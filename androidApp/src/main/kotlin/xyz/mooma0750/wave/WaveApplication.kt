@@ -10,6 +10,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -40,6 +41,15 @@ class WaveApplication : Application() {
 
     companion object {
         const val LOGIN_WEBVIEW_SUFFIX = "login"
+
+        /** このプロセスでログイン用 WebView を作ったか。作っていなければ、ログアウト時に WebView を初期化しない。 */
+        @Volatile
+        var loginWebViewUsed: Boolean = false
+            private set
+
+        fun markLoginWebViewUsed() {
+            loginWebViewUsed = true
+        }
         const val LOG_TAG = "wave"
 
         /**
@@ -62,7 +72,14 @@ class AppContainer(
     val isDebuggable = context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
 
     /** 画面のライフサイクルより長く走らせる処理（ログイン完了・ログアウト・通信）用。メインスレッドは使わない。 */
-    val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    val appScope =
+        CoroutineScope(
+            SupervisorJob() + Dispatchers.Default +
+                CoroutineExceptionHandler { _, error ->
+                    // 例外文には値が入りうるので、種類だけを記録する
+                    Log.e(WaveApplication.LOG_TAG, "uncaught in appScope type=${error::class.qualifiedName}")
+                },
+        )
 
     val authManager = AuthManager(KeystoreCredentialStore(context.credentialDataStore))
 

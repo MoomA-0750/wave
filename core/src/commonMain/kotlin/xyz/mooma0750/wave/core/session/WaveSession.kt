@@ -166,6 +166,11 @@ class WaveSession internal constructor(
 
     val state: StateFlow<SessionState> = mutableState.asStateFlow()
 
+    private val mutableAppliedObtainedAt = MutableStateFlow<Long?>(null)
+
+    /** このセッションに反映済みのログインの取得時刻（未ログインなら null）。UI が「このログインが反映された」ことを待つのに使う。 */
+    val appliedObtainedAtEpochMs: StateFlow<Long?> = mutableAppliedObtainedAt.asStateFlow()
+
     // 他のプロパティをすべて初期化してから購読を始める（UNDISPATCHED なので、ここで最初の値を反映する）
     private val subscription =
         sessionScope.launch(start = CoroutineStart.UNDISPATCHED) {
@@ -193,6 +198,7 @@ class WaveSession internal constructor(
             current.value = generation
             tagged.value = Tagged(generation.id, if (next != null) SessionState.Active else SessionState.LoggedOut)
             publishState()
+            mutableAppliedObtainedAt.value = next?.obtainedAtEpochMs
             // close() と行き違った場合に、cookie をメモリに残さない
             if (!sessionJob.isActive) clearInnerTubeSession()
         }

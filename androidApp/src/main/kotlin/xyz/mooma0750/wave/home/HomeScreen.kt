@@ -33,15 +33,16 @@ import xyz.mooma0750.wave.login.LoginViewModel
 @Composable
 fun HomeScreen(
     container: AppContainer,
+    obtainedAtEpochMs: Long,
     onReLogin: () -> Unit,
 ) {
     val sessionState by container.session.state.collectAsStateWithLifecycle()
-    var account by remember { mutableStateOf<AccountResult?>(null) }
-    var premium by remember { mutableStateOf<PremiumStatus?>(null) }
+    var account by remember(obtainedAtEpochMs) { mutableStateOf<AccountResult?>(null) }
+    var premium by remember(obtainedAtEpochMs) { mutableStateOf<PremiumStatus?>(null) }
 
-    LaunchedEffect(Unit) {
-        // AuthManager の LoggedIn は、WaveSession への反映より先に届くことがある
-        container.session.state.first { it !is SessionState.LoggedOut }
+    LaunchedEffect(obtainedAtEpochMs) {
+        // AuthManager の LoggedIn は、WaveSession への反映より先に届くことがある。このログインが反映されるまで待つ
+        container.session.appliedObtainedAtEpochMs.first { it == obtainedAtEpochMs }
         val fetchedAccount = withContext(Dispatchers.Default) { container.session.accountInfo() }
         account = fetchedAccount
         // 値は出さず、種類だけを記録する（実機確認用）

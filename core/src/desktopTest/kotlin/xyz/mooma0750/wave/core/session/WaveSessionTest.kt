@@ -432,6 +432,17 @@ class WaveSessionTest {
         }
 
     @Test
+    fun appliedLoginIsPublishedForTheUi(): Unit =
+        runBlocking {
+            val session = session()
+            assertNull(session.appliedObtainedAtEpochMs.value)
+            credentials.value = loggedIn
+            withTimeout(5_000) { session.appliedObtainedAtEpochMs.first { it == loggedIn.obtainedAtEpochMs } }
+            credentials.value = null
+            withTimeout(5_000) { session.appliedObtainedAtEpochMs.first { it == null } }
+        }
+
+    @Test
     fun switchingAccountsResetsStateAndPremiumCache(): Unit =
         runBlocking {
             handler = premiumHandler(listOf(141))

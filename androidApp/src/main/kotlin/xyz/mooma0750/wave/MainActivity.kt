@@ -45,14 +45,14 @@ class MainActivity : ComponentActivity() {
                             LoginScreen(loginViewModel)
                             LaunchedEffect(loginState) { if (loginState == LoginUiState.Done) reLogin = false }
                         } else {
-                            HomeScreen(container, onReLogin = { reLogin = true })
+                            HomeScreen(container, obtainedAtEpochMs = (authState as AuthState.LoggedIn).obtainedAtEpochMs, onReLogin = { reLogin = true })
                         }
                     AuthState.LoggedOut, is AuthState.Unreadable -> {
                         val loginViewModel = viewModel(key = "login") { LoginViewModel(container) }
-                        LaunchedEffect(Unit) {
-                            reLogin = false
-                            loginViewModel.resetIfDone()
-                        }
+                        val loginState by loginViewModel.uiState.collectAsStateWithLifecycle()
+                        LaunchedEffect(Unit) { reLogin = false }
+                        // ログアウト後に入り直したとき、前回のログインが Done のまま残っていたら（後始末中にログアウトした場合を含む）やり直せる状態に戻す
+                        LaunchedEffect(loginState) { if (loginState == LoginUiState.Done) loginViewModel.resetIfDone() }
                         LoginScreen(loginViewModel)
                     }
                 }

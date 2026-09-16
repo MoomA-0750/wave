@@ -74,7 +74,8 @@ class AuthGuardEngine(
         val response = delegate.execute(data)
         val setCookies = response.headers.getAll(HttpHeaders.SetCookie)
         if (!setCookies.isNullOrEmpty()) {
-            onSetCookieNames(data.url.host, setCookies.map { it.substringBefore('=').trim() })
+            // "=" が無い Set-Cookie は、行全体が名前の無い cookie の値になるので、名前として渡さない
+            onSetCookieNames(data.url.host, setCookies.map { if ('=' in it) it.substringBefore('=').trim() else "(unnamed)" })
         }
         return response
     }

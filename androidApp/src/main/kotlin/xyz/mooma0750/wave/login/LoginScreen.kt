@@ -10,16 +10,20 @@ import android.os.Looper
 import android.util.Log
 import android.webkit.ConsoleMessage
 import android.webkit.CookieManager
+import android.webkit.RenderProcessGoneDetail
 import android.webkit.SslErrorHandler
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -39,23 +43,36 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import xyz.mooma0750.wave.WaveApplication
+import java.io.ByteArrayInputStream
 
 private const val START_URL = "https://accounts.google.com/ServiceLogin?continue=https%3A%2F%2Fmusic.youtube.com%2F"
 private const val LANDING_HOST = "music.youtube.com"
 private const val READ_RETRY_DELAY_MS = 500L
 private const val READ_RETRY_LIMIT = 10
 
-/** WebView 内で開いてよいトップレベルの遷移先。それ以外は外部ブラウザへ渡す。 */
-internal fun isLoginHostAllowed(uri: Uri): Boolean {
-    if (uri.scheme != "https") return false
-    val host = uri.host ?: return false
-    return host == "accounts.google.com" ||
-        host.endsWith(".google.com") ||
-        host == "google.com" ||
-        host.endsWith(".google.co.jp") ||
-        host == LANDING_HOST ||
-        host.endsWith(".youtube.com")
-}
+/**
+ * WebView 内で開いてよいメインフレームのホスト。利用者がページを置ける Google のホスト（sites・docs など）を含めないよう、
+ * ワイルドカードにせず列挙する。足りずにログインが止まった場合は、ログの "login blocked host=" で分かる。
+ */
+private val LOGIN_HOSTS =
+    setOf(
+        "accounts.google.com",
+        "accounts.google.co.jp",
+        "accounts.youtube.com",
+        "myaccount.google.com",
+        "gds.google.com",
+        "consent.google.com",
+        "consent.youtube.com",
+        "google.com",
+        "www.google.com",
+        "www.google.co.jp",
+        "youtube.com",
+        "www.youtube.com",
+        "m.youtube.com",
+        LANDING_HOST,
+    )
+
+internal fun isLoginHostAllowed(uri: Uri): Boolean = uri.scheme == "https" && uri.host in LOGIN_HOSTS
 
 private val SAPISID_COOKIE = Regex("""(?:^|;\s*)(?:SAPISID|__Secure-3PAPISID|__Secure-1PAPISID)=[^;]+""")
 
@@ -66,9 +83,15 @@ fun LoginScreen(viewModel: LoginViewModel) {
     var host by remember { mutableStateOf("") }
 
     Scaffold(topBar = { TopAppBar(title = { Text(host.ifEmpty { "ログイン" }) }) }) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding)) {
+        Box(Modifier.fillMaxSize().padding(padding).imePadding()) {
             when (val state = uiState) {
-                LoginUiState.Browsing -> LoginWebView(onHostChanged = { host = it }, onLanded = viewModel::onLanded)
+                LoginUiState.Browsing ->
+                    LoginWebView(
+                        onHostChanged = { host = it },
+                        onLanded = viewModel::onLanded,
+                        onRendererGone = viewModel::onRendererGone,
+                        onAbandoned = viewModel::onAbandoned,
+                    )
                 LoginUiState.Saving, LoginUiState.Done ->
                     CircularProgressIndicator(Modifier.align(Alignment.Center))
                 is LoginUiState.Failed ->
@@ -77,6 +100,7 @@ fun LoginScreen(viewModel: LoginViewModel) {
                             when (state.reason) {
                                 FailureReason.NoSapisid -> "ログイン情報を取得できませんでした。"
                                 FailureReason.SaveFailed -> "ログイン情報を端末に保存できませんでした。"
+                                FailureReason.RendererGone -> "ログイン画面が異常終了しました。"
                             },
                         )
                         Button(onClick = viewModel::retry) { Text("もう一度ログインする") }
@@ -91,14 +115,20 @@ fun LoginScreen(viewModel: LoginViewModel) {
 private fun LoginWebView(
     onHostChanged: (String) -> Unit,
     onLanded: (cookie: String?, visitorData: String?, dataSyncId: String?) -> Unit,
+    onRendererGone: () -> Unit,
+    onAbandoned: () -> Unit,
 ) {
     var webView by remember { mutableStateOf<WebView?>(null) }
+    var canGoBack by remember { mutableStateOf(false) }
+
+    BackHandler(enabled = canGoBack) { webView?.goBack() }
 
     AndroidView(
         modifier = Modifier.fillMaxSize(),
         factory = { context ->
             // debug ビルドでも、このプロセスの WebView を chrome://inspect に出さない
             WebView.setWebContentsDebuggingEnabled(false)
+            WaveApplication.markLoginWebViewUsed()
             WebView(context).apply {
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = true
@@ -119,11 +149,29 @@ private fun LoginWebView(
                             view: WebView,
                             request: WebResourceRequest,
                         ): Boolean {
-                            if (!request.isForMainFrame) return false
-                            if (isLoginHostAllowed(request.url)) return false
-                            Log.i(WaveApplication.LOG_TAG, "login opens external host=${request.url.host}")
-                            runCatching { view.context.startActivity(Intent(Intent.ACTION_VIEW, request.url)) }
+                            if (!request.isForMainFrame || isLoginHostAllowed(request.url)) return false
+                            Log.i(WaveApplication.LOG_TAG, "login blocked host=${request.url.host} external=${request.hasGesture()}")
+                            // 利用者が自分でタップしたリンクだけ、ブラウザで開く（ページ側の自動遷移では外部アプリを起動しない）
+                            if (request.hasGesture() && request.url.scheme == "https") {
+                                val intent =
+                                    Intent(Intent.ACTION_VIEW, request.url).apply {
+                                        addCategory(Intent.CATEGORY_BROWSABLE)
+                                        component = null
+                                        selector = null
+                                    }
+                                runCatching { view.context.startActivity(intent) }
+                            }
                             return true
+                        }
+
+                        // POST の遷移は shouldOverrideUrlLoading を通らないので、ここでもメインフレームを止める
+                        override fun shouldInterceptRequest(
+                            view: WebView,
+                            request: WebResourceRequest,
+                        ): WebResourceResponse? {
+                            if (!request.isForMainFrame || isLoginHostAllowed(request.url)) return null
+                            Log.i(WaveApplication.LOG_TAG, "login blocked host=${request.url.host} method=${request.method}")
+                            return WebResourceResponse("text/plain", "utf-8", 403, "Forbidden", emptyMap(), ByteArrayInputStream(ByteArray(0)))
                         }
 
                         override fun onPageStarted(
@@ -134,6 +182,14 @@ private fun LoginWebView(
                             onHostChanged(url?.let { Uri.parse(it).host }.orEmpty())
                         }
 
+                        override fun doUpdateVisitedHistory(
+                            view: WebView,
+                            url: String?,
+                            isReload: Boolean,
+                        ) {
+                            canGoBack = view.canGoBack()
+                        }
+
                         override fun onReceivedSslError(
                             view: WebView,
                             handler: SslErrorHandler,
@@ -142,15 +198,27 @@ private fun LoginWebView(
                             handler.cancel()
                         }
 
+                        override fun onRenderProcessGone(
+                            view: WebView,
+                            detail: RenderProcessGoneDetail,
+                        ): Boolean {
+                            // 処理しないとアプリのプロセスごと終わる。この WebView はもう使えないので、画面を失敗にして作り直させる
+                            Log.w(WaveApplication.LOG_TAG, "login renderer gone crashed=${detail.didCrash()}")
+                            onRendererGone()
+                            return true
+                        }
+
                         override fun onPageFinished(
                             view: WebView,
                             url: String?,
                         ) {
-                            val uri = url?.let(Uri::parse) ?: return
-                            if (uri.scheme != "https" || uri.host != LANDING_HOST) return
-                            val cookie = CookieManager.getInstance().getCookie("https://$LANDING_HOST")
-                            if (cookie == null || !SAPISID_COOKIE.containsMatchIn(cookie)) return
+                            if (!isOnLandingPage(view)) return
+                            if (!hasSapisid(CookieManager.getInstance().getCookie("https://$LANDING_HOST"))) return
                             readConfigValues(view, attempt = 0) { visitorData, dataSyncId ->
+                                // 読んでいる間に別のページへ移っていたら使わない。cookie は値を読み終えた時点のものを渡す
+                                if (!isOnLandingPage(view)) return@readConfigValues
+                                val cookie = CookieManager.getInstance().getCookie("https://$LANDING_HOST")
+                                if (!hasSapisid(cookie)) return@readConfigValues
                                 onLanded(cookie, visitorData, dataSyncId)
                             }
                         }
@@ -169,9 +237,17 @@ private fun LoginWebView(
                 destroy()
             }
             webView = null
+            onAbandoned()
         }
     }
 }
+
+private fun isOnLandingPage(view: WebView): Boolean {
+    val uri = view.url?.let(Uri::parse) ?: return false
+    return uri.scheme == "https" && uri.host == LANDING_HOST
+}
+
+private fun hasSapisid(cookie: String?): Boolean = cookie != null && SAPISID_COOKIE.containsMatchIn(cookie)
 
 /** ページの yt.config_ から値を読む。JS インターフェースは公開せず、評価結果（JSON の文字列リテラル）を受け取るだけ。 */
 private fun readConfigValues(
@@ -214,7 +290,7 @@ internal fun decodeJsString(raw: String?): String? {
             'n', 'r', 't', 'b', 'f' -> return null
             'u' -> {
                 if (i + 6 > body.length) return null
-                val code = body.substring(i + 2, i + 6).toIntOrNull(16) ?: return null
+                val code = body.substring(i + 2, i + 6).toIntOrNull(16)?.takeIf { it >= 0 } ?: return null
                 out.append(code.toChar())
                 i += 6
             }

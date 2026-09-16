@@ -31,7 +31,7 @@ sealed interface LoginUiState {
     ) : LoginUiState
 }
 
-enum class FailureReason { NoSapisid, SaveFailed }
+enum class FailureReason { NoSapisid, SaveFailed, RendererGone }
 
 /**
  * WebView から取った値は、このクラスのメモリ上だけを通って AuthManager へ渡す。
@@ -73,6 +73,16 @@ class LoginViewModel(
         }
     }
 
+    /** WebView のレンダラが落ちた。 */
+    fun onRendererGone() {
+        if (!extracted.get()) mutableUiState.value = LoginUiState.Failed(FailureReason.RendererGone)
+    }
+
+    /** 値を取る前に WebView が破棄された（途中でやめた・レンダラが落ちた）。Google にはログイン済みかもしれないので cookie を消す。 */
+    fun onAbandoned() {
+        if (!extracted.get()) container.appScope.launch { clearWebViewCredentials() }
+    }
+
     /** ログイン画面に入り直したとき。前回のログインが完了済みなら、最初からやり直せる状態に戻す。 */
     fun resetIfDone() {
         if (mutableUiState.value == LoginUiState.Done) retry()
@@ -85,13 +95,22 @@ class LoginViewModel(
     }
 
     companion object {
-        /** WebView 側に残った cookie とストレージを消す。プロセス全体に効く。ディレクトリは次の起動で消える。 */
+        /**
+         * WebView 側に残った cookie とストレージを消す。プロセス全体に効く。ディレクトリは次の起動で消える。
+         * このプロセスでログイン用 WebView を使っていなければ何もしない（ここで Chromium を読み込ませない）。
+         */
         suspend fun clearWebViewCredentials() {
+            if (!WaveApplication.loginWebViewUsed) return
             withContext(Dispatchers.Main + NonCancellable) {
-                val cookies = CookieManager.getInstance()
-                suspendCancellableCoroutine { continuation -> cookies.removeAllCookies { continuation.resume(Unit) } }
-                cookies.flush()
-                WebStorage.getInstance().deleteAllData()
+                try {
+                    val cookies = CookieManager.getInstance()
+                    suspendCancellableCoroutine { continuation -> cookies.removeAllCookies { continuation.resume(Unit) } }
+                    cookies.flush()
+                    WebStorage.getInstance().deleteAllData()
+                } catch (error: RuntimeException) {
+                    // WebView の更新中などで使えない。ディレクトリは次の起動で消える
+                    Log.w(WaveApplication.LOG_TAG, "webview cleanup failed type=${error::class.simpleName}")
+                }
             }
         }
     }

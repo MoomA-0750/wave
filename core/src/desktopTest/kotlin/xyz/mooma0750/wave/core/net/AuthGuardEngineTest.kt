@@ -32,7 +32,7 @@ class AuthGuardEngineTest {
         MockEngine { request ->
             sent += request
             when (request.url.encodedPath) {
-                "/set-cookie" -> respond("", HttpStatusCode.OK, headersOf(HttpHeaders.SetCookie, listOf("__Secure-3PSIDTS=synthetic-value; Path=/", "PREF=f6=1")))
+                "/set-cookie" -> respond("", HttpStatusCode.OK, headersOf(HttpHeaders.SetCookie, listOf("__Secure-3PSIDTS=synthetic-value; Path=/", "PREF=f6=1", "synthetic-nameless-value")))
                 "/redirect" -> respond("", HttpStatusCode.Found, headersOf(HttpHeaders.Location, "https://accounts.google.com/ServiceLogin"))
                 else -> respondOk("{}")
             }
@@ -114,8 +114,8 @@ class AuthGuardEngineTest {
     fun reportsOnlySetCookieNames(): Unit =
         runBlocking {
             client.get("https://music.youtube.com/set-cookie")
-            assertEquals(listOf("music.youtube.com" to listOf("__Secure-3PSIDTS", "PREF")), setCookieNames.toList())
-            assertFalse(setCookieNames.toString().contains("synthetic-value"))
+            assertEquals(listOf("music.youtube.com" to listOf("__Secure-3PSIDTS", "PREF", "(unnamed)")), setCookieNames.toList())
+            assertFalse(setCookieNames.toString().contains("synthetic"))
         }
 
     @Test
