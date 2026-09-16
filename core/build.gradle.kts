@@ -29,6 +29,8 @@ kotlin {
         commonMain.dependencies {
             api(libs.innertubex)
             implementation(libs.kotlinx.serialization.json)
+            implementation(libs.ktor.client.content.negotiation)
+            implementation(libs.ktor.serialization.kotlinx.json)
         }
         androidMain.dependencies {
             api(libs.androidx.datastore.preferences)
