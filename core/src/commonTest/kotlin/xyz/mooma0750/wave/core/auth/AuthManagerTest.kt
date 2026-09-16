@@ -4,6 +4,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -44,6 +45,69 @@ class AuthManagerTest {
             assertEquals(SaveResult.Failed(transient = true), manager.completeLogin(credentials))
             assertEquals(AuthState.LoggedOut, manager.state.value)
             assertNull(manager.credentials.value)
+        }
+
+    @Test
+    fun credentialsAreDroppedBeforeStateTurnsLoggedOut() =
+        runTest {
+            val manager = AuthManager(FakeStore(LoadResult.Found(credentials)))
+            manager.restore()
+            val credentialsWhenLoggedOut = mutableListOf<Credentials?>()
+            // Unconfined は代入した瞬間にその場で再開するので、state が変わった時点の credentials を見られる
+            val watcher =
+                launch(UnconfinedTestDispatcher(testScheduler)) {
+                    manager.state.collect { if (it == AuthState.LoggedOut) credentialsWhenLoggedOut += manager.credentials.value }
+                }
+            manager.logout()
+            watcher.cancel()
+            assertEquals(listOf<Credentials?>(null), credentialsWhenLoggedOut)
+        }
+
+    @Test
+    fun logoutFinishesClearingEvenIfCallerIsCancelled() =
+        runTest {
+            val clearStarted = CompletableDeferred<Unit>()
+            val releaseClear = CompletableDeferred<Unit>()
+            val store =
+                FakeStore(LoadResult.Found(credentials)).apply {
+                    beforeClear = {
+                        clearStarted.complete(Unit)
+                        releaseClear.await()
+                    }
+                }
+            val manager = AuthManager(store)
+            manager.restore()
+
+            val logout = launch { manager.logout() }
+            clearStarted.await()
+            logout.cancel()
+            releaseClear.complete(Unit)
+            logout.join()
+
+            assertEquals(1, store.clears)
+            assertEquals(AuthState.LoggedOut, manager.state.value)
+        }
+
+    @Test
+    fun loginIsPublishedEvenIfCallerIsCancelledAfterSaving() =
+        runTest {
+            val saveStarted = CompletableDeferred<Unit>()
+            val releaseSave = CompletableDeferred<Unit>()
+            val store =
+                FakeStore(LoadResult.Empty, beforeSave = {
+                    saveStarted.complete(Unit)
+                    releaseSave.await()
+                })
+            val manager = AuthManager(store)
+            manager.restore()
+
+            val login = launch { manager.completeLogin(credentials) }
+            saveStarted.await()
+            login.cancel()
+            releaseSave.complete(Unit)
+            login.join()
+
+            assertEquals(AuthState.LoggedIn(7), manager.state.value)
         }
 
     @Test
@@ -99,6 +163,7 @@ class AuthManagerTest {
     ) : CredentialStore {
         var clears = 0
         var onClear: () -> Unit = {}
+        var beforeClear: suspend () -> Unit = {}
 
         override suspend fun load(): LoadResult = loadResult
 
@@ -108,6 +173,7 @@ class AuthManagerTest {
         }
 
         override suspend fun clear() {
+            beforeClear()
             onClear()
             clears++
         }

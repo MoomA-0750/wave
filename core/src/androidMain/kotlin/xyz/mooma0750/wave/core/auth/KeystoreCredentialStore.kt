@@ -8,12 +8,13 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import java.io.IOException
 import java.security.GeneralSecurityException
-import java.security.InvalidKeyException
 import java.security.KeyStore
 import java.security.ProviderException
 import java.security.UnrecoverableKeyException
@@ -39,7 +40,9 @@ class KeystoreCredentialStore(
             val prefs =
                 try {
                     dataStore.data.first()
-                } catch (_: IOException) {
+                } catch (cancellation: CancellationException) {
+                    throw cancellation
+                } catch (_: Exception) {
                     return@withContext LoadResult.Unreadable(UnreadableReason.Transient)
                 }
             val encodedIv = prefs[IV]
@@ -77,6 +80,8 @@ class KeystoreCredentialStore(
                     return@withContext LoadResult.Unreadable(UnreadableReason.Transient)
                 } catch (_: ProviderException) {
                     return@withContext LoadResult.Unreadable(UnreadableReason.Transient)
+                } catch (_: RuntimeException) {
+                    return@withContext LoadResult.Unreadable(UnreadableReason.Transient)
                 }
 
             try {
@@ -101,28 +106,33 @@ class KeystoreCredentialStore(
                     prefs[SCHEMA_VERSION] = CredentialCodec.CURRENT_SCHEMA
                 }
                 SaveResult.Saved
-            } catch (_: IOException) {
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (_: Exception) {
                 SaveResult.Failed(transient = true)
             } finally {
                 plaintext.fill(0)
             }
         }
 
+    /**
+     * 暗号文 → 鍵 の順に消す。暗号文の削除に失敗しても鍵は消す（鍵が無ければ暗号文は読めない。
+     * 次の起動では Unreadable(KeyUnavailable) になり、再ログインで上書きされる）。
+     * 途中でキャンセルさせない。
+     */
     override suspend fun clear() {
-        withContext(Dispatchers.IO) {
+        withContext(Dispatchers.IO + NonCancellable) {
             try {
                 dataStore.edit { prefs ->
                     prefs.remove(IV)
                     prefs.remove(CIPHERTEXT)
                     prefs.remove(SCHEMA_VERSION)
                 }
-            } catch (_: IOException) {
-                // 鍵は消しにいく。暗号文だけが残っても鍵が無ければ読めない
+            } catch (_: Exception) {
             }
             try {
                 androidKeyStore().deleteEntry(keyAlias)
-            } catch (_: GeneralSecurityException) {
-            } catch (_: ProviderException) {
+            } catch (_: Exception) {
             }
         }
     }
@@ -132,25 +142,32 @@ class KeystoreCredentialStore(
         val ciphertext: ByteArray,
     )
 
-    /** 鍵が無ければ作る。鍵が使えなくなっていたら、作り直して1回だけやり直す。 */
+    /**
+     * 鍵が無ければ作る。作り直すのは、鍵が永久に無効化された（KeyPermanentlyInvalidatedException）場合だけ。
+     * それ以外の失敗（UnrecoverableKeyException を含む。一時的な失敗が包まれていることがある）では鍵を消さず、失敗を返す。
+     */
     private fun encryptWithUsableKey(plaintext: ByteArray): Encrypted? {
-        var forceRegenerate = false
+        var regenerate = false
         repeat(2) {
             try {
                 val key =
-                    when (val lookup = if (forceRegenerate) null else lookupKey()) {
-                        null -> regenerateKey()
-                        is KeyLookup.Found -> lookup.key
-                        KeyLookup.Missing -> generateKey()
-                        is KeyLookup.Failed -> if (lookup.reason == UnreadableReason.KeyUnavailable) regenerateKey() else return null
+                    if (regenerate) {
+                        regenerateKey()
+                    } else {
+                        when (val lookup = lookupKey()) {
+                            is KeyLookup.Found -> lookup.key
+                            KeyLookup.Missing -> generateKey()
+                            is KeyLookup.Failed -> return null
+                        }
                     }
                 return Cipher.getInstance(TRANSFORMATION).run {
                     init(Cipher.ENCRYPT_MODE, key)
                     updateAAD(associatedData(CredentialCodec.CURRENT_SCHEMA))
                     Encrypted(iv = iv, ciphertext = doFinal(plaintext))
                 }
-            } catch (_: InvalidKeyException) {
-                forceRegenerate = true
+            } catch (_: KeyPermanentlyInvalidatedException) {
+                if (regenerate) return null
+                regenerate = true
             } catch (_: GeneralSecurityException) {
                 return null
             } catch (_: ProviderException) {

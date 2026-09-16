@@ -1,10 +1,12 @@
 package xyz.mooma0750.wave.core.auth
 
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 sealed interface AuthState {
     data object Restoring : AuthState
@@ -43,21 +45,31 @@ class AuthManager(
         }
     }
 
-    /** 保存できたときだけ LoggedIn にする（再起動で消えるログインを作らない）。 */
+    /**
+     * 保存できたときだけ LoggedIn にする（再起動で消えるログインを作らない）。
+     * 保存と反映は途中でキャンセルさせない（ディスクだけがログイン済みになるのを防ぐ）。
+     */
     suspend fun completeLogin(credentials: Credentials): SaveResult =
         mutex.withLock {
-            val result = store.save(credentials)
-            if (result == SaveResult.Saved) {
-                publish(credentials, AuthState.LoggedIn(credentials.obtainedAtEpochMs))
+            withContext(NonCancellable) {
+                val result = store.save(credentials)
+                if (result == SaveResult.Saved) {
+                    publish(credentials, AuthState.LoggedIn(credentials.obtainedAtEpochMs))
+                }
+                result
             }
-            result
         }
 
-    /** 通信から先に認証を外し、その後に保存物を消す。 */
+    /**
+     * 通信から先に認証を外し、その後に保存物を消す。
+     * 消去は途中でキャンセルさせない（画面遷移で呼び出し元が消えても、端末に認証情報を残さない）。
+     */
     suspend fun logout() {
         mutex.withLock {
-            publish(null, AuthState.LoggedOut)
-            store.clear()
+            withContext(NonCancellable) {
+                publish(null, AuthState.LoggedOut)
+                store.clear()
+            }
         }
     }
 

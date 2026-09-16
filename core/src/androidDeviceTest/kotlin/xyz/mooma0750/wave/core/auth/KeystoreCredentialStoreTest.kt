@@ -4,6 +4,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -73,8 +74,37 @@ class KeystoreCredentialStoreTest {
     fun storesOnlyCiphertext(): Unit =
         runBlocking {
             store().save(credentials)
-            val stored = dataStore.data.first().asMap().values.joinToString(" ")
-            assertEquals(false, "synthetic" in stored)
+            val prefs = dataStore.data.first()
+            val ciphertext = Base64.getDecoder().decode(prefs[stringPreferencesKey("ct")])
+            val plaintext = CredentialCodec.encode(credentials)
+            assertEquals(false, ciphertext.contentEquals(plaintext))
+            assertEquals(false, ciphertext.decodeToString(throwOnInvalidSequence = false).contains("SAPISID"))
+            assertEquals(false, prefs.asMap().values.joinToString(" ").contains("synthetic"))
+            // GCM: 暗号文 = 平文と同じ長さ + 16 バイトのタグ
+            assertEquals(plaintext.size + 16, ciphertext.size)
+        }
+
+    @Test
+    fun schemaVersionIsBoundAsAssociatedData(): Unit =
+        runBlocking {
+            store().save(credentials)
+            dataStore.edit { it[intPreferencesKey("v")] = 2 }
+
+            assertEquals(LoadResult.Unreadable(UnreadableReason.Tampered), store().load())
+        }
+
+    @Test
+    fun tamperedIvIsDetected(): Unit =
+        runBlocking {
+            store().save(credentials)
+            val ivKey = stringPreferencesKey("iv")
+            dataStore.edit { prefs ->
+                val bytes = Base64.getDecoder().decode(prefs[ivKey])
+                bytes[0] = (bytes[0].toInt() xor 0x01).toByte()
+                prefs[ivKey] = Base64.getEncoder().encodeToString(bytes)
+            }
+
+            assertEquals(LoadResult.Unreadable(UnreadableReason.Tampered), store().load())
         }
 
     @Test
