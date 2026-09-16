@@ -13,6 +13,9 @@ kotlin {
         namespace = "xyz.mooma0750.wave.core"
         compileSdk = libs.versions.compileSdk.get().toInt()
         minSdk = libs.versions.minSdk.get().toInt()
+        withDeviceTest {
+            instrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        }
     }
 
     // Phase 1 では共通コードをホストで速く試すためのターゲット（Windows 版の実装方針とは無関係）
@@ -27,10 +30,19 @@ kotlin {
             api(libs.innertubex)
             implementation(libs.kotlinx.serialization.json)
         }
+        androidMain.dependencies {
+            api(libs.androidx.datastore.preferences)
+        }
         commonTest.dependencies {
             implementation(kotlin("test"))
             implementation(libs.ktor.client.mock)
             implementation(libs.kotlinx.coroutines.test)
+        }
+        getByName("androidDeviceTest").dependencies {
+            implementation(libs.androidx.test.runner)
+            implementation(libs.androidx.test.ext.junit)
+            implementation(libs.kotlinx.coroutines.test)
+            implementation(kotlin("test"))
         }
     }
 }
