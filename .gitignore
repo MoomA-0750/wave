@@ -1,0 +1,7 @@
+dev/
+*.keystore
+keystore.properties
+local.properties
+.gradle/
+build/
+.idea/
