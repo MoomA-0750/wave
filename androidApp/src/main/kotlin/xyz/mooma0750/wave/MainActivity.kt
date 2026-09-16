@@ -6,22 +6,54 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import xyz.mooma0750.wave.core.auth.AuthState
+import xyz.mooma0750.wave.home.HomeScreen
+import xyz.mooma0750.wave.login.LoginScreen
+import xyz.mooma0750.wave.login.LoginUiState
+import xyz.mooma0750.wave.login.LoginViewModel
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        val container = (application as WaveApplication).container
         setContent {
             MaterialTheme {
-                Scaffold { padding ->
-                    Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                        Text("wave", style = MaterialTheme.typography.headlineMedium)
+                val authState by container.authManager.state.collectAsStateWithLifecycle()
+                // 失効したときに、ログイン済みのまま再ログイン画面を出すためのフラグ（値は真偽値だけ）
+                var reLogin by rememberSaveable { mutableStateOf(false) }
+
+                when (authState) {
+                    AuthState.Restoring ->
+                        Box(Modifier.fillMaxSize()) { CircularProgressIndicator(Modifier.align(Alignment.Center)) }
+                    is AuthState.LoggedIn ->
+                        if (reLogin) {
+                            val loginViewModel = viewModel(key = "relogin") { LoginViewModel(container) }
+                            LaunchedEffect(Unit) { loginViewModel.resetIfDone() }
+                            val loginState by loginViewModel.uiState.collectAsStateWithLifecycle()
+                            LoginScreen(loginViewModel)
+                            LaunchedEffect(loginState) { if (loginState == LoginUiState.Done) reLogin = false }
+                        } else {
+                            HomeScreen(container, onReLogin = { reLogin = true })
+                        }
+                    AuthState.LoggedOut, is AuthState.Unreadable -> {
+                        val loginViewModel = viewModel(key = "login") { LoginViewModel(container) }
+                        LaunchedEffect(Unit) {
+                            reLogin = false
+                            loginViewModel.resetIfDone()
+                        }
+                        LoginScreen(loginViewModel)
                     }
                 }
             }
