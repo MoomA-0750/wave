@@ -23,10 +23,10 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -35,6 +35,7 @@ import xyz.mooma0750.wave.core.auth.AuthManager
 import xyz.mooma0750.wave.core.auth.Credentials
 import xyz.mooma0750.wave.core.net.AuthRouteViolation
 import kotlin.time.Duration
+import kotlin.time.TimeSource
 
 sealed interface SessionState {
     data object LoggedOut : SessionState
@@ -101,16 +102,20 @@ sealed interface AccountResult {
  * InnerTube（music.youtube.com の youtubei/v1/ 以下）専用の認証付きチャネル。
  * 音声バイトの取得には使わない。この HttpClient を再生エンジンに渡さない。
  *
- * ログイン状態が変わるたびに「世代」を作り直す。進行中の呼び出しは古い世代の Job ごとキャンセルする
+ * ログイン状態が変わるたびに「世代」を作り直す。進行中の呼び出しは古い世代のスコープごとキャンセルする
  * （innertubex は player・browse・accountMenu を世代の変化でキャンセルしないため）。
+ * 状態は (世代, SessionState) の組で CAS 更新し、古い世代の結果が新しい世代の状態を上書きしないようにする。
+ *
+ * 呼び出しの block と parse は scope のディスパッチャで走る。メインスレッドのスコープを渡さないこと。
  */
 class WaveSession internal constructor(
-    private val httpClient: HttpClient,
+    httpClient: HttpClient,
     private val credentials: StateFlow<Credentials?>,
-    private val scope: CoroutineScope,
+    scope: CoroutineScope,
     retryDelay: suspend (Duration) -> Unit,
     private val rethrowViolations: Boolean,
-    private val nowEpochMs: () -> Long,
+    /** 単調時計のミリ秒。壁時計を使うと、端末の時刻の巻き戻しでキャッシュが固定される。 */
+    private val nowMs: () -> Long,
     configParser: ((HttpClient, InnerTube) -> YtConfigParser)?,
 ) : AutoCloseable {
     constructor(
@@ -124,7 +129,7 @@ class WaveSession internal constructor(
         scope = scope,
         retryDelay = { delay(it) },
         rethrowViolations = rethrowViolations,
-        nowEpochMs = { kotlin.time.Clock.System.now().toEpochMilliseconds() },
+        nowMs = monotonicMillis(),
         configParser = null,
     )
 
@@ -132,35 +137,46 @@ class WaveSession internal constructor(
         val id: Long,
         /** この世代の呼び出しをまとめてキャンセルするためのスコープ。 */
         val scope: CoroutineScope,
-        val loggedIn: Boolean,
+        val credentials: Credentials?,
     ) {
+        // 以下は generationLock の中でだけ読み書きする
         var confirm: Deferred<Unit>? = null
+        var lastConfirmAtMs: Long? = null
         var premium: Deferred<PremiumStatus>? = null
-        var premiumUnknownAtEpochMs: Long? = null
+        var premiumUnknownAtMs: Long? = null
     }
 
-    private fun childScope(): CoroutineScope = CoroutineScope(scope.coroutineContext + SupervisorJob(scope.coroutineContext[Job]))
+    private class Tagged(
+        val generationId: Long,
+        val state: SessionState,
+    )
+
+    private val sessionJob = SupervisorJob(scope.coroutineContext[Job])
+    private val sessionScope = CoroutineScope(scope.coroutineContext + sessionJob)
+
+    private fun childScope(): CoroutineScope = CoroutineScope(sessionScope.coroutineContext + SupervisorJob(sessionJob))
 
     internal val innerTube = InnerTube(httpClient = httpClient, retryDelay = retryDelay)
     private val ytConfigParser: YtConfigParser =
         configParser?.invoke(httpClient, innerTube) ?: YtConfigParserImpl(httpClient, innerTube)
     private val generationLock = Mutex()
+    private val current = MutableStateFlow(Generation(0, childScope(), credentials = null))
+    private val tagged = MutableStateFlow(Tagged(0, SessionState.LoggedOut))
     private val mutableState = MutableStateFlow<SessionState>(SessionState.LoggedOut)
-    private val current = MutableStateFlow(Generation(0, childScope(), loggedIn = false))
-    private var applied: Credentials? = null
 
     val state: StateFlow<SessionState> = mutableState.asStateFlow()
 
+    // 他のプロパティをすべて初期化してから購読を始める（UNDISPATCHED なので、ここで最初の値を反映する）
     private val subscription =
-        scope.launch(start = CoroutineStart.UNDISPATCHED) {
+        sessionScope.launch(start = CoroutineStart.UNDISPATCHED) {
             credentials.collect { next -> applyCredentials(next) }
         }
 
     private suspend fun applyCredentials(next: Credentials?) {
         generationLock.withLock {
-            if (next === applied && current.value.id > 0) return
-            applied = next
             val old = current.value
+            if (old.id > 0 && next === old.credentials) return
+            if (!sessionJob.isActive) return
             old.scope.cancel()
             if (next != null) {
                 innerTube.replaceSession(
@@ -171,11 +187,45 @@ class WaveSession internal constructor(
                     useLoginForBrowse = true,
                 )
             } else {
-                // clearSessionIfMatches は CAS を1回しか試さないので使わない
-                innerTube.replaceSession(cookie = null, visitorData = null, dataSyncId = null, authUser = "0", useLoginForBrowse = false)
+                clearInnerTubeSession()
             }
-            current.value = Generation(old.id + 1, childScope(), loggedIn = next != null)
-            mutableState.value = if (next != null) SessionState.Active else SessionState.LoggedOut
+            val generation = Generation(old.id + 1, childScope(), next)
+            current.value = generation
+            tagged.value = Tagged(generation.id, if (next != null) SessionState.Active else SessionState.LoggedOut)
+            publishState()
+            // close() と行き違った場合に、cookie をメモリに残さない
+            if (!sessionJob.isActive) clearInnerTubeSession()
+        }
+    }
+
+    private fun clearInnerTubeSession() {
+        // clearSessionIfMatches は CAS を1回しか試さないので使わない
+        innerTube.replaceSession(cookie = null, visitorData = null, dataSyncId = null, authUser = "0", useLoginForBrowse = false)
+    }
+
+    /** generationId が現在の世代と一致するときだけ状態を変える。 */
+    internal fun updateStateFor(
+        generationId: Long,
+        transform: (SessionState) -> SessionState,
+    ): Boolean {
+        while (true) {
+            val previous = tagged.value
+            if (previous.generationId != generationId) return false
+            if (tagged.compareAndSet(previous, Tagged(generationId, transform(previous.state)))) {
+                publishState()
+                return true
+            }
+        }
+    }
+
+    internal fun currentGenerationId(): Long = current.value.id
+
+    /** tagged の最新値を公開用の StateFlow に写す。並行して写した場合も、最後は最新値になる。 */
+    private fun publishState() {
+        while (true) {
+            val latest = tagged.value
+            mutableState.value = latest.state
+            if (tagged.value === latest) return
         }
     }
 
@@ -200,20 +250,24 @@ class WaveSession internal constructor(
         parse: suspend (HttpResponse) -> ParseOutcome<T>,
     ): CallResult<T> {
         val generation = current.value
-        if (!generation.loggedIn) return CallResult.Failed(FailureKind.NotLoggedIn)
+        // ログアウトが AuthManager に反映済みで、まだこの世代に届いていない場合も送らない
+        if (generation.credentials == null || credentials.value !== generation.credentials) {
+            return CallResult.Failed(FailureKind.NotLoggedIn)
+        }
 
-        val deferred =
-            generation.scope.async {
-                runCatchingOutcome(block, parse)
-            }
+        val deferred = generation.scope.async { runCatchingOutcome(block, parse) }
         val outcome =
             try {
                 deferred.await()
             } catch (cancellation: CancellationException) {
                 deferred.cancel()
                 currentCoroutineContext().ensureActive()
-                // 呼び出し元は生きていて、世代が変わった（ログアウト・再ログイン）
-                return CallResult.Failed(FailureKind.NotLoggedIn)
+                // 世代が変わったなら未ログイン。世代がそのままなら innertubex 側の中断（その世代のセッション変更）
+                return if (generation.scope.isActive && current.value === generation) {
+                    CallResult.Failed(FailureKind.Network)
+                } else {
+                    CallResult.Failed(FailureKind.NotLoggedIn)
+                }
             }
         if (outcome is Outcome.Violation && rethrowViolations) throw AuthRouteViolation("($operation)")
         return classify(generation, outcome)
@@ -259,7 +313,7 @@ class WaveSession internal constructor(
             is Outcome.Body ->
                 when (val parsed = outcome.parsed) {
                     is ParseOutcome.Parsed -> {
-                        setState(generation, SessionState.Active)
+                        updateStateFor(generation.id) { SessionState.Active }
                         CallResult.Ok(parsed.value)
                     }
                     ParseOutcome.LoggedOutResponse -> suspect(generation, SuspectReason.EmptyResponse, status = null)
@@ -269,7 +323,7 @@ class WaveSession internal constructor(
             is Outcome.Status ->
                 when (outcome.status) {
                     401 -> {
-                        setState(generation, SessionState.Expired(ExpiredReason.Unauthenticated))
+                        updateStateFor(generation.id) { SessionState.Expired(ExpiredReason.Unauthenticated) }
                         CallResult.Failed(FailureKind.Expired, 401)
                     }
                     403 -> suspect(generation, SuspectReason.Forbidden, 403)
@@ -285,32 +339,37 @@ class WaveSession internal constructor(
         reason: SuspectReason,
         status: Int?,
     ): CallResult.Failed {
-        if (current.value === generation) {
-            mutableState.update { previous ->
-                when (previous) {
-                    is SessionState.Expired -> previous
-                    is SessionState.Suspect -> SessionState.Suspect(reason, previous.consecutive + 1)
-                    else -> SessionState.Suspect(reason, 1)
+        var needsConfirm = false
+        updateStateFor(generation.id) { previous ->
+            when (previous) {
+                is SessionState.Expired -> {
+                    needsConfirm = false
+                    previous
+                }
+                is SessionState.Suspect -> {
+                    needsConfirm = true
+                    SessionState.Suspect(reason, previous.consecutive + 1)
+                }
+                else -> {
+                    needsConfirm = true
+                    SessionState.Suspect(reason, 1)
                 }
             }
-            startConfirm(generation)
         }
+        if (needsConfirm) startConfirm(generation)
         return CallResult.Failed(FailureKind.Suspect, status)
     }
 
-    private fun setState(
-        generation: Generation,
-        state: SessionState,
-    ) {
-        if (current.value === generation) mutableState.value = state
-    }
-
-    private val confirmLock = Mutex()
-
-    /** 世代ごとに同時に1本だけ。accountMenu（応答がそのまま返る）で、ログインが外れているかを確かめる。 */
+    /**
+     * accountMenu（応答がそのまま返る）で、ログインが外れているかを確かめる。
+     * 世代ごとに同時に1本だけ、かつ前回の開始から CONFIRM_INTERVAL_MS 以上あける（レート制限中に負荷を上乗せしない）。
+     */
     private suspend fun startConfirm(generation: Generation) {
-        confirmLock.withLock {
+        generationLock.withLock {
             if (generation.confirm?.isActive == true) return
+            val last = generation.lastConfirmAtMs
+            if (last != null && nowMs() - last < CONFIRM_INTERVAL_MS) return
+            generation.lastConfirmAtMs = nowMs()
             generation.confirm = generation.scope.async { confirm(generation) }
         }
     }
@@ -329,35 +388,42 @@ class WaveSession internal constructor(
             status in 300..399 -> {
                 val host = response.headers[HttpHeaders.Location]?.let { runCatching { Url(it).host }.getOrNull() }
                 response.bodyAsChannel().cancel(null)
-                if (host == SIGN_IN_HOST) setState(generation, SessionState.Expired(ExpiredReason.RedirectedToSignIn))
+                if (host == SIGN_IN_HOST) expire(generation, ExpiredReason.RedirectedToSignIn)
             }
             status == 401 -> {
                 response.bodyAsChannel().cancel(null)
-                setState(generation, SessionState.Expired(ExpiredReason.Unauthenticated))
+                expire(generation, ExpiredReason.Unauthenticated)
             }
             status in 200..299 -> {
-                val header =
+                val body =
                     try {
-                        parseActiveAccount(response)
+                        parseAccountMenu(response)
                     } catch (cancellation: CancellationException) {
                         throw cancellation
                     } catch (_: Exception) {
                         return
                     }
-                if (header == null) {
-                    setState(generation, SessionState.Expired(ExpiredReason.ConfirmedLoggedOut))
-                } else {
-                    setState(generation, SessionState.Active)
+                when {
+                    activeAccountOf(body) != null ->
+                        updateStateFor(generation.id) { previous -> if (previous is SessionState.Suspect) SessionState.Active else previous }
+                    showsLoggedOut(body) -> expire(generation, ExpiredReason.ConfirmedLoggedOut)
                 }
             }
             else -> response.bodyAsChannel().cancel(null)
         }
     }
 
+    private fun expire(
+        generation: Generation,
+        reason: ExpiredReason,
+    ) {
+        updateStateFor(generation.id) { SessionState.Expired(reason) }
+    }
+
     suspend fun accountInfo(): AccountResult {
         val result =
             call("accountMenu", { it.accountMenu(YouTubeClient.WEB_REMIX) }) { response ->
-                val account = parseActiveAccount(response)
+                val account = activeAccountOf(parseAccountMenu(response))
                 if (account == null) ParseOutcome.LoggedOutResponse else ParseOutcome.Parsed(account)
             }
         return when (result) {
@@ -368,25 +434,29 @@ class WaveSession internal constructor(
 
     /**
      * 世代ごとに1本だけ判定する。Available・Unavailable はその世代のあいだ、Unknown は60秒だけキャッシュする。
+     * 失効した後も Available を返しうるので、表示では SessionState と合わせて使う。
      */
     suspend fun premiumStatus(): PremiumStatus {
         val generation = current.value
-        if (!generation.loggedIn) return PremiumStatus.Unknown
+        if (generation.credentials == null) return PremiumStatus.Unknown
         val deferred =
             generationLock.withLock {
                 val cached = generation.premium
-                val unknownAt = generation.premiumUnknownAtEpochMs
+                val unknownAt = generation.premiumUnknownAtMs
                 val reusable =
                     cached != null &&
-                        (unknownAt == null || nowEpochMs() - unknownAt < UNKNOWN_CACHE_MS)
-                if (reusable) {
+                        !cached.isCancelled &&
+                        (unknownAt == null || nowMs() - unknownAt < UNKNOWN_CACHE_MS)
+                if (cached != null && reusable) {
                     cached
                 } else {
-                    generation.premiumUnknownAtEpochMs = null
+                    generation.premiumUnknownAtMs = null
                     generation.scope
                         .async {
                             probePremium().also { status ->
-                                if (status == PremiumStatus.Unknown) generation.premiumUnknownAtEpochMs = nowEpochMs()
+                                if (status == PremiumStatus.Unknown) {
+                                    generationLock.withLock { generation.premiumUnknownAtMs = nowMs() }
+                                }
                             }
                         }.also { generation.premium = it }
                 }
@@ -421,9 +491,10 @@ class WaveSession internal constructor(
         return premiumStatusOf(body)
     }
 
+    /** 購読と進行中の呼び出しを止め、innertubex のセッションから cookie を消す。HttpClient は閉じない。 */
     override fun close() {
-        subscription.cancel()
-        current.value.scope.cancel()
+        sessionJob.cancel()
+        clearInnerTubeSession()
         innerTube.close()
     }
 
@@ -434,6 +505,7 @@ class WaveSession internal constructor(
         const val PROBE_VIDEO_ID = "dQw4w9WgXcQ"
 
         const val UNKNOWN_CACHE_MS = 60_000L
+        const val CONFIRM_INTERVAL_MS = 30_000L
         const val MAX_ACCOUNT_MENU_BYTES = 2 * 1024 * 1024
         const val MAX_PLAYER_BYTES = 4 * 1024 * 1024
 
@@ -443,14 +515,19 @@ class WaveSession internal constructor(
                 explicitNulls = false
             }
 
+        fun monotonicMillis(): () -> Long {
+            val origin = TimeSource.Monotonic.markNow()
+            return { origin.elapsedNow().inWholeMilliseconds }
+        }
+
         internal fun create(
             httpClient: HttpClient,
             credentials: StateFlow<Credentials?>,
             scope: CoroutineScope,
             retryDelay: suspend (Duration) -> Unit = {},
             rethrowViolations: Boolean = false,
-            nowEpochMs: () -> Long = { 0L },
+            nowMs: () -> Long = { 0L },
             configParser: ((HttpClient, InnerTube) -> YtConfigParser)? = null,
-        ) = WaveSession(httpClient, credentials, scope, retryDelay, rethrowViolations, nowEpochMs, configParser)
+        ) = WaveSession(httpClient, credentials, scope, retryDelay, rethrowViolations, nowMs, configParser)
     }
 }

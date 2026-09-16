@@ -5,15 +5,18 @@ import com.metrolist.innertubex.models.response.AccountMenuResponse
 import io.ktor.client.statement.HttpResponse
 import kotlinx.serialization.Serializable
 
-/** ログイン中のアカウント。ヘッダが無い（ログアウト相当の応答）なら null。 */
-internal suspend fun parseActiveAccount(response: HttpResponse): AccountResult.Ok? {
-    val body =
-        WaveSession.json.decodeFromString(
-            AccountMenuResponse.serializer(),
-            response.bodyAsTextLimited(WaveSession.MAX_ACCOUNT_MENU_BYTES),
-        )
-    return activeAccountOf(body)
-}
+internal suspend fun parseAccountMenu(response: HttpResponse): AccountMenuResponse =
+    WaveSession.json.decodeFromString(
+        AccountMenuResponse.serializer(),
+        response.bodyAsTextLimited(WaveSession.MAX_ACCOUNT_MENU_BYTES),
+    )
+
+/**
+ * accountMenu の応答が、ログアウトしていることを示しているか。
+ * 中身の分からない応答（`{}` など）で全員を失効扱いにしないよう、actions があるのにアカウントのヘッダが無い場合だけ true にする。
+ * 実際のログアウト時の応答の形は未検証（M8 の実機確認で確かめる）。
+ */
+internal fun showsLoggedOut(body: AccountMenuResponse): Boolean = body.actions.isNotEmpty() && activeAccountOf(body) == null
 
 internal fun activeAccountOf(body: AccountMenuResponse): AccountResult.Ok? {
     val header =

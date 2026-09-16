@@ -8,6 +8,10 @@ import io.ktor.client.engine.mock.respondOk
 import io.ktor.client.request.HttpRequestData
 import io.ktor.client.request.get
 import io.ktor.client.request.header
+import io.ktor.client.request.post
+import io.ktor.client.request.setBody
+import io.ktor.http.Headers
+import io.ktor.http.content.OutgoingContent
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.Url
@@ -23,6 +27,7 @@ import kotlin.test.assertTrue
 class AuthGuardEngineTest {
     private val sent = CopyOnWriteArrayList<HttpRequestData>()
     private val setCookieNames = CopyOnWriteArrayList<Pair<String, List<String>>>()
+    private val violations = CopyOnWriteArrayList<String>()
     private val mock =
         MockEngine { request ->
             sent += request
@@ -32,10 +37,13 @@ class AuthGuardEngineTest {
                 else -> respondOk("{}")
             }
         }
-    private val client = createWaveHttpClient(AuthGuardEngine(mock) { host, names -> setCookieNames += host to names })
+    private val client =
+        createWaveHttpClient(
+            AuthGuardEngine(mock, onViolation = { violations += it }, onSetCookieNames = { host, names -> setCookieNames += host to names }),
+        )
 
     @Test
-    fun blocksAuthHeadersOutsideAllowedRoutes() =
+    fun blocksAuthHeadersOutsideAllowedRoutes(): Unit =
         runBlocking {
             val blocked =
                 listOf(
@@ -46,6 +54,11 @@ class AuthGuardEngineTest {
                     "https://music.youtube.com/playlist_image_upload/x",
                     "http://music.youtube.com/youtubei/v1/browse",
                     "https://music.youtube.com.evil.example/youtubei/v1/browse",
+                    "https://music.youtube.com:8443/youtubei/v1/browse",
+                    "https://user:pass@music.youtube.com/youtubei/v1/browse",
+                    "https://music.youtube.com/youtubei/v1/../../upload",
+                    "https://music.youtube.com/youtubei/v1/%2e%2e/%2E%2E/upload",
+                    "https://music.youtube.com/youtubei/v1/./browse",
                 )
             for (url in blocked) {
                 for (header in listOf(HttpHeaders.Cookie, HttpHeaders.Authorization, "X-Goog-AuthUser")) {
@@ -58,7 +71,7 @@ class AuthGuardEngineTest {
         }
 
     @Test
-    fun allowsAuthHeadersToInnerTubeAndAnythingWithoutAuth() =
+    fun allowsAuthHeadersToInnerTubeAndAnythingWithoutAuth(): Unit =
         runBlocking {
             client.get("https://music.youtube.com/youtubei/v1/browse") { header(HttpHeaders.Cookie, "SAPISID=synthetic") }
             client.get("https://www.youtube.com/s/player/base.js")
@@ -67,7 +80,7 @@ class AuthGuardEngineTest {
         }
 
     @Test
-    fun guardsClientsThatInnerTubeRebuildsFromTheEngine() =
+    fun guardsClientsThatInnerTubeRebuildsFromTheEngine(): Unit =
         runBlocking {
             // innertubex の getTextWithoutRedirects は HttpClient(engine) を作り直す。その経路もガードを通ることを確かめる
             val innerTube = InnerTube(httpClient = client, retryDelay = {})
@@ -75,12 +88,30 @@ class AuthGuardEngineTest {
 
             runCatching { YtConfigParserImpl(client, innerTube).fetchConfig("dQw4w9WgXcQ", useLoginCookies = true) }
 
+            assertTrue(violations.contains("www.youtube.com"), "作り直したクライアントの cookie 付きリクエストが、ガードで止められていない")
             assertTrue(sent.none { it.headers[HttpHeaders.Cookie] != null }, "cookie 付きのリクエストがエンジンに届いている")
             innerTube.close()
         }
 
     @Test
-    fun reportsOnlySetCookieNames() =
+    fun inspectsHeadersCarriedByTheBody(): Unit =
+        runBlocking {
+            assertFailsWith<AuthRouteViolation> {
+                client.post("https://www.youtube.com/anything") {
+                    setBody(
+                        object : OutgoingContent.ByteArrayContent() {
+                            override val headers: Headers = headersOf(HttpHeaders.Cookie, "SAPISID=synthetic")
+
+                            override fun bytes(): ByteArray = ByteArray(0)
+                        },
+                    )
+                }
+            }
+            assertTrue(sent.isEmpty())
+        }
+
+    @Test
+    fun reportsOnlySetCookieNames(): Unit =
         runBlocking {
             client.get("https://music.youtube.com/set-cookie")
             assertEquals(listOf("music.youtube.com" to listOf("__Secure-3PSIDTS", "PREF")), setCookieNames.toList())
@@ -88,7 +119,7 @@ class AuthGuardEngineTest {
         }
 
     @Test
-    fun doesNotFollowRedirects() =
+    fun doesNotFollowRedirects(): Unit =
         runBlocking {
             val response = client.get("https://music.youtube.com/redirect")
             assertEquals(HttpStatusCode.Found, response.status)
@@ -100,6 +131,8 @@ class AuthGuardEngineTest {
         assertTrue(isAuthRouteAllowed(Url("https://music.youtube.com/youtubei/v1/player?prettyPrint=false")))
         assertFalse(isAuthRouteAllowed(Url("https://music.youtube.com/youtubei/v2/player")))
         assertFalse(isAuthRouteAllowed(Url("https://sub.music.youtube.com/youtubei/v1/player")))
+        assertTrue(isAuthRouteAllowed(Url("https://music.youtube.com:443/youtubei/v1/player")))
+        assertFalse(isAuthRouteAllowed(Url("https://music.youtube.com/youtubei/v1/a%2Fb")))
     }
 
     @Test

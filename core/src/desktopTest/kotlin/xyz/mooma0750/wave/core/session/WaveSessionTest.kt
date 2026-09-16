@@ -24,6 +24,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import xyz.mooma0750.wave.core.auth.Credentials
@@ -65,7 +66,7 @@ class WaveSessionTest {
             credentials = credentials,
             scope = scope,
             rethrowViolations = rethrowViolations,
-            nowEpochMs = { now.get() },
+            nowMs = { now.get() },
             configParser = { _, _ ->
                 object : YtConfigParser {
                     override suspend fun fetchConfig(
@@ -86,7 +87,7 @@ class WaveSessionTest {
     }
 
     @Test
-    fun loggedOutSessionSendsNothing() =
+    fun loggedOutSessionSendsNothing(): Unit =
         runBlocking {
             val session = session()
             assertEquals(SessionState.LoggedOut, session.state.value)
@@ -96,7 +97,7 @@ class WaveSessionTest {
         }
 
     @Test
-    fun accountInfoSendsAuthOnlyToInnerTubeWithTrimmedDataSyncId() =
+    fun accountInfoSendsAuthOnlyToInnerTubeWithTrimmedDataSyncId(): Unit =
         runBlocking {
             val session = session()
             credentials.value = loggedIn
@@ -117,7 +118,7 @@ class WaveSessionTest {
         }
 
     @Test
-    fun missingNameBecomesNull() =
+    fun missingNameBecomesNull(): Unit =
         runBlocking {
             handler = { json("""{"actions":[{"openPopupAction":{"popup":{"multiPageMenuRenderer":{"header":{"activeAccountHeaderRenderer":{}}}}}}]}""") }
             val session = loggedInSession()
@@ -125,7 +126,7 @@ class WaveSessionTest {
         }
 
     @Test
-    fun unauthorizedResponseExpiresImmediately() =
+    fun unauthorizedResponseExpiresImmediately(): Unit =
         runBlocking {
             handler = { respond("", HttpStatusCode.Unauthorized) }
             val session = loggedInSession()
@@ -135,7 +136,7 @@ class WaveSessionTest {
         }
 
     @Test
-    fun unauthorizedExceptionExpiresImmediately() =
+    fun unauthorizedExceptionExpiresImmediately(): Unit =
         runBlocking {
             handler = { respond("", HttpStatusCode.Unauthorized) }
             val session = loggedInSession()
@@ -145,7 +146,7 @@ class WaveSessionTest {
         }
 
     @Test
-    fun redirectIsConfirmedBeforeExpiring() =
+    fun redirectIsConfirmedBeforeExpiring(): Unit =
         runBlocking {
             handler = { request ->
                 if (request.url.encodedPath.endsWith("/player")) {
@@ -160,7 +161,7 @@ class WaveSessionTest {
         }
 
     @Test
-    fun loginRequiredIsConfirmedAndClearedWhenStillLoggedIn() =
+    fun loginRequiredIsConfirmedAndClearedWhenStillLoggedIn(): Unit =
         runBlocking {
             handler = { request ->
                 if (request.url.encodedPath.endsWith("/player")) json(player("LOGIN_REQUIRED", emptyList())) else json(accountMenu("Synthetic User"))
@@ -172,7 +173,7 @@ class WaveSessionTest {
         }
 
     @Test
-    fun loginRequiredExpiresWhenConfirmationShowsLoggedOut() =
+    fun loginRequiredExpiresWhenConfirmationShowsLoggedOut(): Unit =
         runBlocking {
             handler = { request ->
                 if (request.url.encodedPath.endsWith("/player")) json(player("LOGIN_REQUIRED", emptyList())) else json(accountMenu(null))
@@ -183,7 +184,7 @@ class WaveSessionTest {
         }
 
     @Test
-    fun forbiddenIsOnlySuspectedWhileAccountIsStillThere() =
+    fun forbiddenIsOnlySuspectedWhileAccountIsStillThere(): Unit =
         runBlocking {
             handler = { request ->
                 if (request.url.encodedPath.endsWith("/player")) respond("", HttpStatusCode.Forbidden) else json(accountMenu("Synthetic User"))
@@ -194,7 +195,7 @@ class WaveSessionTest {
         }
 
     @Test
-    fun serverErrorsAreRetriedAndDoNotChangeState() =
+    fun serverErrorsAreRetriedAndDoNotChangeState(): Unit =
         runBlocking {
             handler = { respond("", HttpStatusCode.ServiceUnavailable) }
             val session = loggedInSession()
@@ -204,7 +205,7 @@ class WaveSessionTest {
         }
 
     @Test
-    fun successClearsSuspicion() =
+    fun successClearsSuspicion(): Unit =
         runBlocking {
             var fail = true
             handler = { request ->
@@ -223,7 +224,7 @@ class WaveSessionTest {
         }
 
     @Test
-    fun logoutClearsCookieEvenAfterGenerationMoved() =
+    fun logoutClearsCookieEvenAfterGenerationMoved(): Unit =
         runBlocking {
             val session = loggedInSession()
             // locale の変更でも innertubex の世代は進む（clearSessionIfMatches だとここで取りこぼす）
@@ -236,7 +237,7 @@ class WaveSessionTest {
         }
 
     @Test
-    fun logoutCancelsInFlightCallsAndTheirRetries() =
+    fun logoutCancelsInFlightCallsAndTheirRetries(): Unit =
         runBlocking {
             val received = CompletableDeferred<Unit>()
             val release = CompletableDeferred<Unit>()
@@ -258,7 +259,7 @@ class WaveSessionTest {
         }
 
     @Test
-    fun violationsAreRethrownOnlyWhenStrict() =
+    fun violationsAreRethrownOnlyWhenStrict(): Unit =
         runBlocking {
             val strict = loggedInSession(rethrowViolations = true)
             assertFailsWith<AuthRouteViolation> {
@@ -273,21 +274,21 @@ class WaveSessionTest {
         }
 
     @Test
-    fun premiumIsAvailableWithPremiumItags() =
+    fun premiumIsAvailableWithPremiumItags(): Unit =
         runBlocking {
             handler = premiumHandler(listOf(140, 141, 251))
             assertEquals(PremiumStatus.Available, loggedInSession().premiumStatus())
         }
 
     @Test
-    fun premiumIsUnavailableWithoutPremiumItags() =
+    fun premiumIsUnavailableWithoutPremiumItags(): Unit =
         runBlocking {
             handler = premiumHandler(listOf(140, 251))
             assertEquals(PremiumStatus.Unavailable, loggedInSession().premiumStatus())
         }
 
     @Test
-    fun premiumIsUnknownWithoutSignatureTimestamp() =
+    fun premiumIsUnknownWithoutSignatureTimestamp(): Unit =
         runBlocking {
             sts = null
             handler = premiumHandler(listOf(141))
@@ -296,7 +297,7 @@ class WaveSessionTest {
         }
 
     @Test
-    fun premiumIsProbedOncePerGenerationEvenWhenCalledConcurrently() =
+    fun premiumIsProbedOncePerGenerationEvenWhenCalledConcurrently(): Unit =
         runBlocking {
             handler = premiumHandler(listOf(774))
             val session = loggedInSession()
@@ -307,7 +308,7 @@ class WaveSessionTest {
         }
 
     @Test
-    fun unknownPremiumIsRetriedAfterSixtySeconds() =
+    fun unknownPremiumIsRetriedAfterSixtySeconds(): Unit =
         runBlocking {
             sts = null
             handler = premiumHandler(listOf(141))
@@ -318,6 +319,158 @@ class WaveSessionTest {
             sts = 20702
             now.set(60_000)
             assertEquals(PremiumStatus.Available, session.premiumStatus())
+        }
+
+    @Test
+    fun emptySuccessIsOnlySuspectedAndUnknownShapesDoNotExpire(): Unit =
+        runBlocking {
+            handler = { json("{}") }
+            val session = loggedInSession()
+            assertEquals(AccountResult.Failed(FailureKind.Suspect), session.accountInfo())
+            assertEquals(SessionState.Suspect(SuspectReason.EmptyResponse, 1), session.state.value)
+            withTimeout(5_000) { while (sent.size < 2) delay(10) }
+            delay(200)
+            // 確認の応答も {} なので、ログアウトの印とはみなさず Suspect のまま
+            assertIs<SessionState.Suspect>(session.state.value)
+        }
+
+    @Test
+    fun confirmationWith401Expires() =
+        runBlocking {
+            handler = { request ->
+                if (request.url.encodedPath.endsWith("/player")) respond("", HttpStatusCode.Forbidden) else respond("", HttpStatusCode.Unauthorized)
+            }
+            val session = loggedInSession()
+            callPlayer(session)
+            awaitState(session) { it == SessionState.Expired(ExpiredReason.Unauthenticated) }
+        }
+
+    @Test
+    fun confirmationIsRateLimited(): Unit =
+        runBlocking {
+            handler = { request ->
+                if (request.url.encodedPath.endsWith("/player")) respond("", HttpStatusCode.Forbidden) else respond("", HttpStatusCode.InternalServerError)
+            }
+            val session = loggedInSession()
+            repeat(5) { callPlayer(session) }
+            delay(300)
+            val confirms = { sent.count { it.url.encodedPath.endsWith("/account_menu") } }
+            // 500 は innertubex が3回まで再試行するので、確認1回 = 3リクエスト
+            assertEquals(3, confirms())
+            now.set(WaveSession.CONFIRM_INTERVAL_MS)
+            callPlayer(session)
+            withTimeout(5_000) { while (confirms() < 6) delay(10) }
+        }
+
+    @Test
+    fun expiredIsNotDowngradedToSuspect(): Unit =
+        runBlocking {
+            var status = HttpStatusCode.Unauthorized
+            handler = { respond("", status) }
+            val session = loggedInSession()
+            callPlayer(session)
+            status = HttpStatusCode.Forbidden
+            callPlayer(session)
+            assertEquals(SessionState.Expired(ExpiredReason.Unauthenticated), session.state.value)
+            delay(200)
+            assertEquals(0, sent.count { it.url.encodedPath.endsWith("/account_menu") })
+        }
+
+    @Test
+    fun parseFailuresAndNetworkErrorsAreClassified(): Unit =
+        runBlocking {
+            handler = { request ->
+                if (request.url.encodedPath.endsWith("/player")) json("not json") else throw java.io.IOException("synthetic network failure")
+            }
+            val session = loggedInSession()
+            assertEquals(
+                CallResult.Failed(FailureKind.Parse),
+                session.call("player", { it.player(YouTubeClient.WEB_REMIX, "synthetic-id", signatureTimestamp = 1) }) { error("unparseable") },
+            )
+            assertEquals(AccountResult.Failed(FailureKind.Network), session.accountInfo())
+            assertEquals(SessionState.Active, session.state.value)
+        }
+
+    @Test
+    fun cancellationFromInnerTubeIsNotReportedAsLoggedOut(): Unit =
+        runBlocking {
+            val session = loggedInSession()
+            assertEquals(
+                CallResult.Failed(FailureKind.Network),
+                session.call<Unit>("mutation", { throw kotlinx.coroutines.CancellationException("InnerTube session changed") }) { ParseOutcome.Parsed(Unit) },
+            )
+            assertEquals(SessionState.Active, session.state.value)
+        }
+
+    @Test
+    fun callerCancellationIsPropagated(): Unit =
+        runBlocking {
+            val release = CompletableDeferred<Unit>()
+            handler = {
+                release.await()
+                json(player("OK", emptyList()))
+            }
+            val session = loggedInSession()
+            val job = launch { callPlayer(session) }
+            withTimeout(5_000) { while (sent.isEmpty()) delay(10) }
+            job.cancel()
+            withTimeout(5_000) { job.join() }
+            assertTrue(job.isCancelled)
+            release.complete(Unit)
+        }
+
+    @Test
+    fun staleGenerationCannotOverwriteNewState(): Unit =
+        runBlocking {
+            val session = loggedInSession()
+            val staleId = session.currentGenerationId()
+            credentials.value = assertNotNull(Credentials.fromLogin("SAPISID=other-synthetic", "v2", "s2", 2))
+            awaitState(session) { session.currentGenerationId() != staleId }
+
+            assertFalse(session.updateStateFor(staleId) { SessionState.Expired(ExpiredReason.Unauthenticated) })
+            assertEquals(SessionState.Active, session.state.value)
+        }
+
+    @Test
+    fun switchingAccountsResetsStateAndPremiumCache(): Unit =
+        runBlocking {
+            handler = premiumHandler(listOf(141))
+            val session = loggedInSession()
+            assertEquals(PremiumStatus.Available, session.premiumStatus())
+            handler = { respond("", HttpStatusCode.Unauthorized) }
+            callPlayer(session)
+            assertIs<SessionState.Expired>(session.state.value)
+
+            handler = premiumHandler(listOf(140))
+            credentials.value = assertNotNull(Credentials.fromLogin("SAPISID=other-synthetic", "v2", "s2", 2))
+            awaitState(session) { it == SessionState.Active }
+            assertEquals(PremiumStatus.Unavailable, session.premiumStatus())
+            assertTrue(sent.last().headers[HttpHeaders.Cookie].orEmpty().contains("other-synthetic"))
+        }
+
+    @Test
+    fun premiumIsUnknownWhenAnyStepFails(): Unit =
+        runBlocking {
+            handler = { request -> if (request.url.encodedPath.endsWith("/player")) json(player("OK", listOf(141))) else respond("", HttpStatusCode.InternalServerError) }
+            assertEquals(PremiumStatus.Unknown, loggedInSession().premiumStatus())
+
+            handler = { request -> if (request.url.encodedPath.endsWith("/player")) json(player("LOGIN_REQUIRED", listOf(141))) else json(accountMenu("Synthetic User")) }
+            assertEquals(PremiumStatus.Unknown, loggedInSession().premiumStatus())
+
+            handler = { request -> if (request.url.encodedPath.endsWith("/player")) json(player("UNPLAYABLE", listOf(141))) else json(accountMenu("Synthetic User")) }
+            assertEquals(PremiumStatus.Unknown, loggedInSession().premiumStatus())
+        }
+
+    @Test
+    fun closeClearsTheInnerTubeSession(): Unit =
+        runBlocking {
+            val session = loggedInSession()
+            session.close()
+            assertNull(session.innerTube.sessionSnapshot().cookie)
+            credentials.value = assertNotNull(Credentials.fromLogin("SAPISID=other-synthetic", null, null, 2))
+            delay(200)
+            assertNull(session.innerTube.sessionSnapshot().cookie)
+            assertEquals(AccountResult.Failed(FailureKind.NotLoggedIn), session.accountInfo())
         }
 
     private suspend fun loggedInSession(rethrowViolations: Boolean = false): WaveSession {
@@ -351,7 +504,8 @@ class WaveSessionTest {
 
     private fun accountMenu(name: String?): String =
         if (name == null) {
-            """{"actions":[]}"""
+            // 合成のログアウト相当: actions はあるが、アカウントのヘッダが無い（実際の形は未検証）
+            """{"actions":[{"openPopupAction":{"popup":{"multiPageMenuRenderer":{}}}}]}"""
         } else {
             """{"actions":[{"openPopupAction":{"popup":{"multiPageMenuRenderer":{"header":{"activeAccountHeaderRenderer":""" +
                 """{"accountName":{"runs":[{"text":"$name"}]},"channelHandle":{"runs":[{"text":"@synthetic"}]}}}}}}}]}"""
