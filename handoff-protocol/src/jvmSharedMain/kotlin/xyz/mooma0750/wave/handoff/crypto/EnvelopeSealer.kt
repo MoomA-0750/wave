@@ -62,6 +62,7 @@ object EnvelopeSealer {
             to.encodeToByteArray(),
             type.name.encodeToByteArray(),
             seq.toString().encodeToByteArray(),
-            (handoffId ?: "").encodeToByteArray(),
+            // null と "" を区別する（有無の1バイトを前に付ける）
+            if (handoffId == null) byteArrayOf(0) else byteArrayOf(1) + handoffId.encodeToByteArray(),
         )
 }

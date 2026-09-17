@@ -100,4 +100,43 @@ class PairingTest {
         assertNull(Pairing.decodeOffer(Pairing.encodeOffer(a.offer.copy(v = 2))))
         assertNotEquals(a.offer.token, responder().offer.token)
     }
+
+    @Test
+    fun helloSignedWithAnotherKeyIsRejected() {
+        val a = responder()
+        // 封は正しい（使い捨ての鍵で導いた鍵）が、pkB に対応しない鍵で署名した Hello
+        val forged = Pairing.Initiator(a.offer, WaveCrypto.generateEphemeralKeyPair().private, idB.public, "Fold 7", "account-1")
+        assertEquals(Pairing.Failure.BadSignature, reason(a.onHello(forged.hello())))
+    }
+
+    @Test
+    fun confirmSignedWithAnotherKeyIsRejected() {
+        val a = Pairing.Responder(WaveCrypto.generateEphemeralKeyPair().private, idA.public, "Pixel 3", "account-1", nowMs = { now })
+        val b = initiator(a.offer)
+        assertEquals(Pairing.Failure.BadSignature, reason(b.onConfirm(a.onHello(b.hello()).getOrThrow())))
+    }
+
+    @Test
+    fun initiatorChecksTheResponderAccountToo() {
+        val a = Pairing.Responder(idA.private, idA.public, "Pixel 3", "account-1", nowMs = { now }, confirmAccountId = "account-2")
+        val b = initiator(a.offer)
+        assertEquals(Pairing.Failure.AccountMismatch, reason(b.onConfirm(a.onHello(b.hello()).getOrThrow())))
+    }
+
+    @Test
+    fun codeEntryExpiresAndSelfPairingIsRejected() {
+        val a = responder()
+        val b = initiator(a.offer)
+        a.onHello(b.hello()).getOrThrow()
+        now += Pairing.LIFETIME_MS + 1
+        assertEquals(Pairing.Failure.Expired, reason(a.onCodeEntered("000000")))
+        val self = responder()
+        assertEquals(Pairing.Failure.Malformed, reason(self.onHello(initiator(self.offer, identity = idA).hello())))
+    }
+
+    @Test
+    fun deviceNamesAreSanitized() {
+        assertEquals("abc", Pairing.sanitizeName("a\u202Eb\u0000c"))
+        assertEquals("端末", Pairing.sanitizeName("\u0007"))
+    }
 }

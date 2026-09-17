@@ -32,6 +32,8 @@ class EnvelopeSealerTest {
         assertNull(EnvelopeSealer.open(envelope.copy(type = EnvelopeType.Cancel), onA.receiveKey, a, b, 4))
         assertNull(EnvelopeSealer.open(envelope.copy(seq = 6), onA.receiveKey, a, b, 4))
         assertNull(EnvelopeSealer.open(envelope.copy(handoffId = "h2"), onA.receiveKey, a, b, 4))
+        val withoutId = EnvelopeSealer.seal(onB.sendKey, b, a, EnvelopeType.Unpair, seq = 7, handoffId = null, plaintext = byteArrayOf())
+        assertNull(EnvelopeSealer.open(withoutId.copy(handoffId = ""), onA.receiveKey, a, b, 4), "null と空文字を区別していない")
         // 宛先・送り手が違う
         assertNull(EnvelopeSealer.open(envelope, onA.receiveKey, self = "someone", expectedFrom = b, lastReceivedSeq = 4))
         assertNull(EnvelopeSealer.open(envelope, onA.receiveKey, self = a, expectedFrom = "someone", lastReceivedSeq = 4))

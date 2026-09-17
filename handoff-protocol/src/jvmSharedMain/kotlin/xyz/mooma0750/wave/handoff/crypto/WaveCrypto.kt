@@ -42,12 +42,15 @@ object WaveCrypto {
     fun decodePublicKey(encoded: ByteArray): ECPublicKey? {
         if (encoded.size > 200) return null
         val key = runCatching { KeyFactory.getInstance("EC").generatePublic(X509EncodedKeySpec(encoded)) as? ECPublicKey }.getOrNull() ?: return null
+        // 送る形を正規化したものだけ（圧縮点など、読み直すと別のバイト列になる形を受けると、端末と中継で端末 ID が食い違う）
+        if (!key.encoded.contentEquals(encoded)) return null
         val params = key.params
         if (params.curve.a != A || params.curve.b != B || params.order != N || (params.curve.field as? java.security.spec.ECFieldFp)?.p != P) return null
         val x = key.w.affineX ?: return null
         val y = key.w.affineY ?: return null
         if (x.signum() < 0 || x >= P || y.signum() < 0 || y >= P) return null
-        val lhs = y.modPow(BigInteger.TWO, P)
+        // BigInteger.TWO は Android の API 33 から（minSdk 31）なので使わない
+        val lhs = y.multiply(y).mod(P)
         val rhs = x.modPow(BigInteger.valueOf(3), P).add(A.multiply(x)).add(B).mod(P)
         return if (lhs == rhs) key else null
     }

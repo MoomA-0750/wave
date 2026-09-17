@@ -53,6 +53,8 @@ class WaveCryptoTest {
         val p384 = java.security.KeyPairGenerator.getInstance("EC").apply { initialize(java.security.spec.ECGenParameterSpec("secp384r1")) }.generateKeyPair()
         assertNull(WaveCrypto.decodePublicKey(p384.public.encoded))
         assertNull(WaveCrypto.decodePublicKey(ByteArray(10)))
+        // 送る形を正規化していないもの（末尾にごみ）
+        assertNull(WaveCrypto.decodePublicKey(encoded + byteArrayOf(0)))
     }
 
     @Test

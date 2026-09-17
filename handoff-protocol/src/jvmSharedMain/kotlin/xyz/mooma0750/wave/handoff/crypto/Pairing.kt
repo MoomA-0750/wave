@@ -117,6 +117,8 @@ object Pairing {
         /** アカウントの識別子（正規化した DATASYNC_ID）。HMAC にだけ使う。 */
         private val accountId: String,
         private val nowMs: () -> Long,
+        /** テスト用: Confirm に入れるアカウント（B 側の照合を確かめる）。 */
+        private val confirmAccountId: String = accountId,
     ) {
         private val pkA = WaveCrypto.encodePublicKey(identityPublic)
         private val ephemeral: KeyPair = WaveCrypto.generateEphemeralKeyPair()
@@ -138,6 +140,7 @@ object Pairing {
         val tokenHash: ByteArray = WaveCrypto.sha256(token)
 
         /** B の Hello を受けて Confirm を返す。token は最初の正しい Hello で消費する。 */
+        @Synchronized
         fun onHello(hello: Hello): Result<Confirm> {
             if (expired()) return failure(Failure.Expired)
             if (used) return failure(Failure.AlreadyUsed)
@@ -154,22 +157,25 @@ object Pairing {
                     ?: return failure(Failure.Malformed)
             val pkBBytes = unb64(body.pkB) ?: return failure(Failure.Malformed)
             val pkB = WaveCrypto.decodePublicKey(pkBBytes) ?: return failure(Failure.Malformed)
+            // 自分自身とのペアは受けない（方向の鍵が崩れる）
+            if (pkBBytes.contentEquals(pkA)) return failure(Failure.Malformed)
             val transcript = WaveCrypto.lengthPrefixed(transcript0, pkBBytes)
             if (!WaveCrypto.verify(pkB, "$LABEL-b", transcript, unb64(body.sigB) ?: return failure(Failure.Malformed))) return failure(Failure.BadSignature)
             val keys = schedule(prk, transcript, self = pkA, peer = pkBBytes)
             if (!WaveCrypto.constantTimeEquals(accountHmac(keys.accountKey, accountId), unb64(body.accountHmac) ?: ByteArray(0))) return failure(Failure.AccountMismatch)
             used = true
-            pending = PendingPair(keys.sas, Established(pkBBytes, body.deviceName.take(64), keys.sendKey, keys.receiveKey, keys.accountKey))
-            val confirm = ConfirmBody(b64.encodeToString(WaveCrypto.sign(identityPrivate, "$LABEL-a", transcript)), deviceName, b64.encodeToString(accountHmac(keys.accountKey, accountId)))
+            pending = PendingPair(keys.sas, Established(pkBBytes, sanitizeName(body.deviceName), keys.sendKey, keys.receiveKey, keys.accountKey))
+            val confirm = ConfirmBody(b64.encodeToString(WaveCrypto.sign(identityPrivate, "$LABEL-a", transcript)), deviceName, b64.encodeToString(accountHmac(keys.accountKey, confirmAccountId)))
             val (nonce, ciphertext) = WaveCrypto.seal(handshakeKey(prk, "a->b", transcript0), transcript0, json.encodeToString(ConfirmBody.serializer(), confirm).encodeToByteArray())
             return Result.success(Confirm(b64.encodeToString(nonce), b64.encodeToString(ciphertext)))
         }
 
         /** 本人が入力した6桁（B の画面の数字）。一致したらペアを確定する。3回まで。 */
+        @Synchronized
         fun onCodeEntered(code: String): Result<Established> {
             if (expired()) return failure(Failure.Expired)
-            val current = pending ?: return failure(Failure.Malformed)
             if (attempts >= MAX_ATTEMPTS) return failure(Failure.TooManyAttempts)
+            val current = pending ?: return failure(Failure.Malformed)
             attempts++
             if (!WaveCrypto.constantTimeEquals(code.trim().encodeToByteArray(), current.sas.encodeToByteArray())) {
                 if (attempts >= MAX_ATTEMPTS) pending = null
@@ -193,9 +199,9 @@ object Pairing {
         private val pkB = WaveCrypto.encodePublicKey(identityPublic)
         private val ephemeral = WaveCrypto.generateEphemeralKeyPair()
         private val eB = WaveCrypto.encodePublicKey(ephemeral.public)
-        private val pkA = unb64(offer.pkA)!!
-        private val eA = unb64(offer.eA)!!
-        private val token = unb64(offer.token)!!
+        private val pkA = requireNotNull(unb64(offer.pkA)?.takeIf { WaveCrypto.decodePublicKey(it) != null }) { "offer は decodeOffer を通すこと" }
+        private val eA = requireNotNull(unb64(offer.eA)?.takeIf { WaveCrypto.decodePublicKey(it) != null }) { "offer は decodeOffer を通すこと" }
+        private val token = requireNotNull(unb64(offer.token)?.takeIf { it.size == TOKEN_BYTES }) { "offer は decodeOffer を通すこと" }
         private val transcript0 = WaveCrypto.lengthPrefixed(LABEL.encodeToByteArray(), pkA, eA, token, eB)
         private val transcript = WaveCrypto.lengthPrefixed(transcript0, pkB)
         private val prk = Hkdf.extract(token, WaveCrypto.ecdh(ephemeral.private, WaveCrypto.decodePublicKey(eA)!!))
@@ -217,7 +223,7 @@ object Pairing {
             val pkAKey = WaveCrypto.decodePublicKey(pkA) ?: return failure(Failure.Malformed)
             if (!WaveCrypto.verify(pkAKey, "$LABEL-a", transcript, unb64(body.sigA) ?: return failure(Failure.Malformed))) return failure(Failure.BadSignature)
             if (!WaveCrypto.constantTimeEquals(accountHmac(keys.accountKey, accountId), unb64(body.accountHmac) ?: ByteArray(0))) return failure(Failure.AccountMismatch)
-            return Result.success(keys.sas to Established(pkA, body.deviceName.take(64), keys.sendKey, keys.receiveKey, keys.accountKey))
+            return Result.success(keys.sas to Established(pkA, sanitizeName(body.deviceName), keys.sendKey, keys.receiveKey, keys.accountKey))
         }
     }
 
@@ -282,4 +288,12 @@ object Pairing {
     }
 
     private fun unb64(value: String): ByteArray? = runCatching { unb64.decode(value) }.getOrNull()
+
+    /** 端末名から制御文字・書字方向の上書き文字を落とし、64文字までにする。 */
+    fun sanitizeName(name: String): String =
+        name
+            .filterNot { it.isISOControl() || it in '\u202A'..'\u202E' || it in '\u2066'..'\u2069' || it == '\u200E' || it == '\u200F' }
+            .trim()
+            .take(64)
+            .ifEmpty { "端末" }
 }
