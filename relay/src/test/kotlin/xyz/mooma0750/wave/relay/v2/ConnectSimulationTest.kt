@@ -205,6 +205,51 @@ class ConnectSimulationTest {
     }
 
     @Test
+    fun joiningDeviceAcceptsOnlyTheInvitersHouseholdAndItsOwnAdd() {
+        setUp()
+        a.startPlaying("queue-A")
+        relay.run()
+        // C は家の外。A の Confirm（6桁で確かめた通信路）で床を受け取った体で、加入を待つ
+        val c = SimDevice("C", { relay }, { now })
+        val info = requireNotNull(a.client.joinInfo())
+        c.client.expectJoin(info, inviterDeviceId = a.deviceId)
+        // A が C を加える前に C がつながれない（中継は家の端末だけを認証する）ので、A が先に加える
+        relay.fromClient(a.deviceId, RelayV2.ChainAppend(MemberChain.add(a, requireNotNull(a.client.verifiedChain()), c.keys)))
+        relay.run()
+        c.connect()
+        relay.run()
+        assertEquals(a.client.householdId, c.client.householdId)
+        // 家の状態を読め、引き取れる
+        assertTrue(c.events.any { it is ClientEvent.RemoteChanged && it.writer == a.deviceId })
+        assertTrue(c.client.requestTransfer())
+        relay.run()
+        assertTrue(c.playing)
+        assertFalse(a.playing)
+    }
+
+    @Test
+    fun joiningDeviceRejectsAnotherHouseholdOrAnAddByAnotherSigner() {
+        setUp()
+        val info = requireNotNull(a.client.joinInfo())
+        // B が C を加えた（A の Confirm の相手ではない署名者）→ C は受け入れない
+        val c = SimDevice("C", { relay }, { now })
+        c.client.expectJoin(info, inviterDeviceId = a.deviceId)
+        relay.fromClient(b.deviceId, RelayV2.ChainAppend(MemberChain.add(b, requireNotNull(b.client.verifiedChain()), c.keys)))
+        relay.run()
+        c.connect()
+        relay.run()
+        assertEquals(null, c.client.householdId)
+        // 別の家の ID を名乗る Confirm → 分岐として知らせる
+        val d = SimDevice("D", { relay }, { now })
+        d.client.expectJoin(info.copy(householdId = "another-household"), inviterDeviceId = a.deviceId)
+        relay.fromClient(a.deviceId, RelayV2.ChainAppend(MemberChain.add(a, requireNotNull(a.client.verifiedChain()), d.keys)))
+        relay.run()
+        d.connect()
+        relay.run()
+        assertEquals(null, d.client.householdId)
+    }
+
+    @Test
     fun forkedChainAndStoreResetAreSurfacedAndNotActedOn() {
         setUp()
         a.startPlaying("queue-A")

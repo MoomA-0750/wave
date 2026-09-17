@@ -169,6 +169,42 @@ class ConnectClient(
 
     /** 加入の手順で、家の鎖を使う（A が B を加えるときの add の署名に使う）。 */
     fun verifiedChain(): VerifiedChain? = chain
+
+    /** 加入の Confirm で受け取った床（D-3）。6桁の照合で確かめた相手（inviter）から、認証された通信路で届いた値。 */
+    @Serializable
+    data class JoinInfo(
+        val householdId: String,
+        val headSeq: Long,
+        val headHash: String,
+        val storeId: String,
+        val cursorFloor: Long,
+        val queueFloor: Long,
+    )
+
+    private var expectedJoin: Pair<JoinInfo, String>? = null
+
+    /** A 側: Confirm に入れる床（家に入っていなければ null）。 */
+    fun joinInfo(): JoinInfo? {
+        val current = chain ?: return null
+        val store = storeId ?: return null
+        return JoinInfo(current.householdId, current.headSeq, current.headHash, store, cursorFloor, queueFloor)
+    }
+
+    /**
+     * B 側: 加入を待つ。次に受ける鎖が、この家の ID・頭を含み、その後に inviter の署名で自分を加える記録があるときだけ受け入れる。
+     * storeId と版の床もここで決まる（最初に受けた welcome の storeId を無条件に信じない）。
+     */
+    fun expectJoin(
+        info: JoinInfo,
+        inviterDeviceId: String,
+    ) {
+        if (chain != null) return
+        expectedJoin = info to inviterDeviceId
+        storeId = info.storeId
+        cursorFloor = info.cursorFloor
+        queueFloor = info.queueFloor
+        persist()
+    }
     val activeDeviceId: String? get() = serverActive
     val hasRetreated: Boolean get() = retreated
 
@@ -181,14 +217,9 @@ class ConnectClient(
         when (message) {
             is RelayV2.Welcome -> onWelcome(message)
             is RelayV2.Chain -> onChain(message.records)
-            is RelayV2.ChainChanged -> {
-                val current = chain
-                if (current == null || message.headSeq > current.headSeq) {
-                    send(RelayV2.ChainGet(records.size.toLong()))
-                } else if (current.hashAt(message.headSeq) != message.headHash) {
-                    effects.event(ClientEvent.ChainForked)
-                }
-            }
+            // 自分の追記の返事（chain_ok）は、他の端末への chain_changed を受けないので、同じく取り直す（宛先を書き直すため）
+            is RelayV2.ChainChanged -> onHeadAnnounced(message.headSeq, message.headHash)
+            is RelayV2.ChainOk -> onHeadAnnounced(message.headSeq, message.headHash)
             is RelayV2.State -> onState(message.state)
             is RelayV2.StateOk -> onStateOk(message)
             is RelayV2.StateConflict -> onStateConflict(message)
@@ -204,6 +235,18 @@ class ConnectClient(
                     effects.event(ClientEvent.TransferFailed("expired"))
                 }
             else -> Unit
+        }
+    }
+
+    private fun onHeadAnnounced(
+        headSeq: Long,
+        headHash: String,
+    ) {
+        val current = chain
+        if (current == null || headSeq > current.headSeq) {
+            send(RelayV2.ChainGet(records.size.toLong()))
+        } else if (current.hashAt(headSeq) != headHash) {
+            effects.event(ClientEvent.ChainForked)
         }
     }
 
@@ -241,9 +284,21 @@ class ConnectClient(
 
     private fun onChain(newRecords: List<ChainRecord>) {
         val candidate = records + newRecords
-        val trusted = chain?.let { MemberChain.Head(it.headSeq, it.headHash) }
+        val join = expectedJoin
+        val trusted = chain?.let { MemberChain.Head(it.headSeq, it.headHash) } ?: join?.let { MemberChain.Head(it.first.headSeq, it.first.headHash) }
         when (val result = MemberChain.verify(candidate, trusted)) {
             is ChainVerification.Ok -> {
+                if (join != null && chain == null) {
+                    // 加入: 家の ID が Confirm と同じで、頭の後に inviter が自分を加えた記録があること
+                    val added = candidate.drop((join.first.headSeq + 1).toInt()).any { it.type == ChainType.Add && it.target?.deviceId == signer.deviceId && it.signerId == join.second }
+                    if (result.chain.householdId != join.first.householdId) {
+                        effects.event(ClientEvent.ChainForked)
+                        return
+                    }
+                    // まだ加えられていない（A の追記の前に取った）: 受け入れずに次の chain_changed を待つ
+                    if (!added) return
+                    expectedJoin = null
+                }
                 val headChanged = result.chain.headHash != chain?.headHash
                 records = candidate
                 chain = result.chain
