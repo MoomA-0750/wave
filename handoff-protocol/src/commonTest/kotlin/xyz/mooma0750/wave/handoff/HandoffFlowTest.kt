@@ -33,8 +33,40 @@ class HandoffFlowTest {
         assertIs<HandoffTaker.SnapshotDecision.Ignore>(HandoffTaker(nowMs = { now }).apply { request("A", handoffId) }.onSnapshot("A", HandoffBody.Snapshot("h", snapshotText("11111111-1111-4111-8111-111111111111")), true))
         val decision = assertIs<HandoffTaker.SnapshotDecision.Adopt>(taker.onSnapshot("A", HandoffBody.Snapshot("h", snapshotText()), true))
         assertEquals(handoffId, decision.snapshot.handoffId)
+        assertIs<HandoffTaker.State.Adopting>(taker.state)
         taker.onAdopted(handoffId)
         assertIs<HandoffTaker.State.Adopted>(taker.state)
+    }
+
+    @Test
+    fun takerKeepsAdoptingPastDeadlineAndTracksIssuedRequests() {
+        val taker = HandoffTaker(nowMs = { now })
+        taker.request("A", handoffId)
+        assertIs<HandoffTaker.SnapshotDecision.Adopt>(taker.onSnapshot("A", HandoffBody.Snapshot("h", snapshotText()), true))
+        // 取り込みの途中で期限が来ても取り下げない（Cancel を送ると A が再開して二重に鳴る）
+        now += HandoffTaker.DEFAULT_TIMEOUT_MS + 1
+        assertNull(taker.expire())
+        assertFalse(taker.request("A", "another"), "取り込み中に次の要求を受けた")
+        assertFalse(taker.onCancel("A", HandoffBody.Cancel(handoffId, "no_queue")), "取り込み中に Cancel で取り下げた")
+        taker.onAdoptFailed(handoffId)
+        assertEquals(HandoffTaker.State.Idle, taker.state)
+        assertTrue(taker.wasIssued(handoffId))
+        assertFalse(taker.wasIssued("someone-else"))
+        assertFalse(taker.wasIssued(null))
+    }
+
+    @Test
+    fun undeliverableOnlyMatchesTheWaitingRequest() {
+        val taker = HandoffTaker(nowMs = { now })
+        taker.request("A", handoffId)
+        assertFalse(taker.onUndeliverable("C", handoffId), "別の端末への送信の失敗で取り下げた")
+        assertFalse(taker.onUndeliverable("A", null), "handoffId の無い送信（解除など）の失敗で取り下げた")
+        assertTrue(taker.onUndeliverable("A", handoffId))
+        val giver = HandoffGiver(nowMs = { now })
+        assertEquals(HandoffGiver.RequestDecision.Capture, giver.onRequest("B", HandoffBody.Request(handoffId, "x"), canGive = true))
+        assertFalse(giver.onUndeliverable("B", "other"))
+        assertTrue(giver.onUndeliverable("B", handoffId))
+        assertFalse(giver.holdingConnection)
     }
 
     @Test

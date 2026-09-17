@@ -96,8 +96,10 @@ class RelayServerTest {
                 sendMessage(RelayMessage.Register(pk(b), b64.encodeToString(signature)))
                 assertIs<RelayMessage.OnlineResult>(receiveMessage())
                 // B はまだオフライン
-                sendMessage(RelayMessage.Send(envelope(id(a), id(b))))
-                assertEquals(RelayMessage.Error("offline"), receiveMessage())
+                val toOffline = envelope(id(a), id(b)).copy(handoffId = "0f8fad5b-d9cb-469f-a165-70867728950e")
+                sendMessage(RelayMessage.Send(toOffline))
+                // どの封筒が届かなかったかを返す（送り手が引き取りの待ちを正しく取り下げるため）
+                assertEquals(RelayMessage.Error("offline", to = id(b), type = toOffline.type, handoffId = toOffline.handoffId), receiveMessage())
                 val sessionA = this
                 client.webSocket("/connect") {
                     authenticate(b)

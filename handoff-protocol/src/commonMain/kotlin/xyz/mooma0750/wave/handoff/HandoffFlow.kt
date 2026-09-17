@@ -69,6 +69,12 @@ class HandoffTaker(
             val deadlineMs: Long,
         ) : State
 
+        /** 検証を通した snapshot を取り込んでいる。期限では取り下げない（取り込みの途中で Cancel を送ると二重に鳴る）。 */
+        data class Adopting(
+            val peerId: String,
+            val handoffId: String,
+        ) : State
+
         data class Adopted(
             val peerId: String,
             val handoffId: String,
@@ -95,16 +101,22 @@ class HandoffTaker(
 
     var state: State = State.Idle
         private set
+    private val issuedHandoffIds = ArrayDeque<String>()
 
     fun request(
         peerId: String,
         handoffId: String,
     ): Boolean {
         expire()
-        if (state is State.Requested) return false
+        if (state is State.Requested || state is State.Adopting) return false
         state = State.Requested(peerId, handoffId, nowMs() + timeoutMs)
+        issuedHandoffIds.addLast(handoffId)
+        while (issuedHandoffIds.size > 16) issuedHandoffIds.removeFirst()
         return true
     }
+
+    /** 自分が最近出した要求か（取り下げた後に遅れて届いた snapshot に、Cancel を返すため）。 */
+    fun wasIssued(handoffId: String?): Boolean = handoffId != null && handoffId in issuedHandoffIds
 
     /**
      * @param accountMatches 本文のアカウントの HMAC が、自分の（確認済みの）アカウントと一致したか
@@ -125,7 +137,10 @@ class HandoffTaker(
             return SnapshotDecision.Ignore("account_mismatch", sendCancel = true)
         }
         return when (val decoded = HandoffCodec.decode(body.snapshot, current.handoffId)) {
-            is HandoffDecodeResult.Ok -> SnapshotDecision.Adopt(decoded.snapshot)
+            is HandoffDecodeResult.Ok -> {
+                state = State.Adopting(current.peerId, current.handoffId)
+                SnapshotDecision.Adopt(decoded.snapshot)
+            }
             is HandoffDecodeResult.UnsupportedVersion -> {
                 state = State.Idle
                 SnapshotDecision.Incompatible(decoded.version)
@@ -138,7 +153,7 @@ class HandoffTaker(
     }
 
     fun onAdopted(handoffId: String) {
-        val current = state as? State.Requested ?: return
+        val current = state as? State.Adopting ?: return
         if (current.handoffId == handoffId) state = State.Adopted(current.peerId, handoffId)
     }
 
@@ -158,7 +173,18 @@ class HandoffTaker(
 
     /** 適用できなかった（前面でない・ログインが変わった等）。Cancel を送る。 */
     fun onAdoptFailed(handoffId: String) {
-        if ((state as? State.Requested)?.handoffId == handoffId) state = State.Idle
+        if ((state as? State.Adopting)?.handoffId == handoffId) state = State.Idle
+    }
+
+    /** 中継が「相手はオフライン」と返した。待っている要求と同じ端末・handoffId のときだけ取り下げる。@return 取り下げたか */
+    fun onUndeliverable(
+        peerId: String,
+        handoffId: String?,
+    ): Boolean {
+        val current = state as? State.Requested ?: return false
+        if (current.peerId != peerId || current.handoffId != handoffId) return false
+        state = State.Idle
+        return true
     }
 
     /** 期限を過ぎた要求を取り下げる。取り下げたら、その要求（Cancel を送る先）を返す。 */
@@ -241,6 +267,17 @@ class HandoffGiver(
     ): Boolean {
         val current = state as? State.Given ?: return false
         if (current.peerId != peerId || current.handoffId != body.handoffId) return false
+        state = State.Idle
+        return true
+    }
+
+    /** snapshot が相手に届かなかった（送れない・相手がオフライン）。@return 再開してよいか */
+    fun onUndeliverable(
+        peerId: String,
+        handoffId: String?,
+    ): Boolean {
+        val current = state as? State.Given ?: return false
+        if (current.peerId != peerId || current.handoffId != handoffId) return false
         state = State.Idle
         return true
     }

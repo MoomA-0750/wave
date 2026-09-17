@@ -60,28 +60,30 @@ fun ConnectScreen(
     var scanning by remember { mutableStateOf(false) }
     var confirmTakeOver by remember { mutableStateOf<PairStore.PairRecord?>(null) }
     var confirmUnpair by remember { mutableStateOf<PairStore.PairRecord?>(null) }
-    var takingFrom by remember { mutableStateOf<String?>(null) }
+    val takingFrom by container.connect.pendingTakeOver.collectAsStateWithLifecycle()
+    // 押してから要求を出すまで（再生中かを確かめる間）に、もう一度押させない
+    var checking by remember { mutableStateOf(false) }
+    var cameraDenied by remember { mutableStateOf(false) }
 
-    // 画面を離れたら、途中のペアリングは取り下げる（QR を出したまま・数字を待ったままにしない）
-    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { container.pairing.cancel() } }
+    // 画面を離れたら、途中のペアリングは取り下げる（QR を出したまま・数字を待ったままにしない）。
+    // B で数字を出している間は取り下げない（A が承認した後に戻ってきて「続ける」を押せるように）
+    val latestPairingState by androidx.compose.runtime.rememberUpdatedState(pairingState)
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        onDispose { if (latestPairingState !is PairingController.State.ShowCode) container.pairing.cancel() }
+    }
     LaunchedEffect(reload, pairingState is PairingController.State.Done) { pairs = container.pairStore.all() }
     // 結果の知らせ（引き取り・解除・相手からの解除）が来たら一覧を読み直す
-    LaunchedEffect(Unit) {
-        container.connect.events.collect {
-            takingFrom = null
-            reload++
-        }
-    }
+    LaunchedEffect(Unit) { container.connect.events.collect { reload++ } }
 
     val context = LocalContext.current
     val cameraPermission =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
             scanning = granted
+            cameraDenied = !granted
         }
 
     fun startTakeOver(pair: PairStore.PairRecord) {
-        takingFrom = pair.peerName
-        scope.launch { if (!container.connect.takeOver(pair.peerDeviceId)) takingFrom = null }
+        container.appScope.launch { container.connect.takeOver(pair.peerDeviceId) }
     }
 
     Scaffold(
@@ -117,11 +119,16 @@ fun ConnectScreen(
                         list.forEach { pair ->
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Text(pair.peerName, Modifier.weight(1f))
-                                Button(enabled = takingFrom == null, onClick = {
+                                Button(enabled = takingFrom == null && !checking, onClick = {
+                                    checking = true
                                     scope.launch {
-                                        // 手元で再生中なら、置き換える前に確かめる
-                                        val playing = container.player.controller().isPlaying
-                                        if (playing) confirmTakeOver = pair else startTakeOver(pair)
+                                        try {
+                                            // 手元で再生中なら、置き換える前に確かめる
+                                            val playing = container.player.controller().isPlaying
+                                            if (playing) confirmTakeOver = pair else startTakeOver(pair)
+                                        } finally {
+                                            checking = false
+                                        }
                                     }
                                 }) { Text("引き取る") }
                                 OutlinedButton(onClick = { confirmUnpair = pair }) { Text("解除") }
@@ -138,11 +145,13 @@ fun ConnectScreen(
             HorizontalDivider()
 
             Text("ペアリング", style = MaterialTheme.typography.titleMedium)
+            if (cameraDenied) Text("カメラが許可されていないので QR を読み取れません。設定アプリで wave のカメラを許可してください", color = MaterialTheme.colorScheme.error)
             PairingSection(
                 state = pairingState,
                 scanning = scanning,
                 onShowQr = { container.pairing.startOffer() },
                 onScan = {
+                    cameraDenied = false
                     container.pairing.cancel()
                     if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
                         scanning = true
@@ -186,7 +195,7 @@ fun ConnectScreen(
             confirmButton = {
                 TextButton(onClick = {
                     confirmUnpair = null
-                    scope.launch { container.connect.unpair(pair.peerDeviceId) }
+                    container.appScope.launch { container.connect.unpair(pair.peerDeviceId) }
                 }) { Text("解除する") }
             },
             dismissButton = { TextButton(onClick = { confirmUnpair = null }) { Text("やめる") } },
@@ -254,6 +263,7 @@ private fun PairingSection(
         }
         is PairingController.State.ShowCode -> {
             Text("${state.peerName} の画面に、この数字を入力してください")
+            state.message?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             Text(state.code.chunked(3).joinToString(" "), style = MaterialTheme.typography.displayMedium)
             Text("入力して ${state.peerName} に「ペアリングしました」と出たら「続ける」を押します", style = MaterialTheme.typography.bodySmall)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

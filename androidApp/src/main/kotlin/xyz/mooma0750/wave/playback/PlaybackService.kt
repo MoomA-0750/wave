@@ -75,10 +75,14 @@ class PlaybackService : MediaSessionService() {
     private var relayHeld = false
 
     /**
-     * 引き取られた後、この端末で再生し直すまで true。この間のキューは相手の再生より古いので、引き取りの要求には渡さない
-     * （2台で行き来したあと、古いキューで相手の今の再生を上書きした。2026-09-17 の実機確認）。プロセスが終われば消える
+     * 渡した（かもしれない）後、この端末で再生し直すまで true。この間のキューは相手の再生より古いので、引き取りの要求には渡さない
+     * （2台で行き来したあと、古いキューで相手の今の再生を上書きした。2026-09-17 の実機確認）。
+     * snapshot を作った時点で立てる（Ack が落ちても古いキューを渡さない）。Cancel と、この端末での再生で戻す
      */
     private var handedOff = false
+
+    /** このプロセスで再生したか。保存から戻しただけのキュー（相手の再生より古いかもしれない）は渡さない。 */
+    private var playedInProcess = false
     private var relayReleaseJob: Job? = null
     private var handoffEndpoint: HandoffHost.Endpoint? = null
 
@@ -154,7 +158,10 @@ class PlaybackService : MediaSessionService() {
 
                 override fun onIsPlayingChanged(isPlaying: Boolean) {
                     historyTracker.onIsPlayingChanged(isPlaying)
-                    if (isPlaying) handedOff = false
+                    if (isPlaying) {
+                        handedOff = false
+                        playedInProcess = true
+                    }
                     updateRelayHold(isPlaying)
                     val now = android.os.SystemClock.elapsedRealtime()
                     if (isPlaying) {
@@ -224,11 +231,12 @@ class PlaybackService : MediaSessionService() {
             object : HandoffHost.Endpoint {
                 private var resumeAfterCancel = false
 
-                override fun hasQueue(): Boolean = player.mediaItemCount > 0 && loggedInAt != null && !handedOff
+                override fun hasQueue(): Boolean = player.mediaItemCount > 0 && loggedInAt != null && playedInProcess && !handedOff
 
                 override fun markHandedOff() {
                     resumeAfterCancel = false
-                    handedOff = true
+                    // Ack より先に、本人がこの端末で再生を再開していたら、その再生は新しい
+                    if (!player.isPlaying) handedOff = true
                     historyTracker.markHandedOff()
                     // 渡すものが無くなったので、一時停止後の待ち受けを続けない（相手の Ack の再送を受けてから離す）
                     if (!player.isPlaying && relayHeld) {
@@ -244,13 +252,16 @@ class PlaybackService : MediaSessionService() {
                 }
 
                 override fun resumeAfterCancel() {
+                    handedOff = false
                     if (resumeAfterCancel) player.play()
                     resumeAfterCancel = false
                 }
 
                 override fun capture(handoffId: String): xyz.mooma0750.wave.handoff.HandoffSnapshot? {
                     val wasPlaying = player.isPlaying || player.playWhenReady
-                    resumeAfterCancel = wasPlaying
+                    // 同じ相手の押し直しで2回目の capture が来ても、最初の「再生していた」を消さない
+                    resumeAfterCancel = resumeAfterCancel || wasPlaying
+                    handedOff = true
                     player.pause()
                     val (listenedMs, historySent) = historyTracker.handoffState()
                     return queueSession.handoffSnapshot(

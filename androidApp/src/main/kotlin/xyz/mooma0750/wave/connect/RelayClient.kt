@@ -64,12 +64,14 @@ class RelayClient(
     private var sessionNonce: ByteArray? = null
     private var users = 0
     private var reconnectJob: Job? = null
+    private var failedAttempts = 0
 
     /** 使い始める（参照を数え、0 から 1 になったら接続する）。 */
     @Synchronized
     fun acquire() {
         users++
-        if (users == 1) open()
+        // 他の利用者がつないでいても、未登録・失敗のまま待っているなら、すぐつなぎ直す（ペアリングの直後に登録が済んでいる）
+        if (users == 1 || (socket == null && status.value != Status.Connecting)) open()
     }
 
     @Synchronized
@@ -131,7 +133,12 @@ class RelayClient(
                     }
                 },
             )
-        return withTimeoutOrNull(PAIR_TIMEOUT_MS) { result.await() }.also { pairSocket.cancel() }
+        return try {
+            withTimeoutOrNull(PAIR_TIMEOUT_MS) { result.await() }
+        } finally {
+            // 取り消されても /pair のソケットを残さない（中継の未認証の接続の枠を使い続けない）
+            pairSocket.cancel()
+        }
     }
 
     @Synchronized
@@ -155,6 +162,7 @@ class RelayClient(
                                 webSocket.send(RelayMessage.encode(RelayMessage.Auth(b64.encodeToString(identity.encodedPublicKey), b64.encodeToString(signature))))
                             }
                             is RelayMessage.Welcome -> {
+                                synchronized(this@RelayClient) { failedAttempts = 0 }
                                 mutableStatus.value = Status.Connected
                                 Log.i(WaveApplication.LOG_TAG, "relay connected")
                             }
@@ -203,9 +211,12 @@ class RelayClient(
         sessionNonce = null
         mutableStatus.value = next
         if (users > 0 && next != Status.NotRegistered) {
+            // Tailscale が切れたまま再生を続けても、名前解決を5秒ごとに試し続けない
+            val wait = (RECONNECT_DELAY_MS shl failedAttempts.coerceAtMost(4)).coerceAtMost(MAX_RECONNECT_DELAY_MS)
+            failedAttempts++
             reconnectJob =
                 scope.launch {
-                    delay(RECONNECT_DELAY_MS)
+                    delay(wait)
                     synchronized(this@RelayClient) { if (users > 0 && socket == null) open() }
                 }
         }
@@ -222,6 +233,7 @@ class RelayClient(
 
     private companion object {
         const val RECONNECT_DELAY_MS = 5_000L
+        const val MAX_RECONNECT_DELAY_MS = 60_000L
         const val PAIR_TIMEOUT_MS = 2 * 60 * 1000L
     }
 }

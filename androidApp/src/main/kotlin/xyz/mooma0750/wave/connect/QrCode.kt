@@ -69,10 +69,13 @@ fun QrScanner(
     val done = remember { AtomicBoolean(false) }
     val executor = remember { Executors.newSingleThreadExecutor() }
     val providerFuture = remember { ProcessCameraProvider.getInstance(context) }
+    // 自分が束ねた use case だけを外す（止めた executor に画像を渡させない）
+    val bound = remember { arrayOfNulls<androidx.camera.core.UseCase>(2) }
     DisposableEffect(Unit) {
         onDispose {
             done.set(true)
-            if (providerFuture.isDone) runCatching { providerFuture.get().unbindAll() }
+            (bound[1] as? ImageAnalysis)?.clearAnalyzer()
+            if (providerFuture.isDone) runCatching { providerFuture.get().unbind(*bound.filterNotNull().toTypedArray()) }
             executor.shutdown()
         }
     }
@@ -91,7 +94,8 @@ fun QrScanner(
                         ContextCompat.getMainExecutor(viewContext).execute { latestOnResult(text) }
                     }
                 }
-                provider.unbindAll()
+                bound[0] = preview
+                bound[1] = analysis
                 runCatching { provider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, preview, analysis) }
             }, ContextCompat.getMainExecutor(viewContext))
             view

@@ -2,15 +2,23 @@ package xyz.mooma0750.wave.connect
 
 import android.os.SystemClock
 import android.util.Log
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import xyz.mooma0750.wave.WaveApplication
 import xyz.mooma0750.wave.core.session.WaveSession
 import xyz.mooma0750.wave.handoff.Envelope
@@ -29,6 +37,9 @@ import java.util.UUID
 /**
  * 端末間の受け渡しの調停役（Phase 6、ADR-0009）。中継からの封筒を開き、引き取る側・引き取られる側の状態機械に渡し、
  * 再生サービスの入口（HandoffHost）を Main で呼ぶ。信頼の根拠は PairStore（中継の登録は見ない）。
+ *
+ * 状態機械（taker・giver）は flowLock の中でだけ触る。snapshot の取り込みの間も持ち続け、期限のタイマーと行き違わない。
+ * 画面から呼ぶ入口（takeOver・unpair）は appScope で動かし、画面を離れても中継の参照を戻す。
  */
 class ConnectManager(
     private val identity: DeviceIdentity,
@@ -46,11 +57,18 @@ class ConnectManager(
     private val unb64 = Base64.getUrlDecoder()
     private val taker = HandoffTaker(nowMs = SystemClock::elapsedRealtime)
     private val giver = HandoffGiver(nowMs = SystemClock::elapsedRealtime)
+    private val flowLock = Mutex()
+    private val unpairFlush = Mutex()
 
     private val mutableEvents = MutableSharedFlow<String>(extraBufferCapacity = 8)
 
     /** 画面に出す短い文言。 */
     val events: SharedFlow<String> = mutableEvents
+
+    private val mutablePendingTakeOver = MutableStateFlow<String?>(null)
+
+    /** 引き取りを頼んで返事を待っている相手の名前（画面の「頼んでいます」とボタンの無効化）。 */
+    val pendingTakeOver: StateFlow<String?> = mutablePendingTakeOver
 
     /** 中継からの、ペアリングの第1手（A の画面が受ける）。 */
     val pairHellos = MutableSharedFlow<RelayMessage.PairHello>(extraBufferCapacity = 2)
@@ -61,83 +79,157 @@ class ConnectManager(
                 when (message) {
                     is RelayMessage.Delivered -> onEnvelope(message.envelope)
                     is RelayMessage.PairHello -> pairHellos.tryEmit(message)
-                    is RelayMessage.Error -> onRelayError(message.code)
+                    is RelayMessage.Error -> onRelayError(message)
                     else -> Unit
                 }
             }
         }
+        // 中継につながるたびに、相手に届いていない解除を知らせ直す
+        scope.launch {
+            relay.status.collect { status -> if (status == RelayClient.Status.Connected) scope.launch { flushUnpairs() } }
+        }
     }
 
-    /** 手元の端末（B）: peerDeviceId の端末から引き取る。中継には、この呼び出しの間だけつなぐ。 */
-    suspend fun takeOver(peerDeviceId: String): Boolean {
+    /** 手元の端末（B）: peerDeviceId の端末から引き取る。@return 要求を送れたか（結果は events で知らせる） */
+    suspend fun takeOver(peerDeviceId: String): Boolean = scope.async { requestTakeOver(peerDeviceId) }.await()
+
+    /**
+     * ペアリングを解除する。手元では一覧からすぐ消し、相手に Unpair を送る。届かなければ鍵を残し、
+     * 中継につながったとき・相手から封筒が届いたときに送り直す。中継からの締め出し（revoke）は別の操作（決定 K-11）。
+     */
+    suspend fun unpair(peerDeviceId: String) = scope.async { requestUnpair(peerDeviceId) }.await()
+
+    private suspend fun requestTakeOver(peerDeviceId: String): Boolean {
         val pair = pairs.find(peerDeviceId) ?: return false
         val accountHmac = accountHmac(pair) ?: return notify("書き込み先のアカウントを確かめられないので、引き取れません")
         val handoffId = UUID.randomUUID().toString()
-        if (!taker.request(peerDeviceId, handoffId)) return notify("ほかの引き取りを待っています")
+        if (!flowLock.withLock { taker.request(peerDeviceId, handoffId) }) return notify("ほかの引き取りを待っています")
+        mutablePendingTakeOver.value = pair.peerName
         relay.acquire()
-        val status = withTimeoutOrNull(RELAY_CONNECT_TIMEOUT_MS) { relay.status.first { it != RelayClient.Status.Connecting && it != RelayClient.Status.Disconnected } }
-        if (status != RelayClient.Status.Connected) {
-            taker.reset()
-            relay.release()
-            return notify(PairingController.relayMessage(status))
-        }
-        ensurePlaybackService()
-        if (!sendBody(pair, EnvelopeType.Request, handoffId, HandoffBody.Request(handoffId, accountHmac))) {
-            taker.reset()
-            relay.release()
-            return notify("中継に届きませんでした")
-        }
-        Log.i(WaveApplication.LOG_TAG, "connect request sent")
-        scope.launch {
-            try {
-                delay(HandoffTaker.DEFAULT_TIMEOUT_MS + 500)
-                taker.expire()?.let { expired ->
-                    pairs.find(expired.peerId)?.let { sendBody(it, EnvelopeType.Cancel, expired.handoffId, HandoffBody.Cancel(expired.handoffId, "timeout")) }
-                    notify("${pair.peerName} から返事がありませんでした（再生中か、一時停止から9分以内のときに引き取れます）")
+        var releaseHere = true
+        try {
+            val status = awaitRelay()
+            if (status != RelayClient.Status.Connected) return abandon(PairingController.relayMessage(status))
+            ensurePlaybackService()
+            if (!sendBody(pair, EnvelopeType.Request, handoffId, HandoffBody.Request(handoffId, accountHmac))) return abandon("中継に届きませんでした")
+            Log.i(WaveApplication.LOG_TAG, "connect request sent")
+            releaseHere = false
+            scope.launch {
+                try {
+                    delay(HandoffTaker.DEFAULT_TIMEOUT_MS + 500)
+                    val expired = flowLock.withLock { taker.expire().also { syncPending() } }
+                    if (expired != null) {
+                        pairs.find(expired.peerId)?.let { sendBody(it, EnvelopeType.Cancel, expired.handoffId, HandoffBody.Cancel(expired.handoffId, "timeout")) }
+                        notify("${pair.peerName} から返事がありませんでした（再生中か、一時停止から9分以内のときに引き取れます）")
+                    }
+                    // 取り込んだ後の Ack の再送（3秒後）を待ってから離す
+                    delay(ACK_RESEND_GRACE_MS)
+                } finally {
+                    relay.release()
                 }
-                // 取り込んだ後の Ack の再送（3秒後）を待ってから離す
-                delay(ACK_RESEND_GRACE_MS)
-            } finally {
-                relay.release()
             }
+            return true
+        } catch (cancellation: CancellationException) {
+            flowLock.withLock { resetTaker() }
+            throw cancellation
+        } catch (error: Exception) {
+            Log.i(WaveApplication.LOG_TAG, "connect request failed type=${error::class.simpleName}")
+            return abandon("引き取りを始められませんでした")
+        } finally {
+            if (releaseHere) relay.release()
         }
-        return true
     }
 
-    /**
-     * ペアリングを解除する。相手に知らせ、中継の登録を取り消し（登録した端末でなくても、ペアの端末なら取り消せる）、手元の記録を消す。
-     * 相手に届かなくても、手元の記録は消す（相手からの封筒は、以後は知らない端末として捨てる）。
-     */
-    suspend fun unpair(peerDeviceId: String) {
+    private suspend fun abandon(message: String): Boolean {
+        flowLock.withLock { resetTaker() }
+        return notify(message)
+    }
+
+    private fun resetTaker() {
+        if (taker.state is HandoffTaker.State.Requested) taker.reset()
+        syncPending()
+    }
+
+    private fun syncPending() {
+        if (taker.state !is HandoffTaker.State.Requested && taker.state !is HandoffTaker.State.Adopting) mutablePendingTakeOver.value = null
+    }
+
+    private suspend fun requestUnpair(peerDeviceId: String) {
         val pair = pairs.find(peerDeviceId) ?: return
+        pairs.markUnpaired(peerDeviceId)
         relay.acquire()
         try {
-            val connected = withTimeoutOrNull(RELAY_CONNECT_TIMEOUT_MS) { relay.status.first { it != RelayClient.Status.Connecting && it != RelayClient.Status.Disconnected } } == RelayClient.Status.Connected
-            if (connected) {
-                sendBody(pair, EnvelopeType.Unpair, null, HandoffBody.Unpair)
-                relay.revoke(peerDeviceId)
-                // 送信の完了を待つ（close より先に送り出す）
-                delay(1_000)
+            val delivered = awaitRelay() == RelayClient.Status.Connected && sendUnpair(pair)
+            if (delivered) {
+                pairs.remove(peerDeviceId)
+                notify("${pair.peerName} とのペアリングを解除しました")
+            } else {
+                notify("${pair.peerName} とのペアリングを解除しました。${pair.peerName} がつながっていないので、次に両方がつながったときに知らせます（すぐに外すには ${pair.peerName} でも解除してください）")
             }
-            pairs.remove(peerDeviceId)
-            notify(if (connected) "${pair.peerName} とのペアリングを解除しました" else "${pair.peerName} とのペアリングを解除しました（中継に届かなかったので、相手の端末でも解除してください）")
         } finally {
             relay.release()
         }
     }
 
-    /** 中継の返事のエラー。offline は宛先が接続していないとき（どの封筒のことかは返らないので、待っている要求に当てる）。 */
-    private suspend fun onRelayError(code: String) {
-        Log.i(WaveApplication.LOG_TAG, "connect relay error code=${code.take(32)}")
-        if (code != "offline") return
-        val waiting = taker.state as? HandoffTaker.State.Requested ?: return
-        taker.reset()
-        val name = pairs.find(waiting.peerId)?.peerName ?: "相手の端末"
-        notify("$name は中継につながっていません（再生中か、一時停止から9分以内のときに引き取れます）")
+    /** Unpair を送り、中継が「オフライン」と返さなければ届いたとみなす。 */
+    private suspend fun sendUnpair(pair: PairStore.PairRecord): Boolean =
+        coroutineScope {
+            val offline =
+                async(start = CoroutineStart.UNDISPATCHED) {
+                    withTimeoutOrNull(UNPAIR_OFFLINE_WAIT_MS) {
+                        relay.incoming.first { it is RelayMessage.Error && it.code == "offline" && it.to == pair.peerDeviceId && it.type == EnvelopeType.Unpair }
+                    }
+                }
+            if (!sendBody(pair, EnvelopeType.Unpair, null, HandoffBody.Unpair)) {
+                offline.cancel()
+                return@coroutineScope false
+            }
+            offline.await() == null
+        }
+
+    private suspend fun flushUnpairs() {
+        if (!unpairFlush.tryLock()) return
+        try {
+            pairs.unpairedPending().forEach { pair ->
+                if (relay.status.value != RelayClient.Status.Connected) return
+                if (sendUnpair(pair)) {
+                    pairs.remove(pair.peerDeviceId)
+                    Log.i(WaveApplication.LOG_TAG, "connect unpair delivered later")
+                }
+            }
+        } catch (error: Exception) {
+            if (error is CancellationException) throw error
+            Log.i(WaveApplication.LOG_TAG, "connect unpair flush failed type=${error::class.simpleName}")
+        } finally {
+            unpairFlush.unlock()
+        }
+    }
+
+    private suspend fun awaitRelay(): RelayClient.Status? =
+        withTimeoutOrNull(RELAY_CONNECT_TIMEOUT_MS) { relay.status.first { it != RelayClient.Status.Connecting && it != RelayClient.Status.Disconnected } }
+
+    /** 中継の返事のエラー。offline には、どの封筒が届かなかったかが付く。 */
+    private suspend fun onRelayError(error: RelayMessage.Error) {
+        Log.i(WaveApplication.LOG_TAG, "connect relay error code=${error.code.take(32)} type=${error.type}")
+        val to = error.to
+        if (error.code != "offline" || to == null) return
+        flowLock.withLock {
+            when (error.type) {
+                EnvelopeType.Request ->
+                    if (taker.onUndeliverable(to, error.handoffId)) {
+                        syncPending()
+                        val name = pairs.find(to)?.peerName ?: "相手の端末"
+                        notify("$name は中継につながっていません（再生中か、一時停止から9分以内のときに引き取れます）")
+                    }
+                // 渡そうとした相手が抜けていた: 一時停止したままにしない
+                EnvelopeType.Snapshot -> if (giver.onUndeliverable(to, error.handoffId)) onMain { host.endpoint?.resumeAfterCancel() }
+                else -> Unit
+            }
+        }
     }
 
     private suspend fun onEnvelope(envelope: Envelope) {
-        val pair = pairs.find(envelope.from)
+        val pair = pairs.find(envelope.from, includeUnpaired = true)
         if (pair == null) {
             Log.i(WaveApplication.LOG_TAG, "connect envelope from unknown device dropped")
             return
@@ -157,20 +249,36 @@ class ConnectManager(
         if (!pairs.acceptReceivedSeq(pair.peerDeviceId, envelope.seq)) return
         val body = HandoffBody.decode(plaintext.decodeToString()) ?: return
         Log.i(WaveApplication.LOG_TAG, "connect received type=${envelope.type}")
-        when (body) {
-            is HandoffBody.Request -> onRequest(pair, envelope, body)
-            is HandoffBody.Snapshot -> onSnapshot(pair, body)
-            is HandoffBody.Ack -> if (giver.onAck(pair.peerDeviceId, body)) onMain { host.endpoint?.markHandedOff() }.also { notify("${pair.peerName} が引き取りました") }
-            is HandoffBody.Cancel ->
-                if (giver.onCancel(pair.peerDeviceId, body)) {
-                    onMain { host.endpoint?.resumeAfterCancel() }
-                } else if (taker.onCancel(pair.peerDeviceId, body)) {
-                    Log.i(WaveApplication.LOG_TAG, "connect refused reason=${body.reason.take(32)}")
-                    notify(if (body.reason == "account") "${pair.peerName} は別のアカウントでログインしています" else "${pair.peerName} には引き取れる再生がありません")
-                }
-            HandoffBody.Unpair -> {
+        if (pair.unpaired) {
+            // 手元では解除済み: 相手はまだ知らないので、ここで知らせ直す（受信の処理を止めないよう別に送る）
+            if (body == HandoffBody.Unpair) {
                 pairs.remove(pair.peerDeviceId)
-                notify("${pair.peerName} がペアリングを解除しました")
+            } else {
+                scope.launch { if (sendUnpair(pair)) pairs.remove(pair.peerDeviceId) }
+            }
+            return
+        }
+        flowLock.withLock {
+            when (body) {
+                is HandoffBody.Request -> onRequest(pair, envelope, body)
+                is HandoffBody.Snapshot -> onSnapshot(pair, envelope, body)
+                is HandoffBody.Ack ->
+                    if (giver.onAck(pair.peerDeviceId, body)) {
+                        onMain { host.endpoint?.markHandedOff() }
+                        notify("${pair.peerName} が引き取りました")
+                    }
+                is HandoffBody.Cancel ->
+                    if (giver.onCancel(pair.peerDeviceId, body)) {
+                        onMain { host.endpoint?.resumeAfterCancel() }
+                    } else if (taker.onCancel(pair.peerDeviceId, body)) {
+                        syncPending()
+                        Log.i(WaveApplication.LOG_TAG, "connect refused reason=${body.reason.take(32)}")
+                        notify(if (body.reason == "account") "${pair.peerName} は別のアカウントでログインしています" else "${pair.peerName} には引き取れる再生がありません")
+                    }
+                HandoffBody.Unpair -> {
+                    pairs.remove(pair.peerDeviceId)
+                    notify("${pair.peerName} がペアリングを解除しました")
+                }
             }
         }
     }
@@ -188,14 +296,19 @@ class ConnectManager(
             HandoffGiver.RequestDecision.Capture -> {
                 val snapshot = onMain { host.endpoint?.capture(body.handoffId) }
                 if (snapshot == null || mine == null) {
+                    if (giver.onUndeliverable(pair.peerDeviceId, body.handoffId)) onMain { host.endpoint?.resumeAfterCancel() }
                     sendBody(pair, EnvelopeType.Cancel, body.handoffId, HandoffBody.Cancel(body.handoffId, "no_queue"))
                     return
                 }
-                sendBody(pair, EnvelopeType.Snapshot, body.handoffId, HandoffBody.Snapshot(mine, HandoffCodec.encode(snapshot)))
+                if (!sendBody(pair, EnvelopeType.Snapshot, body.handoffId, HandoffBody.Snapshot(mine, HandoffCodec.encode(snapshot)))) {
+                    // 送れなかった: 一時停止したままにしない
+                    if (giver.onUndeliverable(pair.peerDeviceId, body.handoffId)) onMain { host.endpoint?.resumeAfterCancel() }
+                    return
+                }
                 Log.i(WaveApplication.LOG_TAG, "connect snapshot sent items=${snapshot.items.size}")
                 scope.launch {
                     delay(HandoffGiver.DEFAULT_WINDOW_MS + 500)
-                    if (giver.expire()) notify("引き取られなかったかもしれません（一時停止しています）")
+                    if (flowLock.withLock { giver.expire() }) notify("引き取られなかったかもしれません（一時停止しています）")
                 }
             }
             HandoffGiver.RequestDecision.Duplicate -> Unit
@@ -205,19 +318,24 @@ class ConnectManager(
 
     private suspend fun onSnapshot(
         pair: PairStore.PairRecord,
+        envelope: Envelope,
         body: HandoffBody.Snapshot,
     ) {
         val mine = accountHmac(pair)
         val accountMatches = mine != null && xyz.mooma0750.wave.handoff.crypto.WaveCrypto.constantTimeEquals(mine.encodeToByteArray(), body.accountHmac.encodeToByteArray())
+        // 状態機械は判断と同時に待ちを取り下げるので、Cancel の宛先は先に取っておく。封筒の handoffId は AAD で認証済み
+        val waiting = (taker.state as? HandoffTaker.State.Requested)?.takeIf { it.peerId == pair.peerDeviceId }
+        val cancelTarget = envelope.handoffId ?: waiting?.handoffId
         when (val decision = taker.onSnapshot(pair.peerDeviceId, body, accountMatches)) {
             is HandoffTaker.SnapshotDecision.Adopt -> {
                 val handoffId = decision.snapshot.handoffId
                 val adopted = uiInForeground() && onMain { host.endpoint?.adopt(decision.snapshot) == true }
                 if (adopted) {
                     taker.onAdopted(handoffId)
-                    // Ack が中継で落ちた場合に備えて、新しい seq でもう一度送る（相手は handoffId ごとに冪等）
-                    repeat(2) { attempt ->
-                        if (attempt > 0) delay(3_000)
+                    // Ack が中継で落ちた場合に備えて、新しい seq でもう一度送る（相手は handoffId ごとに冪等）。受信の処理は止めない
+                    scope.launch {
+                        sendBody(pair, EnvelopeType.Ack, handoffId, HandoffBody.Ack(handoffId))
+                        delay(ACK_RESEND_DELAY_MS)
                         sendBody(pair, EnvelopeType.Ack, handoffId, HandoffBody.Ack(handoffId))
                     }
                     notify("${pair.peerName} から引き取りました")
@@ -229,15 +347,22 @@ class ConnectManager(
             }
             is HandoffTaker.SnapshotDecision.Ignore -> {
                 Log.i(WaveApplication.LOG_TAG, "connect snapshot ignored reason=${decision.reason}")
-                val requested = taker.state as? HandoffTaker.State.Requested
-                if (decision.sendCancel) {
-                    // 期限切れ・アカウント不一致: 送り手の handoffId は snapshot の中にしかないので、検証前の値は使わず、待っていた ID に向けて送る
-                    requested?.let { sendBody(pair, EnvelopeType.Cancel, it.handoffId, HandoffBody.Cancel(it.handoffId, decision.reason)) }
-                }
+                // 待っていない snapshot でも、自分が最近出した要求への返事なら（取り下げた後に届いた）、A を再開させる
+                val target =
+                    when {
+                        decision.sendCancel -> cancelTarget
+                        taker.wasIssued(envelope.handoffId) -> envelope.handoffId
+                        else -> null
+                    }
+                target?.let { sendBody(pair, EnvelopeType.Cancel, it, HandoffBody.Cancel(it, decision.reason)) }
                 if (decision.reason == "account_mismatch") notify("${pair.peerName} は別のアカウントでログインしています")
             }
-            is HandoffTaker.SnapshotDecision.Incompatible -> notify("${pair.peerName} の wave を更新してください")
+            is HandoffTaker.SnapshotDecision.Incompatible -> {
+                cancelTarget?.let { sendBody(pair, EnvelopeType.Cancel, it, HandoffBody.Cancel(it, "incompatible")) }
+                notify("${pair.peerName} の wave を更新してください")
+            }
         }
+        syncPending()
     }
 
     private suspend fun sendBody(
@@ -272,12 +397,14 @@ class ConnectManager(
 
     private suspend fun <T> onMain(block: () -> T): T = withContext(Dispatchers.Main) { block() }
 
-    companion object {
-        private const val RELAY_CONNECT_TIMEOUT_MS = 15_000L
-        private const val ACK_RESEND_GRACE_MS = 5_000L
-    }
-
     /** 受け渡しの窓の間は接続を保つ（再生サービスが待ち受けの規則を決めるときに見る）。 */
     val holdingConnection: Boolean
         get() = giver.holdingConnection
+
+    private companion object {
+        const val RELAY_CONNECT_TIMEOUT_MS = 15_000L
+        const val ACK_RESEND_DELAY_MS = 3_000L
+        const val ACK_RESEND_GRACE_MS = 5_000L
+        const val UNPAIR_OFFLINE_WAIT_MS = 3_000L
+    }
 }

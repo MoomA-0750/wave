@@ -149,7 +149,7 @@ private class Hub(
                 // 送り手は接続の鍵と一致しなければならない（なりすましの封筒を捨てる）
                 if (envelope.from != deviceId) return reply(RelayMessage.Error("from_mismatch"))
                 val target = sessions[envelope.to]
-                if (target == null || !deliver(target, RelayMessage.Delivered(envelope))) return reply(RelayMessage.Error("offline"))
+                if (target == null || !deliver(target, RelayMessage.Delivered(envelope))) return reply(RelayMessage.Error("offline", to = envelope.to, type = envelope.type, handoffId = envelope.handoffId))
                 log("delivered type=${envelope.type} chars=${envelope.ciphertext.length}")
             }
             is RelayMessage.Online -> reply(RelayMessage.OnlineResult(message.ids.take(32).filter { sessions.containsKey(it) }))

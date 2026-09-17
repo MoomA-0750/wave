@@ -122,23 +122,20 @@ object DebugActions {
                 }
                 "pair_code" -> {
                     container.pairing.enterCode(intent.getStringExtra("code").orEmpty())
-                    val next = kotlinx.coroutines.withTimeoutOrNull(10_000) { container.pairing.state.first { it !is xyz.mooma0750.wave.connect.PairingController.State.EnterCode } }
+                    val next = kotlinx.coroutines.withTimeoutOrNull(20_000) { container.pairing.state.first { it is xyz.mooma0750.wave.connect.PairingController.State.Done || it is xyz.mooma0750.wave.connect.PairingController.State.Failed || (it as? xyz.mooma0750.wave.connect.PairingController.State.EnterCode)?.message != null } }
                     Log.i(WaveApplication.LOG_TAG, "debug pair code state=${next?.let { it::class.simpleName }} message=${(next as? xyz.mooma0750.wave.connect.PairingController.State.Failed)?.message}")
                 }
                 "pair_continue" -> {
                     container.pairing.confirmOnB()
-                    Log.i(WaveApplication.LOG_TAG, "debug pair continue pairs=${container.pairStore.all().size}")
+                    val next = kotlinx.coroutines.withTimeoutOrNull(20_000) { container.pairing.state.first { it is xyz.mooma0750.wave.connect.PairingController.State.Done || it is xyz.mooma0750.wave.connect.PairingController.State.ShowCode || it is xyz.mooma0750.wave.connect.PairingController.State.Failed } }
+                    Log.i(WaveApplication.LOG_TAG, "debug pair continue state=${next?.let { it::class.simpleName }} pairs=${container.pairStore.all().size}")
                 }
                 "take_over" -> {
                     val peer = container.pairStore.all().firstOrNull()
                     if (peer == null) {
                         Log.i(WaveApplication.LOG_TAG, "debug take over no pair")
                     } else {
-                        container.relayClient.acquire()
-                        kotlinx.coroutines.withTimeoutOrNull(15_000) { container.relayClient.status.first { it == xyz.mooma0750.wave.connect.RelayClient.Status.Connected } }
                         Log.i(WaveApplication.LOG_TAG, "debug take over started=${container.connect.takeOver(peer.peerDeviceId)} relay=${container.relayClient.status.value}")
-                        kotlinx.coroutines.delay(30_000)
-                        container.relayClient.release()
                     }
                 }
                 // Phase 6 P6-S: tailnet 内の計測用 echo へ WSS でつなぎ、往復の時間と、指定した秒数の後に届くかを測る（本文は固定の文字列だけ）

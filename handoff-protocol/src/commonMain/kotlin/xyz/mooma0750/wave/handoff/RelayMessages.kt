@@ -39,10 +39,14 @@ sealed interface RelayMessage {
         val ids: List<String>,
     ) : RelayMessage
 
+    /** 失敗の返事。`offline` などの送信の失敗には、どの封筒のことかを返す（送り手自身が付けた値だけ）。 */
     @Serializable
     @SerialName("error")
     data class Error(
         val code: String,
+        val to: String? = null,
+        val type: EnvelopeType? = null,
+        val handoffId: String? = null,
     ) : RelayMessage
 
     /** 未登録の B からのペアリングの第1手を、pairing_open した A にだけ届ける。 */
