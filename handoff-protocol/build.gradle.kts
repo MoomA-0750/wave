@@ -26,6 +26,12 @@ kotlin {
         commonMain.dependencies {
             implementation(libs.kotlinx.serialization.json)
         }
+        // Android と中継（JVM）で共有する暗号の部品。JCA（Android は Conscrypt）だけを使う（決定 K-4'）
+        val jvmSharedMain by creating {
+            dependsOn(commonMain.get())
+        }
+        androidMain.get().dependsOn(jvmSharedMain)
+        getByName("desktopMain").dependsOn(jvmSharedMain)
         commonTest.dependencies {
             implementation(kotlin("test"))
         }

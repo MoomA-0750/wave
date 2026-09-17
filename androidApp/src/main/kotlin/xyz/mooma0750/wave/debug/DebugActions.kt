@@ -74,6 +74,9 @@ object DebugActions {
                     container.logout()
                 }
                 "shuffle" -> player.shuffleUpcoming()
+                // Phase 6 P6-S: tailnet 内の計測用 echo へ WSS でつなぎ、往復の時間と、指定した秒数の後に届くかを測る（本文は固定の文字列だけ）
+                "relay_echo" -> P6sEcho.start(intent.getStringExtra("url") ?: P6sEcho.DEFAULT_URL, intent.getStringExtra("delays")?.split(',')?.mapNotNull { it.trim().toIntOrNull() }.orEmpty())
+                "relay_echo_stop" -> P6sEcho.stop()
                 // Phase 6: 中継を使わず、同じ端末で自分のキューを書き出して検証し、取り込み直す（adopt の確認）
                 "handoff_self" -> {
                     player.controller() // サービスを起動しておく
