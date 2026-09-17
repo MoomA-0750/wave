@@ -501,6 +501,25 @@ class ConnectSimulationTest {
     }
 
     @Test
+    fun remotePlayingNowNeedsTheWriterToBeConnected() {
+        setUp()
+        a.startPlaying("queue-A")
+        relay.run()
+        assertTrue(b.client.remotePlayingNow())
+        // 別のアカウントの再生は「他の端末で鳴っている」に数えない
+        b.accountTag = "tag-account-2"
+        assertFalse(b.client.remotePlayingNow())
+        b.accountTag = "tag-account-1"
+        // A が落ちた（最後のカーソルは再生中のまま）: 再生ボタンを止め続けない
+        a.disconnect()
+        relay.run()
+        assertFalse(b.client.remotePlayingNow(), "つながっていない端末の最後の「再生中」で鳴っている扱いにした")
+        a.connect()
+        relay.run()
+        assertTrue(b.client.remotePlayingNow())
+    }
+
+    @Test
     fun sameQueueIsNotPutAgain() {
         setUp()
         var queuePuts = 0

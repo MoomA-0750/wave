@@ -49,6 +49,7 @@ class FakeRelay(
     ) {
         connected[deviceId] = deliver
         post(deviceId, store.welcome(deviceId, connected.keys.toList()))
+        broadcast(RelayV2.Presence(connected.keys.toList()))
     }
 
     fun disconnect(deviceId: String) {
@@ -57,6 +58,7 @@ class FakeRelay(
             broadcast(RelayV2.PendingExpired(claimId))
             broadcast(active)
         }
+        broadcast(RelayV2.Presence(connected.keys.toList()))
     }
 
     fun isConnected(deviceId: String) = deviceId in connected

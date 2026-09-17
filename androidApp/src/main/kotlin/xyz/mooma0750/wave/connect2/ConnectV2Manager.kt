@@ -317,9 +317,7 @@ class ConnectV2Manager(
         engine: ConnectClient,
         foreground: Boolean,
     ): Boolean {
-        val remote = engine.latestCursorBody()
-        val remotePlaying = remote != null && remote.first != identity.deviceId && remote.second.playing && remote.second.accountTag == effects.accountTag()
-        if (!remotePlaying) return false
+        if (!engine.remotePlayingNow()) return false
         appScope.launch(Dispatchers.Main) { host.endpoint?.pause() }
         if (foreground && engine.requestTransfer()) {
             Log.i(WaveApplication.LOG_TAG, "connect-v2 play button became transfer")

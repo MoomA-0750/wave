@@ -181,6 +181,9 @@ class ConnectClient(
     private var pendingOwner: String? = null
     private val claimOrders = HashMap<String, Long>()
 
+    /** 中継につながっている家の端末（中継の申告。表示と D-9 の判断だけに使い、止まる根拠にしない）。 */
+    private var online: Set<String> = emptySet()
+
     /** 同時に始めた相手の証拠で、claimOrder を待って保留しているもの（D-8）。 */
     private val deferredEvidence = ArrayList<PlaybackArbiter.Evidence>()
 
@@ -220,6 +223,16 @@ class ConnectClient(
 
     /** 表示用の最新のカーソル（別アカウントのものを含む）。 */
     fun latestCursorBody(): Pair<String, CursorBody>? = latestCursor?.let { it.writer to it.body }
+
+    /**
+     * 同じアカウントの他の端末が今鳴っているか（D-9 の再生ボタンの判断）。最後のカーソルが再生中で、その端末が中継につながっているとき。
+     * 落ちた・通信を失った端末の最後の「再生中」で、再生ボタンを止め続けない（レビュー p6b34 中-2）。通信を失ったまま鳴っている端末は、つながり直したら止まる（L-4）
+     */
+    fun remotePlayingNow(): Boolean {
+        val cursor = latestCursor ?: return false
+        val tag = effects.accountTag() ?: return false
+        return cursor.writer != signer.deviceId && cursor.body.playing && cursor.body.accountTag == tag && cursor.writer in online
+    }
 
     /** A 側: Confirm に入れる床（家に入っていなければ null）。 */
     fun joinInfo(): JoinInfo? {
@@ -261,6 +274,7 @@ class ConnectClient(
             is RelayV2.YieldDelivery -> onYield(message)
             is RelayV2.ActiveChanged -> onActiveChanged(message)
             is RelayV2.PendingExpired -> onPendingExpired(message.claimId)
+            is RelayV2.Presence -> online = message.online.toSet()
             else -> Unit
         }
     }
@@ -271,6 +285,7 @@ class ConnectClient(
         inflight.clear()
         serverActive = null
         pendingOwner = null
+        online = emptySet()
         // 取り込む前に切れた引き取りは捨てる（つながり直した後に、古い状態から突然取り込まない。レビュー p6b34 中-4）
         val waiting = transfer
         if (waiting != null && !waiting.adopting) {
@@ -327,6 +342,7 @@ class ConnectClient(
         // 前の接続の書き込みは届いていないかもしれない（返事を待っていたものは積み直す）
         onDisconnected()
         serverActive = welcome.activeDeviceId
+        online = welcome.online.toSet()
         claimOrders.putAll(welcome.claimOrders)
         val known = storeId
         if (known == null) {
