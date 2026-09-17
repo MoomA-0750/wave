@@ -119,16 +119,12 @@ sealed interface WriteResult<out T> {
 }
 
 /** debug の調査の結果。normalizedForLocalHmac は端末の中で HMAC を取るためだけに使い、ログに出さない。 */
-class AccountIdentityProbe(
-    val keyPaths: Set<String>,
-    val savedHasDataSyncId: Boolean,
-    val tokenCount: Int,
-    val selectedTokenCount: Int,
-    val selectedMatchesSaved: Boolean?,
-    val anyMatchesSaved: Boolean?,
-    val normalizedForLocalHmac: String?,
+/** 確認済みのアカウント（識別子の値は HMAC にだけ使う）と、確認したログインの世代。 */
+class VerifiedAccount(
+    val generationId: Long,
+    val id: xyz.mooma0750.wave.core.auth.Secret,
 ) {
-    override fun toString(): String = "AccountIdentityProbe(keyPaths=$keyPaths, saved=$savedHasDataSyncId, tokens=$tokenCount, selected=$selectedTokenCount, selectedMatches=$selectedMatchesSaved, anyMatches=$anyMatchesSaved)"
+    override fun toString(): String = "VerifiedAccount(generation=$generationId)"
 }
 
 /** 再生統計の送信の結果。ログには種類と status の数値だけを出す（ADR-0006 の 5）。 */
@@ -492,32 +488,6 @@ class WaveSession internal constructor(
     }
 
     /**
-     * debug の調査用（Phase 6 の P6-S、決定 E7）: アカウントの識別子（DATASYNC_ID）がどの応答のどこにあるかを、キー名の場所と真偽値だけで返す。
-     * 値そのものは返さない。比べるのは端末の中だけ。
-     */
-    suspend fun probeAccountIdentity(): AccountIdentityProbe? {
-        val saved = credentials.value?.dataSyncId?.reveal()?.substringBefore("||")
-        val accounts =
-            call("accounts_list", block = { it.accountsList(YouTubeClient.WEB_REMIX) }) { response ->
-                ParseOutcome.Parsed(json.parseToJsonElement(response.bodyAsTextLimited(MAX_PLAYER_BYTES)))
-            }
-        val root = (accounts as? CallResult.Ok)?.value ?: return null
-        val paths = xyz.mooma0750.wave.core.music.MusicParsers.keyPathsLike(root, "datasync") +
-            xyz.mooma0750.wave.core.music.MusicParsers.keyPathsLike(root, "pageId") +
-            xyz.mooma0750.wave.core.music.MusicParsers.keyPathsLike(root, "isSelected")
-        val tokens = accountTokensOf(root)
-        return AccountIdentityProbe(
-            keyPaths = paths,
-            savedHasDataSyncId = saved != null,
-            tokenCount = tokens.size,
-            selectedTokenCount = tokens.count { it.first },
-            selectedMatchesSaved = saved?.let { s -> tokens.any { it.first && it.second == s } },
-            anyMatchesSaved = saved?.let { s -> tokens.any { it.second == s } },
-            normalizedForLocalHmac = saved,
-        )
-    }
-
-    /**
      * 書き込み先のアカウントを、世代ごとに1本だけ確かめる（ADR-0007）。保存している DATASYNC_ID（onBehalfOfUser に送る値）が、
      * accountsList の選択中のアカウントの datasyncIdToken と一致すれば Verified。Unknown は60秒だけキャッシュする。
      */
@@ -567,11 +537,20 @@ class WaveSession internal constructor(
      * 確認済みのアカウントの識別子（正規化した DATASYNC_ID）。確認できていなければ null。
      * 端末間でアカウントを比べる HMAC にだけ使う（値そのものをログ・画面・端末の外に出さない、ADR-0007）。
      */
-    suspend fun verifiedAccountId(): xyz.mooma0750.wave.core.auth.Secret? {
+    suspend fun verifiedAccountId(): xyz.mooma0750.wave.core.auth.Secret? = verifiedAccount()?.id
+
+    /**
+     * 確認済みのアカウントと、確認したログインの世代。受け渡し・ペアリングでは、確認した後の操作（取り込み・保存）の直前に、
+     * この世代が今も続いているかを確かめる（確認と操作の間にアカウントが切り替わった場合に、前のアカウントの結果を使わない）。
+     */
+    suspend fun verifiedAccount(): VerifiedAccount? {
         val generation = current.value
         val id = generation.credentials?.dataSyncId ?: return null
-        return if (verify(generation) == AccountVerification.Verified && current.value === generation) id else null
+        return if (verify(generation) == AccountVerification.Verified && current.value === generation) VerifiedAccount(generation.id, id) else null
     }
+
+    /** 今のログインの世代（受け渡しの確認に使う）。 */
+    fun loginGenerationId(): Long = current.value.id
 
     /** 今のログインの、書き込み先のアカウントの確認（UI・受け渡し用）。 */
     suspend fun accountVerification(): AccountVerification {

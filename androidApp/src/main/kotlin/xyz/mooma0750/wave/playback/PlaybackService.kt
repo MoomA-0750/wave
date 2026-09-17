@@ -257,7 +257,16 @@ class PlaybackService : MediaSessionService() {
                     resumeAfterCancel = false
                 }
 
-                override fun capture(handoffId: String): xyz.mooma0750.wave.handoff.HandoffSnapshot? {
+                override fun forgetHandedOff() {
+                    handedOff = false
+                }
+
+                override fun capture(
+                    handoffId: String,
+                    expectedLoginGeneration: Long,
+                ): xyz.mooma0750.wave.handoff.HandoffSnapshot? {
+                    // 確かめたアカウントのキューでなければ渡さない（確かめた後にアカウントが切り替わった）
+                    if (queueSession.accountEpoch != expectedLoginGeneration || container.session.loginGenerationId() != expectedLoginGeneration) return null
                     val wasPlaying = player.isPlaying || player.playWhenReady
                     // 同じ相手の押し直しで2回目の capture が来ても、最初の「再生していた」を消さない
                     resumeAfterCancel = resumeAfterCancel || wasPlaying
@@ -275,8 +284,11 @@ class PlaybackService : MediaSessionService() {
                     )
                 }
 
-                override fun adopt(snapshot: xyz.mooma0750.wave.handoff.HandoffSnapshot): Boolean {
-                    if (loggedInAt == null) return false
+                override fun adopt(
+                    snapshot: xyz.mooma0750.wave.handoff.HandoffSnapshot,
+                    expectedLoginGeneration: Long,
+                ): Boolean {
+                    if (loggedInAt == null || container.session.loginGenerationId() != expectedLoginGeneration) return false
                     handedOff = false
                     // 途中の復元を無効にし、受け取ったキューを保存で上書きしてよい状態にする
                     restoreStarted = true
@@ -290,7 +302,8 @@ class PlaybackService : MediaSessionService() {
                             xyz.mooma0750.wave.handoff.HandoffRepeat.One -> Player.REPEAT_MODE_ONE
                             xyz.mooma0750.wave.handoff.HandoffRepeat.All -> Player.REPEAT_MODE_ALL
                         }
-                    queueSession.adopt(snapshot)
+                    // 確かめた世代に結び付ける（この後に切り替わっても、続きの取得・曲の解決は照合で止まる）
+                    queueSession.adopt(snapshot, expectedLoginGeneration)
                     return true
                 }
             }

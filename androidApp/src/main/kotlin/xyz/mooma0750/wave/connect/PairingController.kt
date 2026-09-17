@@ -79,7 +79,8 @@ class PairingController(
     val state: StateFlow<State> = mutableState
     private var job: Job? = null
     private var codes: Channel<String>? = null
-    private var pendingOnB: Pair<String, Pairing.Established>? = null
+    /** B: 表示している6桁、確定を待っているペア、アカウントを確かめたログインの世代。 */
+    private var pendingOnB: Triple<String, Pairing.Established, Long>? = null
 
     /** A: QR を出す。中継に登録済み（接続できる）でなければ始められない。 */
     fun startOffer() {
@@ -102,9 +103,9 @@ class PairingController(
 
     /** B: A に数字を入力してもらったあと「続ける」。中継に登録されたか（= A が承認したか）を確かめてから保存する。 */
     fun confirmOnB() {
-        val (code, established) = pendingOnB ?: return
+        val (code, established, generation) = pendingOnB ?: return
         job?.cancel()
-        job = launchJob { runConfirmOnB(code, established) }
+        job = launchJob { runConfirmOnB(code, established, generation) }
     }
 
     fun cancel() {
@@ -121,8 +122,8 @@ class PairingController(
         try {
             val status = awaitRelay()
             if (status != RelayClient.Status.Connected) return fail(relayMessage(status))
-            val accountId = session.verifiedAccountId()?.reveal() ?: return fail("書き込み先のアカウントを確かめられません")
-            val responder = Pairing.Responder(identity.privateKey(), identity.publicKey, deviceName, accountId, nowMs = android.os.SystemClock::elapsedRealtime)
+            val account = session.verifiedAccount() ?: return fail("書き込み先のアカウントを確かめられません")
+            val responder = Pairing.Responder(identity.privateKey(), identity.publicKey, deviceName, account.id.reveal(), nowMs = android.os.SystemClock::elapsedRealtime)
             val tokenHash = b64.encodeToString(responder.tokenHash)
             if (!relay.send(RelayMessage.PairingOpen(tokenHash))) return fail("中継に届きませんでした")
             mutableState.value = State.ShowingOffer(Pairing.encodeOffer(responder.offer))
@@ -152,6 +153,11 @@ class PairingController(
                                 fail(failureMessage(error))
                                 return@withTimeoutOrNull true
                             }
+                        // 確かめた後にアカウントが切り替わっていたら、前のアカウントで確かめたペアを保存しない
+                        if (session.loginGenerationId() != account.generationId) {
+                            fail("ログインが切り替わったので、もう一度ペアリングしてください")
+                            return@withTimeoutOrNull true
+                        }
                         mutableState.value = State.Working("中継に登録しています")
                         if (!register(established.peerPublicKey)) {
                             fail("中継に登録できませんでした。もう一度ペアリングしてください")
@@ -188,16 +194,16 @@ class PairingController(
 
     private suspend fun runAccept(offerText: String) {
         val offer = Pairing.decodeOffer(offerText) ?: return fail("wave のペアリングの QR ではありません")
-        val accountId = session.verifiedAccountId()?.reveal() ?: return fail("書き込み先のアカウントを確かめられません")
+        val account = session.verifiedAccount() ?: return fail("書き込み先のアカウントを確かめられません")
         mutableState.value = State.Working("相手の端末に送っています")
-        val initiator = Pairing.Initiator(offer, identity.privateKey(), identity.publicKey, deviceName, accountId)
+        val initiator = Pairing.Initiator(offer, identity.privateKey(), identity.publicKey, deviceName, account.id.reveal())
         val reply = relay.pair(offer.token, json.encodeToJsonElement(Pairing.Hello.serializer(), initiator.hello()))
         val confirmed =
             reply as? RelayMessage.PairConfirmed
                 ?: return fail(if (reply == null) "中継に届きませんでした（Tailscale を確かめてください）" else "相手の端末が待っていません。QR を出し直してもらってください")
         val confirm = runCatching { json.decodeFromJsonElement(Pairing.Confirm.serializer(), confirmed.confirm) }.getOrNull() ?: return fail("相手の応答を読めませんでした")
         val (code, established) = initiator.onConfirm(confirm).getOrElse { return fail(failureMessage(it)) }
-        pendingOnB = code to established
+        pendingOnB = Triple(code, established, account.generationId)
         mutableState.value = State.ShowCode(code, established.peerDeviceName)
         Log.i(WaveApplication.LOG_TAG, "pairing code shown role=B")
     }
@@ -205,7 +211,9 @@ class PairingController(
     private suspend fun runConfirmOnB(
         code: String,
         established: Pairing.Established,
+        generation: Long,
     ) {
+        if (session.loginGenerationId() != generation) return fail("ログインが切り替わったので、もう一度ペアリングしてください")
         mutableState.value = State.Working("承認されたか確かめています")
         relay.acquire()
         try {

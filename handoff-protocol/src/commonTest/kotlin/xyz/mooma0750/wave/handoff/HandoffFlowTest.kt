@@ -48,11 +48,29 @@ class HandoffFlowTest {
         assertNull(taker.expire())
         assertFalse(taker.request("A", "another"), "取り込み中に次の要求を受けた")
         assertFalse(taker.onCancel("A", HandoffBody.Cancel(handoffId, "no_queue")), "取り込み中に Cancel で取り下げた")
+        assertTrue(taker.busy)
         taker.onAdoptFailed(handoffId)
         assertEquals(HandoffTaker.State.Idle, taker.state)
-        assertTrue(taker.wasIssued(handoffId))
-        assertFalse(taker.wasIssued("someone-else"))
-        assertFalse(taker.wasIssued(null))
+        assertFalse(taker.busy)
+        // 取り込まなかった要求は、次にその相手に出す要求に載せる（相手が一時停止したままなら取り下げさせる）
+        assertEquals(handoffId, taker.abandonedFor("A"))
+        assertNull(taker.abandonedFor("C"))
+    }
+
+    @Test
+    fun abandonedRequestIsRememberedOnTimeoutButNotAfterAdoption() {
+        val taker = HandoffTaker(nowMs = { now })
+        taker.request("A", handoffId)
+        now += HandoffTaker.DEFAULT_TIMEOUT_MS + 1
+        assertEquals(handoffId, taker.expire()?.handoffId)
+        assertEquals(handoffId, taker.abandonedFor("A"))
+        val second = "11111111-1111-4111-8111-111111111111"
+        taker.request("A", second)
+        assertIs<HandoffTaker.SnapshotDecision.Adopt>(taker.onSnapshot("A", HandoffBody.Snapshot("h", snapshotText(second)), true))
+        taker.onAdopted(second)
+        assertEquals(second, taker.currentHandoffId)
+        // 取り込んだ要求は「取り込まなかった」にしない。直前に取り込まなかった要求のまま
+        assertEquals(handoffId, taker.abandonedFor("A"))
     }
 
     @Test

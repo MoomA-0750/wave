@@ -71,7 +71,12 @@ fun ConnectScreen(
     androidx.compose.runtime.DisposableEffect(Unit) {
         onDispose { if (latestPairingState !is PairingController.State.ShowCode) container.pairing.cancel() }
     }
-    LaunchedEffect(reload, pairingState is PairingController.State.Done) { pairs = container.pairStore.all() }
+    var unreadable by remember { mutableStateOf(false) }
+    LaunchedEffect(reload, pairingState is PairingController.State.Done) {
+        pairs = container.pairStore.all()
+        unreadable = container.pairStore.isUnreadable()
+    }
+    val fingerprint = remember { runCatching { container.deviceIdentity.fingerprintForDisplay }.getOrDefault("取得できませんでした") }
     // 結果の知らせ（引き取り・解除・相手からの解除）が来たら一覧を読み直す
     LaunchedEffect(Unit) { container.connect.events.collect { reload++ } }
 
@@ -106,7 +111,19 @@ fun ConnectScreen(
                 return@Column
             }
             Text("中継: ${relayStatusText(relayStatus)}", style = MaterialTheme.typography.bodyMedium)
-            Text("この端末の指紋: ${container.deviceIdentity.fingerprintForDisplay}", style = MaterialTheme.typography.bodySmall)
+            Text("この端末の指紋: $fingerprint", style = MaterialTheme.typography.bodySmall)
+            if (unreadable) {
+                Text(
+                    "ペアリングした端末の情報を読めません（端末の鍵が無効になった可能性があります）。消して作り直すまで、ペアリング・引き取り・解除はできません。ログインは消えません",
+                    color = MaterialTheme.colorScheme.error,
+                )
+                OutlinedButton(onClick = {
+                    container.appScope.launch {
+                        container.pairStore.resetUnreadable()
+                        reload++
+                    }
+                }) { Text("ペアの情報を消して作り直す") }
+            }
             HorizontalDivider()
 
             Text("ペアリングした端末", style = MaterialTheme.typography.titleMedium)

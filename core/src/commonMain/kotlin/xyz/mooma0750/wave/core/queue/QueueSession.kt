@@ -331,8 +331,15 @@ class QueueSession(
      * 受け取った continuation は古いかもしれないが、拒否されたら出どころを問わない救済（最後の曲からラジオ）に乗る。
      * @return 置き換えた後の今の項目の位置
      */
-    fun adopt(snapshot: xyz.mooma0750.wave.handoff.HandoffSnapshot): Int {
-        startGeneration()
+    /**
+     * @param expectedLoginGeneration アカウントを確かめたときのログインの世代。渡されたら、今の世代ではなくこの世代にキューを結び付ける
+     * （確かめた後に切り替わっていたら、続きの取得・曲の解決は WaveSession の照合で止まる）
+     */
+    fun adopt(
+        snapshot: xyz.mooma0750.wave.handoff.HandoffSnapshot,
+        expectedLoginGeneration: Long? = null,
+    ): Int {
+        startGeneration(expectedLoginGeneration ?: loginGeneration())
         val items = snapshot.items.map(HandoffMapping::queueItemOf)
         val index = items.indexOfFirst { it.itemId == snapshot.currentItemId }.coerceAtLeast(0)
         source = HandoffMapping.queueSourceOf(snapshot.source)
@@ -346,9 +353,9 @@ class QueueSession(
 
     fun snapshot(): QueueSnapshot = QueueSnapshot(generation, player.items, player.currentIndex, source, continuation, exhausted)
 
-    private fun startGeneration() {
+    private fun startGeneration(epoch: Long? = loginGeneration()) {
         generation++
-        accountEpoch = loginGeneration()
+        accountEpoch = epoch
         player.setAccountEpoch(accountEpoch)
         rescuedContinuation = null
         emptyRadioPages = 0

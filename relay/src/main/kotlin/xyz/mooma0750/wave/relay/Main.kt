@@ -6,7 +6,7 @@ import java.io.File
 
 /**
  * 環境変数:
- * - WAVE_RELAY_HOST: 署名の対象に入れるホスト名（例 relay.invalid:10443）
+ * - WAVE_RELAY_HOST: 署名の対象に入れるホスト名（例 <tailnet のホスト>:<ポート>。端末の wave.relayHost と同じ値）
  * - WAVE_RELAY_DATA: 登録を保存するファイル（Docker のボリューム）
  * - WAVE_RELAY_BOOTSTRAP_KEYS: 最初に登録する署名公開鍵（base64url の SPKI、カンマ区切り）。取り消せない
  * - WAVE_RELAY_PORT: 待ち受けのポート（既定 8791）。tailscale serve からだけ届くよう 127.0.0.1 に置く

@@ -53,4 +53,8 @@ enum class EnvelopeType {
     /** どちらからでも: ペアを解除した。 */
     @SerialName("unpair")
     Unpair,
+
+    /** Unpair を受けた側から: 解除を受け取った（送った側は、これを受けてから鍵を消す）。 */
+    @SerialName("unpair_ack")
+    UnpairAck,
 }

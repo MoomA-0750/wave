@@ -31,7 +31,7 @@ import java.util.concurrent.TimeUnit
  */
 class RelayClient(
     private val identity: DeviceIdentity,
-    /** 例: wss://relay.invalid:10443 */
+    /** 例: wss://<中継のホスト>:<ポート>（local.properties の wave.relayUrl） */
     private val baseUrl: String,
     /** 署名の対象に入れるホスト名（中継の設定と同じ値）。 */
     private val relayHost: String,
@@ -153,6 +153,8 @@ class RelayClient(
                         webSocket: WebSocket,
                         text: String,
                     ) {
+                        // 閉じた前の接続から遅れて届いたものは、今の接続の nonce・状態を書き換えない
+                        if (!isCurrent(webSocket)) return
                         when (val message = RelayMessage.decode(text)) {
                             is RelayMessage.Challenge -> {
                                 val nonce = runCatching { Base64.getUrlDecoder().decode(message.nonce) }.getOrNull() ?: return
@@ -177,7 +179,7 @@ class RelayClient(
                         reason: String,
                     ) {
                         // 認証の前に閉じられたら、登録されていない
-                        if (status.value == Status.Connecting && reason == "auth") mutableStatus.value = Status.NotRegistered
+                        if (isCurrent(webSocket) && status.value == Status.Connecting && reason == "auth") mutableStatus.value = Status.NotRegistered
                         webSocket.close(code, null)
                     }
 
@@ -200,6 +202,9 @@ class RelayClient(
                 },
             )
     }
+
+    @Synchronized
+    private fun isCurrent(webSocket: WebSocket): Boolean = socket === webSocket
 
     @Synchronized
     private fun onDisconnected(

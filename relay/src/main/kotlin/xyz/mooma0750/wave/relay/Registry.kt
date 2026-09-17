@@ -23,7 +23,12 @@ class Registry(
     )
 
     private val json = Json { ignoreUnknownKeys = true }
-    private val bootstrap: Map<String, String> = bootstrapKeys.mapNotNull { key -> idOf(key)?.let { it to key } }.toMap()
+    private val bootstrap: Map<String, String> =
+        bootstrapKeys.associate { key ->
+            // 読めない起動時の鍵を黙って捨てない（最初の端末がつながれず、原因が分からなくなる）
+            val id = requireNotNull(idOf(key)) { "WAVE_RELAY_BOOTSTRAP_KEYS に読めない公開鍵があります" }
+            id to key
+        }
     private val registered = LinkedHashMap<String, String>()
 
     init {
@@ -47,7 +52,11 @@ class Registry(
         if (contains(id)) return true
         if (bootstrap.size + registered.size >= maxDevices) return false
         registered[id] = publicKey
-        persist()
+        // 保存に失敗したら、メモリの登録も戻す（再起動で消える登録を、成功と返さない）
+        runCatching { persist() }.onFailure {
+            registered.remove(id)
+            return false
+        }
         return true
     }
 
@@ -55,9 +64,12 @@ class Registry(
     @Synchronized
     fun revoke(deviceId: String): Boolean {
         if (deviceId in bootstrap) return false
-        val removed = registered.remove(deviceId) != null
-        if (removed) persist()
-        return removed
+        val key = registered.remove(deviceId) ?: return false
+        runCatching { persist() }.onFailure {
+            registered[deviceId] = key
+            return false
+        }
+        return true
     }
 
     @Synchronized

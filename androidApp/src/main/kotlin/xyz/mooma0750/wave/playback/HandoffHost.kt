@@ -8,11 +8,23 @@ import xyz.mooma0750.wave.handoff.HandoffSnapshot
  */
 class HandoffHost {
     interface Endpoint {
-        /** 引き取られる側: 一時停止して、今のキューのスナップショットを作る。キューが空なら null。 */
-        fun capture(handoffId: String): HandoffSnapshot?
+        /**
+         * 引き取られる側: 一時停止して、今のキューのスナップショットを作る。キューが空なら null。
+         * キューが、アカウントを確かめたログインの世代（expectedLoginGeneration）のものでなければ null（一時停止もしない）。
+         */
+        fun capture(
+            handoffId: String,
+            expectedLoginGeneration: Long,
+        ): HandoffSnapshot?
 
-        /** 引き取る側: 検証済みのスナップショットでキューを置き換えて再生を始める。受け付けなければ false。 */
-        fun adopt(snapshot: HandoffSnapshot): Boolean
+        /**
+         * 引き取る側: 検証済みのスナップショットでキューを置き換えて再生を始める。受け付けなければ false。
+         * アカウントを確かめたログインの世代が今の世代でなければ受け付けない。
+         */
+        fun adopt(
+            snapshot: HandoffSnapshot,
+            expectedLoginGeneration: Long,
+        ): Boolean
 
         /** 引き取られる側: キューがあるか（引き取りに応じられるか）。 */
         fun hasQueue(): Boolean
@@ -22,6 +34,9 @@ class HandoffHost {
 
         /** 引き取られる側: 相手が取り消した。一時停止する前の再生に戻す。 */
         fun resumeAfterCancel()
+
+        /** 引き取られる側: 前の要求が取り込まれなかったので「渡し済み」を戻す。再生は再開しない（続けて次の要求に応じるため）。 */
+        fun forgetHandedOff()
     }
 
     var endpoint: Endpoint? = null

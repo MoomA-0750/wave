@@ -12,6 +12,11 @@ sealed interface HandoffBody {
     data class Request(
         val handoffId: String,
         val accountHmac: String,
+        /**
+         * この相手に出して、取り込まなかった直前の要求。相手がそれで一時停止したまま（Cancel が落ちた）なら、
+         * この要求で取り下げる。暗号文の中なので中継は偽れない
+         */
+        val abandonedHandoffId: String? = null,
     ) : HandoffBody
 
     @Serializable
@@ -38,6 +43,10 @@ sealed interface HandoffBody {
     @Serializable
     @SerialName("unpair")
     data object Unpair : HandoffBody
+
+    @Serializable
+    @SerialName("unpair_ack")
+    data object UnpairAck : HandoffBody
 
     companion object {
         private val json =
@@ -100,8 +109,23 @@ class HandoffTaker(
     }
 
     var state: State = State.Idle
-        private set
-    private val issuedHandoffIds = ArrayDeque<String>()
+        private set(value) {
+            val previous = field
+            // 待っていた・取り込んでいた要求を、取り込まずに終えた
+            if (value == State.Idle) {
+                when (previous) {
+                    is State.Requested -> abandoned = previous.peerId to previous.handoffId
+                    is State.Adopting -> abandoned = previous.peerId to previous.handoffId
+                    else -> Unit
+                }
+            }
+            field = value
+        }
+
+    private var abandoned: Pair<String, String>? = null
+
+    /** peerId に出して、取り込まずに終えた直前の要求（次の Request に載せる）。 */
+    fun abandonedFor(peerId: String): String? = abandoned?.takeIf { it.first == peerId }?.second
 
     fun request(
         peerId: String,
@@ -110,13 +134,22 @@ class HandoffTaker(
         expire()
         if (state is State.Requested || state is State.Adopting) return false
         state = State.Requested(peerId, handoffId, nowMs() + timeoutMs)
-        issuedHandoffIds.addLast(handoffId)
-        while (issuedHandoffIds.size > 16) issuedHandoffIds.removeFirst()
         return true
     }
 
-    /** 自分が最近出した要求か（取り下げた後に遅れて届いた snapshot に、Cancel を返すため）。 */
-    fun wasIssued(handoffId: String?): Boolean = handoffId != null && handoffId in issuedHandoffIds
+    /** 取り込み中・取り込み済みの handoffId（届いた snapshot がそれなら、Cancel を返さない）。 */
+    val currentHandoffId: String?
+        get() =
+            when (val current = state) {
+                is State.Requested -> current.handoffId
+                is State.Adopting -> current.handoffId
+                is State.Adopted -> current.handoffId
+                State.Idle -> null
+            }
+
+    /** 引き取りを頼んでいる・取り込んでいる（相手からの要求には応じない。互いに同時に引き取ると両方で鳴る）。 */
+    val busy: Boolean
+        get() = state is State.Requested || state is State.Adopting
 
     /**
      * @param accountMatches 本文のアカウントの HMAC が、自分の（確認済みの）アカウントと一致したか

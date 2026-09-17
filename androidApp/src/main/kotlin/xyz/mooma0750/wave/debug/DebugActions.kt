@@ -138,15 +138,12 @@ object DebugActions {
                         Log.i(WaveApplication.LOG_TAG, "debug take over started=${container.connect.takeOver(peer.peerDeviceId)} relay=${container.relayClient.status.value}")
                     }
                 }
-                // Phase 6 P6-S: tailnet 内の計測用 echo へ WSS でつなぎ、往復の時間と、指定した秒数の後に届くかを測る（本文は固定の文字列だけ）
-                "relay_echo" -> P6sEcho.start(intent.getStringExtra("url") ?: P6sEcho.DEFAULT_URL, intent.getStringExtra("delays")?.split(',')?.mapNotNull { it.trim().toIntOrNull() }.orEmpty())
-                "relay_echo_stop" -> P6sEcho.stop()
                 // Phase 6: 中継を使わず、同じ端末で自分のキューを書き出して検証し、取り込み直す（adopt の確認）
                 "handoff_self" -> {
                     player.controller() // サービスを起動しておく
                     val endpoint = container.handoffHost.endpoint
                     val handoffId = java.util.UUID.randomUUID().toString()
-                    val captured = endpoint?.capture(handoffId)
+                    val captured = endpoint?.capture(handoffId, container.session.loginGenerationId())
                     if (endpoint == null || captured == null) {
                         Log.i(WaveApplication.LOG_TAG, "debug handoff capture failed endpoint=${endpoint != null}")
                     } else {
@@ -155,21 +152,11 @@ object DebugActions {
                             is xyz.mooma0750.wave.handoff.HandoffDecodeResult.Ok -> {
                                 val index = decoded.snapshot.items.indexOfFirst { it.itemId == decoded.snapshot.currentItemId }
                                 Log.i(WaveApplication.LOG_TAG, "debug handoff bytes=${text.length} items=${decoded.snapshot.items.size} index=$index positionS=${decoded.snapshot.positionMs / 1000} listenedS=${decoded.snapshot.listenedMs / 1000} sent=${decoded.snapshot.historySent} repeat=${decoded.snapshot.repeat}")
-                                Log.i(WaveApplication.LOG_TAG, "debug handoff adopt=${endpoint.adopt(decoded.snapshot)}")
+                                Log.i(WaveApplication.LOG_TAG, "debug handoff adopt=${endpoint.adopt(decoded.snapshot, container.session.loginGenerationId())}")
                             }
                             else -> Log.i(WaveApplication.LOG_TAG, "debug handoff decode=$decoded")
                         }
                     }
-                }
-                // Phase 6 P6-S: アカウントの識別子の場所（キー名・真偽値）と、2台で比べるための HMAC の先頭6文字（固定の調査用の鍵）
-                "account_probe" -> {
-                    val probe = container.session.probeAccountIdentity()
-                    val prefix =
-                        probe?.normalizedForLocalHmac?.let { id ->
-                            val mac = javax.crypto.Mac.getInstance("HmacSHA256").apply { init(javax.crypto.spec.SecretKeySpec("wave-p6s-probe-2026-09-17".encodeToByteArray(), "HmacSHA256")) }
-                            mac.doFinal(id.encodeToByteArray()).take(3).joinToString("") { "%02x".format(it) }
-                        }
-                    Log.i(WaveApplication.LOG_TAG, "debug account probe=$probe hmac6=$prefix")
                 }
                 // Phase 6 の暗号の選択のため、この端末の Android Keystore で使える鍵の種類を測る（真偽値だけ、鍵は作ってすぐ消す）
                 "keystore_probe" -> {

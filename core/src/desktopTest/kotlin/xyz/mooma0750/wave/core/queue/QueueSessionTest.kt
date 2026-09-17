@@ -749,4 +749,22 @@ class QueueSessionTest {
             assertEquals(listOf("PL" to "page2"), content.playlistCalls)
             assertTrue(content.epochs.isNotEmpty() && content.epochs.all { it == 5L }, "続きの取得に受け取った側の世代を渡していない: ${content.epochs}")
         }
+
+    @Test
+    fun adoptBindsTheGenerationTheAccountWasVerifiedIn() =
+        runTest {
+            val player = FakePlayer()
+            val content = FakeContent().apply { playlistResult = { _, _ -> CallResult.Ok(SongPage(listOf(song("p9")), continuation = null)) } }
+            var n = 0
+            // アカウントを確かめたのは世代 5、取り込む時点では世代 6 に切り替わっている
+            val queue = QueueSession(player, content, this, newItemId = { "00000000-0000-4000-8000-%012d".format(n++) }, loginGeneration = { 6 })
+            val source = QueueSession(FakePlayer(), FakeContent(), this, newItemId = { "00000000-0000-4000-8000-%012d".format(100 + n++) }, loginGeneration = { 1 })
+            source.playFrom(listOf(song("p1")), 0, "PL", "page2")
+            val snapshot = requireNotNull(source.handoffSnapshot("id", 0, true, 0, 0, false, 0))
+            queue.adopt(snapshot, expectedLoginGeneration = 5)
+            assertEquals(5L, queue.accountEpoch)
+            assertEquals(5L, player.epoch)
+            advanceUntilIdle()
+            assertTrue(content.epochs.isNotEmpty() && content.epochs.all { it == 5L }, "確かめた世代ではなく今の世代で取得した: ${content.epochs}")
+        }
 }
