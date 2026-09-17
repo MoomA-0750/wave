@@ -658,6 +658,7 @@ class PlaybackService : MediaSessionService() {
             if (!isOwnUiController(session, controller)) return Futures.immediateFuture(SessionResult(SessionError.ERROR_PERMISSION_DENIED))
             if (customCommand.customAction in USER_SELECTIONS) skipGuard.onUserSelection()
             val wasEmpty = session.player.mediaItemCount == 0
+            val wasPlaying = session.player.playWhenReady
             // 曲を選ぶ処理の中の play() は、再生ボタン（D-9）として知らせない。後で「曲を選んだ」を1回だけ知らせる（レビュー p6b34 高-1）
             connectV2Suppressed = true
             val handled =
@@ -677,9 +678,9 @@ class PlaybackService : MediaSessionService() {
                     connectV2Suppressed = false
                 }
             // 曲を選んだ（キューを置き換えた・飛んだ）のは、本人が新しく再生を始めたこと（L-3）
-            // 空のキューに「次に再生」「最後に追加」で足して再生が始まった場合も、新しい再生
-            val startedFromEmpty = wasEmpty && session.player.mediaItemCount > 0 && session.player.playWhenReady
-            if (handled != null && (customCommand.customAction in USER_SELECTIONS || startedFromEmpty)) container.connectV2Host.listener?.onUserStartedPlayback(newSelection = true)
+            // 空のキュー・最後まで行ったキューに「次に再生」「最後に追加」で足して再生が始まった場合も、新しい再生（再レビュー 低-O）
+            val startedPlaying = (wasEmpty || !wasPlaying) && session.player.mediaItemCount > 0 && session.player.playWhenReady
+            if (handled != null && (customCommand.customAction in USER_SELECTIONS || startedPlaying)) container.connectV2Host.listener?.onUserStartedPlayback(newSelection = true)
             return Futures.immediateFuture(SessionResult(if (handled != null) SessionResult.RESULT_SUCCESS else SessionError.ERROR_BAD_VALUE))
         }
 
