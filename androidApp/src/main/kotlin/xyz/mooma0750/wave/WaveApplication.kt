@@ -1,6 +1,10 @@
 package xyz.mooma0750.wave
 
 import android.app.Application
+import coil3.ImageLoader
+import coil3.PlatformContext
+import coil3.SingletonImageLoader
+import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import android.content.Context
 import android.content.pm.ApplicationInfo
 import android.os.SystemClock
@@ -36,7 +40,9 @@ import java.io.File
 /** プロセスで1つだけ作る（同じファイルに DataStore を2つ作ると例外になる）。 */
 private val Context.credentialDataStore: DataStore<Preferences> by preferencesDataStore(name = "credentials")
 
-class WaveApplication : Application() {
+class WaveApplication :
+    Application(),
+    SingletonImageLoader.Factory {
     lateinit var container: AppContainer
         private set
 
@@ -51,6 +57,13 @@ class WaveApplication : Application() {
         container = AppContainer(this)
         container.appScope.launch { container.authManager.restore() }
     }
+
+    /** サムネイルは、認証情報を持たない音声用と同じクライアントで取る（ADR-0003）。 */
+    override fun newImageLoader(context: PlatformContext): ImageLoader =
+        ImageLoader
+            .Builder(context)
+            .components { add(OkHttpNetworkFetcherFactory(callFactory = { container.mediaHttpClient })) }
+            .build()
 
     companion object {
         const val LOGIN_WEBVIEW_SUFFIX = "login"

@@ -80,6 +80,11 @@ class Media3QueuePlayer(
     private fun indexOf(itemId: String): Int? = (0 until player.mediaItemCount).firstOrNull { player.getMediaItemAt(it).mediaId == itemId }
 
     companion object {
+        private val GOOGLE_IMAGE_SIZE = Regex("=w\\d+-h\\d+")
+
+        /** 検索結果のサムネイル（120px）は再生画面・通知には小さいので、googleusercontent のサイズ指定を大きくする。 */
+        fun largeArtwork(url: String): String = if ("googleusercontent.com" in url) url.replace(GOOGLE_IMAGE_SIZE, "=w544-h544") else url
+
         fun mediaItemOf(item: QueueItem): MediaItem {
             val song = item.song
             return MediaItem
@@ -92,7 +97,7 @@ class Media3QueuePlayer(
                         .setTitle(song.title)
                         .setArtist(song.artists.joinToString(", ") { it.name })
                         .setAlbumTitle(song.album?.title)
-                        .setArtworkUri(song.thumbnailUrl?.toUri())
+                        .setArtworkUri(song.thumbnailUrl?.let(::largeArtwork)?.toUri())
                         .setDurationMs(song.durationSeconds?.let { it * 1000L })
                         .build(),
                 ).build()

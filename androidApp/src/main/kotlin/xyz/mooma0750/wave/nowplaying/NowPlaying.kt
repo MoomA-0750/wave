@@ -6,6 +6,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -43,12 +46,13 @@ import xyz.mooma0750.wave.playback.PlayerConnection
 fun MiniPlayer(connection: PlayerConnection) {
     val (state, controller) = rememberPlayerUiState(connection)
     var showQueue by remember { mutableStateOf(false) }
+    var showFull by remember { mutableStateOf(false) }
     if (state.title == null) return
 
     Surface(tonalElevation = 3.dp) {
         Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 12.dp, vertical = 6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
+                Column(Modifier.weight(1f).clickable { showFull = true }) {
                     Text(state.title, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Medium)
                     Text(
                         listOfNotNull(state.artist, state.error?.let { "エラー: $it" }, "バッファ中".takeIf { state.buffering }).joinToString(" • "),
@@ -77,6 +81,15 @@ fun MiniPlayer(connection: PlayerConnection) {
                     onValueChange = { controller?.seekTo((it * state.durationMs).toLong()) },
                 )
             }
+        }
+    }
+
+    if (showFull) {
+        ModalBottomSheet(onDismissRequest = { showFull = false }, sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+            FullPlayer(state, controller, onQueue = {
+                showFull = false
+                showQueue = true
+            })
         }
     }
 
@@ -118,4 +131,59 @@ private fun QueueSheet(
         }
         Spacer(Modifier.navigationBarsPadding())
     }
+}
+
+/** 再生中の画面（大）。仮の見た目。 */
+@Composable
+private fun FullPlayer(
+    state: PlayerUiState,
+    controller: MediaController?,
+    onQueue: () -> Unit,
+) {
+    Column(
+        Modifier.fillMaxWidth().padding(24.dp).navigationBarsPadding(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        coil3.compose.AsyncImage(
+            model = controller?.currentMediaItem?.mediaMetadata?.artworkUri,
+            contentDescription = null,
+            modifier = Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(8.dp)),
+            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+        )
+        Text(state.title.orEmpty(), style = MaterialTheme.typography.titleLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Text(state.artist.orEmpty(), style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        if (state.durationMs > 0) {
+            Slider(
+                value = (state.positionMs.toFloat() / state.durationMs).coerceIn(0f, 1f),
+                onValueChange = { controller?.seekTo((it * state.durationMs).toLong()) },
+            )
+            Row(Modifier.fillMaxWidth()) {
+                Text(formatTime(state.positionMs), style = MaterialTheme.typography.bodySmall)
+                Spacer(Modifier.weight(1f))
+                Text(formatTime(state.durationMs), style = MaterialTheme.typography.bodySmall)
+            }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            TextButton(onClick = { controller?.seekToPreviousMediaItem() }, enabled = state.hasPrevious) { Text("前へ") }
+            androidx.compose.material3.Button(onClick = {
+                controller?.run {
+                    if (isPlaying) {
+                        pause()
+                    } else {
+                        if (playerError != null) prepare()
+                        play()
+                    }
+                }
+            }) { Text(if (state.isPlaying) "一時停止" else "再生") }
+            TextButton(onClick = { controller?.seekToNextMediaItem() }, enabled = state.hasNext) { Text("次へ") }
+        }
+        state.error?.let { Text("エラー: $it", style = MaterialTheme.typography.bodySmall) }
+        TextButton(onClick = onQueue) { Text("再生キュー（${state.queue.size}曲）") }
+    }
+}
+
+private fun formatTime(ms: Long): String {
+    val total = ms / 1000
+    return "%d:%02d".format(total / 60, total % 60)
 }
