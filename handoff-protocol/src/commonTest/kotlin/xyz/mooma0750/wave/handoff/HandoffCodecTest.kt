@@ -90,12 +90,13 @@ class HandoffCodecTest {
                 item(2, "https://i.ytimg.com/vi/x/hq.jpg"),
                 item(3, "https://yt3.ggpht.com/x"),
             )
-        val ok = assertIs<HandoffDecodeResult.Ok>(HandoffCodec.validate(snapshot(items = items).copy(positionMs = 999_999_999), handoffId)).snapshot
+        val ok = assertIs<HandoffDecodeResult.Ok>(HandoffCodec.validate(snapshot(items = items).copy(positionMs = 999_999_999, listenedMs = Long.MAX_VALUE), handoffId)).snapshot
         assertNull(ok.items[0].thumbnailUrl)
         assertNull(ok.items[1].thumbnailUrl)
         assertEquals("https://i.ytimg.com/vi/x/hq.jpg", ok.items[2].thumbnailUrl)
         assertEquals("https://yt3.ggpht.com/x", ok.items[3].thumbnailUrl)
         assertEquals(200_000L, ok.positionMs)
+        assertEquals(200_000L, ok.listenedMs)
     }
 
     @Test

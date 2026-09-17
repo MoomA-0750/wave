@@ -40,4 +40,12 @@ class ListenCounterTest {
         assertEquals(5_000L, ListenCounter.thresholdFor(6_000))
         assertEquals(30_000L, ListenCounter.thresholdFor(0))
     }
+
+    @Test
+    fun hugeCarriedTimeSaturatesInsteadOfOverflowing() {
+        val counter = ListenCounter(30_000, initialListenedMs = Long.MAX_VALUE - 5)
+        counter.start(0)
+        counter.stop(1_000)
+        assertEquals(Long.MAX_VALUE, counter.listenedMs(2_000))
+    }
 }

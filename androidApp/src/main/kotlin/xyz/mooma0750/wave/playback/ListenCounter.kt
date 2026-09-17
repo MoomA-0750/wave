@@ -22,11 +22,17 @@ class ListenCounter(
     }
 
     fun stop(nowMs: Long) {
-        playingSinceMs?.let { listenedMs += (nowMs - it).coerceAtLeast(0) }
+        // 飽和させる（引き継いだ値が大きくても負に回らない）
+        playingSinceMs?.let { listenedMs = saturatingAdd(listenedMs, (nowMs - it).coerceAtLeast(0)) }
         playingSinceMs = null
     }
 
-    fun listenedMs(nowMs: Long): Long = listenedMs + (playingSinceMs?.let { (nowMs - it).coerceAtLeast(0) } ?: 0)
+    fun listenedMs(nowMs: Long): Long = saturatingAdd(listenedMs, playingSinceMs?.let { (nowMs - it).coerceAtLeast(0) } ?: 0)
+
+    private fun saturatingAdd(
+        a: Long,
+        b: Long,
+    ): Long = if (a > Long.MAX_VALUE - b) Long.MAX_VALUE else a + b
 
     companion object {
         const val THRESHOLD_MS = 30_000L

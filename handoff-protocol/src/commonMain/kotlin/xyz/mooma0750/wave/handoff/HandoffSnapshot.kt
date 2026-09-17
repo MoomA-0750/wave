@@ -116,6 +116,7 @@ object HandoffCodec {
     private const val MAX_TEXT = 500
     private const val MAX_CONTINUATION = 4096
     private const val MAX_ARTISTS = 20
+    private const val MAX_TIME_MS = 24 * 3600 * 1000L
 
     private val VIDEO_ID = Regex("^[A-Za-z0-9_-]{11}$")
     private val BROWSE_ID = Regex("^[A-Za-z0-9_-]{2,64}$")
@@ -181,8 +182,9 @@ object HandoffCodec {
         return HandoffDecodeResult.Ok(
             snapshot.copy(
                 items = snapshot.items.map { it.copy(thumbnailUrl = it.thumbnailUrl?.takeIf(::allowedThumbnail)) },
-                // 位置を曲の長さ以下に切り詰める
-                positionMs = if (durationMs != null) snapshot.positionMs.coerceAtMost(durationMs) else snapshot.positionMs,
+                // 位置と聴いた時間を曲の長さ以下（長さが無ければ24時間以下）に切り詰める（拒否はしない）
+                positionMs = snapshot.positionMs.coerceAtMost(durationMs ?: MAX_TIME_MS),
+                listenedMs = snapshot.listenedMs.coerceAtMost(durationMs ?: MAX_TIME_MS),
             ),
         )
     }
