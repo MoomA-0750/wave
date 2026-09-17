@@ -75,6 +75,34 @@ object DebugActions {
                     container.logout()
                 }
                 "shuffle" -> player.shuffleUpcoming()
+                // Phase 6: 暗号の部品とペアリングの手順が、この端末（Conscrypt・Keystore の鍵）で動くかを端末の中だけで確かめる（結果の真偽値だけ）
+                "crypto_selftest" -> {
+                    val results = linkedMapOf<String, Boolean>()
+                    fun check(name: String, block: () -> Boolean) {
+                        results[name] = runCatching(block).getOrElse { error -> Log.i(WaveApplication.LOG_TAG, "debug selftest $name error=${error::class.simpleName}"); false }
+                    }
+                    val identity = container.deviceIdentity
+                    check("keystore_key_decodes") { xyz.mooma0750.wave.handoff.crypto.WaveCrypto.decodePublicKey(identity.encodedPublicKey) != null }
+                    check("keystore_sign_verify") {
+                        val sig = identity.sign("wave-selftest", byteArrayOf(1, 2, 3))
+                        xyz.mooma0750.wave.handoff.crypto.WaveCrypto.verify(identity.publicKey, "wave-selftest", byteArrayOf(1, 2, 3), sig)
+                    }
+                    check("pairing_roundtrip") {
+                        val other = xyz.mooma0750.wave.handoff.crypto.WaveCrypto.generateEphemeralKeyPair()
+                        val a = xyz.mooma0750.wave.handoff.crypto.Pairing.Responder(identity.privateKey(), identity.publicKey, "self-a", "selftest-account", nowMs = android.os.SystemClock::elapsedRealtime)
+                        val offer = xyz.mooma0750.wave.handoff.crypto.Pairing.decodeOffer(xyz.mooma0750.wave.handoff.crypto.Pairing.encodeOffer(a.offer))!!
+                        val b = xyz.mooma0750.wave.handoff.crypto.Pairing.Initiator(offer, other.private, other.public, "self-b", "selftest-account")
+                        val (code, onB) = b.onConfirm(a.onHello(b.hello()).getOrThrow()).getOrThrow()
+                        val onA = a.onCodeEntered(code).getOrThrow()
+                        val env = xyz.mooma0750.wave.handoff.crypto.EnvelopeSealer.seal(onB.sendKey, "b", "a", xyz.mooma0750.wave.handoff.EnvelopeType.Request, 0, "h", byteArrayOf(9))
+                        xyz.mooma0750.wave.handoff.crypto.EnvelopeSealer.open(env, onA.receiveKey, "a", "b", -1)?.contentEquals(byteArrayOf(9)) == true
+                    }
+                    check("hkdf_rfc_case3") {
+                        val prk = xyz.mooma0750.wave.handoff.crypto.Hkdf.extract(ByteArray(0), ByteArray(22) { 0x0b })
+                        prk.joinToString("") { "%02x".format(it) } == "19ef24a32c717b167f33a91d6f648bdf96596776afdb6377ac434c1c293ccb04"
+                    }
+                    Log.i(WaveApplication.LOG_TAG, "debug selftest sdk=${android.os.Build.VERSION.SDK_INT} $results")
+                }
                 // Phase 6: ペアリングと引き取りの確認（DebugReceiver からだけ）。QR の文字列と6桁はアプリの中のファイルに書き、ログには出さない
                 "connect_info" -> {
                     java.io.File(context.filesDir, "connect-pubkey.txt").writeText(java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(container.deviceIdentity.encodedPublicKey))
