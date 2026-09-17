@@ -77,8 +77,8 @@ class PlaybackService : MediaSessionService() {
     /** Connect v2 の入口（Phase 6b）。 */
     private var connectV2Endpoint: ConnectV2Host.Endpoint? = null
 
-    /** 引き取りの取り込み中（本人が再生を始めたとして claim しない）。 */
-    private var connectV2Adopting = false
+    /** 取り込み・曲の選択・再開の処理の中（サービスの中の play() を、本人の再生ボタンとして知らせない）。 */
+    private var connectV2Suppressed = false
 
     /**
      * 渡した（かもしれない）後、この端末で再生し直すまで true。この間のキューは相手の再生より古いので、引き取りの要求には渡さない
@@ -160,10 +160,9 @@ class PlaybackService : MediaSessionService() {
                     if (events.containsAny(Player.EVENT_MEDIA_ITEM_TRANSITION, Player.EVENT_TIMELINE_CHANGED)) {
                         likeController.onCurrentSong(Media3QueuePlayer.songOf(player.currentMediaItem)?.videoId, TrackUri.epochOf(player.currentMediaItem?.localConfiguration?.uri))
                     }
-                    // Connect v2（Phase 6b）: キューと位置の変化を知らせる。再生中かは playWhenReady（本人の意図）で見る（バッファ中の揺れで書かない）
+                    // Connect v2（Phase 6b）: 位置の変化を知らせる。キューの変化は onTimelineChanged（並びが変わったときだけ）
                     container.connectV2Host.listener?.let { v2 ->
-                        if (events.contains(Player.EVENT_TIMELINE_CHANGED)) v2.onQueueChanged()
-                        val significant = events.containsAny(Player.EVENT_PLAY_WHEN_READY_CHANGED, Player.EVENT_MEDIA_ITEM_TRANSITION)
+                        val significant = events.containsAny(Player.EVENT_PLAY_WHEN_READY_CHANGED, Player.EVENT_MEDIA_ITEM_TRANSITION, Player.EVENT_PLAYBACK_STATE_CHANGED)
                         if (significant || events.containsAny(Player.EVENT_POSITION_DISCONTINUITY, Player.EVENT_REPEAT_MODE_CHANGED)) v2.onCursorChanged(significant)
                     }
                 }
@@ -173,7 +172,7 @@ class PlaybackService : MediaSessionService() {
                     reason: Int,
                 ) {
                     // 本人（画面・通知・Bluetooth）が再生を始めた。引き取りの取り込みは除く
-                    if (playWhenReady && reason == Player.PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST && !connectV2Adopting) {
+                    if (playWhenReady && reason == Player.PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST && !connectV2Suppressed) {
                         container.connectV2Host.listener?.onUserStartedPlayback(newSelection = false)
                     }
                 }
@@ -221,6 +220,8 @@ class PlaybackService : MediaSessionService() {
                     // 件数と位置だけ（曲名などは出さない）
                     if (reason == Player.TIMELINE_CHANGE_REASON_PLAYLIST_CHANGED) {
                         Log.i(WaveApplication.LOG_TAG, "queue size=${player.mediaItemCount} index=${player.currentMediaItemIndex}")
+                        // 曲のソースの準備（SOURCE_UPDATE）では知らせない（レビュー p6b34 中-1）
+                        container.connectV2Host.listener?.onQueueChanged()
                     }
                 }
 
@@ -336,15 +337,15 @@ class PlaybackService : MediaSessionService() {
             object : ConnectV2Host.Endpoint {
                 override fun snapshot(): xyz.mooma0750.wave.handoff.HandoffSnapshot? {
                     if (loggedInAt == null) return null
-                    val (listenedMs, historySent) = historyTracker.handoffState()
+                    // 中身（並び・出どころ・続き）が同じなら同じ文字列になるよう、位置・履歴・時刻は入れない（カーソルが持つ。キューを置き直さない判断に使う）
                     return queueSession.handoffSnapshot(
-                        handoffId = UUID.randomUUID().toString(),
-                        positionMs = player.currentPosition,
-                        playing = player.playWhenReady,
-                        repeatMode = player.repeatMode,
-                        listenedMs = listenedMs,
-                        historySent = historySent,
-                        nowEpochMs = System.currentTimeMillis(),
+                        handoffId = V2_SNAPSHOT_ID,
+                        positionMs = 0,
+                        playing = false,
+                        repeatMode = Player.REPEAT_MODE_OFF,
+                        listenedMs = 0,
+                        historySent = false,
+                        nowEpochMs = 0,
                     )
                 }
 
@@ -357,11 +358,22 @@ class PlaybackService : MediaSessionService() {
                             Player.REPEAT_MODE_ALL -> xyz.mooma0750.wave.handoff.HandoffRepeat.All
                             else -> xyz.mooma0750.wave.handoff.HandoffRepeat.Off
                         }
-                    return ConnectV2Host.Cursor(itemId, player.currentPosition.coerceAtLeast(0), player.playWhenReady, repeat, listenedMs, historySent)
+                    // 最後まで行った・エラーで止まった端末を「再生中」と書かない（レビュー p6b34 中-2）
+                    val playing = player.playWhenReady && (player.playbackState == Player.STATE_READY || player.playbackState == Player.STATE_BUFFERING)
+                    return ConnectV2Host.Cursor(itemId, player.currentPosition.coerceAtLeast(0), playing, repeat, listenedMs, historySent)
                 }
 
                 override fun pause() {
                     player.pause()
+                }
+
+                override fun resume() {
+                    connectV2Suppressed = true
+                    try {
+                        player.play()
+                    } finally {
+                        connectV2Suppressed = false
+                    }
                 }
 
                 override fun adopt(
@@ -369,11 +381,11 @@ class PlaybackService : MediaSessionService() {
                     positionMs: Long,
                     expectedLoginGeneration: Long,
                 ): Boolean {
-                    connectV2Adopting = true
+                    connectV2Suppressed = true
                     try {
                         return endpoint.adopt(snapshot.copy(positionMs = positionMs.coerceAtLeast(0), playing = true), expectedLoginGeneration)
                     } finally {
-                        connectV2Adopting = false
+                        connectV2Suppressed = false
                     }
                 }
             }
@@ -638,20 +650,29 @@ class PlaybackService : MediaSessionService() {
             }
             if (!isOwnUiController(session, controller)) return Futures.immediateFuture(SessionResult(SessionError.ERROR_PERMISSION_DENIED))
             if (customCommand.customAction in USER_SELECTIONS) skipGuard.onUserSelection()
+            val wasEmpty = session.player.mediaItemCount == 0
+            // 曲を選ぶ処理の中の play() は、再生ボタン（D-9）として知らせない。後で「曲を選んだ」を1回だけ知らせる（レビュー p6b34 高-1）
+            connectV2Suppressed = true
             val handled =
-                when (customCommand.customAction) {
-                    QueueCommands.PLAY_SONG -> QueueCommands.songOf(args)?.let { queue.playSong(it) }
-                    QueueCommands.PLAY_FROM ->
-                        QueueCommands.playFromOf(args)?.let { queue.playFrom(it.songs, it.startIndex, it.playlistId, it.continuation, it.shuffle) }
-                    QueueCommands.ADD_NEXT -> QueueCommands.songOf(args)?.let { queue.addNext(it) }
-                    QueueCommands.ADD_TO_END -> QueueCommands.songOf(args)?.let { queue.addToEnd(it) }
-                    QueueCommands.REMOVE -> QueueCommands.itemIdOf(args)?.let { queue.remove(it) }
-                    QueueCommands.JUMP -> QueueCommands.itemIdOf(args)?.let { queue.jumpTo(it) }
-                    QueueCommands.SHUFFLE_UPCOMING -> queue.shuffleUpcoming()
-                    else -> null
+                try {
+                    when (customCommand.customAction) {
+                        QueueCommands.PLAY_SONG -> QueueCommands.songOf(args)?.let { queue.playSong(it) }
+                        QueueCommands.PLAY_FROM ->
+                            QueueCommands.playFromOf(args)?.let { queue.playFrom(it.songs, it.startIndex, it.playlistId, it.continuation, it.shuffle) }
+                        QueueCommands.ADD_NEXT -> QueueCommands.songOf(args)?.let { queue.addNext(it) }
+                        QueueCommands.ADD_TO_END -> QueueCommands.songOf(args)?.let { queue.addToEnd(it) }
+                        QueueCommands.REMOVE -> QueueCommands.itemIdOf(args)?.let { queue.remove(it) }
+                        QueueCommands.JUMP -> QueueCommands.itemIdOf(args)?.let { queue.jumpTo(it) }
+                        QueueCommands.SHUFFLE_UPCOMING -> queue.shuffleUpcoming()
+                        else -> null
+                    }
+                } finally {
+                    connectV2Suppressed = false
                 }
             // 曲を選んだ（キューを置き換えた・飛んだ）のは、本人が新しく再生を始めたこと（L-3）
-            if (handled != null && customCommand.customAction in USER_SELECTIONS) container.connectV2Host.listener?.onUserStartedPlayback(newSelection = true)
+            // 空のキューに「次に再生」「最後に追加」で足して再生が始まった場合も、新しい再生
+            val startedFromEmpty = wasEmpty && session.player.mediaItemCount > 0 && session.player.playWhenReady
+            if (handled != null && (customCommand.customAction in USER_SELECTIONS || startedFromEmpty)) container.connectV2Host.listener?.onUserStartedPlayback(newSelection = true)
             return Futures.immediateFuture(SessionResult(if (handled != null) SessionResult.RESULT_SUCCESS else SessionError.ERROR_BAD_VALUE))
         }
 
@@ -755,6 +776,7 @@ class PlaybackService : MediaSessionService() {
                 Player.EVENT_POSITION_DISCONTINUITY,
             )
         val USER_SELECTIONS = setOf(QueueCommands.PLAY_SONG, QueueCommands.PLAY_FROM, QueueCommands.JUMP)
+        const val V2_SNAPSHOT_ID = "00000000-0000-4000-8000-000000000000"
         const val CUSTOM_NOTIFICATION_ACTION = "androidx.media3.session.CUSTOM_NOTIFICATION_ACTION"
         const val EXTRAS_KEY_CUSTOM_NOTIFICATION_ACTION = "androidx.media3.session.EXTRAS_KEY_CUSTOM_NOTIFICATION_ACTION"
         const val EXTRAS_KEY_CUSTOM_NOTIFICATION_ACTION_EXTRAS = "androidx.media3.session.EXTRAS_KEY_CUSTOM_NOTIFICATION_ACTION_EXTRAS"

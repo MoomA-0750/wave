@@ -3,6 +3,10 @@ package xyz.mooma0750.wave.connect2
 import android.util.Log
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
@@ -10,6 +14,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.launch
@@ -19,6 +24,7 @@ import xyz.mooma0750.wave.WaveApplication
 import xyz.mooma0750.wave.connect.DeviceIdentity
 import xyz.mooma0750.wave.core.session.WaveSession
 import xyz.mooma0750.wave.handoff.crypto.Pairing
+import xyz.mooma0750.wave.handoff.v2.ClientEvent
 import xyz.mooma0750.wave.handoff.v2.RelayV2
 import java.util.Base64
 
@@ -87,17 +93,62 @@ class PairingV2Controller(
         job = launchJob { runAccept(offerText) }
     }
 
-    /** B: A に数字を入力してもらったあと「続ける」。A の Confirm の床で加入を待つ（中継につながると鎖を確かめる）。 */
+    /**
+     * B: A に数字を入力してもらったあと「続ける」。A の Confirm の床で加入を待ち、エンジンが加入の鎖を受け入れたら完了にする（レビュー p6b34 中-3）。
+     * A の追記が中継に入る前につなぐと認証で断られる（NotMember）ので、間を空けてつなぎ直す。
+     */
     fun confirmOnB() {
         val established = pendingOnB ?: return
         val extension = established.peerExtension ?: return run { mutableState.value = State.Failed("相手の端末が Connect v2 に対応していません") }
-        if (!manager.expectJoin(extension, established.peerPublicKey)) return run { mutableState.value = State.Failed("相手の応答を読めませんでした") }
         pendingOnB = null
-        // 家に入ったので、つなぎ直して鎖を取る（認証は中継の鎖の今の端末で行う）
-        manager.relay.acquire()
-        manager.relay.release()
-        mutableState.value = State.Done(established.peerDeviceName)
-        Log.i(WaveApplication.LOG_TAG, "pairing-v2 established role=B")
+        job?.cancel()
+        job = launchJob { runJoinOnB(established, extension) }
+    }
+
+    private suspend fun runJoinOnB(
+        established: Pairing.Established,
+        extension: String,
+    ) {
+        if (!manager.expectJoin(extension, established.peerPublicKey)) return fail("この端末の Connect v2 の状態では加われません（既に家に入っているか、保存を読めません）")
+        mutableState.value = State.Working("家に加わるのを待っています")
+        val joined =
+            coroutineScope {
+                val outcome =
+                    async(start = CoroutineStart.UNDISPATCHED) {
+                        manager.events.first { it is ClientEvent.Joined || it is ClientEvent.ChainForked || it is ClientEvent.ChainRolledBack || it is ClientEvent.ChainInvalid }
+                    }
+                try {
+                    withTimeoutOrNull(JOIN_WAIT_MS) {
+                        for (wait in JOIN_RETRY_MS) {
+                            if (manager.inHousehold()) return@withTimeoutOrNull ClientEvent.Joined
+                            // 家に入ったので、つなぎ直して鎖を取る（認証は中継の鎖の今の端末で行う）
+                            manager.relay.acquire()
+                            try {
+                                val result =
+                                    withTimeoutOrNull(wait) {
+                                        merge<ClientEvent?>(flow { emit(outcome.await()) }, manager.relay.status.filter { it == RelayClientV2.Status.NotMember }.map { null }).first()
+                                    }
+                                if (result != null) return@withTimeoutOrNull result
+                                // 断られた: A の追記が中継に入るのを待ってから、つなぎ直す
+                                if (manager.relay.status.value == RelayClientV2.Status.NotMember) delay(wait)
+                            } finally {
+                                manager.relay.release()
+                            }
+                        }
+                        null
+                    }
+                } finally {
+                    outcome.cancel()
+                }
+            }
+        when {
+            joined == ClientEvent.Joined -> {
+                mutableState.value = State.Done(established.peerDeviceName)
+                Log.i(WaveApplication.LOG_TAG, "pairing-v2 established role=B")
+            }
+            joined == null -> fail("家に加われませんでした（相手の端末で加える操作が済んでいるか確かめて、もう一度やり直してください）")
+            else -> fail("中継の端末一覧を確かめられませんでした")
+        }
     }
 
     fun cancel() {
@@ -190,6 +241,13 @@ class PairingV2Controller(
                 fail("ペアリングできませんでした")
             }
         }
+
+    private companion object {
+        const val JOIN_WAIT_MS = 30_000L
+
+        /** つなぎ直すまでの待ち（NotMember で断られたら、次の待ちでつなぎ直す）。 */
+        val JOIN_RETRY_MS = listOf(2_000L, 5_000L, 10_000L, 13_000L)
+    }
 
     private fun fail(message: String) {
         codes = null

@@ -137,21 +137,27 @@ object DebugActions {
                         Log.i(WaveApplication.LOG_TAG, "debug v2 configured=false")
                     } else {
                         manager.relay.acquire()
-                        kotlinx.coroutines.delay(5_000)
-                        manager.summary { Log.i(WaveApplication.LOG_TAG, "debug v2 $it") }
-                        kotlinx.coroutines.delay(500)
-                        manager.relay.release()
+                        try {
+                            kotlinx.coroutines.delay(5_000)
+                            manager.summary { Log.i(WaveApplication.LOG_TAG, "debug v2 $it") }
+                            kotlinx.coroutines.delay(500)
+                        } finally {
+                            manager.relay.release()
+                        }
                     }
                 }
                 "v2_create_household" -> {
                     val manager = container.connectV2 ?: return@launch
                     manager.relay.acquire()
-                    kotlinx.coroutines.withTimeoutOrNull(15_000) { manager.relay.status.first { it == xyz.mooma0750.wave.connect2.RelayClientV2.Status.Connected } }
-                    manager.createHousehold()
-                    kotlinx.coroutines.delay(5_000)
-                    manager.summary { Log.i(WaveApplication.LOG_TAG, "debug v2 household $it") }
-                    kotlinx.coroutines.delay(500)
-                    manager.relay.release()
+                    try {
+                        kotlinx.coroutines.withTimeoutOrNull(15_000) { manager.relay.status.first { it == xyz.mooma0750.wave.connect2.RelayClientV2.Status.Connected } }
+                        manager.createHousehold()
+                        kotlinx.coroutines.delay(5_000)
+                        manager.summary { Log.i(WaveApplication.LOG_TAG, "debug v2 household $it") }
+                        kotlinx.coroutines.delay(500)
+                    } finally {
+                        manager.relay.release()
+                    }
                 }
                 "v2_pair_offer" -> {
                     val pairing = container.pairingV2 ?: return@launch
@@ -176,23 +182,31 @@ object DebugActions {
                 }
                 "v2_pair_continue" -> {
                     val pairing = container.pairingV2 ?: return@launch
-                    pairing.confirmOnB()
-                    kotlinx.coroutines.delay(8_000)
-                    container.connectV2?.summary { Log.i(WaveApplication.LOG_TAG, "debug v2 pair continue $it") }
-                    kotlinx.coroutines.delay(500)
-                    container.connectV2?.relay?.release()
+                    try {
+                        pairing.confirmOnB()
+                        val next = kotlinx.coroutines.withTimeoutOrNull(40_000) { pairing.state.first { it is xyz.mooma0750.wave.connect2.PairingV2Controller.State.Done || it is xyz.mooma0750.wave.connect2.PairingV2Controller.State.Failed } }
+                        Log.i(WaveApplication.LOG_TAG, "debug v2 pair continue state=${next?.let { it::class.simpleName }} message=${(next as? xyz.mooma0750.wave.connect2.PairingV2Controller.State.Failed)?.message}")
+                        container.connectV2?.summary { Log.i(WaveApplication.LOG_TAG, "debug v2 pair continue $it") }
+                        kotlinx.coroutines.delay(500)
+                    } finally {
+                        // v2_pair_accept で取った参照を戻す
+                        container.connectV2?.relay?.release()
+                    }
                 }
                 "v2_transfer" -> {
                     val manager = container.connectV2 ?: return@launch
                     player.controller() // 再生サービスを起動しておく
                     manager.relay.acquire()
-                    kotlinx.coroutines.withTimeoutOrNull(15_000) { manager.relay.status.first { it == xyz.mooma0750.wave.connect2.RelayClientV2.Status.Connected } }
-                    kotlinx.coroutines.delay(2_000)
-                    manager.transfer()
-                    kotlinx.coroutines.delay(15_000)
-                    manager.summary { Log.i(WaveApplication.LOG_TAG, "debug v2 transfer $it") }
-                    kotlinx.coroutines.delay(500)
-                    manager.relay.release()
+                    try {
+                        kotlinx.coroutines.withTimeoutOrNull(15_000) { manager.relay.status.first { it == xyz.mooma0750.wave.connect2.RelayClientV2.Status.Connected } }
+                        kotlinx.coroutines.delay(2_000)
+                        manager.transfer()
+                        kotlinx.coroutines.delay(15_000)
+                        manager.summary { Log.i(WaveApplication.LOG_TAG, "debug v2 transfer $it") }
+                        kotlinx.coroutines.delay(500)
+                    } finally {
+                        manager.relay.release()
+                    }
                 }
                 "v2_accept_reset" -> container.connectV2?.acceptStoreReset()
                 "take_over" -> {

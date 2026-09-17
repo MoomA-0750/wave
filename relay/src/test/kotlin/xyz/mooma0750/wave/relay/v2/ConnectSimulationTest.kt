@@ -20,6 +20,10 @@ class ConnectSimulationTest {
         relay = FakeRelay(listOf(a.publicKeyB64), nowMs = { now })
         val genesis = MemberChain.genesis(a, a.keys)
         relay.store.createHousehold(a.deviceId, genesis)
+        // A は家を作ると押した端末、ほかは A の Confirm の床（genesis の頭）で加入を待つ端末（最初の鎖を無条件に信じない）
+        a.client.beginCreateHousehold()
+        val genesisInfo = ConnectClient.JoinInfo(MemberChain.hash(genesis), 0, MemberChain.hash(genesis), relay.store.storeId, 0, 0)
+        (listOf(b) + extra).forEach { it.client.expectJoin(genesisInfo, a.deviceId) }
         var records = listOf(genesis)
         for (device in listOf(b) + extra) {
             val chain = (MemberChain.verify(records) as xyz.mooma0750.wave.handoff.v2.ChainVerification.Ok).chain
@@ -389,6 +393,84 @@ class ConnectSimulationTest {
         // 受け入れるまで、その状態を表示にも取り込みにも使わない
         assertEquals(50_000L, b.client.latestCursorBody()?.second?.positionMs)
         assertFalse(b.client.requestTransfer())
+    }
+
+    @Test
+    fun takeOverFromAPlayingDeviceStartsAtItsCurrentPositionNotItsLastEvent() {
+        setUp()
+        a.startPlaying("queue-A", item = "item-2", position = 0)
+        relay.run()
+        // A はカーソルを1回だけ書いて3分鳴り続ける（その間の出来事は無い）
+        now += 180_000
+        assertTrue(b.client.requestTransfer())
+        relay.run()
+        assertTrue(b.playing)
+        assertTrue(b.positionMs in 180_000..181_000, "最後の出来事の位置から始まった: ${b.positionMs}")
+    }
+
+    @Test
+    fun playbackStartedBeforeTheAccountTagExistsIsClaimedLater() {
+        setUp()
+        b.startPlaying("queue-B")
+        relay.run()
+        // A はまだ Verified でない（タグが無い）うちに再生を始めた
+        a.accountTag = null
+        a.startPlaying("queue-A")
+        relay.run()
+        assertFalse(a.client.isWriter)
+        a.accountTag = "tag-account-1"
+        a.client.onAccountTagAvailable()
+        relay.run()
+        assertTrue(a.client.isWriter, "タグができても claim しなかった")
+        assertTrue(a.playing)
+        assertFalse(b.playing)
+    }
+
+    @Test
+    fun switchingAccountsClearsTheLocalQueueSoItIsNotWrittenWithTheNewTag() {
+        setUp()
+        a.startPlaying("queue-account-1")
+        relay.run()
+        val before = relay.store.latest().single { it.kind == xyz.mooma0750.wave.handoff.v2.StateKind.Queue }.version
+        // ログアウトして別のアカウントでログインし、つながり直す
+        a.disconnect()
+        a.client.clearLocal()
+        a.accountTag = "tag-account-2"
+        a.connect()
+        relay.run()
+        assertFalse(a.client.isWriter)
+        assertEquals(before, relay.store.latest().single { it.kind == xyz.mooma0750.wave.handoff.v2.StateKind.Queue }.version, "前のアカウントのキューを書き直した")
+    }
+
+    @Test
+    fun deviceNotExpectingAHouseholdRejectsARelayMadeHousehold() {
+        setUp()
+        // 中継が自分の鍵で家を作り、家に入っていない端末 D を加えた鎖を見せる
+        val attacker = SimDevice("X", { relay }, { now })
+        val d = SimDevice("D", { relay }, { now })
+        val genesis = MemberChain.genesis(attacker, attacker.keys)
+        val add = MemberChain.add(attacker, (MemberChain.verify(listOf(genesis)) as xyz.mooma0750.wave.handoff.v2.ChainVerification.Ok).chain, d.keys)
+        d.client.onMessage(RelayV2.Chain(listOf(genesis, add)))
+        assertEquals(null, d.client.householdId)
+        assertTrue(d.events.any { it is ClientEvent.ChainInvalid })
+    }
+
+    @Test
+    fun transferInterruptedByDisconnectIsDroppedNotAdoptedLater() {
+        setUp()
+        a.startPlaying("queue-A")
+        relay.run()
+        relay.hold = { to, message -> to == a.deviceId && message is RelayV2.YieldDelivery }
+        assertTrue(b.client.requestTransfer())
+        relay.run()
+        b.disconnect()
+        assertTrue(b.events.any { it is ClientEvent.TransferFailed && it.reason == "disconnected" })
+        now += 300_000
+        b.client.tick()
+        b.connect()
+        relay.run()
+        assertFalse(b.playing, "つながり直した後に古い状態から取り込んだ")
+        assertTrue(b.client.requestTransfer(), "次の「ここで再生」が効かない")
     }
 
     @Test

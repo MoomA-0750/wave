@@ -207,8 +207,26 @@ class SimDevice(
 
     // 偽の再生
     var playing = false
+        set(value) {
+            // 再生・停止の切り替えで、そこまでの位置を確定させる
+            val current = positionNow()
+            field = value
+            positionAnchor = current
+            anchorAt = clock()
+        }
     var queue: String? = null
-    var positionMs = 0L
+    private var positionAnchor = 0L
+    private var anchorAt = 0L
+
+    /** 偽の再生の位置（再生中は時間とともに進む）。代入するとそこから数え直す。 */
+    var positionMs: Long
+        get() = positionNow()
+        set(value) {
+            positionAnchor = value
+            anchorAt = clock()
+        }
+
+    private fun positionNow(): Long = if (playing) positionAnchor + (clock() - anchorAt) else positionAnchor
     var currentItemId = "item-0"
     val events = ArrayList<ClientEvent>()
     var persisted = ClientPersisted()
@@ -222,8 +240,9 @@ class SimDevice(
             send = { message -> relay().fromClient(deviceId, message) },
             effects =
                 object : ConnectClient.Effects {
-                    override fun pause() {
+                    override fun pause(): ConnectClient.LocalCursor {
                         playing = false
+                        return localCursor()
                     }
 
                     override fun adopt(
@@ -277,8 +296,10 @@ class SimDevice(
     }
 
     fun pushCursor() {
-        client.setLocalCursor(ConnectClient.LocalCursor(currentItemId, positionMs, playing, HandoffRepeat.Off, 0, false))
+        client.setLocalCursor(localCursor())
     }
+
+    fun localCursor() = ConnectClient.LocalCursor(currentItemId, positionMs, playing, HandoffRepeat.Off, 0, false, clock())
 
     fun stoppedBy(other: SimDevice) = events.any { it is ClientEvent.Stopped && it.by == other.deviceId }
 }

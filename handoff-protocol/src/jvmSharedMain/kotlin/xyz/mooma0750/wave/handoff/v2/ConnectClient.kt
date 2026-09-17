@@ -11,6 +11,11 @@ data class ClientPersisted(
     val queueFloor: Long = 0,
     val retreated: Boolean = false,
     val handledClaimIds: List<String> = emptyList(),
+    /** 加入を待っている（Confirm の床と招いた端末）。プロセスが落ちても、無条件に最初の鎖を信じない（レビュー p6b34 高-6）。 */
+    val expectedJoin: ConnectClient.JoinInfo? = null,
+    val expectedInviter: String? = null,
+    /** 家を作ると押した（最初の鎖が自分の genesis なら受け入れる）。 */
+    val creatingHousehold: Boolean = false,
 )
 
 sealed interface ClientEvent {
@@ -55,6 +60,9 @@ sealed interface ClientEvent {
     data class ServerError(
         val code: String,
     ) : ClientEvent
+
+    /** 家に入った（加入の鎖を受け入れた、または自分の genesis の鎖を受け入れた）。 */
+    data object Joined : ClientEvent
 }
 
 /**
@@ -76,7 +84,8 @@ class ConnectClient(
     initial: ClientPersisted = ClientPersisted(),
 ) {
     interface Effects {
-        fun pause()
+        /** 一時停止し、止めた時点の手元の再生を返す（最後のカーソルの位置を今に合わせる、レビュー p6b34 高-3）。 */
+        fun pause(): LocalCursor?
 
         /** 取り込んで positionMs から再生を始める。受け付けなければ false（画面が前面でない・ログインが変わった等）。 */
         fun adopt(
@@ -101,6 +110,8 @@ class ConnectClient(
         val repeat: xyz.mooma0750.wave.handoff.HandoffRepeat,
         val listenedMs: Long,
         val historySent: Boolean,
+        /** positionMs を取った時刻（nowMs と同じ単調時計）。再生中なら、書くときに経過を足す。 */
+        val capturedAtMs: Long,
     )
 
     /** 加入の Confirm で受け取った床（D-3）。6桁の照合で確かめた相手（inviter）から、認証された通信路で届いた値。 */
@@ -157,7 +168,11 @@ class ConnectClient(
     private var queueFloor = initial.queueFloor
     private var retreated = initial.retreated
     private val handledClaims = ArrayDeque(initial.handledClaimIds)
-    private var expectedJoin: Pair<JoinInfo, String>? = null
+    private var expectedJoin: Pair<JoinInfo, String>? = initial.expectedJoin?.let { info -> initial.expectedInviter?.let { info to it } }
+    private var creatingHousehold = initial.creatingHousehold
+
+    /** タグ（Verified のアカウント）が無い間に本人が再生を始めた。タグができたら claim する（レビュー p6b34 高-4）。 */
+    private var startWaitingForTag = false
 
     private var latestCursor: Opened<CursorBody>? = null
     private var latestQueue: Opened<QueueBody>? = null
@@ -223,6 +238,7 @@ class ConnectClient(
     ) {
         if (chain != null) return
         expectedJoin = info to inviterDeviceId
+        creatingHousehold = false
         storeId = info.storeId
         cursorFloor = info.cursorFloor
         queueFloor = info.queueFloor
@@ -255,6 +271,44 @@ class ConnectClient(
         inflight.clear()
         serverActive = null
         pendingOwner = null
+        // 取り込む前に切れた引き取りは捨てる（つながり直した後に、古い状態から突然取り込まない。レビュー p6b34 中-4）
+        val waiting = transfer
+        if (waiting != null && !waiting.adopting) {
+            transfer = null
+            effects.event(ClientEvent.TransferFailed("disconnected"))
+        }
+    }
+
+    /** 家を作ると押した。次に受ける最初の鎖が自分の genesis なら受け入れる。 */
+    fun beginCreateHousehold() {
+        if (chain != null) return
+        creatingHousehold = true
+        persist()
+    }
+
+    /** ログアウト・別のログインに変わった: 手元のキュー・再生・セッションを捨てる（前のアカウントのキューを新しいタグで書かない、レビュー p6b34 高-5）。 */
+    fun clearLocal() {
+        session = null
+        localQueue = null
+        localQueueRef = null
+        local = null
+        lastOwnCursorHash = null
+        dirtyCursor = false
+        dirtyQueue = false
+        inflight.clear()
+        deferredEvidence.clear()
+        startWaitingForTag = false
+        resumePending = false
+        val waiting = transfer
+        transfer = null
+        if (waiting != null) send(RelayV2.Release(waiting.claimId))
+    }
+
+    /** アカウントタグができた（Verified になった）。タグが無い間に始めた再生が続いていれば claim する。 */
+    fun onAccountTagAvailable() {
+        if (!startWaitingForTag) return
+        startWaitingForTag = false
+        if (local?.playing == true && session == null) userStartedPlayback()
     }
 
     private fun onHeadAnnounced(
@@ -336,13 +390,22 @@ class ConnectClient(
         val trusted = chain?.let { MemberChain.Head(it.headSeq, it.headHash) } ?: join?.let { MemberChain.Head(it.first.headSeq, it.first.headHash) }
         when (val result = MemberChain.verify(candidate, trusted)) {
             is ChainVerification.Ok -> {
-                if (join != null && chain == null) {
-                    // 加入: 家の ID が Confirm と同じで、頭の後に inviter が自分を加えた記録があること
-                    if (result.chain.householdId != join.first.householdId) return effects.event(ClientEvent.ChainForked)
-                    val added = candidate.drop((join.first.headSeq + 1).toInt()).any { it.type == ChainType.Add && it.target?.deviceId == signer.deviceId && it.signerId == join.second }
-                    // まだ加えられていない（A の追記の前に取った）: 受け入れずに次の chain_changed を待つ
-                    if (!added) return
-                    expectedJoin = null
+                val joining = chain == null
+                if (joining) {
+                    when {
+                        join != null -> {
+                            // 加入: 家の ID が Confirm と同じで、頭の後に inviter が自分を加えた記録があること
+                            if (result.chain.householdId != join.first.householdId) return effects.event(ClientEvent.ChainForked)
+                            val added = candidate.drop((join.first.headSeq + 1).toInt()).any { it.type == ChainType.Add && it.target?.deviceId == signer.deviceId && it.signerId == join.second }
+                            // まだ加えられていない（A の追記の前に取った）: 受け入れずに次の chain_changed を待つ
+                            if (!added) return
+                            expectedJoin = null
+                        }
+                        // 家を作ると押した端末: 最初の記録が自分の genesis であること
+                        creatingHousehold && candidate.first().target?.deviceId == signer.deviceId && candidate.first().type == ChainType.Genesis -> creatingHousehold = false
+                        // 加入も家を作るのも待っていない: 中継が勝手に作った家を信じない（D-12）
+                        else -> return effects.event(ClientEvent.ChainInvalid("unexpected_household"))
+                    }
                 }
                 val headChanged = result.chain.headHash != chain?.headHash
                 records = candidate
@@ -350,6 +413,7 @@ class ConnectClient(
                 persist()
                 // 書き手は、外した端末を宛先から外すために、次の書き込みを待たずに書き直す（D-2）
                 if (headChanged && isWriter) markDirty()
+                if (joining) effects.event(ClientEvent.Joined)
                 val pending = deferred.toList()
                 deferred.clear()
                 pending.forEach(::onState)
@@ -484,12 +548,10 @@ class ConnectClient(
         }
         val wasPlaying = local?.playing == true
         endSession()
+        // 止めた時点の位置を取る（引き取られるときの最後のカーソルを、最後の出来事の位置にしない）
+        local = effects.pause() ?: local?.let { it.copy(playing = false, positionMs = currentPosition(it), capturedAtMs = nowMs()) }
         // 一時停止中なら鳴らしていないので、書き手でなくなるだけ（知らせない）
-        if (wasPlaying) {
-            effects.pause()
-            local = local?.copy(playing = false)
-            effects.event(ClientEvent.Stopped(evidence.from))
-        }
+        if (wasPlaying) effects.event(ClientEvent.Stopped(evidence.from))
         return true
     }
 
@@ -600,6 +662,8 @@ class ConnectClient(
 
     /** 手元のキューが変わった（HandoffCodec.encode の文字列）。書き手なら置く。 */
     fun setLocalQueue(snapshot: String) {
+        // 中身が同じなら置き直さない（キューは最大 約210KB、レビュー p6b34 中-1）
+        if (snapshot == localQueue) return
         localQueue = snapshot
         if (isWriter) {
             dirtyQueue = true
@@ -624,7 +688,11 @@ class ConnectClient(
      */
     fun userStartedPlayback(): Boolean {
         if (role != Role.Player || chain == null || storeId == null || pendingStoreId != null) return false
-        val tag = effects.accountTag() ?: return false
+        val tag = effects.accountTag()
+        if (tag == null) {
+            startWaitingForTag = true
+            return false
+        }
         // 家の最新の再生が別のアカウントなら、claim しない（書き込みのたびに再生中の端末を奪い合わない、レビュー p6b12 中-5）
         val latest = latestCursor
         if (latest != null && latest.writer != signer.deviceId && latest.body.accountTag != tag) return false
@@ -730,7 +798,7 @@ class ConnectClient(
         claimOrders[signer.deviceId]?.let { session?.claimOrder = it }
         deferredEvidence.clear()
         retreated = false
-        local = LocalCursor(cursor.body.currentItemId, position, true, cursor.body.repeat, cursor.body.listenedMs, cursor.body.historySent)
+        local = LocalCursor(cursor.body.currentItemId, position, true, cursor.body.repeat, cursor.body.listenedMs, cursor.body.historySent, nowMs())
         persist()
         // B の最初のカーソルで再生中が確定する（D-7）。キューは前の端末の doc をそのまま指す
         dirtyCursor = true
@@ -789,7 +857,7 @@ class ConnectClient(
         return CursorBody(
             queueRef = queueRef,
             currentItemId = cursor.currentItemId,
-            positionMs = cursor.positionMs,
+            positionMs = currentPosition(cursor),
             playing = cursor.playing && mine != null,
             repeat = cursor.repeat,
             sessionBase = mine?.arbiter?.base ?: 0,
@@ -802,6 +870,10 @@ class ConnectClient(
         )
     }
 
+    /** 再生中なら、位置を取ってからの経過を足す（書くのが遅れても位置を戻さない）。 */
+    private fun currentPosition(cursor: LocalCursor): Long =
+        if (cursor.playing) cursor.positionMs + (nowMs() - cursor.capturedAtMs).coerceIn(0, MAX_EXTRAPOLATION_MS) else cursor.positionMs
+
     private fun sealCommand(
         current: VerifiedChain,
         command: CommandBody,
@@ -813,7 +885,7 @@ class ConnectClient(
     }
 
     private fun persist() {
-        effects.persist(ClientPersisted(records, storeId, cursorFloor, queueFloor, retreated, handledClaims.toList()))
+        effects.persist(ClientPersisted(records, storeId, cursorFloor, queueFloor, retreated, handledClaims.toList(), expectedJoin?.first, expectedJoin?.second, creatingHousehold))
     }
 
     companion object {

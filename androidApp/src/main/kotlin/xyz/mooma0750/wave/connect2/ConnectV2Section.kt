@@ -2,6 +2,7 @@ package xyz.mooma0750.wave.connect2
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -19,6 +20,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -53,6 +55,16 @@ fun ConnectV2Section(container: AppContainer) {
     var confirmTransfer by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val cameraPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted -> scanning = granted }
+    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+
+    // 裏で他の端末に止められた・再生ボタンで鳴らさなかったことを通知で知らせるため、家に入っていれば画面を開いたときに求める（2回断られたら Android が出さなくなる。Android 13 以降、レビュー p6b34 中-5）
+    LaunchedEffect(info.inHousehold) {
+        if (info.inHousehold && Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
 
     // 画面を離れたら、途中の加入を取り下げる（B で数字を出している間は残す）
     DisposableEffect(Unit) {

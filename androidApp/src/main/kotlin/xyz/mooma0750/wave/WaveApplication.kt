@@ -244,7 +244,15 @@ class AppContainer(
         connectV2?.let { manager ->
             appScope.launch {
                 manager.events.collect { event ->
-                    if (event is xyz.mooma0750.wave.handoff.v2.ClientEvent.Stopped && startedActivities == 0) notifyStoppedByAnotherDevice()
+                    if (startedActivities != 0) return@collect
+                    // 裏で再生ボタンを押して鳴らさなかったときも知らせる（D-9、レビュー p6b34 中-5）
+                    when {
+                        event is xyz.mooma0750.wave.handoff.v2.ClientEvent.Stopped -> notifyConnect("他の端末で再生が始まりました", "この端末の再生は止めました")
+                        event is xyz.mooma0750.wave.handoff.v2.ClientEvent.ServerError && event.code == xyz.mooma0750.wave.connect2.ConnectV2Manager.REMOTE_PLAYING ->
+                            notifyConnect("他の端末で再生中です", "ここで聴くには、wave を開いて「ここで再生」を押してください")
+                        event is xyz.mooma0750.wave.handoff.v2.ClientEvent.ServerError && event.code == xyz.mooma0750.wave.connect2.ConnectV2Manager.RELAY_UNREACHABLE ->
+                            notifyConnect("再生しませんでした", "中継につながらず、他の端末の再生を確かめられませんでした")
+                    }
                 }
             }
         }
@@ -255,7 +263,10 @@ class AppContainer(
         const val CONNECT_NOTIFICATION_ID = 4201
     }
 
-    private fun notifyStoppedByAnotherDevice() {
+    private fun notifyConnect(
+        title: String,
+        text: String,
+    ) {
         val manager = androidx.core.app.NotificationManagerCompat.from(appContext)
         if (android.os.Build.VERSION.SDK_INT >= 33 &&
             androidx.core.content.ContextCompat.checkSelfPermission(appContext, android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED
@@ -270,8 +281,8 @@ class AppContainer(
             androidx.core.app.NotificationCompat
                 .Builder(appContext, CONNECT_CHANNEL_ID)
                 .setSmallIcon(android.R.drawable.ic_media_pause)
-                .setContentTitle("他の端末で再生が始まりました")
-                .setContentText("この端末の再生は止めました")
+                .setContentTitle(title)
+                .setContentText(text)
                 .setContentIntent(intent)
                 .setAutoCancel(true)
                 .build()
