@@ -130,6 +130,71 @@ object DebugActions {
                     val next = kotlinx.coroutines.withTimeoutOrNull(20_000) { container.pairing.state.first { it is xyz.mooma0750.wave.connect.PairingController.State.Done || it is xyz.mooma0750.wave.connect.PairingController.State.ShowCode || it is xyz.mooma0750.wave.connect.PairingController.State.Failed } }
                     Log.i(WaveApplication.LOG_TAG, "debug pair continue state=${next?.let { it::class.simpleName }} pairs=${container.pairStore.all().size}")
                 }
+                // Phase 6b: Connect v2 の確認（中継 v2 の場所が local.properties に無ければ何もしない）
+                "v2_info" -> {
+                    val manager = container.connectV2
+                    if (manager == null) {
+                        Log.i(WaveApplication.LOG_TAG, "debug v2 configured=false")
+                    } else {
+                        manager.relay.acquire()
+                        kotlinx.coroutines.delay(5_000)
+                        manager.summary { Log.i(WaveApplication.LOG_TAG, "debug v2 $it") }
+                        kotlinx.coroutines.delay(500)
+                        manager.relay.release()
+                    }
+                }
+                "v2_create_household" -> {
+                    val manager = container.connectV2 ?: return@launch
+                    manager.relay.acquire()
+                    kotlinx.coroutines.withTimeoutOrNull(15_000) { manager.relay.status.first { it == xyz.mooma0750.wave.connect2.RelayClientV2.Status.Connected } }
+                    manager.createHousehold()
+                    kotlinx.coroutines.delay(5_000)
+                    manager.summary { Log.i(WaveApplication.LOG_TAG, "debug v2 household $it") }
+                    kotlinx.coroutines.delay(500)
+                    manager.relay.release()
+                }
+                "v2_pair_offer" -> {
+                    val pairing = container.pairingV2 ?: return@launch
+                    pairing.startOffer()
+                    val shown = kotlinx.coroutines.withTimeoutOrNull(20_000) { pairing.state.first { it is xyz.mooma0750.wave.connect2.PairingV2Controller.State.ShowingOffer || it is xyz.mooma0750.wave.connect2.PairingV2Controller.State.Failed } }
+                    (shown as? xyz.mooma0750.wave.connect2.PairingV2Controller.State.ShowingOffer)?.let { java.io.File(context.filesDir, "pair-offer-v2.txt").writeText(it.offerText) }
+                    Log.i(WaveApplication.LOG_TAG, "debug v2 pair offer state=${shown?.let { it::class.simpleName }}")
+                }
+                "v2_pair_accept" -> {
+                    val pairing = container.pairingV2 ?: return@launch
+                    container.connectV2?.relay?.acquire()
+                    pairing.accept(intent.getStringExtra("offer").orEmpty())
+                    val next = kotlinx.coroutines.withTimeoutOrNull(30_000) { pairing.state.first { it is xyz.mooma0750.wave.connect2.PairingV2Controller.State.ShowCode || it is xyz.mooma0750.wave.connect2.PairingV2Controller.State.Failed } }
+                    (next as? xyz.mooma0750.wave.connect2.PairingV2Controller.State.ShowCode)?.let { java.io.File(context.filesDir, "pair-code-v2.txt").writeText(it.code) }
+                    Log.i(WaveApplication.LOG_TAG, "debug v2 pair accept state=${next?.let { it::class.simpleName }} message=${(next as? xyz.mooma0750.wave.connect2.PairingV2Controller.State.Failed)?.message}")
+                }
+                "v2_pair_code" -> {
+                    val pairing = container.pairingV2 ?: return@launch
+                    pairing.enterCode(intent.getStringExtra("code").orEmpty())
+                    val next = kotlinx.coroutines.withTimeoutOrNull(20_000) { pairing.state.first { it is xyz.mooma0750.wave.connect2.PairingV2Controller.State.Done || it is xyz.mooma0750.wave.connect2.PairingV2Controller.State.Failed || (it as? xyz.mooma0750.wave.connect2.PairingV2Controller.State.EnterCode)?.message != null } }
+                    Log.i(WaveApplication.LOG_TAG, "debug v2 pair code state=${next?.let { it::class.simpleName }} message=${(next as? xyz.mooma0750.wave.connect2.PairingV2Controller.State.Failed)?.message}")
+                }
+                "v2_pair_continue" -> {
+                    val pairing = container.pairingV2 ?: return@launch
+                    pairing.confirmOnB()
+                    kotlinx.coroutines.delay(8_000)
+                    container.connectV2?.summary { Log.i(WaveApplication.LOG_TAG, "debug v2 pair continue $it") }
+                    kotlinx.coroutines.delay(500)
+                    container.connectV2?.relay?.release()
+                }
+                "v2_transfer" -> {
+                    val manager = container.connectV2 ?: return@launch
+                    player.controller() // 再生サービスを起動しておく
+                    manager.relay.acquire()
+                    kotlinx.coroutines.withTimeoutOrNull(15_000) { manager.relay.status.first { it == xyz.mooma0750.wave.connect2.RelayClientV2.Status.Connected } }
+                    kotlinx.coroutines.delay(2_000)
+                    manager.transfer()
+                    kotlinx.coroutines.delay(15_000)
+                    manager.summary { Log.i(WaveApplication.LOG_TAG, "debug v2 transfer $it") }
+                    kotlinx.coroutines.delay(500)
+                    manager.relay.release()
+                }
+                "v2_accept_reset" -> container.connectV2?.acceptStoreReset()
                 "take_over" -> {
                     val peer = container.pairStore.all().firstOrNull()
                     if (peer == null) {

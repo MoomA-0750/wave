@@ -11,6 +11,8 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
@@ -60,11 +62,26 @@ class ConnectV2Manager(
             baseUrl,
             relayHost,
             appScope,
-            deliver = { message -> post { client?.onMessage(message) } },
+            deliver = { message ->
+                when (message) {
+                    // 加入の第1手は画面（PairingV2Controller）が受ける
+                    is RelayV2.PairHello -> pairHellos.tryEmit(message)
+                    else -> {
+                        if (message is RelayV2.ChainOk || message is RelayV2.ChainConflict || message is RelayV2.Error) chainReplies.tryEmit(message)
+                        post { client?.onMessage(message) }
+                    }
+                }
+            },
             onConnectionLost = { post { client?.onDisconnected() } },
         )
 
     private var client: ConnectClient? = null
+
+    /** 中継 v2 からの、加入の第1手（A の画面が受ける）。 */
+    val pairHellos = MutableSharedFlow<RelayV2.PairHello>(extraBufferCapacity = 2)
+
+    /** 鎖の追記への返事（加入の手順が待つ）。 */
+    private val chainReplies = MutableSharedFlow<RelayV2>(extraBufferCapacity = 4)
 
     /** 他の端末の最新の再生（表示）。 */
     data class RemoteView(
@@ -241,6 +258,56 @@ class ConnectV2Manager(
             mutableUnreadable.value = false
             load()
         }
+
+    // --- 加入（PairingV2Controller から） ---
+
+    /** この端末の家の鍵の記述（Hello の拡張）。 */
+    suspend fun selfMemberKeysJson(): String =
+        kotlinx.coroutines.withContext(dispatcher) {
+            xyz.mooma0750.wave.handoff.v2.ConnectJson.json.encodeToString(
+                xyz.mooma0750.wave.handoff.v2.MemberKeys.serializer(),
+                MemberChain.memberKeys(keys, keys.kxPub, Role.Player),
+            )
+        }
+
+    /** A 側: Confirm の拡張（家に入っていなければ null）。 */
+    suspend fun joinInfoJson(): String? =
+        kotlinx.coroutines.withContext(dispatcher) {
+            client?.joinInfo()?.let { xyz.mooma0750.wave.handoff.v2.ConnectJson.json.encodeToString(ConnectClient.JoinInfo.serializer(), it) }
+        }
+
+    /** A 側: 6桁の照合の後、B を家に加える。中継の返事を待つ。@return 加えたか */
+    suspend fun addMember(memberKeysJson: String): Boolean {
+        val record =
+            kotlinx.coroutines.withContext(dispatcher) {
+                val chain = client?.verifiedChain() ?: return@withContext null
+                val member = runCatching { xyz.mooma0750.wave.handoff.v2.ConnectJson.json.decodeFromString(xyz.mooma0750.wave.handoff.v2.MemberKeys.serializer(), memberKeysJson) }.getOrNull() ?: return@withContext null
+                if (member.role != Role.Player) return@withContext null
+                MemberChain.add(keys, chain, member)
+            } ?: return false
+        return kotlinx.coroutines.coroutineScope {
+            val reply =
+                async(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
+                    kotlinx.coroutines.withTimeoutOrNull(10_000) { chainReplies.first { it !is RelayV2.Error || it.requestId == null } }
+                }
+            if (!relay.send(RelayV2.ChainAppend(record))) {
+                reply.cancel()
+                return@coroutineScope false
+            }
+            reply.await() is RelayV2.ChainOk
+        }
+    }
+
+    /** B 側: 6桁の照合の後、A の Confirm の床で加入を待つ。 */
+    fun expectJoin(
+        joinInfoJson: String,
+        inviterPublicKey: ByteArray,
+    ): Boolean {
+        val info = runCatching { xyz.mooma0750.wave.handoff.v2.ConnectJson.json.decodeFromString(ConnectClient.JoinInfo.serializer(), joinInfoJson) }.getOrNull() ?: return false
+        val inviter = xyz.mooma0750.wave.handoff.crypto.EnvelopeSealer.deviceId(inviterPublicKey)
+        post { client?.expectJoin(info, inviter) }
+        return true
+    }
 
     /** 表示・debug 用の要約（件数と真偽値だけ）。 */
     fun summary(onResult: (String) -> Unit) =

@@ -239,6 +239,11 @@ class AppContainer(
             null
         }
 
+    val pairingV2: xyz.mooma0750.wave.connect2.PairingV2Controller? =
+        connectV2?.let { manager ->
+            xyz.mooma0750.wave.connect2.PairingV2Controller(deviceIdentity, manager, session, appScope, android.os.Build.MODEL)
+        }
+
     val connect =
         xyz.mooma0750.wave.connect.ConnectManager(
             identity = deviceIdentity,
