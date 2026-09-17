@@ -51,14 +51,25 @@ class ResolvedStreamCache(
     private val resolver: StreamResolver,
     private val nowMs: () -> Long,
 ) {
-    private val entries = HashMap<String, ResolvedStream>()
+    // 挿入順を保つ（上限を超えたら古いものから捨てる）
+    private val entries = LinkedHashMap<String, ResolvedStream>()
     private val rejectedAt = HashMap<String, Long>()
+
+    /** clear のたびに進む。ログアウトの前に始まった解決の結果を、ログアウト後にキャッシュへ戻さないために使う。 */
+    @get:Synchronized
+    var epoch: Long = 0
+        private set
 
     @Synchronized
     fun get(videoId: String): ResolvedStream? = entries[videoId]?.takeIf { resolver.isFresh(it, FRESH_MARGIN_MS) }
 
     @Synchronized
-    fun put(stream: ResolvedStream) {
+    fun put(
+        stream: ResolvedStream,
+        startedInEpoch: Long,
+    ) {
+        if (startedInEpoch != epoch) return
+        entries.remove(stream.videoId)
         entries[stream.videoId] = stream
         // 上限を超えたら古いものから捨てる（署名付き URL をメモリに溜めない）
         while (entries.size > MAX_ENTRIES) entries.remove(entries.keys.first())
@@ -86,6 +97,7 @@ class ResolvedStreamCache(
 
     @Synchronized
     fun clear() {
+        epoch++
         entries.clear()
         rejectedAt.clear()
     }
@@ -154,6 +166,8 @@ class WaveStreamDataSource(
                 openUpstream(second, dataSpec)
             } catch (again: RejectedException) {
                 cache.markRejected(videoId)
+                // 解決したばかりの URL も拒否された。解読の設定が古い可能性があるので取り直す（初回がキャッシュ由来だった場合）
+                if (cached != null) runBlocking { resolver.onStreamRejected() }
                 throw StreamRejectedException(again.status)
             }
         }
@@ -162,11 +176,13 @@ class WaveStreamDataSource(
     private fun resolve(
         videoId: String,
         sameAs: ResolvedStream?,
-    ): ResolvedStream =
-        when (val result = runBlocking { resolver.resolve(videoId, sameAs) }) {
-            is ResolveResult.Ok -> result.stream.also(cache::put)
+    ): ResolvedStream {
+        val startedInEpoch = cache.epoch
+        return when (val result = runBlocking { resolver.resolve(videoId, sameAs) }) {
+            is ResolveResult.Ok -> result.stream.also { cache.put(it, startedInEpoch) }
             is ResolveResult.Failed -> throw StreamResolveException(result.reason)
         }
+    }
 
     private class RejectedException(
         val status: Int,
@@ -191,6 +207,8 @@ class WaveStreamDataSource(
             source.open(dataSpec.buildUpon().setUri(Uri.parse(url)).build())
         } catch (error: HttpDataSource.InvalidResponseCodeException) {
             closeQuietly(source)
+            // 404・410 は曲が無くなった。再試行しない種類として扱う
+            if (error.responseCode == 404 || error.responseCode == 410) throw StreamRejectedException(error.responseCode)
             if (error.responseCode == 403 || error.responseCode in 300..399) {
                 throw RejectedException(error.responseCode, error.headerFields["Location"]?.firstOrNull() ?: error.headerFields["location"]?.firstOrNull())
             }

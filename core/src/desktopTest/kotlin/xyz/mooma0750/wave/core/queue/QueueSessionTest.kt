@@ -253,6 +253,19 @@ class QueueSessionTest {
         }
 
     @Test
+    fun emptyQueueAtTheEndOfAPlaylistDoesNotSpin() =
+        runTest {
+            val player = FakePlayer()
+            val content = FakeContent().apply { playlistResult = { _, _ -> CallResult.Ok(SongPage(emptyList(), continuation = null)) } }
+            val queue = session(player, content)
+            queue.playFrom(listOf(song("a")), startIndex = 0, playlistId = "PL", playlistContinuation = "c1")
+            queue.remove(player.items.single().itemId)
+            advanceUntilIdle() // 空回りするとここで終わらない
+            assertTrue(queue.snapshot().exhausted)
+            assertEquals(emptyList(), content.upNextCalls)
+        }
+
+    @Test
     fun userAddedItemsAreAlwaysAllowed() =
         runTest {
             val player = FakePlayer()

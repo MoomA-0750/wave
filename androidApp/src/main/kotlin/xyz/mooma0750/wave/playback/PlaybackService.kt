@@ -2,6 +2,7 @@ package xyz.mooma0750.wave.playback
 
 import android.content.Intent
 import android.os.Bundle
+import android.os.Process
 import android.util.Log
 import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
@@ -32,6 +33,7 @@ import xyz.mooma0750.wave.core.music.UpNextPage
 import xyz.mooma0750.wave.core.queue.QueueContentSource
 import xyz.mooma0750.wave.core.queue.QueueSession
 import xyz.mooma0750.wave.core.session.CallResult
+import xyz.mooma0750.wave.core.stream.StreamFailure
 import java.util.UUID
 
 /** 再生の本体。画面が無くても動き、キューの続き（サジェスト）もここで取る。 */
@@ -40,7 +42,7 @@ class PlaybackService : MediaSessionService() {
     private val scope = MainScope()
     private var session: MediaSession? = null
     private var queue: QueueSession? = null
-    private var consecutiveSkips = 0
+    private val skipGuard = SkipGuard(MAX_CONSECUTIVE_SKIPS)
 
     override fun onCreate() {
         super.onCreate()
@@ -65,9 +67,8 @@ class PlaybackService : MediaSessionService() {
                     // 例外文や原因には URL が入りうるので、コードと型名だけを記録する
                     val cause = error.cause
                     Log.w(WaveApplication.LOG_TAG, "playback error code=${error.errorCodeName} cause=${cause?.javaClass?.simpleName} reason=${(cause as? StreamResolveException)?.reason}")
-                    if (shouldSkip(error) && consecutiveSkips < MAX_CONSECUTIVE_SKIPS && player.hasNextMediaItem()) {
-                        // 再生できない曲は飛ばして続ける。ネットワークの一時的な失敗では飛ばさない（利用者が再生を押せば再開する）
-                        consecutiveSkips++
+                    if (skipGuard.onError(failureOf(error), player.hasNextMediaItem())) {
+                        // この曲だけの失敗は飛ばして続ける。一時的な失敗・どの曲でも起きる失敗では止める
                         player.seekToNextMediaItem()
                         player.prepare()
                         player.play()
@@ -75,7 +76,7 @@ class PlaybackService : MediaSessionService() {
                 }
 
                 override fun onPlaybackStateChanged(playbackState: Int) {
-                    if (playbackState == Player.STATE_READY) consecutiveSkips = 0
+                    if (playbackState == Player.STATE_READY) skipGuard.onPlaying()
                     if (playbackState == Player.STATE_ENDED) queueSession.onPlaybackProgressed()
                 }
 
@@ -83,7 +84,6 @@ class PlaybackService : MediaSessionService() {
                     mediaItem: MediaItem?,
                     reason: Int,
                 ) {
-                    if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED || reason == Player.MEDIA_ITEM_TRANSITION_REASON_SEEK) consecutiveSkips = 0
                     queueSession.onPlaybackProgressed()
                 }
             },
@@ -105,16 +105,24 @@ class PlaybackService : MediaSessionService() {
         }
     }
 
-    private fun shouldSkip(error: PlaybackException): Boolean {
+    private fun failureOf(error: PlaybackException): PlaybackFailure {
         val cause = error.cause
         return when {
-            cause is StreamResolveException -> !cause.transient
-            cause is StreamRejectedException -> true
-            error.errorCode in PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED..PlaybackException.ERROR_CODE_PARSING_MANIFEST_UNSUPPORTED -> true
-            error.errorCode in PlaybackException.ERROR_CODE_DECODER_INIT_FAILED..PlaybackException.ERROR_CODE_DECODING_RESOURCES_RECLAIMED -> true
-            else -> false
+            cause is StreamResolveException ->
+                when (cause.reason) {
+                    StreamFailure.Unplayable, StreamFailure.NoAudioFormat, StreamFailure.ItagUnavailable, StreamFailure.StreamChanged -> PlaybackFailure.ThisSong
+                    StreamFailure.Network, StreamFailure.Http, StreamFailure.PlayerConfigUnavailable -> PlaybackFailure.Transient
+                    else -> PlaybackFailure.Everywhere
+                }
+            cause is StreamRejectedException -> PlaybackFailure.ThisSong
+            error.errorCode in PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED..PlaybackException.ERROR_CODE_PARSING_MANIFEST_UNSUPPORTED -> PlaybackFailure.ThisSong
+            error.errorCode in PlaybackException.ERROR_CODE_DECODER_INIT_FAILED..PlaybackException.ERROR_CODE_DECODING_RESOURCES_RECLAIMED -> PlaybackFailure.ThisSong
+            else -> PlaybackFailure.Transient
         }
     }
+
+    /** このアプリ自身のコントローラーか。パッケージ名は名乗れるので、Binder から取る uid で判定する。 */
+    private fun isOwnController(controller: MediaSession.ControllerInfo): Boolean = controller.uid == Process.myUid()
 
     private inner class Callback(
         private val queue: QueueSession,
@@ -124,7 +132,7 @@ class PlaybackService : MediaSessionService() {
             controller: MediaSession.ControllerInfo,
         ): MediaSession.ConnectionResult {
             // 外部のコントローラー（通知・Bluetooth など）は既定の再生操作だけ。キューの操作は渡さない
-            if (controller.packageName != packageName) return super.onConnect(session, controller)
+            if (!isOwnController(controller)) return super.onConnect(session, controller)
             val commands =
                 MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS
                     .buildUpon()
@@ -139,7 +147,8 @@ class PlaybackService : MediaSessionService() {
             customCommand: SessionCommand,
             args: Bundle,
         ): ListenableFuture<SessionResult> {
-            if (controller.packageName != packageName) return Futures.immediateFuture(SessionResult(SessionError.ERROR_PERMISSION_DENIED))
+            if (!isOwnController(controller)) return Futures.immediateFuture(SessionResult(SessionError.ERROR_PERMISSION_DENIED))
+            if (customCommand.customAction in USER_SELECTIONS) skipGuard.onUserSelection()
             val handled =
                 when (customCommand.customAction) {
                     QueueCommands.PLAY_SONG -> QueueCommands.songOf(args)?.let { queue.playSong(it) }
@@ -183,6 +192,7 @@ class PlaybackService : MediaSessionService() {
 
     private companion object {
         const val MAX_CONSECUTIVE_SKIPS = 3
+        val USER_SELECTIONS = setOf(QueueCommands.PLAY_SONG, QueueCommands.PLAY_FROM, QueueCommands.JUMP)
     }
 }
 

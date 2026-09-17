@@ -22,8 +22,9 @@ class Media3QueuePlayer(
     override val currentIndex: Int
         get() = if (player.mediaItemCount == 0) -1 else player.currentMediaItemIndex
 
+    /** 最後まで行って止まっている、またはエラーで止まっている（次が無くて飛ばせなかった）。追加が来たら再開する。 */
     override val ended: Boolean
-        get() = player.playbackState == Player.STATE_ENDED
+        get() = player.playbackState == Player.STATE_ENDED || (player.playbackState == Player.STATE_IDLE && player.playerError != null)
 
     override fun replace(
         items: List<QueueItem>,
@@ -38,7 +39,12 @@ class Media3QueuePlayer(
 
     override fun append(items: List<QueueItem>) {
         items.forEach { itemsById[it.itemId] = it }
+        val wasEmpty = player.mediaItemCount == 0
         player.addMediaItems(items.map(::mediaItemOf))
+        if (wasEmpty) {
+            player.prepare()
+            player.play()
+        }
     }
 
     override fun insertAfterCurrent(items: List<QueueItem>) {

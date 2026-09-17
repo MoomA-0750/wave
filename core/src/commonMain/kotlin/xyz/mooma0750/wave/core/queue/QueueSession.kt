@@ -195,12 +195,17 @@ class QueueSession(
         exhausted = false
     }
 
-    /** プレイリストの最後まで来たら、最後の曲から始まるラジオにつなぐ。 */
-    private fun switchToRadio() {
-        val last = player.items.lastOrNull() ?: return
+    /** プレイリストの最後まで来たら、最後の曲から始まるラジオにつなぐ。キューが空で切り替えられなければ、尽きた扱いにする。 */
+    private fun switchToRadio(): Boolean {
+        val last = player.items.lastOrNull()
+        if (last == null) {
+            exhausted = true
+            return false
+        }
         radioPlaylistId = radioPlaylistIdOf(last.song.videoId)
         source = QueueSource.Radio(last.song.videoId)
         continuation = null
+        return true
     }
 
     private fun maybeFetch() {
@@ -232,9 +237,8 @@ class QueueSession(
             is QueueSource.Playlist -> {
                 val token = continuation
                 if (token == null) {
-                    // プレイリストの最後まで来ている。ラジオに切り替え、続けてその最初のページを取る
-                    switchToRadio()
-                    return 1
+                    // プレイリストの最後まで来ている。ラジオに切り替えられたら、続けてその最初のページを取る
+                    return if (switchToRadio()) 1 else 0
                 }
                 when (val result = content.playlistPage(currentSource.playlistId, token)) {
                     is CallResult.Failed -> null
@@ -242,9 +246,9 @@ class QueueSession(
                         if (requestGeneration != generation) return null
                         continuation = result.value.continuation
                         val added = appendItems(result.value.songs.map { item(it, ItemOrigin.Source) })
-                        if (continuation == null) switchToRadio()
-                        // プレイリストの続きは重複でも入れる（同じ曲を2回含むプレイリストがある）。0件でもラジオへ進めるよう、1として扱う
-                        if (added == 0 && continuation == null) 1 else added
+                        val switched = continuation == null && switchToRadio()
+                        // プレイリストの続きは重複でも入れる（同じ曲を2回含むプレイリストがある）。0件でもラジオへ切り替えたら続けて取る
+                        if (added == 0 && switched) 1 else added
                     }
                 }
             }
