@@ -45,6 +45,8 @@ class HouseholdStore(
         val queue: StoredDoc? = null,
         val activeDeviceId: String? = null,
         val claimOrder: Long = 0,
+        /** 端末ごとの最新の claim の順番。 */
+        val claimOrders: Map<String, Long> = emptyMap(),
     )
 
     private class Pending(
@@ -66,6 +68,13 @@ class HouseholdStore(
     private var persisted: Persisted
     private var chain: VerifiedChain? = null
     private var pending: Pending? = null
+
+    /** 直前の claim・transfer が黙って捨てた transfer（呼ぶ側が PendingExpired を配る）。 */
+    private var droppedByClaim: String? = null
+
+    /** 直前の claim・transfer が捨てた transfer の claimId を取り出す。 */
+    @Synchronized
+    fun takeDroppedPending(): String? = droppedByClaim.also { droppedByClaim = null }
 
     init {
         // ファイルがあるのに読めなければ起動を止める（storeId を作り直すと、全端末に「作り直された」と出る）
@@ -89,7 +98,7 @@ class HouseholdStore(
         online: List<String>,
     ): RelayV2.Welcome {
         val current = chain
-        return RelayV2.Welcome(deviceId, persisted.storeId, current?.householdId, current?.headSeq, current?.headHash, persisted.activeDeviceId, online)
+        return RelayV2.Welcome(deviceId, persisted.storeId, current?.householdId, current?.headSeq, current?.headHash, persisted.activeDeviceId, online, latest(), persisted.claimOrders)
     }
 
     /** 接続の認証に使う公開鍵。家があれば今の端末だけ、無ければ起動時の設定の鍵だけ。 */
@@ -112,6 +121,8 @@ class HouseholdStore(
             val headSeq: Long,
             val headHash: String,
             val removed: String?,
+            /** 外した端末が再生中だったので空にした（呼ぶ側が active_changed を配る）。 */
+            val activeChanged: RelayV2.ActiveChanged? = null,
         ) : ChainResult
 
         data class Conflict(
@@ -148,12 +159,14 @@ class HouseholdStore(
         val records = persisted.chain + record
         val verified = (MemberChain.verify(records, MemberChain.Head(current.headSeq, current.headHash)) as? ChainVerification.Ok)?.chain ?: return ChainResult.Rejected("invalid_record")
         val removed = record.removedDeviceId
+        val previousActive = persisted.activeDeviceId
         // 外した端末が再生中のままなら空にする（D-11）
         val active = persisted.activeDeviceId?.takeIf { it != removed }
         save(persisted.copy(chain = records, activeDeviceId = active))
         chain = verified
         if (pending?.owner == removed) pending = null
-        return ChainResult.Ok(verified.headSeq, verified.headHash, removed)
+        val changed = if (removed != null && removed == previousActive) RelayV2.ActiveChanged(null, null, persisted.claimOrder) else null
+        return ChainResult.Ok(verified.headSeq, verified.headHash, removed, changed)
     }
 
     @Synchronized
@@ -228,9 +241,10 @@ class HouseholdStore(
         val current = chain ?: return ClaimResult.Rejected("no_household")
         if (current.members[sender]?.keys?.role != Role.Player) return ClaimResult.Rejected("not_player")
         if (!commandFrom(sender, current, yieldDoc) || claimId.length !in 16..64) return ClaimResult.Rejected("bad_command")
+        droppedByClaim = pending?.claimId
         pending = null
         val order = persisted.claimOrder + 1
-        save(persisted.copy(activeDeviceId = sender, claimOrder = order))
+        save(persisted.copy(activeDeviceId = sender, claimOrder = order, claimOrders = persisted.claimOrders + (sender to order)))
         return ClaimResult.Ok(RelayV2.ActiveChanged(sender, claimId, order))
     }
 
@@ -247,9 +261,10 @@ class HouseholdStore(
         if (!commandFrom(sender, current, yieldDoc) || claimId.length !in 16..64) return ClaimResult.Rejected("bad_command")
         val cursor = persisted.cursor ?: return ClaimResult.Rejected("no_state")
         if (cursor.version != basedOnVersion) return ClaimResult.Conflict(stateOf(StateKind.Cursor))
+        droppedByClaim = pending?.claimId
         pending = Pending(claimId, sender, persisted.activeDeviceId, nowMs() + PENDING_MS)
         val order = persisted.claimOrder + 1
-        save(persisted.copy(claimOrder = order))
+        save(persisted.copy(claimOrder = order, claimOrders = persisted.claimOrders + (sender to order)))
         return ClaimResult.Ok(RelayV2.ActiveChanged(persisted.activeDeviceId, claimId, order, pendingOwner = sender))
     }
 
@@ -339,7 +354,11 @@ class HouseholdStore(
 
     private fun write(next: Persisted) {
         val temp = File(file.parentFile ?: File("."), "${file.name}.tmp")
-        temp.writeText(json.encodeToString(Persisted.serializer(), next))
+        java.io.FileOutputStream(temp).use { stream ->
+            stream.write(json.encodeToString(Persisted.serializer(), next).encodeToByteArray())
+            // 返事をした書き込みを、電源が落ちても失わない
+            stream.fd.sync()
+        }
         Files.move(temp.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
     }
 

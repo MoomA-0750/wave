@@ -59,6 +59,10 @@ sealed interface RelayV2 {
         val headHash: String? = null,
         val activeDeviceId: String? = null,
         val online: List<String> = emptyList(),
+        /** 最新の状態（welcome と一緒に渡し、端末が「最新を見た上で」つなぎ直しの判断をできるようにする）。 */
+        val states: List<StoredState> = emptyList(),
+        /** 端末ごとの最新の claim の順番（同時に始めたときの判断、D-8）。 */
+        val claimOrders: Map<String, Long> = emptyMap(),
     ) : RelayV2
 
     // --- 端末一覧の鎖 ---

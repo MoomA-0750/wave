@@ -71,6 +71,13 @@ private class HubV2(
     private val unb64 = Base64.getUrlDecoder()
     private val sessions = ConcurrentHashMap<String, DefaultWebSocketServerSession>()
     private val unauthenticated = AtomicInteger(0)
+    private val pairWaiting = AtomicInteger(0)
+
+    /**
+     * 家の状態の変更と、その結果の配信を1本に並べる（active_changed・yield・state の順番を、全端末で同じにする。レビュー p6b12 高-1）。
+     * 配信は trySend なので、ここでは待たない
+     */
+    private val order = Any()
 
     private class PairingSlot(
         val ownerId: String,
@@ -134,11 +141,15 @@ private class HubV2(
             session.close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, "auth"))
             return
         }
-        sessions.put(deviceId, session)?.close(CloseReason(CloseReason.Codes.NORMAL, "replaced"))
+        val previous =
+            synchronized(order) {
+                val replaced = sessions.put(deviceId, session)
+                send(session, store.welcome(deviceId, sessions.keys.toList()))
+                presence()
+                replaced
+            }
+        previous?.close(CloseReason(CloseReason.Codes.NORMAL, "replaced"))
         log("connected devices=${sessions.size}")
-        send(session, store.welcome(deviceId, sessions.keys.toList()))
-        store.latest().forEach { send(session, RelayV2.State(it)) }
-        presence()
         try {
             for (frame in session.incoming) {
                 val text = (frame as? Frame.Text)?.readText() ?: continue
@@ -151,29 +162,33 @@ private class HubV2(
                     session.close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, "removed"))
                     break
                 }
-                handle(session, deviceId, RelayV2.decode(text))
+                synchronized(order) { handle(session, deviceId, RelayV2.decode(text)) }
             }
         } finally {
-            if (sessions.remove(deviceId, session)) {
-                pairings.entries.removeIf { it.value.owner === session }
-                store.expirePending(disconnected = deviceId)?.let { (claimId, active) ->
-                    broadcast(RelayV2.PendingExpired(claimId))
-                    broadcast(active)
+            synchronized(order) {
+                if (sessions.remove(deviceId, session)) {
+                    pairings.entries.removeIf { it.value.owner === session }
+                    store.expirePending(disconnected = deviceId)?.let { (claimId, active) ->
+                        broadcast(RelayV2.PendingExpired(claimId))
+                        broadcast(active)
+                    }
+                    presence()
                 }
-                presence()
             }
             log("disconnected devices=${sessions.size}")
         }
     }
 
     fun tick() {
-        store.expirePending()?.let { (claimId, active) ->
-            broadcast(RelayV2.PendingExpired(claimId))
-            broadcast(active)
+        synchronized(order) {
+            store.expirePending()?.let { (claimId, active) ->
+                broadcast(RelayV2.PendingExpired(claimId))
+                broadcast(active)
+            }
         }
     }
 
-    private suspend fun handle(
+    private fun handle(
         session: DefaultWebSocketServerSession,
         deviceId: String,
         message: RelayV2?,
@@ -195,7 +210,8 @@ private class HubV2(
                     is HouseholdStore.ChainResult.Ok -> {
                         reply(RelayV2.ChainOk(result.headSeq, result.headHash))
                         broadcast(RelayV2.ChainChanged(result.headSeq, result.headHash), except = deviceId)
-                        result.removed?.let { removed -> sessions.remove(removed)?.close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, "removed")) }
+                        result.activeChanged?.let { broadcast(it) }
+                        result.removed?.let { removed -> sessions.remove(removed)?.let { removedSession -> closeLater(removedSession) } }
                         log("chain appended seq=${result.headSeq}")
                     }
                     is HouseholdStore.ChainResult.Conflict -> reply(RelayV2.ChainConflict(result.headSeq, result.headHash))
@@ -216,6 +232,7 @@ private class HubV2(
             is RelayV2.Claim ->
                 when (val result = store.claim(deviceId, message.claimId, message.yieldDoc)) {
                     is HouseholdStore.ClaimResult.Ok -> {
+                        store.takeDroppedPending()?.let { broadcast(RelayV2.PendingExpired(it)) }
                         broadcast(result.activeChanged)
                         // yield は家の全端末に配る（各端末は宛先で判断する。サーバーの再生中の端末に依らない）
                         broadcast(RelayV2.YieldDelivery(message.claimId, message.yieldDoc), except = deviceId)
@@ -227,6 +244,7 @@ private class HubV2(
             is RelayV2.Transfer ->
                 when (val result = store.transfer(deviceId, message.claimId, message.basedOnVersion, message.yieldDoc)) {
                     is HouseholdStore.ClaimResult.Ok -> {
+                        store.takeDroppedPending()?.let { broadcast(RelayV2.PendingExpired(it)) }
                         broadcast(result.activeChanged)
                         broadcast(RelayV2.YieldDelivery(message.claimId, message.yieldDoc), except = deviceId)
                         log("transfer")
@@ -265,7 +283,22 @@ private class HubV2(
 
     /** 未加入の端末の入口。token が pairing_open されていれば、枠を開けた端末にだけ1回転送し、Confirm を1回だけ返す。 */
     suspend fun pair(session: DefaultWebSocketServerSession) {
-        gate(session) { pairGated(session) }
+        // 加入の待ち（最大2分）は、接続の認証の枠とは別に数える（待ちで認証の枠を埋めさせない）
+        if (pairWaiting.incrementAndGet() > MAX_PAIR_WAITING) {
+            pairWaiting.decrementAndGet()
+            session.close(CloseReason(CloseReason.Codes.TRY_AGAIN_LATER, "busy"))
+            return
+        }
+        try {
+            pairGated(session)
+        } finally {
+            pairWaiting.decrementAndGet()
+        }
+    }
+
+    /** 閉じるのは suspend なので、順番の外で行う。 */
+    private fun closeLater(target: DefaultWebSocketServerSession) {
+        target.launch { target.close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, "removed")) }
     }
 
     private suspend fun pairGated(session: DefaultWebSocketServerSession) {
@@ -295,5 +328,6 @@ private class HubV2(
     private companion object {
         const val PAIRING_LIFETIME_MS = 2 * 60 * 1000L
         const val MAX_UNAUTHENTICATED = 16
+        const val MAX_PAIR_WAITING = 4
     }
 }

@@ -101,8 +101,8 @@ object DocSealer {
         return DocOpen.Ok(header, plaintext, stale)
     }
 
-    /** 署名とヘッダの差し替えの検出に使うハッシュ（prevHash）。 */
-    fun hash(doc: SealedDoc): String = b64.encodeToString(WaveCrypto.sha256(signedBytes(doc), decode(doc.signature) ?: ByteArray(0)))
+    /** doc のハッシュ（prevHash・食い違いの検出・キューの参照）。署名は含めない（書き換えで別のハッシュを作らせない）。 */
+    fun hash(doc: SealedDoc): String = b64.encodeToString(WaveCrypto.sha256(signedBytes(doc)))
 
     fun roleAllowed(
         kind: DocKind,

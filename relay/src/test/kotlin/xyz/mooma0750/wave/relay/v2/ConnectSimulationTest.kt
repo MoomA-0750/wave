@@ -109,43 +109,56 @@ class ConnectSimulationTest {
     }
 
     @Test
-    fun concurrentStartsLeaveExactlyOneDevicePlaying() {
+    fun concurrentStartsLeaveOnlyTheLaterClaimPlaying() {
         setUp()
         a.startPlaying("queue-A")
         relay.run()
-        // A を見た上で、B と A がほぼ同時に始め直す（どちらも相手の新しいセッションを見ていない）
+        // A を見た上で、A と B がほぼ同時に始め直す（どちらも相手の新しいセッションを見ていない）。中継には A、B の順に届く
         a.startPlaying("queue-A2")
         b.startPlaying("queue-B")
         relay.run()
-        assertEquals(1, listOf(a, b).count { it.playing }, "A=${a.playing} B=${b.playing}")
+        assertTrue(b.playing, "claim が後に届いた B が止まった")
+        assertFalse(a.playing)
+        assertTrue(b.client.isWriter)
+        assertFalse(a.client.isWriter)
     }
 
     @Test
-    fun deviceClocksDoNotDecideWhoWins() {
-        now = 5_000_000
-        val skewed = SimDevice("C", { relay }, { now }, epochSkewMs = 3_600_000)
-        setUp(skewed)
-        // 時計が1時間進んだ C が先に始め、B が後から始める → B が勝つ
-        skewed.startPlaying("queue-C")
+    fun crossingClaimsAreDecidedByClaimOrderEvenWhenActiveChangedArrivesLate() {
+        setUp()
+        a.startPlaying("queue-A")
         relay.run()
+        // B への active_changed を遅らせる: B は A の yield を、自分と A の claimOrder を知る前に受ける
+        relay.hold = { to, message -> to == b.deviceId && message is RelayV2.ActiveChanged }
         b.startPlaying("queue-B")
+        a.startPlaying("queue-A2")
         relay.run()
-        assertTrue(b.playing)
-        assertFalse(skewed.playing)
+        // 保留している間は、B は受けた順番で止まらない
+        assertTrue(b.client.isWriter)
+        relay.hold = { _, _ -> false }
+        relay.releaseHeld()
+        relay.run()
+        // claim は B、A の順に届いたので、A が残る
+        assertTrue(a.playing, "claim が後に届いた A が止まった: A=${a.events.filterNot { it is ClientEvent.RemoteChanged }} B=${b.events.filterNot { it is ClientEvent.RemoteChanged }} log=${relay.log}")
+        assertFalse(b.playing)
+        assertTrue(a.client.isWriter)
     }
 
     @Test
     fun anotherAccountCannotStopTheHousehold() {
         setUp()
+        b.accountTag = "tag-account-2"
         a.startPlaying("queue-A")
         relay.run()
-        b.accountTag = "tag-account-2"
+        // 家の最新の再生が別のアカウントなので、B は claim しない（手元だけで鳴る）
         b.startPlaying("queue-other-account")
         relay.run()
+        assertFalse(b.client.isWriter)
         assertTrue(a.playing, "別のアカウントの端末の再生で止まった")
-        assertTrue(a.events.any { it is ClientEvent.RemoteChanged && !it.accountMatches })
-        // 別のアカウントの端末は引き取れない
-        b.playing = false
+        assertTrue(a.client.isWriter)
+        assertTrue(b.events.any { it is ClientEvent.RemoteChanged && it.writer == a.deviceId && !it.accountMatches })
+        // 別のアカウントの端末は、A の再生を引き取れない（最新のカーソルは A のもの）
+        assertEquals(a.deviceId, b.client.latestCursorBody()?.first)
         assertFalse(b.client.requestTransfer())
     }
 
@@ -247,6 +260,96 @@ class ConnectSimulationTest {
         d.connect()
         relay.run()
         assertEquals(null, d.client.householdId)
+    }
+
+    @Test
+    fun writesResumeAfterReconnecting() {
+        setUp()
+        a.startPlaying("queue-A", position = 1_000)
+        relay.run()
+        val before = relay.store.latest().single { it.kind == xyz.mooma0750.wave.handoff.v2.StateKind.Cursor }.version
+        // 切れている間に位置が変わる（送れない）
+        a.disconnect()
+        a.positionMs = 90_000
+        a.pushCursor()
+        relay.run()
+        a.connect()
+        relay.run()
+        val after = relay.store.latest().single { it.kind == xyz.mooma0750.wave.handoff.v2.StateKind.Cursor }
+        assertTrue(after.version > before, "つながり直しても書き直していない")
+        assertEquals(a.deviceId, after.doc.header.writerId)
+        // B から見て、A の新しい位置
+        assertEquals(90_000L, b.client.latestCursorBody()?.second?.positionMs)
+        // その後の変化もすぐ書ける
+        a.positionMs = 95_000
+        a.pushCursor()
+        relay.run()
+        assertEquals(95_000L, b.client.latestCursorBody()?.second?.positionMs)
+    }
+
+    @Test
+    fun playbackStartedOfflineIsClaimedOnReconnect() {
+        setUp()
+        b.startPlaying("queue-B")
+        relay.run()
+        // A は切れている間に、本人が新しく再生を始めた（claim は届かない）
+        a.disconnect()
+        a.startPlaying("queue-A-offline")
+        relay.run()
+        assertTrue(b.playing)
+        a.connect()
+        relay.run()
+        // つながった後に claim が届き、後の claim の A が残る
+        assertTrue(a.playing, "オフラインで始めた A が止まった")
+        assertFalse(b.playing)
+        assertEquals(a.deviceId, relay.store.welcome(a.deviceId, emptyList()).activeDeviceId)
+    }
+
+    @Test
+    fun adoptingDeviceWhoseFirstWriteMissesTheDeadlineClaimsAgain() {
+        setUp()
+        a.startPlaying("queue-A", position = 5_000)
+        relay.run()
+        // B の最初の書き込みが中継に届かないまま、transfer の期限を過ぎる
+        relay.dropIncoming = { from, message -> from == b.deviceId && message is RelayV2.StatePut }
+        assertTrue(b.client.requestTransfer())
+        relay.run()
+        assertTrue(b.playing)
+        relay.dropIncoming = { _, _ -> false }
+        now += HouseholdStore.PENDING_MS + 1
+        relay.tick()
+        relay.run()
+        // B は鳴っているので、新しく始めたものとして claim し直し、書ける
+        assertTrue(b.playing)
+        assertTrue(b.client.isWriter)
+        b.positionMs = 7_000
+        b.pushCursor()
+        relay.run()
+        val cursor = relay.store.latest().single { it.kind == xyz.mooma0750.wave.handoff.v2.StateKind.Cursor }
+        assertEquals(b.deviceId, cursor.doc.header.writerId)
+        assertEquals(b.deviceId, relay.store.welcome(b.deviceId, emptyList()).activeDeviceId)
+        assertFalse(a.playing)
+    }
+
+    @Test
+    fun staleHeadRejectionMakesTheWriterRewrapWithoutTheRemovedDevice() {
+        val c = SimDevice("C", { relay }, { now })
+        setUp(c)
+        a.startPlaying("queue-A")
+        relay.run()
+        // A に鎖の更新を届けないまま、B が C を外す
+        relay.drop = { to, message -> to == a.deviceId && message is RelayV2.ChainChanged }
+        val chain = requireNotNull(b.client.verifiedChain())
+        relay.fromClient(b.deviceId, RelayV2.ChainAppend(MemberChain.remove(b, chain, c.deviceId)))
+        relay.run()
+        relay.drop = { _, _ -> false }
+        // A は古い頭で書こうとして stale_head で断られ、鎖を取り直して書き直す
+        a.positionMs = 12_000
+        a.pushCursor()
+        relay.run()
+        val cursor = relay.store.latest().single { it.kind == xyz.mooma0750.wave.handoff.v2.StateKind.Cursor }
+        assertEquals(12_000L, b.client.latestCursorBody()?.second?.positionMs)
+        assertFalse(cursor.doc.recipients.any { it.deviceId == c.deviceId }, "外した端末に包んだまま")
     }
 
     @Test

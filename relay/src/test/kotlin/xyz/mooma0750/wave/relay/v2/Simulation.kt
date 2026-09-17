@@ -32,6 +32,7 @@ class FakeRelay(
     private val connected = LinkedHashMap<String, (RelayV2) -> Unit>()
     private val outbox = ArrayDeque<Pair<String, RelayV2>>()
     private val held = ArrayList<Pair<String, RelayV2>>()
+    val log = ArrayList<String>()
 
     /** true を返すと、その端末へのそのメッセージを落とす。 */
     var drop: (to: String, message: RelayV2) -> Boolean = { _, _ -> false }
@@ -48,7 +49,6 @@ class FakeRelay(
     ) {
         connected[deviceId] = deliver
         post(deviceId, store.welcome(deviceId, connected.keys.toList()))
-        store.latest().forEach { post(deviceId, RelayV2.State(it)) }
     }
 
     fun disconnect(deviceId: String) {
@@ -85,6 +85,7 @@ class FakeRelay(
                 held += to to message
                 continue
             }
+            log += "${to.take(4)}<-${message::class.simpleName}${(message as? RelayV2.ActiveChanged)?.let { "(" + it.activeDeviceId?.take(4) + "," + it.claimOrder + ")" } ?: ""}${(message as? RelayV2.Error)?.code?.let { "($it)" } ?: ""}"
             deliver(message)
         }
     }
@@ -99,11 +100,21 @@ class FakeRelay(
         except: String? = null,
     ) = connected.keys.filter { it != except }.forEach { post(it, message) }
 
+    /** @return 中継に届いたか（つながっていなければ false。端末の send の戻り値） */
     fun fromClient(
         deviceId: String,
         message: RelayV2,
+    ): Boolean {
+        if (deviceId !in connected) return false
+        if (dropIncoming(deviceId, message)) return true
+        handle(deviceId, message)
+        return true
+    }
+
+    private fun handle(
+        deviceId: String,
+        message: RelayV2,
     ) {
-        if (deviceId !in connected || dropIncoming(deviceId, message)) return
         when (message) {
             is RelayV2.ChainGet -> post(deviceId, RelayV2.Chain(store.chainFrom(message.fromSeq)))
             is RelayV2.ChainAppend ->
@@ -111,6 +122,7 @@ class FakeRelay(
                     is HouseholdStore.ChainResult.Ok -> {
                         post(deviceId, RelayV2.ChainOk(result.headSeq, result.headHash))
                         broadcast(RelayV2.ChainChanged(result.headSeq, result.headHash), except = deviceId)
+                        result.activeChanged?.let { broadcast(it) }
                         result.removed?.let { connected.remove(it) }
                     }
                     is HouseholdStore.ChainResult.Conflict -> post(deviceId, RelayV2.ChainConflict(result.headSeq, result.headHash))
@@ -130,6 +142,7 @@ class FakeRelay(
             is RelayV2.Claim ->
                 when (val result = store.claim(deviceId, message.claimId, message.yieldDoc)) {
                     is HouseholdStore.ClaimResult.Ok -> {
+                        store.takeDroppedPending()?.let { broadcast(RelayV2.PendingExpired(it)) }
                         broadcast(result.activeChanged)
                         broadcast(RelayV2.YieldDelivery(message.claimId, message.yieldDoc), except = deviceId)
                     }
@@ -139,6 +152,7 @@ class FakeRelay(
             is RelayV2.Transfer ->
                 when (val result = store.transfer(deviceId, message.claimId, message.basedOnVersion, message.yieldDoc)) {
                     is HouseholdStore.ClaimResult.Ok -> {
+                        store.takeDroppedPending()?.let { broadcast(RelayV2.PendingExpired(it)) }
                         broadcast(result.activeChanged)
                         broadcast(RelayV2.YieldDelivery(message.claimId, message.yieldDoc), except = deviceId)
                     }

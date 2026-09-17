@@ -119,7 +119,8 @@ data class SealedDoc(
 /** カーソル（D-5）。小さく、再生・一時停止・シーク・遷移のたびに書く。 */
 @Serializable
 data class CursorBody(
-    val queueRevision: Long,
+    /** このカーソルの曲が載っているキューの doc のハッシュ（DocSealer.hash）。書き手ごとの番号にしない（レビュー p6b12 中-4）。 */
+    val queueRef: String,
     val currentItemId: String,
     val positionMs: Long,
     val playing: Boolean,
@@ -139,7 +140,6 @@ data class CursorBody(
 /** キュー（D-5）。snapshot は HandoffCodec.encode の文字列（取り込む側が HandoffCodec.decode で検証する）。 */
 @Serializable
 data class QueueBody(
-    val queueRevision: Long,
     val accountTag: String,
     val snapshot: String,
 )

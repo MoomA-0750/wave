@@ -11,51 +11,52 @@ class PlaybackArbiterTest {
     private fun decide(
         mine: Session,
         evidence: Evidence,
-        active: String? = null,
-    ) = PlaybackArbiter.decide("A", mine, evidence, active)
+        myOrder: Long? = null,
+        otherOrder: Long? = null,
+    ) = PlaybackArbiter.decide("A", mine, evidence, myOrder, otherOrder)
 
     @Test
-    fun laterSessionWinsRegardlessOfClocks() {
+    fun laterSessionWinsRegardlessOfClaimOrders() {
         // A はカーソル v10 を書いて再生中（セッションは v9 を見て始め、最初に書けたのが v10）
         val a = Session(base = 9, startVersion = 10)
-        // B は A の v12 を見てから始めた → A が止まる（サーバーが A を再生中と言っていても）
-        assertEquals(PlaybackArbiter.Result(Decision.Stop, Reason.OtherStartedAfterMine), decide(a, Evidence.Yield("B", sessionBase = 12), active = "A"))
+        // B は A の v12 を見てから始めた → A が止まる（claimOrder が逆でも）
+        assertEquals(PlaybackArbiter.Result(Decision.Stop, Reason.OtherStartedAfterMine), decide(a, Evidence.Yield("B", sessionBase = 12), myOrder = 9, otherOrder = 1))
         assertEquals(Decision.Stop, decide(a, Evidence.PlayingCursor("B", sessionBase = 10, sessionStartVersion = 13)).decision)
-        // A は B のセッション（v5 から）を見てから始めた → A は止まらない（B が A のカーソルを見て止まる）
-        assertEquals(PlaybackArbiter.Result(Decision.Keep, Reason.MineStartedAfterOther), decide(a, Evidence.PlayingCursor("B", sessionBase = 4, sessionStartVersion = 5), active = "B"))
+        // A は B のセッション（v5 から）を見てから始めた → A は止まらない
+        assertEquals(PlaybackArbiter.Result(Decision.Keep, Reason.MineStartedAfterOther), decide(a, Evidence.PlayingCursor("B", sessionBase = 4, sessionStartVersion = 5), myOrder = 1, otherOrder = 9))
     }
 
     @Test
     fun theOtherSideReachesTheOppositeDecision() {
-        // 2台が同じ証拠を互いに見たとき、片方だけが止まる
         val a = Session(base = 9, startVersion = 10)
         val b = Session(base = 12, startVersion = 13)
-        val aDecision = PlaybackArbiter.decide("A", a, Evidence.PlayingCursor("B", b.base, b.startVersion), serverActiveDeviceId = "A").decision
-        val bDecision = PlaybackArbiter.decide("B", b, Evidence.PlayingCursor("A", a.base, a.startVersion), serverActiveDeviceId = "A").decision
-        assertEquals(Decision.Stop, aDecision)
-        assertEquals(Decision.Keep, bDecision)
+        assertEquals(Decision.Stop, PlaybackArbiter.decide("A", a, Evidence.PlayingCursor("B", b.base, b.startVersion), 1, 2).decision)
+        assertEquals(Decision.Keep, PlaybackArbiter.decide("B", b, Evidence.PlayingCursor("A", a.base, a.startVersion), 2, 1).decision)
     }
 
     @Test
-    fun concurrentStartsAreSettledByTheServersChoiceOnly() {
-        // 2台とも v20 を見て同時に始めた（どちらも相手の書いた版を見ていない）
+    fun concurrentStartsAreSettledByClaimOrderAndDeferredUntilKnown() {
+        // 2台とも v20 を見て同時に始めた
         val a = Session(base = 20, startVersion = 21)
         val bCursor = Evidence.PlayingCursor("B", sessionBase = 20, sessionStartVersion = 22)
-        // A の base(20) < B の start(22)、B の base(20) < A の start(21) → 同時
-        assertEquals(PlaybackArbiter.Result(Decision.Stop, Reason.Concurrent), decide(a, bCursor, active = "B"))
-        assertEquals(PlaybackArbiter.Result(Decision.Keep, Reason.Concurrent), decide(a, bCursor, active = "A"))
+        assertEquals(PlaybackArbiter.Result(Decision.Stop, Reason.Concurrent), decide(a, bCursor, myOrder = 5, otherOrder = 6))
+        assertEquals(PlaybackArbiter.Result(Decision.Keep, Reason.Concurrent), decide(a, bCursor, myOrder = 6, otherOrder = 5))
+        // どちらかの順番がまだ届いていなければ保留（受けた順番で決めない）
+        assertEquals(Decision.Defer, decide(a, bCursor, myOrder = null, otherOrder = 6).decision)
+        assertEquals(Decision.Defer, decide(a, bCursor, myOrder = 5, otherOrder = null).decision)
+        // 両側の結論は逆になる
+        val b = Session(base = 20, startVersion = 22)
+        assertEquals(Decision.Keep, PlaybackArbiter.decide("B", b, Evidence.PlayingCursor("A", 20, 21), 6, 5).decision)
         // まだ書けていない（通信が無い間に始めた）端末への yield も同時の扱い
         val offlineStart = Session(base = 20, startVersion = null)
-        assertEquals(Decision.Stop, decide(offlineStart, Evidence.Yield("B", sessionBase = 20), active = "B").decision)
-        assertEquals(Decision.Keep, decide(offlineStart, Evidence.Yield("B", sessionBase = 20), active = null).decision)
+        assertEquals(Decision.Stop, decide(offlineStart, Evidence.Yield("B", sessionBase = 20), myOrder = 3, otherOrder = 4).decision)
+        assertEquals(Decision.Keep, decide(offlineStart, Evidence.Yield("B", sessionBase = 20), myOrder = 4, otherOrder = 3).decision)
     }
 
     @Test
     fun reconnectingDeviceThatKeptPlayingStops() {
-        // A は v30 で書いた後に通信を失い、鳴り続けた。その間に B が v30 を見て引き取り v31 を書いた
         val a = Session(base = 29, startVersion = 30)
-        assertEquals(Decision.Stop, decide(a, Evidence.PlayingCursor("B", sessionBase = 30, sessionStartVersion = 31), active = "B").decision)
-        // 自分自身の証拠では止まらない
-        assertEquals(Reason.Self, PlaybackArbiter.decide("B", Session(30, 31), Evidence.PlayingCursor("B", 30, 31), "A").reason)
+        assertEquals(Decision.Stop, decide(a, Evidence.PlayingCursor("B", sessionBase = 30, sessionStartVersion = 31)).decision)
+        assertEquals(Reason.Self, PlaybackArbiter.decide("B", Session(30, 31), Evidence.PlayingCursor("B", 30, 31), null, null).reason)
     }
 }

@@ -26,9 +26,15 @@ sealed interface ClientEvent {
         val accountMatches: Boolean,
     ) : ClientEvent
 
+    /** 中継が、検証した一覧と同じ seq で別の記録を見せた。 */
     data object ChainForked : ClientEvent
 
     data object ChainRolledBack : ClientEvent
+
+    /** 受けた記録が検証を通らなかった（改ざん・不正な追記）。 */
+    data class ChainInvalid(
+        val reason: String,
+    ) : ClientEvent
 
     /** サーバーの状態が作り直された。acceptStoreReset を呼ぶまで、その状態で止まらない・取り込まない（L-12）。 */
     data class StoreReset(
@@ -59,7 +65,8 @@ class ConnectClient(
     private val signer: DeviceSigner,
     private val opener: KxOpener,
     private val role: Role,
-    private val send: (RelayV2) -> Unit,
+    /** 中継へ送る。つながっていなくて送れなければ false。 */
+    private val send: (RelayV2) -> Boolean,
     private val effects: Effects,
     /** 単調時計（ミリ秒）。transfer の3秒と外挿の足し算にだけ使う。 */
     private val nowMs: () -> Long,
@@ -86,62 +93,6 @@ class ConnectClient(
         fun accountTag(): String?
     }
 
-    private class Opened<T>(
-        val stored: StoredState,
-        val body: T,
-        val hash: String,
-        val receivedAtLocalMs: Long,
-    ) {
-        val writer: String get() = stored.doc.header.writerId
-        val version: Long get() = stored.version
-    }
-
-    private class Inflight(
-        val kind: StateKind,
-        val expectVersion: Long,
-        val doc: SealedDoc,
-        val hash: String,
-        val cursor: CursorBody?,
-        val queue: QueueBody?,
-    )
-
-    private class Transfer(
-        val claimId: String,
-        val basedOnVersion: Long,
-        val previousWriter: String,
-        val startedAtMs: Long,
-        var retried: Boolean = false,
-        var adopting: Boolean = false,
-    )
-
-    private var records: List<ChainRecord> = initial.chain
-    private var chain: VerifiedChain? = (MemberChain.verify(records) as? ChainVerification.Ok)?.chain
-    private var storeId: String? = initial.storeId
-    private var pendingStoreId: String? = null
-    private var cursorFloor = initial.cursorFloor
-    private var queueFloor = initial.queueFloor
-    private var retreated = initial.retreated
-    private val handledClaims = ArrayDeque(initial.handledClaimIds)
-
-    private var latestCursor: Opened<CursorBody>? = null
-    private var latestQueue: Opened<QueueBody>? = null
-    private val deferred = ArrayList<StoredState>()
-    private var serverActive: String? = null
-    private var pendingOwner: String? = null
-
-    // 手元の再生
-    private var localQueue: String? = null
-    private var localQueueRevision = 0L
-    private var local: LocalCursor? = null
-    private var session: PlaybackArbiter.Session? = null
-    private var deviceSeq = 0L
-    private var lastOwnCursorHash: String? = null
-    private val inflight = HashMap<String, Inflight>()
-    private var dirtyCursor = false
-    private var dirtyQueue = false
-    private var transfer: Transfer? = null
-    private var reclaimAfterState = false
-
     /** 手元の再生の、カーソルに入れる値。 */
     data class LocalCursor(
         val currentItemId: String,
@@ -151,27 +102,6 @@ class ConnectClient(
         val listenedMs: Long,
         val historySent: Boolean,
     )
-
-    val isWriter: Boolean get() = session != null
-
-    /** 検証した家の ID（アカウントタグの計算に使う）。家に入っていなければ null。 */
-    val householdId: String? get() = chain?.householdId
-
-    /** 検証した端末一覧（表示）。 */
-    val members: List<MemberKeys> get() = chain?.members?.values?.map { it.keys }.orEmpty()
-
-    /** 検証した一覧の頭（加入の Confirm に入れる）。 */
-    val head: MemberChain.Head? get() = chain?.let { MemberChain.Head(it.headSeq, it.headHash) }
-
-    val knownStoreId: String? get() = storeId
-
-    /** サーバーの状態が作り直されたと気づき、本人の確認を待っている（L-12）。 */
-    val storeResetPending: Boolean get() = pendingStoreId != null
-
-    val floors: Pair<Long, Long> get() = cursorFloor to queueFloor
-
-    /** 加入の手順で、家の鎖を使う（A が B を加えるときの add の署名に使う）。 */
-    fun verifiedChain(): VerifiedChain? = chain
 
     /** 加入の Confirm で受け取った床（D-3）。6桁の照合で確かめた相手（inviter）から、認証された通信路で届いた値。 */
     @Serializable
@@ -184,7 +114,97 @@ class ConnectClient(
         val queueFloor: Long,
     )
 
+    private class Opened<T>(
+        val stored: StoredState,
+        val body: T,
+        val hash: String,
+        val receivedAtLocalMs: Long,
+    ) {
+        val writer: String get() = stored.doc.header.writerId
+        val version: Long get() = stored.version
+    }
+
+    private class Inflight(
+        val kind: StateKind,
+        val doc: SealedDoc,
+        val hash: String,
+        val cursor: CursorBody?,
+        val queue: QueueBody?,
+        /** 送ったときのセッション（前のセッションの返事で、新しいセッションの startVersion を決めない）。 */
+        val sessionId: Long,
+    )
+
+    private class Transfer(
+        val claimId: String,
+        val previousWriter: String,
+        val startedAtMs: Long,
+        val retried: Boolean,
+        var adopting: Boolean = false,
+    )
+
+    private class Session(
+        val id: Long,
+        var arbiter: PlaybackArbiter.Session,
+        var claimId: String?,
+        var claimOrder: Long? = null,
+    )
+
+    private var records: List<ChainRecord> = initial.chain
+    private var chain: VerifiedChain? = (MemberChain.verify(records) as? ChainVerification.Ok)?.chain
+    private var storeId: String? = initial.storeId
+    private var pendingStoreId: String? = null
+    private var cursorFloor = initial.cursorFloor
+    private var queueFloor = initial.queueFloor
+    private var retreated = initial.retreated
+    private val handledClaims = ArrayDeque(initial.handledClaimIds)
     private var expectedJoin: Pair<JoinInfo, String>? = null
+
+    private var latestCursor: Opened<CursorBody>? = null
+    private var latestQueue: Opened<QueueBody>? = null
+    private val deferred = ArrayList<StoredState>()
+    private var serverActive: String? = null
+    private var pendingOwner: String? = null
+    private val claimOrders = HashMap<String, Long>()
+
+    /** 同時に始めた相手の証拠で、claimOrder を待って保留しているもの（D-8）。 */
+    private val deferredEvidence = ArrayList<PlaybackArbiter.Evidence>()
+
+    // 手元の再生
+    private var localQueue: String? = null
+    private var localQueueRef: String? = null
+    private var local: LocalCursor? = null
+    private var session: Session? = null
+    private var sessionCounter = 0L
+    private var deviceSeq = 0L
+    private var lastOwnCursorHash: String? = null
+    private val inflight = HashMap<String, Inflight>()
+    private var dirtyCursor = false
+    private var dirtyQueue = false
+    private var transfer: Transfer? = null
+
+    /** つながり直した後、最新の状態と鎖をそろえてから書き込みを再開する（レビュー p6b12 高-2）。 */
+    private var resumePending = false
+
+    val isWriter: Boolean get() = session != null
+    val activeDeviceId: String? get() = serverActive
+    val hasRetreated: Boolean get() = retreated
+
+    /** 検証した家の ID（アカウントタグの計算に使う）。家に入っていなければ null。 */
+    val householdId: String? get() = chain?.householdId
+
+    /** 検証した端末一覧（表示）。 */
+    val members: List<MemberKeys> get() = chain?.members?.values?.map { it.keys }.orEmpty()
+
+    val knownStoreId: String? get() = storeId
+
+    /** サーバーの状態が作り直されたと気づき、本人の確認を待っている（L-12）。 */
+    val storeResetPending: Boolean get() = pendingStoreId != null
+
+    /** 加入の手順で、家の鎖を使う（A が B を加えるときの add の署名に使う）。 */
+    fun verifiedChain(): VerifiedChain? = chain
+
+    /** 表示用の最新のカーソル（別アカウントのものを含む）。 */
+    fun latestCursorBody(): Pair<String, CursorBody>? = latestCursor?.let { it.writer to it.body }
 
     /** A 側: Confirm に入れる床（家に入っていなければ null）。 */
     fun joinInfo(): JoinInfo? {
@@ -208,11 +228,6 @@ class ConnectClient(
         queueFloor = info.queueFloor
         persist()
     }
-    val activeDeviceId: String? get() = serverActive
-    val hasRetreated: Boolean get() = retreated
-
-    /** 表示用の最新のカーソル（別アカウントのものを含む）。 */
-    fun latestCursorBody(): Pair<String, CursorBody>? = latestCursor?.let { it.writer to it.body }
 
     // --- 受信 ---
 
@@ -228,17 +243,18 @@ class ConnectClient(
             is RelayV2.StateConflict -> onStateConflict(message)
             is RelayV2.Error -> onError(message)
             is RelayV2.YieldDelivery -> onYield(message)
-            is RelayV2.ActiveChanged -> {
-                serverActive = message.activeDeviceId
-                pendingOwner = message.pendingOwner
-            }
-            is RelayV2.PendingExpired ->
-                if (transfer?.claimId == message.claimId) {
-                    transfer = null
-                    effects.event(ClientEvent.TransferFailed("expired"))
-                }
+            is RelayV2.ActiveChanged -> onActiveChanged(message)
+            is RelayV2.PendingExpired -> onPendingExpired(message.claimId)
             else -> Unit
         }
+    }
+
+    /** 接続が切れた。返事を待っていた書き込みは、つながり直した後に最新の版へ積み直す。 */
+    fun onDisconnected() {
+        inflight.values.forEach { if (it.kind == StateKind.Cursor) dirtyCursor = true else dirtyQueue = true }
+        inflight.clear()
+        serverActive = null
+        pendingOwner = null
     }
 
     private fun onHeadAnnounced(
@@ -254,7 +270,10 @@ class ConnectClient(
     }
 
     private fun onWelcome(welcome: RelayV2.Welcome) {
+        // 前の接続の書き込みは届いていないかもしれない（返事を待っていたものは積み直す）
+        onDisconnected()
         serverActive = welcome.activeDeviceId
+        claimOrders.putAll(welcome.claimOrders)
         val known = storeId
         if (known == null) {
             storeId = welcome.storeId
@@ -263,6 +282,7 @@ class ConnectClient(
             pendingStoreId = welcome.storeId
             effects.event(ClientEvent.StoreReset(welcome.storeId))
         }
+        resumePending = isWriter
         val current = chain
         val headSeq = welcome.headSeq
         if (headSeq != null && (current == null || headSeq > current.headSeq)) {
@@ -270,6 +290,9 @@ class ConnectClient(
         } else if (headSeq != null && current != null && current.hashAt(headSeq) != welcome.headHash) {
             effects.event(ClientEvent.ChainForked)
         }
+        // 最新の状態を先に見る（通信を失ったまま鳴っていた端末は、ここで止まる）
+        welcome.states.forEach(::onState)
+        maybeResume()
     }
 
     /** 本人が「この状態から始める」を押した（L-12）。床を捨てて新しい storeId を受け入れる。 */
@@ -282,22 +305,41 @@ class ConnectClient(
         latestCursor = null
         latestQueue = null
         persist()
+        // 書き手なら、新しい保存に最初から書き直す（前の版のセッションのままにしない）
+        session?.let {
+            it.arbiter = PlaybackArbiter.Session(base = 0, startVersion = null)
+            sendClaimFor(it)
+            markDirty()
+        }
         send(RelayV2.StateGet)
+        flush()
     }
 
     private fun onChain(newRecords: List<ChainRecord>) {
-        val candidate = records + newRecords
+        // 取得が重なって同じ記録が2回届いても、分岐にしない（seq で並べ、既に持っている分はハッシュを比べる）
+        val fresh = ArrayList<ChainRecord>()
+        for (record in newRecords) {
+            val index = record.seq.toInt()
+            when {
+                index < 0 -> return effects.event(ClientEvent.ChainInvalid("seq"))
+                index < records.size -> if (MemberChain.hash(record) != MemberChain.hash(records[index])) return effects.event(ClientEvent.ChainForked)
+                index == records.size + fresh.size -> fresh += record
+                else -> return effects.event(ClientEvent.ChainInvalid("gap"))
+            }
+        }
+        if (fresh.isEmpty()) {
+            flush()
+            return
+        }
+        val candidate = records + fresh
         val join = expectedJoin
         val trusted = chain?.let { MemberChain.Head(it.headSeq, it.headHash) } ?: join?.let { MemberChain.Head(it.first.headSeq, it.first.headHash) }
         when (val result = MemberChain.verify(candidate, trusted)) {
             is ChainVerification.Ok -> {
                 if (join != null && chain == null) {
                     // 加入: 家の ID が Confirm と同じで、頭の後に inviter が自分を加えた記録があること
+                    if (result.chain.householdId != join.first.householdId) return effects.event(ClientEvent.ChainForked)
                     val added = candidate.drop((join.first.headSeq + 1).toInt()).any { it.type == ChainType.Add && it.target?.deviceId == signer.deviceId && it.signerId == join.second }
-                    if (result.chain.householdId != join.first.householdId) {
-                        effects.event(ClientEvent.ChainForked)
-                        return
-                    }
                     // まだ加えられていない（A の追記の前に取った）: 受け入れずに次の chain_changed を待つ
                     if (!added) return
                     expectedJoin = null
@@ -307,18 +349,16 @@ class ConnectClient(
                 chain = result.chain
                 persist()
                 // 書き手は、外した端末を宛先から外すために、次の書き込みを待たずに書き直す（D-2）
-                if (headChanged && isWriter) {
-                    dirtyCursor = true
-                    dirtyQueue = localQueue != null
-                    flush()
-                }
+                if (headChanged && isWriter) markDirty()
                 val pending = deferred.toList()
                 deferred.clear()
                 pending.forEach(::onState)
+                maybeResume()
+                flush()
             }
             ChainVerification.Fork -> effects.event(ClientEvent.ChainForked)
             ChainVerification.Rollback -> effects.event(ClientEvent.ChainRolledBack)
-            is ChainVerification.Invalid -> effects.event(ClientEvent.ChainForked)
+            is ChainVerification.Invalid -> effects.event(ClientEvent.ChainInvalid(result.reason))
         }
     }
 
@@ -337,22 +377,25 @@ class ConnectClient(
                 DocOpen.Fork -> return effects.event(ClientEvent.ChainForked)
                 is DocOpen.Rejected -> return
             }
-        if (opened.header.version != stored.version) return
+        val expectedKind = if (stored.kind == StateKind.Cursor) DocKind.Cursor else DocKind.Queue
+        if (opened.header.version != stored.version || opened.header.kind != expectedKind) return
         val hash = DocSealer.hash(stored.doc)
         when (stored.kind) {
             StateKind.Cursor -> {
-                if (stored.version < cursorFloor) return
+                if (stored.version < cursorFloor && latestCursor != null) return
                 val existing = latestCursor
                 if (existing != null && existing.version == stored.version) {
                     if (existing.hash != hash && existing.writer == stored.doc.header.writerId) effects.event(ClientEvent.StateEquivocation)
                     return
                 }
                 if (existing != null && existing.version > stored.version) return
+                if (stored.version < cursorFloor) return
                 val body = runCatching { ConnectJson.json.decodeFromString(CursorBody.serializer(), opened.plaintext.decodeToString()) }.getOrNull() ?: return
-                latestCursor = Opened(stored, body, hash, nowMs())
+                val opened2 = Opened(stored, body, hash, nowMs())
+                latestCursor = opened2
                 cursorFloor = stored.version
                 persist()
-                onCursor(latestCursor!!)
+                onCursor(opened2)
             }
             StateKind.Queue -> {
                 if (stored.version < queueFloor) return
@@ -362,10 +405,6 @@ class ConnectClient(
                 queueFloor = stored.version
                 persist()
             }
-        }
-        if (reclaimAfterState && isWriter) {
-            reclaimAfterState = false
-            claimAgain()
         }
     }
 
@@ -388,6 +427,8 @@ class ConnectClient(
         val opened = DocSealer.open(delivery.yieldDoc, current, opener) as? DocOpen.Ok ?: return
         val command = runCatching { ConnectJson.json.decodeFromString(CommandBody.serializer(), opened.plaintext.decodeToString()) }.getOrNull() as? CommandBody.Yield ?: return
         if (command.to != signer.deviceId || command.from != opened.header.writerId || command.claimId != delivery.claimId) return
+        // yield を出せるのは player だけ（controller の遠隔操作は後、L-5）
+        if (current.members[command.from]?.keys?.role != Role.Player) return
         if (command.claimId in handledClaims) return
         remember(command.claimId)
         // 別のアカウントの端末の再生では止まらない（L-11）
@@ -398,15 +439,51 @@ class ConnectClient(
         if (stopped && wasWriter && pendingOwner == command.from) sendYielded(command.claimId)
     }
 
+    private fun onActiveChanged(message: RelayV2.ActiveChanged) {
+        serverActive = message.activeDeviceId
+        pendingOwner = message.pendingOwner
+        val claimer = message.pendingOwner ?: message.activeDeviceId
+        if (message.claimId != null && claimer != null) {
+            claimOrders[claimer] = message.claimOrder
+            session?.let { if (it.claimId == message.claimId) it.claimOrder = message.claimOrder }
+        }
+        // 順番が分かったので、保留していた証拠で決め直す
+        if (deferredEvidence.isNotEmpty()) {
+            val pending = deferredEvidence.toList()
+            deferredEvidence.clear()
+            for (evidence in pending) if (decide(evidence)) break
+        }
+        // 自分が再生中になったら、断られていた書き込みを送る
+        if (message.activeDeviceId == signer.deviceId || message.pendingOwner == signer.deviceId) flush()
+    }
+
+    private fun onPendingExpired(claimId: String) {
+        val waiting = transfer ?: return
+        if (waiting.claimId != claimId) return
+        transfer = null
+        if (waiting.adopting && isWriter) {
+            // 取り込んで鳴っているのに、最初のカーソルが期限に間に合わなかった: 新しく始めたものとして claim し直す（レビュー p6b12 高-3）
+            restartSession()
+        } else {
+            effects.event(ClientEvent.TransferFailed("expired"))
+        }
+    }
+
     /** @return 書き手でなくなったか */
     private fun decide(evidence: PlaybackArbiter.Evidence): Boolean {
         val mine = session ?: return false
-        val result = PlaybackArbiter.decide(signer.deviceId, mine, evidence, serverActive)
-        if (result.decision != PlaybackArbiter.Decision.Stop) return false
+        val result = PlaybackArbiter.decide(signer.deviceId, mine.arbiter, evidence, mine.claimOrder, claimOrders[evidence.from])
+        when (result.decision) {
+            PlaybackArbiter.Decision.Keep -> return false
+            PlaybackArbiter.Decision.Defer -> {
+                deferredEvidence.removeAll { it.from == evidence.from }
+                deferredEvidence += evidence
+                return false
+            }
+            PlaybackArbiter.Decision.Stop -> Unit
+        }
         val wasPlaying = local?.playing == true
-        session = null
-        retreated = true
-        persist()
+        endSession()
         // 一時停止中なら鳴らしていないので、書き手でなくなるだけ（知らせない）
         if (wasPlaying) {
             effects.pause()
@@ -416,24 +493,34 @@ class ConnectClient(
         return true
     }
 
+    private fun endSession() {
+        session = null
+        retreated = true
+        deferredEvidence.clear()
+        dirtyCursor = false
+        dirtyQueue = false
+        persist()
+    }
+
     private fun sendYielded(claimId: String) {
         val current = chain ?: return
-        val body = cursorBody(sessionOverride = null) ?: return
+        val body = cursorBody(null) ?: return
         val expect = maxOf(latestCursor?.version ?: 0, cursorFloor)
         val doc = DocSealer.seal(signer, current, DocKind.Cursor, expect + 1, lastOwnCursorHash, epochMs(), ConnectJson.json.encodeToString(CursorBody.serializer(), body).encodeToByteArray())
         send(RelayV2.Yielded(claimId, expect, doc))
     }
 
     private fun onStateOk(ok: RelayV2.StateOk) {
-        val sent = inflight.remove(ok.requestId)
-        if (sent == null) return
+        val sent = inflight.remove(ok.requestId) ?: return
         val stored = StoredState(sent.kind, ok.version, sent.doc, storeId.orEmpty(), 0, 0, serverActive)
         when (ok.kind) {
             StateKind.Cursor -> {
                 sent.cursor?.let { latestCursor = Opened(stored, it, sent.hash, nowMs()) }
                 cursorFloor = maxOf(cursorFloor, ok.version)
                 val mine = session
-                if (mine != null && mine.startVersion == null) session = mine.copy(startVersion = ok.version)
+                if (mine != null && mine.id == sent.sessionId && mine.arbiter.startVersion == null) {
+                    mine.arbiter = mine.arbiter.copy(startVersion = ok.version)
+                }
                 if (transfer?.adopting == true) {
                     val from = transfer!!.previousWriter
                     transfer = null
@@ -449,23 +536,14 @@ class ConnectClient(
         flush()
     }
 
-    /** 接続が切れた。返事を待っていた書き込みは、つながり直した後に最新の版へ積み直す。 */
-    fun onDisconnected() {
-        inflight.values.forEach { if (it.kind == StateKind.Cursor) dirtyCursor = true else dirtyQueue = true }
-        inflight.clear()
-        serverActive = null
-        pendingOwner = null
-    }
-
     private fun onStateConflict(conflict: RelayV2.StateConflict) {
         val waiting = transfer
         if (waiting != null && conflict.requestId == waiting.claimId) {
             conflict.latest?.let(::onState)
-            if (!waiting.retried && transfer === waiting) {
-                transfer = null
+            transfer = null
+            if (!waiting.retried) {
                 requestTransfer(retried = true)
             } else {
-                transfer = null
                 effects.event(ClientEvent.TransferFailed("conflict"))
             }
             return
@@ -482,21 +560,26 @@ class ConnectClient(
         // 止まっていなければ、最新の版に積み直す
         if (isWriter) {
             if (sent.kind == StateKind.Cursor) dirtyCursor = true else dirtyQueue = true
-            flush()
         }
+        flush()
     }
 
     private fun onError(error: RelayV2.Error) {
         val sent = error.requestId?.let { inflight.remove(it) }
         when (error.code) {
-            // 書き込みを断られた: 最新を取り、止まる理由が無ければ claim し直す（D-7）
+            // 書き込みを断られた: 持っている最新の証拠で止まる理由が無く、自分の claim が一番後（または誰も再生中でない）なら、すぐ claim し直す
+            // （新しい状態を待たない、レビュー p6b12 高-3）。他の端末の claim の方が後なら、その端末の証拠を待つ（断られるたびに奪い合わない）
             "not_active" ->
                 if (sent != null && isWriter) {
-                    reclaimAfterState = true
-                    send(RelayV2.StateGet)
+                    if (sent.kind == StateKind.Cursor) dirtyCursor = true else dirtyQueue = true
+                    val stopped = latestCursor?.takeIf { it.writer != signer.deviceId && it.body.playing && it.body.accountTag == effects.accountTag() }?.let { decide(PlaybackArbiter.Evidence.PlayingCursor(it.writer, it.body.sessionBase, it.body.sessionStartVersion)) } == true
+                    val mine = session
+                    val latestOther = claimOrders.filterKeys { it != signer.deviceId }.values.maxOrNull()
+                    val mineIsLatest = mine?.claimOrder != null && (latestOther == null || mine.claimOrder!! > latestOther)
+                    if (!stopped && isWriter && (serverActive == null || mineIsLatest) && mine?.claimOrder != null) restartSession()
                 }
             "stale_head" -> {
-                if (sent != null) {
+                if (sent != null && isWriter) {
                     if (sent.kind == StateKind.Cursor) dirtyCursor = true else dirtyQueue = true
                 }
                 send(RelayV2.ChainGet(records.size.toLong()))
@@ -510,6 +593,7 @@ class ConnectClient(
                 }
             }
         }
+        // 断られた書き込みは、ここで送り直さない（次の状態・active_changed・鎖の取得で送る。すぐ送ると断られ続けて止まらない）
     }
 
     // --- 手元の操作 ---
@@ -517,9 +601,10 @@ class ConnectClient(
     /** 手元のキューが変わった（HandoffCodec.encode の文字列）。書き手なら置く。 */
     fun setLocalQueue(snapshot: String) {
         localQueue = snapshot
-        localQueueRevision++
         if (isWriter) {
             dirtyQueue = true
+            // キューを置き直すので、カーソルも新しいキューを指し直す
+            dirtyCursor = true
             flush()
         }
     }
@@ -535,39 +620,60 @@ class ConnectClient(
 
     /**
      * 本人が手元で新しく再生を始めた・再開した（L-3）。新しいセッションとして claim し、キューとカーソルを置く。
-     * @return claim を送ったか（家に入っていない・Verified でない・controller なら false。呼ぶ側は手元だけで再生する）
+     * @return claim を送ったか（家に入っていない・Verified でない・controller・家の再生が別のアカウントなら false。呼ぶ側は手元だけで再生する）
      */
     fun userStartedPlayback(): Boolean {
         if (role != Role.Player || chain == null || storeId == null || pendingStoreId != null) return false
         val tag = effects.accountTag() ?: return false
-        session = PlaybackArbiter.Session(base = maxOf(latestCursor?.version ?: 0, cursorFloor), startVersion = null)
+        // 家の最新の再生が別のアカウントなら、claim しない（書き込みのたびに再生中の端末を奪い合わない、レビュー p6b12 中-5）
+        val latest = latestCursor
+        if (latest != null && latest.writer != signer.deviceId && latest.body.accountTag != tag) return false
         retreated = false
-        persist()
-        sendClaim(tag)
-        dirtyQueue = localQueue != null
-        dirtyCursor = true
-        flush()
+        restartSession()
         return true
     }
 
-    private fun claimAgain() {
-        val tag = effects.accountTag() ?: return
-        val mine = session ?: return
-        // 最新を見た上で止まらなかったので、見た版を足して始め直す
-        session = mine.copy(base = maxOf(mine.base, latestCursor?.version ?: 0), startVersion = null)
-        sendClaim(tag)
-        dirtyQueue = localQueue != null
-        dirtyCursor = true
+    /** 新しいセッションを始めて claim する（手元で始めた・書き込みを断られた・取り込みが期限に遅れた）。 */
+    private fun restartSession() {
+        val next = Session(++sessionCounter, PlaybackArbiter.Session(base = maxOf(latestCursor?.version ?: 0, cursorFloor), startVersion = null), claimId = null)
+        session = next
+        deferredEvidence.clear()
+        // 前のセッションの書き込みの返事は待たない（新しいセッションで積み直す）
+        inflight.clear()
+        persist()
+        sendClaimFor(next)
+        markDirty()
         flush()
     }
 
-    private fun sendClaim(tag: String) {
+    private fun sendClaimFor(target: Session) {
         val current = chain ?: return
+        val tag = effects.accountTag() ?: return
         val claimId = newId()
         remember(claimId)
+        target.claimId = claimId
+        target.claimOrder = null
         val to = latestCursor?.writer?.takeIf { it != signer.deviceId }.orEmpty()
-        val command = CommandBody.Yield(claimId, signer.deviceId, to, session!!.base, tag)
+        val command = CommandBody.Yield(claimId, signer.deviceId, to, target.arbiter.base, tag)
         send(RelayV2.Claim(claimId, sealCommand(current, command)))
+    }
+
+    /** つながり直した後: 最新の状態と鎖がそろっていて、まだ書き手なら、claim し直して積み直す。 */
+    private fun maybeResume() {
+        if (!resumePending || deferred.isNotEmpty() || chain == null) return
+        resumePending = false
+        val mine = session ?: return
+        if (serverActive != signer.deviceId) {
+            // 切れている間に始めた再生（claim が届いていない）や、切れている間に再生中でなくなった場合
+            sendClaimFor(mine)
+        }
+        markDirty()
+        flush()
+    }
+
+    private fun markDirty() {
+        dirtyCursor = local != null
+        dirtyQueue = localQueue != null
     }
 
     /**
@@ -582,12 +688,15 @@ class ConnectClient(
         val tag = effects.accountTag() ?: return false
         val cursor = latestCursor ?: return false
         val queue = latestQueue ?: return false
-        if (cursor.writer == signer.deviceId || cursor.body.accountTag != tag || queue.body.accountTag != tag || queue.body.queueRevision != cursor.body.queueRevision) return false
+        if (cursor.writer == signer.deviceId || cursor.body.accountTag != tag || queue.body.accountTag != tag || cursor.body.queueRef != queue.hash) return false
         val claimId = newId()
         remember(claimId)
-        transfer = Transfer(claimId, cursor.version, cursor.writer, nowMs(), retried = retried)
+        transfer = Transfer(claimId, cursor.writer, nowMs(), retried)
         val command = CommandBody.Yield(claimId, signer.deviceId, cursor.writer, cursor.version, tag)
-        send(RelayV2.Transfer(claimId, cursor.version, sealCommand(current, command)))
+        if (!send(RelayV2.Transfer(claimId, cursor.version, sealCommand(current, command)))) {
+            transfer = null
+            return false
+        }
         return true
     }
 
@@ -601,7 +710,7 @@ class ConnectClient(
         val waiting = transfer ?: return
         val cursor = latestCursor
         val queue = latestQueue
-        if (cursor == null || queue == null || queue.body.queueRevision != cursor.body.queueRevision) {
+        if (cursor == null || queue == null || cursor.body.queueRef != queue.hash) {
             transfer = null
             send(RelayV2.Release(waiting.claimId))
             effects.event(ClientEvent.TransferFailed("no_state"))
@@ -616,12 +725,14 @@ class ConnectClient(
             return
         }
         localQueue = queue.body.snapshot
-        localQueueRevision = queue.body.queueRevision
-        session = PlaybackArbiter.Session(base = cursor.version, startVersion = null)
+        localQueueRef = queue.hash
+        session = Session(++sessionCounter, PlaybackArbiter.Session(base = cursor.version, startVersion = null), claimId = waiting.claimId)
+        claimOrders[signer.deviceId]?.let { session?.claimOrder = it }
+        deferredEvidence.clear()
         retreated = false
         local = LocalCursor(cursor.body.currentItemId, position, true, cursor.body.repeat, cursor.body.listenedMs, cursor.body.historySent)
         persist()
-        // B の最初のカーソルで再生中が確定する（D-7）
+        // B の最初のカーソルで再生中が確定する（D-7）。キューは前の端末の doc をそのまま指す
         dirtyCursor = true
         flush()
     }
@@ -638,45 +749,51 @@ class ConnectClient(
 
     private fun flush() {
         val current = chain ?: return
-        if (!isWriter) return
+        val mine = session ?: return
+        if (resumePending) return
         if (dirtyQueue && inflight.values.none { it.kind == StateKind.Queue }) {
             val snapshot = localQueue
             val tag = effects.accountTag()
             if (snapshot != null && tag != null) {
-                dirtyQueue = false
-                val body = QueueBody(localQueueRevision, tag, snapshot)
+                val body = QueueBody(tag, snapshot)
                 val expect = maxOf(latestQueue?.version ?: 0, queueFloor)
                 val doc = DocSealer.seal(signer, current, DocKind.Queue, expect + 1, null, epochMs(), ConnectJson.json.encodeToString(QueueBody.serializer(), body).encodeToByteArray())
                 val requestId = newId()
-                inflight[requestId] = Inflight(StateKind.Queue, expect, doc, DocSealer.hash(doc), null, body)
-                send(RelayV2.StatePut(requestId, StateKind.Queue, expect, doc))
+                val hash = DocSealer.hash(doc)
+                if (send(RelayV2.StatePut(requestId, StateKind.Queue, expect, doc))) {
+                    dirtyQueue = false
+                    localQueueRef = hash
+                    inflight[requestId] = Inflight(StateKind.Queue, doc, hash, null, body, mine.id)
+                }
             }
         }
-        if (dirtyCursor && inflight.values.none { it.kind == StateKind.Cursor }) {
-            val body = cursorBody(session) ?: return
-            dirtyCursor = false
+        // カーソルは、指すキューが置けてから書く（キューの送信中は待つ）
+        if (dirtyCursor && inflight.values.none { it.kind == StateKind.Cursor || it.kind == StateKind.Queue } && !dirtyQueue) {
+            val body = cursorBody(mine) ?: return
             val expect = maxOf(latestCursor?.version ?: 0, cursorFloor)
             val doc = DocSealer.seal(signer, current, DocKind.Cursor, expect + 1, lastOwnCursorHash, epochMs(), ConnectJson.json.encodeToString(CursorBody.serializer(), body).encodeToByteArray())
             val hash = DocSealer.hash(doc)
-            lastOwnCursorHash = hash
             val requestId = newId()
-            inflight[requestId] = Inflight(StateKind.Cursor, expect, doc, hash, body, null)
-            send(RelayV2.StatePut(requestId, StateKind.Cursor, expect, doc))
+            if (send(RelayV2.StatePut(requestId, StateKind.Cursor, expect, doc))) {
+                dirtyCursor = false
+                lastOwnCursorHash = hash
+                inflight[requestId] = Inflight(StateKind.Cursor, doc, hash, body, null, mine.id)
+            }
         }
     }
 
-    private fun cursorBody(sessionOverride: PlaybackArbiter.Session?): CursorBody? {
+    private fun cursorBody(mine: Session?): CursorBody? {
         val cursor = local ?: return null
         val tag = effects.accountTag() ?: return null
-        val mine = sessionOverride
+        val queueRef = localQueueRef ?: return null
         return CursorBody(
-            queueRevision = localQueueRevision,
+            queueRef = queueRef,
             currentItemId = cursor.currentItemId,
             positionMs = cursor.positionMs,
             playing = cursor.playing && mine != null,
             repeat = cursor.repeat,
-            sessionBase = mine?.base ?: 0,
-            sessionStartVersion = mine?.startVersion,
+            sessionBase = mine?.arbiter?.base ?: 0,
+            sessionStartVersion = mine?.arbiter?.startVersion,
             deviceSeq = ++deviceSeq,
             listenedMs = cursor.listenedMs,
             historySent = cursor.historySent,

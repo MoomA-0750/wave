@@ -111,10 +111,11 @@ object MemberChain {
             ChainRecord(householdId = chain.householdId, seq = chain.headSeq + 1, prevHash = chain.headHash, type = ChainType.Remove, removedDeviceId = deviceId, signerId = signer.deviceId, signature = ""),
         )
 
-    fun hash(record: ChainRecord): String {
-        val signature = runCatching { unb64.decode(record.signature) }.getOrDefault(ByteArray(0))
-        return b64.encodeToString(WaveCrypto.sha256(canonical(record), signature))
-    }
+    /**
+     * 記録のハッシュ（householdId・prevHash・頭）。署名は含めない（ECDSA の署名は、秘密鍵なしに別の有効な署名へ書き換えられるので、
+     * 中継が署名を書き換えるだけで偽の分岐を作れてしまう。レビュー p6b12 低）。署名は検証で内容に結び付いている
+     */
+    fun hash(record: ChainRecord): String = b64.encodeToString(WaveCrypto.sha256(canonical(record)))
 
     /**
      * genesis から検証する。trusted（この端末が前に検証した頭）があれば、それより短い鎖と、その seq でハッシュが違う鎖を拒む。

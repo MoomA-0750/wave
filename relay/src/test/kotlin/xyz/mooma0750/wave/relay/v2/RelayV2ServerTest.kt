@@ -80,6 +80,7 @@ class RelayV2ServerTest {
                 client.webSocket("/v2/connect") {
                     val welcomeB = authenticate(b)
                     assertEquals(chain.householdId, welcomeB.householdId)
+                    assertTrue(welcomeB.states.isEmpty())
                     // A が再生を始める → B に yield と再生中の端末の変更が届く
                     sessionA.sendMessage(RelayV2.Claim("0f8fad5b-d9cb-469f-a165-70867728950e", doc(a, chain, DocKind.Command, 1)))
                     assertEquals(a.deviceId, expect<RelayV2.ActiveChanged>().activeDeviceId)
@@ -103,7 +104,9 @@ class RelayV2ServerTest {
                     // A が B を外す → B は切られ、次に来ても認証できない
                     sessionA.sendMessage(RelayV2.ChainAppend(MemberChain.remove(a, chain, b.deviceId)))
                     assertEquals(2L, sessionA.expect<RelayV2.ChainOk>().headSeq)
-                    assertTrue(runCatching { while (true) receiveMessage() }.isFailure)
+                    // 5秒のタイムアウトではなく、すぐ閉じられる
+                    val closed = runCatching { kotlinx.coroutines.withTimeout(2_000) { while (true) incoming.receive() } }.exceptionOrNull()
+                    assertTrue(closed != null && closed !is kotlinx.coroutines.TimeoutCancellationException, "外した端末が切られていない: $closed")
                 }
                 client.webSocket("/v2/connect") {
                     val challenge = assertIs<RelayV2.Challenge>(receiveMessage())
