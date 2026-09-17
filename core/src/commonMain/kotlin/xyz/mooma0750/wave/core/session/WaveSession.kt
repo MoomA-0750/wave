@@ -561,6 +561,16 @@ class WaveSession internal constructor(
         return if (selected.single() == saved) AccountVerification.Verified else AccountVerification.Mismatch
     }
 
+    /**
+     * 確認済みのアカウントの識別子（正規化した DATASYNC_ID）。確認できていなければ null。
+     * 端末間でアカウントを比べる HMAC にだけ使う（値そのものをログ・画面・端末の外に出さない、ADR-0007）。
+     */
+    suspend fun verifiedAccountId(): xyz.mooma0750.wave.core.auth.Secret? {
+        val generation = current.value
+        val id = generation.credentials?.dataSyncId ?: return null
+        return if (verify(generation) == AccountVerification.Verified && current.value === generation) id else null
+    }
+
     /** 今のログインの、書き込み先のアカウントの確認（UI・受け渡し用）。 */
     suspend fun accountVerification(): AccountVerification {
         val generation = current.value

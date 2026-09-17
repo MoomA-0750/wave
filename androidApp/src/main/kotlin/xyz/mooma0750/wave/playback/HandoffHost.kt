@@ -13,6 +13,15 @@ class HandoffHost {
 
         /** 引き取る側: 検証済みのスナップショットでキューを置き換えて再生を始める。受け付けなければ false。 */
         fun adopt(snapshot: HandoffSnapshot): Boolean
+
+        /** 引き取られる側: キューがあるか（引き取りに応じられるか）。 */
+        fun hasQueue(): Boolean
+
+        /** 引き取られる側: 相手が受け取った。今の再生の履歴を送り済みにする（二重に載せない）。 */
+        fun markHandedOff()
+
+        /** 引き取られる側: 相手が取り消した。一時停止する前の再生に戻す。 */
+        fun resumeAfterCancel()
     }
 
     var endpoint: Endpoint? = null

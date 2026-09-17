@@ -39,6 +39,7 @@ object DebugActions {
     fun handle(
         intent: Intent?,
         container: AppContainer,
+        context: android.content.Context = container.appContext,
         fromPrivilegedReceiver: Boolean = false,
     ) {
         if (!container.isDebuggable) return
@@ -74,6 +75,44 @@ object DebugActions {
                     container.logout()
                 }
                 "shuffle" -> player.shuffleUpcoming()
+                // Phase 6: ペアリングと引き取りの確認（DebugReceiver からだけ）。QR の文字列と6桁はアプリの中のファイルに書き、ログには出さない
+                "connect_info" -> {
+                    java.io.File(context.filesDir, "connect-pubkey.txt").writeText(java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(container.deviceIdentity.encodedPublicKey))
+                    Log.i(WaveApplication.LOG_TAG, "debug connect configured=${container.connectConfigured} pairs=${container.pairStore.all().size} relay=${container.relayClient.status.value}")
+                }
+                "pair_offer" -> {
+                    container.pairing.startOffer()
+                    val shown = kotlinx.coroutines.withTimeoutOrNull(20_000) { container.pairing.state.first { it is xyz.mooma0750.wave.connect.PairingController.State.ShowingOffer || it is xyz.mooma0750.wave.connect.PairingController.State.Failed } }
+                    (shown as? xyz.mooma0750.wave.connect.PairingController.State.ShowingOffer)?.let { java.io.File(context.filesDir, "pair-offer.txt").writeText(it.offerText) }
+                    Log.i(WaveApplication.LOG_TAG, "debug pair offer state=${shown?.let { it::class.simpleName }} message=${(shown as? xyz.mooma0750.wave.connect.PairingController.State.Failed)?.message}")
+                }
+                "pair_accept" -> {
+                    container.pairing.accept(intent.getStringExtra("offer").orEmpty())
+                    val next = kotlinx.coroutines.withTimeoutOrNull(30_000) { container.pairing.state.first { it is xyz.mooma0750.wave.connect.PairingController.State.ShowCode || it is xyz.mooma0750.wave.connect.PairingController.State.Failed } }
+                    (next as? xyz.mooma0750.wave.connect.PairingController.State.ShowCode)?.let { java.io.File(context.filesDir, "pair-code.txt").writeText(it.code) }
+                    Log.i(WaveApplication.LOG_TAG, "debug pair accept state=${next?.let { it::class.simpleName }} message=${(next as? xyz.mooma0750.wave.connect.PairingController.State.Failed)?.message}")
+                }
+                "pair_code" -> {
+                    container.pairing.enterCode(intent.getStringExtra("code").orEmpty())
+                    val next = kotlinx.coroutines.withTimeoutOrNull(10_000) { container.pairing.state.first { it !is xyz.mooma0750.wave.connect.PairingController.State.EnterCode } }
+                    Log.i(WaveApplication.LOG_TAG, "debug pair code state=${next?.let { it::class.simpleName }} message=${(next as? xyz.mooma0750.wave.connect.PairingController.State.Failed)?.message}")
+                }
+                "pair_continue" -> {
+                    container.pairing.confirmOnB()
+                    Log.i(WaveApplication.LOG_TAG, "debug pair continue pairs=${container.pairStore.all().size}")
+                }
+                "take_over" -> {
+                    val peer = container.pairStore.all().firstOrNull()
+                    if (peer == null) {
+                        Log.i(WaveApplication.LOG_TAG, "debug take over no pair")
+                    } else {
+                        container.relayClient.acquire()
+                        kotlinx.coroutines.withTimeoutOrNull(15_000) { container.relayClient.status.first { it == xyz.mooma0750.wave.connect.RelayClient.Status.Connected } }
+                        Log.i(WaveApplication.LOG_TAG, "debug take over started=${container.connect.takeOver(peer.peerDeviceId)} relay=${container.relayClient.status.value}")
+                        kotlinx.coroutines.delay(30_000)
+                        container.relayClient.release()
+                    }
+                }
                 // Phase 6 P6-S: tailnet 内の計測用 echo へ WSS でつなぎ、往復の時間と、指定した秒数の後に届くかを測る（本文は固定の文字列だけ）
                 "relay_echo" -> P6sEcho.start(intent.getStringExtra("url") ?: P6sEcho.DEFAULT_URL, intent.getStringExtra("delays")?.split(',')?.mapNotNull { it.trim().toIntOrNull() }.orEmpty())
                 "relay_echo_stop" -> P6sEcho.stop()

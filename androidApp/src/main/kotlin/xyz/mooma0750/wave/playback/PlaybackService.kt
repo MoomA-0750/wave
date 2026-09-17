@@ -70,6 +70,10 @@ class PlaybackService : MediaSessionService() {
     private var saveJob: Job? = null
     private var periodicSaveJob: Job? = null
     private var likes: LikeController? = null
+
+    /** 中継に接続しているか（引き取られるのを待ち受ける）。再生中と、一時停止から前面のタイムアウトの少し前までだけ（P6-S の計測で届くことを確認）。 */
+    private var relayHeld = false
+    private var relayReleaseJob: Job? = null
     private var handoffEndpoint: HandoffHost.Endpoint? = null
 
     private lateinit var container: xyz.mooma0750.wave.AppContainer
@@ -144,6 +148,7 @@ class PlaybackService : MediaSessionService() {
 
                 override fun onIsPlayingChanged(isPlaying: Boolean) {
                     historyTracker.onIsPlayingChanged(isPlaying)
+                    updateRelayHold(isPlaying)
                     val now = android.os.SystemClock.elapsedRealtime()
                     if (isPlaying) {
                         skipGuard.onPlaying(now)
@@ -210,8 +215,23 @@ class PlaybackService : MediaSessionService() {
         // ログインし直した（別のログインに変わった）ときも、アカウントの切り替えとして同じく消す（2026-09-17 本人の決定）
         val endpoint =
             object : HandoffHost.Endpoint {
+                private var resumeAfterCancel = false
+
+                override fun hasQueue(): Boolean = player.mediaItemCount > 0 && loggedInAt != null
+
+                override fun markHandedOff() {
+                    resumeAfterCancel = false
+                    historyTracker.markHandedOff()
+                }
+
+                override fun resumeAfterCancel() {
+                    if (resumeAfterCancel) player.play()
+                    resumeAfterCancel = false
+                }
+
                 override fun capture(handoffId: String): xyz.mooma0750.wave.handoff.HandoffSnapshot? {
                     val wasPlaying = player.isPlaying || player.playWhenReady
+                    resumeAfterCancel = wasPlaying
                     player.pause()
                     val (listenedMs, historySent) = historyTracker.handoffState()
                     return queueSession.handoffSnapshot(
@@ -277,6 +297,28 @@ class PlaybackService : MediaSessionService() {
                     AuthState.Restoring -> Unit
                 }
             }
+        }
+    }
+
+    private fun updateRelayHold(isPlaying: Boolean) {
+        if (!container.connectConfigured) return
+        if (isPlaying) {
+            relayReleaseJob?.cancel()
+            relayReleaseJob = null
+            if (!relayHeld) {
+                relayHeld = true
+                container.relayClient.acquire()
+            }
+        } else if (relayHeld && relayReleaseJob == null) {
+            relayReleaseJob =
+                scope.launch {
+                    // 一時停止から、前面のタイムアウト（10分）の少し前まで待ち受ける。受け渡しの窓の間は延ばす
+                    delay(RELAY_HOLD_AFTER_PAUSE_MS)
+                    while (container.connect.holdingConnection) delay(10_000)
+                    relayHeld = false
+                    relayReleaseJob = null
+                    container.relayClient.release()
+                }
         }
     }
 
@@ -546,6 +588,9 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        relayReleaseJob?.cancel()
+        if (relayHeld) container.relayClient.release()
+        relayHeld = false
         handoffEndpoint?.let { container.handoffHost.unregister(it) }
         handoffEndpoint = null
         // scope を止めると待っている保存が捨てられるので、その前に最後の状態を書く
@@ -570,6 +615,7 @@ class PlaybackService : MediaSessionService() {
     private companion object {
         const val MAX_CONSECUTIVE_SKIPS = 3
         const val SAVE_DEBOUNCE_MS = 1_000L
+        const val RELAY_HOLD_AFTER_PAUSE_MS = 9 * 60 * 1000L
         const val PERIODIC_SAVE_MS = 60_000L
         val SAVE_EVENTS =
             intArrayOf(

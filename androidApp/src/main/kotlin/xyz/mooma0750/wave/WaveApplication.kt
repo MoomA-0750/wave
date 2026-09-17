@@ -63,6 +63,33 @@ class WaveApplication :
         WebView.setDataDirectorySuffix(LOGIN_WEBVIEW_SUFFIX)
         container = AppContainer(this)
         container.appScope.launch { container.authManager.restore() }
+        registerActivityLifecycleCallbacks(
+            object : ActivityLifecycleCallbacks {
+                override fun onActivityStarted(activity: android.app.Activity) {
+                    container.startedActivities++
+                }
+
+                override fun onActivityStopped(activity: android.app.Activity) {
+                    container.startedActivities = (container.startedActivities - 1).coerceAtLeast(0)
+                }
+
+                override fun onActivityCreated(
+                    activity: android.app.Activity,
+                    savedInstanceState: android.os.Bundle?,
+                ) = Unit
+
+                override fun onActivityResumed(activity: android.app.Activity) = Unit
+
+                override fun onActivityPaused(activity: android.app.Activity) = Unit
+
+                override fun onActivitySaveInstanceState(
+                    activity: android.app.Activity,
+                    outState: android.os.Bundle,
+                ) = Unit
+
+                override fun onActivityDestroyed(activity: android.app.Activity) = Unit
+            },
+        )
     }
 
     /** サムネイルは、認証情報を持たない音声用と同じクライアントで取る（ADR-0003）。 */
@@ -99,6 +126,7 @@ class WaveApplication :
 class AppContainer(
     context: Context,
 ) {
+    val appContext: Context = context.applicationContext
     val isDebuggable = context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
 
     /** 画面のライフサイクルより長く走らせる処理（ログイン完了・ログアウト・通信）用。メインスレッドは使わない。 */
@@ -171,6 +199,44 @@ class AppContainer(
 
     /** 端末間の受け渡しの、再生サービスへの入口（Phase 6）。 */
     val handoffHost = HandoffHost()
+
+    /** この端末の身元（Keystore の署名鍵）。 */
+    val deviceIdentity = xyz.mooma0750.wave.connect.DeviceIdentity()
+
+    /** ペアリングした端末の一覧（信頼の根拠）。 */
+    val pairStore = xyz.mooma0750.wave.connect.PairStore(java.io.File(context.noBackupFilesDir, "pairs.bin"))
+
+    /** 中継の場所が設定されているか（local.properties）。無ければ端末間の受け渡しは使えない。 */
+    val connectConfigured: Boolean = BuildConfig.RELAY_URL.isNotEmpty() && BuildConfig.RELAY_HOST.isNotEmpty()
+
+    val relayClient = xyz.mooma0750.wave.connect.RelayClient(deviceIdentity, BuildConfig.RELAY_URL, BuildConfig.RELAY_HOST, appScope)
+
+    /** 前面にある Activity の数（引き取った曲の再生を始めてよいか）。 */
+    @Volatile
+    var startedActivities = 0
+
+    val connect =
+        xyz.mooma0750.wave.connect.ConnectManager(
+            identity = deviceIdentity,
+            pairs = pairStore,
+            relay = relayClient,
+            session = session,
+            host = handoffHost,
+            scope = appScope,
+            uiInForeground = { startedActivities > 0 },
+            ensurePlaybackService = { kotlinx.coroutines.withContext(Dispatchers.Main) { player.controller() } },
+        )
+
+    val pairing =
+        xyz.mooma0750.wave.connect.PairingController(
+            identity = deviceIdentity,
+            pairs = pairStore,
+            relay = relayClient,
+            connect = connect,
+            session = session,
+            scope = appScope,
+            deviceName = android.os.Build.MODEL,
+        )
 
     /** 再生履歴の送信（ADR-0006）。 */
     val playbackHistory = PlaybackHistory(session)

@@ -49,6 +49,12 @@ class PlaybackHistoryTracker(
     /** 引き取ったときに、次の遷移で今の曲に引き継ぐ値（決定 K-8）。 */
     private var seed: Triple<String, Long, Boolean>? = null
 
+    /** 引き取られる側: 相手が受け取ったので、今の再生では送らない。 */
+    fun markHandedOff() {
+        stop()
+        play?.done = true
+    }
+
     /** 引き取られる側: 今の曲について（聴いた時間, 履歴を送り済みか）。 */
     fun handoffState(): Pair<Long, Boolean> {
         val current = play ?: return 0L to false
