@@ -113,6 +113,12 @@ class Media3QueuePlayer(
 
     companion object {
         private val GOOGLE_IMAGE_SIZE = Regex("=w\\d+-h\\d+")
+        private const val SONG_EXTRA = "xyz.mooma0750.wave.SONG"
+        private val songJson = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+
+        /** mediaItemOf で載せた曲。読めなければ null。 */
+        fun songOf(item: MediaItem?): xyz.mooma0750.wave.core.music.Song? =
+            item?.mediaMetadata?.extras?.getString(SONG_EXTRA)?.let { runCatching { songJson.decodeFromString(xyz.mooma0750.wave.core.music.Song.serializer(), it) }.getOrNull() }
 
         /** 検索結果のサムネイル（120px）は再生画面・通知には小さいので、googleusercontent のサイズ指定を大きくする。 */
         fun largeArtwork(url: String): String = if ("googleusercontent.com" in url) url.replace(GOOGLE_IMAGE_SIZE, "=w544-h544") else url
@@ -131,6 +137,8 @@ class Media3QueuePlayer(
                         .setAlbumTitle(song.album?.title)
                         .setArtworkUri(song.thumbnailUrl?.takeIf { it.startsWith("https://") }?.let(::largeArtwork)?.toUri())
                         .setDurationMs(song.durationSeconds?.let { it * 1000L })
+                        // 自アプリの画面の曲のメニュー（アーティスト・アルバムを開く）で使う。公開のメタデータだけ
+                        .setExtras(android.os.Bundle().apply { putString(SONG_EXTRA, songJson.encodeToString(xyz.mooma0750.wave.core.music.Song.serializer(), song)) })
                         .build(),
                 ).build()
         }

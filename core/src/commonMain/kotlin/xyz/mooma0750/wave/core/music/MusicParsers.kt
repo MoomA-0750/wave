@@ -81,6 +81,85 @@ internal object MusicParsers {
         return PlaylistPage(title, songs, continuation)
     }
 
+    /**
+     * アルバムのページ（browse `MPREb_…`）。曲の行にはアーティスト・アルバム・サムネイルが無いので、ヘッダの値で埋める。
+     * 取れなければ null。
+     */
+    fun albumPage(
+        root: JsonObject,
+        browseId: String,
+    ): AlbumPage? {
+        val header = findAll(root, "musicResponsiveHeaderRenderer").firstOrNull() ?: return null
+        val title = textOf(header.path("title")) ?: return null
+        val artists = artistsOf(header.path("straplineTextOne", "runs").arrayItems())
+        val thumbnail = header.path("thumbnail", "musicThumbnailRenderer", "thumbnail", "thumbnails").arrayItems().lastOrNull().path("url").string()
+        val playlistId =
+            header.path("buttons").arrayItems().firstNotNullOfOrNull {
+                it.path("musicPlayButtonRenderer", "playNavigationEndpoint", "watchPlaylistEndpoint", "playlistId").string()
+            }
+        val album = AlbumRef(title, browseId)
+        val shelf =
+            root
+                .path("contents", "twoColumnBrowseResultsRenderer", "secondaryContents", "sectionListRenderer", "contents")
+                .arrayItems()
+                .firstNotNullOfOrNull { it.path("musicShelfRenderer").asObject() }
+        val songs =
+            shelf.path("contents").arrayItems().mapNotNull { row ->
+                val item = row.path("musicResponsiveListItemRenderer").asObject() ?: return@mapNotNull null
+                // 行の2列目以降は再生回数などだけのことが多い。ページ種別付きのアーティストが無ければヘッダのアーティストにする
+                val rowRuns = item.path("flexColumns").arrayItems().drop(1).flatMap { it.path("musicResponsiveListItemFlexColumnRenderer", "text", "runs").arrayItems() }
+                responsiveListItemSong(item)?.let { song ->
+                    song.copy(
+                        artists = typedArtistsOf(rowRuns).ifEmpty { artists },
+                        album = song.album ?: album,
+                        thumbnailUrl = song.thumbnailUrl ?: thumbnail,
+                    )
+                }
+            }
+        return AlbumPage(browseId, title, textOf(header.path("subtitle")), artists, thumbnail, playlistId, songs)
+    }
+
+    /** アーティストのページ（browse `UC…`）。取れなければ null。 */
+    fun artistPage(root: JsonObject): ArtistPage? {
+        val header = root.path("header", "musicImmersiveHeaderRenderer").asObject() ?: root.path("header", "musicVisualHeaderRenderer").asObject() ?: return null
+        val name = textOf(header.path("title")) ?: return null
+        val thumbnail = header.path("thumbnail", "musicThumbnailRenderer", "thumbnail", "thumbnails").arrayItems().lastOrNull().path("url").string()
+        val sections =
+            root
+                .path("contents", "singleColumnBrowseResultsRenderer", "tabs")
+                .firstArrayItem()
+                .path("tabRenderer", "content", "sectionListRenderer", "contents")
+                .arrayItems()
+        val songShelf = sections.firstNotNullOfOrNull { it.path("musicShelfRenderer").asObject() }
+        val topSongs = songShelf.path("contents").arrayItems().mapNotNull { it.path("musicResponsiveListItemRenderer").asObject()?.let(::responsiveListItemSong) }
+        val allSongs =
+            (
+                songShelf.path("title", "runs").firstArrayItem().path("navigationEndpoint", "browseEndpoint", "browseId").string()
+                    ?: songShelf.path("bottomEndpoint", "browseEndpoint", "browseId").string()
+            )?.takeIf { it.startsWith("VL") }?.removePrefix("VL")
+        val albumShelves =
+            sections.mapNotNull { section ->
+                val carousel = section.path("musicCarouselShelfRenderer").asObject() ?: return@mapNotNull null
+                val albums =
+                    carousel.path("contents").arrayItems().mapNotNull { card ->
+                        val item = card.path("musicTwoRowItemRenderer").asObject() ?: return@mapNotNull null
+                        val browse = item.path("navigationEndpoint", "browseEndpoint")
+                        if (pageTypeOfBrowse(browse) != "MUSIC_PAGE_TYPE_ALBUM") return@mapNotNull null
+                        AlbumSummary(
+                            browseId = browse.path("browseId").string() ?: return@mapNotNull null,
+                            title = textOf(item.path("title")) ?: return@mapNotNull null,
+                            subtitle = textOf(item.path("subtitle")),
+                            thumbnailUrl = item.path("thumbnailRenderer", "musicThumbnailRenderer", "thumbnail", "thumbnails").arrayItems().lastOrNull().path("url").string(),
+                        )
+                    }
+                if (albums.isEmpty()) return@mapNotNull null
+                AlbumShelf(textOf(carousel.path("header", "musicCarouselShelfBasicHeaderRenderer", "title")).orEmpty(), albums)
+            }
+        return ArtistPage(name, thumbnail, topSongs, allSongs, albumShelves)
+    }
+
+    private fun textOf(element: JsonElement?): String? = element.path("runs").arrayItems().joinToString("") { it.path("text").string().orEmpty() }.takeIf { it.isNotBlank() }
+
     /** ログインしていないときに返る「ログインしてください」の案内（200 の messageRenderer）だけの応答か。 */
     fun isSignInPrompt(root: JsonObject): Boolean =
         findAll(root, "messageRenderer").isNotEmpty() &&
@@ -127,6 +206,8 @@ internal object MusicParsers {
 
     /** 検索・プレイリストの行（musicResponsiveListItemRenderer）。 */
     fun responsiveListItemSong(item: JsonObject): Song? {
+        // 地域・権利の都合で再生できない行（グレーアウト）は、キューに入れても飛ばされるだけなので除く
+        if (item.path("musicItemRendererDisplayPolicy").string() == GREY_OUT) return null
         val columns = item.path("flexColumns").arrayItems().map { it.path("musicResponsiveListItemFlexColumnRenderer", "text", "runs").arrayItems() }
         val titleRuns = columns.getOrNull(0).orEmpty()
         val videoId =
@@ -171,10 +252,7 @@ internal object MusicParsers {
      * アーティストの runs を取り出す。ページ種別が付いていればそれを使い、無ければ区切り（" • "）の前の文字列をアーティストとみなす。
      */
     private fun artistsOf(runs: List<JsonObject>): List<ArtistRef> {
-        val typed =
-            runs.filter { pageTypeOf(it) in ARTIST_PAGE_TYPES }.mapNotNull { run ->
-                run.path("text").string()?.let { ArtistRef(it, run.path("navigationEndpoint", "browseEndpoint", "browseId").string()) }
-            }
+        val typed = typedArtistsOf(runs)
         if (typed.isNotEmpty()) return typed
         val firstSegment = runs.takeWhile { it.path("text").string() != SEPARATOR }
         return firstSegment
@@ -183,20 +261,22 @@ internal object MusicParsers {
             .map { ArtistRef(it, null) }
     }
 
+    private fun typedArtistsOf(runs: List<JsonObject>): List<ArtistRef> =
+        runs.filter { pageTypeOf(it) in ARTIST_PAGE_TYPES }.mapNotNull { run ->
+            // チャンネル（USER_CHANNEL）はアーティストのページとして開けないので、名前だけにする
+            val browseId = run.path("navigationEndpoint", "browseEndpoint", "browseId").string().takeIf { pageTypeOf(run) == ARTIST_PAGE }
+            run.path("text").string()?.let { ArtistRef(it, browseId) }
+        }
+
     private fun albumOf(runs: List<JsonObject>): AlbumRef? =
         runs.firstOrNull { pageTypeOf(it) == "MUSIC_PAGE_TYPE_ALBUM" }?.let { run ->
             run.path("text").string()?.let { AlbumRef(it, run.path("navigationEndpoint", "browseEndpoint", "browseId").string()) }
         }
 
-    private fun pageTypeOf(run: JsonObject): String? =
-        run
-            .path(
-                "navigationEndpoint",
-                "browseEndpoint",
-                "browseEndpointContextSupportedConfigs",
-                "browseEndpointContextMusicConfig",
-                "pageType",
-            ).string()
+    private fun pageTypeOf(run: JsonObject): String? = pageTypeOfBrowse(run.path("navigationEndpoint", "browseEndpoint"))
+
+    private fun pageTypeOfBrowse(browse: JsonElement?): String? =
+        browse.path("browseEndpointContextSupportedConfigs", "browseEndpointContextMusicConfig", "pageType").string()
 
     private fun nextContinuation(shelf: JsonObject): String? =
         shelf.path("continuations").arrayItems().firstNotNullOfOrNull { it.path("nextContinuationData", "continuation").string() }
@@ -214,7 +294,9 @@ internal object MusicParsers {
     }
 
     private const val SEPARATOR = " • "
-    private val ARTIST_PAGE_TYPES = setOf("MUSIC_PAGE_TYPE_ARTIST", "MUSIC_PAGE_TYPE_USER_CHANNEL")
+    private const val ARTIST_PAGE = "MUSIC_PAGE_TYPE_ARTIST"
+    private val ARTIST_PAGE_TYPES = setOf(ARTIST_PAGE, "MUSIC_PAGE_TYPE_USER_CHANNEL")
+    private const val GREY_OUT = "MUSIC_ITEM_RENDERER_DISPLAY_POLICY_GREY_OUT"
     private val DURATION = Regex("""^\d{1,2}(:\d{2}){1,2}$""")
 }
 

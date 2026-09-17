@@ -60,3 +60,41 @@ data class PlaylistPage(
     val songs: List<Song>,
     val continuation: String?,
 )
+
+/** アルバム・シングルのカード。 */
+@Serializable
+data class AlbumSummary(
+    /** `MPREb_…` */
+    val browseId: String,
+    val title: String,
+    val subtitle: String?,
+    val thumbnailUrl: String?,
+)
+
+/** アルバムのページ。 */
+data class AlbumPage(
+    val browseId: String,
+    val title: String,
+    val subtitle: String?,
+    val artists: List<ArtistRef>,
+    val thumbnailUrl: String?,
+    /** 再生に使う playlistId（`OLAK5uy_…`）。無ければ曲の一覧だけで再生する。 */
+    val playlistId: String?,
+    val songs: List<Song>,
+)
+
+/** アーティストのページ（F1c の範囲: 曲の棚・すべての曲・アルバム類の棚）。 */
+data class ArtistPage(
+    val name: String,
+    val thumbnailUrl: String?,
+    val topSongs: List<Song>,
+    /** 「すべて表示」の先のプレイリスト（VL を除いた ID）。 */
+    val allSongsPlaylistId: String?,
+    /** アルバム・シングルなどの棚。見出しは応答の表示のまま（言語に依存するので判定に使わない）。 */
+    val albumShelves: List<AlbumShelf>,
+)
+
+data class AlbumShelf(
+    val title: String,
+    val albums: List<AlbumSummary>,
+)

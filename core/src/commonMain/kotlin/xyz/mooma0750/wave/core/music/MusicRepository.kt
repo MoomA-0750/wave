@@ -70,6 +70,28 @@ class MusicRepository(
             if (MusicParsers.isSignInPrompt(root)) ParseOutcome.LoggedOutResponse else ParseOutcome.Parsed(MusicParsers.playlistPage(root)).also { lastRendererNames = MusicParsers.rendererNames(root) }
         }
 
+    /** アルバムのページ（`MPREb_…`）。公開データだが、ログイン中の表示に合わせて cookie 付きで取る。 */
+    suspend fun album(browseId: String): CallResult<AlbumPage> =
+        session.call(
+            operation = "browse",
+            block = { it.browse(YouTubeClient.WEB_REMIX, browseId = browseId, setLogin = true) },
+        ) { response ->
+            val root = json(response)
+            lastRendererNames = MusicParsers.rendererNames(root)
+            MusicParsers.albumPage(root, browseId)?.let { ParseOutcome.Parsed(it) } ?: ParseOutcome.Invalid
+        }
+
+    /** アーティストのページ（`UC…`）。 */
+    suspend fun artist(browseId: String): CallResult<ArtistPage> =
+        session.call(
+            operation = "browse",
+            block = { it.browse(YouTubeClient.WEB_REMIX, browseId = browseId, setLogin = true) },
+        ) { response ->
+            val root = json(response)
+            lastRendererNames = MusicParsers.rendererNames(root)
+            MusicParsers.artistPage(root)?.let { ParseOutcome.Parsed(it) } ?: ParseOutcome.Invalid
+        }
+
     /** 直近の応答に含まれていたレンダラ名（値は含まない）。解析が0件だったときの調査用。 */
     var lastRendererNames: Set<String> = emptySet()
         private set

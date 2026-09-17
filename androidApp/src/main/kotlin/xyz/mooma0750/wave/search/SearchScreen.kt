@@ -41,8 +41,7 @@ import xyz.mooma0750.wave.core.session.FailureKind
 fun SearchScreen(
     viewModel: SearchViewModel,
     onSongClick: (Song) -> Unit,
-    onPlayNext: (Song) -> Unit,
-    onAddToQueue: (Song) -> Unit,
+    actions: xyz.mooma0750.wave.navigation.SongActions,
     onBack: () -> Unit,
     bottomBar: @Composable () -> Unit = {},
 ) {
@@ -72,10 +71,7 @@ fun SearchScreen(
             }
             LazyColumn(Modifier.fillMaxSize()) {
                 itemsIndexed(state.songs, key = { index, song -> "$index-${song.videoId}" }) { index, song ->
-                    SongRow(song, onClick = { onSongClick(song) }) {
-                        TextButton(onClick = { onPlayNext(song) }) { Text("次に") }
-                        TextButton(onClick = { onAddToQueue(song) }) { Text("追加") }
-                    }
+                    SongRow(song, onClick = { onSongClick(song) }) { SongMenuButton(song, actions) }
                     if (index == state.songs.lastIndex && state.continuation != null) {
                         LaunchedEffect(state.songs.size) { viewModel.loadMore() }
                     }

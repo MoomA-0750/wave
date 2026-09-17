@@ -43,7 +43,10 @@ import xyz.mooma0750.wave.playback.PlayerConnection
 /** 画面の下に常に出すミニプレーヤー（仮）。 */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MiniPlayer(connection: PlayerConnection) {
+fun MiniPlayer(
+    connection: PlayerConnection,
+    actions: xyz.mooma0750.wave.navigation.SongActions,
+) {
     val (state, controller) = rememberPlayerUiState(connection)
     var showQueue by remember { mutableStateOf(false) }
     var showFull by remember { mutableStateOf(false) }
@@ -86,7 +89,7 @@ fun MiniPlayer(connection: PlayerConnection) {
 
     if (showFull) {
         ModalBottomSheet(onDismissRequest = { showFull = false }, sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
-            FullPlayer(state, controller, connection, onQueue = {
+            FullPlayer(state, controller, connection, actions = actions.closing { showFull = false }, onQueue = {
                 showFull = false
                 showQueue = true
             })
@@ -95,7 +98,7 @@ fun MiniPlayer(connection: PlayerConnection) {
 
     if (showQueue) {
         ModalBottomSheet(onDismissRequest = { showQueue = false }) {
-            QueueSheet(state, connection)
+            QueueSheet(state, controller, connection, actions.closing { showQueue = false })
         }
     }
 }
@@ -103,7 +106,9 @@ fun MiniPlayer(connection: PlayerConnection) {
 @Composable
 private fun QueueSheet(
     state: PlayerUiState,
+    controller: MediaController?,
     connection: PlayerConnection,
+    actions: xyz.mooma0750.wave.navigation.SongActions,
 ) {
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
@@ -125,6 +130,11 @@ private fun QueueSheet(
                         Text(row.title, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = if (current) FontWeight.Bold else FontWeight.Normal)
                         Text(row.artist, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
                     }
+                    controller?.takeIf { index < it.mediaItemCount }?.let { c ->
+                        xyz.mooma0750.wave.playback.Media3QueuePlayer.songOf(c.getMediaItemAt(index))?.let { song ->
+                            xyz.mooma0750.wave.search.SongMenuButton(song, actions, inQueue = true)
+                        }
+                    }
                     if (!current) TextButton(onClick = { scope.launch { connection.remove(row.itemId) } }) { Text("削除") }
                 }
             }
@@ -139,6 +149,7 @@ private fun FullPlayer(
     state: PlayerUiState,
     controller: MediaController?,
     connection: PlayerConnection,
+    actions: xyz.mooma0750.wave.navigation.SongActions,
     onQueue: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
@@ -154,7 +165,12 @@ private fun FullPlayer(
             contentScale = androidx.compose.ui.layout.ContentScale.Crop,
         )
         Text(state.title.orEmpty(), style = MaterialTheme.typography.titleLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        Text(state.artist.orEmpty(), style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(state.artist.orEmpty(), style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+            xyz.mooma0750.wave.playback.Media3QueuePlayer.songOf(controller?.currentMediaItem)?.let { song ->
+                xyz.mooma0750.wave.search.SongMenuButton(song, actions, inQueue = true)
+            }
+        }
         if (state.durationMs > 0) {
             Slider(
                 value = (state.positionMs.toFloat() / state.durationMs).coerceIn(0f, 1f),

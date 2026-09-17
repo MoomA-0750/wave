@@ -45,6 +45,7 @@ fun HomeScreen(
     onSearch: () -> Unit,
     library: LibraryUiState,
     onOpenPlaylist: (PlaylistSummary) -> Unit,
+    songActions: xyz.mooma0750.wave.navigation.SongActions,
 ) {
     val sessionState by container.session.state.collectAsStateWithLifecycle()
     var account by remember(obtainedAtEpochMs) { mutableStateOf<AccountResult?>(null) }
@@ -71,7 +72,7 @@ fun HomeScreen(
         Log.i(WaveApplication.LOG_TAG, "premium=$status session=${container.session.state.value}")
     }
 
-    Scaffold(bottomBar = { MiniPlayer(container.player) }) { padding ->
+    Scaffold(bottomBar = { MiniPlayer(container.player, songActions) }) { padding ->
         LazyColumn(Modifier.fillMaxSize().padding(padding)) {
             item {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

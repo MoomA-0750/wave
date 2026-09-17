@@ -65,8 +65,7 @@ fun PlaylistScreen(
     viewModel: PlaylistViewModel,
     onPlay: (songs: List<Song>, index: Int, continuation: String?) -> Unit,
     onShufflePlay: (songs: List<Song>, continuation: String?) -> Unit,
-    onPlayNext: (Song) -> Unit,
-    onAddToQueue: (Song) -> Unit,
+    actions: xyz.mooma0750.wave.navigation.SongActions,
     onBack: () -> Unit,
     bottomBar: @Composable () -> Unit,
 ) {
@@ -90,10 +89,7 @@ fun PlaylistScreen(
             state.failure?.let { item { Text(failureMessage(it), Modifier.padding(16.dp)) } }
             if (!state.loading && state.failure == null && state.songs.isEmpty()) item { Text("曲がありません", Modifier.padding(16.dp)) }
             itemsIndexed(state.songs, key = { index, song -> "$index-${song.videoId}" }) { index, song ->
-                SongRow(song, onClick = { onPlay(state.songs, index, state.continuation) }) {
-                    TextButton(onClick = { onPlayNext(song) }) { Text("次に") }
-                    TextButton(onClick = { onAddToQueue(song) }) { Text("追加") }
-                }
+                SongRow(song, onClick = { onPlay(state.songs, index, state.continuation) }) { xyz.mooma0750.wave.search.SongMenuButton(song, actions) }
                 if (index == state.songs.lastIndex && state.continuation != null) LaunchedEffect(state.songs.size) { viewModel.loadMore() }
             }
             if (state.loading) item { CircularProgressIndicator(Modifier.padding(16.dp)) }

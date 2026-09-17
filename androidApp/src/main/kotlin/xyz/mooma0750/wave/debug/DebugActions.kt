@@ -17,6 +17,9 @@ import xyz.mooma0750.wave.core.session.CallResult
 object DebugActions {
     private const val EXTRA = "debug_action"
 
+    /** debug の intent から画面を開く（MainActivity が購読する）。 */
+    val navigation = kotlinx.coroutines.flow.MutableSharedFlow<xyz.mooma0750.wave.navigation.Screen>(extraBufferCapacity = 4)
+
     fun handle(
         intent: Intent?,
         container: AppContainer,
@@ -38,14 +41,28 @@ object DebugActions {
                         is CallResult.Failed -> Log.i(WaveApplication.LOG_TAG, "debug search failed ${result.kind}")
                     }
                 "add_unplayable_next" -> player.addNext(DebugPlayback.unplayableSong)
-                "play_public_playlist" ->
+                "play_public_playlist", "play_public_playlist_shuffle" ->
                     when (val page = container.music.playlist(DebugPlayback.PUBLIC_PLAYLIST_ID)) {
-                        is CallResult.Ok -> player.playFrom(page.value.songs, 0, DebugPlayback.PUBLIC_PLAYLIST_ID, page.value.continuation)
+                        is CallResult.Ok -> player.playFrom(page.value.songs, 0, DebugPlayback.PUBLIC_PLAYLIST_ID, page.value.continuation, shuffle = action.endsWith("shuffle"))
                         is CallResult.Failed -> Log.i(WaveApplication.LOG_TAG, "debug playlist failed ${page.kind}")
                     }
                 "last_item" -> player.controller().run { seekTo(mediaItemCount - 1, 0L) }
                 "near_end" -> player.controller().run { if (duration > 10_000) seekTo(duration - 5_000) }
                 "logout" -> container.logout()
+                "shuffle" -> player.shuffleUpcoming()
+                "repeat" -> {
+                    player.cycleRepeatMode()
+                    Log.i(WaveApplication.LOG_TAG, "debug repeat=${player.controller().repeatMode}")
+                }
+                "open_artist" -> intent.getStringExtra("browse_id")?.let { navigation.tryEmit(xyz.mooma0750.wave.navigation.Screen.Artist(it, "")) }
+                "open_album" -> intent.getStringExtra("browse_id")?.let { navigation.tryEmit(xyz.mooma0750.wave.navigation.Screen.Album(it, "")) }
+                "play_album" ->
+                    intent.getStringExtra("browse_id")?.let { id ->
+                        when (val page = container.music.album(id)) {
+                            is CallResult.Ok -> player.playFrom(page.value.songs, 0, page.value.playlistId, null)
+                            is CallResult.Failed -> Log.i(WaveApplication.LOG_TAG, "debug album failed ${page.kind}")
+                        }
+                    }
                 else -> Log.i(WaveApplication.LOG_TAG, "debug action unknown")
             }
         }

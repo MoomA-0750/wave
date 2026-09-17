@@ -14,6 +14,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -23,7 +24,13 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import xyz.mooma0750.wave.core.auth.AuthState
+import xyz.mooma0750.wave.artist.AlbumScreen
+import xyz.mooma0750.wave.artist.AlbumViewModel
+import xyz.mooma0750.wave.artist.ArtistScreen
+import xyz.mooma0750.wave.artist.ArtistViewModel
 import xyz.mooma0750.wave.debug.DebugActions
+import xyz.mooma0750.wave.navigation.Screen
+import xyz.mooma0750.wave.navigation.SongActions
 import xyz.mooma0750.wave.home.HomeScreen
 import xyz.mooma0750.wave.login.LoginScreen
 import xyz.mooma0750.wave.login.LoginViewModel
@@ -54,58 +61,99 @@ class MainActivity : ComponentActivity() {
                 val loginGeneration by container.loginGeneration.collectAsStateWithLifecycle()
                 // 失効したときに、ログイン済みのまま再ログイン画面を出す。プロセスが復元されたら出さない（保存しない）
                 var reLogin by remember { mutableStateOf(false) }
-                // 仮の画面遷移（Phase 4 で作り直す）
-                var searching by remember { mutableStateOf(false) }
-                var openPlaylist by remember { mutableStateOf<PlaylistSummary?>(null) }
+                // 仮の画面遷移（Phase 4 で作り直す）。ホームの上に画面を積む
+                val stack = remember { mutableStateListOf<Screen>() }
+                val scope = rememberCoroutineScope()
+                val songActions =
+                    remember {
+                        SongActions(
+                            playNext = { song -> scope.launch { container.player.addNext(song) } },
+                            addToQueue = { song -> scope.launch { container.player.addToEnd(song) } },
+                            openArtist = { artist -> artist.browseId?.let { stack += Screen.Artist(it, artist.name) } },
+                            openAlbum = { album -> album.browseId?.let { stack += Screen.Album(it, album.title) } },
+                        )
+                    }
+                val miniPlayer: @Composable () -> Unit = { MiniPlayer(container.player, songActions) }
+                LaunchedEffect(container) {
+                    DebugActions.navigation.collect { stack += it }
+                }
 
                 when (val state = authState) {
                     AuthState.Restoring -> Progress()
                     AuthState.LoggingOut -> Progress("ログアウトしています…")
                     is AuthState.LoggedIn -> {
-                        LaunchedEffect(loginGeneration) { reLogin = false }
+                        LaunchedEffect(loginGeneration) {
+                            reLogin = false
+                            stack.clear()
+                        }
+                        if (stack.isNotEmpty()) BackHandler { stack.removeAt(stack.lastIndex) }
+                        val pop: () -> Unit = { if (stack.isNotEmpty()) stack.removeAt(stack.lastIndex) }
                         if (reLogin) {
                             BackHandler { reLogin = false }
                             LoginScreen(
                                 viewModel(key = "relogin-$loginGeneration") { LoginViewModel(container) },
                                 onCancel = { reLogin = false },
                             )
-                        } else if (openPlaylist != null) {
-                            val playlist = requireNotNull(openPlaylist)
-                            BackHandler { openPlaylist = null }
-                            val scope = rememberCoroutineScope()
-                            PlaylistScreen(
-                                viewModel(key = "playlist-$loginGeneration-${playlist.playlistId}") { PlaylistViewModel(container.music, playlist.playlistId, playlist.title) },
-                                onPlay = { songs, index, continuation -> scope.launch { container.player.playFrom(songs, index, playlist.playlistId, continuation) } },
-                                onShufflePlay = { songs, continuation ->
-                                    scope.launch { container.player.playFrom(songs, 0, playlist.playlistId, continuation, shuffle = true) }
-                                },
-                                onPlayNext = { song -> scope.launch { container.player.addNext(song) } },
-                                onAddToQueue = { song -> scope.launch { container.player.addToEnd(song) } },
-                                onBack = { openPlaylist = null },
-                                bottomBar = { MiniPlayer(container.player) },
-                            )
-                        } else if (searching) {
-                            BackHandler { searching = false }
-                            val scope = rememberCoroutineScope()
-                            SearchScreen(
-                                viewModel(key = "search-$loginGeneration") { SearchViewModel(container.music) },
-                                onSongClick = { song -> scope.launch { container.player.playSong(song) } },
-                                onPlayNext = { song -> scope.launch { container.player.addNext(song) } },
-                                onAddToQueue = { song -> scope.launch { container.player.addToEnd(song) } },
-                                onBack = { searching = false },
-                                bottomBar = { MiniPlayer(container.player) },
-                            )
                         } else {
-                            val library = viewModel(key = "library-$loginGeneration") { LibraryViewModel(container.music) }
-                            val libraryState by library.state.collectAsStateWithLifecycle()
-                            HomeScreen(
-                                container,
-                                obtainedAtEpochMs = state.obtainedAtEpochMs,
-                                onReLogin = { reLogin = true },
-                                onSearch = { searching = true },
-                                library = libraryState,
-                                onOpenPlaylist = { openPlaylist = it },
-                            )
+                            when (val screen = stack.lastOrNull()) {
+                                null -> {
+                                    val library = viewModel(key = "library-$loginGeneration") { LibraryViewModel(container.music) }
+                                    val libraryState by library.state.collectAsStateWithLifecycle()
+                                    HomeScreen(
+                                        container,
+                                        obtainedAtEpochMs = state.obtainedAtEpochMs,
+                                        onReLogin = { reLogin = true },
+                                        onSearch = { stack += Screen.Search },
+                                        library = libraryState,
+                                        onOpenPlaylist = { stack += Screen.Playlist(it) },
+                                        songActions = songActions,
+                                    )
+                                }
+                                Screen.Search ->
+                                    SearchScreen(
+                                        viewModel(key = "search-$loginGeneration") { SearchViewModel(container.music) },
+                                        onSongClick = { song -> scope.launch { container.player.playSong(song) } },
+                                        actions = songActions,
+                                        onBack = pop,
+                                        bottomBar = miniPlayer,
+                                    )
+                                is Screen.Playlist -> {
+                                    val playlist = screen.summary
+                                    PlaylistScreen(
+                                        viewModel(key = "playlist-$loginGeneration-${playlist.playlistId}") { PlaylistViewModel(container.music, playlist.playlistId, playlist.title) },
+                                        onPlay = { songs, index, continuation -> scope.launch { container.player.playFrom(songs, index, playlist.playlistId, continuation) } },
+                                        onShufflePlay = { songs, continuation ->
+                                            scope.launch { container.player.playFrom(songs, 0, playlist.playlistId, continuation, shuffle = true) }
+                                        },
+                                        actions = songActions,
+                                        onBack = pop,
+                                        bottomBar = miniPlayer,
+                                    )
+                                }
+                                is Screen.Artist ->
+                                    ArtistScreen(
+                                        viewModel(key = "artist-$loginGeneration-${screen.browseId}") { ArtistViewModel(container.music, screen.browseId) },
+                                        title = screen.name,
+                                        actions = songActions,
+                                        // 曲の棚は5曲だけなので、最後まで行ったら最後の曲からラジオにつなぐ
+                                        onPlay = { songs, index -> scope.launch { container.player.playFrom(songs, index, playlistId = null, continuation = null) } },
+                                        onOpenAllSongs = { id, name -> stack += Screen.Playlist(PlaylistSummary(id, name, null, null)) },
+                                        onOpenAlbum = { album -> stack += Screen.Album(album.browseId, album.title) },
+                                        onBack = pop,
+                                        bottomBar = miniPlayer,
+                                    )
+                                is Screen.Album ->
+                                    AlbumScreen(
+                                        viewModel(key = "album-$loginGeneration-${screen.browseId}") { AlbumViewModel(container.music, screen.browseId) },
+                                        title = screen.title,
+                                        actions = songActions,
+                                        onPlay = { page, index, shuffle ->
+                                            scope.launch { container.player.playFrom(page.songs, index, page.playlistId, continuation = null, shuffle = shuffle) }
+                                        },
+                                        onBack = pop,
+                                        bottomBar = miniPlayer,
+                                    )
+                            }
                         }
                     }
                     AuthState.LoggedOut, is AuthState.Unreadable ->
