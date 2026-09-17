@@ -82,9 +82,12 @@ class MainActivity : ComponentActivity() {
                     AuthState.Restoring -> Progress()
                     AuthState.LoggingOut -> Progress("ログアウトしています…")
                     is AuthState.LoggedIn -> {
+                        // ログインし直したら、前のログインで開いた画面を閉じる（最初の表示では閉じない）
+                        var shownGeneration by remember { mutableStateOf(loginGeneration) }
                         LaunchedEffect(loginGeneration) {
                             reLogin = false
-                            stack.clear()
+                            if (shownGeneration != loginGeneration) stack.clear()
+                            shownGeneration = loginGeneration
                         }
                         if (stack.isNotEmpty()) BackHandler { stack.removeAt(stack.lastIndex) }
                         val pop: () -> Unit = { if (stack.isNotEmpty()) stack.removeAt(stack.lastIndex) }

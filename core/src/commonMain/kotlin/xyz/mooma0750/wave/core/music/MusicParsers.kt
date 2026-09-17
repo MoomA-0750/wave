@@ -57,8 +57,23 @@ internal object MusicParsers {
                 title = title,
                 subtitle = item.path("subtitle", "runs").arrayItems().joinToString("") { it.path("text").string().orEmpty() }.takeIf { it.isNotBlank() },
                 thumbnailUrl = item.path("thumbnailRenderer", "musicThumbnailRenderer", "thumbnail", "thumbnails").arrayItems().lastOrNull().path("url").string(),
+                // 実アカウントのライブラリで、自分のプレイリストのカードだけがメニューに EDIT を持つことを確かめた（2026-09-17、アイコン名だけ）
+                editable = EDIT_ICON in menuIconsOf(item),
             )
         }.distinctBy { it.playlistId }
+
+    private fun menuIconsOf(card: JsonObject): Set<String> {
+        val icons = mutableSetOf<String>()
+        fun walk(element: JsonElement?) {
+            when (element) {
+                is JsonObject -> element.forEach { (name, value) -> if (name == "iconType") value.string()?.let { icons += it } else walk(value) }
+                is JsonArray -> element.forEach(::walk)
+                else -> Unit
+            }
+        }
+        walk(card.path("menu"))
+        return icons
+    }
 
     /** プレイリストの最初のページ（browse VL<id>）と続きのページ（appendContinuationItemsAction）。 */
     fun playlistPage(root: JsonObject): PlaylistPage {
@@ -125,10 +140,12 @@ internal object MusicParsers {
         val title = textOf(header.path("title")) ?: return null
         val artists = artistsOf(header.path("straplineTextOne", "runs").arrayItems())
         val thumbnail = header.path("thumbnail", "musicThumbnailRenderer", "thumbnail", "thumbnails").arrayItems().lastOrNull().path("url").string()
+        // 匿名の応答はヘッダの再生ボタン。無ければ canonical URL の list=、それも無ければアルバムの playlistId（OLAK5uy_）を探す
         val playlistId =
             header.path("buttons").arrayItems().firstNotNullOfOrNull {
                 it.path("musicPlayButtonRenderer", "playNavigationEndpoint", "watchPlaylistEndpoint", "playlistId").string()
-            }
+            } ?: root.path("microformat", "microformatDataRenderer", "urlCanonical").string()?.substringAfter("list=", "")?.substringBefore('&')?.takeIf { it.startsWith(ALBUM_PLAYLIST_PREFIX) }
+                ?: findAll(root, "watchPlaylistEndpoint").firstNotNullOfOrNull { it.path("playlistId").string()?.takeIf { id -> id.startsWith(ALBUM_PLAYLIST_PREFIX) } }
         val album = AlbumRef(title, browseId)
         val shelf =
             root
@@ -195,8 +212,35 @@ internal object MusicParsers {
     /** ログインしていないときに返る「ログインしてください」の案内（200 の messageRenderer）だけの応答か。 */
     fun isSignInPrompt(root: JsonObject): Boolean =
         findAll(root, "messageRenderer").isNotEmpty() &&
-            findAll(root, "musicTwoRowItemRenderer").isEmpty() &&
-            findAll(root, "musicResponsiveListItemRenderer").isEmpty()
+            // 空のプレイリストも「曲がありません」の messageRenderer を持つ。ヘッダや曲の棚があればログインの案内ではない
+            CONTENT_RENDERERS.none { findAll(root, it).isNotEmpty() }
+
+    /** プレイリストのカードごとの、メニューの項目のアイコン名（値の無い列挙名だけ）。編集できるかの手がかりを調べる用（決定 E7）。 */
+    fun playlistCardMenuIcons(root: JsonObject): List<Set<String>> = findAll(root, "musicTwoRowItemRenderer").map(::menuIconsOf)
+
+    /** key が現れる場所を、キー名の並び（配列は [] ）だけで集める。値は含めない（決定 E7）。 */
+    fun keyPaths(
+        root: JsonElement,
+        key: String,
+    ): Set<String> {
+        val paths = mutableSetOf<String>()
+        fun walk(
+            element: JsonElement,
+            path: String,
+        ) {
+            when (element) {
+                is JsonObject ->
+                    element.forEach { (name, value) ->
+                        if (name == key) paths += path
+                        walk(value, if (path.isEmpty()) name else "$path.$name")
+                    }
+                is JsonArray -> element.forEach { walk(it, "$path[]") }
+                else -> Unit
+            }
+        }
+        walk(root, "")
+        return paths
+    }
 
     /** 応答のレンダラ名だけを集める（値は含めない）。解析が0件だったときの原因調査用（決定 E7）。 */
     fun rendererNames(root: JsonElement): Set<String> {
@@ -327,6 +371,17 @@ internal object MusicParsers {
 
     private const val SEPARATOR = " • "
     private const val ARTIST_PAGE = "MUSIC_PAGE_TYPE_ARTIST"
+    private const val ALBUM_PLAYLIST_PREFIX = "OLAK5uy_"
+    private const val EDIT_ICON = "EDIT"
+    private val CONTENT_RENDERERS =
+        listOf(
+            "musicTwoRowItemRenderer",
+            "musicResponsiveListItemRenderer",
+            "musicResponsiveHeaderRenderer",
+            "musicDetailHeaderRenderer",
+            "musicEditablePlaylistDetailHeaderRenderer",
+            "musicPlaylistShelfRenderer",
+        )
     const val EDITABLE_PLAYLIST_HEADER = "musicEditablePlaylistDetailHeaderRenderer"
     private val ARTIST_PAGE_TYPES = setOf(ARTIST_PAGE, "MUSIC_PAGE_TYPE_USER_CHANNEL")
     private const val GREY_OUT = "MUSIC_ITEM_RENDERER_DISPLAY_POLICY_GREY_OUT"

@@ -52,6 +52,8 @@ data class PlaylistSummary(
     val title: String,
     val subtitle: String?,
     val thumbnailUrl: String?,
+    /** 自分が編集できる（カードのメニューに編集がある）。追加先の一覧に使う。 */
+    val editable: Boolean = false,
 )
 
 /** プレイリストの1ページ。 */

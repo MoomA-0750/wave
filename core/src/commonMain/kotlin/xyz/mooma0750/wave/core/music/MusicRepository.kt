@@ -50,8 +50,17 @@ class MusicRepository(
             block = { it.browse(YouTubeClient.WEB_REMIX, browseId = LIBRARY_PLAYLISTS, setLogin = true) },
         ) { response ->
             val root = json(response)
-            if (MusicParsers.isSignInPrompt(root)) ParseOutcome.LoggedOutResponse else ParseOutcome.Parsed(MusicParsers.playlists(root)).also { lastRendererNames = MusicParsers.rendererNames(root) }
+            if (MusicParsers.isSignInPrompt(root)) {
+                ParseOutcome.LoggedOutResponse
+            } else {
+                lastCardMenuIcons = MusicParsers.playlistCardMenuIcons(root)
+                ParseOutcome.Parsed(MusicParsers.playlists(root)).also { lastRendererNames = MusicParsers.rendererNames(root) }
+            }
         }
+
+    /** 直近のライブラリの応答の、カードごとのメニューのアイコン名。調査用。 */
+    var lastCardMenuIcons: List<Set<String>> = emptyList()
+        private set
 
     /** プレイリストの曲。continuation を渡したら続きのページ。高く評価した曲は playlistId = LIKED_SONGS。 */
     suspend fun playlist(
@@ -69,7 +78,8 @@ class MusicRepository(
             },
         ) { response ->
             val root = json(response)
-            if (MusicParsers.isSignInPrompt(root)) ParseOutcome.LoggedOutResponse else ParseOutcome.Parsed(MusicParsers.playlistPage(root)).also { lastRendererNames = MusicParsers.rendererNames(root) }
+            lastRendererNames = MusicParsers.rendererNames(root)
+            if (MusicParsers.isSignInPrompt(root)) ParseOutcome.LoggedOutResponse else ParseOutcome.Parsed(MusicParsers.playlistPage(root))
         }
 
     /** 曲の評価（next の最初の応答から取る）。 */
@@ -168,6 +178,7 @@ class MusicRepository(
         ) { response ->
             val root = json(response)
             lastRendererNames = MusicParsers.rendererNames(root)
+            lastKeyPaths = MusicParsers.keyPaths(root, "playlistId")
             MusicParsers.albumPage(root, browseId)?.let { ParseOutcome.Parsed(it) } ?: ParseOutcome.Invalid
         }
 
@@ -181,6 +192,10 @@ class MusicRepository(
             lastRendererNames = MusicParsers.rendererNames(root)
             MusicParsers.artistPage(root)?.let { ParseOutcome.Parsed(it) } ?: ParseOutcome.Invalid
         }
+
+    /** 直近のアルバムの応答で playlistId が現れた場所（キー名だけ）。実アカウントの応答の形を調べる用。 */
+    var lastKeyPaths: Set<String> = emptySet()
+        private set
 
     /** 直近の応答に含まれていたレンダラ名（値は含まない）。解析が0件だったときの調査用。 */
     var lastRendererNames: Set<String> = emptySet()

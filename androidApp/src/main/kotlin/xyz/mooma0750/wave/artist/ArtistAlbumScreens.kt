@@ -95,6 +95,7 @@ class AlbumViewModel(
                     is CallResult.Ok -> {
                         val page = result.value
                         Log.i(WaveApplication.LOG_TAG, "album songs=${page.songs.size} playlist=${page.playlistId != null}" + if (page.songs.isEmpty()) " renderers=${music.lastRendererNames}" else "")
+                        if (page.playlistId == null) Log.i(WaveApplication.LOG_TAG, "album playlistId paths=${music.lastKeyPaths}")
                         PageUiState(page = page)
                     }
                     is CallResult.Failed -> {

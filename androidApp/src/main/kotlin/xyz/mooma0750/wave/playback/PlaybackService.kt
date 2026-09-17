@@ -316,6 +316,9 @@ class PlaybackService : MediaSessionService() {
             session: MediaSession,
             controller: MediaSession.ControllerInfo,
         ): MediaSession.ConnectionResult {
+            if (container.isDebuggable) {
+                Log.i(WaveApplication.LOG_TAG, "connect package=${controller.packageName} uid=${controller.uid} trusted=${controller.isTrusted} notification=${session.isMediaNotificationController(controller)} version=${controller.controllerVersion}")
+            }
             if (isOwnNotificationController(session, controller)) {
                 // 通知用コントローラーには、評価のボタンのコマンドだけを足す（受けるときにトークンを確かめる）
                 return MediaSession.ConnectionResult
@@ -334,6 +337,9 @@ class PlaybackService : MediaSessionService() {
                 // 信頼されていない他アプリは、Media3 のコントローラーでもレガシー（MediaBrowser で公開 Service につなぐ）でも拒否する。
                 // レガシーで受け入れると、プラットフォームのセッションのトークンを渡すことになり、PlaybackState の custom action の
                 // extras（通知の評価ボタンのトークン）とキューを読ませてしまう（F1d inner gate 指摘1）
+                if (!controller.isTrusted) {
+                    Log.w(WaveApplication.LOG_TAG, "controller rejected package=${controller.packageName} uid=${controller.uid} version=${controller.controllerVersion}")
+                }
                 return if (controller.isTrusted) {
                     MediaSession.ConnectionResult
                         .AcceptedResultBuilder(session, controller)
@@ -379,6 +385,17 @@ class PlaybackService : MediaSessionService() {
                     else -> null
                 }
             return Futures.immediateFuture(SessionResult(if (handled != null) SessionResult.RESULT_SUCCESS else SessionError.ERROR_BAD_VALUE))
+        }
+
+        override fun onMediaButtonEvent(
+            session: MediaSession,
+            controllerInfo: MediaSession.ControllerInfo,
+            intent: Intent,
+        ): Boolean {
+            if (container.isDebuggable) {
+                Log.i(WaveApplication.LOG_TAG, "media button package=${controllerInfo.packageName} uid=${controllerInfo.uid} trusted=${controllerInfo.isTrusted} notification=${session.isMediaNotificationController(controllerInfo)} version=${controllerInfo.controllerVersion}")
+            }
+            return super.onMediaButtonEvent(session, controllerInfo, intent)
         }
 
         override fun onPostConnect(

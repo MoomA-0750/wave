@@ -46,6 +46,33 @@ class LibraryParsersTest {
         assertTrue(names.none { it.contains(" ") || it.startsWith("http") })
     }
 
+    @Test
+    fun onlyCardsWithAnEditMenuAreEditable() {
+        // 合成: 自分のプレイリスト（EDIT あり）と、保存しただけのプレイリスト（BOOKMARK だけ）
+        fun card(id: String, icons: List<String>) =
+            """{"musicTwoRowItemRenderer":{"title":{"runs":[{"text":"$id"}]},"navigationEndpoint":{"browseEndpoint":{"browseId":"VL$id"}},
+            "menu":{"menuRenderer":{"items":[${icons.joinToString(",") { """{"menuNavigationItemRenderer":{"icon":{"iconType":"$it"}}}""" }}]}}}}"""
+        val root = Json.parseToJsonElement("""{"items":[${card("PLmine", listOf("MUSIC_SHUFFLE", "EDIT", "DELETE"))},${card("PLsaved", listOf("BOOKMARK", "SHARE"))}]}""") as JsonObject
+        val playlists = MusicParsers.playlists(root).associate { it.playlistId to it.editable }
+        assertEquals(mapOf("PLmine" to true, "PLsaved" to false), playlists)
+        assertTrue(MusicParsers.playlists(fixture("browse_home_playlists")).none { it.editable })
+    }
+
+    @Test
+    fun emptyPlaylistIsNotASignInPrompt() {
+        // 実アカウントの空のプレイリストの形（レンダラ名だけを実機で確認、2026-09-17）を合成する
+        val empty =
+            Json.parseToJsonElement(
+                """{"header":{"musicEditablePlaylistDetailHeaderRenderer":{"header":{"musicResponsiveHeaderRenderer":{"title":{"runs":[{"text":"x"}]}}}}},
+                "contents":{"twoColumnBrowseResultsRenderer":{"secondaryContents":{"sectionListRenderer":{"contents":[{"musicPlaylistShelfRenderer":{"contents":[
+                {"musicSideAlignedItemRenderer":{"startItems":[{"messageRenderer":{"text":{"runs":[{"text":"no songs"}]}}}]}}]}}]}}}}}""",
+            ) as JsonObject
+        assertFalse(MusicParsers.isSignInPrompt(empty))
+        val page = MusicParsers.playlistPage(empty)
+        assertTrue(page.songs.isEmpty())
+        assertTrue(page.editable)
+    }
+
     private fun fixture(name: String): JsonObject =
         Json.parseToJsonElement(requireNotNull(javaClass.getResource("/fixtures/$name.json")).readText()) as JsonObject
 }
