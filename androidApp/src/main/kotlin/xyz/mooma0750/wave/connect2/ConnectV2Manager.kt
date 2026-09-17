@@ -96,6 +96,24 @@ class ConnectV2Manager(
     private val mutableEvents = MutableSharedFlow<ClientEvent>(extraBufferCapacity = 16)
     val events: SharedFlow<ClientEvent> = mutableEvents
 
+    /** 画面の表示（件数と真偽値だけ）。 */
+    data class Info(
+        val loaded: Boolean = false,
+        val inHousehold: Boolean = false,
+        val members: Int = 0,
+        val isWriter: Boolean = false,
+        val retreated: Boolean = false,
+        val storeResetPending: Boolean = false,
+    )
+
+    private val mutableInfo = MutableStateFlow(Info())
+    val info: StateFlow<Info> = mutableInfo
+
+    private fun refreshInfo() {
+        val engine = client
+        mutableInfo.value = Info(engine != null, engine?.householdId != null, engine?.members?.size ?: 0, engine?.isWriter == true, engine?.hasRetreated == true, engine?.storeResetPending == true)
+    }
+
     private val mutableUnreadable = MutableStateFlow(false)
 
     /** 端末の保存が読めない（作り直すまで Connect v2 を使わない）。 */
@@ -143,6 +161,7 @@ class ConnectV2Manager(
             )
         host.listener = listener
         refreshAccountTag()
+        refreshInfo()
     }
 
     private val effects =
@@ -167,10 +186,12 @@ class ConnectV2Manager(
                 if (event is ClientEvent.RemoteChanged) mutableRemote.value = RemoteView(event.writer, event.cursor, event.accountMatches)
                 Log.i(WaveApplication.LOG_TAG, "connect-v2 event=${event::class.simpleName}")
                 mutableEvents.tryEmit(event)
+                refreshInfo()
             }
 
             override fun persist(state: ClientPersisted) {
                 runCatching { storage.save(state) }.onFailure { Log.i(WaveApplication.LOG_TAG, "connect-v2 persist failed type=${it::class.simpleName}") }
+                refreshInfo()
             }
 
             override fun accountTag(): String? = accountTag?.takeIf { tagGeneration == session.loginGenerationId() }
@@ -328,6 +349,7 @@ class ConnectV2Manager(
                 if (relay.status.value == RelayClientV2.Status.Connected) {
                     post {
                         client?.tick()
+                        refreshInfo()
                         // 家の ID が分かった・ログインが変わったら、アカウントタグを計算し直す
                         if (client?.householdId != null && (accountTag == null || tagGeneration != session.loginGenerationId())) refreshAccountTag()
                     }

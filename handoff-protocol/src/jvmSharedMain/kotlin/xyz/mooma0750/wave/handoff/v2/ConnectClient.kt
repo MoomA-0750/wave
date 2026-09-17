@@ -165,6 +165,9 @@ class ConnectClient(
 
     val knownStoreId: String? get() = storeId
 
+    /** サーバーの状態が作り直されたと気づき、本人の確認を待っている（L-12）。 */
+    val storeResetPending: Boolean get() = pendingStoreId != null
+
     val floors: Pair<Long, Long> get() = cursorFloor to queueFloor
 
     /** 加入の手順で、家の鎖を使う（A が B を加えるときの add の署名に使う）。 */
