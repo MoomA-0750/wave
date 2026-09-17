@@ -16,8 +16,10 @@ import kotlin.random.Random
 /**
  * いつ再生履歴を送るかを決める（ADR-0006 の 1・3）。メインスレッドだけから使う。
  * - 再生1回は曲の遷移で始まり次の遷移で終わる（1曲リピートの繰り返しも遷移）。送るのは1回だけ
- * - 聴いた時間は位置ではなく、単調時計で isPlaying の区間だけを足す（シークで一気に達しない）
+ * - 聴いた時間は ListenCounter（単調時計で再生中の区間だけ）
  * - 統計 URL は遷移後に最初に再生が始まったときに1回だけキャッシュから取る。無ければ送らない（統計のために解決しない）
+ * - 待ちは一時停止・遷移で取り消すが、始まった送信は取り消さない（取り消すと送ったかどうか分からないまま失われる）。
+ *   ログアウト・切り替えでの取り消しは WaveSession の世代のスコープが担う
  */
 class PlaybackHistoryTracker(
     private val player: Player,
@@ -33,15 +35,14 @@ class PlaybackHistoryTracker(
         val cpn: String,
         val durationHintMs: Long?,
     ) {
-        var listenedMs = 0L
-        var playingSinceMs: Long? = null
+        var counter: ListenCounter? = null
         var looked = false
         var stream: ResolvedStream? = null
         var done = false
     }
 
     private var play: Play? = null
-    private var timer: Job? = null
+    private var waiting: Job? = null
 
     fun onMediaItemTransition() {
         stop()
@@ -64,7 +65,7 @@ class PlaybackHistoryTracker(
 
     private fun started() {
         val current = play ?: return
-        if (current.done || current.playingSinceMs != null) return
+        if (current.done) return
         if (!current.looked) {
             current.looked = true
             val cached = cache.peek(current.videoId)
@@ -72,30 +73,28 @@ class PlaybackHistoryTracker(
             Log.i(WaveApplication.LOG_TAG, "history play started cached=${cached != null} stats=${cached?.hasPlaybackStats}")
         }
         if (current.stream == null) return
-        current.playingSinceMs = elapsedMs()
-        val remaining = (thresholdMs(current) - current.listenedMs).coerceAtLeast(0)
-        timer = scope.launch {
-            delay(remaining)
-            send(current)
-        }
+        val counter =
+            current.counter ?: ListenCounter(ListenCounter.thresholdFor(player.duration.takeIf { it != C.TIME_UNSET } ?: current.durationHintMs)).also {
+                current.counter = it
+            }
+        val remaining = counter.start(elapsedMs()) ?: return
+        waiting =
+            scope.launch {
+                delay(remaining)
+                waiting = null
+                current.done = true
+                // 待ちとは別の Job で送る（stop で取り消されないように）
+                scope.launch { send(current) }
+            }
     }
 
     private fun stop() {
-        timer?.cancel()
-        timer = null
-        val current = play ?: return
-        current.playingSinceMs?.let { current.listenedMs += elapsedMs() - it }
-        current.playingSinceMs = null
-    }
-
-    private fun thresholdMs(current: Play): Long {
-        val duration = player.duration.takeIf { it != C.TIME_UNSET && it > 0 } ?: current.durationHintMs ?: return THRESHOLD_MS
-        return if (duration < THRESHOLD_MS) (duration / 2).coerceAtLeast(MIN_THRESHOLD_MS) else THRESHOLD_MS
+        waiting?.cancel()
+        waiting = null
+        play?.counter?.stop(elapsedMs())
     }
 
     private suspend fun send(current: Play) {
-        if (play !== current || current.done) return
-        current.done = true
         val stream = current.stream ?: return
         if (!enabled()) {
             Log.i(WaveApplication.LOG_TAG, "history skipped disabled")
@@ -107,10 +106,5 @@ class PlaybackHistoryTracker(
             WaveApplication.LOG_TAG,
             "history outcome=${outcome::class.simpleName}" + if (outcome is StatsOutcome.Sent) " status=${outcome.status} html=${outcome.html}" else "",
         )
-    }
-
-    private companion object {
-        const val THRESHOLD_MS = 30_000L
-        const val MIN_THRESHOLD_MS = 5_000L
     }
 }

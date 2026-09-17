@@ -2,7 +2,7 @@
 
 ## 決定
 
-`Cookie`・`Authorization`・`X-Goog-AuthUser` を持つリクエストは、`https://music.youtube.com:443/youtubei/v1/` 以下にしか送らない。
+`Cookie`・`Authorization`・`X-Goog-AuthUser` を持つリクエストは、`https://music.youtube.com:443/youtubei/v1/` 以下と、`https://music.youtube.com:443/api/stats/playback`（完全一致、再生履歴、ADR-0006 で追加）にしか送らない。
 この検査を Ktor のプラグインではなく、`HttpClientEngine` を包む委譲エンジン（`AuthGuardEngine`）に置く。
 
 - innertubex は、渡した `HttpClient` のエンジンだけを使って新しい `HttpClient(engine)` を作り直す経路を持つ（プレイヤー JS・STS の取得など）。プラグインはその経路に載らないが、エンジンは共有される

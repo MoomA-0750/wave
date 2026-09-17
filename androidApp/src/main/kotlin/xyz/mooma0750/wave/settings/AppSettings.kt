@@ -7,6 +7,8 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
+import java.io.IOException
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
@@ -19,7 +21,11 @@ class AppSettings(
     private val store = context.applicationContext.settingsDataStore
 
     /** 再生履歴を YouTube Music に送るか（ADR-0006 の 7、既定は送る）。 */
-    val historyEnabled: Flow<Boolean> = store.data.map { it[HISTORY_ENABLED] ?: true }
+    val historyEnabled: Flow<Boolean> =
+        store.data
+            .map { it[HISTORY_ENABLED] ?: true }
+            // 読めなければ送らない側に倒す（再生サービス・画面を落とさない）
+            .catch { if (it is IOException) emit(false) else throw it }
 
     suspend fun isHistoryEnabled(): Boolean = historyEnabled.first()
 

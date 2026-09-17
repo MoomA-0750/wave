@@ -387,6 +387,9 @@ class WaveSession internal constructor(
         if (generation.credentials == null || credentials.value !== generation.credentials) return StatsOutcome.NotLoggedIn
         if (generation.id != statsGeneration) return StatsOutcome.GenerationMismatch
         val target = playbackStatsTarget(statsUrl) ?: return StatsOutcome.ShapeRejected
+        // innertubex のセッションの写しを先に取り、その後で世代がまだ同じかを確かめる（切り替えと行き違って新しいアカウントの写しを渡さない）
+        val snapshot = innerTube.sessionSnapshot()
+        if (!generation.scope.isActive || current.value !== generation) return StatsOutcome.GenerationMismatch
         val deferred =
             generation.scope.async {
                 try {
@@ -396,7 +399,7 @@ class WaveSession internal constructor(
                             url = target,
                             cpn = cpn,
                             playlistId = null,
-                            requestSession = innerTube.sessionSnapshot(),
+                            requestSession = snapshot,
                             currentMediaTime = currentMediaTimeSeconds,
                         )
                     // 204 も Content-Type: text/html を付けて返るので、本文のある応答だけを HTML とみなす（実機、2026-09-17）
@@ -408,6 +411,7 @@ class WaveSession internal constructor(
                 } catch (httpError: InnerTubeHttpException) {
                     StatsOutcome.Sent(httpError.status.value, html = false)
                 } catch (_: AuthRouteViolation) {
+                    // rethrowViolations でも投げ直さない。統計は再生サービスの中で送るので、落とさずに件数として記録する（ADR-0006 の 5）
                     StatsOutcome.Violation
                 } catch (_: Exception) {
                     StatsOutcome.Failed
