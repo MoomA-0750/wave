@@ -103,7 +103,7 @@ class Media3QueuePlayer(
                         .setTitle(song.title)
                         .setArtist(song.artists.joinToString(", ") { it.name })
                         .setAlbumTitle(song.album?.title)
-                        .setArtworkUri(song.thumbnailUrl?.let(::largeArtwork)?.toUri())
+                        .setArtworkUri(song.thumbnailUrl?.takeIf { it.startsWith("https://") }?.let(::largeArtwork)?.toUri())
                         .setDurationMs(song.durationSeconds?.let { it * 1000L })
                         .build(),
                 ).build()

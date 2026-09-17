@@ -67,7 +67,7 @@ class MainActivity : ComponentActivity() {
                             BackHandler { openPlaylist = null }
                             val scope = rememberCoroutineScope()
                             PlaylistScreen(
-                                viewModel(key = "playlist-${playlist.playlistId}") { PlaylistViewModel(container.music, playlist.playlistId, playlist.title) },
+                                viewModel(key = "playlist-$loginGeneration-${playlist.playlistId}") { PlaylistViewModel(container.music, playlist.playlistId, playlist.title) },
                                 onPlay = { songs, index, continuation -> scope.launch { container.player.playFrom(songs, index, playlist.playlistId, continuation) } },
                                 onPlayNext = { song -> scope.launch { container.player.addNext(song) } },
                                 onAddToQueue = { song -> scope.launch { container.player.addToEnd(song) } },
@@ -78,7 +78,7 @@ class MainActivity : ComponentActivity() {
                             BackHandler { searching = false }
                             val scope = rememberCoroutineScope()
                             SearchScreen(
-                                viewModel { SearchViewModel(container.music) },
+                                viewModel(key = "search-$loginGeneration") { SearchViewModel(container.music) },
                                 onSongClick = { song -> scope.launch { container.player.playSong(song) } },
                                 onPlayNext = { song -> scope.launch { container.player.addNext(song) } },
                                 onAddToQueue = { song -> scope.launch { container.player.addToEnd(song) } },

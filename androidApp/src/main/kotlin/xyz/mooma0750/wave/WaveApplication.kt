@@ -36,6 +36,7 @@ import xyz.mooma0750.wave.playback.PlayerConnection
 import xyz.mooma0750.wave.playback.MediaHttp
 import xyz.mooma0750.wave.playback.ResolvedStreamCache
 import java.io.File
+import java.util.UUID
 
 /** プロセスで1つだけ作る（同じファイルに DataStore を2つ作ると例外になる）。 */
 private val Context.credentialDataStore: DataStore<Preferences> by preferencesDataStore(name = "credentials")
@@ -64,6 +65,12 @@ class WaveApplication :
             .Builder(context)
             .components { add(OkHttpNetworkFetcherFactory(callFactory = { container.mediaHttpClient })) }
             .build()
+            .also { loader ->
+                container.imageCacheCleaner = {
+                    loader.memoryCache?.clear()
+                    loader.diskCache?.clear()
+                }
+            }
 
     companion object {
         const val LOGIN_WEBVIEW_SUFFIX = "login"
@@ -120,8 +127,11 @@ class AppContainer(
 
     val music = MusicRepository(session)
 
+    /** 自アプリの UI のコントローラーを見分けるための、プロセスごとの値（接続ヒントで渡す）。 */
+    val controllerToken: String = UUID.randomUUID().toString()
+
     /** UI から再生サービスへの接続。 */
-    val player = PlayerConnection(context)
+    val player = PlayerConnection(context, controllerToken)
 
     /** 解決済みのストリーム URL。ログアウトで消す。 */
     val streamCache = ResolvedStreamCache(stream.resolver, SystemClock::elapsedRealtime)
@@ -132,6 +142,9 @@ class AppContainer(
             session.appliedObtainedAtEpochMs.filterNotNull().collect { stream.resolver.prewarm() }
         }
     }
+
+    /** WaveApplication が設定する（Coil のキャッシュを消す）。 */
+    var imageCacheCleaner: () -> Unit = {}
 
     private val mutableLoginGeneration = MutableStateFlow(0)
 
@@ -145,6 +158,9 @@ class AppContainer(
     /** ログアウトの唯一の入口。保存物を消し、WebView 側の後始末もする。両方消せたら true。 */
     suspend fun logout(): Boolean {
         val cleared = authManager.logout()
+        // 再生サービスが動いていなくても、前のアカウントで解決した URL とサムネイルを残さない
+        streamCache.clear()
+        imageCacheCleaner()
         WebViewCredentials.clear()
         Log.i(WaveApplication.LOG_TAG, "logout cleared=$cleared")
         return cleared

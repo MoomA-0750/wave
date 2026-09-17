@@ -13,6 +13,7 @@ import xyz.mooma0750.wave.core.music.Song
 /** UI から PlaybackService へつなぐ。MediaController はアプリで1つを使い回す。 */
 class PlayerConnection(
     private val context: Context,
+    private val token: String,
 ) {
     private var controller: MediaController? = null
     private val connecting = Mutex()
@@ -24,10 +25,15 @@ class PlayerConnection(
             controller?.release()
             MediaController
                 .Builder(context, SessionToken(context, ComponentName(context, PlaybackService::class.java)))
+                .setConnectionHints(android.os.Bundle().apply { putString(CONNECTION_TOKEN_KEY, token) })
                 .buildAsync()
                 .await()
                 .also { controller = it }
         }
+
+    companion object {
+        const val CONNECTION_TOKEN_KEY = "xyz.mooma0750.wave.CONTROLLER_TOKEN"
+    }
 
     suspend fun playSong(song: Song) = send(QueueCommands.PLAY_SONG, QueueCommands.songArgs(song))
 

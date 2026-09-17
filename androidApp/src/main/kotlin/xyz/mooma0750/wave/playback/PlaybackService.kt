@@ -44,10 +44,12 @@ class PlaybackService : MediaSessionService() {
     private var queue: QueueSession? = null
     private val skipGuard = SkipGuard(MAX_CONSECUTIVE_SKIPS)
 
+    private lateinit var container: xyz.mooma0750.wave.AppContainer
+
     override fun onCreate() {
         super.onCreate()
-        val container = (application as WaveApplication).container
         val dataSourceFactory = WaveStreamDataSource.Factory(container.stream.resolver, container.streamCache, container.mediaHttpClient)
+        container = (application as WaveApplication).container
         val player =
             ExoPlayer
                 .Builder(this)
@@ -103,14 +105,34 @@ class PlaybackService : MediaSessionService() {
             MediaSession
                 .Builder(this, player)
                 .setCallback(Callback(queueSession))
+                // 通知・ロック画面のアートワークも、認証情報を持たない音声用のクライアントで取る
+                .setBitmapLoader(
+                    androidx.media3.datasource.DataSourceBitmapLoader
+                        .Builder(this)
+                        .setDataSourceFactory(androidx.media3.datasource.okhttp.OkHttpDataSource.Factory(container.mediaHttpClient))
+                        .build(),
+                )
                 .build()
 
-        // ログアウトしたら再生を止めてキューと解決済みの URL を消す（決定 E5）
+        // ログアウトしたら再生を止めてキューと解決済みの URL を消す（決定 E5）。
+        // ログインし直した（別のログインに変わった）ときも、アカウントの切り替えとして同じく消す（2026-09-17 本人の決定）
         scope.launch {
+            var loggedInAt: Long? = null
             container.authManager.state.collect { state ->
-                if (state == AuthState.LoggedOut || state == AuthState.LoggingOut) {
-                    queueSession.reset()
-                    container.streamCache.clear()
+                when (state) {
+                    AuthState.LoggedOut, AuthState.LoggingOut, is AuthState.Unreadable -> {
+                        queueSession.reset()
+                        container.streamCache.clear()
+                        loggedInAt = null
+                    }
+                    is AuthState.LoggedIn -> {
+                        if (loggedInAt != null && loggedInAt != state.obtainedAtEpochMs) {
+                            queueSession.reset()
+                            container.streamCache.clear()
+                        }
+                        loggedInAt = state.obtainedAtEpochMs
+                    }
+                    AuthState.Restoring -> Unit
                 }
             }
         }
@@ -132,8 +154,17 @@ class PlaybackService : MediaSessionService() {
         }
     }
 
-    /** このアプリ自身のコントローラーか。パッケージ名は名乗れるので、Binder から取る uid で判定する。 */
-    private fun isOwnController(controller: MediaSession.ControllerInfo): Boolean = controller.uid == Process.myUid()
+    /**
+     * このアプリの UI のコントローラーか。パッケージ名は名乗れるので uid で判定し、さらに接続ヒントの値で、
+     * Media3 が同じ uid で作る通知用コントローラー（他アプリの Intent を転送しうる）と区別する。
+     */
+    private fun isOwnUiController(
+        session: MediaSession,
+        controller: MediaSession.ControllerInfo,
+    ): Boolean =
+        controller.uid == Process.myUid() &&
+            !session.isMediaNotificationController(controller) &&
+            controller.connectionHints.getString(PlayerConnection.CONNECTION_TOKEN_KEY) == container.controllerToken
 
     private inner class Callback(
         private val queue: QueueSession,
@@ -142,8 +173,15 @@ class PlaybackService : MediaSessionService() {
             session: MediaSession,
             controller: MediaSession.ControllerInfo,
         ): MediaSession.ConnectionResult {
-            // 外部のコントローラー（通知・Bluetooth など）は既定の再生操作だけ。キューの操作は渡さない
-            if (!isOwnController(controller)) return super.onConnect(session, controller)
+            if (!isOwnUiController(session, controller)) {
+                // 通知・システム（ロック画面・Bluetooth はプラットフォームのセッション経由）・信頼された外部は既定の再生操作だけ。
+                // 信頼されていない他アプリの Media3 コントローラーは、キューの中身を読ませないために拒否する
+                val allowed =
+                    session.isMediaNotificationController(controller) ||
+                        controller.isTrusted ||
+                        controller.controllerVersion == MediaSession.ControllerInfo.LEGACY_CONTROLLER_VERSION
+                return if (allowed) super.onConnect(session, controller) else MediaSession.ConnectionResult.reject()
+            }
             val commands =
                 MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS
                     .buildUpon()
@@ -158,7 +196,7 @@ class PlaybackService : MediaSessionService() {
             customCommand: SessionCommand,
             args: Bundle,
         ): ListenableFuture<SessionResult> {
-            if (!isOwnController(controller)) return Futures.immediateFuture(SessionResult(SessionError.ERROR_PERMISSION_DENIED))
+            if (!isOwnUiController(session, controller)) return Futures.immediateFuture(SessionResult(SessionError.ERROR_PERMISSION_DENIED))
             if (customCommand.customAction in USER_SELECTIONS) skipGuard.onUserSelection()
             val handled =
                 when (customCommand.customAction) {
@@ -184,6 +222,16 @@ class PlaybackService : MediaSessionService() {
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = session
 
+    override fun onStartCommand(
+        intent: Intent?,
+        flags: Int,
+        startId: Int,
+    ): Int {
+        // 通知のカスタムボタンは使っていない。他アプリからの Intent でキューのコマンドを転送させない
+        if (intent?.action == CUSTOM_NOTIFICATION_ACTION) return START_NOT_STICKY
+        return super.onStartCommand(intent, flags, startId)
+    }
+
     override fun onTaskRemoved(rootIntent: Intent?) {
         val player = session?.player
         val playing = player != null && player.playWhenReady && (player.playbackState == Player.STATE_READY || player.playbackState == Player.STATE_BUFFERING)
@@ -204,6 +252,7 @@ class PlaybackService : MediaSessionService() {
     private companion object {
         const val MAX_CONSECUTIVE_SKIPS = 3
         val USER_SELECTIONS = setOf(QueueCommands.PLAY_SONG, QueueCommands.PLAY_FROM, QueueCommands.JUMP)
+        const val CUSTOM_NOTIFICATION_ACTION = "androidx.media3.session.CUSTOM_NOTIFICATION_ACTION"
     }
 }
 
