@@ -172,6 +172,24 @@ class HouseholdStoreTest {
     }
 
     @Test
+    fun claimOrdersAndLatestStatesArriveInWelcomeAndSurviveRestart() {
+        val (s, chain) = household()
+        s.claim(a.deviceId, claimId, doc(a, chain, DocKind.Command, 1))
+        assertIs<HouseholdStore.PutResult.Ok>(put(s, a, chain, 0))
+        s.claim(b.deviceId, "1f8fad5b-d9cb-469f-a165-70867728950e", doc(b, chain, DocKind.Command, 1))
+        val welcome = store().welcome(pc.deviceId, emptyList())
+        assertEquals(mapOf(a.deviceId to 1L, b.deviceId to 2L), welcome.claimOrders)
+        assertEquals(1, welcome.states.size)
+        assertEquals(b.deviceId, welcome.activeDeviceId)
+        // claim が transfer の途中を捨てたら、呼ぶ側が知らせられる
+        s.transfer(a.deviceId, "2f8fad5b-d9cb-469f-a165-70867728950e", 1, doc(a, chain, DocKind.Command, 1))
+        assertNull(s.takeDroppedPending())
+        s.claim(b.deviceId, "3f8fad5b-d9cb-469f-a165-70867728950e", doc(b, chain, DocKind.Command, 1))
+        assertEquals("2f8fad5b-d9cb-469f-a165-70867728950e", s.takeDroppedPending())
+        assertNull(s.takeDroppedPending())
+    }
+
+    @Test
     fun chainAppendIsLinearAndRemovalClearsActive() {
         val (s, chain) = household()
         s.claim(b.deviceId, claimId, doc(b, chain, DocKind.Command, 1))
