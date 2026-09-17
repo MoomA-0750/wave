@@ -51,6 +51,9 @@ class ConnectV2Host {
          * @param newSelection 曲を選んだ（キューを置き換えた・飛んだ）。false は再生ボタン（画面・通知・Bluetooth）
          */
         fun onUserStartedPlayback(newSelection: Boolean)
+
+        /** 本人が一時停止した（D-9 の待ちの後に、再生を戻さない）。 */
+        fun onUserPaused()
     }
 
     @Volatile

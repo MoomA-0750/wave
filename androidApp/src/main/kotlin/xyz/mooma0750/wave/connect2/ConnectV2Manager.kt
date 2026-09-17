@@ -75,11 +75,7 @@ class ConnectV2Manager(
                     is RelayV2.PairHello -> pairHellos.tryEmit(message)
                     else -> {
                         if (message is RelayV2.ChainOk || message is RelayV2.ChainConflict || message is RelayV2.Error) chainReplies.tryEmit(message)
-                        post {
-                            client?.onMessage(message)
-                            // 最新の状態（welcome に同梱）を受けた（D-9 の待ちが見る）
-                            if (message is RelayV2.Welcome) welcomes.value++
-                        }
+                        post { client?.onMessage(message) }
                     }
                 }
             },
@@ -93,9 +89,6 @@ class ConnectV2Manager(
 
     /** 鎖の追記への返事（加入の手順が待つ）。 */
     private val chainReplies = MutableSharedFlow<RelayV2>(extraBufferCapacity = 4)
-
-    /** 受けて処理した welcome の数（つながり直して最新の状態をそろえたか）。 */
-    private val welcomes = MutableStateFlow(0)
 
     /** 他の端末の最新の再生（表示）。 */
     data class RemoteView(
@@ -168,8 +161,17 @@ class ConnectV2Manager(
 
     private val tagComputing = AtomicBoolean(false)
 
-    /** 最後に使ったアカウントのタグ（エンジンのスレッドだけ）。別のアカウントに変わったら手元の再生を捨てる。 */
-    private var lastTag: String? = null
+    /** 最後に見たログインの世代（エンジンのスレッドだけ）。変わったら手元の再生を終わらせる（再生サービスもキューを消している）。 */
+    private var seenGeneration: Long? = null
+
+    /** 本人の再生の意図の番号（再生ボタン・曲の選択のたびに増える）。D-9 の待ちの後に変わっていたら何もしない（再レビュー 中-C）。 */
+    private val playIntent = java.util.concurrent.atomic.AtomicLong()
+
+    /** D-9 の待ち（エンジンのスレッドだけで触る。1本だけ）。 */
+    private var waitJob: Job? = null
+
+    /** 最後に間引かずに書いたカーソルの、曲・再生中か・リピート（Main だけ）。再バッファのたびに書かない（再レビュー 低-N）。 */
+    private var lastSignificant: Triple<String, Boolean, xyz.mooma0750.wave.handoff.HandoffRepeat>? = null
 
     private var cursorJob: Job? = null
     private var queueJob: Job? = null
@@ -230,6 +232,7 @@ class ConnectV2Manager(
                 initial = initial,
             )
         host.listener = listener
+        seenGeneration = session.loginGenerationId()
         refreshInfo()
     }
 
@@ -286,7 +289,7 @@ class ConnectV2Manager(
                 val account = session.verifiedAccount() ?: return@launch
                 val digest = WaveCrypto.sha256(WaveCrypto.lengthPrefixed(TAG_LABEL.encodeToByteArray(), householdId.encodeToByteArray(), account.id.reveal().encodeToByteArray()))
                 val next = TagState(householdId, Base64.getUrlEncoder().withoutPadding().encodeToString(digest), account.generationId)
-                tagState = next
+                // 置くのはエンジンのスレッドで、ログインの切り替えの後始末の後（公開してから捨てるまでの間に、前のキューを新しいタグで書かない、再レビュー 中-E）
                 post { onTagComputed(next) }
             } finally {
                 tagComputing.set(false)
@@ -294,16 +297,32 @@ class ConnectV2Manager(
         }
     }
 
-    /** エンジンのスレッドで: 別のアカウントに変わっていたら、前のアカウントのキュー・再生を捨ててから、保留した開始を claim する。 */
+    /** エンジンのスレッドで: ログインの世代が変わっていたら、手元の再生を終わらせる（前のアカウントのタグで一時停止を書いてから捨てる、再レビュー 中-D）。 */
+    private fun checkLoginGeneration(engine: ConnectClient) {
+        val generation = session.loginGenerationId()
+        val previous = seenGeneration
+        seenGeneration = generation
+        if (previous == null || previous == generation) return
+        val finalTag = tagState?.takeIf { it.generation == previous }?.tag
+        tagState = null
+        engine.endLocal(finalTag)
+        Log.i(WaveApplication.LOG_TAG, "connect-v2 login changed ended local")
+    }
+
+    /** エンジンのスレッドで: タグを置き、保留した開始を claim する（手元のキューは今のものを置き直す、再レビュー 低-M）。 */
     private fun onTagComputed(state: TagState) {
         val engine = client ?: return
-        if (state.householdId != engine.householdId) return
-        val previous = lastTag
-        lastTag = state.tag
-        if (previous != null && previous != state.tag) {
-            // 前のアカウントのキューを新しいアカウントのタグで書かない（レビュー p6b34 高-5）
-            engine.clearLocal()
-            Log.i(WaveApplication.LOG_TAG, "connect-v2 account changed cleared local")
+        checkLoginGeneration(engine)
+        if (state.householdId != engine.householdId || state.generation != session.loginGenerationId()) return
+        tagState = state
+        if (!engine.isWriter) {
+            val (snapshot, cursor) =
+                runBlocking(Dispatchers.Main) {
+                    val endpoint = host.endpoint
+                    endpoint?.snapshot()?.let(HandoffCodec::encode) to endpoint?.cursor()?.toLocal()
+                }
+            snapshot?.let(engine::setLocalQueue)
+            cursor?.let(engine::setLocalCursor)
         }
         engine.onAccountTagAvailable()
         refreshInfo()
@@ -326,7 +345,10 @@ class ConnectV2Manager(
 
             override fun onCursorChanged(significant: Boolean) {
                 cursorJob?.cancel()
-                if (significant) {
+                // 曲・再生中か・リピートが前と同じなら、再バッファなどなので間引く（再レビュー 低-N）
+                val key = host.endpoint?.cursor()?.let { Triple(it.currentItemId, it.playing, it.repeat) }
+                if (significant && key != lastSignificant) {
+                    lastSignificant = key
                     pushCursor()
                 } else {
                     // シークなどは間引く（D-6）
@@ -338,16 +360,24 @@ class ConnectV2Manager(
                 }
             }
 
+            override fun onUserPaused() {
+                playIntent.incrementAndGet()
+            }
+
             override fun onUserStartedPlayback(newSelection: Boolean) {
+                val intent = playIntent.incrementAndGet()
                 val foreground = uiInForeground()
                 post {
                     val engine = client ?: return@post
-                    // D-9: 引き取られた・止まった端末で再生ボタンを押したとき、他の端末で鳴っていれば、古い手元のキューで奪わない。
-                    // 起動の直後などで最新の状態をまだ受けていなければ、一時停止してつなぎ、受けてから決める（レビュー p6b34 中-6）。曲を選んだのは新しい再生（L-3）
+                    // 新しい操作が来たら、前の D-9 の待ちはやめる（曲を選んだのに、待ちの後で止めない、再レビュー 中-C）
+                    waitJob?.cancel()
+                    waitJob = null
+                    // D-9: 引き取られた・止まった端末で再生ボタンを押したとき、他の端末で鳴っていれば、古い手元のキューで奪わない。曲を選んだのは新しい再生（L-3）
+                    // 今の接続で最新の状態をそろえていない・アカウントタグがまだ無いなら、一時停止してつなぎ、そろってから決める（再レビュー 高-A・中-B）
                     if (!newSelection && engine.hasRetreated && engine.householdId != null) {
-                        if (engine.latestCursorBody() == null) {
+                        if (!engine.stateSettled || effects.accountTag() == null) {
                             appScope.launch(Dispatchers.Main) { host.endpoint?.pause() }
-                            appScope.launch { decideAfterWelcome(foreground) }
+                            waitJob = appScope.launch { decideAfterWait(intent, foreground) }
                             return@post
                         }
                         if (retreatedPlayButton(engine, foreground)) return@post
@@ -373,30 +403,48 @@ class ConnectV2Manager(
         return true
     }
 
-    /** 最新の状態を受けるまで（最大 WELCOME_WAIT_MS）待ってから、D-9 の判断をする。つなげなければ再生しないで知らせる。 */
-    private suspend fun decideAfterWelcome(foreground: Boolean) {
-        val before = welcomes.value
+    private enum class WaitOutcome { Ready, NotMember, Unreachable, Unverified }
+
+    /**
+     * 中継につないで、今の接続の最新の状態とアカウントタグがそろうまで（最大 SETTLE_WAIT_MS）待ってから、D-9 の判断をする。
+     * そろわなければ鳴らさずに知らせる。家から外された・tailnet に届かないときは待たない（再レビュー 低-J）。
+     */
+    private suspend fun decideAfterWait(
+        intent: Long,
+        foreground: Boolean,
+    ) {
         relay.acquire()
         try {
-            // 既につながっていて welcome を処理済みなら、待たない（中継に最新のカーソルが無いだけ）
-            val welcomed = (before > 0 && relay.status.value == RelayClientV2.Status.Connected) || withTimeoutOrNull(WELCOME_WAIT_MS) { welcomes.first { it > before } } != null
-            if (welcomed) {
-                // welcome の状態は鎖をそろえてから開く（取り直しを待つ）
-                withTimeoutOrNull(STATE_WAIT_MS) {
-                    while (withContext(dispatcher) { client?.latestCursorBody() } == null) delay(100)
-                }
-            }
+            val outcome =
+                withTimeoutOrNull(SETTLE_WAIT_MS) {
+                    while (true) {
+                        when (relay.status.value) {
+                            RelayClientV2.Status.NotMember -> return@withTimeoutOrNull WaitOutcome.NotMember
+                            RelayClientV2.Status.TailnetUnreachable -> return@withTimeoutOrNull WaitOutcome.Unreachable
+                            else -> Unit
+                        }
+                        if (withContext(dispatcher) { client?.let { it.stateSettled && effects.accountTag() != null } == true }) return@withTimeoutOrNull WaitOutcome.Ready
+                        delay(100)
+                    }
+                    @Suppress("UNREACHABLE_CODE")
+                    WaitOutcome.Unreachable
+                } ?: withContext(dispatcher) { if (client?.stateSettled == true) WaitOutcome.Unverified else WaitOutcome.Unreachable }
             withContext(dispatcher) {
                 val engine = client ?: return@withContext
-                if (retreatedPlayButton(engine, foreground)) return@withContext
-                if (!welcomed) {
-                    effects.event(ClientEvent.ServerError(RELAY_UNREACHABLE))
-                    Log.i(WaveApplication.LOG_TAG, "connect-v2 play button relay unreachable")
-                    return@withContext
+                // 待っている間に本人が別の操作をした・もう退いた端末でない
+                if (playIntent.get() != intent || !engine.hasRetreated) return@withContext
+                when (outcome) {
+                    WaitOutcome.Ready -> {
+                        if (retreatedPlayButton(engine, foreground)) return@withContext
+                        // 他の端末で鳴っていない: 止めた再生を戻して、新しい再生として claim する
+                        runBlocking(Dispatchers.Main) { host.endpoint?.resume() }
+                        claimLocal(engine, newSelection = false)
+                    }
+                    WaitOutcome.NotMember -> effects.event(ClientEvent.ServerError(NOT_MEMBER))
+                    WaitOutcome.Unverified -> effects.event(ClientEvent.ServerError(ACCOUNT_UNVERIFIED))
+                    WaitOutcome.Unreachable -> effects.event(ClientEvent.ServerError(RELAY_UNREACHABLE))
                 }
-                // 他の端末で鳴っていない: 止めた再生を戻して、新しい再生として claim する
-                runBlocking(Dispatchers.Main) { host.endpoint?.resume() }
-                claimLocal(engine, newSelection = false)
+                Log.i(WaveApplication.LOG_TAG, "connect-v2 play button waited outcome=$outcome")
             }
         } finally {
             relay.release()
@@ -420,9 +468,14 @@ class ConnectV2Manager(
         Log.i(WaveApplication.LOG_TAG, "connect-v2 user started claimed=$claimed selection=$newSelection")
     }
 
+    /** Main で: 位置を読んだ時刻で手元のカーソルを作ってから渡す（再レビュー 低-H）。キューが空なら手元の再生を終わらせる（中-D）。 */
     private fun pushCursor() {
-        val cursor = host.endpoint?.cursor() ?: return
-        post { client?.setLocalCursor(cursor.toLocal()) }
+        val endpoint = host.endpoint ?: return
+        val cursor = endpoint.cursor()?.toLocal()
+        post {
+            val engine = client ?: return@post
+            if (cursor != null) engine.setLocalCursor(cursor) else engine.endLocal(effects.accountTag())
+        }
     }
 
     private fun ConnectV2Host.Cursor.toLocal() = ConnectClient.LocalCursor(currentItemId, positionMs, playing, repeat, listenedMs, historySent, SystemClock.elapsedRealtime())
@@ -438,11 +491,13 @@ class ConnectV2Manager(
     ): HandoffSnapshot? {
         val index = snapshot.items.indexOfFirst { it.itemId == cursor.currentItemId }
         if (index < 0) return null
-        val start = (index - HandoffCodec.MAX_PLAYED_ITEMS).coerceAtLeast(0)
-        val end = (index + 1 + HandoffCodec.MAX_UPCOMING_ITEMS).coerceAtMost(snapshot.items.size)
+        val (items, _, truncatedTail) = HandoffCodec.window(snapshot.items, index)
         val moved =
             snapshot.copy(
-                items = snapshot.items.subList(start, end),
+                items = items,
+                // 後ろを切ったら、続きの取得は読み込み済みの末尾を指さないので捨てる（再レビュー 低-G）
+                continuation = if (truncatedTail) null else snapshot.continuation,
+                exhausted = if (truncatedTail) false else snapshot.exhausted,
                 currentItemId = cursor.currentItemId,
                 positionMs = positionMs.coerceAtLeast(0),
                 repeat = cursor.repeat,
@@ -492,7 +547,7 @@ class ConnectV2Manager(
             client?.clearLocal()
             storage.reset()
             tagState = null
-            lastTag = null
+            seenGeneration = null
             load()
             Log.i(WaveApplication.LOG_TAG, "connect-v2 household forgotten")
         }
@@ -526,9 +581,12 @@ class ConnectV2Manager(
                 if (member.role != Role.Player) return@withContext null
                 // 6桁で確かめた相手の身元鍵と同じであること（レビュー p6b34 低-3）
                 if (!runCatching { Base64.getUrlDecoder().decode(member.identityPub) }.getOrNull().contentEquals(peerPublicKey)) return@withContext null
+                // 保存を作り直した端末が同じ鍵で加わり直す: 既にいるので追記しない（B は6桁で確かめた頭の鎖で受け入れる、再レビュー 中-F）
+                if (chain.members[member.deviceId]?.keys?.kxPub == member.kxPub) return@withContext (null to member.deviceId)
                 MemberChain.add(keys, chain, member) to member.deviceId
             } ?: return false
         val (record, memberId) = added
+        if (record == null) return true
         return appendRecord(record) { members -> members.any { it.deviceId == memberId } }
     }
 
@@ -593,6 +651,9 @@ class ConnectV2Manager(
         }
     }
 
+    /** 加入の待ちをやめた（時間切れ・取り下げ）。 */
+    fun cancelJoin() = post { client?.cancelJoin() }
+
     /** 家に入っているか（加入の待ちが見る）。 */
     suspend fun inHousehold(): Boolean = withContext(dispatcher) { client?.householdId != null }
 
@@ -614,6 +675,7 @@ class ConnectV2Manager(
             while (true) {
                 post {
                     val engine = client ?: return@post
+                    checkLoginGeneration(engine)
                     engine.tick()
                     refreshInfo()
                     engine.householdId?.let(::refreshAccountTagIfNeeded)
@@ -630,14 +692,19 @@ class ConnectV2Manager(
         /** 退いた端末の再生ボタンで、中継につなげず最新の状態を確かめられなかった（D-9）。 */
         const val RELAY_UNREACHABLE = "relay_unreachable"
 
+        /** 退いた端末の再生ボタンで、中継がこの端末を家の端末として受け付けなかった。 */
+        const val NOT_MEMBER = "not_member_play"
+
+        /** 退いた端末の再生ボタンで、アカウントを確かめられず、他の端末で同じアカウントが鳴っているか決められなかった。 */
+        const val ACCOUNT_UNVERIFIED = "account_unverified_play"
+
         /** 家を作る要求を中継に送れなかった。 */
         const val HOUSEHOLD_CREATE_UNSENT = "household_create_unsent"
 
         const val TICK_MS = 1_000L
         const val CURSOR_DEBOUNCE_MS = 1_000L
         const val QUEUE_DEBOUNCE_MS = 1_000L
-        const val WELCOME_WAIT_MS = 8_000L
-        const val STATE_WAIT_MS = 2_000L
+        const val SETTLE_WAIT_MS = 10_000L
         const val TAG_LABEL = "wave-v2-account-tag"
         const val MAX_LABEL_CHARS = 64
     }

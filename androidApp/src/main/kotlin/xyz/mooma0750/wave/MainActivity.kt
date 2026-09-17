@@ -100,6 +100,8 @@ class MainActivity : ComponentActivity() {
                                     when (event.code) {
                                         xyz.mooma0750.wave.connect2.ConnectV2Manager.REMOTE_PLAYING -> "他の端末で再生中です（端末の連携の画面から「ここで再生」）"
                                         xyz.mooma0750.wave.connect2.ConnectV2Manager.RELAY_UNREACHABLE -> "中継につながらず、他の端末の再生を確かめられませんでした"
+                                        xyz.mooma0750.wave.connect2.ConnectV2Manager.NOT_MEMBER -> "この端末は家の端末として受け付けられませんでした（端末の連携の画面を確かめてください）"
+                                        xyz.mooma0750.wave.connect2.ConnectV2Manager.ACCOUNT_UNVERIFIED -> "アカウントを確かめられず、他の端末の再生を確かめられませんでした"
                                         xyz.mooma0750.wave.connect2.ConnectV2Manager.HOUSEHOLD_CREATE_UNSENT -> "家を作る要求を中継に送れませんでした（中継に登録した端末か、接続を確かめてください）"
                                         else -> null
                                     }

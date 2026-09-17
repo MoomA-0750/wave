@@ -172,8 +172,9 @@ class PlaybackService : MediaSessionService() {
                     reason: Int,
                 ) {
                     // 本人（画面・通知・Bluetooth）が再生を始めた。引き取りの取り込みは除く
-                    if (playWhenReady && reason == Player.PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST && !connectV2Suppressed) {
-                        container.connectV2Host.listener?.onUserStartedPlayback(newSelection = false)
+                    if (reason == Player.PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST && !connectV2Suppressed) {
+                        val listener = container.connectV2Host.listener
+                        if (playWhenReady) listener?.onUserStartedPlayback(newSelection = false) else listener?.onUserPaused()
                     }
                 }
 
@@ -364,7 +365,13 @@ class PlaybackService : MediaSessionService() {
                 }
 
                 override fun pause() {
-                    player.pause()
+                    // Connect v2 が止めるのは、本人の一時停止として知らせない
+                    connectV2Suppressed = true
+                    try {
+                        player.pause()
+                    } finally {
+                        connectV2Suppressed = false
+                    }
                 }
 
                 override fun resume() {

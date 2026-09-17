@@ -111,35 +111,13 @@ class PairingV2Controller(
     ) {
         if (!manager.expectJoin(extension, established.peerPublicKey)) return fail("この端末の Connect v2 の状態では加われません（既に家に入っているか、保存を読めません）")
         mutableState.value = State.Working("家に加わるのを待っています")
+        var accepted = false
         val joined =
-            coroutineScope {
-                val outcome =
-                    async(start = CoroutineStart.UNDISPATCHED) {
-                        manager.events.first { it is ClientEvent.Joined || it is ClientEvent.ChainForked || it is ClientEvent.ChainRolledBack || it is ClientEvent.ChainInvalid }
-                    }
-                try {
-                    withTimeoutOrNull(JOIN_WAIT_MS) {
-                        for (wait in JOIN_RETRY_MS) {
-                            if (manager.inHousehold()) return@withTimeoutOrNull ClientEvent.Joined
-                            // 家に入ったので、つなぎ直して鎖を取る（認証は中継の鎖の今の端末で行う）
-                            manager.relay.acquire()
-                            try {
-                                val result =
-                                    withTimeoutOrNull(wait) {
-                                        merge<ClientEvent?>(flow { emit(outcome.await()) }, manager.relay.status.filter { it == RelayClientV2.Status.NotMember }.map { null }).first()
-                                    }
-                                if (result != null) return@withTimeoutOrNull result
-                                // 断られた: A の追記が中継に入るのを待ってから、つなぎ直す
-                                if (manager.relay.status.value == RelayClientV2.Status.NotMember) delay(wait)
-                            } finally {
-                                manager.relay.release()
-                            }
-                        }
-                        null
-                    }
-                } finally {
-                    outcome.cancel()
-                }
+            try {
+                awaitJoin().also { accepted = it == ClientEvent.Joined }
+            } finally {
+                // 時間切れ・失敗・取り下げでは、エンジンの待ちも消す（後でつながったときに黙って家に入らない、再レビュー 低-L）
+                if (!accepted) manager.cancelJoin()
             }
         when {
             joined == ClientEvent.Joined -> {
@@ -151,6 +129,38 @@ class PairingV2Controller(
             else -> fail("中継の端末一覧を確かめられませんでした")
         }
     }
+
+    /** 加入の鎖を受け入れるまで待つ。断られたら間を空けてつなぎ直す。@return Joined・鎖の問題の出来事、時間切れなら null */
+    private suspend fun awaitJoin(): ClientEvent? =
+        coroutineScope {
+            val outcome =
+                async(start = CoroutineStart.UNDISPATCHED) {
+                    manager.events.first { it is ClientEvent.Joined || it is ClientEvent.ChainForked || it is ClientEvent.ChainRolledBack || it is ClientEvent.ChainInvalid }
+                }
+            try {
+                withTimeoutOrNull(JOIN_WAIT_MS) {
+                    for (wait in JOIN_RETRY_MS) {
+                        if (manager.inHousehold()) return@withTimeoutOrNull ClientEvent.Joined
+                        // 家に入ったので、つなぎ直して鎖を取る（認証は中継の鎖の今の端末で行う）
+                        manager.relay.acquire()
+                        try {
+                            val result =
+                                withTimeoutOrNull(wait) {
+                                    merge<ClientEvent?>(flow { emit(outcome.await()) }, manager.relay.status.filter { it == RelayClientV2.Status.NotMember }.map { null }).first()
+                                }
+                            if (result != null) return@withTimeoutOrNull result
+                            // 断られた: A の追記が中継に入るのを待ってから、つなぎ直す
+                            if (manager.relay.status.value == RelayClientV2.Status.NotMember) delay(wait)
+                        } finally {
+                            manager.relay.release()
+                        }
+                    }
+                    null
+                }
+            } finally {
+                outcome.cancel()
+            }
+        }
 
     fun cancel() {
         job?.cancel()
