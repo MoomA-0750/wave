@@ -16,6 +16,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -25,6 +26,10 @@ import xyz.mooma0750.wave.core.auth.AuthState
 import xyz.mooma0750.wave.home.HomeScreen
 import xyz.mooma0750.wave.login.LoginScreen
 import xyz.mooma0750.wave.login.LoginViewModel
+import xyz.mooma0750.wave.playback.PlayerConnection
+import xyz.mooma0750.wave.search.SearchScreen
+import xyz.mooma0750.wave.search.SearchViewModel
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -38,6 +43,8 @@ class MainActivity : ComponentActivity() {
                 val loginGeneration by container.loginGeneration.collectAsStateWithLifecycle()
                 // 失効したときに、ログイン済みのまま再ログイン画面を出す。プロセスが復元されたら出さない（保存しない）
                 var reLogin by remember { mutableStateOf(false) }
+                // 仮の画面遷移（S6 で整理する）
+                var searching by remember { mutableStateOf(false) }
 
                 when (val state = authState) {
                     AuthState.Restoring -> Progress()
@@ -50,8 +57,24 @@ class MainActivity : ComponentActivity() {
                                 viewModel(key = "relogin-$loginGeneration") { LoginViewModel(container) },
                                 onCancel = { reLogin = false },
                             )
+                        } else if (searching) {
+                            BackHandler { searching = false }
+                            val scope = rememberCoroutineScope()
+                            SearchScreen(
+                                viewModel { SearchViewModel(container.music) },
+                                onSongClick = { song ->
+                                    scope.launch {
+                                        container.player.controller().run {
+                                            setMediaItem(PlayerConnection.mediaItemOf(song))
+                                            prepare()
+                                            play()
+                                        }
+                                    }
+                                },
+                                onBack = { searching = false },
+                            )
                         } else {
-                            HomeScreen(container, obtainedAtEpochMs = state.obtainedAtEpochMs, onReLogin = { reLogin = true })
+                            HomeScreen(container, obtainedAtEpochMs = state.obtainedAtEpochMs, onReLogin = { reLogin = true }, onSearch = { searching = true })
                         }
                     }
                     AuthState.LoggedOut, is AuthState.Unreadable ->

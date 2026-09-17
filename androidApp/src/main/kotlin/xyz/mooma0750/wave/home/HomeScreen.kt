@@ -37,6 +37,7 @@ fun HomeScreen(
     container: AppContainer,
     obtainedAtEpochMs: Long,
     onReLogin: () -> Unit,
+    onSearch: () -> Unit,
 ) {
     val sessionState by container.session.state.collectAsStateWithLifecycle()
     var account by remember(obtainedAtEpochMs) { mutableStateOf<AccountResult?>(null) }
@@ -83,6 +84,7 @@ fun HomeScreen(
                         PremiumStatus.Unknown -> "未確認"
                     },
             )
+            Button(onClick = onSearch) { Text("検索") }
             when (sessionState) {
                 is SessionState.Expired -> {
                     Text("再ログインが必要です")

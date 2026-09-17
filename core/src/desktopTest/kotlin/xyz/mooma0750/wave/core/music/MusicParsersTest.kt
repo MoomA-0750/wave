@@ -1,0 +1,72 @@
+package xyz.mooma0750.wave.core.music
+
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
+
+/** 匿名で取得した公開データの fixture（responseContext などは除去済み）で、形を固定する。 */
+class MusicParsersTest {
+    @Test
+    fun searchSongsFirstPage() {
+        val page = MusicParsers.searchSongs(fixture("search_songs"))
+        assertEquals(3, page.songs.size)
+        val song = page.songs.first()
+        assertTrue(song.videoId.isNotBlank())
+        assertTrue(song.title.isNotBlank())
+        assertTrue(song.artists.isNotEmpty(), "アーティストが取れていない")
+        assertNotNull(song.album)
+        assertNotNull(song.durationSeconds)
+        assertTrue(song.thumbnailUrl.orEmpty().startsWith("https://"))
+        assertNotNull(page.continuation)
+    }
+
+    @Test
+    fun searchSongsContinuationPage() {
+        val page = MusicParsers.searchSongs(fixture("search_songs_continuation"))
+        assertEquals(3, page.songs.size)
+        assertTrue(page.songs.all { it.artists.isNotEmpty() && it.durationSeconds != null })
+        assertNotNull(page.continuation)
+    }
+
+    @Test
+    fun upNextFirstPage() {
+        val page = MusicParsers.upNext(fixture("next_radio"))
+        assertEquals(4, page.songs.size)
+        assertTrue(page.songs.all { it.videoId.isNotBlank() && it.title.isNotBlank() && it.artists.isNotEmpty() && it.durationSeconds != null })
+        assertTrue(page.playlistId.orEmpty().startsWith("RDAMVM"))
+        assertNotNull(page.continuation)
+    }
+
+    @Test
+    fun upNextContinuationPrefersContinuationContents() {
+        val first = MusicParsers.upNext(fixture("next_radio"))
+        val page = MusicParsers.upNext(fixture("next_radio_continuation"))
+        assertEquals(4, page.songs.size)
+        assertTrue(page.songs.map { it.videoId } != first.songs.map { it.videoId }, "続きのページで最初のページの contents を読んでいる")
+    }
+
+    @Test
+    fun unknownShapesReturnEmptyInsteadOfThrowing() {
+        assertEquals(SongPage(emptyList(), null), MusicParsers.searchSongs(JsonObject(emptyMap())))
+        assertEquals(UpNextPage(emptyList(), null, null), MusicParsers.upNext(JsonObject(emptyMap())))
+        val broken = Json.parseToJsonElement("""{"flexColumns":[{"musicResponsiveListItemFlexColumnRenderer":{"text":{"runs":[{"text":"no id"}]}}}]}""") as JsonObject
+        assertNull(MusicParsers.responsiveListItemSong(broken))
+    }
+
+    @Test
+    fun durations() {
+        assertEquals(262, MusicParsers.parseDuration("4:22"))
+        assertEquals(3723, MusicParsers.parseDuration("1:02:03"))
+        assertNull(MusicParsers.parseDuration("1.1B plays"))
+        assertNull(MusicParsers.parseDuration("2021"))
+    }
+
+    private fun fixture(name: String): JsonObject {
+        val text = requireNotNull(javaClass.getResource("/fixtures/$name.json")) { "fixture $name" }.readText()
+        return Json.parseToJsonElement(text) as JsonObject
+    }
+}

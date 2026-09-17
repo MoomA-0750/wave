@@ -26,7 +26,9 @@ import xyz.mooma0750.wave.core.auth.KeystoreCredentialStore
 import xyz.mooma0750.wave.core.net.AuthGuardEngine
 import xyz.mooma0750.wave.core.net.createWaveHttpClient
 import xyz.mooma0750.wave.core.session.WaveSession
+import xyz.mooma0750.wave.core.music.MusicRepository
 import xyz.mooma0750.wave.core.stream.StreamComponents
+import xyz.mooma0750.wave.playback.PlayerConnection
 import xyz.mooma0750.wave.playback.MediaHttp
 import xyz.mooma0750.wave.playback.ResolvedStreamCache
 import java.io.File
@@ -102,6 +104,11 @@ class AppContainer(
 
     /** 音声バイト・サムネイルの取得用。認証情報を持たない（ADR-0003）。 */
     val mediaHttpClient = MediaHttp.create()
+
+    val music = MusicRepository(session)
+
+    /** UI から再生サービスへの接続。 */
+    val player = PlayerConnection(context)
 
     /** 解決済みのストリーム URL。ログアウトで消す。 */
     val streamCache = ResolvedStreamCache(stream.resolver)
