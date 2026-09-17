@@ -94,6 +94,19 @@ sealed interface WriteResult<out T> {
     data object Unknown : WriteResult<Nothing>
 }
 
+/** debug の調査の結果。normalizedForLocalHmac は端末の中で HMAC を取るためだけに使い、ログに出さない。 */
+class AccountIdentityProbe(
+    val keyPaths: Set<String>,
+    val savedHasDataSyncId: Boolean,
+    val tokenCount: Int,
+    val selectedTokenCount: Int,
+    val selectedMatchesSaved: Boolean?,
+    val anyMatchesSaved: Boolean?,
+    val normalizedForLocalHmac: String?,
+) {
+    override fun toString(): String = "AccountIdentityProbe(keyPaths=$keyPaths, saved=$savedHasDataSyncId, tokens=$tokenCount, selected=$selectedTokenCount, selectedMatches=$selectedMatchesSaved, anyMatches=$anyMatchesSaved)"
+}
+
 /** 再生統計の送信の結果。ログには種類と status の数値だけを出す（ADR-0006 の 5）。 */
 sealed interface StatsOutcome {
     data object NotLoggedIn : StatsOutcome
@@ -427,6 +440,46 @@ class WaveSession internal constructor(
             currentCoroutineContext().ensureActive()
             StatsOutcome.Cancelled
         }
+    }
+
+    /**
+     * debug の調査用（Phase 6 の P6-S、決定 E7）: アカウントの識別子（DATASYNC_ID）がどの応答のどこにあるかを、キー名の場所と真偽値だけで返す。
+     * 値そのものは返さない。比べるのは端末の中だけ。
+     */
+    suspend fun probeAccountIdentity(): AccountIdentityProbe? {
+        val saved = credentials.value?.dataSyncId?.reveal()?.substringBefore("||")
+        val accounts =
+            call("accounts_list", block = { it.accountsList(YouTubeClient.WEB_REMIX) }) { response ->
+                ParseOutcome.Parsed(json.parseToJsonElement(response.bodyAsTextLimited(MAX_PLAYER_BYTES)))
+            }
+        val root = (accounts as? CallResult.Ok)?.value ?: return null
+        val paths = xyz.mooma0750.wave.core.music.MusicParsers.keyPathsLike(root, "datasync") +
+            xyz.mooma0750.wave.core.music.MusicParsers.keyPathsLike(root, "pageId") +
+            xyz.mooma0750.wave.core.music.MusicParsers.keyPathsLike(root, "isSelected")
+        val tokens = mutableListOf<Pair<Boolean, String>>()
+        fun walk(element: kotlinx.serialization.json.JsonElement, selected: Boolean) {
+            when (element) {
+                is kotlinx.serialization.json.JsonObject -> {
+                    val isSelected = (element["isSelected"] as? kotlinx.serialization.json.JsonPrimitive)?.content == "true" || selected
+                    element.forEach { (name, value) ->
+                        if (name == "datasyncIdToken" && value is kotlinx.serialization.json.JsonPrimitive) tokens += isSelected to value.content.substringBefore("||")
+                        walk(value, isSelected)
+                    }
+                }
+                is kotlinx.serialization.json.JsonArray -> element.forEach { walk(it, selected) }
+                else -> Unit
+            }
+        }
+        walk(root, false)
+        return AccountIdentityProbe(
+            keyPaths = paths,
+            savedHasDataSyncId = saved != null,
+            tokenCount = tokens.size,
+            selectedTokenCount = tokens.count { it.first },
+            selectedMatchesSaved = saved?.let { s -> tokens.any { it.first && it.second == s } },
+            anyMatchesSaved = saved?.let { s -> tokens.any { it.second == s } },
+            normalizedForLocalHmac = saved,
+        )
     }
 
     private suspend fun <T> runCatchingOutcome(

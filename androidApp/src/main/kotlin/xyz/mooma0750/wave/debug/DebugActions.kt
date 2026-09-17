@@ -74,6 +74,16 @@ object DebugActions {
                     container.logout()
                 }
                 "shuffle" -> player.shuffleUpcoming()
+                // Phase 6 P6-S: アカウントの識別子の場所（キー名・真偽値）と、2台で比べるための HMAC の先頭6文字（固定の調査用の鍵）
+                "account_probe" -> {
+                    val probe = container.session.probeAccountIdentity()
+                    val prefix =
+                        probe?.normalizedForLocalHmac?.let { id ->
+                            val mac = javax.crypto.Mac.getInstance("HmacSHA256").apply { init(javax.crypto.spec.SecretKeySpec("wave-p6s-probe-2026-09-17".encodeToByteArray(), "HmacSHA256")) }
+                            mac.doFinal(id.encodeToByteArray()).take(3).joinToString("") { "%02x".format(it) }
+                        }
+                    Log.i(WaveApplication.LOG_TAG, "debug account probe=$probe hmac6=$prefix")
+                }
                 // Phase 6 の暗号の選択のため、この端末の Android Keystore で使える鍵の種類を測る（真偽値だけ、鍵は作ってすぐ消す）
                 "keystore_probe" -> {
                     val results = linkedMapOf<String, Boolean>()
