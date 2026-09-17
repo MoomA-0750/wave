@@ -14,6 +14,10 @@ import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import xyz.mooma0750.wave.core.auth.AuthManager
 import xyz.mooma0750.wave.core.auth.KeystoreCredentialStore
@@ -32,7 +36,9 @@ class WaveApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         // ログイン用 WebView のデータは、このプロセスで WebView を初めて使う前に毎回消す
-        // （取得の途中でプロセスが落ちた場合の後始末を兼ねる）
+        // （取得の途中でプロセスが落ちた場合の後始末を兼ねる）。
+        // 注意: suffix はプロセスごとに1回しか設定できず、このプロセスのすべての WebView に効く。
+        // 起動時の削除と WebViewCredentials.clear() もプロセス全体に効くので、ログイン以外の用途で WebView を足すなら別プロセスにすること。
         deleteLoginWebViewData(this)
         WebView.setDataDirectorySuffix(LOGIN_WEBVIEW_SUFFIX)
         container = AppContainer(this)
@@ -41,15 +47,6 @@ class WaveApplication : Application() {
 
     companion object {
         const val LOGIN_WEBVIEW_SUFFIX = "login"
-
-        /** このプロセスでログイン用 WebView を作ったか。作っていなければ、ログアウト時に WebView を初期化しない。 */
-        @Volatile
-        var loginWebViewUsed: Boolean = false
-            private set
-
-        fun markLoginWebViewUsed() {
-            loginWebViewUsed = true
-        }
         const val LOG_TAG = "wave"
 
         /**
@@ -94,4 +91,21 @@ class AppContainer(
     val httpClient: HttpClient = createWaveHttpClient(guardedEngine)
 
     val session = WaveSession(httpClient, authManager, appScope, rethrowViolations = isDebuggable)
+
+    private val mutableLoginGeneration = MutableStateFlow(0)
+
+    /** ログインが完了するたびに増える。ログイン画面の ViewModel をログインごとに作り直すキーに使う。 */
+    val loginGeneration: StateFlow<Int> = mutableLoginGeneration.asStateFlow()
+
+    fun onLoginCompleted() {
+        mutableLoginGeneration.update { it + 1 }
+    }
+
+    /** ログアウトの唯一の入口。保存物を消し、WebView 側の後始末もする。両方消せたら true。 */
+    suspend fun logout(): Boolean {
+        val cleared = authManager.logout()
+        WebViewCredentials.clear()
+        Log.i(WaveApplication.LOG_TAG, "logout cleared=$cleared")
+        return cleared
+    }
 }

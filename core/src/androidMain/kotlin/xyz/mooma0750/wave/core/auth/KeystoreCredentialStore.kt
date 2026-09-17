@@ -120,22 +120,28 @@ class KeystoreCredentialStore(
      * 次の起動では Unreadable(KeyUnavailable) になり、再ログインで上書きされる）。
      * 途中でキャンセルさせない。
      */
-    override suspend fun clear() {
+    override suspend fun clear(): Boolean =
         withContext(Dispatchers.IO + NonCancellable) {
-            try {
-                dataStore.edit { prefs ->
-                    prefs.remove(IV)
-                    prefs.remove(CIPHERTEXT)
-                    prefs.remove(SCHEMA_VERSION)
+            val ciphertextRemoved =
+                try {
+                    dataStore.edit { prefs ->
+                        prefs.remove(IV)
+                        prefs.remove(CIPHERTEXT)
+                        prefs.remove(SCHEMA_VERSION)
+                    }
+                    true
+                } catch (_: Exception) {
+                    false
                 }
-            } catch (_: Exception) {
-            }
-            try {
-                androidKeyStore().deleteEntry(keyAlias)
-            } catch (_: Exception) {
-            }
+            val keyRemoved =
+                try {
+                    androidKeyStore().deleteEntry(keyAlias)
+                    true
+                } catch (_: Exception) {
+                    false
+                }
+            ciphertextRemoved && keyRemoved
         }
-    }
 
     private class Encrypted(
         val iv: ByteArray,

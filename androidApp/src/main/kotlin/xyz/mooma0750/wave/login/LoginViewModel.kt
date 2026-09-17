@@ -1,23 +1,17 @@
 package xyz.mooma0750.wave.login
 
 import android.util.Log
-import android.webkit.CookieManager
-import android.webkit.WebStorage
 import androidx.lifecycle.ViewModel
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlinx.coroutines.withContext
 import xyz.mooma0750.wave.AppContainer
 import xyz.mooma0750.wave.WaveApplication
+import xyz.mooma0750.wave.WebViewCredentials
 import xyz.mooma0750.wave.core.auth.Credentials
 import xyz.mooma0750.wave.core.auth.SaveResult
 import java.util.concurrent.atomic.AtomicBoolean
-import kotlin.coroutines.resume
 
 sealed interface LoginUiState {
     data object Browsing : LoginUiState
@@ -31,7 +25,7 @@ sealed interface LoginUiState {
     ) : LoginUiState
 }
 
-enum class FailureReason { NoSapisid, SaveFailed, RendererGone }
+enum class FailureReason { NoSapisid, NoVisitorData, SaveFailed, RendererGone }
 
 /**
  * WebView から取った値は、このクラスのメモリ上だけを通って AuthManager へ渡す。
@@ -60,16 +54,19 @@ class LoginViewModel(
                 "login landed credentials=${credentials != null} visitorData=${visitorData != null} dataSyncId=${dataSyncId != null}",
             )
             val next =
-                if (credentials == null) {
-                    LoginUiState.Failed(FailureReason.NoSapisid)
-                } else {
-                    when (container.authManager.completeLogin(credentials)) {
-                        SaveResult.Saved -> LoginUiState.Done
-                        is SaveResult.Failed -> LoginUiState.Failed(FailureReason.SaveFailed)
-                    }
+                when {
+                    credentials == null -> LoginUiState.Failed(FailureReason.NoSapisid)
+                    // visitorData が無いと後から補う経路が無く、/player が通らないことがある。保存せずにやり直してもらう
+                    credentials.visitorData == null -> LoginUiState.Failed(FailureReason.NoVisitorData)
+                    else ->
+                        when (container.authManager.completeLogin(credentials)) {
+                            SaveResult.Saved -> LoginUiState.Done
+                            is SaveResult.Failed -> LoginUiState.Failed(FailureReason.SaveFailed)
+                        }
                 }
-            clearWebViewCredentials()
+            WebViewCredentials.clear()
             mutableUiState.value = next
+            if (next == LoginUiState.Done) container.onLoginCompleted()
         }
     }
 
@@ -80,12 +77,7 @@ class LoginViewModel(
 
     /** 値を取る前に WebView が破棄された（途中でやめた・レンダラが落ちた）。Google にはログイン済みかもしれないので cookie を消す。 */
     fun onAbandoned() {
-        if (!extracted.get()) container.appScope.launch { clearWebViewCredentials() }
-    }
-
-    /** ログイン画面に入り直したとき。前回のログインが完了済みなら、最初からやり直せる状態に戻す。 */
-    fun resetIfDone() {
-        if (mutableUiState.value == LoginUiState.Done) retry()
+        if (!extracted.get()) container.appScope.launch { WebViewCredentials.clear() }
     }
 
     /** 失敗後にやり直すとき。 */
@@ -94,24 +86,12 @@ class LoginViewModel(
         mutableUiState.value = LoginUiState.Browsing
     }
 
-    companion object {
-        /**
-         * WebView 側に残った cookie とストレージを消す。プロセス全体に効く。ディレクトリは次の起動で消える。
-         * このプロセスでログイン用 WebView を使っていなければ何もしない（ここで Chromium を読み込ませない）。
-         */
-        suspend fun clearWebViewCredentials() {
-            if (!WaveApplication.loginWebViewUsed) return
-            withContext(Dispatchers.Main + NonCancellable) {
-                try {
-                    val cookies = CookieManager.getInstance()
-                    suspendCancellableCoroutine { continuation -> cookies.removeAllCookies { continuation.resume(Unit) } }
-                    cookies.flush()
-                    WebStorage.getInstance().deleteAllData()
-                } catch (error: RuntimeException) {
-                    // WebView の更新中などで使えない。ディレクトリは次の起動で消える
-                    Log.w(WaveApplication.LOG_TAG, "webview cleanup failed type=${error::class.simpleName}")
-                }
-            }
+    /** 保存済みのログイン情報を消してからやり直す（読めない保存物・保存に失敗し続ける場合の、利用者の操作による脱出口）。 */
+    fun discardSavedAndRetry() {
+        container.appScope.launch {
+            val cleared = container.authManager.discardSaved()
+            Log.i(WaveApplication.LOG_TAG, "discard saved login cleared=$cleared")
+            retry()
         }
     }
 }

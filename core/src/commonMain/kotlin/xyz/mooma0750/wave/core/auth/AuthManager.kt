@@ -13,7 +13,10 @@ sealed interface AuthState {
 
     data object LoggedOut : AuthState
 
-    /** 保存物はあるが読めなかった。UI は再ログインを促す。 */
+    /** 通信からは認証を外したが、端末の保存物をまだ消している。消し終わるまで「ログアウトした」と表示しない。 */
+    data object LoggingOut : AuthState
+
+    /** 保存物はあるが読めなかった。UI は再ログインを促し、手動で消してやり直す手段も出す。 */
     data class Unreadable(val reason: UnreadableReason) : AuthState
 
     /** Credentials は UI 層へ運ばない。 */
@@ -61,17 +64,27 @@ class AuthManager(
         }
 
     /**
-     * 通信から先に認証を外し、その後に保存物を消す。
-     * 消去は途中でキャンセルさせない（画面遷移で呼び出し元が消えても、端末に認証情報を残さない）。
+     * 通信から先に認証を外し（LoggingOut）、保存物を消し終えてから LoggedOut にする。
+     * 消去は途中でキャンセルさせない。プロセスが途中で終わった場合は、次の起動でログイン状態に戻る
+     * （UI は消し終わるまで「ログアウトした」と表示しないので、利用者にはそう見える）。
+     *
+     * @return 暗号文と鍵の両方を消せたら true
      */
-    suspend fun logout() {
+    suspend fun logout(): Boolean =
         mutex.withLock {
             withContext(NonCancellable) {
+                publish(null, AuthState.LoggingOut)
+                val cleared = store.clear()
                 publish(null, AuthState.LoggedOut)
-                store.clear()
+                cleared
             }
         }
-    }
+
+    /**
+     * 読めない保存物や、保存に失敗し続ける状態から抜けるために、利用者の操作で保存物を消す。
+     * 自動では呼ばない（一時的な失敗で有効な認証情報を消さないため）。
+     */
+    suspend fun discardSaved(): Boolean = logout()
 
     private fun publish(
         credentials: Credentials?,

@@ -226,6 +226,11 @@ class WaveSession internal constructor(
 
     internal fun currentGenerationId(): Long = current.value.id
 
+    /** テスト用: 走っている確認（accountMenu）が終わるまで待つ。 */
+    internal suspend fun awaitConfirmIdle() {
+        generationLock.withLock { current.value.confirm }?.join()
+    }
+
     /** tagged の最新値を公開用の StateFlow に写す。並行して写した場合も、最後は最新値になる。 */
     private fun publishState() {
         while (true) {
@@ -249,9 +254,15 @@ class WaveSession internal constructor(
         data object Network : Outcome<Nothing>
     }
 
-    /** InnerTube 呼び出しの入口。応答を分類し、state を更新する。 */
-    suspend fun <T> call(
+    /**
+     * InnerTube 呼び出しの入口。応答を分類し、state を更新する。core の外からは呼ばせない（素の InnerTube を触らせない）。
+     *
+     * @param provesAuthentication この応答の成功が「ログインが有効」を意味するか（accountMenu のヘッダなど）。
+     *   匿名でも成功する検索などで Suspect・Expired を解除しないよう、既定は false
+     */
+    internal suspend fun <T> call(
         operation: String,
+        provesAuthentication: Boolean = false,
         block: suspend (InnerTube) -> HttpResponse,
         parse: suspend (HttpResponse) -> ParseOutcome<T>,
     ): CallResult<T> {
@@ -275,8 +286,8 @@ class WaveSession internal constructor(
                     CallResult.Failed(FailureKind.NotLoggedIn)
                 }
             }
-        if (outcome is Outcome.Violation && rethrowViolations) throw AuthRouteViolation("($operation)")
-        return classify(generation, outcome)
+        if (outcome is Outcome.Violation && rethrowViolations) throw AuthRouteViolation("operation=$operation")
+        return classify(generation, outcome, provesAuthentication)
     }
 
     private suspend fun <T> runCatchingOutcome(
@@ -314,12 +325,13 @@ class WaveSession internal constructor(
     private suspend fun <T> classify(
         generation: Generation,
         outcome: Outcome<T>,
+        provesAuthentication: Boolean,
     ): CallResult<T> =
         when (outcome) {
             is Outcome.Body ->
                 when (val parsed = outcome.parsed) {
                     is ParseOutcome.Parsed -> {
-                        updateStateFor(generation.id) { SessionState.Active }
+                        if (provesAuthentication) updateStateFor(generation.id) { SessionState.Active }
                         CallResult.Ok(parsed.value)
                     }
                     ParseOutcome.LoggedOutResponse -> suspect(generation, SuspectReason.EmptyResponse, status = null)
@@ -428,7 +440,7 @@ class WaveSession internal constructor(
 
     suspend fun accountInfo(): AccountResult {
         val result =
-            call("accountMenu", { it.accountMenu(YouTubeClient.WEB_REMIX) }) { response ->
+            call("accountMenu", provesAuthentication = true, block = { it.accountMenu(YouTubeClient.WEB_REMIX) }) { response ->
                 val account = activeAccountOf(parseAccountMenu(response))
                 if (account == null) ParseOutcome.LoggedOutResponse else ParseOutcome.Parsed(account)
             }
@@ -439,8 +451,10 @@ class WaveSession internal constructor(
     }
 
     /**
+     * 表示用の診断値。固定の1曲で Premium 音質のフォーマットが観測できたかを返すだけで、アカウントの資格の判定ではない
+     * （地域・曲の差し替え・一時的な欠落で変わる）。再生時の音質選択には使わず、再生する曲のフォーマットで決めること。
+     *
      * 世代ごとに1本だけ判定する。Available・Unavailable はその世代のあいだ、Unknown は60秒だけキャッシュする。
-     * 失効した後も Available を返しうるので、表示では SessionState と合わせて使う。
      */
     suspend fun premiumStatus(): PremiumStatus {
         val generation = current.value
@@ -486,7 +500,7 @@ class WaveSession internal constructor(
                 null
             } ?: return PremiumStatus.Unknown
         val player =
-            call("player", { it.player(YouTubeClient.WEB_REMIX, PROBE_VIDEO_ID, signatureTimestamp = sts) }) { response ->
+            call("player", block = { it.player(YouTubeClient.WEB_REMIX, PROBE_VIDEO_ID, signatureTimestamp = sts) }) { response ->
                 val body = json.decodeFromString(PlayerProbeResponse.serializer(), response.bodyAsTextLimited(MAX_PLAYER_BYTES))
                 when (body.playabilityStatus?.status) {
                     "LOGIN_REQUIRED" -> ParseOutcome.LoginRequired
@@ -507,7 +521,7 @@ class WaveSession internal constructor(
     internal companion object {
         const val SIGN_IN_HOST = "accounts.google.com"
 
-        /** 判定に使う曲。削除されにくい公式の音源にする（実機で 141/774 が出ることを確認して決める）。 */
+        /** 判定に使う曲。Pixel 3・日本・Premium アカウントで 141/774 が出ることを確認した（2026-09-17）。 */
         const val PROBE_VIDEO_ID = "dQw4w9WgXcQ"
 
         const val UNKNOWN_CACHE_MS = 60_000L

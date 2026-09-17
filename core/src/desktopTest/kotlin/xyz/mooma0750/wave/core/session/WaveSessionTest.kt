@@ -205,21 +205,31 @@ class WaveSessionTest {
         }
 
     @Test
-    fun successClearsSuspicion(): Unit =
+    fun onlyAuthenticationProvingSuccessClearsSuspicion(): Unit =
         runBlocking {
             var fail = true
+            var accountAvailable = false
             handler = { request ->
                 when {
                     request.url.encodedPath.endsWith("/player") && fail -> respond("", HttpStatusCode.Forbidden)
                     request.url.encodedPath.endsWith("/player") -> json(player("OK", emptyList()))
+                    accountAvailable -> json(accountMenu("Synthetic User"))
                     else -> respond("", HttpStatusCode.InternalServerError) // 確認は失敗させて Suspect のままにする
                 }
             }
             val session = loggedInSession()
             callPlayer(session)
+            session.awaitConfirmIdle()
             assertIs<SessionState.Suspect>(session.state.value)
+
+            // 匿名でも成功しうる応答では解除しない
             fail = false
             assertIs<CallResult.Ok<Unit>>(callPlayer(session))
+            assertIs<SessionState.Suspect>(session.state.value)
+
+            // アカウントのヘッダが返った（ログインが有効と分かった）ときだけ解除する
+            accountAvailable = true
+            assertIs<AccountResult.Ok>(session.accountInfo())
             assertEquals(SessionState.Active, session.state.value)
         }
 
@@ -263,12 +273,12 @@ class WaveSessionTest {
         runBlocking {
             val strict = loggedInSession(rethrowViolations = true)
             assertFailsWith<AuthRouteViolation> {
-                strict.call("stray", { it.httpClient.get("https://www.youtube.com/") { header(HttpHeaders.Cookie, "SAPISID=synthetic") } }) { ParseOutcome.Parsed(Unit) }
+                strict.call("stray", block = { it.httpClient.get("https://www.youtube.com/") { header(HttpHeaders.Cookie, "SAPISID=synthetic") } }) { ParseOutcome.Parsed(Unit) }
             }
             val lenient = loggedInSession(rethrowViolations = false)
             assertEquals(
                 CallResult.Failed(FailureKind.Http),
-                lenient.call("stray", { it.httpClient.get("https://www.youtube.com/") { header(HttpHeaders.Cookie, "SAPISID=synthetic") } }) { ParseOutcome.Parsed(Unit) },
+                lenient.call("stray", block = { it.httpClient.get("https://www.youtube.com/") { header(HttpHeaders.Cookie, "SAPISID=synthetic") } }) { ParseOutcome.Parsed(Unit) },
             )
             assertTrue(sent.none { it.url.host == "www.youtube.com" })
         }
@@ -328,8 +338,8 @@ class WaveSessionTest {
             val session = loggedInSession()
             assertEquals(AccountResult.Failed(FailureKind.Suspect), session.accountInfo())
             assertEquals(SessionState.Suspect(SuspectReason.EmptyResponse, 1), session.state.value)
-            withTimeout(5_000) { while (sent.size < 2) delay(10) }
-            delay(200)
+            session.awaitConfirmIdle()
+            assertEquals(2, sent.size, "確認の accountMenu が走っていない")
             // 確認の応答も {} なので、ログアウトの印とはみなさず Suspect のまま
             assertIs<SessionState.Suspect>(session.state.value)
         }
@@ -353,7 +363,7 @@ class WaveSessionTest {
             }
             val session = loggedInSession()
             repeat(5) { callPlayer(session) }
-            delay(300)
+            session.awaitConfirmIdle()
             val confirms = { sent.count { it.url.encodedPath.endsWith("/account_menu") } }
             // 500 は innertubex が3回まで再試行するので、確認1回 = 3リクエスト
             assertEquals(3, confirms())
@@ -372,7 +382,8 @@ class WaveSessionTest {
             status = HttpStatusCode.Forbidden
             callPlayer(session)
             assertEquals(SessionState.Expired(ExpiredReason.Unauthenticated), session.state.value)
-            delay(200)
+            // 確認は suspect() の中で同期的に起動されるので、起動されていればここで待てる
+            session.awaitConfirmIdle()
             assertEquals(0, sent.count { it.url.encodedPath.endsWith("/account_menu") })
         }
 
@@ -385,7 +396,7 @@ class WaveSessionTest {
             val session = loggedInSession()
             assertEquals(
                 CallResult.Failed(FailureKind.Parse),
-                session.call("player", { it.player(YouTubeClient.WEB_REMIX, "synthetic-id", signatureTimestamp = 1) }) { error("unparseable") },
+                session.call("player", block = { it.player(YouTubeClient.WEB_REMIX, "synthetic-id", signatureTimestamp = 1) }) { error("unparseable") },
             )
             assertEquals(AccountResult.Failed(FailureKind.Network), session.accountInfo())
             assertEquals(SessionState.Active, session.state.value)
@@ -397,7 +408,7 @@ class WaveSessionTest {
             val session = loggedInSession()
             assertEquals(
                 CallResult.Failed(FailureKind.Network),
-                session.call<Unit>("mutation", { throw kotlinx.coroutines.CancellationException("InnerTube session changed") }) { ParseOutcome.Parsed(Unit) },
+                session.call<Unit>("mutation", block = { throw kotlinx.coroutines.CancellationException("InnerTube session changed") }) { ParseOutcome.Parsed(Unit) },
             )
             assertEquals(SessionState.Active, session.state.value)
         }
@@ -495,7 +506,7 @@ class WaveSessionTest {
         session: WaveSession,
         parseLoginRequired: Boolean = false,
     ): CallResult<Unit> =
-        session.call("player", { it.player(YouTubeClient.WEB_REMIX, "synthetic-id", signatureTimestamp = 1) }) {
+        session.call("player", block = { it.player(YouTubeClient.WEB_REMIX, "synthetic-id", signatureTimestamp = 1) }) {
             if (parseLoginRequired) ParseOutcome.LoginRequired else ParseOutcome.Parsed(Unit)
         }
 

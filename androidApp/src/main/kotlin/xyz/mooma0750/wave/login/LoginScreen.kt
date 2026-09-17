@@ -28,8 +28,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -43,12 +45,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import xyz.mooma0750.wave.WaveApplication
+import xyz.mooma0750.wave.WebViewCredentials
 import java.io.ByteArrayInputStream
 
 private const val START_URL = "https://accounts.google.com/ServiceLogin?continue=https%3A%2F%2Fmusic.youtube.com%2F"
 private const val LANDING_HOST = "music.youtube.com"
 private const val READ_RETRY_DELAY_MS = 500L
-private const val READ_RETRY_LIMIT = 10
+private const val READ_RETRY_LIMIT = 20
 
 /**
  * WebView 内で開いてよいメインフレームのホスト。利用者がページを置ける Google のホスト（sites・docs など）を含めないよう、
@@ -78,20 +81,41 @@ private val SAPISID_COOKIE = Regex("""(?:^|;\s*)(?:SAPISID|__Secure-3PAPISID|__S
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun LoginScreen(viewModel: LoginViewModel) {
+fun LoginScreen(
+    viewModel: LoginViewModel,
+    /** 保存済みのログイン情報が読めなかったことを知らせ、消してやり直す手段を出す。 */
+    savedLoginUnreadable: Boolean = false,
+    /** 再ログインをやめて戻る（ログイン済みのまま再ログインする場合だけ）。 */
+    onCancel: (() -> Unit)? = null,
+) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var host by remember { mutableStateOf("") }
 
-    Scaffold(topBar = { TopAppBar(title = { Text(host.ifEmpty { "ログイン" }) }) }) { padding ->
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(host.ifEmpty { "ログイン" }) },
+                actions = { if (onCancel != null) TextButton(onClick = onCancel) { Text("キャンセル") } },
+            )
+        },
+    ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding).imePadding()) {
             when (val state = uiState) {
                 LoginUiState.Browsing ->
-                    LoginWebView(
+                    Column(Modifier.fillMaxSize()) {
+                        if (savedLoginUnreadable) {
+                            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text("保存済みのログイン情報を読み込めませんでした。ログインし直すと上書きされます。")
+                                OutlinedButton(onClick = viewModel::discardSavedAndRetry) { Text("保存済みのログイン情報を消す") }
+                            }
+                        }
+                        LoginWebView(
                         onHostChanged = { host = it },
                         onLanded = viewModel::onLanded,
                         onRendererGone = viewModel::onRendererGone,
-                        onAbandoned = viewModel::onAbandoned,
-                    )
+                            onAbandoned = viewModel::onAbandoned,
+                        )
+                    }
                 LoginUiState.Saving, LoginUiState.Done ->
                     CircularProgressIndicator(Modifier.align(Alignment.Center))
                 is LoginUiState.Failed ->
@@ -99,11 +123,15 @@ fun LoginScreen(viewModel: LoginViewModel) {
                         Text(
                             when (state.reason) {
                                 FailureReason.NoSapisid -> "ログイン情報を取得できませんでした。"
+                                FailureReason.NoVisitorData -> "ログイン情報の一部を取得できませんでした。通信状況を確認して、もう一度ログインしてください。"
                                 FailureReason.SaveFailed -> "ログイン情報を端末に保存できませんでした。"
                                 FailureReason.RendererGone -> "ログイン画面が異常終了しました。"
                             },
                         )
                         Button(onClick = viewModel::retry) { Text("もう一度ログインする") }
+                        if (state.reason == FailureReason.SaveFailed) {
+                            OutlinedButton(onClick = viewModel::discardSavedAndRetry) { Text("保存済みのログイン情報を消してやり直す") }
+                        }
                     }
             }
         }
@@ -120,15 +148,19 @@ private fun LoginWebView(
 ) {
     var webView by remember { mutableStateOf<WebView?>(null) }
     var canGoBack by remember { mutableStateOf(false) }
+    // 値の読み取りの遅延リトライは、この WebView が破棄されたら止める
+    val retryHandler = remember { Handler(Looper.getMainLooper()) }
+    val alive = remember { java.util.concurrent.atomic.AtomicBoolean(true) }
 
     BackHandler(enabled = canGoBack) { webView?.goBack() }
 
     AndroidView(
         modifier = Modifier.fillMaxSize(),
         factory = { context ->
-            // debug ビルドでも、このプロセスの WebView を chrome://inspect に出さない
+            // release ビルドで、このプロセスの WebView を chrome://inspect に出さない。
+            // debuggable なビルドでは Chromium が強制的に有効にするので効かない（決定7: 実アカウントでログイン中は DevTools を接続しない）
             WebView.setWebContentsDebuggingEnabled(false)
-            WaveApplication.markLoginWebViewUsed()
+            WebViewCredentials.markUsed()
             WebView(context).apply {
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = true
@@ -214,9 +246,9 @@ private fun LoginWebView(
                         ) {
                             if (!isOnLandingPage(view)) return
                             if (!hasSapisid(CookieManager.getInstance().getCookie("https://$LANDING_HOST"))) return
-                            readConfigValues(view, attempt = 0) { visitorData, dataSyncId ->
+                            readConfigValues(view, retryHandler, alive, attempt = 0) { visitorData, dataSyncId ->
                                 // 読んでいる間に別のページへ移っていたら使わない。cookie は値を読み終えた時点のものを渡す
-                                if (!isOnLandingPage(view)) return@readConfigValues
+                                if (!alive.get() || !isOnLandingPage(view)) return@readConfigValues
                                 val cookie = CookieManager.getInstance().getCookie("https://$LANDING_HOST")
                                 if (!hasSapisid(cookie)) return@readConfigValues
                                 onLanded(cookie, visitorData, dataSyncId)
@@ -231,6 +263,8 @@ private fun LoginWebView(
 
     DisposableEffect(Unit) {
         onDispose {
+            alive.set(false)
+            retryHandler.removeCallbacksAndMessages(null)
             webView?.apply {
                 stopLoading()
                 clearCache(true)
@@ -252,15 +286,18 @@ private fun hasSapisid(cookie: String?): Boolean = cookie != null && SAPISID_COO
 /** ページの yt.config_ から値を読む。JS インターフェースは公開せず、評価結果（JSON の文字列リテラル）を受け取るだけ。 */
 private fun readConfigValues(
     view: WebView,
+    retryHandler: Handler,
+    alive: java.util.concurrent.atomic.AtomicBoolean,
     attempt: Int,
     onRead: (visitorData: String?, dataSyncId: String?) -> Unit,
 ) {
+    if (!alive.get()) return
     view.evaluateJavascript("String(window.yt?.config_?.VISITOR_DATA ?? '')") { rawVisitor ->
         view.evaluateJavascript("String(window.yt?.config_?.DATASYNC_ID ?? '')") { rawSync ->
             val visitorData = decodeJsString(rawVisitor)
             val dataSyncId = decodeJsString(rawSync)
             if ((visitorData == null || dataSyncId == null) && attempt < READ_RETRY_LIMIT) {
-                Handler(Looper.getMainLooper()).postDelayed({ readConfigValues(view, attempt + 1, onRead) }, READ_RETRY_DELAY_MS)
+                retryHandler.postDelayed({ readConfigValues(view, retryHandler, alive, attempt + 1, onRead) }, READ_RETRY_DELAY_MS)
             } else {
                 onRead(visitorData, dataSyncId)
             }

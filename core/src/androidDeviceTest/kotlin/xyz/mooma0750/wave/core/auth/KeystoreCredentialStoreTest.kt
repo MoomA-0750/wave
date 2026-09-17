@@ -140,7 +140,7 @@ class KeystoreCredentialStoreTest {
     fun clearRemovesCiphertextAndKey(): Unit =
         runBlocking {
             store().save(credentials)
-            store().clear()
+            assertEquals(true, store().clear())
 
             assertEquals(LoadResult.Empty, store().load())
             assertNull(androidKeyStore().getKey(alias, null))

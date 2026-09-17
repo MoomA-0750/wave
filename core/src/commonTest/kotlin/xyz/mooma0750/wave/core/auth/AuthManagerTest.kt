@@ -48,7 +48,7 @@ class AuthManagerTest {
         }
 
     @Test
-    fun credentialsAreDroppedBeforeStateTurnsLoggedOut() =
+    fun credentialsAreDroppedBeforeStateTurnsLoggingOut() =
         runTest {
             val manager = AuthManager(FakeStore(LoadResult.Found(credentials)))
             manager.restore()
@@ -56,7 +56,7 @@ class AuthManagerTest {
             // Unconfined は代入した瞬間にその場で再開するので、state が変わった時点の credentials を見られる
             val watcher =
                 launch(UnconfinedTestDispatcher(testScheduler)) {
-                    manager.state.collect { if (it == AuthState.LoggedOut) credentialsWhenLoggedOut += manager.credentials.value }
+                    manager.state.collect { if (it == AuthState.LoggingOut) credentialsWhenLoggedOut += manager.credentials.value }
                 }
             manager.logout()
             watcher.cancel()
@@ -118,13 +118,36 @@ class AuthManagerTest {
                 FakeStore(LoadResult.Found(credentials)).apply {
                     onClear = {
                         assertNull(manager.credentials.value)
-                        assertEquals(AuthState.LoggedOut, manager.state.value)
+                        // 消している間は、まだ「ログアウトした」とは見せない
+                        assertEquals(AuthState.LoggingOut, manager.state.value)
                     }
                 }
             manager = AuthManager(store)
             manager.restore()
             manager.logout()
             assertEquals(1, store.clears)
+        }
+
+    @Test
+    fun logoutReportsWhetherStorageWasCleared() =
+        runTest {
+            val store = FakeStore(LoadResult.Found(credentials)).apply { clearResult = false }
+            val manager = AuthManager(store)
+            manager.restore()
+            assertEquals(false, manager.logout())
+            assertEquals(AuthState.LoggedOut, manager.state.value)
+        }
+
+    @Test
+    fun unreadableStorageCanBeDiscardedByTheUser() =
+        runTest {
+            val store = FakeStore(LoadResult.Unreadable(UnreadableReason.KeyUnavailable))
+            val manager = AuthManager(store)
+            manager.restore()
+            assertEquals(0, store.clears, "読めない保存物を自動で消している")
+            assertEquals(true, manager.discardSaved())
+            assertEquals(1, store.clears)
+            assertEquals(AuthState.LoggedOut, manager.state.value)
         }
 
     @Test
@@ -172,10 +195,13 @@ class AuthManagerTest {
             return saveResult
         }
 
-        override suspend fun clear() {
+        var clearResult = true
+
+        override suspend fun clear(): Boolean {
             beforeClear()
             onClear()
             clears++
+            return clearResult
         }
     }
 }

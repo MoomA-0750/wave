@@ -14,7 +14,7 @@ internal suspend fun parseAccountMenu(response: HttpResponse): AccountMenuRespon
 /**
  * accountMenu の応答が、ログアウトしていることを示しているか。
  * 中身の分からない応答（`{}` など）で全員を失効扱いにしないよう、actions があるのにアカウントのヘッダが無い場合だけ true にする。
- * 実際のログアウト時の応答の形は未検証（M8 の実機確認で確かめる）。
+ * 実際のログアウト時の応答の形は未検証（wave はログアウト中に送信しないので、まだ観測できていない）。
  */
 internal fun showsLoggedOut(body: AccountMenuResponse): Boolean = body.actions.isNotEmpty() && activeAccountOf(body) == null
 

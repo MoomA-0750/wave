@@ -8,8 +8,8 @@ interface CredentialStore {
     /** 失敗は SaveResult で返す。例外文に値を含めない。 */
     suspend fun save(credentials: Credentials): SaveResult
 
-    /** 暗号文 → 鍵 の順に消す。途中で失敗しても、呼ばれるたびに残りを消しにいく。 */
-    suspend fun clear()
+    /** 暗号文 → 鍵 の順に消す。途中で失敗しても、呼ばれるたびに残りを消しにいく。両方消せたら true。 */
+    suspend fun clear(): Boolean
 }
 
 sealed interface LoadResult {
