@@ -353,6 +353,45 @@ class ConnectSimulationTest {
     }
 
     @Test
+    fun stateRelabeledWithAnotherVersionIsIgnored() {
+        setUp()
+        a.startPlaying("queue-A", position = 1_000)
+        relay.run()
+        val real = relay.store.latest().single { it.kind == xyz.mooma0750.wave.handoff.v2.StateKind.Cursor }
+        // A の本物の書き込みを2つ作る
+        a.positionMs = 2_000
+        a.pushCursor()
+        relay.run()
+        val second = relay.store.latest().single { it.kind == xyz.mooma0750.wave.handoff.v2.StateKind.Cursor }
+        // 中継が、B に「前の版の番号で、後の doc」を見せる → 見出しの版と合わないので捨てる
+        relay.inject(b.deviceId, RelayV2.State(second.copy(version = real.version)))
+        relay.run()
+        assertEquals(2_000L, b.client.latestCursorBody()?.second?.positionMs)
+    }
+
+    @Test
+    fun resetStoreServingOldStateIsIgnoredUntilAccepted() {
+        setUp()
+        a.startPlaying("queue-A", position = 1_000)
+        relay.run()
+        a.positionMs = 50_000
+        a.pushCursor()
+        relay.run()
+        val old = relay.store.latest().single { it.kind == xyz.mooma0750.wave.handoff.v2.StateKind.Cursor }
+        // 中継が保存を作り直し（storeId が変わる）、古い状態を最新として見せる
+        b.disconnect()
+        relay.file.delete()
+        relay.store = HouseholdStore(relay.file, listOf(a.publicKeyB64), { now })
+        b.connect()
+        relay.inject(b.deviceId, RelayV2.State(old.copy(storeId = relay.store.storeId)))
+        relay.run()
+        assertTrue(b.events.any { it is ClientEvent.StoreReset })
+        // 受け入れるまで、その状態を表示にも取り込みにも使わない
+        assertEquals(50_000L, b.client.latestCursorBody()?.second?.positionMs)
+        assertFalse(b.client.requestTransfer())
+    }
+
+    @Test
     fun forkedChainAndStoreResetAreSurfacedAndNotActedOn() {
         setUp()
         a.startPlaying("queue-A")

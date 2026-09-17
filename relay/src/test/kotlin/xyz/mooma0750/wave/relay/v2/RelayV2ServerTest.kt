@@ -147,6 +147,38 @@ class RelayV2ServerTest {
         }
 
     @Test
+    fun pairingOpenForwardsOneHelloAndReturnsTheConfirm() =
+        testApplication {
+            application { relayV2Module(RelayV2Config(host, store(), tickMs = 50)) }
+            val client = createClient { install(WebSockets) }
+            client.webSocket("/v2/connect") {
+                authenticate(a)
+                sendMessage(RelayV2.HouseholdCreate(MemberChain.genesis(a, a.keys)))
+                expect<RelayV2.ChainOk>()
+                val token = WaveCrypto.randomBytes(16)
+                val b64 = Base64.getUrlEncoder().withoutPadding()
+                sendMessage(RelayV2.PairingOpen(b64.encodeToString(WaveCrypto.sha256(token))))
+                val sessionA = this
+                client.webSocket("/v2/pair") {
+                    sendMessage(RelayV2.PairHelloIn(b64.encodeToString(token), kotlinx.serialization.json.JsonPrimitive("hello")))
+                    val hello = sessionA.expect<RelayV2.PairHello>()
+                    assertEquals(kotlinx.serialization.json.JsonPrimitive("hello"), hello.hello)
+                    sessionA.sendMessage(RelayV2.PairConfirm(hello.tokenHash, kotlinx.serialization.json.JsonPrimitive("confirm")))
+                    assertEquals(kotlinx.serialization.json.JsonPrimitive("confirm"), assertIs<RelayV2.PairConfirmed>(receiveMessage()).confirm)
+                }
+                // 同じ token の2回目は受けない
+                client.webSocket("/v2/pair") {
+                    sendMessage(RelayV2.PairHelloIn(b64.encodeToString(token), kotlinx.serialization.json.JsonPrimitive("again")))
+                    assertEquals("no_pairing", assertIs<RelayV2.Error>(receiveMessage()).code)
+                }
+                // 家の外の端末は pairing_open を開けない（接続できないので）。大きすぎるフレームは断る
+                sendMessage(RelayV2.StateGet)
+                send(Frame.Text("x".repeat(RelayV2.MAX_FRAME_CHARS + 10)))
+                assertEquals("too_large", expect<RelayV2.Error>().code)
+            }
+        }
+
+    @Test
     fun unknownDevicesCannotConnectBeforeOrAfterTheHouseholdExists() =
         testApplication {
             application { relayV2Module(RelayV2Config(host, store(), tickMs = 50)) }
