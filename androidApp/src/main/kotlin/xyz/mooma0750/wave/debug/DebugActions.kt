@@ -74,6 +74,26 @@ object DebugActions {
                     container.logout()
                 }
                 "shuffle" -> player.shuffleUpcoming()
+                // Phase 6: 中継を使わず、同じ端末で自分のキューを書き出して検証し、取り込み直す（adopt の確認）
+                "handoff_self" -> {
+                    player.controller() // サービスを起動しておく
+                    val endpoint = container.handoffHost.endpoint
+                    val handoffId = java.util.UUID.randomUUID().toString()
+                    val captured = endpoint?.capture(handoffId)
+                    if (endpoint == null || captured == null) {
+                        Log.i(WaveApplication.LOG_TAG, "debug handoff capture failed endpoint=${endpoint != null}")
+                    } else {
+                        val text = xyz.mooma0750.wave.handoff.HandoffCodec.encode(captured)
+                        when (val decoded = xyz.mooma0750.wave.handoff.HandoffCodec.decode(text, handoffId)) {
+                            is xyz.mooma0750.wave.handoff.HandoffDecodeResult.Ok -> {
+                                val index = decoded.snapshot.items.indexOfFirst { it.itemId == decoded.snapshot.currentItemId }
+                                Log.i(WaveApplication.LOG_TAG, "debug handoff bytes=${text.length} items=${decoded.snapshot.items.size} index=$index positionS=${decoded.snapshot.positionMs / 1000} listenedS=${decoded.snapshot.listenedMs / 1000} sent=${decoded.snapshot.historySent} repeat=${decoded.snapshot.repeat}")
+                                Log.i(WaveApplication.LOG_TAG, "debug handoff adopt=${endpoint.adopt(decoded.snapshot)}")
+                            }
+                            else -> Log.i(WaveApplication.LOG_TAG, "debug handoff decode=$decoded")
+                        }
+                    }
+                }
                 // Phase 6 P6-S: アカウントの識別子の場所（キー名・真偽値）と、2台で比べるための HMAC の先頭6文字（固定の調査用の鍵）
                 "account_probe" -> {
                     val probe = container.session.probeAccountIdentity()

@@ -5,8 +5,10 @@ package xyz.mooma0750.wave.playback
  */
 class ListenCounter(
     private val thresholdMs: Long,
+    /** 他の端末で聴いた時間（引き取ったとき、決定 K-8）。 */
+    initialListenedMs: Long = 0,
 ) {
-    private var listenedMs = 0L
+    private var listenedMs = initialListenedMs.coerceAtLeast(0)
     private var playingSinceMs: Long? = null
 
     val running: Boolean

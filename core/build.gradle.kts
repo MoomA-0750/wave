@@ -27,6 +27,7 @@ kotlin {
 
     sourceSets {
         commonMain.dependencies {
+            api(project(":handoff-protocol"))
             implementation(libs.innertubex)
             implementation(libs.kotlinx.serialization.json)
             implementation(libs.ktor.client.content.negotiation)

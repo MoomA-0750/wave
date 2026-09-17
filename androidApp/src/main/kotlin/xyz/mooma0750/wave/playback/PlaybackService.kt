@@ -70,6 +70,7 @@ class PlaybackService : MediaSessionService() {
     private var saveJob: Job? = null
     private var periodicSaveJob: Job? = null
     private var likes: LikeController? = null
+    private var handoffEndpoint: HandoffHost.Endpoint? = null
 
     private lateinit var container: xyz.mooma0750.wave.AppContainer
 
@@ -207,6 +208,44 @@ class PlaybackService : MediaSessionService() {
 
         // ログアウトしたら再生を止めてキューと解決済みの URL を消す（決定 E5）。
         // ログインし直した（別のログインに変わった）ときも、アカウントの切り替えとして同じく消す（2026-09-17 本人の決定）
+        val endpoint =
+            object : HandoffHost.Endpoint {
+                override fun capture(handoffId: String): xyz.mooma0750.wave.handoff.HandoffSnapshot? {
+                    val wasPlaying = player.isPlaying || player.playWhenReady
+                    player.pause()
+                    val (listenedMs, historySent) = historyTracker.handoffState()
+                    return queueSession.handoffSnapshot(
+                        handoffId = handoffId,
+                        positionMs = player.currentPosition,
+                        playing = wasPlaying,
+                        repeatMode = player.repeatMode,
+                        listenedMs = listenedMs,
+                        historySent = historySent,
+                        nowEpochMs = System.currentTimeMillis(),
+                    )
+                }
+
+                override fun adopt(snapshot: xyz.mooma0750.wave.handoff.HandoffSnapshot): Boolean {
+                    if (loggedInAt == null) return false
+                    // 途中の復元を無効にし、受け取ったキューを保存で上書きしてよい状態にする
+                    restoreStarted = true
+                    restoreSettled = true
+                    skipGuard.onUserSelection()
+                    lastErrorWasThisSong = false
+                    historyTracker.seedHandoff(snapshot.currentItemId, snapshot.listenedMs, snapshot.historySent)
+                    player.repeatMode =
+                        when (snapshot.repeat) {
+                            xyz.mooma0750.wave.handoff.HandoffRepeat.Off -> Player.REPEAT_MODE_OFF
+                            xyz.mooma0750.wave.handoff.HandoffRepeat.One -> Player.REPEAT_MODE_ONE
+                            xyz.mooma0750.wave.handoff.HandoffRepeat.All -> Player.REPEAT_MODE_ALL
+                        }
+                    queueSession.adopt(snapshot)
+                    return true
+                }
+            }
+        handoffEndpoint = endpoint
+        container.handoffHost.register(endpoint)
+
         // 保存したキューを戻すのも、この購読の中で行う（ログアウト・切り替えの処理と順序を決めるため）
         scope.launch {
             container.authManager.state.collect { state ->
@@ -505,6 +544,8 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        handoffEndpoint?.let { container.handoffHost.unregister(it) }
+        handoffEndpoint = null
         // scope を止めると待っている保存が捨てられるので、その前に最後の状態を書く
         val obtainedAt = loggedInAt
         val queueSession = queue

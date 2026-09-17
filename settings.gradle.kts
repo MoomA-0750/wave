@@ -23,5 +23,6 @@ dependencyResolutionManagement {
 
 rootProject.name = "wave"
 
+include(":handoff-protocol")
 include(":core")
 include(":androidApp")

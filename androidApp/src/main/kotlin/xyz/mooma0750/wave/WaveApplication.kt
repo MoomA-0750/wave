@@ -38,6 +38,7 @@ import xyz.mooma0750.wave.core.stream.PlaybackHistory
 import xyz.mooma0750.wave.library.PlaylistEditor
 import xyz.mooma0750.wave.settings.AppSettings
 import xyz.mooma0750.wave.playback.MediaHttp
+import xyz.mooma0750.wave.playback.HandoffHost
 import xyz.mooma0750.wave.playback.QueueStore
 import xyz.mooma0750.wave.playback.ResolvedStreamCache
 import java.io.File
@@ -167,6 +168,9 @@ class AppContainer(
     val streamCache = ResolvedStreamCache(stream.resolver, SystemClock::elapsedRealtime)
 
     val settings = AppSettings(context)
+
+    /** 端末間の受け渡しの、再生サービスへの入口（Phase 6）。 */
+    val handoffHost = HandoffHost()
 
     /** 再生履歴の送信（ADR-0006）。 */
     val playbackHistory = PlaybackHistory(session)

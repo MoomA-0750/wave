@@ -63,6 +63,19 @@ class QueueSessionTest {
         }
 
         var epoch: Long? = null
+        var playedFromMs: Long? = null
+
+        override fun replaceAndPlayAt(
+            items: List<QueueItem>,
+            startIndex: Int,
+            positionMs: Long,
+        ) {
+            this.items.clear()
+            this.items += items
+            currentIndex = startIndex
+            ended = false
+            playedFromMs = positionMs
+        }
 
         override fun setAccountEpoch(epoch: Long?) {
             this.epoch = epoch
@@ -664,5 +677,46 @@ class QueueSessionTest {
             assertEquals(listOf<Long?>(7), content.epochs)
             queue.playSong(song("b"))
             assertEquals(8L, player.epoch)
+        }
+
+    @Test
+    fun handoffSnapshotRoundTripsIntoAnotherQueue() =
+        runTest {
+            val player = FakePlayer()
+            val content = FakeContent().apply { upNextResult = { _, _, _ -> page("r1", "r2", continuation = "c9") } }
+            var n = 0
+            val uuids = { "00000000-0000-4000-8000-%012d".format(n++) }
+            val queue = QueueSession(player, content, this, newItemId = uuids, loginGeneration = { 1 })
+            queue.playSong(song("abcdefghijk"))
+            advanceUntilIdle()
+            player.currentIndex = 1
+            val handoffId = "0f8fad5b-d9cb-469f-a165-70867728950e"
+            val snapshot = requireNotNull(queue.handoffSnapshot(handoffId, positionMs = 42_000, playing = true, repeatMode = 2, listenedMs = 31_000, historySent = true, nowEpochMs = 5))
+            assertEquals(player.items[1].itemId, snapshot.currentItemId)
+            assertEquals(xyz.mooma0750.wave.handoff.HandoffRepeat.All, snapshot.repeat)
+            assertEquals("c9", snapshot.continuation)
+
+            val other = FakePlayer()
+            val otherContent = FakeContent()
+            val receiving = QueueSession(other, otherContent, this, newItemId = { "unused" }, loginGeneration = { 9 })
+            val index = receiving.adopt(snapshot)
+            assertEquals(1, index)
+            assertEquals(player.items, other.items)
+            assertEquals(42_000L, other.playedFromMs)
+            assertEquals(9L, other.epoch, "受け取った側の自分のログインの世代に結び付いていない")
+            assertEquals(QueueSource.Radio("abcdefghijk"), receiving.snapshot().source)
+            assertEquals("c9", receiving.snapshot().continuation)
+        }
+
+    @Test
+    fun handoffSnapshotDropsTheContinuationWhenUpcomingItemsAreTruncated() =
+        runTest {
+            val player = FakePlayer()
+            val queue = session(player, FakeContent())
+            val songs = (0 until 400).map { song("s$it") }
+            queue.playFrom(songs, startIndex = 0, playlistId = "PL", playlistContinuation = "more")
+            val snapshot = requireNotNull(queue.handoffSnapshot("id", 0, true, 0, 0, false, 0))
+            assertEquals(1 + xyz.mooma0750.wave.handoff.HandoffCodec.MAX_UPCOMING_ITEMS, snapshot.items.size)
+            assertEquals(null, snapshot.continuation, "切り詰めたのに続きのトークンを送っている")
         }
 }

@@ -31,9 +31,11 @@ class PlaybackHistoryTracker(
     private val random: Random,
 ) {
     private class Play(
+        val itemId: String,
         val videoId: String,
         val cpn: String,
         val durationHintMs: Long?,
+        val carriedListenedMs: Long,
     ) {
         var counter: ListenCounter? = null
         var looked = false
@@ -44,11 +46,35 @@ class PlaybackHistoryTracker(
     private var play: Play? = null
     private var waiting: Job? = null
 
+    /** 引き取ったときに、次の遷移で今の曲に引き継ぐ値（決定 K-8）。 */
+    private var seed: Triple<String, Long, Boolean>? = null
+
+    /** 引き取られる側: 今の曲について（聴いた時間, 履歴を送り済みか）。 */
+    fun handoffState(): Pair<Long, Boolean> {
+        val current = play ?: return 0L to false
+        return (current.counter?.listenedMs(elapsedMs()) ?: current.carriedListenedMs) to current.done
+    }
+
+    /** 引き取る側: 置き換える直前に呼ぶ。itemId の曲の最初の再生に、聴いた時間と送り済みかを引き継ぐ。 */
+    fun seedHandoff(
+        itemId: String,
+        listenedMs: Long,
+        historySent: Boolean,
+    ) {
+        seed = Triple(itemId, listenedMs, historySent)
+    }
+
     fun onMediaItemTransition() {
         stop()
+        val mediaId = player.currentMediaItem?.mediaId
+        val carried = seed?.takeIf { it.first == mediaId }
+        seed = null
         play =
             Media3QueuePlayer.songOf(player.currentMediaItem)?.let { song ->
-                Play(song.videoId, PlaybackHistory.newCpn(random), song.durationSeconds?.let { it * 1000L })
+                Play(mediaId.orEmpty(), song.videoId, PlaybackHistory.newCpn(random), song.durationSeconds?.let { it * 1000L }, carried?.second ?: 0L).also {
+                    // 他の端末で送り済みなら、この再生では送らない（二重に載せない）
+                    if (carried?.third == true) it.done = true
+                }
             }
         if (player.isPlaying) started()
     }
@@ -74,7 +100,7 @@ class PlaybackHistoryTracker(
         }
         if (current.stream == null) return
         val counter =
-            current.counter ?: ListenCounter(ListenCounter.thresholdFor(player.duration.takeIf { it != C.TIME_UNSET } ?: current.durationHintMs)).also {
+            current.counter ?: ListenCounter(ListenCounter.thresholdFor(player.duration.takeIf { it != C.TIME_UNSET } ?: current.durationHintMs), current.carriedListenedMs).also {
                 current.counter = it
             }
         val remaining = counter.start(elapsedMs()) ?: return

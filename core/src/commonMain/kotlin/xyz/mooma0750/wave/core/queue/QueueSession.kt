@@ -81,6 +81,13 @@ interface QueuePlayer {
 
     fun insertAfterCurrent(items: List<QueueItem>)
 
+    /** 置き換えて、startIndex の positionMs から再生を始める（端末間の受け渡しで受け取ったとき）。 */
+    fun replaceAndPlayAt(
+        items: List<QueueItem>,
+        startIndex: Int,
+        positionMs: Long,
+    )
+
     /** これから入れる項目を、このログインの世代に結び付ける（曲の解決がその世代で行われる）。 */
     fun setAccountEpoch(epoch: Long?)
 
@@ -271,6 +278,59 @@ class QueueSession(
         radioPlaylistId = saved.radioPlaylistId
         exhausted = saved.exhausted
         player.restore(saved.items, saved.currentIndex, saved.positionMs)
+    }
+
+    /**
+     * 端末間の受け渡しで送るスナップショット（Phase 6、ADR-0009）。今の曲より前は20件、後ろは300件まで。
+     * 後ろを切ったら continuation を捨てる（プレイリストなら終わりでラジオへ）。キューが空なら null。
+     */
+    fun handoffSnapshot(
+        handoffId: String,
+        positionMs: Long,
+        playing: Boolean,
+        repeatMode: Int,
+        listenedMs: Long,
+        historySent: Boolean,
+        nowEpochMs: Long,
+    ): xyz.mooma0750.wave.handoff.HandoffSnapshot? {
+        val items = player.items
+        val index = player.currentIndex
+        if (items.isEmpty() || index !in items.indices) return null
+        val (window, windowIndex, truncated) = xyz.mooma0750.wave.handoff.HandoffCodec.window(items, index)
+        return xyz.mooma0750.wave.handoff.HandoffSnapshot(
+            schemaVersion = HandoffMapping.SCHEMA_VERSION,
+            handoffId = handoffId,
+            items = window.map(HandoffMapping::itemOf),
+            currentItemId = window[windowIndex].itemId,
+            positionMs = positionMs.coerceAtLeast(0),
+            playing = playing,
+            repeat = HandoffMapping.repeatOf(repeatMode),
+            source = HandoffMapping.sourceOf(source),
+            continuation = if (truncated) null else continuation,
+            radioPlaylistId = radioPlaylistId,
+            exhausted = exhausted && !truncated,
+            listenedMs = listenedMs.coerceAtLeast(0),
+            historySent = historySent,
+            capturedAtEpochMs = nowEpochMs,
+        )
+    }
+
+    /**
+     * 受け取ったスナップショット（検証済み）でキューを置き換えて、再生を始める。世代を進める。
+     * 受け取った continuation は古いかもしれないが、拒否されたら出どころを問わない救済（最後の曲からラジオ）に乗る。
+     * @return 置き換えた後の今の項目の位置
+     */
+    fun adopt(snapshot: xyz.mooma0750.wave.handoff.HandoffSnapshot): Int {
+        startGeneration()
+        val items = snapshot.items.map(HandoffMapping::queueItemOf)
+        val index = items.indexOfFirst { it.itemId == snapshot.currentItemId }.coerceAtLeast(0)
+        source = HandoffMapping.queueSourceOf(snapshot.source)
+        continuation = snapshot.continuation
+        radioPlaylistId = snapshot.radioPlaylistId
+        exhausted = snapshot.exhausted
+        player.replaceAndPlayAt(items, index, snapshot.positionMs)
+        maybeFetch()
+        return index
     }
 
     fun snapshot(): QueueSnapshot = QueueSnapshot(generation, player.items, player.currentIndex, source, continuation, exhausted)

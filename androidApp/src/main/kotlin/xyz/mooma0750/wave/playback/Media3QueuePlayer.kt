@@ -49,6 +49,18 @@ class Media3QueuePlayer(
         player.play()
     }
 
+    override fun replaceAndPlayAt(
+        items: List<QueueItem>,
+        startIndex: Int,
+        positionMs: Long,
+    ) {
+        itemsById.clear()
+        items.forEach { itemsById[it.itemId] = it }
+        player.setMediaItems(items.map { mediaItemOf(it, accountEpoch) }, startIndex, positionMs)
+        player.prepare()
+        player.play()
+    }
+
     override fun restore(
         items: List<QueueItem>,
         startIndex: Int,
