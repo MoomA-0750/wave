@@ -26,11 +26,13 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import xyz.mooma0750.wave.AppContainer
 import xyz.mooma0750.wave.WaveApplication
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyColumn
 import xyz.mooma0750.wave.debug.DebugPlayback
 import xyz.mooma0750.wave.nowplaying.MiniPlayer
 import xyz.mooma0750.wave.debug.StreamCheck
+import xyz.mooma0750.wave.library.LibraryUiState
+import xyz.mooma0750.wave.library.libraryItems
+import xyz.mooma0750.wave.core.music.PlaylistSummary
 import xyz.mooma0750.wave.core.session.AccountResult
 import xyz.mooma0750.wave.core.session.PremiumStatus
 import xyz.mooma0750.wave.core.session.SessionState
@@ -41,6 +43,8 @@ fun HomeScreen(
     obtainedAtEpochMs: Long,
     onReLogin: () -> Unit,
     onSearch: () -> Unit,
+    library: LibraryUiState,
+    onOpenPlaylist: (PlaylistSummary) -> Unit,
 ) {
     val sessionState by container.session.state.collectAsStateWithLifecycle()
     var account by remember(obtainedAtEpochMs) { mutableStateOf<AccountResult?>(null) }
@@ -68,47 +72,59 @@ fun HomeScreen(
     }
 
     Scaffold(bottomBar = { MiniPlayer(container.player) }) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding).padding(24.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Text(
-                when (val current = account) {
-                    null -> "アカウントを確認しています…"
-                    is AccountResult.Ok -> current.name ?: "名前を取得できませんでした"
-                    is AccountResult.Failed -> "アカウントを取得できませんでした"
-                },
-                style = MaterialTheme.typography.headlineSmall,
-            )
-            // 診断値: 固定の1曲で Premium 音質のフォーマットを観測できたか（再生時の音質はその曲で決める）
-            Text(
-                "Premium 音質: " +
-                    when (premium) {
-                        null -> "確認中…"
-                        PremiumStatus.Available -> "利用可"
-                        PremiumStatus.Unavailable -> "利用不可"
-                        PremiumStatus.Unknown -> "未確認"
-                    },
-            )
-            Button(onClick = onSearch) { Text("検索") }
-            when (sessionState) {
-                is SessionState.Expired -> {
-                    Text("再ログインが必要です")
-                    Button(onClick = onReLogin) { Text("ログインし直す") }
+        LazyColumn(Modifier.fillMaxSize().padding(padding)) {
+            item {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        when (val current = account) {
+                            null -> "アカウントを確認しています…"
+                            is AccountResult.Ok -> current.name ?: "名前を取得できませんでした"
+                            is AccountResult.Failed -> "アカウントを取得できませんでした"
+                        },
+                        style = MaterialTheme.typography.titleLarge,
+                    )
+                    // 診断値: 固定の1曲で Premium 音質のフォーマットを観測できたか（再生時の音質はその曲で決める）
+                    Text(
+                        "Premium 音質: " +
+                            when (premium) {
+                                null -> "確認中…"
+                                PremiumStatus.Available -> "利用可"
+                                PremiumStatus.Unavailable -> "利用不可"
+                                PremiumStatus.Unknown -> "未確認"
+                            },
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    when (sessionState) {
+                        is SessionState.Expired -> {
+                            Text("再ログインが必要です")
+                            Button(onClick = onReLogin) { Text("ログインし直す") }
+                        }
+                        is SessionState.Suspect -> {
+                            Text("ログイン状態を確認できていません")
+                            OutlinedButton(onClick = onReLogin) { Text("ログインし直す") }
+                        }
+                        else -> Unit
+                    }
+                    androidx.compose.foundation.layout.Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(onClick = onSearch) { Text("検索") }
+                        OutlinedButton(onClick = { container.appScope.launch { container.logout() } }) { Text("ログアウト") }
+                    }
                 }
-                is SessionState.Suspect -> {
-                    Text("ログイン状態を確認できていません")
-                    OutlinedButton(onClick = onReLogin) { Text("ログインし直す") }
-                }
-                else -> Unit
             }
-            OutlinedButton(onClick = { container.appScope.launch { container.logout() } }) { Text("ログアウト") }
+            libraryItems(library, onOpenPlaylist)
             if (container.isDebuggable) {
-                var checkLines by remember { mutableStateOf<List<String>?>(null) }
-                val scope = rememberCoroutineScope()
-                OutlinedButton(onClick = {
-                    checkLines = listOf("確認中…")
-                    scope.launch { checkLines = StreamCheck.run(container) }
-                }) { Text("開発用: ストリーム確認") }
-                checkLines?.forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
-                DebugPlaybackButtons(container)
+                item {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        var checkLines by remember { mutableStateOf<List<String>?>(null) }
+                        val scope = rememberCoroutineScope()
+                        OutlinedButton(onClick = {
+                            checkLines = listOf("確認中…")
+                            scope.launch { checkLines = StreamCheck.run(container) }
+                        }) { Text("開発用: ストリーム確認") }
+                        checkLines?.forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
+                        DebugPlaybackButtons(container)
+                    }
+                }
             }
         }
     }

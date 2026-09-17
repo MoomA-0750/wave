@@ -26,6 +26,10 @@ import xyz.mooma0750.wave.core.auth.AuthState
 import xyz.mooma0750.wave.home.HomeScreen
 import xyz.mooma0750.wave.login.LoginScreen
 import xyz.mooma0750.wave.login.LoginViewModel
+import xyz.mooma0750.wave.core.music.PlaylistSummary
+import xyz.mooma0750.wave.library.LibraryViewModel
+import xyz.mooma0750.wave.library.PlaylistScreen
+import xyz.mooma0750.wave.library.PlaylistViewModel
 import xyz.mooma0750.wave.nowplaying.MiniPlayer
 import xyz.mooma0750.wave.search.SearchScreen
 import xyz.mooma0750.wave.search.SearchViewModel
@@ -43,8 +47,9 @@ class MainActivity : ComponentActivity() {
                 val loginGeneration by container.loginGeneration.collectAsStateWithLifecycle()
                 // 失効したときに、ログイン済みのまま再ログイン画面を出す。プロセスが復元されたら出さない（保存しない）
                 var reLogin by remember { mutableStateOf(false) }
-                // 仮の画面遷移（S6 で整理する）
+                // 仮の画面遷移（Phase 4 で作り直す）
                 var searching by remember { mutableStateOf(false) }
+                var openPlaylist by remember { mutableStateOf<PlaylistSummary?>(null) }
 
                 when (val state = authState) {
                     AuthState.Restoring -> Progress()
@@ -56,6 +61,18 @@ class MainActivity : ComponentActivity() {
                             LoginScreen(
                                 viewModel(key = "relogin-$loginGeneration") { LoginViewModel(container) },
                                 onCancel = { reLogin = false },
+                            )
+                        } else if (openPlaylist != null) {
+                            val playlist = requireNotNull(openPlaylist)
+                            BackHandler { openPlaylist = null }
+                            val scope = rememberCoroutineScope()
+                            PlaylistScreen(
+                                viewModel(key = "playlist-${playlist.playlistId}") { PlaylistViewModel(container.music, playlist.playlistId, playlist.title) },
+                                onPlay = { songs, index, continuation -> scope.launch { container.player.playFrom(songs, index, playlist.playlistId, continuation) } },
+                                onPlayNext = { song -> scope.launch { container.player.addNext(song) } },
+                                onAddToQueue = { song -> scope.launch { container.player.addToEnd(song) } },
+                                onBack = { openPlaylist = null },
+                                bottomBar = { MiniPlayer(container.player) },
                             )
                         } else if (searching) {
                             BackHandler { searching = false }
@@ -69,7 +86,16 @@ class MainActivity : ComponentActivity() {
                                 bottomBar = { MiniPlayer(container.player) },
                             )
                         } else {
-                            HomeScreen(container, obtainedAtEpochMs = state.obtainedAtEpochMs, onReLogin = { reLogin = true }, onSearch = { searching = true })
+                            val library = viewModel(key = "library-$loginGeneration") { LibraryViewModel(container.music) }
+                            val libraryState by library.state.collectAsStateWithLifecycle()
+                            HomeScreen(
+                                container,
+                                obtainedAtEpochMs = state.obtainedAtEpochMs,
+                                onReLogin = { reLogin = true },
+                                onSearch = { searching = true },
+                                library = libraryState,
+                                onOpenPlaylist = { openPlaylist = it },
+                            )
                         }
                     }
                     AuthState.LoggedOut, is AuthState.Unreadable ->

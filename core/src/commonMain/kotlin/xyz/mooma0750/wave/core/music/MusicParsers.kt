@@ -44,6 +44,87 @@ internal object MusicParsers {
         return UpNextPage(songs, continuation, panel.path("playlistId").string())
     }
 
+    /** ライブラリのプレイリスト一覧などに並ぶ、プレイリストのカード（musicTwoRowItemRenderer）をすべて集める。 */
+    fun playlists(root: JsonObject): List<PlaylistSummary> =
+        findAll(root, "musicTwoRowItemRenderer").mapNotNull { item ->
+            val browse = item.path("navigationEndpoint", "browseEndpoint")
+            val pageType = browse.path("browseEndpointContextSupportedConfigs", "browseEndpointContextMusicConfig", "pageType").string()
+            val browseId = browse.path("browseId").string() ?: return@mapNotNull null
+            if (pageType != "MUSIC_PAGE_TYPE_PLAYLIST" && !browseId.startsWith("VL")) return@mapNotNull null
+            val title = item.path("title", "runs").arrayItems().joinToString("") { it.path("text").string().orEmpty() }.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            PlaylistSummary(
+                playlistId = browseId.removePrefix("VL"),
+                title = title,
+                subtitle = item.path("subtitle", "runs").arrayItems().joinToString("") { it.path("text").string().orEmpty() }.takeIf { it.isNotBlank() },
+                thumbnailUrl = item.path("thumbnailRenderer", "musicThumbnailRenderer", "thumbnail", "thumbnails").arrayItems().lastOrNull().path("url").string(),
+            )
+        }.distinctBy { it.playlistId }
+
+    /** プレイリストの最初のページ（browse VL<id>）と続きのページ（appendContinuationItemsAction）。 */
+    fun playlistPage(root: JsonObject): PlaylistPage {
+        val appended =
+            root.path("onResponseReceivedActions").arrayItems().firstNotNullOfOrNull {
+                it.path("appendContinuationItemsAction", "continuationItems") as? JsonArray
+            }
+        val items: List<JsonObject> =
+            appended?.arrayItems()
+                ?: findAll(root, "musicPlaylistShelfRenderer").firstOrNull().path("contents").arrayItems()
+        val songs = items.mapNotNull { it.path("musicResponsiveListItemRenderer").asObject()?.let(::responsiveListItemSong) }
+        val continuation =
+            items.lastOrNull().path("continuationItemRenderer", "continuationEndpoint", "continuationCommand", "token").string()
+                ?: findAll(root, "musicPlaylistShelfRenderer").firstOrNull().path("continuations").arrayItems().firstNotNullOfOrNull {
+                    it.path("nextContinuationData", "continuation").string()
+                }
+        val title =
+            findAll(root, "musicResponsiveHeaderRenderer").firstOrNull().path("title", "runs").arrayItems().joinToString("") { it.path("text").string().orEmpty() }.takeIf { it.isNotBlank() }
+                ?: findAll(root, "musicDetailHeaderRenderer").firstOrNull().path("title", "runs").arrayItems().joinToString("") { it.path("text").string().orEmpty() }.takeIf { it.isNotBlank() }
+        return PlaylistPage(title, songs, continuation)
+    }
+
+    /** ログインしていないときに返る「ログインしてください」の案内（200 の messageRenderer）だけの応答か。 */
+    fun isSignInPrompt(root: JsonObject): Boolean =
+        findAll(root, "messageRenderer").isNotEmpty() &&
+            findAll(root, "musicTwoRowItemRenderer").isEmpty() &&
+            findAll(root, "musicResponsiveListItemRenderer").isEmpty()
+
+    /** 応答のレンダラ名だけを集める（値は含めない）。解析が0件だったときの原因調査用（決定 E7）。 */
+    fun rendererNames(root: JsonElement): Set<String> {
+        val names = mutableSetOf<String>()
+        fun walk(element: JsonElement) {
+            when (element) {
+                is JsonObject ->
+                    element.forEach { (key, value) ->
+                        if (key.endsWith("Renderer") || key.endsWith("Action") || key.endsWith("Continuation")) names += key
+                        walk(value)
+                    }
+                is JsonArray -> element.forEach(::walk)
+                else -> Unit
+            }
+        }
+        walk(root)
+        return names
+    }
+
+    private fun findAll(
+        root: JsonElement?,
+        key: String,
+    ): List<JsonObject> {
+        val found = mutableListOf<JsonObject>()
+        fun walk(element: JsonElement?) {
+            when (element) {
+                is JsonObject ->
+                    element.forEach { (name, value) ->
+                        if (name == key && value is JsonObject) found += value
+                        walk(value)
+                    }
+                is JsonArray -> element.forEach(::walk)
+                else -> Unit
+            }
+        }
+        walk(root)
+        return found
+    }
+
     /** 検索・プレイリストの行（musicResponsiveListItemRenderer）。 */
     fun responsiveListItemSong(item: JsonObject): Song? {
         val columns = item.path("flexColumns").arrayItems().map { it.path("musicResponsiveListItemFlexColumnRenderer", "text", "runs").arrayItems() }

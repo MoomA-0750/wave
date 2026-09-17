@@ -32,7 +32,6 @@ import xyz.mooma0750.wave.core.music.UpNextPage
 import xyz.mooma0750.wave.core.queue.QueueContentSource
 import xyz.mooma0750.wave.core.queue.QueueSession
 import xyz.mooma0750.wave.core.session.CallResult
-import xyz.mooma0750.wave.core.session.FailureKind
 import java.util.UUID
 
 /** 再生の本体。画面が無くても動き、キューの続き（サジェスト）もここで取る。 */
@@ -200,7 +199,11 @@ private class RepositoryContentSource(
     override suspend fun playlistPage(
         playlistId: String,
         continuation: String,
-    ): CallResult<SongPage> = CallResult.Failed(FailureKind.Parse) // S5 で実装する
+    ): CallResult<SongPage> =
+        when (val result = music.playlist(playlistId, continuation)) {
+            is CallResult.Ok -> CallResult.Ok(SongPage(result.value.songs, result.value.continuation))
+            is CallResult.Failed -> result
+        }
 }
 
 /** 再試行しない失敗と、時間をおく失敗を分ける。 */

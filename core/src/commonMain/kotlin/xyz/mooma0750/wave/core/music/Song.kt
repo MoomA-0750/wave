@@ -43,3 +43,20 @@ data class UpNextPage(
     /** ラジオの playlistId（続きの取得に使う）。 */
     val playlistId: String?,
 )
+
+/** ライブラリなどに並ぶプレイリスト。 */
+@Serializable
+data class PlaylistSummary(
+    /** VL を除いた ID（キューの出どころや続きの取得に使う）。 */
+    val playlistId: String,
+    val title: String,
+    val subtitle: String?,
+    val thumbnailUrl: String?,
+)
+
+/** プレイリストの1ページ。 */
+data class PlaylistPage(
+    val title: String?,
+    val songs: List<Song>,
+    val continuation: String?,
+)

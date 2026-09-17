@@ -41,12 +41,48 @@ class MusicRepository(
             block = { it.next(YouTubeClient.WEB_REMIX, videoId = videoId, playlistId = playlistId, continuation = continuation) },
         ) { response -> ParseOutcome.Parsed(MusicParsers.upNext(json(response))) }
 
+    /** ライブラリのプレイリスト。ログイン案内だけが返ったら、ログアウト相当の応答として扱う（確認の accountMenu が走る）。 */
+    suspend fun libraryPlaylists(): CallResult<List<PlaylistSummary>> =
+        session.call(
+            operation = "browse",
+            block = { it.browse(YouTubeClient.WEB_REMIX, browseId = LIBRARY_PLAYLISTS, setLogin = true) },
+        ) { response ->
+            val root = json(response)
+            if (MusicParsers.isSignInPrompt(root)) ParseOutcome.LoggedOutResponse else ParseOutcome.Parsed(MusicParsers.playlists(root)).also { lastRendererNames = MusicParsers.rendererNames(root) }
+        }
+
+    /** プレイリストの曲。continuation を渡したら続きのページ。高く評価した曲は playlistId = LIKED_SONGS。 */
+    suspend fun playlist(
+        playlistId: String,
+        continuation: String? = null,
+    ): CallResult<PlaylistPage> =
+        session.call(
+            operation = "browse",
+            block = {
+                if (continuation == null) {
+                    it.browse(YouTubeClient.WEB_REMIX, browseId = "VL$playlistId", setLogin = true)
+                } else {
+                    it.browse(YouTubeClient.WEB_REMIX, continuation = continuation, setLogin = true)
+                }
+            },
+        ) { response ->
+            val root = json(response)
+            if (MusicParsers.isSignInPrompt(root)) ParseOutcome.LoggedOutResponse else ParseOutcome.Parsed(MusicParsers.playlistPage(root)).also { lastRendererNames = MusicParsers.rendererNames(root) }
+        }
+
+    /** 直近の応答に含まれていたレンダラ名（値は含まない）。解析が0件だったときの調査用。 */
+    var lastRendererNames: Set<String> = emptySet()
+        private set
+
     private suspend fun json(response: HttpResponse): JsonObject =
         WaveSession.json.parseToJsonElement(response.bodyAsTextLimited(MAX_BROWSE_BYTES)) as JsonObject
 
     companion object {
         /** 検索を曲に絞る params。 */
         const val SONGS_FILTER = "EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D"
+
+        const val LIBRARY_PLAYLISTS = "FEmusic_liked_playlists"
+        const val LIKED_SONGS = "LM"
 
         /** ある曲から始まるラジオの playlistId。 */
         fun radioPlaylistId(videoId: String): String = "RDAMVM$videoId"
