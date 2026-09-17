@@ -230,15 +230,31 @@ class ConnectV2Manager(
                 }
             }
 
-            override fun onUserStartedPlayback() {
+            override fun onUserStartedPlayback(newSelection: Boolean) {
                 val snapshot = host.endpoint?.snapshot()?.let(HandoffCodec::encode)
                 val cursor = host.endpoint?.cursor()
+                val foreground = uiInForeground()
                 post {
                     val engine = client ?: return@post
+                    // D-9: 引き取られた・止まった端末で再生ボタンを押したとき、他の端末で鳴っていれば、古い手元のキューで奪わない。
+                    // 画面が前面なら「ここで再生」、裏なら止めて知らせる。曲を選んだのは新しい再生（L-3）
+                    val remote = engine.latestCursorBody()
+                    val remotePlaying = remote != null && remote.first != identity.deviceId && remote.second.playing && remote.second.accountTag == effects.accountTag()
+                    if (!newSelection && engine.hasRetreated && remotePlaying) {
+                        if (foreground && engine.requestTransfer()) {
+                            appScope.launch(Dispatchers.Main) { host.endpoint?.pause() }
+                            Log.i(WaveApplication.LOG_TAG, "connect-v2 play button became transfer")
+                        } else {
+                            appScope.launch(Dispatchers.Main) { host.endpoint?.pause() }
+                            mutableEvents.tryEmit(ClientEvent.ServerError("remote_playing"))
+                            Log.i(WaveApplication.LOG_TAG, "connect-v2 play button blocked remote playing")
+                        }
+                        return@post
+                    }
                     snapshot?.let(engine::setLocalQueue)
                     cursor?.let { engine.setLocalCursor(it.toLocal()) }
                     val claimed = engine.userStartedPlayback()
-                    Log.i(WaveApplication.LOG_TAG, "connect-v2 user started claimed=$claimed")
+                    Log.i(WaveApplication.LOG_TAG, "connect-v2 user started claimed=$claimed selection=$newSelection")
                 }
             }
         }

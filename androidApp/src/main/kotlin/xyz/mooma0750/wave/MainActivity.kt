@@ -87,6 +87,21 @@ class MainActivity : ComponentActivity() {
                 LaunchedEffect(container) {
                     container.connect.events.collect { message -> android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_LONG).show() }
                 }
+                LaunchedEffect(container) {
+                    container.connectV2?.events?.collect { event ->
+                        val message =
+                            when (event) {
+                                is xyz.mooma0750.wave.handoff.v2.ClientEvent.Stopped -> "他の端末で再生が始まりました"
+                                is xyz.mooma0750.wave.handoff.v2.ClientEvent.TransferCompleted -> "引き取りました"
+                                is xyz.mooma0750.wave.handoff.v2.ClientEvent.TransferFailed -> "引き取れませんでした（${event.reason}）"
+                                is xyz.mooma0750.wave.handoff.v2.ClientEvent.StoreReset -> "中継の状態が作り直されました（端末の連携の画面で確かめてください）"
+                                xyz.mooma0750.wave.handoff.v2.ClientEvent.ChainForked, xyz.mooma0750.wave.handoff.v2.ClientEvent.ChainRolledBack, is xyz.mooma0750.wave.handoff.v2.ClientEvent.ChainInvalid -> "中継の端末一覧を確かめられませんでした"
+                                is xyz.mooma0750.wave.handoff.v2.ClientEvent.ServerError -> if (event.code == "remote_playing") "他の端末で再生中です（端末の連携の画面から「ここで再生」）" else null
+                                else -> null
+                            }
+                        message?.let { android.widget.Toast.makeText(context, it, android.widget.Toast.LENGTH_LONG).show() }
+                    }
+                }
 
                 when (val state = authState) {
                     AuthState.Restoring -> Progress()

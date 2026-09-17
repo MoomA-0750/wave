@@ -174,7 +174,7 @@ class PlaybackService : MediaSessionService() {
                 ) {
                     // 本人（画面・通知・Bluetooth）が再生を始めた。引き取りの取り込みは除く
                     if (playWhenReady && reason == Player.PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST && !connectV2Adopting) {
-                        container.connectV2Host.listener?.onUserStartedPlayback()
+                        container.connectV2Host.listener?.onUserStartedPlayback(newSelection = false)
                     }
                 }
 
@@ -651,7 +651,7 @@ class PlaybackService : MediaSessionService() {
                     else -> null
                 }
             // 曲を選んだ（キューを置き換えた・飛んだ）のは、本人が新しく再生を始めたこと（L-3）
-            if (handled != null && customCommand.customAction in USER_SELECTIONS) container.connectV2Host.listener?.onUserStartedPlayback()
+            if (handled != null && customCommand.customAction in USER_SELECTIONS) container.connectV2Host.listener?.onUserStartedPlayback(newSelection = true)
             return Futures.immediateFuture(SessionResult(if (handled != null) SessionResult.RESULT_SUCCESS else SessionError.ERROR_BAD_VALUE))
         }
 

@@ -106,6 +106,8 @@ fun ConnectScreen(
             Modifier.fillMaxSize().padding(padding).padding(16.dp).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            // Connect v2（Phase 6b、試験中）。v1 と並べて出す（L-9）
+            xyz.mooma0750.wave.connect2.ConnectV2Section(container)
             if (!container.connectConfigured) {
                 Text("中継の場所が設定されていないので、この機能は使えません")
                 return@Column

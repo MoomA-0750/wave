@@ -239,6 +239,45 @@ class AppContainer(
             null
         }
 
+    init {
+        // Connect v2: 裏にいるときに他の端末の再生で止まったら、通知で知らせる（Toast は裏では出ない、Opus 低-5）
+        connectV2?.let { manager ->
+            appScope.launch {
+                manager.events.collect { event ->
+                    if (event is xyz.mooma0750.wave.handoff.v2.ClientEvent.Stopped && startedActivities == 0) notifyStoppedByAnotherDevice()
+                }
+            }
+        }
+    }
+
+    private companion object {
+        const val CONNECT_CHANNEL_ID = "connect"
+        const val CONNECT_NOTIFICATION_ID = 4201
+    }
+
+    private fun notifyStoppedByAnotherDevice() {
+        val manager = androidx.core.app.NotificationManagerCompat.from(appContext)
+        if (android.os.Build.VERSION.SDK_INT >= 33 &&
+            androidx.core.content.ContextCompat.checkSelfPermission(appContext, android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            return
+        }
+        manager.createNotificationChannel(
+            androidx.core.app.NotificationChannelCompat.Builder(CONNECT_CHANNEL_ID, androidx.core.app.NotificationManagerCompat.IMPORTANCE_LOW).setName("端末の連携").build(),
+        )
+        val intent = android.app.PendingIntent.getActivity(appContext, 0, android.content.Intent(appContext, MainActivity::class.java), android.app.PendingIntent.FLAG_IMMUTABLE)
+        val notification =
+            androidx.core.app.NotificationCompat
+                .Builder(appContext, CONNECT_CHANNEL_ID)
+                .setSmallIcon(android.R.drawable.ic_media_pause)
+                .setContentTitle("他の端末で再生が始まりました")
+                .setContentText("この端末の再生は止めました")
+                .setContentIntent(intent)
+                .setAutoCancel(true)
+                .build()
+        runCatching { manager.notify(CONNECT_NOTIFICATION_ID, notification) }
+    }
+
     val pairingV2: xyz.mooma0750.wave.connect2.PairingV2Controller? =
         connectV2?.let { manager ->
             xyz.mooma0750.wave.connect2.PairingV2Controller(deviceIdentity, manager, session, appScope, android.os.Build.MODEL)

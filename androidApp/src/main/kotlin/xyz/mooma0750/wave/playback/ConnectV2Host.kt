@@ -43,8 +43,11 @@ class ConnectV2Host {
         /** @param significant 再生・一時停止・曲の遷移（すぐ書く）。false はシークなど（間引く） */
         fun onCursorChanged(significant: Boolean)
 
-        /** 本人が再生を始めた・再開した・曲を選んだ（L-3）。 */
-        fun onUserStartedPlayback()
+        /**
+         * 本人が再生を始めた・再開した・曲を選んだ（L-3）。
+         * @param newSelection 曲を選んだ（キューを置き換えた・飛んだ）。false は再生ボタン（画面・通知・Bluetooth）
+         */
+        fun onUserStartedPlayback(newSelection: Boolean)
     }
 
     @Volatile
