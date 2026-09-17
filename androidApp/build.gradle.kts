@@ -21,6 +21,9 @@ android {
         versionName = "0.1.0"
         buildConfigField("String", "RELAY_URL", "\"" + (localProperties.getProperty("wave.relayUrl") ?: "") + "\"")
         buildConfigField("String", "RELAY_HOST", "\"" + (localProperties.getProperty("wave.relayHost") ?: "") + "\"")
+        // Connect v2（Phase 6b）。無ければ v2 は動かない（L-9: v1 と並べて動かす）
+        buildConfigField("String", "RELAY_V2_URL", "\"" + (localProperties.getProperty("wave.relayV2Url") ?: "") + "\"")
+        buildConfigField("String", "RELAY_V2_HOST", "\"" + (localProperties.getProperty("wave.relayV2Host") ?: "") + "\"")
     }
 
     buildFeatures {

@@ -351,6 +351,9 @@ class QueueSession(
         return index
     }
 
+    /** 今の曲の項目 ID（Connect v2 のカーソル）。キューが空なら null。 */
+    fun currentItemId(): String? = player.items.getOrNull(player.currentIndex)?.itemId
+
     fun snapshot(): QueueSnapshot = QueueSnapshot(generation, player.items, player.currentIndex, source, continuation, exhausted)
 
     private fun startGeneration(epoch: Long? = loginGeneration()) {

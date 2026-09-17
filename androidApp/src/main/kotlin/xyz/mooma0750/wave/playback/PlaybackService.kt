@@ -74,6 +74,12 @@ class PlaybackService : MediaSessionService() {
     /** 中継に接続しているか（引き取られるのを待ち受ける）。再生中と、一時停止から前面のタイムアウトの少し前までだけ（P6-S の計測で届くことを確認）。 */
     private var relayHeld = false
 
+    /** Connect v2 の入口（Phase 6b）。 */
+    private var connectV2Endpoint: ConnectV2Host.Endpoint? = null
+
+    /** 引き取りの取り込み中（本人が再生を始めたとして claim しない）。 */
+    private var connectV2Adopting = false
+
     /**
      * 渡した（かもしれない）後、この端末で再生し直すまで true。この間のキューは相手の再生より古いので、引き取りの要求には渡さない
      * （2台で行き来したあと、古いキューで相手の今の再生を上書きした。2026-09-17 の実機確認）。
@@ -153,6 +159,22 @@ class PlaybackService : MediaSessionService() {
                     if (events.containsAny(*SAVE_EVENTS)) scheduleSave()
                     if (events.containsAny(Player.EVENT_MEDIA_ITEM_TRANSITION, Player.EVENT_TIMELINE_CHANGED)) {
                         likeController.onCurrentSong(Media3QueuePlayer.songOf(player.currentMediaItem)?.videoId, TrackUri.epochOf(player.currentMediaItem?.localConfiguration?.uri))
+                    }
+                    // Connect v2（Phase 6b）: キューと位置の変化を知らせる。再生中かは playWhenReady（本人の意図）で見る（バッファ中の揺れで書かない）
+                    container.connectV2Host.listener?.let { v2 ->
+                        if (events.contains(Player.EVENT_TIMELINE_CHANGED)) v2.onQueueChanged()
+                        val significant = events.containsAny(Player.EVENT_PLAY_WHEN_READY_CHANGED, Player.EVENT_MEDIA_ITEM_TRANSITION)
+                        if (significant || events.containsAny(Player.EVENT_POSITION_DISCONTINUITY, Player.EVENT_REPEAT_MODE_CHANGED)) v2.onCursorChanged(significant)
+                    }
+                }
+
+                override fun onPlayWhenReadyChanged(
+                    playWhenReady: Boolean,
+                    reason: Int,
+                ) {
+                    // 本人（画面・通知・Bluetooth）が再生を始めた。引き取りの取り込みは除く
+                    if (playWhenReady && reason == Player.PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST && !connectV2Adopting) {
+                        container.connectV2Host.listener?.onUserStartedPlayback()
                     }
                 }
 
@@ -246,7 +268,7 @@ class PlaybackService : MediaSessionService() {
                                 delay(HANDED_OFF_RELEASE_DELAY_MS)
                                 relayHeld = false
                                 relayReleaseJob = null
-                                container.relayClient.release()
+                                releaseRelays()
                             }
                     }
                 }
@@ -310,6 +332,54 @@ class PlaybackService : MediaSessionService() {
         handoffEndpoint = endpoint
         container.handoffHost.register(endpoint)
 
+        val v2Endpoint =
+            object : ConnectV2Host.Endpoint {
+                override fun snapshot(): xyz.mooma0750.wave.handoff.HandoffSnapshot? {
+                    if (loggedInAt == null) return null
+                    val (listenedMs, historySent) = historyTracker.handoffState()
+                    return queueSession.handoffSnapshot(
+                        handoffId = UUID.randomUUID().toString(),
+                        positionMs = player.currentPosition,
+                        playing = player.playWhenReady,
+                        repeatMode = player.repeatMode,
+                        listenedMs = listenedMs,
+                        historySent = historySent,
+                        nowEpochMs = System.currentTimeMillis(),
+                    )
+                }
+
+                override fun cursor(): ConnectV2Host.Cursor? {
+                    val itemId = queueSession.currentItemId() ?: return null
+                    val (listenedMs, historySent) = historyTracker.handoffState()
+                    val repeat =
+                        when (player.repeatMode) {
+                            Player.REPEAT_MODE_ONE -> xyz.mooma0750.wave.handoff.HandoffRepeat.One
+                            Player.REPEAT_MODE_ALL -> xyz.mooma0750.wave.handoff.HandoffRepeat.All
+                            else -> xyz.mooma0750.wave.handoff.HandoffRepeat.Off
+                        }
+                    return ConnectV2Host.Cursor(itemId, player.currentPosition.coerceAtLeast(0), player.playWhenReady, repeat, listenedMs, historySent)
+                }
+
+                override fun pause() {
+                    player.pause()
+                }
+
+                override fun adopt(
+                    snapshot: xyz.mooma0750.wave.handoff.HandoffSnapshot,
+                    positionMs: Long,
+                    expectedLoginGeneration: Long,
+                ): Boolean {
+                    connectV2Adopting = true
+                    try {
+                        return endpoint.adopt(snapshot.copy(positionMs = positionMs.coerceAtLeast(0), playing = true), expectedLoginGeneration)
+                    } finally {
+                        connectV2Adopting = false
+                    }
+                }
+            }
+        connectV2Endpoint = v2Endpoint
+        container.connectV2Host.register(v2Endpoint)
+
         // 保存したキューを戻すのも、この購読の中で行う（ログアウト・切り替えの処理と順序を決めるため）
         scope.launch {
             container.authManager.state.collect { state ->
@@ -345,13 +415,13 @@ class PlaybackService : MediaSessionService() {
     }
 
     private fun updateRelayHold(isPlaying: Boolean) {
-        if (!container.connectConfigured) return
+        if (!container.connectConfigured && container.connectV2 == null) return
         if (isPlaying) {
             relayReleaseJob?.cancel()
             relayReleaseJob = null
             if (!relayHeld) {
                 relayHeld = true
-                container.relayClient.acquire()
+                acquireRelays()
             }
         } else if (relayHeld && relayReleaseJob == null) {
             relayReleaseJob =
@@ -361,9 +431,20 @@ class PlaybackService : MediaSessionService() {
                     while (container.connect.holdingConnection) delay(10_000)
                     relayHeld = false
                     relayReleaseJob = null
-                    container.relayClient.release()
+                    releaseRelays()
                 }
         }
+    }
+
+    /** v1 の中継と、設定されていれば Connect v2 の中継（Phase 6b、L-9 で並べて動かす）。 */
+    private fun acquireRelays() {
+        if (container.connectConfigured) container.relayClient.acquire()
+        container.connectV2?.relay?.acquire()
+    }
+
+    private fun releaseRelays() {
+        if (container.connectConfigured) container.relayClient.release()
+        container.connectV2?.relay?.release()
     }
 
     /** 評価を自アプリの画面（コントローラーごとの extras）と通知のボタンへ配る。 */
@@ -569,6 +650,8 @@ class PlaybackService : MediaSessionService() {
                     QueueCommands.SHUFFLE_UPCOMING -> queue.shuffleUpcoming()
                     else -> null
                 }
+            // 曲を選んだ（キューを置き換えた・飛んだ）のは、本人が新しく再生を始めたこと（L-3）
+            if (handled != null && customCommand.customAction in USER_SELECTIONS) container.connectV2Host.listener?.onUserStartedPlayback()
             return Futures.immediateFuture(SessionResult(if (handled != null) SessionResult.RESULT_SUCCESS else SessionError.ERROR_BAD_VALUE))
         }
 
@@ -633,9 +716,10 @@ class PlaybackService : MediaSessionService() {
 
     override fun onDestroy() {
         relayReleaseJob?.cancel()
-        if (relayHeld) container.relayClient.release()
+        if (relayHeld) releaseRelays()
         relayHeld = false
         handoffEndpoint?.let { container.handoffHost.unregister(it) }
+        connectV2Endpoint?.let { container.connectV2Host.unregister(it) }
         handoffEndpoint = null
         // scope を止めると待っている保存が捨てられるので、その前に最後の状態を書く
         val obtainedAt = loggedInAt

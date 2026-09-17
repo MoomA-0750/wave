@@ -153,6 +153,22 @@ class ConnectClient(
     )
 
     val isWriter: Boolean get() = session != null
+
+    /** 検証した家の ID（アカウントタグの計算に使う）。家に入っていなければ null。 */
+    val householdId: String? get() = chain?.householdId
+
+    /** 検証した端末一覧（表示）。 */
+    val members: List<MemberKeys> get() = chain?.members?.values?.map { it.keys }.orEmpty()
+
+    /** 検証した一覧の頭（加入の Confirm に入れる）。 */
+    val head: MemberChain.Head? get() = chain?.let { MemberChain.Head(it.headSeq, it.headHash) }
+
+    val knownStoreId: String? get() = storeId
+
+    val floors: Pair<Long, Long> get() = cursorFloor to queueFloor
+
+    /** 加入の手順で、家の鎖を使う（A が B を加えるときの add の署名に使う）。 */
+    fun verifiedChain(): VerifiedChain? = chain
     val activeDeviceId: String? get() = serverActive
     val hasRetreated: Boolean get() = retreated
 

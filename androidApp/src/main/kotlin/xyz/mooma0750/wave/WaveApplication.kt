@@ -67,10 +67,14 @@ class WaveApplication :
             object : ActivityLifecycleCallbacks {
                 override fun onActivityStarted(activity: android.app.Activity) {
                     container.startedActivities++
+                    // 画面が前面の間は中継 v2 につなぎ、他の端末の再生を表示する（Phase 6b、D-11）
+                    if (container.startedActivities == 1) container.connectV2?.relay?.acquire()
                 }
 
                 override fun onActivityStopped(activity: android.app.Activity) {
-                    container.startedActivities = (container.startedActivities - 1).coerceAtLeast(0)
+                    val before = container.startedActivities
+                    container.startedActivities = (before - 1).coerceAtLeast(0)
+                    if (before == 1) container.connectV2?.relay?.release()
                 }
 
                 override fun onActivityCreated(
@@ -200,6 +204,9 @@ class AppContainer(
     /** 端末間の受け渡しの、再生サービスへの入口（Phase 6）。 */
     val handoffHost = HandoffHost()
 
+    /** Connect v2 の、再生サービスへの入口（Phase 6b）。 */
+    val connectV2Host = xyz.mooma0750.wave.playback.ConnectV2Host()
+
     /** この端末の身元（Keystore の署名鍵）。 */
     val deviceIdentity = xyz.mooma0750.wave.connect.DeviceIdentity()
 
@@ -214,6 +221,23 @@ class AppContainer(
     /** 前面にある Activity の数（引き取った曲の再生を始めてよいか）。 */
     @Volatile
     var startedActivities = 0
+
+    /** Connect v2（Phase 6b）。中継 v2 の場所が設定されていなければ null。 */
+    val connectV2: xyz.mooma0750.wave.connect2.ConnectV2Manager? =
+        if (BuildConfig.RELAY_V2_URL.isNotEmpty() && BuildConfig.RELAY_V2_HOST.isNotEmpty()) {
+            xyz.mooma0750.wave.connect2.ConnectV2Manager(
+                identity = deviceIdentity,
+                session = session,
+                host = connectV2Host,
+                appScope = appScope,
+                baseUrl = BuildConfig.RELAY_V2_URL,
+                relayHost = BuildConfig.RELAY_V2_HOST,
+                storageFile = java.io.File(context.noBackupFilesDir, "connect-v2.bin"),
+                uiInForeground = { startedActivities > 0 },
+            )
+        } else {
+            null
+        }
 
     val connect =
         xyz.mooma0750.wave.connect.ConnectManager(
