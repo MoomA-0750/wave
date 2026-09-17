@@ -486,6 +486,17 @@ class ConnectV2Manager(
             load()
         }
 
+    /** 家から外された（中継が接続を断る）端末で、本人が押したら、この端末の家の記録を消して加わり直せるようにする。 */
+    fun forgetHousehold() =
+        post {
+            client?.clearLocal()
+            storage.reset()
+            tagState = null
+            lastTag = null
+            load()
+            Log.i(WaveApplication.LOG_TAG, "connect-v2 household forgotten")
+        }
+
     // --- 加入（PairingV2Controller から） ---
 
     /** この端末の家の鍵の記述（Hello の拡張）。 */

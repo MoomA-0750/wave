@@ -95,6 +95,11 @@ fun ConnectV2Section(container: AppContainer) {
         OutlinedButton(onClick = { manager.resetUnreadable() }) { Text("作り直す") }
         return
     }
+    if (info.inHousehold && relayStatus == RelayClientV2.Status.NotMember) {
+        // 家から外された・中継の家が作り直された。消すかどうかは本人が決める（勝手に消さない）
+        Text("中継がこの端末を家の端末として受け付けません（家から外されたか、中継の家が作り直されました）", color = MaterialTheme.colorScheme.error)
+        OutlinedButton(onClick = { manager.forgetHousehold() }) { Text("この端末の家の記録を消す") }
+    }
     if (info.storeResetPending) {
         Text("中継の状態が作り直されました。この状態から始めますか", color = MaterialTheme.colorScheme.error)
         OutlinedButton(onClick = { manager.acceptStoreReset() }) { Text("この状態から始める") }
