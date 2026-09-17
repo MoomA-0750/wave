@@ -144,5 +144,7 @@ class AuthGuardEngineTest {
         assertFalse(isAllowedMediaUrl("https://user:pass@rr1.googlevideo.com/videoplayback"))
         assertFalse(isAllowedMediaUrl("https://googlevideo.com/videoplayback"))
         assertFalse(isAllowedMediaUrl("not a url"))
+        assertFalse(isAllowedMediaUrl("https://rr1---sn-synthetic.googlevideo.com:8443/videoplayback"))
+        assertFalse(isAllowedMediaUrl("https://rr1---sn-synthetic.googlevideo.com/other"))
     }
 }

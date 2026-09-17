@@ -83,9 +83,9 @@ class AuthGuardEngine(
     override fun close() = delegate.close()
 }
 
-/** https かつホストが googlevideo.com 配下の場合だけ true。解読後のストリーム URL に使う（Phase 3）。 */
+/** 解読後のストリーム URL として使ってよいか。https・ポート 443・googlevideo.com 配下・パスが /videoplayback のときだけ true（ADR-0003）。 */
 fun isAllowedMediaUrl(url: String): Boolean {
     val parsed = runCatching { Url(url) }.getOrNull() ?: return false
-    if (parsed.protocol.name != "https" || parsed.user != null || parsed.password != null) return false
-    return parsed.host.endsWith(".googlevideo.com")
+    if (parsed.protocol.name != "https" || parsed.port != 443 || parsed.user != null || parsed.password != null) return false
+    return parsed.host.endsWith(".googlevideo.com") && parsed.encodedPath == "/videoplayback"
 }

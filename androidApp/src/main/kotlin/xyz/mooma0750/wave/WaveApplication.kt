@@ -24,6 +24,8 @@ import xyz.mooma0750.wave.core.auth.KeystoreCredentialStore
 import xyz.mooma0750.wave.core.net.AuthGuardEngine
 import xyz.mooma0750.wave.core.net.createWaveHttpClient
 import xyz.mooma0750.wave.core.session.WaveSession
+import xyz.mooma0750.wave.core.stream.StreamComponents
+import xyz.mooma0750.wave.playback.MediaHttp
 import java.io.File
 
 /** プロセスで1つだけ作る（同じファイルに DataStore を2つ作ると例外になる）。 */
@@ -91,6 +93,12 @@ class AppContainer(
     val httpClient: HttpClient = createWaveHttpClient(guardedEngine)
 
     val session = WaveSession(httpClient, authManager, appScope, rethrowViolations = isDebuggable)
+
+    /** ストリームの解決（WaveSession のガード付きクライアントを使う）。 */
+    val stream = StreamComponents.create(session)
+
+    /** 音声バイト・サムネイルの取得用。認証情報を持たない（ADR-0003）。 */
+    val mediaHttpClient = MediaHttp.create()
 
     private val mutableLoginGeneration = MutableStateFlow(0)
 

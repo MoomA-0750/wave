@@ -109,7 +109,7 @@ sealed interface AccountResult {
  * 呼び出しの block と parse は scope のディスパッチャで走る。メインスレッドのスコープを渡さないこと。
  */
 class WaveSession internal constructor(
-    httpClient: HttpClient,
+    internal val httpClient: HttpClient,
     private val credentials: StateFlow<Credentials?>,
     scope: CoroutineScope,
     retryDelay: suspend (Duration) -> Unit,

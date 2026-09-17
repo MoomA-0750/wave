@@ -16,6 +16,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -25,6 +26,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import xyz.mooma0750.wave.AppContainer
 import xyz.mooma0750.wave.WaveApplication
+import xyz.mooma0750.wave.debug.StreamCheck
 import xyz.mooma0750.wave.core.session.AccountResult
 import xyz.mooma0750.wave.core.session.PremiumStatus
 import xyz.mooma0750.wave.core.session.SessionState
@@ -92,6 +94,15 @@ fun HomeScreen(
                 else -> Unit
             }
             OutlinedButton(onClick = { container.appScope.launch { container.logout() } }) { Text("ログアウト") }
+            if (container.isDebuggable) {
+                var checkLines by remember { mutableStateOf<List<String>?>(null) }
+                val scope = rememberCoroutineScope()
+                OutlinedButton(onClick = {
+                    checkLines = listOf("確認中…")
+                    scope.launch { checkLines = StreamCheck.run(container) }
+                }) { Text("開発用: ストリーム確認") }
+                checkLines?.forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
+            }
         }
     }
 }
