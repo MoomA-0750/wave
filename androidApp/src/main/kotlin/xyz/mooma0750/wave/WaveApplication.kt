@@ -74,7 +74,18 @@ class WaveApplication :
                 override fun onActivityStopped(activity: android.app.Activity) {
                     val before = container.startedActivities
                     container.startedActivities = (before - 1).coerceAtLeast(0)
-                    if (before == 1) container.connectV2?.relay?.release()
+                    if (before == 1) {
+                        val relay = container.connectV2?.relay
+                        // 画面の回転などで作り直すだけなら、すぐ切らない（つなぎ直しを避ける、レビュー p6b34 低-5）。数は後で必ず戻す
+                        if (activity.isChangingConfigurations) {
+                            container.appScope.launch {
+                                kotlinx.coroutines.delay(CONFIGURATION_CHANGE_GRACE_MS)
+                                relay?.release()
+                            }
+                        } else {
+                            relay?.release()
+                        }
+                    }
                 }
 
                 override fun onActivityCreated(
@@ -112,6 +123,9 @@ class WaveApplication :
     companion object {
         const val LOGIN_WEBVIEW_SUFFIX = "login"
         const val LOG_TAG = "wave"
+
+        /** 画面の作り直しの間、中継 v2 の接続を残しておく時間。 */
+        const val CONFIGURATION_CHANGE_GRACE_MS = 5_000L
 
         /**
          * ログイン用 WebView が作るファイル。名前は Pixel 3（Android 12）で確かめた。

@@ -41,6 +41,13 @@ import xyz.mooma0750.wave.connect.QrScanner
  * Connect v2 の仮の画面（Phase 6b P6b-4）。端末の連携の画面の上に出す。見た目は後で詰める（機能を先）。
  * 他の端末で再生中の曲・「ここで再生」・家に端末を加える（QR と6桁）・保存の作り直しの確認。
  */
+private tailrec fun android.content.Context.findActivity(): android.app.Activity? =
+    when (this) {
+        is android.app.Activity -> this
+        is android.content.ContextWrapper -> baseContext.findActivity()
+        else -> null
+    }
+
 @Composable
 fun ConnectV2Section(container: AppContainer) {
     val manager = container.connectV2 ?: return
@@ -66,9 +73,12 @@ fun ConnectV2Section(container: AppContainer) {
         }
     }
 
-    // 画面を離れたら、途中の加入を取り下げる（B で数字を出している間は残す）
+    // 画面を離れたら、途中の加入を取り下げる（B で数字を出している間と、回転などで作り直すだけのときは残す、レビュー p6b34 低-5）
     DisposableEffect(Unit) {
-        onDispose { if (pairing.state.value !is PairingV2Controller.State.ShowCode) pairing.cancel() }
+        onDispose {
+            val recreating = context.findActivity()?.isChangingConfigurations == true
+            if (!recreating && pairing.state.value !is PairingV2Controller.State.ShowCode) pairing.cancel()
+        }
     }
 
     Text("Connect v2（試験中）", style = MaterialTheme.typography.titleMedium)
