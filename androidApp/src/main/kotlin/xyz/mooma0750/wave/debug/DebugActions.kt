@@ -74,6 +74,39 @@ object DebugActions {
                     container.logout()
                 }
                 "shuffle" -> player.shuffleUpcoming()
+                // Phase 6 の暗号の選択のため、この端末の Android Keystore で使える鍵の種類を測る（真偽値だけ、鍵は作ってすぐ消す）
+                "keystore_probe" -> {
+                    val results = linkedMapOf<String, Boolean>()
+                    fun attempt(name: String, block: () -> Unit) {
+                        results[name] = runCatching { block() }.isSuccess
+                    }
+                    val ks = java.security.KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+                    attempt("ecdsa_p256") {
+                        val gen = java.security.KeyPairGenerator.getInstance(android.security.keystore.KeyProperties.KEY_ALGORITHM_EC, "AndroidKeyStore")
+                        gen.initialize(android.security.keystore.KeyGenParameterSpec.Builder("wave-probe-sign", android.security.keystore.KeyProperties.PURPOSE_SIGN).setDigests(android.security.keystore.KeyProperties.DIGEST_SHA256).build())
+                        val pair = gen.generateKeyPair()
+                        java.security.Signature.getInstance("SHA256withECDSA").apply { initSign(pair.private); update(byteArrayOf(1)); sign() }
+                    }
+                    attempt("ecdh_p256") {
+                        val gen = java.security.KeyPairGenerator.getInstance(android.security.keystore.KeyProperties.KEY_ALGORITHM_EC, "AndroidKeyStore")
+                        gen.initialize(android.security.keystore.KeyGenParameterSpec.Builder("wave-probe-agree", android.security.keystore.KeyProperties.PURPOSE_AGREE_KEY).build())
+                        val pair = gen.generateKeyPair()
+                        val peer = java.security.KeyPairGenerator.getInstance("EC").apply { initialize(java.security.spec.ECGenParameterSpec("secp256r1")) }.generateKeyPair()
+                        javax.crypto.KeyAgreement.getInstance("ECDH", "AndroidKeyStore").apply { init(pair.private); doPhase(peer.public, true); generateSecret() }
+                    }
+                    attempt("x25519_keystore") {
+                        val gen = java.security.KeyPairGenerator.getInstance("XDH", "AndroidKeyStore")
+                        gen.initialize(android.security.keystore.KeyGenParameterSpec.Builder("wave-probe-x25519", android.security.keystore.KeyProperties.PURPOSE_AGREE_KEY).setAlgorithmParameterSpec(java.security.spec.NamedParameterSpec("X25519")).build())
+                        gen.generateKeyPair()
+                    }
+                    attempt("x25519_software") {
+                        val pair = java.security.KeyPairGenerator.getInstance("XDH").apply { initialize(java.security.spec.NamedParameterSpec("X25519")) }.generateKeyPair()
+                        javax.crypto.KeyAgreement.getInstance("XDH").apply { init(pair.private); doPhase(pair.public, true); generateSecret() }
+                    }
+                    attempt("chacha20_poly1305") { javax.crypto.Cipher.getInstance("ChaCha20-Poly1305") }
+                    listOf("wave-probe-sign", "wave-probe-agree", "wave-probe-x25519").forEach { runCatching { ks.deleteEntry(it) } }
+                    Log.i(WaveApplication.LOG_TAG, "debug keystore sdk=${android.os.Build.VERSION.SDK_INT} $results")
+                }
                 // 最後のページと確かめられるか（番号・ページ数・真偽値だけ）
                 "playlist_end_probe" ->
                     (container.music.libraryPlaylists() as? CallResult.Ok)?.value?.forEachIndexed { index, summary ->
