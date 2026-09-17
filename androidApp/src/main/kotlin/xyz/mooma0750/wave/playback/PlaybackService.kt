@@ -154,7 +154,6 @@ class PlaybackService : MediaSessionService() {
                 .Builder(this, player)
                 .setCallback(Callback(queueSession))
                 // 通知・ロック画面のアートワークも、認証情報を持たない音声用のクライアントで取る
-                .setSessionExtras(likeController.state.toBundle())
                 .setBitmapLoader(
                     androidx.media3.datasource.DataSourceBitmapLoader
                         .Builder(this)
@@ -198,12 +197,19 @@ class PlaybackService : MediaSessionService() {
         }
     }
 
-    /** 評価を画面（セッションの extras）と通知のボタンへ配る。 */
+    /** 評価を自アプリの画面（コントローラーごとの extras）と通知のボタンへ配る。 */
     private fun publishLikeState(state: LikeState) {
         val current = session ?: return
-        current.sessionExtras = state.toBundle()
+        val bundle = state.toBundle()
+        current.connectedControllers.filter { isOwnUiController(current, it) }.forEach { current.setSessionExtras(it, bundle) }
         current.setMediaButtonPreferences(likeButtons(state))
     }
+
+    /** Media3 がプロセス内に作る通知用コントローラーか。パッケージ名と接続ヒントだけで判定されるので uid も見る。 */
+    private fun isOwnNotificationController(
+        session: MediaSession,
+        controller: MediaSession.ControllerInfo,
+    ): Boolean = controller.uid == Process.myUid() && session.isMediaNotificationController(controller)
 
     private fun likeButtons(state: LikeState): List<CommandButton> {
         val videoId = state.videoId ?: return emptyList()
@@ -310,7 +316,7 @@ class PlaybackService : MediaSessionService() {
             session: MediaSession,
             controller: MediaSession.ControllerInfo,
         ): MediaSession.ConnectionResult {
-            if (session.isMediaNotificationController(controller)) {
+            if (isOwnNotificationController(session, controller)) {
                 // 通知用コントローラーには、評価のボタンのコマンドだけを足す（受けるときにトークンを確かめる）
                 return MediaSession.ConnectionResult
                     .AcceptedResultBuilder(session, controller)
@@ -324,13 +330,11 @@ class PlaybackService : MediaSessionService() {
                     .build()
             }
             if (!isOwnUiController(session, controller)) {
-                // 通知・システム（ロック画面・Bluetooth はプラットフォームのセッション経由）・信頼された外部は既定の再生操作だけ。
-                // 信頼されていない他アプリの Media3 コントローラーは、キューの中身を読ませないために拒否する
-                val allowed =
-                    session.isMediaNotificationController(controller) ||
-                        controller.isTrusted ||
-                        controller.controllerVersion == MediaSession.ControllerInfo.LEGACY_CONTROLLER_VERSION
-                return if (allowed) {
+                // システム（ロック画面・Bluetooth はプラットフォームのセッション経由）・信頼された外部は既定の再生操作だけ。
+                // 信頼されていない他アプリは、Media3 のコントローラーでもレガシー（MediaBrowser で公開 Service につなぐ）でも拒否する。
+                // レガシーで受け入れると、プラットフォームのセッションのトークンを渡すことになり、PlaybackState の custom action の
+                // extras（通知の評価ボタンのトークン）とキューを読ませてしまう（F1d inner gate 指摘1）
+                return if (controller.isTrusted) {
                     MediaSession.ConnectionResult
                         .AcceptedResultBuilder(session, controller)
                         .setAvailablePlayerCommands(withoutShuffleMode(if (controller.isTrusted) MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS else MediaSession.ConnectionResult.DEFAULT_UNTRUSTED_PLAYER_COMMANDS))
@@ -354,7 +358,8 @@ class PlaybackService : MediaSessionService() {
             args: Bundle,
         ): ListenableFuture<SessionResult> {
             if (customCommand.customAction == QueueCommands.TOGGLE_LIKE) {
-                val allowed = isOwnUiController(session, controller) || (session.isMediaNotificationController(controller) && hasNotificationToken(args))
+                // Android 13 以降のシステムのメディア操作は、Media3 が通知用コントローラーに差し替えて届ける。extras を返すかは SystemUI 次第（未確認）
+                val allowed = isOwnUiController(session, controller) || (isOwnNotificationController(session, controller) && hasNotificationToken(args))
                 if (!allowed) return Futures.immediateFuture(SessionResult(SessionError.ERROR_PERMISSION_DENIED))
                 val accepted = likes?.toggle(args.getString(QueueCommands.KEY_VIDEO_ID)) == true
                 return Futures.immediateFuture(SessionResult(if (accepted) SessionResult.RESULT_SUCCESS else SessionError.ERROR_INVALID_STATE))
@@ -374,6 +379,13 @@ class PlaybackService : MediaSessionService() {
                     else -> null
                 }
             return Futures.immediateFuture(SessionResult(if (handled != null) SessionResult.RESULT_SUCCESS else SessionError.ERROR_BAD_VALUE))
+        }
+
+        override fun onPostConnect(
+            session: MediaSession,
+            controller: MediaSession.ControllerInfo,
+        ) {
+            if (isOwnUiController(session, controller)) likes?.let { session.setSessionExtras(controller, it.state.toBundle()) }
         }
 
         /** MediaItem の直接の追加は受け付けない。キューの操作はカスタムコマンドだけ（任意の videoId を解決させない）。 */

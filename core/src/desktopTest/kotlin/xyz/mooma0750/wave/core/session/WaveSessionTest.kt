@@ -452,6 +452,67 @@ class WaveSessionTest {
         }
 
     @Test
+    fun writeInterruptedByLogoutIsUnknownNotFailed(): Unit =
+        runBlocking {
+            val release = CompletableDeferred<Unit>()
+            handler = {
+                release.await()
+                json("{}")
+            }
+            val session = loggedInSession()
+            val write = async { session.callWrite("like", { it.likeVideo(YouTubeClient.WEB_REMIX, "synthetic-id") }) { ParseOutcome.Parsed(Unit) } }
+            withTimeout(5_000) { while (sent.isEmpty()) delay(10) }
+            // 送信後にログアウトした。反映されたかは分からない
+            credentials.value = null
+            assertEquals(WriteResult.Unknown, withTimeout(5_000) { write.await() })
+            release.complete(Unit)
+        }
+
+    @Test
+    fun writeViolationsAreFailedAndRethrownOnlyWhenStrict(): Unit =
+        runBlocking {
+            val stray: suspend (com.metrolist.innertubex.InnerTube) -> io.ktor.client.statement.HttpResponse = {
+                it.httpClient.get("https://www.youtube.com/") { header(HttpHeaders.Cookie, "SAPISID=synthetic") }
+            }
+            assertFailsWith<AuthRouteViolation> { loggedInSession(rethrowViolations = true).callWrite("stray", stray) { ParseOutcome.Parsed(Unit) } }
+            // ガードは送る前に止めるので、反映されていないと確実
+            assertEquals(WriteResult.Failed(FailureKind.Http), loggedInSession(rethrowViolations = false).callWrite("stray", stray) { ParseOutcome.Parsed(Unit) })
+            assertTrue(sent.none { it.url.host == "www.youtube.com" })
+        }
+
+    @Test
+    fun callerCancellationOfAWriteIsPropagated(): Unit =
+        runBlocking {
+            val release = CompletableDeferred<Unit>()
+            handler = {
+                release.await()
+                json("{}")
+            }
+            val session = loggedInSession()
+            val job = launch { session.callWrite("like", { it.likeVideo(YouTubeClient.WEB_REMIX, "synthetic-id") }) { ParseOutcome.Parsed(Unit) } }
+            withTimeout(5_000) { while (sent.isEmpty()) delay(10) }
+            job.cancel()
+            withTimeout(5_000) { job.join() }
+            assertTrue(job.isCancelled)
+            release.complete(Unit)
+        }
+
+    @Test
+    fun writeRedirectIsSuspectAndSuccessDoesNotClearIt(): Unit =
+        runBlocking {
+            val like: suspend (com.metrolist.innertubex.InnerTube) -> io.ktor.client.statement.HttpResponse = { it.likeVideo(YouTubeClient.WEB_REMIX, "synthetic-id") }
+            // 確認（accountMenu）は 403 を返し続けるので、疑いのまま残る
+            handler = { request -> if (request.url.encodedPath.endsWith("/account_menu")) respond("", HttpStatusCode.Forbidden) else respond("", HttpStatusCode.Found) }
+            val session = loggedInSession()
+            assertEquals(WriteResult.Failed(FailureKind.Suspect, 302), session.callWrite("like", like) { ParseOutcome.Parsed(Unit) })
+            session.awaitConfirmIdle()
+            assertTrue(sent.any { it.url.encodedPath.endsWith("/account_menu") }, "確認が走っていない")
+            handler = { request -> if (request.url.encodedPath.endsWith("/account_menu")) respond("", HttpStatusCode.Forbidden) else json("{}") }
+            assertIs<WriteResult.Done<Unit>>(session.callWrite("like", like) { ParseOutcome.Parsed(Unit) })
+            assertIs<SessionState.Suspect>(session.state.value, "書き込みの成功で疑いを解除した")
+        }
+
+    @Test
     fun writesWhileLoggedOutAreNotSent(): Unit =
         runBlocking {
             val session = session()

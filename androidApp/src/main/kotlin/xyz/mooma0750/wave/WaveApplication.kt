@@ -111,7 +111,9 @@ class AppContainer(
     // OkHttp に Interceptor・Authenticator・CookieJar を足すと、ガードの後でヘッダが付くので足さない
     private val guardedEngine =
         AuthGuardEngine(
-            delegate = OkHttp.create(),
+            // 送信を始めた後でも POST を黙って送り直す設定（Ktor の既定は true）を切る。プレイリストへの追加・作成が重複しないように。
+            // 読み取りの一時的な失敗は innertubex の再試行で補う
+            delegate = OkHttp.create { config { retryOnConnectionFailure(false) } },
             onViolation = { host -> Log.w(WaveApplication.LOG_TAG, "auth headers blocked for host=$host") },
             onSetCookieNames = { host, names -> Log.i(WaveApplication.LOG_TAG, "set-cookie host=$host names=$names") },
         )

@@ -59,7 +59,33 @@ data class PlaylistPage(
     val title: String?,
     val songs: List<Song>,
     val continuation: String?,
+    /** songs と同じ並びの、プレイリスト内の項目の ID（削除に使う）。取れなければ null。 */
+    val setVideoIds: List<String?> = emptyList(),
+    /** 自分が編集できるプレイリストか（最初のページのヘッダで判定する）。 */
+    val editable: Boolean = false,
 )
+
+/** プレイリストへの追加の結果（決定 G-1: 先に全ページを読んで重複を確かめる）。 */
+sealed interface AddToPlaylistResult {
+    data object Added : AddToPlaylistResult
+
+    /** 既にある。追加していない。 */
+    data object AlreadyInPlaylist : AddToPlaylistResult
+
+    /** 重複を確かめられなかった。追加していない。 */
+    data class NotChecked(
+        val kind: xyz.mooma0750.wave.core.session.FailureKind,
+    ) : AddToPlaylistResult
+
+    /** 追加を送ったが、反映されていないと分かる応答。 */
+    data class Failed(
+        val kind: xyz.mooma0750.wave.core.session.FailureKind,
+        val status: Int?,
+    ) : AddToPlaylistResult
+
+    /** 追加を送ったが、反映されたか分からない。自動で送り直さない。 */
+    data object Unknown : AddToPlaylistResult
+}
 
 /** 曲の評価。 */
 enum class LikeStatus { Like, Dislike, Indifferent }

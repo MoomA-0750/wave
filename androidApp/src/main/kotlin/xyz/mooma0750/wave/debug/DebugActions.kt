@@ -13,6 +13,9 @@ import xyz.mooma0750.wave.core.session.CallResult
 /**
  * debug ビルドだけ: adb から `am start -n xyz.mooma0750.wave/.MainActivity --es debug_action <名前>` で確認の操作を起こす。
  * 画面の文字を読まずに（個人のライブラリを PC に出さずに）通し確認をするため。release ビルドでは何もしない。
+ *
+ * アカウントへの書き込み・ログアウトは、公開 Activity からは起こさない（他アプリの intent でも起動できるため）。
+ * DUMP 権限付きの [DebugReceiver] からだけ受ける: `am broadcast -n xyz.mooma0750.wave/.debug.DebugReceiver --es debug_action <名前>`
  */
 object DebugActions {
     private const val EXTRA = "debug_action"
@@ -20,13 +23,20 @@ object DebugActions {
     /** debug の intent から画面を開く（MainActivity が購読する）。 */
     val navigation = kotlinx.coroutines.flow.MutableSharedFlow<xyz.mooma0750.wave.navigation.Screen>(extraBufferCapacity = 4)
 
+    private val WRITE_ACTIONS = setOf("logout", "toggle_like", "playlist_create", "playlist_add", "playlist_remove")
+
     fun handle(
         intent: Intent?,
         container: AppContainer,
+        fromPrivilegedReceiver: Boolean = false,
     ) {
         if (!container.isDebuggable) return
         val action = intent?.getStringExtra(EXTRA) ?: return
         intent.removeExtra(EXTRA)
+        if (action in WRITE_ACTIONS && !fromPrivilegedReceiver) {
+            Log.w(WaveApplication.LOG_TAG, "debug action=$action rejected (use DebugReceiver)")
+            return
+        }
         Log.i(WaveApplication.LOG_TAG, "debug action=$action")
         container.appScope.launch(Dispatchers.Main) {
             // 起動直後は保存したログインの復元が終わっていない

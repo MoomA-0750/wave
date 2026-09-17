@@ -214,13 +214,13 @@ private fun FullPlayer(
             val videoId = like.videoId
             TextButton(
                 onClick = { if (videoId != null) scope.launch { connection.toggleLike(videoId) } },
-                enabled = videoId != null && like.status != null && !like.pending,
+                enabled = videoId != null && !like.pending,
             ) {
                 Text(
                     when {
                         like.pending -> "変更中…"
                         like.status == xyz.mooma0750.wave.core.music.LikeStatus.Like -> "高く評価済み（外す）"
-                        like.status == null -> "評価を確認中"
+                        like.status == null -> "評価を読み直す"
                         else -> "高く評価"
                     },
                 )

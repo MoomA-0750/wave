@@ -84,11 +84,15 @@ class LikeController(
         publish(LikeState(messageId = state.messageId))
     }
 
-    /** 表示中の曲（expectedVideoId）の評価を切り替える。受け付けなければ false。 */
+    /** 表示中の曲（expectedVideoId）の評価を切り替える。評価を読めていなければ読み直す。受け付けなければ false。 */
     fun toggle(expectedVideoId: String?): Boolean {
         val current = state
         val videoId = current.videoId ?: return false
-        if (expectedVideoId != videoId || current.pending || current.status == null) return false
+        if (expectedVideoId != videoId || current.pending) return false
+        if (current.status == null) {
+            if (loadJob?.isActive != true) load(videoId)
+            return true
+        }
         val liked = current.status != LikeStatus.Like
         val startedEpoch = epoch
         publish(current.copy(pending = true, message = null))
@@ -96,8 +100,11 @@ class LikeController(
             val result = music.setLiked(videoId, liked)
             Log.i(WaveApplication.LOG_TAG, "like write result=${result::class.simpleName} liked=$liked")
             if (result !is WriteResult.Failed) onLikedSongsChanged()
-            // 曲が変わった・ログアウトしたなら、表示には反映しない
-            if (startedEpoch != epoch || state.videoId != videoId) return@launch
+            // 曲が変わった・ログアウトしたなら、表示には反映しない。別の曲を挟んで同じ曲に戻っていたら、古い評価を読んでいるかもしれないので読み直す
+            if (startedEpoch != epoch || state.videoId != videoId) {
+                if (result !is WriteResult.Failed && state.videoId == videoId) load(videoId)
+                return@launch
+            }
             when (result) {
                 is WriteResult.Done -> publish(state.copy(status = if (liked) LikeStatus.Like else LikeStatus.Indifferent, pending = false))
                 is WriteResult.Failed -> publish(state.copy(pending = false, message = "評価を変更できませんでした", messageId = state.messageId + 1))
@@ -118,8 +125,11 @@ class LikeController(
                 val result = music.likeStatus(videoId)
                 if (startedEpoch != epoch || state.videoId != videoId) return@launch
                 when (result) {
-                    is CallResult.Ok -> publish(state.copy(status = result.value))
-                    is CallResult.Failed -> Log.i(WaveApplication.LOG_TAG, "like status failed ${result.kind}")
+                    is CallResult.Ok -> publish(state.copy(status = result.value, message = null))
+                    is CallResult.Failed -> {
+                        Log.i(WaveApplication.LOG_TAG, "like status failed ${result.kind}")
+                        publish(state.copy(message = "評価を読み込めませんでした（押すと読み直します）", messageId = state.messageId + 1))
+                    }
                 }
             }
     }

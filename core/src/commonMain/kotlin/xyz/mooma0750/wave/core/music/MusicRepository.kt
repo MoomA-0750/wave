@@ -5,6 +5,7 @@ import com.metrolist.innertubex.models.YouTubeClient
 import io.ktor.client.statement.HttpResponse
 import kotlinx.serialization.json.JsonObject
 import xyz.mooma0750.wave.core.session.CallResult
+import xyz.mooma0750.wave.core.session.FailureKind
 import xyz.mooma0750.wave.core.session.ParseOutcome
 import xyz.mooma0750.wave.core.session.WaveSession
 import xyz.mooma0750.wave.core.session.WriteResult
@@ -90,8 +91,74 @@ class MusicRepository(
             operation = if (liked) "like" else "removelike",
             block = { if (liked) it.likeVideo(YouTubeClient.WEB_REMIX, videoId) else it.unlikeVideo(YouTubeClient.WEB_REMIX, videoId) },
         ) { response ->
-            runCatching { json(response) }.fold(onSuccess = { ParseOutcome.Parsed(Unit) }, onFailure = { ParseOutcome.Invalid })
+            // 読めない応答の例外は callWrite が Invalid（Unknown）にする。キャンセルは握りつぶさない
+            json(response)
+            ParseOutcome.Parsed(Unit)
         }
+
+    /**
+     * 曲をプレイリストに追加する（決定 G-1）。innertubex は重複を避ける指定を送らないので、先に全ページを読んで確かめる。
+     * 読み取りに失敗したら追加しない。読むのと追加の間に別の端末で足された場合の重複は受け入れる。
+     */
+    suspend fun addToPlaylist(
+        playlistId: String,
+        videoId: String,
+    ): AddToPlaylistResult {
+        var continuation: String? = null
+        var pages = 0
+        do {
+            when (val page = playlist(playlistId, continuation)) {
+                is CallResult.Failed -> return AddToPlaylistResult.NotChecked(page.kind)
+                is CallResult.Ok -> {
+                    if (page.value.songs.any { it.videoId == videoId }) return AddToPlaylistResult.AlreadyInPlaylist
+                    continuation = page.value.continuation
+                }
+            }
+            // 続きのトークンが循環しても止まるように、ページ数に上限を置く（1ページ100曲で5000曲）
+            if (++pages >= MAX_PLAYLIST_PAGES && continuation != null) return AddToPlaylistResult.NotChecked(FailureKind.Parse)
+        } while (continuation != null)
+        return when (val result = editPlaylist("add") { it.addToPlaylist(YouTubeClient.WEB_REMIX, playlistId, videoId) }) {
+            is WriteResult.Done -> AddToPlaylistResult.Added
+            is WriteResult.Failed -> AddToPlaylistResult.Failed(result.kind, result.status)
+            WriteResult.Unknown -> AddToPlaylistResult.Unknown
+        }
+    }
+
+    /** プレイリストから1項目を外す。setVideoId はプレイリストのページ（PlaylistPage.setVideoIds）の値。 */
+    suspend fun removeFromPlaylist(
+        playlistId: String,
+        videoId: String,
+        setVideoId: String,
+    ): WriteResult<Unit> = editPlaylist("remove") { it.removePlaylistSong(YouTubeClient.WEB_REMIX, playlistId, setVideoId, videoId) }
+
+    /** 非公開のプレイリストを作る（innertubex が PRIVATE 固定）。作った playlistId を返す。 */
+    suspend fun createPlaylist(title: String): WriteResult<String> =
+        session.callWrite(
+            operation = "playlist/create",
+            block = { it.createPlaylist(YouTubeClient.WEB_REMIX, title) },
+        ) { response ->
+            val id = MusicParsers.createdPlaylistId(json(response))
+            if (id != null) ParseOutcome.Parsed(id) else ParseOutcome.Invalid
+        }
+
+    /**
+     * browse/edit_playlist。`STATUS_SUCCEEDED` だけを成功とし、ほかの status は反映されていない応答、status が無ければ分からないとする。
+     */
+    private suspend fun editPlaylist(
+        operation: String,
+        block: suspend (com.metrolist.innertubex.InnerTube) -> HttpResponse,
+    ): WriteResult<Unit> {
+        val result =
+            session.callWrite(operation = "edit_playlist/$operation", block = block) { response ->
+                val status = MusicParsers.editPlaylistStatus(json(response))
+                if (status != null) ParseOutcome.Parsed(status) else ParseOutcome.Invalid
+            }
+        return when (result) {
+            is WriteResult.Done -> if (result.value == STATUS_SUCCEEDED) WriteResult.Done(Unit) else WriteResult.Failed(FailureKind.Http)
+            is WriteResult.Failed -> result
+            WriteResult.Unknown -> WriteResult.Unknown
+        }
+    }
 
     /** アルバムのページ（`MPREb_…`）。公開データだが、ログイン中の表示に合わせて cookie 付きで取る。 */
     suspend fun album(browseId: String): CallResult<AlbumPage> =
@@ -133,5 +200,7 @@ class MusicRepository(
         fun radioPlaylistId(videoId: String): String = "RDAMVM$videoId"
 
         private const val MAX_BROWSE_BYTES = 8 * 1024 * 1024
+        private const val MAX_PLAYLIST_PAGES = 50
+        private const val STATUS_SUCCEEDED = "STATUS_SUCCEEDED"
     }
 }

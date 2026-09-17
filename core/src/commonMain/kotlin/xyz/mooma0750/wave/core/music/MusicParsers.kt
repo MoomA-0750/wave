@@ -69,7 +69,11 @@ internal object MusicParsers {
         val items: List<JsonObject> =
             appended?.arrayItems()
                 ?: findAll(root, "musicPlaylistShelfRenderer").firstOrNull().path("contents").arrayItems()
-        val songs = items.mapNotNull { it.path("musicResponsiveListItemRenderer").asObject()?.let(::responsiveListItemSong) }
+        val rows =
+            items.mapNotNull { item ->
+                val row = item.path("musicResponsiveListItemRenderer").asObject() ?: return@mapNotNull null
+                responsiveListItemSong(row)?.let { it to row.path("playlistItemData", "playlistSetVideoId").string() }
+            }
         val continuation =
             items.lastOrNull().path("continuationItemRenderer", "continuationEndpoint", "continuationCommand", "token").string()
                 ?: findAll(root, "musicPlaylistShelfRenderer").firstOrNull().path("continuations").arrayItems().firstNotNullOfOrNull {
@@ -78,8 +82,16 @@ internal object MusicParsers {
         val title =
             findAll(root, "musicResponsiveHeaderRenderer").firstOrNull().path("title", "runs").arrayItems().joinToString("") { it.path("text").string().orEmpty() }.takeIf { it.isNotBlank() }
                 ?: findAll(root, "musicDetailHeaderRenderer").firstOrNull().path("title", "runs").arrayItems().joinToString("") { it.path("text").string().orEmpty() }.takeIf { it.isNotBlank() }
-        return PlaylistPage(title, songs, continuation)
+        // 自分のプレイリストは編集用のヘッダを持つ（実アカウントの応答でレンダラ名だけを確かめる、決定 E7）
+        val editable = findAll(root, EDITABLE_PLAYLIST_HEADER).isNotEmpty()
+        return PlaylistPage(title, rows.map { it.first }, continuation, rows.map { it.second }, editable)
     }
+
+    /** browse/edit_playlist の応答の status（`STATUS_SUCCEEDED` など）。 */
+    fun editPlaylistStatus(root: JsonObject): String? = root.path("status").string()
+
+    /** playlist/create の応答の playlistId。 */
+    fun createdPlaylistId(root: JsonObject): String? = root.path("playlistId").string()
 
     /**
      * next の最初の応答にある、指定した曲の評価（`playerOverlays…likeButtonRenderer`）。続きの応答には無い。
@@ -315,6 +327,7 @@ internal object MusicParsers {
 
     private const val SEPARATOR = " • "
     private const val ARTIST_PAGE = "MUSIC_PAGE_TYPE_ARTIST"
+    const val EDITABLE_PLAYLIST_HEADER = "musicEditablePlaylistDetailHeaderRenderer"
     private val ARTIST_PAGE_TYPES = setOf(ARTIST_PAGE, "MUSIC_PAGE_TYPE_USER_CHANNEL")
     private const val GREY_OUT = "MUSIC_ITEM_RENDERER_DISPLAY_POLICY_GREY_OUT"
     private val DURATION = Regex("""^\d{1,2}(:\d{2}){1,2}$""")
