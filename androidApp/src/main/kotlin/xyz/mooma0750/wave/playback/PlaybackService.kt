@@ -73,6 +73,12 @@ class PlaybackService : MediaSessionService() {
 
     /** 中継に接続しているか（引き取られるのを待ち受ける）。再生中と、一時停止から前面のタイムアウトの少し前までだけ（P6-S の計測で届くことを確認）。 */
     private var relayHeld = false
+
+    /**
+     * 引き取られた後、この端末で再生し直すまで true。この間のキューは相手の再生より古いので、引き取りの要求には渡さない
+     * （2台で行き来したあと、古いキューで相手の今の再生を上書きした。2026-09-17 の実機確認）。プロセスが終われば消える
+     */
+    private var handedOff = false
     private var relayReleaseJob: Job? = null
     private var handoffEndpoint: HandoffHost.Endpoint? = null
 
@@ -148,6 +154,7 @@ class PlaybackService : MediaSessionService() {
 
                 override fun onIsPlayingChanged(isPlaying: Boolean) {
                     historyTracker.onIsPlayingChanged(isPlaying)
+                    if (isPlaying) handedOff = false
                     updateRelayHold(isPlaying)
                     val now = android.os.SystemClock.elapsedRealtime()
                     if (isPlaying) {
@@ -217,11 +224,19 @@ class PlaybackService : MediaSessionService() {
             object : HandoffHost.Endpoint {
                 private var resumeAfterCancel = false
 
-                override fun hasQueue(): Boolean = player.mediaItemCount > 0 && loggedInAt != null
+                override fun hasQueue(): Boolean = player.mediaItemCount > 0 && loggedInAt != null && !handedOff
 
                 override fun markHandedOff() {
                     resumeAfterCancel = false
+                    handedOff = true
                     historyTracker.markHandedOff()
+                    // 渡すものが無くなったので、一時停止後の待ち受けを続けない
+                    if (!player.isPlaying && relayHeld) {
+                        relayReleaseJob?.cancel()
+                        relayReleaseJob = null
+                        relayHeld = false
+                        container.relayClient.release()
+                    }
                 }
 
                 override fun resumeAfterCancel() {
@@ -247,6 +262,7 @@ class PlaybackService : MediaSessionService() {
 
                 override fun adopt(snapshot: xyz.mooma0750.wave.handoff.HandoffSnapshot): Boolean {
                     if (loggedInAt == null) return false
+                    handedOff = false
                     // 途中の復元を無効にし、受け取ったキューを保存で上書きしてよい状態にする
                     restoreStarted = true
                     restoreSettled = true

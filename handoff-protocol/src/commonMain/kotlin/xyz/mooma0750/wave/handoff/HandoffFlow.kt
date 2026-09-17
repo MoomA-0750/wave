@@ -142,6 +142,20 @@ class HandoffTaker(
         if (current.handoffId == handoffId) state = State.Adopted(current.peerId, handoffId)
     }
 
+    /**
+     * 相手が断った（渡せるキューが無い・アカウント違い）。待っている要求と同じ端末・handoffId のときだけ取り下げる。
+     * @return 取り下げたか（呼び出し側は理由を利用者に知らせる）
+     */
+    fun onCancel(
+        peerId: String,
+        body: HandoffBody.Cancel,
+    ): Boolean {
+        val current = state as? State.Requested ?: return false
+        if (current.peerId != peerId || current.handoffId != body.handoffId) return false
+        state = State.Idle
+        return true
+    }
+
     /** 適用できなかった（前面でない・ログインが変わった等）。Cancel を送る。 */
     fun onAdoptFailed(handoffId: String) {
         if ((state as? State.Requested)?.handoffId == handoffId) state = State.Idle

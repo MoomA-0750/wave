@@ -38,6 +38,20 @@ class HandoffFlowTest {
     }
 
     @Test
+    fun takerStopsWaitingOnlyForMatchingRefusal() {
+        val taker = HandoffTaker(nowMs = { now })
+        assertFalse(taker.onCancel("A", HandoffBody.Cancel(handoffId, "no_queue")), "待っていないのに取り下げた")
+        taker.request("A", handoffId)
+        assertFalse(taker.onCancel("C", HandoffBody.Cancel(handoffId, "no_queue")), "別の端末の Cancel で取り下げた")
+        assertFalse(taker.onCancel("A", HandoffBody.Cancel("other", "no_queue")), "別の handoffId の Cancel で取り下げた")
+        assertIs<HandoffTaker.State.Requested>(taker.state)
+        assertTrue(taker.onCancel("A", HandoffBody.Cancel(handoffId, "no_queue")))
+        assertEquals(HandoffTaker.State.Idle, taker.state)
+        // 取り下げた後に遅れて届いた snapshot は受けない
+        assertIs<HandoffTaker.SnapshotDecision.Ignore>(taker.onSnapshot("A", HandoffBody.Snapshot("h", snapshotText()), true))
+    }
+
+    @Test
     fun takerRejectsAnotherAccountAndLateSnapshots() {
         val taker = HandoffTaker(nowMs = { now })
         taker.request("A", handoffId)

@@ -113,7 +113,13 @@ class ConnectManager(
             is HandoffBody.Request -> onRequest(pair, envelope, body)
             is HandoffBody.Snapshot -> onSnapshot(pair, body)
             is HandoffBody.Ack -> if (giver.onAck(pair.peerDeviceId, body)) onMain { host.endpoint?.markHandedOff() }.also { notify("${pair.peerName} が引き取りました") }
-            is HandoffBody.Cancel -> if (giver.onCancel(pair.peerDeviceId, body)) onMain { host.endpoint?.resumeAfterCancel() }
+            is HandoffBody.Cancel ->
+                if (giver.onCancel(pair.peerDeviceId, body)) {
+                    onMain { host.endpoint?.resumeAfterCancel() }
+                } else if (taker.onCancel(pair.peerDeviceId, body)) {
+                    Log.i(WaveApplication.LOG_TAG, "connect refused reason=${body.reason.take(32)}")
+                    notify(if (body.reason == "account") "${pair.peerName} は別のアカウントでログインしています" else "${pair.peerName} には引き取れる再生がありません")
+                }
             HandoffBody.Unpair -> {
                 pairs.remove(pair.peerDeviceId)
                 notify("${pair.peerName} がペアリングを解除しました")
