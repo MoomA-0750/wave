@@ -474,6 +474,53 @@ class ConnectSimulationTest {
     }
 
     @Test
+    fun joiningDeviceAcceptsTheChainOnlyAfterItsInviterAddsIt() {
+        setUp()
+        a.startPlaying("queue-A")
+        relay.run()
+        val c = SimDevice("C", { relay }, { now })
+        c.client.expectJoin(a.client.joinInfo()!!, a.deviceId)
+        // A の追記の前に取った鎖: まだ加えられていないので、受け入れずに待つ
+        c.client.onMessage(RelayV2.Chain(relay.store.chainFrom(0)))
+        assertEquals(null, c.client.householdId)
+        assertFalse(c.events.any { it is ClientEvent.Joined || it is ClientEvent.ChainInvalid })
+        // B（招いた端末でない）が C を加えた鎖は、加入として受け入れない
+        val chain = a.client.verifiedChain()!!
+        relay.store.append(b.deviceId, MemberChain.add(b, chain, c.keys))
+        c.client.onMessage(RelayV2.Chain(relay.store.chainFrom(0)))
+        assertEquals(null, c.client.householdId, "招いた端末でない端末の add で加入した")
+        // 招いた A が加えた鎖なら受け入れる
+        val c2 = SimDevice("C2", { relay }, { now })
+        c2.client.expectJoin(a.client.joinInfo()!!, a.deviceId)
+        relay.run()
+        val latest = (MemberChain.verify(relay.store.chainFrom(0)) as xyz.mooma0750.wave.handoff.v2.ChainVerification.Ok).chain
+        relay.store.append(a.deviceId, MemberChain.add(a, latest, c2.keys))
+        c2.client.onMessage(RelayV2.Chain(relay.store.chainFrom(0)))
+        assertEquals(a.client.householdId, c2.client.householdId)
+        assertTrue(c2.events.contains(ClientEvent.Joined))
+    }
+
+    @Test
+    fun sameQueueIsNotPutAgain() {
+        setUp()
+        var queuePuts = 0
+        relay.dropIncoming = { from, message ->
+            if (from == a.deviceId && message is RelayV2.StatePut && message.kind == xyz.mooma0750.wave.handoff.v2.StateKind.Queue) queuePuts++
+            false
+        }
+        a.startPlaying("queue-A")
+        relay.run()
+        assertEquals(1, queuePuts)
+        a.client.setLocalQueue("queue-A")
+        a.pushCursor()
+        relay.run()
+        assertEquals(1, queuePuts, "中身が同じキューを置き直した")
+        a.client.setLocalQueue("queue-A2")
+        relay.run()
+        assertEquals(2, queuePuts)
+    }
+
+    @Test
     fun forkedChainAndStoreResetAreSurfacedAndNotActedOn() {
         setUp()
         a.startPlaying("queue-A")
