@@ -5,6 +5,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
+import kotlin.random.Random
 import xyz.mooma0750.wave.core.music.Song
 import xyz.mooma0750.wave.core.music.SongPage
 import xyz.mooma0750.wave.core.music.UpNextPage
@@ -67,6 +68,9 @@ interface QueuePlayer {
     /** 再生が最後まで行って止まっているか。 */
     val ended: Boolean
 
+    /** キュー全体を繰り返しているか。 */
+    val repeatAll: Boolean
+
     fun replace(
         items: List<QueueItem>,
         startIndex: Int,
@@ -75,6 +79,9 @@ interface QueuePlayer {
     fun append(items: List<QueueItem>)
 
     fun insertAfterCurrent(items: List<QueueItem>)
+
+    /** 今の項目より後ろを、この並びに置き換える（今の項目の再生は続ける）。 */
+    fun replaceAfterCurrent(items: List<QueueItem>)
 
     fun remove(itemId: String)
 
@@ -110,6 +117,7 @@ class QueueSession(
     private val content: QueueContentSource,
     private val scope: CoroutineScope,
     private val newItemId: () -> String,
+    private val random: Random = Random.Default,
 ) {
     var generation: Long = 0
         private set
@@ -127,16 +135,24 @@ class QueueSession(
         maybeFetch()
     }
 
-    /** 一覧（プレイリストなど）の途中から再生する。続きのページがあれば、終わりが近づいたら取る。 */
+    /**
+     * 一覧（プレイリストなど）の途中から再生する。続きのページがあれば、終わりが近づいたら取る。
+     * shuffle なら読み込み済みの曲を並べ替えて先頭から再生する（続きのページは並べ替えずに後ろに付く）。
+     */
     fun playFrom(
         songs: List<Song>,
         startIndex: Int,
         playlistId: String?,
         playlistContinuation: String?,
+        shuffle: Boolean = false,
     ) {
         if (songs.isEmpty()) return
         startGeneration()
-        player.replace(songs.map { item(it, ItemOrigin.Source) }, startIndex.coerceIn(songs.indices))
+        if (shuffle) {
+            player.replace(songs.shuffled(random).map { item(it, ItemOrigin.Source) }, 0)
+        } else {
+            player.replace(songs.map { item(it, ItemOrigin.Source) }, startIndex.coerceIn(songs.indices))
+        }
         if (playlistId != null) {
             source = QueueSource.Playlist(playlistId)
             continuation = playlistContinuation
@@ -167,8 +183,25 @@ class QueueSession(
         maybeFetch()
     }
 
+    /**
+     * 今の曲より後ろを並べ替える（決定 F-1）。キューを置き換えないので世代は進めず、取得中の続きもそのまま後ろに付く。
+     * Media3 のシャッフルモードは並びと別の順序を持ち、キューの表示と続きの取得の判断が食い違うので使わない。
+     */
+    fun shuffleUpcoming() {
+        val current = player.currentIndex
+        if (current < 0) return
+        val upcoming = player.items.drop(current + 1)
+        if (upcoming.size < 2) return
+        player.replaceAfterCurrent(upcoming.shuffled(random))
+    }
+
     /** 曲が変わった・再生が最後まで行ったときに呼ぶ。残りが少なければ続きを取る。 */
     fun onPlaybackProgressed() {
+        maybeFetch()
+    }
+
+    /** リピートを切り替えたときに呼ぶ。全体リピートを外したら、止めていた続きの取得を再開する。 */
+    fun onRepeatModeChanged() {
         maybeFetch()
     }
 
@@ -208,8 +241,21 @@ class QueueSession(
         return true
     }
 
+    /**
+     * 全体リピート中は今のキューを繰り返すので、ラジオへの切り替えとサジェストの続きは取らない。
+     * 曲を選んだ直後のラジオの最初のページと、プレイリストの続き（利用者が選んだ一覧そのもの）は取る。
+     */
+    private fun blockedByRepeat(): Boolean {
+        if (!player.repeatAll) return false
+        return when (source) {
+            is QueueSource.Radio -> continuation != null
+            is QueueSource.Playlist -> continuation == null
+            null -> false
+        }
+    }
+
     private fun maybeFetch() {
-        if (exhausted || fetchJob?.isActive == true) return
+        if (exhausted || fetchJob?.isActive == true || blockedByRepeat()) return
         val remaining = player.items.size - 1 - player.currentIndex
         if (remaining > FETCH_WHEN_REMAINING_AT_MOST) return
         val requestGeneration = generation
@@ -238,6 +284,7 @@ class QueueSession(
                 val token = continuation
                 if (token == null) {
                     // プレイリストの最後まで来ている。ラジオに切り替えられたら、続けてその最初のページを取る
+                    if (player.repeatAll) return 0
                     return if (switchToRadio()) 1 else 0
                 }
                 when (val result = content.playlistPage(currentSource.playlistId, token)) {
@@ -246,7 +293,7 @@ class QueueSession(
                         if (requestGeneration != generation) return null
                         continuation = result.value.continuation
                         val added = appendItems(result.value.songs.map { item(it, ItemOrigin.Source) })
-                        val switched = continuation == null && switchToRadio()
+                        val switched = continuation == null && !player.repeatAll && switchToRadio()
                         // プレイリストの続きは重複でも入れる（同じ曲を2回含むプレイリストがある）。0件でもラジオへ切り替えたら続けて取る
                         if (added == 0 && switched) 1 else added
                     }

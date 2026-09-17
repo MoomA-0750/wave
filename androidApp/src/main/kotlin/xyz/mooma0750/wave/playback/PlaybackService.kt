@@ -77,6 +77,10 @@ class PlaybackService : MediaSessionService() {
                     }
                 }
 
+                override fun onRepeatModeChanged(repeatMode: Int) {
+                    queueSession.onRepeatModeChanged()
+                }
+
                 override fun onPlaybackStateChanged(playbackState: Int) {
                     if (playbackState == Player.STATE_READY) skipGuard.onPlaying()
                     if (playbackState == Player.STATE_ENDED) queueSession.onPlaybackProgressed()
@@ -180,14 +184,21 @@ class PlaybackService : MediaSessionService() {
                     session.isMediaNotificationController(controller) ||
                         controller.isTrusted ||
                         controller.controllerVersion == MediaSession.ControllerInfo.LEGACY_CONTROLLER_VERSION
-                return if (allowed) super.onConnect(session, controller) else MediaSession.ConnectionResult.reject()
+                return if (allowed) {
+                    MediaSession.ConnectionResult
+                        .AcceptedResultBuilder(session, controller)
+                        .setAvailablePlayerCommands(withoutShuffleMode(if (controller.isTrusted) MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS else MediaSession.ConnectionResult.DEFAULT_UNTRUSTED_PLAYER_COMMANDS))
+                        .build()
+                } else {
+                    MediaSession.ConnectionResult.reject()
+                }
             }
             val commands =
                 MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS
                     .buildUpon()
                     .apply { QueueCommands.all.forEach(::add) }
                     .build()
-            return MediaSession.ConnectionResult.accept(commands, MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS)
+            return MediaSession.ConnectionResult.accept(commands, withoutShuffleMode(MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS))
         }
 
         override fun onCustomCommand(
@@ -202,11 +213,12 @@ class PlaybackService : MediaSessionService() {
                 when (customCommand.customAction) {
                     QueueCommands.PLAY_SONG -> QueueCommands.songOf(args)?.let { queue.playSong(it) }
                     QueueCommands.PLAY_FROM ->
-                        QueueCommands.playFromOf(args)?.let { queue.playFrom(it.songs, it.startIndex, it.playlistId, it.continuation) }
+                        QueueCommands.playFromOf(args)?.let { queue.playFrom(it.songs, it.startIndex, it.playlistId, it.continuation, it.shuffle) }
                     QueueCommands.ADD_NEXT -> QueueCommands.songOf(args)?.let { queue.addNext(it) }
                     QueueCommands.ADD_TO_END -> QueueCommands.songOf(args)?.let { queue.addToEnd(it) }
                     QueueCommands.REMOVE -> QueueCommands.itemIdOf(args)?.let { queue.remove(it) }
                     QueueCommands.JUMP -> QueueCommands.itemIdOf(args)?.let { queue.jumpTo(it) }
+                    QueueCommands.SHUFFLE_UPCOMING -> queue.shuffleUpcoming()
                     else -> null
                 }
             return Futures.immediateFuture(SessionResult(if (handled != null) SessionResult.RESULT_SUCCESS else SessionError.ERROR_BAD_VALUE))
@@ -253,6 +265,12 @@ class PlaybackService : MediaSessionService() {
         const val MAX_CONSECUTIVE_SKIPS = 3
         val USER_SELECTIONS = setOf(QueueCommands.PLAY_SONG, QueueCommands.PLAY_FROM, QueueCommands.JUMP)
         const val CUSTOM_NOTIFICATION_ACTION = "androidx.media3.session.CUSTOM_NOTIFICATION_ACTION"
+
+        /**
+         * すべてのコントローラーから、シャッフルモードの切り替えを外す（決定 G-5）。
+         * Media3 のシャッフル順は並びと別に持つので、Bluetooth などから有効にされるとキューの表示と続きの取得が食い違う
+         */
+        fun withoutShuffleMode(commands: Player.Commands): Player.Commands = commands.buildUpon().remove(Player.COMMAND_SET_SHUFFLE_MODE).build()
     }
 }
 

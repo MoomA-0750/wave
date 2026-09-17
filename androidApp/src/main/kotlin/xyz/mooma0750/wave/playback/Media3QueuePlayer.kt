@@ -26,6 +26,9 @@ class Media3QueuePlayer(
     override val ended: Boolean
         get() = player.playbackState == Player.STATE_ENDED || (player.playbackState == Player.STATE_IDLE && player.playerError != null)
 
+    override val repeatAll: Boolean
+        get() = player.repeatMode == Player.REPEAT_MODE_ALL
+
     override fun replace(
         items: List<QueueItem>,
         startIndex: Int,
@@ -55,6 +58,18 @@ class Media3QueuePlayer(
             player.prepare()
             player.play()
         }
+    }
+
+    /** 1件ずつ動かすとタイムラインの変更がその回数だけコントローラーへ送られるので、削除と追加の2回にする。 */
+    override fun replaceAfterCurrent(items: List<QueueItem>) {
+        if (player.mediaItemCount == 0) return
+        val start = player.currentMediaItemIndex + 1
+        items.forEach { itemsById[it.itemId] = it }
+        player.removeMediaItems(start, player.mediaItemCount)
+        player.addMediaItems(items.map(::mediaItemOf))
+        // 並べ替えで外れた項目（呼び出し側が渡さなかったもの）は表から消す
+        val kept = (0 until player.mediaItemCount).mapTo(HashSet()) { player.getMediaItemAt(it).mediaId }
+        itemsById.keys.retainAll(kept)
     }
 
     override fun remove(itemId: String) {

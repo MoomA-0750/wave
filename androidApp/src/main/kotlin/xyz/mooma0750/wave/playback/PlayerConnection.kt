@@ -42,7 +42,8 @@ class PlayerConnection(
         startIndex: Int,
         playlistId: String?,
         continuation: String?,
-    ) = send(QueueCommands.PLAY_FROM, QueueCommands.playFromArgs(QueueCommands.PlayFrom(songs, startIndex, playlistId, continuation)))
+        shuffle: Boolean = false,
+    ) = send(QueueCommands.PLAY_FROM, QueueCommands.playFromArgs(QueueCommands.PlayFrom(songs, startIndex, playlistId, continuation, shuffle)))
 
     suspend fun addNext(song: Song) = send(QueueCommands.ADD_NEXT, QueueCommands.songArgs(song))
 
@@ -51,6 +52,19 @@ class PlayerConnection(
     suspend fun remove(itemId: String) = send(QueueCommands.REMOVE, QueueCommands.itemArgs(itemId))
 
     suspend fun jumpTo(itemId: String) = send(QueueCommands.JUMP, QueueCommands.itemArgs(itemId))
+
+    suspend fun shuffleUpcoming() = send(QueueCommands.SHUFFLE_UPCOMING, android.os.Bundle.EMPTY)
+
+    /** オフ → 全体 → 1曲 → オフ。リピートは Player の標準の操作なので、カスタムコマンドにしない。 */
+    suspend fun cycleRepeatMode() {
+        val current = controller()
+        current.repeatMode =
+            when (current.repeatMode) {
+                androidx.media3.common.Player.REPEAT_MODE_OFF -> androidx.media3.common.Player.REPEAT_MODE_ALL
+                androidx.media3.common.Player.REPEAT_MODE_ALL -> androidx.media3.common.Player.REPEAT_MODE_ONE
+                else -> androidx.media3.common.Player.REPEAT_MODE_OFF
+            }
+    }
 
     private suspend fun send(
         action: String,

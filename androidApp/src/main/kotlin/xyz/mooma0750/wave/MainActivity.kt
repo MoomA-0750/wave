@@ -76,6 +76,9 @@ class MainActivity : ComponentActivity() {
                             PlaylistScreen(
                                 viewModel(key = "playlist-$loginGeneration-${playlist.playlistId}") { PlaylistViewModel(container.music, playlist.playlistId, playlist.title) },
                                 onPlay = { songs, index, continuation -> scope.launch { container.player.playFrom(songs, index, playlist.playlistId, continuation) } },
+                                onShufflePlay = { songs, continuation ->
+                                    scope.launch { container.player.playFrom(songs, 0, playlist.playlistId, continuation, shuffle = true) }
+                                },
                                 onPlayNext = { song -> scope.launch { container.player.addNext(song) } },
                                 onAddToQueue = { song -> scope.launch { container.player.addToEnd(song) } },
                                 onBack = { openPlaylist = null },

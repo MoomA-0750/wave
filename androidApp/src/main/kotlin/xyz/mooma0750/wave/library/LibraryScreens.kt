@@ -64,6 +64,7 @@ private fun PlaylistRow(
 fun PlaylistScreen(
     viewModel: PlaylistViewModel,
     onPlay: (songs: List<Song>, index: Int, continuation: String?) -> Unit,
+    onShufflePlay: (songs: List<Song>, continuation: String?) -> Unit,
     onPlayNext: (Song) -> Unit,
     onAddToQueue: (Song) -> Unit,
     onBack: () -> Unit,
@@ -83,6 +84,7 @@ fun PlaylistScreen(
             item {
                 Row(Modifier.padding(16.dp)) {
                     Button(onClick = { onPlay(state.songs, 0, state.continuation) }, enabled = state.songs.isNotEmpty()) { Text("すべて再生") }
+                    TextButton(onClick = { onShufflePlay(state.songs, state.continuation) }, enabled = state.songs.isNotEmpty()) { Text("シャッフル再生") }
                 }
             }
             state.failure?.let { item { Text(failureMessage(it), Modifier.padding(16.dp)) } }

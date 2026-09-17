@@ -13,6 +13,7 @@ import xyz.mooma0750.wave.core.session.CallResult
 import xyz.mooma0750.wave.core.session.FailureKind
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -21,6 +22,7 @@ class QueueSessionTest {
         override val items = mutableListOf<QueueItem>()
         override var currentIndex = -1
         override var ended = false
+        override var repeatAll = false
         var resumedAt: Int? = null
 
         override fun replace(
@@ -39,6 +41,11 @@ class QueueSessionTest {
 
         override fun insertAfterCurrent(items: List<QueueItem>) {
             this.items.addAll(currentIndex + 1, items)
+        }
+
+        override fun replaceAfterCurrent(items: List<QueueItem>) {
+            while (this.items.size > currentIndex + 1) this.items.removeAt(this.items.size - 1)
+            this.items += items
         }
 
         override fun remove(itemId: String) {
@@ -104,7 +111,7 @@ class QueueSessionTest {
         content: FakeContent,
     ): QueueSession {
         var counter = 0
-        return QueueSession(player, content, this, newItemId = { "item-${counter++}" })
+        return QueueSession(player, content, this, newItemId = { "item-${counter++}" }, random = kotlin.random.Random(42))
     }
 
     @Test
@@ -294,5 +301,105 @@ class QueueSessionTest {
             gate.complete(Unit)
             advanceUntilIdle()
             assertEquals(emptyList(), player.videoIds())
+        }
+
+    @Test
+    fun shuffleReordersOnlyTheItemsAfterTheCurrentOne() =
+        runTest {
+            val player = FakePlayer()
+            val queue = session(player, FakeContent())
+            val ids = (0 until 10).map { "s$it" }
+            queue.playFrom(ids.map(::song), startIndex = 2, playlistId = "PL", playlistContinuation = null)
+            val before = player.items.toList()
+            val generation = queue.generation
+
+            queue.shuffleUpcoming()
+
+            assertEquals(before.take(3), player.items.take(3), "今の曲とそれより前が動いた")
+            assertEquals(before.drop(3).toSet(), player.items.drop(3).toSet(), "項目が増減した（itemId ごと保つ）")
+            assertNotEquals(before.drop(3), player.items.drop(3), "並べ替わっていない")
+            assertEquals(generation, queue.generation, "シャッフルで世代が進んだ")
+        }
+
+    @Test
+    fun shuffleKeepsAnInFlightFetch() =
+        runTest {
+            val player = FakePlayer()
+            val gate = CompletableDeferred<Unit>()
+            val content =
+                FakeContent().apply {
+                    this.gate = gate
+                    upNextResult = { _, _, _ -> page("r1", "r2", "r3", continuation = null) }
+                }
+            val queue = session(player, content)
+            queue.playSong(song("a"))
+            advanceUntilIdle() // 取得は gate で止まっている
+            queue.addToEnd(song("u1"))
+            queue.addToEnd(song("u2"))
+            queue.addToEnd(song("u3"))
+            queue.shuffleUpcoming()
+            gate.complete(Unit)
+            advanceUntilIdle()
+            assertEquals(listOf("r1", "r2", "r3"), player.videoIds().takeLast(3), "取得中のサジェストが捨てられた")
+        }
+
+    @Test
+    fun shufflePlayStartsAtTheTopWithAPermutation() =
+        runTest {
+            val player = FakePlayer()
+            val queue = session(player, FakeContent())
+            val ids = (0 until 10).map { "s$it" }
+            queue.playFrom(ids.map(::song), startIndex = 5, playlistId = "PL", playlistContinuation = "c", shuffle = true)
+            assertEquals(0, player.currentIndex)
+            assertEquals(ids.toSet(), player.videoIds().toSet())
+            assertNotEquals(ids, player.videoIds())
+            assertEquals(QueueSource.Playlist("PL"), queue.snapshot().source)
+        }
+
+    @Test
+    fun repeatAllStillFetchesTheFirstRadioPageButNotItsContinuation() =
+        runTest {
+            val player = FakePlayer().apply { repeatAll = true }
+            val content =
+                FakeContent().apply {
+                    upNextResult = { _, _, token -> if (token == null) page("r1", continuation = "c1") else page("r2", continuation = null) }
+                }
+            val queue = session(player, content)
+            queue.playSong(song("a"))
+            advanceUntilIdle()
+            // 1曲を延々と繰り返さないよう、最初のページは取る
+            assertEquals(listOf("a", "r1"), player.videoIds())
+
+            player.currentIndex = 1
+            queue.onPlaybackProgressed()
+            advanceUntilIdle()
+            assertEquals(1, content.upNextCalls.size, "全体リピート中にサジェストの続きを取った")
+
+            player.repeatAll = false
+            queue.onRepeatModeChanged()
+            advanceUntilIdle()
+            assertEquals(listOf("a", "r1", "r2"), player.videoIds(), "リピートを外しても続きを取らない")
+        }
+
+    @Test
+    fun repeatAllFetchesPlaylistPagesButDoesNotSwitchToRadio() =
+        runTest {
+            val player = FakePlayer().apply { repeatAll = true }
+            val content =
+                FakeContent().apply {
+                    playlistResult = { _, _ -> CallResult.Ok(SongPage(listOf(song("p2")), continuation = null)) }
+                    upNextResult = { _, _, _ -> page("r1", continuation = null) }
+                }
+            val queue = session(player, content)
+            queue.playFrom(listOf(song("p1")), startIndex = 0, playlistId = "PL", playlistContinuation = "page2")
+            advanceUntilIdle()
+            assertEquals(listOf("p1", "p2"), player.videoIds(), "全体リピート中でもプレイリストの続きは取る")
+            assertEquals(emptyList(), content.upNextCalls, "全体リピート中にラジオへ切り替えた")
+            assertEquals(QueueSource.Playlist("PL"), queue.snapshot().source)
+
+            player.repeatAll = false
+            queue.onRepeatModeChanged()
+            advanceUntilIdle()
+            assertEquals(listOf("p1", "p2", "r1"), player.videoIds())
         }
 }

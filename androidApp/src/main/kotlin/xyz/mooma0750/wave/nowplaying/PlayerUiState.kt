@@ -24,6 +24,7 @@ data class PlayerUiState(
     val currentIndex: Int = -1,
     val hasNext: Boolean = false,
     val hasPrevious: Boolean = false,
+    val repeatMode: Int = Player.REPEAT_MODE_OFF,
     val error: String? = null,
 )
 
@@ -62,6 +63,7 @@ fun rememberPlayerUiState(connection: PlayerConnection): Pair<PlayerUiState, Med
                     currentIndex = current.currentMediaItemIndex,
                     hasNext = current.hasNextMediaItem(),
                     hasPrevious = current.hasPreviousMediaItem(),
+                    repeatMode = current.repeatMode,
                     error = current.playerError?.errorCodeName,
                 )
         }

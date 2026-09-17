@@ -86,7 +86,7 @@ fun MiniPlayer(connection: PlayerConnection) {
 
     if (showFull) {
         ModalBottomSheet(onDismissRequest = { showFull = false }, sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
-            FullPlayer(state, controller, onQueue = {
+            FullPlayer(state, controller, connection, onQueue = {
                 showFull = false
                 showQueue = true
             })
@@ -138,8 +138,10 @@ private fun QueueSheet(
 private fun FullPlayer(
     state: PlayerUiState,
     controller: MediaController?,
+    connection: PlayerConnection,
     onQueue: () -> Unit,
 ) {
+    val scope = rememberCoroutineScope()
     Column(
         Modifier.fillMaxWidth().padding(24.dp).navigationBarsPadding(),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -177,6 +179,18 @@ private fun FullPlayer(
                 }
             }) { Text(if (state.isPlaying) "一時停止" else "再生") }
             TextButton(onClick = { controller?.seekToNextMediaItem() }, enabled = state.hasNext) { Text("次へ") }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            TextButton(onClick = { scope.launch { connection.shuffleUpcoming() } }, enabled = state.queue.size - state.currentIndex > 2) { Text("残りをシャッフル") }
+            TextButton(onClick = { scope.launch { connection.cycleRepeatMode() } }) {
+                Text(
+                    when (state.repeatMode) {
+                        androidx.media3.common.Player.REPEAT_MODE_ALL -> "リピート: 全体"
+                        androidx.media3.common.Player.REPEAT_MODE_ONE -> "リピート: 1曲"
+                        else -> "リピート: オフ"
+                    },
+                )
+            }
         }
         state.error?.let { Text("エラー: $it", style = MaterialTheme.typography.bodySmall) }
         TextButton(onClick = onQueue) { Text("再生キュー（${state.queue.size}曲）") }

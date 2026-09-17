@@ -17,8 +17,9 @@ object QueueCommands {
     const val ADD_TO_END = "xyz.mooma0750.wave.ADD_TO_END"
     const val REMOVE = "xyz.mooma0750.wave.REMOVE"
     const val JUMP = "xyz.mooma0750.wave.JUMP"
+    const val SHUFFLE_UPCOMING = "xyz.mooma0750.wave.SHUFFLE_UPCOMING"
 
-    val all = listOf(PLAY_SONG, PLAY_FROM, ADD_NEXT, ADD_TO_END, REMOVE, JUMP).map { SessionCommand(it, Bundle.EMPTY) }
+    val all = listOf(PLAY_SONG, PLAY_FROM, ADD_NEXT, ADD_TO_END, REMOVE, JUMP, SHUFFLE_UPCOMING).map { SessionCommand(it, Bundle.EMPTY) }
 
     private const val KEY_SONG = "song"
     private const val KEY_PLAY_FROM = "playFrom"
@@ -31,6 +32,7 @@ object QueueCommands {
         val startIndex: Int,
         val playlistId: String?,
         val continuation: String?,
+        val shuffle: Boolean = false,
     )
 
     fun songArgs(song: Song): Bundle = Bundle().apply { putString(KEY_SONG, json.encodeToString(Song.serializer(), song)) }
