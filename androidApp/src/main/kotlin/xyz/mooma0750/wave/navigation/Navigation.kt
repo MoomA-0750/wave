@@ -9,6 +9,9 @@ import xyz.mooma0750.wave.core.music.Song
 sealed interface Screen {
     data object Search : Screen
 
+    /** 端末の連携（Phase 6 のペアリングと引き取り）。 */
+    data object Connect : Screen
+
     data class Playlist(
         val summary: PlaylistSummary,
     ) : Screen

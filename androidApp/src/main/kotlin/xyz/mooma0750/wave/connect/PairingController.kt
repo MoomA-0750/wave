@@ -40,8 +40,10 @@ class PairingController(
             val offerText: String,
         ) : State
 
-        /** A: B の画面の6桁の入力を待っている。 */
-        data object EnterCode : State
+        /** A: B の画面の6桁の入力を待っている。間違えたときは message に理由を出す。 */
+        data class EnterCode(
+            val message: String? = null,
+        ) : State
 
         /** B: この6桁を A に入力してもらう。 */
         data class ShowCode(
@@ -89,7 +91,7 @@ class PairingController(
                 val decoded = runCatching { json.decodeFromJsonElement(Pairing.Hello.serializer(), hello.hello) }.getOrNull() ?: return@launch fail("相手の応答を読めませんでした")
                 val confirm = r.onHello(decoded).getOrElse { return@launch fail(failureMessage(it)) }
                 relay.send(RelayMessage.PairConfirm(tokenHash, json.encodeToJsonElement(Pairing.Confirm.serializer(), confirm)))
-                mutableState.value = State.EnterCode
+                mutableState.value = State.EnterCode()
             }
     }
 
@@ -100,8 +102,7 @@ class PairingController(
             val established = r.onCodeEntered(code).getOrElse { error ->
                 val reason = (error as? Pairing.PairingFailure)?.reason
                 if (reason == Pairing.Failure.WrongCode) {
-                    mutableState.value = State.Failed("数字が違います。もう一度入力してください")
-                    mutableState.value = State.EnterCode
+                    mutableState.value = State.EnterCode("数字が違います。もう一度入力してください")
                 } else {
                     fail(failureMessage(error))
                 }

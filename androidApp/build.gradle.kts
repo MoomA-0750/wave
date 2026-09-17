@@ -50,6 +50,11 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
+    // Phase 6 のペアリングの QR（表示は ZXing、読み取りは CameraX の画像を ZXing で解く）
+    implementation(libs.zxing.core)
+    implementation(libs.androidx.camera.camera2)
+    implementation(libs.androidx.camera.lifecycle)
+    implementation(libs.androidx.camera.view)
 
     testImplementation(libs.junit4)
     testImplementation(kotlin("test"))

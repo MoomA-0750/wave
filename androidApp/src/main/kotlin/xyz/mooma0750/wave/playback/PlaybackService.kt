@@ -230,12 +230,16 @@ class PlaybackService : MediaSessionService() {
                     resumeAfterCancel = false
                     handedOff = true
                     historyTracker.markHandedOff()
-                    // 渡すものが無くなったので、一時停止後の待ち受けを続けない
+                    // 渡すものが無くなったので、一時停止後の待ち受けを続けない（相手の Ack の再送を受けてから離す）
                     if (!player.isPlaying && relayHeld) {
                         relayReleaseJob?.cancel()
-                        relayReleaseJob = null
-                        relayHeld = false
-                        container.relayClient.release()
+                        relayReleaseJob =
+                            scope.launch {
+                                delay(HANDED_OFF_RELEASE_DELAY_MS)
+                                relayHeld = false
+                                relayReleaseJob = null
+                                container.relayClient.release()
+                            }
                     }
                 }
 
@@ -632,6 +636,7 @@ class PlaybackService : MediaSessionService() {
         const val MAX_CONSECUTIVE_SKIPS = 3
         const val SAVE_DEBOUNCE_MS = 1_000L
         const val RELAY_HOLD_AFTER_PAUSE_MS = 9 * 60 * 1000L
+        private const val HANDED_OFF_RELEASE_DELAY_MS = 5_000L
         const val PERIODIC_SAVE_MS = 60_000L
         val SAVE_EVENTS =
             intArrayOf(

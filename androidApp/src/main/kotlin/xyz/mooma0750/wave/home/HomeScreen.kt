@@ -43,6 +43,7 @@ fun HomeScreen(
     obtainedAtEpochMs: Long,
     onReLogin: () -> Unit,
     onSearch: () -> Unit,
+    onConnect: () -> Unit,
     library: LibraryUiState,
     onOpenPlaylist: (PlaylistSummary) -> Unit,
     songActions: xyz.mooma0750.wave.navigation.SongActions,
@@ -115,6 +116,7 @@ fun HomeScreen(
                     }
                     androidx.compose.foundation.layout.Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(onClick = onSearch) { Text("検索") }
+                        if (container.connectConfigured) OutlinedButton(onClick = onConnect) { Text("端末の連携") }
                         OutlinedButton(onClick = { container.appScope.launch { container.logout() } }) { Text("ログアウト") }
                     }
                 }

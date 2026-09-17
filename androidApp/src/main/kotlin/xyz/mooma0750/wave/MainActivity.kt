@@ -82,6 +82,11 @@ class MainActivity : ComponentActivity() {
                 LaunchedEffect(container) {
                     DebugActions.navigation.collect { stack += it }
                 }
+                // 端末の連携の結果（引き取り・解除など）は、どの画面にいても短く知らせる（仮の表示）
+                val context = androidx.compose.ui.platform.LocalContext.current
+                LaunchedEffect(container) {
+                    container.connect.events.collect { message -> android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_LONG).show() }
+                }
 
                 when (val state = authState) {
                     AuthState.Restoring -> Progress()
@@ -115,11 +120,14 @@ class MainActivity : ComponentActivity() {
                                         obtainedAtEpochMs = state.obtainedAtEpochMs,
                                         onReLogin = { reLogin = true },
                                         onSearch = { stack += Screen.Search },
+                                        onConnect = { stack += Screen.Connect },
                                         library = libraryState,
                                         onOpenPlaylist = { stack += Screen.Playlist(it) },
                                         songActions = songActions,
                                     )
                                 }
+                                Screen.Connect ->
+                                    xyz.mooma0750.wave.connect.ConnectScreen(container, onBack = pop, bottomBar = miniPlayer)
                                 Screen.Search ->
                                     SearchScreen(
                                         viewModel(key = "search-$loginGeneration") { SearchViewModel(container.music) },
