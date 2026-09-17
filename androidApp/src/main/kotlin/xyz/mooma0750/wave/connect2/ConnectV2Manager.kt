@@ -461,12 +461,17 @@ class ConnectV2Manager(
         }
 
     /** A 側: 6桁の照合の後、B を家に加える。中継の返事を待つ。@return 加えたか */
-    suspend fun addMember(memberKeysJson: String): Boolean {
+    suspend fun addMember(
+        memberKeysJson: String,
+        peerPublicKey: ByteArray,
+    ): Boolean {
         val record =
             kotlinx.coroutines.withContext(dispatcher) {
                 val chain = client?.verifiedChain() ?: return@withContext null
                 val member = runCatching { xyz.mooma0750.wave.handoff.v2.ConnectJson.json.decodeFromString(xyz.mooma0750.wave.handoff.v2.MemberKeys.serializer(), memberKeysJson) }.getOrNull() ?: return@withContext null
                 if (member.role != Role.Player) return@withContext null
+                // 6桁で確かめた相手の身元鍵と同じであること（レビュー p6b34 低-3）
+                if (!runCatching { Base64.getUrlDecoder().decode(member.identityPub) }.getOrNull().contentEquals(peerPublicKey)) return@withContext null
                 MemberChain.add(keys, chain, member)
             } ?: return false
         return kotlinx.coroutines.coroutineScope {

@@ -200,7 +200,7 @@ class PairingV2Controller(
                         }
                         val memberKeys = established.peerExtension
                         mutableState.value = State.Working("家に加えています")
-                        if (memberKeys == null || !manager.addMember(memberKeys)) {
+                        if (memberKeys == null || !manager.addMember(memberKeys, established.peerPublicKey)) {
                             fail("家に加えられませんでした。もう一度やり直してください")
                         } else {
                             Log.i(WaveApplication.LOG_TAG, "pairing-v2 established role=A")

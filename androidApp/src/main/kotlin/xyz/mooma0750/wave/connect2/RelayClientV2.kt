@@ -142,8 +142,15 @@ class RelayClientV2(
                                 webSocket.send(RelayV2.encode(RelayV2.Auth(b64.encodeToString(identity.encodedPublicKey), b64.encodeToString(signature))))
                             }
                             is RelayV2.Welcome -> {
-                                synchronized(this@RelayClientV2) { failedAttempts = 0 }
-                                mutableStatus.value = Status.Connected
+                                // close() と行き違ったら Connected にしない（レビュー p6b34 低-8）
+                                val current =
+                                    synchronized(this@RelayClientV2) {
+                                        if (socket !== webSocket) return
+                                        failedAttempts = 0
+                                        mutableStatus.value = Status.Connected
+                                        true
+                                    }
+                                if (!current) return
                                 Log.i(WaveApplication.LOG_TAG, "relay-v2 connected")
                                 deliver(message)
                             }
