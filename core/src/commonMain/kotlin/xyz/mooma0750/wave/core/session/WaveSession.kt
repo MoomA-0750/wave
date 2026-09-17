@@ -343,12 +343,15 @@ class WaveSession internal constructor(
     internal suspend fun <T> callWrite(
         operation: String,
         block: suspend (InnerTube) -> HttpResponse,
+        /** 操作を始めたときのログインの世代。違えば（途中でアカウントが変われば）送らない。 */
+        expectedGeneration: Long? = null,
         parse: suspend (HttpResponse) -> ParseOutcome<T>,
     ): WriteResult<T> {
         val generation = current.value
         if (generation.credentials == null || credentials.value !== generation.credentials) {
             return WriteResult.Failed(FailureKind.NotLoggedIn)
         }
+        if (expectedGeneration != null && expectedGeneration != generation.id) return WriteResult.Failed(FailureKind.NotLoggedIn)
         val deferred = generation.scope.async { runCatchingOutcome(block, parse) }
         val outcome =
             try {

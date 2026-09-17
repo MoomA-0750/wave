@@ -70,7 +70,16 @@ class PlayerConnection(
     suspend fun jumpTo(itemId: String) = send(QueueCommands.JUMP, QueueCommands.itemArgs(itemId))
 
     /** 表示中の曲（videoId）の評価を切り替える。曲が変わっていたら Service が受け付けない。 */
-    suspend fun toggleLike(videoId: String) = send(QueueCommands.TOGGLE_LIKE, android.os.Bundle().apply { putString(QueueCommands.KEY_VIDEO_ID, videoId) })
+    suspend fun setLiked(
+        videoId: String,
+        liked: Boolean,
+    ) = send(
+        QueueCommands.TOGGLE_LIKE,
+        android.os.Bundle().apply {
+            putString(QueueCommands.KEY_VIDEO_ID, videoId)
+            putBoolean(QueueCommands.KEY_TARGET_LIKED, liked)
+        },
+    )
 
     suspend fun shuffleUpcoming() = send(QueueCommands.SHUFFLE_UPCOMING, android.os.Bundle.EMPTY)
 

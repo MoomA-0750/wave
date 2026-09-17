@@ -30,8 +30,8 @@ class PlaylistEditor(
     fun add(
         playlist: PlaylistSummary,
         song: Song,
-    ) = run("add:${playlist.playlistId}:${song.videoId}") {
-        val result = music.addToPlaylist(playlist.playlistId, song.videoId)
+    ) = run("add:${playlist.playlistId}:${song.videoId}") { generation ->
+        val result = music.addToPlaylist(playlist.playlistId, song.videoId, generation)
         Log.i(WaveApplication.LOG_TAG, "playlist add result=${result::class.simpleName}")
         if (result == AddToPlaylistResult.Added || result == AddToPlaylistResult.Unknown) onChanged()
         when (result) {
@@ -47,8 +47,8 @@ class PlaylistEditor(
         playlistId: String,
         song: Song,
         setVideoId: String,
-    ) = run("remove:$playlistId:$setVideoId") {
-        val result = music.removeFromPlaylist(playlistId, song.videoId, setVideoId)
+    ) = run("remove:$playlistId:$setVideoId") { generation ->
+        val result = music.removeFromPlaylist(playlistId, song.videoId, setVideoId, generation)
         Log.i(WaveApplication.LOG_TAG, "playlist remove result=${result::class.simpleName}")
         if (result !is WriteResult.Failed) onChanged()
         when (result) {
@@ -62,8 +62,8 @@ class PlaylistEditor(
     fun create(
         title: String,
         song: Song?,
-    ) = run("create") {
-        val result = music.createPlaylist(title)
+    ) = run("create") { generation ->
+        val result = music.createPlaylist(title, generation)
         Log.i(WaveApplication.LOG_TAG, "playlist create result=${result::class.simpleName}")
         if (result !is WriteResult.Failed) onChanged()
         when (result) {
@@ -71,7 +71,7 @@ class PlaylistEditor(
                 if (song == null) {
                     "「$title」を作りました"
                 } else {
-                    val added = music.addToPlaylist(result.value, song.videoId)
+                    val added = music.addToPlaylist(result.value, song.videoId, generation)
                     Log.i(WaveApplication.LOG_TAG, "playlist add result=${added::class.simpleName}")
                     onChanged()
                     if (added == AddToPlaylistResult.Added) "「$title」を作って追加しました" else "「$title」を作りましたが、追加できたか確認できませんでした"
@@ -83,12 +83,14 @@ class PlaylistEditor(
 
     private fun run(
         key: String,
-        block: suspend () -> String,
+        block: suspend (generation: Long) -> String,
     ): Boolean {
         synchronized(inFlight) { if (!inFlight.add(key)) return false }
+        // 操作を選んだときのログインに結び付ける（途中でアカウントが変われば送らない）
+        val generation = music.currentLoginGeneration()
         scope.launch {
             try {
-                val message = block()
+                val message = block(generation)
                 withContext(Dispatchers.Main) { Toast.makeText(context, message, Toast.LENGTH_LONG).show() }
             } finally {
                 synchronized(inFlight) { inFlight.remove(key) }

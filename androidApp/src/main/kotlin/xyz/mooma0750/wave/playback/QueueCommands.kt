@@ -22,6 +22,9 @@ object QueueCommands {
     /** 再生中の曲の評価を切り替える。自アプリの UI と、トークン付きの通知のボタンから受ける（決定 G-2）。 */
     const val TOGGLE_LIKE = "xyz.mooma0750.wave.TOGGLE_LIKE"
     const val KEY_VIDEO_ID = "videoId"
+
+    /** 評価の目標（true = 高く評価、false = 外す）。Service の状態と食い違えば受け付けない。 */
+    const val KEY_TARGET_LIKED = "targetLiked"
     const val KEY_NOTIFICATION_TOKEN = "notificationToken"
 
     val all = listOf(PLAY_SONG, PLAY_FROM, ADD_NEXT, ADD_TO_END, REMOVE, JUMP, SHUFFLE_UPCOMING, TOGGLE_LIKE).map { SessionCommand(it, Bundle.EMPTY) }

@@ -54,6 +54,10 @@ class PlaybackService : MediaSessionService() {
 
     /** 保存したキューを戻す判断が済んだか。済むまでは保存しない（戻す前の空のキューで上書きしない）。 */
     private var restoreSettled = false
+
+    /** 自アプリの UI がつながったか。保存したキューはこのときだけ戻す（他アプリの bind・Intent での起動では戻さない、F1 outer gate 指摘1）。 */
+    private var ownUiConnected = false
+    private var restoreStarted = false
     private var saveJob: Job? = null
     private var periodicSaveJob: Job? = null
     private var likes: LikeController? = null
@@ -201,10 +205,7 @@ class PlaybackService : MediaSessionService() {
                             container.queueStore.delete()
                         }
                         loggedInAt = state.obtainedAtEpochMs
-                        if (!restoreSettled) {
-                            restoreSavedQueue(queueSession, player, state.obtainedAtEpochMs)
-                            restoreSettled = true
-                        }
+                        maybeRestore()
                     }
                     AuthState.Restoring -> Unit
                 }
@@ -233,6 +234,8 @@ class PlaybackService : MediaSessionService() {
             Bundle().apply {
                 putString(QueueCommands.KEY_NOTIFICATION_TOKEN, container.notificationCommandToken)
                 putString(QueueCommands.KEY_VIDEO_ID, videoId)
+                // 押した時点で見えていた表示の「逆」を目標にする（表示が古いまま押しても、逆向きに書き込まない）
+                putBoolean(QueueCommands.KEY_TARGET_LIKED, !liked)
             }
         return listOf(
             CommandButton
@@ -252,6 +255,19 @@ class PlaybackService : MediaSessionService() {
         } catch (_: RuntimeException) {
             false
         }
+
+    /** ログインが分かっていて、自アプリの UI がつながっていれば、1回だけ保存したキューを戻す。 */
+    private fun maybeRestore() {
+        val obtainedAt = loggedInAt ?: return
+        if (restoreStarted || restoreSettled || !ownUiConnected) return
+        val queueSession = queue ?: return
+        val player = session?.player ?: return
+        restoreStarted = true
+        scope.launch {
+            restoreSavedQueue(queueSession, player, obtainedAt)
+            restoreSettled = true
+        }
+    }
 
     /**
      * 保存したキューを、再生を始めずに戻す。保存時と今のログインが違えばファイルを消す。
@@ -382,7 +398,8 @@ class PlaybackService : MediaSessionService() {
                 // Android 13 以降のシステムのメディア操作は、Media3 が通知用コントローラーに差し替えて届ける。extras を返すかは SystemUI 次第（未確認）
                 val allowed = isOwnUiController(session, controller) || (isOwnNotificationController(session, controller) && hasNotificationToken(args))
                 if (!allowed) return Futures.immediateFuture(SessionResult(SessionError.ERROR_PERMISSION_DENIED))
-                val accepted = likes?.toggle(args.getString(QueueCommands.KEY_VIDEO_ID)) == true
+                val target = if (args.containsKey(QueueCommands.KEY_TARGET_LIKED)) args.getBoolean(QueueCommands.KEY_TARGET_LIKED) else null
+                val accepted = likes?.setLiked(args.getString(QueueCommands.KEY_VIDEO_ID), target) == true
                 return Futures.immediateFuture(SessionResult(if (accepted) SessionResult.RESULT_SUCCESS else SessionError.ERROR_INVALID_STATE))
             }
             if (!isOwnUiController(session, controller)) return Futures.immediateFuture(SessionResult(SessionError.ERROR_PERMISSION_DENIED))
@@ -417,7 +434,11 @@ class PlaybackService : MediaSessionService() {
             session: MediaSession,
             controller: MediaSession.ControllerInfo,
         ) {
-            if (isOwnUiController(session, controller)) likes?.let { session.setSessionExtras(controller, it.state.toBundle()) }
+            if (isOwnUiController(session, controller)) {
+                likes?.let { session.setSessionExtras(controller, it.state.toBundle()) }
+                ownUiConnected = true
+                maybeRestore()
+            }
         }
 
         /** MediaItem の直接の追加は受け付けない。キューの操作はカスタムコマンドだけ（任意の videoId を解決させない）。 */

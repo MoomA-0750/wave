@@ -84,8 +84,14 @@ class LikeController(
         publish(LikeState(messageId = state.messageId))
     }
 
-    /** 表示中の曲（expectedVideoId）の評価を切り替える。評価を読めていなければ読み直す。受け付けなければ false。 */
-    fun toggle(expectedVideoId: String?): Boolean {
+    /**
+     * 表示中の曲（expectedVideoId）を、評価の目標（targetLiked）にする。評価を読めていなければ読み直す。
+     * 目標が今の状態と同じ（押した側の表示が古い）なら書き込まずに状態を配り直す。受け付けなければ false。
+     */
+    fun setLiked(
+        expectedVideoId: String?,
+        targetLiked: Boolean?,
+    ): Boolean {
         val current = state
         val videoId = current.videoId ?: return false
         if (expectedVideoId != videoId || current.pending) return false
@@ -93,11 +99,17 @@ class LikeController(
             if (loadJob?.isActive != true) load(videoId)
             return true
         }
-        val liked = current.status != LikeStatus.Like
+        val liked = targetLiked ?: return false
+        if (liked == (current.status == LikeStatus.Like)) {
+            publish(current)
+            return false
+        }
         val startedEpoch = epoch
+        // 始めたときのログインで送る（途中でアカウントが変われば送らない）
+        val generation = music.currentLoginGeneration()
         publish(current.copy(pending = true, message = null))
         scope.launch {
-            val result = music.setLiked(videoId, liked)
+            val result = music.setLiked(videoId, liked, generation)
             Log.i(WaveApplication.LOG_TAG, "like write result=${result::class.simpleName} liked=$liked")
             if (result !is WriteResult.Failed) onLikedSongsChanged()
             // 曲が変わった・ログアウトしたなら、表示には反映しない。別の曲を挟んで同じ曲に戻っていたら、古い評価を読んでいるかもしれないので読み直す

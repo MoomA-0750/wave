@@ -27,7 +27,11 @@ object DebugActions {
     /** 画面がまだ購読していなくても取りこぼさない（起動直後の intent でも開く）。 */
     val navigation = navigationChannel.receiveAsFlow()
 
-    private val WRITE_ACTIONS = setOf("logout", "toggle_like", "playlist_create", "playlist_add", "playlist_remove")
+    /**
+     * 公開 Activity から受けてよい action（画面の遷移だけ）。再生を始めるものも、再生履歴というアカウントへの書き込みにつながるので
+     * DebugReceiver からだけ受ける（F1 outer gate 指摘2）。
+     */
+    private val ACTIVITY_ACTIONS = setOf("open_artist", "open_album")
 
     /** 確認用に作ったプレイリスト。プロセスの中だけに持ち、ログに出さない。 */
     private var createdPlaylistId: String? = null
@@ -40,7 +44,7 @@ object DebugActions {
         if (!container.isDebuggable) return
         val action = intent?.getStringExtra(EXTRA) ?: return
         intent.removeExtra(EXTRA)
-        if (action in WRITE_ACTIONS && !fromPrivilegedReceiver) {
+        if (action !in ACTIVITY_ACTIONS && !fromPrivilegedReceiver) {
             Log.w(WaveApplication.LOG_TAG, "debug action=$action rejected (use DebugReceiver)")
             return
         }
@@ -65,7 +69,10 @@ object DebugActions {
                     }
                 "last_item" -> player.controller().run { seekTo(mediaItemCount - 1, 0L) }
                 "near_end" -> player.controller().run { if (duration > 10_000) seekTo(duration - 5_000) }
-                "logout" -> container.logout()
+                "logout" -> {
+                    createdPlaylistId = null
+                    container.logout()
+                }
                 "shuffle" -> player.shuffleUpcoming()
                 // プレイリストの書き込みの確認（DebugReceiver からだけ）。作った ID はメモリに置くだけで出さない
                 "playlist_create" ->
@@ -122,7 +129,7 @@ object DebugActions {
                         // 曲の ID そのものは出さず、並びと集合のハッシュだけ
                         Log.i(WaveApplication.LOG_TAG, "debug queue size=${ids.size} index=$currentMediaItemIndex head=${ids.take(currentMediaItemIndex + 1).hashCode()} order=${ids.hashCode()} set=${ids.sorted().hashCode()} repeat=$repeatMode shuffleMode=$shuffleModeEnabled")
                     }
-                "toggle_like" -> player.likeState.value.videoId?.let { player.toggleLike(it) }
+                "toggle_like" -> player.likeState.value.let { state -> state.videoId?.let { player.setLiked(it, state.status != xyz.mooma0750.wave.core.music.LikeStatus.Like) } }
                 "like_state" -> player.likeState.value.let { Log.i(WaveApplication.LOG_TAG, "debug like status=${it.status} pending=${it.pending} message=${it.message != null}") }
                 "repeat" -> {
                     player.cycleRepeatMode()

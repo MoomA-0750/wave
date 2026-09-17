@@ -33,6 +33,7 @@ import xyz.mooma0750.wave.core.session.WaveSession
 import xyz.mooma0750.wave.core.music.MusicRepository
 import xyz.mooma0750.wave.core.stream.StreamComponents
 import xyz.mooma0750.wave.playback.PlayerConnection
+import xyz.mooma0750.wave.core.auth.AuthState
 import xyz.mooma0750.wave.core.stream.PlaybackHistory
 import xyz.mooma0750.wave.library.PlaylistEditor
 import xyz.mooma0750.wave.settings.AppSettings
@@ -114,7 +115,8 @@ class AppContainer(
     // OkHttp に Interceptor・Authenticator・CookieJar を足すと、ガードの後でヘッダが付くので足さない
     private val guardedEngine =
         AuthGuardEngine(
-            // 送信を始めた後でも POST を黙って送り直す設定（Ktor の既定は true）を切る。プレイリストへの追加・作成が重複しないように。
+            // 接続の失敗で POST を黙って送り直す設定（Ktor の既定は true）を切る。プレイリストへの追加・作成が重複しないように。
+            // ただし OkHttp は 503 + Retry-After: 0 と、まとめた接続での 421 は、この設定に関わらず送り直す（サーバーが処理していないと示す応答）。
             // 読み取りの一時的な失敗は innertubex の再試行で補う
             delegate = OkHttp.create { config { retryOnConnectionFailure(false) } },
             onViolation = { host -> Log.w(WaveApplication.LOG_TAG, "auth headers blocked for host=$host") },
@@ -173,6 +175,10 @@ class AppContainer(
     val queueStore = QueueStore.create(context)
 
     init {
+        // 起動時・ログアウト後にログインしていなければ、再生サービスが動いていなくても保存したキューを消す
+        appScope.launch {
+            authManager.state.collect { state -> if (state is AuthState.LoggedOut || state is AuthState.Unreadable) queueStore.delete() }
+        }
         // ログインが反映されたら、プレイヤーの設定を先に取っておく（最初の再生を速くする）
         appScope.launch {
             session.appliedObtainedAtEpochMs.filterNotNull().collect { stream.resolver.prewarm() }
@@ -193,11 +199,11 @@ class AppContainer(
 
     /** ログアウトの唯一の入口。保存物を消し、WebView 側の後始末もする。両方消せたら true。 */
     suspend fun logout(): Boolean {
+        // 先に消す（ログアウトの完了を待つ間にプロセスが終わっても、前のアカウントのキューを残さない）
+        queueStore.delete()
         val cleared = authManager.logout()
         // 再生サービスが動いていなくても、前のアカウントで解決した URL とサムネイルを残さない
         streamCache.clear()
-        // 再生サービスが動いていないときのログアウトでも、前のアカウントのキューを残さない
-        queueStore.delete()
         imageCacheCleaner()
         WebViewCredentials.clear()
         Log.i(WaveApplication.LOG_TAG, "logout cleared=$cleared")

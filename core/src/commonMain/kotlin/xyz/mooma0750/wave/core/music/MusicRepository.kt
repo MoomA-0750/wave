@@ -82,6 +82,9 @@ class MusicRepository(
             if (MusicParsers.isSignInPrompt(root)) ParseOutcome.LoggedOutResponse else ParseOutcome.Parsed(MusicParsers.playlistPage(root))
         }
 
+    /** 今のログインの世代。複数の呼び出しにまたがる操作を、始めたときのログインに結び付けるために使う。 */
+    fun currentLoginGeneration(): Long = session.currentGenerationId()
+
     /** 曲の評価（next の最初の応答から取る）。 */
     suspend fun likeStatus(videoId: String): CallResult<LikeStatus> =
         session.call(
@@ -96,10 +99,12 @@ class MusicRepository(
     suspend fun setLiked(
         videoId: String,
         liked: Boolean,
+        expectedGeneration: Long? = null,
     ): WriteResult<Unit> =
         session.callWrite(
             operation = if (liked) "like" else "removelike",
             block = { if (liked) it.likeVideo(YouTubeClient.WEB_REMIX, videoId) else it.unlikeVideo(YouTubeClient.WEB_REMIX, videoId) },
+            expectedGeneration = expectedGeneration,
         ) { response ->
             // 読めない応答の例外は callWrite が Invalid（Unknown）にする。キャンセルは握りつぶさない
             json(response)
@@ -113,6 +118,7 @@ class MusicRepository(
     suspend fun addToPlaylist(
         playlistId: String,
         videoId: String,
+        expectedGeneration: Long = currentLoginGeneration(),
     ): AddToPlaylistResult {
         var continuation: String? = null
         var pages = 0
@@ -127,7 +133,7 @@ class MusicRepository(
             // 続きのトークンが循環しても止まるように、ページ数に上限を置く（1ページ100曲で5000曲）
             if (++pages >= MAX_PLAYLIST_PAGES && continuation != null) return AddToPlaylistResult.NotChecked(FailureKind.Parse)
         } while (continuation != null)
-        return when (val result = editPlaylist("add") { it.addToPlaylist(YouTubeClient.WEB_REMIX, playlistId, videoId) }) {
+        return when (val result = editPlaylist("add", expectedGeneration) { it.addToPlaylist(YouTubeClient.WEB_REMIX, playlistId, videoId) }) {
             is WriteResult.Done -> AddToPlaylistResult.Added
             is WriteResult.Failed -> AddToPlaylistResult.Failed(result.kind, result.status)
             WriteResult.Unknown -> AddToPlaylistResult.Unknown
@@ -139,13 +145,18 @@ class MusicRepository(
         playlistId: String,
         videoId: String,
         setVideoId: String,
-    ): WriteResult<Unit> = editPlaylist("remove") { it.removePlaylistSong(YouTubeClient.WEB_REMIX, playlistId, setVideoId, videoId) }
+        expectedGeneration: Long = currentLoginGeneration(),
+    ): WriteResult<Unit> = editPlaylist("remove", expectedGeneration) { it.removePlaylistSong(YouTubeClient.WEB_REMIX, playlistId, setVideoId, videoId) }
 
     /** 非公開のプレイリストを作る（innertubex が PRIVATE 固定）。作った playlistId を返す。 */
-    suspend fun createPlaylist(title: String): WriteResult<String> =
+    suspend fun createPlaylist(
+        title: String,
+        expectedGeneration: Long = currentLoginGeneration(),
+    ): WriteResult<String> =
         session.callWrite(
             operation = "playlist/create",
             block = { it.createPlaylist(YouTubeClient.WEB_REMIX, title) },
+            expectedGeneration = expectedGeneration,
         ) { response ->
             val id = MusicParsers.createdPlaylistId(json(response))
             if (id != null) ParseOutcome.Parsed(id) else ParseOutcome.Invalid
@@ -156,10 +167,11 @@ class MusicRepository(
      */
     private suspend fun editPlaylist(
         operation: String,
+        expectedGeneration: Long,
         block: suspend (com.metrolist.innertubex.InnerTube) -> HttpResponse,
     ): WriteResult<Unit> {
         val result =
-            session.callWrite(operation = "edit_playlist/$operation", block = block) { response ->
+            session.callWrite(operation = "edit_playlist/$operation", block = block, expectedGeneration = expectedGeneration) { response ->
                 val status = MusicParsers.editPlaylistStatus(json(response))
                 if (status != null) ParseOutcome.Parsed(status) else ParseOutcome.Invalid
             }

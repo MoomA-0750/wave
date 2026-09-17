@@ -91,7 +91,10 @@ class MainActivity : ComponentActivity() {
                         var shownGeneration by remember { mutableStateOf(loginGeneration) }
                         LaunchedEffect(loginGeneration) {
                             reLogin = false
-                            if (shownGeneration != loginGeneration) stack.clear()
+                            if (shownGeneration != loginGeneration) {
+                                stack.clear()
+                                addTarget = null
+                            }
                             shownGeneration = loginGeneration
                         }
                         if (stack.isNotEmpty()) BackHandler { stack.removeAt(stack.lastIndex) }

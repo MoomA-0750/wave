@@ -213,7 +213,7 @@ private fun FullPlayer(
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             val videoId = like.videoId
             TextButton(
-                onClick = { if (videoId != null) scope.launch { connection.toggleLike(videoId) } },
+                onClick = { if (videoId != null) scope.launch { connection.setLiked(videoId, like.status != xyz.mooma0750.wave.core.music.LikeStatus.Like) } },
                 enabled = videoId != null && !like.pending,
             ) {
                 Text(

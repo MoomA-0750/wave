@@ -572,6 +572,22 @@ class WaveSessionTest {
         }
 
     @Test
+    fun writesStartedUnderAnotherLoginAreNotSent(): Unit =
+        runBlocking {
+            val session = loggedInSession()
+            val started = session.currentGenerationId()
+            credentials.value = assertNotNull(Credentials.fromLogin("SAPISID=other-synthetic", null, null, 2))
+            withTimeout(5_000) { while (session.currentGenerationId() == started) delay(10) }
+            withTimeout(5_000) { session.state.first { it == SessionState.Active } }
+            val before = sent.size
+            assertEquals(
+                WriteResult.Failed(FailureKind.NotLoggedIn),
+                session.callWrite("like", { it.likeVideo(YouTubeClient.WEB_REMIX, "synthetic-id") }, expectedGeneration = started) { ParseOutcome.Parsed(Unit) },
+            )
+            assertEquals(before, sent.size, "前のログインで始めた書き込みを送った")
+        }
+
+    @Test
     fun writesWhileLoggedOutAreNotSent(): Unit =
         runBlocking {
             val session = session()
