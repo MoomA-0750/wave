@@ -60,6 +60,17 @@ class ArtistAlbumParsersTest {
         assertNull(MusicParsers.albumPage(fixture("search_songs"), "MPREb_x"))
     }
 
+    @Test
+    fun likeStatusIsReadOnlyForTheRequestedSong() {
+        val root = fixture("next_radio")
+        val videoId = requireNotNull(Regex("\"target\":\\{\"videoId\":\"([^\"]+)\"").find(fixtureText("next_radio").replace(" ", ""))).groupValues[1]
+        assertEquals(LikeStatus.Indifferent, MusicParsers.likeStatus(root, videoId))
+        assertNull(MusicParsers.likeStatus(root, "other-video"))
+        assertNull(MusicParsers.likeStatus(fixture("next_radio_continuation"), videoId), "続きの応答に評価は無い")
+        val liked = Json.parseToJsonElement(fixtureText("next_radio").replace("\"INDIFFERENT\"", "\"LIKE\"")) as JsonObject
+        assertEquals(LikeStatus.Like, MusicParsers.likeStatus(liked, videoId))
+    }
+
     private fun fixtureText(name: String): String = requireNotNull(javaClass.getResource("/fixtures/$name.json")) { "fixture $name" }.readText()
 
     private fun fixture(name: String): JsonObject = Json.parseToJsonElement(fixtureText(name)) as JsonObject

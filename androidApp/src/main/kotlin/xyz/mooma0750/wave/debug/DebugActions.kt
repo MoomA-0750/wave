@@ -50,6 +50,8 @@ object DebugActions {
                 "near_end" -> player.controller().run { if (duration > 10_000) seekTo(duration - 5_000) }
                 "logout" -> container.logout()
                 "shuffle" -> player.shuffleUpcoming()
+                "toggle_like" -> player.likeState.value.videoId?.let { player.toggleLike(it) }
+                "like_state" -> player.likeState.value.let { Log.i(WaveApplication.LOG_TAG, "debug like status=${it.status} pending=${it.pending} message=${it.message != null}") }
                 "repeat" -> {
                     player.cycleRepeatMode()
                     Log.i(WaveApplication.LOG_TAG, "debug repeat=${player.controller().repeatMode}")

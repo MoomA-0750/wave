@@ -7,6 +7,7 @@ import kotlinx.serialization.json.JsonObject
 import xyz.mooma0750.wave.core.session.CallResult
 import xyz.mooma0750.wave.core.session.ParseOutcome
 import xyz.mooma0750.wave.core.session.WaveSession
+import xyz.mooma0750.wave.core.session.WriteResult
 
 /** 曲・プレイリスト・ラジオの取得。通信は WaveSession を通し、失敗は FailureKind のまま返す。 */
 class MusicRepository(
@@ -68,6 +69,28 @@ class MusicRepository(
         ) { response ->
             val root = json(response)
             if (MusicParsers.isSignInPrompt(root)) ParseOutcome.LoggedOutResponse else ParseOutcome.Parsed(MusicParsers.playlistPage(root)).also { lastRendererNames = MusicParsers.rendererNames(root) }
+        }
+
+    /** 曲の評価（next の最初の応答から取る）。 */
+    suspend fun likeStatus(videoId: String): CallResult<LikeStatus> =
+        session.call(
+            operation = "next",
+            block = { it.next(YouTubeClient.WEB_REMIX, videoId = videoId, playlistId = null) },
+        ) { response -> MusicParsers.likeStatus(json(response), videoId)?.let { ParseOutcome.Parsed(it) } ?: ParseOutcome.Invalid }
+
+    /**
+     * 高く評価する（liked = true）・評価を外す（false）。書き込みの規則は WaveSession.callWrite。
+     * 応答の中身は確かめない（2xx の JSON なら反映されたとみなす）。
+     */
+    suspend fun setLiked(
+        videoId: String,
+        liked: Boolean,
+    ): WriteResult<Unit> =
+        session.callWrite(
+            operation = if (liked) "like" else "removelike",
+            block = { if (liked) it.likeVideo(YouTubeClient.WEB_REMIX, videoId) else it.unlikeVideo(YouTubeClient.WEB_REMIX, videoId) },
+        ) { response ->
+            runCatching { json(response) }.fold(onSuccess = { ParseOutcome.Parsed(Unit) }, onFailure = { ParseOutcome.Invalid })
         }
 
     /** アルバムのページ（`MPREb_…`）。公開データだが、ログイン中の表示に合わせて cookie 付きで取る。 */

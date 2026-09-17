@@ -82,6 +82,26 @@ internal object MusicParsers {
     }
 
     /**
+     * next の最初の応答にある、指定した曲の評価（`playerOverlays…likeButtonRenderer`）。続きの応答には無い。
+     * 別の曲の評価や、知らない値なら null。
+     */
+    fun likeStatus(
+        root: JsonObject,
+        videoId: String,
+    ): LikeStatus? {
+        val button =
+            root.path("playerOverlays", "playerOverlayRenderer", "actions").arrayItems().firstNotNullOfOrNull { it.path("likeButtonRenderer").asObject() }
+                ?: return null
+        if (button.path("target", "videoId").string() != videoId) return null
+        return when (button.path("likeStatus").string()) {
+            "LIKE" -> LikeStatus.Like
+            "DISLIKE" -> LikeStatus.Dislike
+            "INDIFFERENT" -> LikeStatus.Indifferent
+            else -> null
+        }
+    }
+
+    /**
      * アルバムのページ（browse `MPREb_…`）。曲の行にはアーティスト・アルバム・サムネイルが無いので、ヘッダの値で埋める。
      * 取れなければ null。
      */

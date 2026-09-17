@@ -17,7 +17,9 @@ import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
+import androidx.media3.session.CommandButton
 import androidx.media3.session.SessionCommand
+import xyz.mooma0750.wave.core.music.LikeStatus
 import androidx.media3.session.SessionError
 import androidx.media3.session.SessionResult
 import com.google.common.util.concurrent.Futures
@@ -53,6 +55,7 @@ class PlaybackService : MediaSessionService() {
     private var restoreSettled = false
     private var saveJob: Job? = null
     private var periodicSaveJob: Job? = null
+    private var likes: LikeController? = null
 
     private lateinit var container: xyz.mooma0750.wave.AppContainer
 
@@ -73,6 +76,14 @@ class PlaybackService : MediaSessionService() {
                 .build()
         val queueSession = QueueSession(Media3QueuePlayer(player), RepositoryContentSource(container.music), scope, newItemId = { UUID.randomUUID().toString() })
         queue = queueSession
+        val likeController =
+            LikeController(
+                container.music,
+                scope,
+                onChanged = { state -> publishLikeState(state) },
+                onLikedSongsChanged = { container.onLikedSongsChanged() },
+            )
+        likes = likeController
         player.addListener(
             object : Player.Listener {
                 override fun onPlayerError(error: PlaybackException) {
@@ -92,6 +103,9 @@ class PlaybackService : MediaSessionService() {
                     events: Player.Events,
                 ) {
                     if (events.containsAny(*SAVE_EVENTS)) scheduleSave()
+                    if (events.containsAny(Player.EVENT_MEDIA_ITEM_TRANSITION, Player.EVENT_TIMELINE_CHANGED)) {
+                        likeController.onCurrentSong(Media3QueuePlayer.songOf(player.currentMediaItem)?.videoId)
+                    }
                 }
 
                 override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -140,6 +154,7 @@ class PlaybackService : MediaSessionService() {
                 .Builder(this, player)
                 .setCallback(Callback(queueSession))
                 // 通知・ロック画面のアートワークも、認証情報を持たない音声用のクライアントで取る
+                .setSessionExtras(likeController.state.toBundle())
                 .setBitmapLoader(
                     androidx.media3.datasource.DataSourceBitmapLoader
                         .Builder(this)
@@ -156,6 +171,7 @@ class PlaybackService : MediaSessionService() {
                 when (state) {
                     AuthState.LoggedOut, AuthState.LoggingOut, is AuthState.Unreadable -> {
                         loggedInAt = null
+                        likeController.reset()
                         queueSession.reset()
                         container.streamCache.clear()
                         container.queueStore.delete()
@@ -165,6 +181,7 @@ class PlaybackService : MediaSessionService() {
                         val previous = loggedInAt
                         if (previous != null && previous != state.obtainedAtEpochMs) {
                             loggedInAt = null
+                            likeController.reset()
                             queueSession.reset()
                             container.streamCache.clear()
                             container.queueStore.delete()
@@ -180,6 +197,40 @@ class PlaybackService : MediaSessionService() {
             }
         }
     }
+
+    /** 評価を画面（セッションの extras）と通知のボタンへ配る。 */
+    private fun publishLikeState(state: LikeState) {
+        val current = session ?: return
+        current.sessionExtras = state.toBundle()
+        current.setMediaButtonPreferences(likeButtons(state))
+    }
+
+    private fun likeButtons(state: LikeState): List<CommandButton> {
+        val videoId = state.videoId ?: return emptyList()
+        val liked = state.status == LikeStatus.Like
+        val extras =
+            Bundle().apply {
+                putString(QueueCommands.KEY_NOTIFICATION_TOKEN, container.notificationCommandToken)
+                putString(QueueCommands.KEY_VIDEO_ID, videoId)
+            }
+        return listOf(
+            CommandButton
+                .Builder(if (liked) CommandButton.ICON_HEART_FILLED else CommandButton.ICON_HEART_UNFILLED)
+                .setDisplayName(if (liked) "評価を外す" else "高く評価")
+                .setSessionCommand(SessionCommand(QueueCommands.TOGGLE_LIKE, extras))
+                .setEnabled(state.status != null && !state.pending)
+                .build(),
+        )
+    }
+
+    /** 通知のボタンから来た値か。定数時間で比べる。Bundle が壊れていても落ちない。 */
+    private fun hasNotificationToken(extras: Bundle?): Boolean =
+        try {
+            val token = extras?.getString(QueueCommands.KEY_NOTIFICATION_TOKEN) ?: return false
+            java.security.MessageDigest.isEqual(token.encodeToByteArray(), container.notificationCommandToken.encodeToByteArray())
+        } catch (_: RuntimeException) {
+            false
+        }
 
     /**
      * 保存したキューを、再生を始めずに戻す。保存時と今のログインが違えばファイルを消す。
@@ -259,6 +310,19 @@ class PlaybackService : MediaSessionService() {
             session: MediaSession,
             controller: MediaSession.ControllerInfo,
         ): MediaSession.ConnectionResult {
+            if (session.isMediaNotificationController(controller)) {
+                // 通知用コントローラーには、評価のボタンのコマンドだけを足す（受けるときにトークンを確かめる）
+                return MediaSession.ConnectionResult
+                    .AcceptedResultBuilder(session, controller)
+                    .setAvailableSessionCommands(
+                        MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS
+                            .buildUpon()
+                            .add(SessionCommand(QueueCommands.TOGGLE_LIKE, Bundle.EMPTY))
+                            .build(),
+                    ).setAvailablePlayerCommands(withoutShuffleMode(MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS))
+                    .setMediaButtonPreferences(likeButtons(likes?.state ?: LikeState()))
+                    .build()
+            }
             if (!isOwnUiController(session, controller)) {
                 // 通知・システム（ロック画面・Bluetooth はプラットフォームのセッション経由）・信頼された外部は既定の再生操作だけ。
                 // 信頼されていない他アプリの Media3 コントローラーは、キューの中身を読ませないために拒否する
@@ -289,6 +353,12 @@ class PlaybackService : MediaSessionService() {
             customCommand: SessionCommand,
             args: Bundle,
         ): ListenableFuture<SessionResult> {
+            if (customCommand.customAction == QueueCommands.TOGGLE_LIKE) {
+                val allowed = isOwnUiController(session, controller) || (session.isMediaNotificationController(controller) && hasNotificationToken(args))
+                if (!allowed) return Futures.immediateFuture(SessionResult(SessionError.ERROR_PERMISSION_DENIED))
+                val accepted = likes?.toggle(args.getString(QueueCommands.KEY_VIDEO_ID)) == true
+                return Futures.immediateFuture(SessionResult(if (accepted) SessionResult.RESULT_SUCCESS else SessionError.ERROR_INVALID_STATE))
+            }
             if (!isOwnUiController(session, controller)) return Futures.immediateFuture(SessionResult(SessionError.ERROR_PERMISSION_DENIED))
             if (customCommand.customAction in USER_SELECTIONS) skipGuard.onUserSelection()
             val handled =
@@ -321,10 +391,21 @@ class PlaybackService : MediaSessionService() {
         flags: Int,
         startId: Int,
     ): Int {
-        // 通知のカスタムボタンは使っていない。他アプリからの Intent でキューのコマンドを転送させない
-        if (intent?.action == CUSTOM_NOTIFICATION_ACTION) return START_NOT_STICKY
+        // 通知のカスタムボタンは評価だけ。トークンの無い Intent（他アプリからの明示的 Intent）は、通知用コントローラーへ転送させない
+        if (intent?.action == CUSTOM_NOTIFICATION_ACTION && !isOwnNotificationIntent(intent)) {
+            Log.w(WaveApplication.LOG_TAG, "notification intent dropped")
+            return START_NOT_STICKY
+        }
         return super.onStartCommand(intent, flags, startId)
     }
+
+    private fun isOwnNotificationIntent(intent: Intent): Boolean =
+        try {
+            intent.getStringExtra(EXTRAS_KEY_CUSTOM_NOTIFICATION_ACTION) == QueueCommands.TOGGLE_LIKE &&
+                hasNotificationToken(intent.getBundleExtra(EXTRAS_KEY_CUSTOM_NOTIFICATION_ACTION_EXTRAS))
+        } catch (_: RuntimeException) {
+            false
+        }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
         val player = session?.player
@@ -348,6 +429,7 @@ class PlaybackService : MediaSessionService() {
         }
         session = null
         queue = null
+        likes = null
         super.onDestroy()
     }
 
@@ -365,6 +447,8 @@ class PlaybackService : MediaSessionService() {
             )
         val USER_SELECTIONS = setOf(QueueCommands.PLAY_SONG, QueueCommands.PLAY_FROM, QueueCommands.JUMP)
         const val CUSTOM_NOTIFICATION_ACTION = "androidx.media3.session.CUSTOM_NOTIFICATION_ACTION"
+        const val EXTRAS_KEY_CUSTOM_NOTIFICATION_ACTION = "androidx.media3.session.EXTRAS_KEY_CUSTOM_NOTIFICATION_ACTION"
+        const val EXTRAS_KEY_CUSTOM_NOTIFICATION_ACTION_EXTRAS = "androidx.media3.session.EXTRAS_KEY_CUSTOM_NOTIFICATION_ACTION_EXTRAS"
 
         /**
          * すべてのコントローラーから、シャッフルモードの切り替えを外す（決定 G-5）。

@@ -19,7 +19,12 @@ object QueueCommands {
     const val JUMP = "xyz.mooma0750.wave.JUMP"
     const val SHUFFLE_UPCOMING = "xyz.mooma0750.wave.SHUFFLE_UPCOMING"
 
-    val all = listOf(PLAY_SONG, PLAY_FROM, ADD_NEXT, ADD_TO_END, REMOVE, JUMP, SHUFFLE_UPCOMING).map { SessionCommand(it, Bundle.EMPTY) }
+    /** 再生中の曲の評価を切り替える。自アプリの UI と、トークン付きの通知のボタンから受ける（決定 G-2）。 */
+    const val TOGGLE_LIKE = "xyz.mooma0750.wave.TOGGLE_LIKE"
+    const val KEY_VIDEO_ID = "videoId"
+    const val KEY_NOTIFICATION_TOKEN = "notificationToken"
+
+    val all = listOf(PLAY_SONG, PLAY_FROM, ADD_NEXT, ADD_TO_END, REMOVE, JUMP, SHUFFLE_UPCOMING, TOGGLE_LIKE).map { SessionCommand(it, Bundle.EMPTY) }
 
     private const val KEY_SONG = "song"
     private const val KEY_PLAY_FROM = "playFrom"

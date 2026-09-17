@@ -17,6 +17,10 @@ class PlayerConnection(
 ) {
     private var controller: MediaController? = null
     private val connecting = Mutex()
+    private val mutableLikeState = kotlinx.coroutines.flow.MutableStateFlow(LikeState())
+
+    /** 再生中の曲の評価（Service がセッションの extras で配る）。 */
+    val likeState: kotlinx.coroutines.flow.StateFlow<LikeState> = mutableLikeState
 
     /** 同時に呼ばれても MediaController を1つだけ作る。 */
     suspend fun controller(): MediaController =
@@ -26,9 +30,21 @@ class PlayerConnection(
             MediaController
                 .Builder(context, SessionToken(context, ComponentName(context, PlaybackService::class.java)))
                 .setConnectionHints(android.os.Bundle().apply { putString(CONNECTION_TOKEN_KEY, token) })
-                .buildAsync()
+                .setListener(
+                    object : MediaController.Listener {
+                        override fun onExtrasChanged(
+                            controller: MediaController,
+                            extras: android.os.Bundle,
+                        ) {
+                            mutableLikeState.value = LikeState.of(extras)
+                        }
+                    },
+                ).buildAsync()
                 .await()
-                .also { controller = it }
+                .also {
+                    controller = it
+                    mutableLikeState.value = LikeState.of(it.sessionExtras)
+                }
         }
 
     companion object {
@@ -52,6 +68,9 @@ class PlayerConnection(
     suspend fun remove(itemId: String) = send(QueueCommands.REMOVE, QueueCommands.itemArgs(itemId))
 
     suspend fun jumpTo(itemId: String) = send(QueueCommands.JUMP, QueueCommands.itemArgs(itemId))
+
+    /** 表示中の曲（videoId）の評価を切り替える。曲が変わっていたら Service が受け付けない。 */
+    suspend fun toggleLike(videoId: String) = send(QueueCommands.TOGGLE_LIKE, android.os.Bundle().apply { putString(QueueCommands.KEY_VIDEO_ID, videoId) })
 
     suspend fun shuffleUpcoming() = send(QueueCommands.SHUFFLE_UPCOMING, android.os.Bundle.EMPTY)
 

@@ -119,8 +119,11 @@ class MainActivity : ComponentActivity() {
                                     )
                                 is Screen.Playlist -> {
                                     val playlist = screen.summary
+                                    // 高く評価した曲は、評価を変えたら読み直す
+                                    val likedVersion by container.likedSongsVersion.collectAsStateWithLifecycle()
+                                    val version = if (playlist.playlistId == xyz.mooma0750.wave.core.music.MusicRepository.LIKED_SONGS) likedVersion else 0
                                     PlaylistScreen(
-                                        viewModel(key = "playlist-$loginGeneration-${playlist.playlistId}") { PlaylistViewModel(container.music, playlist.playlistId, playlist.title) },
+                                        viewModel(key = "playlist-$loginGeneration-${playlist.playlistId}-$version") { PlaylistViewModel(container.music, playlist.playlistId, playlist.title) },
                                         onPlay = { songs, index, continuation -> scope.launch { container.player.playFrom(songs, index, playlist.playlistId, continuation) } },
                                         onShufflePlay = { songs, continuation ->
                                             scope.launch { container.player.playFrom(songs, 0, playlist.playlistId, continuation, shuffle = true) }

@@ -72,6 +72,25 @@ sealed interface CallResult<out T> {
     ) : CallResult<Nothing>
 }
 
+/**
+ * 書き込み（高く評価・プレイリストの編集など）の結果。アプリは自動で送り直さない。
+ * 楽観的に表示を変えず、Done のときだけ確定する。Unknown のときは読み直して確かめる。
+ */
+sealed interface WriteResult<out T> {
+    class Done<T>(
+        val value: T,
+    ) : WriteResult<T>
+
+    /** 送っていないと確実、または反映されていないと分かる応答（4xx・ログインの問題）。 */
+    data class Failed(
+        val kind: FailureKind,
+        val status: Int? = null,
+    ) : WriteResult<Nothing>
+
+    /** 反映されたか分からない（送信後の通信の失敗・中断・5xx・読めない 2xx）。 */
+    data object Unknown : WriteResult<Nothing>
+}
+
 sealed interface ParseOutcome<out T> {
     class Parsed<T>(
         val value: T,
@@ -288,6 +307,44 @@ class WaveSession internal constructor(
             }
         if (outcome is Outcome.Violation && rethrowViolations) throw AuthRouteViolation("operation=$operation")
         return classify(generation, outcome, provesAuthentication)
+    }
+
+    /**
+     * 書き込みの入口。応答の失効・疑いの分類は読み取りと同じだが、書き込みの成功は認証の証明に使わない（ADR-0004）。
+     * 「送っていない」と確実に言えるのは、ログインの事前チェックとガード違反だけ。通信の例外・キャンセル（innertubex の
+     * セッション変更を含む）は、送信後に起きたかもしれないので Unknown にする。
+     */
+    internal suspend fun <T> callWrite(
+        operation: String,
+        block: suspend (InnerTube) -> HttpResponse,
+        parse: suspend (HttpResponse) -> ParseOutcome<T>,
+    ): WriteResult<T> {
+        val generation = current.value
+        if (generation.credentials == null || credentials.value !== generation.credentials) {
+            return WriteResult.Failed(FailureKind.NotLoggedIn)
+        }
+        val deferred = generation.scope.async { runCatchingOutcome(block, parse) }
+        val outcome =
+            try {
+                deferred.await()
+            } catch (cancellation: CancellationException) {
+                deferred.cancel()
+                currentCoroutineContext().ensureActive()
+                return WriteResult.Unknown
+            }
+        when {
+            outcome is Outcome.Violation -> {
+                if (rethrowViolations) throw AuthRouteViolation("operation=$operation")
+                return WriteResult.Failed(FailureKind.Http)
+            }
+            outcome is Outcome.Network -> return WriteResult.Unknown
+            outcome is Outcome.Body && outcome.parsed is ParseOutcome.Invalid -> return WriteResult.Unknown
+            outcome is Outcome.Status && outcome.status >= 500 -> return WriteResult.Unknown
+        }
+        return when (val result = classify(generation, outcome, provesAuthentication = false)) {
+            is CallResult.Ok -> WriteResult.Done(result.value)
+            is CallResult.Failed -> WriteResult.Failed(result.kind, result.status)
+        }
     }
 
     private suspend fun <T> runCatchingOutcome(

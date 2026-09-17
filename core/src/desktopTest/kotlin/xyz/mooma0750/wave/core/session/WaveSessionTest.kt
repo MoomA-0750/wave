@@ -414,6 +414,52 @@ class WaveSessionTest {
         }
 
     @Test
+    fun writesAreNotRetriedAndUncertainOutcomesAreUnknown(): Unit =
+        runBlocking {
+            val session = loggedInSession()
+            val like: suspend (com.metrolist.innertubex.InnerTube) -> io.ktor.client.statement.HttpResponse = { it.likeVideo(YouTubeClient.WEB_REMIX, "synthetic-id") }
+
+            handler = { respond("", HttpStatusCode.InternalServerError) }
+            assertEquals(WriteResult.Unknown, session.callWrite("like", like) { ParseOutcome.Parsed(Unit) })
+            assertEquals(1, sent.size, "書き込みを送り直した")
+
+            handler = { throw java.io.IOException("synthetic network failure") }
+            assertEquals(WriteResult.Unknown, session.callWrite("like", like) { ParseOutcome.Parsed(Unit) })
+            assertEquals(WriteResult.Unknown, session.callWrite<Unit>("like", { throw kotlinx.coroutines.CancellationException("InnerTube session changed") }) { ParseOutcome.Parsed(Unit) })
+
+            handler = { json("{}") }
+            assertEquals(WriteResult.Unknown, session.callWrite("like", like) { ParseOutcome.Invalid })
+            assertIs<WriteResult.Done<Unit>>(session.callWrite("like", like) { ParseOutcome.Parsed(Unit) })
+
+            handler = { respond("", HttpStatusCode.BadRequest) }
+            assertEquals(WriteResult.Failed(FailureKind.Http, 400), session.callWrite("like", like) { ParseOutcome.Parsed(Unit) })
+            assertEquals(SessionState.Active, session.state.value)
+        }
+
+    @Test
+    fun writesClassifyAuthFailuresButNeverClearThem(): Unit =
+        runBlocking {
+            val session = loggedInSession()
+            val like: suspend (com.metrolist.innertubex.InnerTube) -> io.ktor.client.statement.HttpResponse = { it.likeVideo(YouTubeClient.WEB_REMIX, "synthetic-id") }
+            handler = { request -> if (request.url.encodedPath.endsWith("/account_menu")) json(accountMenu("Synthetic User")) else respond("", HttpStatusCode.Forbidden) }
+            assertEquals(WriteResult.Failed(FailureKind.Suspect, 403), session.callWrite("like", like) { ParseOutcome.Parsed(Unit) })
+
+            handler = { respond("", HttpStatusCode.Unauthorized) }
+            assertEquals(WriteResult.Failed(FailureKind.Expired, 401), session.callWrite("like", like) { ParseOutcome.Parsed(Unit) })
+            handler = { json("{}") }
+            assertIs<WriteResult.Done<Unit>>(session.callWrite("like", like) { ParseOutcome.Parsed(Unit) })
+            assertEquals(SessionState.Expired(ExpiredReason.Unauthenticated), session.state.value, "書き込みの成功で失効を解除した")
+        }
+
+    @Test
+    fun writesWhileLoggedOutAreNotSent(): Unit =
+        runBlocking {
+            val session = session()
+            assertEquals(WriteResult.Failed(FailureKind.NotLoggedIn), session.callWrite("like", { it.likeVideo(YouTubeClient.WEB_REMIX, "synthetic-id") }) { ParseOutcome.Parsed(Unit) })
+            assertTrue(sent.isEmpty())
+        }
+
+    @Test
     fun callerCancellationIsPropagated(): Unit =
         runBlocking {
             val release = CompletableDeferred<Unit>()

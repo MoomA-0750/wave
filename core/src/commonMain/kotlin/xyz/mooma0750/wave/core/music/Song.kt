@@ -61,6 +61,9 @@ data class PlaylistPage(
     val continuation: String?,
 )
 
+/** 曲の評価。 */
+enum class LikeStatus { Like, Dislike, Indifferent }
+
 /** アルバム・シングルのカード。 */
 @Serializable
 data class AlbumSummary(

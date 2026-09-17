@@ -131,6 +131,21 @@ class AppContainer(
     /** 自アプリの UI のコントローラーを見分けるための、プロセスごとの値（接続ヒントで渡す）。 */
     val controllerToken: String = UUID.randomUUID().toString()
 
+    /**
+     * 通知の評価ボタンの PendingIntent に入れる、プロセスごとの値（決定 G-2）。他アプリの明示的 Intent と区別する。
+     * 通知の内容を読める権限を持つアプリには読まれうる。UI のコントローラーの値とは分ける。ログに出さない
+     */
+    val notificationCommandToken: String = UUID.randomUUID().toString()
+
+    private val mutableLikedSongsVersion = MutableStateFlow(0)
+
+    /** 高く評価した曲が変わった（かもしれない）たびに増える。一覧を読み直すキーに使う。 */
+    val likedSongsVersion: StateFlow<Int> = mutableLikedSongsVersion.asStateFlow()
+
+    fun onLikedSongsChanged() {
+        mutableLikedSongsVersion.update { it + 1 }
+    }
+
     /** UI から再生サービスへの接続。 */
     val player = PlayerConnection(context, controllerToken)
 

@@ -26,6 +26,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -208,6 +209,24 @@ private fun FullPlayer(
                 )
             }
         }
+        val like by connection.likeState.collectAsState()
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            val videoId = like.videoId
+            TextButton(
+                onClick = { if (videoId != null) scope.launch { connection.toggleLike(videoId) } },
+                enabled = videoId != null && like.status != null && !like.pending,
+            ) {
+                Text(
+                    when {
+                        like.pending -> "変更中…"
+                        like.status == xyz.mooma0750.wave.core.music.LikeStatus.Like -> "高く評価済み（外す）"
+                        like.status == null -> "評価を確認中"
+                        else -> "高く評価"
+                    },
+                )
+            }
+        }
+        like.message?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
         state.error?.let { Text("エラー: $it", style = MaterialTheme.typography.bodySmall) }
         TextButton(onClick = onQueue) { Text("再生キュー（${state.queue.size}曲）") }
     }
