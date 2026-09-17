@@ -33,9 +33,20 @@ class RelayServerTest {
 
     private fun id(key: KeyPair) = EnvelopeSealer.deviceId(key.public.encoded)
 
-    private fun ApplicationTestBuilder.setUp(file: File = File.createTempFile("registry", ".json").apply { delete() }) {
-        application { relayModule(RelayConfig(host, Registry(file, listOf(pk(a))))) }
+    private var now = 0L
+
+    private fun ApplicationTestBuilder.setUp(
+        file: File = File.createTempFile("registry", ".json").apply { delete() },
+        maxDevices: Int = 16,
+    ) {
+        application { relayModule(RelayConfig(host, Registry(file, listOf(pk(a)), maxDevices), nowMs = { now })) }
     }
+
+    private fun registerSignature(
+        key: KeyPair,
+        nonce: ByteArray,
+        target: String,
+    ) = b64.encodeToString(WaveCrypto.sign(key.private, RelayMessage.REGISTER_LABEL, WaveCrypto.lengthPrefixed(host.encodeToByteArray(), nonce, target.encodeToByteArray())))
 
     private suspend fun DefaultClientWebSocketSession.receiveMessage(): RelayMessage = withTimeout(5_000) { RelayMessage.decode((incoming.receive() as Frame.Text).readText())!! }
 
@@ -156,4 +167,127 @@ class RelayServerTest {
                 assertTrue(!Registry(file, emptyList()).contains(id(b)))
             }
         }
+
+    @Test
+    fun authMustSignTheConfiguredHostAndRegistrationTheSessionNonce() =
+        testApplication {
+            setUp()
+            val client = createClient { install(WebSockets) }
+            client.webSocket("/connect") {
+                val challenge = assertIs<RelayMessage.Challenge>(receiveMessage())
+                val nonce = Base64.getUrlDecoder().decode(challenge.nonce)
+                // 別のホスト名に対する署名（別の中継に出した署名の流用）
+                sendMessage(RelayMessage.Auth(pk(a), b64.encodeToString(WaveCrypto.sign(a.private, RelayMessage.AUTH_LABEL, WaveCrypto.lengthPrefixed("other.host".encodeToByteArray(), nonce)))))
+                assertTrue(runCatching { receiveMessage() }.isFailure, "別のホスト名の署名で認証が通った")
+            }
+            client.webSocket("/connect") {
+                authenticate(a)
+                receiveMessage()
+                sendMessage(RelayMessage.Register(pk(b), registerSignature(a, ByteArray(32), pk(b))))
+                assertEquals(RelayMessage.Error("register_failed"), receiveMessage(), "別の接続の nonce の署名で登録できた")
+            }
+        }
+
+    @Test
+    fun revokedDevicesAreDisconnectedAndTheDeviceLimitHolds() =
+        testApplication {
+            setUp(maxDevices = 2)
+            val client = createClient { install(WebSockets) }
+            client.webSocket("/connect") {
+                val nonce = authenticate(a)
+                receiveMessage()
+                sendMessage(RelayMessage.Register(pk(b), registerSignature(a, nonce, pk(b))))
+                assertIs<RelayMessage.OnlineResult>(receiveMessage())
+                sendMessage(RelayMessage.Register(pk(c), registerSignature(a, nonce, pk(c))))
+                assertEquals(RelayMessage.Error("register_failed"), receiveMessage(), "上限を超えて登録した")
+                val sessionA = this
+                client.webSocket("/connect") {
+                    authenticate(b)
+                    receiveMessage()
+                    sessionA.sendMessage(RelayMessage.Revoke(id(b), b64.encodeToString(WaveCrypto.sign(a.private, RelayMessage.REVOKE_LABEL, WaveCrypto.lengthPrefixed(host.encodeToByteArray(), nonce, id(b).encodeToByteArray())))))
+                    assertIs<RelayMessage.OnlineResult>(sessionA.receiveMessage())
+                    assertTrue(runCatching { receiveMessage() }.isFailure, "締め出した接続が開いたまま")
+                }
+            }
+        }
+
+    @Test
+    fun pairGateChecksExpiryOwnerSizeAndConfirmOwner() =
+        testApplication {
+            setUp()
+            val client = createClient { install(WebSockets) }
+            val token = WaveCrypto.randomBytes(16)
+            val tokenHash = b64.encodeToString(WaveCrypto.sha256(token))
+            client.webSocket("/connect") {
+                val nonce = authenticate(a)
+                receiveMessage()
+                sendMessage(RelayMessage.Register(pk(b), registerSignature(a, nonce, pk(b))))
+                receiveMessage()
+                sendMessage(RelayMessage.PairingOpen(tokenHash))
+                // 大きすぎる Hello
+                client.webSocket("/pair") {
+                    sendMessage(RelayMessage.PairHelloIn(b64.encodeToString(token), JsonPrimitive("x".repeat(RelayMessage.MAX_PAIR_FRAME_CHARS))))
+                    assertEquals(RelayMessage.Error("no_pairing"), receiveMessage())
+                }
+                // 枠の持ち主でない登録端末からの Confirm は通さない
+                val ownerSession = this
+                client.webSocket("/connect") {
+                    authenticate(b)
+                    receiveMessage()
+                    val sessionB = this
+                    client.webSocket("/pair") {
+                        sendMessage(RelayMessage.PairHelloIn(b64.encodeToString(token), JsonPrimitive("hello")))
+                        assertIs<RelayMessage.PairHello>(ownerSession.receiveMessage())
+                        sessionB.sendMessage(RelayMessage.PairConfirm(tokenHash, JsonPrimitive("forged")))
+                        assertEquals(RelayMessage.Error("no_pairing"), sessionB.receiveMessage(), "枠の持ち主でない端末の Confirm を通した")
+                        // 同じ token の2通目は、1通目の Confirm の前でも届けない
+                        client.webSocket("/pair") {
+                            sendMessage(RelayMessage.PairHelloIn(b64.encodeToString(token), JsonPrimitive("second")))
+                            assertEquals(RelayMessage.Error("no_pairing"), receiveMessage())
+                        }
+                    }
+                }
+            }
+        }
+
+    @Test
+    fun pairGateRejectsExpiredOrOfflineOwners() =
+        testApplication {
+            setUp()
+            val client = createClient { install(WebSockets) }
+            val token = WaveCrypto.randomBytes(16)
+            client.webSocket("/connect") {
+                authenticate(a)
+                receiveMessage()
+                sendMessage(RelayMessage.PairingOpen(b64.encodeToString(WaveCrypto.sha256(token))))
+                // 中継が pairing_open を処理し終えてから時刻を進める
+                sendMessage(RelayMessage.Online(emptyList()))
+                receiveMessage()
+                now += 2 * 60 * 1000L + 1
+                client.webSocket("/pair") {
+                    sendMessage(RelayMessage.PairHelloIn(b64.encodeToString(token), JsonPrimitive("late")))
+                    assertEquals(RelayMessage.Error("no_pairing"), receiveMessage(), "期限切れの枠に届けた")
+                }
+            }
+            now = 0
+            val token2 = WaveCrypto.randomBytes(16)
+            client.webSocket("/connect") {
+                authenticate(a)
+                receiveMessage()
+                sendMessage(RelayMessage.PairingOpen(b64.encodeToString(WaveCrypto.sha256(token2))))
+                sendMessage(RelayMessage.Online(emptyList()))
+                receiveMessage()
+            }
+            // A が切断した後の /pair
+            client.webSocket("/pair") {
+                sendMessage(RelayMessage.PairHelloIn(b64.encodeToString(token2), JsonPrimitive("offline")))
+                assertEquals(RelayMessage.Error("no_pairing"), receiveMessage())
+            }
+        }
+
+    @Test
+    fun unreadableRegistryStopsStartup() {
+        val file = File.createTempFile("registry", ".json").apply { writeText("{broken") }
+        assertTrue(runCatching { Registry(file, emptyList()) }.isFailure, "壊れた登録ファイルで空のまま起動した")
+    }
 }

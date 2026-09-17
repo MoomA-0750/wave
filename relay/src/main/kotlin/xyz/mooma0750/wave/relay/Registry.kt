@@ -27,8 +27,11 @@ class Registry(
     private val registered = LinkedHashMap<String, String>()
 
     init {
-        val stored = runCatching { json.decodeFromString(Stored.serializer(), file.readText()) }.getOrNull()
-        stored?.keys?.forEach { key -> idOf(key)?.let { registered[it] = key } }
+        // ファイルがあるのに読めなければ起動を止める（空で起動すると、次の登録で全件を上書きして消してしまう）
+        if (file.exists()) {
+            val stored = json.decodeFromString(Stored.serializer(), file.readText())
+            stored.keys.forEach { key -> idOf(key)?.let { registered[it] = key } }
+        }
     }
 
     @Synchronized
@@ -61,12 +64,12 @@ class Registry(
     fun size(): Int = bootstrap.size + registered.size
 
     private fun persist() {
-        val tmp = File(file.parentFile, file.name + ".tmp")
-        tmp.writeText(json.encodeToString(Stored.serializer(), Stored(registered.values.toList())))
-        if (!tmp.renameTo(file)) {
-            file.writeText(tmp.readText())
-            tmp.delete()
+        val tmp = File(file.absoluteFile.parentFile, file.name + ".tmp")
+        java.io.FileOutputStream(tmp).use { stream ->
+            stream.write(json.encodeToString(Stored.serializer(), Stored(registered.values.toList())).encodeToByteArray())
+            stream.fd.sync()
         }
+        java.nio.file.Files.move(tmp.toPath(), file.toPath(), java.nio.file.StandardCopyOption.ATOMIC_MOVE, java.nio.file.StandardCopyOption.REPLACE_EXISTING)
     }
 
     companion object {

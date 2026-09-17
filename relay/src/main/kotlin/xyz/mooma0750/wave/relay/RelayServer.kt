@@ -38,7 +38,8 @@ fun Application.relayModule(config: RelayConfig) {
     install(WebSockets) {
         pingPeriod = 30.seconds
         timeout = 90.seconds
-        maxFrameSize = RelayMessage.MAX_FRAME_CHARS.toLong() * 4
+        // 1フレームの上限（ASCII の JSON なので文字数とバイト数はほぼ同じ）。認証前・/pair の入口は同時に開ける数を別に絞る
+        maxFrameSize = RelayMessage.MAX_FRAME_CHARS.toLong() + 1024
     }
     val hub = Hub(config)
     routing {
@@ -57,10 +58,37 @@ private class Hub(
 
     private class PairingSlot(
         val ownerId: String,
+        /** 枠を開けた接続そのもの（置き換えられた古い接続の後始末で、新しい接続の枠を消さない）。 */
+        val owner: DefaultWebSocketServerSession,
         val expiresAtMs: Long,
         val confirm: CompletableDeferred<kotlinx.serialization.json.JsonElement> = CompletableDeferred(),
-        @Volatile var helloDelivered: Boolean = false,
+        val helloDelivered: java.util.concurrent.atomic.AtomicBoolean = java.util.concurrent.atomic.AtomicBoolean(false),
     )
+
+    /** 認証前の /connect と /pair の同時の数（tailnet 内からの大きなフレームの抱え込みを限る）。 */
+    private val unauthenticated = java.util.concurrent.atomic.AtomicInteger(0)
+
+    private suspend fun <T> gate(
+        session: DefaultWebSocketServerSession,
+        block: suspend () -> T,
+    ): T? {
+        if (unauthenticated.incrementAndGet() > MAX_UNAUTHENTICATED) {
+            unauthenticated.decrementAndGet()
+            session.close(CloseReason(CloseReason.Codes.TRY_AGAIN_LATER, "busy"))
+            return null
+        }
+        return try {
+            block()
+        } finally {
+            unauthenticated.decrementAndGet()
+        }
+    }
+
+    /** 宛先へ送る。宛先が閉じている・詰まっていても、送り手の接続を落とさない。 */
+    private fun deliver(
+        target: DefaultWebSocketServerSession,
+        message: RelayMessage,
+    ): Boolean = runCatching { target.outgoing.trySend(Frame.Text(RelayMessage.encode(message))).isSuccess }.getOrDefault(false)
 
     /** tokenHash → A。端末ごとに1件。メモリだけ。 */
     private val pairings = ConcurrentHashMap<String, PairingSlot>()
@@ -71,9 +99,11 @@ private class Hub(
         val nonce = WaveCrypto.randomBytes(32)
         session.send(Frame.Text(RelayMessage.encode(RelayMessage.Challenge(config.host, b64.encodeToString(nonce)))))
         val auth =
-            withTimeoutOrNull(30.seconds) { (session.incoming.receive() as? Frame.Text)?.readText() }
-                ?.takeIf { it.length <= 4096 }
-                ?.let(RelayMessage::decode) as? RelayMessage.Auth
+            gate(session) {
+                withTimeoutOrNull(30.seconds) { runCatching { (session.incoming.receive() as? Frame.Text)?.readText() }.getOrNull() }
+                    ?.takeIf { it.length <= 4096 }
+                    ?.let(RelayMessage::decode) as? RelayMessage.Auth
+            }
         val deviceId = auth?.let { Registry.idOf(it.publicKey) }
         val key = deviceId?.let(config.registry::publicKey)
         val signature = auth?.let { runCatching { unb64.decode(it.signature) }.getOrNull() }
@@ -99,7 +129,7 @@ private class Hub(
             }
         } finally {
             sessions.remove(deviceId, session)
-            pairings.entries.removeIf { it.value.ownerId == deviceId }
+            pairings.entries.removeIf { it.value.owner === session }
             log("disconnected devices=${sessions.size}")
         }
     }
@@ -114,10 +144,12 @@ private class Hub(
         when (message) {
             is RelayMessage.Send -> {
                 val envelope = message.envelope
+                // 締め出された端末は、接続が閉じきる前でも送らせない
+                if (!config.registry.contains(deviceId)) return session.close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, "revoked"))
                 // 送り手は接続の鍵と一致しなければならない（なりすましの封筒を捨てる）
                 if (envelope.from != deviceId) return reply(RelayMessage.Error("from_mismatch"))
-                val target = sessions[envelope.to] ?: return reply(RelayMessage.Error("offline"))
-                target.send(Frame.Text(RelayMessage.encode(RelayMessage.Delivered(envelope))))
+                val target = sessions[envelope.to]
+                if (target == null || !deliver(target, RelayMessage.Delivered(envelope))) return reply(RelayMessage.Error("offline"))
                 log("delivered type=${envelope.type} chars=${envelope.ciphertext.length}")
             }
             is RelayMessage.Online -> reply(RelayMessage.OnlineResult(message.ids.take(32).filter { sessions.containsKey(it) }))
@@ -153,12 +185,15 @@ private class Hub(
             is RelayMessage.PairingOpen -> {
                 if (message.tokenHash.length != 43) return reply(RelayMessage.Error("bad_token"))
                 pairings.entries.removeIf { it.value.ownerId == deviceId || it.value.expiresAtMs < config.nowMs() }
-                pairings[message.tokenHash] = PairingSlot(deviceId, config.nowMs() + PAIRING_LIFETIME_MS)
+                // 他の端末の枠を上書きさせない
+                if (pairings.putIfAbsent(message.tokenHash, PairingSlot(deviceId, session, config.nowMs() + PAIRING_LIFETIME_MS)) != null) {
+                    return reply(RelayMessage.Error("bad_token"))
+                }
                 log("pairing opened")
             }
             is RelayMessage.PairConfirm -> {
                 val slot = pairings[message.tokenHash]
-                if (slot == null || slot.ownerId != deviceId || !slot.helloDelivered) return reply(RelayMessage.Error("no_pairing"))
+                if (slot == null || slot.ownerId != deviceId || !slot.helloDelivered.get()) return reply(RelayMessage.Error("no_pairing"))
                 slot.confirm.complete(message.confirm)
                 pairings.remove(message.tokenHash)
             }
@@ -168,20 +203,28 @@ private class Hub(
 
     /** 未登録の B の入口。token が pairing_open されていれば A にだけ1回転送し、A の Confirm を1回だけ返す。 */
     suspend fun pair(session: DefaultWebSocketServerSession) {
-        val text = withTimeoutOrNull(30.seconds) { (session.incoming.receive() as? Frame.Text)?.readText() }
+        gate(session) { pairGated(session) }
+    }
+
+    private suspend fun pairGated(session: DefaultWebSocketServerSession) {
+        val text = withTimeoutOrNull(30.seconds) { runCatching { (session.incoming.receive() as? Frame.Text)?.readText() }.getOrNull() }
         val hello = text?.takeIf { it.length <= RelayMessage.MAX_PAIR_FRAME_CHARS }?.let(RelayMessage::decode) as? RelayMessage.PairHelloIn
         val token = hello?.let { runCatching { unb64.decode(it.token) }.getOrNull() }
         val tokenHash = token?.let { b64.encodeToString(WaveCrypto.sha256(it)) }
-        val slot = tokenHash?.let { pairings[it] }?.takeIf { it.expiresAtMs >= config.nowMs() && !it.helloDelivered }
-        val owner = slot?.let { sessions[it.ownerId] }
-        if (hello == null || slot == null || owner == null) {
+        val slot = tokenHash?.let { pairings[it] }?.takeIf { it.expiresAtMs >= config.nowMs() }
+        // 枠の持ち主がいまも同じ接続でオンラインのときだけ。Hello は1回だけ（同時の2本でも1本だけ通す）
+        val owner = slot?.owner?.takeIf { sessions[slot.ownerId] === it }
+        if (hello == null || slot == null || owner == null || !slot.helloDelivered.compareAndSet(false, true)) {
             log("pair rejected")
             session.send(Frame.Text(RelayMessage.encode(RelayMessage.Error("no_pairing"))))
             session.close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, "pair"))
             return
         }
-        slot.helloDelivered = true
-        owner.send(Frame.Text(RelayMessage.encode(RelayMessage.PairHello(tokenHash, hello.hello))))
+        if (!deliver(owner, RelayMessage.PairHello(tokenHash, hello.hello))) {
+            session.send(Frame.Text(RelayMessage.encode(RelayMessage.Error("no_pairing"))))
+            session.close(CloseReason(CloseReason.Codes.NORMAL, "offline"))
+            return
+        }
         log("pair hello forwarded")
         val confirm = withTimeoutOrNull(PAIRING_LIFETIME_MS) { slot.confirm.await() }
         if (confirm == null) {
@@ -194,5 +237,6 @@ private class Hub(
 
     private companion object {
         const val PAIRING_LIFETIME_MS = 2 * 60 * 1000L
+        const val MAX_UNAUTHENTICATED = 16
     }
 }
