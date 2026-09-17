@@ -106,6 +106,13 @@ fun HomeScreen(
                         }
                         else -> Unit
                     }
+                    val historyEnabled by container.settings.historyEnabled.collectAsStateWithLifecycle(initialValue = null)
+                    androidx.compose.foundation.layout.Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                        Text("再生履歴を YouTube Music に送る", Modifier.weight(1f))
+                        historyEnabled?.let { enabled ->
+                            androidx.compose.material3.Switch(checked = enabled, onCheckedChange = { container.appScope.launch { container.settings.setHistoryEnabled(it) } })
+                        }
+                    }
                     androidx.compose.foundation.layout.Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(onClick = onSearch) { Text("検索") }
                         OutlinedButton(onClick = { container.appScope.launch { container.logout() } }) { Text("ログアウト") }

@@ -11,17 +11,22 @@ import io.ktor.utils.io.InternalAPI
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlin.coroutines.CoroutineContext
 
-/** 認証ヘッダを送ってよい宛先。host は完全一致、path は前方一致。 */
+/** 認証ヘッダを送ってよい宛先。host は完全一致、path は exact なら完全一致、そうでなければ前方一致。 */
 internal data class AuthRoute(
     val host: String,
-    val pathPrefix: String,
+    val path: String,
+    val exact: Boolean = false,
 )
 
-/** Phase 3 で再生統計などが要れば、ここに行を足す。 */
+/** 行を足すときは ADR を書く（ADR-0003、再生統計は ADR-0006）。 */
 internal val AUTH_ROUTES: List<AuthRoute> =
     listOf(
         AuthRoute("music.youtube.com", "/youtubei/v1/"),
+        // 再生履歴の playback 統計だけ。watchtime や他の /api/stats/ は含めない
+        AuthRoute("music.youtube.com", PLAYBACK_STATS_PATH, exact = true),
     )
+
+internal const val PLAYBACK_STATS_PATH = "/api/stats/playback"
 
 internal val AUTH_HEADERS: Set<String> = setOf("cookie", "authorization", "x-goog-authuser")
 
@@ -39,7 +44,7 @@ internal fun isAuthRouteAllowed(url: Url): Boolean {
     val lowered = path.lowercase()
     if ('\\' in path || "%2e" in lowered || "%2f" in lowered || "%5c" in lowered) return false
     if (path.split('/').any { it == "." || it == ".." }) return false
-    return AUTH_ROUTES.any { route -> url.host == route.host && path.startsWith(route.pathPrefix) }
+    return AUTH_ROUTES.any { route -> url.host == route.host && if (route.exact) path == route.path else path.startsWith(route.path) }
 }
 
 internal fun hasAuthHeaders(headerNames: Set<String>): Boolean = headerNames.any { it.lowercase() in AUTH_HEADERS }

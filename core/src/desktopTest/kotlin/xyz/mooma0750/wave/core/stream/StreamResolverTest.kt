@@ -9,7 +9,10 @@ import io.ktor.client.request.HttpRequestData
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
@@ -38,9 +41,11 @@ class StreamResolverTest {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val sent = CopyOnWriteArrayList<HttpRequestData>()
     private var playerJson = player("OK", listOf(format(251, cipher = true), format(141, cipher = true), format(774, cipher = true)))
+    private var gate: CompletableDeferred<Unit>? = null
     private val engine =
         MockEngine { request ->
             sent += request
+            gate?.await()
             respond(playerJson, HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
         }
     private val client = createWaveHttpClient(AuthGuardEngine(engine))
@@ -105,6 +110,38 @@ class StreamResolverTest {
             assertEquals(21540_000L - StreamResolver.EXPIRY_SAFETY_MS, stream.expiresAtMs)
             assertFalse(stream.toString().contains("googlevideo"))
             assertEquals("music.youtube.com", sent.single().url.host)
+        }
+
+    @Test
+    fun playbackStatsUrlIsKeptWithTheGenerationThatFetchedIt(): Unit =
+        runBlocking {
+            ready()
+            playerJson = player("OK", listOf(format(251, cipher = true)), statsUrl = "https://s.youtube.com/api/stats/playback?ns=yt&docid=synthetic")
+            val stream = assertIs<ResolveResult.Ok>(resolver.resolve("synthetic-id")).stream
+            assertTrue(stream.hasPlaybackStats)
+            assertEquals(session.currentGenerationId(), stream.sessionGeneration)
+            assertFalse(stream.toString().contains("stats"))
+        }
+
+    @Test
+    fun playbackStatsUrlIsDroppedWhenTheLoginChangesDuringTheCall(): Unit =
+        runBlocking {
+            ready()
+            val release = CompletableDeferred<Unit>()
+            playerJson = player("OK", listOf(format(251, cipher = true)), statsUrl = "https://s.youtube.com/api/stats/playback?ns=yt")
+            val switching =
+                launch {
+                    withTimeout(5_000) { while (sent.isEmpty()) delay(5) }
+                    // /player の応答の前に、別のアカウントに切り替わる
+                    credentials.value = assertNotNull(Credentials.fromLogin("SAPISID=other-synthetic", "v", "d", 2))
+                    withTimeout(5_000) { while (session.currentGenerationId() < 2) delay(5) }
+                    release.complete(Unit)
+                }
+            gate = release
+            val result = resolver.resolve("synthetic-id")
+            switching.join()
+            // 切り替えで呼び出しは取り消されるか、成功しても統計 URL を持たない
+            if (result is ResolveResult.Ok) assertFalse(result.stream.hasPlaybackStats)
         }
 
     @Test
@@ -294,5 +331,8 @@ class StreamResolverTest {
     private fun player(
         status: String,
         formats: List<String>,
-    ): String = """{"playabilityStatus":{"status":"$status"},"streamingData":{"expiresInSeconds":21540,"adaptiveFormats":[${formats.joinToString(",")}]}}"""
+        statsUrl: String? = null,
+    ): String =
+        """{"playabilityStatus":{"status":"$status"},"streamingData":{"expiresInSeconds":21540,"adaptiveFormats":[${formats.joinToString(",")}]}""" +
+            (statsUrl?.let { ""","playbackTracking":{"videostatsPlaybackUrl":{"baseUrl":"$it"}}""" } ?: "") + "}"
 }

@@ -136,6 +136,20 @@ class AuthGuardEngineTest {
     }
 
     @Test
+    fun playbackStatsRouteIsExactAndOnlyOnMusicHost() {
+        assertTrue(isAuthRouteAllowed(Url("https://music.youtube.com/api/stats/playback?ns=yt&docid=x")))
+        assertFalse(isAuthRouteAllowed(Url("https://s.youtube.com/api/stats/playback?ns=yt")))
+        assertFalse(isAuthRouteAllowed(Url("https://www.youtube.com/api/stats/playback")))
+        assertFalse(isAuthRouteAllowed(Url("https://music.youtube.com/api/stats/watchtime")))
+        assertFalse(isAuthRouteAllowed(Url("https://music.youtube.com/api/stats/playback/")))
+        assertFalse(isAuthRouteAllowed(Url("https://music.youtube.com/api/stats/playbackx")))
+        assertFalse(isAuthRouteAllowed(Url("https://music.youtube.com/api/stats/playback/../qoe")))
+        assertFalse(isAuthRouteAllowed(Url("https://music.youtube.com/api/stats/%2e%2e/playback")))
+        assertFalse(isAuthRouteAllowed(Url("https://music.youtube.com:8443/api/stats/playback")))
+        assertFalse(isAuthRouteAllowed(Url("http://music.youtube.com/api/stats/playback")))
+    }
+
+    @Test
     fun mediaUrlsMustBeHttpsGooglevideo() {
         assertTrue(isAllowedMediaUrl("https://rr1---sn-synthetic.googlevideo.com/videoplayback?itag=141"))
         assertFalse(isAllowedMediaUrl("http://rr1---sn-synthetic.googlevideo.com/videoplayback"))

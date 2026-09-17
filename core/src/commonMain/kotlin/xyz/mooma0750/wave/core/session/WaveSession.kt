@@ -10,6 +10,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsChannel
 import io.ktor.http.HttpHeaders
+import io.ktor.http.URLBuilder
 import io.ktor.http.Url
 import io.ktor.utils.io.cancel
 import kotlinx.coroutines.CancellationException
@@ -34,6 +35,8 @@ import kotlinx.serialization.json.Json
 import xyz.mooma0750.wave.core.auth.AuthManager
 import xyz.mooma0750.wave.core.auth.Credentials
 import xyz.mooma0750.wave.core.net.AuthRouteViolation
+import xyz.mooma0750.wave.core.net.PLAYBACK_STATS_PATH
+import xyz.mooma0750.wave.core.net.isAuthRouteAllowed
 import kotlin.time.Duration
 import kotlin.time.TimeSource
 
@@ -89,6 +92,29 @@ sealed interface WriteResult<out T> {
 
     /** 反映されたか分からない（送信後の通信の失敗・中断・5xx・読めない 2xx）。 */
     data object Unknown : WriteResult<Nothing>
+}
+
+/** 再生統計の送信の結果。ログには種類と status の数値だけを出す（ADR-0006 の 5）。 */
+sealed interface StatsOutcome {
+    data object NotLoggedIn : StatsOutcome
+
+    /** 統計 URL を取った世代と、今の世代が違う（アカウントの切り替えなど）。送っていない。 */
+    data object GenerationMismatch : StatsOutcome
+
+    /** 統計 URL の形が想定と違う（ホスト・パス・ポート）。送っていない。 */
+    data object ShapeRejected : StatsOutcome
+
+    data class Sent(
+        val status: Int,
+        /** 応答が HTML だった（受け付けられていない兆候）。 */
+        val html: Boolean,
+    ) : StatsOutcome
+
+    data object Violation : StatsOutcome
+
+    data object Failed : StatsOutcome
+
+    data object Cancelled : StatsOutcome
 }
 
 sealed interface ParseOutcome<out T> {
@@ -344,6 +370,55 @@ class WaveSession internal constructor(
         return when (val result = classify(generation, outcome, provesAuthentication = false)) {
             is CallResult.Ok -> WriteResult.Done(result.value)
             is CallResult.Failed -> WriteResult.Failed(result.kind, result.status)
+        }
+    }
+
+    /**
+     * 再生の playback 統計を送る（ADR-0006）。応答は失効・疑いの分類に通さない。送り直さない。
+     * 統計 URL を取った世代が今の世代と同じときだけ、世代のスコープで送る（切り替え・ログアウトで取り消される）。
+     */
+    internal suspend fun sendPlaybackStats(
+        statsUrl: String,
+        statsGeneration: Long,
+        cpn: String,
+        currentMediaTimeSeconds: String,
+    ): StatsOutcome {
+        val generation = current.value
+        if (generation.credentials == null || credentials.value !== generation.credentials) return StatsOutcome.NotLoggedIn
+        if (generation.id != statsGeneration) return StatsOutcome.GenerationMismatch
+        val target = playbackStatsTarget(statsUrl) ?: return StatsOutcome.ShapeRejected
+        val deferred =
+            generation.scope.async {
+                try {
+                    val response =
+                        innerTube.registerPlaybackWithSession(
+                            client = YouTubeClient.WEB_REMIX,
+                            url = target,
+                            cpn = cpn,
+                            playlistId = null,
+                            requestSession = innerTube.sessionSnapshot(),
+                            currentMediaTime = currentMediaTimeSeconds,
+                        )
+                    // 204 も Content-Type: text/html を付けて返るので、本文のある応答だけを HTML とみなす（実機、2026-09-17）
+                    val html = response.status.value != 204 && response.headers[HttpHeaders.ContentType]?.startsWith("text/html") == true
+                    response.bodyAsChannel().cancel(null)
+                    StatsOutcome.Sent(response.status.value, html)
+                } catch (cancellation: CancellationException) {
+                    throw cancellation
+                } catch (httpError: InnerTubeHttpException) {
+                    StatsOutcome.Sent(httpError.status.value, html = false)
+                } catch (_: AuthRouteViolation) {
+                    StatsOutcome.Violation
+                } catch (_: Exception) {
+                    StatsOutcome.Failed
+                }
+            }
+        return try {
+            deferred.await()
+        } catch (cancellation: CancellationException) {
+            deferred.cancel()
+            currentCoroutineContext().ensureActive()
+            StatsOutcome.Cancelled
         }
     }
 
@@ -607,4 +682,24 @@ class WaveSession internal constructor(
             configParser: ((HttpClient, InnerTube) -> YtConfigParser)? = null,
         ) = WaveSession(httpClient, credentials, scope, retryDelay, rethrowViolations, nowMs, configParser)
     }
+}
+
+private val PLAYBACK_STATS_SOURCE_HOSTS = setOf("s.youtube.com", "music.youtube.com", "www.youtube.com")
+
+/**
+ * /player の応答の統計 URL を、送ってよい宛先（music.youtube.com の /api/stats/playback）に組み立て直す（ADR-0006 の 2・3）。
+ * 応答の値は信用せず、https・443・既知のホスト・パス完全一致でなければ null。list=（playlistId）は外す。
+ */
+internal fun playbackStatsTarget(statsUrl: String): String? {
+    val parsed = runCatching { Url(statsUrl) }.getOrNull() ?: return null
+    if (parsed.protocol.name != "https" || parsed.port != 443 || parsed.user != null || parsed.password != null) return null
+    if (parsed.host !in PLAYBACK_STATS_SOURCE_HOSTS || parsed.encodedPath != PLAYBACK_STATS_PATH) return null
+    val rewritten =
+        URLBuilder(parsed)
+            .apply {
+                host = "music.youtube.com"
+                parameters.remove("list")
+                fragment = ""
+            }.build()
+    return rewritten.takeIf { isAuthRouteAllowed(it) }?.toString()
 }

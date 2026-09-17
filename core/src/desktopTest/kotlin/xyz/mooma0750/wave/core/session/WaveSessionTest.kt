@@ -452,6 +452,65 @@ class WaveSessionTest {
         }
 
     @Test
+    fun playbackStatsTargetIsRebuiltForTheMusicHost() {
+        val target = assertNotNull(playbackStatsTarget("https://s.youtube.com/api/stats/playback?ns=yt&docid=synthetic&list=PLx&ei=e"))
+        val url = io.ktor.http.Url(target)
+        assertEquals("music.youtube.com", url.host)
+        assertEquals("/api/stats/playback", url.encodedPath)
+        assertEquals("synthetic", url.parameters["docid"])
+        assertNull(url.parameters["list"], "playlistId を送っている")
+        assertNull(playbackStatsTarget("https://s.youtube.com/api/stats/watchtime?ns=yt"))
+        assertNull(playbackStatsTarget("https://evil.example/api/stats/playback"))
+        assertNull(playbackStatsTarget("https://s.youtube.com:8443/api/stats/playback"))
+        assertNull(playbackStatsTarget("http://s.youtube.com/api/stats/playback"))
+        assertNull(playbackStatsTarget("https://user@s.youtube.com/api/stats/playback"))
+        assertNull(playbackStatsTarget("https://s.youtube.com/api/stats/%2e%2e/playback"))
+        assertNull(playbackStatsTarget("not a url"))
+    }
+
+    @Test
+    fun playbackStatsAreSentWithAuthOnlyToTheMusicHostAndNeverClassified(): Unit =
+        runBlocking {
+            val session = loggedInSession()
+            val generation = session.currentGenerationId()
+            handler = { respond("", HttpStatusCode.NoContent) }
+            assertEquals(StatsOutcome.Sent(204, html = false), session.sendPlaybackStats("https://s.youtube.com/api/stats/playback?ns=yt&docid=d", generation, "cpn-synthetic-001", "30.0"))
+            val request = sent.single()
+            assertEquals("music.youtube.com", request.url.host)
+            assertEquals("/api/stats/playback", request.url.encodedPath)
+            assertEquals("cpn-synthetic-001", request.url.parameters["cpn"])
+            assertTrue(request.headers[HttpHeaders.Cookie].orEmpty().contains("SAPISID=synthetic-sapisid"))
+
+            // 統計の拒否でセッションを疑い・失効にしない
+            for (status in listOf(HttpStatusCode.Unauthorized, HttpStatusCode.Forbidden, HttpStatusCode.Found)) {
+                handler = { respond("", status) }
+                assertEquals(status.value, assertIs<StatsOutcome.Sent>(session.sendPlaybackStats("https://s.youtube.com/api/stats/playback?ns=yt", generation, "c", "30.0")).status)
+            }
+            handler = { respond("", HttpStatusCode.NoContent, headersOf(HttpHeaders.ContentType, "text/html; charset=utf-8")) }
+            assertEquals(StatsOutcome.Sent(204, html = false), session.sendPlaybackStats("https://s.youtube.com/api/stats/playback?ns=yt", generation, "c", "30.0"))
+            handler = { respond("<html></html>", HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "text/html; charset=utf-8")) }
+            assertEquals(StatsOutcome.Sent(200, html = true), session.sendPlaybackStats("https://s.youtube.com/api/stats/playback?ns=yt", generation, "c", "30.0"))
+            assertEquals(SessionState.Active, session.state.value)
+            assertTrue(sent.none { it.url.encodedPath.endsWith("/account_menu") })
+            assertTrue(sent.none { it.url.host != "music.youtube.com" })
+        }
+
+    @Test
+    fun playbackStatsFromAnotherGenerationOrWhileLoggedOutAreNotSent(): Unit =
+        runBlocking {
+            val session = loggedInSession()
+            val oldGeneration = session.currentGenerationId()
+            credentials.value = assertNotNull(Credentials.fromLogin("SAPISID=other-synthetic", null, null, 2))
+            withTimeout(5_000) { while (session.currentGenerationId() == oldGeneration) delay(10) }
+            assertEquals(StatsOutcome.GenerationMismatch, session.sendPlaybackStats("https://s.youtube.com/api/stats/playback?ns=yt", oldGeneration, "c", "30.0"))
+            assertEquals(StatsOutcome.ShapeRejected, session.sendPlaybackStats("https://s.youtube.com/api/stats/watchtime", session.currentGenerationId(), "c", "30.0"))
+            credentials.value = null
+            withTimeout(5_000) { session.state.first { it == SessionState.LoggedOut } }
+            assertEquals(StatsOutcome.NotLoggedIn, session.sendPlaybackStats("https://s.youtube.com/api/stats/playback?ns=yt", session.currentGenerationId(), "c", "30.0"))
+            assertTrue(sent.none { it.url.encodedPath.startsWith("/api/stats") })
+        }
+
+    @Test
     fun writeInterruptedByLogoutIsUnknownNotFailed(): Unit =
         runBlocking {
             val release = CompletableDeferred<Unit>()

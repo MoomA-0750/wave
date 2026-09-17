@@ -1,0 +1,33 @@
+package xyz.mooma0750.wave.settings
+
+import android.content.Context
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.preferencesDataStore
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+
+private val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
+
+/** 認証情報とは別の、アプリの設定。 */
+class AppSettings(
+    context: Context,
+) {
+    private val store = context.applicationContext.settingsDataStore
+
+    /** 再生履歴を YouTube Music に送るか（ADR-0006 の 7、既定は送る）。 */
+    val historyEnabled: Flow<Boolean> = store.data.map { it[HISTORY_ENABLED] ?: true }
+
+    suspend fun isHistoryEnabled(): Boolean = historyEnabled.first()
+
+    suspend fun setHistoryEnabled(enabled: Boolean) {
+        store.edit { it[HISTORY_ENABLED] = enabled }
+    }
+
+    private companion object {
+        val HISTORY_ENABLED = booleanPreferencesKey("history_enabled")
+    }
+}

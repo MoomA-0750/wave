@@ -63,6 +63,10 @@ class ResolvedStreamCache(
     @Synchronized
     fun get(videoId: String): ResolvedStream? = entries[videoId]?.takeIf { resolver.isFresh(it, FRESH_MARGIN_MS) }
 
+    /** 期限に関わらず、最後に解決した値。再生履歴の統計 URL を取るためだけに使う（音声の取得には get を使う）。 */
+    @Synchronized
+    fun peek(videoId: String): ResolvedStream? = entries[videoId]
+
     @Synchronized
     fun put(
         stream: ResolvedStream,

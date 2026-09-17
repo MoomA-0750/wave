@@ -29,12 +29,22 @@ class ResolvedStream internal constructor(
     private val url: String,
     /** 単調時計（StreamResolver の nowMs）のミリ秒。 */
     val expiresAtMs: Long,
+    /** /player の応答の playback 統計の URL（ADR-0006）。署名は無いが再生の識別子を含むので出さない。 */
+    private val playbackStatsUrl: String? = null,
+    /** /player を呼んだ WaveSession の世代。呼ぶ前後で変わっていたら統計 URL は持たない。 */
+    internal val sessionGeneration: Long = -1,
 ) {
+    internal fun revealPlaybackStatsUrl(): String? = playbackStatsUrl
+
+    val hasPlaybackStats: Boolean
+        get() = playbackStatsUrl != null
+
     /** 音声を取得する DataSource だけが呼ぶ。ログ・例外文・UI に渡さない。 */
     fun revealUrl(): String = url
 
     /** debug の確認用: 署名の対象の expire を変えた（取得すると 403 になる）写しを作る。再解決の経路を通すためだけに使う。 */
-    fun corruptedForDebug(): ResolvedStream = ResolvedStream(videoId, itag, mimeType, contentLength, lastModified, url.replace("expire=", "expire=1"), expiresAtMs)
+    fun corruptedForDebug(): ResolvedStream =
+        ResolvedStream(videoId, itag, mimeType, contentLength, lastModified, url.replace("expire=", "expire=1"), expiresAtMs, playbackStatsUrl, sessionGeneration)
 
     override fun toString(): String = "ResolvedStream(videoId=$videoId, itag=$itag, mimeType=$mimeType, contentLength=$contentLength)"
 }
@@ -131,6 +141,7 @@ class StreamResolver internal constructor(
         val config = playerConfig() ?: return ResolveResult.Failed(StreamFailure.PlayerConfigUnavailable)
         // 期限は /player を呼ぶ前の時刻から数える（解読にかかった時間の分だけ短く見積もる）
         val requestedAtMs = nowMs()
+        val generationBefore = session.currentGenerationId()
 
         val player =
             session.call(
@@ -180,6 +191,9 @@ class StreamResolver internal constructor(
         if (!isAllowedMediaUrl(url)) return ResolveResult.Failed(StreamFailure.RejectedUrl)
 
         val lifetimeMs = (streaming.expiresInSeconds?.takeIf { it > 0 }?.toLong() ?: DEFAULT_LIFETIME_SECONDS) * 1000
+        // 別のログインの世代で取った統計 URL を、今のログインで送らないように世代を刻む（ADR-0006 の 3・6）
+        val sameGeneration = session.currentGenerationId() == generationBefore
+        val statsUrl = body.playbackTracking?.videostatsPlaybackUrl?.baseUrl?.takeIf { sameGeneration }
         return ResolveResult.Ok(
             ResolvedStream(
                 videoId = videoId,
@@ -189,6 +203,8 @@ class StreamResolver internal constructor(
                 lastModified = chosen.lastModified,
                 url = url,
                 expiresAtMs = requestedAtMs + lifetimeMs - EXPIRY_SAFETY_MS,
+                playbackStatsUrl = statsUrl,
+                sessionGeneration = generationBefore,
             ),
         )
     }

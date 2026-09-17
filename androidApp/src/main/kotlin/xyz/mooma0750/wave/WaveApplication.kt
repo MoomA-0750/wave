@@ -33,7 +33,9 @@ import xyz.mooma0750.wave.core.session.WaveSession
 import xyz.mooma0750.wave.core.music.MusicRepository
 import xyz.mooma0750.wave.core.stream.StreamComponents
 import xyz.mooma0750.wave.playback.PlayerConnection
+import xyz.mooma0750.wave.core.stream.PlaybackHistory
 import xyz.mooma0750.wave.library.PlaylistEditor
+import xyz.mooma0750.wave.settings.AppSettings
 import xyz.mooma0750.wave.playback.MediaHttp
 import xyz.mooma0750.wave.playback.QueueStore
 import xyz.mooma0750.wave.playback.ResolvedStreamCache
@@ -161,6 +163,11 @@ class AppContainer(
 
     /** 解決済みのストリーム URL。ログアウトで消す。 */
     val streamCache = ResolvedStreamCache(stream.resolver, SystemClock::elapsedRealtime)
+
+    val settings = AppSettings(context)
+
+    /** 再生履歴の送信（ADR-0006）。 */
+    val playbackHistory = PlaybackHistory(session)
 
     /** 次に開いたときに戻すキュー。ログアウトで消す。 */
     val queueStore = QueueStore.create(context)

@@ -29,6 +29,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.random.asKotlinRandom
 import xyz.mooma0750.wave.WaveApplication
 import xyz.mooma0750.wave.core.auth.AuthState
 import xyz.mooma0750.wave.core.music.MusicRepository
@@ -84,6 +85,16 @@ class PlaybackService : MediaSessionService() {
                 onLikedSongsChanged = { container.onLikedSongsChanged() },
             )
         likes = likeController
+        val historyTracker =
+            PlaybackHistoryTracker(
+                player,
+                container.streamCache,
+                container.playbackHistory,
+                enabled = { container.settings.isHistoryEnabled() },
+                scope = scope,
+                elapsedMs = android.os.SystemClock::elapsedRealtime,
+                random = java.security.SecureRandom().asKotlinRandom(),
+            )
         player.addListener(
             object : Player.Listener {
                 override fun onPlayerError(error: PlaybackException) {
@@ -109,6 +120,7 @@ class PlaybackService : MediaSessionService() {
                 }
 
                 override fun onIsPlayingChanged(isPlaying: Boolean) {
+                    historyTracker.onIsPlayingChanged(isPlaying)
                     periodicSaveJob?.cancel()
                     if (isPlaying) {
                         periodicSaveJob =
@@ -145,6 +157,7 @@ class PlaybackService : MediaSessionService() {
                     reason: Int,
                 ) {
                     Log.i(WaveApplication.LOG_TAG, "transition index=${player.currentMediaItemIndex} reason=$reason")
+                    historyTracker.onMediaItemTransition()
                     queueSession.onPlaybackProgressed()
                 }
             },
@@ -171,6 +184,7 @@ class PlaybackService : MediaSessionService() {
                     AuthState.LoggedOut, AuthState.LoggingOut, is AuthState.Unreadable -> {
                         loggedInAt = null
                         likeController.reset()
+                        historyTracker.reset()
                         queueSession.reset()
                         container.streamCache.clear()
                         container.queueStore.delete()
@@ -181,6 +195,7 @@ class PlaybackService : MediaSessionService() {
                         if (previous != null && previous != state.obtainedAtEpochMs) {
                             loggedInAt = null
                             likeController.reset()
+                            historyTracker.reset()
                             queueSession.reset()
                             container.streamCache.clear()
                             container.queueStore.delete()
