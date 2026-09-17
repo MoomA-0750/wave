@@ -1,0 +1,103 @@
+package xyz.mooma0750.wave.handoff.crypto
+
+import kotlin.test.Test
+import kotlin.test.assertContentEquals
+import kotlin.test.assertEquals
+import kotlin.test.assertIs
+import kotlin.test.assertNotEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
+
+class PairingTest {
+    private var now = 0L
+    private val idA = WaveCrypto.generateEphemeralKeyPair()
+    private val idB = WaveCrypto.generateEphemeralKeyPair()
+
+    private fun responder(account: String = "account-1") = Pairing.Responder(idA.private, idA.public, "Pixel 3", account, nowMs = { now })
+
+    private fun initiator(
+        offer: Pairing.Offer,
+        account: String = "account-1",
+        identity: java.security.KeyPair = idB,
+    ) = Pairing.Initiator(offer, identity.private, identity.public, "Fold 7", account)
+
+    private fun reason(result: Result<*>) = (result.exceptionOrNull() as Pairing.PairingFailure).reason
+
+    @Test
+    fun honestPairingAgreesOnTheCodeAndDirectionalKeys() {
+        val a = responder()
+        val offer = assertNotNull(Pairing.decodeOffer(Pairing.encodeOffer(a.offer)))
+        val b = initiator(offer)
+        val confirm = a.onHello(b.hello()).getOrThrow()
+        val (code, pairOnB) = b.onConfirm(confirm).getOrThrow()
+        assertTrue(Regex("^[0-9]{6}$").matches(code))
+        val pairOnA = a.onCodeEntered(code).getOrThrow()
+        assertContentEquals(pairOnA.sendKey, pairOnB.receiveKey)
+        assertContentEquals(pairOnA.receiveKey, pairOnB.sendKey)
+        assertContentEquals(pairOnA.accountKey, pairOnB.accountKey)
+        assertContentEquals(idB.public.encoded, pairOnA.peerPublicKey)
+        assertContentEquals(idA.public.encoded, pairOnB.peerPublicKey)
+        assertEquals("Fold 7", pairOnA.peerDeviceName)
+        assertEquals("Pixel 3", pairOnB.peerDeviceName)
+    }
+
+    @Test
+    fun thirdPartyWhoPhotographedTheQrIsRejectedByTheCodeB() {
+        val a = responder()
+        val attacker = WaveCrypto.generateEphemeralKeyPair()
+        // 第三者が QR を撮り、B より先に自分の鍵で Hello を送る（アカウントの HMAC は、識別子を知っていれば作れると仮定する）
+        val evil = initiator(a.offer, identity = attacker)
+        a.onHello(evil.hello()).getOrThrow()
+        // 正規の B は token 消費済みで進めない
+        assertEquals(Pairing.Failure.AlreadyUsed, reason(a.onHello(initiator(a.offer).hello())))
+        // 本人が B に出ない数字を入れる（B の画面には数字が出ていない）。3回で打ち切る
+        repeat(2) { assertEquals(Pairing.Failure.WrongCode, reason(a.onCodeEntered("000000"))) }
+        assertEquals(Pairing.Failure.TooManyAttempts, reason(a.onCodeEntered("000000")))
+    }
+
+    @Test
+    fun relayCannotSwapTheInitiatorsEphemeralKey() {
+        val a = responder()
+        val b = initiator(a.offer)
+        val hello = b.hello()
+        val swapped = hello.copy(eB = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(WaveCrypto.generateEphemeralKeyPair().public.encoded))
+        assertEquals(Pairing.Failure.Malformed, reason(a.onHello(swapped)), "差し替えた鍵で封が開いた")
+    }
+
+    @Test
+    fun confirmFromAnotherResponderFailsSignatureOrDecryption() {
+        val a = responder()
+        val b = initiator(a.offer)
+        a.onHello(b.hello()).getOrThrow()
+        val other = responder()
+        val confirmFromOther = other.onHello(initiator(other.offer).hello()).getOrThrow()
+        assertIs<Pairing.PairingFailure>(b.onConfirm(confirmFromOther).exceptionOrNull())
+    }
+
+    @Test
+    fun differentAccountsAreRejected() {
+        val a = responder(account = "account-1")
+        val b = initiator(a.offer, account = "account-2")
+        assertEquals(Pairing.Failure.AccountMismatch, reason(a.onHello(b.hello())))
+    }
+
+    @Test
+    fun offersExpireAfterTwoMinutes() {
+        val a = responder()
+        val b = initiator(a.offer)
+        now += Pairing.LIFETIME_MS + 1
+        assertEquals(Pairing.Failure.Expired, reason(a.onHello(b.hello())))
+    }
+
+    @Test
+    fun malformedOffersAreRejected() {
+        assertNull(Pairing.decodeOffer("https://example.com"))
+        assertNull(Pairing.decodeOffer("wave-pair:!!!"))
+        val a = responder()
+        val tampered = a.offer.copy(token = "AAAA")
+        assertNull(Pairing.decodeOffer(Pairing.encodeOffer(tampered)))
+        assertNull(Pairing.decodeOffer(Pairing.encodeOffer(a.offer.copy(v = 2))))
+        assertNotEquals(a.offer.token, responder().offer.token)
+    }
+}
