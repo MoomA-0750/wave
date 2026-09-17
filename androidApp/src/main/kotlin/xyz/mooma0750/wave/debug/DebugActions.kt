@@ -60,7 +60,7 @@ object DebugActions {
                 "search_play" ->
                     when (val result = container.music.searchSongs(intent.getStringExtra("query") ?: "YOASOBI")) {
                         is CallResult.Ok -> result.value.songs.getOrNull(intent.getIntExtra("index", 0))?.let { player.playSong(it) }
-                        is CallResult.Failed -> Log.i(WaveApplication.LOG_TAG, "debug search failed ${result.kind}")
+                        is CallResult.Failed -> Log.i(WaveApplication.LOG_TAG, "debug search failed ${result.kind} status=${result.status}")
                     }
                 "add_unplayable_next" -> player.addNext(DebugPlayback.unplayableSong)
                 "play_public_playlist", "play_public_playlist_shuffle" ->

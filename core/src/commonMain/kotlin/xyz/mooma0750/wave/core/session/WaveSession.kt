@@ -6,6 +6,7 @@ import com.metrolist.innertubex.bodyAsTextLimited
 import com.metrolist.innertubex.extraction.YtConfigParser
 import com.metrolist.innertubex.extraction.YtConfigParserImpl
 import com.metrolist.innertubex.models.YouTubeClient
+import com.metrolist.innertubex.models.YouTubeLocale
 import io.ktor.client.HttpClient
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsChannel
@@ -245,7 +246,8 @@ class WaveSession internal constructor(
 
     private fun childScope(): CoroutineScope = CoroutineScope(sessionScope.coroutineContext + SupervisorJob(sessionJob))
 
-    internal val innerTube = InnerTube(httpClient = httpClient, retryDelay = retryDelay)
+    internal val innerTube =
+        InnerTube(httpClient = httpClient, retryDelay = retryDelay).also { it.locale = sanitizedYouTubeLocale(it.locale) }
     private val ytConfigParser: YtConfigParser =
         configParser?.invoke(httpClient, innerTube) ?: YtConfigParserImpl(httpClient, innerTube)
     private val generationLock = Mutex()
@@ -887,3 +889,21 @@ internal fun accountTokensOf(root: kotlinx.serialization.json.JsonElement): List
     walk(root, false)
     return tokens
 }
+
+/**
+ * innertubex は端末の言語を `toLanguageTag()` のまま hl に入れる。Samsung などは `en-US-u-mu-celsius` のように
+ * 拡張（1文字の区切りから後ろ）を付けるので、そのまま送ると全ての要求が 400 になる。拡張を落とし、形が崩れていれば既定に戻す。
+ */
+internal fun sanitizedYouTubeLocale(locale: YouTubeLocale): YouTubeLocale {
+    val subtags = locale.hl.split('-', '_').takeWhile { it.length > 1 }
+    val hl =
+        subtags
+            .takeIf { tags -> tags.isNotEmpty() && tags.first() != "und" && tags.all { tag -> tag.length <= 8 && tag.all { it in 'a'..'z' || it in 'A'..'Z' || it in '0'..'9' } } }
+            ?.joinToString("-")
+            ?: DEFAULT_HL
+    val gl = locale.gl.takeIf { it.length == 2 && it.all { c -> c in 'A'..'Z' } } ?: DEFAULT_GL
+    return YouTubeLocale(gl = gl, hl = hl)
+}
+
+private const val DEFAULT_HL = "en"
+private const val DEFAULT_GL = "US"
