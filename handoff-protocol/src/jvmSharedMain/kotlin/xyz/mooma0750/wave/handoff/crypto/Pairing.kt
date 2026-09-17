@@ -23,6 +23,7 @@ object Pairing {
     const val TOKEN_BYTES = 16
     const val LIFETIME_MS = 2 * 60 * 1000L
     const val MAX_ATTEMPTS = 3
+    private const val MAX_EXTENSION_CHARS = 2048
 
     private const val LABEL = "wave-pair-v1"
     private val json = Json { ignoreUnknownKeys = true }
@@ -59,6 +60,8 @@ object Pairing {
         val sigB: String,
         val deviceName: String,
         val accountHmac: String,
+        /** Connect v2（Phase 6b）: B の家の鍵の記述（MemberKeys の JSON）。v1 は null。sigB の対象に入る。 */
+        val extension: String? = null,
     )
 
     @Serializable
@@ -66,6 +69,8 @@ object Pairing {
         val sigA: String,
         val deviceName: String,
         val accountHmac: String,
+        /** Connect v2: 家の ID・一覧の頭・storeId・版の床（6桁の照合の前に渡すので、秘密を入れない）。sigA の対象に入る。 */
+        val extension: String? = null,
     )
 
     /** 確定したペア。鍵は保存するときに Keystore の AES 鍵で包む。 */
@@ -78,6 +83,8 @@ object Pairing {
         val receiveKey: ByteArray,
         /** アカウントの HMAC の鍵。 */
         val accountKey: ByteArray,
+        /** 相手の拡張（A から見た B の Hello、B から見た A の Confirm）。署名で確かめた値。 */
+        val peerExtension: String? = null,
     )
 
     sealed interface Failure {
@@ -119,6 +126,8 @@ object Pairing {
         private val nowMs: () -> Long,
         /** テスト用: Confirm に入れるアカウント（B 側の照合を確かめる）。 */
         private val confirmAccountId: String = accountId,
+        /** Connect v2: Confirm に入れる拡張（秘密を入れない）。 */
+        private val confirmExtension: String? = null,
     ) {
         private val pkA = WaveCrypto.encodePublicKey(identityPublic)
         private val ephemeral: KeyPair = WaveCrypto.generateEphemeralKeyPair()
@@ -160,12 +169,13 @@ object Pairing {
             // 自分自身とのペアは受けない（方向の鍵が崩れる）
             if (pkBBytes.contentEquals(pkA)) return failure(Failure.Malformed)
             val transcript = WaveCrypto.lengthPrefixed(transcript0, pkBBytes)
-            if (!WaveCrypto.verify(pkB, "$LABEL-b", transcript, unb64(body.sigB) ?: return failure(Failure.Malformed))) return failure(Failure.BadSignature)
+            if (body.extension != null && body.extension.length > MAX_EXTENSION_CHARS) return failure(Failure.Malformed)
+            if (!WaveCrypto.verify(pkB, "$LABEL-b", signedTranscript(transcript, body.extension), unb64(body.sigB) ?: return failure(Failure.Malformed))) return failure(Failure.BadSignature)
             val keys = schedule(prk, transcript, self = pkA, peer = pkBBytes)
             if (!WaveCrypto.constantTimeEquals(accountHmac(keys.accountKey, accountId), unb64(body.accountHmac) ?: ByteArray(0))) return failure(Failure.AccountMismatch)
             used = true
-            pending = PendingPair(keys.sas, Established(pkBBytes, sanitizeName(body.deviceName), keys.sendKey, keys.receiveKey, keys.accountKey))
-            val confirm = ConfirmBody(b64.encodeToString(WaveCrypto.sign(identityPrivate, "$LABEL-a", transcript)), deviceName, b64.encodeToString(accountHmac(keys.accountKey, confirmAccountId)))
+            pending = PendingPair(keys.sas, Established(pkBBytes, sanitizeName(body.deviceName), keys.sendKey, keys.receiveKey, keys.accountKey, body.extension))
+            val confirm = ConfirmBody(b64.encodeToString(WaveCrypto.sign(identityPrivate, "$LABEL-a", signedTranscript(transcript, confirmExtension))), deviceName, b64.encodeToString(accountHmac(keys.accountKey, confirmAccountId)), confirmExtension)
             val (nonce, ciphertext) = WaveCrypto.seal(handshakeKey(prk, "a->b", transcript0), transcript0, json.encodeToString(ConfirmBody.serializer(), confirm).encodeToByteArray())
             return Result.success(Confirm(b64.encodeToString(nonce), b64.encodeToString(ciphertext)))
         }
@@ -195,6 +205,8 @@ object Pairing {
         identityPublic: PublicKey,
         private val deviceName: String,
         private val accountId: String,
+        /** Connect v2: Hello に入れる拡張（B の家の鍵の記述）。 */
+        private val helloExtension: String? = null,
     ) {
         private val pkB = WaveCrypto.encodePublicKey(identityPublic)
         private val ephemeral = WaveCrypto.generateEphemeralKeyPair()
@@ -208,7 +220,7 @@ object Pairing {
         private val keys = schedule(prk, transcript, self = pkB, peer = pkA)
 
         fun hello(): Hello {
-            val body = HelloBody(b64.encodeToString(pkB), b64.encodeToString(WaveCrypto.sign(identityPrivate, "$LABEL-b", transcript)), deviceName, b64.encodeToString(accountHmac(keys.accountKey, accountId)))
+            val body = HelloBody(b64.encodeToString(pkB), b64.encodeToString(WaveCrypto.sign(identityPrivate, "$LABEL-b", signedTranscript(transcript, helloExtension))), deviceName, b64.encodeToString(accountHmac(keys.accountKey, accountId)), helloExtension)
             val (nonce, ciphertext) = WaveCrypto.seal(handshakeKey(prk, "b->a", transcript0), transcript0, json.encodeToString(HelloBody.serializer(), body).encodeToByteArray())
             return Hello(VERSION, b64.encodeToString(eB), b64.encodeToString(nonce), b64.encodeToString(ciphertext))
         }
@@ -221,9 +233,10 @@ object Pairing {
                     ?.let { runCatching { json.decodeFromString(ConfirmBody.serializer(), it.decodeToString()) }.getOrNull() }
                     ?: return failure(Failure.Malformed)
             val pkAKey = WaveCrypto.decodePublicKey(pkA) ?: return failure(Failure.Malformed)
-            if (!WaveCrypto.verify(pkAKey, "$LABEL-a", transcript, unb64(body.sigA) ?: return failure(Failure.Malformed))) return failure(Failure.BadSignature)
+            if (body.extension != null && body.extension.length > MAX_EXTENSION_CHARS) return failure(Failure.Malformed)
+            if (!WaveCrypto.verify(pkAKey, "$LABEL-a", signedTranscript(transcript, body.extension), unb64(body.sigA) ?: return failure(Failure.Malformed))) return failure(Failure.BadSignature)
             if (!WaveCrypto.constantTimeEquals(accountHmac(keys.accountKey, accountId), unb64(body.accountHmac) ?: ByteArray(0))) return failure(Failure.AccountMismatch)
-            return Result.success(keys.sas to Established(pkA, sanitizeName(body.deviceName), keys.sendKey, keys.receiveKey, keys.accountKey))
+            return Result.success(keys.sas to Established(pkA, sanitizeName(body.deviceName), keys.sendKey, keys.receiveKey, keys.accountKey, body.extension))
         }
     }
 
@@ -239,6 +252,12 @@ object Pairing {
         val receiveKey: ByteArray,
         val accountKey: ByteArray,
     )
+
+    /** 拡張があれば、署名の対象に拡張のハッシュを足す（無ければ v1 と同じ）。 */
+    private fun signedTranscript(
+        transcript: ByteArray,
+        extension: String?,
+    ): ByteArray = if (extension == null) transcript else WaveCrypto.lengthPrefixed(transcript, WaveCrypto.sha256(extension.encodeToByteArray()))
 
     private fun handshakeKey(
         prk: ByteArray,

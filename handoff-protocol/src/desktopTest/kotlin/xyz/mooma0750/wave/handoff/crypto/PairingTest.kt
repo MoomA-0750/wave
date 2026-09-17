@@ -135,6 +135,28 @@ class PairingTest {
     }
 
     @Test
+    fun connectV2ExtensionsTravelInsideTheSignedHandshake() {
+        val a = Pairing.Responder(idA.private, idA.public, "Pixel 3", "account-1", nowMs = { now }, confirmExtension = """{"householdId":"h","headSeq":1}""")
+        val b = Pairing.Initiator(a.offer, idB.private, idB.public, "Fold 7", "account-1", helloExtension = """{"deviceId":"d","role":"player"}""")
+        val (code, pairOnB) = b.onConfirm(a.onHello(b.hello()).getOrThrow()).getOrThrow()
+        val pairOnA = a.onCodeEntered(code).getOrThrow()
+        assertEquals("""{"deviceId":"d","role":"player"}""", pairOnA.peerExtension)
+        assertEquals("""{"householdId":"h","headSeq":1}""", pairOnB.peerExtension)
+        // v1（拡張なし）はそのまま
+        val v1 = responder()
+        val v1b = initiator(v1.offer)
+        val (v1code, v1OnB) = v1b.onConfirm(v1.onHello(v1b.hello()).getOrThrow()).getOrThrow()
+        assertNull(v1OnB.peerExtension)
+        assertNull(v1.onCodeEntered(v1code).getOrThrow().peerExtension)
+        // 長すぎる拡張は受けない
+        val big = Pairing.Initiator(a.offer, idB.private, idB.public, "Fold 7", "account-1", helloExtension = "x".repeat(4096))
+        val fresh = Pairing.Responder(idA.private, idA.public, "Pixel 3", "account-1", nowMs = { now })
+        val bigOnFresh = Pairing.Initiator(fresh.offer, idB.private, idB.public, "Fold 7", "account-1", helloExtension = "x".repeat(4096))
+        assertEquals(Pairing.Failure.Malformed, reason(fresh.onHello(bigOnFresh.hello())))
+        assertNotNull(big)
+    }
+
+    @Test
     fun deviceNamesAreSanitized() {
         assertEquals("abc", Pairing.sanitizeName("a\u202Eb\u0000c"))
         assertEquals("端末", Pairing.sanitizeName("\u0007"))
