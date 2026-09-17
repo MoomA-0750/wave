@@ -188,8 +188,20 @@ object DebugActions {
                         javax.crypto.KeyAgreement.getInstance("XDH").apply { init(pair.private); doPhase(pair.public, true); generateSecret() }
                     }
                     attempt("chacha20_poly1305") { javax.crypto.Cipher.getInstance("ChaCha20-Poly1305") }
+                    // Phase 6b P6b-S: 鍵交換・署名の時間（ミリ秒、5回の中央値）と、鍵がどこに置かれるか（securityLevel）
+                    val timings = linkedMapOf<String, String>()
+                    runCatching {
+                        val agree = ks.getKey("wave-probe-agree", null) as java.security.PrivateKey
+                        val sign = ks.getKey("wave-probe-sign", null) as java.security.PrivateKey
+                        val peer = java.security.KeyPairGenerator.getInstance("EC").apply { initialize(java.security.spec.ECGenParameterSpec("secp256r1")) }.generateKeyPair()
+                        fun median(block: () -> Unit): Long = List(5) { val t = System.nanoTime(); block(); (System.nanoTime() - t) / 1_000_000 }.sorted()[2]
+                        timings["ecdh_ms"] = median { javax.crypto.KeyAgreement.getInstance("ECDH", "AndroidKeyStore").apply { init(agree); doPhase(peer.public, true); generateSecret() } }.toString()
+                        timings["ecdsa_ms"] = median { java.security.Signature.getInstance("SHA256withECDSA").apply { initSign(sign); update(ByteArray(512)); sign() } }.toString()
+                        val info = java.security.KeyFactory.getInstance(agree.algorithm, "AndroidKeyStore").getKeySpec(agree, android.security.keystore.KeyInfo::class.java)
+                        timings["agree_security_level"] = info.securityLevel.toString()
+                    }.onFailure { timings["timing_error"] = it::class.simpleName ?: "?" }
                     listOf("wave-probe-sign", "wave-probe-agree", "wave-probe-x25519").forEach { runCatching { ks.deleteEntry(it) } }
-                    Log.i(WaveApplication.LOG_TAG, "debug keystore sdk=${android.os.Build.VERSION.SDK_INT} $results")
+                    Log.i(WaveApplication.LOG_TAG, "debug keystore sdk=${android.os.Build.VERSION.SDK_INT} $results $timings")
                 }
                 // 最後のページと確かめられるか（番号・ページ数・真偽値だけ）
                 "playlist_end_probe" ->
