@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import xyz.mooma0750.wave.AppContainer
 import xyz.mooma0750.wave.WaveApplication
+import xyz.mooma0750.wave.debug.DebugPlayback
 import xyz.mooma0750.wave.debug.StreamCheck
 import xyz.mooma0750.wave.core.session.AccountResult
 import xyz.mooma0750.wave.core.session.PremiumStatus
@@ -102,7 +103,37 @@ fun HomeScreen(
                     scope.launch { checkLines = StreamCheck.run(container) }
                 }) { Text("開発用: ストリーム確認") }
                 checkLines?.forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
+                DebugPlaybackButtons(container)
             }
         }
+    }
+}
+
+/** debug ビルドだけの再生確認（S2）。 */
+@Composable
+private fun DebugPlaybackButtons(container: AppContainer) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = rememberCoroutineScope()
+    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedButton(onClick = {
+            scope.launch {
+                DebugPlayback.controller(context).run {
+                    setMediaItem(DebugPlayback.fixedItem())
+                    prepare()
+                    play()
+                }
+            }
+        }) { Text("開発用: 固定の曲を再生") }
+        OutlinedButton(onClick = {
+            scope.launch { DebugPlayback.controller(context).run { if (isPlaying) pause() else play() } }
+        }) { Text("再生/一時停止") }
+        OutlinedButton(onClick = {
+            scope.launch {
+                val corrupted = container.streamCache.corruptForDebug(DebugPlayback.VIDEO_ID)
+                Log.i(WaveApplication.LOG_TAG, "debug corrupt cached url done=$corrupted")
+                // バッファの外へ飛んで、DataSource を開き直させる
+                DebugPlayback.controller(context).run { seekTo(currentPosition + 120_000) }
+            }
+        }) { Text("開発用: URL を壊して 2 分進む") }
     }
 }

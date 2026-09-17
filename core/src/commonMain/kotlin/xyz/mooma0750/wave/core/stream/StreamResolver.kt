@@ -30,6 +30,9 @@ class ResolvedStream internal constructor(
     /** 音声を取得する DataSource だけが呼ぶ。ログ・例外文・UI に渡さない。 */
     fun revealUrl(): String = url
 
+    /** debug の確認用: 署名の対象の expire を変えた（取得すると 403 になる）写しを作る。再解決の経路を通すためだけに使う。 */
+    fun corruptedForDebug(): ResolvedStream = ResolvedStream(videoId, itag, mimeType, contentLength, url.replace("expire=", "expire=1"), expiresAtMs)
+
     override fun toString(): String = "ResolvedStream(videoId=$videoId, itag=$itag, mimeType=$mimeType, contentLength=$contentLength)"
 }
 
@@ -175,6 +178,12 @@ class StreamResolver internal constructor(
         } catch (_: Exception) {
         }
     }
+
+    /** 期限まで marginMs 以上残っているか。解決と同じ時計で測る。 */
+    fun isFresh(
+        stream: ResolvedStream,
+        marginMs: Long,
+    ): Boolean = stream.expiresAtMs - nowMs() > marginMs
 
     /** debug の確認用。キャッシュ中のプレイヤーの URL（公開のプレイヤー JS の場所で、秘密ではない）。 */
     internal fun currentPlayerUrl(): String? = cachedConfig?.playerUrl

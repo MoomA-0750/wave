@@ -34,4 +34,11 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.ktor.client.okhttp)
+    implementation(libs.androidx.media3.exoplayer)
+    implementation(libs.androidx.media3.session)
+    implementation(libs.androidx.media3.datasource.okhttp)
+    implementation(libs.kotlinx.coroutines.guava)
+
+    testImplementation(libs.junit4)
+    testImplementation(kotlin("test"))
 }
