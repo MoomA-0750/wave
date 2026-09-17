@@ -19,6 +19,8 @@ fun SongMenuButton(
     song: Song,
     actions: SongActions,
     inQueue: Boolean = false,
+    /** 画面ごとの追加の項目（プレイリストから外す など）。 */
+    extraItems: List<Pair<String, () -> Unit>> = emptyList(),
 ) {
     var open by remember { mutableStateOf(false) }
     Box {
@@ -32,6 +34,16 @@ fun SongMenuButton(
                 DropdownMenuItem(text = { Text("キューに追加") }, onClick = {
                     open = false
                     actions.addToQueue(song)
+                })
+            }
+            DropdownMenuItem(text = { Text("プレイリストに追加") }, onClick = {
+                open = false
+                actions.addToPlaylist(song)
+            })
+            extraItems.forEach { (label, action) ->
+                DropdownMenuItem(text = { Text(label) }, onClick = {
+                    open = false
+                    action()
                 })
             }
             // チャンネル（browseId が無いもの）は開けない

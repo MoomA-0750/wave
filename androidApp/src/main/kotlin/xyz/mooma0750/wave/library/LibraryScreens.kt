@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
@@ -20,6 +21,9 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -66,6 +70,7 @@ fun PlaylistScreen(
     onPlay: (songs: List<Song>, index: Int, continuation: String?) -> Unit,
     onShufflePlay: (songs: List<Song>, continuation: String?) -> Unit,
     actions: xyz.mooma0750.wave.navigation.SongActions,
+    onRemove: (song: Song, setVideoId: String) -> Unit,
     onBack: () -> Unit,
     bottomBar: @Composable () -> Unit,
 ) {
@@ -89,10 +94,64 @@ fun PlaylistScreen(
             state.failure?.let { item { Text(failureMessage(it), Modifier.padding(16.dp)) } }
             if (!state.loading && state.failure == null && state.songs.isEmpty()) item { Text("曲がありません", Modifier.padding(16.dp)) }
             itemsIndexed(state.songs, key = { index, song -> "$index-${song.videoId}" }) { index, song ->
-                SongRow(song, onClick = { onPlay(state.songs, index, state.continuation) }) { xyz.mooma0750.wave.search.SongMenuButton(song, actions) }
+                val setVideoId = state.setVideoIds.getOrNull(index)
+                SongRow(song, onClick = { onPlay(state.songs, index, state.continuation) }) {
+                    xyz.mooma0750.wave.search.SongMenuButton(
+                        song,
+                        actions,
+                        extraItems = if (state.editable && setVideoId != null) listOf("このプレイリストから外す" to { onRemove(song, setVideoId) }) else emptyList(),
+                    )
+                }
                 if (index == state.songs.lastIndex && state.continuation != null) LaunchedEffect(state.songs.size) { viewModel.loadMore() }
             }
             if (state.loading) item { CircularProgressIndicator(Modifier.padding(16.dp)) }
         }
     }
+}
+
+/** 曲をプレイリストに追加する（仮）。追加先は自分が編集できるプレイリストだけ。 */
+@Composable
+fun AddToPlaylistDialog(
+    viewModel: LibraryViewModel,
+    onDismiss: () -> Unit,
+    onPick: (PlaylistSummary) -> Unit,
+    onCreate: (title: String) -> Unit,
+) {
+    val state by viewModel.state.collectAsStateWithLifecycle()
+    var creating by remember { mutableStateOf(false) }
+    var title by remember { mutableStateOf("") }
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (creating) "新しいプレイリスト（非公開）" else "プレイリストに追加") },
+        text = {
+            if (creating) {
+                androidx.compose.material3.OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    singleLine = true,
+                    placeholder = { Text("プレイリストの名前") },
+                )
+            } else {
+                LazyColumn(Modifier.heightIn(max = 400.dp)) {
+                    item { TextButton(onClick = { creating = true }) { Text("新しいプレイリストを作る") } }
+                    when {
+                        state.failure != null -> item { Text(failureMessage(state.failure)) }
+                        state.loading -> item { CircularProgressIndicator(Modifier.padding(8.dp)) }
+                    }
+                    itemsIndexed(state.playlists.filter { it.editable }, key = { _, playlist -> playlist.playlistId }) { _, playlist ->
+                        Text(
+                            playlist.title,
+                            Modifier.fillMaxWidth().clickable { onPick(playlist) }.padding(vertical = 12.dp),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            if (creating) TextButton(onClick = { onCreate(title.trim()) }, enabled = title.isNotBlank()) { Text("作って追加") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("閉じる") } },
+    )
 }

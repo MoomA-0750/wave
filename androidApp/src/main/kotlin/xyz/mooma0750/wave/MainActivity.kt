@@ -35,6 +35,7 @@ import xyz.mooma0750.wave.home.HomeScreen
 import xyz.mooma0750.wave.login.LoginScreen
 import xyz.mooma0750.wave.login.LoginViewModel
 import xyz.mooma0750.wave.core.music.PlaylistSummary
+import xyz.mooma0750.wave.library.AddToPlaylistDialog
 import xyz.mooma0750.wave.library.LibraryViewModel
 import xyz.mooma0750.wave.library.PlaylistScreen
 import xyz.mooma0750.wave.library.PlaylistViewModel
@@ -63,6 +64,9 @@ class MainActivity : ComponentActivity() {
                 var reLogin by remember { mutableStateOf(false) }
                 // 仮の画面遷移（Phase 4 で作り直す）。ホームの上に画面を積む
                 val stack = remember { mutableStateListOf<Screen>() }
+                // プレイリストに追加する曲（ダイアログを出す）
+                var addTarget by remember { mutableStateOf<xyz.mooma0750.wave.core.music.Song?>(null) }
+                val playlistsVersion by container.playlistsVersion.collectAsStateWithLifecycle()
                 val scope = rememberCoroutineScope()
                 val songActions =
                     remember {
@@ -71,6 +75,7 @@ class MainActivity : ComponentActivity() {
                             addToQueue = { song -> scope.launch { container.player.addToEnd(song) } },
                             openArtist = { artist -> artist.browseId?.let { stack += Screen.Artist(it, artist.name) } },
                             openAlbum = { album -> album.browseId?.let { stack += Screen.Album(it, album.title) } },
+                            addToPlaylist = { song -> addTarget = song },
                         )
                     }
                 val miniPlayer: @Composable () -> Unit = { MiniPlayer(container.player, songActions) }
@@ -100,7 +105,7 @@ class MainActivity : ComponentActivity() {
                         } else {
                             when (val screen = stack.lastOrNull()) {
                                 null -> {
-                                    val library = viewModel(key = "library-$loginGeneration") { LibraryViewModel(container.music) }
+                                    val library = viewModel(key = "library-$loginGeneration-$playlistsVersion") { LibraryViewModel(container.music) }
                                     val libraryState by library.state.collectAsStateWithLifecycle()
                                     HomeScreen(
                                         container,
@@ -126,12 +131,13 @@ class MainActivity : ComponentActivity() {
                                     val likedVersion by container.likedSongsVersion.collectAsStateWithLifecycle()
                                     val version = if (playlist.playlistId == xyz.mooma0750.wave.core.music.MusicRepository.LIKED_SONGS) likedVersion else 0
                                     PlaylistScreen(
-                                        viewModel(key = "playlist-$loginGeneration-${playlist.playlistId}-$version") { PlaylistViewModel(container.music, playlist.playlistId, playlist.title) },
+                                        viewModel(key = "playlist-$loginGeneration-${playlist.playlistId}-$version-$playlistsVersion") { PlaylistViewModel(container.music, playlist.playlistId, playlist.title) },
                                         onPlay = { songs, index, continuation -> scope.launch { container.player.playFrom(songs, index, playlist.playlistId, continuation) } },
                                         onShufflePlay = { songs, continuation ->
                                             scope.launch { container.player.playFrom(songs, 0, playlist.playlistId, continuation, shuffle = true) }
                                         },
                                         actions = songActions,
+                                        onRemove = { song, setVideoId -> container.playlistEditor.remove(playlist.playlistId, song, setVideoId) },
                                         onBack = pop,
                                         bottomBar = miniPlayer,
                                     )
@@ -159,6 +165,20 @@ class MainActivity : ComponentActivity() {
                                         onBack = pop,
                                         bottomBar = miniPlayer,
                                     )
+                            }
+                            addTarget?.let { song ->
+                                AddToPlaylistDialog(
+                                    viewModel(key = "library-$loginGeneration-$playlistsVersion") { LibraryViewModel(container.music) },
+                                    onDismiss = { addTarget = null },
+                                    onPick = { playlist ->
+                                        container.playlistEditor.add(playlist, song)
+                                        addTarget = null
+                                    },
+                                    onCreate = { title ->
+                                        container.playlistEditor.create(title, song)
+                                        addTarget = null
+                                    },
+                                )
                             }
                         }
                     }

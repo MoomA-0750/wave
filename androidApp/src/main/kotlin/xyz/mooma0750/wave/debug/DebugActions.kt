@@ -29,6 +29,9 @@ object DebugActions {
 
     private val WRITE_ACTIONS = setOf("logout", "toggle_like", "playlist_create", "playlist_add", "playlist_remove")
 
+    /** 確認用に作ったプレイリスト。プロセスの中だけに持ち、ログに出さない。 */
+    private var createdPlaylistId: String? = null
+
     fun handle(
         intent: Intent?,
         container: AppContainer,
@@ -64,6 +67,35 @@ object DebugActions {
                 "near_end" -> player.controller().run { if (duration > 10_000) seekTo(duration - 5_000) }
                 "logout" -> container.logout()
                 "shuffle" -> player.shuffleUpcoming()
+                // プレイリストの書き込みの確認（DebugReceiver からだけ）。作った ID はメモリに置くだけで出さない
+                "playlist_create" ->
+                    when (val result = container.music.createPlaylist(intent.getStringExtra("title") ?: "wave 確認用")) {
+                        is xyz.mooma0750.wave.core.session.WriteResult.Done -> {
+                            createdPlaylistId = result.value
+                            Log.i(WaveApplication.LOG_TAG, "debug playlist created")
+                        }
+                        else -> Log.i(WaveApplication.LOG_TAG, "debug playlist create result=$result")
+                    }
+                "playlist_add" -> {
+                    val id = createdPlaylistId
+                    val videoId = xyz.mooma0750.wave.playback.Media3QueuePlayer.songOf(player.controller().currentMediaItem)?.videoId
+                    if (id != null && videoId != null) Log.i(WaveApplication.LOG_TAG, "debug playlist add result=${container.music.addToPlaylist(id, videoId)}")
+                }
+                "playlist_remove" -> {
+                    val id = createdPlaylistId
+                    val videoId = xyz.mooma0750.wave.playback.Media3QueuePlayer.songOf(player.controller().currentMediaItem)?.videoId
+                    val page = id?.let { container.music.playlist(it) }
+                    if (id != null && videoId != null && page is CallResult.Ok) {
+                        val index = page.value.songs.indexOfFirst { it.videoId == videoId }
+                        val setVideoId = page.value.setVideoIds.getOrNull(index)
+                        Log.i(WaveApplication.LOG_TAG, "debug playlist before remove songs=${page.value.songs.size} editable=${page.value.editable} found=${setVideoId != null}")
+                        if (setVideoId != null) Log.i(WaveApplication.LOG_TAG, "debug playlist remove result=${container.music.removeFromPlaylist(id, videoId, setVideoId)::class.simpleName}")
+                    }
+                }
+                "playlist_count" -> {
+                    val page = createdPlaylistId?.let { container.music.playlist(it) }
+                    Log.i(WaveApplication.LOG_TAG, "debug playlist songs=${(page as? CallResult.Ok)?.value?.songs?.size} editable=${(page as? CallResult.Ok)?.value?.editable}")
+                }
                 // 編集できるプレイリストの見分け方を調べる（決定 E7）。番号・アイコン名・レンダラ名だけを出し、題名と ID は出さない
                 "playlist_probe" ->
                     when (val library = container.music.libraryPlaylists()) {

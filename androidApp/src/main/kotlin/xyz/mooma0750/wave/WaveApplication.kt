@@ -33,6 +33,7 @@ import xyz.mooma0750.wave.core.session.WaveSession
 import xyz.mooma0750.wave.core.music.MusicRepository
 import xyz.mooma0750.wave.core.stream.StreamComponents
 import xyz.mooma0750.wave.playback.PlayerConnection
+import xyz.mooma0750.wave.library.PlaylistEditor
 import xyz.mooma0750.wave.playback.MediaHttp
 import xyz.mooma0750.wave.playback.QueueStore
 import xyz.mooma0750.wave.playback.ResolvedStreamCache
@@ -147,6 +148,13 @@ class AppContainer(
     fun onLikedSongsChanged() {
         mutableLikedSongsVersion.update { it + 1 }
     }
+
+    private val mutablePlaylistsVersion = MutableStateFlow(0)
+
+    /** プレイリストを編集した（かもしれない）たびに増える。ライブラリとプレイリストの表示を読み直すキーに使う。 */
+    val playlistsVersion: StateFlow<Int> = mutablePlaylistsVersion.asStateFlow()
+
+    val playlistEditor = PlaylistEditor(context.applicationContext, music, appScope, onChanged = { mutablePlaylistsVersion.update { it + 1 } })
 
     /** UI から再生サービスへの接続。 */
     val player = PlayerConnection(context, controllerToken)

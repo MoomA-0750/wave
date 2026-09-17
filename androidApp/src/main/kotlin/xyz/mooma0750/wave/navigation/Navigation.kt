@@ -30,6 +30,7 @@ class SongActions(
     val addToQueue: (Song) -> Unit,
     val openArtist: (ArtistRef) -> Unit,
     val openAlbum: (AlbumRef) -> Unit,
+    val addToPlaylist: (Song) -> Unit,
 ) {
     /** シートの上から画面を開くときに、先にシートを閉じる。 */
     fun closing(close: () -> Unit): SongActions =
@@ -43,6 +44,10 @@ class SongActions(
             openAlbum = {
                 close()
                 openAlbum(it)
+            },
+            addToPlaylist = {
+                close()
+                addToPlaylist(it)
             },
         )
 }

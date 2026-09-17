@@ -48,6 +48,9 @@ class LibraryViewModel(
 data class PlaylistUiState(
     val title: String? = null,
     val songs: List<Song> = emptyList(),
+    /** songs と同じ並びの、削除に使う ID。 */
+    val setVideoIds: List<String?> = emptyList(),
+    val editable: Boolean = false,
     val continuation: String? = null,
     val loading: Boolean = true,
     val failure: FailureKind? = null,
@@ -66,7 +69,16 @@ class PlaylistViewModel(
             when (val result = music.playlist(playlistId)) {
                 is CallResult.Ok -> {
                     Log.i(WaveApplication.LOG_TAG, "playlist songs=${result.value.songs.size} continuation=${result.value.continuation != null}" + if (result.value.songs.isEmpty()) " renderers=${music.lastRendererNames}" else "")
-                    mutableState.update { it.copy(title = result.value.title ?: it.title, songs = result.value.songs, continuation = result.value.continuation, loading = false) }
+                    mutableState.update {
+                        it.copy(
+                            title = result.value.title ?: it.title,
+                            songs = result.value.songs,
+                            setVideoIds = result.value.setVideoIds,
+                            editable = result.value.editable,
+                            continuation = result.value.continuation,
+                            loading = false,
+                        )
+                    }
                 }
                 is CallResult.Failed -> mutableState.update { it.copy(loading = false, failure = result.kind) }
             }
@@ -80,7 +92,10 @@ class PlaylistViewModel(
         mutableState.update { it.copy(loading = true) }
         viewModelScope.launch {
             when (val result = music.playlist(playlistId, token)) {
-                is CallResult.Ok -> mutableState.update { it.copy(songs = it.songs + result.value.songs, continuation = result.value.continuation, loading = false) }
+                is CallResult.Ok ->
+                    mutableState.update {
+                        it.copy(songs = it.songs + result.value.songs, setVideoIds = it.setVideoIds + result.value.setVideoIds, continuation = result.value.continuation, loading = false)
+                    }
                 is CallResult.Failed -> mutableState.update { it.copy(loading = false, continuation = null) }
             }
         }
