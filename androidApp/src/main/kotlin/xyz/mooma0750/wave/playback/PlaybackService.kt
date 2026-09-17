@@ -138,7 +138,7 @@ class PlaybackService : MediaSessionService() {
                 ) {
                     if (events.containsAny(*SAVE_EVENTS)) scheduleSave()
                     if (events.containsAny(Player.EVENT_MEDIA_ITEM_TRANSITION, Player.EVENT_TIMELINE_CHANGED)) {
-                        likeController.onCurrentSong(Media3QueuePlayer.songOf(player.currentMediaItem)?.videoId)
+                        likeController.onCurrentSong(Media3QueuePlayer.songOf(player.currentMediaItem)?.videoId, TrackUri.epochOf(player.currentMediaItem?.localConfiguration?.uri))
                     }
                 }
 
@@ -270,6 +270,8 @@ class PlaybackService : MediaSessionService() {
                             container.queueStore.delete()
                         }
                         loggedInAt = state.obtainedAtEpochMs
+                        // ログアウトの後のログインでは reset が走らないので、空のキューを今のログインの世代に結び付け直す
+                        queueSession.rebindIfEmpty()
                         maybeRestore()
                     }
                     AuthState.Restoring -> Unit

@@ -638,6 +638,35 @@ class WaveSessionTest {
         }
 
     @Test
+    fun loginIsPublishedOnlyAfterTheSessionGenerationAdvanced(): Unit =
+        runBlocking {
+            val store =
+                object : xyz.mooma0750.wave.core.auth.CredentialStore {
+                    override suspend fun load() = xyz.mooma0750.wave.core.auth.LoadResult.Empty
+
+                    override suspend fun save(credentials: Credentials) = xyz.mooma0750.wave.core.auth.SaveResult.Saved
+
+                    override suspend fun clear() = true
+                }
+            val auth = xyz.mooma0750.wave.core.auth.AuthManager(store)
+            val session = WaveSession(client, auth, scope, rethrowViolations = false)
+            auth.restore()
+            val seen = CopyOnWriteArrayList<Pair<Boolean, Long>>()
+            // state を見た瞬間に、WaveSession の世代がもうそのログインに進んでいるか（購読の順序に頼らない）
+            val watcher =
+                launch(kotlinx.coroutines.Dispatchers.Unconfined) {
+                    auth.state.collect { state -> seen += (state is xyz.mooma0750.wave.core.auth.AuthState.LoggedIn) to session.currentGenerationId() }
+                }
+            val before = session.currentGenerationId()
+            auth.completeLogin(loggedIn)
+            withTimeout(5_000) { while (seen.none { it.first }) delay(10) }
+            val atLoggedIn = seen.first { it.first }.second
+            assertTrue(atLoggedIn > before, "LoggedIn を公開した時点で世代が進んでいない")
+            watcher.cancel()
+            session.close()
+        }
+
+    @Test
     fun writesWhileLoggedOutAreNotSent(): Unit =
         runBlocking {
             val session = session()

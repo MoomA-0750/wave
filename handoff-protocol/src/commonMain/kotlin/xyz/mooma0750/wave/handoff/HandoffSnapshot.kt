@@ -144,7 +144,10 @@ object HandoffCodec {
         expectedHandoffId: String,
     ): HandoffDecodeResult {
         if (text.encodeToByteArray().size > MAX_BYTES) return HandoffDecodeResult.Rejected("too_large")
-        val version = runCatching { json.decodeFromString(VersionOnly.serializer(), text).schemaVersion }.getOrNull()
+        val versionResult = runCatching { json.decodeFromString(VersionOnly.serializer(), text).schemaVersion }
+        // 読めない JSON は「相手を更新して」ではなく拒否
+        if (versionResult.isFailure) return HandoffDecodeResult.Rejected("unreadable")
+        val version = versionResult.getOrNull()
         if (version != SCHEMA_VERSION) return HandoffDecodeResult.UnsupportedVersion(version)
         val snapshot = runCatching { json.decodeFromString(HandoffSnapshot.serializer(), text) }.getOrNull() ?: return HandoffDecodeResult.Rejected("unreadable")
         return validate(snapshot, expectedHandoffId)
@@ -195,11 +198,15 @@ object HandoffCodec {
     /** https・既知の画像ホストだけ（ポート・userinfo の無いもの）。 */
     private fun allowedThumbnail(url: String): Boolean {
         if (!url.startsWith("https://") || url.length > 2048) return false
+        // バックスラッシュ・空白・制御文字・% は、URL パーサによって区切りや別のホストとして解釈されるので、どこにあっても拒否する
+        if (url.any { it == '\\' || it.isWhitespace() || it.isISOControl() }) return false
         val authority = url.removePrefix("https://").substringBefore('/').substringBefore('?').substringBefore('#')
-        if ('@' in authority || ':' in authority) return false
-        val host = authority.lowercase()
-        return THUMBNAIL_HOSTS.any { host.endsWith(it) }
+        // ホストは小文字の英数字・ドット・ハイフンだけ（userinfo・ポート・%・IDN を含まない）
+        if (!HOST.matches(authority)) return false
+        return THUMBNAIL_HOSTS.any { authority.endsWith(it) }
     }
+
+    private val HOST = Regex("^[a-z0-9.-]{1,253}$")
 
     @Serializable
     private data class VersionOnly(

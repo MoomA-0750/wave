@@ -135,7 +135,7 @@ class MusicRepository(
         var continuation: String? = null
         var pages = 0
         do {
-            when (val page = playlist(playlistId, continuation)) {
+            when (val page = playlist(playlistId, continuation, expectedGeneration)) {
                 is CallResult.Failed -> return AddToPlaylistResult.NotChecked(page.kind)
                 is CallResult.Ok -> {
                     if (page.value.songs.any { it.videoId == videoId }) return AddToPlaylistResult.AlreadyInPlaylist

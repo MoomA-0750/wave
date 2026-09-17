@@ -69,12 +69,19 @@ class LikeController(
     private var loadJob: Job? = null
     private var epoch = 0
 
-    fun onCurrentSong(videoId: String?) {
-        if (videoId == state.videoId) return
+    /** 今の曲がキューに入ったときのログインの世代。評価の読み書きはこの世代で送る（P6-0 inner gate 中-3）。 */
+    private var songGeneration: Long? = null
+
+    fun onCurrentSong(
+        videoId: String?,
+        generation: Long?,
+    ) {
+        if (videoId == state.videoId && generation == songGeneration) return
         loadJob?.cancel()
         epoch++
+        songGeneration = generation
         publish(LikeState(videoId = videoId, messageId = state.messageId))
-        if (videoId != null) load(videoId)
+        if (videoId != null && generation != null) load(videoId)
     }
 
     /** ログアウト・アカウントの切り替え。書き込み中の結果も捨てる。 */
@@ -105,8 +112,8 @@ class LikeController(
             return false
         }
         val startedEpoch = epoch
-        // 始めたときのログインで送る（途中でアカウントが変われば送らない）
-        val generation = music.currentLoginGeneration()
+        // 表示している評価を読んだときの（曲をキューに入れたときの）ログインの世代で送る（途中でアカウントが変われば送らない）
+        val generation = songGeneration ?: return false
         publish(current.copy(pending = true, message = null))
         scope.launch {
             val result = music.setLiked(videoId, liked, generation)
@@ -131,8 +138,8 @@ class LikeController(
 
     private fun load(videoId: String) {
         val startedEpoch = epoch
-        // 読み込みを始めたときのログインで読む（途中で替われば送らない）
-        val generation = music.currentLoginGeneration()
+        // 曲をキューに入れたときのログインの世代で読む（途中で替われば送らない）
+        val generation = songGeneration ?: return
         loadJob?.cancel()
         loadJob =
             scope.launch {

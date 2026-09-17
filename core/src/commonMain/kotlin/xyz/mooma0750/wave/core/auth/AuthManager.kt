@@ -36,6 +36,12 @@ class AuthManager(
     /** WaveSession 向け。state と同じ臨界区間で、credentials → state の順に更新する。 */
     internal val credentials: StateFlow<Credentials?> = mutableCredentials.asStateFlow()
 
+    /**
+     * 公開する前に、同じ臨界区間で呼ぶ（WaveSession が世代を進める、ADR-0007）。
+     * state を購読する側（再生サービスなど）が LoggedIn を見た時点で、WaveSession の世代は新しいログインに進んでいる。
+     */
+    internal var beforePublish: (suspend (Credentials?) -> Unit)? = null
+
     /** 起動時に1回。先に completeLogin・logout が終わっていたら何もしない。 */
     suspend fun restore() {
         mutex.withLock {
@@ -86,10 +92,11 @@ class AuthManager(
      */
     suspend fun discardSaved(): Boolean = logout()
 
-    private fun publish(
+    private suspend fun publish(
         credentials: Credentials?,
         state: AuthState,
     ) {
+        beforePublish?.invoke(credentials)
         mutableCredentials.value = credentials
         mutableState.value = state
     }

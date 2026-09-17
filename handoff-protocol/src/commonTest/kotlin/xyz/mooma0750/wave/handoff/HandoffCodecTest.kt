@@ -57,6 +57,9 @@ class HandoffCodecTest {
         assertIs<HandoffDecodeResult.Rejected>(HandoffCodec.decode(HandoffCodec.encode(snapshot()), "11111111-1111-4111-8111-111111111111"))
         assertEquals(HandoffDecodeResult.UnsupportedVersion(2), HandoffCodec.decode(HandoffCodec.encode(snapshot().copy(schemaVersion = 2)), handoffId))
         assertEquals(HandoffDecodeResult.UnsupportedVersion(null), HandoffCodec.decode("{}", handoffId))
+        assertEquals(HandoffDecodeResult.Rejected("unreadable"), HandoffCodec.decode("{not json", handoffId))
+        // handoffId は UUID の形でなければ、一致していても拒否
+        assertIs<HandoffDecodeResult.Rejected>(HandoffCodec.validate(snapshot().copy(handoffId = "same-but-not-uuid"), "same-but-not-uuid"))
     }
 
     @Test
@@ -89,12 +92,20 @@ class HandoffCodecTest {
                 item(1, "https://user@lh3.googleusercontent.com/x"),
                 item(2, "https://i.ytimg.com/vi/x/hq.jpg"),
                 item(3, "https://yt3.ggpht.com/x"),
+                item(4, "https://evil.example\\.ytimg.com/x.jpg"),
+                item(5, "https://LH3.GOOGLEUSERCONTENT.COM/x"),
+                item(6, "https://evil.example%2F.ytimg.com/x"),
+                item(7, "https://lh3.googleusercontent.com:443/x"),
             )
         val ok = assertIs<HandoffDecodeResult.Ok>(HandoffCodec.validate(snapshot(items = items).copy(positionMs = 999_999_999, listenedMs = Long.MAX_VALUE), handoffId)).snapshot
         assertNull(ok.items[0].thumbnailUrl)
         assertNull(ok.items[1].thumbnailUrl)
         assertEquals("https://i.ytimg.com/vi/x/hq.jpg", ok.items[2].thumbnailUrl)
         assertEquals("https://yt3.ggpht.com/x", ok.items[3].thumbnailUrl)
+        assertNull(ok.items[4].thumbnailUrl, "バックスラッシュで別のホストへ向けられる")
+        assertNull(ok.items[5].thumbnailUrl)
+        assertNull(ok.items[6].thumbnailUrl)
+        assertNull(ok.items[7].thumbnailUrl)
         assertEquals(200_000L, ok.positionMs)
         assertEquals(200_000L, ok.listenedMs)
     }

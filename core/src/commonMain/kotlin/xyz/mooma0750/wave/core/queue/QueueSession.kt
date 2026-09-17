@@ -200,6 +200,7 @@ class QueueSession(
     }
 
     fun addNext(song: Song) {
+        rebindIfEmpty()
         val resumeAt = endedAtLastItem()
         player.insertAfterCurrent(listOf(item(song, ItemOrigin.UserAdded)))
         // 最後まで行って止まっているなら、足した曲から続ける（再生を押すと終わった曲の先頭に戻ってしまうため）
@@ -207,9 +208,19 @@ class QueueSession(
     }
 
     fun addToEnd(song: Song) {
+        rebindIfEmpty()
         val resumeAt = endedAtLastItem()
         player.append(listOf(item(song, ItemOrigin.UserAdded)))
         if (resumeAt != null) player.resumeAt(resumeAt)
+    }
+
+    /**
+     * キューが空なら、今のログインの世代に結び付け直す。ログアウトしてログインし直した後は、キューを置き換えずに
+     * 「キューに追加」から始まることがあり、ログアウトのときに取った古い世代のままだと曲を解決できない（P6-0 inner gate 中-1）。
+     */
+    fun rebindIfEmpty() {
+        if (player.items.isNotEmpty()) return
+        startGeneration()
     }
 
     /** 最後の項目で止まっているなら、その次（足す項目）の位置。 */

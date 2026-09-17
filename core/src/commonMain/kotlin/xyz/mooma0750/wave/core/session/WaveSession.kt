@@ -215,7 +215,10 @@ class WaveSession internal constructor(
         rethrowViolations = rethrowViolations,
         nowMs = monotonicMillis(),
         configParser = null,
-    )
+    ) {
+        // 認証情報を公開する前に世代を進める（購読の順序に頼らない、ADR-0007 の同期点 a）
+        authManager.beforePublish = { next -> applyCredentials(next, authoritative = true) }
+    }
 
     private class Generation(
         val id: Long,
@@ -260,13 +263,21 @@ class WaveSession internal constructor(
     // 他のプロパティをすべて初期化してから購読を始める（UNDISPATCHED なので、ここで最初の値を反映する）
     private val subscription =
         sessionScope.launch(start = CoroutineStart.UNDISPATCHED) {
-            credentials.collect { next -> applyCredentials(next) }
+            credentials.collect { next -> applyCredentials(next, authoritative = false) }
         }
 
-    private suspend fun applyCredentials(next: Credentials?) {
+    /**
+     * @param authoritative AuthManager が公開する前に呼んだ（まだ credentials の値には出ていない）。
+     *   false（購読からの反映）なら、今の値と違う古い値は反映しない（先に反映した新しい世代を巻き戻さない）
+     */
+    private suspend fun applyCredentials(
+        next: Credentials?,
+        authoritative: Boolean,
+    ) {
         generationLock.withLock {
             val old = current.value
             if (old.id > 0 && next === old.credentials) return
+            if (!authoritative && old.id > 0 && next !== credentials.value) return
             if (!sessionJob.isActive) return
             old.scope.cancel()
             if (next != null) {
@@ -540,12 +551,14 @@ class WaveSession internal constructor(
     ): AccountVerification {
         if (current.value !== generation) return AccountVerification.Unknown
         val result =
-            call("accounts_list", block = { it.accountsList(YouTubeClient.WEB_REMIX) }) { response ->
+            call("accounts_list", block = { it.accountsList(YouTubeClient.WEB_REMIX) }, expectedGeneration = generation.id) { response ->
                 ParseOutcome.Parsed(accountTokensOf(json.parseToJsonElement(response.bodyAsTextLimited(MAX_PLAYER_BYTES))))
             }
         val tokens = (result as? CallResult.Ok)?.value ?: return AccountVerification.Unknown
-        if (tokens.none { it.first }) return AccountVerification.Unknown
-        return if (tokens.any { it.first && it.second == saved }) AccountVerification.Verified else AccountVerification.Mismatch
+        // 選択中のアカウントがちょうど1件のときだけ判定する（0件・複数件は形が想定と違う）
+        val selected = tokens.filter { it.first }.map { it.second }.distinct()
+        if (selected.size != 1) return AccountVerification.Unknown
+        return if (selected.single() == saved) AccountVerification.Verified else AccountVerification.Mismatch
     }
 
     /** 今のログインの、書き込み先のアカウントの確認（UI・受け渡し用）。 */

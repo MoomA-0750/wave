@@ -167,7 +167,8 @@ class WaveStreamDataSource(
 
     override fun open(dataSpec: DataSpec): Long {
         val videoId = TrackUri.videoIdOf(dataSpec.uri) ?: throw DataSourceException("unsupported uri scheme", null, PlaybackException.ERROR_CODE_IO_UNSPECIFIED)
-        val epoch = TrackUri.epochOf(dataSpec.uri)
+        // 世代の無い曲は解決しない（照合しない側に倒さない、P6-0 inner gate 中-4）
+        val epoch = TrackUri.epochOf(dataSpec.uri) ?: throw StreamResolveException(xyz.mooma0750.wave.core.stream.StreamFailure.NotLoggedIn)
         openedSpec = dataSpec
         if (cache.recentlyRejected(videoId)) throw StreamRejectedException(403)
         val cached = cache.get(videoId, epoch)

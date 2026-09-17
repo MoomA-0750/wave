@@ -719,4 +719,34 @@ class QueueSessionTest {
             assertEquals(1 + xyz.mooma0750.wave.handoff.HandoffCodec.MAX_UPCOMING_ITEMS, snapshot.items.size)
             assertEquals(null, snapshot.continuation, "切り詰めたのに続きのトークンを送っている")
         }
+
+    @Test
+    fun addingToAnEmptyQueueAfterReloginUsesTheCurrentLoginGeneration() =
+        runTest {
+            val player = FakePlayer()
+            val queue = session(player, FakeContent())
+            loginGeneration = 8
+            queue.reset() // ログアウト
+            loginGeneration = 9 // ログインし直した
+            queue.addToEnd(song("a"))
+            assertEquals(9L, player.epoch, "ログアウトのときの世代のまま曲を入れた")
+        }
+
+    @Test
+    fun adoptRestoresTheFullContextAndPlaylistFetchesCarryTheGeneration() =
+        runTest {
+            val player = FakePlayer()
+            val content = FakeContent().apply { playlistResult = { _, _ -> CallResult.Ok(SongPage(listOf(song("p9")), continuation = null)) } }
+            var n = 0
+            val queue = QueueSession(player, content, this, newItemId = { "00000000-0000-4000-8000-%012d".format(n++) }, loginGeneration = { 5 })
+            val source = QueueSession(FakePlayer(), FakeContent(), this, newItemId = { "00000000-0000-4000-8000-%012d".format(100 + n++) }, loginGeneration = { 1 })
+            source.playFrom(listOf(song("p1")), 0, "PL", "page2")
+            val snapshot = requireNotNull(source.handoffSnapshot("id", 0, true, 0, 0, false, 0)).copy(radioPlaylistId = "RDsynthetic", exhausted = false)
+            queue.adopt(snapshot)
+            assertEquals(false, queue.snapshot().exhausted)
+            assertEquals("page2", queue.snapshot().continuation)
+            advanceUntilIdle()
+            assertEquals(listOf("PL" to "page2"), content.playlistCalls)
+            assertTrue(content.epochs.isNotEmpty() && content.epochs.all { it == 5L }, "続きの取得に受け取った側の世代を渡していない: ${content.epochs}")
+        }
 }
