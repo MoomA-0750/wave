@@ -24,6 +24,8 @@ import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import xyz.mooma0750.wave.WaveApplication
 import xyz.mooma0750.wave.core.auth.AuthState
@@ -43,6 +45,14 @@ class PlaybackService : MediaSessionService() {
     private var session: MediaSession? = null
     private var queue: QueueSession? = null
     private val skipGuard = SkipGuard(MAX_CONSECUTIVE_SKIPS)
+
+    /** 今のログインの取得時刻。ログインしていなければ null。キューの保存に使う。 */
+    private var loggedInAt: Long? = null
+
+    /** 保存したキューを戻す判断が済んだか。済むまでは保存しない（戻す前の空のキューで上書きしない）。 */
+    private var restoreSettled = false
+    private var saveJob: Job? = null
+    private var periodicSaveJob: Job? = null
 
     private lateinit var container: xyz.mooma0750.wave.AppContainer
 
@@ -74,6 +84,26 @@ class PlaybackService : MediaSessionService() {
                         player.seekToNextMediaItem()
                         player.prepare()
                         player.play()
+                    }
+                }
+
+                override fun onEvents(
+                    player: Player,
+                    events: Player.Events,
+                ) {
+                    if (events.containsAny(*SAVE_EVENTS)) scheduleSave()
+                }
+
+                override fun onIsPlayingChanged(isPlaying: Boolean) {
+                    periodicSaveJob?.cancel()
+                    if (isPlaying) {
+                        periodicSaveJob =
+                            scope.launch {
+                                while (true) {
+                                    delay(PERIODIC_SAVE_MS)
+                                    saveNow()
+                                }
+                            }
                     }
                 }
 
@@ -120,26 +150,78 @@ class PlaybackService : MediaSessionService() {
 
         // ログアウトしたら再生を止めてキューと解決済みの URL を消す（決定 E5）。
         // ログインし直した（別のログインに変わった）ときも、アカウントの切り替えとして同じく消す（2026-09-17 本人の決定）
+        // 保存したキューを戻すのも、この購読の中で行う（ログアウト・切り替えの処理と順序を決めるため）
         scope.launch {
-            var loggedInAt: Long? = null
             container.authManager.state.collect { state ->
                 when (state) {
                     AuthState.LoggedOut, AuthState.LoggingOut, is AuthState.Unreadable -> {
+                        loggedInAt = null
                         queueSession.reset()
                         container.streamCache.clear()
-                        loggedInAt = null
+                        container.queueStore.delete()
+                        restoreSettled = true
                     }
                     is AuthState.LoggedIn -> {
-                        if (loggedInAt != null && loggedInAt != state.obtainedAtEpochMs) {
+                        val previous = loggedInAt
+                        if (previous != null && previous != state.obtainedAtEpochMs) {
+                            loggedInAt = null
                             queueSession.reset()
                             container.streamCache.clear()
+                            container.queueStore.delete()
                         }
                         loggedInAt = state.obtainedAtEpochMs
+                        if (!restoreSettled) {
+                            restoreSavedQueue(queueSession, player, state.obtainedAtEpochMs)
+                            restoreSettled = true
+                        }
                     }
                     AuthState.Restoring -> Unit
                 }
             }
         }
+    }
+
+    /**
+     * 保存したキューを、再生を始めずに戻す。保存時と今のログインが違えばファイルを消す。
+     * 読み込みの間に UI から曲が選ばれた・ログインが変わったなら戻さない。
+     */
+    private suspend fun restoreSavedQueue(
+        queueSession: QueueSession,
+        player: Player,
+        obtainedAt: Long,
+    ) {
+        val saved = container.queueStore.load() ?: return
+        if (saved.obtainedAtEpochMs != obtainedAt) {
+            container.queueStore.delete()
+            return
+        }
+        val now = container.authManager.state.value
+        if (now !is AuthState.LoggedIn || now.obtainedAtEpochMs != obtainedAt || player.mediaItemCount > 0) return
+        queueSession.restore(saved)
+        player.repeatMode = saved.repeatMode
+        Log.i(WaveApplication.LOG_TAG, "queue restored size=${saved.items.size} index=${saved.currentIndex}")
+    }
+
+    /** 連続した変更は1回にまとめて保存する。 */
+    private fun scheduleSave() {
+        if (!restoreSettled) return
+        saveJob?.cancel()
+        saveJob =
+            scope.launch {
+                delay(SAVE_DEBOUNCE_MS)
+                saveNow()
+            }
+    }
+
+    private suspend fun saveNow() {
+        if (!restoreSettled) return
+        val obtainedAt = loggedInAt ?: return
+        val queueSession = queue ?: return
+        val player = session?.player ?: return
+        // 保存内容を作る前に世代を読む（この後にログアウトの削除が走ったら書かない）
+        val epoch = container.queueStore.currentEpoch()
+        val saved = queueSession.saved(obtainedAt, player.currentPosition, player.repeatMode)
+        if (saved == null) container.queueStore.delete() else container.queueStore.save(saved, epoch)
     }
 
     private fun failureOf(error: PlaybackException): PlaybackFailure {
@@ -251,6 +333,14 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        // scope を止めると待っている保存が捨てられるので、その前に最後の状態を書く
+        val obtainedAt = loggedInAt
+        val queueSession = queue
+        val lastPlayer = session?.player
+        if (restoreSettled && obtainedAt != null && queueSession != null && lastPlayer != null) {
+            val epoch = container.queueStore.currentEpoch()
+            queueSession.saved(obtainedAt, lastPlayer.currentPosition, lastPlayer.repeatMode)?.let { container.queueStore.saveBlocking(it, epoch) }
+        }
         scope.cancel()
         session?.run {
             player.release()
@@ -263,6 +353,16 @@ class PlaybackService : MediaSessionService() {
 
     private companion object {
         const val MAX_CONSECUTIVE_SKIPS = 3
+        const val SAVE_DEBOUNCE_MS = 1_000L
+        const val PERIODIC_SAVE_MS = 60_000L
+        val SAVE_EVENTS =
+            intArrayOf(
+                Player.EVENT_TIMELINE_CHANGED,
+                Player.EVENT_MEDIA_ITEM_TRANSITION,
+                Player.EVENT_IS_PLAYING_CHANGED,
+                Player.EVENT_REPEAT_MODE_CHANGED,
+                Player.EVENT_POSITION_DISCONTINUITY,
+            )
         val USER_SELECTIONS = setOf(QueueCommands.PLAY_SONG, QueueCommands.PLAY_FROM, QueueCommands.JUMP)
         const val CUSTOM_NOTIFICATION_ACTION = "androidx.media3.session.CUSTOM_NOTIFICATION_ACTION"
 

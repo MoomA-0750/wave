@@ -10,6 +10,7 @@ import xyz.mooma0750.wave.core.music.Song
 import xyz.mooma0750.wave.core.music.SongPage
 import xyz.mooma0750.wave.core.music.UpNextPage
 import xyz.mooma0750.wave.core.session.CallResult
+import xyz.mooma0750.wave.core.session.FailureKind
 
 /** キューの項目。itemId は項目ごとに一意（同じ曲を2回入れても区別できる）。 */
 @Serializable
@@ -80,6 +81,13 @@ interface QueuePlayer {
 
     fun insertAfterCurrent(items: List<QueueItem>)
 
+    /** 保存したキューを戻す。再生は始めない（起動のたびにストリームを解決しない）。 */
+    fun restore(
+        items: List<QueueItem>,
+        startIndex: Int,
+        positionMs: Long,
+    )
+
     /** 今の項目より後ろを、この並びに置き換える（今の項目の再生は続ける）。 */
     fun replaceAfterCurrent(items: List<QueueItem>)
 
@@ -126,6 +134,9 @@ class QueueSession(
     private var radioPlaylistId: String? = null
     private var exhausted = true
     private var fetchJob: Job? = null
+
+    /** 保存から戻した continuation を使っている。古くなって拒否されたら、最後の曲からラジオをやり直す。 */
+    private var usingRestoredContinuation = false
 
     /** 1曲を選んで再生する。その曲から始まるラジオをサジェストとして追加していく。 */
     fun playSong(song: Song) {
@@ -213,10 +224,34 @@ class QueueSession(
         player.clear()
     }
 
+    /** 保存用。キューが空なら null（保存せずにファイルを消す）。 */
+    fun saved(
+        obtainedAtEpochMs: Long,
+        positionMs: Long,
+        repeatMode: Int,
+    ): SavedQueue? {
+        val items = player.items
+        val index = player.currentIndex
+        if (items.isEmpty() || index !in items.indices) return null
+        return SavedQueue(SavedQueue.VERSION, obtainedAtEpochMs, items, index, positionMs.coerceAtLeast(0), repeatMode, source, continuation, radioPlaylistId, exhausted)
+    }
+
+    /** 保存したキューを、再生を始めずに戻す。ログインの照合は呼び出し側で済ませる。 */
+    fun restore(saved: SavedQueue) {
+        startGeneration()
+        player.restore(saved.items, saved.currentIndex, saved.positionMs)
+        source = saved.source
+        continuation = saved.continuation
+        radioPlaylistId = saved.radioPlaylistId
+        exhausted = saved.exhausted
+        usingRestoredContinuation = saved.continuation != null
+    }
+
     fun snapshot(): QueueSnapshot = QueueSnapshot(generation, player.items, player.currentIndex, source, continuation, exhausted)
 
     private fun startGeneration() {
         generation++
+        usingRestoredContinuation = false
         fetchJob?.cancel()
         fetchJob = null
     }
@@ -288,9 +323,10 @@ class QueueSession(
                     return if (switchToRadio()) 1 else 0
                 }
                 when (val result = content.playlistPage(currentSource.playlistId, token)) {
-                    is CallResult.Failed -> null
+                    is CallResult.Failed -> restartFromStaleContinuation(requestGeneration, result.kind)
                     is CallResult.Ok -> {
                         if (requestGeneration != generation) return null
+                        usingRestoredContinuation = false
                         continuation = result.value.continuation
                         val added = appendItems(result.value.songs.map { item(it, ItemOrigin.Source) })
                         val switched = continuation == null && !player.repeatAll && switchToRadio()
@@ -308,9 +344,10 @@ class QueueSession(
                         continuation = token,
                     )
                 when (result) {
-                    is CallResult.Failed -> null
+                    is CallResult.Failed -> restartFromStaleContinuation(requestGeneration, result.kind)
                     is CallResult.Ok -> {
                         if (requestGeneration != generation) return null
+                        usingRestoredContinuation = false
                         val page = result.value
                         page.playlistId?.let { radioPlaylistId = it }
                         continuation = page.continuation
@@ -324,6 +361,22 @@ class QueueSession(
                 }
             }
         }
+    }
+
+    /**
+     * 保存から戻した continuation が古くなって拒否された（HTTP のエラー・解析できない応答）なら、最後の曲からラジオをやり直す。
+     * 通信の失敗やログインの問題では、continuation のせいとは限らないのでやり直さない。
+     * @return 続けて取るなら 1、失敗として扱うなら null
+     */
+    private fun restartFromStaleContinuation(
+        requestGeneration: Long,
+        kind: FailureKind,
+    ): Int? {
+        if (requestGeneration != generation || !usingRestoredContinuation) return null
+        if (kind != FailureKind.Http && kind != FailureKind.Parse) return null
+        usingRestoredContinuation = false
+        if (source is QueueSource.Playlist && player.repeatAll) return null
+        return if (switchToRadio()) 1 else null
     }
 
     private fun appendItems(items: List<QueueItem>): Int {

@@ -43,6 +43,20 @@ class QueueSessionTest {
             this.items.addAll(currentIndex + 1, items)
         }
 
+        var restoredPositionMs: Long? = null
+        var replaceCount = 0
+
+        override fun restore(
+            items: List<QueueItem>,
+            startIndex: Int,
+            positionMs: Long,
+        ) {
+            this.items.clear()
+            this.items += items
+            currentIndex = startIndex
+            restoredPositionMs = positionMs
+        }
+
         override fun replaceAfterCurrent(items: List<QueueItem>) {
             while (this.items.size > currentIndex + 1) this.items.removeAt(this.items.size - 1)
             this.items += items
@@ -401,5 +415,85 @@ class QueueSessionTest {
             queue.onRepeatModeChanged()
             advanceUntilIdle()
             assertEquals(listOf("p1", "p2", "r1"), player.videoIds())
+        }
+
+    @Test
+    fun savedQueueRoundTripsThroughTheSession() =
+        runTest {
+            val player = FakePlayer()
+            val content = FakeContent().apply { upNextResult = { _, _, _ -> page("r1", "r2", continuation = "c9") } }
+            val queue = session(player, content)
+            queue.playSong(song("a"))
+            advanceUntilIdle()
+            player.currentIndex = 1
+            val saved = requireNotNull(queue.saved(obtainedAtEpochMs = 7, positionMs = 12_345, repeatMode = 2))
+
+            val decoded = requireNotNull(SavedQueue.decode(SavedQueue.encode(saved)))
+            assertEquals(saved, decoded)
+
+            val restoredPlayer = FakePlayer()
+            val restoredContent = FakeContent()
+            val restored = session(restoredPlayer, restoredContent)
+            restored.restore(decoded)
+            advanceUntilIdle()
+            assertEquals(player.items, restoredPlayer.items)
+            assertEquals(1, restoredPlayer.currentIndex)
+            assertEquals(12_345L, restoredPlayer.restoredPositionMs)
+            assertEquals(QueueSource.Radio("a"), restored.snapshot().source)
+            assertEquals("c9", restored.snapshot().continuation)
+            assertEquals(emptyList(), restoredContent.upNextCalls, "残りが少なくないのに取得した")
+        }
+
+    @Test
+    fun emptyQueueIsNotSaved() =
+        runTest {
+            val queue = session(FakePlayer(), FakeContent())
+            assertEquals(null, queue.saved(1, 0, 0))
+        }
+
+    @Test
+    fun brokenOrForeignSavedQueuesAreRejected() {
+        val item = QueueItem("i", song("a"), ItemOrigin.Source)
+        val valid = SavedQueue(SavedQueue.VERSION, 1, listOf(item), 0, 0, 0, QueueSource.Radio("a"), null, null, false)
+        assertEquals(valid, SavedQueue.decode(SavedQueue.encode(valid)))
+        assertEquals(null, SavedQueue.decode("{"))
+        assertEquals(null, SavedQueue.decode(""))
+        assertEquals(null, SavedQueue.decode(SavedQueue.encode(valid.copy(version = SavedQueue.VERSION + 1))))
+        assertEquals(null, SavedQueue.decode(SavedQueue.encode(valid.copy(items = emptyList()))))
+        assertEquals(null, SavedQueue.decode(SavedQueue.encode(valid.copy(currentIndex = 1))))
+        assertEquals(null, SavedQueue.decode(SavedQueue.encode(valid.copy(repeatMode = 3))))
+        assertEquals(null, SavedQueue.decode(SavedQueue.encode(valid).replace("\"exhausted\"", "\"unknownKey\":1,\"exhausted\"")))
+    }
+
+    @Test
+    fun staleRestoredContinuationRestartsRadioFromTheLastItem() =
+        runTest {
+            val player = FakePlayer()
+            val content =
+                FakeContent().apply {
+                    upNextResult = { seed, _, token -> if (token != null) CallResult.Failed(FailureKind.Http, 400) else page("fresh-$seed", continuation = null) }
+                }
+            val queue = session(player, content)
+            val items = listOf("a", "b").mapIndexed { i, id -> QueueItem("i$i", song(id), ItemOrigin.Source) }
+            queue.restore(SavedQueue(SavedQueue.VERSION, 1, items, 1, 0, 0, QueueSource.Radio("a"), "old-token", "RDAMVMa", false))
+            queue.onPlaybackProgressed()
+            advanceUntilIdle()
+            assertEquals(listOf("a", "b", "fresh-b"), player.videoIds())
+            assertEquals("old-token", content.upNextCalls[0].third)
+            assertEquals(Triple("b", "RDAMVMb", null), content.upNextCalls[1])
+        }
+
+    @Test
+    fun networkFailureWithARestoredContinuationDoesNotRestart() =
+        runTest {
+            val player = FakePlayer()
+            val content = FakeContent().apply { upNextResult = { _, _, _ -> CallResult.Failed(FailureKind.Network) } }
+            val queue = session(player, content)
+            val items = listOf(QueueItem("i0", song("a"), ItemOrigin.Source))
+            queue.restore(SavedQueue(SavedQueue.VERSION, 1, items, 0, 0, 0, QueueSource.Radio("a"), "token", "RDAMVMa", false))
+            queue.onPlaybackProgressed()
+            advanceUntilIdle()
+            assertEquals(1, content.upNextCalls.size)
+            assertEquals("token", queue.snapshot().continuation)
         }
 }

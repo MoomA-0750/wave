@@ -40,6 +40,17 @@ class Media3QueuePlayer(
         player.play()
     }
 
+    override fun restore(
+        items: List<QueueItem>,
+        startIndex: Int,
+        positionMs: Long,
+    ) {
+        itemsById.clear()
+        items.forEach { itemsById[it.itemId] = it }
+        // prepare しない。再生ボタンが押されたら、Media3 が IDLE から prepare する
+        player.setMediaItems(items.map(::mediaItemOf), startIndex, positionMs)
+    }
+
     override fun append(items: List<QueueItem>) {
         items.forEach { itemsById[it.itemId] = it }
         val wasEmpty = player.mediaItemCount == 0

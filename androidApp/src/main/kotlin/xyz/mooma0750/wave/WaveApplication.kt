@@ -34,6 +34,7 @@ import xyz.mooma0750.wave.core.music.MusicRepository
 import xyz.mooma0750.wave.core.stream.StreamComponents
 import xyz.mooma0750.wave.playback.PlayerConnection
 import xyz.mooma0750.wave.playback.MediaHttp
+import xyz.mooma0750.wave.playback.QueueStore
 import xyz.mooma0750.wave.playback.ResolvedStreamCache
 import java.io.File
 import java.util.UUID
@@ -136,6 +137,9 @@ class AppContainer(
     /** 解決済みのストリーム URL。ログアウトで消す。 */
     val streamCache = ResolvedStreamCache(stream.resolver, SystemClock::elapsedRealtime)
 
+    /** 次に開いたときに戻すキュー。ログアウトで消す。 */
+    val queueStore = QueueStore.create(context)
+
     init {
         // ログインが反映されたら、プレイヤーの設定を先に取っておく（最初の再生を速くする）
         appScope.launch {
@@ -160,6 +164,8 @@ class AppContainer(
         val cleared = authManager.logout()
         // 再生サービスが動いていなくても、前のアカウントで解決した URL とサムネイルを残さない
         streamCache.clear()
+        // 再生サービスが動いていないときのログアウトでも、前のアカウントのキューを残さない
+        queueStore.delete()
         imageCacheCleaner()
         WebViewCredentials.clear()
         Log.i(WaveApplication.LOG_TAG, "logout cleared=$cleared")
