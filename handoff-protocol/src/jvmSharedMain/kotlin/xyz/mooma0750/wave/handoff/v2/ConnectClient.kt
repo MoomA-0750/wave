@@ -474,7 +474,7 @@ class ConnectClient(
                 val opened2 = Opened(stored, body, hash, nowMs())
                 latestCursor = opened2
                 cursorFloor = stored.version
-                persist()
+                persistFloor()
                 onCursor(opened2)
             }
             StateKind.Queue -> {
@@ -483,7 +483,7 @@ class ConnectClient(
                 val body = runCatching { ConnectJson.json.decodeFromString(QueueBody.serializer(), opened.plaintext.decodeToString()) }.getOrNull() ?: return
                 latestQueue = Opened(stored, body, hash, nowMs())
                 queueFloor = stored.version
-                persist()
+                persistFloor()
             }
         }
     }
@@ -786,6 +786,7 @@ class ConnectClient(
 
     /** 時間の経過。transfer で前の端末から返事が無ければ、最後の状態から取り込む。 */
     fun tick() {
+        if (floorDirty && lastPersistMs.let { it == null || nowMs() - it >= FLOOR_PERSIST_MS }) persist()
         val waiting = transfer ?: return
         if (!waiting.adopting && nowMs() - waiting.startedAtMs >= TRANSFER_WAIT_MS) completeTransfer()
     }
@@ -900,12 +901,28 @@ class ConnectClient(
         while (handledClaims.size > MAX_HANDLED_CLAIMS) handledClaims.removeFirst()
     }
 
+    /** 版の床が上がるたびに保存しない（シークの多い相手で書き込みが増える、レビュー p6b34 低-10）。落ちても床が少し低いだけ（巻き戻しの窓が広がる）。 */
+    private var floorDirty = false
+    private var lastPersistMs: Long? = null
+
+    private fun persistFloor() {
+        val last = lastPersistMs
+        if (last != null && nowMs() - last < FLOOR_PERSIST_MS) {
+            floorDirty = true
+            return
+        }
+        persist()
+    }
+
     private fun persist() {
+        floorDirty = false
+        lastPersistMs = nowMs()
         effects.persist(ClientPersisted(records, storeId, cursorFloor, queueFloor, retreated, handledClaims.toList(), expectedJoin?.first, expectedJoin?.second, creatingHousehold))
     }
 
     companion object {
         const val TRANSFER_WAIT_MS = 3_000L
+        const val FLOOR_PERSIST_MS = 30_000L
         const val MAX_EXTRAPOLATION_MS = 9 * 60 * 1000L
         private const val MAX_HANDLED_CLAIMS = 64
     }

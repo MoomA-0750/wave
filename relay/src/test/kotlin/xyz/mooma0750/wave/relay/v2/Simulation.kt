@@ -232,6 +232,7 @@ class SimDevice(
     var currentItemId = "item-0"
     val events = ArrayList<ClientEvent>()
     var persisted = ClientPersisted()
+    var persistCount = 0
     var foreground = true
 
     val client: ConnectClient =
@@ -266,6 +267,7 @@ class SimDevice(
 
                     override fun persist(state: ClientPersisted) {
                         persisted = state
+                        persistCount++
                     }
 
                     override fun accountTag(): String? = accountTag

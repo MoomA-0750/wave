@@ -520,6 +520,26 @@ class ConnectSimulationTest {
     }
 
     @Test
+    fun remoteCursorFloorIsPersistedAtMostEveryThirtySeconds() {
+        setUp()
+        a.startPlaying("queue-A")
+        relay.run()
+        advance(31_000)
+        val before = b.persistCount
+        // A がシークを続ける（カーソルが10回届く）
+        repeat(10) {
+            a.positionMs += 1_000
+            a.pushCursor()
+            relay.run()
+        }
+        assertTrue(b.persistCount - before <= 1, "他の端末のカーソルのたびに保存した: ${b.persistCount - before}")
+        val floor = b.persisted.cursorFloor
+        // 時間が経てば、上がった床を保存する
+        advance(31_000)
+        assertTrue(b.persisted.cursorFloor > floor, "上がった床が保存されない")
+    }
+
+    @Test
     fun sameQueueIsNotPutAgain() {
         setUp()
         var queuePuts = 0
