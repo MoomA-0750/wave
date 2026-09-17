@@ -247,6 +247,7 @@ class AppContainer(
                 baseUrl = BuildConfig.RELAY_V2_URL,
                 relayHost = BuildConfig.RELAY_V2_HOST,
                 storageFile = java.io.File(context.noBackupFilesDir, "connect-v2.bin"),
+                labelsFile = java.io.File(context.noBackupFilesDir, "connect-v2-labels.json"),
                 uiInForeground = { startedActivities > 0 },
             )
         } else {

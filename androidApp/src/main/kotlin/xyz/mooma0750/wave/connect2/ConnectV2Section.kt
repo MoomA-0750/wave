@@ -58,6 +58,10 @@ fun ConnectV2Section(container: AppContainer) {
     val relayStatus by manager.relay.status.collectAsStateWithLifecycle()
     val unreadable by manager.unreadable.collectAsStateWithLifecycle()
     val pairingState by pairing.state.collectAsStateWithLifecycle()
+    val members by manager.members.collectAsStateWithLifecycle()
+    var removing by remember { mutableStateOf<ConnectV2Manager.MemberView?>(null) }
+    var removeBusy by remember { mutableStateOf(false) }
+    var removeMessage by remember { mutableStateOf<String?>(null) }
     var scanning by remember { mutableStateOf(false) }
     var confirmTransfer by remember { mutableStateOf(false) }
     val context = LocalContext.current
@@ -123,6 +127,16 @@ fun ConnectV2Section(container: AppContainer) {
         }
     } else if (info.inHousehold) {
         OutlinedButton(onClick = { pairing.startOffer() }) { Text("家に端末を加える（QR を出す）") }
+        Text("家の端末", style = MaterialTheme.typography.bodyMedium)
+        for (member in members) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(if (member.role == xyz.mooma0750.wave.handoff.v2.Role.Controller) "${member.label}（操作だけ）" else member.label, modifier = Modifier.weight(1f))
+                if (!member.isSelf) {
+                    TextButton(enabled = !removeBusy, onClick = { removing = member }) { Text("外す") }
+                }
+            }
+        }
+        removeMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
     }
 
     if (scanning) {
@@ -171,6 +185,27 @@ fun ConnectV2Section(container: AppContainer) {
         }
     }
     HorizontalDivider()
+
+    removing?.let { member ->
+        AlertDialog(
+            onDismissRequest = { removing = null },
+            title = { Text("家から外す") },
+            text = { Text("${member.label} を家から外します。外した端末は、もう一度 QR と6桁で加えるまで、この家の再生を見たり引き取ったりできません。") },
+            confirmButton = {
+                TextButton(onClick = {
+                    removing = null
+                    removeBusy = true
+                    removeMessage = null
+                    scope.launch {
+                        val removed = manager.removeMember(member.deviceId)
+                        removeBusy = false
+                        removeMessage = if (removed) "${member.label} を外しました" else "外せませんでした（中継への接続を確かめてください）"
+                    }
+                }) { Text("外す") }
+            },
+            dismissButton = { TextButton(onClick = { removing = null }) { Text("やめる") } },
+        )
+    }
 
     if (confirmTransfer) {
         AlertDialog(

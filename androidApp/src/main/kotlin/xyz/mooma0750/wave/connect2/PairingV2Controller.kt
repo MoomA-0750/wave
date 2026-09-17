@@ -143,6 +143,7 @@ class PairingV2Controller(
             }
         when {
             joined == ClientEvent.Joined -> {
+                manager.rememberLabel(xyz.mooma0750.wave.handoff.crypto.EnvelopeSealer.deviceId(established.peerPublicKey), established.peerDeviceName)
                 mutableState.value = State.Done(established.peerDeviceName)
                 Log.i(WaveApplication.LOG_TAG, "pairing-v2 established role=B")
             }
@@ -203,6 +204,7 @@ class PairingV2Controller(
                         if (memberKeys == null || !manager.addMember(memberKeys, established.peerPublicKey)) {
                             fail("家に加えられませんでした。もう一度やり直してください")
                         } else {
+                            manager.rememberLabel(xyz.mooma0750.wave.handoff.crypto.EnvelopeSealer.deviceId(established.peerPublicKey), established.peerDeviceName)
                             Log.i(WaveApplication.LOG_TAG, "pairing-v2 established role=A")
                             mutableState.value = State.Done(established.peerDeviceName)
                         }

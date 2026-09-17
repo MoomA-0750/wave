@@ -17,6 +17,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import xyz.mooma0750.wave.WaveApplication
 import xyz.mooma0750.wave.connect.DeviceIdentity
@@ -51,6 +53,8 @@ class ConnectV2Manager(
     baseUrl: String,
     relayHost: String,
     storageFile: File,
+    /** 家の端末の表示名（加入のときに相手から聞いた名前）。鎖には名前を入れないので、この端末だけが知っている。 */
+    private val labelsFile: File,
     /** 画面が前面にあるか（引き取った曲の再生を始めてよいか）。 */
     private val uiInForeground: () -> Boolean,
 ) {
@@ -119,10 +123,32 @@ class ConnectV2Manager(
     private val mutableInfo = MutableStateFlow(Info())
     val info: StateFlow<Info> = mutableInfo
 
+    /** 家の端末（表示）。名前を知らない端末は ID の頭だけ。 */
+    data class MemberView(
+        val deviceId: String,
+        val label: String,
+        val isSelf: Boolean,
+        val role: Role,
+    )
+
+    private val mutableMembers = MutableStateFlow<List<MemberView>>(emptyList())
+    val members: StateFlow<List<MemberView>> = mutableMembers
+
+    private val labelsJson = Json { ignoreUnknownKeys = true }
+
+    @Volatile
+    private var labels: Map<String, String> = emptyMap()
+
     private fun refreshInfo() {
         val engine = client
         writer = engine?.isWriter == true
         mutableInfo.value = Info(engine != null, engine?.householdId != null, engine?.members?.size ?: 0, engine?.isWriter == true, engine?.hasRetreated == true, engine?.storeResetPending == true)
+        val known = labels
+        mutableMembers.value =
+            engine?.members.orEmpty().map { member ->
+                val self = member.deviceId == identity.deviceId
+                MemberView(member.deviceId, if (self) "この端末" else known[member.deviceId] ?: "端末 ${member.deviceId.take(6)}", self, member.role)
+            }
     }
 
     private val mutableUnreadable = MutableStateFlow(false)
@@ -162,7 +188,26 @@ class ConnectV2Manager(
         }
     }
 
+    private fun loadLabels() {
+        labels = runCatching { labelsJson.decodeFromString<Map<String, String>>(labelsFile.readText()) }.getOrDefault(emptyMap())
+    }
+
+    /** 加入の相手の名前を覚える（表示だけ）。 */
+    fun rememberLabel(
+        deviceId: String,
+        name: String,
+    ) = post {
+        labels = labels + (deviceId to name.take(MAX_LABEL_CHARS))
+        runCatching {
+            val temp = File(labelsFile.parentFile, labelsFile.name + ".tmp")
+            temp.writeText(labelsJson.encodeToString(labels))
+            if (!temp.renameTo(labelsFile)) temp.delete()
+        }
+        refreshInfo()
+    }
+
     private fun load() {
+        loadLabels()
         val initial =
             when (val loaded = storage.load()) {
                 is ConnectV2Storage.Loaded.Ok -> loaded.state
@@ -473,11 +518,39 @@ class ConnectV2Manager(
                 MemberChain.add(keys, chain, member) to member.deviceId
             } ?: return false
         val (record, memberId) = added
+        return appendRecord(record) { members -> members.any { it.deviceId == memberId } }
+    }
+
+    /**
+     * 家から他の端末を外す（player だけ、最後の player は外せない。中継はその端末の接続を切る）。@return 外したか
+     * この端末自身を外すのは、まだ扱わない。
+     */
+    suspend fun removeMember(deviceId: String): Boolean {
+        if (deviceId == identity.deviceId) return false
+        val record =
+            withContext(dispatcher) {
+                val chain = client?.verifiedChain() ?: return@withContext null
+                if (deviceId !in chain.members) return@withContext null
+                MemberChain.remove(keys, chain, deviceId)
+            } ?: return false
+        val removed = appendRecord(record) { members -> members.none { it.deviceId == deviceId } }
+        Log.i(WaveApplication.LOG_TAG, "connect-v2 remove member ok=$removed")
+        return removed
+    }
+
+    /**
+     * 鎖に追記して中継の返事を待つ。返事が来なかったら、鎖を取り直して done（今の端末一覧で済んだか）を見る
+     * （中継では通っているのにやり直すと、二重の記録で必ず失敗する、レビュー p6b34 低-3）。
+     */
+    private suspend fun appendRecord(
+        record: xyz.mooma0750.wave.handoff.v2.ChainRecord,
+        done: (List<xyz.mooma0750.wave.handoff.v2.MemberKeys>) -> Boolean,
+    ): Boolean {
         val reply =
             kotlinx.coroutines.coroutineScope {
                 val reply =
                     async(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
-                        kotlinx.coroutines.withTimeoutOrNull(10_000) { chainReplies.first { it !is RelayV2.Error || it.requestId == null } }
+                        withTimeoutOrNull(10_000) { chainReplies.first { it !is RelayV2.Error || it.requestId == null } }
                     }
                 if (!relay.send(RelayV2.ChainAppend(record))) {
                     reply.cancel()
@@ -487,10 +560,9 @@ class ConnectV2Manager(
             }
         if (reply is RelayV2.ChainOk) return true
         if (reply != null) return false
-        // 返事が来なかった: 中継では追記が通っているかもしれない。鎖を取り直して B がいるかを見る（やり直すと二重の add で必ず失敗する、レビュー p6b34 低-3）
         relay.send(RelayV2.ChainGet(0))
         return withTimeoutOrNull(5_000) {
-            while (withContext(dispatcher) { client?.members?.none { it.deviceId == memberId } != false }) delay(200)
+            while (!withContext(dispatcher) { client?.members?.let(done) == true }) delay(200)
             true
         } == true
     }
@@ -556,5 +628,6 @@ class ConnectV2Manager(
         const val WELCOME_WAIT_MS = 8_000L
         const val STATE_WAIT_MS = 2_000L
         const val TAG_LABEL = "wave-v2-account-tag"
+        const val MAX_LABEL_CHARS = 64
     }
 }
