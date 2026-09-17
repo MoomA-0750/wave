@@ -1,6 +1,7 @@
 package xyz.mooma0750.wave.handoff.v2
 
 import kotlinx.serialization.Serializable
+import xyz.mooma0750.wave.handoff.crypto.Hpke
 
 /** 端末が保存しておくもの（D-2 の頭、D-4 の storeId と版の床、D-9 の退いた印、処理した claimId）。 */
 @Serializable
@@ -184,6 +185,9 @@ class ConnectClient(
     /** 中継につながっている家の端末（中継の申告。表示と D-9 の判断だけに使い、止まる根拠にしない）。 */
     private var online: Set<String> = emptySet()
 
+    /** 今の接続で welcome を処理した（切れたら false。メモリに残った古いカーソルを最新とみなさない、再レビュー 高-A）。 */
+    private var welcomed = false
+
     /** 同時に始めた相手の証拠で、claimOrder を待って保留しているもの（D-8）。 */
     private val deferredEvidence = ArrayList<PlaybackArbiter.Evidence>()
 
@@ -228,6 +232,9 @@ class ConnectClient(
      * 同じアカウントの他の端末が今鳴っているか（D-9 の再生ボタンの判断）。最後のカーソルが再生中で、その端末が中継につながっているとき。
      * 落ちた・通信を失った端末の最後の「再生中」で、再生ボタンを止め続けない（レビュー p6b34 中-2）。通信を失ったまま鳴っている端末は、つながり直したら止まる（L-4）
      */
+    /** 今の接続で最新の状態をそろえた（welcome を処理し、鎖の取り直しを待っている状態が無い）。D-9 の判断はこれが true のときだけ行う。 */
+    val stateSettled: Boolean get() = welcomed && deferred.isEmpty()
+
     fun remotePlayingNow(): Boolean {
         val cursor = latestCursor ?: return false
         val tag = effects.accountTag() ?: return false
@@ -281,11 +288,7 @@ class ConnectClient(
 
     /** 接続が切れた。返事を待っていた書き込みは、つながり直した後に最新の版へ積み直す。 */
     fun onDisconnected() {
-        inflight.values.forEach { if (it.kind == StateKind.Cursor) dirtyCursor = true else dirtyQueue = true }
-        inflight.clear()
-        serverActive = null
-        pendingOwner = null
-        online = emptySet()
+        resetConnection()
         // 取り込む前に切れた引き取りは捨てる（つながり直した後に、古い状態から突然取り込まない。レビュー p6b34 中-4）
         val waiting = transfer
         if (waiting != null && !waiting.adopting) {
@@ -294,10 +297,28 @@ class ConnectClient(
         }
     }
 
+    private fun resetConnection() {
+        inflight.values.forEach { if (it.kind == StateKind.Cursor) dirtyCursor = true else dirtyQueue = true }
+        inflight.clear()
+        serverActive = null
+        pendingOwner = null
+        online = emptySet()
+        welcomed = false
+    }
+
     /** 家を作ると押した。次に受ける最初の鎖が自分の genesis なら受け入れる。 */
     fun beginCreateHousehold() {
         if (chain != null) return
         creatingHousehold = true
+        // 途中でやめた加入の待ちを残さない（自分の genesis を分岐として捨てない、再レビュー 低-L）
+        expectedJoin = null
+        persist()
+    }
+
+    /** 加入の待ちをやめた（時間切れ・取り下げ）。後でつながったときに、黙って家に入らない（再レビュー 低-L）。 */
+    fun cancelJoin() {
+        if (chain != null || expectedJoin == null) return
+        expectedJoin = null
         persist()
     }
 
@@ -317,6 +338,27 @@ class ConnectClient(
         val waiting = transfer
         transfer = null
         if (waiting != null) send(RelayV2.Release(waiting.claimId))
+    }
+
+    /**
+     * 手元の再生が無くなった（ログインの世代が変わった・キューが空になった）。書き手なら、finalTag（その再生のアカウントのタグ）で
+     * 一時停止のカーソルを1回だけ送ってから、手元を捨てる（中継に「再生中」を残して、同じアカウントの他の端末の再生ボタンを止め続けない、再レビュー 中-D）。
+     * 返事は待たない（版が行き違えば書けないが、次に鳴らした端末が上書きする）。
+     */
+    fun endLocal(finalTag: String?) {
+        val current = chain
+        val mine = session
+        val cursor = local
+        val queueRef = localQueueRef
+        if (current != null && mine != null && cursor != null && queueRef != null && finalTag != null && pendingStoreId == null) {
+            val body = cursorBody(null, finalTag)?.copy(playing = false)
+            if (body != null) {
+                val expect = maxOf(latestCursor?.version ?: 0, cursorFloor)
+                val doc = DocSealer.seal(signer, current, DocKind.Cursor, expect + 1, lastOwnCursorHash, epochMs(), ConnectJson.json.encodeToString(CursorBody.serializer(), body).encodeToByteArray())
+                send(RelayV2.StatePut(newId(), StateKind.Cursor, expect, doc))
+            }
+        }
+        clearLocal()
     }
 
     /** アカウントタグができた（Verified になった）。タグが無い間に始めた再生が続いていれば claim する。 */
@@ -339,8 +381,10 @@ class ConnectClient(
     }
 
     private fun onWelcome(welcome: RelayV2.Welcome) {
-        // 前の接続の書き込みは届いていないかもしれない（返事を待っていたものは積み直す）
-        onDisconnected()
+        // 前の接続の書き込みは届いていないかもしれない（返事を待っていたものは積み直す）。
+        // transfer は捨てない（Connected にしてから welcome を処理するまでに送った「ここで再生」を捨てない、再レビュー 低-I。本当に切れたときは onDisconnected が捨てる）
+        resetConnection()
+        welcomed = true
         serverActive = welcome.activeDeviceId
         online = welcome.online.toSet()
         claimOrders.putAll(welcome.claimOrders)
@@ -412,7 +456,12 @@ class ConnectClient(
                         join != null -> {
                             // 加入: 家の ID が Confirm と同じで、頭の後に inviter が自分を加えた記録があること
                             if (result.chain.householdId != join.first.householdId) return effects.event(ClientEvent.ChainForked)
-                            val added = candidate.drop((join.first.headSeq + 1).toInt()).any { it.type == ChainType.Add && it.target?.deviceId == signer.deviceId && it.signerId == join.second }
+                            // 招いた端末が自分を加えた記録があるか、6桁で確かめた A の頭の時点で自分が既に同じ鍵でいる
+                            // （保存を作り直した端末が加わり直す。頭より後に誰かが加えた記録では入らない、再レビュー 中-F）
+                            val existing = result.chain.members[signer.deviceId]
+                            val added =
+                                candidate.drop((join.first.headSeq + 1).toInt()).any { it.type == ChainType.Add && it.target?.deviceId == signer.deviceId && it.signerId == join.second } ||
+                                    (existing != null && existing.addedSeq <= join.first.headSeq && Hpke.serializePublicKey(existing.kx).contentEquals(Hpke.serializePublicKey(opener.kxPub)))
                             // まだ加えられていない（A の追記の前に取った）: 受け入れずに次の chain_changed を待つ
                             if (!added) return
                             expectedJoin = null
@@ -867,9 +916,12 @@ class ConnectClient(
         }
     }
 
-    private fun cursorBody(mine: Session?): CursorBody? {
+    private fun cursorBody(
+        mine: Session?,
+        tagOverride: String? = null,
+    ): CursorBody? {
         val cursor = local ?: return null
-        val tag = effects.accountTag() ?: return null
+        val tag = tagOverride ?: effects.accountTag() ?: return null
         val queueRef = localQueueRef ?: return null
         return CursorBody(
             queueRef = queueRef,

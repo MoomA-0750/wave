@@ -235,7 +235,19 @@ class SimDevice(
     var persistCount = 0
     var foreground = true
 
-    val client: ConnectClient =
+    /** false なら、止めた時点の位置を返せない（再生サービスがいない）。 */
+    var pauseCapturesPosition = true
+    private val role = role
+
+    var client: ConnectClient = newClient(ClientPersisted())
+        private set
+
+    /** プロセスが落ちて起き直した（保存から読み直す）。 */
+    fun restart(initial: ClientPersisted = persisted) {
+        client = newClient(initial)
+    }
+
+    private fun newClient(initial: ClientPersisted): ConnectClient =
         ConnectClient(
             signer = this,
             opener = this,
@@ -243,9 +255,9 @@ class SimDevice(
             send = { message -> relay().fromClient(deviceId, message) },
             effects =
                 object : ConnectClient.Effects {
-                    override fun pause(): ConnectClient.LocalCursor {
+                    override fun pause(): ConnectClient.LocalCursor? {
                         playing = false
-                        return localCursor()
+                        return if (pauseCapturesPosition) localCursor() else null
                     }
 
                     override fun adopt(
@@ -275,6 +287,7 @@ class SimDevice(
             nowMs = clock,
             epochMs = { clock() + epochSkewMs },
             newId = { UUID.randomUUID().toString() },
+            initial = initial,
         )
 
     fun connect() = relay().connect(deviceId) { client.onMessage(it) }

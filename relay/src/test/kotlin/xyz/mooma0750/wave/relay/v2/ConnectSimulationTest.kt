@@ -540,6 +540,113 @@ class ConnectSimulationTest {
     }
 
     @Test
+    fun stateIsSettledOnlyAfterTheWelcomeOfTheCurrentConnection() {
+        setUp()
+        a.startPlaying("queue-A")
+        relay.run()
+        assertTrue(b.client.stateSettled)
+        b.disconnect()
+        // メモリに A のカーソルが残っていても、今の接続でそろえていない
+        assertTrue(b.client.latestCursorBody() != null)
+        assertFalse(b.client.stateSettled, "切れた後も最新の状態をそろえた扱いにした")
+        b.connect()
+        relay.run()
+        assertTrue(b.client.stateSettled)
+    }
+
+    @Test
+    fun welcomeDoesNotDropATransferSentJustBefore() {
+        setUp()
+        a.startPlaying("queue-A")
+        relay.run()
+        relay.hold = { to, message -> to == a.deviceId && message is RelayV2.YieldDelivery }
+        assertTrue(b.client.requestTransfer())
+        relay.run()
+        // つながり直した直後の welcome の処理（RelayClientV2 は welcome の前に Connected にする）
+        b.client.onMessage(relay.store.welcome(b.deviceId, listOf(a.deviceId, b.deviceId)))
+        relay.run()
+        assertFalse(b.events.any { it is ClientEvent.TransferFailed }, "welcome の処理で transfer を捨てた")
+        relay.hold = { _, _ -> false }
+        relay.releaseHeld()
+        relay.run()
+        assertTrue(b.playing, "引き取れない")
+    }
+
+    @Test
+    fun endingLocalPlaybackWritesAPausedCursorWithTheFinalTag() {
+        setUp()
+        a.startPlaying("queue-A")
+        relay.run()
+        assertTrue(b.client.remotePlayingNow())
+        // A でログインが切り替わった（今のタグはもう使えない）
+        a.accountTag = null
+        a.client.endLocal("tag-account-1")
+        relay.run()
+        assertFalse(a.client.isWriter)
+        assertFalse(b.client.remotePlayingNow(), "中継に「再生中」が残った")
+        assertEquals(false, b.client.latestCursorBody()?.second?.playing)
+    }
+
+    @Test
+    fun yieldedWithoutACapturedPositionStillAddsTheElapsedTime() {
+        setUp()
+        a.startPlaying("queue-A", position = 10_000)
+        relay.run()
+        a.pauseCapturesPosition = false
+        now += 60_000
+        assertTrue(b.client.requestTransfer())
+        relay.run()
+        assertTrue(b.playing)
+        assertTrue(b.positionMs >= 70_000, "位置が進んでいない: ${b.positionMs}")
+    }
+
+    @Test
+    fun joinWaitSurvivesAProcessRestartAndCanBeCancelled() {
+        setUp()
+        val c = SimDevice("C", { relay }, { now })
+        c.client.expectJoin(a.client.joinInfo()!!, a.deviceId)
+        c.restart()
+        val chain = a.client.verifiedChain()!!
+        relay.store.append(a.deviceId, MemberChain.add(a, chain, c.keys))
+        c.client.onMessage(RelayV2.Chain(relay.store.chainFrom(0)))
+        assertTrue(c.events.contains(ClientEvent.Joined), "起き直した後に加入を受け入れない")
+        // 取り下げた待ちでは、後で鎖を受けても黙って家に入らない
+        val d = SimDevice("D", { relay }, { now })
+        d.client.expectJoin(a.client.joinInfo()!!, a.deviceId)
+        d.client.cancelJoin()
+        d.restart()
+        relay.store.append(a.deviceId, MemberChain.add(a, a.client.verifiedChain()!!.let { (MemberChain.verify(relay.store.chainFrom(0)) as xyz.mooma0750.wave.handoff.v2.ChainVerification.Ok).chain }, d.keys))
+        d.client.onMessage(RelayV2.Chain(relay.store.chainFrom(0)))
+        assertEquals(null, d.client.householdId)
+    }
+
+    @Test
+    fun creatingDeviceRejectsSomeoneElsesGenesis() {
+        setUp()
+        val c = SimDevice("C", { relay }, { now })
+        c.client.beginCreateHousehold()
+        c.restart()
+        // A の genesis（自分のではない）
+        c.client.onMessage(RelayV2.Chain(relay.store.chainFrom(0)))
+        assertEquals(null, c.client.householdId)
+        assertTrue(c.events.any { it is ClientEvent.ChainInvalid })
+    }
+
+    @Test
+    fun deviceWhoseStorageWasResetCanJoinAgainWithoutANewAdd() {
+        setUp()
+        // B の保存を作り直した（同じ鍵のまま、家の記録だけ無い）
+        b.disconnect()
+        b.restart(xyz.mooma0750.wave.handoff.v2.ClientPersisted())
+        // 加入の手順をやり直す: A は B が既にいるので add を送らない、B は A の頭の鎖に自分がいれば受け入れる
+        b.client.expectJoin(a.client.joinInfo()!!, a.deviceId)
+        b.connect()
+        relay.run()
+        assertEquals(a.client.householdId, b.client.householdId)
+        assertTrue(b.events.contains(ClientEvent.Joined))
+    }
+
+    @Test
     fun sameQueueIsNotPutAgain() {
         setUp()
         var queuePuts = 0
