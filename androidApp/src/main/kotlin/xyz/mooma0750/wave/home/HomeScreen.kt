@@ -144,5 +144,21 @@ private fun DebugPlaybackButtons(container: AppContainer) {
                 container.player.controller().run { seekTo(currentPosition + 120_000) }
             }
         }) { Text("開発用: URL を壊して 2 分進む") }
+        OutlinedButton(onClick = { scope.launch { container.player.addNext(DebugPlayback.unplayableSong) } }) { Text("開発用: 再生できない曲を次に") }
+        OutlinedButton(onClick = {
+            scope.launch {
+                when (val page = container.music.playlist(DebugPlayback.PUBLIC_PLAYLIST_ID)) {
+                    is xyz.mooma0750.wave.core.session.CallResult.Ok ->
+                        container.player.playFrom(page.value.songs, 0, DebugPlayback.PUBLIC_PLAYLIST_ID, page.value.continuation)
+                    is xyz.mooma0750.wave.core.session.CallResult.Failed -> Log.i(WaveApplication.LOG_TAG, "debug playlist failed ${page.kind}")
+                }
+            }
+        }) { Text("開発用: 公開プレイリストを再生") }
+        OutlinedButton(onClick = {
+            scope.launch { container.player.controller().run { seekTo(mediaItemCount - 1, 0L) } }
+        }) { Text("開発用: キューの最後の曲へ") }
+        OutlinedButton(onClick = {
+            scope.launch { container.player.controller().run { if (duration > 10_000) seekTo(duration - 5_000) } }
+        }) { Text("開発用: 曲の終わりへ") }
     }
 }

@@ -145,6 +145,7 @@ class WaveStreamDataSource(
         if (cache.recentlyRejected(videoId)) throw StreamRejectedException(403)
         val cached = cache.get(videoId)
         val first = cached ?: resolve(videoId, sameAs = null)
+        Log.i(WaveApplication.LOG_TAG, "stream open itag=${first.itag} cached=${cached != null} position=${dataSpec.position}")
         return try {
             openUpstream(first, dataSpec)
         } catch (rejected: RejectedException) {

@@ -80,10 +80,21 @@ class PlaybackService : MediaSessionService() {
                     if (playbackState == Player.STATE_ENDED) queueSession.onPlaybackProgressed()
                 }
 
+                override fun onTimelineChanged(
+                    timeline: androidx.media3.common.Timeline,
+                    reason: Int,
+                ) {
+                    // 件数と位置だけ（曲名などは出さない）
+                    if (reason == Player.TIMELINE_CHANGE_REASON_PLAYLIST_CHANGED) {
+                        Log.i(WaveApplication.LOG_TAG, "queue size=${player.mediaItemCount} index=${player.currentMediaItemIndex} source=${queueSession.snapshot().source?.javaClass?.simpleName} exhausted=${queueSession.snapshot().exhausted}")
+                    }
+                }
+
                 override fun onMediaItemTransition(
                     mediaItem: MediaItem?,
                     reason: Int,
                 ) {
+                    Log.i(WaveApplication.LOG_TAG, "transition index=${player.currentMediaItemIndex} reason=$reason")
                     queueSession.onPlaybackProgressed()
                 }
             },
