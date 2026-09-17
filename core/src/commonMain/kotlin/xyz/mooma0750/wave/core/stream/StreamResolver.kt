@@ -308,6 +308,8 @@ class StreamResolver internal constructor(
                 FailureKind.Network -> StreamFailure.Network
                 FailureKind.Http -> StreamFailure.Http
                 FailureKind.Parse -> StreamFailure.Parse
+                // 読み取りでは起きない（書き込みだけが確認を要する）
+                FailureKind.AccountUnverified -> StreamFailure.NotLoggedIn
             }
     }
 }

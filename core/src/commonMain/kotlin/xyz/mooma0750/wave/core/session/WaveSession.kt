@@ -34,6 +34,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
 import xyz.mooma0750.wave.core.auth.AuthManager
 import xyz.mooma0750.wave.core.auth.Credentials
+import xyz.mooma0750.wave.core.auth.normalizeDataSyncId
 import xyz.mooma0750.wave.core.net.AuthRouteViolation
 import xyz.mooma0750.wave.core.net.PLAYBACK_STATS_PATH
 import xyz.mooma0750.wave.core.net.isAuthRouteAllowed
@@ -62,7 +63,29 @@ enum class ExpiredReason { Unauthenticated, RedirectedToSignIn, ConfirmedLoggedO
 
 enum class PremiumStatus { Available, Unavailable, Unknown }
 
-enum class FailureKind { NotLoggedIn, Expired, Suspect, Network, Http, Parse }
+enum class FailureKind {
+    NotLoggedIn,
+    Expired,
+    Suspect,
+    Network,
+    Http,
+    Parse,
+
+    /** 書き込み先のアカウント（DATASYNC_ID）を確かめられていない。書き込み・再生履歴・受け渡しをしない（ADR-0007）。 */
+    AccountUnverified,
+}
+
+/** 書き込み先のアカウントの確認の結果。 */
+enum class AccountVerification {
+    /** 保存している DATASYNC_ID が、accountsList の選択中のアカウントと一致した。 */
+    Verified,
+
+    /** 一致しなかった、または DATASYNC_ID が無い。 */
+    Mismatch,
+
+    /** 通信の失敗などで確かめられなかった（60秒後にもう一度確かめる）。 */
+    Unknown,
+}
 
 sealed interface CallResult<out T> {
     class Ok<T>(
@@ -116,6 +139,9 @@ sealed interface StatsOutcome {
 
     /** 統計 URL の形が想定と違う（ホスト・パス・ポート）。送っていない。 */
     data object ShapeRejected : StatsOutcome
+
+    /** 書き込み先のアカウントを確かめられていない。送っていない。 */
+    data object AccountUnverified : StatsOutcome
 
     data class Sent(
         val status: Int,
@@ -202,6 +228,8 @@ class WaveSession internal constructor(
         var lastConfirmAtMs: Long? = null
         var premium: Deferred<PremiumStatus>? = null
         var premiumUnknownAtMs: Long? = null
+        var verification: Deferred<AccountVerification>? = null
+        var verificationUnknownAtMs: Long? = null
     }
 
     private class Tagged(
@@ -365,6 +393,10 @@ class WaveSession internal constructor(
             return WriteResult.Failed(FailureKind.NotLoggedIn)
         }
         if (expectedGeneration != null && expectedGeneration != generation.id) return WriteResult.Failed(FailureKind.NotLoggedIn)
+        // 書き込み先のアカウントを確かめてから送る（ADR-0007）
+        if (verify(generation) != AccountVerification.Verified) {
+            return if (current.value === generation) WriteResult.Failed(FailureKind.AccountUnverified) else WriteResult.Failed(FailureKind.NotLoggedIn)
+        }
         val deferred = generation.scope.async { runCatchingOutcome(block, parse) }
         val outcome =
             try {
@@ -403,6 +435,7 @@ class WaveSession internal constructor(
         if (generation.credentials == null || credentials.value !== generation.credentials) return StatsOutcome.NotLoggedIn
         if (generation.id != statsGeneration) return StatsOutcome.GenerationMismatch
         val target = playbackStatsTarget(statsUrl) ?: return StatsOutcome.ShapeRejected
+        if (verify(generation) != AccountVerification.Verified) return StatsOutcome.AccountUnverified
         // innertubex のセッションの写しを先に取り、その後で世代がまだ同じかを確かめる（切り替えと行き違って新しいアカウントの写しを渡さない）
         val snapshot = innerTube.sessionSnapshot()
         if (!generation.scope.isActive || current.value !== generation) return StatsOutcome.GenerationMismatch
@@ -456,21 +489,7 @@ class WaveSession internal constructor(
         val paths = xyz.mooma0750.wave.core.music.MusicParsers.keyPathsLike(root, "datasync") +
             xyz.mooma0750.wave.core.music.MusicParsers.keyPathsLike(root, "pageId") +
             xyz.mooma0750.wave.core.music.MusicParsers.keyPathsLike(root, "isSelected")
-        val tokens = mutableListOf<Pair<Boolean, String>>()
-        fun walk(element: kotlinx.serialization.json.JsonElement, selected: Boolean) {
-            when (element) {
-                is kotlinx.serialization.json.JsonObject -> {
-                    val isSelected = (element["isSelected"] as? kotlinx.serialization.json.JsonPrimitive)?.content == "true" || selected
-                    element.forEach { (name, value) ->
-                        if (name == "datasyncIdToken" && value is kotlinx.serialization.json.JsonPrimitive) tokens += isSelected to value.content.substringBefore("||")
-                        walk(value, isSelected)
-                    }
-                }
-                is kotlinx.serialization.json.JsonArray -> element.forEach { walk(it, selected) }
-                else -> Unit
-            }
-        }
-        walk(root, false)
+        val tokens = accountTokensOf(root)
         return AccountIdentityProbe(
             keyPaths = paths,
             savedHasDataSyncId = saved != null,
@@ -480,6 +499,57 @@ class WaveSession internal constructor(
             anyMatchesSaved = saved?.let { s -> tokens.any { it.second == s } },
             normalizedForLocalHmac = saved,
         )
+    }
+
+    /**
+     * 書き込み先のアカウントを、世代ごとに1本だけ確かめる（ADR-0007）。保存している DATASYNC_ID（onBehalfOfUser に送る値）が、
+     * accountsList の選択中のアカウントの datasyncIdToken と一致すれば Verified。Unknown は60秒だけキャッシュする。
+     */
+    private suspend fun verify(generation: Generation): AccountVerification {
+        val saved = generation.credentials?.dataSyncId?.reveal() ?: return AccountVerification.Mismatch
+        val deferred =
+            generationLock.withLock {
+                val cached = generation.verification
+                val unknownAt = generation.verificationUnknownAtMs
+                if (cached != null && !cached.isCancelled && (unknownAt == null || nowMs() - unknownAt < UNKNOWN_CACHE_MS)) {
+                    cached
+                } else {
+                    generation.verificationUnknownAtMs = null
+                    generation.scope
+                        .async {
+                            fetchVerification(generation, saved).also { result ->
+                                if (result == AccountVerification.Unknown) generationLock.withLock { generation.verificationUnknownAtMs = nowMs() }
+                            }
+                        }.also { generation.verification = it }
+                }
+            }
+        return try {
+            deferred.await()
+        } catch (cancellation: CancellationException) {
+            currentCoroutineContext().ensureActive()
+            AccountVerification.Unknown
+        }
+    }
+
+    private suspend fun fetchVerification(
+        generation: Generation,
+        saved: String,
+    ): AccountVerification {
+        if (current.value !== generation) return AccountVerification.Unknown
+        val result =
+            call("accounts_list", block = { it.accountsList(YouTubeClient.WEB_REMIX) }) { response ->
+                ParseOutcome.Parsed(accountTokensOf(json.parseToJsonElement(response.bodyAsTextLimited(MAX_PLAYER_BYTES))))
+            }
+        val tokens = (result as? CallResult.Ok)?.value ?: return AccountVerification.Unknown
+        if (tokens.none { it.first }) return AccountVerification.Unknown
+        return if (tokens.any { it.first && it.second == saved }) AccountVerification.Verified else AccountVerification.Mismatch
+    }
+
+    /** 今のログインの、書き込み先のアカウントの確認（UI・受け渡し用）。 */
+    suspend fun accountVerification(): AccountVerification {
+        val generation = current.value
+        if (generation.credentials == null) return AccountVerification.Mismatch
+        return verify(generation)
     }
 
     private suspend fun <T> runCatchingOutcome(
@@ -762,4 +832,32 @@ internal fun playbackStatsTarget(statsUrl: String): String? {
                 fragment = ""
             }.build()
     return rewritten.takeIf { isAuthRouteAllowed(it) }?.toString()
+}
+
+/**
+ * accountsList の応答から、各アカウントの（選択中か, datasyncIdToken の `||` より前）を集める。
+ * 実アカウントで確かめた場所（2026-09-17、キー名だけ）: accountItem.isSelected と、その下の selectActiveIdentityEndpoint.supportedTokens[].datasyncIdToken.datasyncIdToken
+ */
+internal fun accountTokensOf(root: kotlinx.serialization.json.JsonElement): List<Pair<Boolean, String>> {
+    val tokens = mutableListOf<Pair<Boolean, String>>()
+    fun walk(
+        element: kotlinx.serialization.json.JsonElement,
+        selected: Boolean,
+    ) {
+        when (element) {
+            is kotlinx.serialization.json.JsonObject -> {
+                val isSelected = selected || (element["isSelected"] as? kotlinx.serialization.json.JsonPrimitive)?.content == "true"
+                element.forEach { (name, value) ->
+                    if (name == "datasyncIdToken" && value is kotlinx.serialization.json.JsonPrimitive && value.isString) {
+                        normalizeDataSyncId(value.content)?.let { tokens += isSelected to it }
+                    }
+                    walk(value, isSelected)
+                }
+            }
+            is kotlinx.serialization.json.JsonArray -> element.forEach { walk(it, selected) }
+            else -> Unit
+        }
+    }
+    walk(root, false)
+    return tokens
 }

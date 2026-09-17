@@ -45,6 +45,12 @@ class PlaylistWriteTest {
     private val engine =
         MockEngine { request: HttpRequestData ->
             val body = request.body.toByteArray().decodeToString()
+            if (request.url.encodedPath.endsWith("/account/accounts_list")) {
+                // 書き込みの前の、書き込み先のアカウントの確認（合成）
+                return@MockEngine json(
+                    """{"actions":[{"getMultiPageMenuAction":{"menu":{"multiPageMenuRenderer":{"sections":[{"accountSectionListRenderer":{"contents":[{"accountItemSectionRenderer":{"contents":[{"accountItem":{"isSelected":true,"serviceEndpoint":{"selectActiveIdentityEndpoint":{"supportedTokens":[{"datasyncIdToken":{"datasyncIdToken":"synthetic-sync||x"}}]}}}}]}}]}}]}}}}]}""",
+                )
+            }
             sent += request.url.encodedPath to body
             when {
                 request.url.encodedPath.endsWith("/browse/edit_playlist") -> editResponse()
@@ -62,7 +68,7 @@ class PlaylistWriteTest {
             }
         }
     private val client = createWaveHttpClient(AuthGuardEngine(engine))
-    private val credentials = MutableStateFlow<Credentials?>(assertNotNull(Credentials.fromLogin("SAPISID=synthetic-sapisid", "synthetic-visitor", null, 1)))
+    private val credentials = MutableStateFlow<Credentials?>(assertNotNull(Credentials.fromLogin("SAPISID=synthetic-sapisid", "synthetic-visitor", "synthetic-sync", 1)))
 
     @AfterTest
     fun tearDown() {

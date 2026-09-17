@@ -117,5 +117,6 @@ fun failureMessage(kind: FailureKind?): String =
         FailureKind.Network -> "通信できませんでした"
         FailureKind.Http -> "サーバーから応答がありませんでした"
         FailureKind.Parse -> "応答を読み取れませんでした"
+        FailureKind.AccountUnverified -> "書き込み先のアカウントを確かめられませんでした。少し待ってからもう一度試してください"
         null -> ""
     }

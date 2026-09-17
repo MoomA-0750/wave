@@ -51,10 +51,18 @@ class WaveSessionTest {
     private var sts: Int? = 20702
     private var handler: suspend MockRequestHandleScope.(HttpRequestData) -> HttpResponseData = { json(accountMenu("Synthetic User")) }
 
+    /** accountsList の応答（書き込みの前の確認）。sent には記録しない。null なら handler に任せる。 */
+    private var accountsListHandler: (suspend MockRequestHandleScope.(HttpRequestData) -> HttpResponseData)? = { json(accountsList(selectedDataSyncId = "synthetic-sync")) }
+
     private val engine =
         MockEngine { request ->
-            sent += request
-            handler(request)
+            val accounts = accountsListHandler
+            if (accounts != null && request.url.encodedPath.endsWith("/account/accounts_list")) {
+                accounts(request)
+            } else {
+                sent += request
+                handler(request)
+            }
         }
     private val client = createWaveHttpClient(AuthGuardEngine(engine))
     private val credentials = MutableStateFlow<Credentials?>(null)
@@ -588,6 +596,48 @@ class WaveSessionTest {
         }
 
     @Test
+    fun writesAndStatsWaitForTheWriteAccountToBeVerified(): Unit =
+        runBlocking {
+            val like: suspend (com.metrolist.innertubex.InnerTube) -> io.ktor.client.statement.HttpResponse = { it.likeVideo(YouTubeClient.WEB_REMIX, "synthetic-id") }
+            handler = { json("{}") }
+            // 選択中のアカウントが別（ブランドアカウントに切り替わっている等）
+            accountsListHandler = { json(accountsList(selectedDataSyncId = "someone-else", otherDataSyncId = "synthetic-sync")) }
+            val session = loggedInSession()
+            assertEquals(AccountVerification.Mismatch, session.accountVerification())
+            assertEquals(WriteResult.Failed(FailureKind.AccountUnverified), session.callWrite("like", like) { ParseOutcome.Parsed(Unit) })
+            assertEquals(StatsOutcome.AccountUnverified, session.sendPlaybackStats("https://s.youtube.com/api/stats/playback?ns=yt", session.currentGenerationId(), "c", "30.0"))
+            assertTrue(sent.none { it.url.encodedPath.contains("like") || it.url.encodedPath.startsWith("/api/stats") }, "確かめられないまま送った")
+        }
+
+    @Test
+    fun verificationFailureIsRetriedAfterAMinuteAndMatchingAccountIsVerified(): Unit =
+        runBlocking {
+            var calls = 0
+            accountsListHandler = {
+                calls++
+                // 5xx は読み取りの再試行で吸収されるので、再試行しない失敗（400）で確かめる
+                if (calls == 1) respond("", HttpStatusCode.BadRequest) else json(accountsList(selectedDataSyncId = "synthetic-sync"))
+            }
+            val session = loggedInSession()
+            assertEquals(AccountVerification.Unknown, session.accountVerification())
+            assertEquals(AccountVerification.Unknown, session.accountVerification(), "60秒以内に確かめ直した")
+            now.addAndGet(61_000)
+            assertEquals(AccountVerification.Verified, session.accountVerification())
+            assertEquals(AccountVerification.Verified, session.accountVerification())
+            assertTrue(calls >= 2)
+        }
+
+    @Test
+    fun loginWithoutDataSyncIdCannotWrite(): Unit =
+        runBlocking {
+            val session = session()
+            credentials.value = assertNotNull(Credentials.fromLogin("SAPISID=synthetic-sapisid", null, null, 3))
+            awaitState(session) { it == SessionState.Active }
+            assertEquals(AccountVerification.Mismatch, session.accountVerification())
+            assertEquals(WriteResult.Failed(FailureKind.AccountUnverified), session.callWrite("like", { it.likeVideo(YouTubeClient.WEB_REMIX, "x") }) { ParseOutcome.Parsed(Unit) })
+        }
+
+    @Test
     fun writesWhileLoggedOutAreNotSent(): Unit =
         runBlocking {
             val session = session()
@@ -705,6 +755,14 @@ class WaveSessionTest {
         }
 
     private fun MockRequestHandleScope.json(body: String) = respond(body, HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+
+    /** 実アカウントで確かめたキーの場所の合成（値は合成）。 */
+    private fun accountsList(selectedDataSyncId: String?, otherDataSyncId: String? = null): String {
+        fun item(selected: Boolean, id: String) =
+            """{"accountItem":{"isSelected":$selected,"serviceEndpoint":{"selectActiveIdentityEndpoint":{"supportedTokens":[{"datasyncIdToken":{"datasyncIdToken":"$id||x"}}]}}}}"""
+        val items = listOfNotNull(selectedDataSyncId?.let { item(true, it) }, otherDataSyncId?.let { item(false, it) })
+        return """{"actions":[{"getMultiPageMenuAction":{"menu":{"multiPageMenuRenderer":{"sections":[{"accountSectionListRenderer":{"contents":[{"accountItemSectionRenderer":{"contents":[${items.joinToString(",")}]}}]}}]}}}}]}"""
+    }
 
     private fun accountMenu(name: String?): String =
         if (name == null) {
