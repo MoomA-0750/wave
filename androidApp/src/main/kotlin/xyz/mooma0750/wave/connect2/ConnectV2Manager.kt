@@ -463,26 +463,36 @@ class ConnectV2Manager(
         memberKeysJson: String,
         peerPublicKey: ByteArray,
     ): Boolean {
-        val record =
+        val added =
             kotlinx.coroutines.withContext(dispatcher) {
                 val chain = client?.verifiedChain() ?: return@withContext null
                 val member = runCatching { xyz.mooma0750.wave.handoff.v2.ConnectJson.json.decodeFromString(xyz.mooma0750.wave.handoff.v2.MemberKeys.serializer(), memberKeysJson) }.getOrNull() ?: return@withContext null
                 if (member.role != Role.Player) return@withContext null
                 // 6桁で確かめた相手の身元鍵と同じであること（レビュー p6b34 低-3）
                 if (!runCatching { Base64.getUrlDecoder().decode(member.identityPub) }.getOrNull().contentEquals(peerPublicKey)) return@withContext null
-                MemberChain.add(keys, chain, member)
+                MemberChain.add(keys, chain, member) to member.deviceId
             } ?: return false
-        return kotlinx.coroutines.coroutineScope {
-            val reply =
-                async(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
-                    kotlinx.coroutines.withTimeoutOrNull(10_000) { chainReplies.first { it !is RelayV2.Error || it.requestId == null } }
+        val (record, memberId) = added
+        val reply =
+            kotlinx.coroutines.coroutineScope {
+                val reply =
+                    async(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
+                        kotlinx.coroutines.withTimeoutOrNull(10_000) { chainReplies.first { it !is RelayV2.Error || it.requestId == null } }
+                    }
+                if (!relay.send(RelayV2.ChainAppend(record))) {
+                    reply.cancel()
+                    return@coroutineScope RelayV2.Error("unsent")
                 }
-            if (!relay.send(RelayV2.ChainAppend(record))) {
-                reply.cancel()
-                return@coroutineScope false
+                reply.await()
             }
-            reply.await() is RelayV2.ChainOk
-        }
+        if (reply is RelayV2.ChainOk) return true
+        if (reply != null) return false
+        // 返事が来なかった: 中継では追記が通っているかもしれない。鎖を取り直して B がいるかを見る（やり直すと二重の add で必ず失敗する、レビュー p6b34 低-3）
+        relay.send(RelayV2.ChainGet(0))
+        return withTimeoutOrNull(5_000) {
+            while (withContext(dispatcher) { client?.members?.none { it.deviceId == memberId } != false }) delay(200)
+            true
+        } == true
     }
 
     /** B 側: 6桁の照合の後、A の Confirm の床で加入を待つ。@return 待ち始めたか（保存が読めない・既に別の家に入っている等は false） */
