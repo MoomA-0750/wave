@@ -23,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import xyz.mooma0750.wave.core.auth.AuthState
+import xyz.mooma0750.wave.debug.DebugActions
 import xyz.mooma0750.wave.home.HomeScreen
 import xyz.mooma0750.wave.login.LoginScreen
 import xyz.mooma0750.wave.login.LoginViewModel
@@ -36,10 +37,16 @@ import xyz.mooma0750.wave.search.SearchViewModel
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        DebugActions.handle(intent, (application as WaveApplication).container)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val container = (application as WaveApplication).container
+        DebugActions.handle(intent, container)
         setContent {
             MaterialTheme {
                 val authState by container.authManager.state.collectAsStateWithLifecycle()
