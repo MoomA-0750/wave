@@ -13,6 +13,8 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -60,6 +62,9 @@ class ConnectManager(
     private val flowLock = Mutex()
     private val unpairFlush = Mutex()
 
+    /** つながったままの間に解除が残ったとき、送り直しの繰り返しを始め直す。 */
+    private val unpairRetryKick = MutableStateFlow(0)
+
     private val mutableEvents = MutableSharedFlow<String>(extraBufferCapacity = 8)
 
     /** 画面に出す短い文言。 */
@@ -84,9 +89,15 @@ class ConnectManager(
                 }
             }
         }
-        // 中継につながるたびに、相手に届いていない解除を知らせ直す
+        // 中継につながっている間、相手に届いていない解除を知らせ直す。相手がつながるのは、こちらがつながった後のこともあるので、
+        // つながった時だけでなく、残っている間は一定の間隔で送り直す（中継は相手がつながったことを知らせない）
         scope.launch {
-            relay.status.collect { status -> if (status == RelayClient.Status.Connected) scope.launch { flushUnpairs() } }
+            combine(relay.status, unpairRetryKick) { status, _ -> status }.collectLatest { status ->
+                while (status == RelayClient.Status.Connected && pairs.unpairedPending().isNotEmpty()) {
+                    flushUnpairs()
+                    delay(UNPAIR_RETRY_INTERVAL_MS)
+                }
+            }
         }
     }
 
@@ -159,11 +170,12 @@ class ConnectManager(
         pairs.markUnpaired(peerDeviceId)
         relay.acquire()
         try {
-            val delivered = awaitRelay() == RelayClient.Status.Connected && sendUnpair(pair)
+            val delivered = awaitRelay() == RelayClient.Status.Connected && unpairFlush.withLock { sendUnpair(pair) }
             if (delivered) {
                 pairs.remove(peerDeviceId)
                 notify("${pair.peerName} とのペアリングを解除しました")
             } else {
+                unpairRetryKick.value++
                 notify("${pair.peerName} とのペアリングを解除しました。${pair.peerName} がつながっていないので、次に両方がつながったときに知らせます（すぐに外すには ${pair.peerName} でも解除してください）")
             }
         } finally {
@@ -188,7 +200,7 @@ class ConnectManager(
         }
 
     private suspend fun flushUnpairs() {
-        if (!unpairFlush.tryLock()) return
+        unpairFlush.lock()
         try {
             pairs.unpairedPending().forEach { pair ->
                 if (relay.status.value != RelayClient.Status.Connected) return
@@ -406,5 +418,6 @@ class ConnectManager(
         const val ACK_RESEND_DELAY_MS = 3_000L
         const val ACK_RESEND_GRACE_MS = 5_000L
         const val UNPAIR_OFFLINE_WAIT_MS = 3_000L
+        const val UNPAIR_RETRY_INTERVAL_MS = 60_000L
     }
 }
