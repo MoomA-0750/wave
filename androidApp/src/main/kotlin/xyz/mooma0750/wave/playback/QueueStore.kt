@@ -30,11 +30,16 @@ class AtomicQueueFile(
     override fun read(): String? = runCatching { atomic.readFully().decodeToString() }.getOrNull()
 
     override fun write(text: String) {
-        val stream = atomic.startWrite()
+        val stream =
+            try {
+                atomic.startWrite()
+            } catch (_: java.io.IOException) {
+                return
+            }
         try {
             stream.write(text.encodeToByteArray())
             atomic.finishWrite(stream)
-        } catch (error: java.io.IOException) {
+        } catch (_: java.io.IOException) {
             atomic.failWrite(stream)
         }
     }

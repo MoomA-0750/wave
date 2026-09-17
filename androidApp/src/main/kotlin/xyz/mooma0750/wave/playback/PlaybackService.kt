@@ -26,6 +26,7 @@ import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.plus
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -44,7 +45,15 @@ import java.util.UUID
 /** 再生の本体。画面が無くても動き、キューの続き（サジェスト）もここで取る。 */
 @OptIn(UnstableApi::class)
 class PlaybackService : MediaSessionService() {
-    private val scope = MainScope()
+    // 保存などの例外でサービスごと落とさない（種類だけを記録する）
+    private val scope =
+        MainScope() +
+            kotlinx.coroutines.CoroutineExceptionHandler { _, error ->
+                Log.e(WaveApplication.LOG_TAG, "uncaught in PlaybackService type=${error::class.qualifiedName}")
+            }
+
+    /** 直前のエラーが、この曲だけの失敗だったか（次が無くて飛ばせず止まった場合に、続きが来たら再開してよい）。 */
+    private var lastErrorWasThisSong = false
     private var session: MediaSession? = null
     private var queue: QueueSession? = null
     private val skipGuard = SkipGuard(MAX_CONSECUTIVE_SKIPS)
@@ -79,7 +88,13 @@ class PlaybackService : MediaSessionService() {
                 ).setHandleAudioBecomingNoisy(true)
                 .setWakeMode(C.WAKE_MODE_NETWORK)
                 .build()
-        val queueSession = QueueSession(Media3QueuePlayer(player), RepositoryContentSource(container.music), scope, newItemId = { UUID.randomUUID().toString() })
+        val queueSession =
+            QueueSession(
+                Media3QueuePlayer(player, stoppedOnSkippableError = { lastErrorWasThisSong }),
+                RepositoryContentSource(container.music),
+                scope,
+                newItemId = { UUID.randomUUID().toString() },
+            )
         queue = queueSession
         val likeController =
             LikeController(
@@ -105,7 +120,9 @@ class PlaybackService : MediaSessionService() {
                     // 例外文や原因には URL が入りうるので、コードと型名だけを記録する
                     val cause = error.cause
                     Log.w(WaveApplication.LOG_TAG, "playback error code=${error.errorCodeName} cause=${cause?.javaClass?.simpleName} reason=${(cause as? StreamResolveException)?.reason}")
-                    if (skipGuard.onError(failureOf(error), player.hasNextMediaItem())) {
+                    val failure = failureOf(error)
+                    lastErrorWasThisSong = failure == PlaybackFailure.ThisSong
+                    if (skipGuard.onError(failure, player.hasNextMediaItem(), android.os.SystemClock.elapsedRealtime())) {
                         // この曲だけの失敗は飛ばして続ける。一時的な失敗・どの曲でも起きる失敗では止める
                         player.seekToNextMediaItem()
                         player.prepare()
@@ -125,6 +142,15 @@ class PlaybackService : MediaSessionService() {
 
                 override fun onIsPlayingChanged(isPlaying: Boolean) {
                     historyTracker.onIsPlayingChanged(isPlaying)
+                    val now = android.os.SystemClock.elapsedRealtime()
+                    if (isPlaying) {
+                        skipGuard.onPlaying(now)
+                        lastErrorWasThisSong = false
+                        // 復元したキューを再生し始めたときなど、曲の遷移を待たずに続きの取得を判断する
+                        queueSession.onPlaybackProgressed()
+                    } else {
+                        skipGuard.onNotPlaying(now)
+                    }
                     periodicSaveJob?.cancel()
                     if (isPlaying) {
                         periodicSaveJob =
@@ -142,7 +168,6 @@ class PlaybackService : MediaSessionService() {
                 }
 
                 override fun onPlaybackStateChanged(playbackState: Int) {
-                    if (playbackState == Player.STATE_READY) skipGuard.onPlaying()
                     if (playbackState == Player.STATE_ENDED) queueSession.onPlaybackProgressed()
                 }
 
@@ -152,7 +177,7 @@ class PlaybackService : MediaSessionService() {
                 ) {
                     // 件数と位置だけ（曲名などは出さない）
                     if (reason == Player.TIMELINE_CHANGE_REASON_PLAYLIST_CHANGED) {
-                        Log.i(WaveApplication.LOG_TAG, "queue size=${player.mediaItemCount} index=${player.currentMediaItemIndex} source=${queueSession.snapshot().source?.javaClass?.simpleName} exhausted=${queueSession.snapshot().exhausted}")
+                        Log.i(WaveApplication.LOG_TAG, "queue size=${player.mediaItemCount} index=${player.currentMediaItemIndex}")
                     }
                 }
 
@@ -374,7 +399,7 @@ class PlaybackService : MediaSessionService() {
                 return if (controller.isTrusted) {
                     MediaSession.ConnectionResult
                         .AcceptedResultBuilder(session, controller)
-                        .setAvailablePlayerCommands(withoutShuffleMode(if (controller.isTrusted) MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS else MediaSession.ConnectionResult.DEFAULT_UNTRUSTED_PLAYER_COMMANDS))
+                        .setAvailablePlayerCommands(withoutShuffleMode(MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS))
                         .build()
                 } else {
                     MediaSession.ConnectionResult.reject()

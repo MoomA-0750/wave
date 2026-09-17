@@ -138,14 +138,18 @@ class QueueSession(
     private var exhausted = true
     private var fetchJob: Job? = null
 
-    /** 保存から戻した continuation を使っている。古くなって拒否されたら、最後の曲からラジオをやり直す。 */
-    private var usingRestoredContinuation = false
+    /** 古くなって拒否された continuation。同じものでラジオのやり直しを繰り返さない。 */
+    private var rescuedContinuation: String? = null
+
+    /** ラジオのページがすべてキューにある曲だった回数（続けて）。 */
+    private var emptyRadioPages = 0
 
     /** 1曲を選んで再生する。その曲から始まるラジオをサジェストとして追加していく。 */
     fun playSong(song: Song) {
         startGeneration()
-        player.replace(listOf(item(song, ItemOrigin.Source)), startIndex = 0)
+        // 文脈を先に決める（replace の中で Player が同期で曲の遷移を知らせ、取得の判断が走っても古い文脈を使わない）
         startRadio(song.videoId)
+        player.replace(listOf(item(song, ItemOrigin.Source)), startIndex = 0)
         maybeFetch()
     }
 
@@ -162,29 +166,38 @@ class QueueSession(
     ) {
         if (songs.isEmpty()) return
         startGeneration()
-        if (shuffle) {
-            player.replace(songs.shuffled(random).map { item(it, ItemOrigin.Source) }, 0)
-        } else {
-            player.replace(songs.map { item(it, ItemOrigin.Source) }, startIndex.coerceIn(songs.indices))
-        }
+        val ordered = if (shuffle) songs.shuffled(random) else songs
+        // 文脈を先に決める（playSong と同じ理由）。continuation が無いプレイリストも、ラジオへの切り替えは
+        // 終わりが近づいたときに fetchOnce が全体リピートを見て行う
         if (playlistId != null) {
             source = QueueSource.Playlist(playlistId)
             continuation = playlistContinuation
             radioPlaylistId = null
             exhausted = false
-            if (playlistContinuation == null) switchToRadio()
         } else {
-            startRadio(songs.last().videoId)
+            startRadio(ordered.last().videoId)
         }
+        player.replace(ordered.map { item(it, ItemOrigin.Source) }, if (shuffle) 0 else startIndex.coerceIn(songs.indices))
         maybeFetch()
     }
 
     fun addNext(song: Song) {
+        val resumeAt = endedAtLastItem()
         player.insertAfterCurrent(listOf(item(song, ItemOrigin.UserAdded)))
+        // 最後まで行って止まっているなら、足した曲から続ける（再生を押すと終わった曲の先頭に戻ってしまうため）
+        if (resumeAt != null) player.resumeAt(resumeAt)
     }
 
     fun addToEnd(song: Song) {
+        val resumeAt = endedAtLastItem()
         player.append(listOf(item(song, ItemOrigin.UserAdded)))
+        if (resumeAt != null) player.resumeAt(resumeAt)
+    }
+
+    /** 最後の項目で止まっているなら、その次（足す項目）の位置。 */
+    private fun endedAtLastItem(): Int? {
+        val items = player.items
+        return if (player.ended && items.isNotEmpty() && player.currentIndex == items.lastIndex) items.size else null
     }
 
     fun remove(itemId: String) {
@@ -242,19 +255,19 @@ class QueueSession(
     /** 保存したキューを、再生を始めずに戻す。ログインの照合は呼び出し側で済ませる。 */
     fun restore(saved: SavedQueue) {
         startGeneration()
-        player.restore(saved.items, saved.currentIndex, saved.positionMs)
         source = saved.source
         continuation = saved.continuation
         radioPlaylistId = saved.radioPlaylistId
         exhausted = saved.exhausted
-        usingRestoredContinuation = saved.continuation != null
+        player.restore(saved.items, saved.currentIndex, saved.positionMs)
     }
 
     fun snapshot(): QueueSnapshot = QueueSnapshot(generation, player.items, player.currentIndex, source, continuation, exhausted)
 
     private fun startGeneration() {
         generation++
-        usingRestoredContinuation = false
+        rescuedContinuation = null
+        emptyRadioPages = 0
         fetchJob?.cancel()
         fetchJob = null
     }
@@ -326,10 +339,9 @@ class QueueSession(
                     return if (switchToRadio()) 1 else 0
                 }
                 when (val result = content.playlistPage(currentSource.playlistId, token)) {
-                    is CallResult.Failed -> restartFromStaleContinuation(requestGeneration, result.kind)
+                    is CallResult.Failed -> restartFromStaleContinuation(requestGeneration, token, result)
                     is CallResult.Ok -> {
                         if (requestGeneration != generation) return null
-                        usingRestoredContinuation = false
                         continuation = result.value.continuation
                         val added = appendItems(result.value.songs.map { item(it, ItemOrigin.Source) })
                         val switched = continuation == null && !player.repeatAll && switchToRadio()
@@ -347,10 +359,9 @@ class QueueSession(
                         continuation = token,
                     )
                 when (result) {
-                    is CallResult.Failed -> restartFromStaleContinuation(requestGeneration, result.kind)
+                    is CallResult.Failed -> token?.let { restartFromStaleContinuation(requestGeneration, it, result) }
                     is CallResult.Ok -> {
                         if (requestGeneration != generation) return null
-                        usingRestoredContinuation = false
                         val page = result.value
                         page.playlistId?.let { radioPlaylistId = it }
                         continuation = page.continuation
@@ -358,7 +369,13 @@ class QueueSession(
                         val known = player.items.map { it.song.videoId }.toMutableSet()
                         val fresh = page.songs.filter { known.add(it.videoId) }.map { item(it, ItemOrigin.Suggestion) }
                         val added = appendItems(fresh)
-                        if (page.continuation == null || added == 0) exhausted = true
+                        when {
+                            page.continuation == null -> exhausted = true
+                            added > 0 -> emptyRadioPages = 0
+                            // ライブラリの曲に寄ったラジオでは、1ページすべてがキューにある曲のことがある。続きがあれば数回まで続けて取る
+                            ++emptyRadioPages >= MAX_EMPTY_RADIO_PAGES -> exhausted = true
+                            else -> return 1
+                        }
                         added
                     }
                 }
@@ -367,24 +384,30 @@ class QueueSession(
     }
 
     /**
-     * 保存から戻した continuation が古くなって拒否された（HTTP のエラー・解析できない応答）なら、最後の曲からラジオをやり直す。
-     * 通信の失敗やログインの問題では、continuation のせいとは限らないのでやり直さない。
+     * continuation が古くなって拒否された（4xx のうち 429 以外・解析できない応答）なら、最後の曲からラジオをやり直す。
+     * 保存から戻した・長く止めていた・端末から受け取ったなど、出どころは問わない。同じ continuation では1回だけ。
+     * 通信の失敗・レート制限・5xx・ログインの問題では、continuation のせいとは限らないのでやり直さない。
      * @return 続けて取るなら 1、失敗として扱うなら null
      */
     private fun restartFromStaleContinuation(
         requestGeneration: Long,
-        kind: FailureKind,
+        token: String,
+        failure: CallResult.Failed,
     ): Int? {
-        if (requestGeneration != generation || !usingRestoredContinuation) return null
-        if (kind != FailureKind.Http && kind != FailureKind.Parse) return null
-        usingRestoredContinuation = false
+        if (requestGeneration != generation || rescuedContinuation == token || continuation != token) return null
+        val stale =
+            failure.kind == FailureKind.Parse ||
+                (failure.kind == FailureKind.Http && failure.status != null && failure.status in 400..499 && failure.status != 429)
+        if (!stale) return null
+        rescuedContinuation = token
         if (source is QueueSource.Playlist && player.repeatAll) return null
         return if (switchToRadio()) 1 else null
     }
 
     private fun appendItems(items: List<QueueItem>): Int {
         if (items.isEmpty()) return 0
-        val wasEnded = player.ended
+        // 最後の項目で止まっているときだけ、足した先頭から続ける（途中の曲で一時的な失敗で止めたものは勝手に再開しない）
+        val wasEnded = player.ended && player.currentIndex == player.items.lastIndex
         val firstNewIndex = player.items.size
         player.append(items)
         if (wasEnded) player.resumeAt(firstNewIndex)
@@ -412,6 +435,9 @@ class QueueSession(
 
         /** 自動で続きを足したときに残す、今の曲より前の項目の数。 */
         const val MAX_PLAYED_ITEMS = 100
+
+        /** ラジオのページがすべて重複でも、続けて取る回数の上限。 */
+        const val MAX_EMPTY_RADIO_PAGES = 3
 
         fun radioPlaylistIdOf(videoId: String): String = "RDAMVM$videoId"
     }

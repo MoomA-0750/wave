@@ -13,6 +13,7 @@ import xyz.mooma0750.wave.core.session.CallResult
 import xyz.mooma0750.wave.core.session.FailureKind
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
@@ -25,6 +26,9 @@ class QueueSessionTest {
         override var repeatAll = false
         var resumedAt: Int? = null
 
+        /** Media3 のように、replace の中から同期で呼び返す。 */
+        var onReplaced: (() -> Unit)? = null
+
         override fun replace(
             items: List<QueueItem>,
             startIndex: Int,
@@ -33,6 +37,7 @@ class QueueSessionTest {
             this.items += items
             currentIndex = startIndex
             ended = false
+            onReplaced?.invoke()
         }
 
         override fun append(items: List<QueueItem>) {
@@ -222,7 +227,8 @@ class QueueSessionTest {
                 queue.onPlaybackProgressed()
                 advanceUntilIdle()
             }
-            assertEquals(1, content.upNextCalls.size, "新規0件なのに取り続けている")
+            // 重複だけのページでも続きがあれば数回までは取るが、それ以上は取り続けない
+            assertEquals(QueueSession.MAX_EMPTY_RADIO_PAGES, content.upNextCalls.size, "新規0件なのに取り続けている")
             assertTrue(queue.snapshot().exhausted)
         }
 
@@ -519,5 +525,109 @@ class QueueSessionTest {
             }
             assertTrue(player.currentIndex <= QueueSession.MAX_PLAYED_ITEMS, "再生済みが刈られていない: ${player.currentIndex}")
             assertTrue(player.items.size <= QueueSession.MAX_PLAYED_ITEMS + 1 + 5)
+        }
+
+    @Test
+    fun transientStopInTheMiddleIsNotResumedByArrivingSuggestions() =
+        runTest {
+            val player = FakePlayer()
+            val gate = CompletableDeferred<Unit>()
+            val content = FakeContent().apply {
+                this.gate = gate
+                upNextResult = { _, _, _ -> page("r1", "r2", continuation = null) }
+            }
+            val queue = session(player, content)
+            queue.playFrom(listOf(song("a"), song("b"), song("c")), startIndex = 0, playlistId = null, playlistContinuation = null)
+            advanceUntilIdle()
+            // 途中の曲 a で一時的な失敗で止まっている（最後の項目ではない）
+            player.ended = true
+            gate.complete(Unit)
+            advanceUntilIdle()
+            assertEquals(null, player.resumedAt, "止めた曲を飛ばして勝手に再開した")
+        }
+
+    @Test
+    fun repeatAllAlbumWithoutContinuationDoesNotMixInRadio() =
+        runTest {
+            val player = FakePlayer().apply { repeatAll = true }
+            val content = FakeContent().apply { upNextResult = { _, _, _ -> page("r1", "r2", continuation = null) } }
+            val queue = session(player, content)
+            queue.playFrom(listOf(song("p1"), song("p2")), startIndex = 0, playlistId = "OLAK", playlistContinuation = null)
+            advanceUntilIdle()
+            assertEquals(listOf("p1", "p2"), player.videoIds())
+            assertEquals(emptyList(), content.upNextCalls)
+        }
+
+    @Test
+    fun radioPagesFullOfDuplicatesKeepFetchingAFewTimes() =
+        runTest {
+            val player = FakePlayer()
+            var call = 0
+            val content =
+                FakeContent().apply {
+                    upNextResult = { _, _, _ ->
+                        call++
+                        if (call < 3) page("a", continuation = "c$call") else page("new", continuation = "c$call")
+                    }
+                }
+            val queue = session(player, content)
+            queue.playSong(song("a"))
+            advanceUntilIdle()
+            assertEquals(listOf("a", "new"), player.videoIds(), "重複だけのページで尽きた扱いにした")
+        }
+
+    @Test
+    fun staleContinuationIsRescuedOnceRegardlessOfWhereItCameFrom() =
+        runTest {
+            val player = FakePlayer()
+            var failWith: CallResult.Failed? = CallResult.Failed(FailureKind.Http, 429)
+            val content =
+                FakeContent().apply {
+                    upNextResult = { seed, _, token ->
+                        when {
+                            token == null && seed == "a" -> page("b", continuation = "old")
+                            token != null -> failWith!!
+                            else -> page("fresh-$seed", continuation = null)
+                        }
+                    }
+                }
+            val queue = session(player, content)
+            queue.playSong(song("a"))
+            advanceUntilIdle()
+            player.currentIndex = 1
+            queue.onPlaybackProgressed()
+            advanceUntilIdle()
+            // 429 は continuation のせいとは限らない
+            assertEquals(listOf("a", "b"), player.videoIds())
+            failWith = CallResult.Failed(FailureKind.Http, 400)
+            queue.onPlaybackProgressed()
+            advanceUntilIdle()
+            assertEquals(listOf("a", "b", "fresh-b"), player.videoIds())
+        }
+
+    @Test
+    fun synchronousCallbacksDuringReplaceSeeTheNewContext() =
+        runTest {
+            val player = FakePlayer()
+            val content = FakeContent().apply { upNextResult = { _, _, _ -> page("x", continuation = null) } }
+            val queue = session(player, content)
+            queue.playSong(song("old"))
+            advanceUntilIdle()
+            player.onReplaced = { queue.onPlaybackProgressed() }
+            content.upNextCalls.clear()
+            queue.playSong(song("new"))
+            advanceUntilIdle()
+            assertTrue(content.upNextCalls.all { it.first == "new" }, "古い曲のラジオを取った: ${content.upNextCalls}")
+        }
+
+    @Test
+    fun addingAfterTheQueueEndedResumesAtTheAddedSong() =
+        runTest {
+            val player = FakePlayer()
+            val queue = session(player, FakeContent())
+            queue.playFrom(listOf(song("a")), startIndex = 0, playlistId = "PL", playlistContinuation = null)
+            player.ended = true
+            queue.addToEnd(song("b"))
+            assertEquals(1, player.resumedAt)
         }
 }

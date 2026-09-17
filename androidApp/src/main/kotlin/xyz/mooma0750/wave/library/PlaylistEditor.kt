@@ -71,10 +71,14 @@ class PlaylistEditor(
                 if (song == null) {
                     "「$title」を作りました"
                 } else {
-                    val added = music.addToPlaylist(result.value, song.videoId, generation)
+                    val added = music.addToPlaylist(result.value, song.videoId, generation, knownEmpty = true)
                     Log.i(WaveApplication.LOG_TAG, "playlist add result=${added::class.simpleName}")
                     onChanged()
-                    if (added == AddToPlaylistResult.Added) "「$title」を作って追加しました" else "「$title」を作りましたが、追加できたか確認できませんでした"
+                    when (added) {
+                        AddToPlaylistResult.Added -> "「$title」を作って追加しました"
+                        AddToPlaylistResult.Unknown -> "「$title」を作りましたが、追加できたか確認できませんでした"
+                        else -> "「$title」を作りましたが、追加できませんでした"
+                    }
                 }
             is WriteResult.Failed -> "プレイリストを作れませんでした"
             WriteResult.Unknown -> "プレイリストを作れたか確認できませんでした。ライブラリを読み直すので、作られていないことを確かめてから作り直してください"

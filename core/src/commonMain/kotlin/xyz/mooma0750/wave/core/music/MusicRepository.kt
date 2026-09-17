@@ -120,7 +120,10 @@ class MusicRepository(
         playlistId: String,
         videoId: String,
         expectedGeneration: Long = currentLoginGeneration(),
+        /** 作ったばかりで空と分かっているプレイリストでは、重複の確認の読み取りを省く（作成直後は読めないことがある）。 */
+        knownEmpty: Boolean = false,
     ): AddToPlaylistResult {
+        if (knownEmpty) return writeAdd(playlistId, videoId, expectedGeneration)
         var continuation: String? = null
         var pages = 0
         do {
@@ -136,12 +139,19 @@ class MusicRepository(
             // 続きのトークンが循環しても止まるように、ページ数に上限を置く（1ページ100曲で5000曲）
             if (++pages >= MAX_PLAYLIST_PAGES && continuation != null) return AddToPlaylistResult.NotChecked(FailureKind.Parse)
         } while (continuation != null)
-        return when (val result = editPlaylist("add", expectedGeneration) { it.addToPlaylist(YouTubeClient.WEB_REMIX, playlistId, videoId) }) {
+        return writeAdd(playlistId, videoId, expectedGeneration)
+    }
+
+    private suspend fun writeAdd(
+        playlistId: String,
+        videoId: String,
+        expectedGeneration: Long,
+    ): AddToPlaylistResult =
+        when (val result = editPlaylist("add", expectedGeneration) { it.addToPlaylist(YouTubeClient.WEB_REMIX, playlistId, videoId) }) {
             is WriteResult.Done -> AddToPlaylistResult.Added
             is WriteResult.Failed -> AddToPlaylistResult.Failed(result.kind, result.status)
             WriteResult.Unknown -> AddToPlaylistResult.Unknown
         }
-    }
 
     /** プレイリストから1項目を外す。setVideoId はプレイリストのページ（PlaylistPage.setVideoIds）の値。 */
     suspend fun removeFromPlaylist(

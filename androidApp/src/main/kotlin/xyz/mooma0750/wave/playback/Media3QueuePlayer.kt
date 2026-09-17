@@ -13,6 +13,8 @@ import xyz.mooma0750.wave.core.queue.QueuePlayer
  */
 class Media3QueuePlayer(
     private val player: Player,
+    /** エラーで止まっているとき、それが「この曲だけの失敗で、次が無くて飛ばせなかった」ものか。一時的な失敗なら再開しない。 */
+    private val stoppedOnSkippableError: () -> Boolean = { false },
 ) : QueuePlayer {
     private val itemsById = HashMap<String, QueueItem>()
 
@@ -24,7 +26,9 @@ class Media3QueuePlayer(
 
     /** 最後まで行って止まっている、またはエラーで止まっている（次が無くて飛ばせなかった）。追加が来たら再開する。 */
     override val ended: Boolean
-        get() = player.playbackState == Player.STATE_ENDED || (player.playbackState == Player.STATE_IDLE && player.playerError != null)
+        get() =
+            player.playbackState == Player.STATE_ENDED ||
+                (player.playbackState == Player.STATE_IDLE && player.playerError != null && stoppedOnSkippableError())
 
     override val repeatAll: Boolean
         get() = player.repeatMode == Player.REPEAT_MODE_ALL
