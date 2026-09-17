@@ -74,6 +74,21 @@ object DebugActions {
                     container.logout()
                 }
                 "shuffle" -> player.shuffleUpcoming()
+                // 最後のページと確かめられるか（番号・ページ数・真偽値だけ）
+                "playlist_end_probe" ->
+                    (container.music.libraryPlaylists() as? CallResult.Ok)?.value?.forEachIndexed { index, summary ->
+                        if (!summary.editable && summary.playlistId != xyz.mooma0750.wave.core.music.MusicRepository.LIKED_SONGS) return@forEachIndexed
+                        var continuation: String? = null
+                        var pages = 0
+                        var last: xyz.mooma0750.wave.core.music.PlaylistPage? = null
+                        do {
+                            val page = container.music.playlist(summary.playlistId, continuation) as? CallResult.Ok ?: break
+                            last = page.value
+                            continuation = page.value.continuation
+                            pages++
+                        } while (continuation != null && pages < 50)
+                        Log.i(WaveApplication.LOG_TAG, "probe end playlist=$index pages=$pages songsLast=${last?.songs?.size} endConfirmed=${last?.endConfirmed} keys=${if (last?.endConfirmed == false) container.music.lastKeyPaths else emptySet()}")
+                    }
                 // プレイリストの書き込みの確認（DebugReceiver からだけ）。作った ID はメモリに置くだけで出さない
                 "playlist_create" ->
                     when (val result = container.music.createPlaylist(intent.getStringExtra("title") ?: "wave 確認用")) {

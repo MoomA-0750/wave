@@ -91,6 +91,9 @@ interface QueuePlayer {
     /** 今の項目より後ろを、この並びに置き換える（今の項目の再生は続ける）。 */
     fun replaceAfterCurrent(items: List<QueueItem>)
 
+    /** 先頭から count 件を取り除く（再生済みの項目を刈る）。今の項目の再生は続ける。 */
+    fun removeFirst(count: Int)
+
     fun remove(itemId: String)
 
     fun jumpTo(itemId: String)
@@ -385,7 +388,17 @@ class QueueSession(
         val firstNewIndex = player.items.size
         player.append(items)
         if (wasEnded) player.resumeAt(firstNewIndex)
+        prunePlayed()
         return items.size
+    }
+
+    /**
+     * ラジオの続きを足し続けると、再生済みの項目が際限なく溜まる（保存・表示・コントローラーへの通知が重くなる）。
+     * 自動で続きを足したときだけ、今の曲より前を MAX_PLAYED_ITEMS 件に刈る。
+     */
+    private fun prunePlayed() {
+        val excess = player.currentIndex - MAX_PLAYED_ITEMS
+        if (excess > 0) player.removeFirst(excess)
     }
 
     private fun item(
@@ -396,6 +409,9 @@ class QueueSession(
     companion object {
         /** 残りがこの件数以下になったら続きを取る。 */
         const val FETCH_WHEN_REMAINING_AT_MOST = 2
+
+        /** 自動で続きを足したときに残す、今の曲より前の項目の数。 */
+        const val MAX_PLAYED_ITEMS = 100
 
         fun radioPlaylistIdOf(videoId: String): String = "RDAMVM$videoId"
     }

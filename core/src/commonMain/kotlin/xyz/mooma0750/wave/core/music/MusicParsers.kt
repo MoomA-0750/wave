@@ -81,9 +81,10 @@ internal object MusicParsers {
             root.path("onResponseReceivedActions").arrayItems().firstNotNullOfOrNull {
                 it.path("appendContinuationItemsAction", "continuationItems") as? JsonArray
             }
+        val shelf = findAll(root, "musicPlaylistShelfRenderer").firstOrNull()
         val items: List<JsonObject> =
             appended?.arrayItems()
-                ?: findAll(root, "musicPlaylistShelfRenderer").firstOrNull().path("contents").arrayItems()
+                ?: shelf.path("contents").arrayItems()
         val rows =
             items.mapNotNull { item ->
                 val row = item.path("musicResponsiveListItemRenderer").asObject() ?: return@mapNotNull null
@@ -99,8 +100,25 @@ internal object MusicParsers {
                 ?: findAll(root, "musicDetailHeaderRenderer").firstOrNull().path("title", "runs").arrayItems().joinToString("") { it.path("text").string().orEmpty() }.takeIf { it.isNotBlank() }
         // 自分のプレイリストは編集用のヘッダを持つ（実アカウントの応答でレンダラ名だけを確かめる、決定 E7）
         val editable = findAll(root, EDITABLE_PLAYLIST_HEADER).isNotEmpty()
-        return PlaylistPage(title, rows.map { it.first }, continuation, rows.map { it.second }, editable)
+        // 最後のページと言えるのは、知っている形（続きの追加 or 曲の棚）が見つかり、その中に名前に continuation を含むキーが無いときだけ
+        // （知らない形の続きがあるのに読み取れなかった場合を、最後のページと誤認しない）。
+        // 自分のプレイリストでは、曲の棚の外（sectionListRenderer.continuations）に「おすすめ」の欄の続きがある。曲の続きではないので見ない
+        // （実アカウントでキー名の場所だけ確認、空のプレイリストにも付いている、2026-09-17）
+        val songArea: JsonElement? = appended ?: shelf
+        val endConfirmed = continuation == null && songArea != null && !containsKeyLike(songArea, "continuation")
+        return PlaylistPage(title, rows.map { it.first }, continuation, rows.map { it.second }, editable, endConfirmed)
     }
+
+    private fun containsKeyLike(
+        root: JsonElement?,
+        fragment: String,
+    ): Boolean =
+        when (root) {
+            // 続きのページを包むだけのキー（続きがあることを意味しない）は数えない
+            is JsonObject -> root.any { (name, value) -> (name !in CONTINUATION_CONTAINERS && name.contains(fragment, ignoreCase = true)) || containsKeyLike(value, fragment) }
+            is JsonArray -> root.any { containsKeyLike(it, fragment) }
+            else -> false
+        }
 
     /** browse/edit_playlist の応答の status（`STATUS_SUCCEEDED` など）。 */
     fun editPlaylistStatus(root: JsonObject): String? = root.path("status").string()
@@ -217,6 +235,31 @@ internal object MusicParsers {
 
     /** プレイリストのカードごとの、メニューの項目のアイコン名（値の無い列挙名だけ）。編集できるかの手がかりを調べる用（決定 E7）。 */
     fun playlistCardMenuIcons(root: JsonObject): List<Set<String>> = findAll(root, "musicTwoRowItemRenderer").map(::menuIconsOf)
+
+    /** 名前に fragment を含むキーの場所（キー名の並びだけ、値は含めない）。調査用（決定 E7）。 */
+    fun keyPathsLike(
+        root: JsonElement,
+        fragment: String,
+    ): Set<String> {
+        val paths = mutableSetOf<String>()
+        fun walk(
+            element: JsonElement,
+            path: String,
+        ) {
+            when (element) {
+                is JsonObject ->
+                    element.forEach { (name, value) ->
+                        val next = if (path.isEmpty()) name else "$path.$name"
+                        if (name.contains(fragment, ignoreCase = true)) paths += next
+                        walk(value, next)
+                    }
+                is JsonArray -> element.forEach { walk(it, "$path[]") }
+                else -> Unit
+            }
+        }
+        walk(root, "")
+        return paths
+    }
 
     /** key が現れる場所を、キー名の並び（配列は [] ）だけで集める。値は含めない（決定 E7）。 */
     fun keyPaths(
@@ -373,6 +416,7 @@ internal object MusicParsers {
     private const val ARTIST_PAGE = "MUSIC_PAGE_TYPE_ARTIST"
     private const val ALBUM_PLAYLIST_PREFIX = "OLAK5uy_"
     private const val EDIT_ICON = "EDIT"
+    private val CONTINUATION_CONTAINERS = setOf("appendContinuationItemsAction", "continuationItems")
     private val CONTENT_RENDERERS =
         listOf(
             "musicTwoRowItemRenderer",

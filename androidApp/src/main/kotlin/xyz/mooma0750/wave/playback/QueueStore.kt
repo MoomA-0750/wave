@@ -62,8 +62,8 @@ class QueueStore(
         saved: SavedQueue,
         epochAtCapture: Long,
     ) {
-        val text = SavedQueue.encode(saved)
-        withContext(io) { writeIfCurrent(text, epochAtCapture) }
+        // JSON にするのも IO のスレッドで（長いキューでメインスレッドを止めない）
+        withContext(io) { writeIfCurrent(SavedQueue.encode(saved), epochAtCapture) }
     }
 
     /** onDestroy から呼ぶ。scope を止める前に、呼び出したスレッドで書き終える。 */

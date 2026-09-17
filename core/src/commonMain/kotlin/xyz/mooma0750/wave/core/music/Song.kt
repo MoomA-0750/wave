@@ -65,6 +65,11 @@ data class PlaylistPage(
     val setVideoIds: List<String?> = emptyList(),
     /** 自分が編集できるプレイリストか（最初のページのヘッダで判定する）。 */
     val editable: Boolean = false,
+    /**
+     * continuation が無いことを、知っている形の応答から確かめられた（最後のページ）。
+     * 形が変わって続きを読み取れなかっただけの場合は false（重複を確かめる書き込みで「全部読んだ」と誤認しない）。
+     */
+    val endConfirmed: Boolean = false,
 )
 
 /** プレイリストへの追加の結果（決定 G-1: 先に全ページを読んで重複を確かめる）。 */

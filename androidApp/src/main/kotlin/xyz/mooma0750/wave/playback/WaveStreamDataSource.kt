@@ -148,7 +148,9 @@ class WaveStreamDataSource(
         openedSpec = dataSpec
         if (cache.recentlyRejected(videoId)) throw StreamRejectedException(403)
         val cached = cache.get(videoId)
-        val first = cached ?: resolve(videoId, sameAs = null)
+        // 途中の位置から開き直すときは、期限切れでも前に使ったファイル（itag・長さ・更新日時）と同じものだけを使う。
+        // 別のエンコードの途中から継ぎ足さない（一致しなければ StreamChanged でその曲を飛ばす）
+        val first = cached ?: resolve(videoId, sameAs = if (dataSpec.position > 0) cache.peek(videoId) else null)
         Log.i(WaveApplication.LOG_TAG, "stream open itag=${first.itag} cached=${cached != null} position=${dataSpec.position}")
         return try {
             openUpstream(first, dataSpec)

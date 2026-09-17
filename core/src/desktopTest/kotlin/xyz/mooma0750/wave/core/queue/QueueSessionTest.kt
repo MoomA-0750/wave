@@ -57,6 +57,12 @@ class QueueSessionTest {
             restoredPositionMs = positionMs
         }
 
+        override fun removeFirst(count: Int) {
+            val n = count.coerceAtMost(currentIndex)
+            repeat(n) { items.removeAt(0) }
+            currentIndex -= n
+        }
+
         override fun replaceAfterCurrent(items: List<QueueItem>) {
             while (this.items.size > currentIndex + 1) this.items.removeAt(this.items.size - 1)
             this.items += items
@@ -495,5 +501,23 @@ class QueueSessionTest {
             advanceUntilIdle()
             assertEquals(1, content.upNextCalls.size)
             assertEquals("token", queue.snapshot().continuation)
+        }
+
+    @Test
+    fun playedItemsArePrunedWhenSuggestionsAreAppended() =
+        runTest {
+            val player = FakePlayer()
+            var n = 0
+            val content = FakeContent().apply { upNextResult = { _, _, _ -> page(*(0 until 5).map { "r${n++}" }.toTypedArray(), continuation = "more") } }
+            val queue = session(player, content)
+            queue.playSong(song("seed"))
+            advanceUntilIdle()
+            repeat(40) {
+                player.currentIndex = player.items.size - 1
+                queue.onPlaybackProgressed()
+                advanceUntilIdle()
+            }
+            assertTrue(player.currentIndex <= QueueSession.MAX_PLAYED_ITEMS, "再生済みが刈られていない: ${player.currentIndex}")
+            assertTrue(player.items.size <= QueueSession.MAX_PLAYED_ITEMS + 1 + 5)
         }
 }

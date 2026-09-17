@@ -39,6 +39,9 @@ class PlaylistWriteTest {
     private var editResponse: suspend MockRequestHandleScope.() -> HttpResponseData = { json("""{"status":"STATUS_SUCCEEDED"}""") }
     private var browseFails = false
 
+    /** 1ページ目の続きの形を、知らない名前に変える（YouTube 側の変更の想定）。 */
+    private var unknownContinuation = false
+
     private val engine =
         MockEngine { request: HttpRequestData ->
             val body = request.body.toByteArray().decodeToString()
@@ -48,7 +51,13 @@ class PlaylistWriteTest {
                 request.url.encodedPath.endsWith("/playlist/create") -> json("""{"playlistId":"PLsynthetic"}""")
                 request.url.encodedPath.endsWith("/browse") && browseFails -> respond("", HttpStatusCode.InternalServerError)
                 request.url.encodedPath.endsWith("/browse") ->
-                    json(fixture(if ("continuation" in body || request.url.parameters.names().any { it.contains("continuation") || it == "ctoken" }) "browse_playlist_continuation" else "browse_playlist"))
+                    if ("continuation" in body || request.url.parameters.names().any { it.contains("continuation") || it == "ctoken" }) {
+                        json(fixture("browse_playlist_continuation"))
+                    } else if (unknownContinuation) {
+                        json(fixture("browse_playlist").replace("continuationItemRenderer", "futureContinuationRenderer").replace("nextContinuationData", "futureContinuationData").replace("\"continuations\"", "\"futureContinuations\""))
+                    } else {
+                        json(fixture("browse_playlist"))
+                    }
                 else -> respond("", HttpStatusCode.NotFound)
             }
         }
@@ -87,6 +96,15 @@ class PlaylistWriteTest {
             val videoId = requireNotNull(Regex("\"videoId\":\"([^\"]+)\"").find(fixture("browse_playlist_continuation"))).groupValues[1]
             assertEquals(AddToPlaylistResult.AlreadyInPlaylist, repository.addToPlaylist("PLx", videoId))
             assertEquals(0, edits())
+        }
+
+    @Test
+    fun unknownContinuationShapeIsNotTreatedAsTheEnd(): Unit =
+        runBlocking {
+            unknownContinuation = true
+            val repository = repository()
+            assertIs<AddToPlaylistResult.NotChecked>(repository.addToPlaylist("PLx", "not-in-playlist"))
+            assertEquals(0, edits(), "続きを読めないまま追加した")
         }
 
     @Test

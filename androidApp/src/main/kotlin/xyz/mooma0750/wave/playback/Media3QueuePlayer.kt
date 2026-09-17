@@ -83,6 +83,13 @@ class Media3QueuePlayer(
         itemsById.keys.retainAll(kept)
     }
 
+    override fun removeFirst(count: Int) {
+        val n = count.coerceAtMost(player.currentMediaItemIndex)
+        if (n <= 0) return
+        (0 until n).forEach { itemsById.remove(player.getMediaItemAt(it).mediaId) }
+        player.removeMediaItems(0, n)
+    }
+
     override fun remove(itemId: String) {
         val index = indexOf(itemId) ?: return
         player.removeMediaItem(index)

@@ -79,6 +79,7 @@ class MusicRepository(
         ) { response ->
             val root = json(response)
             lastRendererNames = MusicParsers.rendererNames(root)
+            lastKeyPaths = MusicParsers.keyPathsLike(root, "continuation")
             if (MusicParsers.isSignInPrompt(root)) ParseOutcome.LoggedOutResponse else ParseOutcome.Parsed(MusicParsers.playlistPage(root))
         }
 
@@ -128,6 +129,8 @@ class MusicRepository(
                 is CallResult.Ok -> {
                     if (page.value.songs.any { it.videoId == videoId }) return AddToPlaylistResult.AlreadyInPlaylist
                     continuation = page.value.continuation
+                    // 続きが読めなかっただけかもしれない（応答の形の変化）なら、全部読んだとはみなさず追加しない
+                    if (continuation == null && !page.value.endConfirmed) return AddToPlaylistResult.NotChecked(FailureKind.Parse)
                 }
             }
             // 続きのトークンが循環しても止まるように、ページ数に上限を置く（1ページ100曲で5000曲）

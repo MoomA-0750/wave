@@ -16,12 +16,14 @@ class LibraryParsersTest {
         assertTrue(page.songs.all { it.videoId.isNotBlank() && it.title.isNotBlank() && it.artists.isNotEmpty() && it.durationSeconds != null })
         assertNotNull(page.title)
         assertNotNull(page.continuation)
+        assertFalse(page.endConfirmed)
     }
 
     @Test
     fun playlistContinuationPage() {
         val page = MusicParsers.playlistPage(fixture("browse_playlist_continuation"))
         assertEquals(3, page.songs.size)
+        assertTrue(page.endConfirmed, "最後のページと確かめられない")
     }
 
     @Test
@@ -64,13 +66,14 @@ class LibraryParsersTest {
         val empty =
             Json.parseToJsonElement(
                 """{"header":{"musicEditablePlaylistDetailHeaderRenderer":{"header":{"musicResponsiveHeaderRenderer":{"title":{"runs":[{"text":"x"}]}}}}},
-                "contents":{"twoColumnBrowseResultsRenderer":{"secondaryContents":{"sectionListRenderer":{"contents":[{"musicPlaylistShelfRenderer":{"contents":[
+                "contents":{"twoColumnBrowseResultsRenderer":{"secondaryContents":{"sectionListRenderer":{"continuations":[{"nextContinuationData":{"continuation":"suggestions"}}],"contents":[{"musicPlaylistShelfRenderer":{"contents":[
                 {"musicSideAlignedItemRenderer":{"startItems":[{"messageRenderer":{"text":{"runs":[{"text":"no songs"}]}}}]}}]}}]}}}}}""",
             ) as JsonObject
         assertFalse(MusicParsers.isSignInPrompt(empty))
         val page = MusicParsers.playlistPage(empty)
         assertTrue(page.songs.isEmpty())
         assertTrue(page.editable)
+        assertTrue(page.endConfirmed)
     }
 
     private fun fixture(name: String): JsonObject =
