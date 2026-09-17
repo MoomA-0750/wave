@@ -26,7 +26,10 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import xyz.mooma0750.wave.AppContainer
 import xyz.mooma0750.wave.WaveApplication
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import xyz.mooma0750.wave.debug.DebugPlayback
+import xyz.mooma0750.wave.nowplaying.MiniPlayer
 import xyz.mooma0750.wave.debug.StreamCheck
 import xyz.mooma0750.wave.core.session.AccountResult
 import xyz.mooma0750.wave.core.session.PremiumStatus
@@ -64,8 +67,8 @@ fun HomeScreen(
         Log.i(WaveApplication.LOG_TAG, "premium=$status session=${container.session.state.value}")
     }
 
-    Scaffold { padding ->
-        Column(Modifier.fillMaxSize().padding(padding).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    Scaffold(bottomBar = { MiniPlayer(container.player) }) { padding ->
+        Column(Modifier.fillMaxSize().padding(padding).padding(24.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Text(
                 when (val current = account) {
                     null -> "アカウントを確認しています…"
@@ -111,30 +114,18 @@ fun HomeScreen(
     }
 }
 
-/** debug ビルドだけの再生確認（S2）。 */
+/** debug ビルドだけの再生確認。 */
 @Composable
 private fun DebugPlaybackButtons(container: AppContainer) {
-    val context = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
     androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedButton(onClick = {
-            scope.launch {
-                DebugPlayback.controller(context).run {
-                    setMediaItem(DebugPlayback.fixedItem())
-                    prepare()
-                    play()
-                }
-            }
-        }) { Text("開発用: 固定の曲を再生") }
-        OutlinedButton(onClick = {
-            scope.launch { DebugPlayback.controller(context).run { if (isPlaying) pause() else play() } }
-        }) { Text("再生/一時停止") }
+        OutlinedButton(onClick = { scope.launch { container.player.playSong(DebugPlayback.fixedSong) } }) { Text("開発用: 固定の曲を再生") }
         OutlinedButton(onClick = {
             scope.launch {
                 val corrupted = container.streamCache.corruptForDebug(DebugPlayback.VIDEO_ID)
                 Log.i(WaveApplication.LOG_TAG, "debug corrupt cached url done=$corrupted")
                 // バッファの外へ飛んで、DataSource を開き直させる
-                DebugPlayback.controller(context).run { seekTo(currentPosition + 120_000) }
+                container.player.controller().run { seekTo(currentPosition + 120_000) }
             }
         }) { Text("開発用: URL を壊して 2 分進む") }
     }

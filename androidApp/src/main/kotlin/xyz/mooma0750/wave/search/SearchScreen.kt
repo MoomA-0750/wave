@@ -22,6 +22,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -34,10 +35,13 @@ import xyz.mooma0750.wave.core.session.FailureKind
 fun SearchScreen(
     viewModel: SearchViewModel,
     onSongClick: (Song) -> Unit,
+    onPlayNext: (Song) -> Unit,
+    onAddToQueue: (Song) -> Unit,
     onBack: () -> Unit,
     bottomBar: @Composable () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val keyboard = LocalSoftwareKeyboardController.current
     Scaffold(
         topBar = { TopAppBar(title = { Text("検索") }, navigationIcon = { TextButton(onClick = onBack) { Text("戻る") } }) },
         bottomBar = bottomBar,
@@ -50,7 +54,11 @@ fun SearchScreen(
                 singleLine = true,
                 placeholder = { Text("曲名・アーティスト") },
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { viewModel.search() }),
+                keyboardActions =
+                    KeyboardActions(onSearch = {
+                        keyboard?.hide()
+                        viewModel.search()
+                    }),
             )
             when {
                 state.failure != null -> Text(failureMessage(state.failure), Modifier.padding(16.dp))
@@ -58,7 +66,10 @@ fun SearchScreen(
             }
             LazyColumn(Modifier.fillMaxSize()) {
                 itemsIndexed(state.songs, key = { index, song -> "$index-${song.videoId}" }) { index, song ->
-                    SongRow(song, onClick = { onSongClick(song) })
+                    SongRow(song, onClick = { onSongClick(song) }) {
+                        TextButton(onClick = { onPlayNext(song) }) { Text("次に") }
+                        TextButton(onClick = { onAddToQueue(song) }) { Text("追加") }
+                    }
                     if (index == state.songs.lastIndex && state.continuation != null) {
                         LaunchedEffect(state.songs.size) { viewModel.loadMore() }
                     }

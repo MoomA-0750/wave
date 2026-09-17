@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 android {
@@ -38,6 +39,7 @@ dependencies {
     implementation(libs.androidx.media3.session)
     implementation(libs.androidx.media3.datasource.okhttp)
     implementation(libs.kotlinx.coroutines.guava)
+    implementation(libs.kotlinx.serialization.json)
 
     testImplementation(libs.junit4)
     testImplementation(kotlin("test"))

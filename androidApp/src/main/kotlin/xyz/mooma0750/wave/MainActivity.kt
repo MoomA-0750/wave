@@ -26,7 +26,7 @@ import xyz.mooma0750.wave.core.auth.AuthState
 import xyz.mooma0750.wave.home.HomeScreen
 import xyz.mooma0750.wave.login.LoginScreen
 import xyz.mooma0750.wave.login.LoginViewModel
-import xyz.mooma0750.wave.playback.PlayerConnection
+import xyz.mooma0750.wave.nowplaying.MiniPlayer
 import xyz.mooma0750.wave.search.SearchScreen
 import xyz.mooma0750.wave.search.SearchViewModel
 import kotlinx.coroutines.launch
@@ -62,16 +62,11 @@ class MainActivity : ComponentActivity() {
                             val scope = rememberCoroutineScope()
                             SearchScreen(
                                 viewModel { SearchViewModel(container.music) },
-                                onSongClick = { song ->
-                                    scope.launch {
-                                        container.player.controller().run {
-                                            setMediaItem(PlayerConnection.mediaItemOf(song))
-                                            prepare()
-                                            play()
-                                        }
-                                    }
-                                },
+                                onSongClick = { song -> scope.launch { container.player.playSong(song) } },
+                                onPlayNext = { song -> scope.launch { container.player.addNext(song) } },
+                                onAddToQueue = { song -> scope.launch { container.player.addToEnd(song) } },
                                 onBack = { searching = false },
+                                bottomBar = { MiniPlayer(container.player) },
                             )
                         } else {
                             HomeScreen(container, obtainedAtEpochMs = state.obtainedAtEpochMs, onReLogin = { reLogin = true }, onSearch = { searching = true })

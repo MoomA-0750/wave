@@ -111,7 +111,7 @@ class AppContainer(
     val player = PlayerConnection(context)
 
     /** 解決済みのストリーム URL。ログアウトで消す。 */
-    val streamCache = ResolvedStreamCache(stream.resolver)
+    val streamCache = ResolvedStreamCache(stream.resolver, SystemClock::elapsedRealtime)
 
     init {
         // ログインが反映されたら、プレイヤーの設定を先に取っておく（最初の再生を速くする）

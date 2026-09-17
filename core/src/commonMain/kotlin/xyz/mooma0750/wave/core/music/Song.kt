@@ -1,6 +1,9 @@
 package xyz.mooma0750.wave.core.music
 
+import kotlinx.serialization.Serializable
+
 /** 画面に依らない曲の表現。UI・再生キュー・端末間の受け渡しで共通に使う。 */
+@Serializable
 data class Song(
     val videoId: String,
     val title: String,
@@ -14,11 +17,13 @@ data class Song(
         get() = listOfNotNull(artists.joinToString(", ") { it.name }.takeIf { it.isNotEmpty() }, album?.title).joinToString(" • ")
 }
 
+@Serializable
 data class ArtistRef(
     val name: String,
     val browseId: String?,
 )
 
+@Serializable
 data class AlbumRef(
     val title: String,
     val browseId: String?,
