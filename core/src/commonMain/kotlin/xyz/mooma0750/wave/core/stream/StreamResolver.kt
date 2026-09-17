@@ -1,5 +1,6 @@
 package xyz.mooma0750.wave.core.stream
 
+import com.metrolist.innertubex.InnerTubeLogger
 import com.metrolist.innertubex.bodyAsTextLimited
 import com.metrolist.innertubex.cipher.PlayerConfigRepository
 import com.metrolist.innertubex.cipher.RemotePlayerConfigStore
@@ -23,6 +24,8 @@ class ResolvedStream internal constructor(
     val itag: Int,
     val mimeType: String,
     val contentLength: Long?,
+    /** 同じ itag でも、再エンコードなどで中身が変わったことを見分けるための値。 */
+    val lastModified: String?,
     private val url: String,
     /** 単調時計（StreamResolver の nowMs）のミリ秒。 */
     val expiresAtMs: Long,
@@ -31,7 +34,7 @@ class ResolvedStream internal constructor(
     fun revealUrl(): String = url
 
     /** debug の確認用: 署名の対象の expire を変えた（取得すると 403 になる）写しを作る。再解決の経路を通すためだけに使う。 */
-    fun corruptedForDebug(): ResolvedStream = ResolvedStream(videoId, itag, mimeType, contentLength, url.replace("expire=", "expire=1"), expiresAtMs)
+    fun corruptedForDebug(): ResolvedStream = ResolvedStream(videoId, itag, mimeType, contentLength, lastModified, url.replace("expire=", "expire=1"), expiresAtMs)
 
     override fun toString(): String = "ResolvedStream(videoId=$videoId, itag=$itag, mimeType=$mimeType, contentLength=$contentLength)"
 }
@@ -50,6 +53,9 @@ enum class StreamFailure {
 
     /** 求めた itag が応答に無い（再解決で別の itag に切り替えないため）。 */
     ItagUnavailable,
+
+    /** 同じ itag だが中身（長さ・更新日時）が変わった。途中位置から継ぎ足せない。 */
+    StreamChanged,
 
     /** 使える音声フォーマットが無い。 */
     NoAudioFormat,
@@ -103,13 +109,28 @@ class StreamResolver internal constructor(
     private var cachedConfig: PlayerConfigCache? = null
 
     /**
-     * @param requiredItag 指定したら、その itag だけを使う（再解決で途中位置から別ファイルを継ぎ足さないため）
+     * @param sameAs 再解決のとき、前に使ったストリーム。同じ itag・長さ・更新日時のものだけを使う
+     *   （途中位置から別ファイルを継ぎ足さないため）
      */
     suspend fun resolve(
         videoId: String,
-        requiredItag: Int? = null,
+        sameAs: ResolvedStream? = null,
+    ): ResolveResult = resolve(videoId, sameAs?.itag, sameAs)
+
+    /** @param requiredItag 指定したら、その itag だけを使う */
+    suspend fun resolve(
+        videoId: String,
+        requiredItag: Int?,
+    ): ResolveResult = resolve(videoId, requiredItag, sameAs = null)
+
+    private suspend fun resolve(
+        videoId: String,
+        requiredItag: Int?,
+        sameAs: ResolvedStream?,
     ): ResolveResult {
         val config = playerConfig() ?: return ResolveResult.Failed(StreamFailure.PlayerConfigUnavailable)
+        // 期限は /player を呼ぶ前の時刻から数える（解読にかかった時間の分だけ短く見積もる）
+        val requestedAtMs = nowMs()
 
         val player =
             session.call(
@@ -149,8 +170,11 @@ class StreamResolver internal constructor(
             }
         val chosen = deciphered.firstOrNull { it.url != null && it.signatureCipher == null && it.cipher == null }
         if (chosen == null) {
-            invalidatePlayerConfig()
+            invalidatePlayerConfig(config)
             return ResolveResult.Failed(StreamFailure.DecipherFailed)
+        }
+        if (sameAs != null && (chosen.contentLength != sameAs.contentLength || chosen.lastModified != sameAs.lastModified)) {
+            return ResolveResult.Failed(StreamFailure.StreamChanged)
         }
         val url = removeQueryParameters(requireNotNull(chosen.url), UNWANTED_PARAMETERS)
         if (!isAllowedMediaUrl(url)) return ResolveResult.Failed(StreamFailure.RejectedUrl)
@@ -162,15 +186,16 @@ class StreamResolver internal constructor(
                 itag = chosen.itag,
                 mimeType = chosen.mimeType,
                 contentLength = chosen.contentLength,
+                lastModified = chosen.lastModified,
                 url = url,
-                expiresAtMs = nowMs() + lifetimeMs,
+                expiresAtMs = requestedAtMs + lifetimeMs - EXPIRY_SAFETY_MS,
             ),
         )
     }
 
     /** 解決した URL が拒否された（403 など）。プレイヤーの設定を捨て、faraday の設定を取り直す。 */
     suspend fun onStreamRejected() {
-        invalidatePlayerConfig()
+        invalidatePlayerConfig(used = null)
         try {
             decipherer.onStreamRejected()
         } catch (cancellation: CancellationException) {
@@ -209,8 +234,9 @@ class StreamResolver internal constructor(
             PlayerConfigCache(normalizePlayerUrl(fetched.playerUrl), sts, nowMs()).also { cachedConfig = it }
         }
 
-    private suspend fun invalidatePlayerConfig() {
-        configMutex.withLock { cachedConfig = null }
+    /** used を渡したら、それがまだキャッシュにあるときだけ捨てる（古い設定での失敗が、取り直した新しい設定を捨てないように）。 */
+    private suspend fun invalidatePlayerConfig(used: PlayerConfigCache?) {
+        configMutex.withLock { if (used == null || cachedConfig === used) cachedConfig = null }
     }
 
     internal companion object {
@@ -219,6 +245,7 @@ class StreamResolver internal constructor(
         val UNWANTED_PARAMETERS = setOf("pot", "ump")
         const val PLAYER_CONFIG_TTL_MS = 60 * 60 * 1000L
         const val DEFAULT_LIFETIME_SECONDS = 60 * 60L
+        const val EXPIRY_SAFETY_MS = 60 * 1000L
 
         fun audioCandidates(
             formats: List<PlayerResponse.StreamingData.Format>,
@@ -226,6 +253,8 @@ class StreamResolver internal constructor(
         ): List<PlayerResponse.StreamingData.Format> =
             formats
                 .filter { it.isAudio && !it.isDrc && it.itag in AUDIO_ITAG_PREFERENCE }
+                // 吹き替えなど音声トラックが複数ある曲では、既定のトラックだけを使う
+                .filter { it.audioTrack == null || it.audioTrack?.audioIsDefault == true }
                 .filter { requiredItag == null || it.itag == requiredItag }
                 .filter { it.url != null || it.signatureCipher != null || it.cipher != null }
                 .sortedBy { AUDIO_ITAG_PREFERENCE.indexOf(it.itag) }
@@ -292,22 +321,32 @@ class FaradayStatus internal constructor(
 class StreamComponents internal constructor(
     val resolver: StreamResolver,
     private val repository: InMemoryPlayerConfigRepository,
+    /** debug の確認用。create で trackCipherPath を指定したときだけ。 */
+    val cipherPath: CipherPathStats?,
 ) {
     fun faradayStatus(): FaradayStatus {
         val playerUrl = resolver.currentPlayerUrl()
         val loaded = repository.cachedJson.isNotBlank()
         val hash = playerUrl?.let { Regex("/s/player/([A-Za-z0-9_-]+)/").find(it)?.groupValues?.get(1) }
-        return FaradayStatus(loaded, if (loaded && hash != null) repository.cachedJson.contains(hash) else null)
+        // 表のキーとして完全一致するか（部分一致で誤判定しない）
+        return FaradayStatus(loaded, if (loaded && hash != null) repository.cachedJson.contains("\"$hash\"") else null)
     }
 
     companion object {
+        /**
+         * @param nowMs スリープ中も進む時計（Android では SystemClock.elapsedRealtime）。URL の期限の判定に使う
+         * @param trackCipherPath debug の確認用に、解読がどの経路を通ったかを数える
+         */
         fun create(
             session: WaveSession,
-            nowMs: () -> Long = WaveSession.monotonicMillis(),
+            nowMs: () -> Long,
+            trackCipherPath: Boolean = false,
         ): StreamComponents {
+            val cipherPath = if (trackCipherPath) CipherPathStats() else null
+            val logger = cipherPath?.logger ?: InnerTubeLogger.NONE
             val repository = InMemoryPlayerConfigRepository()
-            val store = RemotePlayerConfigStore(session.httpClient, repository)
-            val cipher = YouTubeCipherService(session.httpClient, store)
+            val store = RemotePlayerConfigStore(session.httpClient, repository, logger)
+            val cipher = YouTubeCipherService(session.httpClient, store, logger)
             val decipherer =
                 object : FormatDecipherer {
                     override suspend fun decipher(
@@ -319,8 +358,8 @@ class StreamComponents internal constructor(
                         cipher.refreshAfterStreamRejection()
                     }
                 }
-            val parser = YtConfigParserImpl(session.httpClient, session.innerTube, store)
-            return StreamComponents(StreamResolver(session, parser, decipherer, nowMs), repository)
+            val parser = YtConfigParserImpl(session.httpClient, session.innerTube, store, logger)
+            return StreamComponents(StreamResolver(session, parser, decipherer, nowMs), repository, cipherPath)
         }
     }
 }

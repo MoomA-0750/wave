@@ -102,7 +102,7 @@ class StreamResolverTest {
             val stream = assertIs<ResolveResult.Ok>(resolver.resolve("synthetic-id")).stream
             assertEquals(774, stream.itag)
             assertEquals("https://rr1---sn-synthetic.googlevideo.com/videoplayback?itag=774&sig=abc%3D&n=solved", stream.revealUrl())
-            assertEquals(21540_000L, stream.expiresAtMs)
+            assertEquals(21540_000L - StreamResolver.EXPIRY_SAFETY_MS, stream.expiresAtMs)
             assertFalse(stream.toString().contains("googlevideo"))
             assertEquals("music.youtube.com", sent.single().url.host)
         }
@@ -198,6 +198,68 @@ class StreamResolverTest {
         }
 
     @Test
+    fun reResolveRequiresTheSameFile(): Unit =
+        runBlocking {
+            ready()
+            val first = assertIs<ResolveResult.Ok>(resolver.resolve("a")).stream
+            assertEquals(774, assertIs<ResolveResult.Ok>(resolver.resolve("a", sameAs = first)).stream.itag)
+            playerJson = player("OK", listOf(format(774, cipher = true, contentLength = 99999)))
+            assertEquals(ResolveResult.Failed(StreamFailure.StreamChanged), resolver.resolve("a", sameAs = first))
+        }
+
+    @Test
+    fun usesOnlyTheDefaultAudioTrack(): Unit =
+        runBlocking {
+            ready()
+            playerJson =
+                player(
+                    "OK",
+                    listOf(
+                        format(774, cipher = true, track = """{"id":"en.1","audioIsDefault":false}"""),
+                        format(141, cipher = true, track = """{"id":"ja.0","audioIsDefault":true}"""),
+                    ),
+                )
+            assertEquals(141, assertIs<ResolveResult.Ok>(resolver.resolve("a")).stream.itag)
+        }
+
+    @Test
+    fun decipherExceptionIsDecipherFailed(): Unit =
+        runBlocking {
+            ready()
+            decipher = { error("synthetic failure") }
+            assertEquals(ResolveResult.Failed(StreamFailure.DecipherFailed), resolver.resolve("a"))
+        }
+
+    @Test
+    fun missingLifetimeFallsBackToAnHour(): Unit =
+        runBlocking {
+            ready()
+            playerJson = """{"playabilityStatus":{"status":"OK"},"streamingData":{"adaptiveFormats":[${format(141, cipher = true)}]}}"""
+            val stream = assertIs<ResolveResult.Ok>(resolver.resolve("a")).stream
+            assertEquals(StreamResolver.DEFAULT_LIFETIME_SECONDS * 1000 - StreamResolver.EXPIRY_SAFETY_MS, stream.expiresAtMs)
+            assertTrue(resolver.isFresh(stream, marginMs = 0))
+            now.set(stream.expiresAtMs)
+            assertFalse(resolver.isFresh(stream, marginMs = 0))
+        }
+
+    @Test
+    fun staleConfigFailureDoesNotDropFreshConfig(): Unit =
+        runBlocking {
+            ready()
+            resolver.resolve("a")
+            assertEquals(1, configFetches.get())
+            now.set(StreamResolver.PLAYER_CONFIG_TTL_MS)
+            decipher = { formats -> formats }
+            // 取り直し（2回目）→ 解読失敗でその設定を捨てる
+            resolver.resolve("a")
+            decipher = { formats -> formats.map { it.copy(url = "https://rr1---sn-synthetic.googlevideo.com/videoplayback?itag=${it.itag}", signatureCipher = null) } }
+            resolver.resolve("a")
+            assertEquals(3, configFetches.get())
+            resolver.resolve("a")
+            assertEquals(3, configFetches.get(), "取り直した設定を使い回していない")
+        }
+
+    @Test
     fun removesOnlyNamedParametersWithoutReencoding() {
         assertEquals(
             "https://h/videoplayback?a=1&sig=x%3D%3D&b=2#f",
@@ -214,12 +276,15 @@ class StreamResolverTest {
         drc: Boolean = false,
         width: Int? = null,
         url: String? = "https://rr1---sn-synthetic.googlevideo.com/videoplayback?itag=$itag",
+        contentLength: Long = 12345,
+        track: String? = null,
     ): String {
         val source = if (cipher) """"signatureCipher":"s=abc&sp=sig&url=https%3A%2F%2Fsynthetic"""" else if (url != null) """"url":"$url"""" else null
         return listOfNotNull(
             """"itag":$itag""",
             """"mimeType":"audio/webm; codecs=\"opus\""""",
-            """"contentLength":"12345"""",
+            """"contentLength":"$contentLength"""",
+            track?.let { """"audioTrack":$it""" },
             """"isDrc":$drc""",
             width?.let { """"width":$it""" },
             source,

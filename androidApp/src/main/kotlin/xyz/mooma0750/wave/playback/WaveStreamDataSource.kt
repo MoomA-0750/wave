@@ -98,14 +98,14 @@ class WaveStreamDataSource(
     override fun open(dataSpec: DataSpec): Long {
         val videoId = TrackUri.videoIdOf(dataSpec.uri) ?: throw IOException("unsupported uri scheme")
         openedUri = dataSpec.uri
-        val first = cache.get(videoId) ?: resolve(videoId, requiredItag = null)
+        val first = cache.get(videoId) ?: resolve(videoId, sameAs = null)
         return try {
             openUpstream(first, dataSpec)
         } catch (rejected: RejectedException) {
             Log.i(WaveApplication.LOG_TAG, "stream rejected status=${rejected.status} itag=${first.itag}; resolving again")
             cache.invalidate(videoId)
             runBlocking { resolver.onStreamRejected() }
-            val second = resolve(videoId, requiredItag = first.itag)
+            val second = resolve(videoId, sameAs = first)
             try {
                 openUpstream(second, dataSpec)
             } catch (again: RejectedException) {
@@ -117,9 +117,9 @@ class WaveStreamDataSource(
 
     private fun resolve(
         videoId: String,
-        requiredItag: Int?,
+        sameAs: ResolvedStream?,
     ): ResolvedStream =
-        when (val result = runBlocking { resolver.resolve(videoId, requiredItag) }) {
+        when (val result = runBlocking { resolver.resolve(videoId, sameAs) }) {
             is ResolveResult.Ok -> result.stream.also(cache::put)
             is ResolveResult.Failed -> throw StreamResolveException(result.reason)
         }

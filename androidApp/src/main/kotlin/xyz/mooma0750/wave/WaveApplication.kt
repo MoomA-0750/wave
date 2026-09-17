@@ -3,6 +3,7 @@ package xyz.mooma0750.wave
 import android.app.Application
 import android.content.Context
 import android.content.pm.ApplicationInfo
+import android.os.SystemClock
 import android.util.Log
 import android.webkit.WebView
 import androidx.datastore.core.DataStore
@@ -15,6 +16,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -95,14 +97,21 @@ class AppContainer(
 
     val session = WaveSession(httpClient, authManager, appScope, rethrowViolations = isDebuggable)
 
-    /** ストリームの解決（WaveSession のガード付きクライアントを使う）。 */
-    val stream = StreamComponents.create(session)
+    /** ストリームの解決（WaveSession のガード付きクライアントを使う）。期限はスリープ中も進む時計で測る。 */
+    val stream = StreamComponents.create(session, nowMs = SystemClock::elapsedRealtime, trackCipherPath = isDebuggable)
 
     /** 音声バイト・サムネイルの取得用。認証情報を持たない（ADR-0003）。 */
     val mediaHttpClient = MediaHttp.create()
 
     /** 解決済みのストリーム URL。ログアウトで消す。 */
     val streamCache = ResolvedStreamCache(stream.resolver)
+
+    init {
+        // ログインが反映されたら、プレイヤーの設定を先に取っておく（最初の再生を速くする）
+        appScope.launch {
+            session.appliedObtainedAtEpochMs.filterNotNull().collect { stream.resolver.prewarm() }
+        }
+    }
 
     private val mutableLoginGeneration = MutableStateFlow(0)
 

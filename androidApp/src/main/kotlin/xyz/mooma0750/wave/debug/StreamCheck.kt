@@ -29,9 +29,9 @@ object StreamCheck {
                         is ResolveResult.Ok -> {
                             val stream = result.stream
                             val fetchStart = SystemClock.elapsedRealtime()
-                            val request = Request.Builder().url(stream.revealUrl()).get().build()
                             val (status, bytes) =
                                 try {
+                                    val request = Request.Builder().url(stream.revealUrl()).get().build()
                                     container.mediaHttpClient.newCall(request).execute().use { response ->
                                         var total = 0L
                                         response.body.byteStream().use { input ->
@@ -56,7 +56,7 @@ object StreamCheck {
                 lines += line
             }
             val faraday = container.stream.faradayStatus()
-            val faradayLine = "faraday tableLoaded=${faraday.tableLoaded} playerInTable=${faraday.playerInTable}"
+            val faradayLine = "faraday tableLoaded=${faraday.tableLoaded} playerInTable=${faraday.playerInTable} ${container.stream.cipherPath}"
             Log.i(WaveApplication.LOG_TAG, "streamcheck $faradayLine")
             lines += faradayLine
             lines
