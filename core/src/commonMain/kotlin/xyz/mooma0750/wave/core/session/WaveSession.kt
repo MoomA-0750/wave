@@ -350,6 +350,8 @@ class WaveSession internal constructor(
         operation: String,
         provesAuthentication: Boolean = false,
         block: suspend (InnerTube) -> HttpResponse,
+        /** 呼び出しの文脈（キューなど）を作ったときのログインの世代。違えば送らない（ADR-0007）。 */
+        expectedGeneration: Long? = null,
         parse: suspend (HttpResponse) -> ParseOutcome<T>,
     ): CallResult<T> {
         val generation = current.value
@@ -357,6 +359,7 @@ class WaveSession internal constructor(
         if (generation.credentials == null || credentials.value !== generation.credentials) {
             return CallResult.Failed(FailureKind.NotLoggedIn)
         }
+        if (expectedGeneration != null && expectedGeneration != generation.id) return CallResult.Failed(FailureKind.NotLoggedIn)
 
         val deferred = generation.scope.async { runCatchingOutcome(block, parse) }
         val outcome =

@@ -32,7 +32,7 @@ class ResolvedStream internal constructor(
     /** /player の応答の playback 統計の URL（ADR-0006）。署名は無いが再生の識別子を含むので出さない。 */
     private val playbackStatsUrl: String? = null,
     /** /player を呼んだ WaveSession の世代。呼ぶ前後で変わっていたら統計 URL は持たない。 */
-    internal val sessionGeneration: Long = -1,
+    val sessionGeneration: Long = -1,
 ) {
     internal fun revealPlaybackStatsUrl(): String? = playbackStatsUrl
 
@@ -125,19 +125,23 @@ class StreamResolver internal constructor(
     suspend fun resolve(
         videoId: String,
         sameAs: ResolvedStream? = null,
-    ): ResolveResult = resolve(videoId, sameAs?.itag, sameAs)
+        /** 曲をキューに入れたときのログインの世代（ADR-0007）。違えば解決しない。 */
+        expectedGeneration: Long? = null,
+    ): ResolveResult = resolve(videoId, sameAs?.itag, sameAs, expectedGeneration)
 
     /** @param requiredItag 指定したら、その itag だけを使う */
     suspend fun resolve(
         videoId: String,
         requiredItag: Int?,
-    ): ResolveResult = resolve(videoId, requiredItag, sameAs = null)
+    ): ResolveResult = resolve(videoId, requiredItag, sameAs = null, expectedGeneration = null)
 
     private suspend fun resolve(
         videoId: String,
         requiredItag: Int?,
         sameAs: ResolvedStream?,
+        expectedGeneration: Long?,
     ): ResolveResult {
+        if (expectedGeneration != null && expectedGeneration != session.currentGenerationId()) return ResolveResult.Failed(StreamFailure.NotLoggedIn)
         val config = playerConfig() ?: return ResolveResult.Failed(StreamFailure.PlayerConfigUnavailable)
         // 期限は /player を呼ぶ前の時刻から数える（解読にかかった時間の分だけ短く見積もる）
         val requestedAtMs = nowMs()
@@ -146,6 +150,7 @@ class StreamResolver internal constructor(
         val player =
             session.call(
                 operation = "player",
+                expectedGeneration = expectedGeneration,
                 block = { it.player(YouTubeClient.WEB_REMIX, videoId, signatureTimestamp = config.signatureTimestamp) },
             ) { response ->
                 val body = WaveSession.json.decodeFromString(PlayerResponse.serializer(), response.bodyAsTextLimited(WaveSession.MAX_PLAYER_BYTES))

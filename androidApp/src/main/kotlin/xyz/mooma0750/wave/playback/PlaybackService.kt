@@ -94,6 +94,7 @@ class PlaybackService : MediaSessionService() {
                 RepositoryContentSource(container.music),
                 scope,
                 newItemId = { UUID.randomUUID().toString() },
+                loginGeneration = { container.music.currentLoginGeneration() },
             )
         queue = queueSession
         val likeController =
@@ -556,13 +557,15 @@ private class RepositoryContentSource(
         videoId: String?,
         playlistId: String?,
         continuation: String?,
-    ): CallResult<UpNextPage> = music.upNext(videoId, playlistId, continuation)
+        expectedGeneration: Long?,
+    ): CallResult<UpNextPage> = music.upNext(videoId, playlistId, continuation, expectedGeneration)
 
     override suspend fun playlistPage(
         playlistId: String,
         continuation: String,
+        expectedGeneration: Long?,
     ): CallResult<SongPage> =
-        when (val result = music.playlist(playlistId, continuation)) {
+        when (val result = music.playlist(playlistId, continuation, expectedGeneration)) {
             is CallResult.Ok -> CallResult.Ok(SongPage(result.value.songs, result.value.continuation))
             is CallResult.Failed -> result
         }

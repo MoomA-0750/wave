@@ -131,10 +131,12 @@ class LikeController(
 
     private fun load(videoId: String) {
         val startedEpoch = epoch
+        // 読み込みを始めたときのログインで読む（途中で替われば送らない）
+        val generation = music.currentLoginGeneration()
         loadJob?.cancel()
         loadJob =
             scope.launch {
-                val result = music.likeStatus(videoId)
+                val result = music.likeStatus(videoId, generation)
                 if (startedEpoch != epoch || state.videoId != videoId) return@launch
                 when (result) {
                     is CallResult.Ok -> publish(state.copy(status = result.value, message = null))

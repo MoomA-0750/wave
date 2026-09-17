@@ -81,6 +81,9 @@ interface QueuePlayer {
 
     fun insertAfterCurrent(items: List<QueueItem>)
 
+    /** これから入れる項目を、このログインの世代に結び付ける（曲の解決がその世代で行われる）。 */
+    fun setAccountEpoch(epoch: Long?)
+
     /** 保存したキューを戻す。再生は始めない（起動のたびにストリームを解決しない）。 */
     fun restore(
         items: List<QueueItem>,
@@ -106,15 +109,18 @@ interface QueuePlayer {
 
 /** 続きの取得元。MusicRepository を包む。 */
 interface QueueContentSource {
+    /** @param expectedGeneration キューを作ったときのログインの世代（違えば送らない） */
     suspend fun upNext(
         videoId: String?,
         playlistId: String?,
         continuation: String?,
+        expectedGeneration: Long?,
     ): CallResult<UpNextPage>
 
     suspend fun playlistPage(
         playlistId: String,
         continuation: String,
+        expectedGeneration: Long?,
     ): CallResult<SongPage>
 }
 
@@ -129,7 +135,12 @@ class QueueSession(
     private val scope: CoroutineScope,
     private val newItemId: () -> String,
     private val random: Random = Random.Default,
+    /** 今のログインの世代（ADR-0007）。キューを置き換えるたびに取り、取得・曲の解決をその世代に結び付ける。 */
+    private val loginGeneration: () -> Long? = { null },
 ) {
+    /** このキューを作ったときのログインの世代。 */
+    var accountEpoch: Long? = null
+        private set
     var generation: Long = 0
         private set
     private var source: QueueSource? = null
@@ -266,6 +277,8 @@ class QueueSession(
 
     private fun startGeneration() {
         generation++
+        accountEpoch = loginGeneration()
+        player.setAccountEpoch(accountEpoch)
         rescuedContinuation = null
         emptyRadioPages = 0
         fetchJob?.cancel()
@@ -338,7 +351,7 @@ class QueueSession(
                     if (player.repeatAll) return 0
                     return if (switchToRadio()) 1 else 0
                 }
-                when (val result = content.playlistPage(currentSource.playlistId, token)) {
+                when (val result = content.playlistPage(currentSource.playlistId, token, accountEpoch)) {
                     is CallResult.Failed -> restartFromStaleContinuation(requestGeneration, token, result)
                     is CallResult.Ok -> {
                         if (requestGeneration != generation) return null
@@ -357,6 +370,7 @@ class QueueSession(
                         videoId = if (token == null) currentSource.seedVideoId else null,
                         playlistId = radioPlaylistId,
                         continuation = token,
+                        expectedGeneration = accountEpoch,
                     )
                 when (result) {
                     is CallResult.Failed -> token?.let { restartFromStaleContinuation(requestGeneration, it, result) }

@@ -27,9 +27,24 @@ object TrackUri {
     private const val SCHEME = "wave"
     private const val HOST = "track"
 
-    fun of(videoId: String): Uri = Uri.Builder().scheme(SCHEME).authority(HOST).appendPath(videoId).build()
+    private const val EPOCH = "epoch"
+
+    /** @param epoch 曲をキューに入れたときのログインの世代（ADR-0007）。解決はこの世代でだけ行う */
+    fun of(
+        videoId: String,
+        epoch: Long?,
+    ): Uri =
+        Uri
+            .Builder()
+            .scheme(SCHEME)
+            .authority(HOST)
+            .appendPath(videoId)
+            .apply { if (epoch != null) appendQueryParameter(EPOCH, epoch.toString()) }
+            .build()
 
     fun videoIdOf(uri: Uri): String? = uri.takeIf { it.scheme == SCHEME && it.host == HOST }?.lastPathSegment
+
+    fun epochOf(uri: Uri?): Long? = uri?.takeIf { it.scheme == SCHEME && it.host == HOST }?.getQueryParameter(EPOCH)?.toLongOrNull()
 }
 
 /** 解決できなかった。例外文には失敗の種類だけを入れる（URL・原因の例外を持たない）。 */
@@ -60,12 +75,19 @@ class ResolvedStreamCache(
     var epoch: Long = 0
         private set
 
+    /** @param epoch 曲をキューに入れたときのログインの世代。別の世代で解決した値は返さない */
     @Synchronized
-    fun get(videoId: String): ResolvedStream? = entries[videoId]?.takeIf { resolver.isFresh(it, FRESH_MARGIN_MS) }
+    fun get(
+        videoId: String,
+        epoch: Long?,
+    ): ResolvedStream? = entries[videoId]?.takeIf { resolver.isFresh(it, FRESH_MARGIN_MS) && (epoch == null || it.sessionGeneration == epoch) }
 
-    /** 期限に関わらず、最後に解決した値。再生履歴の統計 URL を取るためだけに使う（音声の取得には get を使う）。 */
+    /** 期限に関わらず、最後に解決した値（同じ世代のものだけ）。再生履歴の統計 URL と、途中から開き直すときのファイルの同一性のために使う。 */
     @Synchronized
-    fun peek(videoId: String): ResolvedStream? = entries[videoId]
+    fun peek(
+        videoId: String,
+        epoch: Long?,
+    ): ResolvedStream? = entries[videoId]?.takeIf { epoch == null || it.sessionGeneration == epoch }
 
     @Synchronized
     fun put(
@@ -145,12 +167,13 @@ class WaveStreamDataSource(
 
     override fun open(dataSpec: DataSpec): Long {
         val videoId = TrackUri.videoIdOf(dataSpec.uri) ?: throw DataSourceException("unsupported uri scheme", null, PlaybackException.ERROR_CODE_IO_UNSPECIFIED)
+        val epoch = TrackUri.epochOf(dataSpec.uri)
         openedSpec = dataSpec
         if (cache.recentlyRejected(videoId)) throw StreamRejectedException(403)
-        val cached = cache.get(videoId)
+        val cached = cache.get(videoId, epoch)
         // 途中の位置から開き直すときは、期限切れでも前に使ったファイル（itag・長さ・更新日時）と同じものだけを使う。
         // 別のエンコードの途中から継ぎ足さない（一致しなければ StreamChanged でその曲を飛ばす）
-        val first = cached ?: resolve(videoId, sameAs = if (dataSpec.position > 0) cache.peek(videoId) else null)
+        val first = cached ?: resolve(videoId, sameAs = if (dataSpec.position > 0) cache.peek(videoId, epoch) else null, epoch = epoch)
         Log.i(WaveApplication.LOG_TAG, "stream open itag=${first.itag} cached=${cached != null} position=${dataSpec.position}")
         return try {
             openUpstream(first, dataSpec)
@@ -168,7 +191,7 @@ class WaveStreamDataSource(
             // 解決したばかりの URL が拒否されたときだけ、解読の設定が古いと考えて取り直す
             // （キャッシュの URL は、回線が変わった・期限切れなど解読と無関係な理由で拒否されうる）
             if (cached == null) runBlocking { resolver.onStreamRejected() }
-            val second = resolve(videoId, sameAs = first)
+            val second = resolve(videoId, sameAs = first, epoch = epoch)
             try {
                 openUpstream(second, dataSpec)
             } catch (again: RejectedException) {
@@ -183,9 +206,10 @@ class WaveStreamDataSource(
     private fun resolve(
         videoId: String,
         sameAs: ResolvedStream?,
+        epoch: Long?,
     ): ResolvedStream {
         val startedInEpoch = cache.epoch
-        return when (val result = runBlocking { resolver.resolve(videoId, sameAs) }) {
+        return when (val result = runBlocking { resolver.resolve(videoId, sameAs, expectedGeneration = epoch) }) {
             is ResolveResult.Ok -> result.stream.also { cache.put(it, startedInEpoch) }
             is ResolveResult.Failed -> throw StreamResolveException(result.reason)
         }

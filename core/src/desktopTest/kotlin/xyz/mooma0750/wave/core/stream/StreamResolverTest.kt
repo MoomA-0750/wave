@@ -140,6 +140,20 @@ class StreamResolverTest {
         }
 
     @Test
+    fun resolutionForAnotherLoginGenerationIsNotSent(): Unit =
+        runBlocking {
+            ready()
+            val old = session.currentGenerationId()
+            credentials.value = assertNotNull(Credentials.fromLogin("SAPISID=other-synthetic", "v", "d", 2))
+            withTimeout(5_000) { while (session.currentGenerationId() == old) delay(5) }
+            withTimeout(5_000) { session.state.first { it == SessionState.Active } }
+            val before = sent.size
+            assertEquals(ResolveResult.Failed(StreamFailure.NotLoggedIn), resolver.resolve("synthetic-id", expectedGeneration = old))
+            assertEquals(before, sent.size, "前のログインでキューに入れた曲を、今のログインで解決した")
+            assertIs<ResolveResult.Ok>(resolver.resolve("synthetic-id", expectedGeneration = session.currentGenerationId()))
+        }
+
+    @Test
     fun requiredItagDoesNotFallBackToAnotherFormat(): Unit =
         runBlocking {
             ready()

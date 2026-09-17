@@ -17,6 +17,11 @@ class Media3QueuePlayer(
     private val stoppedOnSkippableError: () -> Boolean = { false },
 ) : QueuePlayer {
     private val itemsById = HashMap<String, QueueItem>()
+    private var accountEpoch: Long? = null
+
+    override fun setAccountEpoch(epoch: Long?) {
+        accountEpoch = epoch
+    }
 
     override val items: List<QueueItem>
         get() = (0 until player.mediaItemCount).mapNotNull { itemsById[player.getMediaItemAt(it).mediaId] }
@@ -39,7 +44,7 @@ class Media3QueuePlayer(
     ) {
         itemsById.clear()
         items.forEach { itemsById[it.itemId] = it }
-        player.setMediaItems(items.map(::mediaItemOf), startIndex, 0L)
+        player.setMediaItems(items.map { mediaItemOf(it, accountEpoch) }, startIndex, 0L)
         player.prepare()
         player.play()
     }
@@ -52,13 +57,13 @@ class Media3QueuePlayer(
         itemsById.clear()
         items.forEach { itemsById[it.itemId] = it }
         // prepare しない。再生ボタンが押されたら、Media3 が IDLE から prepare する
-        player.setMediaItems(items.map(::mediaItemOf), startIndex, positionMs)
+        player.setMediaItems(items.map { mediaItemOf(it, accountEpoch) }, startIndex, positionMs)
     }
 
     override fun append(items: List<QueueItem>) {
         items.forEach { itemsById[it.itemId] = it }
         val wasEmpty = player.mediaItemCount == 0
-        player.addMediaItems(items.map(::mediaItemOf))
+        player.addMediaItems(items.map { mediaItemOf(it, accountEpoch) })
         if (wasEmpty) {
             player.prepare()
             player.play()
@@ -68,7 +73,7 @@ class Media3QueuePlayer(
     override fun insertAfterCurrent(items: List<QueueItem>) {
         items.forEach { itemsById[it.itemId] = it }
         val index = if (player.mediaItemCount == 0) 0 else player.currentMediaItemIndex + 1
-        player.addMediaItems(index, items.map(::mediaItemOf))
+        player.addMediaItems(index, items.map { mediaItemOf(it, accountEpoch) })
         if (player.mediaItemCount == items.size) {
             player.prepare()
             player.play()
@@ -81,7 +86,7 @@ class Media3QueuePlayer(
         val start = player.currentMediaItemIndex + 1
         items.forEach { itemsById[it.itemId] = it }
         player.removeMediaItems(start, player.mediaItemCount)
-        player.addMediaItems(items.map(::mediaItemOf))
+        player.addMediaItems(items.map { mediaItemOf(it, accountEpoch) })
         // 並べ替えで外れた項目（呼び出し側が渡さなかったもの）は表から消す
         val kept = (0 until player.mediaItemCount).mapTo(HashSet()) { player.getMediaItemAt(it).mediaId }
         itemsById.keys.retainAll(kept)
@@ -134,12 +139,15 @@ class Media3QueuePlayer(
         /** 検索結果のサムネイル（120px）は再生画面・通知には小さいので、googleusercontent のサイズ指定を大きくする。 */
         fun largeArtwork(url: String): String = if ("googleusercontent.com" in url) url.replace(GOOGLE_IMAGE_SIZE, "=w544-h544") else url
 
-        fun mediaItemOf(item: QueueItem): MediaItem {
+        fun mediaItemOf(
+            item: QueueItem,
+            epoch: Long?,
+        ): MediaItem {
             val song = item.song
             return MediaItem
                 .Builder()
                 .setMediaId(item.itemId)
-                .setUri(TrackUri.of(song.videoId))
+                .setUri(TrackUri.of(song.videoId, epoch))
                 .setMediaMetadata(
                     MediaMetadata
                         .Builder()

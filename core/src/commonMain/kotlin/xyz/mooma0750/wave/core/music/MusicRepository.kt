@@ -37,9 +37,11 @@ class MusicRepository(
         videoId: String?,
         playlistId: String?,
         continuation: String? = null,
+        expectedGeneration: Long? = null,
     ): CallResult<UpNextPage> =
         session.call(
             operation = "next",
+            expectedGeneration = expectedGeneration,
             block = { it.next(YouTubeClient.WEB_REMIX, videoId = videoId, playlistId = playlistId, continuation = continuation) },
         ) { response -> ParseOutcome.Parsed(MusicParsers.upNext(json(response))) }
 
@@ -66,9 +68,11 @@ class MusicRepository(
     suspend fun playlist(
         playlistId: String,
         continuation: String? = null,
+        expectedGeneration: Long? = null,
     ): CallResult<PlaylistPage> =
         session.call(
             operation = "browse",
+            expectedGeneration = expectedGeneration,
             block = {
                 if (continuation == null) {
                     it.browse(YouTubeClient.WEB_REMIX, browseId = "VL$playlistId", setLogin = true)
@@ -87,9 +91,13 @@ class MusicRepository(
     fun currentLoginGeneration(): Long = session.currentGenerationId()
 
     /** 曲の評価（next の最初の応答から取る）。 */
-    suspend fun likeStatus(videoId: String): CallResult<LikeStatus> =
+    suspend fun likeStatus(
+        videoId: String,
+        expectedGeneration: Long? = null,
+    ): CallResult<LikeStatus> =
         session.call(
             operation = "next",
+            expectedGeneration = expectedGeneration,
             block = { it.next(YouTubeClient.WEB_REMIX, videoId = videoId, playlistId = null) },
         ) { response -> MusicParsers.likeStatus(json(response), videoId)?.let { ParseOutcome.Parsed(it) } ?: ParseOutcome.Invalid }
 

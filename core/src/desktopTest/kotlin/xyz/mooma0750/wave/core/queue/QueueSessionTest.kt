@@ -62,6 +62,12 @@ class QueueSessionTest {
             restoredPositionMs = positionMs
         }
 
+        var epoch: Long? = null
+
+        override fun setAccountEpoch(epoch: Long?) {
+            this.epoch = epoch
+        }
+
         override fun removeFirst(count: Int) {
             val n = count.coerceAtMost(currentIndex)
             repeat(n) { items.removeAt(0) }
@@ -104,13 +110,16 @@ class QueueSessionTest {
         var upNextResult: (String?, String?, String?) -> CallResult<UpNextPage> = { _, _, _ -> CallResult.Failed(FailureKind.Network) }
         var playlistResult: (String, String) -> CallResult<SongPage> = { _, _ -> CallResult.Failed(FailureKind.Network) }
         var gate: CompletableDeferred<Unit>? = null
+        val epochs = mutableListOf<Long?>()
 
         override suspend fun upNext(
             videoId: String?,
             playlistId: String?,
             continuation: String?,
+            expectedGeneration: Long?,
         ): CallResult<UpNextPage> {
             upNextCalls += Triple(videoId, playlistId, continuation)
+            epochs += expectedGeneration
             gate?.await()
             return upNextResult(videoId, playlistId, continuation)
         }
@@ -118,8 +127,10 @@ class QueueSessionTest {
         override suspend fun playlistPage(
             playlistId: String,
             continuation: String,
+            expectedGeneration: Long?,
         ): CallResult<SongPage> {
             playlistCalls += playlistId to continuation
+            epochs += expectedGeneration
             return playlistResult(playlistId, continuation)
         }
     }
@@ -131,12 +142,14 @@ class QueueSessionTest {
         continuation: String? = "next",
     ) = CallResult.Ok(UpNextPage(ids.map(::song), continuation, "RDAMVMseed"))
 
+    private var loginGeneration: Long? = 7
+
     private fun TestScope.session(
         player: FakePlayer,
         content: FakeContent,
     ): QueueSession {
         var counter = 0
-        return QueueSession(player, content, this, newItemId = { "item-${counter++}" }, random = kotlin.random.Random(42))
+        return QueueSession(player, content, this, newItemId = { "item-${counter++}" }, random = kotlin.random.Random(42), loginGeneration = { loginGeneration })
     }
 
     @Test
@@ -629,5 +642,27 @@ class QueueSessionTest {
             player.ended = true
             queue.addToEnd(song("b"))
             assertEquals(1, player.resumedAt)
+        }
+
+    @Test
+    fun fetchesAreBoundToTheLoginGenerationOfTheQueue() =
+        runTest {
+            val player = FakePlayer()
+            val gate = CompletableDeferred<Unit>()
+            val content = FakeContent().apply {
+                this.gate = gate
+                upNextResult = { _, _, _ -> page("r1", continuation = null) }
+            }
+            val queue = session(player, content)
+            loginGeneration = 7
+            queue.playSong(song("a"))
+            assertEquals(7L, player.epoch, "曲の解決を世代に結び付けていない")
+            // キューを作った後にログインが変わっても、取得はキューを作ったときの世代で送る（WaveSession が違えば送らない）
+            loginGeneration = 8
+            gate.complete(Unit)
+            advanceUntilIdle()
+            assertEquals(listOf<Long?>(7), content.epochs)
+            queue.playSong(song("b"))
+            assertEquals(8L, player.epoch)
         }
 }

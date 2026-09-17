@@ -68,7 +68,7 @@ class PlaybackHistoryTracker(
         if (current.done) return
         if (!current.looked) {
             current.looked = true
-            val cached = cache.peek(current.videoId)
+            val cached = cache.peek(current.videoId, TrackUri.epochOf(player.currentMediaItem?.localConfiguration?.uri))
             current.stream = cached?.takeIf { it.hasPlaybackStats }
             Log.i(WaveApplication.LOG_TAG, "history play started cached=${cached != null} stats=${cached?.hasPlaybackStats}")
         }
