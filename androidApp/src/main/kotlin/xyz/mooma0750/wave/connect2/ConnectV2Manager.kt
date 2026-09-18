@@ -372,38 +372,60 @@ class ConnectV2Manager(
                     // 新しい操作が来たら、前の D-9 の待ちはやめる（曲を選んだのに、待ちの後で止めない、再レビュー 中-C）
                     waitJob?.cancel()
                     waitJob = null
-                    // D-9: 引き取られた・止まった端末で再生ボタンを押したとき、他の端末で鳴っていれば、古い手元のキューで奪わない。曲を選んだのは新しい再生（L-3）
-                    // 今の接続で最新の状態をそろえていない・アカウントタグがまだ無いなら、一時停止してつなぎ、そろってから決める（再レビュー 高-A・中-B）
-                    if (!newSelection && engine.hasRetreated && engine.householdId != null) {
-                        if (!engine.stateSettled || effects.accountTag() == null) {
-                            appScope.launch(Dispatchers.Main) { host.endpoint?.pause() }
-                            waitJob = appScope.launch { decideAfterWait(intent, foreground) }
-                            return@post
-                        }
-                        if (retreatedPlayButton(engine, foreground)) return@post
+                    val decision =
+                        PlayButtonPolicy.onPlay(
+                            newSelection = newSelection,
+                            retreated = engine.hasRetreated,
+                            inHousehold = engine.householdId != null,
+                            stateSettled = engine.stateSettled,
+                            hasAccountTag = effects.accountTag() != null,
+                            remotePlaying = engine.remotePlayingNow(),
+                            foreground = foreground,
+                        )
+                    if (decision == PlayButtonPolicy.Decision.Wait) {
+                        appScope.launch(Dispatchers.Main) { host.endpoint?.pause() }
+                        waitJob = appScope.launch { decideAfterWait(intent, foreground) }
+                        return@post
                     }
-                    claimLocal(engine, newSelection)
+                    apply(engine, decision, newSelection)
                 }
             }
         }
 
-    /** エンジンのスレッドで: 退いた端末の再生ボタン。他の端末で鳴っていれば、前面なら引き取り、裏なら止めて知らせる。@return 処理した */
-    private fun retreatedPlayButton(
+    /** エンジンのスレッドで: 判断のとおりに動く（Wait は呼ぶ側で扱う）。 */
+    private fun apply(
         engine: ConnectClient,
-        foreground: Boolean,
-    ): Boolean {
-        if (!engine.remotePlayingNow()) return false
-        appScope.launch(Dispatchers.Main) { host.endpoint?.pause() }
-        if (foreground && engine.requestTransfer()) {
-            Log.i(WaveApplication.LOG_TAG, "connect-v2 play button became transfer")
-        } else {
-            effects.event(ClientEvent.ServerError(REMOTE_PLAYING))
-            Log.i(WaveApplication.LOG_TAG, "connect-v2 play button blocked remote playing")
+        decision: PlayButtonPolicy.Decision,
+        newSelection: Boolean,
+    ) {
+        when (decision) {
+            PlayButtonPolicy.Decision.Claim -> claimLocal(engine, newSelection)
+            PlayButtonPolicy.Decision.ResumeAndClaim -> {
+                // 待ちで止めた再生を戻して、新しい再生として claim する
+                runBlocking(Dispatchers.Main) { host.endpoint?.resume() }
+                claimLocal(engine, newSelection)
+            }
+            PlayButtonPolicy.Decision.TakeOver -> {
+                appScope.launch(Dispatchers.Main) { host.endpoint?.pause() }
+                // 引き取れなければ（アカウント違い・状態が欠けている）、鳴らさずに知らせる
+                if (engine.requestTransfer()) {
+                    Log.i(WaveApplication.LOG_TAG, "connect-v2 play button became transfer")
+                } else {
+                    effects.event(ClientEvent.ServerError(REMOTE_PLAYING))
+                    Log.i(WaveApplication.LOG_TAG, "connect-v2 play button blocked remote playing")
+                }
+            }
+            PlayButtonPolicy.Decision.BlockRemotePlaying -> {
+                appScope.launch(Dispatchers.Main) { host.endpoint?.pause() }
+                effects.event(ClientEvent.ServerError(REMOTE_PLAYING))
+                Log.i(WaveApplication.LOG_TAG, "connect-v2 play button blocked remote playing")
+            }
+            PlayButtonPolicy.Decision.NotifyNotMember -> effects.event(ClientEvent.ServerError(NOT_MEMBER))
+            PlayButtonPolicy.Decision.NotifyUnreachable -> effects.event(ClientEvent.ServerError(RELAY_UNREACHABLE))
+            PlayButtonPolicy.Decision.NotifyUnverified -> effects.event(ClientEvent.ServerError(ACCOUNT_UNVERIFIED))
+            PlayButtonPolicy.Decision.Wait, PlayButtonPolicy.Decision.Nothing -> Unit
         }
-        return true
     }
-
-    private enum class WaitOutcome { Ready, NotMember, Unreachable, Unverified }
 
     /**
      * 中継につないで、今の接続の最新の状態とアカウントタグがそろうまで（最大 SETTLE_WAIT_MS）待ってから、D-9 の判断をする。
@@ -419,32 +441,32 @@ class ConnectV2Manager(
                 withTimeoutOrNull(SETTLE_WAIT_MS) {
                     while (true) {
                         when (relay.status.value) {
-                            RelayClientV2.Status.NotMember -> return@withTimeoutOrNull WaitOutcome.NotMember
-                            RelayClientV2.Status.TailnetUnreachable -> return@withTimeoutOrNull WaitOutcome.Unreachable
+                            RelayClientV2.Status.NotMember -> return@withTimeoutOrNull PlayButtonPolicy.WaitOutcome.NotMember
+                            RelayClientV2.Status.TailnetUnreachable -> return@withTimeoutOrNull PlayButtonPolicy.WaitOutcome.Unreachable
                             else -> Unit
                         }
-                        if (withContext(dispatcher) { client?.let { it.stateSettled && effects.accountTag() != null } == true }) return@withTimeoutOrNull WaitOutcome.Ready
+                        if (withContext(dispatcher) { client?.let { it.stateSettled && effects.accountTag() != null } == true }) return@withTimeoutOrNull PlayButtonPolicy.WaitOutcome.Ready
                         delay(100)
                     }
                     @Suppress("UNREACHABLE_CODE")
-                    WaitOutcome.Unreachable
-                } ?: withContext(dispatcher) { if (client?.stateSettled == true) WaitOutcome.Unverified else WaitOutcome.Unreachable }
+                    PlayButtonPolicy.WaitOutcome.Unreachable
+                }
+                    // 時間切れ: 状態はそろっているならアカウントの問題、そうでなければ中継の問題
+                    ?: withContext(dispatcher) {
+                        if (client?.stateSettled == true) PlayButtonPolicy.WaitOutcome.Unverified else PlayButtonPolicy.WaitOutcome.Unreachable
+                    }
             withContext(dispatcher) {
                 val engine = client ?: return@withContext
-                // 待っている間に本人が別の操作をした・もう退いた端末でない
-                if (playIntent.get() != intent || !engine.hasRetreated) return@withContext
-                when (outcome) {
-                    WaitOutcome.Ready -> {
-                        if (retreatedPlayButton(engine, foreground)) return@withContext
-                        // 他の端末で鳴っていない: 止めた再生を戻して、新しい再生として claim する
-                        runBlocking(Dispatchers.Main) { host.endpoint?.resume() }
-                        claimLocal(engine, newSelection = false)
-                    }
-                    WaitOutcome.NotMember -> effects.event(ClientEvent.ServerError(NOT_MEMBER))
-                    WaitOutcome.Unverified -> effects.event(ClientEvent.ServerError(ACCOUNT_UNVERIFIED))
-                    WaitOutcome.Unreachable -> effects.event(ClientEvent.ServerError(RELAY_UNREACHABLE))
-                }
-                Log.i(WaveApplication.LOG_TAG, "connect-v2 play button waited outcome=$outcome")
+                val decision =
+                    PlayButtonPolicy.afterWait(
+                        outcome = outcome,
+                        intentUnchanged = playIntent.get() == intent,
+                        stillRetreated = engine.hasRetreated,
+                        remotePlaying = engine.remotePlayingNow(),
+                        foreground = foreground,
+                    )
+                apply(engine, decision, newSelection = false)
+                Log.i(WaveApplication.LOG_TAG, "connect-v2 play button waited outcome=$outcome decision=$decision")
             }
         } finally {
             relay.release()
