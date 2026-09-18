@@ -539,6 +539,48 @@ class ConnectSimulationTest {
         assertTrue(b.persisted.cursorFloor > floor, "上がった床が保存されない")
     }
 
+    /** 朝の2台の確認と同じ順番（家を作る→加わる→再生→引き取り→引き取られた端末で曲を選ぶ→切れて戻る）。 */
+    @Test
+    fun theTwoDeviceWalkthroughInOrder() {
+        setUp()
+        // 1. A で再生して3分たつ
+        a.startPlaying("queue-A", item = "item-3")
+        relay.run()
+        advance(180_000)
+        assertEquals(a.deviceId, b.client.activeDeviceId)
+        // 2. B が「ここで再生」→ 同じ曲の3分から続く（最後の出来事の位置ではない）
+        assertTrue(b.client.requestTransfer())
+        relay.run()
+        assertTrue(b.playing)
+        assertFalse(a.playing)
+        assertEquals("item-3", b.currentItemId)
+        assertTrue(b.positionMs >= 180_000, "位置が続いていない: ${b.positionMs}")
+        assertTrue(a.client.hasRetreated)
+        // 3. 引き取られた A で曲を選ぶ → A が鳴り、B が止まる（相手のキューに置き換わらない）
+        a.startPlaying("queue-A2", item = "item-9")
+        relay.run()
+        assertTrue(a.playing)
+        assertFalse(b.playing)
+        assertTrue(b.stoppedBy(a))
+        assertEquals("queue-A2", a.queue)
+        assertTrue(b.client.hasRetreated)
+        // 4. B が通信を失うと、B はもう「最新の状態をそろえた」とは言わない（古い状態で判断しない）
+        b.disconnect()
+        assertFalse(b.client.stateSettled)
+        // 5. つながり直すと、A が鳴っていることが分かる（裏の再生ボタンは鳴らさない側に倒れる）
+        b.connect()
+        relay.run()
+        assertTrue(b.client.stateSettled)
+        assertTrue(b.client.remotePlayingNow())
+        // 6. B が前面で引き取り直せる
+        assertTrue(b.client.requestTransfer())
+        relay.run()
+        assertTrue(b.playing)
+        assertFalse(a.playing)
+        assertEquals("queue-A2", b.queue)
+        assertEquals("item-9", b.currentItemId)
+    }
+
     @Test
     fun stateIsSettledOnlyAfterTheWelcomeOfTheCurrentConnection() {
         setUp()
