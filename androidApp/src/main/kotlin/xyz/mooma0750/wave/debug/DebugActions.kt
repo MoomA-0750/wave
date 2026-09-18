@@ -168,7 +168,7 @@ object DebugActions {
                 }
                 "v2_pair_accept" -> {
                     val pairing = container.pairingV2 ?: return@launch
-                    container.connectV2?.relay?.acquire()
+                    // 加入の第1手は /v2/pair の別のソケット、待ちは PairingV2Controller が自分で参照を取る（再レビュー 低-P）
                     pairing.accept(intent.getStringExtra("offer").orEmpty())
                     val next = kotlinx.coroutines.withTimeoutOrNull(30_000) { pairing.state.first { it is xyz.mooma0750.wave.connect2.PairingV2Controller.State.ShowCode || it is xyz.mooma0750.wave.connect2.PairingV2Controller.State.Failed } }
                     (next as? xyz.mooma0750.wave.connect2.PairingV2Controller.State.ShowCode)?.let { java.io.File(context.filesDir, "pair-code-v2.txt").writeText(it.code) }
@@ -182,16 +182,11 @@ object DebugActions {
                 }
                 "v2_pair_continue" -> {
                     val pairing = container.pairingV2 ?: return@launch
-                    try {
-                        pairing.confirmOnB()
-                        val next = kotlinx.coroutines.withTimeoutOrNull(40_000) { pairing.state.first { it is xyz.mooma0750.wave.connect2.PairingV2Controller.State.Done || it is xyz.mooma0750.wave.connect2.PairingV2Controller.State.Failed } }
-                        Log.i(WaveApplication.LOG_TAG, "debug v2 pair continue state=${next?.let { it::class.simpleName }} message=${(next as? xyz.mooma0750.wave.connect2.PairingV2Controller.State.Failed)?.message}")
-                        container.connectV2?.summary { Log.i(WaveApplication.LOG_TAG, "debug v2 pair continue $it") }
-                        kotlinx.coroutines.delay(500)
-                    } finally {
-                        // v2_pair_accept で取った参照を戻す
-                        container.connectV2?.relay?.release()
-                    }
+                    pairing.confirmOnB()
+                    val next = kotlinx.coroutines.withTimeoutOrNull(40_000) { pairing.state.first { it is xyz.mooma0750.wave.connect2.PairingV2Controller.State.Done || it is xyz.mooma0750.wave.connect2.PairingV2Controller.State.Failed } }
+                    Log.i(WaveApplication.LOG_TAG, "debug v2 pair continue state=${next?.let { it::class.simpleName }} message=${(next as? xyz.mooma0750.wave.connect2.PairingV2Controller.State.Failed)?.message}")
+                    container.connectV2?.summary { Log.i(WaveApplication.LOG_TAG, "debug v2 pair continue $it") }
+                    kotlinx.coroutines.delay(500)
                 }
                 "v2_transfer" -> {
                     val manager = container.connectV2 ?: return@launch
