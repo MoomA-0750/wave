@@ -240,6 +240,17 @@ class PlaybackService : MediaSessionService() {
             MediaSession
                 .Builder(this, player)
                 .setCallback(Callback(queueSession))
+                // 通知・ロック画面・時計から、アプリに戻れるようにする
+                .setSessionActivity(
+                    android.app.PendingIntent.getActivity(
+                        this,
+                        0,
+                        android.content.Intent(this, xyz.mooma0750.wave.MainActivity::class.java)
+                            .setAction(android.content.Intent.ACTION_MAIN)
+                            .addCategory(android.content.Intent.CATEGORY_LAUNCHER),
+                        android.app.PendingIntent.FLAG_IMMUTABLE,
+                    ),
+                )
                 // 通知・ロック画面のアートワークも、認証情報を持たない音声用のクライアントで取る
                 .setBitmapLoader(
                     androidx.media3.datasource.DataSourceBitmapLoader
@@ -495,7 +506,10 @@ class PlaybackService : MediaSessionService() {
                 .Builder(if (liked) CommandButton.ICON_HEART_FILLED else CommandButton.ICON_HEART_UNFILLED)
                 .setDisplayName(if (liked) "評価を外す" else "高く評価")
                 .setSessionCommand(SessionCommand(QueueCommands.TOGGLE_LIKE, extras))
-                .setEnabled(state.status != null && !state.pending)
+                // 書き込み中も評価を読めていない間も、ボタンは残す。
+                // 無効なボタンはプラットフォームのセッション（通知センター・時計・車載）の一覧から落ちるので、押すたびにハートが消えて見える
+                .setEnabled(true)
+                .setSlots(CommandButton.SLOT_BACK_SECONDARY, CommandButton.SLOT_OVERFLOW)
                 .build(),
         )
     }

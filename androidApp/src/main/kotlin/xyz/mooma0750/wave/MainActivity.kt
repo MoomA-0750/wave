@@ -50,11 +50,22 @@ class MainActivity : ComponentActivity() {
         DebugActions.handle(intent, (application as WaveApplication).container)
     }
 
+    private val notificationPermission =
+        registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { granted ->
+            android.util.Log.i(WaveApplication.LOG_TAG, "notification permission granted=$granted")
+        }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val container = (application as WaveApplication).container
         DebugActions.handle(intent, container)
+        // Android 13 以降は、許可が無いと再生中の通知（通知センター・ロック画面・時計）が出ない
+        if (android.os.Build.VERSION.SDK_INT >= 33 &&
+            androidx.core.content.ContextCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+        }
         setContent {
             MaterialTheme {
                 val authState by container.authManager.state.collectAsStateWithLifecycle()
