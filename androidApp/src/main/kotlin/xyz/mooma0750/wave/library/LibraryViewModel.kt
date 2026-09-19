@@ -54,6 +54,12 @@ data class PlaylistUiState(
     val continuation: String? = null,
     val loading: Boolean = true,
     val failure: FailureKind? = null,
+    /** プレイリストの中の絞り込み（手元で絞る）。 */
+    val query: String = "",
+    /** 絞り込みのために全ページを読んでいる途中。 */
+    val loadingAll: Boolean = false,
+    /** 上限まで読んでも続きがあった（絞り込みが全曲を見ていない）。 */
+    val incomplete: Boolean = false,
 )
 
 class PlaylistViewModel(
@@ -61,6 +67,11 @@ class PlaylistViewModel(
     val playlistId: String,
     initialTitle: String?,
 ) : ViewModel() {
+    private companion object {
+        /** 1ページ100曲。中を探すときに読むページ数の上限。 */
+        const val MAX_PAGES = 50
+    }
+
     private val mutableState = MutableStateFlow(PlaylistUiState(title = initialTitle))
     val state: StateFlow<PlaylistUiState> = mutableState.asStateFlow()
 
@@ -82,6 +93,42 @@ class PlaylistViewModel(
                 }
                 is CallResult.Failed -> mutableState.update { it.copy(loading = false, failure = result.kind) }
             }
+        }
+    }
+
+    /**
+     * 中を探す。読み込んだぶんだけでは足りないので、絞り込みを始めたら残りのページも読む（上限 MAX_PAGES）。
+     */
+    fun setQuery(query: String) {
+        mutableState.update { it.copy(query = query) }
+        if (query.isNotBlank()) loadAll()
+    }
+
+    private fun loadAll() {
+        if (state.value.loadingAll || state.value.continuation == null) return
+        mutableState.update { it.copy(loadingAll = true) }
+        viewModelScope.launch {
+            var pages = 0
+            while (true) {
+                val token = state.value.continuation ?: break
+                if (pages >= MAX_PAGES) {
+                    mutableState.update { it.copy(incomplete = true) }
+                    break
+                }
+                pages++
+                when (val result = music.playlist(playlistId, token)) {
+                    is CallResult.Ok ->
+                        mutableState.update {
+                            it.copy(songs = it.songs + result.value.songs, setVideoIds = it.setVideoIds + result.value.setVideoIds, continuation = result.value.continuation)
+                        }
+                    is CallResult.Failed -> {
+                        mutableState.update { it.copy(incomplete = true) }
+                        break
+                    }
+                }
+            }
+            mutableState.update { it.copy(loadingAll = false) }
+            Log.i(WaveApplication.LOG_TAG, "playlist load all songs=${state.value.songs.size} incomplete=${state.value.incomplete}")
         }
     }
 

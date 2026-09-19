@@ -9,12 +9,14 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -99,9 +101,32 @@ fun PlaylistScreen(
                     }
                 }
             }
+            item {
+                OutlinedTextField(
+                    value = state.query,
+                    onValueChange = { viewModel.setQuery(it) },
+                    label = { Text("この中を探す") },
+                    singleLine = true,
+                    trailingIcon = { if (state.query.isNotEmpty()) TextButton(onClick = { viewModel.setQuery("") }) { Text("消す") } },
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                )
+            }
             state.failure?.let { item { Text(failureMessage(it), Modifier.padding(16.dp)) } }
             if (!state.loading && state.failure == null && state.songs.isEmpty()) item { Text("曲がありません", Modifier.padding(16.dp)) }
-            itemsIndexed(state.songs, key = { index, song -> "$index-${song.videoId}" }) { index, song ->
+            // 絞り込み中は、元の並びでの位置を持ったまま出す（再生も「外す」も元の位置に当てる）
+            val shown = SongFilter.matchingIndices(state.songs, state.query)
+            if (state.query.isNotBlank()) {
+                item {
+                    Column(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                        Text("${shown.size}件", style = MaterialTheme.typography.bodySmall)
+                        if (state.loadingAll) Text("残りのページを読んでいます…", style = MaterialTheme.typography.bodySmall)
+                        if (state.incomplete) Text("全部は読めませんでした（この先に一致する曲があるかもしれません）", style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+                if (shown.isEmpty() && !state.loadingAll) item { Text("見つかりませんでした", Modifier.padding(16.dp)) }
+            }
+            items(shown, key = { index -> "$index-${state.songs[index].videoId}" }) { index ->
+                val song = state.songs[index]
                 val setVideoId = state.setVideoIds.getOrNull(index)
                 SongRow(song, onClick = { onPlay(state.songs, index, state.continuation) }) {
                     xyz.mooma0750.wave.search.SongMenuButton(
@@ -110,7 +135,10 @@ fun PlaylistScreen(
                         extraItems = if (state.editable && setVideoId != null) listOf("このプレイリストから外す" to { onRemove(song, setVideoId) }) else emptyList(),
                     )
                 }
-                if (index == state.songs.lastIndex && state.continuation != null) LaunchedEffect(state.songs.size) { viewModel.loadMore() }
+                // 絞り込み中は、続きを読むのは loadAll に任せる
+                if (state.query.isBlank() && index == state.songs.lastIndex && state.continuation != null) {
+                    LaunchedEffect(state.songs.size) { viewModel.loadMore() }
+                }
             }
             if (state.loading) item { CircularProgressIndicator(Modifier.padding(16.dp)) }
         }
