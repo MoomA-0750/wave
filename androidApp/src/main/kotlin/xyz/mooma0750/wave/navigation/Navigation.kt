@@ -12,8 +12,13 @@ sealed interface Screen {
     /** 端末の連携（Phase 6 のペアリングと引き取り）。 */
     data object Connect : Screen
 
+    /** 再生履歴（自分が聴いた曲）。 */
+    data object History : Screen
+
     data class Playlist(
         val summary: PlaylistSummary,
+        /** 開いたときに入れておく絞り込み（アーティストの高評価曲から来たときなど）。 */
+        val initialQuery: String? = null,
     ) : Screen
 
     data class Artist(

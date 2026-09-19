@@ -196,6 +196,9 @@ class AppContainer(
     /** 高く評価した曲が変わった（かもしれない）たびに増える。一覧を読み直すキーに使う。 */
     val likedSongsVersion: StateFlow<Int> = mutableLikedSongsVersion.asStateFlow()
 
+    /** 高く評価した曲の読み込み（アーティストのページで使う）。評価が変わるまで使い回す。 */
+    val likedSongs = xyz.mooma0750.wave.library.LikedSongsCache(music)
+
     fun onLikedSongsChanged() {
         mutableLikedSongsVersion.update { it + 1 }
     }

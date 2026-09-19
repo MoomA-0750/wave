@@ -56,12 +56,25 @@ data class PageUiState<T>(
     val failure: FailureKind? = null,
 )
 
+/** アーティストのページに出す、そのアーティストの高評価曲。 */
+data class ArtistLikedState(
+    val songs: List<Song> = emptyList(),
+    val loading: Boolean = true,
+    /** 高く評価した曲を最後まで読めなかった（この先にもあるかもしれない）。 */
+    val incomplete: Boolean = false,
+)
+
 class ArtistViewModel(
     music: MusicRepository,
-    browseId: String,
+    private val browseId: String,
+    private val liked: xyz.mooma0750.wave.library.LikedSongsCache? = null,
+    private val likedSongsVersion: Int = 0,
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(PageUiState<ArtistPage>())
     val state: StateFlow<PageUiState<ArtistPage>> = mutableState.asStateFlow()
+
+    private val mutableLiked = MutableStateFlow(ArtistLikedState())
+    val likedSongs: StateFlow<ArtistLikedState> = mutableLiked.asStateFlow()
 
     init {
         viewModelScope.launch {
@@ -77,7 +90,17 @@ class ArtistViewModel(
                         PageUiState(failure = result.kind)
                     }
                 }
+            loadLiked()
         }
+    }
+
+    private suspend fun loadLiked() {
+        val cache = liked ?: return run { mutableLiked.value = ArtistLikedState(loading = false) }
+        val name = state.value.page?.name.orEmpty()
+        val result = cache.songs(likedSongsVersion)
+        val songs = xyz.mooma0750.wave.library.LikedByArtist.filter(result.songs, browseId, name)
+        Log.i(WaveApplication.LOG_TAG, "artist liked songs=${songs.size} of=${result.songs.size} complete=${result.complete}")
+        mutableLiked.value = ArtistLikedState(songs = songs, loading = false, incomplete = !result.complete)
     }
 }
 
@@ -115,12 +138,15 @@ fun ArtistScreen(
     actions: SongActions,
     onPlay: (songs: List<Song>, index: Int) -> Unit,
     onOpenAllSongs: (playlistId: String, artistName: String) -> Unit,
+    /** 「高く評価した曲」をこのアーティストで絞った一覧を開く。 */
+    onOpenLiked: (artistName: String) -> Unit,
     onOpenAlbum: (AlbumSummary) -> Unit,
     onBack: () -> Unit,
     bottomBar: @Composable () -> Unit,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val page = state.page
+    val liked by viewModel.likedSongs.collectAsStateWithLifecycle()
     Scaffold(
         topBar = { TopAppBar(title = { Text(page?.name ?: title, maxLines = 1, overflow = TextOverflow.Ellipsis) }, navigationIcon = { TextButton(onClick = onBack) { Text("戻る") } }) },
         bottomBar = bottomBar,
@@ -138,6 +164,24 @@ fun ArtistScreen(
                     }
                     itemsIndexed(page.topSongs, key = { index, song -> "song-$index-${song.videoId}" }) { index, song ->
                         SongRow(song, onClick = { onPlay(page.topSongs, index) }) { SongMenuButton(song, actions) }
+                    }
+                    // このアーティストの、自分が高く評価した曲
+                    if (liked.loading || liked.songs.isNotEmpty()) {
+                        item(key = "liked-heading") {
+                            Row(Modifier.padding(start = 16.dp, top = 16.dp, end = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text("高く評価した曲", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                                if (liked.songs.isNotEmpty()) TextButton(onClick = { onOpenLiked(page.name) }) { Text("一覧で見る") }
+                            }
+                        }
+                        if (liked.loading) item(key = "liked-loading") { CircularProgressIndicator(Modifier.padding(16.dp)) }
+                        itemsIndexed(liked.songs, key = { index, song -> "liked-$index-${song.videoId}" }) { index, song ->
+                            SongRow(song, onClick = { onPlay(liked.songs, index) }) { SongMenuButton(song, actions) }
+                        }
+                        if (liked.incomplete) {
+                            item(key = "liked-incomplete") {
+                                Text("高く評価した曲を全部は読めていません", Modifier.padding(horizontal = 16.dp), style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
                     }
                     page.albumShelves.forEachIndexed { shelfIndex, shelf ->
                         item(key = "shelf-$shelfIndex") {

@@ -157,11 +157,20 @@ class MainActivity : ComponentActivity() {
                                         onConnect = { stack += Screen.Connect },
                                         library = libraryState,
                                         onOpenPlaylist = { stack += Screen.Playlist(it) },
+                                        onOpenHistory = { stack += Screen.History },
                                         songActions = songActions,
                                     )
                                 }
                                 Screen.Connect ->
                                     xyz.mooma0750.wave.connect.ConnectScreen(container, onBack = pop, bottomBar = miniPlayer)
+                                Screen.History ->
+                                    xyz.mooma0750.wave.library.HistoryScreen(
+                                        viewModel(key = "history-$loginGeneration") { xyz.mooma0750.wave.library.HistoryViewModel(container.music) },
+                                        onPlay = { songs, index -> scope.launch { container.player.playFrom(songs, index, playlistId = null, continuation = null) } },
+                                        actions = songActions,
+                                        onBack = pop,
+                                        bottomBar = miniPlayer,
+                                    )
                                 Screen.Search -> {
                                     // 検索から開いたアーティスト・アルバムも履歴に残す（Spotify と同じで、あとから辿れる）
                                     val searchActions =
@@ -195,7 +204,9 @@ class MainActivity : ComponentActivity() {
                                     val likedVersion by container.likedSongsVersion.collectAsStateWithLifecycle()
                                     val version = if (playlist.playlistId == xyz.mooma0750.wave.core.music.MusicRepository.LIKED_SONGS) likedVersion else 0
                                     PlaylistScreen(
-                                        viewModel(key = "playlist-$loginGeneration-${playlist.playlistId}-$version-$playlistsVersion") { PlaylistViewModel(container.music, playlist.playlistId, playlist.title) },
+                                        viewModel(key = "playlist-$loginGeneration-${playlist.playlistId}-$version-$playlistsVersion-${screen.initialQuery}") {
+                                            PlaylistViewModel(container.music, playlist.playlistId, playlist.title, screen.initialQuery)
+                                        },
                                         onPlay = { songs, index, continuation -> scope.launch { container.player.playFrom(songs, index, playlist.playlistId, continuation) } },
                                         onShufflePlay = { songs, continuation ->
                                             scope.launch { container.player.playFrom(songs, 0, playlist.playlistId, continuation, shuffle = true) }
@@ -209,18 +220,26 @@ class MainActivity : ComponentActivity() {
                                         bottomBar = miniPlayer,
                                     )
                                 }
-                                is Screen.Artist ->
+                                is Screen.Artist -> {
+                                    val likedSongsVersion by container.likedSongsVersion.collectAsStateWithLifecycle()
                                     ArtistScreen(
-                                        viewModel(key = "artist-$loginGeneration-${screen.browseId}") { ArtistViewModel(container.music, screen.browseId) },
+                                        viewModel(key = "artist-$loginGeneration-${screen.browseId}-$likedSongsVersion") {
+                                            ArtistViewModel(container.music, screen.browseId, container.likedSongs, likedSongsVersion)
+                                        },
                                         title = screen.name,
                                         actions = songActions,
                                         // 曲の棚は5曲だけなので、最後まで行ったら最後の曲からラジオにつなぐ
                                         onPlay = { songs, index -> scope.launch { container.player.playFrom(songs, index, playlistId = null, continuation = null) } },
                                         onOpenAllSongs = { id, name -> stack += Screen.Playlist(PlaylistSummary(id, name, null, null)) },
+                                        // 「高く評価した曲」を、そのアーティストで絞った状態で開く
+                                        onOpenLiked = { name ->
+                                            stack += Screen.Playlist(PlaylistSummary(xyz.mooma0750.wave.core.music.MusicRepository.LIKED_SONGS, "高く評価した曲", null, null), initialQuery = name)
+                                        },
                                         onOpenAlbum = { album -> stack += Screen.Album(album.browseId, album.title) },
                                         onBack = pop,
                                         bottomBar = miniPlayer,
                                     )
+                                }
                                 is Screen.Album ->
                                     AlbumScreen(
                                         viewModel(key = "album-$loginGeneration-${screen.browseId}") { AlbumViewModel(container.music, screen.browseId) },

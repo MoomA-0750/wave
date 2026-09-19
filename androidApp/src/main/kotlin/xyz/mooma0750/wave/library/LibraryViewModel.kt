@@ -66,13 +66,14 @@ class PlaylistViewModel(
     private val music: MusicRepository,
     val playlistId: String,
     initialTitle: String?,
+    initialQuery: String? = null,
 ) : ViewModel() {
     private companion object {
         /** 1ページ100曲。中を探すときに読むページ数の上限。 */
         const val MAX_PAGES = 50
     }
 
-    private val mutableState = MutableStateFlow(PlaylistUiState(title = initialTitle))
+    private val mutableState = MutableStateFlow(PlaylistUiState(title = initialTitle, query = initialQuery.orEmpty()))
     val state: StateFlow<PlaylistUiState> = mutableState.asStateFlow()
 
     init {
@@ -93,6 +94,8 @@ class PlaylistViewModel(
                 }
                 is CallResult.Failed -> mutableState.update { it.copy(loading = false, failure = result.kind) }
             }
+            // 絞り込みを入れて開いたら、その場で残りのページも読む
+            if (state.value.query.isNotBlank()) loadAll()
         }
     }
 

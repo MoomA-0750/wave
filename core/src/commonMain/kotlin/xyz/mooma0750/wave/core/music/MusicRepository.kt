@@ -64,6 +64,25 @@ class MusicRepository(
     var lastCardMenuIcons: List<Set<String>> = emptyList()
         private set
 
+    /**
+     * 再生履歴（自分が聴いた曲）。ログイン必須。送信の設定（ADR-0006）とは別で、設定を切っていても見られる（切っている間の分は載らない）。
+     */
+    suspend fun history(continuation: String? = null): CallResult<HistoryPage> =
+        session.call(
+            operation = "browse",
+            block = {
+                if (continuation == null) {
+                    it.browse(YouTubeClient.WEB_REMIX, browseId = HISTORY, setLogin = true)
+                } else {
+                    it.browse(YouTubeClient.WEB_REMIX, continuation = continuation, setLogin = true)
+                }
+            },
+        ) { response ->
+            val root = json(response)
+            lastRendererNames = MusicParsers.rendererNames(root)
+            if (MusicParsers.isSignInPrompt(root)) ParseOutcome.LoggedOutResponse else ParseOutcome.Parsed(MusicParsers.historyPage(root))
+        }
+
     /** プレイリストの曲。continuation を渡したら続きのページ。高く評価した曲は playlistId = LIKED_SONGS。 */
     suspend fun playlist(
         playlistId: String,
@@ -242,6 +261,7 @@ class MusicRepository(
         const val SONGS_FILTER = "EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D"
 
         const val LIBRARY_PLAYLISTS = "FEmusic_liked_playlists"
+        const val HISTORY = "FEmusic_history"
         const val LIKED_SONGS = "LM"
 
         /** ある曲から始まるラジオの playlistId。 */

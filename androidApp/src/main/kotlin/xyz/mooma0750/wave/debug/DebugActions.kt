@@ -277,6 +277,22 @@ object DebugActions {
                     listOf("wave-probe-sign", "wave-probe-agree", "wave-probe-x25519").forEach { runCatching { ks.deleteEntry(it) } }
                     Log.i(WaveApplication.LOG_TAG, "debug keystore sdk=${android.os.Build.VERSION.SDK_INT} $results $timings")
                 }
+                // 再生履歴を読めるか（区切りの数・件数だけ。曲名は出さない）
+                "history_probe" -> {
+                    when (val result = container.music.history()) {
+                        is CallResult.Ok -> {
+                            Log.i(WaveApplication.LOG_TAG, "debug history sections=${result.value.sections.size} songs=${result.value.songs.size} continuation=${result.value.continuation != null} headings=${result.value.sections.count { it.title != null }}")
+                            val token = result.value.continuation
+                            if (token != null) {
+                                when (val next = container.music.history(token)) {
+                                    is CallResult.Ok -> Log.i(WaveApplication.LOG_TAG, "debug history page2 sections=${next.value.sections.size} songs=${next.value.songs.size} continuation=${next.value.continuation != null}")
+                                    is CallResult.Failed -> Log.i(WaveApplication.LOG_TAG, "debug history page2 failed=${next.kind}")
+                                }
+                            }
+                        }
+                        is CallResult.Failed -> Log.i(WaveApplication.LOG_TAG, "debug history failed=${result.kind} renderers=${container.music.lastRendererNames}")
+                    }
+                }
                 // 最後のページと確かめられるか（番号・ページ数・真偽値だけ）
                 "playlist_end_probe" ->
                     (container.music.libraryPlaylists() as? CallResult.Ok)?.value?.forEachIndexed { index, summary ->

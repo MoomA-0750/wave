@@ -72,6 +72,20 @@ data class PlaylistPage(
     val endConfirmed: Boolean = false,
 )
 
+/** 再生履歴の1つの区切り（「今日」「今週」など）。 */
+data class HistorySection(
+    val title: String?,
+    val songs: List<Song>,
+)
+
+/** 再生履歴の1ページ。区切りごとに曲が並ぶ。 */
+data class HistoryPage(
+    val sections: List<HistorySection>,
+    val continuation: String?,
+) {
+    val songs: List<Song> get() = sections.flatMap { it.songs }
+}
+
 /** プレイリストへの追加の結果（決定 G-1: 先に全ページを読んで重複を確かめる）。 */
 sealed interface AddToPlaylistResult {
     data object Added : AddToPlaylistResult

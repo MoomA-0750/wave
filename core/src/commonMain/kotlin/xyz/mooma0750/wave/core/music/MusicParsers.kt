@@ -26,6 +26,32 @@ internal object MusicParsers {
         return SongPage(songs, nextContinuation(shelf))
     }
 
+    /**
+     * 再生履歴（browse FEmusic_history）。「今日」「今週」のように区切られた棚が並ぶので、棚ごとに見出しと曲を取る。
+     * 続きのページは continuationContents に来る。
+     */
+    fun historyPage(root: JsonObject): HistoryPage {
+        val container =
+            root.path("continuationContents", "sectionListContinuation").asObject()
+                ?: root
+                    .path("contents", "singleColumnBrowseResultsRenderer", "tabs")
+                    .firstArrayItem()
+                    .path("tabRenderer", "content", "sectionListRenderer")
+                    .asObject()
+                ?: return HistoryPage(emptyList(), null)
+        val sections =
+            findAll(container, "musicShelfRenderer").map { shelf ->
+                HistorySection(
+                    title = shelf.path("title", "runs").arrayItems().joinToString("") { it.path("text").string().orEmpty() }.takeIf { it.isNotBlank() },
+                    songs = shelf.path("contents").arrayItems().mapNotNull { it.path("musicResponsiveListItemRenderer").asObject()?.let(::responsiveListItemSong) },
+                )
+            }
+        val continuation =
+            nextContinuation(container)
+                ?: findAll(container, "musicShelfRenderer").lastOrNull()?.let(::nextContinuation)
+        return HistoryPage(sections.filter { it.songs.isNotEmpty() }, continuation)
+    }
+
     /** next（ラジオ）の最初のページと続きのページ。続きの応答は contents も持つので、continuationContents を優先する。 */
     fun upNext(root: JsonObject): UpNextPage {
         val panel =

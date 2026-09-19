@@ -40,12 +40,18 @@ import xyz.mooma0750.wave.search.failureMessage
 fun LazyListScope.libraryItems(
     state: LibraryUiState,
     onOpen: (PlaylistSummary) -> Unit,
+    onOpenHistory: () -> Unit = {},
 ) {
     item {
         Text("ライブラリ", Modifier.padding(start = 16.dp, top = 16.dp, bottom = 4.dp), style = MaterialTheme.typography.titleMedium)
     }
     item {
         PlaylistRow(PlaylistSummary(MusicRepository.LIKED_SONGS, "高く評価した曲", null, null), onOpen)
+    }
+    item {
+        Column(Modifier.fillMaxWidth().clickable(onClick = onOpenHistory).padding(horizontal = 16.dp, vertical = 10.dp)) {
+            Text("再生履歴", maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyLarge)
+        }
     }
     when {
         state.failure != null -> item { Text(failureMessage(state.failure), Modifier.padding(16.dp)) }

@@ -46,6 +46,7 @@ fun HomeScreen(
     onConnect: () -> Unit,
     library: LibraryUiState,
     onOpenPlaylist: (PlaylistSummary) -> Unit,
+    onOpenHistory: () -> Unit,
     songActions: xyz.mooma0750.wave.navigation.SongActions,
 ) {
     val sessionState by container.session.state.collectAsStateWithLifecycle()
@@ -121,7 +122,7 @@ fun HomeScreen(
                     }
                 }
             }
-            libraryItems(library, onOpenPlaylist)
+            libraryItems(library, onOpenPlaylist, onOpenHistory)
             if (container.isDebuggable) {
                 item {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
