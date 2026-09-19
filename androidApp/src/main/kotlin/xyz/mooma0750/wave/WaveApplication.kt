@@ -342,10 +342,22 @@ class AppContainer(
     /** 次に開いたときに戻すキュー。ログアウトで消す。 */
     val queueStore = QueueStore.create(context)
 
+    /** 検索の履歴（語と、検索から開いたアーティスト・アルバム）。ログアウトで消す。 */
+    val searchHistory =
+        xyz.mooma0750.wave.search.SearchHistoryStore(
+            xyz.mooma0750.wave.playback.AtomicQueueFile(java.io.File(context.noBackupFilesDir, "search-history.json")),
+            appScope,
+        )
+
     init {
         // 起動時・ログアウト後にログインしていなければ、再生サービスが動いていなくても保存したキューを消す
         appScope.launch {
-            authManager.state.collect { state -> if (state is AuthState.LoggedOut || state is AuthState.Unreadable) queueStore.delete() }
+            authManager.state.collect { state ->
+                if (state is AuthState.LoggedOut || state is AuthState.Unreadable) {
+                    queueStore.delete()
+                    searchHistory.clear()
+                }
+            }
         }
         // ログインが反映されたら、プレイヤーの設定を先に取っておく（最初の再生を速くする）
         appScope.launch {
@@ -367,8 +379,9 @@ class AppContainer(
 
     /** ログアウトの唯一の入口。保存物を消し、WebView 側の後始末もする。両方消せたら true。 */
     suspend fun logout(): Boolean {
-        // 先に消す（ログアウトの完了を待つ間にプロセスが終わっても、前のアカウントのキューを残さない）
+        // 先に消す（ログアウトの完了を待つ間にプロセスが終わっても、前のアカウントのキュー・検索履歴を残さない）
         queueStore.delete()
+        searchHistory.clear()
         val cleared = authManager.logout()
         // 再生サービスが動いていなくても、前のアカウントで解決した URL とサムネイルを残さない
         streamCache.clear()

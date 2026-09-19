@@ -162,14 +162,33 @@ class MainActivity : ComponentActivity() {
                                 }
                                 Screen.Connect ->
                                     xyz.mooma0750.wave.connect.ConnectScreen(container, onBack = pop, bottomBar = miniPlayer)
-                                Screen.Search ->
+                                Screen.Search -> {
+                                    // 検索から開いたアーティスト・アルバムも履歴に残す（Spotify と同じで、あとから辿れる）
+                                    val searchActions =
+                                        remember(songActions) {
+                                            SongActions(
+                                                playNext = songActions.playNext,
+                                                addToQueue = songActions.addToQueue,
+                                                openArtist = { artist ->
+                                                    artist.browseId?.let { container.searchHistory.add(xyz.mooma0750.wave.search.SearchHistoryEntry.Artist(artist.name, it)) }
+                                                    songActions.openArtist(artist)
+                                                },
+                                                openAlbum = { album ->
+                                                    album.browseId?.let { container.searchHistory.add(xyz.mooma0750.wave.search.SearchHistoryEntry.Album(album.title, it)) }
+                                                    songActions.openAlbum(album)
+                                                },
+                                                addToPlaylist = songActions.addToPlaylist,
+                                            )
+                                        }
                                     SearchScreen(
-                                        viewModel(key = "search-$loginGeneration") { SearchViewModel(container.music) },
+                                        viewModel(key = "search-$loginGeneration") { SearchViewModel(container.music, container.searchHistory) },
                                         onSongClick = { song -> scope.launch { container.player.playSong(song) } },
-                                        actions = songActions,
+                                        actions = searchActions,
                                         onBack = pop,
                                         bottomBar = miniPlayer,
+                                        history = container.searchHistory,
                                     )
+                                }
                                 is Screen.Playlist -> {
                                     val playlist = screen.summary
                                     // 高く評価した曲は、評価を変えたら読み直す

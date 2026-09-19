@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -44,8 +45,11 @@ fun SearchScreen(
     actions: xyz.mooma0750.wave.navigation.SongActions,
     onBack: () -> Unit,
     bottomBar: @Composable () -> Unit = {},
+    /** 検索の履歴（語・アーティスト・アルバム）。null なら出さない。 */
+    history: SearchHistoryStore? = null,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val historyEntries by (history?.entries ?: kotlinx.coroutines.flow.MutableStateFlow(emptyList())).collectAsStateWithLifecycle()
     val keyboard = LocalSoftwareKeyboardController.current
     Scaffold(
         topBar = { TopAppBar(title = { Text("検索") }, navigationIcon = { TextButton(onClick = onBack) { Text("戻る") } }) },
@@ -70,6 +74,34 @@ fun SearchScreen(
                 state.empty -> Text("見つかりませんでした", Modifier.padding(16.dp))
             }
             LazyColumn(Modifier.fillMaxSize()) {
+                // まだ検索していないときは、前に探した語と、そこから開いたアーティスト・アルバムを出す
+                if (state.songs.isEmpty() && !state.loading && state.failure == null && !state.empty && historyEntries.isNotEmpty()) {
+                    item {
+                        Row(
+                            Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp),
+                            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                        ) {
+                            Text("最近の検索", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                            TextButton(onClick = { history?.clear() }) { Text("すべて消す") }
+                        }
+                    }
+                    items(historyEntries, key = { entry -> entryKey(entry) }) { entry ->
+                        HistoryRow(
+                            entry,
+                            onClick = {
+                                when (entry) {
+                                    is SearchHistoryEntry.Query -> {
+                                        keyboard?.hide()
+                                        viewModel.searchFor(entry.text)
+                                    }
+                                    is SearchHistoryEntry.Artist -> actions.openArtist(xyz.mooma0750.wave.core.music.ArtistRef(entry.name, entry.browseId))
+                                    is SearchHistoryEntry.Album -> actions.openAlbum(xyz.mooma0750.wave.core.music.AlbumRef(entry.title, entry.browseId))
+                                }
+                            },
+                            onRemove = { history?.remove(entry) },
+                        )
+                    }
+                }
                 itemsIndexed(state.songs, key = { index, song -> "$index-${song.videoId}" }) { index, song ->
                     SongRow(song, onClick = { onSongClick(song) }) { SongMenuButton(song, actions) }
                     if (index == state.songs.lastIndex && state.continuation != null) {
@@ -120,3 +152,35 @@ fun failureMessage(kind: FailureKind?): String =
         FailureKind.AccountUnverified -> "書き込み先のアカウントを確かめられませんでした（しばらくして直らなければ、ログインし直してください）"
         null -> ""
     }
+
+private fun entryKey(entry: SearchHistoryEntry): String =
+    when (entry) {
+        is SearchHistoryEntry.Query -> "q-${entry.text}"
+        is SearchHistoryEntry.Artist -> "ar-${entry.browseId}"
+        is SearchHistoryEntry.Album -> "al-${entry.browseId}"
+    }
+
+/** 履歴の1行。語・アーティスト・アルバムの区別が分かるようにする。 */
+@Composable
+private fun HistoryRow(
+    entry: SearchHistoryEntry,
+    onClick: () -> Unit,
+    onRemove: () -> Unit,
+) {
+    val (label, kind) =
+        when (entry) {
+            is SearchHistoryEntry.Query -> entry.text to "検索した語"
+            is SearchHistoryEntry.Artist -> entry.name to "アーティスト"
+            is SearchHistoryEntry.Album -> entry.title to "アルバム"
+        }
+    Row(
+        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(start = 16.dp, top = 8.dp, bottom = 8.dp, end = 4.dp),
+        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(kind, style = MaterialTheme.typography.bodySmall)
+        }
+        TextButton(onClick = onRemove) { Text("消す") }
+    }
+}
