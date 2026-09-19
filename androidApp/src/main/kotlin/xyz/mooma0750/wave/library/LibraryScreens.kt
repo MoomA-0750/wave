@@ -69,6 +69,8 @@ fun PlaylistScreen(
     viewModel: PlaylistViewModel,
     onPlay: (songs: List<Song>, index: Int, continuation: String?) -> Unit,
     onShufflePlay: (songs: List<Song>, continuation: String?) -> Unit,
+    /** 読み込んだぶんを丸ごとキューに入れる。next = 次に再生（false は最後に追加）。 */
+    onQueue: (songs: List<Song>, next: Boolean) -> Unit,
     actions: xyz.mooma0750.wave.navigation.SongActions,
     onRemove: (song: Song, setVideoId: String) -> Unit,
     onBack: () -> Unit,
@@ -86,9 +88,15 @@ fun PlaylistScreen(
     ) { padding ->
         LazyColumn(Modifier.fillMaxSize().padding(padding)) {
             item {
-                Row(Modifier.padding(16.dp)) {
-                    Button(onClick = { onPlay(state.songs, 0, state.continuation) }, enabled = state.songs.isNotEmpty()) { Text("すべて再生") }
-                    TextButton(onClick = { onShufflePlay(state.songs, state.continuation) }, enabled = state.songs.isNotEmpty()) { Text("シャッフル再生") }
+                Column(Modifier.padding(16.dp)) {
+                    Row {
+                        Button(onClick = { onPlay(state.songs, 0, state.continuation) }, enabled = state.songs.isNotEmpty()) { Text("すべて再生") }
+                        TextButton(onClick = { onShufflePlay(state.songs, state.continuation) }, enabled = state.songs.isNotEmpty()) { Text("シャッフル再生") }
+                    }
+                    Row {
+                        TextButton(onClick = { onQueue(state.songs, true) }, enabled = state.songs.isNotEmpty()) { Text("次に再生") }
+                        TextButton(onClick = { onQueue(state.songs, false) }, enabled = state.songs.isNotEmpty()) { Text("キューに追加") }
+                    }
                 }
             }
             state.failure?.let { item { Text(failureMessage(it), Modifier.padding(16.dp)) } }

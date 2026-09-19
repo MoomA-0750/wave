@@ -30,6 +30,7 @@ object QueueCommands {
     val all = listOf(PLAY_SONG, PLAY_FROM, ADD_NEXT, ADD_TO_END, REMOVE, JUMP, SHUFFLE_UPCOMING, TOGGLE_LIKE).map { SessionCommand(it, Bundle.EMPTY) }
 
     private const val KEY_SONG = "song"
+    private const val KEY_SONGS = "songs"
     private const val KEY_PLAY_FROM = "playFrom"
     private const val KEY_ITEM_ID = "itemId"
     private val json = Json { ignoreUnknownKeys = true }
@@ -46,6 +47,13 @@ object QueueCommands {
     fun songArgs(song: Song): Bundle = Bundle().apply { putString(KEY_SONG, json.encodeToString(Song.serializer(), song)) }
 
     fun songOf(args: Bundle): Song? = args.getString(KEY_SONG)?.let { runCatching { json.decodeFromString(Song.serializer(), it) }.getOrNull() }
+
+    /** アルバム・プレイリストを丸ごとキューに入れる。 */
+    fun songsArgs(songs: List<Song>): Bundle =
+        Bundle().apply { putString(KEY_SONGS, json.encodeToString(kotlinx.serialization.builtins.ListSerializer(Song.serializer()), songs)) }
+
+    fun songsOf(args: Bundle): List<Song>? =
+        args.getString(KEY_SONGS)?.let { runCatching { json.decodeFromString(kotlinx.serialization.builtins.ListSerializer(Song.serializer()), it) }.getOrNull() }?.takeIf { it.isNotEmpty() }
 
     fun playFromArgs(playFrom: PlayFrom): Bundle = Bundle().apply { putString(KEY_PLAY_FROM, json.encodeToString(PlayFrom.serializer(), playFrom)) }
 

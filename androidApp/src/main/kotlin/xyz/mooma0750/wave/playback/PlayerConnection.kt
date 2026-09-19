@@ -65,6 +65,11 @@ class PlayerConnection(
 
     suspend fun addToEnd(song: Song) = send(QueueCommands.ADD_TO_END, QueueCommands.songArgs(song))
 
+    /** アルバム・プレイリストを丸ごと足す。 */
+    suspend fun addNext(songs: List<Song>) = send(QueueCommands.ADD_NEXT, QueueCommands.songsArgs(songs))
+
+    suspend fun addToEnd(songs: List<Song>) = send(QueueCommands.ADD_TO_END, QueueCommands.songsArgs(songs))
+
     suspend fun remove(itemId: String) = send(QueueCommands.REMOVE, QueueCommands.itemArgs(itemId))
 
     suspend fun jumpTo(itemId: String) = send(QueueCommands.JUMP, QueueCommands.itemArgs(itemId))

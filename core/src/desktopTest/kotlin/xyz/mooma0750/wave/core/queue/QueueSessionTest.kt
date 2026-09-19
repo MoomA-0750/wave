@@ -338,6 +338,22 @@ class QueueSessionTest {
         }
 
     @Test
+    fun anAlbumCanBeAddedWholeKeepingItsOrder() =
+        runTest {
+            val player = FakePlayer()
+            val queue = session(player, FakeContent())
+            queue.playSong(song("a"))
+            queue.addNext(listOf(song("n1"), song("n2")))
+            queue.addToEnd(listOf(song("e1"), song("e2")))
+            assertEquals(listOf("a", "n1", "n2", "e1", "e2"), player.videoIds())
+            assertEquals(5, player.items.map { it.itemId }.toSet().size)
+            // 空の追加では何も起きない
+            queue.addNext(emptyList())
+            queue.addToEnd(emptyList())
+            assertEquals(5, player.items.size)
+        }
+
+    @Test
     fun resetClearsTheQueueAndDropsInFlightResults() =
         runTest {
             val player = FakePlayer()

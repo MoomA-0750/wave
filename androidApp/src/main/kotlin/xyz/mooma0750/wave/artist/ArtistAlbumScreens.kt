@@ -179,6 +179,8 @@ fun AlbumScreen(
     title: String,
     actions: SongActions,
     onPlay: (page: AlbumPage, index: Int, shuffle: Boolean) -> Unit,
+    /** アルバムを丸ごとキューに入れる。next = 次に再生（false は最後に追加）。 */
+    onQueue: (page: AlbumPage, next: Boolean) -> Unit,
     onBack: () -> Unit,
     bottomBar: @Composable () -> Unit,
 ) {
@@ -200,6 +202,10 @@ fun AlbumScreen(
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Button(onClick = { onPlay(page, 0, false) }, enabled = page.songs.isNotEmpty()) { Text("すべて再生") }
                                 TextButton(onClick = { onPlay(page, 0, true) }, enabled = page.songs.isNotEmpty()) { Text("シャッフル再生") }
+                            }
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                TextButton(onClick = { onQueue(page, true) }, enabled = page.songs.isNotEmpty()) { Text("次に再生") }
+                                TextButton(onClick = { onQueue(page, false) }, enabled = page.songs.isNotEmpty()) { Text("キューに追加") }
                             }
                             if (page.songs.isEmpty()) Text("曲がありません")
                         }

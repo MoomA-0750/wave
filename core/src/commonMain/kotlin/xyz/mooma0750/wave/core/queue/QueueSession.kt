@@ -199,18 +199,26 @@ class QueueSession(
         maybeFetch()
     }
 
-    fun addNext(song: Song) {
+    fun addNext(song: Song) = addNext(listOf(song))
+
+    /** アルバム・プレイリストを丸ごと、次に再生する。並びはそのまま。 */
+    fun addNext(songs: List<Song>) {
+        if (songs.isEmpty()) return
         rebindIfEmpty()
         val resumeAt = endedAtLastItem()
-        player.insertAfterCurrent(listOf(item(song, ItemOrigin.UserAdded)))
+        player.insertAfterCurrent(songs.map { item(it, ItemOrigin.UserAdded) })
         // 最後まで行って止まっているなら、足した曲から続ける（再生を押すと終わった曲の先頭に戻ってしまうため）
         if (resumeAt != null) player.resumeAt(resumeAt)
     }
 
-    fun addToEnd(song: Song) {
+    fun addToEnd(song: Song) = addToEnd(listOf(song))
+
+    /** アルバム・プレイリストを丸ごと、キューの最後に足す。 */
+    fun addToEnd(songs: List<Song>) {
+        if (songs.isEmpty()) return
         rebindIfEmpty()
         val resumeAt = endedAtLastItem()
-        player.append(listOf(item(song, ItemOrigin.UserAdded)))
+        player.append(songs.map { item(it, ItemOrigin.UserAdded) })
         if (resumeAt != null) player.resumeAt(resumeAt)
     }
 

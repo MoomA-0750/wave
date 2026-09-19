@@ -181,6 +181,9 @@ class MainActivity : ComponentActivity() {
                                         onShufflePlay = { songs, continuation ->
                                             scope.launch { container.player.playFrom(songs, 0, playlist.playlistId, continuation, shuffle = true) }
                                         },
+                                        onQueue = { songs, next ->
+                                            scope.launch { if (next) container.player.addNext(songs) else container.player.addToEnd(songs) }
+                                        },
                                         actions = songActions,
                                         onRemove = { song, setVideoId -> container.playlistEditor.remove(playlist.playlistId, song, setVideoId) },
                                         onBack = pop,
@@ -206,6 +209,9 @@ class MainActivity : ComponentActivity() {
                                         actions = songActions,
                                         onPlay = { page, index, shuffle ->
                                             scope.launch { container.player.playFrom(page.songs, index, page.playlistId, continuation = null, shuffle = shuffle) }
+                                        },
+                                        onQueue = { page, next ->
+                                            scope.launch { if (next) container.player.addNext(page.songs) else container.player.addToEnd(page.songs) }
                                         },
                                         onBack = pop,
                                         bottomBar = miniPlayer,
