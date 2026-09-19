@@ -86,6 +86,18 @@ data class HistoryPage(
     val songs: List<Song> get() = sections.flatMap { it.songs }
 }
 
+/** プレイリストの中の曲の ID を全ページ読んだ結果。 */
+sealed interface PlaylistScan {
+    data class Ok(
+        val videoIds: Set<String>,
+    ) : PlaylistScan
+
+    /** 最後まで読めなかった（中に在るかどうかを言えない）。 */
+    data class Incomplete(
+        val kind: xyz.mooma0750.wave.core.session.FailureKind,
+    ) : PlaylistScan
+}
+
 /** プレイリストへの追加の結果（決定 G-1: 先に全ページを読んで重複を確かめる）。 */
 sealed interface AddToPlaylistResult {
     data object Added : AddToPlaylistResult

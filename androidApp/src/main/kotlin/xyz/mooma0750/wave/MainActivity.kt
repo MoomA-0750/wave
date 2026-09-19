@@ -267,6 +267,9 @@ class MainActivity : ComponentActivity() {
                                         container.playlistEditor.create(title, song)
                                         addTarget = null
                                     },
+                                    song = song,
+                                    membership = container.playlistMembership,
+                                    playlistsVersion = playlistsVersion,
                                 )
                             }
                         }

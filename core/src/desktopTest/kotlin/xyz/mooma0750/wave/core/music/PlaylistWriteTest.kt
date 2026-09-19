@@ -105,6 +105,27 @@ class PlaylistWriteTest {
         }
 
     @Test
+    fun scanningReturnsEveryVideoIdWithoutWriting(): Unit =
+        runBlocking {
+            val repository = repository()
+            val onSecondPage = requireNotNull(Regex("\"videoId\":\"([^\"]+)\"").find(fixture("browse_playlist_continuation"))).groupValues[1]
+            val scan = assertIs<PlaylistScan.Ok>(repository.scanPlaylist("PLx"))
+            assertTrue(onSecondPage in scan.videoIds, "2ページ目の曲が入っていない")
+            assertEquals(2, sent.count { it.first.endsWith("/browse") }, "全ページを読んでいない")
+            assertEquals(0, edits(), "確認だけのはずが書き込んだ")
+        }
+
+    @Test
+    fun aScanThatCannotReachTheEndIsIncomplete(): Unit =
+        runBlocking {
+            unknownContinuation = true
+            val repository = repository()
+            assertIs<PlaylistScan.Incomplete>(repository.scanPlaylist("PLx"))
+            browseFails = true
+            assertIs<PlaylistScan.Incomplete>(repository.scanPlaylist("PLy"))
+        }
+
+    @Test
     fun unknownContinuationShapeIsNotTreatedAsTheEnd(): Unit =
         runBlocking {
             unknownContinuation = true

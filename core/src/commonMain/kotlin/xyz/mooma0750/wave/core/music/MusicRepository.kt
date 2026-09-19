@@ -151,22 +151,37 @@ class MusicRepository(
         knownEmpty: Boolean = false,
     ): AddToPlaylistResult {
         if (knownEmpty) return writeAdd(playlistId, videoId, expectedGeneration)
+        return when (val scan = scanPlaylist(playlistId, expectedGeneration)) {
+            is PlaylistScan.Incomplete -> AddToPlaylistResult.NotChecked(scan.kind)
+            is PlaylistScan.Ok -> if (videoId in scan.videoIds) AddToPlaylistResult.AlreadyInPlaylist else writeAdd(playlistId, videoId, expectedGeneration)
+        }
+    }
+
+    /**
+     * プレイリストの中の曲の ID を全ページ読む（重複の確認と、「どのプレイリストに入っているか」の表示に使う）。
+     * 続きを読み取れないまま終わったときは、最後まで読んだとみなさない。
+     */
+    suspend fun scanPlaylist(
+        playlistId: String,
+        expectedGeneration: Long = currentLoginGeneration(),
+    ): PlaylistScan {
+        val ids = mutableSetOf<String>()
         var continuation: String? = null
         var pages = 0
         do {
             when (val page = playlist(playlistId, continuation, expectedGeneration)) {
-                is CallResult.Failed -> return AddToPlaylistResult.NotChecked(page.kind)
+                is CallResult.Failed -> return PlaylistScan.Incomplete(page.kind)
                 is CallResult.Ok -> {
-                    if (page.value.songs.any { it.videoId == videoId }) return AddToPlaylistResult.AlreadyInPlaylist
+                    ids += page.value.songs.map { it.videoId }
                     continuation = page.value.continuation
-                    // 続きが読めなかっただけかもしれない（応答の形の変化）なら、全部読んだとはみなさず追加しない
-                    if (continuation == null && !page.value.endConfirmed) return AddToPlaylistResult.NotChecked(FailureKind.Parse)
+                    // 続きが読めなかっただけかもしれない（応答の形の変化）なら、全部読んだとはみなさない
+                    if (continuation == null && !page.value.endConfirmed) return PlaylistScan.Incomplete(FailureKind.Parse)
                 }
             }
             // 続きのトークンが循環しても止まるように、ページ数に上限を置く（1ページ100曲で5000曲）
-            if (++pages >= MAX_PLAYLIST_PAGES && continuation != null) return AddToPlaylistResult.NotChecked(FailureKind.Parse)
+            if (++pages >= MAX_PLAYLIST_PAGES && continuation != null) return PlaylistScan.Incomplete(FailureKind.Parse)
         } while (continuation != null)
-        return writeAdd(playlistId, videoId, expectedGeneration)
+        return PlaylistScan.Ok(ids)
     }
 
     private suspend fun writeAdd(

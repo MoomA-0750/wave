@@ -21,10 +21,12 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
@@ -158,10 +160,24 @@ fun AddToPlaylistDialog(
     onDismiss: () -> Unit,
     onPick: (PlaylistSummary) -> Unit,
     onCreate: (title: String) -> Unit,
+    /** 追加する曲。どのプレイリストに入っているかを確かめるのに使う。 */
+    song: Song? = null,
+    membership: PlaylistMembership? = null,
+    playlistsVersion: Int = 0,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var creating by remember { mutableStateOf(false) }
     var title by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
+    val editable = state.playlists.filter { it.editable }
+    // すでに入っているプレイリストを出す（YouTube Music に一覧で返す口が無いので、1つずつ読む）
+    val check = remember(membership, scope) { membership?.Check(scope) }
+    val statuses by (check?.status ?: remember { kotlinx.coroutines.flow.MutableStateFlow(emptyMap<String, PlaylistMembership.Status>()) }).collectAsStateWithLifecycle()
+    LaunchedEffect(check, song?.videoId, editable.map { it.playlistId }, playlistsVersion) {
+        val videoId = song?.videoId
+        if (check != null && videoId != null && editable.isNotEmpty()) check.start(editable.map { it.playlistId }, videoId, playlistsVersion)
+    }
+    DisposableEffect(check) { onDispose { check?.cancel() } }
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(if (creating) "新しいプレイリスト（非公開）" else "プレイリストに追加") },
@@ -180,13 +196,17 @@ fun AddToPlaylistDialog(
                         state.failure != null -> item { Text(failureMessage(state.failure)) }
                         state.loading -> item { CircularProgressIndicator(Modifier.padding(8.dp)) }
                     }
-                    itemsIndexed(state.playlists.filter { it.editable }, key = { _, playlist -> playlist.playlistId }) { _, playlist ->
-                        Text(
-                            playlist.title,
-                            Modifier.fillMaxWidth().clickable { onPick(playlist) }.padding(vertical = 12.dp),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
+                    itemsIndexed(editable, key = { _, playlist -> playlist.playlistId }) { _, playlist ->
+                        val status = statuses[playlist.playlistId]
+                        Column(Modifier.fillMaxWidth().clickable { onPick(playlist) }.padding(vertical = 12.dp)) {
+                            Text(playlist.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            when (status) {
+                                PlaylistMembership.Status.Checking -> Text("確認中…", style = MaterialTheme.typography.bodySmall)
+                                PlaylistMembership.Status.In -> Text("この曲は入っています", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                                PlaylistMembership.Status.Unknown -> Text("入っているか分かりません", style = MaterialTheme.typography.bodySmall)
+                                PlaylistMembership.Status.NotIn, null -> Unit
+                            }
+                        }
                     }
                 }
             }
