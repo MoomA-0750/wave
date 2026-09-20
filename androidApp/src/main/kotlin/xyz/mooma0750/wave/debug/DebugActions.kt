@@ -277,6 +277,28 @@ object DebugActions {
                     listOf("wave-probe-sign", "wave-probe-agree", "wave-probe-x25519").forEach { runCatching { ks.deleteEntry(it) } }
                     Log.i(WaveApplication.LOG_TAG, "debug keystore sdk=${android.os.Build.VERSION.SDK_INT} $results $timings")
                 }
+                // 通知・時計に出す画像の元（ホストと大きさの指定だけ。曲名・ID は出さない）
+                "artwork_probe" -> {
+                    val controller = player.controller()
+                    val uri = controller.mediaMetadata.artworkUri
+                    val host = uri?.host
+                    val size = uri?.toString()?.let { Regex("=w\\d+-h\\d+|/[a-z]+default\\.jpg").find(it)?.value }
+                    Log.i(WaveApplication.LOG_TAG, "debug artwork host=$host size=$size hasData=${controller.mediaMetadata.artworkData != null}")
+                    // 実際に返る画像の大きさ（URL・曲名は出さない）
+                    if (uri != null) {
+                        kotlinx.coroutines.withContext(Dispatchers.IO) {
+                            runCatching {
+                                val request = okhttp3.Request.Builder().url(uri.toString()).build()
+                                container.mediaHttpClient.newCall(request).execute().use { response ->
+                                    val bytes = response.body?.bytes()
+                                    val options = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                                    if (bytes != null) android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
+                                    Log.i(WaveApplication.LOG_TAG, "debug artwork fetched code=${response.code} bytes=${bytes?.size} image=${options.outWidth}x${options.outHeight}")
+                                }
+                            }.onFailure { Log.i(WaveApplication.LOG_TAG, "debug artwork fetch failed type=${it::class.simpleName}") }
+                        }
+                    }
+                }
                 // 再生履歴を読めるか（区切りの数・件数だけ。曲名は出さない）
                 "history_probe" -> {
                     when (val result = container.music.history()) {

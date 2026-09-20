@@ -607,6 +607,10 @@ class PlaybackService : MediaSessionService() {
             !session.isMediaNotificationController(controller) &&
             controller.connectionHints.getString(PlayerConnection.CONNECTION_TOKEN_KEY) == container.controllerToken
 
+    /** 本人が通知の読み取りを許可したアプリ（時計・車載のコンパニオンなど）。 */
+    private fun notificationListenerPackages(): Set<String> =
+        runCatching { androidx.core.app.NotificationManagerCompat.getEnabledListenerPackages(this) }.getOrDefault(emptySet())
+
     private inner class Callback(
         private val queue: QueueSession,
     ) : MediaSession.Callback {
@@ -635,12 +639,18 @@ class PlaybackService : MediaSessionService() {
                 // 信頼されていない他アプリは、Media3 のコントローラーでもレガシー（MediaBrowser で公開 Service につなぐ）でも拒否する。
                 // レガシーで受け入れると、プラットフォームのセッションのトークンを渡すことになり、PlaybackState の custom action の
                 // extras（通知の評価ボタンのトークン）とキューを読ませてしまう（F1d inner gate 指摘1）
-                if (!controller.isTrusted) {
+                // 例外: 通知を読める（本人が許可した）アプリは、通知のボタンを押せる立場なので、つないでも新しくできることは増えない。
+                // 時計・車載のコンパニオンはここに当たる（Media3 の isTrusted はこれを拾わないことがある）
+                val readsOurNotification = !controller.isTrusted && controller.packageName in notificationListenerPackages()
+                if (!controller.isTrusted && !readsOurNotification) {
                     Log.w(WaveApplication.LOG_TAG, "controller rejected package=${controller.packageName} uid=${controller.uid} version=${controller.controllerVersion}")
                 }
-                return if (controller.isTrusted) {
+                return if (controller.isTrusted || readsOurNotification) {
+                    if (readsOurNotification) Log.i(WaveApplication.LOG_TAG, "controller accepted via notification access package=${controller.packageName}")
                     MediaSession.ConnectionResult
                         .AcceptedResultBuilder(session, controller)
+                        // 再生の操作だけ（このアプリのキューの操作・評価のコマンドは渡さない）
+                        .setAvailableSessionCommands(MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS)
                         .setAvailablePlayerCommands(withoutShuffleMode(MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS))
                         .build()
                 } else {
