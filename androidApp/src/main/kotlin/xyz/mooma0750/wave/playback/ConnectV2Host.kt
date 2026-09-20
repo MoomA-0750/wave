@@ -8,6 +8,10 @@ import xyz.mooma0750.wave.handoff.HandoffSnapshot
  * 再生サービスは、キュー・位置の変化と「本人が再生を始めた」を Listener に知らせる（Main から呼ぶ。受ける側がスレッドを移す）。
  */
 class ConnectV2Host {
+    /** 確認用: プラットフォームのセッションに入っている項目名（debug）。 */
+    @Volatile
+    var platformMetadataKeys: (() -> List<String>)? = null
+
     interface Endpoint {
         /** 今のキューの書き出し（一時停止しない）。キューが空・ログインしていなければ null。 */
         fun snapshot(): HandoffSnapshot?

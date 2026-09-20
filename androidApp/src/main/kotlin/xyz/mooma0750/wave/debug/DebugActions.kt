@@ -284,6 +284,7 @@ object DebugActions {
                     val host = uri?.host
                     val size = uri?.toString()?.let { Regex("=w\\d+-h\\d+|/[a-z]+default\\.jpg").find(it)?.value }
                     Log.i(WaveApplication.LOG_TAG, "debug artwork host=$host size=$size hasData=${controller.mediaMetadata.artworkData != null}")
+                    Log.i(WaveApplication.LOG_TAG, "debug artwork platform keys=${container.connectV2Host.platformMetadataKeys?.invoke()?.map { it.removePrefix("android.media.metadata.") }}")
                     // 実際に返る画像の大きさ（URL・曲名は出さない）
                     if (uri != null) {
                         kotlinx.coroutines.withContext(Dispatchers.IO) {

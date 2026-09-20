@@ -252,11 +252,14 @@ class PlaybackService : MediaSessionService() {
                     ),
                 )
                 // 通知・ロック画面のアートワークも、認証情報を持たない音声用のクライアントで取る
+                // 取った画像は持っておく（毎回取り直すと、セッションの画像が入ったり抜けたりして、時計・車載に出ない）
                 .setBitmapLoader(
-                    androidx.media3.datasource.DataSourceBitmapLoader
-                        .Builder(this)
-                        .setDataSourceFactory(androidx.media3.datasource.okhttp.OkHttpDataSource.Factory(container.mediaHttpClient))
-                        .build(),
+                    androidx.media3.session.CacheBitmapLoader(
+                        androidx.media3.datasource.DataSourceBitmapLoader
+                            .Builder(this)
+                            .setDataSourceFactory(androidx.media3.datasource.okhttp.OkHttpDataSource.Factory(container.mediaHttpClient))
+                            .build(),
+                    ),
                 )
                 .build()
 
@@ -409,6 +412,18 @@ class PlaybackService : MediaSessionService() {
             }
         connectV2Endpoint = v2Endpoint
         container.connectV2Host.register(v2Endpoint)
+        if (container.isDebuggable) {
+            container.connectV2Host.platformMetadataKeys = {
+                val token = session?.platformToken
+                val metadata = token?.let { android.media.session.MediaController(this, it).metadata }
+                val sizes =
+                    listOf(android.media.MediaMetadata.METADATA_KEY_ALBUM_ART, android.media.MediaMetadata.METADATA_KEY_DISPLAY_ICON).map { key ->
+                        val bitmap = metadata?.getBitmap(key)
+                        "${key.removePrefix("android.media.metadata.")}=${bitmap?.width}x${bitmap?.height}"
+                    }
+                metadata?.keySet()?.sorted().orEmpty() + sizes
+            }
+        }
 
         // 保存したキューを戻すのも、この購読の中で行う（ログアウト・切り替えの処理と順序を決めるため）
         scope.launch {
