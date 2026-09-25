@@ -235,7 +235,4 @@ private fun FullPlayer(
     }
 }
 
-private fun formatTime(ms: Long): String {
-    val total = ms / 1000
-    return "%d:%02d".format(total / 60, total % 60)
-}
+private fun formatTime(ms: Long): String = xyz.mooma0750.wave.ui.Durations.ofMillis(ms)

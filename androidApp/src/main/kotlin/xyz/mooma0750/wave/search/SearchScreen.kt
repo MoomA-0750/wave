@@ -131,7 +131,7 @@ fun SongRow(
         Column(Modifier.weight(1f)) {
             Text(song.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyLarge)
             Text(
-                listOfNotNull(song.subtitle.takeIf { it.isNotEmpty() }, song.durationSeconds?.let { "%d:%02d".format(it / 60, it % 60) }).joinToString(" • "),
+                listOfNotNull(song.subtitle.takeIf { it.isNotEmpty() }, song.durationSeconds?.let { xyz.mooma0750.wave.ui.Durations.ofSeconds(it.toLong()) }).joinToString(" • "),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.bodySmall,

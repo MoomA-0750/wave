@@ -41,12 +41,14 @@ data class HistoryUiState(
     val loading: Boolean = true,
     val failure: FailureKind? = null,
 ) {
-    /** 見出しと曲を1本の並びにしたもの（画面に出す順）。 */
+    /** 見出しと曲を1本の並びにしたもの（画面に出す順）。曲には、見出しを除いた並びでの番号（再生を始める位置）を持たせる。 */
     val rows: List<HistoryRow>
-        get() =
-            sections.flatMap { section ->
-                listOfNotNull(section.title?.let { HistoryRow.Heading(it) }) + section.songs.map { HistoryRow.Item(it) }
+        get() {
+            var songIndex = 0
+            return sections.flatMap { section ->
+                listOfNotNull(section.title?.let { HistoryRow.Heading(it) }) + section.songs.map { HistoryRow.Item(it, songIndex++) }
             }
+        }
 
     val songs: List<Song> get() = sections.flatMap { it.songs }
 }
@@ -58,6 +60,8 @@ sealed interface HistoryRow {
 
     data class Item(
         val song: Song,
+        /** 見出しを除いた並び（songs）での番号。 */
+        val songIndex: Int,
     ) : HistoryRow
 }
 
@@ -130,11 +134,8 @@ fun HistoryScreen(
             itemsIndexed(rows, key = { index, row -> if (row is HistoryRow.Item) "$index-${row.song.videoId}" else "$index-h" }) { index, row ->
                 when (row) {
                     is HistoryRow.Heading -> Text(row.title, Modifier.padding(start = 16.dp, top = 16.dp, bottom = 4.dp), style = MaterialTheme.typography.titleSmall)
-                    is HistoryRow.Item -> {
-                        // 並びの中の位置（見出しを除いた番号）から再生する
-                        val songIndex = rows.take(index).count { it is HistoryRow.Item }
-                        SongRow(row.song, onClick = { onPlay(state.songs, songIndex) }) { SongMenuButton(row.song, actions) }
-                    }
+                    // 並びの中の位置（見出しを除いた番号）から再生する
+                    is HistoryRow.Item -> SongRow(row.song, onClick = { onPlay(state.songs, row.songIndex) }) { SongMenuButton(row.song, actions) }
                 }
                 if (index == rows.lastIndex && state.continuation != null) LaunchedEffect(rows.size) { viewModel.loadMore() }
             }
