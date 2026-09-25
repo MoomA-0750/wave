@@ -85,7 +85,7 @@ class ArtistAlbumParsersTest {
         assertNull(assertNotNull(MusicParsers.albumPage(Json.parseToJsonElement(none) as JsonObject, "MPREb_test")).playlistId)
     }
 
-    private fun fixtureText(name: String): String = requireNotNull(javaClass.getResource("/fixtures/$name.json")) { "fixture $name" }.readText()
+    private fun fixtureText(name: String): String = xyz.mooma0750.wave.core.Fixtures.text(name)
 
-    private fun fixture(name: String): JsonObject = Json.parseToJsonElement(fixtureText(name)) as JsonObject
+    private fun fixture(name: String): JsonObject = xyz.mooma0750.wave.core.Fixtures.json(name)
 }

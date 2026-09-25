@@ -1,5 +1,6 @@
 package xyz.mooma0750.wave.core.music
 
+import xyz.mooma0750.wave.core.jsonResponse
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.MockRequestHandleScope
 import io.ktor.client.engine.mock.respond
@@ -165,7 +166,7 @@ class PlaylistWriteTest {
         assertTrue(page.setVideoIds.all { it != null })
     }
 
-    private fun MockRequestHandleScope.json(body: String) = respond(body, HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+    private fun MockRequestHandleScope.json(body: String) = jsonResponse(body)
 
-    private fun fixture(name: String): String = requireNotNull(javaClass.getResource("/fixtures/$name.json")).readText()
+    private fun fixture(name: String): String = xyz.mooma0750.wave.core.Fixtures.text(name)
 }

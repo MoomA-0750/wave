@@ -1,5 +1,6 @@
 package xyz.mooma0750.wave.core.session
 
+import xyz.mooma0750.wave.core.jsonResponse
 import com.metrolist.innertubex.extraction.PlayerConfig
 import com.metrolist.innertubex.extraction.YtConfigParser
 import com.metrolist.innertubex.models.YouTubeClient
@@ -783,7 +784,7 @@ class WaveSessionTest {
             if (request.url.encodedPath.endsWith("/player")) json(player("OK", itags)) else json(accountMenu("Synthetic User"))
         }
 
-    private fun MockRequestHandleScope.json(body: String) = respond(body, HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+    private fun MockRequestHandleScope.json(body: String) = jsonResponse(body)
 
     /** 実アカウントで確かめたキーの場所の合成（値は合成）。 */
     private fun accountsList(selectedDataSyncId: String?, otherDataSyncId: String? = null): String {

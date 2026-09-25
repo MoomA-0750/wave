@@ -97,8 +97,5 @@ class MusicParsersTest {
         assertEquals("https://large", song?.thumbnailUrl)
     }
 
-    private fun fixture(name: String): JsonObject {
-        val text = requireNotNull(javaClass.getResource("/fixtures/$name.json")) { "fixture $name" }.readText()
-        return Json.parseToJsonElement(text) as JsonObject
-    }
+    private fun fixture(name: String): JsonObject = xyz.mooma0750.wave.core.Fixtures.json(name)
 }

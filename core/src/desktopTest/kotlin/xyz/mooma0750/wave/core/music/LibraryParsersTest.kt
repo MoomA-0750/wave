@@ -95,6 +95,5 @@ class LibraryParsersTest {
         assertEquals("新しい", MusicParsers.playlistPage(both).title)
     }
 
-    private fun fixture(name: String): JsonObject =
-        Json.parseToJsonElement(requireNotNull(javaClass.getResource("/fixtures/$name.json")).readText()) as JsonObject
+    private fun fixture(name: String): JsonObject = xyz.mooma0750.wave.core.Fixtures.json(name)
 }
