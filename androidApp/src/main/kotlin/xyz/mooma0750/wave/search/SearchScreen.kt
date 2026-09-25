@@ -45,11 +45,11 @@ fun SearchScreen(
     actions: xyz.mooma0750.wave.navigation.SongActions,
     onBack: () -> Unit,
     bottomBar: @Composable () -> Unit = {},
-    /** 検索の履歴（語・アーティスト・アルバム）。null なら出さない。 */
-    history: SearchHistoryStore? = null,
+    /** 検索の履歴（語・アーティスト・アルバム）。 */
+    history: SearchHistoryStore,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    val historyEntries by (history?.entries ?: kotlinx.coroutines.flow.MutableStateFlow(emptyList())).collectAsStateWithLifecycle()
+    val historyEntries by history.entries.collectAsStateWithLifecycle()
     val keyboard = LocalSoftwareKeyboardController.current
     Scaffold(
         topBar = { TopAppBar(title = { Text("検索") }, navigationIcon = { TextButton(onClick = onBack) { Text("戻る") } }) },
@@ -82,7 +82,7 @@ fun SearchScreen(
                             verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
                         ) {
                             Text("最近の検索", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
-                            TextButton(onClick = { history?.clear() }) { Text("すべて消す") }
+                            TextButton(onClick = { history.clear() }) { Text("すべて消す") }
                         }
                     }
                     items(historyEntries, key = { entry -> entryKey(entry) }) { entry ->
@@ -98,7 +98,7 @@ fun SearchScreen(
                                     is SearchHistoryEntry.Album -> actions.openAlbum(xyz.mooma0750.wave.core.music.AlbumRef(entry.title, entry.browseId))
                                 }
                             },
-                            onRemove = { history?.remove(entry) },
+                            onRemove = { history.remove(entry) },
                         )
                     }
                 }

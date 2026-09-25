@@ -64,7 +64,7 @@ data class PlaylistUiState(
 
 class PlaylistViewModel(
     private val music: MusicRepository,
-    val playlistId: String,
+    private val playlistId: String,
     initialTitle: String?,
     initialQuery: String? = null,
 ) : ViewModel() {

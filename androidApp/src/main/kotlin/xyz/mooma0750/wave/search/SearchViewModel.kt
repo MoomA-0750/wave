@@ -27,7 +27,7 @@ data class SearchUiState(
 
 class SearchViewModel(
     private val music: MusicRepository,
-    private val history: SearchHistoryStore? = null,
+    private val history: SearchHistoryStore,
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(SearchUiState())
     val state: StateFlow<SearchUiState> = mutableState.asStateFlow()
@@ -39,7 +39,7 @@ class SearchViewModel(
 
     fun search() {
         val query = state.value.query.trim().takeIf { it.isNotEmpty() } ?: return
-        history?.add(SearchHistoryEntry.Query(query))
+        history.add(SearchHistoryEntry.Query(query))
         job?.cancel()
         mutableState.update { it.copy(songs = emptyList(), loading = true, failure = null, continuation = null, empty = false) }
         job =

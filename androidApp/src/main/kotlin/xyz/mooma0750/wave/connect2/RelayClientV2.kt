@@ -143,14 +143,11 @@ class RelayClientV2(
                             }
                             is RelayV2.Welcome -> {
                                 // close() と行き違ったら Connected にしない（レビュー p6b34 低-8）
-                                val current =
-                                    synchronized(this@RelayClientV2) {
-                                        if (socket !== webSocket) return
-                                        failedAttempts = 0
-                                        mutableStatus.value = Status.Connected
-                                        true
-                                    }
-                                if (!current) return
+                                synchronized(this@RelayClientV2) {
+                                    if (socket !== webSocket) return
+                                    failedAttempts = 0
+                                    mutableStatus.value = Status.Connected
+                                }
                                 Log.i(WaveApplication.LOG_TAG, "relay-v2 connected")
                                 deliver(message)
                             }

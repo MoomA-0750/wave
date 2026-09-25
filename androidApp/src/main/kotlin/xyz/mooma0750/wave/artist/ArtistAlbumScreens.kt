@@ -67,8 +67,8 @@ data class ArtistLikedState(
 class ArtistViewModel(
     music: MusicRepository,
     private val browseId: String,
-    private val liked: xyz.mooma0750.wave.library.LikedSongsCache? = null,
-    private val likedSongsVersion: Int = 0,
+    private val liked: xyz.mooma0750.wave.library.LikedSongsCache,
+    private val likedSongsVersion: Int,
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(PageUiState<ArtistPage>())
     val state: StateFlow<PageUiState<ArtistPage>> = mutableState.asStateFlow()
@@ -95,9 +95,8 @@ class ArtistViewModel(
     }
 
     private suspend fun loadLiked() {
-        val cache = liked ?: return run { mutableLiked.value = ArtistLikedState(loading = false) }
         val name = state.value.page?.name.orEmpty()
-        val result = cache.songs(likedSongsVersion)
+        val result = liked.songs(likedSongsVersion)
         val songs = xyz.mooma0750.wave.library.LikedByArtist.filter(result.songs, browseId, name)
         Log.i(WaveApplication.LOG_TAG, "artist liked songs=${songs.size} of=${result.songs.size} complete=${result.complete}")
         mutableLiked.value = ArtistLikedState(songs = songs, loading = false, incomplete = !result.complete)

@@ -42,7 +42,7 @@ import xyz.mooma0750.wave.search.failureMessage
 fun LazyListScope.libraryItems(
     state: LibraryUiState,
     onOpen: (PlaylistSummary) -> Unit,
-    onOpenHistory: () -> Unit = {},
+    onOpenHistory: () -> Unit,
 ) {
     item {
         Text("ライブラリ", Modifier.padding(start = 16.dp, top = 16.dp, bottom = 4.dp), style = MaterialTheme.typography.titleMedium)
@@ -161,9 +161,9 @@ fun AddToPlaylistDialog(
     onPick: (PlaylistSummary) -> Unit,
     onCreate: (title: String) -> Unit,
     /** 追加する曲。どのプレイリストに入っているかを確かめるのに使う。 */
-    song: Song? = null,
-    membership: PlaylistMembership? = null,
-    playlistsVersion: Int = 0,
+    song: Song,
+    membership: PlaylistMembership,
+    playlistsVersion: Int,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var creating by remember { mutableStateOf(false) }
@@ -171,13 +171,12 @@ fun AddToPlaylistDialog(
     val scope = rememberCoroutineScope()
     val editable = state.playlists.filter { it.editable }
     // すでに入っているプレイリストを出す（YouTube Music に一覧で返す口が無いので、1つずつ読む）
-    val check = remember(membership, scope) { membership?.Check(scope) }
-    val statuses by (check?.status ?: remember { kotlinx.coroutines.flow.MutableStateFlow(emptyMap<String, PlaylistMembership.Status>()) }).collectAsStateWithLifecycle()
-    LaunchedEffect(check, song?.videoId, editable.map { it.playlistId }, playlistsVersion) {
-        val videoId = song?.videoId
-        if (check != null && videoId != null && editable.isNotEmpty()) check.start(editable.map { it.playlistId }, videoId, playlistsVersion)
+    val check = remember(membership, scope) { membership.Check(scope) }
+    val statuses by check.status.collectAsStateWithLifecycle()
+    LaunchedEffect(check, song.videoId, editable.map { it.playlistId }, playlistsVersion) {
+        if (editable.isNotEmpty()) check.start(editable.map { it.playlistId }, song.videoId, playlistsVersion)
     }
-    DisposableEffect(check) { onDispose { check?.cancel() } }
+    DisposableEffect(check) { onDispose { check.cancel() } }
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(if (creating) "新しいプレイリスト（非公開）" else "プレイリストに追加") },
