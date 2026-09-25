@@ -147,6 +147,75 @@ class RelayV2ServerTest {
         }
 
     @Test
+    fun releasingAPendingTransferGivesTheActiveDeviceBack() =
+        testApplication {
+            application { relayV2Module(RelayV2Config(host, store(), tickMs = 60_000)) }
+            val client = createClient { install(WebSockets) }
+            client.webSocket("/v2/connect") {
+                authenticate(a)
+                val genesis = MemberChain.genesis(a, a.keys)
+                sendMessage(RelayV2.HouseholdCreate(genesis))
+                expect<RelayV2.ChainOk>()
+                val addB = MemberChain.add(a, verified(listOf(genesis)), b.keys)
+                sendMessage(RelayV2.ChainAppend(addB))
+                expect<RelayV2.ChainOk>()
+                val chain = verified(listOf(genesis, addB))
+                sendMessage(RelayV2.Claim("0f8fad5b-d9cb-469f-a165-70867728950e", doc(a, chain, DocKind.Command, 1)))
+                expect<RelayV2.ActiveChanged>()
+                sendMessage(RelayV2.StatePut("r1", StateKind.Cursor, 0, doc(a, chain, DocKind.Cursor, 1)))
+                expect<RelayV2.StateOk>()
+                val sessionA = this
+                client.webSocket("/v2/connect") {
+                    authenticate(b)
+                    sendMessage(RelayV2.Transfer("1f8fad5b-d9cb-469f-a165-70867728950e", 1, doc(b, chain, DocKind.Command, 1)))
+                    assertEquals(b.deviceId, expect<RelayV2.ActiveChanged>().pendingOwner)
+                    // 取り込めなかった B が取り下げる → 全員に、再生中は A のまま（pending なし）と配られる
+                    sendMessage(RelayV2.Release("1f8fad5b-d9cb-469f-a165-70867728950e"))
+                    val back = expect<RelayV2.ActiveChanged>()
+                    assertEquals(a.deviceId, back.activeDeviceId)
+                    assertNull(back.pendingOwner)
+                    // A にも同じ変更が届く（持ち主の違う Release は無視される）
+                    var seen: RelayV2.ActiveChanged
+                    do seen = sessionA.expect<RelayV2.ActiveChanged>() while (seen.pendingOwner != null)
+                    assertEquals(a.deviceId, seen.activeDeviceId)
+                }
+            }
+        }
+
+    @Test
+    fun aClaimDuringAPendingTransferExpiresItForEveryone() =
+        testApplication {
+            application { relayV2Module(RelayV2Config(host, store(), tickMs = 60_000)) }
+            val client = createClient { install(WebSockets) }
+            client.webSocket("/v2/connect") {
+                authenticate(a)
+                val genesis = MemberChain.genesis(a, a.keys)
+                sendMessage(RelayV2.HouseholdCreate(genesis))
+                expect<RelayV2.ChainOk>()
+                val addB = MemberChain.add(a, verified(listOf(genesis)), b.keys)
+                sendMessage(RelayV2.ChainAppend(addB))
+                expect<RelayV2.ChainOk>()
+                val chain = verified(listOf(genesis, addB))
+                sendMessage(RelayV2.Claim("0f8fad5b-d9cb-469f-a165-70867728950e", doc(a, chain, DocKind.Command, 1)))
+                expect<RelayV2.ActiveChanged>()
+                sendMessage(RelayV2.StatePut("r1", StateKind.Cursor, 0, doc(a, chain, DocKind.Cursor, 1)))
+                expect<RelayV2.StateOk>()
+                val sessionA = this
+                client.webSocket("/v2/connect") {
+                    authenticate(b)
+                    sendMessage(RelayV2.Transfer("1f8fad5b-d9cb-469f-a165-70867728950e", 1, doc(b, chain, DocKind.Command, 1)))
+                    expect<RelayV2.ActiveChanged>()
+                    // 引き取りの途中で A が新しく再生を始める → 途中の引き取りは捨てられ、両方に知らされる。その後に A が再生中
+                    sessionA.sendMessage(RelayV2.Claim("2f8fad5b-d9cb-469f-a165-70867728950e", doc(a, chain, DocKind.Command, 1)))
+                    assertEquals("1f8fad5b-d9cb-469f-a165-70867728950e", expect<RelayV2.PendingExpired>().claimId)
+                    assertEquals(a.deviceId, expect<RelayV2.ActiveChanged>().activeDeviceId)
+                    assertEquals("2f8fad5b-d9cb-469f-a165-70867728950e", expect<RelayV2.YieldDelivery>().claimId)
+                    assertEquals("1f8fad5b-d9cb-469f-a165-70867728950e", sessionA.expect<RelayV2.PendingExpired>().claimId)
+                }
+            }
+        }
+
+    @Test
     fun pairingOpenForwardsOneHelloAndReturnsTheConfirm() =
         testApplication {
             application { relayV2Module(RelayV2Config(host, store(), tickMs = 50)) }
