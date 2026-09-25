@@ -290,13 +290,12 @@ class ConnectClient(
         // 取り込む前に切れた引き取りは捨てる（つながり直した後に、古い状態から突然取り込まない。レビュー p6b34 中-4）
         val waiting = transfer
         if (waiting != null && !waiting.adopting) {
-            transfer = null
-            effects.event(ClientEvent.TransferFailed("disconnected"))
+            failTransfer("disconnected")
         }
     }
 
     private fun resetConnection() {
-        inflight.values.forEach { if (it.kind == StateKind.Cursor) dirtyCursor = true else dirtyQueue = true }
+        inflight.values.forEach { markUnsent(it.kind) }
         inflight.clear()
         serverActive = null
         pendingOwner = null
@@ -368,7 +367,7 @@ class ConnectClient(
 
     private fun onHeadAnnounced(
         headSeq: Long,
-        headHash: String,
+        headHash: String?,
     ) {
         val current = chain
         if (current == null || headSeq > current.headSeq) {
@@ -395,13 +394,7 @@ class ConnectClient(
             effects.event(ClientEvent.StoreReset(welcome.storeId))
         }
         resumePending = isWriter
-        val current = chain
-        val headSeq = welcome.headSeq
-        if (headSeq != null && (current == null || headSeq > current.headSeq)) {
-            send(RelayV2.ChainGet(records.size.toLong()))
-        } else if (headSeq != null && current != null && current.hashAt(headSeq) != welcome.headHash) {
-            effects.event(ClientEvent.ChainForked)
-        }
+        welcome.headSeq?.let { onHeadAnnounced(it, welcome.headHash) }
         // 最新の状態を先に見る（通信を失ったまま鳴っていた端末は、ここで止まる）
         welcome.states.forEach(::onState)
         maybeResume()
@@ -504,19 +497,17 @@ class ConnectClient(
                 DocOpen.Fork -> return effects.event(ClientEvent.ChainForked)
                 is DocOpen.Rejected -> return
             }
-        val expectedKind = if (stored.kind == StateKind.Cursor) DocKind.Cursor else DocKind.Queue
-        if (opened.header.version != stored.version || opened.header.kind != expectedKind) return
+        if (opened.header.version != stored.version || opened.header.kind != stored.kind.docKind) return
         val hash = DocSealer.hash(stored.doc)
         when (stored.kind) {
             StateKind.Cursor -> {
-                if (stored.version < cursorFloor && latestCursor != null) return
+                if (stored.version < cursorFloor) return
                 val existing = latestCursor
                 if (existing != null && existing.version == stored.version) {
                     if (existing.hash != hash && existing.writer == stored.doc.header.writerId) effects.event(ClientEvent.StateEquivocation)
                     return
                 }
                 if (existing != null && existing.version > stored.version) return
-                if (stored.version < cursorFloor) return
                 val body = runCatching { ConnectJson.json.decodeFromString(CursorBody.serializer(), opened.plaintext.decodeToString()) }.getOrNull() ?: return
                 val opened2 = Opened(stored, body, hash, nowMs())
                 latestCursor = opened2
@@ -646,10 +637,9 @@ class ConnectClient(
                 if (mine != null && mine.id == sent.sessionId && mine.arbiter.startVersion == null) {
                     mine.arbiter = mine.arbiter.copy(startVersion = ok.version)
                 }
-                if (transfer?.adopting == true) {
-                    val from = transfer!!.previousWriter
+                transfer?.takeIf { it.adopting }?.let { adopted ->
                     transfer = null
-                    effects.event(ClientEvent.TransferCompleted(from))
+                    effects.event(ClientEvent.TransferCompleted(adopted.previousWriter))
                 }
             }
             StateKind.Queue -> {
@@ -684,7 +674,7 @@ class ConnectClient(
         latest?.let(::onState)
         // 止まっていなければ、最新の版に積み直す
         if (isWriter) {
-            if (sent.kind == StateKind.Cursor) dirtyCursor = true else dirtyQueue = true
+            markUnsent(sent.kind)
         }
         flush()
     }
@@ -696,7 +686,7 @@ class ConnectClient(
             // （新しい状態を待たない、レビュー p6b12 高-3）。他の端末の claim の方が後なら、その端末の証拠を待つ（断られるたびに奪い合わない）
             "not_active" ->
                 if (sent != null && isWriter) {
-                    if (sent.kind == StateKind.Cursor) dirtyCursor = true else dirtyQueue = true
+                    markUnsent(sent.kind)
                     val stopped = latestCursor?.takeIf { it.writer != signer.deviceId && it.body.playing && it.body.accountTag == effects.accountTag() }?.let { decide(PlaybackArbiter.Evidence.PlayingCursor(it.writer, it.body.sessionBase, it.body.sessionStartVersion)) } == true
                     val mine = session
                     val latestOther = claimOrders.filterKeys { it != signer.deviceId }.values.maxOrNull()
@@ -705,14 +695,13 @@ class ConnectClient(
                 }
             "stale_head" -> {
                 if (sent != null && isWriter) {
-                    if (sent.kind == StateKind.Cursor) dirtyCursor = true else dirtyQueue = true
+                    markUnsent(sent.kind)
                 }
                 send(RelayV2.ChainGet(records.size.toLong()))
             }
             else -> {
                 if (error.requestId != null && error.requestId == transfer?.claimId) {
-                    transfer = null
-                    effects.event(ClientEvent.TransferFailed(error.code))
+                    failTransfer(error.code)
                 } else {
                     effects.event(ClientEvent.ServerError(error.code))
                 }
@@ -802,6 +791,11 @@ class ConnectClient(
         flush()
     }
 
+    /** 送った書き込みが届いていない・断られた: その種類を積み直す。 */
+    private fun markUnsent(kind: StateKind) {
+        if (kind == StateKind.Cursor) dirtyCursor = true else dirtyQueue = true
+    }
+
     private fun markDirty() {
         dirtyCursor = local != null
         dirtyQueue = localQueue != null
@@ -843,17 +837,13 @@ class ConnectClient(
         val cursor = latestCursor
         val queue = latestQueue
         if (cursor == null || queue == null || cursor.body.queueRef != queue.hash) {
-            transfer = null
-            send(RelayV2.Release(waiting.claimId))
-            effects.event(ClientEvent.TransferFailed("no_state"))
+            failTransfer("no_state", release = waiting.claimId)
             return
         }
         val position = extrapolatedPosition(cursor)
         waiting.adopting = true
         if (!effects.adopt(queue.body.snapshot, cursor.body, position)) {
-            transfer = null
-            send(RelayV2.Release(waiting.claimId))
-            effects.event(ClientEvent.TransferFailed("not_adopted"))
+            failTransfer("not_adopted", release = waiting.claimId)
             return
         }
         localQueue = queue.body.snapshot
@@ -867,6 +857,16 @@ class ConnectClient(
         // B の最初のカーソルで再生中が確定する（D-7）。キューは前の端末の doc をそのまま指す
         dirtyCursor = true
         flush()
+    }
+
+    /** 引き取りをやめる（取り下げるときは中継に Release を送る）。 */
+    private fun failTransfer(
+        reason: String,
+        release: String? = null,
+    ) {
+        transfer = null
+        release?.let { send(RelayV2.Release(it)) }
+        effects.event(ClientEvent.TransferFailed(reason))
     }
 
     /** 経過はサーバーの時計で測り、手元で受けてからの時間を足す。9分を超える経過は一時停止として扱う（D-5）。 */

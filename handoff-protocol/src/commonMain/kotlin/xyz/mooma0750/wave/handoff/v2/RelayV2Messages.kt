@@ -15,6 +15,14 @@ enum class StateKind {
     Queue,
 }
 
+/** 状態の種類に対応する doc の種類。 */
+val StateKind.docKind: DocKind
+    get() =
+        when (this) {
+            StateKind.Cursor -> DocKind.Cursor
+            StateKind.Queue -> DocKind.Queue
+        }
+
 /** サーバーが持つ最新の状態（配るときの形）。 */
 @Serializable
 data class StoredState(

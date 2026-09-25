@@ -709,6 +709,41 @@ class ConnectSimulationTest {
     }
 
     @Test
+    fun aCursorOlderThanTheSavedFloorIsIgnoredAfterARestart() {
+        setUp()
+        a.startPlaying("queue-A")
+        relay.run()
+        val old = relay.store.latest().first { it.kind == xyz.mooma0750.wave.handoff.v2.StateKind.Cursor }
+        a.positionMs = 5_000
+        a.pushCursor()
+        relay.run()
+        // 床を保存させてから（30秒に1回まとめて保存）、起き直す（メモリに最新のカーソルが無い）
+        advance(31_000)
+        b.disconnect()
+        b.restart()
+        // 中継が古いカーソルを配っても（巻き戻し）、保存した床より古いので取り込まない
+        b.client.onMessage(RelayV2.State(old))
+        assertEquals(null, b.client.latestCursorBody(), "保存した床より古いカーソルを取り込んだ")
+    }
+
+    @Test
+    fun aTransferThatCannotBeAdoptedIsReleasedRightAway() {
+        setUp()
+        a.startPlaying("queue-A")
+        relay.run()
+        // A は通信を失っていて返事をしない。B は取り込めない（画面が前面でない）
+        a.disconnect()
+        b.foreground = false
+        assertTrue(b.client.requestTransfer())
+        relay.run()
+        val before = relay.log.size
+        advance(ConnectClient.TRANSFER_WAIT_MS)
+        assertTrue(b.events.any { it is ClientEvent.TransferFailed && it.reason == "not_adopted" })
+        // 取り下げたので、期限（10秒）を待たずに中継の引き取りの途中が消え、再生中の端末の知らせが配られる
+        assertTrue(relay.log.drop(before).any { "ActiveChanged" in it }, "取り下げが中継に届いていない: ${relay.log.drop(before)}")
+    }
+
+    @Test
     fun forkedChainAndStoreResetAreSurfacedAndNotActedOn() {
         setUp()
         a.startPlaying("queue-A")

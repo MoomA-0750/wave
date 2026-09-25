@@ -12,6 +12,7 @@ import xyz.mooma0750.wave.handoff.v2.RelayV2
 import xyz.mooma0750.wave.handoff.v2.Role
 import xyz.mooma0750.wave.handoff.v2.SealedDoc
 import xyz.mooma0750.wave.handoff.v2.StateKind
+import xyz.mooma0750.wave.handoff.v2.docKind
 import xyz.mooma0750.wave.handoff.v2.StoredState
 import xyz.mooma0750.wave.handoff.v2.VerifiedChain
 import java.io.File
@@ -321,7 +322,7 @@ class HouseholdStore(
         doc: SealedDoc,
     ): String? {
         val header = doc.header
-        val expectedKind = if (kind == StateKind.Cursor) DocKind.Cursor else DocKind.Queue
+        val expectedKind = kind.docKind
         return when {
             header.writerId != sender -> "writer_mismatch"
             header.householdId != current.householdId -> "household"
