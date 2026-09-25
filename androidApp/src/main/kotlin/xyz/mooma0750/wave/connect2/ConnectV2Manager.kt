@@ -61,7 +61,6 @@ class ConnectV2Manager(
     private val dispatcher = Executors.newSingleThreadExecutor { Thread(it, "connect-v2") }.asCoroutineDispatcher()
     private val keys = DeviceKeysV2(identity)
     private val storage = ConnectV2Storage(storageFile)
-    private val snapshotJson = Json { ignoreUnknownKeys = true }
 
     val relay =
         RelayClientV2(
@@ -254,8 +253,8 @@ class ConnectV2Manager(
                 val state = tagState ?: return false
                 // 待っている間にログインが切り替わっていないこと（レビュー p6b34 低-2）
                 if (cursor.accountTag != state.tag) return false
-                val decoded = decodeSnapshot(snapshot) ?: return false
-                val adjusted = atCursor(decoded, cursor, positionMs) ?: return false
+                val decoded = RemoteQueue.decode(snapshot) ?: return false
+                val adjusted = RemoteQueue.atCursor(decoded, cursor, positionMs) ?: return false
                 return runBlocking(Dispatchers.Main) {
                     uiInForeground() && session.loginGenerationId() == state.generation && host.endpoint?.adopt(adjusted, adjusted.positionMs, state.generation) == true
                 }
@@ -287,8 +286,7 @@ class ConnectV2Manager(
         appScope.launch {
             try {
                 val account = session.verifiedAccount() ?: return@launch
-                val digest = WaveCrypto.sha256(WaveCrypto.lengthPrefixed(TAG_LABEL.encodeToByteArray(), householdId.encodeToByteArray(), account.id.reveal().encodeToByteArray()))
-                val next = TagState(householdId, Base64.getUrlEncoder().withoutPadding().encodeToString(digest), account.generationId)
+                val next = TagState(householdId, AccountTag.of(householdId, account.id.reveal()), account.generationId)
                 // 置くのはエンジンのスレッドで、ログインの切り替えの後始末の後（公開してから捨てるまでの間に、前のキューを新しいタグで書かない、再レビュー 中-E）
                 post { onTagComputed(next) }
             } finally {
@@ -502,38 +500,6 @@ class ConnectV2Manager(
 
     private fun ConnectV2Host.Cursor.toLocal() = ConnectClient.LocalCursor(currentItemId, positionMs, playing, repeat, listenedMs, historySent, SystemClock.elapsedRealtime())
 
-    /**
-     * キューの doc（置いた時点の曲）を、カーソルの今の曲・リピート・履歴に合わせる（レビュー p6b34 高-2）。
-     * 今の曲がキューに無ければ取り込まない。窓（前20件・後300件）は今の曲で切り直し、位置は曲の長さで切り詰める（validate）。
-     */
-    private fun atCursor(
-        snapshot: HandoffSnapshot,
-        cursor: CursorBody,
-        positionMs: Long,
-    ): HandoffSnapshot? {
-        val index = snapshot.items.indexOfFirst { it.itemId == cursor.currentItemId }
-        if (index < 0) return null
-        val (items, _, truncatedTail) = HandoffCodec.window(snapshot.items, index)
-        val moved =
-            snapshot.copy(
-                items = items,
-                // 後ろを切ったら、続きの取得は読み込み済みの末尾を指さないので捨てる（再レビュー 低-G）
-                continuation = if (truncatedTail) null else snapshot.continuation,
-                exhausted = if (truncatedTail) false else snapshot.exhausted,
-                currentItemId = cursor.currentItemId,
-                positionMs = positionMs.coerceAtLeast(0),
-                repeat = cursor.repeat,
-                listenedMs = cursor.listenedMs.coerceAtLeast(0),
-                historySent = cursor.historySent,
-            )
-        return (HandoffCodec.validate(moved, moved.handoffId) as? HandoffDecodeResult.Ok)?.snapshot
-    }
-
-    private fun decodeSnapshot(text: String): HandoffSnapshot? {
-        val id = runCatching { snapshotJson.decodeFromString(HandoffSnapshot.serializer(), text).handoffId }.getOrNull() ?: return null
-        return (HandoffCodec.decode(text, id) as? HandoffDecodeResult.Ok)?.snapshot
-    }
-
     // --- 画面・debug からの操作 ---
 
     /** 「ここで再生」。 */
@@ -727,7 +693,6 @@ class ConnectV2Manager(
         const val CURSOR_DEBOUNCE_MS = 1_000L
         const val QUEUE_DEBOUNCE_MS = 1_000L
         const val SETTLE_WAIT_MS = 10_000L
-        const val TAG_LABEL = "wave-v2-account-tag"
         const val MAX_LABEL_CHARS = 64
     }
 }
