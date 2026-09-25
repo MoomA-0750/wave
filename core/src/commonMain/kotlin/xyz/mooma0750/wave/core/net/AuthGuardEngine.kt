@@ -34,12 +34,15 @@ class AuthRouteViolation(
     host: String,
 ) : IllegalStateException("auth headers blocked for host $host")
 
+/** https・ポート 443・利用者名とパスワードを含まない URL か（送り先の確認の最初の段）。 */
+internal fun Url.isPlainHttps443(): Boolean = protocol.name == "https" && port == 443 && user == null && password == null
+
 /**
  * 認証ヘッダを持つリクエストを、この宛先へ送ってよいか。
  * OkHttp は送信時に `.`・`..` のセグメントを解決するので、それらを含むパスは前方一致を信用せずに拒否する。
  */
 internal fun isAuthRouteAllowed(url: Url): Boolean {
-    if (url.protocol.name != "https" || url.port != 443 || url.user != null || url.password != null) return false
+    if (!url.isPlainHttps443()) return false
     val path = url.encodedPath
     val lowered = path.lowercase()
     if ('\\' in path || "%2e" in lowered || "%2f" in lowered || "%5c" in lowered) return false
@@ -91,6 +94,6 @@ class AuthGuardEngine(
 /** 解読後のストリーム URL として使ってよいか。https・ポート 443・googlevideo.com 配下・パスが /videoplayback のときだけ true（ADR-0003）。 */
 fun isAllowedMediaUrl(url: String): Boolean {
     val parsed = runCatching { Url(url) }.getOrNull() ?: return false
-    if (parsed.protocol.name != "https" || parsed.port != 443 || parsed.user != null || parsed.password != null) return false
+    if (!parsed.isPlainHttps443()) return false
     return parsed.host.endsWith(".googlevideo.com") && parsed.encodedPath == "/videoplayback"
 }

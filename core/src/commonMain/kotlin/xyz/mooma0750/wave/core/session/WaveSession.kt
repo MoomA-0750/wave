@@ -39,6 +39,7 @@ import xyz.mooma0750.wave.core.auth.normalizeDataSyncId
 import xyz.mooma0750.wave.core.net.AuthRouteViolation
 import xyz.mooma0750.wave.core.net.PLAYBACK_STATS_PATH
 import xyz.mooma0750.wave.core.net.isAuthRouteAllowed
+import xyz.mooma0750.wave.core.net.isPlainHttps443
 import kotlin.time.Duration
 import kotlin.time.TimeSource
 
@@ -823,7 +824,7 @@ private val PLAYBACK_STATS_SOURCE_HOSTS = setOf("s.youtube.com", "music.youtube.
  */
 internal fun playbackStatsTarget(statsUrl: String): String? {
     val parsed = runCatching { Url(statsUrl) }.getOrNull() ?: return null
-    if (parsed.protocol.name != "https" || parsed.port != 443 || parsed.user != null || parsed.password != null) return null
+    if (!parsed.isPlainHttps443()) return null
     if (parsed.host !in PLAYBACK_STATS_SOURCE_HOSTS || parsed.encodedPath != PLAYBACK_STATS_PATH) return null
     val rewritten =
         URLBuilder(parsed)
