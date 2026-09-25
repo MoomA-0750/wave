@@ -239,14 +239,12 @@ class HouseholdStore(
         claimId: String,
         yieldDoc: SealedDoc,
     ): ClaimResult {
-        val current = chain ?: return ClaimResult.Rejected("no_household")
-        if (current.members[sender]?.keys?.role != Role.Player) return ClaimResult.Rejected("not_player")
-        if (!commandFrom(sender, current, yieldDoc) || claimId.length !in 16..64) return ClaimResult.Rejected("bad_command")
+        commandProblem(sender, claimId, yieldDoc)?.let { return ClaimResult.Rejected(it) }
         droppedByClaim = pending?.claimId
         pending = null
-        val order = persisted.claimOrder + 1
-        save(persisted.copy(activeDeviceId = sender, claimOrder = order, claimOrders = persisted.claimOrders + (sender to order)))
-        return ClaimResult.Ok(RelayV2.ActiveChanged(sender, claimId, order))
+        val next = withNextClaimOrder(sender).copy(activeDeviceId = sender)
+        save(next)
+        return ClaimResult.Ok(RelayV2.ActiveChanged(sender, claimId, next.claimOrder))
     }
 
     /** 「ここで再生」。サーバーの最新のカーソルの版が basedOnVersion と同じときだけ、新しい端末の最初の書き込みを待つ（D-7）。 */
@@ -257,16 +255,32 @@ class HouseholdStore(
         basedOnVersion: Long,
         yieldDoc: SealedDoc,
     ): ClaimResult {
-        val current = chain ?: return ClaimResult.Rejected("no_household")
-        if (current.members[sender]?.keys?.role != Role.Player) return ClaimResult.Rejected("not_player")
-        if (!commandFrom(sender, current, yieldDoc) || claimId.length !in 16..64) return ClaimResult.Rejected("bad_command")
+        commandProblem(sender, claimId, yieldDoc)?.let { return ClaimResult.Rejected(it) }
         val cursor = persisted.cursor ?: return ClaimResult.Rejected("no_state")
         if (cursor.version != basedOnVersion) return ClaimResult.Conflict(stateOf(StateKind.Cursor))
         droppedByClaim = pending?.claimId
         pending = Pending(claimId, sender, persisted.activeDeviceId, nowMs() + PENDING_MS)
+        val next = withNextClaimOrder(sender)
+        save(next)
+        return ClaimResult.Ok(RelayV2.ActiveChanged(next.activeDeviceId, claimId, next.claimOrder, pendingOwner = sender))
+    }
+
+    /** claim・transfer の命令を受けられない理由（家が無い → player でない → 命令が正しくない の順）。受けられれば null。 */
+    private fun commandProblem(
+        sender: String,
+        claimId: String,
+        yieldDoc: SealedDoc,
+    ): String? {
+        val current = chain ?: return "no_household"
+        if (current.members[sender]?.keys?.role != Role.Player) return "not_player"
+        if (!commandFrom(sender, current, yieldDoc) || claimId.length !in 16..64) return "bad_command"
+        return null
+    }
+
+    /** 次の順番を振り、端末ごとの順番に残す（保存はしない）。 */
+    private fun withNextClaimOrder(sender: String): Persisted {
         val order = persisted.claimOrder + 1
-        save(persisted.copy(claimOrder = order, claimOrders = persisted.claimOrders + (sender to order)))
-        return ClaimResult.Ok(RelayV2.ActiveChanged(persisted.activeDeviceId, claimId, order, pendingOwner = sender))
+        return persisted.copy(claimOrder = order, claimOrders = persisted.claimOrders + (sender to order))
     }
 
     /** 引き取られた端末の最後のカーソル。今の transfer の前の再生中の端末からだけ、state_put と同じ CAS で受ける。 */

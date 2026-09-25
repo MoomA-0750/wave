@@ -190,6 +190,25 @@ class HouseholdStoreTest {
     }
 
     @Test
+    fun transfersAreNumberedLikeClaimsAndRejectionsKeepTheirOrder() {
+        val (s, chain) = household()
+        s.claim(a.deviceId, claimId, doc(a, chain, DocKind.Command, 1))
+        assertIs<HouseholdStore.PutResult.Ok>(put(s, a, chain, 0))
+        // transfer も claim と同じ順番を振り、端末ごとの順番に残す（同時に始めた判断に使う）
+        val ok = assertIs<HouseholdStore.ClaimResult.Ok>(s.transfer(b.deviceId, "1f8fad5b-d9cb-469f-a165-70867728950e", 1, doc(b, chain, DocKind.Command, 1)))
+        assertEquals(2L, ok.activeChanged.claimOrder)
+        assertEquals(mapOf(a.deviceId to 1L, b.deviceId to 2L), s.welcome(pc.deviceId, emptyList()).claimOrders)
+        // 断る理由の順番: 家が無い → player でない → 命令が正しくない
+        val stranger = RelayTestDevice()
+        assertEquals(HouseholdStore.ClaimResult.Rejected("not_player"), s.claim(pc.deviceId, "short", doc(pc, chain, DocKind.Command, 1)))
+        assertEquals(HouseholdStore.ClaimResult.Rejected("not_player"), s.claim(stranger.deviceId, "short", doc(b, chain, DocKind.Command, 1)))
+        assertEquals(HouseholdStore.ClaimResult.Rejected("not_player"), s.transfer(pc.deviceId, "short", 1, doc(pc, chain, DocKind.Command, 1)))
+        assertEquals(HouseholdStore.ClaimResult.Rejected("bad_command"), s.claim(b.deviceId, "short", doc(b, chain, DocKind.Command, 1)))
+        assertEquals(HouseholdStore.ClaimResult.Rejected("bad_command"), s.transfer(b.deviceId, "short", 1, doc(b, chain, DocKind.Command, 1)))
+        assertEquals(HouseholdStore.ClaimResult.Rejected("no_household"), HouseholdStore(File(dir, "empty.json"), listOf(a.publicKeyB64), nowMs = { now }).claim(a.deviceId, claimId, doc(a, chain, DocKind.Command, 1)))
+    }
+
+    @Test
     fun chainAppendIsLinearAndRemovalClearsActive() {
         val (s, chain) = household()
         s.claim(b.deviceId, claimId, doc(b, chain, DocKind.Command, 1))
