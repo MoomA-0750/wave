@@ -76,6 +76,25 @@ class LibraryParsersTest {
         assertTrue(page.endConfirmed)
     }
 
+    @Test
+    fun playlistTitleFallsBackToTheDetailHeader() {
+        // 新しいヘッダ（musicResponsiveHeaderRenderer）が無い応答では、古いヘッダの題名を使う
+        val root =
+            Json.parseToJsonElement(
+                """{"header":{"musicDetailHeaderRenderer":{"title":{"runs":[{"text":"古い"},{"text":"ヘッダ"}]}}},
+                "contents":{"singleColumnBrowseResultsRenderer":{"tabs":[{"tabRenderer":{"content":{"sectionListRenderer":{"contents":[{"musicPlaylistShelfRenderer":{"contents":[]}}]}}}}]}}}""",
+            ) as JsonObject
+        assertEquals("古いヘッダ", MusicParsers.playlistPage(root).title)
+        // 両方あれば新しい方
+        val both =
+            Json.parseToJsonElement(
+                """{"header":{"musicDetailHeaderRenderer":{"title":{"runs":[{"text":"古い"}]}}},
+                "x":{"musicResponsiveHeaderRenderer":{"title":{"runs":[{"text":"新しい"}]}}},
+                "contents":{"singleColumnBrowseResultsRenderer":{"tabs":[{"tabRenderer":{"content":{"sectionListRenderer":{"contents":[{"musicPlaylistShelfRenderer":{"contents":[]}}]}}}}]}}}""",
+            ) as JsonObject
+        assertEquals("新しい", MusicParsers.playlistPage(both).title)
+    }
+
     private fun fixture(name: String): JsonObject =
         Json.parseToJsonElement(requireNotNull(javaClass.getResource("/fixtures/$name.json")).readText()) as JsonObject
 }

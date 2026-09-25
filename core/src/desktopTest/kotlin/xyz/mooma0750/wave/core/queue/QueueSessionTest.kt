@@ -309,6 +309,10 @@ class QueueSessionTest {
             assertEquals(listOf("PL1" to "page2"), content.playlistCalls)
             assertEquals("p1", content.upNextCalls.single().first)
             assertEquals("RDAMVMp1", content.upNextCalls.single().second)
+            // ラジオに切り替わった後の文脈: 出どころは最後の曲のラジオ。ラジオの続きが無いので尽きた扱い
+            val snapshot = queue.snapshot()
+            assertEquals(QueueSource.Radio("p1"), snapshot.source)
+            assertTrue(snapshot.exhausted)
         }
 
     @Test

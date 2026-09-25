@@ -71,6 +71,20 @@ class ArtistAlbumParsersTest {
         assertEquals(LikeStatus.Like, MusicParsers.likeStatus(liked, videoId))
     }
 
+    @Test
+    fun albumPlaylistIdFallsBackToTheCanonicalUrlThenToAnyAlbumPlaylist() {
+        // 再生ボタンが無い応答（ログイン時の形）: canonical URL の list= から取る
+        val expected = assertNotNull(MusicParsers.albumPage(fixture("browse_album"), "MPREb_test")).playlistId
+        val noButton = fixtureText("browse_album").replace("musicPlayButtonRenderer", "unknownPlayButtonRenderer")
+        assertEquals(expected, assertNotNull(MusicParsers.albumPage(Json.parseToJsonElement(noButton) as JsonObject, "MPREb_test")).playlistId)
+        // canonical URL も無い: アルバムの playlistId（OLAK5uy_）を持つ watchPlaylistEndpoint から取る
+        val noCanonical = noButton.replace("urlCanonical", "unknownCanonical")
+        assertEquals(expected, assertNotNull(MusicParsers.albumPage(Json.parseToJsonElement(noCanonical) as JsonObject, "MPREb_test")).playlistId)
+        // どれも無ければ null
+        val none = noCanonical.replace("watchPlaylistEndpoint", "unknownEndpoint")
+        assertNull(assertNotNull(MusicParsers.albumPage(Json.parseToJsonElement(none) as JsonObject, "MPREb_test")).playlistId)
+    }
+
     private fun fixtureText(name: String): String = requireNotNull(javaClass.getResource("/fixtures/$name.json")) { "fixture $name" }.readText()
 
     private fun fixture(name: String): JsonObject = Json.parseToJsonElement(fixtureText(name)) as JsonObject
