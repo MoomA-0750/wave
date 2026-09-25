@@ -88,6 +88,14 @@ sealed interface ResolveResult {
     ) : ResolveResult
 }
 
+/** URL か、解読すれば URL になるもの（signatureCipher・cipher）を持つ。どちらも無いのは SABR だけの形式。 */
+private val PlayerResponse.StreamingData.Format.hasSource: Boolean
+    get() = url != null || signatureCipher != null || cipher != null
+
+/** 解読が済んで、そのまま使える URL だけを持つ。 */
+private val PlayerResponse.StreamingData.Format.isDeciphered: Boolean
+    get() = url != null && signatureCipher == null && cipher == null
+
 /** signatureCipher と n の解読。テストで差し替えるための境界。 */
 interface FormatDecipherer {
     /** 入力と同じ順・同じ長さで返す。解けたものは url が入り、signatureCipher・cipher が消える。 */
@@ -170,7 +178,7 @@ class StreamResolver internal constructor(
                 when {
                     requiredItag != null && streaming.adaptiveFormats.none { it.itag == requiredItag } -> StreamFailure.ItagUnavailable
                     streaming.adaptiveFormats.isNotEmpty() &&
-                        streaming.adaptiveFormats.all { it.url == null && it.signatureCipher == null && it.cipher == null } -> StreamFailure.SabrOnly
+                        streaming.adaptiveFormats.none { it.hasSource } -> StreamFailure.SabrOnly
                     else -> StreamFailure.NoAudioFormat
                 },
             )
@@ -184,7 +192,7 @@ class StreamResolver internal constructor(
             } catch (_: Exception) {
                 emptyList()
             }
-        val chosen = deciphered.firstOrNull { it.url != null && it.signatureCipher == null && it.cipher == null }
+        val chosen = deciphered.firstOrNull { it.isDeciphered }
         if (chosen == null) {
             invalidatePlayerConfig(config)
             return ResolveResult.Failed(StreamFailure.DecipherFailed)
@@ -277,7 +285,7 @@ class StreamResolver internal constructor(
                 // 吹き替えなど音声トラックが複数ある曲では、既定のトラックだけを使う
                 .filter { it.audioTrack == null || it.audioTrack?.audioIsDefault == true }
                 .filter { requiredItag == null || it.itag == requiredItag }
-                .filter { it.url != null || it.signatureCipher != null || it.cipher != null }
+                .filter { it.hasSource }
                 .sortedBy { AUDIO_ITAG_PREFERENCE.indexOf(it.itag) }
 
         /** クエリの並びと他の値の符号化を変えずに、指定した名前のパラメータだけを外す。 */
@@ -299,11 +307,14 @@ class StreamResolver internal constructor(
 
         /** faraday の表と EJS で同じプレイヤーを二重に取らないよう、ロケール部分を揃える。 */
         fun normalizePlayerUrl(playerUrl: String): String {
-            val hash = PLAYER_HASH.find(playerUrl)?.groupValues?.get(1) ?: return playerUrl
+            val hash = playerHashOf(playerUrl) ?: return playerUrl
             return "https://www.youtube.com/s/player/$hash/player_ias.vflset/en_GB/base.js"
         }
 
         private val PLAYER_HASH = Regex("/s/player/([A-Za-z0-9_-]+)/")
+
+        /** プレイヤーの URL の中のハッシュ（`/s/player/<hash>/`）。 */
+        internal fun playerHashOf(playerUrl: String): String? = PLAYER_HASH.find(playerUrl)?.groupValues?.get(1)
 
         private fun FailureKind.toStreamFailure(): StreamFailure =
             when (this) {
@@ -350,7 +361,7 @@ class StreamComponents internal constructor(
     fun faradayStatus(): FaradayStatus {
         val playerUrl = resolver.currentPlayerUrl()
         val loaded = repository.cachedJson.isNotBlank()
-        val hash = playerUrl?.let { Regex("/s/player/([A-Za-z0-9_-]+)/").find(it)?.groupValues?.get(1) }
+        val hash = playerUrl?.let(StreamResolver::playerHashOf)
         // 表のキーとして完全一致するか（部分一致で誤判定しない）
         return FaradayStatus(loaded, if (loaded && hash != null) repository.cachedJson.contains("\"$hash\"") else null)
     }
