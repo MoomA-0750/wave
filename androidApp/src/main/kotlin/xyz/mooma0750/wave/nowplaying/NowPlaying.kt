@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.media3.session.MediaController
 import kotlinx.coroutines.launch
 import xyz.mooma0750.wave.playback.PlayerConnection
+import xyz.mooma0750.wave.playback.togglePlayPause
 
 /** 画面の下に常に出すミニプレーヤー（仮）。 */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -66,16 +67,7 @@ fun MiniPlayer(
                     )
                 }
                 TextButton(onClick = { controller?.seekToPreviousMediaItem() }, enabled = state.hasPrevious) { Text("前") }
-                TextButton(onClick = {
-                    controller?.run {
-                        if (isPlaying) {
-                            pause()
-                        } else {
-                            if (playerError != null) prepare()
-                            play()
-                        }
-                    }
-                }) { Text(if (state.isPlaying) "停止" else "再生") }
+                TextButton(onClick = { controller?.togglePlayPause() }) { Text(if (state.isPlaying) "停止" else "再生") }
                 TextButton(onClick = { controller?.seekToNextMediaItem() }, enabled = state.hasNext) { Text("次") }
                 TextButton(onClick = { showQueue = true }) { Text("キュー") }
             }
@@ -188,16 +180,7 @@ private fun FullPlayer(
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             TextButton(onClick = { controller?.seekToPreviousMediaItem() }, enabled = state.hasPrevious) { Text("前へ") }
-            androidx.compose.material3.Button(onClick = {
-                controller?.run {
-                    if (isPlaying) {
-                        pause()
-                    } else {
-                        if (playerError != null) prepare()
-                        play()
-                    }
-                }
-            }) { Text(if (state.isPlaying) "一時停止" else "再生") }
+            androidx.compose.material3.Button(onClick = { controller?.togglePlayPause() }) { Text(if (state.isPlaying) "一時停止" else "再生") }
             TextButton(onClick = { controller?.seekToNextMediaItem() }, enabled = state.hasNext) { Text("次へ") }
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {

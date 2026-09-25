@@ -1,5 +1,6 @@
 package xyz.mooma0750.wave.debug
 
+import xyz.mooma0750.wave.playback.playFromButton
 import android.content.Intent
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
@@ -262,7 +263,7 @@ object DebugActions {
                     Log.i(WaveApplication.LOG_TAG, "debug playlist songs=${(page as? CallResult.Ok)?.value?.songs?.size} editable=${(page as? CallResult.Ok)?.value?.editable}")
                 }
                 // ミニプレーヤーの再生ボタンと同じ呼び方
-                "play" -> player.controller().run { if (playerError != null) prepare(); play() }
+                "play" -> player.controller().playFromButton()
                 "queue_digest" ->
                     player.controller().run {
                         val ids = (0 until mediaItemCount).map { xyz.mooma0750.wave.playback.Media3QueuePlayer.songOf(getMediaItemAt(it))?.videoId.orEmpty() }
