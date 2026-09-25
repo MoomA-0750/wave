@@ -61,6 +61,25 @@ internal object PlayButtonPolicy {
     }
 
     /**
+     * 待ちの1回分: 家から外された・tailnet に届かないなら待たずに終わる（再レビュー 低-J）。そろっていれば Ready。まだなら null（待ち続ける）。
+     * settledAndTagged は、終わりが決まっていないときだけ調べる。
+     */
+    inline fun waitStep(
+        notMember: Boolean,
+        tailnetUnreachable: Boolean,
+        settledAndTagged: () -> Boolean,
+    ): WaitOutcome? =
+        when {
+            notMember -> WaitOutcome.NotMember
+            tailnetUnreachable -> WaitOutcome.Unreachable
+            settledAndTagged() -> WaitOutcome.Ready
+            else -> null
+        }
+
+    /** 時間切れ: 状態はそろっているならアカウントの問題、そうでなければ中継の問題。 */
+    fun timeoutOutcome(settled: Boolean): WaitOutcome = if (settled) WaitOutcome.Unverified else WaitOutcome.Unreachable
+
+    /**
      * 待った後。
      * @param intentUnchanged 待っている間に、本人が再生ボタン・曲の選択・一時停止をしていない
      */

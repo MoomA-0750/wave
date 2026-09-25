@@ -437,22 +437,17 @@ class ConnectV2Manager(
         try {
             val outcome =
                 withTimeoutOrNull(SETTLE_WAIT_MS) {
-                    while (true) {
-                        when (relay.status.value) {
-                            RelayClientV2.Status.NotMember -> return@withTimeoutOrNull PlayButtonPolicy.WaitOutcome.NotMember
-                            RelayClientV2.Status.TailnetUnreachable -> return@withTimeoutOrNull PlayButtonPolicy.WaitOutcome.Unreachable
-                            else -> Unit
-                        }
-                        if (withContext(dispatcher) { client?.let { it.stateSettled && effects.accountTag() != null } == true }) return@withTimeoutOrNull PlayButtonPolicy.WaitOutcome.Ready
-                        delay(100)
+                    var step: PlayButtonPolicy.WaitOutcome? = null
+                    while (step == null) {
+                        val status = relay.status.value
+                        step =
+                            PlayButtonPolicy.waitStep(status == RelayClientV2.Status.NotMember, status == RelayClientV2.Status.TailnetUnreachable) {
+                                withContext(dispatcher) { client?.let { it.stateSettled && effects.accountTag() != null } == true }
+                            }
+                        if (step == null) delay(100)
                     }
-                    @Suppress("UNREACHABLE_CODE")
-                    PlayButtonPolicy.WaitOutcome.Unreachable
-                }
-                    // 時間切れ: 状態はそろっているならアカウントの問題、そうでなければ中継の問題
-                    ?: withContext(dispatcher) {
-                        if (client?.stateSettled == true) PlayButtonPolicy.WaitOutcome.Unverified else PlayButtonPolicy.WaitOutcome.Unreachable
-                    }
+                    step
+                } ?: withContext(dispatcher) { PlayButtonPolicy.timeoutOutcome(client?.stateSettled == true) }
             withContext(dispatcher) {
                 val engine = client ?: return@withContext
                 val decision =

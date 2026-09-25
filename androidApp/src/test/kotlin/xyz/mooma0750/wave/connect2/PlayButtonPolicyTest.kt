@@ -68,4 +68,21 @@ class PlayButtonPolicyTest {
         assertEquals(Decision.NotifyNotMember, PlayButtonPolicy.afterWait(WaitOutcome.NotMember, intentUnchanged = true, stillRetreated = true, remotePlaying = false, foreground = true))
         assertEquals(Decision.NotifyUnverified, PlayButtonPolicy.afterWait(WaitOutcome.Unverified, intentUnchanged = true, stillRetreated = true, remotePlaying = false, foreground = true))
     }
+
+    @Test
+    fun theWaitEndsEarlyWhenItCannotSucceed() {
+        var asked = 0
+        val settled = {
+            asked++
+            true
+        }
+        assertEquals(WaitOutcome.NotMember, PlayButtonPolicy.waitStep(notMember = true, tailnetUnreachable = true, settledAndTagged = settled))
+        assertEquals(WaitOutcome.Unreachable, PlayButtonPolicy.waitStep(notMember = false, tailnetUnreachable = true, settledAndTagged = settled))
+        // 終わりが決まっていれば、エンジンに聞かない
+        assertEquals(0, asked)
+        assertEquals(WaitOutcome.Ready, PlayButtonPolicy.waitStep(notMember = false, tailnetUnreachable = false, settledAndTagged = settled))
+        assertEquals(null, PlayButtonPolicy.waitStep(notMember = false, tailnetUnreachable = false) { false })
+        assertEquals(WaitOutcome.Unverified, PlayButtonPolicy.timeoutOutcome(settled = true))
+        assertEquals(WaitOutcome.Unreachable, PlayButtonPolicy.timeoutOutcome(settled = false))
+    }
 }
