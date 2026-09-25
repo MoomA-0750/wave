@@ -89,7 +89,7 @@ class MusicRepository(
         }
 
     /** 今のログインの世代。複数の呼び出しにまたがる操作を、始めたときのログインに結び付けるために使う。 */
-    fun currentLoginGeneration(): Long = session.currentGenerationId()
+    fun currentLoginGeneration(): Long = session.loginGenerationId()
 
     /** 曲の評価（next の最初の応答から取る）。 */
     suspend fun likeStatus(

@@ -117,7 +117,7 @@ class StreamResolverTest {
             playerJson = player("OK", listOf(format(251, cipher = true)), statsUrl = "https://s.youtube.com/api/stats/playback?ns=yt&docid=synthetic")
             val stream = assertIs<ResolveResult.Ok>(resolver.resolve("synthetic-id")).stream
             assertTrue(stream.hasPlaybackStats)
-            assertEquals(session.currentGenerationId(), stream.sessionGeneration)
+            assertEquals(session.loginGenerationId(), stream.sessionGeneration)
             assertFalse(stream.toString().contains("stats"))
         }
 
@@ -126,12 +126,12 @@ class StreamResolverTest {
         runBlocking {
             ready()
             playerJson = player("OK", listOf(format(251, cipher = true)), statsUrl = "https://s.youtube.com/api/stats/playback?ns=yt")
-            val before = session.currentGenerationId()
+            val before = session.loginGenerationId()
             val original = decipher
             // /player の応答の後、解読の最中に別のアカウントへ切り替わる
             decipher = { formats ->
                 credentials.value = assertNotNull(Credentials.fromLogin("SAPISID=other-synthetic", "v", "d", 2))
-                runBlocking { withTimeout(5_000) { while (session.currentGenerationId() == before) delay(5) } }
+                runBlocking { withTimeout(5_000) { while (session.loginGenerationId() == before) delay(5) } }
                 original(formats)
             }
             val stream = assertIs<ResolveResult.Ok>(resolver.resolve("synthetic-id")).stream
@@ -143,14 +143,14 @@ class StreamResolverTest {
     fun resolutionForAnotherLoginGenerationIsNotSent(): Unit =
         runBlocking {
             ready()
-            val old = session.currentGenerationId()
+            val old = session.loginGenerationId()
             credentials.value = assertNotNull(Credentials.fromLogin("SAPISID=other-synthetic", "v", "d", 2))
-            withTimeout(5_000) { while (session.currentGenerationId() == old) delay(5) }
+            withTimeout(5_000) { while (session.loginGenerationId() == old) delay(5) }
             withTimeout(5_000) { session.state.first { it == SessionState.Active } }
             val before = sent.size
             assertEquals(ResolveResult.Failed(StreamFailure.NotLoggedIn), resolver.resolve("synthetic-id", expectedGeneration = old))
             assertEquals(before, sent.size, "前のログインでキューに入れた曲を、今のログインで解決した")
-            assertIs<ResolveResult.Ok>(resolver.resolve("synthetic-id", expectedGeneration = session.currentGenerationId()))
+            assertIs<ResolveResult.Ok>(resolver.resolve("synthetic-id", expectedGeneration = session.loginGenerationId()))
         }
 
     @Test

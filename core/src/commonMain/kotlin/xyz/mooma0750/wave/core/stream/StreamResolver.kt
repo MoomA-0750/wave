@@ -141,11 +141,11 @@ class StreamResolver internal constructor(
         sameAs: ResolvedStream?,
         expectedGeneration: Long?,
     ): ResolveResult {
-        if (expectedGeneration != null && expectedGeneration != session.currentGenerationId()) return ResolveResult.Failed(StreamFailure.NotLoggedIn)
+        if (expectedGeneration != null && expectedGeneration != session.loginGenerationId()) return ResolveResult.Failed(StreamFailure.NotLoggedIn)
         val config = playerConfig() ?: return ResolveResult.Failed(StreamFailure.PlayerConfigUnavailable)
         // 期限は /player を呼ぶ前の時刻から数える（解読にかかった時間の分だけ短く見積もる）
         val requestedAtMs = nowMs()
-        val generationBefore = session.currentGenerationId()
+        val generationBefore = session.loginGenerationId()
 
         val player =
             session.call(
@@ -197,7 +197,7 @@ class StreamResolver internal constructor(
 
         val lifetimeMs = (streaming.expiresInSeconds?.takeIf { it > 0 }?.toLong() ?: DEFAULT_LIFETIME_SECONDS) * 1000
         // 別のログインの世代で取った統計 URL を、今のログインで送らないように世代を刻む（ADR-0006 の 3・6）
-        val sameGeneration = session.currentGenerationId() == generationBefore
+        val sameGeneration = session.loginGenerationId() == generationBefore
         val statsUrl = body.playbackTracking?.videostatsPlaybackUrl?.baseUrl?.takeIf { sameGeneration }
         return ResolveResult.Ok(
             ResolvedStream(

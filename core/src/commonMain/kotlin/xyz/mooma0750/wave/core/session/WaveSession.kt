@@ -318,8 +318,6 @@ class WaveSession internal constructor(
         }
     }
 
-    internal fun currentGenerationId(): Long = current.value.id
-
     /** テスト用: 走っている確認（accountMenu）が終わるまで待つ。 */
     internal suspend fun awaitConfirmIdle() {
         generationLock.withLock { current.value.confirm }?.join()
@@ -364,7 +362,7 @@ class WaveSession internal constructor(
     ): CallResult<T> {
         val generation = current.value
         // ログアウトが AuthManager に反映済みで、まだこの世代に届いていない場合も送らない
-        if (generation.credentials == null || credentials.value !== generation.credentials) {
+        if (isStale(generation)) {
             return CallResult.Failed(FailureKind.NotLoggedIn)
         }
         if (expectedGeneration != null && expectedGeneration != generation.id) return CallResult.Failed(FailureKind.NotLoggedIn)
@@ -400,7 +398,7 @@ class WaveSession internal constructor(
         parse: suspend (HttpResponse) -> ParseOutcome<T>,
     ): WriteResult<T> {
         val generation = current.value
-        if (generation.credentials == null || credentials.value !== generation.credentials) {
+        if (isStale(generation)) {
             return WriteResult.Failed(FailureKind.NotLoggedIn)
         }
         if (expectedGeneration != null && expectedGeneration != generation.id) return WriteResult.Failed(FailureKind.NotLoggedIn)
@@ -443,7 +441,7 @@ class WaveSession internal constructor(
         currentMediaTimeSeconds: String,
     ): StatsOutcome {
         val generation = current.value
-        if (generation.credentials == null || credentials.value !== generation.credentials) return StatsOutcome.NotLoggedIn
+        if (isStale(generation)) return StatsOutcome.NotLoggedIn
         if (generation.id != statsGeneration) return StatsOutcome.GenerationMismatch
         val target = playbackStatsTarget(statsUrl) ?: return StatsOutcome.ShapeRejected
         if (verify(generation) != AccountVerification.Verified) return StatsOutcome.AccountUnverified
@@ -542,7 +540,10 @@ class WaveSession internal constructor(
         return if (verify(generation) == AccountVerification.Verified && current.value === generation) VerifiedAccount(generation.id, id) else null
     }
 
-    /** 今のログインの世代（受け渡しの確認に使う）。 */
+    /** その世代はもう使えない（ログアウトした・資格情報が差し替わった）。送る前の確認。 */
+    private fun isStale(generation: Generation): Boolean = generation.credentials == null || credentials.value !== generation.credentials
+
+    /** 今のログインの世代（受け渡し・書き込み・曲の解決を、始めたときのログインに結び付けるのに使う）。 */
     fun loginGenerationId(): Long = current.value.id
 
     /** 今のログインの、書き込み先のアカウントの確認（UI・受け渡し用）。 */

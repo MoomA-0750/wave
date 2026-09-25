@@ -480,7 +480,7 @@ class WaveSessionTest {
     fun playbackStatsAreSentWithAuthOnlyToTheMusicHostAndNeverClassified(): Unit =
         runBlocking {
             val session = loggedInSession()
-            val generation = session.currentGenerationId()
+            val generation = session.loginGenerationId()
             handler = { respond("", HttpStatusCode.NoContent) }
             assertEquals(StatsOutcome.Sent(204, html = false), session.sendPlaybackStats("https://s.youtube.com/api/stats/playback?ns=yt&docid=d", generation, "cpn-synthetic-001", "30.0"))
             val request = sent.single()
@@ -507,14 +507,14 @@ class WaveSessionTest {
     fun playbackStatsFromAnotherGenerationOrWhileLoggedOutAreNotSent(): Unit =
         runBlocking {
             val session = loggedInSession()
-            val oldGeneration = session.currentGenerationId()
+            val oldGeneration = session.loginGenerationId()
             credentials.value = assertNotNull(Credentials.fromLogin("SAPISID=other-synthetic", null, null, 2))
-            withTimeout(5_000) { while (session.currentGenerationId() == oldGeneration) delay(10) }
+            withTimeout(5_000) { while (session.loginGenerationId() == oldGeneration) delay(10) }
             assertEquals(StatsOutcome.GenerationMismatch, session.sendPlaybackStats("https://s.youtube.com/api/stats/playback?ns=yt", oldGeneration, "c", "30.0"))
-            assertEquals(StatsOutcome.ShapeRejected, session.sendPlaybackStats("https://s.youtube.com/api/stats/watchtime", session.currentGenerationId(), "c", "30.0"))
+            assertEquals(StatsOutcome.ShapeRejected, session.sendPlaybackStats("https://s.youtube.com/api/stats/watchtime", session.loginGenerationId(), "c", "30.0"))
             credentials.value = null
             withTimeout(5_000) { session.state.first { it == SessionState.LoggedOut } }
-            assertEquals(StatsOutcome.NotLoggedIn, session.sendPlaybackStats("https://s.youtube.com/api/stats/playback?ns=yt", session.currentGenerationId(), "c", "30.0"))
+            assertEquals(StatsOutcome.NotLoggedIn, session.sendPlaybackStats("https://s.youtube.com/api/stats/playback?ns=yt", session.loginGenerationId(), "c", "30.0"))
             assertTrue(sent.none { it.url.encodedPath.startsWith("/api/stats") })
         }
 
@@ -583,9 +583,9 @@ class WaveSessionTest {
     fun writesStartedUnderAnotherLoginAreNotSent(): Unit =
         runBlocking {
             val session = loggedInSession()
-            val started = session.currentGenerationId()
+            val started = session.loginGenerationId()
             credentials.value = assertNotNull(Credentials.fromLogin("SAPISID=other-synthetic", null, null, 2))
-            withTimeout(5_000) { while (session.currentGenerationId() == started) delay(10) }
+            withTimeout(5_000) { while (session.loginGenerationId() == started) delay(10) }
             withTimeout(5_000) { session.state.first { it == SessionState.Active } }
             val before = sent.size
             assertEquals(
@@ -605,7 +605,7 @@ class WaveSessionTest {
             val session = loggedInSession()
             assertEquals(AccountVerification.Mismatch, session.accountVerification())
             assertEquals(WriteResult.Failed(FailureKind.AccountUnverified), session.callWrite("like", like) { ParseOutcome.Parsed(Unit) })
-            assertEquals(StatsOutcome.AccountUnverified, session.sendPlaybackStats("https://s.youtube.com/api/stats/playback?ns=yt", session.currentGenerationId(), "c", "30.0"))
+            assertEquals(StatsOutcome.AccountUnverified, session.sendPlaybackStats("https://s.youtube.com/api/stats/playback?ns=yt", session.loginGenerationId(), "c", "30.0"))
             assertTrue(sent.none { it.url.encodedPath.contains("like") || it.url.encodedPath.startsWith("/api/stats") }, "確かめられないまま送った")
         }
 
@@ -655,9 +655,9 @@ class WaveSessionTest {
             // state を見た瞬間に、WaveSession の世代がもうそのログインに進んでいるか（購読の順序に頼らない）
             val watcher =
                 launch(kotlinx.coroutines.Dispatchers.Unconfined) {
-                    auth.state.collect { state -> seen += (state is xyz.mooma0750.wave.core.auth.AuthState.LoggedIn) to session.currentGenerationId() }
+                    auth.state.collect { state -> seen += (state is xyz.mooma0750.wave.core.auth.AuthState.LoggedIn) to session.loginGenerationId() }
                 }
-            val before = session.currentGenerationId()
+            val before = session.loginGenerationId()
             auth.completeLogin(loggedIn)
             withTimeout(5_000) { while (seen.none { it.first }) delay(10) }
             val atLoggedIn = seen.first { it.first }.second
@@ -695,9 +695,9 @@ class WaveSessionTest {
     fun staleGenerationCannotOverwriteNewState(): Unit =
         runBlocking {
             val session = loggedInSession()
-            val staleId = session.currentGenerationId()
+            val staleId = session.loginGenerationId()
             credentials.value = assertNotNull(Credentials.fromLogin("SAPISID=other-synthetic", "v2", "s2", 2))
-            awaitState(session) { session.currentGenerationId() != staleId }
+            awaitState(session) { session.loginGenerationId() != staleId }
 
             assertFalse(session.updateStateFor(staleId) { SessionState.Expired(ExpiredReason.Unauthenticated) })
             assertEquals(SessionState.Active, session.state.value)
