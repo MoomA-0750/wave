@@ -155,7 +155,8 @@ class PlaylistViewModel(
         mutableState.update { it.copy(loading = true) }
         viewModelScope.launch {
             when (appendNextPage()) {
-                is CallResult.Failed -> mutableState.update { it.copy(loading = false, continuation = null) }
+                // 続きを読めなかった: この先は読まない。全曲は見ていないので、中を探している途中なら「全部は読めなかった」と出す（レビュー 2026-09-26 低）
+                is CallResult.Failed -> mutableState.update { it.copy(loading = false, continuation = null, incomplete = true) }
                 else -> mutableState.update { it.copy(loading = false) }
             }
         }

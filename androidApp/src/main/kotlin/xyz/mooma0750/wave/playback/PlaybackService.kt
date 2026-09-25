@@ -86,13 +86,13 @@ class PlaybackService : MediaSessionService() {
     /** 取り込み・曲の選択・再開の処理の中（サービスの中の play() を、本人の再生ボタンとして知らせない）。 */
     private var connectV2Suppressed = false
 
+    /** 渡す再生の操作（シャッフルのモードは除く）。 */
+    private val playerCommands by lazy { withoutShuffleMode(MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS) }
+
     /**
      * block の中で同期に来る Player の callback を、本人の操作（再生ボタン・一時停止）として Connect v2 に知らせない。
      * 効くのは Main で同期に呼ばれる間だけ（suspend や post を挟まないこと）。
      */
-    /** 渡す再生の操作（シャッフルのモードは除く）。 */
-    private val playerCommands by lazy { withoutShuffleMode(MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS) }
-
     private inline fun <T> suppressingV2(block: () -> T): T {
         connectV2Suppressed = true
         try {
