@@ -65,13 +65,7 @@ class MusicRepository(
     suspend fun history(continuation: String? = null): CallResult<HistoryPage> =
         session.call(
             operation = "browse",
-            block = {
-                if (continuation == null) {
-                    it.browse(YouTubeClient.WEB_REMIX, browseId = HISTORY, setLogin = true)
-                } else {
-                    it.browse(YouTubeClient.WEB_REMIX, continuation = continuation, setLogin = true)
-                }
-            },
+            block = browseOrContinue(HISTORY, continuation),
         ) { response ->
             val root = json(response)
             lastRendererNames = MusicParsers.rendererNames(root)
@@ -87,13 +81,7 @@ class MusicRepository(
         session.call(
             operation = "browse",
             expectedGeneration = expectedGeneration,
-            block = {
-                if (continuation == null) {
-                    it.browse(YouTubeClient.WEB_REMIX, browseId = "VL$playlistId", setLogin = true)
-                } else {
-                    it.browse(YouTubeClient.WEB_REMIX, continuation = continuation, setLogin = true)
-                }
-            },
+            block = browseOrContinue("VL$playlistId", continuation),
         ) { response ->
             val root = json(response)
             lastRendererNames = MusicParsers.rendererNames(root)
@@ -112,7 +100,7 @@ class MusicRepository(
             operation = "next",
             expectedGeneration = expectedGeneration,
             block = { it.next(YouTubeClient.WEB_REMIX, videoId = videoId, playlistId = null) },
-        ) { response -> MusicParsers.likeStatus(json(response), videoId)?.let { ParseOutcome.Parsed(it) } ?: ParseOutcome.Invalid }
+        ) { response -> parsedOrInvalid(MusicParsers.likeStatus(json(response), videoId)) }
 
     /**
      * 高く評価する（liked = true）・評価を外す（false）。書き込みの規則は WaveSession.callWrite。
@@ -222,7 +210,7 @@ class MusicRepository(
         val result =
             session.callWrite(operation = "edit_playlist/$operation", block = block, expectedGeneration = expectedGeneration) { response ->
                 val status = MusicParsers.editPlaylistStatus(json(response))
-                if (status != null) ParseOutcome.Parsed(status) else ParseOutcome.Invalid
+                parsedOrInvalid(status)
             }
         return when (result) {
             is WriteResult.Done -> if (result.value == STATUS_SUCCEEDED) WriteResult.Done(Unit) else WriteResult.Failed(FailureKind.Http)
@@ -235,23 +223,23 @@ class MusicRepository(
     suspend fun album(browseId: String): CallResult<AlbumPage> =
         session.call(
             operation = "browse",
-            block = { it.browse(YouTubeClient.WEB_REMIX, browseId = browseId, setLogin = true) },
+            block = browseOrContinue(browseId, continuation = null),
         ) { response ->
             val root = json(response)
             lastRendererNames = MusicParsers.rendererNames(root)
             lastKeyPaths = MusicParsers.keyPaths(root, "playlistId")
-            MusicParsers.albumPage(root, browseId)?.let { ParseOutcome.Parsed(it) } ?: ParseOutcome.Invalid
+            parsedOrInvalid(MusicParsers.albumPage(root, browseId))
         }
 
     /** アーティストのページ（`UC…`）。 */
     suspend fun artist(browseId: String): CallResult<ArtistPage> =
         session.call(
             operation = "browse",
-            block = { it.browse(YouTubeClient.WEB_REMIX, browseId = browseId, setLogin = true) },
+            block = browseOrContinue(browseId, continuation = null),
         ) { response ->
             val root = json(response)
             lastRendererNames = MusicParsers.rendererNames(root)
-            MusicParsers.artistPage(root)?.let { ParseOutcome.Parsed(it) } ?: ParseOutcome.Invalid
+            parsedOrInvalid(MusicParsers.artistPage(root))
         }
 
     /** 直近のアルバムの応答で playlistId が現れた場所（キー名だけ）。実アカウントの応答の形を調べる用。 */
@@ -261,6 +249,22 @@ class MusicRepository(
     /** 直近の応答に含まれていたレンダラ名（値は含まない）。解析が0件だったときの調査用。 */
     var lastRendererNames: Set<String> = emptySet()
         private set
+
+    /** 最初のページは browseId、続きは continuation で読む（ログイン中の表示に合わせて cookie 付き）。 */
+    private fun browseOrContinue(
+        browseId: String,
+        continuation: String?,
+    ): suspend (com.metrolist.innertubex.InnerTube) -> HttpResponse =
+        {
+            if (continuation == null) {
+                it.browse(YouTubeClient.WEB_REMIX, browseId = browseId, setLogin = true)
+            } else {
+                it.browse(YouTubeClient.WEB_REMIX, continuation = continuation, setLogin = true)
+            }
+        }
+
+    /** 読めなければ（形が違えば）Invalid。 */
+    private fun <T> parsedOrInvalid(value: T?): ParseOutcome<T> = if (value != null) ParseOutcome.Parsed(value) else ParseOutcome.Invalid
 
     private suspend fun json(response: HttpResponse): JsonObject =
         WaveSession.json.parseToJsonElement(response.bodyAsTextLimited(MAX_BROWSE_BYTES)) as JsonObject
