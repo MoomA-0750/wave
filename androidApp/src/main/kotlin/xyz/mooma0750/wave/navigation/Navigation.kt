@@ -5,6 +5,7 @@ import xyz.mooma0750.wave.core.music.AlbumRef
 import xyz.mooma0750.wave.core.music.ArtistRef
 import xyz.mooma0750.wave.core.music.PlaylistSummary
 import xyz.mooma0750.wave.core.music.Song
+import xyz.mooma0750.wave.playback.PlayerConnection
 
 /** 仮の画面遷移（Phase 4 で作り直す）。ホームの上に積む。 */
 sealed interface Screen {
@@ -62,7 +63,7 @@ data class SongActions(
 /** 画面から再生サービスへのキューの操作（画面の scope で送る。結果は待たない）。 */
 class PlayerActions(
     private val scope: kotlinx.coroutines.CoroutineScope,
-    private val player: xyz.mooma0750.wave.playback.PlayerConnection,
+    private val player: PlayerConnection,
 ) {
     fun playSong(song: Song) {
         scope.launch { player.playSong(song) }

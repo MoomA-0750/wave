@@ -2,17 +2,22 @@ package xyz.mooma0750.wave.connect2
 
 import android.os.SystemClock
 import android.util.Log
+import java.io.File
+import java.util.Base64
+import java.util.UUID
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
@@ -25,21 +30,21 @@ import xyz.mooma0750.wave.connect.DeviceIdentity
 import xyz.mooma0750.wave.core.session.WaveSession
 import xyz.mooma0750.wave.handoff.HandoffCodec
 import xyz.mooma0750.wave.handoff.HandoffDecodeResult
+import xyz.mooma0750.wave.handoff.HandoffRepeat
 import xyz.mooma0750.wave.handoff.HandoffSnapshot
+import xyz.mooma0750.wave.handoff.crypto.EnvelopeSealer
 import xyz.mooma0750.wave.handoff.crypto.WaveCrypto
+import xyz.mooma0750.wave.handoff.v2.ChainRecord
 import xyz.mooma0750.wave.handoff.v2.ClientEvent
 import xyz.mooma0750.wave.handoff.v2.ClientPersisted
 import xyz.mooma0750.wave.handoff.v2.ConnectClient
+import xyz.mooma0750.wave.handoff.v2.ConnectJson
 import xyz.mooma0750.wave.handoff.v2.CursorBody
 import xyz.mooma0750.wave.handoff.v2.MemberChain
+import xyz.mooma0750.wave.handoff.v2.MemberKeys
 import xyz.mooma0750.wave.handoff.v2.RelayV2
 import xyz.mooma0750.wave.handoff.v2.Role
 import xyz.mooma0750.wave.playback.ConnectV2Host
-import java.io.File
-import java.util.Base64
-import java.util.UUID
-import java.util.concurrent.Executors
-import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Connect v2 の Android 側の調停役（Phase 6b）。ConnectClient を1本のスレッドに閉じ込め、中継 v2・再生サービス・画面をつなぐ。
@@ -170,7 +175,7 @@ class ConnectV2Manager(
     private var waitJob: Job? = null
 
     /** 最後に間引かずに書いたカーソルの、曲・再生中か・リピート（Main だけ）。再バッファのたびに書かない（再レビュー 低-N）。 */
-    private var lastSignificant: Triple<String, Boolean, xyz.mooma0750.wave.handoff.HandoffRepeat>? = null
+    private var lastSignificant: Triple<String, Boolean, HandoffRepeat>? = null
 
     private var cursorJob: Job? = null
     private var queueJob: Job? = null
@@ -546,8 +551,8 @@ class ConnectV2Manager(
     /** この端末の家の鍵の記述（Hello の拡張）。 */
     suspend fun selfMemberKeysJson(): String =
         kotlinx.coroutines.withContext(dispatcher) {
-            xyz.mooma0750.wave.handoff.v2.ConnectJson.json.encodeToString(
-                xyz.mooma0750.wave.handoff.v2.MemberKeys.serializer(),
+            ConnectJson.json.encodeToString(
+                MemberKeys.serializer(),
                 MemberChain.memberKeys(keys, keys.kxPub, Role.Player),
             )
         }
@@ -555,7 +560,7 @@ class ConnectV2Manager(
     /** A 側: Confirm の拡張（家に入っていなければ null）。 */
     suspend fun joinInfoJson(): String? =
         kotlinx.coroutines.withContext(dispatcher) {
-            client?.joinInfo()?.let { xyz.mooma0750.wave.handoff.v2.ConnectJson.json.encodeToString(ConnectClient.JoinInfo.serializer(), it) }
+            client?.joinInfo()?.let { ConnectJson.json.encodeToString(ConnectClient.JoinInfo.serializer(), it) }
         }
 
     /** A 側: 6桁の照合の後、B を家に加える。中継の返事を待つ。@return 加えたか */
@@ -566,7 +571,7 @@ class ConnectV2Manager(
         val added =
             kotlinx.coroutines.withContext(dispatcher) {
                 val chain = client?.verifiedChain() ?: return@withContext null
-                val member = runCatching { xyz.mooma0750.wave.handoff.v2.ConnectJson.json.decodeFromString(xyz.mooma0750.wave.handoff.v2.MemberKeys.serializer(), memberKeysJson) }.getOrNull() ?: return@withContext null
+                val member = runCatching { ConnectJson.json.decodeFromString(MemberKeys.serializer(), memberKeysJson) }.getOrNull() ?: return@withContext null
                 if (member.role != Role.Player) return@withContext null
                 // 6桁で確かめた相手の身元鍵と同じであること（レビュー p6b34 低-3）
                 if (!runCatching { Base64.getUrlDecoder().decode(member.identityPub) }.getOrNull().contentEquals(peerPublicKey)) return@withContext null
@@ -601,8 +606,8 @@ class ConnectV2Manager(
      * （中継では通っているのにやり直すと、二重の記録で必ず失敗する、レビュー p6b34 低-3）。
      */
     private suspend fun appendRecord(
-        record: xyz.mooma0750.wave.handoff.v2.ChainRecord,
-        done: (List<xyz.mooma0750.wave.handoff.v2.MemberKeys>) -> Boolean,
+        record: ChainRecord,
+        done: (List<MemberKeys>) -> Boolean,
     ): Boolean {
         val reply =
             kotlinx.coroutines.coroutineScope {
@@ -630,8 +635,8 @@ class ConnectV2Manager(
         joinInfoJson: String,
         inviterPublicKey: ByteArray,
     ): Boolean {
-        val info = runCatching { xyz.mooma0750.wave.handoff.v2.ConnectJson.json.decodeFromString(ConnectClient.JoinInfo.serializer(), joinInfoJson) }.getOrNull() ?: return false
-        val inviter = xyz.mooma0750.wave.handoff.crypto.EnvelopeSealer.deviceId(inviterPublicKey)
+        val info = runCatching { ConnectJson.json.decodeFromString(ConnectClient.JoinInfo.serializer(), joinInfoJson) }.getOrNull() ?: return false
+        val inviter = EnvelopeSealer.deviceId(inviterPublicKey)
         return withContext(dispatcher) {
             val engine = client ?: return@withContext false
             if (engine.householdId != null) return@withContext false

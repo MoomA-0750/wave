@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import xyz.mooma0750.wave.WaveApplication
 import xyz.mooma0750.wave.core.music.MusicRepository
+import xyz.mooma0750.wave.core.music.PlaylistPage
 import xyz.mooma0750.wave.core.music.PlaylistSummary
 import xyz.mooma0750.wave.core.music.Song
 import xyz.mooma0750.wave.core.session.CallResult
@@ -79,7 +80,7 @@ class PlaylistViewModel(
     /** 「もっと読む」と「全部読む」が同じ続きを2回読まないように、続きは1つずつ読む。 */
     private val pages = NextPageLoader()
 
-    private suspend fun appendNextPage(): CallResult<xyz.mooma0750.wave.core.music.PlaylistPage>? =
+    private suspend fun appendNextPage(): CallResult<PlaylistPage>? =
         pages.next(
             currentToken = { state.value.continuation },
             fetch = { token -> music.playlist(playlistId, token) },

@@ -43,6 +43,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import xyz.mooma0750.wave.AppContainer
+import xyz.mooma0750.wave.connect2.ConnectV2Section
 
 /** 端末の連携（Phase 6 の仮の画面）: 中継の状態、ペアリング、ペアの一覧（引き取る・解除）。 */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -107,7 +108,7 @@ fun ConnectScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             // Connect v2（Phase 6b、試験中）。v1 と並べて出す（L-9）
-            xyz.mooma0750.wave.connect2.ConnectV2Section(container)
+            ConnectV2Section(container)
             if (!container.connectConfigured) {
                 Text("中継の場所が設定されていないので、この機能は使えません")
                 return@Column

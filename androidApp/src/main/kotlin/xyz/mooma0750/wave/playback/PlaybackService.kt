@@ -15,24 +15,27 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
+import androidx.media3.session.CommandButton
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
-import androidx.media3.session.CommandButton
 import androidx.media3.session.SessionCommand
-import xyz.mooma0750.wave.core.music.LikeStatus
 import androidx.media3.session.SessionError
 import androidx.media3.session.SessionResult
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
+import java.util.UUID
+import kotlin.random.asKotlinRandom
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.plus
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlin.random.asKotlinRandom
+import kotlinx.coroutines.plus
+import xyz.mooma0750.wave.AppContainer
+import xyz.mooma0750.wave.MainActivity
 import xyz.mooma0750.wave.WaveApplication
 import xyz.mooma0750.wave.core.auth.AuthState
+import xyz.mooma0750.wave.core.music.LikeStatus
 import xyz.mooma0750.wave.core.music.MusicRepository
 import xyz.mooma0750.wave.core.music.SongPage
 import xyz.mooma0750.wave.core.music.UpNextPage
@@ -40,7 +43,7 @@ import xyz.mooma0750.wave.core.queue.QueueContentSource
 import xyz.mooma0750.wave.core.queue.QueueSession
 import xyz.mooma0750.wave.core.session.CallResult
 import xyz.mooma0750.wave.core.stream.StreamFailure
-import java.util.UUID
+import xyz.mooma0750.wave.handoff.HandoffSnapshot
 
 /** 再生の本体。画面が無くても動き、キューの続き（サジェスト）もここで取る。 */
 @OptIn(UnstableApi::class)
@@ -111,7 +114,7 @@ class PlaybackService : MediaSessionService() {
     private var relayReleaseJob: Job? = null
     private var handoffEndpoint: HandoffHost.Endpoint? = null
 
-    private lateinit var container: xyz.mooma0750.wave.AppContainer
+    private lateinit var container: AppContainer
 
     override fun onCreate() {
         super.onCreate()
@@ -267,7 +270,7 @@ class PlaybackService : MediaSessionService() {
                     android.app.PendingIntent.getActivity(
                         this,
                         0,
-                        android.content.Intent(this, xyz.mooma0750.wave.MainActivity::class.java)
+                        android.content.Intent(this, MainActivity::class.java)
                             .setAction(android.content.Intent.ACTION_MAIN)
                             .addCategory(android.content.Intent.CATEGORY_LAUNCHER),
                         android.app.PendingIntent.FLAG_IMMUTABLE,
@@ -326,7 +329,7 @@ class PlaybackService : MediaSessionService() {
                 override fun capture(
                     handoffId: String,
                     expectedLoginGeneration: Long,
-                ): xyz.mooma0750.wave.handoff.HandoffSnapshot? {
+                ): HandoffSnapshot? {
                     // 確かめたアカウントのキューでなければ渡さない（確かめた後にアカウントが切り替わった）
                     if (queueSession.accountEpoch != expectedLoginGeneration || container.session.loginGenerationId() != expectedLoginGeneration) return null
                     val wasPlaying = player.isPlaying || player.playWhenReady
@@ -347,7 +350,7 @@ class PlaybackService : MediaSessionService() {
                 }
 
                 override fun adopt(
-                    snapshot: xyz.mooma0750.wave.handoff.HandoffSnapshot,
+                    snapshot: HandoffSnapshot,
                     expectedLoginGeneration: Long,
                 ): Boolean {
                     if (loggedInAt == null || container.session.loginGenerationId() != expectedLoginGeneration) return false
@@ -369,7 +372,7 @@ class PlaybackService : MediaSessionService() {
 
         val v2Endpoint =
             object : ConnectV2Host.Endpoint {
-                override fun snapshot(): xyz.mooma0750.wave.handoff.HandoffSnapshot? {
+                override fun snapshot(): HandoffSnapshot? {
                     if (loggedInAt == null) return null
                     // 中身（並び・出どころ・続き）が同じなら同じ文字列になるよう、位置・履歴・時刻は入れない（カーソルが持つ。キューを置き直さない判断に使う）
                     return queueSession.handoffSnapshot(
@@ -398,7 +401,7 @@ class PlaybackService : MediaSessionService() {
                 override fun resume() = suppressingV2 { player.play() }
 
                 override fun adopt(
-                    snapshot: xyz.mooma0750.wave.handoff.HandoffSnapshot,
+                    snapshot: HandoffSnapshot,
                     positionMs: Long,
                     expectedLoginGeneration: Long,
                 ): Boolean = suppressingV2 { endpoint.adopt(snapshot.copy(positionMs = positionMs.coerceAtLeast(0), playing = true), expectedLoginGeneration) }

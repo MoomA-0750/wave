@@ -31,6 +31,7 @@ import xyz.mooma0750.wave.core.music.MusicRepository
 import xyz.mooma0750.wave.core.music.Song
 import xyz.mooma0750.wave.core.session.CallResult
 import xyz.mooma0750.wave.core.session.FailureKind
+import xyz.mooma0750.wave.navigation.SongActions
 import xyz.mooma0750.wave.search.SongMenuButton
 import xyz.mooma0750.wave.search.SongRow
 import xyz.mooma0750.wave.search.failureMessage
@@ -116,7 +117,7 @@ class HistoryViewModel(
 fun HistoryScreen(
     viewModel: HistoryViewModel,
     onPlay: (songs: List<Song>, index: Int) -> Unit,
-    actions: xyz.mooma0750.wave.navigation.SongActions,
+    actions: SongActions,
     onBack: () -> Unit,
     bottomBar: @Composable () -> Unit,
 ) {

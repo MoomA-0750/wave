@@ -4,17 +4,15 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.CircularProgressIndicator
@@ -29,20 +27,26 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import xyz.mooma0750.wave.core.music.AlbumRef
+import xyz.mooma0750.wave.core.music.ArtistRef
 import xyz.mooma0750.wave.core.music.Song
 import xyz.mooma0750.wave.core.session.FailureKind
+import xyz.mooma0750.wave.navigation.SongActions
+import xyz.mooma0750.wave.ui.Durations
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SearchScreen(
     viewModel: SearchViewModel,
     onSongClick: (Song) -> Unit,
-    actions: xyz.mooma0750.wave.navigation.SongActions,
+    actions: SongActions,
     onBack: () -> Unit,
     bottomBar: @Composable () -> Unit = {},
     /** 検索の履歴（語・アーティスト・アルバム）。 */
@@ -94,8 +98,8 @@ fun SearchScreen(
                                         keyboard?.hide()
                                         viewModel.searchFor(entry.text)
                                     }
-                                    is SearchHistoryEntry.Artist -> actions.openArtist(xyz.mooma0750.wave.core.music.ArtistRef(entry.name, entry.browseId))
-                                    is SearchHistoryEntry.Album -> actions.openAlbum(xyz.mooma0750.wave.core.music.AlbumRef(entry.title, entry.browseId))
+                                    is SearchHistoryEntry.Artist -> actions.openArtist(ArtistRef(entry.name, entry.browseId))
+                                    is SearchHistoryEntry.Album -> actions.openAlbum(AlbumRef(entry.title, entry.browseId))
                                 }
                             },
                             onRemove = { history.remove(entry) },
@@ -131,7 +135,7 @@ fun SongRow(
         Column(Modifier.weight(1f)) {
             Text(song.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyLarge)
             Text(
-                listOfNotNull(song.subtitle.takeIf { it.isNotEmpty() }, song.durationSeconds?.let { xyz.mooma0750.wave.ui.Durations.ofSeconds(it.toLong()) }).joinToString(" • "),
+                listOfNotNull(song.subtitle.takeIf { it.isNotEmpty() }, song.durationSeconds?.let { Durations.ofSeconds(it.toLong()) }).joinToString(" • "),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.bodySmall,

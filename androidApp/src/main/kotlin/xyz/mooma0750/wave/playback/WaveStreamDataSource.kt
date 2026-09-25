@@ -12,6 +12,7 @@ import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.TransferListener
 import androidx.media3.datasource.okhttp.OkHttpDataSource
+import java.io.IOException
 import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient
 import xyz.mooma0750.wave.WaveApplication
@@ -20,7 +21,6 @@ import xyz.mooma0750.wave.core.stream.ResolveResult
 import xyz.mooma0750.wave.core.stream.ResolvedStream
 import xyz.mooma0750.wave.core.stream.StreamFailure
 import xyz.mooma0750.wave.core.stream.StreamResolver
-import java.io.IOException
 
 /** 再生キューの項目の URI。署名付き URL の代わりに Media3 の中を流れる。 */
 object TrackUri {
@@ -168,7 +168,7 @@ class WaveStreamDataSource(
     override fun open(dataSpec: DataSpec): Long {
         val videoId = TrackUri.videoIdOf(dataSpec.uri) ?: throw DataSourceException("unsupported uri scheme", null, PlaybackException.ERROR_CODE_IO_UNSPECIFIED)
         // 世代の無い曲は解決しない（照合しない側に倒さない、P6-0 inner gate 中-4）
-        val epoch = TrackUri.epochOf(dataSpec.uri) ?: throw StreamResolveException(xyz.mooma0750.wave.core.stream.StreamFailure.NotLoggedIn)
+        val epoch = TrackUri.epochOf(dataSpec.uri) ?: throw StreamResolveException(StreamFailure.NotLoggedIn)
         openedSpec = dataSpec
         if (cache.recentlyRejected(videoId)) throw StreamRejectedException(403)
         val cached = cache.get(videoId, epoch)

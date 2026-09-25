@@ -15,8 +15,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -35,6 +35,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import xyz.mooma0750.wave.core.music.MusicRepository
 import xyz.mooma0750.wave.core.music.PlaylistSummary
 import xyz.mooma0750.wave.core.music.Song
+import xyz.mooma0750.wave.navigation.SongActions
+import xyz.mooma0750.wave.search.SongMenuButton
 import xyz.mooma0750.wave.search.SongRow
 import xyz.mooma0750.wave.search.failureMessage
 
@@ -81,7 +83,7 @@ fun PlaylistScreen(
     onShufflePlay: (songs: List<Song>, continuation: String?) -> Unit,
     /** 読み込んだぶんを丸ごとキューに入れる。next = 次に再生（false は最後に追加）。 */
     onQueue: (songs: List<Song>, next: Boolean) -> Unit,
-    actions: xyz.mooma0750.wave.navigation.SongActions,
+    actions: SongActions,
     onRemove: (song: Song, setVideoId: String) -> Unit,
     onBack: () -> Unit,
     bottomBar: @Composable () -> Unit,
@@ -137,7 +139,7 @@ fun PlaylistScreen(
                 val song = state.songs[index]
                 val setVideoId = state.setVideoIds.getOrNull(index)
                 SongRow(song, onClick = { onPlay(state.songs, index, state.continuation) }) {
-                    xyz.mooma0750.wave.search.SongMenuButton(
+                    SongMenuButton(
                         song,
                         actions,
                         extraItems = if (state.editable && setVideoId != null) listOf("このプレイリストから外す" to { onRemove(song, setVideoId) }) else emptyList(),

@@ -4,6 +4,7 @@ import androidx.core.net.toUri
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
+import xyz.mooma0750.wave.core.music.Song
 import xyz.mooma0750.wave.core.queue.QueueItem
 import xyz.mooma0750.wave.core.queue.QueuePlayer
 
@@ -147,8 +148,8 @@ class Media3QueuePlayer(
         private val songJson = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
 
         /** mediaItemOf で載せた曲。読めなければ null。 */
-        fun songOf(item: MediaItem?): xyz.mooma0750.wave.core.music.Song? =
-            item?.mediaMetadata?.extras?.getString(SONG_EXTRA)?.let { runCatching { songJson.decodeFromString(xyz.mooma0750.wave.core.music.Song.serializer(), it) }.getOrNull() }
+        fun songOf(item: MediaItem?): Song? =
+            item?.mediaMetadata?.extras?.getString(SONG_EXTRA)?.let { runCatching { songJson.decodeFromString(Song.serializer(), it) }.getOrNull() }
 
         /**
          * 一覧のサムネイル（小さい）を、再生画面・通知・時計に耐える大きさにする。
@@ -183,7 +184,7 @@ class Media3QueuePlayer(
                         // 画像そのものは ArtworkEmbedder が今の曲にだけ入れる。アプリの画面は曲の情報（extras）の URL から出す
                         .setDurationMs(song.durationSeconds?.let { it * 1000L })
                         // 自アプリの画面の曲のメニュー（アーティスト・アルバムを開く）で使う。公開のメタデータだけ
-                        .setExtras(android.os.Bundle().apply { putString(SONG_EXTRA, songJson.encodeToString(xyz.mooma0750.wave.core.music.Song.serializer(), song)) })
+                        .setExtras(android.os.Bundle().apply { putString(SONG_EXTRA, songJson.encodeToString(Song.serializer(), song)) })
                         .build(),
                 ).build()
         }

@@ -36,6 +36,7 @@ import kotlinx.coroutines.launch
 import xyz.mooma0750.wave.AppContainer
 import xyz.mooma0750.wave.connect.QrImage
 import xyz.mooma0750.wave.connect.QrScanner
+import xyz.mooma0750.wave.handoff.v2.Role
 
 /**
  * Connect v2 の仮の画面（Phase 6b P6b-4）。端末の連携の画面の上に出す。見た目は後で詰める（機能を先）。
@@ -135,7 +136,7 @@ fun ConnectV2Section(container: AppContainer) {
         Text("家の端末", style = MaterialTheme.typography.bodyMedium)
         for (member in members) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(if (member.role == xyz.mooma0750.wave.handoff.v2.Role.Controller) "${member.label}（操作だけ）" else member.label, modifier = Modifier.weight(1f))
+                Text(if (member.role == Role.Controller) "${member.label}（操作だけ）" else member.label, modifier = Modifier.weight(1f))
                 if (!member.isSelf) {
                     TextButton(enabled = !removeBusy, onClick = { removing = member }) { Text("外す") }
                 }

@@ -23,26 +23,34 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import xyz.mooma0750.wave.core.auth.AuthState
+import kotlinx.coroutines.launch
 import xyz.mooma0750.wave.artist.AlbumScreen
 import xyz.mooma0750.wave.artist.AlbumViewModel
 import xyz.mooma0750.wave.artist.ArtistScreen
 import xyz.mooma0750.wave.artist.ArtistViewModel
-import xyz.mooma0750.wave.debug.DebugActions
-import xyz.mooma0750.wave.navigation.Screen
-import xyz.mooma0750.wave.navigation.SongActions
-import xyz.mooma0750.wave.home.HomeScreen
-import xyz.mooma0750.wave.login.LoginScreen
-import xyz.mooma0750.wave.login.LoginViewModel
+import xyz.mooma0750.wave.connect.ConnectScreen
+import xyz.mooma0750.wave.connect2.ConnectNotices
+import xyz.mooma0750.wave.core.auth.AuthState
+import xyz.mooma0750.wave.core.music.MusicRepository
 import xyz.mooma0750.wave.core.music.PlaylistSummary
+import xyz.mooma0750.wave.core.music.Song
+import xyz.mooma0750.wave.debug.DebugActions
+import xyz.mooma0750.wave.home.HomeScreen
 import xyz.mooma0750.wave.library.AddToPlaylistDialog
+import xyz.mooma0750.wave.library.HistoryScreen
+import xyz.mooma0750.wave.library.HistoryViewModel
 import xyz.mooma0750.wave.library.LibraryViewModel
 import xyz.mooma0750.wave.library.PlaylistScreen
 import xyz.mooma0750.wave.library.PlaylistViewModel
+import xyz.mooma0750.wave.login.LoginScreen
+import xyz.mooma0750.wave.login.LoginViewModel
+import xyz.mooma0750.wave.navigation.PlayerActions
+import xyz.mooma0750.wave.navigation.Screen
+import xyz.mooma0750.wave.navigation.SongActions
 import xyz.mooma0750.wave.nowplaying.MiniPlayer
+import xyz.mooma0750.wave.search.SearchHistoryEntry
 import xyz.mooma0750.wave.search.SearchScreen
 import xyz.mooma0750.wave.search.SearchViewModel
-import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: android.content.Intent) {
@@ -76,7 +84,7 @@ class MainActivity : ComponentActivity() {
                 // 仮の画面遷移（Phase 4 で作り直す）。ホームの上に画面を積む
                 val stack = remember { mutableStateListOf<Screen>() }
                 // プレイリストに追加する曲（ダイアログを出す）
-                var addTarget by remember { mutableStateOf<xyz.mooma0750.wave.core.music.Song?>(null) }
+                var addTarget by remember { mutableStateOf<Song?>(null) }
                 val playlistsVersion by container.playlistsVersion.collectAsStateWithLifecycle()
                 val scope = rememberCoroutineScope()
                 val songActions =
@@ -89,7 +97,7 @@ class MainActivity : ComponentActivity() {
                             addToPlaylist = { song -> addTarget = song },
                         )
                     }
-                val playerActions = remember { xyz.mooma0750.wave.navigation.PlayerActions(scope, container.player) }
+                val playerActions = remember { PlayerActions(scope, container.player) }
                 val miniPlayer: @Composable () -> Unit = { MiniPlayer(container.player, songActions) }
                 LaunchedEffect(container) {
                     DebugActions.navigation.collect { stack += it }
@@ -101,7 +109,7 @@ class MainActivity : ComponentActivity() {
                 }
                 LaunchedEffect(container) {
                     container.connectV2?.events?.collect { event ->
-                        val message = xyz.mooma0750.wave.connect2.ConnectNotices.toast(event)
+                        val message = ConnectNotices.toast(event)
                         message?.let { android.widget.Toast.makeText(context, it, android.widget.Toast.LENGTH_LONG).show() }
                     }
                 }
@@ -146,10 +154,10 @@ class MainActivity : ComponentActivity() {
                                     )
                                 }
                                 Screen.Connect ->
-                                    xyz.mooma0750.wave.connect.ConnectScreen(container, onBack = pop, bottomBar = miniPlayer)
+                                    ConnectScreen(container, onBack = pop, bottomBar = miniPlayer)
                                 Screen.History ->
-                                    xyz.mooma0750.wave.library.HistoryScreen(
-                                        viewModel(key = "history-$loginGeneration") { xyz.mooma0750.wave.library.HistoryViewModel(container.music) },
+                                    HistoryScreen(
+                                        viewModel(key = "history-$loginGeneration") { HistoryViewModel(container.music) },
                                         onPlay = { songs, index -> playerActions.playFrom(songs, index) },
                                         actions = songActions,
                                         onBack = pop,
@@ -161,11 +169,11 @@ class MainActivity : ComponentActivity() {
                                         remember(songActions) {
                                             songActions.copy(
                                                 openArtist = { artist ->
-                                                    artist.browseId?.let { container.searchHistory.add(xyz.mooma0750.wave.search.SearchHistoryEntry.Artist(artist.name, it)) }
+                                                    artist.browseId?.let { container.searchHistory.add(SearchHistoryEntry.Artist(artist.name, it)) }
                                                     songActions.openArtist(artist)
                                                 },
                                                 openAlbum = { album ->
-                                                    album.browseId?.let { container.searchHistory.add(xyz.mooma0750.wave.search.SearchHistoryEntry.Album(album.title, it)) }
+                                                    album.browseId?.let { container.searchHistory.add(SearchHistoryEntry.Album(album.title, it)) }
                                                     songActions.openAlbum(album)
                                                 },
                                             )
@@ -183,7 +191,7 @@ class MainActivity : ComponentActivity() {
                                     val playlist = screen.summary
                                     // 高く評価した曲は、評価を変えたら読み直す
                                     val likedVersion by container.likedSongsVersion.collectAsStateWithLifecycle()
-                                    val version = if (playlist.playlistId == xyz.mooma0750.wave.core.music.MusicRepository.LIKED_SONGS) likedVersion else 0
+                                    val version = if (playlist.playlistId == MusicRepository.LIKED_SONGS) likedVersion else 0
                                     PlaylistScreen(
                                         viewModel(key = "playlist-$loginGeneration-${playlist.playlistId}-$version-$playlistsVersion-${screen.initialQuery}") {
                                             PlaylistViewModel(container.music, playlist.playlistId, playlist.title, screen.initialQuery)
@@ -210,7 +218,7 @@ class MainActivity : ComponentActivity() {
                                         onOpenAllSongs = { id, name -> stack += Screen.Playlist(PlaylistSummary(id, name, null, null)) },
                                         // 「高く評価した曲」を、そのアーティストで絞った状態で開く
                                         onOpenLiked = { name ->
-                                            stack += Screen.Playlist(PlaylistSummary(xyz.mooma0750.wave.core.music.MusicRepository.LIKED_SONGS, "高く評価した曲", null, null), initialQuery = name)
+                                            stack += Screen.Playlist(PlaylistSummary(MusicRepository.LIKED_SONGS, "高く評価した曲", null, null), initialQuery = name)
                                         },
                                         onOpenAlbum = { album -> stack += Screen.Album(album.browseId, album.title) },
                                         onBack = pop,

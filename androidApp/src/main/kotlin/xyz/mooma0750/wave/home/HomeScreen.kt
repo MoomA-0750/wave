@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -26,16 +27,17 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import xyz.mooma0750.wave.AppContainer
 import xyz.mooma0750.wave.WaveApplication
-import androidx.compose.foundation.lazy.LazyColumn
+import xyz.mooma0750.wave.core.music.PlaylistSummary
+import xyz.mooma0750.wave.core.session.AccountResult
+import xyz.mooma0750.wave.core.session.CallResult
+import xyz.mooma0750.wave.core.session.PremiumStatus
+import xyz.mooma0750.wave.core.session.SessionState
 import xyz.mooma0750.wave.debug.DebugPlayback
-import xyz.mooma0750.wave.nowplaying.MiniPlayer
 import xyz.mooma0750.wave.debug.StreamCheck
 import xyz.mooma0750.wave.library.LibraryUiState
 import xyz.mooma0750.wave.library.libraryItems
-import xyz.mooma0750.wave.core.music.PlaylistSummary
-import xyz.mooma0750.wave.core.session.AccountResult
-import xyz.mooma0750.wave.core.session.PremiumStatus
-import xyz.mooma0750.wave.core.session.SessionState
+import xyz.mooma0750.wave.navigation.SongActions
+import xyz.mooma0750.wave.nowplaying.MiniPlayer
 
 @Composable
 fun HomeScreen(
@@ -47,7 +49,7 @@ fun HomeScreen(
     library: LibraryUiState,
     onOpenPlaylist: (PlaylistSummary) -> Unit,
     onOpenHistory: () -> Unit,
-    songActions: xyz.mooma0750.wave.navigation.SongActions,
+    songActions: SongActions,
 ) {
     val sessionState by container.session.state.collectAsStateWithLifecycle()
     var account by remember(obtainedAtEpochMs) { mutableStateOf<AccountResult?>(null) }
@@ -159,9 +161,9 @@ private fun DebugPlaybackButtons(container: AppContainer) {
         OutlinedButton(onClick = {
             scope.launch {
                 when (val page = container.music.playlist(DebugPlayback.PUBLIC_PLAYLIST_ID)) {
-                    is xyz.mooma0750.wave.core.session.CallResult.Ok ->
+                    is CallResult.Ok ->
                         container.player.playFrom(page.value.songs, 0, DebugPlayback.PUBLIC_PLAYLIST_ID, page.value.continuation)
-                    is xyz.mooma0750.wave.core.session.CallResult.Failed -> Log.i(WaveApplication.LOG_TAG, "debug playlist failed ${page.kind}")
+                    is CallResult.Failed -> Log.i(WaveApplication.LOG_TAG, "debug playlist failed ${page.kind}")
                 }
             }
         }) { Text("開発用: 公開プレイリストを再生") }

@@ -7,8 +7,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -17,6 +15,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -34,20 +33,26 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.media3.session.MediaController
 import kotlinx.coroutines.launch
+import xyz.mooma0750.wave.core.music.LikeStatus
+import xyz.mooma0750.wave.navigation.SongActions
+import xyz.mooma0750.wave.playback.Media3QueuePlayer
 import xyz.mooma0750.wave.playback.PlayerConnection
 import xyz.mooma0750.wave.playback.togglePlayPause
+import xyz.mooma0750.wave.search.SongMenuButton
+import xyz.mooma0750.wave.ui.Durations
 
 /** 画面の下に常に出すミニプレーヤー（仮）。 */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MiniPlayer(
     connection: PlayerConnection,
-    actions: xyz.mooma0750.wave.navigation.SongActions,
+    actions: SongActions,
 ) {
     val (state, controller) = rememberPlayerUiState(connection)
     var showQueue by remember { mutableStateOf(false) }
@@ -101,7 +106,7 @@ private fun QueueSheet(
     state: PlayerUiState,
     controller: MediaController?,
     connection: PlayerConnection,
-    actions: xyz.mooma0750.wave.navigation.SongActions,
+    actions: SongActions,
 ) {
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
@@ -124,8 +129,8 @@ private fun QueueSheet(
                         Text(row.artist, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
                     }
                     controller?.takeIf { index < it.mediaItemCount }?.let { c ->
-                        xyz.mooma0750.wave.playback.Media3QueuePlayer.songOf(c.getMediaItemAt(index))?.let { song ->
-                            xyz.mooma0750.wave.search.SongMenuButton(song, actions, inQueue = true)
+                        Media3QueuePlayer.songOf(c.getMediaItemAt(index))?.let { song ->
+                            SongMenuButton(song, actions, inQueue = true)
                         }
                     }
                     if (!current) TextButton(onClick = { scope.launch { connection.remove(row.itemId) } }) { Text("削除") }
@@ -142,7 +147,7 @@ private fun FullPlayer(
     state: PlayerUiState,
     controller: MediaController?,
     connection: PlayerConnection,
-    actions: xyz.mooma0750.wave.navigation.SongActions,
+    actions: SongActions,
     onQueue: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
@@ -154,7 +159,7 @@ private fun FullPlayer(
         coil3.compose.AsyncImage(
             model =
                 controller?.currentMediaItem?.let { item ->
-                    xyz.mooma0750.wave.playback.Media3QueuePlayer.songOf(item)?.thumbnailUrl?.takeIf { it.startsWith("https://") }?.let(xyz.mooma0750.wave.playback.Media3QueuePlayer::largeArtwork)
+                    Media3QueuePlayer.songOf(item)?.thumbnailUrl?.takeIf { it.startsWith("https://") }?.let(Media3QueuePlayer::largeArtwork)
                 },
             contentDescription = null,
             modifier = Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(8.dp)),
@@ -163,8 +168,8 @@ private fun FullPlayer(
         Text(state.title.orEmpty(), style = MaterialTheme.typography.titleLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(state.artist.orEmpty(), style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-            xyz.mooma0750.wave.playback.Media3QueuePlayer.songOf(controller?.currentMediaItem)?.let { song ->
-                xyz.mooma0750.wave.search.SongMenuButton(song, actions, inQueue = true)
+            Media3QueuePlayer.songOf(controller?.currentMediaItem)?.let { song ->
+                SongMenuButton(song, actions, inQueue = true)
             }
         }
         if (state.durationMs > 0) {
@@ -199,13 +204,13 @@ private fun FullPlayer(
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             val videoId = like.videoId
             TextButton(
-                onClick = { if (videoId != null) scope.launch { connection.setLiked(videoId, like.status != xyz.mooma0750.wave.core.music.LikeStatus.Like) } },
+                onClick = { if (videoId != null) scope.launch { connection.setLiked(videoId, like.status != LikeStatus.Like) } },
                 enabled = videoId != null && !like.pending,
             ) {
                 Text(
                     when {
                         like.pending -> "変更中…"
-                        like.status == xyz.mooma0750.wave.core.music.LikeStatus.Like -> "高く評価済み（外す）"
+                        like.status == LikeStatus.Like -> "高く評価済み（外す）"
                         like.status == null -> "評価を読み直す"
                         else -> "高く評価"
                     },
@@ -218,4 +223,4 @@ private fun FullPlayer(
     }
 }
 
-private fun formatTime(ms: Long): String = xyz.mooma0750.wave.ui.Durations.ofMillis(ms)
+private fun formatTime(ms: Long): String = Durations.ofMillis(ms)

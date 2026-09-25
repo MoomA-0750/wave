@@ -2,6 +2,8 @@ package xyz.mooma0750.wave.connect
 
 import android.os.SystemClock
 import android.util.Log
+import java.util.Base64
+import java.util.UUID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -32,9 +34,8 @@ import xyz.mooma0750.wave.handoff.HandoffTaker
 import xyz.mooma0750.wave.handoff.RelayMessage
 import xyz.mooma0750.wave.handoff.crypto.EnvelopeSealer
 import xyz.mooma0750.wave.handoff.crypto.Pairing
+import xyz.mooma0750.wave.handoff.crypto.WaveCrypto
 import xyz.mooma0750.wave.playback.HandoffHost
-import java.util.Base64
-import java.util.UUID
 
 /**
  * 端末間の受け渡しの調停役（Phase 6、ADR-0009）。中継からの封筒を開き、引き取る側・引き取られる側の状態機械に渡し、
@@ -337,7 +338,7 @@ class ConnectManager(
         val released = body.abandonedHandoffId?.let { giver.onCancel(pair.peerDeviceId, HandoffBody.Cancel(it, "abandoned")) } == true
         if (released) onMain { host.endpoint?.forgetHandedOff() }
         val proof = accountProof(pair)
-        val accountMatches = proof != null && xyz.mooma0750.wave.handoff.crypto.WaveCrypto.constantTimeEquals(proof.hmac.encodeToByteArray(), body.accountHmac.encodeToByteArray())
+        val accountMatches = proof != null && WaveCrypto.constantTimeEquals(proof.hmac.encodeToByteArray(), body.accountHmac.encodeToByteArray())
         // こちらも引き取りを頼んでいる・取り込んでいる間は応じない（互いに同時に引き取ると、両方が相手のキューで鳴る）
         val busy = taker.busy
         val canGive = !busy && accountMatches && onMain { host.endpoint?.hasQueue() == true }
@@ -384,7 +385,7 @@ class ConnectManager(
         body: HandoffBody.Snapshot,
     ) {
         val proof = accountProof(pair)
-        val accountMatches = proof != null && xyz.mooma0750.wave.handoff.crypto.WaveCrypto.constantTimeEquals(proof.hmac.encodeToByteArray(), body.accountHmac.encodeToByteArray())
+        val accountMatches = proof != null && WaveCrypto.constantTimeEquals(proof.hmac.encodeToByteArray(), body.accountHmac.encodeToByteArray())
         // 状態機械は判断と同時に待ちを取り下げるので、Cancel の宛先は先に取っておく。封筒の handoffId は AAD で認証済み
         val waiting = (taker.state as? HandoffTaker.State.Requested)?.takeIf { it.peerId == pair.peerDeviceId }
         val cancelTarget = envelope.handoffId ?: waiting?.handoffId

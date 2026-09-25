@@ -1,15 +1,16 @@
 package xyz.mooma0750.wave.connect2
 
 import android.util.Log
+import java.util.Base64
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.filter
@@ -23,10 +24,10 @@ import kotlinx.serialization.json.Json
 import xyz.mooma0750.wave.WaveApplication
 import xyz.mooma0750.wave.connect.DeviceIdentity
 import xyz.mooma0750.wave.core.session.WaveSession
+import xyz.mooma0750.wave.handoff.crypto.EnvelopeSealer
 import xyz.mooma0750.wave.handoff.crypto.Pairing
 import xyz.mooma0750.wave.handoff.v2.ClientEvent
 import xyz.mooma0750.wave.handoff.v2.RelayV2
-import java.util.Base64
 
 /**
  * Connect v2 の加入（Phase 6b、D-3）。A（家の端末、QR を出して6桁を入力）と B（QR を読んで6桁を表示）。
@@ -121,7 +122,7 @@ class PairingV2Controller(
             }
         when {
             joined == ClientEvent.Joined -> {
-                manager.rememberLabel(xyz.mooma0750.wave.handoff.crypto.EnvelopeSealer.deviceId(established.peerPublicKey), established.peerDeviceName)
+                manager.rememberLabel(EnvelopeSealer.deviceId(established.peerPublicKey), established.peerDeviceName)
                 mutableState.value = State.Done(established.peerDeviceName)
                 Log.i(WaveApplication.LOG_TAG, "pairing-v2 established role=B")
             }
@@ -210,7 +211,7 @@ class PairingV2Controller(
                         if (memberKeys == null || !manager.addMember(memberKeys, established.peerPublicKey)) {
                             fail("家に加えられませんでした。もう一度やり直してください")
                         } else {
-                            manager.rememberLabel(xyz.mooma0750.wave.handoff.crypto.EnvelopeSealer.deviceId(established.peerPublicKey), established.peerDeviceName)
+                            manager.rememberLabel(EnvelopeSealer.deviceId(established.peerPublicKey), established.peerDeviceName)
                             Log.i(WaveApplication.LOG_TAG, "pairing-v2 established role=A")
                             mutableState.value = State.Done(established.peerDeviceName)
                         }

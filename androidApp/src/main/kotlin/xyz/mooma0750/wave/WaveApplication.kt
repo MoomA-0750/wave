@@ -1,10 +1,6 @@
 package xyz.mooma0750.wave
 
 import android.app.Application
-import coil3.ImageLoader
-import coil3.PlatformContext
-import coil3.SingletonImageLoader
-import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import android.content.Context
 import android.content.pm.ApplicationInfo
 import android.os.SystemClock
@@ -13,36 +9,53 @@ import android.webkit.WebView
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
+import coil3.ImageLoader
+import coil3.PlatformContext
+import coil3.SingletonImageLoader
+import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
+import java.io.File
+import java.util.UUID
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import xyz.mooma0750.wave.connect.ConnectManager
+import xyz.mooma0750.wave.connect.DeviceIdentity
+import xyz.mooma0750.wave.connect.PairStore
+import xyz.mooma0750.wave.connect.PairingController
+import xyz.mooma0750.wave.connect.RelayClient
+import xyz.mooma0750.wave.connect2.ConnectNotices
+import xyz.mooma0750.wave.connect2.ConnectV2Manager
+import xyz.mooma0750.wave.connect2.PairingV2Controller
 import xyz.mooma0750.wave.core.auth.AuthManager
+import xyz.mooma0750.wave.core.auth.AuthState
 import xyz.mooma0750.wave.core.auth.KeystoreCredentialStore
+import xyz.mooma0750.wave.core.music.MusicRepository
 import xyz.mooma0750.wave.core.net.AuthGuardEngine
 import xyz.mooma0750.wave.core.net.createWaveHttpClient
 import xyz.mooma0750.wave.core.session.WaveSession
-import xyz.mooma0750.wave.core.music.MusicRepository
-import xyz.mooma0750.wave.core.stream.StreamComponents
-import xyz.mooma0750.wave.playback.PlayerConnection
-import xyz.mooma0750.wave.core.auth.AuthState
 import xyz.mooma0750.wave.core.stream.PlaybackHistory
+import xyz.mooma0750.wave.core.stream.StreamComponents
+import xyz.mooma0750.wave.library.LikedSongsCache
 import xyz.mooma0750.wave.library.PlaylistEditor
-import xyz.mooma0750.wave.settings.AppSettings
-import xyz.mooma0750.wave.playback.MediaHttp
+import xyz.mooma0750.wave.library.PlaylistMembership
+import xyz.mooma0750.wave.playback.AtomicQueueFile
+import xyz.mooma0750.wave.playback.ConnectV2Host
 import xyz.mooma0750.wave.playback.HandoffHost
+import xyz.mooma0750.wave.playback.MediaHttp
+import xyz.mooma0750.wave.playback.PlayerConnection
 import xyz.mooma0750.wave.playback.QueueStore
 import xyz.mooma0750.wave.playback.ResolvedStreamCache
-import java.io.File
-import java.util.UUID
+import xyz.mooma0750.wave.search.SearchHistoryStore
+import xyz.mooma0750.wave.settings.AppSettings
 
 /** プロセスで1つだけ作る（同じファイルに DataStore を2つ作ると例外になる）。 */
 private val Context.credentialDataStore: DataStore<Preferences> by preferencesDataStore(name = "credentials")
@@ -197,10 +210,10 @@ class AppContainer(
     val likedSongsVersion: StateFlow<Int> = mutableLikedSongsVersion.asStateFlow()
 
     /** 曲がどのプレイリストに入っているかの確認（プレイリストが変わるまで使い回す）。 */
-    val playlistMembership = xyz.mooma0750.wave.library.PlaylistMembership(music)
+    val playlistMembership = PlaylistMembership(music)
 
     /** 高く評価した曲の読み込み（アーティストのページで使う）。評価が変わるまで使い回す。 */
-    val likedSongs = xyz.mooma0750.wave.library.LikedSongsCache(music)
+    val likedSongs = LikedSongsCache(music)
 
     fun onLikedSongsChanged() {
         mutableLikedSongsVersion.update { it + 1 }
@@ -225,27 +238,27 @@ class AppContainer(
     val handoffHost = HandoffHost()
 
     /** Connect v2 の、再生サービスへの入口（Phase 6b）。 */
-    val connectV2Host = xyz.mooma0750.wave.playback.ConnectV2Host()
+    val connectV2Host = ConnectV2Host()
 
     /** この端末の身元（Keystore の署名鍵）。 */
-    val deviceIdentity = xyz.mooma0750.wave.connect.DeviceIdentity()
+    val deviceIdentity = DeviceIdentity()
 
     /** ペアリングした端末の一覧（信頼の根拠）。 */
-    val pairStore = xyz.mooma0750.wave.connect.PairStore(java.io.File(context.noBackupFilesDir, "pairs.bin"))
+    val pairStore = PairStore(java.io.File(context.noBackupFilesDir, "pairs.bin"))
 
     /** 中継の場所が設定されているか（local.properties）。無ければ端末間の受け渡しは使えない。 */
     val connectConfigured: Boolean = BuildConfig.RELAY_URL.isNotEmpty() && BuildConfig.RELAY_HOST.isNotEmpty()
 
-    val relayClient = xyz.mooma0750.wave.connect.RelayClient(deviceIdentity, BuildConfig.RELAY_URL, BuildConfig.RELAY_HOST, appScope)
+    val relayClient = RelayClient(deviceIdentity, BuildConfig.RELAY_URL, BuildConfig.RELAY_HOST, appScope)
 
     /** 前面にある Activity の数（引き取った曲の再生を始めてよいか）。 */
     @Volatile
     var startedActivities = 0
 
     /** Connect v2（Phase 6b）。中継 v2 の場所が設定されていなければ null。 */
-    val connectV2: xyz.mooma0750.wave.connect2.ConnectV2Manager? =
+    val connectV2: ConnectV2Manager? =
         if (BuildConfig.RELAY_V2_URL.isNotEmpty() && BuildConfig.RELAY_V2_HOST.isNotEmpty()) {
-            xyz.mooma0750.wave.connect2.ConnectV2Manager(
+            ConnectV2Manager(
                 identity = deviceIdentity,
                 session = session,
                 host = connectV2Host,
@@ -267,7 +280,7 @@ class AppContainer(
                 manager.events.collect { event ->
                     if (startedActivities != 0) return@collect
                     // 裏で再生ボタンを押して鳴らさなかったときも知らせる（D-9、レビュー p6b34 中-5）
-                    xyz.mooma0750.wave.connect2.ConnectNotices.background(event)?.let { notifyConnect(it.title, it.text) }
+                    ConnectNotices.background(event)?.let { notifyConnect(it.title, it.text) }
                 }
             }
         }
@@ -304,13 +317,13 @@ class AppContainer(
         runCatching { manager.notify(CONNECT_NOTIFICATION_ID, notification) }
     }
 
-    val pairingV2: xyz.mooma0750.wave.connect2.PairingV2Controller? =
+    val pairingV2: PairingV2Controller? =
         connectV2?.let { manager ->
-            xyz.mooma0750.wave.connect2.PairingV2Controller(deviceIdentity, manager, session, appScope, android.os.Build.MODEL)
+            PairingV2Controller(deviceIdentity, manager, session, appScope, android.os.Build.MODEL)
         }
 
     val connect =
-        xyz.mooma0750.wave.connect.ConnectManager(
+        ConnectManager(
             identity = deviceIdentity,
             pairs = pairStore,
             relay = relayClient,
@@ -322,7 +335,7 @@ class AppContainer(
         )
 
     val pairing =
-        xyz.mooma0750.wave.connect.PairingController(
+        PairingController(
             identity = deviceIdentity,
             pairs = pairStore,
             relay = relayClient,
@@ -340,8 +353,8 @@ class AppContainer(
 
     /** 検索の履歴（語と、検索から開いたアーティスト・アルバム）。ログアウトで消す。 */
     val searchHistory =
-        xyz.mooma0750.wave.search.SearchHistoryStore(
-            xyz.mooma0750.wave.playback.AtomicQueueFile(java.io.File(context.noBackupFilesDir, "search-history.json")),
+        SearchHistoryStore(
+            AtomicQueueFile(java.io.File(context.noBackupFilesDir, "search-history.json")),
             appScope,
         )
 
