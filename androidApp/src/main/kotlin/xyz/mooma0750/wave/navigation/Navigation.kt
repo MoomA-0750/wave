@@ -1,5 +1,6 @@
 package xyz.mooma0750.wave.navigation
 
+import kotlinx.coroutines.launch
 import xyz.mooma0750.wave.core.music.AlbumRef
 import xyz.mooma0750.wave.core.music.ArtistRef
 import xyz.mooma0750.wave.core.music.PlaylistSummary
@@ -33,7 +34,7 @@ sealed interface Screen {
 }
 
 /** 曲の一覧・キュー・再生画面から共通に呼ぶ操作。 */
-class SongActions(
+data class SongActions(
     val playNext: (Song) -> Unit,
     val addToQueue: (Song) -> Unit,
     val openArtist: (ArtistRef) -> Unit,
@@ -42,9 +43,7 @@ class SongActions(
 ) {
     /** シートの上から画面を開くときに、先にシートを閉じる。 */
     fun closing(close: () -> Unit): SongActions =
-        SongActions(
-            playNext = playNext,
-            addToQueue = addToQueue,
+        copy(
             openArtist = {
                 close()
                 openArtist(it)
@@ -58,4 +57,32 @@ class SongActions(
                 addToPlaylist(it)
             },
         )
+}
+
+/** 画面から再生サービスへのキューの操作（画面の scope で送る。結果は待たない）。 */
+class PlayerActions(
+    private val scope: kotlinx.coroutines.CoroutineScope,
+    private val player: xyz.mooma0750.wave.playback.PlayerConnection,
+) {
+    fun playSong(song: Song) {
+        scope.launch { player.playSong(song) }
+    }
+
+    fun playFrom(
+        songs: List<Song>,
+        index: Int,
+        playlistId: String? = null,
+        continuation: String? = null,
+        shuffle: Boolean = false,
+    ) {
+        scope.launch { player.playFrom(songs, index, playlistId, continuation, shuffle) }
+    }
+
+    /** 丸ごとキューに入れる。next = 次に再生（false は最後に追加）。 */
+    fun queue(
+        songs: List<Song>,
+        next: Boolean,
+    ) {
+        scope.launch { if (next) player.addNext(songs) else player.addToEnd(songs) }
+    }
 }

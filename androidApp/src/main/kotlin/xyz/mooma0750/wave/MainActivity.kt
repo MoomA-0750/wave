@@ -89,6 +89,7 @@ class MainActivity : ComponentActivity() {
                             addToPlaylist = { song -> addTarget = song },
                         )
                     }
+                val playerActions = remember { xyz.mooma0750.wave.navigation.PlayerActions(scope, container.player) }
                 val miniPlayer: @Composable () -> Unit = { MiniPlayer(container.player, songActions) }
                 LaunchedEffect(container) {
                     DebugActions.navigation.collect { stack += it }
@@ -149,7 +150,7 @@ class MainActivity : ComponentActivity() {
                                 Screen.History ->
                                     xyz.mooma0750.wave.library.HistoryScreen(
                                         viewModel(key = "history-$loginGeneration") { xyz.mooma0750.wave.library.HistoryViewModel(container.music) },
-                                        onPlay = { songs, index -> scope.launch { container.player.playFrom(songs, index, playlistId = null, continuation = null) } },
+                                        onPlay = { songs, index -> playerActions.playFrom(songs, index) },
                                         actions = songActions,
                                         onBack = pop,
                                         bottomBar = miniPlayer,
@@ -158,9 +159,7 @@ class MainActivity : ComponentActivity() {
                                     // 検索から開いたアーティスト・アルバムも履歴に残す（Spotify と同じで、あとから辿れる）
                                     val searchActions =
                                         remember(songActions) {
-                                            SongActions(
-                                                playNext = songActions.playNext,
-                                                addToQueue = songActions.addToQueue,
+                                            songActions.copy(
                                                 openArtist = { artist ->
                                                     artist.browseId?.let { container.searchHistory.add(xyz.mooma0750.wave.search.SearchHistoryEntry.Artist(artist.name, it)) }
                                                     songActions.openArtist(artist)
@@ -169,12 +168,11 @@ class MainActivity : ComponentActivity() {
                                                     album.browseId?.let { container.searchHistory.add(xyz.mooma0750.wave.search.SearchHistoryEntry.Album(album.title, it)) }
                                                     songActions.openAlbum(album)
                                                 },
-                                                addToPlaylist = songActions.addToPlaylist,
                                             )
                                         }
                                     SearchScreen(
                                         viewModel(key = "search-$loginGeneration") { SearchViewModel(container.music, container.searchHistory) },
-                                        onSongClick = { song -> scope.launch { container.player.playSong(song) } },
+                                        onSongClick = playerActions::playSong,
                                         actions = searchActions,
                                         onBack = pop,
                                         bottomBar = miniPlayer,
@@ -190,13 +188,9 @@ class MainActivity : ComponentActivity() {
                                         viewModel(key = "playlist-$loginGeneration-${playlist.playlistId}-$version-$playlistsVersion-${screen.initialQuery}") {
                                             PlaylistViewModel(container.music, playlist.playlistId, playlist.title, screen.initialQuery)
                                         },
-                                        onPlay = { songs, index, continuation -> scope.launch { container.player.playFrom(songs, index, playlist.playlistId, continuation) } },
-                                        onShufflePlay = { songs, continuation ->
-                                            scope.launch { container.player.playFrom(songs, 0, playlist.playlistId, continuation, shuffle = true) }
-                                        },
-                                        onQueue = { songs, next ->
-                                            scope.launch { if (next) container.player.addNext(songs) else container.player.addToEnd(songs) }
-                                        },
+                                        onPlay = { songs, index, continuation -> playerActions.playFrom(songs, index, playlist.playlistId, continuation) },
+                                        onShufflePlay = { songs, continuation -> playerActions.playFrom(songs, 0, playlist.playlistId, continuation, shuffle = true) },
+                                        onQueue = playerActions::queue,
                                         actions = songActions,
                                         onRemove = { song, setVideoId -> container.playlistEditor.remove(playlist.playlistId, song, setVideoId) },
                                         onBack = pop,
@@ -212,7 +206,7 @@ class MainActivity : ComponentActivity() {
                                         title = screen.name,
                                         actions = songActions,
                                         // 曲の棚は5曲だけなので、最後まで行ったら最後の曲からラジオにつなぐ
-                                        onPlay = { songs, index -> scope.launch { container.player.playFrom(songs, index, playlistId = null, continuation = null) } },
+                                        onPlay = { songs, index -> playerActions.playFrom(songs, index) },
                                         onOpenAllSongs = { id, name -> stack += Screen.Playlist(PlaylistSummary(id, name, null, null)) },
                                         // 「高く評価した曲」を、そのアーティストで絞った状態で開く
                                         onOpenLiked = { name ->
@@ -228,12 +222,8 @@ class MainActivity : ComponentActivity() {
                                         viewModel(key = "album-$loginGeneration-${screen.browseId}") { AlbumViewModel(container.music, screen.browseId) },
                                         title = screen.title,
                                         actions = songActions,
-                                        onPlay = { page, index, shuffle ->
-                                            scope.launch { container.player.playFrom(page.songs, index, page.playlistId, continuation = null, shuffle = shuffle) }
-                                        },
-                                        onQueue = { page, next ->
-                                            scope.launch { if (next) container.player.addNext(page.songs) else container.player.addToEnd(page.songs) }
-                                        },
+                                        onPlay = { page, index, shuffle -> playerActions.playFrom(page.songs, index, page.playlistId, shuffle = shuffle) },
+                                        onQueue = { page, next -> playerActions.queue(page.songs, next) },
                                         onBack = pop,
                                         bottomBar = miniPlayer,
                                     )
