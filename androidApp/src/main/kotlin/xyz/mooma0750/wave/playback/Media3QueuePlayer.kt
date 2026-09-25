@@ -41,22 +41,14 @@ class Media3QueuePlayer(
     override fun replace(
         items: List<QueueItem>,
         startIndex: Int,
-    ) {
-        itemsById.clear()
-        items.forEach { itemsById[it.itemId] = it }
-        player.setMediaItems(items.map { mediaItemOf(it, accountEpoch) }, startIndex, 0L)
-        player.prepare()
-        player.play()
-    }
+    ) = replaceAndPlayAt(items, startIndex, 0L)
 
     override fun replaceAndPlayAt(
         items: List<QueueItem>,
         startIndex: Int,
         positionMs: Long,
     ) {
-        itemsById.clear()
-        items.forEach { itemsById[it.itemId] = it }
-        player.setMediaItems(items.map { mediaItemOf(it, accountEpoch) }, startIndex, positionMs)
+        setItems(items, startIndex, positionMs)
         player.prepare()
         player.play()
     }
@@ -66,9 +58,18 @@ class Media3QueuePlayer(
         startIndex: Int,
         positionMs: Long,
     ) {
+        // prepare しない。再生ボタンが押されたら、Media3 が IDLE から prepare する
+        setItems(items, startIndex, positionMs)
+    }
+
+    /** キューを置き換える（再生はしない）。 */
+    private fun setItems(
+        items: List<QueueItem>,
+        startIndex: Int,
+        positionMs: Long,
+    ) {
         itemsById.clear()
         items.forEach { itemsById[it.itemId] = it }
-        // prepare しない。再生ボタンが押されたら、Media3 が IDLE から prepare する
         player.setMediaItems(items.map { mediaItemOf(it, accountEpoch) }, startIndex, positionMs)
     }
 
