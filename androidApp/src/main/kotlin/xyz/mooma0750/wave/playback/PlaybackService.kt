@@ -620,48 +620,54 @@ class PlaybackService : MediaSessionService() {
             if (container.isDebuggable) {
                 Log.i(WaveApplication.LOG_TAG, "connect package=${controller.packageName} uid=${controller.uid} trusted=${controller.isTrusted} notification=${session.isMediaNotificationController(controller)} version=${controller.controllerVersion}")
             }
-            if (isOwnNotificationController(session, controller)) {
+            val access =
+                ControllerGate.classify(
+                    isOwnNotificationController = isOwnNotificationController(session, controller),
+                    isOwnUiController = isOwnUiController(session, controller),
+                    isTrusted = controller.isTrusted,
+                    // 通知を読める（本人が許可した）アプリは、通知のボタンを押せる立場なので、つないでも新しくできることは増えない。
+                    // 時計・車載のコンパニオンはここに当たる（Media3 の isTrusted はこれを拾わないことがある）
+                    readsOurNotification = { controller.packageName in notificationListenerPackages() },
+                )
+            return when (access) {
                 // 通知用コントローラーには、評価のボタンのコマンドだけを足す（受けるときにトークンを確かめる）
-                return MediaSession.ConnectionResult
-                    .AcceptedResultBuilder(session, controller)
-                    .setAvailableSessionCommands(
-                        MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS
-                            .buildUpon()
-                            .add(SessionCommand(QueueCommands.TOGGLE_LIKE, Bundle.EMPTY))
-                            .build(),
-                    ).setAvailablePlayerCommands(withoutShuffleMode(MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS))
-                    .setMediaButtonPreferences(likeButtons(likes?.state ?: LikeState()))
-                    .build()
-            }
-            if (!isOwnUiController(session, controller)) {
-                // システム（ロック画面・Bluetooth はプラットフォームのセッション経由）・信頼された外部は既定の再生操作だけ。
-                // 信頼されていない他アプリは、Media3 のコントローラーでもレガシー（MediaBrowser で公開 Service につなぐ）でも拒否する。
-                // レガシーで受け入れると、プラットフォームのセッションのトークンを渡すことになり、PlaybackState の custom action の
-                // extras（通知の評価ボタンのトークン）とキューを読ませてしまう（F1d inner gate 指摘1）
-                // 例外: 通知を読める（本人が許可した）アプリは、通知のボタンを押せる立場なので、つないでも新しくできることは増えない。
-                // 時計・車載のコンパニオンはここに当たる（Media3 の isTrusted はこれを拾わないことがある）
-                val readsOurNotification = !controller.isTrusted && controller.packageName in notificationListenerPackages()
-                if (!controller.isTrusted && !readsOurNotification) {
-                    Log.w(WaveApplication.LOG_TAG, "controller rejected package=${controller.packageName} uid=${controller.uid} version=${controller.controllerVersion}")
-                }
-                return if (controller.isTrusted || readsOurNotification) {
-                    if (readsOurNotification) Log.i(WaveApplication.LOG_TAG, "controller accepted via notification access package=${controller.packageName}")
+                ControllerGate.Access.OwnNotification ->
                     MediaSession.ConnectionResult
                         .AcceptedResultBuilder(session, controller)
-                        // 再生の操作だけ（このアプリのキューの操作・評価のコマンドは渡さない）
+                        .setAvailableSessionCommands(
+                            MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS
+                                .buildUpon()
+                                .add(SessionCommand(QueueCommands.TOGGLE_LIKE, Bundle.EMPTY))
+                                .build(),
+                        ).setAvailablePlayerCommands(withoutShuffleMode(MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS))
+                        .setMediaButtonPreferences(likeButtons(likes?.state ?: LikeState()))
+                        .build()
+                // システム（ロック画面・Bluetooth はプラットフォームのセッション経由）・信頼された外部・通知を読めるアプリは、再生の操作だけ
+                // （このアプリのキューの操作・評価のコマンドは渡さない）
+                ControllerGate.Access.PlaybackOnly -> {
+                    if (!controller.isTrusted) Log.i(WaveApplication.LOG_TAG, "controller accepted via notification access package=${controller.packageName}")
+                    MediaSession.ConnectionResult
+                        .AcceptedResultBuilder(session, controller)
                         .setAvailableSessionCommands(MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS)
                         .setAvailablePlayerCommands(withoutShuffleMode(MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS))
                         .build()
-                } else {
+                }
+                // 信頼されていない他アプリは、Media3 のコントローラーでもレガシー（MediaBrowser で公開 Service につなぐ）でも拒否する。
+                // レガシーで受け入れると、プラットフォームのセッションのトークンを渡すことになり、PlaybackState の custom action の
+                // extras（通知の評価ボタンのトークン）とキューを読ませてしまう（F1d inner gate 指摘1）
+                ControllerGate.Access.Reject -> {
+                    Log.w(WaveApplication.LOG_TAG, "controller rejected package=${controller.packageName} uid=${controller.uid} version=${controller.controllerVersion}")
                     MediaSession.ConnectionResult.reject()
                 }
+                ControllerGate.Access.OwnUi -> {
+                    val commands =
+                        MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS
+                            .buildUpon()
+                            .apply { QueueCommands.all.forEach(::add) }
+                            .build()
+                    MediaSession.ConnectionResult.accept(commands, withoutShuffleMode(MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS))
+                }
             }
-            val commands =
-                MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS
-                    .buildUpon()
-                    .apply { QueueCommands.all.forEach(::add) }
-                    .build()
-            return MediaSession.ConnectionResult.accept(commands, withoutShuffleMode(MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS))
         }
 
         override fun onCustomCommand(
