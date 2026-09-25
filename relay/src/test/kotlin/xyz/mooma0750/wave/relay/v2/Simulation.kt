@@ -20,7 +20,7 @@ import java.security.interfaces.ECPublicKey
 import java.util.UUID
 
 /**
- * 端末なしの多端末テストの中継（Phase 6b、Opus 中-8）。本物の HouseholdStore を使い、振り分けは HubV2 と同じ。
+ * 端末なしの多端末テストの中継（Phase 6b、Opus 中-8）。本物の HouseholdStore と、中継と同じ振り分け（HouseholdRouter）を使う。
  * 届ける前に hook で落とす・遅らせることができる（敵対的なサーバー）。届けるのは run() のときだけ（決まった順）。
  */
 class FakeRelay(
@@ -54,20 +54,14 @@ class FakeRelay(
 
     fun disconnect(deviceId: String) {
         connected.remove(deviceId)
-        store.expirePending(disconnected = deviceId)?.let { (claimId, active) ->
-            broadcast(RelayV2.PendingExpired(claimId))
-            broadcast(active)
-        }
+        router.broadcastExpired(store.expirePending(disconnected = deviceId), outlet(null))
         broadcast(RelayV2.Presence(connected.keys.toList()))
     }
 
     fun isConnected(deviceId: String) = deviceId in connected
 
     fun tick() {
-        store.expirePending()?.let { (claimId, active) ->
-            broadcast(RelayV2.PendingExpired(claimId))
-            broadcast(active)
-        }
+        router.broadcastExpired(store.expirePending(), outlet(null))
     }
 
     fun releaseHeld() {
@@ -113,66 +107,30 @@ class FakeRelay(
         return true
     }
 
+    /** 振り分けは中継（HubV2）と同じもの。 */
+    private val router = HouseholdRouter({ store })
+
+    private fun outlet(deviceId: String?) =
+        object : HouseholdRouter.Outlet {
+            override fun reply(message: RelayV2) {
+                deviceId?.let { post(it, message) }
+            }
+
+            override fun broadcast(
+                message: RelayV2,
+                except: String?,
+            ) = this@FakeRelay.broadcast(message, except)
+
+            override fun removed(deviceId: String) {
+                connected.remove(deviceId)
+            }
+        }
+
     private fun handle(
         deviceId: String,
         message: RelayV2,
     ) {
-        when (message) {
-            is RelayV2.ChainGet -> post(deviceId, RelayV2.Chain(store.chainFrom(message.fromSeq)))
-            is RelayV2.ChainAppend ->
-                when (val result = store.append(deviceId, message.record)) {
-                    is HouseholdStore.ChainResult.Ok -> {
-                        post(deviceId, RelayV2.ChainOk(result.headSeq, result.headHash))
-                        broadcast(RelayV2.ChainChanged(result.headSeq, result.headHash), except = deviceId)
-                        result.activeChanged?.let { broadcast(it) }
-                        result.removed?.let { connected.remove(it) }
-                    }
-                    is HouseholdStore.ChainResult.Conflict -> post(deviceId, RelayV2.ChainConflict(result.headSeq, result.headHash))
-                    is HouseholdStore.ChainResult.Rejected -> post(deviceId, RelayV2.Error(result.code))
-                }
-            RelayV2.StateGet -> store.latest().forEach { post(deviceId, RelayV2.State(it)) }
-            is RelayV2.StatePut ->
-                when (val result = store.put(deviceId, message)) {
-                    is HouseholdStore.PutResult.Ok -> {
-                        post(deviceId, RelayV2.StateOk(message.requestId, message.kind, result.state.version))
-                        broadcast(RelayV2.State(result.state), except = deviceId)
-                        result.activeChanged?.let { broadcast(it) }
-                    }
-                    is HouseholdStore.PutResult.Conflict -> post(deviceId, RelayV2.StateConflict(message.requestId, message.kind, result.latest))
-                    is HouseholdStore.PutResult.Rejected -> post(deviceId, RelayV2.Error(result.code, message.requestId))
-                }
-            is RelayV2.Claim ->
-                when (val result = store.claim(deviceId, message.claimId, message.yieldDoc)) {
-                    is HouseholdStore.ClaimResult.Ok -> {
-                        store.takeDroppedPending()?.let { broadcast(RelayV2.PendingExpired(it)) }
-                        broadcast(result.activeChanged)
-                        broadcast(RelayV2.YieldDelivery(message.claimId, message.yieldDoc), except = deviceId)
-                    }
-                    is HouseholdStore.ClaimResult.Conflict -> post(deviceId, RelayV2.StateConflict(message.claimId, StateKind.Cursor, result.latest))
-                    is HouseholdStore.ClaimResult.Rejected -> post(deviceId, RelayV2.Error(result.code, message.claimId))
-                }
-            is RelayV2.Transfer ->
-                when (val result = store.transfer(deviceId, message.claimId, message.basedOnVersion, message.yieldDoc)) {
-                    is HouseholdStore.ClaimResult.Ok -> {
-                        store.takeDroppedPending()?.let { broadcast(RelayV2.PendingExpired(it)) }
-                        broadcast(result.activeChanged)
-                        broadcast(RelayV2.YieldDelivery(message.claimId, message.yieldDoc), except = deviceId)
-                    }
-                    is HouseholdStore.ClaimResult.Conflict -> post(deviceId, RelayV2.StateConflict(message.claimId, StateKind.Cursor, result.latest))
-                    is HouseholdStore.ClaimResult.Rejected -> post(deviceId, RelayV2.Error(result.code, message.claimId))
-                }
-            is RelayV2.Yielded ->
-                when (val result = store.yielded(deviceId, message)) {
-                    is HouseholdStore.PutResult.Ok -> {
-                        post(deviceId, RelayV2.StateOk(message.claimId, StateKind.Cursor, result.state.version))
-                        broadcast(RelayV2.State(result.state), except = deviceId)
-                    }
-                    is HouseholdStore.PutResult.Conflict -> post(deviceId, RelayV2.StateConflict(message.claimId, StateKind.Cursor, result.latest))
-                    is HouseholdStore.PutResult.Rejected -> post(deviceId, RelayV2.Error(result.code, message.claimId))
-                }
-            is RelayV2.Release -> store.release(deviceId, message.claimId)?.let { broadcast(it) }
-            else -> post(deviceId, RelayV2.Error("unsupported"))
-        }
+        if (!router.route(deviceId, message, outlet(deviceId))) post(deviceId, RelayV2.Error("unsupported"))
     }
 
     /** 敵対的なサーバー: 端末へ任意のメッセージを差し込む。 */

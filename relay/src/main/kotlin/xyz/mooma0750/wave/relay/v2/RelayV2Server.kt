@@ -168,10 +168,7 @@ private class HubV2(
             synchronized(order) {
                 if (sessions.remove(deviceId, session)) {
                     pairings.entries.removeIf { it.value.owner === session }
-                    store.expirePending(disconnected = deviceId)?.let { (claimId, active) ->
-                        broadcast(RelayV2.PendingExpired(claimId))
-                        broadcast(active)
-                    }
+                    router.broadcastExpired(store.expirePending(disconnected = deviceId), outlet(null))
                     presence()
                 }
             }
@@ -181,12 +178,28 @@ private class HubV2(
 
     fun tick() {
         synchronized(order) {
-            store.expirePending()?.let { (claimId, active) ->
-                broadcast(RelayV2.PendingExpired(claimId))
-                broadcast(active)
-            }
+            router.broadcastExpired(store.expirePending(), outlet(null))
         }
     }
+
+    private val router = HouseholdRouter({ store }, ::log)
+
+    /** 返事は session へ（無ければ返さない）、配信は接続中の全端末へ、外された端末は閉じる。 */
+    private fun outlet(session: DefaultWebSocketServerSession?) =
+        object : HouseholdRouter.Outlet {
+            override fun reply(message: RelayV2) {
+                session?.let { send(it, message) }
+            }
+
+            override fun broadcast(
+                message: RelayV2,
+                except: String?,
+            ) = this@HubV2.broadcast(message, except)
+
+            override fun removed(deviceId: String) {
+                sessions.remove(deviceId)?.let { removedSession -> closeLater(removedSession) }
+            }
+        }
 
     private fun handle(
         session: DefaultWebSocketServerSession,
@@ -195,74 +208,6 @@ private class HubV2(
     ) {
         fun reply(message: RelayV2) = send(session, message)
         when (message) {
-            is RelayV2.HouseholdCreate ->
-                when (val result = store.createHousehold(deviceId, message.genesis)) {
-                    is HouseholdStore.ChainResult.Ok -> {
-                        reply(RelayV2.ChainOk(result.headSeq, result.headHash))
-                        log("household created")
-                    }
-                    is HouseholdStore.ChainResult.Conflict -> reply(RelayV2.ChainConflict(result.headSeq, result.headHash))
-                    is HouseholdStore.ChainResult.Rejected -> reply(RelayV2.Error(result.code))
-                }
-            is RelayV2.ChainGet -> reply(RelayV2.Chain(store.chainFrom(message.fromSeq)))
-            is RelayV2.ChainAppend ->
-                when (val result = store.append(deviceId, message.record)) {
-                    is HouseholdStore.ChainResult.Ok -> {
-                        reply(RelayV2.ChainOk(result.headSeq, result.headHash))
-                        broadcast(RelayV2.ChainChanged(result.headSeq, result.headHash), except = deviceId)
-                        result.activeChanged?.let { broadcast(it) }
-                        result.removed?.let { removed -> sessions.remove(removed)?.let { removedSession -> closeLater(removedSession) } }
-                        log("chain appended seq=${result.headSeq}")
-                    }
-                    is HouseholdStore.ChainResult.Conflict -> reply(RelayV2.ChainConflict(result.headSeq, result.headHash))
-                    is HouseholdStore.ChainResult.Rejected -> reply(RelayV2.Error(result.code))
-                }
-            RelayV2.StateGet -> store.latest().forEach { reply(RelayV2.State(it)) }
-            is RelayV2.StatePut ->
-                when (val result = store.put(deviceId, message)) {
-                    is HouseholdStore.PutResult.Ok -> {
-                        reply(RelayV2.StateOk(message.requestId, message.kind, result.state.version))
-                        broadcast(RelayV2.State(result.state), except = deviceId)
-                        result.activeChanged?.let { broadcast(it) }
-                        log("state kind=${message.kind} chars=${message.doc.ciphertext.length}")
-                    }
-                    is HouseholdStore.PutResult.Conflict -> reply(RelayV2.StateConflict(message.requestId, message.kind, result.latest))
-                    is HouseholdStore.PutResult.Rejected -> reply(RelayV2.Error(result.code, message.requestId))
-                }
-            is RelayV2.Claim ->
-                when (val result = store.claim(deviceId, message.claimId, message.yieldDoc)) {
-                    is HouseholdStore.ClaimResult.Ok -> {
-                        store.takeDroppedPending()?.let { broadcast(RelayV2.PendingExpired(it)) }
-                        broadcast(result.activeChanged)
-                        // yield は家の全端末に配る（各端末は宛先で判断する。サーバーの再生中の端末に依らない）
-                        broadcast(RelayV2.YieldDelivery(message.claimId, message.yieldDoc), except = deviceId)
-                        log("claim")
-                    }
-                    is HouseholdStore.ClaimResult.Conflict -> reply(RelayV2.StateConflict(message.claimId, StateKind.Cursor, result.latest))
-                    is HouseholdStore.ClaimResult.Rejected -> reply(RelayV2.Error(result.code, message.claimId))
-                }
-            is RelayV2.Transfer ->
-                when (val result = store.transfer(deviceId, message.claimId, message.basedOnVersion, message.yieldDoc)) {
-                    is HouseholdStore.ClaimResult.Ok -> {
-                        store.takeDroppedPending()?.let { broadcast(RelayV2.PendingExpired(it)) }
-                        broadcast(result.activeChanged)
-                        broadcast(RelayV2.YieldDelivery(message.claimId, message.yieldDoc), except = deviceId)
-                        log("transfer")
-                    }
-                    is HouseholdStore.ClaimResult.Conflict -> reply(RelayV2.StateConflict(message.claimId, StateKind.Cursor, result.latest))
-                    is HouseholdStore.ClaimResult.Rejected -> reply(RelayV2.Error(result.code, message.claimId))
-                }
-            is RelayV2.Yielded ->
-                when (val result = store.yielded(deviceId, message)) {
-                    is HouseholdStore.PutResult.Ok -> {
-                        reply(RelayV2.StateOk(message.claimId, StateKind.Cursor, result.state.version))
-                        broadcast(RelayV2.State(result.state), except = deviceId)
-                        log("yielded")
-                    }
-                    is HouseholdStore.PutResult.Conflict -> reply(RelayV2.StateConflict(message.claimId, StateKind.Cursor, result.latest))
-                    is HouseholdStore.PutResult.Rejected -> reply(RelayV2.Error(result.code, message.claimId))
-                }
-            is RelayV2.Release -> store.release(deviceId, message.claimId)?.let { broadcast(it) }
             is RelayV2.PairingOpen -> {
                 if (message.tokenHash.length != 43 || !store.isMember(deviceId)) return run { reply(RelayV2.Error("bad_token")) }
                 pairings.entries.removeIf { it.value.ownerId == deviceId || it.value.expiresAtMs < config.nowMs() }
@@ -277,7 +222,8 @@ private class HubV2(
                 slot.confirm.complete(message.confirm)
                 pairings.remove(message.tokenHash)
             }
-            else -> reply(RelayV2.Error("unsupported"))
+            // 家の状態に当てるものは、テストの中継と同じ振り分け（HouseholdRouter）を通る
+            else -> if (!router.route(deviceId, message, outlet(session))) reply(RelayV2.Error("unsupported"))
         }
     }
 
