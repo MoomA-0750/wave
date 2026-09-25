@@ -76,6 +76,22 @@ class PlaylistViewModel(
     private val mutableState = MutableStateFlow(PlaylistUiState(title = initialTitle, query = initialQuery.orEmpty()))
     val state: StateFlow<PlaylistUiState> = mutableState.asStateFlow()
 
+    /** 「もっと読む」と「全部読む」が同じ続きを2回読まないように、続きは1つずつ読む。 */
+    private val pages = NextPageLoader()
+
+    private suspend fun appendNextPage(): CallResult<xyz.mooma0750.wave.core.music.PlaylistPage>? =
+        pages.next(
+            currentToken = { state.value.continuation },
+            fetch = { token -> music.playlist(playlistId, token) },
+            apply = { result ->
+                if (result is CallResult.Ok) {
+                    mutableState.update {
+                        it.copy(songs = it.songs + result.value.songs, setVideoIds = it.setVideoIds + result.value.setVideoIds, continuation = result.value.continuation)
+                    }
+                }
+            },
+        )
+
     init {
         viewModelScope.launch {
             when (val result = music.playlist(playlistId)) {
@@ -111,23 +127,20 @@ class PlaylistViewModel(
         if (state.value.loadingAll || state.value.continuation == null) return
         mutableState.update { it.copy(loadingAll = true) }
         viewModelScope.launch {
-            var pages = 0
-            while (true) {
-                val token = state.value.continuation ?: break
-                if (pages >= MAX_PAGES) {
+            var read = 0
+            while (state.value.continuation != null) {
+                if (read >= MAX_PAGES) {
                     mutableState.update { it.copy(incomplete = true) }
                     break
                 }
-                pages++
-                when (val result = music.playlist(playlistId, token)) {
-                    is CallResult.Ok ->
-                        mutableState.update {
-                            it.copy(songs = it.songs + result.value.songs, setVideoIds = it.setVideoIds + result.value.setVideoIds, continuation = result.value.continuation)
-                        }
+                read++
+                when (appendNextPage()) {
+                    null -> break
                     is CallResult.Failed -> {
                         mutableState.update { it.copy(incomplete = true) }
                         break
                     }
+                    is CallResult.Ok -> Unit
                 }
             }
             mutableState.update { it.copy(loadingAll = false) }
@@ -137,16 +150,12 @@ class PlaylistViewModel(
 
     fun loadMore() {
         val current = state.value
-        val token = current.continuation ?: return
-        if (current.loading) return
+        if (current.continuation == null || current.loading) return
         mutableState.update { it.copy(loading = true) }
         viewModelScope.launch {
-            when (val result = music.playlist(playlistId, token)) {
-                is CallResult.Ok ->
-                    mutableState.update {
-                        it.copy(songs = it.songs + result.value.songs, setVideoIds = it.setVideoIds + result.value.setVideoIds, continuation = result.value.continuation, loading = false)
-                    }
+            when (appendNextPage()) {
                 is CallResult.Failed -> mutableState.update { it.copy(loading = false, continuation = null) }
+                else -> mutableState.update { it.copy(loading = false) }
             }
         }
     }
