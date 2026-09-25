@@ -65,6 +65,38 @@ class MusicParsersTest {
         assertNull(MusicParsers.parseDuration("2021"))
     }
 
+    @Test
+    fun songRowsTakeTheLastThumbnailAndTheirDuration() {
+        // 一覧の行: いちばん大きい（最後の）サムネイル、長さは固定の列、無ければ詳細の列から
+        fun row(fixed: String?) =
+            Json.parseToJsonElement(
+                """{"playlistItemData":{"videoId":"abcdefghijk"},
+                "flexColumns":[{"musicResponsiveListItemFlexColumnRenderer":{"text":{"runs":[{"text":"曲"}]}}},
+                               {"musicResponsiveListItemFlexColumnRenderer":{"text":{"runs":[{"text":"人"},{"text":" • "},{"text":"2:05"}]}}}],
+                ${fixed?.let { """"fixedColumns":[{"musicResponsiveListItemFixedColumnRenderer":{"text":{"runs":[{"text":"$it"}]}}}],""" } ?: ""}
+                "thumbnail":{"musicThumbnailRenderer":{"thumbnail":{"thumbnails":[{"url":"https://small"},{"url":"https://large"}]}}}}""",
+            ) as JsonObject
+        val withFixed = assertNotNull(MusicParsers.responsiveListItemSong(row("3:10")))
+        assertEquals("https://large", withFixed.thumbnailUrl)
+        assertEquals(190, withFixed.durationSeconds)
+        assertEquals("曲", withFixed.title)
+        assertEquals(125, assertNotNull(MusicParsers.responsiveListItemSong(row(null))).durationSeconds)
+    }
+
+    @Test
+    fun queuePanelRowsTakeTheLastThumbnailAndLength() {
+        val item =
+            Json.parseToJsonElement(
+                """{"videoId":"abcdefghijk","title":{"runs":[{"text":"曲"}]},"lengthText":{"runs":[{"text":"4:01"}]},
+                "longBylineText":{"runs":[{"text":"人"}]},
+                "thumbnail":{"thumbnails":[{"url":"https://small"},{"url":"https://large"}]}}""",
+            ) as JsonObject
+        val song = MusicParsers.playlistPanelSong(item)
+        assertEquals(241, song?.durationSeconds)
+        assertEquals("曲", song?.title)
+        assertEquals("https://large", song?.thumbnailUrl)
+    }
+
     private fun fixture(name: String): JsonObject {
         val text = requireNotNull(javaClass.getResource("/fixtures/$name.json")) { "fixture $name" }.readText()
         return Json.parseToJsonElement(text) as JsonObject

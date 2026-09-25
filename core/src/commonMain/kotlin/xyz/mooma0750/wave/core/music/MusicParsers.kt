@@ -22,7 +22,7 @@ internal object MusicParsers {
                     .arrayItems()
                     .firstNotNullOfOrNull { it.path("musicShelfRenderer").asObject() }
                 ?: return SongPage(emptyList(), null)
-        val songs = shelf.path("contents").arrayItems().mapNotNull { it.path("musicResponsiveListItemRenderer").asObject()?.let(::responsiveListItemSong) }
+        val songs = shelfSongs(shelf)
         return SongPage(songs, nextContinuation(shelf))
     }
 
@@ -39,16 +39,17 @@ internal object MusicParsers {
                     .path("tabRenderer", "content", "sectionListRenderer")
                     .asObject()
                 ?: return HistoryPage(emptyList(), null)
+        val shelves = findAll(container, "musicShelfRenderer")
         val sections =
-            findAll(container, "musicShelfRenderer").map { shelf ->
+            shelves.map { shelf ->
                 HistorySection(
-                    title = shelf.path("title", "runs").arrayItems().joinToString("") { it.path("text").string().orEmpty() }.takeIf { it.isNotBlank() },
-                    songs = shelf.path("contents").arrayItems().mapNotNull { it.path("musicResponsiveListItemRenderer").asObject()?.let(::responsiveListItemSong) },
+                    title = textOf(shelf.path("title")),
+                    songs = shelfSongs(shelf),
                 )
             }
         val continuation =
             nextContinuation(container)
-                ?: findAll(container, "musicShelfRenderer").lastOrNull()?.let(::nextContinuation)
+                ?: shelves.lastOrNull()?.let(::nextContinuation)
         return HistoryPage(sections.filter { it.songs.isNotEmpty() }, continuation)
     }
 
@@ -74,15 +75,15 @@ internal object MusicParsers {
     fun playlists(root: JsonObject): List<PlaylistSummary> =
         findAll(root, "musicTwoRowItemRenderer").mapNotNull { item ->
             val browse = item.path("navigationEndpoint", "browseEndpoint")
-            val pageType = browse.path("browseEndpointContextSupportedConfigs", "browseEndpointContextMusicConfig", "pageType").string()
+            val pageType = pageTypeOfBrowse(browse)
             val browseId = browse.path("browseId").string() ?: return@mapNotNull null
             if (pageType != "MUSIC_PAGE_TYPE_PLAYLIST" && !browseId.startsWith("VL")) return@mapNotNull null
-            val title = item.path("title", "runs").arrayItems().joinToString("") { it.path("text").string().orEmpty() }.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            val title = textOf(item.path("title")) ?: return@mapNotNull null
             PlaylistSummary(
                 playlistId = browseId.removePrefix("VL"),
                 title = title,
-                subtitle = item.path("subtitle", "runs").arrayItems().joinToString("") { it.path("text").string().orEmpty() }.takeIf { it.isNotBlank() },
-                thumbnailUrl = item.path("thumbnailRenderer", "musicThumbnailRenderer", "thumbnail", "thumbnails").arrayItems().lastOrNull().path("url").string(),
+                subtitle = textOf(item.path("subtitle")),
+                thumbnailUrl = lastThumbnailUrl(item.path("thumbnailRenderer")),
                 // 実アカウントのライブラリで、自分のプレイリストのカードだけがメニューに EDIT を持つことを確かめた（2026-09-17、アイコン名だけ）
                 editable = EDIT_ICON in menuIconsOf(item),
             )
@@ -118,12 +119,12 @@ internal object MusicParsers {
             }
         val continuation =
             items.lastOrNull().path("continuationItemRenderer", "continuationEndpoint", "continuationCommand", "token").string()
-                ?: findAll(root, "musicPlaylistShelfRenderer").firstOrNull().path("continuations").arrayItems().firstNotNullOfOrNull {
+                ?: shelf.path("continuations").arrayItems().firstNotNullOfOrNull {
                     it.path("nextContinuationData", "continuation").string()
                 }
         val title =
-            findAll(root, "musicResponsiveHeaderRenderer").firstOrNull().path("title", "runs").arrayItems().joinToString("") { it.path("text").string().orEmpty() }.takeIf { it.isNotBlank() }
-                ?: findAll(root, "musicDetailHeaderRenderer").firstOrNull().path("title", "runs").arrayItems().joinToString("") { it.path("text").string().orEmpty() }.takeIf { it.isNotBlank() }
+            textOf(findAll(root, "musicResponsiveHeaderRenderer").firstOrNull().path("title"))
+                ?: textOf(findAll(root, "musicDetailHeaderRenderer").firstOrNull().path("title"))
         // 自分のプレイリストは編集用のヘッダを持つ（実アカウントの応答でレンダラ名だけを確かめる、決定 E7）
         val editable = findAll(root, EDITABLE_PLAYLIST_HEADER).isNotEmpty()
         // 最後のページと言えるのは、知っている形（続きの追加 or 曲の棚）が見つかり、その中に名前に continuation を含むキーが無いときだけ
@@ -183,7 +184,7 @@ internal object MusicParsers {
         val header = findAll(root, "musicResponsiveHeaderRenderer").firstOrNull() ?: return null
         val title = textOf(header.path("title")) ?: return null
         val artists = artistsOf(header.path("straplineTextOne", "runs").arrayItems())
-        val thumbnail = header.path("thumbnail", "musicThumbnailRenderer", "thumbnail", "thumbnails").arrayItems().lastOrNull().path("url").string()
+        val thumbnail = lastThumbnailUrl(header.path("thumbnail"))
         // 匿名の応答はヘッダの再生ボタン。無ければ canonical URL の list=、それも無ければアルバムの playlistId（OLAK5uy_）を探す
         val playlistId =
             header.path("buttons").arrayItems().firstNotNullOfOrNull {
@@ -216,7 +217,7 @@ internal object MusicParsers {
     fun artistPage(root: JsonObject): ArtistPage? {
         val header = root.path("header", "musicImmersiveHeaderRenderer").asObject() ?: root.path("header", "musicVisualHeaderRenderer").asObject() ?: return null
         val name = textOf(header.path("title")) ?: return null
-        val thumbnail = header.path("thumbnail", "musicThumbnailRenderer", "thumbnail", "thumbnails").arrayItems().lastOrNull().path("url").string()
+        val thumbnail = lastThumbnailUrl(header.path("thumbnail"))
         val sections =
             root
                 .path("contents", "singleColumnBrowseResultsRenderer", "tabs")
@@ -224,7 +225,7 @@ internal object MusicParsers {
                 .path("tabRenderer", "content", "sectionListRenderer", "contents")
                 .arrayItems()
         val songShelf = sections.firstNotNullOfOrNull { it.path("musicShelfRenderer").asObject() }
-        val topSongs = songShelf.path("contents").arrayItems().mapNotNull { it.path("musicResponsiveListItemRenderer").asObject()?.let(::responsiveListItemSong) }
+        val topSongs = shelfSongs(songShelf)
         val allSongs =
             (
                 songShelf.path("title", "runs").firstArrayItem().path("navigationEndpoint", "browseEndpoint", "browseId").string()
@@ -242,7 +243,7 @@ internal object MusicParsers {
                             browseId = browse.path("browseId").string() ?: return@mapNotNull null,
                             title = textOf(item.path("title")) ?: return@mapNotNull null,
                             subtitle = textOf(item.path("subtitle")),
-                            thumbnailUrl = item.path("thumbnailRenderer", "musicThumbnailRenderer", "thumbnail", "thumbnails").arrayItems().lastOrNull().path("url").string(),
+                            thumbnailUrl = lastThumbnailUrl(item.path("thumbnailRenderer")),
                         )
                     }
                 if (albums.isEmpty()) return@mapNotNull null
@@ -251,7 +252,19 @@ internal object MusicParsers {
         return ArtistPage(name, thumbnail, topSongs, allSongs, albumShelves)
     }
 
-    private fun textOf(element: JsonElement?): String? = element.path("runs").arrayItems().joinToString("") { it.path("text").string().orEmpty() }.takeIf { it.isNotBlank() }
+    private fun textOf(element: JsonElement?): String? = runsText(element.path("runs").arrayItems())
+
+    /** runs の文字をつなぐ。空なら null。 */
+    private fun runsText(runs: List<JsonObject>): String? = runs.joinToString("") { it.path("text").string().orEmpty() }.takeIf { it.isNotBlank() }
+
+    /** musicThumbnailRenderer の、いちばん大きい（最後の）サムネイルの URL。 */
+    private fun lastThumbnailUrl(element: JsonElement?): String? = element.path("musicThumbnailRenderer", "thumbnail", "thumbnails").arrayItems().lastOrNull().path("url").string()
+
+    /** 棚の中の曲の行。 */
+    private fun shelfSongs(shelf: JsonElement?): List<Song> = shelf.path("contents").arrayItems().mapNotNull { it.path("musicResponsiveListItemRenderer").asObject()?.let(::responsiveListItemSong) }
+
+    /** runs の中で最初に「分:秒」と読める文字の長さ（秒）。 */
+    private fun durationOf(runs: List<JsonObject>): Int? = runs.firstNotNullOfOrNull { it.path("text").string()?.let(::parseDuration) }
 
     /** ログインしていないときに返る「ログインしてください」の案内（200 の messageRenderer）だけの応答か。 */
     fun isSignInPrompt(root: JsonObject): Boolean =
@@ -332,35 +345,35 @@ internal object MusicParsers {
                 ?: titleRuns.firstNotNullOfOrNull { it.path("navigationEndpoint", "watchEndpoint", "videoId").string() }
                 ?: item.path("overlay", "musicItemThumbnailOverlayRenderer", "content", "musicPlayButtonRenderer", "playNavigationEndpoint", "watchEndpoint", "videoId").string()
                 ?: return null
-        val title = titleRuns.joinToString("") { it.path("text").string().orEmpty() }.takeIf { it.isNotBlank() } ?: return null
+        val title = runsText(titleRuns) ?: return null
         val detailRuns = columns.drop(1).flatten()
         val fixedDuration =
             item
                 .path("fixedColumns")
                 .arrayItems()
                 .flatMap { it.path("musicResponsiveListItemFixedColumnRenderer", "text", "runs").arrayItems() }
-                .firstNotNullOfOrNull { it.path("text").string()?.let(::parseDuration) }
+                .let(::durationOf)
         return Song(
             videoId = videoId,
             title = title,
             artists = artistsOf(detailRuns),
             album = albumOf(detailRuns),
-            durationSeconds = fixedDuration ?: detailRuns.firstNotNullOfOrNull { it.path("text").string()?.let(::parseDuration) },
-            thumbnailUrl = item.path("thumbnail", "musicThumbnailRenderer", "thumbnail", "thumbnails").arrayItems().lastOrNull().path("url").string(),
+            durationSeconds = fixedDuration ?: durationOf(detailRuns),
+            thumbnailUrl = lastThumbnailUrl(item.path("thumbnail")),
         )
     }
 
     /** ラジオ・キューの行（playlistPanelVideoRenderer）。 */
     fun playlistPanelSong(item: JsonObject): Song? {
         val videoId = item.path("videoId").string() ?: item.path("navigationEndpoint", "watchEndpoint", "videoId").string() ?: return null
-        val title = item.path("title", "runs").arrayItems().joinToString("") { it.path("text").string().orEmpty() }.takeIf { it.isNotBlank() } ?: return null
+        val title = textOf(item.path("title")) ?: return null
         val byline = item.path("longBylineText", "runs").arrayItems().ifEmpty { item.path("shortBylineText", "runs").arrayItems() }
         return Song(
             videoId = videoId,
             title = title,
             artists = artistsOf(byline),
             album = albumOf(byline),
-            durationSeconds = item.path("lengthText", "runs").arrayItems().firstNotNullOfOrNull { it.path("text").string()?.let(::parseDuration) },
+            durationSeconds = durationOf(item.path("lengthText", "runs").arrayItems()),
             thumbnailUrl = item.path("thumbnail", "thumbnails").arrayItems().lastOrNull().path("url").string(),
         )
     }
@@ -421,7 +434,7 @@ internal object MusicParsers {
             "musicResponsiveListItemRenderer",
             "musicResponsiveHeaderRenderer",
             "musicDetailHeaderRenderer",
-            "musicEditablePlaylistDetailHeaderRenderer",
+            EDITABLE_PLAYLIST_HEADER,
             "musicPlaylistShelfRenderer",
         )
     const val EDITABLE_PLAYLIST_HEADER = "musicEditablePlaylistDetailHeaderRenderer"
