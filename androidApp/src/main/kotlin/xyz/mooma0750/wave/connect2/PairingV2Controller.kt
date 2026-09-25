@@ -142,8 +142,7 @@ class PairingV2Controller(
                     for (wait in JOIN_RETRY_MS) {
                         if (manager.inHousehold()) return@withTimeoutOrNull ClientEvent.Joined
                         // 家に入ったので、つなぎ直して鎖を取る（認証は中継の鎖の今の端末で行う）
-                        manager.relay.acquire()
-                        try {
+                        manager.relay.holding {
                             val result =
                                 withTimeoutOrNull(wait) {
                                     merge<ClientEvent?>(flow { emit(outcome.await()) }, manager.relay.status.filter { it == RelayClientV2.Status.NotMember }.map { null }).first()
@@ -151,8 +150,6 @@ class PairingV2Controller(
                             if (result != null) return@withTimeoutOrNull result
                             // 断られた: A の追記が中継に入るのを待ってから、つなぎ直す
                             if (manager.relay.status.value == RelayClientV2.Status.NotMember) delay(wait)
-                        } finally {
-                            manager.relay.release()
                         }
                     }
                     null
@@ -172,8 +169,7 @@ class PairingV2Controller(
 
     private suspend fun runOffer(entered: Channel<String>) {
         mutableState.value = State.Working("中継に接続しています")
-        manager.relay.acquire()
-        try {
+        manager.relay.holding {
             val status = withTimeoutOrNull(15_000) { manager.relay.status.first { it != RelayClientV2.Status.Connecting && it != RelayClientV2.Status.Disconnected } }
             if (status != RelayClientV2.Status.Connected) return fail("中継 v2 に接続できませんでした")
             val joinInfo = manager.joinInfoJson() ?: return fail("この端末はまだ家に入っていません")
@@ -223,8 +219,6 @@ class PairingV2Controller(
                     true
                 }
             if (done == null) fail("時間切れです。もう一度やり直してください")
-        } finally {
-            manager.relay.release()
         }
     }
 

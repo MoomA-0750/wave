@@ -313,15 +313,7 @@ class ConnectV2Manager(
         checkLoginGeneration(engine)
         if (state.householdId != engine.householdId || state.generation != session.loginGenerationId()) return
         tagState = state
-        if (!engine.isWriter) {
-            val (snapshot, cursor) =
-                runBlocking(Dispatchers.Main) {
-                    val endpoint = host.endpoint
-                    endpoint?.snapshot()?.let(HandoffCodec::encode) to endpoint?.cursor()?.toLocal()
-                }
-            snapshot?.let(engine::setLocalQueue)
-            cursor?.let(engine::setLocalCursor)
-        }
+        if (!engine.isWriter) loadLocalFromPlayer(engine)
         engine.onAccountTagAvailable()
         refreshInfo()
     }
@@ -381,7 +373,7 @@ class ConnectV2Manager(
                             foreground = foreground,
                         )
                     if (decision == PlayButtonPolicy.Decision.Wait) {
-                        appScope.launch(Dispatchers.Main) { host.endpoint?.pause() }
+                        pauseOnMain()
                         waitJob = appScope.launch { decideAfterWait(intent, foreground) }
                         return@post
                     }
@@ -404,19 +396,17 @@ class ConnectV2Manager(
                 claimLocal(engine, newSelection)
             }
             PlayButtonPolicy.Decision.TakeOver -> {
-                appScope.launch(Dispatchers.Main) { host.endpoint?.pause() }
+                pauseOnMain()
                 // 引き取れなければ（アカウント違い・状態が欠けている）、鳴らさずに知らせる
                 if (engine.requestTransfer()) {
                     Log.i(WaveApplication.LOG_TAG, "connect-v2 play button became transfer")
                 } else {
-                    effects.event(ClientEvent.ServerError(REMOTE_PLAYING))
-                    Log.i(WaveApplication.LOG_TAG, "connect-v2 play button blocked remote playing")
+                    notifyRemotePlaying()
                 }
             }
             PlayButtonPolicy.Decision.BlockRemotePlaying -> {
-                appScope.launch(Dispatchers.Main) { host.endpoint?.pause() }
-                effects.event(ClientEvent.ServerError(REMOTE_PLAYING))
-                Log.i(WaveApplication.LOG_TAG, "connect-v2 play button blocked remote playing")
+                pauseOnMain()
+                notifyRemotePlaying()
             }
             PlayButtonPolicy.Decision.NotifyNotMember -> effects.event(ClientEvent.ServerError(NOT_MEMBER))
             PlayButtonPolicy.Decision.NotifyUnreachable -> effects.event(ClientEvent.ServerError(RELAY_UNREACHABLE))
@@ -433,8 +423,7 @@ class ConnectV2Manager(
         intent: Long,
         foreground: Boolean,
     ) {
-        relay.acquire()
-        try {
+        relay.holding {
             val outcome =
                 withTimeoutOrNull(SETTLE_WAIT_MS) {
                     var step: PlayButtonPolicy.WaitOutcome? = null
@@ -461,16 +450,14 @@ class ConnectV2Manager(
                 apply(engine, decision, newSelection = false)
                 Log.i(WaveApplication.LOG_TAG, "connect-v2 play button waited outcome=$outcome decision=$decision")
             }
-        } finally {
-            relay.release()
         }
     }
 
-    /** エンジンのスレッドで: 手元のキューと位置を置いて claim する。 */
-    private fun claimLocal(
-        engine: ConnectClient,
-        newSelection: Boolean,
-    ) {
+    /**
+     * エンジンのスレッドで: 再生サービスの今のキューと位置をエンジンに置く。
+     * Main で読んで待つ（Main はエンジンのスレッドを待たないので、ここで待ってよい）。位置を読んだ時刻は Main で取る（再レビュー 低-H）。
+     */
+    private fun loadLocalFromPlayer(engine: ConnectClient) {
         val (snapshot, cursor) =
             runBlocking(Dispatchers.Main) {
                 val endpoint = host.endpoint
@@ -478,6 +465,25 @@ class ConnectV2Manager(
             }
         snapshot?.let(engine::setLocalQueue)
         cursor?.let(engine::setLocalCursor)
+    }
+
+    /** 再生サービスを Main で一時停止する（待たない）。 */
+    private fun pauseOnMain() {
+        appScope.launch(Dispatchers.Main) { host.endpoint?.pause() }
+    }
+
+    /** 他の端末で鳴っているので鳴らさなかった、と知らせる。 */
+    private fun notifyRemotePlaying() {
+        effects.event(ClientEvent.ServerError(REMOTE_PLAYING))
+        Log.i(WaveApplication.LOG_TAG, "connect-v2 play button blocked remote playing")
+    }
+
+    /** エンジンのスレッドで: 手元のキューと位置を置いて claim する。 */
+    private fun claimLocal(
+        engine: ConnectClient,
+        newSelection: Boolean,
+    ) {
+        loadLocalFromPlayer(engine)
         val claimed = engine.userStartedPlayback()
         refreshInfo()
         Log.i(WaveApplication.LOG_TAG, "connect-v2 user started claimed=$claimed selection=$newSelection")

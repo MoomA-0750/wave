@@ -221,3 +221,13 @@ class RelayClientV2(
         const val PAIR_TIMEOUT_MS = 2 * 60 * 1000L
     }
 }
+
+/** 中継の参照を取って block を走らせ、必ず戻す（参照の数を崩さない）。 */
+inline fun <T> RelayClientV2.holding(block: () -> T): T {
+    acquire()
+    try {
+        return block()
+    } finally {
+        release()
+    }
+}
