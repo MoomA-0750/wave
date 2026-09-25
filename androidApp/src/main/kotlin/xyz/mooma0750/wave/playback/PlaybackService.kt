@@ -342,12 +342,7 @@ class PlaybackService : MediaSessionService() {
                     skipGuard.onUserSelection()
                     lastErrorWasThisSong = false
                     historyTracker.seedHandoff(snapshot.currentItemId, snapshot.listenedMs, snapshot.historySent)
-                    player.repeatMode =
-                        when (snapshot.repeat) {
-                            xyz.mooma0750.wave.handoff.HandoffRepeat.Off -> Player.REPEAT_MODE_OFF
-                            xyz.mooma0750.wave.handoff.HandoffRepeat.One -> Player.REPEAT_MODE_ONE
-                            xyz.mooma0750.wave.handoff.HandoffRepeat.All -> Player.REPEAT_MODE_ALL
-                        }
+                    player.repeatMode = PlaybackDecisions.repeatModeOf(snapshot.repeat)
                     // 確かめた世代に結び付ける（この後に切り替わっても、続きの取得・曲の解決は照合で止まる）
                     queueSession.adopt(snapshot, expectedLoginGeneration)
                     return true
@@ -375,14 +370,9 @@ class PlaybackService : MediaSessionService() {
                 override fun cursor(): ConnectV2Host.Cursor? {
                     val itemId = queueSession.currentItemId() ?: return null
                     val (listenedMs, historySent) = historyTracker.handoffState()
-                    val repeat =
-                        when (player.repeatMode) {
-                            Player.REPEAT_MODE_ONE -> xyz.mooma0750.wave.handoff.HandoffRepeat.One
-                            Player.REPEAT_MODE_ALL -> xyz.mooma0750.wave.handoff.HandoffRepeat.All
-                            else -> xyz.mooma0750.wave.handoff.HandoffRepeat.Off
-                        }
+                    val repeat = PlaybackDecisions.repeatOf(player.repeatMode)
                     // 最後まで行った・エラーで止まった端末を「再生中」と書かない（レビュー p6b34 中-2）
-                    val playing = player.playWhenReady && (player.playbackState == Player.STATE_READY || player.playbackState == Player.STATE_BUFFERING)
+                    val playing = PlaybackDecisions.isActivelyPlaying(player.playWhenReady, player.playbackState)
                     return ConnectV2Host.Cursor(itemId, player.currentPosition.coerceAtLeast(0), playing, repeat, listenedMs, historySent)
                 }
 
@@ -602,21 +592,7 @@ class PlaybackService : MediaSessionService() {
         if (saved == null) container.queueStore.delete() else container.queueStore.save(saved, epoch)
     }
 
-    private fun failureOf(error: PlaybackException): PlaybackFailure {
-        val cause = error.cause
-        return when {
-            cause is StreamResolveException ->
-                when (cause.reason) {
-                    StreamFailure.Unplayable, StreamFailure.NoAudioFormat, StreamFailure.ItagUnavailable, StreamFailure.StreamChanged -> PlaybackFailure.ThisSong
-                    StreamFailure.Network, StreamFailure.Http, StreamFailure.PlayerConfigUnavailable -> PlaybackFailure.Transient
-                    else -> PlaybackFailure.Everywhere
-                }
-            cause is StreamRejectedException -> PlaybackFailure.ThisSong
-            error.errorCode in PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED..PlaybackException.ERROR_CODE_PARSING_MANIFEST_UNSUPPORTED -> PlaybackFailure.ThisSong
-            error.errorCode in PlaybackException.ERROR_CODE_DECODER_INIT_FAILED..PlaybackException.ERROR_CODE_DECODING_RESOURCES_RECLAIMED -> PlaybackFailure.ThisSong
-            else -> PlaybackFailure.Transient
-        }
-    }
+    private fun failureOf(error: PlaybackException): PlaybackFailure = PlaybackDecisions.failureOf(error.cause, error.errorCode)
 
     /**
      * このアプリの UI のコントローラーか。パッケージ名は名乗れるので uid で判定し、さらに接続ヒントの値で、
@@ -726,8 +702,16 @@ class PlaybackService : MediaSessionService() {
                 }
             // 曲を選んだ（キューを置き換えた・飛んだ）のは、本人が新しく再生を始めたこと（L-3）
             // 空のキュー・最後まで行ったキューに「次に再生」「最後に追加」で足して再生が始まった場合も、新しい再生（再レビュー 低-O）
-            val startedPlaying = (wasEmpty || !wasPlaying) && session.player.mediaItemCount > 0 && session.player.playWhenReady
-            if (handled != null && (customCommand.customAction in USER_SELECTIONS || startedPlaying)) container.connectV2Host.listener?.onUserStartedPlayback(newSelection = true)
+            val newSelection =
+                PlaybackDecisions.startedNewSelection(
+                    handled = handled != null,
+                    userSelection = customCommand.customAction in USER_SELECTIONS,
+                    wasEmpty = wasEmpty,
+                    wasPlaying = wasPlaying,
+                    itemCountAfter = session.player.mediaItemCount,
+                    playWhenReadyAfter = session.player.playWhenReady,
+                )
+            if (newSelection) container.connectV2Host.listener?.onUserStartedPlayback(newSelection = true)
             return Futures.immediateFuture(SessionResult(if (handled != null) SessionResult.RESULT_SUCCESS else SessionError.ERROR_BAD_VALUE))
         }
 
@@ -786,7 +770,7 @@ class PlaybackService : MediaSessionService() {
 
     override fun onTaskRemoved(rootIntent: Intent?) {
         val player = session?.player
-        val playing = player != null && player.playWhenReady && (player.playbackState == Player.STATE_READY || player.playbackState == Player.STATE_BUFFERING)
+        val playing = player != null && PlaybackDecisions.isActivelyPlaying(player.playWhenReady, player.playbackState)
         if (!playing) pauseAllPlayersAndStopSelf()
     }
 
@@ -874,14 +858,6 @@ private class RepositoryContentSource(
 /** 再試行しない失敗と、時間をおく失敗を分ける。 */
 @OptIn(UnstableApi::class)
 class WaveLoadErrorHandlingPolicy : DefaultLoadErrorHandlingPolicy() {
-    override fun getRetryDelayMsFor(loadErrorInfo: LoadErrorHandlingPolicy.LoadErrorInfo): Long {
-        val cause = loadErrorInfo.exception
-        return when {
-            cause is StreamRejectedException -> C.TIME_UNSET
-            cause is StreamResolveException && !cause.transient -> C.TIME_UNSET
-            // /player の失敗（429 など）は、すぐに叩き直さない
-            cause is StreamResolveException -> 5_000L * loadErrorInfo.errorCount
-            else -> super.getRetryDelayMsFor(loadErrorInfo)
-        }
-    }
+    override fun getRetryDelayMsFor(loadErrorInfo: LoadErrorHandlingPolicy.LoadErrorInfo): Long =
+        PlaybackDecisions.retryDelayFor(loadErrorInfo.exception, loadErrorInfo.errorCount) ?: super.getRetryDelayMsFor(loadErrorInfo)
 }
