@@ -100,24 +100,7 @@ class MainActivity : ComponentActivity() {
                 }
                 LaunchedEffect(container) {
                     container.connectV2?.events?.collect { event ->
-                        val message =
-                            when (event) {
-                                is xyz.mooma0750.wave.handoff.v2.ClientEvent.Stopped -> "他の端末で再生が始まりました"
-                                is xyz.mooma0750.wave.handoff.v2.ClientEvent.TransferCompleted -> "引き取りました"
-                                is xyz.mooma0750.wave.handoff.v2.ClientEvent.TransferFailed -> "引き取れませんでした（${event.reason}）"
-                                is xyz.mooma0750.wave.handoff.v2.ClientEvent.StoreReset -> "中継の状態が作り直されました（端末の連携の画面で確かめてください）"
-                                xyz.mooma0750.wave.handoff.v2.ClientEvent.ChainForked, xyz.mooma0750.wave.handoff.v2.ClientEvent.ChainRolledBack, is xyz.mooma0750.wave.handoff.v2.ClientEvent.ChainInvalid -> "中継の端末一覧を確かめられませんでした"
-                                is xyz.mooma0750.wave.handoff.v2.ClientEvent.ServerError ->
-                                    when (event.code) {
-                                        xyz.mooma0750.wave.connect2.ConnectV2Manager.REMOTE_PLAYING -> "他の端末で再生中です（端末の連携の画面から「ここで再生」）"
-                                        xyz.mooma0750.wave.connect2.ConnectV2Manager.RELAY_UNREACHABLE -> "中継につながらず、他の端末の再生を確かめられませんでした"
-                                        xyz.mooma0750.wave.connect2.ConnectV2Manager.NOT_MEMBER -> "この端末は家の端末として受け付けられませんでした（端末の連携の画面を確かめてください）"
-                                        xyz.mooma0750.wave.connect2.ConnectV2Manager.ACCOUNT_UNVERIFIED -> "アカウントを確かめられず、他の端末の再生を確かめられませんでした"
-                                        xyz.mooma0750.wave.connect2.ConnectV2Manager.HOUSEHOLD_CREATE_UNSENT -> "家を作る要求を中継に送れませんでした（中継に登録した端末か、接続を確かめてください）"
-                                        else -> null
-                                    }
-                                else -> null
-                            }
+                        val message = xyz.mooma0750.wave.connect2.ConnectNotices.toast(event)
                         message?.let { android.widget.Toast.makeText(context, it, android.widget.Toast.LENGTH_LONG).show() }
                     }
                 }

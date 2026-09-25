@@ -267,17 +267,7 @@ class AppContainer(
                 manager.events.collect { event ->
                     if (startedActivities != 0) return@collect
                     // 裏で再生ボタンを押して鳴らさなかったときも知らせる（D-9、レビュー p6b34 中-5）
-                    when {
-                        event is xyz.mooma0750.wave.handoff.v2.ClientEvent.Stopped -> notifyConnect("他の端末で再生が始まりました", "この端末の再生は止めました")
-                        event is xyz.mooma0750.wave.handoff.v2.ClientEvent.ServerError && event.code == xyz.mooma0750.wave.connect2.ConnectV2Manager.REMOTE_PLAYING ->
-                            notifyConnect("他の端末で再生中です", "ここで聴くには、wave を開いて「ここで再生」を押してください")
-                        event is xyz.mooma0750.wave.handoff.v2.ClientEvent.ServerError && event.code == xyz.mooma0750.wave.connect2.ConnectV2Manager.RELAY_UNREACHABLE ->
-                            notifyConnect("再生しませんでした", "中継につながらず、他の端末の再生を確かめられませんでした")
-                        event is xyz.mooma0750.wave.handoff.v2.ClientEvent.ServerError && event.code == xyz.mooma0750.wave.connect2.ConnectV2Manager.NOT_MEMBER ->
-                            notifyConnect("再生しませんでした", "この端末は家の端末として受け付けられませんでした")
-                        event is xyz.mooma0750.wave.handoff.v2.ClientEvent.ServerError && event.code == xyz.mooma0750.wave.connect2.ConnectV2Manager.ACCOUNT_UNVERIFIED ->
-                            notifyConnect("再生しませんでした", "アカウントを確かめられず、他の端末の再生を確かめられませんでした")
-                    }
+                    xyz.mooma0750.wave.connect2.ConnectNotices.background(event)?.let { notifyConnect(it.title, it.text) }
                 }
             }
         }
