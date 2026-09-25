@@ -188,10 +188,7 @@ class QueueSession(
         // 文脈を先に決める（playSong と同じ理由）。continuation が無いプレイリストも、ラジオへの切り替えは
         // 終わりが近づいたときに fetchOnce が全体リピートを見て行う
         if (playlistId != null) {
-            source = QueueSource.Playlist(playlistId)
-            continuation = playlistContinuation
-            radioPlaylistId = null
-            exhausted = false
+            setContext(QueueSource.Playlist(playlistId), playlistContinuation, radioPlaylistId = null, exhausted = false)
         } else {
             startRadio(ordered.last().videoId)
         }
@@ -202,24 +199,36 @@ class QueueSession(
     fun addNext(song: Song) = addNext(listOf(song))
 
     /** アルバム・プレイリストを丸ごと、次に再生する。並びはそのまま。 */
-    fun addNext(songs: List<Song>) {
-        if (songs.isEmpty()) return
-        rebindIfEmpty()
-        val resumeAt = endedAtLastItem()
-        player.insertAfterCurrent(songs.map { item(it, ItemOrigin.UserAdded) })
-        // 最後まで行って止まっているなら、足した曲から続ける（再生を押すと終わった曲の先頭に戻ってしまうため）
-        if (resumeAt != null) player.resumeAt(resumeAt)
-    }
+    fun addNext(songs: List<Song>) = addUserItems(songs, player::insertAfterCurrent)
 
     fun addToEnd(song: Song) = addToEnd(listOf(song))
 
     /** アルバム・プレイリストを丸ごと、キューの最後に足す。 */
-    fun addToEnd(songs: List<Song>) {
+    fun addToEnd(songs: List<Song>) = addUserItems(songs, player::append)
+
+    private fun addUserItems(
+        songs: List<Song>,
+        put: (List<QueueItem>) -> Unit,
+    ) {
         if (songs.isEmpty()) return
         rebindIfEmpty()
         val resumeAt = endedAtLastItem()
-        player.append(songs.map { item(it, ItemOrigin.UserAdded) })
+        put(songs.map { item(it, ItemOrigin.UserAdded) })
+        // 最後まで行って止まっているなら、足した曲から続ける（再生を押すと終わった曲の先頭に戻ってしまうため）
         if (resumeAt != null) player.resumeAt(resumeAt)
+    }
+
+    /** キューの文脈（出どころ・続き・ラジオ・尽きたか）をまとめて置く。 */
+    private fun setContext(
+        source: QueueSource?,
+        continuation: String?,
+        radioPlaylistId: String?,
+        exhausted: Boolean,
+    ) {
+        this.source = source
+        this.continuation = continuation
+        this.radioPlaylistId = radioPlaylistId
+        this.exhausted = exhausted
     }
 
     /**
@@ -285,17 +294,14 @@ class QueueSession(
     ): SavedQueue? {
         val items = player.items
         val index = player.currentIndex
-        if (items.isEmpty() || index !in items.indices) return null
+        if (index !in items.indices) return null
         return SavedQueue(SavedQueue.VERSION, obtainedAtEpochMs, items, index, positionMs.coerceAtLeast(0), repeatMode, source, continuation, radioPlaylistId, exhausted)
     }
 
     /** 保存したキューを、再生を始めずに戻す。ログインの照合は呼び出し側で済ませる。 */
     fun restore(saved: SavedQueue) {
         startGeneration()
-        source = saved.source
-        continuation = saved.continuation
-        radioPlaylistId = saved.radioPlaylistId
-        exhausted = saved.exhausted
+        setContext(saved.source, saved.continuation, saved.radioPlaylistId, saved.exhausted)
         player.restore(saved.items, saved.currentIndex, saved.positionMs)
     }
 
@@ -314,7 +320,7 @@ class QueueSession(
     ): xyz.mooma0750.wave.handoff.HandoffSnapshot? {
         val items = player.items
         val index = player.currentIndex
-        if (items.isEmpty() || index !in items.indices) return null
+        if (index !in items.indices) return null
         val (window, windowIndex, truncated) = xyz.mooma0750.wave.handoff.HandoffCodec.window(items, index)
         return xyz.mooma0750.wave.handoff.HandoffSnapshot(
             schemaVersion = HandoffMapping.SCHEMA_VERSION,
@@ -337,11 +343,9 @@ class QueueSession(
     /**
      * 受け取ったスナップショット（検証済み）でキューを置き換えて、再生を始める。世代を進める。
      * 受け取った continuation は古いかもしれないが、拒否されたら出どころを問わない救済（最後の曲からラジオ）に乗る。
-     * @return 置き換えた後の今の項目の位置
-     */
-    /**
      * @param expectedLoginGeneration アカウントを確かめたときのログインの世代。渡されたら、今の世代ではなくこの世代にキューを結び付ける
      * （確かめた後に切り替わっていたら、続きの取得・曲の解決は WaveSession の照合で止まる）
+     * @return 置き換えた後の今の項目の位置
      */
     fun adopt(
         snapshot: xyz.mooma0750.wave.handoff.HandoffSnapshot,
@@ -350,10 +354,7 @@ class QueueSession(
         startGeneration(expectedLoginGeneration ?: loginGeneration())
         val items = snapshot.items.map(HandoffMapping::queueItemOf)
         val index = items.indexOfFirst { it.itemId == snapshot.currentItemId }.coerceAtLeast(0)
-        source = HandoffMapping.queueSourceOf(snapshot.source)
-        continuation = snapshot.continuation
-        radioPlaylistId = snapshot.radioPlaylistId
-        exhausted = snapshot.exhausted
+        setContext(HandoffMapping.queueSourceOf(snapshot.source), snapshot.continuation, snapshot.radioPlaylistId, snapshot.exhausted)
         player.replaceAndPlayAt(items, index, snapshot.positionMs)
         maybeFetch()
         return index
