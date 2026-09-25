@@ -33,6 +33,10 @@
             <intent-filter>
                 <action android:name="androidx.media3.session.MediaSessionService" />
             </intent-filter>
+            <!-- 時計・車載などの古い作りのアプリは、この口を探してセッションを見つける（つないでよいかは onConnect で判断する） -->
+            <intent-filter>
+                <action android:name="android.media.browse.MediaBrowserService" />
+            </intent-filter>
         </service>
     </application>
 

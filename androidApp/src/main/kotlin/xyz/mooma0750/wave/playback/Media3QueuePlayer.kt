@@ -178,7 +178,8 @@ class Media3QueuePlayer(
                         .setTitle(song.title)
                         .setArtist(song.artists.joinToString(", ") { it.name })
                         .setAlbumTitle(song.album?.title)
-                        .setArtworkUri(song.thumbnailUrl?.takeIf { it.startsWith("https://") }?.let(::largeArtwork)?.toUri())
+                        // 画像の URL は入れない（プラットフォームのセッションに https の URL があると、時計が画像を出さない）。
+                        // 画像そのものは ArtworkEmbedder が今の曲にだけ入れる。アプリの画面は曲の情報（extras）の URL から出す
                         .setDurationMs(song.durationSeconds?.let { it * 1000L })
                         // 自アプリの画面の曲のメニュー（アーティスト・アルバムを開く）で使う。公開のメタデータだけ
                         .setExtras(android.os.Bundle().apply { putString(SONG_EXTRA, songJson.encodeToString(xyz.mooma0750.wave.core.music.Song.serializer(), song)) })

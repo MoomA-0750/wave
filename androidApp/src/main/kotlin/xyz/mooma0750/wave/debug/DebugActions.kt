@@ -280,7 +280,9 @@ object DebugActions {
                 // 通知・時計に出す画像の元（ホストと大きさの指定だけ。曲名・ID は出さない）
                 "artwork_probe" -> {
                     val controller = player.controller()
-                    val uri = controller.mediaMetadata.artworkUri
+                    val uri =
+                        controller.currentMediaItem?.let { xyz.mooma0750.wave.playback.Media3QueuePlayer.songOf(it) }?.thumbnailUrl
+                            ?.let(xyz.mooma0750.wave.playback.Media3QueuePlayer::largeArtwork)?.let(android.net.Uri::parse)
                     val host = uri?.host
                     val size = uri?.toString()?.let { Regex("=w\\d+-h\\d+|/[a-z]+default\\.jpg").find(it)?.value }
                     Log.i(WaveApplication.LOG_TAG, "debug artwork host=$host size=$size hasData=${controller.mediaMetadata.artworkData != null}")

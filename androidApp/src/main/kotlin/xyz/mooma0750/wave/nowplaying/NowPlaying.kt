@@ -160,7 +160,10 @@ private fun FullPlayer(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         coil3.compose.AsyncImage(
-            model = controller?.currentMediaItem?.mediaMetadata?.artworkUri,
+            model =
+                controller?.currentMediaItem?.let { item ->
+                    xyz.mooma0750.wave.playback.Media3QueuePlayer.songOf(item)?.thumbnailUrl?.takeIf { it.startsWith("https://") }?.let(xyz.mooma0750.wave.playback.Media3QueuePlayer::largeArtwork)
+                },
             contentDescription = null,
             modifier = Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(8.dp)),
             contentScale = androidx.compose.ui.layout.ContentScale.Crop,

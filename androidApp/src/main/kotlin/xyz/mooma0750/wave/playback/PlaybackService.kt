@@ -71,6 +71,9 @@ class PlaybackService : MediaSessionService() {
     private var periodicSaveJob: Job? = null
     private var likes: LikeController? = null
 
+    /** 今の曲の画像を、URL ではなく画像そのものとして入れる（時計に出すため）。 */
+    private var artwork: ArtworkEmbedder? = null
+
     /** 中継に接続しているか（引き取られるのを待ち受ける）。再生中と、一時停止から前面のタイムアウトの少し前までだけ（P6-S の計測で届くことを確認）。 */
     private var relayHeld = false
 
@@ -118,6 +121,7 @@ class PlaybackService : MediaSessionService() {
                 loginGeneration = { container.music.currentLoginGeneration() },
             )
         queue = queueSession
+        artwork = ArtworkEmbedder(player, container.mediaHttpClient, scope)
         val likeController =
             LikeController(
                 container.music,
@@ -157,6 +161,8 @@ class PlaybackService : MediaSessionService() {
                     events: Player.Events,
                 ) {
                     if (events.containsAny(*SAVE_EVENTS)) scheduleSave()
+                    // 今の曲が変わった・キューが置き換わった: 画像を入れる（入れ終わった曲では何もしない）
+                    if (events.containsAny(Player.EVENT_MEDIA_ITEM_TRANSITION, Player.EVENT_TIMELINE_CHANGED)) artwork?.onCurrentItemChanged()
                     if (events.containsAny(Player.EVENT_MEDIA_ITEM_TRANSITION, Player.EVENT_TIMELINE_CHANGED)) {
                         likeController.onCurrentSong(Media3QueuePlayer.songOf(player.currentMediaItem)?.videoId, TrackUri.epochOf(player.currentMediaItem?.localConfiguration?.uri))
                     }
@@ -258,6 +264,8 @@ class PlaybackService : MediaSessionService() {
                         androidx.media3.datasource.DataSourceBitmapLoader
                             .Builder(this)
                             .setDataSourceFactory(androidx.media3.datasource.okhttp.OkHttpDataSource.Factory(container.mediaHttpClient))
+                            // 既定では画面の大きさに合わせて縮む（時計・車載に渡す絵が小さくなる）
+                            .setMaximumOutputDimension(ARTWORK_MAX_PIXELS)
                             .build(),
                     ),
                 )
@@ -783,6 +791,8 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        artwork?.release()
+        artwork = null
         relayReleaseJob?.cancel()
         if (relayHeld) releaseRelays()
         relayHeld = false
@@ -824,6 +834,9 @@ class PlaybackService : MediaSessionService() {
             )
         val USER_SELECTIONS = setOf(QueueCommands.PLAY_SONG, QueueCommands.PLAY_FROM, QueueCommands.JUMP)
         const val V2_SNAPSHOT_ID = "00000000-0000-4000-8000-000000000000"
+
+        /** 通知・ロック画面・時計に渡す画像の、長辺の上限。 */
+        const val ARTWORK_MAX_PIXELS = 1024
         const val CUSTOM_NOTIFICATION_ACTION = "androidx.media3.session.CUSTOM_NOTIFICATION_ACTION"
         const val EXTRAS_KEY_CUSTOM_NOTIFICATION_ACTION = "androidx.media3.session.EXTRAS_KEY_CUSTOM_NOTIFICATION_ACTION"
         const val EXTRAS_KEY_CUSTOM_NOTIFICATION_ACTION_EXTRAS = "androidx.media3.session.EXTRAS_KEY_CUSTOM_NOTIFICATION_ACTION_EXTRAS"
