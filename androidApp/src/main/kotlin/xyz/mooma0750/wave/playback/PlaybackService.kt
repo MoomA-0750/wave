@@ -84,6 +84,22 @@ class PlaybackService : MediaSessionService() {
     private var connectV2Suppressed = false
 
     /**
+     * block の中で同期に来る Player の callback を、本人の操作（再生ボタン・一時停止）として Connect v2 に知らせない。
+     * 効くのは Main で同期に呼ばれる間だけ（suspend や post を挟まないこと）。
+     */
+    /** 渡す再生の操作（シャッフルのモードは除く）。 */
+    private val playerCommands by lazy { withoutShuffleMode(MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS) }
+
+    private inline fun <T> suppressingV2(block: () -> T): T {
+        connectV2Suppressed = true
+        try {
+            return block()
+        } finally {
+            connectV2Suppressed = false
+        }
+    }
+
+    /**
      * 渡した（かもしれない）後、この端末で再生し直すまで true。この間のキューは相手の再生より古いので、引き取りの要求には渡さない
      * （2台で行き来したあと、古いキューで相手の今の再生を上書きした。2026-09-17 の実機確認）。
      * snapshot を作った時点で立てる（Ack が落ちても古いキューを渡さない）。Cancel と、この端末での再生で戻す
@@ -376,64 +392,41 @@ class PlaybackService : MediaSessionService() {
                     return ConnectV2Host.Cursor(itemId, player.currentPosition.coerceAtLeast(0), playing, repeat, listenedMs, historySent)
                 }
 
-                override fun pause() {
-                    // Connect v2 が止めるのは、本人の一時停止として知らせない
-                    connectV2Suppressed = true
-                    try {
-                        player.pause()
-                    } finally {
-                        connectV2Suppressed = false
-                    }
-                }
+                // Connect v2 が止める・戻すのは、本人の一時停止・再生ボタンとして知らせない
+                override fun pause() = suppressingV2 { player.pause() }
 
-                override fun resume() {
-                    connectV2Suppressed = true
-                    try {
-                        player.play()
-                    } finally {
-                        connectV2Suppressed = false
-                    }
-                }
+                override fun resume() = suppressingV2 { player.play() }
 
                 override fun adopt(
                     snapshot: xyz.mooma0750.wave.handoff.HandoffSnapshot,
                     positionMs: Long,
                     expectedLoginGeneration: Long,
-                ): Boolean {
-                    connectV2Suppressed = true
-                    try {
-                        return endpoint.adopt(snapshot.copy(positionMs = positionMs.coerceAtLeast(0), playing = true), expectedLoginGeneration)
-                    } finally {
-                        connectV2Suppressed = false
-                    }
-                }
+                ): Boolean = suppressingV2 { endpoint.adopt(snapshot.copy(positionMs = positionMs.coerceAtLeast(0), playing = true), expectedLoginGeneration) }
             }
         connectV2Endpoint = v2Endpoint
         container.connectV2Host.register(v2Endpoint)
+
+        // 前のアカウントの評価・履歴の送信の状態・キュー・解決済みの URL・保存を捨てる（ログアウト・アカウントの切り替え）
+        suspend fun clearAccountState() {
+            loggedInAt = null
+            likeController.reset()
+            historyTracker.reset()
+            queueSession.reset()
+            container.streamCache.clear()
+            container.queueStore.delete()
+        }
 
         // 保存したキューを戻すのも、この購読の中で行う（ログアウト・切り替えの処理と順序を決めるため）
         scope.launch {
             container.authManager.state.collect { state ->
                 when (state) {
                     AuthState.LoggedOut, AuthState.LoggingOut, is AuthState.Unreadable -> {
-                        loggedInAt = null
-                        likeController.reset()
-                        historyTracker.reset()
-                        queueSession.reset()
-                        container.streamCache.clear()
-                        container.queueStore.delete()
+                        clearAccountState()
                         restoreSettled = true
                     }
                     is AuthState.LoggedIn -> {
                         val previous = loggedInAt
-                        if (previous != null && previous != state.obtainedAtEpochMs) {
-                            loggedInAt = null
-                            likeController.reset()
-                            historyTracker.reset()
-                            queueSession.reset()
-                            container.streamCache.clear()
-                            container.queueStore.delete()
-                        }
+                        if (previous != null && previous != state.obtainedAtEpochMs) clearAccountState()
                         loggedInAt = state.obtainedAtEpochMs
                         // ログアウトの後のログインでは reset が走らないので、空のキューを今のログインの世代に結び付け直す
                         queueSession.rebindIfEmpty()
@@ -627,7 +620,7 @@ class PlaybackService : MediaSessionService() {
                                 .buildUpon()
                                 .add(SessionCommand(QueueCommands.TOGGLE_LIKE, Bundle.EMPTY))
                                 .build(),
-                        ).setAvailablePlayerCommands(withoutShuffleMode(MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS))
+                        ).setAvailablePlayerCommands(playerCommands)
                         .setMediaButtonPreferences(likeButtons(likes?.state ?: LikeState()))
                         .build()
                 // システム（ロック画面・Bluetooth はプラットフォームのセッション経由）・信頼された外部・通知を読めるアプリは、再生の操作だけ
@@ -637,7 +630,7 @@ class PlaybackService : MediaSessionService() {
                     MediaSession.ConnectionResult
                         .AcceptedResultBuilder(session, controller)
                         .setAvailableSessionCommands(MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS)
-                        .setAvailablePlayerCommands(withoutShuffleMode(MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS))
+                        .setAvailablePlayerCommands(playerCommands)
                         .build()
                 }
                 // 信頼されていない他アプリは、Media3 のコントローラーでもレガシー（MediaBrowser で公開 Service につなぐ）でも拒否する。
@@ -653,7 +646,7 @@ class PlaybackService : MediaSessionService() {
                             .buildUpon()
                             .apply { QueueCommands.all.forEach(::add) }
                             .build()
-                    MediaSession.ConnectionResult.accept(commands, withoutShuffleMode(MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS))
+                    MediaSession.ConnectionResult.accept(commands, playerCommands)
                 }
             }
         }
@@ -677,9 +670,8 @@ class PlaybackService : MediaSessionService() {
             val wasEmpty = session.player.mediaItemCount == 0
             val wasPlaying = session.player.playWhenReady
             // 曲を選ぶ処理の中の play() は、再生ボタン（D-9）として知らせない。後で「曲を選んだ」を1回だけ知らせる（レビュー p6b34 高-1）
-            connectV2Suppressed = true
             val handled =
-                try {
+                suppressingV2 {
                     when (customCommand.customAction) {
                         QueueCommands.PLAY_SONG -> QueueCommands.songOf(args)?.let { queue.playSong(it) }
                         QueueCommands.PLAY_FROM ->
@@ -691,8 +683,6 @@ class PlaybackService : MediaSessionService() {
                         QueueCommands.SHUFFLE_UPCOMING -> queue.shuffleUpcoming()
                         else -> null
                     }
-                } finally {
-                    connectV2Suppressed = false
                 }
             // 曲を選んだ（キューを置き換えた・飛んだ）のは、本人が新しく再生を始めたこと（L-3）
             // 空のキュー・最後まで行ったキューに「次に再生」「最後に追加」で足して再生が始まった場合も、新しい再生（再レビュー 低-O）
