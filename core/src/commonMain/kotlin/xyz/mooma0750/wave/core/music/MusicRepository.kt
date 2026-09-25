@@ -55,14 +55,9 @@ class MusicRepository(
             if (MusicParsers.isSignInPrompt(root)) {
                 ParseOutcome.LoggedOutResponse
             } else {
-                lastCardMenuIcons = MusicParsers.playlistCardMenuIcons(root)
                 ParseOutcome.Parsed(MusicParsers.playlists(root)).also { lastRendererNames = MusicParsers.rendererNames(root) }
             }
         }
-
-    /** 直近のライブラリの応答の、カードごとのメニューのアイコン名。調査用。 */
-    var lastCardMenuIcons: List<Set<String>> = emptyList()
-        private set
 
     /**
      * 再生履歴（自分が聴いた曲）。ログイン必須。送信の設定（ADR-0006）とは別で、設定を切っていても見られる（切っている間の分は載らない）。
@@ -102,7 +97,6 @@ class MusicRepository(
         ) { response ->
             val root = json(response)
             lastRendererNames = MusicParsers.rendererNames(root)
-            lastKeyPaths = MusicParsers.keyPathsLike(root, "continuation")
             if (MusicParsers.isSignInPrompt(root)) ParseOutcome.LoggedOutResponse else ParseOutcome.Parsed(MusicParsers.playlistPage(root))
         }
 
@@ -278,9 +272,6 @@ class MusicRepository(
         const val LIBRARY_PLAYLISTS = "FEmusic_liked_playlists"
         const val HISTORY = "FEmusic_history"
         const val LIKED_SONGS = "LM"
-
-        /** ある曲から始まるラジオの playlistId。 */
-        fun radioPlaylistId(videoId: String): String = "RDAMVM$videoId"
 
         private const val MAX_BROWSE_BYTES = 8 * 1024 * 1024
         private const val MAX_PLAYLIST_PAGES = 50

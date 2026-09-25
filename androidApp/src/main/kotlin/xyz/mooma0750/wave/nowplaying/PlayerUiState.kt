@@ -13,7 +13,6 @@ import xyz.mooma0750.wave.playback.PlayerConnection
 
 /** 画面に出す再生の状態。MediaController から読み取る。 */
 data class PlayerUiState(
-    val connected: Boolean = false,
     val title: String? = null,
     val artist: String? = null,
     val isPlaying: Boolean = false,
@@ -48,7 +47,6 @@ fun rememberPlayerUiState(connection: PlayerConnection): Pair<PlayerUiState, Med
             val item = current.currentMediaItem
             state =
                 PlayerUiState(
-                    connected = true,
                     title = item?.mediaMetadata?.title?.toString(),
                     artist = item?.mediaMetadata?.artist?.toString(),
                     isPlaying = current.isPlaying,

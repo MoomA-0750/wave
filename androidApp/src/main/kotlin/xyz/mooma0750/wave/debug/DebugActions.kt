@@ -232,107 +232,6 @@ object DebugActions {
                         }
                     }
                 }
-                // Phase 6 の暗号の選択のため、この端末の Android Keystore で使える鍵の種類を測る（真偽値だけ、鍵は作ってすぐ消す）
-                "keystore_probe" -> {
-                    val results = linkedMapOf<String, Boolean>()
-                    fun attempt(name: String, block: () -> Unit) {
-                        results[name] = runCatching { block() }.isSuccess
-                    }
-                    val ks = java.security.KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
-                    attempt("ecdsa_p256") {
-                        val gen = java.security.KeyPairGenerator.getInstance(android.security.keystore.KeyProperties.KEY_ALGORITHM_EC, "AndroidKeyStore")
-                        gen.initialize(android.security.keystore.KeyGenParameterSpec.Builder("wave-probe-sign", android.security.keystore.KeyProperties.PURPOSE_SIGN).setDigests(android.security.keystore.KeyProperties.DIGEST_SHA256).build())
-                        val pair = gen.generateKeyPair()
-                        java.security.Signature.getInstance("SHA256withECDSA").apply { initSign(pair.private); update(byteArrayOf(1)); sign() }
-                    }
-                    attempt("ecdh_p256") {
-                        val gen = java.security.KeyPairGenerator.getInstance(android.security.keystore.KeyProperties.KEY_ALGORITHM_EC, "AndroidKeyStore")
-                        gen.initialize(android.security.keystore.KeyGenParameterSpec.Builder("wave-probe-agree", android.security.keystore.KeyProperties.PURPOSE_AGREE_KEY).build())
-                        val pair = gen.generateKeyPair()
-                        val peer = java.security.KeyPairGenerator.getInstance("EC").apply { initialize(java.security.spec.ECGenParameterSpec("secp256r1")) }.generateKeyPair()
-                        javax.crypto.KeyAgreement.getInstance("ECDH", "AndroidKeyStore").apply { init(pair.private); doPhase(peer.public, true); generateSecret() }
-                    }
-                    attempt("x25519_keystore") {
-                        val gen = java.security.KeyPairGenerator.getInstance("XDH", "AndroidKeyStore")
-                        gen.initialize(android.security.keystore.KeyGenParameterSpec.Builder("wave-probe-x25519", android.security.keystore.KeyProperties.PURPOSE_AGREE_KEY).setAlgorithmParameterSpec(java.security.spec.NamedParameterSpec("X25519")).build())
-                        gen.generateKeyPair()
-                    }
-                    attempt("x25519_software") {
-                        val pair = java.security.KeyPairGenerator.getInstance("XDH").apply { initialize(java.security.spec.NamedParameterSpec("X25519")) }.generateKeyPair()
-                        javax.crypto.KeyAgreement.getInstance("XDH").apply { init(pair.private); doPhase(pair.public, true); generateSecret() }
-                    }
-                    attempt("chacha20_poly1305") { javax.crypto.Cipher.getInstance("ChaCha20-Poly1305") }
-                    // Phase 6b P6b-S: 鍵交換・署名の時間（ミリ秒、5回の中央値）と、鍵がどこに置かれるか（securityLevel）
-                    val timings = linkedMapOf<String, String>()
-                    runCatching {
-                        val agree = ks.getKey("wave-probe-agree", null) as java.security.PrivateKey
-                        val sign = ks.getKey("wave-probe-sign", null) as java.security.PrivateKey
-                        val peer = java.security.KeyPairGenerator.getInstance("EC").apply { initialize(java.security.spec.ECGenParameterSpec("secp256r1")) }.generateKeyPair()
-                        fun median(block: () -> Unit): Long = List(5) { val t = System.nanoTime(); block(); (System.nanoTime() - t) / 1_000_000 }.sorted()[2]
-                        timings["ecdh_ms"] = median { javax.crypto.KeyAgreement.getInstance("ECDH", "AndroidKeyStore").apply { init(agree); doPhase(peer.public, true); generateSecret() } }.toString()
-                        timings["ecdsa_ms"] = median { java.security.Signature.getInstance("SHA256withECDSA").apply { initSign(sign); update(ByteArray(512)); sign() } }.toString()
-                        val info = java.security.KeyFactory.getInstance(agree.algorithm, "AndroidKeyStore").getKeySpec(agree, android.security.keystore.KeyInfo::class.java)
-                        timings["agree_security_level"] = info.securityLevel.toString()
-                    }.onFailure { timings["timing_error"] = it::class.simpleName ?: "?" }
-                    listOf("wave-probe-sign", "wave-probe-agree", "wave-probe-x25519").forEach { runCatching { ks.deleteEntry(it) } }
-                    Log.i(WaveApplication.LOG_TAG, "debug keystore sdk=${android.os.Build.VERSION.SDK_INT} $results $timings")
-                }
-                // 通知・時計に出す画像の元（ホストと大きさの指定だけ。曲名・ID は出さない）
-                "artwork_probe" -> {
-                    val controller = player.controller()
-                    val uri =
-                        controller.currentMediaItem?.let { xyz.mooma0750.wave.playback.Media3QueuePlayer.songOf(it) }?.thumbnailUrl
-                            ?.let(xyz.mooma0750.wave.playback.Media3QueuePlayer::largeArtwork)?.let(android.net.Uri::parse)
-                    val host = uri?.host
-                    val size = uri?.toString()?.let { Regex("=w\\d+-h\\d+|/[a-z]+default\\.jpg").find(it)?.value }
-                    Log.i(WaveApplication.LOG_TAG, "debug artwork host=$host size=$size hasData=${controller.mediaMetadata.artworkData != null}")
-                    Log.i(WaveApplication.LOG_TAG, "debug artwork platform keys=${container.connectV2Host.platformMetadataKeys?.invoke()?.map { it.removePrefix("android.media.metadata.") }}")
-                    // 実際に返る画像の大きさ（URL・曲名は出さない）
-                    if (uri != null) {
-                        kotlinx.coroutines.withContext(Dispatchers.IO) {
-                            runCatching {
-                                val request = okhttp3.Request.Builder().url(uri.toString()).build()
-                                container.mediaHttpClient.newCall(request).execute().use { response ->
-                                    val bytes = response.body?.bytes()
-                                    val options = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                                    if (bytes != null) android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
-                                    Log.i(WaveApplication.LOG_TAG, "debug artwork fetched code=${response.code} bytes=${bytes?.size} image=${options.outWidth}x${options.outHeight}")
-                                }
-                            }.onFailure { Log.i(WaveApplication.LOG_TAG, "debug artwork fetch failed type=${it::class.simpleName}") }
-                        }
-                    }
-                }
-                // 再生履歴を読めるか（区切りの数・件数だけ。曲名は出さない）
-                "history_probe" -> {
-                    when (val result = container.music.history()) {
-                        is CallResult.Ok -> {
-                            Log.i(WaveApplication.LOG_TAG, "debug history sections=${result.value.sections.size} songs=${result.value.songs.size} continuation=${result.value.continuation != null} headings=${result.value.sections.count { it.title != null }}")
-                            val token = result.value.continuation
-                            if (token != null) {
-                                when (val next = container.music.history(token)) {
-                                    is CallResult.Ok -> Log.i(WaveApplication.LOG_TAG, "debug history page2 sections=${next.value.sections.size} songs=${next.value.songs.size} continuation=${next.value.continuation != null}")
-                                    is CallResult.Failed -> Log.i(WaveApplication.LOG_TAG, "debug history page2 failed=${next.kind}")
-                                }
-                            }
-                        }
-                        is CallResult.Failed -> Log.i(WaveApplication.LOG_TAG, "debug history failed=${result.kind} renderers=${container.music.lastRendererNames}")
-                    }
-                }
-                // 最後のページと確かめられるか（番号・ページ数・真偽値だけ）
-                "playlist_end_probe" ->
-                    (container.music.libraryPlaylists() as? CallResult.Ok)?.value?.forEachIndexed { index, summary ->
-                        if (!summary.editable && summary.playlistId != xyz.mooma0750.wave.core.music.MusicRepository.LIKED_SONGS) return@forEachIndexed
-                        var continuation: String? = null
-                        var pages = 0
-                        var last: xyz.mooma0750.wave.core.music.PlaylistPage? = null
-                        do {
-                            val page = container.music.playlist(summary.playlistId, continuation) as? CallResult.Ok ?: break
-                            last = page.value
-                            continuation = page.value.continuation
-                            pages++
-                        } while (continuation != null && pages < 50)
-                        Log.i(WaveApplication.LOG_TAG, "probe end playlist=$index pages=$pages songsLast=${last?.songs?.size} endConfirmed=${last?.endConfirmed} keys=${if (last?.endConfirmed == false) container.music.lastKeyPaths else emptySet()}")
-                    }
                 // プレイリストの書き込みの確認（DebugReceiver からだけ）。作った ID はメモリに置くだけで出さない
                 "playlist_create" ->
                     when (val result = container.music.createPlaylist(intent.getStringExtra("title") ?: "wave 確認用")) {
@@ -362,24 +261,6 @@ object DebugActions {
                     val page = createdPlaylistId?.let { container.music.playlist(it) }
                     Log.i(WaveApplication.LOG_TAG, "debug playlist songs=${(page as? CallResult.Ok)?.value?.songs?.size} editable=${(page as? CallResult.Ok)?.value?.editable}")
                 }
-                // 編集できるプレイリストの見分け方を調べる（決定 E7）。番号・アイコン名・レンダラ名だけを出し、題名と ID は出さない
-                "playlist_probe" ->
-                    when (val library = container.music.libraryPlaylists()) {
-                        is CallResult.Failed -> Log.i(WaveApplication.LOG_TAG, "probe library failed ${library.kind}")
-                        is CallResult.Ok -> {
-                            Log.i(WaveApplication.LOG_TAG, "probe cards=${container.music.lastCardMenuIcons.size} playlists=${library.value.size}")
-                            container.music.lastCardMenuIcons.forEachIndexed { index, icons -> Log.i(WaveApplication.LOG_TAG, "probe card=$index icons=$icons") }
-                            val only = intent.getIntArrayExtra("only")?.toSet()
-                            library.value.take(intent.getIntExtra("limit", 8)).forEachIndexed { index, summary ->
-                                if (only != null && index !in only) return@forEachIndexed
-                                when (val page = container.music.playlist(summary.playlistId)) {
-                                    is CallResult.Ok ->
-                                        Log.i(WaveApplication.LOG_TAG, "probe playlist=$index editable=${page.value.editable} liked=${summary.playlistId == xyz.mooma0750.wave.core.music.MusicRepository.LIKED_SONGS} headers=${container.music.lastRendererNames.filter { it.contains("Header") }}")
-                                    is CallResult.Failed -> Log.i(WaveApplication.LOG_TAG, "probe playlist=$index failed ${page.kind} status=${page.status} renderers=${container.music.lastRendererNames}")
-                                }
-                            }
-                        }
-                    }
                 // ミニプレーヤーの再生ボタンと同じ呼び方
                 "play" -> player.controller().run { if (playerError != null) prepare(); play() }
                 "queue_digest" ->

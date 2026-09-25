@@ -217,8 +217,6 @@ class ConnectClient(
     /** 検証した端末一覧（表示）。 */
     val members: List<MemberKeys> get() = chain?.members?.values?.map { it.keys }.orEmpty()
 
-    val knownStoreId: String? get() = storeId
-
     /** サーバーの状態が作り直されたと気づき、本人の確認を待っている（L-12）。 */
     val storeResetPending: Boolean get() = pendingStoreId != null
 

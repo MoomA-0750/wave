@@ -118,7 +118,6 @@ sealed interface WriteResult<out T> {
     data object Unknown : WriteResult<Nothing>
 }
 
-/** debug の調査の結果。normalizedForLocalHmac は端末の中で HMAC を取るためだけに使い、ログに出さない。 */
 /** 確認済みのアカウント（識別子の値は HMAC にだけ使う）と、確認したログインの世代。 */
 class VerifiedAccount(
     val generationId: Long,
@@ -532,12 +531,6 @@ class WaveSession internal constructor(
         if (selected.size != 1) return AccountVerification.Unknown
         return if (selected.single() == saved) AccountVerification.Verified else AccountVerification.Mismatch
     }
-
-    /**
-     * 確認済みのアカウントの識別子（正規化した DATASYNC_ID）。確認できていなければ null。
-     * 端末間でアカウントを比べる HMAC にだけ使う（値そのものをログ・画面・端末の外に出さない、ADR-0007）。
-     */
-    suspend fun verifiedAccountId(): xyz.mooma0750.wave.core.auth.Secret? = verifiedAccount()?.id
 
     /**
      * 確認済みのアカウントと、確認したログインの世代。受け渡し・ペアリングでは、確認した後の操作（取り込み・保存）の直前に、

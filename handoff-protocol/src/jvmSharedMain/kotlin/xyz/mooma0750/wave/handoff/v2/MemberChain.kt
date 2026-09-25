@@ -36,9 +36,6 @@ class VerifiedChain(
     private val hashes: List<String>,
 ) {
     fun hashAt(seq: Long): String? = hashes.getOrNull(seq.toInt())
-
-    val players: List<ChainMember>
-        get() = members.values.filter { it.keys.role == Role.Player }
 }
 
 sealed interface ChainVerification {

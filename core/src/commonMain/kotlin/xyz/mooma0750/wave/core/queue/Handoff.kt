@@ -72,12 +72,5 @@ internal object HandoffMapping {
             else -> HandoffRepeat.Off
         }
 
-    fun repeatModeOf(repeat: HandoffRepeat): Int =
-        when (repeat) {
-            HandoffRepeat.Off -> 0
-            HandoffRepeat.One -> 1
-            HandoffRepeat.All -> 2
-        }
-
     const val SCHEMA_VERSION = HandoffCodec.SCHEMA_VERSION
 }

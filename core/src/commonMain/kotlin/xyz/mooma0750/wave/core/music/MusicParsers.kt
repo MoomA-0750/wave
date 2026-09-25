@@ -259,34 +259,6 @@ internal object MusicParsers {
             // 空のプレイリストも「曲がありません」の messageRenderer を持つ。ヘッダや曲の棚があればログインの案内ではない
             CONTENT_RENDERERS.none { findAll(root, it).isNotEmpty() }
 
-    /** プレイリストのカードごとの、メニューの項目のアイコン名（値の無い列挙名だけ）。編集できるかの手がかりを調べる用（決定 E7）。 */
-    fun playlistCardMenuIcons(root: JsonObject): List<Set<String>> = findAll(root, "musicTwoRowItemRenderer").map(::menuIconsOf)
-
-    /** 名前に fragment を含むキーの場所（キー名の並びだけ、値は含めない）。調査用（決定 E7）。 */
-    fun keyPathsLike(
-        root: JsonElement,
-        fragment: String,
-    ): Set<String> {
-        val paths = mutableSetOf<String>()
-        fun walk(
-            element: JsonElement,
-            path: String,
-        ) {
-            when (element) {
-                is JsonObject ->
-                    element.forEach { (name, value) ->
-                        val next = if (path.isEmpty()) name else "$path.$name"
-                        if (name.contains(fragment, ignoreCase = true)) paths += next
-                        walk(value, next)
-                    }
-                is JsonArray -> element.forEach { walk(it, "$path[]") }
-                else -> Unit
-            }
-        }
-        walk(root, "")
-        return paths
-    }
-
     /** key が現れる場所を、キー名の並び（配列は [] ）だけで集める。値は含めない（決定 E7）。 */
     fun keyPaths(
         root: JsonElement,
