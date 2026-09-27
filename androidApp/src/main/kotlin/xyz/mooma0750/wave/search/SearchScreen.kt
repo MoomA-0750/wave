@@ -73,13 +73,16 @@ fun SearchScreen(
                         viewModel.search()
                     }),
             )
-            when {
-                state.failure != null -> Text(failureMessage(state.failure), Modifier.padding(16.dp))
-                state.empty -> Text("見つかりませんでした", Modifier.padding(16.dp))
+            // 検索欄が空のときは、前の検索の結果ではなく、最近の検索（語と、そこから開いたアーティスト・アルバム）を出す（Spotify と同じ）
+            val showHistory = state.query.isBlank()
+            if (!showHistory) {
+                when {
+                    state.failure != null -> Text(failureMessage(state.failure), Modifier.padding(16.dp))
+                    state.empty -> Text("見つかりませんでした", Modifier.padding(16.dp))
+                }
             }
             LazyColumn(Modifier.fillMaxSize()) {
-                // まだ検索していないときは、前に探した語と、そこから開いたアーティスト・アルバムを出す
-                if (state.songs.isEmpty() && !state.loading && state.failure == null && !state.empty && historyEntries.isNotEmpty()) {
+                if (showHistory && historyEntries.isNotEmpty()) {
                     item {
                         Row(
                             Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp),
@@ -106,10 +109,12 @@ fun SearchScreen(
                         )
                     }
                 }
-                itemsIndexed(state.songs, key = { index, song -> "$index-${song.videoId}" }) { index, song ->
-                    SongRow(song, onClick = { onSongClick(song) }) { SongMenuButton(song, actions) }
-                    if (index == state.songs.lastIndex && state.continuation != null) {
-                        LaunchedEffect(state.songs.size) { viewModel.loadMore() }
+                if (!showHistory) {
+                    itemsIndexed(state.songs, key = { index, song -> "$index-${song.videoId}" }) { index, song ->
+                        SongRow(song, onClick = { onSongClick(song) }) { SongMenuButton(song, actions) }
+                        if (index == state.songs.lastIndex && state.continuation != null) {
+                            LaunchedEffect(state.songs.size) { viewModel.loadMore() }
+                        }
                     }
                 }
                 if (state.loading) item { CircularProgressIndicator(Modifier.padding(16.dp)) }
