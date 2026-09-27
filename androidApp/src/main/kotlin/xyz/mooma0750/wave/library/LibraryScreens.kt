@@ -173,7 +173,7 @@ fun AddToPlaylistDialog(
     val scope = rememberCoroutineScope()
     val editable = state.playlists.filter { it.editable }
     // すでに入っているプレイリストを出す（YouTube Music に一覧で返す口が無いので、1つずつ読む）
-    val check = remember(membership, scope) { membership.Check(scope) }
+    val check = remember(membership, scope) { PlaylistMembership.Check(membership, scope) }
     val statuses by check.status.collectAsStateWithLifecycle()
     LaunchedEffect(check, song.videoId, editable.map { it.playlistId }, playlistsVersion) {
         if (editable.isNotEmpty()) check.start(editable.map { it.playlistId }, song.videoId, playlistsVersion)

@@ -45,7 +45,7 @@ class PlaylistMembership(
     private val cache = mutableMapOf<String, Cached>()
 
     /** 1つのプレイリストを読む。読めたら曲の ID の集合、読めなければ null。 */
-    private suspend fun videoIds(
+    internal suspend fun videoIds(
         playlistId: String,
         version: Int,
     ): Set<String>? {
@@ -64,8 +64,10 @@ class PlaylistMembership(
 
     /**
      * 画面1つ分の確認。プレイリストごとの状態を出しながら、順に読む（同時に読むのは CONCURRENCY 件まで）。
+     * inner class にしない（Compose が画面の中で使う型の安定性の情報を作れず、実行時に落ちる）。
      */
-    inner class Check(
+    class Check(
+        private val membership: PlaylistMembership,
         private val scope: CoroutineScope,
     ) {
         private val mutableStatus = MutableStateFlow<Map<String, Status>>(emptyMap())
@@ -85,7 +87,7 @@ class PlaylistMembership(
                     playlistIds.forEach { playlistId ->
                         launch {
                             limit.withPermit {
-                                val ids = videoIds(playlistId, version)
+                                val ids = membership.videoIds(playlistId, version)
                                 val status =
                                     when {
                                         ids == null -> Status.Unknown
