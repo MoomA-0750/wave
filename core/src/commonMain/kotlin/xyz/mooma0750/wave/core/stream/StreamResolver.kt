@@ -49,6 +49,9 @@ class ResolvedStream internal constructor(
     override fun toString(): String = "ResolvedStream(videoId=$videoId, itag=$itag, mimeType=$mimeType, contentLength=$contentLength)"
 }
 
+/** 取るストリームの種類。映像は映像だけ（音は音声のストリームから鳴らす）。 */
+enum class StreamKind { Audio, Video }
+
 enum class StreamFailure {
     NotLoggedIn,
     Expired,
@@ -67,7 +70,7 @@ enum class StreamFailure {
     /** 同じ itag だが中身（長さ・更新日時）が変わった。途中位置から継ぎ足せない。 */
     StreamChanged,
 
-    /** 使える音声フォーマットが無い。 */
+    /** 使える音声フォーマット（映像を求めたときは映像フォーマット）が無い。 */
     NoAudioFormat,
 
     /** URL も signatureCipher も無いフォーマットしか無い。SABR だけの応答で、ADR-0001 が覆る兆候。 */
@@ -135,19 +138,22 @@ class StreamResolver internal constructor(
         sameAs: ResolvedStream? = null,
         /** 曲をキューに入れたときのログインの世代（ADR-0007）。違えば解決しない。 */
         expectedGeneration: Long? = null,
-    ): ResolveResult = resolve(videoId, sameAs?.itag, sameAs, expectedGeneration)
+        kind: StreamKind = StreamKind.Audio,
+    ): ResolveResult = resolve(videoId, sameAs?.itag, sameAs, expectedGeneration, kind)
 
     /** @param requiredItag 指定したら、その itag だけを使う */
     suspend fun resolve(
         videoId: String,
         requiredItag: Int?,
-    ): ResolveResult = resolve(videoId, requiredItag, sameAs = null, expectedGeneration = null)
+        kind: StreamKind = StreamKind.Audio,
+    ): ResolveResult = resolve(videoId, requiredItag, sameAs = null, expectedGeneration = null, kind = kind)
 
     private suspend fun resolve(
         videoId: String,
         requiredItag: Int?,
         sameAs: ResolvedStream?,
         expectedGeneration: Long?,
+        kind: StreamKind,
     ): ResolveResult {
         if (expectedGeneration != null && expectedGeneration != session.loginGenerationId()) return ResolveResult.Failed(StreamFailure.NotLoggedIn)
         val config = playerConfig() ?: return ResolveResult.Failed(StreamFailure.PlayerConfigUnavailable)
@@ -172,7 +178,11 @@ class StreamResolver internal constructor(
         if (body.playabilityStatus.status != "OK") return ResolveResult.Failed(StreamFailure.Unplayable)
         val streaming = body.streamingData ?: return ResolveResult.Failed(StreamFailure.NoAudioFormat)
 
-        val candidates = audioCandidates(streaming.adaptiveFormats, requiredItag)
+        val candidates =
+            when (kind) {
+                StreamKind.Audio -> audioCandidates(streaming.adaptiveFormats, requiredItag)
+                StreamKind.Video -> videoCandidates(streaming.adaptiveFormats, requiredItag)
+            }
         if (candidates.isEmpty()) {
             return ResolveResult.Failed(
                 when {
@@ -206,7 +216,8 @@ class StreamResolver internal constructor(
         val lifetimeMs = (streaming.expiresInSeconds?.takeIf { it > 0 }?.toLong() ?: DEFAULT_LIFETIME_SECONDS) * 1000
         // 別のログインの世代で取った統計 URL を、今のログインで送らないように世代を刻む（ADR-0006 の 3・6）
         val sameGeneration = session.loginGenerationId() == generationBefore
-        val statsUrl = body.playbackTracking?.videostatsPlaybackUrl?.baseUrl?.takeIf { sameGeneration }
+        // 再生履歴は音声の再生で数える（映像の方では送らない）
+        val statsUrl = body.playbackTracking?.videostatsPlaybackUrl?.baseUrl?.takeIf { sameGeneration && kind == StreamKind.Audio }
         return ResolveResult.Ok(
             ResolvedStream(
                 videoId = videoId,
@@ -287,6 +298,31 @@ class StreamResolver internal constructor(
                 .filter { requiredItag == null || it.itag == requiredItag }
                 .filter { it.hasSource }
                 .sortedBy { AUDIO_ITAG_PREFERENCE.indexOf(it.itag) }
+
+        /**
+         * 映像だけのフォーマット。高さが MAX_VIDEO_HEIGHT 以下で、H.264（avc1）→ VP9 の順、同じ符号化なら高い方。
+         * AV1 は多くの端末でハードウェアで復号できないので使わない。
+         */
+        fun videoCandidates(
+            formats: List<PlayerResponse.StreamingData.Format>,
+            requiredItag: Int?,
+        ): List<PlayerResponse.StreamingData.Format> =
+            formats
+                .filter { it.mimeType.startsWith("video/") && videoCodecRank(it.mimeType) != null }
+                .filter { (it.height ?: Int.MAX_VALUE) <= MAX_VIDEO_HEIGHT }
+                .filter { requiredItag == null || it.itag == requiredItag }
+                .filter { it.hasSource }
+                .sortedWith(compareBy<PlayerResponse.StreamingData.Format> { videoCodecRank(it.mimeType) }.thenByDescending { it.height ?: 0 })
+
+        /** 映像の高さの上限（通信量を抑える）。 */
+        const val MAX_VIDEO_HEIGHT = 720
+
+        private fun videoCodecRank(mimeType: String): Int? =
+            when {
+                "avc1" in mimeType -> 0
+                "vp9" in mimeType || "vp09" in mimeType -> 1
+                else -> null
+            }
 
         /** クエリの並びと他の値の符号化を変えずに、指定した名前のパラメータだけを外す。 */
         fun removeQueryParameters(

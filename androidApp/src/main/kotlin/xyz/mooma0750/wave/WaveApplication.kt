@@ -41,6 +41,7 @@ import xyz.mooma0750.wave.core.auth.KeystoreCredentialStore
 import xyz.mooma0750.wave.core.lyrics.LrclibClient
 import xyz.mooma0750.wave.core.lyrics.LyricsRepository
 import xyz.mooma0750.wave.core.music.MusicRepository
+import xyz.mooma0750.wave.nowplaying.MusicVideos
 import xyz.mooma0750.wave.core.net.AuthGuardEngine
 import xyz.mooma0750.wave.core.net.createWaveHttpClient
 import xyz.mooma0750.wave.core.session.WaveSession
@@ -241,6 +242,12 @@ class AppContainer(
     /** 解決済みのストリーム URL。ログアウトで消す。 */
     val streamCache = ResolvedStreamCache(stream.resolver, SystemClock::elapsedRealtime)
 
+    /** 映像の表示用に解決した URL（音声とは別に持つ）。ログアウトで消す。 */
+    val videoStreamCache = ResolvedStreamCache(stream.resolver, SystemClock::elapsedRealtime)
+
+    /** 曲に重ねる映像（MV）。 */
+    val musicVideos = MusicVideos(music, stream.resolver, videoStreamCache, mediaHttpClient)
+
     val settings = AppSettings(context)
 
     /** 端末間の受け渡しの、再生サービスへの入口（Phase 6）。 */
@@ -403,6 +410,7 @@ class AppContainer(
         val cleared = authManager.logout()
         // 再生サービスが動いていなくても、前のアカウントで解決した URL とサムネイルを残さない
         streamCache.clear()
+        videoStreamCache.clear()
         imageCacheCleaner()
         WebViewCredentials.clear()
         Log.i(WaveApplication.LOG_TAG, "logout cleared=$cleared")

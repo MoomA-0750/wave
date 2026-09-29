@@ -20,6 +20,7 @@ import xyz.mooma0750.wave.core.net.isAllowedMediaUrl
 import xyz.mooma0750.wave.core.stream.ResolveResult
 import xyz.mooma0750.wave.core.stream.ResolvedStream
 import xyz.mooma0750.wave.core.stream.StreamFailure
+import xyz.mooma0750.wave.core.stream.StreamKind
 import xyz.mooma0750.wave.core.stream.StreamResolver
 
 /** 再生キューの項目の URI。署名付き URL の代わりに Media3 の中を流れる。 */
@@ -156,6 +157,8 @@ class WaveStreamDataSource(
     private val resolver: StreamResolver,
     private val cache: ResolvedStreamCache,
     private val upstreamFactory: OkHttpDataSource.Factory,
+    /** 映像の表示用は Video（キャッシュも音声とは別のものを渡す）。 */
+    private val kind: StreamKind,
 ) : DataSource {
     private var upstream: DataSource? = null
     private var openedSpec: DataSpec? = null
@@ -175,7 +178,7 @@ class WaveStreamDataSource(
         // 途中の位置から開き直すときは、期限切れでも前に使ったファイル（itag・長さ・更新日時）と同じものだけを使う。
         // 別のエンコードの途中から継ぎ足さない（一致しなければ StreamChanged でその曲を飛ばす）
         val first = cached ?: resolve(videoId, sameAs = if (dataSpec.position > 0) cache.peek(videoId, epoch) else null, epoch = epoch)
-        Log.i(WaveApplication.LOG_TAG, "stream open itag=${first.itag} cached=${cached != null} position=${dataSpec.position}")
+        Log.i(WaveApplication.LOG_TAG, "stream open kind=$kind itag=${first.itag} cached=${cached != null} position=${dataSpec.position}")
         return try {
             openUpstream(first, dataSpec)
         } catch (rejected: RejectedException) {
@@ -210,7 +213,7 @@ class WaveStreamDataSource(
         epoch: Long?,
     ): ResolvedStream {
         val startedInEpoch = cache.epoch
-        return when (val result = runBlocking { resolver.resolve(videoId, sameAs, expectedGeneration = epoch) }) {
+        return when (val result = runBlocking { resolver.resolve(videoId, sameAs, expectedGeneration = epoch, kind = kind) }) {
             is ResolveResult.Ok -> result.stream.also { cache.put(it, startedInEpoch) }
             is ResolveResult.Failed -> throw StreamResolveException(result.reason)
         }
@@ -321,9 +324,10 @@ class WaveStreamDataSource(
         private val resolver: StreamResolver,
         private val cache: ResolvedStreamCache,
         client: OkHttpClient,
+        private val kind: StreamKind = StreamKind.Audio,
     ) : DataSource.Factory {
         private val upstreamFactory = OkHttpDataSource.Factory(client)
 
-        override fun createDataSource(): DataSource = WaveStreamDataSource(resolver, cache, upstreamFactory)
+        override fun createDataSource(): DataSource = WaveStreamDataSource(resolver, cache, upstreamFactory, kind)
     }
 }

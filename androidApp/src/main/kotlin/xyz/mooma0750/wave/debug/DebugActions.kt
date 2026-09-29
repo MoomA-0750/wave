@@ -77,6 +77,7 @@ object DebugActions {
                         is CallResult.Ok -> result.value.songs.getOrNull(intent.getIntExtra("index", 0))?.let { player.playSong(it) }
                         is CallResult.Failed -> Log.i(WaveApplication.LOG_TAG, "debug search failed ${result.kind} status=${result.status}")
                     }
+                "video_probe" -> VideoProbe.run(container, intent.getStringExtra("video_id") ?: player.controller().currentMediaItem?.let { Media3QueuePlayer.songOf(it)?.videoId })
                 "add_unplayable_next" -> player.addNext(DebugPlayback.unplayableSong)
                 "play_public_playlist", "play_public_playlist_shuffle" ->
                     when (val page = container.music.playlist(DebugPlayback.PUBLIC_PLAYLIST_ID)) {

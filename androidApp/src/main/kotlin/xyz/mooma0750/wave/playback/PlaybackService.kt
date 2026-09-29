@@ -416,6 +416,7 @@ class PlaybackService : MediaSessionService() {
             historyTracker.reset()
             queueSession.reset()
             container.streamCache.clear()
+            container.videoStreamCache.clear()
             container.queueStore.delete()
         }
 

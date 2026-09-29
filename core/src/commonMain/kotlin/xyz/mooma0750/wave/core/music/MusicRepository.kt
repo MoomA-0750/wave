@@ -103,6 +103,13 @@ class MusicRepository(
             block = { it.next(YouTubeClient.WEB_REMIX, videoId = videoId, playlistId = null) },
         ) { response -> parsedOrInvalid(MusicParsers.likeStatus(json(response), videoId)) }
 
+    /** 曲の種類と、見せる映像（音源なら対応する MV と時刻の対応表）。曲が応答に無ければ Invalid。 */
+    suspend fun musicVideoInfo(videoId: String): CallResult<MusicVideoInfo> =
+        session.call(
+            operation = "next",
+            block = { it.next(YouTubeClient.WEB_REMIX, videoId = videoId, playlistId = null) },
+        ) { response -> parsedOrInvalid(MusicParsers.musicVideoInfo(json(response), videoId)) }
+
     /**
      * 曲の歌詞（時刻なし）。next で歌詞のタブを探し、あれば browse で読む。歌詞の無い曲は Ok(null)。
      */

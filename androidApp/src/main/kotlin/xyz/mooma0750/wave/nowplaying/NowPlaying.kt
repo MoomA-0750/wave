@@ -56,6 +56,7 @@ fun MiniPlayer(
     connection: PlayerConnection,
     actions: SongActions,
     lyrics: LyricsRepository,
+    videos: MusicVideos,
 ) {
     val (state, controller) = rememberPlayerUiState(connection)
     var showQueue by remember { mutableStateOf(false) }
@@ -90,7 +91,7 @@ fun MiniPlayer(
 
     if (showFull) {
         ModalBottomSheet(onDismissRequest = { showFull = false }, sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
-            FullPlayer(state, controller, connection, lyrics, actions = actions.closing { showFull = false }, onQueue = {
+            FullPlayer(state, controller, connection, lyrics, videos, actions = actions.closing { showFull = false }, onQueue = {
                 showFull = false
                 showQueue = true
             })
@@ -151,19 +152,22 @@ private fun FullPlayer(
     controller: MediaController?,
     connection: PlayerConnection,
     lyrics: LyricsRepository,
+    videos: MusicVideos,
     actions: SongActions,
     onQueue: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     val song = Media3QueuePlayer.songOf(controller?.currentMediaItem)
-    var showLyrics by rememberSaveable { mutableStateOf(false) }
+    var view by rememberSaveable { mutableStateOf(PlayerView.Artwork) }
     Column(
         Modifier.fillMaxWidth().padding(24.dp).navigationBarsPadding(),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        if (showLyrics && song != null) {
+        if (view == PlayerView.Lyrics && song != null) {
             LyricsPanel(song, controller, lyrics, Modifier.fillMaxWidth().aspectRatio(1f))
+        } else if (view == PlayerView.Video && song != null) {
+            MusicVideoPanel(song, controller, videos, Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(8.dp)))
         } else {
             coil3.compose.AsyncImage(
                 model = song?.thumbnailUrl?.takeIf { it.startsWith("https://") }?.let(Media3QueuePlayer::largeArtwork),
@@ -176,7 +180,12 @@ private fun FullPlayer(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(state.artist.orEmpty(), style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
             song?.let { SongMenuButton(it, actions, inQueue = true) }
-            TextButton(onClick = { showLyrics = !showLyrics }, enabled = song != null) { Text(if (showLyrics) "アートワーク" else "歌詞") }
+            TextButton(onClick = { view = if (view == PlayerView.Lyrics) PlayerView.Artwork else PlayerView.Lyrics }, enabled = song != null) {
+                Text(if (view == PlayerView.Lyrics) "歌詞を閉じる" else "歌詞")
+            }
+            TextButton(onClick = { view = if (view == PlayerView.Video) PlayerView.Artwork else PlayerView.Video }, enabled = song != null) {
+                Text(if (view == PlayerView.Video) "動画を閉じる" else "動画")
+            }
         }
         if (state.durationMs > 0) {
             Slider(
@@ -230,3 +239,6 @@ private fun FullPlayer(
 }
 
 private fun formatTime(ms: Long): String = Durations.ofMillis(ms)
+
+/** 再生中の画面の上半分に出すもの。 */
+private enum class PlayerView { Artwork, Lyrics, Video }

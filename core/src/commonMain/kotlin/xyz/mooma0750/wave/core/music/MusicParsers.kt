@@ -151,6 +151,47 @@ internal object MusicParsers {
     /** browse/edit_playlist の応答の status（`STATUS_SUCCEEDED` など）。 */
     fun editPlaylistStatus(root: JsonObject): String? = root.path("status").string()
 
+    /**
+     * next の最初の応答から、videoId の曲の種類と見せる映像。ログイン中の応答では、音源の行が
+     * playlistPanelVideoWrapperRenderer（primaryRenderer と counterpart・segmentMap）に包まれて、対応する MV が付く。
+     * 曲が一覧に無ければ null。
+     */
+    fun musicVideoInfo(
+        root: JsonObject,
+        videoId: String,
+    ): MusicVideoInfo? {
+        val panel =
+            root
+                .path("contents", "singleColumnMusicWatchNextResultsRenderer", "tabbedRenderer", "watchNextTabbedResultsRenderer", "tabs")
+                .firstArrayItem()
+                .path("tabRenderer", "content", "musicQueueRenderer", "content", "playlistPanelRenderer")
+        for (item in panel.path("contents").arrayItems()) {
+            val wrapper = item.path("playlistPanelVideoWrapperRenderer")
+            val renderer = item.path("playlistPanelVideoRenderer") ?: wrapper.path("primaryRenderer", "playlistPanelVideoRenderer")
+            if (renderer.path("videoId").string() != videoId) continue
+            val type = musicVideoTypeOf(renderer)
+            if (type != MusicVideoType.Atv) return MusicVideoInfo(type, MusicVideo(videoId, emptyList()))
+            val counterpart = wrapper.path("counterpart").firstArrayItem()
+            val counterpartId = counterpart.path("counterpartRenderer", "playlistPanelVideoRenderer", "videoId").string()
+            val segments =
+                counterpart.path("segmentMap", "segment").arrayItems().mapNotNull {
+                    TimeSegment(
+                        primaryStartMs = it.path("primaryVideoStartTimeMilliseconds").string()?.toLongOrNull() ?: return@mapNotNull null,
+                        counterpartStartMs = it.path("counterpartVideoStartTimeMilliseconds").string()?.toLongOrNull() ?: return@mapNotNull null,
+                        durationMs = it.path("durationMilliseconds").string()?.toLongOrNull() ?: return@mapNotNull null,
+                    )
+                }
+            // 対応表が無い MV は時刻を合わせられないので使わない
+            return MusicVideoInfo(type, counterpartId?.takeIf { segments.isNotEmpty() }?.let { MusicVideo(it, segments) })
+        }
+        return null
+    }
+
+    private fun musicVideoTypeOf(renderer: JsonElement?): MusicVideoType? =
+        MusicVideoType.of(
+            renderer.path("navigationEndpoint", "watchEndpoint", "watchEndpointMusicSupportedConfigs", "watchEndpointMusicConfig", "musicVideoType").string(),
+        )
+
     /** next の最初の応答の、歌詞のタブの browseId（`MPLY…`）。歌詞の無い曲はタブに行き先が無いので null。 */
     fun lyricsBrowseId(root: JsonObject): String? =
         root
