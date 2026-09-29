@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -32,8 +31,10 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
 import kotlinx.coroutines.delay
+import xyz.mooma0750.wave.R
 import xyz.mooma0750.wave.core.music.MusicVideo
 import xyz.mooma0750.wave.core.music.Song
+import xyz.mooma0750.wave.ui.IconTextButton
 
 /** 再生中の曲の映像（MV）。音はそのまま、映像だけを重ねる。画面が裏に回ったら映像のプレイヤーを捨てる。 */
 @Composable
@@ -53,7 +54,7 @@ fun MusicVideoPanel(
             MusicVideos.Result.Failed ->
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Note("動画を読み込めませんでした")
-                    TextButton(onClick = { attempt++ }) { Text("もう一度") }
+                    IconTextButton(R.drawable.ic_refresh, "もう一度", { attempt++ })
                 }
             is MusicVideos.Result.Found ->
                 if (lifecycle.isAtLeast(Lifecycle.State.STARTED)) {
@@ -131,7 +132,7 @@ private fun SyncedVideo(
     if (failed) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Note("動画を再生できませんでした")
-            TextButton(onClick = onFailed) { Text("もう一度") }
+            IconTextButton(R.drawable.ic_refresh, "もう一度", onFailed)
         }
         return
     }

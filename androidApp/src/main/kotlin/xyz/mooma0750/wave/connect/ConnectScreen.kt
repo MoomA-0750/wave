@@ -1,5 +1,6 @@
 package xyz.mooma0750.wave.connect
 
+import xyz.mooma0750.wave.ui.BackButton
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -96,9 +97,7 @@ fun ConnectScreen(
         topBar = {
             TopAppBar(
                 title = { Text("端末の連携") },
-                navigationIcon = {
-                    TextButton(onClick = onBack) { Text("戻る") }
-                },
+                navigationIcon = { BackButton(onBack) },
             )
         },
         bottomBar = bottomBar,

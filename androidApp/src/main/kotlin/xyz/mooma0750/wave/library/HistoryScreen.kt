@@ -1,5 +1,6 @@
 package xyz.mooma0750.wave.library
 
+import xyz.mooma0750.wave.ui.BackButton
 import android.util.Log
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -10,7 +11,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -123,7 +123,7 @@ fun HistoryScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     Scaffold(
-        topBar = { TopAppBar(title = { Text("再生履歴") }, navigationIcon = { TextButton(onClick = onBack) { Text("戻る") } }) },
+        topBar = { TopAppBar(title = { Text("再生履歴") }, navigationIcon = { BackButton(onBack) }) },
         bottomBar = bottomBar,
     ) { padding ->
         LazyColumn(Modifier.fillMaxSize().padding(padding)) {

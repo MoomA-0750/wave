@@ -1,5 +1,8 @@
 package xyz.mooma0750.wave.home
 
+import xyz.mooma0750.wave.ui.IconTextButton
+import xyz.mooma0750.wave.ui.ButtonStyle
+import xyz.mooma0750.wave.R
 import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -118,9 +121,9 @@ fun HomeScreen(
                         }
                     }
                     androidx.compose.foundation.layout.Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = onSearch) { Text("検索") }
-                        if (container.connectConfigured || container.connectV2 != null) OutlinedButton(onClick = onConnect) { Text("端末の連携") }
-                        OutlinedButton(onClick = { container.appScope.launch { container.logout() } }) { Text("ログアウト") }
+                        IconTextButton(R.drawable.ic_search, "検索", onSearch, style = ButtonStyle.Filled)
+                        if (container.connectConfigured || container.connectV2 != null) IconTextButton(R.drawable.ic_devices, "端末の連携", onConnect, style = ButtonStyle.Outlined)
+                        IconTextButton(R.drawable.ic_logout, "ログアウト", { container.appScope.launch { container.logout() } }, style = ButtonStyle.Outlined)
                     }
                 }
             }

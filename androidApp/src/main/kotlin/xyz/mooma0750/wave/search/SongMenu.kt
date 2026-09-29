@@ -1,10 +1,12 @@
 package xyz.mooma0750.wave.search
 
+import xyz.mooma0750.wave.ui.MenuIcon
+import xyz.mooma0750.wave.ui.IconAction
+import xyz.mooma0750.wave.R
 import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -24,19 +26,19 @@ fun SongMenuButton(
 ) {
     var open by remember { mutableStateOf(false) }
     Box {
-        TextButton(onClick = { open = true }) { Text("…") }
+        IconAction(R.drawable.ic_more_vert, "メニュー", { open = true })
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             if (!inQueue) {
-                DropdownMenuItem(text = { Text("次に再生") }, onClick = {
+                DropdownMenuItem(text = { Text("次に再生") }, leadingIcon = { MenuIcon(R.drawable.ic_playlist_play) }, onClick = {
                     open = false
                     actions.playNext(song)
                 })
-                DropdownMenuItem(text = { Text("キューに追加") }, onClick = {
+                DropdownMenuItem(text = { Text("キューに追加") }, leadingIcon = { MenuIcon(R.drawable.ic_playlist_add) }, onClick = {
                     open = false
                     actions.addToQueue(song)
                 })
             }
-            DropdownMenuItem(text = { Text("プレイリストに追加") }, onClick = {
+            DropdownMenuItem(text = { Text("プレイリストに追加") }, leadingIcon = { MenuIcon(R.drawable.ic_add) }, onClick = {
                 open = false
                 actions.addToPlaylist(song)
             })

@@ -1,5 +1,8 @@
 package xyz.mooma0750.wave.search
 
+import xyz.mooma0750.wave.ui.IconAction
+import xyz.mooma0750.wave.R
+import xyz.mooma0750.wave.ui.BackButton
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -56,7 +59,7 @@ fun SearchScreen(
     val historyEntries by history.entries.collectAsStateWithLifecycle()
     val keyboard = LocalSoftwareKeyboardController.current
     Scaffold(
-        topBar = { TopAppBar(title = { Text("検索") }, navigationIcon = { TextButton(onClick = onBack) { Text("戻る") } }) },
+        topBar = { TopAppBar(title = { Text("検索") }, navigationIcon = { BackButton(onBack) }) },
         bottomBar = bottomBar,
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
@@ -190,6 +193,6 @@ private fun HistoryRow(
             Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(kind, style = MaterialTheme.typography.bodySmall)
         }
-        TextButton(onClick = onRemove) { Text("消す") }
+        IconAction(R.drawable.ic_close, "消す", onRemove)
     }
 }

@@ -1,5 +1,10 @@
 package xyz.mooma0750.wave.library
 
+import xyz.mooma0750.wave.ui.IconAction
+import xyz.mooma0750.wave.ui.IconTextButton
+import xyz.mooma0750.wave.ui.ButtonStyle
+import xyz.mooma0750.wave.R
+import xyz.mooma0750.wave.ui.BackButton
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -11,7 +16,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -93,7 +97,7 @@ fun PlaylistScreen(
         topBar = {
             TopAppBar(
                 title = { Text(state.title ?: "プレイリスト", maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                navigationIcon = { TextButton(onClick = onBack) { Text("戻る") } },
+                navigationIcon = { BackButton(onBack) },
             )
         },
         bottomBar = bottomBar,
@@ -102,12 +106,12 @@ fun PlaylistScreen(
             item {
                 Column(Modifier.padding(16.dp)) {
                     Row {
-                        Button(onClick = { onPlay(state.songs, 0, state.continuation) }, enabled = state.songs.isNotEmpty()) { Text("すべて再生") }
-                        TextButton(onClick = { onShufflePlay(state.songs, state.continuation) }, enabled = state.songs.isNotEmpty()) { Text("シャッフル再生") }
+                        IconTextButton(R.drawable.ic_play_arrow, "すべて再生", { onPlay(state.songs, 0, state.continuation) }, enabled = state.songs.isNotEmpty(), style = ButtonStyle.Filled)
+                        IconTextButton(R.drawable.ic_shuffle, "シャッフル再生", { onShufflePlay(state.songs, state.continuation) }, enabled = state.songs.isNotEmpty())
                     }
                     Row {
-                        TextButton(onClick = { onQueue(state.songs, true) }, enabled = state.songs.isNotEmpty()) { Text("次に再生") }
-                        TextButton(onClick = { onQueue(state.songs, false) }, enabled = state.songs.isNotEmpty()) { Text("キューに追加") }
+                        IconTextButton(R.drawable.ic_playlist_play, "次に再生", { onQueue(state.songs, true) }, enabled = state.songs.isNotEmpty())
+                        IconTextButton(R.drawable.ic_playlist_add, "キューに追加", { onQueue(state.songs, false) }, enabled = state.songs.isNotEmpty())
                     }
                 }
             }
@@ -117,7 +121,7 @@ fun PlaylistScreen(
                     onValueChange = { viewModel.setQuery(it) },
                     label = { Text("この中を探す") },
                     singleLine = true,
-                    trailingIcon = { if (state.query.isNotEmpty()) TextButton(onClick = { viewModel.setQuery("") }) { Text("消す") } },
+                    trailingIcon = { if (state.query.isNotEmpty()) IconAction(R.drawable.ic_close, "消す", { viewModel.setQuery("") }) },
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                 )
             }
@@ -192,7 +196,7 @@ fun AddToPlaylistDialog(
                 )
             } else {
                 LazyColumn(Modifier.heightIn(max = 400.dp)) {
-                    item { TextButton(onClick = { creating = true }) { Text("新しいプレイリストを作る") } }
+                    item { IconTextButton(R.drawable.ic_add, "新しいプレイリストを作る", { creating = true }) }
                     when {
                         state.failure != null -> item { Text(failureMessage(state.failure)) }
                         state.loading -> item { CircularProgressIndicator(Modifier.padding(8.dp)) }

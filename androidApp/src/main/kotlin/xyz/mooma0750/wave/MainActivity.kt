@@ -9,7 +9,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.MaterialTheme
+import xyz.mooma0750.wave.ui.WaveTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -75,7 +75,7 @@ class MainActivity : ComponentActivity() {
             notificationPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
         }
         setContent {
-            MaterialTheme {
+            WaveTheme {
                 val authState by container.authManager.state.collectAsStateWithLifecycle()
                 // ログインが完了するたびに増える。ログイン画面の ViewModel をログインごとに作り直す（完了済みの状態を持ち越さない）
                 val loginGeneration by container.loginGeneration.collectAsStateWithLifecycle()

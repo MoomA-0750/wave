@@ -1,5 +1,7 @@
 package xyz.mooma0750.wave.nowplaying
 
+import xyz.mooma0750.wave.ui.IconTextButton
+import xyz.mooma0750.wave.R
 import android.os.SystemClock
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.DragInteraction
@@ -14,7 +16,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -51,7 +52,7 @@ fun LyricsPanel(
             Box(modifier, contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("歌詞を読み込めませんでした")
-                    TextButton(onClick = { attempt++ }) { Text("もう一度") }
+                    IconTextButton(R.drawable.ic_refresh, "もう一度", { attempt++ })
                 }
             }
         is LyricsRepository.Result.Found ->

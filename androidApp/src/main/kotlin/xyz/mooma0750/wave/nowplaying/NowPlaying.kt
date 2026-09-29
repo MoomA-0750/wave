@@ -1,5 +1,13 @@
 package xyz.mooma0750.wave.nowplaying
 
+import xyz.mooma0750.wave.ui.LargeIconSize
+import xyz.mooma0750.wave.ui.IconAction
+import xyz.mooma0750.wave.R
+import androidx.media3.common.Player
+import androidx.compose.ui.res.painterResource
+import androidx.compose.material3.Icon
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -7,11 +15,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -22,7 +28,6 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -75,10 +80,10 @@ fun MiniPlayer(
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
-                TextButton(onClick = { controller?.seekToPreviousMediaItem() }, enabled = state.hasPrevious) { Text("前") }
-                TextButton(onClick = { controller?.togglePlayPause() }) { Text(if (state.isPlaying) "停止" else "再生") }
-                TextButton(onClick = { controller?.seekToNextMediaItem() }, enabled = state.hasNext) { Text("次") }
-                TextButton(onClick = { showQueue = true }) { Text("キュー") }
+                IconAction(R.drawable.ic_skip_previous, "前の曲", { controller?.seekToPreviousMediaItem() }, enabled = state.hasPrevious)
+                IconAction(if (state.isPlaying) R.drawable.ic_pause else R.drawable.ic_play_arrow, if (state.isPlaying) "一時停止" else "再生", { controller?.togglePlayPause() })
+                IconAction(R.drawable.ic_skip_next, "次の曲", { controller?.seekToNextMediaItem() }, enabled = state.hasNext)
+                IconAction(R.drawable.ic_queue_music, "再生キュー", { showQueue = true })
             }
             if (state.durationMs > 0) {
                 Slider(
@@ -137,7 +142,7 @@ private fun QueueSheet(
                             SongMenuButton(song, actions, inQueue = true)
                         }
                     }
-                    if (!current) TextButton(onClick = { scope.launch { connection.remove(row.itemId) } }) { Text("削除") }
+                    if (!current) IconAction(R.drawable.ic_delete, "キューから削除", { scope.launch { connection.remove(row.itemId) } })
                 }
             }
         }
@@ -180,12 +185,6 @@ private fun FullPlayer(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(state.artist.orEmpty(), style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
             song?.let { SongMenuButton(it, actions, inQueue = true) }
-            TextButton(onClick = { view = if (view == PlayerView.Lyrics) PlayerView.Artwork else PlayerView.Lyrics }, enabled = song != null) {
-                Text(if (view == PlayerView.Lyrics) "歌詞を閉じる" else "歌詞")
-            }
-            TextButton(onClick = { view = if (view == PlayerView.Video) PlayerView.Artwork else PlayerView.Video }, enabled = song != null) {
-                Text(if (view == PlayerView.Video) "動画を閉じる" else "動画")
-            }
         }
         if (state.durationMs > 0) {
             Slider(
@@ -198,43 +197,65 @@ private fun FullPlayer(
                 Text(formatTime(state.durationMs), style = MaterialTheme.typography.bodySmall)
             }
         }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            TextButton(onClick = { controller?.seekToPreviousMediaItem() }, enabled = state.hasPrevious) { Text("前へ") }
-            androidx.compose.material3.Button(onClick = { controller?.togglePlayPause() }) { Text(if (state.isPlaying) "一時停止" else "再生") }
-            TextButton(onClick = { controller?.seekToNextMediaItem() }, enabled = state.hasNext) { Text("次へ") }
-        }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            TextButton(onClick = { scope.launch { connection.shuffleUpcoming() } }, enabled = state.queue.size - state.currentIndex > 2) { Text("残りをシャッフル") }
-            TextButton(onClick = { scope.launch { connection.cycleRepeatMode() } }) {
-                Text(
-                    when (state.repeatMode) {
-                        androidx.media3.common.Player.REPEAT_MODE_ALL -> "リピート: 全体"
-                        androidx.media3.common.Player.REPEAT_MODE_ONE -> "リピート: 1曲"
-                        else -> "リピート: オフ"
-                    },
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceEvenly) {
+            IconAction(R.drawable.ic_shuffle, "残りをシャッフル", { scope.launch { connection.shuffleUpcoming() } }, enabled = state.queue.size - state.currentIndex > 2)
+            IconAction(R.drawable.ic_skip_previous, "前の曲", { controller?.seekToPreviousMediaItem() }, enabled = state.hasPrevious)
+            FilledIconButton(onClick = { controller?.togglePlayPause() }, modifier = Modifier.size(64.dp)) {
+                Icon(
+                    painterResource(if (state.isPlaying) R.drawable.ic_pause else R.drawable.ic_play_arrow),
+                    contentDescription = if (state.isPlaying) "一時停止" else "再生",
+                    modifier = Modifier.size(LargeIconSize),
                 )
             }
+            IconAction(R.drawable.ic_skip_next, "次の曲", { controller?.seekToNextMediaItem() }, enabled = state.hasNext)
+            IconAction(
+                if (state.repeatMode == Player.REPEAT_MODE_ONE) R.drawable.ic_repeat_one else R.drawable.ic_repeat,
+                when (state.repeatMode) {
+                    Player.REPEAT_MODE_ALL -> "リピート: 全体"
+                    Player.REPEAT_MODE_ONE -> "リピート: 1曲"
+                    else -> "リピート: オフ"
+                },
+                { scope.launch { connection.cycleRepeatMode() } },
+                active = state.repeatMode != Player.REPEAT_MODE_OFF,
+            )
         }
         val like by connection.likeState.collectAsState()
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceEvenly) {
             val videoId = like.videoId
-            TextButton(
-                onClick = { if (videoId != null) scope.launch { connection.setLiked(videoId, like.status != LikeStatus.Like) } },
+            IconAction(
+                when (like.status) {
+                    LikeStatus.Like -> R.drawable.ic_favorite
+                    null -> R.drawable.ic_refresh
+                    else -> R.drawable.ic_favorite_border
+                },
+                when {
+                    like.pending -> "変更中"
+                    like.status == LikeStatus.Like -> "高く評価を外す"
+                    like.status == null -> "評価を読み直す"
+                    else -> "高く評価"
+                },
+                { if (videoId != null) scope.launch { connection.setLiked(videoId, like.status != LikeStatus.Like) } },
                 enabled = videoId != null && !like.pending,
-            ) {
-                Text(
-                    when {
-                        like.pending -> "変更中…"
-                        like.status == LikeStatus.Like -> "高く評価済み（外す）"
-                        like.status == null -> "評価を読み直す"
-                        else -> "高く評価"
-                    },
-                )
-            }
+                active = like.status == LikeStatus.Like,
+            )
+            IconAction(
+                R.drawable.ic_lyrics,
+                if (view == PlayerView.Lyrics) "歌詞を閉じる" else "歌詞",
+                { view = if (view == PlayerView.Lyrics) PlayerView.Artwork else PlayerView.Lyrics },
+                enabled = song != null,
+                active = view == PlayerView.Lyrics,
+            )
+            IconAction(
+                R.drawable.ic_music_video,
+                if (view == PlayerView.Video) "動画を閉じる" else "動画",
+                { view = if (view == PlayerView.Video) PlayerView.Artwork else PlayerView.Video },
+                enabled = song != null,
+                active = view == PlayerView.Video,
+            )
+            IconAction(R.drawable.ic_queue_music, "再生キュー（${state.queue.size}曲）", onQueue)
         }
         like.message?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
         state.error?.let { Text("エラー: $it", style = MaterialTheme.typography.bodySmall) }
-        TextButton(onClick = onQueue) { Text("再生キュー（${state.queue.size}曲）") }
     }
 }
 

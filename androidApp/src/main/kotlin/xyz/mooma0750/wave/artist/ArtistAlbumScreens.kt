@@ -1,5 +1,9 @@
 package xyz.mooma0750.wave.artist
 
+import xyz.mooma0750.wave.ui.IconTextButton
+import xyz.mooma0750.wave.ui.ButtonStyle
+import xyz.mooma0750.wave.R
+import xyz.mooma0750.wave.ui.BackButton
 import android.util.Log
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -149,7 +153,7 @@ fun ArtistScreen(
     val page = state.page
     val liked by viewModel.likedSongs.collectAsStateWithLifecycle()
     Scaffold(
-        topBar = { TopAppBar(title = { Text(page?.name ?: title, maxLines = 1, overflow = TextOverflow.Ellipsis) }, navigationIcon = { TextButton(onClick = onBack) { Text("戻る") } }) },
+        topBar = { TopAppBar(title = { Text(page?.name ?: title, maxLines = 1, overflow = TextOverflow.Ellipsis) }, navigationIcon = { BackButton(onBack) }) },
         bottomBar = bottomBar,
     ) { padding ->
         LazyColumn(Modifier.fillMaxSize().padding(padding)) {
@@ -232,7 +236,7 @@ fun AlbumScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val page = state.page
     Scaffold(
-        topBar = { TopAppBar(title = { Text(page?.title ?: title, maxLines = 1, overflow = TextOverflow.Ellipsis) }, navigationIcon = { TextButton(onClick = onBack) { Text("戻る") } }) },
+        topBar = { TopAppBar(title = { Text(page?.title ?: title, maxLines = 1, overflow = TextOverflow.Ellipsis) }, navigationIcon = { BackButton(onBack) }) },
         bottomBar = bottomBar,
     ) { padding ->
         LazyColumn(Modifier.fillMaxSize().padding(padding)) {
@@ -245,12 +249,12 @@ fun AlbumScreen(
                             Text(page.artists.joinToString(", ") { it.name }, style = MaterialTheme.typography.bodyMedium)
                             page.subtitle?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Button(onClick = { onPlay(page, 0, false) }, enabled = page.songs.isNotEmpty()) { Text("すべて再生") }
-                                TextButton(onClick = { onPlay(page, 0, true) }, enabled = page.songs.isNotEmpty()) { Text("シャッフル再生") }
+                                IconTextButton(R.drawable.ic_play_arrow, "すべて再生", { onPlay(page, 0, false) }, enabled = page.songs.isNotEmpty(), style = ButtonStyle.Filled)
+                                IconTextButton(R.drawable.ic_shuffle, "シャッフル再生", { onPlay(page, 0, true) }, enabled = page.songs.isNotEmpty())
                             }
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                TextButton(onClick = { onQueue(page, true) }, enabled = page.songs.isNotEmpty()) { Text("次に再生") }
-                                TextButton(onClick = { onQueue(page, false) }, enabled = page.songs.isNotEmpty()) { Text("キューに追加") }
+                                IconTextButton(R.drawable.ic_playlist_play, "次に再生", { onQueue(page, true) }, enabled = page.songs.isNotEmpty())
+                                IconTextButton(R.drawable.ic_playlist_add, "キューに追加", { onQueue(page, false) }, enabled = page.songs.isNotEmpty())
                             }
                             if (page.songs.isEmpty()) Text("曲がありません")
                         }
