@@ -76,7 +76,7 @@ fun HomeScreen(
         Log.i(WaveApplication.LOG_TAG, "premium=$status session=${container.session.state.value}")
     }
 
-    Scaffold(bottomBar = { MiniPlayer(container.player, songActions) }) { padding ->
+    Scaffold(bottomBar = { MiniPlayer(container.player, songActions, container.lyrics) }) { padding ->
         LazyColumn(Modifier.fillMaxSize().padding(padding)) {
             item {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

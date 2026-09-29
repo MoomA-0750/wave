@@ -30,6 +30,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -39,6 +40,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.media3.session.MediaController
 import kotlinx.coroutines.launch
+import xyz.mooma0750.wave.core.lyrics.LyricsRepository
 import xyz.mooma0750.wave.core.music.LikeStatus
 import xyz.mooma0750.wave.navigation.SongActions
 import xyz.mooma0750.wave.playback.Media3QueuePlayer
@@ -53,6 +55,7 @@ import xyz.mooma0750.wave.ui.Durations
 fun MiniPlayer(
     connection: PlayerConnection,
     actions: SongActions,
+    lyrics: LyricsRepository,
 ) {
     val (state, controller) = rememberPlayerUiState(connection)
     var showQueue by remember { mutableStateOf(false) }
@@ -87,7 +90,7 @@ fun MiniPlayer(
 
     if (showFull) {
         ModalBottomSheet(onDismissRequest = { showFull = false }, sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
-            FullPlayer(state, controller, connection, actions = actions.closing { showFull = false }, onQueue = {
+            FullPlayer(state, controller, connection, lyrics, actions = actions.closing { showFull = false }, onQueue = {
                 showFull = false
                 showQueue = true
             })
@@ -147,30 +150,33 @@ private fun FullPlayer(
     state: PlayerUiState,
     controller: MediaController?,
     connection: PlayerConnection,
+    lyrics: LyricsRepository,
     actions: SongActions,
     onQueue: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
+    val song = Media3QueuePlayer.songOf(controller?.currentMediaItem)
+    var showLyrics by rememberSaveable { mutableStateOf(false) }
     Column(
         Modifier.fillMaxWidth().padding(24.dp).navigationBarsPadding(),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        coil3.compose.AsyncImage(
-            model =
-                controller?.currentMediaItem?.let { item ->
-                    Media3QueuePlayer.songOf(item)?.thumbnailUrl?.takeIf { it.startsWith("https://") }?.let(Media3QueuePlayer::largeArtwork)
-                },
-            contentDescription = null,
-            modifier = Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(8.dp)),
-            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-        )
+        if (showLyrics && song != null) {
+            LyricsPanel(song, controller, lyrics, Modifier.fillMaxWidth().aspectRatio(1f))
+        } else {
+            coil3.compose.AsyncImage(
+                model = song?.thumbnailUrl?.takeIf { it.startsWith("https://") }?.let(Media3QueuePlayer::largeArtwork),
+                contentDescription = null,
+                modifier = Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(8.dp)),
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+            )
+        }
         Text(state.title.orEmpty(), style = MaterialTheme.typography.titleLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(state.artist.orEmpty(), style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-            Media3QueuePlayer.songOf(controller?.currentMediaItem)?.let { song ->
-                SongMenuButton(song, actions, inQueue = true)
-            }
+            song?.let { SongMenuButton(it, actions, inQueue = true) }
+            TextButton(onClick = { showLyrics = !showLyrics }, enabled = song != null) { Text(if (showLyrics) "アートワーク" else "歌詞") }
         }
         if (state.durationMs > 0) {
             Slider(

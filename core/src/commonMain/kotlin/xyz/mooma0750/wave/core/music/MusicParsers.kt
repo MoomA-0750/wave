@@ -5,6 +5,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
+import xyz.mooma0750.wave.core.lyrics.Lyrics
 
 /**
  * InnerTube の応答（JSON）からドメインモデルへの純粋な変換。
@@ -149,6 +150,28 @@ internal object MusicParsers {
 
     /** browse/edit_playlist の応答の status（`STATUS_SUCCEEDED` など）。 */
     fun editPlaylistStatus(root: JsonObject): String? = root.path("status").string()
+
+    /** next の最初の応答の、歌詞のタブの browseId（`MPLY…`）。歌詞の無い曲はタブに行き先が無いので null。 */
+    fun lyricsBrowseId(root: JsonObject): String? =
+        root
+            .path("contents", "singleColumnMusicWatchNextResultsRenderer", "tabbedRenderer", "watchNextTabbedResultsRenderer", "tabs")
+            .arrayItems()
+            .map { it.path("tabRenderer", "endpoint", "browseEndpoint") }
+            .firstOrNull { pageTypeOfBrowse(it) == "MUSIC_PAGE_TYPE_TRACK_LYRICS" }
+            .path("browseId")
+            .string()
+
+    /** 歌詞のページ（時刻なし）の本文と出典（「Source: Musixmatch」など）。本文が無ければ null。 */
+    fun plainLyrics(root: JsonObject): Lyrics.Plain? {
+        val shelf =
+            root
+                .path("contents", "sectionListRenderer", "contents")
+                .arrayItems()
+                .firstNotNullOfOrNull { it.path("musicDescriptionShelfRenderer").asObject() }
+                ?: return null
+        val text = textOf(shelf.path("description")) ?: return null
+        return Lyrics.Plain(text, textOf(shelf.path("footer")))
+    }
 
     /** playlist/create の応答の playlistId。 */
     fun createdPlaylistId(root: JsonObject): String? = root.path("playlistId").string()

@@ -4,6 +4,7 @@ import com.metrolist.innertubex.bodyAsTextLimited
 import com.metrolist.innertubex.models.YouTubeClient
 import io.ktor.client.statement.HttpResponse
 import kotlinx.serialization.json.JsonObject
+import xyz.mooma0750.wave.core.lyrics.Lyrics
 import xyz.mooma0750.wave.core.session.CallResult
 import xyz.mooma0750.wave.core.session.FailureKind
 import xyz.mooma0750.wave.core.session.ParseOutcome
@@ -101,6 +102,27 @@ class MusicRepository(
             expectedGeneration = expectedGeneration,
             block = { it.next(YouTubeClient.WEB_REMIX, videoId = videoId, playlistId = null) },
         ) { response -> parsedOrInvalid(MusicParsers.likeStatus(json(response), videoId)) }
+
+    /**
+     * 曲の歌詞（時刻なし）。next で歌詞のタブを探し、あれば browse で読む。歌詞の無い曲は Ok(null)。
+     */
+    suspend fun lyrics(videoId: String): CallResult<Lyrics.Plain?> {
+        val browseId =
+            when (
+                val tab =
+                    session.call(
+                        operation = "next",
+                        block = { it.next(YouTubeClient.WEB_REMIX, videoId = videoId, playlistId = null) },
+                    ) { response -> ParseOutcome.Parsed(MusicParsers.lyricsBrowseId(json(response))) }
+            ) {
+                is CallResult.Failed -> return tab
+                is CallResult.Ok -> tab.value ?: return CallResult.Ok(null)
+            }
+        return session.call(
+            operation = "browse",
+            block = browseOrContinue(browseId, continuation = null),
+        ) { response -> ParseOutcome.Parsed(MusicParsers.plainLyrics(json(response))) }
+    }
 
     /**
      * 高く評価する（liked = true）・評価を外す（false）。書き込みの規則は WaveSession.callWrite。

@@ -38,6 +38,8 @@ import xyz.mooma0750.wave.connect2.PairingV2Controller
 import xyz.mooma0750.wave.core.auth.AuthManager
 import xyz.mooma0750.wave.core.auth.AuthState
 import xyz.mooma0750.wave.core.auth.KeystoreCredentialStore
+import xyz.mooma0750.wave.core.lyrics.LrclibClient
+import xyz.mooma0750.wave.core.lyrics.LyricsRepository
 import xyz.mooma0750.wave.core.music.MusicRepository
 import xyz.mooma0750.wave.core.net.AuthGuardEngine
 import xyz.mooma0750.wave.core.net.createWaveHttpClient
@@ -194,6 +196,13 @@ class AppContainer(
     val mediaHttpClient = MediaHttp.create()
 
     val music = MusicRepository(session)
+
+    /** 歌詞。LRCLIB へは認証情報を持たないクライアントで、曲名・アーティスト名・アルバム名・長さだけを送る。 */
+    val lyrics =
+        LyricsRepository(
+            music,
+            LrclibClient(HttpClient(OkHttp.create { preconfigured = mediaHttpClient }), userAgent = "wave/${BuildConfig.VERSION_NAME}"),
+        )
 
     /** 自アプリの UI のコントローラーを見分けるための、プロセスごとの値（接続ヒントで渡す）。 */
     val controllerToken: String = UUID.randomUUID().toString()

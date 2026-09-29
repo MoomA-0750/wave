@@ -98,7 +98,7 @@ class MainActivity : ComponentActivity() {
                         )
                     }
                 val playerActions = remember { PlayerActions(scope, container.player) }
-                val miniPlayer: @Composable () -> Unit = { MiniPlayer(container.player, songActions) }
+                val miniPlayer: @Composable () -> Unit = { MiniPlayer(container.player, songActions, container.lyrics) }
                 LaunchedEffect(container) {
                     DebugActions.navigation.collect { stack += it }
                 }
