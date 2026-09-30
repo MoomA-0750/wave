@@ -411,6 +411,7 @@ class AppContainer(
         // 再生サービスが動いていなくても、前のアカウントで解決した URL とサムネイルを残さない
         streamCache.clear()
         videoStreamCache.clear()
+        settings.clearPlaylistOrders()
         imageCacheCleaner()
         WebViewCredentials.clear()
         Log.i(WaveApplication.LOG_TAG, "logout cleared=$cleared")

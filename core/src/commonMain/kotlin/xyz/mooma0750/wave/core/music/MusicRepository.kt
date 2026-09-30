@@ -73,16 +73,21 @@ class MusicRepository(
             if (MusicParsers.isSignInPrompt(root)) ParseOutcome.LoggedOutResponse else ParseOutcome.Parsed(MusicParsers.historyPage(root))
         }
 
-    /** プレイリストの曲。continuation を渡したら続きのページ。高く評価した曲は playlistId = LIKED_SONGS。 */
+    /**
+     * プレイリストの曲。continuation を渡したら続きのページ（並べ方は最初のページのものが続く）。高く評価した曲は playlistId = LIKED_SONGS。
+     * @param order 最初のページの並べ方。null ならサーバーが覚えている並べ方（自分のプレイリストでは、選ぶとサーバーに覚えられる）。
+     *   カスタムの降順はここでは扱わない（呼ぶ側が全部読んで逆にする）
+     */
     suspend fun playlist(
         playlistId: String,
         continuation: String? = null,
         expectedGeneration: Long? = null,
+        order: PlaylistOrder? = null,
     ): CallResult<PlaylistPage> =
         session.call(
             operation = "browse",
             expectedGeneration = expectedGeneration,
-            block = browseOrContinue("VL$playlistId", continuation),
+            block = browseOrContinue("VL$playlistId", continuation, order?.params),
         ) { response ->
             val root = json(response)
             lastRendererNames = MusicParsers.rendererNames(root)
@@ -283,10 +288,11 @@ class MusicRepository(
     private fun browseOrContinue(
         browseId: String,
         continuation: String?,
+        params: String? = null,
     ): suspend (com.metrolist.innertubex.InnerTube) -> HttpResponse =
         {
             if (continuation == null) {
-                it.browse(YouTubeClient.WEB_REMIX, browseId = browseId, setLogin = true)
+                it.browse(YouTubeClient.WEB_REMIX, browseId = browseId, params = params, setLogin = true)
             } else {
                 it.browse(YouTubeClient.WEB_REMIX, continuation = continuation, setLogin = true)
             }

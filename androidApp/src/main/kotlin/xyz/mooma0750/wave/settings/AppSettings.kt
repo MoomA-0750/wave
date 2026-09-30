@@ -1,5 +1,8 @@
 package xyz.mooma0750.wave.settings
 
+import xyz.mooma0750.wave.library.PlaylistOrderStore
+import xyz.mooma0750.wave.core.music.PlaylistOrder
+import androidx.datastore.preferences.core.stringPreferencesKey
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
@@ -33,7 +36,33 @@ class AppSettings(
         store.edit { it[HISTORY_ENABLED] = enabled }
     }
 
+    /** プレイリストごとに選んだ並べ方。選んでいなければカスタム。 */
+    val playlistOrders: PlaylistOrderStore =
+        object : PlaylistOrderStore {
+            override suspend fun get(playlistId: String): PlaylistOrder =
+                try {
+                    store.data.first()[playlistOrderKey(playlistId)]?.let(PlaylistOrder::decode)
+                } catch (_: IOException) {
+                    null
+                } ?: PlaylistOrder()
+
+            override suspend fun set(
+                playlistId: String,
+                order: PlaylistOrder,
+            ) {
+                store.edit { if (order == PlaylistOrder()) it.remove(playlistOrderKey(playlistId)) else it[playlistOrderKey(playlistId)] = order.encode() }
+            }
+        }
+
+    /** ログアウトで、前のアカウントのプレイリストの並べ方を消す。 */
+    suspend fun clearPlaylistOrders() {
+        store.edit { prefs -> prefs.asMap().keys.filter { it.name.startsWith(PLAYLIST_ORDER_PREFIX) }.forEach { prefs.remove(it) } }
+    }
+
     private companion object {
         val HISTORY_ENABLED = booleanPreferencesKey("history_enabled")
+        const val PLAYLIST_ORDER_PREFIX = "playlist_order_"
+
+        fun playlistOrderKey(playlistId: String) = stringPreferencesKey(PLAYLIST_ORDER_PREFIX + playlistId)
     }
 }

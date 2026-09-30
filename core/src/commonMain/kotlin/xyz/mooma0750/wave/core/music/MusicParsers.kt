@@ -134,7 +134,8 @@ internal object MusicParsers {
         // （実アカウントでキー名の場所だけ確認、空のプレイリストにも付いている、2026-09-17）
         val songArea: JsonElement? = appended ?: shelf
         val endConfirmed = continuation == null && songArea != null && !containsKeyLike(songArea, "continuation")
-        return PlaylistPage(title, rows.map { it.first }, continuation, rows.map { it.second }, editable, endConfirmed)
+        val sortable = findAll(root, "sortFilterSubMenuRenderer").isNotEmpty()
+        return PlaylistPage(title, rows.map { it.first }, continuation, rows.map { it.second }, editable, endConfirmed, sortable)
     }
 
     private fun containsKeyLike(

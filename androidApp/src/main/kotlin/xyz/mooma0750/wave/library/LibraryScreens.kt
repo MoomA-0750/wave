@@ -1,5 +1,12 @@
 package xyz.mooma0750.wave.library
 
+import xyz.mooma0750.wave.core.music.PlaylistSort
+import xyz.mooma0750.wave.core.music.PlaylistOrder
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.Alignment
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.foundation.layout.Box
 import xyz.mooma0750.wave.ui.IconAction
 import xyz.mooma0750.wave.ui.IconTextButton
 import xyz.mooma0750.wave.ui.ButtonStyle
@@ -125,6 +132,17 @@ fun PlaylistScreen(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                 )
             }
+            item { SortRow(state.order, state.sortable, viewModel::setOrder) }
+            // カスタムの降順は、全部読んでから逆に並べる。読んでいる途中の（逆になる前の）並びは出さない
+            if (state.order.reversedLocally && state.loadingAll) {
+                item {
+                    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        CircularProgressIndicator()
+                        Text("全部読んでから並べ替えています…", Modifier.padding(start = 12.dp))
+                    }
+                }
+                return@LazyColumn
+            }
             state.failure?.let { item { Text(failureMessage(it), Modifier.padding(16.dp)) } }
             if (!state.loading && state.failure == null && state.songs.isEmpty()) item { Text("曲がありません", Modifier.padding(16.dp)) }
             // 絞り込み中は、元の並びでの位置を持ったまま出す（再生も「外す」も元の位置に当てる）
@@ -158,6 +176,48 @@ fun PlaylistScreen(
         }
     }
 }
+
+/** 並べ方の選択と、昇順・降順の切り替え。サーバーで並べ替えられないプレイリストはカスタムだけ。 */
+@Composable
+private fun SortRow(
+    order: PlaylistOrder,
+    sortable: Boolean,
+    onChange: (PlaylistOrder) -> Unit,
+) {
+    var open by remember { mutableStateOf(false) }
+    Row(Modifier.padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box {
+            IconTextButton(R.drawable.ic_sort, sortLabel(order.sort), { open = true })
+            DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+                PlaylistSort.entries.filter { it == PlaylistSort.Custom || sortable }.forEach { sort ->
+                    DropdownMenuItem(
+                        text = { Text(sortLabel(sort), fontWeight = if (sort == order.sort) FontWeight.Bold else FontWeight.Normal) },
+                        onClick = {
+                            open = false
+                            onChange(order.copy(sort = sort))
+                        },
+                    )
+                }
+            }
+        }
+        IconAction(
+            if (order.descending) R.drawable.ic_arrow_downward else R.drawable.ic_arrow_upward,
+            if (order.descending) "降順（押すと昇順）" else "昇順（押すと降順）",
+            { onChange(order.copy(descending = !order.descending)) },
+        )
+        Text(if (order.descending) "降順" else "昇順", style = MaterialTheme.typography.bodySmall)
+    }
+}
+
+private fun sortLabel(sort: PlaylistSort): String =
+    when (sort) {
+        PlaylistSort.Custom -> "カスタム"
+        PlaylistSort.Added -> "追加した日"
+        PlaylistSort.Published -> "リリース（公開日）"
+        PlaylistSort.Title -> "曲名"
+        PlaylistSort.Artist -> "アーティスト"
+        PlaylistSort.Album -> "アルバム"
+    }
 
 /** 曲をプレイリストに追加する（仮）。追加先は自分が編集できるプレイリストだけ。 */
 @Composable

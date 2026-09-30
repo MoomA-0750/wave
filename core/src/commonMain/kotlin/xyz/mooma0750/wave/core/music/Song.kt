@@ -70,6 +70,8 @@ data class PlaylistPage(
      * 形が変わって続きを読み取れなかっただけの場合は false（重複を確かめる書き込みで「全部読んだ」と誤認しない）。
      */
     val endConfirmed: Boolean = false,
+    /** サーバーで並べ替えられる（最初のページに並べ替えのメニューがある）。 */
+    val sortable: Boolean = false,
 )
 
 /** 再生履歴の1つの区切り（「今日」「今週」など）。 */

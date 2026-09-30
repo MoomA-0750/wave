@@ -194,7 +194,7 @@ class MainActivity : ComponentActivity() {
                                     val version = if (playlist.playlistId == MusicRepository.LIKED_SONGS) likedVersion else 0
                                     PlaylistScreen(
                                         viewModel(key = "playlist-$loginGeneration-${playlist.playlistId}-$version-$playlistsVersion-${screen.initialQuery}") {
-                                            PlaylistViewModel(container.music, playlist.playlistId, playlist.title, screen.initialQuery)
+                                            PlaylistViewModel(container.music, playlist.playlistId, playlist.title, screen.initialQuery, container.settings.playlistOrders)
                                         },
                                         onPlay = { songs, index, continuation -> playerActions.playFrom(songs, index, playlist.playlistId, continuation) },
                                         onShufflePlay = { songs, continuation -> playerActions.playFrom(songs, 0, playlist.playlistId, continuation, shuffle = true) },
