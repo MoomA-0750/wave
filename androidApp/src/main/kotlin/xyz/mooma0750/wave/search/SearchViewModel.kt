@@ -4,26 +4,71 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import xyz.mooma0750.wave.WaveApplication
+import xyz.mooma0750.wave.core.music.AlbumSummary
+import xyz.mooma0750.wave.core.music.ArtistSummary
 import xyz.mooma0750.wave.core.music.MusicRepository
+import xyz.mooma0750.wave.core.music.SearchPage
+import xyz.mooma0750.wave.core.music.SearchSuggestions
 import xyz.mooma0750.wave.core.music.Song
 import xyz.mooma0750.wave.core.session.CallResult
 import xyz.mooma0750.wave.core.session.FailureKind
 
+/** 検索の結果の分け方。All は種類ごとに少しずつ並べる。 */
+enum class SearchTab { All, Songs, Albums, Artists }
+
+/** 種類ごとの結果（続きのページを持つ）。 */
+data class ResultList<T>(
+    val items: List<T> = emptyList(),
+    val continuation: String? = null,
+    val loadingMore: Boolean = false,
+    val failure: FailureKind? = null,
+)
+
 data class SearchUiState(
     val query: String = "",
-    val songs: List<Song> = emptyList(),
+    /** 今の結果を出した語。打ち込み中で query と違う間は候補を出す。 */
+    val submitted: String? = null,
+    val suggestions: SearchSuggestions? = null,
+    val tab: SearchTab = SearchTab.All,
+    val songs: ResultList<Song> = ResultList(),
+    val albums: ResultList<AlbumSummary> = ResultList(),
+    val artists: ResultList<ArtistSummary> = ResultList(),
     val loading: Boolean = false,
-    val failure: FailureKind? = null,
-    val continuation: String? = null,
-    /** 検索したが0件だった。 */
-    val empty: Boolean = false,
-)
+) {
+    /** 打ち込み中（まだ検索していない語）。 */
+    val typing: Boolean get() = query.isNotBlank() && query.trim() != submitted
+
+    /** 3種類とも失敗した。どれかが取れていれば、取れた分を出す。 */
+    val failure: FailureKind?
+        get() = if (songs.failure != null && albums.failure != null && artists.failure != null) songs.failure else null
+
+    val empty: Boolean
+        get() = submitted != null && !loading && failure == null && songs.items.isEmpty() && albums.items.isEmpty() && artists.items.isEmpty()
+
+    /** 語がアーティストの名前そのものなら、アーティストを先に出す。 */
+    val artistFirst: Boolean
+        get() = SearchOrder.artistFirst(submitted, artists.items)
+}
+
+object SearchOrder {
+    fun artistFirst(
+        query: String?,
+        artists: List<ArtistSummary>,
+    ): Boolean {
+        val first = artists.firstOrNull() ?: return false
+        return query != null && normalize(first.name) == normalize(query)
+    }
+
+    private fun normalize(text: String): String = text.trim().lowercase().filterNot { it.isWhitespace() }
+}
 
 class SearchViewModel(
     private val music: MusicRepository,
@@ -32,50 +77,120 @@ class SearchViewModel(
     private val mutableState = MutableStateFlow(SearchUiState())
     val state: StateFlow<SearchUiState> = mutableState.asStateFlow()
     private var job: Job? = null
+    private var suggestionJob: Job? = null
 
     fun onQueryChange(query: String) {
         mutableState.update { it.copy(query = query) }
+        suggestionJob?.cancel()
+        val input = query.trim()
+        if (input.isEmpty() || input == state.value.submitted) {
+            mutableState.update { it.copy(suggestions = null) }
+            return
+        }
+        suggestionJob =
+            viewModelScope.launch {
+                // 打つたびに送らない（打ち終わるのを少し待つ）
+                delay(SUGGESTION_DEBOUNCE_MS)
+                val result = music.searchSuggestions(input)
+                // 候補が来る間に語が変わっていたら捨てる（古い候補で上書きしない）
+                if (state.value.query.trim() != input) return@launch
+                when (result) {
+                    is CallResult.Ok -> mutableState.update { it.copy(suggestions = result.value) }
+                    // 候補が取れなくても検索はできるので、前の候補を消すだけにする
+                    is CallResult.Failed -> mutableState.update { it.copy(suggestions = null) }
+                }
+            }
     }
 
     fun search() {
         val query = state.value.query.trim().takeIf { it.isNotEmpty() } ?: return
         history.add(SearchHistoryEntry.Query(query))
         job?.cancel()
-        mutableState.update { it.copy(songs = emptyList(), loading = true, failure = null, continuation = null, empty = false) }
+        suggestionJob?.cancel()
+        mutableState.update {
+            it.copy(
+                query = query,
+                submitted = query,
+                suggestions = null,
+                tab = SearchTab.All,
+                songs = ResultList(),
+                albums = ResultList(),
+                artists = ResultList(),
+                loading = true,
+            )
+        }
         job =
             viewModelScope.launch {
-                when (val result = music.searchSongs(query)) {
-                    is CallResult.Ok -> {
-                        // 件数だけを記録する（ログイン中の応答の形が匿名と違って0件になっていないかの確認用）
-                        Log.i(WaveApplication.LOG_TAG, "search songs=${result.value.songs.size} continuation=${result.value.continuation != null}")
-                        mutableState.update { it.copy(songs = result.value.songs, continuation = result.value.continuation, loading = false, empty = result.value.songs.isEmpty()) }
-                    }
-                    is CallResult.Failed -> mutableState.update { it.copy(loading = false, failure = result.kind) }
-                }
+                val songs = async { music.searchSongs(query) }
+                val albums = async { music.searchAlbums(query) }
+                val artists = async { music.searchArtists(query) }
+                val songResult = songs.await().toList { ResultList(it.songs, it.continuation) }
+                val albumResult = albums.await().toList { it.asResultList() }
+                val artistResult = artists.await().toList { it.asResultList() }
+                // 件数だけを記録する（ログイン中の応答の形が匿名と違って0件になっていないかの確認用）
+                Log.i(
+                    WaveApplication.LOG_TAG,
+                    "search songs=${songResult.items.size} albums=${albumResult.items.size} artists=${artistResult.items.size} " +
+                        "failed=${listOfNotNull(songResult.failure, albumResult.failure, artistResult.failure).size}",
+                )
+                mutableState.update { it.copy(songs = songResult, albums = albumResult, artists = artistResult, loading = false) }
             }
     }
 
-    /** 履歴の語をそのまま探す。 */
+    /** 履歴や候補の語をそのまま探す。 */
     fun searchFor(query: String) {
         mutableState.update { it.copy(query = query) }
         search()
     }
 
-    fun loadMore() {
+    fun selectTab(tab: SearchTab) {
+        mutableState.update { it.copy(tab = tab) }
+    }
+
+    fun loadMore(tab: SearchTab) {
         val current = state.value
-        val continuation = current.continuation ?: return
-        if (current.loading) return
-        mutableState.update { it.copy(loading = true) }
-        job =
-            viewModelScope.launch {
-                when (val result = music.searchSongs(current.query, continuation)) {
-                    is CallResult.Ok ->
-                        mutableState.update { state ->
-                            val known = state.songs.map { it.videoId }.toSet()
-                            state.copy(songs = state.songs + result.value.songs.filter { it.videoId !in known }, continuation = result.value.continuation, loading = false)
-                        }
-                    is CallResult.Failed -> mutableState.update { it.copy(loading = false, continuation = null) }
+        val query = current.submitted ?: return
+        when (tab) {
+            SearchTab.Songs ->
+                more(current.songs, { s, list -> s.copy(songs = list) }) { token ->
+                    music.searchSongs(query, token).toList { ResultList(it.songs, it.continuation) }
                 }
+            SearchTab.Albums ->
+                more(current.albums, { s, list -> s.copy(albums = list) }) { token -> music.searchAlbums(query, token).toList { it.asResultList() } }
+            SearchTab.Artists ->
+                more(current.artists, { s, list -> s.copy(artists = list) }) { token -> music.searchArtists(query, token).toList { it.asResultList() } }
+            SearchTab.All -> Unit
+        }
+    }
+
+    private fun <T> more(
+        list: ResultList<T>,
+        put: (SearchUiState, ResultList<T>) -> SearchUiState,
+        fetch: suspend (String) -> ResultList<T>,
+    ) {
+        val token = list.continuation ?: return
+        if (list.loadingMore) return
+        mutableState.update { put(it, list.copy(loadingMore = true)) }
+        val submitted = state.value.submitted
+        viewModelScope.launch {
+            val next = fetch(token)
+            mutableState.update { state ->
+                if (state.submitted != submitted) return@update state
+                // 続きが取れなければ、それ以上は読まない（取れた分は残す）
+                put(state, ResultList(list.items + next.items.filter { it !in list.items }, next.continuation, loadingMore = false))
             }
+        }
+    }
+
+    private fun <T> SearchPage<T>.asResultList(): ResultList<T> = ResultList(items, continuation)
+
+    private inline fun <V, T> CallResult<V>.toList(ok: (V) -> ResultList<T>): ResultList<T> =
+        when (this) {
+            is CallResult.Ok -> ok(value)
+            is CallResult.Failed -> ResultList(failure = kind)
+        }
+
+    private companion object {
+        const val SUGGESTION_DEBOUNCE_MS = 250L
     }
 }

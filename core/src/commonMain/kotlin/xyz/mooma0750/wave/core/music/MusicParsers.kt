@@ -27,6 +27,77 @@ internal object MusicParsers {
         return SongPage(songs, nextContinuation(shelf))
     }
 
+    /** アルバムに絞った検索の最初のページと続きのページ。 */
+    fun searchAlbums(root: JsonObject): SearchPage<AlbumSummary> = searchPage(root, ::albumRow)
+
+    /** アーティストに絞った検索の最初のページと続きのページ。 */
+    fun searchArtists(root: JsonObject): SearchPage<ArtistSummary> = searchPage(root, ::artistRow)
+
+    private fun <T> searchPage(
+        root: JsonObject,
+        row: (JsonObject) -> T?,
+    ): SearchPage<T> {
+        val shelf = searchShelf(root) ?: return SearchPage(emptyList(), null)
+        val items = shelf.path("contents").arrayItems().mapNotNull { it.path("musicResponsiveListItemRenderer").asObject()?.let(row) }
+        return SearchPage(items, nextContinuation(shelf))
+    }
+
+    private fun searchShelf(root: JsonObject): JsonObject? =
+        root.path("continuationContents", "musicShelfContinuation").asObject()
+            ?: root
+                .path("contents", "tabbedSearchResultsRenderer", "tabs")
+                .firstArrayItem()
+                .path("tabRenderer", "content", "sectionListRenderer", "contents")
+                .arrayItems()
+                .firstNotNullOfOrNull { it.path("musicShelfRenderer").asObject() }
+
+    /**
+     * 打ち込み中の候補（music/get_search_suggestions）。1つめの区切りに語の候補、2つめに曲・アルバム・アーティストの行が来る。
+     * 行の種類はページ種別と videoId で分ける（見出しや「曲」などの文字は言語に依るので使わない）。
+     */
+    fun searchSuggestions(root: JsonObject): SearchSuggestions {
+        val contents = root.path("contents").arrayItems().flatMap { it.path("searchSuggestionsSectionRenderer", "contents").arrayItems() }
+        val queries =
+            contents.mapNotNull { item ->
+                val suggestion = item.path("searchSuggestionRenderer").asObject() ?: item.path("historySuggestionRenderer").asObject() ?: return@mapNotNull null
+                suggestion.path("navigationEndpoint", "searchEndpoint", "query").string() ?: textOf(suggestion.path("suggestion"))
+            }
+        val rows = contents.mapNotNull { it.path("musicResponsiveListItemRenderer").asObject() }
+        return SearchSuggestions(
+            queries = queries.distinct(),
+            songs = rows.filter { pageTypeOfBrowse(it.path("navigationEndpoint", "browseEndpoint")) == null }.mapNotNull(::responsiveListItemSong),
+            albums = rows.mapNotNull(::albumRow),
+            artists = rows.mapNotNull(::artistRow),
+        )
+    }
+
+    private fun albumRow(item: JsonObject): AlbumSummary? {
+        val browse = item.path("navigationEndpoint", "browseEndpoint")
+        if (pageTypeOfBrowse(browse) != "MUSIC_PAGE_TYPE_ALBUM") return null
+        val columns = flexColumnRuns(item)
+        return AlbumSummary(
+            browseId = browse.path("browseId").string() ?: return null,
+            title = runsText(columns.getOrNull(0).orEmpty()) ?: return null,
+            subtitle = runsText(columns.drop(1).flatten()),
+            thumbnailUrl = lastThumbnailUrl(item.path("thumbnail")),
+        )
+    }
+
+    private fun artistRow(item: JsonObject): ArtistSummary? {
+        val browse = item.path("navigationEndpoint", "browseEndpoint")
+        if (pageTypeOfBrowse(browse) != ARTIST_PAGE) return null
+        val columns = flexColumnRuns(item)
+        return ArtistSummary(
+            browseId = browse.path("browseId").string() ?: return null,
+            name = runsText(columns.getOrNull(0).orEmpty()) ?: return null,
+            subtitle = runsText(columns.drop(1).flatten()),
+            thumbnailUrl = lastThumbnailUrl(item.path("thumbnail")),
+        )
+    }
+
+    private fun flexColumnRuns(item: JsonObject): List<List<JsonObject>> =
+        item.path("flexColumns").arrayItems().map { it.path("musicResponsiveListItemFlexColumnRenderer", "text", "runs").arrayItems() }
+
     /**
      * 再生履歴（browse FEmusic_history）。「今日」「今週」のように区切られた棚が並ぶので、棚ごとに見出しと曲を取る。
      * 続きのページは continuationContents に来る。

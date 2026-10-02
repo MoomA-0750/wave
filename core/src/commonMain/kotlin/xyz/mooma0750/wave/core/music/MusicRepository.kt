@@ -1,5 +1,6 @@
 package xyz.mooma0750.wave.core.music
 
+import com.metrolist.innertubex.InnerTube
 import com.metrolist.innertubex.bodyAsTextLimited
 import com.metrolist.innertubex.models.YouTubeClient
 import io.ktor.client.statement.HttpResponse
@@ -30,6 +31,44 @@ class MusicRepository(
                 }
             },
         ) { response -> ParseOutcome.Parsed(MusicParsers.searchSongs(json(response))) }
+
+    /** アルバムに絞った検索。continuation を渡したら続きのページ。 */
+    suspend fun searchAlbums(
+        query: String,
+        continuation: String? = null,
+    ): CallResult<SearchPage<AlbumSummary>> =
+        session.call(operation = "search", block = searchOrContinue(query, ALBUMS_FILTER, continuation)) { response ->
+            ParseOutcome.Parsed(MusicParsers.searchAlbums(json(response)))
+        }
+
+    /** アーティストに絞った検索。continuation を渡したら続きのページ。 */
+    suspend fun searchArtists(
+        query: String,
+        continuation: String? = null,
+    ): CallResult<SearchPage<ArtistSummary>> =
+        session.call(operation = "search", block = searchOrContinue(query, ARTISTS_FILTER, continuation)) { response ->
+            ParseOutcome.Parsed(MusicParsers.searchArtists(json(response)))
+        }
+
+    /** 打ち込み中の候補。 */
+    suspend fun searchSuggestions(input: String): CallResult<SearchSuggestions> =
+        session.call(
+            operation = "get_search_suggestions",
+            block = { it.getSearchSuggestions(YouTubeClient.WEB_REMIX, input) },
+        ) { response -> ParseOutcome.Parsed(MusicParsers.searchSuggestions(json(response))) }
+
+    private fun searchOrContinue(
+        query: String,
+        params: String,
+        continuation: String?,
+    ): suspend (InnerTube) -> HttpResponse =
+        {
+            if (continuation == null) {
+                it.search(YouTubeClient.WEB_REMIX, query = query, params = params)
+            } else {
+                it.search(YouTubeClient.WEB_REMIX, continuation = continuation)
+            }
+        }
 
     /**
      * 次に流れる曲（ラジオ）。最初は videoId と playlistId（`RDAMVM<videoId>`）、続きは continuation と playlistId で取る。
@@ -307,6 +346,8 @@ class MusicRepository(
     companion object {
         /** 検索を曲に絞る params。 */
         const val SONGS_FILTER = "EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D"
+        const val ALBUMS_FILTER = "EgWKAQIYAWoKEAkQBRAKEAMQBA%3D%3D"
+        const val ARTISTS_FILTER = "EgWKAQIgAWoKEAkQBRAKEAMQBA%3D%3D"
 
         const val LIBRARY_PLAYLISTS = "FEmusic_liked_playlists"
         const val HISTORY = "FEmusic_history"

@@ -162,3 +162,28 @@ data class AlbumShelf(
     val title: String,
     val albums: List<AlbumSummary>,
 )
+
+/** アーティストの行（検索の結果）。 */
+data class ArtistSummary(
+    /** `UC…` */
+    val browseId: String,
+    val name: String,
+    val subtitle: String?,
+    val thumbnailUrl: String?,
+)
+
+/** アルバム・アーティストの検索の1ページ。 */
+data class SearchPage<T>(
+    val items: List<T>,
+    val continuation: String?,
+)
+
+/** 打ち込み中の候補。語の候補と、そのまま開ける曲・アルバム・アーティスト。 */
+data class SearchSuggestions(
+    val queries: List<String>,
+    val songs: List<Song>,
+    val albums: List<AlbumSummary>,
+    val artists: List<ArtistSummary>,
+) {
+    val isEmpty: Boolean get() = queries.isEmpty() && songs.isEmpty() && albums.isEmpty() && artists.isEmpty()
+}
