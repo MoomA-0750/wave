@@ -40,6 +40,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -697,8 +698,11 @@ class WaveSessionTest {
         runBlocking {
             val session = loggedInSession()
             val staleId = session.loginGenerationId()
-            credentials.value = assertNotNull(Credentials.fromLogin("SAPISID=other-synthetic", "v2", "s2", 2))
-            awaitState(session) { session.loginGenerationId() != staleId }
+            val next = assertNotNull(Credentials.fromLogin("SAPISID=other-synthetic", "v2", "s2", 2))
+            credentials.value = next
+            // 状態は Active のまま替わらない（StateFlow は流し直さない）ので、状態ではなく反映を待つ
+            withTimeout(5_000) { session.appliedObtainedAtEpochMs.first { it == next.obtainedAtEpochMs } }
+            assertNotEquals(staleId, session.loginGenerationId())
 
             assertFalse(session.updateStateFor(staleId) { SessionState.Expired(ExpiredReason.Unauthenticated) })
             assertEquals(SessionState.Active, session.state.value)
