@@ -35,6 +35,7 @@ import xyz.mooma0750.wave.core.music.MusicRepository
 import xyz.mooma0750.wave.core.music.PlaylistSummary
 import xyz.mooma0750.wave.core.music.Song
 import xyz.mooma0750.wave.debug.DebugActions
+import xyz.mooma0750.wave.home.HomeFeedViewModel
 import xyz.mooma0750.wave.home.HomeScreen
 import xyz.mooma0750.wave.library.AddToPlaylistDialog
 import xyz.mooma0750.wave.library.HistoryScreen
@@ -151,6 +152,8 @@ class MainActivity : ComponentActivity() {
                                         onOpenPlaylist = { stack += Screen.Playlist(it) },
                                         onOpenHistory = { stack += Screen.History },
                                         songActions = songActions,
+                                        feed = viewModel(key = "home-feed-$loginGeneration") { HomeFeedViewModel(container.music) },
+                                        onPlaySong = playerActions::playSong,
                                     )
                                 }
                                 Screen.Connect ->

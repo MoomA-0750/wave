@@ -1,5 +1,7 @@
 package xyz.mooma0750.wave.search
 
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.json.Json
 import org.junit.Test
 import kotlin.test.assertEquals
 
@@ -57,5 +59,37 @@ class SearchHistoryTest {
     fun removingTakesOutJustThatEntry() {
         val entries = listOf(query("a"), query("b"))
         assertEquals(listOf(query("a")), SearchHistory.remove(entries, query("b")))
+    }
+
+    @Test
+    fun reAddingWithoutAnImageKeepsTheEarlierImage() {
+        val rich = SearchHistoryEntry.Artist("YOASOBI", "UC1", "Artist", "https://img/a")
+        // 曲のメニューから同じアーティストを開くと、画像の無い記録が来る
+        val entries = SearchHistory.add(listOf(query("x"), rich), SearchHistoryEntry.Artist("YOASOBI", "UC1"))
+        assertEquals(listOf(rich, query("x")), entries)
+        val song = SearchHistoryEntry.Song("v1", "夜に駆ける", "YOASOBI", "https://img/s")
+        assertEquals(listOf(song), SearchHistory.add(listOf(song), SearchHistoryEntry.Song("v1", "夜に駆ける")))
+    }
+
+    @Test
+    fun songsAreKeptByVideoId() {
+        var entries = SearchHistory.add(emptyList(), SearchHistoryEntry.Song("v1", "a"))
+        entries = SearchHistory.add(entries, SearchHistoryEntry.Song("v2", "b"))
+        entries = SearchHistory.add(entries, SearchHistoryEntry.Song("v1", "a"))
+        assertEquals(listOf("v1", "v2"), entries.map { (it as SearchHistoryEntry.Song).videoId })
+        assertEquals(entries, SearchHistory.add(entries, SearchHistoryEntry.Song("", "c")))
+    }
+
+    @Test
+    fun savedDataFromTheEarlierVersionStillLoads() {
+        val json = Json { ignoreUnknownKeys = true }
+        val serializer = ListSerializer(SearchHistoryEntry.serializer())
+        val old = """[{"type":"query","text":"a"},{"type":"artist","name":"n","browseId":"UC1"},{"type":"album","title":"t","browseId":"MPREb_1"}]"""
+        assertEquals(
+            listOf(query("a"), SearchHistoryEntry.Artist("n", "UC1"), SearchHistoryEntry.Album("t", "MPREb_1")),
+            json.decodeFromString(serializer, old),
+        )
+        val now = listOf(SearchHistoryEntry.Song("v1", "s", "a", "https://img"), SearchHistoryEntry.Artist("n", "UC1", null, "https://img2"))
+        assertEquals(now, json.decodeFromString(serializer, json.encodeToString(serializer, now)))
     }
 }

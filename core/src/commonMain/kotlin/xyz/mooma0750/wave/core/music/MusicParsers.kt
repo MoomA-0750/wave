@@ -99,6 +99,62 @@ internal object MusicParsers {
         item.path("flexColumns").arrayItems().map { it.path("musicResponsiveListItemFlexColumnRenderer", "text", "runs").arrayItems() }
 
     /**
+     * ホーム（browse FEmusic_home）の最初のページと続きのページ。棚（musicCarouselShelfRenderer）ごとに、読める項目だけを取る。
+     * 項目の種類はページ種別と watchEndpoint で分ける。
+     */
+    fun homePage(root: JsonObject): HomePage {
+        val list =
+            root.path("continuationContents", "sectionListContinuation").asObject()
+                ?: root
+                    .path("contents", "singleColumnBrowseResultsRenderer", "tabs")
+                    .firstArrayItem()
+                    .path("tabRenderer", "content", "sectionListRenderer")
+                    .asObject()
+                ?: return HomePage(emptyList(), null)
+        val shelves =
+            list.path("contents").arrayItems().mapNotNull { section ->
+                val carousel = section.path("musicCarouselShelfRenderer").asObject() ?: return@mapNotNull null
+                val header = carousel.path("header", "musicCarouselShelfBasicHeaderRenderer")
+                val items = carousel.path("contents").arrayItems().mapNotNull(::homeItem)
+                if (items.isEmpty()) return@mapNotNull null
+                HomeShelf(textOf(header.path("title")).orEmpty(), textOf(header.path("strapline")), items)
+            }
+        val continuation = list.path("continuations").arrayItems().firstNotNullOfOrNull { it.path("nextContinuationData", "continuation").string() }
+        return HomePage(shelves, continuation)
+    }
+
+    /** 新作のアルバム・シングル（browse FEmusic_new_releases_albums の格子）。 */
+    fun newReleases(root: JsonObject): List<AlbumSummary> = gridItems(root).mapNotNull { (it as? HomeItem.AlbumItem)?.album }
+
+    /** 格子（gridRenderer）に並ぶカード。ライブラリの「最近のアクティビティ」もこの形。 */
+    fun gridItems(root: JsonObject): List<HomeItem> = findAll(root, "gridRenderer").flatMap { it.path("items").arrayItems() }.mapNotNull(::homeItem)
+
+    private fun homeItem(card: JsonObject): HomeItem? {
+        card.path("musicResponsiveListItemRenderer").asObject()?.let { row ->
+            return albumRow(row)?.let(HomeItem::AlbumItem)
+                ?: artistRow(row)?.let(HomeItem::ArtistItem)
+                ?: responsiveListItemSong(row)?.let(HomeItem::SongItem)
+        }
+        val item = card.path("musicTwoRowItemRenderer").asObject() ?: return null
+        val title = textOf(item.path("title")) ?: return null
+        val subtitleRuns = item.path("subtitle", "runs").arrayItems()
+        val subtitle = runsText(subtitleRuns)
+        val thumbnail = lastThumbnailUrl(item.path("thumbnailRenderer"))
+        val endpoint = item.path("navigationEndpoint")
+        endpoint.path("watchEndpoint", "videoId").string()?.let { videoId ->
+            return HomeItem.SongItem(Song(videoId, title, artistsOf(subtitleRuns), albumOf(subtitleRuns), null, thumbnail))
+        }
+        val browse = endpoint.path("browseEndpoint")
+        val browseId = browse.path("browseId").string() ?: return null
+        return when (pageTypeOfBrowse(browse)) {
+            "MUSIC_PAGE_TYPE_ALBUM" -> HomeItem.AlbumItem(AlbumSummary(browseId, title, subtitle, thumbnail))
+            ARTIST_PAGE -> HomeItem.ArtistItem(ArtistSummary(browseId, title, subtitle, thumbnail))
+            "MUSIC_PAGE_TYPE_PLAYLIST" -> HomeItem.PlaylistItem(PlaylistSummary(browseId.removePrefix("VL"), title, subtitle, thumbnail))
+            else -> null
+        }
+    }
+
+    /**
      * 再生履歴（browse FEmusic_history）。「今日」「今週」のように区切られた棚が並ぶので、棚ごとに見出しと曲を取る。
      * 続きのページは continuationContents に来る。
      */

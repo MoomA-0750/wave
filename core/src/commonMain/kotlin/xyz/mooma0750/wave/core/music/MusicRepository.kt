@@ -32,6 +32,28 @@ class MusicRepository(
             },
         ) { response -> ParseOutcome.Parsed(MusicParsers.searchSongs(json(response))) }
 
+    /** ホームのおすすめの棚。continuation を渡したら続きの棚。 */
+    suspend fun home(continuation: String? = null): CallResult<HomePage> =
+        session.call(operation = "browse", block = browseOrContinue(HOME, continuation)) { response ->
+            val root = json(response)
+            lastRendererNames = MusicParsers.rendererNames(root)
+            ParseOutcome.Parsed(MusicParsers.homePage(root))
+        }
+
+    /** 最近再生したアルバム・プレイリスト・アーティスト（ライブラリの最近のアクティビティ）。ログイン必須。 */
+    suspend fun recentActivity(): CallResult<List<HomeItem>> =
+        session.call(operation = "browse", block = { it.browse(YouTubeClient.WEB_REMIX, browseId = LIBRARY_LANDING, setLogin = true) }) { response ->
+            val root = json(response)
+            lastRendererNames = MusicParsers.rendererNames(root)
+            if (MusicParsers.isSignInPrompt(root)) ParseOutcome.LoggedOutResponse else ParseOutcome.Parsed(MusicParsers.gridItems(root))
+        }
+
+    /** 新作のアルバム・シングル。 */
+    suspend fun newReleases(): CallResult<List<AlbumSummary>> =
+        session.call(operation = "browse", block = { it.browse(YouTubeClient.WEB_REMIX, browseId = NEW_RELEASES, setLogin = true) }) { response ->
+            ParseOutcome.Parsed(MusicParsers.newReleases(json(response)))
+        }
+
     /** アルバムに絞った検索。continuation を渡したら続きのページ。 */
     suspend fun searchAlbums(
         query: String,
@@ -351,6 +373,9 @@ class MusicRepository(
 
         const val LIBRARY_PLAYLISTS = "FEmusic_liked_playlists"
         const val HISTORY = "FEmusic_history"
+        const val HOME = "FEmusic_home"
+        const val LIBRARY_LANDING = "FEmusic_library_landing"
+        const val NEW_RELEASES = "FEmusic_new_releases_albums"
         const val LIKED_SONGS = "LM"
 
         private const val MAX_BROWSE_BYTES = 8 * 1024 * 1024

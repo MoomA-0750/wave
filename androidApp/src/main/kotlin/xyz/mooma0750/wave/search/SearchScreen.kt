@@ -3,7 +3,9 @@ package xyz.mooma0750.wave.search
 import xyz.mooma0750.wave.ui.IconAction
 import xyz.mooma0750.wave.R
 import xyz.mooma0750.wave.ui.BackButton
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
@@ -89,21 +91,44 @@ fun SearchScreen(
                         viewModel.search()
                     }),
             )
-            // 検索欄が空のときは、前の検索の結果ではなく、最近の検索（語と、そこから開いたアーティスト・アルバム）を出す（Spotify と同じ）
+            // 検索から再生した曲・開いたアーティスト・アルバムは、画像と補足の行も付けて履歴に残す（Spotify と同じ）
+            val playAndRemember = { song: Song ->
+                history.add(SearchHistoryEntry.Song(song.videoId, song.title, song.artists.joinToString(", ") { it.name }.ifEmpty { null }, song.thumbnailUrl))
+                onSongClick(song)
+            }
+            val opener =
+                Opener(
+                    artist = { artist ->
+                        history.add(SearchHistoryEntry.Artist(artist.name, artist.browseId, artist.subtitle, artist.thumbnailUrl))
+                        actions.openArtist(ArtistRef(artist.name, artist.browseId))
+                    },
+                    album = { album ->
+                        history.add(SearchHistoryEntry.Album(album.title, album.browseId, album.subtitle, album.thumbnailUrl))
+                        actions.openAlbum(AlbumRef(album.title, album.browseId))
+                    },
+                )
+            // 検索欄が空のときは、前の検索の結果ではなく、最近の検索を出す（Spotify と同じ）
             when {
-                state.query.isBlank() -> HistoryList(historyEntries, history, onQuery = { keyboard?.hide(); viewModel.searchFor(it) }, actions)
-                state.typing -> SuggestionList(state.suggestions, onQuery = { keyboard?.hide(); viewModel.searchFor(it) }, onSongClick, actions)
-                else -> Results(state, viewModel, onSongClick, actions)
+                state.query.isBlank() -> HistoryList(historyEntries, history, onQuery = { keyboard?.hide(); viewModel.searchFor(it) }, onSongClick, actions)
+                state.typing -> SuggestionList(state.suggestions, onQuery = { keyboard?.hide(); viewModel.searchFor(it) }, playAndRemember, opener, actions)
+                else -> Results(state, viewModel, playAndRemember, opener, actions)
             }
         }
     }
 }
+
+/** 検索の結果からアーティスト・アルバムを開く（履歴に残してから開く）。 */
+private class Opener(
+    val artist: (ArtistSummary) -> Unit,
+    val album: (AlbumSummary) -> Unit,
+)
 
 @Composable
 private fun HistoryList(
     entries: List<SearchHistoryEntry>,
     history: SearchHistoryStore,
     onQuery: (String) -> Unit,
+    onSongClick: (Song) -> Unit,
     actions: SongActions,
 ) {
     LazyColumn(Modifier.fillMaxSize()) {
@@ -113,7 +138,7 @@ private fun HistoryList(
                 Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("最近の検索", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                Text("最近の検索", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
                 TextButton(onClick = { history.clear() }) { Text("すべて消す") }
             }
         }
@@ -125,6 +150,11 @@ private fun HistoryList(
                         is SearchHistoryEntry.Query -> onQuery(entry.text)
                         is SearchHistoryEntry.Artist -> actions.openArtist(ArtistRef(entry.name, entry.browseId))
                         is SearchHistoryEntry.Album -> actions.openAlbum(AlbumRef(entry.title, entry.browseId))
+                        is SearchHistoryEntry.Song -> {
+                            // 押した曲を履歴の先頭に上げてから再生する
+                            history.add(entry)
+                            onSongClick(Song(entry.videoId, entry.title, listOfNotNull(entry.subtitle?.let { ArtistRef(it, null) }), null, null, entry.thumbnailUrl))
+                        }
                     }
                 },
                 onRemove = { history.remove(entry) },
@@ -139,6 +169,7 @@ private fun SuggestionList(
     suggestions: SearchSuggestions?,
     onQuery: (String) -> Unit,
     onSongClick: (Song) -> Unit,
+    opener: Opener,
     actions: SongActions,
 ) {
     LazyColumn(Modifier.fillMaxSize()) {
@@ -153,8 +184,8 @@ private fun SuggestionList(
                 Text(query, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
-        items(suggestions.artists, key = { "ar-${it.browseId}" }) { artist -> ArtistRow(artist) { actions.openArtist(ArtistRef(artist.name, artist.browseId)) } }
-        items(suggestions.albums, key = { "al-${it.browseId}" }) { album -> AlbumRow(album) { actions.openAlbum(AlbumRef(album.title, album.browseId)) } }
+        items(suggestions.artists, key = { "ar-${it.browseId}" }) { artist -> ArtistRow(artist) { opener.artist(artist) } }
+        items(suggestions.albums, key = { "al-${it.browseId}" }) { album -> AlbumRow(album) { opener.album(album) } }
         items(suggestions.songs, key = { "s-${it.videoId}" }) { song ->
             SongRow(song, onClick = { onSongClick(song) }) { SongMenuButton(song, actions) }
         }
@@ -167,6 +198,7 @@ private fun Results(
     state: SearchUiState,
     viewModel: SearchViewModel,
     onSongClick: (Song) -> Unit,
+    opener: Opener,
     actions: SongActions,
 ) {
     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -178,8 +210,8 @@ private fun Results(
         state.failure != null -> Text(failureMessage(state.failure), Modifier.padding(16.dp))
         state.empty -> Text("見つかりませんでした", Modifier.padding(16.dp))
     }
-    val openArtist = { artist: ArtistSummary -> actions.openArtist(ArtistRef(artist.name, artist.browseId)) }
-    val openAlbum = { album: AlbumSummary -> actions.openAlbum(AlbumRef(album.title, album.browseId)) }
+    val openArtist = opener.artist
+    val openAlbum = opener.album
     val songRow: @Composable (Song) -> Unit = { song -> SongRow(song, onClick = { onSongClick(song) }) { SongMenuButton(song, actions) } }
     LazyColumn(Modifier.fillMaxSize()) {
         when (state.tab) {
@@ -334,28 +366,46 @@ private fun entryKey(entry: SearchHistoryEntry): String =
         is SearchHistoryEntry.Query -> "q-${entry.text}"
         is SearchHistoryEntry.Artist -> "ar-${entry.browseId}"
         is SearchHistoryEntry.Album -> "al-${entry.browseId}"
+        is SearchHistoryEntry.Song -> "s-${entry.videoId}"
     }
 
-/** 履歴の1行。語・アーティスト・アルバムの区別が分かるようにする。 */
+/** 履歴の1行。画像（アーティストは丸、語は検索のアイコン）と、種類の分かる補足の行を出す。 */
 @Composable
 private fun HistoryRow(
     entry: SearchHistoryEntry,
     onClick: () -> Unit,
     onRemove: () -> Unit,
 ) {
-    val (label, kind) =
+    val (label, detail) =
         when (entry) {
-            is SearchHistoryEntry.Query -> entry.text to "検索した語"
+            is SearchHistoryEntry.Query -> entry.text to null
             is SearchHistoryEntry.Artist -> entry.name to "アーティスト"
-            is SearchHistoryEntry.Album -> entry.title to "アルバム"
+            is SearchHistoryEntry.Album -> entry.title to listOfNotNull("アルバム", entry.subtitle).joinToString(" • ")
+            is SearchHistoryEntry.Song -> entry.title to listOfNotNull("曲", entry.subtitle).joinToString(" • ")
         }
     Row(
         Modifier.fillMaxWidth().clickable(onClick = onClick).padding(start = 16.dp, top = 8.dp, bottom = 8.dp, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        val shape = if (entry is SearchHistoryEntry.Artist) CircleShape else RoundedCornerShape(4.dp)
+        Box(Modifier.size(56.dp).clip(shape).background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) {
+            if (entry.thumbnailUrl != null) {
+                coil3.compose.AsyncImage(model = entry.thumbnailUrl, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+            } else {
+                val icon =
+                    when (entry) {
+                        is SearchHistoryEntry.Query -> R.drawable.ic_search
+                        is SearchHistoryEntry.Artist -> R.drawable.ic_person
+                        is SearchHistoryEntry.Album -> R.drawable.ic_album
+                        is SearchHistoryEntry.Song -> R.drawable.ic_music_note
+                    }
+                Icon(painterResource(icon), contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(kind, style = MaterialTheme.typography.bodySmall)
+            Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyLarge)
+            detail?.let { Text(it, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
         IconAction(R.drawable.ic_close, "消す", onRemove)
     }

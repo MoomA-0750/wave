@@ -31,6 +31,7 @@ import kotlinx.coroutines.launch
 import xyz.mooma0750.wave.AppContainer
 import xyz.mooma0750.wave.WaveApplication
 import xyz.mooma0750.wave.core.music.PlaylistSummary
+import xyz.mooma0750.wave.core.music.Song
 import xyz.mooma0750.wave.core.session.AccountResult
 import xyz.mooma0750.wave.core.session.CallResult
 import xyz.mooma0750.wave.core.session.PremiumStatus
@@ -53,7 +54,10 @@ fun HomeScreen(
     onOpenPlaylist: (PlaylistSummary) -> Unit,
     onOpenHistory: () -> Unit,
     songActions: SongActions,
+    feed: HomeFeedViewModel,
+    onPlaySong: (Song) -> Unit,
 ) {
+    val feedState by feed.state.collectAsStateWithLifecycle()
     val sessionState by container.session.state.collectAsStateWithLifecycle()
     var account by remember(obtainedAtEpochMs) { mutableStateOf<AccountResult?>(null) }
     var premium by remember(obtainedAtEpochMs) { mutableStateOf<PremiumStatus?>(null) }
@@ -127,6 +131,7 @@ fun HomeScreen(
                     }
                 }
             }
+            homeFeedItems(feedState, feed::refresh, feed::loadMore, onPlaySong, onOpenPlaylist, songActions)
             libraryItems(library, onOpenPlaylist, onOpenHistory)
             if (container.isDebuggable) {
                 item {
