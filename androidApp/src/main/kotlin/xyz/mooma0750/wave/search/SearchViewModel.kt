@@ -67,7 +67,12 @@ object SearchOrder {
         return query != null && normalize(first.name) == normalize(query)
     }
 
-    private fun normalize(text: String): String = text.trim().lowercase().filterNot { it.isWhitespace() }
+    /** 全角・半角（日本語の入力で打った「ＹＯＡＳＯＢＩ」）、大文字・小文字、空白の違いを無視する。 */
+    private fun normalize(text: String): String =
+        java.text.Normalizer
+            .normalize(text, java.text.Normalizer.Form.NFKC)
+            .lowercase()
+            .filterNot { it.isWhitespace() }
 }
 
 class SearchViewModel(

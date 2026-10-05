@@ -5,6 +5,8 @@ import xyz.mooma0750.wave.R
 import androidx.media3.common.Player
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
@@ -193,13 +195,17 @@ fun NowPlayingScreen(
     val art by rememberArtworkColor(song?.thumbnailUrl)
     val background = MaterialTheme.colorScheme.background
     val top = lerp(background, art, 0.6f)
-    Box(
+    BoxWithConstraints(
         Modifier
             .fillMaxSize()
             .background(Brush.verticalGradient(0f to top, 0.75f to background)),
     ) {
+        // 曲名から操作の列までが最初の画面に収まるよう、ジャケットは高さに合わせて小さくする（開いた折りたたみ・横向き）
+        val artSize = minOf(minOf(maxWidth, MAX_CONTENT_WIDTH) - 48.dp, maxHeight - CONTROLS_HEIGHT).coerceAtLeast(160.dp)
         Column(
             Modifier
+                .widthIn(max = MAX_CONTENT_WIDTH)
+                .align(Alignment.TopCenter)
                 .fillMaxSize()
                 .statusBarsPadding()
                 .navigationBarsPadding()
@@ -216,14 +222,14 @@ fun NowPlayingScreen(
                 }
                 song?.let { SongMenuButton(it, actions, inQueue = true) } ?: Spacer(Modifier.size(48.dp))
             }
-            Box(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 24.dp)) {
+            Box(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 24.dp), contentAlignment = Alignment.Center) {
                 if (video && song != null) {
-                    MusicVideoPanel(song, controller, videos, Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(8.dp)))
+                    MusicVideoPanel(song, controller, videos, Modifier.size(artSize).clip(RoundedCornerShape(8.dp)))
                 } else {
                     coil3.compose.AsyncImage(
                         model = song?.thumbnailUrl?.takeIf { it.startsWith("https://") }?.let(Media3QueuePlayer::largeArtwork),
                         contentDescription = null,
-                        modifier = Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(8.dp)),
+                        modifier = Modifier.size(artSize).clip(RoundedCornerShape(8.dp)),
                         contentScale = androidx.compose.ui.layout.ContentScale.Crop,
                     )
                 }
@@ -311,6 +317,12 @@ fun NowPlayingScreen(
 }
 
 private const val SWIPE_PX = 120f
+
+/** ジャケットの下の、曲名から端末・キューの列までの高さ（ジャケットの大きさの上限を決める）。 */
+private val CONTROLS_HEIGHT = 400.dp
+
+/** 広い画面でも、操作の列が横に間延びしないように（Spotify と同じく中央の列に収める）。 */
+private val MAX_CONTENT_WIDTH = 560.dp
 
 @Composable
 private fun QueueSheet(

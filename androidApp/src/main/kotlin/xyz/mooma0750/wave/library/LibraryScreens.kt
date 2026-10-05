@@ -98,8 +98,8 @@ fun PlaylistScreen(
             }
         },
         details = {
-            summary.subtitle?.let { DetailText(it) }
-            DetailText(if (state.continuation != null) "${state.songs.size}曲以上" else "${state.songs.size}曲")
+            // 一覧の補足（「作った人 • 曲数」）があればそれを、無ければ読んだ曲数を出す
+            DetailText(summary.subtitle ?: if (state.continuation != null) "${state.songs.size}曲以上" else "${state.songs.size}曲")
         },
         actions = {
             QueueMenu(enabled = state.songs.isNotEmpty(), onQueue = { next -> onQueue(state.songs, next) })

@@ -229,6 +229,21 @@ private fun Results(
     LazyColumn(Modifier.fillMaxSize()) {
         when (state.tab) {
             SearchTab.All -> {
+                // Spotify の「トップの検索結果」: 語がアーティスト名ならそのアーティスト、そうでなければ最初の曲
+                val topArtist = state.artists.items.firstOrNull()?.takeIf { state.artistFirst }
+                val topSong = state.songs.items.firstOrNull()
+                if (topArtist != null || topSong != null) {
+                    item(key = "top") {
+                        SectionHeader("トップの検索結果", more = false) {}
+                        if (topArtist != null) {
+                            TopResult(topArtist.thumbnailUrl, topArtist.name, "アーティスト", CircleShape) { openArtist(topArtist) }
+                        } else if (topSong != null) {
+                            TopResult(topSong.thumbnailUrl, topSong.title, listOf("曲", topSong.artists.joinToString(", ") { it.name }).filter { it.isNotEmpty() }.joinToString(" • "), RoundedCornerShape(4.dp)) {
+                                onSongClick(topSong)
+                            }
+                        }
+                    }
+                }
                 // 種類ごとに少しずつ。続きは種類の絞り込みで見る
                 val sections =
                     listOf(SearchTab.Songs, SearchTab.Albums, SearchTab.Artists)
@@ -272,6 +287,28 @@ private fun <T> LazyListScope.pagedItems(
     }
     if (list.loadingMore) item { CircularProgressIndicator(Modifier.padding(16.dp)) }
     if (list.failure != null && list.items.isEmpty()) item { Text(failureMessage(list.failure), Modifier.padding(16.dp)) }
+}
+
+/** トップの検索結果の大きなカード。 */
+@Composable
+private fun TopResult(
+    thumbnailUrl: String?,
+    title: String,
+    detail: String,
+    shape: Shape,
+    onClick: () -> Unit,
+) {
+    androidx.compose.material3.Card(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+        colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            coil3.compose.AsyncImage(model = thumbnailUrl, contentDescription = null, modifier = Modifier.size(96.dp).clip(shape), contentScale = ContentScale.Crop)
+            Text(title, Modifier.padding(top = 12.dp), style = MaterialTheme.typography.headlineSmall, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(detail, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
 }
 
 @Composable
@@ -359,7 +396,12 @@ fun SongRow(
         Column(Modifier.weight(1f)) {
             Text(song.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyLarge)
             Text(
-                listOfNotNull(song.subtitle.takeIf { it.isNotEmpty() }, song.durationSeconds?.let { Durations.ofSeconds(it.toLong()) }).joinToString(" • "),
+                // アルバムの中では、アルバム名と長さは出さずアーティストだけ（Spotify と同じ）
+                if (showArtwork) {
+                    listOfNotNull(song.subtitle.takeIf { it.isNotEmpty() }, song.durationSeconds?.let { Durations.ofSeconds(it.toLong()) }).joinToString(" • ")
+                } else {
+                    song.artists.joinToString(", ") { it.name }
+                },
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.bodySmall,

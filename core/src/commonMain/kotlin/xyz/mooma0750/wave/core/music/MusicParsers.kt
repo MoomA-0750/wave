@@ -85,10 +85,17 @@ internal object MusicParsers {
 
     private fun artistRow(item: JsonObject): ArtistSummary? {
         val browse = item.path("navigationEndpoint", "browseEndpoint")
-        if (pageTypeOfBrowse(browse) != ARTIST_PAGE) return null
+        val browseId = browse.path("browseId").string() ?: return null
+        val artistId =
+            when (pageTypeOfBrowse(browse)) {
+                ARTIST_PAGE -> browseId
+                // ライブラリのアーティスト（MPLA + チャンネルの ID）。アーティストのページはチャンネルの ID で開く
+                LIBRARY_ARTIST_PAGE -> browseId.removePrefix(LIBRARY_ARTIST_PREFIX).takeIf { browseId.startsWith(LIBRARY_ARTIST_PREFIX) } ?: return null
+                else -> return null
+            }
         val columns = flexColumnRuns(item)
         return ArtistSummary(
-            browseId = browse.path("browseId").string() ?: return null,
+            browseId = artistId,
             name = runsText(columns.getOrNull(0).orEmpty()) ?: return null,
             subtitle = runsText(columns.drop(1).flatten()),
             thumbnailUrl = lastThumbnailUrl(item.path("thumbnail")),
@@ -644,6 +651,8 @@ internal object MusicParsers {
 
     private const val SEPARATOR = " • "
     private const val ARTIST_PAGE = "MUSIC_PAGE_TYPE_ARTIST"
+    private const val LIBRARY_ARTIST_PAGE = "MUSIC_PAGE_TYPE_LIBRARY_ARTIST"
+    private const val LIBRARY_ARTIST_PREFIX = "MPLA"
     private const val ALBUM_PLAYLIST_PREFIX = "OLAK5uy_"
     private const val EDIT_ICON = "EDIT"
     private val CONTINUATION_CONTAINERS = setOf("appendContinuationItemsAction", "continuationItems")

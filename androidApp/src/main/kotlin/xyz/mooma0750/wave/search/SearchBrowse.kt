@@ -30,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -93,6 +94,8 @@ fun SearchBrowseScreen(
     onOpenCategory: (MoodCategory) -> Unit,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    // 広い画面（開いた折りたたみ・タブレット）では列を増やす（Spotify のタブレットと同じ）
+    val columns = (LocalConfiguration.current.screenWidthDp / 200).coerceIn(2, 6)
     LazyColumn(Modifier.fillMaxSize()) {
         item {
             Text("検索", Modifier.statusBarsPadding().padding(start = 16.dp, top = 16.dp, bottom = 12.dp), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
@@ -125,11 +128,11 @@ fun SearchBrowseScreen(
             item {
                 Text(section.title, Modifier.padding(start = 16.dp, top = 24.dp, bottom = 12.dp), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             }
-            section.categories.chunked(2).forEach { row ->
+            section.categories.chunked(columns).forEach { row ->
                 item {
                     Row(Modifier.padding(horizontal = 16.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         row.forEach { category -> MoodTile(category, Modifier.weight(1f)) { onOpenCategory(category) } }
-                        if (row.size == 1) Spacer(Modifier.weight(1f))
+                        repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
                     }
                 }
             }

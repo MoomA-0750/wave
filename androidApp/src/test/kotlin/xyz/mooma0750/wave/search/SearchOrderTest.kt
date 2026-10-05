@@ -12,6 +12,8 @@ class SearchOrderTest {
     fun artistComesFirstOnlyWhenTheQueryIsItsName() {
         assertTrue(SearchOrder.artistFirst("yoasobi", listOf(artist("YOASOBI"))))
         assertTrue(SearchOrder.artistFirst(" Mrs. GREEN APPLE ", listOf(artist("Mrs.GREEN APPLE"))))
+        // 日本語の入力で打つと全角になる
+        assertTrue(SearchOrder.artistFirst("ＹＯＡＳＯＢＩ", listOf(artist("YOASOBI"))))
         assertFalse(SearchOrder.artistFirst("夜に駆ける", listOf(artist("YOASOBI"))))
         assertFalse(SearchOrder.artistFirst("yoasobi", emptyList()))
         assertFalse(SearchOrder.artistFirst(null, listOf(artist("YOASOBI"))))

@@ -47,6 +47,15 @@ import xyz.mooma0750.wave.navigation.SongActions
 import xyz.mooma0750.wave.search.failureMessage
 import xyz.mooma0750.wave.ui.IconTextButton
 
+object HomeShelves {
+    /** 先頭の「新作」と、アルバムが3枚以上重なる別の棚があるか。 */
+    fun duplicatesNewReleases(shelves: List<HomeShelf>): Boolean {
+        val ours = shelves.firstOrNull { it.title == "新作" && it.strapline == null } ?: return false
+        val ids = ours.items.mapNotNull { (it as? HomeItem.AlbumItem)?.album?.browseId }.toSet()
+        return shelves.any { shelf -> shelf !== ours && shelf.items.count { (it as? HomeItem.AlbumItem)?.album?.browseId in ids } >= 3 }
+    }
+}
+
 data class HomeFeedUiState(
     /** 上の格子に出す、最近聴いたもの（Spotify のホームの先頭の8枚）。 */
     val recent: List<HomeItem> = emptyList(),
@@ -111,6 +120,8 @@ class HomeFeedViewModel(
                         continuation = next.value.continuation
                         pages++
                     }
+                    // YouTube Music のホームに新作の棚が来ていれば、こちらの「新作」は出さない（同じものが2つ並ぶ）
+                    if (HomeShelves.duplicatesNewReleases(shelves)) shelves = shelves.filterNot { it.title == NEW_RELEASES_TITLE && it.strapline == null }
                     Log.i(WaveApplication.LOG_TAG, "home initial pages=$pages shelves=${shelves.size} kinds=${kindCounts(shelves)}")
                     mutableState.value =
                         HomeFeedUiState(recentItems.take(RECENT_GRID), shelves, home.value.chips.ifEmpty { chips }, chip, continuation, loading = false)

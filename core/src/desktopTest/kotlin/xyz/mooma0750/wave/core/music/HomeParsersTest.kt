@@ -79,4 +79,18 @@ class HomeParsersTest {
         assertEquals(2, page.shelves.size)
         assertTrue(page.shelves.all { it.items.size == 4 })
     }
+
+    @Test
+    fun libraryArtistRowsOpenTheChannel() {
+        // ライブラリのアーティストの行（実アカウントで確かめた形: MUSIC_PAGE_TYPE_LIBRARY_ARTIST と MPLA + チャンネルの ID。値は合成）
+        val root =
+            kotlinx.serialization.json.Json.parseToJsonElement(
+                """{"contents":{"singleColumnBrowseResultsRenderer":{"tabs":[{"tabRenderer":{"content":{"sectionListRenderer":{"contents":[{"musicShelfRenderer":{"contents":[
+                {"musicResponsiveListItemRenderer":{"flexColumns":[{"musicResponsiveListItemFlexColumnRenderer":{"text":{"runs":[{"text":"n"}]}}}],
+                "navigationEndpoint":{"browseEndpoint":{"browseId":"MPLAUCx","browseEndpointContextSupportedConfigs":{"browseEndpointContextMusicConfig":{"pageType":"MUSIC_PAGE_TYPE_LIBRARY_ARTIST"}}}}}}]}}]}}}}]}}}""",
+            ) as JsonObject
+        val artist = (MusicParsers.libraryCards(root).single() as HomeItem.ArtistItem).artist
+        assertEquals("UCx", artist.browseId)
+        assertEquals("n", artist.name)
+    }
 }

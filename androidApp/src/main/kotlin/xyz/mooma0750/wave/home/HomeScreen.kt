@@ -34,6 +34,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -118,8 +119,10 @@ private fun RecentGrid(
     items: List<HomeItem>,
     onClick: (HomeItem) -> Unit,
 ) {
+    // 広い画面では4列（Spotify のタブレットと同じ）
+    val columns = if (LocalConfiguration.current.screenWidthDp >= 600) 4 else 2
     Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        items.chunked(2).forEach { row ->
+        items.chunked(columns).forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 row.forEach { item ->
                     val look = HomeItemLook.of(item)
@@ -147,7 +150,7 @@ private fun RecentGrid(
                         }
                     }
                 }
-                if (row.size == 1) Spacer(Modifier.weight(1f))
+                repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
             }
         }
     }
