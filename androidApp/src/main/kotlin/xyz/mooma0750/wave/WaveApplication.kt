@@ -140,6 +140,9 @@ class WaveApplication :
         const val LOGIN_WEBVIEW_SUFFIX = "login"
         const val LOG_TAG = "wave"
 
+        /** YouTube に送る言語（画面の言語に合わせる）。 */
+        const val CONTENT_LANGUAGE = "ja"
+
         /** 画面の作り直しの間、中継 v2 の接続を残しておく時間。 */
         const val CONFIGURATION_CHANGE_GRACE_MS = 5_000L
 
@@ -188,7 +191,8 @@ class AppContainer(
 
     val httpClient: HttpClient = createWaveHttpClient(guardedEngine)
 
-    val session = WaveSession(httpClient, authManager, appScope, rethrowViolations = isDebuggable)
+    // 画面が日本語なので、YouTube の見出しやジャンル名も日本語にそろえる（端末が英語でも混ざらないように）
+    val session = WaveSession(httpClient, authManager, appScope, rethrowViolations = isDebuggable, contentLanguage = WaveApplication.CONTENT_LANGUAGE)
 
     /** ストリームの解決（WaveSession のガード付きクライアントを使う）。期限はスリープ中も進む時計で測る。 */
     val stream = StreamComponents.create(session, nowMs = SystemClock::elapsedRealtime, trackCipherPath = isDebuggable)

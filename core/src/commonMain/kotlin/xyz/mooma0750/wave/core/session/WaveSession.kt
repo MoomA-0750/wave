@@ -204,6 +204,8 @@ class WaveSession internal constructor(
         authManager: AuthManager,
         scope: CoroutineScope,
         rethrowViolations: Boolean,
+        /** YouTube の文字（棚の見出し・ジャンル名など）の言語。null なら端末の言語。地域（gl）は端末のまま。 */
+        contentLanguage: String? = null,
     ) : this(
         httpClient = httpClient,
         credentials = authManager.credentials,
@@ -215,6 +217,7 @@ class WaveSession internal constructor(
     ) {
         // 認証情報を公開する前に世代を進める（購読の順序に頼らない、ADR-0007 の同期点 a）
         authManager.beforePublish = { next -> applyCredentials(next, authoritative = true) }
+        contentLanguage?.let { hl -> innerTube.locale = sanitizedYouTubeLocale(YouTubeLocale(gl = innerTube.locale.gl, hl = hl)) }
     }
 
     private class Generation(

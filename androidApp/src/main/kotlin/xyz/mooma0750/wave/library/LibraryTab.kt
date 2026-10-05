@@ -57,6 +57,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import xyz.mooma0750.wave.R
 import xyz.mooma0750.wave.WaveApplication
@@ -162,10 +163,17 @@ class LibraryTabViewModel(
     fun refresh() {
         mutableState.value = LibraryTabUiState()
         viewModelScope.launch {
-            val artists = async { music.libraryArtists() }
-            val albums = async { music.libraryAlbums() }
+            // ページが届くたびに一覧に足す（全部そろうのを待たずに出す）
+            val parts = MutableStateFlow(Triple(emptyList<PlaylistSummary>(), emptyList<ArtistSummary>(), emptyList<AlbumSummary>()))
+            fun publish() {
+                val (playlists, artists, albums) = parts.value
+                val entries = (playlists.map(LibraryEntry::Playlist) + artists.map(LibraryEntry::Artist) + albums.map(LibraryEntry::Album)).distinctBy { it.key }
+                mutableState.update { it.copy(entries = entries, loading = entries.isEmpty() && it.loading) }
+            }
             val recent = async { music.recentActivity() }
-            val playlists = music.libraryPlaylists()
+            val artists = async { music.libraryArtists { page -> parts.update { it.copy(second = page) }.also { publish() } } }
+            val albums = async { music.libraryAlbums { page -> parts.update { it.copy(third = page) }.also { publish() } } }
+            val playlists = music.libraryPlaylists { page -> parts.update { it.copy(first = page) }.also { publish() } }
             val artistResult = artists.await()
             val albumResult = albums.await()
             // 件数だけを記録する
@@ -173,18 +181,14 @@ class LibraryTabViewModel(
                 WaveApplication.LOG_TAG,
                 "library tab playlists=${(playlists as? CallResult.Ok)?.value?.size} artists=${(artistResult as? CallResult.Ok)?.value?.size} albums=${(albumResult as? CallResult.Ok)?.value?.size}",
             )
-            val entries =
-                (playlists as? CallResult.Ok)?.value.orEmpty().map(LibraryEntry::Playlist) +
-                    (artistResult as? CallResult.Ok)?.value.orEmpty().map(LibraryEntry::Artist) +
-                    (albumResult as? CallResult.Ok)?.value.orEmpty().map(LibraryEntry::Album)
             val recentKeys = (recent.await() as? CallResult.Ok)?.value.orEmpty().mapNotNull(LibraryOrder::keyOf)
-            mutableState.value =
-                LibraryTabUiState(
-                    entries.distinctBy { it.key },
-                    recentKeys,
+            mutableState.update {
+                it.copy(
+                    recentKeys = recentKeys,
                     loading = false,
-                    failure = (playlists as? CallResult.Failed)?.kind.takeIf { entries.isEmpty() },
+                    failure = (playlists as? CallResult.Failed)?.kind.takeIf { _ -> it.entries.isEmpty() },
                 )
+            }
         }
     }
 }

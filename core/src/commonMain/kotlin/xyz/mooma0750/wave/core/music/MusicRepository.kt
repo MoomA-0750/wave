@@ -52,22 +52,52 @@ class MusicRepository(
         }
 
     /** ライブラリのアーティスト（ライブラリの曲のアーティスト）。ログイン必須。 */
-    suspend fun libraryArtists(): CallResult<List<ArtistSummary>> =
-        libraryCards(LIBRARY_ARTISTS) { (it as? HomeItem.ArtistItem)?.artist }
+    suspend fun libraryArtists(onPage: (List<ArtistSummary>) -> Unit = {}): CallResult<List<ArtistSummary>> =
+        libraryCards(LIBRARY_ARTISTS, onPage) { (it as? HomeItem.ArtistItem)?.artist }
 
     /** ライブラリのアルバム（保存したアルバム）。ログイン必須。 */
-    suspend fun libraryAlbums(): CallResult<List<AlbumSummary>> =
-        libraryCards(LIBRARY_ALBUMS) { (it as? HomeItem.AlbumItem)?.album }
+    suspend fun libraryAlbums(onPage: (List<AlbumSummary>) -> Unit = {}): CallResult<List<AlbumSummary>> =
+        libraryCards(LIBRARY_ALBUMS, onPage) { (it as? HomeItem.AlbumItem)?.album }
 
-    private suspend fun <T> libraryCards(
+    private suspend fun <T : Any> libraryCards(
         browseId: String,
+        onPage: (List<T>) -> Unit,
         pick: (HomeItem) -> T?,
-    ): CallResult<List<T>> =
-        session.call(operation = "browse", block = { it.browse(YouTubeClient.WEB_REMIX, browseId = browseId, setLogin = true) }) { response ->
-            val root = json(response)
-            lastRendererNames = MusicParsers.rendererNames(root)
-            if (MusicParsers.isSignInPrompt(root)) ParseOutcome.LoggedOutResponse else ParseOutcome.Parsed(MusicParsers.libraryCards(root).mapNotNull(pick))
-        }
+    ): CallResult<List<T>> = allLibraryPages(browseId, { root -> MusicParsers.libraryCards(root).mapNotNull(pick) }, { it }, onPage)
+
+    /**
+     * ライブラリの一覧を、続きのページまで読む（Spotify のマイライブラリと同じく全部を並べる）。
+     * 途中のページで失敗したら、そこまでの分を返す。onPage にはページが届くたびに、それまでの分を渡す（画面に順に出す）。
+     */
+    private suspend fun <T> allLibraryPages(
+        browseId: String,
+        parse: (JsonObject) -> List<T>,
+        key: (T) -> Any,
+        onPage: (List<T>) -> Unit = {},
+    ): CallResult<List<T>> {
+        val items = mutableListOf<T>()
+        var token: String? = null
+        var pages = 0
+        do {
+            val page =
+                session.call(operation = "browse", block = browseOrContinue(browseId, token)) { response ->
+                    val root = json(response)
+                    lastRendererNames = MusicParsers.rendererNames(root)
+                    if (MusicParsers.isSignInPrompt(root)) ParseOutcome.LoggedOutResponse else ParseOutcome.Parsed(parse(root) to MusicParsers.libraryContinuation(root))
+                }
+            when (page) {
+                is CallResult.Failed -> return if (pages == 0) page else CallResult.Ok(items.distinctBy(key))
+                is CallResult.Ok -> {
+                    items += page.value.first
+                    onPage(items.distinctBy(key))
+                    // 同じトークンが返ったら（形が変わったときなど）止める
+                    token = page.value.second?.takeIf { it != token }
+                }
+            }
+            pages++
+        } while (token != null && pages < MAX_LIBRARY_PAGES)
+        return CallResult.Ok(items.distinctBy(key))
+    }
 
     /** 気分とジャンルの一覧（検索のタブのタイル）。 */
     suspend fun moods(): CallResult<List<MoodSection>> =
@@ -140,19 +170,9 @@ class MusicRepository(
             block = { it.next(YouTubeClient.WEB_REMIX, videoId = videoId, playlistId = playlistId, continuation = continuation) },
         ) { response -> ParseOutcome.Parsed(MusicParsers.upNext(json(response))) }
 
-    /** ライブラリのプレイリスト。ログイン案内だけが返ったら、ログアウト相当の応答として扱う（確認の accountMenu が走る）。 */
-    suspend fun libraryPlaylists(): CallResult<List<PlaylistSummary>> =
-        session.call(
-            operation = "browse",
-            block = { it.browse(YouTubeClient.WEB_REMIX, browseId = LIBRARY_PLAYLISTS, setLogin = true) },
-        ) { response ->
-            val root = json(response)
-            if (MusicParsers.isSignInPrompt(root)) {
-                ParseOutcome.LoggedOutResponse
-            } else {
-                ParseOutcome.Parsed(MusicParsers.playlists(root)).also { lastRendererNames = MusicParsers.rendererNames(root) }
-            }
-        }
+    /** ライブラリのプレイリスト（全ページ）。ログイン案内だけが返ったら、ログアウト相当の応答として扱う（確認の accountMenu が走る）。 */
+    suspend fun libraryPlaylists(onPage: (List<PlaylistSummary>) -> Unit = {}): CallResult<List<PlaylistSummary>> =
+        allLibraryPages(LIBRARY_PLAYLISTS, MusicParsers::playlists, { it.playlistId }, onPage)
 
     /**
      * 再生履歴（自分が聴いた曲）。ログイン必須。送信の設定（ADR-0006）とは別で、設定を切っていても見られる（切っている間の分は載らない）。
@@ -417,6 +437,7 @@ class MusicRepository(
 
         private const val MAX_BROWSE_BYTES = 8 * 1024 * 1024
         private const val MAX_PLAYLIST_PAGES = 50
+        private const val MAX_LIBRARY_PAGES = 20
         private const val STATUS_SUCCEEDED = "STATUS_SUCCEEDED"
     }
 }

@@ -93,4 +93,21 @@ class HomeParsersTest {
         assertEquals("UCx", artist.browseId)
         assertEquals("n", artist.name)
     }
+
+    @Test
+    fun libraryContinuationPagesAreRead() {
+        fun json(text: String) = kotlinx.serialization.json.Json.parseToJsonElement(text) as JsonObject
+        val album = """{"musicTwoRowItemRenderer":{"title":{"runs":[{"text":"a"}]},"navigationEndpoint":{"browseEndpoint":{"browseId":"MPREb_a","browseEndpointContextSupportedConfigs":{"browseEndpointContextMusicConfig":{"pageType":"MUSIC_PAGE_TYPE_ALBUM"}}}}}}"""
+        // 最初のページ（格子と続きのトークン）と、続きのページ（gridContinuation）
+        val first = json("""{"contents":{"gridRenderer":{"items":[$album],"continuations":[{"nextContinuationData":{"continuation":"t1"}}]}}}""")
+        val next = json("""{"continuationContents":{"gridContinuation":{"items":[$album]}}}""")
+        assertEquals(1, MusicParsers.libraryCards(first).size)
+        assertEquals("t1", MusicParsers.libraryContinuation(first))
+        assertEquals(1, MusicParsers.libraryCards(next).size)
+        assertEquals(null, MusicParsers.libraryContinuation(next))
+        // 棚の続き（アーティストの一覧）
+        val shelf = json("""{"continuationContents":{"musicShelfContinuation":{"contents":[{"musicResponsiveListItemRenderer":{"flexColumns":[{"musicResponsiveListItemFlexColumnRenderer":{"text":{"runs":[{"text":"n"}]}}}],"navigationEndpoint":{"browseEndpoint":{"browseId":"MPLAUCy","browseEndpointContextSupportedConfigs":{"browseEndpointContextMusicConfig":{"pageType":"MUSIC_PAGE_TYPE_LIBRARY_ARTIST"}}}}}}],"continuations":[{"nextContinuationData":{"continuation":"t2"}}]}}}""")
+        assertEquals("UCy", (MusicParsers.libraryCards(shelf).single() as HomeItem.ArtistItem).artist.browseId)
+        assertEquals("t2", MusicParsers.libraryContinuation(shelf))
+    }
 }

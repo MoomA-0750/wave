@@ -158,7 +158,14 @@ internal object MusicParsers {
 
     /** ライブラリのアーティスト・アルバムの一覧。格子（カード）と棚（行）のどちらの形でも読む。 */
     fun libraryCards(root: JsonObject): List<HomeItem> =
-        gridItems(root) + findAll(root, "musicShelfRenderer").flatMap { it.path("contents").arrayItems() }.mapNotNull(::homeItem)
+        gridItems(root) +
+            findAll(root, "gridContinuation").flatMap { it.path("items").arrayItems() }.mapNotNull(::homeItem) +
+            (findAll(root, "musicShelfRenderer") + findAll(root, "musicShelfContinuation")).flatMap { it.path("contents").arrayItems() }.mapNotNull(::homeItem)
+
+    /** ライブラリの一覧の続きのトークン（格子・棚のどちらでも）。無ければ最後のページ。 */
+    fun libraryContinuation(root: JsonObject): String? =
+        findAll(root, "nextContinuationData").firstNotNullOfOrNull { it.path("continuation").string() }
+            ?: findAll(root, "continuationItemRenderer").firstNotNullOfOrNull { it.path("continuationEndpoint", "continuationCommand", "token").string() }
 
     /** 格子（gridRenderer）に並ぶカード。ライブラリの「最近のアクティビティ」もこの形。 */
     fun gridItems(root: JsonObject): List<HomeItem> = findAll(root, "gridRenderer").flatMap { it.path("items").arrayItems() }.mapNotNull(::homeItem)
