@@ -207,8 +207,10 @@ fun LibraryTabScreen(
     var sort by rememberSaveable { mutableStateOf(LibrarySort.Recents) }
     var grid by rememberSaveable { mutableStateOf(false) }
     var creating by remember { mutableStateOf(false) }
-    val entries = LibraryOrder.arrange(state, filter, sort)
-    val liked = PlaylistSummary(MusicRepository.LIKED_SONGS, "高く評価した曲", "プレイリスト • 自動", null)
+    // 「高く評価した曲」は並べ方に関わらず先頭に留める（Spotify の「お気に入りの曲」と同じ）。一覧にあればその画像を使う
+    val serverLiked = state.entries.firstNotNullOfOrNull { (it as? LibraryEntry.Playlist)?.playlist?.takeIf { p -> p.playlistId == MusicRepository.LIKED_SONGS } }
+    val entries = LibraryOrder.arrange(state, filter, sort).filterNot { it is LibraryEntry.Playlist && it.playlist.playlistId == MusicRepository.LIKED_SONGS }
+    val liked = PlaylistSummary(MusicRepository.LIKED_SONGS, "高く評価した曲", "プレイリスト • 自動", serverLiked?.thumbnailUrl)
     val showLiked = filter == null || filter == LibraryFilter.Playlists
     val open = { entry: LibraryEntry ->
         when (entry) {

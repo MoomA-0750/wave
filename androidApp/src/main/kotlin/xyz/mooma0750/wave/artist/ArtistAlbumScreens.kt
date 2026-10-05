@@ -1,5 +1,20 @@
 package xyz.mooma0750.wave.artist
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.ListItem
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.font.FontWeight
+import xyz.mooma0750.wave.library.QueueMenu
+import xyz.mooma0750.wave.ui.CollectionScreen
+import xyz.mooma0750.wave.ui.DetailText
+import xyz.mooma0750.wave.ui.MenuIcon
+import xyz.mooma0750.wave.ui.PlayControls
 import xyz.mooma0750.wave.ui.IconTextButton
 import xyz.mooma0750.wave.ui.ButtonStyle
 import xyz.mooma0750.wave.R
@@ -152,49 +167,59 @@ fun ArtistScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val page = state.page
     val liked by viewModel.likedSongs.collectAsStateWithLifecycle()
-    Scaffold(
-        topBar = { TopAppBar(title = { Text(page?.name ?: title, maxLines = 1, overflow = TextOverflow.Ellipsis) }, navigationIcon = { BackButton(onBack) }) },
-        bottomBar = bottomBar,
-    ) { padding ->
-        LazyColumn(Modifier.fillMaxSize().padding(padding)) {
-            when {
-                state.failure != null -> item { Text(failureMessage(state.failure), Modifier.padding(16.dp)) }
-                page == null -> item { CircularProgressIndicator(Modifier.padding(16.dp)) }
-                else -> {
-                    item {
-                        Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("曲", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                            page.allSongsPlaylistId?.let { id -> Button(onClick = { onOpenAllSongs(id, page.name) }) { Text("すべての曲") } }
-                        }
-                    }
-                    itemsIndexed(page.topSongs, key = { index, song -> "song-$index-${song.videoId}" }) { index, song ->
-                        SongRow(song, onClick = { onPlay(page.topSongs, index) }) { SongMenuButton(song, actions) }
-                    }
-                    // このアーティストの、自分が高く評価した曲
-                    if (liked.loading || liked.songs.isNotEmpty()) {
-                        item(key = "liked-heading") {
-                            Row(Modifier.padding(start = 16.dp, top = 16.dp, end = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Text("高く評価した曲", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                                if (liked.songs.isNotEmpty()) TextButton(onClick = { onOpenLiked(page.name) }) { Text("一覧で見る") }
-                            }
-                        }
-                        if (liked.loading) item(key = "liked-loading") { CircularProgressIndicator(Modifier.padding(16.dp)) }
-                        itemsIndexed(liked.songs, key = { index, song -> "liked-$index-${song.videoId}" }) { index, song ->
-                            SongRow(song, onClick = { onPlay(liked.songs, index) }) { SongMenuButton(song, actions) }
-                        }
-                        if (liked.incomplete) {
-                            item(key = "liked-incomplete") {
-                                Text("高く評価した曲を全部は読めていません", Modifier.padding(horizontal = 16.dp), style = MaterialTheme.typography.bodySmall)
-                            }
-                        }
-                    }
-                    page.albumShelves.forEachIndexed { shelfIndex, shelf ->
-                        item(key = "shelf-$shelfIndex") {
-                            Column(Modifier.padding(top = 16.dp)) {
-                                Text(shelf.title, Modifier.padding(horizontal = 16.dp), style = MaterialTheme.typography.titleMedium)
-                                LazyRow(contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                    items(shelf.albums, key = { it.browseId }) { album -> AlbumCard(album, onOpenAlbum) }
+    var shuffle by rememberSaveable { mutableStateOf(false) }
+    val topSongs = page?.topSongs.orEmpty()
+    CollectionScreen(
+        title = page?.name ?: title,
+        coverUrl = page?.thumbnailUrl,
+        onBack = onBack,
+        hero = true,
+        play =
+            PlayControls(shuffle, { shuffle = it }, enabled = topSongs.isNotEmpty()) {
+                onPlay(if (shuffle) topSongs.shuffled() else topSongs, 0)
+            },
+    ) {
+        when {
+            state.failure != null -> item { Text(failureMessage(state.failure), Modifier.padding(16.dp)) }
+            page == null -> item { CircularProgressIndicator(Modifier.padding(16.dp)) }
+            else -> {
+                // Spotify の「人気」: 番号付きの曲
+                item { SectionTitle("人気") }
+                itemsIndexed(page.topSongs, key = { index, song -> "song-$index-${song.videoId}" }) { index, song ->
+                    SongRow(song, onClick = { onPlay(page.topSongs, index) }, number = index + 1) { SongMenuButton(song, actions) }
+                }
+                page.allSongsPlaylistId?.let { id ->
+                    item { TextButton(onClick = { onOpenAllSongs(id, page.name) }, modifier = Modifier.padding(horizontal = 8.dp)) { Text("すべての曲を見る") } }
+                }
+                // Spotify の「高く評価した曲」の行（このアーティストの、自分が高く評価した曲）
+                if (liked.loading || liked.songs.isNotEmpty()) {
+                    item(key = "liked") {
+                        ListItem(
+                            headlineContent = { Text("高く評価した曲") },
+                            supportingContent = {
+                                Text(
+                                    when {
+                                        liked.loading -> "確認しています…"
+                                        liked.incomplete -> "${liked.songs.size}曲以上 • ${page.name}"
+                                        else -> "${liked.songs.size}曲 • ${page.name}"
+                                    },
+                                )
+                            },
+                            leadingContent = {
+                                Box(Modifier.size(56.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer), contentAlignment = Alignment.Center) {
+                                    MenuIcon(R.drawable.ic_favorite)
                                 }
+                            },
+                            modifier = Modifier.clickable(enabled = liked.songs.isNotEmpty()) { onOpenLiked(page.name) },
+                        )
+                    }
+                }
+                page.albumShelves.forEachIndexed { shelfIndex, shelf ->
+                    item(key = "shelf-$shelfIndex") {
+                        Column(Modifier.padding(top = 8.dp)) {
+                            SectionTitle(shelf.title)
+                            LazyRow(contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                items(shelf.albums, key = { it.browseId }) { album -> AlbumCard(album, onOpenAlbum) }
                             }
                         }
                     }
@@ -202,6 +227,11 @@ fun ArtistScreen(
             }
         }
     }
+}
+
+@Composable
+private fun SectionTitle(text: String) {
+    Text(text, Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
 }
 
 @Composable
@@ -235,35 +265,35 @@ fun AlbumScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val page = state.page
-    Scaffold(
-        topBar = { TopAppBar(title = { Text(page?.title ?: title, maxLines = 1, overflow = TextOverflow.Ellipsis) }, navigationIcon = { BackButton(onBack) }) },
-        bottomBar = bottomBar,
-    ) { padding ->
-        LazyColumn(Modifier.fillMaxSize().padding(padding)) {
-            when {
-                state.failure != null -> item { Text(failureMessage(state.failure), Modifier.padding(16.dp)) }
-                page == null -> item { CircularProgressIndicator(Modifier.padding(16.dp)) }
-                else -> {
-                    item {
-                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text(page.artists.joinToString(", ") { it.name }, style = MaterialTheme.typography.bodyMedium)
-                            page.subtitle?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                IconTextButton(R.drawable.ic_play_arrow, "すべて再生", { onPlay(page, 0, false) }, enabled = page.songs.isNotEmpty(), style = ButtonStyle.Filled)
-                                IconTextButton(R.drawable.ic_shuffle, "シャッフル再生", { onPlay(page, 0, true) }, enabled = page.songs.isNotEmpty())
-                            }
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                IconTextButton(R.drawable.ic_playlist_play, "次に再生", { onQueue(page, true) }, enabled = page.songs.isNotEmpty())
-                                IconTextButton(R.drawable.ic_playlist_add, "キューに追加", { onQueue(page, false) }, enabled = page.songs.isNotEmpty())
-                            }
-                            if (page.songs.isEmpty()) Text("曲がありません")
-                        }
-                    }
-                    itemsIndexed(page.songs, key = { index, song -> "$index-${song.videoId}" }) { index, song ->
-                        SongRow(song, onClick = { onPlay(page, index, false) }) { SongMenuButton(song, actions) }
-                    }
-                }
+    var shuffle by rememberSaveable { mutableStateOf(false) }
+    CollectionScreen(
+        title = page?.title ?: title,
+        coverUrl = page?.thumbnailUrl,
+        onBack = onBack,
+        details = {
+            page?.let { album ->
+                // Spotify: アーティスト（押すとアーティストのページ）、その下に「アルバム • 年」
+                val artist = album.artists.firstOrNull()
+                Text(
+                    album.artists.joinToString(", ") { it.name },
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.then(if (artist?.browseId != null) Modifier.clickable { actions.openArtist(artist) } else Modifier),
+                )
+                album.subtitle?.let { DetailText(it) }
             }
+        },
+        actions = { QueueMenu(enabled = page?.songs?.isNotEmpty() == true, onQueue = { next -> page?.let { onQueue(it, next) } }) },
+        play = PlayControls(shuffle, { shuffle = it }, enabled = page?.songs?.isNotEmpty() == true) { page?.let { onPlay(it, 0, shuffle) } },
+    ) {
+        when {
+            state.failure != null -> item { Text(failureMessage(state.failure), Modifier.padding(16.dp)) }
+            page == null -> item { CircularProgressIndicator(Modifier.padding(16.dp)) }
+            page.songs.isEmpty() -> item { Text("曲がありません", Modifier.padding(16.dp)) }
+            else ->
+                itemsIndexed(page.songs, key = { index, song -> "$index-${song.videoId}" }) { index, song ->
+                    SongRow(song, onClick = { onPlay(page, index, false) }, showArtwork = false) { SongMenuButton(song, actions) }
+                }
         }
     }
 }

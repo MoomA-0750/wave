@@ -1,0 +1,143 @@
+package xyz.mooma0750.wave.ui
+
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import xyz.mooma0750.wave.R
+
+/**
+ * プレイリスト・アルバムのページ（並びは Spotify と同じ）: ジャケットの色のグラデーションの上に大きなジャケット、
+ * 名前と補足、左に小さな操作・右にシャッフルと大きな再生ボタン、その下に曲。
+ * 上の帯は、スクロールしてジャケットが隠れたら名前を出し、色を付ける。
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun CollectionScreen(
+    title: String,
+    coverUrl: String?,
+    onBack: () -> Unit,
+    /** ジャケットの上に出すもの（Spotify のプレイリストの「この中を探す」「並べ替え」）。 */
+    top: @Composable ColumnScope.() -> Unit = {},
+    /** 名前の下の行（作った人・年・曲数など）。 */
+    details: @Composable ColumnScope.() -> Unit = {},
+    /** 操作の列の左側（キューに追加・メニューなど）。 */
+    actions: @Composable RowScope.() -> Unit = {},
+    /** 操作の列の右側の、シャッフルの切り替えと再生ボタン。null なら出さない。 */
+    play: PlayControls?,
+    coverShape: Shape = RoundedCornerShape(4.dp),
+    /** アーティストのページ: 画像を横幅いっぱいに出し、名前を画像の上に重ねる（Spotify のアーティストのページ）。 */
+    hero: Boolean = false,
+    content: LazyListScope.() -> Unit,
+) {
+    val listState = rememberLazyListState()
+    val art by rememberArtworkColor(coverUrl)
+    val background = MaterialTheme.colorScheme.background
+    val collapsed by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 } }
+    val barColor by animateColorAsState(if (collapsed) lerp(background, art, 0.5f) else Color.Transparent, label = "bar")
+    Box(Modifier.fillMaxSize()) {
+        LazyColumn(Modifier.fillMaxSize(), state = listState) {
+            if (hero) {
+                item(key = "collection-hero") {
+                    Box(Modifier.fillMaxWidth().height(340.dp)) {
+                        coil3.compose.AsyncImage(model = coverUrl, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.4f to Color.Transparent, 1f to background.copy(alpha = 0.95f))))
+                        Text(
+                            title,
+                            Modifier.align(Alignment.BottomStart).padding(16.dp),
+                            style = MaterialTheme.typography.displaySmall,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    Column(Modifier.padding(horizontal = 16.dp)) { details() }
+                }
+            } else item(key = "collection-header") {
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .background(Brush.verticalGradient(listOf(lerp(background, art, 0.7f), background)))
+                        .statusBarsPadding()
+                        .padding(top = 56.dp, start = 16.dp, end = 16.dp),
+                ) {
+                    top()
+                    coil3.compose.AsyncImage(
+                        model = coverUrl,
+                        contentDescription = null,
+                        modifier = Modifier.padding(vertical = 12.dp).size(240.dp).align(Alignment.CenterHorizontally).clip(coverShape),
+                        contentScale = ContentScale.Crop,
+                    )
+                    Text(title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Spacer(Modifier.height(4.dp))
+                    details()
+                }
+            }
+            item(key = "collection-actions") {
+                Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 16.dp, top = 4.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    actions()
+                    Spacer(Modifier.weight(1f))
+                    play?.let { controls ->
+                        IconAction(R.drawable.ic_shuffle, if (controls.shuffle) "シャッフル: オン" else "シャッフル: オフ", { controls.onShuffleChange(!controls.shuffle) }, active = controls.shuffle, size = 28.dp)
+                        PlayFab(playing = false, onClick = controls.onPlay, enabled = controls.enabled, modifier = Modifier.padding(start = 8.dp))
+                    }
+                }
+            }
+            content()
+            item(key = "collection-bottom") { Spacer(Modifier.height(16.dp)) }
+        }
+        TopAppBar(
+            title = { if (collapsed) Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+            navigationIcon = { BackButton(onBack) },
+            colors = TopAppBarDefaults.topAppBarColors(containerColor = barColor),
+        )
+    }
+}
+
+/** 再生ボタンとシャッフルの切り替え（Spotify の、再生ボタンの左のシャッフル）。 */
+class PlayControls(
+    val shuffle: Boolean,
+    val onShuffleChange: (Boolean) -> Unit,
+    val enabled: Boolean,
+    val onPlay: () -> Unit,
+)
+
+/** 補足の行（Spotify の、名前の下の小さな灰色の文字）。 */
+@Composable
+fun DetailText(text: String) {
+    Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+}

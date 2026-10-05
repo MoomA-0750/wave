@@ -5,6 +5,12 @@ import xyz.mooma0750.wave.R
 import xyz.mooma0750.wave.ui.BackButton
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.runtime.remember
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -36,11 +42,9 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -59,7 +63,6 @@ import xyz.mooma0750.wave.core.session.FailureKind
 import xyz.mooma0750.wave.navigation.SongActions
 import xyz.mooma0750.wave.ui.Durations
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SearchScreen(
     viewModel: SearchViewModel,
@@ -73,24 +76,34 @@ fun SearchScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val historyEntries by history.entries.collectAsStateWithLifecycle()
     val keyboard = LocalSoftwareKeyboardController.current
-    Scaffold(
-        topBar = { TopAppBar(title = { Text("検索") }, navigationIcon = { BackButton(onBack) }) },
-        bottomBar = bottomBar,
-    ) { padding ->
+    // 開いたらすぐ打てるように（Spotify と同じ）。結果を見ている途中で戻ってきたときは開かない
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { if (state.query.isBlank()) focus.requestFocus() }
+    Scaffold(bottomBar = bottomBar) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
-            OutlinedTextField(
-                value = state.query,
-                onValueChange = viewModel::onQueryChange,
-                modifier = Modifier.fillMaxWidth().padding(16.dp),
-                singleLine = true,
-                placeholder = { Text("曲名・アーティスト") },
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions =
-                    KeyboardActions(onSearch = {
-                        keyboard?.hide()
-                        viewModel.search()
-                    }),
-            )
+            Row(Modifier.padding(start = 4.dp, end = 16.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                BackButton(onBack)
+                TextField(
+                    value = state.query,
+                    onValueChange = viewModel::onQueryChange,
+                    modifier = Modifier.weight(1f).focusRequester(focus),
+                    singleLine = true,
+                    placeholder = { Text("何を聴きたいですか？") },
+                    trailingIcon = { if (state.query.isNotEmpty()) IconAction(R.drawable.ic_close, "消す", { viewModel.onQueryChange("") }) },
+                    shape = RoundedCornerShape(8.dp),
+                    colors =
+                        TextFieldDefaults.colors(
+                            focusedIndicatorColor = Color.Transparent,
+                            unfocusedIndicatorColor = Color.Transparent,
+                        ),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions =
+                        KeyboardActions(onSearch = {
+                            keyboard?.hide()
+                            viewModel.search()
+                        }),
+                )
+            }
             // 検索から再生した曲・開いたアーティスト・アルバムは、画像と補足の行も付けて履歴に残す（Spotify と同じ）
             val playAndRemember = { song: Song ->
                 history.add(SearchHistoryEntry.Song(song.videoId, song.title, song.artists.joinToString(", ") { it.name }.ifEmpty { null }, song.thumbnailUrl))
@@ -326,16 +339,23 @@ private const val PREVIEW_COUNT = 4
 fun SongRow(
     song: Song,
     onClick: () -> Unit,
+    /** アルバムの中では画像を出さない（Spotify と同じ）。 */
+    showArtwork: Boolean = true,
+    /** 左に出す番号（アーティストの人気の曲）。 */
+    number: Int? = null,
     trailing: @Composable () -> Unit = {},
 ) {
     Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        coil3.compose.AsyncImage(
-            model = song.thumbnailUrl,
-            contentDescription = null,
-            modifier = Modifier.size(48.dp).clip(RoundedCornerShape(4.dp)),
-            contentScale = ContentScale.Crop,
-        )
-        Spacer(Modifier.width(12.dp))
+        number?.let { Text("$it", Modifier.width(28.dp), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge) }
+        if (showArtwork) {
+            coil3.compose.AsyncImage(
+                model = song.thumbnailUrl,
+                contentDescription = null,
+                modifier = Modifier.size(48.dp).clip(RoundedCornerShape(4.dp)),
+                contentScale = ContentScale.Crop,
+            )
+            Spacer(Modifier.width(12.dp))
+        }
         Column(Modifier.weight(1f)) {
             Text(song.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyLarge)
             Text(
@@ -343,6 +363,7 @@ fun SongRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         trailing()

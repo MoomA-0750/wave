@@ -142,6 +142,10 @@ class MainActivity : ComponentActivity() {
                         }
                         BackHandler(enabled = nav.canGoBack) { nav.back() }
                         val account = rememberAccountInfo(container, state.obtainedAtEpochMs)
+                        // どの画面にいるかだけを記録する（実機の確認用。中身や ID は出さない）
+                        LaunchedEffect(nav.tab, nav.current) {
+                            android.util.Log.i(WaveApplication.LOG_TAG, "nav tab=${nav.tab} screen=${nav.current?.let { it::class.simpleName } ?: "root"}")
+                        }
                         val pop: () -> Unit = nav::back
                         if (reLogin) {
                             BackHandler { reLogin = false }
@@ -246,7 +250,8 @@ class MainActivity : ComponentActivity() {
                                     val likedVersion by container.likedSongsVersion.collectAsStateWithLifecycle()
                                     val version = if (playlist.playlistId == MusicRepository.LIKED_SONGS) likedVersion else 0
                                     PlaylistScreen(
-                                        viewModel(key = "playlist-$loginGeneration-${playlist.playlistId}-$version-$playlistsVersion-${screen.initialQuery}") {
+                                        summary = playlist,
+                                        viewModel = viewModel(key = "playlist-$loginGeneration-${playlist.playlistId}-$version-$playlistsVersion-${screen.initialQuery}") {
                                             PlaylistViewModel(container.music, playlist.playlistId, playlist.title, screen.initialQuery, container.settings.playlistOrders)
                                         },
                                         onPlay = { songs, index, continuation -> playerActions.playFrom(songs, index, playlist.playlistId, continuation) },
