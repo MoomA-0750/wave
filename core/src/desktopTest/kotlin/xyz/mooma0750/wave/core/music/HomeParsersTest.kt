@@ -23,6 +23,10 @@ class HomeParsersTest {
         assertTrue(!playlist.playlistId.startsWith("VL"))
         assertTrue(playlist.thumbnailUrl.orEmpty().startsWith("https://"))
         assertNotNull(page.continuation)
+        // 気分の絞り込み（見出しの上のチップ）
+        assertEquals(10, page.chips.size)
+        assertEquals("Sleep", page.chips.first().title)
+        assertTrue(page.chips.all { it.params.isNotBlank() })
     }
 
     @Test
@@ -56,5 +60,23 @@ class HomeParsersTest {
     @Test
     fun unknownShapeIsEmpty() {
         assertEquals(HomePage(emptyList(), null), MusicParsers.homePage(JsonObject(emptyMap())))
+    }
+
+    @Test
+    fun moodsAreTilesGroupedBySection() {
+        val sections = MusicParsers.moods(Fixtures.json("browse_moods"))
+        assertEquals(listOf("Moods & moments", "Genres"), sections.map { it.title })
+        assertEquals(listOf(11, 27), sections.map { it.categories.size })
+        val chill = sections.first().categories.first()
+        assertEquals("Chill", chill.title)
+        assertEquals("ggMPOg1uX1JOQWZFeDByc2Jm", chill.params)
+        assertEquals(4288988671L, chill.color)
+    }
+
+    @Test
+    fun moodCategoryPageIsShelves() {
+        val page = MusicParsers.homePage(Fixtures.json("browse_mood_category"))
+        assertEquals(2, page.shelves.size)
+        assertTrue(page.shelves.all { it.items.size == 4 })
     }
 }

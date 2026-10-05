@@ -27,8 +27,30 @@ data class HomeShelf(
     val items: List<HomeItem>,
 )
 
-/** ホームの1ページ。続きは棚の追加。 */
+/** ホームの絞り込み（「リラックス」「元気が出る」など）。押すと params を付けてホームを取り直す。 */
+data class HomeChip(
+    val title: String,
+    val params: String,
+)
+
+/** ホームの1ページ。続きは棚の追加。絞り込みは最初のページにだけ来る。 */
 data class HomePage(
     val shelves: List<HomeShelf>,
     val continuation: String?,
+    val chips: List<HomeChip> = emptyList(),
+)
+
+/** 気分・ジャンルの1枚（検索のタブの色のタイル）。 */
+data class MoodCategory(
+    val title: String,
+    /** browse FEmusic_moods_and_genres_category に付ける params。 */
+    val params: String,
+    /** タイルの色（ARGB）。無いこともある。 */
+    val color: Long?,
+)
+
+/** 気分・ジャンルのまとまり（「気分」「ジャンル」）。 */
+data class MoodSection(
+    val title: String,
+    val categories: List<MoodCategory>,
 )

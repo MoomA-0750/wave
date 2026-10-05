@@ -1,185 +1,154 @@
 package xyz.mooma0750.wave.home
 
-import xyz.mooma0750.wave.ui.IconTextButton
-import xyz.mooma0750.wave.ui.ButtonStyle
-import xyz.mooma0750.wave.R
-import android.util.Log
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material3.Button
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import xyz.mooma0750.wave.AppContainer
-import xyz.mooma0750.wave.WaveApplication
+import xyz.mooma0750.wave.R
+import xyz.mooma0750.wave.core.music.HomeItem
 import xyz.mooma0750.wave.core.music.PlaylistSummary
 import xyz.mooma0750.wave.core.music.Song
 import xyz.mooma0750.wave.core.session.AccountResult
-import xyz.mooma0750.wave.core.session.CallResult
-import xyz.mooma0750.wave.core.session.PremiumStatus
-import xyz.mooma0750.wave.core.session.SessionState
-import xyz.mooma0750.wave.debug.DebugPlayback
-import xyz.mooma0750.wave.debug.StreamCheck
-import xyz.mooma0750.wave.library.LibraryUiState
-import xyz.mooma0750.wave.library.libraryItems
 import xyz.mooma0750.wave.navigation.SongActions
-import xyz.mooma0750.wave.nowplaying.MiniPlayer
+import xyz.mooma0750.wave.settings.AccountInfo
+import xyz.mooma0750.wave.settings.Avatar
+import xyz.mooma0750.wave.ui.MenuIcon
 
+/**
+ * ホーム（並びは Spotify と同じ）: 左上のアカウントのアイコン（押すと横からメニュー）と絞り込みのチップ、
+ * 最近聴いたものの2列の格子、おすすめの棚。
+ */
 @Composable
 fun HomeScreen(
-    container: AppContainer,
-    obtainedAtEpochMs: Long,
-    onReLogin: () -> Unit,
-    onSearch: () -> Unit,
-    onConnect: () -> Unit,
-    library: LibraryUiState,
-    onOpenPlaylist: (PlaylistSummary) -> Unit,
-    onOpenHistory: () -> Unit,
-    songActions: SongActions,
+    account: AccountInfo,
     feed: HomeFeedViewModel,
     onPlaySong: (Song) -> Unit,
+    onOpenPlaylist: (PlaylistSummary) -> Unit,
+    songActions: SongActions,
+    onOpenHistory: () -> Unit,
+    onOpenSettings: () -> Unit,
+    onConnect: () -> Unit,
+    showConnect: Boolean,
 ) {
-    val feedState by feed.state.collectAsStateWithLifecycle()
-    val sessionState by container.session.state.collectAsStateWithLifecycle()
-    var account by remember(obtainedAtEpochMs) { mutableStateOf<AccountResult?>(null) }
-    var premium by remember(obtainedAtEpochMs) { mutableStateOf<PremiumStatus?>(null) }
-    // 失敗が表示に残り続けないよう、前面に戻ったときと、セッションが Active に戻ったときに取り直す
-    var refresh by remember { mutableIntStateOf(0) }
-    val sessionActive = sessionState is SessionState.Active
-
-    LifecycleResumeEffect(Unit) {
-        if (account !is AccountResult.Ok || premium == PremiumStatus.Unknown) refresh++
-        onPauseOrDispose {}
+    val state by feed.state.collectAsStateWithLifecycle()
+    val drawer = rememberDrawerState(DrawerValue.Closed)
+    val scope = rememberCoroutineScope()
+    val closeThen = { action: () -> Unit ->
+        scope.launch { drawer.close() }
+        action()
     }
-
-    LaunchedEffect(obtainedAtEpochMs, refresh, sessionActive) {
-        // AuthManager の LoggedIn は、WaveSession への反映より先に届くことがある。このログインが反映されるまで待つ
-        container.session.appliedObtainedAtEpochMs.first { it == obtainedAtEpochMs }
-        if (account is AccountResult.Ok && premium != null && premium != PremiumStatus.Unknown) return@LaunchedEffect
-        val fetchedAccount = container.session.accountInfo()
-        account = fetchedAccount
-        // 値は出さず、種類だけを記録する（実機確認用）
-        Log.i(WaveApplication.LOG_TAG, "account result=${fetchedAccount::class.simpleName} name=${(fetchedAccount as? AccountResult.Ok)?.name != null}")
-        val status = container.session.premiumStatus()
-        premium = status
-        Log.i(WaveApplication.LOG_TAG, "premium=$status session=${container.session.state.value}")
-    }
-
-    Scaffold(bottomBar = { MiniPlayer(container.player, songActions, container.lyrics, container.musicVideos) }) { padding ->
-        LazyColumn(Modifier.fillMaxSize().padding(padding)) {
-            item {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    ModalNavigationDrawer(
+        drawerState = drawer,
+        drawerContent = {
+            ModalDrawerSheet {
+                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Avatar(account, 48.dp)
                     Text(
-                        when (val current = account) {
-                            null -> "アカウントを確認しています…"
-                            is AccountResult.Ok -> current.name ?: "名前を取得できませんでした"
-                            is AccountResult.Failed -> "アカウントを取得できませんでした"
-                        },
-                        style = MaterialTheme.typography.titleLarge,
+                        (account.account as? AccountResult.Ok)?.name ?: "アカウント",
+                        Modifier.padding(start = 12.dp),
+                        style = MaterialTheme.typography.titleMedium,
                     )
-                    // 診断値: 固定の1曲で Premium 音質のフォーマットを観測できたか（再生時の音質はその曲で決める）
-                    Text(
-                        "Premium 音質: " +
-                            when (premium) {
-                                null -> "確認中…"
-                                PremiumStatus.Available -> "利用可"
-                                PremiumStatus.Unavailable -> "利用不可"
-                                PremiumStatus.Unknown -> "未確認"
-                            },
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                    when (sessionState) {
-                        is SessionState.Expired -> {
-                            Text("再ログインが必要です")
-                            Button(onClick = onReLogin) { Text("ログインし直す") }
-                        }
-                        is SessionState.Suspect -> {
-                            Text("ログイン状態を確認できていません")
-                            OutlinedButton(onClick = onReLogin) { Text("ログインし直す") }
-                        }
-                        else -> Unit
-                    }
-                    val historyEnabled by container.settings.historyEnabled.collectAsStateWithLifecycle(initialValue = null)
-                    androidx.compose.foundation.layout.Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                        Text("再生履歴を YouTube Music に送る", Modifier.weight(1f))
-                        historyEnabled?.let { enabled ->
-                            androidx.compose.material3.Switch(checked = enabled, onCheckedChange = { container.appScope.launch { container.settings.setHistoryEnabled(it) } })
-                        }
-                    }
-                    androidx.compose.foundation.layout.Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        IconTextButton(R.drawable.ic_search, "検索", onSearch, style = ButtonStyle.Filled)
-                        if (container.connectConfigured || container.connectV2 != null) IconTextButton(R.drawable.ic_devices, "端末の連携", onConnect, style = ButtonStyle.Outlined)
-                        IconTextButton(R.drawable.ic_logout, "ログアウト", { container.appScope.launch { container.logout() } }, style = ButtonStyle.Outlined)
+                }
+                HorizontalDivider()
+                NavigationDrawerItem(label = { Text("最近再生した曲") }, icon = { MenuIcon(R.drawable.ic_history) }, selected = false, onClick = { closeThen(onOpenHistory) })
+                if (showConnect) {
+                    NavigationDrawerItem(label = { Text("端末の連携") }, icon = { MenuIcon(R.drawable.ic_devices) }, selected = false, onClick = { closeThen(onConnect) })
+                }
+                NavigationDrawerItem(label = { Text("設定") }, icon = { MenuIcon(R.drawable.ic_settings) }, selected = false, onClick = { closeThen(onOpenSettings) })
+            }
+        },
+    ) {
+        LazyColumn(Modifier.fillMaxSize()) {
+            item(key = "top") {
+                Row(Modifier.statusBarsPadding().padding(top = 8.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Avatar(account, 32.dp, Modifier.padding(start = 16.dp).clip(CircleShape).clickable { scope.launch { drawer.open() } })
+                    LazyRow(contentPadding = PaddingValues(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        item { FilterChip(selected = state.selected == null, onClick = { feed.select(null) }, label = { Text("すべて") }) }
+                        items(state.chips) { chip -> FilterChip(selected = state.selected == chip, onClick = { feed.select(chip) }, label = { Text(chip.title) }) }
                     }
                 }
             }
-            homeFeedItems(feedState, feed::refresh, feed::loadMore, onPlaySong, onOpenPlaylist, songActions)
-            libraryItems(library, onOpenPlaylist, onOpenHistory)
-            if (container.isDebuggable) {
-                item {
-                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        var checkLines by remember { mutableStateOf<List<String>?>(null) }
-                        val scope = rememberCoroutineScope()
-                        OutlinedButton(onClick = {
-                            checkLines = listOf("確認中…")
-                            scope.launch { checkLines = StreamCheck.run(container) }
-                        }) { Text("開発用: ストリーム確認") }
-                        checkLines?.forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
-                        DebugPlaybackButtons(container)
-                    }
-                }
+            if (state.recent.isNotEmpty()) {
+                item(key = "recent") { RecentGrid(state.recent) { openHomeItem(it, onPlaySong, onOpenPlaylist, songActions) } }
             }
+            homeFeedItems(state, feed::refresh, feed::loadMore, onPlaySong, onOpenPlaylist, songActions)
+            item(key = "bottom") { Spacer(Modifier.height(16.dp)) }
         }
     }
 }
 
-/** debug ビルドだけの再生確認。 */
+/** 最近聴いたものの2列の格子（Spotify のホームの先頭）。画像を左に、名前を右に。 */
 @Composable
-private fun DebugPlaybackButtons(container: AppContainer) {
-    val scope = rememberCoroutineScope()
-    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedButton(onClick = { scope.launch { container.player.playSong(DebugPlayback.fixedSong) } }) { Text("開発用: 固定の曲を再生") }
-        OutlinedButton(onClick = {
-            scope.launch {
-                val corrupted = container.streamCache.corruptForDebug(DebugPlayback.VIDEO_ID)
-                Log.i(WaveApplication.LOG_TAG, "debug corrupt cached url done=$corrupted")
-                // バッファの外へ飛んで、DataSource を開き直させる
-                container.player.controller().run { seekTo(currentPosition + 120_000) }
-            }
-        }) { Text("開発用: URL を壊して 2 分進む") }
-        OutlinedButton(onClick = { scope.launch { container.player.addNext(DebugPlayback.unplayableSong) } }) { Text("開発用: 再生できない曲を次に") }
-        OutlinedButton(onClick = {
-            scope.launch {
-                when (val page = container.music.playlist(DebugPlayback.PUBLIC_PLAYLIST_ID)) {
-                    is CallResult.Ok ->
-                        container.player.playFrom(page.value.songs, 0, DebugPlayback.PUBLIC_PLAYLIST_ID, page.value.continuation)
-                    is CallResult.Failed -> Log.i(WaveApplication.LOG_TAG, "debug playlist failed ${page.kind}")
+private fun RecentGrid(
+    items: List<HomeItem>,
+    onClick: (HomeItem) -> Unit,
+) {
+    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        items.chunked(2).forEach { row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                row.forEach { item ->
+                    val look = HomeItemLook.of(item)
+                    Card(
+                        onClick = { onClick(item) },
+                        modifier = Modifier.weight(1f).height(56.dp),
+                        shape = RoundedCornerShape(6.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            coil3.compose.AsyncImage(
+                                model = look.thumbnailUrl,
+                                contentDescription = null,
+                                modifier = Modifier.size(56.dp).then(if (item is HomeItem.ArtistItem) Modifier.padding(4.dp).clip(CircleShape) else Modifier),
+                                contentScale = ContentScale.Crop,
+                            )
+                            Text(
+                                look.title,
+                                Modifier.padding(horizontal = 8.dp),
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                        }
+                    }
                 }
+                if (row.size == 1) Spacer(Modifier.weight(1f))
             }
-        }) { Text("開発用: 公開プレイリストを再生") }
-        OutlinedButton(onClick = {
-            scope.launch { container.player.controller().run { seekTo(mediaItemCount - 1, 0L) } }
-        }) { Text("開発用: キューの最後の曲へ") }
-        OutlinedButton(onClick = {
-            scope.launch { container.player.controller().run { if (duration > 10_000) seekTo(duration - 5_000) } }
-        }) { Text("開発用: 曲の終わりへ") }
+        }
     }
 }

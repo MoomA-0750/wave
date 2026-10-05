@@ -120,11 +120,38 @@ internal object MusicParsers {
                 HomeShelf(textOf(header.path("title")).orEmpty(), textOf(header.path("strapline")), items)
             }
         val continuation = list.path("continuations").arrayItems().firstNotNullOfOrNull { it.path("nextContinuationData", "continuation").string() }
-        return HomePage(shelves, continuation)
+        val chips =
+            findAll(list.path("header"), "chipCloudChipRenderer").mapNotNull { chip ->
+                val browse = chip.path("navigationEndpoint", "browseEndpoint")
+                if (browse.path("browseId").string() != "FEmusic_home") return@mapNotNull null
+                HomeChip(textOf(chip.path("text")) ?: return@mapNotNull null, browse.path("params").string() ?: return@mapNotNull null)
+            }
+        return HomePage(shelves, continuation, chips)
     }
+
+    /** 気分とジャンル（browse FEmusic_moods_and_genres）。格子ごとに見出しとタイル。 */
+    fun moods(root: JsonObject): List<MoodSection> =
+        findAll(root, "gridRenderer").mapNotNull { grid ->
+            val categories =
+                grid.path("items").arrayItems().mapNotNull { item ->
+                    val button = item.path("musicNavigationButtonRenderer").asObject() ?: return@mapNotNull null
+                    val browse = button.path("clickCommand", "browseEndpoint")
+                    MoodCategory(
+                        title = textOf(button.path("buttonText")) ?: return@mapNotNull null,
+                        params = browse.path("params").string() ?: return@mapNotNull null,
+                        color = (button.path("solid", "leftStripeColor") as? kotlinx.serialization.json.JsonPrimitive)?.content?.toLongOrNull(),
+                    )
+                }
+            if (categories.isEmpty()) return@mapNotNull null
+            MoodSection(textOf(grid.path("header", "gridHeaderRenderer", "title")).orEmpty(), categories)
+        }
 
     /** 新作のアルバム・シングル（browse FEmusic_new_releases_albums の格子）。 */
     fun newReleases(root: JsonObject): List<AlbumSummary> = gridItems(root).mapNotNull { (it as? HomeItem.AlbumItem)?.album }
+
+    /** ライブラリのアーティスト・アルバムの一覧。格子（カード）と棚（行）のどちらの形でも読む。 */
+    fun libraryCards(root: JsonObject): List<HomeItem> =
+        gridItems(root) + findAll(root, "musicShelfRenderer").flatMap { it.path("contents").arrayItems() }.mapNotNull(::homeItem)
 
     /** 格子（gridRenderer）に並ぶカード。ライブラリの「最近のアクティビティ」もこの形。 */
     fun gridItems(root: JsonObject): List<HomeItem> = findAll(root, "gridRenderer").flatMap { it.path("items").arrayItems() }.mapNotNull(::homeItem)

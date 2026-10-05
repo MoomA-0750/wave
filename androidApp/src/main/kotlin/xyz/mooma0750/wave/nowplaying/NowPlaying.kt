@@ -1,12 +1,29 @@
 package xyz.mooma0750.wave.nowplaying
 
-import xyz.mooma0750.wave.ui.LargeIconSize
 import xyz.mooma0750.wave.ui.IconAction
 import xyz.mooma0750.wave.R
 import androidx.media3.common.Player
-import androidx.compose.ui.res.painterResource
-import androidx.compose.material3.Icon
-import androidx.compose.material3.FilledIconButton
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.input.pointer.pointerInput
+import xyz.mooma0750.wave.ui.PlayFab
+import xyz.mooma0750.wave.ui.rememberArtworkColor
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -54,61 +71,246 @@ import xyz.mooma0750.wave.playback.togglePlayPause
 import xyz.mooma0750.wave.search.SongMenuButton
 import xyz.mooma0750.wave.ui.Durations
 
-/** 画面の下に常に出すミニプレーヤー（仮）。 */
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * 画面の下のミニプレーヤー（並びは Spotify と同じ: ジャケット・曲名・端末・評価・再生、下に進み具合の線）。
+ * 押すと再生画面を開く。左右に払うと前後の曲へ。
+ */
 @Composable
 fun MiniPlayer(
     connection: PlayerConnection,
-    actions: SongActions,
-    lyrics: LyricsRepository,
-    videos: MusicVideos,
+    onOpen: () -> Unit,
+    onOpenDevices: () -> Unit,
 ) {
     val (state, controller) = rememberPlayerUiState(connection)
-    var showQueue by remember { mutableStateOf(false) }
-    var showFull by remember { mutableStateOf(false) }
     if (state.title == null) return
-
-    Surface(tonalElevation = 3.dp) {
-        Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 12.dp, vertical = 6.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f).clickable { showFull = true }) {
-                    Text(state.title, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Medium)
+    val scope = rememberCoroutineScope()
+    val song = Media3QueuePlayer.songOf(controller?.currentMediaItem)
+    val art by rememberArtworkColor(song?.thumbnailUrl)
+    val container = lerp(MaterialTheme.colorScheme.surfaceContainerHigh, art, 0.35f)
+    var drag by remember { mutableFloatStateOf(0f) }
+    Surface(
+        color = container,
+        shape = RoundedCornerShape(8.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 4.dp)
+                .pointerInput(controller) {
+                    detectHorizontalDragGestures(
+                        onDragEnd = {
+                            when {
+                                drag < -SWIPE_PX -> controller?.takeIf { it.hasNextMediaItem() }?.seekToNextMediaItem()
+                                drag > SWIPE_PX -> controller?.takeIf { it.hasPreviousMediaItem() }?.seekToPreviousMediaItem()
+                            }
+                            drag = 0f
+                        },
+                    ) { _, amount -> drag += amount }
+                }.clickable(onClick = onOpen),
+    ) {
+        Column {
+            Row(Modifier.padding(start = 6.dp, top = 6.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                coil3.compose.AsyncImage(
+                    model = song?.thumbnailUrl,
+                    contentDescription = null,
+                    modifier = Modifier.size(40.dp).clip(RoundedCornerShape(4.dp)),
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                )
+                Column(Modifier.weight(1f).padding(horizontal = 10.dp)) {
+                    Text(state.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                     Text(
                         listOfNotNull(state.artist, state.error?.let { "エラー: $it" }, "バッファ中".takeIf { state.buffering }).joinToString(" • "),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                IconAction(R.drawable.ic_skip_previous, "前の曲", { controller?.seekToPreviousMediaItem() }, enabled = state.hasPrevious)
+                IconAction(R.drawable.ic_devices, "端末の連携", onOpenDevices)
+                LikeButton(connection, scope)
                 IconAction(if (state.isPlaying) R.drawable.ic_pause else R.drawable.ic_play_arrow, if (state.isPlaying) "一時停止" else "再生", { controller?.togglePlayPause() })
-                IconAction(R.drawable.ic_skip_next, "次の曲", { controller?.seekToNextMediaItem() }, enabled = state.hasNext)
-                IconAction(R.drawable.ic_queue_music, "再生キュー", { showQueue = true })
             }
             if (state.durationMs > 0) {
-                Slider(
-                    value = (state.positionMs.toFloat() / state.durationMs).coerceIn(0f, 1f),
-                    onValueChange = { controller?.seekTo((it * state.durationMs).toLong()) },
+                LinearProgressIndicator(
+                    progress = { (state.positionMs.toFloat() / state.durationMs).coerceIn(0f, 1f) },
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp).height(2.dp),
+                    drawStopIndicator = {},
+                    gapSize = 0.dp,
                 )
             }
         }
     }
+}
 
-    if (showFull) {
-        ModalBottomSheet(onDismissRequest = { showFull = false }, sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
-            FullPlayer(state, controller, connection, lyrics, videos, actions = actions.closing { showFull = false }, onQueue = {
-                showFull = false
-                showQueue = true
-            })
+/** 評価のボタン（Spotify の「＋」と「✓」）。押すと「高く評価」を付け外しする。 */
+@Composable
+private fun LikeButton(
+    connection: PlayerConnection,
+    scope: kotlinx.coroutines.CoroutineScope,
+    size: androidx.compose.ui.unit.Dp = 24.dp,
+) {
+    val like by connection.likeState.collectAsState()
+    val videoId = like.videoId
+    val liked = like.status == LikeStatus.Like
+    IconAction(
+        when {
+            liked -> R.drawable.ic_check_circle
+            like.status == null && videoId != null -> R.drawable.ic_refresh
+            else -> R.drawable.ic_add_circle
+        },
+        when {
+            like.pending -> "変更中"
+            liked -> "高く評価した曲から外す"
+            like.status == null -> "評価を読み直す"
+            else -> "高く評価した曲に追加"
+        },
+        { if (videoId != null) scope.launch { connection.setLiked(videoId, !liked) } },
+        enabled = videoId != null && !like.pending,
+        active = liked,
+        size = size,
+    )
+}
+
+/**
+ * 再生画面（並びは Spotify と同じ）。上にジャケットの色のグラデーション、閉じる・曲／動画の切り替え・メニュー、
+ * 大きなジャケット（動画のときは映像）、曲名と評価、シークバー、操作の列、端末と再生キュー、下に歌詞のカード。
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun NowPlayingScreen(
+    connection: PlayerConnection,
+    lyrics: LyricsRepository,
+    videos: MusicVideos,
+    actions: SongActions,
+    onClose: () -> Unit,
+    onOpenDevices: () -> Unit,
+) {
+    val (state, controller) = rememberPlayerUiState(connection)
+    val scope = rememberCoroutineScope()
+    val song = Media3QueuePlayer.songOf(controller?.currentMediaItem)
+    var showQueue by remember { mutableStateOf(false) }
+    var showLyrics by remember { mutableStateOf(false) }
+    var video by rememberSaveable { mutableStateOf(false) }
+    val art by rememberArtworkColor(song?.thumbnailUrl)
+    val background = MaterialTheme.colorScheme.background
+    val top = lerp(background, art, 0.6f)
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(Brush.verticalGradient(0f to top, 0.75f to background)),
+    ) {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .navigationBarsPadding()
+                .verticalScroll(rememberScrollState()),
+        ) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                IconAction(R.drawable.ic_arrow_down, "閉じる", onClose)
+                Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                    // Spotify の「曲｜動画」の切り替え
+                    SingleChoiceSegmentedButtonRow {
+                        SegmentedButton(selected = !video, onClick = { video = false }, shape = SegmentedButtonDefaults.itemShape(0, 2), icon = {}) { Text("曲") }
+                        SegmentedButton(selected = video, onClick = { video = true }, shape = SegmentedButtonDefaults.itemShape(1, 2), icon = {}, enabled = song != null) { Text("動画") }
+                    }
+                }
+                song?.let { SongMenuButton(it, actions, inQueue = true) } ?: Spacer(Modifier.size(48.dp))
+            }
+            Box(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 24.dp)) {
+                if (video && song != null) {
+                    MusicVideoPanel(song, controller, videos, Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(8.dp)))
+                } else {
+                    coil3.compose.AsyncImage(
+                        model = song?.thumbnailUrl?.takeIf { it.startsWith("https://") }?.let(Media3QueuePlayer::largeArtwork),
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(8.dp)),
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                    )
+                }
+            }
+            Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(state.title.orEmpty(), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    val artist = song?.artists?.firstOrNull()
+                    Text(
+                        state.artist.orEmpty(),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.then(if (artist?.browseId != null) Modifier.clickable { actions.openArtist(artist) } else Modifier),
+                    )
+                }
+                LikeButton(connection, scope, size = 28.dp)
+            }
+            Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
+                Slider(
+                    value = if (state.durationMs > 0) (state.positionMs.toFloat() / state.durationMs).coerceIn(0f, 1f) else 0f,
+                    onValueChange = { if (state.durationMs > 0) controller?.seekTo((it * state.durationMs).toLong()) },
+                    enabled = state.durationMs > 0,
+                )
+                Row(Modifier.fillMaxWidth()) {
+                    Text(formatTime(state.positionMs), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.weight(1f))
+                    Text(formatTime(state.durationMs), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                IconAction(R.drawable.ic_shuffle, "残りをシャッフル", { scope.launch { connection.shuffleUpcoming() } }, enabled = state.queue.size - state.currentIndex > 2)
+                IconAction(R.drawable.ic_skip_previous, "前の曲", { controller?.seekToPreviousMediaItem() }, enabled = state.hasPrevious, size = 36.dp)
+                PlayFab(state.isPlaying, { controller?.togglePlayPause() }, size = 72.dp)
+                IconAction(R.drawable.ic_skip_next, "次の曲", { controller?.seekToNextMediaItem() }, enabled = state.hasNext, size = 36.dp)
+                IconAction(
+                    if (state.repeatMode == Player.REPEAT_MODE_ONE) R.drawable.ic_repeat_one else R.drawable.ic_repeat,
+                    when (state.repeatMode) {
+                        Player.REPEAT_MODE_ALL -> "リピート: 全体"
+                        Player.REPEAT_MODE_ONE -> "リピート: 1曲"
+                        else -> "リピート: オフ"
+                    },
+                    { scope.launch { connection.cycleRepeatMode() } },
+                    active = state.repeatMode != Player.REPEAT_MODE_OFF,
+                )
+            }
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                IconAction(R.drawable.ic_devices, "端末の連携", onOpenDevices)
+                Spacer(Modifier.weight(1f))
+                IconAction(R.drawable.ic_queue_music, "再生キュー（${state.queue.size}曲）", { showQueue = true })
+            }
+            val like by connection.likeState.collectAsState()
+            like.message?.let { Text(it, Modifier.padding(horizontal = 24.dp), style = MaterialTheme.typography.bodySmall) }
+            state.error?.let { Text("エラー: $it", Modifier.padding(horizontal = 24.dp), style = MaterialTheme.typography.bodySmall) }
+            // 下に続く歌詞のカード（Spotify と同じ。押すと全面で開く）
+            if (song != null) {
+                Card(
+                    Modifier.fillMaxWidth().padding(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = lerp(MaterialTheme.colorScheme.surfaceContainerHigh, art, 0.5f)),
+                ) {
+                    Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text("歌詞", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                        IconAction(R.drawable.ic_lyrics, "歌詞を全面で開く", { showLyrics = true })
+                    }
+                    LyricsPanel(song, controller, lyrics, Modifier.fillMaxWidth().height(320.dp).padding(horizontal = 8.dp))
+                }
+            }
+        }
+    }
+
+    if (showLyrics && song != null) {
+        ModalBottomSheet(onDismissRequest = { showLyrics = false }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+            Text(state.title.orEmpty(), Modifier.padding(horizontal = 24.dp), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(state.artist.orEmpty(), Modifier.padding(horizontal = 24.dp), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            LyricsPanel(song, controller, lyrics, Modifier.fillMaxWidth().fillMaxHeight(0.85f).padding(8.dp))
         }
     }
 
     if (showQueue) {
-        ModalBottomSheet(onDismissRequest = { showQueue = false }) {
+        ModalBottomSheet(onDismissRequest = { showQueue = false }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
             QueueSheet(state, controller, connection, actions.closing { showQueue = false })
         }
     }
 }
+
+private const val SWIPE_PX = 120f
 
 @Composable
 private fun QueueSheet(
@@ -121,7 +323,7 @@ private fun QueueSheet(
     val listState = rememberLazyListState()
     LaunchedEffect(Unit) { if (state.currentIndex > 0) listState.scrollToItem(state.currentIndex) }
     Column(Modifier.fillMaxWidth()) {
-        Text("再生キュー（${state.queue.size}曲）", Modifier.padding(16.dp), style = MaterialTheme.typography.titleMedium)
+        Text("再生キュー", Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         LazyColumn(Modifier.fillMaxWidth(), state = listState) {
             itemsIndexed(state.queue, key = { _, row -> row.itemId }) { index, row ->
                 val current = index == state.currentIndex
@@ -150,116 +352,5 @@ private fun QueueSheet(
     }
 }
 
-/** 再生中の画面（大）。仮の見た目。 */
-@Composable
-private fun FullPlayer(
-    state: PlayerUiState,
-    controller: MediaController?,
-    connection: PlayerConnection,
-    lyrics: LyricsRepository,
-    videos: MusicVideos,
-    actions: SongActions,
-    onQueue: () -> Unit,
-) {
-    val scope = rememberCoroutineScope()
-    val song = Media3QueuePlayer.songOf(controller?.currentMediaItem)
-    var view by rememberSaveable { mutableStateOf(PlayerView.Artwork) }
-    Column(
-        Modifier.fillMaxWidth().padding(24.dp).navigationBarsPadding(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        if (view == PlayerView.Lyrics && song != null) {
-            LyricsPanel(song, controller, lyrics, Modifier.fillMaxWidth().aspectRatio(1f))
-        } else if (view == PlayerView.Video && song != null) {
-            MusicVideoPanel(song, controller, videos, Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(8.dp)))
-        } else {
-            coil3.compose.AsyncImage(
-                model = song?.thumbnailUrl?.takeIf { it.startsWith("https://") }?.let(Media3QueuePlayer::largeArtwork),
-                contentDescription = null,
-                modifier = Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(8.dp)),
-                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-            )
-        }
-        Text(state.title.orEmpty(), style = MaterialTheme.typography.titleLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(state.artist.orEmpty(), style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-            song?.let { SongMenuButton(it, actions, inQueue = true) }
-        }
-        if (state.durationMs > 0) {
-            Slider(
-                value = (state.positionMs.toFloat() / state.durationMs).coerceIn(0f, 1f),
-                onValueChange = { controller?.seekTo((it * state.durationMs).toLong()) },
-            )
-            Row(Modifier.fillMaxWidth()) {
-                Text(formatTime(state.positionMs), style = MaterialTheme.typography.bodySmall)
-                Spacer(Modifier.weight(1f))
-                Text(formatTime(state.durationMs), style = MaterialTheme.typography.bodySmall)
-            }
-        }
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceEvenly) {
-            IconAction(R.drawable.ic_shuffle, "残りをシャッフル", { scope.launch { connection.shuffleUpcoming() } }, enabled = state.queue.size - state.currentIndex > 2)
-            IconAction(R.drawable.ic_skip_previous, "前の曲", { controller?.seekToPreviousMediaItem() }, enabled = state.hasPrevious)
-            FilledIconButton(onClick = { controller?.togglePlayPause() }, modifier = Modifier.size(64.dp)) {
-                Icon(
-                    painterResource(if (state.isPlaying) R.drawable.ic_pause else R.drawable.ic_play_arrow),
-                    contentDescription = if (state.isPlaying) "一時停止" else "再生",
-                    modifier = Modifier.size(LargeIconSize),
-                )
-            }
-            IconAction(R.drawable.ic_skip_next, "次の曲", { controller?.seekToNextMediaItem() }, enabled = state.hasNext)
-            IconAction(
-                if (state.repeatMode == Player.REPEAT_MODE_ONE) R.drawable.ic_repeat_one else R.drawable.ic_repeat,
-                when (state.repeatMode) {
-                    Player.REPEAT_MODE_ALL -> "リピート: 全体"
-                    Player.REPEAT_MODE_ONE -> "リピート: 1曲"
-                    else -> "リピート: オフ"
-                },
-                { scope.launch { connection.cycleRepeatMode() } },
-                active = state.repeatMode != Player.REPEAT_MODE_OFF,
-            )
-        }
-        val like by connection.likeState.collectAsState()
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceEvenly) {
-            val videoId = like.videoId
-            IconAction(
-                when (like.status) {
-                    LikeStatus.Like -> R.drawable.ic_favorite
-                    null -> R.drawable.ic_refresh
-                    else -> R.drawable.ic_favorite_border
-                },
-                when {
-                    like.pending -> "変更中"
-                    like.status == LikeStatus.Like -> "高く評価を外す"
-                    like.status == null -> "評価を読み直す"
-                    else -> "高く評価"
-                },
-                { if (videoId != null) scope.launch { connection.setLiked(videoId, like.status != LikeStatus.Like) } },
-                enabled = videoId != null && !like.pending,
-                active = like.status == LikeStatus.Like,
-            )
-            IconAction(
-                R.drawable.ic_lyrics,
-                if (view == PlayerView.Lyrics) "歌詞を閉じる" else "歌詞",
-                { view = if (view == PlayerView.Lyrics) PlayerView.Artwork else PlayerView.Lyrics },
-                enabled = song != null,
-                active = view == PlayerView.Lyrics,
-            )
-            IconAction(
-                R.drawable.ic_music_video,
-                if (view == PlayerView.Video) "動画を閉じる" else "動画",
-                { view = if (view == PlayerView.Video) PlayerView.Artwork else PlayerView.Video },
-                enabled = song != null,
-                active = view == PlayerView.Video,
-            )
-            IconAction(R.drawable.ic_queue_music, "再生キュー（${state.queue.size}曲）", onQueue)
-        }
-        like.message?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
-        state.error?.let { Text("エラー: $it", style = MaterialTheme.typography.bodySmall) }
-    }
-}
-
 private fun formatTime(ms: Long): String = Durations.ofMillis(ms)
 
-/** 再生中の画面の上半分に出すもの。 */
-private enum class PlayerView { Artwork, Lyrics, Video }

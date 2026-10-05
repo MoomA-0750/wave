@@ -119,7 +119,7 @@ fun HistoryScreen(
     onPlay: (songs: List<Song>, index: Int) -> Unit,
     actions: SongActions,
     onBack: () -> Unit,
-    bottomBar: @Composable () -> Unit,
+    bottomBar: @Composable () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     Scaffold(

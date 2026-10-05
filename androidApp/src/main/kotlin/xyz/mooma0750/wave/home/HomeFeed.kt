@@ -35,6 +35,7 @@ import xyz.mooma0750.wave.R
 import xyz.mooma0750.wave.WaveApplication
 import xyz.mooma0750.wave.core.music.AlbumRef
 import xyz.mooma0750.wave.core.music.ArtistRef
+import xyz.mooma0750.wave.core.music.HomeChip
 import xyz.mooma0750.wave.core.music.HomeItem
 import xyz.mooma0750.wave.core.music.HomeShelf
 import xyz.mooma0750.wave.core.music.MusicRepository
@@ -47,8 +48,13 @@ import xyz.mooma0750.wave.search.failureMessage
 import xyz.mooma0750.wave.ui.IconTextButton
 
 data class HomeFeedUiState(
+    /** 上の格子に出す、最近聴いたもの（Spotify のホームの先頭の8枚）。 */
+    val recent: List<HomeItem> = emptyList(),
     /** 新作（アルバム・シングル）を先頭に、ホームの棚を続ける。 */
     val shelves: List<HomeShelf> = emptyList(),
+    /** 上の絞り込み（気分）。選んでいなければ selected は null（すべて）。 */
+    val chips: List<HomeChip> = emptyList(),
+    val selected: HomeChip? = null,
     val continuation: String? = null,
     val loading: Boolean = true,
     val loadingMore: Boolean = false,
@@ -66,12 +72,26 @@ class HomeFeedViewModel(
         refresh()
     }
 
-    fun refresh() {
-        mutableState.value = HomeFeedUiState()
-        viewModelScope.launch {
-            val newReleases = async { music.newReleases() }
-            val recent = async { music.recentActivity() }
-            val home = music.home()
+    private var job: kotlinx.coroutines.Job? = null
+
+    /** 絞り込みを選ぶ。同じものをもう一度押したら外す（Spotify のチップと同じ）。 */
+    fun select(chip: HomeChip?) {
+        val next = chip.takeIf { it != state.value.selected }
+        load(next)
+    }
+
+    fun refresh() = load(state.value.selected)
+
+    private fun load(chip: HomeChip?) {
+        val chips = state.value.chips
+        mutableState.value = HomeFeedUiState(chips = chips, selected = chip)
+        job?.cancel()
+        job =
+            viewModelScope.launch {
+            // 絞り込み中は、ホームの棚だけ（最近聴いたもの・新作は「すべて」のときだけ）
+            val newReleases = async { if (chip == null) music.newReleases() else CallResult.Ok(emptyList()) }
+            val recent = async { if (chip == null) music.recentActivity() else CallResult.Ok(emptyList()) }
+            val home = music.home(params = chip?.params)
             val releases = (newReleases.await() as? CallResult.Ok)?.value.orEmpty()
             val recentItems = (recent.await() as? CallResult.Ok)?.value.orEmpty()
             Log.i(WaveApplication.LOG_TAG, "home recent items=${recentItems.size} kinds=${recentItems.groupingBy { it::class.simpleName.orEmpty() }.eachCount()}" + if (recentItems.isEmpty()) " renderers=${music.lastRendererNames}" else "")
@@ -92,10 +112,12 @@ class HomeFeedViewModel(
                         pages++
                     }
                     Log.i(WaveApplication.LOG_TAG, "home initial pages=$pages shelves=${shelves.size} kinds=${kindCounts(shelves)}")
-                    mutableState.value = HomeFeedUiState(shelves, continuation, loading = false)
+                    mutableState.value =
+                        HomeFeedUiState(recentItems.take(RECENT_GRID), shelves, home.value.chips.ifEmpty { chips }, chip, continuation, loading = false)
                 }
                 is CallResult.Failed ->
-                    mutableState.value = HomeFeedUiState(releaseShelf, null, loading = false, failure = home.kind.takeIf { releaseShelf.isEmpty() })
+                    mutableState.value =
+                        HomeFeedUiState(recentItems.take(RECENT_GRID), releaseShelf, chips, chip, null, loading = false, failure = home.kind.takeIf { releaseShelf.isEmpty() })
             }
         }
     }
@@ -122,6 +144,7 @@ class HomeFeedViewModel(
         const val NEW_RELEASES_TITLE = "新作"
         const val RECENT_TITLE = "最近聴いたもの"
         const val RECENT_COUNT = 20
+        const val RECENT_GRID = 8
         const val NEW_RELEASES_COUNT = 20
         const val MIN_SHELVES = 8
         const val MAX_INITIAL_PAGES = 4
@@ -144,11 +167,9 @@ fun LazyListScope.homeFeedItems(
                 Text(shelf.title, Modifier.padding(horizontal = 16.dp), style = MaterialTheme.typography.titleLarge)
                 LazyRow(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     items(shelf.items) { item ->
-                        when (item) {
-                            is HomeItem.SongItem -> Card(item.song.thumbnailUrl, item.song.title, item.song.subtitle, RoundedCornerShape(6.dp)) { onPlaySong(item.song) }
-                            is HomeItem.AlbumItem -> Card(item.album.thumbnailUrl, item.album.title, item.album.subtitle, RoundedCornerShape(6.dp)) { actions.openAlbum(AlbumRef(item.album.title, item.album.browseId)) }
-                            is HomeItem.PlaylistItem -> Card(item.playlist.thumbnailUrl, item.playlist.title, item.playlist.subtitle, RoundedCornerShape(6.dp)) { onOpenPlaylist(item.playlist) }
-                            is HomeItem.ArtistItem -> Card(item.artist.thumbnailUrl, item.artist.name, item.artist.subtitle, CircleShape) { actions.openArtist(ArtistRef(item.artist.name, item.artist.browseId)) }
+                        val look = HomeItemLook.of(item)
+                        Card(look.thumbnailUrl, look.title, look.subtitle, if (item is HomeItem.ArtistItem) CircleShape else RoundedCornerShape(6.dp)) {
+                            openHomeItem(item, onPlaySong, onOpenPlaylist, actions)
                         }
                     }
                 }
@@ -170,6 +191,37 @@ fun LazyListScope.homeFeedItems(
                     IconTextButton(R.drawable.ic_refresh, "もう一度", onRetry)
                 }
             }
+    }
+}
+
+/** カードに出す画像と文字。 */
+data class HomeItemLook(
+    val thumbnailUrl: String?,
+    val title: String,
+    val subtitle: String?,
+) {
+    companion object {
+        fun of(item: HomeItem): HomeItemLook =
+            when (item) {
+                is HomeItem.SongItem -> HomeItemLook(item.song.thumbnailUrl, item.song.title, item.song.subtitle)
+                is HomeItem.AlbumItem -> HomeItemLook(item.album.thumbnailUrl, item.album.title, item.album.subtitle)
+                is HomeItem.PlaylistItem -> HomeItemLook(item.playlist.thumbnailUrl, item.playlist.title, item.playlist.subtitle)
+                is HomeItem.ArtistItem -> HomeItemLook(item.artist.thumbnailUrl, item.artist.name, item.artist.subtitle)
+            }
+    }
+}
+
+fun openHomeItem(
+    item: HomeItem,
+    onPlaySong: (Song) -> Unit,
+    onOpenPlaylist: (PlaylistSummary) -> Unit,
+    actions: SongActions,
+) {
+    when (item) {
+        is HomeItem.SongItem -> onPlaySong(item.song)
+        is HomeItem.AlbumItem -> actions.openAlbum(AlbumRef(item.album.title, item.album.browseId))
+        is HomeItem.PlaylistItem -> onOpenPlaylist(item.playlist)
+        is HomeItem.ArtistItem -> actions.openArtist(ArtistRef(item.artist.name, item.artist.browseId))
     }
 }
 

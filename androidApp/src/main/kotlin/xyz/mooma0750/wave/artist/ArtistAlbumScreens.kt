@@ -147,7 +147,7 @@ fun ArtistScreen(
     onOpenLiked: (artistName: String) -> Unit,
     onOpenAlbum: (AlbumSummary) -> Unit,
     onBack: () -> Unit,
-    bottomBar: @Composable () -> Unit,
+    bottomBar: @Composable () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val page = state.page
@@ -231,7 +231,7 @@ fun AlbumScreen(
     /** アルバムを丸ごとキューに入れる。next = 次に再生（false は最後に追加）。 */
     onQueue: (page: AlbumPage, next: Boolean) -> Unit,
     onBack: () -> Unit,
-    bottomBar: @Composable () -> Unit,
+    bottomBar: @Composable () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val page = state.page

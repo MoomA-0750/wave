@@ -51,41 +51,6 @@ import xyz.mooma0750.wave.search.SongMenuButton
 import xyz.mooma0750.wave.search.SongRow
 import xyz.mooma0750.wave.search.failureMessage
 
-/** ホームに出すライブラリの一覧（高く評価した曲 + プレイリスト）。 */
-fun LazyListScope.libraryItems(
-    state: LibraryUiState,
-    onOpen: (PlaylistSummary) -> Unit,
-    onOpenHistory: () -> Unit,
-) {
-    item {
-        Text("ライブラリ", Modifier.padding(start = 16.dp, top = 16.dp, bottom = 4.dp), style = MaterialTheme.typography.titleMedium)
-    }
-    item {
-        PlaylistRow(PlaylistSummary(MusicRepository.LIKED_SONGS, "高く評価した曲", null, null), onOpen)
-    }
-    item {
-        Column(Modifier.fillMaxWidth().clickable(onClick = onOpenHistory).padding(horizontal = 16.dp, vertical = 10.dp)) {
-            Text("再生履歴", maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyLarge)
-        }
-    }
-    when {
-        state.failure != null -> item { Text(failureMessage(state.failure), Modifier.padding(16.dp)) }
-        state.loading -> item { CircularProgressIndicator(Modifier.padding(16.dp)) }
-    }
-    itemsIndexed(state.playlists, key = { _, playlist -> playlist.playlistId }) { _, playlist -> PlaylistRow(playlist, onOpen) }
-}
-
-@Composable
-private fun PlaylistRow(
-    playlist: PlaylistSummary,
-    onOpen: (PlaylistSummary) -> Unit,
-) {
-    Column(Modifier.fillMaxWidth().clickable { onOpen(playlist) }.padding(horizontal = 16.dp, vertical = 10.dp)) {
-        Text(playlist.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyLarge)
-        playlist.subtitle?.let { Text(it, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall) }
-    }
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlaylistScreen(
@@ -97,7 +62,7 @@ fun PlaylistScreen(
     actions: SongActions,
     onRemove: (song: Song, setVideoId: String) -> Unit,
     onBack: () -> Unit,
-    bottomBar: @Composable () -> Unit,
+    bottomBar: @Composable () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     Scaffold(

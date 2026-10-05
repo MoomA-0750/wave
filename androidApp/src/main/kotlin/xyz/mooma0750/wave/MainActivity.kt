@@ -45,13 +45,25 @@ import xyz.mooma0750.wave.library.PlaylistScreen
 import xyz.mooma0750.wave.library.PlaylistViewModel
 import xyz.mooma0750.wave.login.LoginScreen
 import xyz.mooma0750.wave.login.LoginViewModel
+import xyz.mooma0750.wave.navigation.AppNavigator
+import xyz.mooma0750.wave.navigation.AppShell
 import xyz.mooma0750.wave.navigation.PlayerActions
+import xyz.mooma0750.wave.navigation.Tab
+import xyz.mooma0750.wave.library.LibraryTabScreen
+import xyz.mooma0750.wave.library.LibraryTabViewModel
+import xyz.mooma0750.wave.search.MoodCategoryScreen
+import xyz.mooma0750.wave.search.MoodCategoryViewModel
+import xyz.mooma0750.wave.search.MoodsViewModel
+import xyz.mooma0750.wave.search.SearchBrowseScreen
 import xyz.mooma0750.wave.navigation.Screen
 import xyz.mooma0750.wave.navigation.SongActions
 import xyz.mooma0750.wave.nowplaying.MiniPlayer
+import xyz.mooma0750.wave.nowplaying.NowPlayingScreen
 import xyz.mooma0750.wave.search.SearchHistoryEntry
 import xyz.mooma0750.wave.search.SearchScreen
 import xyz.mooma0750.wave.search.SearchViewModel
+import xyz.mooma0750.wave.settings.SettingsScreen
+import xyz.mooma0750.wave.settings.rememberAccountInfo
 
 class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: android.content.Intent) {
@@ -82,8 +94,8 @@ class MainActivity : ComponentActivity() {
                 val loginGeneration by container.loginGeneration.collectAsStateWithLifecycle()
                 // 失効したときに、ログイン済みのまま再ログイン画面を出す。プロセスが復元されたら出さない（保存しない）
                 var reLogin by remember { mutableStateOf(false) }
-                // 仮の画面遷移（Phase 4 で作り直す）。ホームの上に画面を積む
-                val stack = remember { mutableStateListOf<Screen>() }
+                // 下のタブと、タブごとの画面の積み重ね（Spotify と同じ）
+                val nav = remember { AppNavigator() }
                 // プレイリストに追加する曲（ダイアログを出す）
                 var addTarget by remember { mutableStateOf<Song?>(null) }
                 val playlistsVersion by container.playlistsVersion.collectAsStateWithLifecycle()
@@ -93,15 +105,14 @@ class MainActivity : ComponentActivity() {
                         SongActions(
                             playNext = { song -> scope.launch { container.player.addNext(song) } },
                             addToQueue = { song -> scope.launch { container.player.addToEnd(song) } },
-                            openArtist = { artist -> artist.browseId?.let { stack += Screen.Artist(it, artist.name) } },
-                            openAlbum = { album -> album.browseId?.let { stack += Screen.Album(it, album.title) } },
+                            openArtist = { artist -> artist.browseId?.let { nav.push(Screen.Artist(it, artist.name)) } },
+                            openAlbum = { album -> album.browseId?.let { nav.push(Screen.Album(it, album.title)) } },
                             addToPlaylist = { song -> addTarget = song },
                         )
                     }
                 val playerActions = remember { PlayerActions(scope, container.player) }
-                val miniPlayer: @Composable () -> Unit = { MiniPlayer(container.player, songActions, container.lyrics, container.musicVideos) }
                 LaunchedEffect(container) {
-                    DebugActions.navigation.collect { stack += it }
+                    DebugActions.navigation.collect { nav.push(it) }
                 }
                 // 端末の連携の結果（引き取り・解除など）は、どの画面にいても短く知らせる（仮の表示）
                 val context = androidx.compose.ui.platform.LocalContext.current
@@ -124,13 +135,14 @@ class MainActivity : ComponentActivity() {
                         LaunchedEffect(loginGeneration) {
                             reLogin = false
                             if (shownGeneration != loginGeneration) {
-                                stack.clear()
+                                nav.clearAll()
                                 addTarget = null
                             }
                             shownGeneration = loginGeneration
                         }
-                        if (stack.isNotEmpty()) BackHandler { stack.removeAt(stack.lastIndex) }
-                        val pop: () -> Unit = { if (stack.isNotEmpty()) stack.removeAt(stack.lastIndex) }
+                        BackHandler(enabled = nav.canGoBack) { nav.back() }
+                        val account = rememberAccountInfo(container, state.obtainedAtEpochMs)
+                        val pop: () -> Unit = nav::back
                         if (reLogin) {
                             BackHandler { reLogin = false }
                             LoginScreen(
@@ -138,33 +150,72 @@ class MainActivity : ComponentActivity() {
                                 onCancel = { reLogin = false },
                             )
                         } else {
-                            when (val screen = stack.lastOrNull()) {
-                                null -> {
-                                    val library = viewModel(key = "library-$loginGeneration-$playlistsVersion") { LibraryViewModel(container.music) }
-                                    val libraryState by library.state.collectAsStateWithLifecycle()
+                            AppShell(
+                                nav,
+                                miniPlayer = { open -> MiniPlayer(container.player, onOpen = open, onOpenDevices = { nav.push(Screen.Connect) }) },
+                                nowPlaying = { close ->
+                                    NowPlayingScreen(
+                                        container.player,
+                                        container.lyrics,
+                                        container.musicVideos,
+                                        actions = songActions.closing(close),
+                                        onClose = close,
+                                        onOpenDevices = {
+                                            close()
+                                            nav.push(Screen.Connect)
+                                        },
+                                    )
+                                },
+                            ) {
+                            when (val screen = nav.current) {
+                                null -> when (nav.tab) {
+                                Tab.Search ->
+                                    SearchBrowseScreen(
+                                        viewModel(key = "moods-$loginGeneration") { MoodsViewModel(container.music) },
+                                        onOpenSearch = { nav.push(Screen.Search) },
+                                        onOpenCategory = { nav.push(Screen.Mood(it.title, it.params)) },
+                                    )
+                                Tab.Library ->
+                                    LibraryTabScreen(
+                                        viewModel(key = "library-tab-$loginGeneration-$playlistsVersion") { LibraryTabViewModel(container.music) },
+                                        account = account,
+                                        onOpenPlaylist = { nav.push(Screen.Playlist(it)) },
+                                        onOpenArtist = { nav.push(Screen.Artist(it.browseId, it.name)) },
+                                        onOpenAlbum = { nav.push(Screen.Album(it.browseId, it.title)) },
+                                        onCreatePlaylist = { container.playlistEditor.create(it, null) },
+                                    )
+                                Tab.Home ->
                                     HomeScreen(
-                                        container,
-                                        obtainedAtEpochMs = state.obtainedAtEpochMs,
-                                        onReLogin = { reLogin = true },
-                                        onSearch = { stack += Screen.Search },
-                                        onConnect = { stack += Screen.Connect },
-                                        library = libraryState,
-                                        onOpenPlaylist = { stack += Screen.Playlist(it) },
-                                        onOpenHistory = { stack += Screen.History },
-                                        songActions = songActions,
+                                        account = account,
                                         feed = viewModel(key = "home-feed-$loginGeneration") { HomeFeedViewModel(container.music) },
                                         onPlaySong = playerActions::playSong,
+                                        onOpenPlaylist = { nav.push(Screen.Playlist(it)) },
+                                        songActions = songActions,
+                                        onOpenHistory = { nav.push(Screen.History) },
+                                        onOpenSettings = { nav.push(Screen.Settings) },
+                                        onConnect = { nav.push(Screen.Connect) },
+                                        showConnect = container.connectConfigured || container.connectV2 != null,
                                     )
                                 }
+                                is Screen.Mood ->
+                                    MoodCategoryScreen(
+                                        screen.title,
+                                        viewModel(key = "mood-$loginGeneration-${screen.params}") { MoodCategoryViewModel(container.music, screen.params) },
+                                        onPlaySong = playerActions::playSong,
+                                        onOpenPlaylist = { nav.push(Screen.Playlist(it)) },
+                                        actions = songActions,
+                                        onBack = pop,
+                                    )
+                                Screen.Settings ->
+                                    SettingsScreen(container, account, onReLogin = { reLogin = true }, onConnect = { nav.push(Screen.Connect) }, onBack = pop)
                                 Screen.Connect ->
-                                    ConnectScreen(container, onBack = pop, bottomBar = miniPlayer)
+                                    ConnectScreen(container, onBack = pop)
                                 Screen.History ->
                                     HistoryScreen(
                                         viewModel(key = "history-$loginGeneration") { HistoryViewModel(container.music) },
                                         onPlay = { songs, index -> playerActions.playFrom(songs, index) },
                                         actions = songActions,
                                         onBack = pop,
-                                        bottomBar = miniPlayer,
                                     )
                                 Screen.Search -> {
                                     // 検索から開いたアーティスト・アルバムも履歴に残す（Spotify と同じで、あとから辿れる）
@@ -186,7 +237,6 @@ class MainActivity : ComponentActivity() {
                                         onSongClick = playerActions::playSong,
                                         actions = searchActions,
                                         onBack = pop,
-                                        bottomBar = miniPlayer,
                                         history = container.searchHistory,
                                     )
                                 }
@@ -205,7 +255,6 @@ class MainActivity : ComponentActivity() {
                                         actions = songActions,
                                         onRemove = { song, setVideoId -> container.playlistEditor.remove(playlist.playlistId, song, setVideoId) },
                                         onBack = pop,
-                                        bottomBar = miniPlayer,
                                     )
                                 }
                                 is Screen.Artist -> {
@@ -218,14 +267,13 @@ class MainActivity : ComponentActivity() {
                                         actions = songActions,
                                         // 曲の棚は5曲だけなので、最後まで行ったら最後の曲からラジオにつなぐ
                                         onPlay = { songs, index -> playerActions.playFrom(songs, index) },
-                                        onOpenAllSongs = { id, name -> stack += Screen.Playlist(PlaylistSummary(id, name, null, null)) },
+                                        onOpenAllSongs = { id, name -> nav.push(Screen.Playlist(PlaylistSummary(id, name, null, null))) },
                                         // 「高く評価した曲」を、そのアーティストで絞った状態で開く
                                         onOpenLiked = { name ->
-                                            stack += Screen.Playlist(PlaylistSummary(MusicRepository.LIKED_SONGS, "高く評価した曲", null, null), initialQuery = name)
+                                            nav.push(Screen.Playlist(PlaylistSummary(MusicRepository.LIKED_SONGS, "高く評価した曲", null, null), initialQuery = name))
                                         },
-                                        onOpenAlbum = { album -> stack += Screen.Album(album.browseId, album.title) },
+                                        onOpenAlbum = { album -> nav.push(Screen.Album(album.browseId, album.title)) },
                                         onBack = pop,
-                                        bottomBar = miniPlayer,
                                     )
                                 }
                                 is Screen.Album ->
@@ -236,8 +284,8 @@ class MainActivity : ComponentActivity() {
                                         onPlay = { page, index, shuffle -> playerActions.playFrom(page.songs, index, page.playlistId, shuffle = shuffle) },
                                         onQueue = { page, next -> playerActions.queue(page.songs, next) },
                                         onBack = pop,
-                                        bottomBar = miniPlayer,
                                     )
+                            }
                             }
                             addTarget?.let { song ->
                                 AddToPlaylistDialog(

@@ -32,9 +32,12 @@ class MusicRepository(
             },
         ) { response -> ParseOutcome.Parsed(MusicParsers.searchSongs(json(response))) }
 
-    /** ホームのおすすめの棚。continuation を渡したら続きの棚。 */
-    suspend fun home(continuation: String? = null): CallResult<HomePage> =
-        session.call(operation = "browse", block = browseOrContinue(HOME, continuation)) { response ->
+    /** ホームのおすすめの棚。continuation を渡したら続きの棚。params は絞り込み（[HomeChip]）。 */
+    suspend fun home(
+        continuation: String? = null,
+        params: String? = null,
+    ): CallResult<HomePage> =
+        session.call(operation = "browse", block = browseOrContinue(HOME, continuation, params)) { response ->
             val root = json(response)
             lastRendererNames = MusicParsers.rendererNames(root)
             ParseOutcome.Parsed(MusicParsers.homePage(root))
@@ -46,6 +49,36 @@ class MusicRepository(
             val root = json(response)
             lastRendererNames = MusicParsers.rendererNames(root)
             if (MusicParsers.isSignInPrompt(root)) ParseOutcome.LoggedOutResponse else ParseOutcome.Parsed(MusicParsers.gridItems(root))
+        }
+
+    /** ライブラリのアーティスト（ライブラリの曲のアーティスト）。ログイン必須。 */
+    suspend fun libraryArtists(): CallResult<List<ArtistSummary>> =
+        libraryCards(LIBRARY_ARTISTS) { (it as? HomeItem.ArtistItem)?.artist }
+
+    /** ライブラリのアルバム（保存したアルバム）。ログイン必須。 */
+    suspend fun libraryAlbums(): CallResult<List<AlbumSummary>> =
+        libraryCards(LIBRARY_ALBUMS) { (it as? HomeItem.AlbumItem)?.album }
+
+    private suspend fun <T> libraryCards(
+        browseId: String,
+        pick: (HomeItem) -> T?,
+    ): CallResult<List<T>> =
+        session.call(operation = "browse", block = { it.browse(YouTubeClient.WEB_REMIX, browseId = browseId, setLogin = true) }) { response ->
+            val root = json(response)
+            lastRendererNames = MusicParsers.rendererNames(root)
+            if (MusicParsers.isSignInPrompt(root)) ParseOutcome.LoggedOutResponse else ParseOutcome.Parsed(MusicParsers.libraryCards(root).mapNotNull(pick))
+        }
+
+    /** 気分とジャンルの一覧（検索のタブのタイル）。 */
+    suspend fun moods(): CallResult<List<MoodSection>> =
+        session.call(operation = "browse", block = { it.browse(YouTubeClient.WEB_REMIX, browseId = MOODS, setLogin = true) }) { response ->
+            ParseOutcome.Parsed(MusicParsers.moods(json(response)))
+        }
+
+    /** 気分・ジャンルの1つのページ（ホームと同じ棚の並び）。 */
+    suspend fun moodCategory(params: String): CallResult<HomePage> =
+        session.call(operation = "browse", block = { it.browse(YouTubeClient.WEB_REMIX, browseId = MOOD_CATEGORY, params = params, setLogin = true) }) { response ->
+            ParseOutcome.Parsed(MusicParsers.homePage(json(response)))
         }
 
     /** 新作のアルバム・シングル。 */
@@ -375,6 +408,10 @@ class MusicRepository(
         const val HISTORY = "FEmusic_history"
         const val HOME = "FEmusic_home"
         const val LIBRARY_LANDING = "FEmusic_library_landing"
+        const val MOODS = "FEmusic_moods_and_genres"
+        const val LIBRARY_ARTISTS = "FEmusic_library_corpus_track_artists"
+        const val LIBRARY_ALBUMS = "FEmusic_liked_albums"
+        const val MOOD_CATEGORY = "FEmusic_moods_and_genres_category"
         const val NEW_RELEASES = "FEmusic_new_releases_albums"
         const val LIKED_SONGS = "LM"
 

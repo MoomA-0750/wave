@@ -17,6 +17,15 @@ sealed interface Screen {
     /** 再生履歴（自分が聴いた曲）。 */
     data object History : Screen
 
+    /** 気分・ジャンルのページ。 */
+    data class Mood(
+        val title: String,
+        val params: String,
+    ) : Screen
+
+    /** 設定（アカウント・再生履歴の送信・ログアウト）。 */
+    data object Settings : Screen
+
     data class Playlist(
         val summary: PlaylistSummary,
         /** 開いたときに入れておく絞り込み（アーティストの高評価曲から来たときなど）。 */
