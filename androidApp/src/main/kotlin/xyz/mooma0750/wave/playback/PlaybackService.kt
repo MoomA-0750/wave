@@ -59,6 +59,12 @@ class PlaybackService : MediaSessionService() {
     /** 直前のエラーが、この曲だけの失敗だったか（次が無くて飛ばせず止まった場合に、続きが来たら再開してよい）。 */
     private var lastErrorWasThisSong = false
     private var session: MediaSession? = null
+
+    /** 手元の再生器（セッションの再生器は、ほかの端末を映している間だけ remotePlayer に替わる）。 */
+    private var localPlayer: ExoPlayer? = null
+
+    /** ほかの端末の再生を通知・ロック画面・Bluetooth に映す再生器（音は出さない）。 */
+    private var remotePlayer: RemoteSessionPlayer? = null
     private var queue: QueueSession? = null
     private val skipGuard = SkipGuard(MAX_CONSECUTIVE_SKIPS)
 
@@ -263,6 +269,7 @@ class PlaybackService : MediaSessionService() {
                 }
             },
         )
+        localPlayer = player
         session =
             MediaSession
                 .Builder(this, player)
@@ -427,6 +434,13 @@ class PlaybackService : MediaSessionService() {
         connectV2Endpoint = v2Endpoint
         container.connectV2Host.register(v2Endpoint)
 
+        // ほかの端末を映している間は、通知・ロック画面・Bluetooth の再生器をその端末を映すものに替える（ボタンは遠隔操作になる）
+        container.connectV2?.let { manager ->
+            scope.launch(kotlinx.coroutines.Dispatchers.Main) {
+                manager.remotePlayback.collect { remote -> mirrorRemote(remote, manager) }
+            }
+        }
+
         // 前のアカウントの評価・履歴の送信の状態・キュー・解決済みの URL・保存を捨てる（ログアウト・アカウントの切り替え）
         suspend fun clearAccountState() {
             loggedInAt = null
@@ -539,12 +553,28 @@ class PlaybackService : MediaSessionService() {
             false
         }
 
+    /** 手元で鳴っていなければ、セッションの再生器をほかの端末を映すものにする。映すものが無ければ手元の再生器に戻す。 */
+    private fun mirrorRemote(
+        remote: xyz.mooma0750.wave.connect2.ConnectV2Manager.RemotePlayback?,
+        manager: xyz.mooma0750.wave.connect2.ConnectV2Manager,
+    ) {
+        val current = session ?: return
+        val local = localPlayer ?: return
+        if (remote != null && !local.playWhenReady) {
+            val mirror = remotePlayer ?: RemoteSessionPlayer { action, position -> manager.control(action, position) }.also { remotePlayer = it }
+            mirror.update(remote)
+            if (current.player !== mirror) current.player = mirror
+        } else if (current.player !== local) {
+            current.player = local
+        }
+    }
+
     /** ログインが分かっていて、自アプリの UI がつながっていれば、1回だけ保存したキューを戻す。 */
     private fun maybeRestore() {
         val obtainedAt = loggedInAt ?: return
         if (restoreStarted || restoreSettled || !ownUiConnected) return
         val queueSession = queue ?: return
-        val player = session?.player ?: return
+        val player = localPlayer ?: return
         restoreStarted = true
         scope.launch {
             restoreSavedQueue(queueSession, player, obtainedAt)
@@ -588,7 +618,7 @@ class PlaybackService : MediaSessionService() {
         if (!restoreSettled) return
         val obtainedAt = loggedInAt ?: return
         val queueSession = queue ?: return
-        val player = session?.player ?: return
+        val player = localPlayer ?: return
         // 保存内容を作る前に世代を読む（この後にログアウトの削除が走ったら書かない）
         val epoch = container.queueStore.currentEpoch()
         val saved = queueSession.saved(obtainedAt, player.currentPosition, player.repeatMode)
@@ -689,8 +719,9 @@ class PlaybackService : MediaSessionService() {
             }
             if (!isOwnUiController(session, controller)) return Futures.immediateFuture(SessionResult(SessionError.ERROR_PERMISSION_DENIED))
             if (customCommand.customAction in USER_SELECTIONS) skipGuard.onUserSelection()
-            val wasEmpty = session.player.mediaItemCount == 0
-            val wasPlaying = session.player.playWhenReady
+            val local = localPlayer ?: return Futures.immediateFuture(SessionResult(SessionError.ERROR_INVALID_STATE))
+            val wasEmpty = local.mediaItemCount == 0
+            val wasPlaying = local.playWhenReady
             // 曲を選ぶ処理の中の play() は、再生ボタン（D-9）として知らせない。後で「曲を選んだ」を1回だけ知らせる（レビュー p6b34 高-1）
             val handled =
                 suppressingV2 {
@@ -714,8 +745,8 @@ class PlaybackService : MediaSessionService() {
                     userSelection = customCommand.customAction in USER_SELECTIONS,
                     wasEmpty = wasEmpty,
                     wasPlaying = wasPlaying,
-                    itemCountAfter = session.player.mediaItemCount,
-                    playWhenReadyAfter = session.player.playWhenReady,
+                    itemCountAfter = local.mediaItemCount,
+                    playWhenReadyAfter = local.playWhenReady,
                 )
             if (newSelection) container.connectV2Host.listener?.onUserStartedPlayback(newSelection = true)
             return Futures.immediateFuture(SessionResult(if (handled != null) SessionResult.RESULT_SUCCESS else SessionError.ERROR_BAD_VALUE))
@@ -775,7 +806,7 @@ class PlaybackService : MediaSessionService() {
         }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
-        val player = session?.player
+        val player = localPlayer
         val playing = player != null && PlaybackDecisions.isActivelyPlaying(player.playWhenReady, player.playbackState)
         if (!playing) pauseAllPlayersAndStopSelf()
     }
@@ -792,17 +823,18 @@ class PlaybackService : MediaSessionService() {
         // scope を止めると待っている保存が捨てられるので、その前に最後の状態を書く
         val obtainedAt = loggedInAt
         val queueSession = queue
-        val lastPlayer = session?.player
+        val lastPlayer = localPlayer
         if (restoreSettled && obtainedAt != null && queueSession != null && lastPlayer != null) {
             val epoch = container.queueStore.currentEpoch()
             queueSession.saved(obtainedAt, lastPlayer.currentPosition, lastPlayer.repeatMode)?.let { container.queueStore.saveBlocking(it, epoch) }
         }
         scope.cancel()
-        session?.run {
-            player.release()
-            release()
-        }
+        session?.release()
+        localPlayer?.release()
+        remotePlayer?.release()
         session = null
+        localPlayer = null
+        remotePlayer = null
         queue = null
         likes = null
         super.onDestroy()
