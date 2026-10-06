@@ -46,7 +46,7 @@ object DebugActions {
      * 公開 Activity から受けてよい action（画面の遷移だけ）。再生を始めるものも、再生履歴というアカウントへの書き込みにつながるので
      * DebugReceiver からだけ受ける（F1 outer gate 指摘2）。
      */
-    private val ACTIVITY_ACTIONS = setOf("open_artist", "open_album")
+    private val ACTIVITY_ACTIONS = setOf("open_artist", "open_album", "notice")
 
     /** 確認用に作ったプレイリスト。プロセスの中だけに持ち、ログに出さない。 */
     private var createdPlaylistId: String? = null
@@ -291,6 +291,8 @@ object DebugActions {
                     player.cycleRepeatMode()
                     Log.i(WaveApplication.LOG_TAG, "debug repeat=${player.controller().repeatMode}")
                 }
+                // 知らせ（スナックバー）の見た目の確認。表示だけで、何も書き込まない
+                "notice" -> xyz.mooma0750.wave.ui.Notices.show(intent.getStringExtra("text") ?: "wave debug notice")
                 "open_artist" -> intent.getStringExtra("browse_id")?.let { navigationChannel.trySend(Screen.Artist(it, "")) }
                 "open_album" -> intent.getStringExtra("browse_id")?.let { navigationChannel.trySend(Screen.Album(it, "")) }
                 "play_album" ->
