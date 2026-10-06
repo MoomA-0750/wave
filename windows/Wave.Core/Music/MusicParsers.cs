@@ -310,7 +310,33 @@ public static partial class MusicParsers
         }
         var lyrics = WatchTabs(root).Items().Select(t => t.Path("tabRenderer", "endpoint", "browseEndpoint"))
             .FirstOrDefault(b => PageTypeOfBrowse(b) == "MUSIC_PAGE_TYPE_TRACK_LYRICS").Path("browseId").Str();
-        return new SongInfo(like, lyrics);
+        return new SongInfo(like, lyrics, MusicVideoOf(root, videoId));
+    }
+
+    /// <summary>
+    /// 曲に重ねる映像（Android の musicVideoInfo と同じ）。公式の MV・投稿の動画はその曲自身、音源（ATV）は対応する MV（時刻の対応表があるときだけ）。
+    /// </summary>
+    public static MusicVideo? MusicVideoOf(JsonNode root, string videoId)
+    {
+        var panel = WatchTabs(root).FirstItem().Path("tabRenderer", "content", "musicQueueRenderer", "content", "playlistPanelRenderer");
+        foreach (var item in panel.Path("contents").Items())
+        {
+            var wrapper = item.Path("playlistPanelVideoWrapperRenderer");
+            var renderer = item.Path("playlistPanelVideoRenderer") ?? wrapper.Path("primaryRenderer", "playlistPanelVideoRenderer");
+            if (renderer.Path("videoId").Str() != videoId) continue;
+            var type = renderer.Path("navigationEndpoint", "watchEndpoint", "watchEndpointMusicSupportedConfigs", "watchEndpointMusicConfig", "musicVideoType").Str();
+            if (type is null) return null;
+            if (type != "MUSIC_VIDEO_TYPE_ATV") return new MusicVideo(videoId, []);
+            var counterpart = wrapper.Path("counterpart").FirstItem();
+            var counterpartId = counterpart.Path("counterpartRenderer", "playlistPanelVideoRenderer", "videoId").Str();
+            var segments = counterpart.Path("segmentMap", "segment").Items()
+                .Select(s => long.TryParse(s.Path("primaryVideoStartTimeMilliseconds").Str(), out var p) && long.TryParse(s.Path("counterpartVideoStartTimeMilliseconds").Str(), out var c) &&
+                             long.TryParse(s.Path("durationMilliseconds").Str(), out var d) ? new TimeSegment(p, c, d) : null)
+                .OfType<TimeSegment>().ToList();
+            // 対応表が無い MV は時刻を合わせられないので使わない
+            return counterpartId is not null && segments.Count > 0 ? new MusicVideo(counterpartId, segments) : null;
+        }
+        return null;
     }
 
     /// <summary>歌詞のページ（時刻なし）の本文と出典。</summary>

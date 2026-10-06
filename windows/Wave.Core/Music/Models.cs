@@ -133,8 +133,23 @@ public sealed record MoodCategory(string Title, string Params, long? Color);
 
 public sealed record MoodSection(string Title, IReadOnlyList<MoodCategory> Categories);
 
-/// <summary>next の最初の応答から分かる、曲の評価と歌詞のタブ。</summary>
-public sealed record SongInfo(LikeStatus? Like, string? LyricsBrowseId);
+/// <summary>next の最初の応答から分かる、曲の評価と歌詞のタブと、曲に重ねる映像（無ければ null）。</summary>
+public sealed record SongInfo(LikeStatus? Like, string? LyricsBrowseId, MusicVideo? Video = null);
+
+/// <summary>音源と MV の時刻の対応の1区間（MV には前奏や間奏が足されていて、同じ時刻にはならない）。</summary>
+public sealed record TimeSegment(long PrimaryStartMs, long CounterpartStartMs, long DurationMs);
+
+/// <summary>曲に見せる映像（Android の MusicVideo と同じ）。</summary>
+public sealed record MusicVideo(string VideoId, IReadOnlyList<TimeSegment> Segments)
+{
+    /// <summary>曲の positionMs に当たる映像の時刻。対応する区間の外（MV に無い部分）なら null。</summary>
+    public long? VideoPositionOf(long positionMs)
+    {
+        if (Segments.Count == 0) return positionMs;
+        var segment = Segments.FirstOrDefault(s => positionMs >= s.PrimaryStartMs && positionMs < s.PrimaryStartMs + s.DurationMs);
+        return segment is null ? null : segment.CounterpartStartMs + (positionMs - segment.PrimaryStartMs);
+    }
+}
 
 /// <summary>確かめたアカウント（DATASYNC_ID）と、確かめたときのログインの世代。Id はログ・画面に出さない。</summary>
 public sealed record VerifiedAccount(long Generation, string Id)

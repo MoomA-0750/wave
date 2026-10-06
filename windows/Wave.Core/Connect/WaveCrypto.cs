@@ -109,7 +109,8 @@ public static class WaveCrypto
             if (!OnCurve(x, y)) return null;
             return new EcPublicKey(encoded.ToArray(), x, y);
         }
-        catch (CryptographicException)
+        // Windows（CNG）は曲線の外の点を読み込むと PlatformNotSupportedException を投げる。相手から届いた鍵で処理を止めない
+        catch (Exception e) when (e is CryptographicException or PlatformNotSupportedException)
         {
             return null;
         }

@@ -13,12 +13,16 @@ public static class DashManifest
     {
         var duration = TimeSpan.FromMilliseconds(Math.Max(1, dash.DurationMs)).TotalSeconds.ToString("0.###", CultureInfo.InvariantCulture);
         var mime = mimeType.Split(';')[0].Trim();
+        var video = mime.StartsWith("video/", StringComparison.Ordinal);
+        var representation = video
+            ? $"""id="video" codecs="{SecurityElement.Escape(dash.Codecs)}" bandwidth="{dash.Bitrate}" width="{dash.Width}" height="{dash.Height}" frameRate="{Math.Max(1, dash.FrameRate)}" """
+            : $"""id="audio" codecs="{SecurityElement.Escape(dash.Codecs)}" bandwidth="{dash.Bitrate}" audioSamplingRate="{dash.SampleRate}" """;
         return $"""
             <?xml version="1.0" encoding="UTF-8"?>
             <MPD xmlns="urn:mpeg:dash:schema:mpd:2011" type="static" mediaPresentationDuration="PT{duration}S" minBufferTime="PT2S" profiles="urn:mpeg:dash:profile:isoff-on-demand:2011">
               <Period>
                 <AdaptationSet mimeType="{SecurityElement.Escape(mime)}" segmentAlignment="true" startWithSAP="1">
-                  <Representation id="audio" codecs="{SecurityElement.Escape(dash.Codecs)}" bandwidth="{dash.Bitrate}" audioSamplingRate="{dash.SampleRate}">
+                  <Representation {representation.Trim()}>
                     <BaseURL>{SecurityElement.Escape(placeholderUrl)}</BaseURL>
                     <SegmentBase indexRange="{dash.IndexStart}-{dash.IndexEnd}">
                       <Initialization range="{dash.InitStart}-{dash.InitEnd}" />

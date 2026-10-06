@@ -59,7 +59,11 @@ public sealed class ResolvedStream
 }
 
 /// <summary>DASH（SegmentBase）の目次を作るための、形式ごとの値。</summary>
-public sealed record DashInfo(long InitStart, long InitEnd, long IndexStart, long IndexEnd, long Bitrate, int SampleRate, long DurationMs, string Codecs);
+public sealed record DashInfo(long InitStart, long InitEnd, long IndexStart, long IndexEnd, long Bitrate, int SampleRate, long DurationMs, string Codecs,
+    int Width = 0, int Height = 0, int FrameRate = 0);
+
+/// <summary>取るもの。映像は音の無い映像だけ（曲に重ねる MV）。</summary>
+public enum StreamKind { Audio, Video }
 
 public sealed record ResolveResult(ResolvedStream? Stream, StreamFailure? Failure)
 {
@@ -79,7 +83,7 @@ public sealed partial class StreamResolver(InnerTubeClient client, PlayerCipherP
     private const long DefaultLifetimeSeconds = 60 * 60;
     private const long ExpirySafetyMs = 60 * 1000;
 
-    public async Task<ResolveResult> ResolveAsync(string videoId, CancellationToken cancel = default)
+    public async Task<ResolveResult> ResolveAsync(string videoId, CancellationToken cancel = default, StreamKind kind = StreamKind.Audio)
     {
         if (!VideoIdPattern().IsMatch(videoId)) return ResolveResult.Failed(StreamFailure.Parse);
         var config = await cipher.GetAsync(cancel);
@@ -114,7 +118,7 @@ public sealed partial class StreamResolver(InnerTubeClient client, PlayerCipherP
         if (status != "OK") return ResolveResult.Failed(StreamFailure.Unplayable);
         var streaming = root.Path("streamingData");
         var formats = streaming.Path("adaptiveFormats").Items();
-        var candidates = AudioCandidates(formats);
+        var candidates = kind == StreamKind.Video ? VideoCandidates(formats) : AudioCandidates(formats);
         if (candidates.Count == 0)
             return ResolveResult.Failed(formats.Count > 0 && formats.All(f => !HasSource(f)) ? StreamFailure.SabrOnly : StreamFailure.NoAudioFormat);
 
@@ -125,7 +129,7 @@ public sealed partial class StreamResolver(InnerTubeClient client, PlayerCipherP
             url = RemoveQueryParameters(url, UnwantedParameters);
             if (!IsAllowedMediaUrl(url)) return ResolveResult.Failed(StreamFailure.RejectedUrl);
             var lifetime = (streaming.Path("expiresInSeconds").Long() is { } s && s > 0 ? s : DefaultLifetimeSeconds) * 1000;
-            var statsUrl = generation == client.Generation ? root.Path("playbackTracking", "videostatsPlaybackUrl", "baseUrl").Str() : null;
+            var statsUrl = generation == client.Generation && kind == StreamKind.Audio ? root.Path("playbackTracking", "videostatsPlaybackUrl", "baseUrl").Str() : null;
             return ResolveResult.Ok(new ResolvedStream(
                 videoId,
                 (int)format.Path("itag").Long()!.Value,
@@ -150,7 +154,8 @@ public sealed partial class StreamResolver(InnerTubeClient client, PlayerCipherP
         var mime = format.Path("mimeType").Str() ?? "";
         var codecs = CodecsPattern().Match(mime) is { Success: true } m ? m.Groups[1].Value : "mp4a.40.2";
         return new DashInfo(i0, i1, x0, x1, format.Path("bitrate").Long() ?? 128000, (int)(format.Path("audioSampleRate").Long() ?? 44100),
-            format.Path("approxDurationMs").Long() ?? 0, codecs);
+            format.Path("approxDurationMs").Long() ?? 0, codecs,
+            (int)(format.Path("width").Long() ?? 0), (int)(format.Path("height").Long() ?? 0), (int)(format.Path("fps").Long() ?? 0));
     }
 
     [GeneratedRegex("codecs=\"([^\"]+)\"")]
@@ -189,6 +194,20 @@ public sealed partial class StreamResolver(InnerTubeClient client, PlayerCipherP
         }
         return url;
     }
+
+    /// <summary>映像の高さの上限（右の欄・全画面でも足りる高さで、通信量を抑える）。</summary>
+    public const int MaxVideoHeight = 720;
+
+    /// <summary>
+    /// 映像だけのフォーマット。Windows の標準の再生が DASH で確実に鳴らせる H.264（mp4・avc1）だけを、高い方から。
+    /// </summary>
+    public static List<JsonObject> VideoCandidates(IEnumerable<JsonObject> formats) =>
+        formats
+            .Where(f => f.Path("mimeType").Str() is { } m && m.StartsWith("video/mp4", StringComparison.Ordinal) && m.Contains("avc1", StringComparison.Ordinal))
+            .Where(f => (f.Path("height").Long() ?? long.MaxValue) <= MaxVideoHeight)
+            .Where(HasSource)
+            .OrderByDescending(f => f.Path("height").Long() ?? 0)
+            .ToList();
 
     public static List<JsonObject> AudioCandidates(IEnumerable<JsonObject> formats) =>
         formats
