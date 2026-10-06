@@ -147,6 +147,14 @@ object DebugActions {
                     Log.i(WaveApplication.LOG_TAG, "debug pair continue state=${next?.let { it::class.simpleName }} pairs=${container.pairStore.all().size}")
                 }
                 // Phase 6b: Connect v2 の確認（中継 v2 の場所が local.properties に無ければ何もしない）
+                // Keystore の操作の枠が返らない件の切り分け（Pixel 3、2026-10-06）。op=ecdh|sign|aes を n 回、本番と同じ使い方で行う。
+                // 1回ごとに3秒で打ち切り、何回目で詰まったかだけをログに出す（鍵・値は出さない）
+                "keystore_probe" -> {
+                    val op = intent.getStringExtra("op").orEmpty()
+                    val count = intent.getIntExtra("n", 40)
+                    val result = kotlinx.coroutines.withContext(Dispatchers.IO) { KeystoreProbe.run(container, op, count) }
+                    Log.i(WaveApplication.LOG_TAG, "debug keystore_probe op=$op $result")
+                }
                 "v2_info" -> {
                     val manager = container.connectV2
                     if (manager == null) {
@@ -305,5 +313,70 @@ object DebugActions {
                 else -> Log.i(WaveApplication.LOG_TAG, "debug action unknown")
             }
         }
+    }
+}
+
+/** Keystore の操作を種類ごとに試す（debug だけ）。 */
+private object KeystoreProbe {
+    private val executor = java.util.concurrent.Executors.newSingleThreadExecutor { Thread(it, "keystore-probe").apply { isDaemon = true } }
+
+    fun run(
+        container: AppContainer,
+        op: String,
+        count: Int,
+    ): String {
+        val keys = xyz.mooma0750.wave.connect2.DeviceKeysV2(container.deviceIdentity)
+        val action: () -> Unit =
+            when (op) {
+                "ecdh" -> {
+                    {
+                        val peer = xyz.mooma0750.wave.handoff.crypto.WaveCrypto.generateEphemeralKeyPair().public as java.security.interfaces.ECPublicKey
+                        keys.dh(peer)
+                    }
+                }
+                "sign" -> {
+                    { container.deviceIdentity.sign("wave-probe", ByteArray(64)) }
+                }
+                "aes" -> {
+                    {
+                        javax.crypto.Cipher.getInstance("AES/GCM/NoPadding").run {
+                            init(javax.crypto.Cipher.ENCRYPT_MODE, probeKey())
+                            doFinal(ByteArray(64))
+                        }
+                    }
+                }
+                else -> return "unknown"
+            }
+        var slowest = 0L
+        for (i in 1..count) {
+            val started = android.os.SystemClock.elapsedRealtime()
+            val future = executor.submit(action)
+            try {
+                future.get(3, java.util.concurrent.TimeUnit.SECONDS)
+            } catch (_: java.util.concurrent.TimeoutException) {
+                return "stuck_at=$i done=${i - 1} slowest_ms=$slowest"
+            } catch (error: java.util.concurrent.ExecutionException) {
+                return "failed_at=$i type=${error.cause?.let { it::class.simpleName }}"
+            }
+            slowest = maxOf(slowest, android.os.SystemClock.elapsedRealtime() - started)
+        }
+        return "ok done=$count slowest_ms=$slowest"
+    }
+
+    private fun probeKey(): javax.crypto.SecretKey {
+        val store = java.security.KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        (store.getKey("wave-probe-aes", null) as? javax.crypto.SecretKey)?.let { return it }
+        return javax.crypto.KeyGenerator
+            .getInstance(android.security.keystore.KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore")
+            .apply {
+                init(
+                    android.security.keystore.KeyGenParameterSpec
+                        .Builder("wave-probe-aes", android.security.keystore.KeyProperties.PURPOSE_ENCRYPT)
+                        .setBlockModes(android.security.keystore.KeyProperties.BLOCK_MODE_GCM)
+                        .setEncryptionPaddings(android.security.keystore.KeyProperties.ENCRYPTION_PADDING_NONE)
+                        .setKeySize(256)
+                        .build(),
+                )
+            }.generateKey()
     }
 }
