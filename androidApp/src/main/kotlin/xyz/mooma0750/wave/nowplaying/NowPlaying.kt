@@ -292,7 +292,7 @@ fun NowPlayingScreen(
                 }
                 Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
                     // Spotify の「曲｜動画」の切り替え。動画のある曲だけ出す（無い曲・調べている間・ほかの端末を映している間は出さない）
-                    if (song != null && remote == null && hasVideo == true) {
+                    if (song != null && hasVideo == true) {
                         SingleChoiceSegmentedButtonRow {
                             SegmentedButton(selected = !video, onClick = { video = false }, shape = SegmentedButtonDefaults.itemShape(0, 2), icon = {}) { Text(stringResource(R.string.nowplaying_song)) }
                             SegmentedButton(selected = video, onClick = { video = true }, shape = SegmentedButtonDefaults.itemShape(1, 2), icon = {}) { Text(stringResource(R.string.nowplaying_video)) }
@@ -302,8 +302,9 @@ fun NowPlayingScreen(
                 song?.let { SongMenuButton(it, actions, inQueue = true) } ?: Spacer(Modifier.size(48.dp))
             }
             Box(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 24.dp), contentAlignment = Alignment.Center) {
-                if (video && song != null && remote == null) {
-                    MusicVideoPanel(song, controller, videos, Modifier.size(artSize).clip(RoundedCornerShape(8.dp)))
+                if (video && song != null) {
+                    // ほかの端末を映している間も、その再生の位置（見積もり）に合わせて映像を出す
+                    MusicVideoPanel(song, display.clock, videos, Modifier.size(artSize).clip(RoundedCornerShape(8.dp)))
                 } else {
                     coil3.compose.AsyncImage(
                         model = song?.thumbnailUrl?.takeIf { it.startsWith("https://") }?.let(Media3QueuePlayer::largeArtwork),
@@ -644,6 +645,8 @@ private fun rememberDisplay(
         remember(connect) {
             object : LyricsClock {
                 override fun positionMs(): Long = latest.positionAt(android.os.SystemClock.elapsedRealtime())
+
+                override fun isPlaying(): Boolean = latest.playing
 
                 override fun seekTo(positionMs: Long) {
                     connect?.control(ControlAction.Seek, positionMs)

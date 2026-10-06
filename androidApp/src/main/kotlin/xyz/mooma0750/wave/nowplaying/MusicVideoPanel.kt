@@ -41,7 +41,8 @@ import androidx.compose.ui.res.stringResource
 @Composable
 fun MusicVideoPanel(
     song: Song,
-    player: Player?,
+    /** 合わせる先の位置と再生中か（手元の再生、またはほかの端末の再生の見積もり）。 */
+    player: LyricsClock?,
     videos: MusicVideos,
     modifier: Modifier = Modifier,
 ) {
@@ -69,7 +70,7 @@ fun MusicVideoPanel(
 @Composable
 private fun SyncedVideo(
     video: MusicVideo,
-    mainPlayer: Player?,
+    mainPlayer: LyricsClock?,
     videos: MusicVideos,
     onFailed: () -> Unit,
 ) {
@@ -109,9 +110,9 @@ private fun SyncedVideo(
         while (true) {
             val step =
                 VideoSync.step(
-                    targetMs = video.videoPositionOf(main.currentPosition),
+                    targetMs = video.videoPositionOf(main.positionMs()),
                     videoMs = videoPlayer.currentPosition,
-                    playing = main.isPlaying,
+                    playing = main.isPlaying(),
                     videoReady = videoPlayer.playbackState == Player.STATE_READY,
                 )
             hidden = step == VideoSync.Step.Hide

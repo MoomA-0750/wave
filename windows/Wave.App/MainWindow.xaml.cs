@@ -466,10 +466,10 @@ public sealed partial class MainWindow : Window
     private readonly MusicVideoPlayer videoPlayer = new();
     private DispatcherQueueTimer? videoTimer;
 
-    /// <summary>MV のある曲で、手元で鳴らしているときだけ「曲｜動画」を出す（ほかの端末を映している間は映像を合わせられない）。</summary>
+    /// <summary>MV のある曲で「曲｜動画」を出す（ほかの端末を映している間は、その再生の位置の見積もりに合わせる）。</summary>
     private void UpdateVideoSwitch()
     {
-        var available = Player.Video is not null && !Player.IsRemote;
+        var available = Player.Video is not null;
         VideoSwitch.Visibility = Ui.Show(available);
         if (!available) ShowVideo(false);
     }
@@ -517,7 +517,7 @@ public sealed partial class MainWindow : Window
         timer.Tick += (_, _) =>
         {
             if (Player.Video is not { } video) return;
-            videoPlayer.Sync(video, Player.LocalPositionMs, Player.IsPlaying);
+            videoPlayer.Sync(video, Player.IsRemote ? (long)(Player.Position * 1000) : Player.LocalPositionMs, Player.IsPlaying);
             // MV に無い区間（前奏など）はジャケットを出す
             PaneVideo.Visibility = Ui.Show(videoPlayer.Showing);
             CoverImage.Visibility = Ui.Hide(videoPlayer.Showing);

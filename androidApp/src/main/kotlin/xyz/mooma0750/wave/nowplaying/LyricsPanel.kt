@@ -159,6 +159,9 @@ private const val LINE_ANIMATION_MS = 350
 interface LyricsClock {
     fun positionMs(): Long
 
+    /** 鳴っているか（映像を合わせるため）。 */
+    fun isPlaying(): Boolean
+
     fun seekTo(positionMs: Long)
 }
 
@@ -166,6 +169,8 @@ interface LyricsClock {
 fun Player.asLyricsClock(): LyricsClock =
     object : LyricsClock {
         override fun positionMs(): Long = currentPosition
+
+        override fun isPlaying(): Boolean = this@asLyricsClock.isPlaying
 
         override fun seekTo(positionMs: Long) = this@asLyricsClock.seekTo(positionMs)
     }
