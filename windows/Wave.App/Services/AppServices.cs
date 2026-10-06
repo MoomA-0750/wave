@@ -28,6 +28,7 @@ public static class AppServices
     public static void Initialize(DispatcherQueue ui)
     {
         Settings = Settings.Load();
+        RangeStream.Diagnostics = AppPaths.Log;
         Http = InnerTubeClient.CreateHttpClient();
         Client = new InnerTubeClient(Http);
         Music = new MusicRepository(Client);

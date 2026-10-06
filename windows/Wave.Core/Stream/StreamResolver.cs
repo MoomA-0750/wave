@@ -26,8 +26,9 @@ public sealed class ResolvedStream
     private readonly string url;
     private readonly string? statsUrl;
 
-    internal ResolvedStream(string videoId, int itag, string mimeType, long? contentLength, string url, long expiresAtMs, string? statsUrl, long generation)
+    internal ResolvedStream(string videoId, int itag, string mimeType, long? contentLength, string url, long expiresAtMs, string? statsUrl, long generation, DashInfo? dash = null)
     {
+        Dash = dash;
         VideoId = videoId;
         Itag = itag;
         MimeType = mimeType;
@@ -46,6 +47,9 @@ public sealed class ResolvedStream
     public long Generation { get; }
     public bool HasPlaybackStats => statsUrl is not null;
 
+    /// <summary>DASH の目次を作るための値（初期化と索引のバイト範囲など）。無ければ null。</summary>
+    public DashInfo? Dash { get; }
+
     /// <summary>音声を取得するところだけが呼ぶ。ログ・例外文・画面に渡さない。</summary>
     public string RevealUrl() => url;
 
@@ -53,6 +57,9 @@ public sealed class ResolvedStream
 
     public override string ToString() => $"ResolvedStream(videoId={VideoId}, itag={Itag}, mimeType={MimeType}, contentLength={ContentLength})";
 }
+
+/// <summary>DASH（SegmentBase）の目次を作るための、形式ごとの値。</summary>
+public sealed record DashInfo(long InitStart, long InitEnd, long IndexStart, long IndexEnd, long Bitrate, int SampleRate, long DurationMs, string Codecs);
 
 public sealed record ResolveResult(ResolvedStream? Stream, StreamFailure? Failure)
 {
@@ -127,11 +134,27 @@ public sealed partial class StreamResolver(InnerTubeClient client, PlayerCipherP
                 url,
                 requestedAt + lifetime - ExpirySafetyMs,
                 statsUrl,
-                generation));
+                generation,
+                DashOf(format)));
         }
         cipher.Invalidate();
         return ResolveResult.Failed(StreamFailure.DecipherFailed);
     }
+
+    internal static DashInfo? DashOf(JsonObject format)
+    {
+        var init = format.Path("initRange");
+        var index = format.Path("indexRange");
+        if (init.Path("start").Long() is not { } i0 || init.Path("end").Long() is not { } i1 ||
+            index.Path("start").Long() is not { } x0 || index.Path("end").Long() is not { } x1) return null;
+        var mime = format.Path("mimeType").Str() ?? "";
+        var codecs = CodecsPattern().Match(mime) is { Success: true } m ? m.Groups[1].Value : "mp4a.40.2";
+        return new DashInfo(i0, i1, x0, x1, format.Path("bitrate").Long() ?? 128000, (int)(format.Path("audioSampleRate").Long() ?? 44100),
+            format.Path("approxDurationMs").Long() ?? 0, codecs);
+    }
+
+    [GeneratedRegex("codecs=\"([^\"]+)\"")]
+    private static partial Regex CodecsPattern();
 
     /// <summary>解決した URL が拒否された（403 など）。次は解読の準備を取り直す。</summary>
     public void OnStreamRejected() => cipher.Invalidate();

@@ -12,6 +12,9 @@ public sealed class RangeStream : System.IO.Stream
 {
     public const int ChunkSize = 512 * 1024;
 
+    /// <summary>動作の記録（位置・状態・バイト数だけ。URL は渡さない）。</summary>
+    public static Action<string>? Diagnostics { get; set; }
+
     private readonly HttpClient http;
     private readonly string url;
     private readonly long length;
@@ -65,25 +68,36 @@ public sealed class RangeStream : System.IO.Stream
 
     public override int Read(byte[] buffer, int offset, int count) => ReadAsync(buffer.AsMemory(offset, count)).AsTask().GetAwaiter().GetResult();
 
+    /// <summary>
+    /// 求められた分を、終わりに着くまで埋めて返す（区切りの途中で短く返すと、Windows の再生部品が終わりと受け取るため）。
+    /// </summary>
     public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancel = default)
     {
-        if (position >= length || buffer.Length == 0) return 0;
-        if (chunk is null || position < chunkStart || position >= chunkStart + chunk.Length)
+        var total = 0;
+        while (total < buffer.Length && position < length)
         {
-            chunkStart = position;
-            var end = Math.Min(length - 1, position + ChunkSize - 1);
-            chunk = await FetchAsync(position, end, cancel);
-            if (chunk.Length == 0) return 0;
+            if (chunk is null || position < chunkStart || position >= chunkStart + chunk.Length)
+            {
+                chunkStart = position;
+                var end = Math.Min(length - 1, position + ChunkSize - 1);
+                chunk = await FetchAsync(position, end, cancel);
+                if (chunk.Length == 0) break;
+            }
+            var from = (int)(position - chunkStart);
+            var n = Math.Min(buffer.Length - total, chunk.Length - from);
+            chunk.AsMemory(from, n).CopyTo(buffer[total..]);
+            position += n;
+            total += n;
         }
-        var from = (int)(position - chunkStart);
-        var n = Math.Min(buffer.Length, chunk.Length - from);
-        chunk.AsMemory(from, n).CopyTo(buffer);
-        position += n;
-        return n;
+        return total;
     }
 
     public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancel) =>
         ReadAsync(buffer.AsMemory(offset, count), cancel).AsTask();
+
+    /// <summary>start から end（含む）までのバイトを取る（DASH の再生部品の求めに応じて使う）。</summary>
+    public Task<byte[]> ReadRangeAsync(long start, long end, CancellationToken cancel = default) =>
+        FetchAsync(Math.Clamp(start, 0, length - 1), Math.Clamp(end, start, length - 1), cancel);
 
     private async Task<byte[]> FetchAsync(long start, long end, CancellationToken cancel)
     {
@@ -93,7 +107,9 @@ public sealed class RangeStream : System.IO.Stream
             try
             {
                 using var response = await SendAsync(start, end, cancel);
-                return await response.Content.ReadAsByteArrayAsync(cancel);
+                var bytes = await response.Content.ReadAsByteArrayAsync(cancel);
+                Diagnostics?.Invoke($"range {start}-{end} status={(int)response.StatusCode} bytes={bytes.Length}");
+                return bytes;
             }
             catch (HttpRequestException) when (attempt < 2)
             {
@@ -114,6 +130,7 @@ public sealed class RangeStream : System.IO.Stream
         var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancel);
         if (response.StatusCode is HttpStatusCode.PartialContent or HttpStatusCode.OK) return response;
         var status = (int)response.StatusCode;
+        Diagnostics?.Invoke($"range {start}-{end} rejected status={status}");
         response.Dispose();
         throw new StreamRejectedException(status);
     }

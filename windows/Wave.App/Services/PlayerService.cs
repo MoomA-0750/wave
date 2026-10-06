@@ -9,6 +9,7 @@ using Windows.Media.Core;
 using Windows.Media.Playback;
 using Windows.Storage.Streams;
 using System.IO;
+using System.Runtime.InteropServices.WindowsRuntime;
 
 namespace Wave.App.Services;
 
@@ -65,10 +66,16 @@ public sealed partial class PlayerService : ObservableObject
         repeat = (RepeatMode)Math.Clamp(settings.Repeat, 0, 2);
         player.Volume = volume;
         player.MediaEnded += (_, _) => ui.TryEnqueue(OnEnded);
+        player.MediaOpened += (s, _) =>
+        {
+            var d = s.PlaybackSession.NaturalDuration.TotalSeconds;
+            AppPaths.Log($"media opened duration={d:F1}");
+        };
         player.MediaFailed += (_, e) => ui.TryEnqueue(() => OnFailed(e.Error));
         player.PlaybackSession.PlaybackStateChanged += (s, _) =>
         {
             var state = s.PlaybackState;
+            AppPaths.Log($"state {state} pos={s.Position.TotalSeconds:F1}");
             ui.TryEnqueue(() => IsPlaying = state is MediaPlaybackState.Playing);
         };
         var commands = player.CommandManager;
@@ -84,10 +91,50 @@ public sealed partial class PlayerService : ObservableObject
             e.Handled = true;
             ui.TryEnqueue(Previous);
         };
+        DebugLocalPlay();
         timer = ui.CreateTimer();
         timer.Interval = TimeSpan.FromMilliseconds(250);
         timer.Tick += (_, _) => Tick();
         timer.Start();
+    }
+
+    /// <summary>debug: %LOCALAPPDATA%\wave\debug-play.txt に書いたファイルを、曲と同じ経路（.NET の Stream を渡す）で鳴らす。</summary>
+    private void DebugLocalPlay()
+    {
+        var save = Path.Combine(AppPaths.Data, "debug-save.txt");
+        if (File.Exists(save))
+        {
+            var videoId = File.ReadAllText(save).Trim();
+            File.Delete(save);
+            _ = Task.Run(async () =>
+            {
+                var r = await AppServices.Resolver.ResolveAsync(videoId);
+                if (r.Stream is null)
+                {
+                    AppPaths.Log($"debug save resolve failed {r.Failure}");
+                    return;
+                }
+                await using var src = await RangeStream.OpenAsync(AppServices.Http, r.Stream);
+                await using var dst = File.Create(Path.Combine(AppPaths.Data, "debug.m4a"));
+                await src.CopyToAsync(dst);
+                AppPaths.Log($"debug saved itag={r.Stream.Itag} bytes={dst.Length}");
+            });
+        }
+        var marker = Path.Combine(AppPaths.Data, "debug-play.txt");
+        if (!File.Exists(marker)) return;
+        var path = File.ReadAllText(marker).Trim();
+        File.Delete(marker);
+        var stream = File.OpenRead(path);
+        player.Source = new MediaPlaybackItem(MediaSource.CreateFromStream(stream.AsRandomAccessStream(), "audio/mp4"));
+        player.Play();
+        _ = Task.Run(async () =>
+        {
+            for (var i = 0; i < 4; i++)
+            {
+                await Task.Delay(1500);
+                AppPaths.Log($"debug local state={player.PlaybackSession.PlaybackState} pos={player.PlaybackSession.Position.TotalSeconds:F1}");
+            }
+        });
     }
 
     partial void OnVolumeChanged(double value)
@@ -374,9 +421,8 @@ public sealed partial class PlayerService : ObservableObject
             return false;
         }
         if (Current?.VideoId != song.VideoId) return false;
-        // 再生の部品にはバイトのストリームだけを渡す（署名付き URL は渡さない）
-        var mime = stream.MimeType.Split(';')[0].Trim();
-        var source = MediaSource.CreateFromStream(bytes.AsRandomAccessStream(), mime);
+        var source = await CreateSourceAsync(song, stream, bytes);
+        if (source is null || Current?.VideoId != song.VideoId) return false;
         var item = new MediaPlaybackItem(source);
         var props = item.GetDisplayProperties();
         props.Type = MediaPlaybackType.Music;
@@ -393,8 +439,63 @@ public sealed partial class PlayerService : ObservableObject
         return true;
     }
 
+    /// <summary>
+    /// YouTube の音声は DASH 用の断片化 MP4 で、Windows のふつうのファイル再生では時刻が読めず一瞬で終わってしまう。
+    /// そこで DASH の目次（MPD）をその場で作り、Windows の DASH の再生（AdaptiveMediaSource）に渡す。
+    /// 目次には本物の URL を書かず、バイトは再生の部品に求められたぶんだけアプリが取って渡す（署名付き URL は渡さない）。
+    /// </summary>
+    private static async Task<MediaSource?> CreateSourceAsync(Song song, ResolvedStream stream, RangeStream bytes)
+    {
+        if (stream.Dash is not { } dash)
+        {
+            AppPaths.Log("source plain (no dash ranges)");
+            return MediaSource.CreateFromStream(bytes.AsRandomAccessStream(), stream.MimeType.Split(';')[0].Trim());
+        }
+        var placeholder = new Uri($"https://wave.invalid/audio/{song.VideoId}/{stream.Itag}");
+        var manifest = new InMemoryRandomAccessStream();
+        await manifest.WriteAsync(System.Text.Encoding.UTF8.GetBytes(DashManifest.Build(dash, stream.MimeType, placeholder.ToString())).AsBuffer());
+        manifest.Seek(0);
+        var created = await Windows.Media.Streaming.Adaptive.AdaptiveMediaSource.CreateFromStreamAsync(manifest, placeholder, "application/dash+xml");
+        if (created.Status != Windows.Media.Streaming.Adaptive.AdaptiveMediaSourceCreationStatus.Success)
+        {
+            AppPaths.Log($"dash create failed status={created.Status}");
+            return null;
+        }
+        var adaptive = created.MediaSource;
+        adaptive.DownloadRequested += async (_, e) =>
+        {
+            if (e.ResourceUri.Host != placeholder.Host) return;
+            var deferral = e.GetDeferral();
+            try
+            {
+                var offset = (long)(e.ResourceByteRangeOffset ?? 0);
+                var end = e.ResourceByteRangeLength is { } length ? offset + (long)length - 1 : bytes.Length - 1;
+                var data = await bytes.ReadRangeAsync(offset, end);
+                e.Result.Buffer = data.AsBuffer();
+            }
+            catch (Exception ex) when (ex is StreamRejectedException or HttpRequestException or IOException)
+            {
+                AppPaths.Log($"dash download failed type={ex.GetType().Name} status={(ex as StreamRejectedException)?.Status}");
+                e.Result.ExtendedStatus = 403;
+            }
+            finally
+            {
+                deferral.Complete();
+            }
+        };
+        return MediaSource.CreateFromAdaptiveMediaSource(adaptive);
+    }
+
     private void OnEnded()
     {
+        // 曲の途中で「終わった」と来たら、読み込みの失敗とみなす（次々に飛ばさない）
+        var known = Current?.DurationSeconds ?? 0;
+        if (known > 10 && Position < known - 5)
+        {
+            AppPaths.Log($"ended early position={Position:F1} duration={known}");
+            if (Current is { } song) _ = RecoverAsync(song);
+            return;
+        }
         if (Repeat == RepeatMode.One)
         {
             Seek(0);
@@ -527,5 +628,14 @@ public sealed partial class PlayerService : ObservableObject
         IsPlaying = false;
         Like = null;
         Lyrics = null;
+    }
+}
+
+internal static class ObjectExtensions
+{
+    public static T Also<T>(this T value, Action<T> action)
+    {
+        action(value);
+        return value;
     }
 }
