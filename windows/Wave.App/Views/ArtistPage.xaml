@@ -34,6 +34,26 @@
             <ListView x:Name="TopSongs" Margin="12,0" ItemTemplate="{StaticResource TrackRowTemplate}" ItemContainerStyle="{StaticResource TrackListItemStyle}"
                       ScrollViewer.VerticalScrollMode="Disabled" DoubleTapped="OnDoubleTapped" />
             <HyperlinkButton x:Name="AllSongs" Content="{x:Bind app:L.T('すべての曲を見る', 'See all songs')}" Margin="20,0" Click="OnAllSongs" Visibility="Collapsed" />
+            <!-- Spotify の「高く評価した曲」の行（このアーティストの、自分が高く評価した曲）。1曲も無ければ出さない -->
+            <Button x:Name="LikedRow" Margin="24,0" Padding="8" HorizontalAlignment="Left" Background="Transparent" BorderThickness="0" Click="OnLiked" Visibility="Collapsed">
+                <StackPanel Orientation="Horizontal" Spacing="16">
+                    <Grid Width="56" Height="56">
+                        <Ellipse>
+                            <Ellipse.Fill>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                    <GradientStop Color="#FF450AF5" Offset="0" />
+                                    <GradientStop Color="#FFC4EFD9" Offset="1" />
+                                </LinearGradientBrush>
+                            </Ellipse.Fill>
+                        </Ellipse>
+                        <FontIcon Glyph="&#xEB52;" FontSize="20" Foreground="White" />
+                    </Grid>
+                    <StackPanel VerticalAlignment="Center" Spacing="2">
+                        <TextBlock Text="{x:Bind app:L.T('高く評価した曲', 'Liked Songs')}" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                        <TextBlock x:Name="LikedText" Style="{StaticResource SubtleTextStyle}" />
+                    </StackPanel>
+                </StackPanel>
+            </Button>
             <ItemsRepeater x:Name="Shelves" Margin="16,8,16,0">
                 <ItemsRepeater.Layout>
                     <StackLayout Spacing="24" />

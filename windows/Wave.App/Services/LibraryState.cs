@@ -23,7 +23,35 @@ public sealed partial class LibraryState : ObservableObject
 
     public event Action? LikedSongsChanged;
 
-    public void LikedChanged() => LikedSongsChanged?.Invoke();
+    public void LikedChanged()
+    {
+        likedSongs = null;
+        LikedSongsChanged?.Invoke();
+    }
+
+    /// <summary>
+    /// 高く評価した曲を全部（アーティストのページで、そのアーティストの曲を数えて絞るため）。
+    /// 開くたびに読み直さないよう、評価が変わるまで持っておく。Complete は最後まで読めたか。
+    /// </summary>
+    private Task<(List<Song> Songs, bool Complete)>? likedSongs;
+
+    public Task<(List<Song> Songs, bool Complete)> LikedSongsAsync() => likedSongs ??= LoadLikedAsync();
+
+    private async Task<(List<Song> Songs, bool Complete)> LoadLikedAsync()
+    {
+        var result = await AppServices.Music.FullPlaylistAsync(MusicRepository.LikedSongs);
+        if (!result.IsOk)
+        {
+            likedSongs = null;
+            return ([], false);
+        }
+        AppPaths.Log($"liked songs loaded songs={result.Value!.Songs.Count} complete={result.Value.Continuation is null}");
+        return (result.Value.Songs.ToList(), result.Value.Continuation is null);
+    }
+
+    /// <summary>高く評価した曲のうち、そのアーティストのもの（ID が取れない行は名前で照らす。Android と同じ）。</summary>
+    public static List<Song> ByArtist(IEnumerable<Song> songs, string? browseId, string name) =>
+        songs.Where(song => song.Artists.Any(a => browseId is not null && a.BrowseId is not null ? a.BrowseId == browseId : string.Equals(a.Name, name, StringComparison.OrdinalIgnoreCase))).ToList();
 
     public async Task RefreshAsync()
     {

@@ -42,6 +42,28 @@ public sealed partial class ArtistPage : Page
         AllSongs.Visibility = Ui.Show(artist.AllSongsPlaylistId is not null);
         Shelves.ItemsSource = artist.AlbumShelves.Select(s => new HomeShelf(s.Title, null, s.Albums.Select(a => (HomeItem)new HomeItem.AlbumItem(a)).ToList())).ToList();
         UpdatePlayIcon();
+        await ShowLikedAsync(artist);
+    }
+
+    /// <summary>このアーティストの、自分が高く評価した曲の数（ログインしていなければ出さない）。</summary>
+    private async Task ShowLikedAsync(Core.Music.ArtistPage page)
+    {
+        if (!AppServices.Client.IsLoggedIn) return;
+        LikedText.Text = L.T("確かめています…", "Checking…");
+        LikedRow.Visibility = Visibility.Visible;
+        LikedRow.IsEnabled = false;
+        var (songs, complete) = await AppServices.Library.LikedSongsAsync();
+        if (artist != page) return;
+        var count = LibraryState.ByArtist(songs, browseId, page.Name).Count;
+        LikedRow.Visibility = Ui.Show(count > 0);
+        LikedRow.IsEnabled = true;
+        LikedText.Text = complete ? L.T($"{page.Name} の {count} 曲", $"{count} {(count == 1 ? "song" : "songs")} by {page.Name}")
+            : L.T($"{page.Name} の {count} 曲以上", $"{count}+ songs by {page.Name}");
+    }
+
+    private void OnLiked(object sender, RoutedEventArgs e)
+    {
+        if (artist is { } page) Nav.LikedSongsBy(browseId, page.Name);
     }
 
     protected override void OnNavigatedFrom(NavigationEventArgs e) => Player.PropertyChanged -= OnPlayerChanged;

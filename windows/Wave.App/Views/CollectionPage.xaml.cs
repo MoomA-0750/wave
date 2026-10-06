@@ -130,6 +130,11 @@ public sealed partial class CollectionPage : Page
 
     private async Task LoadPlaylistAsync(CancellationToken token)
     {
+        if (request.Artist is { } artist)
+        {
+            await LoadLikedByArtistAsync(artist, token);
+            return;
+        }
         var first = true;
         var result = await AppServices.Music.FullPlaylistAsync(request.Id, page =>
         {
@@ -157,6 +162,18 @@ public sealed partial class CollectionPage : Page
         // サーバーの補足（曲数・時間を含む）があればそれを出す。無ければ読めた曲から数える
         var subtitle = result.Value!.Subtitle ?? request.Subtitle;
         DetailText.Text = subtitle ?? $"{L.Songs(rows.Count)}, {L.Length(total)}";
+        Done();
+    }
+
+    /// <summary>高く評価した曲のうち、そのアーティストのもの（ライブラリで覚えた一覧から絞る）。</summary>
+    private async Task LoadLikedByArtistAsync(ArtistFilter artist, CancellationToken token)
+    {
+        var (songs, complete) = await AppServices.Library.LikedSongsAsync();
+        token.ThrowIfCancellationRequested();
+        var n = 1;
+        foreach (var song in LibraryState.ByArtist(songs, artist.BrowseId, artist.Name)) rows.Add(new TrackRow(n++, song) { Menu = MenuFor });
+        var total = rows.Sum(r => r.Song.DurationSeconds ?? 0);
+        DetailText.Text = $"{artist.Name} • {L.Songs(rows.Count)}{(complete ? "" : "+")}, {L.Length(total)}";
         Done();
     }
 

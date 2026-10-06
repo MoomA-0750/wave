@@ -6,7 +6,10 @@ using Wave.Core.Music;
 namespace Wave.App;
 
 /// <summary>プレイリスト・アルバムのページを開くときの値。</summary>
-public sealed record CollectionRequest(bool IsAlbum, string Id, string? Title = null, string? ThumbnailUrl = null, string? Subtitle = null);
+public sealed record CollectionRequest(bool IsAlbum, string Id, string? Title = null, string? ThumbnailUrl = null, string? Subtitle = null, ArtistFilter? Artist = null);
+
+/// <summary>一覧をそのアーティストの曲だけに絞る（高く評価した曲をアーティストのページから開くとき）。</summary>
+public sealed record ArtistFilter(string? BrowseId, string Name);
 
 /// <summary>画面の移り変わり（中央の枠）。戻る・進むは枠の履歴を使う。</summary>
 public static class Nav
@@ -25,6 +28,10 @@ public static class Nav
 
     public static void LikedSongs() =>
         Go(typeof(Views.CollectionPage), new CollectionRequest(false, MusicRepository.LikedSongs, L.T("高く評価した曲", "Liked Songs"), AppServices.Library.LikedThumbnail));
+
+    /// <summary>高く評価した曲のうち、そのアーティストのもの。</summary>
+    public static void LikedSongsBy(string? browseId, string name) =>
+        Go(typeof(Views.CollectionPage), new CollectionRequest(false, MusicRepository.LikedSongs, L.T("高く評価した曲", "Liked Songs"), AppServices.Library.LikedThumbnail, name, new ArtistFilter(browseId, name)));
 
     public static void Album(string browseId, AlbumSummary? summary = null) =>
         Go(typeof(Views.CollectionPage), new CollectionRequest(true, browseId, summary?.Title, summary?.ThumbnailUrl, summary?.Subtitle));
