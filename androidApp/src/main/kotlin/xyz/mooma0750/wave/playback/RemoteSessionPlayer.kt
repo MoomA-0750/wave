@@ -22,6 +22,8 @@ import xyz.mooma0750.wave.handoff.v2.ControlAction
 @UnstableApi
 class RemoteSessionPlayer(
     private val control: (ControlAction, Long?) -> Unit,
+    /** 通知のアーティストの行（アーティスト, 端末名 → 「アーティスト • 端末名で再生中」）。 */
+    private val artistLine: (String, String) -> String,
 ) : SimpleBasePlayer(Looper.getMainLooper()) {
     private var remote: ConnectV2Manager.RemotePlayback? = null
 
@@ -44,7 +46,8 @@ class RemoteSessionPlayer(
                     MediaMetadata
                         .Builder()
                         .setTitle(song.title)
-                        .setArtist(song.artists.joinToString(", ") { it.name })
+                        // Spotify と同じく、どの端末で鳴っているかを出す
+                        .setArtist(artistLine(song.artists.joinToString(", ") { it.name }, current.deviceLabel))
                         .setAlbumTitle(song.album?.title)
                         .setArtworkUri(song.thumbnailUrl?.takeIf { it.startsWith("https://") }?.let(android.net.Uri::parse))
                         .build()

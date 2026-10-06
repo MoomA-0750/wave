@@ -155,9 +155,17 @@ class MainActivity : ComponentActivity() {
                                 onCancel = { reLogin = false },
                             )
                         } else {
+                            // Spotify と同じく、デバイスのボタンは端末を選ぶだけの画面を出す（設定はその中のリンクから）
+                            var showDevices by remember { mutableStateOf(false) }
+                            val openDevices: () -> Unit = { if (container.connectV2 != null) showDevices = true else nav.push(Screen.Connect) }
+                            if (showDevices) {
+                                container.connectV2?.let { manager ->
+                                    xyz.mooma0750.wave.connect2.DevicePickerSheet(manager, onDismiss = { showDevices = false }, onOpenSettings = { nav.push(Screen.Connect) })
+                                }
+                            }
                             AppShell(
                                 nav,
-                                miniPlayer = { open -> MiniPlayer(container.player, container.connectV2, onOpen = open, onOpenDevices = { nav.push(Screen.Connect) }) },
+                                miniPlayer = { open -> MiniPlayer(container.player, container.connectV2, onOpen = open, onOpenDevices = openDevices) },
                                 nowPlaying = { close ->
                                     NowPlayingScreen(
                                         connect = container.connectV2,
@@ -166,10 +174,7 @@ class MainActivity : ComponentActivity() {
                                         videos = container.musicVideos,
                                         actions = songActions.closing(close),
                                         onClose = close,
-                                        onOpenDevices = {
-                                            close()
-                                            nav.push(Screen.Connect)
-                                        },
+                                        onOpenDevices = openDevices,
                                     )
                                 },
                             ) {

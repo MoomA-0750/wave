@@ -70,6 +70,9 @@ public sealed partial class MainWindow : Window
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);
         AppWindow.TitleBar.PreferredHeightOption = TitleBarHeightOption.Tall;
+        // 最大化したときに上に白い線が出ないよう、タイトルバーと窓の枠もアプリの明るさで描かせる
+        AppWindow.TitleBar.PreferredTheme = TitleBarTheme.UseDefaultAppMode;
+        UseDarkFrame(Application.Current.RequestedTheme == ApplicationTheme.Dark);
         AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "wave.ico"));
         Ui.ResizeLogical(this, 1480, 940);
         if (AppWindow.Presenter is OverlappedPresenter presenter)
@@ -626,36 +629,37 @@ public sealed partial class MainWindow : Window
 
     private void OnDevicesOpening(object? sender, object e) => BuildDevicesPanel();
 
-    /// <summary>Spotify の「デバイスに接続」と同じ並び: 今鳴っている端末、その下に家のほかの端末。</summary>
+    /// <summary>Spotify の「デバイスに接続」と同じ並び: 今鳴っている端末、その下に家のほかの端末（押すとその端末に移す）。</summary>
     private void BuildDevicesPanel()
     {
         var connect = AppServices.Connect;
         var info = connect.Info;
         DevicesPanel.Children.Clear();
-        var remote = connect.Remote is { AccountMatches: true } r && !info.IsWriter ? r : null;
-        var playingHere = info.IsWriter || remote is not { Playing: true };
+        var remote = Player.IsRemote ? connect.Remote : null;
         DevicesPanel.Children.Add(new TextBlock { Text = L.T("現在のデバイス", "Current device"), Style = (Style)Application.Current.Resources["BodyStrongTextBlockStyle"] });
-        DevicesPanel.Children.Add(DeviceRow(playingHere ? "\uE7F4" : "\uE8EA", playingHere ? L.T("この PC", "This PC") : remote!.DeviceLabel,
-            playingHere ? null : string.Join(" · ", new[] { remote!.Title, remote.Artist }.Where(t => !string.IsNullOrEmpty(t))), accent: true, action: null));
+        if (remote is null)
+        {
+            DevicesPanel.Children.Add(DeviceRow("\uE7F4", L.T("この PC", "This PC"), null, accent: true, enabled: true, action: null));
+        }
+        else
+        {
+            DevicesPanel.Children.Add(DeviceRow("\uE8EA", remote.DeviceLabel, string.Join(" · ", new[] { remote.Title, remote.Artist }.Where(t => !string.IsNullOrEmpty(t))), accent: true, enabled: true, action: null));
+        }
         if (!info.InHousehold)
         {
             DevicesPanel.Children.Add(new TextBlock { Text = L.T("スマホと連携すると、再生を引き継げます", "Connect your phone to move playback between devices"), TextWrapping = TextWrapping.Wrap, Style = (Style)Application.Current.Resources["SubtleTextStyle"] });
         }
         else
         {
-            var others = connect.Members.Where(m => !m.IsSelf && !(remote is { Playing: true } && m.DeviceId == remote.DeviceId && !playingHere)).ToList();
-            if (!playingHere)
-            {
-                others.Insert(0, new MemberView("", L.T("この PC", "This PC"), true, false, true, false));
-            }
+            var others = connect.Members.Where(m => remote is null ? !m.IsSelf : m.DeviceId != remote.DeviceId).Where(m => !m.IsController).ToList();
             if (others.Count > 0)
             {
                 DevicesPanel.Children.Add(new TextBlock { Text = L.T("ほかのデバイスを選択", "Select another device"), Margin = new Thickness(0, 8, 0, 0), Style = (Style)Application.Current.Resources["BodyStrongTextBlockStyle"] });
-                foreach (var member in others)
+                foreach (var member in others.OrderByDescending(m => m.IsSelf).ThenByDescending(m => m.Online))
                 {
                     if (member.IsSelf)
                     {
-                        DevicesPanel.Children.Add(DeviceRow("\uE7F4", member.Label, L.T("クリックしてこの PC で再生", "Click to play on this PC"), accent: false, action: () =>
+                        DevicesPanel.Children.Add(DeviceRow("\uE7F4", L.T("この PC", "This PC"), null, accent: false, enabled: true, action: () =>
                         {
                             DevicesFlyout.Hide();
                             connect.Transfer();
@@ -663,9 +667,12 @@ public sealed partial class MainWindow : Window
                     }
                     else
                     {
-                        var state = member.Active && remote is { Playing: false } ? L.T("一時停止中", "Paused") : member.Online ? L.T("オンライン", "Online") : L.T("オフライン", "Offline");
-                        // 相手の端末に再生を送る操作はまだ無い（相手の端末で「ここで再生」を押す）
-                        DevicesPanel.Children.Add(DeviceRow("\uE8EA", member.Label, state, accent: false, action: null));
+                        var target = member.DeviceId;
+                        DevicesPanel.Children.Add(DeviceRow("\uE8EA", member.Label, member.Online ? null : L.T("オフライン", "Offline"), accent: false, enabled: member.Online, action: () =>
+                        {
+                            DevicesFlyout.Hide();
+                            connect.PlayOnDevice(target);
+                        }));
                     }
                 }
             }
@@ -679,7 +686,7 @@ public sealed partial class MainWindow : Window
         DevicesPanel.Children.Add(settings);
     }
 
-    private static FrameworkElement DeviceRow(string glyph, string title, string? subtitle, bool accent, Action? action)
+    private static FrameworkElement DeviceRow(string glyph, string title, string? subtitle, bool accent, bool enabled, Action? action)
     {
         var accentBrush = (Brush)Application.Current.Resources["AccentTextFillColorPrimaryBrush"];
         var grid = new Grid { ColumnSpacing = 12, Padding = new Thickness(8) };
@@ -695,9 +702,21 @@ public sealed partial class MainWindow : Window
         if (!string.IsNullOrEmpty(subtitle)) text.Children.Add(new TextBlock { Text = subtitle, TextTrimming = TextTrimming.CharacterEllipsis, Style = (Style)Application.Current.Resources["SubtleTextStyle"] });
         Grid.SetColumn(text, 1);
         grid.Children.Add(text);
-        if (action is null) return grid;
+        if (!enabled) grid.Opacity = 0.45;
+        if (action is null || !enabled) return grid;
         var button = new Button { Content = grid, HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch, Padding = new Thickness(0), Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent), BorderThickness = new Thickness(0) };
         button.Click += (_, _) => action();
         return button;
+    }
+
+    [System.Runtime.InteropServices.DllImport("dwmapi.dll")]
+    private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
+
+    /// <summary>窓の枠（最大化したときの上の縁を含む）をダークで描かせる（DWMWA_USE_IMMERSIVE_DARK_MODE）。</summary>
+    private void UseDarkFrame(bool dark)
+    {
+        var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+        var value = dark ? 1 : 0;
+        _ = DwmSetWindowAttribute(hwnd, 20, ref value, sizeof(int));
     }
 }

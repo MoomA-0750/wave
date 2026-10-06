@@ -156,4 +156,11 @@
     </plurals>
     <string name="connect_v2_notice_control_unsent">鳴らしている端末に送れませんでした</string>
     <string name="nowplaying_playing_on">%1$sで再生中</string>
+    <string name="devices_current">現在のデバイス</string>
+    <string name="devices_this_phone">このスマホ</string>
+    <string name="devices_select_another">ほかのデバイスを選択</string>
+    <string name="devices_offline">オフライン</string>
+    <string name="devices_not_set_up">ほかの端末と連携すると、再生を引き継げます</string>
+    <string name="devices_settings">端末の連携の設定</string>
+    <string name="nowplaying_artist_on_device">%1$s • %2$sで再生中</string>
 </resources>

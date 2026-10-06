@@ -427,6 +427,7 @@ class PlaybackService : MediaSessionService() {
                             xyz.mooma0750.wave.handoff.v2.ControlAction.Next -> player.seekToNextMediaItem()
                             xyz.mooma0750.wave.handoff.v2.ControlAction.Previous -> player.seekToPrevious()
                             xyz.mooma0750.wave.handoff.v2.ControlAction.Seek -> player.seekTo((positionMs ?: 0).coerceAtLeast(0))
+                            xyz.mooma0750.wave.handoff.v2.ControlAction.Transfer -> return@suppressingV2 false
                         }
                         true
                     }
@@ -561,7 +562,7 @@ class PlaybackService : MediaSessionService() {
         val current = session ?: return
         val local = localPlayer ?: return
         if (remote != null && !local.playWhenReady) {
-            val mirror = remotePlayer ?: RemoteSessionPlayer { action, position -> manager.control(action, position) }.also { remotePlayer = it }
+            val mirror = remotePlayer ?: RemoteSessionPlayer({ action, position -> manager.control(action, position) }, { artist, device -> getString(xyz.mooma0750.wave.R.string.nowplaying_artist_on_device, artist, device) }).also { remotePlayer = it }
             mirror.update(remote)
             if (current.player !== mirror) current.player = mirror
         } else if (current.player !== local) {
@@ -737,6 +738,13 @@ class PlaybackService : MediaSessionService() {
                         else -> null
                     }
                 }
+            // ほかの端末を映している間に曲を選んだ: 手元では鳴らさず（用意だけ）、その端末で鳴らしてもらう（Spotify と同じ）
+            val remoteTarget = container.connectV2?.remotePlayback?.value?.deviceId
+            if (handled != null && remoteTarget != null && customCommand.customAction in USER_SELECTIONS && session.player === remotePlayer) {
+                suppressingV2 { local.pause() }
+                container.connectV2?.playOnRemote(remoteTarget)
+                return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+            }
             // 曲を選んだ（キューを置き換えた・飛んだ）のは、本人が新しく再生を始めたこと（L-3）
             // 空のキュー・最後まで行ったキューに「次に再生」「最後に追加」で足して再生が始まった場合も、新しい再生（再レビュー 低-O）
             val newSelection =

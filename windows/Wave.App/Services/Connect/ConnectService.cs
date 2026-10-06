@@ -131,6 +131,22 @@ public sealed class ConnectService
         player.CursorChanged += OnCursorChanged;
         player.UserStartedPlayback += OnUserStartedPlayback;
         player.UserPaused += () => Interlocked.Increment(ref playIntent);
+        player.PlayOnRemote = target =>
+        {
+            if (client is null || Relay.Status != RelayStatus.Connected) return false;
+            // UI のスレッドで手元のキュー（音を出さずに用意したもの）を読んでから渡す
+            var snapshot = Snapshot();
+            var cursor = player.CurrentCursor() is { } c ? ToLocal(c) with { Playing = false } : null;
+            if (snapshot is null || cursor is null) return false;
+            Post(() =>
+            {
+                if (client is not { } engine) return;
+                engine.SetLocalQueue(snapshot);
+                engine.SetLocalCursor(cursor);
+                AppPaths.Log($"connect-v2 play on remote sent={engine.PlayOn(target)}");
+            });
+            return true;
+        };
         player.SendRemoteControl = (action, positionMs) =>
         {
             if (client is null || Relay.Status != RelayStatus.Connected) return false;
@@ -292,9 +308,28 @@ public sealed class ConnectService
 
     // --- 画面の値 ---
 
+    private int profileSentForMembers = -1;
+    private RelayStatus lastRelayStatus = RelayStatus.Disconnected;
+
+    /// <summary>中継につながったとき・家の端末が増えたときに、この PC の名前を家に知らせる（作業スレッドで）。</summary>
+    private void MaybeSendProfile(ConnectClient? engine)
+    {
+        var status = Relay?.Status ?? RelayStatus.Disconnected;
+        if (status != lastRelayStatus)
+        {
+            lastRelayStatus = status;
+            if (status == RelayStatus.Connected) profileSentForMembers = -1;
+        }
+        if (engine?.HouseholdId is null || status != RelayStatus.Connected) return;
+        var count = engine.Members.Count;
+        if (count == profileSentForMembers) return;
+        if (engine.SendProfile(DeviceName)) profileSentForMembers = count;
+    }
+
     private void RefreshInfo()
     {
         var engine = client;
+        MaybeSendProfile(engine);
         writer = engine?.IsWriter == true;
         var online = engine?.Online ?? new HashSet<string>();
         var active = engine?.ActiveDeviceId;
@@ -347,7 +382,7 @@ public sealed class ConnectService
         }
         if (mirroredQueue is not { } export || export.Items.All(i => i.Meta.ItemId != now.Cursor.CurrentItemId)) return null;
         var duration = export.Items.First(i => i.Meta.ItemId == now.Cursor.CurrentItemId).Song.DurationSeconds;
-        return new RemoteSnapshot(remote.DeviceLabel, mirroredKey, export, now.Cursor.CurrentItemId, now.PositionMs, player.ClockMs, now.Cursor.Playing, RepeatOf(now.Cursor.Repeat), duration, now.Version);
+        return new RemoteSnapshot(remote.DeviceId, remote.DeviceLabel, mirroredKey, export, now.Cursor.CurrentItemId, now.PositionMs, player.ClockMs, now.Cursor.Playing, RepeatOf(now.Cursor.Repeat), duration, now.Version);
     }
 
     private void SetPairing(PairingView view) => ui.TryEnqueue(() =>
@@ -404,6 +439,12 @@ public sealed class ConnectService
 
     private void OnEvent(ClientEvent e)
     {
+        if (e is ClientEvent.Profile profile)
+        {
+            var name = new string(profile.Name.Where(ch => !char.IsControl(ch) && ch is not ('\u202A' or '\u202B' or '\u202C' or '\u202D' or '\u202E' or '\u2066' or '\u2067' or '\u2068' or '\u2069' or '\u200E' or '\u200F')).ToArray()).Trim();
+            if (name.Length > 0 && (!labels.TryGetValue(profile.DeviceId, out var known) || known != name)) RememberLabel(profile.DeviceId, name);
+            return;
+        }
         if (e is ClientEvent.Joined or ClientEvent.ChainForked or ClientEvent.ChainRolledBack or ClientEvent.ChainInvalid) joinWaiter?.TrySetResult(e);
         var text = e switch
         {
@@ -754,6 +795,9 @@ public sealed class ConnectService
     };
 
     // --- 画面からの操作 ---
+
+    /// <summary>デバイスの一覧で、ほかの端末を選んだ（その端末に再生を移す）。</summary>
+    public void PlayOnDevice(string deviceId) => Post(() => AppPaths.Log($"connect-v2 remote transfer requested={client?.RequestRemoteTransfer(deviceId)}"));
 
     /// <summary>「この PC で再生」。</summary>
     public void Transfer() => Post(() => AppPaths.Log($"connect-v2 transfer requested={client?.RequestTransfer()}"));

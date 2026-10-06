@@ -85,6 +85,11 @@ public sealed partial class PlayerService : ObservableObject
     /// <summary>鳴らしている端末の名前（IsRemote のとき）。</summary>
     [ObservableProperty] private string? remoteDevice;
 
+    /// <summary>手元で選んだキューを、ほかの端末で鳴らす（端末の連携が置く）。端末 ID を渡し、頼めたら true。</summary>
+    public Func<string, bool>? PlayOnRemote { get; set; }
+
+    private string? RemoteDeviceId => IsRemote ? remote?.DeviceId : null;
+
     /// <summary>ほかの端末への命令を送る（端末の連携が置く）。送れたら true。</summary>
     public Func<Wave.Core.Connect.ControlAction, long?, bool>? SendRemoteControl { get; set; }
 
@@ -177,6 +182,7 @@ public sealed partial class PlayerService : ObservableObject
     public void PlayList(IReadOnlyList<Song> songs, int start = 0, string? source = null, bool? shuffleOverride = null)
     {
         if (songs.Count == 0) return;
+        var target = RemoteDeviceId;
         LeaveRemote();
         radioContinuation = null;
         radioPlaylistId = null;
@@ -204,22 +210,47 @@ public sealed partial class PlayerService : ObservableObject
         }
         radioSeed = null;
         ReplaceQueue(order, QueueOrigin.Source);
-        SelectAt(first);
+        StartSelection(first, target);
+    }
+
+    /// <summary>
+    /// 曲を選んだ。ほかの端末で鳴っていたら、音を出さずにキューを用意して、その端末で鳴らしてもらう（Spotify と同じ）。
+    /// 頼めなければ、この PC で鳴らす。
+    /// </summary>
+    /// <returns>ほかの端末に頼んだか</returns>
+    private bool StartSelection(int index, string? remoteTarget)
+    {
+        if (remoteTarget is not null && index >= 0 && index < Queue.Count)
+        {
+            loadCancel?.Cancel();
+            player.Pause();
+            player.Source = null;
+            Index = index;
+            Current = Queue[index];
+            Position = 0;
+            Duration = Current.DurationSeconds ?? 0;
+            IsPlaying = false;
+            IsLoading = false;
+            if (PlayOnRemote?.Invoke(remoteTarget) == true) return true;
+        }
+        SelectAt(index);
         UserStartedPlayback?.Invoke(true);
+        return false;
     }
 
     /// <summary>1曲から始めて、続きはラジオ（似た曲）にする（Spotify の「曲から再生」と同じ）。</summary>
     public async void PlaySong(Song song)
     {
+        var target = RemoteDeviceId;
         LeaveRemote();
         SourceId = null;
         unshuffled = [song];
         ReplaceQueue([song], QueueOrigin.Source);
-        SelectAt(0);
-        UserStartedPlayback?.Invoke(true);
+        // 曲のラジオの続きは、鳴らす端末が自分で取る（キューには種の曲だけを渡す）
         radioSeed = song.VideoId;
         radioPlaylistId = "RDAMVM" + song.VideoId;
         radioContinuation = null;
+        if (StartSelection(0, target)) return;
         var page = await AppServices.Music.UpNextAsync(song.VideoId, radioPlaylistId);
         if (!page.IsOk || Queue.Count == 0 || Queue[0].VideoId != song.VideoId) return;
         radioContinuation = page.Value!.Continuation;
@@ -271,9 +302,9 @@ public sealed partial class PlayerService : ObservableObject
     public void PlayAt(int position)
     {
         if (position < 0 || position >= Queue.Count) return;
+        var target = RemoteDeviceId;
         LeaveRemote();
-        SelectAt(position);
-        UserStartedPlayback?.Invoke(true);
+        StartSelection(position, target);
     }
 
     private void SelectAt(int position, double seekTo = 0)
@@ -1094,7 +1125,7 @@ public sealed record QueueExport(
 public sealed record PlaybackCursor(string CurrentItemId, long PositionMs, bool Playing, RepeatMode Repeat, long ListenedMs, bool HistorySent);
 
 /// <summary>ほかの端末の再生（表示と遠隔操作のため）。QueueKey はキューの中身の目印（同じなら置き直さない）。</summary>
-public sealed record RemoteSnapshot(string DeviceLabel, string? QueueKey, QueueExport? Queue, string CurrentItemId, long PositionMs, long CapturedAtMs, bool Playing, RepeatMode Repeat, int? DurationSeconds, long Version = 0)
+public sealed record RemoteSnapshot(string DeviceId, string DeviceLabel, string? QueueKey, QueueExport? Queue, string CurrentItemId, long PositionMs, long CapturedAtMs, bool Playing, RepeatMode Repeat, int? DurationSeconds, long Version = 0)
 {
     /// <summary>今の位置（再生中なら、取ってからの経過を足す。曲の長さで止める）。</summary>
     public double PositionNow(long nowMs)

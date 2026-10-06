@@ -157,4 +157,11 @@
     </plurals>
     <string name="connect_v2_notice_control_unsent">Couldn\'t reach the device that\'s playing</string>
     <string name="nowplaying_playing_on">Playing on %1$s</string>
+    <string name="devices_current">Current device</string>
+    <string name="devices_this_phone">This phone</string>
+    <string name="devices_select_another">Select another device</string>
+    <string name="devices_offline">Offline</string>
+    <string name="devices_not_set_up">Connect your other devices to move playback between them</string>
+    <string name="devices_settings">Device settings</string>
+    <string name="nowplaying_artist_on_device">%1$s • Playing on %2$s</string>
 </resources>

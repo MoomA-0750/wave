@@ -129,6 +129,8 @@ class ConnectV2Manager(
         val label: String,
         val isSelf: Boolean,
         val role: Role,
+        /** 中継につながっている（中継の申告。表示だけ）。 */
+        val online: Boolean = false,
     )
 
     private val mutableMembers = MutableStateFlow<List<MemberView>>(emptyList())
@@ -141,19 +143,22 @@ class ConnectV2Manager(
 
     private fun refreshInfo() {
         val engine = client
+        maybeSendProfile(engine)
         mutableRemotePlayback.value = mirrorOf(engine)
         writer = engine?.isWriter == true
         mutableInfo.value = Info(engine != null, engine?.householdId != null, engine?.members?.size ?: 0, engine?.isWriter == true, engine?.hasRetreated == true, engine?.storeResetPending == true)
         val known = labels
+        val online = engine?.onlineDevices().orEmpty()
         mutableMembers.value =
             engine?.members.orEmpty().map { member ->
                 val self = member.deviceId == identity.deviceId
-                MemberView(member.deviceId, if (self) resources.getString(R.string.connect_v2_member_self) else known[member.deviceId] ?: resources.getString(R.string.connect_v2_member_unknown, member.deviceId.take(6)), self, member.role)
+                MemberView(member.deviceId, if (self) resources.getString(R.string.connect_v2_member_self) else known[member.deviceId] ?: resources.getString(R.string.connect_v2_member_unknown, member.deviceId.take(6)), self, member.role, member.deviceId in online)
             }
     }
 
     /** 画面に映す、ほかの端末の再生（同じアカウントで、その端末が中継につながっているときだけ。この端末が鳴らしていれば null）。 */
     data class RemotePlayback(
+        val deviceId: String,
         val deviceLabel: String,
         val items: List<xyz.mooma0750.wave.core.music.Song>,
         val itemIds: List<String>,
@@ -206,7 +211,46 @@ class ConnectV2Manager(
                 )
             }
         val label = labels[now.writer] ?: resources.getString(R.string.connect_v2_member_unknown, now.writer.take(6))
-        return RemotePlayback(label, songs, items.map { it.itemId }, index, now.positionMs, SystemClock.elapsedRealtime(), now.cursor.playing, now.cursor.repeat)
+        return RemotePlayback(now.writer, label, songs, items.map { it.itemId }, index, now.positionMs, SystemClock.elapsedRealtime(), now.cursor.playing, now.cursor.repeat)
+    }
+
+    /** ほかの端末に選ばれて引き取りを頼まれた時刻の期限（この間は画面が裏でも取り込む）。 */
+    @Volatile
+    private var remoteTransferUntil = 0L
+
+    private var profileSentForMembers = -1
+    private var lastRelayStatus: RelayClientV2.Status? = null
+
+    /** エンジンのスレッドで: 中継につながったとき・家の端末が増えたときに、この端末の名前を家に知らせる。 */
+    private fun maybeSendProfile(engine: ConnectClient?) {
+        val status = relay.status.value
+        if (status != lastRelayStatus) {
+            lastRelayStatus = status
+            if (status == RelayClientV2.Status.Connected) profileSentForMembers = -1
+        }
+        if (engine?.householdId == null || status != RelayClientV2.Status.Connected) return
+        val count = engine.members.size
+        if (count == profileSentForMembers) return
+        if (engine.sendProfile(android.os.Build.MODEL)) profileSentForMembers = count
+    }
+
+    /** デバイスの一覧で、ほかの端末を選んだ（その端末に再生を移す）。 */
+    fun playOnDevice(deviceId: String) = post { Log.i(WaveApplication.LOG_TAG, "connect-v2 remote transfer requested=${client?.requestRemoteTransfer(deviceId)}") }
+
+    /**
+     * ほかの端末で鳴っている間に曲を選んだ: 再生サービスが音を出さずに用意したキューを家に置き、その端末で鳴らしてもらう。
+     * 再生サービスから Main で呼ぶ。
+     */
+    fun playOnRemote(target: String) {
+        val endpoint = host.endpoint ?: return
+        val snapshot = endpoint.snapshot()?.let(HandoffCodec::encode) ?: return
+        val cursor = endpoint.cursor()?.toLocal()?.copy(playing = false) ?: return
+        post {
+            val engine = client ?: return@post
+            engine.setLocalQueue(snapshot)
+            engine.setLocalCursor(cursor)
+            Log.i(WaveApplication.LOG_TAG, "connect-v2 play on remote sent=${engine.playOn(target)}")
+        }
     }
 
     /** 画面から: 鳴らしている端末へ遠隔操作を送る。 */
@@ -331,12 +375,18 @@ class ConnectV2Manager(
                 if (cursor.accountTag != state.tag) return false
                 val decoded = RemoteQueue.decode(snapshot) ?: return false
                 val adjusted = RemoteQueue.atCursor(decoded, cursor, positionMs) ?: return false
+                val requested = SystemClock.elapsedRealtime() < remoteTransferUntil
                 return runBlocking(Dispatchers.Main) {
-                    uiInForeground() && session.loginGenerationId() == state.generation && host.endpoint?.adopt(adjusted, adjusted.positionMs, state.generation) == true
+                    (uiInForeground() || requested) && session.loginGenerationId() == state.generation && host.endpoint?.adopt(adjusted, adjusted.positionMs, state.generation) == true
                 }
             }
 
             override fun event(event: ClientEvent) {
+                if (event is ClientEvent.Profile) {
+                    val name = xyz.mooma0750.wave.handoff.crypto.Pairing.sanitizeName(event.name)
+                    if (labels[event.deviceId] != name) rememberLabel(event.deviceId, name)
+                    return
+                }
                 if (event is ClientEvent.RemoteChanged) mutableRemote.value = RemoteView(event.writer, event.cursor, event.accountMatches)
                 Log.i(WaveApplication.LOG_TAG, "connect-v2 event=${event::class.simpleName}")
                 mutableEvents.tryEmit(event)
@@ -353,6 +403,11 @@ class ConnectV2Manager(
                 positionMs: Long?,
             ): Boolean {
                 Log.i(WaveApplication.LOG_TAG, "connect-v2 control received action=$action")
+                if (action == xyz.mooma0750.wave.handoff.v2.ControlAction.Transfer) {
+                    // ほかの端末のデバイスの一覧でこの端末が選ばれた: 画面が裏にあっても、この後の取り込みを許す（15秒だけ）
+                    remoteTransferUntil = SystemClock.elapsedRealtime() + REMOTE_TRANSFER_WINDOW_MS
+                    return true
+                }
                 return runBlocking(Dispatchers.Main) { host.endpoint?.control(action, positionMs) == true }
             }
 
@@ -782,6 +837,9 @@ class ConnectV2Manager(
 
         /** 遠隔操作を送れなかった。 */
         const val CONTROL_UNSENT = "control_unsent"
+
+        /** ほかの端末に選ばれてから、画面が裏でも取り込んでよい時間。 */
+        const val REMOTE_TRANSFER_WINDOW_MS = 15_000L
 
         const val TICK_MS = 1_000L
         const val CURSOR_DEBOUNCE_MS = 1_000L
