@@ -93,6 +93,17 @@ public sealed class RelayConnection
         }
     }
 
+    /// <summary>つないでいてもつなぎ直す（家の記録を消した後に、新しい家の welcome を受け取る）。</summary>
+    public void Restart()
+    {
+        lock (gate)
+        {
+            if (users == 0) return;
+            CloseLocked();
+            OpenLocked();
+        }
+    }
+
     public async Task<T> HoldingAsync<T>(Func<Task<T>> block)
     {
         Acquire();

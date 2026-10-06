@@ -787,7 +787,7 @@ public sealed class ConnectService
         seenGeneration = null;
         Unreadable = false;
         Load();
-        Relay?.Reconnect();
+        Relay?.Restart();
         AppPaths.Log("connect-v2 household forgotten");
     });
 

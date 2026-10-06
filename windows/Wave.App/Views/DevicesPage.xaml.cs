@@ -53,7 +53,7 @@ public sealed partial class DevicesPage : Page
         }
 
         var remote = Devices.Remote;
-        RemoteCard.Visibility = info.InHousehold && remote is { AccountMatches: true } && !info.IsWriter ? Visibility.Visible : Visibility.Collapsed;
+        RemoteCard.Visibility = info.InHousehold && info.Relay != RelayStatus.NotMember && remote is { AccountMatches: true } && !info.IsWriter ? Visibility.Visible : Visibility.Collapsed;
         if (remote is not null && RemoteCard.Visibility == Visibility.Visible)
         {
             RemoteDevice.Text = remote.Playing ? L.T($"{remote.DeviceLabel}で再生中", $"Playing on {remote.DeviceLabel}") : L.T($"{remote.DeviceLabel}で一時停止中", $"Paused on {remote.DeviceLabel}");

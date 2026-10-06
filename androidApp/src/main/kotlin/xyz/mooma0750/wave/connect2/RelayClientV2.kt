@@ -72,6 +72,17 @@ class RelayClientV2(
         if (users == 0) close()
     }
 
+    /** つなぎ直す（家の記録を消した後に、新しい家の welcome を受け取る）。使っている人がいなければ何もしない。 */
+    @Synchronized
+    fun restart() {
+        if (users == 0) return
+        val closing = socket
+        socket = null
+        closing?.close(1000, null)
+        if (closing != null) onConnectionLost()
+        open()
+    }
+
     fun send(message: RelayV2): Boolean = currentSocket()?.takeIf { status.value == Status.Connected }?.send(RelayV2.encode(message)) == true
 
     @Synchronized

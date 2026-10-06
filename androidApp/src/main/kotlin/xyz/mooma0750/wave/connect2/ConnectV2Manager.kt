@@ -622,6 +622,8 @@ class ConnectV2Manager(
             tagState = null
             seenGeneration = null
             load()
+            // 今の接続は前の家の welcome を受けたまま（storeId が分からない）なので、つなぎ直す
+            relay.restart()
             Log.i(WaveApplication.LOG_TAG, "connect-v2 household forgotten")
         }
 

@@ -718,6 +718,8 @@ public sealed partial class PlayerService : ObservableObject
         var backup = localBackup;
         localBackup = null;
         if (!restoreLocal) return;
+        // タスクバーの表示に「再生中」を残さない（手元の曲は一時停止のまま戻す）
+        player.SystemMediaTransportControls.PlaybackStatus = backup is null ? MediaPlaybackStatus.Closed : MediaPlaybackStatus.Paused;
         Queue.Clear();
         Current = null;
         Index = -1;
