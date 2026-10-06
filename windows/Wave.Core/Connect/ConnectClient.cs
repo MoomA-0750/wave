@@ -157,6 +157,9 @@ public sealed class ConnectClient
     /// <summary>中継につながっている家の端末（中継の申告。表示と D-9 の判断だけに使い、止まる根拠にしない）。</summary>
     private IReadOnlySet<string> online = new HashSet<string>();
 
+    /// <summary>中継につながっている家の端末（中継の申告。表示だけに使う）。</summary>
+    public IReadOnlySet<string> Online => online;
+
     /// <summary>今の接続で welcome を処理した（切れたら false。メモリに残った古いカーソルを最新とみなさない）。</summary>
     private bool welcomed;
 

@@ -15,6 +15,9 @@ public sealed class Settings
     /// <summary>画面の言語。"system"（Windows に合わせる）・"ja"・"en"。次の起動から効く。</summary>
     public string Language { get; set; } = "system";
     public List<SearchHistoryEntry> SearchHistory { get; set; } = [];
+    /// <summary>端末の連携の中継 v2 の場所（例: wss://ホスト:ポート）と、署名に入れるホスト名とポート。空なら連携を使わない。</summary>
+    public string? RelayV2Url { get; set; }
+    public string? RelayV2Host { get; set; }
 
     private static readonly string FilePath = Path.Combine(AppPaths.Data, "settings.json");
     private static readonly JsonSerializerOptions Options = new() { WriteIndented = true };

@@ -221,6 +221,49 @@ public sealed class MusicRepository(InnerTubeClient client)
         return ApiResult<AccountInfo>.Ok(new AccountInfo(name, photo));
     }
 
+    /// <summary>
+    /// 今のログインが、保存した DATASYNC_ID のアカウントか（Android の WaveSession.verifiedAccount と同じ）。端末の連携でアカウントの照合に使う。
+    /// accounts_list の選択中のアカウントがちょうど1件で、その datasyncIdToken（"||" より前）が保存した値と同じで、
+    /// 確かめている間にログインが変わっていないときだけ返す。値はログ・画面に出さない。
+    /// </summary>
+    public async Task<VerifiedAccount?> VerifiedAccountAsync(CancellationToken cancel = default)
+    {
+        var generation = client.Generation;
+        var saved = client.CurrentCredentials?.RevealDataSyncId();
+        if (saved is null) return null;
+        var result = await client.PostAsync("account/accounts_list", new JsonObject(), cancel: cancel);
+        if (!result.IsOk) return null;
+        var selected = AccountTokens(result.Value!).Where(t => t.Selected).Select(t => t.Id).Distinct().ToList();
+        if (selected.Count != 1 || selected[0] != saved || client.Generation != generation) return null;
+        return new VerifiedAccount(generation, saved);
+    }
+
+    /// <summary>accounts_list の応答から、各アカウントの（選択中か, datasyncIdToken の "||" より前）を集める。</summary>
+    internal static List<(bool Selected, string Id)> AccountTokens(JsonNode root)
+    {
+        var tokens = new List<(bool, string)>();
+        void Walk(JsonNode? node, bool selected)
+        {
+            switch (node)
+            {
+                case JsonObject obj:
+                    var isSelected = selected || (obj["isSelected"] is JsonValue v && v.ToString() == "true");
+                    foreach (var (name, value) in obj)
+                    {
+                        if (name == "datasyncIdToken" && value is JsonValue s && s.TryGetValue<string>(out var text) && Wave.Core.Auth.Credentials.NormalizeDataSyncId(text) is { } id)
+                            tokens.Add((isSelected, id));
+                        Walk(value, isSelected);
+                    }
+                    break;
+                case JsonArray array:
+                    foreach (var item in array) Walk(item, selected);
+                    break;
+            }
+        }
+        Walk(root, false);
+        return tokens;
+    }
+
     private async Task<ApiResult<JsonNode>> BrowseAsync(string? browseId, string? continuation, string? browseParams, CancellationToken cancel)
     {
         var body = new JsonObject();

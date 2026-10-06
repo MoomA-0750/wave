@@ -9,6 +9,7 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Navigation;
 using Wave.App.Services;
+using Wave.App.Services.Connect;
 using Wave.App.Views;
 using Wave.Core.Lyrics;
 using Wave.Core.Music;
@@ -77,6 +78,7 @@ public sealed partial class MainWindow : Window
             presenter.PreferredMinimumHeight = 600;
         }
         Nav.Frame = ContentFrame;
+        InitConnect();
         rightPaneOpen = AppServices.Settings.RightPaneOpen;
         Player.PropertyChanged += OnPlayerChanged;
         Player.Queue.CollectionChanged += OnQueueChanged;
@@ -593,5 +595,105 @@ public sealed partial class MainWindow : Window
         toastCountdown?.Stop();
         toastCountdown = null;
         ToastFrame.Visibility = Visibility.Collapsed;
+    }
+
+    // --- 端末の連携（Connect v2） ---
+
+    private void InitConnect()
+    {
+        var connect = AppServices.Connect;
+        connect.Changed += RenderConnect;
+        connect.Notice += ShowToast;
+        RenderConnect();
+    }
+
+    private void RenderConnect()
+    {
+        var connect = AppServices.Connect;
+        DevicesButton.Visibility = connect.Configured ? Visibility.Visible : Visibility.Collapsed;
+        var remote = connect.Remote is { AccountMatches: true, Playing: true, Online: true } r && !connect.Info.IsWriter ? r : null;
+        RemoteStrip.Visibility = remote is null ? Visibility.Collapsed : Visibility.Visible;
+        if (remote is not null) RemoteStripText.Text = L.T($"{remote.DeviceLabel}で再生中", $"Playing on {remote.DeviceLabel}");
+        DevicesIcon.Foreground = remote is not null ? (Brush)Application.Current.Resources["AccentTextFillColorPrimaryBrush"] : (Brush)Application.Current.Resources["TextFillColorPrimaryBrush"];
+        if (DevicesFlyout.IsOpen) BuildDevicesPanel();
+    }
+
+    private void OnDevicesOpening(object? sender, object e) => BuildDevicesPanel();
+
+    private void OnRemoteStripTapped(object sender, TappedRoutedEventArgs e) => DevicesFlyout.ShowAt(DevicesButton);
+
+    /// <summary>Spotify の「デバイスに接続」と同じ並び: 今鳴っている端末、その下に家のほかの端末。</summary>
+    private void BuildDevicesPanel()
+    {
+        var connect = AppServices.Connect;
+        var info = connect.Info;
+        DevicesPanel.Children.Clear();
+        var remote = connect.Remote is { AccountMatches: true } r && !info.IsWriter ? r : null;
+        var playingHere = info.IsWriter || remote is not { Playing: true };
+        DevicesPanel.Children.Add(new TextBlock { Text = L.T("現在のデバイス", "Current device"), Style = (Style)Application.Current.Resources["BodyStrongTextBlockStyle"] });
+        DevicesPanel.Children.Add(DeviceRow("\uE7F4", playingHere ? L.T("この PC", "This PC") : remote!.DeviceLabel,
+            playingHere ? null : string.Join(" · ", new[] { remote!.Title, remote.Artist }.Where(t => !string.IsNullOrEmpty(t))), accent: true, action: null));
+        if (!info.InHousehold)
+        {
+            DevicesPanel.Children.Add(new TextBlock { Text = L.T("スマホと連携すると、再生を引き継げます", "Connect your phone to move playback between devices"), TextWrapping = TextWrapping.Wrap, Style = (Style)Application.Current.Resources["SubtleTextStyle"] });
+        }
+        else
+        {
+            var others = connect.Members.Where(m => !m.IsSelf && !(remote is { Playing: true } && m.DeviceId == remote.DeviceId && !playingHere)).ToList();
+            if (!playingHere)
+            {
+                others.Insert(0, new MemberView("", L.T("この PC", "This PC"), true, false, true, false));
+            }
+            if (others.Count > 0)
+            {
+                DevicesPanel.Children.Add(new TextBlock { Text = L.T("ほかのデバイスを選択", "Select another device"), Margin = new Thickness(0, 8, 0, 0), Style = (Style)Application.Current.Resources["BodyStrongTextBlockStyle"] });
+                foreach (var member in others)
+                {
+                    if (member.IsSelf)
+                    {
+                        DevicesPanel.Children.Add(DeviceRow("\uE7F4", member.Label, L.T("クリックしてこの PC で再生", "Click to play on this PC"), accent: false, action: () =>
+                        {
+                            DevicesFlyout.Hide();
+                            connect.Transfer();
+                        }));
+                    }
+                    else
+                    {
+                        var state = member.Active && remote is { Playing: false } ? L.T("一時停止中", "Paused") : member.Online ? L.T("オンライン", "Online") : L.T("オフライン", "Offline");
+                        // 相手の端末に再生を送る操作はまだ無い（相手の端末で「ここで再生」を押す）
+                        DevicesPanel.Children.Add(DeviceRow("\uE8EA", member.Label, state, accent: false, action: null));
+                    }
+                }
+            }
+        }
+        var settings = new HyperlinkButton { Content = L.T("端末の連携の設定", "Device settings"), Margin = new Thickness(0, 8, 0, 0) };
+        settings.Click += (_, _) =>
+        {
+            DevicesFlyout.Hide();
+            Nav.Devices();
+        };
+        DevicesPanel.Children.Add(settings);
+    }
+
+    private static FrameworkElement DeviceRow(string glyph, string title, string? subtitle, bool accent, Action? action)
+    {
+        var accentBrush = (Brush)Application.Current.Resources["AccentTextFillColorPrimaryBrush"];
+        var grid = new Grid { ColumnSpacing = 12, Padding = new Thickness(8) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        var icon = new FontIcon { Glyph = glyph, FontSize = 24, VerticalAlignment = VerticalAlignment.Center };
+        if (accent) icon.Foreground = accentBrush;
+        grid.Children.Add(icon);
+        var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        var titleBlock = new TextBlock { Text = title, TextTrimming = TextTrimming.CharacterEllipsis, Style = (Style)Application.Current.Resources["BodyStrongTextBlockStyle"] };
+        if (accent) titleBlock.Foreground = accentBrush;
+        text.Children.Add(titleBlock);
+        if (!string.IsNullOrEmpty(subtitle)) text.Children.Add(new TextBlock { Text = subtitle, TextTrimming = TextTrimming.CharacterEllipsis, Style = (Style)Application.Current.Resources["SubtleTextStyle"] });
+        Grid.SetColumn(text, 1);
+        grid.Children.Add(text);
+        if (action is null) return grid;
+        var button = new Button { Content = grid, HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch, Padding = new Thickness(0), Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent), BorderThickness = new Thickness(0) };
+        button.Click += (_, _) => action();
+        return button;
     }
 }

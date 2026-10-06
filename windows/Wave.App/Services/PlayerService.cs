@@ -39,6 +39,28 @@ public sealed partial class PlayerService : ObservableObject
     private bool extending;
     private int consecutiveFailures;
     private const int MaxConsecutiveFailures = 3;
+    private string? radioSeed;
+
+    // 端末の連携（Connect v2）: キューの項目ごとの ID と出どころ（Queue と同じ並び）、今の曲を聴いた時間
+    private readonly List<QueueItemMeta> itemMeta = [];
+    private QueueOrigin nextOrigin = QueueOrigin.Source;
+    private Queue<string>? adoptIds;
+    private readonly System.Diagnostics.Stopwatch clock = System.Diagnostics.Stopwatch.StartNew();
+    private long listenedMs;
+    private long? playingSinceMs;
+    private string? listenedItemId;
+
+    /// <summary>キューの並び・中身が変わった（端末の連携が書き出す）。</summary>
+    public event Action? QueueChanged;
+
+    /// <summary>位置・再生中か・曲・リピートが変わった。true は再生・一時停止・曲の遷移（すぐ書く）、false はシークなど（間引く）。</summary>
+    public event Action<bool>? CursorChanged;
+
+    /// <summary>本人が再生を始めた・曲を選んだ（true は曲を選んだ、false は再生ボタン）。</summary>
+    public event Action<bool>? UserStartedPlayback;
+
+    /// <summary>本人が一時停止した。</summary>
+    public event Action? UserPaused;
 
     public ObservableCollection<Song> Queue { get; } = [];
 
@@ -78,7 +100,19 @@ public sealed partial class PlayerService : ObservableObject
             AppPaths.Log($"state {state} pos={s.Position.TotalSeconds:F1}");
             ui.TryEnqueue(() => IsPlaying = state is MediaPlaybackState.Playing);
         };
+        Queue.CollectionChanged += OnQueueCollectionChanged;
         var commands = player.CommandManager;
+        // メディアキー・音量のポップアップの再生・一時停止も、本人の操作として扱う（端末の連携に知らせる）
+        commands.PlayReceived += (_, e) =>
+        {
+            e.Handled = true;
+            ui.TryEnqueue(() => { if (!IsPlaying) TogglePlay(); });
+        };
+        commands.PauseReceived += (_, e) =>
+        {
+            e.Handled = true;
+            ui.TryEnqueue(() => { if (IsPlaying) TogglePlay(); });
+        };
         commands.NextBehavior.EnablingRule = MediaCommandEnablingRule.Always;
         commands.PreviousBehavior.EnablingRule = MediaCommandEnablingRule.Always;
         commands.NextReceived += (_, e) =>
@@ -108,7 +142,22 @@ public sealed partial class PlayerService : ObservableObject
     {
         AppServices.Settings.Repeat = (int)value;
         AppServices.Settings.Save();
+        CursorChanged?.Invoke(true);
     }
+
+    partial void OnIsPlayingChanged(bool value)
+    {
+        var now = clock.ElapsedMilliseconds;
+        if (value) playingSinceMs ??= now;
+        else if (playingSinceMs is { } since)
+        {
+            listenedMs += now - since;
+            playingSinceMs = null;
+        }
+        CursorChanged?.Invoke(true);
+    }
+
+    partial void OnCurrentChanged(Song? value) => CursorChanged?.Invoke(true);
 
     /// <summary>曲の一覧を start から再生する（プレイリスト・アルバム・検索の結果）。shuffle が null なら今の設定のまま。</summary>
     public void PlayList(IReadOnlyList<Song> songs, int start = 0, string? source = null, bool? shuffleOverride = null)
@@ -138,8 +187,10 @@ public sealed partial class PlayerService : ObservableObject
             }
             first = 0;
         }
-        ReplaceQueue(order);
-        PlayAt(first);
+        radioSeed = null;
+        ReplaceQueue(order, QueueOrigin.Source);
+        SelectAt(first);
+        UserStartedPlayback?.Invoke(true);
     }
 
     /// <summary>1曲から始めて、続きはラジオ（似た曲）にする（Spotify の「曲から再生」と同じ）。</summary>
@@ -147,15 +198,17 @@ public sealed partial class PlayerService : ObservableObject
     {
         SourceId = null;
         unshuffled = [song];
-        ReplaceQueue([song]);
-        PlayAt(0);
+        ReplaceQueue([song], QueueOrigin.Source);
+        SelectAt(0);
+        UserStartedPlayback?.Invoke(true);
+        radioSeed = song.VideoId;
         radioPlaylistId = "RDAMVM" + song.VideoId;
         radioContinuation = null;
         var page = await AppServices.Music.UpNextAsync(song.VideoId, radioPlaylistId);
         if (!page.IsOk || Queue.Count == 0 || Queue[0].VideoId != song.VideoId) return;
         radioContinuation = page.Value!.Continuation;
         radioPlaylistId = page.Value.PlaylistId ?? radioPlaylistId;
-        foreach (var s in page.Value.Songs.Where(s => s.VideoId != song.VideoId)) Queue.Add(s);
+        AddAll(page.Value.Songs.Where(s => s.VideoId != song.VideoId), QueueOrigin.Suggestion);
     }
 
     /// <summary>あとから読めた残りの曲を、まだキューに無い分だけ足す（長いプレイリストを最初のページから鳴らし始めたとき）。</summary>
@@ -165,7 +218,7 @@ public sealed partial class PlayerService : ObservableObject
         var extra = songs.Where(s => known.Add(s.VideoId)).ToList();
         unshuffled = songs.ToList();
         if (Shuffle) Random.Shared.Shuffle(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(extra));
-        foreach (var s in extra) Queue.Add(s);
+        AddAll(extra, QueueOrigin.Source);
     }
 
     public void PlayNext(Song song)
@@ -175,7 +228,9 @@ public sealed partial class PlayerService : ObservableObject
             PlaySong(song);
             return;
         }
+        nextOrigin = QueueOrigin.UserAdded;
         Queue.Insert(Index + 1, song);
+        nextOrigin = QueueOrigin.Source;
         Message = L.T($"「{song.Title}」を次に再生します", $"{song.Title} will play next");
     }
 
@@ -186,7 +241,7 @@ public sealed partial class PlayerService : ObservableObject
             PlaySong(song);
             return;
         }
-        Queue.Add(song);
+        AddAll([song], QueueOrigin.UserAdded);
         Message = L.T($"「{song.Title}」をキューに追加しました", $"Added {song.Title} to queue");
     }
 
@@ -196,12 +251,20 @@ public sealed partial class PlayerService : ObservableObject
         Queue.RemoveAt(position);
     }
 
+    /// <summary>キューの曲を選んで鳴らす（本人の選択）。</summary>
     public void PlayAt(int position)
+    {
+        if (position < 0 || position >= Queue.Count) return;
+        SelectAt(position);
+        UserStartedPlayback?.Invoke(true);
+    }
+
+    private void SelectAt(int position, double seekTo = 0)
     {
         if (position < 0 || position >= Queue.Count) return;
         Index = position;
         Current = Queue[position];
-        _ = LoadCurrentAsync();
+        _ = LoadCurrentAsync(seekTo);
     }
 
     public void TogglePlay()
@@ -210,17 +273,35 @@ public sealed partial class PlayerService : ObservableObject
         if (player.Source is null)
         {
             _ = LoadCurrentAsync();
+            UserStartedPlayback?.Invoke(false);
             return;
         }
-        if (IsPlaying) player.Pause();
-        else player.Play();
+        if (IsPlaying)
+        {
+            player.Pause();
+            UserPaused?.Invoke();
+        }
+        else
+        {
+            player.Play();
+            UserStartedPlayback?.Invoke(false);
+        }
     }
 
+    /// <summary>本人の「次へ」（曲を選んだのと同じ扱い）。</summary>
     public void Next()
     {
-        if (Queue.Count == 0) return;
-        if (Index + 1 < Queue.Count) PlayAt(Index + 1);
-        else if (Repeat == RepeatMode.All) PlayAt(0);
+        if (Advance()) UserStartedPlayback?.Invoke(true);
+    }
+
+    /// <summary>次の曲へ進む（曲の終わり・失敗の飛ばしにも使う）。進んだら true。</summary>
+    private bool Advance()
+    {
+        if (Queue.Count == 0) return false;
+        if (Index + 1 < Queue.Count) SelectAt(Index + 1);
+        else if (Repeat == RepeatMode.All) SelectAt(0);
+        else return false;
+        return true;
     }
 
     public void Previous()
@@ -231,7 +312,8 @@ public sealed partial class PlayerService : ObservableObject
             Seek(0);
             return;
         }
-        PlayAt(Index - 1);
+        SelectAt(Index - 1);
+        UserStartedPlayback?.Invoke(true);
     }
 
     public void Seek(double seconds)
@@ -239,6 +321,7 @@ public sealed partial class PlayerService : ObservableObject
         if (player.Source is null) return;
         player.PlaybackSession.Position = TimeSpan.FromSeconds(Math.Max(0, seconds));
         Position = seconds;
+        CursorChanged?.Invoke(false);
     }
 
     public void ToggleShuffle()
@@ -261,8 +344,20 @@ public sealed partial class PlayerService : ObservableObject
             var extras = upcoming.Where(u => original.All(o => o.VideoId != u.VideoId)).ToList();
             rest = original.Where(o => upcoming.Any(u => u.VideoId == o.VideoId)).Concat(extras).ToList();
         }
+        // 並べ替えでも項目の ID と出どころは保つ
+        var metas = Enumerable.Range(Index + 1, Queue.Count - Index - 1).ToDictionary(i => Queue[i], i => itemMeta[i], ReferenceEqualityComparer.Instance);
         while (Queue.Count > Index + 1) Queue.RemoveAt(Queue.Count - 1);
-        foreach (var s in rest) Queue.Add(s);
+        foreach (var s in rest)
+        {
+            if (metas.TryGetValue(s, out var meta))
+            {
+                adoptIds = new([meta.ItemId]);
+                nextOrigin = meta.Origin;
+            }
+            Queue.Add(s);
+            nextOrigin = QueueOrigin.Source;
+        }
+        adoptIds = null;
     }
 
     private void SetShuffleField(bool value)
@@ -303,13 +398,117 @@ public sealed partial class PlayerService : ObservableObject
         }
     }
 
-    private void ReplaceQueue(List<Song> songs)
+    private void ReplaceQueue(List<Song> songs, QueueOrigin origin)
     {
         Queue.Clear();
-        foreach (var s in songs) Queue.Add(s);
+        AddAll(songs, origin);
     }
 
-    private async Task LoadCurrentAsync()
+    private void AddAll(IEnumerable<Song> songs, QueueOrigin origin)
+    {
+        nextOrigin = origin;
+        foreach (var s in songs) Queue.Add(s);
+        nextOrigin = QueueOrigin.Source;
+    }
+
+    private void OnQueueCollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+    {
+        switch (e.Action)
+        {
+            case System.Collections.Specialized.NotifyCollectionChangedAction.Add:
+                for (var i = 0; i < e.NewItems!.Count; i++)
+                {
+                    var id = adoptIds is { Count: > 0 } ids ? ids.Dequeue() : Guid.NewGuid().ToString();
+                    itemMeta.Insert(e.NewStartingIndex + i, new QueueItemMeta(id, nextOrigin));
+                }
+                break;
+            case System.Collections.Specialized.NotifyCollectionChangedAction.Remove:
+                itemMeta.RemoveRange(e.OldStartingIndex, e.OldItems!.Count);
+                break;
+            case System.Collections.Specialized.NotifyCollectionChangedAction.Move:
+                var moved = itemMeta[e.OldStartingIndex];
+                itemMeta.RemoveAt(e.OldStartingIndex);
+                itemMeta.Insert(e.NewStartingIndex, moved);
+                break;
+            case System.Collections.Specialized.NotifyCollectionChangedAction.Replace:
+                itemMeta[e.NewStartingIndex] = new QueueItemMeta(Guid.NewGuid().ToString(), nextOrigin);
+                break;
+            case System.Collections.Specialized.NotifyCollectionChangedAction.Reset:
+                itemMeta.Clear();
+                break;
+        }
+        QueueChanged?.Invoke();
+    }
+
+    // --- 端末の連携（Connect v2）の入口。本人の操作として知らせない ---
+
+    /// <summary>今のキューの書き出しに要る値。キューが空なら null。</summary>
+    public QueueExport? ExportQueue()
+    {
+        if (Queue.Count == 0 || Index < 0 || Index >= Queue.Count) return null;
+        return new QueueExport(
+            Queue.Select((song, i) => (song, itemMeta[i])).ToList(),
+            itemMeta[Index].ItemId,
+            radioSeed is not null ? null : SourceId,
+            radioSeed,
+            radioContinuation,
+            radioPlaylistId);
+    }
+
+    /// <summary>今の再生の位置など。キューが空なら null。</summary>
+    public PlaybackCursor? CurrentCursor()
+    {
+        if (Current is null || Index < 0 || Index >= itemMeta.Count) return null;
+        var position = player.Source is null ? 0 : (long)(player.PlaybackSession.Position.TotalMilliseconds);
+        return new PlaybackCursor(itemMeta[Index].ItemId, Math.Max(0, position), IsPlaying || IsLoading, Repeat, ListenedNow(), statsSent);
+    }
+
+    private long ListenedNow() => listenedMs + (playingSinceMs is { } since ? clock.ElapsedMilliseconds - since : 0);
+
+    /// <summary>端末の連携が止める（本人の一時停止として知らせない）。</summary>
+    public void ConnectPause()
+    {
+        loadCancel?.Cancel();
+        IsLoading = false;
+        player.Pause();
+    }
+
+    /// <summary>端末の連携が戻す。</summary>
+    public void ConnectResume()
+    {
+        if (Current is null) return;
+        if (player.Source is null) _ = LoadCurrentAsync(Position);
+        else player.Play();
+    }
+
+    /// <summary>他の端末から引き取ったキューで置き換え、今の曲の positionMs から鳴らす。</summary>
+    public bool ConnectAdopt(QueueExport queue, long positionMs, RepeatMode repeat, long listened, bool historySent)
+    {
+        var index = queue.Items.FindIndex(i => i.Meta.ItemId == queue.CurrentItemId);
+        if (index < 0) return false;
+        SourceId = queue.SourceId;
+        radioSeed = queue.RadioSeed;
+        radioContinuation = queue.Continuation;
+        radioPlaylistId = queue.RadioPlaylistId;
+        unshuffled = queue.Items.Select(i => i.Song).ToList();
+        Queue.Clear();
+        foreach (var (song, meta) in queue.Items)
+        {
+            adoptIds = new([meta.ItemId]);
+            nextOrigin = meta.Origin;
+            Queue.Add(song);
+        }
+        adoptIds = null;
+        nextOrigin = QueueOrigin.Source;
+        Repeat = repeat;
+        seedListened = (queue.CurrentItemId, listened, historySent);
+        SelectAt(index, positionMs / 1000.0);
+        return true;
+    }
+
+    private (string ItemId, long ListenedMs, bool HistorySent)? seedListened;
+
+    private async Task LoadCurrentAsync(double seekTo = 0)
     {
         loadCancel?.Cancel();
         var cancel = new CancellationTokenSource();
@@ -318,10 +517,25 @@ public sealed partial class PlayerService : ObservableObject
         IsLoading = true;
         Like = null;
         Lyrics = null;
-        Position = 0;
+        Position = seekTo;
         Duration = song.DurationSeconds ?? 0;
-        statsSent = false;
         retried = false;
+        // 聴いた時間は曲ごと（引き取った曲は相手の値から続ける。同じ曲の読み直しでは数え直さない）
+        var itemId = Index >= 0 && Index < itemMeta.Count ? itemMeta[Index].ItemId : null;
+        if (seedListened is { } seed && seed.ItemId == itemId)
+        {
+            listenedMs = seed.ListenedMs;
+            statsSent = seed.HistorySent;
+            listenedItemId = itemId;
+        }
+        else if (itemId != listenedItemId)
+        {
+            listenedMs = 0;
+            statsSent = false;
+            listenedItemId = itemId;
+        }
+        seedListened = null;
+        playingSinceMs = IsPlaying ? clock.ElapsedMilliseconds : null;
         player.Pause();
         try
         {
@@ -332,7 +546,7 @@ public sealed partial class PlayerService : ObservableObject
                 IsLoading = false;
                 return;
             }
-            if (!await StartStreamAsync(song, stream))
+            if (!await StartStreamAsync(song, stream, seekTo))
             {
                 if (cancel.IsCancellationRequested) return;
                 await RecoverAsync(song);
@@ -461,10 +675,12 @@ public sealed partial class PlayerService : ObservableObject
             Seek(0);
             player.Play();
             statsSent = false;
+            listenedMs = 0;
+            playingSinceMs = clock.ElapsedMilliseconds;
             cpn = PlaybackStats.NewCpn();
             return;
         }
-        if (Index + 1 < Queue.Count || Repeat == RepeatMode.All) Next();
+        if (Index + 1 < Queue.Count || Repeat == RepeatMode.All) Advance();
         else IsPlaying = false;
     }
 
@@ -507,7 +723,7 @@ public sealed partial class PlayerService : ObservableObject
             return;
         }
         Message = L.T("再生できなかったので、次の曲に進みます", "Couldn't play this song, skipping to the next one");
-        if (Index + 1 < Queue.Count) Next();
+        if (Index + 1 < Queue.Count) Advance();
     }
 
     private void Tick()
@@ -567,7 +783,7 @@ public sealed partial class PlayerService : ObservableObject
             if (!page.IsOk) return;
             radioContinuation = page.Value!.Continuation;
             var known = Queue.Select(s => s.VideoId).ToHashSet();
-            foreach (var s in page.Value.Songs.Where(s => known.Add(s.VideoId))) Queue.Add(s);
+            AddAll(page.Value.Songs.Where(s => known.Add(s.VideoId)).ToList(), QueueOrigin.Suggestion);
         }
         finally
         {
@@ -591,3 +807,18 @@ public sealed partial class PlayerService : ObservableObject
     }
 }
 
+public enum QueueOrigin { Source, Suggestion, UserAdded }
+
+/// <summary>キューの項目の ID（UUID）と出どころ。端末の連携で、どの項目が今の曲かを相手と合わせるのに使う。</summary>
+public sealed record QueueItemMeta(string ItemId, QueueOrigin Origin);
+
+/// <summary>キューの書き出し（端末の連携）。SourceId はプレイリスト・アルバムの ID、RadioSeed はラジオの元の曲。</summary>
+public sealed record QueueExport(
+    List<(Song Song, QueueItemMeta Meta)> Items,
+    string CurrentItemId,
+    string? SourceId,
+    string? RadioSeed,
+    string? Continuation,
+    string? RadioPlaylistId);
+
+public sealed record PlaybackCursor(string CurrentItemId, long PositionMs, bool Playing, RepeatMode Repeat, long ListenedMs, bool HistorySent);

@@ -24,6 +24,8 @@ public static class AppServices
     public static PlayerService Player { get; private set; } = null!;
     public static LibraryState Library { get; private set; } = null!;
     public static AccountState Account { get; private set; } = null!;
+    /// <summary>端末の連携（中継の場所が設定に無ければ使えない）。</summary>
+    public static global::Wave.App.Services.Connect.ConnectService Connect { get; private set; } = null!;
 
     public static void Initialize(DispatcherQueue ui)
     {
@@ -44,5 +46,6 @@ public static class AppServices
         Library = new LibraryState();
         Player = new PlayerService(ui);
         Account.Restore();
+        Connect = new global::Wave.App.Services.Connect.ConnectService(ui, Player, Settings.RelayV2Url, Settings.RelayV2Host);
     }
 }

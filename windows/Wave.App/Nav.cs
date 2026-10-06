@@ -37,6 +37,8 @@ public static class Nav
 
     public static void Settings() => Go(typeof(Views.SettingsPage));
 
+    public static void Devices() => Go(typeof(Views.DevicesPage));
+
     public static void Lyrics() => Go(typeof(Views.LyricsPage));
 
     /// <summary>カードを押したとき。曲は再生（Spotify と同じ）、ほかはそのページへ。</summary>

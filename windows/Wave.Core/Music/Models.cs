@@ -135,3 +135,9 @@ public sealed record MoodSection(string Title, IReadOnlyList<MoodCategory> Categ
 
 /// <summary>next の最初の応答から分かる、曲の評価と歌詞のタブ。</summary>
 public sealed record SongInfo(LikeStatus? Like, string? LyricsBrowseId);
+
+/// <summary>確かめたアカウント（DATASYNC_ID）と、確かめたときのログインの世代。Id はログ・画面に出さない。</summary>
+public sealed record VerifiedAccount(long Generation, string Id)
+{
+    public override string ToString() => $"VerifiedAccount(Generation={Generation})";
+}
