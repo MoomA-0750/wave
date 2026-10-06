@@ -35,7 +35,7 @@
                 <TextBlock Text="{x:Bind app:L.T('はじめる', 'Get started')}" Style="{StaticResource BodyStrongTextBlockStyle}" Margin="0,8,0,4" />
                 <StackPanel Padding="16" CornerRadius="8" Spacing="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                             BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
-                    <TextBlock TextWrapping="Wrap" Text="{x:Bind app:L.T('連携済みのスマホで「端末を追加」を押し、表示された QR の下の文字列をここに貼り付けてください。', 'On a phone that’s already set up, tap “Add device”, then paste the text shown under the QR code here.')}" />
+                    <TextBlock TextWrapping="Wrap" Text="{x:Bind app:L.T('連携済みのスマホの wave で「端末の連携」→「端末を追加」を押し、「文字で共有」で送った文字列をここに貼り付けてください。', 'On a phone that’s already set up, open Devices in wave, tap “Add device”, then “Share as text”, and paste the text here.')}" />
                     <TextBox x:Name="OfferBox" PlaceholderText="wave-pair:…" TextWrapping="Wrap" AcceptsReturn="False" />
                     <StackPanel Orientation="Horizontal" Spacing="8">
                         <Button Style="{StaticResource AccentButtonStyle}" Click="OnJoin" Content="{x:Bind app:L.T('加わる', 'Join')}" />

@@ -136,6 +136,7 @@
     <string name="connect_v2_member_controller">%1$s (control only)</string>
     <string name="connect_v2_remove">Remove</string>
     <string name="connect_v2_offer_hint">On the device you\'re adding, tap \"Scan QR to join\" in wave and scan this QR code (expires in 2 minutes)</string>
+    <string name="connect_v2_share_offer">Share as text (for a PC)</string>
     <string name="connect_v2_enter_code">Enter the 6-digit code shown on the device you\'re adding</string>
     <string name="connect_v2_continue_after_entering">Continue after entering it</string>
     <string name="connect_v2_joined">Now in the same household as %1$s</string>

@@ -136,6 +136,7 @@
     <string name="connect_v2_member_controller">%1$s（操作だけ）</string>
     <string name="connect_v2_remove">外す</string>
     <string name="connect_v2_offer_hint">加える端末の wave で「QR を読み取って加わる」を押し、この QR を写してください（2分で無効）</string>
+    <string name="connect_v2_share_offer">文字で共有（PC で加えるとき）</string>
     <string name="connect_v2_enter_code">加える端末に出ている6桁の数字を入力してください</string>
     <string name="connect_v2_continue_after_entering">入力したら続ける</string>
     <string name="connect_v2_joined">%1$s と同じ家になりました</string>

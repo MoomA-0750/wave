@@ -168,7 +168,17 @@ fun ConnectV2Section(container: AppContainer) {
         is PairingV2Controller.State.ShowingOffer -> {
             Text(stringResource(R.string.connect_v2_offer_hint), style = MaterialTheme.typography.bodySmall)
             QrImage(state.offerText, Modifier.fillMaxWidth().aspectRatio(1f))
-            OutlinedButton(onClick = { pairing.cancel() }) { Text(stringResource(R.string.connect_cancel)) }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                // カメラの無い PC で加えるとき: QR と同じ文字列を共有して、PC の wave に貼り付けてもらう（秘密は載っていない。照合は6桁で行う）
+                OutlinedButton(onClick = {
+                    val send =
+                        android.content.Intent(android.content.Intent.ACTION_SEND)
+                            .setType("text/plain")
+                            .putExtra(android.content.Intent.EXTRA_TEXT, state.offerText)
+                    context.startActivity(android.content.Intent.createChooser(send, null))
+                }) { Text(stringResource(R.string.connect_v2_share_offer)) }
+                OutlinedButton(onClick = { pairing.cancel() }) { Text(stringResource(R.string.connect_cancel)) }
+            }
         }
         is PairingV2Controller.State.EnterCode -> {
             var code by remember { mutableStateOf("") }
