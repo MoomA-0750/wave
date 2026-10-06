@@ -46,6 +46,7 @@
     <string name="nowplaying_like_reload">評価を読み直す</string>
     <string name="nowplaying_like">高く評価した曲に追加</string>
     <string name="nowplaying_close">閉じる</string>
+    <string name="nowplaying_expand">全面に広げる</string>
     <string name="nowplaying_song">曲</string>
     <string name="nowplaying_video">動画</string>
     <string name="nowplaying_shuffle_upcoming">残りをシャッフル</string>

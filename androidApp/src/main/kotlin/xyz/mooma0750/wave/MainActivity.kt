@@ -60,6 +60,7 @@ import xyz.mooma0750.wave.navigation.Screen
 import xyz.mooma0750.wave.navigation.SongActions
 import xyz.mooma0750.wave.nowplaying.MiniPlayer
 import xyz.mooma0750.wave.nowplaying.NowPlayingScreen
+import xyz.mooma0750.wave.nowplaying.rememberHasPlayback
 import xyz.mooma0750.wave.search.SearchHistoryEntry
 import xyz.mooma0750.wave.search.SearchScreen
 import xyz.mooma0750.wave.search.SearchViewModel
@@ -166,16 +167,19 @@ class MainActivity : ComponentActivity() {
                             }
                             AppShell(
                                 nav,
+                                hasPlayback = rememberHasPlayback(container.player, container.connectV2),
                                 miniPlayer = { open -> MiniPlayer(container.player, container.connectV2, onOpen = open, onOpenDevices = openDevices, actions = songActions) },
-                                nowPlaying = { close ->
+                                nowPlaying = { close, inPanel ->
                                     NowPlayingScreen(
                                         connect = container.connectV2,
                                         connection = container.player,
                                         lyrics = container.lyrics,
                                         videos = container.musicVideos,
-                                        actions = songActions.closing(close),
+                                        // 右の列からアーティストなどを開くときは、列はそのまま（全面のときだけ閉じる）
+                                        actions = if (inPanel) songActions else songActions.closing(close),
                                         onClose = close,
                                         onOpenDevices = openDevices,
+                                        inPanel = inPanel,
                                     )
                                 },
                             ) {

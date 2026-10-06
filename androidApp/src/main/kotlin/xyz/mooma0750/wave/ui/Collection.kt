@@ -3,6 +3,7 @@ package xyz.mooma0750.wave.ui
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -97,15 +98,36 @@ fun CollectionScreen(
                         .padding(top = 56.dp, start = 16.dp, end = 16.dp),
                 ) {
                     top()
-                    coil3.compose.AsyncImage(
-                        model = coverUrl,
-                        contentDescription = null,
-                        modifier = Modifier.padding(vertical = 12.dp).size(240.dp).align(Alignment.CenterHorizontally).clip(coverShape),
-                        contentScale = ContentScale.Crop,
-                    )
-                    Text(title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    Spacer(Modifier.height(4.dp))
-                    details()
+                    BoxWithConstraints(Modifier.fillMaxWidth()) {
+                        if (maxWidth >= WIDE_HEADER_MIN_WIDTH) {
+                            // 広い画面（タブレット・開いた折りたたみ）: ジャケットの右に大きな題名（Spotify のタブレット・デスクトップと同じ）
+                            Row(Modifier.padding(vertical = 16.dp), verticalAlignment = Alignment.Bottom) {
+                                coil3.compose.AsyncImage(
+                                    model = coverUrl,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(200.dp).clip(coverShape),
+                                    contentScale = ContentScale.Crop,
+                                )
+                                Column(Modifier.padding(start = 24.dp).weight(1f)) {
+                                    Text(title, style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                    Spacer(Modifier.height(8.dp))
+                                    details()
+                                }
+                            }
+                        } else {
+                            Column(Modifier.fillMaxWidth()) {
+                                coil3.compose.AsyncImage(
+                                    model = coverUrl,
+                                    contentDescription = null,
+                                    modifier = Modifier.padding(vertical = 12.dp).size(240.dp).align(Alignment.CenterHorizontally).clip(coverShape),
+                                    contentScale = ContentScale.Crop,
+                                )
+                                Text(title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                Spacer(Modifier.height(4.dp))
+                                details()
+                            }
+                        }
+                    }
                 }
             }
             item(key = "collection-actions") {
@@ -128,6 +150,9 @@ fun CollectionScreen(
         )
     }
 }
+
+/** これより広ければ、見出しのジャケットの右に題名を並べる。 */
+private val WIDE_HEADER_MIN_WIDTH = 600.dp
 
 /** 再生ボタンとシャッフルの切り替え（Spotify の、再生ボタンの左のシャッフル）。 */
 class PlayControls(

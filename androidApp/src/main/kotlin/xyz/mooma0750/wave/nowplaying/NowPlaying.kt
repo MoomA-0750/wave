@@ -19,6 +19,7 @@ import androidx.media3.common.Player
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -225,6 +226,8 @@ fun NowPlayingScreen(
     onClose: () -> Unit,
     onOpenDevices: () -> Unit,
     connect: ConnectV2Manager? = null,
+    /** 広い画面の右の列として出す（左上は閉じる代わりに全面に広げる。onClose が広げる）。 */
+    inPanel: Boolean = false,
 ) {
     val display = rememberDisplay(connection, connect)
     val state = display.state
@@ -248,19 +251,45 @@ fun NowPlayingScreen(
             .fillMaxSize()
             .background(Brush.verticalGradient(0f to top, 0.75f to background)),
     ) {
+        // 広い画面の全面では、左にジャケットと操作、右に歌詞を縦いっぱいに並べる（中央に細い列だけだと左右が空く）
+        val sideBySide = !inPanel && maxWidth >= SIDE_BY_SIDE_MIN_WIDTH
+        val leftWidth = if (sideBySide) minOf(MAX_CONTENT_WIDTH, maxWidth * 0.45f) else minOf(maxWidth, MAX_CONTENT_WIDTH)
         // 曲名から操作の列までが最初の画面に収まるよう、ジャケットは高さに合わせて小さくする（開いた折りたたみ・横向き）
-        val artSize = minOf(minOf(maxWidth, MAX_CONTENT_WIDTH) - 48.dp, maxHeight - CONTROLS_HEIGHT).coerceAtLeast(160.dp)
+        val artSize = minOf(leftWidth - 48.dp, maxHeight - CONTROLS_HEIGHT).coerceAtLeast(160.dp)
+        val hasLyrics by androidx.compose.runtime.produceState<Boolean?>(null, song?.videoId) {
+            value = song?.let { lyrics.lyrics(it) is xyz.mooma0750.wave.core.lyrics.LyricsRepository.Result.Found }
+        }
+        if (sideBySide && song != null && hasLyrics == true) {
+            Card(
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .width(maxWidth - leftWidth - 48.dp)
+                    .fillMaxHeight()
+                    .statusBarsPadding()
+                    .navigationBarsPadding()
+                    .padding(top = 56.dp, bottom = 24.dp, end = 24.dp),
+                colors = CardDefaults.cardColors(containerColor = lerp(MaterialTheme.colorScheme.surfaceContainerHigh, art, 0.5f)),
+            ) {
+                Text(stringResource(R.string.nowplaying_lyrics), Modifier.padding(start = 20.dp, top = 16.dp), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                LyricsPanel(song, display.clock, lyrics, Modifier.fillMaxSize().padding(horizontal = 12.dp))
+            }
+        }
         Column(
             Modifier
-                .widthIn(max = MAX_CONTENT_WIDTH)
-                .align(Alignment.TopCenter)
+                .widthIn(max = leftWidth)
+                .align(if (sideBySide) Alignment.TopStart else Alignment.TopCenter)
+                .then(if (sideBySide) Modifier.padding(start = 24.dp) else Modifier)
                 .fillMaxSize()
                 .statusBarsPadding()
                 .navigationBarsPadding()
                 .verticalScroll(rememberScrollState()),
         ) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconAction(R.drawable.ic_arrow_down, stringResource(R.string.nowplaying_close), onClose)
+                if (inPanel) {
+                    IconAction(R.drawable.ic_open_in_full, stringResource(R.string.nowplaying_expand), onClose)
+                } else {
+                    IconAction(R.drawable.ic_arrow_down, stringResource(R.string.nowplaying_close), onClose)
+                }
                 Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
                     // Spotify の「曲｜動画」の切り替え。動画のある曲だけ出す（無い曲・調べている間・ほかの端末を映している間は出さない）
                     if (song != null && remote == null && hasVideo == true) {
@@ -383,11 +412,8 @@ fun NowPlayingScreen(
             val like by connection.likeState.collectAsState()
             like.message?.let { Text(it, Modifier.padding(horizontal = 24.dp), style = MaterialTheme.typography.bodySmall) }
             state.error?.let { Text(stringResource(R.string.nowplaying_error, it), Modifier.padding(horizontal = 24.dp), style = MaterialTheme.typography.bodySmall) }
-            // 下に続く歌詞のカード（Spotify と同じ。押すと全面で開く）。歌詞が無い曲・探している間は出さない
-            val hasLyrics by androidx.compose.runtime.produceState<Boolean?>(null, song?.videoId) {
-                value = song?.let { lyrics.lyrics(it) is xyz.mooma0750.wave.core.lyrics.LyricsRepository.Result.Found }
-            }
-            if (song != null && hasLyrics == true) {
+            // 下に続く歌詞のカード（Spotify と同じ。押すと全面で開く）。歌詞が無い曲・探している間は出さない。広い画面の全面では右に出す
+            if (!sideBySide && song != null && hasLyrics == true) {
                 Card(
                     Modifier.fillMaxWidth().padding(16.dp),
                     colors = CardDefaults.cardColors(containerColor = lerp(MaterialTheme.colorScheme.surfaceContainerHigh, art, 0.5f)),
@@ -424,6 +450,16 @@ private val CONTROLS_HEIGHT = 400.dp
 
 /** 広い画面でも、操作の列が横に間延びしないように（Spotify と同じく中央の列に収める）。 */
 private val MAX_CONTENT_WIDTH = 560.dp
+
+/** 全面の再生画面で、歌詞を右に並べる幅。 */
+private val SIDE_BY_SIDE_MIN_WIDTH = 840.dp
+
+/** 何か再生している（ほかの端末の再生を映している）か。広い画面で右の再生の列を出すかに使う。 */
+@Composable
+fun rememberHasPlayback(
+    connection: PlayerConnection,
+    connect: ConnectV2Manager?,
+): Boolean = rememberDisplay(connection, connect).state.title != null
 
 @Composable
 private fun QueueSheet(

@@ -25,7 +25,7 @@ class SongActionsTest {
         closing.openArtist(ArtistRef("a", "UC"))
         closing.openAlbum(AlbumRef("b", "MP"))
         closing.addToPlaylist(song)
-        // キューに足すのはシートの上のまま（閉じない）。画面を開く・ダイアログを出すのは先に閉じる
-        assertEquals(listOf("playNext", "addToQueue", "close", "artist", "close", "album", "close", "addToPlaylist"), calls)
+        // キューに足す・プレイリストに追加する（ダイアログが上に重なる）のはシートの上のまま。画面を開くのは先に閉じる
+        assertEquals(listOf("playNext", "addToQueue", "close", "artist", "close", "album", "addToPlaylist"), calls)
     }
 }
