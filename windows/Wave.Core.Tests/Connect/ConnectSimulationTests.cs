@@ -229,4 +229,27 @@ public class ConnectSimulationTests
         relay.Run();
         Assert.Single(a.Controls);
     }
+
+    [Fact]
+    public void RemoteControlHeldBackForMoreThanFiveMinutesIsIgnored()
+    {
+        SetUp();
+        a.StartPlaying(snapshot);
+        relay.Run();
+        RelayV2.Control? held = null;
+        relay.OnFromClient = (from, message) =>
+        {
+            if (from == b.DeviceId && message is RelayV2.Control c) held = c;
+        };
+        a.Playing = false;
+        a.PushCursor();
+        relay.Run();
+        Assert.True(b.Client.SendControl(ControlAction.Play));
+        // 中継が届けるのを6分遅らせる（送った分も差し込んだ分も、届くのは6分後）
+        now += 6 * 60 * 1000L;
+        relay.Inject(a.DeviceId, held!);
+        relay.Run();
+        Assert.Empty(a.Controls);
+        Assert.False(a.Playing);
+    }
 }

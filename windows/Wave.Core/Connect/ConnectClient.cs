@@ -66,6 +66,9 @@ public sealed class ConnectClient
     /// <summary>遠隔操作の送り手が見ていた版と、受け手の最新の書き込みの版の差の上限（それより古い操作には従わない）。</summary>
     private const long MaxControlLag = 20;
 
+    /// <summary>遠隔操作の鮮度の上限（命令の見出しの時刻と受け手の時計の差）。</summary>
+    private const long MaxControlAgeMs = 5 * 60 * 1000;
+
     /// <summary>開いた遠隔操作の doc のハッシュ（同じ doc の再送を開く前に捨てる）。</summary>
     private readonly LinkedList<string> seenControlDocs = new();
 
@@ -1015,6 +1018,8 @@ public sealed class ConnectClient
         if (DocSealer.Open(message.Doc, current, opener) is not DocOpen.Ok opened) return;
         if (ConnectJson.Decode<CommandBody>(opened.Plaintext) is not CommandBody.Control command) return;
         if (command.To != signer.DeviceId || command.From != opened.Header.WriterId || command.From == signer.DeviceId) return;
+        // 出してから5分を超えた命令には従わない（中継が取っておいて後から届けるのを、時間でも縛る。順序の判断には時計を使わない）
+        if (Math.Abs(epochMs() - opened.Header.IssuedAtEpochMs) > MaxControlAgeMs) return;
         // 遠隔操作を出せるのは player だけ（yield と同じ）
         if (!current.Members.TryGetValue(command.From, out var from) || from.Keys.Role != Role.Player) return;
         if (handledClaims.Contains(command.CommandId)) return;

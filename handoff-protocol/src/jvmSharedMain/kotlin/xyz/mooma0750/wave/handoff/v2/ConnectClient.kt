@@ -905,6 +905,8 @@ class ConnectClient(
         val opened = DocSealer.open(message.doc, current, opener) as? DocOpen.Ok ?: return
         val command = runCatching { ConnectJson.json.decodeFromString(CommandBody.serializer(), opened.plaintext.decodeToString()) }.getOrNull() as? CommandBody.Control ?: return
         if (command.to != signer.deviceId || command.from != opened.header.writerId || command.from == signer.deviceId) return
+        // 出してから5分を超えた命令には従わない（中継が取っておいて後から届けるのを、時間でも縛る。順序の判断には時計を使わない L-10 とは別の目的）
+        if (kotlin.math.abs(epochMs() - opened.header.issuedAtEpochMs) > MAX_CONTROL_AGE_MS) return
         // 遠隔操作を出せるのは player だけ（yield と同じ。controller の遠隔操作は Phase 7 で決める）
         if (current.members[command.from]?.keys?.role != Role.Player) return
         if (command.commandId in handledClaims) return
@@ -1072,5 +1074,8 @@ class ConnectClient(
 
         /** 遠隔操作の送り手が見ていた版と、受け手の最新の書き込みの版の差の上限（それより古い操作には従わない）。 */
         private const val MAX_CONTROL_LAG = 20L
+
+        /** 遠隔操作の鮮度の上限（命令の見出しの時刻と受け手の時計の差）。 */
+        private const val MAX_CONTROL_AGE_MS = 5 * 60 * 1000L
     }
 }

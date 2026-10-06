@@ -805,4 +805,31 @@ class ConnectSimulationTest {
         relay.run()
         assertEquals(1, a.controls.size, "再送された命令に二度従った")
     }
+
+    @Test
+    fun remoteControlHeldBackForMoreThanFiveMinutesIsIgnored() {
+        setUp()
+        a.startPlaying("queue-A")
+        relay.run()
+        a.playing = false
+        a.pushCursor()
+        relay.run()
+        // 中継が「再生」を取っておき、6分後に届ける
+        val held = ArrayList<RelayV2>()
+        relay.dropIncoming = { from, message ->
+            if (from == b.deviceId && message is RelayV2.Control) {
+                held += message
+                true
+            } else {
+                false
+            }
+        }
+        assertTrue(b.client.sendControl(xyz.mooma0750.wave.handoff.v2.ControlAction.Play))
+        relay.run()
+        now += 6 * 60 * 1000L
+        relay.inject(a.deviceId, held.single())
+        relay.run()
+        assertTrue(a.controls.isEmpty(), "古い命令に従った")
+        assertFalse(a.playing)
+    }
 }
