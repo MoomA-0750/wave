@@ -9,7 +9,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Snackbar
+import androidx.compose.material3.SnackbarDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -18,6 +19,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -55,16 +58,24 @@ fun NoticeHost(modifier: Modifier = Modifier) {
             remaining.animateTo(0f, tween(Notices.DURATION_MS, easing = LinearEasing))
             data.dismiss()
         }
-        Snackbar(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+        // スナックバーと同じ色・形の箱を自分で組み、バーは中の余白ではなく箱の下の縁に沿わせる
+        Surface(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp).fillMaxWidth(),
+            shape = SnackbarDefaults.shape,
+            color = SnackbarDefaults.color,
+            contentColor = SnackbarDefaults.contentColor,
+            shadowElevation = 6.dp,
+        ) {
             Column {
-                Text(data.visuals.message)
+                Text(data.visuals.message, Modifier.padding(horizontal = 16.dp, vertical = 14.dp), style = MaterialTheme.typography.bodyMedium)
                 LinearProgressIndicator(
                     progress = { remaining.value },
-                    modifier = Modifier.fillMaxWidth().padding(top = 10.dp).height(3.dp),
+                    modifier = Modifier.fillMaxWidth().height(3.dp),
                     color = MaterialTheme.colorScheme.inversePrimary,
-                    trackColor = MaterialTheme.colorScheme.inverseOnSurface.copy(alpha = 0.2f),
+                    trackColor = Color.Transparent,
                     drawStopIndicator = {},
                     gapSize = 0.dp,
+                    strokeCap = StrokeCap.Butt,
                 )
             }
         }

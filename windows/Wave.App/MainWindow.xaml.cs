@@ -564,6 +564,7 @@ public sealed partial class MainWindow : Window
     {
         Toast.Message = message;
         Toast.IsOpen = true;
+        ToastFrame.Visibility = Visibility.Visible;
         // 下のバーを満タンから空へ動かし、空になったら閉じる
         toastCountdown?.Stop();
         var animation = new Microsoft.UI.Xaml.Media.Animation.DoubleAnimation
@@ -579,7 +580,9 @@ public sealed partial class MainWindow : Window
         board.Children.Add(animation);
         board.Completed += (_, _) =>
         {
-            if (toastCountdown == board) Toast.IsOpen = false;
+            if (toastCountdown != board) return;
+            Toast.IsOpen = false;
+            ToastFrame.Visibility = Visibility.Collapsed;
         };
         toastCountdown = board;
         board.Begin();
@@ -589,5 +592,6 @@ public sealed partial class MainWindow : Window
     {
         toastCountdown?.Stop();
         toastCountdown = null;
+        ToastFrame.Visibility = Visibility.Collapsed;
     }
 }

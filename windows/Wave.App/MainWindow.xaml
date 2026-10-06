@@ -154,12 +154,15 @@
                 <Grid>
                     <Frame x:Name="ContentFrame" Navigated="OnNavigated" />
                     <!-- 知らせ（Android のスナックバーと同じく、下の細いバーが消えるまでの残り時間を表す） -->
-                    <InfoBar x:Name="Toast" IsOpen="False" Severity="Informational" IsClosable="True" VerticalAlignment="Bottom"
-                             HorizontalAlignment="Center" Margin="16" MaxWidth="560" MinWidth="320" Closed="OnToastClosed">
-                        <InfoBar.Content>
-                            <ProgressBar x:Name="ToastCountdown" Minimum="0" Maximum="1" Value="1" Margin="0,0,0,10" />
-                        </InfoBar.Content>
-                    </InfoBar>
+                    <!-- 箱の角で切り取り、バーを箱の下の縁に沿わせる -->
+                    <Border x:Name="ToastFrame" VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="16" MaxWidth="560" MinWidth="320"
+                            CornerRadius="{ThemeResource ControlCornerRadius}" Visibility="Collapsed">
+                        <Grid>
+                            <InfoBar x:Name="Toast" IsOpen="False" Severity="Informational" IsClosable="True" Closed="OnToastClosed" />
+                            <ProgressBar x:Name="ToastCountdown" Minimum="0" Maximum="1" Value="1" VerticalAlignment="Bottom" MinHeight="3"
+                                         Background="Transparent" CornerRadius="0" />
+                        </Grid>
+                    </Border>
                 </Grid>
             </Border>
 
