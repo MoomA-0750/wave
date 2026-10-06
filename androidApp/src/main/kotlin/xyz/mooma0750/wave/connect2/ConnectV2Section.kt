@@ -28,12 +28,15 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import xyz.mooma0750.wave.AppContainer
+import xyz.mooma0750.wave.R
 import xyz.mooma0750.wave.connect.QrImage
 import xyz.mooma0750.wave.connect.QrScanner
 import xyz.mooma0750.wave.handoff.v2.Role
@@ -86,59 +89,66 @@ fun ConnectV2Section(container: AppContainer) {
         }
     }
 
-    Text("Connect v2（試験中）", style = MaterialTheme.typography.titleMedium)
+    Text(stringResource(R.string.connect_v2_title), style = MaterialTheme.typography.titleMedium)
     Text(
-        "中継 v2: ${relayStatus.name}・家: ${if (info.inHousehold) "${info.members}台" else "入っていません"}${if (info.isWriter) "・この端末で再生中" else ""}",
+        stringResource(
+            R.string.connect_v2_status,
+            relayStatus.name,
+            if (info.inHousehold) pluralStringResource(R.plurals.connect_v2_household_members, info.members, info.members) else stringResource(R.string.connect_v2_household_none),
+            if (info.isWriter) stringResource(R.string.connect_v2_status_writer_suffix) else "",
+        ),
         style = MaterialTheme.typography.bodySmall,
     )
     if (unreadable) {
-        Text("この端末の Connect v2 の保存を読めません。作り直すと家に加わり直す必要があります", color = MaterialTheme.colorScheme.error)
-        OutlinedButton(onClick = { manager.resetUnreadable() }) { Text("作り直す") }
+        Text(stringResource(R.string.connect_v2_unreadable), color = MaterialTheme.colorScheme.error)
+        OutlinedButton(onClick = { manager.resetUnreadable() }) { Text(stringResource(R.string.connect_v2_reset)) }
         return
     }
     if (info.inHousehold && relayStatus == RelayClientV2.Status.NotMember) {
         // 家から外された・中継の家が作り直された。消すかどうかは本人が決める（勝手に消さない）
-        Text("中継がこの端末を家の端末として受け付けません（家から外されたか、中継の家が作り直されました）", color = MaterialTheme.colorScheme.error)
-        OutlinedButton(onClick = { manager.forgetHousehold() }) { Text("この端末の家の記録を消す") }
+        Text(stringResource(R.string.connect_v2_not_member), color = MaterialTheme.colorScheme.error)
+        OutlinedButton(onClick = { manager.forgetHousehold() }) { Text(stringResource(R.string.connect_v2_forget_household)) }
     }
     if (info.storeResetPending) {
-        Text("中継の状態が作り直されました。この状態から始めますか", color = MaterialTheme.colorScheme.error)
-        OutlinedButton(onClick = { manager.acceptStoreReset() }) { Text("この状態から始める") }
+        Text(stringResource(R.string.connect_v2_store_reset_prompt), color = MaterialTheme.colorScheme.error)
+        OutlinedButton(onClick = { manager.acceptStoreReset() }) { Text(stringResource(R.string.connect_v2_accept_store_reset)) }
     }
 
     remote?.let { view ->
         val cursor = view.cursor
-        val status = if (cursor.playing) "再生中" else "一時停止中"
         if (!view.accountMatches) {
-            Text("別のアカウントの端末が$status（引き取れません）", style = MaterialTheme.typography.bodySmall)
+            Text(
+                stringResource(if (cursor.playing) R.string.connect_v2_remote_other_account_playing else R.string.connect_v2_remote_other_account_paused),
+                style = MaterialTheme.typography.bodySmall,
+            )
         } else if (!info.isWriter) {
-            Text("他の端末で$status（${cursor.positionMs / 1000}秒）")
+            Text(stringResource(if (cursor.playing) R.string.connect_v2_remote_playing else R.string.connect_v2_remote_paused, cursor.positionMs / 1000))
             Button(onClick = {
                 scope.launch {
                     // 手元で鳴っていれば、置き換える前に確かめる
                     if (container.player.controller().isPlaying) confirmTransfer = true else manager.transfer()
                 }
-            }) { Text("ここで再生") }
+            }) { Text(stringResource(R.string.connect_v2_play_here)) }
         }
     }
 
     if (!info.inHousehold && info.loaded) {
-        Text("家を作れるのは、中継に最初に登録した端末だけです。ほかの端末は、家の端末が出す QR から加わります", style = MaterialTheme.typography.bodySmall)
+        Text(stringResource(R.string.connect_v2_household_hint), style = MaterialTheme.typography.bodySmall)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { manager.createHousehold() }) { Text("家を作る") }
+            OutlinedButton(onClick = { manager.createHousehold() }) { Text(stringResource(R.string.connect_v2_create_household)) }
             OutlinedButton(onClick = {
                 pairing.cancel()
                 if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) scanning = true else cameraPermission.launch(Manifest.permission.CAMERA)
-            }) { Text("QR を読み取って加わる") }
+            }) { Text(stringResource(R.string.connect_v2_scan_to_join)) }
         }
     } else if (info.inHousehold) {
-        OutlinedButton(onClick = { pairing.startOffer() }) { Text("家に端末を加える（QR を出す）") }
-        Text("家の端末", style = MaterialTheme.typography.bodyMedium)
+        OutlinedButton(onClick = { pairing.startOffer() }) { Text(stringResource(R.string.connect_v2_add_device)) }
+        Text(stringResource(R.string.connect_v2_household_devices), style = MaterialTheme.typography.bodyMedium)
         for (member in members) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(if (member.role == Role.Controller) "${member.label}（操作だけ）" else member.label, modifier = Modifier.weight(1f))
+                Text(if (member.role == Role.Controller) stringResource(R.string.connect_v2_member_controller, member.label) else member.label, modifier = Modifier.weight(1f))
                 if (!member.isSelf) {
-                    TextButton(enabled = !removeBusy, onClick = { removing = member }) { Text("外す") }
+                    TextButton(enabled = !removeBusy, onClick = { removing = member }) { Text(stringResource(R.string.connect_v2_remove)) }
                 }
             }
         }
@@ -150,44 +160,44 @@ fun ConnectV2Section(container: AppContainer) {
             scanning = false
             pairing.accept(text)
         }, modifier = Modifier.fillMaxWidth().aspectRatio(1f))
-        OutlinedButton(onClick = { scanning = false }) { Text("やめる") }
+        OutlinedButton(onClick = { scanning = false }) { Text(stringResource(R.string.connect_cancel)) }
     }
     when (val state = pairingState) {
         PairingV2Controller.State.Idle -> Unit
         is PairingV2Controller.State.Working -> Text(state.message)
         is PairingV2Controller.State.ShowingOffer -> {
-            Text("加える端末の wave で「QR を読み取って加わる」を押し、この QR を写してください（2分で無効）", style = MaterialTheme.typography.bodySmall)
+            Text(stringResource(R.string.connect_v2_offer_hint), style = MaterialTheme.typography.bodySmall)
             QrImage(state.offerText, Modifier.fillMaxWidth().aspectRatio(1f))
-            OutlinedButton(onClick = { pairing.cancel() }) { Text("やめる") }
+            OutlinedButton(onClick = { pairing.cancel() }) { Text(stringResource(R.string.connect_cancel)) }
         }
         is PairingV2Controller.State.EnterCode -> {
             var code by remember { mutableStateOf("") }
-            Text("加える端末に出ている6桁の数字を入力してください")
+            Text(stringResource(R.string.connect_v2_enter_code))
             state.message?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             OutlinedTextField(value = code, onValueChange = { value -> code = value.filter { it.isDigit() }.take(6) }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(enabled = code.length == 6, onClick = {
                     pairing.enterCode(code)
                     code = ""
-                }) { Text("確定") }
-                OutlinedButton(onClick = { pairing.cancel() }) { Text("やめる") }
+                }) { Text(stringResource(R.string.connect_confirm)) }
+                OutlinedButton(onClick = { pairing.cancel() }) { Text(stringResource(R.string.connect_cancel)) }
             }
         }
         is PairingV2Controller.State.ShowCode -> {
-            Text("${state.peerName} の画面に、この数字を入力してください")
+            Text(stringResource(R.string.connect_show_code, state.peerName))
             Text(state.code.chunked(3).joinToString(" "), style = MaterialTheme.typography.displayMedium)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = { pairing.confirmOnB() }) { Text("入力したら続ける") }
-                OutlinedButton(onClick = { pairing.cancel() }) { Text("やめる") }
+                Button(onClick = { pairing.confirmOnB() }) { Text(stringResource(R.string.connect_v2_continue_after_entering)) }
+                OutlinedButton(onClick = { pairing.cancel() }) { Text(stringResource(R.string.connect_cancel)) }
             }
         }
         is PairingV2Controller.State.Done -> {
-            Text("${state.peerName} と同じ家になりました")
-            OutlinedButton(onClick = { pairing.cancel() }) { Text("閉じる") }
+            Text(stringResource(R.string.connect_v2_joined, state.peerName))
+            OutlinedButton(onClick = { pairing.cancel() }) { Text(stringResource(R.string.connect_close)) }
         }
         is PairingV2Controller.State.Failed -> {
             Text(state.message, color = MaterialTheme.colorScheme.error)
-            OutlinedButton(onClick = { pairing.cancel() }) { Text("戻る") }
+            OutlinedButton(onClick = { pairing.cancel() }) { Text(stringResource(R.string.connect_back)) }
         }
     }
     HorizontalDivider()
@@ -195,8 +205,8 @@ fun ConnectV2Section(container: AppContainer) {
     removing?.let { member ->
         AlertDialog(
             onDismissRequest = { removing = null },
-            title = { Text("家から外す") },
-            text = { Text("${member.label} を家から外します。外した端末は、もう一度 QR と6桁で加えるまで、この家の再生を見たり引き取ったりできません。") },
+            title = { Text(stringResource(R.string.connect_v2_remove_title)) },
+            text = { Text(stringResource(R.string.connect_v2_remove_text, member.label)) },
             confirmButton = {
                 TextButton(onClick = {
                     removing = null
@@ -205,26 +215,26 @@ fun ConnectV2Section(container: AppContainer) {
                     scope.launch {
                         val removed = manager.removeMember(member.deviceId)
                         removeBusy = false
-                        removeMessage = if (removed) "${member.label} を外しました" else "外せませんでした（中継への接続を確かめてください）"
+                        removeMessage = if (removed) context.getString(R.string.connect_v2_removed, member.label) else context.getString(R.string.connect_v2_remove_failed)
                     }
-                }) { Text("外す") }
+                }) { Text(stringResource(R.string.connect_v2_remove)) }
             },
-            dismissButton = { TextButton(onClick = { removing = null }) { Text("やめる") } },
+            dismissButton = { TextButton(onClick = { removing = null }) { Text(stringResource(R.string.connect_cancel)) } },
         )
     }
 
     if (confirmTransfer) {
         AlertDialog(
             onDismissRequest = { confirmTransfer = false },
-            title = { Text("ここで再生") },
-            text = { Text("この端末で再生中のキューは、他の端末のキューに置き換わります。") },
+            title = { Text(stringResource(R.string.connect_v2_play_here)) },
+            text = { Text(stringResource(R.string.connect_v2_play_here_text)) },
             confirmButton = {
                 TextButton(onClick = {
                     confirmTransfer = false
                     manager.transfer()
-                }) { Text("置き換える") }
+                }) { Text(stringResource(R.string.connect_replace)) }
             },
-            dismissButton = { TextButton(onClick = { confirmTransfer = false }) { Text("やめる") } },
+            dismissButton = { TextButton(onClick = { confirmTransfer = false }) { Text(stringResource(R.string.connect_cancel)) } },
         )
     }
 }

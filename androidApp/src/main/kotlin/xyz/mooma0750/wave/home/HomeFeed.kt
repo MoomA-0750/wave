@@ -21,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
@@ -50,11 +51,25 @@ import xyz.mooma0750.wave.ui.IconTextButton
 object HomeShelves {
     /** 先頭の「新作」と、アルバムが3枚以上重なる別の棚があるか。 */
     fun duplicatesNewReleases(shelves: List<HomeShelf>): Boolean {
-        val ours = shelves.firstOrNull { it.title == "新作" && it.strapline == null } ?: return false
+        val ours = shelves.firstOrNull { it.title == HomeShelves.NEW_RELEASES_TITLE && it.strapline == null } ?: return false
         val ids = ours.items.mapNotNull { (it as? HomeItem.AlbumItem)?.album?.browseId }.toSet()
         return shelves.any { shelf -> shelf !== ours && shelf.items.count { (it as? HomeItem.AlbumItem)?.album?.browseId in ids } >= 3 }
     }
+
+    /** アプリが自分で作る棚の見出しの目印。画面で端末の言語の見出しに置き換える（YouTube から来る見出しとは重ならない）。 */
+    const val NEW_RELEASES_TITLE = "wave:new-releases"
+    const val RECENT_TITLE = "wave:recent"
 }
+
+/** 棚の見出し。アプリが作った棚は端末の言語で出す。 */
+@Composable
+fun shelfTitle(shelf: HomeShelf): String =
+    when {
+        shelf.strapline != null -> shelf.title
+        shelf.title == HomeShelves.NEW_RELEASES_TITLE -> stringResource(R.string.home_new_releases)
+        shelf.title == HomeShelves.RECENT_TITLE -> stringResource(R.string.home_recent_shelf)
+        else -> shelf.title
+    }
 
 data class HomeFeedUiState(
     /** 上の格子に出す、最近聴いたもの（Spotify のホームの先頭の8枚）。 */
@@ -104,8 +119,8 @@ class HomeFeedViewModel(
             val releases = (newReleases.await() as? CallResult.Ok)?.value.orEmpty()
             val recentItems = (recent.await() as? CallResult.Ok)?.value.orEmpty()
             Log.i(WaveApplication.LOG_TAG, "home recent items=${recentItems.size} kinds=${recentItems.groupingBy { it::class.simpleName.orEmpty() }.eachCount()}" + if (recentItems.isEmpty()) " renderers=${music.lastRendererNames}" else "")
-            val recentShelf = listOfNotNull(recentItems.takeIf { it.isNotEmpty() }?.let { HomeShelf(RECENT_TITLE, null, it.take(RECENT_COUNT)) })
-            val releaseShelf = recentShelf + listOfNotNull(releases.takeIf { it.isNotEmpty() }?.let { albums -> HomeShelf(NEW_RELEASES_TITLE, null, albums.take(NEW_RELEASES_COUNT).map(HomeItem::AlbumItem)) })
+            val recentShelf = listOfNotNull(recentItems.takeIf { it.isNotEmpty() }?.let { HomeShelf(HomeShelves.RECENT_TITLE, null, it.take(RECENT_COUNT)) })
+            val releaseShelf = recentShelf + listOfNotNull(releases.takeIf { it.isNotEmpty() }?.let { albums -> HomeShelf(HomeShelves.NEW_RELEASES_TITLE, null, albums.take(NEW_RELEASES_COUNT).map(HomeItem::AlbumItem)) })
             when (home) {
                 is CallResult.Ok -> {
                     // 棚の数と項目の種類の数だけを記録する（見出し・中身は記録しない）
@@ -121,7 +136,7 @@ class HomeFeedViewModel(
                         pages++
                     }
                     // YouTube Music のホームに新作の棚が来ていれば、こちらの「新作」は出さない（同じものが2つ並ぶ）
-                    if (HomeShelves.duplicatesNewReleases(shelves)) shelves = shelves.filterNot { it.title == NEW_RELEASES_TITLE && it.strapline == null }
+                    if (HomeShelves.duplicatesNewReleases(shelves)) shelves = shelves.filterNot { it.title == HomeShelves.NEW_RELEASES_TITLE && it.strapline == null }
                     Log.i(WaveApplication.LOG_TAG, "home initial pages=$pages shelves=${shelves.size} kinds=${kindCounts(shelves)}")
                     mutableState.value =
                         HomeFeedUiState(recentItems.take(RECENT_GRID), shelves, home.value.chips.ifEmpty { chips }, chip, continuation, loading = false)
@@ -152,8 +167,6 @@ class HomeFeedViewModel(
         shelves.flatMap { it.items }.groupingBy { it::class.simpleName.orEmpty() }.eachCount()
 
     private companion object {
-        const val NEW_RELEASES_TITLE = "新作"
-        const val RECENT_TITLE = "最近聴いたもの"
         const val RECENT_COUNT = 20
         const val RECENT_GRID = 8
         const val NEW_RELEASES_COUNT = 20
@@ -175,7 +188,7 @@ fun LazyListScope.homeFeedItems(
         item(key = "shelf-$index") {
             Column(Modifier.padding(top = 12.dp)) {
                 shelf.strapline?.let { Text(it, Modifier.padding(horizontal = 16.dp), style = MaterialTheme.typography.labelMedium) }
-                Text(shelf.title, Modifier.padding(horizontal = 16.dp), style = MaterialTheme.typography.titleLarge)
+                Text(shelfTitle(shelf), Modifier.padding(horizontal = 16.dp), style = MaterialTheme.typography.titleLarge)
                 LazyRow(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     items(shelf.items) { item ->
                         val look = HomeItemLook.of(item)
@@ -190,7 +203,7 @@ fun LazyListScope.homeFeedItems(
     // 下にライブラリが続くので、続きの棚は自動では読まない
     if (state.continuation != null) {
         item(key = "home-more") {
-            IconTextButton(R.drawable.ic_add, if (state.loadingMore) "読み込んでいます…" else "おすすめをもっと見る", onLoadMore, Modifier.padding(horizontal = 8.dp), enabled = !state.loadingMore)
+            IconTextButton(R.drawable.ic_add, if (state.loadingMore) stringResource(R.string.home_loading) else stringResource(R.string.home_more_recommendations), onLoadMore, Modifier.padding(horizontal = 8.dp), enabled = !state.loadingMore)
         }
     }
     when {
@@ -198,8 +211,8 @@ fun LazyListScope.homeFeedItems(
         state.failure != null ->
             item(key = "home-failure") {
                 Column(Modifier.padding(16.dp)) {
-                    Text("おすすめを読み込めませんでした（${failureMessage(state.failure)}）", style = MaterialTheme.typography.bodySmall)
-                    IconTextButton(R.drawable.ic_refresh, "もう一度", onRetry)
+                    Text(stringResource(R.string.home_recommendations_failed, failureMessage(state.failure)), style = MaterialTheme.typography.bodySmall)
+                    IconTextButton(R.drawable.ic_refresh, stringResource(R.string.home_retry), onRetry)
                 }
             }
     }

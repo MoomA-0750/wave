@@ -1,6 +1,5 @@
 package xyz.mooma0750.wave.library
 
-import xyz.mooma0750.wave.ui.BackButton
 import android.util.Log
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -16,6 +15,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import xyz.mooma0750.wave.R
 import xyz.mooma0750.wave.WaveApplication
 import xyz.mooma0750.wave.core.music.HistorySection
 import xyz.mooma0750.wave.core.music.MusicRepository
@@ -35,6 +36,7 @@ import xyz.mooma0750.wave.navigation.SongActions
 import xyz.mooma0750.wave.search.SongMenuButton
 import xyz.mooma0750.wave.search.SongRow
 import xyz.mooma0750.wave.search.failureMessage
+import xyz.mooma0750.wave.ui.BackButton
 
 data class HistoryUiState(
     val sections: List<HistorySection> = emptyList(),
@@ -123,13 +125,13 @@ fun HistoryScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     Scaffold(
-        topBar = { TopAppBar(title = { Text("再生履歴") }, navigationIcon = { BackButton(onBack) }) },
+        topBar = { TopAppBar(title = { Text(stringResource(R.string.library_history_title)) }, navigationIcon = { BackButton(onBack) }) },
         bottomBar = bottomBar,
     ) { padding ->
         LazyColumn(Modifier.fillMaxSize().padding(padding)) {
             state.failure?.let { item { Text(failureMessage(it), Modifier.padding(16.dp)) } }
             if (!state.loading && state.failure == null && state.sections.isEmpty()) {
-                item { Text("履歴がありません", Modifier.padding(16.dp)) }
+                item { Text(stringResource(R.string.library_history_empty), Modifier.padding(16.dp)) }
             }
             val rows = state.rows
             itemsIndexed(rows, key = { index, row -> if (row is HistoryRow.Item) "$index-${row.song.videoId}" else "$index-h" }) { index, row ->

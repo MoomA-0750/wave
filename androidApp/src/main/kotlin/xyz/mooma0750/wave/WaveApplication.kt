@@ -140,8 +140,9 @@ class WaveApplication :
         const val LOGIN_WEBVIEW_SUFFIX = "login"
         const val LOG_TAG = "wave"
 
-        /** YouTube に送る言語（画面の言語に合わせる）。 */
-        const val CONTENT_LANGUAGE = "ja"
+        /** YouTube に送る言語（画面の言語に合わせる）。日本語の画面なら ja、それ以外は en。 */
+        fun contentLanguage(resources: android.content.res.Resources): String =
+            if (resources.configuration.locales[0].language == "ja") "ja" else "en"
 
         /** 画面の作り直しの間、中継 v2 の接続を残しておく時間。 */
         const val CONFIGURATION_CHANGE_GRACE_MS = 5_000L
@@ -192,7 +193,7 @@ class AppContainer(
     val httpClient: HttpClient = createWaveHttpClient(guardedEngine)
 
     // 画面が日本語なので、YouTube の見出しやジャンル名も日本語にそろえる（端末が英語でも混ざらないように）
-    val session = WaveSession(httpClient, authManager, appScope, rethrowViolations = isDebuggable, contentLanguage = WaveApplication.CONTENT_LANGUAGE)
+    val session = WaveSession(httpClient, authManager, appScope, rethrowViolations = isDebuggable, contentLanguage = WaveApplication.contentLanguage(appContext.resources))
 
     /** ストリームの解決（WaveSession のガード付きクライアントを使う）。期限はスリープ中も進む時計で測る。 */
     val stream = StreamComponents.create(session, nowMs = SystemClock::elapsedRealtime, trackCipherPath = isDebuggable)
@@ -288,6 +289,7 @@ class AppContainer(
                 storageFile = java.io.File(context.noBackupFilesDir, "connect-v2.bin"),
                 labelsFile = java.io.File(context.noBackupFilesDir, "connect-v2-labels.json"),
                 uiInForeground = { startedActivities > 0 },
+                resources = appContext.resources,
             )
         } else {
             null
@@ -300,7 +302,7 @@ class AppContainer(
                 manager.events.collect { event ->
                     if (startedActivities != 0) return@collect
                     // 裏で再生ボタンを押して鳴らさなかったときも知らせる（D-9、レビュー p6b34 中-5）
-                    ConnectNotices.background(event)?.let { notifyConnect(it.title, it.text) }
+                    ConnectNotices.background(event)?.let { notifyConnect(appContext.getString(it.title), appContext.getString(it.text)) }
                 }
             }
         }
@@ -322,7 +324,7 @@ class AppContainer(
             return
         }
         manager.createNotificationChannel(
-            androidx.core.app.NotificationChannelCompat.Builder(CONNECT_CHANNEL_ID, androidx.core.app.NotificationManagerCompat.IMPORTANCE_LOW).setName("端末の連携").build(),
+            androidx.core.app.NotificationChannelCompat.Builder(CONNECT_CHANNEL_ID, androidx.core.app.NotificationManagerCompat.IMPORTANCE_LOW).setName(appContext.getString(R.string.app_notification_channel_connect)).build(),
         )
         val intent = android.app.PendingIntent.getActivity(appContext, 0, android.content.Intent(appContext, MainActivity::class.java), android.app.PendingIntent.FLAG_IMMUTABLE)
         val notification =
@@ -339,7 +341,7 @@ class AppContainer(
 
     val pairingV2: PairingV2Controller? =
         connectV2?.let { manager ->
-            PairingV2Controller(deviceIdentity, manager, session, appScope, android.os.Build.MODEL)
+            PairingV2Controller(deviceIdentity, manager, session, appScope, android.os.Build.MODEL, appContext.resources)
         }
 
     val connect =
@@ -352,6 +354,7 @@ class AppContainer(
             scope = appScope,
             uiInForeground = { startedActivities > 0 },
             ensurePlaybackService = { kotlinx.coroutines.withContext(Dispatchers.Main) { player.controller() } },
+            resources = appContext.resources,
         )
 
     val pairing =
@@ -363,6 +366,7 @@ class AppContainer(
             session = session,
             scope = appScope,
             deviceName = android.os.Build.MODEL,
+            resources = appContext.resources,
         )
 
     /** 再生履歴の送信（ADR-0006）。 */

@@ -2,11 +2,11 @@ package xyz.mooma0750.wave.library
 
 import android.content.Context
 import android.util.Log
-import android.widget.Toast
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import xyz.mooma0750.wave.R
 import xyz.mooma0750.wave.WaveApplication
 import xyz.mooma0750.wave.core.music.AddToPlaylistResult
 import xyz.mooma0750.wave.core.music.MusicRepository
@@ -35,11 +35,11 @@ class PlaylistEditor(
         Log.i(WaveApplication.LOG_TAG, "playlist add result=${result::class.simpleName}")
         if (result == AddToPlaylistResult.Added || result == AddToPlaylistResult.Unknown) onChanged()
         when (result) {
-            AddToPlaylistResult.Added -> "「${playlist.title}」に追加しました"
-            AddToPlaylistResult.AlreadyInPlaylist -> "「${playlist.title}」には既にあります"
-            is AddToPlaylistResult.NotChecked -> "プレイリストを読めなかったので、追加していません"
-            is AddToPlaylistResult.Failed -> "追加できませんでした"
-            AddToPlaylistResult.Unknown -> "追加できたか確認できませんでした。プレイリストを開いて確かめてください"
+            AddToPlaylistResult.Added -> context.getString(R.string.library_added_to_playlist, playlist.title)
+            AddToPlaylistResult.AlreadyInPlaylist -> context.getString(R.string.library_already_in_playlist, playlist.title)
+            is AddToPlaylistResult.NotChecked -> context.getString(R.string.library_add_not_checked)
+            is AddToPlaylistResult.Failed -> context.getString(R.string.library_add_failed)
+            AddToPlaylistResult.Unknown -> context.getString(R.string.library_add_unknown)
         }
     }
 
@@ -52,9 +52,9 @@ class PlaylistEditor(
         Log.i(WaveApplication.LOG_TAG, "playlist remove result=${result::class.simpleName}")
         if (result !is WriteResult.Failed) onChanged()
         when (result) {
-            is WriteResult.Done -> "プレイリストから外しました"
-            is WriteResult.Failed -> "外せませんでした"
-            WriteResult.Unknown -> "外せたか確認できませんでした。表示を読み直します"
+            is WriteResult.Done -> context.getString(R.string.library_removed_from_playlist)
+            is WriteResult.Failed -> context.getString(R.string.library_remove_failed)
+            WriteResult.Unknown -> context.getString(R.string.library_remove_unknown)
         }
     }
 
@@ -69,19 +69,19 @@ class PlaylistEditor(
         when (result) {
             is WriteResult.Done ->
                 if (song == null) {
-                    "「$title」を作りました"
+                    context.getString(R.string.library_playlist_created, title)
                 } else {
                     val added = music.addToPlaylist(result.value, song.videoId, generation, knownEmpty = true)
                     Log.i(WaveApplication.LOG_TAG, "playlist add result=${added::class.simpleName}")
                     onChanged()
                     when (added) {
-                        AddToPlaylistResult.Added -> "「$title」を作って追加しました"
-                        AddToPlaylistResult.Unknown -> "「$title」を作りましたが、追加できたか確認できませんでした"
-                        else -> "「$title」を作りましたが、追加できませんでした"
+                        AddToPlaylistResult.Added -> context.getString(R.string.library_playlist_created_and_added, title)
+                        AddToPlaylistResult.Unknown -> context.getString(R.string.library_playlist_created_add_unknown, title)
+                        else -> context.getString(R.string.library_playlist_created_add_failed, title)
                     }
                 }
-            is WriteResult.Failed -> "プレイリストを作れませんでした"
-            WriteResult.Unknown -> "プレイリストを作れたか確認できませんでした。ライブラリを読み直すので、作られていないことを確かめてから作り直してください"
+            is WriteResult.Failed -> context.getString(R.string.library_create_playlist_failed)
+            WriteResult.Unknown -> context.getString(R.string.library_create_playlist_unknown)
         }
     }
 
@@ -95,7 +95,7 @@ class PlaylistEditor(
         scope.launch {
             try {
                 val message = block(generation)
-                withContext(Dispatchers.Main) { Toast.makeText(context, message, Toast.LENGTH_LONG).show() }
+                xyz.mooma0750.wave.ui.Notices.show(message)
             } finally {
                 synchronized(inFlight) { inFlight.remove(key) }
             }

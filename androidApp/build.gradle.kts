@@ -10,6 +10,10 @@ plugins {
 }
 
 android {
+    // 端末の設定で、アプリだけの言語（English / 日本語）を選べるようにする
+    androidResources {
+        generateLocaleConfig = true
+    }
     namespace = "xyz.mooma0750.wave"
     compileSdk = libs.versions.compileSdk.get().toInt()
 

@@ -32,6 +32,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
@@ -98,7 +99,7 @@ fun SearchBrowseScreen(
     val columns = (LocalConfiguration.current.screenWidthDp / 200).coerceIn(2, 6)
     LazyColumn(Modifier.fillMaxSize()) {
         item {
-            Text("検索", Modifier.statusBarsPadding().padding(start = 16.dp, top = 16.dp, bottom = 12.dp), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.search_title), Modifier.statusBarsPadding().padding(start = 16.dp, top = 16.dp, bottom = 12.dp), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         }
         // 上に留めると Spotify のように見出しの下で止まるが、ここでは並びだけを合わせる
         item {
@@ -111,7 +112,7 @@ fun SearchBrowseScreen(
                 Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(painterResource(R.drawable.ic_search), contentDescription = null)
                     Spacer(Modifier.width(12.dp))
-                    Text("何を聴きたいですか？", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge)
+                    Text(stringResource(R.string.search_hint), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge)
                 }
             }
         }
@@ -119,8 +120,8 @@ fun SearchBrowseScreen(
         state.failure?.let { failure ->
             item {
                 Column(Modifier.padding(16.dp)) {
-                    Text("ジャンルを読み込めませんでした（${failureMessage(failure)}）", style = MaterialTheme.typography.bodySmall)
-                    IconTextButton(R.drawable.ic_refresh, "もう一度", viewModel::refresh)
+                    Text(stringResource(R.string.search_genres_failed, failureMessage(failure)), style = MaterialTheme.typography.bodySmall)
+                    IconTextButton(R.drawable.ic_refresh, stringResource(R.string.search_retry), viewModel::refresh)
                 }
             }
         }

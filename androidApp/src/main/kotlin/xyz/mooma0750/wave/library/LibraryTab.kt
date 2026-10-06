@@ -47,6 +47,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -214,7 +215,7 @@ fun LibraryTabScreen(
     // 「高く評価した曲」は並べ方に関わらず先頭に留める（Spotify の「お気に入りの曲」と同じ）。一覧にあればその画像を使う
     val serverLiked = state.entries.firstNotNullOfOrNull { (it as? LibraryEntry.Playlist)?.playlist?.takeIf { p -> p.playlistId == MusicRepository.LIKED_SONGS } }
     val entries = LibraryOrder.arrange(state, filter, sort).filterNot { it is LibraryEntry.Playlist && it.playlist.playlistId == MusicRepository.LIKED_SONGS }
-    val liked = PlaylistSummary(MusicRepository.LIKED_SONGS, "高く評価した曲", "プレイリスト • 自動", serverLiked?.thumbnailUrl)
+    val liked = PlaylistSummary(MusicRepository.LIKED_SONGS, stringResource(R.string.library_liked_songs), stringResource(R.string.library_liked_songs_subtitle), serverLiked?.thumbnailUrl)
     val showLiked = filter == null || filter == LibraryFilter.Playlists
     val open = { entry: LibraryEntry ->
         when (entry) {
@@ -227,8 +228,8 @@ fun LibraryTabScreen(
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.statusBarsPadding().padding(start = 16.dp, end = 4.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Avatar(account, 32.dp)
-            Text("マイライブラリ", Modifier.weight(1f).padding(start = 12.dp), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-            IconAction(R.drawable.ic_add, "プレイリストを作成", { creating = true })
+            Text(stringResource(R.string.library_title), Modifier.weight(1f).padding(start = 12.dp), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            IconAction(R.drawable.ic_add, stringResource(R.string.library_create_playlist), { creating = true })
         }
         LazyRow(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             items(LibraryFilter.entries) { option ->
@@ -238,9 +239,9 @@ fun LibraryTabScreen(
                     label = {
                         Text(
                             when (option) {
-                                LibraryFilter.Playlists -> "プレイリスト"
-                                LibraryFilter.Artists -> "アーティスト"
-                                LibraryFilter.Albums -> "アルバム"
+                                LibraryFilter.Playlists -> stringResource(R.string.library_filter_playlists)
+                                LibraryFilter.Artists -> stringResource(R.string.library_filter_artists)
+                                LibraryFilter.Albums -> stringResource(R.string.library_filter_albums)
                             },
                         )
                     },
@@ -250,7 +251,7 @@ fun LibraryTabScreen(
         Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             SortButton(sort) { sort = it }
             Spacer(Modifier.weight(1f))
-            IconAction(if (grid) R.drawable.ic_view_list else R.drawable.ic_grid_view, if (grid) "リストで表示" else "格子で表示", { grid = !grid })
+            IconAction(if (grid) R.drawable.ic_view_list else R.drawable.ic_grid_view, if (grid) stringResource(R.string.library_view_as_list) else stringResource(R.string.library_view_as_grid), { grid = !grid })
         }
         when {
             state.loading -> CircularProgressIndicator(Modifier.padding(16.dp))
@@ -272,17 +273,18 @@ fun LibraryTabScreen(
 
     if (creating) {
         var title by remember { mutableStateOf("") }
+        val defaultName = stringResource(R.string.library_default_playlist_name)
         AlertDialog(
             onDismissRequest = { creating = false },
-            title = { Text("プレイリストに名前を付けましょう") },
-            text = { OutlinedTextField(title, { title = it }, singleLine = true, placeholder = { Text("マイプレイリスト") }) },
+            title = { Text(stringResource(R.string.library_name_playlist_title)) },
+            text = { OutlinedTextField(title, { title = it }, singleLine = true, placeholder = { Text(defaultName) }) },
             confirmButton = {
                 TextButton(onClick = {
-                    onCreatePlaylist(title.ifBlank { "マイプレイリスト" })
+                    onCreatePlaylist(title.ifBlank { defaultName })
                     creating = false
-                }) { Text("作成") }
+                }) { Text(stringResource(R.string.library_create)) }
             },
-            dismissButton = { TextButton(onClick = { creating = false }) { Text("キャンセル") } },
+            dismissButton = { TextButton(onClick = { creating = false }) { Text(stringResource(R.string.library_cancel)) } },
         )
     }
 }
@@ -293,24 +295,17 @@ private fun SortButton(
     onChange: (LibrarySort) -> Unit,
 ) {
     var open by remember { mutableStateOf(false) }
-    val label = { option: LibrarySort ->
-        when (option) {
-            LibrarySort.Recents -> "最近"
-            LibrarySort.Added -> "追加順"
-            LibrarySort.Alphabetical -> "アルファベット順"
-        }
-    }
     Box {
         TextButton(onClick = { open = true }) {
             Icon(painterResource(R.drawable.ic_swap_vert), contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(6.dp))
-            Text(label(sort))
+            Text(librarySortLabel(sort))
         }
         DropdownMenu(open, onDismissRequest = { open = false }) {
-            Text("並べ替え", Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.titleSmall)
+            Text(stringResource(R.string.library_sort), Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.titleSmall)
             LibrarySort.entries.forEach { option ->
                 DropdownMenuItem(
-                    text = { Text(label(option)) },
+                    text = { Text(librarySortLabel(option)) },
                     trailingIcon = { if (option == sort) MenuIcon(R.drawable.ic_check_circle) },
                     onClick = {
                         onChange(option)
@@ -322,11 +317,20 @@ private fun SortButton(
     }
 }
 
+@Composable
+private fun librarySortLabel(option: LibrarySort): String =
+    when (option) {
+        LibrarySort.Recents -> stringResource(R.string.library_sort_recents)
+        LibrarySort.Added -> stringResource(R.string.library_sort_recently_added)
+        LibrarySort.Alphabetical -> stringResource(R.string.library_sort_alphabetical)
+    }
+
+@Composable
 private fun subtitleOf(entry: LibraryEntry): String =
     when (entry) {
-        is LibraryEntry.Playlist -> entry.playlist.subtitle ?: "プレイリスト"
-        is LibraryEntry.Artist -> "アーティスト"
-        is LibraryEntry.Album -> entry.album.subtitle ?: "アルバム"
+        is LibraryEntry.Playlist -> entry.playlist.subtitle ?: stringResource(R.string.library_kind_playlist)
+        is LibraryEntry.Artist -> stringResource(R.string.library_kind_artist)
+        is LibraryEntry.Album -> entry.album.subtitle ?: stringResource(R.string.library_kind_album)
     }
 
 private fun thumbnailOf(entry: LibraryEntry): String? =

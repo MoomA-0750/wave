@@ -1,42 +1,28 @@
 package xyz.mooma0750.wave.artist
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.ListItem
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.text.font.FontWeight
-import xyz.mooma0750.wave.library.QueueMenu
-import xyz.mooma0750.wave.ui.CollectionScreen
-import xyz.mooma0750.wave.ui.DetailText
-import xyz.mooma0750.wave.ui.MenuIcon
-import xyz.mooma0750.wave.ui.PlayControls
-import xyz.mooma0750.wave.ui.IconTextButton
-import xyz.mooma0750.wave.ui.ButtonStyle
-import xyz.mooma0750.wave.R
-import xyz.mooma0750.wave.ui.BackButton
 import android.util.Log
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -44,9 +30,16 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
@@ -56,6 +49,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import xyz.mooma0750.wave.R
 import xyz.mooma0750.wave.WaveApplication
 import xyz.mooma0750.wave.core.music.AlbumPage
 import xyz.mooma0750.wave.core.music.AlbumSummary
@@ -66,10 +60,18 @@ import xyz.mooma0750.wave.core.session.CallResult
 import xyz.mooma0750.wave.core.session.FailureKind
 import xyz.mooma0750.wave.library.LikedByArtist
 import xyz.mooma0750.wave.library.LikedSongsCache
+import xyz.mooma0750.wave.library.QueueMenu
 import xyz.mooma0750.wave.navigation.SongActions
 import xyz.mooma0750.wave.search.SongMenuButton
 import xyz.mooma0750.wave.search.SongRow
 import xyz.mooma0750.wave.search.failureMessage
+import xyz.mooma0750.wave.ui.BackButton
+import xyz.mooma0750.wave.ui.ButtonStyle
+import xyz.mooma0750.wave.ui.CollectionScreen
+import xyz.mooma0750.wave.ui.DetailText
+import xyz.mooma0750.wave.ui.IconTextButton
+import xyz.mooma0750.wave.ui.MenuIcon
+import xyz.mooma0750.wave.ui.PlayControls
 
 /** 1回だけ読むページの状態。 */
 data class PageUiState<T>(
@@ -184,24 +186,24 @@ fun ArtistScreen(
             page == null -> item { CircularProgressIndicator(Modifier.padding(16.dp)) }
             else -> {
                 // Spotify の「人気」: 番号付きの曲
-                item { SectionTitle("人気") }
+                item { SectionTitle(stringResource(R.string.artist_popular)) }
                 itemsIndexed(page.topSongs, key = { index, song -> "song-$index-${song.videoId}" }) { index, song ->
                     SongRow(song, onClick = { onPlay(page.topSongs, index) }, number = index + 1) { SongMenuButton(song, actions) }
                 }
                 page.allSongsPlaylistId?.let { id ->
-                    item { TextButton(onClick = { onOpenAllSongs(id, page.name) }, modifier = Modifier.padding(horizontal = 8.dp)) { Text("すべての曲を見る") } }
+                    item { TextButton(onClick = { onOpenAllSongs(id, page.name) }, modifier = Modifier.padding(horizontal = 8.dp)) { Text(stringResource(R.string.artist_see_all_songs)) } }
                 }
                 // Spotify の「高く評価した曲」の行（このアーティストの、自分が高く評価した曲）
                 if (liked.loading || liked.songs.isNotEmpty()) {
                     item(key = "liked") {
                         ListItem(
-                            headlineContent = { Text("高く評価した曲") },
+                            headlineContent = { Text(stringResource(R.string.artist_liked_songs)) },
                             supportingContent = {
                                 Text(
                                     when {
-                                        liked.loading -> "確認しています…"
-                                        liked.incomplete -> "${liked.songs.size}曲以上 • ${page.name}"
-                                        else -> "${liked.songs.size}曲 • ${page.name}"
+                                        liked.loading -> stringResource(R.string.artist_checking)
+                                        liked.incomplete -> pluralStringResource(R.plurals.artist_liked_count_more, liked.songs.size, liked.songs.size, page.name)
+                                        else -> pluralStringResource(R.plurals.artist_liked_count, liked.songs.size, liked.songs.size, page.name)
                                     },
                                 )
                             },
@@ -289,7 +291,7 @@ fun AlbumScreen(
         when {
             state.failure != null -> item { Text(failureMessage(state.failure), Modifier.padding(16.dp)) }
             page == null -> item { CircularProgressIndicator(Modifier.padding(16.dp)) }
-            page.songs.isEmpty() -> item { Text("曲がありません", Modifier.padding(16.dp)) }
+            page.songs.isEmpty() -> item { Text(stringResource(R.string.artist_no_songs), Modifier.padding(16.dp)) }
             else ->
                 itemsIndexed(page.songs, key = { index, song -> "$index-${song.videoId}" }) { index, song ->
                     SongRow(song, onClick = { onPlay(page, index, false) }, showArtwork = false) { SongMenuButton(song, actions) }

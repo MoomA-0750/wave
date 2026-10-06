@@ -39,6 +39,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import xyz.mooma0750.wave.R
+import androidx.compose.ui.res.stringResource
 
 /**
  * プレイリスト・アルバムのページ（並びは Spotify と同じ）: ジャケットの色のグラデーションの上に大きなジャケット、
@@ -112,7 +113,7 @@ fun CollectionScreen(
                     actions()
                     Spacer(Modifier.weight(1f))
                     play?.let { controls ->
-                        IconAction(R.drawable.ic_shuffle, if (controls.shuffle) "シャッフル: オン" else "シャッフル: オフ", { controls.onShuffleChange(!controls.shuffle) }, active = controls.shuffle, size = 28.dp)
+                        IconAction(R.drawable.ic_shuffle, if (controls.shuffle) stringResource(R.string.ui_shuffle_on) else stringResource(R.string.ui_shuffle_off), { controls.onShuffleChange(!controls.shuffle) }, active = controls.shuffle, size = 28.dp)
                         PlayFab(playing = false, onClick = controls.onPlay, enabled = controls.enabled, modifier = Modifier.padding(start = 8.dp))
                     }
                 }

@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- MainActivity -->
+    <string name="main_logging_out">ログアウトしています…</string>
+    <string name="main_liked_songs">高く評価した曲</string>
+
+    <!-- navigation -->
+    <string name="nav_home">ホーム</string>
+    <string name="nav_search">検索</string>
+    <string name="nav_library">マイライブラリ</string>
+
+    <!-- ui -->
+    <string name="ui_shuffle_on">シャッフル: オン</string>
+    <string name="ui_shuffle_off">シャッフル: オフ</string>
+    <string name="ui_pause">一時停止</string>
+    <string name="ui_play">再生</string>
+    <string name="ui_back">戻る</string>
+
+    <!-- login -->
+    <string name="login_title">ログイン</string>
+    <string name="login_cancel">キャンセル</string>
+    <string name="login_saved_unreadable">保存済みのログイン情報を読み込めませんでした。ログインし直すと上書きされます。</string>
+    <string name="login_discard_saved">保存済みのログイン情報を消す</string>
+    <string name="login_failed_no_sapisid">ログイン情報を取得できませんでした。</string>
+    <string name="login_failed_no_visitor_data">ログイン情報の一部を取得できませんでした。通信状況を確認して、もう一度ログインしてください。</string>
+    <string name="login_failed_save">ログイン情報を端末に保存できませんでした。</string>
+    <string name="login_failed_renderer_gone">ログイン画面が異常終了しました。</string>
+    <string name="login_retry">もう一度ログインする</string>
+    <string name="login_discard_saved_and_retry">保存済みのログイン情報を消してやり直す</string>
+
+    <!-- nowplaying -->
+    <string name="nowplaying_video_searching">動画を探しています…</string>
+    <string name="nowplaying_video_none">この曲には動画がありません</string>
+    <string name="nowplaying_video_load_failed">動画を読み込めませんでした</string>
+    <string name="nowplaying_retry">もう一度</string>
+    <string name="nowplaying_video_play_failed">動画を再生できませんでした</string>
+    <string name="nowplaying_video_loading">動画を読み込んでいます…</string>
+    <string name="nowplaying_video_gap">（この部分は動画にありません）</string>
+    <string name="nowplaying_error">エラー: %1$s</string>
+    <string name="nowplaying_buffering">バッファ中</string>
+    <string name="nowplaying_connected_devices">端末の連携</string>
+    <string name="nowplaying_pause">一時停止</string>
+    <string name="nowplaying_play">再生</string>
+    <string name="nowplaying_like_pending">変更中</string>
+    <string name="nowplaying_unlike">高く評価した曲から外す</string>
+    <string name="nowplaying_like_reload">評価を読み直す</string>
+    <string name="nowplaying_like">高く評価した曲に追加</string>
+    <string name="nowplaying_close">閉じる</string>
+    <string name="nowplaying_song">曲</string>
+    <string name="nowplaying_video">動画</string>
+    <string name="nowplaying_shuffle_upcoming">残りをシャッフル</string>
+    <string name="nowplaying_previous">前の曲</string>
+    <string name="nowplaying_next">次の曲</string>
+    <string name="nowplaying_repeat_all">リピート: 全体</string>
+    <string name="nowplaying_repeat_one">リピート: 1曲</string>
+    <string name="nowplaying_repeat_off">リピート: オフ</string>
+    <plurals name="nowplaying_queue_with_count">
+        <item quantity="other">再生キュー（%1$d曲）</item>
+    </plurals>
+    <string name="nowplaying_lyrics">歌詞</string>
+    <string name="nowplaying_lyrics_open_full">歌詞を全面で開く</string>
+    <string name="nowplaying_queue">再生キュー</string>
+    <string name="nowplaying_remove_from_queue">キューから削除</string>
+    <string name="nowplaying_lyrics_searching">歌詞を探しています…</string>
+    <string name="nowplaying_lyrics_none">この曲の歌詞は見つかりませんでした</string>
+    <string name="nowplaying_lyrics_load_failed">歌詞を読み込めませんでした</string>
+
+    <!-- settings -->
+    <string name="settings_title">設定</string>
+    <string name="settings_account_checking">アカウントを確認しています…</string>
+    <string name="settings_account_no_name">名前を取得できませんでした</string>
+    <string name="settings_account_failed">アカウントを取得できませんでした</string>
+    <string name="settings_premium_quality">Premium 音質: %1$s</string>
+    <string name="settings_premium_checking">確認中…</string>
+    <string name="settings_premium_available">利用可</string>
+    <string name="settings_premium_unavailable">利用不可</string>
+    <string name="settings_premium_unknown">未確認</string>
+    <string name="settings_relogin_required">再ログインが必要です</string>
+    <string name="settings_relogin">ログインし直す</string>
+    <string name="settings_session_unverified">ログイン状態を確認できていません</string>
+    <string name="settings_history_title">再生履歴を YouTube Music に送る</string>
+    <string name="settings_history_summary">オフにすると、wave で聴いた曲が YouTube Music の履歴やおすすめに反映されません</string>
+    <string name="settings_connected_devices">端末の連携</string>
+    <string name="settings_connected_devices_summary">ほかの端末で再生を引き継ぐ</string>
+    <string name="settings_log_out">ログアウト</string>
+    <string name="settings_checking">確認中…</string>
+    <string name="settings_debug_stream_check">開発用: ストリーム確認</string>
+    <string name="settings_debug_play_fixed">開発用: 固定の曲を再生</string>
+    <string name="settings_debug_corrupt_url">開発用: URL を壊して 2 分進む</string>
+    <string name="settings_debug_add_unplayable">開発用: 再生できない曲を次に</string>
+    <string name="settings_debug_play_public_playlist">開発用: 公開プレイリストを再生</string>
+    <string name="settings_debug_last_in_queue">開発用: キューの最後の曲へ</string>
+    <string name="settings_debug_song_end">開発用: 曲の終わりへ</string>
+</resources>

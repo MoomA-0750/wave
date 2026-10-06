@@ -1,5 +1,6 @@
 package xyz.mooma0750.wave.connect2
 
+import android.content.res.Resources
 import android.util.Log
 import java.util.Base64
 import kotlinx.coroutines.CancellationException
@@ -21,6 +22,7 @@ import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
+import xyz.mooma0750.wave.R
 import xyz.mooma0750.wave.WaveApplication
 import xyz.mooma0750.wave.connect.DeviceIdentity
 import xyz.mooma0750.wave.core.session.WaveSession
@@ -40,6 +42,8 @@ class PairingV2Controller(
     private val session: WaveSession,
     private val scope: CoroutineScope,
     private val deviceName: String,
+    /** 画面に出す文言を引く（端末の言語に従う）。 */
+    private val resources: Resources,
 ) {
     sealed interface State {
         data object Idle : State
@@ -100,7 +104,7 @@ class PairingV2Controller(
      */
     fun confirmOnB() {
         val established = pendingOnB ?: return
-        val extension = established.peerExtension ?: return run { mutableState.value = State.Failed("相手の端末が Connect v2 に対応していません") }
+        val extension = established.peerExtension ?: return run { mutableState.value = State.Failed(str(R.string.connect_v2_peer_unsupported)) }
         pendingOnB = null
         job?.cancel()
         job = launchJob { runJoinOnB(established, extension) }
@@ -110,8 +114,8 @@ class PairingV2Controller(
         established: Pairing.Established,
         extension: String,
     ) {
-        if (!manager.expectJoin(extension, established.peerPublicKey)) return fail("この端末の Connect v2 の状態では加われません（既に家に入っているか、保存を読めません）")
-        mutableState.value = State.Working("家に加わるのを待っています")
+        if (!manager.expectJoin(extension, established.peerPublicKey)) return fail(str(R.string.connect_v2_cannot_join_state))
+        mutableState.value = State.Working(str(R.string.connect_v2_status_waiting_join))
         var accepted = false
         val joined =
             try {
@@ -126,8 +130,8 @@ class PairingV2Controller(
                 mutableState.value = State.Done(established.peerDeviceName)
                 Log.i(WaveApplication.LOG_TAG, "pairing-v2 established role=B")
             }
-            joined == null -> fail("家に加われませんでした（相手の端末で加える操作が済んでいるか確かめて、もう一度やり直してください）")
-            else -> fail("中継の端末一覧を確かめられませんでした")
+            joined == null -> fail(str(R.string.connect_v2_join_failed))
+            else -> fail(str(R.string.connect_v2_member_list_unverified))
         }
     }
 
@@ -169,15 +173,15 @@ class PairingV2Controller(
     }
 
     private suspend fun runOffer(entered: Channel<String>) {
-        mutableState.value = State.Working("中継に接続しています")
+        mutableState.value = State.Working(str(R.string.connect_status_connecting_relay))
         manager.relay.holding {
             val status = withTimeoutOrNull(15_000) { manager.relay.status.first { it != RelayClientV2.Status.Connecting && it != RelayClientV2.Status.Disconnected } }
-            if (status != RelayClientV2.Status.Connected) return fail("中継 v2 に接続できませんでした")
-            val joinInfo = manager.joinInfoJson() ?: return fail("この端末はまだ家に入っていません")
-            val account = session.verifiedAccount() ?: return fail("書き込み先のアカウントを確かめられません")
+            if (status != RelayClientV2.Status.Connected) return fail(str(R.string.connect_v2_relay_connect_failed))
+            val joinInfo = manager.joinInfoJson() ?: return fail(str(R.string.connect_v2_not_in_household))
+            val account = session.verifiedAccount() ?: return fail(str(R.string.connect_account_unverified))
             val responder = Pairing.Responder(identity.privateKey(), identity.publicKey, deviceName, account.id.reveal(), nowMs = android.os.SystemClock::elapsedRealtime, confirmExtension = joinInfo)
             val tokenHash = b64.encodeToString(responder.tokenHash)
-            if (!manager.relay.send(RelayV2.PairingOpen(tokenHash))) return fail("中継に届きませんでした")
+            if (!manager.relay.send(RelayV2.PairingOpen(tokenHash))) return fail(str(R.string.connect_relay_send_failed))
             mutableState.value = State.ShowingOffer(Pairing.encodeOffer(responder.offer))
             val hello =
                 withTimeoutOrNull(Pairing.LIFETIME_MS) {
@@ -185,10 +189,10 @@ class PairingV2Controller(
                         manager.pairHellos.filter { it.tokenHash == tokenHash },
                         manager.relay.status.filter { it != RelayClientV2.Status.Connected }.map { null },
                     ).first()
-                } ?: return fail("時間内に読み取られなかったか、中継との接続が切れました")
-            val decoded = runCatching { json.decodeFromJsonElement(Pairing.Hello.serializer(), hello.hello) }.getOrNull() ?: return fail("相手の応答を読めませんでした")
-            val confirm = responder.onHello(decoded).getOrElse { return fail("相手の端末を確かめられませんでした") }
-            if (!manager.relay.send(RelayV2.PairConfirm(tokenHash, json.encodeToJsonElement(Pairing.Confirm.serializer(), confirm)))) return fail("中継に届きませんでした")
+                } ?: return fail(str(R.string.connect_v2_offer_not_scanned))
+            val decoded = runCatching { json.decodeFromJsonElement(Pairing.Hello.serializer(), hello.hello) }.getOrNull() ?: return fail(str(R.string.connect_pairing_bad_reply))
+            val confirm = responder.onHello(decoded).getOrElse { return fail(str(R.string.connect_pairing_peer_unverified)) }
+            if (!manager.relay.send(RelayV2.PairConfirm(tokenHash, json.encodeToJsonElement(Pairing.Confirm.serializer(), confirm)))) return fail(str(R.string.connect_relay_send_failed))
             mutableState.value = State.EnterCode()
             val done =
                 withTimeoutOrNull(Pairing.LIFETIME_MS) {
@@ -196,20 +200,20 @@ class PairingV2Controller(
                         val established =
                             responder.onCodeEntered(code).getOrElse { error ->
                                 if ((error as? Pairing.PairingFailure)?.reason == Pairing.Failure.WrongCode) {
-                                    mutableState.value = State.EnterCode("数字が違います。もう一度入力してください")
+                                    mutableState.value = State.EnterCode(str(R.string.connect_pairing_wrong_code))
                                     continue
                                 }
-                                fail("ペアリングできませんでした")
+                                fail(str(R.string.connect_pairing_failed))
                                 return@withTimeoutOrNull true
                             }
                         if (session.loginGenerationId() != account.generationId) {
-                            fail("ログインが切り替わったので、もう一度やり直してください")
+                            fail(str(R.string.connect_v2_login_changed))
                             return@withTimeoutOrNull true
                         }
                         val memberKeys = established.peerExtension
-                        mutableState.value = State.Working("家に加えています")
+                        mutableState.value = State.Working(str(R.string.connect_v2_status_adding))
                         if (memberKeys == null || !manager.addMember(memberKeys, established.peerPublicKey)) {
-                            fail("家に加えられませんでした。もう一度やり直してください")
+                            fail(str(R.string.connect_v2_add_failed))
                         } else {
                             manager.rememberLabel(EnvelopeSealer.deviceId(established.peerPublicKey), established.peerDeviceName)
                             Log.i(WaveApplication.LOG_TAG, "pairing-v2 established role=A")
@@ -219,20 +223,20 @@ class PairingV2Controller(
                     }
                     true
                 }
-            if (done == null) fail("時間切れです。もう一度やり直してください")
+            if (done == null) fail(str(R.string.connect_pairing_timed_out))
         }
     }
 
     private suspend fun runAccept(offerText: String) {
-        val offer = Pairing.decodeOffer(offerText) ?: return fail("wave のペアリングの QR ではありません")
-        val account = session.verifiedAccount() ?: return fail("書き込み先のアカウントを確かめられません")
-        mutableState.value = State.Working("相手の端末に送っています")
+        val offer = Pairing.decodeOffer(offerText) ?: return fail(str(R.string.connect_pairing_not_wave_qr))
+        val account = session.verifiedAccount() ?: return fail(str(R.string.connect_account_unverified))
+        mutableState.value = State.Working(str(R.string.connect_status_sending_peer))
         val initiator = Pairing.Initiator(offer, identity.privateKey(), identity.publicKey, deviceName, account.id.reveal(), helloExtension = manager.selfMemberKeysJson())
         val reply = manager.relay.pair(offer.token, json.encodeToJsonElement(Pairing.Hello.serializer(), initiator.hello()))
-        val confirmed = reply as? RelayV2.PairConfirmed ?: return fail(if (reply == null) "中継 v2 に届きませんでした（Tailscale を確かめてください）" else "相手の端末が待っていません")
-        val confirm = runCatching { json.decodeFromJsonElement(Pairing.Confirm.serializer(), confirmed.confirm) }.getOrNull() ?: return fail("相手の応答を読めませんでした")
-        val (code, established) = initiator.onConfirm(confirm).getOrElse { return fail("相手の端末を確かめられませんでした") }
-        if (session.loginGenerationId() != account.generationId) return fail("ログインが切り替わったので、もう一度やり直してください")
+        val confirmed = reply as? RelayV2.PairConfirmed ?: return fail(str(if (reply == null) R.string.connect_v2_relay_unreachable_tailscale else R.string.connect_v2_peer_not_waiting))
+        val confirm = runCatching { json.decodeFromJsonElement(Pairing.Confirm.serializer(), confirmed.confirm) }.getOrNull() ?: return fail(str(R.string.connect_pairing_bad_reply))
+        val (code, established) = initiator.onConfirm(confirm).getOrElse { return fail(str(R.string.connect_pairing_peer_unverified)) }
+        if (session.loginGenerationId() != account.generationId) return fail(str(R.string.connect_v2_login_changed))
         pendingOnB = established
         mutableState.value = State.ShowCode(code, established.peerDeviceName)
     }
@@ -245,7 +249,7 @@ class PairingV2Controller(
                 throw cancellation
             } catch (error: Exception) {
                 Log.i(WaveApplication.LOG_TAG, "pairing-v2 error type=${error::class.simpleName}")
-                fail("ペアリングできませんでした")
+                fail(str(R.string.connect_pairing_failed))
             }
         }
 
@@ -255,6 +259,8 @@ class PairingV2Controller(
         /** つなぎ直すまでの待ち（NotMember で断られたら、次の待ちでつなぎ直す）。 */
         val JOIN_RETRY_MS = listOf(2_000L, 5_000L, 10_000L, 13_000L)
     }
+
+    private fun str(id: Int): String = resources.getString(id)
 
     private fun fail(message: String) {
         codes = null

@@ -25,6 +25,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import xyz.mooma0750.wave.R
 import xyz.mooma0750.wave.WaveApplication
 import xyz.mooma0750.wave.connect.DeviceIdentity
 import xyz.mooma0750.wave.core.session.WaveSession
@@ -62,6 +63,8 @@ class ConnectV2Manager(
     private val labelsFile: File,
     /** 画面が前面にあるか（引き取った曲の再生を始めてよいか）。 */
     private val uiInForeground: () -> Boolean,
+    /** 端末の表示名の既定の文言を引く（端末の言語に従う）。 */
+    private val resources: android.content.res.Resources,
 ) {
     private val dispatcher = Executors.newSingleThreadExecutor { Thread(it, "connect-v2") }.asCoroutineDispatcher()
     private val keys = DeviceKeysV2(identity)
@@ -144,7 +147,7 @@ class ConnectV2Manager(
         mutableMembers.value =
             engine?.members.orEmpty().map { member ->
                 val self = member.deviceId == identity.deviceId
-                MemberView(member.deviceId, if (self) "この端末" else known[member.deviceId] ?: "端末 ${member.deviceId.take(6)}", self, member.role)
+                MemberView(member.deviceId, if (self) resources.getString(R.string.connect_v2_member_self) else known[member.deviceId] ?: resources.getString(R.string.connect_v2_member_unknown, member.deviceId.take(6)), self, member.role)
             }
     }
 

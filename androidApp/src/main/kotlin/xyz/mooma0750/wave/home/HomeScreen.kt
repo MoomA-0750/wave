@@ -35,6 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -80,17 +81,17 @@ fun HomeScreen(
                 Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                     Avatar(account, 48.dp)
                     Text(
-                        (account.account as? AccountResult.Ok)?.name ?: "アカウント",
+                        (account.account as? AccountResult.Ok)?.name ?: stringResource(R.string.home_account),
                         Modifier.padding(start = 12.dp),
                         style = MaterialTheme.typography.titleMedium,
                     )
                 }
                 HorizontalDivider()
-                NavigationDrawerItem(label = { Text("最近再生した曲") }, icon = { MenuIcon(R.drawable.ic_history) }, selected = false, onClick = { closeThen(onOpenHistory) })
+                NavigationDrawerItem(label = { Text(stringResource(R.string.home_recently_played)) }, icon = { MenuIcon(R.drawable.ic_history) }, selected = false, onClick = { closeThen(onOpenHistory) })
                 if (showConnect) {
-                    NavigationDrawerItem(label = { Text("端末の連携") }, icon = { MenuIcon(R.drawable.ic_devices) }, selected = false, onClick = { closeThen(onConnect) })
+                    NavigationDrawerItem(label = { Text(stringResource(R.string.home_connect_devices)) }, icon = { MenuIcon(R.drawable.ic_devices) }, selected = false, onClick = { closeThen(onConnect) })
                 }
-                NavigationDrawerItem(label = { Text("設定") }, icon = { MenuIcon(R.drawable.ic_settings) }, selected = false, onClick = { closeThen(onOpenSettings) })
+                NavigationDrawerItem(label = { Text(stringResource(R.string.home_settings)) }, icon = { MenuIcon(R.drawable.ic_settings) }, selected = false, onClick = { closeThen(onOpenSettings) })
             }
         },
     ) {
@@ -99,7 +100,7 @@ fun HomeScreen(
                 Row(Modifier.statusBarsPadding().padding(top = 8.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Avatar(account, 32.dp, Modifier.padding(start = 16.dp).clip(CircleShape).clickable { scope.launch { drawer.open() } })
                     LazyRow(contentPadding = PaddingValues(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        item { FilterChip(selected = state.selected == null, onClick = { feed.select(null) }, label = { Text("すべて") }) }
+                        item { FilterChip(selected = state.selected == null, onClick = { feed.select(null) }, label = { Text(stringResource(R.string.home_chip_all)) }) }
                         items(state.chips) { chip -> FilterChip(selected = state.selected == chip, onClick = { feed.select(chip) }, label = { Text(chip.title) }) }
                     }
                 }

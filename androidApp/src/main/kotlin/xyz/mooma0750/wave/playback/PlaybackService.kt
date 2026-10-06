@@ -33,6 +33,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.plus
 import xyz.mooma0750.wave.AppContainer
 import xyz.mooma0750.wave.MainActivity
+import xyz.mooma0750.wave.R
 import xyz.mooma0750.wave.WaveApplication
 import xyz.mooma0750.wave.core.auth.AuthState
 import xyz.mooma0750.wave.core.music.LikeStatus
@@ -147,6 +148,7 @@ class PlaybackService : MediaSessionService() {
                 scope,
                 onChanged = { state -> publishLikeState(state) },
                 onLikedSongsChanged = { container.onLikedSongsChanged() },
+                resources = resources,
             )
         likes = likeController
         val historyTracker =
@@ -502,7 +504,7 @@ class PlaybackService : MediaSessionService() {
         return listOf(
             CommandButton
                 .Builder(if (liked) CommandButton.ICON_HEART_FILLED else CommandButton.ICON_HEART_UNFILLED)
-                .setDisplayName(if (liked) "評価を外す" else "高く評価")
+                .setDisplayName(getString(if (liked) R.string.playback_like_remove else R.string.playback_like))
                 .setSessionCommand(SessionCommand(QueueCommands.TOGGLE_LIKE, extras))
                 // 書き込み中も評価を読めていない間も、ボタンは残す。
                 // 無効なボタンはプラットフォームのセッション（通知センター・時計・車載）の一覧から落ちるので、押すたびにハートが消えて見える

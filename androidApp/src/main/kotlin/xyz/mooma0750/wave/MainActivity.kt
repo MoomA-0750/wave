@@ -64,6 +64,8 @@ import xyz.mooma0750.wave.search.SearchScreen
 import xyz.mooma0750.wave.search.SearchViewModel
 import xyz.mooma0750.wave.settings.SettingsScreen
 import xyz.mooma0750.wave.settings.rememberAccountInfo
+import androidx.compose.ui.res.stringResource
+import xyz.mooma0750.wave.R
 
 class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: android.content.Intent) {
@@ -117,18 +119,17 @@ class MainActivity : ComponentActivity() {
                 // 端末の連携の結果（引き取り・解除など）は、どの画面にいても短く知らせる（仮の表示）
                 val context = androidx.compose.ui.platform.LocalContext.current
                 LaunchedEffect(container) {
-                    container.connect.events.collect { message -> android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_LONG).show() }
+                    container.connect.events.collect { message -> xyz.mooma0750.wave.ui.Notices.show(message) }
                 }
                 LaunchedEffect(container) {
                     container.connectV2?.events?.collect { event ->
-                        val message = ConnectNotices.toast(event)
-                        message?.let { android.widget.Toast.makeText(context, it, android.widget.Toast.LENGTH_LONG).show() }
+                        ConnectNotices.toast(event, context.resources)?.let(xyz.mooma0750.wave.ui.Notices::show)
                     }
                 }
 
                 when (val state = authState) {
                     AuthState.Restoring -> Progress()
-                    AuthState.LoggingOut -> Progress("ログアウトしています…")
+                    AuthState.LoggingOut -> Progress(stringResource(R.string.main_logging_out))
                     is AuthState.LoggedIn -> {
                         // ログインし直したら、前のログインで開いた画面を閉じる（最初の表示では閉じない）
                         var shownGeneration by remember { mutableStateOf(loginGeneration) }
@@ -264,6 +265,7 @@ class MainActivity : ComponentActivity() {
                                 }
                                 is Screen.Artist -> {
                                     val likedSongsVersion by container.likedSongsVersion.collectAsStateWithLifecycle()
+                                    val likedSongsTitle = stringResource(R.string.main_liked_songs)
                                     ArtistScreen(
                                         viewModel(key = "artist-$loginGeneration-${screen.browseId}-$likedSongsVersion") {
                                             ArtistViewModel(container.music, screen.browseId, container.likedSongs, likedSongsVersion)
@@ -275,7 +277,7 @@ class MainActivity : ComponentActivity() {
                                         onOpenAllSongs = { id, name -> nav.push(Screen.Playlist(PlaylistSummary(id, name, null, null))) },
                                         // 「高く評価した曲」を、そのアーティストで絞った状態で開く
                                         onOpenLiked = { name ->
-                                            nav.push(Screen.Playlist(PlaylistSummary(MusicRepository.LIKED_SONGS, "高く評価した曲", null, null), initialQuery = name))
+                                            nav.push(Screen.Playlist(PlaylistSummary(MusicRepository.LIKED_SONGS, likedSongsTitle, null, null), initialQuery = name))
                                         },
                                         onOpenAlbum = { album -> nav.push(Screen.Album(album.browseId, album.title)) },
                                         onBack = pop,

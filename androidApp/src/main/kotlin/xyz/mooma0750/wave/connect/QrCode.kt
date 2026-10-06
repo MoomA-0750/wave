@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -30,6 +31,7 @@ import com.google.zxing.qrcode.QRCodeReader
 import com.google.zxing.qrcode.QRCodeWriter
 import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
 import java.util.concurrent.Executors
+import xyz.mooma0750.wave.R
 import java.util.concurrent.atomic.AtomicBoolean
 
 /** ペアリングの QR を表示する（1モジュール = 1ピクセルの画像を、ぼかさずに拡大する）。 */
@@ -51,7 +53,7 @@ fun QrImage(
             val pixels = IntArray(matrix.width * matrix.height) { i -> if (matrix[i % matrix.width, i / matrix.width]) 0xFF000000.toInt() else 0xFFFFFFFF.toInt() }
             Bitmap.createBitmap(pixels, matrix.width, matrix.height, Bitmap.Config.ARGB_8888).asImageBitmap()
         }
-    Image(bitmap, contentDescription = "ペアリングの QR", modifier = modifier, filterQuality = FilterQuality.None)
+    Image(bitmap, contentDescription = stringResource(R.string.connect_qr_content_description), modifier = modifier, filterQuality = FilterQuality.None)
 }
 
 /**

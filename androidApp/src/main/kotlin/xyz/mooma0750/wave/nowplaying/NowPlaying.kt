@@ -72,6 +72,8 @@ import xyz.mooma0750.wave.playback.PlayerConnection
 import xyz.mooma0750.wave.playback.togglePlayPause
 import xyz.mooma0750.wave.search.SongMenuButton
 import xyz.mooma0750.wave.ui.Durations
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
 
 /**
  * 画面の下のミニプレーヤー（並びは Spotify と同じ: ジャケット・曲名・端末・評価・再生、下に進み具合の線）。
@@ -120,16 +122,16 @@ fun MiniPlayer(
                 Column(Modifier.weight(1f).padding(horizontal = 10.dp)) {
                     Text(state.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                     Text(
-                        listOfNotNull(state.artist, state.error?.let { "エラー: $it" }, "バッファ中".takeIf { state.buffering }).joinToString(" • "),
+                        listOfNotNull(state.artist, state.error?.let { stringResource(R.string.nowplaying_error, it) }, if (state.buffering) stringResource(R.string.nowplaying_buffering) else null).joinToString(" • "),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                IconAction(R.drawable.ic_devices, "端末の連携", onOpenDevices)
+                IconAction(R.drawable.ic_devices, stringResource(R.string.nowplaying_connected_devices), onOpenDevices)
                 LikeButton(connection, scope)
-                IconAction(if (state.isPlaying) R.drawable.ic_pause else R.drawable.ic_play_arrow, if (state.isPlaying) "一時停止" else "再生", { controller?.togglePlayPause() })
+                IconAction(if (state.isPlaying) R.drawable.ic_pause else R.drawable.ic_play_arrow, if (state.isPlaying) stringResource(R.string.nowplaying_pause) else stringResource(R.string.nowplaying_play), { controller?.togglePlayPause() })
             }
             if (state.durationMs > 0) {
                 LinearProgressIndicator(
@@ -160,10 +162,10 @@ private fun LikeButton(
             else -> R.drawable.ic_add_circle
         },
         when {
-            like.pending -> "変更中"
-            liked -> "高く評価した曲から外す"
-            like.status == null -> "評価を読み直す"
-            else -> "高く評価した曲に追加"
+            like.pending -> stringResource(R.string.nowplaying_like_pending)
+            liked -> stringResource(R.string.nowplaying_unlike)
+            like.status == null -> stringResource(R.string.nowplaying_like_reload)
+            else -> stringResource(R.string.nowplaying_like)
         },
         { if (videoId != null) scope.launch { connection.setLiked(videoId, !liked) } },
         enabled = videoId != null && !like.pending,
@@ -212,12 +214,12 @@ fun NowPlayingScreen(
                 .verticalScroll(rememberScrollState()),
         ) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconAction(R.drawable.ic_arrow_down, "閉じる", onClose)
+                IconAction(R.drawable.ic_arrow_down, stringResource(R.string.nowplaying_close), onClose)
                 Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
                     // Spotify の「曲｜動画」の切り替え
                     SingleChoiceSegmentedButtonRow {
-                        SegmentedButton(selected = !video, onClick = { video = false }, shape = SegmentedButtonDefaults.itemShape(0, 2), icon = {}) { Text("曲") }
-                        SegmentedButton(selected = video, onClick = { video = true }, shape = SegmentedButtonDefaults.itemShape(1, 2), icon = {}, enabled = song != null) { Text("動画") }
+                        SegmentedButton(selected = !video, onClick = { video = false }, shape = SegmentedButtonDefaults.itemShape(0, 2), icon = {}) { Text(stringResource(R.string.nowplaying_song)) }
+                        SegmentedButton(selected = video, onClick = { video = true }, shape = SegmentedButtonDefaults.itemShape(1, 2), icon = {}, enabled = song != null) { Text(stringResource(R.string.nowplaying_video)) }
                     }
                 }
                 song?.let { SongMenuButton(it, actions, inQueue = true) } ?: Spacer(Modifier.size(48.dp))
@@ -262,29 +264,29 @@ fun NowPlayingScreen(
                 }
             }
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                IconAction(R.drawable.ic_shuffle, "残りをシャッフル", { scope.launch { connection.shuffleUpcoming() } }, enabled = state.queue.size - state.currentIndex > 2)
-                IconAction(R.drawable.ic_skip_previous, "前の曲", { controller?.seekToPreviousMediaItem() }, enabled = state.hasPrevious, size = 36.dp)
+                IconAction(R.drawable.ic_shuffle, stringResource(R.string.nowplaying_shuffle_upcoming), { scope.launch { connection.shuffleUpcoming() } }, enabled = state.queue.size - state.currentIndex > 2)
+                IconAction(R.drawable.ic_skip_previous, stringResource(R.string.nowplaying_previous), { controller?.seekToPreviousMediaItem() }, enabled = state.hasPrevious, size = 36.dp)
                 PlayFab(state.isPlaying, { controller?.togglePlayPause() }, size = 72.dp)
-                IconAction(R.drawable.ic_skip_next, "次の曲", { controller?.seekToNextMediaItem() }, enabled = state.hasNext, size = 36.dp)
+                IconAction(R.drawable.ic_skip_next, stringResource(R.string.nowplaying_next), { controller?.seekToNextMediaItem() }, enabled = state.hasNext, size = 36.dp)
                 IconAction(
                     if (state.repeatMode == Player.REPEAT_MODE_ONE) R.drawable.ic_repeat_one else R.drawable.ic_repeat,
                     when (state.repeatMode) {
-                        Player.REPEAT_MODE_ALL -> "リピート: 全体"
-                        Player.REPEAT_MODE_ONE -> "リピート: 1曲"
-                        else -> "リピート: オフ"
+                        Player.REPEAT_MODE_ALL -> stringResource(R.string.nowplaying_repeat_all)
+                        Player.REPEAT_MODE_ONE -> stringResource(R.string.nowplaying_repeat_one)
+                        else -> stringResource(R.string.nowplaying_repeat_off)
                     },
                     { scope.launch { connection.cycleRepeatMode() } },
                     active = state.repeatMode != Player.REPEAT_MODE_OFF,
                 )
             }
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconAction(R.drawable.ic_devices, "端末の連携", onOpenDevices)
+                IconAction(R.drawable.ic_devices, stringResource(R.string.nowplaying_connected_devices), onOpenDevices)
                 Spacer(Modifier.weight(1f))
-                IconAction(R.drawable.ic_queue_music, "再生キュー（${state.queue.size}曲）", { showQueue = true })
+                IconAction(R.drawable.ic_queue_music, pluralStringResource(R.plurals.nowplaying_queue_with_count, state.queue.size, state.queue.size), { showQueue = true })
             }
             val like by connection.likeState.collectAsState()
             like.message?.let { Text(it, Modifier.padding(horizontal = 24.dp), style = MaterialTheme.typography.bodySmall) }
-            state.error?.let { Text("エラー: $it", Modifier.padding(horizontal = 24.dp), style = MaterialTheme.typography.bodySmall) }
+            state.error?.let { Text(stringResource(R.string.nowplaying_error, it), Modifier.padding(horizontal = 24.dp), style = MaterialTheme.typography.bodySmall) }
             // 下に続く歌詞のカード（Spotify と同じ。押すと全面で開く）
             if (song != null) {
                 Card(
@@ -292,8 +294,8 @@ fun NowPlayingScreen(
                     colors = CardDefaults.cardColors(containerColor = lerp(MaterialTheme.colorScheme.surfaceContainerHigh, art, 0.5f)),
                 ) {
                     Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text("歌詞", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                        IconAction(R.drawable.ic_lyrics, "歌詞を全面で開く", { showLyrics = true })
+                        Text(stringResource(R.string.nowplaying_lyrics), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                        IconAction(R.drawable.ic_lyrics, stringResource(R.string.nowplaying_lyrics_open_full), { showLyrics = true })
                     }
                     LyricsPanel(song, controller, lyrics, Modifier.fillMaxWidth().height(320.dp).padding(horizontal = 8.dp))
                 }
@@ -335,7 +337,7 @@ private fun QueueSheet(
     val listState = rememberLazyListState()
     LaunchedEffect(Unit) { if (state.currentIndex > 0) listState.scrollToItem(state.currentIndex) }
     Column(Modifier.fillMaxWidth()) {
-        Text("再生キュー", Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        Text(stringResource(R.string.nowplaying_queue), Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         LazyColumn(Modifier.fillMaxWidth(), state = listState) {
             itemsIndexed(state.queue, key = { _, row -> row.itemId }) { index, row ->
                 val current = index == state.currentIndex
@@ -356,7 +358,7 @@ private fun QueueSheet(
                             SongMenuButton(song, actions, inQueue = true)
                         }
                     }
-                    if (!current) IconAction(R.drawable.ic_delete, "キューから削除", { scope.launch { connection.remove(row.itemId) } })
+                    if (!current) IconAction(R.drawable.ic_delete, stringResource(R.string.nowplaying_remove_from_queue), { scope.launch { connection.remove(row.itemId) } })
                 }
             }
         }

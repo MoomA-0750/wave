@@ -1,6 +1,8 @@
 package xyz.mooma0750.wave.connect
 
+import android.content.res.Resources
 import android.util.Log
+import androidx.annotation.StringRes
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -18,6 +20,7 @@ import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
+import xyz.mooma0750.wave.R
 import xyz.mooma0750.wave.WaveApplication
 import xyz.mooma0750.wave.core.session.WaveSession
 import xyz.mooma0750.wave.handoff.RelayMessage
@@ -39,6 +42,8 @@ class PairingController(
     private val session: WaveSession,
     private val scope: CoroutineScope,
     private val deviceName: String,
+    /** 画面に出す文言を引く（端末の言語に従う）。 */
+    private val resources: Resources,
 ) {
     sealed interface State {
         data object Idle : State
@@ -117,15 +122,15 @@ class PairingController(
     }
 
     private suspend fun runOffer(entered: Channel<String>) {
-        mutableState.value = State.Working("中継に接続しています")
+        mutableState.value = State.Working(str(R.string.connect_status_connecting_relay))
         relay.acquire()
         try {
             val status = awaitRelay()
-            if (status != RelayClient.Status.Connected) return fail(relayMessage(status))
-            val account = session.verifiedAccount() ?: return fail("書き込み先のアカウントを確かめられません")
+            if (status != RelayClient.Status.Connected) return fail(str(relayMessage(status)))
+            val account = session.verifiedAccount() ?: return fail(str(R.string.connect_account_unverified))
             val responder = Pairing.Responder(identity.privateKey(), identity.publicKey, deviceName, account.id.reveal(), nowMs = android.os.SystemClock::elapsedRealtime)
             val tokenHash = b64.encodeToString(responder.tokenHash)
-            if (!relay.send(RelayMessage.PairingOpen(tokenHash))) return fail("中継に届きませんでした")
+            if (!relay.send(RelayMessage.PairingOpen(tokenHash))) return fail(str(R.string.connect_relay_send_failed))
             mutableState.value = State.ShowingOffer(Pairing.encodeOffer(responder.offer))
             Log.i(WaveApplication.LOG_TAG, "pairing offer shown")
             // 中継がつなぎ直すと預けた枠が消えるので、切れたら待たずに失敗にする
@@ -136,10 +141,10 @@ class PairingController(
                         relay.status.filter { it != RelayClient.Status.Connected }.map { null },
                     ).first()
                 }
-            if (hello == null) return fail(if (relay.status.value != RelayClient.Status.Connected) "中継との接続が切れました。もう一度 QR を出してください" else "時間内に読み取られませんでした")
-            val decoded = runCatching { json.decodeFromJsonElement(Pairing.Hello.serializer(), hello.hello) }.getOrNull() ?: return fail("相手の応答を読めませんでした")
+            if (hello == null) return fail(str(if (relay.status.value != RelayClient.Status.Connected) R.string.connect_pairing_relay_lost else R.string.connect_pairing_not_scanned))
+            val decoded = runCatching { json.decodeFromJsonElement(Pairing.Hello.serializer(), hello.hello) }.getOrNull() ?: return fail(str(R.string.connect_pairing_bad_reply))
             val confirm = responder.onHello(decoded).getOrElse { return fail(failureMessage(it)) }
-            if (!relay.send(RelayMessage.PairConfirm(tokenHash, json.encodeToJsonElement(Pairing.Confirm.serializer(), confirm)))) return fail("中継に届きませんでした")
+            if (!relay.send(RelayMessage.PairConfirm(tokenHash, json.encodeToJsonElement(Pairing.Confirm.serializer(), confirm)))) return fail(str(R.string.connect_relay_send_failed))
             mutableState.value = State.EnterCode()
             val done =
                 withTimeoutOrNull(Pairing.LIFETIME_MS) {
@@ -147,7 +152,7 @@ class PairingController(
                         val established =
                             responder.onCodeEntered(code).getOrElse { error ->
                                 if ((error as? Pairing.PairingFailure)?.reason == Pairing.Failure.WrongCode) {
-                                    mutableState.value = State.EnterCode("数字が違います。もう一度入力してください")
+                                    mutableState.value = State.EnterCode(str(R.string.connect_pairing_wrong_code))
                                     continue
                                 }
                                 fail(failureMessage(error))
@@ -155,12 +160,12 @@ class PairingController(
                             }
                         // 確かめた後にアカウントが切り替わっていたら、前のアカウントで確かめたペアを保存しない
                         if (session.loginGenerationId() != account.generationId) {
-                            fail("ログインが切り替わったので、もう一度ペアリングしてください")
+                            fail(str(R.string.connect_pairing_login_changed))
                             return@withTimeoutOrNull true
                         }
-                        mutableState.value = State.Working("中継に登録しています")
+                        mutableState.value = State.Working(str(R.string.connect_status_registering))
                         if (!register(established.peerPublicKey)) {
-                            fail("中継に登録できませんでした。もう一度ペアリングしてください")
+                            fail(str(R.string.connect_pairing_register_failed))
                         } else {
                             pairs.add(established)
                             Log.i(WaveApplication.LOG_TAG, "pairing established role=A")
@@ -170,7 +175,7 @@ class PairingController(
                     }
                     true
                 }
-            if (done == null) fail("時間切れです。もう一度やり直してください")
+            if (done == null) fail(str(R.string.connect_pairing_timed_out))
         } finally {
             relay.release()
         }
@@ -193,15 +198,15 @@ class PairingController(
         }
 
     private suspend fun runAccept(offerText: String) {
-        val offer = Pairing.decodeOffer(offerText) ?: return fail("wave のペアリングの QR ではありません")
-        val account = session.verifiedAccount() ?: return fail("書き込み先のアカウントを確かめられません")
-        mutableState.value = State.Working("相手の端末に送っています")
+        val offer = Pairing.decodeOffer(offerText) ?: return fail(str(R.string.connect_pairing_not_wave_qr))
+        val account = session.verifiedAccount() ?: return fail(str(R.string.connect_account_unverified))
+        mutableState.value = State.Working(str(R.string.connect_status_sending_peer))
         val initiator = Pairing.Initiator(offer, identity.privateKey(), identity.publicKey, deviceName, account.id.reveal())
         val reply = relay.pair(offer.token, json.encodeToJsonElement(Pairing.Hello.serializer(), initiator.hello()))
         val confirmed =
             reply as? RelayMessage.PairConfirmed
-                ?: return fail(if (reply == null) "中継に届きませんでした（Tailscale を確かめてください）" else "相手の端末が待っていません。QR を出し直してもらってください")
-        val confirm = runCatching { json.decodeFromJsonElement(Pairing.Confirm.serializer(), confirmed.confirm) }.getOrNull() ?: return fail("相手の応答を読めませんでした")
+                ?: return fail(str(if (reply == null) R.string.connect_pairing_relay_unreachable_tailscale else R.string.connect_pairing_peer_not_waiting_reshow))
+        val confirm = runCatching { json.decodeFromJsonElement(Pairing.Confirm.serializer(), confirmed.confirm) }.getOrNull() ?: return fail(str(R.string.connect_pairing_bad_reply))
         val (code, established) = initiator.onConfirm(confirm).getOrElse { return fail(failureMessage(it)) }
         pendingOnB = Triple(code, established, account.generationId)
         mutableState.value = State.ShowCode(code, established.peerDeviceName)
@@ -213,8 +218,8 @@ class PairingController(
         established: Pairing.Established,
         generation: Long,
     ) {
-        if (session.loginGenerationId() != generation) return fail("ログインが切り替わったので、もう一度ペアリングしてください")
-        mutableState.value = State.Working("承認されたか確かめています")
+        if (session.loginGenerationId() != generation) return fail(str(R.string.connect_pairing_login_changed))
+        mutableState.value = State.Working(str(R.string.connect_status_checking_approval))
         relay.acquire()
         try {
             when (val status = awaitRelay()) {
@@ -226,8 +231,8 @@ class PairingController(
                     mutableState.value = State.Done(established.peerDeviceName)
                 }
                 RelayClient.Status.NotRegistered ->
-                    mutableState.value = State.ShowCode(code, established.peerDeviceName, "まだ承認されていません。${established.peerDeviceName} に数字を入力し、「ペアリングしました」と出てから押してください")
-                else -> mutableState.value = State.ShowCode(code, established.peerDeviceName, relayMessage(status))
+                    mutableState.value = State.ShowCode(code, established.peerDeviceName, str(R.string.connect_pairing_not_approved, established.peerDeviceName))
+                else -> mutableState.value = State.ShowCode(code, established.peerDeviceName, str(relayMessage(status)))
             }
         } finally {
             relay.release()
@@ -242,7 +247,7 @@ class PairingController(
                 throw cancellation
             } catch (error: Exception) {
                 Log.i(WaveApplication.LOG_TAG, "pairing error type=${error::class.simpleName}")
-                fail("ペアリングできませんでした")
+                fail(str(R.string.connect_pairing_failed))
             }
         }
 
@@ -256,25 +261,34 @@ class PairingController(
         Log.i(WaveApplication.LOG_TAG, "pairing failed")
     }
 
+    private fun str(
+        @StringRes id: Int,
+        vararg args: Any,
+    ): String = resources.getString(id, *args)
+
     private fun failureMessage(error: Throwable): String =
-        when ((error as? Pairing.PairingFailure)?.reason) {
-            Pairing.Failure.AccountMismatch -> "相手の端末は別のアカウントでログインしています"
-            Pairing.Failure.Expired -> "時間切れです。もう一度やり直してください"
-            Pairing.Failure.TooManyAttempts -> "数字を3回間違えたので、やり直してください"
-            Pairing.Failure.AlreadyUsed -> "この QR は使用済みです"
-            Pairing.Failure.BadSignature, Pairing.Failure.Malformed -> "相手の端末を確かめられませんでした"
-            else -> "ペアリングできませんでした"
-        }
+        str(
+            when ((error as? Pairing.PairingFailure)?.reason) {
+                Pairing.Failure.AccountMismatch -> R.string.connect_pairing_account_mismatch
+                Pairing.Failure.Expired -> R.string.connect_pairing_timed_out
+                Pairing.Failure.TooManyAttempts -> R.string.connect_pairing_too_many_attempts
+                Pairing.Failure.AlreadyUsed -> R.string.connect_pairing_qr_used
+                Pairing.Failure.BadSignature, Pairing.Failure.Malformed -> R.string.connect_pairing_peer_unverified
+                else -> R.string.connect_pairing_failed
+            },
+        )
 
     companion object {
         private const val RELAY_CONNECT_TIMEOUT_MS = 15_000L
         private const val REGISTER_REPLY_TIMEOUT_MS = 10_000L
 
-        fun relayMessage(status: RelayClient.Status?): String =
+        /** 中継につながらなかったときの文言（文字列リソースの ID）。 */
+        @StringRes
+        fun relayMessage(status: RelayClient.Status?): Int =
             when (status) {
-                RelayClient.Status.TailnetUnreachable -> "中継に届きません。Tailscale に接続し、wave が Tailscale の対象になっているか確かめてください"
-                RelayClient.Status.NotRegistered -> "この端末は中継に登録されていません。ペアリング済みの端末から QR を出してください"
-                else -> "中継に接続できませんでした"
+                RelayClient.Status.TailnetUnreachable -> R.string.connect_relay_tailnet_unreachable
+                RelayClient.Status.NotRegistered -> R.string.connect_relay_not_registered
+                else -> R.string.connect_relay_connect_failed
             }
     }
 }

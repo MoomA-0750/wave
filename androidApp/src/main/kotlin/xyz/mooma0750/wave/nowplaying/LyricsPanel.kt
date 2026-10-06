@@ -34,6 +34,7 @@ import xyz.mooma0750.wave.core.lyrics.Lyrics
 import xyz.mooma0750.wave.core.lyrics.LyricsRepository
 import xyz.mooma0750.wave.core.lyrics.LyricsTiming
 import xyz.mooma0750.wave.core.music.Song
+import androidx.compose.ui.res.stringResource
 
 /** 再生中の曲の歌詞。時刻付きなら再生位置に合わせて今の行を強調し、行を押すとそこへ飛ぶ。 */
 @Composable
@@ -46,13 +47,13 @@ fun LyricsPanel(
     var attempt by remember(song.videoId) { mutableIntStateOf(0) }
     val result by produceState<LyricsRepository.Result?>(null, song.videoId, attempt) { value = lyrics.lyrics(song) }
     when (val current = result) {
-        null -> Message("歌詞を探しています…", modifier)
-        LyricsRepository.Result.None -> Message("この曲の歌詞は見つかりませんでした", modifier)
+        null -> Message(stringResource(R.string.nowplaying_lyrics_searching), modifier)
+        LyricsRepository.Result.None -> Message(stringResource(R.string.nowplaying_lyrics_none), modifier)
         LyricsRepository.Result.Failed ->
             Box(modifier, contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("歌詞を読み込めませんでした")
-                    IconTextButton(R.drawable.ic_refresh, "もう一度", { attempt++ })
+                    Text(stringResource(R.string.nowplaying_lyrics_load_failed))
+                    IconTextButton(R.drawable.ic_refresh, stringResource(R.string.nowplaying_retry), { attempt++ })
                 }
             }
         is LyricsRepository.Result.Found ->

@@ -35,6 +35,7 @@ import xyz.mooma0750.wave.R
 import xyz.mooma0750.wave.core.music.MusicVideo
 import xyz.mooma0750.wave.core.music.Song
 import xyz.mooma0750.wave.ui.IconTextButton
+import androidx.compose.ui.res.stringResource
 
 /** 再生中の曲の映像（MV）。音はそのまま、映像だけを重ねる。画面が裏に回ったら映像のプレイヤーを捨てる。 */
 @Composable
@@ -49,12 +50,12 @@ fun MusicVideoPanel(
     val lifecycle by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
     Box(modifier.background(Color.Black), contentAlignment = Alignment.Center) {
         when (val current = result) {
-            null -> Note("動画を探しています…")
-            MusicVideos.Result.None -> Note("この曲には動画がありません")
+            null -> Note(stringResource(R.string.nowplaying_video_searching))
+            MusicVideos.Result.None -> Note(stringResource(R.string.nowplaying_video_none))
             MusicVideos.Result.Failed ->
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Note("動画を読み込めませんでした")
-                    IconTextButton(R.drawable.ic_refresh, "もう一度", { attempt++ })
+                    Note(stringResource(R.string.nowplaying_video_load_failed))
+                    IconTextButton(R.drawable.ic_refresh, stringResource(R.string.nowplaying_retry), { attempt++ })
                 }
             is MusicVideos.Result.Found ->
                 if (lifecycle.isAtLeast(Lifecycle.State.STARTED)) {
@@ -131,8 +132,8 @@ private fun SyncedVideo(
 
     if (failed) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Note("動画を再生できませんでした")
-            IconTextButton(R.drawable.ic_refresh, "もう一度", onFailed)
+            Note(stringResource(R.string.nowplaying_video_play_failed))
+            IconTextButton(R.drawable.ic_refresh, stringResource(R.string.nowplaying_retry), onFailed)
         }
         return
     }
@@ -141,8 +142,8 @@ private fun SyncedVideo(
             factory = { TextureView(it).also(videoPlayer::setVideoTextureView) },
             modifier = Modifier.fillMaxWidth().aspectRatio(aspectRatio),
         )
-        if (!firstFrame) Note("動画を読み込んでいます…")
-        if (hidden) Box(Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) { Note("（この部分は動画にありません）") }
+        if (!firstFrame) Note(stringResource(R.string.nowplaying_video_loading))
+        if (hidden) Box(Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) { Note(stringResource(R.string.nowplaying_video_gap)) }
     }
 }
 

@@ -48,6 +48,7 @@ import xyz.mooma0750.wave.core.session.PremiumStatus
 import xyz.mooma0750.wave.core.session.SessionState
 import xyz.mooma0750.wave.debug.DebugPlayback
 import xyz.mooma0750.wave.debug.StreamCheck
+import androidx.compose.ui.res.stringResource
 
 /** アカウントの表示名と Premium の確認（ホームのアイコンと設定で使う）。 */
 class AccountInfo(
@@ -98,29 +99,31 @@ fun SettingsScreen(
     onBack: () -> Unit,
 ) {
     val sessionState by container.session.state.collectAsStateWithLifecycle()
-    Scaffold(topBar = { TopAppBar(title = { Text("設定") }, navigationIcon = { BackButton(onBack) }) }) { padding ->
+    Scaffold(topBar = { TopAppBar(title = { Text(stringResource(R.string.settings_title)) }, navigationIcon = { BackButton(onBack) }) }) { padding ->
         LazyColumn(Modifier.fillMaxSize().padding(padding)) {
             item {
                 ListItem(
                     headlineContent = {
                         Text(
                             when (val current = info.account) {
-                                null -> "アカウントを確認しています…"
-                                is AccountResult.Ok -> current.name ?: "名前を取得できませんでした"
-                                is AccountResult.Failed -> "アカウントを取得できませんでした"
+                                null -> stringResource(R.string.settings_account_checking)
+                                is AccountResult.Ok -> current.name ?: stringResource(R.string.settings_account_no_name)
+                                is AccountResult.Failed -> stringResource(R.string.settings_account_failed)
                             },
                         )
                     },
                     // 診断値: 固定の1曲で Premium 音質のフォーマットを観測できたか（再生時の音質はその曲で決める）
                     supportingContent = {
                         Text(
-                            "Premium 音質: " +
+                            stringResource(
+                                R.string.settings_premium_quality,
                                 when (info.premium) {
-                                    null -> "確認中…"
-                                    PremiumStatus.Available -> "利用可"
-                                    PremiumStatus.Unavailable -> "利用不可"
-                                    PremiumStatus.Unknown -> "未確認"
+                                    null -> stringResource(R.string.settings_premium_checking)
+                                    PremiumStatus.Available -> stringResource(R.string.settings_premium_available)
+                                    PremiumStatus.Unavailable -> stringResource(R.string.settings_premium_unavailable)
+                                    PremiumStatus.Unknown -> stringResource(R.string.settings_premium_unknown)
                                 },
+                            ),
                         )
                     },
                     leadingContent = { Avatar(info, 48.dp) },
@@ -129,11 +132,11 @@ fun SettingsScreen(
             when (sessionState) {
                 is SessionState.Expired ->
                     item {
-                        ListItem(headlineContent = { Text("再ログインが必要です") }, trailingContent = { Button(onClick = onReLogin) { Text("ログインし直す") } })
+                        ListItem(headlineContent = { Text(stringResource(R.string.settings_relogin_required)) }, trailingContent = { Button(onClick = onReLogin) { Text(stringResource(R.string.settings_relogin)) } })
                     }
                 is SessionState.Suspect ->
                     item {
-                        ListItem(headlineContent = { Text("ログイン状態を確認できていません") }, trailingContent = { OutlinedButton(onClick = onReLogin) { Text("ログインし直す") } })
+                        ListItem(headlineContent = { Text(stringResource(R.string.settings_session_unverified)) }, trailingContent = { OutlinedButton(onClick = onReLogin) { Text(stringResource(R.string.settings_relogin)) } })
                     }
                 else -> Unit
             }
@@ -141,8 +144,8 @@ fun SettingsScreen(
             item {
                 val historyEnabled by container.settings.historyEnabled.collectAsStateWithLifecycle(initialValue = null)
                 ListItem(
-                    headlineContent = { Text("再生履歴を YouTube Music に送る") },
-                    supportingContent = { Text("オフにすると、wave で聴いた曲が YouTube Music の履歴やおすすめに反映されません") },
+                    headlineContent = { Text(stringResource(R.string.settings_history_title)) },
+                    supportingContent = { Text(stringResource(R.string.settings_history_summary)) },
                     trailingContent = {
                         historyEnabled?.let { enabled ->
                             Switch(checked = enabled, onCheckedChange = { container.appScope.launch { container.settings.setHistoryEnabled(it) } })
@@ -153,8 +156,8 @@ fun SettingsScreen(
             if (container.connectConfigured || container.connectV2 != null) {
                 item {
                     ListItem(
-                        headlineContent = { Text("端末の連携") },
-                        supportingContent = { Text("ほかの端末で再生を引き継ぐ") },
+                        headlineContent = { Text(stringResource(R.string.settings_connected_devices)) },
+                        supportingContent = { Text(stringResource(R.string.settings_connected_devices_summary)) },
                         leadingContent = { MenuIcon(R.drawable.ic_devices) },
                         modifier = Modifier.clickable(onClick = onConnect),
                     )
@@ -162,7 +165,7 @@ fun SettingsScreen(
             }
             item {
                 ListItem(
-                    headlineContent = { Text("ログアウト") },
+                    headlineContent = { Text(stringResource(R.string.settings_log_out)) },
                     leadingContent = { MenuIcon(R.drawable.ic_logout) },
                     modifier = Modifier.clickable { container.appScope.launch { container.logout() } },
                 )
@@ -172,10 +175,11 @@ fun SettingsScreen(
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         var checkLines by remember { mutableStateOf<List<String>?>(null) }
                         val scope = rememberCoroutineScope()
+                        val checking = stringResource(R.string.settings_checking)
                         OutlinedButton(onClick = {
-                            checkLines = listOf("確認中…")
+                            checkLines = listOf(checking)
                             scope.launch { checkLines = StreamCheck.run(container) }
-                        }) { Text("開発用: ストリーム確認") }
+                        }) { Text(stringResource(R.string.settings_debug_stream_check)) }
                         checkLines?.forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
                         DebugPlaybackButtons(container)
                     }
@@ -210,7 +214,7 @@ fun Avatar(
 private fun DebugPlaybackButtons(container: AppContainer) {
     val scope = rememberCoroutineScope()
     androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedButton(onClick = { scope.launch { container.player.playSong(DebugPlayback.fixedSong) } }) { Text("開発用: 固定の曲を再生") }
+        OutlinedButton(onClick = { scope.launch { container.player.playSong(DebugPlayback.fixedSong) } }) { Text(stringResource(R.string.settings_debug_play_fixed)) }
         OutlinedButton(onClick = {
             scope.launch {
                 val corrupted = container.streamCache.corruptForDebug(DebugPlayback.VIDEO_ID)
@@ -218,8 +222,8 @@ private fun DebugPlaybackButtons(container: AppContainer) {
                 // バッファの外へ飛んで、DataSource を開き直させる
                 container.player.controller().run { seekTo(currentPosition + 120_000) }
             }
-        }) { Text("開発用: URL を壊して 2 分進む") }
-        OutlinedButton(onClick = { scope.launch { container.player.addNext(DebugPlayback.unplayableSong) } }) { Text("開発用: 再生できない曲を次に") }
+        }) { Text(stringResource(R.string.settings_debug_corrupt_url)) }
+        OutlinedButton(onClick = { scope.launch { container.player.addNext(DebugPlayback.unplayableSong) } }) { Text(stringResource(R.string.settings_debug_add_unplayable)) }
         OutlinedButton(onClick = {
             scope.launch {
                 when (val page = container.music.playlist(DebugPlayback.PUBLIC_PLAYLIST_ID)) {
@@ -228,12 +232,12 @@ private fun DebugPlaybackButtons(container: AppContainer) {
                     is CallResult.Failed -> Log.i(WaveApplication.LOG_TAG, "debug playlist failed ${page.kind}")
                 }
             }
-        }) { Text("開発用: 公開プレイリストを再生") }
+        }) { Text(stringResource(R.string.settings_debug_play_public_playlist)) }
         OutlinedButton(onClick = {
             scope.launch { container.player.controller().run { seekTo(mediaItemCount - 1, 0L) } }
-        }) { Text("開発用: キューの最後の曲へ") }
+        }) { Text(stringResource(R.string.settings_debug_last_in_queue)) }
         OutlinedButton(onClick = {
             scope.launch { container.player.controller().run { if (duration > 10_000) seekTo(duration - 5_000) } }
-        }) { Text("開発用: 曲の終わりへ") }
+        }) { Text(stringResource(R.string.settings_debug_song_end)) }
     }
 }

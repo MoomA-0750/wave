@@ -23,9 +23,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import xyz.mooma0750.wave.ui.NoticeHost
 import androidx.compose.ui.res.painterResource
 import xyz.mooma0750.wave.R
+import androidx.compose.ui.res.stringResource
 
 /**
  * 画面の枠（並びは Spotify と同じ）: 中身の下に、ミニプレーヤーと3つのタブ。
@@ -42,12 +45,16 @@ fun AppShell(
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
             // 下のタブがナビゲーションバーの分を受け持つので、中の画面では数えない
-            Box(Modifier.weight(1f).consumeWindowInsets(WindowInsets.navigationBars)) { content() }
+            Box(Modifier.weight(1f).consumeWindowInsets(WindowInsets.navigationBars)) {
+                content()
+                // 知らせはミニプレーヤーのすぐ上に出す
+                NoticeHost(Modifier.align(Alignment.BottomCenter))
+            }
             miniPlayer { playerOpen = true }
             NavigationBar {
-                TabItem(nav, Tab.Home, R.drawable.ic_home, R.drawable.ic_home_outline, "ホーム")
-                TabItem(nav, Tab.Search, R.drawable.ic_search, R.drawable.ic_search_outline, "検索")
-                TabItem(nav, Tab.Library, R.drawable.ic_library, R.drawable.ic_library_outline, "マイライブラリ")
+                TabItem(nav, Tab.Home, R.drawable.ic_home, R.drawable.ic_home_outline, stringResource(R.string.nav_home))
+                TabItem(nav, Tab.Search, R.drawable.ic_search, R.drawable.ic_search_outline, stringResource(R.string.nav_search))
+                TabItem(nav, Tab.Library, R.drawable.ic_library, R.drawable.ic_library_outline, stringResource(R.string.nav_library))
             }
         }
         AnimatedVisibility(

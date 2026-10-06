@@ -4,6 +4,7 @@ import xyz.mooma0750.wave.ui.BackButton
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.annotation.StringRes
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -38,12 +39,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import xyz.mooma0750.wave.AppContainer
+import xyz.mooma0750.wave.R
 import xyz.mooma0750.wave.connect2.ConnectV2Section
 
 /** 端末の連携（Phase 6 の仮の画面）: 中継の状態、ペアリング、ペアの一覧（引き取る・解除）。 */
@@ -78,7 +81,8 @@ fun ConnectScreen(
         pairs = container.pairStore.all()
         unreadable = container.pairStore.isUnreadable()
     }
-    val fingerprint = remember { runCatching { container.deviceIdentity.fingerprintForDisplay }.getOrDefault("取得できませんでした") }
+    val fingerprintUnavailable = stringResource(R.string.connect_fingerprint_unavailable)
+    val fingerprint = remember { runCatching { container.deviceIdentity.fingerprintForDisplay }.getOrDefault(fingerprintUnavailable) }
     // 結果の知らせ（引き取り・解除・相手からの解除）が来たら一覧を読み直す
     LaunchedEffect(Unit) { container.connect.events.collect { reload++ } }
 
@@ -96,7 +100,7 @@ fun ConnectScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("端末の連携") },
+                title = { Text(stringResource(R.string.connect_title)) },
                 navigationIcon = { BackButton(onBack) },
             )
         },
@@ -109,14 +113,14 @@ fun ConnectScreen(
             // Connect v2（Phase 6b、試験中）。v1 と並べて出す（L-9）
             ConnectV2Section(container)
             if (!container.connectConfigured) {
-                Text("中継の場所が設定されていないので、この機能は使えません")
+                Text(stringResource(R.string.connect_relay_not_configured))
                 return@Column
             }
-            Text("中継: ${relayStatusText(relayStatus)}", style = MaterialTheme.typography.bodyMedium)
-            Text("この端末の指紋: $fingerprint", style = MaterialTheme.typography.bodySmall)
+            Text(stringResource(R.string.connect_relay_status, stringResource(relayStatusText(relayStatus))), style = MaterialTheme.typography.bodyMedium)
+            Text(stringResource(R.string.connect_fingerprint, fingerprint), style = MaterialTheme.typography.bodySmall)
             if (unreadable) {
                 Text(
-                    "ペアリングした端末の情報を読めません（端末の鍵が無効になった可能性があります）。消して作り直すまで、ペアリング・引き取り・解除はできません。ログインは消えません",
+                    stringResource(R.string.connect_pairs_unreadable),
                     color = MaterialTheme.colorScheme.error,
                 )
                 OutlinedButton(onClick = {
@@ -124,16 +128,16 @@ fun ConnectScreen(
                         container.pairStore.resetUnreadable()
                         reload++
                     }
-                }) { Text("ペアの情報を消して作り直す") }
+                }) { Text(stringResource(R.string.connect_pairs_reset)) }
             }
             HorizontalDivider()
 
-            Text("ペアリングした端末", style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.connect_paired_devices), style = MaterialTheme.typography.titleMedium)
             when (val list = pairs) {
                 null -> CircularProgressIndicator()
                 else ->
                     if (list.isEmpty()) {
-                        Text("まだありません。下の「ペアリング」から追加します", style = MaterialTheme.typography.bodySmall)
+                        Text(stringResource(R.string.connect_no_pairs), style = MaterialTheme.typography.bodySmall)
                     } else {
                         list.forEach { pair ->
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -149,8 +153,8 @@ fun ConnectScreen(
                                             checking = false
                                         }
                                     }
-                                }) { Text("引き取る") }
-                                OutlinedButton(onClick = { confirmUnpair = pair }) { Text("解除") }
+                                }) { Text(stringResource(R.string.connect_take_over)) }
+                                OutlinedButton(onClick = { confirmUnpair = pair }) { Text(stringResource(R.string.connect_unpair)) }
                             }
                         }
                     }
@@ -158,13 +162,13 @@ fun ConnectScreen(
             takingFrom?.let { name ->
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     CircularProgressIndicator(Modifier.padding(4.dp))
-                    Text("$name に引き取りを頼んでいます…")
+                    Text(stringResource(R.string.connect_requesting_take_over, name))
                 }
             }
             HorizontalDivider()
 
-            Text("ペアリング", style = MaterialTheme.typography.titleMedium)
-            if (cameraDenied) Text("カメラが許可されていないので QR を読み取れません。設定アプリで wave のカメラを許可してください", color = MaterialTheme.colorScheme.error)
+            Text(stringResource(R.string.connect_pairing), style = MaterialTheme.typography.titleMedium)
+            if (cameraDenied) Text(stringResource(R.string.connect_camera_denied), color = MaterialTheme.colorScheme.error)
             PairingSection(
                 state = pairingState,
                 scanning = scanning,
@@ -195,29 +199,29 @@ fun ConnectScreen(
     confirmTakeOver?.let { pair ->
         AlertDialog(
             onDismissRequest = { confirmTakeOver = null },
-            title = { Text("${pair.peerName} から引き取る") },
-            text = { Text("この端末で再生中のキューは、${pair.peerName} のキューに置き換わります。") },
+            title = { Text(stringResource(R.string.connect_take_over_title, pair.peerName)) },
+            text = { Text(stringResource(R.string.connect_take_over_text, pair.peerName)) },
             confirmButton = {
                 TextButton(onClick = {
                     confirmTakeOver = null
                     startTakeOver(pair)
-                }) { Text("置き換える") }
+                }) { Text(stringResource(R.string.connect_replace)) }
             },
-            dismissButton = { TextButton(onClick = { confirmTakeOver = null }) { Text("やめる") } },
+            dismissButton = { TextButton(onClick = { confirmTakeOver = null }) { Text(stringResource(R.string.connect_cancel)) } },
         )
     }
     confirmUnpair?.let { pair ->
         AlertDialog(
             onDismissRequest = { confirmUnpair = null },
-            title = { Text("${pair.peerName} とのペアリングを解除") },
-            text = { Text("解除すると、もう一度ペアリングするまで引き取りはできません。") },
+            title = { Text(stringResource(R.string.connect_unpair_title, pair.peerName)) },
+            text = { Text(stringResource(R.string.connect_unpair_text)) },
             confirmButton = {
                 TextButton(onClick = {
                     confirmUnpair = null
                     container.appScope.launch { container.connect.unpair(pair.peerDeviceId) }
-                }) { Text("解除する") }
+                }) { Text(stringResource(R.string.connect_unpair_confirm)) }
             },
-            dismissButton = { TextButton(onClick = { confirmUnpair = null }) { Text("やめる") } },
+            dismissButton = { TextButton(onClick = { confirmUnpair = null }) { Text(stringResource(R.string.connect_cancel)) } },
         )
     }
 }
@@ -234,20 +238,20 @@ private fun PairingSection(
     onCancel: () -> Unit,
 ) {
     if (scanning) {
-        Text("もう一方の端末に出ている QR を写してください", style = MaterialTheme.typography.bodySmall)
+        Text(stringResource(R.string.connect_scan_hint), style = MaterialTheme.typography.bodySmall)
         QrScanner(onResult = onScanned, modifier = Modifier.fillMaxWidth().aspectRatio(1f))
-        OutlinedButton(onClick = onCancel) { Text("やめる") }
+        OutlinedButton(onClick = onCancel) { Text(stringResource(R.string.connect_cancel)) }
         return
     }
     when (state) {
         PairingController.State.Idle -> {
             Text(
-                "引き取られる側（すでに中継に登録済みの端末）で「QR を出す」、追加する端末で「QR を読み取る」を押します",
+                stringResource(R.string.connect_pairing_idle_hint),
                 style = MaterialTheme.typography.bodySmall,
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = onShowQr) { Text("QR を出す") }
-                OutlinedButton(onClick = onScan) { Text("QR を読み取る") }
+                Button(onClick = onShowQr) { Text(stringResource(R.string.connect_show_qr)) }
+                OutlinedButton(onClick = onScan) { Text(stringResource(R.string.connect_scan_qr)) }
             }
         }
         is PairingController.State.Working -> {
@@ -255,16 +259,16 @@ private fun PairingSection(
                 CircularProgressIndicator(Modifier.padding(4.dp))
                 Text(state.message)
             }
-            OutlinedButton(onClick = onCancel) { Text("やめる") }
+            OutlinedButton(onClick = onCancel) { Text(stringResource(R.string.connect_cancel)) }
         }
         is PairingController.State.ShowingOffer -> {
-            Text("追加する端末の wave で「QR を読み取る」を押し、この QR を写してください（2分で無効になります）", style = MaterialTheme.typography.bodySmall)
+            Text(stringResource(R.string.connect_offer_hint), style = MaterialTheme.typography.bodySmall)
             QrImage(state.offerText, Modifier.fillMaxWidth().aspectRatio(1f))
-            OutlinedButton(onClick = onCancel) { Text("やめる") }
+            OutlinedButton(onClick = onCancel) { Text(stringResource(R.string.connect_cancel)) }
         }
         is PairingController.State.EnterCode -> {
             var code by remember { mutableStateOf("") }
-            Text("追加する端末に出ている6桁の数字を入力してください")
+            Text(stringResource(R.string.connect_enter_code))
             state.message?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             OutlinedTextField(
                 value = code,
@@ -276,37 +280,38 @@ private fun PairingSection(
                 Button(enabled = code.length == 6, onClick = {
                     onEnterCode(code)
                     code = ""
-                }) { Text("確定") }
-                OutlinedButton(onClick = onCancel) { Text("やめる") }
+                }) { Text(stringResource(R.string.connect_confirm)) }
+                OutlinedButton(onClick = onCancel) { Text(stringResource(R.string.connect_cancel)) }
             }
         }
         is PairingController.State.ShowCode -> {
-            Text("${state.peerName} の画面に、この数字を入力してください")
+            Text(stringResource(R.string.connect_show_code, state.peerName))
             state.message?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             Text(state.code.chunked(3).joinToString(" "), style = MaterialTheme.typography.displayMedium)
-            Text("入力して ${state.peerName} に「ペアリングしました」と出たら「続ける」を押します", style = MaterialTheme.typography.bodySmall)
+            Text(stringResource(R.string.connect_show_code_hint, state.peerName), style = MaterialTheme.typography.bodySmall)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = onContinue) { Text("続ける") }
-                OutlinedButton(onClick = onCancel) { Text("やめる") }
+                Button(onClick = onContinue) { Text(stringResource(R.string.connect_continue)) }
+                OutlinedButton(onClick = onCancel) { Text(stringResource(R.string.connect_cancel)) }
             }
         }
         is PairingController.State.Done -> {
-            Text("${state.peerName} とペアリングしました")
-            OutlinedButton(onClick = onCancel) { Text("閉じる") }
+            Text(stringResource(R.string.connect_paired_with, state.peerName))
+            OutlinedButton(onClick = onCancel) { Text(stringResource(R.string.connect_close)) }
         }
         is PairingController.State.Failed -> {
             Text(state.message, color = MaterialTheme.colorScheme.error)
-            OutlinedButton(onClick = onCancel) { Text("戻る") }
+            OutlinedButton(onClick = onCancel) { Text(stringResource(R.string.connect_back)) }
         }
     }
 }
 
-private fun relayStatusText(status: RelayClient.Status): String =
+@StringRes
+private fun relayStatusText(status: RelayClient.Status): Int =
     when (status) {
-        RelayClient.Status.Disconnected -> "つないでいません（再生中・引き取り・ペアリングのときだけつなぎます）"
-        RelayClient.Status.Connecting -> "接続しています…"
-        RelayClient.Status.Connected -> "接続中"
-        RelayClient.Status.TailnetUnreachable -> "届きません（Tailscale に接続しているか確かめてください）"
-        RelayClient.Status.NotRegistered -> "この端末は未登録です（ペアリングすると登録されます）"
-        RelayClient.Status.Failed -> "接続できませんでした"
+        RelayClient.Status.Disconnected -> R.string.connect_relay_status_disconnected
+        RelayClient.Status.Connecting -> R.string.connect_relay_status_connecting
+        RelayClient.Status.Connected -> R.string.connect_relay_status_connected
+        RelayClient.Status.TailnetUnreachable -> R.string.connect_relay_status_tailnet_unreachable
+        RelayClient.Status.NotRegistered -> R.string.connect_relay_status_not_registered
+        RelayClient.Status.Failed -> R.string.connect_relay_status_failed
     }

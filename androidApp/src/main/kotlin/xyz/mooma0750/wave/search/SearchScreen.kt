@@ -1,30 +1,10 @@
 package xyz.mooma0750.wave.search
 
-import xyz.mooma0750.wave.ui.IconAction
-import xyz.mooma0750.wave.R
-import xyz.mooma0750.wave.ui.BackButton
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
-import androidx.compose.runtime.remember
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.Color
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.Icon
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.res.painterResource
-import xyz.mooma0750.wave.core.music.AlbumSummary
-import xyz.mooma0750.wave.core.music.ArtistSummary
-import xyz.mooma0750.wave.core.music.SearchSuggestions
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -34,34 +14,55 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import xyz.mooma0750.wave.R
 import xyz.mooma0750.wave.core.music.AlbumRef
+import xyz.mooma0750.wave.core.music.AlbumSummary
 import xyz.mooma0750.wave.core.music.ArtistRef
+import xyz.mooma0750.wave.core.music.ArtistSummary
+import xyz.mooma0750.wave.core.music.SearchSuggestions
 import xyz.mooma0750.wave.core.music.Song
 import xyz.mooma0750.wave.core.session.FailureKind
 import xyz.mooma0750.wave.navigation.SongActions
+import xyz.mooma0750.wave.ui.BackButton
 import xyz.mooma0750.wave.ui.Durations
+import xyz.mooma0750.wave.ui.IconAction
 
 @Composable
 fun SearchScreen(
@@ -88,8 +89,8 @@ fun SearchScreen(
                     onValueChange = viewModel::onQueryChange,
                     modifier = Modifier.weight(1f).focusRequester(focus),
                     singleLine = true,
-                    placeholder = { Text("何を聴きたいですか？") },
-                    trailingIcon = { if (state.query.isNotEmpty()) IconAction(R.drawable.ic_close, "消す", { viewModel.onQueryChange("") }) },
+                    placeholder = { Text(stringResource(R.string.search_hint)) },
+                    trailingIcon = { if (state.query.isNotEmpty()) IconAction(R.drawable.ic_close, stringResource(R.string.search_clear), { viewModel.onQueryChange("") }) },
                     shape = RoundedCornerShape(8.dp),
                     colors =
                         TextFieldDefaults.colors(
@@ -151,8 +152,8 @@ private fun HistoryList(
                 Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("最近の検索", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                TextButton(onClick = { history.clear() }) { Text("すべて消す") }
+                Text(stringResource(R.string.search_recent_searches), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                TextButton(onClick = { history.clear() }) { Text(stringResource(R.string.search_clear_all)) }
             }
         }
         items(entries, key = { entry -> entryKey(entry) }) { entry ->
@@ -221,7 +222,7 @@ private fun Results(
     }
     when {
         state.failure != null -> Text(failureMessage(state.failure), Modifier.padding(16.dp))
-        state.empty -> Text("見つかりませんでした", Modifier.padding(16.dp))
+        state.empty -> Text(stringResource(R.string.search_not_found), Modifier.padding(16.dp))
     }
     val openArtist = opener.artist
     val openAlbum = opener.album
@@ -234,11 +235,11 @@ private fun Results(
                 val topSong = state.songs.items.firstOrNull()
                 if (topArtist != null || topSong != null) {
                     item(key = "top") {
-                        SectionHeader("トップの検索結果", more = false) {}
+                        SectionHeader(stringResource(R.string.search_top_result), more = false) {}
                         if (topArtist != null) {
-                            TopResult(topArtist.thumbnailUrl, topArtist.name, "アーティスト", CircleShape) { openArtist(topArtist) }
+                            TopResult(topArtist.thumbnailUrl, topArtist.name, stringResource(R.string.search_kind_artist), CircleShape) { openArtist(topArtist) }
                         } else if (topSong != null) {
-                            TopResult(topSong.thumbnailUrl, topSong.title, listOf("曲", topSong.artists.joinToString(", ") { it.name }).filter { it.isNotEmpty() }.joinToString(" • "), RoundedCornerShape(4.dp)) {
+                            TopResult(topSong.thumbnailUrl, topSong.title, listOf(stringResource(R.string.search_kind_song), topSong.artists.joinToString(", ") { it.name }).filter { it.isNotEmpty() }.joinToString(" • "), RoundedCornerShape(4.dp)) {
                                 onSongClick(topSong)
                             }
                         }
@@ -319,7 +320,7 @@ private fun SectionHeader(
 ) {
     Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-        if (more) TextButton(onClick = onMore) { Text("すべて表示") }
+        if (more) TextButton(onClick = onMore) { Text(stringResource(R.string.search_show_all)) }
     }
 }
 
@@ -362,12 +363,13 @@ private fun CardRow(
     }
 }
 
+@Composable
 private fun tabLabel(tab: SearchTab): String =
     when (tab) {
-        SearchTab.All -> "すべて"
-        SearchTab.Songs -> "曲"
-        SearchTab.Albums -> "アルバム"
-        SearchTab.Artists -> "アーティスト"
+        SearchTab.All -> stringResource(R.string.search_tab_all)
+        SearchTab.Songs -> stringResource(R.string.search_tab_songs)
+        SearchTab.Albums -> stringResource(R.string.search_tab_albums)
+        SearchTab.Artists -> stringResource(R.string.search_tab_artists)
     }
 
 private const val PREVIEW_COUNT = 4
@@ -412,15 +414,16 @@ fun SongRow(
     }
 }
 
+@Composable
 fun failureMessage(kind: FailureKind?): String =
     when (kind) {
-        FailureKind.NotLoggedIn -> "ログインしていません"
-        FailureKind.Expired -> "再ログインが必要です"
-        FailureKind.Suspect -> "ログイン状態を確認しています。少し待ってからもう一度試してください"
-        FailureKind.Network -> "通信できませんでした"
-        FailureKind.Http -> "サーバーから応答がありませんでした"
-        FailureKind.Parse -> "応答を読み取れませんでした"
-        FailureKind.AccountUnverified -> "書き込み先のアカウントを確かめられませんでした（しばらくして直らなければ、ログインし直してください）"
+        FailureKind.NotLoggedIn -> stringResource(R.string.search_failure_not_logged_in)
+        FailureKind.Expired -> stringResource(R.string.search_failure_expired)
+        FailureKind.Suspect -> stringResource(R.string.search_failure_suspect)
+        FailureKind.Network -> stringResource(R.string.search_failure_network)
+        FailureKind.Http -> stringResource(R.string.search_failure_http)
+        FailureKind.Parse -> stringResource(R.string.search_failure_parse)
+        FailureKind.AccountUnverified -> stringResource(R.string.search_failure_account_unverified)
         null -> ""
     }
 
@@ -442,9 +445,9 @@ private fun HistoryRow(
     val (label, detail) =
         when (entry) {
             is SearchHistoryEntry.Query -> entry.text to null
-            is SearchHistoryEntry.Artist -> entry.name to "アーティスト"
-            is SearchHistoryEntry.Album -> entry.title to listOfNotNull("アルバム", entry.subtitle).joinToString(" • ")
-            is SearchHistoryEntry.Song -> entry.title to listOfNotNull("曲", entry.subtitle).joinToString(" • ")
+            is SearchHistoryEntry.Artist -> entry.name to stringResource(R.string.search_kind_artist)
+            is SearchHistoryEntry.Album -> entry.title to listOfNotNull(stringResource(R.string.search_kind_album), entry.subtitle).joinToString(" • ")
+            is SearchHistoryEntry.Song -> entry.title to listOfNotNull(stringResource(R.string.search_kind_song), entry.subtitle).joinToString(" • ")
         }
     Row(
         Modifier.fillMaxWidth().clickable(onClick = onClick).padding(start = 16.dp, top = 8.dp, bottom = 8.dp, end = 4.dp),
@@ -470,6 +473,6 @@ private fun HistoryRow(
             Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyLarge)
             detail?.let { Text(it, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
-        IconAction(R.drawable.ic_close, "消す", onRemove)
+        IconAction(R.drawable.ic_close, stringResource(R.string.search_clear), onRemove)
     }
 }

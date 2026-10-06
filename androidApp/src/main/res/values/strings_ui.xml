@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- MainActivity -->
+    <string name="main_logging_out">Logging out…</string>
+    <string name="main_liked_songs">Liked Songs</string>
+
+    <!-- navigation -->
+    <string name="nav_home">Home</string>
+    <string name="nav_search">Search</string>
+    <string name="nav_library">Your Library</string>
+
+    <!-- ui -->
+    <string name="ui_shuffle_on">Shuffle: On</string>
+    <string name="ui_shuffle_off">Shuffle: Off</string>
+    <string name="ui_pause">Pause</string>
+    <string name="ui_play">Play</string>
+    <string name="ui_back">Back</string>
+
+    <!-- login -->
+    <string name="login_title">Log in</string>
+    <string name="login_cancel">Cancel</string>
+    <string name="login_saved_unreadable">Couldn\'t read your saved login. Logging in again will replace it.</string>
+    <string name="login_discard_saved">Delete saved login</string>
+    <string name="login_failed_no_sapisid">Couldn\'t get your login details.</string>
+    <string name="login_failed_no_visitor_data">Couldn\'t get some of your login details. Check your connection and log in again.</string>
+    <string name="login_failed_save">Couldn\'t save your login on this device.</string>
+    <string name="login_failed_renderer_gone">The login screen stopped unexpectedly.</string>
+    <string name="login_retry">Log in again</string>
+    <string name="login_discard_saved_and_retry">Delete saved login and try again</string>
+
+    <!-- nowplaying -->
+    <string name="nowplaying_video_searching">Looking for a video…</string>
+    <string name="nowplaying_video_none">No video for this song</string>
+    <string name="nowplaying_video_load_failed">Couldn\'t load the video</string>
+    <string name="nowplaying_retry">Try again</string>
+    <string name="nowplaying_video_play_failed">Couldn\'t play the video</string>
+    <string name="nowplaying_video_loading">Loading video…</string>
+    <string name="nowplaying_video_gap">(This part isn\'t in the video)</string>
+    <string name="nowplaying_error">Error: %1$s</string>
+    <string name="nowplaying_buffering">Buffering</string>
+    <string name="nowplaying_connected_devices">Connected devices</string>
+    <string name="nowplaying_pause">Pause</string>
+    <string name="nowplaying_play">Play</string>
+    <string name="nowplaying_like_pending">Updating</string>
+    <string name="nowplaying_unlike">Remove from Liked Songs</string>
+    <string name="nowplaying_like_reload">Reload like status</string>
+    <string name="nowplaying_like">Add to Liked Songs</string>
+    <string name="nowplaying_close">Close</string>
+    <string name="nowplaying_song">Song</string>
+    <string name="nowplaying_video">Video</string>
+    <string name="nowplaying_shuffle_upcoming">Shuffle upcoming</string>
+    <string name="nowplaying_previous">Previous</string>
+    <string name="nowplaying_next">Next</string>
+    <string name="nowplaying_repeat_all">Repeat: All</string>
+    <string name="nowplaying_repeat_one">Repeat: One</string>
+    <string name="nowplaying_repeat_off">Repeat: Off</string>
+    <plurals name="nowplaying_queue_with_count">
+        <item quantity="one">Queue (%1$d song)</item>
+        <item quantity="other">Queue (%1$d songs)</item>
+    </plurals>
+    <string name="nowplaying_lyrics">Lyrics</string>
+    <string name="nowplaying_lyrics_open_full">Open lyrics full screen</string>
+    <string name="nowplaying_queue">Queue</string>
+    <string name="nowplaying_remove_from_queue">Remove from queue</string>
+    <string name="nowplaying_lyrics_searching">Looking for lyrics…</string>
+    <string name="nowplaying_lyrics_none">No lyrics found for this song</string>
+    <string name="nowplaying_lyrics_load_failed">Couldn\'t load lyrics</string>
+
+    <!-- settings -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_account_checking">Checking account…</string>
+    <string name="settings_account_no_name">Couldn\'t get your name</string>
+    <string name="settings_account_failed">Couldn\'t get your account</string>
+    <string name="settings_premium_quality">Premium audio: %1$s</string>
+    <string name="settings_premium_checking">Checking…</string>
+    <string name="settings_premium_available">Available</string>
+    <string name="settings_premium_unavailable">Unavailable</string>
+    <string name="settings_premium_unknown">Unknown</string>
+    <string name="settings_relogin_required">You need to log in again</string>
+    <string name="settings_relogin">Log in again</string>
+    <string name="settings_session_unverified">Couldn\'t verify your login</string>
+    <string name="settings_history_title">Send play history to YouTube Music</string>
+    <string name="settings_history_summary">When off, songs you play in wave won\'t appear in your YouTube Music history or affect recommendations</string>
+    <string name="settings_connected_devices">Connected devices</string>
+    <string name="settings_connected_devices_summary">Continue playback on other devices</string>
+    <string name="settings_log_out">Log out</string>
+    <string name="settings_checking">Checking…</string>
+    <string name="settings_debug_stream_check">Dev: Check stream</string>
+    <string name="settings_debug_play_fixed">Dev: Play fixed song</string>
+    <string name="settings_debug_corrupt_url">Dev: Break URL and skip 2 min</string>
+    <string name="settings_debug_add_unplayable">Dev: Queue unplayable song next</string>
+    <string name="settings_debug_play_public_playlist">Dev: Play public playlist</string>
+    <string name="settings_debug_last_in_queue">Dev: Jump to last song in queue</string>
+    <string name="settings_debug_song_end">Dev: Jump to end of song</string>
+</resources>

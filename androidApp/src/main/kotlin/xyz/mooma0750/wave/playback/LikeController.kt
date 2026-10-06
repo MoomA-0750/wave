@@ -5,6 +5,7 @@ import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import xyz.mooma0750.wave.R
 import xyz.mooma0750.wave.WaveApplication
 import xyz.mooma0750.wave.core.music.LikeStatus
 import xyz.mooma0750.wave.core.music.MusicRepository
@@ -63,6 +64,8 @@ class LikeController(
     private val onChanged: (LikeState) -> Unit,
     /** 評価が変わった（かもしれない）とき。ライブラリの「高く評価した曲」を読み直させる。 */
     private val onLikedSongsChanged: () -> Unit,
+    /** 知らせの文言を引く（端末の言語に従う）。 */
+    private val resources: android.content.res.Resources,
 ) {
     var state = LikeState()
         private set
@@ -126,9 +129,9 @@ class LikeController(
             }
             when (result) {
                 is WriteResult.Done -> publish(state.copy(status = if (liked) LikeStatus.Like else LikeStatus.Indifferent, pending = false))
-                is WriteResult.Failed -> publish(state.copy(pending = false, message = "評価を変更できませんでした", messageId = state.messageId + 1))
+                is WriteResult.Failed -> publish(state.copy(pending = false, message = resources.getString(R.string.playback_like_change_failed), messageId = state.messageId + 1))
                 WriteResult.Unknown -> {
-                    publish(state.copy(status = null, pending = false, message = "評価を変更できたか確認できませんでした", messageId = state.messageId + 1))
+                    publish(state.copy(status = null, pending = false, message = resources.getString(R.string.playback_like_change_unknown), messageId = state.messageId + 1))
                     load(videoId)
                 }
             }
@@ -149,7 +152,7 @@ class LikeController(
                     is CallResult.Ok -> publish(state.copy(status = result.value, message = null))
                     is CallResult.Failed -> {
                         Log.i(WaveApplication.LOG_TAG, "like status failed ${result.kind}")
-                        publish(state.copy(message = "評価を読み込めませんでした（押すと読み直します）", messageId = state.messageId + 1))
+                        publish(state.copy(message = resources.getString(R.string.playback_like_load_failed), messageId = state.messageId + 1))
                     }
                 }
             }

@@ -40,6 +40,7 @@ import coil3.request.SuccessResult
 import coil3.request.allowHardware
 import coil3.toBitmap
 import xyz.mooma0750.wave.R
+import androidx.compose.ui.res.stringResource
 
 /** 端末の壁紙から作った色（Material You）で、ダークモードにも従う。minSdk 31 なので常に使える。 */
 @Composable
@@ -161,7 +162,7 @@ fun PlayFab(
     FilledIconButton(onClick = onClick, modifier = modifier.size(size), enabled = enabled) {
         Icon(
             painterResource(if (playing) R.drawable.ic_pause else R.drawable.ic_play_arrow),
-            contentDescription = if (playing) "一時停止" else "再生",
+            contentDescription = if (playing) stringResource(R.string.ui_pause) else stringResource(R.string.ui_play),
             modifier = Modifier.size(size * 0.55f),
         )
     }
@@ -194,7 +195,7 @@ fun IconTextButton(
 /** 上の帯の「戻る」。 */
 @Composable
 fun BackButton(onBack: () -> Unit) {
-    IconAction(R.drawable.ic_arrow_back, "戻る", onBack)
+    IconAction(R.drawable.ic_arrow_back, stringResource(R.string.ui_back), onBack)
 }
 
 /** メニューの項目の頭に付けるアイコン。 */

@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -50,7 +51,7 @@ fun SongMenuButton(
     extraItems: List<Pair<String, () -> Unit>> = emptyList(),
 ) {
     var open by remember { mutableStateOf(false) }
-    IconAction(R.drawable.ic_more_vert, "メニュー", { open = true })
+    IconAction(R.drawable.ic_more_vert, stringResource(R.string.search_menu), { open = true })
     if (!open) return
     val close = { open = false }
     ModalBottomSheet(onDismissRequest = close) {
@@ -68,16 +69,16 @@ fun SongMenuButton(
                 }
             }
             HorizontalDivider(Modifier.padding(vertical = 4.dp))
-            MenuRow(R.drawable.ic_add_circle, "プレイリストに追加") {
+            MenuRow(R.drawable.ic_add_circle, stringResource(R.string.search_add_to_playlist)) {
                 close()
                 actions.addToPlaylist(song)
             }
             if (!inQueue) {
-                MenuRow(R.drawable.ic_playlist_play, "次に再生") {
+                MenuRow(R.drawable.ic_playlist_play, stringResource(R.string.search_play_next)) {
                     close()
                     actions.playNext(song)
                 }
-                MenuRow(R.drawable.ic_queue_music, "キューに追加") {
+                MenuRow(R.drawable.ic_queue_music, stringResource(R.string.search_add_to_queue)) {
                     close()
                     actions.addToQueue(song)
                 }
@@ -89,14 +90,14 @@ fun SongMenuButton(
                 }
             }
             song.album?.takeIf { it.browseId != null }?.let { album ->
-                MenuRow(R.drawable.ic_album, "アルバムへ移動") {
+                MenuRow(R.drawable.ic_album, stringResource(R.string.search_go_to_album)) {
                     close()
                     actions.openAlbum(album)
                 }
             }
             // チャンネル（browseId が無いもの）は開けない
             song.artists.filter { it.browseId != null }.forEach { artist ->
-                MenuRow(R.drawable.ic_person, if (song.artists.size > 1) "アーティストへ移動: ${artist.name}" else "アーティストへ移動") {
+                MenuRow(R.drawable.ic_person, if (song.artists.size > 1) stringResource(R.string.search_go_to_artist_named, artist.name) else stringResource(R.string.search_go_to_artist)) {
                     close()
                     actions.openArtist(artist)
                 }
