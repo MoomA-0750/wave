@@ -91,6 +91,7 @@
     <string name="search_play_next">次に再生</string>
     <string name="search_add_to_queue">キューに追加</string>
     <string name="search_go_to_album">アルバムへ移動</string>
+    <string name="search_start_radio">曲のラジオを再生</string>
     <string name="search_go_to_artist">アーティストへ移動</string>
     <string name="search_go_to_artist_named">アーティストへ移動: %1$s</string>
     <string name="home_account">アカウント</string>

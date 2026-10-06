@@ -21,6 +21,10 @@ class PlayerConnection(
 
     /** 再生中の曲の評価（Service がセッションの extras で配る）。 */
     val likeState: kotlinx.coroutines.flow.StateFlow<LikeState> = mutableLikeState
+    private val mutableShuffled = kotlinx.coroutines.flow.MutableStateFlow(false)
+
+    /** シャッフルが入っているか（Service がセッションの extras で配る）。 */
+    val shuffled: kotlinx.coroutines.flow.StateFlow<Boolean> = mutableShuffled
 
     /** 同時に呼ばれても MediaController を1つだけ作る。 */
     suspend fun controller(): MediaController =
@@ -37,6 +41,7 @@ class PlayerConnection(
                             extras: android.os.Bundle,
                         ) {
                             mutableLikeState.value = LikeState.of(extras)
+                            mutableShuffled.value = extras.getBoolean(QueueCommands.KEY_SHUFFLED)
                         }
                     },
                 ).buildAsync()
@@ -44,6 +49,7 @@ class PlayerConnection(
                 .also {
                     controller = it
                     mutableLikeState.value = LikeState.of(it.sessionExtras)
+                    mutableShuffled.value = it.sessionExtras.getBoolean(QueueCommands.KEY_SHUFFLED)
                 }
         }
 
@@ -92,7 +98,8 @@ class PlayerConnection(
         },
     )
 
-    suspend fun shuffleUpcoming() = send(QueueCommands.SHUFFLE_UPCOMING, android.os.Bundle.EMPTY)
+    /** シャッフルの入り切り（切ると、残りの曲を入れる前の並びに戻す）。 */
+    suspend fun toggleShuffle() = send(QueueCommands.TOGGLE_SHUFFLE, android.os.Bundle.EMPTY)
 
     /** オフ → 全体 → 1曲 → オフ。リピートは Player の標準の操作なので、カスタムコマンドにしない。 */
     suspend fun cycleRepeatMode() {

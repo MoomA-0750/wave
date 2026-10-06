@@ -29,6 +29,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.plus
 import xyz.mooma0750.wave.AppContainer
@@ -147,6 +148,13 @@ class PlaybackService : MediaSessionService() {
                 loginGeneration = { container.music.currentLoginGeneration() },
             )
         queue = queueSession
+        // シャッフルの入り切りを画面へ配り、保存する（並びが変わらない入り切りもあるので、並びの変化とは別に保存する）
+        scope.launch {
+            queueSession.shuffled.drop(1).collect {
+                session?.let { publishOwnUiExtras(it) }
+                scheduleSave()
+            }
+        }
         artwork = ArtworkEmbedder(player, container.mediaHttpClient, scope)
         val likeController =
             LikeController(
@@ -512,9 +520,20 @@ class PlaybackService : MediaSessionService() {
     /** 評価を自アプリの画面（コントローラーごとの extras）と通知のボタンへ配る。 */
     private fun publishLikeState(state: LikeState) {
         val current = session ?: return
-        val bundle = state.toBundle()
-        current.connectedControllers.filter { isOwnUiController(current, it) }.forEach { current.setSessionExtras(it, bundle) }
+        publishOwnUiExtras(current, state)
         current.setMediaButtonPreferences(likeButtons(state))
+    }
+
+    /** 自アプリの画面に配る extras（評価と、シャッフルが入っているか）。 */
+    private fun ownUiExtras(state: LikeState = likes?.state ?: LikeState()): Bundle =
+        state.toBundle().apply { putBoolean(QueueCommands.KEY_SHUFFLED, queue?.shuffled?.value == true) }
+
+    private fun publishOwnUiExtras(
+        current: MediaSession,
+        state: LikeState = likes?.state ?: LikeState(),
+    ) {
+        val bundle = ownUiExtras(state)
+        current.connectedControllers.filter { isOwnUiController(current, it) }.forEach { current.setSessionExtras(it, bundle) }
     }
 
     /** Media3 がプロセス内に作る通知用コントローラーか。パッケージ名と接続ヒントだけで判定されるので uid も見る。 */
@@ -739,7 +758,7 @@ class PlaybackService : MediaSessionService() {
                         QueueCommands.REMOVE -> QueueCommands.itemIdOf(args)?.let { queue.remove(it) }
                         QueueCommands.JUMP -> QueueCommands.itemIdOf(args)?.let { queue.jumpTo(it) }
                         QueueCommands.MOVE -> QueueCommands.itemIdOf(args)?.let { id -> QueueCommands.toIndexOf(args)?.let { queue.move(id, it) } }
-                        QueueCommands.SHUFFLE_UPCOMING -> queue.shuffleUpcoming()
+                        QueueCommands.TOGGLE_SHUFFLE -> queue.toggleShuffle()
                         else -> null
                     }
                 }
@@ -781,7 +800,7 @@ class PlaybackService : MediaSessionService() {
             controller: MediaSession.ControllerInfo,
         ) {
             if (isOwnUiController(session, controller)) {
-                likes?.let { session.setSessionExtras(controller, it.state.toBundle()) }
+                session.setSessionExtras(controller, ownUiExtras())
                 ownUiConnected = true
                 maybeRestore()
             }

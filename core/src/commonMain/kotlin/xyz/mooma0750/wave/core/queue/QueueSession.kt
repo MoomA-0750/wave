@@ -3,6 +3,8 @@ package xyz.mooma0750.wave.core.queue
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import kotlin.random.Random
@@ -168,9 +170,20 @@ class QueueSession(
     /** ラジオのページがすべてキューにある曲だった回数（続けて）。 */
     private var emptyRadioPages = 0
 
+    /**
+     * シャッフルを入れる前の並び（項目 ID → 元の順番）。シャッフルが切れていれば null。
+     * 切ったときに、残っている後ろの項目をこの順に戻す（後から足した項目は、そのままの順で最後に付く）。
+     */
+    private var unshuffledOrder: Map<String, Int>? = null
+    private val mutableShuffled = MutableStateFlow(false)
+
+    /** シャッフルが入っているか（再生画面のボタンの表示に使う）。 */
+    val shuffled: StateFlow<Boolean> = mutableShuffled
+
     /** 1曲を選んで再生する。その曲から始まるラジオをサジェストとして追加していく。 */
     fun playSong(song: Song) {
         startGeneration()
+        setShuffleOrder(null)
         // 文脈を先に決める（replace の中で Player が同期で曲の遷移を知らせ、取得の判断が走っても古い文脈を使わない）
         startRadio(song.videoId)
         player.replace(listOf(item(song, ItemOrigin.Source)), startIndex = 0)
@@ -190,15 +203,18 @@ class QueueSession(
     ) {
         if (songs.isEmpty()) return
         startGeneration()
-        val ordered = if (shuffle) songs.shuffled(random) else songs
+        val sourceItems = songs.map { item(it, ItemOrigin.Source) }
+        val ordered = if (shuffle) sourceItems.shuffled(random) else sourceItems
         // 文脈を先に決める（playSong と同じ理由）。continuation が無いプレイリストも、ラジオへの切り替えは
         // 終わりが近づいたときに fetchOnce が全体リピートを見て行う
         if (playlistId != null) {
             setContext(QueueSource.Playlist(playlistId), playlistContinuation, radioPlaylistId = null, exhausted = false)
         } else {
-            startRadio(ordered.last().videoId)
+            startRadio(ordered.last().song.videoId)
         }
-        player.replace(ordered.map { item(it, ItemOrigin.Source) }, if (shuffle) 0 else startIndex.coerceIn(songs.indices))
+        // シャッフル再生なら、切ったときに一覧の並びへ戻せるように元の順番を覚えておく
+        setShuffleOrder(if (shuffle) sourceItems.map { it.itemId } else null)
+        player.replace(ordered, if (shuffle) 0 else startIndex.coerceIn(songs.indices))
         maybeFetch()
     }
 
@@ -282,6 +298,34 @@ class QueueSession(
         player.replaceAfterCurrent(upcoming.shuffled(random))
     }
 
+    /**
+     * シャッフルの入り切り（Windows 版・Spotify と同じ）。入れるときは今の曲より後ろの並びを覚えてから並べ替え、
+     * 切るときは残っている後ろの項目を覚えた並びに戻す。シャッフル中に足した項目（覚えていない項目）は、今の順のまま最後に付く。
+     * どちらも世代は進めない（shuffleUpcoming と同じく、取得中の続きはそのまま後ろに付く）。
+     */
+    fun toggleShuffle() {
+        val order = unshuffledOrder
+        if (order == null) {
+            val current = player.currentIndex
+            if (current < 0) return
+            val upcoming = player.items.drop(current + 1)
+            setShuffleOrder(upcoming.map { it.itemId })
+            if (upcoming.size >= 2) player.replaceAfterCurrent(upcoming.shuffled(random))
+        } else {
+            setShuffleOrder(null)
+            val current = player.currentIndex
+            if (current < 0) return
+            val upcoming = player.items.drop(current + 1)
+            val restored = unshuffle(upcoming, order)
+            if (restored != upcoming) player.replaceAfterCurrent(restored)
+        }
+    }
+
+    private fun setShuffleOrder(itemIds: List<String>?) {
+        unshuffledOrder = itemIds?.withIndex()?.associate { (index, id) -> id to index }
+        mutableShuffled.value = itemIds != null
+    }
+
     /** 曲が変わった・再生が最後まで行ったときに呼ぶ。残りが少なければ続きを取る。 */
     fun onPlaybackProgressed() {
         maybeFetch()
@@ -295,6 +339,7 @@ class QueueSession(
     /** ログアウトなど。キューを消して、取得を止める。 */
     fun reset() {
         startGeneration()
+        setShuffleOrder(null)
         exhausted = true
         source = null
         player.clear()
@@ -309,13 +354,15 @@ class QueueSession(
         val items = player.items
         val index = player.currentIndex
         if (index !in items.indices) return null
-        return SavedQueue(SavedQueue.VERSION, obtainedAtEpochMs, items, index, positionMs.coerceAtLeast(0), repeatMode, source, continuation, radioPlaylistId, exhausted)
+        val unshuffled = unshuffledOrder?.entries?.sortedBy { it.value }?.map { it.key }
+        return SavedQueue(SavedQueue.VERSION, obtainedAtEpochMs, items, index, positionMs.coerceAtLeast(0), repeatMode, source, continuation, radioPlaylistId, exhausted, unshuffled)
     }
 
     /** 保存したキューを、再生を始めずに戻す。ログインの照合は呼び出し側で済ませる。 */
     fun restore(saved: SavedQueue) {
         startGeneration()
         setContext(saved.source, saved.continuation, saved.radioPlaylistId, saved.exhausted)
+        setShuffleOrder(saved.unshuffledOrder)
         player.restore(saved.items, saved.currentIndex, saved.positionMs)
     }
 
@@ -369,6 +416,8 @@ class QueueSession(
         val items = snapshot.items.map(HandoffMapping::queueItemOf)
         val index = items.indexOfFirst { it.itemId == snapshot.currentItemId }.coerceAtLeast(0)
         setContext(HandoffMapping.queueSourceOf(snapshot.source), snapshot.continuation, snapshot.radioPlaylistId, snapshot.exhausted)
+        // 受け取った並びの元の順番は分からないので、シャッフルは切った状態で始める
+        setShuffleOrder(null)
         player.replaceAndPlayAt(items, index, snapshot.positionMs)
         maybeFetch()
         return index
@@ -558,5 +607,17 @@ class QueueSession(
         const val MAX_EMPTY_RADIO_PAGES = 3
 
         fun radioPlaylistIdOf(videoId: String): String = "RDAMVM$videoId"
+
+        /**
+         * シャッフルを切ったときの後ろの並び。覚えている項目は元の順番に、覚えていない項目（シャッフル中に足した曲・続き）は
+         * 今の順のまま最後に付ける。項目は増減させない。
+         */
+        fun unshuffle(
+            upcoming: List<QueueItem>,
+            order: Map<String, Int>,
+        ): List<QueueItem> {
+            val (known, added) = upcoming.partition { it.itemId in order }
+            return known.sortedBy { order.getValue(it.itemId) } + added
+        }
     }
 }

@@ -21,6 +21,8 @@ data class SavedQueue(
     val continuation: String?,
     val radioPlaylistId: String?,
     val exhausted: Boolean,
+    /** シャッフル中なら、シャッフルを入れる前の並び（項目 ID）。切っていれば null。前の形式のファイルには無い（切った状態で戻す）。 */
+    val unshuffledOrder: List<String>? = null,
 ) {
     companion object {
         const val VERSION = 1

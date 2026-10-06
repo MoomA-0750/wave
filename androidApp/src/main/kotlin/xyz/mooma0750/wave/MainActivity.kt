@@ -104,6 +104,7 @@ class MainActivity : ComponentActivity() {
                 var addTarget by remember { mutableStateOf<Song?>(null) }
                 val playlistsVersion by container.playlistsVersion.collectAsStateWithLifecycle()
                 val scope = rememberCoroutineScope()
+                val playerActions = remember { PlayerActions(scope, container.player) }
                 val songActions =
                     remember {
                         SongActions(
@@ -112,9 +113,10 @@ class MainActivity : ComponentActivity() {
                             openArtist = { artist -> artist.browseId?.let { nav.push(Screen.Artist(it, artist.name)) } },
                             openAlbum = { album -> album.browseId?.let { nav.push(Screen.Album(it, album.title)) } },
                             addToPlaylist = { song -> addTarget = song },
+                            // 1曲を選んで再生するのと同じ（その曲から始まるラジオになる）
+                            startRadio = playerActions::playSong,
                         )
                     }
-                val playerActions = remember { PlayerActions(scope, container.player) }
                 LaunchedEffect(container) {
                     DebugActions.navigation.collect { nav.push(it) }
                 }

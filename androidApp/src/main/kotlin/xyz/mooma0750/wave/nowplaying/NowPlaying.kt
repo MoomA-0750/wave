@@ -355,7 +355,15 @@ fun NowPlayingScreen(
                 }
             }
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                IconAction(R.drawable.ic_shuffle, stringResource(R.string.nowplaying_shuffle_upcoming), { scope.launch { connection.shuffleUpcoming() } }, enabled = remote == null && state.queue.size - state.currentIndex > 2)
+                // シャッフルは入り切り（切ると残りの曲を入れる前の並びに戻す）。入っている間は色を付ける
+                val shuffled by connection.shuffled.collectAsState()
+                IconAction(
+                    R.drawable.ic_shuffle,
+                    if (shuffled) stringResource(R.string.ui_shuffle_on) else stringResource(R.string.ui_shuffle_off),
+                    { scope.launch { connection.toggleShuffle() } },
+                    active = shuffled && remote == null,
+                    enabled = remote == null && state.currentIndex >= 0,
+                )
                 IconAction(R.drawable.ic_skip_previous, stringResource(R.string.nowplaying_previous), { display.previous() }, enabled = state.hasPrevious, size = 36.dp)
                 PlayFab(state.isPlaying, { display.togglePlay() }, size = 72.dp)
                 IconAction(R.drawable.ic_skip_next, stringResource(R.string.nowplaying_next), { display.next() }, enabled = state.hasNext, size = 36.dp)

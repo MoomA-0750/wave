@@ -49,7 +49,6 @@
     <string name="nowplaying_expand">Expand</string>
     <string name="nowplaying_song">Song</string>
     <string name="nowplaying_video">Video</string>
-    <string name="nowplaying_shuffle_upcoming">Shuffle upcoming</string>
     <string name="nowplaying_previous">Previous</string>
     <string name="nowplaying_next">Next</string>
     <string name="nowplaying_repeat_all">Repeat: All</string>

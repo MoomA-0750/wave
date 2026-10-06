@@ -90,7 +90,7 @@ object DebugActions {
                     createdPlaylistId = null
                     container.logout()
                 }
-                "shuffle" -> player.shuffleUpcoming()
+                "shuffle" -> player.toggleShuffle()
                 // Phase 6: 暗号の部品とペアリングの手順が、この端末（Conscrypt・Keystore の鍵）で動くかを端末の中だけで確かめる（結果の真偽値だけ）
                 "crypto_selftest" -> {
                     val results = linkedMapOf<String, Boolean>()

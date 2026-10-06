@@ -50,6 +50,8 @@ data class SongActions(
     val openArtist: (ArtistRef) -> Unit,
     val openAlbum: (AlbumRef) -> Unit,
     val addToPlaylist: (Song) -> Unit,
+    /** その曲から始まるラジオを再生する（Spotify の「曲のラジオを再生」。キューを置き換える）。 */
+    val startRadio: (Song) -> Unit,
 ) {
     /** シートの上から画面を開くときに、先にシートを閉じる。 */
     fun closing(close: () -> Unit): SongActions =

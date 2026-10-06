@@ -39,7 +39,7 @@ import xyz.mooma0750.wave.ui.MenuIcon
 
 /**
  * 曲のメニュー（Spotify の「⋯」と同じく、下からのシートに曲の画像と名前、その下に操作）。
- * キューへの追加・プレイリストへの追加・アーティストとアルバムのページへの移動。
+ * キューへの追加・プレイリストへの追加・曲のラジオ・アーティストとアルバムのページへの移動。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -82,6 +82,10 @@ fun SongMenuButton(
                     close()
                     actions.addToQueue(song)
                 }
+            }
+            MenuRow(R.drawable.ic_graphic_eq, stringResource(R.string.search_start_radio)) {
+                close()
+                actions.startRadio(song)
             }
             extraItems.forEach { (label, action) ->
                 MenuRow(R.drawable.ic_delete, label) {

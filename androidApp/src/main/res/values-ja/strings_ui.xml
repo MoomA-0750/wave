@@ -49,7 +49,6 @@
     <string name="nowplaying_expand">全面に広げる</string>
     <string name="nowplaying_song">曲</string>
     <string name="nowplaying_video">動画</string>
-    <string name="nowplaying_shuffle_upcoming">残りをシャッフル</string>
     <string name="nowplaying_previous">前の曲</string>
     <string name="nowplaying_next">次の曲</string>
     <string name="nowplaying_repeat_all">リピート: 全体</string>

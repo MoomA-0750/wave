@@ -425,6 +425,106 @@ class QueueSessionTest {
         }
 
     @Test
+    fun turningShuffleOffRestoresTheRememberedOrderOfTheRemainingItems() =
+        runTest {
+            val player = FakePlayer()
+            val queue = session(player, FakeContent())
+            val ids = (0 until 10).map { "s$it" }
+            queue.playFrom(ids.map(::song), startIndex = 2, playlistId = "PL", playlistContinuation = null)
+            val generation = queue.generation
+
+            queue.toggleShuffle()
+            assertTrue(queue.shuffled.value)
+            assertEquals(ids.take(3), player.videoIds().take(3), "今の曲とそれより前が動いた")
+            assertNotEquals(ids.drop(3), player.videoIds().drop(3), "並べ替わっていない")
+            // シャッフル中に2曲進めて、1曲を消す
+            player.currentIndex = 4
+            val played = player.videoIds().take(5)
+            val removed = player.items[7]
+            queue.remove(removed.itemId)
+
+            queue.toggleShuffle()
+            assertFalse(queue.shuffled.value)
+            assertEquals(played, player.videoIds().take(5), "今の曲とそれより前が動いた")
+            val expected = ids.drop(3).filter { it !in played && it != removed.song.videoId }
+            assertEquals(expected, player.videoIds().drop(5), "残りが元の順に戻っていない")
+            assertEquals(generation, queue.generation, "シャッフルの入り切りで世代が進んだ")
+        }
+
+    @Test
+    fun itemsAddedWhileShuffledStayAtTheEndInTheirOrderWhenShuffleIsTurnedOff() =
+        runTest {
+            val player = FakePlayer()
+            val queue = session(player, FakeContent())
+            val ids = (0 until 6).map { "s$it" }
+            queue.playFrom(ids.map(::song), startIndex = 0, playlistId = "PL", playlistContinuation = null)
+            queue.toggleShuffle()
+            queue.addToEnd(song("u1"))
+            queue.addNext(song("n1"))
+            queue.addToEnd(song("u2"))
+
+            queue.toggleShuffle()
+            assertEquals(listOf("s0", "s1", "s2", "s3", "s4", "s5", "n1", "u1", "u2"), player.videoIds())
+        }
+
+    @Test
+    fun shufflePlayCanBeTurnedOffBackToTheListOrder() =
+        runTest {
+            val player = FakePlayer()
+            val queue = session(player, FakeContent())
+            val ids = (0 until 10).map { "s$it" }
+            queue.playFrom(ids.map(::song), startIndex = 0, playlistId = "PL", playlistContinuation = "c", shuffle = true)
+            assertTrue(queue.shuffled.value)
+            val first = player.videoIds().first()
+
+            queue.toggleShuffle()
+            assertFalse(queue.shuffled.value)
+            assertEquals(listOf(first) + ids.filter { it != first }, player.videoIds())
+        }
+
+    @Test
+    fun choosingANewQueueTurnsShuffleOff() =
+        runTest {
+            val player = FakePlayer()
+            val queue = session(player, FakeContent())
+            queue.playFrom((0 until 5).map { song("s$it") }, startIndex = 0, playlistId = "PL", playlistContinuation = "c")
+            queue.toggleShuffle()
+            assertTrue(queue.shuffled.value)
+            queue.playSong(song("a"))
+            assertFalse(queue.shuffled.value)
+            queue.toggleShuffle()
+            queue.playFrom((0 until 5).map { song("t$it") }, startIndex = 0, playlistId = "PL", playlistContinuation = "c")
+            assertFalse(queue.shuffled.value)
+        }
+
+    @Test
+    fun shuffleOrderSurvivesSaveAndRestore() =
+        runTest {
+            val player = FakePlayer()
+            val queue = session(player, FakeContent())
+            val ids = (0 until 8).map { "s$it" }
+            queue.playFrom(ids.map(::song), startIndex = 0, playlistId = "PL", playlistContinuation = "c")
+            queue.toggleShuffle()
+            val saved = SavedQueue.decode(SavedQueue.encode(queue.saved(1, 0, 0)!!))!!
+
+            val restoredPlayer = FakePlayer()
+            val restored = session(restoredPlayer, FakeContent())
+            restored.restore(saved)
+            assertTrue(restored.shuffled.value)
+            restored.toggleShuffle()
+            assertEquals(ids, restoredPlayer.videoIds())
+        }
+
+    @Test
+    fun savedQueuesWithoutTheShuffleOrderAreStillRead() {
+        val item = QueueItem("i", song("a"), ItemOrigin.Source)
+        val saved = SavedQueue(SavedQueue.VERSION, 1, listOf(item), 0, 0, 0, QueueSource.Radio("a"), null, null, false)
+        val old = SavedQueue.encode(saved).replace(",\"unshuffledOrder\":null", "")
+        assertFalse("unshuffledOrder" in old)
+        assertEquals(saved, SavedQueue.decode(old))
+    }
+
+    @Test
     fun shufflePlayStartsAtTheTopWithAPermutation() =
         runTest {
             val player = FakePlayer()

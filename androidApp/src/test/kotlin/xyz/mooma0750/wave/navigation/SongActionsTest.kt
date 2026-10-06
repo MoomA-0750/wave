@@ -17,6 +17,7 @@ class SongActionsTest {
                 openArtist = { calls += "artist" },
                 openAlbum = { calls += "album" },
                 addToPlaylist = { calls += "addToPlaylist" },
+                startRadio = { calls += "radio" },
             )
         val closing = actions.closing { calls += "close" }
         val song = Song("v", "t", emptyList(), null, null, null)
@@ -25,7 +26,8 @@ class SongActionsTest {
         closing.openArtist(ArtistRef("a", "UC"))
         closing.openAlbum(AlbumRef("b", "MP"))
         closing.addToPlaylist(song)
+        closing.startRadio(song)
         // キューに足す・プレイリストに追加する（ダイアログが上に重なる）のはシートの上のまま。画面を開くのは先に閉じる
-        assertEquals(listOf("playNext", "addToQueue", "close", "artist", "close", "album", "addToPlaylist"), calls)
+        assertEquals(listOf("playNext", "addToQueue", "close", "artist", "close", "album", "addToPlaylist", "radio"), calls)
     }
 }
