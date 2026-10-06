@@ -1,0 +1,32 @@
+<Page x:Class="Wave.App.Views.LyricsPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:local="using:Wave.App.Views">
+    <!-- 歌詞（Spotify と同じく中央の枠いっぱいに、歌っている行を明るく、過ぎた行と先の行は薄く） -->
+    <Grid>
+        <Rectangle x:Name="Backdrop" />
+        <ListView x:Name="Lines" SelectionMode="None" IsItemClickEnabled="True" ItemClick="OnLineClick" Padding="40,40,40,240">
+            <ListView.ItemContainerStyle>
+                <Style TargetType="ListViewItem" BasedOn="{StaticResource DefaultListViewItemStyle}">
+                    <Setter Property="Padding" Value="0,6" />
+                </Style>
+            </ListView.ItemContainerStyle>
+            <ListView.ItemTemplate>
+                <DataTemplate x:DataType="local:LyricRow">
+                    <TextBlock Text="{x:Bind Text}" FontSize="30" FontWeight="Bold" TextWrapping="Wrap" Opacity="{x:Bind Opacity, Mode=OneWay}">
+                        <TextBlock.OpacityTransition>
+                            <ScalarTransition Duration="0:0:0.25" />
+                        </TextBlock.OpacityTransition>
+                    </TextBlock>
+                </DataTemplate>
+            </ListView.ItemTemplate>
+        </ListView>
+        <ScrollViewer x:Name="PlainView" Visibility="Collapsed">
+            <TextBlock x:Name="PlainText" FontSize="26" FontWeight="SemiBold" TextWrapping="Wrap" Margin="40" LineHeight="40" IsTextSelectionEnabled="True" />
+        </ScrollViewer>
+        <TextBlock x:Name="SourceText" Style="{StaticResource SubtleTextStyle}" VerticalAlignment="Bottom" Margin="40,0,40,16" />
+        <StackPanel x:Name="EmptyPanel" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="8" Visibility="Collapsed">
+            <TextBlock x:Name="EmptyText" Style="{StaticResource SubtitleTextBlockStyle}" HorizontalAlignment="Center" />
+        </StackPanel>
+    </Grid>
+</Page>

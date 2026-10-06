@@ -109,6 +109,8 @@ public abstract record HomeItem
         _ => null,
     };
 
+    public bool IsArtist => this is ArtistItem;
+
     /// <summary>同じものを見分けるための値（重複を除くのに使う）。</summary>
     public string Key => this switch
     {

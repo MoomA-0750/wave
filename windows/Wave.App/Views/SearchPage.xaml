@@ -1,0 +1,135 @@
+<Page x:Class="Wave.App.Views.SearchPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:app="using:Wave.App"
+      xmlns:controls="using:Wave.App.Controls"
+      xmlns:services="using:Wave.App.Services"
+      xmlns:music="using:Wave.Core.Music"
+      xmlns:views="using:Wave.App.Views">
+    <Grid>
+        <!-- 何も打っていないとき: 最近の検索と、気分・ジャンルのタイル（Spotify の「すべてをブラウズ」） -->
+        <ScrollViewer x:Name="BrowseView">
+            <StackPanel Padding="24,16,24,32" Spacing="16">
+                <StackPanel x:Name="RecentPanel" Spacing="12">
+                    <Grid>
+                        <TextBlock Text="最近の検索" Style="{StaticResource SubtitleTextBlockStyle}" />
+                        <HyperlinkButton Content="すべて消去" HorizontalAlignment="Right" Click="OnClearHistory" />
+                    </Grid>
+                    <ItemsRepeater x:Name="RecentList">
+                        <ItemsRepeater.Layout>
+                            <UniformGridLayout MinItemWidth="260" MinItemHeight="64" MinRowSpacing="8" MinColumnSpacing="8" ItemsStretch="Fill" />
+                        </ItemsRepeater.Layout>
+                        <ItemsRepeater.ItemTemplate>
+                            <DataTemplate x:DataType="services:SearchHistoryEntry">
+                                <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Padding="8" Click="OnRecentClick" Tag="{x:Bind}">
+                                    <Grid ColumnSpacing="12">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="48" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Width="48" Height="48" CornerRadius="{x:Bind app:Ui.Radius(IsRound)}"
+                                                Background="{ThemeResource ControlFillColorSecondaryBrush}">
+                                            <Grid>
+                                                <FontIcon Glyph="&#xE721;" Visibility="{x:Bind app:Ui.Show(IsQuery)}" />
+                                                <Image Source="{x:Bind app:Ui.Small(ThumbnailUrl)}" Stretch="UniformToFill" />
+                                            </Grid>
+                                        </Border>
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                            <TextBlock Text="{x:Bind Title}" TextTrimming="CharacterEllipsis" MaxLines="1" />
+                                            <TextBlock Text="{x:Bind Subtitle}" Style="{StaticResource SubtleTextStyle}" />
+                                        </StackPanel>
+                                        <Button Grid.Column="2" Style="{StaticResource IconButtonStyle}" Click="OnRemoveRecent" Tag="{x:Bind}" ToolTipService.ToolTip="履歴から削除">
+                                            <FontIcon Glyph="&#xE711;" FontSize="12" />
+                                        </Button>
+                                    </Grid>
+                                </Button>
+                            </DataTemplate>
+                        </ItemsRepeater.ItemTemplate>
+                    </ItemsRepeater>
+                </StackPanel>
+
+                <TextBlock Text="すべてをブラウズ" Style="{StaticResource SubtitleTextBlockStyle}" Margin="0,8,0,0" />
+                <ItemsRepeater x:Name="MoodTiles">
+                    <ItemsRepeater.Layout>
+                        <UniformGridLayout MinItemWidth="200" MinItemHeight="110" MinRowSpacing="12" MinColumnSpacing="12" ItemsStretch="Fill" />
+                    </ItemsRepeater.Layout>
+                    <ItemsRepeater.ItemTemplate>
+                        <DataTemplate x:DataType="views:MoodTile">
+                            <Button HorizontalAlignment="Stretch" VerticalAlignment="Stretch" HorizontalContentAlignment="Left" VerticalContentAlignment="Top"
+                                    Background="{x:Bind Brush}" Foreground="White" CornerRadius="8" Padding="16" BorderThickness="0" Click="OnMoodClick" Tag="{x:Bind Category}">
+                                <TextBlock Text="{x:Bind Category.Title}" Style="{StaticResource SubtitleTextBlockStyle}" TextWrapping="Wrap" />
+                            </Button>
+                        </DataTemplate>
+                    </ItemsRepeater.ItemTemplate>
+                </ItemsRepeater>
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- 検索の結果 -->
+        <Grid x:Name="ResultsView" Visibility="Collapsed">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <SelectorBar x:Name="Tabs" Margin="16,8,16,0" SelectionChanged="OnTabChanged">
+                <SelectorBarItem Text="すべて" Tag="all" IsSelected="True" />
+                <SelectorBarItem Text="曲" Tag="songs" />
+                <SelectorBarItem Text="アーティスト" Tag="artists" />
+                <SelectorBarItem Text="アルバム" Tag="albums" />
+            </SelectorBar>
+
+            <ScrollViewer x:Name="AllView" Grid.Row="1">
+                <StackPanel Padding="24,16,24,32" Spacing="28">
+                    <Grid ColumnSpacing="24">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="2*" MinWidth="280" />
+                            <ColumnDefinition Width="3*" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Spacing="12" x:Name="TopPanel">
+                            <TextBlock Text="トップの検索結果" Style="{StaticResource SubtitleTextBlockStyle}" />
+                            <Button x:Name="TopCard" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Padding="20" CornerRadius="8"
+                                    Click="OnTopClick" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                                <Grid>
+                                    <StackPanel Spacing="16">
+                                        <Border x:Name="TopImageBorder" Width="96" Height="96" CornerRadius="6" HorizontalAlignment="Left">
+                                            <Image x:Name="TopImage" Stretch="UniformToFill" />
+                                        </Border>
+                                        <TextBlock x:Name="TopTitle" Style="{StaticResource TitleTextBlockStyle}" TextTrimming="CharacterEllipsis" MaxLines="2" TextWrapping="Wrap" />
+                                        <TextBlock x:Name="TopSubtitle" Style="{StaticResource SubtleTextStyle}" FontSize="14" />
+                                    </StackPanel>
+                                    <Button Style="{StaticResource PlayCircleButtonStyle}" Width="48" Height="48" CornerRadius="24"
+                                            HorizontalAlignment="Right" VerticalAlignment="Bottom" Click="OnTopPlay" ToolTipService.ToolTip="再生">
+                                        <FontIcon Glyph="&#xF5B0;" FontSize="18" />
+                                    </Button>
+                                </Grid>
+                            </Button>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Spacing="12">
+                            <TextBlock Text="曲" Style="{StaticResource SubtitleTextBlockStyle}" />
+                            <ListView x:Name="TopSongs" ItemTemplate="{StaticResource TrackRowTemplate}" ItemContainerStyle="{StaticResource TrackListItemStyle}"
+                                      SelectionMode="Single" DoubleTapped="OnSongDoubleTapped" ScrollViewer.VerticalScrollMode="Disabled" />
+                        </StackPanel>
+                    </Grid>
+                    <controls:ShelfView x:Name="ArtistShelf" Title="アーティスト" />
+                    <controls:ShelfView x:Name="AlbumShelf" Title="アルバム" />
+                </StackPanel>
+            </ScrollViewer>
+
+            <ListView x:Name="SongList" Grid.Row="1" Visibility="Collapsed" Padding="12,8" ItemTemplate="{StaticResource TrackRowTemplate}"
+                      ItemContainerStyle="{StaticResource TrackListItemStyle}" DoubleTapped="OnSongDoubleTapped" />
+
+            <GridView x:Name="CardGrid" Grid.Row="1" Visibility="Collapsed" Padding="16,8" SelectionMode="None">
+                <GridView.ItemTemplate>
+                    <DataTemplate x:DataType="music:HomeItem">
+                        <controls:MediaCard Item="{x:Bind}" />
+                    </DataTemplate>
+                </GridView.ItemTemplate>
+            </GridView>
+
+            <ProgressRing x:Name="LoadingRing" Grid.Row="1" IsActive="False" VerticalAlignment="Top" Margin="0,48,0,0" />
+            <TextBlock x:Name="Empty" Grid.Row="1" Visibility="Collapsed" HorizontalAlignment="Center" Margin="0,64,0,0"
+                       Text="見つかりませんでした" Style="{StaticResource SubtitleTextBlockStyle}" />
+        </Grid>
+    </Grid>
+</Page>

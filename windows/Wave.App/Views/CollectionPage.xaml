@@ -1,0 +1,59 @@
+<Page x:Class="Wave.App.Views.CollectionPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- プレイリスト・アルバムのページ（Spotify と同じ: ジャケットの色のグラデーション、大きなジャケットと名前、再生ボタン、曲の表） -->
+    <ListView x:Name="Tracks" ItemTemplate="{StaticResource TrackRowTemplate}" ItemContainerStyle="{StaticResource TrackListItemStyle}"
+              SelectionMode="Single" DoubleTapped="OnDoubleTapped" Padding="12,0,12,24" KeyDown="OnKeyDown">
+        <ListView.Header>
+            <StackPanel>
+                <Grid>
+                    <Rectangle x:Name="Gradient" Height="360" VerticalAlignment="Top" Margin="-12,0" />
+                    <Grid Padding="12,40,12,24" ColumnSpacing="24">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Border x:Name="CoverBorder" Width="220" Height="220" CornerRadius="8" Background="{ThemeResource ControlFillColorSecondaryBrush}">
+                            <Grid>
+                                <FontIcon x:Name="LikedIcon" Glyph="&#xEB52;" FontSize="72" Foreground="White" Visibility="Collapsed" />
+                                <Image x:Name="Cover" Stretch="UniformToFill" />
+                            </Grid>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Bottom" Spacing="8">
+                            <TextBlock x:Name="KindText" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                            <TextBlock x:Name="TitleText" FontSize="56" FontWeight="Bold" TextTrimming="CharacterEllipsis" MaxLines="2" TextWrapping="Wrap" LineHeight="60" />
+                            <TextBlock x:Name="DetailText" Style="{StaticResource BodyTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       TextTrimming="CharacterEllipsis" MaxLines="2" TextWrapping="Wrap" />
+                        </StackPanel>
+                    </Grid>
+                </Grid>
+                <StackPanel Orientation="Horizontal" Spacing="16" Padding="12,8,12,16">
+                    <Button x:Name="PlayButton" Style="{StaticResource PlayCircleButtonStyle}" Click="OnPlay" ToolTipService.ToolTip="再生" IsEnabled="False">
+                        <FontIcon x:Name="PlayIcon" Glyph="&#xF5B0;" FontSize="20" />
+                    </Button>
+                    <ToggleButton x:Name="ShuffleButton" Style="{StaticResource IconToggleStyle}" Click="OnShuffle" ToolTipService.ToolTip="シャッフル">
+                        <FontIcon Glyph="&#xE8B1;" FontSize="22" />
+                    </ToggleButton>
+                    <Button x:Name="MoreButton" Style="{StaticResource IconButtonStyle}" Click="OnMore" ToolTipService.ToolTip="その他">
+                        <FontIcon Glyph="&#xE712;" FontSize="20" />
+                    </Button>
+                    <ProgressRing x:Name="LoadingRing" IsActive="True" Width="20" Height="20" />
+                </StackPanel>
+                <Grid Padding="12,0,12,8" ColumnSpacing="12" BorderThickness="0,0,0,1" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="32" />
+                        <ColumnDefinition Width="3*" />
+                        <ColumnDefinition x:Name="AlbumHeaderColumn" Width="2*" />
+                        <ColumnDefinition Width="56" />
+                        <ColumnDefinition Width="36" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="#" HorizontalAlignment="Right" Style="{StaticResource SubtleTextStyle}" />
+                    <TextBlock Grid.Column="1" Text="タイトル" Style="{StaticResource SubtleTextStyle}" />
+                    <TextBlock Grid.Column="2" x:Name="AlbumHeader" Text="アルバム" Style="{StaticResource SubtleTextStyle}" />
+                    <FontIcon Grid.Column="3" Glyph="&#xE823;" FontSize="14" HorizontalAlignment="Right" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                </Grid>
+                <TextBlock x:Name="ErrorText" Visibility="Collapsed" Margin="12,24" />
+            </StackPanel>
+        </ListView.Header>
+    </ListView>
+</Page>

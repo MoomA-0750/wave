@@ -41,7 +41,9 @@ PS
     ;;
   push)
     ensure_remote
-    # 未コミットの変更も送れるよう、作業ツリーを一時コミット（stash create）にして送る
+    # 未コミットの変更も送れるよう、作業ツリーを一時コミット（stash create）にして送る。
+    # stash create は追跡していないファイルを含めないので、windows/ の新しいファイルは先に索引へ入れる
+    git -C "$REPO" add -A windows
     rev=$(git -C "$REPO" stash create)
     rev=${rev:-$(git -C "$REPO" rev-parse HEAD)}
     git -C "$REPO" push -q -f win "$rev:refs/heads/main"
@@ -49,6 +51,7 @@ PS
     ;;
   build)
     ps <<PS
+Get-Process Wave.App -ErrorAction SilentlyContinue | Stop-Process -Force
 Set-Location '$WIN_DIR/windows/Wave.App'
 dotnet build -c Debug -p:Platform=x64 -v q -nologo 2>&1 | Select-String -Pattern 'error|warn|Warn|Error|Elapsed|経過' | Select-Object -First 60 | ForEach-Object { \$_.Line }
 "exit=\$LASTEXITCODE"

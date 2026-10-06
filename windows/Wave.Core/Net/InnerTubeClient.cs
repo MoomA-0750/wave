@@ -56,6 +56,8 @@ public sealed class InnerTubeClient
 
     private readonly HttpClient http;
     private volatile Credentials? credentials;
+    /// <summary>ログインしていないときの訪問者 ID（最初の応答の responseContext から取る。続きのトークンがこれに結び付く）。</summary>
+    private volatile string? anonymousVisitor;
     private long generation;
 
     /// <summary>表示の言語（YouTube から届く文字の言語）。画面に合わせて日本語に固定する。</summary>
@@ -92,6 +94,7 @@ public sealed class InnerTubeClient
     public void SetCredentials(Credentials? value)
     {
         credentials = value;
+        anonymousVisitor = null;
         Interlocked.Increment(ref generation);
     }
 
@@ -127,7 +130,10 @@ public sealed class InnerTubeClient
             // 送ったあとでログインが変わっていたら、別のアカウントの結果として使わない
             if (creds is not null && loginGeneration != Generation) return ApiResult<JsonNode>.Failed(FailureKind.NotLoggedIn);
             var text = await ReadLimitedAsync(response, MaxResponseBytes, cancel);
-            return JsonNode.Parse(text) is { } root ? ApiResult<JsonNode>.Ok(root) : ApiResult<JsonNode>.Failed(FailureKind.Parse);
+            if (JsonNode.Parse(text) is not { } root) return ApiResult<JsonNode>.Failed(FailureKind.Parse);
+            if (credentials is null && anonymousVisitor is null && root["responseContext"]?["visitorData"] is JsonValue v && v.TryGetValue<string>(out var visitorId))
+                anonymousVisitor = visitorId;
+            return ApiResult<JsonNode>.Ok(root);
         }
         catch (OperationCanceledException) when (cancel.IsCancellationRequested)
         {
@@ -171,7 +177,7 @@ public sealed class InnerTubeClient
             ["gl"] = Gl,
             ["hl"] = Hl,
         };
-        var visitor = creds?.VisitorData ?? credentials?.VisitorData;
+        var visitor = creds?.VisitorData ?? credentials?.VisitorData ?? anonymousVisitor;
         if (visitor is not null) client["visitorData"] = visitor;
         var user = new JsonObject { ["lockedSafetyMode"] = false };
         if (creds?.RevealDataSyncId() is { } dsid) user["onBehalfOfUser"] = dsid;
@@ -197,7 +203,7 @@ public sealed class InnerTubeClient
         h.TryAddWithoutValidation("X-Origin", Origin);
         h.TryAddWithoutValidation("Referer", Origin + "/");
         h.TryAddWithoutValidation("Accept-Language", Hl);
-        var visitor = creds?.VisitorData ?? credentials?.VisitorData;
+        var visitor = creds?.VisitorData ?? credentials?.VisitorData ?? anonymousVisitor;
         if (visitor is not null) h.TryAddWithoutValidation("X-Goog-Visitor-Id", visitor);
         h.TryAddWithoutValidation("Cookie", WithPref(creds?.RevealCookie()));
         if (creds?.RevealSapisid() is { } sapisid)

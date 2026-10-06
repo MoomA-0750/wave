@@ -1,0 +1,45 @@
+<Page x:Class="Wave.App.Views.SettingsPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <ScrollViewer>
+        <StackPanel Padding="40,32" Spacing="8" MaxWidth="880" HorizontalAlignment="Stretch">
+            <TextBlock Text="設定" FontSize="48" FontWeight="Bold" Margin="0,0,0,16" />
+
+            <TextBlock Text="アカウント" Style="{StaticResource BodyStrongTextBlockStyle}" Margin="0,8,0,4" />
+            <Grid Padding="16" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                  BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" ColumnSpacing="16">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <PersonPicture x:Name="Avatar" Width="56" Height="56" />
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock x:Name="NameText" Style="{StaticResource SubtitleTextBlockStyle}" />
+                    <TextBlock x:Name="StateText" Style="{StaticResource SubtleTextStyle}" />
+                </StackPanel>
+                <Button x:Name="AccountButton" Grid.Column="2" VerticalAlignment="Center" Click="OnAccount" />
+            </Grid>
+            <InfoBar x:Name="UnreadableBar" Severity="Warning" IsClosable="False"
+                     Title="保存したログイン情報を読み込めませんでした" Message="ログインし直すと上書きされます。" />
+
+            <TextBlock Text="再生" Style="{StaticResource BodyStrongTextBlockStyle}" Margin="0,16,0,4" />
+            <Grid Padding="16" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                  BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+                <StackPanel>
+                    <TextBlock Text="再生した曲を YouTube Music の再生履歴に残す" />
+                    <TextBlock Text="オフにすると、wave で聴いた曲は履歴やおすすめに使われません" Style="{StaticResource SubtleTextStyle}" />
+                </StackPanel>
+                <ToggleSwitch x:Name="HistorySwitch" HorizontalAlignment="Right" OnContent="" OffContent="" MinWidth="0" Toggled="OnHistoryToggled" />
+            </Grid>
+
+            <TextBlock Text="このアプリについて" Style="{StaticResource BodyStrongTextBlockStyle}" Margin="0,16,0,4" />
+            <StackPanel Padding="16" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Spacing="4">
+                <TextBlock x:Name="VersionText" />
+                <TextBlock Text="ログイン情報は Windows のデータ保護で暗号化して、このユーザーのフォルダにだけ保存します。" Style="{StaticResource SubtleTextStyle}" TextWrapping="Wrap" MaxLines="3" />
+                <TextBlock x:Name="DataPath" Style="{StaticResource SubtleTextStyle}" IsTextSelectionEnabled="True" />
+            </StackPanel>
+        </StackPanel>
+    </ScrollViewer>
+</Page>

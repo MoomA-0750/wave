@@ -1,0 +1,37 @@
+<UserControl x:Class="Wave.App.Controls.ShelfView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:app="using:Wave.App"
+             xmlns:controls="using:Wave.App.Controls"
+             xmlns:music="using:Wave.Core.Music">
+    <!-- 横に流れる棚（見出しと、左右に送るボタン） -->
+    <StackPanel Spacing="4">
+        <Grid Padding="8,0">
+            <StackPanel>
+                <TextBlock Text="{x:Bind Strapline, Mode=OneWay}" Style="{StaticResource SubtleTextStyle}" Visibility="{x:Bind app:Ui.ShowText(Strapline), Mode=OneWay}" />
+                <TextBlock Text="{x:Bind Title, Mode=OneWay}" Style="{StaticResource ShelfTitleStyle}" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Bottom" Spacing="4">
+                <Button Style="{StaticResource IconButtonStyle}" Click="OnLeft" ToolTipService.ToolTip="前へ">
+                    <FontIcon Glyph="&#xE76B;" FontSize="12" />
+                </Button>
+                <Button Style="{StaticResource IconButtonStyle}" Click="OnRight" ToolTipService.ToolTip="次へ">
+                    <FontIcon Glyph="&#xE76C;" FontSize="12" />
+                </Button>
+            </StackPanel>
+        </Grid>
+        <ScrollViewer x:Name="Scroller" HorizontalScrollMode="Enabled" HorizontalScrollBarVisibility="Hidden"
+                      VerticalScrollMode="Disabled" VerticalScrollBarVisibility="Disabled">
+            <ItemsRepeater ItemsSource="{x:Bind Items, Mode=OneWay}">
+                <ItemsRepeater.Layout>
+                    <StackLayout Orientation="Horizontal" />
+                </ItemsRepeater.Layout>
+                <ItemsRepeater.ItemTemplate>
+                    <DataTemplate x:DataType="music:HomeItem">
+                        <controls:MediaCard Item="{x:Bind}" />
+                    </DataTemplate>
+                </ItemsRepeater.ItemTemplate>
+            </ItemsRepeater>
+        </ScrollViewer>
+    </StackPanel>
+</UserControl>
