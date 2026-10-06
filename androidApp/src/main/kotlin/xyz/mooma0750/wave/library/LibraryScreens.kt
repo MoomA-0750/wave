@@ -198,7 +198,8 @@ private fun SortRow(
                     },
                     onClick = {
                         open = false
-                        onChange(if (selected) order.copy(descending = !order.descending) else order.copy(sort = sort))
+                        // 同じ並べ方はもう一度押すと向きを変える。別の並べ方に替えたら既定の向き（追加した日は新しい順、ほかは昇順。Windows と同じ）
+                        onChange(if (selected) order.copy(descending = !order.descending) else PlaylistOrder(sort, descending = sort == PlaylistSort.Added))
                     },
                 )
             }
