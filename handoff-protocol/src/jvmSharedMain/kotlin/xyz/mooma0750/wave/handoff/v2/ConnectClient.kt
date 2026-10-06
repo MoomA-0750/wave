@@ -509,6 +509,9 @@ class ConnectClient(
         if (pendingStoreId != null && stored.storeId == pendingStoreId) return
         if (stored.storeId != storeId) return
         val current = chain ?: return run { deferred += stored }
+        // 開く前に、開いても捨てるもの（床より古い・持っている版より古い・持っているものと同じ）を除く。
+        // 開くたびに受け取りの鍵で鍵交換をする（Pixel 3 では Keystore のソフトウェア実装の枠を使う）ので、つなぎ直しのたびの同じ状態で使わない
+        if (alreadyHave(stored)) return
         val opened =
             when (val result = DocSealer.open(stored.doc, current, opener)) {
                 is DocOpen.Ok -> result
@@ -548,6 +551,17 @@ class ConnectClient(
             }
         }
     }
+
+    /** 開いても捨てるだけの状態か（同じ版で中身が違うものは、署名を確かめて食い違いを知らせるために開く）。 */
+    private fun alreadyHave(stored: StoredState): Boolean =
+        when (stored.kind) {
+            StateKind.Cursor -> {
+                val existing = latestCursor
+                stored.version < cursorFloor ||
+                    (existing != null && (existing.version > stored.version || (existing.version == stored.version && existing.hash == DocSealer.hash(stored.doc))))
+            }
+            StateKind.Queue -> stored.version < queueFloor || (latestQueue?.version ?: -1) >= stored.version
+        }
 
     private fun onCursor(cursor: Opened<CursorBody>) {
         if (cursor.writer == signer.deviceId) return

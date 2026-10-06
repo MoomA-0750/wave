@@ -566,6 +566,8 @@ public sealed class ConnectClient
             deferred.Add(stored);
             return;
         }
+        // 開く前に、開いても捨てるもの（床より古い・持っている版より古い・持っているものと同じ）を除く（鍵交換の回数を減らす）
+        if (AlreadyHave(stored)) return;
         DocOpen.Ok opened;
         switch (DocSealer.Open(stored.Doc, current, opener))
         {
@@ -618,6 +620,14 @@ public sealed class ConnectClient
             }
         }
     }
+
+    /// <summary>開いても捨てるだけの状態か（同じ版で中身が違うものは、署名を確かめて食い違いを知らせるために開く）。</summary>
+    private bool AlreadyHave(StoredState stored) => stored.Kind switch
+    {
+        StateKind.Cursor => stored.Version < cursorFloor ||
+            (latestCursor is { } existing && (existing.Version > stored.Version || (existing.Version == stored.Version && existing.Hash == DocSealer.Hash(stored.Doc)))),
+        _ => stored.Version < queueFloor || (latestQueue?.Version ?? -1) >= stored.Version,
+    };
 
     private void OnCursor(Opened<CursorBody> cursor)
     {
