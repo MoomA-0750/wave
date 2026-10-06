@@ -104,8 +104,20 @@ public sealed class ConnectService
             }
         }) { IsBackground = true, Name = "connect-v2" }.Start();
         if (string.IsNullOrWhiteSpace(relayUrl) || string.IsNullOrWhiteSpace(relayHost)) return;
-        var (state, device) = DeviceKeys.LoadOrCreate(Path.Combine(AppPaths.Data, "connect-keys.bin"));
+        var (state, device) = DeviceKeys.LoadOrCreate();
         AppPaths.Log($"connect-v2 keys state={state}");
+        if (state == DeviceKeys.LoadState.Created)
+        {
+            // 新しい鍵（端末 ID が変わる）: 前の取り出せる鍵のファイルと、その端末 ID で入っていた家の記録は使えないので消す（加入し直す）
+            DeviceKeys.DeleteLegacyFile(Path.Combine(AppPaths.Data, "connect-keys.bin"));
+            try
+            {
+                if (File.Exists(storagePath)) File.Delete(storagePath);
+            }
+            catch (IOException)
+            {
+            }
+        }
         if (device is null)
         {
             Unreadable = true;
