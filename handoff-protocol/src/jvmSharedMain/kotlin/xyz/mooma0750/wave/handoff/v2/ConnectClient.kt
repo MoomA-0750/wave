@@ -223,6 +223,9 @@ class ConnectClient(
     /** 加入の手順で、家の鎖を使う（A が B を加えるときの add の署名に使う）。 */
     fun verifiedChain(): VerifiedChain? = chain
 
+    /** 検証した鎖の記録（追記する前に、追記後の鎖が通るかを確かめるのに使う）。家に入っていなければ null。 */
+    fun verifiedRecords(): List<ChainRecord>? = if (chain == null) null else records
+
     /** 表示用の最新のカーソル（別アカウントのものを含む）。 */
     fun latestCursorBody(): Pair<String, CursorBody>? = latestCursor?.let { it.writer to it.body }
 

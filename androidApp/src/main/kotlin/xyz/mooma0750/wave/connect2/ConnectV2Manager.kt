@@ -580,7 +580,11 @@ class ConnectV2Manager(
                 if (!runCatching { Base64.getUrlDecoder().decode(member.identityPub) }.getOrNull().contentEquals(peerPublicKey)) return@withContext null
                 // 保存を作り直した端末が同じ鍵で加わり直す: 既にいるので追記しない（B は6桁で確かめた頭の鎖で受け入れる、再レビュー 中-F）
                 if (chain.members[member.deviceId]?.keys?.kxPub == member.kxPub) return@withContext (null to member.deviceId)
-                MemberChain.add(keys, chain, member) to member.deviceId
+                val record = MemberChain.add(keys, chain, member)
+                // 積む前に、鎖として通ることを確かめる（相手の kx の署名が壊れていると、家の全端末がその鎖を拒んで止まる）
+                val records = client?.verifiedRecords() ?: return@withContext null
+                if (MemberChain.verify(records + record) !is xyz.mooma0750.wave.handoff.v2.ChainVerification.Ok) return@withContext null
+                record to member.deviceId
             } ?: return false
         val (record, memberId) = added
         if (record == null) return true

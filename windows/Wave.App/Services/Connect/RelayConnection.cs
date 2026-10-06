@@ -39,7 +39,8 @@ public sealed class RelayConnection
 
     private ClientWebSocket? socket;
     private CancellationTokenSource? socketCancel;
-    private readonly SemaphoreSlim sendLock = new(1, 1);
+    /// <summary>今のソケットへ送るもの（1本の送り口で、積んだ順に送る）。</summary>
+    private System.Threading.Channels.Channel<byte[]>? outbox;
     private int users;
     private int failedAttempts;
     private CancellationTokenSource? reconnectCancel;
@@ -105,34 +106,28 @@ public sealed class RelayConnection
         }
     }
 
-    /// <summary>つながっていれば送る（送る順は保つ）。送れなければ false。</summary>
+    /// <summary>つながっていれば送る（呼んだ順に送る）。送れなければ false。</summary>
     public bool Send(string json)
     {
-        ClientWebSocket? current;
-        CancellationToken cancel;
         lock (gate)
         {
-            if (status != RelayStatus.Connected || socket is null) return false;
-            current = socket;
-            cancel = socketCancel!.Token;
+            if (status != RelayStatus.Connected || socket is null || outbox is null) return false;
+            return outbox.Writer.TryWrite(Encoding.UTF8.GetBytes(json));
         }
-        var bytes = Encoding.UTF8.GetBytes(json);
-        _ = Task.Run(async () =>
+    }
+
+    private static async Task SendLoopAsync(ClientWebSocket ws, System.Threading.Channels.Channel<byte[]> queue, CancellationToken cancel)
+    {
+        try
         {
-            await sendLock.WaitAsync();
-            try
+            await foreach (var bytes in queue.Reader.ReadAllAsync(cancel))
             {
-                await current.SendAsync(bytes, WebSocketMessageType.Text, true, cancel);
+                await ws.SendAsync(bytes, WebSocketMessageType.Text, true, cancel);
             }
-            catch (Exception e) when (e is WebSocketException or OperationCanceledException or ObjectDisposedException)
-            {
-            }
-            finally
-            {
-                sendLock.Release();
-            }
-        });
-        return true;
+        }
+        catch (Exception e) when (e is WebSocketException or OperationCanceledException or ObjectDisposedException or InvalidOperationException)
+        {
+        }
     }
 
     /// <summary>家に入っていない端末から、加入の第1手を送って返事を待つ（/v2/pair、認証なし）。届かなければ null。</summary>
@@ -175,17 +170,20 @@ public sealed class RelayConnection
         var ws = new ClientWebSocket();
         ws.Options.KeepAliveInterval = TimeSpan.FromSeconds(30);
         var cancel = new CancellationTokenSource();
+        var queue = System.Threading.Channels.Channel.CreateUnbounded<byte[]>(new System.Threading.Channels.UnboundedChannelOptions { SingleReader = true });
         socket = ws;
         socketCancel = cancel;
-        _ = Task.Run(() => RunAsync(ws, cancel.Token));
+        outbox = queue;
+        _ = Task.Run(() => RunAsync(ws, queue, cancel.Token));
     }
 
-    private async Task RunAsync(ClientWebSocket ws, CancellationToken cancel)
+    private async Task RunAsync(ClientWebSocket ws, System.Threading.Channels.Channel<byte[]> queue, CancellationToken cancel)
     {
         var next = RelayStatus.Disconnected;
         try
         {
             await ws.ConnectAsync(new Uri(baseUrl + "/v2/connect"), cancel);
+            _ = SendLoopAsync(ws, queue, cancel);
             while (!cancel.IsCancellationRequested)
             {
                 var text = await ReceiveTextAsync(ws, RelayV2.MaxFrameChars, cancel);
@@ -198,7 +196,7 @@ public sealed class RelayConnection
                     }
                     break;
                 }
-                OnText(ws, text);
+                OnText(ws, queue, text);
             }
         }
         catch (WebSocketException e) when (e.InnerException is HttpRequestException { InnerException: System.Net.Sockets.SocketException { SocketErrorCode: System.Net.Sockets.SocketError.HostNotFound } })
@@ -216,7 +214,7 @@ public sealed class RelayConnection
         OnDisconnected(ws, next);
     }
 
-    private void OnText(ClientWebSocket ws, string text)
+    private void OnText(ClientWebSocket ws, System.Threading.Channels.Channel<byte[]> queue, string text)
     {
         JsonNode? node;
         try
@@ -236,7 +234,7 @@ public sealed class RelayConnection
             // 中継が名乗るホストではなく、設定のホストで署名する
             var signature = sign(RelayV2.AuthLabel, WaveCrypto.LengthPrefixed(Encoding.UTF8.GetBytes(relayHost), nonce));
             var auth = RelayV2.Encode(new RelayV2.Auth { PublicKey = B64.Encode(identityPub), Signature = B64.Encode(signature) });
-            _ = ws.SendAsync(Encoding.UTF8.GetBytes(auth), WebSocketMessageType.Text, true, CancellationToken.None);
+            queue.Writer.TryWrite(Encoding.UTF8.GetBytes(auth));
             return;
         }
         if (op == "welcome")
@@ -262,7 +260,10 @@ public sealed class RelayConnection
         {
             if (socket != ws) return;
             socket = null;
+            socketCancel?.Cancel();
             socketCancel = null;
+            outbox?.Writer.TryComplete();
+            outbox = null;
             SetStatus(next);
             if (users > 0 && next != RelayStatus.NotMember)
             {
@@ -296,6 +297,8 @@ public sealed class RelayConnection
         reconnectCancel?.Cancel();
         var closing = socket;
         var cancel = socketCancel;
+        outbox?.Writer.TryComplete();
+        outbox = null;
         socket = null;
         socketCancel = null;
         SetStatus(RelayStatus.Disconnected);

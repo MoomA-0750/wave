@@ -60,6 +60,9 @@ public sealed class ConnectService
     /// <summary>知らせ（UI のスレッドで呼ぶ）。</summary>
     public event Action<string>? Notice;
 
+    /// <summary>画面が前面にあるか（UI のスレッドで呼ぶ）。裏でメディアキーを押したときに、ほかの端末の再生を黙って引き取らない（D-9）。</summary>
+    public Func<bool> IsForeground { get; set; } = () => true;
+
     private Dictionary<string, string> labels = new();
 
     private sealed record TagState(string HouseholdId, string Tag, long Generation);
@@ -185,7 +188,8 @@ public sealed class ConnectService
             case RelayV2.PairHello hello:
                 pairHellos.Writer.TryWrite(hello);
                 return;
-            case RelayV2.ChainOk or RelayV2.ChainConflict or RelayV2.Error:
+            // 鎖の追記への返事（state_put への error は requestId が付くので除く）
+            case RelayV2.ChainOk or RelayV2.ChainConflict or RelayV2.Error { RequestId: null }:
                 chainReply?.TrySetResult(message);
                 break;
         }
@@ -467,25 +471,27 @@ public sealed class ConnectService
             if (client is not { } engine) return;
             if (cursor is not null) engine.SetLocalCursor(cursor);
             else engine.EndLocal(new Effects(this).AccountTag());
+            AppPaths.Log($"connect-v2 cursor playing={cursor?.Playing} writer={engine.IsWriter}");
         });
     }
 
     private void OnUserStartedPlayback(bool newSelection)
     {
         var intent = Interlocked.Increment(ref playIntent);
+        var foreground = IsForeground();
         Post(() =>
         {
             if (client is not { } engine) return;
             waitCancel?.Cancel();
             waitCancel = null;
             var effects = new Effects(this);
-            var decision = PlayButtonPolicy.OnPlay(newSelection, engine.HasRetreated, engine.HouseholdId is not null, engine.StateSettled, effects.AccountTag() is not null, engine.RemotePlayingNow(), foreground: true);
+            var decision = PlayButtonPolicy.OnPlay(newSelection, engine.HasRetreated, engine.HouseholdId is not null, engine.StateSettled, effects.AccountTag() is not null, engine.RemotePlayingNow(), foreground);
             if (decision == PlayButtonPolicy.Decision.Wait)
             {
                 ui.TryEnqueue(player.ConnectPause);
                 var cancel = new CancellationTokenSource();
                 waitCancel = cancel;
-                _ = DecideAfterWaitAsync(intent, cancel.Token);
+                _ = DecideAfterWaitAsync(intent, foreground, cancel.Token);
                 return;
             }
             Apply(engine, decision);
@@ -529,7 +535,7 @@ public sealed class ConnectService
     }
 
     /// <summary>中継の最新の状態とアカウントタグがそろうまで（最大 10 秒）待ってから、D-9 の判断をする。</summary>
-    private async Task DecideAfterWaitAsync(long intent, CancellationToken cancel)
+    private async Task DecideAfterWaitAsync(long intent, bool foreground, CancellationToken cancel)
     {
         var relay = Relay!;
         relay.Acquire();
@@ -550,7 +556,7 @@ public sealed class ConnectService
             Post(() =>
             {
                 if (client is not { } engine) return;
-                var decision = PlayButtonPolicy.AfterWait(final, Interlocked.Read(ref playIntent) == intent, engine.HasRetreated, engine.RemotePlayingNow(), foreground: true);
+                var decision = PlayButtonPolicy.AfterWait(final, Interlocked.Read(ref playIntent) == intent, engine.HasRetreated, engine.RemotePlayingNow(), foreground);
                 Apply(engine, decision);
                 AppPaths.Log($"connect-v2 play button waited outcome={final} decision={decision}");
             });
@@ -882,15 +888,30 @@ public sealed class ConnectService
             RelayV2.PairHello? hello = null;
             try
             {
-                while (hello is null)
+                // 中継が切れたら待たない（Android と同じ）
+                void OnStatus(RelayStatus s)
                 {
-                    var next = await pairHellos.Reader.ReadAsync(lifetime.Token);
-                    if (next.TokenHash == tokenHash) hello = next;
+                    if (s != RelayStatus.Connected) lifetime.Cancel();
+                }
+                relay.StatusChanged += OnStatus;
+                try
+                {
+                    while (hello is null)
+                    {
+                        var next = await pairHellos.Reader.ReadAsync(lifetime.Token);
+                        if (next.TokenHash == tokenHash) hello = next;
+                    }
+                }
+                finally
+                {
+                    relay.StatusChanged -= OnStatus;
                 }
             }
             catch (OperationCanceledException) when (!cancel.IsCancellationRequested)
             {
-                Fail(L.T("時間内に読み取られませんでした", "The code wasn’t used in time"));
+                Fail(relay.Status != RelayStatus.Connected
+                    ? L.T("中継との接続が切れました", "Lost the connection to the relay")
+                    : L.T("時間内に読み取られませんでした", "The code wasn’t used in time"));
                 return;
             }
             if (Wave.Core.Connect.Pairing.DecodeHello(hello.Hello) is not { } decoded)
@@ -968,7 +989,10 @@ public sealed class ConnectService
             if (B64.Decode(member.IdentityPub) is not { } identity || !identity.AsSpan().SequenceEqual(peerPublicKey)) return null;
             // 保存を作り直した端末が同じ鍵で加わり直す: 既にいるので追記しない
             if (chain.Members.TryGetValue(member.DeviceId, out var existing) && existing.Keys.KxPub == member.KxPub) return (null, member.DeviceId);
-            return (MemberChain.Add(keys!, chain, member), member.DeviceId);
+            var record = MemberChain.Add(keys!, chain, member);
+            // 積む前に、鎖として通ることを確かめる（相手の kx の署名が壊れていると、家の全端末がその鎖を拒んで止まる）
+            if (client!.VerifiedRecords() is not { } records || MemberChain.Verify([.. records, record]) is not ChainVerification.Ok) return null;
+            return (record, member.DeviceId);
         });
         if (prepared is not { } added) return false;
         if (added.Record is null) return true;

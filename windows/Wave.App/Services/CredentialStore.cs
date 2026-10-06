@@ -70,8 +70,12 @@ public static class AppPaths
     public static string WebView => Path.Combine(Data, "WebView2");
 
     /// <summary>動作の記録（件数・状態だけ。認証情報・URL は書かない）。</summary>
+    private static readonly object LogLock = new();
+
     public static void Log(string message)
     {
+        // UI のスレッドと連携の作業スレッドから同時に書くと、片方が「使用中」で落ちるので順に書く
+        lock (LogLock)
         try
         {
             File.AppendAllText(Path.Combine(Data, "wave.log"), $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} {message}{Environment.NewLine}");

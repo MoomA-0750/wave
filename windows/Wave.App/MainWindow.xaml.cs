@@ -602,6 +602,10 @@ public sealed partial class MainWindow : Window
     private void InitConnect()
     {
         var connect = AppServices.Connect;
+        // 裏（ほかの窓が前・最小化）で再生キーを押したときは、ほかの端末の再生を引き取らずに知らせる
+        var active = true;
+        Activated += (_, e) => active = e.WindowActivationState != WindowActivationState.Deactivated;
+        connect.IsForeground = () => active && AppWindow.Presenter is not OverlappedPresenter { State: OverlappedPresenterState.Minimized };
         connect.Changed += RenderConnect;
         connect.Notice += ShowToast;
         RenderConnect();
@@ -631,7 +635,7 @@ public sealed partial class MainWindow : Window
         var remote = connect.Remote is { AccountMatches: true } r && !info.IsWriter ? r : null;
         var playingHere = info.IsWriter || remote is not { Playing: true };
         DevicesPanel.Children.Add(new TextBlock { Text = L.T("現在のデバイス", "Current device"), Style = (Style)Application.Current.Resources["BodyStrongTextBlockStyle"] });
-        DevicesPanel.Children.Add(DeviceRow("\uE7F4", playingHere ? L.T("この PC", "This PC") : remote!.DeviceLabel,
+        DevicesPanel.Children.Add(DeviceRow(playingHere ? "\uE7F4" : "\uE8EA", playingHere ? L.T("この PC", "This PC") : remote!.DeviceLabel,
             playingHere ? null : string.Join(" · ", new[] { remote!.Title, remote.Artist }.Where(t => !string.IsNullOrEmpty(t))), accent: true, action: null));
         if (!info.InHousehold)
         {

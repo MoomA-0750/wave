@@ -228,6 +228,9 @@ public sealed class ConnectClient
     /// <summary>加入の手順で、家の鎖を使う（A が B を加えるときの add の署名に使う）。</summary>
     public VerifiedChain? VerifiedChain() => chain;
 
+    /// <summary>検証した鎖の記録（追記する前に、追記後の鎖が通るかを確かめるのに使う）。家に入っていなければ null。</summary>
+    public IReadOnlyList<ChainRecord>? VerifiedRecords() => chain is null ? null : records;
+
     /// <summary>表示用の最新のカーソル（別アカウントのものを含む）。</summary>
     public (string Writer, CursorBody Cursor)? LatestCursorBody() => latestCursor is { } c ? (c.Writer, c.Body) : null;
 
