@@ -1097,7 +1097,13 @@ public sealed partial class PlayerService : ObservableObject
     /// <summary>ラジオの残りが少なくなったら続きを足す。</summary>
     private async void ExtendRadioIfNeeded()
     {
-        if (extending || radioContinuation is null || Queue.Count - Index > 3) return;
+        if (extending || Queue.Count - Index > 3) return;
+        // ほかの端末から引き取ったラジオは続きの印を持たないので、種の曲から取り直す
+        if (radioContinuation is null)
+        {
+            if (radioSeed is { } seed) await ExtendFromSeedAsync(seed);
+            return;
+        }
         extending = true;
         try
         {
