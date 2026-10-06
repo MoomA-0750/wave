@@ -40,7 +40,7 @@ import androidx.compose.ui.res.stringResource
 @Composable
 fun LyricsPanel(
     song: Song,
-    player: Player?,
+    player: LyricsClock?,
     lyrics: LyricsRepository,
     modifier: Modifier = Modifier,
 ) {
@@ -71,14 +71,14 @@ fun LyricsPanel(
 @Composable
 private fun SyncedLyrics(
     lyrics: Lyrics.Synced,
-    player: Player?,
+    player: LyricsClock?,
     modifier: Modifier,
 ) {
-    var positionMs by remember { mutableLongStateOf(player?.currentPosition ?: 0) }
+    var positionMs by remember { mutableLongStateOf(player?.positionMs() ?: 0) }
     // 再生位置は通知が来ないので読みに行く。行の切り替えが目で見て遅れない間隔
     LaunchedEffect(player) {
         while (player != null) {
-            positionMs = player.currentPosition
+            positionMs = player.positionMs()
             delay(POSITION_POLL_MS)
         }
     }
@@ -134,3 +134,18 @@ private fun Message(
 
 private const val POSITION_POLL_MS = 100L
 private const val USER_SCROLL_HOLD_MS = 3_000L
+
+/** 歌詞を合わせる位置と、行を押したときのシーク（手元の再生か、ほかの端末の再生か）。 */
+interface LyricsClock {
+    fun positionMs(): Long
+
+    fun seekTo(positionMs: Long)
+}
+
+/** 手元の再生（MediaController）。 */
+fun Player.asLyricsClock(): LyricsClock =
+    object : LyricsClock {
+        override fun positionMs(): Long = currentPosition
+
+        override fun seekTo(positionMs: Long) = this@asLyricsClock.seekTo(positionMs)
+    }

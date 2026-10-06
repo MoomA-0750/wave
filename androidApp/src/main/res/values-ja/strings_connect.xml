@@ -154,4 +154,6 @@
     <plurals name="connect_v2_household_members">
         <item quantity="other">%d台</item>
     </plurals>
+    <string name="connect_v2_notice_control_unsent">鳴らしている端末に送れませんでした</string>
+    <string name="nowplaying_playing_on">%1$sで再生中</string>
 </resources>

@@ -35,6 +35,7 @@ internal object ConnectNotices {
                     ConnectV2Manager.NOT_MEMBER -> Message(R.string.connect_v2_notice_not_member)
                     ConnectV2Manager.ACCOUNT_UNVERIFIED -> Message(R.string.connect_v2_notice_account_unverified)
                     ConnectV2Manager.HOUSEHOLD_CREATE_UNSENT -> Message(R.string.connect_v2_notice_household_create_unsent)
+                    ConnectV2Manager.CONTROL_UNSENT -> Message(R.string.connect_v2_notice_control_unsent)
                     else -> null
                 }
             else -> null

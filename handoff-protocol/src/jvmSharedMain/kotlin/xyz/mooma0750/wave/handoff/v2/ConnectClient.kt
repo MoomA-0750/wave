@@ -255,6 +255,12 @@ class ConnectClient(
         return cursor.writer != signer.deviceId && cursor.body.playing && cursor.body.accountTag == tag && cursor.writer in online
     }
 
+    /** 表示用: 最新のキューの doc の中身（別アカウントのものを含む）。 */
+    fun latestQueueBody(): Pair<String, QueueBody>? = latestQueue?.let { it.writer to it.body }
+
+    /** 表示用: 中継につながっている家の端末（中継の申告）。 */
+    fun onlineDevices(): Set<String> = online
+
     /** A 側: Confirm に入れる床（家に入っていなければ null）。 */
     fun joinInfo(): JoinInfo? {
         val current = chain ?: return null

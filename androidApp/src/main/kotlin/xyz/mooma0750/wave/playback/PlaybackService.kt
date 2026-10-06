@@ -407,6 +407,22 @@ class PlaybackService : MediaSessionService() {
                     positionMs: Long,
                     expectedLoginGeneration: Long,
                 ): Boolean = suppressingV2 { endpoint.adopt(snapshot.copy(positionMs = positionMs.coerceAtLeast(0), playing = true), expectedLoginGeneration) }
+
+                override fun control(
+                    action: xyz.mooma0750.wave.handoff.v2.ControlAction,
+                    positionMs: Long?,
+                ): Boolean =
+                    suppressingV2 {
+                        if (player.mediaItemCount == 0) return@suppressingV2 false
+                        when (action) {
+                            xyz.mooma0750.wave.handoff.v2.ControlAction.Play -> player.play()
+                            xyz.mooma0750.wave.handoff.v2.ControlAction.Pause -> player.pause()
+                            xyz.mooma0750.wave.handoff.v2.ControlAction.Next -> player.seekToNextMediaItem()
+                            xyz.mooma0750.wave.handoff.v2.ControlAction.Previous -> player.seekToPrevious()
+                            xyz.mooma0750.wave.handoff.v2.ControlAction.Seek -> player.seekTo((positionMs ?: 0).coerceAtLeast(0))
+                        }
+                        true
+                    }
             }
         connectV2Endpoint = v2Endpoint
         container.connectV2Host.register(v2Endpoint)

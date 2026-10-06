@@ -157,12 +157,13 @@ class MainActivity : ComponentActivity() {
                         } else {
                             AppShell(
                                 nav,
-                                miniPlayer = { open -> MiniPlayer(container.player, onOpen = open, onOpenDevices = { nav.push(Screen.Connect) }) },
+                                miniPlayer = { open -> MiniPlayer(container.player, container.connectV2, onOpen = open, onOpenDevices = { nav.push(Screen.Connect) }) },
                                 nowPlaying = { close ->
                                     NowPlayingScreen(
-                                        container.player,
-                                        container.lyrics,
-                                        container.musicVideos,
+                                        connect = container.connectV2,
+                                        connection = container.player,
+                                        lyrics = container.lyrics,
+                                        videos = container.musicVideos,
                                         actions = songActions.closing(close),
                                         onClose = close,
                                         onOpenDevices = {

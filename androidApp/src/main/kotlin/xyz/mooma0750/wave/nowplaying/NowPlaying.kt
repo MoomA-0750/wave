@@ -1,5 +1,9 @@
 package xyz.mooma0750.wave.nowplaying
 
+import xyz.mooma0750.wave.connect2.ConnectV2Manager
+import xyz.mooma0750.wave.handoff.HandoffRepeat
+import xyz.mooma0750.wave.handoff.v2.ControlAction
+import androidx.compose.runtime.mutableLongStateOf
 import xyz.mooma0750.wave.ui.IconAction
 import xyz.mooma0750.wave.R
 import androidx.media3.common.Player
@@ -82,13 +86,15 @@ import androidx.compose.ui.res.pluralStringResource
 @Composable
 fun MiniPlayer(
     connection: PlayerConnection,
+    connect: ConnectV2Manager?,
     onOpen: () -> Unit,
     onOpenDevices: () -> Unit,
 ) {
-    val (state, controller) = rememberPlayerUiState(connection)
+    val display = rememberDisplay(connection, connect)
+    val state = display.state
     if (state.title == null) return
     val scope = rememberCoroutineScope()
-    val song = Media3QueuePlayer.songOf(controller?.currentMediaItem)
+    val song = display.song
     val art by rememberArtworkColor(song?.thumbnailUrl)
     val container = lerp(MaterialTheme.colorScheme.surfaceContainerHigh, art, 0.35f)
     var drag by remember { mutableFloatStateOf(0f) }
@@ -99,12 +105,12 @@ fun MiniPlayer(
             Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 8.dp, vertical = 4.dp)
-                .pointerInput(controller) {
+                .pointerInput(display.remote != null, state.hasNext, state.hasPrevious) {
                     detectHorizontalDragGestures(
                         onDragEnd = {
                             when {
-                                drag < -SWIPE_PX -> controller?.takeIf { it.hasNextMediaItem() }?.seekToNextMediaItem()
-                                drag > SWIPE_PX -> controller?.takeIf { it.hasPreviousMediaItem() }?.seekToPreviousMediaItem()
+                                drag < -SWIPE_PX -> if (state.hasNext) display.next()
+                                drag > SWIPE_PX -> if (state.hasPrevious) display.previous()
                             }
                             drag = 0f
                         },
@@ -121,17 +127,30 @@ fun MiniPlayer(
                 )
                 Column(Modifier.weight(1f).padding(horizontal = 10.dp)) {
                     Text(state.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-                    Text(
-                        listOfNotNull(state.artist, state.error?.let { stringResource(R.string.nowplaying_error, it) }, if (state.buffering) stringResource(R.string.nowplaying_buffering) else null).joinToString(" • "),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    val remote = display.remote
+                    if (remote != null) {
+                        // Spotify と同じく、鳴らしている端末を色を付けて出す
+                        Text(
+                            stringResource(R.string.nowplaying_playing_on, remote.deviceLabel),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    } else {
+                        Text(
+                            listOfNotNull(state.artist, state.error?.let { stringResource(R.string.nowplaying_error, it) }, if (state.buffering) stringResource(R.string.nowplaying_buffering) else null).joinToString(" • "),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
-                IconAction(R.drawable.ic_devices, stringResource(R.string.nowplaying_connected_devices), onOpenDevices)
-                LikeButton(connection, scope)
-                IconAction(if (state.isPlaying) R.drawable.ic_pause else R.drawable.ic_play_arrow, if (state.isPlaying) stringResource(R.string.nowplaying_pause) else stringResource(R.string.nowplaying_play), { controller?.togglePlayPause() })
+                IconAction(R.drawable.ic_devices, stringResource(R.string.nowplaying_connected_devices), onOpenDevices, active = display.remote != null)
+                if (display.remote == null) LikeButton(connection, scope)
+                IconAction(if (state.isPlaying) R.drawable.ic_pause else R.drawable.ic_play_arrow, if (state.isPlaying) stringResource(R.string.nowplaying_pause) else stringResource(R.string.nowplaying_play), { display.togglePlay() })
             }
             if (state.durationMs > 0) {
                 LinearProgressIndicator(
@@ -187,10 +206,14 @@ fun NowPlayingScreen(
     actions: SongActions,
     onClose: () -> Unit,
     onOpenDevices: () -> Unit,
+    connect: ConnectV2Manager? = null,
 ) {
-    val (state, controller) = rememberPlayerUiState(connection)
+    val display = rememberDisplay(connection, connect)
+    val state = display.state
+    val controller = display.controller
+    val remote = display.remote
     val scope = rememberCoroutineScope()
-    val song = Media3QueuePlayer.songOf(controller?.currentMediaItem)
+    val song = display.song
     var showQueue by remember { mutableStateOf(false) }
     var showLyrics by remember { mutableStateOf(false) }
     var video by rememberSaveable { mutableStateOf(false) }
@@ -219,13 +242,13 @@ fun NowPlayingScreen(
                     // Spotify の「曲｜動画」の切り替え
                     SingleChoiceSegmentedButtonRow {
                         SegmentedButton(selected = !video, onClick = { video = false }, shape = SegmentedButtonDefaults.itemShape(0, 2), icon = {}) { Text(stringResource(R.string.nowplaying_song)) }
-                        SegmentedButton(selected = video, onClick = { video = true }, shape = SegmentedButtonDefaults.itemShape(1, 2), icon = {}, enabled = song != null) { Text(stringResource(R.string.nowplaying_video)) }
+                        SegmentedButton(selected = video, onClick = { video = true }, shape = SegmentedButtonDefaults.itemShape(1, 2), icon = {}, enabled = song != null && remote == null) { Text(stringResource(R.string.nowplaying_video)) }
                     }
                 }
                 song?.let { SongMenuButton(it, actions, inQueue = true) } ?: Spacer(Modifier.size(48.dp))
             }
             Box(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 24.dp), contentAlignment = Alignment.Center) {
-                if (video && song != null) {
+                if (video && song != null && remote == null) {
                     MusicVideoPanel(song, controller, videos, Modifier.size(artSize).clip(RoundedCornerShape(8.dp)))
                 } else {
                     coil3.compose.AsyncImage(
@@ -249,12 +272,12 @@ fun NowPlayingScreen(
                         modifier = Modifier.then(if (artist?.browseId != null) Modifier.clickable { actions.openArtist(artist) } else Modifier),
                     )
                 }
-                LikeButton(connection, scope, size = 28.dp)
+                if (remote == null) LikeButton(connection, scope, size = 28.dp)
             }
             Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
                 Slider(
                     value = if (state.durationMs > 0) (state.positionMs.toFloat() / state.durationMs).coerceIn(0f, 1f) else 0f,
-                    onValueChange = { if (state.durationMs > 0) controller?.seekTo((it * state.durationMs).toLong()) },
+                    onValueChange = { if (state.durationMs > 0) display.seekTo((it * state.durationMs).toLong()) },
                     enabled = state.durationMs > 0,
                 )
                 Row(Modifier.fillMaxWidth()) {
@@ -264,10 +287,10 @@ fun NowPlayingScreen(
                 }
             }
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                IconAction(R.drawable.ic_shuffle, stringResource(R.string.nowplaying_shuffle_upcoming), { scope.launch { connection.shuffleUpcoming() } }, enabled = state.queue.size - state.currentIndex > 2)
-                IconAction(R.drawable.ic_skip_previous, stringResource(R.string.nowplaying_previous), { controller?.seekToPreviousMediaItem() }, enabled = state.hasPrevious, size = 36.dp)
-                PlayFab(state.isPlaying, { controller?.togglePlayPause() }, size = 72.dp)
-                IconAction(R.drawable.ic_skip_next, stringResource(R.string.nowplaying_next), { controller?.seekToNextMediaItem() }, enabled = state.hasNext, size = 36.dp)
+                IconAction(R.drawable.ic_shuffle, stringResource(R.string.nowplaying_shuffle_upcoming), { scope.launch { connection.shuffleUpcoming() } }, enabled = remote == null && state.queue.size - state.currentIndex > 2)
+                IconAction(R.drawable.ic_skip_previous, stringResource(R.string.nowplaying_previous), { display.previous() }, enabled = state.hasPrevious, size = 36.dp)
+                PlayFab(state.isPlaying, { display.togglePlay() }, size = 72.dp)
+                IconAction(R.drawable.ic_skip_next, stringResource(R.string.nowplaying_next), { display.next() }, enabled = state.hasNext, size = 36.dp)
                 IconAction(
                     if (state.repeatMode == Player.REPEAT_MODE_ONE) R.drawable.ic_repeat_one else R.drawable.ic_repeat,
                     when (state.repeatMode) {
@@ -277,10 +300,21 @@ fun NowPlayingScreen(
                     },
                     { scope.launch { connection.cycleRepeatMode() } },
                     active = state.repeatMode != Player.REPEAT_MODE_OFF,
+                    enabled = remote == null,
                 )
             }
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconAction(R.drawable.ic_devices, stringResource(R.string.nowplaying_connected_devices), onOpenDevices)
+                IconAction(R.drawable.ic_devices, stringResource(R.string.nowplaying_connected_devices), onOpenDevices, active = remote != null)
+                if (remote != null) {
+                    Text(
+                        stringResource(R.string.nowplaying_playing_on, remote.deviceLabel),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
                 Spacer(Modifier.weight(1f))
                 IconAction(R.drawable.ic_queue_music, pluralStringResource(R.plurals.nowplaying_queue_with_count, state.queue.size, state.queue.size), { showQueue = true })
             }
@@ -297,7 +331,7 @@ fun NowPlayingScreen(
                         Text(stringResource(R.string.nowplaying_lyrics), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                         IconAction(R.drawable.ic_lyrics, stringResource(R.string.nowplaying_lyrics_open_full), { showLyrics = true })
                     }
-                    LyricsPanel(song, controller, lyrics, Modifier.fillMaxWidth().height(320.dp).padding(horizontal = 8.dp))
+                    LyricsPanel(song, display.clock, lyrics, Modifier.fillMaxWidth().height(320.dp).padding(horizontal = 8.dp))
                 }
             }
         }
@@ -307,13 +341,13 @@ fun NowPlayingScreen(
         ModalBottomSheet(onDismissRequest = { showLyrics = false }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
             Text(state.title.orEmpty(), Modifier.padding(horizontal = 24.dp), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Text(state.artist.orEmpty(), Modifier.padding(horizontal = 24.dp), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            LyricsPanel(song, controller, lyrics, Modifier.fillMaxWidth().fillMaxHeight(0.85f).padding(8.dp))
+            LyricsPanel(song, display.clock, lyrics, Modifier.fillMaxWidth().fillMaxHeight(0.85f).padding(8.dp))
         }
     }
 
     if (showQueue) {
         ModalBottomSheet(onDismissRequest = { showQueue = false }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
-            QueueSheet(state, controller, connection, actions.closing { showQueue = false })
+            QueueSheet(state, if (remote == null) controller else null, connection, actions.closing { showQueue = false }, remote = remote != null)
         }
     }
 }
@@ -332,6 +366,8 @@ private fun QueueSheet(
     controller: MediaController?,
     connection: PlayerConnection,
     actions: SongActions,
+    /** ほかの端末のキューを映している（曲を選ぶ・外す操作は無い）。 */
+    remote: Boolean = false,
 ) {
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
@@ -345,7 +381,7 @@ private fun QueueSheet(
                     Modifier
                         .fillMaxWidth()
                         .then(if (current) Modifier.background(MaterialTheme.colorScheme.secondaryContainer) else Modifier)
-                        .clickable { scope.launch { connection.jumpTo(row.itemId) } }
+                        .then(if (remote) Modifier else Modifier.clickable { scope.launch { connection.jumpTo(row.itemId) } })
                         .padding(horizontal = 16.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -358,7 +394,7 @@ private fun QueueSheet(
                             SongMenuButton(song, actions, inQueue = true)
                         }
                     }
-                    if (!current) IconAction(R.drawable.ic_delete, stringResource(R.string.nowplaying_remove_from_queue), { scope.launch { connection.remove(row.itemId) } })
+                    if (!current && !remote) IconAction(R.drawable.ic_delete, stringResource(R.string.nowplaying_remove_from_queue), { scope.launch { connection.remove(row.itemId) } })
                 }
             }
         }
@@ -368,3 +404,83 @@ private fun QueueSheet(
 
 private fun formatTime(ms: Long): String = Durations.ofMillis(ms)
 
+/**
+ * 画面の操作先: 手元の再生か、ほかの端末の再生か（Spotify と同じく、ほかの端末で鳴っていればそれを映し、操作はその端末への命令になる）。
+ */
+private class Display(
+    val state: PlayerUiState,
+    val song: xyz.mooma0750.wave.core.music.Song?,
+    val controller: MediaController?,
+    val remote: ConnectV2Manager.RemotePlayback?,
+    private val connect: ConnectV2Manager?,
+    val clock: LyricsClock?,
+) {
+    fun togglePlay() {
+        val playing = remote?.playing
+        if (playing != null) connect?.control(if (playing) ControlAction.Pause else ControlAction.Play) else controller?.togglePlayPause()
+    }
+
+    fun next() {
+        if (remote != null) connect?.control(ControlAction.Next) else controller?.seekToNextMediaItem()
+    }
+
+    fun previous() {
+        if (remote != null) connect?.control(ControlAction.Previous) else controller?.seekToPreviousMediaItem()
+    }
+
+    fun seekTo(positionMs: Long) {
+        if (remote != null) connect?.control(ControlAction.Seek, positionMs) else controller?.seekTo(positionMs)
+    }
+}
+
+@Composable
+private fun rememberDisplay(
+    connection: PlayerConnection,
+    connect: ConnectV2Manager?,
+): Display {
+    val (local, controller) = rememberPlayerUiState(connection)
+    val remote = connect?.remotePlayback?.collectAsState()?.value
+    if (remote == null) {
+        val clock = remember(controller) { controller?.asLyricsClock() }
+        return Display(local, Media3QueuePlayer.songOf(controller?.currentMediaItem), controller, null, connect, clock)
+    }
+    // 位置は1秒ごとに進める（相手のカーソルの位置と、取った時刻から見積もる）
+    var now by remember { mutableLongStateOf(android.os.SystemClock.elapsedRealtime()) }
+    LaunchedEffect(remote) {
+        while (true) {
+            now = android.os.SystemClock.elapsedRealtime()
+            kotlinx.coroutines.delay(500)
+        }
+    }
+    val current = remote.current
+    val state =
+        PlayerUiState(
+            title = current.title,
+            artist = current.artists.joinToString(", ") { it.name },
+            isPlaying = remote.playing,
+            positionMs = remote.positionAt(now),
+            durationMs = (current.durationSeconds ?: 0) * 1000L,
+            queue = remote.items.mapIndexed { index, song -> QueueRow(remote.itemIds[index], song.title, song.artists.joinToString(", ") { it.name }) },
+            currentIndex = remote.currentIndex,
+            hasNext = remote.currentIndex < remote.items.size - 1 || remote.repeat != HandoffRepeat.Off,
+            hasPrevious = true,
+            repeatMode =
+                when (remote.repeat) {
+                    HandoffRepeat.One -> Player.REPEAT_MODE_ONE
+                    HandoffRepeat.All -> Player.REPEAT_MODE_ALL
+                    HandoffRepeat.Off -> Player.REPEAT_MODE_OFF
+                },
+        )
+    val latest by androidx.compose.runtime.rememberUpdatedState(remote)
+    val clock =
+        remember(connect) {
+            object : LyricsClock {
+                override fun positionMs(): Long = latest.positionAt(android.os.SystemClock.elapsedRealtime())
+
+                override fun seekTo(positionMs: Long) {
+                    connect?.control(ControlAction.Seek, positionMs)
+                }
+            }
+        }
+    return Display(state, current, null, remote, connect, clock)
+}

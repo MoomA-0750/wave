@@ -155,4 +155,6 @@
         <item quantity="one">%d device</item>
         <item quantity="other">%d devices</item>
     </plurals>
+    <string name="connect_v2_notice_control_unsent">Couldn\'t reach the device that\'s playing</string>
+    <string name="nowplaying_playing_on">Playing on %1$s</string>
 </resources>

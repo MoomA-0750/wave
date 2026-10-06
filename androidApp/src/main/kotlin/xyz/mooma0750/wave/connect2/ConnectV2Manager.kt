@@ -141,6 +141,7 @@ class ConnectV2Manager(
 
     private fun refreshInfo() {
         val engine = client
+        mutableRemotePlayback.value = mirrorOf(engine)
         writer = engine?.isWriter == true
         mutableInfo.value = Info(engine != null, engine?.householdId != null, engine?.members?.size ?: 0, engine?.isWriter == true, engine?.hasRetreated == true, engine?.storeResetPending == true)
         val known = labels
@@ -149,6 +150,73 @@ class ConnectV2Manager(
                 val self = member.deviceId == identity.deviceId
                 MemberView(member.deviceId, if (self) resources.getString(R.string.connect_v2_member_self) else known[member.deviceId] ?: resources.getString(R.string.connect_v2_member_unknown, member.deviceId.take(6)), self, member.role)
             }
+    }
+
+    /** 画面に映す、ほかの端末の再生（同じアカウントで、その端末が中継につながっているときだけ。この端末が鳴らしていれば null）。 */
+    data class RemotePlayback(
+        val deviceLabel: String,
+        val items: List<xyz.mooma0750.wave.core.music.Song>,
+        val itemIds: List<String>,
+        val currentIndex: Int,
+        val positionMs: Long,
+        /** positionMs を取った時刻（elapsedRealtime）。 */
+        val capturedAtMs: Long,
+        val playing: Boolean,
+        val repeat: HandoffRepeat,
+    ) {
+        val current: xyz.mooma0750.wave.core.music.Song get() = items[currentIndex]
+
+        /** 今の位置（再生中なら経過を足す。曲の長さで止める）。 */
+        fun positionAt(nowMs: Long): Long {
+            val position = if (playing) positionMs + (nowMs - capturedAtMs).coerceAtLeast(0) else positionMs
+            return current.durationSeconds?.let { position.coerceAtMost(it * 1000L) } ?: position
+        }
+    }
+
+    private val mutableRemotePlayback = MutableStateFlow<RemotePlayback?>(null)
+    val remotePlayback: StateFlow<RemotePlayback?> = mutableRemotePlayback
+
+    private var mirroredSnapshot: String? = null
+    private var mirroredItems: List<xyz.mooma0750.wave.handoff.HandoffItem>? = null
+
+    /** エンジンのスレッドで: 映す再生を作る（キューの doc は中身が変わったときだけ読み直す）。 */
+    private fun mirrorOf(engine: ConnectClient?): RemotePlayback? {
+        if (engine == null || engine.isWriter) return null
+        val now = engine.remoteNow() ?: return null
+        val tag = tagState?.tag ?: return null
+        if (now.cursor.accountTag != tag || now.writer !in engine.onlineDevices()) return null
+        val (writer, queue) = engine.latestQueueBody() ?: return null
+        if (writer != now.writer) return null
+        if (queue.snapshot !== mirroredSnapshot) {
+            mirroredSnapshot = queue.snapshot
+            mirroredItems = RemoteQueue.decode(queue.snapshot)?.items
+        }
+        val items = mirroredItems ?: return null
+        val index = items.indexOfFirst { it.itemId == now.cursor.currentItemId }
+        if (index < 0) return null
+        val songs =
+            items.map { item ->
+                xyz.mooma0750.wave.core.music.Song(
+                    videoId = item.videoId,
+                    title = item.title,
+                    artists = item.artists.map { xyz.mooma0750.wave.core.music.ArtistRef(it.name, it.browseId) },
+                    album = item.album?.let { xyz.mooma0750.wave.core.music.AlbumRef(it.name, it.browseId) },
+                    durationSeconds = item.durationSeconds,
+                    thumbnailUrl = item.thumbnailUrl,
+                )
+            }
+        val label = labels[now.writer] ?: resources.getString(R.string.connect_v2_member_unknown, now.writer.take(6))
+        return RemotePlayback(label, songs, items.map { it.itemId }, index, now.positionMs, SystemClock.elapsedRealtime(), now.cursor.playing, now.cursor.repeat)
+    }
+
+    /** 画面から: 鳴らしている端末へ遠隔操作を送る。 */
+    fun control(
+        action: xyz.mooma0750.wave.handoff.v2.ControlAction,
+        positionMs: Long? = null,
+    ) = post {
+        val sent = client?.sendControl(action, positionMs)
+        Log.i(WaveApplication.LOG_TAG, "connect-v2 control action=$action sent=$sent")
+        if (sent != true) mutableEvents.tryEmit(ClientEvent.ServerError(CONTROL_UNSENT))
     }
 
     private val mutableUnreadable = MutableStateFlow(false)
@@ -278,6 +346,14 @@ class ConnectV2Manager(
             override fun persist(state: ClientPersisted) {
                 runCatching { storage.save(state) }.onFailure { Log.i(WaveApplication.LOG_TAG, "connect-v2 persist failed type=${it::class.simpleName}") }
                 refreshInfo()
+            }
+
+            override fun control(
+                action: xyz.mooma0750.wave.handoff.v2.ControlAction,
+                positionMs: Long?,
+            ): Boolean {
+                Log.i(WaveApplication.LOG_TAG, "connect-v2 control received action=$action")
+                return runBlocking(Dispatchers.Main) { host.endpoint?.control(action, positionMs) == true }
             }
 
             override fun accountTag(): String? = tagState?.takeIf { it.generation == session.loginGenerationId() && it.householdId == client?.householdId }?.tag
@@ -701,6 +777,9 @@ class ConnectV2Manager(
 
         /** 家を作る要求を中継に送れなかった。 */
         const val HOUSEHOLD_CREATE_UNSENT = "household_create_unsent"
+
+        /** 遠隔操作を送れなかった。 */
+        const val CONTROL_UNSENT = "control_unsent"
 
         const val TICK_MS = 1_000L
         const val CURSOR_DEBOUNCE_MS = 1_000L

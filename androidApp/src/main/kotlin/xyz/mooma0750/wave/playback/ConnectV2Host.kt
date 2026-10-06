@@ -29,6 +29,12 @@ class ConnectV2Host {
             positionMs: Long,
             expectedLoginGeneration: Long,
         ): Boolean
+
+        /** ほかの端末からの遠隔操作に従う（本人の操作として知らせない）。 */
+        fun control(
+            action: xyz.mooma0750.wave.handoff.v2.ControlAction,
+            positionMs: Long?,
+        ): Boolean
     }
 
     data class Cursor(
