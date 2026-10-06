@@ -84,6 +84,12 @@
     <string name="settings_connected_devices">Connected devices</string>
     <string name="settings_connected_devices_summary">Continue playback on other devices</string>
     <string name="settings_log_out">Log out</string>
+    <string name="settings_log_out_confirm_title">Log out?</string>
+    <string name="settings_log_out_confirm_message">You\'ll need to sign in to YouTube Music again. The saved queue on this device is also cleared.</string>
+    <string name="settings_cancel">Cancel</string>
+    <string name="settings_about">About</string>
+    <string name="settings_version">Version %1$s</string>
+    <string name="settings_login_storage">Your login is encrypted with a key in this device\'s Android Keystore and stored only on this device. It isn\'t included in backups or device transfers.</string>
     <string name="settings_checking">Checking…</string>
     <string name="settings_debug_stream_check">Dev: Check stream</string>
     <string name="settings_debug_play_fixed">Dev: Play fixed song</string>

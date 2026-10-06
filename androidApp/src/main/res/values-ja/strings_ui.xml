@@ -83,6 +83,12 @@
     <string name="settings_connected_devices">端末の連携</string>
     <string name="settings_connected_devices_summary">ほかの端末で再生を引き継ぐ</string>
     <string name="settings_log_out">ログアウト</string>
+    <string name="settings_log_out_confirm_title">ログアウトしますか？</string>
+    <string name="settings_log_out_confirm_message">YouTube Music にログインし直す必要があります。この端末に保存したキューも消えます。</string>
+    <string name="settings_cancel">キャンセル</string>
+    <string name="settings_about">このアプリについて</string>
+    <string name="settings_version">バージョン %1$s</string>
+    <string name="settings_login_storage">ログインの情報は、この端末の Android Keystore の鍵で暗号化して、この端末の中だけに保存しています。バックアップや端末間の転送には含めません。</string>
     <string name="settings_checking">確認中…</string>
     <string name="settings_debug_stream_check">開発用: ストリーム確認</string>
     <string name="settings_debug_play_fixed">開発用: 固定の曲を再生</string>

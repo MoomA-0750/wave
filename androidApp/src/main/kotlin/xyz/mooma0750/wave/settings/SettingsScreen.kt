@@ -21,7 +21,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -41,6 +43,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import xyz.mooma0750.wave.AppContainer
+import xyz.mooma0750.wave.BuildConfig
 import xyz.mooma0750.wave.WaveApplication
 import xyz.mooma0750.wave.core.session.AccountResult
 import xyz.mooma0750.wave.core.session.CallResult
@@ -88,7 +91,7 @@ fun rememberAccountInfo(
     return AccountInfo(account, premium)
 }
 
-/** 設定（Spotify の「設定とプライバシー」）。アカウント・再生履歴の送信・端末の連携・ログアウト・開発用の確認。 */
+/** 設定（Spotify の「設定とプライバシー」）。アカウント・再生履歴の送信・端末の連携・ログアウト・このアプリについて・開発用の確認。 */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
@@ -164,10 +167,40 @@ fun SettingsScreen(
                 }
             }
             item {
+                // 押し間違いでログインが消えないよう、確かめてからログアウトする（Spotify と同じ）
+                var confirming by remember { mutableStateOf(false) }
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.settings_log_out)) },
                     leadingContent = { MenuIcon(R.drawable.ic_logout) },
-                    modifier = Modifier.clickable { container.appScope.launch { container.logout() } },
+                    modifier = Modifier.clickable { confirming = true },
+                )
+                if (confirming) {
+                    AlertDialog(
+                        onDismissRequest = { confirming = false },
+                        title = { Text(stringResource(R.string.settings_log_out_confirm_title)) },
+                        text = { Text(stringResource(R.string.settings_log_out_confirm_message)) },
+                        confirmButton = {
+                            TextButton(onClick = {
+                                confirming = false
+                                container.appScope.launch { container.logout() }
+                            }) { Text(stringResource(R.string.settings_log_out)) }
+                        },
+                        dismissButton = { TextButton(onClick = { confirming = false }) { Text(stringResource(R.string.settings_cancel)) } },
+                    )
+                }
+            }
+            item { HorizontalDivider() }
+            item {
+                // このアプリについて: 名前と版、ログインの情報の置き場所（KeystoreCredentialStore と data_extraction_rules の通り）
+                ListItem(
+                    overlineContent = { Text(stringResource(R.string.settings_about)) },
+                    headlineContent = { Text(stringResource(R.string.app_name)) },
+                    supportingContent = {
+                        Column {
+                            Text(stringResource(R.string.settings_version, BuildConfig.VERSION_NAME))
+                            Text(stringResource(R.string.settings_login_storage), Modifier.padding(top = 4.dp))
+                        }
+                    },
                 )
             }
             if (container.isDebuggable) {
