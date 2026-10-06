@@ -228,6 +228,8 @@ object DebugActions {
                     }
                 }
                 "v2_accept_reset" -> container.connectV2?.acceptStoreReset()
+                // 中継の家を作り直した後に、この端末の家の記録を消す（家を作った端末は中継に断られないので、画面の「消す」が出ない）
+                "v2_forget" -> container.connectV2?.forgetHousehold()
                 "take_over" -> {
                     val peer = container.pairStore.all().firstOrNull()
                     if (peer == null) {
@@ -325,7 +327,7 @@ private object KeystoreProbe {
         op: String,
         count: Int,
     ): String {
-        val keys = xyz.mooma0750.wave.connect2.DeviceKeysV2(container.deviceIdentity)
+        val keys = xyz.mooma0750.wave.connect2.DeviceKeysV2(container.deviceIdentity, java.io.File(container.appContext.noBackupFilesDir, "connect-v2-kx.bin"))
         val action: () -> Unit =
             when (op) {
                 "ecdh" -> {

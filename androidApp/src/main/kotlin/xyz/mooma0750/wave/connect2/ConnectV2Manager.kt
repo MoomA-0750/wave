@@ -67,7 +67,7 @@ class ConnectV2Manager(
     private val resources: android.content.res.Resources,
 ) {
     private val dispatcher = Executors.newSingleThreadExecutor { Thread(it, "connect-v2") }.asCoroutineDispatcher()
-    private val keys = DeviceKeysV2(identity)
+    private val keys = DeviceKeysV2(identity, File(storageFile.parentFile, "connect-v2-kx.bin"))
     private val storage = ConnectV2Storage(storageFile)
 
     val relay =
