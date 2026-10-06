@@ -181,6 +181,8 @@ sealed interface CommandBody {
     data class Profile(
         val from: String,
         val name: String,
+        /** 端末の種類（"phone"・"pc" など。表示の絵だけに使う）。 */
+        val kind: String? = null,
     ) : CommandBody
 }
 

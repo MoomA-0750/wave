@@ -180,6 +180,9 @@ public abstract record CommandBody
     {
         public required string From { get; init; }
         public required string Name { get; init; }
+
+        /// <summary>端末の種類（"phone"・"pc" など。表示の絵だけに使う）。</summary>
+        public string? Kind { get; init; }
     }
 }
 

@@ -65,6 +65,9 @@ public sealed class ConnectService
 
     private Dictionary<string, string> labels = new();
 
+    /// <summary>家の端末の種類（端末が知らせてきたもの。表示の絵だけ）。</summary>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> kinds = new();
+
     private sealed record TagState(string HouseholdId, string Tag, long Generation);
 
     private volatile TagState? tagState;
@@ -323,7 +326,7 @@ public sealed class ConnectService
         if (engine?.HouseholdId is null || status != RelayStatus.Connected) return;
         var count = engine.Members.Count;
         if (count == profileSentForMembers) return;
-        if (engine.SendProfile(DeviceName)) profileSentForMembers = count;
+        if (engine.SendProfile(DeviceName, "pc")) profileSentForMembers = count;
     }
 
     private void RefreshInfo()
@@ -342,7 +345,7 @@ public sealed class ConnectService
             engine?.HasRetreated == true,
             engine?.StoreResetPending == true,
             Relay?.Status ?? RelayStatus.Disconnected);
-        var members = (engine?.Members ?? []).Select(m => new MemberView(m.DeviceId, LabelOf(m.DeviceId), m.DeviceId == keys?.DeviceId, m.Role == Role.Controller, online.Contains(m.DeviceId), m.DeviceId == active)).ToList();
+        var members = (engine?.Members ?? []).Select(m => new MemberView(m.DeviceId, LabelOf(m.DeviceId), m.DeviceId == keys?.DeviceId, m.Role == Role.Controller, online.Contains(m.DeviceId), m.DeviceId == active, kinds.TryGetValue(m.DeviceId, out var k) && k == "pc")).ToList();
         RemoteView? remote = null;
         if (engine?.LatestCursorBody() is { } latest && latest.Writer != keys?.DeviceId)
         {
@@ -448,7 +451,9 @@ public sealed class ConnectService
         if (e is ClientEvent.Profile profile)
         {
             var name = new string(profile.Name.Where(ch => !char.IsControl(ch) && ch is not ('\u202A' or '\u202B' or '\u202C' or '\u202D' or '\u202E' or '\u2066' or '\u2067' or '\u2068' or '\u2069' or '\u200E' or '\u200F')).ToArray()).Trim();
+            if (profile.Kind is { } kind) kinds[profile.DeviceId] = kind;
             if (name.Length > 0 && (!labels.TryGetValue(profile.DeviceId, out var known) || known != name)) RememberLabel(profile.DeviceId, name);
+            else RefreshInfo();
             return;
         }
         if (e is ClientEvent.Joined or ClientEvent.ChainForked or ClientEvent.ChainRolledBack or ClientEvent.ChainInvalid) joinWaiter?.TrySetResult(e);
@@ -1235,7 +1240,7 @@ public sealed record ConnectInfo(
     bool StoreResetPending = false,
     RelayStatus Relay = RelayStatus.Disconnected);
 
-public sealed record MemberView(string DeviceId, string Label, bool IsSelf, bool IsController, bool Online, bool Active);
+public sealed record MemberView(string DeviceId, string Label, bool IsSelf, bool IsController, bool Online, bool Active, bool IsPc = false);
 
 public sealed record RemoteView(string DeviceId, string DeviceLabel, string? Title, string? Artist, string? ThumbnailUrl, int? DurationSeconds, bool Playing, long PositionMs, bool AccountMatches, bool Online);
 

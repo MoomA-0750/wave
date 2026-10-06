@@ -126,6 +126,17 @@ class Media3QueuePlayer(
         player.play()
     }
 
+    override fun move(
+        itemId: String,
+        toIndex: Int,
+    ) {
+        val from = indexOf(itemId) ?: return
+        val current = player.currentMediaItemIndex
+        // 今の曲とそれより前は動かさない（Spotify と同じく、並べ替えられるのは次に流れる曲）
+        if (from <= current || toIndex <= current || toIndex >= player.mediaItemCount) return
+        player.moveMediaItem(from, toIndex)
+    }
+
     override fun resumeAt(index: Int) {
         if (index !in 0 until player.mediaItemCount) return
         player.seekTo(index, 0L)

@@ -31,6 +31,7 @@ data class QueueRow(
     val itemId: String,
     val title: String,
     val artist: String,
+    val thumbnailUrl: String? = null,
 )
 
 @Composable
@@ -56,7 +57,7 @@ fun rememberPlayerUiState(connection: PlayerConnection): Pair<PlayerUiState, Med
                     queue =
                         (0 until current.mediaItemCount).map {
                             val mediaItem = current.getMediaItemAt(it)
-                            QueueRow(mediaItem.mediaId, mediaItem.mediaMetadata.title?.toString().orEmpty(), mediaItem.mediaMetadata.artist?.toString().orEmpty())
+                            QueueRow(mediaItem.mediaId, mediaItem.mediaMetadata.title?.toString().orEmpty(), mediaItem.mediaMetadata.artist?.toString().orEmpty(), mediaItem.mediaMetadata.artworkUri?.toString())
                         },
                     currentIndex = current.currentMediaItemIndex,
                     hasNext = current.hasNextMediaItem(),

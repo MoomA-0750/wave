@@ -1,5 +1,14 @@
 package xyz.mooma0750.wave.nowplaying
 
+import androidx.compose.runtime.toMutableStateList
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.ui.zIndex
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.material3.Icon
+import androidx.compose.ui.res.painterResource
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.graphics.Color
 import xyz.mooma0750.wave.connect2.ConnectV2Manager
 import xyz.mooma0750.wave.handoff.HandoffRepeat
 import xyz.mooma0750.wave.handoff.v2.ControlAction
@@ -89,6 +98,7 @@ fun MiniPlayer(
     connect: ConnectV2Manager?,
     onOpen: () -> Unit,
     onOpenDevices: () -> Unit,
+    actions: SongActions? = null,
 ) {
     val display = rememberDisplay(connection, connect)
     val state = display.state
@@ -149,7 +159,7 @@ fun MiniPlayer(
                     }
                 }
                 IconAction(R.drawable.ic_devices, stringResource(R.string.nowplaying_connected_devices), onOpenDevices, active = display.remote != null)
-                if (display.remote == null) LikeButton(connection, scope)
+                if (display.remote == null) LikeButton(connection, scope, onLikedTap = song?.let { current -> actions?.let { { it.addToPlaylist(current) } } })
                 IconAction(if (state.isPlaying) R.drawable.ic_pause else R.drawable.ic_play_arrow, if (state.isPlaying) stringResource(R.string.nowplaying_pause) else stringResource(R.string.nowplaying_play), { display.togglePlay() })
             }
             if (state.durationMs > 0) {
@@ -170,6 +180,8 @@ private fun LikeButton(
     connection: PlayerConnection,
     scope: kotlinx.coroutines.CoroutineScope,
     size: androidx.compose.ui.unit.Dp = 24.dp,
+    /** 評価済み（✓）のときに押した: Spotify と同じく、プレイリストに追加する画面を出す（評価はそこで外せる）。 */
+    onLikedTap: (() -> Unit)? = null,
 ) {
     val like by connection.likeState.collectAsState()
     val videoId = like.videoId
@@ -186,7 +198,13 @@ private fun LikeButton(
             like.status == null -> stringResource(R.string.nowplaying_like_reload)
             else -> stringResource(R.string.nowplaying_like)
         },
-        { if (videoId != null) scope.launch { connection.setLiked(videoId, !liked) } },
+        {
+            when {
+                videoId == null -> Unit
+                liked && onLikedTap != null -> onLikedTap()
+                else -> scope.launch { connection.setLiked(videoId, !liked) }
+            }
+        },
         enabled = videoId != null && !like.pending,
         active = liked,
         size = size,
@@ -217,6 +235,11 @@ fun NowPlayingScreen(
     var showQueue by remember { mutableStateOf(false) }
     var showLyrics by remember { mutableStateOf(false) }
     var video by rememberSaveable { mutableStateOf(false) }
+    // 動画のある曲だけ「動画」を押せるようにする（押してから無いと分かるのを避ける）
+    val hasVideo by androidx.compose.runtime.produceState<Boolean?>(null, song?.videoId) {
+        value = song?.videoId?.let { videos.videoFor(it) is MusicVideos.Result.Found }
+    }
+    LaunchedEffect(hasVideo) { if (hasVideo == false) video = false }
     val art by rememberArtworkColor(song?.thumbnailUrl)
     val background = MaterialTheme.colorScheme.background
     val top = lerp(background, art, 0.6f)
@@ -242,7 +265,7 @@ fun NowPlayingScreen(
                     // Spotify の「曲｜動画」の切り替え
                     SingleChoiceSegmentedButtonRow {
                         SegmentedButton(selected = !video, onClick = { video = false }, shape = SegmentedButtonDefaults.itemShape(0, 2), icon = {}) { Text(stringResource(R.string.nowplaying_song)) }
-                        SegmentedButton(selected = video, onClick = { video = true }, shape = SegmentedButtonDefaults.itemShape(1, 2), icon = {}, enabled = song != null && remote == null) { Text(stringResource(R.string.nowplaying_video)) }
+                        SegmentedButton(selected = video, onClick = { video = true }, shape = SegmentedButtonDefaults.itemShape(1, 2), icon = {}, enabled = song != null && remote == null && hasVideo == true) { Text(stringResource(R.string.nowplaying_video)) }
                     }
                 }
                 song?.let { SongMenuButton(it, actions, inQueue = true) } ?: Spacer(Modifier.size(48.dp))
@@ -272,7 +295,7 @@ fun NowPlayingScreen(
                         modifier = Modifier.then(if (artist?.browseId != null) Modifier.clickable { actions.openArtist(artist) } else Modifier),
                     )
                 }
-                if (remote == null) LikeButton(connection, scope, size = 28.dp)
+                if (remote == null) LikeButton(connection, scope, size = 28.dp, onLikedTap = song?.let { current -> { actions.addToPlaylist(current) } })
             }
             Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
                 // ほかの端末を映している間は、ドラッグの間は表示だけ動かし、指を離したときに1回だけ命令を送る（命令ごとに暗号化・鍵交換をする）
@@ -331,6 +354,30 @@ fun NowPlayingScreen(
                 Spacer(Modifier.weight(1f))
                 IconAction(R.drawable.ic_queue_music, pluralStringResource(R.plurals.nowplaying_queue_with_count, state.queue.size, state.queue.size), { showQueue = true })
             }
+            // 次の曲（Windows・Spotify と同じく、操作の下に出す。押すとキューを開く）
+            state.queue.getOrNull(state.currentIndex + 1)?.let { next ->
+                Card(
+                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).clickable { showQueue = true },
+                    colors = CardDefaults.cardColors(containerColor = lerp(MaterialTheme.colorScheme.surfaceContainerHigh, art, 0.35f)),
+                ) {
+                    Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(stringResource(R.string.nowplaying_next_up), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                        TextButton(onClick = { showQueue = true }) { Text(stringResource(R.string.nowplaying_open_queue)) }
+                    }
+                    Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        coil3.compose.AsyncImage(
+                            model = next.thumbnailUrl,
+                            contentDescription = null,
+                            modifier = Modifier.size(48.dp).clip(RoundedCornerShape(4.dp)),
+                            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                        )
+                        Column(Modifier.padding(start = 12.dp)) {
+                            Text(next.title, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.SemiBold)
+                            Text(next.artist, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+            }
             val like by connection.likeState.collectAsState()
             like.message?.let { Text(it, Modifier.padding(horizontal = 24.dp), style = MaterialTheme.typography.bodySmall) }
             state.error?.let { Text(stringResource(R.string.nowplaying_error, it), Modifier.padding(horizontal = 24.dp), style = MaterialTheme.typography.bodySmall) }
@@ -379,35 +426,102 @@ private fun QueueSheet(
     controller: MediaController?,
     connection: PlayerConnection,
     actions: SongActions,
-    /** ほかの端末のキューを映している（曲を選ぶ・外す操作は無い）。 */
+    /** ほかの端末のキューを映している（曲を選ぶ・外す・並べ替える操作は無い）。 */
     remote: Boolean = false,
 ) {
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
     LaunchedEffect(Unit) { if (state.currentIndex > 0) listState.scrollToItem(state.currentIndex) }
+    // ドラッグの間は手元の並びを動かして見せ、指を離したときに1回だけ再生サービスへ送る
+    val rows = remember(state.queue) { state.queue.toMutableStateList() }
+    var dragging by remember { mutableStateOf<String?>(null) }
+    var dragOffset by remember { mutableFloatStateOf(0f) }
     Column(Modifier.fillMaxWidth()) {
         Text(stringResource(R.string.nowplaying_queue), Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         LazyColumn(Modifier.fillMaxWidth(), state = listState) {
-            itemsIndexed(state.queue, key = { _, row -> row.itemId }) { index, row ->
+            itemsIndexed(rows, key = { _, row -> row.itemId }) { index, row ->
                 val current = index == state.currentIndex
+                val movable = !remote && index > state.currentIndex
+                val isDragged = dragging == row.itemId
                 Row(
                     Modifier
                         .fillMaxWidth()
-                        .then(if (current) Modifier.background(MaterialTheme.colorScheme.secondaryContainer) else Modifier)
-                        .then(if (remote) Modifier else Modifier.clickable { scope.launch { connection.jumpTo(row.itemId) } })
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                        .zIndex(if (isDragged) 1f else 0f)
+                        .graphicsLayer { translationY = if (isDragged) dragOffset else 0f }
+                        .background(
+                            when {
+                                isDragged -> MaterialTheme.colorScheme.surfaceContainerHighest
+                                current -> MaterialTheme.colorScheme.secondaryContainer
+                                else -> Color.Transparent
+                            },
+                        ).then(if (remote) Modifier else Modifier.clickable { scope.launch { connection.jumpTo(row.itemId) } })
+                        .padding(start = 16.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Column(Modifier.weight(1f)) {
-                        Text(row.title, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = if (current) FontWeight.Bold else FontWeight.Normal)
-                        Text(row.artist, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
+                    coil3.compose.AsyncImage(
+                        model = row.thumbnailUrl,
+                        contentDescription = null,
+                        modifier = Modifier.size(48.dp).clip(RoundedCornerShape(4.dp)),
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                    )
+                    Column(Modifier.weight(1f).padding(start = 12.dp)) {
+                        Text(row.title, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = if (current) FontWeight.Bold else FontWeight.Normal, color = if (current) MaterialTheme.colorScheme.primary else Color.Unspecified)
+                        Text(row.artist, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    controller?.takeIf { index < it.mediaItemCount }?.let { c ->
-                        Media3QueuePlayer.songOf(c.getMediaItemAt(index))?.let { song ->
-                            SongMenuButton(song, actions, inQueue = true)
+                    controller?.let { c ->
+                        val position = (0 until c.mediaItemCount).firstOrNull { c.getMediaItemAt(it).mediaId == row.itemId }
+                        position?.let { Media3QueuePlayer.songOf(c.getMediaItemAt(it)) }?.let { song ->
+                            SongMenuButton(song, actions, inQueue = true, extraItems = if (!current && !remote) listOf(stringResource(R.string.nowplaying_remove_from_queue) to { scope.launch { connection.remove(row.itemId) }; Unit }) else emptyList())
                         }
                     }
-                    if (!current && !remote) IconAction(R.drawable.ic_delete, stringResource(R.string.nowplaying_remove_from_queue), { scope.launch { connection.remove(row.itemId) } })
+                    if (movable) {
+                        // 並べ替えのつまみ（Spotify と同じく右端。上下にドラッグする）
+                        Icon(
+                            painterResource(R.drawable.ic_drag_handle),
+                            contentDescription = stringResource(R.string.nowplaying_reorder),
+                            modifier =
+                                Modifier
+                                    .size(48.dp)
+                                    .padding(12.dp)
+                                    .pointerInput(row.itemId) {
+                                        detectDragGestures(
+                                            onDragStart = {
+                                                dragging = row.itemId
+                                                dragOffset = 0f
+                                            },
+                                            onDragEnd = {
+                                                val id = dragging
+                                                val to = rows.indexOfFirst { it.itemId == id }
+                                                dragging = null
+                                                dragOffset = 0f
+                                                if (id != null && to > state.currentIndex && to != state.queue.indexOfFirst { it.itemId == id }) {
+                                                    scope.launch { connection.move(id, to) }
+                                                }
+                                            },
+                                            onDragCancel = {
+                                                dragging = null
+                                                dragOffset = 0f
+                                            },
+                                        ) { change, amount ->
+                                            change.consume()
+                                            dragOffset += amount.y
+                                            val id = dragging ?: return@detectDragGestures
+                                            val from = rows.indexOfFirst { it.itemId == id }
+                                            val height = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == id }?.size?.toFloat() ?: return@detectDragGestures
+                                            // 半分を越えたら隣と入れ替える（今の曲より上には行かない）
+                                            if (dragOffset > height / 2 && from < rows.lastIndex) {
+                                                rows.add(from + 1, rows.removeAt(from))
+                                                dragOffset -= height
+                                            } else if (dragOffset < -height / 2 && from - 1 > state.currentIndex) {
+                                                rows.add(from - 1, rows.removeAt(from))
+                                                dragOffset += height
+                                            }
+                                        }
+                                    },
+                        )
+                    } else {
+                        Spacer(Modifier.size(48.dp))
+                    }
                 }
             }
         }
@@ -473,7 +587,7 @@ private fun rememberDisplay(
             isPlaying = remote.playing,
             positionMs = remote.positionAt(now),
             durationMs = (current.durationSeconds ?: 0) * 1000L,
-            queue = remote.items.mapIndexed { index, song -> QueueRow(remote.itemIds[index], song.title, song.artists.joinToString(", ") { it.name }) },
+            queue = remote.items.mapIndexed { index, song -> QueueRow(remote.itemIds[index], song.title, song.artists.joinToString(", ") { it.name }, song.thumbnailUrl) },
             currentIndex = remote.currentIndex,
             hasNext = remote.currentIndex < remote.items.size - 1 || remote.repeat != HandoffRepeat.Off,
             hasPrevious = true,

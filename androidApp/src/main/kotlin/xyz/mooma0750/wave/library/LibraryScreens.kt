@@ -228,6 +228,9 @@ fun AddToPlaylistDialog(
     song: Song,
     membership: PlaylistMembership,
     playlistsVersion: Int,
+    /** 「高く評価した曲」に入っているか（分からなければ null で行を出さない）。Spotify と同じく、ここで評価を外せる。 */
+    liked: Boolean? = null,
+    onToggleLiked: () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var creating by remember { mutableStateOf(false) }
@@ -255,6 +258,18 @@ fun AddToPlaylistDialog(
             } else {
                 LazyColumn(Modifier.heightIn(max = 400.dp)) {
                     item { IconTextButton(R.drawable.ic_add, stringResource(R.string.library_new_playlist), { creating = true }) }
+                    if (liked != null) {
+                        item {
+                            Row(Modifier.fillMaxWidth().clickable(onClick = onToggleLiked).padding(vertical = 12.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                                Text(stringResource(R.string.library_liked_songs_row), Modifier.weight(1f), maxLines = 1)
+                                androidx.compose.material3.Icon(
+                                    androidx.compose.ui.res.painterResource(if (liked) R.drawable.ic_check_circle else R.drawable.ic_add_circle),
+                                    contentDescription = null,
+                                    tint = if (liked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
                     when {
                         state.failure != null -> item { Text(failureMessage(state.failure)) }
                         state.loading -> item { CircularProgressIndicator(Modifier.padding(8.dp)) }

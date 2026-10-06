@@ -734,6 +734,7 @@ class PlaybackService : MediaSessionService() {
                         QueueCommands.ADD_TO_END -> QueueCommands.songsOf(args)?.let { queue.addToEnd(it) } ?: QueueCommands.songOf(args)?.let { queue.addToEnd(it) }
                         QueueCommands.REMOVE -> QueueCommands.itemIdOf(args)?.let { queue.remove(it) }
                         QueueCommands.JUMP -> QueueCommands.itemIdOf(args)?.let { queue.jumpTo(it) }
+                        QueueCommands.MOVE -> QueueCommands.itemIdOf(args)?.let { id -> QueueCommands.toIndexOf(args)?.let { queue.move(id, it) } }
                         QueueCommands.SHUFFLE_UPCOMING -> queue.shuffleUpcoming()
                         else -> null
                     }

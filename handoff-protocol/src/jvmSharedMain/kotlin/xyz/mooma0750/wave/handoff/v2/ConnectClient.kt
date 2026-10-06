@@ -69,6 +69,7 @@ sealed interface ClientEvent {
     data class Profile(
         val deviceId: String,
         val name: String,
+        val kind: String? = null,
     ) : ClientEvent
 }
 
@@ -936,10 +937,13 @@ class ConnectClient(
     }
 
     /** この端末の表示名を家のほかの端末に知らせる。 */
-    fun sendProfile(name: String): Boolean {
+    fun sendProfile(
+        name: String,
+        kind: String? = null,
+    ): Boolean {
         val current = chain ?: return false
         if (signer.deviceId !in current.members) return false
-        return send(RelayV2.Control(sealCommand(current, CommandBody.Profile(signer.deviceId, name.take(64)))))
+        return send(RelayV2.Control(sealCommand(current, CommandBody.Profile(signer.deviceId, name.take(64), kind?.take(16)))))
     }
 
     /** 表示用: ほかの端末の最新のカーソル（別アカウントのものを含む）と、今の時刻に合わせた位置。 */
@@ -964,7 +968,7 @@ class ConnectClient(
         val opened = DocSealer.open(message.doc, current, opener) as? DocOpen.Ok ?: return
         val body = runCatching { ConnectJson.json.decodeFromString(CommandBody.serializer(), opened.plaintext.decodeToString()) }.getOrNull() ?: return
         if (body is CommandBody.Profile) {
-            if (body.from == opened.header.writerId && body.from != signer.deviceId && body.from in current.members) effects.event(ClientEvent.Profile(body.from, body.name))
+            if (body.from == opened.header.writerId && body.from != signer.deviceId && body.from in current.members) effects.event(ClientEvent.Profile(body.from, body.name, body.kind))
             return
         }
         val command = body as? CommandBody.Control ?: return

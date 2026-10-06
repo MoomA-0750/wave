@@ -643,7 +643,7 @@ public sealed partial class MainWindow : Window
         }
         else
         {
-            DevicesPanel.Children.Add(DeviceRow("\uE8EA", remote.DeviceLabel, string.Join(" · ", new[] { remote.Title, remote.Artist }.Where(t => !string.IsNullOrEmpty(t))), accent: true, enabled: true, action: null));
+            DevicesPanel.Children.Add(DeviceRow(connect.Members.FirstOrDefault(m => m.DeviceId == remote.DeviceId)?.IsPc == true ? "\uE7F4" : "\uE8EA", remote.DeviceLabel, string.Join(" · ", new[] { remote.Title, remote.Artist }.Where(t => !string.IsNullOrEmpty(t))), accent: true, enabled: true, action: null));
         }
         if (!info.InHousehold)
         {
@@ -668,7 +668,7 @@ public sealed partial class MainWindow : Window
                     else
                     {
                         var target = member.DeviceId;
-                        DevicesPanel.Children.Add(DeviceRow("\uE8EA", member.Label, member.Online ? null : L.T("オフライン", "Offline"), accent: false, enabled: member.Online, action: () =>
+                        DevicesPanel.Children.Add(DeviceRow(member.IsPc ? "\uE7F4" : "\uE8EA", member.Label, member.Online ? null : L.T("オフライン", "Offline"), accent: false, enabled: member.Online, action: () =>
                         {
                             DevicesFlyout.Hide();
                             connect.PlayOnDevice(target);

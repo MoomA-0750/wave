@@ -52,7 +52,7 @@ fun DevicePickerSheet(
                 DeviceRow(R.drawable.ic_smartphone, stringResource(R.string.devices_this_phone), null, current = true, enabled = true, onClick = null)
             } else {
                 DeviceRow(
-                    R.drawable.ic_devices,
+                    if (members.firstOrNull { it.deviceId == playing.deviceId }?.isPc == true) R.drawable.ic_computer else R.drawable.ic_smartphone,
                     playing.deviceLabel,
                     listOf(playing.current.title, playing.current.artists.joinToString(", ") { it.name }).joinToString(" • "),
                     current = true,
@@ -76,7 +76,7 @@ fun DevicePickerSheet(
                                 manager.transfer()
                             }
                         } else {
-                            DeviceRow(R.drawable.ic_devices, member.label, if (member.online) null else stringResource(R.string.devices_offline), current = false, enabled = member.online) {
+                            DeviceRow(if (member.isPc) R.drawable.ic_computer else R.drawable.ic_smartphone, member.label, if (member.online) null else stringResource(R.string.devices_offline), current = false, enabled = member.online) {
                                 onDismiss()
                                 manager.playOnDevice(member.deviceId)
                             }

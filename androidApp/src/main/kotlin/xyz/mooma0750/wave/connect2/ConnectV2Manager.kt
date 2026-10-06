@@ -131,6 +131,8 @@ class ConnectV2Manager(
         val role: Role,
         /** 中継につながっている（中継の申告。表示だけ）。 */
         val online: Boolean = false,
+        /** PC（端末が知らせてきた種類。表示の絵だけ）。 */
+        val isPc: Boolean = false,
     )
 
     private val mutableMembers = MutableStateFlow<List<MemberView>>(emptyList())
@@ -140,6 +142,9 @@ class ConnectV2Manager(
 
     @Volatile
     private var labels: Map<String, String> = emptyMap()
+
+    /** 家の端末の種類（端末が知らせてきたもの。表示の絵だけ）。 */
+    private val kinds = java.util.concurrent.ConcurrentHashMap<String, String>()
 
     private fun refreshInfo() {
         val engine = client
@@ -152,7 +157,7 @@ class ConnectV2Manager(
         mutableMembers.value =
             engine?.members.orEmpty().map { member ->
                 val self = member.deviceId == identity.deviceId
-                MemberView(member.deviceId, if (self) resources.getString(R.string.connect_v2_member_self) else known[member.deviceId] ?: resources.getString(R.string.connect_v2_member_unknown, member.deviceId.take(6)), self, member.role, member.deviceId in online)
+                MemberView(member.deviceId, if (self) resources.getString(R.string.connect_v2_member_self) else known[member.deviceId] ?: resources.getString(R.string.connect_v2_member_unknown, member.deviceId.take(6)), self, member.role, member.deviceId in online, kinds[member.deviceId] == "pc")
             }
     }
 
@@ -232,7 +237,7 @@ class ConnectV2Manager(
         if (engine?.householdId == null || status != RelayClientV2.Status.Connected) return
         val count = engine.members.size
         if (count == profileSentForMembers) return
-        if (engine.sendProfile(android.os.Build.MODEL)) profileSentForMembers = count
+        if (engine.sendProfile(android.os.Build.MODEL, "phone")) profileSentForMembers = count
     }
 
     /** デバイスの一覧で、ほかの端末を選んだ（その端末に再生を移す）。 */
@@ -385,7 +390,8 @@ class ConnectV2Manager(
             override fun event(event: ClientEvent) {
                 if (event is ClientEvent.Profile) {
                     val name = xyz.mooma0750.wave.handoff.crypto.Pairing.sanitizeName(event.name)
-                    if (labels[event.deviceId] != name) rememberLabel(event.deviceId, name)
+                    event.kind?.let { kinds[event.deviceId] = it }
+                    if (labels[event.deviceId] != name) rememberLabel(event.deviceId, name) else refreshInfo()
                     return
                 }
                 if (event is ClientEvent.RemoteChanged) mutableRemote.value = RemoteView(event.writer, event.cursor, event.accountMatches)

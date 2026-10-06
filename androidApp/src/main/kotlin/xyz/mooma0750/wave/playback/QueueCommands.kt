@@ -17,6 +17,7 @@ object QueueCommands {
     const val ADD_TO_END = "xyz.mooma0750.wave.ADD_TO_END"
     const val REMOVE = "xyz.mooma0750.wave.REMOVE"
     const val JUMP = "xyz.mooma0750.wave.JUMP"
+    const val MOVE = "xyz.mooma0750.wave.MOVE"
     const val SHUFFLE_UPCOMING = "xyz.mooma0750.wave.SHUFFLE_UPCOMING"
 
     /** 再生中の曲の評価を切り替える。自アプリの UI と、トークン付きの通知のボタンから受ける（決定 G-2）。 */
@@ -27,12 +28,13 @@ object QueueCommands {
     const val KEY_TARGET_LIKED = "targetLiked"
     const val KEY_NOTIFICATION_TOKEN = "notificationToken"
 
-    val all = listOf(PLAY_SONG, PLAY_FROM, ADD_NEXT, ADD_TO_END, REMOVE, JUMP, SHUFFLE_UPCOMING, TOGGLE_LIKE).map { SessionCommand(it, Bundle.EMPTY) }
+    val all = listOf(PLAY_SONG, PLAY_FROM, ADD_NEXT, ADD_TO_END, REMOVE, JUMP, MOVE, SHUFFLE_UPCOMING, TOGGLE_LIKE).map { SessionCommand(it, Bundle.EMPTY) }
 
     private const val KEY_SONG = "song"
     private const val KEY_SONGS = "songs"
     private const val KEY_PLAY_FROM = "playFrom"
     private const val KEY_ITEM_ID = "itemId"
+    private const val KEY_TO_INDEX = "toIndex"
     private val json = Json { ignoreUnknownKeys = true }
 
     @Serializable
@@ -62,4 +64,15 @@ object QueueCommands {
     fun itemArgs(itemId: String): Bundle = Bundle().apply { putString(KEY_ITEM_ID, itemId) }
 
     fun itemIdOf(args: Bundle): String? = args.getString(KEY_ITEM_ID)
+
+    fun moveArgs(
+        itemId: String,
+        toIndex: Int,
+    ): Bundle =
+        Bundle().apply {
+            putString(KEY_ITEM_ID, itemId)
+            putInt(KEY_TO_INDEX, toIndex)
+        }
+
+    fun toIndexOf(args: Bundle): Int? = args.getInt(KEY_TO_INDEX, -1).takeIf { it >= 0 }
 }

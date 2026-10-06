@@ -91,4 +91,8 @@
     <string name="settings_debug_play_public_playlist">開発用: 公開プレイリストを再生</string>
     <string name="settings_debug_last_in_queue">開発用: キューの最後の曲へ</string>
     <string name="settings_debug_song_end">開発用: 曲の終わりへ</string>
+    <string name="nowplaying_next_up">次の曲</string>
+    <string name="nowplaying_open_queue">キューを開く</string>
+    <string name="nowplaying_reorder">ドラッグして並べ替え</string>
+    <string name="library_liked_songs_row">高く評価した曲</string>
 </resources>

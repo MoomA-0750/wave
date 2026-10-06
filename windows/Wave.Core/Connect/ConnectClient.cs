@@ -51,7 +51,7 @@ public abstract record ClientEvent
     public sealed record Joined : ClientEvent;
 
     /// <summary>家の端末が表示名を知らせてきた（表示だけ）。</summary>
-    public sealed record Profile(string DeviceId, string Name) : ClientEvent;
+    public sealed record Profile(string DeviceId, string Name, string? Kind = null) : ClientEvent;
 }
 
 /// <summary>
@@ -1013,11 +1013,11 @@ public sealed class ConnectClient
     }
 
     /// <summary>この端末の表示名を家のほかの端末に知らせる。</summary>
-    public bool SendProfile(string name)
+    public bool SendProfile(string name, string? kind = null)
     {
         var current = chain;
         if (current is null || !current.Members.ContainsKey(signer.DeviceId)) return false;
-        return send(new RelayV2.Control { Doc = SealCommand(current, new CommandBody.Profile { From = signer.DeviceId, Name = name.Length > 64 ? name[..64] : name }) });
+        return send(new RelayV2.Control { Doc = SealCommand(current, new CommandBody.Profile { From = signer.DeviceId, Name = name.Length > 64 ? name[..64] : name, Kind = kind }) });
     }
 
     /// <summary>遠隔操作を送る（鳴っていない端末から、今鳴らしている同じアカウントの端末へ）。</summary>
@@ -1069,7 +1069,7 @@ public sealed class ConnectClient
         var body = ConnectJson.Decode<CommandBody>(opened.Plaintext);
         if (body is CommandBody.Profile profile)
         {
-            if (profile.From == opened.Header.WriterId && profile.From != signer.DeviceId && current.Members.ContainsKey(profile.From)) effects.Event(new ClientEvent.Profile(profile.From, profile.Name));
+            if (profile.From == opened.Header.WriterId && profile.From != signer.DeviceId && current.Members.ContainsKey(profile.From)) effects.Event(new ClientEvent.Profile(profile.From, profile.Name, profile.Kind));
             return;
         }
         if (body is not CommandBody.Control command) return;

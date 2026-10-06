@@ -74,6 +74,12 @@ class PlayerConnection(
 
     suspend fun jumpTo(itemId: String) = send(QueueCommands.JUMP, QueueCommands.itemArgs(itemId))
 
+    /** キューを並べ替える（今の曲より後ろだけ）。 */
+    suspend fun move(
+        itemId: String,
+        toIndex: Int,
+    ) = send(QueueCommands.MOVE, QueueCommands.moveArgs(itemId, toIndex))
+
     /** 表示中の曲（videoId）の評価を切り替える。曲が変わっていたら Service が受け付けない。 */
     suspend fun setLiked(
         videoId: String,

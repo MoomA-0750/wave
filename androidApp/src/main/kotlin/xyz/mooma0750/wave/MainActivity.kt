@@ -13,6 +13,7 @@ import xyz.mooma0750.wave.ui.WaveTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -165,7 +166,7 @@ class MainActivity : ComponentActivity() {
                             }
                             AppShell(
                                 nav,
-                                miniPlayer = { open -> MiniPlayer(container.player, container.connectV2, onOpen = open, onOpenDevices = openDevices) },
+                                miniPlayer = { open -> MiniPlayer(container.player, container.connectV2, onOpen = open, onOpenDevices = openDevices, actions = songActions) },
                                 nowPlaying = { close ->
                                     NowPlayingScreen(
                                         connect = container.connectV2,
@@ -301,6 +302,9 @@ class MainActivity : ComponentActivity() {
                             }
                             }
                             addTarget?.let { song ->
+                                val like by container.player.likeState.collectAsState()
+                                val likeScope = rememberCoroutineScope()
+                                val likedNow = if (like.videoId == song.videoId) like.status?.let { it == xyz.mooma0750.wave.core.music.LikeStatus.Like } else null
                                 AddToPlaylistDialog(
                                     viewModel(key = "library-$loginGeneration-$playlistsVersion") { LibraryViewModel(container.music) },
                                     onDismiss = { addTarget = null },
@@ -315,6 +319,8 @@ class MainActivity : ComponentActivity() {
                                     song = song,
                                     membership = container.playlistMembership,
                                     playlistsVersion = playlistsVersion,
+                                    liked = likedNow,
+                                    onToggleLiked = { likedNow?.let { now -> likeScope.launch { container.player.setLiked(song.videoId, !now) } } },
                                 )
                             }
                         }
