@@ -15,7 +15,6 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <TitleBar x:Name="AppTitleBar" Title="wave" IsBackButtonVisible="True" BackRequested="OnBack">
@@ -327,7 +326,11 @@
                     <FontIcon Glyph="&#xE8FD;" FontSize="16" />
                 </ToggleButton>
                 <Button x:Name="DevicesButton" Style="{StaticResource IconButtonStyle}" ToolTipService.ToolTip="{x:Bind app:L.T('デバイスに接続', 'Connect to a device')}" Visibility="Collapsed">
-                    <FontIcon x:Name="DevicesIcon" Glyph="&#xE772;" FontSize="16" />
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <FontIcon x:Name="DevicesIcon" Glyph="&#xE772;" FontSize="16" />
+                        <TextBlock x:Name="DevicesLabel" Visibility="Collapsed" MaxWidth="140" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
+                                   Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" Style="{StaticResource CaptionTextBlockStyle}" FontWeight="SemiBold" />
+                    </StackPanel>
                     <Button.Flyout>
                         <Flyout x:Name="DevicesFlyout" Placement="Top" Opening="OnDevicesOpening">
                             <StackPanel x:Name="DevicesPanel" Width="320" Spacing="4" />
@@ -344,12 +347,5 @@
             </StackPanel>
         </Grid>
 
-        <!-- ほかの端末で再生中（Spotify と同じく、下に色の帯） -->
-        <Border x:Name="RemoteStrip" Grid.Row="3" Background="{ThemeResource AccentFillColorDefaultBrush}" Padding="16,4" Visibility="Collapsed" Tapped="OnRemoteStripTapped">
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
-                <FontIcon Glyph="&#xE7F5;" FontSize="14" Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}" />
-                <TextBlock x:Name="RemoteStripText" Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}" Style="{StaticResource CaptionTextBlockStyle}" FontWeight="SemiBold" />
-            </StackPanel>
-        </Border>
     </Grid>
 </Window>

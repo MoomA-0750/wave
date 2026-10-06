@@ -119,6 +119,12 @@ public sealed class ConnectService
         player.CursorChanged += OnCursorChanged;
         player.UserStartedPlayback += OnUserStartedPlayback;
         player.UserPaused += () => Interlocked.Increment(ref playIntent);
+        player.SendRemoteControl = (action, positionMs) =>
+        {
+            if (client is null || Relay.Status != RelayStatus.Connected) return false;
+            Post(() => AppPaths.Log($"connect-v2 control action={action} sent={client?.SendControl(action, positionMs)}"));
+            return true;
+        };
         // 接続に関係なく回す（transfer の期限・アカウントタグの計算）
         _ = Task.Run(async () =>
         {
@@ -300,13 +306,36 @@ public sealed class ConnectService
             remote = new RemoteView(latest.Writer, LabelOf(latest.Writer), item?.Title, item is null ? null : string.Join(", ", item.Artists.Select(a => a.Name)), item?.ThumbnailUrl, item?.DurationSeconds,
                 latest.Cursor.Playing, latest.Cursor.PositionMs, tag is not null && latest.Cursor.AccountTag == tag, online.Contains(latest.Writer));
         }
+        var mirror = MirrorOf(engine, remote);
         ui.TryEnqueue(() =>
         {
             Info = info;
             Members = members;
             Remote = remote;
+            player.ShowRemote(mirror);
             Changed?.Invoke();
         });
+    }
+
+    private string? mirroredSnapshot;
+    private QueueExport? mirroredQueue;
+    private string? mirroredKey;
+
+    /// <summary>下のバーに映す、ほかの端末の再生（同じアカウントで、その端末が中継につながっているときだけ）。</summary>
+    private RemoteSnapshot? MirrorOf(ConnectClient? engine, RemoteView? remote)
+    {
+        if (engine is null || engine.IsWriter || remote is not { AccountMatches: true, Online: true }) return null;
+        if (engine.RemoteNowPosition() is not { } now || now.Writer != remote.DeviceId) return null;
+        if (engine.LatestQueueBody() is not { } queue || queue.Writer != now.Writer) return null;
+        if (!ReferenceEquals(queue.Queue.Snapshot, mirroredSnapshot))
+        {
+            mirroredSnapshot = queue.Queue.Snapshot;
+            mirroredQueue = DecodeQueue(queue.Queue.Snapshot) is { } decoded ? ToExport(decoded) : null;
+            mirroredKey = Guid.NewGuid().ToString();
+        }
+        if (mirroredQueue is not { } export || export.Items.All(i => i.Meta.ItemId != now.Cursor.CurrentItemId)) return null;
+        var duration = export.Items.First(i => i.Meta.ItemId == now.Cursor.CurrentItemId).Song.DurationSeconds;
+        return new RemoteSnapshot(remote.DeviceLabel, mirroredKey, export, now.Cursor.CurrentItemId, now.PositionMs, player.ClockMs, now.Cursor.Playing, RepeatOf(now.Cursor.Repeat), duration);
     }
 
     private void SetPairing(PairingView view) => ui.TryEnqueue(() =>
@@ -349,6 +378,12 @@ public sealed class ConnectService
         {
             owner.Save(state);
             owner.RefreshInfo();
+        }
+
+        public bool Control(ControlAction action, long? positionMs)
+        {
+            AppPaths.Log($"connect-v2 control received action={action}");
+            return owner.OnUi(() => owner.player.ApplyControl(action, positionMs));
         }
 
         public string? AccountTag() =>
@@ -440,6 +475,8 @@ public sealed class ConnectService
 
     private void OnCursorChanged(bool significant)
     {
+        // ほかの端末を映している間は、手元の再生の変化ではない
+        if (player.IsRemote) return;
         cursorTimer ??= Debounce(CursorDebounceMs, PushCursor);
         cursorTimer.Stop();
         var key = player.CurrentCursor() is { } c ? (c.CurrentItemId, c.Playing, RepeatOf(c.Repeat)) : ((string, bool, HandoffRepeat)?)null;

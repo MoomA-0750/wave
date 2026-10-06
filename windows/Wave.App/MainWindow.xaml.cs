@@ -615,16 +615,16 @@ public sealed partial class MainWindow : Window
     {
         var connect = AppServices.Connect;
         DevicesButton.Visibility = connect.Configured ? Visibility.Visible : Visibility.Collapsed;
-        var remote = connect.Remote is { AccountMatches: true, Playing: true, Online: true } r && !connect.Info.IsWriter ? r : null;
-        RemoteStrip.Visibility = remote is null ? Visibility.Collapsed : Visibility.Visible;
-        if (remote is not null) RemoteStripText.Text = L.T($"{remote.DeviceLabel}で再生中", $"Playing on {remote.DeviceLabel}");
+        // ほかの端末で鳴っているときは、アイコンの右にその端末名（Spotify と同じく色を付ける）
+        var remote = Player.IsRemote ? Player.RemoteDevice : null;
+        DevicesLabel.Visibility = remote is null ? Visibility.Collapsed : Visibility.Visible;
+        DevicesLabel.Text = remote ?? "";
+        DevicesIcon.Glyph = remote is null ? "\uE772" : "\uE8EA";
         DevicesIcon.Foreground = remote is not null ? (Brush)Application.Current.Resources["AccentTextFillColorPrimaryBrush"] : (Brush)Application.Current.Resources["TextFillColorPrimaryBrush"];
         if (DevicesFlyout.IsOpen) BuildDevicesPanel();
     }
 
     private void OnDevicesOpening(object? sender, object e) => BuildDevicesPanel();
-
-    private void OnRemoteStripTapped(object sender, TappedRoutedEventArgs e) => DevicesFlyout.ShowAt(DevicesButton);
 
     /// <summary>Spotify の「デバイスに接続」と同じ並び: 今鳴っている端末、その下に家のほかの端末。</summary>
     private void BuildDevicesPanel()
