@@ -33,7 +33,7 @@ public sealed partial class LoginWindow : Window
     public LoginWindow()
     {
         InitializeComponent();
-        AppWindow.Resize(new Windows.Graphics.SizeInt32(520, 760));
+        Ui.ResizeLogical(this, 520, 760);
         if (AppWindow.Presenter is OverlappedPresenter presenter) presenter.IsMinimizable = false;
         AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "wave.ico"));
         Closed += (_, _) =>

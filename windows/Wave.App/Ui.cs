@@ -9,6 +9,17 @@ namespace Wave.App;
 /// <summary>画面の x:Bind から呼ぶ小さな変換。</summary>
 public static partial class Ui
 {
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern uint GetDpiForWindow(IntPtr hwnd);
+
+    /// <summary>窓の大きさを、画面の拡大率に合わせて論理ピクセルで決める（AppWindow.Resize は物理ピクセル）。</summary>
+    public static void ResizeLogical(Microsoft.UI.Xaml.Window window, int width, int height)
+    {
+        var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(window);
+        var scale = Math.Max(1.0, GetDpiForWindow(hwnd) / 96.0);
+        window.AppWindow.Resize(new Windows.Graphics.SizeInt32((int)(width * scale), (int)(height * scale)));
+    }
+
     /// <summary>画像の URL を、表示する大きさに合うものにして読む（YouTube の画像は URL で大きさを選べる）。</summary>
     public static ImageSource? Img(string? url) => Img(url, 226);
 
