@@ -66,7 +66,9 @@ public sealed class ConnectService
     private Dictionary<string, string> labels = new();
 
     /// <summary>家の端末の種類（端末が知らせてきたもの。表示の絵だけ）。</summary>
-    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> kinds = new();
+    /// <summary>家の端末の種類（表示の絵だけ）。相手は中継につながったときにしか知らせないので、名前と同じくファイルに覚える。</summary>
+    private Dictionary<string, string> kinds = new();
+    private readonly string kindsPath = Path.Combine(AppPaths.Data, "connect-v2-kinds.json");
 
     private sealed record TagState(string HouseholdId, string Tag, long Generation);
 
@@ -288,6 +290,27 @@ public sealed class ConnectService
         {
             labels = new();
         }
+        try
+        {
+            kinds = File.Exists(kindsPath) ? JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(kindsPath)) ?? new() : new();
+        }
+        catch (Exception e) when (e is JsonException or IOException)
+        {
+            kinds = new();
+        }
+    }
+
+    private void RememberKind(string deviceId, string kind)
+    {
+        kinds[deviceId] = kind;
+        try
+        {
+            File.WriteAllText(kindsPath + ".tmp", JsonSerializer.Serialize(kinds));
+            File.Move(kindsPath + ".tmp", kindsPath, overwrite: true);
+        }
+        catch (IOException)
+        {
+        }
     }
 
     private void RememberLabel(string deviceId, string name) => Post(() =>
@@ -312,6 +335,7 @@ public sealed class ConnectService
     // --- 画面の値 ---
 
     private int profileSentForMembers = -1;
+    private HashSet<string> profileSeenOnline = new();
     private RelayStatus lastRelayStatus = RelayStatus.Disconnected;
 
     /// <summary>中継につながったとき・家の端末が増えたときに、この PC の名前を家に知らせる（作業スレッドで）。</summary>
@@ -325,7 +349,11 @@ public sealed class ConnectService
         }
         if (engine?.HouseholdId is null || status != RelayStatus.Connected) return;
         var count = engine.Members.Count;
-        if (count == profileSentForMembers) return;
+        // 知らせはその時つながっている端末にしか届かないので、ほかの端末が新しくつながってきたときにも知らせる
+        var online = engine.Online;
+        var newcomer = online.Any(id => id != keys?.DeviceId && !profileSeenOnline.Contains(id));
+        profileSeenOnline = new HashSet<string>(online);
+        if (count == profileSentForMembers && !newcomer) return;
         if (engine.SendProfile(DeviceName, "pc")) profileSentForMembers = count;
     }
 
@@ -451,7 +479,7 @@ public sealed class ConnectService
         if (e is ClientEvent.Profile profile)
         {
             var name = new string(profile.Name.Where(ch => !char.IsControl(ch) && ch is not ('\u202A' or '\u202B' or '\u202C' or '\u202D' or '\u202E' or '\u2066' or '\u2067' or '\u2068' or '\u2069' or '\u200E' or '\u200F')).ToArray()).Trim();
-            if (profile.Kind is { } kind) kinds[profile.DeviceId] = kind;
+            if (profile.Kind is "pc" or "phone" && (!kinds.TryGetValue(profile.DeviceId, out var knownKind) || knownKind != profile.Kind)) RememberKind(profile.DeviceId, profile.Kind);
             if (name.Length > 0 && (!labels.TryGetValue(profile.DeviceId, out var known) || known != name)) RememberLabel(profile.DeviceId, name);
             else RefreshInfo();
             return;

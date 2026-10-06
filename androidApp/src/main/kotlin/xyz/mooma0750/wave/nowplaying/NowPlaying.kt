@@ -262,10 +262,12 @@ fun NowPlayingScreen(
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconAction(R.drawable.ic_arrow_down, stringResource(R.string.nowplaying_close), onClose)
                 Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                    // Spotify の「曲｜動画」の切り替え
-                    SingleChoiceSegmentedButtonRow {
-                        SegmentedButton(selected = !video, onClick = { video = false }, shape = SegmentedButtonDefaults.itemShape(0, 2), icon = {}) { Text(stringResource(R.string.nowplaying_song)) }
-                        SegmentedButton(selected = video, onClick = { video = true }, shape = SegmentedButtonDefaults.itemShape(1, 2), icon = {}, enabled = song != null && remote == null && hasVideo == true) { Text(stringResource(R.string.nowplaying_video)) }
+                    // Spotify の「曲｜動画」の切り替え。動画のある曲だけ出す（無い曲・調べている間・ほかの端末を映している間は出さない）
+                    if (song != null && remote == null && hasVideo == true) {
+                        SingleChoiceSegmentedButtonRow {
+                            SegmentedButton(selected = !video, onClick = { video = false }, shape = SegmentedButtonDefaults.itemShape(0, 2), icon = {}) { Text(stringResource(R.string.nowplaying_song)) }
+                            SegmentedButton(selected = video, onClick = { video = true }, shape = SegmentedButtonDefaults.itemShape(1, 2), icon = {}) { Text(stringResource(R.string.nowplaying_video)) }
+                        }
                     }
                 }
                 song?.let { SongMenuButton(it, actions, inQueue = true) } ?: Spacer(Modifier.size(48.dp))

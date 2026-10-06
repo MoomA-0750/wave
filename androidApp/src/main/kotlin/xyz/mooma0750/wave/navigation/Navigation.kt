@@ -62,10 +62,7 @@ data class SongActions(
                 close()
                 openAlbum(it)
             },
-            addToPlaylist = {
-                close()
-                addToPlaylist(it)
-            },
+            // プレイリストへの追加はダイアログが上に重なるので、再生中の画面は閉じない（追加の後に元の画面へ戻る）
         )
 }
 

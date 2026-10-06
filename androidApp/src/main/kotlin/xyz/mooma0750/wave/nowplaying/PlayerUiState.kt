@@ -57,7 +57,19 @@ fun rememberPlayerUiState(connection: PlayerConnection): Pair<PlayerUiState, Med
                     queue =
                         (0 until current.mediaItemCount).map {
                             val mediaItem = current.getMediaItemAt(it)
-                            QueueRow(mediaItem.mediaId, mediaItem.mediaMetadata.title?.toString().orEmpty(), mediaItem.mediaMetadata.artist?.toString().orEmpty(), mediaItem.mediaMetadata.artworkUri?.toString())
+                            QueueRow(
+                                mediaItem.mediaId,
+                                mediaItem.mediaMetadata.title
+                                    ?.toString()
+                                    .orEmpty(),
+                                mediaItem.mediaMetadata.artist
+                                    ?.toString()
+                                    .orEmpty(),
+                                // 曲の情報の画像の URL は入れていない（時計のため）ので、曲の情報（extras）から引く
+                                xyz.mooma0750.wave.playback.Media3QueuePlayer
+                                    .songOf(mediaItem)
+                                    ?.thumbnailUrl,
+                            )
                         },
                     currentIndex = current.currentMediaItemIndex,
                     hasNext = current.hasNextMediaItem(),

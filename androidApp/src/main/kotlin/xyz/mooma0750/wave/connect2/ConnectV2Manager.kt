@@ -143,8 +143,11 @@ class ConnectV2Manager(
     @Volatile
     private var labels: Map<String, String> = emptyMap()
 
-    /** 家の端末の種類（端末が知らせてきたもの。表示の絵だけ）。 */
-    private val kinds = java.util.concurrent.ConcurrentHashMap<String, String>()
+    /** 家の端末の種類（端末が知らせてきたもの。表示の絵だけ）。相手は中継につながったときにしか知らせないので、名前と同じくファイルに覚える。 */
+    @Volatile
+    private var kinds: Map<String, String> = emptyMap()
+
+    private val kindsFile get() = File(labelsFile.parentFile, "connect-v2-kinds.json")
 
     private fun refreshInfo() {
         val engine = client
@@ -227,7 +230,13 @@ class ConnectV2Manager(
     private var profileSentForMembers = -1
     private var lastRelayStatus: RelayClientV2.Status? = null
 
-    /** エンジンのスレッドで: 中継につながったとき・家の端末が増えたときに、この端末の名前を家に知らせる。 */
+    /** 前に見た、中継につながっている端末（新しくつながってきた端末にも名前を知らせるため）。 */
+    private var profileSeenOnline: Set<String> = emptySet()
+
+    /**
+     * エンジンのスレッドで: 中継につながったとき・家の端末が増えたとき・ほかの端末が新しくつながってきたときに、この端末の名前を家に知らせる
+     * （知らせはその時つながっている端末にしか届かない）。
+     */
     private fun maybeSendProfile(engine: ConnectClient?) {
         val status = relay.status.value
         if (status != lastRelayStatus) {
@@ -236,7 +245,10 @@ class ConnectV2Manager(
         }
         if (engine?.householdId == null || status != RelayClientV2.Status.Connected) return
         val count = engine.members.size
-        if (count == profileSentForMembers) return
+        val online = engine.onlineDevices().toSet()
+        val newcomer = (online - profileSeenOnline - identity.deviceId).isNotEmpty()
+        profileSeenOnline = online
+        if (count == profileSentForMembers && !newcomer) return
         if (engine.sendProfile(android.os.Build.MODEL, "phone")) profileSentForMembers = count
     }
 
@@ -317,6 +329,19 @@ class ConnectV2Manager(
 
     private fun loadLabels() {
         labels = runCatching { labelsJson.decodeFromString<Map<String, String>>(labelsFile.readText()) }.getOrDefault(emptyMap())
+        kinds = runCatching { labelsJson.decodeFromString<Map<String, String>>(kindsFile.readText()) }.getOrDefault(emptyMap())
+    }
+
+    private fun rememberKind(
+        deviceId: String,
+        kind: String,
+    ) {
+        kinds = kinds + (deviceId to kind)
+        runCatching {
+            val temp = File(kindsFile.parentFile, kindsFile.name + ".tmp")
+            temp.writeText(labelsJson.encodeToString(kinds))
+            if (!temp.renameTo(kindsFile)) temp.delete()
+        }
     }
 
     /** 加入の相手の名前を覚える（表示だけ）。 */
@@ -390,7 +415,7 @@ class ConnectV2Manager(
             override fun event(event: ClientEvent) {
                 if (event is ClientEvent.Profile) {
                     val name = xyz.mooma0750.wave.handoff.crypto.Pairing.sanitizeName(event.name)
-                    event.kind?.let { kinds[event.deviceId] = it }
+                    event.kind?.takeIf { it in KNOWN_KINDS && kinds[event.deviceId] != it }?.let { rememberKind(event.deviceId, it) }
                     if (labels[event.deviceId] != name) rememberLabel(event.deviceId, name) else refreshInfo()
                     return
                 }
@@ -865,5 +890,6 @@ class ConnectV2Manager(
         const val QUEUE_DEBOUNCE_MS = 1_000L
         const val SETTLE_WAIT_MS = 10_000L
         const val MAX_LABEL_CHARS = 64
+        val KNOWN_KINDS = setOf("pc", "phone")
     }
 }
