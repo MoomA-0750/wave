@@ -160,8 +160,8 @@ class PlaylistViewModel(
                 }
                 is CallResult.Failed -> mutableState.update { it.copy(loading = false, failure = result.kind) }
             }
-            // 絞り込みを入れて開いたら、その場で残りのページも読む。カスタムの降順は全部読んでから逆にする
-            if (state.value.query.isNotBlank() || order.reversedLocally) loadAll()
+            // 絞り込みを入れて開いたら、その場で残りのページも読む。カスタムの降順・長さは全部読んでから手元で並べる
+            if (state.value.query.isNotBlank() || order.arrangedLocally) loadAll()
         }
     }
 
@@ -176,8 +176,8 @@ class PlaylistViewModel(
     private fun loadAll() {
         if (state.value.loadingAll) return
         if (state.value.continuation == null) {
-            // 1ページで全部だった。カスタムの降順なら、ここで逆にする
-            if (state.value.order.reversedLocally) mutableState.update { it.copy(songs = it.songs.reversed(), setVideoIds = it.setVideoIds.reversed()) }
+            // 1ページで全部だった。カスタムの降順・長さなら、ここで並べる
+            if (state.value.order.arrangedLocally) mutableState.update(::arrangedLocally)
             return
         }
         mutableState.update { it.copy(loadingAll = true) }
@@ -199,14 +199,20 @@ class PlaylistViewModel(
                 }
             }
             mutableState.update {
-                if (it.order.reversedLocally) {
-                    it.copy(loadingAll = false, songs = it.songs.reversed(), setVideoIds = it.setVideoIds.reversed(), continuation = null)
+                if (it.order.arrangedLocally) {
+                    arrangedLocally(it).copy(loadingAll = false, continuation = null)
                 } else {
                     it.copy(loadingAll = false)
                 }
             }
             Log.i(WaveApplication.LOG_TAG, "playlist load all songs=${state.value.songs.size} incomplete=${state.value.incomplete}")
         }
+    }
+
+    /** 読んだ曲を、手元で並べる並べ方（カスタムの降順・長さ）で並べる。曲とプレイリストの項目の ID は一緒に動かす。 */
+    private fun arrangedLocally(state: PlaylistUiState): PlaylistUiState {
+        val (songs, setVideoIds) = state.order.arrange(state.songs, state.setVideoIds)
+        return state.copy(songs = songs, setVideoIds = setVideoIds)
     }
 
     fun loadMore() {

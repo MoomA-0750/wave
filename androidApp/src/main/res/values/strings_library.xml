@@ -19,6 +19,7 @@
     <string name="library_sort_recently_added">Recently added</string>
     <string name="library_sort_alphabetical">Alphabetical</string>
     <string name="library_sort">Sort</string>
+    <string name="library_search_in_library">Search Your Library</string>
     <string name="library_kind_playlist">Playlist</string>
     <string name="library_kind_artist">Artist</string>
     <string name="library_kind_album">Album</string>
@@ -53,6 +54,7 @@
     <string name="library_sort_title">Title</string>
     <string name="library_sort_artist">Artist</string>
     <string name="library_sort_album">Album</string>
+    <string name="library_sort_duration">Duration</string>
     <string name="library_new_playlist_private">New playlist (private)</string>
     <string name="library_add_to_playlist">Add to playlist</string>
     <string name="library_playlist_name_hint">Playlist name</string>

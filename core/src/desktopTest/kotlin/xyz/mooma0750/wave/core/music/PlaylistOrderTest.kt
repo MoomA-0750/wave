@@ -50,6 +50,30 @@ class PlaylistOrderTest {
     }
 
     @Test
+    fun durationIsSortedLocallyAfterLoadingInTheCustomOrder() {
+        val ascending = PlaylistOrder(PlaylistSort.Duration)
+        val descending = PlaylistOrder(PlaylistSort.Duration, descending = true)
+        assertEquals("2ggA", ascending.params)
+        assertTrue(ascending.arrangedLocally)
+        assertTrue(descending.arrangedLocally)
+        assertFalse(ascending.reversedLocally)
+        assertTrue(PlaylistOrder(PlaylistSort.Custom, descending = true).arrangedLocally)
+        assertFalse(PlaylistOrder(PlaylistSort.Title).arrangedLocally)
+
+        fun song(
+            id: String,
+            seconds: Int?,
+        ) = Song(id, id, emptyList(), null, seconds, null)
+        val songs = listOf(song("a", 200), song("b", null), song("c", 90), song("d", 200), song("e", 300))
+        val ids = listOf("sa", null, "sc", "sd", "se")
+        // 同じ長さは元の並びのまま、長さの分からない曲は最後
+        assertEquals(listOf("c", "a", "d", "e", "b") to listOf("sc", "sa", "sd", "se", null), ascending.arrange(songs, ids).let { (s, x) -> s.map { it.videoId } to x })
+        assertEquals(listOf("e", "a", "d", "c", "b") to listOf("se", "sa", "sd", "sc", null), descending.arrange(songs, ids).let { (s, x) -> s.map { it.videoId } to x })
+        assertEquals(listOf("e", "d", "c", "b", "a"), PlaylistOrder(PlaylistSort.Custom, descending = true).arrange(songs, ids).first.map { it.videoId })
+        assertEquals(songs, PlaylistOrder(PlaylistSort.Title).arrange(songs, ids).first)
+    }
+
+    @Test
     fun storedFormRoundTrips() {
         PlaylistSort.entries.forEach { sort ->
             listOf(false, true).forEach { descending ->

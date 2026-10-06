@@ -36,7 +36,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -117,20 +121,26 @@ data class LibraryTabUiState(
 )
 
 object LibraryOrder {
-    /** 絞り込みと並べ方を当てた一覧。「最近」は最近再生したものを先に、残りは追加順のまま。 */
+    /**
+     * 絞り込みと並べ方を当てた一覧。「最近」は最近再生したものを先に、残りは追加順のまま。
+     * query は「マイライブラリを検索」の語（種類のチップと一緒に効く）。
+     */
     fun arrange(
         state: LibraryTabUiState,
         filter: LibraryFilter?,
         sort: LibrarySort,
+        query: String = "",
     ): List<LibraryEntry> {
         val filtered =
             state.entries.filter {
-                when (filter) {
-                    null -> true
-                    LibraryFilter.Playlists -> it is LibraryEntry.Playlist
-                    LibraryFilter.Artists -> it is LibraryEntry.Artist
-                    LibraryFilter.Albums -> it is LibraryEntry.Album
-                }
+                val kind =
+                    when (filter) {
+                        null -> true
+                        LibraryFilter.Playlists -> it is LibraryEntry.Playlist
+                        LibraryFilter.Artists -> it is LibraryEntry.Artist
+                        LibraryFilter.Albums -> it is LibraryEntry.Album
+                    }
+                kind && matches(it.title, subtitleOf(it), query)
             }
         return when (sort) {
             LibrarySort.Added -> filtered
@@ -141,6 +151,29 @@ object LibraryOrder {
             }
         }
     }
+
+    /**
+     * 「マイライブラリを検索」に当たるか。名前と補足（作った人・アーティスト）のどれかに、入力した語がすべて含まれていれば残す
+     * （空白区切りで AND、大文字小文字は無視。プレイリストの中を探すのと同じ）。入力が空なら全部。
+     */
+    fun matches(
+        title: String,
+        subtitle: String?,
+        query: String,
+    ): Boolean {
+        val terms = query.lowercase().split(' ', '\u3000').filter { it.isNotBlank() }
+        if (terms.isEmpty()) return true
+        val haystack = "${title.lowercase()} ${subtitle.orEmpty().lowercase()}"
+        return terms.all { it in haystack }
+    }
+
+    /** 検索に使う補足（サーバーから来た文言だけ。種類の名前は含めない）。 */
+    private fun subtitleOf(entry: LibraryEntry): String? =
+        when (entry) {
+            is LibraryEntry.Playlist -> entry.playlist.subtitle
+            is LibraryEntry.Artist -> null
+            is LibraryEntry.Album -> entry.album.subtitle
+        }
 
     fun keyOf(item: HomeItem): String? =
         when (item) {
@@ -211,12 +244,20 @@ fun LibraryTabScreen(
     var filter by rememberSaveable { mutableStateOf<LibraryFilter?>(null) }
     var sort by rememberSaveable { mutableStateOf(LibrarySort.Recents) }
     var grid by rememberSaveable { mutableStateOf(false) }
+    // Spotify の「マイライブラリを検索」: 虫めがねを押すと入力欄に広がる
+    var searching by rememberSaveable { mutableStateOf(false) }
+    var query by rememberSaveable { mutableStateOf("") }
+    val closeSearch = {
+        searching = false
+        query = ""
+    }
+    BackHandler(enabled = searching, onBack = closeSearch)
     var creating by remember { mutableStateOf(false) }
     // 「高く評価した曲」は並べ方に関わらず先頭に留める（Spotify の「お気に入りの曲」と同じ）。一覧にあればその画像を使う
     val serverLiked = state.entries.firstNotNullOfOrNull { (it as? LibraryEntry.Playlist)?.playlist?.takeIf { p -> p.playlistId == MusicRepository.LIKED_SONGS } }
-    val entries = LibraryOrder.arrange(state, filter, sort).filterNot { it is LibraryEntry.Playlist && it.playlist.playlistId == MusicRepository.LIKED_SONGS }
+    val entries = LibraryOrder.arrange(state, filter, sort, query).filterNot { it is LibraryEntry.Playlist && it.playlist.playlistId == MusicRepository.LIKED_SONGS }
     val liked = PlaylistSummary(MusicRepository.LIKED_SONGS, stringResource(R.string.library_liked_songs), stringResource(R.string.library_liked_songs_subtitle), serverLiked?.thumbnailUrl)
-    val showLiked = filter == null || filter == LibraryFilter.Playlists
+    val showLiked = (filter == null || filter == LibraryFilter.Playlists) && LibraryOrder.matches(liked.title, liked.subtitle, query)
     val open = { entry: LibraryEntry ->
         when (entry) {
             is LibraryEntry.Playlist -> onOpenPlaylist(entry.playlist)
@@ -249,9 +290,27 @@ fun LibraryTabScreen(
             }
         }
         Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            SortButton(sort) { sort = it }
-            Spacer(Modifier.weight(1f))
-            IconAction(if (grid) R.drawable.ic_view_list else R.drawable.ic_grid_view, if (grid) stringResource(R.string.library_view_as_list) else stringResource(R.string.library_view_as_grid), { grid = !grid })
+            if (searching) {
+                val focus = remember { FocusRequester() }
+                LaunchedEffect(Unit) { focus.requestFocus() }
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    placeholder = { Text(stringResource(R.string.library_search_in_library)) },
+                    singleLine = true,
+                    leadingIcon = { MenuIcon(R.drawable.ic_search) },
+                    trailingIcon = { if (query.isNotEmpty()) IconAction(R.drawable.ic_close, stringResource(R.string.library_clear), { query = "" }) },
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.weight(1f).padding(start = 12.dp).height(52.dp).focusRequester(focus),
+                    textStyle = MaterialTheme.typography.bodyMedium,
+                )
+                TextButton(onClick = closeSearch) { Text(stringResource(R.string.library_cancel)) }
+            } else {
+                IconAction(R.drawable.ic_search, stringResource(R.string.library_search_in_library), { searching = true })
+                SortButton(sort) { sort = it }
+                Spacer(Modifier.weight(1f))
+                IconAction(if (grid) R.drawable.ic_view_list else R.drawable.ic_grid_view, if (grid) stringResource(R.string.library_view_as_list) else stringResource(R.string.library_view_as_grid), { grid = !grid })
+            }
         }
         when {
             state.loading -> CircularProgressIndicator(Modifier.padding(16.dp))

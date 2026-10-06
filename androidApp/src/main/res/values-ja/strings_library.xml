@@ -19,6 +19,7 @@
     <string name="library_sort_recently_added">追加順</string>
     <string name="library_sort_alphabetical">アルファベット順</string>
     <string name="library_sort">並べ替え</string>
+    <string name="library_search_in_library">マイライブラリを検索</string>
     <string name="library_kind_playlist">プレイリスト</string>
     <string name="library_kind_artist">アーティスト</string>
     <string name="library_kind_album">アルバム</string>
@@ -53,6 +54,7 @@
     <string name="library_sort_title">曲名</string>
     <string name="library_sort_artist">アーティスト</string>
     <string name="library_sort_album">アルバム</string>
+    <string name="library_sort_duration">長さ</string>
     <string name="library_new_playlist_private">新しいプレイリスト（非公開）</string>
     <string name="library_add_to_playlist">プレイリストに追加</string>
     <string name="library_playlist_name_hint">プレイリストの名前</string>

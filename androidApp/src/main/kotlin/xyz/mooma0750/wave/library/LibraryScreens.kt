@@ -111,8 +111,8 @@ fun PlaylistScreen(
                 if (shuffle) onShufflePlay(state.songs, state.continuation) else onPlay(state.songs, 0, state.continuation)
             },
     ) {
-        // カスタムの降順は、全部読んでから逆に並べる。読んでいる途中の（逆になる前の）並びは出さない
-        if (state.order.reversedLocally && state.loadingAll) {
+        // カスタムの降順・長さは、全部読んでから手元で並べる。読んでいる途中の（並べる前の）並びは出さない
+        if (state.order.arrangedLocally && state.loadingAll) {
             item {
                 Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                     CircularProgressIndicator()
@@ -176,7 +176,7 @@ fun QueueMenu(
     }
 }
 
-/** 並べ方の選択と、昇順・降順の切り替え。サーバーで並べ替えられないプレイリストはカスタムだけ。 */
+/** 並べ方の選択と、昇順・降順の切り替え。サーバーで並べ替えられないプレイリストはカスタムと長さ（手元で並べる）だけ。 */
 @Composable
 private fun SortRow(
     order: PlaylistOrder,
@@ -189,7 +189,7 @@ private fun SortRow(
         FilledTonalButton(onClick = { open = true }, modifier = Modifier.padding(start = 8.dp).height(52.dp), shape = RoundedCornerShape(8.dp)) { Text(stringResource(R.string.library_sort)) }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             Text(stringResource(R.string.library_sort), Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.titleSmall)
-            PlaylistSort.entries.filter { it == PlaylistSort.Custom || sortable }.forEach { sort ->
+            PlaylistSort.entries.filter { it == PlaylistSort.Custom || it == PlaylistSort.Duration || sortable }.forEach { sort ->
                 val selected = sort == order.sort
                 DropdownMenuItem(
                     text = { Text(sortLabel(sort), fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal, color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface) },
@@ -215,6 +215,7 @@ private fun sortLabel(sort: PlaylistSort): String =
         PlaylistSort.Title -> stringResource(R.string.library_sort_title)
         PlaylistSort.Artist -> stringResource(R.string.library_sort_artist)
         PlaylistSort.Album -> stringResource(R.string.library_sort_album)
+        PlaylistSort.Duration -> stringResource(R.string.library_sort_duration)
     }
 
 /** 曲をプレイリストに追加する（仮）。追加先は自分が編集できるプレイリストだけ。 */

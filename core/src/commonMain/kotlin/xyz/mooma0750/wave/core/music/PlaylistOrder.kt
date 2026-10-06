@@ -25,6 +25,9 @@ enum class PlaylistSort(
     Title(5),
     Artist(6),
     Album(7),
+
+    /** 曲の長さ。サーバーに並べ方が無いので、カスタムの並びで全部読んでから手元で並べる（Windows 版と同じ）。 */
+    Duration(null),
 }
 
 data class PlaylistOrder(
@@ -42,6 +45,32 @@ data class PlaylistOrder(
     /** 全部読んでから手元で逆に並べる。 */
     val reversedLocally: Boolean
         get() = sort == PlaylistSort.Custom && descending
+
+    /** 全部読んでから手元で並べる（カスタムの降順と、長さ）。読んでいる途中の並びは出さない。 */
+    val arrangedLocally: Boolean
+        get() = reversedLocally || sort == PlaylistSort.Duration
+
+    /**
+     * 全部読んだ曲を手元で並べる。extra は曲と同じ位置に対応する値（プレイリストの項目の ID）で、曲と一緒に並べ替える。
+     * 長さは同じ長さなら元の並びのまま、長さの分からない曲は向きに関わらず最後に置く。手元で並べない並べ方ならそのまま返す。
+     */
+    fun <T> arrange(
+        songs: List<Song>,
+        extra: List<T>,
+    ): Pair<List<Song>, List<T>> {
+        val order: List<Int> =
+            when {
+                reversedLocally -> songs.indices.reversed().toList()
+                sort == PlaylistSort.Duration -> {
+                    val (known, unknown) = songs.indices.partition { songs[it].durationSeconds != null }
+                    val byLength = compareBy<Int> { songs[it].durationSeconds }
+                    known.sortedWith(if (descending) byLength.reversed() else byLength) + unknown
+                }
+                else -> return songs to extra
+            }
+        // 対応が崩れている（件数が違う）ときは extra を並べ替えない
+        return order.map { songs[it] } to if (extra.size == songs.size) order.map { extra[it] } else extra
+    }
 
     /** 端末に保存する形。 */
     fun encode(): String = "${sort.name}:${if (descending) "desc" else "asc"}"

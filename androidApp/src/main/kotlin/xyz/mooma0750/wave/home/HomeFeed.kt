@@ -1,7 +1,7 @@
 package xyz.mooma0750.wave.home
 
 import android.util.Log
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -17,6 +17,10 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Shape
@@ -45,6 +49,7 @@ import xyz.mooma0750.wave.core.music.Song
 import xyz.mooma0750.wave.core.session.CallResult
 import xyz.mooma0750.wave.core.session.FailureKind
 import xyz.mooma0750.wave.navigation.SongActions
+import xyz.mooma0750.wave.search.SongMenuSheet
 import xyz.mooma0750.wave.search.failureMessage
 import xyz.mooma0750.wave.ui.IconTextButton
 
@@ -192,9 +197,18 @@ fun LazyListScope.homeFeedItems(
                 LazyRow(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     items(shelf.items) { item ->
                         val look = HomeItemLook.of(item)
-                        Card(look.thumbnailUrl, look.title, look.subtitle, if (item is HomeItem.ArtistItem) CircleShape else RoundedCornerShape(6.dp)) {
+                        // 曲のカードは長押しで曲のメニューを開く（Spotify と同じ）
+                        var menu by remember { mutableStateOf(false) }
+                        Card(
+                            look.thumbnailUrl,
+                            look.title,
+                            look.subtitle,
+                            if (item is HomeItem.ArtistItem) CircleShape else RoundedCornerShape(6.dp),
+                            onLongClick = if (item is HomeItem.SongItem) ({ menu = true }) else null,
+                        ) {
                             openHomeItem(item, onPlaySong, onOpenPlaylist, actions)
                         }
+                        if (menu && item is HomeItem.SongItem) SongMenuSheet(item.song, actions, onDismiss = { menu = false })
                     }
                 }
             }
@@ -255,9 +269,10 @@ private fun Card(
     title: String,
     subtitle: String?,
     shape: Shape,
+    onLongClick: (() -> Unit)? = null,
     onClick: () -> Unit,
 ) {
-    Column(Modifier.width(CARD_SIZE).clickable(onClick = onClick)) {
+    Column(Modifier.width(CARD_SIZE).combinedClickable(onLongClick = onLongClick, onClick = onClick)) {
         coil3.compose.AsyncImage(
             model = thumbnailUrl,
             contentDescription = null,

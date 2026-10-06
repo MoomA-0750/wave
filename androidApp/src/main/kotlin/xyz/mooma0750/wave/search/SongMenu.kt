@@ -52,8 +52,20 @@ fun SongMenuButton(
 ) {
     var open by remember { mutableStateOf(false) }
     IconAction(R.drawable.ic_more_vert, stringResource(R.string.search_menu), { open = true })
-    if (!open) return
-    val close = { open = false }
+    if (open) SongMenuSheet(song, actions, onDismiss = { open = false }, inQueue = inQueue, extraItems = extraItems)
+}
+
+/** 曲のメニューのシート。「⋯」のボタンのほか、カードの長押しからも開く（Spotify と同じ）。 */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SongMenuSheet(
+    song: Song,
+    actions: SongActions,
+    onDismiss: () -> Unit,
+    inQueue: Boolean = false,
+    extraItems: List<Pair<String, () -> Unit>> = emptyList(),
+) {
+    val close = onDismiss
     ModalBottomSheet(onDismissRequest = close) {
         Column(Modifier.navigationBarsPadding()) {
             Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {

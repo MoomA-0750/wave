@@ -1,6 +1,7 @@
 package xyz.mooma0750.wave.home
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -29,6 +30,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -47,6 +51,7 @@ import xyz.mooma0750.wave.core.music.PlaylistSummary
 import xyz.mooma0750.wave.core.music.Song
 import xyz.mooma0750.wave.core.session.AccountResult
 import xyz.mooma0750.wave.navigation.SongActions
+import xyz.mooma0750.wave.search.SongMenuSheet
 import xyz.mooma0750.wave.settings.AccountInfo
 import xyz.mooma0750.wave.settings.Avatar
 import xyz.mooma0750.wave.ui.MenuIcon
@@ -106,7 +111,7 @@ fun HomeScreen(
                 }
             }
             if (state.recent.isNotEmpty()) {
-                item(key = "recent") { RecentGrid(state.recent) { openHomeItem(it, onPlaySong, onOpenPlaylist, songActions) } }
+                item(key = "recent") { RecentGrid(state.recent, songActions) { openHomeItem(it, onPlaySong, onOpenPlaylist, songActions) } }
             }
             homeFeedItems(state, feed::refresh, feed::loadMore, onPlaySong, onOpenPlaylist, songActions)
             item(key = "bottom") { Spacer(Modifier.height(16.dp)) }
@@ -118,6 +123,7 @@ fun HomeScreen(
 @Composable
 private fun RecentGrid(
     items: List<HomeItem>,
+    actions: SongActions,
     onClick: (HomeItem) -> Unit,
 ) {
     // 広い画面では4列（Spotify のタブレットと同じ）
@@ -127,9 +133,15 @@ private fun RecentGrid(
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 row.forEach { item ->
                     val look = HomeItemLook.of(item)
+                    // 曲は長押しで曲のメニューを開く（棚のカードと同じ）
+                    var menu by remember { mutableStateOf(false) }
+                    if (menu && item is HomeItem.SongItem) SongMenuSheet(item.song, actions, onDismiss = { menu = false })
                     Card(
-                        onClick = { onClick(item) },
-                        modifier = Modifier.weight(1f).height(56.dp),
+                        modifier =
+                            Modifier.weight(1f).height(56.dp).clip(RoundedCornerShape(6.dp)).combinedClickable(
+                                onLongClick = if (item is HomeItem.SongItem) ({ menu = true }) else null,
+                                onClick = { onClick(item) },
+                            ),
                         shape = RoundedCornerShape(6.dp),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
                     ) {
