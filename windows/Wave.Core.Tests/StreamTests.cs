@@ -101,4 +101,13 @@ public class StreamTests
         Assert.Equal(new VideoSync.Step.Run(1, true), VideoSync.Decide(5000, 3000, true, false));
         Assert.Equal(new VideoSync.Step.Seek(5000, false), VideoSync.Decide(5000, 4000, false, true));
     }
+
+    [Fact]
+    public void PlaylistOrderParamsMatchTheServersSortMenu()
+    {
+        // Android の PlaylistOrderTest と同じ値（プレイリストのページの並べ替えのメニューの値）
+        Assert.Equal("2ggECAIQAw==", Wave.Core.Music.PlaylistOrder.Params(Wave.Core.Music.PlaylistOrder.Added, descending: true));
+        Assert.Equal("2ggECAEQAw==", Wave.Core.Music.PlaylistOrder.Params(Wave.Core.Music.PlaylistOrder.Added, descending: false));
+        Assert.Equal("2ggECAEQBQ==", Wave.Core.Music.PlaylistOrder.Params(5, descending: false));
+    }
 }

@@ -105,13 +105,14 @@ public sealed class MusicRepository(InnerTubeClient client)
     }
 
     /// <summary>プレイリストの曲。高く評価した曲は playlistId = LM。</summary>
-    public Task<ApiResult<PlaylistPage>> PlaylistAsync(string playlistId, string? continuation = null, CancellationToken cancel = default) =>
-        LoggedInBrowseAsync("VL" + playlistId, continuation, MusicParsers.PlaylistPage, cancel);
+    /// <param name="order">並べ方の params（PlaylistOrder）。null なら付けない</param>
+    public Task<ApiResult<PlaylistPage>> PlaylistAsync(string playlistId, string? continuation = null, CancellationToken cancel = default, string? order = null) =>
+        LoggedInBrowseAsync("VL" + playlistId, continuation, MusicParsers.PlaylistPage, cancel, order);
 
     /// <summary>プレイリストの曲を全部読む（再生とシャッフル用）。onPage にはそれまでの分を渡す。</summary>
-    public async Task<ApiResult<PlaylistPage>> FullPlaylistAsync(string playlistId, Action<PlaylistPage>? onPage = null, CancellationToken cancel = default)
+    public async Task<ApiResult<PlaylistPage>> FullPlaylistAsync(string playlistId, Action<PlaylistPage>? onPage = null, CancellationToken cancel = default, string? order = null)
     {
-        var first = await PlaylistAsync(playlistId, null, cancel);
+        var first = await PlaylistAsync(playlistId, null, cancel, order);
         if (!first.IsOk) return first;
         var page = first.Value!;
         var songs = page.Songs.ToList();
@@ -277,10 +278,10 @@ public sealed class MusicRepository(InnerTubeClient client)
     }
 
     /// <summary>ログイン必須の browse。ログインの案内だけが返ったら NotLoggedIn。</summary>
-    private async Task<ApiResult<T>> LoggedInBrowseAsync<T>(string browseId, string? continuation, Func<JsonNode, T> parse, CancellationToken cancel)
+    private async Task<ApiResult<T>> LoggedInBrowseAsync<T>(string browseId, string? continuation, Func<JsonNode, T> parse, CancellationToken cancel, string? browseParams = null)
     {
         if (!client.IsLoggedIn) return ApiResult<T>.Failed(FailureKind.NotLoggedIn);
-        var result = await BrowseAsync(browseId, continuation, null, cancel);
+        var result = await BrowseAsync(browseId, continuation, browseParams, cancel);
         if (!result.IsOk) return ApiResult<T>.Failed(result.Failure!.Value, result.Status);
         return MusicParsers.IsSignInPrompt(result.Value!) ? ApiResult<T>.Failed(FailureKind.NotLoggedIn) : ApiResult<T>.Ok(parse(result.Value!));
     }

@@ -25,12 +25,23 @@ public sealed partial class SettingsPage : Page
     {
         var account = AppServices.Account;
         NameText.Text = account.IsLoggedIn ? account.Name ?? L.T("ログイン中", "Logged in") : L.T("ログインしていません", "Not logged in");
-        StateText.Text = account.IsLoggedIn ? L.T("YouTube Music のライブラリ・おすすめ・高評価が使えます", "Your YouTube Music library, recommendations and likes are available") : L.T("ログインすると、ライブラリやおすすめが使えます", "Log in to use your library and recommendations");
+        StateText.Text = !account.IsLoggedIn ? L.T("ログインすると、ライブラリやおすすめが使えます", "Log in to use your library and recommendations")
+            : !account.AccountChecked ? L.T("アカウントを確かめています…", "Checking account…")
+            : L.T("Premium 音質: ", "Premium audio: ") + account.PremiumAudio switch
+            {
+                true => L.T("使えます", "Available"),
+                false => L.T("使えません", "Unavailable"),
+                null => account.AccountCheckFailed ? L.T("分かりません", "Unknown") : L.T("確かめています…", "Checking…"),
+            };
+        // ログインを確かめられなかった（期限切れなど）: Android と同じく、もう一度ログインを勧める
+        ReloginBar.IsOpen = account.IsLoggedIn && account.AccountCheckFailed;
         Avatar.DisplayName = account.Name ?? "";
         Avatar.ProfilePicture = Ui.Small(account.PhotoUrl);
         AccountButton.Content = account.IsLoggedIn ? L.T("ログアウト", "Log out") : L.T("ログイン", "Log in");
         UnreadableBar.IsOpen = account.SavedLoginUnreadable && !account.IsLoggedIn;
     }
+
+    private void OnRelogin(object sender, RoutedEventArgs e) => App.Window?.ShowLogin();
 
     private async void OnAccount(object sender, RoutedEventArgs e)
     {

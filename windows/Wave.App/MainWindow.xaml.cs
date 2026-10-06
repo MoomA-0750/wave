@@ -55,7 +55,6 @@ public sealed class Suggestion(string title, string? subtitle, string? thumbnail
 public sealed partial class MainWindow : Window
 {
     private string? libraryKind;
-    private bool alphabetical;
     private CancellationTokenSource? suggestCancel;
     private static readonly TimeSpan ToastDuration = TimeSpan.FromSeconds(4);
     private Microsoft.UI.Xaml.Media.Animation.Storyboard? toastCountdown;
@@ -68,6 +67,8 @@ public sealed partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        // 閉じるときに、キューと位置を書いておく（次の起動で戻す）
+        Closed += (_, _) => Player.SaveQueue();
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);
         AppWindow.TitleBar.PreferredHeightOption = TitleBarHeightOption.Tall;
@@ -93,7 +94,7 @@ public sealed partial class MainWindow : Window
         AppServices.Library.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(LibraryState.IsLoading)) LibraryLoading.Visibility = Ui.Show(AppServices.Library.IsLoading);
-            if (e.PropertyName == nameof(LibraryState.LikedThumbnail)) RenderLibrary();
+            if (e.PropertyName is nameof(LibraryState.LikedThumbnail) or nameof(LibraryState.RecentKeys)) RenderLibrary();
         };
         AppServices.Account.Changed += () => _ = AppServices.Library.RefreshAsync();
         SizeChanged += (_, _) => Layout();
@@ -301,19 +302,50 @@ public sealed partial class MainWindow : Window
         if (libraryKind is null or "artist") entries.AddRange(lib.Artists.Select(a => new LibraryEntry(a.Name, L.T("アーティスト", "Artist"), a.ThumbnailUrl, new HomeItem.ArtistItem(a))));
         if (libraryKind is null or "album") entries.AddRange(lib.Albums.Select(a => new LibraryEntry(a.Title, L.T("アルバム", "Album") + (string.IsNullOrEmpty(a.Subtitle) ? "" : " • " + a.Subtitle), a.ThumbnailUrl, new HomeItem.AlbumItem(a))));
         if (filter.Length > 0) entries = entries.Where(e => e.Title.Contains(filter, StringComparison.CurrentCultureIgnoreCase)).ToList();
-        if (alphabetical) entries = entries.OrderBy(e => e.Title, StringComparer.CurrentCultureIgnoreCase).ToList();
+        var sort = AppServices.Settings.LibrarySort;
+        if (sort == "alpha") entries = entries.OrderBy(e => e.Title, StringComparer.CurrentCultureIgnoreCase).ToList();
+        else if (sort == "recent")
+        {
+            // 最近再生したものを先に、残りは追加した順のまま（Android と同じ）
+            var rank = lib.RecentKeys.Select((key, i) => (key, i)).GroupBy(x => x.key).ToDictionary(g => g.Key, g => g.First().i);
+            entries = entries.Select((e, i) => (e, i)).OrderBy(x => x.e.Item is { } item && LibraryState.KeyOf(item) is { } k && rank.TryGetValue(k, out var r) ? r : int.MaxValue)
+                .ThenBy(x => x.i).Select(x => x.e).ToList();
+        }
         // 高く評価した曲はいつも先頭（Spotify の「お気に入りの曲」と同じ）
         if (libraryKind is null or "playlist" && (filter.Length == 0 || L.T("高く評価した曲", "Liked Songs").Contains(filter)))
             entries.Insert(0, new LibraryEntry(L.T("高く評価した曲", "Liked Songs"), L.T("プレイリスト • 自動", "Playlist • Auto"), lib.LikedThumbnail, null, isLiked: true));
         LibraryList.ItemsSource = entries;
+        LibraryGrid.ItemsSource = entries;
+        var grid = AppServices.Settings.LibraryGrid;
+        LibraryList.Visibility = Ui.Hide(grid);
+        LibraryGrid.Visibility = Ui.Show(grid);
+        // 押すと切り替わる先の絵（Spotify と同じ）
+        ViewToggleIcon.Glyph = grid ? "\uE8FD" : "\uF0E2";
+        ToolTipService.SetToolTip(ViewToggle, grid ? L.T("リストで表示", "List view") : L.T("グリッドで表示", "Grid view"));
+        SortButton.Content = sort switch
+        {
+            "alpha" => L.T("アルファベット順", "Alphabetical"),
+            "added" => L.T("最近追加した順", "Recently added"),
+            _ => L.T("最近", "Recents"),
+        };
+        SortRecent.IsChecked = sort == "recent";
+        SortAdded.IsChecked = sort == "added";
+        SortAlpha.IsChecked = sort == "alpha";
+    }
+
+    private void OnLibraryViewToggle(object sender, RoutedEventArgs e)
+    {
+        AppServices.Settings.LibraryGrid = !AppServices.Settings.LibraryGrid;
+        AppServices.Settings.Save();
+        RenderLibrary();
     }
 
     private void OnLibraryFilterChanged(object sender, TextChangedEventArgs e) => RenderLibrary();
 
     private void OnSort(object sender, RoutedEventArgs e)
     {
-        alphabetical = (sender as FrameworkElement)?.Tag as string == "alpha";
-        SortButton.Content = alphabetical ? L.T("アルファベット順", "Alphabetical") : L.T("最近", "Recents");
+        AppServices.Settings.LibrarySort = (sender as FrameworkElement)?.Tag as string ?? "recent";
+        AppServices.Settings.Save();
         RenderLibrary();
     }
 
@@ -476,6 +508,8 @@ public sealed partial class MainWindow : Window
 
     private void OnSongTab(object sender, RoutedEventArgs e) => ShowVideo(false);
 
+    private void OnVideoRetry(object sender, RoutedEventArgs e) => ShowVideo(true);
+
     private void OnVideoTab(object sender, RoutedEventArgs e) => ShowVideo(true);
 
     private async void ShowVideo(bool show)
@@ -487,7 +521,7 @@ public sealed partial class MainWindow : Window
             videoTimer?.Stop();
             videoPlayer.Stop();
             PaneVideo.Visibility = Visibility.Collapsed;
-            VideoNote.Visibility = Visibility.Collapsed;
+            VideoNotePanel.Visibility = Visibility.Collapsed;
             CoverImage.Visibility = Visibility.Visible;
             CoverBox.Background = (Brush)Application.Current.Resources["ControlFillColorSecondaryBrush"];
             return;
@@ -495,16 +529,18 @@ public sealed partial class MainWindow : Window
         CoverBox.Background = new SolidColorBrush(Colors.Black);
         CoverImage.Visibility = Visibility.Collapsed;
         VideoNote.Text = L.T("動画を読み込んでいます…", "Loading video…");
-        VideoNote.Visibility = Visibility.Visible;
+        VideoNotePanel.Visibility = Visibility.Visible;
+        VideoRetry.Visibility = Visibility.Collapsed;
         PaneVideo.SetMediaPlayer(videoPlayer.Player);
         if (!await videoPlayer.LoadAsync(video))
         {
             if (VideoTab.IsChecked != true || Player.Video != video) return;
             VideoNote.Text = L.T("動画を読み込めませんでした", "Couldn't load the video");
+            VideoRetry.Visibility = Visibility.Visible;
             return;
         }
         if (VideoTab.IsChecked != true || Player.Video != video) return;
-        VideoNote.Visibility = Visibility.Collapsed;
+        VideoNotePanel.Visibility = Visibility.Collapsed;
         PaneVideo.Visibility = Visibility.Visible;
         videoTimer ??= CreateVideoTimer();
         videoTimer.Start();
@@ -518,20 +554,37 @@ public sealed partial class MainWindow : Window
         {
             if (Player.Video is not { } video) return;
             videoPlayer.Sync(video, Player.IsRemote ? (long)(Player.Position * 1000) : Player.LocalPositionMs, Player.IsPlaying);
-            // MV に無い区間（前奏など）はジャケットを出す
+            // MV に無い区間（前奏など）は、黒地にその旨を出す（Android と同じ）
             PaneVideo.Visibility = Ui.Show(videoPlayer.Showing);
-            CoverImage.Visibility = Ui.Hide(videoPlayer.Showing);
+            VideoNote.Text = L.T("この部分には動画がありません", "There's no video for this part");
+            VideoNotePanel.Visibility = Ui.Hide(videoPlayer.Showing);
         };
         return timer;
     }
 
     private void RenderQueue()
     {
-        var entries = new List<QueueEntry>();
+        var entries = new System.Collections.ObjectModel.ObservableCollection<QueueEntry>();
         for (var i = Math.Max(0, Player.Index); i < Player.Queue.Count; i++) entries.Add(new QueueEntry(i, Player.Queue[i], i == Player.Index));
         QueueList.ItemsSource = entries;
         QueueEmpty.Visibility = entries.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         QueueList.Visibility = entries.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    private void OnQueueDragStarting(object sender, DragItemsStartingEventArgs e)
+    {
+        // 今の曲と、ほかの端末を映している間は並べ替えない
+        if (Player.IsRemote || e.Items.OfType<QueueEntry>().Any(q => q.IsCurrent)) e.Cancel = true;
+    }
+
+    private void OnQueueDragCompleted(ListViewBase sender, DragItemsCompletedEventArgs e)
+    {
+        if (e.DropResult != Windows.ApplicationModel.DataTransfer.DataPackageOperation.Move || e.Items.FirstOrDefault() is not QueueEntry moved) return;
+        if (QueueList.ItemsSource is not IList<QueueEntry> shown) return;
+        // 表示の並びでの位置から、キューでの行き先を求める（今の曲より前には置かない）
+        var to = Player.Index + Math.Max(1, shown.IndexOf(moved));
+        Player.MoveUpcoming(moved.Index, to);
+        RenderQueue();
     }
 
     private void OnQueueClick(object sender, ItemClickEventArgs e)
@@ -569,12 +622,23 @@ public sealed partial class MainWindow : Window
 
     public bool IsLiked(LikeStatus? like) => like == LikeStatus.Like;
 
-    public string LikeGlyph(LikeStatus? like) => like == LikeStatus.Like ? "\uEC61" : "\uECC8";
+    /// <summary>評価済みは✓、まだなら＋、読めていない（ログイン中で評価が分からない）なら↻（押すと読み直す。Android と同じ）。</summary>
+    public string LikeGlyph(LikeStatus? like, Song? current) => like switch
+    {
+        LikeStatus.Like => "\uEC61",
+        null when AppServices.Client.IsLoggedIn && current is not null => "\uE72C",
+        _ => "\uECC8",
+    };
 
     public Brush LikeBrush(LikeStatus? like) =>
         (Brush)Application.Current.Resources[like == LikeStatus.Like ? "AccentTextFillColorPrimaryBrush" : "TextFillColorSecondaryBrush"];
 
-    public string LikeTip(LikeStatus? like) => like == LikeStatus.Like ? L.T("プレイリストに追加", "Add to playlist") : L.T("高く評価した曲に追加", "Add to Liked Songs");
+    public string LikeTip(LikeStatus? like, Song? current) => like switch
+    {
+        LikeStatus.Like => L.T("プレイリストに追加", "Add to playlist"),
+        null when AppServices.Client.IsLoggedIn && current is not null => L.T("評価を読み直す", "Reload like status"),
+        _ => L.T("高く評価した曲に追加", "Add to Liked Songs"),
+    };
 
     public bool IsRepeating(RepeatMode mode) => mode != RepeatMode.Off;
 
@@ -623,6 +687,7 @@ public sealed partial class MainWindow : Window
     {
         if (Player.Current is not { } song) return;
         if (Player.Like == LikeStatus.Like) _ = Dialogs.AddToPlaylistAsync(song);
+        else if (Player.Like is null && AppServices.Client.IsLoggedIn) Player.ReloadLike();
         else Player.ToggleLike();
     }
 

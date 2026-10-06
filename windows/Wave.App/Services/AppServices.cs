@@ -46,6 +46,8 @@ public static class AppServices
         Library = new LibraryState();
         Player = new PlayerService(ui);
         Account.Restore();
+        // 前回のキューを、再生を始めずに戻す（同じログインのときだけ）
+        Player.RestoreSavedQueue();
         Connect = new global::Wave.App.Services.Connect.ConnectService(ui, Player, Settings.RelayV2Url, Settings.RelayV2Host);
     }
 }

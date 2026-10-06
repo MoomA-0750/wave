@@ -40,7 +40,10 @@ public sealed partial class DevicesPage : Page
         }
         else if (info.Unreadable)
         {
-            Show(InfoBarSeverity.Error, L.T("連携の保存を読めません", "Couldn’t read the saved device group"), null);
+            // Android の「リセット」と同じ: 読めない保存を消して、加わり直せるようにする
+            Show(InfoBarSeverity.Error, L.T("連携の保存を読めません", "Couldn’t read the saved device group"),
+                L.T("リセットすると、この PC はもう一度ほかの端末から加わり直します。", "Reset it to join your devices again from another device."),
+                L.T("リセット", "Reset"), Devices.ForgetHousehold);
         }
         else if (info.InHousehold && info.Relay == RelayStatus.NotMember)
         {

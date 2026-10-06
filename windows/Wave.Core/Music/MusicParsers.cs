@@ -278,8 +278,9 @@ public static partial class MusicParsers
         var editable = root.FindAll(EditablePlaylistHeader).Count > 0;
         JsonNode? songArea = appended ?? (JsonNode?)shelf;
         var endConfirmed = continuation is null && songArea is not null && !ContainsKeyLike(songArea, "continuation");
+        var sortable = root.FindAll("sortFilterSubMenuRenderer").Count > 0;
         return new PlaylistPage(title, rows.Select(r => r.Song!).ToList(), continuation, rows.Select(r => r.SetId).ToList(), editable, endConfirmed,
-            string.IsNullOrEmpty(subtitle) ? null : subtitle, thumbnail);
+            string.IsNullOrEmpty(subtitle) ? null : subtitle, thumbnail, sortable);
     }
 
     private static bool ContainsKeyLike(JsonNode? root, string fragment) => root switch

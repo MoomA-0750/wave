@@ -151,6 +151,79 @@ public sealed partial class PlayerService : ObservableObject
         timer.Interval = TimeSpan.FromMilliseconds(250);
         timer.Tick += (_, _) => Tick();
         timer.Start();
+        // キューを次の起動に持ち越す（変わってから少し待ってまとめて書く。鳴っている間は位置のために時々書く）
+        saveTimer = ui.CreateTimer();
+        saveTimer.Interval = TimeSpan.FromSeconds(2);
+        saveTimer.IsRepeating = false;
+        saveTimer.Tick += (_, _) => SaveQueue();
+        QueueChanged += ScheduleSave;
+        CursorChanged += _ => ScheduleSave();
+    }
+
+    // --- キューの持ち越し ---
+
+    private readonly QueueStore store = new();
+    private readonly DispatcherQueueTimer saveTimer;
+    private long lastPositionSaveMs;
+    private const long PositionSaveIntervalMs = 15_000;
+
+    private void ScheduleSave()
+    {
+        saveTimer.Stop();
+        saveTimer.Start();
+    }
+
+    /// <summary>今のキューを保存する（ほかの端末を映している間は、手元のキューが無いので書かない）。</summary>
+    public void SaveQueue()
+    {
+        lastPositionSaveMs = clock.ElapsedMilliseconds;
+        if (IsRemote) return;
+        if (ExportQueue() is not { } queue || CurrentCursor() is not { } cursor)
+        {
+            if (Queue.Count == 0) store.Delete();
+            return;
+        }
+        store.Save(new SavedQueue(SavedQueue.CurrentVersion, AppServices.Account.ObtainedAtEpochMs,
+            queue.Items.Select(i => new SavedQueueItem(i.Song, i.Meta.ItemId, i.Meta.Origin)).ToList(),
+            cursor.CurrentItemId, cursor.PositionMs, (int)Repeat, SourceId, queue.RadioSeed, queue.Continuation, queue.RadioPlaylistId));
+    }
+
+    /// <summary>起動時に、前回のキューを再生を始めずに戻す（保存したときと今のログインが違えば消す）。</summary>
+    public void RestoreSavedQueue()
+    {
+        if (store.Load() is not { } saved) return;
+        if (saved.ObtainedAtEpochMs != AppServices.Account.ObtainedAtEpochMs)
+        {
+            store.Delete();
+            return;
+        }
+        var index = saved.Items.FindIndex(i => i.ItemId == saved.CurrentItemId);
+        if (index < 0 || Queue.Count > 0) return;
+        SourceId = saved.SourceId;
+        radioSeed = saved.RadioSeed;
+        radioContinuation = saved.Continuation;
+        radioPlaylistId = saved.RadioPlaylistId;
+        unshuffled = saved.Items.Select(i => i.Song).ToList();
+        foreach (var item in saved.Items)
+        {
+            adoptIds = new([item.ItemId]);
+            nextOrigin = item.Origin;
+            Queue.Add(item.Song);
+        }
+        adoptIds = null;
+        nextOrigin = QueueOrigin.Source;
+        Repeat = (RepeatMode)saved.Repeat;
+        Index = index;
+        Current = Queue[index];
+        Duration = Current.DurationSeconds ?? 0;
+        Position = saved.PositionMs / 1000.0;
+        var song = Current;
+        var cancel = new CancellationTokenSource();
+        loadCancel?.Cancel();
+        loadCancel = cancel;
+        _ = LoadSongInfoAsync(song, cancel.Token);
+        _ = LoadLyricsAsync(song, cancel.Token);
+        AppPaths.Log($"queue restored items={Queue.Count} index={index}");
     }
 
     partial void OnVolumeChanged(double value)
@@ -286,6 +359,29 @@ public sealed partial class PlayerService : ObservableObject
         Message = L.T($"「{song.Title}」を次に再生します", $"{song.Title} will play next");
     }
 
+    /// <summary>
+    /// 一覧（プレイリスト・アルバム）を丸ごと、今の曲の次（next）かキューの最後に入れる（Android の「次に再生」「キューに追加」と同じ）。
+    /// キューが空なら、その一覧を再生する。
+    /// </summary>
+    public void QueueAll(IReadOnlyList<Song> songs, bool next)
+    {
+        if (songs.Count == 0) return;
+        if (Queue.Count == 0)
+        {
+            PlayList(songs);
+            return;
+        }
+        nextOrigin = QueueOrigin.UserAdded;
+        if (next)
+        {
+            for (var i = 0; i < songs.Count; i++) Queue.Insert(Index + 1 + i, songs[i]);
+        }
+        else foreach (var s in songs) Queue.Add(s);
+        nextOrigin = QueueOrigin.Source;
+        Message = next ? L.T($"{songs.Count} 曲を次に再生します", $"{L.Songs(songs.Count)} will play next")
+            : L.T($"{songs.Count} 曲をキューに追加しました", $"Added {L.Songs(songs.Count)} to queue");
+    }
+
     public void AddToQueue(Song song)
     {
         if (Queue.Count == 0)
@@ -295,6 +391,13 @@ public sealed partial class PlayerService : ObservableObject
         }
         AddAll([song], QueueOrigin.UserAdded);
         Message = L.T($"「{song.Title}」をキューに追加しました", $"Added {song.Title} to queue");
+    }
+
+    /// <summary>キューの次の曲を並べ替える（今の曲より後ろだけ）。</summary>
+    public void MoveUpcoming(int from, int to)
+    {
+        if (IsRemote || from <= Index || to <= Index || from >= Queue.Count || to >= Queue.Count || from == to) return;
+        Queue.Move(from, to);
     }
 
     public void RemoveAt(int position)
@@ -330,7 +433,8 @@ public sealed partial class PlayerService : ObservableObject
         if (Current is null) return;
         if (player.Source is null)
         {
-            _ = LoadCurrentAsync();
+            // 前回から持ち越したキューは、覚えている位置から鳴らす
+            _ = LoadCurrentAsync(Position);
             UserStartedPlayback?.Invoke(false);
             return;
         }
@@ -1060,6 +1164,7 @@ public sealed partial class PlayerService : ObservableObject
             if (remote is { } r) Position = r.PositionNow(clock.ElapsedMilliseconds);
             return;
         }
+        if (IsPlaying && clock.ElapsedMilliseconds - lastPositionSaveMs > PositionSaveIntervalMs) SaveQueue();
         if (player.Source is null) return;
         var session = player.PlaybackSession;
         Position = session.Position.TotalSeconds;
@@ -1084,6 +1189,21 @@ public sealed partial class PlayerService : ObservableObject
         if (!info.IsOk || Current?.VideoId != song.VideoId) return;
         if (AppServices.Client.IsLoggedIn) Like = info.Value!.Like;
         Video = info.Value!.Video;
+    }
+
+    /// <summary>評価を読み直す（読めなかったときの↻）。</summary>
+    public void ReloadLike()
+    {
+        if (Current is not { } song) return;
+        _ = LoadSongInfoAsync(song, loadCancel?.Token ?? CancellationToken.None);
+    }
+
+    /// <summary>歌詞を読み直す（読み込みに失敗したときの「もう一度」。失敗は覚えていないので取り直す）。</summary>
+    public void ReloadLyrics()
+    {
+        if (Current is not { } song) return;
+        Lyrics = null;
+        _ = LoadLyricsAsync(song, loadCancel?.Token ?? CancellationToken.None);
     }
 
     private async Task LoadLyricsAsync(Song song, CancellationToken cancel)
@@ -1134,6 +1254,9 @@ public sealed partial class PlayerService : ObservableObject
     /// <summary>ログアウトのとき。再生を止めてキューを空にする（別のアカウントの URL を使い続けない）。</summary>
     public void Stop()
     {
+        // ログアウト・別のアカウントでのログイン: 保存したキューも消す
+        saveTimer.Stop();
+        store.Delete();
         LeaveRemote();
         loadCancel?.Cancel();
         player.Pause();

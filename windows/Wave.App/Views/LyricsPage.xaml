@@ -40,6 +40,8 @@
         </Border>
         <StackPanel x:Name="EmptyPanel" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="8" Visibility="Collapsed">
             <TextBlock x:Name="EmptyText" Style="{StaticResource SubtitleTextBlockStyle}" HorizontalAlignment="Center" />
+            <!-- 読み込みに失敗したときだけ（Android と同じ） -->
+            <Button x:Name="RetryButton" HorizontalAlignment="Center" Visibility="Collapsed" Click="OnRetry" Content="{x:Bind local:LyricsPage.RetryText}" />
         </StackPanel>
     </Grid>
 </Page>

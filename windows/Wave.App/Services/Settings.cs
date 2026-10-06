@@ -12,6 +12,11 @@ public sealed class Settings
     /// <summary>再生を YouTube Music の再生履歴に送る（Android 版の既定と同じく、オン）。</summary>
     public bool SendHistory { get; set; } = true;
     public bool RightPaneOpen { get; set; } = true;
+    /// <summary>マイライブラリの並べ方（recent: 最近再生した順・added: 最近追加した順・alpha: アルファベット順）と、グリッドで出すか。</summary>
+    public string LibrarySort { get; set; } = "recent";
+    public bool LibraryGrid { get; set; }
+    /// <summary>プレイリストごとに選んだ並べ方（`Added:desc` など）。Android と同じく開くたびにサーバーへ明示して送る。</summary>
+    public Dictionary<string, string> PlaylistOrders { get; set; } = [];
     /// <summary>画面の言語。"system"（Windows に合わせる）・"ja"・"en"。次の起動から効く。</summary>
     public string Language { get; set; } = "system";
     public List<SearchHistoryEntry> SearchHistory { get; set; } = [];

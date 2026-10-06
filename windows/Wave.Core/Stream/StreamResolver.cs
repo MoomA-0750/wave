@@ -161,6 +161,30 @@ public sealed partial class StreamResolver(InnerTubeClient client, PlayerCipherP
     [GeneratedRegex("codecs=\"([^\"]+)\"")]
     private static partial Regex CodecsPattern();
 
+    /// <summary>Premium 音質（AAC 256kbps・opus 約 256kbps）の形式の itag。</summary>
+    public static readonly int[] PremiumItags = [141, 774];
+
+    /// <summary>
+    /// Premium 音質を使えるか（Android の premiumStatus と同じ）。決まった1曲で Premium の形式が返るかを見る。分からなければ null。
+    /// </summary>
+    public async Task<bool?> PremiumAudioAsync(CancellationToken cancel = default)
+    {
+        var config = await cipher.GetAsync(cancel);
+        if (config is null) return null;
+        var body = new JsonObject
+        {
+            ["videoId"] = PremiumProbeVideoId,
+            ["playbackContext"] = new JsonObject { ["contentPlaybackContext"] = new JsonObject { ["signatureTimestamp"] = config.SignatureTimestamp } },
+            ["contentCheckOk"] = true,
+            ["racyCheckOk"] = true,
+        };
+        var response = await client.PostAsync("player", body, cancel: cancel);
+        if (!response.IsOk || response.Value!.Path("playabilityStatus", "status").Str() != "OK") return null;
+        return response.Value.Path("streamingData", "adaptiveFormats").Items().Any(f => f.Path("itag").Long() is { } itag && Array.IndexOf(PremiumItags, (int)itag) >= 0);
+    }
+
+    private const string PremiumProbeVideoId = "dQw4w9WgXcQ";
+
     /// <summary>解決した URL が拒否された（403 など）。次は解読の準備を取り直す。</summary>
     public void OnStreamRejected() => cipher.Invalidate();
 

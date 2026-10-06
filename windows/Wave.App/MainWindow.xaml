@@ -109,16 +109,22 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <TextBox x:Name="LibraryFilter" PlaceholderText="{x:Bind app:L.T('マイライブラリを検索', 'Search in Your Library')}" TextChanged="OnLibraryFilterChanged" />
                         <DropDownButton x:Name="SortButton" Grid.Column="1" Content="{x:Bind app:L.T('最近', 'Recents')}" Background="Transparent" BorderThickness="0">
                             <DropDownButton.Flyout>
                                 <MenuFlyout Placement="BottomEdgeAlignedRight">
-                                    <RadioMenuFlyoutItem Text="{x:Bind app:L.T('最近', 'Recents')}" GroupName="sort" IsChecked="True" Tag="recent" Click="OnSort" />
-                                    <RadioMenuFlyoutItem Text="{x:Bind app:L.T('アルファベット順', 'Alphabetical')}" GroupName="sort" Tag="alpha" Click="OnSort" />
+                                    <RadioMenuFlyoutItem x:Name="SortRecent" Text="{x:Bind app:L.T('最近', 'Recents')}" GroupName="sort" Tag="recent" Click="OnSort" />
+                                    <RadioMenuFlyoutItem x:Name="SortAdded" Text="{x:Bind app:L.T('最近追加した順', 'Recently added')}" GroupName="sort" Tag="added" Click="OnSort" />
+                                    <RadioMenuFlyoutItem x:Name="SortAlpha" Text="{x:Bind app:L.T('アルファベット順', 'Alphabetical')}" GroupName="sort" Tag="alpha" Click="OnSort" />
                                 </MenuFlyout>
                             </DropDownButton.Flyout>
                         </DropDownButton>
+                        <!-- リスト・グリッドの切り替え（Android と同じ） -->
+                        <Button x:Name="ViewToggle" Grid.Column="2" Style="{StaticResource IconButtonStyle}" Click="OnLibraryViewToggle">
+                            <FontIcon x:Name="ViewToggleIcon" Glyph="&#xF0E2;" FontSize="14" />
+                        </Button>
                     </Grid>
                     <ListView x:Name="LibraryList" Grid.Row="3" SelectionMode="None" IsItemClickEnabled="True" ItemClick="OnLibraryClick" Padding="4,0,4,8">
                         <ListView.ItemContainerStyle>
@@ -148,6 +154,21 @@
                             </DataTemplate>
                         </ListView.ItemTemplate>
                     </ListView>
+                    <GridView x:Name="LibraryGrid" Grid.Row="3" SelectionMode="None" IsItemClickEnabled="True" ItemClick="OnLibraryClick" Padding="10,4,4,8" Visibility="Collapsed">
+                        <GridView.ItemTemplate>
+                            <DataTemplate x:DataType="app:LibraryEntry">
+                                <StackPanel Width="96" Spacing="4" Padding="0,0,0,6" RightTapped="OnLibraryRightTapped">
+                                    <Border Width="96" Height="96" CornerRadius="{x:Bind app:Ui.Radius(IsArtist)}" Background="{x:Bind CoverBackground}">
+                                        <Grid>
+                                            <FontIcon Glyph="&#xEB52;" Foreground="White" FontSize="28" Visibility="{x:Bind app:Ui.Show(IsLiked)}" />
+                                            <Image Source="{x:Bind app:Ui.Small(ThumbnailUrl)}" Stretch="UniformToFill" Visibility="{x:Bind app:Ui.Hide(IsLiked)}" />
+                                        </Grid>
+                                    </Border>
+                                    <TextBlock Text="{x:Bind Title}" TextTrimming="CharacterEllipsis" FontSize="12" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </GridView.ItemTemplate>
+                    </GridView>
                     <StackPanel x:Name="LoggedOutPanel" Grid.Row="3" Spacing="12" Padding="16" Visibility="Collapsed">
                         <TextBlock Text="{x:Bind app:L.T('ログインすると、YouTube Music のプレイリスト・アーティスト・アルバムがここに並びます。', 'Log in to see your YouTube Music playlists, artists and albums here.')}" TextWrapping="Wrap" />
                         <Button Content="{x:Bind app:L.T('ログイン', 'Log in')}" Style="{StaticResource AccentButtonStyle}" Click="OnLogin" />
@@ -185,7 +206,10 @@
                                     <Grid>
                                         <Image x:Name="CoverImage" Source="{x:Bind app:Ui.Large(Player.Current.ThumbnailUrl), Mode=OneWay}" Stretch="UniformToFill" />
                                         <MediaPlayerElement x:Name="PaneVideo" AreTransportControlsEnabled="False" Stretch="Uniform" Visibility="Collapsed" IsHitTestVisible="False" />
-                                        <TextBlock x:Name="VideoNote" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="White" Style="{StaticResource CaptionTextBlockStyle}" />
+                                        <StackPanel x:Name="VideoNotePanel" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8">
+                                            <TextBlock x:Name="VideoNote" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" Foreground="White" Style="{StaticResource CaptionTextBlockStyle}" />
+                                            <Button x:Name="VideoRetry" HorizontalAlignment="Center" Visibility="Collapsed" Click="OnVideoRetry" Content="{x:Bind app:L.T('もう一度', 'Retry')}" />
+                                        </StackPanel>
                                     </Grid>
                                 </Border>
                                 <StackPanel x:Name="VideoSwitch" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,10,0,0" Visibility="Collapsed"
@@ -206,8 +230,8 @@
                                     <HyperlinkButton Content="{x:Bind Player.Current.ArtistsText, Mode=OneWay}" Padding="0" Click="OnArtistLink" />
                                 </StackPanel>
                                 <!-- Android・Spotify と同じ: 評価していなければ＋（押すと評価）、評価済みなら✓（押すとプレイリストに追加する画面） -->
-                                <Button Grid.Column="1" Style="{StaticResource IconButtonStyle}" VerticalAlignment="Top" Click="OnLike" ToolTipService.ToolTip="{x:Bind LikeTip(Player.Like), Mode=OneWay}">
-                                    <FontIcon Glyph="{x:Bind LikeGlyph(Player.Like), Mode=OneWay}" Foreground="{x:Bind LikeBrush(Player.Like), Mode=OneWay}" FontSize="20" />
+                                <Button Grid.Column="1" Style="{StaticResource IconButtonStyle}" VerticalAlignment="Top" Click="OnLike" ToolTipService.ToolTip="{x:Bind LikeTip(Player.Like, Player.Current), Mode=OneWay}">
+                                    <FontIcon Glyph="{x:Bind LikeGlyph(Player.Like, Player.Current), Mode=OneWay}" Foreground="{x:Bind LikeBrush(Player.Like), Mode=OneWay}" FontSize="20" />
                                 </Button>
                             </Grid>
                             <!-- 歌詞（無い曲では箱ごと出さない）。全文を中で送り、歌っている行へ滑らかに動かす -->
@@ -257,7 +281,9 @@
                             <TextBlock Text="{x:Bind app:L.T('曲を再生すると、ここに次の曲が並びます', 'Play something and upcoming songs will show up here')}" Style="{StaticResource SubtleTextStyle}"
                                        HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" MaxLines="3" />
                         </StackPanel>
-                        <ListView x:Name="QueueList" Grid.Row="1" SelectionMode="None" IsItemClickEnabled="True" ItemClick="OnQueueClick" Padding="4,0,4,8">
+                        <!-- 次の曲はドラッグで並べ替えられる（今の曲は動かせない。Android と同じ） -->
+                        <ListView x:Name="QueueList" Grid.Row="1" SelectionMode="None" IsItemClickEnabled="True" ItemClick="OnQueueClick" Padding="4,0,4,8"
+                                  CanDragItems="True" CanReorderItems="True" AllowDrop="True" DragItemsStarting="OnQueueDragStarting" DragItemsCompleted="OnQueueDragCompleted">
                             <ListView.Header>
                                 <TextBlock Text="{x:Bind app:L.T('再生中', 'Now playing')}" Style="{StaticResource SubtleTextStyle}" Margin="12,4" />
                             </ListView.Header>
@@ -308,9 +334,9 @@
                         <TextBlock Text="{x:Bind Player.Current.ArtistsText, Mode=OneWay}" TextTrimming="CharacterEllipsis" Style="{StaticResource CaptionTextBlockStyle}" />
                     </HyperlinkButton>
                 </StackPanel>
-                <Button Grid.Column="2" Style="{StaticResource IconButtonStyle}" VerticalAlignment="Center" Click="OnLike" ToolTipService.ToolTip="{x:Bind LikeTip(Player.Like), Mode=OneWay}"
+                <Button Grid.Column="2" Style="{StaticResource IconButtonStyle}" VerticalAlignment="Center" Click="OnLike" ToolTipService.ToolTip="{x:Bind LikeTip(Player.Like, Player.Current), Mode=OneWay}"
                         Visibility="{x:Bind HasSong(Player.Current), Mode=OneWay}">
-                    <FontIcon Glyph="{x:Bind LikeGlyph(Player.Like), Mode=OneWay}" Foreground="{x:Bind LikeBrush(Player.Like), Mode=OneWay}" FontSize="18" />
+                    <FontIcon Glyph="{x:Bind LikeGlyph(Player.Like, Player.Current), Mode=OneWay}" Foreground="{x:Bind LikeBrush(Player.Like), Mode=OneWay}" FontSize="18" />
                 </Button>
             </Grid>
 

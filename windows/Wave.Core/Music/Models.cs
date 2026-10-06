@@ -33,7 +33,9 @@ public sealed record PlaylistPage(
     bool Editable,
     bool EndConfirmed,
     string? Subtitle = null,
-    string? ThumbnailUrl = null);
+    string? ThumbnailUrl = null,
+    /// <summary>サーバーで並べ替えられる（自分のプレイリストなど。並べ替えのメニューがある）。</summary>
+    bool Sortable = false);
 
 public sealed record HistorySection(string? Title, IReadOnlyList<Song> Songs);
 

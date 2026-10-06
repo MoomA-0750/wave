@@ -71,6 +71,7 @@ public sealed partial class LyricsPage : Page
         PlainView.Visibility = Visibility.Collapsed;
         Lines.Visibility = Visibility.Collapsed;
         EmptyPanel.Visibility = Visibility.Collapsed;
+        RetryButton.Visibility = Visibility.Collapsed;
         SourceText.Text = "";
         if (Player.Current is not { } song)
         {
@@ -114,9 +115,14 @@ public sealed partial class LyricsPage : Page
                 break;
             default:
                 Empty(L.T("歌詞を読み込めませんでした", "Couldn't load lyrics"));
+                RetryButton.Visibility = Visibility.Visible;
                 break;
         }
     }
+
+    public static string RetryText => L.T("もう一度", "Retry");
+
+    private void OnRetry(object sender, RoutedEventArgs e) => Player.ReloadLyrics();
 
     private void Empty(string text)
     {

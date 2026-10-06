@@ -15,6 +15,16 @@ public sealed partial class LibraryState : ObservableObject
     [ObservableProperty] private string? failure;
     /// <summary>高く評価した曲（LM）のサムネイル。</summary>
     [ObservableProperty] private string? likedThumbnail;
+    /// <summary>最近再生したアルバム・プレイリスト・アーティストの目印（並べ方の「最近」に使う。Android と同じ）。</summary>
+    [ObservableProperty] private IReadOnlyList<string> recentKeys = [];
+
+    public static string? KeyOf(HomeItem item) => item switch
+    {
+        HomeItem.PlaylistItem p => "p-" + p.Playlist.PlaylistId,
+        HomeItem.ArtistItem a => "ar-" + a.Artist.BrowseId,
+        HomeItem.AlbumItem a => "al-" + a.Album.BrowseId,
+        _ => null,
+    };
 
     private CancellationTokenSource? cancel;
 
@@ -68,6 +78,7 @@ public sealed partial class LibraryState : ObservableObject
             var playlists = AppServices.Music.LibraryPlaylistsAsync(page => Replace(Playlists, page.Where(p => p.PlaylistId != MusicRepository.LikedSongs || Capture(p)), token), token);
             var artists = AppServices.Music.LibraryArtistsAsync(page => Replace(Artists, page, token), token);
             var albums = AppServices.Music.LibraryAlbumsAsync(page => Replace(Albums, page, token), token);
+            _ = LoadRecentAsync(token);
             var results = await Task.WhenAll(playlists.ContinueWith(t => t.Result.Failure), artists.ContinueWith(t => t.Result.Failure), albums.ContinueWith(t => t.Result.Failure));
             if (token.IsCancellationRequested) return;
             Failure = results.FirstOrDefault(f => f is not null)?.ToString();
@@ -80,6 +91,12 @@ public sealed partial class LibraryState : ObservableObject
         {
             if (!token.IsCancellationRequested) IsLoading = false;
         }
+    }
+
+    private async Task LoadRecentAsync(CancellationToken token)
+    {
+        var recent = await AppServices.Music.RecentActivityAsync(token);
+        if (!token.IsCancellationRequested && recent.IsOk) RecentKeys = recent.Value!.Select(KeyOf).OfType<string>().ToList();
     }
 
     private bool Capture(PlaylistSummary liked)

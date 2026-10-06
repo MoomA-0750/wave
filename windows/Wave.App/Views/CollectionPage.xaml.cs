@@ -21,7 +21,37 @@ public sealed partial class CollectionPage : Page
     private SortKey sort = SortKey.Custom;
     private bool descending;
 
-    private enum SortKey { Custom, Title, Artist, Album, Duration }
+    /// <summary>Added・Published はサーバーで並べる（自分のプレイリストなど、並べ替えのメニューがあるときだけ）。ほかは手元で並べる。</summary>
+    private enum SortKey { Custom, Added, Published, Title, Artist, Album, Duration }
+
+    private bool sortable;
+
+    private bool ServerSort => sort is SortKey.Added or SortKey.Published;
+
+    /// <summary>読み込みのときに送る並べ方（プレイリストだけ）。</summary>
+    private string ServerOrder => sort switch
+    {
+        SortKey.Added => PlaylistOrder.Params(PlaylistOrder.Added, descending),
+        SortKey.Published => PlaylistOrder.Params(PlaylistOrder.Published, descending),
+        _ => PlaylistOrder.DefaultOrdering,
+    };
+
+    private void RestoreOrder()
+    {
+        sort = SortKey.Custom;
+        descending = false;
+        if (request.IsAlbum || !AppServices.Settings.PlaylistOrders.TryGetValue(request.Id, out var saved)) return;
+        var parts = saved.Split(':');
+        if (Enum.TryParse<SortKey>(parts[0], out var key)) sort = key;
+        descending = parts.Length > 1 && parts[1] == "desc";
+    }
+
+    private void SaveOrder()
+    {
+        if (request.IsAlbum) return;
+        AppServices.Settings.PlaylistOrders[request.Id] = $"{sort}:{(descending ? "desc" : "asc")}";
+        AppServices.Settings.Save();
+    }
     private CollectionRequest request = null!;
     private bool editable;
     private string? playlistIdForPlayback;
@@ -38,6 +68,8 @@ public sealed partial class CollectionPage : Page
     protected override void OnNavigatedTo(NavigationEventArgs e)
     {
         request = (CollectionRequest)e.Parameter;
+        RestoreOrder();
+        SortText.Text = SortLabels().First(x => x.Key == sort).Label;
         Player.PropertyChanged += OnPlayerChanged;
         ShuffleButton.IsChecked = Player.Shuffle;
         ShowHeader(request.Title, request.ThumbnailUrl, request.Subtitle);
@@ -152,6 +184,7 @@ public sealed partial class CollectionPage : Page
             {
                 first = false;
                 editable = page.Editable;
+                sortable = page.Sortable;
                 ShowHeader(page.Title ?? request.Title, request.ThumbnailUrl ?? page.ThumbnailUrl, page.Subtitle ?? request.Subtitle);
             }
             for (var i = all.Count; i < page.Songs.Count; i++)
@@ -161,7 +194,7 @@ public sealed partial class CollectionPage : Page
             }
             PlayButton.IsEnabled = rows.Count > 0;
             TrackRow.MarkCurrent(rows, Player.Current?.VideoId);
-        }, token);
+        }, token, ServerOrder);
         if (!result.IsOk)
         {
             Fail(result.Failure == Core.Net.FailureKind.NotLoggedIn ? L.T("このプレイリストを見るにはログインしてください", "Log in to see this playlist") : L.T("プレイリストを読み込めませんでした", "Couldn't load the playlist"));
@@ -221,7 +254,7 @@ public sealed partial class CollectionPage : Page
 
     // --- 絞り込みと並べ替え（Spotify のプレイリストの🔍と「カスタム順」と同じ。全部読んだ曲を手元で） ---
 
-    private bool IsDefaultView => filter.Length == 0 && sort == SortKey.Custom && !descending;
+    private bool IsDefaultView => filter.Length == 0 && (ServerSort || sort == SortKey.Custom && !descending);
 
     private void AddRow(TrackRow row)
     {
@@ -250,7 +283,8 @@ public sealed partial class CollectionPage : Page
             _ => null,
         };
         if (key is not null) view = descending ? view.OrderByDescending(key) : view.OrderBy(key);
-        else if (descending) view = view.Reverse();
+        // サーバーで並べたもの（追加した日・公開日）はその並びのまま。カスタム順の逆は手元で
+        else if (descending && !ServerSort) view = view.Reverse();
         var list = view.ToList();
         if (list.SequenceEqual(rows)) return;
         rows.Clear();
@@ -292,17 +326,22 @@ public sealed partial class CollectionPage : Page
     private void OnSortOpening(object sender, object e)
     {
         SortMenu.Items.Clear();
-        foreach (var (k, label) in SortLabels())
+        foreach (var (k, label) in SortLabels().Where(x => sortable || x.Key is not (SortKey.Added or SortKey.Published)))
         {
             var item = new ToggleMenuFlyoutItem { Text = label, IsChecked = k == sort };
             if (k == sort && k != SortKey.Custom) item.Icon = new FontIcon { Glyph = descending ? "\uE74B" : "\uE74A" };
             item.Click += (_, _) =>
             {
                 // 同じ並べ方をもう一度選ぶと向きを変える
+                var wasServer = ServerSort;
                 if (k == sort) descending = !descending;
-                else (sort, descending) = (k, false);
+                // 追加した日は新しい順から（Spotify と同じ）
+                else (sort, descending) = (k, k == SortKey.Added);
                 SortText.Text = SortLabels().First(x => x.Key == sort).Label;
-                ApplyView();
+                SaveOrder();
+                // サーバーで並べる並べ方に替えた・外したときは読み直す（自分のプレイリストではサーバーも並べ方を覚える）
+                if (!request.IsAlbum && (wasServer || ServerSort)) _ = LoadAsync();
+                else ApplyView();
             };
             SortMenu.Items.Add(item);
         }
@@ -311,6 +350,8 @@ public sealed partial class CollectionPage : Page
     private static IEnumerable<(SortKey Key, string Label)> SortLabels() =>
     [
         (SortKey.Custom, L.T("カスタム順", "Custom order")),
+        (SortKey.Added, L.T("追加した日", "Date added")),
+        (SortKey.Published, L.T("リリース日", "Release date")),
         (SortKey.Title, L.T("タイトル", "Title")),
         (SortKey.Artist, L.T("アーティスト", "Artist")),
         (SortKey.Album, L.T("アルバム", "Album")),
@@ -342,12 +383,11 @@ public sealed partial class CollectionPage : Page
     private void OnMore(object sender, RoutedEventArgs e)
     {
         var menu = new MenuFlyout();
-        var queue = new MenuFlyoutItem { Text = L.T("キューに追加", "Add to queue"), Icon = new FontIcon { Glyph = "" } };
-        queue.Click += (_, _) =>
-        {
-            foreach (var s in Songs) Player.AddToQueue(s);
-            Player.Message = L.T($"{rows.Count} 曲をキューに追加しました", $"Added {L.Songs(rows.Count)} to queue");
-        };
+        var next = new MenuFlyoutItem { Text = L.T("次に再生", "Play next"), Icon = new FontIcon { Glyph = "\uE8A0" } };
+        next.Click += (_, _) => Player.QueueAll(Songs, next: true);
+        menu.Items.Add(next);
+        var queue = new MenuFlyoutItem { Text = L.T("キューに追加", "Add to queue"), Icon = new FontIcon { Glyph = "\uE8FD" } };
+        queue.Click += (_, _) => Player.QueueAll(Songs, next: false);
         menu.Items.Add(queue);
         menu.ShowAt((FrameworkElement)sender);
     }
