@@ -183,7 +183,7 @@
                             <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Padding="16" CornerRadius="8" Click="OnOpenLyrics">
                                 <StackPanel Spacing="8">
                                     <TextBlock Text="歌詞" Style="{StaticResource BodyStrongTextBlockStyle}" />
-                                    <TextBlock x:Name="LyricsPreview" TextWrapping="Wrap" MaxLines="4" Style="{StaticResource BodyTextBlockStyle}" />
+                                    <StackPanel x:Name="LyricsPreview" Spacing="4" />
                                 </StackPanel>
                             </Button>
                             <StackPanel Padding="16" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" Spacing="8">

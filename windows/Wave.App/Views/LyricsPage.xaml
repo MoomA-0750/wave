@@ -24,7 +24,9 @@
         <ScrollViewer x:Name="PlainView" Visibility="Collapsed">
             <TextBlock x:Name="PlainText" FontSize="26" FontWeight="SemiBold" TextWrapping="Wrap" Margin="40" LineHeight="40" IsTextSelectionEnabled="True" />
         </ScrollViewer>
-        <TextBlock x:Name="SourceText" Style="{StaticResource SubtleTextStyle}" VerticalAlignment="Bottom" Margin="40,0,40,16" />
+        <Border VerticalAlignment="Bottom" Padding="40,8,40,12" Background="{ThemeResource LayerFillColorDefaultBrush}">
+            <TextBlock x:Name="SourceText" Style="{StaticResource SubtleTextStyle}" />
+        </Border>
         <StackPanel x:Name="EmptyPanel" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="8" Visibility="Collapsed">
             <TextBlock x:Name="EmptyText" Style="{StaticResource SubtitleTextBlockStyle}" HorizontalAlignment="Center" />
         </StackPanel>

@@ -154,8 +154,9 @@ public sealed partial class CollectionPage : Page
             return;
         }
         var total = rows.Sum(r => r.Song.DurationSeconds ?? 0);
+        // サーバーの補足（曲数・時間を含む）があればそれを出す。無ければ読めた曲から数える
         var subtitle = result.Value!.Subtitle ?? request.Subtitle;
-        DetailText.Text = string.Join(" • ", new[] { subtitle, $"{rows.Count} 曲, {Length(total)}" }.Where(s => !string.IsNullOrEmpty(s)));
+        DetailText.Text = subtitle ?? $"{rows.Count} 曲, {Length(total)}";
         Done();
     }
 

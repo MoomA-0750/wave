@@ -91,50 +91,10 @@ public sealed partial class PlayerService : ObservableObject
             e.Handled = true;
             ui.TryEnqueue(Previous);
         };
-        DebugLocalPlay();
         timer = ui.CreateTimer();
         timer.Interval = TimeSpan.FromMilliseconds(250);
         timer.Tick += (_, _) => Tick();
         timer.Start();
-    }
-
-    /// <summary>debug: %LOCALAPPDATA%\wave\debug-play.txt に書いたファイルを、曲と同じ経路（.NET の Stream を渡す）で鳴らす。</summary>
-    private void DebugLocalPlay()
-    {
-        var save = Path.Combine(AppPaths.Data, "debug-save.txt");
-        if (File.Exists(save))
-        {
-            var videoId = File.ReadAllText(save).Trim();
-            File.Delete(save);
-            _ = Task.Run(async () =>
-            {
-                var r = await AppServices.Resolver.ResolveAsync(videoId);
-                if (r.Stream is null)
-                {
-                    AppPaths.Log($"debug save resolve failed {r.Failure}");
-                    return;
-                }
-                await using var src = await RangeStream.OpenAsync(AppServices.Http, r.Stream);
-                await using var dst = File.Create(Path.Combine(AppPaths.Data, "debug.m4a"));
-                await src.CopyToAsync(dst);
-                AppPaths.Log($"debug saved itag={r.Stream.Itag} bytes={dst.Length}");
-            });
-        }
-        var marker = Path.Combine(AppPaths.Data, "debug-play.txt");
-        if (!File.Exists(marker)) return;
-        var path = File.ReadAllText(marker).Trim();
-        File.Delete(marker);
-        var stream = File.OpenRead(path);
-        player.Source = new MediaPlaybackItem(MediaSource.CreateFromStream(stream.AsRandomAccessStream(), "audio/mp4"));
-        player.Play();
-        _ = Task.Run(async () =>
-        {
-            for (var i = 0; i < 4; i++)
-            {
-                await Task.Delay(1500);
-                AppPaths.Log($"debug local state={player.PlaybackSession.PlaybackState} pos={player.PlaybackSession.Position.TotalSeconds:F1}");
-            }
-        });
     }
 
     partial void OnVolumeChanged(double value)
@@ -631,11 +591,3 @@ public sealed partial class PlayerService : ObservableObject
     }
 }
 
-internal static class ObjectExtensions
-{
-    public static T Also<T>(this T value, Action<T> action)
-    {
-        action(value);
-        return value;
-    }
-}

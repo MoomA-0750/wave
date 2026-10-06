@@ -379,6 +379,10 @@ public sealed partial class MainWindow : Window
 
     private int lyricsPreviewIndex = -2;
 
+    /// <summary>
+    /// 右の欄の歌詞（Spotify の再生中の画面と同じく、歌っている行を明るく太く、前後の行を薄く）。
+    /// 時刻付きの歌詞では再生位置に合わせて送る。
+    /// </summary>
     private void RenderLyricsPreview()
     {
         switch (Player.Lyrics)
@@ -387,20 +391,41 @@ public sealed partial class MainWindow : Window
                 var i = LyricsTiming.CurrentIndex(synced.Lines, (long)(Player.Position * 1000));
                 if (i == lyricsPreviewIndex) return;
                 lyricsPreviewIndex = i;
-                LyricsPreview.Text = string.Join("\n", synced.Lines.Skip(Math.Max(0, i)).Take(4).Select(l => l.Text));
+                var first = Math.Max(0, i - 1);
+                ShowPreviewLines(synced.Lines.Skip(first).Take(5).Select((l, k) => (Text: string.IsNullOrWhiteSpace(l.Text) ? "♪" : l.Text, Current: first + k == i)));
                 break;
             case LyricsService.Result.Found { Lyrics: SongLyrics.Plain plain }:
-                lyricsPreviewIndex = -2;
-                LyricsPreview.Text = plain.Text;
+                if (lyricsPreviewIndex == -3) return;
+                lyricsPreviewIndex = -3;
+                ShowPreviewLines(plain.Text.Split('\n').Take(5).Select(t => (Text: t, Current: false)), plain: true);
                 break;
             case null when Player.Current is not null:
                 lyricsPreviewIndex = -2;
-                LyricsPreview.Text = "歌詞を探しています…";
+                ShowPreviewLines([("歌詞を探しています…", false)], plain: true);
                 break;
             default:
                 lyricsPreviewIndex = -2;
-                LyricsPreview.Text = Player.Current is null ? "" : "歌詞はありません";
+                ShowPreviewLines(Player.Current is null ? [] : [("歌詞はありません", false)], plain: true);
                 break;
+        }
+    }
+
+    private void ShowPreviewLines(IEnumerable<(string Text, bool Current)> lines, bool plain = false)
+    {
+        LyricsPreview.Children.Clear();
+        var primary = (Brush)Application.Current.Resources["TextFillColorPrimaryBrush"];
+        var secondary = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"];
+        foreach (var (text, current) in lines)
+        {
+            LyricsPreview.Children.Add(new TextBlock
+            {
+                Text = text,
+                TextWrapping = TextWrapping.Wrap,
+                FontSize = current ? 17 : 15,
+                FontWeight = current ? Microsoft.UI.Text.FontWeights.Bold : Microsoft.UI.Text.FontWeights.SemiBold,
+                Foreground = current || plain ? primary : secondary,
+                Opacity = current || plain ? 1 : 0.55,
+            });
         }
     }
 
