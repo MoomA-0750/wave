@@ -190,7 +190,8 @@ class PlaybackService : MediaSessionService() {
                     if (events.containsAny(*SAVE_EVENTS)) scheduleSave()
                     // 今の曲が変わった・キューが置き換わった: 画像を入れる（入れ終わった曲では何もしない）
                     if (events.containsAny(Player.EVENT_MEDIA_ITEM_TRANSITION, Player.EVENT_TIMELINE_CHANGED)) artwork?.onCurrentItemChanged()
-                    if (events.containsAny(Player.EVENT_MEDIA_ITEM_TRANSITION, Player.EVENT_TIMELINE_CHANGED)) {
+                    // ほかの端末を映している間は、映している曲の評価のまま（mirrorRemote が切り替える）
+                    if (events.containsAny(Player.EVENT_MEDIA_ITEM_TRANSITION, Player.EVENT_TIMELINE_CHANGED) && session?.player !== remotePlayer) {
                         likeController.onCurrentSong(Media3QueuePlayer.songOf(player.currentMediaItem)?.videoId, TrackUri.epochOf(player.currentMediaItem?.localConfiguration?.uri))
                     }
                     // Connect v2（Phase 6b）: 位置の変化を知らせる。キューの変化は onTimelineChanged（並びが変わったときだけ）
@@ -565,8 +566,11 @@ class PlaybackService : MediaSessionService() {
             val mirror = remotePlayer ?: RemoteSessionPlayer({ action, position -> manager.control(action, position) }, { artist, device -> getString(xyz.mooma0750.wave.R.string.nowplaying_artist_on_device, artist, device) }).also { remotePlayer = it }
             mirror.update(remote)
             if (current.player !== mirror) current.player = mirror
+            // 映している曲の評価を読み書きする（評価はアカウントに付くので、どの端末で鳴っていても同じ）
+            likes?.onCurrentSong(remote.current.videoId, container.music.currentLoginGeneration())
         } else if (current.player !== local) {
             current.player = local
+            likes?.onCurrentSong(Media3QueuePlayer.songOf(local.currentMediaItem)?.videoId, TrackUri.epochOf(local.currentMediaItem?.localConfiguration?.uri))
         }
     }
 
