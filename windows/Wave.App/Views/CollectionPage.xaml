@@ -30,7 +30,8 @@
                         </StackPanel>
                     </Grid>
                 </Grid>
-                <StackPanel Orientation="Horizontal" Spacing="16" Padding="12,8,12,16">
+                <Grid Padding="12,8,12,16">
+                <StackPanel Orientation="Horizontal" Spacing="16">
                     <Button x:Name="PlayButton" Style="{StaticResource PlayCircleButtonStyle}" Click="OnPlay" ToolTipService.ToolTip="{x:Bind app:L.T('再生', 'Play')}" IsEnabled="False">
                         <FontIcon x:Name="PlayIcon" Glyph="&#xF5B0;" FontSize="20" />
                     </Button>
@@ -42,6 +43,21 @@
                     </Button>
                     <ProgressRing x:Name="LoadingRing" IsActive="True" Width="20" Height="20" />
                 </StackPanel>
+                <!-- 右端: 一覧の中を探す（🔍で開く）と並べ替え（Spotify と同じ） -->
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Spacing="8">
+                    <Button Style="{StaticResource IconButtonStyle}" Click="OnSearchToggle" ToolTipService.ToolTip="{x:Bind app:L.T('この一覧の中を検索', 'Search in this list')}">
+                        <FontIcon Glyph="&#xE721;" FontSize="16" />
+                    </Button>
+                    <TextBox x:Name="FilterBox" Width="240" Visibility="Collapsed" PlaceholderText="{x:Bind app:L.T('この一覧の中を検索', 'Search in this list')}"
+                             TextChanged="OnFilterChanged" KeyDown="OnFilterKeyDown" VerticalAlignment="Center" />
+                    <DropDownButton Background="Transparent" BorderThickness="0" VerticalAlignment="Center">
+                        <TextBlock x:Name="SortText" Text="{x:Bind app:L.T('カスタム順', 'Custom order')}" Style="{StaticResource SubtleTextStyle}" FontSize="14" />
+                        <DropDownButton.Flyout>
+                            <MenuFlyout x:Name="SortMenu" Placement="BottomEdgeAlignedRight" Opening="OnSortOpening" />
+                        </DropDownButton.Flyout>
+                    </DropDownButton>
+                </StackPanel>
+                </Grid>
                 <Grid Padding="12,0,12,8" ColumnSpacing="12" BorderThickness="0,0,0,1" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="32" />
@@ -56,6 +72,7 @@
                     <FontIcon Grid.Column="3" Glyph="&#xE823;" FontSize="14" HorizontalAlignment="Right" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                 </Grid>
                 <TextBlock x:Name="ErrorText" Visibility="Collapsed" Margin="12,24" />
+                <TextBlock x:Name="NoMatchText" Visibility="Collapsed" Margin="12,24" Style="{StaticResource SubtleTextStyle}" Text="{x:Bind app:L.T('一致する曲はありません', 'No matching songs')}" />
             </StackPanel>
         </ListView.Header>
     </ListView>
