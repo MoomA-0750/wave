@@ -159,6 +159,8 @@ public sealed partial class PlayerService : ObservableObject
 
     partial void OnIsPlayingChanged(bool value)
     {
+        // ほかの端末を映している間は、この端末で聴いた時間ではない
+        if (IsRemote) return;
         var now = clock.ElapsedMilliseconds;
         if (value) playingSinceMs ??= now;
         else if (playingSinceMs is { } since)
@@ -350,9 +352,25 @@ public sealed partial class PlayerService : ObservableObject
     {
         if (IsRemote)
         {
-            if (remote is { } r) remote = r with { PositionMs = (long)(Math.Max(0, seconds) * 1000), CapturedAtMs = clock.ElapsedMilliseconds };
+            // ドラッグ中は何度も呼ばれるので、動きが止まってから1回だけ送る
+            var target = (long)(Math.Max(0, seconds) * 1000);
+            if (remote is { } r) remote = r with { PositionMs = target, CapturedAtMs = clock.ElapsedMilliseconds };
             Position = Math.Max(0, seconds);
-            Remote(Wave.Core.Connect.ControlAction.Seek, (long)(Math.Max(0, seconds) * 1000));
+            pendingRemoteSeek = target;
+            HoldOptimistic();
+            if (remoteSeekTimer is null)
+            {
+                remoteSeekTimer = ui.CreateTimer();
+                remoteSeekTimer.Interval = TimeSpan.FromMilliseconds(350);
+                remoteSeekTimer.IsRepeating = false;
+                remoteSeekTimer.Tick += (_, _) =>
+                {
+                    if (IsRemote && pendingRemoteSeek is { } p) Remote(Wave.Core.Connect.ControlAction.Seek, p);
+                    pendingRemoteSeek = null;
+                };
+            }
+            remoteSeekTimer.Stop();
+            remoteSeekTimer.Start();
             return;
         }
         if (player.Source is null) return;
@@ -572,26 +590,50 @@ public sealed partial class PlayerService : ObservableObject
             var playing = action == Wave.Core.Connect.ControlAction.Play;
             remote = r with { PositionMs = (long)(r.PositionNow(clock.ElapsedMilliseconds) * 1000), CapturedAtMs = clock.ElapsedMilliseconds, Playing = playing };
             IsPlaying = playing;
+            HoldOptimistic();
         }
     }
+
+    private long? pendingRemoteSeek;
+    private DispatcherQueueTimer? remoteSeekTimer;
+
+    /// <summary>押した結果を見せている間（相手の新しいカーソルが届くまで、最大3秒）、届いた古いカーソルで表示を戻さない。</summary>
+    private long optimisticUntilMs;
+    private long? optimisticBaseVersion;
+
+    private void HoldOptimistic()
+    {
+        optimisticUntilMs = clock.ElapsedMilliseconds + 3_000;
+        optimisticBaseVersion = remote?.Version;
+    }
+
+    /// <summary>映し始める前の手元のキュー（映すのをやめたら戻す。Android と同じく、手元のキューは相手のキューで消さない）。</summary>
+    private sealed record LocalQueueBackup(List<(Song Song, QueueItemMeta Meta)> Items, int Index, string? SourceId, string? RadioSeed, string? Continuation, string? RadioPlaylistId, List<Song> Unshuffled);
+
+    private LocalQueueBackup? localBackup;
 
     /// <summary>ほかの端末の再生を映す（null ならやめる）。端末の連携が UI のスレッドで呼ぶ。</summary>
     public void ShowRemote(RemoteSnapshot? next)
     {
         if (next is null)
         {
-            if (IsRemote) LeaveRemote(clearDisplay: true);
+            if (IsRemote) LeaveRemote(restoreLocal: true);
             return;
         }
         if (!IsRemote)
         {
-            // 手元の再生は止めておく（この端末は鳴らしていない）
+            // 手元の再生は止めて、キューを退避する（この端末は鳴らしていない）
             loadCancel?.Cancel();
             player.Pause();
             player.Source = null;
             IsLoading = false;
+            localBackup = Queue.Count == 0 ? null : new LocalQueueBackup(
+                Queue.Select((song, i) => (song, itemMeta[i])).ToList(), Index, SourceId, radioSeed, radioContinuation, radioPlaylistId, unshuffled.ToList());
             IsRemote = true;
         }
+        // 押した直後は、相手の新しいカーソルが届くまで表示を保つ
+        if (clock.ElapsedMilliseconds < optimisticUntilMs && next.Version == optimisticBaseVersion) return;
+        optimisticUntilMs = 0;
         remote = next;
         RemoteDevice = next.DeviceLabel;
         // キューは中身が変わったときだけ置き直す
@@ -657,8 +699,11 @@ public sealed partial class PlayerService : ObservableObject
 
     private Song? shownOnSmtc;
 
-    /// <summary>映すのをやめる（この端末で鳴らし始めた・相手が見えなくなった）。</summary>
-    private void LeaveRemote(bool clearDisplay = false)
+    /// <summary>
+    /// 映すのをやめる。この端末で鳴らし始めたとき（曲を選んだ・引き取った）は、そのままキューを置き換える。
+    /// 相手が見えなくなったときは、映す前の手元のキューに戻す。
+    /// </summary>
+    private void LeaveRemote(bool restoreLocal = false)
     {
         if (!IsRemote) return;
         IsRemote = false;
@@ -666,8 +711,36 @@ public sealed partial class PlayerService : ObservableObject
         shownOnSmtc = null;
         remote = null;
         remoteQueueKey = null;
+        pendingRemoteSeek = null;
+        remoteSeekTimer?.Stop();
         IsPlaying = false;
-        if (clearDisplay) Position = 0;
+        Position = 0;
+        var backup = localBackup;
+        localBackup = null;
+        if (!restoreLocal) return;
+        Queue.Clear();
+        Current = null;
+        Index = -1;
+        if (backup is null) return;
+        foreach (var (song, meta) in backup.Items)
+        {
+            adoptIds = new([meta.ItemId]);
+            nextOrigin = meta.Origin;
+            Queue.Add(song);
+        }
+        adoptIds = null;
+        nextOrigin = QueueOrigin.Source;
+        SourceId = backup.SourceId;
+        radioSeed = backup.RadioSeed;
+        radioContinuation = backup.Continuation;
+        radioPlaylistId = backup.RadioPlaylistId;
+        unshuffled = backup.Unshuffled;
+        if (backup.Index >= 0 && backup.Index < Queue.Count)
+        {
+            Index = backup.Index;
+            Current = Queue[backup.Index];
+            Duration = Current.DurationSeconds ?? 0;
+        }
     }
 
     // --- ほかの端末からの命令に従う（この端末が鳴らしている） ---
@@ -988,7 +1061,7 @@ public sealed partial class PlayerService : ObservableObject
     /// <summary>ログアウトのとき。再生を止めてキューを空にする（別のアカウントの URL を使い続けない）。</summary>
     public void Stop()
     {
-        LeaveRemote(clearDisplay: true);
+        LeaveRemote();
         loadCancel?.Cancel();
         player.Pause();
         player.Source = null;
@@ -1019,7 +1092,7 @@ public sealed record QueueExport(
 public sealed record PlaybackCursor(string CurrentItemId, long PositionMs, bool Playing, RepeatMode Repeat, long ListenedMs, bool HistorySent);
 
 /// <summary>ほかの端末の再生（表示と遠隔操作のため）。QueueKey はキューの中身の目印（同じなら置き直さない）。</summary>
-public sealed record RemoteSnapshot(string DeviceLabel, string? QueueKey, QueueExport? Queue, string CurrentItemId, long PositionMs, long CapturedAtMs, bool Playing, RepeatMode Repeat, int? DurationSeconds)
+public sealed record RemoteSnapshot(string DeviceLabel, string? QueueKey, QueueExport? Queue, string CurrentItemId, long PositionMs, long CapturedAtMs, bool Playing, RepeatMode Repeat, int? DurationSeconds, long Version = 0)
 {
     /// <summary>今の位置（再生中なら、取ってからの経過を足す。曲の長さで止める）。</summary>
     public double PositionNow(long nowMs)

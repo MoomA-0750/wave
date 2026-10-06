@@ -182,6 +182,9 @@ class ConnectClient(
     private var queueFloor = initial.queueFloor
     private var retreated = initial.retreated
     private val handledClaims = ArrayDeque(initial.handledClaimIds)
+
+    /** 開いた遠隔操作の doc のハッシュ（同じ doc の再送を開く前に捨てる）。 */
+    private val seenControlDocs = ArrayDeque<String>()
     private var expectedJoin: Pair<JoinInfo, String>? = initial.expectedJoin?.let { info -> initial.expectedInviter?.let { info to it } }
     private var creatingHousehold = initial.creatingHousehold
 
@@ -892,15 +895,26 @@ class ConnectClient(
      */
     private fun onControl(message: RelayV2.Control) {
         val current = chain ?: return
-        if (message.doc.header.kind != DocKind.Command || session == null) return
+        val mine = session ?: return
+        if (message.doc.header.kind != DocKind.Command) return
+        // 中継が同じ命令を流し直しても、開く（受け取りの鍵で鍵交換をする）前に捨てる。署名の対象のハッシュなので、再送なら必ず同じ値
+        val docHash = DocSealer.hash(message.doc)
+        if (docHash in seenControlDocs) return
+        seenControlDocs.addLast(docHash)
+        while (seenControlDocs.size > MAX_HANDLED_CLAIMS) seenControlDocs.removeFirst()
         val opened = DocSealer.open(message.doc, current, opener) as? DocOpen.Ok ?: return
         val command = runCatching { ConnectJson.json.decodeFromString(CommandBody.serializer(), opened.plaintext.decodeToString()) }.getOrNull() as? CommandBody.Control ?: return
         if (command.to != signer.deviceId || command.from != opened.header.writerId || command.from == signer.deviceId) return
+        // 遠隔操作を出せるのは player だけ（yield と同じ。controller の遠隔操作は Phase 7 で決める）
+        if (current.members[command.from]?.keys?.role != Role.Player) return
         if (command.commandId in handledClaims) return
         remember(command.commandId)
         if (command.accountTag != effects.accountTag()) return
         val own = latestCursor?.takeIf { it.writer == signer.deviceId } ?: return
         if (command.basedOnVersion > own.version || own.version - command.basedOnVersion > MAX_CONTROL_LAG) return
+        // 今のセッションより前の見え方に基づく命令には従わない（前のセッションの命令を中継が取っておいて、新しいセッションに流しても効かない）
+        val sessionStart = mine.arbiter.startVersion ?: return
+        if (command.basedOnVersion < sessionStart) return
         if (command.action == ControlAction.Seek && command.positionMs == null) return
         effects.control(command.action, command.positionMs)
     }

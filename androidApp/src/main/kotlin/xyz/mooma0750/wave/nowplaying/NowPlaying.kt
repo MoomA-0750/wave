@@ -275,9 +275,22 @@ fun NowPlayingScreen(
                 if (remote == null) LikeButton(connection, scope, size = 28.dp)
             }
             Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
+                // ほかの端末を映している間は、ドラッグの間は表示だけ動かし、指を離したときに1回だけ命令を送る（命令ごとに暗号化・鍵交換をする）
+                var dragging by remember { mutableStateOf<Float?>(null) }
                 Slider(
-                    value = if (state.durationMs > 0) (state.positionMs.toFloat() / state.durationMs).coerceIn(0f, 1f) else 0f,
-                    onValueChange = { if (state.durationMs > 0) display.seekTo((it * state.durationMs).toLong()) },
+                    value = dragging ?: if (state.durationMs > 0) (state.positionMs.toFloat() / state.durationMs).coerceIn(0f, 1f) else 0f,
+                    onValueChange = {
+                        if (remote != null) {
+                            dragging = it
+                        } else if (state.durationMs > 0) {
+                            display.seekTo((it * state.durationMs).toLong())
+                        }
+                    },
+                    onValueChangeFinished = {
+                        val target = dragging
+                        dragging = null
+                        if (remote != null && target != null && state.durationMs > 0) display.seekTo((target * state.durationMs).toLong())
+                    },
                     enabled = state.durationMs > 0,
                 )
                 Row(Modifier.fillMaxWidth()) {

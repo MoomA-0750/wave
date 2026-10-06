@@ -347,7 +347,7 @@ public sealed class ConnectService
         }
         if (mirroredQueue is not { } export || export.Items.All(i => i.Meta.ItemId != now.Cursor.CurrentItemId)) return null;
         var duration = export.Items.First(i => i.Meta.ItemId == now.Cursor.CurrentItemId).Song.DurationSeconds;
-        return new RemoteSnapshot(remote.DeviceLabel, mirroredKey, export, now.Cursor.CurrentItemId, now.PositionMs, player.ClockMs, now.Cursor.Playing, RepeatOf(now.Cursor.Repeat), duration);
+        return new RemoteSnapshot(remote.DeviceLabel, mirroredKey, export, now.Cursor.CurrentItemId, now.PositionMs, player.ClockMs, now.Cursor.Playing, RepeatOf(now.Cursor.Repeat), duration, now.Version);
     }
 
     private void SetPairing(PairingView view) => ui.TryEnqueue(() =>
@@ -514,6 +514,8 @@ public sealed class ConnectService
 
     private void PushCursor()
     {
+        // ほかの端末を映している間は手元の再生ではない（間引きのタイマーが映し始めた後に鳴っても、手元の再生を終わらせない）
+        if (player.IsRemote) return;
         var cursor = player.CurrentCursor() is { } c ? ToLocal(c) : null;
         Post(() =>
         {

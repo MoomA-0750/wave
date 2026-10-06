@@ -66,6 +66,9 @@ public sealed class ConnectClient
     /// <summary>遠隔操作の送り手が見ていた版と、受け手の最新の書き込みの版の差の上限（それより古い操作には従わない）。</summary>
     private const long MaxControlLag = 20;
 
+    /// <summary>開いた遠隔操作の doc のハッシュ（同じ doc の再送を開く前に捨てる）。</summary>
+    private readonly LinkedList<string> seenControlDocs = new();
+
     public interface IEffects
     {
         /// <summary>一時停止し、止めた時点の手元の再生を返す（最後のカーソルの位置を今に合わせる）。</summary>
@@ -86,7 +89,7 @@ public sealed class ConnectClient
     }
 
     /// <summary>表示用: ほかの端末の最新のカーソルと、今の時刻に合わせた位置。</summary>
-    public sealed record RemoteNow(string Writer, CursorBody Cursor, long PositionMs);
+    public sealed record RemoteNow(string Writer, CursorBody Cursor, long PositionMs, long Version);
 
     /// <summary>手元の再生の、カーソルに入れる値。</summary>
     /// <param name="CapturedAtMs">PositionMs を取った時刻（nowMs と同じ単調時計）。再生中なら、書くときに経過を足す。</param>
@@ -993,7 +996,7 @@ public sealed class ConnectClient
     {
         var cursor = latestCursor;
         if (cursor is null || cursor.Writer == signer.DeviceId) return null;
-        return new RemoteNow(cursor.Writer, cursor.Body, ExtrapolatedPosition(cursor));
+        return new RemoteNow(cursor.Writer, cursor.Body, ExtrapolatedPosition(cursor), cursor.Version);
     }
 
     /// <summary>
@@ -1003,15 +1006,24 @@ public sealed class ConnectClient
     private void OnControl(RelayV2.Control message)
     {
         var current = chain;
-        if (current is null || message.Doc.Header.Kind != DocKind.Command || session is null) return;
+        if (current is null || message.Doc.Header.Kind != DocKind.Command || session is not { } mine) return;
+        // 中継が同じ命令を流し直しても、開く（鍵交換をする）前に捨てる。署名の対象のハッシュなので、再送なら必ず同じ値
+        var docHash = DocSealer.Hash(message.Doc);
+        if (seenControlDocs.Contains(docHash)) return;
+        seenControlDocs.AddLast(docHash);
+        while (seenControlDocs.Count > MaxHandledClaims) seenControlDocs.RemoveFirst();
         if (DocSealer.Open(message.Doc, current, opener) is not DocOpen.Ok opened) return;
         if (ConnectJson.Decode<CommandBody>(opened.Plaintext) is not CommandBody.Control command) return;
         if (command.To != signer.DeviceId || command.From != opened.Header.WriterId || command.From == signer.DeviceId) return;
+        // 遠隔操作を出せるのは player だけ（yield と同じ）
+        if (!current.Members.TryGetValue(command.From, out var from) || from.Keys.Role != Role.Player) return;
         if (handledClaims.Contains(command.CommandId)) return;
         Remember(command.CommandId);
         if (command.AccountTag != effects.AccountTag()) return;
         if (latestCursor is not { } own || own.Writer != signer.DeviceId) return;
         if (command.BasedOnVersion > own.Version || own.Version - command.BasedOnVersion > MaxControlLag) return;
+        // 今のセッションより前の見え方に基づく命令には従わない
+        if (mine.Arbiter.StartVersion is not { } sessionStart || command.BasedOnVersion < sessionStart) return;
         if (command.Action == ControlAction.Seek && command.PositionMs is null) return;
         effects.Control(command.Action, command.PositionMs);
     }
