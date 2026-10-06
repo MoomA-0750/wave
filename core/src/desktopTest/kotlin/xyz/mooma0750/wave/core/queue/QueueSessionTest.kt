@@ -103,6 +103,15 @@ class QueueSessionTest {
             currentIndex = items.indexOfFirst { it.itemId == itemId }
         }
 
+        override fun move(
+            itemId: String,
+            toIndex: Int,
+        ) {
+            val from = items.indexOfFirst { it.itemId == itemId }
+            if (from <= currentIndex || toIndex <= currentIndex || toIndex >= items.size) return
+            items.add(toIndex, items.removeAt(from))
+        }
+
         override fun resumeAt(index: Int) {
             resumedAt = index
             currentIndex = index

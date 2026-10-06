@@ -132,7 +132,7 @@ public sealed partial class MainWindow : Window
 
     // ---- タイトルバー ----
 
-    private void OnBack(TitleBar sender, object args)
+    private void OnBackClick(object sender, RoutedEventArgs e)
     {
         if (ContentFrame.CanGoBack) ContentFrame.GoBack();
     }
@@ -144,7 +144,7 @@ public sealed partial class MainWindow : Window
 
     private void OnNavigated(object sender, NavigationEventArgs e)
     {
-        AppTitleBar.IsBackButtonEnabled = ContentFrame.CanGoBack;
+        BackButton.IsEnabled = ContentFrame.CanGoBack;
         ForwardButton.IsEnabled = ContentFrame.CanGoForward;
         LyricsToggle.IsChecked = e.SourcePageType == typeof(LyricsPage);
     }
@@ -237,6 +237,7 @@ public sealed partial class MainWindow : Window
             AccountMenu.Items.Add(new MenuFlyoutItem { Text = account.Name ?? L.T("ログイン中", "Logged in"), IsEnabled = false });
             AccountMenu.Items.Add(new MenuFlyoutSeparator());
             AccountMenu.Items.Add(MenuItem(L.T("最近再生した曲", "Recently played"), "", Nav.History));
+            if (AppServices.Connect.Configured) AccountMenu.Items.Add(MenuItem(L.T("端末の連携", "Devices"), "\uE772", Nav.Devices));
         }
         else AccountMenu.Items.Add(MenuItem(L.T("ログイン", "Log in"), "", ShowLogin));
         AccountMenu.Items.Add(MenuItem(L.T("設定", "Settings"), "", Nav.Settings));
@@ -389,11 +390,14 @@ public sealed partial class MainWindow : Window
         switch (Player.Lyrics)
         {
             case LyricsService.Result.Found { Lyrics: SongLyrics.Synced synced }:
-                var i = LyricsTiming.CurrentIndex(synced.Lines, (long)(Player.Position * 1000));
+                var last = LyricsTiming.CurrentIndex(synced.Lines, (long)(Player.Position * 1000));
+                // 同じ時刻の行（原文と読み・訳が並ぶ歌詞）は、まとめて今の行とする
+                var currentStart = last >= 0 ? synced.Lines[last].StartMs : (long?)null;
+                var i = currentStart is { } start ? synced.Lines.ToList().FindIndex(l => l.StartMs == start) : last;
                 if (i == lyricsPreviewIndex) return;
                 lyricsPreviewIndex = i;
                 var first = Math.Max(0, i - 1);
-                ShowPreviewLines(synced.Lines.Skip(first).Take(5).Select((l, k) => (Text: string.IsNullOrWhiteSpace(l.Text) ? "♪" : l.Text, Current: first + k == i)));
+                ShowPreviewLines(synced.Lines.Skip(first).Take(5).Select(l => (Text: string.IsNullOrWhiteSpace(l.Text) ? "♪" : l.Text, Current: currentStart is { } s && l.StartMs == s)));
                 break;
             case LyricsService.Result.Found { Lyrics: SongLyrics.Plain plain }:
                 if (lyricsPreviewIndex == -3) return;
@@ -435,6 +439,8 @@ public sealed partial class MainWindow : Window
         var entries = new List<QueueEntry>();
         for (var i = Math.Max(0, Player.Index); i < Player.Queue.Count; i++) entries.Add(new QueueEntry(i, Player.Queue[i], i == Player.Index));
         QueueList.ItemsSource = entries;
+        QueueEmpty.Visibility = entries.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        QueueList.Visibility = entries.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
     }
 
     private void OnQueueClick(object sender, ItemClickEventArgs e)

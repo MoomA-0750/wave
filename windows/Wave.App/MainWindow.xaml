@@ -17,22 +17,29 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <TitleBar x:Name="AppTitleBar" Title="wave" IsBackButtonVisible="True" BackRequested="OnBack">
+        <TitleBar x:Name="AppTitleBar" Title="wave" IsBackButtonVisible="False">
             <TitleBar.IconSource>
                 <ImageIconSource ImageSource="ms-appx:///Assets/wave.png" />
             </TitleBar.IconSource>
             <TitleBar.LeftHeader>
-                <Button x:Name="ForwardButton" Style="{StaticResource IconButtonStyle}" Click="OnForward" IsEnabled="False"
-                        ToolTipService.ToolTip="{x:Bind app:L.T('進む', 'Forward')}" Margin="0,0,4,0" Height="32" Width="40" MinHeight="32">
-                    <FontIcon Glyph="&#xE72A;" FontSize="12" />
-                </Button>
+                <!-- 戻る・進む（同じ大きさの2つのボタン。タイトルバー備え付けの戻るは使わない） -->
+                <StackPanel Orientation="Horizontal" Spacing="2" Margin="4,0,4,0" VerticalAlignment="Center">
+                    <Button x:Name="BackButton" Style="{StaticResource IconButtonStyle}" Click="OnBackClick" IsEnabled="False"
+                            ToolTipService.ToolTip="{x:Bind app:L.T('戻る', 'Back')}" Height="32" Width="40" MinHeight="32" Padding="0">
+                        <FontIcon Glyph="&#xE72B;" FontSize="12" />
+                    </Button>
+                    <Button x:Name="ForwardButton" Style="{StaticResource IconButtonStyle}" Click="OnForward" IsEnabled="False"
+                            ToolTipService.ToolTip="{x:Bind app:L.T('進む', 'Forward')}" Height="32" Width="40" MinHeight="32" Padding="0">
+                        <FontIcon Glyph="&#xE72A;" FontSize="12" />
+                    </Button>
+                </StackPanel>
             </TitleBar.LeftHeader>
             <TitleBar.Content>
                 <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
                     <Button x:Name="HomeButton" Click="OnHome" ToolTipService.ToolTip="{x:Bind app:L.T('ホーム', 'Home')}" CornerRadius="16" Height="32" Width="40" Padding="0">
                         <FontIcon Glyph="&#xE80F;" FontSize="14" />
                     </Button>
-                    <AutoSuggestBox x:Name="SearchBox" Width="440" VerticalAlignment="Center" PlaceholderText="{x:Bind app:L.T('何を聴きたいですか？', 'What do you want to play?')}"
+                    <AutoSuggestBox x:Name="SearchBox" Width="440" VerticalAlignment="Center" MaxSuggestionListHeight="640" PlaceholderText="{x:Bind app:L.T('何を聴きたいですか？', 'What do you want to play?')}"
                                     QueryIcon="Find" TextChanged="OnSearchTextChanged" QuerySubmitted="OnSearchSubmitted"
                                     GotFocus="OnSearchFocus" UpdateTextOnSelect="False">
                         <AutoSuggestBox.KeyboardAccelerators>
@@ -184,7 +191,7 @@
                                     <TextBlock Text="{x:Bind SongTitleOrIdle(Player.Current), Mode=OneWay}" Style="{StaticResource SubtitleTextBlockStyle}" TextWrapping="Wrap" MaxLines="2" />
                                     <HyperlinkButton Content="{x:Bind Player.Current.ArtistsText, Mode=OneWay}" Padding="0" Click="OnArtistLink" />
                                 </StackPanel>
-                                <ToggleButton Grid.Column="1" Style="{StaticResource IconToggleStyle}" VerticalAlignment="Top" IsChecked="{x:Bind IsLiked(Player.Like), Mode=OneWay}" Click="OnLike" ToolTipService.ToolTip="{x:Bind app:L.T('高く評価', 'Like')}">
+                                <ToggleButton Grid.Column="1" Style="{StaticResource LikeToggleStyle}" VerticalAlignment="Top" IsChecked="{x:Bind IsLiked(Player.Like), Mode=OneWay}" Click="OnLike" ToolTipService.ToolTip="{x:Bind app:L.T('高く評価', 'Like')}">
                                     <FontIcon Glyph="{x:Bind LikeGlyph(Player.Like), Mode=OneWay}" FontSize="18" />
                                 </ToggleButton>
                             </Grid>
@@ -227,6 +234,11 @@
                                 <FontIcon Glyph="&#xE711;" FontSize="12" />
                             </Button>
                         </Grid>
+                        <StackPanel x:Name="QueueEmpty" Grid.Row="1" Spacing="6" Padding="24" VerticalAlignment="Center" Visibility="Collapsed">
+                            <TextBlock Text="{x:Bind app:L.T('キューは空です', 'Your queue is empty')}" Style="{StaticResource BodyStrongTextBlockStyle}" HorizontalAlignment="Center" />
+                            <TextBlock Text="{x:Bind app:L.T('曲を再生すると、ここに次の曲が並びます', 'Play something and upcoming songs will show up here')}" Style="{StaticResource SubtleTextStyle}"
+                                       HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" MaxLines="3" />
+                        </StackPanel>
                         <ListView x:Name="QueueList" Grid.Row="1" SelectionMode="None" IsItemClickEnabled="True" ItemClick="OnQueueClick" Padding="4,0,4,8">
                             <ListView.Header>
                                 <TextBlock Text="{x:Bind app:L.T('再生中', 'Now playing')}" Style="{StaticResource SubtleTextStyle}" Margin="12,4" />
@@ -255,7 +267,7 @@
         </Grid>
 
         <!-- 再生の操作（Spotify の下の帯: 左に曲、中央にボタンと位置、右に歌詞・キュー・音量） -->
-        <Grid Grid.Row="2" Height="88" Padding="16,8" ColumnSpacing="16">
+        <Grid Grid.Row="2" MinHeight="88" Padding="16,10" ColumnSpacing="16">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="3*" />
                 <ColumnDefinition Width="4*" MaxWidth="720" />
@@ -278,7 +290,7 @@
                         <TextBlock Text="{x:Bind Player.Current.ArtistsText, Mode=OneWay}" TextTrimming="CharacterEllipsis" MaxLines="1" Style="{StaticResource CaptionTextBlockStyle}" />
                     </HyperlinkButton>
                 </StackPanel>
-                <ToggleButton Grid.Column="2" Style="{StaticResource IconToggleStyle}" VerticalAlignment="Center" IsChecked="{x:Bind IsLiked(Player.Like), Mode=OneWay}"
+                <ToggleButton Grid.Column="2" Style="{StaticResource LikeToggleStyle}" VerticalAlignment="Center" IsChecked="{x:Bind IsLiked(Player.Like), Mode=OneWay}"
                               Click="OnLike" ToolTipService.ToolTip="{x:Bind app:L.T('高く評価', 'Like')}" Visibility="{x:Bind HasSong(Player.Current), Mode=OneWay}">
                     <FontIcon Glyph="{x:Bind LikeGlyph(Player.Like), Mode=OneWay}" FontSize="16" />
                 </ToggleButton>

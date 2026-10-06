@@ -601,7 +601,29 @@ public sealed partial class PlayerService : ObservableObject
         Repeat = repeat;
         seedListened = (queue.CurrentItemId, listened, historySent);
         SelectAt(index, positionMs / 1000.0);
+        // 曲のラジオを種の曲だけで受け取った（送り手は続きを取る前に渡した）: 続きをこの PC で取る
+        if (queue.RadioSeed is { } seed && radioContinuation is null && Queue.Count - index <= 3) _ = ExtendFromSeedAsync(seed);
         return true;
+    }
+
+    /// <summary>曲のラジオの続きを、種の曲から取って足す（まだキューに無い曲だけ）。</summary>
+    private async Task ExtendFromSeedAsync(string seed)
+    {
+        if (extending) return;
+        extending = true;
+        try
+        {
+            var page = await AppServices.Music.UpNextAsync(seed, radioPlaylistId ?? "RDAMVM" + seed);
+            if (!page.IsOk || radioSeed != seed) return;
+            radioContinuation = page.Value!.Continuation;
+            radioPlaylistId = page.Value.PlaylistId ?? radioPlaylistId;
+            var known = Queue.Select(s => s.VideoId).ToHashSet();
+            AddAll(page.Value.Songs.Where(s => known.Add(s.VideoId)).ToList(), QueueOrigin.Suggestion);
+        }
+        finally
+        {
+            extending = false;
+        }
     }
 
     private (string ItemId, long ListenedMs, bool HistorySent)? seedListened;

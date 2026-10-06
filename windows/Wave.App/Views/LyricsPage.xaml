@@ -4,7 +4,11 @@
       xmlns:local="using:Wave.App.Views">
     <!-- 歌詞（Spotify と同じく中央の枠いっぱいに、歌っている行を明るく、過ぎた行と先の行は薄く） -->
     <Grid>
-        <Rectangle x:Name="Backdrop" />
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <Rectangle x:Name="Backdrop" Grid.RowSpan="2" />
         <ListView x:Name="Lines" SelectionMode="None" IsItemClickEnabled="True" ItemClick="OnLineClick" Padding="40,40,40,240">
             <ListView.ItemContainerStyle>
                 <Style TargetType="ListViewItem" BasedOn="{StaticResource DefaultListViewItemStyle}">
@@ -24,7 +28,8 @@
         <ScrollViewer x:Name="PlainView" Visibility="Collapsed">
             <TextBlock x:Name="PlainText" FontSize="26" FontWeight="SemiBold" TextWrapping="Wrap" Margin="40" LineHeight="40" IsTextSelectionEnabled="True" />
         </ScrollViewer>
-        <Border VerticalAlignment="Bottom" Padding="40,8,40,12" Background="{ThemeResource LayerFillColorDefaultBrush}">
+        <!-- 出典は歌詞に重ねず、下の段に置く -->
+        <Border Grid.Row="1" Padding="40,8,40,12">
             <TextBlock x:Name="SourceText" Style="{StaticResource SubtleTextStyle}" />
         </Border>
         <StackPanel x:Name="EmptyPanel" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="8" Visibility="Collapsed">

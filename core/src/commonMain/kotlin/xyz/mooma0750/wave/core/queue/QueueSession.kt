@@ -108,6 +108,12 @@ interface QueuePlayer {
 
     fun jumpTo(itemId: String)
 
+    /** 今の項目より後ろの項目を、今の項目より後ろの toIndex へ動かす（キューの並べ替え）。 */
+    fun move(
+        itemId: String,
+        toIndex: Int,
+    )
+
     /** 最後まで行って止まっているときに、追加した項目の先頭から再生を続ける。 */
     fun resumeAt(index: Int)
 
@@ -254,6 +260,14 @@ class QueueSession(
     fun jumpTo(itemId: String) {
         player.jumpTo(itemId)
         maybeFetch()
+    }
+
+    /** 本人がキューを並べ替えた（今の曲より後ろだけ）。 */
+    fun move(
+        itemId: String,
+        toIndex: Int,
+    ) {
+        player.move(itemId, toIndex)
     }
 
     /**

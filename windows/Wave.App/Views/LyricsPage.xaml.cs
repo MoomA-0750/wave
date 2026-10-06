@@ -106,10 +106,12 @@ public sealed partial class LyricsPage : Page
     private void Follow()
     {
         if (rows.Count == 0) return;
-        var index = LyricsTiming.CurrentIndex(rows.Select(r => r.Line).ToList(), (long)(Player.Position * 1000));
+        var last = LyricsTiming.CurrentIndex(rows.Select(r => r.Line).ToList(), (long)(Player.Position * 1000));
+        // 同じ時刻の行（原文と読み・訳が並ぶ歌詞）は、まとめて今の行とする（Android と同じ）
+        var index = last < 0 ? last : rows.FindIndex(r => r.Line.StartMs == rows[last].Line.StartMs);
         if (index == current) return;
         current = index;
-        for (var i = 0; i < rows.Count; i++) rows[i].Opacity = i == index ? 1.0 : i < index ? 0.6 : 0.4;
+        for (var i = 0; i < rows.Count; i++) rows[i].Opacity = index >= 0 && i >= index && i <= last ? 1.0 : i < index ? 0.6 : 0.4;
         if (index < 0) return;
         if (Lines.ContainerFromIndex(index) is FrameworkElement item && FindScroller(Lines) is { } scroller)
         {
