@@ -101,7 +101,20 @@ class ConnectClient(
 
         /** 今のログインの accountTag（Verified でなければ null、ADR-0007・L-11）。 */
         fun accountTag(): String?
+
+        /** 遠隔操作に従う（この端末が鳴らしている）。受け付けなければ false。 */
+        fun control(
+            action: ControlAction,
+            positionMs: Long?,
+        ): Boolean = false
     }
+
+    /** 表示用: ほかの端末の最新のカーソルと、今の時刻に合わせた位置。 */
+    data class RemoteNow(
+        val writer: String,
+        val cursor: CursorBody,
+        val positionMs: Long,
+    )
 
     /** 手元の再生の、カーソルに入れる値。 */
     data class LocalCursor(
@@ -280,6 +293,7 @@ class ConnectClient(
             is RelayV2.StateConflict -> onStateConflict(message)
             is RelayV2.Error -> onError(message)
             is RelayV2.YieldDelivery -> onYield(message)
+            is RelayV2.Control -> onControl(message)
             is RelayV2.ActiveChanged -> onActiveChanged(message)
             is RelayV2.PendingExpired -> onPendingExpired(message.claimId)
             is RelayV2.Presence -> online = message.online.toSet()
@@ -828,6 +842,49 @@ class ConnectClient(
         return true
     }
 
+    /**
+     * 遠隔操作を送る（鳴っていない端末から、今鳴らしている同じアカウントの端末へ）。
+     * @return 送ったか（家の再生が自分・別のアカウント・最新の状態をまだ見ていないなら false）
+     */
+    fun sendControl(
+        action: ControlAction,
+        positionMs: Long? = null,
+    ): Boolean {
+        if (isWriter || pendingStoreId != null) return false
+        val current = chain ?: return false
+        val tag = effects.accountTag() ?: return false
+        val cursor = latestCursor ?: return false
+        if (cursor.writer == signer.deviceId || cursor.body.accountTag != tag) return false
+        val command = CommandBody.Control(newId(), signer.deviceId, cursor.writer, action, positionMs?.coerceAtLeast(0), cursor.version, tag)
+        return send(RelayV2.Control(sealCommand(current, command)))
+    }
+
+    /** 表示用: ほかの端末の最新のカーソル（別アカウントのものを含む）と、今の時刻に合わせた位置。 */
+    fun remoteNow(): RemoteNow? {
+        val cursor = latestCursor ?: return null
+        if (cursor.writer == signer.deviceId) return null
+        return RemoteNow(cursor.writer, cursor.body, extrapolatedPosition(cursor))
+    }
+
+    /**
+     * 遠隔操作を受けた。自分宛て・送り主が署名した端末・処理していない ID・この端末が書き手・同じアカウント・
+     * 送り手が見ていた版がこの端末の最新の書き込みに近いときだけ従う（中継が取っておいた古い操作を後から流しても、版が離れていれば従わない）。
+     */
+    private fun onControl(message: RelayV2.Control) {
+        val current = chain ?: return
+        if (message.doc.header.kind != DocKind.Command || session == null) return
+        val opened = DocSealer.open(message.doc, current, opener) as? DocOpen.Ok ?: return
+        val command = runCatching { ConnectJson.json.decodeFromString(CommandBody.serializer(), opened.plaintext.decodeToString()) }.getOrNull() as? CommandBody.Control ?: return
+        if (command.to != signer.deviceId || command.from != opened.header.writerId || command.from == signer.deviceId) return
+        if (command.commandId in handledClaims) return
+        remember(command.commandId)
+        if (command.accountTag != effects.accountTag()) return
+        val own = latestCursor?.takeIf { it.writer == signer.deviceId } ?: return
+        if (command.basedOnVersion > own.version || own.version - command.basedOnVersion > MAX_CONTROL_LAG) return
+        if (command.action == ControlAction.Seek && command.positionMs == null) return
+        effects.control(command.action, command.positionMs)
+    }
+
     /** 時間の経過。transfer で前の端末から返事が無ければ、最後の状態から取り込む。 */
     fun tick() {
         if (floorDirty && lastPersistMs.let { it == null || nowMs() - it >= FLOOR_PERSIST_MS }) persist()
@@ -978,5 +1035,8 @@ class ConnectClient(
         const val FLOOR_PERSIST_MS = 30_000L
         const val MAX_EXTRAPOLATION_MS = 9 * 60 * 1000L
         private const val MAX_HANDLED_CLAIMS = 64
+
+        /** 遠隔操作の送り手が見ていた版と、受け手の最新の書き込みの版の差の上限（それより古い操作には従わない）。 */
+        private const val MAX_CONTROL_LAG = 20L
     }
 }

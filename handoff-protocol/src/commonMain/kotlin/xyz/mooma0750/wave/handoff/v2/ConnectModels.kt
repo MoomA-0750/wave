@@ -156,6 +156,42 @@ sealed interface CommandBody {
         val sessionBase: Long,
         val accountTag: String,
     ) : CommandBody
+
+    /**
+     * 遠隔操作: 鳴っていない端末から、今の再生中の端末へ「再生・一時停止・次へ・前へ・シーク」。
+     * 受け手は、自分宛て・自分が書き手・同じアカウント・処理していない ID・見ていた版が近いときだけ従う（中継の再送・遅延を古い操作として扱わない）。
+     */
+    @Serializable
+    @SerialName("control")
+    data class Control(
+        val commandId: String,
+        val from: String,
+        val to: String,
+        val action: ControlAction,
+        /** シークの位置（seek のときだけ）。 */
+        val positionMs: Long? = null,
+        /** 送り手が見ていた、受け手のカーソルの版。 */
+        val basedOnVersion: Long,
+        val accountTag: String,
+    ) : CommandBody
+}
+
+@Serializable
+enum class ControlAction {
+    @SerialName("play")
+    Play,
+
+    @SerialName("pause")
+    Pause,
+
+    @SerialName("next")
+    Next,
+
+    @SerialName("previous")
+    Previous,
+
+    @SerialName("seek")
+    Seek,
 }
 
 @Serializable

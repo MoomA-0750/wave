@@ -141,6 +141,7 @@ public sealed record QueueBody
 /// <summary>命令（判別子は "type"）。</summary>
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
 [JsonDerivedType(typeof(Yield), "yield")]
+[JsonDerivedType(typeof(Control), "control")]
 public abstract record CommandBody
 {
     /// <summary>再生を始めた端末から、今の再生中の端末へ「止まって」（D-7）。</summary>
@@ -152,6 +153,35 @@ public abstract record CommandBody
         public required long SessionBase { get; init; }
         public required string AccountTag { get; init; }
     }
+
+    /// <summary>
+    /// 遠隔操作: 鳴っていない端末から、今の再生中の端末へ「再生・一時停止・次へ・前へ・シーク」。
+    /// 受け手は、自分宛て・自分が書き手・同じアカウント・処理していない ID・見ていた版が近いときだけ従う。
+    /// </summary>
+    public sealed record Control : CommandBody
+    {
+        public required string CommandId { get; init; }
+        public required string From { get; init; }
+        public required string To { get; init; }
+        public required ControlAction Action { get; init; }
+
+        /// <summary>シークの位置（seek のときだけ）。</summary>
+        public long? PositionMs { get; init; }
+
+        /// <summary>送り手が見ていた、受け手のカーソルの版。</summary>
+        public required long BasedOnVersion { get; init; }
+
+        public required string AccountTag { get; init; }
+    }
+}
+
+public enum ControlAction
+{
+    [JsonStringEnumMemberName("play")] Play,
+    [JsonStringEnumMemberName("pause")] Pause,
+    [JsonStringEnumMemberName("next")] Next,
+    [JsonStringEnumMemberName("previous")] Previous,
+    [JsonStringEnumMemberName("seek")] Seek,
 }
 
 public sealed record ProfileBody

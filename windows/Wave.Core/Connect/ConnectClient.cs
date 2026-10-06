@@ -63,6 +63,9 @@ public sealed class ConnectClient
     public const long MaxExtrapolationMs = 9 * 60 * 1000L;
     private const int MaxHandledClaims = 64;
 
+    /// <summary>遠隔操作の送り手が見ていた版と、受け手の最新の書き込みの版の差の上限（それより古い操作には従わない）。</summary>
+    private const long MaxControlLag = 20;
+
     public interface IEffects
     {
         /// <summary>一時停止し、止めた時点の手元の再生を返す（最後のカーソルの位置を今に合わせる）。</summary>
@@ -77,7 +80,13 @@ public sealed class ConnectClient
 
         /// <summary>今のログインの accountTag（Verified でなければ null）。</summary>
         string? AccountTag();
+
+        /// <summary>遠隔操作に従う（この端末が鳴らしている）。受け付けなければ false。</summary>
+        bool Control(ControlAction action, long? positionMs) => false;
     }
+
+    /// <summary>表示用: ほかの端末の最新のカーソルと、今の時刻に合わせた位置。</summary>
+    public sealed record RemoteNow(string Writer, CursorBody Cursor, long PositionMs);
 
     /// <summary>手元の再生の、カーソルに入れる値。</summary>
     /// <param name="CapturedAtMs">PositionMs を取った時刻（nowMs と同じ単調時計）。再生中なら、書くときに経過を足す。</param>
@@ -291,6 +300,7 @@ public sealed class ConnectClient
             case RelayV2.StateConflict conflict: OnStateConflict(conflict); break;
             case RelayV2.Error error: OnError(error); break;
             case RelayV2.YieldDelivery delivery: OnYield(delivery); break;
+            case RelayV2.Control control: OnControl(control); break;
             case RelayV2.ActiveChanged changed: OnActiveChanged(changed); break;
             case RelayV2.PendingExpired expired: OnPendingExpired(expired.ClaimId); break;
             case RelayV2.Presence presence: online = presence.Online.ToHashSet(); break;
@@ -943,6 +953,58 @@ public sealed class ConnectClient
     /// 取り込みは、前の端末の最後のカーソルが届いたとき、または3秒後（Tick）に行う。
     /// </summary>
     public bool RequestTransfer() => RequestTransfer(retried: false);
+
+    /// <summary>遠隔操作を送る（鳴っていない端末から、今鳴らしている同じアカウントの端末へ）。</summary>
+    /// <returns>送ったか（家の再生が自分・別のアカウント・最新の状態をまだ見ていないなら false）</returns>
+    public bool SendControl(ControlAction action, long? positionMs = null)
+    {
+        if (IsWriter || pendingStoreId is not null) return false;
+        var current = chain;
+        if (current is null) return false;
+        var tag = effects.AccountTag();
+        if (tag is null) return false;
+        var cursor = latestCursor;
+        if (cursor is null || cursor.Writer == signer.DeviceId || cursor.Body.AccountTag != tag) return false;
+        var command = new CommandBody.Control
+        {
+            CommandId = newId(),
+            From = signer.DeviceId,
+            To = cursor.Writer,
+            Action = action,
+            PositionMs = positionMs is { } p ? Math.Max(0, p) : null,
+            BasedOnVersion = cursor.Version,
+            AccountTag = tag,
+        };
+        return send(new RelayV2.Control { Doc = SealCommand(current, command) });
+    }
+
+    /// <summary>表示用: ほかの端末の最新のカーソル（別アカウントのものを含む）と、今の時刻に合わせた位置。</summary>
+    public RemoteNow? RemoteNowPosition()
+    {
+        var cursor = latestCursor;
+        if (cursor is null || cursor.Writer == signer.DeviceId) return null;
+        return new RemoteNow(cursor.Writer, cursor.Body, ExtrapolatedPosition(cursor));
+    }
+
+    /// <summary>
+    /// 遠隔操作を受けた。自分宛て・送り主が署名した端末・処理していない ID・この端末が書き手・同じアカウント・
+    /// 送り手が見ていた版がこの端末の最新の書き込みに近いときだけ従う（中継が取っておいた古い操作を後から流しても、版が離れていれば従わない）。
+    /// </summary>
+    private void OnControl(RelayV2.Control message)
+    {
+        var current = chain;
+        if (current is null || message.Doc.Header.Kind != DocKind.Command || session is null) return;
+        if (DocSealer.Open(message.Doc, current, opener) is not DocOpen.Ok opened) return;
+        if (ConnectJson.Decode<CommandBody>(opened.Plaintext) is not CommandBody.Control command) return;
+        if (command.To != signer.DeviceId || command.From != opened.Header.WriterId || command.From == signer.DeviceId) return;
+        if (handledClaims.Contains(command.CommandId)) return;
+        Remember(command.CommandId);
+        if (command.AccountTag != effects.AccountTag()) return;
+        if (latestCursor is not { } own || own.Writer != signer.DeviceId) return;
+        if (command.BasedOnVersion > own.Version || own.Version - command.BasedOnVersion > MaxControlLag) return;
+        if (command.Action == ControlAction.Seek && command.PositionMs is null) return;
+        effects.Control(command.Action, command.PositionMs);
+    }
 
     private bool RequestTransfer(bool retried)
     {

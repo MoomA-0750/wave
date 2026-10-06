@@ -189,6 +189,9 @@ class SimDevice(
     private fun positionNow(): Long = if (playing) positionAnchor + (clock() - anchorAt) else positionAnchor
     var currentItemId = "item-0"
     val events = ArrayList<ClientEvent>()
+
+    /** 従った遠隔操作。 */
+    val controls = ArrayList<Pair<xyz.mooma0750.wave.handoff.v2.ControlAction, Long?>>()
     var persisted = ClientPersisted()
     var persistCount = 0
     var foreground = true
@@ -241,6 +244,20 @@ class SimDevice(
                     }
 
                     override fun accountTag(): String? = accountTag
+
+                    override fun control(
+                        action: xyz.mooma0750.wave.handoff.v2.ControlAction,
+                        positionMs: Long?,
+                    ): Boolean {
+                        controls += action to positionMs
+                        when (action) {
+                            xyz.mooma0750.wave.handoff.v2.ControlAction.Play -> playing = true
+                            xyz.mooma0750.wave.handoff.v2.ControlAction.Pause -> playing = false
+                            xyz.mooma0750.wave.handoff.v2.ControlAction.Seek -> this@SimDevice.positionMs = positionMs ?: 0
+                            else -> Unit
+                        }
+                        return true
+                    }
                 },
             nowMs = clock,
             epochMs = { clock() + epochSkewMs },

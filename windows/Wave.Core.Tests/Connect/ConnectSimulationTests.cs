@@ -187,4 +187,46 @@ public class ConnectSimulationTests
         Assert.Null(stranger.Client.HouseholdId);
         Assert.Contains(stranger.Events, e => e is ClientEvent.ChainInvalid { Reason: "unexpected_household" });
     }
+
+    [Fact]
+    public void RemoteControlReachesThePlayingDeviceOnce()
+    {
+        SetUp();
+        a.StartPlaying(snapshot);
+        relay.Run();
+        Assert.True(b.Client.SendControl(ControlAction.Pause));
+        relay.Run();
+        Assert.False(a.Playing, "遠隔の一時停止に従っていない");
+        Assert.True(a.Client.IsWriter, "一時停止しても書き手のまま");
+        a.PushCursor();
+        relay.Run();
+        Assert.True(b.Client.SendControl(ControlAction.Seek, 90_000));
+        relay.Run();
+        Assert.Equal(90_000L, a.PositionMs);
+        Assert.Equal(2, a.Controls.Count);
+        Assert.False(a.Client.SendControl(ControlAction.Play));
+        Assert.NotNull(b.Client.RemoteNowPosition());
+    }
+
+    [Fact]
+    public void RemoteControlFromAnotherAccountOrReplayedIsIgnored()
+    {
+        SetUp();
+        a.StartPlaying(snapshot);
+        relay.Run();
+        b.Tag = "tag-account-2";
+        Assert.False(b.Client.SendControl(ControlAction.Pause));
+        b.Tag = "tag-account-1";
+        RelayV2.Control? captured = null;
+        relay.OnFromClient = (from, message) =>
+        {
+            if (from == b.DeviceId && message is RelayV2.Control c) captured = c;
+        };
+        Assert.True(b.Client.SendControl(ControlAction.Pause));
+        relay.Run();
+        Assert.Single(a.Controls);
+        relay.Inject(a.DeviceId, captured!);
+        relay.Run();
+        Assert.Single(a.Controls);
+    }
 }

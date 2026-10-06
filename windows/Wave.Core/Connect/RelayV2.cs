@@ -52,6 +52,7 @@ public sealed record StoredState
 [JsonDerivedType(typeof(Transfer), "transfer")]
 [JsonDerivedType(typeof(YieldDelivery), "yield")]
 [JsonDerivedType(typeof(Yielded), "yielded")]
+[JsonDerivedType(typeof(Control), "control")]
 [JsonDerivedType(typeof(Release), "release")]
 [JsonDerivedType(typeof(ActiveChanged), "active_changed")]
 [JsonDerivedType(typeof(PendingExpired), "pending_expired")]
@@ -204,6 +205,12 @@ public abstract record RelayV2
     {
         public required string ClaimId { get; init; }
         public required long ExpectVersion { get; init; }
+        public required SealedDoc Doc { get; init; }
+    }
+
+    /// <summary>遠隔操作（命令の doc）。中継は書き手が送り主であることだけを確かめ、家のほかの端末に配る。保存しない。</summary>
+    public sealed record Control : RelayV2
+    {
         public required SealedDoc Doc { get; init; }
     }
 

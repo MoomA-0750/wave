@@ -189,6 +189,13 @@ sealed interface RelayV2 {
         val doc: SealedDoc,
     ) : RelayV2
 
+    /** 遠隔操作（命令の doc）。中継は書き手が送り主であることだけを確かめ、家のほかの端末に配る。保存しない。 */
+    @Serializable
+    @SerialName("control")
+    data class Control(
+        val doc: SealedDoc,
+    ) : RelayV2
+
     @Serializable
     @SerialName("release")
     data class Release(

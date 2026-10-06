@@ -73,10 +73,17 @@ internal sealed class FakeRelay(Func<long> nowMs)
         }
     }
 
+    /// <summary>端末から届いたものを覗く（テストで、敵対的な中継が取っておく命令を得る）。</summary>
+    public Action<string, RelayV2>? OnFromClient { get; set; }
+
+    /// <summary>敵対的な中継: 端末へ任意のメッセージを差し込む。</summary>
+    public void Inject(string to, RelayV2 message) => Post(to, message);
+
     /// <returns>中継に届いたか（つながっていなければ false）</returns>
     public bool FromClient(string deviceId, RelayV2 message)
     {
         if (!connected.ContainsKey(deviceId)) return false;
+        OnFromClient?.Invoke(deviceId, message);
         var text = RelayV2.Encode(message);
         if (text.Length > RelayV2.MaxFrameChars) throw new InvalidOperationException("大きすぎる");
         Route(deviceId, RelayV2.Decode(text) ?? throw new InvalidOperationException("読めない: " + text));
@@ -167,6 +174,11 @@ internal sealed class FakeRelay(Func<long> nowMs)
                 break;
             case RelayV2.Yielded yielded:
                 OnYielded(sender, yielded);
+                break;
+            case RelayV2.Control control:
+                // 書き手が送り主で、命令の doc であるときだけ配る（中継の HouseholdRouter と同じ）
+                if (control.Doc.Header.WriterId == sender && control.Doc.Header.Kind == DocKind.Command) Broadcast(control, except: sender);
+                else Reply(new RelayV2.Error { Code = "bad_control" });
                 break;
             case RelayV2.Release release:
                 if (pending is { } waiting && waiting.ClaimId == release.ClaimId && waiting.Owner == sender) Broadcast(DropPending());
@@ -415,4 +427,16 @@ internal sealed class SimDevice : ConnectClient.IEffects
     void ConnectClient.IEffects.Persist(ClientPersisted state) => Persisted = state;
 
     string? ConnectClient.IEffects.AccountTag() => Tag;
+
+    /// <summary>従った遠隔操作。</summary>
+    public List<(ControlAction Action, long? PositionMs)> Controls { get; } = [];
+
+    bool ConnectClient.IEffects.Control(ControlAction action, long? positionMs)
+    {
+        Controls.Add((action, positionMs));
+        if (action == ControlAction.Play) Playing = true;
+        else if (action == ControlAction.Pause) Playing = false;
+        else if (action == ControlAction.Seek) PositionMs = positionMs ?? 0;
+        return true;
+    }
 }

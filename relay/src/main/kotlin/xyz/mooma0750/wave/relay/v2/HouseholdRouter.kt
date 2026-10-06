@@ -81,6 +81,14 @@ internal class HouseholdRouter(
                     is HouseholdStore.PutResult.Rejected -> out.reply(RelayV2.Error(result.code, message.claimId))
                 }
             is RelayV2.Release -> store.release(deviceId, message.claimId)?.let { out.broadcast(it) }
+            is RelayV2.Control ->
+                // 書き手が送り主で、命令の doc であるときだけ配る（中身は読まない。保存しない）
+                if (message.doc.header.writerId == deviceId && message.doc.header.kind == xyz.mooma0750.wave.handoff.v2.DocKind.Command) {
+                    out.broadcast(message, except = deviceId)
+                    log("control")
+                } else {
+                    out.reply(RelayV2.Error("bad_control"))
+                }
             else -> return false
         }
         return true

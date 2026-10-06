@@ -762,4 +762,47 @@ class ConnectSimulationTest {
         // 受け入れるまで引き取れない
         assertFalse(b.client.requestTransfer())
     }
+
+    @Test
+    fun remoteControlReachesThePlayingDeviceOnce() {
+        setUp()
+        a.startPlaying("queue-A", position = 10_000)
+        relay.run()
+        // 鳴っていない B から一時停止・シーク
+        assertTrue(b.client.sendControl(xyz.mooma0750.wave.handoff.v2.ControlAction.Pause))
+        relay.run()
+        assertFalse(a.playing, "遠隔の一時停止に従っていない")
+        assertTrue(a.client.isWriter, "一時停止しても書き手のまま")
+        a.pushCursor()
+        relay.run()
+        assertTrue(b.client.sendControl(xyz.mooma0750.wave.handoff.v2.ControlAction.Seek, 90_000))
+        relay.run()
+        assertEquals(90_000L, a.positionMs)
+        assertEquals(2, a.controls.size)
+        // 書き手でない端末・自分が書き手のときは送らない
+        assertFalse(a.client.sendControl(xyz.mooma0750.wave.handoff.v2.ControlAction.Play))
+    }
+
+    @Test
+    fun remoteControlFromAnotherAccountOrReplayedIsIgnored() {
+        setUp()
+        a.startPlaying("queue-A")
+        relay.run()
+        b.accountTag = "tag-account-2"
+        // 別のアカウントのタグでは送れない（家の再生のタグと違う）
+        assertFalse(b.client.sendControl(xyz.mooma0750.wave.handoff.v2.ControlAction.Pause))
+        b.accountTag = "tag-account-1"
+        // 中継が同じ命令をもう一度流しても、1回しか従わない
+        val captured = ArrayList<RelayV2>()
+        relay.dropIncoming = { from, message ->
+            if (from == b.deviceId && message is RelayV2.Control) captured += message
+            false
+        }
+        assertTrue(b.client.sendControl(xyz.mooma0750.wave.handoff.v2.ControlAction.Pause))
+        relay.run()
+        assertEquals(1, a.controls.size)
+        relay.inject(a.deviceId, captured.single())
+        relay.run()
+        assertEquals(1, a.controls.size, "再送された命令に二度従った")
+    }
 }
