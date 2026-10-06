@@ -25,7 +25,7 @@
             </Button>
         </Grid>
         <StackPanel Grid.Row="1" Spacing="2">
-            <TextBlock Text="{x:Bind Item.Title, Mode=OneWay}" Style="{StaticResource BodyStrongTextBlockStyle}" TextTrimming="CharacterEllipsis" MaxLines="1" />
+            <TextBlock Text="{x:Bind Item.Title, Mode=OneWay}" Style="{StaticResource BodyStrongTextBlockStyle}" TextTrimming="CharacterEllipsis" />
             <TextBlock Text="{x:Bind Subtitle(Item), Mode=OneWay}" Style="{StaticResource SubtleTextStyle}" MaxLines="2" TextWrapping="Wrap" />
         </StackPanel>
     </Grid>

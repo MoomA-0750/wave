@@ -60,7 +60,7 @@
                                         </Grid>
                                     </Border>
                                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                        <TextBlock Text="{x:Bind Title}" TextTrimming="CharacterEllipsis" MaxLines="1" />
+                                        <TextBlock Text="{x:Bind Title}" TextTrimming="CharacterEllipsis" />
                                         <TextBlock Text="{x:Bind Subtitle}" Style="{StaticResource SubtleTextStyle}" Visibility="{x:Bind app:Ui.ShowText(Subtitle)}" />
                                     </StackPanel>
                                 </Grid>
@@ -141,7 +141,7 @@
                                         </Grid>
                                     </Border>
                                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                        <TextBlock Text="{x:Bind Title}" TextTrimming="CharacterEllipsis" MaxLines="1" />
+                                        <TextBlock Text="{x:Bind Title}" TextTrimming="CharacterEllipsis" />
                                         <TextBlock Text="{x:Bind Subtitle}" Style="{StaticResource SubtleTextStyle}" />
                                     </StackPanel>
                                 </Grid>
@@ -195,10 +195,13 @@
                                     <FontIcon Glyph="{x:Bind LikeGlyph(Player.Like), Mode=OneWay}" FontSize="18" />
                                 </ToggleButton>
                             </Grid>
-                            <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Padding="16" CornerRadius="8" Click="OnOpenLyrics">
+                            <!-- 歌詞（無い曲では箱ごと出さない）。全文を中で送り、歌っている行へ滑らかに動かす -->
+                            <Button x:Name="LyricsCard" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Padding="16" CornerRadius="8" Click="OnOpenLyrics" Visibility="Collapsed">
                                 <StackPanel Spacing="8">
                                     <TextBlock Text="{x:Bind app:L.T('歌詞', 'Lyrics')}" Style="{StaticResource BodyStrongTextBlockStyle}" />
-                                    <StackPanel x:Name="LyricsPreview" Spacing="4" />
+                                    <ScrollViewer x:Name="LyricsScroller" Height="190" IsHitTestVisible="False" VerticalScrollBarVisibility="Hidden" HorizontalScrollMode="Disabled">
+                                        <StackPanel x:Name="LyricsPreview" Padding="0,0,0,160" />
+                                    </ScrollViewer>
                                 </StackPanel>
                             </Button>
                             <StackPanel Padding="16" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" Spacing="8">
@@ -215,7 +218,7 @@
                                         <Image x:Name="NextImage" Stretch="UniformToFill" />
                                     </Border>
                                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                        <TextBlock x:Name="NextTitle" TextTrimming="CharacterEllipsis" MaxLines="1" />
+                                        <TextBlock x:Name="NextTitle" TextTrimming="CharacterEllipsis" />
                                         <TextBlock x:Name="NextArtist" Style="{StaticResource SubtleTextStyle}" />
                                     </StackPanel>
                                 </Grid>
@@ -254,7 +257,7 @@
                                             <Image Source="{x:Bind app:Ui.Small(Song.ThumbnailUrl)}" Stretch="UniformToFill" />
                                         </Border>
                                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                            <TextBlock Text="{x:Bind Song.Title}" TextTrimming="CharacterEllipsis" MaxLines="1" Foreground="{x:Bind controls:Templates.TitleBrush(IsCurrent)}" />
+                                            <TextBlock Text="{x:Bind Song.Title}" TextTrimming="CharacterEllipsis" Foreground="{x:Bind controls:Templates.TitleBrush(IsCurrent)}" />
                                             <TextBlock Text="{x:Bind Song.ArtistsText}" Style="{StaticResource SubtleTextStyle}" />
                                         </StackPanel>
                                     </Grid>
@@ -284,10 +287,10 @@
                 </Border>
                 <StackPanel Grid.Column="1" VerticalAlignment="Center" MaxWidth="260">
                     <HyperlinkButton Padding="0" Click="OnAlbumLink" Foreground="{ThemeResource TextFillColorPrimaryBrush}">
-                        <TextBlock Text="{x:Bind Player.Current.Title, Mode=OneWay}" TextTrimming="CharacterEllipsis" MaxLines="1" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                        <TextBlock Text="{x:Bind Player.Current.Title, Mode=OneWay}" TextTrimming="CharacterEllipsis" Style="{StaticResource BodyStrongTextBlockStyle}" />
                     </HyperlinkButton>
                     <HyperlinkButton Padding="0" Click="OnArtistLink" Foreground="{ThemeResource TextFillColorSecondaryBrush}">
-                        <TextBlock Text="{x:Bind Player.Current.ArtistsText, Mode=OneWay}" TextTrimming="CharacterEllipsis" MaxLines="1" Style="{StaticResource CaptionTextBlockStyle}" />
+                        <TextBlock Text="{x:Bind Player.Current.ArtistsText, Mode=OneWay}" TextTrimming="CharacterEllipsis" Style="{StaticResource CaptionTextBlockStyle}" />
                     </HyperlinkButton>
                 </StackPanel>
                 <ToggleButton Grid.Column="2" Style="{StaticResource LikeToggleStyle}" VerticalAlignment="Center" IsChecked="{x:Bind IsLiked(Player.Like), Mode=OneWay}"

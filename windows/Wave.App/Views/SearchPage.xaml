@@ -36,7 +36,7 @@
                                             </Grid>
                                         </Border>
                                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                            <TextBlock Text="{x:Bind Title}" TextTrimming="CharacterEllipsis" MaxLines="1" />
+                                            <TextBlock Text="{x:Bind Title}" TextTrimming="CharacterEllipsis" />
                                             <TextBlock Text="{x:Bind Subtitle}" Style="{StaticResource SubtleTextStyle}" />
                                         </StackPanel>
                                         <Button Grid.Column="2" Style="{StaticResource IconButtonStyle}" Click="OnRemoveRecent" Tag="{x:Bind}" ToolTipService.ToolTip="{x:Bind app:L.T('履歴から削除', 'Remove from history')}">

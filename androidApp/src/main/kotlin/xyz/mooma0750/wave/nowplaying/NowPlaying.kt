@@ -383,8 +383,11 @@ fun NowPlayingScreen(
             val like by connection.likeState.collectAsState()
             like.message?.let { Text(it, Modifier.padding(horizontal = 24.dp), style = MaterialTheme.typography.bodySmall) }
             state.error?.let { Text(stringResource(R.string.nowplaying_error, it), Modifier.padding(horizontal = 24.dp), style = MaterialTheme.typography.bodySmall) }
-            // 下に続く歌詞のカード（Spotify と同じ。押すと全面で開く）
-            if (song != null) {
+            // 下に続く歌詞のカード（Spotify と同じ。押すと全面で開く）。歌詞が無い曲・探している間は出さない
+            val hasLyrics by androidx.compose.runtime.produceState<Boolean?>(null, song?.videoId) {
+                value = song?.let { lyrics.lyrics(it) is xyz.mooma0750.wave.core.lyrics.LyricsRepository.Result.Found }
+            }
+            if (song != null && hasLyrics == true) {
                 Card(
                     Modifier.fillMaxWidth().padding(16.dp),
                     colors = CardDefaults.cardColors(containerColor = lerp(MaterialTheme.colorScheme.surfaceContainerHigh, art, 0.5f)),

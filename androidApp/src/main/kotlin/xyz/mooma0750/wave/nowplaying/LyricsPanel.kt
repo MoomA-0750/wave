@@ -10,7 +10,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -99,20 +104,34 @@ private fun SyncedLyrics(
     }
 
     LazyColumn(modifier, state = listState) {
-        items(lyrics.lines) { line ->
+        itemsIndexed(lyrics.lines) { index, line ->
             val isCurrent = line.startMs == currentStartMs
+            // 原文に続く同じ時刻の行（読み・訳）は、小さく原文の直下に添える。かたまりの間は空けて、対応を分かりやすくする
+            val isSub = index > 0 && lyrics.lines[index - 1].startMs == line.startMs
+            val color by animateColorAsState(
+                if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = if (currentIndex in 0..<index) 0.4f else 0.55f),
+                tween(LINE_ANIMATION_MS),
+                label = "lyric-color",
+            )
+            // 歌っている行は少し大きく（左端を軸に）
+            val scale by animateFloatAsState(if (isCurrent) 1f else 0.96f, tween(LINE_ANIMATION_MS), label = "lyric-scale")
             Text(
                 line.text.ifBlank { "♪" },
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
-                color = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
+                style = if (isSub) MaterialTheme.typography.bodyLarge else MaterialTheme.typography.titleLarge,
+                fontWeight = if (isSub) FontWeight.Medium else FontWeight.Bold,
+                color = color,
                 modifier =
                     Modifier
                         .fillMaxWidth()
                         .clickable {
                             player?.seekTo(line.startMs)
                             userScrolledAt = 0
-                        }.padding(vertical = 8.dp),
+                        }.padding(top = if (isSub) 0.dp else if (index == 0) 4.dp else 14.dp, bottom = 2.dp)
+                        .graphicsLayer {
+                            scaleX = scale
+                            scaleY = scale
+                            transformOrigin = TransformOrigin(0f, 0.5f)
+                        },
             )
         }
         item { Source(lyrics.source) }
@@ -134,6 +153,7 @@ private fun Message(
 
 private const val POSITION_POLL_MS = 100L
 private const val USER_SCROLL_HOLD_MS = 3_000L
+private const val LINE_ANIMATION_MS = 350
 
 /** 歌詞を合わせる位置と、行を押したときのシーク（手元の再生か、ほかの端末の再生か）。 */
 interface LyricsClock {

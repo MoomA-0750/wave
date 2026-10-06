@@ -380,57 +380,73 @@ public sealed partial class MainWindow : Window
     }
 
     private int lyricsPreviewIndex = -2;
+    /// <summary>右の欄に今並べている歌詞（作り直さずに、明るさと位置だけ変えるため）。</summary>
+    private object? lyricsPreviewSource;
+    private List<(TextBlock Block, LyricLine Line)> lyricsPreviewRows = [];
 
     /// <summary>
-    /// 右の欄の歌詞（Spotify の再生中の画面と同じく、歌っている行を明るく太く、前後の行を薄く）。
-    /// 時刻付きの歌詞では再生位置に合わせて送る。
+    /// 右の欄の歌詞（Spotify の再生中の画面と同じく、歌っている行を明るく、前後の行を薄く）。
+    /// 時刻付きの歌詞では全文を並べ、再生位置に合わせて滑らかに送る。歌詞が無い・探している間は箱ごと出さない。
     /// </summary>
     private void RenderLyricsPreview()
     {
-        switch (Player.Lyrics)
+        var lyrics = (Player.Lyrics as LyricsService.Result.Found)?.Lyrics;
+        LyricsCard.Visibility = Ui.Show(lyrics is not null && Player.Current is not null);
+        if (!ReferenceEquals(lyrics, lyricsPreviewSource))
         {
-            case LyricsService.Result.Found { Lyrics: SongLyrics.Synced synced }:
-                var last = LyricsTiming.CurrentIndex(synced.Lines, (long)(Player.Position * 1000));
-                // 同じ時刻の行（原文と読み・訳が並ぶ歌詞）は、まとめて今の行とする
-                var currentStart = last >= 0 ? synced.Lines[last].StartMs : (long?)null;
-                var i = currentStart is { } start ? synced.Lines.ToList().FindIndex(l => l.StartMs == start) : last;
-                if (i == lyricsPreviewIndex) return;
-                lyricsPreviewIndex = i;
-                var first = Math.Max(0, i - 1);
-                ShowPreviewLines(synced.Lines.Skip(first).Take(5).Select(l => (Text: string.IsNullOrWhiteSpace(l.Text) ? "♪" : l.Text, Current: currentStart is { } s && l.StartMs == s)));
-                break;
-            case LyricsService.Result.Found { Lyrics: SongLyrics.Plain plain }:
-                if (lyricsPreviewIndex == -3) return;
-                lyricsPreviewIndex = -3;
-                ShowPreviewLines(plain.Text.Split('\n').Take(5).Select(t => (Text: t, Current: false)), plain: true);
-                break;
-            case null when Player.Current is not null:
-                lyricsPreviewIndex = -2;
-                ShowPreviewLines([(L.T("歌詞を探しています…", "Looking for lyrics…"), false)], plain: true);
-                break;
-            default:
-                lyricsPreviewIndex = -2;
-                ShowPreviewLines(Player.Current is null ? [] : [(L.T("歌詞はありません", "No lyrics"), false)], plain: true);
-                break;
+            lyricsPreviewSource = lyrics;
+            lyricsPreviewIndex = -2;
+            BuildPreview(lyrics);
         }
+        if (lyrics is not SongLyrics.Synced synced) return;
+        var last = LyricsTiming.CurrentIndex(synced.Lines, (long)(Player.Position * 1000));
+        // 同じ時刻の行（原文と読み・訳が並ぶ歌詞）は、まとめて今の行とする
+        var i = last < 0 ? last : lyricsPreviewRows.FindIndex(r => r.Line.StartMs == synced.Lines[last].StartMs);
+        if (i == lyricsPreviewIndex) return;
+        lyricsPreviewIndex = i;
+        for (var k = 0; k < lyricsPreviewRows.Count; k++)
+            lyricsPreviewRows[k].Block.Opacity = i >= 0 && k >= i && k <= last ? 1 : k < i ? 0.5 : 0.4;
+        // 今のかたまりの1つ前のかたまりが上端に来るように送る（前の行を少し見せる）
+        var anchor = i <= 0 ? 0 : lyricsPreviewRows.FindIndex(r => r.Line.StartMs == synced.Lines[Math.Max(0, i - 1)].StartMs);
+        LyricsPreview.UpdateLayout();
+        var y = anchor <= 0 ? 0 : lyricsPreviewRows[anchor].Block.TransformToVisual(LyricsPreview).TransformPoint(new Windows.Foundation.Point(0, 0)).Y;
+        LyricsScroller.ChangeView(null, y, null, disableAnimation: false);
     }
 
-    private void ShowPreviewLines(IEnumerable<(string Text, bool Current)> lines, bool plain = false)
+    private void BuildPreview(SongLyrics? lyrics)
     {
         LyricsPreview.Children.Clear();
+        lyricsPreviewRows = [];
+        LyricsScroller.ChangeView(null, 0, null, disableAnimation: true);
         var primary = (Brush)Application.Current.Resources["TextFillColorPrimaryBrush"];
-        var secondary = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"];
-        foreach (var (text, current) in lines)
+        switch (lyrics)
         {
-            LyricsPreview.Children.Add(new TextBlock
-            {
-                Text = text,
-                TextWrapping = TextWrapping.Wrap,
-                FontSize = current ? 17 : 15,
-                FontWeight = current ? Microsoft.UI.Text.FontWeights.Bold : Microsoft.UI.Text.FontWeights.SemiBold,
-                Foreground = current || plain ? primary : secondary,
-                Opacity = current || plain ? 1 : 0.55,
-            });
+            case SongLyrics.Synced synced:
+                for (var k = 0; k < synced.Lines.Count; k++)
+                {
+                    var line = synced.Lines[k];
+                    // 原文に続く読み・訳は、小さく原文の直下に添える。かたまりの間は空ける
+                    var sub = k > 0 && synced.Lines[k - 1].StartMs == line.StartMs;
+                    var block = new TextBlock
+                    {
+                        Text = string.IsNullOrWhiteSpace(line.Text) ? "♪" : line.Text,
+                        TextWrapping = TextWrapping.Wrap,
+                        FontSize = sub ? 13 : 16,
+                        LineHeight = sub ? 18 : 22,
+                        FontWeight = sub ? Microsoft.UI.Text.FontWeights.Normal : Microsoft.UI.Text.FontWeights.SemiBold,
+                        Foreground = primary,
+                        Opacity = 0.4,
+                        Margin = new Thickness(0, k == 0 ? 0 : sub ? 1 : 10, 0, 0),
+                        OpacityTransition = new ScalarTransition { Duration = TimeSpan.FromMilliseconds(350) },
+                    };
+                    LyricsPreview.Children.Add(block);
+                    lyricsPreviewRows.Add((block, line));
+                }
+                break;
+            case SongLyrics.Plain plain:
+                foreach (var text in plain.Text.Split('\n').Take(12))
+                    LyricsPreview.Children.Add(new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap, FontSize = 16, LineHeight = 22, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Foreground = primary, Margin = new Thickness(0, 0, 0, 6) });
+                break;
         }
     }
 

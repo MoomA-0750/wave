@@ -255,13 +255,13 @@
                     <Image Source="{x:Bind app:Ui.Small(Song.ThumbnailUrl)}" Stretch="UniformToFill" />
                 </Border>
                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                    <TextBlock Text="{x:Bind Song.Title}" TextTrimming="CharacterEllipsis" MaxLines="1"
+                    <TextBlock Text="{x:Bind Song.Title}" TextTrimming="CharacterEllipsis"
                                Foreground="{x:Bind controls:Templates.TitleBrush(IsCurrent), Mode=OneWay}" />
                     <TextBlock Text="{x:Bind Song.ArtistsText}" Style="{StaticResource SubtleTextStyle}" />
                 </StackPanel>
             </Grid>
             <TextBlock Grid.Column="2" Text="{x:Bind AlbumTitle}" Visibility="{x:Bind app:Ui.Show(ShowAlbum)}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
-                       MaxLines="1" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
             <TextBlock Grid.Column="3" Text="{x:Bind app:Ui.Duration(Song.DurationSeconds)}" VerticalAlignment="Center"
                        HorizontalAlignment="Right" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
             <Button Grid.Column="4" Style="{StaticResource IconButtonStyle}" Click="OnMoreClick" ToolTipService.ToolTip="{x:Bind app:L.T('その他', 'More')}">

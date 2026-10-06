@@ -12,15 +12,21 @@
         <ListView x:Name="Lines" SelectionMode="None" IsItemClickEnabled="True" ItemClick="OnLineClick" Padding="40,40,40,240">
             <ListView.ItemContainerStyle>
                 <Style TargetType="ListViewItem" BasedOn="{StaticResource DefaultListViewItemStyle}">
-                    <Setter Property="Padding" Value="0,6" />
+                    <Setter Property="Padding" Value="0" />
+                    <Setter Property="MinHeight" Value="0" />
                 </Style>
             </ListView.ItemContainerStyle>
             <ListView.ItemTemplate>
                 <DataTemplate x:DataType="local:LyricRow">
-                    <TextBlock Text="{x:Bind Text}" FontSize="30" FontWeight="Bold" TextWrapping="Wrap" Opacity="{x:Bind Opacity, Mode=OneWay}">
+                    <!-- 歌っている行は明るく少し大きく。左端を軸に大きさを変える -->
+                    <TextBlock Text="{x:Bind Text}" FontSize="{x:Bind FontSize}" FontWeight="{x:Bind Weight}" TextWrapping="Wrap" Margin="{x:Bind Gap}" LineHeight="{x:Bind LineHeightOf(FontSize)}"
+                               Opacity="{x:Bind Opacity, Mode=OneWay}" Scale="{x:Bind Scale, Mode=OneWay}" CenterPoint="0,16,0">
                         <TextBlock.OpacityTransition>
-                            <ScalarTransition Duration="0:0:0.25" />
+                            <ScalarTransition Duration="0:0:0.35" />
                         </TextBlock.OpacityTransition>
+                        <TextBlock.ScaleTransition>
+                            <Vector3Transition Duration="0:0:0.35" />
+                        </TextBlock.ScaleTransition>
                     </TextBlock>
                 </DataTemplate>
             </ListView.ItemTemplate>

@@ -18,7 +18,7 @@
                     </Rectangle.Fill>
                 </Rectangle>
                 <StackPanel VerticalAlignment="Bottom" Padding="24">
-                    <TextBlock x:Name="NameText" FontSize="72" FontWeight="Bold" Foreground="White" TextTrimming="CharacterEllipsis" MaxLines="1" />
+                    <TextBlock x:Name="NameText" FontSize="72" FontWeight="Bold" Foreground="White" TextTrimming="CharacterEllipsis" />
                 </StackPanel>
             </Grid>
             <StackPanel Orientation="Horizontal" Spacing="16" Padding="24,0">

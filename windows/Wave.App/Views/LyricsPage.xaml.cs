@@ -9,12 +9,27 @@ using Wave.Core.Lyrics;
 
 namespace Wave.App.Views;
 
-/// <summary>歌詞の1行（時刻付き）。</summary>
-public sealed partial class LyricRow(LyricLine line) : ObservableObject
+/// <summary>
+/// 歌詞の1行（時刻付き）。同じ時刻の行（原文に続く読み・訳）は、前の行に添える小さな行（IsSub）として出す。
+/// かたまりの間は広く、かたまりの中は詰めて、原文と読み・訳の対応を分かりやすくする。
+/// </summary>
+public sealed partial class LyricRow(LyricLine line, bool isSub) : ObservableObject
 {
     public LyricLine Line { get; } = line;
+    public bool IsSub { get; } = isSub;
     public string Text => string.IsNullOrWhiteSpace(Line.Text) ? "♪" : Line.Text;
-    [ObservableProperty] private double opacity = 0.45;
+    public double FontSize => IsSub ? 21 : 30;
+    public Windows.UI.Text.FontWeight Weight => IsSub ? Microsoft.UI.Text.FontWeights.SemiBold : Microsoft.UI.Text.FontWeights.Bold;
+    public Thickness Gap => new(0, IsSub ? 2 : 22, 0, 0);
+    [ObservableProperty] private double opacity = 0.4;
+    /// <summary>歌っている行は少し大きく（切り替わりはアニメーションで）。</summary>
+    [ObservableProperty] private System.Numerics.Vector3 scale = new(0.96f, 0.96f, 1);
+
+    /// <summary>折り返した行の間も詰まりすぎないように。</summary>
+    public double LineHeightOf(double size) => Math.Round(size * 1.3);
+
+    public static List<LyricRow> From(IReadOnlyList<LyricLine> lines) =>
+        lines.Select((l, i) => new LyricRow(l, i > 0 && lines[i - 1].StartMs == l.StartMs)).ToList();
 }
 
 public sealed partial class LyricsPage : Page
@@ -76,11 +91,18 @@ public sealed partial class LyricsPage : Page
                 Empty(L.T("歌詞を探しています…", "Looking for lyrics…"));
                 break;
             case LyricsService.Result.Found { Lyrics: SongLyrics.Synced synced }:
-                rows = synced.Lines.Select(l => new LyricRow(l)).ToList();
+                rows = LyricRow.From(synced.Lines);
                 Lines.ItemsSource = rows;
                 Lines.Visibility = Visibility.Visible;
                 SourceText.Text = L.T("歌詞の提供: ", "Lyrics provided by ") + synced.Source;
                 Follow();
+                // 開いた直後は行の部品がまだ無く送れないので、並べ終わってからもう一度合わせる
+                DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+                {
+                    if (!ReferenceEquals(Lines.ItemsSource, rows)) return;
+                    current = -2;
+                    Follow();
+                });
                 break;
             case LyricsService.Result.Found { Lyrics: SongLyrics.Plain plain }:
                 PlainText.Text = plain.Text;
@@ -111,7 +133,12 @@ public sealed partial class LyricsPage : Page
         var index = last < 0 ? last : rows.FindIndex(r => r.Line.StartMs == rows[last].Line.StartMs);
         if (index == current) return;
         current = index;
-        for (var i = 0; i < rows.Count; i++) rows[i].Opacity = index >= 0 && i >= index && i <= last ? 1.0 : i < index ? 0.6 : 0.4;
+        for (var i = 0; i < rows.Count; i++)
+        {
+            var now = index >= 0 && i >= index && i <= last;
+            rows[i].Opacity = now ? 1.0 : i < index ? 0.55 : 0.4;
+            rows[i].Scale = now ? System.Numerics.Vector3.One : new(0.96f, 0.96f, 1);
+        }
         if (index < 0) return;
         if (Lines.ContainerFromIndex(index) is FrameworkElement item && FindScroller(Lines) is { } scroller)
         {
