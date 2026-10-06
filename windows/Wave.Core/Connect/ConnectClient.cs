@@ -255,6 +255,9 @@ public sealed class ConnectClient
     /// <summary>表示用の最新のキュー（別アカウントのものを含む）。Snapshot は HandoffCodec の文字列。カーソルの currentItemId を引くのに使う。</summary>
     public (string Writer, QueueBody Queue)? LatestQueueBody() => latestQueue is { } q ? (q.Writer, q.Body) : null;
 
+    /// <summary>表示用: 最新のキューの doc のハッシュ（カーソルの QueueRef と照らす）。</summary>
+    public string? LatestQueueHash() => latestQueue?.Hash;
+
     /// <summary>今の接続で最新の状態をそろえた（welcome を処理し、鎖の取り直しを待っている状態が無い）。D-9 の判断はこれが true のときだけ行う。</summary>
     public bool StateSettled => welcomed && deferred.Count == 0;
 

@@ -267,6 +267,9 @@ class ConnectClient(
     /** 表示用: 最新のキューの doc の中身（別アカウントのものを含む）。 */
     fun latestQueueBody(): Pair<String, QueueBody>? = latestQueue?.let { it.writer to it.body }
 
+    /** 表示用: 最新のキューの doc のハッシュ（カーソルの queueRef と照らす）。 */
+    fun latestQueueHash(): String? = latestQueue?.hash
+
     /** 表示用: 中継につながっている家の端末（中継の申告）。 */
     fun onlineDevices(): Set<String> = online
 

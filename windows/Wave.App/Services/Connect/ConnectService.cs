@@ -348,7 +348,7 @@ public sealed class ConnectService
         {
             var tag = tagState?.Tag;
             HandoffItem? item = null;
-            if (engine.LatestQueueBody() is { } queue && queue.Writer == latest.Writer && ConnectJson.Decode<HandoffSnapshot>(queue.Queue.Snapshot) is { } snapshot)
+            if (engine.LatestQueueBody() is { } queue && engine.LatestQueueHash() == latest.Cursor.QueueRef && ConnectJson.Decode<HandoffSnapshot>(queue.Queue.Snapshot) is { } snapshot)
                 item = snapshot.Items.FirstOrDefault(i => i.ItemId == latest.Cursor.CurrentItemId);
             remote = new RemoteView(latest.Writer, LabelOf(latest.Writer), item?.Title, item is null ? null : string.Join(", ", item.Artists.Select(a => a.Name)), item?.ThumbnailUrl, item?.DurationSeconds,
                 latest.Cursor.Playing, latest.Cursor.PositionMs, tag is not null && latest.Cursor.AccountTag == tag, online.Contains(latest.Writer));
@@ -373,7 +373,8 @@ public sealed class ConnectService
     {
         if (engine is null || engine.IsWriter || remote is not { AccountMatches: true, Online: true }) return null;
         if (engine.RemoteNowPosition() is not { } now || now.Writer != remote.DeviceId) return null;
-        if (engine.LatestQueueBody() is not { } queue || queue.Writer != now.Writer) return null;
+        // キューは引き取りの後も前の端末が書いた doc を指すので、書き手ではなくカーソルの QueueRef で照らす
+        if (engine.LatestQueueBody() is not { } queue || engine.LatestQueueHash() != now.Cursor.QueueRef) return null;
         if (!ReferenceEquals(queue.Queue.Snapshot, mirroredSnapshot))
         {
             mirroredSnapshot = queue.Queue.Snapshot;
@@ -430,6 +431,11 @@ public sealed class ConnectService
         public bool Control(ControlAction action, long? positionMs)
         {
             AppPaths.Log($"connect-v2 control received action={action}");
+            if (action == ControlAction.Transfer)
+            {
+                Interlocked.Exchange(ref owner.remoteTransferRequestedAt, Environment.TickCount64);
+                return true;
+            }
             return owner.OnUi(() => owner.player.ApplyControl(action, positionMs));
         }
 
@@ -461,8 +467,22 @@ public sealed class ConnectService
             ClientEvent.ServerError { Code: HouseholdCreateUnsent } => L.T("中継に送れませんでした（この PC では新しく始められない設定かもしれません）", "Couldn’t reach the relay (this PC may not be allowed to start a new group)"),
             _ => null,
         };
-        if (text is not null) Notify(text);
+        if (text is null) return;
+        if (e is ClientEvent.Stopped)
+        {
+            // ほかの端末が曲を選んで「この PC で鳴らして」と頼む流れでは、止められた直後に引き取りを頼まれる。そのときは知らせない
+            var stoppedAt = Environment.TickCount64;
+            _ = Task.Delay(2_000).ContinueWith(_ =>
+            {
+                if (Interlocked.Read(ref remoteTransferRequestedAt) < stoppedAt) Notify(text);
+            });
+            return;
+        }
+        Notify(text);
     }
+
+    /// <summary>ほかの端末に「ここで再生」を頼まれた時刻（止められた知らせを抑えるのに使う）。</summary>
+    private long remoteTransferRequestedAt;
 
     // --- アカウントタグ ---
 

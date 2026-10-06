@@ -190,8 +190,9 @@ class ConnectV2Manager(
         val now = engine.remoteNow() ?: return null
         val tag = tagState?.tag ?: return null
         if (now.cursor.accountTag != tag || now.writer !in engine.onlineDevices()) return null
-        val (writer, queue) = engine.latestQueueBody() ?: return null
-        if (writer != now.writer) return null
+        // キューは引き取りの後も前の端末が書いた doc を指すので、書き手ではなくカーソルの queueRef で照らす
+        val (_, queue) = engine.latestQueueBody() ?: return null
+        if (engine.latestQueueHash() != now.cursor.queueRef) return null
         if (queue.snapshot !== mirroredSnapshot) {
             mirroredSnapshot = queue.snapshot
             mirroredItems = RemoteQueue.decode(queue.snapshot)?.items
@@ -389,7 +390,16 @@ class ConnectV2Manager(
                 }
                 if (event is ClientEvent.RemoteChanged) mutableRemote.value = RemoteView(event.writer, event.cursor, event.accountMatches)
                 Log.i(WaveApplication.LOG_TAG, "connect-v2 event=${event::class.simpleName}")
-                mutableEvents.tryEmit(event)
+                if (event is ClientEvent.Stopped) {
+                    // ほかの端末が曲を選んで「この端末で鳴らして」と頼む流れでは、止められた直後に引き取りを頼まれる。
+                    // そのときは「止めました」を知らせない（2秒待って、頼まれていなければ知らせる）
+                    appScope.launch {
+                        delay(STOPPED_NOTICE_DELAY_MS)
+                        if (SystemClock.elapsedRealtime() >= remoteTransferUntil) mutableEvents.tryEmit(event)
+                    }
+                } else {
+                    mutableEvents.tryEmit(event)
+                }
                 refreshInfo()
             }
 
@@ -840,6 +850,9 @@ class ConnectV2Manager(
 
         /** ほかの端末に選ばれてから、画面が裏でも取り込んでよい時間。 */
         const val REMOTE_TRANSFER_WINDOW_MS = 15_000L
+
+        /** 止められた知らせを出すまでの待ち（その間に引き取りを頼まれたら出さない）。 */
+        const val STOPPED_NOTICE_DELAY_MS = 2_000L
 
         const val TICK_MS = 1_000L
         const val CURSOR_DEBOUNCE_MS = 1_000L
