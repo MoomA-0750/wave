@@ -191,9 +191,10 @@
                                     <TextBlock Text="{x:Bind SongTitleOrIdle(Player.Current), Mode=OneWay}" Style="{StaticResource SubtitleTextBlockStyle}" TextWrapping="Wrap" MaxLines="2" />
                                     <HyperlinkButton Content="{x:Bind Player.Current.ArtistsText, Mode=OneWay}" Padding="0" Click="OnArtistLink" />
                                 </StackPanel>
-                                <ToggleButton Grid.Column="1" Style="{StaticResource LikeToggleStyle}" VerticalAlignment="Top" IsChecked="{x:Bind IsLiked(Player.Like), Mode=OneWay}" Click="OnLike" ToolTipService.ToolTip="{x:Bind app:L.T('高く評価', 'Like')}">
-                                    <FontIcon Glyph="{x:Bind LikeGlyph(Player.Like), Mode=OneWay}" FontSize="18" />
-                                </ToggleButton>
+                                <!-- Android・Spotify と同じ: 評価していなければ＋（押すと評価）、評価済みなら✓（押すとプレイリストに追加する画面） -->
+                                <Button Grid.Column="1" Style="{StaticResource IconButtonStyle}" VerticalAlignment="Top" Click="OnLike" ToolTipService.ToolTip="{x:Bind LikeTip(Player.Like), Mode=OneWay}">
+                                    <FontIcon Glyph="{x:Bind LikeGlyph(Player.Like), Mode=OneWay}" Foreground="{x:Bind LikeBrush(Player.Like), Mode=OneWay}" FontSize="20" />
+                                </Button>
                             </Grid>
                             <!-- 歌詞（無い曲では箱ごと出さない）。全文を中で送り、歌っている行へ滑らかに動かす -->
                             <Button x:Name="LyricsCard" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Padding="16" CornerRadius="8" Click="OnOpenLyrics" Visibility="Collapsed">
@@ -293,10 +294,10 @@
                         <TextBlock Text="{x:Bind Player.Current.ArtistsText, Mode=OneWay}" TextTrimming="CharacterEllipsis" Style="{StaticResource CaptionTextBlockStyle}" />
                     </HyperlinkButton>
                 </StackPanel>
-                <ToggleButton Grid.Column="2" Style="{StaticResource LikeToggleStyle}" VerticalAlignment="Center" IsChecked="{x:Bind IsLiked(Player.Like), Mode=OneWay}"
-                              Click="OnLike" ToolTipService.ToolTip="{x:Bind app:L.T('高く評価', 'Like')}" Visibility="{x:Bind HasSong(Player.Current), Mode=OneWay}">
-                    <FontIcon Glyph="{x:Bind LikeGlyph(Player.Like), Mode=OneWay}" FontSize="16" />
-                </ToggleButton>
+                <Button Grid.Column="2" Style="{StaticResource IconButtonStyle}" VerticalAlignment="Center" Click="OnLike" ToolTipService.ToolTip="{x:Bind LikeTip(Player.Like), Mode=OneWay}"
+                        Visibility="{x:Bind HasSong(Player.Current), Mode=OneWay}">
+                    <FontIcon Glyph="{x:Bind LikeGlyph(Player.Like), Mode=OneWay}" Foreground="{x:Bind LikeBrush(Player.Like), Mode=OneWay}" FontSize="18" />
+                </Button>
             </Grid>
 
             <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">

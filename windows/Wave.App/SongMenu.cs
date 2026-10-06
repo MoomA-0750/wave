@@ -1,3 +1,4 @@
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Wave.App.Services;
 using Wave.Core.Music;
@@ -55,6 +56,65 @@ public static class SongMenu
 /// <summary>小さな入力のダイアログ。</summary>
 public static class Dialogs
 {
+    /// <summary>
+    /// プレイリストに追加する画面（Android・Spotify と同じ）。先頭は「高く評価した曲」で、押すと評価を外す（評価済みのライクボタンから開く）。
+    /// プレイリストを押すとそこに入れて閉じる。
+    /// </summary>
+    public static async Task AddToPlaylistAsync(Song song)
+    {
+        if (App.Window is null) return;
+        ContentDialog? dialog = null;
+        var list = new StackPanel { Spacing = 2, MinWidth = 360 };
+        Button Row(string text, string glyph, Action click, bool accent = false, string? trailing = null)
+        {
+            var grid = new Grid { ColumnSpacing = 12 };
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var icon = new FontIcon { Glyph = glyph, FontSize = 16 };
+            if (accent) icon.Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["AccentTextFillColorPrimaryBrush"];
+            grid.Children.Add(icon);
+            var label = new TextBlock { Text = text, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
+            Grid.SetColumn(label, 1);
+            grid.Children.Add(label);
+            if (trailing is not null)
+            {
+                var mark = new FontIcon { Glyph = trailing, FontSize = 18, Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["AccentTextFillColorPrimaryBrush"] };
+                Grid.SetColumn(mark, 2);
+                grid.Children.Add(mark);
+            }
+            var button = new Button { Content = grid, HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch, Padding = new Thickness(12, 10, 12, 10), Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Transparent), BorderThickness = new Thickness(0) };
+            button.Click += (_, _) => click();
+            return button;
+        }
+        list.Children.Add(Row(L.T("新しいプレイリスト", "New playlist"), "\uE710", () =>
+        {
+            dialog?.Hide();
+            _ = CreatePlaylistAsync(song);
+        }, accent: true));
+        var liked = AppServices.Player.Current?.VideoId == song.VideoId && AppServices.Player.Like == LikeStatus.Like;
+        list.Children.Add(Row(L.T("高く評価した曲", "Liked Songs"), "\uEB52", () =>
+        {
+            dialog?.Hide();
+            // 評価済みなら外す（今の曲のときだけ評価が分かる）
+            if (AppServices.Player.Current?.VideoId == song.VideoId) AppServices.Player.ToggleLike();
+        }, trailing: liked ? "\uEC61" : "\uECC8"));
+        foreach (var playlist in AppServices.Library.Editable)
+            list.Children.Add(Row(playlist.Title, "\uE8FD", () =>
+            {
+                dialog?.Hide();
+                _ = SongMenu.AddAsync(playlist, song);
+            }));
+        dialog = new ContentDialog
+        {
+            Title = L.T("プレイリストに追加", "Add to playlist"),
+            Content = new ScrollViewer { Content = list, MaxHeight = 480 },
+            CloseButtonText = L.T("閉じる", "Close"),
+            XamlRoot = App.Window.Content.XamlRoot,
+        };
+        await dialog.ShowAsync();
+    }
+
     /// <summary>新しいプレイリストを作る（非公開）。song を渡したら作ったあとに入れる。</summary>
     public static async Task CreatePlaylistAsync(Song? song = null)
     {

@@ -494,7 +494,12 @@ public sealed partial class MainWindow : Window
 
     public bool IsLiked(LikeStatus? like) => like == LikeStatus.Like;
 
-    public string LikeGlyph(LikeStatus? like) => like == LikeStatus.Like ? "" : "";
+    public string LikeGlyph(LikeStatus? like) => like == LikeStatus.Like ? "\uEC61" : "\uECC8";
+
+    public Brush LikeBrush(LikeStatus? like) =>
+        (Brush)Application.Current.Resources[like == LikeStatus.Like ? "AccentTextFillColorPrimaryBrush" : "TextFillColorSecondaryBrush"];
+
+    public string LikeTip(LikeStatus? like) => like == LikeStatus.Like ? L.T("プレイリストに追加", "Add to playlist") : L.T("高く評価した曲に追加", "Add to Liked Songs");
 
     public bool IsRepeating(RepeatMode mode) => mode != RepeatMode.Off;
 
@@ -538,7 +543,13 @@ public sealed partial class MainWindow : Window
 
     private void OnRepeat(object sender, RoutedEventArgs e) => Player.CycleRepeat();
 
-    private void OnLike(object sender, RoutedEventArgs e) => Player.ToggleLike();
+    /// <summary>評価していなければ評価する。評価済みならプレイリストに追加する画面を開く（Android と同じ）。</summary>
+    private void OnLike(object sender, RoutedEventArgs e)
+    {
+        if (Player.Current is not { } song) return;
+        if (Player.Like == LikeStatus.Like) _ = Dialogs.AddToPlaylistAsync(song);
+        else Player.ToggleLike();
+    }
 
     private void OnPositionChanged(object sender, RangeBaseValueChangedEventArgs e)
     {
