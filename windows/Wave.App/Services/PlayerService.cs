@@ -74,6 +74,11 @@ public sealed partial class PlayerService : ObservableObject
     [ObservableProperty] private RepeatMode repeat;
     [ObservableProperty] private double volume;
     [ObservableProperty] private LikeStatus? like;
+    /// <summary>今の曲に重ねられる映像（MV）。無い・まだ分からなければ null。</summary>
+    [ObservableProperty] private MusicVideo? video;
+
+    /// <summary>手元の音の再生位置（映像を合わせるため。ほかの端末を映している間は使わない）。</summary>
+    public long LocalPositionMs => player.Source is null ? 0 : (long)player.PlaybackSession.Position.TotalMilliseconds;
     [ObservableProperty] private string? message;
     [ObservableProperty] private LyricsService.Result? lyrics;
     /// <summary>今のキューの出どころ（プレイリスト・アルバムの ID。ラジオなら null）。画面で「再生中」の印に使う。</summary>
@@ -710,6 +715,7 @@ public sealed partial class PlayerService : ObservableObject
             Index = index;
             Current = Queue[index];
             Like = null;
+            Video = null;
             Lyrics = null;
             Duration = Current.DurationSeconds ?? 0;
             var song = Current;
@@ -833,6 +839,7 @@ public sealed partial class PlayerService : ObservableObject
         if (Current is not { } song) return;
         IsLoading = true;
         Like = null;
+        Video = null;
         Lyrics = null;
         Position = seekTo;
         Duration = song.DurationSeconds ?? 0;
@@ -935,14 +942,17 @@ public sealed partial class PlayerService : ObservableObject
     /// そこで DASH の目次（MPD）をその場で作り、Windows の DASH の再生（AdaptiveMediaSource）に渡す。
     /// 目次には本物の URL を書かず、バイトは再生の部品に求められたぶんだけアプリが取って渡す（署名付き URL は渡さない）。
     /// </summary>
-    private static async Task<MediaSource?> CreateSourceAsync(Song song, ResolvedStream stream, RangeStream bytes)
+    private static Task<MediaSource?> CreateSourceAsync(Song song, ResolvedStream stream, RangeStream bytes) => CreateDashSourceAsync(song.VideoId, stream, bytes, "audio");
+
+    /// <summary>音・映像の DASH の再生の元（kind は目次に書く仮の URL の区別）。</summary>
+    internal static async Task<MediaSource?> CreateDashSourceAsync(string videoId, ResolvedStream stream, RangeStream bytes, string kind)
     {
         if (stream.Dash is not { } dash)
         {
             AppPaths.Log("source plain (no dash ranges)");
             return MediaSource.CreateFromStream(bytes.AsRandomAccessStream(), stream.MimeType.Split(';')[0].Trim());
         }
-        var placeholder = new Uri($"https://wave.invalid/audio/{song.VideoId}/{stream.Itag}");
+        var placeholder = new Uri($"https://wave.invalid/{kind}/{videoId}/{stream.Itag}");
         var manifest = new InMemoryRandomAccessStream();
         await manifest.WriteAsync(System.Text.Encoding.UTF8.GetBytes(DashManifest.Build(dash, stream.MimeType, placeholder.ToString())).AsBuffer());
         manifest.Seek(0);
@@ -1067,11 +1077,13 @@ public sealed partial class PlayerService : ObservableObject
         AppPaths.Log($"stats status={status?.ToString() ?? "skipped"}");
     }
 
+    /// <summary>曲の評価（ログイン中だけ）と、重ねられる映像。</summary>
     private async Task LoadSongInfoAsync(Song song, CancellationToken cancel)
     {
-        if (!AppServices.Client.IsLoggedIn) return;
         var info = await AppServices.Music.SongInfoAsync(song.VideoId, cancel);
-        if (info.IsOk && Current?.VideoId == song.VideoId) Like = info.Value!.Like;
+        if (!info.IsOk || Current?.VideoId != song.VideoId) return;
+        if (AppServices.Client.IsLoggedIn) Like = info.Value!.Like;
+        Video = info.Value!.Video;
     }
 
     private async Task LoadLyricsAsync(Song song, CancellationToken cancel)
@@ -1132,6 +1144,7 @@ public sealed partial class PlayerService : ObservableObject
         Index = -1;
         IsPlaying = false;
         Like = null;
+        Video = null;
         Lyrics = null;
     }
 }

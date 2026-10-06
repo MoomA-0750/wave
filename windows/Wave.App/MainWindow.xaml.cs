@@ -1,6 +1,7 @@
 using System.Collections.Specialized;
 using System.ComponentModel;
 using Microsoft.UI;
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -341,6 +342,16 @@ public sealed partial class MainWindow : Window
         switch (e.PropertyName)
         {
             case nameof(PlayerService.Current):
+                // 曲が変わったら曲の表示に戻す（Android と同じ）
+                ShowVideo(false);
+                RenderNowPlaying();
+                if (QueueView.Visibility == Visibility.Visible) RenderQueue();
+                Title = Player.Current is { } current ? $"{current.Title} • {current.ArtistsText}" : "wave";
+                break;
+            case nameof(PlayerService.Video):
+            case nameof(PlayerService.IsRemote):
+                UpdateVideoSwitch();
+                break;
             case nameof(PlayerService.Index):
                 RenderNowPlaying();
                 if (QueueView.Visibility == Visibility.Visible) RenderQueue();
@@ -448,6 +459,70 @@ public sealed partial class MainWindow : Window
                     LyricsPreview.Children.Add(new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap, FontSize = 16, LineHeight = 22, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Foreground = primary, Margin = new Thickness(0, 0, 0, 6) });
                 break;
         }
+    }
+
+    // --- 曲に重ねる映像（右の欄） ---
+
+    private readonly MusicVideoPlayer videoPlayer = new();
+    private DispatcherQueueTimer? videoTimer;
+
+    /// <summary>MV のある曲で、手元で鳴らしているときだけ「曲｜動画」を出す（ほかの端末を映している間は映像を合わせられない）。</summary>
+    private void UpdateVideoSwitch()
+    {
+        var available = Player.Video is not null && !Player.IsRemote;
+        VideoSwitch.Visibility = Ui.Show(available);
+        if (!available) ShowVideo(false);
+    }
+
+    private void OnSongTab(object sender, RoutedEventArgs e) => ShowVideo(false);
+
+    private void OnVideoTab(object sender, RoutedEventArgs e) => ShowVideo(true);
+
+    private async void ShowVideo(bool show)
+    {
+        SongTab.IsChecked = !show;
+        VideoTab.IsChecked = show;
+        if (!show || Player.Video is not { } video)
+        {
+            videoTimer?.Stop();
+            videoPlayer.Stop();
+            PaneVideo.Visibility = Visibility.Collapsed;
+            VideoNote.Visibility = Visibility.Collapsed;
+            CoverImage.Visibility = Visibility.Visible;
+            CoverBox.Background = (Brush)Application.Current.Resources["ControlFillColorSecondaryBrush"];
+            return;
+        }
+        CoverBox.Background = new SolidColorBrush(Colors.Black);
+        CoverImage.Visibility = Visibility.Collapsed;
+        VideoNote.Text = L.T("動画を読み込んでいます…", "Loading video…");
+        VideoNote.Visibility = Visibility.Visible;
+        PaneVideo.SetMediaPlayer(videoPlayer.Player);
+        if (!await videoPlayer.LoadAsync(video))
+        {
+            if (VideoTab.IsChecked != true || Player.Video != video) return;
+            VideoNote.Text = L.T("動画を読み込めませんでした", "Couldn't load the video");
+            return;
+        }
+        if (VideoTab.IsChecked != true || Player.Video != video) return;
+        VideoNote.Visibility = Visibility.Collapsed;
+        PaneVideo.Visibility = Visibility.Visible;
+        videoTimer ??= CreateVideoTimer();
+        videoTimer.Start();
+    }
+
+    private DispatcherQueueTimer CreateVideoTimer()
+    {
+        var timer = DispatcherQueue.CreateTimer();
+        timer.Interval = TimeSpan.FromMilliseconds(200);
+        timer.Tick += (_, _) =>
+        {
+            if (Player.Video is not { } video) return;
+            videoPlayer.Sync(video, Player.LocalPositionMs, Player.IsPlaying);
+            // MV に無い区間（前奏など）はジャケットを出す
+            PaneVideo.Visibility = Ui.Show(videoPlayer.Showing);
+            CoverImage.Visibility = Ui.Hide(videoPlayer.Showing);
+        };
+        return timer;
     }
 
     private void RenderQueue()
