@@ -12,8 +12,8 @@
             <StackPanel Padding="24,16,24,32" Spacing="16">
                 <StackPanel x:Name="RecentPanel" Spacing="12">
                     <Grid>
-                        <TextBlock Text="最近の検索" Style="{StaticResource SubtitleTextBlockStyle}" />
-                        <HyperlinkButton Content="すべて消去" HorizontalAlignment="Right" Click="OnClearHistory" />
+                        <TextBlock Text="{x:Bind app:L.T('最近の検索', 'Recent searches')}" Style="{StaticResource SubtitleTextBlockStyle}" />
+                        <HyperlinkButton Content="{x:Bind app:L.T('すべて消去', 'Clear all')}" HorizontalAlignment="Right" Click="OnClearHistory" />
                     </Grid>
                     <ItemsRepeater x:Name="RecentList">
                         <ItemsRepeater.Layout>
@@ -39,7 +39,7 @@
                                             <TextBlock Text="{x:Bind Title}" TextTrimming="CharacterEllipsis" MaxLines="1" />
                                             <TextBlock Text="{x:Bind Subtitle}" Style="{StaticResource SubtleTextStyle}" />
                                         </StackPanel>
-                                        <Button Grid.Column="2" Style="{StaticResource IconButtonStyle}" Click="OnRemoveRecent" Tag="{x:Bind}" ToolTipService.ToolTip="履歴から削除">
+                                        <Button Grid.Column="2" Style="{StaticResource IconButtonStyle}" Click="OnRemoveRecent" Tag="{x:Bind}" ToolTipService.ToolTip="{x:Bind app:L.T('履歴から削除', 'Remove from history')}">
                                             <FontIcon Glyph="&#xE711;" FontSize="12" />
                                         </Button>
                                     </Grid>
@@ -49,7 +49,7 @@
                     </ItemsRepeater>
                 </StackPanel>
 
-                <TextBlock Text="すべてをブラウズ" Style="{StaticResource SubtitleTextBlockStyle}" Margin="0,8,0,0" />
+                <TextBlock Text="{x:Bind app:L.T('すべてをブラウズ', 'Browse all')}" Style="{StaticResource SubtitleTextBlockStyle}" Margin="0,8,0,0" />
                 <ItemsRepeater x:Name="MoodTiles">
                     <ItemsRepeater.Layout>
                         <UniformGridLayout MinItemWidth="200" MinItemHeight="110" MinRowSpacing="12" MinColumnSpacing="12" ItemsStretch="Fill" />
@@ -73,10 +73,10 @@
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
             <SelectorBar x:Name="Tabs" Margin="16,8,16,0" SelectionChanged="OnTabChanged">
-                <SelectorBarItem Text="すべて" Tag="all" IsSelected="True" />
-                <SelectorBarItem Text="曲" Tag="songs" />
-                <SelectorBarItem Text="アーティスト" Tag="artists" />
-                <SelectorBarItem Text="アルバム" Tag="albums" />
+                <SelectorBarItem Text="{x:Bind app:L.T('すべて', 'All')}" Tag="all" IsSelected="True" />
+                <SelectorBarItem Text="{x:Bind app:L.T('曲', 'Songs')}" Tag="songs" />
+                <SelectorBarItem Text="{x:Bind app:L.T('アーティスト', 'Artists')}" Tag="artists" />
+                <SelectorBarItem Text="{x:Bind app:L.T('アルバム', 'Albums')}" Tag="albums" />
             </SelectorBar>
 
             <ScrollViewer x:Name="AllView" Grid.Row="1">
@@ -87,7 +87,7 @@
                             <ColumnDefinition Width="3*" />
                         </Grid.ColumnDefinitions>
                         <StackPanel Spacing="12" x:Name="TopPanel">
-                            <TextBlock Text="トップの検索結果" Style="{StaticResource SubtitleTextBlockStyle}" />
+                            <TextBlock Text="{x:Bind app:L.T('トップの検索結果', 'Top result')}" Style="{StaticResource SubtitleTextBlockStyle}" />
                             <Button x:Name="TopCard" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Padding="20" CornerRadius="8"
                                     Click="OnTopClick" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
                                 <Grid>
@@ -99,20 +99,20 @@
                                         <TextBlock x:Name="TopSubtitle" Style="{StaticResource SubtleTextStyle}" FontSize="14" />
                                     </StackPanel>
                                     <Button Style="{StaticResource PlayCircleButtonStyle}" Width="48" Height="48" CornerRadius="24"
-                                            HorizontalAlignment="Right" VerticalAlignment="Bottom" Click="OnTopPlay" ToolTipService.ToolTip="再生">
+                                            HorizontalAlignment="Right" VerticalAlignment="Bottom" Click="OnTopPlay" ToolTipService.ToolTip="{x:Bind app:L.T('再生', 'Play')}">
                                         <FontIcon Glyph="&#xF5B0;" FontSize="18" />
                                     </Button>
                                 </Grid>
                             </Button>
                         </StackPanel>
                         <StackPanel Grid.Column="1" Spacing="12">
-                            <TextBlock Text="曲" Style="{StaticResource SubtitleTextBlockStyle}" />
+                            <TextBlock Text="{x:Bind app:L.T('曲', 'Songs')}" Style="{StaticResource SubtitleTextBlockStyle}" />
                             <ListView x:Name="TopSongs" ItemTemplate="{StaticResource TrackRowTemplate}" ItemContainerStyle="{StaticResource TrackListItemStyle}"
                                       SelectionMode="Single" DoubleTapped="OnSongDoubleTapped" ScrollViewer.VerticalScrollMode="Disabled" />
                         </StackPanel>
                     </Grid>
-                    <controls:ShelfView x:Name="ArtistShelf" Title="アーティスト" />
-                    <controls:ShelfView x:Name="AlbumShelf" Title="アルバム" />
+                    <controls:ShelfView x:Name="ArtistShelf" Title="{x:Bind app:L.T('アーティスト', 'Artists')}" />
+                    <controls:ShelfView x:Name="AlbumShelf" Title="{x:Bind app:L.T('アルバム', 'Albums')}" />
                 </StackPanel>
             </ScrollViewer>
 
@@ -129,7 +129,7 @@
 
             <ProgressRing x:Name="LoadingRing" Grid.Row="1" IsActive="False" VerticalAlignment="Top" Margin="0,48,0,0" />
             <TextBlock x:Name="Empty" Grid.Row="1" Visibility="Collapsed" HorizontalAlignment="Center" Margin="0,64,0,0"
-                       Text="見つかりませんでした" Style="{StaticResource SubtitleTextBlockStyle}" />
+                       Text="{x:Bind app:L.T('見つかりませんでした', 'No results found')}" Style="{StaticResource SubtitleTextBlockStyle}" />
         </Grid>
     </Grid>
 </Page>

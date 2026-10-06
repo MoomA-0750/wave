@@ -50,8 +50,8 @@
 
             <ProgressRing x:Name="LoadingRing" IsActive="False" HorizontalAlignment="Center" />
             <StackPanel x:Name="FailurePanel" Visibility="Collapsed" Spacing="8" HorizontalAlignment="Center">
-                <TextBlock Text="ホームを読み込めませんでした" HorizontalAlignment="Center" />
-                <Button Content="もう一度読み込む" HorizontalAlignment="Center" Click="OnRetry" />
+                <TextBlock Text="{x:Bind app:L.T('ホームを読み込めませんでした', 'Couldn’t load Home')}" HorizontalAlignment="Center" />
+                <Button Content="{x:Bind app:L.T('もう一度読み込む', 'Try again')}" HorizontalAlignment="Center" Click="OnRetry" />
             </StackPanel>
         </StackPanel>
     </ScrollViewer>

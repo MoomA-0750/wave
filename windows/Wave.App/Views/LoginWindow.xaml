@@ -1,7 +1,8 @@
 <Window x:Class="Wave.App.Views.LoginWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="wave にログイン">
+      xmlns:app="using:Wave.App"
+        Title="wave">
     <Window.SystemBackdrop>
         <MicaBackdrop />
     </Window.SystemBackdrop>
@@ -17,12 +18,12 @@
             </Grid.ColumnDefinitions>
             <FontIcon Glyph="&#xE72E;" FontSize="14" />
             <TextBlock x:Name="HostText" Grid.Column="1" Style="{StaticResource CaptionTextBlockStyle}" VerticalAlignment="Center"
-                       Text="Google アカウントでログインしてください" TextTrimming="CharacterEllipsis" />
+                       Text="{x:Bind app:L.T('Google アカウントでログインしてください', 'Log in with your Google account')}" TextTrimming="CharacterEllipsis" />
         </Grid>
         <WebView2 x:Name="Browser" Grid.Row="1" />
         <StackPanel x:Name="Status" Grid.Row="1" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="12" Visibility="Collapsed">
             <ProgressRing IsActive="True" />
-            <TextBlock x:Name="StatusText" Text="ログインしています…" HorizontalAlignment="Center" />
+            <TextBlock x:Name="StatusText" Text="{x:Bind app:L.T('ログインしています…', 'Logging in…')}" HorizontalAlignment="Center" />
         </StackPanel>
     </Grid>
 </Window>

@@ -55,7 +55,8 @@ public sealed partial class MainWindow : Window
     private string? libraryKind;
     private bool alphabetical;
     private CancellationTokenSource? suggestCancel;
-    private readonly DispatcherTimer toastTimer = new() { Interval = TimeSpan.FromSeconds(3.5) };
+    private static readonly TimeSpan ToastDuration = TimeSpan.FromSeconds(4);
+    private Microsoft.UI.Xaml.Media.Animation.Storyboard? toastCountdown;
     private bool rightPaneOpen;
 
     public PlayerService Player => AppServices.Player;
@@ -77,11 +78,6 @@ public sealed partial class MainWindow : Window
         }
         Nav.Frame = ContentFrame;
         rightPaneOpen = AppServices.Settings.RightPaneOpen;
-        toastTimer.Tick += (_, _) =>
-        {
-            toastTimer.Stop();
-            Toast.IsOpen = false;
-        };
         Player.PropertyChanged += OnPlayerChanged;
         Player.Queue.CollectionChanged += OnQueueChanged;
         AppServices.Account.PropertyChanged += (_, _) => RenderAccount();
@@ -182,8 +178,8 @@ public sealed partial class MainWindow : Window
             var s = result.Value!;
             var list = new List<Suggestion>();
             list.AddRange(s.Queries.Take(5).Select(q => new Suggestion(q, null, null, q, null)));
-            list.AddRange(s.Artists.Select(a => new Suggestion(a.Name, "アーティスト", a.ThumbnailUrl, null, new HomeItem.ArtistItem(a))));
-            list.AddRange(s.Songs.Select(x => new Suggestion(x.Title, "曲 • " + x.ArtistsText, x.ThumbnailUrl, null, new HomeItem.SongItem(x))));
+            list.AddRange(s.Artists.Select(a => new Suggestion(a.Name, L.T("アーティスト", "Artist"), a.ThumbnailUrl, null, new HomeItem.ArtistItem(a))));
+            list.AddRange(s.Songs.Select(x => new Suggestion(x.Title, L.T("曲 • ", "Song • ") + x.ArtistsText, x.ThumbnailUrl, null, new HomeItem.SongItem(x))));
             list.AddRange(s.Albums.Select(a => new Suggestion(a.Title, a.Subtitle, a.ThumbnailUrl, null, new HomeItem.AlbumItem(a))));
             sender.ItemsSource = list;
         }
@@ -233,12 +229,12 @@ public sealed partial class MainWindow : Window
         var account = AppServices.Account;
         if (account.IsLoggedIn)
         {
-            AccountMenu.Items.Add(new MenuFlyoutItem { Text = account.Name ?? "ログイン中", IsEnabled = false });
+            AccountMenu.Items.Add(new MenuFlyoutItem { Text = account.Name ?? L.T("ログイン中", "Logged in"), IsEnabled = false });
             AccountMenu.Items.Add(new MenuFlyoutSeparator());
-            AccountMenu.Items.Add(MenuItem("最近再生した曲", "", Nav.History));
+            AccountMenu.Items.Add(MenuItem(L.T("最近再生した曲", "Recently played"), "", Nav.History));
         }
-        else AccountMenu.Items.Add(MenuItem("ログイン", "", ShowLogin));
-        AccountMenu.Items.Add(MenuItem("設定", "", Nav.Settings));
+        else AccountMenu.Items.Add(MenuItem(L.T("ログイン", "Log in"), "", ShowLogin));
+        AccountMenu.Items.Add(MenuItem(L.T("設定", "Settings"), "", Nav.Settings));
     }
 
     private static MenuFlyoutItem MenuItem(string text, string glyph, Action action)
@@ -261,7 +257,7 @@ public sealed partial class MainWindow : Window
         login.Finished += ok =>
         {
             login = null;
-            if (ok) ShowToast("ログインしました");
+            if (ok) ShowToast(L.T("ログインしました", "Logged in"));
         };
         login.Activate();
     }
@@ -273,7 +269,7 @@ public sealed partial class MainWindow : Window
     private void RenderChips()
     {
         FilterChips.Children.Clear();
-        foreach (var (kind, title) in new[] { ("playlist", "プレイリスト"), ("artist", "アーティスト"), ("album", "アルバム") })
+        foreach (var (kind, title) in new[] { ("playlist", L.T("プレイリスト", "Playlists")), ("artist", L.T("アーティスト", "Artists")), ("album", L.T("アルバム", "Albums")) })
         {
             var chip = new ToggleButton { Content = title, IsChecked = libraryKind == kind, CornerRadius = new CornerRadius(14), Padding = new Thickness(12, 4, 12, 5) };
             chip.Click += (_, _) =>
@@ -293,15 +289,15 @@ public sealed partial class MainWindow : Window
         var entries = new List<LibraryEntry>();
         if (libraryKind is null or "playlist")
         {
-            entries.AddRange(lib.Playlists.Select(p => new LibraryEntry(p.Title, "プレイリスト" + (string.IsNullOrEmpty(p.Subtitle) ? "" : " • " + p.Subtitle), p.ThumbnailUrl, new HomeItem.PlaylistItem(p))));
+            entries.AddRange(lib.Playlists.Select(p => new LibraryEntry(p.Title, L.T("プレイリスト", "Playlist") + (string.IsNullOrEmpty(p.Subtitle) ? "" : " • " + p.Subtitle), p.ThumbnailUrl, new HomeItem.PlaylistItem(p))));
         }
-        if (libraryKind is null or "artist") entries.AddRange(lib.Artists.Select(a => new LibraryEntry(a.Name, "アーティスト", a.ThumbnailUrl, new HomeItem.ArtistItem(a))));
-        if (libraryKind is null or "album") entries.AddRange(lib.Albums.Select(a => new LibraryEntry(a.Title, "アルバム" + (string.IsNullOrEmpty(a.Subtitle) ? "" : " • " + a.Subtitle), a.ThumbnailUrl, new HomeItem.AlbumItem(a))));
+        if (libraryKind is null or "artist") entries.AddRange(lib.Artists.Select(a => new LibraryEntry(a.Name, L.T("アーティスト", "Artist"), a.ThumbnailUrl, new HomeItem.ArtistItem(a))));
+        if (libraryKind is null or "album") entries.AddRange(lib.Albums.Select(a => new LibraryEntry(a.Title, L.T("アルバム", "Album") + (string.IsNullOrEmpty(a.Subtitle) ? "" : " • " + a.Subtitle), a.ThumbnailUrl, new HomeItem.AlbumItem(a))));
         if (filter.Length > 0) entries = entries.Where(e => e.Title.Contains(filter, StringComparison.CurrentCultureIgnoreCase)).ToList();
         if (alphabetical) entries = entries.OrderBy(e => e.Title, StringComparer.CurrentCultureIgnoreCase).ToList();
         // 高く評価した曲はいつも先頭（Spotify の「お気に入りの曲」と同じ）
-        if (libraryKind is null or "playlist" && (filter.Length == 0 || "高く評価した曲".Contains(filter)))
-            entries.Insert(0, new LibraryEntry("高く評価した曲", "プレイリスト • 自動", lib.LikedThumbnail, null, isLiked: true));
+        if (libraryKind is null or "playlist" && (filter.Length == 0 || L.T("高く評価した曲", "Liked Songs").Contains(filter)))
+            entries.Insert(0, new LibraryEntry(L.T("高く評価した曲", "Liked Songs"), L.T("プレイリスト • 自動", "Playlist • Auto"), lib.LikedThumbnail, null, isLiked: true));
         LibraryList.ItemsSource = entries;
     }
 
@@ -310,7 +306,7 @@ public sealed partial class MainWindow : Window
     private void OnSort(object sender, RoutedEventArgs e)
     {
         alphabetical = (sender as FrameworkElement)?.Tag as string == "alpha";
-        SortButton.Content = alphabetical ? "アルファベット順" : "最近";
+        SortButton.Content = alphabetical ? L.T("アルファベット順", "Alphabetical") : L.T("最近", "Recents");
         RenderLibrary();
     }
 
@@ -325,8 +321,8 @@ public sealed partial class MainWindow : Window
     {
         if (sender is not FrameworkElement { DataContext: LibraryEntry entry } element) return;
         var menu = new MenuFlyout();
-        if (entry.Item is { } item) menu.Items.Add(MenuItem("再生", "", () => Nav.Play(item)));
-        else if (entry.IsLiked) menu.Items.Add(MenuItem("再生", "", () => Nav.Play(new HomeItem.PlaylistItem(new PlaylistSummary(MusicRepository.LikedSongs, entry.Title, null, null)))));
+        if (entry.Item is { } item) menu.Items.Add(MenuItem(L.T("再生", "Play"), "", () => Nav.Play(item)));
+        else if (entry.IsLiked) menu.Items.Add(MenuItem(L.T("再生", "Play"), "", () => Nav.Play(new HomeItem.PlaylistItem(new PlaylistSummary(MusicRepository.LikedSongs, entry.Title, null, null)))));
         menu.ShowAt(element, e.GetPosition(element));
     }
 
@@ -401,11 +397,11 @@ public sealed partial class MainWindow : Window
                 break;
             case null when Player.Current is not null:
                 lyricsPreviewIndex = -2;
-                ShowPreviewLines([("歌詞を探しています…", false)], plain: true);
+                ShowPreviewLines([(L.T("歌詞を探しています…", "Looking for lyrics…"), false)], plain: true);
                 break;
             default:
                 lyricsPreviewIndex = -2;
-                ShowPreviewLines(Player.Current is null ? [] : [("歌詞はありません", false)], plain: true);
+                ShowPreviewLines(Player.Current is null ? [] : [(L.T("歌詞はありません", "No lyrics"), false)], plain: true);
                 break;
         }
     }
@@ -478,6 +474,10 @@ public sealed partial class MainWindow : Window
     public string RepeatGlyph(RepeatMode mode) => mode == RepeatMode.One ? "" : "";
 
     public Visibility HasSong(Song? song) => Ui.Show(song is not null);
+
+    public string PaneHeader(Song? song) => song?.Album?.Title is { Length: > 0 } album ? album : L.T("再生中", "Now playing");
+
+    public string SongTitleOrIdle(Song? song) => song?.Title ?? L.T("何も再生していません", "Nothing playing");
 
     public double MaxOf(double duration) => Math.Max(1, duration);
 
@@ -564,7 +564,30 @@ public sealed partial class MainWindow : Window
     {
         Toast.Message = message;
         Toast.IsOpen = true;
-        toastTimer.Stop();
-        toastTimer.Start();
+        // 下のバーを満タンから空へ動かし、空になったら閉じる
+        toastCountdown?.Stop();
+        var animation = new Microsoft.UI.Xaml.Media.Animation.DoubleAnimation
+        {
+            From = 1,
+            To = 0,
+            Duration = ToastDuration,
+            EnableDependentAnimation = true,
+        };
+        Microsoft.UI.Xaml.Media.Animation.Storyboard.SetTarget(animation, ToastCountdown);
+        Microsoft.UI.Xaml.Media.Animation.Storyboard.SetTargetProperty(animation, "Value");
+        var board = new Microsoft.UI.Xaml.Media.Animation.Storyboard();
+        board.Children.Add(animation);
+        board.Completed += (_, _) =>
+        {
+            if (toastCountdown == board) Toast.IsOpen = false;
+        };
+        toastCountdown = board;
+        board.Begin();
+    }
+
+    private void OnToastClosed(InfoBar sender, InfoBarClosedEventArgs args)
+    {
+        toastCountdown?.Stop();
+        toastCountdown = null;
     }
 }

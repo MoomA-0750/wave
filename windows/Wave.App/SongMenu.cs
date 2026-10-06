@@ -11,23 +11,23 @@ public static class SongMenu
     public static MenuFlyout Build(Song song, Action? removeFromPlaylist = null, int? queueIndex = null)
     {
         var menu = new MenuFlyout();
-        menu.Items.Add(Item("次に再生", "", () => AppServices.Player.PlayNext(song)));
-        menu.Items.Add(Item("キューに追加", "", () => AppServices.Player.AddToQueue(song)));
-        if (queueIndex is { } qi) menu.Items.Add(Item("キューから削除", "", () => AppServices.Player.RemoveAt(qi)));
+        menu.Items.Add(Item(L.T("次に再生", "Play next"), "", () => AppServices.Player.PlayNext(song)));
+        menu.Items.Add(Item(L.T("キューに追加", "Add to queue"), "", () => AppServices.Player.AddToQueue(song)));
+        if (queueIndex is { } qi) menu.Items.Add(Item(L.T("キューから削除", "Remove from queue"), "", () => AppServices.Player.RemoveAt(qi)));
         menu.Items.Add(new MenuFlyoutSeparator());
-        var add = new MenuFlyoutSubItem { Text = "プレイリストに追加", Icon = new FontIcon { Glyph = "" } };
-        add.Items.Add(Item("新しいプレイリスト", "", () => _ = Dialogs.CreatePlaylistAsync(song)));
+        var add = new MenuFlyoutSubItem { Text = L.T("プレイリストに追加", "Add to playlist"), Icon = new FontIcon { Glyph = "" } };
+        add.Items.Add(Item(L.T("新しいプレイリスト", "New playlist"), "", () => _ = Dialogs.CreatePlaylistAsync(song)));
         var editable = AppServices.Library.Editable.ToList();
         if (editable.Count > 0) add.Items.Add(new MenuFlyoutSeparator());
         foreach (var playlist in editable) add.Items.Add(Item(playlist.Title, null, () => _ = AddAsync(playlist, song)));
         if (!AppServices.Client.IsLoggedIn) add.IsEnabled = false;
         menu.Items.Add(add);
-        if (removeFromPlaylist is not null) menu.Items.Add(Item("このプレイリストから削除", "", removeFromPlaylist));
+        if (removeFromPlaylist is not null) menu.Items.Add(Item(L.T("このプレイリストから削除", "Remove from this playlist"), "", removeFromPlaylist));
         menu.Items.Add(new MenuFlyoutSeparator());
-        menu.Items.Add(Item("曲のラジオを再生", "", () => AppServices.Player.PlaySong(song)));
-        if (song.Album?.BrowseId is { } albumId) menu.Items.Add(Item("アルバムへ移動", "", () => Nav.Album(albumId)));
+        menu.Items.Add(Item(L.T("曲のラジオを再生", "Go to song radio"), "", () => AppServices.Player.PlaySong(song)));
+        if (song.Album?.BrowseId is { } albumId) menu.Items.Add(Item(L.T("アルバムへ移動", "Go to album"), "", () => Nav.Album(albumId)));
         foreach (var artist in song.Artists.Where(a => a.BrowseId is not null))
-            menu.Items.Add(Item(song.Artists.Count > 1 ? $"アーティストへ移動: {artist.Name}" : "アーティストへ移動", "", () => Nav.Artist(artist.BrowseId!)));
+            menu.Items.Add(Item(song.Artists.Count > 1 ? L.T($"アーティストへ移動: {artist.Name}", $"Go to artist: {artist.Name}") : L.T("アーティストへ移動", "Go to artist"), "", () => Nav.Artist(artist.BrowseId!)));
         return menu;
     }
 
@@ -44,10 +44,10 @@ public static class SongMenu
         var result = await AppServices.Music.AddToPlaylistAsync(playlist.PlaylistId, song.VideoId, knownEmpty);
         AppServices.Player.Message = result switch
         {
-            AddToPlaylistResult.Added => $"「{playlist.Title}」に追加しました",
-            AddToPlaylistResult.AlreadyInPlaylist => $"「{playlist.Title}」にはもう入っています",
-            AddToPlaylistResult.NotChecked => "重複を確かめられなかったので、追加しませんでした",
-            _ => "追加できませんでした",
+            AddToPlaylistResult.Added => L.T($"「{playlist.Title}」に追加しました", $"Added to {playlist.Title}"),
+            AddToPlaylistResult.AlreadyInPlaylist => L.T($"「{playlist.Title}」にはもう入っています", $"Already in {playlist.Title}"),
+            AddToPlaylistResult.NotChecked => L.T("重複を確かめられなかったので、追加しませんでした", "Couldn't check for duplicates, so it wasn't added"),
+            _ => L.T("追加できませんでした", "Couldn't add it"),
         };
     }
 }
@@ -59,13 +59,13 @@ public static class Dialogs
     public static async Task CreatePlaylistAsync(Song? song = null)
     {
         if (App.Window is null) return;
-        var box = new TextBox { PlaceholderText = "プレイリスト名", Text = song is null ? "" : "マイプレイリスト" };
+        var box = new TextBox { PlaceholderText = L.T("プレイリスト名", "Playlist name"), Text = song is null ? "" : L.T("マイプレイリスト", "My playlist") };
         var dialog = new ContentDialog
         {
-            Title = "プレイリストを作成",
+            Title = L.T("プレイリストを作成", "Create playlist"),
             Content = box,
-            PrimaryButtonText = "作成",
-            CloseButtonText = "キャンセル",
+            PrimaryButtonText = L.T("作成", "Create"),
+            CloseButtonText = L.T("キャンセル", "Cancel"),
             DefaultButton = ContentDialogButton.Primary,
             XamlRoot = App.Window.Content.XamlRoot,
         };
@@ -74,12 +74,12 @@ public static class Dialogs
         var created = await AppServices.Music.CreatePlaylistAsync(title);
         if (!created.IsOk)
         {
-            AppServices.Player.Message = "プレイリストを作成できませんでした";
+            AppServices.Player.Message = L.T("プレイリストを作成できませんでした", "Couldn't create the playlist");
             return;
         }
-        var playlist = new PlaylistSummary(created.Value!, title, "非公開", null, Editable: true);
+        var playlist = new PlaylistSummary(created.Value!, title, L.T("非公開", "Private"), null, Editable: true);
         AppServices.Library.AddCreated(playlist);
         if (song is not null) await SongMenu.AddAsync(playlist, song, knownEmpty: true);
-        else AppServices.Player.Message = $"「{title}」を作成しました";
+        else AppServices.Player.Message = L.T($"「{title}」を作成しました", $"Created {title}");
     }
 }

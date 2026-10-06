@@ -12,6 +12,8 @@ public sealed class Settings
     /// <summary>再生を YouTube Music の再生履歴に送る（Android 版の既定と同じく、オン）。</summary>
     public bool SendHistory { get; set; } = true;
     public bool RightPaneOpen { get; set; } = true;
+    /// <summary>画面の言語。"system"（Windows に合わせる）・"ja"・"en"。次の起動から効く。</summary>
+    public string Language { get; set; } = "system";
     public List<SearchHistoryEntry> SearchHistory { get; set; } = [];
 
     private static readonly string FilePath = Path.Combine(AppPaths.Data, "settings.json");
@@ -79,9 +81,9 @@ public sealed class SearchHistoryEntry
 
     public static SearchHistoryEntry Of(HomeItem item) => item switch
     {
-        HomeItem.SongItem s => new() { Kind = "song", Title = s.Song.Title, Subtitle = "曲 • " + s.Song.ArtistsText, ThumbnailUrl = s.Song.ThumbnailUrl, Id = s.Song.VideoId, Song = s.Song },
+        HomeItem.SongItem s => new() { Kind = "song", Title = s.Song.Title, Subtitle = L.T("曲 • ", "Song • ") + s.Song.ArtistsText, ThumbnailUrl = s.Song.ThumbnailUrl, Id = s.Song.VideoId, Song = s.Song },
         HomeItem.AlbumItem a => new() { Kind = "album", Title = a.Album.Title, Subtitle = a.Album.Subtitle, ThumbnailUrl = a.Album.ThumbnailUrl, Id = a.Album.BrowseId },
-        HomeItem.ArtistItem a => new() { Kind = "artist", Title = a.Artist.Name, Subtitle = "アーティスト", ThumbnailUrl = a.Artist.ThumbnailUrl, Id = a.Artist.BrowseId },
+        HomeItem.ArtistItem a => new() { Kind = "artist", Title = a.Artist.Name, Subtitle = L.T("アーティスト", "Artist"), ThumbnailUrl = a.Artist.ThumbnailUrl, Id = a.Artist.BrowseId },
         HomeItem.PlaylistItem p => new() { Kind = "playlist", Title = p.Playlist.Title, Subtitle = p.Playlist.Subtitle, ThumbnailUrl = p.Playlist.ThumbnailUrl, Id = p.Playlist.PlaylistId },
         _ => Query(item.Title),
     };

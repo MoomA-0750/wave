@@ -24,7 +24,7 @@ public static class Nav
         Go(typeof(Views.CollectionPage), new CollectionRequest(false, playlist.PlaylistId, playlist.Title, playlist.ThumbnailUrl, playlist.Subtitle));
 
     public static void LikedSongs() =>
-        Go(typeof(Views.CollectionPage), new CollectionRequest(false, MusicRepository.LikedSongs, "高く評価した曲", AppServices.Library.LikedThumbnail));
+        Go(typeof(Views.CollectionPage), new CollectionRequest(false, MusicRepository.LikedSongs, L.T("高く評価した曲", "Liked Songs"), AppServices.Library.LikedThumbnail));
 
     public static void Album(string browseId, AlbumSummary? summary = null) =>
         Go(typeof(Views.CollectionPage), new CollectionRequest(true, browseId, summary?.Title, summary?.ThumbnailUrl, summary?.Subtitle));
@@ -71,7 +71,7 @@ public static class Nav
             case HomeItem.AlbumItem a:
                 var album = await AppServices.Music.AlbumAsync(a.Album.BrowseId);
                 if (album.IsOk) player.PlayList(album.Value!.Songs, 0, a.Album.BrowseId);
-                else player.Message = "アルバムを読み込めませんでした";
+                else player.Message = L.T("アルバムを読み込めませんでした", "Couldn't load the album");
                 break;
             case HomeItem.PlaylistItem p:
                 // 最初のページが届いたら鳴らし始め、残りはあとから足す
@@ -82,13 +82,13 @@ public static class Nav
                     started = true;
                     player.PlayList(page.Songs, 0, p.Playlist.PlaylistId, player.Shuffle ? true : null);
                 });
-                if (!full.IsOk && !started) player.Message = "プレイリストを読み込めませんでした";
+                if (!full.IsOk && !started) player.Message = L.T("プレイリストを読み込めませんでした", "Couldn't load the playlist");
                 else if (full.IsOk && player.SourceId == p.Playlist.PlaylistId) player.AppendFrom(full.Value!.Songs);
                 break;
             case HomeItem.ArtistItem r:
                 var artist = await AppServices.Music.ArtistAsync(r.Artist.BrowseId);
                 if (artist.IsOk && artist.Value!.TopSongs.Count > 0) player.PlayList(artist.Value.TopSongs, 0, r.Artist.BrowseId);
-                else player.Message = "アーティストの曲を読み込めませんでした";
+                else player.Message = L.T("アーティストの曲を読み込めませんでした", "Couldn't load the artist's songs");
                 break;
         }
     }

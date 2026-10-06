@@ -17,7 +17,7 @@
             </Border>
             <Button x:Name="PlayButton" Style="{StaticResource PlayCircleButtonStyle}" Width="44" Height="44" CornerRadius="22"
                     HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,6,6" Opacity="0"
-                    Click="OnPlay" ToolTipService.ToolTip="再生">
+                    Click="OnPlay" ToolTipService.ToolTip="{x:Bind app:L.T('再生', 'Play')}">
                 <Button.OpacityTransition>
                     <ScalarTransition />
                 </Button.OpacityTransition>

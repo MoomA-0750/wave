@@ -69,10 +69,10 @@ public static partial class Ui
 
     public static string Kind(HomeItem item) => item switch
     {
-        HomeItem.SongItem => "曲",
-        HomeItem.AlbumItem => "アルバム",
-        HomeItem.PlaylistItem => "プレイリスト",
-        HomeItem.ArtistItem => "アーティスト",
+        HomeItem.SongItem => L.T("曲", "Song"),
+        HomeItem.AlbumItem => L.T("アルバム", "Album"),
+        HomeItem.PlaylistItem => L.T("プレイリスト", "Playlist"),
+        HomeItem.ArtistItem => L.T("アーティスト", "Artist"),
         _ => "",
     };
 

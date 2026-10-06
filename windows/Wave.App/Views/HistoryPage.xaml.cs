@@ -26,7 +26,7 @@ public sealed partial class HistoryPage : Page
         LoadingRing.IsActive = false;
         if (!result.IsOk)
         {
-            ErrorText.Text = result.Failure == Core.Net.FailureKind.NotLoggedIn ? "再生履歴を見るにはログインしてください" : "再生履歴を読み込めませんでした";
+            ErrorText.Text = result.Failure == Core.Net.FailureKind.NotLoggedIn ? L.T("再生履歴を見るにはログインしてください", "Log in to see your listening history") : L.T("再生履歴を読み込めませんでした", "Couldn't load your listening history");
             ErrorText.Visibility = Visibility.Visible;
             return;
         }

@@ -90,7 +90,7 @@ public sealed partial class HomePage : Page
     private void RenderChips()
     {
         Chips.Children.Clear();
-        Chips.Children.Add(Chip("すべて", null));
+        Chips.Children.Add(Chip(L.T("すべて", "All"), null));
         foreach (var chip in chips) Chips.Children.Add(Chip(chip.Title, chip));
     }
 

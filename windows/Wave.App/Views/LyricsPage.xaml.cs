@@ -59,7 +59,7 @@ public sealed partial class LyricsPage : Page
         SourceText.Text = "";
         if (Player.Current is not { } song)
         {
-            Empty("曲を再生すると、ここに歌詞が出ます");
+            Empty(L.T("曲を再生すると、ここに歌詞が出ます", "Play a song to see its lyrics here"));
             return;
         }
         if (await Artwork.DominantColorAsync(song.ThumbnailUrl) is { } color && Player.Current?.VideoId == song.VideoId)
@@ -73,13 +73,13 @@ public sealed partial class LyricsPage : Page
         switch (Player.Lyrics)
         {
             case null:
-                Empty("歌詞を探しています…");
+                Empty(L.T("歌詞を探しています…", "Looking for lyrics…"));
                 break;
             case LyricsService.Result.Found { Lyrics: SongLyrics.Synced synced }:
                 rows = synced.Lines.Select(l => new LyricRow(l)).ToList();
                 Lines.ItemsSource = rows;
                 Lines.Visibility = Visibility.Visible;
-                SourceText.Text = "歌詞の提供: " + synced.Source;
+                SourceText.Text = L.T("歌詞の提供: ", "Lyrics provided by ") + synced.Source;
                 Follow();
                 break;
             case LyricsService.Result.Found { Lyrics: SongLyrics.Plain plain }:
@@ -88,10 +88,10 @@ public sealed partial class LyricsPage : Page
                 SourceText.Text = plain.Source ?? "";
                 break;
             case LyricsService.Result.None:
-                Empty("この曲の歌詞は見つかりませんでした");
+                Empty(L.T("この曲の歌詞は見つかりませんでした", "No lyrics found for this song"));
                 break;
             default:
-                Empty("歌詞を読み込めませんでした");
+                Empty(L.T("歌詞を読み込めませんでした", "Couldn't load lyrics"));
                 break;
         }
     }

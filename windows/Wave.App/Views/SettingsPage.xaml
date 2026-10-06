@@ -1,11 +1,12 @@
 <Page x:Class="Wave.App.Views.SettingsPage"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:app="using:Wave.App">
     <ScrollViewer>
         <StackPanel Padding="40,32" Spacing="8" MaxWidth="880" HorizontalAlignment="Stretch">
-            <TextBlock Text="設定" FontSize="48" FontWeight="Bold" Margin="0,0,0,16" />
+            <TextBlock Text="{x:Bind app:L.T('設定', 'Settings')}" FontSize="48" FontWeight="Bold" Margin="0,0,0,16" />
 
-            <TextBlock Text="アカウント" Style="{StaticResource BodyStrongTextBlockStyle}" Margin="0,8,0,4" />
+            <TextBlock Text="{x:Bind app:L.T('アカウント', 'Account')}" Style="{StaticResource BodyStrongTextBlockStyle}" Margin="0,8,0,4" />
             <Grid Padding="16" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                   BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" ColumnSpacing="16">
                 <Grid.ColumnDefinitions>
@@ -21,23 +22,33 @@
                 <Button x:Name="AccountButton" Grid.Column="2" VerticalAlignment="Center" Click="OnAccount" />
             </Grid>
             <InfoBar x:Name="UnreadableBar" Severity="Warning" IsClosable="False"
-                     Title="保存したログイン情報を読み込めませんでした" Message="ログインし直すと上書きされます。" />
+                     Title="{x:Bind app:L.T('保存したログイン情報を読み込めませんでした', 'Couldn’t read your saved login')}" Message="{x:Bind app:L.T('ログインし直すと上書きされます。', 'Logging in again will replace it.')}" />
 
-            <TextBlock Text="再生" Style="{StaticResource BodyStrongTextBlockStyle}" Margin="0,16,0,4" />
+            <TextBlock Text="{x:Bind app:L.T('再生', 'Play')}" Style="{StaticResource BodyStrongTextBlockStyle}" Margin="0,16,0,4" />
             <Grid Padding="16" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                   BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
                 <StackPanel>
-                    <TextBlock Text="再生した曲を YouTube Music の再生履歴に残す" />
-                    <TextBlock Text="オフにすると、wave で聴いた曲は履歴やおすすめに使われません" Style="{StaticResource SubtleTextStyle}" />
+                    <TextBlock Text="{x:Bind app:L.T('再生した曲を YouTube Music の再生履歴に残す', 'Save played songs to your YouTube Music history')}" />
+                    <TextBlock Text="{x:Bind app:L.T('オフにすると、wave で聴いた曲は履歴やおすすめに使われません', 'When off, songs you play in wave won’t be used for history or recommendations')}" Style="{StaticResource SubtleTextStyle}" />
                 </StackPanel>
                 <ToggleSwitch x:Name="HistorySwitch" HorizontalAlignment="Right" OnContent="" OffContent="" MinWidth="0" Toggled="OnHistoryToggled" />
             </Grid>
 
-            <TextBlock Text="このアプリについて" Style="{StaticResource BodyStrongTextBlockStyle}" Margin="0,16,0,4" />
+            <TextBlock Text="{x:Bind app:L.T('言語', 'Language')}" Style="{StaticResource BodyStrongTextBlockStyle}" Margin="0,16,0,4" />
+            <Grid Padding="16" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                  BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+                <StackPanel>
+                    <TextBlock Text="{x:Bind app:L.T('画面の言語', 'App language')}" />
+                    <TextBlock Text="{x:Bind app:L.T('YouTube から届く文字（棚の見出しなど）もこの言語になります。次の起動から反映されます', 'Text from YouTube (such as shelf titles) also uses this language. Takes effect the next time you open wave')}" Style="{StaticResource SubtleTextStyle}" TextWrapping="Wrap" MaxLines="3" Margin="0,0,220,0" />
+                </StackPanel>
+                <ComboBox x:Name="LanguageBox" HorizontalAlignment="Right" VerticalAlignment="Center" MinWidth="200" SelectionChanged="OnLanguageChanged" />
+            </Grid>
+
+            <TextBlock Text="{x:Bind app:L.T('このアプリについて', 'About')}" Style="{StaticResource BodyStrongTextBlockStyle}" Margin="0,16,0,4" />
             <StackPanel Padding="16" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                         BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Spacing="4">
                 <TextBlock x:Name="VersionText" />
-                <TextBlock Text="ログイン情報は Windows のデータ保護で暗号化して、このユーザーのフォルダにだけ保存します。" Style="{StaticResource SubtleTextStyle}" TextWrapping="Wrap" MaxLines="3" />
+                <TextBlock Text="{x:Bind app:L.T('ログイン情報は Windows のデータ保護で暗号化して、このユーザーのフォルダにだけ保存します。', 'Your login is encrypted with Windows Data Protection and stored only in this user’s folder.')}" Style="{StaticResource SubtleTextStyle}" TextWrapping="Wrap" MaxLines="3" />
                 <TextBlock x:Name="DataPath" Style="{StaticResource SubtleTextStyle}" IsTextSelectionEnabled="True" />
             </StackPanel>
         </StackPanel>

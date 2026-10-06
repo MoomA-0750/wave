@@ -149,9 +149,9 @@ public sealed partial class SearchPage : Page
         TopTitle.Text = top.Title;
         TopSubtitle.Text = top switch
         {
-            HomeItem.SongItem s => "曲 • " + s.Song.ArtistsText,
-            HomeItem.ArtistItem => "アーティスト",
-            HomeItem.AlbumItem a => a.Album.Subtitle ?? "アルバム",
+            HomeItem.SongItem s => L.T("曲 • ", "Song • ") + s.Song.ArtistsText,
+            HomeItem.ArtistItem => L.T("アーティスト", "Artist"),
+            HomeItem.AlbumItem a => a.Album.Subtitle ?? L.T("アルバム", "Album"),
             _ => "",
         };
     }

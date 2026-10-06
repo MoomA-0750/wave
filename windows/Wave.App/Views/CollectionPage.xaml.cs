@@ -56,7 +56,7 @@ public sealed partial class CollectionPage : Page
     private void ShowHeader(string? title, string? thumbnail, string? detail)
     {
         var liked = request.Id == MusicRepository.LikedSongs;
-        KindText.Text = request.IsAlbum ? "アルバム" : "プレイリスト";
+        KindText.Text = request.IsAlbum ? L.T("アルバム", "Album") : L.T("プレイリスト", "Playlist");
         TitleText.Text = title ?? "";
         DetailText.Text = detail ?? "";
         LikedIcon.Visibility = Ui.Show(liked);
@@ -116,13 +116,13 @@ public sealed partial class CollectionPage : Page
         var result = await AppServices.Music.AlbumAsync(request.Id, token);
         if (!result.IsOk)
         {
-            Fail("アルバムを読み込めませんでした");
+            Fail(L.T("アルバムを読み込めませんでした", "Couldn't load the album"));
             return;
         }
         var album = result.Value!;
         playlistIdForPlayback = album.PlaylistId;
         var total = album.Songs.Sum(s => s.DurationSeconds ?? 0);
-        ShowHeader(album.Title, album.ThumbnailUrl, string.Join(" • ", new[] { string.Join(", ", album.Artists.Select(a => a.Name)), album.Subtitle, $"{album.Songs.Count} 曲, {Length(total)}" }.Where(s => !string.IsNullOrEmpty(s))));
+        ShowHeader(album.Title, album.ThumbnailUrl, string.Join(" • ", new[] { string.Join(", ", album.Artists.Select(a => a.Name)), album.Subtitle, $"{L.Songs(album.Songs.Count)}, {L.Length(total)}" }.Where(s => !string.IsNullOrEmpty(s))));
         var n = 1;
         foreach (var s in album.Songs) rows.Add(new TrackRow(n++, s) { ShowAlbum = false, ShowArtwork = false, Menu = r => SongMenu.Build(r.Song) });
         Done();
@@ -150,13 +150,13 @@ public sealed partial class CollectionPage : Page
         }, token);
         if (!result.IsOk)
         {
-            Fail(result.Failure == Core.Net.FailureKind.NotLoggedIn ? "このプレイリストを見るにはログインしてください" : "プレイリストを読み込めませんでした");
+            Fail(result.Failure == Core.Net.FailureKind.NotLoggedIn ? L.T("このプレイリストを見るにはログインしてください", "Log in to see this playlist") : L.T("プレイリストを読み込めませんでした", "Couldn't load the playlist"));
             return;
         }
         var total = rows.Sum(r => r.Song.DurationSeconds ?? 0);
         // サーバーの補足（曲数・時間を含む）があればそれを出す。無ければ読めた曲から数える
         var subtitle = result.Value!.Subtitle ?? request.Subtitle;
-        DetailText.Text = subtitle ?? $"{rows.Count} 曲, {Length(total)}";
+        DetailText.Text = subtitle ?? $"{L.Songs(rows.Count)}, {L.Length(total)}";
         Done();
     }
 
@@ -171,28 +171,22 @@ public sealed partial class CollectionPage : Page
         if (await AppServices.Music.RemoveFromPlaylistAsync(request.Id, row.Song.VideoId, setVideoId))
         {
             rows.Remove(row);
-            Player.Message = "プレイリストから削除しました";
+            Player.Message = L.T("プレイリストから削除しました", "Removed from playlist");
         }
-        else Player.Message = "削除できませんでした";
+        else Player.Message = L.T("削除できませんでした", "Couldn't remove it");
     }
 
     private void Done()
     {
         PlayButton.IsEnabled = rows.Count > 0;
         TrackRow.MarkCurrent(rows, Player.Current?.VideoId);
-        if (rows.Count == 0) Fail("曲がありません");
+        if (rows.Count == 0) Fail(L.T("曲がありません", "No songs"));
     }
 
     private void Fail(string text)
     {
         ErrorText.Text = text;
         ErrorText.Visibility = Visibility.Visible;
-    }
-
-    private static string Length(int seconds)
-    {
-        var t = TimeSpan.FromSeconds(seconds);
-        return t.TotalHours >= 1 ? $"{(int)t.TotalHours} 時間 {t.Minutes} 分" : $"{t.Minutes} 分 {t.Seconds} 秒";
     }
 
     private List<Song> Songs => rows.Select(r => r.Song).ToList();
@@ -222,11 +216,11 @@ public sealed partial class CollectionPage : Page
     private void OnMore(object sender, RoutedEventArgs e)
     {
         var menu = new MenuFlyout();
-        var queue = new MenuFlyoutItem { Text = "キューに追加", Icon = new FontIcon { Glyph = "" } };
+        var queue = new MenuFlyoutItem { Text = L.T("キューに追加", "Add to queue"), Icon = new FontIcon { Glyph = "" } };
         queue.Click += (_, _) =>
         {
             foreach (var s in Songs) Player.AddToQueue(s);
-            Player.Message = $"{rows.Count} 曲をキューに追加しました";
+            Player.Message = L.T($"{rows.Count} 曲をキューに追加しました", $"Added {L.Songs(rows.Count)} to queue");
         };
         menu.Items.Add(queue);
         menu.ShowAt((FrameworkElement)sender);

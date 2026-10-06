@@ -33,6 +33,7 @@ public sealed partial class LoginWindow : Window
     public LoginWindow()
     {
         InitializeComponent();
+        Title = L.T("wave にログイン", "Log in to wave");
         Ui.ResizeLogical(this, 520, 760);
         if (AppWindow.Presenter is OverlappedPresenter presenter) presenter.IsMinimizable = false;
         AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "wave.ico"));
@@ -56,7 +57,7 @@ public sealed partial class LoginWindow : Window
         catch (Exception e) when (e is System.Runtime.InteropServices.COMException or FileNotFoundException)
         {
             AppPaths.Log($"login webview unavailable type={e.GetType().Name}");
-            StatusText.Text = "ログイン画面（WebView2）を開けませんでした";
+            StatusText.Text = L.T("ログイン画面（WebView2）を開けませんでした", "Couldn't open the login page (WebView2)");
             Status.Visibility = Visibility.Visible;
             return;
         }
@@ -91,7 +92,7 @@ public sealed partial class LoginWindow : Window
         core.ProcessFailed += (_, e) =>
         {
             AppPaths.Log($"login webview process failed kind={e.ProcessFailedKind}");
-            StatusText.Text = "ログイン画面が異常終了しました。閉じてやり直してください";
+            StatusText.Text = L.T("ログイン画面が異常終了しました。閉じてやり直してください", "The login page crashed. Close it and try again");
             Status.Visibility = Visibility.Visible;
         };
         core.Navigate(StartUrl);
@@ -123,7 +124,7 @@ public sealed partial class LoginWindow : Window
         var ok = credentials is not null && AppServices.Account.LogIn(credentials);
         if (!ok)
         {
-            StatusText.Text = credentials is null ? "ログイン情報を取得できませんでした" : "ログイン情報を保存できませんでした";
+            StatusText.Text = credentials is null ? L.T("ログイン情報を取得できませんでした", "Couldn't get your login details") : L.T("ログイン情報を保存できませんでした", "Couldn't save your login details");
             finishing = false;
             return;
         }

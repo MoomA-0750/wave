@@ -1,13 +1,14 @@
 <Page x:Class="Wave.App.Views.HistoryPage"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:app="using:Wave.App"
       xmlns:local="using:Wave.App.Views">
     <!-- 最近再生した曲（YouTube Music の再生履歴。「今日」「昨日」などで区切る） -->
     <ListView x:Name="Tracks" ItemTemplate="{StaticResource TrackRowTemplate}" ItemContainerStyle="{StaticResource TrackListItemStyle}"
               DoubleTapped="OnDoubleTapped" Padding="12,0,12,24">
         <ListView.Header>
             <StackPanel Padding="12,32,12,16" Spacing="8">
-                <TextBlock Text="最近再生した曲" FontSize="48" FontWeight="Bold" />
+                <TextBlock Text="{x:Bind app:L.T('最近再生した曲', 'Recently played')}" FontSize="48" FontWeight="Bold" />
                 <ProgressRing x:Name="LoadingRing" IsActive="True" HorizontalAlignment="Left" />
                 <TextBlock x:Name="ErrorText" Visibility="Collapsed" />
             </StackPanel>

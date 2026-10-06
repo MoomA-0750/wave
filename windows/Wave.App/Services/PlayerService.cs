@@ -176,7 +176,7 @@ public sealed partial class PlayerService : ObservableObject
             return;
         }
         Queue.Insert(Index + 1, song);
-        Message = $"「{song.Title}」を次に再生します";
+        Message = L.T($"「{song.Title}」を次に再生します", $"{song.Title} will play next");
     }
 
     public void AddToQueue(Song song)
@@ -187,7 +187,7 @@ public sealed partial class PlayerService : ObservableObject
             return;
         }
         Queue.Add(song);
-        Message = $"「{song.Title}」をキューに追加しました";
+        Message = L.T($"「{song.Title}」をキューに追加しました", $"Added {song.Title} to queue");
     }
 
     public void RemoveAt(int position)
@@ -285,7 +285,7 @@ public sealed partial class PlayerService : ObservableObject
         if (Current is not { } song) return;
         if (!AppServices.Client.IsLoggedIn)
         {
-            Message = "高く評価するにはログインしてください";
+            Message = L.T("高く評価するにはログインしてください", "Log in to like songs");
             return;
         }
         var liked = Like != LikeStatus.Like;
@@ -294,11 +294,11 @@ public sealed partial class PlayerService : ObservableObject
         if (!result.IsOk && Current?.VideoId == song.VideoId)
         {
             Like = liked ? LikeStatus.Indifferent : LikeStatus.Like;
-            Message = "高評価を変更できませんでした";
+            Message = L.T("高評価を変更できませんでした", "Couldn't update your likes");
         }
         else
         {
-            Message = liked ? "高く評価した曲に追加しました" : "高く評価した曲から削除しました";
+            Message = liked ? L.T("高く評価した曲に追加しました", "Added to Liked Songs") : L.T("高く評価した曲から削除しました", "Removed from Liked Songs");
             AppServices.Library.LikedChanged();
         }
     }
@@ -358,10 +358,10 @@ public sealed partial class PlayerService : ObservableObject
         AppPaths.Log($"resolve failed reason={result.Failure}");
         Message = result.Failure switch
         {
-            StreamFailure.NotLoggedIn => "この曲を再生するにはログインが必要です",
-            StreamFailure.Unplayable => "この曲は再生できません",
-            StreamFailure.Network => "通信できませんでした",
-            _ => $"再生の準備ができませんでした（{result.Failure}）",
+            StreamFailure.NotLoggedIn => L.T("この曲を再生するにはログインが必要です", "Log in to play this song"),
+            StreamFailure.Unplayable => L.T("この曲は再生できません", "This song isn't available"),
+            StreamFailure.Network => L.T("通信できませんでした", "Couldn't connect"),
+            _ => L.T($"再生の準備ができませんでした（{result.Failure}）", $"Couldn't prepare playback ({result.Failure})"),
         };
         return null;
     }
@@ -483,7 +483,7 @@ public sealed partial class PlayerService : ObservableObject
         if (!AppServices.Client.IsLoggedIn)
         {
             IsLoading = false;
-            Message = "曲を再生するにはログインしてください（右上のアカウントから）";
+            Message = L.T("曲を再生するにはログインしてください（右上のアカウントから）", "Log in to play songs (from the account button at the top right)");
             return;
         }
         if (!retried)
@@ -502,11 +502,11 @@ public sealed partial class PlayerService : ObservableObject
         IsLoading = false;
         if (++consecutiveFailures >= MaxConsecutiveFailures)
         {
-            Message = "続けて再生できなかったので、止めました";
+            Message = L.T("続けて再生できなかったので、止めました", "Stopped after several songs failed to play");
             consecutiveFailures = 0;
             return;
         }
-        Message = "再生できなかったので、次の曲に進みます";
+        Message = L.T("再生できなかったので、次の曲に進みます", "Couldn't play this song, skipping to the next one");
         if (Index + 1 < Queue.Count) Next();
     }
 

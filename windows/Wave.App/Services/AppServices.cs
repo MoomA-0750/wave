@@ -28,9 +28,11 @@ public static class AppServices
     public static void Initialize(DispatcherQueue ui)
     {
         Settings = Settings.Load();
+        L.Initialize(Settings.Language);
         RangeStream.Diagnostics = AppPaths.Log;
         Http = InnerTubeClient.CreateHttpClient();
-        Client = new InnerTubeClient(Http);
+        // YouTube から届く文字（棚の見出しなど）を画面と同じ言語にする
+        Client = new InnerTubeClient(Http, L.Hl);
         Music = new MusicRepository(Client);
         Resolver = new StreamResolver(Client, new PlayerCipherProvider(Http, () => Clock.ElapsedMilliseconds), () => Clock.ElapsedMilliseconds);
         Stats = new PlaybackStats(Client);

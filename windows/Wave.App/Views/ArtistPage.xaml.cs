@@ -76,6 +76,6 @@ public sealed partial class ArtistPage : Page
 
     private void OnAllSongs(object sender, RoutedEventArgs e)
     {
-        if (artist?.AllSongsPlaylistId is { } id) Nav.Playlist(new PlaylistSummary(id, artist.Name + " のすべての曲", null, artist.ThumbnailUrl));
+        if (artist?.AllSongsPlaylistId is { } id) Nav.Playlist(new PlaylistSummary(id, artist.Name + L.T(" のすべての曲", " — all songs"), null, artist.ThumbnailUrl));
     }
 }

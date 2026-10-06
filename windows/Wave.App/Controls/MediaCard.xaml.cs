@@ -22,7 +22,7 @@ public sealed partial class MediaCard : UserControl
     public string Subtitle(HomeItem? item) => item switch
     {
         null => "",
-        HomeItem.ArtistItem => "アーティスト",
+        HomeItem.ArtistItem => L.T("アーティスト", "Artist"),
         _ => item.Subtitle ?? "",
     };
 
