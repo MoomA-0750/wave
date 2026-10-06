@@ -1,0 +1,246 @@
+using System.Text.Json.Nodes;
+using Wave.Core.Lyrics;
+using Wave.Core.Net;
+
+namespace Wave.Core.Music;
+
+/// <summary>プレイリストへの追加の結果（Android 版の決定 G-1: 先に全ページを読んで重複を確かめる）。</summary>
+public enum AddToPlaylistResult { Added, AlreadyInPlaylist, NotChecked, Failed }
+
+/// <summary>曲・プレイリスト・ラジオなどの取得と書き込み（Android 版の MusicRepository と同じ呼び方）。</summary>
+public sealed class MusicRepository(InnerTubeClient client)
+{
+    public const string SongsFilter = "EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D";
+    public const string AlbumsFilter = "EgWKAQIYAWoKEAkQBRAKEAMQBA%3D%3D";
+    public const string ArtistsFilter = "EgWKAQIgAWoKEAkQBRAKEAMQBA%3D%3D";
+    public const string LibraryPlaylists = "FEmusic_liked_playlists";
+    public const string History = "FEmusic_history";
+    public const string Home = "FEmusic_home";
+    public const string LibraryLanding = "FEmusic_library_landing";
+    public const string MoodsBrowse = "FEmusic_moods_and_genres";
+    public const string LibraryArtists = "FEmusic_library_corpus_track_artists";
+    public const string LibraryAlbums = "FEmusic_liked_albums";
+    public const string MoodCategoryBrowse = "FEmusic_moods_and_genres_category";
+    public const string NewReleasesBrowse = "FEmusic_new_releases_albums";
+    public const string LikedSongs = "LM";
+    private const int MaxLibraryPages = 20;
+    private const int MaxPlaylistPages = 50;
+
+    public InnerTubeClient Client => client;
+
+    public Task<ApiResult<SongPage>> SearchSongsAsync(string query, string? continuation = null, CancellationToken cancel = default) =>
+        SearchAsync(query, SongsFilter, continuation, MusicParsers.SearchSongs, cancel);
+
+    public Task<ApiResult<SearchPage<AlbumSummary>>> SearchAlbumsAsync(string query, string? continuation = null, CancellationToken cancel = default) =>
+        SearchAsync(query, AlbumsFilter, continuation, MusicParsers.SearchAlbums, cancel);
+
+    public Task<ApiResult<SearchPage<ArtistSummary>>> SearchArtistsAsync(string query, string? continuation = null, CancellationToken cancel = default) =>
+        SearchAsync(query, ArtistsFilter, continuation, MusicParsers.SearchArtists, cancel);
+
+    private async Task<ApiResult<T>> SearchAsync<T>(string query, string filter, string? continuation, Func<JsonNode, T> parse, CancellationToken cancel)
+    {
+        var body = continuation is null ? new JsonObject { ["query"] = query, ["params"] = filter } : new JsonObject();
+        var q = continuation is null ? null : new Dictionary<string, string> { ["continuation"] = continuation, ["ctoken"] = continuation };
+        return (await client.PostAsync("search", body, query: q, cancel: cancel)).Map(parse);
+    }
+
+    public async Task<ApiResult<SearchSuggestions>> SuggestionsAsync(string input, CancellationToken cancel = default) =>
+        (await client.PostAsync("music/get_search_suggestions", new JsonObject { ["input"] = input }, setLogin: false, cancel: cancel)).Map(MusicParsers.SearchSuggestions);
+
+    public async Task<ApiResult<HomePage>> HomeAsync(string? continuation = null, string? chipParams = null, CancellationToken cancel = default) =>
+        (await BrowseAsync(Home, continuation, chipParams, cancel)).Map(MusicParsers.HomePage);
+
+    public async Task<ApiResult<List<MoodSection>>> MoodsAsync(CancellationToken cancel = default) =>
+        (await BrowseAsync(MoodsBrowse, null, null, cancel)).Map(MusicParsers.Moods);
+
+    public async Task<ApiResult<HomePage>> MoodCategoryAsync(string moodParams, CancellationToken cancel = default) =>
+        (await BrowseAsync(MoodCategoryBrowse, null, moodParams, cancel)).Map(MusicParsers.HomePage);
+
+    public async Task<ApiResult<List<AlbumSummary>>> NewReleasesAsync(CancellationToken cancel = default) =>
+        (await BrowseAsync(NewReleasesBrowse, null, null, cancel)).Map(MusicParsers.NewReleases);
+
+    /// <summary>最近再生したアルバム・プレイリスト・アーティスト。ログイン必須。</summary>
+    public Task<ApiResult<List<HomeItem>>> RecentActivityAsync(CancellationToken cancel = default) =>
+        LoggedInBrowseAsync(LibraryLanding, null, MusicParsers.GridItems, cancel);
+
+    public Task<ApiResult<List<PlaylistSummary>>> LibraryPlaylistsAsync(Action<List<PlaylistSummary>>? onPage = null, CancellationToken cancel = default) =>
+        AllLibraryPagesAsync(LibraryPlaylists, MusicParsers.Playlists, p => p.PlaylistId, onPage, cancel);
+
+    public Task<ApiResult<List<ArtistSummary>>> LibraryArtistsAsync(Action<List<ArtistSummary>>? onPage = null, CancellationToken cancel = default) =>
+        AllLibraryPagesAsync(LibraryArtists, root => MusicParsers.LibraryCards(root).OfType<HomeItem.ArtistItem>().Select(a => a.Artist).ToList(), a => a.BrowseId, onPage, cancel);
+
+    public Task<ApiResult<List<AlbumSummary>>> LibraryAlbumsAsync(Action<List<AlbumSummary>>? onPage = null, CancellationToken cancel = default) =>
+        AllLibraryPagesAsync(LibraryAlbums, root => MusicParsers.LibraryCards(root).OfType<HomeItem.AlbumItem>().Select(a => a.Album).ToList(), a => a.BrowseId, onPage, cancel);
+
+    /// <summary>ライブラリの一覧を続きのページまで読む。途中で失敗したらそこまでの分を返す。onPage にはそれまでの分を渡す。</summary>
+    private async Task<ApiResult<List<T>>> AllLibraryPagesAsync<T>(string browseId, Func<JsonNode, List<T>> parse, Func<T, object> key, Action<List<T>>? onPage, CancellationToken cancel)
+    {
+        var items = new List<T>();
+        string? token = null;
+        var pages = 0;
+        do
+        {
+            var page = await LoggedInBrowseAsync(browseId, token, root => (Items: parse(root), Next: MusicParsers.LibraryContinuation(root)), cancel);
+            if (!page.IsOk) return pages == 0 ? ApiResult<List<T>>.Failed(page.Failure!.Value, page.Status) : ApiResult<List<T>>.Ok(items.DistinctBy(key).ToList());
+            items.AddRange(page.Value.Items);
+            onPage?.Invoke(items.DistinctBy(key).ToList());
+            // 同じトークンが返ったら止める
+            token = page.Value.Next != token ? page.Value.Next : null;
+            pages++;
+        } while (token is not null && pages < MaxLibraryPages);
+        return ApiResult<List<T>>.Ok(items.DistinctBy(key).ToList());
+    }
+
+    public Task<ApiResult<HistoryPage>> HistoryAsync(string? continuation = null, CancellationToken cancel = default) =>
+        LoggedInBrowseAsync(History, continuation, MusicParsers.HistoryPage, cancel);
+
+    /// <summary>次に流れる曲（ラジオ）。最初は videoId と playlistId（RDAMVM&lt;videoId&gt;）、続きは continuation で取る。</summary>
+    public async Task<ApiResult<UpNextPage>> UpNextAsync(string? videoId, string? playlistId, string? continuation = null, CancellationToken cancel = default)
+    {
+        var body = new JsonObject { ["contentCheckOk"] = true, ["racyCheckOk"] = true };
+        if (videoId is not null) body["videoId"] = videoId;
+        if (playlistId is not null) body["playlistId"] = playlistId;
+        if (continuation is not null) body["continuation"] = continuation;
+        return (await client.PostAsync("next", body, cancel: cancel)).Map(MusicParsers.UpNext);
+    }
+
+    /// <summary>プレイリストの曲。高く評価した曲は playlistId = LM。</summary>
+    public Task<ApiResult<PlaylistPage>> PlaylistAsync(string playlistId, string? continuation = null, CancellationToken cancel = default) =>
+        LoggedInBrowseAsync("VL" + playlistId, continuation, MusicParsers.PlaylistPage, cancel);
+
+    /// <summary>プレイリストの曲を全部読む（再生とシャッフル用）。onPage にはそれまでの分を渡す。</summary>
+    public async Task<ApiResult<PlaylistPage>> FullPlaylistAsync(string playlistId, Action<PlaylistPage>? onPage = null, CancellationToken cancel = default)
+    {
+        var first = await PlaylistAsync(playlistId, null, cancel);
+        if (!first.IsOk) return first;
+        var page = first.Value!;
+        var songs = page.Songs.ToList();
+        var setIds = page.SetVideoIds.ToList();
+        var token = page.Continuation;
+        onPage?.Invoke(page);
+        for (var i = 0; token is not null && i < MaxPlaylistPages; i++)
+        {
+            var next = await PlaylistAsync(playlistId, token, cancel);
+            if (!next.IsOk) break;
+            songs.AddRange(next.Value!.Songs);
+            setIds.AddRange(next.Value.SetVideoIds);
+            token = next.Value.Continuation != token ? next.Value.Continuation : null;
+            onPage?.Invoke(page with { Songs = songs.ToList(), SetVideoIds = setIds.ToList(), Continuation = token });
+        }
+        return ApiResult<PlaylistPage>.Ok(page with { Songs = songs, SetVideoIds = setIds, Continuation = token });
+    }
+
+    /// <summary>曲の評価と歌詞のタブ（next の最初の応答から取る）。</summary>
+    public async Task<ApiResult<SongInfo>> SongInfoAsync(string videoId, CancellationToken cancel = default) =>
+        (await client.PostAsync("next", new JsonObject { ["videoId"] = videoId, ["contentCheckOk"] = true, ["racyCheckOk"] = true }, cancel: cancel))
+            .Map(root => MusicParsers.SongInfo(root, videoId));
+
+    /// <summary>YouTube Music の時刻なしの歌詞。無ければ Ok(null)。</summary>
+    public async Task<ApiResult<SongLyrics.Plain?>> PlainLyricsAsync(string videoId, CancellationToken cancel = default)
+    {
+        var info = await SongInfoAsync(videoId, cancel);
+        if (!info.IsOk) return ApiResult<SongLyrics.Plain?>.Failed(info.Failure!.Value, info.Status);
+        if (info.Value!.LyricsBrowseId is not { } browseId) return ApiResult<SongLyrics.Plain?>.Ok(null);
+        return (await BrowseAsync(browseId, null, null, cancel)).Map(MusicParsers.PlainLyrics);
+    }
+
+    public async Task<ApiResult<bool>> SetLikedAsync(string videoId, bool liked, CancellationToken cancel = default)
+    {
+        if (!client.IsLoggedIn) return ApiResult<bool>.Failed(FailureKind.NotLoggedIn);
+        var body = new JsonObject { ["target"] = new JsonObject { ["videoId"] = videoId } };
+        return (await client.PostAsync(liked ? "like/like" : "like/removelike", body, cancel: cancel)).Map(_ => true);
+    }
+
+    /// <summary>曲をプレイリストに追加する。先に全ページを読んで重複を確かめ、読めなければ追加しない。</summary>
+    public async Task<AddToPlaylistResult> AddToPlaylistAsync(string playlistId, string videoId, bool knownEmpty = false, CancellationToken cancel = default)
+    {
+        if (!knownEmpty)
+        {
+            var ids = new HashSet<string>();
+            string? token = null;
+            var pages = 0;
+            do
+            {
+                var page = await PlaylistAsync(playlistId, token, cancel);
+                if (!page.IsOk) return AddToPlaylistResult.NotChecked;
+                foreach (var s in page.Value!.Songs) ids.Add(s.VideoId);
+                token = page.Value.Continuation;
+                if (token is null && !page.Value.EndConfirmed) return AddToPlaylistResult.NotChecked;
+                if (++pages >= MaxPlaylistPages && token is not null) return AddToPlaylistResult.NotChecked;
+            } while (token is not null);
+            if (ids.Contains(videoId)) return AddToPlaylistResult.AlreadyInPlaylist;
+        }
+        var result = await EditPlaylistAsync(playlistId, new JsonObject { ["action"] = "ACTION_ADD_VIDEO", ["addedVideoId"] = videoId }, cancel);
+        return result ? AddToPlaylistResult.Added : AddToPlaylistResult.Failed;
+    }
+
+    public Task<bool> RemoveFromPlaylistAsync(string playlistId, string videoId, string setVideoId, CancellationToken cancel = default) =>
+        EditPlaylistAsync(playlistId, new JsonObject { ["action"] = "ACTION_REMOVE_VIDEO", ["setVideoId"] = setVideoId, ["removedVideoId"] = videoId }, cancel);
+
+    private async Task<bool> EditPlaylistAsync(string playlistId, JsonObject action, CancellationToken cancel)
+    {
+        if (!client.IsLoggedIn) return false;
+        var body = new JsonObject { ["playlistId"] = playlistId.StartsWith("VL", StringComparison.Ordinal) ? playlistId[2..] : playlistId, ["actions"] = new JsonArray(action) };
+        var result = await client.PostAsync("browse/edit_playlist", body, cancel: cancel);
+        return result.IsOk && MusicParsers.EditPlaylistStatus(result.Value!) == "STATUS_SUCCEEDED";
+    }
+
+    /// <summary>非公開のプレイリストを作る。作った playlistId を返す。</summary>
+    public async Task<ApiResult<string>> CreatePlaylistAsync(string title, CancellationToken cancel = default)
+    {
+        if (!client.IsLoggedIn) return ApiResult<string>.Failed(FailureKind.NotLoggedIn);
+        var result = await client.PostAsync("playlist/create", new JsonObject { ["title"] = title, ["privacyStatus"] = "PRIVATE" }, cancel: cancel);
+        if (!result.IsOk) return ApiResult<string>.Failed(result.Failure!.Value, result.Status);
+        return MusicParsers.CreatedPlaylistId(result.Value!) is { } id ? ApiResult<string>.Ok(id) : ApiResult<string>.Failed(FailureKind.Parse);
+    }
+
+    public async Task<ApiResult<AlbumPage>> AlbumAsync(string browseId, CancellationToken cancel = default)
+    {
+        var result = await BrowseAsync(browseId, null, null, cancel);
+        if (!result.IsOk) return ApiResult<AlbumPage>.Failed(result.Failure!.Value, result.Status);
+        return MusicParsers.AlbumPage(result.Value!, browseId) is { } page ? ApiResult<AlbumPage>.Ok(page) : ApiResult<AlbumPage>.Failed(FailureKind.Parse);
+    }
+
+    public async Task<ApiResult<ArtistPage>> ArtistAsync(string browseId, CancellationToken cancel = default)
+    {
+        var result = await BrowseAsync(browseId, null, null, cancel);
+        if (!result.IsOk) return ApiResult<ArtistPage>.Failed(result.Failure!.Value, result.Status);
+        return MusicParsers.ArtistPage(result.Value!) is { } page ? ApiResult<ArtistPage>.Ok(page) : ApiResult<ArtistPage>.Failed(FailureKind.Parse);
+    }
+
+    /// <summary>アカウントの名前と画像（ログインの確認を兼ねる）。</summary>
+    public async Task<ApiResult<AccountInfo>> AccountAsync(CancellationToken cancel = default)
+    {
+        if (!client.IsLoggedIn) return ApiResult<AccountInfo>.Failed(FailureKind.NotLoggedIn);
+        var result = await client.PostAsync("account/account_menu", new JsonObject(), cancel: cancel);
+        if (!result.IsOk) return ApiResult<AccountInfo>.Failed(result.Failure!.Value, result.Status);
+        var header = result.Value!.FindAll("activeAccountHeaderRenderer").FirstOrDefault();
+        if (header is null) return ApiResult<AccountInfo>.Failed(FailureKind.NotLoggedIn);
+        var name = string.Concat(header.Path("accountName", "runs").Items().Select(r => r.Path("text").Str()));
+        var photo = header.Path("accountPhoto", "thumbnails").Items().LastOrDefault().Path("url").Str();
+        return ApiResult<AccountInfo>.Ok(new AccountInfo(name, photo));
+    }
+
+    private async Task<ApiResult<JsonNode>> BrowseAsync(string? browseId, string? continuation, string? browseParams, CancellationToken cancel)
+    {
+        var body = new JsonObject();
+        if (continuation is not null) body["continuation"] = continuation;
+        else
+        {
+            body["browseId"] = browseId;
+            if (browseParams is not null) body["params"] = browseParams;
+        }
+        return await client.PostAsync("browse", body, cancel: cancel);
+    }
+
+    /// <summary>ログイン必須の browse。ログインの案内だけが返ったら NotLoggedIn。</summary>
+    private async Task<ApiResult<T>> LoggedInBrowseAsync<T>(string browseId, string? continuation, Func<JsonNode, T> parse, CancellationToken cancel)
+    {
+        if (!client.IsLoggedIn) return ApiResult<T>.Failed(FailureKind.NotLoggedIn);
+        var result = await BrowseAsync(browseId, continuation, null, cancel);
+        if (!result.IsOk) return ApiResult<T>.Failed(result.Failure!.Value, result.Status);
+        return MusicParsers.IsSignInPrompt(result.Value!) ? ApiResult<T>.Failed(FailureKind.NotLoggedIn) : ApiResult<T>.Ok(parse(result.Value!));
+    }
+}
+
+public sealed record AccountInfo(string Name, string? PhotoUrl);
