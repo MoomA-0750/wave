@@ -174,6 +174,14 @@ sealed interface CommandBody {
         val basedOnVersion: Long,
         val accountTag: String,
     ) : CommandBody
+
+    /** 端末の表示名を家のほかの端末に知らせる（名前は鎖に入れないので、加入した2台以外にも伝える）。宛先は家の全端末。 */
+    @Serializable
+    @SerialName("profile")
+    data class Profile(
+        val from: String,
+        val name: String,
+    ) : CommandBody
 }
 
 @Serializable
@@ -192,6 +200,10 @@ enum class ControlAction {
 
     @SerialName("seek")
     Seek,
+
+    /** 宛先の端末に「ここで再生（引き取り）」を頼む。宛先は書き手でない端末。 */
+    @SerialName("transfer")
+    Transfer,
 }
 
 @Serializable

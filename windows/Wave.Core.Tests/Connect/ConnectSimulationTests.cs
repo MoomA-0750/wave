@@ -252,4 +252,46 @@ public class ConnectSimulationTests
         Assert.Empty(a.Controls);
         Assert.False(a.Playing);
     }
+
+    [Fact]
+    public void ChoosingAnotherDeviceMovesPlaybackThere()
+    {
+        SetUp();
+        a.StartPlaying(snapshot);
+        relay.Run();
+        Assert.True(a.Client.RequestRemoteTransfer(b.DeviceId));
+        relay.Run();
+        Assert.True(b.Playing, "選んだ B で鳴っていない");
+        Assert.False(a.Playing);
+        Assert.True(b.Client.IsWriter);
+    }
+
+    [Fact]
+    public void ChoosingASongWhileAnotherDevicePlaysPlaysItThere()
+    {
+        SetUp();
+        a.StartPlaying(snapshot);
+        relay.Run();
+        var other = HandoffCodec.Encode(InteropTests.SampleSnapshot() with { CurrentItemId = InteropTests.SampleSnapshot().Items[^1].ItemId });
+        b.Queue = other;
+        b.CurrentItemId = InteropTests.SampleSnapshot().Items[^1].ItemId;
+        b.PositionMs = 0;
+        b.Client.SetLocalQueue(other);
+        b.PushCursor();
+        Assert.True(b.Client.PlayOn(a.DeviceId));
+        relay.Run();
+        Assert.True(a.Playing, "A で鳴っていない");
+        Assert.Equal(other, a.Queue);
+        Assert.False(b.Playing);
+        Assert.True(a.Client.IsWriter);
+    }
+
+    [Fact]
+    public void DeviceNamesReachTheWholeHousehold()
+    {
+        SetUp();
+        Assert.True(b.Client.SendProfile("Bee"));
+        relay.Run();
+        Assert.Contains(a.Events, e => e is ClientEvent.Profile p && p.DeviceId == b.DeviceId && p.Name == "Bee");
+    }
 }

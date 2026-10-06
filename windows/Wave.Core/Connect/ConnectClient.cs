@@ -49,6 +49,9 @@ public abstract record ClientEvent
 
     /// <summary>家に入った（加入の鎖を受け入れた、または自分の genesis の鎖を受け入れた）。</summary>
     public sealed record Joined : ClientEvent;
+
+    /// <summary>家の端末が表示名を知らせてきた（表示だけ）。</summary>
+    public sealed record Profile(string DeviceId, string Name) : ClientEvent;
 }
 
 /// <summary>
@@ -783,6 +786,7 @@ public sealed class ConnectClient
         }
         Persist();
         Flush();
+        MaybeHandOff();
     }
 
     private void OnStateConflict(RelayV2.StateConflict conflict)
@@ -970,6 +974,49 @@ public sealed class ConnectClient
     /// </summary>
     public bool RequestTransfer() => RequestTransfer(retried: false);
 
+    /// <summary>家の端末 target に「ここで再生（引き取り）」を頼む（デバイスの一覧で端末を選んだ）。</summary>
+    public bool RequestRemoteTransfer(string target)
+    {
+        if (pendingStoreId is not null || target == signer.DeviceId) return false;
+        var current = chain;
+        if (current is null || !current.Members.TryGetValue(target, out var member) || member.Keys.Role != Role.Player) return false;
+        var tag = effects.AccountTag();
+        if (tag is null || latestCursor is not { } cursor || cursor.Body.AccountTag != tag) return false;
+        var command = new CommandBody.Control { CommandId = newId(), From = signer.DeviceId, To = target, Action = ControlAction.Transfer, PositionMs = null, BasedOnVersion = cursor.Version, AccountTag = tag };
+        return send(new RelayV2.Control { Doc = SealCommand(current, command) });
+    }
+
+    /// <summary>
+    /// 手元のキューで家の再生を引き受け（音は出さない）、それを書き終えたら target に引き取ってもらう
+    /// （ほかの端末で鳴っている間に曲を選んだら、その端末で鳴らす）。呼ぶ前に SetLocalQueue・SetLocalCursor（再生中でない）を置く。
+    /// </summary>
+    public bool PlayOn(string target)
+    {
+        if (target == signer.DeviceId || !UserStartedPlayback()) return false;
+        handOff = (target, nowMs());
+        return true;
+    }
+
+    private (string Target, long StartedAtMs)? handOff;
+    private const long HandOffWaitMs = 10_000;
+
+    private void MaybeHandOff()
+    {
+        if (handOff is not { } waiting || session is null) return;
+        if (latestCursor is not { } cursor || latestQueue is not { } queue) return;
+        if (cursor.Writer != signer.DeviceId || queue.Writer != signer.DeviceId || cursor.Body.QueueRef != queue.Hash) return;
+        handOff = null;
+        RequestRemoteTransfer(waiting.Target);
+    }
+
+    /// <summary>この端末の表示名を家のほかの端末に知らせる。</summary>
+    public bool SendProfile(string name)
+    {
+        var current = chain;
+        if (current is null || !current.Members.ContainsKey(signer.DeviceId)) return false;
+        return send(new RelayV2.Control { Doc = SealCommand(current, new CommandBody.Profile { From = signer.DeviceId, Name = name.Length > 64 ? name[..64] : name }) });
+    }
+
     /// <summary>遠隔操作を送る（鳴っていない端末から、今鳴らしている同じアカウントの端末へ）。</summary>
     /// <returns>送ったか（家の再生が自分・別のアカウント・最新の状態をまだ見ていないなら false）</returns>
     public bool SendControl(ControlAction action, long? positionMs = null)
@@ -1009,14 +1056,20 @@ public sealed class ConnectClient
     private void OnControl(RelayV2.Control message)
     {
         var current = chain;
-        if (current is null || message.Doc.Header.Kind != DocKind.Command || session is not { } mine) return;
+        if (current is null || message.Doc.Header.Kind != DocKind.Command) return;
         // 中継が同じ命令を流し直しても、開く（鍵交換をする）前に捨てる。署名の対象のハッシュなので、再送なら必ず同じ値
         var docHash = DocSealer.Hash(message.Doc);
         if (seenControlDocs.Contains(docHash)) return;
         seenControlDocs.AddLast(docHash);
         while (seenControlDocs.Count > MaxHandledClaims) seenControlDocs.RemoveFirst();
         if (DocSealer.Open(message.Doc, current, opener) is not DocOpen.Ok opened) return;
-        if (ConnectJson.Decode<CommandBody>(opened.Plaintext) is not CommandBody.Control command) return;
+        var body = ConnectJson.Decode<CommandBody>(opened.Plaintext);
+        if (body is CommandBody.Profile profile)
+        {
+            if (profile.From == opened.Header.WriterId && profile.From != signer.DeviceId && current.Members.ContainsKey(profile.From)) effects.Event(new ClientEvent.Profile(profile.From, profile.Name));
+            return;
+        }
+        if (body is not CommandBody.Control command) return;
         if (command.To != signer.DeviceId || command.From != opened.Header.WriterId || command.From == signer.DeviceId) return;
         // 出してから5分を超えた命令には従わない（中継が取っておいて後から届けるのを、時間でも縛る。順序の判断には時計を使わない）
         if (Math.Abs(epochMs() - opened.Header.IssuedAtEpochMs) > MaxControlAgeMs) return;
@@ -1025,6 +1078,15 @@ public sealed class ConnectClient
         if (handledClaims.Contains(command.CommandId)) return;
         Remember(command.CommandId);
         if (command.AccountTag != effects.AccountTag()) return;
+        if (command.Action == ControlAction.Transfer)
+        {
+            // 「ここで再生」を頼まれた: 書き手でなく、送り手が見ていた家の最新のカーソルが自分の見ているものに近いときだけ
+            if (IsWriter || latestCursor is not { } latest) return;
+            if (command.BasedOnVersion > latest.Version || latest.Version - command.BasedOnVersion > MaxControlLag) return;
+            if (effects.Control(ControlAction.Transfer, null)) RequestTransfer();
+            return;
+        }
+        if (session is not { } mine) return;
         if (latestCursor is not { } own || own.Writer != signer.DeviceId) return;
         if (command.BasedOnVersion > own.Version || own.Version - command.BasedOnVersion > MaxControlLag) return;
         // 今のセッションより前の見え方に基づく命令には従わない
@@ -1060,6 +1122,8 @@ public sealed class ConnectClient
     public void Tick()
     {
         if (floorDirty && (lastPersistMs is not { } last || nowMs() - last >= FloorPersistMs)) Persist();
+        // 引き受けたものを書けないまま10秒たったら、頼むのをやめる
+        if (handOff is { } h && nowMs() - h.StartedAtMs > HandOffWaitMs) handOff = null;
         var waiting = transfer;
         if (waiting is null) return;
         if (!waiting.Adopting && nowMs() - waiting.StartedAtMs >= TransferWaitMs) CompleteTransfer();

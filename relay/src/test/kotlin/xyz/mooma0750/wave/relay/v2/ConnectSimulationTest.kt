@@ -832,4 +832,47 @@ class ConnectSimulationTest {
         assertTrue(a.controls.isEmpty(), "古い命令に従った")
         assertFalse(a.playing)
     }
+
+    @Test
+    fun choosingAnotherDeviceMovesPlaybackThere() {
+        setUp()
+        a.startPlaying("queue-A", item = "item-2", position = 30_000)
+        relay.run()
+        // 鳴らしている A のデバイスの一覧で B を選ぶ
+        assertTrue(a.client.requestRemoteTransfer(b.deviceId))
+        relay.run()
+        assertTrue(b.playing, "選んだ B で鳴っていない")
+        assertFalse(a.playing)
+        assertEquals("queue-A", b.queue)
+        assertEquals("item-2", b.currentItemId)
+        assertTrue(b.client.isWriter)
+    }
+
+    @Test
+    fun choosingASongWhileAnotherDevicePlaysPlaysItThere() {
+        setUp()
+        a.startPlaying("queue-A")
+        relay.run()
+        // 鳴っていない B で曲を選ぶ: B が新しいキューを引き受け（音は出さない）、A に引き取ってもらう
+        b.queue = "queue-B"
+        b.currentItemId = "item-9"
+        b.positionMs = 0
+        b.client.setLocalQueue("queue-B")
+        b.pushCursor()
+        assertTrue(b.client.playOn(a.deviceId))
+        relay.run()
+        assertTrue(a.playing, "A で鳴っていない")
+        assertEquals("queue-B", a.queue)
+        assertEquals("item-9", a.currentItemId)
+        assertFalse(b.playing)
+        assertTrue(a.client.isWriter)
+    }
+
+    @Test
+    fun deviceNamesReachTheWholeHousehold() {
+        setUp()
+        assertTrue(b.client.sendProfile("Bee"))
+        relay.run()
+        assertTrue(a.events.any { it is ClientEvent.Profile && it.deviceId == b.deviceId && it.name == "Bee" })
+    }
 }

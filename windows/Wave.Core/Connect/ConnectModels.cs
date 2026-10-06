@@ -142,6 +142,7 @@ public sealed record QueueBody
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
 [JsonDerivedType(typeof(Yield), "yield")]
 [JsonDerivedType(typeof(Control), "control")]
+[JsonDerivedType(typeof(Profile), "profile")]
 public abstract record CommandBody
 {
     /// <summary>再生を始めた端末から、今の再生中の端末へ「止まって」（D-7）。</summary>
@@ -173,6 +174,13 @@ public abstract record CommandBody
 
         public required string AccountTag { get; init; }
     }
+
+    /// <summary>端末の表示名を家のほかの端末に知らせる（名前は鎖に入れないので、加入した2台以外にも伝える）。</summary>
+    public sealed record Profile : CommandBody
+    {
+        public required string From { get; init; }
+        public required string Name { get; init; }
+    }
 }
 
 public enum ControlAction
@@ -182,6 +190,9 @@ public enum ControlAction
     [JsonStringEnumMemberName("next")] Next,
     [JsonStringEnumMemberName("previous")] Previous,
     [JsonStringEnumMemberName("seek")] Seek,
+
+    /// <summary>宛先の端末に「ここで再生（引き取り）」を頼む。宛先は書き手でない端末。</summary>
+    [JsonStringEnumMemberName("transfer")] Transfer,
 }
 
 public sealed record ProfileBody

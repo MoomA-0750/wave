@@ -346,8 +346,8 @@ internal sealed class SimDevice : ConnectClient.IEffects
     public SoftwareDevice Keys => keys;
     public MemberKeys MemberKeys => keys.MemberKeys(Role);
     public string? Tag { get; set; } = "tag-account-1";
-    public string? Queue { get; private set; }
-    public string CurrentItemId { get; private set; } = "item-0";
+    public string? Queue { get; set; }
+    public string CurrentItemId { get; set; } = "item-0";
     public List<ClientEvent> Events { get; } = [];
     public ClientPersisted Persisted { get; private set; } = new();
     public ConnectClient Client { get; private set; }

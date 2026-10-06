@@ -64,6 +64,12 @@ sealed interface ClientEvent {
 
     /** 家に入った（加入の鎖を受け入れた、または自分の genesis の鎖を受け入れた）。 */
     data object Joined : ClientEvent
+
+    /** 家の端末が表示名を知らせてきた（表示だけ。署名と家の一覧で確かめた送り主）。 */
+    data class Profile(
+        val deviceId: String,
+        val name: String,
+    ) : ClientEvent
 }
 
 /**
@@ -689,6 +695,7 @@ class ConnectClient(
         }
         persist()
         flush()
+        maybeHandOff()
     }
 
     private fun onStateConflict(conflict: RelayV2.StateConflict) {
@@ -882,6 +889,56 @@ class ConnectClient(
         return send(RelayV2.Control(sealCommand(current, command)))
     }
 
+    /**
+     * 家の端末 target に「ここで再生（引き取り）」を頼む（デバイスの一覧で端末を選んだ）。target は書き手でない端末。
+     * @return 送ったか
+     */
+    fun requestRemoteTransfer(target: String): Boolean {
+        if (pendingStoreId != null || target == signer.deviceId) return false
+        val current = chain ?: return false
+        if (current.members[target]?.keys?.role != Role.Player) return false
+        val tag = effects.accountTag() ?: return false
+        val cursor = latestCursor ?: return false
+        if (cursor.body.accountTag != tag) return false
+        val command = CommandBody.Control(newId(), signer.deviceId, target, ControlAction.Transfer, null, cursor.version, tag)
+        return send(RelayV2.Control(sealCommand(current, command)))
+    }
+
+    /**
+     * 手元のキューで家の再生を引き受け（音は出さない）、それを書き終えたら target に引き取ってもらう
+     * （ほかの端末で鳴っている間に曲を選んだら、その端末で鳴らす。Spotify と同じ見え方）。呼ぶ前に setLocalQueue・setLocalCursor（再生中でない）を置く。
+     */
+    fun playOn(target: String): Boolean {
+        if (target == signer.deviceId) return false
+        if (!userStartedPlayback()) return false
+        handOff = HandOff(target, nowMs())
+        return true
+    }
+
+    private class HandOff(
+        val target: String,
+        val startedAtMs: Long,
+    )
+
+    private var handOff: HandOff? = null
+
+    /** 引き受けたキューとカーソルを書き終えたら、相手に引き取りを頼む。 */
+    private fun maybeHandOff() {
+        val waiting = handOff ?: return
+        val cursor = latestCursor ?: return
+        val queue = latestQueue ?: return
+        if (session == null || cursor.writer != signer.deviceId || queue.writer != signer.deviceId || cursor.body.queueRef != queue.hash) return
+        handOff = null
+        requestRemoteTransfer(waiting.target)
+    }
+
+    /** この端末の表示名を家のほかの端末に知らせる。 */
+    fun sendProfile(name: String): Boolean {
+        val current = chain ?: return false
+        if (signer.deviceId !in current.members) return false
+        return send(RelayV2.Control(sealCommand(current, CommandBody.Profile(signer.deviceId, name.take(64)))))
+    }
+
     /** 表示用: ほかの端末の最新のカーソル（別アカウントのものを含む）と、今の時刻に合わせた位置。 */
     fun remoteNow(): RemoteNow? {
         val cursor = latestCursor ?: return null
@@ -895,7 +952,6 @@ class ConnectClient(
      */
     private fun onControl(message: RelayV2.Control) {
         val current = chain ?: return
-        val mine = session ?: return
         if (message.doc.header.kind != DocKind.Command) return
         // 中継が同じ命令を流し直しても、開く（受け取りの鍵で鍵交換をする）前に捨てる。署名の対象のハッシュなので、再送なら必ず同じ値
         val docHash = DocSealer.hash(message.doc)
@@ -903,7 +959,12 @@ class ConnectClient(
         seenControlDocs.addLast(docHash)
         while (seenControlDocs.size > MAX_HANDLED_CLAIMS) seenControlDocs.removeFirst()
         val opened = DocSealer.open(message.doc, current, opener) as? DocOpen.Ok ?: return
-        val command = runCatching { ConnectJson.json.decodeFromString(CommandBody.serializer(), opened.plaintext.decodeToString()) }.getOrNull() as? CommandBody.Control ?: return
+        val body = runCatching { ConnectJson.json.decodeFromString(CommandBody.serializer(), opened.plaintext.decodeToString()) }.getOrNull() ?: return
+        if (body is CommandBody.Profile) {
+            if (body.from == opened.header.writerId && body.from != signer.deviceId && body.from in current.members) effects.event(ClientEvent.Profile(body.from, body.name))
+            return
+        }
+        val command = body as? CommandBody.Control ?: return
         if (command.to != signer.deviceId || command.from != opened.header.writerId || command.from == signer.deviceId) return
         // 出してから5分を超えた命令には従わない（中継が取っておいて後から届けるのを、時間でも縛る。順序の判断には時計を使わない L-10 とは別の目的）
         if (kotlin.math.abs(epochMs() - opened.header.issuedAtEpochMs) > MAX_CONTROL_AGE_MS) return
@@ -912,9 +973,18 @@ class ConnectClient(
         if (command.commandId in handledClaims) return
         remember(command.commandId)
         if (command.accountTag != effects.accountTag()) return
+        if (command.action == ControlAction.Transfer) {
+            // 「ここで再生」を頼まれた: 書き手でなく、送り手が見ていた家の最新のカーソルが自分の見ているものに近いときだけ
+            if (isWriter) return
+            val latest = latestCursor ?: return
+            if (command.basedOnVersion > latest.version || latest.version - command.basedOnVersion > MAX_CONTROL_LAG) return
+            if (effects.control(ControlAction.Transfer, null)) requestTransfer()
+            return
+        }
         val own = latestCursor?.takeIf { it.writer == signer.deviceId } ?: return
         if (command.basedOnVersion > own.version || own.version - command.basedOnVersion > MAX_CONTROL_LAG) return
         // 今のセッションより前の見え方に基づく命令には従わない（前のセッションの命令を中継が取っておいて、新しいセッションに流しても効かない）
+        val mine = session ?: return
         val sessionStart = mine.arbiter.startVersion ?: return
         if (command.basedOnVersion < sessionStart) return
         if (command.action == ControlAction.Seek && command.positionMs == null) return
@@ -924,6 +994,8 @@ class ConnectClient(
     /** 時間の経過。transfer で前の端末から返事が無ければ、最後の状態から取り込む。 */
     fun tick() {
         if (floorDirty && lastPersistMs.let { it == null || nowMs() - it >= FLOOR_PERSIST_MS }) persist()
+        // 引き受けたものを書けないまま10秒たったら、頼むのをやめる（手元に置いたまま）
+        if (handOff?.let { nowMs() - it.startedAtMs > HAND_OFF_WAIT_MS } == true) handOff = null
         val waiting = transfer ?: return
         if (!waiting.adopting && nowMs() - waiting.startedAtMs >= TRANSFER_WAIT_MS) completeTransfer()
     }
@@ -1077,5 +1149,8 @@ class ConnectClient(
 
         /** 遠隔操作の鮮度の上限（命令の見出しの時刻と受け手の時計の差）。 */
         private const val MAX_CONTROL_AGE_MS = 5 * 60 * 1000L
+
+        /** 引き受けてから相手に頼むまでの待ちの上限。 */
+        private const val HAND_OFF_WAIT_MS = 10_000L
     }
 }
