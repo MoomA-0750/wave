@@ -625,6 +625,7 @@ public sealed partial class PlayerService : ObservableObject
             _ = LoadLyricsAsync(song, cancel.Token);
         }
         IsPlaying = next.Playing;
+        UpdateRemoteMediaControls();
         // 相手のリピートを映すだけ（この端末の設定には書かない）
         if (repeat != next.Repeat)
         {
@@ -634,12 +635,35 @@ public sealed partial class PlayerService : ObservableObject
         Position = next.PositionNow(clock.ElapsedMilliseconds);
     }
 
+    /// <summary>
+    /// タスクバー・音量のポップアップのメディアの表示にも、ほかの端末の曲を出す（前に手元で鳴らした曲を残さない）。
+    /// 再生・一時停止のキーは CommandManager の受け口から TogglePlay に入り、その端末への命令になる。
+    /// </summary>
+    private void UpdateRemoteMediaControls()
+    {
+        var smtc = player.SystemMediaTransportControls;
+        smtc.PlaybackStatus = IsPlaying ? MediaPlaybackStatus.Playing : MediaPlaybackStatus.Paused;
+        if (Current is not { } song || shownOnSmtc == song) return;
+        shownOnSmtc = song;
+        var updater = smtc.DisplayUpdater;
+        updater.ClearAll();
+        updater.Type = MediaPlaybackType.Music;
+        updater.MusicProperties.Title = song.Title;
+        updater.MusicProperties.Artist = song.ArtistsText;
+        if (song.Album?.Title is { } album) updater.MusicProperties.AlbumTitle = album;
+        if (Uri.TryCreate(song.ThumbnailUrl, UriKind.Absolute, out var art)) updater.Thumbnail = RandomAccessStreamReference.CreateFromUri(art);
+        updater.Update();
+    }
+
+    private Song? shownOnSmtc;
+
     /// <summary>映すのをやめる（この端末で鳴らし始めた・相手が見えなくなった）。</summary>
     private void LeaveRemote(bool clearDisplay = false)
     {
         if (!IsRemote) return;
         IsRemote = false;
         RemoteDevice = null;
+        shownOnSmtc = null;
         remote = null;
         remoteQueueKey = null;
         IsPlaying = false;
