@@ -23,7 +23,8 @@ public sealed partial class ArtistPage : Page
     {
         browseId = (string)e.Parameter;
         Player.PropertyChanged += OnPlayerChanged;
-        ShuffleButton.IsChecked = Player.Shuffle;
+        shufflePlay = false;
+        UpdateShuffleButton();
         var result = await AppServices.Music.ArtistAsync(browseId);
         LoadingRing.IsActive = false;
         if (!result.IsOk)
@@ -72,7 +73,7 @@ public sealed partial class ArtistPage : Page
     {
         if (e.PropertyName == nameof(PlayerService.Current)) TrackRow.MarkCurrent(rows, Player.Current?.VideoId);
         if (e.PropertyName is nameof(PlayerService.IsPlaying) or nameof(PlayerService.SourceId)) UpdatePlayIcon();
-        if (e.PropertyName == nameof(PlayerService.Shuffle)) ShuffleButton.IsChecked = Player.Shuffle;
+        if (e.PropertyName is nameof(PlayerService.Shuffle) or nameof(PlayerService.SourceId)) UpdateShuffleButton();
     }
 
     private bool IsPlayingHere => Player.SourceId == browseId && Player.Current is not null;
@@ -86,10 +87,22 @@ public sealed partial class ArtistPage : Page
             Player.TogglePlay();
             return;
         }
-        Player.PlayList(rows.Select(r => r.Song).ToList(), 0, browseId, Player.Shuffle ? true : null);
+        Player.PlayList(rows.Select(r => r.Song).ToList(), 0, browseId, shufflePlay ? true : null);
     }
 
-    private void OnShuffle(object sender, RoutedEventArgs e) => Player.ToggleShuffle();
+    /// <summary>
+    /// 一覧の「シャッフル再生」の指定（Android と同じ）。この一覧を再生しているときは、キューのシャッフルの入り切りになる。
+    /// </summary>
+    private bool shufflePlay;
+
+    private void OnShuffle(object sender, RoutedEventArgs e)
+    {
+        if (IsPlayingHere) Player.ToggleShuffle();
+        else shufflePlay = !shufflePlay;
+        UpdateShuffleButton();
+    }
+
+    private void UpdateShuffleButton() => ShuffleButton.IsChecked = IsPlayingHere ? Player.Shuffle : shufflePlay;
 
     private void OnDoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
     {

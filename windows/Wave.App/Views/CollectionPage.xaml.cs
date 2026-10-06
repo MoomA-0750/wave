@@ -71,7 +71,8 @@ public sealed partial class CollectionPage : Page
         RestoreOrder();
         SortText.Text = SortLabels().First(x => x.Key == sort).Label;
         Player.PropertyChanged += OnPlayerChanged;
-        ShuffleButton.IsChecked = Player.Shuffle;
+        shufflePlay = false;
+        UpdateShuffleButton();
         ShowHeader(request.Title, request.ThumbnailUrl, request.Subtitle);
         _ = LoadAsync();
     }
@@ -86,7 +87,7 @@ public sealed partial class CollectionPage : Page
     {
         if (e.PropertyName == nameof(PlayerService.Current)) TrackRow.MarkCurrent(rows, Player.Current?.VideoId);
         if (e.PropertyName is nameof(PlayerService.IsPlaying) or nameof(PlayerService.SourceId)) UpdatePlayIcon();
-        if (e.PropertyName == nameof(PlayerService.Shuffle)) ShuffleButton.IsChecked = Player.Shuffle;
+        if (e.PropertyName is nameof(PlayerService.Shuffle) or nameof(PlayerService.SourceId)) UpdateShuffleButton();
     }
 
     private bool IsPlayingHere => Player.SourceId == request.Id && Player.Current is not null;
@@ -365,10 +366,22 @@ public sealed partial class CollectionPage : Page
             Player.TogglePlay();
             return;
         }
-        Player.PlayList(Songs, 0, request.Id, Player.Shuffle ? true : null);
+        Player.PlayList(Songs, 0, request.Id, shufflePlay ? true : null);
     }
 
-    private void OnShuffle(object sender, RoutedEventArgs e) => Player.ToggleShuffle();
+    /// <summary>
+    /// 一覧の「シャッフル再生」の指定（Android と同じ）。この一覧を再生しているときは、キューのシャッフルの入り切りになる。
+    /// </summary>
+    private bool shufflePlay;
+
+    private void OnShuffle(object sender, RoutedEventArgs e)
+    {
+        if (IsPlayingHere) Player.ToggleShuffle();
+        else shufflePlay = !shufflePlay;
+        UpdateShuffleButton();
+    }
+
+    private void UpdateShuffleButton() => ShuffleButton.IsChecked = IsPlayingHere ? Player.Shuffle : shufflePlay;
 
     private void OnDoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
     {

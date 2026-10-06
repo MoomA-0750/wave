@@ -20,7 +20,9 @@ public sealed record SavedQueue(
     string? SourceId,
     string? RadioSeed,
     string? Continuation,
-    string? RadioPlaylistId)
+    string? RadioPlaylistId,
+    /// <summary>シャッフル中なら、切ったときに戻す並び（項目の ID → 位置）。前の形式のファイルには無い（切った状態で戻す）。</summary>
+    Dictionary<string, int>? ShuffleOrder = null)
 {
     public const int CurrentVersion = 1;
 }

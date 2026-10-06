@@ -28,7 +28,11 @@ public sealed partial class PlayerService : ObservableObject
     private readonly DispatcherQueue ui;
     private readonly DispatcherQueueTimer timer;
     private readonly Dictionary<string, ResolvedStream> prefetched = new();
-    private List<Song> unshuffled = [];
+    /// <summary>
+    /// シャッフルを入れたときの、今の曲より後ろの並び（項目の ID → 位置）。切ると残りをこの並びに戻す（Android の QueueSession と同じ）。
+    /// null ならシャッフルは切れている。シャッフル中に足した曲は、戻すときに今の順のまま最後に付く。
+    /// </summary>
+    private Dictionary<string, int>? shuffleOrder;
     private CancellationTokenSource? loadCancel;
     private ResolvedStream? currentStream;
     private string cpn = "";
@@ -106,7 +110,7 @@ public sealed partial class PlayerService : ObservableObject
         this.ui = ui;
         var settings = AppServices.Settings;
         volume = settings.Volume;
-        shuffle = settings.Shuffle;
+        // シャッフルはキューごとの状態（Android と同じく、新しい再生では切れる）。設定には持ち越さない
         repeat = (RepeatMode)Math.Clamp(settings.Repeat, 0, 2);
         player.Volume = volume;
         player.MediaEnded += (_, _) => ui.TryEnqueue(OnEnded);
@@ -185,7 +189,7 @@ public sealed partial class PlayerService : ObservableObject
         }
         store.Save(new SavedQueue(SavedQueue.CurrentVersion, AppServices.Account.ObtainedAtEpochMs,
             queue.Items.Select(i => new SavedQueueItem(i.Song, i.Meta.ItemId, i.Meta.Origin)).ToList(),
-            cursor.CurrentItemId, cursor.PositionMs, (int)Repeat, SourceId, queue.RadioSeed, queue.Continuation, queue.RadioPlaylistId));
+            cursor.CurrentItemId, cursor.PositionMs, (int)Repeat, SourceId, queue.RadioSeed, queue.Continuation, queue.RadioPlaylistId, shuffleOrder));
     }
 
     /// <summary>起動時に、前回のキューを再生を始めずに戻す（保存したときと今のログインが違えば消す）。</summary>
@@ -203,7 +207,7 @@ public sealed partial class PlayerService : ObservableObject
         radioSeed = saved.RadioSeed;
         radioContinuation = saved.Continuation;
         radioPlaylistId = saved.RadioPlaylistId;
-        unshuffled = saved.Items.Select(i => i.Song).ToList();
+        SetShuffleOrder(saved.ShuffleOrder);
         foreach (var item in saved.Items)
         {
             adoptIds = new([item.ItemId]);
@@ -265,11 +269,11 @@ public sealed partial class PlayerService : ObservableObject
         radioContinuation = null;
         radioPlaylistId = null;
         SourceId = source;
-        if (shuffleOverride is { } s && s != Shuffle) SetShuffleField(s);
-        unshuffled = songs.ToList();
+        // 一覧の「シャッフル再生」のときだけシャッフルを入れて始める。それ以外は切る（Android と同じ）
+        var shuffled = shuffleOverride == true;
         var order = songs.ToList();
         var first = Math.Clamp(start, 0, songs.Count - 1);
-        if (Shuffle)
+        if (shuffled)
         {
             if (shuffleOverride == true)
             {
@@ -288,6 +292,8 @@ public sealed partial class PlayerService : ObservableObject
         }
         radioSeed = null;
         ReplaceQueue(order, QueueOrigin.Source);
+        // 切ったときに戻す並び: 一覧の並び（同じ曲が2回あっても項目ごとに、一覧での位置を当てる）
+        SetShuffleOrder(shuffled ? RankBy(songs) : null);
         StartSelection(first, target);
     }
 
@@ -322,7 +328,7 @@ public sealed partial class PlayerService : ObservableObject
         var target = RemoteDeviceId;
         LeaveRemote();
         SourceId = null;
-        unshuffled = [song];
+        SetShuffleOrder(null);
         ReplaceQueue([song], QueueOrigin.Source);
         // 曲のラジオの続きは、鳴らす端末が自分で取る（キューには種の曲だけを渡す）
         radioSeed = song.VideoId;
@@ -341,9 +347,16 @@ public sealed partial class PlayerService : ObservableObject
     {
         var known = Queue.Select(s => s.VideoId).ToHashSet();
         var extra = songs.Where(s => known.Add(s.VideoId)).ToList();
-        unshuffled = songs.ToList();
-        if (Shuffle) Random.Shared.Shuffle(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(extra));
-        AddAll(extra, QueueOrigin.Source);
+        if (shuffleOrder is { } order)
+        {
+            // シャッフル中に一覧の残りが読めた: 混ぜて足し、戻す並びには一覧の位置で加える
+            Random.Shared.Shuffle(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(extra));
+            var start = Queue.Count;
+            AddAll(extra, QueueOrigin.Source);
+            var position = songs.Select((song, i) => (song.VideoId, i)).GroupBy(x => x.VideoId).ToDictionary(g => g.Key, g => g.First().i);
+            for (var i = start; i < Queue.Count; i++) order[itemMeta[i].ItemId] = position.GetValueOrDefault(Queue[i].VideoId, int.MaxValue);
+        }
+        else AddAll(extra, QueueOrigin.Source);
     }
 
     public void PlayNext(Song song)
@@ -519,49 +532,58 @@ public sealed partial class PlayerService : ObservableObject
         CursorChanged?.Invoke(false);
     }
 
+    /// <summary>
+    /// シャッフルの入り切り（Android と同じ）。入れると今の曲より後ろの並びを覚えて混ぜ、切ると残りを覚えた並びに戻す
+    /// （シャッフル中に足した曲は今の順のまま最後に付く。曲を外しはしない）。
+    /// </summary>
     public void ToggleShuffle()
     {
         // ほかの端末のキューは並べ替えられない（命令が無い）
-        if (IsRemote) return;
-        SetShuffleField(!Shuffle);
-        if (Queue.Count == 0 || Current is null) return;
-        var current = Current;
-        var upcoming = Queue.Skip(Index + 1).ToList();
-        List<Song> rest;
-        if (Shuffle)
+        if (IsRemote || Queue.Count == 0 || Current is null || Index < 0) return;
+        var upcoming = Enumerable.Range(Index + 1, Queue.Count - Index - 1).Select(i => (Song: Queue[i], Meta: itemMeta[i])).ToList();
+        List<(Song Song, QueueItemMeta Meta)> rest;
+        if (shuffleOrder is not { } order)
         {
-            rest = upcoming;
+            SetShuffleOrder(upcoming.Select((u, i) => (u.Meta.ItemId, i)).ToDictionary(x => x.ItemId, x => x.i));
+            rest = upcoming.ToList();
             Random.Shared.Shuffle(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(rest));
         }
         else
         {
-            // 元の並びのうち、今の曲より後ろのもの（足した曲はそのまま後ろに残す）
-            var at = unshuffled.FindIndex(s => s.VideoId == current.VideoId);
-            var original = at >= 0 ? unshuffled.Skip(at + 1).ToList() : [];
-            var extras = upcoming.Where(u => original.All(o => o.VideoId != u.VideoId)).ToList();
-            rest = original.Where(o => upcoming.Any(u => u.VideoId == o.VideoId)).Concat(extras).ToList();
+            SetShuffleOrder(null);
+            rest = upcoming.Select((u, i) => (u, i)).OrderBy(x => order.TryGetValue(x.u.Meta.ItemId, out var r) ? r : int.MaxValue).ThenBy(x => x.i).Select(x => x.u).ToList();
         }
-        // 並べ替えでも項目の ID と出どころは保つ
-        var metas = Enumerable.Range(Index + 1, Queue.Count - Index - 1).ToDictionary(i => Queue[i], i => itemMeta[i], ReferenceEqualityComparer.Instance);
-        while (Queue.Count > Index + 1) Queue.RemoveAt(Queue.Count - 1);
-        foreach (var s in rest)
-        {
-            if (metas.TryGetValue(s, out var meta))
-            {
-                adoptIds = new([meta.ItemId]);
-                nextOrigin = meta.Origin;
-            }
-            Queue.Add(s);
-            nextOrigin = QueueOrigin.Source;
-        }
-        adoptIds = null;
+        ReplaceUpcoming(rest);
     }
 
-    private void SetShuffleField(bool value)
+    /// <summary>今の曲より後ろを並べ直す（項目の ID と出どころは保つ）。</summary>
+    private void ReplaceUpcoming(List<(Song Song, QueueItemMeta Meta)> rest)
     {
-        Shuffle = value;
-        AppServices.Settings.Shuffle = value;
-        AppServices.Settings.Save();
+        while (Queue.Count > Index + 1) Queue.RemoveAt(Queue.Count - 1);
+        foreach (var (song, meta) in rest)
+        {
+            adoptIds = new([meta.ItemId]);
+            nextOrigin = meta.Origin;
+            Queue.Add(song);
+        }
+        adoptIds = null;
+        nextOrigin = QueueOrigin.Source;
+    }
+
+    private void SetShuffleOrder(Dictionary<string, int>? order)
+    {
+        shuffleOrder = order;
+        Shuffle = order is not null;
+    }
+
+    /// <summary>キューの項目ごとに、元の一覧での位置を当てる（同じ曲が何度も出るときは前から順に）。</summary>
+    private Dictionary<string, int> RankBy(IReadOnlyList<Song> songs)
+    {
+        var slots = songs.Select((song, i) => (song.VideoId, i)).GroupBy(x => x.VideoId).ToDictionary(g => g.Key, g => new Queue<int>(g.Select(x => x.i)));
+        var rank = new Dictionary<string, int>();
+        for (var i = 0; i < Queue.Count; i++)
+            rank[itemMeta[i].ItemId] = slots.TryGetValue(Queue[i].VideoId, out var q) && q.Count > 0 ? q.Dequeue() : int.MaxValue;
+        return rank;
     }
 
     public void CycleRepeat()
@@ -697,7 +719,8 @@ public sealed partial class PlayerService : ObservableObject
         radioSeed = queue.RadioSeed;
         radioContinuation = queue.Continuation;
         radioPlaylistId = queue.RadioPlaylistId;
-        unshuffled = queue.Items.Select(i => i.Song).ToList();
+        // ほかの端末から受け取ったキューは、シャッフルを切った状態で始める（Android と同じ）
+        SetShuffleOrder(null);
         Queue.Clear();
         foreach (var (song, meta) in queue.Items)
         {
@@ -770,7 +793,7 @@ public sealed partial class PlayerService : ObservableObject
     }
 
     /// <summary>映し始める前の手元のキュー（映すのをやめたら戻す。Android と同じく、手元のキューは相手のキューで消さない）。</summary>
-    private sealed record LocalQueueBackup(List<(Song Song, QueueItemMeta Meta)> Items, int Index, string? SourceId, string? RadioSeed, string? Continuation, string? RadioPlaylistId, List<Song> Unshuffled);
+    private sealed record LocalQueueBackup(List<(Song Song, QueueItemMeta Meta)> Items, int Index, string? SourceId, string? RadioSeed, string? Continuation, string? RadioPlaylistId, Dictionary<string, int>? ShuffleOrder);
 
     private LocalQueueBackup? localBackup;
 
@@ -790,7 +813,7 @@ public sealed partial class PlayerService : ObservableObject
             player.Source = null;
             IsLoading = false;
             localBackup = Queue.Count == 0 ? null : new LocalQueueBackup(
-                Queue.Select((song, i) => (song, itemMeta[i])).ToList(), Index, SourceId, radioSeed, radioContinuation, radioPlaylistId, unshuffled.ToList());
+                Queue.Select((song, i) => (song, itemMeta[i])).ToList(), Index, SourceId, radioSeed, radioContinuation, radioPlaylistId, shuffleOrder is null ? null : new Dictionary<string, int>(shuffleOrder));
             IsRemote = true;
         }
         // 押した直後は、相手の新しいカーソルが届くまで表示を保つ
@@ -899,7 +922,7 @@ public sealed partial class PlayerService : ObservableObject
         radioSeed = backup.RadioSeed;
         radioContinuation = backup.Continuation;
         radioPlaylistId = backup.RadioPlaylistId;
-        unshuffled = backup.Unshuffled;
+        SetShuffleOrder(backup.ShuffleOrder);
         if (backup.Index >= 0 && backup.Index < Queue.Count)
         {
             Index = backup.Index;
