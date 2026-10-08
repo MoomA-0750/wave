@@ -1040,6 +1040,7 @@ public sealed class ConnectClient
             PositionMs = positionMs is { } p ? Math.Max(0, p) : null,
             BasedOnVersion = cursor.Version,
             AccountTag = tag,
+            OnItemId = action is ControlAction.Next or ControlAction.Previous or ControlAction.Seek ? cursor.Body.CurrentItemId : null,
         };
         return send(new RelayV2.Control { Doc = SealCommand(current, command) });
     }
@@ -1095,6 +1096,9 @@ public sealed class ConnectClient
         // 今のセッションより前の見え方に基づく命令には従わない
         if (mine.Arbiter.StartVersion is not { } sessionStart || command.BasedOnVersion < sessionStart) return;
         if (command.Action == ControlAction.Seek && command.PositionMs is null) return;
+        // 送り手が見ていた曲から、もう次の曲に変わっていたら従わない（遅れて届いた「次へ」で2曲飛ばさない）
+        // 比べるのは手元で今鳴っている曲（中継に書いた最新より先に進んでいることがある）
+        if (command.OnItemId is not null && command.OnItemId != (local?.CurrentItemId ?? own.Body.CurrentItemId)) return;
         effects.Control(command.Action, command.PositionMs);
     }
 

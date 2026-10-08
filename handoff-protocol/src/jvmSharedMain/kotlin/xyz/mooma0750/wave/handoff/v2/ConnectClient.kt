@@ -889,7 +889,8 @@ class ConnectClient(
         val tag = effects.accountTag() ?: return false
         val cursor = latestCursor ?: return false
         if (cursor.writer == signer.deviceId || cursor.body.accountTag != tag) return false
-        val command = CommandBody.Control(newId(), signer.deviceId, cursor.writer, action, positionMs?.coerceAtLeast(0), cursor.version, tag)
+        val onItem = cursor.body.currentItemId.takeIf { action == ControlAction.Next || action == ControlAction.Previous || action == ControlAction.Seek }
+        val command = CommandBody.Control(newId(), signer.deviceId, cursor.writer, action, positionMs?.coerceAtLeast(0), cursor.version, tag, onItem)
         return send(RelayV2.Control(sealCommand(current, command)))
     }
 
@@ -995,6 +996,9 @@ class ConnectClient(
         val sessionStart = mine.arbiter.startVersion ?: return
         if (command.basedOnVersion < sessionStart) return
         if (command.action == ControlAction.Seek && command.positionMs == null) return
+        // 送り手が見ていた曲から、もう次の曲に変わっていたら従わない（遅れて届いた「次へ」で2曲飛ばさない）
+        // 比べるのは手元で今鳴っている曲（中継に書いた最新より先に進んでいることがある）
+        if (command.onItemId != null && command.onItemId != (local?.currentItemId ?: own.body.currentItemId)) return
         effects.control(command.action, command.positionMs)
     }
 

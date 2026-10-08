@@ -173,6 +173,11 @@ sealed interface CommandBody {
         /** 送り手が見ていた、受け手のカーソルの版。 */
         val basedOnVersion: Long,
         val accountTag: String,
+        /**
+         * 送り手が見ていた、受け手の今の曲（次へ・前へ・シーク）。受け手の今の曲と違えば従わない
+         * （曲の終わりぎわに押した「次へ」が、曲が変わった後に届いて次の曲まで飛ばすのを防ぐ）。前の版の送り手は付けない（null）。
+         */
+        val onItemId: String? = null,
     ) : CommandBody
 
     /** 端末の表示名を家のほかの端末に知らせる（名前は鎖に入れないので、加入した2台以外にも伝える）。宛先は家の全端末。 */

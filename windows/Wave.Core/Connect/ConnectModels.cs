@@ -173,6 +173,11 @@ public abstract record CommandBody
         public required long BasedOnVersion { get; init; }
 
         public required string AccountTag { get; init; }
+
+        /// <summary>
+        /// 送り手が見ていた、受け手の今の曲（次へ・前へ・シーク）。受け手の今の曲と違えば従わない（Android と同じ）。前の版の送り手は付けない（null）。
+        /// </summary>
+        public string? OnItemId { get; init; }
     }
 
     /// <summary>端末の表示名を家のほかの端末に知らせる（名前は鎖に入れないので、加入した2台以外にも伝える）。</summary>

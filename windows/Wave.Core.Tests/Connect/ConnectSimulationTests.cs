@@ -209,6 +209,24 @@ public class ConnectSimulationTests
     }
 
     [Fact]
+    public void NextThatArrivesAfterTheSongAlreadyChangedIsIgnored()
+    {
+        SetUp();
+        a.StartPlaying(snapshot);
+        relay.Run();
+        // 曲の終わりぎわに「次へ」を押した。届く前に、鳴らしている端末は自分で次の曲へ進んだ
+        Assert.True(b.Client.SendControl(ControlAction.Next));
+        a.CurrentItemId = "item-1";
+        a.PushCursor();
+        relay.Run();
+        Assert.Empty(a.Controls);
+        // 今の曲を見て押した「次へ」には従う
+        Assert.True(b.Client.SendControl(ControlAction.Next));
+        relay.Run();
+        Assert.Single(a.Controls);
+    }
+
+    [Fact]
     public void RemoteControlFromAnotherAccountOrReplayedIsIgnored()
     {
         SetUp();
