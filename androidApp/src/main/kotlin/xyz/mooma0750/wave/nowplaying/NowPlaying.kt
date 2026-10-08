@@ -406,7 +406,9 @@ fun NowPlayingScreen(
                     enabled = remote == null,
                 )
             }
-            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+            // 左端に端末、右端にキュー（共有は「…」のメニューにある）。weight(fill = false) と Spacer の weight を並べると余りが分かれて、
+            // キューのボタンが真ん中寄りに出ていたので、SpaceBetween で両端に寄せる
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                 // 端末名が出ているときは、名前まで含めて押せるようにする（アイコンだけが反応するのは分かりにくい）
                 Row(
                     Modifier.weight(1f, fill = false).clip(RoundedCornerShape(24.dp)).clickable(onClick = onOpenDevices).padding(end = if (remote != null) 12.dp else 0.dp),
@@ -424,9 +426,6 @@ fun NowPlayingScreen(
                         )
                     }
                 }
-                Spacer(Modifier.weight(1f))
-                val context = androidx.compose.ui.platform.LocalContext.current
-                song?.let { current -> IconAction(R.drawable.ic_share, stringResource(R.string.search_share), { xyz.mooma0750.wave.search.shareSong(context, current) }) }
                 IconAction(R.drawable.ic_queue_music, pluralStringResource(R.plurals.nowplaying_queue_with_count, state.queue.size, state.queue.size), { showQueue = true })
             }
             // 次の曲（Windows・Spotify と同じく、操作の下に出す。押すとキューを開く）
