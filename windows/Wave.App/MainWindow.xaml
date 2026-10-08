@@ -17,10 +17,8 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <TitleBar x:Name="AppTitleBar" Title="wave" IsBackButtonVisible="False">
-            <TitleBar.IconSource>
-                <ImageIconSource ImageSource="ms-appx:///Assets/wave.png" />
-            </TitleBar.IconSource>
+        <!-- 左上のアイコンと名前は出さない（タスクバーの名前はウィンドウの Title で出る） -->
+        <TitleBar x:Name="AppTitleBar" IsBackButtonVisible="False">
             <TitleBar.LeftHeader>
                 <!-- 戻る・進む（同じ大きさの2つのボタン。タイトルバー備え付けの戻るは使わない） -->
                 <StackPanel Orientation="Horizontal" Spacing="2" Margin="4,0,4,0" VerticalAlignment="Center">
@@ -234,15 +232,7 @@
                                     <FontIcon Glyph="{x:Bind LikeGlyph(Player.Like, Player.Current), Mode=OneWay}" Foreground="{x:Bind LikeBrush(Player.Like), Mode=OneWay}" FontSize="20" />
                                 </Button>
                             </Grid>
-                            <!-- 歌詞（無い曲では箱ごと出さない）。全文を中で送り、歌っている行へ滑らかに動かす -->
-                            <Button x:Name="LyricsCard" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Padding="16" CornerRadius="8" Click="OnOpenLyrics" Visibility="Collapsed">
-                                <StackPanel Spacing="8">
-                                    <TextBlock Text="{x:Bind app:L.T('歌詞', 'Lyrics')}" Style="{StaticResource BodyStrongTextBlockStyle}" />
-                                    <ScrollViewer x:Name="LyricsScroller" Height="190" IsHitTestVisible="False" VerticalScrollBarVisibility="Hidden" HorizontalScrollMode="Disabled">
-                                        <StackPanel x:Name="LyricsPreview" Padding="0,0,0,160" />
-                                    </ScrollViewer>
-                                </StackPanel>
-                            </Button>
+                            <!-- 次の曲（Android と同じく歌詞の上） -->
                             <StackPanel Padding="16" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" Spacing="8">
                                 <Grid>
                                     <TextBlock Text="{x:Bind app:L.T('次の曲', 'Next up')}" Style="{StaticResource BodyStrongTextBlockStyle}" />
@@ -262,6 +252,15 @@
                                     </StackPanel>
                                 </Grid>
                             </StackPanel>
+                            <!-- 歌詞（無い曲では箱ごと出さない）。全文を中で送り、歌っている行へ滑らかに動かす -->
+                            <Button x:Name="LyricsCard" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Padding="16" CornerRadius="8" Click="OnOpenLyrics" Visibility="Collapsed">
+                                <StackPanel Spacing="8">
+                                    <TextBlock Text="{x:Bind app:L.T('歌詞', 'Lyrics')}" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                                    <ScrollViewer x:Name="LyricsScroller" Height="190" IsHitTestVisible="False" VerticalScrollBarVisibility="Hidden" HorizontalScrollMode="Disabled">
+                                        <StackPanel x:Name="LyricsPreview" Padding="0,0,0,160" />
+                                    </ScrollViewer>
+                                </StackPanel>
+                            </Button>
                         </StackPanel>
                     </ScrollViewer>
 

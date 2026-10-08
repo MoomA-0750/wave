@@ -167,3 +167,12 @@ class PlayControls(
 fun DetailText(text: String) {
     Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
 }
+
+/** 合計の長さ（アルバム・プレイリストの補足。Windows の L.Length と同じ形）。 */
+@Composable
+fun totalLength(seconds: Int): String =
+    if (seconds >= 3600) {
+        stringResource(R.string.library_length_hours, seconds / 3600, seconds % 3600 / 60)
+    } else {
+        stringResource(R.string.library_length_minutes, seconds / 60, seconds % 60)
+    }

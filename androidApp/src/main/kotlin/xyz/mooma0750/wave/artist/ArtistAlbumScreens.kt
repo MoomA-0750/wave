@@ -69,6 +69,7 @@ import xyz.mooma0750.wave.ui.BackButton
 import xyz.mooma0750.wave.ui.ButtonStyle
 import xyz.mooma0750.wave.ui.CollectionScreen
 import xyz.mooma0750.wave.ui.DetailText
+import xyz.mooma0750.wave.ui.totalLength
 import xyz.mooma0750.wave.ui.IconTextButton
 import xyz.mooma0750.wave.ui.MenuIcon
 import xyz.mooma0750.wave.ui.PlayControls
@@ -274,7 +275,7 @@ fun AlbumScreen(
         onBack = onBack,
         details = {
             page?.let { album ->
-                // Spotify: アーティスト（押すとアーティストのページ）、その下に「アルバム • 年」
+                // アーティスト（押すとアーティストのページ）、その下に「アルバム • 年 • 曲数, 長さ」（Windows と同じ並び）
                 val artist = album.artists.firstOrNull()
                 Text(
                     album.artists.joinToString(", ") { it.name },
@@ -282,7 +283,8 @@ fun AlbumScreen(
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.then(if (artist?.browseId != null) Modifier.clickable { actions.openArtist(artist) } else Modifier),
                 )
-                album.subtitle?.let { DetailText(it) }
+                val count = pluralStringResource(R.plurals.library_song_count, album.songs.size, album.songs.size)
+                DetailText(listOfNotNull(album.subtitle, "$count, ${totalLength(album.songs.sumOf { it.durationSeconds ?: 0 })}").joinToString(" • "))
             }
         },
         actions = { QueueMenu(enabled = page?.songs?.isNotEmpty() == true, onQueue = { next -> page?.let { onQueue(it, next) } }) },

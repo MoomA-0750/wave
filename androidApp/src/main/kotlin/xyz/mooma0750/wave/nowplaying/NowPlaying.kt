@@ -380,16 +380,22 @@ fun NowPlayingScreen(
                 )
             }
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconAction(R.drawable.ic_devices, stringResource(R.string.nowplaying_connected_devices), onOpenDevices, active = remote != null)
-                if (remote != null) {
-                    Text(
-                        stringResource(R.string.nowplaying_playing_on, remote.deviceLabel),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                // 端末名が出ているときは、名前まで含めて押せるようにする（アイコンだけが反応するのは分かりにくい）
+                Row(
+                    Modifier.weight(1f, fill = false).clip(RoundedCornerShape(24.dp)).clickable(onClick = onOpenDevices).padding(end = if (remote != null) 12.dp else 0.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    IconAction(R.drawable.ic_devices, stringResource(R.string.nowplaying_connected_devices), onOpenDevices, active = remote != null)
+                    if (remote != null) {
+                        Text(
+                            stringResource(R.string.nowplaying_playing_on, remote.deviceLabel),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 }
                 Spacer(Modifier.weight(1f))
                 IconAction(R.drawable.ic_queue_music, pluralStringResource(R.plurals.nowplaying_queue_with_count, state.queue.size, state.queue.size), { showQueue = true })

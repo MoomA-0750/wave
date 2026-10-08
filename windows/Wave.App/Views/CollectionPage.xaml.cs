@@ -73,6 +73,7 @@ public sealed partial class CollectionPage : Page
         Player.PropertyChanged += OnPlayerChanged;
         shufflePlay = false;
         UpdateShuffleButton();
+        ArtistLink.Visibility = Visibility.Collapsed;
         ShowHeader(request.Title, request.ThumbnailUrl, request.Subtitle);
         _ = LoadAsync();
     }
@@ -97,7 +98,6 @@ public sealed partial class CollectionPage : Page
     private void ShowHeader(string? title, string? thumbnail, string? detail)
     {
         var liked = request.Id == MusicRepository.LikedSongs;
-        KindText.Text = request.IsAlbum ? L.T("アルバム", "Album") : L.T("プレイリスト", "Playlist");
         TitleText.Text = title ?? "";
         DetailText.Text = detail ?? "";
         LikedIcon.Visibility = Ui.Show(liked);
@@ -153,6 +153,13 @@ public sealed partial class CollectionPage : Page
         }
     }
 
+    private ArtistRef? albumArtist;
+
+    private void OnArtistLink(object sender, RoutedEventArgs e)
+    {
+        if (albumArtist?.BrowseId is { } id) Nav.Artist(id);
+    }
+
     private async Task LoadAlbumAsync(CancellationToken token)
     {
         var result = await AppServices.Music.AlbumAsync(request.Id, token);
@@ -164,7 +171,11 @@ public sealed partial class CollectionPage : Page
         var album = result.Value!;
         playlistIdForPlayback = album.PlaylistId;
         var total = album.Songs.Sum(s => s.DurationSeconds ?? 0);
-        ShowHeader(album.Title, album.ThumbnailUrl, string.Join(" • ", new[] { string.Join(", ", album.Artists.Select(a => a.Name)), album.Subtitle, $"{L.Songs(album.Songs.Count)}, {L.Length(total)}" }.Where(s => !string.IsNullOrEmpty(s))));
+        ShowHeader(album.Title, album.ThumbnailUrl, string.Join(" • ", new[] { album.Subtitle, $"{L.Songs(album.Songs.Count)}, {L.Length(total)}" }.Where(s => !string.IsNullOrEmpty(s))));
+        // アーティストは題名の下に別の行で出す（押すとアーティストのページ。Android と同じ）
+        albumArtist = album.Artists.FirstOrDefault(a => a.BrowseId is not null);
+        ArtistText.Text = string.Join(", ", album.Artists.Select(a => a.Name));
+        ArtistLink.Visibility = Ui.Show(album.Artists.Count > 0);
         var n = 1;
         foreach (var s in album.Songs) AddRow(new TrackRow(n++, s) { ShowAlbum = false, ShowArtwork = false, Menu = r => SongMenu.Build(r.Song) });
         Done();

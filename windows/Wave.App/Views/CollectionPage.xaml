@@ -20,11 +20,13 @@
                                 <Image x:Name="Cover" Stretch="UniformToFill" />
                             </Grid>
                         </Border>
-                        <!-- 小見出し・題名・説明。下端をジャケットの下端にそろえ、小見出しは題名に寄せる（題名の字の上の余白を詰める） -->
+                        <!-- 題名・アーティスト（アルバムだけ。押すとアーティストのページ）・説明。下端をジャケットの下端にそろえる。並びは Android と同じ -->
                         <StackPanel Grid.Column="1" VerticalAlignment="Bottom" Spacing="0">
-                            <TextBlock x:Name="KindText" Style="{StaticResource BodyStrongTextBlockStyle}" />
                             <TextBlock x:Name="TitleText" FontSize="56" FontWeight="Bold" TextTrimming="CharacterEllipsis" MaxLines="2" TextWrapping="Wrap"
-                                       LineHeight="58" LineStackingStrategy="BlockLineHeight" Margin="0,2,0,10" />
+                                       LineHeight="58" LineStackingStrategy="BlockLineHeight" Margin="0,2,0,6" />
+                            <HyperlinkButton x:Name="ArtistLink" Padding="0" Margin="0,0,0,2" Visibility="Collapsed" Click="OnArtistLink" Foreground="{ThemeResource TextFillColorPrimaryBrush}">
+                                <TextBlock x:Name="ArtistText" Style="{StaticResource BodyStrongTextBlockStyle}" TextTrimming="CharacterEllipsis" />
+                            </HyperlinkButton>
                             <TextBlock x:Name="DetailText" Style="{StaticResource BodyTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                        TextTrimming="CharacterEllipsis" MaxLines="2" TextWrapping="Wrap" />
                         </StackPanel>

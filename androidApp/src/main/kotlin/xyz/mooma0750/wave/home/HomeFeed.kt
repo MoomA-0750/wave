@@ -63,7 +63,6 @@ object HomeShelves {
 
     /** アプリが自分で作る棚の見出しの目印。画面で端末の言語の見出しに置き換える（YouTube から来る見出しとは重ならない）。 */
     const val NEW_RELEASES_TITLE = "wave:new-releases"
-    const val RECENT_TITLE = "wave:recent"
 }
 
 /** 棚の見出し。アプリが作った棚は端末の言語で出す。 */
@@ -72,7 +71,6 @@ fun shelfTitle(shelf: HomeShelf): String =
     when {
         shelf.strapline != null -> shelf.title
         shelf.title == HomeShelves.NEW_RELEASES_TITLE -> stringResource(R.string.home_new_releases)
-        shelf.title == HomeShelves.RECENT_TITLE -> stringResource(R.string.home_recent_shelf)
         else -> shelf.title
     }
 
@@ -124,8 +122,8 @@ class HomeFeedViewModel(
             val releases = (newReleases.await() as? CallResult.Ok)?.value.orEmpty()
             val recentItems = (recent.await() as? CallResult.Ok)?.value.orEmpty()
             Log.i(WaveApplication.LOG_TAG, "home recent items=${recentItems.size} kinds=${recentItems.groupingBy { it::class.simpleName.orEmpty() }.eachCount()}" + if (recentItems.isEmpty()) " renderers=${music.lastRendererNames}" else "")
-            val recentShelf = listOfNotNull(recentItems.takeIf { it.isNotEmpty() }?.let { HomeShelf(HomeShelves.RECENT_TITLE, null, it.take(RECENT_COUNT)) })
-            val releaseShelf = recentShelf + listOfNotNull(releases.takeIf { it.isNotEmpty() }?.let { albums -> HomeShelf(HomeShelves.NEW_RELEASES_TITLE, null, albums.take(NEW_RELEASES_COUNT).map(HomeItem::AlbumItem)) })
+            // 最近聴いたものは上の格子だけに出す（棚にも出すと同じものが2度並ぶ）
+            val releaseShelf = listOfNotNull(releases.takeIf { it.isNotEmpty() }?.let { albums -> HomeShelf(HomeShelves.NEW_RELEASES_TITLE, null, albums.take(NEW_RELEASES_COUNT).map(HomeItem::AlbumItem)) })
             when (home) {
                 is CallResult.Ok -> {
                     // 棚の数と項目の種類の数だけを記録する（見出し・中身は記録しない）
@@ -172,7 +170,6 @@ class HomeFeedViewModel(
         shelves.flatMap { it.items }.groupingBy { it::class.simpleName.orEmpty() }.eachCount()
 
     private companion object {
-        const val RECENT_COUNT = 20
         const val RECENT_GRID = 8
         const val NEW_RELEASES_COUNT = 20
         const val MIN_SHELVES = 8
