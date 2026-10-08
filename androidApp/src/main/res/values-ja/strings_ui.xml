@@ -102,4 +102,7 @@
     <string name="nowplaying_reorder">ドラッグして並べ替え</string>
     <string name="library_liked_songs_row">高く評価した曲</string>
     <string name="ui_liked_badge">高く評価済み</string>
+    <string name="nowplaying_video_fullscreen">全画面</string>
+    <string name="nowplaying_video_exit_fullscreen">全画面を終える</string>
+    <string name="nowplaying_pick_artist">アーティストを選ぶ</string>
 </resources>

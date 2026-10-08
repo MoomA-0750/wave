@@ -9,6 +9,7 @@ using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Navigation;
+using Wave.App.Controls;
 using Wave.App.Services;
 using Wave.App.Services.Connect;
 using Wave.App.Views;
@@ -377,12 +378,14 @@ public sealed partial class MainWindow : Window
                 // 曲が変わったら曲の表示に戻す（Android と同じ）
                 ShowVideo(false);
                 RenderNowPlaying();
+                RenderFullView();
                 if (QueueView.Visibility == Visibility.Visible) RenderQueue();
                 Title = Player.Current is { } current ? $"{current.Title} • {current.ArtistsText}" : "wave";
                 break;
             case nameof(PlayerService.Video):
             case nameof(PlayerService.IsRemote):
                 UpdateVideoSwitch();
+                RenderFullView();
                 break;
             case nameof(PlayerService.Index):
                 RenderNowPlaying();
@@ -422,75 +425,54 @@ public sealed partial class MainWindow : Window
         RenderLyricsPreview();
     }
 
-    private int lyricsPreviewIndex = -2;
-    /// <summary>右の欄に今並べている歌詞（作り直さずに、明るさと位置だけ変えるため）。</summary>
-    private object? lyricsPreviewSource;
-    private List<(TextBlock Block, LyricLine Line)> lyricsPreviewRows = [];
+    private LyricsFollower? lyricsPreview;
+    private LyricsFollower? fullLyrics;
 
     /// <summary>
-    /// 右の欄の歌詞（Spotify の再生中の画面と同じく、歌っている行を明るく、前後の行を薄く）。
-    /// 時刻付きの歌詞では全文を並べ、再生位置に合わせて滑らかに送る。歌詞が無い・探している間は箱ごと出さない。
+    /// 右の欄の歌詞と、全画面の歌詞。歌詞が無い・探している間は箱ごと出さない。
     /// </summary>
     private void RenderLyricsPreview()
     {
         var lyrics = (Player.Lyrics as LyricsService.Result.Found)?.Lyrics;
         LyricsCard.Visibility = Ui.Show(lyrics is not null && Player.Current is not null);
-        if (!ReferenceEquals(lyrics, lyricsPreviewSource))
+        var position = (long)(Player.Position * 1000);
+        (lyricsPreview ??= new LyricsFollower(LyricsScroller, LyricsPreview, 16)).Update(lyrics, position);
+        if (FullView.Visibility == Visibility.Visible)
         {
-            lyricsPreviewSource = lyrics;
-            lyricsPreviewIndex = -2;
-            BuildPreview(lyrics);
+            FullLyricsScroller.Visibility = Ui.Show(lyrics is not null);
+            (fullLyrics ??= new LyricsFollower(FullLyricsScroller, FullLyrics, 30, plainLines: 200)).Update(lyrics, position);
         }
-        if (lyrics is not SongLyrics.Synced synced) return;
-        var last = LyricsTiming.CurrentIndex(synced.Lines, (long)(Player.Position * 1000));
-        // 同じ時刻の行（原文と読み・訳が並ぶ歌詞）は、まとめて今の行とする
-        var i = last < 0 ? last : lyricsPreviewRows.FindIndex(r => r.Line.StartMs == synced.Lines[last].StartMs);
-        if (i == lyricsPreviewIndex) return;
-        lyricsPreviewIndex = i;
-        for (var k = 0; k < lyricsPreviewRows.Count; k++)
-            lyricsPreviewRows[k].Block.Opacity = i >= 0 && k >= i && k <= last ? 1 : k < i ? 0.5 : 0.4;
-        // 今のかたまりの1つ前のかたまりが上端に来るように送る（前の行を少し見せる）
-        var anchor = i <= 0 ? 0 : lyricsPreviewRows.FindIndex(r => r.Line.StartMs == synced.Lines[Math.Max(0, i - 1)].StartMs);
-        LyricsPreview.UpdateLayout();
-        var y = anchor <= 0 ? 0 : lyricsPreviewRows[anchor].Block.TransformToVisual(LyricsPreview).TransformPoint(new Windows.Foundation.Point(0, 0)).Y;
-        LyricsScroller.ChangeView(null, y, null, disableAnimation: false);
     }
 
-    private void BuildPreview(SongLyrics? lyrics)
+    // --- 全画面の再生中の画面（Spotify のデスクトップの全画面表示。下の操作の帯は出したまま） ---
+
+    private void OnFullScreenToggle(object sender, RoutedEventArgs e) => SetFullScreen(FullView.Visibility != Visibility.Visible);
+
+    private void SetFullScreen(bool on)
     {
-        LyricsPreview.Children.Clear();
-        lyricsPreviewRows = [];
-        LyricsScroller.ChangeView(null, 0, null, disableAnimation: true);
-        var primary = (Brush)Application.Current.Resources["TextFillColorPrimaryBrush"];
-        switch (lyrics)
-        {
-            case SongLyrics.Synced synced:
-                for (var k = 0; k < synced.Lines.Count; k++)
-                {
-                    var line = synced.Lines[k];
-                    // 原文に続く読み・訳は、小さく原文の直下に添える。かたまりの間は空ける
-                    var sub = k > 0 && synced.Lines[k - 1].StartMs == line.StartMs;
-                    var block = new TextBlock
-                    {
-                        Text = string.IsNullOrWhiteSpace(line.Text) ? "♪" : line.Text,
-                        TextWrapping = TextWrapping.Wrap,
-                        FontSize = sub ? 13 : 16,
-                        LineHeight = sub ? 18 : 22,
-                        FontWeight = sub ? Microsoft.UI.Text.FontWeights.Normal : Microsoft.UI.Text.FontWeights.SemiBold,
-                        Foreground = primary,
-                        Opacity = 0.4,
-                        Margin = new Thickness(0, k == 0 ? 0 : sub ? 1 : 10, 0, 0),
-                        OpacityTransition = new ScalarTransition { Duration = TimeSpan.FromMilliseconds(350) },
-                    };
-                    LyricsPreview.Children.Add(block);
-                    lyricsPreviewRows.Add((block, line));
-                }
-                break;
-            case SongLyrics.Plain plain:
-                foreach (var text in plain.Text.Split('\n').Take(12))
-                    LyricsPreview.Children.Add(new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap, FontSize = 16, LineHeight = 22, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Foreground = primary, Margin = new Thickness(0, 0, 0, 6) });
-                break;
-        }
+        FullView.Visibility = Ui.Show(on);
+        FullScreenToggle.IsChecked = on;
+        AppWindow.SetPresenter(on ? AppWindowPresenterKind.FullScreen : AppWindowPresenterKind.Overlapped);
+        // 映像は1つの枠にしか映せないので、出す枠を移す
+        if (Player.Video is not null && VideoTab.IsChecked == true) (on ? FullVideo : PaneVideo).SetMediaPlayer(videoPlayer.Player);
+        RenderFullView();
+        RenderLyricsPreview();
+    }
+
+    private void RenderFullView()
+    {
+        if (FullView.Visibility != Visibility.Visible) return;
+        var song = Player.Current;
+        FullCover.Source = Ui.Large(song?.ThumbnailUrl);
+        FullBackdrop.Source = Ui.Large(song?.ThumbnailUrl);
+        FullTitle.Text = song?.Title ?? "";
+        FullArtist.Text = song?.ArtistsText ?? "";
+        var video = VideoTab.IsChecked == true && Player.Video is not null;
+        FullCover.Visibility = Ui.Hide(video);
+        FullVideo.Visibility = Ui.Show(video && videoPlayer.Showing);
+        FullVideoSwitch.Visibility = VideoSwitch.Visibility;
+        FullSongTab.IsChecked = !video;
+        FullVideoTab.IsChecked = video;
     }
 
     // --- 曲に重ねる映像（右の欄） ---
@@ -516,6 +498,7 @@ public sealed partial class MainWindow : Window
     {
         SongTab.IsChecked = !show;
         VideoTab.IsChecked = show;
+        RenderFullView();
         if (!show || Player.Video is not { } video)
         {
             videoTimer?.Stop();
@@ -531,7 +514,7 @@ public sealed partial class MainWindow : Window
         VideoNote.Text = L.T("動画を読み込んでいます…", "Loading video…");
         VideoNotePanel.Visibility = Visibility.Visible;
         VideoRetry.Visibility = Visibility.Collapsed;
-        PaneVideo.SetMediaPlayer(videoPlayer.Player);
+        (FullView.Visibility == Visibility.Visible ? FullVideo : PaneVideo).SetMediaPlayer(videoPlayer.Player);
         if (!await videoPlayer.LoadAsync(video))
         {
             if (VideoTab.IsChecked != true || Player.Video != video) return;
@@ -542,6 +525,7 @@ public sealed partial class MainWindow : Window
         if (VideoTab.IsChecked != true || Player.Video != video) return;
         VideoNotePanel.Visibility = Visibility.Collapsed;
         PaneVideo.Visibility = Visibility.Visible;
+        RenderFullView();
         videoTimer ??= CreateVideoTimer();
         videoTimer.Start();
     }
@@ -556,6 +540,7 @@ public sealed partial class MainWindow : Window
             videoPlayer.Sync(video, Player.IsRemote ? (long)(Player.Position * 1000) : Player.LocalPositionMs, Player.IsPlaying);
             // MV に無い区間（前奏など）は、黒地にその旨を出す（Android と同じ）
             PaneVideo.Visibility = Ui.Show(videoPlayer.Showing);
+            if (FullView.Visibility == Visibility.Visible) FullVideo.Visibility = Ui.Show(videoPlayer.Showing);
             VideoNote.Text = L.T("この部分には動画がありません", "There's no video for this part");
             VideoNotePanel.Visibility = Ui.Hide(videoPlayer.Showing);
         };
@@ -604,14 +589,35 @@ public sealed partial class MainWindow : Window
 
     private void OnOpenLyrics(object sender, RoutedEventArgs e) => Nav.Lyrics();
 
+    /// <summary>アーティストを押した: 1人ならそのページへ、複数なら選ぶメニューを出す（Android と同じ）。</summary>
     private void OnArtistLink(object sender, RoutedEventArgs e)
     {
-        if (Player.Current?.Artists.FirstOrDefault(a => a.BrowseId is not null)?.BrowseId is { } id) Nav.Artist(id);
+        var artists = Player.Current?.Artists.Where(a => a.BrowseId is not null).ToList() ?? [];
+        if (artists.Count == 1) OpenFromFull(() => Nav.Artist(artists[0].BrowseId!));
+        else if (artists.Count > 1 && sender is FrameworkElement anchor)
+        {
+            var menu = new MenuFlyout();
+            foreach (var artist in artists)
+            {
+                var item = new MenuFlyoutItem { Text = artist.Name, Icon = new FontIcon { Glyph = "\uE77B" } };
+                item.Click += (_, _) => OpenFromFull(() => Nav.Artist(artist.BrowseId!));
+                menu.Items.Add(item);
+            }
+            menu.ShowAt(anchor);
+        }
     }
 
+    /// <summary>曲名を押した: アルバムへ。</summary>
     private void OnAlbumLink(object sender, RoutedEventArgs e)
     {
-        if (Player.Current?.Album?.BrowseId is { } id) Nav.Album(id);
+        if (Player.Current?.Album?.BrowseId is { } id) OpenFromFull(() => Nav.Album(id));
+    }
+
+    /// <summary>全画面からページを開くときは、全画面を閉じてから開く。</summary>
+    private void OpenFromFull(Action open)
+    {
+        if (FullView.Visibility == Visibility.Visible) SetFullScreen(false);
+        open();
     }
 
     private void OnArtTapped(object sender, TappedRoutedEventArgs e) => SetRightPane(!(rightPaneOpen && NowPlayingView.Visibility == Visibility.Visible), queue: false);
@@ -733,6 +739,14 @@ public sealed partial class MainWindow : Window
                 break;
             case Windows.System.VirtualKey.Left when ctrl:
                 Player.Previous();
+                e.Handled = true;
+                break;
+            case Windows.System.VirtualKey.F11:
+                SetFullScreen(FullView.Visibility != Visibility.Visible);
+                e.Handled = true;
+                break;
+            case Windows.System.VirtualKey.Escape when FullView.Visibility == Visibility.Visible:
+                SetFullScreen(false);
                 e.Handled = true;
                 break;
         }

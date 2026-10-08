@@ -1,5 +1,6 @@
 package xyz.mooma0750.wave.nowplaying
 
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.toMutableStateList
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.ui.zIndex
@@ -238,6 +239,8 @@ fun NowPlayingScreen(
     var showQueue by remember { mutableStateOf(false) }
     var showLyrics by remember { mutableStateOf(false) }
     var video by rememberSaveable { mutableStateOf(false) }
+    var fullVideo by rememberSaveable { mutableStateOf(false) }
+    var pickArtist by remember { mutableStateOf<List<xyz.mooma0750.wave.core.music.ArtistRef>?>(null) }
     // 動画のある曲だけ「動画」を押せるようにする（押してから無いと分かるのを避ける）
     val hasVideo by androidx.compose.runtime.produceState<Boolean?>(null, song?.videoId) {
         value = song?.videoId?.let { videos.videoFor(it) is MusicVideos.Result.Found }
@@ -301,10 +304,14 @@ fun NowPlayingScreen(
                 }
                 song?.let { SongMenuButton(it, actions, inQueue = true) } ?: Spacer(Modifier.size(48.dp))
             }
-            Box(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 24.dp), contentAlignment = Alignment.Center) {
+            Box(Modifier.fillMaxWidth().padding(horizontal = if (video) 8.dp else 24.dp, vertical = 24.dp), contentAlignment = Alignment.Center) {
                 if (video && song != null) {
-                    // ほかの端末を映している間も、その再生の位置（見積もり）に合わせて映像を出す
-                    MusicVideoPanel(song, display.clock, videos, Modifier.size(artSize).clip(RoundedCornerShape(8.dp)))
+                    // ほかの端末を映している間も、その再生の位置（見積もり）に合わせて映像を出す。
+                    // 映像は横幅いっぱいの 16:9 で出し（正方形のジャケットの枠だと小さい）、右下のボタンで全画面にする
+                    Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f)) {
+                        if (!fullVideo) MusicVideoPanel(song, display.clock, videos, Modifier.fillMaxSize().clip(RoundedCornerShape(8.dp)))
+                        IconAction(R.drawable.ic_fullscreen, stringResource(R.string.nowplaying_video_fullscreen), { fullVideo = true }, modifier = Modifier.align(Alignment.BottomEnd))
+                    }
                 } else {
                     coil3.compose.AsyncImage(
                         model = song?.thumbnailUrl?.takeIf { it.startsWith("https://") }?.let(Media3QueuePlayer::largeArtwork),
@@ -316,15 +323,31 @@ fun NowPlayingScreen(
             }
             Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text(state.title.orEmpty(), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    val artist = song?.artists?.firstOrNull()
+                    // 曲名を押すとアルバムへ、アーティストを押すとアーティストのページへ（複数なら選ぶ）
+                    val album = song?.album?.takeIf { it.browseId != null }
+                    Text(
+                        state.title.orEmpty(),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.then(if (album != null) Modifier.clickable { actions.openAlbum(album) } else Modifier),
+                    )
+                    val artists = song?.artists?.filter { it.browseId != null }.orEmpty()
                     Text(
                         state.artist.orEmpty(),
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.then(if (artist?.browseId != null) Modifier.clickable { actions.openArtist(artist) } else Modifier),
+                        modifier =
+                            Modifier.then(
+                                when (artists.size) {
+                                    0 -> Modifier
+                                    1 -> Modifier.clickable { actions.openArtist(artists.single()) }
+                                    else -> Modifier.clickable { pickArtist = artists }
+                                },
+                            ),
                     )
                 }
                 LikeButton(connection, scope, size = 28.dp, onLikedTap = song?.let { current -> { actions.addToPlaylist(current) } })
@@ -443,6 +466,14 @@ fun NowPlayingScreen(
         }
     }
 
+    pickArtist?.let { artists ->
+        ArtistPickerDialog(artists, onPick = { pickArtist = null; actions.openArtist(it) }, onDismiss = { pickArtist = null })
+    }
+
+    if (fullVideo && video && song != null) {
+        FullScreenVideo(song, display.clock, videos, onClose = { fullVideo = false })
+    }
+
     if (showLyrics && song != null) {
         ModalBottomSheet(onDismissRequest = { showLyrics = false }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
             Text(state.title.orEmpty(), Modifier.padding(horizontal = 24.dp), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -459,6 +490,65 @@ fun NowPlayingScreen(
 }
 
 private const val SWIPE_PX = 120f
+
+/** アーティストが複数いる曲で、どのアーティストのページを開くかを選ぶ。 */
+@Composable
+fun ArtistPickerDialog(
+    artists: List<xyz.mooma0750.wave.core.music.ArtistRef>,
+    onPick: (xyz.mooma0750.wave.core.music.ArtistRef) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.nowplaying_pick_artist)) },
+        text = {
+            Column {
+                artists.forEach { artist ->
+                    Row(Modifier.fillMaxWidth().clickable { onPick(artist) }.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(painterResource(R.drawable.ic_person), contentDescription = null, modifier = Modifier.padding(end = 12.dp))
+                        Text(artist.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.library_close)) } },
+    )
+}
+
+/** 映像の全画面（横向きにし、上下のバーを隠す）。閉じると元の向きに戻す。 */
+@Composable
+private fun FullScreenVideo(
+    song: xyz.mooma0750.wave.core.music.Song,
+    clock: LyricsClock?,
+    videos: MusicVideos,
+    onClose: () -> Unit,
+) {
+    val activity = androidx.compose.ui.platform.LocalContext.current as? android.app.Activity
+    DisposableEffect(activity) {
+        val before = activity?.requestedOrientation
+        activity?.requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        onDispose { if (before != null) activity.requestedOrientation = before }
+    }
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = onClose,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+    ) {
+        // ダイアログの窓でシステムバーを隠す
+        val view = androidx.compose.ui.platform.LocalView.current
+        DisposableEffect(view) {
+            val window = (view.parent as? androidx.compose.ui.window.DialogWindowProvider)?.window
+            val controller = window?.let { androidx.core.view.WindowCompat.getInsetsController(it, view) }
+            controller?.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            controller?.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+            onDispose { controller?.show(androidx.core.view.WindowInsetsCompat.Type.systemBars()) }
+        }
+        Box(Modifier.fillMaxSize().background(Color.Black)) {
+            MusicVideoPanel(song, clock, videos, Modifier.fillMaxSize())
+            IconAction(R.drawable.ic_fullscreen_exit, stringResource(R.string.nowplaying_video_exit_fullscreen), onClose, modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp))
+        }
+    }
+}
 
 /** ジャケットの下の、曲名から端末・キューの列までの高さ（ジャケットの大きさの上限を決める）。 */
 private val CONTROLS_HEIGHT = 400.dp
