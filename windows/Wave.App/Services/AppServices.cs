@@ -24,6 +24,8 @@ public static class AppServices
     public static PlayerService Player { get; private set; } = null!;
     public static LibraryState Library { get; private set; } = null!;
     public static AccountState Account { get; private set; } = null!;
+    /// <summary>Claude との会話（アプリが動いている間だけ持つ）。</summary>
+    public static AiChat Ai { get; } = new();
     /// <summary>端末の連携（中継の場所が設定に無ければ使えない）。</summary>
     public static global::Wave.App.Services.Connect.ConnectService Connect { get; private set; } = null!;
 

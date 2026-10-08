@@ -197,7 +197,13 @@
                 <Grid>
                     <ScrollViewer x:Name="NowPlayingView">
                         <StackPanel Padding="16" Spacing="16">
-                            <TextBlock Text="{x:Bind PaneHeader(Player.Current), Mode=OneWay}" Style="{StaticResource BodyStrongTextBlockStyle}" TextTrimming="CharacterEllipsis" />
+                            <Grid>
+                                <TextBlock Text="{x:Bind PaneHeader(Player.Current), Mode=OneWay}" Style="{StaticResource BodyStrongTextBlockStyle}" TextTrimming="CharacterEllipsis" Margin="0,0,40,0" VerticalAlignment="Center" />
+                                <!-- Claude に聞く（歌詞の意味・似た曲・プレイリスト作り） -->
+                                <Button HorizontalAlignment="Right" Style="{StaticResource IconButtonStyle}" Click="OnShowAi" ToolTipService.ToolTip="{x:Bind app:L.T('Claude に聞く', 'Ask Claude')}">
+                                    <FontIcon Glyph="&#xE99A;" FontSize="14" />
+                                </Button>
+                            </Grid>
                             <!-- ジャケットか、MV のある曲では映像（Spotify と同じ「曲｜動画」の切り替え） -->
                             <Grid>
                                 <Border x:Name="CoverBox" CornerRadius="8" Background="{ThemeResource ControlFillColorSecondaryBrush}" Height="{x:Bind CoverSize, Mode=OneWay}">
@@ -266,6 +272,39 @@
                             </Button>
                         </StackPanel>
                     </ScrollViewer>
+
+                    <!-- Claude に聞く（Android と同じ。今の曲と歌詞を添えて頼む） -->
+                    <Grid x:Name="AiView" Visibility="Collapsed">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <Grid Padding="16,12,8,4">
+                            <TextBlock Text="{x:Bind app:L.T('Claude に聞く', 'Ask Claude')}" Style="{StaticResource BodyStrongTextBlockStyle}" VerticalAlignment="Center" />
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="4">
+                                <HyperlinkButton Click="OnAiClear" Content="{x:Bind app:L.T('新しい会話', 'New chat')}" />
+                                <Button Style="{StaticResource IconButtonStyle}" Click="OnShowNowPlaying" ToolTipService.ToolTip="{x:Bind app:L.T('閉じる', 'Close')}">
+                                    <FontIcon Glyph="&#xE711;" FontSize="12" />
+                                </Button>
+                            </StackPanel>
+                        </Grid>
+                        <ScrollViewer x:Name="AiScroller" Grid.Row="1" Padding="16,0">
+                            <StackPanel x:Name="AiMessages" Spacing="10" Padding="0,8,0,16" />
+                        </ScrollViewer>
+                        <StackPanel x:Name="AiSuggestions" Grid.Row="2" Spacing="4" Padding="16,4" />
+                        <Grid Grid.Row="3" Padding="16,4,16,12" ColumnSpacing="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox x:Name="AiInput" PlaceholderText="{x:Bind app:L.T('Claude に聞く', 'Ask Claude')}" TextWrapping="Wrap" MaxHeight="120" KeyDown="OnAiInputKeyDown" />
+                            <Button x:Name="AiSendButton" Grid.Column="1" Style="{StaticResource IconButtonStyle}" Click="OnAiSend" VerticalAlignment="Bottom">
+                                <FontIcon x:Name="AiSendIcon" Glyph="&#xE724;" FontSize="14" />
+                            </Button>
+                        </Grid>
+                    </Grid>
 
                     <Grid x:Name="QueueView" Visibility="Collapsed">
                         <Grid.RowDefinitions>

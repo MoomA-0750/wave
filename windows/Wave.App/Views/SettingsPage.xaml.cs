@@ -13,6 +13,7 @@ public sealed partial class SettingsPage : Page
     {
         AppServices.Account.PropertyChanged += (_, _) => DispatcherQueue.TryEnqueue(Render);
         HistorySwitch.IsOn = AppServices.Settings.SendHistory;
+        RenderAi();
         LanguageBox.Items.Clear();
         foreach (var (key, label) in Languages) LanguageBox.Items.Add(new ComboBoxItem { Content = label, Tag = key });
         LanguageBox.SelectedIndex = Math.Max(0, Array.FindIndex(Languages, l => l.Key == AppServices.Settings.Language));
@@ -74,6 +75,32 @@ public sealed partial class SettingsPage : Page
         AppServices.Settings.Language = key;
         AppServices.Settings.Save();
         App.Window?.ShowToast(L.T("次の起動から反映されます", "Takes effect the next time you open wave"));
+    }
+
+    private void RenderAi()
+    {
+        var settings = AppServices.Settings;
+        AiStateText.Text = AppServices.Ai.Configured
+            ? L.T($"{settings.AiName ?? settings.AiUrl} の中継につないでいます", $"Connected to {settings.AiName ?? settings.AiUrl}")
+            : L.T("家の PC の Claude Code で、歌詞の意味・似た曲・プレイリスト作りを頼めます", "Ask about lyrics, find similar songs and make playlists with Claude Code on your PC");
+        AiUnpairButton.Visibility = Ui.Show(AppServices.Ai.Configured);
+    }
+
+    private void OnAiPair(object sender, RoutedEventArgs e)
+    {
+        if (!AiChat.Pair(AiPairBox.Password))
+        {
+            AppServices.Player.Message = L.T("wave の Claude の中継の接続の文字列ではありません", "That isn't a wave Claude bridge pairing text");
+            return;
+        }
+        AiPairBox.Password = "";
+        RenderAi();
+    }
+
+    private void OnAiUnpair(object sender, RoutedEventArgs e)
+    {
+        AiChat.Unpair();
+        RenderAi();
     }
 
     private void OnHistoryToggled(object sender, RoutedEventArgs e)

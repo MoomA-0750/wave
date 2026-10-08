@@ -398,8 +398,10 @@ def print_pairing(url, token, png=None):
     print("  wave の AI 中継（%s）" % name)
     print("  接続先  : %s" % url)
     print("  トークン: %s" % token)
+    print("  貼り付け用: %s" % payload)
     print()
-    print("  wave の設定 →「Claude」→「QR コードで接続」で読み取る（PC 版は接続先とトークンを貼る）。")
+    print("  Android: wave の設定 →「Claude」→「QR コードで接続」で読み取る。")
+    print("  Windows: wave の設定 →「Claude」に上の「貼り付け用」の文字列を貼る。")
     if png:
         print("  QR の画像: %s（読ませたら消すこと）" % png)
     print("  トークンを知っている人はこの中継で Claude を使えるので、画面を人に見せないこと。")

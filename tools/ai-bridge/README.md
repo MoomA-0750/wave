@@ -50,7 +50,7 @@ python3 wave_ai_bridge.py --pair --url https://example.ts.net:10447
 端末に QR と、接続先・トークンを出す（QR の中身は `waveai://pair?u=<接続先>&t=<トークン>&n=<ホスト名>`）。
 
 - Android: 設定 →「Claude」→「QR コードで接続」で読む
-- Windows: 設定 →「Claude」に接続先とトークンを貼る
+- Windows: 設定 →「Claude」に、`--pair` が出す「貼り付け用」の文字列（`waveai://pair?…`）を貼る
 
 接続先は https（tailscale serve）か、同じ端末の中（127.0.0.1）だけ受ける。トークンを知っていればこの中継で Claude を使えるので、画面を人に見せない。
 

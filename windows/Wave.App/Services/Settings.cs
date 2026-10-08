@@ -23,6 +23,10 @@ public sealed class Settings
     /// <summary>端末の連携の中継 v2 の場所（例: wss://ホスト:ポート）と、署名に入れるホスト名とポート。空なら連携を使わない。</summary>
     public string? RelayV2Url { get; set; }
     public string? RelayV2Host { get; set; }
+    /// <summary>Claude の中継（tools/ai-bridge）の接続先・トークン・機械の名前。空なら使わない。</summary>
+    public string? AiUrl { get; set; }
+    public string? AiToken { get; set; }
+    public string? AiName { get; set; }
 
     private static readonly string FilePath = Path.Combine(AppPaths.Data, "settings.json");
     private static readonly JsonSerializerOptions Options = new() { WriteIndented = true };

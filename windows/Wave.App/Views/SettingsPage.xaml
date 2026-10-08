@@ -41,6 +41,24 @@
                 <ToggleSwitch x:Name="HistorySwitch" HorizontalAlignment="Right" OnContent="" OffContent="" MinWidth="0" Toggled="OnHistoryToggled" />
             </Grid>
 
+            <TextBlock Text="Claude" Style="{StaticResource BodyStrongTextBlockStyle}" Margin="0,16,0,4" />
+            <StackPanel Padding="16" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Spacing="8">
+                <TextBlock x:Name="AiStateText" TextWrapping="Wrap" />
+                <TextBlock Text="{x:Bind app:L.T('家の PC で tools/ai-bridge の wave_ai_bridge.py --pair を動かし、出てきた waveai://pair?… の文字列を貼ってください。', 'Run wave_ai_bridge.py --pair from tools/ai-bridge on your PC and paste the waveai://pair?… text it prints.')}"
+                           Style="{StaticResource SubtleTextStyle}" TextWrapping="Wrap" MaxLines="3" />
+                <Grid ColumnSpacing="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <PasswordBox x:Name="AiPairBox" PlaceholderText="waveai://pair?u=…&amp;t=…" />
+                    <Button Grid.Column="1" Click="OnAiPair" Content="{x:Bind app:L.T('接続', 'Connect')}" />
+                    <Button x:Name="AiUnpairButton" Grid.Column="2" Click="OnAiUnpair" Content="{x:Bind app:L.T('接続を外す', 'Disconnect')}" />
+                </Grid>
+            </StackPanel>
+
             <TextBlock Text="{x:Bind app:L.T('言語', 'Language')}" Style="{StaticResource BodyStrongTextBlockStyle}" Margin="0,16,0,4" />
             <Grid Padding="16" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                   BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">

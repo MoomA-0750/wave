@@ -130,6 +130,7 @@ public sealed partial class MainWindow : Window
         rightPaneOpen = open;
         AppServices.Settings.RightPaneOpen = open;
         AppServices.Settings.Save();
+        AiView.Visibility = Visibility.Collapsed;
         NowPlayingView.Visibility = Ui.Hide(queue);
         QueueView.Visibility = Ui.Show(queue);
         if (queue) RenderQueue();
@@ -632,6 +633,120 @@ public sealed partial class MainWindow : Window
     }
 
     private void OnShowQueue(object sender, RoutedEventArgs e) => SetRightPane(true, queue: true);
+
+    // ---- Claude に聞く ----
+
+    private bool aiWired;
+
+    private void OnShowAi(object sender, RoutedEventArgs e)
+    {
+        SetRightPane(true, queue: false);
+        NowPlayingView.Visibility = Visibility.Collapsed;
+        AiView.Visibility = Visibility.Visible;
+        if (!aiWired)
+        {
+            aiWired = true;
+            AppServices.Ai.Changed += () => DispatcherQueue.TryEnqueue(RenderAi);
+            foreach (var suggestion in new[]
+            {
+                L.T("この歌詞ってどういう意味だと思う？", "What do these lyrics mean?"),
+                L.T("これに似た曲ある？", "Any songs like this?"),
+                L.T("この曲から始まるプレイリストを作って", "Make a playlist from this song"),
+            })
+            {
+                var button = new HyperlinkButton { Content = suggestion, Padding = new Thickness(0, 2, 0, 2) };
+                button.Click += (_, _) => AppServices.Ai.Send(suggestion);
+                AiSuggestions.Children.Add(button);
+            }
+        }
+        RenderAi();
+        AiInput.Focus(FocusState.Programmatic);
+    }
+
+    private void RenderAi()
+    {
+        var chat = AppServices.Ai;
+        AiMessages.Children.Clear();
+        if (chat.Messages.Count == 0)
+            AiMessages.Children.Add(new TextBlock { Text = L.T("今の曲について聞けます。歌詞の意味・似た曲・プレイリスト作りなど。", "Ask about the song that's playing — what the lyrics mean, similar songs, or have it make a playlist."), TextWrapping = TextWrapping.Wrap, Style = (Style)Application.Current.Resources["SubtleTextStyle"] });
+        foreach (var message in chat.Messages) AiMessages.Children.Add(AiElement(message));
+        if (chat.Running) AiMessages.Children.Add(new ProgressBar { IsIndeterminate = true });
+        AiSendIcon.Glyph = chat.Running ? "\uE71A" : "\uE724";
+        AiSuggestions.Visibility = Ui.Hide(chat.Running);
+        AiScroller.UpdateLayout();
+        AiScroller.ChangeView(null, AiScroller.ScrollableHeight, null, disableAnimation: true);
+    }
+
+    private static UIElement AiElement(AiMessage message)
+    {
+        var subtle = (Style)Application.Current.Resources["SubtleTextStyle"];
+        switch (message)
+        {
+            case AiMessage.User user:
+                return new Border
+                {
+                    HorizontalAlignment = HorizontalAlignment.Right,
+                    MaxWidth = 260,
+                    CornerRadius = new CornerRadius(14),
+                    Padding = new Thickness(12, 6, 12, 8),
+                    Background = (Brush)Application.Current.Resources["AccentFillColorDefaultBrush"],
+                    Child = new TextBlock { Text = user.Text, TextWrapping = TextWrapping.Wrap, Foreground = (Brush)Application.Current.Resources["TextOnAccentFillColorPrimaryBrush"] },
+                };
+            case AiMessage.Assistant assistant:
+                return new TextBlock { Text = assistant.Text, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true };
+            case AiMessage.Action action:
+                return new TextBlock { Text = "・" + action.Text, TextWrapping = TextWrapping.Wrap, Style = subtle };
+            case AiMessage.Failure failure:
+                return new TextBlock { Text = failure.Text, TextWrapping = TextWrapping.Wrap, Foreground = (Brush)Application.Current.Resources["SystemFillColorCriticalBrush"] };
+            case AiMessage.Songs songs:
+            {
+                // 押すと再生、右クリックで曲のメニュー
+                var panel = new StackPanel { Spacing = 2 };
+                foreach (var song in songs.Items)
+                {
+                    var grid = new Grid { ColumnSpacing = 10 };
+                    grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(40) });
+                    grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                    grid.Children.Add(new Border { Width = 40, Height = 40, CornerRadius = new CornerRadius(4), Child = new Image { Source = Ui.Small(song.ThumbnailUrl), Stretch = Stretch.UniformToFill } });
+                    var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+                    text.Children.Add(new TextBlock { Text = song.Title, TextTrimming = TextTrimming.CharacterEllipsis });
+                    text.Children.Add(new TextBlock { Text = song.ArtistsText, Style = subtle, TextTrimming = TextTrimming.CharacterEllipsis });
+                    Grid.SetColumn(text, 1);
+                    grid.Children.Add(text);
+                    var button = new Button { Content = grid, HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch, Padding = new Thickness(6), Background = new SolidColorBrush(Colors.Transparent), BorderThickness = new Thickness(0) };
+                    button.Click += (_, _) => AppServices.Player.PlaySong(song);
+                    button.ContextFlyout = SongMenu.Build(song);
+                    panel.Children.Add(button);
+                }
+                return panel;
+            }
+            default:
+                return new TextBlock();
+        }
+    }
+
+    private void OnAiSend(object sender, RoutedEventArgs e)
+    {
+        if (AppServices.Ai.Running)
+        {
+            AppServices.Ai.Stop();
+            return;
+        }
+        AppServices.Ai.Send(AiInput.Text);
+        AiInput.Text = "";
+    }
+
+    private void OnAiInputKeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        // Enter で送る（Shift+Enter は改行）
+        var shift = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Shift).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
+        if (e.Key != Windows.System.VirtualKey.Enter || shift || AppServices.Ai.Running) return;
+        e.Handled = true;
+        AppServices.Ai.Send(AiInput.Text);
+        AiInput.Text = "";
+    }
+
+    private void OnAiClear(object sender, RoutedEventArgs e) => AppServices.Ai.Clear();
 
     private void OnShowNowPlaying(object sender, RoutedEventArgs e) => SetRightPane(true, queue: false);
 
