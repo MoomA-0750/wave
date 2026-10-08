@@ -136,4 +136,7 @@
     <string name="library_membership_adding">Adding…</string>
     <string name="library_done">Done</string>
     <string name="library_back">Back</string>
+    <string name="library_notification_channel_liked">Liked songs</string>
+    <string name="library_liked_notice_title">Added “%1$s” to Liked Songs</string>
+    <string name="library_liked_notice_text">Add it to a playlist too?</string>
 </resources>

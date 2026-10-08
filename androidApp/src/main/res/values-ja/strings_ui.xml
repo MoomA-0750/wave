@@ -111,4 +111,5 @@
     <string name="nowplaying_next_in_queue">キューの次の曲</string>
     <string name="nowplaying_clear_queue">キューを消去</string>
     <string name="nowplaying_next_from_source">次に流れる曲</string>
+    <string name="search_share">共有</string>
 </resources>

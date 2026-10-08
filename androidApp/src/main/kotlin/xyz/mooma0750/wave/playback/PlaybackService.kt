@@ -518,7 +518,19 @@ class PlaybackService : MediaSessionService() {
     }
 
     /** 評価を自アプリの画面（コントローラーごとの extras）と通知のボタンへ配る。 */
+    /** 通知から高く評価して、書き終わるのを待っている曲。 */
+    private var likeNoticeFor: String? = null
+
     private fun publishLikeState(state: LikeState) {
+        likeNoticeFor?.let { target ->
+            if (state.videoId != target) {
+                likeNoticeFor = null
+            } else if (!state.pending) {
+                likeNoticeFor = null
+                val song = localPlayer?.currentMediaItem?.let(Media3QueuePlayer::songOf)?.takeIf { it.videoId == target }
+                if (state.status == LikeStatus.Like && song != null) xyz.mooma0750.wave.library.AddToPlaylistActivity.notifyLiked(this, song)
+            }
+        }
         val current = session ?: return
         publishOwnUiExtras(current, state)
         current.setMediaButtonPreferences(likeButtons(state))
@@ -739,6 +751,8 @@ class PlaybackService : MediaSessionService() {
                 if (!allowed) return Futures.immediateFuture(SessionResult(SessionError.ERROR_PERMISSION_DENIED))
                 val target = if (args.containsKey(QueueCommands.KEY_TARGET_LIKED)) args.getBoolean(QueueCommands.KEY_TARGET_LIKED) else null
                 val accepted = likes?.setLiked(args.getString(QueueCommands.KEY_VIDEO_ID), target) == true
+                // 通知（アプリの外）から高く評価したら、書けたときに「プレイリストに追加」のボタン付きで知らせる
+                if (accepted && target == true && !isOwnUiController(session, controller) && likes?.state?.pending == true) likeNoticeFor = likes?.state?.videoId
                 return Futures.immediateFuture(SessionResult(if (accepted) SessionResult.RESULT_SUCCESS else SessionError.ERROR_INVALID_STATE))
             }
             if (!isOwnUiController(session, controller)) return Futures.immediateFuture(SessionResult(SessionError.ERROR_PERMISSION_DENIED))

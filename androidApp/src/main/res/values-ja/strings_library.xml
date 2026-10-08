@@ -131,4 +131,7 @@
     <string name="library_membership_adding">追加しています…</string>
     <string name="library_done">完了</string>
     <string name="library_back">戻る</string>
+    <string name="library_notification_channel_liked">高く評価した曲</string>
+    <string name="library_liked_notice_title">「%1$s」を高く評価した曲に追加しました</string>
+    <string name="library_liked_notice_text">プレイリストにも追加できます</string>
 </resources>

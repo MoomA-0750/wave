@@ -26,6 +26,15 @@
             </intent-filter>
         </activity>
 
+        <!-- 通知の「プレイリストに追加」から開く、ダイアログだけの透明な画面 -->
+        <activity
+            android:name=".library.AddToPlaylistActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
         <service
             android:name=".playback.PlaybackService"
             android:exported="true"

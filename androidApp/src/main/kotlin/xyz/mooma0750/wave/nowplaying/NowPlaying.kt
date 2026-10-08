@@ -422,6 +422,8 @@ fun NowPlayingScreen(
                     }
                 }
                 Spacer(Modifier.weight(1f))
+                val context = androidx.compose.ui.platform.LocalContext.current
+                song?.let { current -> IconAction(R.drawable.ic_share, stringResource(R.string.search_share), { xyz.mooma0750.wave.search.shareSong(context, current) }) }
                 IconAction(R.drawable.ic_queue_music, pluralStringResource(R.plurals.nowplaying_queue_with_count, state.queue.size, state.queue.size), { showQueue = true })
             }
             // 次の曲（Windows・Spotify と同じく、操作の下に出す。押すとキューを開く）

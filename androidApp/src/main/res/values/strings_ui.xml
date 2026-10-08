@@ -112,4 +112,5 @@
     <string name="nowplaying_next_in_queue">Next in queue</string>
     <string name="nowplaying_clear_queue">Clear queue</string>
     <string name="nowplaying_next_from_source">Next up</string>
+    <string name="search_share">Share</string>
 </resources>

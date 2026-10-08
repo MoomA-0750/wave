@@ -29,7 +29,42 @@ public static class SongMenu
         if (song.Album?.BrowseId is { } albumId) menu.Items.Add(Item(L.T("アルバムへ移動", "Go to album"), "", () => Nav.Album(albumId)));
         foreach (var artist in song.Artists.Where(a => a.BrowseId is not null))
             menu.Items.Add(Item(song.Artists.Count > 1 ? L.T($"アーティストへ移動: {artist.Name}", $"Go to artist: {artist.Name}") : L.T("アーティストへ移動", "Go to artist"), "", () => Nav.Artist(artist.BrowseId!)));
+        menu.Items.Add(new MenuFlyoutSeparator());
+        var share = new MenuFlyoutSubItem { Text = L.T("共有", "Share"), Icon = new FontIcon { Glyph = "\uE72D" } };
+        share.Items.Add(Item(L.T("曲のリンクをコピー", "Copy song link"), "\uE71B", () => CopyLink(song)));
+        share.Items.Add(Item(L.T("ほかのアプリで共有…", "Share with…"), "\uE72D", () => Share(song)));
+        menu.Items.Add(share);
         return menu;
+    }
+
+    /// <summary>YouTube Music の曲の URL（Android と同じ）。</summary>
+    public static string Url(Song song) => $"https://music.youtube.com/watch?v={song.VideoId}";
+
+    private static string ShareText(Song song) => song.Artists.Count > 0 ? $"{song.Title} - {song.ArtistsText}" : song.Title;
+
+    public static void CopyLink(Song song)
+    {
+        var data = new Windows.ApplicationModel.DataTransfer.DataPackage();
+        data.SetText(Url(song));
+        Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(data);
+        AppServices.Player.Message = L.T("リンクをコピーしました", "Link copied");
+    }
+
+    /// <summary>Windows の共有の画面を出す（曲名とリンク）。</summary>
+    public static void Share(Song song)
+    {
+        if (App.Window is null) return;
+        var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(App.Window);
+        var manager = Windows.ApplicationModel.DataTransfer.DataTransferManagerInterop.GetForWindow(hwnd);
+        void OnRequested(Windows.ApplicationModel.DataTransfer.DataTransferManager sender, Windows.ApplicationModel.DataTransfer.DataRequestedEventArgs args)
+        {
+            sender.DataRequested -= OnRequested;
+            args.Request.Data.Properties.Title = song.Title;
+            args.Request.Data.SetText($"{ShareText(song)}\n{Url(song)}");
+            args.Request.Data.SetWebLink(new Uri(Url(song)));
+        }
+        manager.DataRequested += OnRequested;
+        Windows.ApplicationModel.DataTransfer.DataTransferManagerInterop.ShowShareUIForWindow(hwnd);
     }
 
     private static MenuFlyoutItem Item(string text, string? glyph, Action action)
