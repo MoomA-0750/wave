@@ -273,10 +273,17 @@
                             <RowDefinition Height="*" />
                         </Grid.RowDefinitions>
                         <Grid Padding="16,12,8,4">
-                            <TextBlock Text="{x:Bind app:L.T('キュー', 'Queue')}" Style="{StaticResource BodyStrongTextBlockStyle}" VerticalAlignment="Center" />
-                            <Button HorizontalAlignment="Right" Style="{StaticResource IconButtonStyle}" Click="OnShowNowPlaying" ToolTipService.ToolTip="{x:Bind app:L.T('閉じる', 'Close')}">
-                                <FontIcon Glyph="&#xE711;" FontSize="12" />
-                            </Button>
+                            <!-- キューと履歴の切り替え（Spotify と同じ） -->
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <ToggleButton x:Name="QueueTab" CornerRadius="14" Padding="14,4" MinWidth="0" IsChecked="True" Click="OnQueueTab" Content="{x:Bind app:L.T('キュー', 'Queue')}" />
+                                <ToggleButton x:Name="HistoryTab" CornerRadius="14" Padding="14,4" MinWidth="0" Click="OnHistoryTab" Content="{x:Bind app:L.T('履歴', 'History')}" />
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="4">
+                                <HyperlinkButton x:Name="ClearQueueButton" Visibility="Collapsed" Click="OnClearQueue" Content="{x:Bind app:L.T('キューを消去', 'Clear queue')}" />
+                                <Button Style="{StaticResource IconButtonStyle}" Click="OnShowNowPlaying" ToolTipService.ToolTip="{x:Bind app:L.T('閉じる', 'Close')}">
+                                    <FontIcon Glyph="&#xE711;" FontSize="12" />
+                                </Button>
+                            </StackPanel>
                         </Grid>
                         <StackPanel x:Name="QueueEmpty" Grid.Row="1" Spacing="6" Padding="24" VerticalAlignment="Center" Visibility="Collapsed">
                             <TextBlock Text="{x:Bind app:L.T('キューは空です', 'Your queue is empty')}" Style="{StaticResource BodyStrongTextBlockStyle}" HorizontalAlignment="Center" />
@@ -286,24 +293,25 @@
                         <!-- 次の曲はドラッグで並べ替えられる（今の曲は動かせない。Android と同じ） -->
                         <ListView x:Name="QueueList" Grid.Row="1" SelectionMode="None" IsItemClickEnabled="True" ItemClick="OnQueueClick" Padding="4,0,4,8"
                                   CanDragItems="True" CanReorderItems="True" AllowDrop="True" DragItemsStarting="OnQueueDragStarting" DragItemsCompleted="OnQueueDragCompleted">
-                            <ListView.Header>
-                                <TextBlock Text="{x:Bind app:L.T('再生中', 'Now playing')}" Style="{StaticResource SubtleTextStyle}" Margin="12,4" />
-                            </ListView.Header>
                             <ListView.ItemTemplate>
                                 <DataTemplate x:DataType="app:QueueEntry">
-                                    <Grid ColumnSpacing="12" Padding="0,6" RightTapped="OnQueueRightTapped">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="44" />
-                                            <ColumnDefinition Width="*" />
-                                        </Grid.ColumnDefinitions>
-                                        <Border Width="44" Height="44" CornerRadius="4" Background="{ThemeResource ControlFillColorSecondaryBrush}">
-                                            <Image Source="{x:Bind app:Ui.Small(Song.ThumbnailUrl)}" Stretch="UniformToFill" />
-                                        </Border>
-                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                            <TextBlock Text="{x:Bind Song.Title}" TextTrimming="CharacterEllipsis" Foreground="{x:Bind controls:Templates.TitleBrush(IsCurrent)}" />
-                                            <TextBlock Text="{x:Bind Song.ArtistsText}" Style="{StaticResource SubtleTextStyle}" />
-                                        </StackPanel>
-                                    </Grid>
+                                    <StackPanel RightTapped="OnQueueRightTapped">
+                                        <!-- かたまりの見出し（最初の行にだけ出す） -->
+                                        <TextBlock Text="{x:Bind Section}" Visibility="{x:Bind app:Ui.Show(HasSection)}" Style="{StaticResource BodyStrongTextBlockStyle}" Margin="0,10,0,2" />
+                                        <Grid ColumnSpacing="12" Padding="0,6">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="44" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <Border Width="44" Height="44" CornerRadius="4" Background="{ThemeResource ControlFillColorSecondaryBrush}">
+                                                <Image Source="{x:Bind app:Ui.Small(Song.ThumbnailUrl)}" Stretch="UniformToFill" />
+                                            </Border>
+                                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                <TextBlock Text="{x:Bind Song.Title}" TextTrimming="CharacterEllipsis" Foreground="{x:Bind controls:Templates.TitleBrush(IsCurrent)}" />
+                                                <TextBlock Text="{x:Bind Song.ArtistsText}" Style="{StaticResource SubtleTextStyle}" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </StackPanel>
                                 </DataTemplate>
                             </ListView.ItemTemplate>
                         </ListView>

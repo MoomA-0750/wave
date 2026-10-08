@@ -21,6 +21,9 @@ object QueueCommands {
 
     /** シャッフルの入り切り。入っているかはセッションの extras（KEY_SHUFFLED）で自アプリの画面に配る。 */
     const val TOGGLE_SHUFFLE = "xyz.mooma0750.wave.TOGGLE_SHUFFLE"
+
+    /** 自分で足した曲（キュー）をまとめて外す（Spotify の「キューを消去」）。 */
+    const val CLEAR_USER_QUEUE = "xyz.mooma0750.wave.CLEAR_USER_QUEUE"
     const val KEY_SHUFFLED = "queue.shuffled"
 
     /** 再生中の曲の評価を切り替える。自アプリの UI と、トークン付きの通知のボタンから受ける（決定 G-2）。 */
@@ -31,7 +34,7 @@ object QueueCommands {
     const val KEY_TARGET_LIKED = "targetLiked"
     const val KEY_NOTIFICATION_TOKEN = "notificationToken"
 
-    val all = listOf(PLAY_SONG, PLAY_FROM, ADD_NEXT, ADD_TO_END, REMOVE, JUMP, MOVE, TOGGLE_SHUFFLE, TOGGLE_LIKE).map { SessionCommand(it, Bundle.EMPTY) }
+    val all = listOf(PLAY_SONG, PLAY_FROM, ADD_NEXT, ADD_TO_END, REMOVE, JUMP, MOVE, TOGGLE_SHUFFLE, CLEAR_USER_QUEUE, TOGGLE_LIKE).map { SessionCommand(it, Bundle.EMPTY) }
 
     private const val KEY_SONG = "song"
     private const val KEY_SONGS = "songs"

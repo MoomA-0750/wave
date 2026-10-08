@@ -83,6 +83,12 @@ interface QueuePlayer {
 
     fun insertAfterCurrent(items: List<QueueItem>)
 
+    /** index の位置へ差し込む（キューが空なら先頭に入れて再生を始める）。 */
+    fun insertAt(
+        index: Int,
+        items: List<QueueItem>,
+    )
+
     /** 置き換えて、startIndex の positionMs から再生を始める（端末間の受け渡しで受け取ったとき）。 */
     fun replaceAndPlayAt(
         items: List<QueueItem>,
@@ -225,8 +231,32 @@ class QueueSession(
 
     fun addToEnd(song: Song) = addToEnd(listOf(song))
 
-    /** アルバム・プレイリストを丸ごと、キューの最後に足す。 */
-    fun addToEnd(songs: List<Song>) = addUserItems(songs, player::append)
+    /**
+     * 「キューに追加」（Spotify と同じ）。今の曲の直後に続く、自分で足した曲のかたまりの最後に足す。
+     * 足した順に下へ並び、その下に元から流れる予定の曲（一覧・サジェスト）が続く。
+     */
+    fun addToEnd(songs: List<Song>) =
+        addUserItems(songs) { items ->
+            if (player.items.isEmpty()) player.append(items) else player.insertAt(userQueueEnd(), items)
+        }
+
+    /** 今の曲の直後に続く、自分で足した曲のかたまりの次の位置。 */
+    private fun userQueueEnd(): Int {
+        val items = player.items
+        var index = player.currentIndex + 1
+        while (index < items.size && items[index].origin == ItemOrigin.UserAdded) index++
+        return index
+    }
+
+    /** 今の曲より後ろの、自分で足した曲をまとめて外す（Spotify の「キューを消去」）。外した件数。 */
+    fun clearUserQueue(): Int {
+        val current = player.currentIndex
+        if (current < 0) return 0
+        val ids = player.items.drop(current + 1).filter { it.origin == ItemOrigin.UserAdded }.map { it.itemId }
+        ids.forEach(player::remove)
+        if (ids.isNotEmpty()) maybeFetch()
+        return ids.size
+    }
 
     private fun addUserItems(
         songs: List<Song>,
@@ -305,18 +335,20 @@ class QueueSession(
      */
     fun toggleShuffle() {
         val order = unshuffledOrder
+        // 自分で足した曲（キュー）はシャッフルせず、そのままの順で先頭に置く（Spotify と同じ）
         if (order == null) {
             val current = player.currentIndex
             if (current < 0) return
-            val upcoming = player.items.drop(current + 1)
-            setShuffleOrder(upcoming.map { it.itemId })
-            if (upcoming.size >= 2) player.replaceAfterCurrent(upcoming.shuffled(random))
+            val (user, rest) = player.items.drop(current + 1).partition { it.origin == ItemOrigin.UserAdded }
+            setShuffleOrder(rest.map { it.itemId })
+            if (rest.size >= 2) player.replaceAfterCurrent(user + rest.shuffled(random))
         } else {
             setShuffleOrder(null)
             val current = player.currentIndex
             if (current < 0) return
             val upcoming = player.items.drop(current + 1)
-            val restored = unshuffle(upcoming, order)
+            val (user, rest) = upcoming.partition { it.origin == ItemOrigin.UserAdded && it.itemId !in order }
+            val restored = user + unshuffle(rest, order)
             if (restored != upcoming) player.replaceAfterCurrent(restored)
         }
     }

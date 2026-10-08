@@ -106,4 +106,10 @@
     <string name="nowplaying_video_fullscreen">Full screen</string>
     <string name="nowplaying_video_exit_fullscreen">Exit full screen</string>
     <string name="nowplaying_pick_artist">Go to artist</string>
+    <string name="nowplaying_history">History</string>
+    <string name="nowplaying_history_empty">Nothing played yet</string>
+    <string name="nowplaying_now_playing">Now playing</string>
+    <string name="nowplaying_next_in_queue">Next in queue</string>
+    <string name="nowplaying_clear_queue">Clear queue</string>
+    <string name="nowplaying_next_from_source">Next up</string>
 </resources>

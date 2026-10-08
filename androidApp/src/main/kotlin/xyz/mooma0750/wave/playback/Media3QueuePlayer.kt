@@ -94,6 +94,15 @@ class Media3QueuePlayer(
         }
     }
 
+    override fun insertAt(
+        index: Int,
+        items: List<QueueItem>,
+    ) {
+        if (player.mediaItemCount == 0) return append(items)
+        items.forEach { itemsById[it.itemId] = it }
+        player.addMediaItems(index.coerceIn(0, player.mediaItemCount), items.map { mediaItemOf(it, accountEpoch) })
+    }
+
     /** 1件ずつ動かすとタイムラインの変更がその回数だけコントローラーへ送られるので、削除と追加の2回にする。 */
     override fun replaceAfterCurrent(items: List<QueueItem>) {
         if (player.mediaItemCount == 0) return
@@ -156,6 +165,10 @@ class Media3QueuePlayer(
         /** i.ytimg.com/vi/<id>/<名前>.jpg の「<名前>.jpg（と後ろの指定）」。 */
         private val YTIMG_THUMBNAIL = Regex("/[a-z0-9_]+\\.jpg.*$")
         private const val SONG_EXTRA = "xyz.mooma0750.wave.SONG"
+        private const val ORIGIN_EXTRA = "xyz.mooma0750.wave.ORIGIN"
+
+        /** 自分で足した曲（キューの「次に再生」「キューに追加」）か。 */
+        fun isUserAdded(item: MediaItem?): Boolean = item?.mediaMetadata?.extras?.getString(ORIGIN_EXTRA) == xyz.mooma0750.wave.core.queue.ItemOrigin.UserAdded.name
         private val songJson = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
 
         /** mediaItemOf で載せた曲。読めなければ null。 */
@@ -195,7 +208,12 @@ class Media3QueuePlayer(
                         // 画像そのものは ArtworkEmbedder が今の曲にだけ入れる。アプリの画面は曲の情報（extras）の URL から出す
                         .setDurationMs(song.durationSeconds?.let { it * 1000L })
                         // 自アプリの画面の曲のメニュー（アーティスト・アルバムを開く）で使う。公開のメタデータだけ
-                        .setExtras(android.os.Bundle().apply { putString(SONG_EXTRA, songJson.encodeToString(Song.serializer(), song)) })
+                        .setExtras(
+                            android.os.Bundle().apply {
+                                putString(SONG_EXTRA, songJson.encodeToString(Song.serializer(), song))
+                                putString(ORIGIN_EXTRA, item.origin.name)
+                            },
+                        )
                         .build(),
                 ).build()
         }

@@ -105,4 +105,10 @@
     <string name="nowplaying_video_fullscreen">全画面</string>
     <string name="nowplaying_video_exit_fullscreen">全画面を終える</string>
     <string name="nowplaying_pick_artist">アーティストを選ぶ</string>
+    <string name="nowplaying_history">履歴</string>
+    <string name="nowplaying_history_empty">まだ流れた曲はありません</string>
+    <string name="nowplaying_now_playing">再生中</string>
+    <string name="nowplaying_next_in_queue">キューの次の曲</string>
+    <string name="nowplaying_clear_queue">キューを消去</string>
+    <string name="nowplaying_next_from_source">次に流れる曲</string>
 </resources>

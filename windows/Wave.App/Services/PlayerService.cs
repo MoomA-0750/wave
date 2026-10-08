@@ -384,13 +384,13 @@ public sealed partial class PlayerService : ObservableObject
             PlayList(songs);
             return;
         }
-        nextOrigin = QueueOrigin.UserAdded;
         if (next)
         {
+            nextOrigin = QueueOrigin.UserAdded;
             for (var i = 0; i < songs.Count; i++) Queue.Insert(Index + 1 + i, songs[i]);
+            nextOrigin = QueueOrigin.Source;
         }
-        else foreach (var s in songs) Queue.Add(s);
-        nextOrigin = QueueOrigin.Source;
+        else InsertUserItems(songs);
         Message = next ? L.T($"{songs.Count} 曲を次に再生します", $"{L.Songs(songs.Count)} will play next")
             : L.T($"{songs.Count} 曲をキューに追加しました", $"Added {L.Songs(songs.Count)} to queue");
     }
@@ -402,8 +402,48 @@ public sealed partial class PlayerService : ObservableObject
             PlaySong(song);
             return;
         }
-        AddAll([song], QueueOrigin.UserAdded);
+        InsertUserItems([song]);
         Message = L.T($"「{song.Title}」をキューに追加しました", $"Added {song.Title} to queue");
+    }
+
+    /// <summary>
+    /// 「キューに追加」（Spotify・Android と同じ）。今の曲の直後に続く、自分で足した曲のかたまりの最後に入れる。
+    /// 足した順に下へ並び、その下に元から流れる予定の曲が続く。
+    /// </summary>
+    private void InsertUserItems(IReadOnlyList<Song> songs)
+    {
+        var at = UserQueueEnd;
+        nextOrigin = QueueOrigin.UserAdded;
+        for (var i = 0; i < songs.Count; i++) Queue.Insert(at + i, songs[i]);
+        nextOrigin = QueueOrigin.Source;
+    }
+
+    /// <summary>自分で足した曲（「次に再生」「キューに追加」）か。</summary>
+    public bool IsUserAdded(int position) => position >= 0 && position < itemMeta.Count && itemMeta[position].Origin == QueueOrigin.UserAdded;
+
+    /// <summary>今の曲の直後に続く、自分で足した曲のかたまりの次の位置。</summary>
+    public int UserQueueEnd
+    {
+        get
+        {
+            var i = Index + 1;
+            while (i < Queue.Count && IsUserAdded(i)) i++;
+            return i;
+        }
+    }
+
+    /// <summary>今の曲より後ろの、自分で足した曲をまとめて外す（Spotify の「キューを消去」）。</summary>
+    public void ClearUserQueue()
+    {
+        if (IsRemote) return;
+        var removed = 0;
+        for (var i = Queue.Count - 1; i > Index; i--)
+        {
+            if (!IsUserAdded(i)) continue;
+            Queue.RemoveAt(i);
+            removed++;
+        }
+        if (removed > 0) Message = L.T($"キューから {removed} 曲を外しました", $"Removed {L.Songs(removed)} from the queue");
     }
 
     /// <summary>キューの次の曲を並べ替える（今の曲より後ろだけ）。</summary>
@@ -541,19 +581,23 @@ public sealed partial class PlayerService : ObservableObject
         // ほかの端末のキューは並べ替えられない（命令が無い）
         if (IsRemote || Queue.Count == 0 || Current is null || Index < 0) return;
         var upcoming = Enumerable.Range(Index + 1, Queue.Count - Index - 1).Select(i => (Song: Queue[i], Meta: itemMeta[i])).ToList();
+        // 自分で足した曲（キュー）はシャッフルせず、そのままの順で先頭に置く（Spotify・Android と同じ）
         List<(Song Song, QueueItemMeta Meta)> rest;
+        List<(Song Song, QueueItemMeta Meta)> user;
         if (shuffleOrder is not { } order)
         {
-            SetShuffleOrder(upcoming.Select((u, i) => (u.Meta.ItemId, i)).ToDictionary(x => x.ItemId, x => x.i));
-            rest = upcoming.ToList();
+            user = upcoming.Where(u => u.Meta.Origin == QueueOrigin.UserAdded).ToList();
+            rest = upcoming.Where(u => u.Meta.Origin != QueueOrigin.UserAdded).ToList();
+            SetShuffleOrder(rest.Select((u, i) => (u.Meta.ItemId, i)).ToDictionary(x => x.ItemId, x => x.i));
             Random.Shared.Shuffle(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(rest));
         }
         else
         {
             SetShuffleOrder(null);
-            rest = upcoming.Select((u, i) => (u, i)).OrderBy(x => order.TryGetValue(x.u.Meta.ItemId, out var r) ? r : int.MaxValue).ThenBy(x => x.i).Select(x => x.u).ToList();
+            user = upcoming.Where(u => u.Meta.Origin == QueueOrigin.UserAdded && !order.ContainsKey(u.Meta.ItemId)).ToList();
+            rest = upcoming.Except(user).Select((u, i) => (u, i)).OrderBy(x => order.TryGetValue(x.u.Meta.ItemId, out var r) ? r : int.MaxValue).ThenBy(x => x.i).Select(x => x.u).ToList();
         }
-        ReplaceUpcoming(rest);
+        ReplaceUpcoming([.. user, .. rest]);
     }
 
     /// <summary>今の曲より後ろを並べ直す（項目の ID と出どころは保つ）。</summary>

@@ -1,5 +1,6 @@
 package xyz.mooma0750.wave.nowplaying
 
+import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.toMutableStateList
 import androidx.compose.runtime.mutableFloatStateOf
@@ -566,6 +567,11 @@ fun rememberHasPlayback(
     connect: ConnectV2Manager?,
 ): Boolean = rememberDisplay(connection, connect).state.title != null
 
+/**
+ * キューの画面（Spotify と同じ）。一番上に今の曲、その下に自分で足した曲（「キューを消去」でまとめて外せる）、
+ * その下に元から流れる予定の曲。もう流れた曲は「履歴」に分ける。
+ */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun QueueSheet(
     state: PlayerUiState,
@@ -577,97 +583,141 @@ private fun QueueSheet(
 ) {
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
-    LaunchedEffect(Unit) { if (state.currentIndex > 0) listState.scrollToItem(state.currentIndex) }
+    var history by rememberSaveable { mutableStateOf(false) }
     // ドラッグの間は手元の並びを動かして見せ、指を離したときに1回だけ再生サービスへ送る
     val rows = remember(state.queue) { state.queue.toMutableStateList() }
     var dragging by remember { mutableStateOf<String?>(null) }
     var dragOffset by remember { mutableFloatStateOf(0f) }
+    val current = state.currentIndex
     Column(Modifier.fillMaxWidth()) {
-        Text(stringResource(R.string.nowplaying_queue), Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-        LazyColumn(Modifier.fillMaxWidth(), state = listState) {
-            itemsIndexed(rows, key = { _, row -> row.itemId }) { index, row ->
-                val current = index == state.currentIndex
-                val movable = !remote && index > state.currentIndex
-                val isDragged = dragging == row.itemId
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .zIndex(if (isDragged) 1f else 0f)
-                        .graphicsLayer { translationY = if (isDragged) dragOffset else 0f }
-                        .background(
-                            when {
-                                isDragged -> MaterialTheme.colorScheme.surfaceContainerHighest
-                                current -> MaterialTheme.colorScheme.secondaryContainer
-                                else -> Color.Transparent
-                            },
-                        ).then(if (remote) Modifier else Modifier.clickable { scope.launch { connection.jumpTo(row.itemId) } })
-                        .padding(start = 16.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    coil3.compose.AsyncImage(
-                        model = row.thumbnailUrl,
-                        contentDescription = null,
-                        modifier = Modifier.size(48.dp).clip(RoundedCornerShape(4.dp)),
-                        contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                    )
-                    Column(Modifier.weight(1f).padding(start = 12.dp)) {
-                        Text(row.title, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = if (current) FontWeight.Bold else FontWeight.Normal, color = if (current) MaterialTheme.colorScheme.primary else Color.Unspecified)
-                        Text(row.artist, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            SingleChoiceSegmentedButtonRow {
+                SegmentedButton(selected = !history, onClick = { history = false }, shape = SegmentedButtonDefaults.itemShape(0, 2), icon = {}) { Text(stringResource(R.string.nowplaying_queue)) }
+                SegmentedButton(selected = history, onClick = { history = true }, shape = SegmentedButtonDefaults.itemShape(1, 2), icon = {}) { Text(stringResource(R.string.nowplaying_history)) }
+            }
+        }
+        @Composable
+        fun songRow(
+            index: Int,
+            row: QueueRow,
+            movable: Boolean,
+        ) {
+            val isCurrent = index == current
+            val isDragged = dragging == row.itemId
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .zIndex(if (isDragged) 1f else 0f)
+                    .graphicsLayer { translationY = if (isDragged) dragOffset else 0f }
+                    .background(if (isDragged) MaterialTheme.colorScheme.surfaceContainerHighest else Color.Transparent)
+                    .then(if (remote || isCurrent) Modifier else Modifier.clickable { scope.launch { connection.jumpTo(row.itemId) } })
+                    .padding(start = 16.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                coil3.compose.AsyncImage(
+                    model = row.thumbnailUrl,
+                    contentDescription = null,
+                    modifier = Modifier.size(48.dp).clip(RoundedCornerShape(4.dp)),
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                )
+                Column(Modifier.weight(1f).padding(start = 12.dp)) {
+                    Text(row.title, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal, color = if (isCurrent) MaterialTheme.colorScheme.primary else Color.Unspecified)
+                    Text(row.artist, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                controller?.let { c ->
+                    val position = (0 until c.mediaItemCount).firstOrNull { c.getMediaItemAt(it).mediaId == row.itemId }
+                    position?.let { Media3QueuePlayer.songOf(c.getMediaItemAt(it)) }?.let { song ->
+                        SongMenuButton(song, actions, inQueue = true, extraItems = if (!isCurrent && !remote && index > current) listOf(stringResource(R.string.nowplaying_remove_from_queue) to { scope.launch { connection.remove(row.itemId) }; Unit }) else emptyList())
                     }
-                    controller?.let { c ->
-                        val position = (0 until c.mediaItemCount).firstOrNull { c.getMediaItemAt(it).mediaId == row.itemId }
-                        position?.let { Media3QueuePlayer.songOf(c.getMediaItemAt(it)) }?.let { song ->
-                            SongMenuButton(song, actions, inQueue = true, extraItems = if (!current && !remote) listOf(stringResource(R.string.nowplaying_remove_from_queue) to { scope.launch { connection.remove(row.itemId) }; Unit }) else emptyList())
+                }
+                if (movable) {
+                    // 並べ替えのつまみ（Spotify と同じく右端。上下にドラッグする）
+                    Icon(
+                        painterResource(R.drawable.ic_drag_handle),
+                        contentDescription = stringResource(R.string.nowplaying_reorder),
+                        modifier =
+                            Modifier
+                                .size(48.dp)
+                                .padding(12.dp)
+                                .pointerInput(row.itemId) {
+                                    detectDragGestures(
+                                        onDragStart = {
+                                            dragging = row.itemId
+                                            dragOffset = 0f
+                                        },
+                                        onDragEnd = {
+                                            val id = dragging
+                                            val to = rows.indexOfFirst { it.itemId == id }
+                                            dragging = null
+                                            dragOffset = 0f
+                                            if (id != null && to > current && to != state.queue.indexOfFirst { it.itemId == id }) {
+                                                scope.launch { connection.move(id, to) }
+                                            }
+                                        },
+                                        onDragCancel = {
+                                            dragging = null
+                                            dragOffset = 0f
+                                        },
+                                    ) { change, amount ->
+                                        change.consume()
+                                        dragOffset += amount.y
+                                        val id = dragging ?: return@detectDragGestures
+                                        val from = rows.indexOfFirst { it.itemId == id }
+                                        val height = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == id }?.size?.toFloat() ?: return@detectDragGestures
+                                        // 半分を越えたら隣と入れ替える（今の曲より上には行かない）
+                                        if (dragOffset > height / 2 && from < rows.lastIndex) {
+                                            rows.add(from + 1, rows.removeAt(from))
+                                            dragOffset -= height
+                                        } else if (dragOffset < -height / 2 && from - 1 > current) {
+                                            rows.add(from - 1, rows.removeAt(from))
+                                            dragOffset += height
+                                        }
+                                    }
+                                },
+                    )
+                } else {
+                    Spacer(Modifier.size(48.dp))
+                }
+            }
+        }
+
+        @Composable
+        fun header(
+            text: String,
+            trailing: @Composable () -> Unit = {},
+        ) {
+            Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(text, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                trailing()
+            }
+        }
+        if (history) {
+            // もう流れた曲（新しい順）。押すとその曲に戻る
+            val played = (0 until current.coerceAtMost(rows.size)).reversed()
+            LazyColumn(Modifier.fillMaxWidth()) {
+                if (played.isEmpty()) item { Text(stringResource(R.string.nowplaying_history_empty), Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                items(played.toList(), key = { rows[it].itemId }) { index -> songRow(index, rows[index], movable = false) }
+            }
+        } else {
+            // 今の曲の直後に続く、自分で足した曲のかたまり
+            var userEnd = current + 1
+            while (userEnd < rows.size && rows[userEnd].userAdded) userEnd++
+            LazyColumn(Modifier.fillMaxWidth(), state = listState) {
+                if (current in rows.indices) {
+                    item(key = "h-now") { header(stringResource(R.string.nowplaying_now_playing)) }
+                    item(key = rows[current].itemId) { songRow(current, rows[current], movable = false) }
+                }
+                if (userEnd > current + 1) {
+                    item(key = "h-user") {
+                        header(stringResource(R.string.nowplaying_next_in_queue)) {
+                            if (!remote) TextButton(onClick = { scope.launch { connection.clearUserQueue() } }) { Text(stringResource(R.string.nowplaying_clear_queue)) }
                         }
                     }
-                    if (movable) {
-                        // 並べ替えのつまみ（Spotify と同じく右端。上下にドラッグする）
-                        Icon(
-                            painterResource(R.drawable.ic_drag_handle),
-                            contentDescription = stringResource(R.string.nowplaying_reorder),
-                            modifier =
-                                Modifier
-                                    .size(48.dp)
-                                    .padding(12.dp)
-                                    .pointerInput(row.itemId) {
-                                        detectDragGestures(
-                                            onDragStart = {
-                                                dragging = row.itemId
-                                                dragOffset = 0f
-                                            },
-                                            onDragEnd = {
-                                                val id = dragging
-                                                val to = rows.indexOfFirst { it.itemId == id }
-                                                dragging = null
-                                                dragOffset = 0f
-                                                if (id != null && to > state.currentIndex && to != state.queue.indexOfFirst { it.itemId == id }) {
-                                                    scope.launch { connection.move(id, to) }
-                                                }
-                                            },
-                                            onDragCancel = {
-                                                dragging = null
-                                                dragOffset = 0f
-                                            },
-                                        ) { change, amount ->
-                                            change.consume()
-                                            dragOffset += amount.y
-                                            val id = dragging ?: return@detectDragGestures
-                                            val from = rows.indexOfFirst { it.itemId == id }
-                                            val height = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == id }?.size?.toFloat() ?: return@detectDragGestures
-                                            // 半分を越えたら隣と入れ替える（今の曲より上には行かない）
-                                            if (dragOffset > height / 2 && from < rows.lastIndex) {
-                                                rows.add(from + 1, rows.removeAt(from))
-                                                dragOffset -= height
-                                            } else if (dragOffset < -height / 2 && from - 1 > state.currentIndex) {
-                                                rows.add(from - 1, rows.removeAt(from))
-                                                dragOffset += height
-                                            }
-                                        }
-                                    },
-                        )
-                    } else {
-                        Spacer(Modifier.size(48.dp))
-                    }
+                    items((current + 1 until userEnd).toList(), key = { rows[it].itemId }) { index -> songRow(index, rows[index], movable = !remote) }
+                }
+                if (userEnd < rows.size) {
+                    item(key = "h-rest") { header(stringResource(R.string.nowplaying_next_from_source)) }
+                    items((userEnd until rows.size).toList(), key = { rows[it].itemId }) { index -> songRow(index, rows[index], movable = !remote) }
                 }
             }
         }

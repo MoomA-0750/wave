@@ -32,12 +32,14 @@ public sealed class LibraryEntry(string title, string? subtitle, string? thumbna
         : (Brush)Application.Current.Resources["ControlFillColorSecondaryBrush"];
 }
 
-/// <summary>キューの1行。</summary>
-public sealed class QueueEntry(int index, Song song, bool isCurrent)
+/// <summary>キューの1行。Section はかたまりの最初の行にだけ付く見出し（「再生中」「キューの次の曲」「次に流れる曲」）。</summary>
+public sealed class QueueEntry(int index, Song song, bool isCurrent, string? section = null)
 {
     public int Index { get; } = index;
     public Song Song { get; } = song;
     public bool IsCurrent { get; } = isCurrent;
+    public string? Section { get; } = section;
+    public bool HasSection => Section is not null;
 }
 
 /// <summary>検索欄の候補（語・曲・アルバム・アーティスト）。</summary>
@@ -547,13 +549,58 @@ public sealed partial class MainWindow : Window
         return timer;
     }
 
+    private bool queueHistory;
+
+    /// <summary>
+    /// キュー（Spotify と同じ）: 一番上に今の曲、その下に自分で足した曲、その下に元から流れる予定の曲。もう流れた曲は「履歴」に分ける。
+    /// </summary>
     private void RenderQueue()
     {
         var entries = new System.Collections.ObjectModel.ObservableCollection<QueueEntry>();
-        for (var i = Math.Max(0, Player.Index); i < Player.Queue.Count; i++) entries.Add(new QueueEntry(i, Player.Queue[i], i == Player.Index));
+        QueueTab.IsChecked = !queueHistory;
+        HistoryTab.IsChecked = queueHistory;
+        if (queueHistory)
+        {
+            // 新しい順。押すとその曲に戻る
+            for (var i = Math.Min(Player.Index, Player.Queue.Count) - 1; i >= 0; i--) entries.Add(new QueueEntry(i, Player.Queue[i], false));
+            ClearQueueButton.Visibility = Visibility.Collapsed;
+        }
+        else
+        {
+            var userEnd = Player.UserQueueEnd;
+            for (var i = Math.Max(0, Player.Index); i < Player.Queue.Count; i++)
+            {
+                string? section = i == Player.Index ? L.T("再生中", "Now playing")
+                    : i == Player.Index + 1 && i < userEnd ? L.T("キューの次の曲", "Next in queue")
+                    : i == userEnd ? L.T("次に流れる曲", "Next up")
+                    : null;
+                entries.Add(new QueueEntry(i, Player.Queue[i], i == Player.Index, section));
+            }
+            ClearQueueButton.Visibility = Ui.Show(userEnd > Player.Index + 1 && !Player.IsRemote);
+        }
         QueueList.ItemsSource = entries;
         QueueEmpty.Visibility = entries.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         QueueList.Visibility = entries.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
+        QueueList.CanReorderItems = !queueHistory;
+        QueueList.CanDragItems = !queueHistory;
+    }
+
+    private void OnQueueTab(object sender, RoutedEventArgs e)
+    {
+        queueHistory = false;
+        RenderQueue();
+    }
+
+    private void OnHistoryTab(object sender, RoutedEventArgs e)
+    {
+        queueHistory = true;
+        RenderQueue();
+    }
+
+    private void OnClearQueue(object sender, RoutedEventArgs e)
+    {
+        Player.ClearUserQueue();
+        RenderQueue();
     }
 
     private void OnQueueDragStarting(object sender, DragItemsStartingEventArgs e)

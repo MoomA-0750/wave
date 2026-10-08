@@ -48,6 +48,13 @@ class QueueSessionTest {
             this.items.addAll(currentIndex + 1, items)
         }
 
+        override fun insertAt(
+            index: Int,
+            items: List<QueueItem>,
+        ) {
+            this.items.addAll(index, items)
+        }
+
         var restoredPositionMs: Long? = null
         var replaceCount = 0
 
@@ -463,8 +470,11 @@ class QueueSessionTest {
             queue.addNext(song("n1"))
             queue.addToEnd(song("u2"))
 
+            // 自分で足した曲は、足した順（次に再生は先頭）でかたまりになり、シャッフルしない
+            assertEquals(listOf("s0", "n1", "u1", "u2"), player.videoIds().take(4))
+
             queue.toggleShuffle()
-            assertEquals(listOf("s0", "s1", "s2", "s3", "s4", "s5", "n1", "u1", "u2"), player.videoIds())
+            assertEquals(listOf("s0", "n1", "u1", "u2", "s1", "s2", "s3", "s4", "s5"), player.videoIds())
         }
 
     @Test
@@ -895,5 +905,30 @@ class QueueSessionTest {
             assertEquals(5L, player.epoch)
             advanceUntilIdle()
             assertTrue(content.epochs.isNotEmpty() && content.epochs.all { it == 5L }, "確かめた世代ではなく今の世代で取得した: ${content.epochs}")
+        }
+
+    @Test
+    fun addedSongsGoAfterEarlierAddedSongsButBeforeTheRestOfTheQueue() =
+        runTest {
+            val player = FakePlayer()
+            val queue = session(player, FakeContent())
+            queue.playFrom(listOf(song("p1"), song("p2"), song("p3")), startIndex = 0, playlistId = "PL", playlistContinuation = null)
+            queue.addToEnd(song("u1"))
+            queue.addToEnd(song("u2"))
+            queue.addNext(song("n1"))
+            queue.addToEnd(song("u3"))
+            assertEquals(listOf("p1", "n1", "u1", "u2", "u3", "p2", "p3"), player.videoIds())
+        }
+
+    @Test
+    fun clearingTheUserQueueRemovesOnlyTheSongsAddedByHand() =
+        runTest {
+            val player = FakePlayer()
+            val queue = session(player, FakeContent())
+            queue.playFrom(listOf(song("p1"), song("p2"), song("p3")), startIndex = 0, playlistId = "PL", playlistContinuation = null)
+            queue.addToEnd(listOf(song("u1"), song("u2")))
+            assertEquals(2, queue.clearUserQueue())
+            assertEquals(listOf("p1", "p2", "p3"), player.videoIds())
+            assertEquals(0, queue.clearUserQueue())
         }
 }

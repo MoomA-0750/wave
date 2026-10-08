@@ -759,6 +759,7 @@ class PlaybackService : MediaSessionService() {
                         QueueCommands.JUMP -> QueueCommands.itemIdOf(args)?.let { queue.jumpTo(it) }
                         QueueCommands.MOVE -> QueueCommands.itemIdOf(args)?.let { id -> QueueCommands.toIndexOf(args)?.let { queue.move(id, it) } }
                         QueueCommands.TOGGLE_SHUFFLE -> queue.toggleShuffle()
+                        QueueCommands.CLEAR_USER_QUEUE -> queue.clearUserQueue()
                         else -> null
                     }
                 }

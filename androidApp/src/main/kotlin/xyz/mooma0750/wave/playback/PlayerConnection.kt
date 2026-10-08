@@ -98,6 +98,9 @@ class PlayerConnection(
         },
     )
 
+    /** 自分で足した曲をまとめて外す。 */
+    suspend fun clearUserQueue() = send(QueueCommands.CLEAR_USER_QUEUE, android.os.Bundle.EMPTY)
+
     /** シャッフルの入り切り（切ると、残りの曲を入れる前の並びに戻す）。 */
     suspend fun toggleShuffle() = send(QueueCommands.TOGGLE_SHUFFLE, android.os.Bundle.EMPTY)
 

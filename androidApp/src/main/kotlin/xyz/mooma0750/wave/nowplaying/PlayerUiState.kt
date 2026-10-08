@@ -32,6 +32,8 @@ data class QueueRow(
     val title: String,
     val artist: String,
     val thumbnailUrl: String? = null,
+    /** 自分で足した曲（キューの「次に再生」「キューに追加」）。 */
+    val userAdded: Boolean = false,
 )
 
 @Composable
@@ -69,6 +71,7 @@ fun rememberPlayerUiState(connection: PlayerConnection): Pair<PlayerUiState, Med
                                 xyz.mooma0750.wave.playback.Media3QueuePlayer
                                     .songOf(mediaItem)
                                     ?.thumbnailUrl,
+                                xyz.mooma0750.wave.playback.Media3QueuePlayer.isUserAdded(mediaItem),
                             )
                         },
                     currentIndex = current.currentMediaItemIndex,
