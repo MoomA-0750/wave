@@ -128,4 +128,7 @@
     <plurals name="artist_liked_count_more">
         <item quantity="other">%1$d曲以上 • %2$s</item>
     </plurals>
+    <string name="library_membership_adding">追加しています…</string>
+    <string name="library_done">完了</string>
+    <string name="library_back">戻る</string>
 </resources>

@@ -101,4 +101,5 @@
     <string name="nowplaying_open_queue">キューを開く</string>
     <string name="nowplaying_reorder">ドラッグして並べ替え</string>
     <string name="library_liked_songs_row">高く評価した曲</string>
+    <string name="ui_liked_badge">高く評価済み</string>
 </resources>

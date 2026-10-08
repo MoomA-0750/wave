@@ -619,7 +619,7 @@ public sealed partial class PlayerService : ObservableObject
         else
         {
             Message = liked ? L.T("高く評価した曲に追加しました", "Added to Liked Songs") : L.T("高く評価した曲から削除しました", "Removed from Liked Songs");
-            AppServices.Library.LikedChanged();
+            AppServices.Library.LikedChanged(song.VideoId, liked);
         }
     }
 

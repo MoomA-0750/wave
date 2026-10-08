@@ -65,7 +65,7 @@
                         <ColumnDefinition Width="32" />
                         <ColumnDefinition Width="3*" />
                         <ColumnDefinition x:Name="AlbumHeaderColumn" Width="2*" />
-                        <ColumnDefinition Width="56" />
+                        <ColumnDefinition Width="80" />
                         <ColumnDefinition Width="36" />
                     </Grid.ColumnDefinitions>
                     <TextBlock Text="#" HorizontalAlignment="Right" Style="{StaticResource SubtleTextStyle}" />

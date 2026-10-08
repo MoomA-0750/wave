@@ -102,4 +102,5 @@
     <string name="nowplaying_open_queue">Open queue</string>
     <string name="nowplaying_reorder">Drag to reorder</string>
     <string name="library_liked_songs_row">Liked Songs</string>
+    <string name="ui_liked_badge">Liked</string>
 </resources>

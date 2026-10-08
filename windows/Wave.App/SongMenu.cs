@@ -40,9 +40,10 @@ public static class SongMenu
         return item;
     }
 
-    public static async Task AddAsync(PlaylistSummary playlist, Song song, bool knownEmpty = false)
+    public static async Task<AddToPlaylistResult> AddAsync(PlaylistSummary playlist, Song song, bool knownEmpty = false)
     {
         var result = await AppServices.Music.AddToPlaylistAsync(playlist.PlaylistId, song.VideoId, knownEmpty);
+        if (result is AddToPlaylistResult.Added or AddToPlaylistResult.AlreadyInPlaylist) AppServices.Library.Membership.NoteAdded(playlist.PlaylistId, song.VideoId);
         AppServices.Player.Message = result switch
         {
             AddToPlaylistResult.Added => L.T($"「{playlist.Title}」に追加しました", $"Added to {playlist.Title}"),
@@ -50,6 +51,7 @@ public static class SongMenu
             AddToPlaylistResult.NotChecked => L.T("重複を確かめられなかったので、追加しませんでした", "Couldn't check for duplicates, so it wasn't added"),
             _ => L.T("追加できませんでした", "Couldn't add it"),
         };
+        return result;
     }
 }
 
@@ -58,61 +60,97 @@ public static class Dialogs
 {
     /// <summary>
     /// プレイリストに追加する画面（Android・Spotify と同じ）。先頭は「高く評価した曲」で、押すと評価を外す（評価済みのライクボタンから開く）。
-    /// プレイリストを押すとそこに入れて閉じる。
+    /// プレイリストを押しても閉じず、続けてほかのプレイリストにも足せる（閉じるのは「完了」）。入っているプレイリストには右に✓を出す。
     /// </summary>
     public static async Task AddToPlaylistAsync(Song song)
     {
         if (App.Window is null) return;
         ContentDialog? dialog = null;
+        var cancel = new CancellationTokenSource();
+        var accent = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["AccentTextFillColorPrimaryBrush"];
         var list = new StackPanel { Spacing = 2, MinWidth = 360 };
-        Button Row(string text, string glyph, Action click, bool accent = false, string? trailing = null)
+        (Button Button, Grid Trailing) Row(string text, string glyph, bool accentIcon = false)
         {
             var grid = new Grid { ColumnSpacing = 12 };
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             var icon = new FontIcon { Glyph = glyph, FontSize = 16 };
-            if (accent) icon.Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["AccentTextFillColorPrimaryBrush"];
+            if (accentIcon) icon.Foreground = accent;
             grid.Children.Add(icon);
             var label = new TextBlock { Text = text, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
             Grid.SetColumn(label, 1);
             grid.Children.Add(label);
-            if (trailing is not null)
-            {
-                var mark = new FontIcon { Glyph = trailing, FontSize = 18, Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["AccentTextFillColorPrimaryBrush"] };
-                Grid.SetColumn(mark, 2);
-                grid.Children.Add(mark);
-            }
+            var trailing = new Grid { Width = 20, Height = 20 };
+            Grid.SetColumn(trailing, 2);
+            grid.Children.Add(trailing);
             var button = new Button { Content = grid, HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch, Padding = new Thickness(12, 10, 12, 10), Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Transparent), BorderThickness = new Thickness(0) };
-            button.Click += (_, _) => click();
-            return button;
+            list.Children.Add(button);
+            return (button, trailing);
         }
-        list.Children.Add(Row(L.T("新しいプレイリスト", "New playlist"), "\uE710", () =>
+        void Mark(Grid trailing, PlaylistMembership.Status? status, bool busy = false)
+        {
+            trailing.Children.Clear();
+            if (busy || status == PlaylistMembership.Status.Checking) trailing.Children.Add(new ProgressRing { IsActive = true, Width = 16, Height = 16 });
+            else if (status == PlaylistMembership.Status.In) trailing.Children.Add(new FontIcon { Glyph = "\uEC61", FontSize = 18, Foreground = accent });
+            else if (status == PlaylistMembership.Status.Unknown)
+                ToolTipService.SetToolTip(trailing, L.T("入っているか確かめられませんでした", "Couldn't check"));
+        }
+        var create = Row(L.T("新しいプレイリスト", "New playlist"), "\uE710", accentIcon: true);
+        create.Button.Click += (_, _) =>
         {
             dialog?.Hide();
             _ = CreatePlaylistAsync(song);
-        }, accent: true));
-        var liked = AppServices.Player.Current?.VideoId == song.VideoId && AppServices.Player.Like == LikeStatus.Like;
-        list.Children.Add(Row(L.T("高く評価した曲", "Liked Songs"), "\uEB52", () =>
+        };
+        var likedRow = Row(L.T("高く評価した曲", "Liked Songs"), "\uEB52");
+        var liked = AppServices.Player.Current?.VideoId == song.VideoId ? AppServices.Player.Like == LikeStatus.Like : AppServices.Library.IsLiked(song.VideoId);
+        likedRow.Trailing.Children.Add(new FontIcon { Glyph = liked ? "\uEC61" : "\uECC8", FontSize = 18, Foreground = accent });
+        likedRow.Button.Click += (_, _) =>
         {
             dialog?.Hide();
-            // 評価済みなら外す（今の曲のときだけ評価が分かる）
+            // 評価済みなら外す（今の曲のときだけ評価を変えられる）
             if (AppServices.Player.Current?.VideoId == song.VideoId) AppServices.Player.ToggleLike();
-        }, trailing: liked ? "\uEC61" : "\uECC8"));
-        foreach (var playlist in AppServices.Library.Editable)
-            list.Children.Add(Row(playlist.Title, "\uE8FD", () =>
+        };
+        var membership = AppServices.Library.Membership;
+        foreach (var playlist in AppServices.Library.Editable.ToList())
+        {
+            var row = Row(playlist.Title, "\uE8FD");
+            PlaylistMembership.Status? status = PlaylistMembership.Status.Checking;
+            var busy = false;
+            Mark(row.Trailing, status);
+            row.Button.Click += async (_, _) =>
             {
-                dialog?.Hide();
-                _ = SongMenu.AddAsync(playlist, song);
-            }));
+                if (busy || status == PlaylistMembership.Status.In) return;
+                busy = true;
+                Mark(row.Trailing, status, busy: true);
+                var result = await SongMenu.AddAsync(playlist, song);
+                busy = false;
+                if (result is AddToPlaylistResult.Added or AddToPlaylistResult.AlreadyInPlaylist) status = PlaylistMembership.Status.In;
+                Mark(row.Trailing, status);
+            };
+            _ = CheckAsync();
+
+            async Task CheckAsync()
+            {
+                try
+                {
+                    status = await membership.CheckAsync(playlist.PlaylistId, song.VideoId, cancel.Token);
+                    if (!busy) Mark(row.Trailing, status);
+                }
+                catch (OperationCanceledException)
+                {
+                }
+            }
+        }
         dialog = new ContentDialog
         {
             Title = L.T("プレイリストに追加", "Add to playlist"),
             Content = new ScrollViewer { Content = list, MaxHeight = 480 },
-            CloseButtonText = L.T("閉じる", "Close"),
+            CloseButtonText = L.T("完了", "Done"),
             XamlRoot = App.Window.Content.XamlRoot,
         };
         await dialog.ShowAsync();
+        cancel.Cancel();
     }
 
     /// <summary>新しいプレイリストを作る（非公開）。song を渡したら作ったあとに入れる。</summary>

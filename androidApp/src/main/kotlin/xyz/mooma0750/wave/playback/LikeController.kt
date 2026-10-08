@@ -63,7 +63,7 @@ class LikeController(
     private val scope: CoroutineScope,
     private val onChanged: (LikeState) -> Unit,
     /** 評価が変わった（かもしれない）とき。ライブラリの「高く評価した曲」を読み直させる。 */
-    private val onLikedSongsChanged: () -> Unit,
+    private val onLikedSongsChanged: (videoId: String, liked: Boolean?) -> Unit,
     /** 知らせの文言を引く（端末の言語に従う）。 */
     private val resources: android.content.res.Resources,
 ) {
@@ -121,7 +121,8 @@ class LikeController(
         scope.launch {
             val result = music.setLiked(videoId, liked, generation)
             Log.i(WaveApplication.LOG_TAG, "like write result=${result::class.simpleName} liked=$liked")
-            if (result !is WriteResult.Failed) onLikedSongsChanged()
+            // 書けたと分かれば向きも渡す（分からないときは向きを渡さない）
+            if (result !is WriteResult.Failed) onLikedSongsChanged(videoId, liked.takeIf { result is WriteResult.Done })
             // 曲が変わった・ログアウトしたなら、表示には反映しない。別の曲を挟んで同じ曲に戻っていたら、古い評価を読んでいるかもしれないので読み直す
             if (startedEpoch != epoch || state.videoId != videoId) {
                 if (result !is WriteResult.Failed && state.videoId == videoId) load(videoId)

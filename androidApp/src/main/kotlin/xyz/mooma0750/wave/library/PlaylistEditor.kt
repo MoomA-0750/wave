@@ -24,15 +24,25 @@ class PlaylistEditor(
     private val scope: CoroutineScope,
     /** プレイリストやライブラリの表示を読み直させる。 */
     private val onChanged: () -> Unit,
+    /** 「どのプレイリストに入っているか」の覚え。変えたプレイリストの分だけ直す。 */
+    private val membership: PlaylistMembership? = null,
 ) {
     private val inFlight = mutableSetOf<String>()
 
+    /** @param onResult 結果（追加の画面が、閉じずに「入っている」の印を出すのに使う）。メインスレッドとは限らない。 */
     fun add(
         playlist: PlaylistSummary,
         song: Song,
+        onResult: (AddToPlaylistResult) -> Unit = {},
     ) = run("add:${playlist.playlistId}:${song.videoId}") { generation ->
         val result = music.addToPlaylist(playlist.playlistId, song.videoId, generation)
         Log.i(WaveApplication.LOG_TAG, "playlist add result=${result::class.simpleName}")
+        when (result) {
+            AddToPlaylistResult.Added, AddToPlaylistResult.AlreadyInPlaylist -> membership?.noteAdded(playlist.playlistId, song.videoId)
+            AddToPlaylistResult.Unknown -> membership?.invalidate(playlist.playlistId)
+            else -> Unit
+        }
+        onResult(result)
         if (result == AddToPlaylistResult.Added || result == AddToPlaylistResult.Unknown) onChanged()
         when (result) {
             AddToPlaylistResult.Added -> context.getString(R.string.library_added_to_playlist, playlist.title)
@@ -50,6 +60,7 @@ class PlaylistEditor(
     ) = run("remove:$playlistId:$setVideoId") { generation ->
         val result = music.removeFromPlaylist(playlistId, song.videoId, setVideoId, generation)
         Log.i(WaveApplication.LOG_TAG, "playlist remove result=${result::class.simpleName}")
+        if (result !is WriteResult.Failed) membership?.invalidate(playlistId)
         if (result !is WriteResult.Failed) onChanged()
         when (result) {
             is WriteResult.Done -> context.getString(R.string.library_removed_from_playlist)

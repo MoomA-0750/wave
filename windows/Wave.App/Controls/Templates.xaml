@@ -238,7 +238,7 @@
                 <ColumnDefinition Width="32" />
                 <ColumnDefinition Width="3*" />
                 <ColumnDefinition Width="2*" />
-                <ColumnDefinition Width="56" />
+                <ColumnDefinition Width="80" />
                 <ColumnDefinition Width="36" />
             </Grid.ColumnDefinitions>
             <TextBlock Text="{x:Bind Number}" HorizontalAlignment="Right" VerticalAlignment="Center"
@@ -262,8 +262,12 @@
             </Grid>
             <TextBlock Grid.Column="2" Text="{x:Bind AlbumTitle}" Visibility="{x:Bind app:Ui.Show(ShowAlbum)}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-            <TextBlock Grid.Column="3" Text="{x:Bind app:Ui.Duration(Song.DurationSeconds)}" VerticalAlignment="Center"
-                       HorizontalAlignment="Right" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+            <!-- 高く評価した曲は長さの左に✓（Spotify と同じ） -->
+            <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" VerticalAlignment="Center">
+                <FontIcon Glyph="&#xEC61;" FontSize="14" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" Visibility="{x:Bind app:Ui.Show(IsLiked), Mode=OneWay}"
+                          ToolTipService.ToolTip="{x:Bind app:L.T('高く評価済み', 'Liked')}" />
+                <TextBlock Text="{x:Bind app:Ui.Duration(Song.DurationSeconds)}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+            </StackPanel>
             <Button Grid.Column="4" Style="{StaticResource IconButtonStyle}" Click="OnMoreClick" ToolTipService.ToolTip="{x:Bind app:L.T('その他', 'More')}">
                 <FontIcon Glyph="&#xE712;" FontSize="14" />
             </Button>

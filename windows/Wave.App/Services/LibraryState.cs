@@ -28,15 +28,41 @@ public sealed partial class LibraryState : ObservableObject
 
     private CancellationTokenSource? cancel;
 
+    /// <summary>曲がどのプレイリストに入っているかの覚え（プレイリストに追加する画面）。</summary>
+    public PlaylistMembership Membership { get; } = new();
+
     /// <summary>自分で編集できるプレイリスト（「プレイリストに追加」の行き先）。</summary>
     public IEnumerable<PlaylistSummary> Editable => Playlists.Where(p => p.Editable && p.PlaylistId != MusicRepository.LikedSongs);
 
     public event Action? LikedSongsChanged;
 
-    public void LikedChanged()
+    /// <summary>高く評価した曲の ID（一覧の曲の行にバッジを付ける。Android と同じ）。読む前は空。</summary>
+    private HashSet<string> likedIds = [];
+
+    /// <summary>likedIds が変わった。</summary>
+    public event Action? LikedIdsChanged;
+
+    public bool IsLiked(string videoId) => likedIds.Contains(videoId);
+
+    /// <summary>評価が変わった。曲と向きが分かれば、ID の集合をすぐ直す（全部は読み直さない）。</summary>
+    public void LikedChanged(string? videoId = null, bool? liked = null)
     {
         likedSongs = null;
+        if (videoId is not null && liked is { } on)
+        {
+            if (on) likedIds.Add(videoId);
+            else likedIds.Remove(videoId);
+            LikedIdsChanged?.Invoke();
+        }
         LikedSongsChanged?.Invoke();
+    }
+
+    private async Task LoadLikedIdsAsync(CancellationToken token)
+    {
+        var (songs, _) = await LikedSongsAsync();
+        if (token.IsCancellationRequested) return;
+        likedIds = songs.Select(s => s.VideoId).ToHashSet();
+        LikedIdsChanged?.Invoke();
     }
 
     /// <summary>
@@ -71,7 +97,12 @@ public sealed partial class LibraryState : ObservableObject
         Artists.Clear();
         Albums.Clear();
         Failure = null;
+        likedSongs = null;
+        likedIds = [];
+        Membership.Clear();
+        LikedIdsChanged?.Invoke();
         if (!AppServices.Client.IsLoggedIn) return;
+        _ = LoadLikedIdsAsync(token);
         IsLoading = true;
         try
         {

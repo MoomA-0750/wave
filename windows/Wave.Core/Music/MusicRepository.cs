@@ -153,22 +153,33 @@ public sealed class MusicRepository(InnerTubeClient client)
     }
 
     /// <summary>曲をプレイリストに追加する。先に全ページを読んで重複を確かめ、読めなければ追加しない。</summary>
+    /// <summary>
+    /// プレイリストの中の曲の ID を全ページ読む（重複の確認と「どのプレイリストに入っているか」の表示。Android と同じ）。
+    /// 最後まで読めなければ null。
+    /// </summary>
+    public async Task<HashSet<string>?> ScanPlaylistAsync(string playlistId, CancellationToken cancel = default)
+    {
+        var ids = new HashSet<string>();
+        string? token = null;
+        var pages = 0;
+        do
+        {
+            var page = await PlaylistAsync(playlistId, token, cancel);
+            if (!page.IsOk) return null;
+            foreach (var s in page.Value!.Songs) ids.Add(s.VideoId);
+            token = page.Value.Continuation;
+            if (token is null && !page.Value.EndConfirmed) return null;
+            if (++pages >= MaxPlaylistPages && token is not null) return null;
+        } while (token is not null);
+        return ids;
+    }
+
     public async Task<AddToPlaylistResult> AddToPlaylistAsync(string playlistId, string videoId, bool knownEmpty = false, CancellationToken cancel = default)
     {
         if (!knownEmpty)
         {
-            var ids = new HashSet<string>();
-            string? token = null;
-            var pages = 0;
-            do
-            {
-                var page = await PlaylistAsync(playlistId, token, cancel);
-                if (!page.IsOk) return AddToPlaylistResult.NotChecked;
-                foreach (var s in page.Value!.Songs) ids.Add(s.VideoId);
-                token = page.Value.Continuation;
-                if (token is null && !page.Value.EndConfirmed) return AddToPlaylistResult.NotChecked;
-                if (++pages >= MaxPlaylistPages && token is not null) return AddToPlaylistResult.NotChecked;
-            } while (token is not null);
+            var ids = await ScanPlaylistAsync(playlistId, cancel);
+            if (ids is null) return AddToPlaylistResult.NotChecked;
             if (ids.Contains(videoId)) return AddToPlaylistResult.AlreadyInPlaylist;
         }
         var result = await EditPlaylistAsync(playlistId, new JsonObject { ["action"] = "ACTION_ADD_VIDEO", ["addedVideoId"] = videoId }, cancel);

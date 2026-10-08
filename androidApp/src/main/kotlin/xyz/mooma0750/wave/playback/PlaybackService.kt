@@ -161,7 +161,7 @@ class PlaybackService : MediaSessionService() {
                 container.music,
                 scope,
                 onChanged = { state -> publishLikeState(state) },
-                onLikedSongsChanged = { container.onLikedSongsChanged() },
+                onLikedSongsChanged = { videoId, liked -> container.onLikedSongsChanged(videoId, liked) },
                 resources = resources,
             )
         likes = likeController

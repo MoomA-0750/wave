@@ -1,5 +1,8 @@
 package xyz.mooma0750.wave.library
 
+import xyz.mooma0750.wave.core.music.AddToPlaylistResult
+import androidx.compose.foundation.layout.size
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -219,17 +222,20 @@ private fun sortLabel(sort: PlaylistSort): String =
         PlaylistSort.Duration -> stringResource(R.string.library_sort_duration)
     }
 
-/** 曲をプレイリストに追加する（仮）。追加先は自分が編集できるプレイリストだけ。 */
+/**
+ * 曲をプレイリストに追加する。追加先は自分が編集できるプレイリストだけ。
+ * 押しても閉じず、続けてほかのプレイリストにも足せる（閉じるのは「完了」）。入っているプレイリストには右に印を出す。
+ */
 @Composable
 fun AddToPlaylistDialog(
     viewModel: LibraryViewModel,
     onDismiss: () -> Unit,
-    onPick: (PlaylistSummary) -> Unit,
+    /** 足す。結果を onResult で返す（どのスレッドからでもよい）。受け付けなければ false。 */
+    onPick: (playlist: PlaylistSummary, onResult: (AddToPlaylistResult) -> Unit) -> Boolean,
     onCreate: (title: String) -> Unit,
     /** 追加する曲。どのプレイリストに入っているかを確かめるのに使う。 */
     song: Song,
     membership: PlaylistMembership,
-    playlistsVersion: Int,
     /** 「高く評価した曲」に入っているか（分からなければ null で行を出さない）。Spotify と同じく、ここで評価を外せる。 */
     liked: Boolean? = null,
     onToggleLiked: () -> Unit = {},
@@ -242,8 +248,10 @@ fun AddToPlaylistDialog(
     // すでに入っているプレイリストを出す（YouTube Music に一覧で返す口が無いので、1つずつ読む）
     val check = remember(membership, scope) { PlaylistMembership.Check(membership, scope) }
     val statuses by check.status.collectAsStateWithLifecycle()
-    LaunchedEffect(check, song.videoId, editable.map { it.playlistId }, playlistsVersion) {
-        if (editable.isNotEmpty()) check.start(editable.map { it.playlistId }, song.videoId, playlistsVersion)
+    // 足している途中のプレイリスト
+    var adding by remember { mutableStateOf(emptySet<String>()) }
+    LaunchedEffect(check, song.videoId, editable.map { it.playlistId }) {
+        if (editable.isNotEmpty()) check.start(editable.map { it.playlistId }, song.videoId)
     }
     DisposableEffect(check) { onDispose { check.cancel() } }
     androidx.compose.material3.AlertDialog(
@@ -277,14 +285,40 @@ fun AddToPlaylistDialog(
                         state.loading -> item { CircularProgressIndicator(Modifier.padding(8.dp)) }
                     }
                     itemsIndexed(editable, key = { _, playlist -> playlist.playlistId }) { _, playlist ->
-                        val status = statuses[playlist.playlistId]
-                        Column(Modifier.fillMaxWidth().clickable { onPick(playlist) }.padding(vertical = 12.dp)) {
-                            Text(playlist.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            when (status) {
-                                PlaylistMembership.Status.Checking -> Text(stringResource(R.string.library_membership_checking), style = MaterialTheme.typography.bodySmall)
-                                PlaylistMembership.Status.In -> Text(stringResource(R.string.library_membership_in), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
-                                PlaylistMembership.Status.Unknown -> Text(stringResource(R.string.library_membership_unknown), style = MaterialTheme.typography.bodySmall)
-                                PlaylistMembership.Status.NotIn, null -> Unit
+                        val id = playlist.playlistId
+                        val status = statuses[id]
+                        val busy = id in adding
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable(enabled = status != PlaylistMembership.Status.In && !busy) {
+                                    val accepted =
+                                        onPick(playlist) { result ->
+                                            scope.launch {
+                                                adding = adding - id
+                                                if (result == AddToPlaylistResult.Added || result == AddToPlaylistResult.AlreadyInPlaylist) check.markIn(id)
+                                            }
+                                        }
+                                    if (accepted) adding = adding + id
+                                }.padding(vertical = 12.dp),
+                            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(playlist.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                when {
+                                    busy -> Text(stringResource(R.string.library_membership_adding), style = MaterialTheme.typography.bodySmall)
+                                    status == PlaylistMembership.Status.Unknown -> Text(stringResource(R.string.library_membership_unknown), style = MaterialTheme.typography.bodySmall)
+                                }
+                            }
+                            when {
+                                busy || status == PlaylistMembership.Status.Checking -> CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                                // 入っているプレイリストには印（高く評価した曲の行と同じ✓）
+                                status == PlaylistMembership.Status.In ->
+                                    androidx.compose.material3.Icon(
+                                        androidx.compose.ui.res.painterResource(R.drawable.ic_check_circle),
+                                        contentDescription = stringResource(R.string.library_membership_in),
+                                        tint = MaterialTheme.colorScheme.primary,
+                                    )
                             }
                         }
                     }
@@ -292,8 +326,12 @@ fun AddToPlaylistDialog(
             }
         },
         confirmButton = {
-            if (creating) TextButton(onClick = { onCreate(title.trim()) }, enabled = title.isNotBlank()) { Text(stringResource(R.string.library_create_and_add)) }
+            if (creating) {
+                TextButton(onClick = { onCreate(title.trim()) }, enabled = title.isNotBlank()) { Text(stringResource(R.string.library_create_and_add)) }
+            } else {
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.library_done)) }
+            }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.library_close)) } },
+        dismissButton = { if (creating) TextButton(onClick = { creating = false }) { Text(stringResource(R.string.library_back)) } },
     )
 }

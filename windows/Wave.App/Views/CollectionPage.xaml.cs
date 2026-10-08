@@ -239,6 +239,7 @@ public sealed partial class CollectionPage : Page
 
     private async Task RemoveAsync(TrackRow row, string setVideoId)
     {
+        AppServices.Library.Membership.Invalidate(request.Id);
         if (await AppServices.Music.RemoveFromPlaylistAsync(request.Id, row.Song.VideoId, setVideoId))
         {
             rows.Remove(row);

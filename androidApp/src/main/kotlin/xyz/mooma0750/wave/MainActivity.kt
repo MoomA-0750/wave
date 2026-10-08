@@ -146,6 +146,9 @@ class MainActivity : ComponentActivity() {
                             shownGeneration = loginGeneration
                         }
                         BackHandler(enabled = nav.canGoBack) { nav.back() }
+                        // 一覧の曲に「高く評価した」のバッジを付けるため、評価した曲の ID を読んでおく
+                        LaunchedEffect(loginGeneration) { container.loadLikedIds() }
+                        val likedIds by container.likedIds.collectAsStateWithLifecycle()
                         val account = rememberAccountInfo(container, state.obtainedAtEpochMs)
                         // どの画面にいるかだけを記録する（実機の確認用。中身や ID は出さない）
                         LaunchedEffect(nav.tab, nav.current) {
@@ -158,7 +161,7 @@ class MainActivity : ComponentActivity() {
                                 viewModel(key = "relogin-$loginGeneration") { LoginViewModel(container) },
                                 onCancel = { reLogin = false },
                             )
-                        } else {
+                        } else androidx.compose.runtime.CompositionLocalProvider(xyz.mooma0750.wave.ui.LocalLikedIds provides likedIds) {
                             // Spotify と同じく、デバイスのボタンは端末を選ぶだけの画面を出す（設定はその中のリンクから）
                             var showDevices by remember { mutableStateOf(false) }
                             val openDevices: () -> Unit = { if (container.connectV2 != null) showDevices = true else nav.push(Screen.Connect) }
@@ -311,20 +314,19 @@ class MainActivity : ComponentActivity() {
                                 val like by container.player.likeState.collectAsState()
                                 val likeScope = rememberCoroutineScope()
                                 val likedNow = if (like.videoId == song.videoId) like.status?.let { it == xyz.mooma0750.wave.core.music.LikeStatus.Like } else null
+                                // 開いている間は一覧を作り直さない（足すたびに読み直して並びが動かないように）
+                                val openedVersion = remember(song) { playlistsVersion }
                                 AddToPlaylistDialog(
-                                    viewModel(key = "library-$loginGeneration-$playlistsVersion") { LibraryViewModel(container.music) },
+                                    viewModel(key = "library-$loginGeneration-$openedVersion") { LibraryViewModel(container.music) },
                                     onDismiss = { addTarget = null },
-                                    onPick = { playlist ->
-                                        container.playlistEditor.add(playlist, song)
-                                        addTarget = null
-                                    },
+                                    // 押しても閉じない（続けてほかのプレイリストにも足せる）
+                                    onPick = { playlist, onResult -> container.playlistEditor.add(playlist, song, onResult) },
                                     onCreate = { title ->
                                         container.playlistEditor.create(title, song)
                                         addTarget = null
                                     },
                                     song = song,
                                     membership = container.playlistMembership,
-                                    playlistsVersion = playlistsVersion,
                                     liked = likedNow,
                                     onToggleLiked = { likedNow?.let { now -> likeScope.launch { container.player.setLiked(song.videoId, !now) } } },
                                 )

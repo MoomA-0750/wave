@@ -410,6 +410,8 @@ fun SongRow(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+        // 高く評価した曲には印を付ける（Spotify と同じ）
+        xyz.mooma0750.wave.ui.LikedBadge(song.videoId)
         trailing()
     }
 }

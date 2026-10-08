@@ -230,8 +230,33 @@ class AppContainer(
     /** 高く評価した曲の読み込み（アーティストのページで使う）。評価が変わるまで使い回す。 */
     val likedSongs = LikedSongsCache(music)
 
-    fun onLikedSongsChanged() {
+    private val mutableLikedIds = MutableStateFlow<Set<String>>(emptySet())
+
+    /** 高く評価した曲の ID（一覧の曲にバッジを付けるのに使う）。読む前・読めなければ空。 */
+    val likedIds: StateFlow<Set<String>> = mutableLikedIds.asStateFlow()
+
+    private var likedIdsJob: kotlinx.coroutines.Job? = null
+
+    /** 高く評価した曲の ID を読む（まだ読んでいない・評価が変わった後）。読み込みは likedSongs と共有する。 */
+    fun loadLikedIds() {
+        if (likedIdsJob?.isActive == true) return
+        likedIdsJob =
+            appScope.launch {
+                val version = likedSongsVersion.value
+                val result = likedSongs.songs(version)
+                if (version == likedSongsVersion.value) mutableLikedIds.value = result.songs.mapTo(HashSet()) { it.videoId }
+            }
+    }
+
+    /**
+     * 評価が変わった（かもしれない）。曲と向きが分かれば、手元の ID の集合をすぐ直す（一覧を全部読み直さない）。
+     */
+    fun onLikedSongsChanged(
+        videoId: String? = null,
+        liked: Boolean? = null,
+    ) {
         mutableLikedSongsVersion.update { it + 1 }
+        if (videoId != null && liked != null) mutableLikedIds.update { if (liked) it + videoId else it - videoId }
     }
 
     private val mutablePlaylistsVersion = MutableStateFlow(0)
@@ -239,7 +264,7 @@ class AppContainer(
     /** プレイリストを編集した（かもしれない）たびに増える。ライブラリとプレイリストの表示を読み直すキーに使う。 */
     val playlistsVersion: StateFlow<Int> = mutablePlaylistsVersion.asStateFlow()
 
-    val playlistEditor = PlaylistEditor(context.applicationContext, music, appScope, onChanged = { mutablePlaylistsVersion.update { it + 1 } })
+    val playlistEditor = PlaylistEditor(context.applicationContext, music, appScope, onChanged = { mutablePlaylistsVersion.update { it + 1 } }, membership = playlistMembership)
 
     /** UI から再生サービスへの接続。 */
     val player = PlayerConnection(context, controllerToken)
@@ -420,6 +445,9 @@ class AppContainer(
         streamCache.clear()
         videoStreamCache.clear()
         settings.clearPlaylistOrders()
+        likedIdsJob?.cancel()
+        mutableLikedIds.value = emptySet()
+        playlistMembership.clear()
         imageCacheCleaner()
         WebViewCredentials.clear()
         Log.i(WaveApplication.LOG_TAG, "logout cleared=$cleared")

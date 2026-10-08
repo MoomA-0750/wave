@@ -133,4 +133,7 @@
         <item quantity="one">%1$d+ songs • %2$s</item>
         <item quantity="other">%1$d+ songs • %2$s</item>
     </plurals>
+    <string name="library_membership_adding">Adding…</string>
+    <string name="library_done">Done</string>
+    <string name="library_back">Back</string>
 </resources>
