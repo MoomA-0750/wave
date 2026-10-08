@@ -322,7 +322,7 @@ class MainActivity : ComponentActivity() {
                                     val likedSongsTitle = stringResource(R.string.main_liked_songs)
                                     ArtistScreen(
                                         viewModel(key = "artist-$loginGeneration-${screen.browseId}-$likedSongsVersion") {
-                                            ArtistViewModel(container.music, screen.browseId, container.likedSongs, likedSongsVersion)
+                                            ArtistViewModel(container.music, screen.browseId, container.likedSongs, likedSongsVersion, container.channelPosts)
                                         },
                                         title = screen.name,
                                         actions = songActions,

@@ -217,6 +217,14 @@ class AppContainer(
             LrclibClient(HttpClient(OkHttp.create { preconfigured = mediaHttpClient }), userAgent = "wave/${BuildConfig.VERSION_NAME}"),
         )
 
+    /** アーティストの YouTube のチャンネルの投稿（ライブの告知）。認証情報を持たないクライアントで読む。 */
+    val channelPosts =
+        xyz.mooma0750.wave.core.music.ChannelPostsClient(
+            HttpClient(OkHttp.create { preconfigured = mediaHttpClient }),
+            hl = java.util.Locale.getDefault().language.ifBlank { "ja" },
+            gl = java.util.Locale.getDefault().country.ifBlank { "JP" },
+        )
+
     /** 自アプリの UI のコントローラーを見分けるための、プロセスごとの値（接続ヒントで渡す）。 */
     val controllerToken: String = UUID.randomUUID().toString()
 

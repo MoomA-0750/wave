@@ -94,6 +94,7 @@ class ArtistViewModel(
     private val browseId: String,
     private val liked: LikedSongsCache,
     private val likedSongsVersion: Int,
+    private val channelPosts: xyz.mooma0750.wave.core.music.ChannelPostsClient? = null,
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(PageUiState<ArtistPage>())
     val state: StateFlow<PageUiState<ArtistPage>> = mutableState.asStateFlow()
@@ -156,10 +157,9 @@ class ArtistViewModel(
     private suspend fun loadLivePosts() {
         val page = state.value.page ?: return
         val channelId = page.channelId ?: browseId.takeIf { it.startsWith("UC") } ?: return
-        val result = music.artistPosts(channelId)
-        val posts = (result as? CallResult.Ok)?.value.orEmpty()
-        mutableLivePosts.value = xyz.mooma0750.wave.core.music.LiveNews.of(posts).take(MAX_LIVE_POSTS)
-        Log.i(WaveApplication.LOG_TAG, "artist posts ok=${result is CallResult.Ok} posts=${posts.size} live=${mutableLivePosts.value.size}")
+        val result = channelPosts?.posts(channelId)
+        mutableLivePosts.value = xyz.mooma0750.wave.core.music.LiveNews.of(result.orEmpty()).take(MAX_LIVE_POSTS)
+        Log.i(WaveApplication.LOG_TAG, "artist posts ok=${result != null} posts=${result?.size} live=${mutableLivePosts.value.size}")
     }
 
     private companion object {
