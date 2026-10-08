@@ -110,6 +110,16 @@ public static class DebugCommands
                 if (result.IsOk && result.Value!.Songs.Count > 0) player.PlayList(result.Value.Songs.Take(5).ToList());
                 break;
             }
+            case "artist-play":
+            {
+                // アーティストのページの再生ボタンと同じ流し方（人気の曲から始め、「すべての曲」の残りを足す）
+                var artist = await AppServices.Music.ArtistAsync(arg);
+                if (!artist.IsOk) break;
+                var all = artist.Value!.AllSongsPlaylistId is { } allId ? AppServices.Music.FullPlaylistAsync(allId) : null;
+                await Views.ArtistPage.PlayArtistAsync(player, arg, artist.Value.TopSongs, 0, null, all);
+                AppPaths.Log($"debug artist-play queue={player.Queue.Count} artists={string.Join(",", player.Queue.Select(s => s.Artists.FirstOrDefault()?.Name).Distinct())}");
+                break;
+            }
             case "queue-add":
             {
                 // 検索の先頭の曲を「キューに追加」する
