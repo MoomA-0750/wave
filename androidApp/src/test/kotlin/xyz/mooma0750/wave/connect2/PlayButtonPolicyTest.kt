@@ -19,10 +19,13 @@ class PlayButtonPolicyTest {
     ) = PlayButtonPolicy.onPlay(newSelection, retreated, inHousehold, stateSettled, hasAccountTag, remotePlaying, foreground, hasLocalQueue)
 
     @Test
-    fun playButtonInTheForegroundKeepsTheLocalQueueWithoutWaiting() {
-        // 手元のキューがあれば、状態がそろう前でも、ほかの端末が鳴っていても、手元のキューのまま鳴らす
+    fun playButtonInTheForegroundSyncsToTheLatestPlaybackWithoutWaiting() {
+        // 状態がそろっていれば、家で最後に鳴った再生（ほかの端末で鳴っていればその位置）に合わせて鳴らす
+        assertEquals(Decision.SyncAndClaim, play(hasLocalQueue = true, remotePlaying = true))
+        assertEquals(Decision.SyncAndClaim, play(hasLocalQueue = true, remotePlaying = false))
+        assertEquals(Decision.SyncAndClaim, play(retreated = false, remotePlaying = true))
+        // そろう前は待たずに、手元（そろうまでに合わせた分）のまま鳴らす
         assertEquals(Decision.Claim, play(hasLocalQueue = true, stateSettled = false, hasAccountTag = false))
-        assertEquals(Decision.Claim, play(hasLocalQueue = true, remotePlaying = true))
         // 裏では今までどおり確かめる
         assertEquals(Decision.Wait, play(hasLocalQueue = true, foreground = false, stateSettled = false))
         assertEquals(Decision.BlockRemotePlaying, play(hasLocalQueue = true, foreground = false))
@@ -39,7 +42,7 @@ class PlayButtonPolicyTest {
 
     @Test
     fun playButtonOnADeviceThatWasNotRetreatedJustClaims() {
-        assertEquals(Decision.Claim, play(retreated = false, remotePlaying = true))
+        assertEquals(Decision.Claim, play(retreated = false, remotePlaying = true, foreground = false))
         assertEquals(Decision.Claim, play(inHousehold = false))
     }
 

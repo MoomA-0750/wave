@@ -9,6 +9,9 @@ internal object PlayButtonPolicy {
         /** 手元のキューで新しい再生として claim する。 */
         Claim,
 
+        /** 家で最後に鳴った再生（キューと位置）に手元を合わせてから claim する。 */
+        SyncAndClaim,
+
         /** 一時停止して、最新の状態とアカウントタグがそろうのを待つ。 */
         Wait,
 
@@ -55,11 +58,13 @@ internal object PlayButtonPolicy {
         hasLocalQueue: Boolean = false,
     ): Decision {
         // 曲を選ぶのは、いつでも新しい再生（L-3）。家に入っていない・退いていない端末も、そのまま鳴らして claim する
-        if (newSelection || !retreated || !inHousehold) return Decision.Claim
-        // 前面で手元のキューの再生ボタンを押したら、手元のキューのまま鳴らす（ほかの端末は claim で止まる）。
-        // 中継の状態がそろうのを待たない（待つと開いてすぐの再生が遅れ、引き取りになると手元のキューがほかの端末のものに替わっていた）。
+        if (newSelection || !inHousehold) return Decision.Claim
+        // 前面で再生ボタンを押したら、待たずにこの端末で鳴らす。キューは家で最後に鳴ったもの（ほかの端末で鳴っていればその位置）に合わせる
+        // （止まっている間も合わせてあるので、ふつうは置き換わらない）。ほかの端末は claim で止まる。
+        // 中継の状態がまだそろっていなければ、手元（そろうまでに合わせた分）のまま鳴らす（待つと開いてすぐの再生が遅れる）。
         // 裏（イヤホンのボタンなど）では、うっかりほかの端末の再生を止めないよう今までどおり確かめる
-        if (hasLocalQueue && foreground) return Decision.Claim
+        if (foreground && (hasLocalQueue || !retreated)) return if (stateSettled && hasAccountTag) Decision.SyncAndClaim else Decision.Claim
+        if (!retreated) return Decision.Claim
         // 古い状態で「鳴っていない」と決めない（再レビュー 高-A・中-B）
         if (!stateSettled || !hasAccountTag) return Decision.Wait
         if (!remotePlaying) return Decision.Claim

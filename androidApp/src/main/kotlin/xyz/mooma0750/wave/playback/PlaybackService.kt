@@ -424,6 +424,25 @@ class PlaybackService : MediaSessionService() {
                     expectedLoginGeneration: Long,
                 ): Boolean = suppressingV2 { endpoint.adopt(snapshot.copy(positionMs = positionMs.coerceAtLeast(0), playing = true), expectedLoginGeneration) }
 
+                override fun stage(
+                    snapshot: HandoffSnapshot,
+                    expectedLoginGeneration: Long,
+                ): Boolean =
+                    suppressingV2 {
+                        if (loggedInAt == null || container.session.loginGenerationId() != expectedLoginGeneration || player.playWhenReady) return@suppressingV2 false
+                        handedOff = false
+                        // 途中の復元を無効にし、合わせたキューを保存で上書きしてよい状態にする
+                        restoreStarted = true
+                        restoreSettled = true
+                        lastErrorWasThisSong = false
+                        historyTracker.seedHandoff(snapshot.currentItemId, snapshot.listenedMs, snapshot.historySent)
+                        player.repeatMode = PlaybackDecisions.repeatModeOf(snapshot.repeat)
+                        queueSession.adopt(snapshot, expectedLoginGeneration, play = false)
+                        // 再生ボタンを押したらすぐ鳴るよう、今の曲の URL を先に調べておく
+                        snapshot.items.firstOrNull { it.itemId == snapshot.currentItemId }?.let { prewarmCurrent(it.videoId, queueSession.accountEpoch) }
+                        true
+                    }
+
                 override fun control(
                     action: xyz.mooma0750.wave.handoff.v2.ControlAction,
                     positionMs: Long?,
@@ -637,6 +656,9 @@ class PlaybackService : MediaSessionService() {
         queueSession.restore(saved)
         player.repeatMode = saved.repeatMode
         Log.i(WaveApplication.LOG_TAG, "queue restored size=${saved.items.size} index=${saved.currentIndex}")
+        // 戻す前に再生が押されていた（Bluetooth のボタンで起動したなど）: そのときはキューが空で判断できなかったので、戻したキューで判断し直す
+        // （しないと、ほかの端末が鳴っているのに、この端末でも黙って鳴り出す）
+        if (player.playWhenReady) container.connectV2Host.listener?.onUserStartedPlayback(newSelection = false)
         // 再生ボタンを押してから曲の URL を調べると待たされるので、戻した今の曲だけは先に調べておく（再生は始めない）
         prewarmCurrent(saved.items[saved.currentIndex].song.videoId, queueSession.accountEpoch)
     }

@@ -135,6 +135,12 @@ public static class DebugCommands
             case "pause":
                 if (player.IsPlaying) player.TogglePlay();
                 break;
+            case "play":
+                if (!player.IsPlaying) player.TogglePlay();
+                break;
+            case "now":
+                AppPaths.Log($"debug now title={player.Current?.Title} position={player.Position:0} playing={player.IsPlaying} remote={player.IsRemote}");
+                break;
             case "playlist-delete":
             {
                 // 名前の一致する自分のプレイリストを消す（確かめで作ったものの後片付け）

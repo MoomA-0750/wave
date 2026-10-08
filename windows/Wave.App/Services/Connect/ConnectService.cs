@@ -384,6 +384,7 @@ public sealed class ConnectService
             remote = new RemoteView(latest.Writer, LabelOf(latest.Writer), item?.Title, item is null ? null : string.Join(", ", item.Artists.Select(a => a.Name)), item?.ThumbnailUrl, item?.DurationSeconds,
                 latest.Cursor.Playing, latest.Cursor.PositionMs, tag is not null && latest.Cursor.AccountTag == tag, online.Contains(latest.Writer));
         }
+        if (engine is not null) StageLatest(engine, play: false);
         var mirror = MirrorOf(engine, remote);
         ui.TryEnqueue(() =>
         {
@@ -394,6 +395,49 @@ public sealed class ConnectService
             Changed?.Invoke();
         });
     }
+
+    /// <summary>前に合わせた家の最新の再生（同じ状態で置き直さない）。</summary>
+    private string? stagedKey;
+
+    /// <summary>
+    /// エンジンのスレッドで: この端末が鳴らしていない間、手元のキューと位置を、家で最後に鳴った端末の再生（同じアカウント）に合わせておく
+    /// （Android の stageLatest と同じ）。play なら（本人が手元で再生を押した直後）、今の位置まで合わせて鳴らす（この後 claim する）。
+    /// </summary>
+    private void StageLatest(ConnectClient engine, bool play)
+    {
+        if (engine.IsWriter || tagState is not { } state) return;
+        if (engine.RemoteNowPosition() is not { } now || now.Cursor.AccountTag != state.Tag) return;
+        if (engine.LatestQueueBody() is not { } queue || engine.LatestQueueHash() != now.Cursor.QueueRef) return;
+        // 鳴っている端末の位置は刻々と変わるので、曲が替わったとき・止まったときだけ合わせ直す（鳴らすときは必ず合わせる）
+        var key = $"{now.Cursor.QueueRef}|{now.Cursor.CurrentItemId}|{(now.Cursor.Playing ? "playing" : (now.PositionMs / 1000).ToString())}";
+        if (!play && key == stagedKey) return;
+        if (DecodeQueue(queue.Queue.Snapshot) is not { } decoded || AtCursor(decoded, now.Cursor, now.PositionMs) is not { } adjusted) return;
+        var export = ToExport(adjusted);
+        var done = OnUi(() =>
+        {
+            if (AppServices.Client.Generation != state.Generation) return false;
+            var local = player.CurrentCursor();
+            // 同じキューの同じ曲で位置も近ければそのまま。止まっていれば位置だけ合わせる（鳴らし始めた直後は読み込み中なので、読み直す）
+            if (local?.CurrentItemId == now.Cursor.CurrentItemId && Snapshot() == queue.Queue.Snapshot)
+            {
+                if (Math.Abs(local.PositionMs - adjusted.PositionMs) <= PositionToleranceMs) return true;
+                if (!play)
+                {
+                    player.ConnectStagePosition(adjusted.PositionMs);
+                    return true;
+                }
+            }
+            return play
+                ? player.ConnectAdopt(export, adjusted.PositionMs, RepeatOf(adjusted.Repeat), adjusted.ListenedMs, adjusted.HistorySent)
+                : player.ConnectStage(export, adjusted.PositionMs, RepeatOf(adjusted.Repeat));
+        });
+        if (!done) return;
+        stagedKey = key;
+        AppPaths.Log($"connect-v2 staged latest play={play}");
+    }
+
+    /// <summary>合わせるとき、手元の位置がこれ以上ずれていればシークする。</summary>
+    private const long PositionToleranceMs = 3_000;
 
     private string? mirroredSnapshot;
     private QueueExport? mirroredQueue;
@@ -651,7 +695,13 @@ public sealed class ConnectService
             case PlayButtonPolicy.Decision.Claim:
                 ClaimLocal(engine);
                 break;
+            case PlayButtonPolicy.Decision.SyncAndClaim:
+                // 家で最後に鳴った再生（今ほかの端末で鳴っていれば、その位置）に合わせてから、この端末の再生にする
+                StageLatest(engine, play: true);
+                ClaimLocal(engine);
+                break;
             case PlayButtonPolicy.Decision.ResumeAndClaim:
+                StageLatest(engine, play: false);
                 OnUi(() =>
                 {
                     player.ConnectResume();

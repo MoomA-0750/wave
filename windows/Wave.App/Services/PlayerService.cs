@@ -789,6 +789,58 @@ public sealed partial class PlayerService : ObservableObject
         return true;
     }
 
+    /// <summary>
+    /// ほかの端末で最後に鳴ったキューと位置に、手元を合わせておく（鳴らさない）。再生ボタンを押せばそのまま続きから鳴る。
+    /// ほかの端末を映している間は、映すのをやめたときに戻すキュー（退避した分）を置き換える。手元で鳴っている・読み込み中なら何もしない。
+    /// </summary>
+    public bool ConnectStage(QueueExport queue, long positionMs, RepeatMode repeat)
+    {
+        var index = queue.Items.FindIndex(i => i.Meta.ItemId == queue.CurrentItemId);
+        if (index < 0) return false;
+        if (IsRemote)
+        {
+            localBackup = new LocalQueueBackup(queue.Items, index, queue.SourceId, queue.RadioSeed, queue.Continuation, queue.RadioPlaylistId, null, positionMs / 1000.0, repeat);
+            return true;
+        }
+        if (IsPlaying || IsLoading) return false;
+        loadCancel?.Cancel();
+        player.Source = null;
+        SourceId = queue.SourceId;
+        radioSeed = queue.RadioSeed;
+        radioContinuation = queue.Continuation;
+        radioPlaylistId = queue.RadioPlaylistId;
+        SetShuffleOrder(null);
+        Queue.Clear();
+        foreach (var (song, meta) in queue.Items)
+        {
+            adoptIds = new([meta.ItemId]);
+            nextOrigin = meta.Origin;
+            Queue.Add(song);
+        }
+        adoptIds = null;
+        nextOrigin = QueueOrigin.Source;
+        Repeat = repeat;
+        Index = index;
+        Current = Queue[index];
+        Position = positionMs / 1000.0;
+        Duration = Current.DurationSeconds ?? 0;
+        var staged = Current;
+        var cancel = new CancellationTokenSource();
+        loadCancel = cancel;
+        _ = LoadSongInfoAsync(staged, cancel.Token);
+        _ = LoadLyricsAsync(staged, cancel.Token);
+        SaveQueue();
+        return true;
+    }
+
+    /// <summary>手元の同じ曲のまま、止まっている位置だけ合わせる（ほかの端末を映している間・鳴っている間は何もしない）。</summary>
+    public void ConnectStagePosition(long positionMs)
+    {
+        if (IsRemote || IsPlaying || IsLoading || Current is null) return;
+        if (player.Source is null) Position = positionMs / 1000.0;
+        else player.PlaybackSession.Position = TimeSpan.FromMilliseconds(positionMs);
+    }
+
     /// <summary>曲のラジオの続きを、種の曲から取って足す（まだキューに無い曲だけ）。</summary>
     private async Task ExtendFromSeedAsync(string seed)
     {
@@ -844,7 +896,7 @@ public sealed partial class PlayerService : ObservableObject
     }
 
     /// <summary>映し始める前の手元のキュー（映すのをやめたら戻す。Android と同じく、手元のキューは相手のキューで消さない）。</summary>
-    private sealed record LocalQueueBackup(List<(Song Song, QueueItemMeta Meta)> Items, int Index, string? SourceId, string? RadioSeed, string? Continuation, string? RadioPlaylistId, Dictionary<string, int>? ShuffleOrder);
+    private sealed record LocalQueueBackup(List<(Song Song, QueueItemMeta Meta)> Items, int Index, string? SourceId, string? RadioSeed, string? Continuation, string? RadioPlaylistId, Dictionary<string, int>? ShuffleOrder, double PositionSeconds = 0, RepeatMode? Repeat = null);
 
     private LocalQueueBackup? localBackup;
 
@@ -864,7 +916,7 @@ public sealed partial class PlayerService : ObservableObject
             player.Source = null;
             IsLoading = false;
             localBackup = Queue.Count == 0 ? null : new LocalQueueBackup(
-                Queue.Select((song, i) => (song, itemMeta[i])).ToList(), Index, SourceId, radioSeed, radioContinuation, radioPlaylistId, shuffleOrder is null ? null : new Dictionary<string, int>(shuffleOrder));
+                Queue.Select((song, i) => (song, itemMeta[i])).ToList(), Index, SourceId, radioSeed, radioContinuation, radioPlaylistId, shuffleOrder is null ? null : new Dictionary<string, int>(shuffleOrder), Position);
             IsRemote = true;
         }
         // 押した直後は、相手の新しいカーソルが届くまで表示を保つ
@@ -977,12 +1029,15 @@ public sealed partial class PlayerService : ObservableObject
         radioContinuation = backup.Continuation;
         radioPlaylistId = backup.RadioPlaylistId;
         SetShuffleOrder(backup.ShuffleOrder);
+        if (backup.Repeat is { } repeat) Repeat = repeat;
         if (backup.Index >= 0 && backup.Index < Queue.Count)
         {
             Index = backup.Index;
             Current = Queue[backup.Index];
             Duration = Current.DurationSeconds ?? 0;
+            Position = backup.PositionSeconds;
         }
+        SaveQueue();
     }
 
     // --- ほかの端末からの命令に従う（この端末が鳴らしている） ---

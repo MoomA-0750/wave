@@ -30,6 +30,15 @@ class ConnectV2Host {
             expectedLoginGeneration: Long,
         ): Boolean
 
+        /**
+         * 検証済みのスナップショットで置き換えるが、鳴らさない（ほかの端末で最後に鳴ったキューに合わせておく）。
+         * 手元で鳴っている・鳴らそうとしているとき、ログインの世代が違うときは受け付けない。
+         */
+        fun stage(
+            snapshot: HandoffSnapshot,
+            expectedLoginGeneration: Long,
+        ): Boolean
+
         /** ほかの端末からの遠隔操作に従う（本人の操作として知らせない）。 */
         fun control(
             action: xyz.mooma0750.wave.handoff.v2.ControlAction,

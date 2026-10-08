@@ -443,6 +443,8 @@ class QueueSession(
     fun adopt(
         snapshot: xyz.mooma0750.wave.handoff.HandoffSnapshot,
         expectedLoginGeneration: Long? = null,
+        /** false なら置き換えるだけで鳴らさない（ほかの端末の再生に合わせておくとき）。 */
+        play: Boolean = true,
     ): Int {
         startGeneration(expectedLoginGeneration ?: loginGeneration())
         val items = snapshot.items.map(HandoffMapping::queueItemOf)
@@ -450,7 +452,7 @@ class QueueSession(
         setContext(HandoffMapping.queueSourceOf(snapshot.source), snapshot.continuation, snapshot.radioPlaylistId, snapshot.exhausted)
         // 受け取った並びの元の順番は分からないので、シャッフルは切った状態で始める
         setShuffleOrder(null)
-        player.replaceAndPlayAt(items, index, snapshot.positionMs)
+        if (play) player.replaceAndPlayAt(items, index, snapshot.positionMs) else player.restore(items, index, snapshot.positionMs)
         maybeFetch()
         return index
     }

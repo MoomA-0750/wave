@@ -8,6 +8,9 @@ public static class PlayButtonPolicy
         /// <summary>手元のキューで新しい再生として claim する。</summary>
         Claim,
 
+        /// <summary>家で最後に鳴った再生（キューと位置）に手元を合わせてから claim する。</summary>
+        SyncAndClaim,
+
         /// <summary>一時停止して、最新の状態とアカウントタグがそろうのを待つ。</summary>
         Wait,
 
@@ -36,9 +39,11 @@ public static class PlayButtonPolicy
     public static Decision OnPlay(bool newSelection, bool retreated, bool inHousehold, bool stateSettled, bool hasAccountTag, bool remotePlaying, bool foreground, bool hasLocalQueue = false)
     {
         // 曲を選ぶのは、いつでも新しい再生（L-3）
-        if (newSelection || !retreated || !inHousehold) return Decision.Claim;
-        // 前面で手元のキューの再生ボタンを押したら、待たずに手元のキューのまま鳴らす（Android と同じ。ほかの端末は claim で止まる）
-        if (hasLocalQueue && foreground) return Decision.Claim;
+        if (newSelection || !inHousehold) return Decision.Claim;
+        // 前面で再生ボタンを押したら、待たずにこの端末で鳴らす。キューは家で最後に鳴ったもの（ほかの端末で鳴っていればその位置）に合わせる
+        // （Android と同じ。止まっている間も合わせてある。ほかの端末は claim で止まる）。状態がそろう前は手元のまま鳴らす
+        if (foreground && (hasLocalQueue || !retreated)) return stateSettled && hasAccountTag ? Decision.SyncAndClaim : Decision.Claim;
+        if (!retreated) return Decision.Claim;
         // 古い状態で「鳴っていない」と決めない
         if (!stateSettled || !hasAccountTag) return Decision.Wait;
         if (!remotePlaying) return Decision.Claim;

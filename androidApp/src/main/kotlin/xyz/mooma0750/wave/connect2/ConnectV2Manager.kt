@@ -153,6 +153,7 @@ class ConnectV2Manager(
         val engine = client
         maybeSendProfile(engine)
         mutableRemotePlayback.value = mirrorOf(engine)
+        engine?.let { stageLatest(it, play = false) }
         writer = engine?.isWriter == true
         mutableInfo.value = Info(engine != null, engine?.householdId != null, engine?.members?.size ?: 0, engine?.isWriter == true, engine?.hasRetreated == true, engine?.storeResetPending == true)
         val known = labels
@@ -221,6 +222,54 @@ class ConnectV2Manager(
             }
         val label = labels[now.writer] ?: resources.getString(R.string.connect_v2_member_unknown, now.writer.take(6))
         return RemotePlayback(now.writer, label, songs, items.map { it.itemId }, index, now.positionMs, SystemClock.elapsedRealtime(), now.cursor.playing, now.cursor.repeat)
+    }
+
+    /** 前に合わせた家の最新の再生（同じ状態で置き直さない）。 */
+    private var stagedKey: String? = null
+
+    /**
+     * エンジンのスレッドで: この端末が鳴らしていない間、手元のキューと位置を、家で最後に鳴った端末の再生（同じアカウント）に合わせておく。
+     * 再生ボタンを押す前から正しいキューが出ていて、押せばそのまま続きから鳴る。
+     * play なら（本人が手元で再生を押した直後）、今の位置まで合わせて鳴らしたままにする（この後 claim する）。
+     */
+    private fun stageLatest(
+        engine: ConnectClient,
+        play: Boolean,
+    ) {
+        // 再生サービスが動いていなければ、動き出してから合わせる（情報の更新のたびに呼ばれる）
+        if (engine.isWriter || host.endpoint == null) return
+        val state = tagState ?: return
+        if (state.generation != session.loginGenerationId()) return
+        val now = engine.remoteNow() ?: return
+        if (now.cursor.accountTag != state.tag) return
+        val (_, queue) = engine.latestQueueBody() ?: return
+        if (engine.latestQueueHash() != now.cursor.queueRef) return
+        // 鳴っている端末の位置は刻々と変わるので、曲が替わったとき・止まったときだけ合わせ直す（鳴らすときは必ず合わせる）
+        val key = "${now.cursor.queueRef}|${now.cursor.currentItemId}|${if (now.cursor.playing) "playing" else now.positionMs / 1000}"
+        if (!play && key == stagedKey) return
+        val decoded = RemoteQueue.decode(queue.snapshot) ?: return
+        val adjusted = RemoteQueue.atCursor(decoded, now.cursor, now.positionMs) ?: return
+        val done =
+            runBlocking(Dispatchers.Main) {
+                val endpoint = host.endpoint ?: return@runBlocking false
+                val local = endpoint.cursor()
+                // 手元で鳴っている間は合わせない（鳴らしたのは本人。claim の判断に任せる）
+                if (!play && local?.playing == true) return@runBlocking false
+                val sameQueue = local?.currentItemId == now.cursor.currentItemId && endpoint.snapshot()?.let(HandoffCodec::encode) == queue.snapshot
+                when {
+                    // 同じキューの同じ曲なら、位置だけ合わせる
+                    sameQueue -> {
+                        if (kotlin.math.abs(local!!.positionMs - adjusted.positionMs) > POSITION_TOLERANCE_MS) endpoint.control(xyz.mooma0750.wave.handoff.v2.ControlAction.Seek, adjusted.positionMs)
+                        true
+                    }
+                    play -> endpoint.adopt(adjusted, adjusted.positionMs, state.generation)
+                    else -> endpoint.stage(adjusted, state.generation)
+                }
+            }
+        if (done) {
+            stagedKey = key
+            Log.i(WaveApplication.LOG_TAG, "connect-v2 staged latest play=$play")
+        }
     }
 
     /** ほかの端末に選ばれて引き取りを頼まれた時刻の期限（この間は画面が裏でも取り込む）。 */
@@ -495,6 +544,13 @@ class ConnectV2Manager(
         tagState = state
         if (!engine.isWriter) loadLocalFromPlayer(engine)
         engine.onAccountTagAvailable()
+        // 起動の直後（ログインを確かめる前）に再生が押されると、保留した開始はログインの確かめで捨てられる。
+        // 手元で鳴ったままなら、ここで判断し直す（しないと、ほかの端末が鳴っていても、この端末も書き手にならずに鳴り続ける）
+        if (!engine.isWriter && runBlocking(Dispatchers.Main) { host.endpoint?.cursor()?.playing == true }) {
+            Log.i(WaveApplication.LOG_TAG, "connect-v2 local playing without claim, deciding again")
+            // 再生サービスからの知らせと同じく Main で呼ぶ（中で再生器を読む）
+            appScope.launch(Dispatchers.Main) { listener.onUserStartedPlayback(newSelection = false) }
+        }
         refreshInfo()
     }
 
@@ -572,8 +628,14 @@ class ConnectV2Manager(
     ) {
         when (decision) {
             PlayButtonPolicy.Decision.Claim -> claimLocal(engine, newSelection)
+            PlayButtonPolicy.Decision.SyncAndClaim -> {
+                // 家で最後に鳴った再生（今ほかの端末で鳴っていれば、その位置）に合わせてから、この端末の再生にする
+                stageLatest(engine, play = true)
+                claimLocal(engine, newSelection)
+            }
             PlayButtonPolicy.Decision.ResumeAndClaim -> {
-                // 待ちで止めた再生を戻して、新しい再生として claim する
+                // 待ちで止めた再生を戻して、新しい再生として claim する（家で最後に鳴ったキューに合わせてから）
+                stageLatest(engine, play = false)
                 runBlocking(Dispatchers.Main) { host.endpoint?.resume() }
                 claimLocal(engine, newSelection)
             }
@@ -888,6 +950,9 @@ class ConnectV2Manager(
         const val STOPPED_NOTICE_DELAY_MS = 2_000L
 
         const val TICK_MS = 1_000L
+
+        /** 合わせるとき、手元の位置がこれ以上ずれていればシークする。 */
+        const val POSITION_TOLERANCE_MS = 3_000L
         const val CURSOR_DEBOUNCE_MS = 1_000L
         const val QUEUE_DEBOUNCE_MS = 1_000L
         const val SETTLE_WAIT_MS = 10_000L
