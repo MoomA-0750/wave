@@ -149,9 +149,41 @@ class ArtistViewModel(
                         PageUiState(failure = result.kind)
                     }
                 }
+            launch { loadAllSongs() }
             loadLiked()
             loadLivePosts()
         }
+    }
+
+    /** 「すべての曲」の一覧の最初のページ（再生の文脈にする）。読めなければ null。 */
+    @Volatile
+    private var allSongs: xyz.mooma0750.wave.core.music.PlaylistPage? = null
+
+    private suspend fun loadAllSongs() {
+        val id = state.value.page?.allSongsPlaylistId ?: return
+        val result = music.playlist(id)
+        allSongs = (result as? CallResult.Ok)?.value?.takeIf { it.songs.isNotEmpty() }
+        Log.i(WaveApplication.LOG_TAG, "artist all songs ok=${result is CallResult.Ok} songs=${allSongs?.songs?.size} more=${allSongs?.continuation != null}")
+    }
+
+    /**
+     * 再生の頼み方。「すべての曲」の一覧が読めていれば、それを文脈にして流す（人気の5曲の後も、このアーティストの曲が続く）。
+     * 読めていなければ人気の曲だけを流し、最後の曲からラジオにつなぐ（ほかのアーティストも混ざる）。
+     * @param song 押した曲。null なら先頭（再生ボタン）
+     */
+    fun playRequest(
+        song: Song?,
+        shuffle: Boolean,
+    ): ArtistPlay? {
+        val page = state.value.page ?: return null
+        val all = allSongs
+        if (all != null && page.allSongsPlaylistId != null) {
+            val index = song?.let { s -> all.songs.indexOfFirst { it.videoId == s.videoId } } ?: 0
+            if (index >= 0) return ArtistPlay(all.songs, index, page.allSongsPlaylistId, all.continuation, shuffle && song == null)
+        }
+        if (page.topSongs.isEmpty()) return null
+        val index = song?.let { page.topSongs.indexOf(it).coerceAtLeast(0) } ?: 0
+        return ArtistPlay(page.topSongs, index, null, null, shuffle && song == null)
     }
 
     private suspend fun loadLivePosts() {
@@ -174,6 +206,15 @@ class ArtistViewModel(
         mutableLiked.value = ArtistLikedState(songs = songs, loading = false, incomplete = !result.complete)
     }
 }
+
+/** アーティストのページからの再生（playlistId が null なら、終わったらラジオにつなぐ）。 */
+data class ArtistPlay(
+    val songs: List<Song>,
+    val index: Int,
+    val playlistId: String?,
+    val continuation: String?,
+    val shuffle: Boolean,
+)
 
 class AlbumViewModel(
     music: MusicRepository,
@@ -207,7 +248,7 @@ fun ArtistScreen(
     viewModel: ArtistViewModel,
     title: String,
     actions: SongActions,
-    onPlay: (songs: List<Song>, index: Int) -> Unit,
+    onPlay: (ArtistPlay) -> Unit,
     onOpenAllSongs: (playlistId: String, artistName: String) -> Unit,
     /** 「高く評価した曲」をこのアーティストで絞った一覧を開く。 */
     onOpenLiked: (artistName: String) -> Unit,
@@ -243,7 +284,7 @@ fun ArtistScreen(
         },
         play =
             PlayControls(shuffle, { shuffle = it }, enabled = topSongs.isNotEmpty()) {
-                onPlay(if (shuffle) topSongs.shuffled() else topSongs, 0)
+                viewModel.playRequest(null, shuffle)?.let(onPlay)
             },
     ) {
         when {
@@ -262,7 +303,7 @@ fun ArtistScreen(
                 // Spotify の「人気」: 番号付きの曲
                 item { SectionTitle(stringResource(R.string.artist_popular)) }
                 itemsIndexed(page.topSongs, key = { index, song -> "song-$index-${song.videoId}" }) { index, song ->
-                    SongRow(song, onClick = { onPlay(page.topSongs, index) }, number = index + 1) { SongMenuButton(song, actions) }
+                    SongRow(song, onClick = { viewModel.playRequest(song, false)?.let(onPlay) }, number = index + 1) { SongMenuButton(song, actions) }
                 }
                 page.allSongsPlaylistId?.let { id ->
                     item { TextButton(onClick = { onOpenAllSongs(id, page.name) }, modifier = Modifier.padding(horizontal = 8.dp)) { Text(stringResource(R.string.artist_see_all_songs)) } }

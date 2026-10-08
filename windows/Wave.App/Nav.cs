@@ -96,7 +96,11 @@ public static class Nav
                 break;
             case HomeItem.ArtistItem r:
                 var artist = await AppServices.Music.ArtistAsync(r.Artist.BrowseId);
-                if (artist.IsOk && artist.Value!.TopSongs.Count > 0) player.PlayList(artist.Value.TopSongs, 0, r.Artist.BrowseId);
+                if (artist.IsOk && artist.Value!.TopSongs.Count > 0)
+                {
+                    var all = artist.Value.AllSongsPlaylistId is { } allId ? AppServices.Music.FullPlaylistAsync(allId) : null;
+                    await Views.ArtistPage.PlayArtistAsync(player, r.Artist.BrowseId, artist.Value.TopSongs, 0, null, all);
+                }
                 else player.Message = L.T("アーティストの曲を読み込めませんでした", "Couldn't load the artist's songs");
                 break;
         }

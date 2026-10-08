@@ -6,6 +6,7 @@ using Microsoft.UI.Xaml.Navigation;
 using Wave.App.Controls;
 using Wave.App.Services;
 using Wave.Core.Music;
+using Wave.Core.Net;
 
 namespace Wave.App.Views;
 
@@ -41,6 +42,7 @@ public sealed partial class ArtistPage : Page
         TopSongs.ItemsSource = rows;
         PlayButton.IsEnabled = rows.Count > 0;
         AllSongs.Visibility = Ui.Show(artist.AllSongsPlaylistId is not null);
+        allSongs = artist.AllSongsPlaylistId is { } allId ? AppServices.Music.FullPlaylistAsync(allId) : null;
         var shelves = artist.AlbumShelves.Select(s => new HomeShelf(s.Title, null, s.Albums.Select(a => (HomeItem)new HomeItem.AlbumItem(a)).ToList())).ToList();
         // 最近の新作（登録したアーティストの見張りで見つけたもの）を先頭に（Android と同じ）
         var releases = AppServices.Releases.Recent.Where(r => r.ArtistId == browseId).Select(HomePage.ReleaseItem).ToList();
@@ -152,7 +154,25 @@ public sealed partial class ArtistPage : Page
             Player.TogglePlay();
             return;
         }
-        Player.PlayList(rows.Select(r => r.Song).ToList(), 0, browseId, shufflePlay ? true : null);
+        _ = PlayArtistAsync(Player, browseId, rows.Select(r => r.Song).ToList(), 0, shufflePlay ? true : null, allSongs);
+    }
+
+    /// <summary>「すべての曲」の一覧（ページを開いたときに読み始める。再生のたびに読み直さない）。</summary>
+    private Task<ApiResult<PlaylistPage>>? allSongs;
+
+    /// <summary>
+    /// アーティストを流す: 人気の曲からすぐ鳴らし始め、「すべての曲」の一覧が読めたら残りを後ろに足す（Android と同じ）。
+    /// 人気の曲だけだと、終わったところで最後の曲のラジオに切り替わり、ほかのアーティストの曲が混ざっていた。
+    /// </summary>
+    internal static async Task PlayArtistAsync(PlayerService player, string browseId, IReadOnlyList<Song> topSongs, int start, bool? shuffle, Task<ApiResult<PlaylistPage>>? allSongs)
+    {
+        if (topSongs.Count == 0) return;
+        player.PlayList(topSongs, start, browseId, shuffle);
+        if (allSongs is null) return;
+        var all = await allSongs;
+        AppPaths.Log($"artist all songs ok={all.IsOk} songs={all.Value?.Songs.Count}");
+        // 読んでいる間にほかのものを流し始めていたら足さない
+        if (all.IsOk && player.SourceId == browseId) player.AppendFrom(all.Value!.Songs);
     }
 
     /// <summary>
@@ -171,7 +191,7 @@ public sealed partial class ArtistPage : Page
 
     private void OnDoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
     {
-        if ((e.OriginalSource as FrameworkElement)?.DataContext is TrackRow row) Player.PlayList(rows.Select(r => r.Song).ToList(), rows.IndexOf(row), browseId);
+        if ((e.OriginalSource as FrameworkElement)?.DataContext is TrackRow row) _ = PlayArtistAsync(Player, browseId, rows.Select(r => r.Song).ToList(), rows.IndexOf(row), null, allSongs);
     }
 
     private void OnAllSongs(object sender, RoutedEventArgs e)

@@ -326,8 +326,8 @@ class MainActivity : ComponentActivity() {
                                         },
                                         title = screen.name,
                                         actions = songActions,
-                                        // 曲の棚は5曲だけなので、最後まで行ったら最後の曲からラジオにつなぐ
-                                        onPlay = { songs, index -> playerActions.playFrom(songs, index) },
+                                        // 「すべての曲」の一覧を文脈にして流す（読めなければ人気の曲から、最後の曲のラジオにつなぐ）
+                                        onPlay = { play -> playerActions.playFrom(play.songs, play.index, play.playlistId, play.continuation, play.shuffle) },
                                         onOpenAllSongs = { id, name -> nav.push(Screen.Playlist(PlaylistSummary(id, name, null, null))) },
                                         // 「高く評価した曲」を、そのアーティストで絞った状態で開く
                                         onOpenLiked = { name ->
