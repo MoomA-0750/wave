@@ -148,6 +148,12 @@ public static class DebugCommands
                 await AppServices.Library.RefreshAsync();
                 break;
             }
+            case "playlist-create":
+            {
+                var r = await AppServices.Music.CreatePlaylistAsync(arg);
+                AppPaths.Log($"debug playlist create ok={r.IsOk}");
+                break;
+            }
             case "playlists":
                 await AppServices.Library.RefreshAsync();
                 AppPaths.Log("debug playlists " + string.Join(" | ", AppServices.Library.Editable.Select(p => p.Title)));

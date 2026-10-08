@@ -35,14 +35,13 @@ class LibraryViewModel(
     private val mutableState = MutableStateFlow(cache?.playlists?.let { LibraryUiState(playlists = it, loading = false) } ?: LibraryUiState())
     val state: StateFlow<LibraryUiState> = mutableState.asStateFlow()
 
-    init {
-        refresh()
-    }
+    private var refreshing: kotlinx.coroutines.Job? = null
 
     fun refresh() {
-        val cached = cache?.playlists != null
+        if (refreshing?.isActive == true) return
+        val cached = cache?.playlists != null || state.value.playlists.isNotEmpty()
         if (!cached) mutableState.update { it.copy(loading = true, failure = null) }
-        viewModelScope.launch {
+        refreshing = viewModelScope.launch {
             // 前の一覧が無ければ、ページが届くたびに出す
             when (val result = music.libraryPlaylists { page -> if (!cached) mutableState.update { it.copy(playlists = page, loading = page.isEmpty()) } }) {
                 is CallResult.Ok -> {

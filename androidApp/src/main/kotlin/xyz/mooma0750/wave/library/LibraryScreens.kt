@@ -268,6 +268,8 @@ fun AddToPlaylistDialog(
     onToggleLiked: () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    // 開くたびに裏で読み直す（前の一覧はすぐ出したまま。ほかの端末で作ったプレイリストも出す）
+    LaunchedEffect(viewModel, song.videoId) { viewModel.refresh() }
     var creating by remember { mutableStateOf(false) }
     var title by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
