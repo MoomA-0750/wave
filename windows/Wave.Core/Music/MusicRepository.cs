@@ -20,6 +20,7 @@ public sealed class MusicRepository(InnerTubeClient client)
     public const string MoodsBrowse = "FEmusic_moods_and_genres";
     public const string LibraryArtists = "FEmusic_library_corpus_track_artists";
     public const string LibraryAlbums = "FEmusic_liked_albums";
+    public const string SubscribedArtists = "FEmusic_library_corpus_artists";
     public const string MoodCategoryBrowse = "FEmusic_moods_and_genres_category";
     public const string NewReleasesBrowse = "FEmusic_new_releases_albums";
     public const string LikedSongs = "LM";
@@ -68,6 +69,10 @@ public sealed class MusicRepository(InnerTubeClient client)
 
     public Task<ApiResult<List<ArtistSummary>>> LibraryArtistsAsync(Action<List<ArtistSummary>>? onPage = null, CancellationToken cancel = default) =>
         AllLibraryPagesAsync(LibraryArtists, root => MusicParsers.LibraryCards(root).OfType<HomeItem.ArtistItem>().Select(a => a.Artist).ToList(), a => a.BrowseId, onPage, cancel);
+
+    /// <summary>登録（サブスクライブ）したアーティスト。新作の知らせに使う（Android と同じ）。</summary>
+    public Task<ApiResult<List<ArtistSummary>>> SubscribedArtistsAsync(CancellationToken cancel = default) =>
+        AllLibraryPagesAsync(SubscribedArtists, root => MusicParsers.LibraryCards(root).OfType<HomeItem.ArtistItem>().Select(a => a.Artist).ToList(), a => a.BrowseId, null, cancel);
 
     public Task<ApiResult<List<AlbumSummary>>> LibraryAlbumsAsync(Action<List<AlbumSummary>>? onPage = null, CancellationToken cancel = default) =>
         AllLibraryPagesAsync(LibraryAlbums, root => MusicParsers.LibraryCards(root).OfType<HomeItem.AlbumItem>().Select(a => a.Album).ToList(), a => a.BrowseId, onPage, cancel);

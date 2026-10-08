@@ -325,8 +325,8 @@
                             </StackPanel>
                         </Grid>
                         <StackPanel x:Name="QueueEmpty" Grid.Row="1" Spacing="6" Padding="24" VerticalAlignment="Center" Visibility="Collapsed">
-                            <TextBlock Text="{x:Bind app:L.T('キューは空です', 'Your queue is empty')}" Style="{StaticResource BodyStrongTextBlockStyle}" HorizontalAlignment="Center" />
-                            <TextBlock Text="{x:Bind app:L.T('曲を再生すると、ここに次の曲が並びます', 'Play something and upcoming songs will show up here')}" Style="{StaticResource SubtleTextStyle}"
+                            <TextBlock x:Name="QueueEmptyTitle" Text="{x:Bind app:L.T('キューは空です', 'Your queue is empty')}" Style="{StaticResource BodyStrongTextBlockStyle}" HorizontalAlignment="Center" />
+                            <TextBlock x:Name="QueueEmptyText" Text="{x:Bind app:L.T('曲を再生すると、ここに次の曲が並びます', 'Play something and upcoming songs will show up here')}" Style="{StaticResource SubtleTextStyle}"
                                        HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" MaxLines="3" />
                         </StackPanel>
                         <!-- 次の曲はドラッグで並べ替えられる（今の曲は動かせない。Android と同じ） -->

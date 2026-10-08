@@ -410,8 +410,19 @@ public static partial class MusicParsers
         }).OfType<AlbumShelf>().ToList();
         var subscribe = header.Path("subscriptionButton", "subscribeButtonRenderer");
         bool? subscribed = subscribe.Path("subscribed") is System.Text.Json.Nodes.JsonValue v && v.TryGetValue<bool>(out var b) ? b : null;
+        // 動画の棚: カードが曲の再生（watchEndpoint）になっている棚
+        var videos = sections.SelectMany(section => section.Path("musicCarouselShelfRenderer", "contents").Items()).Select(card =>
+        {
+            var item = card.Path("musicTwoRowItemRenderer");
+            var watch = item.Path("navigationEndpoint", "watchEndpoint");
+            var videoId = watch.Path("videoId").Str();
+            var title = TextOf(item.Path("title"));
+            return videoId is null || title is null ? null
+                : new Song(videoId, title, [new ArtistRef(name, null)], null, null, LastThumbnailUrl(item.Path("thumbnailRenderer")),
+                    watch.Path("watchEndpointMusicSupportedConfigs", "watchEndpointMusicConfig", "musicVideoType").Str());
+        }).OfType<Song>().ToList();
         return new ArtistPage(name, thumbnail, ShelfSongs(songShelf), allSongs?.StartsWith("VL", StringComparison.Ordinal) == true ? allSongs[2..] : null, albumShelves,
-            subscribe.Path("channelId").Str(), subscribed);
+            subscribe.Path("channelId").Str(), subscribed, videos);
     }
 
     /// <summary>ログインしていないときに返る「ログインしてください」の案内だけの応答か。</summary>

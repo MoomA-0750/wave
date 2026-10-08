@@ -37,6 +37,9 @@
                 </ItemsRepeater.ItemTemplate>
             </ItemsRepeater>
 
+            <!-- 登録したアーティストの新作（Android と同じ。アーティストごとに2件まで交互に） -->
+            <controls:ShelfView x:Name="NewReleasesShelf" Visibility="Collapsed" />
+
             <ItemsRepeater x:Name="Shelves">
                 <ItemsRepeater.Layout>
                     <StackLayout Spacing="24" />

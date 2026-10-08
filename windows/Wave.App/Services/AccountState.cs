@@ -69,6 +69,7 @@ public sealed partial class AccountState : ObservableObject
         AppServices.Player.Stop();
         AppServices.Client.SetCredentials(null);
         AppServices.Credentials.Clear();
+        AppServices.Releases.Clear();
         ObtainedAtEpochMs = 0;
         IsLoggedIn = false;
         PremiumAudio = null;

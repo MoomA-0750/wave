@@ -41,7 +41,11 @@ public sealed partial class ArtistPage : Page
         TopSongs.ItemsSource = rows;
         PlayButton.IsEnabled = rows.Count > 0;
         AllSongs.Visibility = Ui.Show(artist.AllSongsPlaylistId is not null);
-        Shelves.ItemsSource = artist.AlbumShelves.Select(s => new HomeShelf(s.Title, null, s.Albums.Select(a => (HomeItem)new HomeItem.AlbumItem(a)).ToList())).ToList();
+        var shelves = artist.AlbumShelves.Select(s => new HomeShelf(s.Title, null, s.Albums.Select(a => (HomeItem)new HomeItem.AlbumItem(a)).ToList())).ToList();
+        // 最近の新作（登録したアーティストの見張りで見つけたもの）を先頭に（Android と同じ）
+        var releases = AppServices.Releases.Recent.Where(r => r.ArtistId == browseId).Select(HomePage.ReleaseItem).ToList();
+        if (releases.Count > 0) shelves.Insert(0, new HomeShelf(L.T("新作", "New releases"), null, releases));
+        Shelves.ItemsSource = shelves;
         UpdatePlayIcon();
         UpdateSubscribe();
         LiveButton.Visibility = Visibility.Visible;

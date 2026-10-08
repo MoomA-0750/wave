@@ -72,6 +72,34 @@ Start-Sleep -Seconds 3
 Get-Process Wave.App -ErrorAction SilentlyContinue | Select-Object Id, MainWindowTitle | Format-Table -HideTableHeaders | Out-String
 PS
     ;;
+  uia)
+    # 画面のセッションで scripts/uia.ps1 を動かし、結果を表示する（例: win.sh uia 'invoke:Liked Songs' 'sleep:1500' 'list'）
+    shift
+    scp -q "$REPO/scripts/uia.ps1" "$HOST:$WIN_DIR/uia.ps1"
+    steps=$(printf '%s\n' "$@" | base64 -w0)
+    ps <<PS
+Remove-Item "\$env:LOCALAPPDATA\wave\uia-out.txt" -ErrorAction SilentlyContinue
+[IO.File]::WriteAllBytes("\$env:LOCALAPPDATA\wave\uia-steps.txt", [Convert]::FromBase64String('$steps'))
+\$act = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument '-NoProfile -ExecutionPolicy Bypass -File $WIN_DIR/uia.ps1'
+\$who = New-ScheduledTaskPrincipal -UserId \$env:USERNAME -LogonType Interactive
+Register-ScheduledTask -TaskName wave-uia -Action \$act -Principal \$who -Force | Out-Null
+Start-ScheduledTask -TaskName wave-uia
+for (\$i = 0; \$i -lt 120 -and -not (Test-Path "\$env:LOCALAPPDATA\wave\uia-out.txt"); \$i++) { Start-Sleep -Milliseconds 500 }
+Get-Content "\$env:LOCALAPPDATA\wave\uia-out.txt" -Encoding utf8
+PS
+    ;;
+  cmd)
+    # Debug ビルドの wave に命令を送る（windows/Wave.App/DebugCommands.cs。例: win.sh cmd 'pane queue' 'queue-dump'）
+    shift
+    cmds=$(printf '%s\n' "$@" | base64 -w0)
+    ps <<PS
+[IO.File]::WriteAllBytes("\$env:LOCALAPPDATA\wave\debug-command.txt", [Convert]::FromBase64String('$cmds'))
+PS
+    ;;
+  log) ps <<PS
+Get-Content "\$env:LOCALAPPDATA\wave\wave.log" -Tail ${2:-30} -Encoding utf8
+PS
+    ;;
   ps) ps ;;
   *) sed -n 2,9p "$0"; exit 1 ;;
 esac

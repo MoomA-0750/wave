@@ -12,6 +12,8 @@ public sealed class Settings
     /// <summary>再生を YouTube Music の再生履歴に送る（Android 版の既定と同じく、オン）。</summary>
     public bool SendHistory { get; set; } = true;
     public bool RightPaneOpen { get; set; } = true;
+    /// <summary>登録したアーティストの新作を通知で知らせる（アプリが動いている間。Android と同じく既定はオン）。</summary>
+    public bool ReleaseNotices { get; set; } = true;
     /// <summary>マイライブラリの並べ方（recent: 最近再生した順・added: 最近追加した順・alpha: アルファベット順）と、グリッドで出すか。</summary>
     public string LibrarySort { get; set; } = "recent";
     public bool LibraryGrid { get; set; }

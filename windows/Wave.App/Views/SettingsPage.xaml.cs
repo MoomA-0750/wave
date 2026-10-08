@@ -14,6 +14,7 @@ public sealed partial class SettingsPage : Page
         AppServices.Account.PropertyChanged += (_, _) => DispatcherQueue.TryEnqueue(Render);
         HistorySwitch.IsOn = AppServices.Settings.SendHistory;
         RenderAi();
+        ReleaseSwitch.IsOn = AppServices.Settings.ReleaseNotices;
         LanguageBox.Items.Clear();
         foreach (var (key, label) in Languages) LanguageBox.Items.Add(new ComboBoxItem { Content = label, Tag = key });
         LanguageBox.SelectedIndex = Math.Max(0, Array.FindIndex(Languages, l => l.Key == AppServices.Settings.Language));
@@ -75,6 +76,13 @@ public sealed partial class SettingsPage : Page
         AppServices.Settings.Language = key;
         AppServices.Settings.Save();
         App.Window?.ShowToast(L.T("次の起動から反映されます", "Takes effect the next time you open wave"));
+    }
+
+    private void OnReleaseToggled(object sender, RoutedEventArgs e)
+    {
+        if (AppServices.Settings.ReleaseNotices == ReleaseSwitch.IsOn) return;
+        AppServices.Settings.ReleaseNotices = ReleaseSwitch.IsOn;
+        AppServices.Settings.Save();
     }
 
     private void RenderAi()

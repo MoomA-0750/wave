@@ -88,6 +88,9 @@ public sealed partial class MainWindow : Window
         Nav.Frame = ContentFrame;
         InitPositionSlider();
         InitConnect();
+#if DEBUG
+        DebugCommands.Start(this);
+#endif
         rightPaneOpen = AppServices.Settings.RightPaneOpen;
         Player.PropertyChanged += OnPlayerChanged;
         Player.Queue.CollectionChanged += OnQueueChanged;
@@ -124,6 +127,34 @@ public sealed partial class MainWindow : Window
         QueueToggle.IsChecked = showRight && QueueView.Visibility == Visibility.Visible;
         SearchBox.Width = width < 1100 ? 300 : 440;
     }
+
+#if DEBUG
+    /// <summary>開発用: 右の欄を切り替える（nowplaying / queue / history / ai）。</summary>
+    public void DebugPane(string which)
+    {
+        switch (which)
+        {
+            case "queue":
+                queueHistory = false;
+                SetRightPane(true, queue: true);
+                break;
+            case "history":
+                queueHistory = true;
+                SetRightPane(true, queue: true);
+                break;
+            case "ai":
+                OnShowAi(this, new RoutedEventArgs());
+                break;
+            default:
+                SetRightPane(true, queue: false);
+                break;
+        }
+    }
+
+    public void DebugFullScreen(bool on) => SetFullScreen(on);
+
+    public void DebugVideo(bool on) => ShowVideo(on);
+#endif
 
     private void SetRightPane(bool open, bool queue)
     {
@@ -582,6 +613,8 @@ public sealed partial class MainWindow : Window
         }
         QueueList.ItemsSource = entries;
         QueueEmpty.Visibility = entries.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        QueueEmptyTitle.Text = queueHistory ? L.T("まだ流れた曲はありません", "Nothing played yet") : L.T("キューは空です", "Your queue is empty");
+        QueueEmptyText.Text = queueHistory ? L.T("流れた曲は、ここに新しい順に並びます", "Songs you've played will show up here") : L.T("曲を再生すると、ここに次の曲が並びます", "Play something and upcoming songs will show up here");
         QueueList.Visibility = entries.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
         QueueList.CanReorderItems = !queueHistory;
         QueueList.CanDragItems = !queueHistory;

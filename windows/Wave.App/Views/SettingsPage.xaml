@@ -41,6 +41,15 @@
                 <ToggleSwitch x:Name="HistorySwitch" HorizontalAlignment="Right" OnContent="" OffContent="" MinWidth="0" Toggled="OnHistoryToggled" />
             </Grid>
 
+            <Grid Padding="16" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" Margin="0,8,0,0"
+                  BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+                <StackPanel Margin="0,0,80,0">
+                    <TextBlock Text="{x:Bind app:L.T('新作の通知', 'New release notifications')}" />
+                    <TextBlock Text="{x:Bind app:L.T('登録したアーティストのアルバム・シングル・動画が出たら知らせる（wave が動いている間、6時間おきに確かめる）', 'Notify when artists you subscribe to release albums, singles or videos (checked every 6 hours while wave is running)')}" Style="{StaticResource SubtleTextStyle}" TextWrapping="Wrap" MaxLines="3" />
+                </StackPanel>
+                <ToggleSwitch x:Name="ReleaseSwitch" HorizontalAlignment="Right" OnContent="" OffContent="" MinWidth="0" Toggled="OnReleaseToggled" />
+            </Grid>
+
             <TextBlock Text="Claude" Style="{StaticResource BodyStrongTextBlockStyle}" Margin="0,16,0,4" />
             <StackPanel Padding="16" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                         BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Spacing="8">

@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Wave.App.Services;
 using Wave.Core.Music;
+using Wave.Core.Net;
 
 namespace Wave.App.Views;
 
@@ -22,6 +23,7 @@ public sealed partial class HomePage : Page
         InitializeComponent();
         Shelves.ItemsSource = shelves;
         AppServices.Account.Changed += () => DispatcherQueue.TryEnqueue(() => _ = ReloadAsync());
+        AppServices.Releases.Changed += () => DispatcherQueue.TryEnqueue(RenderReleases);
         _ = ReloadAsync();
     }
 
@@ -35,12 +37,32 @@ public sealed partial class HomePage : Page
         RenderChips();
         if (selected is null) _ = LoadRecentAsync(id);
         else RecentGrid.Visibility = Visibility.Collapsed;
+        RenderReleases();
         // 最初は棚が8つ以上になるまで続きを読む（Android 版と同じ）
         for (var page = 0; page < 4 && id == requestId; page++)
         {
             if (!await LoadPageAsync(id)) break;
             if (shelves.Count >= 8 || continuation is null) break;
         }
+    }
+
+    private void RenderReleases()
+    {
+        var releases = selected is null ? ReleaseWatchState.Diversified(AppServices.Releases.Recent).Take(20).ToList() : [];
+        NewReleasesShelf.Visibility = Ui.Show(releases.Count > 0);
+        if (releases.Count == 0) return;
+        NewReleasesShelf.Title = L.T("登録したアーティストの新作", "New from artists you subscribe to");
+        NewReleasesShelf.Items = releases.Select(ReleaseItem).ToList();
+    }
+
+    /// <summary>新作をカードにする（アルバムは開く、動画は再生する。見つけて7日は補足に NEW を付ける）。</summary>
+    public static HomeItem ReleaseItem(NewRelease r)
+    {
+        var fresh = !r.Seeded && DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - r.FoundAtEpochMs < 7L * 24 * 60 * 60 * 1000;
+        var subtitle = (fresh ? "NEW • " : "") + r.ArtistName;
+        return r.AlbumBrowseId is { } album
+            ? new HomeItem.AlbumItem(new AlbumSummary(album, r.Title, subtitle, r.ThumbnailUrl))
+            : new HomeItem.SongItem(new Song(r.VideoId!, r.Title, [new ArtistRef(r.ArtistName, r.ArtistId)], null, null, r.ThumbnailUrl));
     }
 
     private async Task LoadRecentAsync(int id)
@@ -60,10 +82,15 @@ public sealed partial class HomePage : Page
         LoadingRing.IsActive = true;
         try
         {
+            var started = System.Diagnostics.Stopwatch.StartNew();
             var result = await AppServices.Music.HomeAsync(continuation, continuation is null ? selected?.Params : null);
+            // 起動直後はほかの読み込みと重なって時間切れになることがあるので、通信の失敗は1回だけやり直す
+            if (!result.IsOk && result.Failure == FailureKind.Network && id == requestId)
+                result = await AppServices.Music.HomeAsync(continuation, continuation is null ? selected?.Params : null);
             if (id != requestId) return false;
             if (!result.IsOk)
             {
+                AppPaths.Log($"home failed failure={result.Failure} status={result.Status} ms={started.ElapsedMilliseconds}");
                 if (shelves.Count == 0) FailurePanel.Visibility = Visibility.Visible;
                 return false;
             }

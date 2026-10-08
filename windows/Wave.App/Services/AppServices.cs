@@ -24,6 +24,8 @@ public static class AppServices
     public static PlayerService Player { get; private set; } = null!;
     public static LibraryState Library { get; private set; } = null!;
     public static AccountState Account { get; private set; } = null!;
+    /// <summary>登録したアーティストの新作。</summary>
+    public static Releases Releases { get; private set; } = null!;
     /// <summary>Claude との会話（アプリが動いている間だけ持つ）。</summary>
     public static AiChat Ai { get; } = new();
     /// <summary>端末の連携（中継の場所が設定に無ければ使えない）。</summary>
@@ -51,5 +53,7 @@ public static class AppServices
         // 前回のキューを、再生を始めずに戻す（同じログインのときだけ）
         Player.RestoreSavedQueue();
         Connect = new global::Wave.App.Services.Connect.ConnectService(ui, Player, Settings.RelayV2Url, Settings.RelayV2Host);
+        Releases = new Releases(ui);
+        Releases.Start();
     }
 }

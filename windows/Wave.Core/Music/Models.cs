@@ -68,7 +68,12 @@ public sealed record ArtistPage(
     IReadOnlyList<AlbumShelf> AlbumShelves,
     // 登録（サブスクライブ）に使うチャンネルと、登録しているか（分からなければ null）
     string? ChannelId = null,
-    bool? Subscribed = null);
+    bool? Subscribed = null,
+    // 動画の棚（MV・YouTube の動画）。新作の知らせに使う
+    IReadOnlyList<Song>? VideoShelf = null)
+{
+    public IReadOnlyList<Song> Videos => VideoShelf ?? [];
+}
 
 public sealed record AlbumShelf(string Title, IReadOnlyList<AlbumSummary> Albums);
 
