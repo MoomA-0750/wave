@@ -482,7 +482,35 @@ internal object MusicParsers {
                 if (albums.isEmpty()) return@mapNotNull null
                 AlbumShelf(textOf(carousel.path("header", "musicCarouselShelfBasicHeaderRenderer", "title")).orEmpty(), albums)
             }
-        return ArtistPage(name, thumbnail, topSongs, allSongs, albumShelves)
+        val subscribe = header.path("subscriptionButton", "subscribeButtonRenderer")
+        // 動画の棚: カードが曲の再生（watchEndpoint）になっている棚
+        val videos =
+            sections.flatMap { section ->
+                section.path("musicCarouselShelfRenderer", "contents").arrayItems().mapNotNull { card ->
+                    val item = card.path("musicTwoRowItemRenderer").asObject() ?: return@mapNotNull null
+                    val watch = item.path("navigationEndpoint", "watchEndpoint")
+                    val videoId = watch.path("videoId").string() ?: return@mapNotNull null
+                    Song(
+                        videoId = videoId,
+                        title = textOf(item.path("title")) ?: return@mapNotNull null,
+                        artists = listOf(ArtistRef(name, null)),
+                        album = null,
+                        durationSeconds = null,
+                        thumbnailUrl = lastThumbnailUrl(item.path("thumbnailRenderer")),
+                        kind = MusicVideoType.of(watch.path("watchEndpointMusicSupportedConfigs", "watchEndpointMusicConfig", "musicVideoType").string()),
+                    )
+                }
+            }
+        return ArtistPage(
+            name,
+            thumbnail,
+            topSongs,
+            allSongs,
+            albumShelves,
+            channelId = subscribe.path("channelId").string(),
+            subscribed = subscribe.path("subscribed").asBoolean(),
+            videos = videos,
+        )
     }
 
     private fun textOf(element: JsonElement?): String? = runsText(element.path("runs").arrayItems())
@@ -696,5 +724,7 @@ internal fun JsonElement?.asObject(): JsonObject? = this as? JsonObject
 internal fun JsonElement?.arrayItems(): List<JsonObject> = (this as? JsonArray)?.mapNotNull { it as? JsonObject }.orEmpty()
 
 internal fun JsonElement?.firstArrayItem(): JsonObject? = arrayItems().firstOrNull()
+
+internal fun JsonElement?.asBoolean(): Boolean? = (this as? JsonPrimitive)?.takeIf { !it.isString }?.contentOrNull?.toBooleanStrictOrNull()
 
 internal fun JsonElement?.string(): String? = (this as? JsonPrimitive)?.takeIf { it.isString }?.contentOrNull

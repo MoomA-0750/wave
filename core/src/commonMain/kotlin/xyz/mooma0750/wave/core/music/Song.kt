@@ -158,6 +158,12 @@ data class ArtistPage(
     val allSongsPlaylistId: String?,
     /** アルバム・シングルなどの棚。見出しは応答の表示のまま（言語に依存するので判定に使わない）。 */
     val albumShelves: List<AlbumShelf>,
+    /** 登録（サブスクライブ）に使うチャンネル。登録のボタンが無ければ null。 */
+    val channelId: String? = null,
+    /** 登録しているか（ログインしていない・分からなければ null）。 */
+    val subscribed: Boolean? = null,
+    /** 動画の棚（MV・YouTube の動画）。新着の知らせに使う。 */
+    val videos: List<Song> = emptyList(),
 )
 
 data class AlbumShelf(

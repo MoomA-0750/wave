@@ -37,6 +37,7 @@ import xyz.mooma0750.wave.connect2.ConnectV2Manager
 import xyz.mooma0750.wave.connect2.PairingV2Controller
 import xyz.mooma0750.wave.core.auth.AuthManager
 import xyz.mooma0750.wave.core.auth.AuthState
+import kotlinx.coroutines.flow.distinctUntilChanged
 import xyz.mooma0750.wave.core.auth.KeystoreCredentialStore
 import xyz.mooma0750.wave.core.lyrics.LrclibClient
 import xyz.mooma0750.wave.core.lyrics.LyricsRepository
@@ -79,6 +80,12 @@ class WaveApplication :
         WebView.setDataDirectorySuffix(LOGIN_WEBVIEW_SUFFIX)
         container = AppContainer(this)
         container.appScope.launch { container.authManager.restore() }
+        // ログインしていれば、登録したアーティストの新作の確かめを予約する（設定で切っていれば取り消す）
+        container.appScope.launch {
+            kotlinx.coroutines.flow.combine(container.authManager.state, container.settings.releaseNotices) { auth, enabled -> auth is AuthState.LoggedIn && enabled }
+                .distinctUntilChanged()
+                .collect { xyz.mooma0750.wave.releases.ReleaseWatcher.schedule(this@WaveApplication, it) }
+        }
         registerActivityLifecycleCallbacks(
             object : ActivityLifecycleCallbacks {
                 override fun onActivityStarted(activity: android.app.Activity) {
@@ -452,6 +459,7 @@ class AppContainer(
         mutableLikedIds.value = emptySet()
         playlistMembership.clear()
         libraryCache.clear()
+        xyz.mooma0750.wave.releases.ReleaseWatcher.clear(appContext)
         imageCacheCleaner()
         WebViewCredentials.clear()
         Log.i(WaveApplication.LOG_TAG, "logout cleared=$cleared")

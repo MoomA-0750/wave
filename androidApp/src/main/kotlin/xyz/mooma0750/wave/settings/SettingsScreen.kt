@@ -156,6 +156,18 @@ fun SettingsScreen(
                     },
                 )
             }
+            item {
+                val releaseNotices by container.settings.releaseNotices.collectAsStateWithLifecycle(initialValue = null)
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.settings_release_notices_title)) },
+                    supportingContent = { Text(stringResource(R.string.settings_release_notices_summary)) },
+                    trailingContent = {
+                        releaseNotices?.let { enabled ->
+                            Switch(checked = enabled, onCheckedChange = { container.appScope.launch { container.settings.setReleaseNotices(it) } })
+                        }
+                    },
+                )
+            }
             if (container.connectConfigured || container.connectV2 != null) {
                 item {
                     ListItem(

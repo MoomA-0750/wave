@@ -73,6 +73,22 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
         DebugActions.handle(intent, (application as WaveApplication).container)
+        openFromNotification(intent)
+    }
+
+    /** 新作の通知から開いた: そのアルバム（動画ならアーティストのページ）を開く。 */
+    private val notificationNavigation = kotlinx.coroutines.channels.Channel<Screen>(capacity = 4)
+
+    private fun openFromNotification(intent: android.content.Intent?) {
+        val album = intent?.getStringExtra(xyz.mooma0750.wave.releases.ReleaseWatcher.EXTRA_ALBUM)
+        val artist = intent?.getStringExtra(xyz.mooma0750.wave.releases.ReleaseWatcher.EXTRA_ARTIST)
+        when {
+            album != null -> notificationNavigation.trySend(Screen.Album(album, intent.getStringExtra(xyz.mooma0750.wave.releases.ReleaseWatcher.EXTRA_ALBUM_TITLE).orEmpty()))
+            artist != null -> notificationNavigation.trySend(Screen.Artist(artist, intent.getStringExtra(xyz.mooma0750.wave.releases.ReleaseWatcher.EXTRA_ARTIST_NAME).orEmpty()))
+            else -> return
+        }
+        intent.removeExtra(xyz.mooma0750.wave.releases.ReleaseWatcher.EXTRA_ALBUM)
+        intent.removeExtra(xyz.mooma0750.wave.releases.ReleaseWatcher.EXTRA_ARTIST)
     }
 
     private val notificationPermission =
@@ -85,6 +101,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         val container = (application as WaveApplication).container
         DebugActions.handle(intent, container)
+        if (savedInstanceState == null) openFromNotification(intent)
         // Android 13 以降は、許可が無いと再生中の通知（通知センター・ロック画面・時計）が出ない
         if (android.os.Build.VERSION.SDK_INT >= 33 &&
             androidx.core.content.ContextCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED
@@ -119,6 +136,9 @@ class MainActivity : ComponentActivity() {
                     }
                 LaunchedEffect(container) {
                     DebugActions.navigation.collect { nav.push(it) }
+                }
+                LaunchedEffect(container) {
+                    for (screen in notificationNavigation) nav.push(screen)
                 }
                 // 端末の連携の結果（引き取り・解除など）は、どの画面にいても短く知らせる（仮の表示）
                 val context = androidx.compose.ui.platform.LocalContext.current

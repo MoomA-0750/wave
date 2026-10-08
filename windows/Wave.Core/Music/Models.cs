@@ -65,7 +65,10 @@ public sealed record ArtistPage(
     string? ThumbnailUrl,
     IReadOnlyList<Song> TopSongs,
     string? AllSongsPlaylistId,
-    IReadOnlyList<AlbumShelf> AlbumShelves);
+    IReadOnlyList<AlbumShelf> AlbumShelves,
+    // 登録（サブスクライブ）に使うチャンネルと、登録しているか（分からなければ null）
+    string? ChannelId = null,
+    bool? Subscribed = null);
 
 public sealed record AlbumShelf(string Title, IReadOnlyList<AlbumSummary> Albums);
 

@@ -138,4 +138,14 @@
     <string name="library_kind_songs">曲</string>
     <string name="library_kind_music_videos">MV</string>
     <string name="library_kind_user_videos">その他の動画（歌ってみた・ライブなど）</string>
+    <string name="artist_subscribe">登録</string>
+    <string name="artist_subscribed">登録済み</string>
+    <string name="artist_subscribe_failed">登録を変更できませんでした</string>
+    <string name="artist_live_info">ライブ・チケット</string>
+    <string name="artist_live_query">%1$s ライブ チケット</string>
+    <string name="releases_channel">新作</string>
+    <string name="releases_new_release">%1$s の新作</string>
+    <string name="releases_new_video">%1$s の新しい動画</string>
+    <string name="settings_release_notices_title">新作の通知</string>
+    <string name="settings_release_notices_summary">登録したアーティストのアルバム・シングル・動画が出たら知らせる（数時間おきに確かめる）</string>
 </resources>

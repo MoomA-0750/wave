@@ -89,7 +89,7 @@ data class ArtistLikedState(
 )
 
 class ArtistViewModel(
-    music: MusicRepository,
+    private val music: MusicRepository,
     private val browseId: String,
     private val liked: LikedSongsCache,
     private val likedSongsVersion: Int,
@@ -99,6 +99,34 @@ class ArtistViewModel(
 
     private val mutableLiked = MutableStateFlow(ArtistLikedState())
     val likedSongs: StateFlow<ArtistLikedState> = mutableLiked.asStateFlow()
+
+    private val mutableSubscribing = MutableStateFlow(false)
+
+    /** 登録・解除を送っている間。 */
+    val subscribing: StateFlow<Boolean> = mutableSubscribing.asStateFlow()
+
+    /**
+     * 登録（サブスクライブ）の切り替え。楽観的に表示を変えず、書けたら変える（分からなければページを読み直す）。
+     * 登録したアーティストの新作は、裏の確かめ（ReleaseWatcher）が通知で知らせる。
+     */
+    fun toggleSubscribed(failedMessage: String) {
+        val page = state.value.page ?: return
+        val channelId = page.channelId ?: return
+        if (mutableSubscribing.value) return
+        val target = page.subscribed != true
+        mutableSubscribing.value = true
+        viewModelScope.launch {
+            val result = music.setSubscribed(channelId, target, music.currentLoginGeneration())
+            Log.i(WaveApplication.LOG_TAG, "artist subscribe result=${result::class.simpleName} subscribe=$target")
+            when (result) {
+                is xyz.mooma0750.wave.core.session.WriteResult.Done -> mutableState.value = state.value.copy(page = page.copy(subscribed = target))
+                is xyz.mooma0750.wave.core.session.WriteResult.Failed -> xyz.mooma0750.wave.ui.Notices.show(failedMessage)
+                xyz.mooma0750.wave.core.session.WriteResult.Unknown ->
+                    (music.artist(browseId) as? CallResult.Ok)?.value?.let { mutableState.value = state.value.copy(page = it) }
+            }
+            mutableSubscribing.value = false
+        }
+    }
 
     init {
         viewModelScope.launch {
@@ -186,6 +214,23 @@ fun ArtistScreen(
             state.failure != null -> item { Text(failureMessage(state.failure), Modifier.padding(16.dp)) }
             page == null -> item { CircularProgressIndicator(Modifier.padding(16.dp)) }
             else -> {
+                // 登録（Spotify の「フォロー」）と、ライブ・チケットの情報を探す
+                item(key = "subscribe") {
+                    val subscribing by viewModel.subscribing.collectAsStateWithLifecycle()
+                    val context = androidx.compose.ui.platform.LocalContext.current
+                    Row(Modifier.padding(horizontal = 16.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (page.channelId != null) {
+                            val failed = stringResource(R.string.artist_subscribe_failed)
+                            androidx.compose.material3.OutlinedButton(onClick = { viewModel.toggleSubscribed(failed) }, enabled = !subscribing && page.subscribed != null) {
+                                Text(if (page.subscribed == true) stringResource(R.string.artist_subscribed) else stringResource(R.string.artist_subscribe))
+                            }
+                        }
+                        androidx.compose.material3.OutlinedButton(onClick = {
+                            val query = android.net.Uri.encode(context.getString(R.string.artist_live_query, page.name))
+                            context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://www.google.com/search?q=$query")))
+                        }) { Text(stringResource(R.string.artist_live_info)) }
+                    }
+                }
                 // Spotify の「人気」: 番号付きの曲
                 item { SectionTitle(stringResource(R.string.artist_popular)) }
                 itemsIndexed(page.topSongs, key = { index, song -> "song-$index-${song.videoId}" }) { index, song ->

@@ -145,6 +145,14 @@ public sealed class MusicRepository(InnerTubeClient client)
         return (await BrowseAsync(browseId, null, null, cancel)).Map(MusicParsers.PlainLyrics);
     }
 
+    /// <summary>アーティスト（チャンネル）を登録する・登録を外す（Android と同じ）。</summary>
+    public async Task<ApiResult<bool>> SetSubscribedAsync(string channelId, bool subscribe, CancellationToken cancel = default)
+    {
+        if (!client.IsLoggedIn) return ApiResult<bool>.Failed(FailureKind.NotLoggedIn);
+        var body = new JsonObject { ["channelIds"] = new JsonArray(channelId) };
+        return (await client.PostAsync(subscribe ? "subscription/subscribe" : "subscription/unsubscribe", body, cancel: cancel)).Map(_ => true);
+    }
+
     public async Task<ApiResult<bool>> SetLikedAsync(string videoId, bool liked, CancellationToken cancel = default)
     {
         if (!client.IsLoggedIn) return ApiResult<bool>.Failed(FailureKind.NotLoggedIn);
@@ -152,7 +160,6 @@ public sealed class MusicRepository(InnerTubeClient client)
         return (await client.PostAsync(liked ? "like/like" : "like/removelike", body, cancel: cancel)).Map(_ => true);
     }
 
-    /// <summary>曲をプレイリストに追加する。先に全ページを読んで重複を確かめ、読めなければ追加しない。</summary>
     /// <summary>
     /// プレイリストの中の曲の ID を全ページ読む（重複の確認と「どのプレイリストに入っているか」の表示。Android と同じ）。
     /// 最後まで読めなければ null。
@@ -174,6 +181,7 @@ public sealed class MusicRepository(InnerTubeClient client)
         return ids;
     }
 
+    /// <summary>曲をプレイリストに追加する。先に全ページを読んで重複を確かめ、読めなければ追加しない。</summary>
     public async Task<AddToPlaylistResult> AddToPlaylistAsync(string playlistId, string videoId, bool knownEmpty = false, CancellationToken cancel = default)
     {
         if (!knownEmpty)

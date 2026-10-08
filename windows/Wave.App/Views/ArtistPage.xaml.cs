@@ -43,7 +43,39 @@ public sealed partial class ArtistPage : Page
         AllSongs.Visibility = Ui.Show(artist.AllSongsPlaylistId is not null);
         Shelves.ItemsSource = artist.AlbumShelves.Select(s => new HomeShelf(s.Title, null, s.Albums.Select(a => (HomeItem)new HomeItem.AlbumItem(a)).ToList())).ToList();
         UpdatePlayIcon();
+        UpdateSubscribe();
+        LiveButton.Visibility = Visibility.Visible;
         await ShowLikedAsync(artist);
+    }
+
+    private bool subscribing;
+
+    private void UpdateSubscribe()
+    {
+        SubscribeButton.Visibility = Ui.Show(artist?.ChannelId is not null && AppServices.Client.IsLoggedIn);
+        SubscribeButton.Content = artist?.Subscribed == true ? L.T("登録済み", "Subscribed") : L.T("登録", "Subscribe");
+        SubscribeButton.IsEnabled = !subscribing && artist?.Subscribed is not null;
+    }
+
+    /// <summary>登録の切り替え。書けたら表示を変える（Android と同じく楽観的に変えない）。</summary>
+    private async void OnSubscribe(object sender, RoutedEventArgs e)
+    {
+        if (artist is not { ChannelId: { } channelId } page || subscribing) return;
+        var target = page.Subscribed != true;
+        subscribing = true;
+        UpdateSubscribe();
+        var result = await AppServices.Music.SetSubscribedAsync(channelId, target);
+        subscribing = false;
+        if (artist == page && result.IsOk) artist = page with { Subscribed = target };
+        else if (!result.IsOk) Player.Message = L.T("登録を変更できませんでした", "Couldn't change your subscription");
+        UpdateSubscribe();
+    }
+
+    private async void OnLive(object sender, RoutedEventArgs e)
+    {
+        if (artist is null) return;
+        var query = Uri.EscapeDataString(L.T($"{artist.Name} ライブ チケット", $"{artist.Name} live tickets"));
+        await Windows.System.Launcher.LaunchUriAsync(new Uri($"https://www.google.com/search?q={query}"));
     }
 
     /// <summary>このアーティストの、自分が高く評価した曲の数（ログインしていなければ出さない）。</summary>

@@ -408,7 +408,10 @@ public static partial class MusicParsers
             }).OfType<AlbumSummary>().ToList();
             return albums.Count == 0 ? null : new AlbumShelf(TextOf(carousel.Path("header", "musicCarouselShelfBasicHeaderRenderer", "title")) ?? "", albums);
         }).OfType<AlbumShelf>().ToList();
-        return new ArtistPage(name, thumbnail, ShelfSongs(songShelf), allSongs?.StartsWith("VL", StringComparison.Ordinal) == true ? allSongs[2..] : null, albumShelves);
+        var subscribe = header.Path("subscriptionButton", "subscribeButtonRenderer");
+        bool? subscribed = subscribe.Path("subscribed") is System.Text.Json.Nodes.JsonValue v && v.TryGetValue<bool>(out var b) ? b : null;
+        return new ArtistPage(name, thumbnail, ShelfSongs(songShelf), allSongs?.StartsWith("VL", StringComparison.Ordinal) == true ? allSongs[2..] : null, albumShelves,
+            subscribe.Path("channelId").Str(), subscribed);
     }
 
     /// <summary>ログインしていないときに返る「ログインしてください」の案内だけの応答か。</summary>

@@ -55,6 +55,10 @@ class MusicRepository(
     suspend fun libraryArtists(onPage: (List<ArtistSummary>) -> Unit = {}): CallResult<List<ArtistSummary>> =
         libraryCards(LIBRARY_ARTISTS, onPage) { (it as? HomeItem.ArtistItem)?.artist }
 
+    /** 登録（サブスクライブ）したアーティスト。ログイン必須。新作の知らせに使う。 */
+    suspend fun subscribedArtists(onPage: (List<ArtistSummary>) -> Unit = {}): CallResult<List<ArtistSummary>> =
+        libraryCards(SUBSCRIBED_ARTISTS, onPage) { (it as? HomeItem.ArtistItem)?.artist }
+
     /** ライブラリのアルバム（保存したアルバム）。ログイン必須。 */
     suspend fun libraryAlbums(onPage: (List<AlbumSummary>) -> Unit = {}): CallResult<List<AlbumSummary>> =
         libraryCards(LIBRARY_ALBUMS, onPage) { (it as? HomeItem.AlbumItem)?.album }
@@ -270,6 +274,23 @@ class MusicRepository(
         }
 
     /**
+     * アーティスト（チャンネル）を登録する（subscribe = true）・登録を外す（false）。書き込みの規則は setLiked と同じ。
+     */
+    suspend fun setSubscribed(
+        channelId: String,
+        subscribe: Boolean,
+        expectedGeneration: Long? = null,
+    ): WriteResult<Unit> =
+        session.callWrite(
+            operation = if (subscribe) "subscribe" else "unsubscribe",
+            block = { if (subscribe) it.subscribeChannel(YouTubeClient.WEB_REMIX, channelId) else it.unsubscribeChannel(YouTubeClient.WEB_REMIX, channelId) },
+            expectedGeneration = expectedGeneration,
+        ) { response ->
+            json(response)
+            ParseOutcome.Parsed(Unit)
+        }
+
+    /**
      * 曲をプレイリストに追加する（決定 G-1）。innertubex は重複を避ける指定を送らないので、先に全ページを読んで確かめる。
      * 読み取りに失敗したら追加しない。読むのと追加の間に別の端末で足された場合の重複は受け入れる。
      */
@@ -430,6 +451,7 @@ class MusicRepository(
         const val LIBRARY_LANDING = "FEmusic_library_landing"
         const val MOODS = "FEmusic_moods_and_genres"
         const val LIBRARY_ARTISTS = "FEmusic_library_corpus_track_artists"
+        const val SUBSCRIBED_ARTISTS = "FEmusic_library_corpus_artists"
         const val LIBRARY_ALBUMS = "FEmusic_liked_albums"
         const val MOOD_CATEGORY = "FEmusic_moods_and_genres_category"
         const val NEW_RELEASES = "FEmusic_new_releases_albums"

@@ -88,4 +88,11 @@ class ArtistAlbumParsersTest {
     private fun fixtureText(name: String): String = xyz.mooma0750.wave.core.Fixtures.text(name)
 
     private fun fixture(name: String): JsonObject = xyz.mooma0750.wave.core.Fixtures.json(name)
+
+    @Test
+    fun artistPageCarriesItsChannelAndSubscription() {
+        val page = MusicParsers.artistPage(xyz.mooma0750.wave.core.Fixtures.json("browse_artist"))!!
+        kotlin.test.assertEquals("UCvpredjG93ifbCP1Y77JyFA", page.channelId)
+        kotlin.test.assertEquals(false, page.subscribed)
+    }
 }

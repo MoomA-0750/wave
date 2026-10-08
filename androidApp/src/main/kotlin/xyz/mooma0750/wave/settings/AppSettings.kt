@@ -36,6 +36,16 @@ class AppSettings(
         store.edit { it[HISTORY_ENABLED] = enabled }
     }
 
+    /** 登録したアーティストの新作を通知で知らせるか（既定は知らせる）。 */
+    val releaseNotices: Flow<Boolean> =
+        store.data
+            .map { it[RELEASE_NOTICES] ?: true }
+            .catch { if (it is IOException) emit(false) else throw it }
+
+    suspend fun setReleaseNotices(enabled: Boolean) {
+        store.edit { it[RELEASE_NOTICES] = enabled }
+    }
+
     /** プレイリストごとに選んだ並べ方。選んでいなければカスタム。 */
     val playlistOrders: PlaylistOrderStore =
         object : PlaylistOrderStore {
@@ -61,6 +71,7 @@ class AppSettings(
 
     private companion object {
         val HISTORY_ENABLED = booleanPreferencesKey("history_enabled")
+        val RELEASE_NOTICES = booleanPreferencesKey("release_notices")
         const val PLAYLIST_ORDER_PREFIX = "playlist_order_"
 
         fun playlistOrderKey(playlistId: String) = stringPreferencesKey(PLAYLIST_ORDER_PREFIX + playlistId)
