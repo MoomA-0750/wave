@@ -537,6 +537,7 @@ class ConnectV2Manager(
             override fun onUserStartedPlayback(newSelection: Boolean) {
                 val intent = playIntent.incrementAndGet()
                 val foreground = uiInForeground()
+                val hasLocalQueue = host.endpoint?.cursor() != null
                 post {
                     val engine = client ?: return@post
                     // 新しい操作が来たら、前の D-9 の待ちはやめる（曲を選んだのに、待ちの後で止めない、再レビュー 中-C）
@@ -551,6 +552,7 @@ class ConnectV2Manager(
                             hasAccountTag = effects.accountTag() != null,
                             remotePlaying = engine.remotePlayingNow(),
                             foreground = foreground,
+                            hasLocalQueue = hasLocalQueue,
                         )
                     if (decision == PlayButtonPolicy.Decision.Wait) {
                         pauseOnMain()

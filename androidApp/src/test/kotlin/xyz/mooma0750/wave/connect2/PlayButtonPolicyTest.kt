@@ -15,7 +15,20 @@ class PlayButtonPolicyTest {
         hasAccountTag: Boolean = true,
         remotePlaying: Boolean = true,
         foreground: Boolean = true,
-    ) = PlayButtonPolicy.onPlay(newSelection, retreated, inHousehold, stateSettled, hasAccountTag, remotePlaying, foreground)
+        hasLocalQueue: Boolean = false,
+    ) = PlayButtonPolicy.onPlay(newSelection, retreated, inHousehold, stateSettled, hasAccountTag, remotePlaying, foreground, hasLocalQueue)
+
+    @Test
+    fun playButtonInTheForegroundKeepsTheLocalQueueWithoutWaiting() {
+        // 手元のキューがあれば、状態がそろう前でも、ほかの端末が鳴っていても、手元のキューのまま鳴らす
+        assertEquals(Decision.Claim, play(hasLocalQueue = true, stateSettled = false, hasAccountTag = false))
+        assertEquals(Decision.Claim, play(hasLocalQueue = true, remotePlaying = true))
+        // 裏では今までどおり確かめる
+        assertEquals(Decision.Wait, play(hasLocalQueue = true, foreground = false, stateSettled = false))
+        assertEquals(Decision.BlockRemotePlaying, play(hasLocalQueue = true, foreground = false))
+        // 手元が空なら引き取る
+        assertEquals(Decision.TakeOver, play(hasLocalQueue = false))
+    }
 
     @Test
     fun choosingASongIsAlwaysANewPlayback() {

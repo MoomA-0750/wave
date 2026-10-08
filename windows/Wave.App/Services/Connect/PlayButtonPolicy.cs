@@ -32,10 +32,13 @@ public static class PlayButtonPolicy
     /// <param name="newSelection">曲を選んだ（キューを置き換えた・飛んだ）</param>
     /// <param name="retreated">他の端末に引き取られた・止められた印がある</param>
     /// <param name="stateSettled">今の接続で中継の最新の状態をそろえた</param>
-    public static Decision OnPlay(bool newSelection, bool retreated, bool inHousehold, bool stateSettled, bool hasAccountTag, bool remotePlaying, bool foreground)
+    /// <param name="hasLocalQueue">手元にキューがある（前に聴いていたキューを戻してある）</param>
+    public static Decision OnPlay(bool newSelection, bool retreated, bool inHousehold, bool stateSettled, bool hasAccountTag, bool remotePlaying, bool foreground, bool hasLocalQueue = false)
     {
         // 曲を選ぶのは、いつでも新しい再生（L-3）
         if (newSelection || !retreated || !inHousehold) return Decision.Claim;
+        // 前面で手元のキューの再生ボタンを押したら、待たずに手元のキューのまま鳴らす（Android と同じ。ほかの端末は claim で止まる）
+        if (hasLocalQueue && foreground) return Decision.Claim;
         // 古い状態で「鳴っていない」と決めない
         if (!stateSettled || !hasAccountTag) return Decision.Wait;
         if (!remotePlaying) return Decision.Claim;

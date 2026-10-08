@@ -637,6 +637,22 @@ class PlaybackService : MediaSessionService() {
         queueSession.restore(saved)
         player.repeatMode = saved.repeatMode
         Log.i(WaveApplication.LOG_TAG, "queue restored size=${saved.items.size} index=${saved.currentIndex}")
+        // 再生ボタンを押してから曲の URL を調べると待たされるので、戻した今の曲だけは先に調べておく（再生は始めない）
+        prewarmCurrent(saved.items[saved.currentIndex].song.videoId, queueSession.accountEpoch)
+    }
+
+    private fun prewarmCurrent(
+        videoId: String,
+        epoch: Long?,
+    ) {
+        val cache = container.streamCache
+        if (cache.get(videoId, epoch) != null) return
+        scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val startedInEpoch = cache.epoch
+            val result = container.stream.resolver.resolve(videoId, expectedGeneration = epoch)
+            if (result is xyz.mooma0750.wave.core.stream.ResolveResult.Ok) cache.put(result.stream, startedInEpoch)
+            Log.i(WaveApplication.LOG_TAG, "queue restore prewarm ok=${result is xyz.mooma0750.wave.core.stream.ResolveResult.Ok}")
+        }
     }
 
     /** 連続した変更は1回にまとめて保存する。 */

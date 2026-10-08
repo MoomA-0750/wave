@@ -624,13 +624,14 @@ public sealed class ConnectService
     {
         var intent = Interlocked.Increment(ref playIntent);
         var foreground = IsForeground();
+        var hasLocalQueue = player.Queue.Count > 0;
         Post(() =>
         {
             if (client is not { } engine) return;
             waitCancel?.Cancel();
             waitCancel = null;
             var effects = new Effects(this);
-            var decision = PlayButtonPolicy.OnPlay(newSelection, engine.HasRetreated, engine.HouseholdId is not null, engine.StateSettled, effects.AccountTag() is not null, engine.RemotePlayingNow(), foreground);
+            var decision = PlayButtonPolicy.OnPlay(newSelection, engine.HasRetreated, engine.HouseholdId is not null, engine.StateSettled, effects.AccountTag() is not null, engine.RemotePlayingNow(), foreground, hasLocalQueue);
             if (decision == PlayButtonPolicy.Decision.Wait)
             {
                 ui.TryEnqueue(player.ConnectPause);

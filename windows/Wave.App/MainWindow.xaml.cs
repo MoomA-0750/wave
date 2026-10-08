@@ -86,6 +86,7 @@ public sealed partial class MainWindow : Window
             presenter.PreferredMinimumHeight = 600;
         }
         Nav.Frame = ContentFrame;
+        InitPositionSlider();
         InitConnect();
         rightPaneOpen = AppServices.Settings.RightPaneOpen;
         Player.PropertyChanged += OnPlayerChanged;
@@ -744,10 +745,22 @@ public sealed partial class MainWindow : Window
         else Player.ToggleLike();
     }
 
+    /// <summary>本人がシークバーを触っている（押している・キーで動かした直後）。これ以外の値の変化（曲が変わって最大値が縮んだなど）ではシークしない。</summary>
+    private bool sliderByUser;
+
+    private void InitPositionSlider()
+    {
+        PositionSlider.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler((_, _) => sliderByUser = true), handledEventsToo: true);
+        PositionSlider.AddHandler(UIElement.PointerReleasedEvent, new PointerEventHandler((_, _) => sliderByUser = false), handledEventsToo: true);
+        PositionSlider.AddHandler(UIElement.PointerCaptureLostEvent, new PointerEventHandler((_, _) => sliderByUser = false), handledEventsToo: true);
+        PositionSlider.AddHandler(UIElement.KeyDownEvent, new KeyEventHandler((_, _) => sliderByUser = true), handledEventsToo: true);
+        PositionSlider.AddHandler(UIElement.KeyUpEvent, new KeyEventHandler((_, _) => sliderByUser = false), handledEventsToo: true);
+    }
+
     private void OnPositionChanged(object sender, RangeBaseValueChangedEventArgs e)
     {
-        // 再生位置の更新による変化は小さい。大きく動いたときだけ、利用者が動かしたとみなして移る
-        if (Math.Abs(e.NewValue - Player.Position) > 1.5) Player.Seek(e.NewValue);
+        // 再生位置の更新による変化は小さい。本人が触っていて、大きく動いたときだけ移る
+        if (sliderByUser && Math.Abs(e.NewValue - Player.Position) > 1.5) Player.Seek(e.NewValue);
     }
 
     private void OnLyricsToggle(object sender, RoutedEventArgs e)

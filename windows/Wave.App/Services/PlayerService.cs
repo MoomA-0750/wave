@@ -219,8 +219,8 @@ public sealed partial class PlayerService : ObservableObject
         Repeat = (RepeatMode)saved.Repeat;
         Index = index;
         Current = Queue[index];
-        Duration = Current.DurationSeconds ?? 0;
         Position = saved.PositionMs / 1000.0;
+        Duration = Current.DurationSeconds ?? 0;
         var song = Current;
         var cancel = new CancellationTokenSource();
         loadCancel?.Cancel();
@@ -259,6 +259,13 @@ public sealed partial class PlayerService : ObservableObject
     }
 
     partial void OnCurrentChanged(Song? value) => CursorChanged?.Invoke(true);
+
+    // 読み込み中も「再生中」として書くので、読み込みが失敗・中断して終わったときも書き直す
+    // （書き直さないと、止まっている PC が再生中のままに見え、ほかの端末の再生ボタンが引き取りになっていた）
+    partial void OnIsLoadingChanged(bool value)
+    {
+        if (!IsRemote) CursorChanged?.Invoke(true);
+    }
 
     /// <summary>曲の一覧を start から再生する（プレイリスト・アルバム・検索の結果）。shuffle が null なら今の設定のまま。</summary>
     public void PlayList(IReadOnlyList<Song> songs, int start = 0, string? source = null, bool? shuffleOverride = null)
@@ -888,6 +895,9 @@ public sealed partial class PlayerService : ObservableObject
             Like = null;
             Video = null;
             Lyrics = null;
+            // 位置を先に新しい曲のものにしてから長さを替える（逆だと、シークバーの最大値が縮んだ瞬間に前の曲の終わりの位置が
+            // 新しい曲の終わりに押し込まれ、本人のシークとして相手に送ってしまい、次の曲がすぐ飛ばされていた）
+            Position = next.PositionNow(clock.ElapsedMilliseconds);
             Duration = Current.DurationSeconds ?? 0;
             var song = Current;
             var cancel = new CancellationTokenSource();
