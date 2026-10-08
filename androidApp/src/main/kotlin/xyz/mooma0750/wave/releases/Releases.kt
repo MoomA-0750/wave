@@ -81,7 +81,8 @@ class Releases(
                 }
             val now = System.currentTimeMillis()
             val year = java.time.Year.now().value
-            var watch = read().retain(artists.map { it.browseId }.toSet()).expire(now)
+            // 登録の一覧は途中のページで失敗すると欠けて返るので、一覧に無いアーティストの記録は捨てない（捨てると次に初めて見る扱いになり、新作を知らせ損ねる）
+            var watch = read().expire(now)
             val found = mutableListOf<NewRelease>()
             for (artist in artists) {
                 val page = (music.artist(artist.browseId) as? CallResult.Ok)?.value ?: continue

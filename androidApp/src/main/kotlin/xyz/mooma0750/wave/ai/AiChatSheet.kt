@@ -41,6 +41,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -92,7 +93,7 @@ fun AiChatSheet(
                                     color = MaterialTheme.colorScheme.onPrimaryContainer,
                                 )
                             }
-                        is AiMessage.Assistant -> Text(message.text, style = MaterialTheme.typography.bodyLarge)
+                        is AiMessage.Assistant -> Text(markdownText(message.text), style = MaterialTheme.typography.bodyLarge)
                         is AiMessage.Action -> Text("・" + message.text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         is AiMessage.Songs ->
                             LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -133,6 +134,21 @@ fun AiChatSheet(
         }
     }
 }
+
+/** Claude の答えの Markdown のうち、太字（**…**）と見出し（# …）だけを見た目にする（ほかの記号はそのまま）。 */
+internal fun markdownText(text: String): androidx.compose.ui.text.AnnotatedString =
+    androidx.compose.ui.text.buildAnnotatedString {
+        text.lines().forEachIndexed { index, raw ->
+            if (index > 0) append('\n')
+            val heading = Regex("^#{1,6}\\s+").find(raw)
+            val line = if (heading != null) raw.substring(heading.value.length) else raw
+            if (heading != null) pushStyle(androidx.compose.ui.text.SpanStyle(fontWeight = FontWeight.Bold))
+            line.split("**").forEachIndexed { part, piece ->
+                if (part % 2 == 1) withStyle(androidx.compose.ui.text.SpanStyle(fontWeight = FontWeight.Bold)) { append(piece) } else append(piece)
+            }
+            if (heading != null) pop()
+        }
+    }
 
 @Composable
 private fun failureText(code: String): String =

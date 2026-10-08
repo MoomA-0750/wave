@@ -76,7 +76,8 @@ public sealed class Releases(DispatcherQueue ui)
             if (!subscribed.IsOk) return;
             var artists = subscribed.Value!.Take(MaxArtists).ToList();
             var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-            var state = Read().Retain(artists.Select(a => a.BrowseId).ToHashSet()).Expire(now);
+            // 登録の一覧は途中のページで失敗すると欠けて返るので、一覧に無いアーティストの記録は捨てない（Android と同じ）
+            var state = Read().Expire(now);
             var found = new List<NewRelease>();
             foreach (var artist in artists)
             {

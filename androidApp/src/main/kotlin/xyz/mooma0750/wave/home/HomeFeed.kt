@@ -116,9 +116,11 @@ class HomeFeedViewModel(
         job =
             viewModelScope.launch {
             // 絞り込み中は、ホームの棚だけ（最近聴いたもの・新作は「すべて」のときだけ）
-            val newReleases = async { if (chip == null) music.newReleases() else CallResult.Ok(emptyList()) }
-            val recent = async { if (chip == null) music.recentActivity() else CallResult.Ok(emptyList()) }
-            val home = music.home(params = chip?.params)
+            val started = android.os.SystemClock.elapsedRealtime()
+            fun took() = android.os.SystemClock.elapsedRealtime() - started
+            val newReleases = async { (if (chip == null) music.newReleases() else CallResult.Ok(emptyList())).also { Log.i(WaveApplication.LOG_TAG, "home timing newReleases ms=${took()}") } }
+            val recent = async { (if (chip == null) music.recentActivity() else CallResult.Ok(emptyList())).also { Log.i(WaveApplication.LOG_TAG, "home timing recent ms=${took()}") } }
+            val home = music.home(params = chip?.params).also { Log.i(WaveApplication.LOG_TAG, "home timing home ms=${took()}") }
             val releases = (newReleases.await() as? CallResult.Ok)?.value.orEmpty()
             val recentItems = (recent.await() as? CallResult.Ok)?.value.orEmpty()
             Log.i(WaveApplication.LOG_TAG, "home recent items=${recentItems.size} kinds=${recentItems.groupingBy { it::class.simpleName.orEmpty() }.eachCount()}" + if (recentItems.isEmpty()) " renderers=${music.lastRendererNames}" else "")

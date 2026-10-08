@@ -726,7 +726,7 @@ public sealed partial class MainWindow : Window
                     Child = new TextBlock { Text = user.Text, TextWrapping = TextWrapping.Wrap, Foreground = (Brush)Application.Current.Resources["TextOnAccentFillColorPrimaryBrush"] },
                 };
             case AiMessage.Assistant assistant:
-                return new TextBlock { Text = assistant.Text, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true };
+                return MarkdownBlock(assistant.Text);
             case AiMessage.Action action:
                 return new TextBlock { Text = "・" + action.Text, TextWrapping = TextWrapping.Wrap, Style = subtle };
             case AiMessage.Failure failure:
@@ -756,6 +756,28 @@ public sealed partial class MainWindow : Window
             default:
                 return new TextBlock();
         }
+    }
+
+    /// <summary>Claude の答えの Markdown のうち、太字（**…**）と見出し（# …）だけを見た目にする（Android と同じ）。</summary>
+    private static TextBlock MarkdownBlock(string text)
+    {
+        var block = new TextBlock { TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true };
+        var lines = text.Split('\n');
+        for (var i = 0; i < lines.Length; i++)
+        {
+            if (i > 0) block.Inlines.Add(new Microsoft.UI.Xaml.Documents.LineBreak());
+            var line = lines[i];
+            var heading = System.Text.RegularExpressions.Regex.Match(line, @"^#{1,6}\s+");
+            if (heading.Success) line = line[heading.Length..];
+            var parts = line.Split("**");
+            for (var k = 0; k < parts.Length; k++)
+            {
+                var run = new Microsoft.UI.Xaml.Documents.Run { Text = parts[k] };
+                if (heading.Success || k % 2 == 1) run.FontWeight = Microsoft.UI.Text.FontWeights.Bold;
+                block.Inlines.Add(run);
+            }
+        }
+        return block;
     }
 
     private void OnAiSend(object sender, RoutedEventArgs e)
