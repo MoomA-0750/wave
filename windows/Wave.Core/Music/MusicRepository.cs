@@ -150,6 +150,13 @@ public sealed class MusicRepository(InnerTubeClient client)
         return (await BrowseAsync(browseId, null, null, cancel)).Map(MusicParsers.PlainLyrics);
     }
 
+    /// <summary>アーティストの YouTube のチャンネルの投稿（本人のお知らせ。ライブ・ツアーの告知を拾うのに使う。Android と同じ）。</summary>
+    public async Task<ApiResult<List<ArtistPost>>> ArtistPostsAsync(string channelId, CancellationToken cancel = default) =>
+        (await client.PostYouTubeAsync("browse", new JsonObject { ["browseId"] = channelId, ["params"] = PostsParams }, cancel)).Map(MusicParsers.ArtistPosts);
+
+    /// <summary>チャンネルの「投稿」タブを開く params。</summary>
+    private const string PostsParams = "EgVwb3N0c_IGBAoCSgA=";
+
     /// <summary>アーティスト（チャンネル）を登録する・登録を外す（Android と同じ）。</summary>
     public async Task<ApiResult<bool>> SetSubscribedAsync(string channelId, bool subscribe, CancellationToken cancel = default)
     {

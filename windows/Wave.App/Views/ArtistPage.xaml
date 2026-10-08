@@ -33,6 +33,13 @@
                 <Button x:Name="LiveButton" Visibility="Collapsed" Click="OnLive" VerticalAlignment="Center" CornerRadius="16" Padding="16,6" Content="{x:Bind app:L.T('ライブ・チケット', 'Concerts &amp; tickets')}" />
                 <ProgressRing x:Name="LoadingRing" IsActive="True" Width="20" Height="20" />
             </StackPanel>
+            <!-- ライブ・ツアーの告知（アーティストの YouTube のチャンネルの投稿から。Android と同じ）。告知が無ければ出さない -->
+            <StackPanel x:Name="LivePanel" Visibility="Collapsed" Spacing="8">
+                <TextBlock Text="{x:Bind app:L.T('ライブ・お知らせ', 'Live &amp; news')}" Style="{StaticResource SubtitleTextBlockStyle}" Margin="24,8,24,0" />
+                <ScrollViewer HorizontalScrollMode="Enabled" HorizontalScrollBarVisibility="Auto" VerticalScrollMode="Disabled" VerticalScrollBarVisibility="Disabled">
+                    <StackPanel x:Name="LivePosts" Orientation="Horizontal" Spacing="12" Padding="24,0,24,8" />
+                </ScrollViewer>
+            </StackPanel>
             <TextBlock Text="{x:Bind app:L.T('人気', 'Popular')}" Style="{StaticResource SubtitleTextBlockStyle}" Margin="24,8,24,0" />
             <ListView x:Name="TopSongs" Margin="12,0" ItemTemplate="{StaticResource TrackRowTemplate}" ItemContainerStyle="{StaticResource TrackListItemStyle}"
                       ScrollViewer.VerticalScrollMode="Disabled" DoubleTapped="OnDoubleTapped" />

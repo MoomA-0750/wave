@@ -290,6 +290,19 @@ public static partial class MusicParsers
         _ => false,
     };
 
+    /// <summary>チャンネルの「投稿」タブの投稿（新しい順。Android と同じ）。</summary>
+    public static List<ArtistPost> ArtistPosts(JsonNode root) =>
+        root.FindAll("backstagePostRenderer").Select(post =>
+        {
+            if (post.Path("postId").Str() is not { } id || RunsText(post.Path("contentText", "runs").Items()) is not { } text) return null;
+            var image = (post.Path("backstageAttachment", "backstageImageRenderer", "image", "thumbnails").Items().LastOrDefault()
+                    ?? post.Path("backstageAttachment", "postMultiImageRenderer", "images").Items().FirstOrDefault()
+                        .Path("backstageImageRenderer", "image", "thumbnails").Items().LastOrDefault())
+                .Path("url").Str();
+            if (image is not null && image.StartsWith("//")) image = "https:" + image;
+            return new ArtistPost(id, text, TextOf(post.Path("publishedTimeText")), image);
+        }).OfType<ArtistPost>().DistinctBy(p => p.PostId).ToList();
+
     public static string? EditPlaylistStatus(JsonNode root) => root.Path("status").Str();
 
     public static string? CreatedPlaylistId(JsonNode root) => root.Path("playlistId").Str();

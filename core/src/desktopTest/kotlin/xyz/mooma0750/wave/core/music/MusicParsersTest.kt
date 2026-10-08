@@ -109,4 +109,26 @@ class MusicParsersTest {
     }
 
     private fun fixture(name: String): JsonObject = xyz.mooma0750.wave.core.Fixtures.json(name)
+
+    @Test
+    fun artistPostsAreReadAndLiveAnnouncementsAreKept() {
+        val root =
+            Json.parseToJsonElement(
+                """{"contents":{"tabs":[{"tabRenderer":{"content":{"items":[
+                {"backstagePostThreadRenderer":{"post":{"backstagePostRenderer":{"postId":"Ugkx1","contentText":{"runs":[{"text":"台北ドーム2DAYS開催決定！\n"},{"text":"チケット販売は9月16日から"}]},
+                  "publishedTimeText":{"runs":[{"text":"2 日前"}]},
+                  "backstageAttachment":{"backstageImageRenderer":{"image":{"thumbnails":[{"url":"//yt3.ggpht.com/small"},{"url":"//yt3.ggpht.com/large"}]}}}}}}},
+                {"backstagePostThreadRenderer":{"post":{"backstagePostRenderer":{"postId":"Ugkx2","contentText":{"runs":[{"text":"新曲 10/14 配信リリース決定！"}]}}}}}
+                ]}}}]}}""",
+            ) as JsonObject
+        val posts = MusicParsers.artistPosts(root)
+        assertEquals(listOf("Ugkx1", "Ugkx2"), posts.map { it.postId })
+        assertEquals("台北ドーム2DAYS開催決定！\nチケット販売は9月16日から", posts[0].text)
+        assertEquals("2 日前", posts[0].publishedText)
+        assertEquals("https://yt3.ggpht.com/large", posts[0].imageUrl)
+        assertEquals("https://www.youtube.com/post/Ugkx1", posts[0].url)
+        // 告知らしいものだけ（リリースの知らせは新作のほうで出す）
+        assertEquals(listOf("Ugkx1"), LiveNews.of(posts).map { it.postId })
+        assertTrue(LiveNews.isLiveRelated("ASIA DOME TOUR 2026"))
+    }
 }

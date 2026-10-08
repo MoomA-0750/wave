@@ -411,6 +411,16 @@ class MusicRepository(
             parsedOrInvalid(MusicParsers.artistPage(root))
         }
 
+    /**
+     * アーティストの YouTube のチャンネルの投稿（本人のお知らせ。ライブ・ツアーの告知を拾うのに使う）。
+     * YouTube（Music ではない）の応答なので、ログインの情報は付けない。
+     */
+    suspend fun artistPosts(channelId: String): CallResult<List<ArtistPost>> =
+        session.call(
+            operation = "browse",
+            block = { it.browse(YouTubeClient.WEB, browseId = channelId, params = POSTS_PARAMS, setLogin = false) },
+        ) { response -> ParseOutcome.Parsed(MusicParsers.artistPosts(json(response))) }
+
     /** 直近のアルバムの応答で playlistId が現れた場所（キー名だけ）。実アカウントの応答の形を調べる用。 */
     var lastKeyPaths: Set<String> = emptySet()
         private set
@@ -440,6 +450,9 @@ class MusicRepository(
         WaveSession.json.parseToJsonElement(response.bodyAsTextLimited(MAX_BROWSE_BYTES)) as JsonObject
 
     companion object {
+        /** チャンネルの「投稿」タブを開く params。 */
+        const val POSTS_PARAMS = "EgVwb3N0c_IGBAoCSgA="
+
         /** 検索を曲に絞る params。 */
         const val SONGS_FILTER = "EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D"
         const val ALBUMS_FILTER = "EgWKAQIYAWoKEAkQBRAKEAMQBA%3D%3D"

@@ -49,7 +49,42 @@ public sealed partial class ArtistPage : Page
         UpdatePlayIcon();
         UpdateSubscribe();
         LiveButton.Visibility = Visibility.Visible;
+        _ = ShowLivePostsAsync(artist);
         await ShowLikedAsync(artist);
+    }
+
+    /// <summary>チャンネルの投稿のうち、ライブ・ツアーの告知らしいものを並べる（押すと YouTube の投稿を開く）。</summary>
+    private async Task ShowLivePostsAsync(Core.Music.ArtistPage page)
+    {
+        var channelId = page.ChannelId ?? (browseId.StartsWith("UC") ? browseId : null);
+        if (channelId is null) return;
+        var result = await AppServices.Music.ArtistPostsAsync(channelId);
+        if (artist != page) return;
+        var posts = result.IsOk ? LiveNews.Of(result.Value!).Take(6).ToList() : [];
+        AppPaths.Log($"artist posts ok={result.IsOk} posts={result.Value?.Count} live={posts.Count}");
+        LivePosts.Children.Clear();
+        foreach (var post in posts) LivePosts.Children.Add(LivePostCard(post));
+        LivePanel.Visibility = Ui.Show(posts.Count > 0);
+    }
+
+    private static Button LivePostCard(ArtistPost post)
+    {
+        var body = new StackPanel { Spacing = 6 };
+        if (post.ImageUrl is { } url) body.Children.Add(new Image { Source = Ui.Img(url, 520), Height = 140, Stretch = Microsoft.UI.Xaml.Media.Stretch.UniformToFill });
+        body.Children.Add(new TextBlock { Text = post.Text, TextWrapping = TextWrapping.Wrap, MaxLines = 6, TextTrimming = TextTrimming.CharacterEllipsis });
+        if (post.PublishedText is { } published) body.Children.Add(new TextBlock { Text = published, Style = (Style)Application.Current.Resources["SubtleTextStyle"] });
+        var card = new Button
+        {
+            Content = body,
+            Width = 260,
+            VerticalAlignment = VerticalAlignment.Stretch,
+            VerticalContentAlignment = VerticalAlignment.Top,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
+            Padding = new Thickness(12),
+            CornerRadius = new CornerRadius(8),
+        };
+        card.Click += async (_, _) => await Windows.System.Launcher.LaunchUriAsync(new Uri(post.Url));
+        return card;
     }
 
     private bool subscribing;

@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -100,6 +101,11 @@ class ArtistViewModel(
     private val mutableLiked = MutableStateFlow(ArtistLikedState())
     val likedSongs: StateFlow<ArtistLikedState> = mutableLiked.asStateFlow()
 
+    private val mutableLivePosts = MutableStateFlow<List<xyz.mooma0750.wave.core.music.ArtistPost>>(emptyList())
+
+    /** チャンネルの投稿のうち、ライブ・ツアーの告知らしいもの。 */
+    val livePosts: StateFlow<List<xyz.mooma0750.wave.core.music.ArtistPost>> = mutableLivePosts.asStateFlow()
+
     private val mutableSubscribing = MutableStateFlow(false)
 
     /** 登録・解除を送っている間。 */
@@ -143,7 +149,21 @@ class ArtistViewModel(
                     }
                 }
             loadLiked()
+            loadLivePosts()
         }
+    }
+
+    private suspend fun loadLivePosts() {
+        val page = state.value.page ?: return
+        val channelId = page.channelId ?: browseId.takeIf { it.startsWith("UC") } ?: return
+        val result = music.artistPosts(channelId)
+        val posts = (result as? CallResult.Ok)?.value.orEmpty()
+        mutableLivePosts.value = xyz.mooma0750.wave.core.music.LiveNews.of(posts).take(MAX_LIVE_POSTS)
+        Log.i(WaveApplication.LOG_TAG, "artist posts ok=${result is CallResult.Ok} posts=${posts.size} live=${mutableLivePosts.value.size}")
+    }
+
+    private companion object {
+        const val MAX_LIVE_POSTS = 6
     }
 
     private suspend fun loadLiked() {
@@ -237,6 +257,11 @@ fun ArtistScreen(
                 // 最近の新作（登録したアーティストの見張りで見つけたもの）
                 if (newReleases.isNotEmpty()) {
                     item(key = "new-releases") { xyz.mooma0750.wave.releases.NewReleaseRow(newReleases, stringResource(R.string.releases_artist_title), actions, onPlaySong, showArtist = false) }
+                }
+                // ライブ・ツアーの告知（アーティストの YouTube のチャンネルの投稿から）
+                item(key = "live-posts") {
+                    val posts by viewModel.livePosts.collectAsStateWithLifecycle()
+                    if (posts.isNotEmpty()) LivePostsRow(posts)
                 }
                 // Spotify の「人気」: 番号付きの曲
                 item { SectionTitle(stringResource(R.string.artist_popular)) }
@@ -350,6 +375,36 @@ fun AlbumScreen(
                 itemsIndexed(page.songs, key = { index, song -> "$index-${song.videoId}" }) { index, song ->
                     SongRow(song, onClick = { onPlay(page, index, false) }, showArtwork = false) { SongMenuButton(song, actions) }
                 }
+        }
+    }
+}
+
+/** ライブ・ツアーの告知の投稿を横に並べる。押すと YouTube の投稿を開く。 */
+@Composable
+private fun LivePostsRow(posts: List<xyz.mooma0750.wave.core.music.ArtistPost>) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    Column(Modifier.padding(top = 8.dp)) {
+        SectionTitle(stringResource(R.string.artist_live_news))
+        LazyRow(contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            items(posts, key = { it.postId }) { post ->
+                androidx.compose.material3.OutlinedCard(
+                    onClick = { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(post.url))) },
+                    modifier = Modifier.width(260.dp),
+                ) {
+                    post.imageUrl?.let { url ->
+                        coil3.compose.AsyncImage(
+                            model = url,
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxWidth().height(140.dp),
+                            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                        )
+                    }
+                    Column(Modifier.padding(12.dp)) {
+                        Text(post.text, maxLines = 6, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium)
+                        post.publishedText?.let { Text(it, Modifier.padding(top = 4.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    }
+                }
+            }
         }
     }
 }

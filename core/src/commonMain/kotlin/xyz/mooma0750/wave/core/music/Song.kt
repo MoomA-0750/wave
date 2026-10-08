@@ -166,6 +166,17 @@ data class ArtistPage(
     val videos: List<Song> = emptyList(),
 )
 
+/** アーティストの YouTube のチャンネルの投稿（本人のお知らせ）。 */
+data class ArtistPost(
+    val postId: String,
+    val text: String,
+    /** 「2 日前」など、応答の表示のまま。 */
+    val publishedText: String?,
+    val imageUrl: String?,
+) {
+    val url: String get() = "https://www.youtube.com/post/$postId"
+}
+
 data class AlbumShelf(
     val title: String,
     val albums: List<AlbumSummary>,

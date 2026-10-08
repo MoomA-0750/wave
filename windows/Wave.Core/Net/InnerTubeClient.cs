@@ -149,6 +149,46 @@ public sealed class InnerTubeClient
         }
     }
 
+    /// <summary>
+    /// YouTube（Music ではない、www.youtube.com の WEB）の youtubei/v1/{endpoint} に、ログインの情報を付けずに POST する
+    /// （アーティストのチャンネルの投稿を読むのに使う）。
+    /// </summary>
+    public async Task<ApiResult<JsonNode>> PostYouTubeAsync(string endpoint, JsonObject body, CancellationToken cancel = default)
+    {
+        body["context"] = new JsonObject
+        {
+            ["client"] = new JsonObject { ["clientName"] = "WEB", ["clientVersion"] = YouTubeWebVersion, ["gl"] = Gl, ["hl"] = Hl },
+        };
+        using var request = new HttpRequestMessage(HttpMethod.Post, "https://www.youtube.com/youtubei/v1/" + endpoint + "?prettyPrint=false")
+        {
+            Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json"),
+        };
+        request.Headers.TryAddWithoutValidation("User-Agent", UserAgent);
+        request.Headers.TryAddWithoutValidation("Origin", "https://www.youtube.com");
+        try
+        {
+            using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancel);
+            var status = (int)response.StatusCode;
+            if (status is < 200 or > 299) return ApiResult<JsonNode>.Failed(FailureKind.Http, status);
+            var text = await ReadLimitedAsync(response, MaxResponseBytes, cancel);
+            return JsonNode.Parse(text) is { } root ? ApiResult<JsonNode>.Ok(root) : ApiResult<JsonNode>.Failed(FailureKind.Parse);
+        }
+        catch (OperationCanceledException) when (cancel.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (JsonException)
+        {
+            return ApiResult<JsonNode>.Failed(FailureKind.Parse);
+        }
+        catch (Exception e) when (e is HttpRequestException or IOException or TaskCanceledException or InvalidDataException)
+        {
+            return ApiResult<JsonNode>.Failed(FailureKind.Network);
+        }
+    }
+
+    private const string YouTubeWebVersion = "2.20261001.00.00";
+
     /// <summary>再生の統計（再生履歴）の GET。URL は music.youtube.com の /api/stats/playback に限る（呼ぶ側で検査済み）。</summary>
     internal async Task<int?> GetStatsAsync(string url, long expectedGeneration, CancellationToken cancel)
     {

@@ -158,4 +158,5 @@
     <string name="releases_kind_release">Release</string>
     <string name="releases_home_title">New from artists you subscribe to</string>
     <string name="releases_artist_title">New releases</string>
+    <string name="artist_live_news">Live &amp; news</string>
 </resources>

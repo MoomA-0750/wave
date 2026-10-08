@@ -188,6 +188,27 @@ public class MusicParsersTests
         Assert.NotNull(lyrics);
         Assert.False(string.IsNullOrWhiteSpace(lyrics!.Text));
     }
+
+    [Fact]
+    public void ArtistPostsAreReadAndLiveAnnouncementsAreKept()
+    {
+        var root = JsonNode.Parse("""
+            {"contents":{"tabs":[{"tabRenderer":{"content":{"items":[
+            {"backstagePostThreadRenderer":{"post":{"backstagePostRenderer":{"postId":"Ugkx1","contentText":{"runs":[{"text":"台北ドーム2DAYS開催決定！\n"},{"text":"チケット販売は9月16日から"}]},
+              "publishedTimeText":{"runs":[{"text":"2 日前"}]},
+              "backstageAttachment":{"backstageImageRenderer":{"image":{"thumbnails":[{"url":"//yt3.ggpht.com/small"},{"url":"//yt3.ggpht.com/large"}]}}}}}}},
+            {"backstagePostThreadRenderer":{"post":{"backstagePostRenderer":{"postId":"Ugkx2","contentText":{"runs":[{"text":"新曲 10/14 配信リリース決定！"}]}}}}}
+            ]}}}]}}
+            """)!;
+        var posts = MusicParsers.ArtistPosts(root);
+        Assert.Equal(["Ugkx1", "Ugkx2"], posts.Select(p => p.PostId));
+        Assert.Equal("台北ドーム2DAYS開催決定！\nチケット販売は9月16日から", posts[0].Text);
+        Assert.Equal("2 日前", posts[0].PublishedText);
+        Assert.Equal("https://yt3.ggpht.com/large", posts[0].ImageUrl);
+        Assert.Equal("https://www.youtube.com/post/Ugkx1", posts[0].Url);
+        Assert.Equal(["Ugkx1"], LiveNews.Of(posts).Select(p => p.PostId));
+        Assert.True(LiveNews.IsLiveRelated("ASIA DOME TOUR 2026"));
+    }
 }
 
 internal static class StringExtensions

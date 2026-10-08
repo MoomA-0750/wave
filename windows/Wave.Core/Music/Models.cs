@@ -60,6 +60,24 @@ public sealed record AlbumPage(
     string? PlaylistId,
     IReadOnlyList<Song> Songs);
 
+/// <summary>アーティストの YouTube のチャンネルの投稿（本人のお知らせ）。PublishedText は「2 日前」など応答の表示のまま。</summary>
+public sealed record ArtistPost(string PostId, string Text, string? PublishedText, string? ImageUrl)
+{
+    public string Url => "https://www.youtube.com/post/" + PostId;
+}
+
+/// <summary>アーティストの投稿のうち、ライブ・ツアー・出演の告知らしいもの（Android の LiveNews と同じ）。</summary>
+public static class LiveNews
+{
+    private static readonly System.Text.RegularExpressions.Regex Keywords = new(
+        @"ライブ|ﾗｲﾌﾞ|ツアー|公演|ワンマン|チケット|開催決定|出演決定|フェス|ドーム|アリーナ|ホール|\bLIVE\b|\bTOUR\b|\bconcert|\btickets?\b|\bfestival\b",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+    public static bool IsLiveRelated(string text) => Keywords.IsMatch(text);
+
+    public static List<ArtistPost> Of(IEnumerable<ArtistPost> posts) => posts.Where(p => IsLiveRelated(p.Text)).ToList();
+}
+
 public sealed record ArtistPage(
     string Name,
     string? ThumbnailUrl,

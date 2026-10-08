@@ -318,6 +318,20 @@ internal object MusicParsers {
         }
 
     /** browse/edit_playlist の応答の status（`STATUS_SUCCEEDED` など）。 */
+    /** チャンネルの「投稿」タブの投稿（新しい順）。 */
+    fun artistPosts(root: JsonObject): List<ArtistPost> =
+        findAll(root, "backstagePostRenderer").mapNotNull { post ->
+            val id = post.path("postId").string() ?: return@mapNotNull null
+            val text = runsText(post.path("contentText", "runs").arrayItems()) ?: return@mapNotNull null
+            val image =
+                (post.path("backstageAttachment", "backstageImageRenderer", "image", "thumbnails").arrayItems().lastOrNull()
+                    ?: post.path("backstageAttachment", "postMultiImageRenderer", "images").arrayItems().firstOrNull()
+                        .path("backstageImageRenderer", "image", "thumbnails").arrayItems().lastOrNull())
+                    .path("url").string()
+                    ?.let { if (it.startsWith("//")) "https:$it" else it }
+            ArtistPost(id, text, textOf(post.path("publishedTimeText")), image)
+        }.distinctBy { it.postId }
+
     fun editPlaylistStatus(root: JsonObject): String? = root.path("status").string()
 
     /**
