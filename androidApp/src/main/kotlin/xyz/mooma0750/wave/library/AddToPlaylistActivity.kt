@@ -35,7 +35,7 @@ class AddToPlaylistActivity : ComponentActivity() {
         setContent {
             WaveTheme {
                 AddToPlaylistDialog(
-                    viewModel { LibraryViewModel(container.music) },
+                    viewModel { LibraryViewModel(container.music, container.libraryCache) },
                     onDismiss = ::finish,
                     onPick = { playlist, onResult -> container.playlistEditor.add(playlist, song, onResult) },
                     onCreate = { title ->

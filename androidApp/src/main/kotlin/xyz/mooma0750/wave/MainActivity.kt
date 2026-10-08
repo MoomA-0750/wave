@@ -198,7 +198,7 @@ class MainActivity : ComponentActivity() {
                                     )
                                 Tab.Library ->
                                     LibraryTabScreen(
-                                        viewModel(key = "library-tab-$loginGeneration-$playlistsVersion") { LibraryTabViewModel(container.music) },
+                                        viewModel(key = "library-tab-$loginGeneration-$playlistsVersion") { LibraryTabViewModel(container.music, container.libraryCache) },
                                         account = account,
                                         onOpenPlaylist = { nav.push(Screen.Playlist(it)) },
                                         onOpenArtist = { nav.push(Screen.Artist(it.browseId, it.name)) },
@@ -317,7 +317,7 @@ class MainActivity : ComponentActivity() {
                                 // 開いている間は一覧を作り直さない（足すたびに読み直して並びが動かないように）
                                 val openedVersion = remember(song) { playlistsVersion }
                                 AddToPlaylistDialog(
-                                    viewModel(key = "library-$loginGeneration-$openedVersion") { LibraryViewModel(container.music) },
+                                    viewModel(key = "library-$loginGeneration-$openedVersion") { LibraryViewModel(container.music, container.libraryCache) },
                                     onDismiss = { addTarget = null },
                                     // 押しても閉じない（続けてほかのプレイリストにも足せる）
                                     onPick = { playlist, onResult -> container.playlistEditor.add(playlist, song, onResult) },

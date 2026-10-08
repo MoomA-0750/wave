@@ -446,7 +446,9 @@ public static partial class MusicParsers
         if (videoId is null || title is null) return null;
         var detailRuns = columns.Skip(1).SelectMany(c => c).ToList();
         var fixedDuration = DurationOf(item.Path("fixedColumns").Items().SelectMany(c => c.Path("musicResponsiveListItemFixedColumnRenderer", "text", "runs").Items()));
-        return new Song(videoId, title, ArtistsOf(detailRuns), AlbumOf(detailRuns), fixedDuration ?? DurationOf(detailRuns), LastThumbnailUrl(item.Path("thumbnail")));
+        var kind = titleRuns.Select(r => r.Path("navigationEndpoint", "watchEndpoint", "watchEndpointMusicSupportedConfigs", "watchEndpointMusicConfig", "musicVideoType").Str()).FirstOrDefault(v => v is not null)
+            ?? item.Path("overlay", "musicItemThumbnailOverlayRenderer", "content", "musicPlayButtonRenderer", "playNavigationEndpoint", "watchEndpoint", "watchEndpointMusicSupportedConfigs", "watchEndpointMusicConfig", "musicVideoType").Str();
+        return new Song(videoId, title, ArtistsOf(detailRuns), AlbumOf(detailRuns), fixedDuration ?? DurationOf(detailRuns), LastThumbnailUrl(item.Path("thumbnail")), kind);
     }
 
     /// <summary>ラジオ・キューの行（playlistPanelVideoRenderer）。</summary>
@@ -458,7 +460,8 @@ public static partial class MusicParsers
         var byline = item.Path("longBylineText", "runs").Items();
         if (byline.Count == 0) byline = item.Path("shortBylineText", "runs").Items();
         return new Song(videoId, title, ArtistsOf(byline), AlbumOf(byline), DurationOf(item.Path("lengthText", "runs").Items()),
-            item.Path("thumbnail", "thumbnails").Items().LastOrDefault().Path("url").Str());
+            item.Path("thumbnail", "thumbnails").Items().LastOrDefault().Path("url").Str(),
+            item.Path("navigationEndpoint", "watchEndpoint", "watchEndpointMusicSupportedConfigs", "watchEndpointMusicConfig", "musicVideoType").Str());
     }
 
     /// <summary>アーティストの runs。ページ種別が付いていればそれを、無ければ区切り（" • "）の前をアーティストとみなす。</summary>

@@ -97,5 +97,16 @@ class MusicParsersTest {
         assertEquals("https://large", song?.thumbnailUrl)
     }
 
+    @Test
+    fun songsCarryTheirKind() {
+        // 検索・ラジオの行には曲の種類（音源・MV・投稿者の動画）が付く。一覧の種類の絞り込みに使う
+        val search = MusicParsers.searchSongs(fixture("search_songs")).songs
+        assertTrue(search.isNotEmpty() && search.all { it.kind != null }, "検索の曲に種類が無い: ${search.map { it.kind }}")
+        val radio = MusicParsers.upNext(fixture("next_radio")).songs
+        assertTrue(radio.isNotEmpty() && radio.all { it.kind != null }, "ラジオの曲に種類が無い: ${radio.map { it.kind }}")
+        val playlist = MusicParsers.playlistPage(fixture("browse_playlist")).songs
+        assertTrue(playlist.isNotEmpty() && playlist.all { it.kind != null }, "プレイリストの曲に種類が無い: ${playlist.map { it.kind }}")
+    }
+
     private fun fixture(name: String): JsonObject = xyz.mooma0750.wave.core.Fixtures.json(name)
 }

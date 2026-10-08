@@ -128,7 +128,7 @@ class PlaylistMembership(
 
     private companion object {
         /** 同時に読むプレイリストの数。 */
-        const val CONCURRENCY = 3
+        const val CONCURRENCY = 6
 
         /** これより古い結果は読み直す（ほかの端末での変更を拾う）。 */
         const val MAX_AGE_MS = 10 * 60 * 1000L

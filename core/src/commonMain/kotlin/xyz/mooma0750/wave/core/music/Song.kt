@@ -11,6 +11,8 @@ data class Song(
     val album: AlbumRef?,
     val durationSeconds: Int?,
     val thumbnailUrl: String?,
+    /** 曲の種類（音源・公式の MV・投稿者の動画）。応答に無ければ null（一覧の絞り込みでは「すべて」にだけ出る）。 */
+    val kind: MusicVideoType? = null,
 ) {
     /** 「アーティスト • アルバム」の1行。 */
     val subtitle: String

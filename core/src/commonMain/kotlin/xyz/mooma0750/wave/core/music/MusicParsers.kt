@@ -593,6 +593,11 @@ internal object MusicParsers {
             album = albumOf(detailRuns),
             durationSeconds = fixedDuration ?: durationOf(detailRuns),
             thumbnailUrl = lastThumbnailUrl(item.path("thumbnail")),
+            kind =
+                MusicVideoType.of(
+                    titleRuns.firstNotNullOfOrNull { it.path("navigationEndpoint", "watchEndpoint", "watchEndpointMusicSupportedConfigs", "watchEndpointMusicConfig", "musicVideoType").string() }
+                        ?: item.path("overlay", "musicItemThumbnailOverlayRenderer", "content", "musicPlayButtonRenderer", "playNavigationEndpoint", "watchEndpoint", "watchEndpointMusicSupportedConfigs", "watchEndpointMusicConfig", "musicVideoType").string(),
+                ),
         )
     }
 
@@ -608,6 +613,7 @@ internal object MusicParsers {
             album = albumOf(byline),
             durationSeconds = durationOf(item.path("lengthText", "runs").arrayItems()),
             thumbnailUrl = item.path("thumbnail", "thumbnails").arrayItems().lastOrNull().path("url").string(),
+            kind = musicVideoTypeOf(item),
         )
     }
 

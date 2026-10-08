@@ -1,6 +1,7 @@
 package xyz.mooma0750.wave.core.music
 
 /** YouTube Music の曲の種類（`musicVideoType`）。 */
+@kotlinx.serialization.Serializable
 enum class MusicVideoType {
     /** 音源（静止画）。対応する MV（counterpart）があることがある。 */
     Atv,

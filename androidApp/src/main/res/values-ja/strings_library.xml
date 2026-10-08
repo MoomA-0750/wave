@@ -134,4 +134,8 @@
     <string name="library_notification_channel_liked">高く評価した曲</string>
     <string name="library_liked_notice_title">「%1$s」を高く評価した曲に追加しました</string>
     <string name="library_liked_notice_text">プレイリストにも追加できます</string>
+    <string name="library_kind_all">すべて</string>
+    <string name="library_kind_songs">曲</string>
+    <string name="library_kind_music_videos">MV</string>
+    <string name="library_kind_user_videos">その他の動画（歌ってみた・ライブなど）</string>
 </resources>

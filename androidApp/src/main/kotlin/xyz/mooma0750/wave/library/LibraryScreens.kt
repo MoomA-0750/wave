@@ -81,6 +81,10 @@ fun PlaylistScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var shuffle by rememberSaveable { mutableStateOf(false) }
+    // 曲の種類の絞り込み（曲・MV・投稿者の動画）。絞っている間は、再生も絞った曲だけにする
+    var kind by rememberSaveable { mutableStateOf(KindFilter.All) }
+    val kindSongs = if (kind == KindFilter.All) state.songs else state.songs.filter(kind::matches)
+    val playContinuation = if (kind == KindFilter.All) state.continuation else null
     CollectionScreen(
         title = state.title ?: summary.title,
         coverUrl = summary.thumbnailUrl ?: state.songs.firstOrNull()?.thumbnailUrl,
@@ -101,17 +105,31 @@ fun PlaylistScreen(
                 )
                 SortRow(state.order, state.sortable, viewModel::setOrder)
             }
+            // 種類のチップ（動画や歌ってみたと、ふつうの曲を分けて出す）
+            androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
+                items(KindFilter.entries.toList()) { option ->
+                    androidx.compose.material3.FilterChip(
+                        selected = kind == option,
+                        onClick = {
+                            kind = if (kind == option) KindFilter.All else option
+                            // 種類を絞るときは、全部読んでから絞る（読んだぶんだけだと少なく見える）
+                            if (kind != KindFilter.All) viewModel.loadAll()
+                        },
+                        label = { Text(kindLabel(option)) },
+                    )
+                }
+            }
         },
         details = {
             // 一覧の補足（「作った人 • 曲数」）があればそれを、無ければ読んだ曲数を出す
             DetailText(summary.subtitle ?: if (state.continuation != null) pluralStringResource(R.plurals.library_song_count_more, state.songs.size, state.songs.size) else pluralStringResource(R.plurals.library_song_count, state.songs.size, state.songs.size))
         },
         actions = {
-            QueueMenu(enabled = state.songs.isNotEmpty(), onQueue = { next -> onQueue(state.songs, next) })
+            QueueMenu(enabled = kindSongs.isNotEmpty(), onQueue = { next -> onQueue(kindSongs, next) })
         },
         play =
-            PlayControls(shuffle, { shuffle = it }, enabled = state.songs.isNotEmpty()) {
-                if (shuffle) onShufflePlay(state.songs, state.continuation) else onPlay(state.songs, 0, state.continuation)
+            PlayControls(shuffle, { shuffle = it }, enabled = kindSongs.isNotEmpty()) {
+                if (shuffle) onShufflePlay(kindSongs, playContinuation) else onPlay(kindSongs, 0, playContinuation)
             },
     ) {
         // カスタムの降順・長さは、全部読んでから手元で並べる。読んでいる途中の（並べる前の）並びは出さない
@@ -127,8 +145,8 @@ fun PlaylistScreen(
         state.failure?.let { item { Text(failureMessage(it), Modifier.padding(16.dp)) } }
         if (!state.loading && state.failure == null && state.songs.isEmpty()) item { Text(stringResource(R.string.library_no_songs), Modifier.padding(16.dp)) }
         // 絞り込み中は、元の並びでの位置を持ったまま出す（再生も「外す」も元の位置に当てる）
-        val shown = SongFilter.matchingIndices(state.songs, state.query)
-        if (state.query.isNotBlank()) {
+        val shown = SongFilter.matchingIndices(state.songs, state.query, kind)
+        if (state.query.isNotBlank() || kind != KindFilter.All) {
             item {
                 Column(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
                     Text(pluralStringResource(R.plurals.library_match_count, shown.size, shown.size), style = MaterialTheme.typography.bodySmall)
@@ -141,7 +159,7 @@ fun PlaylistScreen(
         items(shown, key = { index -> "$index-${state.songs[index].videoId}" }) { index ->
             val song = state.songs[index]
             val setVideoId = state.setVideoIds.getOrNull(index)
-            SongRow(song, onClick = { onPlay(state.songs, index, state.continuation) }) {
+            SongRow(song, onClick = { if (kind == KindFilter.All) onPlay(state.songs, index, state.continuation) else onPlay(kindSongs, kindSongs.indexOf(song).coerceAtLeast(0), null) }) {
                 SongMenuButton(
                     song,
                     actions,
@@ -149,13 +167,22 @@ fun PlaylistScreen(
                 )
             }
             // 絞り込み中は、続きを読むのは loadAll に任せる
-            if (state.query.isBlank() && index == state.songs.lastIndex && state.continuation != null) {
+            if (state.query.isBlank() && kind == KindFilter.All && index == state.songs.lastIndex && state.continuation != null) {
                 LaunchedEffect(state.songs.size) { viewModel.loadMore() }
             }
         }
         if (state.loading) item { CircularProgressIndicator(Modifier.padding(16.dp)) }
     }
 }
+
+@Composable
+private fun kindLabel(kind: KindFilter): String =
+    when (kind) {
+        KindFilter.All -> stringResource(R.string.library_kind_all)
+        KindFilter.Songs -> stringResource(R.string.library_kind_songs)
+        KindFilter.MusicVideos -> stringResource(R.string.library_kind_music_videos)
+        KindFilter.UserVideos -> stringResource(R.string.library_kind_user_videos)
+    }
 
 /** 丸ごとキューに入れるメニュー（Spotify の「⋯」）。 */
 @Composable

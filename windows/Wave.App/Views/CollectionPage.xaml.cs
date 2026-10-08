@@ -267,7 +267,10 @@ public sealed partial class CollectionPage : Page
 
     // --- 絞り込みと並べ替え（Spotify のプレイリストの🔍と「カスタム順」と同じ。全部読んだ曲を手元で） ---
 
-    private bool IsDefaultView => filter.Length == 0 && (ServerSort || sort == SortKey.Custom && !descending);
+    /// <summary>曲の種類の絞り込み（Song.Kind の値。null はすべて）。絞っている間は、再生も絞った曲だけ（出ている並びで再生する）。</summary>
+    private string? kindFilter;
+
+    private bool IsDefaultView => filter.Length == 0 && kindFilter is null && (ServerSort || sort == SortKey.Custom && !descending);
 
     private void AddRow(TrackRow row)
     {
@@ -286,7 +289,7 @@ public sealed partial class CollectionPage : Page
             var text = string.Join(' ', new[] { s.Title, s.ArtistsText, s.Album?.Title ?? "" });
             return terms.All(t => compare.IndexOf(text, t, options) >= 0);
         }
-        IEnumerable<TrackRow> view = all.Where(r => Matches(r.Song));
+        IEnumerable<TrackRow> view = all.Where(r => Matches(r.Song) && (kindFilter is null || r.Song.Kind == kindFilter));
         Func<TrackRow, IComparable?>? key = sort switch
         {
             SortKey.Title => r => r.Song.Title,
@@ -304,6 +307,18 @@ public sealed partial class CollectionPage : Page
         foreach (var r in list) rows.Add(r);
         TrackRow.MarkCurrent(rows, Player.Current?.VideoId);
         NoMatchText.Visibility = Ui.Show(all.Count > 0 && list.Count == 0);
+    }
+
+    /// <summary>種類のチップ（曲・MV・その他の動画）。同じものをもう一度押すと外す。</summary>
+    private void OnKindChip(object sender, RoutedEventArgs e)
+    {
+        var chosen = (sender as FrameworkElement)?.Tag as string;
+        kindFilter = chosen is null || chosen == kindFilter ? null : chosen;
+        KindAll.IsChecked = kindFilter is null;
+        KindSongs.IsChecked = kindFilter == Song.KindSong;
+        KindVideos.IsChecked = kindFilter == Song.KindMusicVideo;
+        KindUserVideos.IsChecked = kindFilter == Song.KindUserVideo;
+        ApplyView();
     }
 
     private void OnSearchToggle(object sender, RoutedEventArgs e)

@@ -7,8 +7,14 @@ public sealed record Song(
     IReadOnlyList<ArtistRef> Artists,
     AlbumRef? Album,
     int? DurationSeconds,
-    string? ThumbnailUrl)
+    string? ThumbnailUrl,
+    // 曲の種類（musicVideoType の値。MUSIC_VIDEO_TYPE_ATV は音源、_OMV は公式の MV、_UGC は投稿者の動画）。応答に無ければ null
+    string? Kind = null)
 {
+    public const string KindSong = "MUSIC_VIDEO_TYPE_ATV";
+    public const string KindMusicVideo = "MUSIC_VIDEO_TYPE_OMV";
+    public const string KindUserVideo = "MUSIC_VIDEO_TYPE_UGC";
+
     public string ArtistsText => string.Join(", ", Artists.Select(a => a.Name));
 
     /// <summary>「アーティスト • アルバム」の1行。</summary>

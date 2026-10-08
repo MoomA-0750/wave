@@ -186,6 +186,7 @@ object LibraryOrder {
 
 class LibraryTabViewModel(
     private val music: MusicRepository,
+    private val cache: LibraryCache? = null,
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(LibraryTabUiState())
     val state: StateFlow<LibraryTabUiState> = mutableState.asStateFlow()
@@ -195,14 +196,21 @@ class LibraryTabViewModel(
     }
 
     fun refresh() {
-        mutableState.value = LibraryTabUiState()
+        // 前に読んだ一覧があれば、まずそれを出す（読み直したら差し替える。途中のページでは差し替えない）
+        val cached = cache?.tab
+        mutableState.value = cached ?: LibraryTabUiState()
         viewModelScope.launch {
             // ページが届くたびに一覧に足す（全部そろうのを待たずに出す）
             val parts = MutableStateFlow(Triple(emptyList<PlaylistSummary>(), emptyList<ArtistSummary>(), emptyList<AlbumSummary>()))
             fun publish() {
                 val (playlists, artists, albums) = parts.value
                 val entries = (playlists.map(LibraryEntry::Playlist) + artists.map(LibraryEntry::Artist) + albums.map(LibraryEntry::Album)).distinctBy { it.key }
-                mutableState.update { it.copy(entries = entries, loading = entries.isEmpty() && it.loading) }
+                if (cached == null) mutableState.update { it.copy(entries = entries, loading = entries.isEmpty() && it.loading) }
+            }
+            fun publishFresh(value: Triple<List<PlaylistSummary>, List<ArtistSummary>, List<AlbumSummary>>) {
+                val (playlists, artists, albums) = value
+                val entries = (playlists.map(LibraryEntry::Playlist) + artists.map(LibraryEntry::Artist) + albums.map(LibraryEntry::Album)).distinctBy { it.key }
+                mutableState.update { it.copy(entries = entries) }
             }
             val recent = async { music.recentActivity() }
             val artists = async { music.libraryArtists { page -> parts.update { it.copy(second = page) }.also { publish() } } }
@@ -216,13 +224,16 @@ class LibraryTabViewModel(
                 "library tab playlists=${(playlists as? CallResult.Ok)?.value?.size} artists=${(artistResult as? CallResult.Ok)?.value?.size} albums=${(albumResult as? CallResult.Ok)?.value?.size}",
             )
             val recentKeys = (recent.await() as? CallResult.Ok)?.value.orEmpty().mapNotNull(LibraryOrder::keyOf)
+            val failed = playlists is CallResult.Failed || artistResult is CallResult.Failed || albumResult is CallResult.Failed
+            if (cached != null && !failed) publishFresh(parts.value)
             mutableState.update {
                 it.copy(
-                    recentKeys = recentKeys,
+                    recentKeys = recentKeys.ifEmpty { it.recentKeys },
                     loading = false,
                     failure = (playlists as? CallResult.Failed)?.kind.takeIf { _ -> it.entries.isEmpty() },
                 )
             }
+            if (!failed) cache?.tab = mutableState.value
         }
     }
 }

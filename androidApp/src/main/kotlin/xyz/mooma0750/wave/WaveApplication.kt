@@ -224,6 +224,9 @@ class AppContainer(
     /** 高く評価した曲が変わった（かもしれない）たびに増える。一覧を読み直すキーに使う。 */
     val likedSongsVersion: StateFlow<Int> = mutableLikedSongsVersion.asStateFlow()
 
+    /** 前に読んだライブラリ（画面をすぐ出すため）。 */
+    val libraryCache = xyz.mooma0750.wave.library.LibraryCache()
+
     /** 曲がどのプレイリストに入っているかの確認（プレイリストが変わるまで使い回す）。 */
     val playlistMembership = PlaylistMembership(music)
 
@@ -448,6 +451,7 @@ class AppContainer(
         likedIdsJob?.cancel()
         mutableLikedIds.value = emptySet()
         playlistMembership.clear()
+        libraryCache.clear()
         imageCacheCleaner()
         WebViewCredentials.clear()
         Log.i(WaveApplication.LOG_TAG, "logout cleared=$cleared")

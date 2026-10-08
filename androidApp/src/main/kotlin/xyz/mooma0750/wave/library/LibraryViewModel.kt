@@ -29,8 +29,10 @@ data class LibraryUiState(
 
 class LibraryViewModel(
     private val music: MusicRepository,
+    private val cache: LibraryCache? = null,
 ) : ViewModel() {
-    private val mutableState = MutableStateFlow(LibraryUiState())
+    // 前に読んだ一覧があれば、まずそれを出す（裏で読み直して差し替える）
+    private val mutableState = MutableStateFlow(cache?.playlists?.let { LibraryUiState(playlists = it, loading = false) } ?: LibraryUiState())
     val state: StateFlow<LibraryUiState> = mutableState.asStateFlow()
 
     init {
@@ -38,14 +40,17 @@ class LibraryViewModel(
     }
 
     fun refresh() {
-        mutableState.update { it.copy(loading = true, failure = null) }
+        val cached = cache?.playlists != null
+        if (!cached) mutableState.update { it.copy(loading = true, failure = null) }
         viewModelScope.launch {
-            when (val result = music.libraryPlaylists()) {
+            // 前の一覧が無ければ、ページが届くたびに出す
+            when (val result = music.libraryPlaylists { page -> if (!cached) mutableState.update { it.copy(playlists = page, loading = page.isEmpty()) } }) {
                 is CallResult.Ok -> {
                     Log.i(WaveApplication.LOG_TAG, "library playlists=${result.value.size}" + if (result.value.isEmpty()) " renderers=${music.lastRendererNames}" else "")
+                    cache?.playlists = result.value
                     mutableState.update { it.copy(playlists = result.value, loading = false) }
                 }
-                is CallResult.Failed -> mutableState.update { it.copy(loading = false, failure = result.kind) }
+                is CallResult.Failed -> mutableState.update { it.copy(loading = false, failure = result.kind.takeIf { _ -> it.playlists.isEmpty() }) }
             }
         }
     }
@@ -173,7 +178,7 @@ class PlaylistViewModel(
         if (query.isNotBlank()) loadAll()
     }
 
-    private fun loadAll() {
+    fun loadAll() {
         if (state.value.loadingAll) return
         if (state.value.continuation == null) {
             // 1ページで全部だった。カスタムの降順・長さなら、ここで並べる

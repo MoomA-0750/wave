@@ -60,6 +60,13 @@
                     </DropDownButton>
                 </StackPanel>
                 </Grid>
+                <!-- 曲の種類で絞る（動画や歌ってみたと、ふつうの曲を分ける。Android と同じ） -->
+                <StackPanel Orientation="Horizontal" Spacing="8" Padding="12,0,12,12">
+                    <ToggleButton x:Name="KindAll" CornerRadius="14" Padding="14,4" IsChecked="True" Click="OnKindChip" Content="{x:Bind app:L.T('すべて', 'All')}" />
+                    <ToggleButton x:Name="KindSongs" CornerRadius="14" Padding="14,4" Click="OnKindChip" Tag="MUSIC_VIDEO_TYPE_ATV" Content="{x:Bind app:L.T('曲', 'Songs')}" />
+                    <ToggleButton x:Name="KindVideos" CornerRadius="14" Padding="14,4" Click="OnKindChip" Tag="MUSIC_VIDEO_TYPE_OMV" Content="{x:Bind app:L.T('MV', 'Music videos')}" />
+                    <ToggleButton x:Name="KindUserVideos" CornerRadius="14" Padding="14,4" Click="OnKindChip" Tag="MUSIC_VIDEO_TYPE_UGC" Content="{x:Bind app:L.T('その他の動画（歌ってみた・ライブなど）', 'Other videos (covers, live…)')}" />
+                </StackPanel>
                 <Grid Padding="12,0,12,8" ColumnSpacing="12" BorderThickness="0,0,0,1" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="32" />

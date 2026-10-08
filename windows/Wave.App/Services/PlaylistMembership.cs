@@ -10,7 +10,7 @@ public sealed class PlaylistMembership
 
     private static readonly TimeSpan MaxAge = TimeSpan.FromMinutes(10);
     private readonly Dictionary<string, (DateTime ReadAt, HashSet<string> Ids)> cache = [];
-    private readonly SemaphoreSlim limit = new(3);
+    private readonly SemaphoreSlim limit = new(6);
 
     /// <summary>そのプレイリストに曲が入っているか。最後まで読めなければ Unknown。UI スレッドから呼ぶ。</summary>
     public async Task<Status> CheckAsync(string playlistId, string videoId, CancellationToken cancel)
