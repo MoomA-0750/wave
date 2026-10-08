@@ -228,7 +228,7 @@ fun ArtistScreen(
         coverUrl = page?.thumbnailUrl,
         onBack = onBack,
         hero = true,
-        // 登録（Spotify の「フォロー」）は名前の右に。登録していなければ色を付けて目立たせる
+        // 登録（Spotify の「フォロー」）は名前の行の右端に。登録していなければ色を付けて目立たせる
         titleTrailing = {
             if (page?.channelId != null) {
                 val subscribing by viewModel.subscribing.collectAsStateWithLifecycle()

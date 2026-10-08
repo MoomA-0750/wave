@@ -17,14 +17,14 @@
                         </LinearGradientBrush>
                     </Rectangle.Fill>
                 </Rectangle>
-                <!-- 名前と、その右に登録（Spotify の「フォロー」）。登録していなければ色を付けて目立たせる -->
+                <!-- 名前と、枠の右端に登録（Spotify の「フォロー」）。登録していなければ色を付けて目立たせる -->
                 <Grid VerticalAlignment="Bottom" Padding="24" ColumnSpacing="20">
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" MaxWidth="900" />
                         <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock x:Name="NameText" FontSize="72" FontWeight="Bold" Foreground="White" TextTrimming="CharacterEllipsis" />
-                    <Button x:Name="SubscribeButton" Grid.Column="1" Visibility="Collapsed" Click="OnSubscribe" VerticalAlignment="Center" CornerRadius="16" Padding="16,6" />
+                    <TextBlock x:Name="NameText" VerticalAlignment="Center" FontSize="72" FontWeight="Bold" Foreground="White" TextTrimming="CharacterEllipsis" />
+                    <Button x:Name="SubscribeButton" Grid.Column="1" Visibility="Collapsed" Click="OnSubscribe" VerticalAlignment="Center" HorizontalAlignment="Right" CornerRadius="16" Padding="16,6" />
                 </Grid>
             </Grid>
             <StackPanel Orientation="Horizontal" Spacing="16" Padding="24,0">

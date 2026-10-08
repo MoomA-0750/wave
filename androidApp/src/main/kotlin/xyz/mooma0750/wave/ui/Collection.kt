@@ -45,7 +45,7 @@ import androidx.compose.ui.res.stringResource
 
 /**
  * プレイリスト・アルバムのページ（並びは Spotify と同じ）: ジャケットの色のグラデーションの上に大きなジャケット、
- * 名前と補足、左に小さな操作・右にシャッフルと大きな再生ボタン、その下に曲。
+ * 名前と補足、左から大きな再生ボタン・シャッフル・小さな操作（Windows と同じ）、その下に曲。
  * 上の帯は、スクロールしてジャケットが隠れたら名前を出し、色を付ける。
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -58,9 +58,9 @@ fun CollectionScreen(
     top: @Composable ColumnScope.() -> Unit = {},
     /** 名前の下の行（作った人・年・曲数など）。 */
     details: @Composable ColumnScope.() -> Unit = {},
-    /** 操作の列の左側（キューに追加・メニューなど）。 */
+    /** 操作の列の、再生ボタンとシャッフルの右（キューに追加・メニューなど）。 */
     actions: @Composable RowScope.() -> Unit = {},
-    /** 操作の列の右側の、シャッフルの切り替えと再生ボタン。null なら出さない。 */
+    /** 操作の列の左端の、再生ボタンとシャッフルの切り替え。null なら出さない。 */
     play: PlayControls?,
     coverShape: Shape = RoundedCornerShape(4.dp),
     /** アーティストのページ: 画像を横幅いっぱいに出し、名前を画像の上に重ねる（Spotify のアーティストのページ）。 */
@@ -88,7 +88,7 @@ fun CollectionScreen(
                         ) {
                             Text(
                                 title,
-                                Modifier.weight(1f, fill = false),
+                                Modifier.weight(1f),
                                 style = MaterialTheme.typography.displaySmall,
                                 fontWeight = FontWeight.Bold,
                                 maxLines = 2,
@@ -142,12 +142,12 @@ fun CollectionScreen(
             }
             item(key = "collection-actions") {
                 Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 16.dp, top = 4.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    actions()
-                    Spacer(Modifier.weight(1f))
+                    // Windows と同じ並び: 左から再生ボタン、シャッフル、そのほかの操作
                     play?.let { controls ->
+                        PlayFab(playing = false, onClick = controls.onPlay, enabled = controls.enabled, modifier = Modifier.padding(start = 12.dp, end = 8.dp))
                         IconAction(R.drawable.ic_shuffle, if (controls.shuffle) stringResource(R.string.ui_shuffle_on) else stringResource(R.string.ui_shuffle_off), { controls.onShuffleChange(!controls.shuffle) }, active = controls.shuffle, size = 28.dp)
-                        PlayFab(playing = false, onClick = controls.onPlay, enabled = controls.enabled, modifier = Modifier.padding(start = 8.dp))
                     }
+                    actions()
                 }
             }
             content()
