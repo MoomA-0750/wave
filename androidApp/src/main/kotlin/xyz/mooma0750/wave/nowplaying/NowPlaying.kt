@@ -230,6 +230,8 @@ fun NowPlayingScreen(
     connect: ConnectV2Manager? = null,
     /** 広い画面の右の列として出す（左上は閉じる代わりに全面に広げる。onClose が広げる）。 */
     inPanel: Boolean = false,
+    /** Claude に聞く（null なら出さない）。 */
+    onAskAi: (() -> Unit)? = null,
 ) {
     val display = rememberDisplay(connection, connect)
     val state = display.state
@@ -303,6 +305,7 @@ fun NowPlayingScreen(
                         }
                     }
                 }
+                if (song != null && onAskAi != null) IconAction(R.drawable.ic_ai, stringResource(R.string.ai_title), onAskAi)
                 song?.let { SongMenuButton(it, actions, inQueue = true) } ?: Spacer(Modifier.size(48.dp))
             }
             Box(Modifier.fillMaxWidth().padding(horizontal = if (video) 8.dp else 24.dp, vertical = 24.dp), contentAlignment = Alignment.Center) {

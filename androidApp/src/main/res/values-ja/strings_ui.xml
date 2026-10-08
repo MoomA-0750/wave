@@ -112,4 +112,38 @@
     <string name="nowplaying_clear_queue">キューを消去</string>
     <string name="nowplaying_next_from_source">次に流れる曲</string>
     <string name="search_share">共有</string>
+    <string name="ai_title">Claude に聞く</string>
+    <string name="ai_new_chat">新しい会話</string>
+    <string name="ai_intro">今の曲について聞けます。歌詞の意味・似た曲・プレイリスト作りなど。</string>
+    <string name="ai_open_settings">設定を開く</string>
+    <string name="ai_suggest_meaning">この歌詞ってどういう意味だと思う？</string>
+    <string name="ai_suggest_similar">これに似た曲ある？</string>
+    <string name="ai_suggest_playlist">この曲から始まるプレイリストを作って</string>
+    <string name="ai_placeholder">Claude に聞く</string>
+    <string name="ai_stop">止める</string>
+    <string name="ai_send">送る</string>
+    <string name="ai_not_configured">Claude につないでいません。設定の「Claude」でつないでください。</string>
+    <string name="ai_unreachable">Claude の中継に届きませんでした。中継を動かしている PC が起きているか確かめてください。</string>
+    <string name="ai_unauthorized">Claude の中継にトークンを断られました。設定でつなぎ直してください。</string>
+    <string name="ai_failed">Claude が失敗しました: %1$s</string>
+    <string name="ai_searched">「%1$s」を探しました</string>
+    <string name="ai_read_liked">高く評価した曲を見ました</string>
+    <string name="settings_ai_title">Claude</string>
+    <string name="settings_ai_summary_off">家の PC の Claude Code（tools/ai-bridge）で、歌詞の意味・似た曲・プレイリスト作りを頼める</string>
+    <string name="settings_ai_connected">%1$s の中継につないでいます</string>
+    <string name="settings_ai_scan">QR コードで接続</string>
+    <string name="settings_ai_disconnect">接続を外す</string>
+    <string name="settings_ai_bad_qr">wave の Claude の中継の QR コードではありません</string>
+    <plurals name="ai_played">
+        <item quantity="other">%d 曲を再生しました</item>
+    </plurals>
+    <plurals name="ai_queued">
+        <item quantity="other">%d 曲をキューに足しました</item>
+    </plurals>
+    <plurals name="ai_created">
+        <item quantity="other">「%1$s」を作って %2$d 曲入れました</item>
+    </plurals>
+    <plurals name="ai_added">
+        <item quantity="other">「%1$s」に %2$d 曲足しました</item>
+    </plurals>
 </resources>

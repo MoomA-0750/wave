@@ -303,6 +303,28 @@ object DebugActions {
                 }
                 // 知らせ（スナックバー）の見た目の確認。表示だけで、何も書き込まない
                 "notice" -> xyz.mooma0750.wave.ui.Notices.show(intent.getStringExtra("text") ?: "wave debug notice")
+                // Claude の中継への接続（QR の中身と同じ waveai://pair?u=&t=&n=）と、頼みの確認（答えの長さと道具の行だけを記録する）
+                "ai_pair" -> intent.getStringExtra("uri")?.let { uri -> xyz.mooma0750.wave.settings.AiBridgeConfig.parse(uri)?.let { container.settings.setAiBridge(it) }.also { Log.i(WaveApplication.LOG_TAG, "debug ai pair ok=${it != null}") } }
+                "ai_ask" ->
+                    intent.getStringExtra("text")?.let { text ->
+                        val chat = container.aiChat
+                        chat.send(text)
+                        kotlinx.coroutines.delay(500)
+                        val done = chat.state.first { !it.running }
+                        done.messages.forEach { message ->
+                            Log.i(
+                                WaveApplication.LOG_TAG,
+                                "debug ai " +
+                                    when (message) {
+                                        is xyz.mooma0750.wave.ai.AiMessage.User -> "user"
+                                        is xyz.mooma0750.wave.ai.AiMessage.Assistant -> "assistant chars=${message.text.length}"
+                                        is xyz.mooma0750.wave.ai.AiMessage.Action -> "action ${message.text}"
+                                        is xyz.mooma0750.wave.ai.AiMessage.Songs -> "songs n=${message.songs.size}"
+                                        is xyz.mooma0750.wave.ai.AiMessage.Failure -> "failure ${message.text}"
+                                    },
+                            )
+                        }
+                    }
                 "open_artist" -> intent.getStringExtra("browse_id")?.let { navigationChannel.trySend(Screen.Artist(it, "")) }
                 "open_album" -> intent.getStringExtra("browse_id")?.let { navigationChannel.trySend(Screen.Album(it, "")) }
                 "play_album" ->

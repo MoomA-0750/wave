@@ -156,6 +156,7 @@ fun SettingsScreen(
                     },
                 )
             }
+            item { AiSettingsSection(container.settings) }
             item {
                 val releaseNotices by container.settings.releaseNotices.collectAsStateWithLifecycle(initialValue = null)
                 ListItem(

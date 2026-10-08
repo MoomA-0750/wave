@@ -17,6 +17,27 @@ import kotlinx.coroutines.flow.map
 
 private val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 
+/** Claude の中継の接続先（QR の waveai://pair?u=&t=&n= から読む）。 */
+data class AiBridgeConfig(
+    val url: String,
+    val token: String,
+    /** 中継の動いている機械の名前（表示用）。 */
+    val name: String? = null,
+) {
+    companion object {
+        /** QR の中身を読む。形が違えば null。接続先は https か、この端末の中（127.0.0.1）だけ受ける。 */
+        fun parse(text: String): AiBridgeConfig? {
+            val uri = runCatching { android.net.Uri.parse(text.trim()) }.getOrNull() ?: return null
+            if (uri.scheme != "waveai" || uri.host != "pair") return null
+            val url = uri.getQueryParameter("u")?.trimEnd('/') ?: return null
+            val token = uri.getQueryParameter("t")?.takeIf { it.isNotBlank() } ?: return null
+            return AiBridgeConfig(url, token, uri.getQueryParameter("n")).takeIf { it.urlAllowed() }
+        }
+    }
+
+    fun urlAllowed(): Boolean = url.startsWith("https://") || url.startsWith("http://127.0.0.1:") || url.startsWith("http://localhost:")
+}
+
 /** 認証情報とは別の、アプリの設定。 */
 class AppSettings(
     context: Context,
@@ -46,6 +67,26 @@ class AppSettings(
         store.edit { it[RELEASE_NOTICES] = enabled }
     }
 
+    /** Claude の中継（tools/ai-bridge）の接続先とトークン。設定していなければ null。 */
+    val aiBridge: Flow<AiBridgeConfig?> =
+        store.data
+            .map { prefs -> prefs[AI_URL]?.let { url -> prefs[AI_TOKEN]?.let { AiBridgeConfig(url, it, prefs[AI_NAME]) } } }
+            .catch { if (it is IOException) emit(null) else throw it }
+
+    suspend fun setAiBridge(config: AiBridgeConfig?) {
+        store.edit {
+            if (config == null) {
+                it.remove(AI_URL)
+                it.remove(AI_TOKEN)
+                it.remove(AI_NAME)
+            } else {
+                it[AI_URL] = config.url
+                it[AI_TOKEN] = config.token
+                config.name?.let { name -> it[AI_NAME] = name } ?: it.remove(AI_NAME)
+            }
+        }
+    }
+
     /** プレイリストごとに選んだ並べ方。選んでいなければカスタム。 */
     val playlistOrders: PlaylistOrderStore =
         object : PlaylistOrderStore {
@@ -72,6 +113,9 @@ class AppSettings(
     private companion object {
         val HISTORY_ENABLED = booleanPreferencesKey("history_enabled")
         val RELEASE_NOTICES = booleanPreferencesKey("release_notices")
+        val AI_URL = stringPreferencesKey("ai_url")
+        val AI_TOKEN = stringPreferencesKey("ai_token")
+        val AI_NAME = stringPreferencesKey("ai_name")
         const val PLAYLIST_ORDER_PREFIX = "playlist_order_"
 
         fun playlistOrderKey(playlistId: String) = stringPreferencesKey(PLAYLIST_ORDER_PREFIX + playlistId)

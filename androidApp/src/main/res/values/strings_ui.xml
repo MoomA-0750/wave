@@ -113,4 +113,42 @@
     <string name="nowplaying_clear_queue">Clear queue</string>
     <string name="nowplaying_next_from_source">Next up</string>
     <string name="search_share">Share</string>
+    <string name="ai_title">Ask Claude</string>
+    <string name="ai_new_chat">New chat</string>
+    <string name="ai_intro">Ask about the song that\'s playing — what the lyrics mean, similar songs, or have it make a playlist.</string>
+    <string name="ai_open_settings">Open settings</string>
+    <string name="ai_suggest_meaning">What do these lyrics mean?</string>
+    <string name="ai_suggest_similar">Any songs like this?</string>
+    <string name="ai_suggest_playlist">Make a playlist from this song</string>
+    <string name="ai_placeholder">Ask Claude</string>
+    <string name="ai_stop">Stop</string>
+    <string name="ai_send">Send</string>
+    <string name="ai_not_configured">Claude isn\'t connected yet. Connect it in Settings → Claude.</string>
+    <string name="ai_unreachable">Couldn\'t reach the Claude bridge. Is the PC running it?</string>
+    <string name="ai_unauthorized">The Claude bridge refused the token. Connect again in Settings.</string>
+    <string name="ai_failed">Claude failed: %1$s</string>
+    <string name="ai_searched">Searched for “%1$s”</string>
+    <string name="ai_read_liked">Looked at your liked songs</string>
+    <string name="settings_ai_title">Claude</string>
+    <string name="settings_ai_summary_off">Ask about lyrics, find similar songs and make playlists with Claude Code on your PC (tools/ai-bridge)</string>
+    <string name="settings_ai_connected">Connected to %1$s</string>
+    <string name="settings_ai_scan">Connect with QR code</string>
+    <string name="settings_ai_disconnect">Disconnect</string>
+    <string name="settings_ai_bad_qr">That isn\'t a wave Claude bridge QR code</string>
+    <plurals name="ai_played">
+        <item quantity="one">Playing %d song</item>
+        <item quantity="other">Playing %d songs</item>
+    </plurals>
+    <plurals name="ai_queued">
+        <item quantity="one">Added %d song to the queue</item>
+        <item quantity="other">Added %d songs to the queue</item>
+    </plurals>
+    <plurals name="ai_created">
+        <item quantity="one">Created “%1$s” with %2$d song</item>
+        <item quantity="other">Created “%1$s” with %2$d songs</item>
+    </plurals>
+    <plurals name="ai_added">
+        <item quantity="one">Added %2$d song to “%1$s”</item>
+        <item quantity="other">Added %2$d songs to “%1$s”</item>
+    </plurals>
 </resources>

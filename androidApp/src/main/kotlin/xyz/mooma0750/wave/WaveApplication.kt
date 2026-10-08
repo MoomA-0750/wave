@@ -274,6 +274,11 @@ class AppContainer(
     /** プレイリストを編集した（かもしれない）たびに増える。ライブラリとプレイリストの表示を読み直すキーに使う。 */
     val playlistsVersion: StateFlow<Int> = mutablePlaylistsVersion.asStateFlow()
 
+    /** プレイリストを変えた（Claude の道具など、PlaylistEditor を通らない変更）。 */
+    fun onPlaylistsChanged() {
+        mutablePlaylistsVersion.update { it + 1 }
+    }
+
     val playlistEditor = PlaylistEditor(context.applicationContext, music, appScope, onChanged = { mutablePlaylistsVersion.update { it + 1 } }, membership = playlistMembership)
 
     /** UI から再生サービスへの接続。 */
@@ -289,6 +294,26 @@ class AppContainer(
     val musicVideos = MusicVideos(music, stream.resolver, videoStreamCache, mediaHttpClient)
 
     val settings = AppSettings(context)
+
+    /** Claude との会話（tools/ai-bridge の中継を通す）。アプリが動いている間だけ会話を持つ。 */
+    val aiChat: xyz.mooma0750.wave.ai.AiChat by lazy {
+        val res = appContext.resources
+        val texts =
+            object : xyz.mooma0750.wave.ai.AiTools.Texts {
+                override fun searched(query: String) = res.getString(R.string.ai_searched, query)
+
+                override fun played(count: Int) = res.getQuantityString(R.plurals.ai_played, count, count)
+
+                override fun queued(count: Int) = res.getQuantityString(R.plurals.ai_queued, count, count)
+
+                override fun created(title: String, count: Int) = res.getQuantityString(R.plurals.ai_created, count, title, count)
+
+                override fun added(title: String, count: Int) = res.getQuantityString(R.plurals.ai_added, count, title, count)
+
+                override fun readLiked() = res.getString(R.string.ai_read_liked)
+            }
+        xyz.mooma0750.wave.ai.AiChat(settings, xyz.mooma0750.wave.ai.AiTools(this, texts), appScope)
+    }
 
     /** 端末間の受け渡しの、再生サービスへの入口（Phase 6）。 */
     val handoffHost = HandoffHost()
@@ -459,6 +484,7 @@ class AppContainer(
         mutableLikedIds.value = emptySet()
         playlistMembership.clear()
         libraryCache.clear()
+        aiChat.clear()
         xyz.mooma0750.wave.releases.ReleaseWatcher.clear(appContext)
         imageCacheCleaner()
         WebViewCredentials.clear()

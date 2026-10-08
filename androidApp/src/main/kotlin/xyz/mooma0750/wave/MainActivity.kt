@@ -182,6 +182,19 @@ class MainActivity : ComponentActivity() {
                                 onCancel = { reLogin = false },
                             )
                         } else androidx.compose.runtime.CompositionLocalProvider(xyz.mooma0750.wave.ui.LocalLikedIds provides likedIds) {
+                            // Claude に聞く（再生画面から開く）
+                            var showAi by remember { mutableStateOf(false) }
+                            if (showAi) {
+                                xyz.mooma0750.wave.ai.AiChatSheet(
+                                    container.aiChat,
+                                    onPlay = playerActions::playSong,
+                                    onOpenSettings = {
+                                        showAi = false
+                                        nav.push(Screen.Settings)
+                                    },
+                                    onDismiss = { showAi = false },
+                                )
+                            }
                             // Spotify と同じく、デバイスのボタンは端末を選ぶだけの画面を出す（設定はその中のリンクから）
                             var showDevices by remember { mutableStateOf(false) }
                             val openDevices: () -> Unit = { if (container.connectV2 != null) showDevices = true else nav.push(Screen.Connect) }
@@ -205,6 +218,7 @@ class MainActivity : ComponentActivity() {
                                         onClose = close,
                                         onOpenDevices = openDevices,
                                         inPanel = inPanel,
+                                        onAskAi = { showAi = true },
                                     )
                                 },
                             ) {
