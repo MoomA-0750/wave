@@ -13,6 +13,9 @@ public sealed class Releases(DispatcherQueue ui)
     private static readonly TimeSpan Interval = TimeSpan.FromHours(6);
     private const int MaxArtists = 300;
     private const int MaxNotifications = 10;
+
+    /// <summary>新作を通知するのに要る、そのアーティストの高く評価した曲の数。</summary>
+    private const int MinLikedToNotify = 3;
     private DispatcherQueueTimer? timer;
     private bool checking;
 
@@ -95,7 +98,13 @@ public sealed class Releases(DispatcherQueue ui)
             Recent = state.Recent;
             AppPaths.Log($"release watch artists={artists.Count} new={found.Count} recent={Recent.Count}");
             Changed?.Invoke();
-            foreach (var release in found.Take(MaxNotifications)) Notify(release);
+            if (found.Count == 0) return;
+            // 鳴らす通知は、よく聴くアーティスト（高く評価した曲が MinLikedToNotify 曲以上）の新作だけにする（Android と同じ。
+            // Apple Music のお気に入りの新作の通知と同じ考え方）。ほかの新作はホームとアーティストのページの「新作」に並べるだけ
+            var (liked, _) = await AppServices.Library.LikedSongsAsync();
+            var favorites = found.Where(r => LibraryState.ByArtist(liked, r.ArtistId, r.ArtistName).Count >= MinLikedToNotify).ToList();
+            AppPaths.Log($"release notify found={found.Count} favorites={favorites.Count} liked={liked.Count}");
+            foreach (var release in favorites.Take(MaxNotifications)) Notify(release);
         }
         catch (Exception e) when (e is IOException or HttpRequestException)
         {

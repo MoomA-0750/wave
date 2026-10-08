@@ -67,7 +67,7 @@ class Releases(
      * 登録したアーティストのページを順に見て、新作を探す。見つけた新作は onFound に渡す（通知する）。
      * @return 最後まで確かめられたか
      */
-    suspend fun check(onFound: (List<NewRelease>) -> Unit = {}): Boolean {
+    suspend fun check(onFound: suspend (List<NewRelease>) -> Unit = {}): Boolean {
         if (!settings.releaseNotices.first()) return true
         // 裏で起きたばかりなら、保存したログインを読み終えるのを待つ
         val state = withTimeoutOrNull(30_000) { auth.state.first { it !is AuthState.Restoring } }

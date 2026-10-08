@@ -18,7 +18,7 @@ public sealed record NewRelease(
 }
 
 /// <summary>
-/// 新作の見張り（Android の ReleaseWatchState と同じ）。アーティストごとに前に見たアルバム・動画の ID を覚え、増えたものを新作とする。
+/// 新作の見張り（Android の ReleaseWatchState と同じ）。アーティストごとに前に見たアルバム・動画の ID を覚え、増えたアルバム・シングルのうち今年のものを新作とする。
 /// 初めて見るアーティストは知らせず、今年の作品だけを「最近の新作」として覚える。
 /// </summary>
 public sealed record ReleaseWatchState(Dictionary<string, HashSet<string>> Seen, List<NewRelease> Recent)
@@ -46,8 +46,11 @@ public sealed record ReleaseWatchState(Dictionary<string, HashSet<string>> Seen,
                 .Select(a => new NewRelease(artistId, page.Name, a.Title, a.BrowseId, null, a.ThumbnailUrl, nowEpochMs, Seeded: true)).ToList();
             return ([], next.WithRecent(seeds));
         }
-        var fresh = albums.Where(a => !before.Contains("a:" + a.BrowseId)).Select(a => new NewRelease(artistId, page.Name, a.Title, a.BrowseId, null, a.ThumbnailUrl, nowEpochMs))
-            .Concat(page.Videos.Where(v => !before.Contains("v:" + v.VideoId)).Select(v => new NewRelease(artistId, page.Name, v.Title, null, v.VideoId, v.ThumbnailUrl, nowEpochMs)))
+        // 新作は「初めて見た」だけでなく、今年の作品（補足に今年の年がある）に限る（Android と同じ）。棚の中身は入れ替わるので、
+        // 何年も前の作品が棚に入り直しただけでも初めて見る扱いになり、通知が大量に来ていた。動画の棚は新作として扱わない（覚えるだけ）
+        var thisYear = year?.ToString();
+        var fresh = albums.Where(a => !before.Contains("a:" + a.BrowseId) && (thisYear is null || a.Subtitle?.Contains(thisYear) == true))
+            .Select(a => new NewRelease(artistId, page.Name, a.Title, a.BrowseId, null, a.ThumbnailUrl, nowEpochMs))
             .ToList();
         return (fresh, next.WithRecent(fresh));
     }

@@ -36,7 +36,7 @@ fun diversifiedReleases(
 }
 
 /**
- * 新作の見張り。アーティストごとに「前に見たアルバム・動画の ID」を覚え、増えたものを新作とする。
+ * 新作の見張り。アーティストごとに「前に見たアルバム・動画の ID」を覚え、増えたアルバム・シングルのうち今年のものを新作とする。
  * 初めて見るアーティストは覚えるだけで知らせない（登録した直後に過去の作品をすべて知らせない）。
  */
 @Serializable
@@ -66,9 +66,14 @@ data class ReleaseWatchState(
             val seeds = albums.filter { it.subtitle?.contains(thisYear) == true }.map { NewRelease(artistId, page.name, it.title, it.browseId, null, it.thumbnailUrl, nowEpochMs, seeded = true) }
             return emptyList<NewRelease>() to next.withRecent(seeds)
         }
+        // 新作は「初めて見た」だけでなく、今年の作品（補足に今年の年がある）に限る。棚の中身は入れ替わるので、
+        // 何年も前の作品が棚に入り直しただけでも初めて見る扱いになり、通知が大量に来ていた。
+        // 動画の棚（ライブ映像・切り抜きなども並ぶ）は新作として扱わない（覚えるだけ）
+        val thisYear = year?.toString()
         val fresh =
-            albums.filter { "a:${it.browseId}" !in before }.map { NewRelease(artistId, page.name, it.title, it.browseId, null, it.thumbnailUrl, nowEpochMs) } +
-                page.videos.filter { "v:${it.videoId}" !in before }.map { NewRelease(artistId, page.name, it.title, null, it.videoId, it.thumbnailUrl, nowEpochMs) }
+            albums
+                .filter { "a:${it.browseId}" !in before && (thisYear == null || it.subtitle?.contains(thisYear) == true) }
+                .map { NewRelease(artistId, page.name, it.title, it.browseId, null, it.thumbnailUrl, nowEpochMs) }
         return fresh to next.withRecent(fresh)
     }
 

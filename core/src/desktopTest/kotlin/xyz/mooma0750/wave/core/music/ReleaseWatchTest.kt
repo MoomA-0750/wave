@@ -24,11 +24,13 @@ class ReleaseWatchTest {
     }
 
     @Test
-    fun newAlbumsAndVideosAreReported() {
-        val (_, first) = ReleaseWatchState().observe("UC1", page(listOf("MP1"), listOf("v1")))
-        val (fresh, _) = first.observe("UC1", page(listOf("MP3", "MP1"), listOf("v2", "v1")))
-        assertEquals(listOf("MP3"), fresh.mapNotNull { it.albumBrowseId })
-        assertEquals(listOf("v2"), fresh.mapNotNull { it.videoId })
+    fun onlyNewAlbumsOfThisYearAreReported() {
+        val (_, first) = ReleaseWatchState().observe("UC1", page(listOf("MP1"), listOf("v1")), year = 2026)
+        // 古い作品が棚に入り直した・動画が増えただけでは知らせない
+        val (fresh, second) = first.observe("UC1", page(listOf("MP3new", "MP2", "MP1"), listOf("v2", "v1")), year = 2026)
+        assertEquals(listOf("MP3new"), fresh.mapNotNull { it.albumBrowseId })
+        assertEquals(emptyList(), fresh.mapNotNull { it.videoId })
+        kotlin.test.assertTrue("a:MP2" in second.seen["UC1"]!! && "v:v2" in second.seen["UC1"]!!)
     }
 
     @Test
@@ -44,9 +46,9 @@ class ReleaseWatchTest {
         val (_, first) = ReleaseWatchState().observe("UC1", page(listOf("MPold", "MPnew")), nowEpochMs = 1, year = 2026)
         assertEquals(listOf("MPnew"), first.recent.mapNotNull { it.albumBrowseId })
         kotlin.test.assertTrue(first.recent.single().seeded)
-        val (fresh, second) = first.observe("UC1", page(listOf("MP3", "MPold", "MPnew")), nowEpochMs = 2, year = 2026)
-        assertEquals(listOf("MP3"), fresh.mapNotNull { it.albumBrowseId })
-        assertEquals(listOf("MP3", "MPnew"), second.recent.mapNotNull { it.albumBrowseId })
-        assertEquals(listOf("MP3"), second.expire(nowEpochMs = 2, maxAgeMs = 0).recent.mapNotNull { it.albumBrowseId })
+        val (fresh, second) = first.observe("UC1", page(listOf("MP3new", "MPold", "MPnew")), nowEpochMs = 2, year = 2026)
+        assertEquals(listOf("MP3new"), fresh.mapNotNull { it.albumBrowseId })
+        assertEquals(listOf("MP3new", "MPnew"), second.recent.mapNotNull { it.albumBrowseId })
+        assertEquals(listOf("MP3new"), second.expire(nowEpochMs = 2, maxAgeMs = 0).recent.mapNotNull { it.albumBrowseId })
     }
 }

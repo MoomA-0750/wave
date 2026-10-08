@@ -91,9 +91,21 @@ class ReleaseWatcher : JobService() {
         suspend fun check(
             context: Context,
             container: xyz.mooma0750.wave.AppContainer,
-        ): Boolean = container.releases.check { found -> found.take(MAX_NOTIFICATIONS).forEach { notify(context, it) } }
+        ): Boolean =
+            container.releases.check { found ->
+                if (found.isEmpty()) return@check
+                // 鳴らす通知は、よく聴くアーティスト（高く評価した曲が MIN_LIKED_TO_NOTIFY 曲以上）の新作だけにする（Apple Music の
+                // お気に入りの新作の通知と同じ考え方）。ほかの新作はホームとアーティストのページの「新作」に並べるだけ
+                val liked = container.likedSongs.songs(container.likedSongsVersion.value).songs
+                val favorites = found.filter { xyz.mooma0750.wave.library.LikedByArtist.filter(liked, it.artistId, it.artistName).size >= MIN_LIKED_TO_NOTIFY }
+                android.util.Log.i(xyz.mooma0750.wave.WaveApplication.LOG_TAG, "release notify found=${found.size} favorites=${favorites.size} liked=${liked.size}")
+                favorites.take(MAX_NOTIFICATIONS).forEach { notify(context, it) }
+            }
 
         private const val MAX_NOTIFICATIONS = 10
+
+        /** 新作を通知するのに要る、そのアーティストの高く評価した曲の数。 */
+        private const val MIN_LIKED_TO_NOTIFY = 3
 
         fun notify(
             context: Context,

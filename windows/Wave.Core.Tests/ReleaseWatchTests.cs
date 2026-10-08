@@ -20,13 +20,16 @@ public class ReleaseWatchTests
     }
 
     [Fact]
-    public void NewAlbumsAndVideosAreReportedNewestFirst()
+    public void OnlyNewAlbumsOfThisYearAreReportedNewestFirst()
     {
         var (_, first) = ReleaseWatchState.Empty.Observe("UC1", Page(["MPold", "MPnew"], ["v1"]), 1, 2026);
-        var (fresh, second) = first.Observe("UC1", Page(["MP3", "MPold", "MPnew"], ["v2", "v1"]), 2, 2026);
-        Assert.Equal(new[] { "MP3" }, fresh.Select(r => r.AlbumBrowseId).OfType<string>());
-        Assert.Equal(new[] { "v2" }, fresh.Select(r => r.VideoId).OfType<string>());
-        Assert.Equal(new[] { "MP3", "v2", "MPnew" }, second.Recent.Select(r => r.Key));
+        // 古い作品（MP2）が棚に入り直した・動画が増えただけでは知らせない
+        var (fresh, second) = first.Observe("UC1", Page(["MP3new", "MP2", "MPold", "MPnew"], ["v2", "v1"]), 2, 2026);
+        Assert.Equal(new[] { "MP3new" }, fresh.Select(r => r.AlbumBrowseId).OfType<string>());
+        Assert.Empty(fresh.Select(r => r.VideoId).OfType<string>());
+        Assert.Contains("a:MP2", second.Seen["UC1"]);
+        Assert.Contains("v:v2", second.Seen["UC1"]);
+        Assert.Equal(new[] { "MP3new", "MPnew" }, second.Recent.Select(r => r.Key));
         // 文字にして戻しても同じ
         var decoded = ReleaseWatchState.Decode(second.Encode())!;
         Assert.Equal(second.Recent, decoded.Recent);
