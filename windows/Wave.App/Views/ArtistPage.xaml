@@ -17,9 +17,15 @@
                         </LinearGradientBrush>
                     </Rectangle.Fill>
                 </Rectangle>
-                <StackPanel VerticalAlignment="Bottom" Padding="24">
+                <!-- 名前と、その右に登録（Spotify の「フォロー」）。登録していなければ色を付けて目立たせる -->
+                <Grid VerticalAlignment="Bottom" Padding="24" ColumnSpacing="20">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" MaxWidth="900" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
                     <TextBlock x:Name="NameText" FontSize="72" FontWeight="Bold" Foreground="White" TextTrimming="CharacterEllipsis" />
-                </StackPanel>
+                    <Button x:Name="SubscribeButton" Grid.Column="1" Visibility="Collapsed" Click="OnSubscribe" VerticalAlignment="Center" CornerRadius="16" Padding="16,6" />
+                </Grid>
             </Grid>
             <StackPanel Orientation="Horizontal" Spacing="16" Padding="24,0">
                 <Button x:Name="PlayButton" Style="{StaticResource PlayCircleButtonStyle}" Click="OnPlay" ToolTipService.ToolTip="{x:Bind app:L.T('再生', 'Play')}" IsEnabled="False">
@@ -28,9 +34,6 @@
                 <ToggleButton x:Name="ShuffleButton" Style="{StaticResource IconToggleStyle}" Click="OnShuffle" ToolTipService.ToolTip="{x:Bind app:L.T('シャッフル', 'Shuffle')}">
                     <FontIcon Glyph="&#xE8B1;" FontSize="22" />
                 </ToggleButton>
-                <!-- 登録（Spotify の「フォロー」）と、ライブ・チケットの情報を探す -->
-                <Button x:Name="SubscribeButton" Visibility="Collapsed" Click="OnSubscribe" VerticalAlignment="Center" CornerRadius="16" Padding="16,6" />
-                <Button x:Name="LiveButton" Visibility="Collapsed" Click="OnLive" VerticalAlignment="Center" CornerRadius="16" Padding="16,6" Content="{x:Bind app:L.T('ライブ・チケット', 'Concerts &amp; tickets')}" />
                 <ProgressRing x:Name="LoadingRing" IsActive="True" Width="20" Height="20" />
             </StackPanel>
             <!-- ライブ・ツアーの告知（アーティストの YouTube のチャンネルの投稿から。Android と同じ）。告知が無ければ出さない -->

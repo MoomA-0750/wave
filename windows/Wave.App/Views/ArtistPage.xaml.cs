@@ -48,7 +48,6 @@ public sealed partial class ArtistPage : Page
         Shelves.ItemsSource = shelves;
         UpdatePlayIcon();
         UpdateSubscribe();
-        LiveButton.Visibility = Visibility.Visible;
         _ = ShowLivePostsAsync(artist);
         await ShowLikedAsync(artist);
     }
@@ -94,6 +93,8 @@ public sealed partial class ArtistPage : Page
         SubscribeButton.Visibility = Ui.Show(artist?.ChannelId is not null && AppServices.Client.IsLoggedIn);
         SubscribeButton.Content = artist?.Subscribed == true ? L.T("登録済み", "Subscribed") : L.T("登録", "Subscribe");
         SubscribeButton.IsEnabled = !subscribing && artist?.Subscribed is not null;
+        // 登録していなければ色付き（AccentButtonStyle）、登録済みなら控えめに
+        SubscribeButton.Style = artist?.Subscribed == true ? null : (Style)Application.Current.Resources["AccentButtonStyle"];
     }
 
     /// <summary>登録の切り替え。書けたら表示を変える（Android と同じく楽観的に変えない）。</summary>
@@ -108,13 +109,6 @@ public sealed partial class ArtistPage : Page
         if (artist == page && result.IsOk) artist = page with { Subscribed = target };
         else if (!result.IsOk) Player.Message = L.T("登録を変更できませんでした", "Couldn't change your subscription");
         UpdateSubscribe();
-    }
-
-    private async void OnLive(object sender, RoutedEventArgs e)
-    {
-        if (artist is null) return;
-        var query = Uri.EscapeDataString(L.T($"{artist.Name} ライブ チケット", $"{artist.Name} live tickets"));
-        await Windows.System.Launcher.LaunchUriAsync(new Uri($"https://www.google.com/search?q={query}"));
     }
 
     /// <summary>このアーティストの、自分が高く評価した曲の数（ログインしていなければ出さない）。</summary>

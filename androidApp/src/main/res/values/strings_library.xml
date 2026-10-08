@@ -146,8 +146,6 @@
     <string name="artist_subscribe">Subscribe</string>
     <string name="artist_subscribed">Subscribed</string>
     <string name="artist_subscribe_failed">Couldn\'t change your subscription</string>
-    <string name="artist_live_info">Concerts &amp; tickets</string>
-    <string name="artist_live_query">%1$s live tickets</string>
     <string name="releases_channel">New releases</string>
     <string name="releases_new_release">New from %1$s</string>
     <string name="releases_new_video">New video from %1$s</string>

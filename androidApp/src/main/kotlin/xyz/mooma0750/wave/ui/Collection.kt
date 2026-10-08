@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
@@ -64,6 +65,8 @@ fun CollectionScreen(
     coverShape: Shape = RoundedCornerShape(4.dp),
     /** アーティストのページ: 画像を横幅いっぱいに出し、名前を画像の上に重ねる（Spotify のアーティストのページ）。 */
     hero: Boolean = false,
+    /** hero のとき、名前の右に並べるもの（アーティストの登録ボタン）。 */
+    titleTrailing: @Composable RowScope.() -> Unit = {},
     content: LazyListScope.() -> Unit,
 ) {
     val listState = rememberLazyListState()
@@ -78,14 +81,21 @@ fun CollectionScreen(
                     Box(Modifier.fillMaxWidth().height(340.dp)) {
                         coil3.compose.AsyncImage(model = coverUrl, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.4f to Color.Transparent, 1f to background.copy(alpha = 0.95f))))
-                        Text(
-                            title,
-                            Modifier.align(Alignment.BottomStart).padding(16.dp),
-                            style = MaterialTheme.typography.displaySmall,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                        )
+                        Row(
+                            Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            Text(
+                                title,
+                                Modifier.weight(1f, fill = false),
+                                style = MaterialTheme.typography.displaySmall,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            titleTrailing()
+                        }
                     }
                     Column(Modifier.padding(horizontal = 16.dp)) { details() }
                 }

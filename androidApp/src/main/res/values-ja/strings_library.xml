@@ -141,8 +141,6 @@
     <string name="artist_subscribe">登録</string>
     <string name="artist_subscribed">登録済み</string>
     <string name="artist_subscribe_failed">登録を変更できませんでした</string>
-    <string name="artist_live_info">ライブ・チケット</string>
-    <string name="artist_live_query">%1$s ライブ チケット</string>
     <string name="releases_channel">新作</string>
     <string name="releases_new_release">%1$s の新作</string>
     <string name="releases_new_video">%1$s の新しい動画</string>

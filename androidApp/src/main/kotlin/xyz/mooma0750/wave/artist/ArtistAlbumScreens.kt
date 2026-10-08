@@ -228,6 +228,19 @@ fun ArtistScreen(
         coverUrl = page?.thumbnailUrl,
         onBack = onBack,
         hero = true,
+        // 登録（Spotify の「フォロー」）は名前の右に。登録していなければ色を付けて目立たせる
+        titleTrailing = {
+            if (page?.channelId != null) {
+                val subscribing by viewModel.subscribing.collectAsStateWithLifecycle()
+                val failed = stringResource(R.string.artist_subscribe_failed)
+                val enabled = !subscribing && page.subscribed != null
+                if (page.subscribed == true) {
+                    androidx.compose.material3.OutlinedButton(onClick = { viewModel.toggleSubscribed(failed) }, enabled = enabled) { Text(stringResource(R.string.artist_subscribed)) }
+                } else {
+                    androidx.compose.material3.Button(onClick = { viewModel.toggleSubscribed(failed) }, enabled = enabled) { Text(stringResource(R.string.artist_subscribe)) }
+                }
+            }
+        },
         play =
             PlayControls(shuffle, { shuffle = it }, enabled = topSongs.isNotEmpty()) {
                 onPlay(if (shuffle) topSongs.shuffled() else topSongs, 0)
@@ -237,23 +250,6 @@ fun ArtistScreen(
             state.failure != null -> item { Text(failureMessage(state.failure), Modifier.padding(16.dp)) }
             page == null -> item { CircularProgressIndicator(Modifier.padding(16.dp)) }
             else -> {
-                // 登録（Spotify の「フォロー」）と、ライブ・チケットの情報を探す
-                item(key = "subscribe") {
-                    val subscribing by viewModel.subscribing.collectAsStateWithLifecycle()
-                    val context = androidx.compose.ui.platform.LocalContext.current
-                    Row(Modifier.padding(horizontal = 16.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        if (page.channelId != null) {
-                            val failed = stringResource(R.string.artist_subscribe_failed)
-                            androidx.compose.material3.OutlinedButton(onClick = { viewModel.toggleSubscribed(failed) }, enabled = !subscribing && page.subscribed != null) {
-                                Text(if (page.subscribed == true) stringResource(R.string.artist_subscribed) else stringResource(R.string.artist_subscribe))
-                            }
-                        }
-                        androidx.compose.material3.OutlinedButton(onClick = {
-                            val query = android.net.Uri.encode(context.getString(R.string.artist_live_query, page.name))
-                            context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://www.google.com/search?q=$query")))
-                        }) { Text(stringResource(R.string.artist_live_info)) }
-                    }
-                }
                 // 最近の新作（登録したアーティストの見張りで見つけたもの）
                 if (newReleases.isNotEmpty()) {
                     item(key = "new-releases") { xyz.mooma0750.wave.releases.NewReleaseRow(newReleases, stringResource(R.string.releases_artist_title), actions, onPlaySong, showArtist = false) }
