@@ -325,6 +325,13 @@ object DebugActions {
                             )
                         }
                     }
+                // 登録したアーティストの一覧（件数と、ページが読めるか）と、新作の確かめを1回走らせる
+                "subscriptions" ->
+                    when (val result = container.music.subscribedArtists()) {
+                        is CallResult.Ok -> Log.i(WaveApplication.LOG_TAG, "debug subscriptions n=${result.value.size} ids=${result.value.take(3).map { it.browseId.take(6) }}")
+                        is CallResult.Failed -> Log.i(WaveApplication.LOG_TAG, "debug subscriptions failed ${result.kind} renderers=${container.music.lastRendererNames}")
+                    }
+                "releases_check" -> Log.i(WaveApplication.LOG_TAG, "debug releases done=${xyz.mooma0750.wave.releases.ReleaseWatcher.check(context, container)}")
                 "open_artist" -> intent.getStringExtra("browse_id")?.let { navigationChannel.trySend(Screen.Artist(it, "")) }
                 "open_album" -> intent.getStringExtra("browse_id")?.let { navigationChannel.trySend(Screen.Album(it, "")) }
                 "play_album" ->

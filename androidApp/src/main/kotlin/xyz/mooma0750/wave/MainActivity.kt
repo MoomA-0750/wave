@@ -169,6 +169,9 @@ class MainActivity : ComponentActivity() {
                         // 一覧の曲に「高く評価した」のバッジを付けるため、評価した曲の ID を読んでおく
                         LaunchedEffect(loginGeneration) { container.loadLikedIds() }
                         val likedIds by container.likedIds.collectAsStateWithLifecycle()
+                        // 登録したアーティストの新作（ホームとアーティストのページに出す）
+                        LaunchedEffect(loginGeneration) { container.releases.load() }
+                        val newReleases by container.releases.recent.collectAsStateWithLifecycle()
                         val account = rememberAccountInfo(container, state.obtainedAtEpochMs)
                         // どの画面にいるかだけを記録する（実機の確認用。中身や ID は出さない）
                         LaunchedEffect(nav.tab, nav.current) {
@@ -250,6 +253,7 @@ class MainActivity : ComponentActivity() {
                                         onOpenSettings = { nav.push(Screen.Settings) },
                                         onConnect = { nav.push(Screen.Connect) },
                                         showConnect = container.connectConfigured || container.connectV2 != null,
+                                        newReleases = newReleases,
                                     )
                                 }
                                 is Screen.Mood ->
@@ -330,6 +334,8 @@ class MainActivity : ComponentActivity() {
                                             nav.push(Screen.Playlist(PlaylistSummary(MusicRepository.LIKED_SONGS, likedSongsTitle, null, null), initialQuery = name))
                                         },
                                         onOpenAlbum = { album -> nav.push(Screen.Album(album.browseId, album.title)) },
+                                        newReleases = newReleases.filter { it.artistId == screen.browseId },
+                                        onPlaySong = playerActions::playSong,
                                         onBack = pop,
                                     )
                                 }

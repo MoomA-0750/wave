@@ -153,4 +153,9 @@
     <string name="releases_new_video">New video from %1$s</string>
     <string name="settings_release_notices_title">New release notifications</string>
     <string name="settings_release_notices_summary">Notify when artists you subscribe to release albums, singles or videos (checked every few hours)</string>
+    <string name="releases_new_badge">NEW</string>
+    <string name="releases_kind_video">Video</string>
+    <string name="releases_kind_release">Release</string>
+    <string name="releases_home_title">New from artists you subscribe to</string>
+    <string name="releases_artist_title">New releases</string>
 </resources>

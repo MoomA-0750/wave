@@ -295,6 +295,9 @@ class AppContainer(
 
     val settings = AppSettings(context)
 
+    /** 登録したアーティストの新作。 */
+    val releases = xyz.mooma0750.wave.releases.Releases(appContext, music, authManager, settings)
+
     /** Claude との会話（tools/ai-bridge の中継を通す）。アプリが動いている間だけ会話を持つ。 */
     val aiChat: xyz.mooma0750.wave.ai.AiChat by lazy {
         val res = appContext.resources
@@ -485,7 +488,7 @@ class AppContainer(
         playlistMembership.clear()
         libraryCache.clear()
         aiChat.clear()
-        xyz.mooma0750.wave.releases.ReleaseWatcher.clear(appContext)
+        releases.clear()
         imageCacheCleaner()
         WebViewCredentials.clear()
         Log.i(WaveApplication.LOG_TAG, "logout cleared=$cleared")

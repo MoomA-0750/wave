@@ -71,6 +71,8 @@ fun HomeScreen(
     onOpenSettings: () -> Unit,
     onConnect: () -> Unit,
     showConnect: Boolean,
+    /** 登録したアーティストの新作。 */
+    newReleases: List<xyz.mooma0750.wave.core.music.NewRelease> = emptyList(),
 ) {
     val state by feed.state.collectAsStateWithLifecycle()
     val drawer = rememberDrawerState(DrawerValue.Closed)
@@ -112,6 +114,12 @@ fun HomeScreen(
             }
             if (state.recent.isNotEmpty()) {
                 item(key = "recent") { RecentGrid(state.recent, songActions) { openHomeItem(it, onPlaySong, onOpenPlaylist, songActions) } }
+            }
+            // 登録したアーティストの新作（最近聴いたものの下）。絞り込み中は出さない
+            if (state.selected == null && newReleases.isNotEmpty()) {
+                item(key = "new-releases") {
+                    xyz.mooma0750.wave.releases.NewReleaseRow(xyz.mooma0750.wave.core.music.diversifiedReleases(newReleases).take(20), stringResource(R.string.releases_home_title), songActions, onPlaySong)
+                }
             }
             homeFeedItems(state, feed::refresh, feed::loadMore, onPlaySong, onOpenPlaylist, songActions)
             item(key = "bottom") { Spacer(Modifier.height(16.dp)) }

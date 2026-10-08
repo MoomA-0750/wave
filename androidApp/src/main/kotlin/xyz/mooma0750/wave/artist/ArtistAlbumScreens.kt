@@ -194,6 +194,9 @@ fun ArtistScreen(
     onOpenAlbum: (AlbumSummary) -> Unit,
     onBack: () -> Unit,
     bottomBar: @Composable () -> Unit = {},
+    /** このアーティストの最近の新作。 */
+    newReleases: List<xyz.mooma0750.wave.core.music.NewRelease> = emptyList(),
+    onPlaySong: (Song) -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val page = state.page
@@ -230,6 +233,10 @@ fun ArtistScreen(
                             context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://www.google.com/search?q=$query")))
                         }) { Text(stringResource(R.string.artist_live_info)) }
                     }
+                }
+                // 最近の新作（登録したアーティストの見張りで見つけたもの）
+                if (newReleases.isNotEmpty()) {
+                    item(key = "new-releases") { xyz.mooma0750.wave.releases.NewReleaseRow(newReleases, stringResource(R.string.releases_artist_title), actions, onPlaySong, showArtist = false) }
                 }
                 // Spotify の「人気」: 番号付きの曲
                 item { SectionTitle(stringResource(R.string.artist_popular)) }

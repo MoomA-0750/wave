@@ -148,4 +148,9 @@
     <string name="releases_new_video">%1$s の新しい動画</string>
     <string name="settings_release_notices_title">新作の通知</string>
     <string name="settings_release_notices_summary">登録したアーティストのアルバム・シングル・動画が出たら知らせる（数時間おきに確かめる）</string>
+    <string name="releases_new_badge">NEW</string>
+    <string name="releases_kind_video">動画</string>
+    <string name="releases_kind_release">新作</string>
+    <string name="releases_home_title">登録したアーティストの新作</string>
+    <string name="releases_artist_title">新作</string>
 </resources>
