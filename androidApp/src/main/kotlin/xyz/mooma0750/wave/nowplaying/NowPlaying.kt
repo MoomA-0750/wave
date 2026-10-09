@@ -328,6 +328,7 @@ fun NowPlayingScreen(
                 } else {
                     // ジャケットを左右にスワイプして次の曲・前の曲へ（指に付いて動き、離すと戻る）
                     var artDrag by remember { mutableFloatStateOf(0f) }
+                    val settleSpec = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
                     val currentDisplay by androidx.compose.runtime.rememberUpdatedState(display)
                     coil3.compose.AsyncImage(
                         model = song?.thumbnailUrl?.takeIf { it.startsWith("https://") }?.let(Media3QueuePlayer::largeArtwork),
@@ -345,7 +346,7 @@ fun NowPlayingScreen(
                                                 artDrag < -SWIPE_PX -> if (currentDisplay.state.hasNext) currentDisplay.next()
                                                 artDrag > SWIPE_PX -> if (currentDisplay.state.hasPrevious) currentDisplay.previous()
                                             }
-                                            scope.launch { androidx.compose.animation.core.animate(artDrag, 0f) { value, _ -> artDrag = value } }
+                                            scope.launch { androidx.compose.animation.core.animate(artDrag, 0f, animationSpec = settleSpec) { value, _ -> artDrag = value } }
                                         },
                                         onDragCancel = { artDrag = 0f },
                                     ) { change, amount ->

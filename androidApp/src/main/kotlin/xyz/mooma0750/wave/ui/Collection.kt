@@ -72,7 +72,7 @@ fun CollectionScreen(
     val art by rememberArtworkColor(coverUrl)
     val background = MaterialTheme.colorScheme.background
     val collapsed by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 } }
-    val barColor by animateColorAsState(if (collapsed) lerp(background, art, 0.5f) else Color.Transparent, label = "bar")
+    val barColor by animateColorAsState(if (collapsed) lerp(background, art, 0.5f) else Color.Transparent, MaterialTheme.motionScheme.defaultEffectsSpec(), label = "bar")
     Box(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.fillMaxSize(), state = listState) {
             if (hero) {
