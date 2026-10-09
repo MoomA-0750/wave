@@ -26,6 +26,10 @@ report 'material3 のワイルドカード import（検査をすり抜ける）'
   '^import androidx\.compose\.material3\.\*' 0
 report '無印の部品 → 置き換え表を見る' \
   '^import androidx\.compose\.material3\.(CircularProgressIndicator|LinearProgressIndicator|NavigationBar|NavigationBarItem|NavigationRail|NavigationRailItem|BottomAppBar|MediumTopAppBar|LargeTopAppBar|ExtendedFloatingActionButton)$' 0
+report '無印の部品を完全名で呼んでいる → 置き換え表を見る' \
+  'androidx\.compose\.material3\.(CircularProgressIndicator|LinearProgressIndicator|NavigationBar|NavigationBarItem|NavigationRail|NavigationRailItem|BottomAppBar|MediumTopAppBar|LargeTopAppBar|ExtendedFloatingActionButton)[[:space:]]*[({]' 0
+report 'animate…AsState の動きを省いている（既定のばね）→ MaterialTheme.motionScheme.*Spec() を渡す' \
+  'animate[A-Za-z]*AsState\([^,]*,[[:space:]]*label[[:space:]]*=' 0
 report 'MaterialTheme(...) でテーマを張っている → MaterialExpressiveTheme' \
   '(^|[^.A-Za-z])MaterialTheme[[:space:]]*[({]' 0
 report 'tween / 自前の spring → MaterialTheme.motionScheme.*Spec()' \
