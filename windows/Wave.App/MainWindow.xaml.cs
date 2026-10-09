@@ -119,17 +119,19 @@ public sealed partial class MainWindow : Window
     private void Layout()
     {
         var width = AppWindow.Size.Width / (Content.XamlRoot?.RasterizationScale ?? 1);
-        var showRight = rightPaneOpen && width >= 1180;
+        // Claude は上のボタンから呼ぶので、少し狭い窓でも右の欄に出す（再生中の画面・キューは広いときだけ）
+        var showRight = rightPaneOpen && (width >= 1180 || (AiView.Visibility == Visibility.Visible && width >= 880));
         RightColumn.Width = showRight ? new GridLength(340) : new GridLength(0);
         RightPane.Visibility = Ui.Show(showRight);
         LibraryColumn.Width = new GridLength(width < 1000 ? 240 : 300);
         PaneToggle.IsChecked = showRight && NowPlayingView.Visibility == Visibility.Visible;
         QueueToggle.IsChecked = showRight && QueueView.Visibility == Visibility.Visible;
+        AiToggle.IsChecked = showRight && AiView.Visibility == Visibility.Visible;
         SearchBox.Width = width < 1100 ? 300 : 440;
     }
 
 #if DEBUG
-    /// <summary>開発用: 右の欄を切り替える（nowplaying / queue / history / ai）。</summary>
+    /// <summary>開発用: 右の欄を切り替える（nowplaying / queue / history / ai / ai-toggle）。</summary>
     public void DebugPane(string which)
     {
         switch (which)
@@ -145,10 +147,14 @@ public sealed partial class MainWindow : Window
             case "ai":
                 OnShowAi(this, new RoutedEventArgs());
                 break;
+            case "ai-toggle":
+                OnAiToggle(this, new RoutedEventArgs());
+                break;
             default:
                 SetRightPane(true, queue: false);
                 break;
         }
+        AppPaths.Log($"debug pane {which} right={RightPane.Visibility} ai={AiView.Visibility} queue={QueueView.Visibility} aiToggle={AiToggle.IsChecked}");
     }
 
     public void DebugFullScreen(bool on) => SetFullScreen(on);
@@ -671,11 +677,27 @@ public sealed partial class MainWindow : Window
 
     private bool aiWired;
 
+    // 上のボタンで Claude を閉じたときに戻す、開く前の右の欄（閉じていた・再生中の画面・キュー）
+    private (bool Open, bool Queue) beforeAi;
+
+    /// <summary>上のバーの Claude のボタン（Ctrl+J）。開いていれば、開く前の右の欄に戻す。</summary>
+    private void OnAiToggle(object sender, RoutedEventArgs e)
+    {
+        if (rightPaneOpen && AiView.Visibility == Visibility.Visible)
+        {
+            SetRightPane(beforeAi.Open, beforeAi.Queue);
+            return;
+        }
+        OnShowAi(sender, e);
+    }
+
     private void OnShowAi(object sender, RoutedEventArgs e)
     {
+        if (!(rightPaneOpen && AiView.Visibility == Visibility.Visible)) beforeAi = (rightPaneOpen, QueueView.Visibility == Visibility.Visible);
         SetRightPane(true, queue: false);
         NowPlayingView.Visibility = Visibility.Collapsed;
         AiView.Visibility = Visibility.Visible;
+        Layout();
         if (!aiWired)
         {
             aiWired = true;
@@ -701,7 +723,7 @@ public sealed partial class MainWindow : Window
         var chat = AppServices.Ai;
         AiMessages.Children.Clear();
         if (chat.Messages.Count == 0)
-            AiMessages.Children.Add(new TextBlock { Text = L.T("今の曲について聞けます。歌詞の意味・似た曲・プレイリスト作りなど。", "Ask about the song that's playing — what the lyrics mean, similar songs, or have it make a playlist."), TextWrapping = TextWrapping.Wrap, Style = (Style)Application.Current.Resources["SubtleTextStyle"] });
+            AiMessages.Children.Add(new TextBlock { Text = L.T("曲探し・プレイリスト作りを頼めます。再生中の曲について、歌詞の意味や似た曲も聞けます。", "Ask Claude to find music, make a playlist, or tell you about the song that's playing — what the lyrics mean, similar songs, and more."), TextWrapping = TextWrapping.Wrap, Style = (Style)Application.Current.Resources["SubtleTextStyle"], MaxLines = 0 }); // 案内文は折り返して全部出す（SubtleTextStyle は1行で切る）
         foreach (var message in chat.Messages) AiMessages.Children.Add(AiElement(message));
         if (chat.Running) AiMessages.Children.Add(new ProgressBar { IsIndeterminate = true });
         AiSendIcon.Glyph = chat.Running ? "\uE71A" : "\uE724";

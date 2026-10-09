@@ -65,6 +65,14 @@
                             </DataTemplate>
                         </AutoSuggestBox.ItemTemplate>
                     </AutoSuggestBox>
+                    <!-- Claude に聞く（どの画面からでも。右の欄に開き、もう一度押すと元に戻す） -->
+                    <ToggleButton x:Name="AiToggle" Click="OnAiToggle" CornerRadius="16" Height="32" Width="40" Padding="0"
+                                  ToolTipService.ToolTip="{x:Bind app:L.T('Claude に聞く (Ctrl+J)', 'Ask Claude (Ctrl+J)')}">
+                        <ToggleButton.KeyboardAccelerators>
+                            <KeyboardAccelerator Modifiers="Control" Key="J" />
+                        </ToggleButton.KeyboardAccelerators>
+                        <FontIcon Glyph="&#xE99A;" FontSize="14" />
+                    </ToggleButton>
                 </StackPanel>
             </TitleBar.Content>
             <TitleBar.RightHeader>
