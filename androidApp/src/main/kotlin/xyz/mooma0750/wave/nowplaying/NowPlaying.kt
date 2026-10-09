@@ -326,10 +326,33 @@ fun NowPlayingScreen(
                         IconAction(R.drawable.ic_fullscreen, stringResource(R.string.nowplaying_video_fullscreen), { fullVideo = true }, modifier = Modifier.align(Alignment.BottomEnd))
                     }
                 } else {
+                    // ジャケットを左右にスワイプして次の曲・前の曲へ（指に付いて動き、離すと戻る）
+                    var artDrag by remember { mutableFloatStateOf(0f) }
+                    val currentDisplay by androidx.compose.runtime.rememberUpdatedState(display)
                     coil3.compose.AsyncImage(
                         model = song?.thumbnailUrl?.takeIf { it.startsWith("https://") }?.let(Media3QueuePlayer::largeArtwork),
                         contentDescription = null,
-                        modifier = Modifier.size(artSize).clip(RoundedCornerShape(8.dp)),
+                        modifier =
+                            Modifier
+                                .size(artSize)
+                                .graphicsLayer {
+                                    translationX = artDrag
+                                    alpha = 1f - (kotlin.math.abs(artDrag) / size.width).coerceIn(0f, 0.5f)
+                                }.pointerInput(Unit) {
+                                    detectHorizontalDragGestures(
+                                        onDragEnd = {
+                                            when {
+                                                artDrag < -SWIPE_PX -> if (currentDisplay.state.hasNext) currentDisplay.next()
+                                                artDrag > SWIPE_PX -> if (currentDisplay.state.hasPrevious) currentDisplay.previous()
+                                            }
+                                            scope.launch { androidx.compose.animation.core.animate(artDrag, 0f) { value, _ -> artDrag = value } }
+                                        },
+                                        onDragCancel = { artDrag = 0f },
+                                    ) { change, amount ->
+                                        change.consume()
+                                        artDrag += amount
+                                    }
+                                }.clip(RoundedCornerShape(8.dp)),
                         contentScale = androidx.compose.ui.layout.ContentScale.Crop,
                     )
                 }

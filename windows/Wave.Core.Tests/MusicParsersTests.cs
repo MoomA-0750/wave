@@ -208,6 +208,11 @@ public class MusicParsersTests
         Assert.Equal("https://www.youtube.com/post/Ugkx1", posts[0].Url);
         Assert.Equal(["Ugkx1"], LiveNews.Of(posts).Select(p => p.PostId));
         Assert.True(LiveNews.IsLiveRelated("ASIA DOME TOUR 2026"));
+        // 1年以上前の告知は出さない
+        Assert.Empty(LiveNews.Of([posts[0] with { PublishedText = "2 年前" }]));
+        Assert.True(LiveNews.IsRecent("11 か月前"));
+        Assert.False(LiveNews.IsRecent("1 year ago (edited)"));
+        Assert.True(LiveNews.IsRecent(null));
     }
 }
 

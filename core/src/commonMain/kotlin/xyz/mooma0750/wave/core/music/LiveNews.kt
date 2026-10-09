@@ -8,8 +8,14 @@ object LiveNews {
             RegexOption.IGNORE_CASE,
         )
 
+    // 「1 年前」「2 years ago」など、年で数える古さ（1年以上前）
+    private val yearsAgo = Regex("\\d+\\s*(年前|years? ago)", RegexOption.IGNORE_CASE)
+
     fun isLiveRelated(text: String): Boolean = keywords.containsMatchIn(text)
 
-    /** 告知らしい投稿だけ（新しい順のまま）。 */
-    fun of(posts: List<ArtistPost>): List<ArtistPost> = posts.filter { isLiveRelated(it.text) }
+    /** 1年以内の投稿か（投稿の時期の表示が無ければ、分からないので残す）。 */
+    fun isRecent(publishedText: String?): Boolean = publishedText == null || !yearsAgo.containsMatchIn(publishedText)
+
+    /** 1年以内の、告知らしい投稿だけ（新しい順のまま。何年も前の告知は終わっているので出さない）。 */
+    fun of(posts: List<ArtistPost>): List<ArtistPost> = posts.filter { isRecent(it.publishedText) && isLiveRelated(it.text) }
 }

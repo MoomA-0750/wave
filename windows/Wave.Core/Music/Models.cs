@@ -73,9 +73,17 @@ public static class LiveNews
         @"ライブ|ﾗｲﾌﾞ|ツアー|公演|ワンマン|チケット|開催決定|出演決定|フェス|ドーム|アリーナ|ホール|\bLIVE\b|\bTOUR\b|\bconcert|\btickets?\b|\bfestival\b",
         System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
+    // 「1 年前」「2 years ago」など、年で数える古さ（1年以上前）
+    private static readonly System.Text.RegularExpressions.Regex YearsAgo = new(
+        @"\d+\s*(年前|years? ago)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
     public static bool IsLiveRelated(string text) => Keywords.IsMatch(text);
 
-    public static List<ArtistPost> Of(IEnumerable<ArtistPost> posts) => posts.Where(p => IsLiveRelated(p.Text)).ToList();
+    /// <summary>1年以内の投稿か（投稿の時期の表示が無ければ、分からないので残す）。</summary>
+    public static bool IsRecent(string? publishedText) => publishedText is null || !YearsAgo.IsMatch(publishedText);
+
+    /// <summary>1年以内の、告知らしい投稿だけ（何年も前の告知は終わっているので出さない）。</summary>
+    public static List<ArtistPost> Of(IEnumerable<ArtistPost> posts) => posts.Where(p => IsRecent(p.PublishedText) && IsLiveRelated(p.Text)).ToList();
 }
 
 public sealed record ArtistPage(

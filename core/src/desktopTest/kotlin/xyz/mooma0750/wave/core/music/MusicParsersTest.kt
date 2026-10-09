@@ -130,5 +130,10 @@ class MusicParsersTest {
         // 告知らしいものだけ（リリースの知らせは新作のほうで出す）
         assertEquals(listOf("Ugkx1"), LiveNews.of(posts).map { it.postId })
         assertTrue(LiveNews.isLiveRelated("ASIA DOME TOUR 2026"))
+        // 1年以上前の告知は出さない
+        assertEquals(emptyList(), LiveNews.of(listOf(posts[0].copy(publishedText = "2 年前"))))
+        assertTrue(LiveNews.isRecent("11 か月前"))
+        assertTrue(!LiveNews.isRecent("1 year ago (edited)"))
+        assertTrue(LiveNews.isRecent(null))
     }
 }
