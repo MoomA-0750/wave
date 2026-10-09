@@ -67,6 +67,16 @@ class AppSettings(
         store.edit { it[RELEASE_NOTICES] = enabled }
     }
 
+    /** 再生中に、通知センターにキュー（次に流れる曲）を出すか。既定は出さない。 */
+    val queueNotice: Flow<Boolean> =
+        store.data
+            .map { it[QUEUE_NOTICE] ?: false }
+            .catch { if (it is IOException) emit(false) else throw it }
+
+    suspend fun setQueueNotice(enabled: Boolean) {
+        store.edit { it[QUEUE_NOTICE] = enabled }
+    }
+
     /** Claude の中継（tools/ai-bridge）の接続先とトークン。設定していなければ null。 */
     val aiBridge: Flow<AiBridgeConfig?> =
         store.data
@@ -113,6 +123,7 @@ class AppSettings(
     private companion object {
         val HISTORY_ENABLED = booleanPreferencesKey("history_enabled")
         val RELEASE_NOTICES = booleanPreferencesKey("release_notices")
+        val QUEUE_NOTICE = booleanPreferencesKey("queue_notice")
         val AI_URL = stringPreferencesKey("ai_url")
         val AI_TOKEN = stringPreferencesKey("ai_token")
         val AI_NAME = stringPreferencesKey("ai_name")

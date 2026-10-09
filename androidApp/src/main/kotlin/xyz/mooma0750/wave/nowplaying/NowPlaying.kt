@@ -65,6 +65,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -240,6 +241,14 @@ fun NowPlayingScreen(
     val scope = rememberCoroutineScope()
     val song = display.song
     var showQueue by remember { mutableStateOf(false) }
+    // キューの通知から開いた
+    val openQueue by xyz.mooma0750.wave.playback.QueueNotice.openRequested.collectAsStateWithLifecycle()
+    LaunchedEffect(openQueue) {
+        if (openQueue) {
+            showQueue = true
+            xyz.mooma0750.wave.playback.QueueNotice.consumeOpenRequest()
+        }
+    }
     var showLyrics by remember { mutableStateOf(false) }
     var video by rememberSaveable { mutableStateOf(false) }
     var fullVideo by rememberSaveable { mutableStateOf(false) }

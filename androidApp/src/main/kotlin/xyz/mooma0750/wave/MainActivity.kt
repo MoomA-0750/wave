@@ -80,6 +80,12 @@ class MainActivity : ComponentActivity() {
     private val notificationNavigation = kotlinx.coroutines.channels.Channel<Screen>(capacity = 4)
 
     private fun openFromNotification(intent: android.content.Intent?) {
+        // キューの通知から開いた: 再生画面のキューを出す
+        if (intent?.getBooleanExtra(xyz.mooma0750.wave.playback.QueueNotice.EXTRA_OPEN_QUEUE, false) == true) {
+            intent.removeExtra(xyz.mooma0750.wave.playback.QueueNotice.EXTRA_OPEN_QUEUE)
+            xyz.mooma0750.wave.playback.QueueNotice.requestOpen()
+            return
+        }
         val album = intent?.getStringExtra(xyz.mooma0750.wave.releases.ReleaseWatcher.EXTRA_ALBUM)
         val artist = intent?.getStringExtra(xyz.mooma0750.wave.releases.ReleaseWatcher.EXTRA_ARTIST)
         when {

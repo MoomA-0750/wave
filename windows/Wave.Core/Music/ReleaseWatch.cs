@@ -65,7 +65,7 @@ public sealed record ReleaseWatchState(Dictionary<string, HashSet<string>> Seen,
     public ReleaseWatchState Retain(ISet<string> artistIds) =>
         new(Seen.Where(kv => artistIds.Contains(kv.Key)).ToDictionary(kv => kv.Key, kv => kv.Value), Recent.Where(r => artistIds.Contains(r.ArtistId)).ToList());
 
-    public ReleaseWatchState Expire(long nowEpochMs, long maxAgeMs = RecentMaxAgeMs) => this with { Recent = Recent.Where(r => nowEpochMs - r.FoundAtEpochMs <= maxAgeMs).ToList() };
+    public ReleaseWatchState Expire(long nowEpochMs, long maxAgeMs = RecentMaxAgeMs) => this with { Recent = Recent.Where(r => nowEpochMs - r.FoundAtEpochMs <= maxAgeMs && r.VideoId is null).ToList() }; // 動画は新作として扱わなくなった（前に覚えた分も外す）
 
     public static ReleaseWatchState? Decode(string text)
     {

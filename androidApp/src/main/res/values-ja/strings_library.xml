@@ -145,11 +145,16 @@
     <string name="releases_new_release">%1$s の新作</string>
     <string name="releases_new_video">%1$s の新しい動画</string>
     <string name="settings_release_notices_title">新作の通知</string>
-    <string name="settings_release_notices_summary">登録したアーティストのアルバム・シングル・動画が出たら知らせる（数時間おきに確かめる）</string>
+    <string name="settings_release_notices_summary">登録したアーティストの今年のアルバム・シングルを知らせる（数時間おきに確かめる）。通知が鳴るのは高く評価した曲が3曲以上のアーティストだけで、ほかは「新作」に並べる</string>
     <string name="releases_new_badge">NEW</string>
     <string name="releases_kind_video">動画</string>
     <string name="releases_kind_release">新作</string>
     <string name="releases_home_title">登録したアーティストの新作</string>
     <string name="releases_artist_title">新作</string>
     <string name="artist_live_news">ライブ・お知らせ</string>
+    <string name="settings_queue_notice_title">キューを通知に出す</string>
+    <string name="settings_queue_notice_summary">再生中、通知センターに次に流れる曲を出す。押すとキューを開く</string>
+    <string name="queue_notice_channel">キュー</string>
+    <string name="queue_notice_more">ほか %1$d 曲</string>
+    <string name="queue_notice_empty">次の曲はありません</string>
 </resources>

@@ -158,6 +158,18 @@ fun SettingsScreen(
             }
             item { AiSettingsSection(container.settings) }
             item {
+                val queueNotice by container.settings.queueNotice.collectAsStateWithLifecycle(initialValue = null)
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.settings_queue_notice_title)) },
+                    supportingContent = { Text(stringResource(R.string.settings_queue_notice_summary)) },
+                    trailingContent = {
+                        queueNotice?.let { enabled ->
+                            Switch(checked = enabled, onCheckedChange = { container.appScope.launch { container.settings.setQueueNotice(it) } })
+                        }
+                    },
+                )
+            }
+            item {
                 val releaseNotices by container.settings.releaseNotices.collectAsStateWithLifecycle(initialValue = null)
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.settings_release_notices_title)) },

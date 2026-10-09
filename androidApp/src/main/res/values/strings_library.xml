@@ -150,11 +150,16 @@
     <string name="releases_new_release">New from %1$s</string>
     <string name="releases_new_video">New video from %1$s</string>
     <string name="settings_release_notices_title">New release notifications</string>
-    <string name="settings_release_notices_summary">Notify when artists you subscribe to release albums, singles or videos (checked every few hours)</string>
+    <string name="settings_release_notices_summary">Notify when artists you subscribe to release albums or singles this year. Only artists with 3 or more liked songs make a sound; the others appear under New releases</string>
     <string name="releases_new_badge">NEW</string>
     <string name="releases_kind_video">Video</string>
     <string name="releases_kind_release">Release</string>
     <string name="releases_home_title">New from artists you subscribe to</string>
     <string name="releases_artist_title">New releases</string>
     <string name="artist_live_news">Live &amp; news</string>
+    <string name="settings_queue_notice_title">Show the queue in notifications</string>
+    <string name="settings_queue_notice_summary">While playing, show the songs coming up next in the notification shade. Tap it to open the queue</string>
+    <string name="queue_notice_channel">Queue</string>
+    <string name="queue_notice_more">+%1$d more</string>
+    <string name="queue_notice_empty">Nothing comes next</string>
 </resources>

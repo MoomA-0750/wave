@@ -67,6 +67,29 @@ class PlaybackService : MediaSessionService() {
     /** ほかの端末の再生を通知・ロック画面・Bluetooth に映す再生器（音は出さない）。 */
     private var remotePlayer: RemoteSessionPlayer? = null
     private var queue: QueueSession? = null
+
+    /** 通知センターのキュー（設定で入れたときだけ）。 */
+    private val queueNotice by lazy { QueueNotice(this) }
+
+    @Volatile
+    private var queueNoticeEnabled = false
+
+    /** キューの通知を今の状態に合わせる（ほかの端末を映している間は、その端末のキュー）。Main で呼ぶ。 */
+    private fun refreshQueueNotice() {
+        val local = localPlayer
+        val remote = container.connectV2?.remotePlayback?.value
+        val mirroring = session?.player === remotePlayer && remote != null
+        when {
+            !queueNoticeEnabled -> queueNotice.update(null, false)
+            mirroring && remote != null ->
+                queueNotice.update(
+                    QueueNotice.Upcoming(remote.itemIds.getOrNull(remote.currentIndex), remote.items.drop(remote.currentIndex + 1).take(8), remote.items.size - remote.currentIndex - 1),
+                    remote.playing,
+                )
+            local != null && local.mediaItemCount > 0 -> queueNotice.update(QueueNotice.upcomingOf(local), local.playWhenReady)
+            else -> queueNotice.update(null, false)
+        }
+    }
     private val skipGuard = SkipGuard(MAX_CONSECUTIVE_SKIPS)
 
     /** 今のログインの取得時刻。ログインしていなければ null。キューの保存に使う。 */
@@ -196,6 +219,7 @@ class PlaybackService : MediaSessionService() {
                     events: Player.Events,
                 ) {
                     if (events.containsAny(*SAVE_EVENTS)) scheduleSave()
+                    if (events.containsAny(Player.EVENT_MEDIA_ITEM_TRANSITION, Player.EVENT_TIMELINE_CHANGED, Player.EVENT_PLAY_WHEN_READY_CHANGED, Player.EVENT_SHUFFLE_MODE_ENABLED_CHANGED)) refreshQueueNotice()
                     // 今の曲が変わった・キューが置き換わった: 画像を入れる（入れ終わった曲では何もしない）
                     if (events.containsAny(Player.EVENT_MEDIA_ITEM_TRANSITION, Player.EVENT_TIMELINE_CHANGED)) artwork?.onCurrentItemChanged()
                     // ほかの端末を映している間は、映している曲の評価のまま（mirrorRemote が切り替える）
@@ -279,6 +303,13 @@ class PlaybackService : MediaSessionService() {
             },
         )
         localPlayer = player
+        // キューの通知の設定（切り替えたらすぐ出す・消す）
+        scope.launch {
+            container.settings.queueNotice.collect {
+                queueNoticeEnabled = it
+                refreshQueueNotice()
+            }
+        }
         session =
             MediaSession
                 .Builder(this, player)
@@ -546,7 +577,10 @@ class PlaybackService : MediaSessionService() {
                 likeNoticeFor = null
             } else if (!state.pending) {
                 likeNoticeFor = null
-                val song = localPlayer?.currentMediaItem?.let(Media3QueuePlayer::songOf)?.takeIf { it.videoId == target }
+                // ほかの端末を映している間は、映している曲
+                val song =
+                    localPlayer?.currentMediaItem?.let(Media3QueuePlayer::songOf)?.takeIf { it.videoId == target }
+                        ?: container.connectV2?.remotePlayback?.value?.current?.takeIf { it.videoId == target }
                 if (state.status == LikeStatus.Like && song != null) xyz.mooma0750.wave.library.AddToPlaylistActivity.notifyLiked(this, song)
             }
         }
@@ -622,6 +656,7 @@ class PlaybackService : MediaSessionService() {
             current.player = local
             likes?.onCurrentSong(Media3QueuePlayer.songOf(local.currentMediaItem)?.videoId, TrackUri.epochOf(local.currentMediaItem?.localConfiguration?.uri))
         }
+        refreshQueueNotice()
     }
 
     /** ログインが分かっていて、自アプリの UI がつながっていれば、1回だけ保存したキューを戻す。 */
@@ -897,6 +932,7 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        queueNotice.cancel()
         artwork?.release()
         artwork = null
         relayReleaseJob?.cancel()

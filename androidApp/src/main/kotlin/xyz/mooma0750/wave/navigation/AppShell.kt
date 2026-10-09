@@ -25,6 +25,8 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -54,6 +56,9 @@ fun AppShell(
     content: @Composable () -> Unit,
 ) {
     var playerOpen by remember { mutableStateOf(false) }
+    // キューの通知から開いた: 狭い画面では再生画面を開く（キューは再生画面が出す）
+    val openQueue by xyz.mooma0750.wave.playback.QueueNotice.openRequested.collectAsState()
+    LaunchedEffect(openQueue) { if (openQueue) playerOpen = true }
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val wide = maxWidth >= WIDE_LAYOUT_MIN_WIDTH
         val panelWidth = (maxWidth * 0.32f).coerceIn(PANEL_MIN_WIDTH, PANEL_MAX_WIDTH)

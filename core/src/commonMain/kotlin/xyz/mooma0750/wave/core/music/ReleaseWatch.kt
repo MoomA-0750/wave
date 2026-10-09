@@ -88,7 +88,7 @@ data class ReleaseWatchState(
     fun expire(
         nowEpochMs: Long,
         maxAgeMs: Long = RECENT_MAX_AGE_MS,
-    ): ReleaseWatchState = copy(recent = recent.filter { nowEpochMs - it.foundAtEpochMs <= maxAgeMs })
+    ): ReleaseWatchState = copy(recent = recent.filter { nowEpochMs - it.foundAtEpochMs <= maxAgeMs && it.videoId == null }) // 動画は新作として扱わなくなった（前に覚えた分も外す）
 
     /** 登録を外したアーティストを忘れる。 */
     fun retain(artistIds: Set<String>): ReleaseWatchState = copy(seen = seen.filterKeys { it in artistIds }, recent = recent.filter { it.artistId in artistIds })
