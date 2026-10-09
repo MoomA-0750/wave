@@ -8,6 +8,7 @@
     <string name="nav_home">ホーム</string>
     <string name="nav_search">検索</string>
     <string name="nav_library">マイライブラリ</string>
+    <string name="nav_ai">Claude</string>
 
     <!-- ui -->
     <string name="ui_shuffle_on">シャッフル: オン</string>
@@ -114,7 +115,7 @@
     <string name="search_share">共有</string>
     <string name="ai_title">Claude に聞く</string>
     <string name="ai_new_chat">新しい会話</string>
-    <string name="ai_intro">今の曲について聞けます。歌詞の意味・似た曲・プレイリスト作りなど。</string>
+    <string name="ai_intro">曲探し・プレイリスト作りを頼めます。再生中の曲について、歌詞の意味や似た曲も聞けます。</string>
     <string name="ai_open_settings">設定を開く</string>
     <string name="ai_suggest_meaning">この歌詞ってどういう意味だと思う？</string>
     <string name="ai_suggest_similar">これに似た曲ある？</string>

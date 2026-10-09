@@ -191,7 +191,7 @@ class MainActivity : ComponentActivity() {
                                 onCancel = { reLogin = false },
                             )
                         } else androidx.compose.runtime.CompositionLocalProvider(xyz.mooma0750.wave.ui.LocalLikedIds provides likedIds) {
-                            // Claude に聞く（再生画面から開く）
+                            // Claude に聞く（再生画面の ✨ からシートで開く。下のバーの「Claude」のタブと同じ会話）
                             var showAi by remember { mutableStateOf(false) }
                             if (showAi) {
                                 xyz.mooma0750.wave.ai.AiChatSheet(
@@ -238,6 +238,12 @@ class MainActivity : ComponentActivity() {
                                         viewModel(key = "moods-$loginGeneration") { MoodsViewModel(container.music) },
                                         onOpenSearch = { nav.push(Screen.Search) },
                                         onOpenCategory = { nav.push(Screen.Mood(it.title, it.params)) },
+                                    )
+                                Tab.Ai ->
+                                    xyz.mooma0750.wave.ai.AiChatScreen(
+                                        container.aiChat,
+                                        onPlay = playerActions::playSong,
+                                        onOpenSettings = { nav.push(Screen.Settings) },
                                     )
                                 Tab.Library ->
                                     LibraryTabScreen(

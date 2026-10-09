@@ -8,6 +8,7 @@
     <string name="nav_home">Home</string>
     <string name="nav_search">Search</string>
     <string name="nav_library">Your Library</string>
+    <string name="nav_ai">Claude</string>
 
     <!-- ui -->
     <string name="ui_shuffle_on">Shuffle: On</string>
@@ -115,7 +116,7 @@
     <string name="search_share">Share</string>
     <string name="ai_title">Ask Claude</string>
     <string name="ai_new_chat">New chat</string>
-    <string name="ai_intro">Ask about the song that\'s playing — what the lyrics mean, similar songs, or have it make a playlist.</string>
+    <string name="ai_intro">Ask Claude to find music, make a playlist, or tell you about the song that\'s playing — what the lyrics mean, similar songs, and more.</string>
     <string name="ai_open_settings">Open settings</string>
     <string name="ai_suggest_meaning">What do these lyrics mean?</string>
     <string name="ai_suggest_similar">Any songs like this?</string>

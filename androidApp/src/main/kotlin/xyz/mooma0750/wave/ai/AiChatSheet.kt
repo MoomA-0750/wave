@@ -36,6 +36,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
@@ -50,8 +52,8 @@ import xyz.mooma0750.wave.core.music.Song
 import xyz.mooma0750.wave.ui.IconAction
 
 /**
- * Claude に聞く（再生画面から開く）。今の曲と歌詞を添えて頼み、答えを流しながら出す。
- * Claude が並べた曲はカードで出し、押すと再生する。
+ * Claude に聞く。再生画面の ✨ からはシートで、下のバーの「Claude」のタブからは全面で開く（会話は同じものを続ける）。
+ * 今の曲と歌詞を添えて頼み、答えを流しながら出す。Claude が並べた曲はカードで出し、押すと再生する。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -60,6 +62,29 @@ fun AiChatSheet(
     onPlay: (Song) -> Unit,
     onOpenSettings: () -> Unit,
     onDismiss: () -> Unit,
+) {
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+        AiChatPanel(chat, onPlay, onOpenSettings, Modifier.fillMaxWidth().fillMaxHeight(0.9f).imePadding().navigationBarsPadding(), MaterialTheme.typography.titleLargeEmphasized)
+    }
+}
+
+/** 下のバーの「Claude」のタブ。見出しはほかのタブと同じ大きさにする。 */
+@Composable
+fun AiChatScreen(
+    chat: AiChat,
+    onPlay: (Song) -> Unit,
+    onOpenSettings: () -> Unit,
+) {
+    AiChatPanel(chat, onPlay, onOpenSettings, Modifier.fillMaxSize().statusBarsPadding().imePadding().padding(top = 16.dp), MaterialTheme.typography.headlineMediumEmphasized)
+}
+
+@Composable
+private fun AiChatPanel(
+    chat: AiChat,
+    onPlay: (Song) -> Unit,
+    onOpenSettings: () -> Unit,
+    modifier: Modifier,
+    titleStyle: androidx.compose.ui.text.TextStyle,
 ) {
     val state by chat.state.collectAsStateWithLifecycle()
     var input by remember { mutableStateOf("") }
@@ -71,64 +96,62 @@ fun AiChatSheet(
         chat.send(text.trim())
         input = ""
     }
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
-        Column(Modifier.fillMaxWidth().fillMaxHeight(0.9f).imePadding().navigationBarsPadding()) {
-            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(stringResource(R.string.ai_title), Modifier.weight(1f), style = MaterialTheme.typography.titleLargeEmphasized)
-                if (state.messages.isNotEmpty()) TextButton(onClick = chat::clear) { Text(stringResource(R.string.ai_new_chat)) }
+    Column(modifier) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(stringResource(R.string.ai_title), Modifier.weight(1f), style = titleStyle)
+            if (state.messages.isNotEmpty()) TextButton(onClick = chat::clear) { Text(stringResource(R.string.ai_new_chat)) }
+        }
+        if (state.running) LinearWavyProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 16.dp))
+        LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = listState, contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (state.messages.isEmpty()) {
+                item { Text(stringResource(R.string.ai_intro), color = MaterialTheme.colorScheme.onSurfaceVariant) }
             }
-            if (state.running) LinearWavyProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 16.dp))
-            LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = listState, contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (state.messages.isEmpty()) {
-                    item { Text(stringResource(R.string.ai_intro), color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                }
-                items(state.messages.size) { index ->
-                    when (val message = state.messages[index]) {
-                        is AiMessage.User ->
-                            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
-                                Text(
-                                    message.text,
-                                    Modifier.widthIn(max = 320.dp).clip(MaterialTheme.shapes.large).background(MaterialTheme.colorScheme.primaryContainer).padding(horizontal = 14.dp, vertical = 8.dp),
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                )
+            items(state.messages.size) { index ->
+                when (val message = state.messages[index]) {
+                    is AiMessage.User ->
+                        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
+                            Text(
+                                message.text,
+                                Modifier.widthIn(max = 320.dp).clip(MaterialTheme.shapes.large).background(MaterialTheme.colorScheme.primaryContainer).padding(horizontal = 14.dp, vertical = 8.dp),
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            )
+                        }
+                    is AiMessage.Assistant -> Text(markdownText(message.text), style = MaterialTheme.typography.bodyLarge)
+                    is AiMessage.Action -> Text("・" + message.text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    is AiMessage.Songs ->
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            items(message.songs, key = { it.videoId }) { song -> SongCard(song) { onPlay(song) } }
+                        }
+                    is AiMessage.Failure ->
+                        Column {
+                            Text(failureText(message.text), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                            if (message.text == AiChat.NOT_CONFIGURED || message.text == AiChat.UNAUTHORIZED) {
+                                TextButton(onClick = onOpenSettings) { Text(stringResource(R.string.ai_open_settings)) }
                             }
-                        is AiMessage.Assistant -> Text(markdownText(message.text), style = MaterialTheme.typography.bodyLarge)
-                        is AiMessage.Action -> Text("・" + message.text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        is AiMessage.Songs ->
-                            LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                items(message.songs, key = { it.videoId }) { song -> SongCard(song) { onPlay(song) } }
-                            }
-                        is AiMessage.Failure ->
-                            Column {
-                                Text(failureText(message.text), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-                                if (message.text == AiChat.NOT_CONFIGURED || message.text == AiChat.UNAUTHORIZED) {
-                                    TextButton(onClick = onOpenSettings) { Text(stringResource(R.string.ai_open_settings)) }
-                                }
-                            }
-                    }
+                        }
                 }
             }
-            // よく頼むこと
-            val suggestions = listOf(stringResource(R.string.ai_suggest_meaning), stringResource(R.string.ai_suggest_similar), stringResource(R.string.ai_suggest_playlist))
-            LazyRow(contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(suggestions) { suggestion -> AssistChip(onClick = { send(suggestion) }, label = { Text(suggestion) }, enabled = !state.running) }
-            }
-            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                OutlinedTextField(
-                    value = input,
-                    onValueChange = { input = it },
-                    modifier = Modifier.weight(1f),
-                    placeholder = { Text(stringResource(R.string.ai_placeholder)) },
-                    maxLines = 4,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                    keyboardActions = KeyboardActions(onSend = { if (input.isNotBlank() && !state.running) send(input) }),
-                    shape = MaterialTheme.shapes.extraLarge,
-                )
-                if (state.running) {
-                    IconAction(R.drawable.ic_close, stringResource(R.string.ai_stop), chat::stop)
-                } else {
-                    IconAction(R.drawable.ic_arrow_upward, stringResource(R.string.ai_send), { send(input) }, enabled = input.isNotBlank())
-                }
+        }
+        // よく頼むこと
+        val suggestions = listOf(stringResource(R.string.ai_suggest_meaning), stringResource(R.string.ai_suggest_similar), stringResource(R.string.ai_suggest_playlist))
+        LazyRow(contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(suggestions) { suggestion -> AssistChip(onClick = { send(suggestion) }, label = { Text(suggestion) }, enabled = !state.running) }
+        }
+        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            OutlinedTextField(
+                value = input,
+                onValueChange = { input = it },
+                modifier = Modifier.weight(1f),
+                placeholder = { Text(stringResource(R.string.ai_placeholder)) },
+                maxLines = 4,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                keyboardActions = KeyboardActions(onSend = { if (input.isNotBlank() && !state.running) send(input) }),
+                shape = MaterialTheme.shapes.extraLarge,
+            )
+            if (state.running) {
+                IconAction(R.drawable.ic_close, stringResource(R.string.ai_stop), chat::stop)
+            } else {
+                IconAction(R.drawable.ic_arrow_upward, stringResource(R.string.ai_send), { send(input) }, enabled = input.isNotBlank())
             }
         }
     }

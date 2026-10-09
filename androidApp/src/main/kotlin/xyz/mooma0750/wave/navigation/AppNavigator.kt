@@ -6,7 +6,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 
 /** 下のタブ（Spotify と同じ3つ）。 */
-enum class Tab { Home, Search, Library }
+enum class Tab { Home, Search, Ai, Library }
 
 /**
  * タブごとの画面の積み重ね（Spotify と同じで、タブを切り替えても各タブの奥の画面は残る）。

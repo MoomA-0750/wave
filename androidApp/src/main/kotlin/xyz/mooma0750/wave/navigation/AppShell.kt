@@ -39,7 +39,7 @@ import xyz.mooma0750.wave.R
 import androidx.compose.ui.res.stringResource
 
 /**
- * 画面の枠（並びは Spotify と同じ）: 中身の下に、ミニプレーヤーと3つのタブ。
+ * 画面の枠（並びは Spotify と同じ）: 中身の下に、ミニプレーヤーと4つのタブ（ホーム・検索・Claude・ライブラリ）。
  * ミニプレーヤーを押すと、再生画面が下からせり上がって全面を覆う。部品は Material のもの。
  *
  * 広い画面（開いた折りたたみ・タブレット）では Spotify のタブレット版と同じく、左に中身と下のタブ、右に再生の列を常に出す
@@ -74,6 +74,8 @@ fun AppShell(
                 ShortNavigationBar {
                     TabItem(nav, Tab.Home, R.drawable.ic_home, R.drawable.ic_home_outline, stringResource(R.string.nav_home))
                     TabItem(nav, Tab.Search, R.drawable.ic_search, R.drawable.ic_search_outline, stringResource(R.string.nav_search))
+                    // Claude はどの画面からでも聞けるように、行き先（タブ）の1つにする（Material ではバーに押すだけのボタンは置かない）
+                    TabItem(nav, Tab.Ai, R.drawable.ic_ai, R.drawable.ic_ai, stringResource(R.string.nav_ai))
                     TabItem(nav, Tab.Library, R.drawable.ic_library, R.drawable.ic_library_outline, stringResource(R.string.nav_library))
                 }
             }
