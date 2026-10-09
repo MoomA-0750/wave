@@ -17,7 +17,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AssistChip
@@ -89,7 +88,7 @@ fun AiChatSheet(
                             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
                                 Text(
                                     message.text,
-                                    Modifier.widthIn(max = 320.dp).clip(RoundedCornerShape(16.dp)).background(MaterialTheme.colorScheme.primaryContainer).padding(horizontal = 14.dp, vertical = 8.dp),
+                                    Modifier.widthIn(max = 320.dp).clip(MaterialTheme.shapes.large).background(MaterialTheme.colorScheme.primaryContainer).padding(horizontal = 14.dp, vertical = 8.dp),
                                     color = MaterialTheme.colorScheme.onPrimaryContainer,
                                 )
                             }
@@ -123,7 +122,7 @@ fun AiChatSheet(
                     maxLines = 4,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                     keyboardActions = KeyboardActions(onSend = { if (input.isNotBlank() && !state.running) send(input) }),
-                    shape = RoundedCornerShape(24.dp),
+                    shape = MaterialTheme.shapes.extraLarge,
                 )
                 if (state.running) {
                     IconAction(R.drawable.ic_close, stringResource(R.string.ai_stop), chat::stop)
@@ -168,7 +167,7 @@ private fun SongCard(
         coil3.compose.AsyncImage(
             model = song.thumbnailUrl,
             contentDescription = null,
-            modifier = Modifier.size(120.dp).clip(RoundedCornerShape(6.dp)),
+            modifier = Modifier.size(120.dp).clip(MaterialTheme.shapes.small),
             contentScale = ContentScale.Crop,
         )
         Text(song.title, Modifier.padding(top = 4.dp), maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium)

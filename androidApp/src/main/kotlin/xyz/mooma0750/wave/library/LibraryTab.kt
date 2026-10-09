@@ -25,7 +25,6 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.DropdownMenu
@@ -311,7 +310,7 @@ fun LibraryTabScreen(
                     singleLine = true,
                     leadingIcon = { MenuIcon(R.drawable.ic_search) },
                     trailingIcon = { if (query.isNotEmpty()) IconAction(R.drawable.ic_close, stringResource(R.string.library_clear), { query = "" }) },
-                    shape = RoundedCornerShape(8.dp),
+                    shape = MaterialTheme.shapes.small,
                     modifier = Modifier.weight(1f).padding(start = 12.dp).height(52.dp).focusRequester(focus),
                     textStyle = MaterialTheme.typography.bodyMedium,
                 )
@@ -415,7 +414,7 @@ private fun Thumbnail(
     entry: LibraryEntry,
     modifier: Modifier,
 ) {
-    val shape = if (entry is LibraryEntry.Artist) CircleShape else RoundedCornerShape(4.dp)
+    val shape = if (entry is LibraryEntry.Artist) CircleShape else MaterialTheme.shapes.extraSmall
     val url = thumbnailOf(entry)
     if (url == null) {
         // 「高く評価した曲」など画像の無いもの（Spotify の紫のタイルの代わりに、テーマの色のタイル）

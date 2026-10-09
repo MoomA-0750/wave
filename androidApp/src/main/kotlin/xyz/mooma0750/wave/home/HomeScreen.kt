@@ -16,7 +16,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DrawerValue
@@ -146,11 +145,11 @@ private fun RecentGrid(
                     if (menu && item is HomeItem.SongItem) SongMenuSheet(item.song, actions, onDismiss = { menu = false })
                     Card(
                         modifier =
-                            Modifier.weight(1f).height(56.dp).clip(RoundedCornerShape(6.dp)).combinedClickable(
+                            Modifier.weight(1f).height(56.dp).clip(MaterialTheme.shapes.small).combinedClickable(
                                 onLongClick = if (item is HomeItem.SongItem) ({ menu = true }) else null,
                                 onClick = { onClick(item) },
                             ),
-                        shape = RoundedCornerShape(6.dp),
+                        shape = MaterialTheme.shapes.small,
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {

@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -67,11 +66,11 @@ fun NewReleaseRow(
                         coil3.compose.AsyncImage(
                             model = release.thumbnailUrl,
                             contentDescription = null,
-                            modifier = Modifier.size(140.dp).clip(RoundedCornerShape(6.dp)),
+                            modifier = Modifier.size(140.dp).clip(MaterialTheme.shapes.small),
                             contentScale = ContentScale.Crop,
                         )
                         if (!release.seeded && now - release.foundAtEpochMs < NEW_BADGE_MS) {
-                            Surface(Modifier.align(Alignment.TopStart).padding(6.dp), shape = RoundedCornerShape(4.dp), color = MaterialTheme.colorScheme.primary) {
+                            Surface(Modifier.align(Alignment.TopStart).padding(6.dp), shape = MaterialTheme.shapes.extraSmall, color = MaterialTheme.colorScheme.primary) {
                                 Text(stringResource(R.string.releases_new_badge), Modifier.padding(horizontal = 6.dp, vertical = 2.dp), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                             }
                         }

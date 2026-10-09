@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ListItem
@@ -72,7 +71,7 @@ fun SongMenuSheet(
                 coil3.compose.AsyncImage(
                     model = song.thumbnailUrl,
                     contentDescription = null,
-                    modifier = Modifier.size(56.dp).clip(RoundedCornerShape(4.dp)),
+                    modifier = Modifier.size(56.dp).clip(MaterialTheme.shapes.extraSmall),
                     contentScale = ContentScale.Crop,
                 )
                 Column(Modifier.padding(start = 12.dp)) {

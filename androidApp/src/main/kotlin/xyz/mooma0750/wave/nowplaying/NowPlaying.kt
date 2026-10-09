@@ -1,5 +1,6 @@
 package xyz.mooma0750.wave.nowplaying
 
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.toMutableStateList
@@ -56,7 +57,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -114,7 +114,7 @@ fun MiniPlayer(
     var drag by remember { mutableFloatStateOf(0f) }
     Surface(
         color = container,
-        shape = RoundedCornerShape(8.dp),
+        shape = MaterialTheme.shapes.small,
         modifier =
             Modifier
                 .fillMaxWidth()
@@ -136,7 +136,7 @@ fun MiniPlayer(
                 coil3.compose.AsyncImage(
                     model = song?.thumbnailUrl,
                     contentDescription = null,
-                    modifier = Modifier.size(40.dp).clip(RoundedCornerShape(4.dp)),
+                    modifier = Modifier.size(40.dp).clip(MaterialTheme.shapes.extraSmall),
                     contentScale = androidx.compose.ui.layout.ContentScale.Crop,
                 )
                 Column(Modifier.weight(1f).padding(horizontal = 10.dp)) {
@@ -322,7 +322,7 @@ fun NowPlayingScreen(
                     // ほかの端末を映している間も、その再生の位置（見積もり）に合わせて映像を出す。
                     // 映像は横幅いっぱいの 16:9 で出し（正方形のジャケットの枠だと小さい）、右下のボタンで全画面にする
                     Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f)) {
-                        if (!fullVideo) MusicVideoPanel(song, display.clock, videos, Modifier.fillMaxSize().clip(RoundedCornerShape(8.dp)))
+                        if (!fullVideo) MusicVideoPanel(song, display.clock, videos, Modifier.fillMaxSize().clip(MaterialTheme.shapes.small))
                         IconAction(R.drawable.ic_fullscreen, stringResource(R.string.nowplaying_video_fullscreen), { fullVideo = true }, modifier = Modifier.align(Alignment.BottomEnd))
                     }
                 } else {
@@ -352,7 +352,7 @@ fun NowPlayingScreen(
                                         change.consume()
                                         artDrag += amount
                                     }
-                                }.clip(RoundedCornerShape(8.dp)),
+                                }.clip(MaterialTheme.shapes.small),
                         contentScale = androidx.compose.ui.layout.ContentScale.Crop,
                     )
                 }
@@ -443,7 +443,7 @@ fun NowPlayingScreen(
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                 // 端末名が出ているときは、名前まで含めて押せるようにする（アイコンだけが反応するのは分かりにくい）
                 Row(
-                    Modifier.weight(1f, fill = false).clip(RoundedCornerShape(24.dp)).clickable(onClick = onOpenDevices).padding(end = if (remote != null) 12.dp else 0.dp),
+                    Modifier.weight(1f, fill = false).clip(CircleShape).clickable(onClick = onOpenDevices).padding(end = if (remote != null) 12.dp else 0.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     IconAction(R.drawable.ic_devices, stringResource(R.string.nowplaying_connected_devices), onOpenDevices, active = remote != null)
@@ -474,7 +474,7 @@ fun NowPlayingScreen(
                         coil3.compose.AsyncImage(
                             model = next.thumbnailUrl,
                             contentDescription = null,
-                            modifier = Modifier.size(48.dp).clip(RoundedCornerShape(4.dp)),
+                            modifier = Modifier.size(48.dp).clip(MaterialTheme.shapes.extraSmall),
                             contentScale = androidx.compose.ui.layout.ContentScale.Crop,
                         )
                         Column(Modifier.padding(start = 12.dp)) {
@@ -653,7 +653,7 @@ private fun QueueSheet(
                 coil3.compose.AsyncImage(
                     model = row.thumbnailUrl,
                     contentDescription = null,
-                    modifier = Modifier.size(48.dp).clip(RoundedCornerShape(4.dp)),
+                    modifier = Modifier.size(48.dp).clip(MaterialTheme.shapes.extraSmall),
                     contentScale = androidx.compose.ui.layout.ContentScale.Crop,
                 )
                 Column(Modifier.weight(1f).padding(start = 12.dp)) {

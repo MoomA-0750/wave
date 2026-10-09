@@ -19,7 +19,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.LoadingIndicator
@@ -91,7 +90,7 @@ fun SearchScreen(
                     singleLine = true,
                     placeholder = { Text(stringResource(R.string.search_hint)) },
                     trailingIcon = { if (state.query.isNotEmpty()) IconAction(R.drawable.ic_close, stringResource(R.string.search_clear), { viewModel.onQueryChange("") }) },
-                    shape = RoundedCornerShape(8.dp),
+                    shape = MaterialTheme.shapes.small,
                     colors =
                         TextFieldDefaults.colors(
                             focusedIndicatorColor = Color.Transparent,
@@ -239,7 +238,7 @@ private fun Results(
                         if (topArtist != null) {
                             TopResult(topArtist.thumbnailUrl, topArtist.name, stringResource(R.string.search_kind_artist), CircleShape) { openArtist(topArtist) }
                         } else if (topSong != null) {
-                            TopResult(topSong.thumbnailUrl, topSong.title, listOf(stringResource(R.string.search_kind_song), topSong.artists.joinToString(", ") { it.name }).filter { it.isNotEmpty() }.joinToString(" • "), RoundedCornerShape(4.dp)) {
+                            TopResult(topSong.thumbnailUrl, topSong.title, listOf(stringResource(R.string.search_kind_song), topSong.artists.joinToString(", ") { it.name }).filter { it.isNotEmpty() }.joinToString(" • "), MaterialTheme.shapes.extraSmall) {
                                 onSongClick(topSong)
                             }
                         }
@@ -329,7 +328,7 @@ private fun AlbumRow(
     album: AlbumSummary,
     onClick: () -> Unit,
 ) {
-    CardRow(album.thumbnailUrl, album.title, album.subtitle, RoundedCornerShape(4.dp), onClick)
+    CardRow(album.thumbnailUrl, album.title, album.subtitle, MaterialTheme.shapes.extraSmall, onClick)
 }
 
 @Composable
@@ -390,7 +389,7 @@ fun SongRow(
             coil3.compose.AsyncImage(
                 model = song.thumbnailUrl,
                 contentDescription = null,
-                modifier = Modifier.size(48.dp).clip(RoundedCornerShape(4.dp)),
+                modifier = Modifier.size(48.dp).clip(MaterialTheme.shapes.extraSmall),
                 contentScale = ContentScale.Crop,
             )
             Spacer(Modifier.width(12.dp))
@@ -455,7 +454,7 @@ private fun HistoryRow(
         Modifier.fillMaxWidth().clickable(onClick = onClick).padding(start = 16.dp, top = 8.dp, bottom = 8.dp, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        val shape = if (entry is SearchHistoryEntry.Artist) CircleShape else RoundedCornerShape(4.dp)
+        val shape = if (entry is SearchHistoryEntry.Artist) CircleShape else MaterialTheme.shapes.extraSmall
         Box(Modifier.size(56.dp).clip(shape).background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) {
             if (entry.thumbnailUrl != null) {
                 coil3.compose.AsyncImage(model = entry.thumbnailUrl, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)

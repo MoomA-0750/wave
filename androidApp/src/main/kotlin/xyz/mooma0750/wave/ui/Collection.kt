@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -62,7 +61,7 @@ fun CollectionScreen(
     actions: @Composable RowScope.() -> Unit = {},
     /** 操作の列の左端の、再生ボタンとシャッフルの切り替え。null なら出さない。 */
     play: PlayControls?,
-    coverShape: Shape = RoundedCornerShape(4.dp),
+    coverShape: Shape = MaterialTheme.shapes.extraSmall,
     /** アーティストのページ: 画像を横幅いっぱいに出し、名前を画像の上に重ねる（Spotify のアーティストのページ）。 */
     hero: Boolean = false,
     /** hero のとき、名前の右に並べるもの（アーティストの登録ボタン）。 */

@@ -16,7 +16,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -99,7 +99,7 @@ fun PlaylistScreen(
                     singleLine = true,
                     leadingIcon = { MenuIcon(R.drawable.ic_search) },
                     trailingIcon = { if (state.query.isNotEmpty()) IconAction(R.drawable.ic_close, stringResource(R.string.library_clear), { viewModel.setQuery("") }) },
-                    shape = RoundedCornerShape(8.dp),
+                    shape = MaterialTheme.shapes.small,
                     modifier = Modifier.weight(1f).height(52.dp),
                     textStyle = MaterialTheme.typography.bodyMedium,
                 )
@@ -216,7 +216,7 @@ private fun SortRow(
     var open by remember { mutableStateOf(false) }
     // Spotify の「並べ替え」: 押すと並べ方の一覧。選んでいるものをもう一度押すと昇順・降順が入れ替わる
     Box {
-        FilledTonalButton(onClick = { open = true }, modifier = Modifier.padding(start = 8.dp).height(52.dp), shape = RoundedCornerShape(8.dp)) { Text(stringResource(R.string.library_sort)) }
+        FilledTonalButton(onClick = { open = true }, shapes = ButtonDefaults.shapes(), modifier = Modifier.padding(start = 8.dp).height(52.dp)) { Text(stringResource(R.string.library_sort)) }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             Text(stringResource(R.string.library_sort), Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.titleSmall)
             PlaylistSort.entries.filter { it == PlaylistSort.Custom || it == PlaylistSort.Duration || sortable }.forEach { sort ->
