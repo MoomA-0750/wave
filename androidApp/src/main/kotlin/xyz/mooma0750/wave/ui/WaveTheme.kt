@@ -3,7 +3,6 @@ package xyz.mooma0750.wave.ui
 import android.graphics.Bitmap
 import androidx.annotation.DrawableRes
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -81,7 +80,7 @@ fun rememberArtworkColor(
         val bitmap = (context.imageLoader.execute(request) as? SuccessResult)?.image?.toBitmap() ?: return@LaunchedEffect
         target = ArtworkColors.of(url, bitmap)
     }
-    return animateColorAsState(target, tween(400), label = "artwork")
+    return animateColorAsState(target, MaterialTheme.motionScheme.slowEffectsSpec(), label = "artwork")
 }
 
 object ArtworkColors {

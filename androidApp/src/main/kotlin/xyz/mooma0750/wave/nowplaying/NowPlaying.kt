@@ -31,7 +31,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
@@ -167,11 +167,11 @@ fun MiniPlayer(
                 IconAction(if (state.isPlaying) R.drawable.ic_pause else R.drawable.ic_play_arrow, if (state.isPlaying) stringResource(R.string.nowplaying_pause) else stringResource(R.string.nowplaying_play), { display.togglePlay() })
             }
             if (state.durationMs > 0) {
-                LinearProgressIndicator(
+                // 再生中だけ波打たせる（止めると平らな線に戻る）
+                LinearWavyProgressIndicator(
                     progress = { (state.positionMs.toFloat() / state.durationMs).coerceIn(0f, 1f) },
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp).height(2.dp),
-                    drawStopIndicator = {},
-                    gapSize = 0.dp,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                    amplitude = { if (state.isPlaying) 1f else 0f },
                 )
             }
         }

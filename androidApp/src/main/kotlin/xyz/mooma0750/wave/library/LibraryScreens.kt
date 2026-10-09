@@ -17,7 +17,7 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -136,7 +136,7 @@ fun PlaylistScreen(
         if (state.order.arrangedLocally && state.loadingAll) {
             item {
                 Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    CircularProgressIndicator()
+                    LoadingIndicator()
                     Text(stringResource(R.string.library_sorting_after_loading_all), Modifier.padding(start = 12.dp))
                 }
             }
@@ -171,7 +171,7 @@ fun PlaylistScreen(
                 LaunchedEffect(state.songs.size) { viewModel.loadMore() }
             }
         }
-        if (state.loading) item { CircularProgressIndicator(Modifier.padding(16.dp)) }
+        if (state.loading) item { LoadingIndicator(Modifier.padding(16.dp)) }
     }
 }
 
@@ -311,7 +311,7 @@ fun AddToPlaylistDialog(
                     }
                     when {
                         state.failure != null -> item { Text(failureMessage(state.failure)) }
-                        state.loading -> item { CircularProgressIndicator(Modifier.padding(8.dp)) }
+                        state.loading -> item { LoadingIndicator(Modifier.padding(8.dp)) }
                     }
                     itemsIndexed(editable, key = { _, playlist -> playlist.playlistId }) { _, playlist ->
                         val id = playlist.playlistId
@@ -340,7 +340,7 @@ fun AddToPlaylistDialog(
                                 }
                             }
                             when {
-                                busy || status == PlaylistMembership.Status.Checking -> CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                                busy || status == PlaylistMembership.Status.Checking -> LoadingIndicator(Modifier.size(24.dp))
                                 // 入っているプレイリストには印（高く評価した曲の行と同じ✓）
                                 status == PlaylistMembership.Status.In ->
                                     androidx.compose.material3.Icon(

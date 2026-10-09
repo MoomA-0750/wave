@@ -18,7 +18,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -134,7 +134,7 @@ fun ConnectScreen(
 
             Text(stringResource(R.string.connect_paired_devices), style = MaterialTheme.typography.titleMedium)
             when (val list = pairs) {
-                null -> CircularProgressIndicator()
+                null -> LoadingIndicator()
                 else ->
                     if (list.isEmpty()) {
                         Text(stringResource(R.string.connect_no_pairs), style = MaterialTheme.typography.bodySmall)
@@ -161,7 +161,7 @@ fun ConnectScreen(
             }
             takingFrom?.let { name ->
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    CircularProgressIndicator(Modifier.padding(4.dp))
+                    LoadingIndicator()
                     Text(stringResource(R.string.connect_requesting_take_over, name))
                 }
             }
@@ -256,7 +256,7 @@ private fun PairingSection(
         }
         is PairingController.State.Working -> {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                CircularProgressIndicator(Modifier.padding(4.dp))
+                LoadingIndicator()
                 Text(state.message)
             }
             OutlinedButton(onClick = onCancel) { Text(stringResource(R.string.connect_cancel)) }

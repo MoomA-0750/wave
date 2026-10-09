@@ -22,7 +22,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
@@ -78,7 +78,7 @@ fun AiChatSheet(
                 Text(stringResource(R.string.ai_title), Modifier.weight(1f), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 if (state.messages.isNotEmpty()) TextButton(onClick = chat::clear) { Text(stringResource(R.string.ai_new_chat)) }
             }
-            if (state.running) LinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 16.dp))
+            if (state.running) LinearWavyProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 16.dp))
             LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = listState, contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (state.messages.isEmpty()) {
                     item { Text(stringResource(R.string.ai_intro), color = MaterialTheme.colorScheme.onSurfaceVariant) }

@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
@@ -110,11 +109,11 @@ private fun SyncedLyrics(
             val isSub = index > 0 && lyrics.lines[index - 1].startMs == line.startMs
             val color by animateColorAsState(
                 if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = if (currentIndex in 0..<index) 0.4f else 0.55f),
-                tween(LINE_ANIMATION_MS),
+                MaterialTheme.motionScheme.defaultEffectsSpec(),
                 label = "lyric-color",
             )
             // 歌っている行は少し大きく（左端を軸に）
-            val scale by animateFloatAsState(if (isCurrent) 1f else 0.96f, tween(LINE_ANIMATION_MS), label = "lyric-scale")
+            val scale by animateFloatAsState(if (isCurrent) 1f else 0.96f, MaterialTheme.motionScheme.defaultSpatialSpec(), label = "lyric-scale")
             Text(
                 line.text.ifBlank { "♪" },
                 style = if (isSub) MaterialTheme.typography.bodyLarge else MaterialTheme.typography.titleLarge,
@@ -153,7 +152,6 @@ private fun Message(
 
 private const val POSITION_POLL_MS = 100L
 private const val USER_SCROLL_HOLD_MS = 3_000L
-private const val LINE_ANIMATION_MS = 350
 
 /** 歌詞を合わせる位置と、行を押したときのシーク（手元の再生か、ほかの端末の再生か）。 */
 interface LyricsClock {

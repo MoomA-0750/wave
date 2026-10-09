@@ -27,7 +27,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
@@ -324,7 +324,7 @@ fun LibraryTabScreen(
             }
         }
         when {
-            state.loading -> CircularProgressIndicator(Modifier.padding(16.dp))
+            state.loading -> LoadingIndicator(Modifier.padding(16.dp))
             state.failure != null -> Text(failureMessage(state.failure), Modifier.padding(16.dp))
         }
         if (grid) {

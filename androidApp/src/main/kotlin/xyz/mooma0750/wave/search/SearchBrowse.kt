@@ -16,7 +16,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -116,7 +116,7 @@ fun SearchBrowseScreen(
                 }
             }
         }
-        if (state.loading) item { CircularProgressIndicator(Modifier.padding(16.dp)) }
+        if (state.loading) item { LoadingIndicator(Modifier.padding(16.dp)) }
         state.failure?.let { failure ->
             item {
                 Column(Modifier.padding(16.dp)) {

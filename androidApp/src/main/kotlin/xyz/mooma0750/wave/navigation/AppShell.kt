@@ -3,7 +3,6 @@ package xyz.mooma0750.wave.navigation
 import androidx.activity.compose.BackHandler
 import androidx.annotation.DrawableRes
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.clickable
@@ -21,8 +20,9 @@ import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ShortNavigationBar
+import androidx.compose.material3.ShortNavigationBarItem
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -71,7 +71,7 @@ fun AppShell(
                     NoticeHost(Modifier.align(Alignment.BottomCenter))
                 }
                 if (!wide || !hasPlayback) miniPlayer { playerOpen = true }
-                NavigationBar {
+                ShortNavigationBar {
                     TabItem(nav, Tab.Home, R.drawable.ic_home, R.drawable.ic_home_outline, stringResource(R.string.nav_home))
                     TabItem(nav, Tab.Search, R.drawable.ic_search, R.drawable.ic_search_outline, stringResource(R.string.nav_search))
                     TabItem(nav, Tab.Library, R.drawable.ic_library, R.drawable.ic_library_outline, stringResource(R.string.nav_library))
@@ -87,8 +87,8 @@ fun AppShell(
         }
         AnimatedVisibility(
             visible = playerOpen,
-            enter = slideInVertically(tween(300)) { it },
-            exit = slideOutVertically(tween(250)) { it },
+            enter = slideInVertically(MaterialTheme.motionScheme.defaultSpatialSpec()) { it },
+            exit = slideOutVertically(MaterialTheme.motionScheme.fastSpatialSpec()) { it },
         ) {
             BackHandler { playerOpen = false }
             // 下の画面に触れないよう、全面で受け止める
@@ -105,7 +105,7 @@ private val PANEL_MIN_WIDTH = 340.dp
 private val PANEL_MAX_WIDTH = 440.dp
 
 @Composable
-private fun androidx.compose.foundation.layout.RowScope.TabItem(
+private fun TabItem(
     nav: AppNavigator,
     tab: Tab,
     @DrawableRes selectedIcon: Int,
@@ -113,7 +113,7 @@ private fun androidx.compose.foundation.layout.RowScope.TabItem(
     label: String,
 ) {
     val selected = nav.tab == tab
-    NavigationBarItem(
+    ShortNavigationBarItem(
         selected = selected,
         onClick = { nav.select(tab) },
         icon = { Icon(painterResource(if (selected) selectedIcon else icon), contentDescription = null) },

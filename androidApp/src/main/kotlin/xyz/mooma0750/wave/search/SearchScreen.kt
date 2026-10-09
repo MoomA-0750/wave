@@ -22,7 +22,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -269,7 +269,7 @@ private fun Results(
             SearchTab.Albums -> pagedItems(state.albums, { "al-$it-" }, { viewModel.loadMore(SearchTab.Albums) }) { AlbumRow(it) { openAlbum(it) } }
             SearchTab.Artists -> pagedItems(state.artists, { "ar-$it-" }, { viewModel.loadMore(SearchTab.Artists) }) { ArtistRow(it) { openArtist(it) } }
         }
-        if (state.loading) item { CircularProgressIndicator(Modifier.padding(16.dp)) }
+        if (state.loading) item { LoadingIndicator(Modifier.padding(16.dp)) }
     }
 }
 
@@ -286,7 +286,7 @@ private fun <T> LazyListScope.pagedItems(
             LaunchedEffect(list.items.size) { loadMore() }
         }
     }
-    if (list.loadingMore) item { CircularProgressIndicator(Modifier.padding(16.dp)) }
+    if (list.loadingMore) item { LoadingIndicator(Modifier.padding(16.dp)) }
     if (list.failure != null && list.items.isEmpty()) item { Text(failureMessage(list.failure), Modifier.padding(16.dp)) }
 }
 

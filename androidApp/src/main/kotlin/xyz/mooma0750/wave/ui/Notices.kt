@@ -7,7 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarDefaults
 import androidx.compose.material3.Surface
@@ -21,6 +21,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -55,7 +57,7 @@ fun NoticeHost(modifier: Modifier = Modifier) {
     SnackbarHost(state, modifier) { data ->
         val remaining = remember(data) { Animatable(1f) }
         LaunchedEffect(data) {
-            remaining.animateTo(0f, tween(Notices.DURATION_MS, easing = LinearEasing))
+            remaining.animateTo(0f, tween(Notices.DURATION_MS, easing = LinearEasing)) // m3e-allow: 消えるまでの残り時間を一定の速さで減らすタイマーで、画面の動きの演出ではない
             data.dismiss()
         }
         // スナックバーと同じ色・形の箱を自分で組み、バーは中の余白ではなく箱の下の縁に沿わせる
@@ -68,14 +70,18 @@ fun NoticeHost(modifier: Modifier = Modifier) {
         ) {
             Column {
                 Text(data.visuals.message, Modifier.padding(horizontal = 16.dp, vertical = 14.dp), style = MaterialTheme.typography.bodyMedium)
-                LinearProgressIndicator(
+                // 箱の下の縁に沿わせる細いバーなので、波は付けず平らなまま減らす
+                val barStroke = Stroke(width = with(LocalDensity.current) { 3.dp.toPx() }, cap = StrokeCap.Butt)
+                LinearWavyProgressIndicator(
                     progress = { remaining.value },
                     modifier = Modifier.fillMaxWidth().height(3.dp),
                     color = MaterialTheme.colorScheme.inversePrimary,
                     trackColor = Color.Transparent,
-                    drawStopIndicator = {},
+                    stroke = barStroke,
+                    trackStroke = barStroke,
                     gapSize = 0.dp,
-                    strokeCap = StrokeCap.Butt,
+                    stopSize = 0.dp,
+                    amplitude = { 0f },
                 )
             }
         }

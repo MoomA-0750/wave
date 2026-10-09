@@ -21,7 +21,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
@@ -289,7 +289,7 @@ fun ArtistScreen(
     ) {
         when {
             state.failure != null -> item { Text(failureMessage(state.failure), Modifier.padding(16.dp)) }
-            page == null -> item { CircularProgressIndicator(Modifier.padding(16.dp)) }
+            page == null -> item { LoadingIndicator(Modifier.padding(16.dp)) }
             else -> {
                 // 最近の新作（登録したアーティストの見張りで見つけたもの）
                 if (newReleases.isNotEmpty()) {
@@ -406,7 +406,7 @@ fun AlbumScreen(
     ) {
         when {
             state.failure != null -> item { Text(failureMessage(state.failure), Modifier.padding(16.dp)) }
-            page == null -> item { CircularProgressIndicator(Modifier.padding(16.dp)) }
+            page == null -> item { LoadingIndicator(Modifier.padding(16.dp)) }
             page.songs.isEmpty() -> item { Text(stringResource(R.string.artist_no_songs), Modifier.padding(16.dp)) }
             else ->
                 itemsIndexed(page.songs, key = { index, song -> "$index-${song.videoId}" }) { index, song ->

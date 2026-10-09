@@ -8,7 +8,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LoadingIndicator
 import xyz.mooma0750.wave.ui.WaveTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -393,7 +393,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun Progress(message: String? = null) {
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-        CircularProgressIndicator()
+        LoadingIndicator()
         if (message != null) Text(message)
     }
 }

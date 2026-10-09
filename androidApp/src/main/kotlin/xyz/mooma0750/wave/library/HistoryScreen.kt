@@ -5,7 +5,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -142,7 +142,7 @@ fun HistoryScreen(
                 }
                 if (index == rows.lastIndex && state.continuation != null) LaunchedEffect(rows.size) { viewModel.loadMore() }
             }
-            if (state.loading) item { CircularProgressIndicator(Modifier.padding(16.dp)) }
+            if (state.loading) item { LoadingIndicator(Modifier.padding(16.dp)) }
         }
     }
 }
