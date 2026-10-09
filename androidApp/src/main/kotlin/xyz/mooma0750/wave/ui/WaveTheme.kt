@@ -16,7 +16,9 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.MaterialExpressiveTheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MotionScheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -42,12 +44,12 @@ import coil3.toBitmap
 import xyz.mooma0750.wave.R
 import androidx.compose.ui.res.stringResource
 
-/** 端末の壁紙から作った色（Material You）で、ダークモードにも従う。minSdk 31 なので常に使える。 */
+/** 端末の壁紙から作った色（Material You）で、ダークモードにも従う。minSdk 31 なので常に使える。動きは Expressive のばね。 */
 @Composable
 fun WaveTheme(content: @Composable () -> Unit) {
     val context = LocalContext.current
     val colorScheme = if (isSystemInDarkTheme()) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-    MaterialTheme(colorScheme = colorScheme) {
+    MaterialExpressiveTheme(colorScheme = colorScheme, motionScheme = MotionScheme.expressive()) {
         // 画面の下地と文字の色をテーマに合わせる（Scaffold の外に出る文字も読めるように）
         Surface(color = MaterialTheme.colorScheme.background, content = content)
     }

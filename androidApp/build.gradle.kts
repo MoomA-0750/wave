@@ -38,6 +38,10 @@ android {
 
 kotlin {
     jvmToolchain(21)
+    compilerOptions {
+        // 画面は Material 3 Expressive で作る（AGENTS.md）。Expressive の部品はまだ実験扱いなので、モジュール全体で opt-in する
+        optIn.add("androidx.compose.material3.ExperimentalMaterial3ExpressiveApi")
+    }
 }
 
 dependencies {
