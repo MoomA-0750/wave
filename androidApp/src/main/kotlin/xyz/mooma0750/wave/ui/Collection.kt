@@ -36,7 +36,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import xyz.mooma0750.wave.R
@@ -88,8 +87,7 @@ fun CollectionScreen(
                             Text(
                                 title,
                                 Modifier.weight(1f),
-                                style = MaterialTheme.typography.displaySmall,
-                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.displaySmallEmphasized,
                                 maxLines = 2,
                                 overflow = TextOverflow.Ellipsis,
                             )
@@ -118,7 +116,7 @@ fun CollectionScreen(
                                     contentScale = ContentScale.Crop,
                                 )
                                 Column(Modifier.padding(start = 24.dp).weight(1f)) {
-                                    Text(title, style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                    Text(title, style = MaterialTheme.typography.displaySmallEmphasized, maxLines = 2, overflow = TextOverflow.Ellipsis)
                                     Spacer(Modifier.height(8.dp))
                                     details()
                                 }
@@ -131,7 +129,7 @@ fun CollectionScreen(
                                     modifier = Modifier.padding(vertical = 12.dp).size(240.dp).align(Alignment.CenterHorizontally).clip(coverShape),
                                     contentScale = ContentScale.Crop,
                                 )
-                                Text(title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                Text(title, style = MaterialTheme.typography.headlineSmallEmphasized, maxLines = 2, overflow = TextOverflow.Ellipsis)
                                 Spacer(Modifier.height(4.dp))
                                 details()
                             }

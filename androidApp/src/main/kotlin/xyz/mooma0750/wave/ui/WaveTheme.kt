@@ -48,7 +48,7 @@ import androidx.compose.ui.res.stringResource
 fun WaveTheme(content: @Composable () -> Unit) {
     val context = LocalContext.current
     val colorScheme = if (isSystemInDarkTheme()) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-    MaterialExpressiveTheme(colorScheme = colorScheme, motionScheme = MotionScheme.expressive()) {
+    MaterialExpressiveTheme(colorScheme = colorScheme, motionScheme = MotionScheme.expressive(), typography = WaveTypography) {
         // 画面の下地と文字の色をテーマに合わせる（Scaffold の外に出る文字も読めるように）
         Surface(color = MaterialTheme.colorScheme.background, content = content)
     }

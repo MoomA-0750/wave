@@ -76,7 +76,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.media3.session.MediaController
@@ -140,7 +139,7 @@ fun MiniPlayer(
                     contentScale = androidx.compose.ui.layout.ContentScale.Crop,
                 )
                 Column(Modifier.weight(1f).padding(horizontal = 10.dp)) {
-                    Text(state.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                    Text(state.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMediumEmphasized)
                     val remote = display.remote
                     if (remote != null) {
                         // Spotify と同じく、鳴らしている端末を色を付けて出す
@@ -148,9 +147,8 @@ fun MiniPlayer(
                             stringResource(R.string.nowplaying_playing_on, remote.deviceLabel),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
-                            style = MaterialTheme.typography.bodySmall,
+                            style = MaterialTheme.typography.bodySmallEmphasized,
                             color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.SemiBold,
                         )
                     } else {
                         Text(
@@ -285,7 +283,7 @@ fun NowPlayingScreen(
                     .padding(top = 56.dp, bottom = 24.dp, end = 24.dp),
                 colors = CardDefaults.cardColors(containerColor = lerp(MaterialTheme.colorScheme.surfaceContainerHigh, art, 0.5f)),
             ) {
-                Text(stringResource(R.string.nowplaying_lyrics), Modifier.padding(start = 20.dp, top = 16.dp), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.nowplaying_lyrics), Modifier.padding(start = 20.dp, top = 16.dp), style = MaterialTheme.typography.titleMediumEmphasized)
                 LyricsPanel(song, display.clock, lyrics, Modifier.fillMaxSize().padding(horizontal = 12.dp))
             }
         }
@@ -364,8 +362,7 @@ fun NowPlayingScreen(
                     val album = song?.album?.takeIf { it.browseId != null }
                     Text(
                         state.title.orEmpty(),
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.titleLargeEmphasized,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.then(if (album != null) Modifier.clickable { actions.openAlbum(album) } else Modifier),
@@ -451,9 +448,8 @@ fun NowPlayingScreen(
                     if (remote != null) {
                         Text(
                             stringResource(R.string.nowplaying_playing_on, remote.deviceLabel),
-                            style = MaterialTheme.typography.bodySmall,
+                            style = MaterialTheme.typography.bodySmallEmphasized,
                             color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.SemiBold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
@@ -468,7 +464,7 @@ fun NowPlayingScreen(
                     colors = CardDefaults.cardColors(containerColor = lerp(MaterialTheme.colorScheme.surfaceContainerHigh, art, 0.35f)),
                 ) {
                     Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text(stringResource(R.string.nowplaying_next_up), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                        Text(stringResource(R.string.nowplaying_next_up), style = MaterialTheme.typography.titleMediumEmphasized, modifier = Modifier.weight(1f))
                         TextButton(onClick = { showQueue = true }) { Text(stringResource(R.string.nowplaying_open_queue)) }
                     }
                     Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -479,7 +475,7 @@ fun NowPlayingScreen(
                             contentScale = androidx.compose.ui.layout.ContentScale.Crop,
                         )
                         Column(Modifier.padding(start = 12.dp)) {
-                            Text(next.title, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.SemiBold)
+                            Text(next.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyLargeEmphasized)
                             Text(next.artist, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
@@ -495,7 +491,7 @@ fun NowPlayingScreen(
                     colors = CardDefaults.cardColors(containerColor = lerp(MaterialTheme.colorScheme.surfaceContainerHigh, art, 0.5f)),
                 ) {
                     Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text(stringResource(R.string.nowplaying_lyrics), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                        Text(stringResource(R.string.nowplaying_lyrics), style = MaterialTheme.typography.titleMediumEmphasized, modifier = Modifier.weight(1f))
                         IconAction(R.drawable.ic_lyrics, stringResource(R.string.nowplaying_lyrics_open_full), { showLyrics = true })
                     }
                     LyricsPanel(song, display.clock, lyrics, Modifier.fillMaxWidth().height(320.dp).padding(horizontal = 8.dp))
@@ -514,7 +510,7 @@ fun NowPlayingScreen(
 
     if (showLyrics && song != null) {
         ModalBottomSheet(onDismissRequest = { showLyrics = false }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
-            Text(state.title.orEmpty(), Modifier.padding(horizontal = 24.dp), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(state.title.orEmpty(), Modifier.padding(horizontal = 24.dp), style = MaterialTheme.typography.titleMediumEmphasized)
             Text(state.artist.orEmpty(), Modifier.padding(horizontal = 24.dp), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             LyricsPanel(song, display.clock, lyrics, Modifier.fillMaxWidth().fillMaxHeight(0.85f).padding(8.dp))
         }
@@ -658,7 +654,7 @@ private fun QueueSheet(
                     contentScale = androidx.compose.ui.layout.ContentScale.Crop,
                 )
                 Column(Modifier.weight(1f).padding(start = 12.dp)) {
-                    Text(row.title, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal, color = if (isCurrent) MaterialTheme.colorScheme.primary else Color.Unspecified)
+                    Text(row.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = if (isCurrent) MaterialTheme.typography.bodyLargeEmphasized else MaterialTheme.typography.bodyLarge, color = if (isCurrent) MaterialTheme.colorScheme.primary else Color.Unspecified)
                     Text(row.artist, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 controller?.let { c ->
@@ -724,7 +720,7 @@ private fun QueueSheet(
             trailing: @Composable () -> Unit = {},
         ) {
             Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(text, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(text, Modifier.weight(1f), style = MaterialTheme.typography.titleMediumEmphasized)
                 trailing()
             }
         }

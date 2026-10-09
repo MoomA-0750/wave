@@ -74,7 +74,7 @@ fun AiChatSheet(
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(Modifier.fillMaxWidth().fillMaxHeight(0.9f).imePadding().navigationBarsPadding()) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(stringResource(R.string.ai_title), Modifier.weight(1f), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.ai_title), Modifier.weight(1f), style = MaterialTheme.typography.titleLargeEmphasized)
                 if (state.messages.isNotEmpty()) TextButton(onClick = chat::clear) { Text(stringResource(R.string.ai_new_chat)) }
             }
             if (state.running) LinearWavyProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 16.dp))
@@ -141,9 +141,9 @@ internal fun markdownText(text: String): androidx.compose.ui.text.AnnotatedStrin
             if (index > 0) append('\n')
             val heading = Regex("^#{1,6}\\s+").find(raw)
             val line = if (heading != null) raw.substring(heading.value.length) else raw
-            if (heading != null) pushStyle(androidx.compose.ui.text.SpanStyle(fontWeight = FontWeight.Bold))
+            if (heading != null) pushStyle(androidx.compose.ui.text.SpanStyle(fontWeight = FontWeight.Bold)) // m3e-allow: AI の返答の Markdown の見出し（文の中の一部の太字）
             line.split("**").forEachIndexed { part, piece ->
-                if (part % 2 == 1) withStyle(androidx.compose.ui.text.SpanStyle(fontWeight = FontWeight.Bold)) { append(piece) } else append(piece)
+                if (part % 2 == 1) withStyle(androidx.compose.ui.text.SpanStyle(fontWeight = FontWeight.Bold)) { append(piece) } else append(piece) // m3e-allow: AI の返答の Markdown の **太字**
             }
             if (heading != null) pop()
         }

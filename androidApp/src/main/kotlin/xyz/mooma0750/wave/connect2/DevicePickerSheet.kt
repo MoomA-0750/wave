@@ -23,7 +23,6 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -46,7 +45,7 @@ fun DevicePickerSheet(
     val remote by manager.remotePlayback.collectAsStateWithLifecycle()
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = 8.dp)) {
-            Text(stringResource(R.string.devices_current), Modifier.padding(horizontal = 24.dp, vertical = 8.dp), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.devices_current), Modifier.padding(horizontal = 24.dp, vertical = 8.dp), style = MaterialTheme.typography.titleMediumEmphasized)
             val playing = remote
             if (playing == null) {
                 DeviceRow(R.drawable.ic_smartphone, stringResource(R.string.devices_this_phone), null, current = true, enabled = true, onClick = null)
@@ -68,7 +67,7 @@ fun DevicePickerSheet(
                         .filter { it.role == Role.Player && if (playing == null) !it.isSelf else it.deviceId != playing.deviceId }
                         .sortedWith(compareByDescending<ConnectV2Manager.MemberView> { it.isSelf }.thenByDescending { it.online })
                 if (others.isNotEmpty()) {
-                    Text(stringResource(R.string.devices_select_another), Modifier.padding(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 8.dp), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.devices_select_another), Modifier.padding(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 8.dp), style = MaterialTheme.typography.titleMediumEmphasized)
                     for (member in others) {
                         if (member.isSelf) {
                             DeviceRow(R.drawable.ic_smartphone, stringResource(R.string.devices_this_phone), null, current = false, enabled = true) {
@@ -113,7 +112,7 @@ private fun DeviceRow(
     ) {
         Icon(painterResource(icon), null, Modifier.size(28.dp), tint = if (current) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
         Column(Modifier.padding(start = 16.dp)) {
-            Text(title, color = accent, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(title, color = accent, style = MaterialTheme.typography.bodyLargeEmphasized, maxLines = 1, overflow = TextOverflow.Ellipsis)
             subtitle?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis) }
         }
     }

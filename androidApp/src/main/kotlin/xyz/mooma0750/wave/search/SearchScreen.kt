@@ -305,7 +305,7 @@ private fun TopResult(
     ) {
         Column(Modifier.padding(16.dp)) {
             coil3.compose.AsyncImage(model = thumbnailUrl, contentDescription = null, modifier = Modifier.size(96.dp).clip(shape), contentScale = ContentScale.Crop)
-            Text(title, Modifier.padding(top = 12.dp), style = MaterialTheme.typography.headlineSmall, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(title, Modifier.padding(top = 12.dp), style = MaterialTheme.typography.headlineSmallEmphasized, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Text(detail, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }

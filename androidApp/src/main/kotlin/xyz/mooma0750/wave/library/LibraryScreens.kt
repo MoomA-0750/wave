@@ -41,7 +41,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -222,7 +221,7 @@ private fun SortRow(
             PlaylistSort.entries.filter { it == PlaylistSort.Custom || it == PlaylistSort.Duration || sortable }.forEach { sort ->
                 val selected = sort == order.sort
                 DropdownMenuItem(
-                    text = { Text(sortLabel(sort), fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal, color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface) },
+                    text = { Text(sortLabel(sort), style = if (selected) MaterialTheme.typography.labelLargeEmphasized else MaterialTheme.typography.labelLarge, color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface) },
                     trailingIcon = {
                         if (selected) MenuIcon(if (order.descending) R.drawable.ic_arrow_downward else R.drawable.ic_arrow_upward)
                     },

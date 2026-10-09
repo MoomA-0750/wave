@@ -34,6 +34,8 @@ report 'MaterialTheme(...) でテーマを張っている → MaterialExpressive
   '(^|[^.A-Za-z])MaterialTheme[[:space:]]*[({]' 0
 report 'tween / 自前の spring → MaterialTheme.motionScheme.*Spec()' \
   '(^|[^A-Za-z.])(tween|spring)[[:space:]]*[(<]' 0
+report '太字の直書き → MaterialTheme.typography.*Emphasized' \
+  'fontWeight[[:space:]]*=[^,)]*FontWeight\.(SemiBold|Bold|ExtraBold|Black)' 1
 report '色の直書き → MaterialTheme.colorScheme' \
   '(^|[^A-Za-z])Color\(0x' 1
 report '角丸の直書き → MaterialTheme.shapes / MaterialShapes' \

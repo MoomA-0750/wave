@@ -32,7 +32,6 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -98,7 +97,7 @@ fun SearchBrowseScreen(
     val columns = (LocalConfiguration.current.screenWidthDp / 200).coerceIn(2, 6)
     LazyColumn(Modifier.fillMaxSize()) {
         item {
-            Text(stringResource(R.string.search_title), Modifier.statusBarsPadding().padding(start = 16.dp, top = 16.dp, bottom = 12.dp), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.search_title), Modifier.statusBarsPadding().padding(start = 16.dp, top = 16.dp, bottom = 12.dp), style = MaterialTheme.typography.headlineMediumEmphasized)
         }
         // 上に留めると Spotify のように見出しの下で止まるが、ここでは並びだけを合わせる
         item {
@@ -126,7 +125,7 @@ fun SearchBrowseScreen(
         }
         state.sections.forEach { section ->
             item {
-                Text(section.title, Modifier.padding(start = 16.dp, top = 24.dp, bottom = 12.dp), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(section.title, Modifier.padding(start = 16.dp, top = 24.dp, bottom = 12.dp), style = MaterialTheme.typography.titleMediumEmphasized)
             }
             section.categories.chunked(columns).forEach { row ->
                 item {
@@ -156,7 +155,7 @@ private fun MoodTile(
         colors = CardDefaults.cardColors(containerColor = lerp(MaterialTheme.colorScheme.surfaceContainerHigh, accent, 0.55f)),
     ) {
         Box(Modifier.fillMaxSize().padding(12.dp)) {
-            Text(category.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color.White)
+            Text(category.title, style = MaterialTheme.typography.titleMediumEmphasized, color = Color.White)
         }
     }
 }

@@ -116,8 +116,8 @@ private fun SyncedLyrics(
             val scale by animateFloatAsState(if (isCurrent) 1f else 0.96f, MaterialTheme.motionScheme.defaultSpatialSpec(), label = "lyric-scale")
             Text(
                 line.text.ifBlank { "♪" },
-                style = if (isSub) MaterialTheme.typography.bodyLarge else MaterialTheme.typography.titleLarge,
-                fontWeight = if (isSub) FontWeight.Medium else FontWeight.Bold,
+                style = if (isSub) MaterialTheme.typography.bodyLarge else MaterialTheme.typography.titleLargeEmphasized,
+                fontWeight = if (isSub) FontWeight.Medium else null,
                 color = color,
                 modifier =
                     Modifier

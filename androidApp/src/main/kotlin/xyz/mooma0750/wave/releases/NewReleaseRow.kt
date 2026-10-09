@@ -19,7 +19,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import xyz.mooma0750.wave.R
@@ -58,7 +57,7 @@ fun NewReleaseRow(
     if (releases.isEmpty()) return
     val now = System.currentTimeMillis()
     Column(Modifier.padding(top = 12.dp)) {
-        Text(title, Modifier.padding(horizontal = 16.dp), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        Text(title, Modifier.padding(horizontal = 16.dp), style = MaterialTheme.typography.titleLargeEmphasized)
         LazyRow(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             items(releases, key = { it.albumBrowseId ?: it.videoId ?: it.title }) { release ->
                 Column(Modifier.width(140.dp).clickable { openRelease(release, actions, onPlaySong) }) {
@@ -71,7 +70,7 @@ fun NewReleaseRow(
                         )
                         if (!release.seeded && now - release.foundAtEpochMs < NEW_BADGE_MS) {
                             Surface(Modifier.align(Alignment.TopStart).padding(6.dp), shape = MaterialTheme.shapes.extraSmall, color = MaterialTheme.colorScheme.primary) {
-                                Text(stringResource(R.string.releases_new_badge), Modifier.padding(horizontal = 6.dp, vertical = 2.dp), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                                Text(stringResource(R.string.releases_new_badge), Modifier.padding(horizontal = 6.dp, vertical = 2.dp), style = MaterialTheme.typography.labelSmallEmphasized)
                             }
                         }
                     }

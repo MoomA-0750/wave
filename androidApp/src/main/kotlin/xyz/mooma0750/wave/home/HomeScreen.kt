@@ -39,7 +39,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -164,8 +163,7 @@ private fun RecentGrid(
                                 Modifier.padding(horizontal = 8.dp),
                                 maxLines = 2,
                                 overflow = TextOverflow.Ellipsis,
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.SemiBold,
+                                style = MaterialTheme.typography.labelLargeEmphasized,
                             )
                         }
                     }

@@ -39,7 +39,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
@@ -347,7 +346,7 @@ fun ArtistScreen(
 
 @Composable
 private fun SectionTitle(text: String) {
-    Text(text, Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+    Text(text, Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp), style = MaterialTheme.typography.titleLargeEmphasized)
 }
 
 @Composable
@@ -392,8 +391,7 @@ fun AlbumScreen(
                 val artist = album.artists.firstOrNull()
                 Text(
                     album.artists.joinToString(", ") { it.name },
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.titleSmallEmphasized,
                     modifier = Modifier.then(if (artist?.browseId != null) Modifier.clickable { actions.openArtist(artist) } else Modifier),
                 )
                 val count = pluralStringResource(R.plurals.library_song_count, album.songs.size, album.songs.size)
