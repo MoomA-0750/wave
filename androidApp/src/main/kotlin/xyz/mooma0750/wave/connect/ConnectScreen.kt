@@ -1,5 +1,7 @@
 package xyz.mooma0750.wave.connect
 
+import xyz.mooma0750.wave.ui.ActionButtonGroup
+import xyz.mooma0750.wave.ui.GroupAction
 import xyz.mooma0750.wave.ui.BackButton
 import android.Manifest
 import android.content.pm.PackageManager
@@ -17,7 +19,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -142,19 +143,23 @@ fun ConnectScreen(
                         list.forEach { pair ->
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Text(pair.peerName, Modifier.weight(1f))
-                                Button(enabled = takingFrom == null && !checking, onClick = {
-                                    checking = true
-                                    scope.launch {
-                                        try {
-                                            // 手元で再生中なら、置き換える前に確かめる
-                                            val playing = container.player.controller().isPlaying
-                                            if (playing) confirmTakeOver = pair else startTakeOver(pair)
-                                        } finally {
-                                            checking = false
-                                        }
-                                    }
-                                }) { Text(stringResource(R.string.connect_take_over)) }
-                                OutlinedButton(onClick = { confirmUnpair = pair }) { Text(stringResource(R.string.connect_unpair)) }
+                                ActionButtonGroup(
+                                    listOf(
+                                        GroupAction(stringResource(R.string.connect_take_over), primary = true, enabled = takingFrom == null && !checking) {
+                                            checking = true
+                                            scope.launch {
+                                                try {
+                                                    // 手元で再生中なら、置き換える前に確かめる
+                                                    val playing = container.player.controller().isPlaying
+                                                    if (playing) confirmTakeOver = pair else startTakeOver(pair)
+                                                } finally {
+                                                    checking = false
+                                                }
+                                            }
+                                        },
+                                        GroupAction(stringResource(R.string.connect_unpair)) { confirmUnpair = pair },
+                                    ),
+                                )
                             }
                         }
                     }
@@ -249,10 +254,12 @@ private fun PairingSection(
                 stringResource(R.string.connect_pairing_idle_hint),
                 style = MaterialTheme.typography.bodySmall,
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = onShowQr) { Text(stringResource(R.string.connect_show_qr)) }
-                OutlinedButton(onClick = onScan) { Text(stringResource(R.string.connect_scan_qr)) }
-            }
+            ActionButtonGroup(
+                listOf(
+                    GroupAction(stringResource(R.string.connect_show_qr), primary = true, onClick = onShowQr),
+                    GroupAction(stringResource(R.string.connect_scan_qr), onClick = onScan),
+                ),
+            )
         }
         is PairingController.State.Working -> {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -276,23 +283,27 @@ private fun PairingSection(
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(enabled = code.length == 6, onClick = {
-                    onEnterCode(code)
-                    code = ""
-                }) { Text(stringResource(R.string.connect_confirm)) }
-                OutlinedButton(onClick = onCancel) { Text(stringResource(R.string.connect_cancel)) }
-            }
+            ActionButtonGroup(
+                listOf(
+                    GroupAction(stringResource(R.string.connect_confirm), primary = true, enabled = code.length == 6) {
+                        onEnterCode(code)
+                        code = ""
+                    },
+                    GroupAction(stringResource(R.string.connect_cancel), onClick = onCancel),
+                ),
+            )
         }
         is PairingController.State.ShowCode -> {
             Text(stringResource(R.string.connect_show_code, state.peerName))
             state.message?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             Text(state.code.chunked(3).joinToString(" "), style = MaterialTheme.typography.displayMedium)
             Text(stringResource(R.string.connect_show_code_hint, state.peerName), style = MaterialTheme.typography.bodySmall)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = onContinue) { Text(stringResource(R.string.connect_continue)) }
-                OutlinedButton(onClick = onCancel) { Text(stringResource(R.string.connect_cancel)) }
-            }
+            ActionButtonGroup(
+                listOf(
+                    GroupAction(stringResource(R.string.connect_continue), primary = true, onClick = onContinue),
+                    GroupAction(stringResource(R.string.connect_cancel), onClick = onCancel),
+                ),
+            )
         }
         is PairingController.State.Done -> {
             Text(stringResource(R.string.connect_paired_with, state.peerName))

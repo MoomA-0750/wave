@@ -1,5 +1,7 @@
 package xyz.mooma0750.wave.connect2
 
+import xyz.mooma0750.wave.ui.ActionButtonGroup
+import xyz.mooma0750.wave.ui.GroupAction
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
@@ -134,13 +136,15 @@ fun ConnectV2Section(container: AppContainer) {
 
     if (!info.inHousehold && info.loaded) {
         Text(stringResource(R.string.connect_v2_household_hint), style = MaterialTheme.typography.bodySmall)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { manager.createHousehold() }) { Text(stringResource(R.string.connect_v2_create_household)) }
-            OutlinedButton(onClick = {
-                pairing.cancel()
-                if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) scanning = true else cameraPermission.launch(Manifest.permission.CAMERA)
-            }) { Text(stringResource(R.string.connect_v2_scan_to_join)) }
-        }
+        ActionButtonGroup(
+            listOf(
+                GroupAction(stringResource(R.string.connect_v2_create_household)) { manager.createHousehold() },
+                GroupAction(stringResource(R.string.connect_v2_scan_to_join)) {
+                    pairing.cancel()
+                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) scanning = true else cameraPermission.launch(Manifest.permission.CAMERA)
+                },
+            ),
+        )
     } else if (info.inHousehold) {
         OutlinedButton(onClick = { pairing.startOffer() }) { Text(stringResource(R.string.connect_v2_add_device)) }
         Text(stringResource(R.string.connect_v2_household_devices), style = MaterialTheme.typography.bodyMedium)
@@ -168,38 +172,44 @@ fun ConnectV2Section(container: AppContainer) {
         is PairingV2Controller.State.ShowingOffer -> {
             Text(stringResource(R.string.connect_v2_offer_hint), style = MaterialTheme.typography.bodySmall)
             QrImage(state.offerText, Modifier.fillMaxWidth().aspectRatio(1f))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                // カメラの無い PC で加えるとき: QR と同じ文字列を共有して、PC の wave に貼り付けてもらう（秘密は載っていない。照合は6桁で行う）
-                OutlinedButton(onClick = {
-                    val send =
-                        android.content.Intent(android.content.Intent.ACTION_SEND)
-                            .setType("text/plain")
-                            .putExtra(android.content.Intent.EXTRA_TEXT, state.offerText)
-                    context.startActivity(android.content.Intent.createChooser(send, null))
-                }) { Text(stringResource(R.string.connect_v2_share_offer)) }
-                OutlinedButton(onClick = { pairing.cancel() }) { Text(stringResource(R.string.connect_cancel)) }
-            }
+            ActionButtonGroup(
+                listOf(
+                    // カメラの無い PC で加えるとき: QR と同じ文字列を共有して、PC の wave に貼り付けてもらう（秘密は載っていない。照合は6桁で行う）
+                    GroupAction(stringResource(R.string.connect_v2_share_offer)) {
+                        val send =
+                            android.content.Intent(android.content.Intent.ACTION_SEND)
+                                .setType("text/plain")
+                                .putExtra(android.content.Intent.EXTRA_TEXT, state.offerText)
+                        context.startActivity(android.content.Intent.createChooser(send, null))
+                    },
+                    GroupAction(stringResource(R.string.connect_cancel)) { pairing.cancel() },
+                ),
+            )
         }
         is PairingV2Controller.State.EnterCode -> {
             var code by remember { mutableStateOf("") }
             Text(stringResource(R.string.connect_v2_enter_code))
             state.message?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             OutlinedTextField(value = code, onValueChange = { value -> code = value.filter { it.isDigit() }.take(6) }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(enabled = code.length == 6, onClick = {
-                    pairing.enterCode(code)
-                    code = ""
-                }) { Text(stringResource(R.string.connect_confirm)) }
-                OutlinedButton(onClick = { pairing.cancel() }) { Text(stringResource(R.string.connect_cancel)) }
-            }
+            ActionButtonGroup(
+                listOf(
+                    GroupAction(stringResource(R.string.connect_confirm), primary = true, enabled = code.length == 6) {
+                        pairing.enterCode(code)
+                        code = ""
+                    },
+                    GroupAction(stringResource(R.string.connect_cancel)) { pairing.cancel() },
+                ),
+            )
         }
         is PairingV2Controller.State.ShowCode -> {
             Text(stringResource(R.string.connect_show_code, state.peerName))
             Text(state.code.chunked(3).joinToString(" "), style = MaterialTheme.typography.displayMedium)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = { pairing.confirmOnB() }) { Text(stringResource(R.string.connect_v2_continue_after_entering)) }
-                OutlinedButton(onClick = { pairing.cancel() }) { Text(stringResource(R.string.connect_cancel)) }
-            }
+            ActionButtonGroup(
+                listOf(
+                    GroupAction(stringResource(R.string.connect_v2_continue_after_entering), primary = true) { pairing.confirmOnB() },
+                    GroupAction(stringResource(R.string.connect_cancel)) { pairing.cancel() },
+                ),
+            )
         }
         is PairingV2Controller.State.Done -> {
             Text(stringResource(R.string.connect_v2_joined, state.peerName))
