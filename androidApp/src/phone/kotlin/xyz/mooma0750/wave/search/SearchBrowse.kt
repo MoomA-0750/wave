@@ -53,35 +53,6 @@ import xyz.mooma0750.wave.home.homeFeedItems
 import xyz.mooma0750.wave.navigation.SongActions
 import xyz.mooma0750.wave.ui.BackButton
 import xyz.mooma0750.wave.ui.IconTextButton
-
-data class MoodsUiState(
-    val sections: List<MoodSection> = emptyList(),
-    val loading: Boolean = true,
-    val failure: FailureKind? = null,
-)
-
-class MoodsViewModel(
-    private val music: MusicRepository,
-) : ViewModel() {
-    private val mutableState = MutableStateFlow(MoodsUiState())
-    val state: StateFlow<MoodsUiState> = mutableState.asStateFlow()
-
-    init {
-        refresh()
-    }
-
-    fun refresh() {
-        mutableState.value = MoodsUiState()
-        viewModelScope.launch {
-            mutableState.value =
-                when (val result = music.moods()) {
-                    is CallResult.Ok -> MoodsUiState(result.value, loading = false)
-                    is CallResult.Failed -> MoodsUiState(loading = false, failure = result.kind)
-                }
-        }
-    }
-}
-
 /**
  * 検索のタブの最初の画面（並びは Spotify と同じ）: 大きな見出し、押すと検索の画面を開く検索欄、
  * 気分・ジャンルの色のタイルの2列の格子。
@@ -156,29 +127,6 @@ private fun MoodTile(
     ) {
         Box(Modifier.fillMaxSize().padding(12.dp)) {
             Text(category.title, style = MaterialTheme.typography.titleMediumEmphasized, color = Color.White)
-        }
-    }
-}
-
-class MoodCategoryViewModel(
-    private val music: MusicRepository,
-    private val params: String,
-) : ViewModel() {
-    private val mutableState = MutableStateFlow(HomeFeedUiState())
-    val state: StateFlow<HomeFeedUiState> = mutableState.asStateFlow()
-
-    init {
-        refresh()
-    }
-
-    fun refresh() {
-        mutableState.value = HomeFeedUiState()
-        viewModelScope.launch {
-            mutableState.value =
-                when (val result = music.moodCategory(params)) {
-                    is CallResult.Ok -> HomeFeedUiState(shelves = result.value.shelves, loading = false)
-                    is CallResult.Failed -> HomeFeedUiState(loading = false, failure = result.kind)
-                }
         }
     }
 }
