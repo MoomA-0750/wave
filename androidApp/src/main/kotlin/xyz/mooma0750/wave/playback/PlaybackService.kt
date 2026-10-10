@@ -147,9 +147,6 @@ class PlaybackService : MediaSessionService() {
 
     private lateinit var container: AppContainer
 
-    /** 時計で動いているか（Wear OS 版）。 */
-    private val isWatch: Boolean get() = packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_WATCH)
-
     override fun onCreate() {
         super.onCreate()
         container = (application as WaveApplication).container
@@ -164,8 +161,9 @@ class PlaybackService : MediaSessionService() {
                     true,
                 ).setHandleAudioBecomingNoisy(true)
                 .setWakeMode(C.WAKE_MODE_NETWORK)
-                // 時計では、本体のスピーカーで鳴らさず、イヤホンが無ければ出力先を選ぶ画面を出す（Wear OS の決まり）
-                .setSuppressPlaybackOnUnsuitableOutput(isWatch)
+                // 時計でも本体のスピーカーで鳴らす（本人の希望。Galaxy Watch 7 はスピーカーを持つ）。イヤホンがつながっていればイヤホンへ流れる。
+                // Wear OS の既定（スピーカーでは鳴らさない）に戻すなら true にする
+                .setSuppressPlaybackOnUnsuitableOutput(false)
                 .build()
         val queueSession =
             QueueSession(

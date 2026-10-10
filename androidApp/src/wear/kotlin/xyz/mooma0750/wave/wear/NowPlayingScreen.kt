@@ -2,6 +2,7 @@ package xyz.mooma0750.wave.wear
 
 import android.content.Context
 import android.media.AudioManager
+import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
@@ -105,8 +106,20 @@ fun NowPlayingScreen(
                 .focusable(),
             contentAlignment = Alignment.Center,
         ) {
+            // 背景に今の曲のアートワーク（文字とボタンが読めるよう、上に暗い幕をかける）
+            song?.thumbnailUrl?.let { url ->
+                coil3.compose.AsyncImage(
+                    model = Media3QueuePlayer.largeArtwork(url),
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                )
+                androidx.compose.foundation.layout.Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background.copy(alpha = 0.6f)))
+            }
             val progress = if (state.durationMs > 0) (state.positionMs.toFloat() / state.durationMs).coerceIn(0f, 1f) else 0f
-            CircularProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxSize().padding(3.dp), strokeWidth = 5.dp)
+            // 部品は渡した関数の中で読んだ状態の変化だけを追うので、状態を通して渡す（値をそのまま渡すと最初の値のまま動かない）
+            val progressState = androidx.compose.runtime.rememberUpdatedState(progress)
+            CircularProgressIndicator(progress = { progressState.value }, modifier = Modifier.fillMaxSize().padding(3.dp), strokeWidth = 5.dp)
             // 回したら少しの間だけ音量を出す
             var showVolume by remember { mutableFloatStateOf(0f) }
             LaunchedEffect(volumeShownAt) {
