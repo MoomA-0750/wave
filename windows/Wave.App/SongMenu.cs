@@ -75,6 +75,23 @@ public static class SongMenu
         return item;
     }
 
+    /// <summary>プレイリストから曲を外す（同じ曲が2回入っていれば両方。追加の画面で、入っているプレイリストを押したとき。Android と同じ）。外せたか。</summary>
+    public static async Task<bool> RemoveAsync(PlaylistSummary playlist, Song song)
+    {
+        var membership = AppServices.Library.Membership;
+        var setIds = await membership.SetVideoIdsAsync(playlist.PlaylistId, song.VideoId);
+        var removed = setIds is { Count: > 0 };
+        if (removed)
+        {
+            foreach (var setId in setIds!) removed &= await AppServices.Music.RemoveFromPlaylistAsync(playlist.PlaylistId, song.VideoId, setId);
+            if (removed) membership.NoteRemoved(playlist.PlaylistId, song.VideoId);
+            else membership.Invalidate(playlist.PlaylistId);
+        }
+        AppPaths.Log($"playlist remove-song known={setIds is not null} removed={removed}");
+        AppServices.Player.Message = removed ? L.T($"「{playlist.Title}」から外しました", $"Removed from {playlist.Title}") : L.T("外せませんでした", "Couldn't remove it");
+        return removed;
+    }
+
     public static async Task<AddToPlaylistResult> AddAsync(PlaylistSummary playlist, Song song, bool knownEmpty = false)
     {
         var result = await AppServices.Music.AddToPlaylistAsync(playlist.PlaylistId, song.VideoId, knownEmpty);
@@ -95,7 +112,7 @@ public static class Dialogs
 {
     /// <summary>
     /// プレイリストに追加する画面（Android・Spotify と同じ）。先頭は「高く評価した曲」で、押すと評価を外す（評価済みのライクボタンから開く）。
-    /// プレイリストを押しても閉じず、続けてほかのプレイリストにも足せる（閉じるのは「完了」）。入っているプレイリストには右に✓を出す。
+    /// プレイリストを押しても閉じず、続けてほかのプレイリストにも足せる（閉じるのは「完了」）。入っているプレイリストには右に✓を出し、押すと外す（Android と同じ）。
     /// </summary>
     public static async Task AddToPlaylistAsync(Song song)
     {
@@ -155,12 +172,19 @@ public static class Dialogs
             Mark(row.Trailing, status);
             row.Button.Click += async (_, _) =>
             {
-                if (busy || status == PlaylistMembership.Status.In) return;
+                if (busy || status == PlaylistMembership.Status.Checking) return;
                 busy = true;
                 Mark(row.Trailing, status, busy: true);
-                var result = await SongMenu.AddAsync(playlist, song);
+                if (status == PlaylistMembership.Status.In)
+                {
+                    if (await SongMenu.RemoveAsync(playlist, song)) status = PlaylistMembership.Status.NotIn;
+                }
+                else
+                {
+                    var result = await SongMenu.AddAsync(playlist, song);
+                    if (result is AddToPlaylistResult.Added or AddToPlaylistResult.AlreadyInPlaylist) status = PlaylistMembership.Status.In;
+                }
                 busy = false;
-                if (result is AddToPlaylistResult.Added or AddToPlaylistResult.AlreadyInPlaylist) status = PlaylistMembership.Status.In;
                 Mark(row.Trailing, status);
             };
             _ = CheckAsync();

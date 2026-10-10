@@ -78,6 +78,8 @@ public sealed partial class PlayerService : ObservableObject
     [ObservableProperty] private RepeatMode repeat;
     [ObservableProperty] private double volume;
     [ObservableProperty] private LikeStatus? like;
+    /// <summary>今の曲がどれかのプレイリストに入っている（先読みで分かったとき。Spotify と同じく評価のボタンに✓を付ける）。</summary>
+    [ObservableProperty] private bool inPlaylist;
     /// <summary>今の曲に重ねられる映像（MV）。無い・まだ分からなければ null。</summary>
     [ObservableProperty] private MusicVideo? video;
 

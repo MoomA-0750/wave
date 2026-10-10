@@ -93,6 +93,7 @@ public sealed partial class MainWindow : Window
 #endif
         rightPaneOpen = AppServices.Settings.RightPaneOpen;
         Player.PropertyChanged += OnPlayerChanged;
+        AppServices.Library.Membership.NowPlayingChanged += () => Player.InPlaylist = AppServices.Library.Membership.IsSavedNowPlaying(Player.Current?.VideoId);
         Player.Queue.CollectionChanged += OnQueueChanged;
         AppServices.Account.PropertyChanged += (_, _) => RenderAccount();
         AppServices.Library.Playlists.CollectionChanged += (_, _) => RenderLibrary();
@@ -101,6 +102,8 @@ public sealed partial class MainWindow : Window
         AppServices.Library.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(LibraryState.IsLoading)) LibraryLoading.Visibility = Ui.Show(AppServices.Library.IsLoading);
+            // 起動直後は、プレイリストの一覧が届いてから今の曲を先読みする
+            if (e.PropertyName == nameof(LibraryState.IsLoading) && !AppServices.Library.IsLoading) PrefetchMembership();
             if (e.PropertyName is nameof(LibraryState.LikedThumbnail) or nameof(LibraryState.RecentKeys)) RenderLibrary();
         };
         AppServices.Account.Changed += () => _ = AppServices.Library.RefreshAsync();
@@ -411,6 +414,31 @@ public sealed partial class MainWindow : Window
 
     // ---- 再生中の曲・キュー ----
 
+    private CancellationTokenSource? membershipPrefetch;
+
+    /// <summary>再生が始まった曲がどのプレイリストに入っているかを先に調べておく（追加の画面をすぐ出し、評価のボタンに✓を付ける。Android と同じ）。</summary>
+    private void PrefetchMembership()
+    {
+        membershipPrefetch?.Cancel();
+        var membership = AppServices.Library.Membership;
+        Player.InPlaylist = membership.IsSavedNowPlaying(Player.Current?.VideoId);
+        if (Player.Current is not { } song || !AppServices.Client.IsLoggedIn) return;
+        var token = (membershipPrefetch = new CancellationTokenSource()).Token;
+        var ids = AppServices.Library.Editable.Select(p => p.PlaylistId).ToList();
+        _ = PrefetchAsync();
+
+        async Task PrefetchAsync()
+        {
+            try
+            {
+                await membership.PrefetchAsync(ids, song.VideoId, token);
+            }
+            catch (OperationCanceledException)
+            {
+            }
+        }
+    }
+
     private void OnPlayerChanged(object? sender, PropertyChangedEventArgs e)
     {
         switch (e.PropertyName)
@@ -422,6 +450,7 @@ public sealed partial class MainWindow : Window
                 RenderFullView();
                 if (QueueView.Visibility == Visibility.Visible) RenderQueue();
                 Title = Player.Current is { } current ? $"{current.Title} • {current.ArtistsText}" : "wave";
+                PrefetchMembership();
                 break;
             case nameof(PlayerService.Video):
             case nameof(PlayerService.IsRemote):
@@ -869,19 +898,22 @@ public sealed partial class MainWindow : Window
     public bool IsLiked(LikeStatus? like) => like == LikeStatus.Like;
 
     /// <summary>評価済みは✓、まだなら＋、読めていない（ログイン中で評価が分からない）なら↻（押すと読み直す。Android と同じ）。</summary>
-    public string LikeGlyph(LikeStatus? like, Song? current) => like switch
+    // Spotify と同じく、高く評価していなくても、どれかのプレイリストに入っていれば✓（押すとプレイリストに追加する画面。Android と同じ）
+    public string LikeGlyph(LikeStatus? like, Song? current, bool inPlaylist) => like switch
     {
         LikeStatus.Like => "\uEC61",
+        _ when inPlaylist => "\uEC61",
         null when AppServices.Client.IsLoggedIn && current is not null => "\uE72C",
         _ => "\uECC8",
     };
 
-    public Brush LikeBrush(LikeStatus? like) =>
-        (Brush)Application.Current.Resources[like == LikeStatus.Like ? "AccentTextFillColorPrimaryBrush" : "TextFillColorSecondaryBrush"];
+    public Brush LikeBrush(LikeStatus? like, bool inPlaylist) =>
+        (Brush)Application.Current.Resources[like == LikeStatus.Like || inPlaylist ? "AccentTextFillColorPrimaryBrush" : "TextFillColorSecondaryBrush"];
 
-    public string LikeTip(LikeStatus? like, Song? current) => like switch
+    public string LikeTip(LikeStatus? like, Song? current, bool inPlaylist) => like switch
     {
         LikeStatus.Like => L.T("プレイリストに追加", "Add to playlist"),
+        _ when inPlaylist => L.T("プレイリストに入っています（追加先を変える）", "Saved in a playlist (change)"),
         null when AppServices.Client.IsLoggedIn && current is not null => L.T("評価を読み直す", "Reload like status"),
         _ => L.T("高く評価した曲に追加", "Add to Liked Songs"),
     };
@@ -932,7 +964,7 @@ public sealed partial class MainWindow : Window
     private void OnLike(object sender, RoutedEventArgs e)
     {
         if (Player.Current is not { } song) return;
-        if (Player.Like == LikeStatus.Like) _ = Dialogs.AddToPlaylistAsync(song);
+        if (Player.Like == LikeStatus.Like || Player.InPlaylist) _ = Dialogs.AddToPlaylistAsync(song);
         else if (Player.Like is null && AppServices.Client.IsLoggedIn) Player.ReloadLike();
         else Player.ToggleLike();
     }

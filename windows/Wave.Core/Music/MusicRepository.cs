@@ -176,16 +176,27 @@ public sealed class MusicRepository(InnerTubeClient client)
     /// プレイリストの中の曲の ID を全ページ読む（重複の確認と「どのプレイリストに入っているか」の表示。Android と同じ）。
     /// 最後まで読めなければ null。
     /// </summary>
-    public async Task<HashSet<string>?> ScanPlaylistAsync(string playlistId, CancellationToken cancel = default)
+    public async Task<HashSet<string>?> ScanPlaylistAsync(string playlistId, CancellationToken cancel = default) =>
+        (await ScanPlaylistItemsAsync(playlistId, cancel))?.Keys.ToHashSet();
+
+    /// <summary>
+    /// プレイリストの中の曲と、曲ごとのプレイリスト内の項目の ID（外すのに使う。同じ曲が2回入っていれば2つ。取れなかった曲は空）。
+    /// 最後まで読めなければ null。
+    /// </summary>
+    public async Task<Dictionary<string, List<string>>?> ScanPlaylistItemsAsync(string playlistId, CancellationToken cancel = default)
     {
-        var ids = new HashSet<string>();
+        var ids = new Dictionary<string, List<string>>();
         string? token = null;
         var pages = 0;
         do
         {
             var page = await PlaylistAsync(playlistId, token, cancel);
             if (!page.IsOk) return null;
-            foreach (var s in page.Value!.Songs) ids.Add(s.VideoId);
+            for (var i = 0; i < page.Value!.Songs.Count; i++)
+            {
+                var setIds = ids.TryGetValue(page.Value.Songs[i].VideoId, out var known) ? known : ids[page.Value.Songs[i].VideoId] = [];
+                if (i < page.Value.SetVideoIds.Count && page.Value.SetVideoIds[i] is { } setId) setIds.Add(setId);
+            }
             token = page.Value.Continuation;
             if (token is null && !page.Value.EndConfirmed) return null;
             if (++pages >= MaxPlaylistPages && token is not null) return null;

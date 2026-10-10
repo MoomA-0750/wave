@@ -104,6 +104,16 @@ public static class DebugCommands
                         _ => "?",
                     });
                 break;
+            case "membership-toggle":
+            {
+                // 追加の画面で、名前の一致するプレイリストの行を押したのと同じ（入っていれば外し、無ければ足す）
+                if (player.Current is not { } song || AppServices.Library.Editable.FirstOrDefault(p => p.Title == arg) is not { } target) break;
+                var status = await AppServices.Library.Membership.CheckAsync(target.PlaylistId, song.VideoId, default);
+                if (status == PlaylistMembership.Status.In) await SongMenu.RemoveAsync(target, song);
+                else await SongMenu.AddAsync(target, song);
+                AppPaths.Log($"debug membership-toggle was={status} inPlaylist={player.InPlaylist}");
+                break;
+            }
             case "song-card":
             {
                 // 検索の先頭の曲を、棚のカードを押したのと同じ開き方で開く
