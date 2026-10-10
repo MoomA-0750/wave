@@ -126,7 +126,14 @@ class WatchLogin(
             keys = pair
             requestedAtMs = SystemClock.elapsedRealtime()
             val sent = nodes.count { node -> runCatching { Wearable.getMessageClient(appContext).sendMessage(node.id, PATH_REQUEST, pair.public.encoded).await() }.isSuccess }
-            mutableStatus.value = if (sent > 0) Status.Waiting(WatchLoginCrypto.codeOf(pair.public.encoded)) else Status.Failed
+            val waiting = Status.Waiting(WatchLoginCrypto.codeOf(pair.public.encoded))
+            mutableStatus.value = if (sent > 0) waiting else Status.Failed
+            // スマホが答えないまま（ログインしていない・やめた）なら、頼みが切れたときに失敗にする
+            kotlinx.coroutines.delay(REQUEST_TTL_MS)
+            if (mutableStatus.value == waiting) {
+                keys = null
+                mutableStatus.value = Status.Failed
+            }
         }
     }
 

@@ -374,7 +374,8 @@ class AppContainer(
 
     /** Connect v2（Phase 6b）。中継 v2 の場所が設定されていなければ null。 */
     val connectV2: ConnectV2Manager? =
-        if (BuildConfig.RELAY_V2_URL.isNotEmpty() && BuildConfig.RELAY_V2_HOST.isNotEmpty()) {
+        // 時計は tailnet の中の中継に届かない（つなぎ直しを繰り返して電池を使う）ので持たない。ほかの端末の再生はスマホを通して操作する
+        if (BuildConfig.RELAY_V2_URL.isNotEmpty() && BuildConfig.RELAY_V2_HOST.isNotEmpty() && !context.packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_WATCH)) {
             ConnectV2Manager(
                 identity = deviceIdentity,
                 session = session,

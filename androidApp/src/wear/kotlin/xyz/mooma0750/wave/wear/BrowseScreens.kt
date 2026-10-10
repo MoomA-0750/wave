@@ -90,11 +90,11 @@ fun FeedScreen(
         }
         if (state.recent.isNotEmpty()) {
             item(key = "recent-h") { MessageRow(look, stringResource(R.string.home_recently_played)) }
-            items(state.recent, key = { "recent-${it.hashCode()}" }) { item -> HomeRow(look, item, actions, onOpenPlaylist) }
+            itemsIndexed(state.recent, key = { index, _ -> "recent-$index" }) { _, item -> HomeRow(look, item, actions, onOpenPlaylist) }
         }
         state.shelves.forEachIndexed { shelfIndex, shelf ->
             item(key = "shelf-$shelfIndex") { MessageRow(look, shelfTitle(shelf)) }
-            items(shelf.items, key = { "s-$shelfIndex-${it.hashCode()}" }) { item -> HomeRow(look, item, actions, onOpenPlaylist) }
+            itemsIndexed(shelf.items, key = { index, _ -> "s-$shelfIndex-$index" }) { _, item -> HomeRow(look, item, actions, onOpenPlaylist) }
         }
         when {
             state.loading || state.loadingMore -> item(key = "loading") { LoadingRow(look) }
@@ -123,7 +123,7 @@ fun ReleasesScreen(
 ) {
     ListScreen(stringResource(R.string.releases_home_title)) { look ->
         if (releases.isEmpty()) item { MessageRow(look, stringResource(R.string.wear_no_releases)) }
-        items(releases, key = { "${it.albumBrowseId}-${it.videoId}" }) { release ->
+        itemsIndexed(releases, key = { index, _ -> "r-$index" }) { _, release ->
             EntryRow(look, release.title, release.artistName, release.thumbnailUrl) {
                 val album = release.albumBrowseId
                 if (album != null) actions.openAlbum(AlbumRef(release.title, album)) else actions.openArtist(ArtistRef(release.artistName, release.artistId))
@@ -190,7 +190,7 @@ fun SearchScreen(
         if (submitted == null) {
             item(key = "browse") { ActionRow(look, R.drawable.ic_grid_view, stringResource(R.string.wear_browse), onClick = onOpenBrowse) }
             if (entries.isNotEmpty()) item(key = "recent-h") { MessageRow(look, stringResource(R.string.search_recent_searches)) }
-            items(entries, key = { "h-${it.hashCode()}" }) { entry ->
+            itemsIndexed(entries, key = { index, _ -> "h-$index" }) { _, entry ->
                 when (entry) {
                     is SearchHistoryEntry.Query -> EntryRow(look, entry.text, null, null, icon = R.drawable.ic_history) { viewModel.searchFor(entry.text) }
                     is SearchHistoryEntry.Artist -> EntryRow(look, entry.name, stringResource(R.string.search_kind_artist), entry.thumbnailUrl, round = true) { actions.openArtist(ArtistRef(entry.name, entry.browseId)) }
@@ -208,7 +208,7 @@ fun SearchScreen(
         if (state.empty) item(key = "none") { MessageRow(look, stringResource(R.string.search_not_found)) }
         val artists = state.artists.items.take(if (state.artistFirst) 3 else 2)
         if (state.artistFirst) {
-            items(artists, key = { "a-${it.browseId}" }) { artist ->
+            itemsIndexed(artists, key = { index, _ -> "a-$index" }) { _, artist ->
                 EntryRow(look, artist.name, stringResource(R.string.search_kind_artist), artist.thumbnailUrl, round = true) {
                     history.add(SearchHistoryEntry.Artist(artist.name, artist.browseId))
                     actions.openArtist(ArtistRef(artist.name, artist.browseId))
@@ -224,7 +224,7 @@ fun SearchScreen(
         }
         if (!state.artistFirst && artists.isNotEmpty()) {
             item(key = "artists-h") { MessageRow(look, stringResource(R.string.search_tab_artists)) }
-            items(artists, key = { "a-${it.browseId}" }) { artist ->
+            itemsIndexed(artists, key = { index, _ -> "a-$index" }) { _, artist ->
                 EntryRow(look, artist.name, stringResource(R.string.search_kind_artist), artist.thumbnailUrl, round = true) {
                     history.add(SearchHistoryEntry.Artist(artist.name, artist.browseId))
                     actions.openArtist(ArtistRef(artist.name, artist.browseId))
@@ -232,7 +232,7 @@ fun SearchScreen(
             }
         }
         if (state.albums.items.isNotEmpty()) item(key = "albums-h") { MessageRow(look, stringResource(R.string.search_tab_albums)) }
-        items(state.albums.items, key = { "al-${it.browseId}" }) { album ->
+        itemsIndexed(state.albums.items, key = { index, _ -> "al-$index" }) { _, album ->
             EntryRow(look, album.title, album.subtitle, album.thumbnailUrl) {
                 history.add(SearchHistoryEntry.Album(album.title, album.browseId))
                 actions.openAlbum(AlbumRef(album.title, album.browseId))
@@ -254,7 +254,7 @@ fun BrowseScreen(
         state.failure?.let { item { ActionRow(look, R.drawable.ic_refresh, stringResource(R.string.search_retry), failureMessage(it), onClick = viewModel::refresh) } }
         state.sections.forEachIndexed { index, section ->
             item(key = "h-$index") { MessageRow(look, section.title) }
-            items(section.categories, key = { "c-$index-${it.params}" }) { category -> EntryRow(look, category.title, null, null) { onOpen(category.title, category.params) } }
+            itemsIndexed(section.categories, key = { categoryIndex, _ -> "c-$index-$categoryIndex" }) { _, category -> EntryRow(look, category.title, null, null) { onOpen(category.title, category.params) } }
         }
     }
 }
@@ -273,7 +273,7 @@ fun MoodScreen(
         state.failure?.let { item { ActionRow(look, R.drawable.ic_refresh, stringResource(R.string.search_retry), failureMessage(it), onClick = viewModel::refresh) } }
         state.shelves.forEachIndexed { shelfIndex, shelf ->
             item(key = "shelf-$shelfIndex") { MessageRow(look, shelfTitle(shelf)) }
-            items(shelf.items, key = { "s-$shelfIndex-${it.hashCode()}" }) { item -> HomeRow(look, item, actions, onOpenPlaylist) }
+            itemsIndexed(shelf.items, key = { index, _ -> "s-$shelfIndex-$index" }) { _, item -> HomeRow(look, item, actions, onOpenPlaylist) }
         }
     }
 }
@@ -458,7 +458,7 @@ fun ArtistScreen(
         page.allSongsPlaylistId?.let { id -> item(key = "all") { ActionRow(look, R.drawable.ic_view_list, stringResource(R.string.artist_see_all_songs)) { onOpenAllSongs(id, page.name) } } }
         page.albumShelves.forEachIndexed { shelfIndex, shelf ->
             item(key = "shelf-$shelfIndex") { MessageRow(look, shelf.title) }
-            items(shelf.albums, key = { "al-$shelfIndex-${it.browseId}" }) { album -> EntryRow(look, album.title, album.subtitle, album.thumbnailUrl) { onOpenAlbum(album.browseId, album.title) } }
+            itemsIndexed(shelf.albums, key = { index, _ -> "al-$shelfIndex-$index" }) { _, album -> EntryRow(look, album.title, album.subtitle, album.thumbnailUrl) { onOpenAlbum(album.browseId, album.title) } }
         }
     }
 }
@@ -510,7 +510,7 @@ fun HistoryScreen(
         if (state.loading && state.sections.isEmpty()) item { LoadingRow(look) }
         state.failure?.let { item { MessageRow(look, failureMessage(it)) } }
         if (!state.loading && state.sections.isEmpty() && state.failure == null) item { MessageRow(look, stringResource(R.string.library_history_empty)) }
-        items(state.rows, key = { it.hashCode() }) { row ->
+        itemsIndexed(state.rows, key = { index, _ -> "r-$index" }) { _, row ->
             when (row) {
                 is HistoryRow.Heading -> MessageRow(look, row.title)
                 is HistoryRow.Item -> SongRow(look, row.song, liked = row.song.videoId in liked, onMenu = { actions.openSong(row.song) }) { onPlay(state.songs, row.songIndex) }
