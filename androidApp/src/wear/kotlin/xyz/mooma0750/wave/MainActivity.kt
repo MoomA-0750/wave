@@ -299,7 +299,7 @@ private fun LoggedIn(
                 val (playerState, _) = xyz.mooma0750.wave.nowplaying.rememberPlayerUiState(container.player)
                 xyz.mooma0750.wave.wear.DevicesScreen(container.watchRemote, watchHasQueue = playerState.queue.isNotEmpty())
             }
-            WearScreen.Ai -> CenterText(stringResource(R.string.wear_coming_soon))
+            WearScreen.Ai -> xyz.mooma0750.wave.wear.AiScreen(container.aiChat, onPlay = play::song)
         }
     }
 }

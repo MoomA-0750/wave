@@ -67,23 +67,13 @@ data class AiChatState(
  * 会話はアプリが動いている間だけ持つ（保存しない）。YouTube の認証情報は中継へ送らない（別の HTTP クライアントを使う）。
  */
 class AiChat(
-    private val settings: AppSettings,
+    private val transport: AiTransport,
     private val tools: AiTools,
     private val scope: CoroutineScope,
 ) {
     private val mutableState = MutableStateFlow(AiChatState())
     val state: StateFlow<AiChatState> = mutableState.asStateFlow()
     private var job: Job? = null
-
-    // 認証情報を持たないクライアント（cookie・リダイレクトなし）。答えは長く流れるので読み取りの時間切れは長めにする
-    private val http =
-        OkHttpClient
-            .Builder()
-            .followRedirects(false)
-            .followSslRedirects(false)
-            .connectTimeout(15, TimeUnit.SECONDS)
-            .readTimeout(120, TimeUnit.SECONDS)
-            .build()
 
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -113,12 +103,7 @@ class AiChat(
         job =
             scope.launch {
                 try {
-                    val config = settings.aiBridge.first()
-                    if (config == null) {
-                        fail(NOT_CONFIGURED)
-                        return@launch
-                    }
-                    run(config, task, history)
+                    run(task, history)
                 } catch (error: Exception) {
                     if (error is kotlinx.coroutines.CancellationException) throw error
                     Log.i(WaveApplication.LOG_TAG, "ai failed type=${error::class.simpleName}")
@@ -130,7 +115,6 @@ class AiChat(
     }
 
     private suspend fun run(
-        config: AiBridgeConfig,
         task: String,
         history: List<Pair<String, String>>,
     ) {
@@ -164,61 +148,51 @@ class AiChat(
                 )
                 put("task", task)
             }.toString()
-        val request =
-            Request
-                .Builder()
-                .url(config.url + "/v1/agent")
-                .header("Authorization", "Bearer " + config.token)
-                .post(body.toRequestBody(JSON))
-                .build()
-        withContext(Dispatchers.IO) {
-            http.newCall(request).execute().use { response ->
-                if (response.code == 401) return@use fail(UNAUTHORIZED)
-                if (!response.isSuccessful) return@use fail(UNREACHABLE)
-                val source = response.body.source()
-                var session: String? = null
-                // 答えの区切り（message_stop の空行）ごとに、新しい吹き出しにする
-                var appending = false
-                while (true) {
-                    val line = source.readUtf8Line() ?: break
-                    val event = runCatching { json.parseToJsonElement(line).jsonObject }.getOrNull() ?: continue
-                    when {
-                        "session" in event -> session = event.string("session")
-                        "delta" in event -> {
-                            val text = event.string("delta").orEmpty()
-                            if (text.isBlank() && !appending) continue
-                            mutableState.update { state ->
-                                val last = state.messages.lastOrNull()
-                                if (appending && last is AiMessage.Assistant) {
-                                    state.copy(messages = state.messages.dropLast(1) + AiMessage.Assistant(last.text + text))
-                                } else {
-                                    state.copy(messages = state.messages + AiMessage.Assistant(text.trimStart()))
-                                }
+        var session: String? = null
+        // 答えの区切り（message_stop の空行）ごとに、新しい吹き出しにする
+        var appending = false
+        val outcome =
+            transport.stream(body) { line ->
+                val event = runCatching { json.parseToJsonElement(line).jsonObject }.getOrNull() ?: return@stream true
+                when {
+                    "session" in event -> session = event.string("session")
+                    "delta" in event -> {
+                        val text = event.string("delta").orEmpty()
+                        if (text.isBlank() && !appending) return@stream true
+                        mutableState.update { state ->
+                            val last = state.messages.lastOrNull()
+                            if (appending && last is AiMessage.Assistant) {
+                                state.copy(messages = state.messages.dropLast(1) + AiMessage.Assistant(last.text + text))
+                            } else {
+                                state.copy(messages = state.messages + AiMessage.Assistant(text.trimStart()))
                             }
-                            appending = text != "\n\n"
                         }
-                        "tool_call" in event -> {
-                            appending = false
-                            val call = event["tool_call"]?.jsonObject ?: continue
-                            val id = call.string("id") ?: continue
-                            val name = call.string("name").orEmpty()
-                            val arguments = call["arguments"] as? JsonObject ?: JsonObject(emptyMap())
-                            val outcome = tools.call(name, arguments)
-                            outcome.shown?.let { mutableState.update { it.copy(messages = it.messages + it.shownMessage(outcome)) } }
-                            postResult(config, session, id, outcome)
-                        }
-                        "error" in event -> fail(event.string("error").orEmpty().take(300))
-                        event["done"] != null -> break
+                        appending = text != "\n\n"
                     }
+                    "tool_call" in event -> {
+                        appending = false
+                        val call = event["tool_call"]?.jsonObject ?: return@stream true
+                        val id = call.string("id") ?: return@stream true
+                        val name = call.string("name").orEmpty()
+                        val arguments = call["arguments"] as? JsonObject ?: JsonObject(emptyMap())
+                        val outcome = tools.call(name, arguments)
+                        outcome.shown?.let { mutableState.update { it.copy(messages = it.messages + it.shownMessage(outcome)) } }
+                        postResult(session, id, outcome)
+                    }
+                    "error" in event -> fail(event.string("error").orEmpty().take(300))
                 }
+                event["done"] == null
             }
+        when (outcome) {
+            AiTransport.Outcome.Done -> Unit
+            AiTransport.Outcome.NotConfigured -> fail(NOT_CONFIGURED)
+            AiTransport.Outcome.Unauthorized -> fail(UNAUTHORIZED)
+            AiTransport.Outcome.Unreachable -> fail(UNREACHABLE)
         }
     }
-
     private fun AiChatState.shownMessage(outcome: AiTools.Outcome): AiMessage = outcome.songs?.let(AiMessage::Songs) ?: AiMessage.Action(outcome.shown.orEmpty())
 
-    private fun postResult(
-        config: AiBridgeConfig,
+    private suspend fun postResult(
         session: String?,
         id: String,
         outcome: AiTools.Outcome,
@@ -229,14 +203,7 @@ class AiChat(
                 put("id", id)
                 if (outcome.error != null) put("error", outcome.error) else put("result", outcome.result)
             }.toString()
-        val request =
-            Request
-                .Builder()
-                .url(config.url + "/v1/agent/result")
-                .header("Authorization", "Bearer " + config.token)
-                .post(body.toRequestBody(JSON))
-                .build()
-        runCatching { http.newCall(request).execute().close() }
+        transport.postResult(body)
     }
 
     private fun fail(text: String) {
@@ -246,8 +213,6 @@ class AiChat(
     private fun JsonObject.string(key: String): String? = (this[key] as? JsonPrimitive)?.takeIf { it.isString }?.content
 
     companion object {
-        private val JSON = "application/json; charset=utf-8".toMediaType()
-
         /** 失敗の種類（画面で端末の言語の文言にする）。 */
         const val NOT_CONFIGURED = "wave:ai-not-configured"
         const val UNREACHABLE = "wave:ai-unreachable"

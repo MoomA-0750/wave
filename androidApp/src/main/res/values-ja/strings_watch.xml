@@ -43,4 +43,6 @@
     <string name="phone_remote_pulled">このスマホで再生しています</string>
     <string name="phone_remote_pushed">時計で再生しています</string>
     <string name="phone_remote_failed">移せませんでした。時計の wave を開いてからもう一度試してください。</string>
+    <string name="wear_ai_not_configured">スマホの wave で Claude が設定されていません。先にスマホで設定してください。</string>
+    <string name="wear_ai_unreachable">スマホを通して Claude につながりませんでした。スマホが近くにあるか確かめてください。</string>
 </resources>

@@ -26,8 +26,14 @@ class PlayerConnection(
     /** シャッフルが入っているか（Service がセッションの extras で配る）。 */
     val shuffled: kotlinx.coroutines.flow.StateFlow<Boolean> = mutableShuffled
 
-    /** 同時に呼ばれても MediaController を1つだけ作る。 */
+    /**
+     * 同時に呼ばれても MediaController を1つだけ作る。作るのはメインスレッドで行う（MediaController は作ったスレッドでしか触れない。
+     * 画面が無いまま Claude の道具や時計からの操作で呼ばれると、ほかのスレッドで作って落ちていた）。
+     */
     suspend fun controller(): MediaController =
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main.immediate) { connect() }
+
+    private suspend fun connect(): MediaController =
         connecting.withLock {
             controller?.takeIf { it.isConnected }?.let { return@withLock it }
             controller?.release()

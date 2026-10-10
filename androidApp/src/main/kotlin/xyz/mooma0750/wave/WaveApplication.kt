@@ -319,6 +319,18 @@ class AppContainer(
     /** 登録したアーティストの新作。 */
     val releases = xyz.mooma0750.wave.releases.Releases(appContext, music, authManager, settings)
 
+    /** Claude の中継へ直接送る（スマホ）。 */
+    private val directAiTransport by lazy { xyz.mooma0750.wave.ai.DirectAiTransport(settings) }
+
+    /** 時計は tailnet の中の中継に届かないので、スマホに中継してもらう。 */
+    val phoneRelayAiTransport by lazy { xyz.mooma0750.wave.ai.PhoneRelayAiTransport(appContext) }
+
+    private val aiTransport: xyz.mooma0750.wave.ai.AiTransport
+        get() = if (appContext.packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_WATCH)) phoneRelayAiTransport else directAiTransport
+
+    /** スマホ: 時計からの Claude への頼みを中継する。 */
+    val aiRelayHost by lazy { xyz.mooma0750.wave.ai.AiRelayHost(appContext, directAiTransport, appScope) }
+
     /** Claude との会話（tools/ai-bridge の中継を通す）。アプリが動いている間だけ会話を持つ。 */
     val aiChat: xyz.mooma0750.wave.ai.AiChat by lazy {
         val res = appContext.resources
@@ -336,7 +348,7 @@ class AppContainer(
 
                 override fun readLiked() = res.getString(R.string.ai_read_liked)
             }
-        xyz.mooma0750.wave.ai.AiChat(settings, xyz.mooma0750.wave.ai.AiTools(this, texts), appScope)
+        xyz.mooma0750.wave.ai.AiChat(aiTransport, xyz.mooma0750.wave.ai.AiTools(this, texts), appScope)
     }
 
     /** 端末間の受け渡しの、再生サービスへの入口（Phase 6）。 */
