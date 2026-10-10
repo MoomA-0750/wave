@@ -169,6 +169,7 @@ private fun LoggedIn(
     // 再生が始まった曲がどのプレイリストに入っているかを先に調べておく（スマホと同じ）
     LaunchedEffect(like.videoId, playlistsVersion) { like.videoId?.let(container::prefetchMembership) }
     LaunchedEffect(nav.current) { Log.i(WaveApplication.LOG_TAG, "wear nav screen=${nav.current::class.simpleName} depth=${nav.stack.size}") }
+    LaunchedEffect(container) { DebugActions.navLogRequests.collect { Log.i(WaveApplication.LOG_TAG, "wear nav screen=${nav.current::class.simpleName} depth=${nav.stack.size}") } }
     // 確認用: adb から画面を開く（スマホと同じ口。時計の画面に置き換える）
     LaunchedEffect(container) {
         DebugActions.navigation.collect { screen ->

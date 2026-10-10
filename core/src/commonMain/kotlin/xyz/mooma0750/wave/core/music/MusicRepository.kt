@@ -356,6 +356,17 @@ class MusicRepository(
         expectedGeneration: Long = currentLoginGeneration(),
     ): WriteResult<Unit> = editPlaylist("remove", expectedGeneration) { it.removePlaylistSong(YouTubeClient.WEB_REMIX, playlistId, setVideoId, videoId) }
 
+    /** 自分のプレイリストを消す（確かめで作ったものの後片付けに使う。画面からは使っていない）。playlistId は先頭の VL を除いたもの。 */
+    suspend fun deletePlaylist(
+        playlistId: String,
+        expectedGeneration: Long = currentLoginGeneration(),
+    ): WriteResult<Unit> =
+        session.callWrite(
+            operation = "playlist/delete",
+            block = { it.deletePlaylist(YouTubeClient.WEB_REMIX, playlistId.removePrefix("VL")) },
+            expectedGeneration = expectedGeneration,
+        ) { ParseOutcome.Parsed(Unit) }
+
     /** 非公開のプレイリストを作る（innertubex が PRIVATE 固定）。作った playlistId を返す。 */
     suspend fun createPlaylist(
         title: String,

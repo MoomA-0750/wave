@@ -42,6 +42,9 @@ object DebugActions {
     /** 画面がまだ購読していなくても取りこぼさない（起動直後の intent でも開く）。 */
     val navigation = navigationChannel.receiveAsFlow()
 
+    /** 確認用: 今の画面をログに出し直す（時計のテストが、どの画面にいるかを確かめる）。 */
+    val navLogRequests = kotlinx.coroutines.flow.MutableSharedFlow<Unit>(extraBufferCapacity = 4)
+
     /**
      * 公開 Activity から受けてよい action（画面の遷移だけ）。再生を始めるものも、再生履歴というアカウントへの書き込みにつながるので
      * DebugReceiver からだけ受ける（F1 outer gate 指摘2）。
@@ -267,6 +270,16 @@ object DebugActions {
                         }
                         else -> Log.i(WaveApplication.LOG_TAG, "debug playlist create result=$result")
                     }
+                // 名前の一致する自分のプレイリストを消す（確かめで作ったものの後片付け。Windows 版の playlist-delete と同じ）
+                "nav_log" -> navLogRequests.tryEmit(Unit)
+                "playlist_delete_named" -> {
+                    val title = intent.getStringExtra("title") ?: "wave 確認用"
+                    val playlists = (container.music.libraryPlaylists() as? CallResult.Ok)?.value.orEmpty().filter { it.editable && it.title == title }
+                    playlists.forEach { Log.i(WaveApplication.LOG_TAG, "debug playlist delete result=${container.music.deletePlaylist(it.playlistId)::class.simpleName}") }
+                    Log.i(WaveApplication.LOG_TAG, "debug playlist delete matched=${playlists.size}")
+                    container.libraryCache.clear()
+                    container.onPlaylistsChanged()
+                }
                 "playlist_add" -> {
                     val id = createdPlaylistId
                     val videoId = Media3QueuePlayer.songOf(player.controller().currentMediaItem)?.videoId

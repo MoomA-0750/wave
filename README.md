@@ -45,6 +45,7 @@ scripts/check-common-main.sh
 - ログインはスマホから受け取る（時計で「スマホに頼む」→ スマホに出た番号を見比べて「送る」。[ADR-0011](docs/adr/0011-watch-login-transfer.md)）
 - スマホの再生の操作・時計とスマホの間の受け渡し・Claude への頼みは、Data Layer でスマホを通す（時計は tailnet の中継に届かない）
 - 確かめは to-fu の Wear OS エミュレーターで行う（`scripts/watch.sh`）。時計でできないことは [docs/wear.md](docs/wear.md) にまとめた
+- 基本操作のテスト: `python3 scripts/watch_smoke.py`（ログインした時計のエミュレーターで、検索・アーティスト・プレイリスト・再生・ベゼルの音量・曲送り・一時停止と再開・プレイリストへの追加と削除を流す。アカウントには確かめ用のプレイリストを作って消すことだけを書き込む）
 
 ## 認証情報の扱い
 
