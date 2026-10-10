@@ -141,7 +141,7 @@ public sealed partial class HomePage : Page
 
     private void OnRecentClick(object sender, RoutedEventArgs e)
     {
-        if (sender is FrameworkElement { Tag: HomeItem item }) Nav.Open(item);
+        if (sender is FrameworkElement { Tag: HomeItem item }) Nav.OpenCard(item);
     }
 
     private void OnRetry(object sender, RoutedEventArgs e) => _ = ReloadAsync();

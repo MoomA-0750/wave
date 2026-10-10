@@ -40,7 +40,7 @@ public sealed partial class MediaCard : UserControl
 
     private void OnTapped(object sender, TappedRoutedEventArgs e)
     {
-        if (Item is { } item) Nav.Open(item);
+        if (Item is { } item) Nav.OpenCard(item);
     }
 
     private void OnPlay(object sender, RoutedEventArgs e)

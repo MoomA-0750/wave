@@ -104,6 +104,14 @@ public static class DebugCommands
                         _ => "?",
                     });
                 break;
+            case "song-card":
+            {
+                // 検索の先頭の曲を、棚のカードを押したのと同じ開き方で開く
+                var result = await AppServices.Music.SearchSongsAsync(arg);
+                if (result.IsOk && result.Value!.Songs.Count > 0) Nav.OpenCard(new HomeItem.SongItem(result.Value.Songs[0]));
+                AppPaths.Log($"debug song-card page={Nav.Frame.CurrentSourcePageType?.Name} playing={player.Current?.VideoId is not null}");
+                break;
+            }
             case "search-play":
             {
                 var result = await AppServices.Music.SearchSongsAsync(arg);

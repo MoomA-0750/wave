@@ -38,6 +38,18 @@ public static class Nav
 
     public static void Artist(string browseId) => Go(typeof(Views.ArtistPage), browseId);
 
+    /// <summary>曲の画面。</summary>
+    public static void Song(Song song) => Go(typeof(Views.SongPage), song);
+
+    /// <summary>
+    /// 棚のカードを押したとき。曲も、アルバム・プレイリストと同じく先にページを開く（Android と同じ。押してすぐ再生しない。再生はカードの再生ボタン）。
+    /// </summary>
+    public static void OpenCard(HomeItem item)
+    {
+        if (item is HomeItem.SongItem s) Song(s.Song);
+        else Open(item);
+    }
+
     public static void Mood(MoodCategory mood) => Go(typeof(Views.MoodPage), mood);
 
     public static void History() => Go(typeof(Views.HistoryPage));
@@ -48,7 +60,7 @@ public static class Nav
 
     public static void Lyrics() => Go(typeof(Views.LyricsPage));
 
-    /// <summary>カードを押したとき。曲は再生（Spotify と同じ）、ほかはそのページへ。</summary>
+    /// <summary>検索の候補・履歴などを選んだとき。曲は再生（Android の検索と同じ）、ほかはそのページへ。</summary>
     public static void Open(HomeItem item)
     {
         switch (item)
