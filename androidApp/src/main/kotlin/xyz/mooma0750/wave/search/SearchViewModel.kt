@@ -107,6 +107,12 @@ class SearchViewModel(
             }
     }
 
+    /** 検索をやめて、履歴の表示に戻る（時計の「消す」）。 */
+    fun clear() {
+        suggestionJob?.cancel()
+        mutableState.value = SearchUiState()
+    }
+
     fun search() {
         val query = state.value.query.trim().takeIf { it.isNotEmpty() } ?: return
         history.add(SearchHistoryEntry.Query(query))

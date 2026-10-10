@@ -20,4 +20,16 @@
     <string name="watch_login_no_phone">wave の入ったスマホが見つかりません。スマホに wave を入れ、時計とペア設定してください。</string>
     <string name="watch_login_failed">ログインできませんでした。もう一度試してください。</string>
     <string name="watch_login_retry">もう一度</string>
+    <!-- 時計の画面 -->
+    <string name="wear_nothing_playing">再生していません</string>
+    <string name="wear_volume">音量</string>
+    <string name="wear_volume_up">音量を上げる</string>
+    <string name="wear_volume_down">音量を下げる</string>
+    <string name="wear_output">イヤホン</string>
+    <string name="wear_browse">ジャンル・気分</string>
+    <string name="wear_no_releases">登録したアーティストの新作はありません。</string>
+    <string name="wear_shuffle_play">シャッフル再生</string>
+    <string name="wear_load_more">さらに読み込む</string>
+    <string name="wear_log_out_confirm_message">この時計からログアウトしますか？スマホはログインしたままです。</string>
+    <string name="wear_coming_soon">時計ではまだ使えません</string>
 </resources>

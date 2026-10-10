@@ -20,4 +20,16 @@
     <string name="watch_login_no_phone">Couldn\'t find a phone with wave. Install wave on your phone and pair the watch.</string>
     <string name="watch_login_failed">Couldn\'t sign in. Try again.</string>
     <string name="watch_login_retry">Try again</string>
+    <!-- 時計の画面 -->
+    <string name="wear_nothing_playing">Nothing playing</string>
+    <string name="wear_volume">Volume</string>
+    <string name="wear_volume_up">Volume up</string>
+    <string name="wear_volume_down">Volume down</string>
+    <string name="wear_output">Headphones</string>
+    <string name="wear_browse">Genres &amp; moods</string>
+    <string name="wear_no_releases">No new releases from artists you subscribe to.</string>
+    <string name="wear_shuffle_play">Shuffle play</string>
+    <string name="wear_load_more">Load more</string>
+    <string name="wear_log_out_confirm_message">Sign out on this watch? Your phone stays signed in.</string>
+    <string name="wear_coming_soon">Not available on the watch yet</string>
 </resources>

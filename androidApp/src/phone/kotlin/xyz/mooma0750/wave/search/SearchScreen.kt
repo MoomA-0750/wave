@@ -62,7 +62,6 @@ import xyz.mooma0750.wave.navigation.SongActions
 import xyz.mooma0750.wave.ui.BackButton
 import xyz.mooma0750.wave.ui.Durations
 import xyz.mooma0750.wave.ui.IconAction
-
 @Composable
 fun SearchScreen(
     viewModel: SearchViewModel,
@@ -414,19 +413,6 @@ fun SongRow(
         trailing()
     }
 }
-
-@Composable
-fun failureMessage(kind: FailureKind?): String =
-    when (kind) {
-        FailureKind.NotLoggedIn -> stringResource(R.string.search_failure_not_logged_in)
-        FailureKind.Expired -> stringResource(R.string.search_failure_expired)
-        FailureKind.Suspect -> stringResource(R.string.search_failure_suspect)
-        FailureKind.Network -> stringResource(R.string.search_failure_network)
-        FailureKind.Http -> stringResource(R.string.search_failure_http)
-        FailureKind.Parse -> stringResource(R.string.search_failure_parse)
-        FailureKind.AccountUnverified -> stringResource(R.string.search_failure_account_unverified)
-        null -> ""
-    }
 
 private fun entryKey(entry: SearchHistoryEntry): String =
     when (entry) {

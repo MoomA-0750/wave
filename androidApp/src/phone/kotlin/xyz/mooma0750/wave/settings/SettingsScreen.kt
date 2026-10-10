@@ -52,45 +52,6 @@ import xyz.mooma0750.wave.core.session.SessionState
 import xyz.mooma0750.wave.debug.DebugPlayback
 import xyz.mooma0750.wave.debug.StreamCheck
 import androidx.compose.ui.res.stringResource
-
-/** アカウントの表示名と Premium の確認（ホームのアイコンと設定で使う）。 */
-class AccountInfo(
-    val account: AccountResult?,
-    val premium: PremiumStatus?,
-)
-
-@Composable
-fun rememberAccountInfo(
-    container: AppContainer,
-    obtainedAtEpochMs: Long,
-): AccountInfo {
-    val sessionState by container.session.state.collectAsStateWithLifecycle()
-    var account by remember(obtainedAtEpochMs) { mutableStateOf<AccountResult?>(null) }
-    var premium by remember(obtainedAtEpochMs) { mutableStateOf<PremiumStatus?>(null) }
-    // 失敗が表示に残り続けないよう、前面に戻ったときと、セッションが Active に戻ったときに取り直す
-    var refresh by remember { mutableIntStateOf(0) }
-    val sessionActive = sessionState is SessionState.Active
-
-    LifecycleResumeEffect(Unit) {
-        if (account !is AccountResult.Ok || premium == PremiumStatus.Unknown) refresh++
-        onPauseOrDispose {}
-    }
-
-    LaunchedEffect(obtainedAtEpochMs, refresh, sessionActive) {
-        // AuthManager の LoggedIn は、WaveSession への反映より先に届くことがある。このログインが反映されるまで待つ
-        container.session.appliedObtainedAtEpochMs.first { it == obtainedAtEpochMs }
-        if (account is AccountResult.Ok && premium != null && premium != PremiumStatus.Unknown) return@LaunchedEffect
-        val fetchedAccount = container.session.accountInfo()
-        account = fetchedAccount
-        // 値は出さず、種類だけを記録する（実機確認用）
-        Log.i(WaveApplication.LOG_TAG, "account result=${fetchedAccount::class.simpleName} name=${(fetchedAccount as? AccountResult.Ok)?.name != null}")
-        val status = container.session.premiumStatus()
-        premium = status
-        Log.i(WaveApplication.LOG_TAG, "premium=$status session=${container.session.state.value}")
-    }
-    return AccountInfo(account, premium)
-}
-
 /** 設定（Spotify の「設定とプライバシー」）。アカウント・再生履歴の送信・端末の連携・ログアウト・このアプリについて・開発用の確認。 */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

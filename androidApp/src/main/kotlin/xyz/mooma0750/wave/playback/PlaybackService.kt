@@ -147,6 +147,9 @@ class PlaybackService : MediaSessionService() {
 
     private lateinit var container: AppContainer
 
+    /** 時計で動いているか（Wear OS 版）。 */
+    private val isWatch: Boolean get() = packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_WATCH)
+
     override fun onCreate() {
         super.onCreate()
         container = (application as WaveApplication).container
@@ -161,6 +164,8 @@ class PlaybackService : MediaSessionService() {
                     true,
                 ).setHandleAudioBecomingNoisy(true)
                 .setWakeMode(C.WAKE_MODE_NETWORK)
+                // 時計では、本体のスピーカーで鳴らさず、イヤホンが無ければ出力先を選ぶ画面を出す（Wear OS の決まり）
+                .setSuppressPlaybackOnUnsuitableOutput(isWatch)
                 .build()
         val queueSession =
             QueueSession(
@@ -321,7 +326,9 @@ class PlaybackService : MediaSessionService() {
                         0,
                         android.content.Intent(this, MainActivity::class.java)
                             .setAction(android.content.Intent.ACTION_MAIN)
-                            .addCategory(android.content.Intent.CATEGORY_LAUNCHER),
+                            .addCategory(android.content.Intent.CATEGORY_LAUNCHER)
+                            // 時計では再生画面を開く（スマホは開いていた画面に戻る）
+                            .putExtra(OPEN_NOW_PLAYING, true),
                         android.app.PendingIntent.FLAG_IMMUTABLE,
                     ),
                 )
@@ -962,6 +969,9 @@ class PlaybackService : MediaSessionService() {
     }
 
     private companion object {
+        /** 時計の MainActivity が再生画面を開く印（wear の MainActivity.EXTRA_OPEN_NOW_PLAYING と同じ値）。 */
+        const val OPEN_NOW_PLAYING = "open_now_playing"
+
         const val MAX_CONSECUTIVE_SKIPS = 3
         const val SAVE_DEBOUNCE_MS = 1_000L
         const val RELAY_HOLD_AFTER_PAUSE_MS = 9 * 60 * 1000L
