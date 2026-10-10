@@ -174,14 +174,6 @@ fun SearchScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val entries by history.entries.collectAsStateWithLifecycle()
     val ask = rememberTextInput(stringResource(R.string.search_hint)) { viewModel.searchFor(it) }
-    // 初めて開いたら、すぐに入力を出す（時計では押す回数を減らす）
-    var asked by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        if (!asked && state.submitted == null) {
-            asked = true
-            ask()
-        }
-    }
     ListScreen(
         title = state.submitted ?: stringResource(R.string.search_title),
         edgeButton = { MainEdgeButton(R.drawable.ic_search, stringResource(R.string.search_hint), onClick = ask) },

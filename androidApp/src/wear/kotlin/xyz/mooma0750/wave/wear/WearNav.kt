@@ -112,6 +112,14 @@ fun WearNavHost(
     content: @Composable (WearScreen) -> Unit,
 ) {
     val holder = rememberSaveableStateHolder()
+    // 閉じた画面の保存した状態（スクロール位置・絞り込み）は捨てる（同じ画面を開き直したときに前の状態が戻らないように）
+    val shown = androidx.compose.runtime.remember { mutableSetOf<String>() }
+    val alive = nav.stack.indices.map { keyOf(nav, it) }.toSet()
+    androidx.compose.runtime.SideEffect {
+        (shown - alive).forEach(holder::removeState)
+        shown.retainAll(alive)
+        shown.addAll(alive)
+    }
     val canGoBack = nav.stack.size > 1
     BackHandler(enabled = canGoBack) { nav.back() }
     val state = rememberSwipeToDismissBoxState()

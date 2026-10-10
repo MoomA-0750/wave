@@ -72,8 +72,8 @@ fun SongPage(
         song.album?.takeIf { it.browseId != null }?.let { album ->
             item(key = "album") { ActionRow(look, R.drawable.ic_album, stringResource(R.string.search_go_to_album), secondary = album.title) { actions.openAlbum(AlbumRef(album.title, album.browseId)) } }
         }
-        song.artists.filter { it.browseId != null }.forEach { artist ->
-            item(key = "artist-${artist.browseId}") {
+        song.artists.filter { it.browseId != null }.forEachIndexed { index, artist ->
+            item(key = "artist-$index") {
                 ActionRow(look, R.drawable.ic_person, stringResource(R.string.search_go_to_artist), secondary = artist.name) { actions.openArtist(ArtistRef(artist.name, artist.browseId)) }
             }
         }

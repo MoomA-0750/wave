@@ -142,12 +142,38 @@ class WatchRemote(
             val snapshot = onMain { container.handoffHost.endpoint?.capture(handoffId, container.session.loginGenerationId()) }
             if (snapshot == null) return@launch report(Result.NothingToPull)
             pendingPushes.add(handoffId)
-            if (!send(node, PATH_PUSH, HandoffCodec.encode(snapshot).encodeToByteArray())) {
+            if (!send(node, PATH_PUSH, encodeForMessage(snapshot).encodeToByteArray())) {
                 pendingPushes.remove(handoffId)
+                onMain { container.handoffHost.endpoint?.resumeAfterCancel() }
+                report(Result.Failed)
+                return@launch
+            }
+            // 相手が答えないまま（プロセスが落ちた・届かない）なら、止めた再生を戻す
+            delay(ACK_TIMEOUT_MS)
+            if (pendingPushes.remove(handoffId)) {
                 onMain { container.handoffHost.endpoint?.resumeAfterCancel() }
                 report(Result.Failed)
             }
         }
+    }
+
+    /** 引き取られた側が答えを待っている受け渡し（答えが来なければ、止めた再生を戻す）。 */
+    private val awaitingPullAck = java.util.Collections.synchronizedSet(mutableSetOf<String>())
+
+    /**
+     * Data Layer のメッセージは約 100KB までなので、超えるときは今の曲より後ろを減らす（後ろを切ったら続きの読み込みはしない）。
+     */
+    private fun encodeForMessage(snapshot: xyz.mooma0750.wave.handoff.HandoffSnapshot): String {
+        var current = snapshot
+        var text = HandoffCodec.encode(current)
+        while (text.encodeToByteArray().size > MAX_MESSAGE_BYTES) {
+            val index = current.items.indexOfFirst { it.itemId == current.currentItemId }
+            val upcoming = current.items.size - index - 1
+            if (index < 0 || upcoming <= 0) break
+            current = current.copy(items = current.items.take(index + 1 + upcoming / 2), continuation = null)
+            text = HandoffCodec.encode(current)
+        }
+        return text
     }
 
     private val pendingPulls = java.util.Collections.synchronizedSet(mutableSetOf<String>())
@@ -161,8 +187,15 @@ class WatchRemote(
         path: String,
         data: ByteArray,
     ) {
-        // ログインしていない端末は、再生を見せず・受け取らない
-        if (container.authManager.state.value !is AuthState.LoggedIn) return
+        // ログインしていない端末は、再生を見せず・受け取らない（メッセージでプロセスが起きた直後は、ログインを読み終えるまで待つ）
+        scope.launch { if (awaitSettledLogin(container.authManager)) handle(nodeId, path, data) }
+    }
+
+    private fun handle(
+        nodeId: String,
+        path: String,
+        data: ByteArray,
+    ) {
         when (path) {
             PATH_SUBSCRIBE -> startPublishing(nodeId)
             PATH_STATE -> json.runCatching { decodeFromString(RemoteState.serializer(), data.decodeToString()) }.getOrNull()?.let { mutablePeer.value = it }
@@ -262,9 +295,19 @@ class WatchRemote(
     ) {
         container.player.controller()
         val snapshot = onMain { container.handoffHost.endpoint?.capture(handoffId, container.session.loginGenerationId()) }
-        val text = snapshot?.let(HandoffCodec::encode).orEmpty()
-        send(nodeId, PATH_SNAPSHOT, "$handoffId\n$text".encodeToByteArray())
-        Log.i(WaveApplication.LOG_TAG, "remote pull answered has=${snapshot != null}")
+        val text = snapshot?.let(::encodeForMessage).orEmpty()
+        if (snapshot != null) awaitingPullAck.add(handoffId)
+        val sent = send(nodeId, PATH_SNAPSHOT, "$handoffId\n$text".encodeToByteArray())
+        Log.i(WaveApplication.LOG_TAG, "remote pull answered has=${snapshot != null} sent=$sent")
+        if (snapshot == null) return
+        if (!sent) {
+            awaitingPullAck.remove(handoffId)
+            onMain { container.handoffHost.endpoint?.resumeAfterCancel() }
+            return
+        }
+        // 相手が答えないまま（プロセスが落ちた・届かない）なら、止めた再生を戻す
+        delay(ACK_TIMEOUT_MS)
+        if (awaitingPullAck.remove(handoffId)) onMain { container.handoffHost.endpoint?.resumeAfterCancel() }
     }
 
     /** 引き取る側: 届いたキューで再生を始め、結果を返す。 */
@@ -273,8 +316,12 @@ class WatchRemote(
         message: String,
     ) {
         val handoffId = message.substringBefore('\n')
-        if (!pendingPulls.remove(handoffId)) return
         val text = message.substringAfter('\n', "")
+        // 頼んだ覚えが無い（このプロセスが途中で落ちた）ものは受けず、相手に戻してもらう
+        if (!pendingPulls.remove(handoffId)) {
+            if (text.isNotEmpty()) send(nodeId, PATH_PULLED, "$handoffId\nfalse".encodeToByteArray())
+            return
+        }
         if (text.isEmpty()) {
             report(Result.NothingToPull)
             return
@@ -285,6 +332,7 @@ class WatchRemote(
     }
 
     private suspend fun finishPulled(message: String) {
+        if (!awaitingPullAck.remove(message.substringBefore('\n'))) return
         val adopted = message.substringAfter('\n') == "true"
         onMain { container.handoffHost.endpoint?.let { if (adopted) it.markHandedOff() else it.resumeAfterCancel() } }
     }
@@ -337,7 +385,15 @@ class WatchRemote(
         nodeId: String,
         path: String,
         data: ByteArray,
-    ): Boolean = runCatching { Wearable.getMessageClient(appContext).sendMessage(nodeId, path, data).await() }.isSuccess
+    ): Boolean =
+        try {
+            Wearable.getMessageClient(appContext).sendMessage(nodeId, path, data).await()
+            true
+        } catch (error: kotlinx.coroutines.CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            false
+        }
 
     private suspend fun <T> onMain(block: () -> T): T = withContext(Dispatchers.Main) { block() }
 
@@ -371,5 +427,11 @@ class WatchRemote(
         private const val PUBLISH_MS = 45_000L
         private const val PUBLISH_POLL_MS = 1_000L
         private const val POSITION_SEND_MS = 5_000L
+
+        /** 受け渡しの答えを待つ時間。 */
+        private const val ACK_TIMEOUT_MS = 30_000L
+
+        /** Data Layer のメッセージの上限（約 100KB）より少し小さく。 */
+        private const val MAX_MESSAGE_BYTES = 90_000
     }
 }

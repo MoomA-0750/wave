@@ -14,6 +14,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import xyz.mooma0750.wave.MainActivity
@@ -52,7 +53,15 @@ class WatchLogin(
         publicKey: ByteArray,
     ) {
         if (WatchLoginCrypto.publicKeyOf(publicKey) == null) return
-        if (auth.state.value !is AuthState.LoggedIn) {
+        scope.launch { handleRequest(nodeId, publicKey) }
+    }
+
+    private suspend fun handleRequest(
+        nodeId: String,
+        publicKey: ByteArray,
+    ) {
+        // 頼みでプロセスが起きた直後は、保存したログインをまだ読んでいる
+        if (!awaitSettledLogin(auth)) {
             Log.i(WaveApplication.LOG_TAG, "watch login request ignored (logged out)")
             return
         }
@@ -73,9 +82,26 @@ class WatchLogin(
         val plain = auth.exportForWatch() ?: return false
         val sealed = WatchLoginCrypto.seal(request.publicKey, plain) ?: return false
         plain.fill(0)
-        val ok = runCatching { Wearable.getMessageClient(appContext).sendMessage(request.nodeId, PATH_CREDENTIALS, sealed).await() }.isSuccess
+        val ok =
+            try {
+                Wearable.getMessageClient(appContext).sendMessage(request.nodeId, PATH_CREDENTIALS, sealed).await()
+                true
+            } catch (error: kotlinx.coroutines.CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                false
+            }
         Log.i(WaveApplication.LOG_TAG, "watch login sent ok=$ok")
         return ok
+    }
+
+    /** スマホ側: 送る（画面を閉じても送り終える。結果は知らせで出す）。 */
+    fun approveInBackground(
+        request: Request,
+        sentText: String,
+        failedText: String,
+    ) {
+        scope.launch { xyz.mooma0750.wave.ui.Notices.show(if (approve(request)) sentText else failedText) }
     }
 
     fun decline() {
@@ -220,3 +246,7 @@ suspend fun <T> Task<T>.await(): T =
             }
         }
     }
+
+/** 保存したログインを読み終えるまで待つ（メッセージでプロセスが起きた直後）。ログインしていれば true。 */
+suspend fun awaitSettledLogin(auth: AuthManager): Boolean =
+    kotlinx.coroutines.withTimeoutOrNull(10_000) { auth.state.first { it != AuthState.Restoring && it != AuthState.LoggingOut } } is AuthState.LoggedIn

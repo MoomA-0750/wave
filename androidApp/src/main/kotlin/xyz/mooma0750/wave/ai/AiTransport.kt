@@ -114,9 +114,17 @@ class PhoneRelayAiTransport(
             // 届く順が入れ替わってもよいように、番号の順に並べ直す
             val waiting = sortedMapOf<Int, String>()
             var next = 0
+            var idleMs = 0L
             while (true) {
-                val (seq, line) = withTimeoutOrNull(IDLE_TIMEOUT_MS) { channel.receive() } ?: return AiTransport.Outcome.Unreachable
-                waiting[seq] = line
+                // 欠けた番号を待ち続けない: 後ろの行が届いているのに少し待っても来なければ、欠けたものとして飛ばす
+                val received = withTimeoutOrNull(GAP_WAIT_MS) { channel.receive() }
+                if (received == null) {
+                    idleMs += GAP_WAIT_MS
+                    if (waiting.isNotEmpty()) next = waiting.firstKey() else if (idleMs >= IDLE_TIMEOUT_MS) return AiTransport.Outcome.Unreachable
+                } else {
+                    idleMs = 0
+                    waiting[received.first] = received.second
+                }
                 while (waiting.containsKey(next)) {
                     val current = waiting.remove(next)!!
                     next++
@@ -154,7 +162,15 @@ class PhoneRelayAiTransport(
         node: String,
         path: String,
         text: String,
-    ): Boolean = runCatching { Wearable.getMessageClient(appContext).sendMessage(node, path, text.encodeToByteArray()).await() }.isSuccess
+    ): Boolean =
+        try {
+            Wearable.getMessageClient(appContext).sendMessage(node, path, text.encodeToByteArray()).await()
+            true
+        } catch (error: kotlinx.coroutines.CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            false
+        }
 
     companion object {
         const val PATH_AGENT = "/wave/ai/agent"
@@ -162,6 +178,7 @@ class PhoneRelayAiTransport(
         const val PATH_LINE = "/wave/ai/line"
         const val END_PREFIX = "wave:end:"
         private const val IDLE_TIMEOUT_MS = 130_000L
+        private const val GAP_WAIT_MS = 5_000L
     }
 }
 
@@ -169,6 +186,7 @@ class PhoneRelayAiTransport(
 class AiRelayHost(
     context: Context,
     private val direct: DirectAiTransport,
+    private val auth: xyz.mooma0750.wave.core.auth.AuthManager,
     private val scope: CoroutineScope,
 ) {
     private val appContext = context.applicationContext
@@ -181,15 +199,34 @@ class AiRelayHost(
         val body = message.substringAfter('\n')
         scope.launch {
             var seq = 0
-            suspend fun reply(line: String) {
-                runCatching { Wearable.getMessageClient(appContext).sendMessage(node, PhoneRelayAiTransport.PATH_LINE, "$id\n${seq++}\n$line".encodeToByteArray()).await() }
+            // 中継の設定はスマホのもの。スマホがログインしていなければ受けない（頼みでプロセスが起きた直後は、ログインを読み終えるまで待つ）
+            if (!xyz.mooma0750.wave.watchlink.awaitSettledLogin(auth)) {
+                runCatching { Wearable.getMessageClient(appContext).sendMessage(node, PhoneRelayAiTransport.PATH_LINE, "$id\n0\n${PhoneRelayAiTransport.END_PREFIX}${AiTransport.Outcome.NotConfigured.name}".encodeToByteArray()).await() }
+                return@launch
+            }
+            // 送れなかった行は数回送り直す（時計は番号の順に読むので、欠けると後ろが止まる）。それでも送れなければ打ち切る
+            suspend fun reply(line: String): Boolean {
+                repeat(3) { attempt ->
+                    val sent =
+                        try {
+                            Wearable.getMessageClient(appContext).sendMessage(node, PhoneRelayAiTransport.PATH_LINE, "$id\n$seq\n$line".encodeToByteArray()).await()
+                            true
+                        } catch (error: kotlinx.coroutines.CancellationException) {
+                            throw error
+                        } catch (error: Exception) {
+                            false
+                        }
+                    if (sent) {
+                        seq++
+                        return true
+                    }
+                    kotlinx.coroutines.delay(300L * (attempt + 1))
+                }
+                return false
             }
             val outcome =
                 runCatching {
-                    direct.stream(body) { line ->
-                        reply(line)
-                        !isAgentDone(line)
-                    }
+                    direct.stream(body) { line -> reply(line) && !isAgentDone(line) }
                 }.getOrDefault(AiTransport.Outcome.Unreachable)
             reply(PhoneRelayAiTransport.END_PREFIX + outcome.name)
             Log.i(WaveApplication.LOG_TAG, "ai relay for watch outcome=$outcome lines=$seq")
@@ -197,7 +234,7 @@ class AiRelayHost(
     }
 
     fun onResult(body: String) {
-        scope.launch { direct.postResult(body) }
+        scope.launch { if (xyz.mooma0750.wave.watchlink.awaitSettledLogin(auth)) direct.postResult(body) }
     }
 }
 

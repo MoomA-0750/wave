@@ -111,7 +111,7 @@ class PlayerConnection(
     suspend fun toggleShuffle() = send(QueueCommands.TOGGLE_SHUFFLE, android.os.Bundle.EMPTY)
 
     /** オフ → 全体 → 1曲 → オフ。リピートは Player の標準の操作なので、カスタムコマンドにしない。 */
-    suspend fun cycleRepeatMode() {
+    suspend fun cycleRepeatMode() = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main.immediate) {
         val current = controller()
         current.repeatMode =
             when (current.repeatMode) {
@@ -125,6 +125,9 @@ class PlayerConnection(
         action: String,
         args: android.os.Bundle,
     ) {
-        controller().sendCustomCommand(SessionCommand(action, android.os.Bundle.EMPTY), args).await()
+        // MediaController は作ったスレッド（メイン）でしか触れない。Claude の道具や時計からの操作は別のスレッドから来る
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main.immediate) {
+            controller().sendCustomCommand(SessionCommand(action, android.os.Bundle.EMPTY), args).await()
+        }
     }
 }

@@ -64,7 +64,10 @@ fun QueueScreen(
                 if (row.userAdded) "${row.artist} · ${stringResource(R.string.nowplaying_next_in_queue)}" else row.artist,
                 row.thumbnailUrl,
                 onLongClick = {
-                    controller?.getMediaItemAt(index)?.let(Media3QueuePlayer::songOf)?.let { onOpenSong(it, row.itemId) }
+                    // 押すまでの間にキューが変わっていることがあるので、行の ID で今の位置を引き直す
+                    controller?.let { c -> (0 until c.mediaItemCount).firstOrNull { c.getMediaItemAt(it).mediaId == row.itemId }?.let { c.getMediaItemAt(it) } }
+                        ?.let(Media3QueuePlayer::songOf)
+                        ?.let { onOpenSong(it, row.itemId) }
                 },
             ) { scope.launch { connection.jumpTo(row.itemId) } }
         }

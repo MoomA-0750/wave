@@ -16,10 +16,8 @@ class WatchLinkListener : WearableListenerService() {
             WatchLogin.PATH_REQUEST -> container.watchLogin.onRequest(event.sourceNodeId, event.data)
             WatchLogin.PATH_CREDENTIALS -> container.watchLogin.onCredentials(event.data)
             // 時計からの Claude への頼みは、スマホがログインしていて中継を設定しているときだけ受ける（中継の設定はスマホのもの）
-            xyz.mooma0750.wave.ai.PhoneRelayAiTransport.PATH_AGENT ->
-                if (container.authManager.state.value is xyz.mooma0750.wave.core.auth.AuthState.LoggedIn) container.aiRelayHost.onAgent(event.sourceNodeId, event.data.decodeToString())
-            xyz.mooma0750.wave.ai.PhoneRelayAiTransport.PATH_RESULT ->
-                if (container.authManager.state.value is xyz.mooma0750.wave.core.auth.AuthState.LoggedIn) container.aiRelayHost.onResult(event.data.decodeToString())
+            xyz.mooma0750.wave.ai.PhoneRelayAiTransport.PATH_AGENT -> container.aiRelayHost.onAgent(event.sourceNodeId, event.data.decodeToString())
+            xyz.mooma0750.wave.ai.PhoneRelayAiTransport.PATH_RESULT -> container.aiRelayHost.onResult(event.data.decodeToString())
             xyz.mooma0750.wave.ai.PhoneRelayAiTransport.PATH_LINE -> container.phoneRelayAiTransport.onLine(event.data.decodeToString())
             else -> if (event.path.startsWith(REMOTE_PREFIX)) container.watchRemote.onMessage(event.sourceNodeId, event.path, event.data)
         }

@@ -41,6 +41,8 @@ fun DevicePickerSheet(
     onOpenSettings: () -> Unit,
     /** 時計（Wear OS 版の wave）。近くにあれば、時計へ再生を移す行を出す。 */
     watch: xyz.mooma0750.wave.watchlink.WatchRemote? = null,
+    /** このスマホで鳴っているか（鳴っていなくて時計が鳴っていれば、時計の行は時計の再生をスマホへ移す）。 */
+    phonePlaying: Boolean = false,
 ) {
     if (watch != null) {
         androidx.compose.runtime.DisposableEffect(watch) {
@@ -102,7 +104,7 @@ fun DevicePickerSheet(
                     enabled = true,
                 ) {
                     onDismiss()
-                    if (remote == null && state.playing) watch?.pull() else watch?.push()
+                    if (remote == null && !phonePlaying && state.playing) watch?.pull() else watch?.push()
                 }
             }
             Spacer(Modifier.height(8.dp))

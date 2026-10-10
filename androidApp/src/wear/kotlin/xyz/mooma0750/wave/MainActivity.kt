@@ -81,9 +81,16 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * 確認用（debug ビルドで adb から `--ez preview_ui true` を付けて開いたときだけ）: ログインしていなくても、ログイン後の画面の並びと行き来を見る。
+     * 通信はログインしていないので失敗する（失敗の表示になる）。認証情報には触れない。
+     */
+    private val previewUi = androidx.compose.runtime.mutableStateOf(false)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val container = (application as WaveApplication).container
+        if (container.isDebuggable && intent?.getBooleanExtra("preview_ui", false) == true) previewUi.value = true
         DebugActions.handle(intent, container)
         if (savedInstanceState == null) openFromIntent(intent)
         setContent {
@@ -92,7 +99,8 @@ class MainActivity : ComponentActivity() {
                     val authState by container.authManager.state.collectAsStateWithLifecycle()
                     when (val state = authState) {
                         AuthState.Restoring, AuthState.LoggingOut -> FullScreenLoading()
-                        AuthState.LoggedOut, is AuthState.Unreadable -> LoginScreen(container.watchLogin, unreadable = state is AuthState.Unreadable)
+                        AuthState.LoggedOut, is AuthState.Unreadable ->
+                            if (previewUi.value) LoggedIn(container, nav, 0) else LoginScreen(container.watchLogin, unreadable = state is AuthState.Unreadable)
                         is AuthState.LoggedIn -> LoggedIn(container, nav, state.obtainedAtEpochMs)
                     }
                 }

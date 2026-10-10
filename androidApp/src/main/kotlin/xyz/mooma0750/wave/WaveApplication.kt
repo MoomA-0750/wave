@@ -329,7 +329,7 @@ class AppContainer(
         get() = if (appContext.packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_WATCH)) phoneRelayAiTransport else directAiTransport
 
     /** スマホ: 時計からの Claude への頼みを中継する。 */
-    val aiRelayHost by lazy { xyz.mooma0750.wave.ai.AiRelayHost(appContext, directAiTransport, appScope) }
+    val aiRelayHost by lazy { xyz.mooma0750.wave.ai.AiRelayHost(appContext, directAiTransport, authManager, appScope) }
 
     /** Claude との会話（tools/ai-bridge の中継を通す）。アプリが動いている間だけ会話を持つ。 */
     val aiChat: xyz.mooma0750.wave.ai.AiChat by lazy {

@@ -37,6 +37,8 @@ fun LoginScreen(
     unreadable: Boolean,
 ) {
     val status by watchLogin.status.collectAsStateWithLifecycle()
+    // ログアウトして戻ってきたときに、前のログインの「済んだ」を残さない
+    androidx.compose.runtime.LaunchedEffect(Unit) { if (watchLogin.status.value == WatchLogin.Status.Done) watchLogin.reset() }
     ListScreen(
         stringResource(R.string.watch_login_title),
         edgeButton = {

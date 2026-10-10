@@ -5,19 +5,15 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import kotlinx.coroutines.launch
 import xyz.mooma0750.wave.R
-import xyz.mooma0750.wave.ui.Notices
 
 /** 時計からログインを頼まれたら、番号を出して本人に送るかを決めてもらう（ADR-0011）。アプリのどの画面の上にも出す。 */
 @Composable
 fun WatchLoginDialog(watchLogin: WatchLogin) {
     val pending by watchLogin.pending.collectAsStateWithLifecycle()
     val request = pending?.takeIf { watchLogin.current() === it } ?: return
-    val scope = rememberCoroutineScope()
     val sent = stringResource(R.string.watch_login_sent)
     val failed = stringResource(R.string.watch_login_send_failed)
     AlertDialog(
@@ -26,7 +22,7 @@ fun WatchLoginDialog(watchLogin: WatchLogin) {
         text = { Text(stringResource(R.string.watch_login_dialog_text, request.code)) },
         confirmButton = {
             TextButton(onClick = {
-                scope.launch { Notices.show(if (watchLogin.approve(request)) sent else failed) }
+                watchLogin.approveInBackground(request, sent, failed)
             }) { Text(stringResource(R.string.watch_login_send)) }
         },
         dismissButton = { TextButton(onClick = watchLogin::decline) { Text(stringResource(R.string.watch_login_cancel)) } },
