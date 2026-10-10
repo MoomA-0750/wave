@@ -22,8 +22,16 @@ fun AiScreen(
     val state by chat.state.collectAsStateWithLifecycle()
     val ask = rememberTextInput(stringResource(R.string.ai_placeholder)) { chat.send(it) }
     val suggestions = listOf(R.string.ai_suggest_meaning, R.string.ai_suggest_similar, R.string.ai_suggest_playlist).map { stringResource(it) }
+    // 新しい頼み・答えが来たら、いちばん下（新しいもの）へ送る
+    val listState = androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState()
+    val last = state.messages.lastOrNull()
+    androidx.compose.runtime.LaunchedEffect(state.messages.size, (last as? AiMessage.Assistant)?.text?.length?.div(200), state.running) {
+        val count = listState.layoutInfo.totalItemsCount
+        if (state.messages.isNotEmpty() && count > 0) listState.animateScrollToItem(count - 1)
+    }
     ListScreen(
         stringResource(R.string.ai_title),
+        state = listState,
         edgeButton = {
             if (state.running) MainEdgeButton(R.drawable.ic_close, stringResource(R.string.ai_stop), onClick = chat::stop) else MainEdgeButton(R.drawable.ic_ai, stringResource(R.string.ai_send), onClick = ask)
         },

@@ -45,4 +45,5 @@
     <string name="phone_remote_failed">Couldn\'t move playback. Open wave on your watch and try again.</string>
     <string name="wear_ai_not_configured">Claude isn\'t set up on your phone. Set it up in wave on your phone first.</string>
     <string name="wear_ai_unreachable">Couldn\'t reach Claude through your phone. Check that your phone is nearby.</string>
+    <string name="wear_connect_headphones">Connect headphones to play</string>
 </resources>

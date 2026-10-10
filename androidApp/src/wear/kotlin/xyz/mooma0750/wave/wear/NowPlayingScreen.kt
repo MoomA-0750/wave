@@ -3,6 +3,7 @@ package xyz.mooma0750.wave.wear
 import android.content.Context
 import android.media.AudioManager
 import androidx.compose.foundation.basicMarquee
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -71,6 +72,26 @@ fun NowPlayingScreen(
     var volumeShownAt by remember { mutableLongStateOf(0L) }
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { focus.requestFocus() }
+    // 時計のスピーカーでは鳴らさない（Wear OS の決まり）。イヤホンが無くて止められたら、出力先を選ぶ画面を1回だけ開き、案内も出す
+    var suppressed by remember { androidx.compose.runtime.mutableStateOf(false) }
+    androidx.compose.runtime.DisposableEffect(controller) {
+        val current = controller ?: return@DisposableEffect onDispose {}
+        fun read() {
+            val now = current.playbackSuppressionReason == Player.PLAYBACK_SUPPRESSION_REASON_UNSUITABLE_AUDIO_OUTPUT && current.playWhenReady
+            if (now && !suppressed) openOutputSwitcher(context)
+            suppressed = now
+        }
+        val listener =
+            object : Player.Listener {
+                override fun onEvents(
+                    player: Player,
+                    events: Player.Events,
+                ) = read()
+            }
+        current.addListener(listener)
+        read()
+        onDispose { current.removeListener(listener) }
+    }
     ScreenScaffold {
         Box(
             Modifier
@@ -110,10 +131,14 @@ fun NowPlayingScreen(
                     )
                     Text(
                         when {
+                            suppressed -> stringResource(R.string.wear_connect_headphones)
                             state.error != null -> stringResource(R.string.nowplaying_error)
                             state.buffering -> stringResource(R.string.nowplaying_buffering)
                             else -> state.artist.orEmpty()
                         },
+                        // イヤホンが無いときは、押すと出力先を選ぶ画面を開く
+                        modifier = if (suppressed) Modifier.clickable { openOutputSwitcher(context) } else Modifier,
+                        color = if (suppressed) MaterialTheme.colorScheme.primary else androidx.compose.ui.graphics.Color.Unspecified,
                         maxLines = 1,
                         style = MaterialTheme.typography.bodySmall,
                         textAlign = TextAlign.Center,

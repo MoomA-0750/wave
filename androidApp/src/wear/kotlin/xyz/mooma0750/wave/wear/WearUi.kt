@@ -54,9 +54,9 @@ class RowLook(
 fun ListScreen(
     title: String?,
     edgeButton: (@Composable () -> Unit)? = null,
+    state: androidx.wear.compose.foundation.lazy.TransformingLazyColumnState = rememberTransformingLazyColumnState(),
     content: TransformingLazyColumnScope.(RowLook) -> Unit,
 ) {
-    val state = rememberTransformingLazyColumnState()
     val look = RowLook(rememberTransformationSpec())
     val body: @Composable (androidx.compose.foundation.layout.PaddingValues) -> Unit = { padding ->
         TransformingLazyColumn(state = state, contentPadding = padding) {

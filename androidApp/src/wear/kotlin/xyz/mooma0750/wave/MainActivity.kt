@@ -14,6 +14,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.wear.compose.material3.AppScaffold
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import xyz.mooma0750.wave.artist.AlbumViewModel
 import xyz.mooma0750.wave.artist.ArtistViewModel
@@ -185,6 +186,13 @@ private fun LoggedIn(
         }
     }
     val likedTitle = stringResource(R.string.main_liked_songs)
+    // スマホの再生を時計へ引き取ったら、再生画面へ
+    LaunchedEffect(container) {
+        // 前に済んだ結果（StateFlow が最初に返すもの）では開かない
+        container.watchRemote.result.drop(1).collect { result ->
+            if (result?.second == xyz.mooma0750.wave.watchlink.WatchRemote.Result.Pulled) nav.openNowPlaying()
+        }
+    }
 
     WearNavHost(nav) { screen ->
         when (screen) {

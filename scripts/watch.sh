@@ -8,8 +8,8 @@
 set -euo pipefail
 here=$(cd "$(dirname "$0")/.." && pwd)
 serial=127.0.0.1:15557
-# Android Studio・Gradle と同じ SDK の adb を使う（/usr/bin/adb と版が違うと、互いに相手の adb サーバーを止める）
-adb() { "${ANDROID_HOME:-$HOME/Android/Sdk}/platform-tools/adb" "$@"; }
+# 常駐の通知の見張り（chatnotify）が /usr/bin/adb を使うので、同じものを使う（版の違う adb が混ざると、互いに相手の adb サーバーを止める）
+adb() { /usr/bin/adb "$@"; }
 sdk='$env:LOCALAPPDATA\Android\Sdk'
 remote_adb() { ssh tofu "& \"$sdk\\platform-tools\\adb.exe\" -s emulator-5556 $*"; }
 case "${1:-}" in
