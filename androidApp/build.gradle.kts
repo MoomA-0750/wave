@@ -30,6 +30,22 @@ android {
         buildConfigField("String", "RELAY_V2_HOST", "\"" + (localProperties.getProperty("wave.relayV2Host") ?: "") + "\"")
     }
 
+    // スマホ（phone）と時計（wear）を同じソースから組む。applicationId を同じにする（時計とスマホの間で
+    // Data Layer を使うには、同じパッケージ名・同じ署名が要る）。共通の部品は main、画面はそれぞれの flavor に置く
+    flavorDimensions += "device"
+    productFlavors {
+        create("phone") {
+            dimension = "device"
+        }
+        create("wear") {
+            dimension = "device"
+            // Galaxy Watch 7 は Wear OS 5（API 34）以降
+            minSdk = 34
+            // スマホ版と同じ applicationId で並べて配るため、versionCode を分ける（時計の方を大きく）
+            versionCode = 100001
+        }
+    }
+
     buildFeatures {
         compose = true
         buildConfig = true
@@ -50,7 +66,8 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
-    implementation(libs.androidx.compose.material3)
+    implementation(libs.androidx.compose.runtime)
+    "phoneImplementation"(libs.androidx.compose.material3)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.ktor.client.okhttp)
@@ -63,9 +80,17 @@ dependencies {
     implementation(libs.coil.network.okhttp)
     // Phase 6 のペアリングの QR（表示は ZXing、読み取りは CameraX の画像を ZXing で解く）
     implementation(libs.zxing.core)
-    implementation(libs.androidx.camera.camera2)
-    implementation(libs.androidx.camera.lifecycle)
-    implementation(libs.androidx.camera.view)
+    "phoneImplementation"(libs.androidx.camera.camera2)
+    "phoneImplementation"(libs.androidx.camera.lifecycle)
+    "phoneImplementation"(libs.androidx.camera.view)
+    // スマホと時計の間でログインを渡す
+    implementation(libs.play.services.wearable)
+    // 時計の画面
+    "wearImplementation"(libs.wear.compose.material3)
+    "wearImplementation"(libs.wear.compose.foundation)
+    "wearImplementation"(libs.wear.input)
+    "wearImplementation"(libs.wear.ongoing)
+    "wearImplementation"(libs.wear.phone.interactions)
 
     testImplementation(libs.junit4)
     testImplementation(kotlin("test"))

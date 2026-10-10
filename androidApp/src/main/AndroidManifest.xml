@@ -7,9 +7,6 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- 新作の確かめ（定期のジョブ）を再起動の後も続ける -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <!-- ペアリングの QR を読むときだけ使う -->
-    <uses-permission android:name="android.permission.CAMERA" />
-    <uses-feature android:name="android.hardware.camera.any" android:required="false" />
 
     <application
         android:name=".WaveApplication"
@@ -19,25 +16,6 @@
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.NoActionBar">
-        <activity
-            android:name=".MainActivity"
-            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|density|uiMode|fontScale|locale|layoutDirection"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
-
-        <!-- 通知の「プレイリストに追加」から開く、ダイアログだけの透明な画面 -->
-        <activity
-            android:name=".library.AddToPlaylistActivity"
-            android:exported="false"
-            android:excludeFromRecents="true"
-            android:noHistory="true"
-            android:taskAffinity=""
-            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
-
         <!-- 登録したアーティストの新作を裏で確かめる -->
         <service
             android:name=".releases.ReleaseWatcher"

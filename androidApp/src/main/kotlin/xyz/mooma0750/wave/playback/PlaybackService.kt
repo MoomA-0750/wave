@@ -581,7 +581,7 @@ class PlaybackService : MediaSessionService() {
                 val song =
                     localPlayer?.currentMediaItem?.let(Media3QueuePlayer::songOf)?.takeIf { it.videoId == target }
                         ?: container.connectV2?.remotePlayback?.value?.current?.takeIf { it.videoId == target }
-                if (state.status == LikeStatus.Like && song != null) xyz.mooma0750.wave.library.AddToPlaylistActivity.notifyLiked(this, song)
+                if (state.status == LikeStatus.Like && song != null) xyz.mooma0750.wave.library.LikedNotice.notifyLiked(this, song)
             }
         }
         val current = session ?: return
