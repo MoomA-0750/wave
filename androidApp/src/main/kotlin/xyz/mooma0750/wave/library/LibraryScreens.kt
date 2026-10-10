@@ -259,6 +259,8 @@ fun AddToPlaylistDialog(
     /** 足す。結果を onResult で返す（どのスレッドからでもよい）。受け付けなければ false。 */
     onPick: (playlist: PlaylistSummary, onResult: (AddToPlaylistResult) -> Unit) -> Boolean,
     onCreate: (title: String) -> Unit,
+    /** 入っているプレイリストを押した: 外す（Spotify と同じく、押すたびに入れる・外すを切り替える）。外せたかを onResult で返す。受け付けなければ false。 */
+    onUnpick: (playlist: PlaylistSummary, onResult: (removed: Boolean) -> Unit) -> Boolean,
     /** 追加する曲。どのプレイリストに入っているかを確かめるのに使う。 */
     song: Song,
     membership: PlaylistMembership,
@@ -278,6 +280,8 @@ fun AddToPlaylistDialog(
     val statuses by check.status.collectAsStateWithLifecycle()
     // 足している途中のプレイリスト
     var adding by remember { mutableStateOf(emptySet<String>()) }
+    // 外している途中のプレイリスト
+    var removing by remember { mutableStateOf(emptySet<String>()) }
     LaunchedEffect(check, song.videoId, editable.map { it.playlistId }) {
         if (editable.isNotEmpty()) check.start(editable.map { it.playlistId }, song.videoId)
     }
@@ -315,25 +319,37 @@ fun AddToPlaylistDialog(
                     itemsIndexed(editable, key = { _, playlist -> playlist.playlistId }) { _, playlist ->
                         val id = playlist.playlistId
                         val status = statuses[id]
-                        val busy = id in adding
+                        val busy = id in adding || id in removing
                         Row(
                             Modifier
                                 .fillMaxWidth()
-                                .clickable(enabled = status != PlaylistMembership.Status.In && !busy) {
-                                    val accepted =
-                                        onPick(playlist) { result ->
-                                            scope.launch {
-                                                adding = adding - id
-                                                if (result == AddToPlaylistResult.Added || result == AddToPlaylistResult.AlreadyInPlaylist) check.markIn(id)
+                                .clickable(enabled = status != PlaylistMembership.Status.Checking && !busy) {
+                                    if (status == PlaylistMembership.Status.In) {
+                                        val accepted =
+                                            onUnpick(playlist) { removed ->
+                                                scope.launch {
+                                                    removing = removing - id
+                                                    if (removed) check.markNotIn(id)
+                                                }
                                             }
-                                        }
-                                    if (accepted) adding = adding + id
+                                        if (accepted) removing = removing + id
+                                    } else {
+                                        val accepted =
+                                            onPick(playlist) { result ->
+                                                scope.launch {
+                                                    adding = adding - id
+                                                    if (result == AddToPlaylistResult.Added || result == AddToPlaylistResult.AlreadyInPlaylist) check.markIn(id)
+                                                }
+                                            }
+                                        if (accepted) adding = adding + id
+                                    }
                                 }.padding(vertical = 12.dp),
                             verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
                         ) {
                             Column(Modifier.weight(1f)) {
                                 Text(playlist.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 when {
+                                    id in removing -> Text(stringResource(R.string.library_membership_removing), style = MaterialTheme.typography.bodySmall)
                                     busy -> Text(stringResource(R.string.library_membership_adding), style = MaterialTheme.typography.bodySmall)
                                     status == PlaylistMembership.Status.Unknown -> Text(stringResource(R.string.library_membership_unknown), style = MaterialTheme.typography.bodySmall)
                                 }

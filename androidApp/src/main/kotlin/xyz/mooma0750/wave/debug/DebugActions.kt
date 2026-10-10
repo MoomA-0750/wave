@@ -337,6 +337,11 @@ object DebugActions {
                         is CallResult.Ok -> result.value.albumShelves.forEach { shelf -> shelf.albums.forEach { Log.i(WaveApplication.LOG_TAG, "debug artist album ${it.browseId} ${it.title} | ${it.subtitle}") } }
                         is CallResult.Failed -> Log.i(WaveApplication.LOG_TAG, "debug artist failed ${result.kind}")
                     }
+                "playlist_top" ->
+                    when (val result = container.music.playlist(intent.getStringExtra("playlist_id") ?: "LM")) {
+                        is CallResult.Ok -> result.value.songs.take(intent.getIntExtra("n", 3)).forEach { Log.i(WaveApplication.LOG_TAG, "debug playlist top ${it.title} | ${it.subtitle}") }
+                        is CallResult.Failed -> Log.i(WaveApplication.LOG_TAG, "debug playlist top failed ${result.kind}")
+                    }
                 "album_probe" ->
                     when (val result = container.music.album(intent.getStringExtra("browse_id") ?: "")) {
                         is CallResult.Ok -> Log.i(WaveApplication.LOG_TAG, "debug album artists=${result.value.artists} subtitle=${result.value.subtitle} songs=${result.value.songs.map { s -> s.artists }}")

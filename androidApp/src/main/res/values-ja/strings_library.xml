@@ -29,6 +29,7 @@
     <string name="library_add_failed">追加できませんでした</string>
     <string name="library_add_unknown">追加できたか確認できませんでした。プレイリストを開いて確かめてください</string>
     <string name="library_removed_from_playlist">プレイリストから外しました</string>
+    <string name="library_removed_from_playlist_named">「%1$s」から外しました</string>
     <string name="library_remove_failed">外せませんでした</string>
     <string name="library_remove_unknown">外せたか確認できませんでした。表示を読み直します</string>
     <string name="library_playlist_created">「%1$s」を作りました</string>
@@ -129,6 +130,7 @@
         <item quantity="other">%1$d曲以上 • %2$s</item>
     </plurals>
     <string name="library_membership_adding">追加しています…</string>
+    <string name="library_membership_removing">外しています…</string>
     <string name="library_done">完了</string>
     <string name="library_back">戻る</string>
     <string name="library_notification_channel_liked">高く評価した曲</string>

@@ -53,6 +53,34 @@ class PlaylistEditor(
         }
     }
 
+    /**
+     * 追加の画面で、入っているプレイリストを押した: その曲を外す（同じ曲が2回入っていれば両方）。
+     * @param onResult 外せたか（追加の画面が印を戻すのに使う）。メインスレッドとは限らない。
+     */
+    fun removeSong(
+        playlist: PlaylistSummary,
+        song: Song,
+        onResult: (removed: Boolean) -> Unit = {},
+    ) = run("remove-song:${playlist.playlistId}:${song.videoId}") { generation ->
+        val setVideoIds = membership?.setVideoIds(playlist.playlistId, song.videoId)
+        if (setVideoIds.isNullOrEmpty()) {
+            Log.i(WaveApplication.LOG_TAG, "playlist remove-song no set ids known=${setVideoIds != null}")
+            onResult(false)
+            return@run context.getString(R.string.library_remove_failed)
+        }
+        val results = setVideoIds.map { music.removeFromPlaylist(playlist.playlistId, song.videoId, it, generation) }
+        Log.i(WaveApplication.LOG_TAG, "playlist remove-song results=${results.map { it::class.simpleName }}")
+        val removed = results.all { it is WriteResult.Done }
+        if (removed) membership?.noteRemoved(playlist.playlistId, song.videoId) else membership?.invalidate(playlist.playlistId)
+        if (results.any { it !is WriteResult.Failed }) onChanged()
+        onResult(removed)
+        when {
+            removed -> context.getString(R.string.library_removed_from_playlist_named, playlist.title)
+            results.any { it is WriteResult.Unknown } -> context.getString(R.string.library_remove_unknown)
+            else -> context.getString(R.string.library_remove_failed)
+        }
+    }
+
     fun remove(
         playlistId: String,
         song: Song,

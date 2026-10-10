@@ -245,6 +245,19 @@ class AppContainer(
     /** 曲がどのプレイリストに入っているかの確認（プレイリストが変わるまで使い回す）。 */
     val playlistMembership = PlaylistMembership(music)
 
+    private var membershipPrefetch: kotlinx.coroutines.Job? = null
+
+    /** 再生が始まった曲について、どのプレイリストに入っているかを先に調べておく（追加の画面をすぐ出し、✓の印を付ける）。 */
+    fun prefetchMembership(videoId: String) {
+        membershipPrefetch?.cancel()
+        membershipPrefetch =
+            appScope.launch {
+                if (authManager.state.value !is xyz.mooma0750.wave.core.auth.AuthState.LoggedIn) return@launch
+                val playlists = libraryCache.playlists ?: (music.libraryPlaylists() as? xyz.mooma0750.wave.core.session.CallResult.Ok)?.value?.also { libraryCache.playlists = it } ?: return@launch
+                playlistMembership.prefetch(playlists.filter { it.editable }.map { it.playlistId }, videoId)
+            }
+    }
+
     /** 高く評価した曲の読み込み（アーティストのページで使う）。評価が変わるまで使い回す。 */
     val likedSongs = LikedSongsCache(music)
 

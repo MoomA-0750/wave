@@ -94,6 +94,8 @@ data class HistoryPage(
 sealed interface PlaylistScan {
     data class Ok(
         val videoIds: Set<String>,
+        /** 曲ごとの、プレイリスト内の項目の ID（外すのに使う。同じ曲が2回入っていれば2つ。取れなかった曲は空）。 */
+        val setVideoIds: Map<String, List<String>> = emptyMap(),
     ) : PlaylistScan
 
     /** 最後まで読めなかった（中に在るかどうかを言えない）。 */

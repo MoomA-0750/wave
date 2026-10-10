@@ -44,6 +44,7 @@
     <string name="nowplaying_play">再生</string>
     <string name="nowplaying_like_pending">変更中</string>
     <string name="nowplaying_unlike">高く評価した曲から外す</string>
+    <string name="nowplaying_saved_in_playlist">プレイリストに入っています（追加先を変える）</string>
     <string name="nowplaying_like_reload">評価を読み直す</string>
     <string name="nowplaying_like">高く評価した曲に追加</string>
     <string name="nowplaying_close">閉じる</string>

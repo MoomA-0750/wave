@@ -29,6 +29,7 @@
     <string name="library_add_failed">Couldn\'t add the song</string>
     <string name="library_add_unknown">Couldn\'t confirm the song was added. Open the playlist to check</string>
     <string name="library_removed_from_playlist">Removed from playlist</string>
+    <string name="library_removed_from_playlist_named">Removed from %1$s</string>
     <string name="library_remove_failed">Couldn\'t remove the song</string>
     <string name="library_remove_unknown">Couldn\'t confirm the song was removed. Reloading</string>
     <string name="library_playlist_created">Created “%1$s”</string>
@@ -134,6 +135,7 @@
         <item quantity="other">%1$d+ songs • %2$s</item>
     </plurals>
     <string name="library_membership_adding">Adding…</string>
+    <string name="library_membership_removing">Removing…</string>
     <string name="library_done">Done</string>
     <string name="library_back">Back</string>
     <string name="library_notification_channel_liked">Liked songs</string>

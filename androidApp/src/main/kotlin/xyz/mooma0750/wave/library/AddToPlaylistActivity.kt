@@ -38,6 +38,7 @@ class AddToPlaylistActivity : ComponentActivity() {
                     viewModel { LibraryViewModel(container.music, container.libraryCache) },
                     onDismiss = ::finish,
                     onPick = { playlist, onResult -> container.playlistEditor.add(playlist, song, onResult) },
+                    onUnpick = { playlist, onResult -> container.playlistEditor.removeSong(playlist, song, onResult) },
                     onCreate = { title ->
                         container.playlistEditor.create(title, song)
                         finish()

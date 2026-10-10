@@ -44,6 +44,7 @@
     <string name="nowplaying_play">Play</string>
     <string name="nowplaying_like_pending">Updating</string>
     <string name="nowplaying_unlike">Remove from Liked Songs</string>
+    <string name="nowplaying_saved_in_playlist">Saved in a playlist (change)</string>
     <string name="nowplaying_like_reload">Reload like status</string>
     <string name="nowplaying_like">Add to Liked Songs</string>
     <string name="nowplaying_close">Close</string>

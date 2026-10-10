@@ -317,6 +317,7 @@ class MusicRepository(
         expectedGeneration: Long = currentLoginGeneration(),
     ): PlaylistScan {
         val ids = mutableSetOf<String>()
+        val setIds = mutableMapOf<String, MutableList<String>>()
         var continuation: String? = null
         var pages = 0
         do {
@@ -324,6 +325,7 @@ class MusicRepository(
                 is CallResult.Failed -> return PlaylistScan.Incomplete(page.kind)
                 is CallResult.Ok -> {
                     ids += page.value.songs.map { it.videoId }
+                    page.value.songs.forEachIndexed { i, song -> page.value.setVideoIds.getOrNull(i)?.let { setIds.getOrPut(song.videoId) { mutableListOf() } += it } }
                     continuation = page.value.continuation
                     // 続きが読めなかっただけかもしれない（応答の形の変化）なら、全部読んだとはみなさない
                     if (continuation == null && !page.value.endConfirmed) return PlaylistScan.Incomplete(FailureKind.Parse)
@@ -332,7 +334,7 @@ class MusicRepository(
             // 続きのトークンが循環しても止まるように、ページ数に上限を置く（1ページ100曲で5000曲）
             if (++pages >= MAX_PLAYLIST_PAGES && continuation != null) return PlaylistScan.Incomplete(FailureKind.Parse)
         } while (continuation != null)
-        return PlaylistScan.Ok(ids)
+        return PlaylistScan.Ok(ids, setIds)
     }
 
     private suspend fun writeAdd(

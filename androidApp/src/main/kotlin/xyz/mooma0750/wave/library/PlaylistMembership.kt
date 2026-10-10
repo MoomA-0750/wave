@@ -41,18 +41,66 @@ class PlaylistMembership(
     private class Cached(
         val readAtMs: Long,
         val videoIds: Set<String>,
+        /** 曲ごとの、プレイリスト内の項目の ID（外すのに使う）。このアプリで足した曲は分からないので持たない。 */
+        val setVideoIds: Map<String, List<String>> = emptyMap(),
     )
 
     private val lock = Mutex()
     private val cache = mutableMapOf<String, Cached>()
 
+    /** 再生中の曲と、それが入っている（と分かった）プレイリスト。 */
+    data class NowPlaying(
+        val videoId: String,
+        val playlistIds: Set<String>,
+    )
+
+    private val mutableNowPlaying = MutableStateFlow<NowPlaying?>(null)
+
+    /** 再生中の曲がどのプレイリストに入っているか（[prefetch] で調べる。Spotify の、どこかに入っていれば✓の印に使う）。 */
+    val nowPlaying: StateFlow<NowPlaying?> = mutableNowPlaying
+
+    /**
+     * 再生が始まった曲について、自分のプレイリストを先に読んでおく（追加の画面を開いたときに待たせない）。
+     * 読んだ結果は覚えるので、次の曲からは古くなったプレイリストだけを読み直す。
+     */
+    suspend fun prefetch(
+        playlistIds: List<String>,
+        videoId: String,
+    ) {
+        // 同じ曲の読み直し（プレイリストを編集した後）では、分かっている印を消さない
+        if (mutableNowPlaying.value?.videoId != videoId) mutableNowPlaying.value = NowPlaying(videoId, emptySet())
+        val limit = Semaphore(CONCURRENCY)
+        val startedMs = nowMs()
+        kotlinx.coroutines.coroutineScope {
+            playlistIds.forEach { playlistId ->
+                launch {
+                    val ids = limit.withPermit { videoIds(playlistId) }
+                    if (ids != null && videoId in ids) mutableNowPlaying.update { it?.takeIf { now -> now.videoId == videoId }?.copy(playlistIds = it.playlistIds + playlistId) ?: it }
+                }
+            }
+        }
+        Log.i(WaveApplication.LOG_TAG, "membership prefetch playlists=${playlistIds.size} in=${mutableNowPlaying.value?.playlistIds?.size} ms=${nowMs() - startedMs}")
+    }
+
+    private fun noteNowPlaying(
+        playlistId: String,
+        videoId: String,
+        isIn: Boolean,
+    ) = mutableNowPlaying.update { now -> if (now?.videoId != videoId) now else now.copy(playlistIds = if (isIn) now.playlistIds + playlistId else now.playlistIds - playlistId) }
+
     /** 1つのプレイリストを読む。読めたら曲の ID の集合、読めなければ null。 */
-    internal suspend fun videoIds(playlistId: String): Set<String>? {
-        lock.withLock { cache[playlistId] }?.takeIf { nowMs() - it.readAtMs < MAX_AGE_MS }?.let { return it.videoIds }
+    internal suspend fun videoIds(playlistId: String): Set<String>? = read(playlistId)?.videoIds
+
+    private suspend fun read(
+        playlistId: String,
+        fresh: Boolean = false,
+    ): Cached? {
+        if (!fresh) lock.withLock { cache[playlistId] }?.takeIf { nowMs() - it.readAtMs < MAX_AGE_MS }?.let { return it }
         return when (val scan = music.scanPlaylist(playlistId)) {
             is PlaylistScan.Ok -> {
-                lock.withLock { cache[playlistId] = Cached(nowMs(), scan.videoIds) }
-                scan.videoIds
+                val read = Cached(nowMs(), scan.videoIds, scan.setVideoIds)
+                lock.withLock { cache[playlistId] = read }
+                read
             }
             is PlaylistScan.Incomplete -> {
                 Log.i(WaveApplication.LOG_TAG, "playlist scan incomplete kind=${scan.kind}")
@@ -66,7 +114,30 @@ class PlaylistMembership(
         playlistId: String,
         videoId: String,
     ) {
-        lock.withLock { cache[playlistId]?.let { cache[playlistId] = Cached(it.readAtMs, it.videoIds + videoId) } }
+        lock.withLock { cache[playlistId]?.let { cache[playlistId] = Cached(it.readAtMs, it.videoIds + videoId, it.setVideoIds) } }
+        noteNowPlaying(playlistId, videoId, isIn = true)
+    }
+
+    /**
+     * 曲を外すのに使う、プレイリスト内の項目の ID。覚えていなければ（このアプリで足した曲など）読み直す。
+     * 読めなければ null、入っていなければ空。
+     */
+    suspend fun setVideoIds(
+        playlistId: String,
+        videoId: String,
+    ): List<String>? {
+        read(playlistId)?.setVideoIds?.get(videoId)?.takeIf { it.isNotEmpty() }?.let { return it }
+        val read = read(playlistId, fresh = true) ?: return null
+        return read.setVideoIds[videoId].orEmpty()
+    }
+
+    /** このアプリで曲を外した（読んだ集合から除く）。 */
+    suspend fun noteRemoved(
+        playlistId: String,
+        videoId: String,
+    ) {
+        lock.withLock { cache[playlistId]?.let { cache[playlistId] = Cached(it.readAtMs, it.videoIds - videoId, it.setVideoIds - videoId) } }
+        noteNowPlaying(playlistId, videoId, isIn = false)
     }
 
     /** 結果が分からない変更をした（次は読み直す）。 */
@@ -77,6 +148,7 @@ class PlaylistMembership(
     /** ログアウト。 */
     suspend fun clear() {
         lock.withLock { cache.clear() }
+        mutableNowPlaying.value = null
     }
 
     /**
@@ -120,6 +192,9 @@ class PlaylistMembership(
         /** 画面の中で足した（読み直さずに「入っている」にする）。 */
         fun markIn(playlistId: String) = mutableStatus.update { it + (playlistId to Status.In) }
 
+        /** 画面の中で外した。 */
+        fun markNotIn(playlistId: String) = mutableStatus.update { it + (playlistId to Status.NotIn) }
+
         fun cancel() {
             job?.cancel()
             job = null
@@ -130,7 +205,10 @@ class PlaylistMembership(
         /** 同時に読むプレイリストの数。 */
         const val CONCURRENCY = 6
 
-        /** これより古い結果は読み直す（ほかの端末での変更を拾う）。 */
-        const val MAX_AGE_MS = 10 * 60 * 1000L
+        /** これより古い結果は読み直す（ほかの端末での変更を拾う。再生のたびに先読みするので、短すぎると毎回全部を読み直す）。 */
+        const val MAX_AGE_MS = 30 * 60 * 1000L
     }
 }
+
+/** 再生中の曲がどのプレイリストに入っているかの覚え（再生画面の評価のボタンが✓を付けるのに使う）。 */
+val LocalPlaylistMembership = androidx.compose.runtime.staticCompositionLocalOf<PlaylistMembership?> { null }

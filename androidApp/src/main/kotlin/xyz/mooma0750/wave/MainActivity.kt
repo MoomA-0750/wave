@@ -191,7 +191,10 @@ class MainActivity : ComponentActivity() {
                                 viewModel(key = "relogin-$loginGeneration") { LoginViewModel(container) },
                                 onCancel = { reLogin = false },
                             )
-                        } else androidx.compose.runtime.CompositionLocalProvider(xyz.mooma0750.wave.ui.LocalLikedIds provides likedIds) {
+                        } else androidx.compose.runtime.CompositionLocalProvider(xyz.mooma0750.wave.ui.LocalLikedIds provides likedIds, xyz.mooma0750.wave.library.LocalPlaylistMembership provides container.playlistMembership) {
+                            // 再生が始まった曲がどのプレイリストに入っているかを先に調べておく（追加の画面をすぐ出し、評価のボタンに✓を付ける）
+                            val playingId = container.player.likeState.collectAsState().value.videoId
+                            LaunchedEffect(playingId, playlistsVersion) { playingId?.let(container::prefetchMembership) }
                             // Claude に聞く（再生画面の ✨ からシートで開く。下のバーの「Claude」のタブと同じ会話）
                             var showAi by remember { mutableStateOf(false) }
                             if (showAi) {
@@ -374,6 +377,7 @@ class MainActivity : ComponentActivity() {
                                     onDismiss = { addTarget = null },
                                     // 押しても閉じない（続けてほかのプレイリストにも足せる）
                                     onPick = { playlist, onResult -> container.playlistEditor.add(playlist, song, onResult) },
+                                    onUnpick = { playlist, onResult -> container.playlistEditor.removeSong(playlist, song, onResult) },
                                     onCreate = { title ->
                                         container.playlistEditor.create(title, song)
                                         addTarget = null

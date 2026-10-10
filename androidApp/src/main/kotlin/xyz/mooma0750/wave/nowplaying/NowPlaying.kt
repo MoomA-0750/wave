@@ -188,27 +188,32 @@ private fun LikeButton(
     val like by connection.likeState.collectAsState()
     val videoId = like.videoId
     val liked = like.status == LikeStatus.Like
+    // Spotify と同じく、高く評価していなくても、どれかのプレイリストに入っていれば✓（押すとプレイリストに追加する画面）
+    val membership = xyz.mooma0750.wave.library.LocalPlaylistMembership.current
+    val nowIn by (membership?.nowPlaying ?: remember { kotlinx.coroutines.flow.MutableStateFlow(null) }).collectAsState()
+    val saved = liked || (nowIn?.videoId == videoId && nowIn?.playlistIds?.isNotEmpty() == true)
     IconAction(
         when {
-            liked -> R.drawable.ic_check_circle
+            saved -> R.drawable.ic_check_circle
             like.status == null && videoId != null -> R.drawable.ic_refresh
             else -> R.drawable.ic_add_circle
         },
         when {
             like.pending -> stringResource(R.string.nowplaying_like_pending)
             liked -> stringResource(R.string.nowplaying_unlike)
+            saved -> stringResource(R.string.nowplaying_saved_in_playlist)
             like.status == null -> stringResource(R.string.nowplaying_like_reload)
             else -> stringResource(R.string.nowplaying_like)
         },
         {
             when {
                 videoId == null -> Unit
-                liked && onLikedTap != null -> onLikedTap()
+                saved && onLikedTap != null -> onLikedTap()
                 else -> scope.launch { connection.setLiked(videoId, !liked) }
             }
         },
         enabled = videoId != null && !like.pending,
-        active = liked,
+        active = saved,
         size = size,
     )
 }
