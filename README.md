@@ -9,7 +9,7 @@ InnerTube との通信には [innertubex](https://github.com/MetrolistGroup/inne
 | モジュール | 内容 |
 |---|---|
 | `core` | 共有コア（KMP: Android + desktop JVM）。desktop ターゲットは、ホスト上でテストを速く回すために置いている |
-| `androidApp` | Android アプリ（Compose + Material3） |
+| `androidApp` | Android アプリ（Compose）。flavor でスマホ（`phone`、Material 3 Expressive）と時計（`wear`、Wear OS の Material 3）を組む。共通の部品は `src/main`、画面はそれぞれの flavor に置く |
 
 設計の決定は `docs/adr/` にある。
 
@@ -37,6 +37,14 @@ commonMain に JVM・Android 専用の API が混ざっていないかは、次�
 ```sh
 scripts/check-common-main.sh
 ```
+
+## 時計（Wear OS）
+
+`./gradlew :androidApp:assembleWearDebug` で時計版（`androidApp-wear-debug.apk`）を組む。スマホ版と同じ applicationId・同じ署名で配る（時計とスマホの間の Data Layer に要る）。
+
+- ログインはスマホから受け取る（時計で「スマホに頼む」→ スマホに出た番号を見比べて「送る」。[ADR-0011](docs/adr/0011-watch-login-transfer.md)）
+- スマホの再生の操作・時計とスマホの間の受け渡し・Claude への頼みは、Data Layer でスマホを通す（時計は tailnet の中継に届かない）
+- 確かめは to-fu の Wear OS エミュレーターで行う（`scripts/watch.sh`）。時計でできないことは [docs/wear.md](docs/wear.md) にまとめた
 
 ## 認証情報の扱い
 
