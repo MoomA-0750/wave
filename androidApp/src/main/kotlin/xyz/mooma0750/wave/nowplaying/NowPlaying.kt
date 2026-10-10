@@ -165,11 +165,11 @@ fun MiniPlayer(
                 IconAction(if (state.isPlaying) R.drawable.ic_pause else R.drawable.ic_play_arrow, if (state.isPlaying) stringResource(R.string.nowplaying_pause) else stringResource(R.string.nowplaying_play), { display.togglePlay() })
             }
             if (state.durationMs > 0) {
-                // 再生中だけ波打たせる（止めると平らな線に戻る）
+                // 下の小さな再生欄では波打たせない（波が枠からはみ出す）
                 LinearWavyProgressIndicator(
                     progress = { (state.positionMs.toFloat() / state.durationMs).coerceIn(0f, 1f) },
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-                    amplitude = { if (state.isPlaying) 1f else 0f },
+                    amplitude = { 0f },
                 )
             }
         }
