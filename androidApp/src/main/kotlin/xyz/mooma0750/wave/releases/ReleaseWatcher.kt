@@ -99,7 +99,8 @@ class ReleaseWatcher : JobService() {
                 val liked = container.likedSongs.songs(container.likedSongsVersion.value).songs
                 val favorites = found.filter { xyz.mooma0750.wave.library.LikedByArtist.filter(liked, it.artistId, it.artistName).size >= MIN_LIKED_TO_NOTIFY }
                 android.util.Log.i(xyz.mooma0750.wave.WaveApplication.LOG_TAG, "release notify found=${found.size} favorites=${favorites.size} liked=${liked.size}")
-                favorites.take(MAX_NOTIFICATIONS).forEach { notify(context, it) }
+                // 時計では知らせない（スマホの通知が時計にも出るので、二重になる）。一覧（新作の画面）には入る
+                if (!context.packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_WATCH)) favorites.take(MAX_NOTIFICATIONS).forEach { notify(context, it) }
             }
 
         private const val MAX_NOTIFICATIONS = 10

@@ -289,6 +289,9 @@ fun LibraryScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var sort by rememberSaveable { mutableStateOf(LibrarySort.Recents) }
+    var filter by rememberSaveable { mutableStateOf<xyz.mooma0750.wave.library.LibraryFilter?>(null) }
+    var query by rememberSaveable { mutableStateOf("") }
+    val search = rememberTextInput(stringResource(R.string.library_search_in_library)) { query = it }
     val create = rememberTextInput(stringResource(R.string.library_playlist_name_hint), onCreatePlaylist)
     ListScreen(stringResource(R.string.library_title), edgeButton = { MainEdgeButton(R.drawable.ic_add, stringResource(R.string.library_create_playlist), onClick = create) }) { look ->
         item(key = "sort") {
@@ -305,9 +308,33 @@ fun LibraryScreen(
                 ),
             ) { sort = LibrarySort.entries[(sort.ordinal + 1) % LibrarySort.entries.size] }
         }
+        item(key = "filter") {
+            ActionRow(
+                look,
+                R.drawable.ic_view_list,
+                stringResource(
+                    when (filter) {
+                        null -> R.string.library_kind_all
+                        xyz.mooma0750.wave.library.LibraryFilter.Playlists -> R.string.library_filter_playlists
+                        xyz.mooma0750.wave.library.LibraryFilter.Artists -> R.string.library_filter_artists
+                        xyz.mooma0750.wave.library.LibraryFilter.Albums -> R.string.library_filter_albums
+                    },
+                ),
+            ) {
+                val all = listOf(null) + xyz.mooma0750.wave.library.LibraryFilter.entries
+                filter = all[(all.indexOf(filter) + 1) % all.size]
+            }
+        }
+        item(key = "search") {
+            if (query.isEmpty()) {
+                ActionRow(look, R.drawable.ic_search, stringResource(R.string.library_search_in_library), onClick = search)
+            } else {
+                ActionRow(look, R.drawable.ic_close, query, stringResource(R.string.library_clear)) { query = "" }
+            }
+        }
         if (state.loading && state.entries.isEmpty()) item { LoadingRow(look) }
         state.failure?.let { item { ActionRow(look, R.drawable.ic_refresh, stringResource(R.string.search_retry), failureMessage(it), onClick = viewModel::refresh) } }
-        items(LibraryOrder.arrange(state, null, sort), key = { it.key }) { entry ->
+        items(LibraryOrder.arrange(state, filter, sort, query), key = { it.key }) { entry ->
             when (entry) {
                 is LibraryEntry.Playlist -> EntryRow(look, entry.playlist.title, entry.playlist.subtitle, entry.playlist.thumbnailUrl) { onOpenPlaylist(entry.playlist) }
                 is LibraryEntry.Artist -> EntryRow(look, entry.artist.name, entry.artist.subtitle, entry.artist.thumbnailUrl, round = true) { onOpenArtist(entry.artist.browseId, entry.artist.name) }
@@ -331,6 +358,7 @@ fun PlaylistScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val songs = state.songs
+    val search = rememberTextInput(stringResource(R.string.library_search_in_playlist), viewModel::setQuery)
     ListScreen(
         state.title ?: summary.title,
         edgeButton = { MainEdgeButton(R.drawable.ic_play_arrow, stringResource(R.string.ui_play)) { if (songs.isNotEmpty()) onPlay(songs, 0, state.continuation, false) } },
@@ -340,7 +368,29 @@ fun PlaylistScreen(
             item(key = "next") { ActionRow(look, R.drawable.ic_playlist_play, stringResource(R.string.search_play_next)) { onQueue(songs, true) } }
             item(key = "queue") { ActionRow(look, R.drawable.ic_queue_music, stringResource(R.string.search_add_to_queue)) { onQueue(songs, false) } }
         }
-        if (state.query.isNotEmpty()) item(key = "query") { ActionRow(look, R.drawable.ic_close, state.query, stringResource(R.string.library_clear)) { viewModel.setQuery("") } }
+        item(key = "query") {
+            if (state.query.isEmpty()) {
+                ActionRow(look, R.drawable.ic_search, stringResource(R.string.library_search_in_playlist), onClick = search)
+            } else {
+                ActionRow(look, R.drawable.ic_close, state.query, stringResource(R.string.library_clear)) { viewModel.setQuery("") }
+            }
+        }
+        // 並べ替え（スマホと同じ順の候補を、押すたびに次へ。同じものをもう一度選ぶと逆順）
+        item(key = "sort") {
+            val options = xyz.mooma0750.wave.core.music.PlaylistSort.entries.filter { it == xyz.mooma0750.wave.core.music.PlaylistSort.Custom || it == xyz.mooma0750.wave.core.music.PlaylistSort.Duration || state.sortable }
+            ActionRow(look, R.drawable.ic_sort, stringResource(R.string.library_sort), playlistSortLabel(state.order.sort) + if (state.order.descending) " ↓" else " ↑") {
+                val current = state.order
+                val next =
+                    if (!current.descending && current.sort != xyz.mooma0750.wave.core.music.PlaylistSort.Added) {
+                        current.copy(descending = true)
+                    } else {
+                        val sort = options[(options.indexOf(current.sort) + 1) % options.size]
+                        xyz.mooma0750.wave.core.music.PlaylistOrder(sort, descending = sort == xyz.mooma0750.wave.core.music.PlaylistSort.Added)
+                    }
+                viewModel.setOrder(next)
+            }
+        }
+        if (state.loadingAll) item(key = "loading-all") { MessageRow(look, stringResource(R.string.library_loading_remaining_pages)) }
         if (state.loading && songs.isEmpty()) item(key = "loading") { LoadingRow(look) }
         state.failure?.let { item(key = "failure") { MessageRow(look, failureMessage(it)) } }
         if (!state.loading && songs.isEmpty() && state.failure == null) item(key = "empty") { MessageRow(look, stringResource(R.string.library_no_songs)) }
@@ -469,3 +519,17 @@ fun HistoryScreen(
         if (state.continuation != null) item(key = "more") { ActionRow(look, R.drawable.ic_add, stringResource(R.string.wear_load_more), onClick = viewModel::loadMore) }
     }
 }
+
+@Composable
+private fun playlistSortLabel(sort: xyz.mooma0750.wave.core.music.PlaylistSort): String =
+    stringResource(
+        when (sort) {
+            xyz.mooma0750.wave.core.music.PlaylistSort.Custom -> R.string.library_sort_custom
+            xyz.mooma0750.wave.core.music.PlaylistSort.Added -> R.string.library_sort_date_added
+            xyz.mooma0750.wave.core.music.PlaylistSort.Published -> R.string.library_sort_release_date
+            xyz.mooma0750.wave.core.music.PlaylistSort.Title -> R.string.library_sort_title
+            xyz.mooma0750.wave.core.music.PlaylistSort.Artist -> R.string.library_sort_artist
+            xyz.mooma0750.wave.core.music.PlaylistSort.Album -> R.string.library_sort_album
+            xyz.mooma0750.wave.core.music.PlaylistSort.Duration -> R.string.library_sort_duration
+        },
+    )
