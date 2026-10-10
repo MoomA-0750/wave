@@ -189,7 +189,6 @@ class MoodCategoryViewModel(
 fun MoodCategoryScreen(
     title: String,
     viewModel: MoodCategoryViewModel,
-    onPlaySong: (Song) -> Unit,
     onOpenPlaylist: (PlaylistSummary) -> Unit,
     actions: SongActions,
     onBack: () -> Unit,
@@ -197,7 +196,7 @@ fun MoodCategoryScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     Scaffold(topBar = { TopAppBar(title = { Text(title) }, navigationIcon = { BackButton(onBack) }) }) { padding ->
         LazyColumn(Modifier.fillMaxSize().padding(padding)) {
-            homeFeedItems(state, viewModel::refresh, {}, onPlaySong, onOpenPlaylist, actions)
+            homeFeedItems(state, viewModel::refresh, {}, onOpenPlaylist, actions)
         }
     }
 }

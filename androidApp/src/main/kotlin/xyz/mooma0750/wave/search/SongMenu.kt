@@ -79,50 +79,66 @@ fun SongMenuSheet(
                 }
             }
             HorizontalDivider(Modifier.padding(vertical = 4.dp))
-            MenuRow(R.drawable.ic_add_circle, stringResource(R.string.search_add_to_playlist)) {
-                close()
-                actions.addToPlaylist(song)
-            }
-            if (!inQueue) {
-                MenuRow(R.drawable.ic_playlist_play, stringResource(R.string.search_play_next)) {
-                    close()
-                    actions.playNext(song)
-                }
-                MenuRow(R.drawable.ic_queue_music, stringResource(R.string.search_add_to_queue)) {
-                    close()
-                    actions.addToQueue(song)
-                }
-            }
-            MenuRow(R.drawable.ic_graphic_eq, stringResource(R.string.search_start_radio)) {
-                close()
-                actions.startRadio(song)
-            }
-            extraItems.forEach { (label, action) ->
-                MenuRow(R.drawable.ic_delete, label) {
-                    close()
-                    action()
-                }
-            }
-            song.album?.takeIf { it.browseId != null }?.let { album ->
-                MenuRow(R.drawable.ic_album, stringResource(R.string.search_go_to_album)) {
-                    close()
-                    actions.openAlbum(album)
-                }
-            }
-            // チャンネル（browseId が無いもの）は開けない
-            song.artists.filter { it.browseId != null }.forEach { artist ->
-                MenuRow(R.drawable.ic_person, if (song.artists.size > 1) stringResource(R.string.search_go_to_artist_named, artist.name) else stringResource(R.string.search_go_to_artist)) {
-                    close()
-                    actions.openArtist(artist)
-                }
-            }
-            val context = androidx.compose.ui.platform.LocalContext.current
-            MenuRow(R.drawable.ic_share, stringResource(R.string.search_share)) {
-                close()
-                shareSong(context, song)
-            }
+            SongMenuItems(song, actions, close, inQueue, extraItems)
             Spacer(Modifier.height(8.dp))
         }
+    }
+}
+
+/** 曲の操作の並び（曲のメニューのシートと、曲の画面で共通）。 */
+@Composable
+fun SongMenuItems(
+    song: Song,
+    actions: SongActions,
+    close: () -> Unit = {},
+    inQueue: Boolean = false,
+    extraItems: List<Pair<String, () -> Unit>> = emptyList(),
+    /** 曲の画面では再生ボタンが曲のラジオを始めるので出さない。 */
+    showRadio: Boolean = true,
+) {
+    MenuRow(R.drawable.ic_add_circle, stringResource(R.string.search_add_to_playlist)) {
+        close()
+        actions.addToPlaylist(song)
+    }
+    if (!inQueue) {
+        MenuRow(R.drawable.ic_playlist_play, stringResource(R.string.search_play_next)) {
+            close()
+            actions.playNext(song)
+        }
+        MenuRow(R.drawable.ic_queue_music, stringResource(R.string.search_add_to_queue)) {
+            close()
+            actions.addToQueue(song)
+        }
+    }
+    if (showRadio) {
+        MenuRow(R.drawable.ic_graphic_eq, stringResource(R.string.search_start_radio)) {
+            close()
+            actions.startRadio(song)
+        }
+    }
+    extraItems.forEach { (label, action) ->
+        MenuRow(R.drawable.ic_delete, label) {
+            close()
+            action()
+        }
+    }
+    song.album?.takeIf { it.browseId != null }?.let { album ->
+        MenuRow(R.drawable.ic_album, stringResource(R.string.search_go_to_album)) {
+            close()
+            actions.openAlbum(album)
+        }
+    }
+    // チャンネル（browseId が無いもの）は開けない
+    song.artists.filter { it.browseId != null }.forEach { artist ->
+        MenuRow(R.drawable.ic_person, if (song.artists.size > 1) stringResource(R.string.search_go_to_artist_named, artist.name) else stringResource(R.string.search_go_to_artist)) {
+            close()
+            actions.openArtist(artist)
+        }
+    }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    MenuRow(R.drawable.ic_share, stringResource(R.string.search_share)) {
+        close()
+        shareSong(context, song)
     }
 }
 

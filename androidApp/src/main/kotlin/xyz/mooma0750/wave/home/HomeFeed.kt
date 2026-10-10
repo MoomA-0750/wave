@@ -183,7 +183,6 @@ fun LazyListScope.homeFeedItems(
     state: HomeFeedUiState,
     onRetry: () -> Unit,
     onLoadMore: () -> Unit,
-    onPlaySong: (Song) -> Unit,
     onOpenPlaylist: (PlaylistSummary) -> Unit,
     actions: SongActions,
 ) {
@@ -204,7 +203,7 @@ fun LazyListScope.homeFeedItems(
                             if (item is HomeItem.ArtistItem) CircleShape else MaterialTheme.shapes.small,
                             onLongClick = if (item is HomeItem.SongItem) ({ menu = true }) else null,
                         ) {
-                            openHomeItem(item, onPlaySong, onOpenPlaylist, actions)
+                            openHomeItem(item, onOpenPlaylist, actions)
                         }
                         if (menu && item is HomeItem.SongItem) SongMenuSheet(item.song, actions, onDismiss = { menu = false })
                     }
@@ -249,12 +248,12 @@ data class HomeItemLook(
 
 fun openHomeItem(
     item: HomeItem,
-    onPlaySong: (Song) -> Unit,
     onOpenPlaylist: (PlaylistSummary) -> Unit,
     actions: SongActions,
 ) {
     when (item) {
-        is HomeItem.SongItem -> onPlaySong(item.song)
+        // 曲も、アルバム・プレイリストと同じく先に画面を開く（押してすぐ再生するものと画面を開くものが混ざらないように）
+        is HomeItem.SongItem -> actions.openSong(item.song)
         is HomeItem.AlbumItem -> actions.openAlbum(AlbumRef(item.album.title, item.album.browseId))
         is HomeItem.PlaylistItem -> onOpenPlaylist(item.playlist)
         is HomeItem.ArtistItem -> actions.openArtist(ArtistRef(item.artist.name, item.artist.browseId))

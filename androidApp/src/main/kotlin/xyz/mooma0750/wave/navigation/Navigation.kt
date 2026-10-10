@@ -41,6 +41,11 @@ sealed interface Screen {
         val browseId: String,
         val title: String,
     ) : Screen
+
+    /** 曲の画面（ホームの棚の曲から）。 */
+    data class Song(
+        val song: xyz.mooma0750.wave.core.music.Song,
+    ) : Screen
 }
 
 /** 曲の一覧・キュー・再生画面から共通に呼ぶ操作。 */
@@ -52,6 +57,8 @@ data class SongActions(
     val addToPlaylist: (Song) -> Unit,
     /** その曲から始まるラジオを再生する（Spotify の「曲のラジオを再生」。キューを置き換える）。 */
     val startRadio: (Song) -> Unit,
+    /** 曲の画面を開く。 */
+    val openSong: (Song) -> Unit = {},
 ) {
     /** シートの上から画面を開くときに、先にシートを閉じる。 */
     fun closing(close: () -> Unit): SongActions =
@@ -63,6 +70,10 @@ data class SongActions(
             openAlbum = {
                 close()
                 openAlbum(it)
+            },
+            openSong = {
+                close()
+                openSong(it)
             },
             // プレイリストへの追加はダイアログが上に重なるので、再生中の画面は閉じない（追加の後に元の画面へ戻る）
         )

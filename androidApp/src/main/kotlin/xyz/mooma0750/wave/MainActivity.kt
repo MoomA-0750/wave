@@ -138,6 +138,7 @@ class MainActivity : ComponentActivity() {
                             addToPlaylist = { song -> addTarget = song },
                             // 1曲を選んで再生するのと同じ（その曲から始まるラジオになる）
                             startRadio = playerActions::playSong,
+                            openSong = { song -> nav.push(Screen.Song(song)) },
                         )
                     }
                 LaunchedEffect(container) {
@@ -272,7 +273,6 @@ class MainActivity : ComponentActivity() {
                                     MoodCategoryScreen(
                                         screen.title,
                                         viewModel(key = "mood-$loginGeneration-${screen.params}") { MoodCategoryViewModel(container.music, screen.params) },
-                                        onPlaySong = playerActions::playSong,
                                         onOpenPlaylist = { nav.push(Screen.Playlist(it)) },
                                         actions = songActions,
                                         onBack = pop,
@@ -360,6 +360,7 @@ class MainActivity : ComponentActivity() {
                                         onQueue = { page, next -> playerActions.queue(page.songs, next) },
                                         onBack = pop,
                                     )
+                                is Screen.Song -> xyz.mooma0750.wave.song.SongScreen(screen.song, songActions, onPlay = playerActions::playSong, onBack = pop)
                             }
                             }
                             addTarget?.let { song ->

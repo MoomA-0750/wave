@@ -111,7 +111,7 @@ fun HomeScreen(
                 }
             }
             if (state.recent.isNotEmpty()) {
-                item(key = "recent") { RecentGrid(state.recent, songActions) { openHomeItem(it, onPlaySong, onOpenPlaylist, songActions) } }
+                item(key = "recent") { RecentGrid(state.recent, songActions) { openHomeItem(it, onOpenPlaylist, songActions) } }
             }
             // 登録したアーティストの新作（最近聴いたものの下）。絞り込み中は出さない
             if (state.selected == null && newReleases.isNotEmpty()) {
@@ -119,7 +119,7 @@ fun HomeScreen(
                     xyz.mooma0750.wave.releases.NewReleaseRow(xyz.mooma0750.wave.core.music.diversifiedReleases(newReleases).take(20), stringResource(R.string.releases_home_title), songActions, onPlaySong)
                 }
             }
-            homeFeedItems(state, feed::refresh, feed::loadMore, onPlaySong, onOpenPlaylist, songActions)
+            homeFeedItems(state, feed::refresh, feed::loadMore, onOpenPlaylist, songActions)
             item(key = "bottom") { Spacer(Modifier.height(16.dp)) }
         }
     }
