@@ -51,4 +51,18 @@ public class ReleaseWatchTests
         var releases = new[] { "a1", "a2", "a3" }.Select(t => new NewRelease("A", "A", t, t, null, null)).Concat(new[] { new NewRelease("B", "B", "b1", "b1", null, null) });
         Assert.Equal(new[] { "a1", "b1", "a2" }, ReleaseWatchState.Diversified(releases).Select(r => r.Title));
     }
+
+    [Fact]
+    public void ReleasesThatLeaveTheArtistPageAreDropped()
+    {
+        // 同じ名前の別人の作品がまとめられ、後でページから外された（Android と同じ）
+        var (_, first) = ReleaseWatchState.Empty.Observe("UC1", Page(["MPold"]), 1, 2026);
+        var (_, second) = first.Observe("UC1", Page(["MPothernew", "MPold"]), 2, 2026);
+        Assert.Equal(["MPothernew"], second.Recent.Select(r => r.AlbumBrowseId));
+        var (_, third) = second.Observe("UC1", Page(["MPold"]), 3, 2026);
+        Assert.Empty(third.Recent);
+        // 今年の作品だけの棚からは、押し出されただけかもしれないので外さない。ほかのアーティストの分は残す
+        Assert.Equal(second.Recent, ReleaseWatchState.Listed(second.Recent, "UC1", Page(["MP4new", "MP5new"]), 2026));
+        Assert.Equal(second.Recent, ReleaseWatchState.Listed(second.Recent, "UC2", Page(["MPold"]), 2026));
+    }
 }

@@ -332,6 +332,16 @@ object DebugActions {
                         is CallResult.Failed -> Log.i(WaveApplication.LOG_TAG, "debug subscriptions failed ${result.kind} renderers=${container.music.lastRendererNames}")
                     }
                 "releases_check" -> Log.i(WaveApplication.LOG_TAG, "debug releases done=${xyz.mooma0750.wave.releases.ReleaseWatcher.check(context, container)}")
+                "artist_probe" ->
+                    when (val result = container.music.artist(intent.getStringExtra("browse_id") ?: "")) {
+                        is CallResult.Ok -> result.value.albumShelves.forEach { shelf -> shelf.albums.forEach { Log.i(WaveApplication.LOG_TAG, "debug artist album ${it.browseId} ${it.title} | ${it.subtitle}") } }
+                        is CallResult.Failed -> Log.i(WaveApplication.LOG_TAG, "debug artist failed ${result.kind}")
+                    }
+                "album_probe" ->
+                    when (val result = container.music.album(intent.getStringExtra("browse_id") ?: "")) {
+                        is CallResult.Ok -> Log.i(WaveApplication.LOG_TAG, "debug album artists=${result.value.artists} subtitle=${result.value.subtitle} songs=${result.value.songs.map { s -> s.artists }}")
+                        is CallResult.Failed -> Log.i(WaveApplication.LOG_TAG, "debug album failed ${result.kind}")
+                    }
                 "open_artist" -> intent.getStringExtra("browse_id")?.let { navigationChannel.trySend(Screen.Artist(it, "")) }
                 "open_album" -> intent.getStringExtra("browse_id")?.let { navigationChannel.trySend(Screen.Album(it, "")) }
                 "play_album" ->

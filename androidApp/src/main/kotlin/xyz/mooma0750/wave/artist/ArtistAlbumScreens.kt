@@ -53,6 +53,7 @@ import xyz.mooma0750.wave.WaveApplication
 import xyz.mooma0750.wave.core.music.AlbumPage
 import xyz.mooma0750.wave.core.music.AlbumSummary
 import xyz.mooma0750.wave.core.music.ArtistPage
+import xyz.mooma0750.wave.core.music.listedReleases
 import xyz.mooma0750.wave.core.music.MusicRepository
 import xyz.mooma0750.wave.core.music.Song
 import xyz.mooma0750.wave.core.session.CallResult
@@ -289,9 +290,10 @@ fun ArtistScreen(
             state.failure != null -> item { Text(failureMessage(state.failure), Modifier.padding(16.dp)) }
             page == null -> item { LoadingIndicator(Modifier.padding(16.dp)) }
             else -> {
-                // 最近の新作（登録したアーティストの見張りで見つけたもの）
-                if (newReleases.isNotEmpty()) {
-                    item(key = "new-releases") { xyz.mooma0750.wave.releases.NewReleaseRow(newReleases, stringResource(R.string.releases_artist_title), actions, onPlaySong, showArtist = false) }
+                // 最近の新作（登録したアーティストの見張りで見つけたもの）。今のページから消えたもの（同じ名前の別人の作品だった）は出さない
+                val listed = newReleases.firstOrNull()?.let { listedReleases(newReleases, it.artistId, page, java.time.Year.now().value) }.orEmpty()
+                if (listed.isNotEmpty()) {
+                    item(key = "new-releases") { xyz.mooma0750.wave.releases.NewReleaseRow(listed, stringResource(R.string.releases_artist_title), actions, onPlaySong, showArtist = false) }
                 }
                 // ライブ・ツアーの告知（アーティストの YouTube のチャンネルの投稿から）
                 item(key = "live-posts") {

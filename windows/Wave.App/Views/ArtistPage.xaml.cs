@@ -44,8 +44,8 @@ public sealed partial class ArtistPage : Page
         AllSongs.Visibility = Ui.Show(artist.AllSongsPlaylistId is not null);
         allSongs = artist.AllSongsPlaylistId is { } allId ? AppServices.Music.FullPlaylistAsync(allId) : null;
         var shelves = artist.AlbumShelves.Select(s => new HomeShelf(s.Title, null, s.Albums.Select(a => (HomeItem)new HomeItem.AlbumItem(a)).ToList())).ToList();
-        // 最近の新作（登録したアーティストの見張りで見つけたもの）を先頭に（Android と同じ）
-        var releases = AppServices.Releases.Recent.Where(r => r.ArtistId == browseId).Select(HomePage.ReleaseItem).ToList();
+        // 最近の新作（登録したアーティストの見張りで見つけたもの）を先頭に（Android と同じ）。今のページから消えたもの（同じ名前の別人の作品だった）は出さない
+        var releases = ReleaseWatchState.Listed(AppServices.Releases.Recent.Where(r => r.ArtistId == browseId).ToList(), browseId, artist, DateTime.Now.Year).Select(HomePage.ReleaseItem).ToList();
         if (releases.Count > 0) shelves.Insert(0, new HomeShelf(L.T("新作", "New releases"), null, releases));
         Shelves.ItemsSource = shelves;
         UpdatePlayIcon();

@@ -51,4 +51,18 @@ class ReleaseWatchTest {
         assertEquals(listOf("MP3new", "MPnew"), second.recent.mapNotNull { it.albumBrowseId })
         assertEquals(listOf("MP3new"), second.expire(nowEpochMs = 2, maxAgeMs = 0).recent.mapNotNull { it.albumBrowseId })
     }
+
+    @Test
+    fun releasesThatLeaveTheArtistPageAreDropped() {
+        // 同じ名前の別人の作品がまとめられ、後でページから外された
+        val (_, first) = ReleaseWatchState().observe("UC1", page(listOf("MPold")), nowEpochMs = 1, year = 2026)
+        val (_, second) = first.observe("UC1", page(listOf("MPothernew", "MPold")), nowEpochMs = 2, year = 2026)
+        assertEquals(listOf("MPothernew"), second.recent.mapNotNull { it.albumBrowseId })
+        val (_, third) = second.observe("UC1", page(listOf("MPold")), nowEpochMs = 3, year = 2026)
+        assertEquals(emptyList(), third.recent)
+        // 今年の作品だけの棚からは、押し出されただけかもしれないので外さない
+        assertEquals(second.recent, listedReleases(second.recent, "UC1", page(listOf("MP4new", "MP5new")), 2026))
+        // ほかのアーティストの分は残す
+        assertEquals(second.recent, listedReleases(second.recent, "UC2", page(listOf("MPold")), 2026))
+    }
 }
