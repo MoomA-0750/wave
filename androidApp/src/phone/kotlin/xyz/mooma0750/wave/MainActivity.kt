@@ -116,6 +116,7 @@ class MainActivity : ComponentActivity() {
         }
         setContent {
             WaveTheme {
+                xyz.mooma0750.wave.watchlink.WatchLoginDialog(container.watchLogin)
                 val authState by container.authManager.state.collectAsStateWithLifecycle()
                 // ログインが完了するたびに増える。ログイン画面の ViewModel をログインごとに作り直す（完了済みの状態を持ち越さない）
                 val loginGeneration by container.loginGeneration.collectAsStateWithLifecycle()

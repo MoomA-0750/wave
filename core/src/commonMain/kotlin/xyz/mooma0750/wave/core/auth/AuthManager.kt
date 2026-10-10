@@ -87,6 +87,18 @@ class AuthManager(
         }
 
     /**
+     * 自分の時計へ渡すための、今のログインの平文（ADR-0011）。ログインしていなければ null。
+     * 呼ぶのは本人が送ると決めたときだけ。返した値は暗号化してすぐ捨てる（保存しない・ログに出さない）。
+     */
+    fun exportForWatch(): ByteArray? = mutableCredentials.value?.let(CredentialCodec::encode)
+
+    /** 自分のスマホから受け取ったログインを保存する（[exportForWatch] の逆）。読めなければ null。 */
+    suspend fun importFromPhone(bytes: ByteArray): SaveResult? {
+        val credentials = (CredentialCodec.decode(bytes) as? DecodeResult.Ok)?.credentials ?: return null
+        return completeLogin(credentials)
+    }
+
+    /**
      * 読めない保存物や、保存に失敗し続ける状態から抜けるために、利用者の操作で保存物を消す。
      * 自動では呼ばない（一時的な失敗で有効な認証情報を消さないため）。
      */

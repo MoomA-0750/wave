@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- スマホ: 時計へのログインの受け渡し -->
+    <string name="watch_notification_channel">時計</string>
+    <string name="watch_login_request_title">時計がログインを求めています</string>
+    <string name="watch_login_request_text">押して番号を確かめ、時計へログインを送ります。</string>
+    <string name="watch_login_dialog_title">時計でログインしますか？</string>
+    <string name="watch_login_dialog_text">時計に同じ番号が出ているときだけ送ってください。\n\n%1$s</string>
+    <string name="watch_login_send">送る</string>
+    <string name="watch_login_cancel">やめる</string>
+    <string name="watch_login_sent">時計へログインを送りました</string>
+    <string name="watch_login_send_failed">時計へ送れませんでした</string>
+
+    <!-- 時計: ログイン -->
+    <string name="watch_login_title">スマホでログイン</string>
+    <string name="watch_login_hint">ログインしたスマホの wave を開いてから、下を押してください。</string>
+    <string name="watch_login_start">スマホに頼む</string>
+    <string name="watch_login_sending">スマホを探しています…</string>
+    <string name="watch_login_waiting">スマホにこの番号が出たら「送る」を押してください:</string>
+    <string name="watch_login_no_phone">wave の入ったスマホが見つかりません。スマホに wave を入れ、時計とペア設定してください。</string>
+    <string name="watch_login_failed">ログインできませんでした。もう一度試してください。</string>
+    <string name="watch_login_retry">もう一度</string>
+</resources>

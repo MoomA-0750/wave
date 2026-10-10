@@ -453,6 +453,9 @@ class AppContainer(
             resources = appContext.resources,
         )
 
+    /** スマホから時計へのログインの受け渡し（ADR-0011）。 */
+    val watchLogin = xyz.mooma0750.wave.watchlink.WatchLogin(context, authManager, appScope)
+
     /** 再生履歴の送信（ADR-0006）。 */
     val playbackHistory = PlaybackHistory(session)
 

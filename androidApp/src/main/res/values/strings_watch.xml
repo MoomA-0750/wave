@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- スマホ: 時計へのログインの受け渡し -->
+    <string name="watch_notification_channel">Watch</string>
+    <string name="watch_login_request_title">Your watch is asking to sign in</string>
+    <string name="watch_login_request_text">Tap to check the code and send your sign-in to the watch.</string>
+    <string name="watch_login_dialog_title">Sign in on your watch?</string>
+    <string name="watch_login_dialog_text">Send only if your watch shows the same code:\n\n%1$s</string>
+    <string name="watch_login_send">Send</string>
+    <string name="watch_login_cancel">Cancel</string>
+    <string name="watch_login_sent">Sent your sign-in to the watch</string>
+    <string name="watch_login_send_failed">Couldn\'t send to the watch</string>
+
+    <!-- 時計: ログイン -->
+    <string name="watch_login_title">Sign in with your phone</string>
+    <string name="watch_login_hint">Open wave on your phone, signed in, then tap below.</string>
+    <string name="watch_login_start">Ask phone</string>
+    <string name="watch_login_sending">Looking for your phone…</string>
+    <string name="watch_login_waiting">Tap Send on your phone if it shows this code:</string>
+    <string name="watch_login_no_phone">Couldn\'t find a phone with wave. Install wave on your phone and pair the watch.</string>
+    <string name="watch_login_failed">Couldn\'t sign in. Try again.</string>
+    <string name="watch_login_retry">Try again</string>
+</resources>
