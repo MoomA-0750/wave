@@ -32,4 +32,15 @@
     <string name="wear_load_more">Load more</string>
     <string name="wear_log_out_confirm_message">Sign out on this watch? Your phone stays signed in.</string>
     <string name="wear_coming_soon">Not available on the watch yet</string>
+    <string name="wear_remote_no_phone">Couldn\'t reach your phone. Check that it\'s nearby and paired.</string>
+    <string name="wear_remote_pull">Play on this watch</string>
+    <string name="wear_remote_push">Play on phone</string>
+    <string name="wear_remote_play_on_phone">Move to phone</string>
+    <string name="wear_remote_pulled">Now playing on this watch</string>
+    <string name="wear_remote_pushed">Now playing on your phone</string>
+    <string name="wear_remote_nothing">Nothing to move</string>
+    <string name="wear_remote_failed">Couldn\'t move playback. Open wave on your phone and try again.</string>
+    <string name="phone_remote_pulled">Now playing on this phone</string>
+    <string name="phone_remote_pushed">Now playing on your watch</string>
+    <string name="phone_remote_failed">Couldn\'t move playback. Open wave on your watch and try again.</string>
 </resources>

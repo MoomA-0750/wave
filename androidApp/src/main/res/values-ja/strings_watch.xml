@@ -32,4 +32,15 @@
     <string name="wear_load_more">さらに読み込む</string>
     <string name="wear_log_out_confirm_message">この時計からログアウトしますか？スマホはログインしたままです。</string>
     <string name="wear_coming_soon">時計ではまだ使えません</string>
+    <string name="wear_remote_no_phone">スマホにつながりません。近くにあり、ペア設定されているか確かめてください。</string>
+    <string name="wear_remote_pull">この時計で再生</string>
+    <string name="wear_remote_push">スマホで再生</string>
+    <string name="wear_remote_play_on_phone">スマホへ移す</string>
+    <string name="wear_remote_pulled">この時計で再生しています</string>
+    <string name="wear_remote_pushed">スマホで再生しています</string>
+    <string name="wear_remote_nothing">移す曲がありません</string>
+    <string name="wear_remote_failed">移せませんでした。スマホの wave を開いてからもう一度試してください。</string>
+    <string name="phone_remote_pulled">このスマホで再生しています</string>
+    <string name="phone_remote_pushed">時計で再生しています</string>
+    <string name="phone_remote_failed">移せませんでした。時計の wave を開いてからもう一度試してください。</string>
 </resources>

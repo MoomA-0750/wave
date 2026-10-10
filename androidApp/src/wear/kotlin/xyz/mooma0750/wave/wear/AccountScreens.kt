@@ -94,9 +94,7 @@ fun SettingsScreen(
         item(key = "history") { Toggle(look, history, R.string.settings_history_title) { container.appScope.launch { container.settings.setHistoryEnabled(it) } } }
         item(key = "queue") { Toggle(look, queueNotice, R.string.settings_queue_notice_title) { container.appScope.launch { container.settings.setQueueNotice(it) } } }
         item(key = "releases") { Toggle(look, releaseNotices, R.string.settings_release_notices_title) { container.appScope.launch { container.settings.setReleaseNotices(it) } } }
-        if (container.connectV2 != null) {
-            item(key = "devices") { ActionRow(look, R.drawable.ic_devices, stringResource(R.string.settings_connected_devices), onClick = onOpenDevices) }
-        }
+        item(key = "devices") { ActionRow(look, R.drawable.ic_devices, stringResource(R.string.settings_connected_devices), onClick = onOpenDevices) }
         item(key = "logout") { ActionRow(look, R.drawable.ic_logout, stringResource(R.string.settings_log_out)) { confirmLogout = true } }
         item(key = "about") { MessageRow(look, stringResource(R.string.settings_version, BuildConfig.VERSION_NAME)) }
     }

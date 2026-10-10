@@ -39,7 +39,16 @@ fun DevicePickerSheet(
     manager: ConnectV2Manager,
     onDismiss: () -> Unit,
     onOpenSettings: () -> Unit,
+    /** 時計（Wear OS 版の wave）。近くにあれば、時計へ再生を移す行を出す。 */
+    watch: xyz.mooma0750.wave.watchlink.WatchRemote? = null,
 ) {
+    if (watch != null) {
+        androidx.compose.runtime.DisposableEffect(watch) {
+            watch.watchPeer()
+            onDispose { watch.stopWatchingPeer() }
+        }
+    }
+    val watchState by (watch?.peer ?: kotlinx.coroutines.flow.MutableStateFlow(null)).collectAsStateWithLifecycle()
     val info by manager.info.collectAsStateWithLifecycle()
     val members by manager.members.collectAsStateWithLifecycle()
     val remote by manager.remotePlayback.collectAsStateWithLifecycle()
@@ -81,6 +90,19 @@ fun DevicePickerSheet(
                             }
                         }
                     }
+                }
+            }
+            // 時計（中継を使わず、Bluetooth などで直接つなぐ）。押すと時計へ移す。スマホで何も鳴っていなければ、時計の再生をスマホへ移す
+            watchState?.let { state ->
+                DeviceRow(
+                    R.drawable.ic_watch,
+                    state.deviceName,
+                    state.title?.let { listOfNotNull(it, state.artist).joinToString(" • ") },
+                    current = false,
+                    enabled = true,
+                ) {
+                    onDismiss()
+                    if (remote == null && state.playing) watch?.pull() else watch?.push()
                 }
             }
             Spacer(Modifier.height(8.dp))

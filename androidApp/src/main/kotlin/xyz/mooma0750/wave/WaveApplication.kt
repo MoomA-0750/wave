@@ -456,6 +456,9 @@ class AppContainer(
     /** スマホから時計へのログインの受け渡し（ADR-0011）。 */
     val watchLogin = xyz.mooma0750.wave.watchlink.WatchLogin(context, authManager, appScope)
 
+    /** スマホと時計の間の再生の操作と受け渡し。 */
+    val watchRemote by lazy { xyz.mooma0750.wave.watchlink.WatchRemote(context, this, appScope) }
+
     /** 再生履歴の送信（ADR-0006）。 */
     val playbackHistory = PlaybackHistory(session)
 

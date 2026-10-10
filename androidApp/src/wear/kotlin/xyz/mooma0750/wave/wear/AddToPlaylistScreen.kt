@@ -50,7 +50,7 @@ fun AddToPlaylistScreen(
     val create = rememberTextInput(stringResource(R.string.library_playlist_name_hint), onCreate)
     ListScreen(
         stringResource(R.string.library_add_to_playlist),
-        edgeButton = { MainEdgeButton(R.drawable.ic_add, stringResource(R.string.library_new_playlist), create) },
+        edgeButton = { MainEdgeButton(R.drawable.ic_add, stringResource(R.string.library_new_playlist), onClick = create) },
     ) { look ->
         if (liked != null) {
             item(key = "liked") {

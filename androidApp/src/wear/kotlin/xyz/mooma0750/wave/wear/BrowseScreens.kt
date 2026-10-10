@@ -184,7 +184,7 @@ fun SearchScreen(
     }
     ListScreen(
         title = state.submitted ?: stringResource(R.string.search_title),
-        edgeButton = { MainEdgeButton(R.drawable.ic_search, stringResource(R.string.search_hint), ask) },
+        edgeButton = { MainEdgeButton(R.drawable.ic_search, stringResource(R.string.search_hint), onClick = ask) },
     ) { look ->
         val submitted = state.submitted
         if (submitted == null) {
@@ -290,7 +290,7 @@ fun LibraryScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     var sort by rememberSaveable { mutableStateOf(LibrarySort.Recents) }
     val create = rememberTextInput(stringResource(R.string.library_playlist_name_hint), onCreatePlaylist)
-    ListScreen(stringResource(R.string.library_title), edgeButton = { MainEdgeButton(R.drawable.ic_add, stringResource(R.string.library_create_playlist), create) }) { look ->
+    ListScreen(stringResource(R.string.library_title), edgeButton = { MainEdgeButton(R.drawable.ic_add, stringResource(R.string.library_create_playlist), onClick = create) }) { look ->
         item(key = "sort") {
             ActionRow(
                 look,

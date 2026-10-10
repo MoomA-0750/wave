@@ -24,6 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import xyz.mooma0750.wave.artist.AlbumScreen
 import xyz.mooma0750.wave.artist.AlbumViewModel
@@ -153,6 +154,20 @@ class MainActivity : ComponentActivity() {
                 LaunchedEffect(container) {
                     container.connect.events.collect { message -> xyz.mooma0750.wave.ui.Notices.show(message) }
                 }
+                // 時計との間で再生を移した結果
+                LaunchedEffect(container) {
+                    container.watchRemote.result.drop(1).collect { result ->
+                        val text =
+                            when (result?.second) {
+                                null -> null
+                                xyz.mooma0750.wave.watchlink.WatchRemote.Result.Pulled -> context.getString(R.string.phone_remote_pulled)
+                                xyz.mooma0750.wave.watchlink.WatchRemote.Result.Pushed -> context.getString(R.string.phone_remote_pushed)
+                                xyz.mooma0750.wave.watchlink.WatchRemote.Result.NothingToPull -> context.getString(R.string.wear_remote_nothing)
+                                xyz.mooma0750.wave.watchlink.WatchRemote.Result.Failed -> context.getString(R.string.phone_remote_failed)
+                            }
+                        text?.let(xyz.mooma0750.wave.ui.Notices::show)
+                    }
+                }
                 LaunchedEffect(container) {
                     container.connectV2?.events?.collect { event ->
                         ConnectNotices.toast(event, context.resources)?.let(xyz.mooma0750.wave.ui.Notices::show)
@@ -214,7 +229,7 @@ class MainActivity : ComponentActivity() {
                             val openDevices: () -> Unit = { if (container.connectV2 != null) showDevices = true else nav.push(Screen.Connect) }
                             if (showDevices) {
                                 container.connectV2?.let { manager ->
-                                    xyz.mooma0750.wave.connect2.DevicePickerSheet(manager, onDismiss = { showDevices = false }, onOpenSettings = { nav.push(Screen.Connect) })
+                                    xyz.mooma0750.wave.connect2.DevicePickerSheet(manager, onDismiss = { showDevices = false }, onOpenSettings = { nav.push(Screen.Connect) }, watch = container.watchRemote)
                                 }
                             }
                             AppShell(

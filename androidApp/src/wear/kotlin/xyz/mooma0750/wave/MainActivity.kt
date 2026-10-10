@@ -180,7 +180,7 @@ private fun LoggedIn(
 
     WearNavHost(nav) { screen ->
         when (screen) {
-            WearScreen.Home -> HomeMenu(container.player, hasDevices = container.connectV2 != null, onOpen = nav::push)
+            WearScreen.Home -> HomeMenu(container.player, hasDevices = true, onOpen = nav::push)
             WearScreen.NowPlaying ->
                 NowPlayingScreen(
                     container.player,
@@ -295,7 +295,10 @@ private fun LoggedIn(
                 )
             }
             WearScreen.Settings -> SettingsScreen(container, account, onOpenDevices = { nav.push(WearScreen.Devices) })
-            WearScreen.Devices -> CenterText(stringResource(R.string.wear_coming_soon))
+            WearScreen.Devices -> {
+                val (playerState, _) = xyz.mooma0750.wave.nowplaying.rememberPlayerUiState(container.player)
+                xyz.mooma0750.wave.wear.DevicesScreen(container.watchRemote, watchHasQueue = playerState.queue.isNotEmpty())
+            }
             WearScreen.Ai -> CenterText(stringResource(R.string.wear_coming_soon))
         }
     }
