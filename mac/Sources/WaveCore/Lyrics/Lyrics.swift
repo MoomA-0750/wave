@@ -17,6 +17,7 @@ public enum SongLyrics: Hashable, Sendable {
     /// 時刻の無い本文。
     case plain(Plain)
 
+    /// 行ごとに時刻がある（再生位置に合わせて表示する）。
     public struct Synced: Hashable, Sendable {
         public var lines: [LyricLine]
         public var source: String?
@@ -26,6 +27,7 @@ public enum SongLyrics: Hashable, Sendable {
         }
     }
 
+    /// 時刻の無い本文。
     public struct Plain: Hashable, Sendable {
         public var text: String
         public var source: String?
@@ -37,58 +39,48 @@ public enum SongLyrics: Hashable, Sendable {
 
     public var source: String? {
         switch self {
-        case .synced(let s): s.source
-        case .plain(let p): p.source
+        case .synced(let s): return s.source
+        case .plain(let p): return p.source
         }
     }
 }
 
 /// LRC 形式（[mm:ss.xx]本文）の読み取り。
 public enum Lrc {
-    private static let timePattern = try! NSRegularExpression(pattern: #"\[(\d{1,3}):(\d{1,2})(?:[.:](\d{1,3}))?]"#)
-    private static let offsetPattern = try! NSRegularExpression(pattern: #"^\[offset:\s*([+-]?\d+)\s*]$"#, options: [.caseInsensitive])
-
     /// 時刻の付いた行だけを時刻の順に返す。[offset:+500] は全体を 500ms 早める。
     public static func parse(_ text: String) -> [LyricLine] {
+        let timePattern = #/\[(\d{1,3}):(\d{1,2})(?:[.:](\d{1,3}))?\]/#
+        let offsetPattern = #/^\[offset:\s*([+-]?\d+)\s*\]$/#.ignoresCase()
         var offset: Int64 = 0
         var lines: [LyricLine] = []
-        for raw in text.split(separator: "\n", omittingEmptySubsequences: false) {
+        // "\r\n" を1文字として扱わないよう、Character ではなく文字列で区切る
+        for raw in text.components(separatedBy: "\n") {
             let line = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-            let ns = line as NSString
-            if let m = offsetPattern.firstMatch(in: line, range: NSRange(location: 0, length: ns.length)) {
-                offset = parseLong(ns.substring(with: m.range(at: 1))) ?? 0
+            if let offsetMatch = line.wholeMatch(of: offsetPattern) {
+                offset = Int64(offsetMatch.output.1) ?? 0
                 continue
             }
             var times: [Int64] = []
-            var rest = line
-            while true {
-                let restNs = rest as NSString
-                guard let match = timePattern.firstMatch(in: rest, range: NSRange(location: 0, length: restNs.length)),
-                    match.range.location == 0
-                else { break }
-                times.append(millisOf(match, in: restNs))
-                rest = restNs.substring(from: match.range.length)
+            var rest = Substring(line)
+            while let match = rest.prefixMatch(of: timePattern) {
+                times.append(millisOf(minutes: match.output.1, seconds: match.output.2, fraction: match.output.3))
+                rest = rest[match.range.upperBound...]
             }
             let body = rest.trimmingCharacters(in: .whitespacesAndNewlines)
             for t in times { lines.append(LyricLine(startMs: max(0, t - offset), text: body)) }
         }
-        // 同じ時刻の行は元の順のまま（安定な並べ替え）
+        // 時刻の順（同じ時刻は元の順のまま）
         return lines.enumerated().sorted { a, b in
             a.element.startMs != b.element.startMs ? a.element.startMs < b.element.startMs : a.offset < b.offset
         }.map(\.element)
     }
 
-    private static func millisOf(_ match: NSTextCheckingResult, in text: NSString) -> Int64 {
-        let fractionRange = match.range(at: 3)
-        let fraction = fractionRange.location == NSNotFound ? "" : text.substring(with: fractionRange)
+    private static func millisOf(minutes: Substring, seconds: Substring, fraction: Substring?) -> Int64 {
+        let fraction = fraction.map(String.init) ?? ""
         // 小数部は桁数で意味が変わる（.9 = 900ms、.90 = 900ms、.905 = 905ms）
-        let fractionMs = fraction.isEmpty ? 0 : (parseLong(fraction.padding(toLength: 3, withPad: "0", startingAt: 0)) ?? 0)
-        let minutes = parseLong(text.substring(with: match.range(at: 1))) ?? 0
-        let seconds = parseLong(text.substring(with: match.range(at: 2))) ?? 0
-        return minutes * 60_000 + seconds * 1_000 + fractionMs
+        let fractionMs = fraction.isEmpty ? 0 : Int64(fraction.padding(toLength: 3, withPad: "0", startingAt: 0)) ?? 0
+        return (Int64(minutes) ?? 0) * 60_000 + (Int64(seconds) ?? 0) * 1_000 + fractionMs
     }
-
-    private static func parseLong(_ s: String) -> Int64? { Int64(s) }
 }
 
 /// 再生位置と歌詞の行の対応。
@@ -103,7 +95,7 @@ public enum LyricsTiming {
         var high = lines.count - 1
         var found = -1
         while low <= high {
-            let mid = Int(UInt(bitPattern: low + high) >> 1)
+            let mid = (low + high) >> 1
             if lines[mid].startMs <= at {
                 found = mid
                 low = mid + 1

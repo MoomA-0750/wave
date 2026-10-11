@@ -361,3 +361,7 @@ public final class MusicRepository: Sendable {
         return MusicParsers.isSignInPrompt(value) ? .failed(.notLoggedIn) : .ok(parse(value))
     }
 }
+
+extension MusicRepository: PlainLyricsSource {
+    public func plainLyrics(videoId: String) async throws -> ApiResult<SongLyrics.Plain?> { try await plainLyrics(videoId) }
+}
