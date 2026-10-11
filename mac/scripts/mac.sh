@@ -5,13 +5,14 @@
 #   mac.sh test [filter]      送ってから swift test
 #   mac.sh app                送ってから wave.app を組む（release、署名つき）
 #   mac.sh run                wave.app を組んで起動する
-#   mac.sh log                アプリのログの末尾
+#   mac.sh cmd <命令>...      開発用の命令を送る（run で組んだときだけ効く。Support/DebugCommands.swift）
+#   mac.sh log [行数]         アプリのログの末尾
 set -euo pipefail
 here=$(cd "$(dirname "$0")/../.." && pwd)
 # 作業木ごとに別の置き場（並べて組んでもぶつからない）
 remote=wave-build-$(basename "$here")
 sync() {
-  rsync -az --delete --exclude .build --exclude '*.app' "$here/mac/" "mac:$remote/mac/"
+  rsync -az --delete --exclude .build --exclude build "$here/mac/" "mac:$remote/mac/"
   rsync -az --delete "$here/core/src/desktopTest/resources/fixtures/" "mac:$remote/core/src/desktopTest/resources/fixtures/"
   rsync -az --delete "$here/windows/Wave.Core.Tests/Fixtures/" "mac:$remote/windows/Wave.Core.Tests/Fixtures/"
 }
@@ -29,7 +30,8 @@ sync) sync ;;
 build) sync; ssh mac "cd $remote/mac && swift build 2>&1" ;;
 test) sync; ssh mac "cd $remote/mac && swift test ${2:+--filter $2} 2>&1" ;;
 app) sync; ssh mac "cd $remote/mac && scripts/bundle.sh"; sign ;;
-run) sync; ssh mac "cd $remote/mac && scripts/bundle.sh"; sign; ssh mac "(pkill -x wave || true); sleep 1; open ~/$remote/mac/build/wave.app" ;;
+run) sync; ssh mac "cd $remote/mac && WAVE_DEBUG=1 scripts/bundle.sh"; sign; ssh mac "(pkill -x wave || true); sleep 1; open ~/$remote/mac/build/wave.app" ;;
+cmd) shift; printf "%s\n" "$@" | ssh mac "cat > ~/Library/Application\\ Support/wave/debug-command.txt" ;;
 log) ssh mac "tail -n ${2:-80} ~/Library/Application\ Support/wave/wave.log" ;;
-*) sed -n 2,8p "$0"; exit 1 ;;
+*) sed -n 2,9p "$0"; exit 1 ;;
 esac

@@ -1108,7 +1108,8 @@ final class PlayerService {
         if isPlaying && clockMs - lastPositionSaveMs > PlayerService.positionSaveIntervalMs { saveQueue() }
         guard engine.hasSource, !isLoading else { return }
         position = engine.positionSeconds
-        if engine.durationSeconds > 0 { duration = engine.durationSeconds }
+        // 断片の MP4 では AVPlayer の読む長さが実際より長いことがある。曲の長さが分かっていればそちらを使う
+        if current?.durationSeconds == nil, engine.durationSeconds > 0 { duration = engine.durationSeconds }
         if !statsSent, isPlaying, position >= PlayerService.statsAfterSeconds, let stream = currentStream, AppServices.settings.sendHistory,
             AppServices.client.isLoggedIn
         {

@@ -28,12 +28,13 @@ enum AppServices {
     /// 画面の下の知らせ。
     private(set) static var toast: ToastCenter!
 
-    private static let clockStart = Date()
+    nonisolated private static let clockStart = Date()
     nonisolated static func clockMs() -> Int64 { Int64(Date().timeIntervalSince(clockStart) * 1000) }
 
     static func initialize() {
         settings = Settings.load()
         L.initialize(settings.language)
+        RangeStream.diagnostics = { AppPaths.log($0) }
         let session = InnerTubeClient.createSession()
         mediaSession = InnerTubeClient.createSession()
         // YouTube から届く文字（棚の見出しなど）を画面と同じ言語にする
@@ -59,6 +60,9 @@ enum AppServices {
         releases.start()
         account.changed.append { library.refresh() }
         library.refresh()
+        #if WAVE_DEBUG
+            DebugCommands.start()
+        #endif
     }
 
     /// プレイリストの一覧が届いた（起動直後は、これを待ってから今の曲を先読みする）。

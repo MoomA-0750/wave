@@ -112,7 +112,8 @@ struct MainView: View {
     private func installKeys() {
         guard keyMonitor == nil else { return }
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            MainActor.assumeIsolated { handleKey(event) ? nil : event }
+            let handled = MainActor.assumeIsolated { handleKey(event) }
+            return handled ? nil : event
         }
     }
 
