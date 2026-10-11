@@ -2,8 +2,241 @@
 import SwiftUI
 import WaveCore
 
-/// 設定（仮。Android の SettingsScreen と同じにする）。
+/// 設定（Android の SettingsScreen・Mac の SettingsPage と同じ並び）。アカウント・再生履歴の送信・Claude・新作の通知・言語・
+/// 端末の連携・ログアウト・このアプリについて。
 struct SettingsView: View {
-    var body: some View { Text(L.t("設定", "Settings")) }
+    @State private var sendHistory = AppServices.settings.sendHistory
+    @State private var releaseNotices = AppServices.settings.releaseNotices
+    @State private var language = AppServices.settings.language
+    @State private var pairText = ""
+    @State private var aiConfigured = AppServices.ai.configured
+    @State private var confirmLogout = false
+    @State private var account = AppServices.account!
+
+    var body: some View {
+        Form {
+            accountSection
+            Section {
+                Toggle(isOn: $sendHistory) {
+                    SettingsLabel(title: L.t("再生した曲を YouTube Music の再生履歴に残す", "Save played songs to your YouTube Music history"),
+                                  detail: L.t("オフにすると、wave で聴いた曲は履歴やおすすめに使われません", "When off, songs you play in wave won’t be used for history or recommendations"))
+                }
+                .onChange(of: sendHistory) { _, v in
+                    AppServices.settings.sendHistory = v
+                    AppServices.settings.save()
+                }
+            } header: {
+                Text(L.t("再生", "Play"))
+            }
+            claudeSection
+            Section {
+                Toggle(isOn: $releaseNotices) {
+                    SettingsLabel(title: L.t("新作の通知", "New release notifications"),
+                                  detail: L.t("登録したアーティストのアルバム・シングル・動画が出たら知らせる（wave が動いている間、6時間おきに確かめる）",
+                                              "Notify when artists you subscribe to release albums, singles or videos (checked every 6 hours while wave is running)"))
+                }
+                .onChange(of: releaseNotices) { _, v in
+                    AppServices.settings.releaseNotices = v
+                    AppServices.settings.save()
+                }
+            } header: {
+                Text(L.t("通知", "Notifications"))
+            }
+            Section {
+                Picker(L.t("画面の言語", "App language"), selection: $language) {
+                    Text(L.t("iPhone に合わせる", "Use iPhone language")).tag("system")
+                    Text("日本語").tag("ja")
+                    Text("English").tag("en")
+                }
+                .onChange(of: language) { _, v in
+                    guard v != AppServices.settings.language else { return }
+                    AppServices.settings.language = v
+                    AppServices.settings.save()
+                    AppServices.toast.show(L.t("次の起動から反映されます", "Takes effect the next time you open wave"))
+                }
+            } header: {
+                Text(L.t("言語", "Language"))
+            } footer: {
+                Text(L.t("YouTube から届く文字（棚の見出しなど）もこの言語になります。次の起動から反映されます",
+                         "Text from YouTube (such as shelf titles) also uses this language. Takes effect the next time you open wave"))
+            }
+            if AppServices.connect.configured {
+                Section {
+                    Button { AppServices.nav.devices() } label: {
+                        HStack {
+                            Label {
+                                SettingsLabel(title: L.t("端末の連携", "Devices"),
+                                              detail: L.t("ほかの端末と再生を引き継ぐ・端末を加える", "Move playback between devices and add devices"))
+                            } icon: {
+                                Image(systemName: "hifispeaker.2")
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            if account.isLoggedIn {
+                Section {
+                    // 押し間違いでログインが消えないよう、確かめてからログアウトする（Android と同じ）
+                    Button(L.t("ログアウト", "Log out"), role: .destructive) { confirmLogout = true }
+                }
+            }
+            Section {
+                LabeledContent("wave for iPhone", value: version)
+                Text(L.t("ログイン情報は iOS のキーチェーンに、この iPhone だけが読める形で保存します。",
+                         "Your login is stored in the iOS keychain, readable only on this iPhone."))
+                    .font(.footnote).foregroundStyle(.secondary)
+            } header: {
+                Text(L.t("このアプリについて", "About"))
+            }
+        }
+        .navigationTitle(L.t("設定", "Settings"))
+        .onAppear { aiConfigured = AppServices.ai.configured }
+        .confirmationDialog(L.t("ログアウトしますか？", "Log out?"), isPresented: $confirmLogout, titleVisibility: .visible) {
+            Button(L.t("ログアウト", "Log out"), role: .destructive) { logOut() }
+            Button(L.t("キャンセル", "Cancel"), role: .cancel) {}
+        } message: {
+            Text(L.t("この iPhone に保存したログイン情報を消します。", "This removes your login saved on this iPhone."))
+        }
+    }
+
+    private var version: String { Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1.0" }
+
+    // MARK: アカウント
+
+    private var accountSection: some View {
+        Section {
+            HStack(spacing: 14) {
+                SettingsAvatar(name: account.name, photoUrl: account.photoUrl, size: 52)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(account.isLoggedIn ? account.name ?? L.t("ログイン中", "Logged in") : L.t("ログインしていません", "Not logged in"))
+                        .font(.headline).lineLimit(1)
+                    Text(stateText).font(.footnote).foregroundStyle(.secondary)
+                }
+            }
+            .padding(.vertical, 4)
+            if !account.isLoggedIn {
+                Button(L.t("ログイン", "Log in")) { LoginGate.shared.skipped = false }
+            }
+            // ログインを確かめられなかった（期限切れなど）: Android と同じく、もう一度ログインを勧める
+            if account.isLoggedIn && account.accountCheckFailed {
+                VStack(alignment: .leading, spacing: 2) {
+                    Label(L.t("ログインを確かめられませんでした", "Couldn’t verify your login"), systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                    Text(L.t("ログインの期限が切れたかもしれません。もう一度ログインしてください。", "Your login may have expired. Please log in again."))
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+                Button(L.t("もう一度ログイン", "Log in again")) { logOut() }
+            }
+            if account.savedLoginUnreadable && !account.isLoggedIn {
+                VStack(alignment: .leading, spacing: 2) {
+                    Label(L.t("保存したログイン情報を読み込めませんでした", "Couldn’t read your saved login"), systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                    Text(L.t("ログインし直すと上書きされます。", "Logging in again will replace it.")).font(.footnote).foregroundStyle(.secondary)
+                }
+            }
+        } header: {
+            Text(L.t("アカウント", "Account"))
+        }
+    }
+
+    private var stateText: String {
+        if !account.isLoggedIn { return L.t("ログインすると、ライブラリやおすすめが使えます", "Log in to use your library and recommendations") }
+        if !account.accountChecked { return L.t("アカウントを確かめています…", "Checking account…") }
+        let premium: String = switch account.premiumAudio {
+        case true?: L.t("使えます", "Available")
+        case false?: L.t("使えません", "Unavailable")
+        case nil: account.accountCheckFailed ? L.t("分かりません", "Unknown") : L.t("確かめています…", "Checking…")
+        }
+        return L.t("Premium 音質: ", "Premium audio: ") + premium
+    }
+
+    /// ログアウトして、ログインの画面を出す。
+    private func logOut() {
+        account.logOut()
+        LoginGate.shared.skipped = false
+    }
+
+    // MARK: Claude
+
+    private var claudeSection: some View {
+        Section {
+            Text(aiConfigured ? L.t("\(AppServices.settings.aiName ?? AppServices.settings.aiUrl ?? "") の中継につないでいます", "Connected to \(AppServices.settings.aiName ?? AppServices.settings.aiUrl ?? "")")
+                : L.t("家の PC の Claude Code で、歌詞の意味・似た曲・プレイリスト作りを頼めます", "Ask about lyrics, find similar songs and make playlists with Claude Code on your PC"))
+            if aiConfigured {
+                Button(L.t("接続を外す", "Disconnect"), role: .destructive) {
+                    AiChat.unpair()
+                    aiConfigured = AppServices.ai.configured
+                }
+            } else {
+                HStack {
+                    SecureField("waveai://pair?u=…&t=…", text: $pairText)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                    PasteButton(payloadType: String.self) { strings in
+                        if let first = strings.first { pairText = first }
+                    }
+                    .labelStyle(.iconOnly)
+                    .buttonBorderShape(.capsule)
+                }
+                Button(L.t("接続", "Connect")) {
+                    if AiChat.pair(pairText) {
+                        pairText = ""
+                        aiConfigured = AppServices.ai.configured
+                        AppServices.toast.show(L.t("Claude の中継につなぎました", "Connected to the Claude bridge"))
+                    } else {
+                        AppServices.toast.show(L.t("wave の Claude の中継の接続の文字列ではありません", "That isn't a wave Claude bridge pairing text"))
+                    }
+                }
+                .disabled(pairText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        } header: {
+            Text("Claude")
+        } footer: {
+            if !aiConfigured {
+                Text(L.t("家の PC で tools/ai-bridge の wave_ai_bridge.py --pair を動かし、出てきた waveai://pair?… の文字列を貼ってください。",
+                         "Run wave_ai_bridge.py --pair from tools/ai-bridge on your PC and paste the waveai://pair?… text it prints."))
+            }
+        }
+    }
+}
+
+/// 見出しと小さな説明の2段。
+private struct SettingsLabel: View {
+    var title: String
+    var detail: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+            Text(detail).font(.footnote).foregroundStyle(.secondary)
+        }
+    }
+}
+
+/// アカウントの絵（無ければ名前の頭文字の丸。Android と同じ）。
+private struct SettingsAvatar: View {
+    var name: String?
+    var photoUrl: String?
+    var size: CGFloat
+
+    var body: some View {
+        if let url = Ui.small(photoUrl) {
+            Cover(url: url, size: size, round: true)
+        } else {
+            ZStack {
+                Circle().fill(Color.accentColor.opacity(0.25))
+                if let initial = name?.trimmingCharacters(in: .whitespaces).first {
+                    Text(String(initial).uppercased()).font(.title2.weight(.semibold)).foregroundStyle(Color.accentColor)
+                } else {
+                    Image(systemName: "person.fill").font(.title2).foregroundStyle(Color.accentColor)
+                }
+            }
+            .frame(width: size, height: size)
+        }
+    }
 }
 #endif
