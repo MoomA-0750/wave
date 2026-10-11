@@ -26,7 +26,12 @@ struct MainView: View {
                 }
                 SuggestionsOverlay(model: model)
             }
-            PlayerBar()
+            if model.fullScreen {
+                PlayerBar()
+            } else {
+                // 下の再生の帯も、上の枠と同じガラスの板にする
+                PlayerBar().pane().padding(8)
+            }
         }
         .background(GeometryReader { geo in
             Color.clear.onChange(of: geo.size.width, initial: true) { _, w in model.windowWidth = w }
@@ -35,6 +40,8 @@ struct MainView: View {
         .toolbarRole(.editor)
         // 全画面の再生中の画面は上の2段を覆う（下の操作の帯は出したまま）
         .toolbar(model.fullScreen ? .hidden : .visible, for: .windowToolbar)
+        // 上の帯も窓の地（すりガラス）を透かす
+        .toolbarBackground(.hidden, for: .windowToolbar)
         .navigationTitle(player.current.map { "\($0.title) • \($0.artistsText)" } ?? "wave")
         .sheet(item: $dialogs.addToPlaylist) { song in AddToPlaylistSheet(song: song) }
         .sheet(isPresented: $dialogs.creating) { CreatePlaylistSheet(song: dialogs.createSong) }
@@ -113,6 +120,8 @@ struct MainView: View {
     /// スペースで再生・一時停止（文字の入力中は除く）。⌘←/→ で前・次の曲。⌘K・⌘L で検索欄、⌘J で Claude、F11 で全画面。
     private func installKeys() {
         guard keyMonitor == nil else { return }
+        // 開いた直後に、窓が最初の文字の欄（ライブラリの検索）へ勝手に入力の焦点を当てるのを外す（スペースで再生できるように）
+        DispatchQueue.main.async { NSApp.windows.first { $0.identifier?.rawValue.hasPrefix("main") == true }?.makeFirstResponder(nil) }
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             let handled = MainActor.assumeIsolated { handleKey(event) }
             return handled ? nil : event

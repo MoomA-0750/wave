@@ -14,6 +14,8 @@ struct WaveApp: App {
         Window("wave", id: "main") {
             MainView()
                 .frame(minWidth: 900, minHeight: 600)
+                // 窓の地は後ろが透けるすりガラス（枠はその上に Liquid Glass の板として浮かせる）
+                .containerBackground(.ultraThinMaterial, for: .window)
         }
         .defaultSize(width: 1480, height: 940)
         .windowToolbarStyle(.unified(showsTitle: false))
@@ -33,6 +35,11 @@ struct WaveApp: App {
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        // メニューバーに再生中の曲を出す
+        MainActor.assumeIsolated { MenuBarController.shared.start() }
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         // 閉じるときに、キューと位置を書いておく（次の起動で戻す）
         MainActor.assumeIsolated { AppServices.player.saveQueue() }

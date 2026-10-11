@@ -124,7 +124,7 @@ struct NowPlayingView: View {
                         LinkText(text: song?.title ?? L.t("何も再生していません", "Nothing playing"), action: SongLinks.openAlbum)
                             .font(.title2.weight(.semibold))
                             .lineLimit(2)
-                        ArtistLink(font: .body, color: .accentColor)
+                        ArtistLink(font: .body, color: .primary.opacity(0.75))
                     }
                     Spacer(minLength: 0)
                     if song != nil { LikeButton.view(player, size: 20) }
@@ -134,7 +134,7 @@ struct NowPlayingView: View {
                     HStack {
                         Text(L.t("次の曲", "Next up")).font(.body.weight(.semibold))
                         Spacer()
-                        Button(L.t("キューを開く", "Open queue")) { model.showQueue() }.buttonStyle(.link)
+                        Button(L.t("キューを開く", "Open queue")) { model.showQueue() }.buttonStyle(.textLink)
                     }
                     if player.index + 1 < player.queue.count {
                         let next = player.queue[player.index + 1]
@@ -208,7 +208,7 @@ struct QueueView: View {
                 Chip(title: L.t("履歴", "History"), isOn: model.queueHistory) { model.queueHistory = true }
                 Spacer()
                 if !model.queueHistory && player.userQueueEnd > player.index + 1 && !player.isRemote {
-                    Button(L.t("キューを消去", "Clear queue")) { player.clearUserQueue() }.buttonStyle(.link)
+                    Button(L.t("キューを消去", "Clear queue")) { player.clearUserQueue() }.buttonStyle(.textLink)
                 }
                 Button { model.setRightPane(open: true, queue: false) } label: { Image(systemName: "xmark").font(.system(size: 11)) }
                     .buttonStyle(IconButtonStyle()).help(L.t("閉じる", "Close"))

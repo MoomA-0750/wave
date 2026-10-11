@@ -1,12 +1,18 @@
 import SwiftUI
 
-/// 枠（Spotify の角の丸い面）。窓の地の上に浮かせる。
+/// 枠（Spotify の角の丸い面）。窓の地の上に浮かせる。macOS 26 以降は Liquid Glass の板にする。
 struct PaneBackground: ViewModifier {
     func body(content: Content) -> some View {
-        content
-            .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 8))
-            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.primary.opacity(0.08)))
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+        if #available(macOS 26.0, *) {
+            content
+                .clipShape(RoundedRectangle(cornerRadius: 14))
+                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 14))
+        } else {
+            content
+                .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 8))
+                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.primary.opacity(0.08)))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+        }
     }
 }
 
@@ -146,4 +152,29 @@ struct LinkText: View {
             .onHover { hover = $0 }
             .onTapGesture(perform: action)
     }
+}
+
+/// 文字だけのリンクのボタン（ガラスの上でも読めるよう、アクセントの青ではなく白寄りの太字。乗せると下線）。
+struct TextLinkStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        TextLinkBody(configuration: configuration)
+    }
+
+    private struct TextLinkBody: View {
+        let configuration: Configuration
+        @State private var hover = false
+
+        var body: some View {
+            configuration.label
+                .fontWeight(.semibold)
+                .foregroundStyle(Color.primary.opacity(configuration.isPressed ? 0.5 : 0.85))
+                .underline(hover)
+                .contentShape(Rectangle())
+                .onHover { hover = $0 }
+        }
+    }
+}
+
+extension ButtonStyle where Self == TextLinkStyle {
+    static var textLink: TextLinkStyle { TextLinkStyle() }
 }

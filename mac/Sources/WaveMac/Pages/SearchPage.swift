@@ -158,7 +158,7 @@ struct SearchPageView: View {
                             AppServices.settings.save()
                             model.showRecent()
                         }
-                        .buttonStyle(.link)
+                        .buttonStyle(.textLink)
                     }
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 260), spacing: 8)], spacing: 8) {
                         ForEach(model.history) { entry in RecentSearchTile(entry: entry, model: model) }

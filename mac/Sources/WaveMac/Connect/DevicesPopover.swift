@@ -58,7 +58,7 @@ struct DevicesPopover: View {
                 isOpen = false
                 AppServices.nav.devices()
             }
-            .buttonStyle(.link)
+            .buttonStyle(.textLink)
             .padding(.top, 8)
         }
         .padding(16)

@@ -72,7 +72,7 @@ struct ArtistPageView: View {
                     Button(L.t("すべての曲を見る", "See all songs")) {
                         AppServices.nav.playlist(PlaylistSummary(playlistId: id, title: artist.name + L.t(" のすべての曲", " — all songs"), subtitle: nil, thumbnailUrl: artist.thumbnailUrl))
                     }
-                    .buttonStyle(.link).padding(.horizontal, 24)
+                    .buttonStyle(.textLink).padding(.horizontal, 24)
                 }
                 // Spotify の「高く評価した曲」の行（このアーティストの、自分が高く評価した曲）。1曲も無ければ出さない
                 if checkingLiked || (liked?.count ?? 0) > 0, let artist {

@@ -6,7 +6,6 @@ import WaveCore
 struct PlayerBar: View {
     @State private var model = MainWindowModel.shared
     @State private var volumeBeforeMute = 0.7
-    @State private var dragging: Double?
     @State private var devicesOpen = false
 
     var body: some View {
@@ -31,49 +30,8 @@ struct PlayerBar: View {
                 }
                 .frame(width: side)
                 // 中央: ボタンと位置
-                VStack(spacing: 2) {
-                    HStack(spacing: 12) {
-                        IconToggle(isOn: player.shuffle, help: L.t("シャッフル", "Shuffle"), action: player.toggleShuffle) {
-                            Image(systemName: "shuffle").font(.system(size: 15))
-                        }
-                        Button(action: player.previous) { Image(systemName: "backward.end.fill").font(.system(size: 15)) }
-                            .buttonStyle(IconButtonStyle()).help(L.t("前へ", "Previous"))
-                        Button(action: player.togglePlay) {
-                            ZStack {
-                                Circle().fill(Color.primary).frame(width: 36, height: 36)
-                                if player.isLoading {
-                                    ProgressView().controlSize(.small).tint(Color(nsColor: .windowBackgroundColor))
-                                } else {
-                                    Image(systemName: player.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 15))
-                                        .foregroundStyle(Color(nsColor: .windowBackgroundColor))
-                                }
-                            }
-                        }
-                        .buttonStyle(.plain)
-                        .help(L.t("再生/一時停止", "Play/Pause"))
-                        Button(action: player.next) { Image(systemName: "forward.end.fill").font(.system(size: 15)) }
-                            .buttonStyle(IconButtonStyle()).help(L.t("次へ", "Next"))
-                        IconToggle(isOn: player.repeatMode != .off, help: L.t("リピート", "Repeat"), action: player.cycleRepeat) {
-                            Image(systemName: player.repeatMode == .one ? "repeat.1" : "repeat").font(.system(size: 15))
-                        }
-                    }
-                    HStack(spacing: 8) {
-                        Text(Ui.time(dragging ?? player.position)).font(.caption).foregroundStyle(.secondary).monospacedDigit()
-                            .frame(width: 44, alignment: .trailing)
-                        Slider(value: Binding(get: { dragging ?? min(player.position, max(1, player.duration)) }, set: { dragging = $0 }),
-                               in: 0...max(1, player.duration)) { editing in
-                            // 本人がシークバーを触り終えたときだけ移る（曲が変わって最大値が縮んだなどではシークしない）
-                            if !editing, let value = dragging {
-                                player.seek(value)
-                                dragging = nil
-                            }
-                        }
-                        .controlSize(.small)
-                        Text(Ui.time(player.duration)).font(.caption).foregroundStyle(.secondary).monospacedDigit()
-                            .frame(width: 44, alignment: .leading)
-                    }
-                }
-                .frame(maxWidth: 720)
+                TransportControls()
+                    .frame(maxWidth: 720)
                 // 右: 歌詞・キュー・デバイス・再生中の画面・全画面・音量
                 HStack(spacing: 4) {
                     Spacer(minLength: 0)
@@ -138,6 +96,57 @@ struct PlayerBar: View {
             player.volume = 0
         } else {
             player.volume = volumeBeforeMute
+        }
+    }
+}
+
+/// 再生のボタン（シャッフル・前へ・再生・次へ・リピート）と位置のバー。下の帯とメニューバーの小窓で使う。
+struct TransportControls: View {
+    @State private var dragging: Double?
+
+    var body: some View {
+        let player = AppServices.player!
+        VStack(spacing: 2) {
+            HStack(spacing: 12) {
+                IconToggle(isOn: player.shuffle, help: L.t("シャッフル", "Shuffle"), action: player.toggleShuffle) {
+                    Image(systemName: "shuffle").font(.system(size: 15))
+                }
+                Button(action: player.previous) { Image(systemName: "backward.end.fill").font(.system(size: 15)) }
+                    .buttonStyle(IconButtonStyle()).help(L.t("前へ", "Previous"))
+                Button(action: player.togglePlay) {
+                    ZStack {
+                        Circle().fill(Color.primary).frame(width: 36, height: 36)
+                        if player.isLoading {
+                            ProgressView().controlSize(.small).tint(Color(nsColor: .windowBackgroundColor))
+                        } else {
+                            Image(systemName: player.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 15))
+                                .foregroundStyle(Color(nsColor: .windowBackgroundColor))
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+                .help(L.t("再生/一時停止", "Play/Pause"))
+                Button(action: player.next) { Image(systemName: "forward.end.fill").font(.system(size: 15)) }
+                    .buttonStyle(IconButtonStyle()).help(L.t("次へ", "Next"))
+                IconToggle(isOn: player.repeatMode != .off, help: L.t("リピート", "Repeat"), action: player.cycleRepeat) {
+                    Image(systemName: player.repeatMode == .one ? "repeat.1" : "repeat").font(.system(size: 15))
+                }
+            }
+            HStack(spacing: 8) {
+                Text(Ui.time(dragging ?? player.position)).font(.caption).foregroundStyle(.secondary).monospacedDigit()
+                    .frame(width: 44, alignment: .trailing)
+                Slider(value: Binding(get: { dragging ?? min(player.position, max(1, player.duration)) }, set: { dragging = $0 }),
+                       in: 0...max(1, player.duration)) { editing in
+                    // 本人がシークバーを触り終えたときだけ移る（曲が変わって最大値が縮んだなどではシークしない）
+                    if !editing, let value = dragging {
+                        player.seek(value)
+                        dragging = nil
+                    }
+                }
+                .controlSize(.small)
+                Text(Ui.time(player.duration)).font(.caption).foregroundStyle(.secondary).monospacedDigit()
+                    .frame(width: 44, alignment: .leading)
+            }
         }
     }
 }

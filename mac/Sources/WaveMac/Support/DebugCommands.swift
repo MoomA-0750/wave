@@ -181,6 +181,7 @@ enum DebugCommands {
             AppPaths.log("debug connect relay=\(c.info.relay) household=\(c.info.inHousehold) pairing=\(p.kind) code=\(p.code ?? "") peer=\(p.peerName ?? "") offer=\(p.offerText != nil) text=\(p.text ?? "")")
             for m in c.members { AppPaths.log("debug connect member label=\(m.label) self=\(m.isSelf) online=\(m.online) active=\(m.active) pc=\(m.isPc) controller=\(m.isController)") }
             if let r = c.remote { AppPaths.log("debug connect remote device=\(r.deviceLabel) title=\(r.title ?? "") playing=\(r.playing) positionMs=\(r.positionMs) online=\(r.online)") }
+        case "menubar": MenuBarController.shared.toggle()
         case "notify-plain":
             let content = UNMutableNotificationContent()
             content.title = "wave"

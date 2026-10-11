@@ -19,7 +19,7 @@ struct AiView: View {
             HStack {
                 Text(L.t("Claude に聞く", "Ask Claude")).font(.body.weight(.semibold))
                 Spacer()
-                Button(L.t("新しい会話", "New chat")) { chat.clear() }.buttonStyle(.link)
+                Button(L.t("新しい会話", "New chat")) { chat.clear() }.buttonStyle(.textLink)
                 Button { model.setRightPane(open: true, queue: false) } label: { Image(systemName: "xmark").font(.system(size: 11)) }
                     .buttonStyle(IconButtonStyle()).help(L.t("閉じる", "Close"))
             }
@@ -46,7 +46,7 @@ struct AiView: View {
             if !chat.running {
                 VStack(alignment: .leading, spacing: 4) {
                     ForEach(suggestions, id: \.self) { s in
-                        Button(s) { chat.send(s) }.buttonStyle(.link).font(.callout)
+                        Button(s) { chat.send(s) }.buttonStyle(.textLink).font(.callout)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
