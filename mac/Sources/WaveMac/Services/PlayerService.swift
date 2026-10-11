@@ -75,6 +75,8 @@ final class PlayerService {
     @ObservationIgnored private var currentStream: ResolvedStream?
     @ObservationIgnored private var cpn = ""
     @ObservationIgnored private var statsSent = false
+    /// 曲の長さに着いて、終わりの扱いをもう済ませたか（AVPlayer の終わりの知らせと二重にしない）。
+    @ObservationIgnored private var endHandled = false
     @ObservationIgnored private var retried = false
     @ObservationIgnored private var radioContinuation: String?
     @ObservationIgnored private var radioPlaylistId: String?
@@ -1042,6 +1044,8 @@ final class PlayerService {
     }
 
     private func onEnded() {
+        guard !endHandled else { return }
+        endHandled = true
         // 曲の途中で「終わった」と来たら、読み込みの失敗とみなす（次々に飛ばさない）
         let known = Double(current?.durationSeconds ?? 0)
         if known > 10 && position < known - 5 {
@@ -1110,6 +1114,10 @@ final class PlayerService {
         position = engine.positionSeconds
         // 断片の MP4 では AVPlayer の読む長さが実際より長いことがある。曲の長さが分かっていればそちらを使う
         if current?.durationSeconds == nil, engine.durationSeconds > 0 { duration = engine.durationSeconds }
+        // 長さを長く読んだときは AVPlayer が終わりを知らせないので、本当の長さ（形式の長さ、無ければ曲の長さ）に着いたら終わりとする
+        let realEnd = currentStream?.dash.map { Double($0.durationMs) / 1000 } ?? Double(current?.durationSeconds ?? 0)
+        if position < (realEnd > 10 ? realEnd : engine.durationSeconds) - 1 { endHandled = false }
+        if isPlaying, !endHandled, realEnd > 10, position >= realEnd - 0.2 { onEnded() }
         if !statsSent, isPlaying, position >= PlayerService.statsAfterSeconds, let stream = currentStream, AppServices.settings.sendHistory,
             AppServices.client.isLoggedIn
         {
