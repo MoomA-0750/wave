@@ -8,7 +8,7 @@ if ! xcrun simctl list devices | grep -q "$name ("; then
   xcrun simctl create "$name" "$type" "$runtime" >/dev/null
 fi
 xcrun simctl boot "$name" 2>/dev/null || true
-open -a Simulator
+# 画面（Simulator のアプリ）は開かない。Xcode 27 のベータには無く、画面は simctl io で撮る。操作は開発用の命令（mac.sh ios-cmd）で行う
 case "${1:-}" in
 install)
   xcrun simctl terminate "$name" xyz.mooma0750.wave 2>/dev/null || true
