@@ -67,7 +67,8 @@ public enum JSON: Equatable, Sendable {
     /// 数か、数の文字列を整数として読む。
     public var long: Int64? {
         switch self {
-        case .number(let d): return d.isFinite ? Int64(d) : nil
+        // Int64 に収まらない数は Int64(d) が落ちるので nil にする（取れない項目は飛ばす）
+        case .number(let d): return d.isFinite && d >= -9.223372036854775e18 && d < 9.223372036854775e18 ? Int64(d) : nil
         case .string(let s): return Int64(s)
         default: return nil
         }
