@@ -40,7 +40,7 @@ enum AppServices {
         // YouTube から届く文字（棚の見出しなど）を画面と同じ言語にする
         client = InnerTubeClient(session: session, hl: L.hl)
         music = MusicRepository(client: client)
-        resolver = StreamResolver(client: client, cipher: PlayerCipherProvider(session: session, nowMs: clockMs), nowMs: clockMs)
+        resolver = StreamResolver(client: client, cipher: PlayerCipherProvider(session: session, nowMs: { AppServices.clockMs() }), nowMs: { AppServices.clockMs() })
         stats = PlaybackStats(client: client)
         // 歌詞の検索（LRCLIB）には YouTube と別の通信を使う
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1.0"
