@@ -67,6 +67,11 @@ final class MainWindowModel {
 
     private init() {
         rightPaneOpen = AppServices.settings.rightPaneOpen
+        // 今の曲を足したり外したりしたら、評価のボタンの✓を付け直す
+        AppServices.library.membership.nowPlayingChanged = {
+            let player = AppServices.player!
+            player.inPlaylist = AppServices.library.membership.isSavedNowPlaying(player.current?.videoId)
+        }
     }
 
     // MARK: 画面の広さに合わせた並び

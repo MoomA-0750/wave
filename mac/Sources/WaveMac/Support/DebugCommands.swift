@@ -88,7 +88,10 @@ enum DebugCommands {
             }
         case "membership-toggle":
             // 追加の画面で、名前の一致するプレイリストの行を押したのと同じ（入っていれば外し、無ければ足す）
-            guard let song = player.current, let target = AppServices.library.editable.first(where: { $0.title == arg }) else { break }
+            guard let song = player.current, let target = AppServices.library.editable.first(where: { $0.title == arg }) else {
+                AppPaths.log("debug membership-toggle no playlist")
+                break
+            }
             let status = await AppServices.library.membership.check(target.playlistId, song.videoId)
             if status == .isIn { _ = await SongActions.remove(target, song) } else { await SongActions.add(target, song) }
             AppPaths.log("debug membership-toggle was=\(status) inPlaylist=\(player.inPlaylist)")
@@ -124,13 +127,25 @@ enum DebugCommands {
         case "pause": if player.isPlaying { player.togglePlay() }
         case "play": if !player.isPlaying { player.togglePlay() }
         case "like": LikeButton.press(player)
+        case "set-like":
+            // 検索の先頭の曲の評価を直接変える（確かめで変えた評価を戻す）。引数は「on|off 検索語」
+            let p = arg.split(separator: " ", maxSplits: 1).map(String.init)
+            guard p.count == 2, let song = await firstSong(p[1]) else { break }
+            let r = try? await AppServices.music.setLiked(song.videoId, liked: p[0] == "on")
+            if r?.isOk == true { AppServices.library.likedChanged(song.videoId, p[0] == "on") }
+            AppPaths.log("debug set-like \(p[0]) ok=\(r?.isOk ?? false) liked=\(AppServices.library.isLiked(song.videoId))")
+        case "dialog-close":
+            Dialogs.shared.addToPlaylist = nil
+            Dialogs.shared.creating = false
         case "now":
-            AppPaths.log("debug now title=\(player.current?.title ?? "nil") position=\(Int(player.position)) duration=\(Int(player.duration)) playing=\(player.isPlaying) loading=\(player.isLoading) like=\(String(describing: player.like)) lyrics=\(player.lyrics != nil) video=\(player.video != nil) remote=\(player.isRemote)")
+            AppPaths.log("debug now title=\(player.current?.title ?? "nil") position=\(Int(player.position)) duration=\(Int(player.duration)) playing=\(player.isPlaying) loading=\(player.isLoading) like=\(String(describing: player.like)) lyrics=\(player.lyrics != nil) video=\(player.video != nil) remote=\(player.isRemote) videoSize=\(MusicVideoPlayer.shared.player.currentItem?.presentationSize ?? .zero)")
         case "route":
             AppPaths.log("debug route=\(nav.current.route) back=\(nav.canGoBack)")
         case "playlist-delete":
             // 名前の一致する自分のプレイリストを消す（確かめで作ったものの後片付け）
-            for p in AppServices.library.editable where p.title == arg {
+            let targets = AppServices.library.editable.filter { $0.title == arg }
+            if targets.isEmpty { AppPaths.log("debug playlist delete none") }
+            for p in targets {
                 let id = p.playlistId.hasPrefix("VL") ? String(p.playlistId.dropFirst(2)) : p.playlistId
                 let r = try? await AppServices.client.post("playlist/delete", body: .obj(["playlistId": .string(id)]))
                 AppPaths.log("debug playlist delete ok=\(r?.isOk ?? false)")
