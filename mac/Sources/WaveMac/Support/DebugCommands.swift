@@ -41,6 +41,7 @@ enum DebugCommands {
         case "home": nav.home()
         case "settings": nav.settings()
         case "login": LoginWindowController.show()
+        case "login-probe": LoginProbe.run()
         case "devices": nav.devices()
         case "history": nav.history()
         case "lyrics": nav.lyrics()
@@ -156,6 +157,29 @@ enum DebugCommands {
             AppPaths.log("debug playlist create ok=\(r?.isOk ?? false)")
         case "playlists":
             AppPaths.log("debug playlists " + AppServices.library.editable.map(\.title).joined(separator: " | "))
+        case "connect-accept":
+            // 家の端末が出した文字列（wave-pair:…）で加わる（「はじめる」に貼って「加わる」を押したのと同じ）
+            AppServices.connect.accept(arg)
+        case "connect-offer":
+            // 「端末を追加」を押したのと同じ。出た文字列（wave-pair:…）は加える端末へ渡すため、データの場所の debug-offer.txt に書く（2分で無効）
+            let c = AppServices.connect!
+            c.startOffer()
+            for _ in 0..<40 where c.pairingState.offerText == nil { try? await Task.sleep(for: .milliseconds(250)) }
+            if let offer = c.pairingState.offerText { try? offer.write(to: AppPaths.file("debug-offer.txt"), atomically: true, encoding: .utf8) }
+            AppPaths.log("debug connect offer ok=\(c.pairingState.offerText != nil)")
+        case "connect-code": AppServices.connect.enterCode(arg)
+        case "connect-confirm": AppServices.connect.confirmOnB()
+        case "connect-cancel": AppServices.connect.cancelPairing()
+        case "connect-transfer": AppServices.connect.transfer()
+        case "connect-play":
+            // デバイスの一覧で、名前の一致する端末を選んだのと同じ
+            if let m = AppServices.connect.members.first(where: { $0.label == arg }) { AppServices.connect.playOnDevice(m.deviceId) }
+        case "connect-state":
+            let c = AppServices.connect!
+            let p = c.pairingState
+            AppPaths.log("debug connect relay=\(c.info.relay) household=\(c.info.inHousehold) pairing=\(p.kind) code=\(p.code ?? "") peer=\(p.peerName ?? "") offer=\(p.offerText != nil) text=\(p.text ?? "")")
+            for m in c.members { AppPaths.log("debug connect member label=\(m.label) self=\(m.isSelf) online=\(m.online) active=\(m.active) pc=\(m.isPc) controller=\(m.isController)") }
+            if let r = c.remote { AppPaths.log("debug connect remote device=\(r.deviceLabel) title=\(r.title ?? "") playing=\(r.playing) positionMs=\(r.positionMs) online=\(r.online)") }
         case "releases-check":
             await AppServices.releases.check()
         default:

@@ -195,6 +195,34 @@ public static class DebugCommands
             case "releases-check":
                 await AppServices.Releases.CheckAsync();
                 break;
+            case "connect-offer":
+                {
+                    // 「端末を追加」を押したのと同じ。出た文字列（wave-pair:…）は加える端末へ渡すため、データの場所の debug-offer.txt に書く（2分で無効）
+                    var connect = AppServices.Connect;
+                    connect.StartOffer();
+                    for (var i = 0; i < 40 && connect.PairingState.OfferText == null; i++) await Task.Delay(250);
+                    if (connect.PairingState.OfferText is { } offer) File.WriteAllText(Path.Combine(AppPaths.Data, "debug-offer.txt"), offer);
+                    AppPaths.Log($"debug connect offer ok={connect.PairingState.OfferText != null}");
+                    break;
+                }
+            case "connect-accept": AppServices.Connect.Accept(arg); break;
+            case "connect-code": AppServices.Connect.EnterCode(arg); break;
+            case "connect-confirm": AppServices.Connect.ConfirmOnB(); break;
+            case "connect-cancel": AppServices.Connect.CancelPairing(); break;
+            case "connect-transfer": AppServices.Connect.Transfer(); break;
+            case "connect-play":
+                // デバイスの一覧で、名前の一致する端末を選んだのと同じ
+                if (AppServices.Connect.Members.FirstOrDefault(m => m.Label == arg) is { } device) AppServices.Connect.PlayOnDevice(device.DeviceId);
+                break;
+            case "connect-state":
+                {
+                    var c = AppServices.Connect;
+                    var p = c.PairingState;
+                    AppPaths.Log($"debug connect relay={c.Info.Relay} household={c.Info.InHousehold} pairing={p.Kind} code={p.Code} peer={p.PeerName} offer={p.OfferText != null} text={p.Text}");
+                    foreach (var m in c.Members) AppPaths.Log($"debug connect member label={m.Label} self={m.IsSelf} online={m.Online} active={m.Active} pc={m.IsPc} controller={m.IsController}");
+                    if (c.Remote is { } r) AppPaths.Log($"debug connect remote device={r.DeviceLabel} title={r.Title} playing={r.Playing} positionMs={r.PositionMs} online={r.Online}");
+                    break;
+                }
         }
     }
 }

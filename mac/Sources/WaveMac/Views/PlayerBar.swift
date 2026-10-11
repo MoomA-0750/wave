@@ -18,12 +18,15 @@ struct PlayerBar: View {
                 HStack(spacing: 12) {
                     Cover(url: Ui.small(player.current?.thumbnailUrl), size: 56)
                         .onTapGesture { model.setRightPane(open: !(model.rightPaneOpen && model.rightView == .nowPlaying), queue: false) }
-                    VStack(alignment: .leading, spacing: 2) {
-                        LinkText(text: player.current?.title ?? "", action: SongLinks.openAlbum).font(.body.weight(.semibold)).lineLimit(1)
-                        ArtistLink(font: .caption, color: .secondary)
+                    // 評価のボタンは曲名のすぐ右（Spotify と同じ）。曲名が長いときだけ省略する
+                    HStack(spacing: 12) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            LinkText(text: player.current?.title ?? "", action: SongLinks.openAlbum).font(.body.weight(.semibold)).lineLimit(1)
+                            ArtistLink(font: .caption, color: .secondary)
+                        }
+                        if player.current != nil { LikeButton.view(player, size: 18) }
                     }
-                    .frame(maxWidth: 260, alignment: .leading)
-                    if player.current != nil { LikeButton.view(player, size: 18) }
+                    .frame(maxWidth: 300, alignment: .leading)
                     Spacer(minLength: 0)
                 }
                 .frame(width: side)

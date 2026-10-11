@@ -11,6 +11,7 @@ final class LoginWindowController: NSObject, NSWindowDelegate, WKNavigationDeleg
     private static var shared: LoginWindowController?
     private static let startUrl = URL(string: "https://accounts.google.com/ServiceLogin?continue=https%3A%2F%2Fmusic.youtube.com%2F")!
     private static let landingHost = "music.youtube.com"
+    static let safariName = "Version/18.0 Safari/605.1.15"
 
     /// メインフレームで開いてよいホスト（利用者がページを置ける sites・docs などは含めない）。
     private static let loginHosts: Set<String> = [
@@ -44,6 +45,8 @@ final class LoginWindowController: NSObject, NSWindowDelegate, WKNavigationDeleg
     private override init() {
         let config = WKWebViewConfiguration()
         config.websiteDataStore = .default()
+        // 既定の UA には Safari の名が無く、YouTube Music が「対応していないブラウザ」のページを返す（yt.config_ が無い）。Safari と名乗る
+        config.applicationNameForUserAgent = LoginWindowController.safariName
         // 実アカウントでログイン中は開発者ツールを使わせない（Android 版の決定7と同じ）
         webView = WKWebView(frame: .zero, configuration: config)
         webView.isInspectable = false

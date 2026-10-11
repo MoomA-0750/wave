@@ -163,6 +163,8 @@ struct MainView: View {
 
 /// 右上のアカウントのメニュー。
 struct AccountMenu: View {
+    @State private var avatar: NSImage?
+
     var body: some View {
         let account = AppServices.account!
         Menu {
@@ -178,14 +180,32 @@ struct AccountMenu: View {
             }
             Button(L.t("設定", "Settings"), systemImage: "gearshape") { AppServices.nav.settings() }
         } label: {
-            if let url = Ui.small(account.photoUrl) {
-                Cover(url: url, size: 26, round: true)
+            // 上の帯のメニューは見出しを1枚の絵にして出すので、枠や切り抜きが効かない。丸く切った 26pt の絵を渡す
+            if let avatar {
+                Image(nsImage: avatar)
             } else {
                 Image(systemName: "person.crop.circle").font(.system(size: 20))
             }
         }
         .menuIndicator(.hidden)
+        .task(id: account.photoUrl) {
+            avatar = nil
+            guard let url = Ui.small(account.photoUrl), let image = await ImageLoader.load(url) else { return }
+            avatar = AccountMenu.round(image, size: 26)
+        }
         .help(L.t("アカウント", "Account"))
+    }
+}
+
+extension AccountMenu {
+    /// 真ん中を正方形に切り出して丸く抜いた絵。
+    static func round(_ image: NSImage, size: CGFloat) -> NSImage {
+        NSImage(size: NSSize(width: size, height: size), flipped: false) { rect in
+            NSBezierPath(ovalIn: rect).addClip()
+            let w = image.size.width, h = image.size.height, side = min(w, h)
+            image.draw(in: rect, from: NSRect(x: (w - side) / 2, y: (h - side) / 2, width: side, height: side), operation: .copy, fraction: 1)
+            return true
+        }
     }
 }
 
