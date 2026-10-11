@@ -1,14 +1,15 @@
 // swift-tools-version: 6.0
 import PackageDescription
 
-// macOS 版（SwiftUI）。画面と機能は Windows 版（windows/）と同じにする。
-// WaveCore は Windows の Wave.Core を Swift へ移したもの、WaveMac は画面。
+// macOS 版と iPhone 版（SwiftUI）。Mac の画面と機能は Windows 版（windows/）と、iPhone は Android 版と同じにする。
+// WaveCore は Windows の Wave.Core を Swift へ移したもの。Wave はアプリで、Shared（再生・ライブラリ・連携など）を両方で使い、
+// Mac/ の画面は macOS で、iOS/ の画面は iOS で組む（同じ製品 wave を、組む先の OS を変えて組む）。
 let package = Package(
     name: "Wave",
     defaultLocalization: "ja",
-    platforms: [.macOS(.v15)],
+    platforms: [.macOS(.v15), .iOS(.v18)],
     products: [
-        .executable(name: "WaveMac", targets: ["WaveMac"]),
+        .executable(name: "wave", targets: ["Wave"]),
         .library(name: "WaveCore", targets: ["WaveCore"]),
     ],
     targets: [
@@ -17,7 +18,7 @@ let package = Package(
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
         .executableTarget(
-            name: "WaveMac",
+            name: "Wave",
             dependencies: ["WaveCore"],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
