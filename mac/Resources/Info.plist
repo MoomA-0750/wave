@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleName</key><string>wave</string>
+	<key>CFBundleDisplayName</key><string>wave</string>
+	<key>CFBundleIdentifier</key><string>xyz.mooma0750.wave</string>
+	<key>CFBundleExecutable</key><string>wave</string>
+	<key>CFBundlePackageType</key><string>APPL</string>
+	<key>CFBundleShortVersionString</key><string>0.1.0</string>
+	<key>CFBundleVersion</key><string>1</string>
+	<key>CFBundleIconFile</key><string>wave</string>
+	<key>CFBundleDevelopmentRegion</key><string>ja</string>
+	<key>CFBundleLocalizations</key><array><string>ja</string><string>en</string></array>
+	<key>LSMinimumSystemVersion</key><string>15.0</string>
+	<key>LSApplicationCategoryType</key><string>public.app-category.music</string>
+	<key>NSHighResolutionCapable</key><true/>
+	<key>NSPrincipalClass</key><string>NSApplication</string>
+	<key>NSLocalNetworkUsageDescription</key><string>端末の連携の中継につなぐのに使います。</string>
+</dict>
+</plist>
