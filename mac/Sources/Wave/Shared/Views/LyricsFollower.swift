@@ -1,4 +1,3 @@
-#if os(macOS)
 import SwiftUI
 import WaveCore
 
@@ -65,4 +64,3 @@ private struct SyncedLyrics: View {
         }
     }
 }
-#endif

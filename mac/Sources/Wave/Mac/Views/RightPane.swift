@@ -17,36 +17,7 @@ struct RightPane: View {
 
 /// 評価のボタンの絵・色・説明（Windows と同じ）。
 /// 評価済みは✓、まだなら＋、読めていない（ログイン中で評価が分からない）なら↻（押すと読み直す。Android と同じ）。
-/// Spotify と同じく、高く評価していなくても、どれかのプレイリストに入っていれば✓（押すとプレイリストに追加する画面）。
-@MainActor
-enum LikeButton {
-    static func symbol(_ player: PlayerService) -> String {
-        if player.like == .like || player.inPlaylist { return "checkmark.circle.fill" }
-        if player.like == nil && AppServices.client.isLoggedIn && player.current != nil { return "arrow.clockwise" }
-        return "plus.circle"
-    }
-
-    static func accent(_ player: PlayerService) -> Bool { player.like == .like || player.inPlaylist }
-
-    static func tip(_ player: PlayerService) -> String {
-        if player.like == .like { return L.t("プレイリストに追加", "Add to playlist") }
-        if player.inPlaylist { return L.t("プレイリストに入っています（追加先を変える）", "Saved in a playlist (change)") }
-        if player.like == nil && AppServices.client.isLoggedIn && player.current != nil { return L.t("評価を読み直す", "Reload like status") }
-        return L.t("高く評価した曲に追加", "Add to Liked Songs")
-    }
-
-    /// 評価していなければ評価する。評価済みならプレイリストに追加する画面を開く（Android と同じ）。
-    static func press(_ player: PlayerService) {
-        guard let song = player.current else { return }
-        if player.like == .like || player.inPlaylist {
-            Dialogs.shared.addToPlaylist(song)
-        } else if player.like == nil && AppServices.client.isLoggedIn {
-            player.reloadLike()
-        } else {
-            player.toggleLike()
-        }
-    }
-
+extension LikeButton {
     static func view(_ player: PlayerService, size: CGFloat) -> some View {
         Button { press(player) } label: {
             Image(systemName: symbol(player)).font(.system(size: size)).foregroundStyle(accent(player) ? Color.accentColor : Color.secondary)
