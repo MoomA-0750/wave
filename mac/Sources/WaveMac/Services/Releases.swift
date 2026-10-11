@@ -80,7 +80,7 @@ final class Releases: NSObject, UNUserNotificationCenterDelegate {
         for release in favorites.prefix(Releases.maxNotifications) { await notify(release) }
     }
 
-    private func notify(_ release: NewRelease) async {
+    func notify(_ release: NewRelease) async {
         guard Bundle.main.bundleIdentifier != nil else { return }
         let content = UNMutableNotificationContent()
         content.title = release.videoId != nil ? L.t("\(release.artistName) の新しい動画", "New video from \(release.artistName)")
@@ -90,7 +90,11 @@ final class Releases: NSObject, UNUserNotificationCenterDelegate {
         if let file = await imageFile(release), let attachment = try? UNNotificationAttachment(identifier: "art", url: file) {
             content.attachments = [attachment]
         }
-        try? await UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: release.key, content: content, trigger: nil))
+        do {
+            try await UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: release.key, content: content, trigger: nil))
+        } catch {
+            AppPaths.log("notify failed error=\((error as NSError).domain)/\((error as NSError).code)")
+        }
     }
 
     /// 通知の画像（ファイルに落としてから付ける）。

@@ -1,5 +1,6 @@
 #if WAVE_DEBUG
 import Foundation
+import UserNotifications
 import WaveCore
 
 /// 開発用（WAVE_DEBUG を付けて組んだときだけ）: データの場所の debug-command.txt に書いた命令を行い、結果を記録に書く
@@ -180,6 +181,20 @@ enum DebugCommands {
             AppPaths.log("debug connect relay=\(c.info.relay) household=\(c.info.inHousehold) pairing=\(p.kind) code=\(p.code ?? "") peer=\(p.peerName ?? "") offer=\(p.offerText != nil) text=\(p.text ?? "")")
             for m in c.members { AppPaths.log("debug connect member label=\(m.label) self=\(m.isSelf) online=\(m.online) active=\(m.active) pc=\(m.isPc) controller=\(m.isController)") }
             if let r = c.remote { AppPaths.log("debug connect remote device=\(r.deviceLabel) title=\(r.title ?? "") playing=\(r.playing) positionMs=\(r.positionMs) online=\(r.online)") }
+        case "notify-plain":
+            let content = UNMutableNotificationContent()
+            content.title = "wave"
+            content.body = L.t("通知の確かめ", "Notification test")
+            do { try await UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "debug-plain", content: content, trigger: nil)) }
+            catch { AppPaths.log("debug notify-plain error=\(error)") }
+            try? await Task.sleep(for: .seconds(2))
+            AppPaths.log("debug notify-plain delivered=\(await UNUserNotificationCenter.current().deliveredNotifications().count)")
+        case "notify-test":
+            // 最近の新作の先頭を、新しく見つけたときと同じ通知で出す
+            let settings = await UNUserNotificationCenter.current().notificationSettings()
+            AppPaths.log("debug notify status=\(settings.authorizationStatus.rawValue) recent=\(AppServices.releases.recent.count)")
+            if let release = AppServices.releases.recent.first { await AppServices.releases.notify(release) }
+            AppPaths.log("debug notify delivered=\(await UNUserNotificationCenter.current().deliveredNotifications().count)")
         case "releases-check":
             await AppServices.releases.check()
         default:
