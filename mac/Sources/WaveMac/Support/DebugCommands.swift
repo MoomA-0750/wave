@@ -40,6 +40,7 @@ enum DebugCommands {
             try? await Task.sleep(for: .milliseconds(Int(arg) ?? 0))
         case "home": nav.home()
         case "settings": nav.settings()
+        case "login": LoginWindowController.show()
         case "devices": nav.devices()
         case "history": nav.history()
         case "lyrics": nav.lyrics()

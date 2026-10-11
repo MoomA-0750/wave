@@ -14,7 +14,7 @@ struct MainView: View {
         VStack(spacing: 0) {
             ZStack(alignment: .top) {
                 if model.fullScreen {
-                    FullView()
+                    FullView().ignoresSafeArea(edges: .top)
                 } else {
                     HStack(spacing: 8) {
                         LibraryPane().frame(width: model.libraryWidth).pane()
@@ -33,6 +33,8 @@ struct MainView: View {
         })
         .toolbar { titleBar }
         .toolbarRole(.editor)
+        // 全画面の再生中の画面は上の2段を覆う（下の操作の帯は出したまま）
+        .toolbar(model.fullScreen ? .hidden : .visible, for: .windowToolbar)
         .navigationTitle(player.current.map { "\($0.title) • \($0.artistsText)" } ?? "wave")
         .sheet(item: $dialogs.addToPlaylist) { song in AddToPlaylistSheet(song: song) }
         .sheet(isPresented: $dialogs.creating) { CreatePlaylistSheet(song: dialogs.createSong) }

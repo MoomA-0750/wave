@@ -201,6 +201,9 @@ struct FullView: View {
             Color(nsColor: .windowBackgroundColor)
             RemoteImage(url: Ui.large(song?.thumbnailUrl)).opacity(0.25)
             LinearGradient(colors: [.black.opacity(0.2), .black.opacity(0.8)], startPoint: .top, endPoint: .bottom)
+            GeometryReader { outer in
+            // 左に曲（3）、右に歌詞（2）。Windows と同じ割り付け
+            let left = (outer.size.width - 56) * 0.6
             HStack(alignment: .bottom, spacing: 56) {
                 VStack(alignment: .leading, spacing: 20) {
                     if player.video != nil { SongVideoSwitch() }
@@ -222,18 +225,17 @@ struct FullView: View {
                         ArtistLink(font: .system(size: 22), color: .white.opacity(0.75))
                     }
                 }
-                .frame(maxWidth: .infinity)
-                .layoutPriority(3)
+                .frame(width: left)
                 if case .found(let lyrics) = player.lyrics {
                     LyricsFollower(lyrics: lyrics, positionMs: Int64(player.position * 1000), fontSize: 30, plainLines: 200)
                         .foregroundStyle(.white)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                         .clipped()
                         .allowsHitTesting(false)
-                        .layoutPriority(2)
                 } else {
-                    Spacer().frame(maxWidth: .infinity).layoutPriority(2)
+                    Spacer().frame(maxWidth: .infinity)
                 }
+            }
             }
             .padding(EdgeInsets(top: 56, leading: 56, bottom: 32, trailing: 56))
             Button { model.setFullScreen(false) } label: { Image(systemName: "arrow.down.right.and.arrow.up.left").font(.system(size: 15)) }

@@ -33,14 +33,15 @@ struct RemoteImage: View {
     @State private var image: NSImage?
 
     var body: some View {
-        ZStack {
-            if let image {
-                Image(nsImage: image).resizable().aspectRatio(contentMode: contentMode)
+        // 地（Color.clear）は渡された大きさをそのまま取るので、画像が大きくても枠からはみ出さない
+        Color.clear
+            .overlay {
+                if let image {
+                    Image(nsImage: image).resizable().aspectRatio(contentMode: contentMode)
+                }
             }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .clipped()
-        .task(id: url) {
+            .clipped()
+            .task(id: url) {
             guard let url else {
                 image = nil
                 return
