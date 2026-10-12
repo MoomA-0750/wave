@@ -51,6 +51,23 @@ enum DebugCommands {
         case "back": nav.goBack()
         case "album": nav.album(arg)
         case "artist": nav.artist(arg)
+        case "podcast": nav.podcast(PodcastSummary(browseId: arg, title: arg, author: nil, thumbnailUrl: nil))
+        case "podcast-play":
+            // 番組のページでエピソードを押したのと同じ流し方（引数は「browseId [番号]」）
+            let p = arg.split(separator: " ").map(String.init)
+            guard let id = p.first, let page = (try? await AppServices.music.podcast(id))?.value, !page.episodes.isEmpty else {
+                AppPaths.log("debug podcast-play failed")
+                break
+            }
+            let i = min(Int(p.count > 1 ? p[1] : "0") ?? 0, page.episodes.count - 1)
+            player.playList(page.episodes.map(\.song), start: i, source: page.playlistId)
+            AppPaths.log("debug podcast-play title=\(page.episodes[i].song.title) artist=\(page.episodes[i].song.artistsText) queue=\(player.queue.count)")
+        case "search-tab":
+            // 検索の結果の絞り込み（all・songs・artists・albums・podcasts・episodes）を選ぶ
+            SearchPageModel.current?.tab = arg
+            try? await Task.sleep(for: .milliseconds(2500))
+            AppPaths.log("debug search-tab \(arg) podcasts=\(SearchPageModel.current?.podcasts.count ?? -1) episodes=\(SearchPageModel.current?.episodes.count ?? -1)")
+        case "library-kind": window.libraryKind = arg.isEmpty || arg == "all" ? nil : arg
         case "playlist": nav.playlist(PlaylistSummary(playlistId: arg, title: arg, subtitle: nil, thumbnailUrl: nil))
         case "search":
             // 上の検索欄に打って Enter を押したのと同じ

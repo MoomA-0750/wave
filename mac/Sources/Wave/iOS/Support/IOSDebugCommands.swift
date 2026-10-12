@@ -52,6 +52,7 @@ enum IOSDebugCommands {
         case "search": nav.search(arg)
         case "album": nav.album(arg)
         case "artist": nav.artist(arg)
+        case "podcast": nav.podcast(PodcastSummary(browseId: arg, title: arg, author: nil, thumbnailUrl: nil))
         case "playlist": nav.playlist(PlaylistSummary(playlistId: arg, title: arg, subtitle: nil, thumbnailUrl: nil))
         case "liked": nav.likedSongs()
         case "history": nav.history()

@@ -24,6 +24,8 @@ enum Route: Hashable {
     case search(String?)
     case collection(CollectionRequest)
     case artist(String)
+    /// ポッドキャストの番組のページ（MPSP…）。
+    case podcast(PodcastSummary)
     case song(Song)
     case mood(MoodCategory)
     case history
@@ -88,6 +90,12 @@ final class Nav {
     }
 
     func artist(_ browseId: String) { go(.artist(browseId)) }
+    func podcast(_ podcast: PodcastSummary) { go(.podcast(podcast)) }
+
+    /// 保存した番組の新しいエピソード（VLRDPN。番組のページと同じ形で返るので、番組のページで開く。Android と同じ）。
+    func newEpisodes() {
+        go(.podcast(PodcastSummary(browseId: MusicRepository.newEpisodesBrowse, title: L.t("新しいエピソード", "New episodes"), author: nil, thumbnailUrl: nil)))
+    }
     func song(_ song: Song) { go(.song(song)) }
     func mood(_ mood: MoodCategory) { go(.mood(mood)) }
     func history() { go(.history) }

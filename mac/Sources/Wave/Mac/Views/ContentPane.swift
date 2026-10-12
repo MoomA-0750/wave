@@ -24,6 +24,7 @@ struct ContentPane: View {
         case .search(let query): SearchPageView(initialQuery: query)
         case .collection(let request): CollectionPageView(request: request)
         case .artist(let browseId): ArtistPageView(browseId: browseId)
+        case .podcast(let podcast): PodcastPageView(summary: podcast)
         case .song(let song): SongPageView(song: song)
         case .mood(let mood): MoodPageView(mood: mood)
         case .history: HistoryPageView()

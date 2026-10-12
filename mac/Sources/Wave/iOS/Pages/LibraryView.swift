@@ -9,7 +9,11 @@ private struct LibraryViewEntry: Identifiable, Hashable {
     var thumbnailUrl: String?
     var item: HomeItem?
     var isLiked = false
-    var id: String { item?.key ?? "liked" }
+    /// 保存したポッドキャストの番組。
+    var podcast: PodcastSummary?
+    /// 「新しいエピソード」（ポッドキャストで絞ったときだけ先頭に出す）。
+    var isNewEpisodes = false
+    var id: String { item?.key ?? podcast.map { "pod-" + $0.browseId } ?? (isNewEpisodes ? "new-episodes" : "liked") }
     var isArtist: Bool { item?.isArtist ?? false }
 }
 
@@ -86,7 +90,8 @@ struct LibraryView: View {
         VStack(alignment: .leading, spacing: 4) {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
-                    ForEach([("playlist", L.t("プレイリスト", "Playlists")), ("artist", L.t("アーティスト", "Artists")), ("album", L.t("アルバム", "Albums"))], id: \.0) { k, title in
+                    ForEach([("playlist", L.t("プレイリスト", "Playlists")), ("artist", L.t("アーティスト", "Artists")), ("album", L.t("アルバム", "Albums")),
+                             ("podcast", L.t("ポッドキャスト", "Podcasts"))], id: \.0) { k, title in
                         LibraryViewChip(title: title, isOn: kind == k) { kind = kind == k ? nil : k }
                     }
                 }
@@ -157,6 +162,12 @@ struct LibraryView: View {
                                  thumbnailUrl: $0.thumbnailUrl, item: .album($0))
             }
         }
+        if kind == nil || kind == "podcast" {
+            entries += lib.podcasts.map {
+                LibraryViewEntry(title: $0.title, subtitle: L.t("ポッドキャスト", "Podcast") + (($0.author ?? "").isEmpty ? "" : " • " + $0.author!),
+                                 thumbnailUrl: $0.thumbnailUrl, podcast: $0)
+            }
+        }
         if !filter.isEmpty {
             entries = entries.filter { $0.title.localizedCaseInsensitiveContains(filter) || ($0.subtitle ?? "").localizedCaseInsensitiveContains(filter) }
         }
@@ -177,12 +188,21 @@ struct LibraryView: View {
         if (kind == nil || kind == "playlist") && (filter.isEmpty || likedTitle.localizedCaseInsensitiveContains(filter)) {
             entries.insert(LibraryViewEntry(title: likedTitle, subtitle: L.t("プレイリスト • 自動", "Playlist • Auto"), thumbnailUrl: lib.likedThumbnail, isLiked: true), at: 0)
         }
+        // ポッドキャストで絞ったときは「新しいエピソード」を先頭に（Android と同じ）
+        let newEpisodesTitle = L.t("新しいエピソード", "New episodes")
+        if kind == "podcast" && (filter.isEmpty || newEpisodesTitle.localizedCaseInsensitiveContains(filter)) {
+            entries.insert(LibraryViewEntry(title: newEpisodesTitle, subtitle: L.t("プレイリスト • 自動", "Playlist • Auto"), isNewEpisodes: true), at: 0)
+        }
         return entries
     }
 
     private func open(_ entry: LibraryViewEntry) {
         if entry.isLiked {
             AppServices.nav.likedSongs()
+        } else if entry.isNewEpisodes {
+            AppServices.nav.newEpisodes()
+        } else if let podcast = entry.podcast {
+            AppServices.nav.podcast(podcast)
         } else if let item = entry.item {
             AppServices.nav.open(item)
         }
@@ -190,6 +210,11 @@ struct LibraryView: View {
 
     @ViewBuilder
     private func menu(_ entry: LibraryViewEntry) -> some View {
+        if entry.podcast == nil && !entry.isNewEpisodes { playMenu(entry) }
+    }
+
+    @ViewBuilder
+    private func playMenu(_ entry: LibraryViewEntry) -> some View {
         let item = entry.item ?? .playlist(PlaylistSummary(playlistId: MusicRepository.likedSongs, title: entry.title, subtitle: nil, thumbnailUrl: nil))
         Button(L.t("再生", "Play"), systemImage: "play.fill") { AppServices.nav.play(item) }
     }
@@ -242,6 +267,8 @@ private struct LibraryViewRow: View {
         HStack(spacing: 12) {
             if entry.isLiked {
                 LikedCover(size: 56)
+            } else if entry.isNewEpisodes {
+                NewEpisodesCover(size: 56)
             } else {
                 Cover(url: Ui.small(entry.thumbnailUrl), size: 56, round: entry.isArtist)
             }
@@ -266,6 +293,8 @@ private struct LibraryViewGridCell: View {
                     GeometryReader { geo in
                         if entry.isLiked {
                             LikedCover(size: geo.size.width)
+                        } else if entry.isNewEpisodes {
+                            NewEpisodesCover(size: geo.size.width, radius: 8)
                         } else {
                             Cover(url: Ui.img(entry.thumbnailUrl), size: geo.size.width, round: entry.isArtist)
                         }

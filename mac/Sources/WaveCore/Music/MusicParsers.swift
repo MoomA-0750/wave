@@ -7,6 +7,7 @@ public enum MusicParsers {
     private static let artistPageType = "MUSIC_PAGE_TYPE_ARTIST"
     private static let libraryArtistPageType = "MUSIC_PAGE_TYPE_LIBRARY_ARTIST"
     private static let libraryArtistPrefix = "MPLA"
+    private static let podcastPageType = "MUSIC_PAGE_TYPE_PODCAST_SHOW_DETAIL_PAGE"
     private static let albumPlaylistPrefix = "OLAK5uy_"
     private static let editIcon = "EDIT"
     private static let greyOut = "MUSIC_ITEM_RENDERER_DISPLAY_POLICY_GREY_OUT"
@@ -417,6 +418,103 @@ public enum MusicParsers {
         !root.findAll("messageRenderer").isEmpty && contentRenderers.allSatisfy { root.findAll($0).isEmpty }
     }
 
+    // MARK: - ポッドキャスト（Android の MusicParsers と同じ）
+
+    /// ポッドキャスト（番組）に絞った検索の最初のページと続きのページ。
+    public static func searchPodcasts(_ root: JSON) -> SearchPage<PodcastSummary> { searchPageOf(root, podcastRow) }
+
+    /// エピソードに絞った検索の最初のページと続きのページ。行の2列目は「日付 • 番組」。
+    public static func searchEpisodes(_ root: JSON) -> SearchPage<PodcastEpisode> { searchPageOf(root, episodeRow) }
+
+    /// ライブラリのポッドキャスト（FEmusic_library_non_music_audio_list）。格子（カード）と棚（行）のどちらの形でも読む。
+    public static func libraryPodcasts(_ root: JSON) -> [PodcastSummary] {
+        (root.findAll("musicTwoRowItemRenderer").compactMap(podcastCard) + root.findAll("musicResponsiveListItemRenderer").compactMap(podcastRow))
+            .distinct { $0.browseId }
+    }
+
+    /// 番組のページ（browse MPSP…）の最初のページ。ヘッダに題・配信者・説明・保存のボタン、右の列の棚にエピソードの行が並ぶ。
+    public static func podcastPage(_ root: JSON, browseId: String) -> PodcastPage? {
+        guard let header = root.findAll("musicResponsiveHeaderRenderer").first, let title = textOf(header.path("title")) else { return nil }
+        let shelf = root.path("contents", "twoColumnBrowseResultsRenderer", "secondaryContents", "sectionListRenderer", "contents").items.lazy
+            .compactMap { $0.path("musicShelfRenderer").asObject }.first
+        let show = ArtistRef(name: title, browseId: nil)
+        // 保存のボタン。ログインしていなければ押すとログインの案内（likeEndpoint を持たない）なので、状態は分からないとする
+        let toggle = header.path("buttons").items.lazy.compactMap { $0.path("toggleButtonRenderer").asObject }.first
+        // 「新しいエピソード」（VLRDPN）は同じ形で返るが、保存できる番組ではない
+        let saved = browseId.hasPrefix(PodcastSummary.podcastPrefix) ? toggle.flatMap { $0.findAll("likeEndpoint").isEmpty ? nil : $0.path("isToggled").bool } : nil
+        let episodes = shelf.path("contents").items.compactMap { $0.path("musicMultiRowListItemRenderer").asObject }
+            .compactMap { multiRowEpisode($0, show: show, showBrowseId: browseId) }
+        return PodcastPage(browseId: browseId, title: title, author: textOf(header.path("straplineTextOne")),
+                           description: textOf(header.path("description", "musicDescriptionShelfRenderer", "description")),
+                           thumbnailUrl: lastThumbnailUrl(header.path("thumbnail")), episodes: episodes,
+                           continuation: shelf.flatMap(nextContinuation), saved: saved)
+    }
+
+    /// 番組のページのエピソードの続き。番組名は行に無いので、呼ぶ側の show を入れる。
+    public static func podcastEpisodes(_ root: JSON, show: ArtistRef, showBrowseId: String?) -> SearchPage<PodcastEpisode> {
+        guard let shelf = root.path("continuationContents", "musicShelfContinuation").asObject else { return SearchPage(items: [], continuation: nil) }
+        let episodes = shelf.path("contents").items.compactMap { $0.path("musicMultiRowListItemRenderer").asObject }
+            .compactMap { multiRowEpisode($0, show: show, showBrowseId: showBrowseId) }
+        return SearchPage(items: episodes, continuation: nextContinuation(shelf))
+    }
+
+    private static func lastText(_ runs: [JSON]) -> String? {
+        runs.compactMap { $0.path("text").str }.last { !$0.allSatisfy(\.isWhitespace) && $0 != separator }
+    }
+
+    /// 番組のページのエピソードの行。題・説明・「再生回数 • 日付」・長さ・聴いたところ。
+    private static func multiRowEpisode(_ row: JSON, show: ArtistRef, showBrowseId: String?) -> PodcastEpisode? {
+        let watch = row.path("onTap", "watchEndpoint").asObject ?? row.path("overlay").findAll("watchEndpoint").first
+        guard let videoId = watch.path("videoId").str, let title = textOf(row.path("title")) else { return nil }
+        let progress = row.path("playbackProgress", "musicPlaybackProgressRenderer")
+        let percent = progress.path("playbackProgressPercentage").double.map { Int($0) }
+        // 「新しいエピソード」のように番組がまざる一覧では、行の補足に番組が付く（あればそれを使う）
+        let subtitleRuns = row.path("subtitle", "runs").items
+        let showIndex = subtitleRuns.firstIndex { pageTypeOf($0) == podcastPageType }
+        let showRun = showIndex.map { subtitleRuns[$0] } ?? row.path("secondTitle", "runs").items.first { pageTypeOf($0) == podcastPageType }
+        let rowShow = showRun?.path("text").str.map { ArtistRef(name: $0, browseId: nil) }
+        let rowShowId = showRun?.path("navigationEndpoint", "browseEndpoint", "browseId").str
+        let dateRuns = subtitleRuns.enumerated().filter { $0.offset != showIndex }.map(\.element)
+        let song = Song(videoId: videoId, title: title, artists: [rowShow ?? show], album: nil, durationSeconds: nil, thumbnailUrl: lastThumbnailUrl(row.path("thumbnail")),
+                        kind: watch.path("watchEndpointMusicSupportedConfigs", "watchEndpointMusicConfig", "musicVideoType").str)
+        return PodcastEpisode(song: song,
+                              // 「2294回視聴 • 6 日前」の最後が日付（再生回数が無ければ日付だけ）
+                              publishedText: lastText(dateRuns),
+                              durationText: lastText(progress.path("durationText", "runs").items),
+                              description: textOf(row.path("description")),
+                              progressPercent: percent.flatMap { (1...100).contains($0) ? $0 : nil },
+                              showBrowseId: rowShowId ?? showBrowseId)
+    }
+
+    /// 検索・ライブラリの番組の行（ページ種別が番組のもの）。
+    private static func podcastRow(_ item: JSON) -> PodcastSummary? {
+        let browse = item.path("navigationEndpoint", "browseEndpoint")
+        guard pageTypeOfBrowse(browse) == podcastPageType, let id = browse.path("browseId").str else { return nil }
+        let columns = flexColumnRuns(item)
+        guard let title = runsText(columns.first ?? []) else { return nil }
+        return PodcastSummary(browseId: id, title: title, author: runsText(columns.dropFirst().flatMap { $0 }), thumbnailUrl: lastThumbnailUrl(item.path("thumbnail")))
+    }
+
+    /// ライブラリ・ホームの番組のカード（musicTwoRowItemRenderer）。
+    private static func podcastCard(_ item: JSON) -> PodcastSummary? {
+        let browse = item.path("navigationEndpoint", "browseEndpoint")
+        guard let id = browse.path("browseId").str else { return nil }
+        guard pageTypeOfBrowse(browse) == podcastPageType || id.hasPrefix(PodcastSummary.podcastPrefix) else { return nil }
+        guard let title = textOf(item.path("title")) else { return nil }
+        return PodcastSummary(browseId: id, title: title, author: textOf(item.path("subtitle")), thumbnailUrl: lastThumbnailUrl(item.path("thumbnailRenderer")))
+    }
+
+    /// エピソードの検索の行。2列目の「日付 • 番組」から日付と番組を取る（番組名は曲のアーティストとして入る）。
+    private static func episodeRow(_ item: JSON) -> PodcastEpisode? {
+        guard let song = responsiveListItemSong(item) else { return nil }
+        let detail = Array(flexColumnRuns(item).dropFirst().joined())
+        let showIndex = detail.firstIndex { pageTypeOf($0) == podcastPageType }
+        let published = detail.enumerated().filter { $0.offset != showIndex }.compactMap { $0.element.path("text").str }
+            .first { !$0.allSatisfy(\.isWhitespace) && $0 != separator }
+        return PodcastEpisode(song: song, publishedText: published,
+                              showBrowseId: showIndex.flatMap { detail[$0].path("navigationEndpoint", "browseEndpoint", "browseId").str })
+    }
+
     private static func textOf(_ node: JSON?) -> String? { runsText(node.path("runs").items) }
 
     private static func runsText<S: Sequence>(_ runs: S) -> String? where S.Element == JSON {
@@ -473,6 +571,8 @@ public enum MusicParsers {
     private static func artistsOf(_ runs: [JSON]) -> [ArtistRef] {
         let typed = typedArtistsOf(runs)
         if !typed.isEmpty { return typed }
+        // ポッドキャストのエピソードは、番組をアーティストの代わりにする（日付などをアーティストと取り違えない）。番組のページはアーティストとしては開けないので名前だけ
+        if let show = runs.first(where: { pageTypeOf($0) == podcastPageType })?.path("text").str { return [ArtistRef(name: show, browseId: nil)] }
         return runs.prefix { $0.path("text").str != separator }
             .compactMap { $0.path("text").str }
             .filter { t in !t.allSatisfy(\.isWhitespace) && t != ", " && t != " & " && parseDuration(t) == nil }

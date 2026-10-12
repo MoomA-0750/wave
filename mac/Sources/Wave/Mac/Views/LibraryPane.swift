@@ -22,12 +22,16 @@ struct LibraryPane: View {
                     .help(L.t("プレイリストを作成", "Create playlist"))
             }
             .padding(EdgeInsets(top: 12, leading: 16, bottom: 4, trailing: 8))
+            // 種類のチップ（4つ並ぶと欄の幅に収まらないことがあるので横に送れるように）
+            ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
-                ForEach([("playlist", L.t("プレイリスト", "Playlists")), ("artist", L.t("アーティスト", "Artists")), ("album", L.t("アルバム", "Albums"))], id: \.0) { kind, title in
+                ForEach([("playlist", L.t("プレイリスト", "Playlists")), ("artist", L.t("アーティスト", "Artists")), ("album", L.t("アルバム", "Albums")),
+                         ("podcast", L.t("ポッドキャスト", "Podcasts"))], id: \.0) { kind, title in
                     Chip(title: title, isOn: model.libraryKind == kind) { model.libraryKind = model.libraryKind == kind ? nil : kind }
                 }
             }
             .padding(.horizontal, 12)
+            }
             .padding(.vertical, 4)
             HStack(spacing: 4) {
                 TextField(L.t("マイライブラリを検索", "Search in Your Library"), text: $model.libraryFilter).textFieldStyle(.roundedBorder)
@@ -113,6 +117,8 @@ struct LibraryPane: View {
     private func entryCover(_ entry: LibraryEntry, size: CGFloat) -> some View {
         if entry.isLiked {
             LikedCover(size: size)
+        } else if entry.isNewEpisodes {
+            NewEpisodesCover(size: size)
         } else {
             Cover(url: Ui.small(entry.thumbnailUrl), size: size, round: entry.isArtist)
         }
@@ -121,6 +127,10 @@ struct LibraryPane: View {
     private func open(_ entry: LibraryEntry) {
         if entry.isLiked {
             AppServices.nav.likedSongs()
+        } else if entry.isNewEpisodes {
+            AppServices.nav.newEpisodes()
+        } else if let podcast = entry.podcast {
+            AppServices.nav.podcast(podcast)
         } else if let item = entry.item {
             AppServices.nav.open(item)
         }
@@ -147,6 +157,8 @@ private struct LibraryRow: View {
         HStack(spacing: 12) {
             if entry.isLiked {
                 LikedCover(size: 48)
+            } else if entry.isNewEpisodes {
+                NewEpisodesCover(size: 48)
             } else {
                 Cover(url: Ui.small(entry.thumbnailUrl), size: 48, round: entry.isArtist)
             }

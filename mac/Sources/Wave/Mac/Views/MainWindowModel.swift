@@ -23,7 +23,11 @@ struct LibraryEntry: Identifiable, Hashable {
     var thumbnailUrl: String?
     var item: HomeItem?
     var isLiked = false
-    var id: String { item?.key ?? "liked" }
+    /// 保存したポッドキャストの番組。
+    var podcast: PodcastSummary?
+    /// 「新しいエピソード」（保存した番組の新着の自動のプレイリスト。ポッドキャストで絞ったときだけ先頭に出す）。
+    var isNewEpisodes = false
+    var id: String { item?.key ?? podcast.map { "pod-" + $0.browseId } ?? (isNewEpisodes ? "new-episodes" : "liked") }
     var isArtist: Bool { item?.isArtist ?? false }
 }
 
@@ -209,6 +213,12 @@ final class MainWindowModel {
                              thumbnailUrl: $0.thumbnailUrl, item: .album($0))
             }
         }
+        if libraryKind == nil || libraryKind == "podcast" {
+            entries += lib.podcasts.map {
+                LibraryEntry(title: $0.title, subtitle: L.t("ポッドキャスト", "Podcast") + (($0.author ?? "").isEmpty ? "" : " • " + $0.author!),
+                             thumbnailUrl: $0.thumbnailUrl, podcast: $0)
+            }
+        }
         if !filter.isEmpty { entries = entries.filter { $0.title.localizedCaseInsensitiveContains(filter) } }
         let sort = AppServices.settings.librarySort
         if sort == "alpha" {
@@ -227,6 +237,11 @@ final class MainWindowModel {
         let likedTitle = L.t("高く評価した曲", "Liked Songs")
         if (libraryKind == nil || libraryKind == "playlist") && (filter.isEmpty || likedTitle.contains(filter)) {
             entries.insert(LibraryEntry(title: likedTitle, subtitle: L.t("プレイリスト • 自動", "Playlist • Auto"), thumbnailUrl: lib.likedThumbnail, isLiked: true), at: 0)
+        }
+        // ポッドキャストで絞ったときは「新しいエピソード」を先頭に（高く評価した曲と同じく留める。Android と同じ）
+        let newEpisodesTitle = L.t("新しいエピソード", "New episodes")
+        if libraryKind == "podcast" && (filter.isEmpty || newEpisodesTitle.localizedCaseInsensitiveContains(filter)) {
+            entries.insert(LibraryEntry(title: newEpisodesTitle, subtitle: L.t("プレイリスト • 自動", "Playlist • Auto"), isNewEpisodes: true), at: 0)
         }
         return entries
     }

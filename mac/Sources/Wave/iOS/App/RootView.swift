@@ -150,6 +150,7 @@ struct RouteView: View {
         case .search(let query): SearchView(initialQuery: query)
         case .collection(let request): CollectionView(request: request)
         case .artist(let id): ArtistView(browseId: id)
+        case .podcast(let podcast): PodcastView(summary: podcast)
         case .song(let song): SongView(song: song)
         case .mood(let mood): MoodView(mood: mood)
         case .history: HistoryView()

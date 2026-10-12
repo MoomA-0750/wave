@@ -4,7 +4,7 @@ import WaveCore
 
 /// 検索の結果の絞り込み（Android の SearchTab と同じ）。
 private enum SearchTab: String, CaseIterable, Hashable {
-    case all, songs, albums, artists
+    case all, songs, albums, artists, podcasts, episodes
 
     var label: String {
         switch self {
@@ -12,6 +12,8 @@ private enum SearchTab: String, CaseIterable, Hashable {
         case .songs: L.t("曲", "Songs")
         case .albums: L.t("アルバム", "Albums")
         case .artists: L.t("アーティスト", "Artists")
+        case .podcasts: L.t("ポッドキャスト", "Podcasts")
+        case .episodes: L.t("エピソード", "Episodes")
         }
     }
 }
@@ -33,6 +35,14 @@ private final class SearchModel {
     var albumContinuation: String?
     var artistContinuation: String?
     var loadingMore = false
+    /// ポッドキャスト・エピソード（その絞り込みを初めて選んだときに読む。「すべて」には出さない。Android と同じ）。
+    var podcasts: [PodcastSummary] = []
+    var episodes: [PodcastEpisode] = []
+    var podcastContinuation: String?
+    var episodeContinuation: String?
+    var podcastsLoading = false
+    @ObservationIgnored private var podcastsLoaded = false
+    @ObservationIgnored private var episodesLoaded = false
 
     var suggestions: SearchSuggestions?
     var history: [SearchHistoryEntry] = []
@@ -111,6 +121,13 @@ private final class SearchModel {
         songContinuation = nil
         albumContinuation = nil
         artistContinuation = nil
+        podcasts = []
+        episodes = []
+        podcastContinuation = nil
+        episodeContinuation = nil
+        podcastsLoaded = false
+        episodesLoaded = false
+        podcastsLoading = false
         Task {
             let music = AppServices.music!
             async let s = music.searchSongs(q)
@@ -154,6 +171,33 @@ private final class SearchModel {
         text.precomposedStringWithCompatibilityMapping.lowercased().filter { !$0.isWhitespace }
     }
 
+    /// 絞り込みを変えた。ポッドキャスト・エピソードは初めて選んだときに読む。
+    func tabChanged() {
+        guard let q = committed?.trimmingCharacters(in: .whitespaces) else { return }
+        let id = requestId
+        if tab == .podcasts && !podcastsLoaded {
+            podcastsLoaded = true
+            podcastsLoading = true
+            Task {
+                let page = (try? await AppServices.music.searchPodcasts(q))?.value
+                guard id == requestId else { return }
+                podcastsLoading = false
+                podcasts = page?.items ?? []
+                podcastContinuation = page?.continuation
+            }
+        } else if tab == .episodes && !episodesLoaded {
+            episodesLoaded = true
+            podcastsLoading = true
+            Task {
+                let page = (try? await AppServices.music.searchEpisodes(q))?.value
+                guard id == requestId else { return }
+                podcastsLoading = false
+                episodes = page?.items ?? []
+                episodeContinuation = page?.continuation
+            }
+        }
+    }
+
     /// 種類で絞った一覧の最後まで来たら続きを読む。
     func loadMore(_ tab: SearchTab) {
         guard !loadingMore, let q = committed?.trimmingCharacters(in: .whitespaces) else { return }
@@ -189,6 +233,26 @@ private final class SearchModel {
                 artistContinuation = page.continuation != c ? page.continuation : nil
                 let known = Set(artists.map(\.browseId))
                 artists += page.items.filter { !known.contains($0.browseId) }
+            }
+        case .podcasts:
+            guard let c = podcastContinuation else { return }
+            loadingMore = true
+            Task {
+                defer { loadingMore = false }
+                guard let page = (try? await music.searchPodcasts(q, continuation: c))?.value, id == requestId else { return }
+                podcastContinuation = page.continuation != c ? page.continuation : nil
+                let known = Set(podcasts.map(\.browseId))
+                podcasts += page.items.filter { !known.contains($0.browseId) }
+            }
+        case .episodes:
+            guard let c = episodeContinuation else { return }
+            loadingMore = true
+            Task {
+                defer { loadingMore = false }
+                guard let page = (try? await music.searchEpisodes(q, continuation: c))?.value, id == requestId else { return }
+                episodeContinuation = page.continuation != c ? page.continuation : nil
+                let known = Set(episodes.map(\.id))
+                episodes += page.items.filter { !known.contains($0.id) }
             }
         case .all:
             return
@@ -226,7 +290,7 @@ struct SearchView: View {
         content
             .navigationTitle(L.t("検索", "Search"))
             .searchable(text: $text, placement: .navigationBarDrawer(displayMode: .always),
-                        prompt: L.t("曲、アーティスト、アルバム", "Songs, artists, albums"))
+                        prompt: L.t("曲、アーティスト、アルバム、ポッドキャスト", "Songs, artists, albums, podcasts"))
             .autocorrectionDisabled()
             .textInputAutocapitalization(.never)
             .onSubmit(of: .search) { submit(text) }
@@ -364,15 +428,20 @@ struct SearchView: View {
     private var results: some View {
         List {
             Section {
-                Picker(L.t("種類", "Type"), selection: $model.tab) {
-                    ForEach(SearchTab.allCases, id: \.self) { tab in Text(tab.label).tag(tab) }
+                // 種類のチップ（6つあるので横に送る。Android の FilterChip と同じ）
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(SearchTab.allCases, id: \.self) { tab in
+                            SearchTabChip(title: tab.label, isOn: model.tab == tab) { model.tab = tab }
+                        }
+                    }
+                    .padding(.horizontal, 16)
                 }
-                .pickerStyle(.segmented)
-                .labelsHidden()
+                .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
                 .listRowSeparator(.hidden)
                 .listRowBackground(Color.clear)
             }
-            if model.loading {
+            if model.loading || (model.podcastsLoading && (model.tab == .podcasts || model.tab == .episodes)) {
                 ProgressView().frame(maxWidth: .infinity).padding(.vertical, 40).listRowSeparator(.hidden).listRowBackground(Color.clear)
             } else if let failure = model.failure {
                 Text(failureText(failure)).foregroundStyle(.secondary).listRowSeparator(.hidden)
@@ -384,12 +453,38 @@ struct SearchView: View {
                 case .songs: pagedSongs
                 case .albums: paged(model.albums.map { HomeItem.album($0) }, more: model.albumContinuation != nil, tab: .albums)
                 case .artists: paged(model.artists.map { HomeItem.artist($0) }, more: model.artistContinuation != nil, tab: .artists)
+                case .podcasts: pagedPodcasts
+                case .episodes: pagedEpisodes
                 }
             }
         }
         .listStyle(.plain)
         .scrollDismissesKeyboard(.immediately)
         .animation(.default, value: model.tab)
+        .onChange(of: model.tab) { model.tabChanged() }
+    }
+
+    @ViewBuilder private var pagedPodcasts: some View {
+        if model.podcasts.isEmpty {
+            Text(L.t("見つかりませんでした", "No results found")).foregroundStyle(.secondary).listRowSeparator(.hidden)
+        }
+        ForEach(model.podcasts) { podcast in
+            PodcastRow(podcast: podcast) { AppServices.nav.podcast(podcast) }
+                .onAppear { if podcast.id == model.podcasts.last?.id { model.loadMore(.podcasts) } }
+        }
+        if model.loadingMore { ProgressView().frame(maxWidth: .infinity).listRowSeparator(.hidden) }
+    }
+
+    @ViewBuilder private var pagedEpisodes: some View {
+        if model.episodes.isEmpty {
+            Text(L.t("見つかりませんでした", "No results found")).foregroundStyle(.secondary).listRowSeparator(.hidden)
+        }
+        ForEach(model.episodes) { episode in
+            // 押したエピソードだけを流す（曲を押したのと同じ）
+            EpisodeRow(episode: episode, showShow: true) { AppServices.player.playSong(episode.song) }
+                .onAppear { if episode.id == model.episodes.last?.id { model.loadMore(.episodes) } }
+        }
+        if model.loadingMore { ProgressView().frame(maxWidth: .infinity).listRowSeparator(.hidden) }
     }
 
     @ViewBuilder private var allSections: some View {
@@ -447,6 +542,25 @@ struct SearchView: View {
                 .onAppear { if item.key == items.last?.key { model.loadMore(tab) } }
         }
         if model.loadingMore { ProgressView().frame(maxWidth: .infinity).listRowSeparator(.hidden) }
+    }
+}
+
+/// 検索の結果の種類のチップ。
+private struct SearchTabChip: View {
+    var title: String
+    var isOn: Bool
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.subheadline.weight(.medium))
+                .padding(.horizontal, 14)
+                .padding(.vertical, 7)
+                .foregroundStyle(isOn ? Color.white : Color.primary)
+                .background(Capsule().fill(isOn ? Color.accentColor : Color.primary.opacity(0.08)))
+        }
+        .buttonStyle(.plain)
     }
 }
 

@@ -8,6 +8,8 @@ final class LibraryState {
     var playlists: [PlaylistSummary] = []
     var artists: [ArtistSummary] = []
     var albums: [AlbumSummary] = []
+    /// 保存したポッドキャストの番組（Android と同じく、マイライブラリの「ポッドキャスト」に並べる）。
+    var podcasts: [PodcastSummary] = []
 
     var isLoading = false
     var failure: String?
@@ -81,6 +83,7 @@ final class LibraryState {
         playlists = []
         artists = []
         albums = []
+        podcasts = []
         failure = nil
         likedSongsTask = nil
         likedIds = []
@@ -114,13 +117,18 @@ final class LibraryState {
             async let a = music.libraryAlbums(onPage: { page in
                 DispatchQueue.main.async { if self.generation == mine { self.albums = page } }
             })
+            async let pod = music.libraryPodcasts(onPage: { page in
+                DispatchQueue.main.async { if self.generation == mine { self.podcasts = page } }
+            })
             let results = [try? await p.failure, try? await r.failure, try? await a.failure]
+            // ポッドキャストが読めなくても、ほかの一覧の失敗とはしない
+            _ = try? await pod
             // onPage の分を先に当ててから終わりにする
             await withCheckedContinuation { c in DispatchQueue.main.async { c.resume() } }
             guard self.generation == mine else { return }
             self.failure = results.compactMap { $0 ?? nil }.first.map { String(describing: $0) }
             self.isLoading = false
-            AppPaths.log("library playlists=\(self.playlists.count) artists=\(self.artists.count) albums=\(self.albums.count) failure=\(self.failure ?? "nil")")
+            AppPaths.log("library playlists=\(self.playlists.count) artists=\(self.artists.count) albums=\(self.albums.count) podcasts=\(self.podcasts.count) failure=\(self.failure ?? "nil")")
             AppServices.onLibraryLoaded()
         }
     }

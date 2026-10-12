@@ -16,11 +16,19 @@ final class SearchPageModel {
     var songs: [TrackRow] = []
     var albums: [AlbumSummary] = []
     var artists: [ArtistSummary] = []
+    /// ポッドキャスト・エピソード（その絞り込みを初めて選んだときに読む。「すべて」には出さない。Android と同じ）。
+    var podcasts: [PodcastSummary] = []
+    var episodes: [PodcastEpisode] = []
+    var podcastsLoading = false
     var moods: [(MoodCategory, Color)] = []
     var history: [SearchHistoryEntry] = []
     @ObservationIgnored private var songContinuation: String?
     @ObservationIgnored private var albumContinuation: String?
     @ObservationIgnored private var artistContinuation: String?
+    @ObservationIgnored private var podcastContinuation: String?
+    @ObservationIgnored private var episodeContinuation: String?
+    @ObservationIgnored private var podcastsLoaded = false
+    @ObservationIgnored private var episodesLoaded = false
     @ObservationIgnored private var loadingMore = false
     @ObservationIgnored private var requestId = 0
     @ObservationIgnored private static var moodCache: [(MoodCategory, Color)]?
@@ -58,6 +66,12 @@ final class SearchPageModel {
         loading = true
         empty = false
         songs = []
+        podcasts = []
+        episodes = []
+        podcastsLoaded = false
+        episodesLoaded = false
+        podcastContinuation = nil
+        episodeContinuation = nil
         let music = AppServices.music!
         async let s = music.searchSongs(q)
         async let al = music.searchAlbums(q)
@@ -71,6 +85,8 @@ final class SearchPageModel {
         albumContinuation = albumsResult.value?.continuation
         artists = artistsResult.value?.items ?? []
         artistContinuation = artistsResult.value?.continuation
+        // ポッドキャスト・エピソードで絞っているときは、その一覧も読み直す
+        if tab == "podcasts" || tab == "episodes" { tabChanged() }
         if found.isEmpty && albums.isEmpty && artists.isEmpty {
             empty = true
             return
@@ -108,6 +124,35 @@ final class SearchPageModel {
         }
     }
 
+    /// 絞り込みを変えた。ポッドキャスト・エピソードは初めて選んだときに読む。
+    func tabChanged() {
+        guard let q = query else { return }
+        let id = requestId
+        if tab == "podcasts" && !podcastsLoaded {
+            podcastsLoaded = true
+            podcastsLoading = true
+            Task {
+                let page = (try? await AppServices.music.searchPodcasts(q))?.value
+                guard id == requestId else { return }
+                podcastsLoading = false
+                podcasts = page?.items ?? []
+                podcastContinuation = page?.continuation
+                AppPaths.log("search podcasts n=\(podcasts.count)")
+            }
+        } else if tab == "episodes" && !episodesLoaded {
+            episodesLoaded = true
+            podcastsLoading = true
+            Task {
+                let page = (try? await AppServices.music.searchEpisodes(q))?.value
+                guard id == requestId else { return }
+                podcastsLoading = false
+                episodes = page?.items ?? []
+                episodeContinuation = page?.continuation
+                AppPaths.log("search episodes n=\(episodes.count)")
+            }
+        }
+    }
+
     func loadMoreCards() {
         guard !loadingMore, let q = query else { return }
         let id = requestId
@@ -126,6 +171,22 @@ final class SearchPageModel {
                 guard let page = (try? await AppServices.music.searchArtists(q, continuation: c))?.value, id == requestId else { return }
                 artistContinuation = page.continuation
                 artists += page.items
+            }
+        } else if tab == "podcasts", let c = podcastContinuation {
+            loadingMore = true
+            Task {
+                defer { loadingMore = false }
+                guard let page = (try? await AppServices.music.searchPodcasts(q, continuation: c))?.value, id == requestId else { return }
+                podcastContinuation = page.continuation
+                podcasts += page.items.filter { p in !podcasts.contains { $0.browseId == p.browseId } }
+            }
+        } else if tab == "episodes", let c = episodeContinuation {
+            loadingMore = true
+            Task {
+                defer { loadingMore = false }
+                guard let page = (try? await AppServices.music.searchEpisodes(q, continuation: c))?.value, id == requestId else { return }
+                episodeContinuation = page.continuation
+                episodes += page.items.filter { e in !episodes.contains { $0.id == e.id } }
             }
         }
     }
@@ -189,15 +250,20 @@ struct SearchPageView: View {
                 Text(L.t("曲", "Songs")).tag("songs")
                 Text(L.t("アーティスト", "Artists")).tag("artists")
                 Text(L.t("アルバム", "Albums")).tag("albums")
+                Text(L.t("ポッドキャスト", "Podcasts")).tag("podcasts")
+                Text(L.t("エピソード", "Episodes")).tag("episodes")
             }
             .pickerStyle(.segmented)
             .labelsHidden()
             .fixedSize()
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(EdgeInsets(top: 8, leading: 16, bottom: 0, trailing: 16))
-            if model.loading {
+            .onChange(of: model.tab) { model.tabChanged() }
+            if model.loading || (model.podcastsLoading && (model.tab == "podcasts" || model.tab == "episodes")) {
                 ProgressView().padding(.top, 48)
                 Spacer()
+            } else if model.tab == "podcasts" || model.tab == "episodes" {
+                podcastResults
             } else if model.empty {
                 Text(L.t("見つかりませんでした", "No results found")).subtitleStyle().padding(.top, 64)
                 Spacer()
@@ -223,6 +289,35 @@ struct SearchPageView: View {
                 default:
                     all
                 }
+            }
+        }
+    }
+
+    /// ポッドキャスト（番組のカード）・エピソード（行）の結果。
+    @ViewBuilder
+    private var podcastResults: some View {
+        if model.tab == "podcasts" ? model.podcasts.isEmpty : model.episodes.isEmpty {
+            Text(L.t("見つかりませんでした", "No results found")).subtitleStyle().padding(.top, 64)
+            Spacer()
+        } else if model.tab == "podcasts" {
+            ScrollView {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 176), spacing: 0)], spacing: 8) {
+                    ForEach(Array(model.podcasts.enumerated()), id: \.element.id) { i, podcast in
+                        PodcastCard(podcast: podcast).onAppear { if i == model.podcasts.count - 1 { model.loadMoreCards() } }
+                    }
+                }
+                .padding(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+            }
+        } else {
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    ForEach(Array(model.episodes.enumerated()), id: \.element.id) { i, episode in
+                        // 押したエピソードだけを流す（曲を押したのと同じ）
+                        EpisodeRowView(episode: episode, showShow: true, onPlay: { AppServices.player.playSong(episode.song) })
+                            .onAppear { if i == model.episodes.count - 1 { model.loadMoreCards() } }
+                    }
+                }
+                .padding(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
             }
         }
     }

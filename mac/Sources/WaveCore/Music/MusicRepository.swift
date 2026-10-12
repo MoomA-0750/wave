@@ -24,6 +24,14 @@ public final class MusicRepository: Sendable {
     public static let songsFilter = "EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D"
     public static let albumsFilter = "EgWKAQIYAWoKEAkQBRAKEAMQBA%3D%3D"
     public static let artistsFilter = "EgWKAQIgAWoKEAkQBRAKEAMQBA%3D%3D"
+    public static let podcastsFilter = "EgWKAQJQAWoKEAkQBRAKEAMQBA%3D%3D"
+    public static let episodesFilter = "EgWKAQJIAWoKEAkQBRAKEAMQBA%3D%3D"
+    /// ライブラリのポッドキャスト（保存した番組）。
+    public static let libraryPodcastsBrowse = "FEmusic_library_non_music_audio_list"
+    /// 保存した番組の新しいエピソード（ログインしたときだけ中身がある自動のプレイリスト）。
+    public static let newEpisodes = "RDPN"
+    /// 「新しいエピソード」のページ（番組のページと同じ形で返る）。
+    public static let newEpisodesBrowse = "VL" + newEpisodes
     public static let libraryPlaylists = "FEmusic_liked_playlists"
     public static let history = "FEmusic_history"
     public static let home = "FEmusic_home"
@@ -56,6 +64,41 @@ public final class MusicRepository: Sendable {
 
     public func searchArtists(_ query: String, continuation: String? = nil) async throws -> ApiResult<SearchPage<ArtistSummary>> {
         try await search(query, filter: MusicRepository.artistsFilter, continuation: continuation, parse: MusicParsers.searchArtists)
+    }
+
+    /// ポッドキャスト（番組）に絞った検索。
+    public func searchPodcasts(_ query: String, continuation: String? = nil) async throws -> ApiResult<SearchPage<PodcastSummary>> {
+        try await search(query, filter: MusicRepository.podcastsFilter, continuation: continuation, parse: MusicParsers.searchPodcasts)
+    }
+
+    /// ポッドキャストのエピソードに絞った検索。
+    public func searchEpisodes(_ query: String, continuation: String? = nil) async throws -> ApiResult<SearchPage<PodcastEpisode>> {
+        try await search(query, filter: MusicRepository.episodesFilter, continuation: continuation, parse: MusicParsers.searchEpisodes)
+    }
+
+    /// ポッドキャストの番組のページ（MPSP…）。エピソードは新しい順。
+    public func podcast(_ browseId: String) async throws -> ApiResult<PodcastPage> {
+        let result = try await browse(browseId, continuation: nil, params: nil)
+        guard result.isOk, let value = result.value else { return .failed(result.failure ?? .parse, status: result.status) }
+        guard let page = MusicParsers.podcastPage(value, browseId: browseId) else { return .failed(.parse) }
+        return .ok(page)
+    }
+
+    /// 番組のページのエピソードの続き。show は番組名（行に無いのでエピソードのアーティストとして入れる）。
+    public func podcastEpisodes(continuation: String, show: ArtistRef, showBrowseId: String?) async throws -> ApiResult<SearchPage<PodcastEpisode>> {
+        try await browse(nil, continuation: continuation, params: nil).map { MusicParsers.podcastEpisodes($0, show: show, showBrowseId: showBrowseId) }
+    }
+
+    /// ライブラリのポッドキャスト（保存した番組）。ログイン必須。
+    public func libraryPodcasts(onPage: (([PodcastSummary]) -> Void)? = nil) async throws -> ApiResult<[PodcastSummary]> {
+        try await allLibraryPages(MusicRepository.libraryPodcastsBrowse, parse: MusicParsers.libraryPodcasts, key: \.browseId, onPage: onPage)
+    }
+
+    /// ポッドキャストをライブラリに保存する・外す。番組のプレイリスト（PL…）を高く評価するのと同じ書き込み（Android と同じ）。
+    public func setPodcastSaved(_ playlistId: String, saved: Bool) async throws -> ApiResult<Bool> {
+        guard client.isLoggedIn else { return .failed(.notLoggedIn) }
+        let body = JSON.obj(["target": .obj(["playlistId": .string(playlistId)])])
+        return try await client.post(saved ? "like/like" : "like/removelike", body: body).map { _ in true }
     }
 
     private func search<T>(_ query: String, filter: String, continuation: String?, parse: (JSON) -> T) async throws -> ApiResult<T> {
