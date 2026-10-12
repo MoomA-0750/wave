@@ -554,6 +554,16 @@ final class PlayerService {
         userStartedPlayback.forEach { $0(true) }
     }
 
+    /// 前の曲へ（再生した長さによらない。ジャケットを払ったとき。Android の seekToPreviousMediaItem と同じ）。
+    func previousTrack() {
+        if isRemote || index <= 0 {
+            previous()
+            return
+        }
+        selectAt(index - 1)
+        userStartedPlayback.forEach { $0(true) }
+    }
+
     @ObservationIgnored private var pendingRemoteSeek: Int64?
     @ObservationIgnored private var remoteSeekWork: DispatchWorkItem?
 

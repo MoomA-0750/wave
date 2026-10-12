@@ -17,6 +17,8 @@ struct ArtistView: View {
     @State private var checkingLiked = false
     /// 「すべての曲」の一覧（ページを開いたときに読み始める。再生のたびに読み直さない）。
     @State private var allSongs: Task<ApiResult<PlaylistPage>?, Never>?
+    /// 写真が上へ流れきったか（それまでは上の帯の名前とぼかしを出さない。写真の名前と二重になる）
+    @State private var pastHero = false
 
     var body: some View {
         let player = AppServices.player!
@@ -112,9 +114,15 @@ struct ArtistView: View {
             .padding(.bottom, 32)
         }
         .ignoresSafeArea(edges: .top)
-        .navigationTitle(artist?.name ?? "")
+        .onScrollGeometryChange(for: Bool.self) { geo in
+            geo.contentOffset.y + geo.contentInsets.top > 380 - 120
+        } action: { _, past in
+            withAnimation(.easeOut(duration: 0.2)) { pastHero = past }
+        }
+        .navigationTitle(pastHero ? (artist?.name ?? "") : "")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
+        .modifier(TopEdgeEffect(hidden: !pastHero))
         .refreshable { await load() }
         .task { if artist == nil { await load() } }
     }
@@ -301,6 +309,21 @@ private struct ArtistViewPostCard: View {
             .glassCard(14)
         }
         .buttonStyle(.plain)
+    }
+}
+#endif
+
+#if os(iOS)
+/// iOS 26 以降の、上の帯の下のぼかし（スクロールの端の効果）を出すかどうか。
+struct TopEdgeEffect: ViewModifier {
+    var hidden: Bool
+
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content.scrollEdgeEffectHidden(hidden, for: .top)
+        } else {
+            content
+        }
     }
 }
 #endif

@@ -12,6 +12,8 @@ struct WaveIOSApp: App {
         // 画面を消しても、ほかのアプリの音と重ねずに鳴らし続ける（Info.plist の UIBackgroundModes audio と組み）
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, policy: .longFormAudio)
         AppServices.initialize()
+        // ほかの端末の再生を映している間も、ロック画面に操作を出し、裏でつながりを保つ
+        RemoteKeepAlive.shared.start()
         #if WAVE_DEBUG
             IOSDebugCommands.start()
         #endif

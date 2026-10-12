@@ -202,7 +202,7 @@ struct NowPlayingView: View {
 }
 
 /// 再生中の画面のジャケット。前後の曲のジャケットを横に並べておき（先に読んでおく）、指について動く。
-/// 払いきると隣のジャケットが真ん中へ滑ってきて、その曲へ移る（Android の再生中の画面と同じく、前へは previous と同じ扱い）。
+/// 払いきると隣のジャケットが真ん中へ滑ってきて、その曲へ移る（前へ払うと、再生した長さによらず前の曲へ。Android と同じ）。
 private struct CoverCarousel: View {
     @State private var drag: CGFloat = 0
     @State private var settling = false
@@ -229,11 +229,10 @@ private struct CoverCarousel: View {
                     guard !settling else { return }
                     let x = value.translation.width, predicted = value.predictedEndTranslation.width
                     let dir = (x < -60 || predicted < -step / 2) ? 1 : (x > 60 || predicted > step / 2) ? -1 : 0
-                    // 前へ払っても、3秒より先なら曲の頭へ戻るだけ（ボタンと同じ）なので、滑らせずに戻す
-                    let moves = dir == 1 ? neighbor(player, 1) != nil : dir == -1 ? (neighbor(player, -1) != nil && player.position <= 3) : false
+                    let moves = dir != 0 && neighbor(player, dir) != nil
                     guard moves else {
                         withAnimation(.snappy) { drag = 0 }
-                        if dir == 1 { player.next() } else if dir == -1 { player.previous() }
+                        if dir == 1 { player.next() } else if dir == -1 { player.previousTrack() }
                         return
                     }
                     settling = true
@@ -244,7 +243,7 @@ private struct CoverCarousel: View {
                         var t = Transaction()
                         t.disablesAnimations = true
                         withTransaction(t) {
-                            if dir == 1 { player.next() } else { player.previous() }
+                            if dir == 1 { player.next() } else { player.previousTrack() }
                             drag = 0
                         }
                         settling = false

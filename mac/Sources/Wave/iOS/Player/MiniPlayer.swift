@@ -52,7 +52,7 @@ struct MiniPlayer: View {
         .onTapGesture(perform: open)
         .gesture(DragGesture(minimumDistance: 24).onEnded { value in
             guard abs(value.translation.width) > abs(value.translation.height), abs(value.translation.width) > 60 else { return }
-            if value.translation.width < 0 { player.next() } else { player.previous() }
+            if value.translation.width < 0 { player.next() } else { player.previousTrack() }
         })
     }
 

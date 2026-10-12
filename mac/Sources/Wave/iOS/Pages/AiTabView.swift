@@ -41,8 +41,13 @@ struct AiTabView: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .scrollDismissesKeyboard(.interactively)
+            // 会話を払う・入力欄の外を押すと、キーボードを閉じる（会話が短くてスクロールしないときも）
+            .scrollDismissesKeyboard(.immediately)
+            .contentShape(Rectangle())
+            .onTapGesture { inputFocus = false }
+            .simultaneousGesture(DragGesture(minimumDistance: 12).onChanged { _ in if inputFocus { inputFocus = false } })
             .onChange(of: chat.messages.count) { _, _ in withAnimation { proxy.scrollTo("end", anchor: .bottom) } }
             .onChange(of: lastLength(chat)) { _, _ in proxy.scrollTo("end", anchor: .bottom) }
         }
@@ -83,6 +88,13 @@ struct AiTabView: View {
                     .focused($inputFocus)
                     .submitLabel(.send)
                     .onSubmit { if !chat.running { send(input) } }
+                    .toolbar {
+                        ToolbarItemGroup(placement: .keyboard) {
+                            Spacer()
+                            Button { inputFocus = false } label: { Image(systemName: "keyboard.chevron.compact.down") }
+                                .accessibilityLabel(L.t("キーボードを閉じる", "Hide keyboard"))
+                        }
+                    }
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
                     .glassCard(20)

@@ -349,7 +349,8 @@ struct SearchView: View {
             }
         }
         .listStyle(.plain)
-        .scrollDismissesKeyboard(.immediately)
+        // 候補を見ている間はキーボードを閉じない（閉じると、確定した検索の結果と見分けがつかない）
+        .scrollDismissesKeyboard(.never)
     }
 
     /// 検索から開く・再生する（履歴に残してから。曲は再生、ほかはそのページ）。
