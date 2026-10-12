@@ -65,6 +65,8 @@ final class AccountState {
         AppServices.client.setCredentials(nil)
         AppServices.credentials.clear()
         AppServices.releases.clear()
+        // 前のアカウントの Claude との会話を残さない（履歴も消す。Android と同じ）
+        AppServices.ai.wipe()
         obtainedAtEpochMs = 0
         isLoggedIn = false
         premiumAudio = nil

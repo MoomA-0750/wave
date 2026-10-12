@@ -82,13 +82,41 @@ enum DebugCommands {
             for m in AppServices.ai.messages {
                 let text: String = switch m {
                 case .user: "user"
-                case .assistant(let t): "assistant chars=\(t.count)"
+                case .assistant(let t, let videoId): "assistant chars=\(t.count) stamps=\(AiText.timestamps(t).map(\.label)) synced=\(videoId != nil)"
                 case .action(let t): "action " + t
                 case .songs(let s): "songs n=\(s.count)"
                 case .failure(let t): "failure " + t
                 }
                 AppPaths.log("debug ai " + text)
             }
+        // Claude の会話の履歴: 一覧・新しい会話・開く（番号）・消す（番号）・最後の答えの時刻へ飛ぶ（番号）
+        case "ai-history":
+            let chat = AppServices.ai!
+            for (i, c) in chat.history.conversations.enumerated() {
+                AppPaths.log("debug ai history \(i) title_chars=\(c.title.count) messages=\(c.messages.count) current=\(c.id == chat.conversationId)")
+            }
+            AppPaths.log("debug ai history n=\(chat.history.conversations.count)")
+        case "ai-new":
+            AppServices.ai.clear()
+        case "ai-open":
+            let list = AppServices.ai.history.conversations
+            let i = Int(arg) ?? 0
+            if list.indices.contains(i) { AppServices.ai.open(list[i].id) }
+            AppPaths.log("debug ai open messages=\(AppServices.ai.messages.count)")
+        case "ai-delete":
+            let list = AppServices.ai.history.conversations
+            let i = Int(arg) ?? 0
+            if list.indices.contains(i) { AppServices.ai.delete(list[i].id) }
+        case "ai-seek":
+            var found: (String?, AiText.Timestamp?) = (nil, nil)
+            for case .assistant(let t, let videoId) in AppServices.ai.messages.reversed() {
+                let stamps = AiText.timestamps(t)
+                if stamps.isEmpty { continue }
+                found = (videoId, stamps.indices.contains(Int(arg) ?? 0) ? stamps[Int(arg) ?? 0] : nil)
+                break
+            }
+            AppPaths.log("debug ai seek stamp=\(found.1?.label ?? "nil") synced=\(found.0 != nil)")
+            if let id = found.0, let stamp = found.1 { AiChat.seek(videoId: id, positionMs: stamp.positionMs) }
         case "membership-toggle":
             // 追加の画面で、名前の一致するプレイリストの行を押したのと同じ（入っていれば外し、無ければ足す）
             guard let song = player.current, let target = AppServices.library.editable.first(where: { $0.title == arg }) else {
