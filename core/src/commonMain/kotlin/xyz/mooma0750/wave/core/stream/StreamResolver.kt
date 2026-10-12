@@ -12,6 +12,8 @@ import com.metrolist.innertubex.models.response.PlayerResponse
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.serialization.json.JsonObject
+import xyz.mooma0750.wave.core.music.LiveParsers
 import xyz.mooma0750.wave.core.net.isAllowedMediaUrl
 import xyz.mooma0750.wave.core.session.CallResult
 import xyz.mooma0750.wave.core.session.FailureKind
@@ -79,6 +81,9 @@ enum class StreamFailure {
 
     /** 解読後の URL が googlevideo の /videoplayback ではない。 */
     RejectedUrl,
+
+    /** ライブ配信だった（ライブの印の無い曲として渡された）。HLS で流し直す。 */
+    LiveStream,
 }
 
 sealed interface ResolveResult {
@@ -167,12 +172,18 @@ class StreamResolver internal constructor(
                 expectedGeneration = expectedGeneration,
                 block = { it.player(YouTubeClient.WEB_REMIX, videoId, signatureTimestamp = config.signatureTimestamp) },
             ) { response ->
-                val body = WaveSession.json.decodeFromString(PlayerResponse.serializer(), response.bodyAsTextLimited(WaveSession.MAX_PLAYER_BYTES))
-                if (body.playabilityStatus.status == "LOGIN_REQUIRED") ParseOutcome.LoginRequired else ParseOutcome.Parsed(body)
+                val root = WaveSession.json.parseToJsonElement(response.bodyAsTextLimited(WaveSession.MAX_PLAYER_BYTES))
+                val body = WaveSession.json.decodeFromJsonElement(PlayerResponse.serializer(), root)
+                when {
+                    // ライブ配信は HLS で流す（LiveClient）。WEB_REMIX の応答では再生できない
+                    root is JsonObject && LiveParsers.isLive(root) -> ParseOutcome.Parsed(null)
+                    body.playabilityStatus.status == "LOGIN_REQUIRED" -> ParseOutcome.LoginRequired
+                    else -> ParseOutcome.Parsed(body)
+                }
             }
         val body =
             when (player) {
-                is CallResult.Ok -> player.value
+                is CallResult.Ok -> player.value ?: return ResolveResult.Failed(StreamFailure.LiveStream)
                 is CallResult.Failed -> return ResolveResult.Failed(player.kind.toStreamFailure())
             }
         if (body.playabilityStatus.status != "OK") return ResolveResult.Failed(StreamFailure.Unplayable)

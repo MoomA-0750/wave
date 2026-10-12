@@ -1,0 +1,17 @@
+{
+ "playabilityStatus": {
+  "status": "OK"
+ },
+ "streamingData": {
+  "expiresInSeconds": "21540",
+  "hlsManifestUrl": "https://manifest.googlevideo.com/api/manifest/hls_variant/expire/1791854541/ei/bTPNavGJGKnqvcAPwLbUIA/ip/203.0.113.7/id/rFZHOHl-L8A.1/source/yt_live_broadcast/requiressl/yes/xpc/EgVo2aDSNQ%3D%3D/hfr/1/playlist_duration/30/manifest_duration/30/maudio/1/bui/AWzQHwpqV0SvA-MSo8Q4UH8FooaUe_VjznqYAbmKkHH4oN0C6oaCJ2YFFUj1P94GASYg5KJdEVuRg5Lg/spc/mpRQ_-8izJanI9YfFfDHhzyFsM05Rg2DSKebF75p4yLlcVcedaeifsWfSR0ZdTyPgws/vprv/1/go/1/rqh/5/reg/0/pacing/0/nvgoi/1/ncsapi/1/keepalive/yes/fexp/51565116%2C52112905%2C52184232%2C52250513/dover/11/itag/0/playlist_type/DVR/sparams/expire%2Cei%2Cip%2Cid%2Csource%2Crequiressl%2Cxpc%2Chfr%2Cplaylist_duration%2Cmanifest_duration%2Cmaudio%2Cbui%2Cspc%2Cvprv%2Cgo%2Crqh%2Creg%2Citag%2Cplaylist_type/sig/AE0s2JYwRgIhAJ9j5zOiuhZ6ze3TJf2ffnCSTZPAvTLslh6nlNvtAphSAiEAp2TCVbU9tJ-bx2SFqNMvZw4HzVdCR1ehoDn9h-2I6bE%3D/file/index.m3u8"
+ },
+ "videoDetails": {
+  "videoId": "rFZHOHl-L8A",
+  "title": "lofi hip hop radio 📚 beats to relax/study to",
+  "lengthSeconds": "0",
+  "isLive": true,
+  "author": "Lofi Girl",
+  "isLiveContent": true
+ }
+}
