@@ -23,6 +23,10 @@ enum AppServices {
     private(set) static var ai: AiChat!
     /// 端末の連携（中継の場所が設定に無ければ使えない）。
     private(set) static var connect: ConnectService!
+    #if os(macOS)
+        /// Discord に再生中の曲を出す（設定でオンにしたときだけ）。
+        private(set) static var discord: DiscordStatus!
+    #endif
     /// 画面の移り変わり。
     private(set) static var nav: Nav!
     /// 画面の下の知らせ。
@@ -61,6 +65,9 @@ enum AppServices {
                                  relayHost: settings.relayV2Host ?? built("WaveRelayV2Host"))
         releases = Releases()
         releases.start()
+        #if os(macOS)
+            discord = DiscordStatus()
+        #endif
         account.changed.append { library.refresh() }
         library.refresh()
         #if WAVE_DEBUG && os(macOS)

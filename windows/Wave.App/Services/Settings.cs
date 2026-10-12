@@ -29,6 +29,9 @@ public sealed class Settings
     public string? AiUrl { get; set; }
     public string? AiToken { get; set; }
     public string? AiName { get; set; }
+    /// <summary>Discord に再生中の曲を出す（既定はオフ）と、そのための Discord のアプリケーション ID（discord.com/developers で作る）。</summary>
+    public bool DiscordPresence { get; set; }
+    public string? DiscordClientId { get; set; }
 
     private static readonly string FilePath = Path.Combine(AppPaths.Data, "settings.json");
     private static readonly JsonSerializerOptions Options = new() { WriteIndented = true };

@@ -71,6 +71,18 @@ mac/scripts/mac.sh ios-ipa  # iPhone 版の wave.ipa を組んで、この機械
 - ログイン情報は macOS のキーチェーン（このユーザー・この Mac だけ）に保存する。Windows の DPAPI に当たる
 - 再生は AVPlayer。署名付きの URL は渡さず、仮の URL（`wave-media://`）を渡して、求められた範囲をアプリが取って返す（Windows の DASH の DownloadRequested と同じ考え）
 
+## Discord に再生中の曲を出す（Windows・macOS）
+
+PC 版（Windows・macOS）は、同じ PC で動いている Discord のアプリ（ローカルの IPC）を通して、Discord のプロフィールに「wave を聴いています」と曲名・アーティスト・ジャケット・残り時間を出せる。既定はオフ。
+
+1. [Discord Developer Portal](https://discord.com/developers/applications) で「New Application」を押し、名前を **wave** にして作る（この名前が「〜を聴いています」に出る）
+2. 「General Information」の **Application ID** をコピーする
+3. wave の設定 →「Discord」で「Discord に再生中の曲を出す」をオンにし、Application ID を貼る（`settings.json` の `DiscordPresence`・`DiscordClientId`（Windows）／`discordPresence`・`discordClientId`（macOS）に入る）
+
+- Discord のアプリが後から起動しても、15 秒おきにつなぎ直す。一時停止すると消える
+- 家のほかの端末（スマホなど）で鳴らしていて、PC の wave がそれを映しているときは、その曲も出す（画像の上の文字に「〜で再生中」と出る）。スマホの Discord には、ほかのアプリが状態を出す手段が無いため
+- 送るのは曲が変わった・再生／一時停止・シークのときだけ（シークは 15 秒に 1 回まで）
+
 ## 認証情報の扱い
 
 ログインは WebView で Google にサインインし、music.youtube.com の cookie を端末の中だけに暗号化して保存する。
