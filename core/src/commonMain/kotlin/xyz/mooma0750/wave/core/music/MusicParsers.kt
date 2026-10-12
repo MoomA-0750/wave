@@ -527,6 +527,137 @@ internal object MusicParsers {
         )
     }
 
+    // ---- ポッドキャスト ----
+
+    /** ポッドキャスト（番組）に絞った検索の最初のページと続きのページ。 */
+    fun searchPodcasts(root: JsonObject): SearchPage<PodcastSummary> = searchPage(root, ::podcastRow)
+
+    /** エピソードに絞った検索の最初のページと続きのページ。行の2列目は「日付 • 番組」。 */
+    fun searchEpisodes(root: JsonObject): SearchPage<PodcastEpisode> = searchPage(root, ::episodeRow)
+
+    /** ライブラリのポッドキャスト（browse FEmusic_library_non_music_audio_list）。格子（カード）と棚（行）のどちらの形でも読む。 */
+    fun libraryPodcasts(root: JsonObject): List<PodcastSummary> =
+        (
+            findAll(root, "musicTwoRowItemRenderer").mapNotNull(::podcastCard) +
+                findAll(root, "musicResponsiveListItemRenderer").mapNotNull(::podcastRow)
+        ).distinctBy { it.browseId }
+
+    /**
+     * 番組のページ（browse `MPSP…`）の最初のページ。ヘッダ（musicResponsiveHeaderRenderer）に題・配信者・説明・保存のボタン、
+     * 右の列（secondaryContents）の棚にエピソードの行（musicMultiRowListItemRenderer）が並ぶ。取れなければ null。
+     */
+    fun podcastPage(
+        root: JsonObject,
+        browseId: String,
+    ): PodcastPage? {
+        val header = findAll(root, "musicResponsiveHeaderRenderer").firstOrNull() ?: return null
+        val title = textOf(header.path("title")) ?: return null
+        val author = textOf(header.path("straplineTextOne"))
+        val shelf =
+            root
+                .path("contents", "twoColumnBrowseResultsRenderer", "secondaryContents", "sectionListRenderer", "contents")
+                .arrayItems()
+                .firstNotNullOfOrNull { it.path("musicShelfRenderer").asObject() }
+        val show = ArtistRef(title, null)
+        // 保存のボタン。ログインしていなければ押すとログインの案内（likeEndpoint を持たない）なので、状態は分からないとする
+        val toggle =
+            header.path("buttons").arrayItems().firstNotNullOfOrNull { it.path("toggleButtonRenderer").asObject() }
+        val saved = toggle?.takeIf { findAll(it, "likeEndpoint").isNotEmpty() }?.path("isToggled").asBoolean()
+        return PodcastPage(
+            browseId = browseId,
+            title = title,
+            author = author,
+            description = textOf(header.path("description", "musicDescriptionShelfRenderer", "description")),
+            thumbnailUrl = lastThumbnailUrl(header.path("thumbnail")),
+            episodes = shelf.path("contents").arrayItems().mapNotNull { it.path("musicMultiRowListItemRenderer").asObject()?.let { row -> multiRowEpisode(row, show, browseId) } },
+            continuation = shelf?.let(::nextContinuation),
+            saved = saved,
+        )
+    }
+
+    /** 番組のページのエピソードの続き（continuationContents.musicShelfContinuation）。番組名は行に無いので、呼ぶ側の show を入れる。 */
+    fun podcastEpisodes(
+        root: JsonObject,
+        show: ArtistRef,
+        showBrowseId: String?,
+    ): SearchPage<PodcastEpisode> {
+        val shelf = root.path("continuationContents", "musicShelfContinuation").asObject() ?: return SearchPage(emptyList(), null)
+        val episodes = shelf.path("contents").arrayItems().mapNotNull { it.path("musicMultiRowListItemRenderer").asObject()?.let { row -> multiRowEpisode(row, show, showBrowseId) } }
+        return SearchPage(episodes, nextContinuation(shelf))
+    }
+
+    /** 番組のページのエピソードの行。題・説明・「再生回数 • 日付」・長さ・聴いたところ。 */
+    private fun multiRowEpisode(
+        row: JsonObject,
+        show: ArtistRef,
+        showBrowseId: String?,
+    ): PodcastEpisode? {
+        val watch = row.path("onTap", "watchEndpoint").asObject() ?: findAll(row.path("overlay"), "watchEndpoint").firstOrNull()
+        val videoId = watch.path("videoId").string() ?: return null
+        val title = textOf(row.path("title")) ?: return null
+        val progress = row.path("playbackProgress", "musicPlaybackProgressRenderer")
+        // 「2294回視聴 • 6 日前」の最後が日付（再生回数が無ければ日付だけ）
+        val published = row.path("subtitle", "runs").arrayItems().mapNotNull { it.path("text").string() }.lastOrNull { it.isNotBlank() && it != SEPARATOR }
+        val durationText = progress.path("durationText", "runs").arrayItems().mapNotNull { it.path("text").string() }.lastOrNull { it.isNotBlank() && it != SEPARATOR }
+        val percent = (progress.path("playbackProgressPercentage") as? JsonPrimitive)?.contentOrNull?.toDoubleOrNull()?.toInt()
+        return PodcastEpisode(
+            song =
+                Song(
+                    videoId = videoId,
+                    title = title,
+                    artists = listOf(show),
+                    album = null,
+                    durationSeconds = null,
+                    thumbnailUrl = lastThumbnailUrl(row.path("thumbnail")),
+                    kind = MusicVideoType.of(watch.path("watchEndpointMusicSupportedConfigs", "watchEndpointMusicConfig", "musicVideoType").string()),
+                ),
+            publishedText = published,
+            durationText = durationText,
+            description = textOf(row.path("description")),
+            progressPercent = percent?.takeIf { it in 1..100 },
+            showBrowseId = showBrowseId,
+        )
+    }
+
+    /** 検索・ライブラリの番組の行（musicResponsiveListItemRenderer、ページ種別が番組のもの）。 */
+    private fun podcastRow(item: JsonObject): PodcastSummary? {
+        val browse = item.path("navigationEndpoint", "browseEndpoint")
+        if (pageTypeOfBrowse(browse) != PODCAST_PAGE) return null
+        val columns = flexColumnRuns(item)
+        return PodcastSummary(
+            browseId = browse.path("browseId").string() ?: return null,
+            title = runsText(columns.getOrNull(0).orEmpty()) ?: return null,
+            author = runsText(columns.drop(1).flatten()),
+            thumbnailUrl = lastThumbnailUrl(item.path("thumbnail")),
+        )
+    }
+
+    /** ライブラリ・ホームの番組のカード（musicTwoRowItemRenderer）。 */
+    private fun podcastCard(item: JsonObject): PodcastSummary? {
+        val browse = item.path("navigationEndpoint", "browseEndpoint")
+        val browseId = browse.path("browseId").string() ?: return null
+        if (pageTypeOfBrowse(browse) != PODCAST_PAGE && !browseId.startsWith(PodcastSummary.PODCAST_PREFIX)) return null
+        return PodcastSummary(
+            browseId = browseId,
+            title = textOf(item.path("title")) ?: return null,
+            author = textOf(item.path("subtitle")),
+            thumbnailUrl = lastThumbnailUrl(item.path("thumbnailRenderer")),
+        )
+    }
+
+    /** エピソードの検索の行。2列目の「日付 • 番組」から日付と番組を取る（番組名は曲のアーティストとして入る）。 */
+    private fun episodeRow(item: JsonObject): PodcastEpisode? {
+        val song = responsiveListItemSong(item) ?: return null
+        val detail = flexColumnRuns(item).drop(1).flatten()
+        val showRun = detail.firstOrNull { pageTypeOf(it) == PODCAST_PAGE }
+        val published = detail.filter { it !== showRun }.mapNotNull { it.path("text").string() }.firstOrNull { it.isNotBlank() && it != SEPARATOR }
+        return PodcastEpisode(
+            song = song,
+            publishedText = published,
+            showBrowseId = showRun?.path("navigationEndpoint", "browseEndpoint", "browseId").string(),
+        )
+    }
+
     private fun textOf(element: JsonElement?): String? = runsText(element.path("runs").arrayItems())
 
     /** runs の文字をつなぐ。空なら null。 */
@@ -665,6 +796,8 @@ internal object MusicParsers {
     private fun artistsOf(runs: List<JsonObject>): List<ArtistRef> {
         val typed = typedArtistsOf(runs)
         if (typed.isNotEmpty()) return typed
+        // ポッドキャストのエピソードは、番組をアーティストの代わりにする（日付などをアーティストと取り違えない）。番組のページはアーティストとしては開けないので名前だけ
+        runs.firstOrNull { pageTypeOf(it) == PODCAST_PAGE }?.path("text")?.string()?.let { return listOf(ArtistRef(it, null)) }
         val firstSegment = runs.takeWhile { it.path("text").string() != SEPARATOR }
         return firstSegment
             .mapNotNull { it.path("text").string() }
@@ -707,6 +840,7 @@ internal object MusicParsers {
     private const val SEPARATOR = " • "
     private const val ARTIST_PAGE = "MUSIC_PAGE_TYPE_ARTIST"
     private const val LIBRARY_ARTIST_PAGE = "MUSIC_PAGE_TYPE_LIBRARY_ARTIST"
+    private const val PODCAST_PAGE = "MUSIC_PAGE_TYPE_PODCAST_SHOW_DETAIL_PAGE"
     private const val LIBRARY_ARTIST_PREFIX = "MPLA"
     private const val ALBUM_PLAYLIST_PREFIX = "OLAK5uy_"
     private const val EDIT_ICON = "EDIT"

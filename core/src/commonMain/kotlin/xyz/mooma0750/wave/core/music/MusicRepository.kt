@@ -139,6 +139,64 @@ class MusicRepository(
             ParseOutcome.Parsed(MusicParsers.searchArtists(json(response)))
         }
 
+    /** ポッドキャスト（番組）に絞った検索。continuation を渡したら続きのページ。 */
+    suspend fun searchPodcasts(
+        query: String,
+        continuation: String? = null,
+    ): CallResult<SearchPage<PodcastSummary>> =
+        session.call(operation = "search", block = searchOrContinue(query, PODCASTS_FILTER, continuation)) { response ->
+            ParseOutcome.Parsed(MusicParsers.searchPodcasts(json(response)))
+        }
+
+    /** ポッドキャストのエピソードに絞った検索。continuation を渡したら続きのページ。 */
+    suspend fun searchEpisodes(
+        query: String,
+        continuation: String? = null,
+    ): CallResult<SearchPage<PodcastEpisode>> =
+        session.call(operation = "search", block = searchOrContinue(query, EPISODES_FILTER, continuation)) { response ->
+            ParseOutcome.Parsed(MusicParsers.searchEpisodes(json(response)))
+        }
+
+    /** ポッドキャストの番組のページ（`MPSP…`）。エピソードは新しい順。 */
+    suspend fun podcast(browseId: String): CallResult<PodcastPage> =
+        session.call(operation = "browse", block = browseOrContinue(browseId, continuation = null)) { response ->
+            val root = json(response)
+            lastRendererNames = MusicParsers.rendererNames(root)
+            parsedOrInvalid(MusicParsers.podcastPage(root, browseId))
+        }
+
+    /** 番組のページのエピソードの続き。show は番組名（行に無いのでエピソードのアーティストとして入れる）。 */
+    suspend fun podcastEpisodes(
+        continuation: String,
+        show: ArtistRef,
+        showBrowseId: String?,
+    ): CallResult<SearchPage<PodcastEpisode>> =
+        session.call(operation = "browse", block = browseOrContinue("", continuation)) { response ->
+            ParseOutcome.Parsed(MusicParsers.podcastEpisodes(json(response), show, showBrowseId))
+        }
+
+    /** ライブラリのポッドキャスト（保存した番組）。ログイン必須。 */
+    suspend fun libraryPodcasts(onPage: (List<PodcastSummary>) -> Unit = {}): CallResult<List<PodcastSummary>> =
+        allLibraryPages(LIBRARY_PODCASTS, MusicParsers::libraryPodcasts, { it.browseId }, onPage)
+
+    /**
+     * ポッドキャストをライブラリに保存する（saved = true）・外す（false）。番組のプレイリスト（`PL…`）を高く評価するのと同じ書き込み。
+     * 書き込みの規則は setLiked と同じ。
+     */
+    suspend fun setPodcastSaved(
+        playlistId: String,
+        saved: Boolean,
+        expectedGeneration: Long? = null,
+    ): WriteResult<Unit> =
+        session.callWrite(
+            operation = if (saved) "like" else "removelike",
+            block = { if (saved) it.likePlaylist(YouTubeClient.WEB_REMIX, playlistId) else it.unlikePlaylist(YouTubeClient.WEB_REMIX, playlistId) },
+            expectedGeneration = expectedGeneration,
+        ) { response ->
+            json(response)
+            ParseOutcome.Parsed(Unit)
+        }
+
     /** 打ち込み中の候補。 */
     suspend fun searchSuggestions(input: String): CallResult<SearchSuggestions> =
         session.call(
@@ -457,6 +515,14 @@ class MusicRepository(
         const val SONGS_FILTER = "EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D"
         const val ALBUMS_FILTER = "EgWKAQIYAWoKEAkQBRAKEAMQBA%3D%3D"
         const val ARTISTS_FILTER = "EgWKAQIgAWoKEAkQBRAKEAMQBA%3D%3D"
+        const val PODCASTS_FILTER = "EgWKAQJQAWoKEAkQBRAKEAMQBA%3D%3D"
+        const val EPISODES_FILTER = "EgWKAQJIAWoKEAkQBRAKEAMQBA%3D%3D"
+
+        /** ライブラリのポッドキャスト（保存した番組）。 */
+        const val LIBRARY_PODCASTS = "FEmusic_library_non_music_audio_list"
+
+        /** 保存した番組の新しいエピソード（ログインしたときだけ中身がある自動のプレイリスト）。 */
+        const val NEW_EPISODES = "RDPN"
 
         const val LIBRARY_PLAYLISTS = "FEmusic_liked_playlists"
         const val HISTORY = "FEmusic_history"
