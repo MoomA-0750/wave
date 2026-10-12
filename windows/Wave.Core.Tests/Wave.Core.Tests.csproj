@@ -17,6 +17,7 @@
   <ItemGroup>
     <!-- Android 版と同じ fixture（匿名で取得した公開データ）をそのまま使う -->
     <None Include="../../core/src/desktopTest/resources/fixtures/*.json" LinkBase="fixtures" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../core/src/desktopTest/resources/fixtures/*.m3u8" LinkBase="fixtures" CopyToOutputDirectory="PreserveNewest" />
     <!-- Connect v2 の相互運用の成果物（Kotlin の CSharpInteropTest が書き出す kotlin.json、C# が書き出す csharp.json） -->
     <None Update="Fixtures/connect/*.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
