@@ -383,7 +383,7 @@ class MainActivity : ComponentActivity() {
                                     )
                                 is Screen.Podcast ->
                                     xyz.mooma0750.wave.podcast.PodcastScreen(
-                                        viewModel(key = "podcast-$loginGeneration-${screen.browseId}") { xyz.mooma0750.wave.podcast.PodcastViewModel(container.music, screen.browseId) },
+                                        viewModel(key = "podcast-$loginGeneration-${screen.browseId}") { xyz.mooma0750.wave.podcast.PodcastViewModel(container.music, screen.browseId, screen.title) },
                                         title = screen.title,
                                         actions = songActions,
                                         // 押したエピソードから、番組の一覧を続けて流す（読んだ分の後はラジオにつなぐ）

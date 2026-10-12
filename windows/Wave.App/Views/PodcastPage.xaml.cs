@@ -44,6 +44,9 @@ public sealed partial class PodcastPage : Page
         if (!result.IsOk)
         {
             AppPaths.Log($"podcast failed {result.Failure}");
+            // 保存した番組が無いアカウントの「新しいエピソード」は、番組のページの形で返らない。失敗ではなく空として出す（Android・Mac と同じ）
+            var emptyNewEpisodes = result.Failure == Core.Net.FailureKind.Parse && summary.BrowseId == MusicRepository.NewEpisodesBrowse;
+            if (emptyNewEpisodes) ErrorText.Text = L.T("エピソードがありません", "No episodes");
             ErrorText.Visibility = Visibility.Visible;
             return;
         }

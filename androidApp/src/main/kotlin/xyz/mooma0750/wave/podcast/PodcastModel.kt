@@ -32,6 +32,8 @@ data class PodcastUiState(
 class PodcastViewModel(
     private val music: MusicRepository,
     private val browseId: String,
+    /** 読めなかったときに出す題（「新しいエピソード」）。 */
+    private val title: String = "",
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(PodcastUiState())
     val state: StateFlow<PodcastUiState> = mutableState.asStateFlow()
@@ -49,7 +51,13 @@ class PodcastViewModel(
             }
             is CallResult.Failed -> {
                 Log.i(WaveApplication.LOG_TAG, "podcast failed ${result.kind}" + if (result.kind == FailureKind.Parse) " renderers=${music.lastRendererNames}" else "")
-                mutableState.value = PodcastUiState(failure = result.kind)
+                // 保存した番組が無いアカウントの「新しいエピソード」は、番組のページの形で返らない。失敗ではなく空として出す（Mac・iOS と同じ）
+                mutableState.value =
+                    if (result.kind == FailureKind.Parse && browseId == MusicRepository.NEW_EPISODES_BROWSE) {
+                        PodcastUiState(page = PodcastPage(browseId, title, null, null, null, emptyList(), null))
+                    } else {
+                        PodcastUiState(failure = result.kind)
+                    }
             }
         }
     }
