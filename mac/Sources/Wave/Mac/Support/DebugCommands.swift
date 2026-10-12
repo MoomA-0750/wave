@@ -1,6 +1,7 @@
 #if os(macOS)
 #if WAVE_DEBUG
 import Foundation
+import MediaPlayer
 import UserNotifications
 import WaveCore
 
@@ -144,6 +145,43 @@ enum DebugCommands {
             AppPaths.log("debug now title=\(player.current?.title ?? "nil") position=\(Int(player.position)) duration=\(Int(player.duration)) playing=\(player.isPlaying) loading=\(player.isLoading) like=\(String(describing: player.like)) lyrics=\(player.lyrics != nil) video=\(player.video != nil) remote=\(player.isRemote) videoSize=\(MusicVideoPlayer.shared.player.currentItem?.presentationSize ?? .zero)")
         case "route":
             AppPaths.log("debug route=\(nav.current.route) back=\(nav.canGoBack)")
+        case "live-play":
+            // ライブ配信の検索の先頭を、検索の行を押したのと同じく鳴らす
+            let page = (try? await AppServices.music.searchLive(arg))?.value
+            AppPaths.log("debug live-play found=\(page?.songs.count ?? -1) continuation=\(page?.continuation != nil) first=\(page?.songs.first?.title ?? "-")")
+            if let song = page?.songs.first { player.playSong(song) }
+        case "live-unmarked":
+            // ライブの印の無い曲として渡しても、ライブと分かって HLS で流すか（引数は videoId）
+            player.playSong(Song(videoId: arg, title: arg, artists: [], album: nil, durationSeconds: 100, thumbnailUrl: nil))
+        case "live-tab":
+            // 検索して「ライブ」の絞り込みを開いたのと同じ
+            window.searchFor(arg)
+            try? await Task.sleep(for: .milliseconds(500))
+            SearchPageModel.current?.tab = "live"
+            for _ in 0..<40 where SearchPageModel.current?.liveLoading != false { try? await Task.sleep(for: .milliseconds(250)) }
+            try? await Task.sleep(for: .milliseconds(300))
+            let rows = SearchPageModel.current?.liveSongs ?? []
+            AppPaths.log("debug live-tab rows=\(rows.count) failed=\(SearchPageModel.current?.liveFailed ?? false) allLive=\(rows.allSatisfy(\.song.isLive))")
+        case "lofi":
+            // 検索の「すべてをブラウズ」の Lo-Fi のタイルを押したのと同じ
+            let moods = (try? await AppServices.music.moods())?.value ?? []
+            let genres = moods.first { $0.categories.contains { $0.params == LofiGenre.params } }
+            AppPaths.log("debug lofi tile section=\(genres?.title ?? "-") first=\(genres?.categories.first?.title ?? "-")")
+            nav.mood(LofiGenre.category)
+        case "lofi-page":
+            let page = (try? await AppServices.music.moodCategory(LofiGenre.params))?.value
+            AppPaths.log("debug lofi-page shelves=" + (page?.shelves.map { "\($0.title):\($0.items.count)" }.joined(separator: " | ") ?? "failed"))
+        case "lofi-play":
+            // Lo-Fi のページの「ライブ配信」の棚の先頭のカードを押したのと同じ
+            let page = (try? await AppServices.music.moodCategory(LofiGenre.params))?.value
+            if let item = page?.shelves.first?.items.first { nav.openCard(item) }
+            AppPaths.log("debug lofi-play route=\(nav.current.route)")
+        case "live-state":
+            let info = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
+            AppPaths.log("debug live-state isLive=\(player.isLive) title=\(player.current?.title ?? "nil") playing=\(player.isPlaying) loading=\(player.isLoading) " +
+                "duration=\(player.duration) lyrics=\(String(describing: player.lyrics)) video=\(player.video != nil) queue=\(player.queue.count) " +
+                "infoLive=\(info[MPNowPlayingInfoPropertyIsLiveStream] as? Bool ?? false) seekCommand=\(MPRemoteCommandCenter.shared().changePlaybackPositionCommand.isEnabled) " +
+                "message=\(player.message ?? "-") " + player.engine.debugState)
         case "playlist-delete":
             // 名前の一致する自分のプレイリストを消す（確かめで作ったものの後片付け）
             let targets = AppServices.library.editable.filter { $0.title == arg }
