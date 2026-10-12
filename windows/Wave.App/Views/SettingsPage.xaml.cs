@@ -18,6 +18,14 @@ public sealed partial class SettingsPage : Page
         DiscordSwitch.IsOn = AppServices.Settings.DiscordPresence;
         DiscordIdBox.Text = AppServices.Settings.DiscordClientId ?? "";
         DiscordStateText.Text = DiscordState();
+        // Discord へのつなぎ具合は裏で変わるので、開いている間は時々書き直す
+        if (discordTimer is null)
+        {
+            discordTimer = DispatcherQueue.CreateTimer();
+            discordTimer.Interval = TimeSpan.FromSeconds(2);
+            discordTimer.Tick += (_, _) => DiscordStateText.Text = DiscordState();
+        }
+        discordTimer.Start();
         LanguageBox.Items.Clear();
         foreach (var (key, label) in Languages) LanguageBox.Items.Add(new ComboBoxItem { Content = label, Tag = key });
         LanguageBox.SelectedIndex = Math.Max(0, Array.FindIndex(Languages, l => l.Key == AppServices.Settings.Language));
@@ -86,6 +94,14 @@ public sealed partial class SettingsPage : Page
         if (AppServices.Settings.ReleaseNotices == ReleaseSwitch.IsOn) return;
         AppServices.Settings.ReleaseNotices = ReleaseSwitch.IsOn;
         AppServices.Settings.Save();
+    }
+
+    private Microsoft.UI.Dispatching.DispatcherQueueTimer? discordTimer;
+
+    protected override void OnNavigatedFrom(NavigationEventArgs e)
+    {
+        discordTimer?.Stop();
+        base.OnNavigatedFrom(e);
     }
 
     private void OnDiscordToggled(object sender, RoutedEventArgs e)
