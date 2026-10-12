@@ -28,18 +28,27 @@ public sealed partial class SearchPage : Page
     private List<AlbumSummary> albums = [];
     private List<ArtistSummary> artists = [];
     private bool loadingMore;
+    // ポッドキャスト・エピソードは、その絞り込みを初めて選んだときに読む（「すべて」には出さない。Android と同じ）
+    private List<PodcastSummary>? podcasts;
+    private string? podcastContinuation;
+    private readonly ObservableCollection<PodcastEpisode> episodes = [];
+    private bool episodesLoaded;
+    private string? episodeContinuation;
+    private bool loadingTab;
 
     public SearchPage()
     {
         InitializeComponent();
         SongList.ItemsSource = songRows;
         CardGrid.ItemsSource = cards;
+        EpisodeList.ItemsSource = episodes;
         AppServices.Player.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(PlayerService.Current)) TrackRow.MarkCurrent(songRows, AppServices.Player.Current?.VideoId);
         };
         SongList.Loaded += (_, _) => Attach(SongList, () => LoadMoreSongsAsync());
         CardGrid.Loaded += (_, _) => Attach(CardGrid, () => LoadMoreCardsAsync());
+        EpisodeList.Loaded += (_, _) => Attach(EpisodeList, () => LoadMoreEpisodesAsync());
     }
 
     public static Visibility IsQuery(string kind) => kind == "query" ? Visibility.Visible : Visibility.Collapsed;
@@ -96,6 +105,13 @@ public sealed partial class SearchPage : Page
         AllView.Visibility = Visibility.Collapsed;
         songRows.Clear();
         cards.Clear();
+        episodes.Clear();
+        podcasts = null;
+        podcastContinuation = null;
+        episodesLoaded = false;
+        episodeContinuation = null;
+        loadingTab = false;
+        EpisodeList.Visibility = Visibility.Collapsed;
         var songsTask = AppServices.Music.SearchSongsAsync(q);
         var albumsTask = AppServices.Music.SearchAlbumsAsync(q);
         var artistsTask = AppServices.Music.SearchArtistsAsync(q);
@@ -108,7 +124,7 @@ public sealed partial class SearchPage : Page
         albumContinuation = albumsTask.Result.Value?.Continuation;
         artists = artistsTask.Result.IsOk ? artistsTask.Result.Value!.Items.ToList() : [];
         artistContinuation = artistsTask.Result.Value?.Continuation;
-        if (songs.Count == 0 && albums.Count == 0 && artists.Count == 0)
+        if (songs.Count == 0 && albums.Count == 0 && artists.Count == 0 && SelectedTab is not ("podcasts" or "episodes"))
         {
             Empty.Visibility = Visibility.Visible;
             return;
@@ -164,15 +180,93 @@ public sealed partial class SearchPage : Page
     {
         if (query is null || LoadingRing.IsActive) return;
         var tab = SelectedTab;
+        Empty.Visibility = Visibility.Collapsed;
         AllView.Visibility = Ui.Show(tab == "all");
         SongList.Visibility = Ui.Show(tab == "songs");
-        CardGrid.Visibility = Ui.Show(tab is "albums" or "artists");
+        CardGrid.Visibility = Ui.Show(tab is "albums" or "artists" or "podcasts");
+        EpisodeList.Visibility = Ui.Show(tab == "episodes");
         if (tab is "albums" or "artists")
         {
             cards.Clear();
             IEnumerable<HomeItem> items = tab == "albums" ? albums.Select(a => new HomeItem.AlbumItem(a)) : artists.Select(a => new HomeItem.ArtistItem(a));
             foreach (var item in items) cards.Add(item);
         }
+        else if (tab == "podcasts")
+        {
+            cards.Clear();
+            if (podcasts is null) _ = LoadPodcastsAsync();
+            else
+            {
+                foreach (var p in podcasts) cards.Add(new HomeItem.PodcastItem(p));
+                Empty.Visibility = Ui.Show(podcasts.Count == 0);
+            }
+        }
+        else if (tab == "episodes")
+        {
+            if (!episodesLoaded) _ = LoadEpisodesAsync();
+            else Empty.Visibility = Ui.Show(episodes.Count == 0);
+        }
+    }
+
+    /// <summary>ポッドキャスト（番組）の最初のページ。</summary>
+    private async Task LoadPodcastsAsync()
+    {
+        if (loadingTab || query is null) return;
+        loadingTab = true;
+        var id = requestId;
+        LoadingRing.IsActive = true;
+        var page = await AppServices.Music.SearchPodcastsAsync(query);
+        if (id != requestId) return;
+        loadingTab = false;
+        LoadingRing.IsActive = false;
+        podcasts = page.IsOk ? page.Value!.Items.ToList() : [];
+        podcastContinuation = page.Value?.Continuation;
+        AppPaths.Log($"search podcasts ok={page.IsOk} items={podcasts.Count}");
+        if (SelectedTab == "podcasts") ShowTab();
+    }
+
+    /// <summary>エピソードの最初のページ。</summary>
+    private async Task LoadEpisodesAsync()
+    {
+        if (loadingTab || query is null) return;
+        loadingTab = true;
+        var id = requestId;
+        LoadingRing.IsActive = true;
+        var page = await AppServices.Music.SearchEpisodesAsync(query);
+        if (id != requestId) return;
+        loadingTab = false;
+        LoadingRing.IsActive = false;
+        episodesLoaded = true;
+        episodes.Clear();
+        if (page.IsOk) foreach (var e in page.Value!.Items) episodes.Add(e);
+        episodeContinuation = page.Value?.Continuation;
+        AppPaths.Log($"search episodes ok={page.IsOk} items={episodes.Count}");
+        if (SelectedTab == "episodes") ShowTab();
+    }
+
+    private async Task LoadMoreEpisodesAsync()
+    {
+        if (loadingMore || episodeContinuation is null || query is null) return;
+        loadingMore = true;
+        var id = requestId;
+        var page = await AppServices.Music.SearchEpisodesAsync(query, episodeContinuation);
+        loadingMore = false;
+        if (id != requestId || !page.IsOk) return;
+        episodeContinuation = page.Value!.Continuation;
+        foreach (var e in page.Value.Items.Where(e => episodes.All(x => x.Song.VideoId != e.Song.VideoId))) episodes.Add(e);
+    }
+
+    /// <summary>エピソードを押した: その1話を再生する（曲を押したのと同じ）。</summary>
+    private void OnEpisodeDoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
+    {
+        if ((e.OriginalSource as FrameworkElement)?.DataContext is not PodcastEpisode episode) return;
+        Remember(new HomeItem.SongItem(episode.Song));
+        AppServices.Player.PlaySong(episode.Song);
+    }
+
+    private void OnEpisodeRightTapped(object sender, RightTappedRoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: PodcastEpisode episode } element) SongMenu.Build(episode.Song).ShowAt(element, e.GetPosition(element));
     }
 
     private void Remember(HomeItem item) => AppServices.Settings.AddSearch(SearchHistoryEntry.Of(item));
@@ -283,6 +377,16 @@ public sealed partial class SearchPage : Page
             artistContinuation = page.Value!.Continuation;
             artists.AddRange(page.Value.Items);
             foreach (var a in page.Value.Items) cards.Add(new HomeItem.ArtistItem(a));
+        }
+        else if (tab == "podcasts" && podcastContinuation is { } pc && podcasts is not null)
+        {
+            loadingMore = true;
+            var page = await AppServices.Music.SearchPodcastsAsync(query, pc);
+            loadingMore = false;
+            if (id != requestId || !page.IsOk) return;
+            podcastContinuation = page.Value!.Continuation;
+            podcasts.AddRange(page.Value.Items);
+            foreach (var p in page.Value.Items) cards.Add(new HomeItem.PodcastItem(p));
         }
     }
 }

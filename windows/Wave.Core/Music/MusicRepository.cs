@@ -24,6 +24,12 @@ public sealed class MusicRepository(InnerTubeClient client)
     public const string MoodCategoryBrowse = "FEmusic_moods_and_genres_category";
     public const string NewReleasesBrowse = "FEmusic_new_releases_albums";
     public const string LikedSongs = "LM";
+    public const string PodcastsFilter = "EgWKAQJQAWoKEAkQBRAKEAMQBA%3D%3D";
+    public const string EpisodesFilter = "EgWKAQJIAWoKEAkQBRAKEAMQBA%3D%3D";
+    /// <summary>ライブラリのポッドキャスト（保存した番組）。</summary>
+    public const string LibraryPodcastsBrowse = "FEmusic_library_non_music_audio_list";
+    /// <summary>保存した番組の新しいエピソード（ログインしたときだけ中身がある自動のプレイリスト）。</summary>
+    public const string NewEpisodes = "RDPN";
     private const int MaxLibraryPages = 20;
     private const int MaxPlaylistPages = 50;
 
@@ -37,6 +43,36 @@ public sealed class MusicRepository(InnerTubeClient client)
 
     public Task<ApiResult<SearchPage<ArtistSummary>>> SearchArtistsAsync(string query, string? continuation = null, CancellationToken cancel = default) =>
         SearchAsync(query, ArtistsFilter, continuation, MusicParsers.SearchArtists, cancel);
+
+    public Task<ApiResult<SearchPage<PodcastSummary>>> SearchPodcastsAsync(string query, string? continuation = null, CancellationToken cancel = default) =>
+        SearchAsync(query, PodcastsFilter, continuation, MusicParsers.SearchPodcasts, cancel);
+
+    public Task<ApiResult<SearchPage<PodcastEpisode>>> SearchEpisodesAsync(string query, string? continuation = null, CancellationToken cancel = default) =>
+        SearchAsync(query, EpisodesFilter, continuation, MusicParsers.SearchEpisodes, cancel);
+
+    /// <summary>ポッドキャストの番組のページ（MPSP…）。エピソードは新しい順。</summary>
+    public async Task<ApiResult<PodcastPage>> PodcastAsync(string browseId, CancellationToken cancel = default)
+    {
+        var result = await BrowseAsync(browseId, null, null, cancel);
+        if (!result.IsOk) return ApiResult<PodcastPage>.Failed(result.Failure!.Value, result.Status);
+        return MusicParsers.PodcastPage(result.Value!, browseId) is { } page ? ApiResult<PodcastPage>.Ok(page) : ApiResult<PodcastPage>.Failed(FailureKind.Parse);
+    }
+
+    /// <summary>番組のページのエピソードの続き。show は番組名（行に無いのでエピソードのアーティストとして入れる）。</summary>
+    public async Task<ApiResult<SearchPage<PodcastEpisode>>> PodcastEpisodesAsync(string continuation, ArtistRef show, string? showBrowseId, CancellationToken cancel = default) =>
+        (await BrowseAsync(null, continuation, null, cancel)).Map(root => MusicParsers.PodcastEpisodes(root, show, showBrowseId));
+
+    /// <summary>ライブラリのポッドキャスト（保存した番組）。ログイン必須。</summary>
+    public Task<ApiResult<List<PodcastSummary>>> LibraryPodcastsAsync(Action<List<PodcastSummary>>? onPage = null, CancellationToken cancel = default) =>
+        AllLibraryPagesAsync(LibraryPodcastsBrowse, MusicParsers.LibraryPodcasts, p => p.BrowseId, onPage, cancel);
+
+    /// <summary>ポッドキャストをライブラリに保存する・外す（番組のプレイリスト PL… を高く評価するのと同じ書き込み。Android と同じ）。</summary>
+    public async Task<ApiResult<bool>> SetPodcastSavedAsync(string playlistId, bool saved, CancellationToken cancel = default)
+    {
+        if (!client.IsLoggedIn) return ApiResult<bool>.Failed(FailureKind.NotLoggedIn);
+        var body = new JsonObject { ["target"] = new JsonObject { ["playlistId"] = playlistId } };
+        return (await client.PostAsync(saved ? "like/like" : "like/removelike", body, cancel: cancel)).Map(_ => true);
+    }
 
     private async Task<ApiResult<T>> SearchAsync<T>(string query, string filter, string? continuation, Func<JsonNode, T> parse, CancellationToken cancel)
     {

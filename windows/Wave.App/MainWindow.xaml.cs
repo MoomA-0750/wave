@@ -99,6 +99,7 @@ public sealed partial class MainWindow : Window
         AppServices.Library.Playlists.CollectionChanged += (_, _) => RenderLibrary();
         AppServices.Library.Artists.CollectionChanged += (_, _) => RenderLibrary();
         AppServices.Library.Albums.CollectionChanged += (_, _) => RenderLibrary();
+        AppServices.Library.Podcasts.CollectionChanged += (_, _) => RenderLibrary();
         AppServices.Library.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(LibraryState.IsLoading)) LibraryLoading.Visibility = Ui.Show(AppServices.Library.IsLoading);
@@ -322,7 +323,7 @@ public sealed partial class MainWindow : Window
     private void RenderChips()
     {
         FilterChips.Children.Clear();
-        foreach (var (kind, title) in new[] { ("playlist", L.T("プレイリスト", "Playlists")), ("artist", L.T("アーティスト", "Artists")), ("album", L.T("アルバム", "Albums")) })
+        foreach (var (kind, title) in new[] { ("playlist", L.T("プレイリスト", "Playlists")), ("artist", L.T("アーティスト", "Artists")), ("album", L.T("アルバム", "Albums")), ("podcast", L.T("ポッドキャスト", "Podcasts")) })
         {
             var chip = new ToggleButton { Content = title, IsChecked = libraryKind == kind, CornerRadius = new CornerRadius(14), Padding = new Thickness(12, 4, 12, 5) };
             chip.Click += (_, _) =>
@@ -346,6 +347,7 @@ public sealed partial class MainWindow : Window
         }
         if (libraryKind is null or "artist") entries.AddRange(lib.Artists.Select(a => new LibraryEntry(a.Name, L.T("アーティスト", "Artist"), a.ThumbnailUrl, new HomeItem.ArtistItem(a))));
         if (libraryKind is null or "album") entries.AddRange(lib.Albums.Select(a => new LibraryEntry(a.Title, L.T("アルバム", "Album") + (string.IsNullOrEmpty(a.Subtitle) ? "" : " • " + a.Subtitle), a.ThumbnailUrl, new HomeItem.AlbumItem(a))));
+        if (libraryKind is null or "podcast") entries.AddRange(lib.Podcasts.Select(c => new LibraryEntry(c.Title, L.T("ポッドキャスト", "Podcast") + (string.IsNullOrEmpty(c.Author) ? "" : " • " + c.Author), c.ThumbnailUrl, new HomeItem.PodcastItem(c))));
         if (filter.Length > 0) entries = entries.Where(e => e.Title.Contains(filter, StringComparison.CurrentCultureIgnoreCase)).ToList();
         var sort = AppServices.Settings.LibrarySort;
         if (sort == "alpha") entries = entries.OrderBy(e => e.Title, StringComparer.CurrentCultureIgnoreCase).ToList();
@@ -359,6 +361,10 @@ public sealed partial class MainWindow : Window
         // 高く評価した曲はいつも先頭（Spotify の「お気に入りの曲」と同じ）
         if (libraryKind is null or "playlist" && (filter.Length == 0 || L.T("高く評価した曲", "Liked Songs").Contains(filter)))
             entries.Insert(0, new LibraryEntry(L.T("高く評価した曲", "Liked Songs"), L.T("プレイリスト • 自動", "Playlist • Auto"), lib.LikedThumbnail, null, isLiked: true));
+        // ポッドキャストで絞ったときは、保存した番組の新しいエピソード（自動のプレイリスト）を先頭に（Android と同じ）
+        if (libraryKind == "podcast" && (filter.Length == 0 || L.T("新しいエピソード", "New episodes").Contains(filter)))
+            entries.Insert(0, new LibraryEntry(L.T("新しいエピソード", "New episodes"), L.T("プレイリスト • 自動", "Playlist • Auto"), null,
+                new HomeItem.PlaylistItem(new PlaylistSummary(MusicRepository.NewEpisodes, L.T("新しいエピソード", "New episodes"), null, null))));
         LibraryList.ItemsSource = entries;
         LibraryGrid.ItemsSource = entries;
         var grid = AppServices.Settings.LibraryGrid;

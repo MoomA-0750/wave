@@ -496,6 +496,8 @@ public static partial class MusicParsers
     {
         var typed = TypedArtistsOf(runs);
         if (typed.Count > 0) return typed;
+        // ポッドキャストのエピソードは、番組をアーティストの代わりにする（日付などをアーティストと取り違えない）。番組のページはアーティストとしては開けないので名前だけ
+        if (runs.FirstOrDefault(r => PageTypeOf(r) == PodcastPageType)?.Path("text").Str() is { } show) return [new ArtistRef(show, null)];
         return runs.TakeWhile(r => r.Path("text").Str() != Separator)
             .Select(r => r.Path("text").Str()).OfType<string>()
             .Where(t => !string.IsNullOrWhiteSpace(t) && t != ", " && t != " & " && ParseDuration(t) is null)

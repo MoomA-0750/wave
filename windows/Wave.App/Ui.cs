@@ -73,6 +73,7 @@ public static partial class Ui
         HomeItem.AlbumItem => L.T("アルバム", "Album"),
         HomeItem.PlaylistItem => L.T("プレイリスト", "Playlist"),
         HomeItem.ArtistItem => L.T("アーティスト", "Artist"),
+        HomeItem.PodcastItem => L.T("ポッドキャスト", "Podcast"),
         _ => "",
     };
 

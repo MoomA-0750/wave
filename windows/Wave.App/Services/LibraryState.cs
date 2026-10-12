@@ -10,6 +10,8 @@ public sealed partial class LibraryState : ObservableObject
     public ObservableCollection<PlaylistSummary> Playlists { get; } = [];
     public ObservableCollection<ArtistSummary> Artists { get; } = [];
     public ObservableCollection<AlbumSummary> Albums { get; } = [];
+    /// <summary>保存したポッドキャストの番組（Android と同じく、ライブラリの絞り込み「ポッドキャスト」に出す）。</summary>
+    public ObservableCollection<PodcastSummary> Podcasts { get; } = [];
 
     [ObservableProperty] private bool isLoading;
     [ObservableProperty] private string? failure;
@@ -23,6 +25,7 @@ public sealed partial class LibraryState : ObservableObject
         HomeItem.PlaylistItem p => "p-" + p.Playlist.PlaylistId,
         HomeItem.ArtistItem a => "ar-" + a.Artist.BrowseId,
         HomeItem.AlbumItem a => "al-" + a.Album.BrowseId,
+        HomeItem.PodcastItem c => "c-" + c.Podcast.BrowseId,
         _ => null,
     };
 
@@ -96,6 +99,7 @@ public sealed partial class LibraryState : ObservableObject
         Playlists.Clear();
         Artists.Clear();
         Albums.Clear();
+        Podcasts.Clear();
         Failure = null;
         likedSongs = null;
         likedIds = [];
@@ -110,6 +114,7 @@ public sealed partial class LibraryState : ObservableObject
             var artists = AppServices.Music.LibraryArtistsAsync(page => Replace(Artists, page, token), token);
             var albums = AppServices.Music.LibraryAlbumsAsync(page => Replace(Albums, page, token), token);
             _ = LoadRecentAsync(token);
+            _ = LoadPodcastsAsync(token);
             var results = await Task.WhenAll(playlists.ContinueWith(t => t.Result.Failure), artists.ContinueWith(t => t.Result.Failure), albums.ContinueWith(t => t.Result.Failure));
             if (token.IsCancellationRequested) return;
             Failure = results.FirstOrDefault(f => f is not null)?.ToString();
@@ -122,6 +127,16 @@ public sealed partial class LibraryState : ObservableObject
         {
             if (!token.IsCancellationRequested) IsLoading = false;
         }
+    }
+
+    /// <summary>保存したポッドキャストを読み直す（番組のページで保存を変えたとき）。</summary>
+    public Task RefreshPodcastsAsync() => AppServices.Client.IsLoggedIn ? LoadPodcastsAsync(cancel?.Token ?? CancellationToken.None) : Task.CompletedTask;
+
+    private async Task LoadPodcastsAsync(CancellationToken token)
+    {
+        var result = await AppServices.Music.LibraryPodcastsAsync(page => Replace(Podcasts, page, token), token);
+        if (result.IsOk) Replace(Podcasts, result.Value!, token);
+        AppPaths.Log($"library podcasts ok={result.IsOk} count={Podcasts.Count}");
     }
 
     private async Task LoadRecentAsync(CancellationToken token)

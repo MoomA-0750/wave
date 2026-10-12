@@ -38,6 +38,9 @@ public static class Nav
 
     public static void Artist(string browseId) => Go(typeof(Views.ArtistPage), browseId);
 
+    /// <summary>ポッドキャストの番組のページ（MPSP…）。</summary>
+    public static void Podcast(PodcastSummary podcast) => Go(typeof(Views.PodcastPage), podcast);
+
     /// <summary>曲の画面。</summary>
     public static void Song(Song song) => Go(typeof(Views.SongPage), song);
 
@@ -77,6 +80,9 @@ public static class Nav
             case HomeItem.ArtistItem a:
                 Artist(a.Artist.BrowseId);
                 break;
+            case HomeItem.PodcastItem c:
+                Podcast(c.Podcast);
+                break;
         }
     }
 
@@ -114,6 +120,12 @@ public static class Nav
                     await Views.ArtistPage.PlayArtistAsync(player, r.Artist.BrowseId, artist.Value.TopSongs, 0, null, all);
                 }
                 else player.Message = L.T("アーティストの曲を読み込めませんでした", "Couldn't load the artist's songs");
+                break;
+            case HomeItem.PodcastItem c:
+                // 番組の新しいエピソードから順に（番組のプレイリストを出どころにする。Android と同じ）
+                var podcast = await AppServices.Music.PodcastAsync(c.Podcast.BrowseId);
+                if (podcast.IsOk && podcast.Value!.Episodes.Count > 0) player.PlayList(podcast.Value.Episodes.Select(x => x.Song).ToList(), 0, podcast.Value.PlaylistId);
+                else player.Message = L.T("エピソードを読み込めませんでした", "Couldn't load the episodes");
                 break;
         }
     }

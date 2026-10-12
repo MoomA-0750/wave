@@ -123,6 +123,8 @@ public abstract record HomeItem
     public sealed record AlbumItem(AlbumSummary Album) : HomeItem;
     public sealed record PlaylistItem(PlaylistSummary Playlist) : HomeItem;
     public sealed record ArtistItem(ArtistSummary Artist) : HomeItem;
+    /// <summary>ポッドキャストの番組（検索・ライブラリ。押すと番組のページ）。</summary>
+    public sealed record PodcastItem(PodcastSummary Podcast) : HomeItem;
 
     public string Title => this switch
     {
@@ -130,6 +132,7 @@ public abstract record HomeItem
         AlbumItem a => a.Album.Title,
         PlaylistItem p => p.Playlist.Title,
         ArtistItem a => a.Artist.Name,
+        PodcastItem p => p.Podcast.Title,
         _ => "",
     };
 
@@ -139,6 +142,7 @@ public abstract record HomeItem
         AlbumItem a => a.Album.Subtitle,
         PlaylistItem p => p.Playlist.Subtitle,
         ArtistItem a => a.Artist.Subtitle,
+        PodcastItem p => p.Podcast.Author,
         _ => null,
     };
 
@@ -148,6 +152,7 @@ public abstract record HomeItem
         AlbumItem a => a.Album.ThumbnailUrl,
         PlaylistItem p => p.Playlist.ThumbnailUrl,
         ArtistItem a => a.Artist.ThumbnailUrl,
+        PodcastItem p => p.Podcast.ThumbnailUrl,
         _ => null,
     };
 
@@ -160,6 +165,7 @@ public abstract record HomeItem
         AlbumItem a => "a:" + a.Album.BrowseId,
         PlaylistItem p => "p:" + p.Playlist.PlaylistId,
         ArtistItem a => "r:" + a.Artist.BrowseId,
+        PodcastItem p => "c:" + p.Podcast.BrowseId,
         _ => "",
     };
 }

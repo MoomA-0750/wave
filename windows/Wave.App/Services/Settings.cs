@@ -99,6 +99,7 @@ public sealed class SearchHistoryEntry
         HomeItem.AlbumItem a => new() { Kind = "album", Title = a.Album.Title, Subtitle = a.Album.Subtitle, ThumbnailUrl = a.Album.ThumbnailUrl, Id = a.Album.BrowseId },
         HomeItem.ArtistItem a => new() { Kind = "artist", Title = a.Artist.Name, Subtitle = L.T("アーティスト", "Artist"), ThumbnailUrl = a.Artist.ThumbnailUrl, Id = a.Artist.BrowseId },
         HomeItem.PlaylistItem p => new() { Kind = "playlist", Title = p.Playlist.Title, Subtitle = p.Playlist.Subtitle, ThumbnailUrl = p.Playlist.ThumbnailUrl, Id = p.Playlist.PlaylistId },
+        HomeItem.PodcastItem c => new() { Kind = "podcast", Title = c.Podcast.Title, Subtitle = c.Podcast.Author, ThumbnailUrl = c.Podcast.ThumbnailUrl, Id = c.Podcast.BrowseId },
         _ => Query(item.Title),
     };
 
@@ -108,6 +109,7 @@ public sealed class SearchHistoryEntry
         "album" when Id is not null => new HomeItem.AlbumItem(new AlbumSummary(Id, Title, Subtitle, ThumbnailUrl)),
         "artist" when Id is not null => new HomeItem.ArtistItem(new ArtistSummary(Id, Title, Subtitle, ThumbnailUrl)),
         "playlist" when Id is not null => new HomeItem.PlaylistItem(new PlaylistSummary(Id, Title, Subtitle, ThumbnailUrl)),
+        "podcast" when Id is not null => new HomeItem.PodcastItem(new PodcastSummary(Id, Title, Subtitle, ThumbnailUrl)),
         _ => null,
     };
 }

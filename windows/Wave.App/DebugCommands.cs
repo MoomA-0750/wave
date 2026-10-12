@@ -77,6 +77,10 @@ public static class DebugCommands
             case "playlist":
                 Nav.Playlist(new PlaylistSummary(arg, arg, null, null));
                 break;
+            case "podcast":
+                // ポッドキャストの番組のページ（MPSP…）
+                Nav.Podcast(new PodcastSummary(arg, arg, null, null));
+                break;
             case "pane":
                 window.DebugPane(arg);
                 break;
