@@ -266,6 +266,10 @@ private fun Results(
             SearchTab.Songs -> pagedItems(state.songs, { "s-$it-" }, { viewModel.loadMore(SearchTab.Songs) }) { songRow(it) }
             SearchTab.Albums -> pagedItems(state.albums, { "al-$it-" }, { viewModel.loadMore(SearchTab.Albums) }) { AlbumRow(it) { openAlbum(it) } }
             SearchTab.Artists -> pagedItems(state.artists, { "ar-$it-" }, { viewModel.loadMore(SearchTab.Artists) }) { ArtistRow(it) { openArtist(it) } }
+            SearchTab.Live -> {
+                pagedItems(state.lives, { "lv-$it-" }, { viewModel.loadMore(SearchTab.Live) }) { songRow(it) }
+                if (state.lives.loaded && state.lives.items.isEmpty() && state.lives.failure == null) item { Text(stringResource(R.string.search_not_found), Modifier.padding(16.dp)) }
+            }
         }
         if (state.loading) item { LoadingIndicator(Modifier.padding(16.dp)) }
     }
@@ -368,6 +372,7 @@ private fun tabLabel(tab: SearchTab): String =
         SearchTab.Songs -> stringResource(R.string.search_tab_songs)
         SearchTab.Albums -> stringResource(R.string.search_tab_albums)
         SearchTab.Artists -> stringResource(R.string.search_tab_artists)
+        SearchTab.Live -> stringResource(R.string.search_tab_live)
     }
 
 private const val PREVIEW_COUNT = 4
@@ -395,6 +400,11 @@ fun SongRow(
         }
         Column(Modifier.weight(1f)) {
             Text(song.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyLarge)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+            // ライブ配信は長さの代わりに印を出す
+            if (song.isLive) {
+                xyz.mooma0750.wave.nowplaying.LiveBadge(Modifier.padding(end = 6.dp))
+            }
             Text(
                 // アルバムの中では、アルバム名と長さは出さずアーティストだけ（Spotify と同じ）
                 if (showArtwork) {
@@ -407,6 +417,7 @@ fun SongRow(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            }
         }
         // 高く評価した曲には印を付ける（Spotify と同じ）
         xyz.mooma0750.wave.ui.LikedBadge(song.videoId)

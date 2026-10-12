@@ -159,6 +159,24 @@ class Media3QueuePlayer(
         itemsById.clear()
     }
 
+    /**
+     * 今の曲がライブ配信だった（ライブの印の無いまま入った）。ライブとして入れ直して流し直す。
+     * @return 入れ直したら true（既にライブなら false。同じ曲で繰り返さない）
+     */
+    fun replayCurrentAsLive(): Boolean {
+        if (player.mediaItemCount == 0) return false
+        val index = player.currentMediaItemIndex
+        val current = player.getMediaItemAt(index)
+        val item = itemsById[current.mediaId] ?: return false
+        if (item.song.isLive) return false
+        val live = item.copy(song = item.song.copy(isLive = true, durationSeconds = null))
+        itemsById[live.itemId] = live
+        player.replaceMediaItem(index, mediaItemOf(live, TrackUri.epochOf(current.localConfiguration?.uri) ?: accountEpoch))
+        player.prepare()
+        player.play()
+        return true
+    }
+
     private fun indexOf(itemId: String): Int? = (0 until player.mediaItemCount).firstOrNull { player.getMediaItemAt(it).mediaId == itemId }
 
     companion object {
@@ -197,7 +215,9 @@ class Media3QueuePlayer(
             return MediaItem
                 .Builder()
                 .setMediaId(item.itemId)
-                .setUri(TrackUri.of(song.videoId, epoch))
+                .setUri(TrackUri.of(song.videoId, epoch, live = song.isLive))
+                // ライブ配信は HLS（媒体プレイリストを読み直しながら流す）
+                .apply { if (song.isLive) setMimeType(androidx.media3.common.MimeTypes.APPLICATION_M3U8) }
                 .setMediaMetadata(
                     MediaMetadata
                         .Builder()
@@ -206,7 +226,7 @@ class Media3QueuePlayer(
                         .setAlbumTitle(song.album?.title)
                         // 画像の URL は入れない（プラットフォームのセッションに https の URL があると、時計が画像を出さない）。
                         // 画像そのものは ArtworkEmbedder が今の曲にだけ入れる。アプリの画面は曲の情報（extras）の URL から出す
-                        .setDurationMs(song.durationSeconds?.let { it * 1000L })
+                        .setDurationMs(song.durationSeconds?.takeUnless { song.isLive }?.let { it * 1000L })
                         // 自アプリの画面の曲のメニュー（アーティスト・アルバムを開く）で使う。公開のメタデータだけ
                         .setExtras(
                             android.os.Bundle().apply {

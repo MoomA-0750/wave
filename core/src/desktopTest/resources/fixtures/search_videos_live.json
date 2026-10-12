@@ -1,0 +1,1320 @@
+{
+ "contents": {
+  "tabbedSearchResultsRenderer": {
+   "tabs": [
+    {
+     "tabRenderer": {
+      "content": {
+       "sectionListRenderer": {
+        "contents": [
+         {
+          "musicShelfRenderer": {
+           "contents": [
+            {
+             "musicResponsiveListItemRenderer": {
+              "thumbnail": {
+               "musicThumbnailRenderer": {
+                "thumbnail": {
+                 "thumbnails": [
+                  {
+                   "url": "https://i.ytimg.com/vi/rFZHOHl-L8A/hqdefault.jpg?sqp=-oaymwEWCJADEOEBIAQqCggAEOADGC0guwJIWg&rs=AMzJL3nFXb35AyGTSBvVU8QTkEaXkBtDjw",
+                   "width": 400,
+                   "height": 225
+                  }
+                 ]
+                },
+                "thumbnailCrop": "MUSIC_THUMBNAIL_CROP_UNSPECIFIED",
+                "thumbnailScale": "MUSIC_THUMBNAIL_SCALE_ASPECT_FIT"
+               }
+              },
+              "overlay": {
+               "musicItemThumbnailOverlayRenderer": {
+                "background": {
+                 "verticalGradient": {
+                  "gradientLayerColors": [
+                   "3422552064",
+                   "3422552064"
+                  ]
+                 }
+                },
+                "content": {
+                 "musicPlayButtonRenderer": {
+                  "playNavigationEndpoint": {
+                   "watchEndpoint": {
+                    "videoId": "rFZHOHl-L8A",
+                    "watchEndpointMusicSupportedConfigs": {
+                     "watchEndpointMusicConfig": {
+                      "musicVideoType": "MUSIC_VIDEO_TYPE_UGC"
+                     }
+                    }
+                   }
+                  },
+                  "playIcon": {
+                   "iconType": "PLAY_ARROW"
+                  },
+                  "pauseIcon": {
+                   "iconType": "PAUSE"
+                  },
+                  "iconColor": 4294967295,
+                  "backgroundColor": 0,
+                  "activeBackgroundColor": 0,
+                  "loadingIndicatorColor": 14745645,
+                  "playingIcon": {
+                   "iconType": "VOLUME_UP"
+                  },
+                  "iconLoadingColor": 0,
+                  "activeScaleFactor": 1,
+                  "buttonSize": "MUSIC_PLAY_BUTTON_SIZE_SMALL",
+                  "rippleTarget": "MUSIC_PLAY_BUTTON_RIPPLE_TARGET_SELF",
+                  "accessibilityPlayData": {
+                   "accessibilityData": {
+                    "label": "lofi hip hop radio 📚 beats to relax/study to - Lofi Girl を再生"
+                   }
+                  },
+                  "accessibilityPauseData": {
+                   "accessibilityData": {
+                    "label": "lofi hip hop radio 📚 beats to relax/study to - Lofi Girl を一時停止"
+                   }
+                  }
+                 }
+                },
+                "contentPosition": "MUSIC_ITEM_THUMBNAIL_OVERLAY_CONTENT_POSITION_CENTERED",
+                "displayStyle": "MUSIC_ITEM_THUMBNAIL_OVERLAY_DISPLAY_STYLE_PERSISTENT"
+               }
+              },
+              "flexColumns": [
+               {
+                "musicResponsiveListItemFlexColumnRenderer": {
+                 "text": {
+                  "runs": [
+                   {
+                    "text": "lofi hip hop radio 📚 beats to relax/study to",
+                    "navigationEndpoint": {
+                     "watchEndpoint": {
+                      "videoId": "rFZHOHl-L8A",
+                      "watchEndpointMusicSupportedConfigs": {
+                       "watchEndpointMusicConfig": {
+                        "musicVideoType": "MUSIC_VIDEO_TYPE_UGC"
+                       }
+                      }
+                     }
+                    }
+                   }
+                  ]
+                 },
+                 "displayPriority": "MUSIC_RESPONSIVE_LIST_ITEM_COLUMN_DISPLAY_PRIORITY_HIGH"
+                }
+               },
+               {
+                "musicResponsiveListItemFlexColumnRenderer": {
+                 "text": {
+                  "runs": [
+                   {
+                    "text": "Lofi Girl",
+                    "navigationEndpoint": {
+                     "browseEndpoint": {
+                      "browseId": "UCSJ4gkVC6NrvII8umztf0Ow",
+                      "browseEndpointContextSupportedConfigs": {
+                       "browseEndpointContextMusicConfig": {
+                        "pageType": "MUSIC_PAGE_TYPE_USER_CHANNEL"
+                       }
+                      }
+                     }
+                    }
+                   },
+                   {
+                    "text": " • "
+                   },
+                   {
+                    "text": "1452万回視聴"
+                   }
+                  ],
+                  "accessibility": {
+                   "accessibilityData": {
+                    "label": "Lofi Girl • 1452万回視聴"
+                   }
+                  }
+                 },
+                 "displayPriority": "MUSIC_RESPONSIVE_LIST_ITEM_COLUMN_DISPLAY_PRIORITY_HIGH"
+                }
+               }
+              ],
+              "menu": {
+               "menuRenderer": {
+                "items": [
+                 {
+                  "menuNavigationItemRenderer": {
+                   "text": {
+                    "runs": [
+                     {
+                      "text": "ミックスリストを開始"
+                     }
+                    ]
+                   },
+                   "icon": {
+                    "iconType": "MIX"
+                   },
+                   "navigationEndpoint": {
+                    "watchEndpoint": {
+                     "videoId": "rFZHOHl-L8A",
+                     "playlistId": "RDAMVMrFZHOHl-L8A",
+                     "params": "wAEB",
+                     "watchEndpointMusicSupportedConfigs": {
+                      "watchEndpointMusicConfig": {
+                       "musicVideoType": "MUSIC_VIDEO_TYPE_UGC"
+                      }
+                     }
+                    }
+                   }
+                  }
+                 },
+                 {
+                  "menuServiceItemRenderer": {
+                   "text": {
+                    "runs": [
+                     {
+                      "text": "次に再生"
+                     }
+                    ]
+                   },
+                   "icon": {
+                    "iconType": "QUEUE_PLAY_NEXT"
+                   },
+                   "serviceEndpoint": {
+                    "queueAddEndpoint": {
+                     "queueTarget": {
+                      "videoId": "rFZHOHl-L8A",
+                      "onEmptyQueue": {
+                       "watchEndpoint": {
+                        "videoId": "rFZHOHl-L8A"
+                       }
+                      }
+                     },
+                     "queueInsertPosition": "INSERT_AFTER_CURRENT_VIDEO",
+                     "commands": [
+                      {
+                       "addToToastAction": {
+                        "item": {
+                         "notificationTextRenderer": {
+                          "successResponseText": {
+                           "runs": [
+                            {
+                             "text": "次にこの曲が再生されます"
+                            }
+                           ]
+                          }
+                         }
+                        }
+                       }
+                      }
+                     ]
+                    }
+                   }
+                  }
+                 },
+                 {
+                  "menuServiceItemRenderer": {
+                   "text": {
+                    "runs": [
+                     {
+                      "text": "キューに追加"
+                     }
+                    ]
+                   },
+                   "icon": {
+                    "iconType": "ADD_TO_REMOTE_QUEUE"
+                   },
+                   "serviceEndpoint": {
+                    "queueAddEndpoint": {
+                     "queueTarget": {
+                      "videoId": "rFZHOHl-L8A",
+                      "onEmptyQueue": {
+                       "watchEndpoint": {
+                        "videoId": "rFZHOHl-L8A"
+                       }
+                      }
+                     },
+                     "queueInsertPosition": "INSERT_AT_END",
+                     "commands": [
+                      {
+                       "addToToastAction": {
+                        "item": {
+                         "notificationTextRenderer": {
+                          "successResponseText": {
+                           "runs": [
+                            {
+                             "text": "曲をキューに追加しました"
+                            }
+                           ]
+                          }
+                         }
+                        }
+                       }
+                      }
+                     ]
+                    }
+                   }
+                  }
+                 },
+                 {
+                  "toggleMenuServiceItemRenderer": {
+                   "defaultText": {
+                    "runs": [
+                     {
+                      "text": "高く評価した曲に追加"
+                     }
+                    ]
+                   },
+                   "defaultIcon": {
+                    "iconType": "FAVORITE"
+                   },
+                   "defaultServiceEndpoint": {
+                    "modalEndpoint": {
+                     "modal": {
+                      "modalWithTitleAndButtonRenderer": {
+                       "title": {
+                        "runs": [
+                         {
+                          "text": "この曲に高評価を付ける"
+                         }
+                        ]
+                       },
+                       "content": {
+                        "runs": [
+                         {
+                          "text": "ログインするとおすすめの精度が上がり、音楽を保存することもできます"
+                         }
+                        ]
+                       },
+                       "button": {
+                        "buttonRenderer": {
+                         "style": "STYLE_BLUE_TEXT",
+                         "isDisabled": false,
+                         "text": {
+                          "runs": [
+                           {
+                            "text": "ログイン"
+                           }
+                          ]
+                         },
+                         "navigationEndpoint": {
+                          "signInEndpoint": {
+                           "hack": true
+                          }
+                         }
+                        }
+                       }
+                      }
+                     }
+                    }
+                   },
+                   "toggledText": {
+                    "runs": [
+                     {
+                      "text": "高く評価した曲から削除"
+                     }
+                    ]
+                   },
+                   "toggledIcon": {
+                    "iconType": "UNFAVORITE"
+                   }
+                  }
+                 },
+                 {
+                  "menuServiceItemDownloadRenderer": {
+                   "serviceEndpoint": {
+                    "offlineVideoEndpoint": {
+                     "videoId": "rFZHOHl-L8A",
+                     "onAddCommand": {
+                      "getDownloadActionCommand": {
+                       "videoId": "rFZHOHl-L8A",
+                       "params": "CAI%3D"
+                      }
+                     }
+                    }
+                   },
+                   "badgeIcon": {
+                    "iconType": "PREMIUM_STANDALONE_CAIRO"
+                   }
+                  }
+                 },
+                 {
+                  "menuNavigationItemRenderer": {
+                   "text": {
+                    "runs": [
+                     {
+                      "text": "再生リストに保存"
+                     }
+                    ]
+                   },
+                   "icon": {
+                    "iconType": "ADD_TO_PLAYLIST"
+                   },
+                   "navigationEndpoint": {
+                    "modalEndpoint": {
+                     "modal": {
+                      "modalWithTitleAndButtonRenderer": {
+                       "title": {
+                        "runs": [
+                         {
+                          "text": "後で見るために保存"
+                         }
+                        ]
+                       },
+                       "content": {
+                        "runs": [
+                         {
+                          "text": "ログインすると、プレイリストを作成して共有できます"
+                         }
+                        ]
+                       },
+                       "button": {
+                        "buttonRenderer": {
+                         "style": "STYLE_BLUE_TEXT",
+                         "isDisabled": false,
+                         "text": {
+                          "runs": [
+                           {
+                            "text": "ログイン"
+                           }
+                          ]
+                         },
+                         "navigationEndpoint": {
+                          "signInEndpoint": {
+                           "hack": true
+                          }
+                         }
+                        }
+                       }
+                      }
+                     }
+                    }
+                   }
+                  }
+                 },
+                 {
+                  "menuNavigationItemRenderer": {
+                   "text": {
+                    "runs": [
+                     {
+                      "text": "共有"
+                     }
+                    ]
+                   },
+                   "icon": {
+                    "iconType": "SHARE"
+                   },
+                   "navigationEndpoint": {
+                    "shareEntityEndpoint": {
+                     "serializedShareEntity": "CgtyRlpIT0hsLUw4QQ%3D%3D",
+                     "sharePanelType": "SHARE_PANEL_TYPE_UNIFIED_SHARE_PANEL"
+                    }
+                   }
+                  }
+                 }
+                ],
+                "accessibility": {
+                 "accessibilityData": {
+                  "label": "操作メニュー"
+                 }
+                }
+               }
+              },
+              "badges": [
+               {
+                "liveBadgeRenderer": {
+                 "label": {
+                  "runs": [
+                   {
+                    "text": "ライブ"
+                   }
+                  ]
+                 },
+                 "accessibility": {
+                  "accessibilityData": {
+                   "label": "ライブ"
+                  }
+                 },
+                 "watchPageVisibility": "BADGE_WATCH_PAGE_VISIBILITY_HIDE"
+                }
+               }
+              ],
+              "playlistItemData": {
+               "videoId": "rFZHOHl-L8A"
+              },
+              "flexColumnDisplayStyle": "MUSIC_RESPONSIVE_LIST_ITEM_FLEX_COLUMN_DISPLAY_STYLE_TWO_LINE_STACK",
+              "itemHeight": "MUSIC_RESPONSIVE_LIST_ITEM_HEIGHT_TALL"
+             }
+            },
+            {
+             "musicResponsiveListItemRenderer": {
+              "thumbnail": {
+               "musicThumbnailRenderer": {
+                "thumbnail": {
+                 "thumbnails": [
+                  {
+                   "url": "https://i.ytimg.com/vi/JD-kMIpDfnY/hqdefault.jpg?sqp=-oaymwEWCJADEOEBIAQqCggAEOADGC0guwJIWg&rs=AMzJL3l4h4Uw44mZcI9ntiQkvEoyltXE_g",
+                   "width": 400,
+                   "height": 225
+                  }
+                 ]
+                },
+                "thumbnailCrop": "MUSIC_THUMBNAIL_CROP_UNSPECIFIED",
+                "thumbnailScale": "MUSIC_THUMBNAIL_SCALE_ASPECT_FIT"
+               }
+              },
+              "overlay": {
+               "musicItemThumbnailOverlayRenderer": {
+                "background": {
+                 "verticalGradient": {
+                  "gradientLayerColors": [
+                   "3422552064",
+                   "3422552064"
+                  ]
+                 }
+                },
+                "content": {
+                 "musicPlayButtonRenderer": {
+                  "playNavigationEndpoint": {
+                   "watchEndpoint": {
+                    "videoId": "JD-kMIpDfnY",
+                    "playerParams": "0gcJCQkB-iE-y48-",
+                    "watchEndpointMusicSupportedConfigs": {
+                     "watchEndpointMusicConfig": {
+                      "musicVideoType": "MUSIC_VIDEO_TYPE_UGC"
+                     }
+                    }
+                   }
+                  },
+                  "playIcon": {
+                   "iconType": "PLAY_ARROW"
+                  },
+                  "pauseIcon": {
+                   "iconType": "PAUSE"
+                  },
+                  "iconColor": 4294967295,
+                  "backgroundColor": 0,
+                  "activeBackgroundColor": 0,
+                  "loadingIndicatorColor": 14745645,
+                  "playingIcon": {
+                   "iconType": "VOLUME_UP"
+                  },
+                  "iconLoadingColor": 0,
+                  "activeScaleFactor": 1,
+                  "buttonSize": "MUSIC_PLAY_BUTTON_SIZE_SMALL",
+                  "rippleTarget": "MUSIC_PLAY_BUTTON_RIPPLE_TARGET_SELF",
+                  "accessibilityPlayData": {
+                   "accessibilityData": {
+                    "label": "lofi hip hop radio 💤 beats to sleep/chill to - Lofi Girl を再生"
+                   }
+                  },
+                  "accessibilityPauseData": {
+                   "accessibilityData": {
+                    "label": "lofi hip hop radio 💤 beats to sleep/chill to - Lofi Girl を一時停止"
+                   }
+                  }
+                 }
+                },
+                "contentPosition": "MUSIC_ITEM_THUMBNAIL_OVERLAY_CONTENT_POSITION_CENTERED",
+                "displayStyle": "MUSIC_ITEM_THUMBNAIL_OVERLAY_DISPLAY_STYLE_PERSISTENT"
+               }
+              },
+              "flexColumns": [
+               {
+                "musicResponsiveListItemFlexColumnRenderer": {
+                 "text": {
+                  "runs": [
+                   {
+                    "text": "lofi hip hop radio 💤 beats to sleep/chill to",
+                    "navigationEndpoint": {
+                     "watchEndpoint": {
+                      "videoId": "JD-kMIpDfnY",
+                      "watchEndpointMusicSupportedConfigs": {
+                       "watchEndpointMusicConfig": {
+                        "musicVideoType": "MUSIC_VIDEO_TYPE_UGC"
+                       }
+                      }
+                     }
+                    }
+                   }
+                  ]
+                 },
+                 "displayPriority": "MUSIC_RESPONSIVE_LIST_ITEM_COLUMN_DISPLAY_PRIORITY_HIGH"
+                }
+               },
+               {
+                "musicResponsiveListItemFlexColumnRenderer": {
+                 "text": {
+                  "runs": [
+                   {
+                    "text": "Lofi Girl",
+                    "navigationEndpoint": {
+                     "browseEndpoint": {
+                      "browseId": "UCSJ4gkVC6NrvII8umztf0Ow",
+                      "browseEndpointContextSupportedConfigs": {
+                       "browseEndpointContextMusicConfig": {
+                        "pageType": "MUSIC_PAGE_TYPE_USER_CHANNEL"
+                       }
+                      }
+                     }
+                    }
+                   },
+                   {
+                    "text": " • "
+                   },
+                   {
+                    "text": "388万回視聴"
+                   }
+                  ],
+                  "accessibility": {
+                   "accessibilityData": {
+                    "label": "Lofi Girl • 388万回視聴"
+                   }
+                  }
+                 },
+                 "displayPriority": "MUSIC_RESPONSIVE_LIST_ITEM_COLUMN_DISPLAY_PRIORITY_HIGH"
+                }
+               }
+              ],
+              "menu": {
+               "menuRenderer": {
+                "items": [
+                 {
+                  "menuNavigationItemRenderer": {
+                   "text": {
+                    "runs": [
+                     {
+                      "text": "ミックスリストを開始"
+                     }
+                    ]
+                   },
+                   "icon": {
+                    "iconType": "MIX"
+                   },
+                   "navigationEndpoint": {
+                    "watchEndpoint": {
+                     "videoId": "JD-kMIpDfnY",
+                     "playlistId": "RDAMVMJD-kMIpDfnY",
+                     "params": "wAEB",
+                     "watchEndpointMusicSupportedConfigs": {
+                      "watchEndpointMusicConfig": {
+                       "musicVideoType": "MUSIC_VIDEO_TYPE_UGC"
+                      }
+                     }
+                    }
+                   }
+                  }
+                 },
+                 {
+                  "menuServiceItemRenderer": {
+                   "text": {
+                    "runs": [
+                     {
+                      "text": "次に再生"
+                     }
+                    ]
+                   },
+                   "icon": {
+                    "iconType": "QUEUE_PLAY_NEXT"
+                   },
+                   "serviceEndpoint": {
+                    "queueAddEndpoint": {
+                     "queueTarget": {
+                      "videoId": "JD-kMIpDfnY",
+                      "onEmptyQueue": {
+                       "watchEndpoint": {
+                        "videoId": "JD-kMIpDfnY"
+                       }
+                      }
+                     },
+                     "queueInsertPosition": "INSERT_AFTER_CURRENT_VIDEO",
+                     "commands": [
+                      {
+                       "addToToastAction": {
+                        "item": {
+                         "notificationTextRenderer": {
+                          "successResponseText": {
+                           "runs": [
+                            {
+                             "text": "次にこの曲が再生されます"
+                            }
+                           ]
+                          }
+                         }
+                        }
+                       }
+                      }
+                     ]
+                    }
+                   }
+                  }
+                 },
+                 {
+                  "menuServiceItemRenderer": {
+                   "text": {
+                    "runs": [
+                     {
+                      "text": "キューに追加"
+                     }
+                    ]
+                   },
+                   "icon": {
+                    "iconType": "ADD_TO_REMOTE_QUEUE"
+                   },
+                   "serviceEndpoint": {
+                    "queueAddEndpoint": {
+                     "queueTarget": {
+                      "videoId": "JD-kMIpDfnY",
+                      "onEmptyQueue": {
+                       "watchEndpoint": {
+                        "videoId": "JD-kMIpDfnY"
+                       }
+                      }
+                     },
+                     "queueInsertPosition": "INSERT_AT_END",
+                     "commands": [
+                      {
+                       "addToToastAction": {
+                        "item": {
+                         "notificationTextRenderer": {
+                          "successResponseText": {
+                           "runs": [
+                            {
+                             "text": "曲をキューに追加しました"
+                            }
+                           ]
+                          }
+                         }
+                        }
+                       }
+                      }
+                     ]
+                    }
+                   }
+                  }
+                 },
+                 {
+                  "toggleMenuServiceItemRenderer": {
+                   "defaultText": {
+                    "runs": [
+                     {
+                      "text": "高く評価した曲に追加"
+                     }
+                    ]
+                   },
+                   "defaultIcon": {
+                    "iconType": "FAVORITE"
+                   },
+                   "defaultServiceEndpoint": {
+                    "modalEndpoint": {
+                     "modal": {
+                      "modalWithTitleAndButtonRenderer": {
+                       "title": {
+                        "runs": [
+                         {
+                          "text": "この曲に高評価を付ける"
+                         }
+                        ]
+                       },
+                       "content": {
+                        "runs": [
+                         {
+                          "text": "ログインするとおすすめの精度が上がり、音楽を保存することもできます"
+                         }
+                        ]
+                       },
+                       "button": {
+                        "buttonRenderer": {
+                         "style": "STYLE_BLUE_TEXT",
+                         "isDisabled": false,
+                         "text": {
+                          "runs": [
+                           {
+                            "text": "ログイン"
+                           }
+                          ]
+                         },
+                         "navigationEndpoint": {
+                          "signInEndpoint": {
+                           "hack": true
+                          }
+                         }
+                        }
+                       }
+                      }
+                     }
+                    }
+                   },
+                   "toggledText": {
+                    "runs": [
+                     {
+                      "text": "高く評価した曲から削除"
+                     }
+                    ]
+                   },
+                   "toggledIcon": {
+                    "iconType": "UNFAVORITE"
+                   }
+                  }
+                 },
+                 {
+                  "menuServiceItemDownloadRenderer": {
+                   "serviceEndpoint": {
+                    "offlineVideoEndpoint": {
+                     "videoId": "JD-kMIpDfnY",
+                     "onAddCommand": {
+                      "getDownloadActionCommand": {
+                       "videoId": "JD-kMIpDfnY",
+                       "params": "CAI%3D"
+                      }
+                     }
+                    }
+                   },
+                   "badgeIcon": {
+                    "iconType": "PREMIUM_STANDALONE_CAIRO"
+                   }
+                  }
+                 },
+                 {
+                  "menuNavigationItemRenderer": {
+                   "text": {
+                    "runs": [
+                     {
+                      "text": "再生リストに保存"
+                     }
+                    ]
+                   },
+                   "icon": {
+                    "iconType": "ADD_TO_PLAYLIST"
+                   },
+                   "navigationEndpoint": {
+                    "modalEndpoint": {
+                     "modal": {
+                      "modalWithTitleAndButtonRenderer": {
+                       "title": {
+                        "runs": [
+                         {
+                          "text": "後で見るために保存"
+                         }
+                        ]
+                       },
+                       "content": {
+                        "runs": [
+                         {
+                          "text": "ログインすると、プレイリストを作成して共有できます"
+                         }
+                        ]
+                       },
+                       "button": {
+                        "buttonRenderer": {
+                         "style": "STYLE_BLUE_TEXT",
+                         "isDisabled": false,
+                         "text": {
+                          "runs": [
+                           {
+                            "text": "ログイン"
+                           }
+                          ]
+                         },
+                         "navigationEndpoint": {
+                          "signInEndpoint": {
+                           "hack": true
+                          }
+                         }
+                        }
+                       }
+                      }
+                     }
+                    }
+                   }
+                  }
+                 },
+                 {
+                  "menuNavigationItemRenderer": {
+                   "text": {
+                    "runs": [
+                     {
+                      "text": "共有"
+                     }
+                    ]
+                   },
+                   "icon": {
+                    "iconType": "SHARE"
+                   },
+                   "navigationEndpoint": {
+                    "shareEntityEndpoint": {
+                     "serializedShareEntity": "CgtKRC1rTUlwRGZuWQ%3D%3D",
+                     "sharePanelType": "SHARE_PANEL_TYPE_UNIFIED_SHARE_PANEL"
+                    }
+                   }
+                  }
+                 }
+                ],
+                "accessibility": {
+                 "accessibilityData": {
+                  "label": "操作メニュー"
+                 }
+                }
+               }
+              },
+              "badges": [
+               {
+                "liveBadgeRenderer": {
+                 "label": {
+                  "runs": [
+                   {
+                    "text": "ライブ"
+                   }
+                  ]
+                 },
+                 "accessibility": {
+                  "accessibilityData": {
+                   "label": "ライブ"
+                  }
+                 },
+                 "watchPageVisibility": "BADGE_WATCH_PAGE_VISIBILITY_HIDE"
+                }
+               }
+              ],
+              "playlistItemData": {
+               "videoId": "JD-kMIpDfnY"
+              },
+              "flexColumnDisplayStyle": "MUSIC_RESPONSIVE_LIST_ITEM_FLEX_COLUMN_DISPLAY_STYLE_TWO_LINE_STACK",
+              "itemHeight": "MUSIC_RESPONSIVE_LIST_ITEM_HEIGHT_TALL"
+             }
+            },
+            {
+             "musicResponsiveListItemRenderer": {
+              "thumbnail": {
+               "musicThumbnailRenderer": {
+                "thumbnail": {
+                 "thumbnails": [
+                  {
+                   "url": "https://i.ytimg.com/vi/ffGvaOKK4eM/hqdefault.jpg?sqp=-oaymwEWCJADEOEBIAQqCggAEOADGC0guwJIWg&rs=AMzJL3n6G7jlc2B6g9dSV3_u_9z_UstNnw",
+                   "width": 400,
+                   "height": 225
+                  }
+                 ]
+                },
+                "thumbnailCrop": "MUSIC_THUMBNAIL_CROP_UNSPECIFIED",
+                "thumbnailScale": "MUSIC_THUMBNAIL_SCALE_ASPECT_FIT"
+               }
+              },
+              "overlay": {
+               "musicItemThumbnailOverlayRenderer": {
+                "background": {
+                 "verticalGradient": {
+                  "gradientLayerColors": [
+                   "3422552064",
+                   "3422552064"
+                  ]
+                 }
+                },
+                "content": {
+                 "musicPlayButtonRenderer": {
+                  "playNavigationEndpoint": {
+                   "watchEndpoint": {
+                    "videoId": "ffGvaOKK4eM",
+                    "watchEndpointMusicSupportedConfigs": {
+                     "watchEndpointMusicConfig": {
+                      "musicVideoType": "MUSIC_VIDEO_TYPE_UGC"
+                     }
+                    }
+                   }
+                  },
+                  "playIcon": {
+                   "iconType": "PLAY_ARROW"
+                  },
+                  "pauseIcon": {
+                   "iconType": "PAUSE"
+                  },
+                  "iconColor": 4294967295,
+                  "backgroundColor": 0,
+                  "activeBackgroundColor": 0,
+                  "loadingIndicatorColor": 14745645,
+                  "playingIcon": {
+                   "iconType": "VOLUME_UP"
+                  },
+                  "iconLoadingColor": 0,
+                  "activeScaleFactor": 1,
+                  "buttonSize": "MUSIC_PLAY_BUTTON_SIZE_SMALL",
+                  "rippleTarget": "MUSIC_PLAY_BUTTON_RIPPLE_TARGET_SELF",
+                  "accessibilityPlayData": {
+                   "accessibilityData": {
+                    "label": "2026 Lofi Hip Hop Mix 🎧 Chill Beats for Productivity, Study & Work - Blue Hour Lo-Fi Jazz を再生"
+                   }
+                  },
+                  "accessibilityPauseData": {
+                   "accessibilityData": {
+                    "label": "2026 Lofi Hip Hop Mix 🎧 Chill Beats for Productivity, Study & Work - Blue Hour Lo-Fi Jazz を一時停止"
+                   }
+                  }
+                 }
+                },
+                "contentPosition": "MUSIC_ITEM_THUMBNAIL_OVERLAY_CONTENT_POSITION_CENTERED",
+                "displayStyle": "MUSIC_ITEM_THUMBNAIL_OVERLAY_DISPLAY_STYLE_PERSISTENT"
+               }
+              },
+              "flexColumns": [
+               {
+                "musicResponsiveListItemFlexColumnRenderer": {
+                 "text": {
+                  "runs": [
+                   {
+                    "text": "2026 Lofi Hip Hop Mix 🎧 Chill Beats for Productivity, Study & Work",
+                    "navigationEndpoint": {
+                     "watchEndpoint": {
+                      "videoId": "ffGvaOKK4eM",
+                      "watchEndpointMusicSupportedConfigs": {
+                       "watchEndpointMusicConfig": {
+                        "musicVideoType": "MUSIC_VIDEO_TYPE_UGC"
+                       }
+                      }
+                     }
+                    }
+                   }
+                  ]
+                 },
+                 "displayPriority": "MUSIC_RESPONSIVE_LIST_ITEM_COLUMN_DISPLAY_PRIORITY_HIGH"
+                }
+               },
+               {
+                "musicResponsiveListItemFlexColumnRenderer": {
+                 "text": {
+                  "runs": [
+                   {
+                    "text": "Blue Hour Lo-Fi Jazz",
+                    "navigationEndpoint": {
+                     "browseEndpoint": {
+                      "browseId": "UCYGj0WGszvWQKoa2k-q9vmA",
+                      "browseEndpointContextSupportedConfigs": {
+                       "browseEndpointContextMusicConfig": {
+                        "pageType": "MUSIC_PAGE_TYPE_USER_CHANNEL"
+                       }
+                      }
+                     }
+                    }
+                   },
+                   {
+                    "text": " • "
+                   },
+                   {
+                    "text": "7571回視聴"
+                   },
+                   {
+                    "text": " • "
+                   },
+                   {
+                    "text": "1:07:10"
+                   }
+                  ],
+                  "accessibility": {
+                   "accessibilityData": {
+                    "label": "Blue Hour Lo-Fi Jazz • 7,571回視聴 • 1 時間 7 分 10 秒"
+                   }
+                  }
+                 },
+                 "displayPriority": "MUSIC_RESPONSIVE_LIST_ITEM_COLUMN_DISPLAY_PRIORITY_HIGH"
+                }
+               }
+              ],
+              "menu": {
+               "menuRenderer": {
+                "items": [
+                 {
+                  "menuNavigationItemRenderer": {
+                   "text": {
+                    "runs": [
+                     {
+                      "text": "ミックスリストを開始"
+                     }
+                    ]
+                   },
+                   "icon": {
+                    "iconType": "MIX"
+                   },
+                   "navigationEndpoint": {
+                    "watchEndpoint": {
+                     "videoId": "ffGvaOKK4eM",
+                     "playlistId": "RDAMVMffGvaOKK4eM",
+                     "params": "wAEB",
+                     "watchEndpointMusicSupportedConfigs": {
+                      "watchEndpointMusicConfig": {
+                       "musicVideoType": "MUSIC_VIDEO_TYPE_UGC"
+                      }
+                     }
+                    }
+                   }
+                  }
+                 },
+                 {
+                  "menuServiceItemRenderer": {
+                   "text": {
+                    "runs": [
+                     {
+                      "text": "次に再生"
+                     }
+                    ]
+                   },
+                   "icon": {
+                    "iconType": "QUEUE_PLAY_NEXT"
+                   },
+                   "serviceEndpoint": {
+                    "queueAddEndpoint": {
+                     "queueTarget": {
+                      "videoId": "ffGvaOKK4eM",
+                      "onEmptyQueue": {
+                       "watchEndpoint": {
+                        "videoId": "ffGvaOKK4eM"
+                       }
+                      }
+                     },
+                     "queueInsertPosition": "INSERT_AFTER_CURRENT_VIDEO",
+                     "commands": [
+                      {
+                       "addToToastAction": {
+                        "item": {
+                         "notificationTextRenderer": {
+                          "successResponseText": {
+                           "runs": [
+                            {
+                             "text": "次にこの曲が再生されます"
+                            }
+                           ]
+                          }
+                         }
+                        }
+                       }
+                      }
+                     ]
+                    }
+                   }
+                  }
+                 },
+                 {
+                  "menuServiceItemRenderer": {
+                   "text": {
+                    "runs": [
+                     {
+                      "text": "キューに追加"
+                     }
+                    ]
+                   },
+                   "icon": {
+                    "iconType": "ADD_TO_REMOTE_QUEUE"
+                   },
+                   "serviceEndpoint": {
+                    "queueAddEndpoint": {
+                     "queueTarget": {
+                      "videoId": "ffGvaOKK4eM",
+                      "onEmptyQueue": {
+                       "watchEndpoint": {
+                        "videoId": "ffGvaOKK4eM"
+                       }
+                      }
+                     },
+                     "queueInsertPosition": "INSERT_AT_END",
+                     "commands": [
+                      {
+                       "addToToastAction": {
+                        "item": {
+                         "notificationTextRenderer": {
+                          "successResponseText": {
+                           "runs": [
+                            {
+                             "text": "曲をキューに追加しました"
+                            }
+                           ]
+                          }
+                         }
+                        }
+                       }
+                      }
+                     ]
+                    }
+                   }
+                  }
+                 },
+                 {
+                  "toggleMenuServiceItemRenderer": {
+                   "defaultText": {
+                    "runs": [
+                     {
+                      "text": "高く評価した曲に追加"
+                     }
+                    ]
+                   },
+                   "defaultIcon": {
+                    "iconType": "FAVORITE"
+                   },
+                   "defaultServiceEndpoint": {
+                    "modalEndpoint": {
+                     "modal": {
+                      "modalWithTitleAndButtonRenderer": {
+                       "title": {
+                        "runs": [
+                         {
+                          "text": "この曲に高評価を付ける"
+                         }
+                        ]
+                       },
+                       "content": {
+                        "runs": [
+                         {
+                          "text": "ログインするとおすすめの精度が上がり、音楽を保存することもできます"
+                         }
+                        ]
+                       },
+                       "button": {
+                        "buttonRenderer": {
+                         "style": "STYLE_BLUE_TEXT",
+                         "isDisabled": false,
+                         "text": {
+                          "runs": [
+                           {
+                            "text": "ログイン"
+                           }
+                          ]
+                         },
+                         "navigationEndpoint": {
+                          "signInEndpoint": {
+                           "hack": true
+                          }
+                         }
+                        }
+                       }
+                      }
+                     }
+                    }
+                   },
+                   "toggledText": {
+                    "runs": [
+                     {
+                      "text": "高く評価した曲から削除"
+                     }
+                    ]
+                   },
+                   "toggledIcon": {
+                    "iconType": "UNFAVORITE"
+                   }
+                  }
+                 },
+                 {
+                  "menuServiceItemDownloadRenderer": {
+                   "serviceEndpoint": {
+                    "offlineVideoEndpoint": {
+                     "videoId": "ffGvaOKK4eM",
+                     "onAddCommand": {
+                      "getDownloadActionCommand": {
+                       "videoId": "ffGvaOKK4eM",
+                       "params": "CAI%3D"
+                      }
+                     }
+                    }
+                   },
+                   "badgeIcon": {
+                    "iconType": "PREMIUM_STANDALONE_CAIRO"
+                   }
+                  }
+                 },
+                 {
+                  "menuNavigationItemRenderer": {
+                   "text": {
+                    "runs": [
+                     {
+                      "text": "再生リストに保存"
+                     }
+                    ]
+                   },
+                   "icon": {
+                    "iconType": "ADD_TO_PLAYLIST"
+                   },
+                   "navigationEndpoint": {
+                    "modalEndpoint": {
+                     "modal": {
+                      "modalWithTitleAndButtonRenderer": {
+                       "title": {
+                        "runs": [
+                         {
+                          "text": "後で見るために保存"
+                         }
+                        ]
+                       },
+                       "content": {
+                        "runs": [
+                         {
+                          "text": "ログインすると、プレイリストを作成して共有できます"
+                         }
+                        ]
+                       },
+                       "button": {
+                        "buttonRenderer": {
+                         "style": "STYLE_BLUE_TEXT",
+                         "isDisabled": false,
+                         "text": {
+                          "runs": [
+                           {
+                            "text": "ログイン"
+                           }
+                          ]
+                         },
+                         "navigationEndpoint": {
+                          "signInEndpoint": {
+                           "hack": true
+                          }
+                         }
+                        }
+                       }
+                      }
+                     }
+                    }
+                   }
+                  }
+                 },
+                 {
+                  "menuNavigationItemRenderer": {
+                   "text": {
+                    "runs": [
+                     {
+                      "text": "共有"
+                     }
+                    ]
+                   },
+                   "icon": {
+                    "iconType": "SHARE"
+                   },
+                   "navigationEndpoint": {
+                    "shareEntityEndpoint": {
+                     "serializedShareEntity": "CgtmZkd2YU9LSzRlTQ%3D%3D",
+                     "sharePanelType": "SHARE_PANEL_TYPE_UNIFIED_SHARE_PANEL"
+                    }
+                   }
+                  }
+                 }
+                ],
+                "accessibility": {
+                 "accessibilityData": {
+                  "label": "操作メニュー"
+                 }
+                }
+               }
+              },
+              "playlistItemData": {
+               "videoId": "ffGvaOKK4eM"
+              },
+              "flexColumnDisplayStyle": "MUSIC_RESPONSIVE_LIST_ITEM_FLEX_COLUMN_DISPLAY_STYLE_TWO_LINE_STACK",
+              "itemHeight": "MUSIC_RESPONSIVE_LIST_ITEM_HEIGHT_TALL"
+             }
+            }
+           ]
+          }
+         }
+        ]
+       }
+      }
+     }
+    }
+   ]
+  }
+ }
+}

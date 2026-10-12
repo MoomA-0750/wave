@@ -11,6 +11,8 @@ public enum StreamFailure: Sendable, Equatable {
     case sabrOnly
     case decipherFailed
     case rejectedUrl
+    /// ライブ配信だった（ライブの印の無い曲として渡された）。HLS（LiveClient）で流し直す。
+    case liveStream
 }
 
 /// 解決済みのストリーム。署名付き URL を含むので、description・debugDescription・Mirror に出さない。
@@ -145,6 +147,8 @@ public final class StreamResolver: @unchecked Sendable {
             default: return .failed(.http)
             }
         }
+        // ライブ配信は HLS で流す（LiveClient）。WEB_REMIX の応答では再生できない
+        if LiveParsers.isLive(root) { return .failed(.liveStream) }
         let status = root.path("playabilityStatus", "status").str
         if status == "LOGIN_REQUIRED" { return .failed(.notLoggedIn) }
         if status != "OK" { return .failed(.unplayable) }

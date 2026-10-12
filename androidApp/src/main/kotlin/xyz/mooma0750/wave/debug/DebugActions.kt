@@ -80,6 +80,30 @@ object DebugActions {
                         is CallResult.Ok -> result.value.songs.getOrNull(intent.getIntExtra("index", 0))?.let { player.playSong(it) }
                         is CallResult.Failed -> Log.i(WaveApplication.LOG_TAG, "debug search failed ${result.kind} status=${result.status}")
                     }
+                // ライブ配信: 検索して index 番目を流す。件数と、流したものがライブかだけを記録する
+                "live_play" ->
+                    when (val result = container.music.searchLive(intent.getStringExtra("query") ?: "lofi girl")) {
+                        is CallResult.Ok -> {
+                            Log.i(WaveApplication.LOG_TAG, "debug live results=${result.value.songs.size} live=${result.value.songs.count { it.isLive }} more=${result.value.continuation != null}")
+                            result.value.songs.getOrNull(intent.getIntExtra("index", 0))?.let { player.playSong(it) }
+                        }
+                        is CallResult.Failed -> Log.i(WaveApplication.LOG_TAG, "debug live search failed ${result.kind} status=${result.status}")
+                    }
+                // ライブの印を付けずに流す（WEB_REMIX の /player がライブと知らせたら HLS に切り替わるかの確認）
+                "live_play_unflagged" ->
+                    when (val result = container.music.searchLive(intent.getStringExtra("query") ?: "lofi girl")) {
+                        is CallResult.Ok -> result.value.songs.firstOrNull()?.let { player.playSong(it.copy(isLive = false)) }
+                        is CallResult.Failed -> Log.i(WaveApplication.LOG_TAG, "debug live search failed ${result.kind}")
+                    }
+                "live_state" ->
+                    player.controller().run {
+                        Log.i(WaveApplication.LOG_TAG, "debug live state isLive=$isCurrentMediaItemLive flagged=${Media3QueuePlayer.songOf(currentMediaItem)?.isLive} playing=$isPlaying state=$playbackState error=${playerError?.errorCodeName} offsetMs=$currentLiveOffset")
+                    }
+                "lofi_page" ->
+                    when (val page = container.music.moodCategory(xyz.mooma0750.wave.core.music.LofiGenre.PARAMS)) {
+                        is CallResult.Ok -> Log.i(WaveApplication.LOG_TAG, "debug lofi shelves=${page.value.shelves.map { "${it.title}:${it.items.size}" }}")
+                        is CallResult.Failed -> Log.i(WaveApplication.LOG_TAG, "debug lofi failed ${page.kind}")
+                    }
                 "video_probe" -> VideoProbe.run(container, intent.getStringExtra("video_id") ?: player.controller().currentMediaItem?.let { Media3QueuePlayer.songOf(it)?.videoId })
                 "add_unplayable_next" -> player.addNext(DebugPlayback.unplayableSong)
                 "play_public_playlist", "play_public_playlist_shuffle" ->

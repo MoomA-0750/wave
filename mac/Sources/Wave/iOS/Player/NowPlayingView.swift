@@ -98,7 +98,17 @@ struct NowPlayingView: View {
         }
     }
 
+    @ViewBuilder
     private func seekBar(_ player: PlayerService) -> some View {
+        if player.isLive {
+            // ライブ配信: 長さも位置も無く、シークしない
+            LiveBadge(font: .subheadline.weight(.bold), dot: 9).frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        } else {
+            seekSlider(player)
+        }
+    }
+
+    private func seekSlider(_ player: PlayerService) -> some View {
         VStack(spacing: 4) {
             Slider(value: Binding(get: { dragging ?? min(player.position, max(1, player.duration)) }, set: { dragging = $0 }),
                    in: 0...max(1, player.duration)) { editing in

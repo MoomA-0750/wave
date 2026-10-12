@@ -82,6 +82,8 @@ public sealed partial class PlayerService : ObservableObject
     [ObservableProperty] private bool inPlaylist;
     /// <summary>今の曲に重ねられる映像（MV）。無い・まだ分からなければ null。</summary>
     [ObservableProperty] private MusicVideo? video;
+    /// <summary>今の曲がライブ配信（長さ・シーク・歌詞・MV が無い。下のバーと右の欄は「ライブ」の印を出す）。</summary>
+    [ObservableProperty] private bool isLive;
 
     /// <summary>手元の音の再生位置（映像を合わせるため。ほかの端末を映している間は使わない）。</summary>
     public long LocalPositionMs => player.Source is null ? 0 : (long)player.PlaybackSession.Position.TotalMilliseconds;
@@ -260,7 +262,33 @@ public sealed partial class PlayerService : ObservableObject
         CursorChanged?.Invoke(true);
     }
 
-    partial void OnCurrentChanged(Song? value) => CursorChanged?.Invoke(true);
+    partial void OnCurrentChanged(Song? value)
+    {
+        IsLive = value?.IsLive == true;
+        CursorChanged?.Invoke(true);
+    }
+
+    partial void OnIsLiveChanged(bool value)
+    {
+        // ライブ配信は位置を動かせない（メディアキー・音量のポップアップのシークも止める。タイムラインも出さない）
+        player.CommandManager.PositionBehavior.EnablingRule = value ? MediaCommandEnablingRule.Never : MediaCommandEnablingRule.Auto;
+    }
+
+    /// <summary>ライブの印の無い曲がライブ配信だった。キューの項目に印を付け直す（項目の ID と出どころは保つ）。</summary>
+    private Song MarkLive(Song song)
+    {
+        var live = song with { IsLive = true, DurationSeconds = null };
+        if (Index >= 0 && Index < Queue.Count && Queue[Index].VideoId == song.VideoId)
+        {
+            adoptIds = new([itemMeta[Index].ItemId]);
+            nextOrigin = itemMeta[Index].Origin;
+            Queue[Index] = live;
+            adoptIds = null;
+            nextOrigin = QueueOrigin.Source;
+        }
+        if (Current?.VideoId == song.VideoId) Current = live;
+        return live;
+    }
 
     // 読み込み中も「再生中」として書くので、読み込みが失敗・中断して終わったときも書き直す
     // （書き直さないと、止まっている PC が再生中のままに見え、ほかの端末の再生ボタンが引き取りになっていた）
@@ -339,6 +367,15 @@ public sealed partial class PlayerService : ObservableObject
         SourceId = null;
         SetShuffleOrder(null);
         ReplaceQueue([song], QueueOrigin.Source);
+        if (song.IsLive)
+        {
+            // ライブ配信は終わらずに流れ続けるので、後ろにラジオのおすすめを足さない（Android と同じ）
+            radioSeed = null;
+            radioPlaylistId = null;
+            radioContinuation = null;
+            StartSelection(0, target);
+            return;
+        }
         // 曲のラジオの続きは、鳴らす端末が自分で取る（キューには種の曲だけを渡す）
         radioSeed = song.VideoId;
         radioPlaylistId = "RDAMVM" + song.VideoId;
@@ -540,6 +577,14 @@ public sealed partial class PlayerService : ObservableObject
             Remote(Wave.Core.Connect.ControlAction.Previous);
             return;
         }
+        // ライブ配信には頭が無いので、前の曲へ（前が無ければ何もしない）
+        if (IsLive)
+        {
+            if (Index <= 0) return;
+            SelectAt(Index - 1);
+            UserStartedPlayback?.Invoke(true);
+            return;
+        }
         // 3秒より先なら曲の頭へ（Spotify と同じ）
         if (Position > 3 || Index <= 0)
         {
@@ -575,7 +620,7 @@ public sealed partial class PlayerService : ObservableObject
             remoteSeekTimer.Start();
             return;
         }
-        if (player.Source is null) return;
+        if (player.Source is null || IsLive) return;
         player.PlaybackSession.Position = TimeSpan.FromSeconds(Math.Max(0, seconds));
         Position = seconds;
         CursorChanged?.Invoke(false);
@@ -709,7 +754,7 @@ public sealed partial class PlayerService : ObservableObject
                 itemMeta.Insert(e.NewStartingIndex, moved);
                 break;
             case System.Collections.Specialized.NotifyCollectionChangedAction.Replace:
-                itemMeta[e.NewStartingIndex] = new QueueItemMeta(Guid.NewGuid().ToString(), nextOrigin);
+                itemMeta[e.NewStartingIndex] = new QueueItemMeta(adoptIds is { Count: > 0 } kept ? kept.Dequeue() : Guid.NewGuid().ToString(), nextOrigin);
                 break;
             case System.Collections.Specialized.NotifyCollectionChangedAction.Reset:
                 itemMeta.Clear();
@@ -838,7 +883,7 @@ public sealed partial class PlayerService : ObservableObject
     /// <summary>手元の同じ曲のまま、止まっている位置だけ合わせる（ほかの端末を映している間・鳴っている間は何もしない）。</summary>
     public void ConnectStagePosition(long positionMs)
     {
-        if (IsRemote || IsPlaying || IsLoading || Current is null) return;
+        if (IsRemote || IsPlaying || IsLoading || Current is null || IsLive) return;
         if (player.Source is null) Position = positionMs / 1000.0;
         else player.PlaybackSession.Position = TimeSpan.FromMilliseconds(positionMs);
     }
@@ -1059,7 +1104,8 @@ public sealed partial class PlayerService : ObservableObject
                 Advance();
                 break;
             case Wave.Core.Connect.ControlAction.Previous:
-                if (Position > 3 || Index <= 0) Seek(0);
+                if (IsLive) { if (Index > 0) SelectAt(Index - 1); }
+                else if (Position > 3 || Index <= 0) Seek(0);
                 else SelectAt(Index - 1);
                 break;
             case Wave.Core.Connect.ControlAction.Seek:
@@ -1101,14 +1147,21 @@ public sealed partial class PlayerService : ObservableObject
         player.Pause();
         try
         {
-            var stream = await ResolveAsync(song.VideoId, cancel.Token);
-            if (cancel.IsCancellationRequested) return;
-            if (stream is null)
+            ResolvedStream? stream = null;
+            if (!song.IsLive)
             {
-                IsLoading = false;
-                return;
+                stream = await ResolveAsync(song.VideoId, cancel.Token);
+                if (cancel.IsCancellationRequested) return;
+                // ライブの印の無い曲がライブ配信だった: 印を付けて HLS で流す
+                if (stream is null && lastResolveWasLive) song = MarkLive(song);
+                else if (stream is null)
+                {
+                    IsLoading = false;
+                    return;
+                }
             }
-            if (!await StartStreamAsync(song, stream, seekTo))
+            var started = song.IsLive ? await StartLiveAsync(song, cancel.Token) : await StartStreamAsync(song, stream!, seekTo);
+            if (!started)
             {
                 if (cancel.IsCancellationRequested) return;
                 await RecoverAsync(song);
@@ -1125,13 +1178,23 @@ public sealed partial class PlayerService : ObservableObject
         }
     }
 
+    /// <summary>直前の ResolveAsync が「ライブ配信だった」で終わったか。</summary>
+    private bool lastResolveWasLive;
+
     private async Task<ResolvedStream?> ResolveAsync(string videoId, CancellationToken cancel)
     {
         if (prefetched.Remove(videoId, out var cached) && AppServices.Resolver.IsFresh(cached, FreshMarginMs) && cached.Generation == AppServices.Client.Generation)
             return cached;
+        lastResolveWasLive = false;
         var result = await AppServices.Resolver.ResolveAsync(videoId, cancel);
         if (result.Stream is { } stream) return stream;
         AppPaths.Log($"resolve failed reason={result.Failure}");
+        if (result.Failure == StreamFailure.LiveStream)
+        {
+            // ライブ配信だった（呼び出し側が HLS で流し直す）
+            lastResolveWasLive = true;
+            return null;
+        }
         Message = result.Failure switch
         {
             StreamFailure.NotLoggedIn => L.T("この曲を再生するにはログインが必要です", "Log in to play this song"),
@@ -1159,6 +1222,14 @@ public sealed partial class PlayerService : ObservableObject
         if (Current?.VideoId != song.VideoId) return false;
         var source = await CreateSourceAsync(song, stream, bytes);
         if (source is null || Current?.VideoId != song.VideoId) return false;
+        PlaySource(song, source, seekTo);
+        AppPaths.Log($"play itag={stream.Itag} queue={Queue.Count} index={Index}");
+        return true;
+    }
+
+    /// <summary>再生の元を曲名・画像と一緒に MediaPlayer に渡して鳴らす（メディアキー・音量のポップアップにも出る）。</summary>
+    private void PlaySource(Song song, MediaSource source, double seekTo)
+    {
         var item = new MediaPlaybackItem(source);
         var props = item.GetDisplayProperties();
         props.Type = MediaPlaybackType.Music;
@@ -1168,10 +1239,56 @@ public sealed partial class PlayerService : ObservableObject
         if (Uri.TryCreate(song.ThumbnailUrl, UriKind.Absolute, out var art)) props.Thumbnail = RandomAccessStreamReference.CreateFromUri(art);
         item.ApplyDisplayProperties(props);
         player.Source = item;
-        if (seekTo > 1) player.PlaybackSession.Position = TimeSpan.FromSeconds(seekTo);
+        if (seekTo > 1 && !song.IsLive) player.PlaybackSession.Position = TimeSpan.FromSeconds(seekTo);
         player.Play();
         IsLoading = false;
-        AppPaths.Log($"play itag={stream.Itag} queue={Queue.Count} index={Index}");
+    }
+
+    /// <summary>ライブ配信を流し始めた時刻（長く流れたあとの失敗は、もう一度だけ取り直してよい）。</summary>
+    private long liveStartedMs;
+
+    /// <summary>
+    /// ライブ配信を HLS で流す（ANDROID の /player から選んだ1本の媒体プレイリストを、Windows の HLS の再生 AdaptiveMediaSource に渡す）。
+    /// VOD の音声の取り方（RangeStream・DASH の目次）は使わない。URL は IP に結び付いた署名を含むので、ログ・画面に出さない。
+    /// </summary>
+    private async Task<bool> StartLiveAsync(Song song, CancellationToken cancel)
+    {
+        currentStream = null;
+        var result = await AppServices.Live.ResolveAsync(song.VideoId, cancel);
+        if (cancel.IsCancellationRequested || Current?.VideoId != song.VideoId) return false;
+        if (result.Stream is not { } live)
+        {
+            AppPaths.Log($"live resolve failed reason={result.Failure}");
+            Message = result.Failure switch
+            {
+                LiveFailure.NotLive => L.T("このライブ配信は終わっているか、再生できません", "This live stream has ended or isn't available"),
+                LiveFailure.Network => L.T("通信できませんでした", "Couldn't connect"),
+                _ => L.T("ライブ配信を再生できませんでした", "Couldn't play this live stream"),
+            };
+            return false;
+        }
+        var created = await Windows.Media.Streaming.Adaptive.AdaptiveMediaSource.CreateFromUriAsync(new Uri(live.RevealUrl()));
+        if (cancel.IsCancellationRequested || Current?.VideoId != song.VideoId) return false;
+        if (created.Status != Windows.Media.Streaming.Adaptive.AdaptiveMediaSourceCreationStatus.Success)
+        {
+            AppPaths.Log($"live create failed status={created.Status} http={created.HttpResponseMessage?.StatusCode}");
+            return false;
+        }
+        var adaptive = created.MediaSource;
+        AppPaths.Log($"live source live={adaptive.IsLive} bitrates={adaptive.AvailableBitrates.Count}");
+        adaptive.DownloadRequested += (_, e) =>
+        {
+            // 媒体プレイリストの読み直しと区切り（googlevideo）のほかは取らない
+            var uri = e.ResourceUri.ToString();
+            if (LiveUrls.IsAllowedManifest(uri) || LiveUrls.IsAllowedSegment(uri)) return;
+            AppPaths.Log($"live download blocked host={e.ResourceUri.Host}");
+            e.Result.Buffer = new Windows.Storage.Streams.Buffer(0);
+            e.Result.ExtendedStatus = 403;
+        };
+        adaptive.DownloadFailed += (_, e) => AppPaths.Log($"live download failed type={e.ResourceType} http={e.HttpResponseMessage?.StatusCode}");
+        PlaySource(song, MediaSource.CreateFromAdaptiveMediaSource(adaptive), 0);
+        liveStartedMs = clock.ElapsedMilliseconds;
+        AppPaths.Log($"play live queue={Queue.Count} index={Index}");
         return true;
     }
 
@@ -1228,6 +1345,13 @@ public sealed partial class PlayerService : ObservableObject
     private void OnEnded()
     {
         // 曲の途中で「終わった」と来たら、読み込みの失敗とみなす（次々に飛ばさない）
+        // ライブ配信が「終わった」: 流れが切れた（URL の期限・配信の中断）とみなして取り直す。だめなら次の曲へ
+        if (IsLive && Current is { } live)
+        {
+            AppPaths.Log("live ended");
+            _ = RecoverAsync(live);
+            return;
+        }
         var known = Current?.DurationSeconds ?? 0;
         if (known > 10 && Position < known - 5)
         {
@@ -1261,13 +1385,26 @@ public sealed partial class PlayerService : ObservableObject
     /// </summary>
     private async Task RecoverAsync(Song song)
     {
-        if (!AppServices.Client.IsLoggedIn)
+        // ライブ配信は ANDROID の匿名の /player で流すので、ログインは要らない
+        var live = song.IsLive || IsLive;
+        if (!live && !AppServices.Client.IsLoggedIn)
         {
             IsLoading = false;
             Message = L.T("曲を再生するにはログインしてください（右上のアカウントから）", "Log in to play songs (from the account button at the top right)");
             return;
         }
-        if (!retried)
+        // ライブ配信は長く流れ続けるので、しばらく鳴ったあとの失敗（URL の期限・403）なら、もう一度取り直してよい
+        if (live && retried && clock.ElapsedMilliseconds - liveStartedMs > 60_000) retried = false;
+        if (live && !retried)
+        {
+            retried = true;
+            if (Current?.VideoId == song.VideoId && await StartLiveAsync(Current, loadCancel?.Token ?? default))
+            {
+                consecutiveFailures = 0;
+                return;
+            }
+        }
+        else if (!retried)
         {
             retried = true;
             AppServices.Resolver.OnStreamRejected();
@@ -1275,6 +1412,12 @@ public sealed partial class PlayerService : ObservableObject
             var position = Position;
             var stream = await ResolveAsync(song.VideoId, loadCancel?.Token ?? default);
             if (stream is not null && Current?.VideoId == song.VideoId && await StartStreamAsync(song, stream, position))
+            {
+                consecutiveFailures = 0;
+                return;
+            }
+            // 取り直したらライブ配信だった（配信が始まった・印の無い曲だった）
+            if (stream is null && lastResolveWasLive && Current?.VideoId == song.VideoId && await StartLiveAsync(MarkLive(song), loadCancel?.Token ?? default))
             {
                 consecutiveFailures = 0;
                 return;
@@ -1302,7 +1445,8 @@ public sealed partial class PlayerService : ObservableObject
         if (player.Source is null) return;
         var session = player.PlaybackSession;
         Position = session.Position.TotalSeconds;
-        if (session.NaturalDuration.TotalSeconds > 0) Duration = session.NaturalDuration.TotalSeconds;
+        if (IsLive) Duration = 0;
+        else if (session.NaturalDuration.TotalSeconds > 0) Duration = session.NaturalDuration.TotalSeconds;
         if (!statsSent && IsPlaying && Position >= StatsAfterSeconds && currentStream is { } stream && AppServices.Settings.SendHistory && AppServices.Client.IsLoggedIn)
         {
             statsSent = true;
@@ -1322,7 +1466,8 @@ public sealed partial class PlayerService : ObservableObject
         var info = await AppServices.Music.SongInfoAsync(song.VideoId, cancel);
         if (!info.IsOk || Current?.VideoId != song.VideoId) return;
         if (AppServices.Client.IsLoggedIn) Like = info.Value!.Like;
-        Video = info.Value!.Video;
+        // ライブ配信には重ねる MV を出さない
+        Video = song.IsLive || IsLive ? null : info.Value!.Video;
     }
 
     /// <summary>評価を読み直す（読めなかったときの↻）。</summary>
@@ -1342,6 +1487,12 @@ public sealed partial class PlayerService : ObservableObject
 
     private async Task LoadLyricsAsync(Song song, CancellationToken cancel)
     {
+        // ライブ配信には歌詞が無い（探さない）
+        if (song.IsLive)
+        {
+            if (Current?.VideoId == song.VideoId) Lyrics = null;
+            return;
+        }
         var result = await AppServices.Lyrics.LyricsAsync(song, cancel);
         if (Current?.VideoId == song.VideoId) Lyrics = result;
     }
@@ -1351,7 +1502,8 @@ public sealed partial class PlayerService : ObservableObject
     {
         if (Index + 1 >= Queue.Count) return;
         var next = Queue[Index + 1];
-        if (prefetched.ContainsKey(next.VideoId)) return;
+        // ライブ配信は流すときに HLS を解決する（先読みしない）
+        if (next.IsLive || prefetched.ContainsKey(next.VideoId)) return;
         var result = await AppServices.Resolver.ResolveAsync(next.VideoId);
         if (result.Stream is { } s)
         {

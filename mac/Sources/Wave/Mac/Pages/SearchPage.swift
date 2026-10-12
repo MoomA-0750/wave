@@ -11,13 +11,19 @@ final class SearchPageModel {
     var query: String?
     var loading = false
     var empty = false
-    var tab = "all"
+    var tab = "all" { didSet { if tab == "live" { loadLiveIfNeeded() } } }
     var top: HomeItem?
     var songs: [TrackRow] = []
     var albums: [AlbumSummary] = []
     var artists: [ArtistSummary] = []
     var moods: [(MoodCategory, Color)] = []
     var history: [SearchHistoryEntry] = []
+    /// 「ライブ」のタブ（ライブ配信の検索）。タブを開いたときに読む。
+    var liveSongs: [TrackRow] = []
+    var liveLoading = false
+    var liveFailed = false
+    @ObservationIgnored private var liveQuery: String?
+    @ObservationIgnored private var liveContinuation: String?
     @ObservationIgnored private var songContinuation: String?
     @ObservationIgnored private var albumContinuation: String?
     @ObservationIgnored private var artistContinuation: String?
@@ -58,6 +64,11 @@ final class SearchPageModel {
         loading = true
         empty = false
         songs = []
+        liveSongs = []
+        liveQuery = nil
+        liveContinuation = nil
+        liveFailed = false
+        if tab == "live" { loadLiveIfNeeded() }
         let music = AppServices.music!
         async let s = music.searchSongs(q)
         async let al = music.searchAlbums(q)
@@ -105,6 +116,41 @@ final class SearchPageModel {
             songContinuation = page.continuation
             let n = songs.count
             songs += page.songs.enumerated().map { TrackRow(number: n + $0.offset + 1, song: $0.element) }
+        }
+    }
+
+    /// ライブ配信の検索（YouTube Music の動画のライブと YouTube のライブを合わせたもの）。同じ語では読み直さない。
+    func loadLiveIfNeeded() {
+        guard let q = query, liveQuery != q else { return }
+        liveQuery = q
+        liveLoading = true
+        liveFailed = false
+        let id = requestId
+        Task {
+            let result = (try? await AppServices.music.searchLive(q)) ?? .failed(.network)
+            guard id == requestId, liveQuery == q else { return }
+            liveLoading = false
+            guard let page = result.value else {
+                liveFailed = true
+                liveQuery = nil
+                return
+            }
+            liveContinuation = page.continuation
+            liveSongs = page.songs.enumerated().map { TrackRow(number: $0.offset + 1, song: $0.element) }
+        }
+    }
+
+    func loadMoreLive() {
+        guard !loadingMore, let c = liveContinuation, let q = liveQuery else { return }
+        loadingMore = true
+        let id = requestId
+        Task {
+            defer { loadingMore = false }
+            guard let page = (try? await AppServices.music.searchLive(q, continuation: c))?.value, id == requestId, liveQuery == q else { return }
+            liveContinuation = page.continuation != c ? page.continuation : nil
+            var known = Set(liveSongs.map(\.song.videoId))
+            let n = liveSongs.count
+            liveSongs += page.songs.filter { known.insert($0.videoId).inserted }.enumerated().map { TrackRow(number: n + $0.offset + 1, song: $0.element) }
         }
     }
 
@@ -189,13 +235,16 @@ struct SearchPageView: View {
                 Text(L.t("曲", "Songs")).tag("songs")
                 Text(L.t("アーティスト", "Artists")).tag("artists")
                 Text(L.t("アルバム", "Albums")).tag("albums")
+                Text(L.t("ライブ", "Live")).tag("live")
             }
             .pickerStyle(.segmented)
             .labelsHidden()
             .fixedSize()
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(EdgeInsets(top: 8, leading: 16, bottom: 0, trailing: 16))
-            if model.loading {
+            if model.tab == "live" {
+                live
+            } else if model.loading {
                 ProgressView().padding(.top, 48)
                 Spacer()
             } else if model.empty {
@@ -223,6 +272,32 @@ struct SearchPageView: View {
                 default:
                     all
                 }
+            }
+        }
+    }
+
+    /// 「ライブ」のタブ: いま配信中のライブ。押すと HLS で流す（後ろにラジオは足さない）。
+    @ViewBuilder
+    private var live: some View {
+        if model.liveLoading {
+            ProgressView().padding(.top, 48)
+            Spacer()
+        } else if model.liveFailed {
+            VStack(spacing: 8) {
+                Text(L.t("ライブ配信を検索できませんでした", "Couldn't search live streams")).subtitleStyle()
+                Button(L.t("もう一度", "Retry")) { model.loadLiveIfNeeded() }
+            }
+            .padding(.top, 64)
+            Spacer()
+        } else if model.liveSongs.isEmpty {
+            Text(L.t("配信中のライブは見つかりませんでした", "No live streams found")).subtitleStyle().padding(.top, 64)
+            Spacer()
+        } else {
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    ForEach(model.liveSongs) { row in songRow(row).onAppear { if row.id == model.liveSongs.last?.id { model.loadMoreLive() } } }
+                }
+                .padding(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
             }
         }
     }

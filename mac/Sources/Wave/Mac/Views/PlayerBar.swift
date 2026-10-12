@@ -133,6 +133,17 @@ struct TransportControls: View {
                     Image(systemName: player.repeatMode == .one ? "repeat.1" : "repeat").font(.system(size: 15))
                 }
             }
+            if player.isLive {
+                // ライブ配信: 長さも位置も無く、シークしない
+                LiveBadge().frame(height: 20).frame(maxWidth: .infinity)
+            } else {
+                positionBar(player)
+            }
+        }
+    }
+
+    private func positionBar(_ player: PlayerService) -> some View {
+        Group {
             HStack(spacing: 8) {
                 Text(Ui.time(dragging ?? player.position)).font(.caption).foregroundStyle(.secondary).monospacedDigit()
                     .frame(width: 44, alignment: .trailing)

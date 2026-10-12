@@ -36,6 +36,20 @@ public static partial class MusicParsers
 
     public static SearchPage<ArtistSummary> SearchArtists(JsonNode root) => SearchPageOf(root, ArtistRow);
 
+    /// <summary>プレイリストに絞った検索の最初のページ（おすすめ・みんなのプレイリスト）。</summary>
+    public static SearchPage<PlaylistSummary> SearchPlaylists(JsonNode root) => SearchPageOf(root, PlaylistRow);
+
+    private static PlaylistSummary? PlaylistRow(JsonObject item)
+    {
+        var browse = item.Path("navigationEndpoint", "browseEndpoint");
+        if (PageTypeOfBrowse(browse) != "MUSIC_PAGE_TYPE_PLAYLIST") return null;
+        var columns = FlexColumnRuns(item);
+        var id = browse.Path("browseId").Str();
+        var title = RunsText(columns.ElementAtOrDefault(0) ?? []);
+        if (id is null || title is null) return null;
+        return new PlaylistSummary(RemoveVl(id), title, RunsText(columns.Skip(1).SelectMany(c => c).ToList()), LastThumbnailUrl(item.Path("thumbnail")));
+    }
+
     private static SearchPage<T> SearchPageOf<T>(JsonNode root, Func<JsonObject, T?> row) where T : class
     {
         var shelf = SearchShelf(root);
@@ -472,10 +486,12 @@ public static partial class MusicParsers
         var title = RunsText(titleRuns);
         if (videoId is null || title is null) return null;
         var detailRuns = columns.Skip(1).SelectMany(c => c).ToList();
+        // ライブ配信には「ライブ」のバッジが付き、長さが無い（文字は言語に依るので、バッジの種類で見分ける）
+        var live = item.Path("badges").Items().Any(b => b.ContainsKey("liveBadgeRenderer"));
         var fixedDuration = DurationOf(item.Path("fixedColumns").Items().SelectMany(c => c.Path("musicResponsiveListItemFixedColumnRenderer", "text", "runs").Items()));
         var kind = titleRuns.Select(r => r.Path("navigationEndpoint", "watchEndpoint", "watchEndpointMusicSupportedConfigs", "watchEndpointMusicConfig", "musicVideoType").Str()).FirstOrDefault(v => v is not null)
             ?? item.Path("overlay", "musicItemThumbnailOverlayRenderer", "content", "musicPlayButtonRenderer", "playNavigationEndpoint", "watchEndpoint", "watchEndpointMusicSupportedConfigs", "watchEndpointMusicConfig", "musicVideoType").Str();
-        return new Song(videoId, title, ArtistsOf(detailRuns), AlbumOf(detailRuns), fixedDuration ?? DurationOf(detailRuns), LastThumbnailUrl(item.Path("thumbnail")), kind);
+        return new Song(videoId, title, ArtistsOf(detailRuns), AlbumOf(detailRuns), live ? null : fixedDuration ?? DurationOf(detailRuns), LastThumbnailUrl(item.Path("thumbnail")), kind, live);
     }
 
     /// <summary>ラジオ・キューの行（playlistPanelVideoRenderer）。</summary>

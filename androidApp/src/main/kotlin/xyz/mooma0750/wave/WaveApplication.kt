@@ -208,7 +208,19 @@ class AppContainer(
     /** 音声バイト・サムネイルの取得用。認証情報を持たない（ADR-0003）。 */
     val mediaHttpClient = MediaHttp.create()
 
-    val music = MusicRepository(session)
+    /** ライブ配信の検索と HLS の解決。www.youtube.com へは認証情報を持たないクライアントで送る（ADR-0003）。 */
+    val live =
+        xyz.mooma0750.wave.core.music.LiveClient(
+            HttpClient(OkHttp.create { preconfigured = mediaHttpClient }),
+            hl = java.util.Locale.getDefault().language.ifBlank { "ja" },
+            gl = java.util.Locale.getDefault().country.ifBlank { "JP" },
+            nowMs = SystemClock::elapsedRealtime,
+        )
+
+    /** 解決したライブの再生先（HLS の媒体プレイリストを読み直すたびに /player を呼ばない）。 */
+    val liveCache = xyz.mooma0750.wave.playback.LiveStreamCache(SystemClock::elapsedRealtime)
+
+    val music = MusicRepository(session, live)
 
     /** 歌詞。LRCLIB へは認証情報を持たないクライアントで、曲名・アーティスト名・アルバム名・長さだけを送る。 */
     val lyrics =
@@ -522,6 +534,7 @@ class AppContainer(
         // 再生サービスが動いていなくても、前のアカウントで解決した URL とサムネイルを残さない
         streamCache.clear()
         videoStreamCache.clear()
+        liveCache.clear()
         settings.clearPlaylistOrders()
         likedIdsJob?.cancel()
         mutableLikedIds.value = emptySet()

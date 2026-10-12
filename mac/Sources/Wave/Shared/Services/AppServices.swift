@@ -10,6 +10,8 @@ enum AppServices {
     /// 音声・映像のバイトの取得（認証のヘッダを付けない）。
     nonisolated(unsafe) private(set) static var mediaSession: URLSession!
     private(set) static var music: MusicRepository!
+    /// ライブ配信の検索と HLS の解決（www.youtube.com。ログインの情報を付けない、別の cookie なしの通信）。
+    private(set) static var live: LiveClient!
     private(set) static var resolver: StreamResolver!
     private(set) static var stats: PlaybackStats!
     private(set) static var lyrics: LyricsService!
@@ -43,7 +45,8 @@ enum AppServices {
         mediaSession = InnerTubeClient.createSession()
         // YouTube から届く文字（棚の見出しなど）を画面と同じ言語にする
         client = InnerTubeClient(session: session, hl: L.hl)
-        music = MusicRepository(client: client)
+        live = LiveClient(session: InnerTubeClient.createSession(), hl: L.hl, gl: client.gl, nowMs: { AppServices.clockMs() })
+        music = MusicRepository(client: client, live: live)
         resolver = StreamResolver(client: client, cipher: PlayerCipherProvider(session: session, nowMs: { AppServices.clockMs() }), nowMs: { AppServices.clockMs() })
         stats = PlaybackStats(client: client)
         // 歌詞の検索（LRCLIB）には YouTube と別の通信を使う

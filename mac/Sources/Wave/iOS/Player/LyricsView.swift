@@ -54,6 +54,8 @@ struct LyricsView: View {
     private func content(_ player: PlayerService) -> some View {
         if player.current == nil {
             message(L.t("曲を再生すると、ここに歌詞が出ます", "Play a song to see its lyrics here"))
+        } else if player.isLive {
+            message(L.t("ライブ配信には歌詞がありません", "Live streams don't have lyrics"))
         } else {
             switch player.lyrics {
             case nil:
@@ -157,16 +159,19 @@ private struct LyricsMiniControls: View {
     var body: some View {
         let player = AppServices.player!
         VStack(spacing: 6) {
-            Slider(value: Binding(get: { dragging ?? min(player.position, max(1, player.duration)) }, set: { dragging = $0 }),
-                   in: 0...max(1, player.duration)) { editing in
-                if !editing, let value = dragging {
-                    player.seek(value)
-                    dragging = nil
+            // ライブ配信は長さも位置も無く、シークしない
+            if !player.isLive {
+                Slider(value: Binding(get: { dragging ?? min(player.position, max(1, player.duration)) }, set: { dragging = $0 }),
+                       in: 0...max(1, player.duration)) { editing in
+                    if !editing, let value = dragging {
+                        player.seek(value)
+                        dragging = nil
+                    }
                 }
+                .tint(.white)
             }
-            .tint(.white)
             HStack {
-                Text(Ui.time(dragging ?? player.position)).foregroundStyle(.secondary).frame(width: 52, alignment: .leading)
+                Text(player.isLive ? "" : Ui.time(dragging ?? player.position)).foregroundStyle(.secondary).frame(width: 52, alignment: .leading)
                 Spacer()
                 Button(action: player.previous) { Image(systemName: "backward.end.fill").font(.title3).frame(width: 44, height: 44) }
                     .accessibilityLabel(L.t("前へ", "Previous"))
@@ -185,7 +190,7 @@ private struct LyricsMiniControls: View {
                 Button(action: player.next) { Image(systemName: "forward.end.fill").font(.title3).frame(width: 44, height: 44) }
                     .accessibilityLabel(L.t("次へ", "Next"))
                 Spacer()
-                Text(Ui.time(player.duration)).foregroundStyle(.secondary).frame(width: 52, alignment: .trailing)
+                Text(player.isLive ? "" : Ui.time(player.duration)).foregroundStyle(.secondary).frame(width: 52, alignment: .trailing)
             }
             .font(.caption.monospacedDigit())
             .buttonStyle(.plain)

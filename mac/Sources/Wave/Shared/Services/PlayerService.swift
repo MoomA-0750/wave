@@ -136,6 +136,9 @@ final class PlayerService {
     /// 鳴らしている端末の名前（isRemote のとき）。
     var remoteDevice: String?
 
+    /// 今の曲がライブ配信（長さ・シーク・歌詞・映像が無い。HLS で流す）。
+    var isLive: Bool { current?.isLive == true }
+
     /// 手元の音の再生位置（映像を合わせるため。ほかの端末を映している間は使わない）。
     var localPositionMs: Int64 { engine.hasSource ? Int64(engine.positionSeconds * 1000) : 0 }
 
@@ -205,8 +208,12 @@ final class PlayerService {
         }
         center.changePlaybackPositionCommand.addTarget { [weak self] event in
             guard let e = event as? MPChangePlaybackPositionCommandEvent else { return .commandFailed }
-            MainActor.assumeIsolated { self?.seek(e.positionTime) }
-            return .success
+            return MainActor.assumeIsolated {
+                // ライブ配信はシークしない
+                guard let self, !self.isLive else { return .commandFailed }
+                self.seek(e.positionTime)
+                return .success
+            }
         }
     }
 
@@ -229,9 +236,13 @@ final class PlayerService {
             shownArtworkFor = song.videoId
             loadArtwork(song)
         }
-        info[MPMediaItemPropertyPlaybackDuration] = duration
-        info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = position
+        // ライブ配信は長さも位置も無い（ロック画面・コントロールセンターでシークさせない）
+        let live = song.isLive
+        info[MPNowPlayingInfoPropertyIsLiveStream] = live
+        info[MPMediaItemPropertyPlaybackDuration] = live ? nil : duration
+        info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = live ? nil : position
         info[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? 1.0 : 0.0
+        MPRemoteCommandCenter.shared().changePlaybackPositionCommand.isEnabled = !live
         center.nowPlayingInfo = info
         center.playbackState = isPlaying ? .playing : .paused
     }
@@ -374,6 +385,14 @@ final class PlayerService {
         sourceId = nil
         setShuffleOrder(nil)
         replaceQueue([song], origin: .source)
+        // ライブ配信は終わらずに流れ続けるので、後ろにラジオのおすすめを足さない（Android と同じ）
+        if song.isLive {
+            radioSeed = nil
+            radioPlaylistId = nil
+            radioContinuation = nil
+            startSelection(0, remoteTarget: target)
+            return
+        }
         // 曲のラジオの続きは、鳴らす端末が自分で取る（キューには種の曲だけを渡す）
         radioSeed = song.videoId
         radioPlaylistId = "RDAMVM" + song.videoId
@@ -545,8 +564,8 @@ final class PlayerService {
             sendRemote(.previous)
             return
         }
-        // 3秒より先なら曲の頭へ（Spotify と同じ）
-        if position > 3 || index <= 0 {
+        // 3秒より先なら曲の頭へ（Spotify と同じ）。ライブ配信には頭が無いので前の曲へ
+        if (position > 3 && !isLive) || index <= 0 {
             seek(0)
             return
         }
@@ -591,7 +610,7 @@ final class PlayerService {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: work)
             return
         }
-        guard engine.hasSource else { return }
+        guard engine.hasSource, !isLive else { return }
         engine.seek(seconds)
         position = seconds
         cursorChanged.forEach { $0(false) }
@@ -947,7 +966,7 @@ final class PlayerService {
         case .pause: engine.pause()
         case .next: advance()
         case .previous:
-            if position > 3 || index <= 0 { seek(0) } else { selectAt(index - 1) }
+            if (position > 3 && !isLive) || index <= 0 { seek(0) } else { selectAt(index - 1) }
         case .seek: seek(Double(positionMs ?? 0) / 1000)
         default: return false
         }
@@ -999,32 +1018,60 @@ final class PlayerService {
         engine.pause()
         updateNowPlayingInfo()
         loadTask = Task {
-            guard let stream = await resolve(song.videoId) else {
-                if token == loadToken { isLoading = false }
-                return
-            }
-            guard token == loadToken, !Task.isCancelled else { return }
-            if !(await startStream(song, stream, seekTo: seekTo, token: token)) {
-                guard token == loadToken else { return }
-                await recover(song)
-                return
+            var song = song
+            if song.isLive {
+                if !(await startLive(song, token: token)) {
+                    guard token == loadToken else { return }
+                    await recover(song)
+                    return
+                }
+            } else {
+                switch await resolve(song.videoId) {
+                case .failed:
+                    if token == loadToken { isLoading = false }
+                    return
+                case .live:
+                    // ライブの印の無い曲がライブ配信だった: 印を付けて HLS で流す
+                    guard token == loadToken, !Task.isCancelled else { return }
+                    song = markLive(song)
+                    if !(await startLive(song, token: token)) {
+                        guard token == loadToken else { return }
+                        await recover(song)
+                        return
+                    }
+                case .stream(let stream):
+                    guard token == loadToken, !Task.isCancelled else { return }
+                    if !(await startStream(song, stream, seekTo: seekTo, token: token)) {
+                        guard token == loadToken else { return }
+                        await recover(song)
+                        return
+                    }
+                }
             }
             consecutiveFailures = 0
-            Task { await loadSongInfo(song, token: token) }
-            Task { await loadLyrics(song, token: token) }
+            Task { [song] in await loadSongInfo(song, token: token) }
+            Task { [song] in await loadLyrics(song, token: token) }
             prefetch()
             extendRadioIfNeeded()
         }
     }
 
-    private func resolve(_ videoId: String) async -> ResolvedStream? {
+    private enum Resolved {
+        case stream(ResolvedStream)
+        /// ライブ配信だった（HLS で流し直す）。
+        case live
+        case failed
+    }
+
+    private func resolve(_ videoId: String) async -> Resolved {
         if let cached = prefetched.removeValue(forKey: videoId), AppServices.resolver.isFresh(cached, marginMs: PlayerService.freshMarginMs),
             cached.generation == AppServices.client.generation
         {
-            return cached
+            return .stream(cached)
         }
-        guard let result = try? await AppServices.resolver.resolve(videoId: videoId) else { return nil }
-        if let stream = result.stream { return stream }
+        guard let result = try? await AppServices.resolver.resolve(videoId: videoId) else { return .failed }
+        if let stream = result.stream { return .stream(stream) }
+        if result.failure == .liveStream { return .live }
         AppPaths.log("resolve failed reason=\(String(describing: result.failure))")
         message = switch result.failure {
         case .notLoggedIn: L.t("この曲を再生するにはログインが必要です", "Log in to play this song")
@@ -1032,7 +1079,50 @@ final class PlayerService {
         case .network: L.t("通信できませんでした", "Couldn't connect")
         default: L.t("再生の準備ができませんでした（\(String(describing: result.failure))）", "Couldn't prepare playback (\(String(describing: result.failure)))")
         }
-        return nil
+        return .failed
+    }
+
+    /// キューの中の同じ曲に、ライブ配信の印を付ける（長さは持たない）。
+    private func markLive(_ song: Song) -> Song {
+        var live = song
+        live.isLive = true
+        live.durationSeconds = nil
+        var changed = false
+        for i in queue.indices where queue[i].videoId == song.videoId && !queue[i].isLive {
+            queue[i] = live
+            changed = true
+        }
+        if current?.videoId == song.videoId { current = live }
+        if changed { queueChanged.forEach { $0() } }
+        AppPaths.log("live detected queue=\(queue.count) index=\(index)")
+        return live
+    }
+
+    /// 鳴り始めたライブ配信（その時刻）。長く鳴ったあとの失敗（URL の期限切れなど）は、もう一度解決し直してよい。
+    @ObservationIgnored private var liveStartedAtMs: Int64?
+
+    /// ライブ配信を HLS で鳴らす（ANDROID の /player → マスター → 選んだ1本の媒体プレイリストを AVPlayer にそのまま渡す）。
+    /// 範囲取得の経路は通さない。再生の統計は送らない。
+    private func startLive(_ song: Song, token: Int) async -> Bool {
+        currentStream = nil
+        liveStartedAtMs = nil
+        guard let result = try? await AppServices.live.resolve(videoId: song.videoId) else { return false }
+        guard current?.videoId == song.videoId, token == loadToken else { return false }
+        guard let stream = result.stream, let url = URL(string: stream.revealUrl()) else {
+            AppPaths.log("live resolve failed reason=\(String(describing: result.failure))")
+            return false
+        }
+        guard await engine.loadLive(url) else { return false }
+        guard current?.videoId == song.videoId, token == loadToken else { return false }
+        engine.play()
+        position = 0
+        duration = 0
+        isPlaying = true
+        isLoading = false
+        liveStartedAtMs = clockMs
+        updateNowPlayingInfo()
+        AppPaths.log("play live queue=\(queue.count) index=\(index)")
+        return true
     }
 
     private func startStream(_ song: Song, _ stream: ResolvedStream, seekTo: Double, token: Int) async -> Bool {
@@ -1091,20 +1181,36 @@ final class PlayerService {
     /// 鳴らせなかったとき。1回だけ解読の準備から取り直してやり直し、だめなら次の曲へ。続けて失敗したら止める
     /// （ログインしていないと、googlevideo は先頭の一部しか返さないので、どの曲も鳴らない）。
     private func recover(_ song: Song) async {
-        guard AppServices.client.isLoggedIn else {
-            isLoading = false
-            message = L.t("曲を再生するにはログインしてください（右上のアカウントから）", "Log in to play songs (from the account button at the top right)")
-            return
+        // ライブ配信はログインなしで鳴る（www.youtube.com の匿名の HLS）。URL は IP に結び付き約6時間で切れるので、解決し直して1回やり直す
+        let live = current?.videoId == song.videoId ? isLive : song.isLive
+        if live, let started = liveStartedAtMs, clockMs - started > 60_000 { retried = false }
+        if !live {
+            guard AppServices.client.isLoggedIn else {
+                isLoading = false
+                message = L.t("曲を再生するにはログインしてください（右上のアカウントから）", "Log in to play songs (from the account button at the top right)")
+                return
+            }
         }
         if !retried {
             retried = true
-            AppServices.resolver.onStreamRejected()
-            prefetched.removeValue(forKey: song.videoId)
-            let at = position
             let token = loadToken
-            if let stream = await resolve(song.videoId), current?.videoId == song.videoId, await startStream(song, stream, seekTo: at, token: token) {
-                consecutiveFailures = 0
-                return
+            if live {
+                AppPaths.log("live retry")
+                isLoading = true
+                if let song = current, song.isLive, await startLive(song, token: token) {
+                    consecutiveFailures = 0
+                    return
+                }
+            } else {
+                AppServices.resolver.onStreamRejected()
+                prefetched.removeValue(forKey: song.videoId)
+                let at = position
+                if case .stream(let stream) = await resolve(song.videoId), current?.videoId == song.videoId,
+                    await startStream(song, stream, seekTo: at, token: token)
+                {
+                    consecutiveFailures = 0
+                    return
+                }
             }
         }
         isLoading = false
@@ -1114,7 +1220,12 @@ final class PlayerService {
             consecutiveFailures = 0
             return
         }
-        message = L.t("再生できなかったので、次の曲に進みます", "Couldn't play this song, skipping to the next one")
+        if live {
+            message = index + 1 < queue.count ? L.t("ライブ配信を再生できなかったので、次の曲に進みます", "Couldn't play this live stream, skipping to the next one")
+                : L.t("ライブ配信を再生できませんでした", "Couldn't play this live stream")
+        } else {
+            message = L.t("再生できなかったので、次の曲に進みます", "Couldn't play this song, skipping to the next one")
+        }
         if index + 1 < queue.count { advance() }
     }
 
@@ -1148,7 +1259,8 @@ final class PlayerService {
     private func loadSongInfo(_ song: Song, token: Int) async {
         guard let info = (try? await AppServices.music.songInfo(song.videoId))?.value, current?.videoId == song.videoId else { return }
         if AppServices.client.isLoggedIn { like = info.like }
-        video = info.video
+        // ライブ配信には重ねる映像（MV）を出さない
+        video = song.isLive || isLive ? nil : info.video
     }
 
     /// 評価を読み直す（読めなかったときの↻）。
@@ -1165,6 +1277,11 @@ final class PlayerService {
     }
 
     private func loadLyrics(_ song: Song, token: Int) async {
+        // ライブ配信には歌詞が無い（探さない）
+        if song.isLive || (current?.videoId == song.videoId && isLive) {
+            if current?.videoId == song.videoId { lyrics = LyricsService.Result.none }
+            return
+        }
         guard let result = try? await AppServices.lyrics.lyrics(song: song) else { return }
         if current?.videoId == song.videoId { lyrics = result }
     }
@@ -1173,7 +1290,7 @@ final class PlayerService {
     private func prefetch() {
         guard index + 1 < queue.count else { return }
         let next = queue[index + 1]
-        if prefetched[next.videoId] != nil { return }
+        if prefetched[next.videoId] != nil || next.isLive { return }
         Task {
             guard let stream = (try? await AppServices.resolver.resolve(videoId: next.videoId))?.stream else { return }
             prefetched[next.videoId] = stream

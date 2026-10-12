@@ -164,7 +164,7 @@ fun MiniPlayer(
                 LikeButton(connection, scope, onLikedTap = song?.let { current -> actions?.let { { it.addToPlaylist(current) } } })
                 IconAction(if (state.isPlaying) R.drawable.ic_pause else R.drawable.ic_play_arrow, if (state.isPlaying) stringResource(R.string.nowplaying_pause) else stringResource(R.string.nowplaying_play), { display.togglePlay() })
             }
-            if (state.durationMs > 0) {
+            if (state.durationMs > 0 && !state.isLive) {
                 // 下の小さな再生欄では波打たせない（波が枠からはみ出す）
                 LinearWavyProgressIndicator(
                     progress = { (state.positionMs.toFloat() / state.durationMs).coerceIn(0f, 1f) },
@@ -173,6 +173,19 @@ fun MiniPlayer(
                 )
             }
         }
+    }
+}
+
+/** ライブ配信の印（シークバーの代わり）。 */
+@Composable
+fun LiveBadge(modifier: Modifier = Modifier) {
+    androidx.compose.material3.Surface(
+        modifier = modifier,
+        shape = MaterialTheme.shapes.extraSmall,
+        color = MaterialTheme.colorScheme.error,
+        contentColor = MaterialTheme.colorScheme.onError,
+    ) {
+        Text(stringResource(R.string.live_badge), Modifier.padding(horizontal = 8.dp, vertical = 2.dp), style = MaterialTheme.typography.labelMediumEmphasized)
     }
 }
 
@@ -257,8 +270,10 @@ fun NowPlayingScreen(
     var fullVideo by rememberSaveable { mutableStateOf(false) }
     var pickArtist by remember { mutableStateOf<List<xyz.mooma0750.wave.core.music.ArtistRef>?>(null) }
     // 動画のある曲だけ「動画」を押せるようにする（押してから無いと分かるのを避ける）
-    val hasVideo by androidx.compose.runtime.produceState<Boolean?>(null, song?.videoId) {
-        value = song?.videoId?.let { videos.videoFor(it) is MusicVideos.Result.Found }
+    // ライブ配信には MV も歌詞も無い（長さもシークも無い）
+    val live = state.isLive
+    val hasVideo by androidx.compose.runtime.produceState<Boolean?>(null, song?.videoId, live) {
+        value = if (live) false else song?.videoId?.let { videos.videoFor(it) is MusicVideos.Result.Found }
     }
     LaunchedEffect(hasVideo) { if (hasVideo == false) video = false }
     val art by rememberArtworkColor(song?.thumbnailUrl)
@@ -274,8 +289,8 @@ fun NowPlayingScreen(
         val leftWidth = if (sideBySide) minOf(MAX_CONTENT_WIDTH, maxWidth * 0.45f) else minOf(maxWidth, MAX_CONTENT_WIDTH)
         // 曲名から操作の列までが最初の画面に収まるよう、ジャケットは高さに合わせて小さくする（開いた折りたたみ・横向き）
         val artSize = minOf(leftWidth - 48.dp, maxHeight - CONTROLS_HEIGHT).coerceAtLeast(160.dp)
-        val hasLyrics by androidx.compose.runtime.produceState<Boolean?>(null, song?.videoId) {
-            value = song?.let { lyrics.lyrics(it) is xyz.mooma0750.wave.core.lyrics.LyricsRepository.Result.Found }
+        val hasLyrics by androidx.compose.runtime.produceState<Boolean?>(null, song?.videoId, live) {
+            value = if (live) false else song?.let { lyrics.lyrics(it) is xyz.mooma0750.wave.core.lyrics.LyricsRepository.Result.Found }
         }
         if (sideBySide && song != null && hasLyrics == true) {
             Card(
@@ -394,6 +409,10 @@ fun NowPlayingScreen(
             Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
                 // ほかの端末を映している間は、ドラッグの間は表示だけ動かし、指を離したときに1回だけ命令を送る（命令ごとに暗号化・鍵交換をする）
                 var dragging by remember { mutableStateOf<Float?>(null) }
+                if (live) {
+                    LiveBadge(Modifier.align(Alignment.CenterHorizontally).padding(vertical = 14.dp))
+                    return@Column
+                }
                 Slider(
                     value = dragging ?: if (state.durationMs > 0) (state.positionMs.toFloat() / state.durationMs).coerceIn(0f, 1f) else 0f,
                     onValueChange = {
@@ -820,7 +839,8 @@ private fun rememberDisplay(
             artist = current.artists.joinToString(", ") { it.name },
             isPlaying = remote.playing,
             positionMs = remote.positionAt(now),
-            durationMs = (current.durationSeconds ?: 0) * 1000L,
+            durationMs = if (current.isLive) 0 else (current.durationSeconds ?: 0) * 1000L,
+            isLive = current.isLive,
             queue = remote.items.mapIndexed { index, song -> QueueRow(remote.itemIds[index], song.title, song.artists.joinToString(", ") { it.name }, song.thumbnailUrl) },
             currentIndex = remote.currentIndex,
             hasNext = remote.currentIndex < remote.items.size - 1 || remote.repeat != HandoffRepeat.Off,

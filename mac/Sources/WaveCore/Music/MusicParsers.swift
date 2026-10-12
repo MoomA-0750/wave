@@ -55,6 +55,18 @@ public enum MusicParsers {
             artists: rows.compactMap(artistRow))
     }
 
+    /// プレイリストに絞った検索の最初のページ（おすすめ・みんなのプレイリスト）。
+    public static func searchPlaylists(_ root: JSON) -> SearchPage<PlaylistSummary> { searchPageOf(root, playlistRow) }
+
+    private static func playlistRow(_ item: JSON) -> PlaylistSummary? {
+        let browse = item.path("navigationEndpoint", "browseEndpoint")
+        guard pageTypeOfBrowse(browse) == "MUSIC_PAGE_TYPE_PLAYLIST", let browseId = browse.path("browseId").str else { return nil }
+        let columns = flexColumnRuns(item)
+        guard let title = runsText(columns.first ?? []) else { return nil }
+        let id = browseId.hasPrefix("VL") ? String(browseId.dropFirst(2)) : browseId
+        return PlaylistSummary(playlistId: id, title: title, subtitle: runsText(columns.dropFirst().flatMap { $0 }), thumbnailUrl: lastThumbnailUrl(item.path("thumbnail")))
+    }
+
     private static func albumRow(_ item: JSON) -> AlbumSummary? {
         let browse = item.path("navigationEndpoint", "browseEndpoint")
         guard pageTypeOfBrowse(browse) == "MUSIC_PAGE_TYPE_ALBUM" else { return nil }
@@ -453,8 +465,11 @@ public enum MusicParsers {
         }.first
             ?? item.path("overlay", "musicItemThumbnailOverlayRenderer", "content", "musicPlayButtonRenderer", "playNavigationEndpoint", "watchEndpoint",
                          "watchEndpointMusicSupportedConfigs", "watchEndpointMusicConfig", "musicVideoType").str
-        return Song(videoId: videoId, title: title, artists: artistsOf(detailRuns), album: albumOf(detailRuns), durationSeconds: fixedDuration ?? durationOf(detailRuns),
-                    thumbnailUrl: lastThumbnailUrl(item.path("thumbnail")), kind: kind)
+        // ライブ配信には「ライブ」のバッジが付き、長さが無い（文字は言語に依るので、バッジの種類で見分ける）
+        let live = item.path("badges").items.contains { $0.path("liveBadgeRenderer") != nil }
+        return Song(videoId: videoId, title: title, artists: artistsOf(detailRuns), album: albumOf(detailRuns),
+                    durationSeconds: live ? nil : fixedDuration ?? durationOf(detailRuns),
+                    thumbnailUrl: lastThumbnailUrl(item.path("thumbnail")), kind: kind, isLive: live)
     }
 
     /// ラジオ・キューの行（playlistPanelVideoRenderer）。

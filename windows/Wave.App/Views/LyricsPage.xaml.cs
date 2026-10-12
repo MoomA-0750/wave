@@ -78,6 +78,11 @@ public sealed partial class LyricsPage : Page
             Empty(L.T("曲を再生すると、ここに歌詞が出ます", "Play a song to see its lyrics here"));
             return;
         }
+        if (song.IsLive)
+        {
+            Empty(L.T("ライブ配信には歌詞がありません", "Live streams don't have lyrics"));
+            return;
+        }
         if (await Artwork.DominantColorAsync(song.ThumbnailUrl) is { } color && Player.Current?.VideoId == song.VideoId)
         {
             var top = color;

@@ -76,6 +76,8 @@
     <string name="search_kind_song">Song</string>
     <string name="search_show_all">Show all</string>
     <string name="search_tab_all">All</string>
+    <string name="search_tab_live">Live</string>
+    <string name="live_badge">LIVE</string>
     <string name="search_tab_songs">Songs</string>
     <string name="search_tab_albums">Albums</string>
     <string name="search_tab_artists">Artists</string>
