@@ -31,7 +31,8 @@ public static partial class MusicParsers
         var show = new ArtistRef(title, null);
         // 保存のボタン。ログインしていなければ押すとログインの案内（likeEndpoint を持たない）なので、状態は分からないとする
         var toggle = header.Path("buttons").Items().Select(b => b.Path("toggleButtonRenderer").Obj()).FirstOrDefault(t => t is not null);
-        bool? saved = toggle is not null && toggle.FindAll("likeEndpoint").Count > 0 && toggle.Path("isToggled") is JsonValue v && v.TryGetValue<bool>(out var b) ? b : null;
+        // 「新しいエピソード」（VLRDPN）も同じ形で返るが、保存するものではない
+        bool? saved = toggle is not null && browseId.StartsWith(PodcastSummary.PodcastPrefix, StringComparison.Ordinal) && toggle.FindAll("likeEndpoint").Count > 0 && toggle.Path("isToggled") is JsonValue v && v.TryGetValue<bool>(out var b) ? b : null;
         var episodes = shelf.Path("contents").Items().Select(i => i.Path("musicMultiRowListItemRenderer").Obj()).OfType<JsonObject>()
             .Select(row => MultiRowEpisode(row, show, browseId)).OfType<PodcastEpisode>().ToList();
         return new PodcastPage(browseId, title, TextOf(header.Path("straplineTextOne")),
@@ -57,8 +58,15 @@ public static partial class MusicParsers
         var title = TextOf(row.Path("title"));
         if (videoId is null || title is null) return null;
         var progress = row.Path("playbackProgress", "musicPlaybackProgressRenderer");
+        // 「新しいエピソード」のように番組がまざる一覧では、行の補足に番組が付く（あればそれを使う）
+        var showRun = row.Path("subtitle", "runs").Items().Concat(row.Path("secondTitle", "runs").Items()).FirstOrDefault(r => PageTypeOf(r) == PodcastPageType);
+        if (showRun?.Path("text").Str() is { } rowShow)
+        {
+            show = new ArtistRef(rowShow, null);
+            showBrowseId = showRun.Path("navigationEndpoint", "browseEndpoint", "browseId").Str() ?? showBrowseId;
+        }
         // 「2294回視聴 • 6 日前」の最後が日付（再生回数が無ければ日付だけ）
-        var published = LastText(row.Path("subtitle", "runs").Items());
+        var published = LastText(row.Path("subtitle", "runs").Items().Where(r => !ReferenceEquals(r, showRun)));
         var duration = LastText(progress.Path("durationText", "runs").Items());
         int? percent = progress.Path("playbackProgressPercentage") is JsonValue p && p.GetValueKind() == JsonValueKind.Number && p.TryGetValue<double>(out var d) ? (int)d : null;
         var song = new Song(videoId, title, [show], null, null, LastThumbnailUrl(row.Path("thumbnail")),

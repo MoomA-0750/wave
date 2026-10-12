@@ -28,7 +28,7 @@ public sealed record PodcastEpisode(
     public string DateAndLength => string.Join(" • ", new[] { PublishedText, DurationText }.Where(s => !string.IsNullOrEmpty(s)));
 }
 
-/// <summary>ポッドキャストの番組のページ（MPSP…）。Saved はライブラリに保存しているか（ログインしていない・分からなければ null）。</summary>
+/// <summary>ポッドキャストの番組のページ（MPSP…）。「新しいエピソード」（VLRDPN）も同じ形で読む。Saved はライブラリに保存しているか（ログインしていない・分からなければ null）。</summary>
 public sealed record PodcastPage(
     string BrowseId,
     string Title,
@@ -39,7 +39,8 @@ public sealed record PodcastPage(
     string? Continuation,
     bool? Saved = null)
 {
-    public string PlaylistId => Summary.PlaylistId;
+    /// <summary>番組のプレイリスト（PL…）。「新しいエピソード」（VLRDPN）なら RDPN（再生の出どころ）。</summary>
+    public string PlaylistId => Summary.PlaylistId is var id && id.StartsWith("VL", StringComparison.Ordinal) ? id[2..] : Summary.PlaylistId;
 
     public PodcastSummary Summary => new(BrowseId, Title, Author, ThumbnailUrl);
 }

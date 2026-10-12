@@ -30,6 +30,8 @@ public sealed class MusicRepository(InnerTubeClient client)
     public const string LibraryPodcastsBrowse = "FEmusic_library_non_music_audio_list";
     /// <summary>保存した番組の新しいエピソード（ログインしたときだけ中身がある自動のプレイリスト）。</summary>
     public const string NewEpisodes = "RDPN";
+    /// <summary>新しいエピソードは browse すると番組のページと同じ形で返るので、番組のページとして VL を付けて読む（Android と同じ）。</summary>
+    public const string NewEpisodesBrowse = "VL" + NewEpisodes;
     private const int MaxLibraryPages = 20;
     private const int MaxPlaylistPages = 50;
 

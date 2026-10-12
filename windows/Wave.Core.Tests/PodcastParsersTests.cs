@@ -3,6 +3,16 @@ using Wave.Core.Music;
 
 namespace Wave.Core.Tests;
 
+internal static class PodcastTestText
+{
+    public static string ReplacingFirst(this string text, string from, string to)
+    {
+        var at = text.IndexOf(from, StringComparison.Ordinal);
+        if (at < 0) throw new InvalidOperationException("fixture の形が変わった: " + from);
+        return text[..at] + to + text[(at + from.Length)..];
+    }
+}
+
 /// <summary>Android 版の PodcastParsersTest と同じ確かめ方（匿名で取得した公開データ）。</summary>
 public class PodcastParsersTests
 {
@@ -62,6 +72,23 @@ public class PodcastParsersTests
         Assert.Null(first.ProgressPercent);
         Assert.StartsWith("https://", first.Song.ThumbnailUrl);
         Assert.NotNull(page.Continuation);
+    }
+
+    [Fact]
+    public void NewEpisodesTakeShowFromEachRowAndAreNotSavable()
+    {
+        // 「新しいエピソード」（VLRDPN）は番組のページと同じ形で、行ごとに番組が付く（ログインが要るので番組の行を差し込んで確かめる）
+        var showRun = """{"text":"Other Show","navigationEndpoint":{"browseEndpoint":{"browseId":"MPSPPLother","browseEndpointContextSupportedConfigs":{"browseEndpointContextMusicConfig":{"pageType":"MUSIC_PAGE_TYPE_PODCAST_SHOW_DETAIL_PAGE"}}}}}""";
+        var text = Fixtures.Text("browse_podcast").ReplacingFirst("""{"text":"2294回視聴"}""", showRun);
+        var page = MusicParsers.PodcastPage(Fixtures.Parse(text), MusicRepository.NewEpisodesBrowse);
+        Assert.NotNull(page);
+        Assert.Equal("RDPN", page.PlaylistId);
+        Assert.Null(page.Saved);
+        var first = page.Episodes[0];
+        Assert.Equal([new ArtistRef("Other Show", null)], first.Song.Artists);
+        Assert.Equal("MPSPPLother", first.ShowBrowseId);
+        Assert.Equal("6 日前", first.PublishedText);
+        Assert.Equal([new ArtistRef(page.Title, null)], page.Episodes[1].Song.Artists);
     }
 
     [Fact]

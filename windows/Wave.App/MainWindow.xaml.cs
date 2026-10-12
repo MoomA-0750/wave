@@ -364,7 +364,7 @@ public sealed partial class MainWindow : Window
         // ポッドキャストで絞ったときは、保存した番組の新しいエピソード（自動のプレイリスト）を先頭に（Android と同じ）
         if (libraryKind == "podcast" && (filter.Length == 0 || L.T("新しいエピソード", "New episodes").Contains(filter)))
             entries.Insert(0, new LibraryEntry(L.T("新しいエピソード", "New episodes"), L.T("プレイリスト • 自動", "Playlist • Auto"), null,
-                new HomeItem.PlaylistItem(new PlaylistSummary(MusicRepository.NewEpisodes, L.T("新しいエピソード", "New episodes"), null, null))));
+                new HomeItem.PodcastItem(new PodcastSummary(MusicRepository.NewEpisodesBrowse, L.T("新しいエピソード", "New episodes"), null, null))));
         LibraryList.ItemsSource = entries;
         LibraryGrid.ItemsSource = entries;
         var grid = AppServices.Settings.LibraryGrid;
