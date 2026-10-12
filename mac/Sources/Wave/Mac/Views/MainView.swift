@@ -88,6 +88,7 @@ struct MainView: View {
                         }
                         .onSubmit { model.searchFor(model.searchText) }
                         .onKeyPress(.escape) {
+                            if TextInput.composing { return .ignored }  // 変換中の Esc は変換の取り消しに使わせる
                             model.suggestions = []
                             return .handled
                         }
@@ -149,7 +150,7 @@ struct MainView: View {
         case 103:  // F11
             model.setFullScreen(!model.fullScreen)
             return true
-        case 53 where model.fullScreen:  // esc
+        case 53 where model.fullScreen && !TextInput.composing:  // esc（変換中は取り消しに使わせる）
             model.setFullScreen(false)
             return true
         default:
