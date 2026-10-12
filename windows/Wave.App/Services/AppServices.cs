@@ -30,6 +30,8 @@ public static class AppServices
     public static AiChat Ai { get; } = new();
     /// <summary>端末の連携（中継の場所が設定に無ければ使えない）。</summary>
     public static global::Wave.App.Services.Connect.ConnectService Connect { get; private set; } = null!;
+    /// <summary>Discord に再生中の曲を出す（設定でオンにしたときだけ）。</summary>
+    public static DiscordStatus Discord { get; private set; } = null!;
 
     public static void Initialize(DispatcherQueue ui)
     {
@@ -55,5 +57,6 @@ public static class AppServices
         Connect = new global::Wave.App.Services.Connect.ConnectService(ui, Player, Settings.RelayV2Url, Settings.RelayV2Host);
         Releases = new Releases(ui);
         Releases.Start();
+        Discord = new DiscordStatus(ui);
     }
 }

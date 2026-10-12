@@ -15,6 +15,9 @@ public sealed partial class SettingsPage : Page
         HistorySwitch.IsOn = AppServices.Settings.SendHistory;
         RenderAi();
         ReleaseSwitch.IsOn = AppServices.Settings.ReleaseNotices;
+        DiscordSwitch.IsOn = AppServices.Settings.DiscordPresence;
+        DiscordIdBox.Text = AppServices.Settings.DiscordClientId ?? "";
+        DiscordStateText.Text = DiscordState();
         LanguageBox.Items.Clear();
         foreach (var (key, label) in Languages) LanguageBox.Items.Add(new ComboBoxItem { Content = label, Tag = key });
         LanguageBox.SelectedIndex = Math.Max(0, Array.FindIndex(Languages, l => l.Key == AppServices.Settings.Language));
@@ -84,6 +87,30 @@ public sealed partial class SettingsPage : Page
         AppServices.Settings.ReleaseNotices = ReleaseSwitch.IsOn;
         AppServices.Settings.Save();
     }
+
+    private void OnDiscordToggled(object sender, RoutedEventArgs e)
+    {
+        if (AppServices.Settings.DiscordPresence == DiscordSwitch.IsOn) return;
+        AppServices.Settings.DiscordPresence = DiscordSwitch.IsOn;
+        SaveDiscordId();
+    }
+
+    private void OnDiscordIdChanged(object sender, RoutedEventArgs e) => SaveDiscordId();
+
+    private void SaveDiscordId()
+    {
+        // ID は数字だけ（貼るときに混ざった空白などは落とす）
+        var id = new string(DiscordIdBox.Text.Where(char.IsAsciiDigit).ToArray());
+        AppServices.Settings.DiscordClientId = id.Length > 0 ? id : null;
+        AppServices.Settings.Save();
+        AppServices.Discord.Push();
+        DiscordStateText.Text = DiscordState();
+    }
+
+    private static string DiscordState() =>
+        !AppServices.Settings.DiscordPresence ? ""
+        : AppServices.Settings.DiscordClientId is null ? L.T("Application ID を入れると出せます", "Enter the Application ID to turn this on")
+        : AppServices.Discord.StatusText;
 
     private void RenderAi()
     {
