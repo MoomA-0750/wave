@@ -18,6 +18,9 @@
             <Setter Property="MaxLines" Value="1" />
         </Style>
 
+        <!-- ライブ配信の印の色（YouTube の「ライブ」と同じ赤） -->
+        <SolidColorBrush x:Key="LiveBrush" Color="#E53935" />
+
         <!-- 小さな灰色の文字 -->
         <Style x:Key="SubtleTextStyle" TargetType="TextBlock" BasedOn="{StaticResource CaptionTextBlockStyle}">
             <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
@@ -266,7 +269,9 @@
             <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" VerticalAlignment="Center">
                 <FontIcon Glyph="&#xEC61;" FontSize="14" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" Visibility="{x:Bind app:Ui.Show(IsLiked), Mode=OneWay}"
                           ToolTipService.ToolTip="{x:Bind app:L.T('高く評価済み', 'Liked')}" />
-                <TextBlock Text="{x:Bind app:Ui.Duration(Song.DurationSeconds)}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                <TextBlock Text="{x:Bind app:Ui.Duration(Song.DurationSeconds)}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Visibility="{x:Bind app:Ui.Hide(Song.IsLive)}" />
+                <!-- ライブ配信は長さの代わりに「ライブ」 -->
+                <TextBlock Text="{x:Bind app:L.T('ライブ', 'LIVE')}" Foreground="{StaticResource LiveBrush}" FontWeight="SemiBold" Visibility="{x:Bind app:Ui.Show(Song.IsLive)}" />
             </StackPanel>
             <Button Grid.Column="4" Style="{StaticResource IconButtonStyle}" Click="OnMoreClick" ToolTipService.ToolTip="{x:Bind app:L.T('その他', 'More')}">
                 <FontIcon Glyph="&#xE712;" FontSize="14" />
