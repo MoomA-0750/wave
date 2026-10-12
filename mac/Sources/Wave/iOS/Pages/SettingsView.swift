@@ -86,6 +86,8 @@ struct SettingsView: View {
             }
             Section {
                 LabeledContent("wave for iPhone", value: version)
+                // 動作の記録（件数・状態だけで、認証情報・URL は書いていない）を送れるように
+                ShareLink(item: AppPaths.file("wave.log")) { Label(L.t("動作の記録を共有", "Share the activity log"), systemImage: "doc.text") }
                 Text(L.t("ログイン情報は iOS のキーチェーンに、この iPhone だけが読める形で保存します。",
                          "Your login is stored in the iOS keychain, readable only on this iPhone."))
                     .font(.footnote).foregroundStyle(.secondary)

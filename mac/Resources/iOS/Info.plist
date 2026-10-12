@@ -6,6 +6,7 @@
 	<key>CFBundleDisplayName</key><string>wave</string>
 	<key>CFBundleIdentifier</key><string>xyz.mooma0750.wave</string>
 	<key>CFBundleExecutable</key><string>wave</string>
+	<key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
 	<key>CFBundlePackageType</key><string>APPL</string>
 	<key>CFBundleShortVersionString</key><string>0.1.0</string>
 	<key>CFBundleVersion</key><string>1</string>

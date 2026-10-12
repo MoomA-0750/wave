@@ -11,12 +11,13 @@
 #   mac.sh ios-cmd <命令>...  iPhone 版に開発用の命令を送る
 #   mac.sh ios-log [行数]     iPhone 版のログの末尾
 #   mac.sh ios-shot <ファイル> シミュレーターの画面を撮ってこの機械に持ってくる
+#   mac.sh ios-ipa [ファイル]  iPhone の実機向けに、署名していない wave.ipa を組んで持ってくる（既定は build/wave.ipa）
 set -euo pipefail
 here=$(cd "$(dirname "$0")/../.." && pwd)
 # 作業木ごとに別の置き場（並べて組んでもぶつからない）
 remote=wave-build-$(basename "$here")
 sync() {
-  rsync -az --delete --exclude .build --exclude .build-ios --exclude build "$here/mac/" "mac:$remote/mac/"
+  rsync -az --delete --exclude .build --exclude .build-ios --exclude .build-ios-device --exclude build "$here/mac/" "mac:$remote/mac/"
   rsync -az --delete "$here/core/src/desktopTest/resources/fixtures/" "mac:$remote/core/src/desktopTest/resources/fixtures/"
   rsync -az --delete "$here/windows/Wave.Core.Tests/Fixtures/" "mac:$remote/windows/Wave.Core.Tests/Fixtures/"
 }
@@ -43,5 +44,6 @@ ios-run)
 ios-cmd) shift; printf "%s\n" "$@" | ssh mac "cat > \"\$(xcrun simctl get_app_container wave-iphone xyz.mooma0750.wave data)/Library/Application Support/wave/debug-command.txt\"" ;;
 ios-log) ssh mac "tail -n ${2:-80} \"\$(xcrun simctl get_app_container wave-iphone xyz.mooma0750.wave data)/Library/Application Support/wave/wave.log\"" ;;
 ios-shot) ssh mac "xcrun simctl io wave-iphone screenshot /tmp/wave-ios.png >/dev/null 2>&1" && scp -q mac:/tmp/wave-ios.png "$2" ;;
+ios-ipa) sync; ssh mac "cd $remote/mac && scripts/ios-bundle.sh device" && scp -q mac:$remote/mac/build/ios-device/wave.ipa "${2:-build/wave.ipa}" ;;
 *) sed -n 2,13p "$0"; exit 1 ;;
 esac
