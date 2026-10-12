@@ -1,6 +1,6 @@
 # wave
 
-YouTube Music の自作クライアント。いまは Android（Jetpack Compose）・Windows（WinUI 3）・macOS（SwiftUI）が対象で、共有コアは Kotlin Multiplatform で書く。
+YouTube Music の自作クライアント。いまは Android（Jetpack Compose）・Windows（WinUI 3）・macOS と iPhone（SwiftUI）が対象で、共有コアは Kotlin Multiplatform で書く。
 
 InnerTube との通信には [innertubex](https://github.com/MetrolistGroup/innertubex)（GPL-3.0）を使う。
 
@@ -47,23 +47,29 @@ scripts/check-common-main.sh
 - 確かめは to-fu の Wear OS エミュレーターで行う（`scripts/watch.sh`）。時計でできないことは [docs/wear.md](docs/wear.md) にまとめた
 - 基本操作のテスト: `python3 scripts/watch_smoke.py`（ログインした時計のエミュレーターで、検索・アーティスト・プレイリスト・再生・ベゼルの音量・曲送り・一時停止と再開・プレイリストへの追加と削除を流す。アカウントには確かめ用のプレイリストを作って消すことだけを書き込む）
 
-## macOS
+## macOS・iPhone
 
-`mac/` に macOS 版（SwiftUI、macOS 15 以降）がある。画面も機能も Windows 版（`windows/`）と同じにする。`WaveCore` は Windows の Wave.Core を Swift へ移したもの（端末の連携は Android・Windows とバイト単位で互換）、`WaveMac` は画面。
+`mac/` に macOS 版と iPhone 版（SwiftUI、macOS 15・iOS 18 以降）がある。Mac の画面と機能は Windows 版（`windows/`）と、iPhone は Android 版と同じにする。`WaveCore` は Windows の Wave.Core を Swift へ移したもの（端末の連携は Android・Windows とバイト単位で互換）。アプリは `Sources/Wave` の1つで、`Shared`（再生・ライブラリ・連携など）を両方で使い、`Mac`・`iOS` の画面をそれぞれの OS で組む。ウィジェット（`Sources/WaveWidget`）は両方にある。
 
 組むのは Mac（`ssh mac`、Xcode）で、この機械からは `mac/scripts/mac.sh` で送って組む。
 
 ```sh
 mac/scripts/mac.sh test     # WaveCore のテスト
 mac/scripts/mac.sh run      # wave.app を組み、Apple Development の証明書で署名して起動する（開発用の命令を入れて組む）
-mac/scripts/mac.sh cmd "search 米津玄師" "now"   # 開発用の命令を送る（Sources/WaveMac/Support/DebugCommands.swift）
+mac/scripts/mac.sh cmd "search 米津玄師" "now"   # 開発用の命令を送る（Sources/Wave/Mac/Support/DebugCommands.swift）
 mac/scripts/mac.sh log      # アプリのログ（~/Library/Application Support/wave/wave.log）
+mac/scripts/mac.sh app      # 配る版（開発用の命令なし）の wave.app を組む
+mac/scripts/mac.sh ios-ipa  # iPhone 版の wave.ipa を組んで、この機械の build/wave.ipa に持ってくる
 ```
+
+- iPhone へは、Sideloadly などで本人の Apple ID で署名し直して入れる（無料の Apple ID だと7日で入れ直しが要る）。iPhone の「デベロッパモード」をオンにし、「VPN とデバイス管理」で自分の Apple ID を信頼する
+- Xcode のプロジェクトは使わず `swift build` で組む。ウィジェットのボタンなどの App Intents の一覧（`Metadata.appintents`）は Xcode が作るものなので、組み立ての中で `appintentsmetadataprocessor` を直に呼んで作る
+- 連携の中継の宛先は、組むときにこの機械の `local.properties`（`wave.relayV2Url`・`wave.relayV2Host`）から Info.plist に書き込む（Android と同じ）。Mac は設定ファイルにあればそちらを使う
+- Mac 版はメニューバーに再生中の曲を出す（押すと操作の窓、右クリックで再生・一時停止、2本指で横に払うと曲送り、縦に払うと音量）
 
 - 署名は Mac の画面側のターミナルで行う（`scripts/sign.command`。ssh からはログインキーチェーンが閉じていて署名できない）。Team ID の付いた署名にしておくと、組み直してもキーチェーンに保存したログイン情報をそのまま読める
 - ログイン情報は macOS のキーチェーン（このユーザー・この Mac だけ）に保存する。Windows の DPAPI に当たる
 - 再生は AVPlayer。署名付きの URL は渡さず、仮の URL（`wave-media://`）を渡して、求められた範囲をアプリが取って返す（Windows の DASH の DownloadRequested と同じ考え）
-- 端末の連携の中継は、Windows と同じく設定ファイル（`settings.json` の `relayV2Url`・`relayV2Host`）に書いたときだけ使う
 
 ## 認証情報の扱い
 
