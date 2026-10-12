@@ -12,6 +12,7 @@
 	<key>CFBundleIconFile</key><string>wave</string>
 	<key>CFBundleDevelopmentRegion</key><string>ja</string>
 	<key>CFBundleLocalizations</key><array><string>ja</string><string>en</string></array>
+	<key>CFBundleURLTypes</key><array><dict><key>CFBundleURLName</key><string>xyz.mooma0750.wave</string><key>CFBundleURLSchemes</key><array><string>wave</string></array></dict></array>
 	<key>LSMinimumSystemVersion</key><string>15.0</string>
 	<key>LSApplicationCategoryType</key><string>public.app-category.music</string>
 	<key>NSHighResolutionCapable</key><true/>

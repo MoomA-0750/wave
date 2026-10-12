@@ -5,7 +5,8 @@ import WaveCore
 /// 会話の1つ分の表示（Android の AiMessage と同じ）。
 enum AiMessage: Identifiable {
     case user(String)
-    case assistant(String)
+    /// Claude の答え。videoId は時刻付きの歌詞を添えて聞いたときの曲（答えの中の [mm:ss] はこの曲が鳴っているときだけ押せる）。
+    case assistant(String, videoId: String? = nil)
     case action(String)
     case songs([Song])
     case failure(String)
@@ -13,7 +14,7 @@ enum AiMessage: Identifiable {
     var id: String {
         switch self {
         case .user(let t): "u:\(t.hashValue)"
-        case .assistant(let t): "a:\(t.prefix(32).hashValue)"
+        case .assistant(let t, _): "a:\(t.prefix(32).hashValue)"
         case .action(let t): "x:\(t.hashValue)"
         case .songs(let s): "s:\(s.map(\.videoId).joined())"
         case .failure(let t): "f:\(t.hashValue)"
@@ -23,11 +24,19 @@ enum AiMessage: Identifiable {
 
 /// Claude との会話（Android の AiChat・AiTools と同じ）。家の PC などで動く中継 tools/ai-bridge 経由で Claude Code を使う。
 /// 中継は状態を持たないので、毎回それまでのやりとりと、今の曲・歌詞を送る。道具の呼び出しは手元で行う。
-/// 会話はアプリが動いている間だけ持つ。YouTube の認証情報は中継へ送らない（別の通信を使う）。
+/// 会話は端末の中の履歴（AiHistoryStore）に残し、「新しい会話」で次の会話へ移る。履歴から開いた会話はそのまま続けられる。
+/// YouTube の認証情報は中継へ送らない（別の通信を使う）。
 @MainActor @Observable
 final class AiChat {
     private(set) var messages: [AiMessage] = []
     private(set) var running = false
+    /// 履歴に残すときの id（新しい会話ごとに変わる。履歴から開けばその会話の id）。
+    private(set) var conversationId = UUID().uuidString
+    @ObservationIgnored private var createdAtMs = AiChat.nowMs()
+    /// これまでの会話。
+    let history = AiHistoryStore()
+
+    private static func nowMs() -> Int64 { Int64(Date().timeIntervalSince1970 * 1000) }
 
     @ObservationIgnored private var task: Task<Void, Never>?
     @ObservationIgnored private var known: [String: Song] = [:]
@@ -50,9 +59,83 @@ final class AiChat {
 
     var configured: Bool { !(AppServices.settings.aiUrl ?? "").isEmpty && !(AppServices.settings.aiToken ?? "").isEmpty }
 
+    /// 新しい会話にする（今の会話は履歴に残す）。
     func clear() {
         stop()
+        archive()
+        reset()
+    }
+
+    /// 履歴の会話を開いて続ける。
+    func open(_ id: String) {
+        guard let conversation = history.conversations.first(where: { $0.id == id }) else { return }
+        stop()
+        archive()
+        messages = conversation.messages.compactMap(AiChat.message(of:))
+        for case .songs(let songs) in messages { songs.forEach(remember) }
+        conversationId = conversation.id
+        createdAtMs = conversation.createdAtMs
+    }
+
+    /// 履歴から消す。開いている会話なら、新しい会話にする。
+    func delete(_ id: String) {
+        if conversationId == id {
+            stop()
+            reset()
+        }
+        history.remove(id)
+    }
+
+    /// ログアウトのとき: 今の会話も履歴も消す。
+    func wipe() {
+        stop()
+        history.clear()
+        reset()
+    }
+
+    private func reset() {
         messages.removeAll()
+        conversationId = UUID().uuidString
+        createdAtMs = AiChat.nowMs()
+    }
+
+    /// 答えの中の時刻を押した: 話している曲がまだ鳴っていれば、その位置へ飛ぶ（ほかの端末で鳴っていればその端末へ）。
+    @discardableResult
+    static func seek(videoId: String, positionMs: Int64) -> Bool {
+        let player = AppServices.player!
+        let ok = player.current?.videoId == videoId
+        if ok { player.seek(Double(positionMs) / 1000) }
+        AppPaths.log("ai seek ok=\(ok)")
+        return ok
+    }
+
+    /// 今の会話を履歴に残す（自分の発言が無ければ残さない）。
+    private func archive() {
+        let saved = messages.map(AiChat.saved(of:))
+        guard let first = saved.first(where: { $0.kind == "user" }) else { return }
+        history.save(AiConversation(id: conversationId, title: AiHistory.title(firstUserText: first.text), createdAtMs: createdAtMs,
+                                    updatedAtMs: AiChat.nowMs(), messages: saved))
+    }
+
+    private static func saved(of message: AiMessage) -> AiSavedMessage {
+        switch message {
+        case .user(let t): AiSavedMessage(kind: "user", text: t)
+        case .assistant(let t, let videoId): AiSavedMessage(kind: "assistant", text: t, videoId: videoId)
+        case .action(let t): AiSavedMessage(kind: "action", text: t)
+        case .songs(let songs): AiSavedMessage(kind: "songs", songs: songs.map(SongRecord.init))
+        case .failure(let t): AiSavedMessage(kind: "failure", text: t)
+        }
+    }
+
+    private static func message(of saved: AiSavedMessage) -> AiMessage? {
+        switch saved.kind {
+        case "user": .user(saved.text)
+        case "assistant": .assistant(saved.text, videoId: saved.videoId)
+        case "action": .action(saved.text)
+        case "songs": (saved.songs ?? []).isEmpty ? nil : .songs((saved.songs ?? []).map(\.song))
+        case "failure": .failure(saved.text)
+        default: nil
+        }
     }
 
     func stop() {
@@ -94,16 +177,22 @@ final class AiChat {
         let history: [JSON] = messages.compactMap {
             switch $0 {
             case .user(let t): .obj(["role": "user", "content": .string(t)])
-            case .assistant(let t): .obj(["role": "assistant", "content": .string(t)])
+            case .assistant(let t, _): .obj(["role": "assistant", "content": .string(t)])
             default: nil
             }
         }
         messages.append(.user(request))
         running = true
+        archive()
+        let id = conversationId
         task = Task {
             defer {
-                running = false
-                task = nil
+                // 止めたあとに別の会話へ移っていれば、そちらには触れない
+                if conversationId == id {
+                    running = false
+                    task = nil
+                    archive()
+                }
             }
             guard configured else {
                 messages.append(.failure(L.t("Claude につないでいません。設定の「Claude」でつないでください。", "Claude isn't connected yet. Connect it in Settings → Claude.")))
@@ -131,11 +220,16 @@ final class AiChat {
 
     private func run(_ request: String, history: [JSON]) async throws {
         var body = JSONObject([("task", .string(request)), ("messages", .array(history))])
+        var syncedVideoId: String?
         if let song = AppServices.player.current {
             remember(song)
             body["now_playing"] = .obj(["title": .string(song.title), "artists": .string(song.artistsText), "album": .string(song.album?.title ?? ""),
                                         "video_id": .string(song.videoId)])
-            if let lyrics = await lyricsText(song) { body["lyrics"] = .string(lyrics) }
+            if let lyrics = await lyricsOf(song) {
+                // 時刻付きなら行ごとに [mm:ss] を付けて送る（Claude が歌詞を引くときに時刻を添える）
+                body["lyrics"] = .string(AiText.lyrics(lyrics))
+                if case .synced = lyrics { syncedVideoId = song.videoId }
+            }
         }
         let (bytes, response) = try await session.bytes(for: post("/v1/agent", .object(body)))
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
@@ -152,10 +246,10 @@ final class AiChat {
                 session = s
             } else if let text = ev["delta"].str {
                 if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !appending { continue }
-                if appending, case .assistant(let last)? = messages.last {
-                    messages[messages.count - 1] = .assistant(last + text)
+                if appending, case .assistant(let last, let videoId)? = messages.last {
+                    messages[messages.count - 1] = .assistant(last + text, videoId: videoId)
                 } else {
-                    messages.append(.assistant(String(text.drop(while: { $0.isWhitespace }))))
+                    messages.append(.assistant(String(text.drop(while: { $0.isWhitespace })), videoId: syncedVideoId))
                 }
                 appending = text != "\n\n"
             } else if let call = ev["tool_call"].obj {
@@ -174,12 +268,9 @@ final class AiChat {
         }
     }
 
-    private func lyricsText(_ song: Song) async -> String? {
+    private func lyricsOf(_ song: Song) async -> SongLyrics? {
         guard case .found(let lyrics)? = try? await AppServices.lyrics.lyrics(song: song) else { return nil }
-        switch lyrics {
-        case .synced(let s): return s.lines.map(\.text).joined(separator: "\n")
-        case .plain(let p): return p.text
-        }
+        return lyrics
     }
 
     private func remember(_ song: Song) { known[song.videoId] = song }
@@ -211,7 +302,7 @@ final class AiChat {
             guard let song = player.current else { return ("nothing is playing", nil, nil) }
             remember(song)
             var o = JSONObject([("song", AiChat.songJson(song))])
-            if let lyrics = await lyricsText(song) { o["lyrics"] = .string(lyrics) }
+            if let lyrics = await lyricsOf(song) { o["lyrics"] = .string(AiText.lyrics(lyrics)) }
             return (.object(o), nil, nil)
         case "get_queue":
             let songs = player.queue

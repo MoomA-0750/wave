@@ -72,6 +72,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.ktor.client.okhttp)
     implementation(libs.androidx.media3.exoplayer)
+    implementation(libs.androidx.media3.exoplayer.hls)
     implementation(libs.androidx.media3.session)
     implementation(libs.androidx.media3.datasource.okhttp)
     implementation(libs.kotlinx.coroutines.guava)
@@ -80,6 +81,9 @@ dependencies {
     implementation(libs.coil.network.okhttp)
     // Phase 6 のペアリングの QR（表示は ZXing、読み取りは CameraX の画像を ZXing で解く）
     implementation(libs.zxing.core)
+    // ホーム画面のウィジェット（再生中の曲・プレイリスト）。時計には無い
+    "phoneImplementation"(libs.androidx.glance.appwidget)
+    "phoneImplementation"(libs.androidx.glance.material3)
     "phoneImplementation"(libs.androidx.camera.camera2)
     "phoneImplementation"(libs.androidx.camera.lifecycle)
     "phoneImplementation"(libs.androidx.camera.view)

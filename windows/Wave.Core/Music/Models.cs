@@ -9,7 +9,9 @@ public sealed record Song(
     int? DurationSeconds,
     string? ThumbnailUrl,
     // 曲の種類（musicVideoType の値。MUSIC_VIDEO_TYPE_ATV は音源、_OMV は公式の MV、_UGC は投稿者の動画）。応答に無ければ null
-    string? Kind = null)
+    string? Kind = null,
+    // ライブ配信（ラジオのように流れ続ける）。長さもシークも無く、HLS で流す（保存したキューに無ければ false）
+    bool IsLive = false)
 {
     public const string KindSong = "MUSIC_VIDEO_TYPE_ATV";
     public const string KindMusicVideo = "MUSIC_VIDEO_TYPE_OMV";

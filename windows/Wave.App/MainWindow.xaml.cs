@@ -455,6 +455,8 @@ public sealed partial class MainWindow : Window
                 RenderNowPlaying();
                 RenderFullView();
                 if (QueueView.Visibility == Visibility.Visible) RenderQueue();
+                // 答えの中の歌詞の時刻は、話している曲が鳴っているときだけ押せる
+                if (aiWired) RenderAi();
                 Title = Player.Current is { } current ? $"{current.Title} • {current.ArtistsText}" : "wave";
                 PrefetchMembership();
                 break;
@@ -466,6 +468,8 @@ public sealed partial class MainWindow : Window
             case nameof(PlayerService.Index):
                 RenderNowPlaying();
                 if (QueueView.Visibility == Visibility.Visible) RenderQueue();
+                // 答えの中の歌詞の時刻は、話している曲が鳴っているときだけ押せる
+                if (aiWired) RenderAi();
                 Title = Player.Current is { } song ? $"{song.Title} • {song.ArtistsText}" : "wave";
                 break;
             case nameof(PlayerService.Lyrics):
@@ -759,7 +763,8 @@ public sealed partial class MainWindow : Window
         AiMessages.Children.Clear();
         if (chat.Messages.Count == 0)
             AiMessages.Children.Add(new TextBlock { Text = L.T("曲探し・プレイリスト作りを頼めます。再生中の曲について、歌詞の意味や似た曲も聞けます。", "Ask Claude to find music, make a playlist, or tell you about the song that's playing — what the lyrics mean, similar songs, and more."), TextWrapping = TextWrapping.Wrap, Style = (Style)Application.Current.Resources["SubtleTextStyle"], MaxLines = 0 }); // 案内文は折り返して全部出す（SubtleTextStyle は1行で切る）
-        foreach (var message in chat.Messages) AiMessages.Children.Add(AiElement(message));
+        var playing = Player.Current?.VideoId;
+        foreach (var message in chat.Messages) AiMessages.Children.Add(AiElement(message, playing));
         if (chat.Running) AiMessages.Children.Add(new ProgressBar { IsIndeterminate = true });
         AiSendIcon.Glyph = chat.Running ? "\uE71A" : "\uE724";
         AiSuggestions.Visibility = Ui.Hide(chat.Running);
@@ -767,7 +772,7 @@ public sealed partial class MainWindow : Window
         AiScroller.ChangeView(null, AiScroller.ScrollableHeight, null, disableAnimation: true);
     }
 
-    private static UIElement AiElement(AiMessage message)
+    private static UIElement AiElement(AiMessage message, string? playingVideoId)
     {
         var subtle = (Style)Application.Current.Resources["SubtleTextStyle"];
         switch (message)
@@ -783,7 +788,8 @@ public sealed partial class MainWindow : Window
                     Child = new TextBlock { Text = user.Text, TextWrapping = TextWrapping.Wrap, Foreground = (Brush)Application.Current.Resources["TextOnAccentFillColorPrimaryBrush"] },
                 };
             case AiMessage.Assistant assistant:
-                return MarkdownBlock(assistant.Text);
+                // 答えの中の [mm:ss] は、話している曲がまだ鳴っていれば押せる（その位置へ飛ぶ）
+                return MarkdownBlock(assistant.Text, assistant.VideoId is { } id && id == playingVideoId ? id : null);
             case AiMessage.Action action:
                 return new TextBlock { Text = "・" + action.Text, TextWrapping = TextWrapping.Wrap, Style = subtle };
             case AiMessage.Failure failure:
@@ -815,10 +821,20 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    /// <summary>Claude の答えの Markdown のうち、太字（**…**）と見出し（# …）だけを見た目にする（Android と同じ）。</summary>
-    private static TextBlock MarkdownBlock(string text)
+    /// <summary>
+    /// Claude の答えの Markdown のうち、太字（**…**）と見出し（# …）だけを見た目にする（Android と同じ）。
+    /// seekVideoId があれば、歌詞の時刻 [mm:ss] を押せるリンク（▶ mm:ss）にし、押すとその位置へ飛ぶ。
+    /// </summary>
+    private static TextBlock MarkdownBlock(string text, string? seekVideoId = null)
     {
         var block = new TextBlock { TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true };
+        void AddRun(string piece, bool bold)
+        {
+            if (piece.Length == 0) return;
+            var run = new Microsoft.UI.Xaml.Documents.Run { Text = piece };
+            if (bold) run.FontWeight = Microsoft.UI.Text.FontWeights.Bold;
+            block.Inlines.Add(run);
+        }
         var lines = text.Split('\n');
         for (var i = 0; i < lines.Length; i++)
         {
@@ -829,9 +845,24 @@ public sealed partial class MainWindow : Window
             var parts = line.Split("**");
             for (var k = 0; k < parts.Length; k++)
             {
-                var run = new Microsoft.UI.Xaml.Documents.Run { Text = parts[k] };
-                if (heading.Success || k % 2 == 1) run.FontWeight = Microsoft.UI.Text.FontWeights.Bold;
-                block.Inlines.Add(run);
+                var bold = heading.Success || k % 2 == 1;
+                var part = parts[k];
+                var at = 0;
+                if (seekVideoId is { } videoId)
+                {
+                    foreach (var stamp in Wave.Core.Ai.AiText.Timestamps(part))
+                    {
+                        AddRun(part[at..stamp.Index], bold);
+                        var link = new Microsoft.UI.Xaml.Documents.Hyperlink { UnderlineStyle = Microsoft.UI.Xaml.Documents.UnderlineStyle.None };
+                        link.Inlines.Add(new Microsoft.UI.Xaml.Documents.Run { Text = $"\u00A0▶\u00A0{stamp.Label}\u00A0" });
+                        ToolTipService.SetToolTip(link, L.T($"{stamp.Label} へ飛ぶ", $"Jump to {stamp.Label}"));
+                        var position = stamp.PositionMs;
+                        link.Click += (_, _) => AiChat.Seek(videoId, position);
+                        block.Inlines.Add(link);
+                        at = stamp.Index + stamp.Length;
+                    }
+                }
+                AddRun(part[at..], bold);
             }
         }
         return block;
@@ -859,6 +890,51 @@ public sealed partial class MainWindow : Window
     }
 
     private void OnAiClear(object sender, RoutedEventArgs e) => AppServices.Ai.Clear();
+
+    /// <summary>これまでの会話（この PC の中だけ）。押すと開いて続け、ゴミ箱で消す（Android と同じ）。</summary>
+    private void OnAiHistory(object sender, RoutedEventArgs e)
+    {
+        var flyout = new Flyout();
+        void Fill()
+        {
+            var chat = AppServices.Ai;
+            var panel = new StackPanel { Spacing = 2, Width = 320 };
+            panel.Children.Add(new TextBlock { Text = L.T("これまでの会話", "Past chats"), Style = (Style)Application.Current.Resources["BodyStrongTextBlockStyle"], Margin = new Thickness(4, 0, 0, 6) });
+            if (chat.History.Conversations.Count == 0)
+                panel.Children.Add(new TextBlock { Text = L.T("まだ会話はありません。会話はこの PC の中だけに残ります。", "No past chats yet. Chats are kept on this PC only."), TextWrapping = TextWrapping.Wrap, Style = (Style)Application.Current.Resources["SubtleTextStyle"], MaxLines = 0, Margin = new Thickness(4, 0, 0, 0) });
+            foreach (var conversation in chat.History.Conversations)
+            {
+                var grid = new Grid { ColumnSpacing = 4 };
+                grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                var text = new StackPanel();
+                text.Children.Add(new TextBlock { Text = conversation.Title.Length > 0 ? conversation.Title : L.T("（質問なし）", "(no question)"), TextTrimming = TextTrimming.CharacterEllipsis });
+                text.Children.Add(new TextBlock { Text = DateTimeOffset.FromUnixTimeMilliseconds(conversation.UpdatedAtMs).LocalDateTime.ToString("g"), Style = (Style)Application.Current.Resources["SubtleTextStyle"] });
+                var open = new Button { Content = text, HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Left, Padding = new Thickness(6), BorderThickness = new Thickness(0), Background = new SolidColorBrush(Colors.Transparent) };
+                if (conversation.Id == chat.ConversationId) open.Background = (Brush)Application.Current.Resources["SubtleFillColorSecondaryBrush"];
+                var id = conversation.Id;
+                open.Click += (_, _) =>
+                {
+                    flyout.Hide();
+                    chat.Open(id);
+                };
+                grid.Children.Add(open);
+                var delete = new Button { Style = (Style)Application.Current.Resources["IconButtonStyle"], Content = new FontIcon { Glyph = "\uE74D", FontSize = 14 }, VerticalAlignment = VerticalAlignment.Center };
+                ToolTipService.SetToolTip(delete, L.T("会話を消す", "Delete chat"));
+                delete.Click += (_, _) =>
+                {
+                    chat.Delete(id);
+                    Fill();
+                };
+                Grid.SetColumn(delete, 1);
+                grid.Children.Add(delete);
+                panel.Children.Add(grid);
+            }
+            flyout.Content = new ScrollViewer { Content = panel, MaxHeight = 480 };
+        }
+        Fill();
+        flyout.ShowAt((FrameworkElement)sender);
+    }
 
     private void OnShowNowPlaying(object sender, RoutedEventArgs e) => SetRightPane(true, queue: false);
 

@@ -8,11 +8,15 @@ namespace Wave.Core.Music;
 public enum AddToPlaylistResult { Added, AlreadyInPlaylist, NotChecked, Failed }
 
 /// <summary>曲・プレイリスト・ラジオなどの取得と書き込み（Android 版の MusicRepository と同じ呼び方）。</summary>
-public sealed class MusicRepository(InnerTubeClient client)
+/// <param name="live">ライブ配信の検索（www.youtube.com、認証情報を持たないクライアント）。無ければ YouTube Music の検索のライブだけを出す。</param>
+public sealed class MusicRepository(InnerTubeClient client, LiveClient? live = null)
 {
     public const string SongsFilter = "EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D";
     public const string AlbumsFilter = "EgWKAQIYAWoKEAkQBRAKEAMQBA%3D%3D";
     public const string ArtistsFilter = "EgWKAQIgAWoKEAkQBRAKEAMQBA%3D%3D";
+    public const string VideosFilter = "EgWKAQIQAWoSEAUQBBAJEAMQChAVEA4QERAQ";
+    public const string FeaturedPlaylistsFilter = "EgeKAQQoADgBahIQBRAEEAkQAxAKEBUQDhAREBA%3D";
+    public const string CommunityPlaylistsFilter = "EgeKAQQoAEABahIQBRAEEAkQAxAKEBUQDhAREBA%3D";
     public const string LibraryPlaylists = "FEmusic_liked_playlists";
     public const string History = "FEmusic_history";
     public const string Home = "FEmusic_home";
@@ -89,11 +93,62 @@ public sealed class MusicRepository(InnerTubeClient client)
     public async Task<ApiResult<HomePage>> HomeAsync(string? continuation = null, string? chipParams = null, CancellationToken cancel = default) =>
         (await BrowseAsync(Home, continuation, chipParams, cancel)).Map(MusicParsers.HomePage);
 
+    /// <summary>気分とジャンルの一覧（検索のタイル）。ジャンルの先頭に、アプリで足した Lo-Fi を置く。</summary>
     public async Task<ApiResult<List<MoodSection>>> MoodsAsync(CancellationToken cancel = default) =>
-        (await BrowseAsync(MoodsBrowse, null, null, cancel)).Map(MusicParsers.Moods);
+        (await BrowseAsync(MoodsBrowse, null, null, cancel)).Map(root => LofiGenre.AddTo(MusicParsers.Moods(root)));
 
+    /// <summary>気分・ジャンルの1つのページ（ホームと同じ棚の並び）。Lo-Fi はアプリで組んだページ。</summary>
     public async Task<ApiResult<HomePage>> MoodCategoryAsync(string moodParams, CancellationToken cancel = default) =>
-        (await BrowseAsync(MoodCategoryBrowse, null, moodParams, cancel)).Map(MusicParsers.HomePage);
+        moodParams == LofiGenre.Params ? await LofiPageAsync(cancel)
+            : (await BrowseAsync(MoodCategoryBrowse, null, moodParams, cancel)).Map(MusicParsers.HomePage);
+
+    /// <summary>
+    /// ライブ配信の検索。最初のページは YouTube Music の動画の検索のうちライブのもの（Lofi Girl のような音楽のライブが上に来る）と、
+    /// YouTube のライブの絞り込みを合わせる。続きは YouTube のライブの絞り込みだけ。両方とも失敗したときだけ失敗。
+    /// </summary>
+    public async Task<ApiResult<SongPage>> SearchLiveAsync(string query, string? continuation = null, CancellationToken cancel = default)
+    {
+        if (continuation is not null)
+        {
+            var next = live is null ? null : await live.SearchAsync(query, continuation, cancel);
+            return next is null ? ApiResult<SongPage>.Failed(FailureKind.Network) : ApiResult<SongPage>.Ok(next);
+        }
+        var musicTask = SearchAsync(query, VideosFilter, null, MusicParsers.SearchSongs, cancel);
+        var webTask = live?.SearchAsync(query, null, cancel) ?? Task.FromResult<SongPage?>(null);
+        await Task.WhenAll(musicTask, webTask);
+        var music = musicTask.Result;
+        var web = webTask.Result;
+        var musicLive = music.IsOk ? music.Value!.Songs.Where(s => s.IsLive).ToList() : null;
+        if (musicLive is null && web is null) return music.IsOk ? ApiResult<SongPage>.Failed(FailureKind.Network) : ApiResult<SongPage>.Failed(music.Failure!.Value, music.Status);
+        var songs = (musicLive ?? []).Concat(web?.Songs ?? []).DistinctBy(s => s.VideoId).ToList();
+        return ApiResult<SongPage>.Ok(new SongPage(songs, web?.Continuation));
+    }
+
+    /// <summary>アプリで足した Lo-Fi のページ。ライブ配信・YouTube Music のプレイリスト・みんなのプレイリストの棚。</summary>
+    public async Task<ApiResult<HomePage>> LofiPageAsync(CancellationToken cancel = default)
+    {
+        var livesTask = SearchLiveAsync(LofiGenre.LiveQuery, null, cancel);
+        var featuredTask = SearchPlaylistsAsync(LofiGenre.PlaylistQuery, FeaturedPlaylistsFilter, cancel);
+        var communityTask = SearchPlaylistsAsync(LofiGenre.PlaylistQuery, CommunityPlaylistsFilter, cancel);
+        await Task.WhenAll(livesTask, featuredTask, communityTask);
+        var lives = livesTask.Result;
+        var featured = featuredTask.Result;
+        var community = communityTask.Result;
+        var shelves = new[]
+        {
+            lives.IsOk ? LofiGenre.Shelf(LofiGenre.LiveTitle, lives.Value!.Songs.Take(LofiGenre.MaxItems).Select(s => (HomeItem)new HomeItem.SongItem(s)).ToList()) : null,
+            featured.IsOk ? LofiGenre.Shelf(LofiGenre.FeaturedTitle, LofiGenre.Featured(featured.Value!.Items).Select(p => (HomeItem)new HomeItem.PlaylistItem(p)).ToList()) : null,
+            community.IsOk ? LofiGenre.Shelf(LofiGenre.CommunityTitle, community.Value!.Items.Take(LofiGenre.MaxItems).Select(p => (HomeItem)new HomeItem.PlaylistItem(p)).ToList()) : null,
+        }.OfType<HomeShelf>().ToList();
+        if (shelves.Count > 0) return ApiResult<HomePage>.Ok(new HomePage(shelves, null, []));
+        if (!lives.IsOk) return ApiResult<HomePage>.Failed(lives.Failure!.Value, lives.Status);
+        if (!featured.IsOk) return ApiResult<HomePage>.Failed(featured.Failure!.Value, featured.Status);
+        if (!community.IsOk) return ApiResult<HomePage>.Failed(community.Failure!.Value, community.Status);
+        return ApiResult<HomePage>.Ok(new HomePage([], null, []));
+    }
+
+    private Task<ApiResult<SearchPage<PlaylistSummary>>> SearchPlaylistsAsync(string query, string filter, CancellationToken cancel) =>
+        SearchAsync(query, filter, null, MusicParsers.SearchPlaylists, cancel);
 
     public async Task<ApiResult<List<AlbumSummary>>> NewReleasesAsync(CancellationToken cancel = default) =>
         (await BrowseAsync(NewReleasesBrowse, null, null, cancel)).Map(MusicParsers.NewReleases);

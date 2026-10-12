@@ -105,7 +105,8 @@ final class Nav {
 
     /// 棚のカードを押したとき。曲も、アルバム・プレイリストと同じく先にページを開く（Android と同じ。押してすぐ再生しない。再生はカードの再生ボタン）。
     func openCard(_ item: HomeItem) {
-        if case .song(let s) = item { song(s) } else { open(item) }
+        // ライブ配信には曲のページが無いので、押したら鳴らす（Lo-Fi のページの「ライブ配信」の棚）
+        if case .song(let s) = item { if s.isLive { AppServices.player.playSong(s) } else { song(s) } } else { open(item) }
     }
 
     /// 検索の候補・履歴などを選んだとき。曲は再生（Android の検索と同じ）、ほかはそのページへ。

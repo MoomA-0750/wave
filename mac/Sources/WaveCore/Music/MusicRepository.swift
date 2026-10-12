@@ -32,6 +32,9 @@ public final class MusicRepository: Sendable {
     public static let newEpisodes = "RDPN"
     /// 「新しいエピソード」のページ（番組のページと同じ形で返る）。
     public static let newEpisodesBrowse = "VL" + newEpisodes
+    public static let videosFilter = "EgWKAQIQAWoSEAUQBBAJEAMQChAVEA4QERAQ"
+    public static let featuredPlaylistsFilter = "EgeKAQQoADgBahIQBRAEEAkQAxAKEBUQDhAREBA%3D"
+    public static let communityPlaylistsFilter = "EgeKAQQoAEABahIQBRAEEAkQAxAKEBUQDhAREBA%3D"
     public static let libraryPlaylists = "FEmusic_liked_playlists"
     public static let history = "FEmusic_history"
     public static let home = "FEmusic_home"
@@ -49,9 +52,12 @@ public final class MusicRepository: Sendable {
     private static let postsParams = "EgVwb3N0c_IGBAoCSgA="
 
     public let client: InnerTubeClient
+    /// ライブ配信の検索（www.youtube.com、認証情報を持たない）。無ければ YouTube Music の検索のライブだけを出す。
+    public let live: LiveClient?
 
-    public init(client: InnerTubeClient) {
+    public init(client: InnerTubeClient, live: LiveClient? = nil) {
         self.client = client
+        self.live = live
     }
 
     public func searchSongs(_ query: String, continuation: String? = nil) async throws -> ApiResult<SongPage> {
@@ -115,12 +121,55 @@ public final class MusicRepository: Sendable {
         try await browse(MusicRepository.home, continuation: continuation, params: chipParams).map(MusicParsers.homePage)
     }
 
+    /// 気分とジャンルの一覧（検索のタブのタイル）。ジャンルの先頭に、アプリで足した Lo-Fi を置く。
     public func moods() async throws -> ApiResult<[MoodSection]> {
-        try await browse(MusicRepository.moodsBrowse, continuation: nil, params: nil).map(MusicParsers.moods)
+        try await browse(MusicRepository.moodsBrowse, continuation: nil, params: nil).map { LofiGenre.addTo(MusicParsers.moods($0)) }
     }
 
+    /// 気分・ジャンルの1つのページ（ホームと同じ棚の並び）。Lo-Fi はアプリで組んだページ。
     public func moodCategory(_ moodParams: String) async throws -> ApiResult<HomePage> {
-        try await browse(MusicRepository.moodCategoryBrowse, continuation: nil, params: moodParams).map(MusicParsers.homePage)
+        if moodParams == LofiGenre.params { return try await lofiPage() }
+        return try await browse(MusicRepository.moodCategoryBrowse, continuation: nil, params: moodParams).map(MusicParsers.homePage)
+    }
+
+    /// ライブ配信の検索。最初のページは YouTube Music の動画の検索のうちライブのもの（Lofi Girl のような音楽のライブが上に来る）と、
+    /// YouTube のライブの絞り込みを合わせる。続きは YouTube のライブの絞り込みだけ。両方失敗したときだけ失敗。
+    public func searchLive(_ query: String, continuation: String? = nil) async throws -> ApiResult<SongPage> {
+        if let continuation {
+            guard let page = try await live?.search(query, continuation: continuation) else { return .failed(.network) }
+            return .ok(page)
+        }
+        async let musicResult = search(query, filter: MusicRepository.videosFilter, continuation: nil, parse: MusicParsers.searchSongs)
+        async let webResult = live?.search(query)
+        let music = try await musicResult
+        let web = try await webResult
+        let musicLive = music.value?.songs.filter(\.isLive)
+        if musicLive == nil && web == nil { return .failed(music.failure ?? .network, status: music.status) }
+        var seen = Set<String>()
+        let songs = ((musicLive ?? []) + (web?.songs ?? [])).filter { seen.insert($0.videoId).inserted }
+        return .ok(SongPage(songs: songs, continuation: web?.continuation))
+    }
+
+    /// アプリで足した Lo-Fi のページ。ライブ配信・YouTube Music のプレイリスト・みんなのプレイリストの棚。
+    public func lofiPage() async throws -> ApiResult<HomePage> {
+        async let livesResult = searchLive(LofiGenre.liveQuery)
+        async let featuredResult = search(LofiGenre.playlistQuery, filter: MusicRepository.featuredPlaylistsFilter, continuation: nil,
+                                          parse: MusicParsers.searchPlaylists)
+        async let communityResult = search(LofiGenre.playlistQuery, filter: MusicRepository.communityPlaylistsFilter, continuation: nil,
+                                           parse: MusicParsers.searchPlaylists)
+        let lives = try await livesResult
+        let featured = try await featuredResult
+        let community = try await communityResult
+        let shelves = [
+            lives.value.flatMap { LofiGenre.shelf(LofiGenre.liveTitle, $0.songs.prefix(LofiGenre.maxItems).map(HomeItem.song)) },
+            featured.value.flatMap { LofiGenre.shelf(LofiGenre.featuredTitle, LofiGenre.featured($0.items).map(HomeItem.playlist)) },
+            community.value.flatMap { LofiGenre.shelf(LofiGenre.communityTitle, $0.items.prefix(LofiGenre.maxItems).map(HomeItem.playlist)) },
+        ].compactMap { $0 }
+        if !shelves.isEmpty { return .ok(HomePage(shelves: shelves, continuation: nil, chips: [])) }
+        if let failed = [lives.failure, featured.failure, community.failure].compactMap({ $0 }).first {
+            return .failed(failed, status: [lives.status, featured.status, community.status].compactMap { $0 }.first)
+        }
+        return .ok(HomePage(shelves: [], continuation: nil, chips: []))
     }
 
     public func newReleases() async throws -> ApiResult<[AlbumSummary]> {

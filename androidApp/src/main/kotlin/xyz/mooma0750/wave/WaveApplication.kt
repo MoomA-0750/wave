@@ -208,7 +208,19 @@ class AppContainer(
     /** 音声バイト・サムネイルの取得用。認証情報を持たない（ADR-0003）。 */
     val mediaHttpClient = MediaHttp.create()
 
-    val music = MusicRepository(session)
+    /** ライブ配信の検索と HLS の解決。www.youtube.com へは認証情報を持たないクライアントで送る（ADR-0003）。 */
+    val live =
+        xyz.mooma0750.wave.core.music.LiveClient(
+            HttpClient(OkHttp.create { preconfigured = mediaHttpClient }),
+            hl = java.util.Locale.getDefault().language.ifBlank { "ja" },
+            gl = java.util.Locale.getDefault().country.ifBlank { "JP" },
+            nowMs = SystemClock::elapsedRealtime,
+        )
+
+    /** 解決したライブの再生先（HLS の媒体プレイリストを読み直すたびに /player を呼ばない）。 */
+    val liveCache = xyz.mooma0750.wave.playback.LiveStreamCache(SystemClock::elapsedRealtime)
+
+    val music = MusicRepository(session, live)
 
     /** 歌詞。LRCLIB へは認証情報を持たないクライアントで、曲名・アーティスト名・アルバム名・長さだけを送る。 */
     val lyrics =
@@ -331,7 +343,7 @@ class AppContainer(
     /** スマホ: 時計からの Claude への頼みを中継する。 */
     val aiRelayHost by lazy { xyz.mooma0750.wave.ai.AiRelayHost(appContext, directAiTransport, authManager, appScope) }
 
-    /** Claude との会話（tools/ai-bridge の中継を通す）。アプリが動いている間だけ会話を持つ。 */
+    /** Claude との会話（tools/ai-bridge の中継を通す）。会話は端末の中の履歴（files/ai_history.json）に残す。 */
     val aiChat: xyz.mooma0750.wave.ai.AiChat by lazy {
         val res = appContext.resources
         val texts =
@@ -348,7 +360,7 @@ class AppContainer(
 
                 override fun readLiked() = res.getString(R.string.ai_read_liked)
             }
-        xyz.mooma0750.wave.ai.AiChat(aiTransport, xyz.mooma0750.wave.ai.AiTools(this, texts), appScope)
+        xyz.mooma0750.wave.ai.AiChat(aiTransport, xyz.mooma0750.wave.ai.AiTools(this, texts), appScope, xyz.mooma0750.wave.ai.AiHistoryStore(java.io.File(appContext.filesDir, "ai_history.json"), appScope))
     }
 
     /** 端末間の受け渡しの、再生サービスへの入口（Phase 6）。 */
@@ -522,12 +534,14 @@ class AppContainer(
         // 再生サービスが動いていなくても、前のアカウントで解決した URL とサムネイルを残さない
         streamCache.clear()
         videoStreamCache.clear()
+        liveCache.clear()
         settings.clearPlaylistOrders()
         likedIdsJob?.cancel()
         mutableLikedIds.value = emptySet()
         playlistMembership.clear()
         libraryCache.clear()
-        aiChat.clear()
+        // 前のアカウントの会話を残さない（履歴も消す）
+        aiChat.wipe()
         releases.clear()
         imageCacheCleaner()
         WebViewCredentials.clear()

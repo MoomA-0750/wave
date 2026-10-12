@@ -76,6 +76,8 @@
     <string name="search_kind_song">曲</string>
     <string name="search_show_all">すべて表示</string>
     <string name="search_tab_all">すべて</string>
+    <string name="search_tab_live">ライブ</string>
+    <string name="live_badge">LIVE</string>
     <string name="search_tab_songs">曲</string>
     <string name="search_tab_albums">アルバム</string>
     <string name="search_tab_artists">アーティスト</string>

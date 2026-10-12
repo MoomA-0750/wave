@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_now_playing_label">Now playing</string>
+    <string name="widget_now_playing_description">The song that\'s playing, with play/pause, next and previous</string>
+    <string name="widget_playlist_label">Playlist</string>
+    <string name="widget_playlist_description">Start one of your playlists from the home screen</string>
+    <string name="widget_nothing_playing">Nothing playing</string>
+    <string name="widget_open_app">Tap to open wave</string>
+    <string name="widget_play">Play</string>
+    <string name="widget_play_playlist">Play %1$s</string>
+    <string name="widget_shuffle_playlist">Shuffle %1$s</string>
+    <string name="widget_choose_playlist">Choose a playlist</string>
+    <string name="widget_playlist_not_chosen">Long-press to choose a playlist</string>
+    <string name="widget_playlist_empty">This playlist has no songs</string>
+    <string name="widget_playlist_failed">Couldn\'t load the playlist</string>
+    <string name="widget_sign_in">Sign in to wave first</string>
+</resources>

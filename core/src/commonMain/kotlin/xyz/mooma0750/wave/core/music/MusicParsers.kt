@@ -71,6 +71,21 @@ internal object MusicParsers {
         )
     }
 
+    /** プレイリストに絞った検索の最初のページ（おすすめ・みんなのプレイリスト）。 */
+    fun searchPlaylists(root: JsonObject): SearchPage<PlaylistSummary> = searchPage(root, ::playlistRow)
+
+    private fun playlistRow(item: JsonObject): PlaylistSummary? {
+        val browse = item.path("navigationEndpoint", "browseEndpoint")
+        if (pageTypeOfBrowse(browse) != "MUSIC_PAGE_TYPE_PLAYLIST") return null
+        val columns = flexColumnRuns(item)
+        return PlaylistSummary(
+            playlistId = browse.path("browseId").string()?.removePrefix("VL") ?: return null,
+            title = runsText(columns.getOrNull(0).orEmpty()) ?: return null,
+            subtitle = runsText(columns.drop(1).flatten()),
+            thumbnailUrl = lastThumbnailUrl(item.path("thumbnail")),
+        )
+    }
+
     private fun albumRow(item: JsonObject): AlbumSummary? {
         val browse = item.path("navigationEndpoint", "browseEndpoint")
         if (pageTypeOfBrowse(browse) != "MUSIC_PAGE_TYPE_ALBUM") return null
@@ -758,6 +773,8 @@ internal object MusicParsers {
                 ?: return null
         val title = runsText(titleRuns) ?: return null
         val detailRuns = columns.drop(1).flatten()
+        // ライブ配信には「ライブ」のバッジが付き、長さが無い（文字は言語に依るので、バッジの種類で見分ける）
+        val live = item.path("badges").arrayItems().any { it.containsKey("liveBadgeRenderer") }
         val fixedDuration =
             item
                 .path("fixedColumns")
@@ -769,8 +786,9 @@ internal object MusicParsers {
             title = title,
             artists = artistsOf(detailRuns),
             album = albumOf(detailRuns),
-            durationSeconds = fixedDuration ?: durationOf(detailRuns),
+            durationSeconds = if (live) null else fixedDuration ?: durationOf(detailRuns),
             thumbnailUrl = lastThumbnailUrl(item.path("thumbnail")),
+            isLive = live,
             kind =
                 MusicVideoType.of(
                     titleRuns.firstNotNullOfOrNull { it.path("navigationEndpoint", "watchEndpoint", "watchEndpointMusicSupportedConfigs", "watchEndpointMusicConfig", "musicVideoType").string() }

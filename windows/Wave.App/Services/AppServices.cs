@@ -17,6 +17,8 @@ public static class AppServices
     public static HttpClient Http { get; private set; } = null!;
     public static InnerTubeClient Client { get; private set; } = null!;
     public static MusicRepository Music { get; private set; } = null!;
+    /// <summary>ライブ配信の検索と HLS の解決（www.youtube.com。YouTube Music の認証情報を持たない別の HttpClient で送る）。</summary>
+    public static LiveClient Live { get; private set; } = null!;
     public static StreamResolver Resolver { get; private set; } = null!;
     public static PlaybackStats Stats { get; private set; } = null!;
     public static LyricsService Lyrics { get; private set; } = null!;
@@ -30,6 +32,8 @@ public static class AppServices
     public static AiChat Ai { get; } = new();
     /// <summary>端末の連携（中継の場所が設定に無ければ使えない）。</summary>
     public static global::Wave.App.Services.Connect.ConnectService Connect { get; private set; } = null!;
+    /// <summary>Discord に再生中の曲を出す（設定でオンにしたときだけ）。</summary>
+    public static DiscordStatus Discord { get; private set; } = null!;
 
     public static void Initialize(DispatcherQueue ui)
     {
@@ -39,7 +43,8 @@ public static class AppServices
         Http = InnerTubeClient.CreateHttpClient();
         // YouTube から届く文字（棚の見出しなど）を画面と同じ言語にする
         Client = new InnerTubeClient(Http, L.Hl);
-        Music = new MusicRepository(Client);
+        Live = new LiveClient(InnerTubeClient.CreateHttpClient(), Client.Hl, Client.Gl, () => Clock.ElapsedMilliseconds);
+        Music = new MusicRepository(Client, Live);
         Resolver = new StreamResolver(Client, new PlayerCipherProvider(Http, () => Clock.ElapsedMilliseconds), () => Clock.ElapsedMilliseconds);
         Stats = new PlaybackStats(Client);
         // 歌詞の検索（LRCLIB）には YouTube と別の HttpClient を使う
@@ -55,5 +60,6 @@ public static class AppServices
         Connect = new global::Wave.App.Services.Connect.ConnectService(ui, Player, Settings.RelayV2Url, Settings.RelayV2Host);
         Releases = new Releases(ui);
         Releases.Start();
+        Discord = new DiscordStatus(ui);
     }
 }

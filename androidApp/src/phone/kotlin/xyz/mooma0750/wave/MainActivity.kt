@@ -87,6 +87,18 @@ class MainActivity : ComponentActivity() {
             xyz.mooma0750.wave.playback.QueueNotice.requestOpen()
             return
         }
+        // ウィジェットから開いた: 再生画面を開く・そのプレイリストを開く
+        if (intent?.getBooleanExtra(xyz.mooma0750.wave.widget.WidgetHooks.EXTRA_OPEN_NOW_PLAYING, false) == true) {
+            intent.removeExtra(xyz.mooma0750.wave.widget.WidgetHooks.EXTRA_OPEN_NOW_PLAYING)
+            xyz.mooma0750.wave.widget.WidgetHooks.requestOpenNowPlaying()
+            return
+        }
+        intent?.getStringExtra(xyz.mooma0750.wave.widget.WidgetHooks.EXTRA_OPEN_PLAYLIST_ID)?.let { id ->
+            val title = intent.getStringExtra(xyz.mooma0750.wave.widget.WidgetHooks.EXTRA_OPEN_PLAYLIST_TITLE).orEmpty()
+            intent.removeExtra(xyz.mooma0750.wave.widget.WidgetHooks.EXTRA_OPEN_PLAYLIST_ID)
+            notificationNavigation.trySend(Screen.Playlist(PlaylistSummary(id, title, null, null)))
+            return
+        }
         val album = intent?.getStringExtra(xyz.mooma0750.wave.releases.ReleaseWatcher.EXTRA_ALBUM)
         val artist = intent?.getStringExtra(xyz.mooma0750.wave.releases.ReleaseWatcher.EXTRA_ARTIST)
         when {

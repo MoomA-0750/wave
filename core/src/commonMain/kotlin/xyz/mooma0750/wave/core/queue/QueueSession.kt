@@ -191,7 +191,8 @@ class QueueSession(
         startGeneration()
         setShuffleOrder(null)
         // 文脈を先に決める（replace の中で Player が同期で曲の遷移を知らせ、取得の判断が走っても古い文脈を使わない）
-        startRadio(song.videoId)
+        // ライブ配信は終わらずに流れ続けるので、後ろにラジオのおすすめを足さない
+        if (song.isLive) setContext(source = null, continuation = null, radioPlaylistId = null, exhausted = true) else startRadio(song.videoId)
         player.replace(listOf(item(song, ItemOrigin.Source)), startIndex = 0)
         maybeFetch()
     }

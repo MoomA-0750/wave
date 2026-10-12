@@ -6,11 +6,34 @@ cd "$(dirname "$0")/.."
 # WAVE_DEBUG=1 なら開発用の命令（debug-command.txt）を入れる
 flags=()
 [ "${WAVE_DEBUG:-}" = 1 ] && flags=(-Xswiftc -DWAVE_DEBUG)
-swift build -c release ${flags[@]+"${flags[@]}"} 2>&1 | grep -E "error|warning: unre|Compiling|Build" | tail -20
+# ウィジェットのボタン・プレイリストの選び（App Intents）の一覧の元を、コンパイラに書き出させる（ios-bundle.sh と同じ）
+flags+=(-Xswiftc -emit-const-values -Xswiftc -Xfrontend -Xswiftc -const-gather-protocols-file -Xswiftc -Xfrontend -Xswiftc "$PWD/Resources/iOS/const-protocols.json")
+swift build -c release "${flags[@]}" 2>&1 | grep -E "error|warning: unre|Compiling|Build" | tail -20
+bin=$(swift build -c release "${flags[@]}" --show-bin-path)
 app=build/wave.app
 rm -rf "$app"
-mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
-cp "$(swift build -c release ${flags[@]+"${flags[@]}"} --show-bin-path)/wave" "$app/Contents/MacOS/wave"
+mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" "$app/Contents/PlugIns/WaveWidget.appex/Contents/MacOS"
+cp "$bin/wave" "$app/Contents/MacOS/wave"
+appex=$app/Contents/PlugIns/WaveWidget.appex
+cp "$bin/WaveWidget" "$appex/Contents/MacOS/WaveWidget"
+cp Resources/Widget/Info.plist "$appex/Contents/Info.plist"
+
+# App Intents の一覧（Metadata.appintents）を作る。Xcode が作るものなので、ここで直に呼ぶ
+intents() {
+    local base=$1 module=$2 dest=$3 binary=$4 list cv sl
+    cv=$(find .build -path "*Release*" -name "$base-primary.swiftconstvalues" -not -path "*iphone*" | head -1)
+    sl=$(find .build -path "*Release*" -name "$base.SwiftFileList" -not -path "*iphone*" | head -1)
+    if [ -z "$cv" ] || [ -z "$sl" ]; then echo "no const values for $module" >&2; return 1; fi
+    list=$(mktemp); echo "$PWD/$cv" > "$list"
+    xcrun appintentsmetadataprocessor --output "$dest" --toolchain-dir "$(xcode-select -p)/Toolchains/XcodeDefault.xctoolchain" \
+        --module-name $module --sdk-root "$(xcrun --sdk macosx --show-sdk-path)" --xcode-version "$(xcodebuild -version | awk '/Build version/ {print $3}')" \
+        --platform-family macOS --deployment-target 15.0 --target-triple arm64-apple-macos15.0 --source-file-list "$sl" \
+        --swift-const-vals-list "$list" --binary-file "$binary" --force --quiet-warnings 2>&1 | grep -iE "error" || true
+    rm -f "$list"
+    [ -d "$dest/Metadata.appintents" ] || { echo "no Metadata.appintents for $module" >&2; return 1; }
+}
+intents wave Wave "$app/Contents/Resources" "$app/Contents/MacOS/wave"
+intents WaveWidget WaveWidget "$appex/Contents/Resources" "$appex/Contents/MacOS/WaveWidget"
 cp Resources/Info.plist "$app/Contents/Info.plist"
 # 連携の中継の宛先を書き込む（mac.sh がこの機械の local.properties から渡す。無ければ書かない）
 if [ -n "${WAVE_RELAY_V2_URL:-}" ] && [ -n "${WAVE_RELAY_V2_HOST:-}" ]; then
@@ -19,5 +42,6 @@ if [ -n "${WAVE_RELAY_V2_URL:-}" ] && [ -n "${WAVE_RELAY_V2_HOST:-}" ]; then
 fi
 [ -f Resources/wave.icns ] && cp Resources/wave.icns "$app/Contents/Resources/"
 # 署名は GUI のセッションで（scripts/sign.command）。ここでは仮に ad-hoc で署名しておく
+codesign --force --entitlements Resources/Widget/widget.entitlements --sign - "$appex"
 codesign --force --entitlements Resources/wave.entitlements --sign - "$app"
 echo "built $app"

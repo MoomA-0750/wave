@@ -15,6 +15,12 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import xyz.mooma0750.wave.AppContainer
 import xyz.mooma0750.wave.WaveApplication
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
+import xyz.mooma0750.wave.core.ai.AiText
 import xyz.mooma0750.wave.core.lyrics.Lyrics
 import xyz.mooma0750.wave.core.lyrics.LyricsRepository
 import xyz.mooma0750.wave.core.music.AddToPlaylistResult
@@ -56,9 +62,11 @@ class AiTools(
         fun readLiked(): String
     }
 
+    /** syncedVideoId は、時刻付きの歌詞を添えたときの曲（答えの中の時刻はこの曲でだけ押せる）。 */
     data class Context(
         val song: Song?,
         val lyrics: String?,
+        val syncedVideoId: String? = null,
     )
 
     private val known = HashMap<String, Song>()
@@ -66,17 +74,38 @@ class AiTools(
     /** 頼みに付ける、今の曲と歌詞。 */
     suspend fun context(): Context {
         val song = currentSong() ?: return Context(null, null)
-        val lyrics =
-            when (val result = container.lyrics.lyrics(song)) {
-                is LyricsRepository.Result.Found ->
-                    when (val l = result.lyrics) {
-                        is Lyrics.Synced -> l.lines.joinToString("\n") { it.text }
-                        is Lyrics.Plain -> l.text
-                    }
-                else -> null
-            }
-        return Context(song, lyrics)
+        val found = (container.lyrics.lyrics(song) as? LyricsRepository.Result.Found)?.lyrics ?: return Context(song, null)
+        // 時刻付きなら行ごとに [mm:ss] を付けて送る（Claude が歌詞を引くときに時刻を添える）
+        return Context(song, AiText.lyrics(found), song.videoId.takeIf { found is Lyrics.Synced })
     }
+
+    /** 鳴っている曲の id（ほかの端末で鳴っていればその曲）。答えの中の時刻を押せるかを決める。 */
+    fun playingVideoId(): Flow<String?> =
+        combine(container.player.likeState.map { it.videoId }, container.connectV2?.remotePlayback ?: flowOf(null)) { local, remote ->
+            remote?.current?.videoId ?: local
+        }.distinctUntilChanged()
+
+    /** 鳴っている曲が videoId のときだけ、positionMs へ飛ぶ（ほかの端末で鳴っていれば、その端末へ送る）。飛べたら true。 */
+    suspend fun seek(
+        videoId: String,
+        positionMs: Long,
+    ): Boolean {
+        val connect = container.connectV2
+        connect?.remotePlayback?.value?.let { remote ->
+            if (remote.current.videoId != videoId) return false
+            connect.control(xyz.mooma0750.wave.handoff.v2.ControlAction.Seek, positionMs)
+            return true
+        }
+        val controller = container.player.controller()
+        return withContext(Dispatchers.Main) {
+            if (Media3QueuePlayer.songOf(controller.currentMediaItem)?.videoId != videoId) return@withContext false
+            controller.seekTo(positionMs)
+            true
+        }
+    }
+
+    /** 履歴から開いた会話に出てきた曲を覚え直す（続きの頼みで Claude がその id を使えるように）。 */
+    fun remember(songs: List<Song>) = songs.forEach(::remember)
 
     private suspend fun currentSong(): Song? {
         // ほかの端末で鳴っていれば、その曲

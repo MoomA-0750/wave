@@ -13,6 +13,8 @@ data class Song(
     val thumbnailUrl: String?,
     /** 曲の種類（音源・公式の MV・投稿者の動画）。応答に無ければ null（一覧の絞り込みでは「すべて」にだけ出る）。 */
     val kind: MusicVideoType? = null,
+    /** ライブ配信（ラジオのように流れ続ける）。長さもシークも無く、HLS で流す。 */
+    val isLive: Boolean = false,
 ) {
     /** 「アーティスト • アルバム」の1行。 */
     val subtitle: String

@@ -14,8 +14,13 @@ public struct Song: Hashable, Sendable, Identifiable {
     public var thumbnailUrl: String?
     /// 曲の種類（musicVideoType の値。MUSIC_VIDEO_TYPE_ATV は音源、_OMV は公式の MV、_UGC は投稿者の動画）。応答に無ければ nil
     public var kind: String?
+    /// ライブ配信（ラジオのように流れ続ける）。長さもシークも無く、HLS で流す。
+    public var isLive: Bool
 
-    public init(videoId: String, title: String, artists: [ArtistRef], album: AlbumRef?, durationSeconds: Int?, thumbnailUrl: String?, kind: String? = nil) {
+    public init(videoId: String, title: String, artists: [ArtistRef], album: AlbumRef?, durationSeconds: Int?, thumbnailUrl: String?, kind: String? = nil,
+                isLive: Bool = false)
+    {
+        self.isLive = isLive
         self.videoId = videoId
         self.title = title
         self.artists = artists

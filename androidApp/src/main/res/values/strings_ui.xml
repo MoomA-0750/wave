@@ -117,6 +117,11 @@
     <string name="search_share">Share</string>
     <string name="ai_title">Ask Claude</string>
     <string name="ai_new_chat">New chat</string>
+    <string name="ai_history">Past chats</string>
+    <string name="ai_history_empty">No past chats yet. Chats are kept on this device only.</string>
+    <string name="ai_history_delete">Delete chat</string>
+    <string name="ai_history_untitled">(no question)</string>
+    <string name="ai_seek_to">Jump to %1$s</string>
     <string name="ai_intro">Ask Claude to find music, make a playlist, or tell you about the song that\'s playing — what the lyrics mean, similar songs, and more.</string>
     <string name="ai_open_settings">Open settings</string>
     <string name="ai_suggest_meaning">What do these lyrics mean?</string>

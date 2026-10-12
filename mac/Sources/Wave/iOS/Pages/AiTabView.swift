@@ -9,6 +9,7 @@ struct AiTabView: View {
     @FocusState private var inputFocus: Bool
     /// 中継につないでいるか（設定は Observable でないので、画面に戻るたびに読み直す）。
     @State private var configured = AppServices.ai.configured
+    @State private var showHistory = false
 
     private var suggestions: [String] {
         [
@@ -56,12 +57,16 @@ struct AiTabView: View {
         .onChange(of: chat.messages.count) { _, _ in configured = chat.configured }
         .navigationTitle("Claude")
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button { showHistory = true } label: { Label(L.t("これまでの会話", "Past chats"), systemImage: "clock.arrow.circlepath") }
+            }
             if !chat.messages.isEmpty {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { chat.clear() } label: { Label(L.t("新しい会話", "New chat"), systemImage: "square.and.pencil") }
                 }
             }
         }
+        .sheet(isPresented: $showHistory) { AiHistorySheet(chat: chat) }
     }
 
     private func inputBar(_ chat: AiChat) -> some View {
@@ -118,7 +123,7 @@ struct AiTabView: View {
     }
 
     private func lastLength(_ chat: AiChat) -> Int {
-        if case .assistant(let t)? = chat.messages.last { return t.count }
+        if case .assistant(let t, _)? = chat.messages.last { return t.count }
         return 0
     }
 
@@ -162,8 +167,8 @@ private struct AiMessageRow: View {
                     .background(RoundedRectangle(cornerRadius: 18).fill(Color.accentColor))
                     .textSelection(.enabled)
             }
-        case .assistant(let text):
-            Text(AiMarkdown.render(text)).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
+        case .assistant(let text, let videoId):
+            AiAnswerText(text: text, videoId: videoId).frame(maxWidth: .infinity, alignment: .leading)
         case .action(let text):
             Text("・" + text).font(.footnote).foregroundStyle(.secondary)
         case .failure(let text):
@@ -197,27 +202,43 @@ private struct AiMessageRow: View {
     }
 }
 
-/// Claude の答えの Markdown のうち、太字（**…**）と見出し（# …）だけを見た目にする（Android・Mac と同じ）。
-private enum AiMarkdown {
-    static func render(_ text: String) -> AttributedString {
-        var out = AttributedString()
-        let lines = text.components(separatedBy: "\n")
-        let heading = try? NSRegularExpression(pattern: #"^#{1,6}\s+"#)
-        for (i, raw) in lines.enumerated() {
-            if i > 0 { out += AttributedString("\n") }
-            var line = raw
-            var isHeading = false
-            if let m = heading?.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)), let r = Range(m.range, in: line) {
-                line.removeSubrange(r)
-                isHeading = true
+/// これまでの会話（この iPhone の中だけ。Android と同じ）。押すと開いて続け、左へ払って消す。
+private struct AiHistorySheet: View {
+    var chat: AiChat
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            List {
+                if chat.history.conversations.isEmpty {
+                    Text(L.t("まだ会話はありません。会話はこの iPhone の中だけに残ります。", "No past chats yet. Chats are kept on this iPhone only."))
+                        .foregroundStyle(.secondary)
+                }
+                ForEach(chat.history.conversations) { conversation in
+                    Button {
+                        chat.open(conversation.id)
+                        dismiss()
+                    } label: {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(conversation.title.isEmpty ? L.t("（質問なし）", "(no question)") : conversation.title)
+                                .lineLimit(2).foregroundStyle(.primary)
+                            Text(Date(timeIntervalSince1970: Double(conversation.updatedAtMs) / 1000).formatted(date: .abbreviated, time: .shortened))
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                    .listRowBackground(conversation.id == chat.conversationId ? Color.accentColor.opacity(0.12) : nil)
+                    .swipeActions {
+                        Button(role: .destructive) { chat.delete(conversation.id) } label: { Label(L.t("会話を消す", "Delete chat"), systemImage: "trash") }
+                    }
+                }
             }
-            for (k, part) in line.components(separatedBy: "**").enumerated() {
-                var run = AttributedString(part)
-                if isHeading || k % 2 == 1 { run.font = .body.bold() }
-                out += run
+            .navigationTitle(L.t("これまでの会話", "Past chats"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) { Button(L.t("閉じる", "Close")) { dismiss() } }
             }
         }
-        return out
+        .presentationDetents([.medium, .large])
     }
 }
 #endif

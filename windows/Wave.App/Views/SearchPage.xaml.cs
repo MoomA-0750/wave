@@ -35,20 +35,30 @@ public sealed partial class SearchPage : Page
     private bool episodesLoaded;
     private string? episodeContinuation;
     private bool loadingTab;
+    private readonly ObservableCollection<TrackRow> liveRows = [];
+    private string? liveContinuation;
+    /// <summary>ライブのタブを読んだ検索の番号（タブを開いたときに一度だけ読む）。</summary>
+    private int liveLoadedFor = -1;
+    private bool liveLoaded;
+    private bool noResults;
 
     public SearchPage()
     {
         InitializeComponent();
         SongList.ItemsSource = songRows;
+        LiveList.ItemsSource = liveRows;
         CardGrid.ItemsSource = cards;
         EpisodeList.ItemsSource = episodes;
         AppServices.Player.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(PlayerService.Current)) TrackRow.MarkCurrent(songRows, AppServices.Player.Current?.VideoId);
+            if (e.PropertyName != nameof(PlayerService.Current)) return;
+            TrackRow.MarkCurrent(songRows, AppServices.Player.Current?.VideoId);
+            TrackRow.MarkCurrent(liveRows, AppServices.Player.Current?.VideoId);
         };
         SongList.Loaded += (_, _) => Attach(SongList, () => LoadMoreSongsAsync());
         CardGrid.Loaded += (_, _) => Attach(CardGrid, () => LoadMoreCardsAsync());
         EpisodeList.Loaded += (_, _) => Attach(EpisodeList, () => LoadMoreEpisodesAsync());
+        LiveList.Loaded += (_, _) => Attach(LiveList, () => LoadMoreLiveAsync());
     }
 
     public static Visibility IsQuery(string kind) => kind == "query" ? Visibility.Visible : Visibility.Collapsed;
@@ -112,6 +122,12 @@ public sealed partial class SearchPage : Page
         episodeContinuation = null;
         loadingTab = false;
         EpisodeList.Visibility = Visibility.Collapsed;
+        liveRows.Clear();
+        liveContinuation = null;
+        liveLoadedFor = -1;
+        liveLoaded = false;
+        noResults = false;
+        LiveList.Visibility = Visibility.Collapsed;
         var songsTask = AppServices.Music.SearchSongsAsync(q);
         var albumsTask = AppServices.Music.SearchAlbumsAsync(q);
         var artistsTask = AppServices.Music.SearchArtistsAsync(q);
@@ -124,9 +140,12 @@ public sealed partial class SearchPage : Page
         albumContinuation = albumsTask.Result.Value?.Continuation;
         artists = artistsTask.Result.IsOk ? artistsTask.Result.Value!.Items.ToList() : [];
         artistContinuation = artistsTask.Result.Value?.Continuation;
-        if (songs.Count == 0 && albums.Count == 0 && artists.Count == 0 && SelectedTab is not ("podcasts" or "episodes"))
+        if (songs.Count == 0 && albums.Count == 0 && artists.Count == 0)
         {
+            noResults = true;
             Empty.Visibility = Visibility.Visible;
+            // ライブ・ポッドキャスト・エピソードのタブを開いていれば、それは別に探す
+            if (SelectedTab is "live" or "podcasts" or "episodes") ShowTab();
             return;
         }
         var number = 1;
@@ -172,6 +191,14 @@ public sealed partial class SearchPage : Page
         };
     }
 
+#if DEBUG
+    /// <summary>開発用: タブを選ぶ（DebugCommands の search-tab）。</summary>
+    public void DebugTab(string tag) => Tabs.SelectedItem = Tabs.Items.FirstOrDefault(i => i.Tag as string == tag);
+
+    /// <summary>開発用: ライブのタブの行の数。</summary>
+    public int DebugLiveRows => liveRows.Count;
+#endif
+
     private string SelectedTab => (Tabs.SelectedItem?.Tag as string) ?? "all";
 
     private void OnTabChanged(SelectorBar sender, SelectorBarSelectionChangedEventArgs args) => ShowTab();
@@ -180,11 +207,15 @@ public sealed partial class SearchPage : Page
     {
         if (query is null || LoadingRing.IsActive) return;
         var tab = SelectedTab;
-        Empty.Visibility = Visibility.Collapsed;
-        AllView.Visibility = Ui.Show(tab == "all");
+        var live = tab == "live";
+        AllView.Visibility = Ui.Show(tab == "all" && !noResults);
         SongList.Visibility = Ui.Show(tab == "songs");
         CardGrid.Visibility = Ui.Show(tab is "albums" or "artists" or "podcasts");
         EpisodeList.Visibility = Ui.Show(tab == "episodes");
+        LiveList.Visibility = Ui.Show(live);
+        // ライブ・ポッドキャスト・エピソードは、選んだときに別に読んだ結果で「見つからない」を決める
+        Empty.Visibility = Ui.Show(live ? liveLoaded && liveRows.Count == 0 : noResults && tab is not ("podcasts" or "episodes"));
+        if (live && liveLoadedFor != requestId) _ = LoadLiveAsync();
         if (tab is "albums" or "artists")
         {
             cards.Clear();
@@ -338,6 +369,42 @@ public sealed partial class SearchPage : Page
             if (FindScroller(child) is { } found) return found;
         }
         return null;
+    }
+
+    /// <summary>ライブのタブの最初のページ（タブを開いたときに読む）。</summary>
+    private async Task LoadLiveAsync()
+    {
+        if (query is null) return;
+        var id = requestId;
+        liveLoadedFor = id;
+        LiveLoading.IsActive = true;
+        var page = await AppServices.Music.SearchLiveAsync(query);
+        if (id != requestId) return;
+        LiveLoading.IsActive = false;
+        liveLoaded = true;
+        if (page.IsOk)
+        {
+            liveContinuation = page.Value!.Continuation;
+            var number = 1;
+            foreach (var s in page.Value.Songs) liveRows.Add(new TrackRow(number++, s) { Menu = r => SongMenu.Build(r.Song) });
+            TrackRow.MarkCurrent(liveRows, AppServices.Player.Current?.VideoId);
+        }
+        AppPaths.Log($"search live ok={page.IsOk} n={liveRows.Count} more={liveContinuation is not null}");
+        if (SelectedTab == "live") Empty.Visibility = Ui.Show(liveRows.Count == 0);
+    }
+
+    private async Task LoadMoreLiveAsync()
+    {
+        if (loadingMore || liveContinuation is null || query is null) return;
+        loadingMore = true;
+        var id = requestId;
+        var page = await AppServices.Music.SearchLiveAsync(query, liveContinuation);
+        loadingMore = false;
+        if (id != requestId || !page.IsOk) return;
+        liveContinuation = page.Value!.Continuation;
+        var known = liveRows.Select(r => r.Song.VideoId).ToHashSet();
+        var number = liveRows.Count + 1;
+        foreach (var s in page.Value.Songs.Where(s => known.Add(s.VideoId))) liveRows.Add(new TrackRow(number++, s) { Menu = r => SongMenu.Build(r.Song) });
     }
 
     private async Task LoadMoreSongsAsync()

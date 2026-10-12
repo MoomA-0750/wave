@@ -111,6 +111,13 @@ class PlaybackService : MediaSessionService() {
     /** 中継に接続しているか（引き取られるのを待ち受ける）。再生中と、一時停止から前面のタイムアウトの少し前までだけ（P6-S の計測で届くことを確認）。 */
     private var relayHeld = false
 
+    /**
+     * ほかの端末の再生を映している間、中継 v2 につないでおくか（画面を閉じても通知・ロック画面の表示と操作を続ける）。
+     * 画面の参照（前面の間だけ）とは別に数える。相手が鳴っている間と、止まってから少しの間だけ（電池のため）。
+     */
+    private var remoteRelayHeld = false
+    private var remoteRelayReleaseJob: Job? = null
+
     /** Connect v2 の入口（Phase 6b）。 */
     private var connectV2Endpoint: ConnectV2Host.Endpoint? = null
 
@@ -147,10 +154,28 @@ class PlaybackService : MediaSessionService() {
 
     private lateinit var container: AppContainer
 
+    /** ホーム画面のウィジェットへ、セッションの再生器（手元か、映しているほかの端末）の今の曲を配る。 */
+    private val widgetListener =
+        object : Player.Listener {
+            override fun onEvents(
+                player: Player,
+                events: Player.Events,
+            ) {
+                if (player === session?.player) publishNowPlaying()
+            }
+        }
+
+    private fun publishNowPlaying() {
+        xyz.mooma0750.wave.widget.WidgetHooks.onNowPlayingChanged(this, session?.player?.let(NowPlayingSnapshot::of))
+    }
+
     override fun onCreate() {
         super.onCreate()
         container = (application as WaveApplication).container
-        val dataSourceFactory = WaveStreamDataSource.Factory(container.stream.resolver, container.streamCache, container.mediaHttpClient)
+        val dataSourceFactory =
+            WaveStreamDataSource
+                .Factory(container.stream.resolver, container.streamCache, container.mediaHttpClient)
+                .withLive(container.live, container.liveCache)
         val player =
             ExoPlayer
                 .Builder(this)
@@ -165,9 +190,10 @@ class PlaybackService : MediaSessionService() {
                 // Wear OS の既定（スピーカーでは鳴らさない）に戻すなら true にする
                 .setSuppressPlaybackOnUnsuitableOutput(false)
                 .build()
+        val queuePlayer = Media3QueuePlayer(player, stoppedOnSkippableError = { lastErrorWasThisSong })
         val queueSession =
             QueueSession(
-                Media3QueuePlayer(player, stoppedOnSkippableError = { lastErrorWasThisSong }),
+                queuePlayer,
                 RepositoryContentSource(container.music),
                 scope,
                 newItemId = { UUID.randomUUID().toString() },
@@ -207,6 +233,8 @@ class PlaybackService : MediaSessionService() {
                     // 例外文や原因には URL が入りうるので、コードと型名だけを記録する
                     val cause = error.cause
                     Log.w(WaveApplication.LOG_TAG, "playback error code=${error.errorCodeName} cause=${cause?.javaClass?.simpleName} reason=${(cause as? StreamResolveException)?.reason}")
+                    // ライブの印の無いまま入ったライブ配信は、HLS で流し直す（端末から受け取ったキューなど）
+                    if ((cause as? StreamResolveException)?.reason == StreamFailure.LiveStream && queuePlayer.replayCurrentAsLive()) return
                     val failure = failureOf(error)
                     lastErrorWasThisSong = failure == PlaybackFailure.ThisSong
                     if (skipGuard.onError(failure, player.hasNextMediaItem(), android.os.SystemClock.elapsedRealtime())) {
@@ -306,6 +334,7 @@ class PlaybackService : MediaSessionService() {
             },
         )
         localPlayer = player
+        player.addListener(widgetListener)
         // キューの通知の設定（切り替えたらすぐ出す・消す）
         scope.launch {
             container.settings.queueNotice.collect {
@@ -343,6 +372,7 @@ class PlaybackService : MediaSessionService() {
                     ),
                 )
                 .build()
+        publishNowPlaying()
 
         // ログアウトしたら再生を止めてキューと解決済みの URL を消す（決定 E5）。
         // ログインし直した（別のログインに変わった）ときも、アカウントの切り替えとして同じく消す（2026-09-17 本人の決定）
@@ -514,6 +544,7 @@ class PlaybackService : MediaSessionService() {
             queueSession.reset()
             container.streamCache.clear()
             container.videoStreamCache.clear()
+            container.liveCache.clear()
             container.queueStore.delete()
         }
 
@@ -652,7 +683,10 @@ class PlaybackService : MediaSessionService() {
         val current = session ?: return
         val local = localPlayer ?: return
         if (remote != null && !local.playWhenReady) {
-            val mirror = remotePlayer ?: RemoteSessionPlayer({ action, position -> manager.control(action, position) }, { artist, device -> getString(xyz.mooma0750.wave.R.string.nowplaying_artist_on_device, artist, device) }).also { remotePlayer = it }
+            val mirror = remotePlayer ?: RemoteSessionPlayer({ action, position -> manager.control(action, position) }, { artist, device -> getString(xyz.mooma0750.wave.R.string.nowplaying_artist_on_device, artist, device) }).also {
+                remotePlayer = it
+                it.addListener(widgetListener)
+            }
             mirror.update(remote)
             if (current.player !== mirror) current.player = mirror
             // 映している曲の評価を読み書きする（評価はアカウントに付くので、どの端末で鳴っていても同じ）
@@ -661,7 +695,41 @@ class PlaybackService : MediaSessionService() {
             current.player = local
             likes?.onCurrentSong(Media3QueuePlayer.songOf(local.currentMediaItem)?.videoId, TrackUri.epochOf(local.currentMediaItem?.localConfiguration?.uri))
         }
+        val following = current.player === remotePlayer && remote != null
+        updateRemoteRelayHold(following, following && remote?.playing == true)
         refreshQueueNotice()
+        publishNowPlaying()
+    }
+
+    /**
+     * ほかの端末を映している間は、画面を閉じても中継 v2 につないでおく。
+     * 画面の参照は前面の間だけなので、これが無いとホーム画面へ戻った途端に切れ、映す再生が消えて通知も消えていた。
+     * 相手が鳴っている間はつなぎ続け、止まってから（前面のタイムアウトの少し前まで）・映すものが無くなってから（少しの間）は離す。
+     */
+    private fun updateRemoteRelayHold(
+        following: Boolean,
+        remotePlaying: Boolean,
+    ) {
+        val manager = container.connectV2 ?: return
+        if (remotePlaying) {
+            remoteRelayReleaseJob?.cancel()
+            remoteRelayReleaseJob = null
+            if (!remoteRelayHeld) {
+                remoteRelayHeld = true
+                manager.relay.acquire()
+                Log.i(WaveApplication.LOG_TAG, "connect-v2 relay held for remote playback")
+            }
+        } else if (remoteRelayHeld && remoteRelayReleaseJob == null) {
+            remoteRelayReleaseJob =
+                scope.launch {
+                    // 止まっている間も映しているなら、また鳴り出すのを待つ。映すものが無くなった（切れた・相手が去った）なら、つなぎ直しを少し待つ
+                    delay(if (following) RELAY_HOLD_AFTER_PAUSE_MS else REMOTE_LOST_RELEASE_DELAY_MS)
+                    remoteRelayHeld = false
+                    remoteRelayReleaseJob = null
+                    manager.relay.release()
+                    Log.i(WaveApplication.LOG_TAG, "connect-v2 relay released after remote playback")
+                }
+        }
     }
 
     /** ログインが分かっていて、自アプリの UI がつながっていれば、1回だけ保存したキューを戻す。 */
@@ -933,16 +1001,29 @@ class PlaybackService : MediaSessionService() {
     override fun onTaskRemoved(rootIntent: Intent?) {
         val player = localPlayer
         val playing = player != null && PlaybackDecisions.isActivelyPlaying(player.playWhenReady, player.playbackState)
+        // ほかの端末が鳴っていて、それを映しているなら、通知・ロック画面からの操作を続けられるよう残す
+        val mirror = remotePlayer
+        val current = session
+        if (current != null && mirror != null && current.player === mirror) {
+            if (mirror.isPlaying) return
+            // 映しているだけなら、閉じるときの一時停止を相手へ送らない（手元の再生器に戻してから止める）
+            player?.let { current.player = it }
+        }
         if (!playing) pauseAllPlayersAndStopSelf()
     }
 
     override fun onDestroy() {
         queueNotice.cancel()
+        // 再生が終わった: ウィジェットは「再生していない」に戻す
+        xyz.mooma0750.wave.widget.WidgetHooks.onNowPlayingChanged(this, null)
         artwork?.release()
         artwork = null
         relayReleaseJob?.cancel()
         if (relayHeld) releaseRelays()
         relayHeld = false
+        remoteRelayReleaseJob?.cancel()
+        if (remoteRelayHeld) container.connectV2?.relay?.release()
+        remoteRelayHeld = false
         handoffEndpoint?.let { container.handoffHost.unregister(it) }
         connectV2Endpoint?.let { container.connectV2Host.unregister(it) }
         handoffEndpoint = null
@@ -974,6 +1055,9 @@ class PlaybackService : MediaSessionService() {
         const val SAVE_DEBOUNCE_MS = 1_000L
         const val RELAY_HOLD_AFTER_PAUSE_MS = 9 * 60 * 1000L
         private const val HANDED_OFF_RELEASE_DELAY_MS = 5_000L
+
+        /** ほかの端末を映すものが無くなってから、中継を離すまで（つなぎ直しの間に消えたのなら、戻るのを待つ）。 */
+        const val REMOTE_LOST_RELEASE_DELAY_MS = 60_000L
         const val PERIODIC_SAVE_MS = 60_000L
         val SAVE_EVENTS =
             intArrayOf(

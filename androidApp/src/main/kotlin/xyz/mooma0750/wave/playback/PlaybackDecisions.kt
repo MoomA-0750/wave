@@ -77,5 +77,5 @@ internal object PlaybackDecisions {
         return handled && (userSelection || startedPlaying)
     }
 
-    private val THIS_SONG_REASONS = setOf(StreamFailure.Unplayable, StreamFailure.NoAudioFormat, StreamFailure.ItagUnavailable, StreamFailure.StreamChanged)
+    private val THIS_SONG_REASONS = setOf(StreamFailure.Unplayable, StreamFailure.NoAudioFormat, StreamFailure.ItagUnavailable, StreamFailure.StreamChanged, StreamFailure.LiveStream)
 }

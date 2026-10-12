@@ -49,7 +49,9 @@ public static class Nav
     /// </summary>
     public static void OpenCard(HomeItem item)
     {
-        if (item is HomeItem.SongItem s) Song(s.Song);
+        // ライブ配信は曲の画面（アルバム・歌詞・クレジット）が無いので、押したら流す
+        if (item is HomeItem.SongItem { Song.IsLive: true } live) AppServices.Player.PlaySong(live.Song);
+        else if (item is HomeItem.SongItem s) Song(s.Song);
         else Open(item);
     }
 

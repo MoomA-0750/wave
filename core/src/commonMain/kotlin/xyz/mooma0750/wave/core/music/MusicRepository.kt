@@ -4,6 +4,8 @@ import com.metrolist.innertubex.InnerTube
 import com.metrolist.innertubex.bodyAsTextLimited
 import com.metrolist.innertubex.models.YouTubeClient
 import io.ktor.client.statement.HttpResponse
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonObject
 import xyz.mooma0750.wave.core.lyrics.Lyrics
 import xyz.mooma0750.wave.core.session.CallResult
@@ -15,6 +17,8 @@ import xyz.mooma0750.wave.core.session.WriteResult
 /** 曲・プレイリスト・ラジオの取得。通信は WaveSession を通し、失敗は FailureKind のまま返す。 */
 class MusicRepository(
     private val session: WaveSession,
+    /** ライブ配信の検索（www.youtube.com、認証情報を持たないクライアント）。無ければ YouTube Music の検索のライブだけを出す。 */
+    private val live: LiveClient? = null,
 ) {
     /** 曲だけに絞った検索。continuation を渡したら続きのページ。 */
     suspend fun searchSongs(
@@ -103,14 +107,17 @@ class MusicRepository(
         return CallResult.Ok(items.distinctBy(key))
     }
 
-    /** 気分とジャンルの一覧（検索のタブのタイル）。 */
+    /** 気分とジャンルの一覧（検索のタブのタイル）。ジャンルの先頭に、アプリで足した Lo-Fi を置く。 */
     suspend fun moods(): CallResult<List<MoodSection>> =
         session.call(operation = "browse", block = { it.browse(YouTubeClient.WEB_REMIX, browseId = MOODS, setLogin = true) }) { response ->
-            ParseOutcome.Parsed(MusicParsers.moods(json(response)))
+            ParseOutcome.Parsed(LofiGenre.addTo(MusicParsers.moods(json(response))))
         }
 
-    /** 気分・ジャンルの1つのページ（ホームと同じ棚の並び）。 */
+    /** 気分・ジャンルの1つのページ（ホームと同じ棚の並び）。Lo-Fi はアプリで組んだページ。 */
     suspend fun moodCategory(params: String): CallResult<HomePage> =
+        if (params == LofiGenre.PARAMS) lofiPage() else youtubeMoodCategory(params)
+
+    private suspend fun youtubeMoodCategory(params: String): CallResult<HomePage> =
         session.call(operation = "browse", block = { it.browse(YouTubeClient.WEB_REMIX, browseId = MOOD_CATEGORY, params = params, setLogin = true) }) { response ->
             ParseOutcome.Parsed(MusicParsers.homePage(json(response)))
         }
@@ -195,6 +202,60 @@ class MusicRepository(
         ) { response ->
             json(response)
             ParseOutcome.Parsed(Unit)
+        }
+
+    /**
+     * ライブ配信の検索。最初のページは YouTube Music の動画の検索のうちライブのもの（Lofi Girl のような音楽のライブが上に来る）と、
+     * YouTube のライブの絞り込みを合わせる。続きは YouTube のライブの絞り込みだけ。
+     */
+    suspend fun searchLive(
+        query: String,
+        continuation: String? = null,
+    ): CallResult<SongPage> {
+        if (continuation != null) {
+            return live?.search(query, continuation)?.let { CallResult.Ok(it) } ?: CallResult.Failed(FailureKind.Network)
+        }
+        return coroutineScope {
+            val music = async { session.call(operation = "search", block = searchOrContinue(query, VIDEOS_FILTER, null)) { response -> ParseOutcome.Parsed(MusicParsers.searchSongs(json(response))) } }
+            val web = async { live?.search(query) }
+            val musicLive = (music.await() as? CallResult.Ok)?.value?.songs?.filter { it.isLive }
+            val webPage = web.await()
+            if (musicLive == null && webPage == null) {
+                (music.await() as? CallResult.Failed) ?: CallResult.Failed(FailureKind.Network)
+            } else {
+                CallResult.Ok(SongPage((musicLive.orEmpty() + webPage?.songs.orEmpty()).distinctBy { it.videoId }, webPage?.continuation))
+            }
+        }
+    }
+
+    /** アプリで足した Lo-Fi のページ。ライブ配信・YouTube Music のプレイリスト・みんなのプレイリストの棚。 */
+    suspend fun lofiPage(): CallResult<HomePage> =
+        coroutineScope {
+            val lives = async { searchLive(LofiGenre.LIVE_QUERY) }
+            val featured = async { searchPlaylists(LofiGenre.PLAYLIST_QUERY, FEATURED_PLAYLISTS_FILTER) }
+            val community = async { searchPlaylists(LofiGenre.PLAYLIST_QUERY, COMMUNITY_PLAYLISTS_FILTER) }
+            val liveResult = lives.await()
+            val featuredResult = featured.await()
+            val communityResult = community.await()
+            val shelves =
+                listOfNotNull(
+                    (liveResult as? CallResult.Ok)?.value?.let { page -> LofiGenre.shelf(LofiGenre.LIVE_TITLE, page.songs.take(LofiGenre.MAX_ITEMS).map(HomeItem::SongItem)) },
+                    (featuredResult as? CallResult.Ok)?.value?.let { page -> LofiGenre.shelf(LofiGenre.FEATURED_TITLE, LofiGenre.featured(page.items).map(HomeItem::PlaylistItem)) },
+                    (communityResult as? CallResult.Ok)?.value?.let { page -> LofiGenre.shelf(LofiGenre.COMMUNITY_TITLE, page.items.take(LofiGenre.MAX_ITEMS).map(HomeItem::PlaylistItem)) },
+                )
+            if (shelves.isNotEmpty()) {
+                CallResult.Ok(HomePage(shelves, continuation = null))
+            } else {
+                listOf(liveResult, featuredResult, communityResult).firstNotNullOfOrNull { it as? CallResult.Failed } ?: CallResult.Ok(HomePage(emptyList(), continuation = null))
+            }
+        }
+
+    private suspend fun searchPlaylists(
+        query: String,
+        params: String,
+    ): CallResult<SearchPage<PlaylistSummary>> =
+        session.call(operation = "search", block = searchOrContinue(query, params, null)) { response ->
+            ParseOutcome.Parsed(MusicParsers.searchPlaylists(json(response)))
         }
 
     /** 打ち込み中の候補。 */
@@ -527,6 +588,9 @@ class MusicRepository(
          */
         const val NEW_EPISODES = "RDPN"
         const val NEW_EPISODES_BROWSE = "VL$NEW_EPISODES"
+        const val VIDEOS_FILTER = "EgWKAQIQAWoSEAUQBBAJEAMQChAVEA4QERAQ"
+        const val FEATURED_PLAYLISTS_FILTER = "EgeKAQQoADgBahIQBRAEEAkQAxAKEBUQDhAREBA%3D"
+        const val COMMUNITY_PLAYLISTS_FILTER = "EgeKAQQoAEABahIQBRAEEAkQAxAKEBUQDhAREBA%3D"
 
         const val LIBRARY_PLAYLISTS = "FEmusic_liked_playlists"
         const val HISTORY = "FEmusic_history"

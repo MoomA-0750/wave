@@ -26,6 +26,9 @@ final class Settings: Codable {
     var aiUrl: String?
     var aiToken: String?
     var aiName: String?
+    /// Discord に再生中の曲を出す（既定はオフ。macOS だけ）と、そのための Discord のアプリケーション ID（discord.com/developers で作る）。
+    var discordPresence = false
+    var discordClientId: String?
 
     private static var fileURL: URL { AppPaths.file("settings.json") }
 
@@ -33,7 +36,7 @@ final class Settings: Codable {
 
     enum CodingKeys: String, CodingKey {
         case volume, shuffle, repeatMode, sendHistory, rightPaneOpen, releaseNotices, librarySort, libraryGrid, playlistOrders, language,
-            searchHistory, relayV2Url, relayV2Host, aiUrl, aiToken, aiName
+            searchHistory, relayV2Url, relayV2Host, aiUrl, aiToken, aiName, discordPresence, discordClientId
     }
 
     // 項目が足りないファイル（前の版）も読めるよう、無い項目は既定のまま
@@ -55,6 +58,8 @@ final class Settings: Codable {
         aiUrl = try c.decodeIfPresent(String.self, forKey: .aiUrl)
         aiToken = try c.decodeIfPresent(String.self, forKey: .aiToken)
         aiName = try c.decodeIfPresent(String.self, forKey: .aiName)
+        discordPresence = try c.decodeIfPresent(Bool.self, forKey: .discordPresence) ?? discordPresence
+        discordClientId = try c.decodeIfPresent(String.self, forKey: .discordClientId)
     }
 
     static func load() -> Settings {

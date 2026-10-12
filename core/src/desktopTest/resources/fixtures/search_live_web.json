@@ -1,0 +1,719 @@
+{
+ "contents": {
+  "twoColumnSearchResultsRenderer": {
+   "primaryContents": {
+    "sectionListRenderer": {
+     "contents": [
+      {
+       "itemSectionRenderer": {
+        "contents": [
+         {
+          "videoRenderer": {
+           "videoId": "a_1ezVmZzig",
+           "thumbnail": {
+            "thumbnails": [
+             {
+              "url": "https://i.ytimg.com/vi/a_1ezVmZzig/hq720.jpg?v=6acc8b9a&sqp=-oaymwEcCOgCEMoBSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLCtEwuc9O8Vsj3ES9-zdbH8SN3KLA",
+              "width": 360,
+              "height": 202
+             },
+             {
+              "url": "https://i.ytimg.com/vi/a_1ezVmZzig/hq720.jpg?v=6acc8b9a&sqp=-oaymwEcCNAFEJQDSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLAP__21pZDulpHHuGpFzRhqtGs54Q",
+              "width": 720,
+              "height": 404
+             }
+            ]
+           },
+           "title": {
+            "runs": [
+             {
+              "text": "1980s & 90s 🧿 Japanese Town Ambience & Lofi Hip Hop Beats 🪭 Retro Nostalgic Vibes Lofi Rain Playlist"
+             }
+            ],
+            "accessibility": {
+             "accessibilityData": {
+              "label": "1980s & 90s 🧿 Japanese Town Ambience & Lofi Hip Hop Beats 🪭 Retro Nostalgic Vibes Lofi Rain Playlist"
+             }
+            }
+           },
+           "ownerText": {
+            "runs": [
+             {
+              "text": "The Japanese Town",
+              "navigationEndpoint": {
+               "commandMetadata": {
+                "webCommandMetadata": {
+                 "url": "/@TheJapaneseTown-jt6fy",
+                 "webPageType": "WEB_PAGE_TYPE_CHANNEL",
+                 "rootVe": 3611,
+                 "apiUrl": "/youtubei/v1/browse"
+                }
+               },
+               "browseEndpoint": {
+                "browseId": "UCuS_-bvOCh4W5Sy11Uf4H5A",
+                "canonicalBaseUrl": "/@TheJapaneseTown-jt6fy"
+               }
+              }
+             }
+            ]
+           },
+           "badges": [
+            {
+             "metadataBadgeRenderer": {
+              "icon": {
+               "iconType": "LIVE"
+              },
+              "style": "BADGE_STYLE_TYPE_LIVE_NOW",
+              "label": "ライブ"
+             }
+            },
+            {
+             "metadataBadgeRenderer": {
+              "style": "BADGE_STYLE_TYPE_SIMPLE",
+              "label": "新着"
+             }
+            }
+           ],
+           "viewCountText": {
+            "runs": [
+             {
+              "text": "177"
+             },
+             {
+              "text": " 人が視聴中"
+             }
+            ]
+           },
+           "thumbnailOverlays": [
+            {
+             "thumbnailOverlayToggleButtonRenderer": {
+              "isToggled": false,
+              "untoggledIcon": {
+               "iconType": "WATCH_LATER"
+              },
+              "toggledIcon": {
+               "iconType": "CHECK"
+              },
+              "untoggledTooltip": "後で見る",
+              "toggledTooltip": "追加済み",
+              "untoggledServiceEndpoint": {
+               "commandMetadata": {
+                "webCommandMetadata": {
+                 "sendPost": true,
+                 "apiUrl": "/youtubei/v1/browse/edit_playlist"
+                }
+               },
+               "playlistEditEndpoint": {
+                "playlistId": "WL",
+                "actions": [
+                 {
+                  "addedVideoId": "a_1ezVmZzig",
+                  "action": "ACTION_ADD_VIDEO"
+                 }
+                ]
+               }
+              },
+              "toggledServiceEndpoint": {
+               "commandMetadata": {
+                "webCommandMetadata": {
+                 "sendPost": true,
+                 "apiUrl": "/youtubei/v1/browse/edit_playlist"
+                }
+               },
+               "playlistEditEndpoint": {
+                "playlistId": "WL",
+                "actions": [
+                 {
+                  "action": "ACTION_REMOVE_VIDEO_BY_VIDEO_ID",
+                  "removedVideoId": "a_1ezVmZzig"
+                 }
+                ]
+               }
+              },
+              "untoggledAccessibility": {
+               "accessibilityData": {
+                "label": "後で見る"
+               }
+              },
+              "toggledAccessibility": {
+               "accessibilityData": {
+                "label": "追加済み"
+               }
+              }
+             }
+            },
+            {
+             "thumbnailOverlayToggleButtonRenderer": {
+              "untoggledIcon": {
+               "iconType": "ADD_TO_QUEUE_TAIL"
+              },
+              "toggledIcon": {
+               "iconType": "PLAYLIST_ADD_CHECK"
+              },
+              "untoggledTooltip": "キューに追加",
+              "toggledTooltip": "追加済み",
+              "untoggledServiceEndpoint": {
+               "commandMetadata": {
+                "webCommandMetadata": {
+                 "sendPost": true
+                }
+               },
+               "signalServiceEndpoint": {
+                "signal": "CLIENT_SIGNAL",
+                "actions": [
+                 {
+                  "addToPlaylistCommand": {
+                   "openMiniplayer": true,
+                   "videoId": "a_1ezVmZzig",
+                   "listType": "PLAYLIST_EDIT_LIST_TYPE_QUEUE",
+                   "onCreateListCommand": {
+                    "commandMetadata": {
+                     "webCommandMetadata": {
+                      "sendPost": true,
+                      "apiUrl": "/youtubei/v1/playlist/create"
+                     }
+                    },
+                    "createPlaylistServiceEndpoint": {
+                     "videoIds": [
+                      "a_1ezVmZzig"
+                     ],
+                     "params": "CAQ%3D"
+                    }
+                   },
+                   "videoIds": [
+                    "a_1ezVmZzig"
+                   ]
+                  }
+                 }
+                ]
+               }
+              },
+              "untoggledAccessibility": {
+               "accessibilityData": {
+                "label": "キューに追加"
+               }
+              },
+              "toggledAccessibility": {
+               "accessibilityData": {
+                "label": "追加済み"
+               }
+              }
+             }
+            },
+            {
+             "thumbnailOverlayNowPlayingRenderer": {
+              "text": {
+               "runs": [
+                {
+                 "text": "再生中"
+                }
+               ]
+              }
+             }
+            },
+            {
+             "thumbnailOverlayLoadingPreviewRenderer": {
+              "text": {
+               "runs": [
+                {
+                 "text": "カーソルを合わせて再生"
+                }
+               ]
+              }
+             }
+            }
+           ]
+          }
+         },
+         {
+          "videoRenderer": {
+           "videoId": "2BG9FPatcEs",
+           "thumbnail": {
+            "thumbnails": [
+             {
+              "url": "https://i.ytimg.com/vi/2BG9FPatcEs/hq720.jpg?v=6acc2626&sqp=-oaymwEcCOgCEMoBSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLCa4TmkdbrsoCDrbVZYFRS4ujajcQ",
+              "width": 360,
+              "height": 202
+             },
+             {
+              "url": "https://i.ytimg.com/vi/2BG9FPatcEs/hq720.jpg?v=6acc2626&sqp=-oaymwEcCNAFEJQDSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLCO0j8jH9PVXoO-WFiIZMqpeGCpRA",
+              "width": 720,
+              "height": 404
+             }
+            ]
+           },
+           "title": {
+            "runs": [
+             {
+              "text": "Live | Lofi Room 🎧 Lofi chill beats to relax/study to | 2026.10.12"
+             }
+            ],
+            "accessibility": {
+             "accessibilityData": {
+              "label": "Live | Lofi Room 🎧 Lofi chill beats to relax/study to | 2026.10.12"
+             }
+            }
+           },
+           "ownerText": {
+            "runs": [
+             {
+              "text": "MyYourOur Music",
+              "navigationEndpoint": {
+               "commandMetadata": {
+                "webCommandMetadata": {
+                 "url": "/channel/UCATyidusLbgd54WOCIryJow",
+                 "webPageType": "WEB_PAGE_TYPE_CHANNEL",
+                 "rootVe": 3611,
+                 "apiUrl": "/youtubei/v1/browse"
+                }
+               },
+               "browseEndpoint": {
+                "browseId": "UCATyidusLbgd54WOCIryJow",
+                "canonicalBaseUrl": "/channel/UCATyidusLbgd54WOCIryJow"
+               }
+              }
+             }
+            ]
+           },
+           "badges": [
+            {
+             "metadataBadgeRenderer": {
+              "icon": {
+               "iconType": "LIVE"
+              },
+              "style": "BADGE_STYLE_TYPE_LIVE_NOW",
+              "label": "ライブ"
+             }
+            },
+            {
+             "metadataBadgeRenderer": {
+              "style": "BADGE_STYLE_TYPE_SIMPLE",
+              "label": "新着"
+             }
+            }
+           ],
+           "viewCountText": {
+            "runs": [
+             {
+              "text": "85"
+             },
+             {
+              "text": " 人が視聴中"
+             }
+            ]
+           },
+           "thumbnailOverlays": [
+            {
+             "thumbnailOverlayToggleButtonRenderer": {
+              "isToggled": false,
+              "untoggledIcon": {
+               "iconType": "WATCH_LATER"
+              },
+              "toggledIcon": {
+               "iconType": "CHECK"
+              },
+              "untoggledTooltip": "後で見る",
+              "toggledTooltip": "追加済み",
+              "untoggledServiceEndpoint": {
+               "commandMetadata": {
+                "webCommandMetadata": {
+                 "sendPost": true,
+                 "apiUrl": "/youtubei/v1/browse/edit_playlist"
+                }
+               },
+               "playlistEditEndpoint": {
+                "playlistId": "WL",
+                "actions": [
+                 {
+                  "addedVideoId": "2BG9FPatcEs",
+                  "action": "ACTION_ADD_VIDEO"
+                 }
+                ]
+               }
+              },
+              "toggledServiceEndpoint": {
+               "commandMetadata": {
+                "webCommandMetadata": {
+                 "sendPost": true,
+                 "apiUrl": "/youtubei/v1/browse/edit_playlist"
+                }
+               },
+               "playlistEditEndpoint": {
+                "playlistId": "WL",
+                "actions": [
+                 {
+                  "action": "ACTION_REMOVE_VIDEO_BY_VIDEO_ID",
+                  "removedVideoId": "2BG9FPatcEs"
+                 }
+                ]
+               }
+              },
+              "untoggledAccessibility": {
+               "accessibilityData": {
+                "label": "後で見る"
+               }
+              },
+              "toggledAccessibility": {
+               "accessibilityData": {
+                "label": "追加済み"
+               }
+              }
+             }
+            },
+            {
+             "thumbnailOverlayToggleButtonRenderer": {
+              "untoggledIcon": {
+               "iconType": "ADD_TO_QUEUE_TAIL"
+              },
+              "toggledIcon": {
+               "iconType": "PLAYLIST_ADD_CHECK"
+              },
+              "untoggledTooltip": "キューに追加",
+              "toggledTooltip": "追加済み",
+              "untoggledServiceEndpoint": {
+               "commandMetadata": {
+                "webCommandMetadata": {
+                 "sendPost": true
+                }
+               },
+               "signalServiceEndpoint": {
+                "signal": "CLIENT_SIGNAL",
+                "actions": [
+                 {
+                  "addToPlaylistCommand": {
+                   "openMiniplayer": true,
+                   "videoId": "2BG9FPatcEs",
+                   "listType": "PLAYLIST_EDIT_LIST_TYPE_QUEUE",
+                   "onCreateListCommand": {
+                    "commandMetadata": {
+                     "webCommandMetadata": {
+                      "sendPost": true,
+                      "apiUrl": "/youtubei/v1/playlist/create"
+                     }
+                    },
+                    "createPlaylistServiceEndpoint": {
+                     "videoIds": [
+                      "2BG9FPatcEs"
+                     ],
+                     "params": "CAQ%3D"
+                    }
+                   },
+                   "videoIds": [
+                    "2BG9FPatcEs"
+                   ]
+                  }
+                 }
+                ]
+               }
+              },
+              "untoggledAccessibility": {
+               "accessibilityData": {
+                "label": "キューに追加"
+               }
+              },
+              "toggledAccessibility": {
+               "accessibilityData": {
+                "label": "追加済み"
+               }
+              }
+             }
+            },
+            {
+             "thumbnailOverlayNowPlayingRenderer": {
+              "text": {
+               "runs": [
+                {
+                 "text": "再生中"
+                }
+               ]
+              }
+             }
+            },
+            {
+             "thumbnailOverlayLoadingPreviewRenderer": {
+              "text": {
+               "runs": [
+                {
+                 "text": "カーソルを合わせて再生"
+                }
+               ]
+              }
+             }
+            }
+           ]
+          }
+         },
+         {
+          "videoRenderer": {
+           "videoId": "Jo5fOHMS9WQ",
+           "thumbnail": {
+            "thumbnails": [
+             {
+              "url": "https://i.ytimg.com/vi/Jo5fOHMS9WQ/hq720.jpg?v=6acc9f55&sqp=-oaymwEcCOgCEMoBSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLBWKnrKiv7JQjchZw4tb9BsDeCKow",
+              "width": 360,
+              "height": 202
+             },
+             {
+              "url": "https://i.ytimg.com/vi/Jo5fOHMS9WQ/hq720.jpg?v=6acc9f55&sqp=-oaymwEcCNAFEJQDSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLBCSdXkki8imGu5BKFkfgWfxK2Ukw",
+              "width": 720,
+              "height": 404
+             }
+            ]
+           },
+           "title": {
+            "runs": [
+             {
+              "text": "Warm Room 👻☀️ Halloween Lofi Hip Hop to make feel good ~ Spooky Morning Lofi Chill"
+             }
+            ],
+            "accessibility": {
+             "accessibilityData": {
+              "label": "Warm Room 👻☀️ Halloween Lofi Hip Hop to make feel good ~ Spooky Morning Lofi Chill"
+             }
+            }
+           },
+           "ownerText": {
+            "runs": [
+             {
+              "text": "Lofi on the Rooftop",
+              "navigationEndpoint": {
+               "commandMetadata": {
+                "webCommandMetadata": {
+                 "url": "/@LofiontheRooftop",
+                 "webPageType": "WEB_PAGE_TYPE_CHANNEL",
+                 "rootVe": 3611,
+                 "apiUrl": "/youtubei/v1/browse"
+                }
+               },
+               "browseEndpoint": {
+                "browseId": "UClBrT0ADeJnemAyp2EbzVFw",
+                "canonicalBaseUrl": "/@LofiontheRooftop"
+               }
+              }
+             }
+            ]
+           },
+           "badges": [
+            {
+             "metadataBadgeRenderer": {
+              "icon": {
+               "iconType": "LIVE"
+              },
+              "style": "BADGE_STYLE_TYPE_LIVE_NOW",
+              "label": "ライブ"
+             }
+            },
+            {
+             "metadataBadgeRenderer": {
+              "style": "BADGE_STYLE_TYPE_SIMPLE",
+              "label": "新着"
+             }
+            }
+           ],
+           "viewCountText": {
+            "runs": [
+             {
+              "text": "330"
+             },
+             {
+              "text": " 人が視聴中"
+             }
+            ]
+           },
+           "thumbnailOverlays": [
+            {
+             "thumbnailOverlayToggleButtonRenderer": {
+              "isToggled": false,
+              "untoggledIcon": {
+               "iconType": "WATCH_LATER"
+              },
+              "toggledIcon": {
+               "iconType": "CHECK"
+              },
+              "untoggledTooltip": "後で見る",
+              "toggledTooltip": "追加済み",
+              "untoggledServiceEndpoint": {
+               "commandMetadata": {
+                "webCommandMetadata": {
+                 "sendPost": true,
+                 "apiUrl": "/youtubei/v1/browse/edit_playlist"
+                }
+               },
+               "playlistEditEndpoint": {
+                "playlistId": "WL",
+                "actions": [
+                 {
+                  "addedVideoId": "Jo5fOHMS9WQ",
+                  "action": "ACTION_ADD_VIDEO"
+                 }
+                ]
+               }
+              },
+              "toggledServiceEndpoint": {
+               "commandMetadata": {
+                "webCommandMetadata": {
+                 "sendPost": true,
+                 "apiUrl": "/youtubei/v1/browse/edit_playlist"
+                }
+               },
+               "playlistEditEndpoint": {
+                "playlistId": "WL",
+                "actions": [
+                 {
+                  "action": "ACTION_REMOVE_VIDEO_BY_VIDEO_ID",
+                  "removedVideoId": "Jo5fOHMS9WQ"
+                 }
+                ]
+               }
+              },
+              "untoggledAccessibility": {
+               "accessibilityData": {
+                "label": "後で見る"
+               }
+              },
+              "toggledAccessibility": {
+               "accessibilityData": {
+                "label": "追加済み"
+               }
+              }
+             }
+            },
+            {
+             "thumbnailOverlayToggleButtonRenderer": {
+              "untoggledIcon": {
+               "iconType": "ADD_TO_QUEUE_TAIL"
+              },
+              "toggledIcon": {
+               "iconType": "PLAYLIST_ADD_CHECK"
+              },
+              "untoggledTooltip": "キューに追加",
+              "toggledTooltip": "追加済み",
+              "untoggledServiceEndpoint": {
+               "commandMetadata": {
+                "webCommandMetadata": {
+                 "sendPost": true
+                }
+               },
+               "signalServiceEndpoint": {
+                "signal": "CLIENT_SIGNAL",
+                "actions": [
+                 {
+                  "addToPlaylistCommand": {
+                   "openMiniplayer": true,
+                   "videoId": "Jo5fOHMS9WQ",
+                   "listType": "PLAYLIST_EDIT_LIST_TYPE_QUEUE",
+                   "onCreateListCommand": {
+                    "commandMetadata": {
+                     "webCommandMetadata": {
+                      "sendPost": true,
+                      "apiUrl": "/youtubei/v1/playlist/create"
+                     }
+                    },
+                    "createPlaylistServiceEndpoint": {
+                     "videoIds": [
+                      "Jo5fOHMS9WQ"
+                     ],
+                     "params": "CAQ%3D"
+                    }
+                   },
+                   "videoIds": [
+                    "Jo5fOHMS9WQ"
+                   ]
+                  }
+                 }
+                ]
+               }
+              },
+              "untoggledAccessibility": {
+               "accessibilityData": {
+                "label": "キューに追加"
+               }
+              },
+              "toggledAccessibility": {
+               "accessibilityData": {
+                "label": "追加済み"
+               }
+              }
+             }
+            },
+            {
+             "thumbnailOverlayNowPlayingRenderer": {
+              "text": {
+               "runs": [
+                {
+                 "text": "再生中"
+                }
+               ]
+              }
+             }
+            },
+            {
+             "thumbnailOverlayLoadingPreviewRenderer": {
+              "text": {
+               "runs": [
+                {
+                 "text": "カーソルを合わせて再生"
+                }
+               ]
+              }
+             }
+            }
+           ]
+          }
+         },
+         {
+          "videoRenderer": {
+           "videoId": "AAAAAAAAAAA",
+           "title": {
+            "runs": [
+             {
+              "text": "not live"
+             }
+            ]
+           },
+           "ownerText": {
+            "runs": [
+             {
+              "text": "someone"
+             }
+            ]
+           },
+           "lengthText": {
+            "simpleText": "3:21"
+           },
+           "thumbnail": {
+            "thumbnails": [
+             {
+              "url": "https://i.ytimg.com/vi/AAAAAAAAAAA/hqdefault.jpg"
+             }
+            ]
+           }
+          }
+         }
+        ]
+       }
+      },
+      {
+       "continuationItemRenderer": {
+        "trigger": "CONTINUATION_TRIGGER_ON_ITEM_SHOWN",
+        "continuationEndpoint": {
+         "commandMetadata": {
+          "webCommandMetadata": {
+           "sendPost": true,
+           "apiUrl": "/youtubei/v1/search"
+          }
+         },
+         "continuationCommand": {
+          "token": "EpkDEgRsb2ZpGpADRWdKQUFVZ1VnZ0VMWVY4eFpYcFdiVnA2YVdlQ0FRc3lRa2M1UmxCaGRHTkZjNElCQzBwdk5XWlBTRTFUT1ZkUmdnRUxlR0psU0RCM1kwSjNhbmVDQVF0UU5ITkhZWEYxWTBwamM0SUJDMDFOZURWQlgyNHhlVkZaZ2dFTFJrVnBaalZOTjIxeVVsV0NBUXRMZWtKMVJqRnhSak01YjRJQkMycFdha1JQTkdGQ2VXRkZnZ0VMUWs5RWNETnJTM2d3V0hlQ0FRc3ljVW81Y3pjdE5UWlRjNElCQzNablZHaERiV2g1Um1oTmdnRUxUR3RMVUhFNVUyYzFXRVdDQVF0ellsVnBSa3BHY2tSV1dZSUJDMGc0TXpsaVEwa3pYMnBWZ2dFTFJrdGhTQzFSUVc1Slp6U0NBUXN5WTBaU1NVOTJTMFYxZDRJQkMybG9jalZyZFdoa1ZVYzRnZ0VMY0VkSVluQnBSbGhaUlRTQ0FRdFlNVEp4YUU5alJUZ3RkN0lCQmdvRUNCUVFBZyUzRCUzRBiB4OgYIgtzZWFyY2gtZmVlZA%3D%3D",
+          "request": "CONTINUATION_REQUEST_TYPE_SEARCH"
+         }
+        },
+        "loggingDirectives": {}
+       }
+      }
+     ]
+    }
+   }
+  }
+ }
+}

@@ -38,7 +38,21 @@ struct WaveApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         // メニューバーに再生中の曲を出す
-        MainActor.assumeIsolated { MenuBarController.shared.start() }
+        MainActor.assumeIsolated {
+            MenuBarController.shared.start()
+            // ウィジェットに今の曲・プレイリストを渡し、そのボタンの頼みを受ける
+            WidgetSync.shared.start()
+        }
+    }
+
+    /// ウィジェットから開いたとき（wave://nowplaying・wave://add-to-playlist）。
+    func application(_ application: NSApplication, open urls: [URL]) {
+        MainActor.assumeIsolated {
+            for url in urls where url.scheme == "wave" {
+                MenuBarController.showMainWindow()
+                if url.host == "add-to-playlist", let song = AppServices.player.current { Dialogs.shared.addToPlaylist(song) }
+            }
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {

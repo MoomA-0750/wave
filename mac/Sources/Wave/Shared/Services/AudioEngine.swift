@@ -123,6 +123,18 @@ final class AudioEngine {
         asset.resourceLoader.setDelegate(loader, queue: loaderQueue)
         let item = AVPlayerItem(asset: asset)
         item.preferredForwardBufferDuration = 30
+        return await start(item)
+    }
+
+    /// ライブ配信の HLS の媒体プレイリストを鳴らす準備をする（AVPlayer が HLS をそのまま読む。範囲取得の経路は通さない）。
+    /// URL は署名を含むので、ログに出さない。読み始めに失敗したら false。
+    func loadLive(_ url: URL) async -> Bool {
+        clear()
+        // 画質は LiveClient が選んだ1本（媒体プレイリスト）に決まっている
+        return await start(AVPlayerItem(url: url))
+    }
+
+    private func start(_ item: AVPlayerItem) async -> Bool {
         observers.append(NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.onEnded?() }
         })
@@ -157,6 +169,16 @@ final class AudioEngine {
     }
 
     var rejected: Bool { loader?.rejected ?? false }
+
+    /// 開発用の命令で状態を記録する（URL は出さない）。
+    var debugState: String {
+        let item = player.currentItem
+        let status = switch item?.status { case .readyToPlay: "ready"; case .failed: "failed"; case .unknown: "unknown"; default: "none" }
+        let control = switch player.timeControlStatus { case .playing: "playing"; case .paused: "paused"; default: "waiting" }
+        let loaded = item?.loadedTimeRanges.last.map { String(format: "%.1f", CMTimeRangeGetEnd($0.timeRangeValue).seconds) } ?? "-"
+        return "item=\(status) control=\(control) rate=\(player.rate) time=\(String(format: "%.1f", positionSeconds)) loadedEnd=\(loaded) " +
+            "durationIndefinite=\(item?.duration.isIndefinite ?? false) error=\((item?.error as NSError?).map { "\($0.domain)/\($0.code)" } ?? "-")"
+    }
 
     func play() { player.play() }
     func pause() { player.pause() }

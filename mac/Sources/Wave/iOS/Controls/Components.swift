@@ -73,6 +73,7 @@ struct SongRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(song.title).lineLimit(1).foregroundStyle(isCurrent ? Color.accentColor : Color.primary)
                 HStack(spacing: 4) {
+                    if song.isLive { LiveBadge(font: .caption2.weight(.bold), dot: 6) }
                     if AppServices.library.isLiked(song.videoId) {
                         Image(systemName: "checkmark.circle.fill").font(.caption2).foregroundStyle(Color.accentColor)
                     }

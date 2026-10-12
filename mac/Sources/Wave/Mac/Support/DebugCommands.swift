@@ -1,6 +1,7 @@
 #if os(macOS)
 #if WAVE_DEBUG
 import Foundation
+import MediaPlayer
 import UserNotifications
 import WaveCore
 
@@ -99,13 +100,41 @@ enum DebugCommands {
             for m in AppServices.ai.messages {
                 let text: String = switch m {
                 case .user: "user"
-                case .assistant(let t): "assistant chars=\(t.count)"
+                case .assistant(let t, let videoId): "assistant chars=\(t.count) stamps=\(AiText.timestamps(t).map(\.label)) synced=\(videoId != nil)"
                 case .action(let t): "action " + t
                 case .songs(let s): "songs n=\(s.count)"
                 case .failure(let t): "failure " + t
                 }
                 AppPaths.log("debug ai " + text)
             }
+        // Claude の会話の履歴: 一覧・新しい会話・開く（番号）・消す（番号）・最後の答えの時刻へ飛ぶ（番号）
+        case "ai-history":
+            let chat = AppServices.ai!
+            for (i, c) in chat.history.conversations.enumerated() {
+                AppPaths.log("debug ai history \(i) title_chars=\(c.title.count) messages=\(c.messages.count) current=\(c.id == chat.conversationId)")
+            }
+            AppPaths.log("debug ai history n=\(chat.history.conversations.count)")
+        case "ai-new":
+            AppServices.ai.clear()
+        case "ai-open":
+            let list = AppServices.ai.history.conversations
+            let i = Int(arg) ?? 0
+            if list.indices.contains(i) { AppServices.ai.open(list[i].id) }
+            AppPaths.log("debug ai open messages=\(AppServices.ai.messages.count)")
+        case "ai-delete":
+            let list = AppServices.ai.history.conversations
+            let i = Int(arg) ?? 0
+            if list.indices.contains(i) { AppServices.ai.delete(list[i].id) }
+        case "ai-seek":
+            var found: (String?, AiText.Timestamp?) = (nil, nil)
+            for case .assistant(let t, let videoId) in AppServices.ai.messages.reversed() {
+                let stamps = AiText.timestamps(t)
+                if stamps.isEmpty { continue }
+                found = (videoId, stamps.indices.contains(Int(arg) ?? 0) ? stamps[Int(arg) ?? 0] : nil)
+                break
+            }
+            AppPaths.log("debug ai seek stamp=\(found.1?.label ?? "nil") synced=\(found.0 != nil)")
+            if let id = found.0, let stamp = found.1 { AiChat.seek(videoId: id, positionMs: stamp.positionMs) }
         case "membership-toggle":
             // 追加の画面で、名前の一致するプレイリストの行を押したのと同じ（入っていれば外し、無ければ足す）
             guard let song = player.current, let target = AppServices.library.editable.first(where: { $0.title == arg }) else {
@@ -161,6 +190,43 @@ enum DebugCommands {
             AppPaths.log("debug now title=\(player.current?.title ?? "nil") position=\(Int(player.position)) duration=\(Int(player.duration)) playing=\(player.isPlaying) loading=\(player.isLoading) like=\(String(describing: player.like)) lyrics=\(player.lyrics != nil) video=\(player.video != nil) remote=\(player.isRemote) videoSize=\(MusicVideoPlayer.shared.player.currentItem?.presentationSize ?? .zero)")
         case "route":
             AppPaths.log("debug route=\(nav.current.route) back=\(nav.canGoBack)")
+        case "live-play":
+            // ライブ配信の検索の先頭を、検索の行を押したのと同じく鳴らす
+            let page = (try? await AppServices.music.searchLive(arg))?.value
+            AppPaths.log("debug live-play found=\(page?.songs.count ?? -1) continuation=\(page?.continuation != nil) first=\(page?.songs.first?.title ?? "-")")
+            if let song = page?.songs.first { player.playSong(song) }
+        case "live-unmarked":
+            // ライブの印の無い曲として渡しても、ライブと分かって HLS で流すか（引数は videoId）
+            player.playSong(Song(videoId: arg, title: arg, artists: [], album: nil, durationSeconds: 100, thumbnailUrl: nil))
+        case "live-tab":
+            // 検索して「ライブ」の絞り込みを開いたのと同じ
+            window.searchFor(arg)
+            try? await Task.sleep(for: .milliseconds(500))
+            SearchPageModel.current?.tab = "live"
+            for _ in 0..<40 where SearchPageModel.current?.liveLoading != false { try? await Task.sleep(for: .milliseconds(250)) }
+            try? await Task.sleep(for: .milliseconds(300))
+            let rows = SearchPageModel.current?.liveSongs ?? []
+            AppPaths.log("debug live-tab rows=\(rows.count) failed=\(SearchPageModel.current?.liveFailed ?? false) allLive=\(rows.allSatisfy(\.song.isLive))")
+        case "lofi":
+            // 検索の「すべてをブラウズ」の Lo-Fi のタイルを押したのと同じ
+            let moods = (try? await AppServices.music.moods())?.value ?? []
+            let genres = moods.first { $0.categories.contains { $0.params == LofiGenre.params } }
+            AppPaths.log("debug lofi tile section=\(genres?.title ?? "-") first=\(genres?.categories.first?.title ?? "-")")
+            nav.mood(LofiGenre.category)
+        case "lofi-page":
+            let page = (try? await AppServices.music.moodCategory(LofiGenre.params))?.value
+            AppPaths.log("debug lofi-page shelves=" + (page?.shelves.map { "\($0.title):\($0.items.count)" }.joined(separator: " | ") ?? "failed"))
+        case "lofi-play":
+            // Lo-Fi のページの「ライブ配信」の棚の先頭のカードを押したのと同じ
+            let page = (try? await AppServices.music.moodCategory(LofiGenre.params))?.value
+            if let item = page?.shelves.first?.items.first { nav.openCard(item) }
+            AppPaths.log("debug lofi-play route=\(nav.current.route)")
+        case "live-state":
+            let info = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
+            AppPaths.log("debug live-state isLive=\(player.isLive) title=\(player.current?.title ?? "nil") playing=\(player.isPlaying) loading=\(player.isLoading) " +
+                "duration=\(player.duration) lyrics=\(String(describing: player.lyrics)) video=\(player.video != nil) queue=\(player.queue.count) " +
+                "infoLive=\(info[MPNowPlayingInfoPropertyIsLiveStream] as? Bool ?? false) seekCommand=\(MPRemoteCommandCenter.shared().changePlaybackPositionCommand.isEnabled) " +
+                "message=\(player.message ?? "-") " + player.engine.debugState)
         case "playlist-delete":
             // 名前の一致する自分のプレイリストを消す（確かめで作ったものの後片付け）
             let targets = AppServices.library.editable.filter { $0.title == arg }

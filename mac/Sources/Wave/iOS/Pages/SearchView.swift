@@ -4,7 +4,7 @@ import WaveCore
 
 /// 検索の結果の絞り込み（Android の SearchTab と同じ）。
 private enum SearchTab: String, CaseIterable, Hashable {
-    case all, songs, albums, artists, podcasts, episodes
+    case all, songs, albums, artists, live, podcasts, episodes
 
     var label: String {
         switch self {
@@ -14,6 +14,7 @@ private enum SearchTab: String, CaseIterable, Hashable {
         case .artists: L.t("アーティスト", "Artists")
         case .podcasts: L.t("ポッドキャスト", "Podcasts")
         case .episodes: L.t("エピソード", "Episodes")
+        case .live: L.t("ライブ", "Live")
         }
     }
 }
@@ -23,7 +24,7 @@ private enum SearchTab: String, CaseIterable, Hashable {
 private final class SearchModel {
     /// 確定した検索語（nil なら結果を出していない）。
     var committed: String?
-    var tab = SearchTab.all
+    var tab = SearchTab.all { didSet { if tab == .live { loadLiveIfNeeded() } } }
     var loading = false
     var empty = false
     var failure: FailureKind?
@@ -43,6 +44,12 @@ private final class SearchModel {
     var podcastsLoading = false
     @ObservationIgnored private var podcastsLoaded = false
     @ObservationIgnored private var episodesLoaded = false
+    /// 「ライブ」の絞り込み（ライブ配信の検索）。開いたときに読む。
+    var liveSongs: [Song] = []
+    var liveLoading = false
+    var liveFailure: FailureKind?
+    @ObservationIgnored private var liveQuery: String?
+    @ObservationIgnored private var liveContinuation: String?
 
     var suggestions: SearchSuggestions?
     var history: [SearchHistoryEntry] = []
@@ -128,6 +135,10 @@ private final class SearchModel {
         podcastsLoaded = false
         episodesLoaded = false
         podcastsLoading = false
+        liveSongs = []
+        liveQuery = nil
+        liveContinuation = nil
+        liveFailure = nil
         Task {
             let music = AppServices.music!
             async let s = music.searchSongs(q)
@@ -198,6 +209,27 @@ private final class SearchModel {
         }
     }
 
+    /// ライブ配信の検索（YouTube Music の動画のライブと YouTube のライブを合わせたもの。Android と同じ）。同じ語では読み直さない。
+    func loadLiveIfNeeded() {
+        guard let q = committed?.trimmingCharacters(in: .whitespaces), !q.isEmpty, liveQuery != q else { return }
+        liveQuery = q
+        liveLoading = true
+        liveFailure = nil
+        let id = requestId
+        Task {
+            let result = (try? await AppServices.music.searchLive(q)) ?? .failed(.network)
+            guard id == requestId, liveQuery == q else { return }
+            liveLoading = false
+            guard let page = result.value else {
+                liveFailure = result.failure ?? .network
+                liveQuery = nil
+                return
+            }
+            liveContinuation = page.continuation
+            liveSongs = page.songs
+        }
+    }
+
     /// 種類で絞った一覧の最後まで来たら続きを読む。
     func loadMore(_ tab: SearchTab) {
         guard !loadingMore, let q = committed?.trimmingCharacters(in: .whitespaces) else { return }
@@ -253,6 +285,16 @@ private final class SearchModel {
                 episodeContinuation = page.continuation != c ? page.continuation : nil
                 let known = Set(episodes.map(\.id))
                 episodes += page.items.filter { !known.contains($0.id) }
+            }
+        case .live:
+            guard let c = liveContinuation, let lq = liveQuery else { return }
+            loadingMore = true
+            Task {
+                defer { loadingMore = false }
+                guard let page = (try? await music.searchLive(lq, continuation: c))?.value, id == requestId, liveQuery == lq else { return }
+                liveContinuation = page.continuation != c ? page.continuation : nil
+                let known = Set(liveSongs.map(\.videoId))
+                liveSongs += page.songs.filter { !known.contains($0.videoId) }
             }
         case .all:
             return
@@ -441,7 +483,9 @@ struct SearchView: View {
                 .listRowSeparator(.hidden)
                 .listRowBackground(Color.clear)
             }
-            if model.loading || (model.podcastsLoading && (model.tab == .podcasts || model.tab == .episodes)) {
+            if model.tab == .live {
+                liveRows
+            } else if model.loading || (model.podcastsLoading && (model.tab == .podcasts || model.tab == .episodes)) {
                 ProgressView().frame(maxWidth: .infinity).padding(.vertical, 40).listRowSeparator(.hidden).listRowBackground(Color.clear)
             } else if let failure = model.failure {
                 Text(failureText(failure)).foregroundStyle(.secondary).listRowSeparator(.hidden)
@@ -455,6 +499,7 @@ struct SearchView: View {
                 case .artists: paged(model.artists.map { HomeItem.artist($0) }, more: model.artistContinuation != nil, tab: .artists)
                 case .podcasts: pagedPodcasts
                 case .episodes: pagedEpisodes
+                case .live: EmptyView()
                 }
             }
         }
@@ -525,6 +570,26 @@ struct SearchView: View {
             Text(tab.label)
             Spacer()
             if more { Button(L.t("すべて表示", "Show all")) { model.tab = tab }.font(.footnote).textCase(nil) }
+        }
+    }
+
+    /// 「ライブ」: いま配信中のライブ。押すと HLS で流す（後ろにラジオは足さない）。
+    @ViewBuilder private var liveRows: some View {
+        if model.liveLoading {
+            ProgressView().frame(maxWidth: .infinity).padding(.vertical, 40).listRowSeparator(.hidden).listRowBackground(Color.clear)
+        } else if let failure = model.liveFailure {
+            LoadState(loading: false, failure: L.t("ライブ配信を検索できませんでした: ", "Couldn't search live streams: ") + failureText(failure)) {
+                model.loadLiveIfNeeded()
+            }
+            .listRowSeparator(.hidden)
+        } else if model.liveSongs.isEmpty {
+            Text(L.t("配信中のライブは見つかりませんでした", "No live streams found")).foregroundStyle(.secondary).listRowSeparator(.hidden)
+        } else {
+            ForEach(model.liveSongs) { song in
+                SongRow(song: song) { open(.song(song)) }
+                    .onAppear { if song.videoId == model.liveSongs.last?.videoId { model.loadMore(.live) } }
+            }
+            if model.loadingMore { ProgressView().frame(maxWidth: .infinity).listRowSeparator(.hidden) }
         }
     }
 

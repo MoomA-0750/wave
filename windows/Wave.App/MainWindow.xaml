@@ -238,6 +238,11 @@
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
                                 <StackPanel>
+                                    <!-- ライブ配信の印 -->
+                                    <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,0,0,4" Visibility="{x:Bind app:Ui.Show(Player.IsLive), Mode=OneWay}">
+                                        <Ellipse Width="8" Height="8" Fill="{StaticResource LiveBrush}" VerticalAlignment="Center" />
+                                        <TextBlock Text="{x:Bind app:L.T('ライブ配信', 'Live')}" Foreground="{StaticResource LiveBrush}" Style="{StaticResource CaptionTextBlockStyle}" FontWeight="SemiBold" />
+                                    </StackPanel>
                                     <!-- 曲名を押すとアルバムへ、アーティストを押すとアーティストのページへ（複数なら選ぶ） -->
                                     <HyperlinkButton Padding="0" Click="OnAlbumLink" Foreground="{ThemeResource TextFillColorPrimaryBrush}">
                                         <TextBlock Text="{x:Bind SongTitleOrIdle(Player.Current), Mode=OneWay}" Style="{StaticResource SubtitleTextBlockStyle}" TextWrapping="Wrap" MaxLines="2" />
@@ -292,6 +297,9 @@
                         <Grid Padding="16,12,8,4">
                             <TextBlock Text="{x:Bind app:L.T('Claude に聞く', 'Ask Claude')}" Style="{StaticResource BodyStrongTextBlockStyle}" VerticalAlignment="Center" />
                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="4">
+                                <Button Style="{StaticResource IconButtonStyle}" Click="OnAiHistory" ToolTipService.ToolTip="{x:Bind app:L.T('これまでの会話', 'Past chats')}">
+                                    <FontIcon Glyph="&#xE81C;" FontSize="14" />
+                                </Button>
                                 <HyperlinkButton Click="OnAiClear" Content="{x:Bind app:L.T('新しい会話', 'New chat')}" />
                                 <Button Style="{StaticResource IconButtonStyle}" Click="OnShowNowPlaying" ToolTipService.ToolTip="{x:Bind app:L.T('閉じる', 'Close')}">
                                     <FontIcon Glyph="&#xE711;" FontSize="12" />
@@ -418,16 +426,24 @@
                         <FontIcon Glyph="{x:Bind RepeatGlyph(Player.Repeat), Mode=OneWay}" FontSize="16" />
                     </ToggleButton>
                 </StackPanel>
-                <Grid ColumnSpacing="8">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="44" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="44" />
-                    </Grid.ColumnDefinitions>
-                    <TextBlock Text="{x:Bind app:Ui.Time(Player.Position), Mode=OneWay}" Style="{StaticResource SubtleTextStyle}" HorizontalAlignment="Right" VerticalAlignment="Center" />
-                    <Slider x:Name="PositionSlider" Grid.Column="1" Minimum="0" Maximum="{x:Bind MaxOf(Player.Duration), Mode=OneWay}"
-                            Value="{x:Bind Player.Position, Mode=OneWay}" ValueChanged="OnPositionChanged" IsThumbToolTipEnabled="False" VerticalAlignment="Center" />
-                    <TextBlock Grid.Column="2" Text="{x:Bind app:Ui.Time(Player.Duration), Mode=OneWay}" Style="{StaticResource SubtleTextStyle}" VerticalAlignment="Center" />
+                <Grid>
+                    <Grid ColumnSpacing="8" Visibility="{x:Bind app:Ui.Hide(Player.IsLive), Mode=OneWay}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="44" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="44" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="{x:Bind app:Ui.Time(Player.Position), Mode=OneWay}" Style="{StaticResource SubtleTextStyle}" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                        <Slider x:Name="PositionSlider" Grid.Column="1" Minimum="0" Maximum="{x:Bind MaxOf(Player.Duration), Mode=OneWay}"
+                                Value="{x:Bind Player.Position, Mode=OneWay}" ValueChanged="OnPositionChanged" IsThumbToolTipEnabled="False" VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="2" Text="{x:Bind app:Ui.Time(Player.Duration), Mode=OneWay}" Style="{StaticResource SubtleTextStyle}" VerticalAlignment="Center" />
+                    </Grid>
+                    <!-- ライブ配信: 位置と長さの代わりに「ライブ」の印（シークできない） -->
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="6" MinHeight="32"
+                                Visibility="{x:Bind app:Ui.Show(Player.IsLive), Mode=OneWay}">
+                        <Ellipse Width="8" Height="8" Fill="{StaticResource LiveBrush}" VerticalAlignment="Center" />
+                        <TextBlock Text="{x:Bind app:L.T('ライブ', 'LIVE')}" Foreground="{StaticResource LiveBrush}" Style="{StaticResource CaptionTextBlockStyle}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    </StackPanel>
                 </Grid>
             </StackPanel>
 

@@ -36,6 +36,24 @@ final class LiveStreamTests: XCTestCase {
         }
     }
 
+    func testLiveSearchAndResolveAnonymously() async throws {
+        let live = LiveClient(session: InnerTubeClient.createSession(), hl: "ja", gl: "JP", nowMs: LiveStreamTests.now)
+        let music = MusicRepository(client: InnerTubeClient(), live: live)
+        let searched = try await music.searchLive("lofi girl")
+        let page = try XCTUnwrap(searched.value)
+        print("live: search songs=\(page.songs.count) continuation=\(page.continuation != nil)")
+        let first = try XCTUnwrap(page.songs.first)
+        XCTAssertTrue(first.isLive)
+        let result = try await live.resolve(videoId: first.videoId)
+        print("live: resolve failure=\(String(describing: result.failure)) stream=\(result.stream.map(String.init(describing:)) ?? "-")")
+        let stream = try XCTUnwrap(result.stream)
+        XCTAssertTrue(isAllowedLiveManifestUrl(stream.revealUrl()))
+        let lofiResult = try await music.moodCategory(LofiGenre.params)
+        let lofi = try XCTUnwrap(lofiResult.value)
+        print("live: lofi shelves=\(lofi.shelves.map { "\($0.title):\($0.items.count)" })")
+        XCTAssertFalse(lofi.shelves.isEmpty)
+    }
+
     func testLrclibFindsSyncedLyrics() async throws {
         let client = LrclibClient(session: InnerTubeClient.createSession(), userAgent: "wave-mac/test")
         let result = try await client.synced(title: "夜に駆ける", artist: "YOASOBI", album: nil, durationSeconds: 261)

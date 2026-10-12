@@ -22,6 +22,7 @@ class PlaybackDecisionsTest {
                 StreamFailure.NoAudioFormat to PlaybackFailure.ThisSong,
                 StreamFailure.ItagUnavailable to PlaybackFailure.ThisSong,
                 StreamFailure.StreamChanged to PlaybackFailure.ThisSong,
+                StreamFailure.LiveStream to PlaybackFailure.ThisSong,
                 StreamFailure.Network to PlaybackFailure.Transient,
                 StreamFailure.Http to PlaybackFailure.Transient,
                 StreamFailure.PlayerConfigUnavailable to PlaybackFailure.Transient,

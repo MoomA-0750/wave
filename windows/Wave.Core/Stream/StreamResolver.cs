@@ -18,6 +18,8 @@ public enum StreamFailure
     SabrOnly,
     DecipherFailed,
     RejectedUrl,
+    /// <summary>ライブ配信だった（ライブの印の無い曲として渡された）。HLS で流し直す。</summary>
+    LiveStream,
 }
 
 /// <summary>解決済みのストリーム。署名付き URL を含むので、ToString に出さない。</summary>
@@ -113,6 +115,8 @@ public sealed partial class StreamResolver(InnerTubeClient client, PlayerCipherP
             });
         }
         var root = response.Value!;
+        // ライブ配信は HLS で流す（LiveClient）。WEB_REMIX の応答では再生できない
+        if (LiveParsers.IsLive(root)) return ResolveResult.Failed(StreamFailure.LiveStream);
         var status = root.Path("playabilityStatus", "status").Str();
         if (status == "LOGIN_REQUIRED") return ResolveResult.Failed(StreamFailure.NotLoggedIn);
         if (status != "OK") return ResolveResult.Failed(StreamFailure.Unplayable);

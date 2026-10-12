@@ -10,6 +10,8 @@ let package = Package(
     platforms: [.macOS(.v15), .iOS(.v18)],
     products: [
         .executable(name: "wave", targets: ["Wave"]),
+        // ウィジェット（アプリの PlugIns/WaveWidget.appex に入れる）。Shared/Widget をアプリと一緒に組む
+        .executable(name: "WaveWidget", targets: ["WaveWidget"]),
         .library(name: "WaveCore", targets: ["WaveCore"]),
     ],
     targets: [
@@ -21,6 +23,11 @@ let package = Package(
             name: "Wave",
             dependencies: ["WaveCore"],
             swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
+        .executableTarget(
+            name: "WaveWidget",
+            swiftSettings: [.swiftLanguageMode(.v5), .unsafeFlags(["-application-extension"])],
+            linkerSettings: [.unsafeFlags(["-Xlinker", "-application_extension"])]
         ),
         .testTarget(
             name: "WaveCoreTests",

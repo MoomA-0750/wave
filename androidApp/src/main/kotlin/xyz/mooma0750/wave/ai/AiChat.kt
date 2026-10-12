@@ -5,6 +5,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.stateIn
+import xyz.mooma0750.wave.core.ai.AiConversation
+import xyz.mooma0750.wave.core.ai.AiHistory
+import xyz.mooma0750.wave.core.ai.AiSavedMessage
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
@@ -36,9 +41,13 @@ sealed interface AiMessage {
         val text: String,
     ) : AiMessage
 
-    /** Claude の答え（流れてくる途中も足していく）。 */
+    /**
+     * Claude の答え（流れてくる途中も足していく）。videoId は時刻付きの歌詞を添えて聞いたときの曲で、
+     * 答えの中の [mm:ss] はこの曲が鳴っているときだけ押せる（押すとその位置へ飛ぶ）。
+     */
     data class Assistant(
         val text: String,
+        val videoId: String? = null,
     ) : AiMessage
 
     /** 道具を使った（「〜を探しました」など）。 */
@@ -59,17 +68,22 @@ sealed interface AiMessage {
 data class AiChatState(
     val messages: List<AiMessage> = emptyList(),
     val running: Boolean = false,
+    /** 履歴に残すときの id（新しい会話ごとに変わる。履歴から開けばその会話の id）。 */
+    val conversationId: String = java.util.UUID.randomUUID().toString(),
+    val createdAtMs: Long = System.currentTimeMillis(),
 )
 
 /**
  * Claude との会話（Kite の AI と同じく、家の PC などで動く中継 tools/ai-bridge 経由で Claude Code を使う）。
  * 中継は状態を持たないので、毎回それまでのやりとりと、今の曲・歌詞を送る。道具の呼び出しは AiTools が手元で行う。
- * 会話はアプリが動いている間だけ持つ（保存しない）。YouTube の認証情報は中継へ送らない（別の HTTP クライアントを使う）。
+ * 会話は端末の中の履歴（AiHistoryStore）に残し、「新しい会話」で次の会話へ移る。履歴から開いた会話はそのまま続けられる
+ * （中継へは毎回それまでのやりとりを送る）。YouTube の認証情報は中継へ送らない（別の HTTP クライアントを使う）。
  */
 class AiChat(
     private val transport: AiTransport,
     private val tools: AiTools,
     private val scope: CoroutineScope,
+    private val store: AiHistoryStore,
 ) {
     private val mutableState = MutableStateFlow(AiChatState())
     val state: StateFlow<AiChatState> = mutableState.asStateFlow()
@@ -77,10 +91,81 @@ class AiChat(
 
     private val json = Json { ignoreUnknownKeys = true }
 
+    /** これまでの会話（新しく話した順）。 */
+    val history: StateFlow<List<AiConversation>> = store.conversations
+
+    /** 鳴っている曲の id（答えの中の時刻を押せるか）。 */
+    val playingVideoId: StateFlow<String?> = tools.playingVideoId().stateIn(scope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** 新しい会話にする（今の会話は履歴に残っている）。 */
     fun clear() {
         stop()
+        archive()
         mutableState.value = AiChatState()
     }
+
+    /** 履歴の会話を開いて続ける。 */
+    fun open(id: String) {
+        val conversation = history.value.firstOrNull { it.id == id } ?: return
+        stop()
+        archive()
+        val messages = conversation.messages.mapNotNull(::messageOf)
+        messages.filterIsInstance<AiMessage.Songs>().forEach { tools.remember(it.songs) }
+        mutableState.value = AiChatState(messages, conversationId = conversation.id, createdAtMs = conversation.createdAtMs)
+    }
+
+    /** 履歴から消す。開いている会話なら、新しい会話にする。 */
+    fun delete(id: String) {
+        if (state.value.conversationId == id) {
+            stop()
+            mutableState.value = AiChatState()
+        }
+        store.remove(id)
+    }
+
+    /** ログアウトのとき: 今の会話も履歴も消す。 */
+    fun wipe() {
+        stop()
+        mutableState.value = AiChatState()
+        store.clear()
+    }
+
+    /** 答えの中の時刻を押した: 話している曲がまだ鳴っていれば、その位置へ飛ぶ。 */
+    fun seek(
+        videoId: String,
+        positionMs: Long,
+    ) {
+        scope.launch {
+            val ok = runCatching { tools.seek(videoId, positionMs) }.getOrDefault(false)
+            Log.i(WaveApplication.LOG_TAG, "ai seek ok=$ok")
+        }
+    }
+
+    /** 今の会話を履歴に残す（自分の発言が無ければ残さない）。 */
+    private fun archive(state: AiChatState = this.state.value) {
+        val saved = state.messages.map(::savedOf)
+        if (saved.none { it.kind == AiSavedMessage.USER }) return
+        store.save(AiConversation(state.conversationId, AiHistory.title(saved), state.createdAtMs, System.currentTimeMillis(), saved))
+    }
+
+    private fun savedOf(message: AiMessage): AiSavedMessage =
+        when (message) {
+            is AiMessage.User -> AiSavedMessage(AiSavedMessage.USER, message.text)
+            is AiMessage.Assistant -> AiSavedMessage(AiSavedMessage.ASSISTANT, message.text, videoId = message.videoId)
+            is AiMessage.Action -> AiSavedMessage(AiSavedMessage.ACTION, message.text)
+            is AiMessage.Songs -> AiSavedMessage(AiSavedMessage.SONGS, songs = message.songs)
+            is AiMessage.Failure -> AiSavedMessage(AiSavedMessage.FAILURE, message.text)
+        }
+
+    private fun messageOf(saved: AiSavedMessage): AiMessage? =
+        when (saved.kind) {
+            AiSavedMessage.USER -> AiMessage.User(saved.text)
+            AiSavedMessage.ASSISTANT -> AiMessage.Assistant(saved.text, saved.videoId)
+            AiSavedMessage.ACTION -> AiMessage.Action(saved.text)
+            AiSavedMessage.SONGS -> saved.songs.takeIf { it.isNotEmpty() }?.let(AiMessage::Songs)
+            AiSavedMessage.FAILURE -> AiMessage.Failure(saved.text)
+            else -> null
+        }
 
     fun stop() {
         job?.cancel()
@@ -100,6 +185,8 @@ class AiChat(
                 }
             }
         mutableState.update { it.copy(messages = it.messages + AiMessage.User(task), running = true) }
+        archive()
+        val conversationId = state.value.conversationId
         job =
             scope.launch {
                 try {
@@ -109,7 +196,12 @@ class AiChat(
                     Log.i(WaveApplication.LOG_TAG, "ai failed type=${error::class.simpleName}")
                     fail(UNREACHABLE)
                 } finally {
-                    mutableState.update { it.copy(running = false) }
+                    // 止めたあとに別の会話へ移っていれば、そちらには触れない
+                    val current = state.value
+                    if (current.conversationId == conversationId) {
+                        mutableState.update { it.copy(running = false) }
+                        archive(current)
+                    }
                 }
             }
     }
@@ -162,9 +254,9 @@ class AiChat(
                         mutableState.update { state ->
                             val last = state.messages.lastOrNull()
                             if (appending && last is AiMessage.Assistant) {
-                                state.copy(messages = state.messages.dropLast(1) + AiMessage.Assistant(last.text + text))
+                                state.copy(messages = state.messages.dropLast(1) + last.copy(text = last.text + text))
                             } else {
-                                state.copy(messages = state.messages + AiMessage.Assistant(text.trimStart()))
+                                state.copy(messages = state.messages + AiMessage.Assistant(text.trimStart(), context.syncedVideoId))
                             }
                         }
                         appending = text != "\n\n"

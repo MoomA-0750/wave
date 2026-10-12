@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleName</key><string>WaveWidget</string>
+	<key>CFBundleDisplayName</key><string>wave</string>
+	<key>CFBundleIdentifier</key><string>xyz.mooma0750.wave.widget</string>
+	<key>CFBundleExecutable</key><string>WaveWidget</string>
+	<key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+	<key>CFBundlePackageType</key><string>XPC!</string>
+	<key>CFBundleShortVersionString</key><string>0.1.0</string>
+	<key>CFBundleVersion</key><string>1</string>
+	<key>CFBundleDevelopmentRegion</key><string>ja</string>
+	<key>CFBundleSupportedPlatforms</key><array><string>iPhoneOS</string></array>
+	<key>DTPlatformName</key><string>iphoneos</string>
+	<key>MinimumOSVersion</key><string>18.0</string>
+	<key>UIDeviceFamily</key><array><integer>1</integer></array>
+	<key>NSExtension</key>
+	<dict>
+		<key>NSExtensionPointIdentifier</key><string>com.apple.widgetkit-extension</string>
+	</dict>
+</dict>
+</plist>

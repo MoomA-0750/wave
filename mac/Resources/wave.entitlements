@@ -4,5 +4,8 @@
 <dict>
 	<!-- JavaScriptCore で署名の解読器を動かす（JIT）。 -->
 	<key>com.apple.security.cs.allow-jit</key><true/>
+	<!-- ウィジェットと今の曲・プレイリストを分け合う置き場。 -->
+	<key>com.apple.security.application-groups</key>
+	<array><string>4U9XZY5WK3.xyz.mooma0750.wave</string></array>
 </dict>
 </plist>

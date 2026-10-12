@@ -97,6 +97,15 @@ struct RootView: View {
             player.message = nil
         }
         .onChange(of: player.current?.videoId) { _, _ in AppServices.prefetchMembership() }
+        // ウィジェット・ロック画面の再生中から開いたとき
+        .onOpenURL { url in
+            guard url.scheme == "wave" else { return }
+            switch url.host {
+            case "nowplaying": if player.current != nil { shell.playerOpen = true }
+            case "add-to-playlist": if let song = player.current { Dialogs.shared.addToPlaylist(song) }
+            default: break
+            }
+        }
         // ログインしていなければ、まずログインの画面（Android と同じく、ログインしないと曲が鳴らない）
         .fullScreenCover(isPresented: Binding(get: { !account.isLoggedIn && !LoginGate.shared.skipped }, set: { _ in })) {
             LoginView()

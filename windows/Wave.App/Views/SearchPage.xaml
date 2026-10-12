@@ -77,6 +77,7 @@
                 <SelectorBarItem Text="{x:Bind app:L.T('曲', 'Songs')}" Tag="songs" />
                 <SelectorBarItem Text="{x:Bind app:L.T('アーティスト', 'Artists')}" Tag="artists" />
                 <SelectorBarItem Text="{x:Bind app:L.T('アルバム', 'Albums')}" Tag="albums" />
+                <SelectorBarItem Text="{x:Bind app:L.T('ライブ', 'Live')}" Tag="live" />
                 <SelectorBarItem Text="{x:Bind app:L.T('ポッドキャスト', 'Podcasts')}" Tag="podcasts" />
                 <SelectorBarItem Text="{x:Bind app:L.T('エピソード', 'Episodes')}" Tag="episodes" />
             </SelectorBar>
@@ -146,6 +147,10 @@
                     </DataTemplate>
                 </ListView.ItemTemplate>
             </ListView>
+            <!-- ライブ配信（YouTube Music の動画のライブと、YouTube のライブの絞り込み） -->
+            <ListView x:Name="LiveList" Grid.Row="1" Visibility="Collapsed" Padding="12,8" ItemTemplate="{StaticResource TrackRowTemplate}"
+                      ItemContainerStyle="{StaticResource TrackListItemStyle}" DoubleTapped="OnSongDoubleTapped" />
+            <ProgressRing x:Name="LiveLoading" Grid.Row="1" IsActive="False" VerticalAlignment="Top" Margin="0,48,0,0" />
 
             <GridView x:Name="CardGrid" Grid.Row="1" Visibility="Collapsed" Padding="16,8" SelectionMode="None">
                 <GridView.ItemTemplate>

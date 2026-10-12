@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Wave.Core.Ai;
 using Wave.Core.Lyrics;
 using Wave.Core.Music;
 
@@ -12,7 +13,8 @@ namespace Wave.App.Services;
 public abstract record AiMessage
 {
     public sealed record User(string Text) : AiMessage;
-    public sealed record Assistant(string Text) : AiMessage;
+    /// <summary>Claude の答え。VideoId は時刻付きの歌詞を添えて聞いたときの曲（答えの中の [mm:ss] はこの曲が鳴っているときだけ押せる）。</summary>
+    public sealed record Assistant(string Text, string? VideoId = null) : AiMessage;
     public sealed record Action(string Text) : AiMessage;
     public sealed record Songs(IReadOnlyList<Song> Items) : AiMessage;
     public sealed record Failure(string Text) : AiMessage;
@@ -21,7 +23,8 @@ public abstract record AiMessage
 /// <summary>
 /// Claude との会話（Android の AiChat・AiTools と同じ）。家の PC などで動く中継 tools/ai-bridge 経由で Claude Code を使う。
 /// 中継は状態を持たないので、毎回それまでのやりとりと、今の曲・歌詞を送る。道具の呼び出しは手元で行う。
-/// 会話はアプリが動いている間だけ持つ。YouTube の認証情報は中継へ送らない（別の HttpClient を使う）。
+/// 会話は端末の中の履歴（AiHistoryStore）に残し、「新しい会話」で次の会話へ移る。履歴から開いた会話はそのまま続けられる。
+/// YouTube の認証情報は中継へ送らない（別の HttpClient を使う）。
 /// </summary>
 public sealed class AiChat
 {
@@ -31,6 +34,14 @@ public sealed class AiChat
 
     public event Action? Changed;
 
+    /// <summary>履歴に残すときの id（新しい会話ごとに変わる。履歴から開けばその会話の id）。</summary>
+    public string ConversationId { get; private set; } = Guid.NewGuid().ToString();
+
+    private long createdAtMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+    /// <summary>これまでの会話（%LOCALAPPDATA%\wave\ai_history.json）。</summary>
+    public AiHistoryStore History { get; } = new();
+
     private CancellationTokenSource? cancel;
     private readonly Dictionary<string, Song> known = [];
 
@@ -39,12 +50,97 @@ public sealed class AiChat
 
     public bool Configured => AppServices.Settings.AiUrl is { Length: > 0 } && AppServices.Settings.AiToken is { Length: > 0 };
 
+    /// <summary>新しい会話にする（今の会話は履歴に残す）。</summary>
     public void Clear()
     {
         Stop();
+        Archive();
+        Reset();
+    }
+
+    /// <summary>履歴の会話を開いて続ける。</summary>
+    public void Open(string id)
+    {
+        if (History.Conversations.FirstOrDefault(c => c.Id == id) is not { } conversation) return;
+        Stop();
+        Archive();
         Messages.Clear();
+        foreach (var saved in conversation.Messages)
+        {
+            if (MessageOf(saved) is not { } message) continue;
+            if (message is AiMessage.Songs songs) foreach (var song in songs.Items) Remember(song);
+            Messages.Add(message);
+        }
+        ConversationId = conversation.Id;
+        createdAtMs = conversation.CreatedAtMs;
         Changed?.Invoke();
     }
+
+    /// <summary>履歴から消す。開いている会話なら、新しい会話にする。</summary>
+    public void Delete(string id)
+    {
+        if (ConversationId == id)
+        {
+            Stop();
+            Reset();
+        }
+        History.Remove(id);
+        Changed?.Invoke();
+    }
+
+    /// <summary>ログアウトのとき: 今の会話も履歴も消す。</summary>
+    public void Wipe()
+    {
+        Stop();
+        History.Clear();
+        Reset();
+    }
+
+    private void Reset()
+    {
+        Messages.Clear();
+        ConversationId = Guid.NewGuid().ToString();
+        createdAtMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        Changed?.Invoke();
+    }
+
+    /// <summary>答えの中の時刻を押した: 話している曲がまだ鳴っていれば、その位置へ飛ぶ（ほかの端末で鳴っていればその端末へ）。</summary>
+    public static bool Seek(string videoId, long positionMs)
+    {
+        var player = AppServices.Player;
+        var ok = player.Current?.VideoId == videoId;
+        if (ok) player.Seek(positionMs / 1000.0);
+        AppPaths.Log($"ai seek ok={ok}");
+        return ok;
+    }
+
+    /// <summary>今の会話を履歴に残す（自分の発言が無ければ残さない）。</summary>
+    private void Archive()
+    {
+        var saved = Messages.Select(SavedOf).ToList();
+        if (!saved.Any(m => m.Kind == AiSavedMessage.User)) return;
+        History.Save(new AiConversation(ConversationId, AiHistory.Title(saved), createdAtMs, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), saved));
+    }
+
+    private static AiSavedMessage SavedOf(AiMessage message) => message switch
+    {
+        AiMessage.User u => new(AiSavedMessage.User, u.Text),
+        AiMessage.Assistant a => new(AiSavedMessage.Assistant, a.Text, a.VideoId),
+        AiMessage.Action a => new(AiSavedMessage.Action, a.Text),
+        AiMessage.Songs s => new(AiSavedMessage.SongsKind, Songs: [.. s.Items]),
+        AiMessage.Failure f => new(AiSavedMessage.Failure, f.Text),
+        _ => new(AiSavedMessage.Action, ""),
+    };
+
+    private static AiMessage? MessageOf(AiSavedMessage saved) => saved.Kind switch
+    {
+        AiSavedMessage.User => new AiMessage.User(saved.Text),
+        AiSavedMessage.Assistant => new AiMessage.Assistant(saved.Text, saved.VideoId),
+        AiSavedMessage.Action => new AiMessage.Action(saved.Text),
+        AiSavedMessage.SongsKind when saved.Songs is { Count: > 0 } songs => new AiMessage.Songs(songs),
+        AiSavedMessage.Failure => new AiMessage.Failure(saved.Text),
+        _ => null,
+    };
 
     public void Stop()
     {
@@ -92,7 +188,9 @@ public sealed class AiChat
         }).OfType<JsonObject>().ToList();
         Messages.Add(new AiMessage.User(task));
         Running = true;
+        Archive();
         Changed?.Invoke();
+        var conversationId = ConversationId;
         var source = cancel = new CancellationTokenSource();
         try
         {
@@ -113,8 +211,13 @@ public sealed class AiChat
         finally
         {
             if (cancel == source) cancel = null;
-            Running = false;
-            Changed?.Invoke();
+            // 止めたあとに別の会話へ移っていれば、そちらには触れない
+            if (ConversationId == conversationId)
+            {
+                Running = false;
+                Archive();
+                Changed?.Invoke();
+            }
         }
     }
 
@@ -122,11 +225,17 @@ public sealed class AiChat
     {
         var settings = AppServices.Settings;
         var body = new JsonObject { ["task"] = task, ["messages"] = new JsonArray([.. history]) };
+        string? syncedVideoId = null;
         if (AppServices.Player.Current is { } song)
         {
             Remember(song);
             body["now_playing"] = new JsonObject { ["title"] = song.Title, ["artists"] = song.ArtistsText, ["album"] = song.Album?.Title ?? "", ["video_id"] = song.VideoId };
-            if (await LyricsTextAsync(song, token) is { } lyrics) body["lyrics"] = lyrics;
+            if (await LyricsOfAsync(song, token) is { } lyrics)
+            {
+                // 時刻付きなら行ごとに [mm:ss] を付けて送る（Claude が歌詞を引くときに時刻を添える）
+                body["lyrics"] = AiText.LyricsText(lyrics);
+                if (lyrics is SongLyrics.Synced) syncedVideoId = song.VideoId;
+            }
         }
         using var request = new HttpRequestMessage(HttpMethod.Post, settings.AiUrl + "/v1/agent") { Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json") };
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", settings.AiToken);
@@ -157,8 +266,8 @@ public sealed class AiChat
             {
                 var text = d.GetValue<string>();
                 if (string.IsNullOrWhiteSpace(text) && !appending) continue;
-                if (appending && Messages.LastOrDefault() is AiMessage.Assistant last) Messages[^1] = new AiMessage.Assistant(last.Text + text);
-                else Messages.Add(new AiMessage.Assistant(text.TrimStart()));
+                if (appending && Messages.LastOrDefault() is AiMessage.Assistant last) Messages[^1] = last with { Text = last.Text + text };
+                else Messages.Add(new AiMessage.Assistant(text.TrimStart(), syncedVideoId));
                 appending = text != "\n\n";
                 Changed?.Invoke();
             }
@@ -180,15 +289,8 @@ public sealed class AiChat
         }
     }
 
-    private static async Task<string?> LyricsTextAsync(Song song, CancellationToken token) =>
-        await AppServices.Lyrics.LyricsAsync(song, token) is LyricsService.Result.Found found
-            ? found.Lyrics switch
-            {
-                SongLyrics.Synced s => string.Join("\n", s.Lines.Select(l => l.Text)),
-                SongLyrics.Plain p => p.Text,
-                _ => null,
-            }
-            : null;
+    private static async Task<SongLyrics?> LyricsOfAsync(Song song, CancellationToken token) =>
+        await AppServices.Lyrics.LyricsAsync(song, token) is LyricsService.Result.Found found ? found.Lyrics : null;
 
     private void Remember(Song song) => known[song.VideoId] = song;
 
@@ -222,7 +324,7 @@ public sealed class AiChat
                 if (player.Current is not { } song) return ("nothing is playing", null, null);
                 Remember(song);
                 var o = new JsonObject { ["song"] = SongJson(song) };
-                if (await LyricsTextAsync(song, token) is { } lyrics) o["lyrics"] = lyrics;
+                if (await LyricsOfAsync(song, token) is { } lyrics) o["lyrics"] = AiText.LyricsText(lyrics);
                 return (o, null, null);
             }
             case "get_queue":

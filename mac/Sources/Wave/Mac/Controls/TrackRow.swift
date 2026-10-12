@@ -57,7 +57,11 @@ struct TrackRowView: View {
                 if isLiked {
                     Image(systemName: "checkmark.circle.fill").font(.system(size: 13)).foregroundStyle(Color.accentColor).help(L.t("高く評価済み", "Liked"))
                 }
-                Text(Ui.duration(row.song.durationSeconds)).foregroundStyle(.secondary).monospacedDigit()
+                if row.song.isLive {
+                    LiveBadge()
+                } else {
+                    Text(Ui.duration(row.song.durationSeconds)).foregroundStyle(.secondary).monospacedDigit()
+                }
             }
             .frame(width: 80, alignment: .trailing)
             Menu {
