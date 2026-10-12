@@ -23,6 +23,8 @@ public sealed partial class MediaCard : UserControl
     {
         null => "",
         HomeItem.ArtistItem => L.T("アーティスト", "Artist"),
+        // ライブ配信は「ライブ • 配信者」
+        HomeItem.SongItem { Song.IsLive: true } s => L.T("ライブ • ", "LIVE • ") + s.Song.ArtistsText,
         _ => item.Subtitle ?? "",
     };
 

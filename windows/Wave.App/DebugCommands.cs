@@ -151,6 +151,60 @@ public static class DebugCommands
                 if (result.IsOk && result.Value!.Songs.Count > 0) player.PlayNext(result.Value.Songs[0]);
                 break;
             }
+            case "live-play":
+            {
+                // ライブの検索の先頭を、検索の結果を選んだのと同じ流し方で流す
+                var result = await AppServices.Music.SearchLiveAsync(arg);
+                AppPaths.Log($"debug live-search ok={result.IsOk} n={result.Value?.Songs.Count} live={result.Value?.Songs.Count(s => s.IsLive)} more={result.Value?.Continuation is not null}");
+                if (result.IsOk && result.Value!.Songs.Count > 0) player.PlaySong(result.Value.Songs[0]);
+                break;
+            }
+            case "live-more":
+            {
+                var first = await AppServices.Music.SearchLiveAsync(arg);
+                if (first.Value?.Continuation is not { } token) break;
+                var next = await AppServices.Music.SearchLiveAsync(arg, token);
+                AppPaths.Log($"debug live-more ok={next.IsOk} n={next.Value?.Songs.Count} more={next.Value?.Continuation is not null}");
+                break;
+            }
+            case "play-id":
+                // ライブの印の無い曲として流す（WEB_REMIX の /player がライブを示したら HLS に切り替わるか）
+                player.PlaySong(new Song(arg, arg, [], null, null, null));
+                break;
+            case "lofi":
+            {
+                // 気分とジャンルの Lo-Fi のタイルを押したのと同じ
+                var moods = await AppServices.Music.MoodsAsync();
+                var tile = moods.Value?.SelectMany(s => s.Categories).FirstOrDefault(c => c.Params == LofiGenre.Params);
+                AppPaths.Log($"debug lofi tile={tile is not null} first={moods.Value?.FirstOrDefault(s => s.Categories.Any(c => c.Params == LofiGenre.Params))?.Categories.FirstOrDefault()?.Title}");
+                Nav.Mood(tile ?? LofiGenre.Category);
+                var page = await AppServices.Music.MoodCategoryAsync(LofiGenre.Params);
+                AppPaths.Log($"debug lofi page ok={page.IsOk} " + string.Join(" | ", page.Value?.Shelves.Select(s => $"{s.Title}={s.Items.Count}") ?? []));
+                break;
+            }
+            case "search-tab":
+            {
+                // 検索欄に打って、結果のタブを選んだのと同じ（例: search-tab live lofi）
+                var words = arg.Split(' ', 2);
+                window.SearchFor(words.Length > 1 ? words[1] : "");
+                await Task.Delay(300);
+                if (Nav.Frame.Content is Views.SearchPage page)
+                {
+                    page.DebugTab(words[0]);
+                    for (var i = 0; i < 40 && page.DebugLiveRows == 0; i++) await Task.Delay(250);
+                    AppPaths.Log($"debug search-tab rows={page.DebugLiveRows}");
+                }
+                break;
+            }
+            case "live-state":
+                AppPaths.Log($"debug live-state live={player.IsLive} playing={player.IsPlaying} loading={player.IsLoading} position={player.Position:0} duration={player.Duration:0} video={player.Video is not null} lyrics={player.Lyrics is not null} queue={player.Queue.Count} title={player.Current?.Title}");
+                break;
+            case "seek":
+                player.Seek(double.Parse(arg));
+                break;
+            case "next":
+                player.Next();
+                break;
             case "queue-dump":
                 AppPaths.Log($"debug queue index={player.Index} " + string.Join(" | ", Enumerable.Range(Math.Max(0, player.Index), Math.Min(8, Math.Max(0, player.Queue.Count - player.Index))).Select(i => (player.IsUserAdded(i) ? "U:" : "") + player.Queue[i].Title)));
                 break;
