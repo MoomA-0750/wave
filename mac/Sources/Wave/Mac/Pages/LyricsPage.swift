@@ -12,6 +12,8 @@ struct LyricsPageView: View {
             ZStack {
                 if player.current == nil {
                     empty(L.t("曲を再生すると、ここに歌詞が出ます", "Play a song to see its lyrics here"))
+                } else if player.isLive {
+                    empty(L.t("ライブ配信には歌詞がありません", "Live streams don't have lyrics"))
                 } else {
                     switch player.lyrics {
                     case nil:
