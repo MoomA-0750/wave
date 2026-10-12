@@ -97,13 +97,40 @@ public static class DebugCommands
                     AppPaths.Log("debug ai " + m switch
                     {
                         AiMessage.User => "user",
-                        AiMessage.Assistant a => $"assistant chars={a.Text.Length}",
+                        AiMessage.Assistant a => $"assistant chars={a.Text.Length} stamps=[{string.Join(",", Wave.Core.Ai.AiText.Timestamps(a.Text).Select(t => t.Label))}] synced={a.VideoId is not null}",
                         AiMessage.Action a => "action " + a.Text,
                         AiMessage.Songs s => $"songs n={s.Items.Count}",
                         AiMessage.Failure f => "failure " + f.Text,
                         _ => "?",
                     });
                 break;
+            // Claude の会話の履歴: 一覧・新しい会話・開く（番号）・消す（番号）・最後の答えの時刻へ飛ぶ（番号）
+            case "ai-history":
+                for (var i = 0; i < AppServices.Ai.History.Conversations.Count; i++)
+                {
+                    var c = AppServices.Ai.History.Conversations[i];
+                    AppPaths.Log($"debug ai history {i} title_chars={c.Title.Length} messages={c.Messages.Count} current={c.Id == AppServices.Ai.ConversationId}");
+                }
+                AppPaths.Log($"debug ai history n={AppServices.Ai.History.Conversations.Count}");
+                break;
+            case "ai-new":
+                AppServices.Ai.Clear();
+                break;
+            case "ai-open":
+                if (AppServices.Ai.History.Conversations.ElementAtOrDefault(int.TryParse(arg, out var openIndex) ? openIndex : 0) is { } opened) AppServices.Ai.Open(opened.Id);
+                AppPaths.Log($"debug ai open messages={AppServices.Ai.Messages.Count}");
+                break;
+            case "ai-delete":
+                if (AppServices.Ai.History.Conversations.ElementAtOrDefault(int.TryParse(arg, out var deleteIndex) ? deleteIndex : 0) is { } deleted) AppServices.Ai.Delete(deleted.Id);
+                break;
+            case "ai-seek":
+            {
+                var answer = AppServices.Ai.Messages.OfType<AiMessage.Assistant>().LastOrDefault(a => Wave.Core.Ai.AiText.Timestamps(a.Text).Count > 0);
+                var stamp = answer is null ? null : Wave.Core.Ai.AiText.Timestamps(answer.Text).ElementAtOrDefault(int.TryParse(arg, out var stampIndex) ? stampIndex : 0);
+                AppPaths.Log($"debug ai seek stamp={stamp?.Label} synced={answer?.VideoId is not null}");
+                if (answer?.VideoId is { } id && stamp is not null) AiChat.Seek(id, stamp.PositionMs);
+                break;
+            }
             case "membership-toggle":
             {
                 // 追加の画面で、名前の一致するプレイリストの行を押したのと同じ（入っていれば外し、無ければ足す）

@@ -70,6 +70,8 @@ public sealed partial class AccountState : ObservableObject
         AppServices.Client.SetCredentials(null);
         AppServices.Credentials.Clear();
         AppServices.Releases.Clear();
+        // 前のアカウントの Claude との会話を残さない（履歴も消す。Android と同じ）
+        AppServices.Ai.Wipe();
         ObtainedAtEpochMs = 0;
         IsLoggedIn = false;
         PremiumAudio = null;
