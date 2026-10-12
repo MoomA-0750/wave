@@ -310,10 +310,12 @@ fun LibraryScreen(
                         xyz.mooma0750.wave.library.LibraryFilter.Playlists -> R.string.library_filter_playlists
                         xyz.mooma0750.wave.library.LibraryFilter.Artists -> R.string.library_filter_artists
                         xyz.mooma0750.wave.library.LibraryFilter.Albums -> R.string.library_filter_albums
+                        xyz.mooma0750.wave.library.LibraryFilter.Podcasts -> R.string.library_filter_podcasts
                     },
                 ),
             ) {
-                val all = listOf(null) + xyz.mooma0750.wave.library.LibraryFilter.entries
+                // 時計はポッドキャストを読まない
+                val all = listOf(null) + xyz.mooma0750.wave.library.LibraryFilter.entries.minus(xyz.mooma0750.wave.library.LibraryFilter.Podcasts)
                 filter = all[(all.indexOf(filter) + 1) % all.size]
             }
         }
@@ -331,6 +333,8 @@ fun LibraryScreen(
                 is LibraryEntry.Playlist -> EntryRow(look, entry.playlist.title, entry.playlist.subtitle, entry.playlist.thumbnailUrl) { onOpenPlaylist(entry.playlist) }
                 is LibraryEntry.Artist -> EntryRow(look, entry.artist.name, entry.artist.subtitle, entry.artist.thumbnailUrl, round = true) { onOpenArtist(entry.artist.browseId, entry.artist.name) }
                 is LibraryEntry.Album -> EntryRow(look, entry.album.title, entry.album.subtitle, entry.album.thumbnailUrl) { onOpenAlbum(entry.album.browseId, entry.album.title) }
+                // 時計はポッドキャストを読まない（スマホと同じキャッシュから来ても出さない）
+                is LibraryEntry.Podcast -> Unit
             }
         }
     }

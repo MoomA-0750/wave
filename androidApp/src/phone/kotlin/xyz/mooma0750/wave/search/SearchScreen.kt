@@ -55,6 +55,8 @@ import xyz.mooma0750.wave.core.music.AlbumRef
 import xyz.mooma0750.wave.core.music.AlbumSummary
 import xyz.mooma0750.wave.core.music.ArtistRef
 import xyz.mooma0750.wave.core.music.ArtistSummary
+import xyz.mooma0750.wave.core.music.PodcastEpisode
+import xyz.mooma0750.wave.core.music.PodcastSummary
 import xyz.mooma0750.wave.core.music.SearchSuggestions
 import xyz.mooma0750.wave.core.music.Song
 import xyz.mooma0750.wave.core.session.FailureKind
@@ -71,6 +73,8 @@ fun SearchScreen(
     bottomBar: @Composable () -> Unit = {},
     /** 検索の履歴（語・アーティスト・アルバム）。 */
     history: SearchHistoryStore,
+    /** ポッドキャストの番組のページを開く。 */
+    onOpenPodcast: (PodcastSummary) -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val historyEntries by history.entries.collectAsStateWithLifecycle()
@@ -118,6 +122,7 @@ fun SearchScreen(
                         history.add(SearchHistoryEntry.Album(album.title, album.browseId, album.subtitle, album.thumbnailUrl))
                         actions.openAlbum(AlbumRef(album.title, album.browseId))
                     },
+                    podcast = onOpenPodcast,
                 )
             // 検索欄が空のときは、前の検索の結果ではなく、最近の検索を出す（Spotify と同じ）
             when {
@@ -133,6 +138,7 @@ fun SearchScreen(
 private class Opener(
     val artist: (ArtistSummary) -> Unit,
     val album: (AlbumSummary) -> Unit,
+    val podcast: (PodcastSummary) -> Unit,
 )
 
 @Composable
@@ -220,7 +226,7 @@ private fun Results(
     }
     when {
         state.failure != null -> Text(failureMessage(state.failure), Modifier.padding(16.dp))
-        state.empty -> Text(stringResource(R.string.search_not_found), Modifier.padding(16.dp))
+        state.empty && state.tab != SearchTab.Podcasts && state.tab != SearchTab.Episodes -> Text(stringResource(R.string.search_not_found), Modifier.padding(16.dp))
     }
     val openArtist = opener.artist
     val openAlbum = opener.album
@@ -266,6 +272,17 @@ private fun Results(
             SearchTab.Songs -> pagedItems(state.songs, { "s-$it-" }, { viewModel.loadMore(SearchTab.Songs) }) { songRow(it) }
             SearchTab.Albums -> pagedItems(state.albums, { "al-$it-" }, { viewModel.loadMore(SearchTab.Albums) }) { AlbumRow(it) { openAlbum(it) } }
             SearchTab.Artists -> pagedItems(state.artists, { "ar-$it-" }, { viewModel.loadMore(SearchTab.Artists) }) { ArtistRow(it) { openArtist(it) } }
+            SearchTab.Podcasts -> {
+                pagedItems(state.podcasts, { "pod-$it-" }, { viewModel.loadMore(SearchTab.Podcasts) }) { PodcastRow(it) { opener.podcast(it) } }
+                notFound(state.podcasts)
+            }
+            SearchTab.Episodes -> {
+                pagedItems(state.episodes, { "ep-$it-" }, { viewModel.loadMore(SearchTab.Episodes) }) { episode ->
+                    // エピソードは曲と同じに流す（番組名がアーティストの位置に出る）。補足の行は「番組 • 日付」
+                    EpisodeRow(episode, onClick = { onSongClick(episode.song) }) { SongMenuButton(episode.song, actions) }
+                }
+                notFound(state.episodes)
+            }
         }
         if (state.loading) item { LoadingIndicator(Modifier.padding(16.dp)) }
     }
@@ -286,6 +303,51 @@ private fun <T> LazyListScope.pagedItems(
     }
     if (list.loadingMore) item { LoadingIndicator(Modifier.padding(16.dp)) }
     if (list.failure != null && list.items.isEmpty()) item { Text(failureMessage(list.failure), Modifier.padding(16.dp)) }
+}
+
+/** 選んだときに読む種類（ポッドキャスト・エピソード）で、読み終えて0件だったとき。 */
+private fun <T> LazyListScope.notFound(list: ResultList<T>) {
+    if (list.requested && !list.loadingMore && list.failure == null && list.items.isEmpty()) {
+        item { Text(stringResource(R.string.search_not_found), Modifier.padding(16.dp)) }
+    }
+}
+
+/** ポッドキャストの番組の行（画像は角の丸い四角）。 */
+@Composable
+private fun PodcastRow(
+    podcast: PodcastSummary,
+    onClick: () -> Unit,
+) {
+    CardRow(podcast.thumbnailUrl, podcast.title, listOfNotNull(stringResource(R.string.search_kind_podcast), podcast.author).joinToString(" • "), MaterialTheme.shapes.small, onClick)
+}
+
+/** エピソードの行（検索の結果）。補足の行は「番組 • 日付」。 */
+@Composable
+private fun EpisodeRow(
+    episode: PodcastEpisode,
+    onClick: () -> Unit,
+    trailing: @Composable () -> Unit,
+) {
+    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        coil3.compose.AsyncImage(
+            model = episode.song.thumbnailUrl,
+            contentDescription = null,
+            modifier = Modifier.size(48.dp).clip(MaterialTheme.shapes.extraSmall),
+            contentScale = ContentScale.Crop,
+        )
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(episode.song.title, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                listOfNotNull(episode.song.artists.firstOrNull()?.name, episode.publishedText).joinToString(" • "),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        trailing()
+    }
 }
 
 /** トップの検索結果の大きなカード。 */
@@ -368,6 +430,8 @@ private fun tabLabel(tab: SearchTab): String =
         SearchTab.Songs -> stringResource(R.string.search_tab_songs)
         SearchTab.Albums -> stringResource(R.string.search_tab_albums)
         SearchTab.Artists -> stringResource(R.string.search_tab_artists)
+        SearchTab.Podcasts -> stringResource(R.string.search_tab_podcasts)
+        SearchTab.Episodes -> stringResource(R.string.search_tab_episodes)
     }
 
 private const val PREVIEW_COUNT = 4

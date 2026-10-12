@@ -17,6 +17,7 @@ import xyz.mooma0750.wave.core.music.ArtistSummary
 import xyz.mooma0750.wave.core.music.HomeItem
 import xyz.mooma0750.wave.core.music.MusicRepository
 import xyz.mooma0750.wave.core.music.PlaylistSummary
+import xyz.mooma0750.wave.core.music.PodcastSummary
 import xyz.mooma0750.wave.core.session.CallResult
 import xyz.mooma0750.wave.core.session.FailureKind
 
@@ -45,10 +46,18 @@ sealed interface LibraryEntry {
         override val key get() = "al-${album.browseId}"
         override val title get() = album.title
     }
+
+    /** 保存したポッドキャストの番組。 */
+    data class Podcast(
+        val podcast: PodcastSummary,
+    ) : LibraryEntry {
+        override val key get() = "pod-${podcast.browseId}"
+        override val title get() = podcast.title
+    }
 }
 
 /** 絞り込み（Spotify のチップ）。 */
-enum class LibraryFilter { Playlists, Artists, Albums }
+enum class LibraryFilter { Playlists, Artists, Albums, Podcasts }
 
 /** 並べ方（Spotify の「最近」「追加順」「アルファベット順」）。 */
 enum class LibrarySort { Recents, Added, Alphabetical }
@@ -80,6 +89,7 @@ object LibraryOrder {
                         LibraryFilter.Playlists -> it is LibraryEntry.Playlist
                         LibraryFilter.Artists -> it is LibraryEntry.Artist
                         LibraryFilter.Albums -> it is LibraryEntry.Album
+                        LibraryFilter.Podcasts -> it is LibraryEntry.Podcast
                     }
                 kind && matches(it.title, subtitleOf(it), query)
             }
@@ -114,6 +124,7 @@ object LibraryOrder {
             is LibraryEntry.Playlist -> entry.playlist.subtitle
             is LibraryEntry.Artist -> null
             is LibraryEntry.Album -> entry.album.subtitle
+            is LibraryEntry.Podcast -> entry.podcast.author
         }
 
     fun keyOf(item: HomeItem): String? =
@@ -128,6 +139,8 @@ object LibraryOrder {
 class LibraryTabViewModel(
     private val music: MusicRepository,
     private val cache: LibraryCache? = null,
+    /** 保存したポッドキャストも読む（時計は読まない）。 */
+    private val withPodcasts: Boolean = true,
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(LibraryTabUiState())
     val state: StateFlow<LibraryTabUiState> = mutableState.asStateFlow()
@@ -143,29 +156,34 @@ class LibraryTabViewModel(
         viewModelScope.launch {
             // ページが届くたびに一覧に足す（全部そろうのを待たずに出す）
             val parts = MutableStateFlow(Triple(emptyList<PlaylistSummary>(), emptyList<ArtistSummary>(), emptyList<AlbumSummary>()))
+            val podcastPart = MutableStateFlow(emptyList<PodcastSummary>())
+            fun entriesOf(value: Triple<List<PlaylistSummary>, List<ArtistSummary>, List<AlbumSummary>>): List<LibraryEntry> {
+                val (playlists, artists, albums) = value
+                return (playlists.map(LibraryEntry::Playlist) + artists.map(LibraryEntry::Artist) + albums.map(LibraryEntry::Album) + podcastPart.value.map(LibraryEntry::Podcast)).distinctBy { it.key }
+            }
             fun publish() {
-                val (playlists, artists, albums) = parts.value
-                val entries = (playlists.map(LibraryEntry::Playlist) + artists.map(LibraryEntry::Artist) + albums.map(LibraryEntry::Album)).distinctBy { it.key }
+                val entries = entriesOf(parts.value)
                 if (cached == null) mutableState.update { it.copy(entries = entries, loading = entries.isEmpty() && it.loading) }
             }
             fun publishFresh(value: Triple<List<PlaylistSummary>, List<ArtistSummary>, List<AlbumSummary>>) {
-                val (playlists, artists, albums) = value
-                val entries = (playlists.map(LibraryEntry::Playlist) + artists.map(LibraryEntry::Artist) + albums.map(LibraryEntry::Album)).distinctBy { it.key }
-                mutableState.update { it.copy(entries = entries) }
+                mutableState.update { it.copy(entries = entriesOf(value)) }
             }
             val recent = async { music.recentActivity() }
             val artists = async { music.libraryArtists { page -> parts.update { it.copy(second = page) }.also { publish() } } }
             val albums = async { music.libraryAlbums { page -> parts.update { it.copy(third = page) }.also { publish() } } }
+            val podcasts = async { if (withPodcasts) music.libraryPodcasts { page -> podcastPart.value = page.also { publish() } } else CallResult.Ok(emptyList()) }
             val playlists = music.libraryPlaylists { page -> parts.update { it.copy(first = page) }.also { publish() } }
             val artistResult = artists.await()
             val albumResult = albums.await()
+            val podcastResult = podcasts.await()
             // 件数だけを記録する
             Log.i(
                 WaveApplication.LOG_TAG,
-                "library tab playlists=${(playlists as? CallResult.Ok)?.value?.size} artists=${(artistResult as? CallResult.Ok)?.value?.size} albums=${(albumResult as? CallResult.Ok)?.value?.size}",
+                "library tab playlists=${(playlists as? CallResult.Ok)?.value?.size} artists=${(artistResult as? CallResult.Ok)?.value?.size} albums=${(albumResult as? CallResult.Ok)?.value?.size} " +
+                    "podcasts=${(podcastResult as? CallResult.Ok)?.value?.size}" + if (podcastResult is CallResult.Ok && podcastResult.value.isEmpty()) " renderers=${music.lastRendererNames}" else "",
             )
             val recentKeys = (recent.await() as? CallResult.Ok)?.value.orEmpty().mapNotNull(LibraryOrder::keyOf)
-            val failed = playlists is CallResult.Failed || artistResult is CallResult.Failed || albumResult is CallResult.Failed
+            val failed = playlists is CallResult.Failed || artistResult is CallResult.Failed || albumResult is CallResult.Failed || podcastResult is CallResult.Failed
             if (cached != null && !failed) publishFresh(parts.value)
             mutableState.update {
                 it.copy(

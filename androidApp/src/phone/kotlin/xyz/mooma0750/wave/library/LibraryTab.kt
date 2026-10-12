@@ -89,6 +89,7 @@ fun LibraryTabScreen(
     onOpenArtist: (ArtistSummary) -> Unit,
     onOpenAlbum: (AlbumSummary) -> Unit,
     onCreatePlaylist: (String) -> Unit,
+    onOpenPodcast: (xyz.mooma0750.wave.core.music.PodcastSummary) -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var filter by rememberSaveable { mutableStateOf<LibraryFilter?>(null) }
@@ -108,11 +109,17 @@ fun LibraryTabScreen(
     val entries = LibraryOrder.arrange(state, filter, sort, query).filterNot { it is LibraryEntry.Playlist && it.playlist.playlistId == MusicRepository.LIKED_SONGS }
     val liked = PlaylistSummary(MusicRepository.LIKED_SONGS, stringResource(R.string.library_liked_songs), stringResource(R.string.library_liked_songs_subtitle), serverLiked?.thumbnailUrl)
     val showLiked = (filter == null || filter == LibraryFilter.Playlists) && LibraryOrder.matches(liked.title, liked.subtitle, query)
+    // ポッドキャストに絞ったときは、先頭に「新しいエピソード」（保存した番組の新しいエピソードの自動のプレイリスト）
+    val newEpisodes = PlaylistSummary(MusicRepository.NEW_EPISODES, stringResource(R.string.library_new_episodes), stringResource(R.string.library_new_episodes_subtitle), null)
+    val showNewEpisodes = filter == LibraryFilter.Podcasts && LibraryOrder.matches(newEpisodes.title, newEpisodes.subtitle, query)
+    // 「新しいエピソード」は番組のページと同じ形で返るので、番組のページで開く
+    val openNewEpisodes = { onOpenPodcast(xyz.mooma0750.wave.core.music.PodcastSummary(MusicRepository.NEW_EPISODES_BROWSE, newEpisodes.title, null, null)) }
     val open = { entry: LibraryEntry ->
         when (entry) {
             is LibraryEntry.Playlist -> onOpenPlaylist(entry.playlist)
             is LibraryEntry.Artist -> onOpenArtist(entry.artist)
             is LibraryEntry.Album -> onOpenAlbum(entry.album)
+            is LibraryEntry.Podcast -> onOpenPodcast(entry.podcast)
         }
     }
 
@@ -133,6 +140,7 @@ fun LibraryTabScreen(
                                 LibraryFilter.Playlists -> stringResource(R.string.library_filter_playlists)
                                 LibraryFilter.Artists -> stringResource(R.string.library_filter_artists)
                                 LibraryFilter.Albums -> stringResource(R.string.library_filter_albums)
+                                LibraryFilter.Podcasts -> stringResource(R.string.library_filter_podcasts)
                             },
                         )
                     },
@@ -169,12 +177,14 @@ fun LibraryTabScreen(
         if (grid) {
             LazyVerticalGrid(GridCells.Fixed(3), Modifier.fillMaxSize(), contentPadding = PaddingValues(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 if (showLiked) item { GridCell(LibraryEntry.Playlist(liked)) { onOpenPlaylist(liked) } }
+                if (showNewEpisodes) item { GridCell(LibraryEntry.Playlist(newEpisodes)) { openNewEpisodes() } }
                 items(entries, key = { it.key }) { entry -> GridCell(entry) { open(entry) } }
                 item(span = { GridItemSpan(maxLineSpan) }) { Spacer(Modifier.height(8.dp)) }
             }
         } else {
             LazyColumn(Modifier.fillMaxSize()) {
                 if (showLiked) item { LibraryRow(LibraryEntry.Playlist(liked)) { onOpenPlaylist(liked) } }
+                if (showNewEpisodes) item { LibraryRow(LibraryEntry.Playlist(newEpisodes)) { openNewEpisodes() } }
                 items(entries, key = { it.key }) { entry -> LibraryRow(entry) { open(entry) } }
             }
         }
@@ -240,6 +250,7 @@ private fun subtitleOf(entry: LibraryEntry): String =
         is LibraryEntry.Playlist -> entry.playlist.subtitle ?: stringResource(R.string.library_kind_playlist)
         is LibraryEntry.Artist -> stringResource(R.string.library_kind_artist)
         is LibraryEntry.Album -> entry.album.subtitle ?: stringResource(R.string.library_kind_album)
+        is LibraryEntry.Podcast -> listOfNotNull(stringResource(R.string.library_kind_podcast), entry.podcast.author).joinToString(" • ")
     }
 
 private fun thumbnailOf(entry: LibraryEntry): String? =
@@ -247,6 +258,7 @@ private fun thumbnailOf(entry: LibraryEntry): String? =
         is LibraryEntry.Playlist -> entry.playlist.thumbnailUrl
         is LibraryEntry.Artist -> entry.artist.thumbnailUrl
         is LibraryEntry.Album -> entry.album.thumbnailUrl
+        is LibraryEntry.Podcast -> entry.podcast.thumbnailUrl
     }
 
 @Composable
@@ -259,7 +271,9 @@ private fun Thumbnail(
     if (url == null) {
         // 「高く評価した曲」など画像の無いもの（Spotify の紫のタイルの代わりに、テーマの色のタイル）
         Box(modifier.clip(shape).background(MaterialTheme.colorScheme.primaryContainer), contentAlignment = Alignment.Center) {
-            Icon(painterResource(R.drawable.ic_favorite), contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
+            // 「新しいエピソード」はヘッドホン、ほかは「高く評価した曲」のハート
+            val newEpisodes = (entry as? LibraryEntry.Playlist)?.playlist?.playlistId == MusicRepository.NEW_EPISODES
+            Icon(painterResource(if (newEpisodes) R.drawable.ic_headphones else R.drawable.ic_favorite), contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
         }
     } else {
         coil3.compose.AsyncImage(model = url, contentDescription = null, modifier = modifier.clip(shape), contentScale = ContentScale.Crop)

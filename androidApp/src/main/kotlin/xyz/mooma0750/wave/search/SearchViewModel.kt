@@ -15,14 +15,16 @@ import xyz.mooma0750.wave.WaveApplication
 import xyz.mooma0750.wave.core.music.AlbumSummary
 import xyz.mooma0750.wave.core.music.ArtistSummary
 import xyz.mooma0750.wave.core.music.MusicRepository
+import xyz.mooma0750.wave.core.music.PodcastEpisode
+import xyz.mooma0750.wave.core.music.PodcastSummary
 import xyz.mooma0750.wave.core.music.SearchPage
 import xyz.mooma0750.wave.core.music.SearchSuggestions
 import xyz.mooma0750.wave.core.music.Song
 import xyz.mooma0750.wave.core.session.CallResult
 import xyz.mooma0750.wave.core.session.FailureKind
 
-/** 検索の結果の分け方。All は種類ごとに少しずつ並べる。 */
-enum class SearchTab { All, Songs, Albums, Artists }
+/** 検索の結果の分け方。All は種類ごとに少しずつ並べる。ポッドキャスト・エピソードは選んだときに初めて読む（All には出さない）。 */
+enum class SearchTab { All, Songs, Albums, Artists, Podcasts, Episodes }
 
 /** 種類ごとの結果（続きのページを持つ）。 */
 data class ResultList<T>(
@@ -30,6 +32,8 @@ data class ResultList<T>(
     val continuation: String? = null,
     val loadingMore: Boolean = false,
     val failure: FailureKind? = null,
+    /** 最初のページを読み始めた（選んだときに読む種類で、2回読まないため）。 */
+    val requested: Boolean = false,
 )
 
 data class SearchUiState(
@@ -41,6 +45,8 @@ data class SearchUiState(
     val songs: ResultList<Song> = ResultList(),
     val albums: ResultList<AlbumSummary> = ResultList(),
     val artists: ResultList<ArtistSummary> = ResultList(),
+    val podcasts: ResultList<PodcastSummary> = ResultList(),
+    val episodes: ResultList<PodcastEpisode> = ResultList(),
     val loading: Boolean = false,
 ) {
     /** 打ち込み中（まだ検索していない語）。 */
@@ -127,6 +133,8 @@ class SearchViewModel(
                 songs = ResultList(),
                 albums = ResultList(),
                 artists = ResultList(),
+                podcasts = ResultList(),
+                episodes = ResultList(),
                 loading = true,
             )
         }
@@ -156,6 +164,29 @@ class SearchViewModel(
 
     fun selectTab(tab: SearchTab) {
         mutableState.update { it.copy(tab = tab) }
+        // ポッドキャスト・エピソードは、初めて選んだときに読む
+        val current = state.value
+        val query = current.submitted ?: return
+        when (tab) {
+            SearchTab.Podcasts -> firstPage(current.podcasts, { s, list -> s.copy(podcasts = list) }) { music.searchPodcasts(query).toList { it.asResultList() } }
+            SearchTab.Episodes -> firstPage(current.episodes, { s, list -> s.copy(episodes = list) }) { music.searchEpisodes(query).toList { it.asResultList() } }
+            else -> Unit
+        }
+    }
+
+    private fun <T> firstPage(
+        list: ResultList<T>,
+        put: (SearchUiState, ResultList<T>) -> SearchUiState,
+        fetch: suspend () -> ResultList<T>,
+    ) {
+        if (list.requested) return
+        mutableState.update { put(it, ResultList(loadingMore = true, requested = true)) }
+        val submitted = state.value.submitted
+        viewModelScope.launch {
+            val first = fetch()
+            Log.i(WaveApplication.LOG_TAG, "search podcast tab items=${first.items.size} failed=${first.failure != null}")
+            mutableState.update { state -> if (state.submitted != submitted) state else put(state, first.copy(requested = true)) }
+        }
     }
 
     fun loadMore(tab: SearchTab) {
@@ -170,6 +201,10 @@ class SearchViewModel(
                 more(current.albums, { s, list -> s.copy(albums = list) }) { token -> music.searchAlbums(query, token).toList { it.asResultList() } }
             SearchTab.Artists ->
                 more(current.artists, { s, list -> s.copy(artists = list) }) { token -> music.searchArtists(query, token).toList { it.asResultList() } }
+            SearchTab.Podcasts ->
+                more(current.podcasts, { s, list -> s.copy(podcasts = list) }) { token -> music.searchPodcasts(query, token).toList { it.asResultList() } }
+            SearchTab.Episodes ->
+                more(current.episodes, { s, list -> s.copy(episodes = list) }) { token -> music.searchEpisodes(query, token).toList { it.asResultList() } }
             SearchTab.All -> Unit
         }
     }
@@ -188,7 +223,7 @@ class SearchViewModel(
             mutableState.update { state ->
                 if (state.submitted != submitted) return@update state
                 // 続きが取れなければ、それ以上は読まない（取れた分は残す）
-                put(state, ResultList(list.items + next.items.filter { it !in list.items }, next.continuation, loadingMore = false))
+                put(state, ResultList(list.items + next.items.filter { it !in list.items }, next.continuation, loadingMore = false, requested = true))
             }
         }
     }

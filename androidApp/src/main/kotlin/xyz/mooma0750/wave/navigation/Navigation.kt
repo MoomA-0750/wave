@@ -42,6 +42,12 @@ sealed interface Screen {
         val title: String,
     ) : Screen
 
+    /** ポッドキャストの番組のページ（`MPSP…`）。 */
+    data class Podcast(
+        val browseId: String,
+        val title: String,
+    ) : Screen
+
     /** 曲の画面（ホームの棚の曲から）。 */
     data class Song(
         val song: xyz.mooma0750.wave.core.music.Song,

@@ -36,7 +36,7 @@ data class PodcastEpisode(
     val showBrowseId: String? = null,
 )
 
-/** ポッドキャストの番組のページ（`MPSP…`）。 */
+/** ポッドキャストの番組のページ（`MPSP…`）。「新しいエピソード」（`VLRDPN`）も同じ形で読む。 */
 data class PodcastPage(
     val browseId: String,
     val title: String,
@@ -50,7 +50,8 @@ data class PodcastPage(
     /** ライブラリに保存しているか（ログインしていない・分からなければ null）。 */
     val saved: Boolean? = null,
 ) {
-    val playlistId: String get() = browseId.removePrefix(PodcastSummary.PODCAST_PREFIX)
+    /** 番組のプレイリスト（`PL…`）。「新しいエピソード」なら `RDPN`。 */
+    val playlistId: String get() = browseId.removePrefix(PodcastSummary.PODCAST_PREFIX).removePrefix("VL")
 
     val summary: PodcastSummary get() = PodcastSummary(browseId, title, author, thumbnailUrl)
 }

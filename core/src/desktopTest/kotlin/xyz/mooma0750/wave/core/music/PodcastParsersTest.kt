@@ -91,6 +91,23 @@ class PodcastParsersTest {
     }
 
     @Test
+    fun newEpisodesTakeShowFromEachRowAndAreNotSavable() {
+        // 「新しいエピソード」（VLRDPN）は番組のページと同じ形で、行の補足に番組が付く（ログインが要るので、番組のページの応答を書き換えて確かめる）
+        val showRun =
+            """{"text":"Other Show","navigationEndpoint":{"browseEndpoint":{"browseId":"MPSPPLother","browseEndpointContextSupportedConfigs":{"browseEndpointContextMusicConfig":{"pageType":"MUSIC_PAGE_TYPE_PODCAST_SHOW_DETAIL_PAGE"}}}}}"""
+        val text = Fixtures.text("browse_podcast").replaceFirst("""{"text":"2294回視聴"}""", showRun)
+        val page = assertNotNull(MusicParsers.podcastPage(kotlinx.serialization.json.Json.parseToJsonElement(text) as JsonObject, "VLRDPN"))
+        assertEquals("RDPN", page.playlistId)
+        assertNull(page.saved)
+        val first = page.episodes.first()
+        assertEquals(listOf(ArtistRef("Other Show", null)), first.song.artists)
+        assertEquals("MPSPPLother", first.showBrowseId)
+        assertEquals("6 日前", first.publishedText)
+        // 番組の付かない行は、ページの題を番組にする
+        assertEquals(listOf(ArtistRef(page.title, null)), page.episodes[1].song.artists)
+    }
+
+    @Test
     fun unknownShapesGiveEmptyResults() {
         val empty = JsonObject(emptyMap())
         assertEquals(SearchPage<PodcastSummary>(emptyList(), null), MusicParsers.searchPodcasts(empty))

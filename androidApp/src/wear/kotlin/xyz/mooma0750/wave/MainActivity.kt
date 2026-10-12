@@ -183,7 +183,9 @@ private fun LoggedIn(
                 xyz.mooma0750.wave.navigation.Screen.History -> WearScreen.History
                 xyz.mooma0750.wave.navigation.Screen.Settings -> WearScreen.Settings
                 xyz.mooma0750.wave.navigation.Screen.Connect -> WearScreen.Devices
-            }.let(nav::push)
+                // 時計にはポッドキャストのページが無い
+                is xyz.mooma0750.wave.navigation.Screen.Podcast -> null
+            }?.let(nav::push)
         }
     }
     val likedTitle = stringResource(R.string.main_liked_songs)
@@ -232,7 +234,7 @@ private fun LoggedIn(
             WearScreen.Releases -> ReleasesScreen(newReleases, actions)
             WearScreen.Library ->
                 LibraryScreen(
-                    viewModel(key = "library-tab-$loginGeneration-$playlistsVersion") { LibraryTabViewModel(container.music, container.libraryCache) },
+                    viewModel(key = "library-tab-$loginGeneration-$playlistsVersion") { LibraryTabViewModel(container.music, container.libraryCache, withPodcasts = false) },
                     onOpenPlaylist = { nav.push(WearScreen.Playlist(it)) },
                     onOpenArtist = { id, name -> nav.push(WearScreen.Artist(id, name)) },
                     onOpenAlbum = { id, title -> nav.push(WearScreen.Album(id, title)) },

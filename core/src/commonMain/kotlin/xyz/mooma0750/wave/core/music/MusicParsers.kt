@@ -562,7 +562,8 @@ internal object MusicParsers {
         // 保存のボタン。ログインしていなければ押すとログインの案内（likeEndpoint を持たない）なので、状態は分からないとする
         val toggle =
             header.path("buttons").arrayItems().firstNotNullOfOrNull { it.path("toggleButtonRenderer").asObject() }
-        val saved = toggle?.takeIf { findAll(it, "likeEndpoint").isNotEmpty() }?.path("isToggled").asBoolean()
+        // 「新しいエピソード」（VLRDPN）も同じ形で返るが、保存するものではない
+        val saved = toggle?.takeIf { browseId.startsWith(PodcastSummary.PODCAST_PREFIX) && findAll(it, "likeEndpoint").isNotEmpty() }?.path("isToggled").asBoolean()
         return PodcastPage(
             browseId = browseId,
             title = title,
@@ -596,8 +597,12 @@ internal object MusicParsers {
         val videoId = watch.path("videoId").string() ?: return null
         val title = textOf(row.path("title")) ?: return null
         val progress = row.path("playbackProgress", "musicPlaybackProgressRenderer")
+        // 「新しいエピソード」のように番組がまざる一覧では、行の補足に番組が付く（あればそれを使う）
+        val showRun = (row.path("subtitle", "runs").arrayItems() + row.path("secondTitle", "runs").arrayItems()).firstOrNull { pageTypeOf(it) == PODCAST_PAGE }
+        val rowShow = showRun?.path("text").string()?.let { ArtistRef(it, null) }
+        val rowShowId = showRun?.path("navigationEndpoint", "browseEndpoint", "browseId").string()
         // 「2294回視聴 • 6 日前」の最後が日付（再生回数が無ければ日付だけ）
-        val published = row.path("subtitle", "runs").arrayItems().mapNotNull { it.path("text").string() }.lastOrNull { it.isNotBlank() && it != SEPARATOR }
+        val published = row.path("subtitle", "runs").arrayItems().filter { it !== showRun }.mapNotNull { it.path("text").string() }.lastOrNull { it.isNotBlank() && it != SEPARATOR }
         val durationText = progress.path("durationText", "runs").arrayItems().mapNotNull { it.path("text").string() }.lastOrNull { it.isNotBlank() && it != SEPARATOR }
         val percent = (progress.path("playbackProgressPercentage") as? JsonPrimitive)?.contentOrNull?.toDoubleOrNull()?.toInt()
         return PodcastEpisode(
@@ -605,7 +610,7 @@ internal object MusicParsers {
                 Song(
                     videoId = videoId,
                     title = title,
-                    artists = listOf(show),
+                    artists = listOf(rowShow ?: show),
                     album = null,
                     durationSeconds = null,
                     thumbnailUrl = lastThumbnailUrl(row.path("thumbnail")),
@@ -615,7 +620,7 @@ internal object MusicParsers {
             durationText = durationText,
             description = textOf(row.path("description")),
             progressPercent = percent?.takeIf { it in 1..100 },
-            showBrowseId = showBrowseId,
+            showBrowseId = rowShowId ?: showBrowseId,
         )
     }
 

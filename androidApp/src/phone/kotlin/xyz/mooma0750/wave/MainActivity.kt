@@ -272,6 +272,7 @@ class MainActivity : ComponentActivity() {
                                         onOpenPlaylist = { nav.push(Screen.Playlist(it)) },
                                         onOpenArtist = { nav.push(Screen.Artist(it.browseId, it.name)) },
                                         onOpenAlbum = { nav.push(Screen.Album(it.browseId, it.title)) },
+                                        onOpenPodcast = { nav.push(Screen.Podcast(it.browseId, it.title)) },
                                         onCreatePlaylist = { container.playlistEditor.create(it, null) },
                                     )
                                 Tab.Home ->
@@ -328,6 +329,7 @@ class MainActivity : ComponentActivity() {
                                         actions = searchActions,
                                         onBack = pop,
                                         history = container.searchHistory,
+                                        onOpenPodcast = { nav.push(Screen.Podcast(it.browseId, it.title)) },
                                     )
                                 }
                                 is Screen.Playlist -> {
@@ -377,6 +379,15 @@ class MainActivity : ComponentActivity() {
                                         actions = songActions,
                                         onPlay = { page, index, shuffle -> playerActions.playFrom(page.songs, index, page.playlistId, shuffle = shuffle) },
                                         onQueue = { page, next -> playerActions.queue(page.songs, next) },
+                                        onBack = pop,
+                                    )
+                                is Screen.Podcast ->
+                                    xyz.mooma0750.wave.podcast.PodcastScreen(
+                                        viewModel(key = "podcast-$loginGeneration-${screen.browseId}") { xyz.mooma0750.wave.podcast.PodcastViewModel(container.music, screen.browseId) },
+                                        title = screen.title,
+                                        actions = songActions,
+                                        // 押したエピソードから、番組の一覧を続けて流す（読んだ分の後はラジオにつなぐ）
+                                        onPlay = { songs, index, playlistId, shuffle -> playerActions.playFrom(songs, index, playlistId, shuffle = shuffle) },
                                         onBack = pop,
                                     )
                                 is Screen.Song -> xyz.mooma0750.wave.song.SongScreen(screen.song, songActions, onPlay = playerActions::playSong, onBack = pop)

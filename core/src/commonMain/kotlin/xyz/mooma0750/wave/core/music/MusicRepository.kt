@@ -521,8 +521,12 @@ class MusicRepository(
         /** ライブラリのポッドキャスト（保存した番組）。 */
         const val LIBRARY_PODCASTS = "FEmusic_library_non_music_audio_list"
 
-        /** 保存した番組の新しいエピソード（ログインしたときだけ中身がある自動のプレイリスト）。 */
+        /**
+         * 保存した番組の新しいエピソード（ログインしたときだけ中身がある自動のプレイリスト）。
+         * browse すると番組のページと同じ形（エピソードの行）で返るので、[podcast] で `VL` を付けて読む（実アカウントでレンダラ名だけ確かめた、2026-10-13）。
+         */
         const val NEW_EPISODES = "RDPN"
+        const val NEW_EPISODES_BROWSE = "VL$NEW_EPISODES"
 
         const val LIBRARY_PLAYLISTS = "FEmusic_liked_playlists"
         const val HISTORY = "FEmusic_history"

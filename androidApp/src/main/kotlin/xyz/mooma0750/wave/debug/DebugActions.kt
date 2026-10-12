@@ -49,7 +49,7 @@ object DebugActions {
      * 公開 Activity から受けてよい action（画面の遷移だけ）。再生を始めるものも、再生履歴というアカウントへの書き込みにつながるので
      * DebugReceiver からだけ受ける（F1 outer gate 指摘2）。
      */
-    private val ACTIVITY_ACTIONS = setOf("open_artist", "open_album", "notice")
+    private val ACTIVITY_ACTIONS = setOf("open_artist", "open_album", "open_podcast", "notice")
 
     /** 確認用に作ったプレイリスト。プロセスの中だけに持ち、ログに出さない。 */
     private var createdPlaylistId: String? = null
@@ -362,6 +362,33 @@ object DebugActions {
                     }
                 "open_artist" -> intent.getStringExtra("browse_id")?.let { navigationChannel.trySend(Screen.Artist(it, "")) }
                 "open_album" -> intent.getStringExtra("browse_id")?.let { navigationChannel.trySend(Screen.Album(it, "")) }
+                // ポッドキャストの読み取りを確かめる（件数と形だけを記録する。題などの中身は出さない）
+                "podcast_probe" -> {
+                    val music = container.music
+                    val library = music.libraryPodcasts()
+                    Log.i(WaveApplication.LOG_TAG, "debug podcast library=${(library as? CallResult.Ok)?.value?.size ?: library} renderers=${music.lastRendererNames}")
+                    when (val page = music.podcast(xyz.mooma0750.wave.core.music.MusicRepository.NEW_EPISODES_BROWSE)) {
+                        is CallResult.Ok -> Log.i(WaveApplication.LOG_TAG, "debug podcast new episodes=${page.value.episodes.size} shows=${page.value.episodes.map { it.song.artists }.distinct().size} showIds=${page.value.episodes.count { it.showBrowseId != null }} saved=${page.value.saved}")
+                        is CallResult.Failed -> Log.i(WaveApplication.LOG_TAG, "debug podcast new episodes failed ${page.kind} renderers=${music.lastRendererNames}")
+                    }
+                    val show = (library as? CallResult.Ok)?.value?.firstOrNull()?.browseId ?: intent.getStringExtra("browse_id") ?: "MPSPPLKl_9MuIE3cMl6HkKJoloUBMkYPcn-zUv"
+                    when (val page = music.podcast(show)) {
+                        is CallResult.Ok -> Log.i(WaveApplication.LOG_TAG, "debug podcast page episodes=${page.value.episodes.size} saved=${page.value.saved} progress=${page.value.episodes.count { it.progressPercent != null }} more=${page.value.continuation != null}")
+                        is CallResult.Failed -> Log.i(WaveApplication.LOG_TAG, "debug podcast page failed ${page.kind} renderers=${music.lastRendererNames}")
+                    }
+                    val search = music.searchEpisodes("rebuild")
+                    Log.i(WaveApplication.LOG_TAG, "debug podcast search episodes=${(search as? CallResult.Ok)?.value?.items?.size ?: search} shows=${(music.searchPodcasts("rebuild") as? CallResult.Ok)?.value?.items?.size}")
+                }
+                // 確認用: 番組を保存して（または外して）、ライブラリと新しいエピソードの件数を記録する
+                "podcast_save" -> {
+                    val music = container.music
+                    val saved = intent.getBooleanExtra("saved", true)
+                    val playlistId = (intent.getStringExtra("browse_id") ?: "MPSPPLKl_9MuIE3cMl6HkKJoloUBMkYPcn-zUv").removePrefix("MPSP")
+                    val result = music.setPodcastSaved(playlistId, saved)
+                    val library = music.libraryPodcasts()
+                    Log.i(WaveApplication.LOG_TAG, "debug podcast save=$saved result=${result::class.simpleName} library=${(library as? CallResult.Ok)?.value?.size}")
+                }
+                "open_podcast" -> intent.getStringExtra("browse_id")?.let { navigationChannel.trySend(Screen.Podcast(it, "")) }
                 "play_album" ->
                     intent.getStringExtra("browse_id")?.let { id ->
                         when (val page = container.music.album(id)) {
