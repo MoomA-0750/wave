@@ -5,6 +5,7 @@ wave の「Claude に聞く」（歌詞の意味・似た曲・プレイリス�
 - Claude には wave の音楽の道具（`wave_agent_mcp.py`）だけを渡す。ほかの道具・MCP・設定ファイルは読ませない（`--tools "" --strict-mcp-config --setting-sources ""`）。空の作業場所で動かすので CLAUDE.md も拾わない
 - 道具を実際に行うのは wave（曲の検索・キューに足す・再生・プレイリストを作る など）。中継は道具の呼び出しを wave に流し、wave が返した結果を Claude に渡す
 - 会話は保存しない（`--no-session-persistence`）。続きの質問は、wave が毎回それまでのやりとりと、今の曲・歌詞を送る
+- 歌詞は、時刻付きの歌詞があれば行ごとに `[01:23] 本文` の形で送る（時刻の無い歌詞はそのまま）。Claude には歌詞の行を引くときに同じ形で時刻を添えさせ、wave は答えの中の `[mm:ss]` を押すとその位置へ飛ぶ（話している曲がまだ鳴っているときだけ）
 - 既定のモデルは sonnet（`--model` か `WAVE_AI_MODEL` で変える）
 - YouTube の認証情報は中継へ送らない（wave は中継とは別の HTTP クライアントで話す）
 

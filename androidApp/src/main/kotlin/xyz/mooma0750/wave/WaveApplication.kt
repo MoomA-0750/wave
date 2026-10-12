@@ -331,7 +331,7 @@ class AppContainer(
     /** スマホ: 時計からの Claude への頼みを中継する。 */
     val aiRelayHost by lazy { xyz.mooma0750.wave.ai.AiRelayHost(appContext, directAiTransport, authManager, appScope) }
 
-    /** Claude との会話（tools/ai-bridge の中継を通す）。アプリが動いている間だけ会話を持つ。 */
+    /** Claude との会話（tools/ai-bridge の中継を通す）。会話は端末の中の履歴（files/ai_history.json）に残す。 */
     val aiChat: xyz.mooma0750.wave.ai.AiChat by lazy {
         val res = appContext.resources
         val texts =
@@ -348,7 +348,7 @@ class AppContainer(
 
                 override fun readLiked() = res.getString(R.string.ai_read_liked)
             }
-        xyz.mooma0750.wave.ai.AiChat(aiTransport, xyz.mooma0750.wave.ai.AiTools(this, texts), appScope)
+        xyz.mooma0750.wave.ai.AiChat(aiTransport, xyz.mooma0750.wave.ai.AiTools(this, texts), appScope, xyz.mooma0750.wave.ai.AiHistoryStore(java.io.File(appContext.filesDir, "ai_history.json"), appScope))
     }
 
     /** 端末間の受け渡しの、再生サービスへの入口（Phase 6）。 */
@@ -527,7 +527,8 @@ class AppContainer(
         mutableLikedIds.value = emptySet()
         playlistMembership.clear()
         libraryCache.clear()
-        aiChat.clear()
+        // 前のアカウントの会話を残さない（履歴も消す）
+        aiChat.wipe()
         releases.clear()
         imageCacheCleaner()
         WebViewCredentials.clear()

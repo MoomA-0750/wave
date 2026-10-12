@@ -8,7 +8,7 @@ Kite の AI 中継（kite-browser/tools/ai-bridge/kite_ai_bridge.py）と同じ�
 
 口:
   GET  /v1/health        {"ok": true, "host": ..., "claude": "2.1.x"}
-  POST /v1/agent         {"now_playing": {...}, "lyrics": "...", "messages": [{"role","content"}], "task": "..."}
+  POST /v1/agent         {"now_playing": {...}, "lyrics": "...（時刻付きなら行ごとに [mm:ss] 本文）", "messages": [{"role","content"}], "task": "..."}
                          1 行 1 つの JSON で流す（{"session"} {"delta"} {"tool_call": {"id","name","arguments"}} … {"done"}）。
                          道具の結果は wave が /v1/agent/result へ返す
   POST /v1/agent/result  {"session", "id", "result" か "error"}
@@ -38,6 +38,9 @@ AGENT_SYSTEM = (
     "あなたは音楽プレイヤー wave に組み込まれたアシスタントです。利用者がいま聴いている曲が <now_playing> に、"
     "あれば歌詞が <lyrics> に入っています。利用者と同じ言語で、簡潔に答えてください。"
     "歌詞の意味を聞かれたら、歌詞に基づいて解釈し、確かでないことは推測だと断ってください。"
+    "歌詞の行の頭に [01:23] のような時刻が付いているときは、歌詞の行を引用したり、ある部分について話したりするたびに、"
+    "その行の時刻を同じ [mm:ss] の形で添えてください（例: [01:23]「…」）。wave はこの時刻を押すとその位置へ飛べるようにします。"
+    "時刻は歌詞に書かれたものだけを使い、作らないでください。歌詞に時刻が無ければ時刻は書かないでください。"
     "似た曲やおすすめを聞かれたら、search_songs で実在を確かめた曲だけを挙げ、show_songs で画面に並べてください。"
     "利用者の好みが要るときは liked_songs を見てください。"
     "プレイリストを作る・キューに足す・再生するように頼まれたら、wave の道具で実際に行い、何をしたかを短く報告してください。"

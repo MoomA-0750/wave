@@ -330,7 +330,7 @@ object DebugActions {
                                 "debug ai " +
                                     when (message) {
                                         is xyz.mooma0750.wave.ai.AiMessage.User -> "user"
-                                        is xyz.mooma0750.wave.ai.AiMessage.Assistant -> "assistant chars=${message.text.length}"
+                                        is xyz.mooma0750.wave.ai.AiMessage.Assistant -> "assistant chars=${message.text.length} stamps=${xyz.mooma0750.wave.core.ai.AiText.timestamps(message.text).map { it.label }} synced=${message.videoId != null}"
                                         is xyz.mooma0750.wave.ai.AiMessage.Action -> "action ${message.text}"
                                         is xyz.mooma0750.wave.ai.AiMessage.Songs -> "songs n=${message.songs.size}"
                                         is xyz.mooma0750.wave.ai.AiMessage.Failure -> "failure ${message.text}"
@@ -338,6 +338,17 @@ object DebugActions {
                             )
                         }
                     }
+                // Claude の会話の履歴: 一覧（件数・題名の長さ・発言の数）・新しい会話・開く（index）・消す（index）・答えの中の時刻へ飛ぶ（index 番目の時刻）
+                "ai_history" -> container.aiChat.history.value.forEachIndexed { i, c -> Log.i(WaveApplication.LOG_TAG, "debug ai history $i title_chars=${c.title.length} messages=${c.messages.size} current=${c.id == container.aiChat.state.value.conversationId}") }.also { Log.i(WaveApplication.LOG_TAG, "debug ai history n=${container.aiChat.history.value.size}") }
+                "ai_new" -> container.aiChat.clear()
+                "ai_open" -> container.aiChat.history.value.getOrNull(intent.getIntExtra("index", 0))?.let { container.aiChat.open(it.id) }.also { Log.i(WaveApplication.LOG_TAG, "debug ai open messages=${container.aiChat.state.value.messages.size}") }
+                "ai_delete" -> container.aiChat.history.value.getOrNull(intent.getIntExtra("index", 0))?.let { container.aiChat.delete(it.id) }
+                "ai_seek" -> {
+                    val message = container.aiChat.state.value.messages.filterIsInstance<xyz.mooma0750.wave.ai.AiMessage.Assistant>().lastOrNull { xyz.mooma0750.wave.core.ai.AiText.timestamps(it.text).isNotEmpty() }
+                    val stamp = message?.let { xyz.mooma0750.wave.core.ai.AiText.timestamps(it.text).getOrNull(intent.getIntExtra("index", 0)) }
+                    Log.i(WaveApplication.LOG_TAG, "debug ai seek stamp=${stamp?.label} synced=${message?.videoId != null} playing=${message?.videoId == container.aiChat.playingVideoId.value}")
+                    if (message?.videoId != null && stamp != null) container.aiChat.seek(message.videoId, stamp.positionMs)
+                }
                 // 登録したアーティストの一覧（件数と、ページが読めるか）と、新作の確かめを1回走らせる
                 "subscriptions" ->
                     when (val result = container.music.subscribedArtists()) {

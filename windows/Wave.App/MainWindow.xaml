@@ -292,6 +292,9 @@
                         <Grid Padding="16,12,8,4">
                             <TextBlock Text="{x:Bind app:L.T('Claude に聞く', 'Ask Claude')}" Style="{StaticResource BodyStrongTextBlockStyle}" VerticalAlignment="Center" />
                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="4">
+                                <Button Style="{StaticResource IconButtonStyle}" Click="OnAiHistory" ToolTipService.ToolTip="{x:Bind app:L.T('これまでの会話', 'Past chats')}">
+                                    <FontIcon Glyph="&#xE81C;" FontSize="14" />
+                                </Button>
                                 <HyperlinkButton Click="OnAiClear" Content="{x:Bind app:L.T('新しい会話', 'New chat')}" />
                                 <Button Style="{StaticResource IconButtonStyle}" Click="OnShowNowPlaying" ToolTipService.ToolTip="{x:Bind app:L.T('閉じる', 'Close')}">
                                     <FontIcon Glyph="&#xE711;" FontSize="12" />
