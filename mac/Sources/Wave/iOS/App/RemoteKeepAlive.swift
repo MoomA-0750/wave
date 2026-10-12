@@ -5,12 +5,12 @@ import WaveCore
 /// ほかの端末の再生を映している間、音の無い音を流し続ける。
 /// iOS は、この端末で音を鳴らしているアプリにしかロック画面・コントロールセンターの操作を出さず、
 /// 鳴らしていないアプリは裏へ回ると止める（中継とのつながりも切れて、ほかの端末の状態を追えなくなる）。
-/// Android の「ほかの端末の再生も通知に出す」と同じにするため。一時停止のまま長く置かれたら止める（電池のため）。
+/// Android の「ほかの端末の再生も通知に出す」と同じにするため。一時停止のまま9分（Android の再生サービスと同じ）置かれたら止める（電池のため）。
 @MainActor
 final class RemoteKeepAlive {
     static let shared = RemoteKeepAlive()
     /// ほかの端末が一時停止のまま、この長さを過ぎたら止める。
-    static let pausedLimit: TimeInterval = 10 * 60
+    static let pausedLimit: TimeInterval = 9 * 60
 
     private var audio: AVAudioPlayer?
     private var timer: Timer?

@@ -17,7 +17,7 @@ here=$(cd "$(dirname "$0")/../.." && pwd)
 # 作業木ごとに別の置き場（並べて組んでもぶつからない）
 remote=wave-build-$(basename "$here")
 # 連携の中継の宛先（Android と同じく local.properties の wave.relayV2Url・wave.relayV2Host）を、組む側へ渡す
-prop() { sed -n "s/^$1=//p" "$here/local.properties" 2>/dev/null | head -1; }
+prop() { sed -n "s/^$1=//p" "$here/local.properties" 2>/dev/null | head -1 || true; }
 relay="WAVE_RELAY_V2_URL='$(prop wave.relayV2Url)' WAVE_RELAY_V2_HOST='$(prop wave.relayV2Host)'"
 sync() {
   rsync -az --delete --exclude .build --exclude .build-ios --exclude .build-ios-device --exclude build "$here/mac/" "mac:$remote/mac/"
