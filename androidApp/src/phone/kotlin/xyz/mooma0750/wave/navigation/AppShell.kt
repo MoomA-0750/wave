@@ -59,6 +59,14 @@ fun AppShell(
     // キューの通知から開いた: 狭い画面では再生画面を開く（キューは再生画面が出す）
     val openQueue by xyz.mooma0750.wave.playback.QueueNotice.openRequested.collectAsState()
     LaunchedEffect(openQueue) { if (openQueue) playerOpen = true }
+    // ウィジェットから開いた: 再生画面を開く
+    val openFromWidget by xyz.mooma0750.wave.widget.WidgetHooks.openNowPlaying.collectAsState()
+    LaunchedEffect(openFromWidget) {
+        if (openFromWidget) {
+            playerOpen = true
+            xyz.mooma0750.wave.widget.WidgetHooks.consumeOpenNowPlaying()
+        }
+    }
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val wide = maxWidth >= WIDE_LAYOUT_MIN_WIDTH
         val panelWidth = (maxWidth * 0.32f).coerceIn(PANEL_MIN_WIDTH, PANEL_MAX_WIDTH)

@@ -19,6 +19,8 @@ androidxCoreKtx = "1.19.0"
 androidxDatastore = "1.2.1"
 androidxLifecycle = "2.11.0"
 androidxMedia3 = "1.11.1"
+# ホーム画面のウィジェット（スマホ版だけ）
+androidxGlance = "1.2.0"
 coil = "3.6.2"
 androidxCamera = "1.6.2"
 zxing = "3.5.4"
@@ -56,6 +58,8 @@ androidx-lifecycle-runtime-compose = { module = "androidx.lifecycle:lifecycle-ru
 androidx-lifecycle-viewmodel-compose = { module = "androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "androidxLifecycle" }
 androidx-media3-datasource-okhttp = { module = "androidx.media3:media3-datasource-okhttp", version.ref = "androidxMedia3" }
 androidx-media3-exoplayer = { module = "androidx.media3:media3-exoplayer", version.ref = "androidxMedia3" }
+androidx-glance-appwidget = { module = "androidx.glance:glance-appwidget", version.ref = "androidxGlance" }
+androidx-glance-material3 = { module = "androidx.glance:glance-material3", version.ref = "androidxGlance" }
 androidx-media3-session = { module = "androidx.media3:media3-session", version.ref = "androidxMedia3" }
 junit4 = { module = "junit:junit", version = "4.13.2" }
 coil-compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil" }
