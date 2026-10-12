@@ -147,6 +147,21 @@ class PlaybackService : MediaSessionService() {
 
     private lateinit var container: AppContainer
 
+    /** ホーム画面のウィジェットへ、セッションの再生器（手元か、映しているほかの端末）の今の曲を配る。 */
+    private val widgetListener =
+        object : Player.Listener {
+            override fun onEvents(
+                player: Player,
+                events: Player.Events,
+            ) {
+                if (player === session?.player) publishNowPlaying()
+            }
+        }
+
+    private fun publishNowPlaying() {
+        xyz.mooma0750.wave.widget.WidgetHooks.onNowPlayingChanged(this, session?.player?.let(NowPlayingSnapshot::of))
+    }
+
     override fun onCreate() {
         super.onCreate()
         container = (application as WaveApplication).container
@@ -306,6 +321,7 @@ class PlaybackService : MediaSessionService() {
             },
         )
         localPlayer = player
+        player.addListener(widgetListener)
         // キューの通知の設定（切り替えたらすぐ出す・消す）
         scope.launch {
             container.settings.queueNotice.collect {
@@ -343,6 +359,7 @@ class PlaybackService : MediaSessionService() {
                     ),
                 )
                 .build()
+        publishNowPlaying()
 
         // ログアウトしたら再生を止めてキューと解決済みの URL を消す（決定 E5）。
         // ログインし直した（別のログインに変わった）ときも、アカウントの切り替えとして同じく消す（2026-09-17 本人の決定）
@@ -652,7 +669,10 @@ class PlaybackService : MediaSessionService() {
         val current = session ?: return
         val local = localPlayer ?: return
         if (remote != null && !local.playWhenReady) {
-            val mirror = remotePlayer ?: RemoteSessionPlayer({ action, position -> manager.control(action, position) }, { artist, device -> getString(xyz.mooma0750.wave.R.string.nowplaying_artist_on_device, artist, device) }).also { remotePlayer = it }
+            val mirror = remotePlayer ?: RemoteSessionPlayer({ action, position -> manager.control(action, position) }, { artist, device -> getString(xyz.mooma0750.wave.R.string.nowplaying_artist_on_device, artist, device) }).also {
+                remotePlayer = it
+                it.addListener(widgetListener)
+            }
             mirror.update(remote)
             if (current.player !== mirror) current.player = mirror
             // 映している曲の評価を読み書きする（評価はアカウントに付くので、どの端末で鳴っていても同じ）
@@ -662,6 +682,7 @@ class PlaybackService : MediaSessionService() {
             likes?.onCurrentSong(Media3QueuePlayer.songOf(local.currentMediaItem)?.videoId, TrackUri.epochOf(local.currentMediaItem?.localConfiguration?.uri))
         }
         refreshQueueNotice()
+        publishNowPlaying()
     }
 
     /** ログインが分かっていて、自アプリの UI がつながっていれば、1回だけ保存したキューを戻す。 */
@@ -938,6 +959,8 @@ class PlaybackService : MediaSessionService() {
 
     override fun onDestroy() {
         queueNotice.cancel()
+        // 再生が終わった: ウィジェットは「再生していない」に戻す
+        xyz.mooma0750.wave.widget.WidgetHooks.onNowPlayingChanged(this, null)
         artwork?.release()
         artwork = null
         relayReleaseJob?.cancel()
