@@ -277,7 +277,8 @@ struct CollectionPageView: View {
             LinearGradient(colors: [(model.gradient ?? .clear).opacity(0.6), .clear], startPoint: .top, endPoint: .bottom).frame(height: 360)
         }
         .onKeyPress(.return) {
-            guard let selected, let i = rows.firstIndex(where: { $0.id == selected }) else { return .ignored }
+            // 一覧の中を探す欄で変換中の Return は確定に使わせる
+            guard !TextInput.composing, let selected, let i = rows.firstIndex(where: { $0.id == selected }) else { return .ignored }
             model.play(rows: rows, start: i)
             return .handled
         }
@@ -332,6 +333,7 @@ struct CollectionPageView: View {
                 TextField(L.t("この一覧の中を検索", "Search in this list"), text: $model.filter)
                     .textFieldStyle(.roundedBorder).frame(width: 240).focused($filterFocus)
                     .onKeyPress(.escape) {
+                        if TextInput.composing { return .ignored }  // 変換中の Esc は変換の取り消しに使わせる
                         model.filter = ""
                         filterOpen = false
                         return .handled

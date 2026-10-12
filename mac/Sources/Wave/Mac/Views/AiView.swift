@@ -6,7 +6,6 @@ import WaveCore
 struct AiView: View {
     @State private var model = MainWindowModel.shared
     @State private var input = ""
-    @FocusState private var inputFocus: Bool
 
     private let suggestions = [
         L.t("この歌詞ってどういう意味だと思う？", "What do these lyrics mean?"),
@@ -55,22 +54,15 @@ struct AiView: View {
                 .padding(.vertical, 4)
             }
             HStack(alignment: .bottom, spacing: 8) {
-                // Enter で送る（Shift+Enter は改行）
-                TextField(L.t("Claude に聞く", "Ask Claude"), text: $input, axis: .vertical)
-                    .textFieldStyle(.roundedBorder)
-                    .lineLimit(1...5)
-                    .focused($inputFocus)
-                    .onKeyPress(.return, phases: .down) { press in
-                        if press.modifiers.contains(.shift) { return .ignored }
-                        submit()
-                        return .handled
-                    }
+                // Enter で送る（Shift+Enter は改行。変換中の Enter は確定）
+                ChatInputField(text: $input, placeholder: L.t("Claude に聞く", "Ask Claude"), autoFocus: true, onSubmit: submit)
+                    .background(RoundedRectangle(cornerRadius: 6).fill(.quaternary.opacity(0.5)))
+                    .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Color(nsColor: .separatorColor)))
                 Button(action: submit) { Image(systemName: chat.running ? "stop.fill" : "paperplane.fill") }
                     .buttonStyle(IconButtonStyle())
             }
             .padding(EdgeInsets(top: 4, leading: 16, bottom: 12, trailing: 16))
         }
-        .onAppear { inputFocus = true }
     }
 
     private func lastText(_ chat: AiChat) -> Int {
