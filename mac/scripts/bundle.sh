@@ -12,6 +12,11 @@ rm -rf "$app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 cp "$(swift build -c release ${flags[@]+"${flags[@]}"} --show-bin-path)/wave" "$app/Contents/MacOS/wave"
 cp Resources/Info.plist "$app/Contents/Info.plist"
+# 連携の中継の宛先を書き込む（mac.sh がこの機械の local.properties から渡す。無ければ書かない）
+if [ -n "${WAVE_RELAY_V2_URL:-}" ] && [ -n "${WAVE_RELAY_V2_HOST:-}" ]; then
+    plutil -replace WaveRelayV2Url -string "$WAVE_RELAY_V2_URL" "$app/Contents/Info.plist"
+    plutil -replace WaveRelayV2Host -string "$WAVE_RELAY_V2_HOST" "$app/Contents/Info.plist"
+fi
 [ -f Resources/wave.icns ] && cp Resources/wave.icns "$app/Contents/Resources/"
 # 署名は GUI のセッションで（scripts/sign.command）。ここでは仮に ad-hoc で署名しておく
 codesign --force --entitlements Resources/wave.entitlements --sign - "$app"

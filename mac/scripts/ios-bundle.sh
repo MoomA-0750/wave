@@ -28,6 +28,11 @@ cp "$(swift build "${args[@]}" --show-bin-path)/wave" "$app/wave"
 cp Resources/iOS/Info.plist "$app/Info.plist"
 plutil -replace CFBundleSupportedPlatforms -json "[\"$platform\"]" "$app/Info.plist"
 plutil -replace DTPlatformName -string "$dt" "$app/Info.plist"
+# 連携の中継の宛先を書き込む（mac.sh がこの機械の local.properties から渡す。無ければ書かない）
+if [ -n "${WAVE_RELAY_V2_URL:-}" ] && [ -n "${WAVE_RELAY_V2_HOST:-}" ]; then
+    plutil -replace WaveRelayV2Url -string "$WAVE_RELAY_V2_URL" "$app/Info.plist"
+    plutil -replace WaveRelayV2Host -string "$WAVE_RELAY_V2_HOST" "$app/Info.plist"
+fi
 if [ "${1:-}" = device ]; then
     # 署名は入れる側（Sideloadly・AltStore など）が本人の Apple ID で行う
     rm -rf "$out/Payload" "$out/wave.ipa"

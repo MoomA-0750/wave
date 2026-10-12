@@ -55,7 +55,10 @@ enum AppServices {
         account.restore()
         // 前回のキューを、再生を始めずに戻す（同じログインのときだけ）
         player.restoreSavedQueue()
-        connect = ConnectService(player: player, relayUrl: settings.relayV2Url, relayHost: settings.relayV2Host)
+        // 中継の宛先は設定にあればそれ、無ければ組んだときに書き込んだもの（Android の local.properties の wave.relayV2Url と同じ）
+        let built = { (key: String) in (Bundle.main.object(forInfoDictionaryKey: key) as? String).flatMap { $0.isEmpty ? nil : $0 } }
+        connect = ConnectService(player: player, relayUrl: settings.relayV2Url ?? built("WaveRelayV2Url"),
+                                 relayHost: settings.relayV2Host ?? built("WaveRelayV2Host"))
         releases = Releases()
         releases.start()
         account.changed.append { library.refresh() }

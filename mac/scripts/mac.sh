@@ -16,6 +16,9 @@ set -euo pipefail
 here=$(cd "$(dirname "$0")/../.." && pwd)
 # 作業木ごとに別の置き場（並べて組んでもぶつからない）
 remote=wave-build-$(basename "$here")
+# 連携の中継の宛先（Android と同じく local.properties の wave.relayV2Url・wave.relayV2Host）を、組む側へ渡す
+prop() { sed -n "s/^$1=//p" "$here/local.properties" 2>/dev/null | head -1; }
+relay="WAVE_RELAY_V2_URL='$(prop wave.relayV2Url)' WAVE_RELAY_V2_HOST='$(prop wave.relayV2Host)'"
 sync() {
   rsync -az --delete --exclude .build --exclude .build-ios --exclude .build-ios-device --exclude build "$here/mac/" "mac:$remote/mac/"
   rsync -az --delete "$here/core/src/desktopTest/resources/fixtures/" "mac:$remote/core/src/desktopTest/resources/fixtures/"
@@ -34,16 +37,16 @@ case "${1:-}" in
 sync) sync ;;
 build) sync; ssh mac "cd $remote/mac && swift build 2>&1" ;;
 test) sync; ssh mac "cd $remote/mac && swift test ${2:+--filter $2} 2>&1" ;;
-app) sync; ssh mac "cd $remote/mac && scripts/bundle.sh"; sign ;;
-run) sync; ssh mac "cd $remote/mac && WAVE_DEBUG=1 scripts/bundle.sh"; sign; ssh mac "(pkill -x wave || true); sleep 1; open ~/$remote/mac/build/wave.app" ;;
+app) sync; ssh mac "cd $remote/mac && $relay scripts/bundle.sh"; sign ;;
+run) sync; ssh mac "cd $remote/mac && WAVE_DEBUG=1 $relay scripts/bundle.sh"; sign; ssh mac "(pkill -x wave || true); sleep 1; open ~/$remote/mac/build/wave.app" ;;
 cmd) shift; printf "%s\n" "$@" | ssh mac "cat > ~/Library/Application\\ Support/wave/debug-command.txt" ;;
 log) ssh mac "tail -n ${2:-80} ~/Library/Application\ Support/wave/wave.log" ;;
 ios-run)
   sync
-  ssh mac "cd $remote/mac && WAVE_DEBUG=1 scripts/ios-bundle.sh && scripts/ios-sim.sh install build/ios/wave.app" ;;
+  ssh mac "cd $remote/mac && WAVE_DEBUG=1 $relay scripts/ios-bundle.sh && scripts/ios-sim.sh install build/ios/wave.app" ;;
 ios-cmd) shift; printf "%s\n" "$@" | ssh mac "cat > \"\$(xcrun simctl get_app_container wave-iphone xyz.mooma0750.wave data)/Library/Application Support/wave/debug-command.txt\"" ;;
 ios-log) ssh mac "tail -n ${2:-80} \"\$(xcrun simctl get_app_container wave-iphone xyz.mooma0750.wave data)/Library/Application Support/wave/wave.log\"" ;;
 ios-shot) ssh mac "xcrun simctl io wave-iphone screenshot /tmp/wave-ios.png >/dev/null 2>&1" && scp -q mac:/tmp/wave-ios.png "$2" ;;
-ios-ipa) sync; ssh mac "cd $remote/mac && scripts/ios-bundle.sh device" && scp -q mac:$remote/mac/build/ios-device/wave.ipa "${2:-build/wave.ipa}" ;;
+ios-ipa) sync; ssh mac "cd $remote/mac && $relay scripts/ios-bundle.sh device" && scp -q mac:$remote/mac/build/ios-device/wave.ipa "${2:-build/wave.ipa}" ;;
 *) sed -n 2,13p "$0"; exit 1 ;;
 esac
