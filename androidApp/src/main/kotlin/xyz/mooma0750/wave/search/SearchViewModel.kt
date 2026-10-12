@@ -22,7 +22,7 @@ import xyz.mooma0750.wave.core.session.CallResult
 import xyz.mooma0750.wave.core.session.FailureKind
 
 /** 検索の結果の分け方。All は種類ごとに少しずつ並べる。 */
-enum class SearchTab { All, Songs, Albums, Artists }
+enum class SearchTab { All, Songs, Albums, Artists, Live }
 
 /** 種類ごとの結果（続きのページを持つ）。 */
 data class ResultList<T>(
@@ -30,6 +30,8 @@ data class ResultList<T>(
     val continuation: String? = null,
     val loadingMore: Boolean = false,
     val failure: FailureKind? = null,
+    /** 一度読み終えた（ライブは絞り込みを選んだときに初めて読む）。 */
+    val loaded: Boolean = false,
 )
 
 data class SearchUiState(
@@ -41,6 +43,8 @@ data class SearchUiState(
     val songs: ResultList<Song> = ResultList(),
     val albums: ResultList<AlbumSummary> = ResultList(),
     val artists: ResultList<ArtistSummary> = ResultList(),
+    /** ライブ配信。「ライブ」を選んだときに読む。 */
+    val lives: ResultList<Song> = ResultList(),
     val loading: Boolean = false,
 ) {
     /** 打ち込み中（まだ検索していない語）。 */
@@ -127,6 +131,7 @@ class SearchViewModel(
                 songs = ResultList(),
                 albums = ResultList(),
                 artists = ResultList(),
+                lives = ResultList(),
                 loading = true,
             )
         }
@@ -156,6 +161,20 @@ class SearchViewModel(
 
     fun selectTab(tab: SearchTab) {
         mutableState.update { it.copy(tab = tab) }
+        if (tab == SearchTab.Live) loadLives()
+    }
+
+    /** ライブ配信を読む（まだ読んでいない語だけ）。 */
+    private fun loadLives() {
+        val current = state.value
+        val query = current.submitted ?: return
+        if (current.lives.loaded || current.lives.loadingMore) return
+        mutableState.update { it.copy(lives = it.lives.copy(loadingMore = true)) }
+        viewModelScope.launch {
+            val result = music.searchLive(query).toList { ResultList(it.songs, it.continuation) }
+            Log.i(WaveApplication.LOG_TAG, "search live=${result.items.size} failed=${result.failure != null}")
+            mutableState.update { if (it.submitted != query) it else it.copy(lives = result.copy(loaded = true)) }
+        }
     }
 
     fun loadMore(tab: SearchTab) {
@@ -170,6 +189,8 @@ class SearchViewModel(
                 more(current.albums, { s, list -> s.copy(albums = list) }) { token -> music.searchAlbums(query, token).toList { it.asResultList() } }
             SearchTab.Artists ->
                 more(current.artists, { s, list -> s.copy(artists = list) }) { token -> music.searchArtists(query, token).toList { it.asResultList() } }
+            SearchTab.Live ->
+                more(current.lives, { s, list -> s.copy(lives = list.copy(loaded = true)) }) { token -> music.searchLive(query, token).toList { ResultList(it.songs, it.continuation) } }
             SearchTab.All -> Unit
         }
     }

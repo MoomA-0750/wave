@@ -150,7 +150,10 @@ class PlaybackService : MediaSessionService() {
     override fun onCreate() {
         super.onCreate()
         container = (application as WaveApplication).container
-        val dataSourceFactory = WaveStreamDataSource.Factory(container.stream.resolver, container.streamCache, container.mediaHttpClient)
+        val dataSourceFactory =
+            WaveStreamDataSource
+                .Factory(container.stream.resolver, container.streamCache, container.mediaHttpClient)
+                .withLive(container.live, container.liveCache)
         val player =
             ExoPlayer
                 .Builder(this)
@@ -165,9 +168,10 @@ class PlaybackService : MediaSessionService() {
                 // Wear OS の既定（スピーカーでは鳴らさない）に戻すなら true にする
                 .setSuppressPlaybackOnUnsuitableOutput(false)
                 .build()
+        val queuePlayer = Media3QueuePlayer(player, stoppedOnSkippableError = { lastErrorWasThisSong })
         val queueSession =
             QueueSession(
-                Media3QueuePlayer(player, stoppedOnSkippableError = { lastErrorWasThisSong }),
+                queuePlayer,
                 RepositoryContentSource(container.music),
                 scope,
                 newItemId = { UUID.randomUUID().toString() },
@@ -207,6 +211,8 @@ class PlaybackService : MediaSessionService() {
                     // 例外文や原因には URL が入りうるので、コードと型名だけを記録する
                     val cause = error.cause
                     Log.w(WaveApplication.LOG_TAG, "playback error code=${error.errorCodeName} cause=${cause?.javaClass?.simpleName} reason=${(cause as? StreamResolveException)?.reason}")
+                    // ライブの印の無いまま入ったライブ配信は、HLS で流し直す（端末から受け取ったキューなど）
+                    if ((cause as? StreamResolveException)?.reason == StreamFailure.LiveStream && queuePlayer.replayCurrentAsLive()) return
                     val failure = failureOf(error)
                     lastErrorWasThisSong = failure == PlaybackFailure.ThisSong
                     if (skipGuard.onError(failure, player.hasNextMediaItem(), android.os.SystemClock.elapsedRealtime())) {
@@ -514,6 +520,7 @@ class PlaybackService : MediaSessionService() {
             queueSession.reset()
             container.streamCache.clear()
             container.videoStreamCache.clear()
+            container.liveCache.clear()
             container.queueStore.delete()
         }
 

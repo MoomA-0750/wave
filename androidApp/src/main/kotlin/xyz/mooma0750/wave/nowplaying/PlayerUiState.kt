@@ -25,6 +25,8 @@ data class PlayerUiState(
     val hasPrevious: Boolean = false,
     val repeatMode: Int = Player.REPEAT_MODE_OFF,
     val error: String? = null,
+    /** ライブ配信を流している（長さもシークも無い）。 */
+    val isLive: Boolean = false,
 )
 
 data class QueueRow(
@@ -79,6 +81,7 @@ fun rememberPlayerUiState(connection: PlayerConnection): Pair<PlayerUiState, Med
                     hasPrevious = current.hasPreviousMediaItem(),
                     repeatMode = current.repeatMode,
                     error = current.playerError?.errorCodeName,
+                    isLive = xyz.mooma0750.wave.playback.Media3QueuePlayer.songOf(item)?.isLive == true || current.isCurrentMediaItemLive,
                 )
         }
         val listener =

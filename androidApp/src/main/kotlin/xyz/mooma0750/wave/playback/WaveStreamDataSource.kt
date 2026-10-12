@@ -16,6 +16,12 @@ import java.io.IOException
 import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient
 import xyz.mooma0750.wave.WaveApplication
+import xyz.mooma0750.wave.core.music.LiveClient
+import xyz.mooma0750.wave.core.music.LiveFailure
+import xyz.mooma0750.wave.core.music.LiveResult
+import xyz.mooma0750.wave.core.music.LiveStream
+import xyz.mooma0750.wave.core.music.isAllowedLiveManifestUrl
+import xyz.mooma0750.wave.core.music.isAllowedLiveSegmentUrl
 import xyz.mooma0750.wave.core.net.isAllowedMediaUrl
 import xyz.mooma0750.wave.core.stream.ResolveResult
 import xyz.mooma0750.wave.core.stream.ResolvedStream
@@ -28,24 +34,54 @@ object TrackUri {
     private const val SCHEME = "wave"
     private const val HOST = "track"
 
+    /** ライブ配信（HLS の媒体プレイリスト）。区切りの URL は googlevideo の https のまま流れる。 */
+    private const val LIVE_HOST = "live"
+
     private const val EPOCH = "epoch"
 
     /** @param epoch 曲をキューに入れたときのログインの世代（ADR-0007）。解決はこの世代でだけ行う */
     fun of(
         videoId: String,
         epoch: Long?,
+        live: Boolean = false,
     ): Uri =
         Uri
             .Builder()
             .scheme(SCHEME)
-            .authority(HOST)
+            .authority(if (live) LIVE_HOST else HOST)
             .appendPath(videoId)
             .apply { if (epoch != null) appendQueryParameter(EPOCH, epoch.toString()) }
             .build()
 
     fun videoIdOf(uri: Uri): String? = uri.takeIf { it.scheme == SCHEME && it.host == HOST }?.lastPathSegment
 
-    fun epochOf(uri: Uri?): Long? = uri?.takeIf { it.scheme == SCHEME && it.host == HOST }?.getQueryParameter(EPOCH)?.toLongOrNull()
+    fun liveVideoIdOf(uri: Uri): String? = uri.takeIf { it.scheme == SCHEME && it.host == LIVE_HOST }?.lastPathSegment
+
+    fun epochOf(uri: Uri?): Long? = uri?.takeIf { it.scheme == SCHEME && (it.host == HOST || it.host == LIVE_HOST) }?.getQueryParameter(EPOCH)?.toLongOrNull()
+}
+
+/** 解決したライブの再生先を、期限の少し前まで使い回す（HLS は数秒おきに媒体プレイリストを読み直す）。 */
+class LiveStreamCache(
+    private val nowMs: () -> Long,
+) {
+    private val entries = HashMap<String, LiveStream>()
+
+    @Synchronized
+    fun get(videoId: String): LiveStream? = entries[videoId]?.takeIf { it.expiresAtMs - nowMs() > 0 }
+
+    @Synchronized
+    fun put(stream: LiveStream) {
+        entries[stream.videoId] = stream
+        while (entries.size > 8) entries.remove(entries.keys.first())
+    }
+
+    @Synchronized
+    fun invalidate(videoId: String) {
+        entries.remove(videoId)
+    }
+
+    @Synchronized
+    fun clear() = entries.clear()
 }
 
 /** 解決できなかった。例外文には失敗の種類だけを入れる（URL・原因の例外を持たない）。 */
@@ -159,6 +195,9 @@ class WaveStreamDataSource(
     private val upstreamFactory: OkHttpDataSource.Factory,
     /** 映像の表示用は Video（キャッシュも音声とは別のものを渡す）。 */
     private val kind: StreamKind,
+    /** ライブ配信の HLS の解決。無ければ wave://live は開けない。 */
+    private val live: LiveClient? = null,
+    private val liveCache: LiveStreamCache? = null,
 ) : DataSource {
     private var upstream: DataSource? = null
     private var openedSpec: DataSpec? = null
@@ -169,6 +208,12 @@ class WaveStreamDataSource(
     }
 
     override fun open(dataSpec: DataSpec): Long {
+        TrackUri.liveVideoIdOf(dataSpec.uri)?.let { return openLive(it, dataSpec) }
+        // ライブの媒体プレイリストに並ぶ区切り（googlevideo の /videoplayback/…）は、そのまま取る
+        if (dataSpec.uri.scheme == "https" && isAllowedLiveSegmentUrl(dataSpec.uri.toString())) {
+            openedSpec = dataSpec
+            return openUrl(dataSpec.uri.toString(), dataSpec, policy = ::isAllowedLiveSegmentUrl)
+        }
         val videoId = TrackUri.videoIdOf(dataSpec.uri) ?: throw DataSourceException("unsupported uri scheme", null, PlaybackException.ERROR_CODE_IO_UNSPECIFIED)
         // 世代の無い曲は解決しない（照合しない側に倒さない、P6-0 inner gate 中-4）
         val epoch = TrackUri.epochOf(dataSpec.uri) ?: throw StreamResolveException(StreamFailure.NotLoggedIn)
@@ -207,6 +252,50 @@ class WaveStreamDataSource(
         }
     }
 
+    /**
+     * wave://live/<videoId> を開く。解決した媒体プレイリスト（manifest.googlevideo.com）を取る。
+     * 拒否されたら（IP が変わった・期限切れ）、解決し直して1回だけ取り直す。
+     */
+    private fun openLive(
+        videoId: String,
+        dataSpec: DataSpec,
+    ): Long {
+        val client = live ?: throw StreamResolveException(StreamFailure.Unplayable)
+        val cache = liveCache ?: throw StreamResolveException(StreamFailure.Unplayable)
+        openedSpec = dataSpec
+        val cached = cache.get(videoId)
+        val first = cached ?: resolveLive(client, cache, videoId)
+        return try {
+            openUrl(first.revealUrl(), dataSpec, policy = ::isAllowedLiveManifestUrl)
+        } catch (rejected: RejectedException) {
+            Log.i(WaveApplication.LOG_TAG, "live playlist rejected status=${rejected.status} cached=${cached != null}; resolving again")
+            cache.invalidate(videoId)
+            val second = resolveLive(client, cache, videoId)
+            try {
+                openUrl(second.revealUrl(), dataSpec, policy = ::isAllowedLiveManifestUrl)
+            } catch (again: RejectedException) {
+                cache.invalidate(videoId)
+                throw StreamRejectedException(again.status)
+            }
+        }
+    }
+
+    private fun resolveLive(
+        client: LiveClient,
+        cache: LiveStreamCache,
+        videoId: String,
+    ): LiveStream =
+        when (val result = runBlocking { client.resolve(videoId) }) {
+            is LiveResult.Ok -> result.stream.also(cache::put).also { Log.i(WaveApplication.LOG_TAG, "live resolved") }
+            is LiveResult.Failed ->
+                throw StreamResolveException(
+                    when (result.reason) {
+                        LiveFailure.Network -> StreamFailure.Network
+                        LiveFailure.NotLive, LiveFailure.NoVariant -> StreamFailure.Unplayable
+                    },
+                )
+        }
+
     private fun resolve(
         videoId: String,
         sameAs: ResolvedStream?,
@@ -232,9 +321,10 @@ class WaveStreamDataSource(
     private fun openUrl(
         url: String,
         dataSpec: DataSpec,
+        policy: (String) -> Boolean = ::isAllowedMediaUrl,
     ): Long {
         // 解決時にも確かめているが、DataSource の組み替えで迂回されないよう、開く直前にも確かめる
-        if (!isAllowedMediaUrl(url)) throw DataSourceException("stream url rejected by media url policy", null, PlaybackException.ERROR_CODE_IO_UNSPECIFIED)
+        if (!policy(url)) throw DataSourceException("stream url rejected by media url policy", null, PlaybackException.ERROR_CODE_IO_UNSPECIFIED)
         val source = upstreamFactory.createDataSource()
         transferListeners.forEach { source.addTransferListener(RedactingTransferListener(it, dataSpec)) }
         upstream = source
@@ -328,6 +418,19 @@ class WaveStreamDataSource(
     ) : DataSource.Factory {
         private val upstreamFactory = OkHttpDataSource.Factory(client)
 
-        override fun createDataSource(): DataSource = WaveStreamDataSource(resolver, cache, upstreamFactory, kind)
+        private var live: LiveClient? = null
+        private var liveCache: LiveStreamCache? = null
+
+        /** ライブ配信（wave://live）も開けるようにする。 */
+        fun withLive(
+            client: LiveClient,
+            cache: LiveStreamCache,
+        ): Factory =
+            apply {
+                live = client
+                liveCache = cache
+            }
+
+        override fun createDataSource(): DataSource = WaveStreamDataSource(resolver, cache, upstreamFactory, kind, live, liveCache)
     }
 }
