@@ -10,6 +10,9 @@ struct SettingsPageView: View {
     @State private var pairText = ""
     @State private var aiConfigured = AppServices.ai.configured
     @State private var confirmLogout = false
+    @State private var discordOn = AppServices.settings.discordPresence
+    @State private var discordId = AppServices.settings.discordClientId ?? ""
+    @State private var discordState = SettingsPageView.discordStateText()
 
     var body: some View {
         let account = AppServices.account!
@@ -67,6 +70,26 @@ struct SettingsPageView: View {
                             AppServices.settings.releaseNotices = v
                             AppServices.settings.save()
                         }
+                }
+
+                section("Discord")
+                card {
+                    VStack(alignment: .leading, spacing: 8) {
+                        toggleRow(L.t("Discord に再生中の曲を出す", "Show what you’re playing on Discord"),
+                                  L.t("この Mac の Discord のアプリに「聴いています」を出します。スマホなどほかの端末で鳴らしている曲も出します",
+                                      "Shows “Listening to” through the Discord app on this Mac, including songs playing on your other devices"),
+                                  isOn: $discordOn)
+                            .onChange(of: discordOn) { _, _ in saveDiscord() }
+                        Text(L.t("discord.com/developers/applications で「wave」という名前のアプリケーションを作り、その Application ID を貼ってください。",
+                                 "Create an application named “wave” at discord.com/developers/applications and paste its Application ID."))
+                            .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                        TextField("Application ID", text: $discordId).textFieldStyle(.roundedBorder)
+                            .onSubmit { saveDiscord() }
+                            .onChange(of: discordId) { _, _ in saveDiscord() }
+                        if !discordState.isEmpty {
+                            Text(discordState).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
                 }
 
                 section("Claude")
@@ -137,12 +160,38 @@ struct SettingsPageView: View {
             .padding(EdgeInsets(top: 32, leading: 40, bottom: 32, trailing: 40))
             .frame(maxWidth: 880, alignment: .leading)
         }
+        .task {
+            // Discord へのつなぎ具合は裏で変わるので、開いている間は時々書き直す
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(2))
+                discordState = Self.discordStateText()
+            }
+        }
         .confirmationDialog(L.t("ログアウトしますか？", "Log out?"), isPresented: $confirmLogout) {
             Button(L.t("ログアウト", "Log out"), role: .destructive) { AppServices.account.logOut() }
             Button(L.t("キャンセル", "Cancel"), role: .cancel) {}
         } message: {
             Text(L.t("この Mac に保存したログイン情報を消します。", "This removes your login saved on this Mac."))
         }
+    }
+
+    private func saveDiscord() {
+        // ID は数字だけ（貼るときに混ざった空白などは落とす）
+        let id = String(discordId.filter { $0.isASCII && $0.isNumber })
+        let settings = AppServices.settings!
+        guard settings.discordPresence != discordOn || settings.discordClientId != (id.isEmpty ? nil : id) else { return }
+        settings.discordPresence = discordOn
+        settings.discordClientId = id.isEmpty ? nil : id
+        settings.save()
+        AppServices.discord.push()
+        discordState = Self.discordStateText()
+    }
+
+    private static func discordStateText() -> String {
+        let settings = AppServices.settings!
+        if !settings.discordPresence { return "" }
+        if settings.discordClientId == nil { return L.t("Application ID を入れると出せます", "Enter the Application ID to turn this on") }
+        return AppServices.discord.statusText
     }
 
     private func stateText(_ account: AccountState) -> String {
