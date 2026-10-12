@@ -19,21 +19,15 @@ struct NowPlayingView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 header(player, song)
-                // ジャケットか、MV のある曲で「動画」を選んでいれば映像
-                ZStack {
-                    if showVideo, player.video != nil {
-                        VideoSurface()
-                    } else {
-                        RemoteImage(url: Ui.large(song?.thumbnailUrl))
-                    }
+                // ジャケット（左右に払うと前後の曲へ）か、MV のある曲で「動画」を選んでいれば映像
+                if showVideo, player.video != nil {
+                    VideoSurface()
+                        .aspectRatio(1, contentMode: .fit)
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        .shadow(radius: 16, y: 8)
+                } else {
+                    CoverCarousel()
                 }
-                .aspectRatio(1, contentMode: .fit)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-                .shadow(radius: 16, y: 8)
-                .gesture(DragGesture(minimumDistance: 24).onEnded { value in
-                    guard abs(value.translation.width) > abs(value.translation.height), abs(value.translation.width) > 60 else { return }
-                    if value.translation.width < 0 { player.next() } else { player.previous() }
-                })
                 titleRow(player, song)
                 seekBar(player)
                 controls(player)
@@ -54,12 +48,10 @@ struct NowPlayingView: View {
         .onChange(of: showVideo, initial: true) { _, show in MusicVideoPlayer.shared.setActive(show ? player.video : nil) }
         .onChange(of: player.video) { _, v in MusicVideoPlayer.shared.setActive(showVideo ? v : nil) }
         .onDisappear { MusicVideoPlayer.shared.setActive(nil) }
-        .sheet(isPresented: $shell.queueOpen) { QueueView() }
+        .sheet(isPresented: $shell.queueOpen) { QueueView().modifier(DialogSheets(layer: .queue)) }
         .sheet(isPresented: $devicesOpen) { DevicesSheet() }
-        .gesture(DragGesture(minimumDistance: 40).onEnded { value in
-            // 下へ払うと閉じる
-            if value.translation.height > 120, abs(value.translation.width) < 80 { dismiss() }
-        })
+        // 曲のメニューの「プレイリストに追加」は、この画面の上に出す
+        .modifier(DialogSheets(layer: .player))
     }
 
     private func header(_ player: PlayerService, _ song: Song?) -> some View {
@@ -85,6 +77,11 @@ struct NowPlayingView: View {
         }
         .foregroundStyle(.primary)
         .padding(.top, 8)
+        .contentShape(Rectangle())
+        // 上の帯を下へ払っても閉じる
+        .gesture(DragGesture(minimumDistance: 20).onEnded { value in
+            if value.translation.height > 60, abs(value.translation.width) < value.translation.height { dismiss() }
+        })
     }
 
     private func titleRow(_ player: PlayerService, _ song: Song?) -> some View {
@@ -197,8 +194,95 @@ struct NowPlayingView: View {
                 .background(RoundedRectangle(cornerRadius: 14).fill((tint ?? .gray).opacity(0.55)))
             }
             .buttonStyle(.plain)
-            .sheet(isPresented: Binding(get: { LyricsSheetState.shared.open }, set: { LyricsSheetState.shared.open = $0 })) { LyricsView() }
+            .sheet(isPresented: Binding(get: { LyricsSheetState.shared.open }, set: { LyricsSheetState.shared.open = $0 })) {
+                LyricsView().modifier(DialogSheets(layer: .lyrics))
+            }
         }
+    }
+}
+
+/// 再生中の画面のジャケット。前後の曲のジャケットを横に並べておき（先に読んでおく）、指について動く。
+/// 払いきると隣のジャケットが真ん中へ滑ってきて、その曲へ移る（Android の再生中の画面と同じく、前へは previous と同じ扱い）。
+private struct CoverCarousel: View {
+    @State private var drag: CGFloat = 0
+    @State private var settling = false
+
+    var body: some View {
+        let player = AppServices.player!
+        GeometryReader { geo in
+            let step = geo.size.width + 24
+            ZStack {
+                ForEach(slots(player), id: \.index) { slot in
+                    cover(slot.song)
+                        .offset(x: CGFloat(slot.index - player.index) * step + drag)
+                }
+            }
+            .contentShape(Rectangle())
+            .gesture(DragGesture(minimumDistance: 16)
+                .onChanged { value in
+                    guard !settling, abs(value.translation.width) > abs(value.translation.height) else { return }
+                    // 隣が無い方へは、少しだけ動かして止める
+                    let x = value.translation.width
+                    drag = neighbor(player, x < 0 ? 1 : -1) == nil ? x / 4 : x
+                }
+                .onEnded { value in
+                    guard !settling else { return }
+                    let x = value.translation.width, predicted = value.predictedEndTranslation.width
+                    let dir = (x < -60 || predicted < -step / 2) ? 1 : (x > 60 || predicted > step / 2) ? -1 : 0
+                    // 前へ払っても、3秒より先なら曲の頭へ戻るだけ（ボタンと同じ）なので、滑らせずに戻す
+                    let moves = dir == 1 ? neighbor(player, 1) != nil : dir == -1 ? (neighbor(player, -1) != nil && player.position <= 3) : false
+                    guard moves else {
+                        withAnimation(.snappy) { drag = 0 }
+                        if dir == 1 { player.next() } else if dir == -1 { player.previous() }
+                        return
+                    }
+                    settling = true
+                    withAnimation(.snappy(duration: 0.25)) {
+                        drag = -CGFloat(dir) * step
+                    } completion: {
+                        // 曲が移ると隣のジャケットが真ん中の位置になるので、ずらしを戻しても見た目は動かない
+                        var t = Transaction()
+                        t.disablesAnimations = true
+                        withTransaction(t) {
+                            if dir == 1 { player.next() } else { player.previous() }
+                            drag = 0
+                        }
+                        settling = false
+                    }
+                })
+        }
+        .aspectRatio(1, contentMode: .fit)
+    }
+
+    private func cover(_ song: Song) -> some View {
+        ZStack {
+            // 大きい絵を読むまで、ミニプレーヤーなどで読んである小さい絵を引き伸ばして出しておく
+            RemoteImage(url: Ui.small(song.thumbnailUrl))
+            RemoteImage(url: Ui.large(song.thumbnailUrl))
+        }
+        .background(Color.white.opacity(0.08))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .shadow(radius: 16, y: 8)
+    }
+
+    private struct Slot {
+        let index: Int
+        let song: Song
+    }
+
+    /// 真ん中と前後の曲（ほかの端末で鳴っているときは、真ん中だけ）。
+    private func slots(_ player: PlayerService) -> [Slot] {
+        guard let current = player.current else { return [] }
+        guard !player.isRemote, player.index >= 0 else { return [Slot(index: max(0, player.index), song: current)] }
+        return (-1...1).compactMap { d in
+            d == 0 ? Slot(index: player.index, song: current) : neighbor(player, d).map { Slot(index: player.index + d, song: $0) }
+        }
+    }
+
+    private func neighbor(_ player: PlayerService, _ d: Int) -> Song? {
+        guard !player.isRemote, player.index >= 0 else { return nil }
+        let i = player.index + d
+        return player.queue.indices.contains(i) ? player.queue[i] : nil
     }
 }
 

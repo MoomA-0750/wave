@@ -5,6 +5,7 @@ import WaveCore
 /// 画面の下のミニプレーヤー（Android と同じ並び: ジャケット・曲名・端末・評価・再生、下に進み具合の線）。
 /// 押すと再生中の画面を開く。左右に払うと前後の曲へ。
 struct MiniPlayer: View {
+    static let zoomId = "nowPlaying"
     var open: () -> Void
 
     var body: some View {

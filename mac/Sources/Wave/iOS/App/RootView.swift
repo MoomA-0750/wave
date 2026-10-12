@@ -22,6 +22,14 @@ final class IOSShell {
     /// 検索のタブに入れておく言葉（ほかの画面から「検索」へ移ったとき）。
     var searchQuery: String?
 
+    /// いま一番上に出ている画面。プレイリストに追加する画面などは、ここから出す（下の画面からは、上の画面を閉じるまで出せない）。
+    var topLayer: SheetLayer {
+        guard playerOpen else { return .root }
+        if queueOpen { return .queue }
+        if LyricsSheetState.shared.open { return .lyrics }
+        return .player
+    }
+
     func path(_ tab: IOSTab) -> Binding<[Route]> {
         Binding(get: { self.paths[tab] ?? [] }, set: { self.paths[tab] = $0 })
     }
@@ -55,8 +63,9 @@ final class IOSShell {
 
 struct RootView: View {
     @State private var shell = IOSShell.shared
-    @State private var dialogs = Dialogs.shared
     @State private var account = AppServices.account!
+    /// ミニプレーヤーから再生中の画面へ広がる動き（下へ払うと閉じられる）
+    @Namespace private var playerZoom
 
     var body: some View {
         let player = AppServices.player!
@@ -74,11 +83,12 @@ struct RootView: View {
                 stack(.library) { LibraryView() }
             }
         }
-        .modifier(MiniPlayerAccessory(show: player.current != nil) { shell.playerOpen = true })
+        .modifier(MiniPlayerAccessory(show: player.current != nil, zoom: playerZoom) { shell.playerOpen = true })
         .overlay(alignment: .bottom) { ToastHost().padding(.bottom, player.current != nil ? 120 : 64) }
-        .fullScreenCover(isPresented: $shell.playerOpen) { NowPlayingView() }
-        .sheet(item: $dialogs.addToPlaylist) { song in AddToPlaylistSheet(song: song) }
-        .sheet(isPresented: $dialogs.creating) { CreatePlaylistSheet(song: dialogs.createSong) }
+        .fullScreenCover(isPresented: $shell.playerOpen) {
+            NowPlayingView().navigationTransition(.zoom(sourceID: MiniPlayer.zoomId, in: playerZoom))
+        }
+        .modifier(DialogSheets(layer: .root))
         // 共有の Nav で選ばれた行き先を、今のタブに積む
         .onChange(of: AppServices.nav.current) { _, entry in shell.open(entry.route) }
         .onChange(of: player.message) { _, message in
@@ -97,6 +107,29 @@ struct RootView: View {
         NavigationStack(path: shell.path(tab)) {
             root().navigationDestination(for: Route.self) { route in RouteView(route: route) }
         }
+    }
+}
+
+/// 画面の重なり（下から 画面の枠・再生中の画面・その上のキューか歌詞）。
+enum SheetLayer {
+    case root, player, queue, lyrics
+}
+
+/// プレイリストに追加する・作る画面を、指定の重なりが一番上のときだけ、その重なりから出す。
+struct DialogSheets: ViewModifier {
+    let layer: SheetLayer
+    @State private var dialogs = Dialogs.shared
+    @State private var shell = IOSShell.shared
+
+    func body(content: Content) -> some View {
+        let top = shell.topLayer == layer
+        content
+            .sheet(item: Binding(get: { top ? dialogs.addToPlaylist : nil }, set: { dialogs.addToPlaylist = $0 })) { song in
+                AddToPlaylistSheet(song: song)
+            }
+            .sheet(isPresented: Binding(get: { top && dialogs.creating }, set: { dialogs.creating = $0 })) {
+                CreatePlaylistSheet(song: dialogs.createSong)
+            }
     }
 }
 
@@ -130,16 +163,18 @@ struct RouteView: View {
 /// ミニプレーヤーを、iOS 26 以降はタブバーの上の付属部品（Liquid Glass）として、それより前は下に重ねて出す。
 private struct MiniPlayerAccessory: ViewModifier {
     var show: Bool
+    var zoom: Namespace.ID
     var open: () -> Void
 
     func body(content: Content) -> some View {
         if #available(iOS 26.0, *), show {
             content
-                .tabViewBottomAccessory { MiniPlayer(open: open) }
+                .tabViewBottomAccessory { MiniPlayer(open: open).matchedTransitionSource(id: MiniPlayer.zoomId, in: zoom) }
                 .tabBarMinimizeBehavior(.onScrollDown)
         } else if show {
             content.safeAreaInset(edge: .bottom) {
                 MiniPlayer(open: open)
+                    .matchedTransitionSource(id: MiniPlayer.zoomId, in: zoom)
                     .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
                     .padding(.horizontal, 8)
                     .padding(.bottom, 52)
