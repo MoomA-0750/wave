@@ -820,7 +820,7 @@ public sealed class ConnectService
         return HandoffCodec.Validate(snapshot, SnapshotId) is HandoffDecodeResult.Ok ? HandoffCodec.Encode(snapshot) : null;
     }
 
-    private static bool ValidVideoId(string id) => System.Text.RegularExpressions.Regex.IsMatch(id, @"\A[A-Za-z0-9_-]{11}\z");
+    private static bool ValidVideoId(string id) => HandoffCodec.IsItemVideoId(id);
 
     private static HandoffItem ItemOf(Song song, QueueItemMeta meta) => new()
     {

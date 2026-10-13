@@ -12,6 +12,7 @@ namespace Wave.App.Views;
 /// <summary>
 /// ポッドキャストの番組のページ（Android と同じ）。エピソードを押すと、読み込んだエピソードを番組のプレイリスト（PL…）を出どころにして、
 /// その話から流す。下まで来たら続きのエピソードを読む。保存（ライブラリに追加）はログインしていて状態が分かるときだけ出す。
+/// RSS の番組（rss:…、ADR-0012）はフィードを読んで同じ形で出す。保存はこの端末の登録の切り替えで、流すときはプレイリストを出どころにしない。
 /// </summary>
 public sealed partial class PodcastPage : Page
 {
@@ -21,6 +22,10 @@ public sealed partial class PodcastPage : Page
     private string? continuation;
     private bool loadingMore;
     private bool saving;
+
+    /// <summary>読んだ RSS の番組（YouTube の番組なら null）と、読んだ項目の数（続きを読むたびに増える）。</summary>
+    private FeedShow? feedShow;
+    private int feedLoaded = FeedShow.PageSize;
 
     public PodcastPage()
     {
@@ -39,6 +44,11 @@ public sealed partial class PodcastPage : Page
         TitleText.Text = summary.Title;
         AuthorText.Text = summary.Author ?? "";
         Cover.Source = Ui.Img(summary.ThumbnailUrl, 544);
+        if (Feed.FeedUrlOf(summary.BrowseId) is { } feedUrl)
+        {
+            await LoadFeedAsync(feedUrl);
+            return;
+        }
         var result = await AppServices.Music.PodcastAsync(summary.BrowseId);
         LoadingRing.IsActive = false;
         if (!result.IsOk)
@@ -63,6 +73,54 @@ public sealed partial class PodcastPage : Page
         UpdateSave();
     }
 
+    /// <summary>RSS の番組を読む（Android の PodcastViewModel.loadFeed と同じ）。</summary>
+    private async Task LoadFeedAsync(string url)
+    {
+        var library = AppServices.FeedLibrary;
+        var started = System.Diagnostics.Stopwatch.StartNew();
+        var result = await AppServices.Feeds.ShowAsync(url);
+        LoadingRing.IsActive = false;
+        if (result is not FeedResult.Ok ok)
+        {
+            var failed = (FeedResult.Failed)result;
+            AppPaths.Log($"podcast feed failed {failed.Failure} status={failed.Status}");
+            ErrorText.Visibility = Visibility.Visible;
+            return;
+        }
+        feedShow = ok.Show;
+        library.Refresh(feedShow);
+        var state = library.State;
+        page = feedShow.ToPage(state.IsSubscribed(url), feedLoaded, state.Positions.GetValueOrDefault);
+        AppPaths.Log($"podcast feed episodes={page.Episodes.Count} items={feedShow.ItemCount} saved={page.Saved} ms={started.ElapsedMilliseconds}");
+        TitleText.Text = page.Title;
+        AuthorText.Text = page.Author ?? "";
+        DescriptionText.Text = page.Description ?? "";
+        MoreLink.Visibility = Ui.Show((page.Description?.Length ?? 0) > 200);
+        if (page.ThumbnailUrl is not null) Cover.Source = Ui.Img(page.ThumbnailUrl, 544);
+        foreach (var episode in page.Episodes) episodes.Add(episode);
+        continuation = page.Continuation;
+        PlayButton.IsEnabled = episodes.Count > 0;
+        UpdateSave();
+        library.Changed += OnFeedLibraryChanged;
+    }
+
+    /// <summary>聴いたところ・登録が変わったら、表示を合わせる（行は置き換えるだけで、並びとスクロールは保つ）。</summary>
+    private void OnFeedLibraryChanged(FeedLibraryState state) => DispatcherQueue.TryEnqueue(() =>
+    {
+        if (feedShow is not { } show || page is null) return;
+        page = page with { Saved = state.IsSubscribed(show.FeedUrl) };
+        var fresh = show.ToPage(page.Saved, feedLoaded, state.Positions.GetValueOrDefault).Episodes;
+        for (var i = 0; i < Math.Min(fresh.Count, episodes.Count); i++)
+            if (episodes[i].Song.VideoId == fresh[i].Song.VideoId && episodes[i].ProgressPercent != fresh[i].ProgressPercent) episodes[i] = fresh[i];
+        UpdateSave();
+    });
+
+    protected override void OnNavigatedFrom(NavigationEventArgs e)
+    {
+        base.OnNavigatedFrom(e);
+        AppServices.FeedLibrary.Changed -= OnFeedLibraryChanged;
+    }
+
     private void OnMoreDescription(object sender, RoutedEventArgs e)
     {
         var expanded = DescriptionText.MaxLines == 0;
@@ -72,7 +130,8 @@ public sealed partial class PodcastPage : Page
 
     private void UpdateSave()
     {
-        SaveButton.Visibility = Ui.Show(page?.Saved is not null && AppServices.Client.IsLoggedIn);
+        // RSS の番組の登録はこの端末のものなので、ログインしていなくても出す
+        SaveButton.Visibility = Ui.Show(page?.Saved is not null && (feedShow is not null || AppServices.Client.IsLoggedIn));
         SaveButton.Content = page?.Saved == true ? L.T("保存済み", "Saved") : L.T("ライブラリに保存", "Save to library");
         SaveButton.IsEnabled = !saving;
         // 保存していなければ色付き、保存済みなら控えめに（アーティストの登録と同じ）
@@ -83,6 +142,14 @@ public sealed partial class PodcastPage : Page
     private async void OnSave(object sender, RoutedEventArgs e)
     {
         if (page is not { Saved: { } saved } current || saving) return;
+        // RSS の番組は、この端末の登録を切り替える（表示は登録の変化で変わる）
+        if (feedShow is { } show)
+        {
+            if (saved) AppServices.FeedLibrary.Unsubscribe(show.FeedUrl);
+            else AppServices.FeedLibrary.Subscribe(show.Subscription);
+            AppPaths.Log($"podcast feed save={!saved}");
+            return;
+        }
         saving = true;
         UpdateSave();
         var result = await AppServices.Music.SetPodcastSavedAsync(current.PlaylistId, !saved);
@@ -99,10 +166,25 @@ public sealed partial class PodcastPage : Page
 
     private void OnPlay(object sender, RoutedEventArgs e) => PlayFrom(0);
 
+#if DEBUG
+    /// <summary>開発用: 「保存」を押したのと同じ。</summary>
+    public void DebugSave() => OnSave(SaveButton, new RoutedEventArgs());
+
+    /// <summary>開発用: index 番目のエピソードを押したのと同じ。</summary>
+    public void DebugPlay(int index) => PlayFrom(index);
+
+    /// <summary>開発用: 読んだエピソードの数と、聴いたところの出ている数。</summary>
+    public string DebugState => $"episodes={episodes.Count} progress={episodes.Count(e => e.ProgressPercent is not null)} saved={page?.Saved} more={continuation is not null} save-visible={SaveButton.Visibility == Visibility.Visible}";
+
+    /// <summary>開発用: 続きを読む（下まで来たのと同じ）。</summary>
+    public Task DebugMoreAsync() => LoadMoreAsync();
+#endif
+
     private void PlayFrom(int index)
     {
         if (page is null || episodes.Count == 0) return;
-        AppServices.Player.PlayList(episodes.Select(x => x.Song).ToList(), index, page.PlaylistId);
+        // RSS の番組は YouTube のプレイリストとして扱わない（出どころを付けない）
+        AppServices.Player.PlayList(episodes.Select(x => x.Song).ToList(), index, feedShow is null ? page.PlaylistId : null);
     }
 
     private void OnDoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
@@ -143,6 +225,16 @@ public sealed partial class PodcastPage : Page
     private async Task LoadMoreAsync()
     {
         if (loadingMore || page is not { } current || continuation is not { } token) return;
+        // RSS の番組は、読んだフィードの続きの項目を組み立てる
+        if (feedShow is { } show)
+        {
+            var more = show.More(token, AppServices.FeedLibrary.State.Positions.GetValueOrDefault);
+            feedLoaded = FeedShow.LoadedAfter(token) ?? feedLoaded;
+            continuation = more.Continuation;
+            foreach (var episode in more.Items.Where(x => episodes.All(y => y.Song.VideoId != x.Song.VideoId))) episodes.Add(episode);
+            AppPaths.Log($"podcast feed more loaded={episodes.Count} more={continuation is not null}");
+            return;
+        }
         loadingMore = true;
         var result = await AppServices.Music.PodcastEpisodesAsync(token, new ArtistRef(current.Title, null), current.BrowseId);
         loadingMore = false;

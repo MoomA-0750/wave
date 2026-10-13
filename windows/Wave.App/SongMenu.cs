@@ -15,6 +15,8 @@ public static class SongMenu
         menu.Items.Add(Item(L.T("次に再生", "Play next"), "", () => AppServices.Player.PlayNext(song)));
         menu.Items.Add(Item(L.T("キューに追加", "Add to queue"), "", () => AppServices.Player.AddToQueue(song)));
         if (queueIndex is { } qi) menu.Items.Add(Item(L.T("キューから削除", "Remove from queue"), "", () => AppServices.Player.RemoveAt(qi)));
+        // RSS のエピソードは YouTube の曲ではない（プレイリスト・ラジオ・共有のリンクが無い。ADR-0012。Android と同じ）
+        if (Feed.IsExternal(song.VideoId)) return menu;
         menu.Items.Add(new MenuFlyoutSeparator());
         var add = new MenuFlyoutSubItem { Text = L.T("プレイリストに追加", "Add to playlist"), Icon = new FontIcon { Glyph = "" } };
         add.Items.Add(Item(L.T("新しいプレイリスト", "New playlist"), "", () => _ = Dialogs.CreatePlaylistAsync(song)));

@@ -20,6 +20,12 @@ public static class AppServices
     /// <summary>ライブ配信の検索と HLS の解決（www.youtube.com。YouTube Music の認証情報を持たない別の HttpClient で送る）。</summary>
     public static LiveClient Live { get; private set; } = null!;
     public static StreamResolver Resolver { get; private set; } = null!;
+    /// <summary>RSS のポッドキャストのフィードと音声の取得用（ADR-0012）。cookie を持たず、https の間だけリダイレクトを追う。</summary>
+    public static HttpClient FeedHttp { get; private set; } = null!;
+    /// <summary>RSS のポッドキャストの検索（Apple の目録）とフィードの読み取り。</summary>
+    public static PodcastFeedClient Feeds { get; private set; } = null!;
+    /// <summary>RSS で登録した番組と聴いたところ（この端末だけ。ログアウトでも消さない）。</summary>
+    public static FeedLibrary FeedLibrary { get; private set; } = null!;
     public static PlaybackStats Stats { get; private set; } = null!;
     public static LyricsService Lyrics { get; private set; } = null!;
     public static CredentialStore Credentials { get; private set; } = null!;
@@ -50,6 +56,10 @@ public static class AppServices
         // 歌詞の検索（LRCLIB）には YouTube と別の HttpClient を使う
         var version = typeof(AppServices).Assembly.GetName().Version?.ToString(3) ?? "0.1.0";
         Lyrics = new LyricsService(Music, new LrclibClient(InnerTubeClient.CreateHttpClient(), $"wave-windows/{version}"));
+        FeedHttp = PodcastFeedClient.CreateHttpClient();
+        var region = System.Globalization.RegionInfo.CurrentRegion.TwoLetterISORegionName;
+        Feeds = new PodcastFeedClient(FeedHttp, region.Length == 2 && region != "IV" ? region : "JP", $"wave/{version}");
+        FeedLibrary = FeedStore.Create();
         Credentials = new CredentialStore();
         Account = new AccountState();
         Library = new LibraryState();

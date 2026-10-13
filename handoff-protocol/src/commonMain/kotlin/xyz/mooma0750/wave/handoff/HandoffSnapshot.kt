@@ -119,6 +119,17 @@ object HandoffCodec {
     private const val MAX_TIME_MS = 24 * 3600 * 1000L
 
     private val VIDEO_ID = Regex("^[A-Za-z0-9_-]{11}$")
+
+    /** RSS のエピソードの曲の ID の頭（ADR-0012。core の Feed.AUDIO_PREFIX と同じ）。 */
+    private const val EXTERNAL_PREFIX = "ext:"
+
+    /** キューの項目の曲の ID: YouTube の動画 ID か、RSS のエピソード（`ext:` + https の音声の URL。ADR-0012）。 */
+    fun isItemVideoId(id: String): Boolean =
+        VIDEO_ID.matches(id) ||
+            id.startsWith(EXTERNAL_PREFIX) &&
+            id.substring(EXTERNAL_PREFIX.length).let { url ->
+                url.startsWith("https://", ignoreCase = true) && url.length in 12..4096 && url.none { it.isWhitespace() || it.isISOControl() }
+            }
     private val BROWSE_ID = Regex("^[A-Za-z0-9_-]{2,64}$")
     private val PLAYLIST_ID = Regex("^[A-Za-z0-9_-]{2,128}$")
     private val UUID = Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
@@ -167,7 +178,7 @@ object HandoffCodec {
         if (currentIndex > MAX_PLAYED_ITEMS || snapshot.items.size - 1 - currentIndex > MAX_UPCOMING_ITEMS) return reject("item_window")
         if (snapshot.listenedMs < 0 || snapshot.positionMs < 0) return reject("negative_time")
         for (item in snapshot.items) {
-            if (!VIDEO_ID.matches(item.videoId)) return reject("video_id")
+            if (!isItemVideoId(item.videoId)) return reject("video_id")
             if (item.title.isEmpty() || item.title.length > MAX_TEXT) return reject("title")
             if (item.artists.size > MAX_ARTISTS || item.artists.any { !validRef(it) }) return reject("artist")
             if (item.album != null && !validRef(item.album)) return reject("album")

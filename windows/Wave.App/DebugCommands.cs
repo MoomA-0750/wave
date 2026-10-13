@@ -81,6 +81,58 @@ public static class DebugCommands
                 // ポッドキャストの番組のページ（MPSP…）
                 Nav.Podcast(new PodcastSummary(arg, arg, null, null));
                 break;
+            case "feed":
+            case "feed-play":
+            {
+                // RSS の番組（ADR-0012）を目録で探し、最初の番組のフィードを読む。件数と形・時間だけを記録する（題などは書かない）。
+                // feed-play は最新のエピソードから流す
+                var term = arg.Length > 0 ? arg : "rebuild";
+                var watch = System.Diagnostics.Stopwatch.StartNew();
+                var found = await AppServices.Feeds.SearchAsync(term);
+                AppPaths.Log($"debug feed search={found?.Count} rss={found?.Count(p => Feed.IsFeedShow(p.BrowseId))} images={found?.Count(p => p.ThumbnailUrl is not null)} ms={watch.ElapsedMilliseconds}");
+                if (found?.FirstOrDefault() is not { } first || Feed.FeedUrlOf(first.BrowseId) is not { } url) break;
+                watch.Restart();
+                var read = await AppServices.Feeds.ShowAsync(url);
+                var readMs = watch.ElapsedMilliseconds;
+                if (read is not FeedResult.Ok ok)
+                {
+                    var failed = (FeedResult.Failed)read;
+                    AppPaths.Log($"debug feed failed {failed.Failure} status={failed.Status} ms={readMs}");
+                    break;
+                }
+                watch.Restart();
+                var feedPage = ok.Show.ToPage(null, positions: AppServices.FeedLibrary.State.Positions.GetValueOrDefault);
+                var pageMs = watch.ElapsedMilliseconds;
+                watch.Restart();
+                var all = ok.Show.AllEpisodes;
+                var allMs = watch.ElapsedMilliseconds;
+                AppPaths.Log($"debug feed read ms={readMs} page ms={pageMs} all ms={allMs} items={ok.Show.ItemCount} episodes={all.Count} durations={all.Count(e => e.DurationSeconds is not null)} dates={all.Count(e => e.PublishedEpochSeconds is not null)} descriptions={all.Count(e => e.Description is not null)} image={ok.Show.ThumbnailUrl is not null} first-page={feedPage.Episodes.Count} more={feedPage.Continuation is not null} newest-first={all.Count < 2 || (all[0].PublishedEpochSeconds ?? 0) >= (all[^1].PublishedEpochSeconds ?? 0)}");
+                if (parts[0] == "feed-play" && feedPage.Episodes.Count > 0) player.PlayList(feedPage.Episodes.Select(e => e.Song).ToList(), 0, null);
+                break;
+            }
+            case "library-kind":
+                AppPaths.Log($"debug library-kind entries={window.DebugLibraryKind(arg)} rss={AppServices.FeedLibrary.State.Subscriptions.Count}");
+                break;
+            case "podcast-save":
+                if (Nav.Frame.Content is Views.PodcastPage savePage) savePage.DebugSave();
+                break;
+            case "podcast-episode":
+                if (Nav.Frame.Content is Views.PodcastPage playPage) playPage.DebugPlay(int.Parse(arg));
+                break;
+            case "podcast-more":
+                if (Nav.Frame.Content is Views.PodcastPage morePage) await morePage.DebugMoreAsync();
+                break;
+            case "podcast-state":
+                AppPaths.Log($"debug podcast-state {(Nav.Frame.Content as Views.PodcastPage)?.DebugState}");
+                break;
+            case "feed-state":
+            {
+                // 登録と聴いたところの件数、今の曲がエピソードならその覚えている位置
+                var state = AppServices.FeedLibrary.State;
+                var current = Feed.AudioUrlOf(player.Current?.VideoId) is { } audio ? state.Positions.GetValueOrDefault(audio) : null;
+                AppPaths.Log($"debug feed-state subscriptions={state.Subscriptions.Count} positions={state.Positions.Count} external={Feed.IsExternal(player.Current?.VideoId)} playing={player.IsPlaying} position={player.Position:0} duration={player.Duration:0} saved={current?.PositionSeconds} finished={current?.Finished} lyrics={player.Lyrics?.GetType().Name} like={player.Like} video={player.Video is not null} queue={player.Queue.Count} source={player.SourceId is not null}");
+                break;
+            }
             case "pane":
                 window.DebugPane(arg);
                 break;
