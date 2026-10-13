@@ -85,6 +85,19 @@ class HandoffCodecTest {
     }
 
     @Test
+    fun acceptsRssEpisodesButOnlyOverHttps() {
+        // RSS のエピソード（ADR-0012）は `ext:` + https の音声の URL。受け取った側も同じ URL を流す
+        val episode = item(0).copy(videoId = "ext:https://example.com/ep.mp3?x=1&y=2")
+        assertIs<HandoffDecodeResult.Ok>(HandoffCodec.decode(HandoffCodec.encode(snapshot(items = listOf(episode, item(1)))), handoffId))
+        fun rejected(videoId: String) = assertIs<HandoffDecodeResult.Rejected>(HandoffCodec.validate(snapshot(items = listOf(item(0).copy(videoId = videoId))), handoffId))
+        rejected("ext:http://example.com/ep.mp3")
+        rejected("ext:https://example.com/a b.mp3")
+        rejected("ext:file:///etc/passwd")
+        // ラジオの種は YouTube の曲だけ
+        assertIs<HandoffDecodeResult.Rejected>(HandoffCodec.validate(snapshot().copy(source = HandoffSource.Radio("ext:https://example.com/ep.mp3")), handoffId))
+    }
+
+    @Test
     fun foreignThumbnailsAreDroppedAndPositionIsClamped() {
         val items =
             listOf(

@@ -215,7 +215,7 @@ public enum HandoffCodec {
         if currentIndex > maxPlayedItems || snapshot.items.count - 1 - currentIndex > maxUpcomingItems { return reject("item_window") }
         if snapshot.listenedMs < 0 || snapshot.positionMs < 0 { return reject("negative_time") }
         for item in snapshot.items {
-            if !isVideoId(item.videoId) { return reject("video_id") }
+            if !isItemVideoId(item.videoId) { return reject("video_id") }
             if item.title.utf16.isEmpty || item.title.utf16.count > maxText { return reject("title") }
             if item.artists.count > maxArtists || item.artists.contains(where: { !validRef($0) }) { return reject("artist") }
             if let album = item.album, !validRef(album) { return reject("album") }
@@ -285,6 +285,11 @@ public enum HandoffCodec {
 
     /// `\A[A-Za-z0-9_-]{11}\z`
     static func isVideoId(_ s: String) -> Bool { s.unicodeScalars.count == 11 && s.unicodeScalars.allSatisfy(isIdChar) }
+
+    /// キューの曲の ID。YouTube の曲か、RSS のエピソード（`ext:` + https の音声の URL。ADR-0012）。
+    public static func isItemVideoId(_ s: String) -> Bool {
+        isVideoId(s) || (Feed.audioUrlOf(s) != nil && !s.unicodeScalars.contains(where: isIsoControl))
+    }
 
     /// `\A[A-Za-z0-9_-]{2,64}\z`
     static func isBrowseId(_ s: String) -> Bool { (2...64).contains(s.unicodeScalars.count) && s.unicodeScalars.allSatisfy(isIdChar) }
