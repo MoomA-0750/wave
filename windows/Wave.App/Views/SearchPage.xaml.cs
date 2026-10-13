@@ -8,6 +8,7 @@ using Microsoft.UI.Xaml.Navigation;
 using Wave.App.Controls;
 using Wave.App.Services;
 using Wave.Core.Music;
+using Wave.Core.Net;
 
 namespace Wave.App.Views;
 
@@ -44,6 +45,8 @@ public sealed partial class SearchPage : Page
     // 歌詞から探した曲は、「歌詞」の絞り込みを初めて選んだときに読む（続きのページは無い。Android と同じ）
     private readonly ObservableCollection<TrackRow> lyricsRows = [];
     private bool lyricsLoaded;
+    /// <summary>読み込みに失敗した絞り込み（"all"・"live"・"podcasts"・"episodes"・"lyrics"）と、その種類。0 件の「見つからない」と分けて出す（Android と同じ）。</summary>
+    private readonly Dictionary<string, FailureKind> failures = [];
 
     public SearchPage()
     {
@@ -136,6 +139,7 @@ public sealed partial class SearchPage : Page
         lyricsRows.Clear();
         lyricsLoaded = false;
         LyricsList.Visibility = Visibility.Collapsed;
+        failures.Clear();
         var songsTask = AppServices.Music.SearchSongsAsync(q);
         var albumsTask = AppServices.Music.SearchAlbumsAsync(q);
         var artistsTask = AppServices.Music.SearchArtistsAsync(q);
@@ -151,6 +155,9 @@ public sealed partial class SearchPage : Page
         if (songs.Count == 0 && albums.Count == 0 && artists.Count == 0)
         {
             noResults = true;
+            var failed = new[] { songsTask.Result.Failure, albumsTask.Result.Failure, artistsTask.Result.Failure }.FirstOrDefault(f => f is not null);
+            if (failed is { } kind) failures["all"] = kind;
+            ShowEmptyText();
             Empty.Visibility = Visibility.Visible;
             // ライブ・ポッドキャスト・エピソード・歌詞のタブを開いていれば、それは別に探す
             if (SelectedTab is "live" or "podcasts" or "episodes" or "lyrics") ShowTab();
@@ -209,6 +216,9 @@ public sealed partial class SearchPage : Page
     /// <summary>開発用: そのタブの行の数（ライブ・歌詞）。</summary>
     public int DebugRows(string tag) => tag == "lyrics" ? lyricsRows.Count : liveRows.Count;
 
+    /// <summary>開発用: 出している「見つからない」・失敗の文言（出していなければ null）。</summary>
+    public string? DebugEmpty => Empty.Visibility == Visibility.Visible ? Empty.Text : null;
+
     /// <summary>開発用: 歌詞のタブの先頭の行（曲名と引用）。</summary>
     public string? DebugLyricsTop => lyricsRows.FirstOrDefault() is { } r ? $"{r.Song.Title} / {r.Song.ArtistsText} / {r.Quote}" : null;
 #endif
@@ -222,6 +232,7 @@ public sealed partial class SearchPage : Page
         if (query is null || LoadingRing.IsActive) return;
         var tab = SelectedTab;
         var live = tab == "live";
+        ShowEmptyText();
         AllView.Visibility = Ui.Show(tab == "all" && !noResults);
         SongList.Visibility = Ui.Show(tab == "songs");
         CardGrid.Visibility = Ui.Show(tab is "albums" or "artists" or "podcasts");
@@ -259,9 +270,27 @@ public sealed partial class SearchPage : Page
         }
     }
 
+    /// <summary>今の絞り込みの「見つからない」の文言。読み込みに失敗していれば、その理由を出す。</summary>
+    private void ShowEmptyText()
+    {
+        var tab = SelectedTab;
+        var key = tab is "live" or "podcasts" or "episodes" or "lyrics" ? tab : "all";
+        Empty.Text = failures.TryGetValue(key, out var kind) ? FailureText(kind) : L.T("見つかりませんでした", "No results found");
+    }
+
+    /// <summary>検索の失敗の文言（Android の search_failure_* と同じ）。</summary>
+    internal static string FailureText(FailureKind kind) =>
+        kind switch
+        {
+            FailureKind.NotLoggedIn => L.T("ログインしていません", "You're not logged in"),
+            FailureKind.Network => L.T("通信できませんでした", "Couldn't connect"),
+            FailureKind.Http => L.T("サーバーから応答がありませんでした", "The server didn't respond"),
+            _ => L.T("応答を読み取れませんでした", "Couldn't read the response"),
+        };
+
     /// <summary>
     /// 歌詞から探した曲（絞り込まない検索の上位の曲の歌詞と照らし合わせる）。歌詞に語が見つかった曲を先に、その行を引用して出す。
-    /// 失敗は 0 件と同じに「見つからない」を出す（ポッドキャスト・エピソードと同じ）。
+    /// 失敗は、0 件の「見つからない」と分けて理由を出す。
     /// </summary>
     private async Task LoadLyricsAsync()
     {
@@ -282,6 +311,7 @@ public sealed partial class SearchPage : Page
                 lyricsRows.Add(new TrackRow(number++, hit.Song) { Menu = r => SongMenu.Build(r.Song), Quote = QuoteOf(hit.Match) });
             TrackRow.MarkCurrent(lyricsRows, AppServices.Player.Current?.VideoId);
         }
+        else failures["lyrics"] = result.Failure!.Value;
         AppPaths.Log($"search lyrics ok={result.IsOk} items={lyricsRows.Count} matched={result.Value?.Count(h => h.Match is not null)}");
         // 読んでいる間にほかの絞り込みへ移っていれば、そちらを出し直す（読むのを待たせていた絞り込みもここで読む）
         ShowTab();
@@ -306,6 +336,8 @@ public sealed partial class SearchPage : Page
         loadingTab = false;
         LoadingRing.IsActive = false;
         podcasts = [.. rss ?? [], .. page.IsOk ? page.Value!.Items : []];
+        // 目録に無く、YouTube の番組が読めなかったときは失敗として出す（Android と同じ）
+        if (podcasts.Count == 0 && !page.IsOk) failures["podcasts"] = page.Failure!.Value;
         podcastContinuation = page.Value?.Continuation;
         AppPaths.Log($"search podcasts ok={page.IsOk} directory={rss?.Count} items={podcasts.Count}");
         if (SelectedTab == "podcasts") ShowTab();
@@ -325,6 +357,7 @@ public sealed partial class SearchPage : Page
         episodesLoaded = true;
         episodes.Clear();
         if (page.IsOk) foreach (var e in page.Value!.Items) episodes.Add(e);
+        else failures["episodes"] = page.Failure!.Value;
         episodeContinuation = page.Value?.Continuation;
         AppPaths.Log($"search episodes ok={page.IsOk} items={episodes.Count}");
         if (SelectedTab == "episodes") ShowTab();
@@ -444,8 +477,13 @@ public sealed partial class SearchPage : Page
             foreach (var s in page.Value.Songs) liveRows.Add(new TrackRow(number++, s) { Menu = r => SongMenu.Build(r.Song) });
             TrackRow.MarkCurrent(liveRows, AppServices.Player.Current?.VideoId);
         }
+        else failures["live"] = page.Failure!.Value;
         AppPaths.Log($"search live ok={page.IsOk} n={liveRows.Count} more={liveContinuation is not null}");
-        if (SelectedTab == "live") Empty.Visibility = Ui.Show(liveRows.Count == 0);
+        if (SelectedTab == "live")
+        {
+            ShowEmptyText();
+            Empty.Visibility = Ui.Show(liveRows.Count == 0);
+        }
     }
 
     private async Task LoadMoreLiveAsync()

@@ -275,7 +275,7 @@ public static class DebugCommands
                 {
                     page.DebugTab(words[0]);
                     for (var i = 0; i < 80 && page.DebugRows(words[0]) == 0; i++) await Task.Delay(250);
-                    AppPaths.Log($"debug search-tab rows={page.DebugRows(words[0])}" + (words[0] == "lyrics" ? $" top={page.DebugLyricsTop}" : ""));
+                    AppPaths.Log($"debug search-tab rows={page.DebugRows(words[0])}" + (words[0] == "lyrics" ? $" top={page.DebugLyricsTop}" : "") + $" empty={page.DebugEmpty}");
                 }
                 break;
             }
