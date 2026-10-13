@@ -436,6 +436,7 @@ public sealed partial class PlayerService : ObservableObject
         nextOrigin = QueueOrigin.UserAdded;
         Queue.Insert(Index + 1, song);
         nextOrigin = QueueOrigin.Source;
+        ResumeAfterEnd(Index + 1);
         Message = L.T($"「{song.Title}」を次に再生します", $"{song.Title} will play next");
     }
 
@@ -456,6 +457,7 @@ public sealed partial class PlayerService : ObservableObject
             nextOrigin = QueueOrigin.UserAdded;
             for (var i = 0; i < songs.Count; i++) Queue.Insert(Index + 1 + i, songs[i]);
             nextOrigin = QueueOrigin.Source;
+            ResumeAfterEnd(Index + 1);
         }
         else InsertUserItems(songs);
         Message = next ? L.T($"{songs.Count} 曲を次に再生します", $"{L.Songs(songs.Count)} will play next")
@@ -483,6 +485,8 @@ public sealed partial class PlayerService : ObservableObject
         nextOrigin = QueueOrigin.UserAdded;
         for (var i = 0; i < songs.Count; i++) Queue.Insert(at + i, songs[i]);
         nextOrigin = QueueOrigin.Source;
+        // 最後まで行って止まっているなら、足した曲から続ける（Android の addUserItems と同じ）
+        ResumeAfterEnd(at);
     }
 
     /// <summary>自分で足した曲（「次に再生」「キューに追加」）か。</summary>
