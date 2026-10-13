@@ -12,7 +12,7 @@ YouTube Music の「ポッドキャスト」は、YouTube のプレイリスト�
    - 探すのは Apple の公開の目録（`https://itunes.apple.com/search?media=podcast&entity=podcast&term=…`、キー不要）。結果の `feedUrl` を登録する。検索語のほかは何も送らない
    - RSS の URL を直接打ち込んでも登録できる（目録に無い番組・限定公開の番組）
    - 番組の目印（browseId）は `rss:` + フィードの URL。`PodcastSummary` / `PodcastPage` / `PodcastEpisode` をそのまま使い、画面は YouTube の番組と同じものを出す
-2. **登録は端末ごとに覚える**（Android は `no_backup/podcast-feeds.json`、Windows・Mac・iOS もそれぞれの端末の中）。ログアウトでは消さない（アカウントに結びつかない）。YouTube のアカウントには書かない（書く場所が無い）。端末をまたいだ同期は後で決める
+2. **登録は端末ごとに覚える**（Android は `no_backup/podcast-feeds.json`、Windows・Mac・iOS もそれぞれの端末の中）。ログアウトでは消さない（アカウントに結びつかない）。YouTube のアカウントには書かない（書く場所が無い）。端末をまたいだ同期は ADR-0013（Connect の中継）で行う
 3. **エピソードは、RSS の `enclosure` の音声を直接流す**
    - 曲の ID（`Song.videoId`）は `ext:` + 音声の URL にする。端末の間の受け渡し・連携でもそのまま通り、受け取った側も同じ URL を流せる
    - `ext:` の曲は YouTube に関わる処理をしない: ストリームの解決・再生履歴の送信・評価・歌詞・ラジオ（次の曲の自動追加）・共有のリンク
@@ -24,6 +24,6 @@ YouTube Music の「ポッドキャスト」は、YouTube のプレイリスト�
 ## 結果
 
 - RSS の番組は YouTube の再生履歴・おすすめに反映されない
-- 登録が端末ごとなので、スマホで登録した番組は PC には出ない（同期は未決）
+- 登録は端末ごとに持ち、Connect の家に入った端末の間で合わせる（ADR-0013）。家に入っていない端末には出ない
 - http（暗号化なし）だけで配る番組は聴けない
 - 検索語は Apple に送る（YouTube の検索とは別に）
