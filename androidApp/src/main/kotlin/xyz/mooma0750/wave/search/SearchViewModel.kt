@@ -16,7 +16,9 @@ import xyz.mooma0750.wave.core.music.AlbumSummary
 import xyz.mooma0750.wave.core.music.ArtistSummary
 import xyz.mooma0750.wave.core.music.MusicRepository
 import xyz.mooma0750.wave.core.music.PodcastEpisode
+import xyz.mooma0750.wave.core.music.PodcastFeedClient
 import xyz.mooma0750.wave.core.music.PodcastSummary
+import kotlinx.coroutines.coroutineScope
 import xyz.mooma0750.wave.core.music.SearchPage
 import xyz.mooma0750.wave.core.music.SearchSuggestions
 import xyz.mooma0750.wave.core.music.Song
@@ -88,6 +90,8 @@ object SearchOrder {
 class SearchViewModel(
     private val music: MusicRepository,
     private val history: SearchHistoryStore,
+    /** RSS のポッドキャストの目録（ADR-0012）。「ポッドキャスト」で YouTube の番組より先に出す。 */
+    private val feeds: PodcastFeedClient? = null,
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(SearchUiState())
     val state: StateFlow<SearchUiState> = mutableState.asStateFlow()
@@ -174,11 +178,21 @@ class SearchViewModel(
         val current = state.value
         val query = current.submitted ?: return
         when (tab) {
-            SearchTab.Podcasts -> firstPage(current.podcasts, { s, list -> s.copy(podcasts = list) }) { music.searchPodcasts(query).toList { it.asResultList() } }
+            SearchTab.Podcasts -> firstPage(current.podcasts, { s, list -> s.copy(podcasts = list) }) { podcastsFirstPage(query) }
             SearchTab.Episodes -> firstPage(current.episodes, { s, list -> s.copy(episodes = list) }) { music.searchEpisodes(query).toList { it.asResultList() } }
             else -> Unit
         }
     }
+
+    /** Apple の目録の番組（RSS）を先に、YouTube の番組を後に並べる。どちらかが読めれば、読めた分を出す。 */
+    private suspend fun podcastsFirstPage(query: String): ResultList<PodcastSummary> =
+        coroutineScope {
+            val directory = async { feeds?.search(query) }
+            val youtube = music.searchPodcasts(query).toList { it.asResultList() }
+            val rss = directory.await()
+            Log.i(WaveApplication.LOG_TAG, "search podcast directory=${rss?.size}")
+            if (rss.isNullOrEmpty()) youtube else youtube.copy(items = rss + youtube.items, failure = null)
+        }
 
     private fun <T> firstPage(
         list: ResultList<T>,

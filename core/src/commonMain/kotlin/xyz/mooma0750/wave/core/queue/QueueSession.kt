@@ -1,5 +1,7 @@
 package xyz.mooma0750.wave.core.queue
 
+import xyz.mooma0750.wave.core.music.Feed
+
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -191,8 +193,8 @@ class QueueSession(
         startGeneration()
         setShuffleOrder(null)
         // 文脈を先に決める（replace の中で Player が同期で曲の遷移を知らせ、取得の判断が走っても古い文脈を使わない）
-        // ライブ配信は終わらずに流れ続けるので、後ろにラジオのおすすめを足さない
-        if (song.isLive) setContext(source = null, continuation = null, radioPlaylistId = null, exhausted = true) else startRadio(song.videoId)
+        // ライブ配信は終わらずに流れ続けるので、後ろにラジオのおすすめを足さない。RSS のエピソードは YouTube のラジオが作れない（ADR-0012）
+        if (song.isLive || Feed.isExternal(song.videoId)) setContext(source = null, continuation = null, radioPlaylistId = null, exhausted = true) else startRadio(song.videoId)
         player.replace(listOf(item(song, ItemOrigin.Source)), startIndex = 0)
         maybeFetch()
     }
@@ -216,6 +218,8 @@ class QueueSession(
         // 終わりが近づいたときに fetchOnce が全体リピートを見て行う
         if (playlistId != null) {
             setContext(QueueSource.Playlist(playlistId), playlistContinuation, radioPlaylistId = null, exhausted = false)
+        } else if (Feed.isExternal(ordered.last().song.videoId)) {
+            setContext(source = null, continuation = null, radioPlaylistId = null, exhausted = true)
         } else {
             startRadio(ordered.last().song.videoId)
         }
@@ -483,7 +487,7 @@ class QueueSession(
     /** プレイリストの最後まで来たら、最後の曲から始まるラジオにつなぐ。キューが空で切り替えられなければ、尽きた扱いにする。 */
     private fun switchToRadio(): Boolean {
         val last = player.items.lastOrNull()
-        if (last == null) {
+        if (last == null || Feed.isExternal(last.song.videoId)) {
             exhausted = true
             return false
         }

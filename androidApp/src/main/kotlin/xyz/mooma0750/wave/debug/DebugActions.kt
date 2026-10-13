@@ -424,6 +424,24 @@ object DebugActions {
                     Log.i(WaveApplication.LOG_TAG, "debug podcast save=$saved result=${result::class.simpleName} library=${(library as? CallResult.Ok)?.value?.size}")
                 }
                 "open_podcast" -> intent.getStringExtra("browse_id")?.let { navigationChannel.trySend(Screen.Podcast(it, "")) }
+                // 確認用: RSS の番組を目録で探し、最初の番組のフィードを読む。play なら最新のエピソードを流す（件数と形だけを記録する）
+                "feed_probe" -> {
+                    val feeds = container.podcastFeeds
+                    val found = feeds.search(intent.getStringExtra("query") ?: "rebuild")
+                    Log.i(WaveApplication.LOG_TAG, "debug feed search=${found?.size} rss=${found?.count { xyz.mooma0750.wave.core.music.Feed.isFeedShow(it.browseId) }}")
+                    val url = found?.firstOrNull()?.browseId?.let(xyz.mooma0750.wave.core.music.Feed::feedUrlOf) ?: return@launch
+                    val started = android.os.SystemClock.elapsedRealtime()
+                    val read = feeds.show(url)
+                    Log.i(WaveApplication.LOG_TAG, "debug feed read ms=${android.os.SystemClock.elapsedRealtime() - started}")
+                    when (val show = read) {
+                        is xyz.mooma0750.wave.core.music.FeedResult.Ok -> {
+                            val page = show.show.toPage(saved = null)
+                            Log.i(WaveApplication.LOG_TAG, "debug feed episodes=${page.episodes.size} durations=${page.episodes.count { it.durationText != null }} dates=${page.episodes.count { it.publishedText != null }} image=${page.thumbnailUrl != null}")
+                            if (intent.getBooleanExtra("play", false)) player.playFrom(page.episodes.map { it.song }, 0, null, null)
+                        }
+                        is xyz.mooma0750.wave.core.music.FeedResult.Failed -> Log.i(WaveApplication.LOG_TAG, "debug feed failed ${show.failure}")
+                    }
+                }
                 "play_album" ->
                     intent.getStringExtra("browse_id")?.let { id ->
                         when (val page = container.music.album(id)) {

@@ -17,7 +17,11 @@ import xyz.mooma0750.wave.core.music.ArtistSummary
 import xyz.mooma0750.wave.core.music.HomeItem
 import xyz.mooma0750.wave.core.music.MusicRepository
 import xyz.mooma0750.wave.core.music.PlaylistSummary
+import xyz.mooma0750.wave.core.music.FeedLibraryState
 import xyz.mooma0750.wave.core.music.PodcastSummary
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import xyz.mooma0750.wave.core.session.CallResult
 import xyz.mooma0750.wave.core.session.FailureKind
 
@@ -141,9 +145,20 @@ class LibraryTabViewModel(
     private val cache: LibraryCache? = null,
     /** 保存したポッドキャストも読む（時計は読まない）。 */
     private val withPodcasts: Boolean = true,
+    /** RSS で登録した番組（ADR-0012）。YouTube のポッドキャストの後ろに並べる。 */
+    private val feeds: StateFlow<FeedLibraryState>? = null,
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(LibraryTabUiState())
-    val state: StateFlow<LibraryTabUiState> = mutableState.asStateFlow()
+    val state: StateFlow<LibraryTabUiState> =
+        if (feeds == null) {
+            mutableState.asStateFlow()
+        } else {
+            combine(mutableState, feeds) { tab, library -> tab.withFeeds(library) }
+                .stateIn(viewModelScope, SharingStarted.Eagerly, mutableState.value.withFeeds(feeds.value))
+        }
+
+    private fun LibraryTabUiState.withFeeds(library: FeedLibraryState): LibraryTabUiState =
+        if (library.subscriptions.isEmpty()) this else copy(entries = (entries + library.subscriptions.map { LibraryEntry.Podcast(it.summary) }).distinctBy { it.key })
 
     init {
         refresh()

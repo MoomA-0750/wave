@@ -19,4 +19,18 @@ object MediaHttp {
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .build()
+
+    /**
+     * RSS のポッドキャストのフィードと音声の取得用（ADR-0012）。認証情報を持たないのは [create] と同じ。
+     * 計測用の転送（podtrac など）を通るので、リダイレクトは追う。https から http へは追わない（followSslRedirects = false）
+     */
+    fun createForFeeds(): OkHttpClient =
+        OkHttpClient
+            .Builder()
+            .followRedirects(true)
+            .followSslRedirects(false)
+            .cache(null)
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .build()
 }

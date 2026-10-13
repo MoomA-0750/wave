@@ -1,5 +1,6 @@
 package xyz.mooma0750.wave.playback
 
+import xyz.mooma0750.wave.core.music.Feed
 import androidx.core.net.toUri
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
@@ -215,7 +216,7 @@ class Media3QueuePlayer(
             return MediaItem
                 .Builder()
                 .setMediaId(item.itemId)
-                .setUri(TrackUri.of(song.videoId, epoch, live = song.isLive))
+                .setUri(Feed.audioUrlOf(song.videoId)?.let(TrackUri::episode) ?: TrackUri.of(song.videoId, epoch, live = song.isLive))
                 // ライブ配信は HLS（媒体プレイリストを読み直しながら流す）
                 .apply { if (song.isLive) setMimeType(androidx.media3.common.MimeTypes.APPLICATION_M3U8) }
                 .setMediaMetadata(

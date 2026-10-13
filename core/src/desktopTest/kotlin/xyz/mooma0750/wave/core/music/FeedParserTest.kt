@@ -15,14 +15,14 @@ class FeedParserTest {
         assertEquals("wave", show.author)
         assertEquals("説明の一行目\n二行目", show.description)
         assertEquals("https://example.com/show.jpg", show.thumbnailUrl)
-        assertEquals(listOf("第2回", "第1回"), show.episodes.map { it.title })
-        val newest = show.episodes[0]
+        assertEquals(listOf("第2回", "第1回"), show.allEpisodes.map { it.title })
+        val newest = show.allEpisodes[0]
         assertEquals("https://example.com/ep2.mp3?x=1&y=2", newest.audioUrl)
         assertEquals(2525, newest.durationSeconds)
         assertEquals("https://example.com/ep2.jpg", newest.thumbnailUrl)
         // 説明はエスケープされた HTML で来る（タグを落とし、文の中の実体は戻す）
         assertEquals("エピソードの説明 1 < 2", newest.description)
-        assertEquals(3723, show.episodes[1].durationSeconds)
+        assertEquals(3723, show.allEpisodes[1].durationSeconds)
     }
 
     @Test
@@ -93,5 +93,20 @@ class FeedParserTest {
         assertEquals(state, decoded)
         assertEquals(listOf("B"), state.unsubscribe(a.feedUrl).subscriptions.map { it.title })
         assertEquals("A2", state.refresh(a.copy(title = "A2")).subscriptions.first().title)
+    }
+
+    @Test
+    fun pagesThroughLongFeedsAndReversesOldestFirst() {
+        val items = (1..70).joinToString("") { n -> "<item><title>回$n</title><pubDate>${n.coerceAtMost(28)} Oct 2026 00:00:00 GMT</pubDate><enclosure url=\"https://x.example/$n.mp3\"/></item>" }
+        val show = requireNotNull(FeedParser.parse("https://x.example/f", "<rss><channel><title>連続</title>$items</channel></rss>"))
+        val first = show.toPage(saved = false)
+        assertEquals(30, first.episodes.size)
+        // 古い順のフィードは新しい順に並べ直す
+        assertEquals("回70", first.episodes.first().song.title)
+        val second = show.more(requireNotNull(first.continuation))
+        assertEquals("回40", second.items.first().song.title)
+        val third = show.more(requireNotNull(second.continuation))
+        assertEquals(10, third.items.size)
+        assertNull(third.continuation)
     }
 }

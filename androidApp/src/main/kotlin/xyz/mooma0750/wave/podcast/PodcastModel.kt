@@ -10,6 +10,12 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import xyz.mooma0750.wave.WaveApplication
 import xyz.mooma0750.wave.core.music.ArtistRef
+import xyz.mooma0750.wave.core.music.Feed
+import xyz.mooma0750.wave.core.music.FeedFailure
+import xyz.mooma0750.wave.core.music.FeedLibrary
+import xyz.mooma0750.wave.core.music.FeedResult
+import xyz.mooma0750.wave.core.music.FeedShow
+import xyz.mooma0750.wave.core.music.PodcastFeedClient
 import xyz.mooma0750.wave.core.music.MusicRepository
 import xyz.mooma0750.wave.core.music.PodcastEpisode
 import xyz.mooma0750.wave.core.music.PodcastPage
@@ -34,12 +40,63 @@ class PodcastViewModel(
     private val browseId: String,
     /** 読めなかったときに出す題（「新しいエピソード」）。 */
     private val title: String = "",
+    /** RSS の番組（`rss:…`）を読む（ADR-0012）。 */
+    private val feeds: PodcastFeedClient? = null,
+    private val feedLibrary: FeedLibrary? = null,
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(PodcastUiState())
     val state: StateFlow<PodcastUiState> = mutableState.asStateFlow()
 
+    private val feedUrl = Feed.feedUrlOf(browseId)
+
+    /** 読んだ RSS の番組（聴いたところが変わったら一覧を作り直す）。 */
+    private var feedShow: FeedShow? = null
+
+    /** RSS の番組で、読んだ項目の数（続きを読むたびに増える）。 */
+    private var feedLoaded = FeedShow.PAGE_SIZE
+
     init {
-        viewModelScope.launch { load() }
+        viewModelScope.launch { if (feedUrl != null) loadFeed(feedUrl) else load() }
+        // 聴いたところ・登録が変わったら、RSS の番組の表示を合わせる
+        if (feedUrl != null && feedLibrary != null) {
+            viewModelScope.launch {
+                feedLibrary.state.collect { library ->
+                    val show = feedShow ?: return@collect
+                    // 読んだところまで（続きで読んだ分も）を、聴いたところを入れて作り直す
+                    mutableState.update { state ->
+                        val page = show.toPage(saved = library.isSubscribed(show.feedUrl), count = feedLoaded) { library.positions[it] }
+                        state.copy(page = page, episodes = page.episodes)
+                    }
+                }
+            }
+        }
+    }
+
+    private suspend fun loadFeed(url: String) {
+        val client = feeds ?: return
+        when (val result = client.show(url)) {
+            is FeedResult.Ok -> {
+                val show = result.show
+                feedShow = show
+                feedLibrary?.refresh(show)
+                val library = feedLibrary?.state?.value
+                val page = show.toPage(saved = library?.isSubscribed(url) ?: false) { library?.positions?.get(it) }
+                Log.i(WaveApplication.LOG_TAG, "podcast feed episodes=${page.episodes.size} saved=${page.saved}")
+                mutableState.value = PodcastUiState(page = page, episodes = page.episodes, continuation = page.continuation)
+            }
+            is FeedResult.Failed -> {
+                Log.i(WaveApplication.LOG_TAG, "podcast feed failed ${result.failure}")
+                mutableState.value =
+                    PodcastUiState(
+                        failure =
+                            when (result.failure) {
+                                FeedFailure.Network -> FailureKind.Network
+                                is FeedFailure.Http -> FailureKind.Http
+                                else -> FailureKind.Parse
+                            },
+                    )
+            }
+        }
     }
 
     private suspend fun load() {
@@ -68,6 +125,17 @@ class PodcastViewModel(
         val token = current.continuation ?: return
         if (current.loadingMore) return
         mutableState.update { it.copy(loadingMore = true) }
+        // RSS の番組は、読んだフィードの続きの項目を読む
+        feedShow?.let { show ->
+            viewModelScope.launch {
+                val positions = feedLibrary?.state?.value?.positions.orEmpty()
+                // 読んだ項目は FeedShow が覚えている（覚え場所はスレッドをまたがないので、画面のスレッドで読む。30件で数十 ms）
+                val more = show.more(token) { positions[it] }
+                feedLoaded = token.removePrefix(FeedShow.CONTINUATION_PREFIX).toIntOrNull()?.plus(FeedShow.PAGE_SIZE) ?: feedLoaded
+                mutableState.update { it.copy(episodes = it.episodes + more.items, continuation = more.continuation, loadingMore = false) }
+            }
+            return
+        }
         viewModelScope.launch {
             val result = music.podcastEpisodes(token, ArtistRef(page.title, null), browseId)
             mutableState.update { state ->
@@ -90,6 +158,13 @@ class PodcastViewModel(
         val page = current.page ?: return
         if (current.saving || page.saved == null) return
         val target = page.saved != true
+        // RSS の番組は、この端末の登録を切り替える
+        val show = feedShow
+        if (feedUrl != null) {
+            if (show == null || feedLibrary == null) return
+            viewModelScope.launch { if (target) feedLibrary.subscribe(show.subscription) else feedLibrary.unsubscribe(show.feedUrl) }
+            return
+        }
         mutableState.update { it.copy(saving = true) }
         viewModelScope.launch {
             val result = music.setPodcastSaved(page.playlistId, target, music.currentLoginGeneration())

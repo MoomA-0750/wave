@@ -1,5 +1,6 @@
 package xyz.mooma0750.wave.search
 
+import xyz.mooma0750.wave.core.music.Feed
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
@@ -95,9 +96,13 @@ fun SongMenuItems(
     /** 曲の画面では再生ボタンが曲のラジオを始めるので出さない。 */
     showRadio: Boolean = true,
 ) {
-    MenuRow(R.drawable.ic_add_circle, stringResource(R.string.search_add_to_playlist)) {
-        close()
-        actions.addToPlaylist(song)
+    // RSS のエピソードは YouTube の曲ではない（プレイリスト・ラジオ・共有のリンクが無い。ADR-0012）
+    val external = Feed.isExternal(song.videoId)
+    if (!external) {
+        MenuRow(R.drawable.ic_add_circle, stringResource(R.string.search_add_to_playlist)) {
+            close()
+            actions.addToPlaylist(song)
+        }
     }
     if (!inQueue) {
         MenuRow(R.drawable.ic_playlist_play, stringResource(R.string.search_play_next)) {
@@ -109,7 +114,7 @@ fun SongMenuItems(
             actions.addToQueue(song)
         }
     }
-    if (showRadio) {
+    if (showRadio && !external) {
         MenuRow(R.drawable.ic_graphic_eq, stringResource(R.string.search_start_radio)) {
             close()
             actions.startRadio(song)
@@ -135,9 +140,11 @@ fun SongMenuItems(
         }
     }
     val context = androidx.compose.ui.platform.LocalContext.current
-    MenuRow(R.drawable.ic_share, stringResource(R.string.search_share)) {
-        close()
-        shareSong(context, song)
+    if (!external) {
+        MenuRow(R.drawable.ic_share, stringResource(R.string.search_share)) {
+            close()
+            shareSong(context, song)
+        }
     }
 }
 

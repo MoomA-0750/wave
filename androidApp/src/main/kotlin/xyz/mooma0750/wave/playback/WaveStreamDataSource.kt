@@ -16,6 +16,7 @@ import java.io.IOException
 import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient
 import xyz.mooma0750.wave.WaveApplication
+import xyz.mooma0750.wave.core.music.Feed
 import xyz.mooma0750.wave.core.music.LiveClient
 import xyz.mooma0750.wave.core.music.LiveFailure
 import xyz.mooma0750.wave.core.music.LiveResult
@@ -38,6 +39,20 @@ object TrackUri {
     private const val LIVE_HOST = "live"
 
     private const val EPOCH = "epoch"
+
+    /** RSS のエピソード（ADR-0012）。音声の URL を `u` に持つ。 */
+    private const val EPISODE_HOST = "episode"
+    private const val EPISODE_URL = "u"
+
+    fun episode(audioUrl: String): Uri =
+        Uri
+            .Builder()
+            .scheme(SCHEME)
+            .authority(EPISODE_HOST)
+            .appendQueryParameter(EPISODE_URL, audioUrl)
+            .build()
+
+    fun episodeUrlOf(uri: Uri): String? = uri.takeIf { it.scheme == SCHEME && it.host == EPISODE_HOST }?.getQueryParameter(EPISODE_URL)
 
     /** @param epoch 曲をキューに入れたときのログインの世代（ADR-0007）。解決はこの世代でだけ行う */
     fun of(
@@ -198,6 +213,8 @@ class WaveStreamDataSource(
     /** ライブ配信の HLS の解決。無ければ wave://live は開けない。 */
     private val live: LiveClient? = null,
     private val liveCache: LiveStreamCache? = null,
+    /** RSS のエピソードの取得。無ければ wave://episode は開けない。 */
+    private val episodeFactory: OkHttpDataSource.Factory? = null,
 ) : DataSource {
     private var upstream: DataSource? = null
     private var openedSpec: DataSpec? = null
@@ -209,6 +226,7 @@ class WaveStreamDataSource(
 
     override fun open(dataSpec: DataSpec): Long {
         TrackUri.liveVideoIdOf(dataSpec.uri)?.let { return openLive(it, dataSpec) }
+        TrackUri.episodeUrlOf(dataSpec.uri)?.let { return openEpisode(it, dataSpec) }
         // ライブの媒体プレイリストに並ぶ区切り（googlevideo の /videoplayback/…）は、そのまま取る
         if (dataSpec.uri.scheme == "https" && isAllowedLiveSegmentUrl(dataSpec.uri.toString())) {
             openedSpec = dataSpec
@@ -249,6 +267,26 @@ class WaveStreamDataSource(
                 if (cached != null) runBlocking { resolver.onStreamRejected() }
                 throw StreamRejectedException(again.status)
             }
+        }
+    }
+
+    /** wave://episode?u=… を開く。RSS の音声をそのまま取る（https だけ。リダイレクトは episodeFactory のクライアントが追う）。 */
+    private fun openEpisode(
+        url: String,
+        dataSpec: DataSpec,
+    ): Long {
+        val factory = episodeFactory ?: throw DataSourceException("episode playback is not configured", null, PlaybackException.ERROR_CODE_IO_UNSPECIFIED)
+        if (!Feed.isAllowedFeedUrl(url)) throw DataSourceException("episode url rejected", null, PlaybackException.ERROR_CODE_IO_UNSPECIFIED)
+        openedSpec = dataSpec
+        val source = factory.createDataSource()
+        transferListeners.forEach { source.addTransferListener(it) }
+        upstream = source
+        return try {
+            source.open(dataSpec.buildUpon().setUri(Uri.parse(url)).build())
+        } catch (error: HttpDataSource.InvalidResponseCodeException) {
+            closeQuietly(source)
+            if (error.responseCode == 404 || error.responseCode == 410 || error.responseCode == 403) throw StreamRejectedException(error.responseCode)
+            throw DataSourceException("episode http status=${error.responseCode}", null, error.reason)
         }
     }
 
@@ -431,6 +469,11 @@ class WaveStreamDataSource(
                 liveCache = cache
             }
 
-        override fun createDataSource(): DataSource = WaveStreamDataSource(resolver, cache, upstreamFactory, kind, live, liveCache)
+        private var episodeFactory: OkHttpDataSource.Factory? = null
+
+        /** RSS のエピソード（wave://episode）も開けるようにする。 */
+        fun withEpisodes(client: OkHttpClient): Factory = apply { episodeFactory = OkHttpDataSource.Factory(client) }
+
+        override fun createDataSource(): DataSource = WaveStreamDataSource(resolver, cache, upstreamFactory, kind, live, liveCache, episodeFactory)
     }
 }

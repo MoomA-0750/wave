@@ -94,20 +94,39 @@ data class EpisodePosition(
     }
 }
 
-/** 読んだ RSS の番組。エピソードは新しい順。 */
-data class FeedShow(
+/**
+ * 読んだ RSS の番組。エピソードは新しい順。
+ * エピソードは要るところだけ読む（数百回分の番組を、開くたびに全部ほどかない。debug の端末では1回分に数 ms かかる）。
+ */
+class FeedShow(
     val feedUrl: String,
     val title: String,
     val author: String?,
     val description: String?,
     val thumbnailUrl: String?,
-    val episodes: List<FeedEpisode>,
+    /** エピソードの元（新しい順）。 */
+    private val items: List<XmlRange>,
 ) {
+    private val parsed = HashMap<Int, FeedEpisode?>()
+
+    /** エピソードの項目の数（音声の無いものも数える）。 */
+    val itemCount: Int get() = items.size
+
     val subscription: FeedSubscription get() = FeedSubscription(feedUrl, title, author, thumbnailUrl)
 
-    /** 番組のページの形にする（[saved] は登録しているか）。 */
+    /** [from] 番目から [count] 件の項目のうち、エピソードとして読めたもの。 */
+    fun episodes(
+        from: Int,
+        count: Int,
+    ): List<FeedEpisode> = (from until minOf(items.size, from + count)).mapNotNull { index -> parsed.getOrPut(index) { FeedParser.episode(items[index]) } }
+
+    /** 全部のエピソード（確かめ用）。 */
+    val allEpisodes: List<FeedEpisode> get() = episodes(0, items.size)
+
+    /** 番組のページの形にする。エピソードは [count] 件の項目まで（[saved] は登録しているか）。 */
     fun toPage(
         saved: Boolean?,
+        count: Int = PAGE_SIZE,
         positions: (String) -> EpisodePosition? = { null },
     ): PodcastPage =
         PodcastPage(
@@ -116,10 +135,26 @@ data class FeedShow(
             author = author,
             description = description,
             thumbnailUrl = thumbnailUrl,
-            episodes = episodes.map { it.toEpisode(this, positions(it.audioUrl)) },
-            continuation = null,
+            episodes = episodes(0, count).map { it.toEpisode(this, positions(it.audioUrl)) },
+            continuation = continuationAfter(count),
             saved = saved,
         )
+
+    /** 続き（[token] は [toPage]・前の続きが返したもの）。 */
+    fun more(
+        token: String,
+        positions: (String) -> EpisodePosition? = { null },
+    ): SearchPage<PodcastEpisode> {
+        val from = token.removePrefix(CONTINUATION_PREFIX).toIntOrNull()?.takeIf { it in 0..items.size } ?: return SearchPage(emptyList(), null)
+        return SearchPage(episodes(from, PAGE_SIZE).map { it.toEpisode(this, positions(it.audioUrl)) }, continuationAfter(from + PAGE_SIZE))
+    }
+
+    private fun continuationAfter(count: Int): String? = if (count < items.size) CONTINUATION_PREFIX + count else null
+
+    companion object {
+        const val PAGE_SIZE = 30
+        const val CONTINUATION_PREFIX = "feed:"
+    }
 }
 
 data class FeedEpisode(
@@ -159,47 +194,87 @@ object FeedParser {
         feedUrl: String,
         xml: String,
     ): FeedShow? {
-        val root = FeedXml.parse(xml) ?: return null
-        val channel = (if (root.name == "rss") root.child("channel") else root.takeIf { it.name == "channel" }) ?: return null
-        val title = channel.childText("title") ?: return null
-        val image = channel.child("itunes:image")?.attributes?.get("href")?.takeIf(Feed::isAllowedFeedUrl)
-            ?: channel.child("image")?.childText("url")?.takeIf(Feed::isAllowedFeedUrl)
-        val episodes =
-            channel.childrenNamed("item").mapNotNull { item ->
-                val audio = item.child("enclosure")?.attributes?.get("url")?.trim()?.let(::upgradeToHttps)?.takeIf(Feed::isAllowedFeedUrl) ?: return@mapNotNull null
-                FeedEpisode(
-                    title = item.childText("title") ?: item.childText("itunes:title") ?: return@mapNotNull null,
-                    audioUrl = audio,
-                    publishedEpochSeconds = item.childText("pubDate")?.let(::parseRfc822),
-                    durationSeconds = item.childText("itunes:duration")?.let(::parseDuration),
-                    description = (item.childText("itunes:summary") ?: item.childText("description") ?: item.childText("content:encoded"))?.let(::plainText)?.takeIf { it.isNotEmpty() },
-                    thumbnailUrl = item.child("itunes:image")?.attributes?.get("href")?.takeIf(Feed::isAllowedFeedUrl),
-                )
-            }.sortedByDescending { it.publishedEpochSeconds ?: Long.MIN_VALUE }
+        val channel = FeedXml.root(xml, "channel") ?: return null
+        val items = channel.children("item")
+        // 番組の欄は最初のエピソードより前だけを見る（エピソードの itunes:author などを拾わない）
+        val head = XmlRange(xml, channel.start, items.firstOrNull()?.let { it.start - 1 } ?: channel.end).detached()
+        val title = head.childText("title", skip = "image") ?: return null
+        val image = head.child("itunes:image")?.attributes?.get("href")?.takeIf(Feed::isAllowedFeedUrl)
+            ?: head.child("image")?.childText("url")?.takeIf(Feed::isAllowedFeedUrl)
+        // ほとんどのフィードは新しい順。古い順（連続ものの番組）なら逆にする（端の2つの日付だけを見る）
+        fun dateOf(range: XmlRange) = range.detached().childText("pubDate")?.let(::parseRfc822)
+        val firstDate = items.asSequence().take(5).firstNotNullOfOrNull(::dateOf)
+        val lastDate = items.asReversed().asSequence().take(5).firstNotNullOfOrNull(::dateOf)
+        val ordered = if (firstDate != null && lastDate != null && firstDate < lastDate) items.asReversed() else items
         return FeedShow(
             feedUrl = feedUrl,
             title = title,
-            author = channel.childText("itunes:author") ?: channel.childText("author") ?: channel.childText("managingEditor"),
-            description = (channel.childText("itunes:summary") ?: channel.childText("description"))?.let(::plainText)?.takeIf { it.isNotEmpty() },
+            author = head.childText("itunes:author") ?: head.childText("author") ?: head.childText("managingEditor"),
+            description = (head.childText("itunes:summary") ?: head.childText("description"))?.let(::plainText)?.takeIf { it.isNotEmpty() },
             thumbnailUrl = image,
-            episodes = episodes,
+            items = ordered,
+        )
+    }
+
+    /** エピソード1回分。音声・題が無ければ null。 */
+    internal fun episode(range: XmlRange): FeedEpisode? {
+        val item = range.detached()
+        val audio = item.child("enclosure")?.attributes?.get("url")?.trim()?.let(::upgradeToHttps)?.takeIf(Feed::isAllowedFeedUrl) ?: return null
+        return FeedEpisode(
+            title = item.childText("title") ?: item.childText("itunes:title") ?: return null,
+            audioUrl = audio,
+            publishedEpochSeconds = item.childText("pubDate")?.let(::parseRfc822),
+            durationSeconds = item.childText("itunes:duration")?.let(::parseDuration),
+            description = (item.childText("itunes:summary") ?: item.childText("description") ?: item.childText("content:encoded"))?.let(::plainText)?.takeIf { it.isNotEmpty() },
+            thumbnailUrl = item.child("itunes:image")?.attributes?.get("href")?.takeIf(Feed::isAllowedFeedUrl),
         )
     }
 
     /** 音声は https でだけ取る。http の URL は同じ場所の https を試す（多くの配信元は両方で返す）。 */
     private fun upgradeToHttps(url: String): String = if (url.startsWith("http://", ignoreCase = true)) "https://" + url.substring(7) else url
 
-    /** HTML の説明を、段落を残した素の文にする。 */
-    fun plainText(html: String): String =
-        FeedXml
-            .decodeEntities(
-                html
-                    .replace(Regex("(?i)<br\\s*/?>|</p>|</li>|</h[1-6]>"), "\n")
-                    .replace(Regex("<[^>]*>"), ""),
-            ).lines()
-            .joinToString("\n") { it.trim() }
-            .replace(Regex("\n{3,}"), "\n\n")
-            .trim()
+    /** 一覧で使う説明の長さ（数百回分の番組で、長い HTML を全部ほどかない）。 */
+    private const val DESCRIPTION_SOURCE_LIMIT = 600
+
+    /** 改行にするタグ（閉じの p・li・見出しと br）。 */
+    private val BREAK_TAGS = setOf("br", "br/", "/p", "/li", "/h1", "/h2", "/h3", "/h4", "/h5", "/h6", "/div")
+
+    /**
+     * HTML の説明を、段落を残した素の文にする。
+     * 正規表現を使わずに & と < の間を飛ぶ（debug の端末では、数百回分の説明の正規表現に十数秒かかった）。
+     */
+    fun plainText(html: String): String {
+        val source = html.take(DESCRIPTION_SOURCE_LIMIT)
+        val stripped = StringBuilder(source.length)
+        var from = 0
+        while (true) {
+            val open = source.indexOf('<', from)
+            if (open < 0) {
+                stripped.append(source, from, source.length)
+                break
+            }
+            stripped.append(source, from, open)
+            val close = source.indexOf('>', open)
+            if (close < 0) break
+            val name = source.substring(open + 1, close).trim().substringBefore(' ').lowercase()
+            if (name in BREAK_TAGS) stripped.append('\n')
+            from = close + 1
+        }
+        // 行ごとに前後の空白を落とし、空行は2つまで
+        val out = StringBuilder(stripped.length)
+        var blank = 0
+        for (line in FeedXml.decodeEntities(stripped.toString()).split('\n')) {
+            val trimmed = line.trim()
+            if (trimmed.isEmpty()) {
+                blank++
+                continue
+            }
+            if (out.isNotEmpty()) out.append(if (blank > 0) "\n\n" else "\n")
+            out.append(trimmed)
+            blank = 0
+        }
+        return out.toString()
+    }
 
     /** `HH:MM:SS`・`MM:SS`・秒。 */
     fun parseDuration(text: String): Int? {
@@ -223,11 +298,12 @@ object FeedParser {
         return "$y/${m.pad2()}/${d.pad2()}"
     }
 
+    private val WHITESPACE = Regex("\\s+")
     private val MONTHS = listOf("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec")
 
     /** RFC 822 の日時（`Mon, 13 Oct 2026 10:00:00 +0900`）。曜日・秒・時差は省けてもよい。 */
     fun parseRfc822(text: String): Long? {
-        val tokens = text.replace(',', ' ').trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
+        val tokens = text.replace(',', ' ').trim().split(WHITESPACE).filter { it.isNotEmpty() }
         val start = if (tokens.firstOrNull()?.firstOrNull()?.isLetter() == true) 1 else 0
         val day = tokens.getOrNull(start)?.toIntOrNull() ?: return null
         val month = tokens.getOrNull(start + 1)?.lowercase()?.take(3)?.let { MONTHS.indexOf(it) + 1 }?.takeIf { it > 0 } ?: return null

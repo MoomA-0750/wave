@@ -272,8 +272,10 @@ fun NowPlayingScreen(
     // 動画のある曲だけ「動画」を押せるようにする（押してから無いと分かるのを避ける）
     // ライブ配信には MV も歌詞も無い（長さもシークも無い）
     val live = state.isLive
+    // RSS のエピソード（ADR-0012）にも MV・歌詞は無い
+    val external = song?.videoId?.let(xyz.mooma0750.wave.core.music.Feed::isExternal) == true
     val hasVideo by androidx.compose.runtime.produceState<Boolean?>(null, song?.videoId, live) {
-        value = if (live) false else song?.videoId?.let { videos.videoFor(it) is MusicVideos.Result.Found }
+        value = if (live || external) false else song?.videoId?.let { videos.videoFor(it) is MusicVideos.Result.Found }
     }
     LaunchedEffect(hasVideo) { if (hasVideo == false) video = false }
     val art by rememberArtworkColor(song?.thumbnailUrl)
@@ -290,7 +292,7 @@ fun NowPlayingScreen(
         // 曲名から操作の列までが最初の画面に収まるよう、ジャケットは高さに合わせて小さくする（開いた折りたたみ・横向き）
         val artSize = minOf(leftWidth - 48.dp, maxHeight - CONTROLS_HEIGHT).coerceAtLeast(160.dp)
         val hasLyrics by androidx.compose.runtime.produceState<Boolean?>(null, song?.videoId, live) {
-            value = if (live) false else song?.let { lyrics.lyrics(it) is xyz.mooma0750.wave.core.lyrics.LyricsRepository.Result.Found }
+            value = if (live || external) false else song?.let { lyrics.lyrics(it) is xyz.mooma0750.wave.core.lyrics.LyricsRepository.Result.Found }
         }
         if (sideBySide && song != null && hasLyrics == true) {
             Card(

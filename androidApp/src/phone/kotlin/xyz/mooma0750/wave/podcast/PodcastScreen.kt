@@ -31,6 +31,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import xyz.mooma0750.wave.R
+import xyz.mooma0750.wave.core.music.Feed
 import xyz.mooma0750.wave.core.music.PodcastEpisode
 import xyz.mooma0750.wave.core.music.Song
 import xyz.mooma0750.wave.navigation.SongActions
@@ -50,8 +51,8 @@ fun PodcastScreen(
     viewModel: PodcastViewModel,
     title: String,
     actions: SongActions,
-    /** 読んだエピソードの index から流す。playlistId は番組のプレイリスト（`PL…`）。 */
-    onPlay: (songs: List<Song>, index: Int, playlistId: String, shuffle: Boolean) -> Unit,
+    /** 読んだエピソードの index から流す。playlistId は番組のプレイリスト（`PL…`）。RSS の番組では null（ADR-0012）。 */
+    onPlay: (songs: List<Song>, index: Int, playlistId: String?, shuffle: Boolean) -> Unit,
     onBack: () -> Unit,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -79,7 +80,7 @@ fun PodcastScreen(
                 }
             }
         },
-        play = PlayControls(shuffle, { shuffle = it }, enabled = songs.isNotEmpty()) { page?.let { onPlay(songs, 0, it.playlistId, shuffle) } },
+        play = PlayControls(shuffle, { shuffle = it }, enabled = songs.isNotEmpty()) { page?.let { onPlay(songs, 0, it.playlistId.takeUnless { _ -> Feed.isFeedShow(it.browseId) }, shuffle) } },
     ) {
         when {
             state.failure != null -> item { Text(failureMessage(state.failure), Modifier.padding(16.dp)) }
@@ -87,7 +88,7 @@ fun PodcastScreen(
             state.episodes.isEmpty() -> item { Text(stringResource(R.string.podcast_no_episodes), Modifier.padding(16.dp)) }
             else -> {
                 itemsIndexed(state.episodes, key = { index, episode -> "$index-${episode.song.videoId}" }) { index, episode ->
-                    EpisodeRow(episode, onClick = { onPlay(songs, index, page.playlistId, false) }) { SongMenuButton(episode.song, actions) }
+                    EpisodeRow(episode, onClick = { onPlay(songs, index, page.playlistId.takeUnless { Feed.isFeedShow(page.browseId) }, false) }) { SongMenuButton(episode.song, actions) }
                     // 最後まで来たら続きを読む
                     if (index == state.episodes.lastIndex && state.continuation != null) LaunchedEffect(state.episodes.size) { viewModel.loadMore() }
                 }

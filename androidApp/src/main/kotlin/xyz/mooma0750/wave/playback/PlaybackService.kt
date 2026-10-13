@@ -1,5 +1,6 @@
 package xyz.mooma0750.wave.playback
 
+import xyz.mooma0750.wave.core.music.Feed
 import android.content.Intent
 import android.os.Bundle
 import android.os.Process
@@ -176,6 +177,7 @@ class PlaybackService : MediaSessionService() {
             WaveStreamDataSource
                 .Factory(container.stream.resolver, container.streamCache, container.mediaHttpClient)
                 .withLive(container.live, container.liveCache)
+                .withEpisodes(container.feedHttpClient)
         val player =
             ExoPlayer
                 .Builder(this)
@@ -227,6 +229,7 @@ class PlaybackService : MediaSessionService() {
                 elapsedMs = android.os.SystemClock::elapsedRealtime,
                 random = java.security.SecureRandom().asKotlinRandom(),
             )
+        val episodePositions = EpisodePositions(player, container.feedLibrary, scope)
         player.addListener(
             object : Player.Listener {
                 override fun onPlayerError(error: PlaybackException) {
@@ -255,7 +258,7 @@ class PlaybackService : MediaSessionService() {
                     if (events.containsAny(Player.EVENT_MEDIA_ITEM_TRANSITION, Player.EVENT_TIMELINE_CHANGED)) artwork?.onCurrentItemChanged()
                     // ほかの端末を映している間は、映している曲の評価のまま（mirrorRemote が切り替える）
                     if (events.containsAny(Player.EVENT_MEDIA_ITEM_TRANSITION, Player.EVENT_TIMELINE_CHANGED) && session?.player !== remotePlayer) {
-                        likeController.onCurrentSong(Media3QueuePlayer.songOf(player.currentMediaItem)?.videoId, TrackUri.epochOf(player.currentMediaItem?.localConfiguration?.uri))
+                        likeController.onCurrentSong(Media3QueuePlayer.songOf(player.currentMediaItem)?.videoId?.takeUnless(Feed::isExternal), TrackUri.epochOf(player.currentMediaItem?.localConfiguration?.uri))
                     }
                     // Connect v2（Phase 6b）: 位置の変化を知らせる。キューの変化は onTimelineChanged（並びが変わったときだけ）
                     container.connectV2Host.listener?.let { v2 ->
@@ -277,6 +280,7 @@ class PlaybackService : MediaSessionService() {
 
                 override fun onIsPlayingChanged(isPlaying: Boolean) {
                     historyTracker.onIsPlayingChanged(isPlaying)
+                    episodePositions.onIsPlayingChanged(isPlaying)
                     if (isPlaying) {
                         handedOff = false
                         playedInProcess = true
@@ -329,6 +333,7 @@ class PlaybackService : MediaSessionService() {
                 ) {
                     Log.i(WaveApplication.LOG_TAG, "transition index=${player.currentMediaItemIndex} reason=$reason")
                     historyTracker.onMediaItemTransition()
+                    episodePositions.onMediaItemTransition(reason)
                     queueSession.onPlaybackProgressed()
                 }
             },
@@ -690,10 +695,10 @@ class PlaybackService : MediaSessionService() {
             mirror.update(remote)
             if (current.player !== mirror) current.player = mirror
             // 映している曲の評価を読み書きする（評価はアカウントに付くので、どの端末で鳴っていても同じ）
-            likes?.onCurrentSong(remote.current.videoId, container.music.currentLoginGeneration())
+            likes?.onCurrentSong(remote.current.videoId.takeUnless(Feed::isExternal), container.music.currentLoginGeneration())
         } else if (current.player !== local) {
             current.player = local
-            likes?.onCurrentSong(Media3QueuePlayer.songOf(local.currentMediaItem)?.videoId, TrackUri.epochOf(local.currentMediaItem?.localConfiguration?.uri))
+            likes?.onCurrentSong(Media3QueuePlayer.songOf(local.currentMediaItem)?.videoId?.takeUnless(Feed::isExternal), TrackUri.epochOf(local.currentMediaItem?.localConfiguration?.uri))
         }
         val following = current.player === remotePlayer && remote != null
         updateRemoteRelayHold(following, following && remote?.playing == true)
@@ -776,7 +781,8 @@ class PlaybackService : MediaSessionService() {
         epoch: Long?,
     ) {
         val cache = container.streamCache
-        if (cache.get(videoId, epoch) != null) return
+        // RSS のエピソードは YouTube で解決しない（ADR-0012）
+        if (Feed.isExternal(videoId) || cache.get(videoId, epoch) != null) return
         scope.launch(kotlinx.coroutines.Dispatchers.IO) {
             val startedInEpoch = cache.epoch
             val result = container.stream.resolver.resolve(videoId, expectedGeneration = epoch)

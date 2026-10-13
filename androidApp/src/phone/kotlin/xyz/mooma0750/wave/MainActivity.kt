@@ -279,7 +279,7 @@ class MainActivity : ComponentActivity() {
                                     )
                                 Tab.Library ->
                                     LibraryTabScreen(
-                                        viewModel(key = "library-tab-$loginGeneration-$playlistsVersion") { LibraryTabViewModel(container.music, container.libraryCache) },
+                                        viewModel(key = "library-tab-$loginGeneration-$playlistsVersion") { LibraryTabViewModel(container.music, container.libraryCache, feeds = container.feedLibrary.state) },
                                         account = account,
                                         onOpenPlaylist = { nav.push(Screen.Playlist(it)) },
                                         onOpenArtist = { nav.push(Screen.Artist(it.browseId, it.name)) },
@@ -336,7 +336,7 @@ class MainActivity : ComponentActivity() {
                                             )
                                         }
                                     SearchScreen(
-                                        viewModel(key = "search-$loginGeneration") { SearchViewModel(container.music, container.searchHistory) },
+                                        viewModel(key = "search-$loginGeneration") { SearchViewModel(container.music, container.searchHistory, container.podcastFeeds) },
                                         onSongClick = playerActions::playSong,
                                         actions = searchActions,
                                         onBack = pop,
@@ -395,7 +395,7 @@ class MainActivity : ComponentActivity() {
                                     )
                                 is Screen.Podcast ->
                                     xyz.mooma0750.wave.podcast.PodcastScreen(
-                                        viewModel(key = "podcast-$loginGeneration-${screen.browseId}") { xyz.mooma0750.wave.podcast.PodcastViewModel(container.music, screen.browseId, screen.title) },
+                                        viewModel(key = "podcast-$loginGeneration-${screen.browseId}") { xyz.mooma0750.wave.podcast.PodcastViewModel(container.music, screen.browseId, screen.title, container.podcastFeeds, container.feedLibrary) },
                                         title = screen.title,
                                         actions = songActions,
                                         // 押したエピソードから、番組の一覧を続けて流す（読んだ分の後はラジオにつなぐ）

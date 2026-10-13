@@ -76,7 +76,8 @@ class PlaybackHistoryTracker(
         val carried = seed?.takeIf { it.first == mediaId }
         seed = null
         play =
-            Media3QueuePlayer.songOf(player.currentMediaItem)?.let { song ->
+            // RSS のエピソードは YouTube の履歴に載せない（ADR-0012）
+            Media3QueuePlayer.songOf(player.currentMediaItem)?.takeUnless { xyz.mooma0750.wave.core.music.Feed.isExternal(it.videoId) }?.let { song ->
                 Play(mediaId.orEmpty(), song.videoId, PlaybackHistory.newCpn(random), song.durationSeconds?.let { it * 1000L }, carried?.second ?: 0L).also {
                     // 他の端末で送り済みなら、この再生では送らない（二重に載せない）
                     if (carried?.third == true) it.done = true

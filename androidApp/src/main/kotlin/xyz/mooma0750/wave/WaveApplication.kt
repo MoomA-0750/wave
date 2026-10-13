@@ -208,6 +208,21 @@ class AppContainer(
     /** 音声バイト・サムネイルの取得用。認証情報を持たない（ADR-0003）。 */
     val mediaHttpClient = MediaHttp.create()
 
+    /** RSS のポッドキャストのフィードと音声の取得用（ADR-0012）。認証情報を持たず、https の間だけリダイレクトを追う。 */
+    val feedHttpClient = xyz.mooma0750.wave.playback.MediaHttp.createForFeeds()
+
+    /** RSS のポッドキャストの検索（Apple の目録）とフィードの読み取り。 */
+    val podcastFeeds =
+        xyz.mooma0750.wave.core.music.PodcastFeedClient(
+            HttpClient(OkHttp.create { preconfigured = feedHttpClient }),
+            country = java.util.Locale.getDefault().country.ifBlank { "JP" },
+            userAgent = "wave/${BuildConfig.VERSION_NAME}",
+            fetchFeed = { url, agent -> xyz.mooma0750.wave.podcast.FeedFetch.fetch(feedHttpClient, url, agent) },
+        )
+
+    /** RSS で登録した番組と聴いたところ（この端末だけ）。 */
+    val feedLibrary: xyz.mooma0750.wave.core.music.FeedLibrary by lazy { xyz.mooma0750.wave.podcast.FeedStore.create(appContext) }
+
     /** ライブ配信の検索と HLS の解決。www.youtube.com へは認証情報を持たないクライアントで送る（ADR-0003）。 */
     val live =
         xyz.mooma0750.wave.core.music.LiveClient(
