@@ -21,9 +21,12 @@ class EpisodePositions(
     /** 今のエピソード（音声の URL・位置・長さ）。YouTube の曲なら null。 */
     private var current: Triple<String, Long, Long?>? = null
 
+    /** 今のエピソードの位置を一度でも拾ったか（拾う前に曲が変わったら書かない。覚えていた続きの位置を 0 で消さない）。 */
+    private var sampled = false
+
     /** 今の曲が変わった。前のエピソードの位置を書き、新しいエピソードなら続きへ飛ぶ。 */
     fun onMediaItemTransition(reason: Int) {
-        current?.let { (url, position, duration) ->
+        current?.takeIf { sampled || reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO }?.let { (url, position, duration) ->
             // 最後まで流れて次へ進んだ（またはリピートで頭へ戻った）なら聴いた
             val finished = reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO || reason == Player.MEDIA_ITEM_TRANSITION_REASON_REPEAT
             val end = if (finished && duration != null) duration else position
@@ -31,6 +34,7 @@ class EpisodePositions(
         }
         val url = currentUrl()
         current = url?.let { Triple(it, 0L, null) }
+        sampled = false
         if (url == null) return
         // 端末の間の受け渡し・キューの復元で位置が付いて来たら、そちらを使う
         val resume = library.position(url)?.resumeSeconds ?: 0
@@ -53,7 +57,10 @@ class EpisodePositions(
         val url = current?.first ?: return null
         if (currentUrl() != url) return null
         val duration = player.duration.takeIf { it != C.TIME_UNSET && it > 0 }
-        return Triple(url, player.currentPosition, duration).also { current = it }
+        return Triple(url, player.currentPosition, duration).also {
+            current = it
+            sampled = true
+        }
     }
 
     private var ticks = 0
