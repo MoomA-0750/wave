@@ -78,6 +78,10 @@ enum class DocKind {
 
     @SerialName("profile")
     Profile,
+
+    /** ライブラリ（RSS で登録した番組・聴いたところ、ADR-0013）。家のどの端末も書ける。 */
+    @SerialName("library")
+    Library,
 }
 
 /** SealedDoc の見出し（平文。署名と、内容・包みの AAD に入る）。 */
@@ -226,3 +230,68 @@ object ConnectJson {
             encodeDefaults = true
         }
 }
+
+/**
+ * ライブラリの文書の中身（ADR-0013）。RSS で登録した番組と、エピソードの聴いたところ。
+ * 番組・エピソードごとに、updatedAtMs の新しい方を残して合わせる（[merge]）。外した番組も印（removed）として残す。
+ */
+@Serializable
+data class LibraryBody(
+    val v: Int = VERSION,
+    /** フィードの URL ごと。 */
+    val feeds: Map<String, LibraryFeed> = emptyMap(),
+    /** 音声の URL ごと。 */
+    val positions: Map<String, LibraryPosition> = emptyMap(),
+) {
+    /** 2つを合わせる。同じ時刻なら [other] を残す（自分の書き込みが後から届いた相手の書き込みを消さないよう、呼ぶ側は相手を other に渡す）。 */
+    fun merge(other: LibraryBody): LibraryBody {
+        val feeds = (feeds.keys + other.feeds.keys).associateWith { key -> newer(this.feeds[key], other.feeds[key]) { it.updatedAtMs } }
+        val positions = (positions.keys + other.positions.keys).associateWith { key -> newer(this.positions[key], other.positions[key]) { it.updatedAtMs } }
+        return LibraryBody(VERSION, feeds, trim(positions))
+    }
+
+    companion object {
+        const val VERSION = 1
+
+        /** 聴いたところは新しい順にこの数まで（文書を数百 KB に収める）。 */
+        const val MAX_POSITIONS = 500
+
+        /** 外した番組の印は、この日数を過ぎたら捨ててよい（全端末に行き渡った後）。 */
+        const val REMOVED_KEEP_DAYS = 180
+
+        private fun <T : Any> newer(
+            mine: T?,
+            other: T?,
+            at: (T) -> Long,
+        ): T =
+            when {
+                mine == null -> other!!
+                other == null -> mine
+                at(mine) > at(other) -> mine
+                else -> other
+            }
+
+        private fun trim(positions: Map<String, LibraryPosition>): Map<String, LibraryPosition> =
+            if (positions.size <= MAX_POSITIONS) positions else positions.entries.sortedByDescending { it.value.updatedAtMs }.take(MAX_POSITIONS).associate { it.key to it.value }
+    }
+}
+
+@Serializable
+data class LibraryFeed(
+    val title: String,
+    val author: String? = null,
+    val thumbnailUrl: String? = null,
+    val addedAtMs: Long = 0,
+    /** 外した（この印のほうが新しければ、ほかの端末でも外す）。 */
+    val removed: Boolean = false,
+    val updatedAtMs: Long,
+)
+
+@Serializable
+data class LibraryPosition(
+    val positionSeconds: Int,
+    val durationSeconds: Int? = null,
+    val finished: Boolean = false,
+    val updatedAtMs: Long,
+)
+

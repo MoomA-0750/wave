@@ -7,6 +7,7 @@ import xyz.mooma0750.wave.handoff.crypto.WaveCrypto
 import xyz.mooma0750.wave.handoff.v2.ChainRecord
 import xyz.mooma0750.wave.handoff.v2.ChainVerification
 import xyz.mooma0750.wave.handoff.v2.DocKind
+import xyz.mooma0750.wave.handoff.v2.LibraryState
 import xyz.mooma0750.wave.handoff.v2.MemberChain
 import xyz.mooma0750.wave.handoff.v2.RelayV2
 import xyz.mooma0750.wave.handoff.v2.Role
@@ -48,6 +49,8 @@ class HouseholdStore(
         val claimOrder: Long = 0,
         /** 端末ごとの最新の claim の順番。 */
         val claimOrders: Map<String, Long> = emptyMap(),
+        /** ライブラリ（ADR-0013）。 */
+        val library: StoredDoc? = null,
     )
 
     private class Pending(
@@ -216,6 +219,50 @@ class HouseholdStore(
         }
         save(next)
         return PutResult.Ok(stateOf(message.kind)!!, activeChanged)
+    }
+
+    sealed interface LibraryResult {
+        data class Ok(
+            val state: LibraryState,
+        ) : LibraryResult
+
+        data class Conflict(
+            val latest: LibraryState?,
+        ) : LibraryResult
+
+        data class Rejected(
+            val code: String,
+        ) : LibraryResult
+    }
+
+    /** 最新のライブラリ（まだ無ければ null）。 */
+    @Synchronized
+    fun library(): LibraryState? = persisted.library?.let { LibraryState(it.version, it.doc, persisted.storeId) }
+
+    /** ライブラリを書く（ADR-0013）。家のどの端末も書ける（再生中でなくてよい）。版の CAS。 */
+    @Synchronized
+    fun putLibrary(
+        sender: String,
+        message: RelayV2.LibraryPut,
+    ): LibraryResult {
+        val current = chain ?: return LibraryResult.Rejected("no_household")
+        if (current.members[sender] == null) return LibraryResult.Rejected("not_member")
+        val header = message.doc.header
+        val problem =
+            when {
+                header.writerId != sender -> "writer_mismatch"
+                header.householdId != current.householdId -> "household"
+                header.kind != DocKind.Library -> "kind"
+                header.version != message.expectVersion + 1 -> "version"
+                header.headSeq > current.headSeq -> "future_head"
+                header.headSeq < current.headSeq -> "stale_head"
+                message.doc.recipients.size > MAX_RECIPIENTS -> "too_many_recipients"
+                else -> null
+            }
+        if (problem != null) return LibraryResult.Rejected(problem)
+        if ((persisted.library?.version ?: 0L) != message.expectVersion) return LibraryResult.Conflict(library())
+        save(persisted.copy(library = StoredDoc(message.expectVersion + 1, message.doc, nowMs())))
+        return LibraryResult.Ok(library()!!)
     }
 
     sealed interface ClaimResult {

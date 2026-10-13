@@ -103,6 +103,9 @@ private class HubV2(
         sessions.forEach { (id, session) -> if (id != except) send(session, message) }
     }
 
+    /** library_get を送った接続（ライブラリはこの接続にだけ配る、ADR-0013）。order の中で触る。 */
+    private val librarySubscribers = HashSet<DefaultWebSocketServerSession>()
+
     private fun presence() = broadcast(RelayV2.Presence(sessions.keys.toList()))
 
     private suspend fun <T> gate(
@@ -166,6 +169,7 @@ private class HubV2(
             }
         } finally {
             synchronized(order) {
+                librarySubscribers.remove(session)
                 if (sessions.remove(deviceId, session)) {
                     pairings.entries.removeIf { it.value.owner === session }
                     router.broadcastExpired(store.expirePending(disconnected = deviceId), outlet(null))
@@ -197,7 +201,21 @@ private class HubV2(
             ) = this@HubV2.broadcast(message, except)
 
             override fun removed(deviceId: String) {
-                sessions.remove(deviceId)?.let { removedSession -> closeLater(removedSession) }
+                sessions.remove(deviceId)?.let { removedSession ->
+                    librarySubscribers.remove(removedSession)
+                    closeLater(removedSession)
+                }
+            }
+
+            override fun subscribeLibrary() {
+                session?.let { librarySubscribers += it }
+            }
+
+            override fun broadcastLibrary(
+                message: RelayV2,
+                except: String?,
+            ) {
+                sessions.forEach { (id, target) -> if (id != except && target in librarySubscribers) send(target, message) }
             }
         }
 

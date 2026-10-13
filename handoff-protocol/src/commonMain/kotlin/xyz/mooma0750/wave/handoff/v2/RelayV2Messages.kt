@@ -35,6 +35,14 @@ data class StoredState(
     val activeDeviceId: String? = null,
 )
 
+/** 中継が持つ最新のライブラリの文書（ADR-0013）。 */
+@Serializable
+data class LibraryState(
+    val version: Long,
+    val doc: SealedDoc,
+    val storeId: String,
+)
+
 /**
  * 中継 v2 のメッセージ（`/v2/connect`、`/v2/pair`。判別子は `op`、`dev/active/phase6b-plan.md` のワイヤの表）。
  * サーバーは SealedDoc の中身を読まない。見出し（書き手・版・一覧の頭）と、送り手の接続の端末 ID だけで振り分ける。
@@ -155,6 +163,41 @@ sealed interface RelayV2 {
     @SerialName("state")
     data class State(
         val state: StoredState,
+    ) : RelayV2
+
+    // --- ライブラリ（ADR-0013）。library_get を送った接続にだけ配る（知らない端末の版に新しい種類を流さない） ---
+
+    @Serializable
+    @SerialName("library_get")
+    data object LibraryGet : RelayV2
+
+    @Serializable
+    @SerialName("library_put")
+    data class LibraryPut(
+        val requestId: String,
+        val expectVersion: Long,
+        val doc: SealedDoc,
+    ) : RelayV2
+
+    @Serializable
+    @SerialName("library_ok")
+    data class LibraryOk(
+        val requestId: String,
+        val version: Long,
+    ) : RelayV2
+
+    @Serializable
+    @SerialName("library_conflict")
+    data class LibraryConflict(
+        val requestId: String,
+        val latest: LibraryState? = null,
+    ) : RelayV2
+
+    /** library_get の返事と、ほかの端末が書いたときの配信。まだ無ければ state は null。 */
+    @Serializable
+    @SerialName("library")
+    data class Library(
+        val state: LibraryState? = null,
     ) : RelayV2
 
     // --- 再生を始める・引き取る ---

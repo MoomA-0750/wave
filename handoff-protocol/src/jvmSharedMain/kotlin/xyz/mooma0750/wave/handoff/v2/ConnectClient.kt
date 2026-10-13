@@ -114,6 +114,9 @@ class ConnectClient(
             action: ControlAction,
             positionMs: Long?,
         ): Boolean = false
+
+        /** ほかの端末と合わせたライブラリが届いた（手元に取り込む、ADR-0013）。 */
+        fun libraryChanged(body: LibraryBody) {}
     }
 
     /** 表示用: ほかの端末の最新のカーソルと、今の時刻に合わせた位置。 */
@@ -300,8 +303,14 @@ class ConnectClient(
 
     // --- 受信 ---
 
+    /** ライブラリの同期（ADR-0013）。手元が変わったら library.publish を呼ぶ。 */
+    val library: LibrarySync by lazy {
+        LibrarySync(signer, opener, send, { chain }, { storeId.takeIf { pendingStoreId == null } }, epochMs, newId) { effects.libraryChanged(it) }
+    }
+
     fun onMessage(message: RelayV2) {
         when (message) {
+            is RelayV2.Library, is RelayV2.LibraryOk, is RelayV2.LibraryConflict -> library.onMessage(message)
             is RelayV2.Welcome -> onWelcome(message)
             is RelayV2.Chain -> onChain(message.records)
             // 自分の追記の返事（chain_ok）は、他の端末への chain_changed を受けないので、同じく取り直す（宛先を書き直すため）
@@ -323,6 +332,7 @@ class ConnectClient(
     /** 接続が切れた。返事を待っていた書き込みは、つながり直した後に最新の版へ積み直す。 */
     fun onDisconnected() {
         resetConnection()
+        library.onDisconnected()
         // 取り込む前に切れた引き取りは捨てる（つながり直した後に、古い状態から突然取り込まない。レビュー p6b34 中-4）
         val waiting = transfer
         if (waiting != null && !waiting.adopting) {
@@ -434,6 +444,7 @@ class ConnectClient(
         // 最新の状態を先に見る（通信を失ったまま鳴っていた端末は、ここで止まる）
         welcome.states.forEach(::onState)
         maybeResume()
+        library.onConnected()
     }
 
     /** 本人が「この状態から始める」を押した（L-12）。床を捨てて新しい storeId を受け入れる。 */
@@ -454,6 +465,7 @@ class ConnectClient(
         }
         send(RelayV2.StateGet)
         flush()
+        library.onConnected()
     }
 
     private fun onChain(newRecords: List<ChainRecord>) {
@@ -511,6 +523,7 @@ class ConnectClient(
                 pending.forEach(::onState)
                 maybeResume()
                 flush()
+                library.onChainUpdated()
             }
             ChainVerification.Fork -> effects.event(ClientEvent.ChainForked)
             ChainVerification.Rollback -> effects.event(ClientEvent.ChainRolledBack)

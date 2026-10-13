@@ -110,7 +110,7 @@ object DocSealer {
     ): Boolean =
         when (kind) {
             DocKind.Cursor, DocKind.Queue -> role == Role.Player
-            DocKind.Command, DocKind.Profile -> true
+            DocKind.Command, DocKind.Profile, DocKind.Library -> true
         }
 
     private fun wrapInfo(

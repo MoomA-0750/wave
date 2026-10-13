@@ -30,6 +30,7 @@ class FakeRelay(
 ) {
     var store = HouseholdStore(file, bootstrapKeys, nowMs)
     private val connected = LinkedHashMap<String, (RelayV2) -> Unit>()
+    private val librarySubscribers = HashSet<String>()
     private val outbox = ArrayDeque<Pair<String, RelayV2>>()
     private val held = ArrayList<Pair<String, RelayV2>>()
     val log = ArrayList<String>()
@@ -54,6 +55,7 @@ class FakeRelay(
 
     fun disconnect(deviceId: String) {
         connected.remove(deviceId)
+        librarySubscribers.remove(deviceId)
         router.broadcastExpired(store.expirePending(disconnected = deviceId), outlet(null))
         broadcast(RelayV2.Presence(connected.keys.toList()))
     }
@@ -124,6 +126,15 @@ class FakeRelay(
             override fun removed(deviceId: String) {
                 connected.remove(deviceId)
             }
+
+            override fun subscribeLibrary() {
+                deviceId?.let { librarySubscribers += it }
+            }
+
+            override fun broadcastLibrary(
+                message: RelayV2,
+                except: String?,
+            ) = connected.keys.filter { it != except && it in librarySubscribers }.forEach { post(it, message) }
         }
 
     private fun handle(
@@ -190,6 +201,9 @@ class SimDevice(
     var currentItemId = "item-0"
     val events = ArrayList<ClientEvent>()
 
+    /** 中継から届いたライブラリ（合わせた後のもの）。 */
+    var library: xyz.mooma0750.wave.handoff.v2.LibraryBody? = null
+
     /** 従った遠隔操作。 */
     val controls = ArrayList<Pair<xyz.mooma0750.wave.handoff.v2.ControlAction, Long?>>()
     var persisted = ClientPersisted()
@@ -244,6 +258,10 @@ class SimDevice(
                     }
 
                     override fun accountTag(): String? = accountTag
+
+                    override fun libraryChanged(body: xyz.mooma0750.wave.handoff.v2.LibraryBody) {
+                        library = body
+                    }
 
                     override fun control(
                         action: xyz.mooma0750.wave.handoff.v2.ControlAction,

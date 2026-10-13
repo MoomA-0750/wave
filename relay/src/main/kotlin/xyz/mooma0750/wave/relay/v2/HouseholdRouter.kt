@@ -23,6 +23,15 @@ internal class HouseholdRouter(
 
         /** 家から外された端末（接続を閉じる）。 */
         fun removed(deviceId: String)
+
+        /** この接続にライブラリを配るようにする（library_get を送った接続だけに配る、ADR-0013）。 */
+        fun subscribeLibrary() {}
+
+        /** ライブラリを、頼んだ接続にだけ配る。 */
+        fun broadcastLibrary(
+            message: RelayV2,
+            except: String? = null,
+        ) {}
     }
 
     /** @return 扱ったか（加入の手順など、家の状態に当てないメッセージは false。呼ぶ側で扱う） */
@@ -66,6 +75,24 @@ internal class HouseholdRouter(
                     }
                     is HouseholdStore.PutResult.Conflict -> out.reply(RelayV2.StateConflict(message.requestId, message.kind, result.latest))
                     is HouseholdStore.PutResult.Rejected -> out.reply(RelayV2.Error(result.code, message.requestId))
+                }
+            RelayV2.LibraryGet -> {
+                if (!store.isMember(deviceId)) {
+                    out.reply(RelayV2.Error("not_member"))
+                } else {
+                    out.subscribeLibrary()
+                    out.reply(RelayV2.Library(store.library()))
+                }
+            }
+            is RelayV2.LibraryPut ->
+                when (val result = store.putLibrary(deviceId, message)) {
+                    is HouseholdStore.LibraryResult.Ok -> {
+                        out.reply(RelayV2.LibraryOk(message.requestId, result.state.version))
+                        out.broadcastLibrary(RelayV2.Library(result.state), except = deviceId)
+                        log("library version=${result.state.version} chars=${message.doc.ciphertext.length}")
+                    }
+                    is HouseholdStore.LibraryResult.Conflict -> out.reply(RelayV2.LibraryConflict(message.requestId, result.latest))
+                    is HouseholdStore.LibraryResult.Rejected -> out.reply(RelayV2.Error(result.code, message.requestId))
                 }
             is RelayV2.Claim -> onClaim(store.claim(deviceId, message.claimId, message.yieldDoc), deviceId, message.claimId, message.yieldDoc, out, "claim")
             is RelayV2.Transfer ->
