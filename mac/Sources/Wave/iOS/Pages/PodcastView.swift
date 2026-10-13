@@ -120,7 +120,12 @@ struct PodcastView: View {
             // RSS の番組は、フィードを読んで同じ形にする
             value = try? await AppServices.feeds.page(summary.browseId).get()
         } else {
-            value = ((try? await AppServices.music.podcast(summary.browseId)) ?? .failed(.network)).value
+            let result = (try? await AppServices.music.podcast(summary.browseId)) ?? .failed(.network)
+            // 保存した番組が無いアカウントの「新しいエピソード」は番組のページの形で返らない。空として出し、RSS の回を混ぜる（Android と同じ）
+            value = result.value ?? (isNewEpisodes && result.failure == .parse
+                ? PodcastPage(browseId: summary.browseId, title: summary.title, author: nil, description: nil, thumbnailUrl: nil, episodes: [],
+                              continuation: nil, saved: nil)
+                : nil)
         }
         loading = false
         guard let value else {
@@ -130,6 +135,12 @@ struct PodcastView: View {
         page = value
         episodes = value.episodes
         continuation = value.continuation
+        // 「新しいエピソード」に、RSS で登録した番組の新しい回を混ぜる（ADR-0012）
+        if isNewEpisodes {
+            let merged = await AppServices.feeds.mergeNewEpisodes(value.episodes)
+            episodes = merged
+            page?.episodes = merged
+        }
         gradient = await Artwork.dominantColor(value.thumbnailUrl)
     }
 

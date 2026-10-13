@@ -74,6 +74,14 @@ public enum RelayV2: Equatable, Sendable {
     case stateConflict(StateConflict)
     case state(State)
 
+    // ライブラリ（ADR-0013）。library_get を送った接続にだけ配られる（知らない端末の版に新しい種類を流さない）
+    case libraryGet
+    case libraryPut(LibraryPut)
+    case libraryOk(LibraryOk)
+    case libraryConflict(LibraryConflict)
+    /// library_get の返事と、ほかの端末が書いたときの配信。まだ無ければ state は nil。
+    case library(Library)
+
     // --- 再生を始める・引き取る ---
     case claim(Claim)
     case transfer(Transfer)
@@ -346,6 +354,40 @@ public enum RelayV2: Equatable, Sendable {
     }
 
     /// op は "error"（Swift の Error と名前が重ならないよう ErrorReply）。
+    public struct LibraryPut: Equatable, Sendable {
+        public var requestId: String
+        public var expectVersion: Int64
+        public var doc: SealedDoc
+        public init(requestId: String, expectVersion: Int64, doc: SealedDoc) {
+            self.requestId = requestId
+            self.expectVersion = expectVersion
+            self.doc = doc
+        }
+    }
+
+    public struct LibraryOk: Equatable, Sendable {
+        public var requestId: String
+        public var version: Int64
+        public init(requestId: String, version: Int64) {
+            self.requestId = requestId
+            self.version = version
+        }
+    }
+
+    public struct LibraryConflict: Equatable, Sendable {
+        public var requestId: String
+        public var latest: LibraryState?
+        public init(requestId: String, latest: LibraryState? = nil) {
+            self.requestId = requestId
+            self.latest = latest
+        }
+    }
+
+    public struct Library: Equatable, Sendable {
+        public var state: LibraryState?
+        public init(state: LibraryState? = nil) { self.state = state }
+    }
+
     public struct ErrorReply: Equatable, Sendable {
         public var code: String
         public var requestId: String?
@@ -387,6 +429,12 @@ public enum RelayV2: Equatable, Sendable {
         case .stateConflict(let m):
             return with("state_conflict", [("requestId", .string(m.requestId)), ("kind", .string(m.kind.rawValue)), ("latest", JSON(m.latest))])
         case .state(let m): return with("state", [("state", m.stored.toJSON())])
+        case .libraryGet: return with("library_get", [])
+        case .libraryPut(let m):
+            return with("library_put", [("requestId", .string(m.requestId)), ("expectVersion", JSON(m.expectVersion)), ("doc", m.doc.toJSON())])
+        case .libraryOk(let m): return with("library_ok", [("requestId", .string(m.requestId)), ("version", JSON(m.version))])
+        case .libraryConflict(let m): return with("library_conflict", [("requestId", .string(m.requestId)), ("latest", JSON(m.latest))])
+        case .library(let m): return with("library", [("state", JSON(m.state))])
         case .claim(let m): return with("claim", [("claimId", .string(m.claimId)), ("yieldDoc", m.yieldDoc.toJSON())])
         case .transfer(let m):
             return with("transfer", [("claimId", .string(m.claimId)), ("basedOnVersion", JSON(m.basedOnVersion)), ("yieldDoc", m.yieldDoc.toJSON())])
@@ -446,6 +494,14 @@ public enum RelayV2: Equatable, Sendable {
                 StateConflict(
                     requestId: try r.string("requestId"), kind: try r.enumValue("kind", StateKind.self), latest: try r.optValue("latest", StoredState.self)))
         case "state": return .state(State(stored: try r.value("state", StoredState.self)))
+        case "library_get": return .libraryGet
+        case "library_put":
+            return .libraryPut(
+                LibraryPut(requestId: try r.string("requestId"), expectVersion: try r.long("expectVersion"), doc: try r.value("doc", SealedDoc.self)))
+        case "library_ok": return .libraryOk(LibraryOk(requestId: try r.string("requestId"), version: try r.long("version")))
+        case "library_conflict":
+            return .libraryConflict(LibraryConflict(requestId: try r.string("requestId"), latest: try r.optValue("latest", LibraryState.self)))
+        case "library": return .library(Library(state: try r.optValue("state", LibraryState.self)))
         case "claim": return .claim(Claim(claimId: try r.string("claimId"), yieldDoc: try r.value("yieldDoc", SealedDoc.self)))
         case "transfer":
             return .transfer(

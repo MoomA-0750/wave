@@ -112,6 +112,8 @@ public struct ChainRecord: Equatable, Sendable, ConnectCodable {
 
 public enum DocKind: String, Sendable {
     case cursor, queue, command, profile
+    /// ライブラリ（RSS で登録した番組・聴いたところ、ADR-0013）。家のどの端末も書ける。
+    case library
 
     public var kotlinName: String {
         switch self {
@@ -119,6 +121,7 @@ public enum DocKind: String, Sendable {
         case .queue: return "Queue"
         case .command: return "Command"
         case .profile: return "Profile"
+        case .library: return "Library"
         }
     }
 }

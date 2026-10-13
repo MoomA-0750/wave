@@ -102,10 +102,16 @@ public protocol ConnectClientEffects: AnyObject {
 
     /// 遠隔操作に従う（この端末が鳴らしている）。受け付けなければ false。
     func control(_ action: ControlAction, positionMs: Int64?) -> Bool
+
+    /// ほかの端末と合わせたライブラリが届いた（手元に取り込む、ADR-0013）。
+    func libraryChanged(_ body: LibraryBody)
 }
 
 public extension ConnectClientEffects {
     func control(_ action: ControlAction, positionMs: Int64?) -> Bool { false }
+
+    /// ほかの端末と合わせたライブラリが届いた（手元に取り込む、ADR-0013）。
+    func libraryChanged(_ body: LibraryBody) {}
 }
 
 /// Connect v2 の端末側（Android 版の ConnectClient と同じ状態機械、D-2・D-6〜D-9）。
@@ -408,8 +414,15 @@ public final class ConnectClient {
 
     // MARK: 受信
 
+    /// ライブラリの同期（ADR-0013）。手元が変わったら library.publish を呼ぶ。
+    public lazy var library: LibrarySync = LibrarySync(
+        signer: signer, opener: opener, send: send, chain: { [unowned self] in self.chain },
+        storeId: { [unowned self] in self.pendingStoreId == nil ? self.storeId : nil }, epochMs: epochMs, newId: newId,
+        onRemote: { [unowned self] in self.effects.libraryChanged($0) })
+
     public func onMessage(_ message: RelayV2) throws {
         switch message {
+        case .library, .libraryOk, .libraryConflict: try library.onMessage(message)
         case .welcome(let welcome): try onWelcome(welcome)
         case .chain(let c): try onChain(c.records)
         // 自分の追記の返事（chain_ok）は、他の端末への chain_changed を受けないので、同じく取り直す（宛先を書き直すため）
@@ -431,6 +444,7 @@ public final class ConnectClient {
     /// 接続が切れた。返事を待っていた書き込みは、つながり直した後に最新の版へ積み直す。
     public func onDisconnected() {
         resetConnection()
+        library.onDisconnected()
         // 取り込む前に切れた引き取りは捨てる（つながり直した後に、古い状態から突然取り込まない）
         if let waiting = transfer, !waiting.adopting { failTransfer("disconnected") }
     }
@@ -530,6 +544,7 @@ public final class ConnectClient {
         // 最新の状態を先に見る（通信を失ったまま鳴っていた端末は、ここで止まる）
         for state in welcome.states { try onState(state) }
         try maybeResume()
+        library.onConnected()
     }
 
     /// 本人が「この状態から始める」を押した（L-12）。床を捨てて新しい storeId を受け入れる。
@@ -550,6 +565,7 @@ public final class ConnectClient {
         }
         _ = send(.stateGet)
         try flush()
+        library.onConnected()
     }
 
     private func onChain(_ newRecords: [ChainRecord]) throws {
@@ -629,6 +645,7 @@ public final class ConnectClient {
             for state in pending { try onState(state) }
             try maybeResume()
             try flush()
+            try library.onChainUpdated()
         case .fork:
             effects.event(.chainForked)
         case .rollback:

@@ -149,6 +149,62 @@ final class FeedParserTests: XCTestCase {
         print("feed parse bytes=\(data.count) seconds=\(String(format: "%.3f", elapsed))")
     }
 
+    // MARK: Kotlin の FeedLibrarySyncTest と同じ
+
+    func testRoundTripsThroughTheSyncBodyAndRemovalWins() {
+        let a = FeedLibraryState().subscribe(FeedSubscription(feedUrl: "https://a.example/f", title: "A", addedAtMs: 10))
+            .remember("https://a.example/1.mp3", EpisodePosition.of(positionSeconds: 60, durationSeconds: 600, nowMs: 11))
+        // もう1台: 何も持っていない → 受け取る
+        let b = FeedLibraryState().apply(a.toBody())
+        XCTAssertEqual(b.subscriptions.map(\.title), ["A"])
+        XCTAssertEqual(b.positions["https://a.example/1.mp3"]?.positionSeconds, 60)
+        // b で外す（後の時刻）→ a に当てると外れる
+        let removed = b.unsubscribe("https://a.example/f", atMs: 20)
+        let a2 = a.apply(a.toBody().merge(removed.toBody()))
+        XCTAssertTrue(a2.subscriptions.isEmpty)
+        XCTAssertEqual(a2.removed["https://a.example/f"], 20)
+        // 古い登録の知らせは、新しい「外した」を覆さない
+        XCTAssertTrue(a2.apply(a.toBody()).subscriptions.isEmpty)
+        // 外した後にもう一度登録すると、印は消える
+        let again = a2.subscribe(FeedSubscription(feedUrl: "https://a.example/f", title: "A", addedAtMs: 30))
+        XCTAssertNil(again.removed["https://a.example/f"])
+        XCTAssertEqual(a2.apply(again.toBody()).subscriptions.map(\.title), ["A"])
+    }
+
+    /// 外した印は端末の JSON に残る（次の起動でも伝えられる）。
+    func testRemovedMarksSurviveTheLocalJson() {
+        let state = FeedLibraryState().subscribe(FeedSubscription(feedUrl: "https://a.example/f", title: "A", addedAtMs: 1)).unsubscribe("https://a.example/f", atMs: 5)
+        XCTAssertEqual(FeedLibraryState.encode(state).flatMap(FeedLibraryState.decode)?.removed["https://a.example/f"], 5)
+    }
+
+    // MARK: Kotlin の NewEpisodesTest と同じ
+
+    private let now: Int64 = 1_791_853_200  // 2026-10-13 01:00 UTC
+
+    private func youtube(_ id: String, _ published: String?) -> PodcastEpisode {
+        PodcastEpisode(song: Song(videoId: id, title: id, artists: [], album: nil, durationSeconds: nil, thumbnailUrl: nil), publishedText: published)
+    }
+
+    func testReadsYouTubeDates() {
+        XCTAssertEqual(NewEpisodes.approximateEpochSeconds("6 日前", nowEpochSeconds: now), now - 6 * 86_400)
+        XCTAssertEqual(NewEpisodes.approximateEpochSeconds("2 時間前", nowEpochSeconds: now), now - 2 * 3_600)
+        XCTAssertEqual(NewEpisodes.approximateEpochSeconds("2025/09/08", nowEpochSeconds: now), FeedParser.parseRfc822("8 Sep 2025 00:00:00 GMT"))
+        XCTAssertNil(NewEpisodes.approximateEpochSeconds("ライブ", nowEpochSeconds: now))
+    }
+
+    func testMergesNewestFirst() {
+        let months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+        let rfc = [3, 10, 200].map { days -> String in
+            let parts = FeedParser.dateText(now - Int64(days) * 86_400).split(separator: "/").map(String.init)
+            return "<item><title>r\(days)</title><pubDate>\(parts[2]) \(months[Int(parts[1])! - 1]) \(parts[0]) 01:00:00 GMT</pubDate><enclosure url=\"https://x.example/\(days).mp3\"/></item>"
+        }.joined()
+        guard let show = FeedParser.parse(feedUrl: "https://x.example/f", xml: "<rss><channel><title>R</title>\(rfc)</channel></rss>") else { return XCTFail("読めない") }
+        let merged = NewEpisodes.merge([youtube("y1", "1 日前"), youtube("y6", "6 日前"), youtube("y?", nil), youtube("y30", "2026/09/13")], [show],
+                                       nowEpochSeconds: now)
+        // 200 日前の RSS の回は混ぜない。読めない表示の回は一つ前と同じ日時
+        XCTAssertEqual(merged.map(\.song.title), ["y1", "r3", "y6", "y?", "r10", "y30"])
+    }
+
     func testHandoffAcceptsExternalAudioIds() {
         XCTAssertTrue(HandoffCodec.isItemVideoId("ext:https://example.com/ep2.mp3?x=1&y=2"))
         XCTAssertTrue(HandoffCodec.isItemVideoId("dQw4w9WgXcQ"))

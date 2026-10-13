@@ -140,29 +140,79 @@ public struct FeedLibraryState: Hashable, Sendable, Codable {
     public var subscriptions: [FeedSubscription]
     /// 音声の URL ごとの聴いたところ。
     public var positions: [String: EpisodePosition]
+    /// 外した番組と、外した時刻（ほかの端末へ「外した」を伝える印、ADR-0013）。
+    public var removed: [String: Int64]
 
-    public init(subscriptions: [FeedSubscription] = [], positions: [String: EpisodePosition] = [:]) {
+    public init(subscriptions: [FeedSubscription] = [], positions: [String: EpisodePosition] = [:], removed: [String: Int64] = [:]) {
         self.subscriptions = subscriptions
         self.positions = positions
+        self.removed = removed
     }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         subscriptions = try c.decodeIfPresent([FeedSubscription].self, forKey: .subscriptions) ?? []
         positions = try c.decodeIfPresent([String: EpisodePosition].self, forKey: .positions) ?? [:]
+        removed = try c.decodeIfPresent([String: Int64].self, forKey: .removed) ?? [:]
     }
 
     public func isSubscribed(_ feedUrl: String) -> Bool { subscriptions.contains { $0.feedUrl == feedUrl } }
 
+    /// 登録する（subscription.addedAtMs が登録した時刻）。外した印は消す。
     public func subscribe(_ subscription: FeedSubscription) -> FeedLibraryState {
         var next = self
         next.subscriptions = [subscription] + subscriptions.filter { $0.feedUrl != subscription.feedUrl }
+        next.removed[subscription.feedUrl] = nil
         return next
     }
 
-    public func unsubscribe(_ feedUrl: String) -> FeedLibraryState {
+    /// 外す。外した印（atMs）を残す。
+    public func unsubscribe(_ feedUrl: String, atMs: Int64 = 0) -> FeedLibraryState {
         var next = self
         next.subscriptions = subscriptions.filter { $0.feedUrl != feedUrl }
+        next.removed[feedUrl] = atMs
+        return next
+    }
+
+    /// 端末の間で合わせる形（ADR-0013。Android の toBody と同じ）。
+    public func toBody() -> LibraryBody {
+        var feeds: [String: LibraryFeed] = [:]
+        for (url, at) in removed { feeds[url] = LibraryFeed(title: "", removed: true, updatedAtMs: at) }
+        for s in subscriptions {
+            feeds[s.feedUrl] = LibraryFeed(title: s.title, author: s.author, thumbnailUrl: s.thumbnailUrl, addedAtMs: s.addedAtMs, removed: false, updatedAtMs: s.addedAtMs)
+        }
+        return LibraryBody(feeds: feeds, positions: positions.mapValues {
+            LibraryPosition(positionSeconds: $0.positionSeconds, durationSeconds: $0.durationSeconds, finished: $0.finished, updatedAtMs: $0.updatedAtMs)
+        })
+    }
+
+    /// ほかの端末と合わせた結果を取り込む。番組・エピソードごとに、手元より新しいものだけを当てる。
+    public func apply(_ body: LibraryBody) -> FeedLibraryState {
+        var next = self
+        // 辞書の並びに依らないよう、URL の順に当てる
+        for url in body.feeds.keys.sorted() {
+            guard let feed = body.feeds[url], Feed.isAllowedFeedUrl(url) else { continue }
+            let localAt = next.subscriptions.first { $0.feedUrl == url }?.addedAtMs ?? next.removed[url]
+            if let localAt, localAt >= feed.updatedAtMs { continue }
+            if feed.removed {
+                next = next.unsubscribe(url, atMs: feed.updatedAtMs)
+            } else {
+                next = next.subscribe(FeedSubscription(feedUrl: url, title: feed.title, author: feed.author,
+                                                       thumbnailUrl: feed.thumbnailUrl.flatMap { Feed.isAllowedFeedUrl($0) ? $0 : nil }, addedAtMs: feed.updatedAtMs))
+            }
+        }
+        // 登録の並びは登録した時刻の新しい順（同じなら今の並び）
+        next.subscriptions = next.subscriptions.enumerated().sorted { a, b in
+            a.element.addedAtMs != b.element.addedAtMs ? a.element.addedAtMs > b.element.addedAtMs : a.offset < b.offset
+        }.map(\.element)
+        for (url, p) in body.positions {
+            if let local = next.positions[url], local.updatedAtMs >= p.updatedAtMs { continue }
+            next.positions[url] = EpisodePosition(positionSeconds: p.positionSeconds, durationSeconds: p.durationSeconds, finished: p.finished, updatedAtMs: p.updatedAtMs)
+        }
+        if next.positions.count > FeedLibraryState.maxPositions {
+            let kept = next.positions.sorted { $0.value.updatedAtMs > $1.value.updatedAtMs }.prefix(FeedLibraryState.maxPositions)
+            next.positions = Dictionary(uniqueKeysWithValues: kept.map { ($0.key, $0.value) })
+        }
         return next
     }
 

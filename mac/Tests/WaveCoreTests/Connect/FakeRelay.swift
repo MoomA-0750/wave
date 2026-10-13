@@ -42,12 +42,21 @@ final class FakeRelay {
 
     var activeDeviceId: String? { active }
 
+    /// ライブラリの命令を知っている新しい中継か（false なら古い中継と同じく unsupported を返す、ADR-0013）。
+    var supportsLibrary = false
+    private var library: StoredDoc?
+    /// library_get を送った接続（ライブラリはこの接続にだけ配る）。
+    private var librarySubscribers: Set<String> = []
+    /// 中継が持つ最新のライブラリ（試験で見る）。
+    var libraryState: LibraryState? { library.map { LibraryState(version: $0.version, doc: $0.doc, storeId: storeId) } }
+
     init(nowMs: @escaping () -> Int64) { self.nowMs = nowMs }
 
     private var onlineIds: [String] { connected.map(\.id) }
 
     func connect(_ deviceId: String, deliver: @escaping (RelayV2) throws -> Void) {
         connected.removeAll { $0.id == deviceId }
+        librarySubscribers.remove(deviceId)
         connected.append((deviceId, deliver))
         post(deviceId, .welcome(welcome(deviceId)))
         broadcast(.presence(.init(online: onlineIds)))
@@ -55,6 +64,7 @@ final class FakeRelay {
 
     func disconnect(_ deviceId: String) {
         connected.removeAll { $0.id == deviceId }
+        librarySubscribers.remove(deviceId)
         broadcastExpired(expirePending(deviceId))
         broadcast(.presence(.init(online: onlineIds)))
     }
@@ -176,9 +186,39 @@ final class FakeRelay {
             }
         case .release(let release):
             if let waiting = pending, waiting.claimId == release.claimId, waiting.owner == sender { broadcast(.activeChanged(dropPending())) }
+        case .libraryGet where supportsLibrary:
+            guard chain?.members[sender] != nil else {
+                reply(.error(.init(code: "not_member")))
+                return
+            }
+            librarySubscribers.insert(sender)
+            reply(.library(.init(state: libraryState)))
+        case .libraryPut(let put) where supportsLibrary:
+            onLibraryPut(sender, put)
         default:
             reply(.error(.init(code: "unsupported")))
         }
+    }
+
+    /// 中継の HouseholdStore.putLibrary と同じ: 家のどの端末も書ける。版の CAS。
+    private func onLibraryPut(_ sender: String, _ put: RelayV2.LibraryPut) {
+        func reply(_ m: RelayV2) { post(sender, m) }
+        guard let current = chain else { return reply(.error(.init(code: "no_household", requestId: put.requestId))) }
+        guard current.members[sender] != nil else { return reply(.error(.init(code: "not_member", requestId: put.requestId))) }
+        let header = put.doc.header
+        let problem: String? =
+            if header.writerId != sender { "writer_mismatch" }
+            else if header.householdId != current.householdId { "household" }
+            else if header.kind != .library { "kind" }
+            else if header.version != put.expectVersion + 1 { "version" }
+            else if header.headSeq > current.headSeq { "future_head" }
+            else if header.headSeq < current.headSeq { "stale_head" }
+            else { nil }
+        if let problem { return reply(.error(.init(code: problem, requestId: put.requestId))) }
+        if (library?.version ?? 0) != put.expectVersion { return reply(.libraryConflict(.init(requestId: put.requestId, latest: libraryState))) }
+        library = StoredDoc(version: put.expectVersion + 1, doc: put.doc, receivedAtServerMs: nowMs())
+        reply(.libraryOk(.init(requestId: put.requestId, version: put.expectVersion + 1)))
+        for id in onlineIds where id != sender && librarySubscribers.contains(id) { post(id, .library(.init(state: libraryState))) }
     }
 
     private func headerProblem(_ sender: String, _ current: VerifiedChain, _ kind: StateKind, _ expectVersion: Int64, _ doc: SealedDoc) -> String? {
@@ -423,6 +463,11 @@ final class SimDevice: ConnectClientEffects {
     func event(_ clientEvent: ClientEvent) { events.append(clientEvent) }
 
     func persist(_ state: ClientPersisted) { persisted = state }
+
+    /// ほかの端末と合わせて届いたライブラリ（ADR-0013）。
+    var library: LibraryBody?
+
+    func libraryChanged(_ body: LibraryBody) { library = body }
 
     func accountTag() -> String? { tag }
 

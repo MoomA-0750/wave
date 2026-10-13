@@ -70,6 +70,8 @@ enum AppServices {
         let built = { (key: String) in (Bundle.main.object(forInfoDictionaryKey: key) as? String).flatMap { $0.isEmpty ? nil : $0 } }
         connect = ConnectService(player: player, relayUrl: settings.relayV2Url ?? built("WaveRelayV2Url"),
                                  relayHost: settings.relayV2Host ?? built("WaveRelayV2Host"))
+        // RSS の登録と聴いたところを、家の端末の間で合わせる（ADR-0013）
+        feeds.startSync()
         releases = Releases()
         releases.start()
         #if os(macOS)

@@ -41,7 +41,47 @@ final class FeedStore {
         change(state.subscribe(s))
     }
 
-    func unsubscribe(_ feedUrl: String) { change(state.unsubscribe(feedUrl)) }
+    func unsubscribe(_ feedUrl: String) { change(state.unsubscribe(feedUrl, atMs: Int64(Date().timeIntervalSince1970 * 1000))) }
+
+    // MARK: 家の端末の間で合わせる（ADR-0013。Android の WaveApplication と同じ間隔）
+
+    /// 聴いたところだけが変わったときは、この間隔に1回まで書く（再生中は15秒ごとに変わる）。
+    private static let positionsEveryMs: Int64 = 30_000
+    @ObservationIgnored private var sentState: FeedLibraryState?
+    @ObservationIgnored private var sentAtMs: Int64 = 0
+    @ObservationIgnored private var pendingPublish: DispatchWorkItem?
+
+    /// 連携が使えるようになった（起動の終わり）。今の中身を中継と合わせる。
+    func startSync() { publish() }
+
+    /// ほかの端末と合わせた結果を取り込む。
+    func apply(_ body: LibraryBody) { change(state.apply(body)) }
+
+    /// 登録の変化はすぐ、聴いたところだけの変化は30秒に1回まで、中継に書く。
+    private func publish() {
+        guard let connect = AppServices.connect else { return }
+        let subscriptionsChanged = sentState == nil || sentState?.subscriptions != state.subscriptions || sentState?.removed != state.removed
+        let now = AppServices.clockMs()
+        pendingPublish?.cancel()
+        pendingPublish = nil
+        if subscriptionsChanged || now - sentAtMs >= FeedStore.positionsEveryMs {
+            sentState = state
+            sentAtMs = now
+            connect.publishLibrary(state.toBody())
+        } else {
+            let work = DispatchWorkItem { [weak self] in
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    self.pendingPublish = nil
+                    self.sentState = self.state
+                    self.sentAtMs = AppServices.clockMs()
+                    AppServices.connect?.publishLibrary(self.state.toBody())
+                }
+            }
+            pendingPublish = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(Int(FeedStore.positionsEveryMs - (now - sentAtMs))), execute: work)
+        }
+    }
 
     /// 聴いたところを覚える（長さが分からなければ nil）。
     func remember(_ audioUrl: String, positionSeconds: Int, durationSeconds: Int?) {
@@ -55,6 +95,7 @@ final class FeedStore {
         let file = self.file
         // 書く順は1本の流れに任せる（後に書いたものが残る）
         writer.async { try? data.write(to: file, options: .atomic) }
+        publish()
     }
 
     // MARK: 番組のページ
@@ -105,6 +146,41 @@ final class FeedStore {
         shows.removeAll { $0.feedUrl == feedUrl }
         shows.append((feedUrl, show))
         if shows.count > FeedStore.keptShows { shows.removeFirst(shows.count - FeedStore.keptShows) }
+    }
+
+    // MARK: 新しいエピソード
+
+    /// ライブラリの「新しいエピソード」に、RSS で登録した番組の新しい回を混ぜる（Android の mergeFeedEpisodes と同じ）。
+    /// 番組のフィードは4つずつ並べて読み、読めなかった番組は飛ばす。登録が無ければ渡したまま。
+    func mergeNewEpisodes(_ youtube: [PodcastEpisode]) async -> [PodcastEpisode] {
+        let subscriptions = state.subscriptions
+        if subscriptions.isEmpty { return youtube }
+        let client = self.client
+        let shows: [FeedShow] = await withTaskGroup(of: (Int, FeedShow?).self) { group in
+            var results: [(Int, FeedShow?)] = []
+            var next = 0
+            func add() {
+                let i = next
+                let url = subscriptions[i].feedUrl
+                group.addTask {
+                    if case .ok(let show) = await client.show(url) { return (i, show) }
+                    return (i, nil)
+                }
+                next += 1
+            }
+            while next < min(4, subscriptions.count) { add() }
+            for await result in group {
+                results.append(result)
+                if next < subscriptions.count { add() }
+            }
+            // 登録の順にそろえる
+            return results.sorted { $0.0 < $1.0 }.compactMap(\.1)
+        }
+        for show in shows { remember(show, show.feedUrl) }
+        let positions = state.positions
+        let merged = NewEpisodes.merge(youtube, shows, nowEpochSeconds: Int64(Date().timeIntervalSince1970)) { positions[$0] }
+        AppPaths.log("podcast new episodes feeds=\(shows.count)/\(subscriptions.count) youtube=\(youtube.count) merged=\(merged.count)")
+        return merged
     }
 
     // MARK: 検索

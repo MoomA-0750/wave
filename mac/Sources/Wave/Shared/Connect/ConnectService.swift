@@ -229,6 +229,12 @@ final class ConnectService {
         }
     }
 
+    /// 手元のライブラリが変わった（RSS の登録・聴いたところ、ADR-0013）。中継のものと合わせ、違えば書く。
+    func publishLibrary(_ body: LibraryBody) {
+        guard let worker else { return }
+        worker.post { try worker.publishLibrary(body) }
+    }
+
     /// 「この Mac で再生」。
     func transfer() {
         guard let worker else { return }
@@ -586,6 +592,9 @@ final class ConnectWorker: ConnectClientEffects, @unchecked Sendable {
     /// 作業の列でだけ読み書きする。
     fileprivate var client: ConnectClient?
 
+    /// 手元のライブラリの最新（client を作る前に届いた分も、作ったら渡す。作業の列でだけ読み書きする）。
+    private var library: LibraryBody?
+
     /// client を作った（メインのスレッドから見る）。
     let loaded = Locked(false)
 
@@ -748,6 +757,7 @@ final class ConnectWorker: ConnectClientEffects, @unchecked Sendable {
         client = ConnectClient(
             signer: keys, opener: keys, role: .player, send: { [unowned self] in self.send($0) }, effects: self, nowMs: { [unowned self] in self.clockMs },
             epochMs: { Int64(Date().timeIntervalSince1970 * 1000) }, newId: { UUID().uuidString.lowercased() }, initial: initial)
+        if let library { try? client?.library.publish(library) }
         loaded.set(true)
         seenGeneration = tube.generation
         refreshInfo()
@@ -951,6 +961,19 @@ final class ConnectWorker: ConnectClientEffects, @unchecked Sendable {
             return true
         }
         return onUi { [player] in player.applyControl(action, positionMs: positionMs) }
+    }
+
+    /// 手元のライブラリを中継と合わせる（作業の列で呼ぶ）。
+    func publishLibrary(_ body: LibraryBody) throws {
+        library = body
+        try client?.library.publish(body)
+    }
+
+    /// ほかの端末と合わせたライブラリが届いた（手元の登録・聴いたところに取り込む）。
+    func libraryChanged(_ body: LibraryBody) {
+        library = body
+        AppPaths.log("connect-v2 library feeds=\(body.feeds.count) positions=\(body.positions.count)")
+        toUi { AppServices.feeds.apply(body) }
     }
 
     func accountTag() -> String? {
