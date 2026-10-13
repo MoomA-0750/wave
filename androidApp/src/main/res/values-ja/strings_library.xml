@@ -83,6 +83,7 @@
     <string name="search_tab_artists">アーティスト</string>
     <string name="search_tab_podcasts">ポッドキャスト</string>
     <string name="search_tab_episodes">エピソード</string>
+    <string name="search_tab_lyrics">歌詞</string>
     <string name="search_kind_podcast">ポッドキャスト</string>
     <string name="library_filter_podcasts">ポッドキャスト</string>
     <string name="library_kind_podcast">ポッドキャスト</string>

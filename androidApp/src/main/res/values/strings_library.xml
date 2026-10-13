@@ -83,6 +83,7 @@
     <string name="search_tab_artists">Artists</string>
     <string name="search_tab_podcasts">Podcasts</string>
     <string name="search_tab_episodes">Episodes</string>
+    <string name="search_tab_lyrics">Lyrics</string>
     <string name="search_kind_podcast">Podcast</string>
     <string name="library_filter_podcasts">Podcasts</string>
     <string name="library_kind_podcast">Podcast</string>
