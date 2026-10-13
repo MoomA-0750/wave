@@ -139,6 +139,24 @@ final class PlayerService {
     /// 今の曲がライブ配信（長さ・シーク・歌詞・映像が無い。HLS で流す）。
     var isLive: Bool { current?.isLive == true }
 
+    /// 今の曲が RSS のエピソード（`ext:`。ADR-0012）。音声の URL をそのまま流し、YouTube のこと（評価・歌詞・MV・ラジオ・履歴・共有）をしない。
+    var isExternal: Bool { current.map { Feed.isExternal($0.videoId) } ?? false }
+
+    /// 流している RSS のエピソードの聴いたところ（音声の URL・最後に拾った位置と長さ）。sampled は鳴ってから位置を拾ったか
+    /// （拾う前に曲が変わったら、覚えている続きの位置を 0 で上書きしない）。
+    private struct EpisodeTrack {
+        var url: String
+        var position: Double
+        var duration: Double?
+        var sampled: Bool
+    }
+
+    @ObservationIgnored private var episode: EpisodeTrack?
+    @ObservationIgnored private var lastEpisodeSaveMs: Int64 = 0
+    private static let episodeSaveIntervalMs: Int64 = 15_000
+    /// 覚えている位置がこれより後なら、流し始めにそこへ飛ぶ。
+    private static let episodeResumeAtLeastSeconds = 5.0
+
     /// 手元の音の再生位置（映像を合わせるため。ほかの端末を映している間は使わない）。
     var localPositionMs: Int64 { engine.hasSource ? Int64(engine.positionSeconds * 1000) : 0 }
 
@@ -385,8 +403,9 @@ final class PlayerService {
         sourceId = nil
         setShuffleOrder(nil)
         replaceQueue([song], origin: .source)
-        // ライブ配信は終わらずに流れ続けるので、後ろにラジオのおすすめを足さない（Android と同じ）
-        if song.isLive {
+        // ライブ配信は終わらずに流れ続けるので、後ろにラジオのおすすめを足さない（Android と同じ）。
+        // RSS のエピソードは YouTube のラジオが作れない（ADR-0012）
+        if song.isLive || Feed.isExternal(song.videoId) {
             radioSeed = nil
             radioPlaylistId = nil
             radioContinuation = nil
@@ -693,7 +712,8 @@ final class PlayerService {
 
     /// 今の曲の高評価を切り替える（ライブラリの「高く評価した曲」に入る）。
     func toggleLike() {
-        guard let song = current else { return }
+        // RSS のエピソードは YouTube の曲ではない（評価できない）
+        guard let song = current, !Feed.isExternal(song.videoId) else { return }
         guard AppServices.client.isLoggedIn else {
             message = L.t("高く評価するにはログインしてください", "Log in to like songs")
             return
@@ -735,6 +755,11 @@ final class PlayerService {
         updateNowPlayingInfo()
         // ほかの端末を映している間は、この端末で聴いた時間ではない
         if isRemote { return }
+        // RSS のエピソードは、止めたらその位置を覚える
+        if !isPlaying {
+            sampleEpisode()
+            saveEpisode()
+        }
         let now = clockMs
         if isPlaying {
             if playingSinceMs == nil { playingSinceMs = now }
@@ -879,6 +904,7 @@ final class PlayerService {
         }
         if !isRemote {
             // 手元の再生は止めて、キューを退避する（この端末は鳴らしていない）
+            finishEpisode()
             cancelLoad()
             engine.clear()
             isLoading = false
@@ -992,6 +1018,8 @@ final class PlayerService {
     }
 
     private func loadCurrent(seekTo: Double = 0) {
+        // 前の RSS のエピソードの聴いたところを書く
+        finishEpisode()
         cancelLoad()
         let token = loadToken
         guard let song = current else { return }
@@ -1019,7 +1047,14 @@ final class PlayerService {
         updateNowPlayingInfo()
         loadTask = Task {
             var song = song
-            if song.isLive {
+            if Feed.isExternal(song.videoId) {
+                // RSS のエピソード: YouTube の解決を通さず、音声の URL をそのまま流す（ADR-0012）
+                if !(await startExternal(song, seekTo: seekTo, token: token)) {
+                    guard token == loadToken else { return }
+                    await recover(song)
+                    return
+                }
+            } else if song.isLive {
                 if !(await startLive(song, token: token)) {
                     guard token == loadToken else { return }
                     await recover(song)
@@ -1125,6 +1160,58 @@ final class PlayerService {
         return true
     }
 
+    /// RSS のエピソードを流す。続きの位置（引き取った・戻したキューの位置、無ければ覚えている位置）から始める。
+    private func startExternal(_ song: Song, seekTo: Double, token: Int) async -> Bool {
+        currentStream = nil
+        liveStartedAtMs = nil
+        guard let audio = Feed.audioUrlOf(song.videoId), let url = URL(string: audio) else {
+            AppPaths.log("episode url rejected")
+            return false
+        }
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1.0"
+        guard await engine.loadExternal(url, userAgent: "wave/\(version)") else { return false }
+        guard current?.videoId == song.videoId, token == loadToken else { return false }
+        // 覚えている位置が5秒より後で、今の位置が1秒未満なら、そこへ飛ぶ（Android の EpisodePositions と同じ）
+        let stored = Double(AppServices.feeds.position(audio)?.resumeSeconds ?? 0)
+        let target = seekTo >= 1 ? seekTo : (stored > PlayerService.episodeResumeAtLeastSeconds ? stored : 0)
+        if target > 0 && engine.positionSeconds < 1 { engine.seek(target) }
+        episode = EpisodeTrack(url: audio, position: target, duration: song.durationSeconds.map(Double.init), sampled: false)
+        lastEpisodeSaveMs = clockMs
+        engine.play()
+        position = target
+        if engine.durationSeconds > 0 { duration = engine.durationSeconds }
+        isPlaying = true
+        isLoading = false
+        updateNowPlayingInfo()
+        AppPaths.log("play episode resume=\(Int(target)) stored=\(Int(stored)) queue=\(queue.count) index=\(index)")
+        return true
+    }
+
+    /// 流している RSS のエピソードの位置と長さを拾う（音声の部品が鳴らしている曲のときだけ）。
+    private func sampleEpisode() {
+        guard var e = episode, !isRemote, !isLoading, engine.hasSource, let song = current, Feed.audioUrlOf(song.videoId) == e.url else { return }
+        e.position = engine.positionSeconds
+        let d = engine.durationSeconds
+        e.duration = d > 0 ? d : song.durationSeconds.map(Double.init)
+        e.sampled = true
+        episode = e
+    }
+
+    /// 拾った位置を書く。finished なら最後まで聴いたとする（自然に次へ進んだ・1曲リピートで頭へ戻った）。
+    private func saveEpisode(finished: Bool = false) {
+        lastEpisodeSaveMs = clockMs
+        guard let e = episode, e.sampled || finished else { return }
+        let end = finished ? (e.duration ?? e.position) : e.position
+        AppServices.feeds.remember(e.url, positionSeconds: Int(end), durationSeconds: e.duration.map { Int($0) })
+    }
+
+    /// 曲が変わる・止める前に、今のエピソードの位置を書いて手放す。
+    private func finishEpisode() {
+        sampleEpisode()
+        saveEpisode()
+        episode = nil
+    }
+
     private func startStream(_ song: Song, _ stream: ResolvedStream, seekTo: Double, token: Int) async -> Bool {
         currentStream = stream
         cpn = PlaybackStats.newCpn()
@@ -1150,12 +1237,20 @@ final class PlayerService {
     private func onEnded() {
         guard !endHandled else { return }
         endHandled = true
-        // 曲の途中で「終わった」と来たら、読み込みの失敗とみなす（次々に飛ばさない）
+        // 曲の途中で「終わった」と来たら、読み込みの失敗とみなす（次々に飛ばさない）。
+        // RSS のエピソードは配信元の長さがずれていることが多いので、AVPlayer の終わりの知らせを信じる
+        let external = isExternal
         let known = Double(current?.durationSeconds ?? 0)
-        if known > 10 && position < known - 5 {
+        if !external && known > 10 && position < known - 5 {
             AppPaths.log("ended early position=\(String(format: "%.1f", position)) duration=\(known)")
             if let song = current { Task { await recover(song) } }
             return
+        }
+        if external, let e = episode {
+            // 最後まで聴いた（続きは頭から）。同じエピソードを流し直すなら、拾い直すまで書かない
+            sampleEpisode()
+            saveEpisode(finished: true)
+            episode = EpisodeTrack(url: e.url, position: 0, duration: episode?.duration ?? e.duration, sampled: false)
         }
         if repeatMode == .one {
             engine.seek(0)
@@ -1183,8 +1278,10 @@ final class PlayerService {
     private func recover(_ song: Song) async {
         // ライブ配信はログインなしで鳴る（www.youtube.com の匿名の HLS）。URL は IP に結び付き約6時間で切れるので、解決し直して1回やり直す
         let live = current?.videoId == song.videoId ? isLive : song.isLive
+        // RSS のエピソードはログインなしで鳴る（配信元から直接取る）
+        let external = Feed.isExternal(song.videoId)
         if live, let started = liveStartedAtMs, clockMs - started > 60_000 { retried = false }
-        if !live {
+        if !live && !external {
             guard AppServices.client.isLoggedIn else {
                 isLoading = false
                 message = L.t("曲を再生するにはログインしてください（右上のアカウントから）", "Log in to play songs (from the account button at the top right)")
@@ -1198,6 +1295,14 @@ final class PlayerService {
                 AppPaths.log("live retry")
                 isLoading = true
                 if let song = current, song.isLive, await startLive(song, token: token) {
+                    consecutiveFailures = 0
+                    return
+                }
+            } else if external {
+                AppPaths.log("episode retry")
+                isLoading = true
+                let at = position
+                if current?.videoId == song.videoId, await startExternal(song, seekTo: at, token: token) {
                     consecutiveFailures = 0
                     return
                 }
@@ -1220,7 +1325,10 @@ final class PlayerService {
             consecutiveFailures = 0
             return
         }
-        if live {
+        if external {
+            message = index + 1 < queue.count ? L.t("エピソードを再生できなかったので、次に進みます", "Couldn't play this episode, skipping to the next one")
+                : L.t("エピソードを再生できませんでした", "Couldn't play this episode")
+        } else if live {
             message = index + 1 < queue.count ? L.t("ライブ配信を再生できなかったので、次の曲に進みます", "Couldn't play this live stream, skipping to the next one")
                 : L.t("ライブ配信を再生できませんでした", "Couldn't play this live stream")
         } else {
@@ -1237,10 +1345,18 @@ final class PlayerService {
         if isPlaying && clockMs - lastPositionSaveMs > PlayerService.positionSaveIntervalMs { saveQueue() }
         guard engine.hasSource, !isLoading else { return }
         position = engine.positionSeconds
-        // 断片の MP4 では AVPlayer の読む長さが実際より長いことがある。曲の長さが分かっていればそちらを使う
-        if current?.durationSeconds == nil, engine.durationSeconds > 0 { duration = engine.durationSeconds }
-        // 長さを長く読んだときは AVPlayer が終わりを知らせないので、本当の長さ（形式の長さ、無ければ曲の長さ）に着いたら終わりとする
-        let realEnd = currentStream?.dash.map { Double($0.durationMs) / 1000 } ?? Double(current?.durationSeconds ?? 0)
+        let external = isExternal
+        // 断片の MP4 では AVPlayer の読む長さが実際より長いことがある。曲の長さが分かっていればそちらを使う。
+        // RSS のエピソードは配信元の長さ（itunes:duration）がずれていることがあるので、音声から読んだ長さを使う
+        if current?.durationSeconds == nil || external, engine.durationSeconds > 0 { duration = engine.durationSeconds }
+        // 長さを長く読んだときは AVPlayer が終わりを知らせないので、本当の長さ（形式の長さ、無ければ曲の長さ）に着いたら終わりとする。
+        // RSS のエピソードは AVPlayer の終わりの知らせに任せる
+        let realEnd = external ? 0 : currentStream?.dash.map { Double($0.durationMs) / 1000 } ?? Double(current?.durationSeconds ?? 0)
+        // RSS のエピソードの聴いたところを拾い、時々書く
+        if external && isPlaying {
+            sampleEpisode()
+            if clockMs - lastEpisodeSaveMs >= PlayerService.episodeSaveIntervalMs { saveEpisode() }
+        }
         if position < (realEnd > 10 ? realEnd : engine.durationSeconds) - 1 { endHandled = false }
         if isPlaying, !endHandled, realEnd > 10, position >= realEnd - 0.2 { onEnded() }
         if !statsSent, isPlaying, position >= PlayerService.statsAfterSeconds, let stream = currentStream, AppServices.settings.sendHistory,
@@ -1257,6 +1373,14 @@ final class PlayerService {
 
     /// 曲の評価（ログイン中だけ）と、重ねられる映像。
     private func loadSongInfo(_ song: Song, token: Int) async {
+        // RSS のエピソードには YouTube の評価も MV も無い（問い合わせない）
+        if Feed.isExternal(song.videoId) {
+            if current?.videoId == song.videoId {
+                like = nil
+                video = nil
+            }
+            return
+        }
         guard let info = (try? await AppServices.music.songInfo(song.videoId))?.value, current?.videoId == song.videoId else { return }
         if AppServices.client.isLoggedIn { like = info.like }
         // ライブ配信には重ねる映像（MV）を出さない
@@ -1278,7 +1402,8 @@ final class PlayerService {
 
     private func loadLyrics(_ song: Song, token: Int) async {
         // ライブ配信には歌詞が無い（探さない）
-        if song.isLive || (current?.videoId == song.videoId && isLive) {
+        // RSS のエピソードにも無い（ADR-0012）
+        if song.isLive || Feed.isExternal(song.videoId) || (current?.videoId == song.videoId && isLive) {
             if current?.videoId == song.videoId { lyrics = LyricsService.Result.none }
             return
         }
@@ -1290,7 +1415,7 @@ final class PlayerService {
     private func prefetch() {
         guard index + 1 < queue.count else { return }
         let next = queue[index + 1]
-        if prefetched[next.videoId] != nil || next.isLive { return }
+        if prefetched[next.videoId] != nil || next.isLive || Feed.isExternal(next.videoId) { return }
         Task {
             guard let stream = (try? await AppServices.resolver.resolve(videoId: next.videoId))?.stream else { return }
             prefetched[next.videoId] = stream
@@ -1322,6 +1447,8 @@ final class PlayerService {
         // ログアウト・別のアカウントでのログイン: 保存したキューも消す
         saveWork?.cancel()
         store.delete()
+        // RSS のエピソードの聴いたところはアカウントに結びつかないので、書いてから止める（消さない）
+        finishEpisode()
         leaveRemote()
         cancelLoad()
         engine.clear()

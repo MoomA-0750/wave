@@ -1217,7 +1217,8 @@ final class ConnectWorker: ConnectClientEffects, @unchecked Sendable {
 
 /// キューの doc と再生サービスの形の行き来（Windows の ConnectService の static の部分）。
 enum ConnectQueue {
-    static func validVideoId(_ id: String) -> Bool { id.utf16.count == 11 && matches(id, min: 11, max: 11) }
+    /// YouTube の曲か、RSS のエピソード（`ext:` + 音声の URL。受け取った側も同じ URL を流せる。ADR-0012）。
+    static func validVideoId(_ id: String) -> Bool { (id.utf16.count == 11 && matches(id, min: 11, max: 11)) || HandoffCodec.isItemVideoId(id) }
 
     /// [A-Za-z0-9_-]{min,max}
     static func matches(_ id: String, min: Int, max: Int) -> Bool {

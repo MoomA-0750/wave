@@ -18,12 +18,16 @@ struct RightPane: View {
 /// 評価のボタンの絵・色・説明（Windows と同じ）。
 /// 評価済みは✓、まだなら＋、読めていない（ログイン中で評価が分からない）なら↻（押すと読み直す。Android と同じ）。
 extension LikeButton {
+    /// RSS のエピソード（ADR-0012）は YouTube の曲ではないので出さない。
+    @ViewBuilder
     static func view(_ player: PlayerService, size: CGFloat) -> some View {
-        Button { press(player) } label: {
-            Image(systemName: symbol(player)).font(.system(size: size)).foregroundStyle(accent(player) ? Color.accentColor : Color.secondary)
+        if available(player) {
+            Button { press(player) } label: {
+                Image(systemName: symbol(player)).font(.system(size: size)).foregroundStyle(accent(player) ? Color.accentColor : Color.secondary)
+            }
+            .buttonStyle(IconButtonStyle())
+            .help(tip(player))
         }
-        .buttonStyle(IconButtonStyle())
-        .help(tip(player))
     }
 }
 

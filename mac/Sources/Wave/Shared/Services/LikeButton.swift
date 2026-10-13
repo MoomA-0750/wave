@@ -19,9 +19,12 @@ enum LikeButton {
         return L.t("高く評価した曲に追加", "Add to Liked Songs")
     }
 
+    /// 評価のボタンを出すか（RSS のエピソードは YouTube の曲ではないので、評価もプレイリストへの追加もできない。ADR-0012）。
+    static func available(_ player: PlayerService) -> Bool { !player.isExternal }
+
     /// 評価していなければ評価する。評価済みならプレイリストに追加する画面を開く（Android と同じ）。
     static func press(_ player: PlayerService) {
-        guard let song = player.current else { return }
+        guard let song = player.current, available(player) else { return }
         if player.like == .like || player.inPlaylist {
             Dialogs.shared.addToPlaylist(song)
         } else if player.like == nil && AppServices.client.isLoggedIn {

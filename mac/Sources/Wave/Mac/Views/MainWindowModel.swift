@@ -214,7 +214,7 @@ final class MainWindowModel {
             }
         }
         if libraryKind == nil || libraryKind == "podcast" {
-            entries += lib.podcasts.map {
+            entries += lib.allPodcasts.map {
                 LibraryEntry(title: $0.title, subtitle: L.t("ポッドキャスト", "Podcast") + (($0.author ?? "").isEmpty ? "" : " • " + $0.author!),
                              thumbnailUrl: $0.thumbnailUrl, podcast: $0)
             }

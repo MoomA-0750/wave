@@ -178,7 +178,8 @@ struct NowPlayingView: View {
                 .accessibilityLabel(L.t("デバイスに接続", "Connect to a device"))
             }
             Spacer()
-            if let song = player.current {
+            // RSS のエピソードには YouTube の共有のリンクが無い（ADR-0012）
+            if let song = player.current, !Feed.isExternal(song.videoId) {
                 ShareLink(item: SongActions.url(song)) { Image(systemName: "square.and.arrow.up").frame(width: 44, height: 44) }
             }
             Button { shell.queueOpen = true } label: { Image(systemName: "list.bullet").frame(width: 44, height: 44) }

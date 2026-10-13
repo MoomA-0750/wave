@@ -18,6 +18,8 @@ enum AppServices {
     private(set) static var credentials: CredentialStore!
     private(set) static var player: PlayerService!
     private(set) static var library: LibraryState!
+    /// RSS のポッドキャスト（この端末の登録と聴いたところ、目録の検索とフィードの取得。ADR-0012）。
+    private(set) static var feeds: FeedStore!
     private(set) static var account: AccountState!
     /// 登録したアーティストの新作。
     private(set) static var releases: Releases!
@@ -41,6 +43,7 @@ enum AppServices {
         settings = Settings.load()
         L.initialize(settings.language)
         RangeStream.diagnostics = { AppPaths.log($0) }
+        PodcastFeedClient.diagnostics = { AppPaths.log($0) }
         let session = InnerTubeClient.createSession()
         mediaSession = InnerTubeClient.createSession()
         // YouTube から届く文字（棚の見出しなど）を画面と同じ言語にする
@@ -56,6 +59,7 @@ enum AppServices {
         toast = ToastCenter()
         nav = Nav()
         account = AccountState()
+        feeds = FeedStore()
         library = LibraryState()
         player = PlayerService()
         ai = AiChat()
@@ -90,7 +94,8 @@ enum AppServices {
         membershipTask?.cancel()
         let membership = library.membership
         player.inPlaylist = membership.isSavedNowPlaying(player.current?.videoId)
-        guard let song = player.current, client.isLoggedIn else { return }
+        // RSS のエピソードは YouTube のプレイリストに入らない（ADR-0012）
+        guard let song = player.current, client.isLoggedIn, !Feed.isExternal(song.videoId) else { return }
         let ids = library.editable.map(\.playlistId)
         membershipTask = Task { await membership.prefetch(ids, song.videoId) }
     }

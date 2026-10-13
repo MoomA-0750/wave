@@ -50,7 +50,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         MainActor.assumeIsolated {
             for url in urls where url.scheme == "wave" {
                 MenuBarController.showMainWindow()
-                if url.host == "add-to-playlist", let song = AppServices.player.current { Dialogs.shared.addToPlaylist(song) }
+                if url.host == "add-to-playlist", let song = AppServices.player.current, !Feed.isExternal(song.videoId) { Dialogs.shared.addToPlaylist(song) }
             }
         }
     }

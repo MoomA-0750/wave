@@ -37,7 +37,22 @@ enum WidgetStore {
     static var playlists: [WidgetPlaylist] { read([WidgetPlaylist].self, "playlists.json") ?? [] }
 
     /// 今の曲のジャケット（小さい絵。ウィジェットとロック画面は通信せずにこれを読む）。
-    static func artworkFile(_ videoId: String) -> URL? { file("artwork-\(videoId).jpg") }
+    static func artworkFile(_ videoId: String) -> URL? { file(artworkName(videoId)) }
+
+    /// ジャケットのファイル名。RSS のエピソード（`ext:` + 音声の URL。ADR-0012）は `/` や `:` を含むので、
+    /// ID の字だけでできていなければ、決まった値になるハッシュ（FNV-1a）で名前にする（アプリとウィジェットで同じ名前になる）。
+    static func artworkName(_ videoId: String) -> String {
+        let plain = !videoId.isEmpty && videoId.utf8.count <= 64 && videoId.unicodeScalars.allSatisfy {
+            ($0.value >= 0x30 && $0.value <= 0x39) || ($0.value >= 0x41 && $0.value <= 0x5A) || ($0.value >= 0x61 && $0.value <= 0x7A) || $0 == "_" || $0 == "-"
+        }
+        if plain { return "artwork-\(videoId).jpg" }
+        var hash: UInt64 = 0xcbf2_9ce4_8422_2325
+        for byte in videoId.utf8 {
+            hash ^= UInt64(byte)
+            hash = hash &* 0x0000_0100_0000_01b3
+        }
+        return "artwork-x\(String(hash, radix: 16)).jpg"
+    }
     static func coverFile(_ playlistId: String) -> URL? { file("cover-\(playlistId.replacingOccurrences(of: "/", with: "_")).jpg") }
 }
 

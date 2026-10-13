@@ -53,6 +53,16 @@ struct PodcastView: View {
     /// 「新しいエピソード」は、番組を保存していないと番組のページの形で返らない（エピソードが無いだけとして出す）。
     private var isNewEpisodes: Bool { summary.browseId == MusicRepository.newEpisodesBrowse }
 
+    /// RSS の番組（`rss:…`。ADR-0012）。保存はこの端末の登録になる。
+    private var isFeed: Bool { Feed.isFeedShow(summary.browseId) }
+
+    /// 保存しているか。RSS の番組はこの端末の登録を見る（分からなければ nil）。
+    private var saved: Bool? {
+        guard page != nil else { return nil }
+        if isFeed, let url = Feed.feedUrlOf(summary.browseId) { return AppServices.feeds.isSubscribed(url) }
+        return page?.saved
+    }
+
     private func header(_ player: PlayerService) -> some View {
         let playingHere = player.sourceId == summary.playlistId && player.current != nil
         return VStack(spacing: 8) {
@@ -86,7 +96,7 @@ struct PodcastView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(episodes.isEmpty)
-                if let saved = page?.saved, AppServices.client.isLoggedIn {
+                if let saved, isFeed || AppServices.client.isLoggedIn {
                     Button { toggleSaved() } label: {
                         Label(saved ? L.t("保存済み", "Saved") : L.t("ライブラリに保存", "Save"), systemImage: saved ? "checkmark" : "plus")
                             .font(.headline)
@@ -105,9 +115,15 @@ struct PodcastView: View {
     private func load() async {
         loading = true
         failed = false
-        let result = (try? await AppServices.music.podcast(summary.browseId)) ?? .failed(.network)
+        let value: PodcastPage?
+        if isFeed {
+            // RSS の番組は、フィードを読んで同じ形にする
+            value = try? await AppServices.feeds.page(summary.browseId).get()
+        } else {
+            value = ((try? await AppServices.music.podcast(summary.browseId)) ?? .failed(.network)).value
+        }
         loading = false
-        guard let value = result.value else {
+        guard let value else {
             failed = true
             return
         }
@@ -122,8 +138,13 @@ struct PodcastView: View {
         loadingMore = true
         Task {
             defer { loadingMore = false }
-            let result = try? await AppServices.music.podcastEpisodes(continuation: token, show: ArtistRef(name: page.title, browseId: nil), showBrowseId: page.browseId)
-            guard let more = result?.value else { return }
+            let more: SearchPage<PodcastEpisode>?
+            if isFeed {
+                more = await AppServices.feeds.more(page.browseId, token)
+            } else {
+                more = (try? await AppServices.music.podcastEpisodes(continuation: token, show: ArtistRef(name: page.title, browseId: nil), showBrowseId: page.browseId))?.value
+            }
+            guard let more else { return }
             let known = Set(episodes.map(\.id))
             let fresh = more.items.filter { !known.contains($0.id) }
             episodes += fresh
@@ -134,6 +155,7 @@ struct PodcastView: View {
     }
 
     /// その位置から、読み込んだエピソードを流す（出どころは番組のプレイリスト）。
+    /// RSS の番組は YouTube のプレイリストではない（出どころの印はこの端末の「再生中」の表示にだけ使い、連携には送らない）。
     private func play(_ index: Int) {
         guard !episodes.isEmpty else { return }
         AppServices.player.playList(episodes.map(\.song), start: index, source: summary.playlistId)
@@ -141,6 +163,10 @@ struct PodcastView: View {
 
     /// 保存の切り替え。書けたら表示を変える（アーティストの登録と同じく楽観的に変えない）。
     private func toggleSaved() {
+        if isFeed {
+            if let current = page { AppServices.feeds.toggle(current) }
+            return
+        }
         guard let current = page, let saved = current.saved, !saving else { return }
         saving = true
         Task {
@@ -201,7 +227,7 @@ struct EpisodeRow: View {
                         if !showShow, let description = episode.description {
                             Text(description).font(.caption).foregroundStyle(.secondary).lineLimit(2)
                         }
-                        if let percent = episode.progressPercent {
+                        if let percent = AppServices.feeds.progress(episode) {
                             ProgressView(value: Double(percent), total: 100).frame(maxWidth: 140)
                         }
                     }
