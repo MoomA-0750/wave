@@ -36,6 +36,13 @@ class MusicRepository(
             },
         ) { response -> ParseOutcome.Parsed(MusicParsers.searchSongs(json(response))) }
 
+    /** 絞り込まない検索の、一番上の結果と各棚の曲・動画（検索の順）。歌詞から探すときの候補（[xyz.mooma0750.wave.core.lyrics.LyricsSearch]）。 */
+    suspend fun searchTopSongs(query: String): CallResult<List<Song>> =
+        session.call(
+            operation = "search",
+            block = { it.search(YouTubeClient.WEB_REMIX, query = query) },
+        ) { response -> ParseOutcome.Parsed(MusicParsers.searchTopSongs(json(response))) }
+
     /** ホームのおすすめの棚。continuation を渡したら続きの棚。params は絞り込み（[HomeChip]）。 */
     suspend fun home(
         continuation: String? = null,

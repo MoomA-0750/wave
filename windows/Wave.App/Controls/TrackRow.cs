@@ -25,6 +25,9 @@ public sealed partial class TrackRow : ObservableObject
     public bool ShowArtwork { get; init; } = true;
     /// <summary>この行のメニューを作る（ページごとに「このプレイリストから削除」などを足す）。</summary>
     public Func<TrackRow, MenuFlyout>? Menu { get; init; }
+    /// <summary>行の下に添える引用（歌詞から探したときの、歌詞の合った行）。</summary>
+    public string? Quote { get; init; }
+    public bool HasQuote => Quote is not null;
 
     [ObservableProperty] private bool isCurrent;
     /// <summary>高く評価した曲（右に✓のバッジを出す。Android・Spotify と同じ）。</summary>

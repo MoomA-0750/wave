@@ -41,6 +41,9 @@ public sealed partial class SearchPage : Page
     private int liveLoadedFor = -1;
     private bool liveLoaded;
     private bool noResults;
+    // 歌詞から探した曲は、「歌詞」の絞り込みを初めて選んだときに読む（続きのページは無い。Android と同じ）
+    private readonly ObservableCollection<TrackRow> lyricsRows = [];
+    private bool lyricsLoaded;
 
     public SearchPage()
     {
@@ -49,11 +52,13 @@ public sealed partial class SearchPage : Page
         LiveList.ItemsSource = liveRows;
         CardGrid.ItemsSource = cards;
         EpisodeList.ItemsSource = episodes;
+        LyricsList.ItemsSource = lyricsRows;
         AppServices.Player.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName != nameof(PlayerService.Current)) return;
             TrackRow.MarkCurrent(songRows, AppServices.Player.Current?.VideoId);
             TrackRow.MarkCurrent(liveRows, AppServices.Player.Current?.VideoId);
+            TrackRow.MarkCurrent(lyricsRows, AppServices.Player.Current?.VideoId);
         };
         SongList.Loaded += (_, _) => Attach(SongList, () => LoadMoreSongsAsync());
         CardGrid.Loaded += (_, _) => Attach(CardGrid, () => LoadMoreCardsAsync());
@@ -128,6 +133,9 @@ public sealed partial class SearchPage : Page
         liveLoaded = false;
         noResults = false;
         LiveList.Visibility = Visibility.Collapsed;
+        lyricsRows.Clear();
+        lyricsLoaded = false;
+        LyricsList.Visibility = Visibility.Collapsed;
         var songsTask = AppServices.Music.SearchSongsAsync(q);
         var albumsTask = AppServices.Music.SearchAlbumsAsync(q);
         var artistsTask = AppServices.Music.SearchArtistsAsync(q);
@@ -144,8 +152,8 @@ public sealed partial class SearchPage : Page
         {
             noResults = true;
             Empty.Visibility = Visibility.Visible;
-            // ライブ・ポッドキャスト・エピソードのタブを開いていれば、それは別に探す
-            if (SelectedTab is "live" or "podcasts" or "episodes") ShowTab();
+            // ライブ・ポッドキャスト・エピソード・歌詞のタブを開いていれば、それは別に探す
+            if (SelectedTab is "live" or "podcasts" or "episodes" or "lyrics") ShowTab();
             return;
         }
         var number = 1;
@@ -197,6 +205,12 @@ public sealed partial class SearchPage : Page
 
     /// <summary>開発用: ライブのタブの行の数。</summary>
     public int DebugLiveRows => liveRows.Count;
+
+    /// <summary>開発用: そのタブの行の数（ライブ・歌詞）。</summary>
+    public int DebugRows(string tag) => tag == "lyrics" ? lyricsRows.Count : liveRows.Count;
+
+    /// <summary>開発用: 歌詞のタブの先頭の行（曲名と引用）。</summary>
+    public string? DebugLyricsTop => lyricsRows.FirstOrDefault() is { } r ? $"{r.Song.Title} / {r.Song.ArtistsText} / {r.Quote}" : null;
 #endif
 
     private string SelectedTab => (Tabs.SelectedItem?.Tag as string) ?? "all";
@@ -213,8 +227,9 @@ public sealed partial class SearchPage : Page
         CardGrid.Visibility = Ui.Show(tab is "albums" or "artists" or "podcasts");
         EpisodeList.Visibility = Ui.Show(tab == "episodes");
         LiveList.Visibility = Ui.Show(live);
-        // ライブ・ポッドキャスト・エピソードは、選んだときに別に読んだ結果で「見つからない」を決める
-        Empty.Visibility = Ui.Show(live ? liveLoaded && liveRows.Count == 0 : noResults && tab is not ("podcasts" or "episodes"));
+        LyricsList.Visibility = Ui.Show(tab == "lyrics");
+        // ライブ・ポッドキャスト・エピソード・歌詞は、選んだときに別に読んだ結果で「見つからない」を決める
+        Empty.Visibility = Ui.Show(live ? liveLoaded && liveRows.Count == 0 : noResults && tab is not ("podcasts" or "episodes" or "lyrics"));
         if (live && liveLoadedFor != requestId) _ = LoadLiveAsync();
         if (tab is "albums" or "artists")
         {
@@ -237,7 +252,44 @@ public sealed partial class SearchPage : Page
             if (!episodesLoaded) _ = LoadEpisodesAsync();
             else Empty.Visibility = Ui.Show(episodes.Count == 0);
         }
+        else if (tab == "lyrics")
+        {
+            if (!lyricsLoaded) _ = LoadLyricsAsync();
+            else Empty.Visibility = Ui.Show(lyricsRows.Count == 0);
+        }
     }
+
+    /// <summary>
+    /// 歌詞から探した曲（絞り込まない検索の上位の曲の歌詞と照らし合わせる）。歌詞に語が見つかった曲を先に、その行を引用して出す。
+    /// 失敗は 0 件と同じに「見つからない」を出す（ポッドキャスト・エピソードと同じ）。
+    /// </summary>
+    private async Task LoadLyricsAsync()
+    {
+        if (loadingTab || query is null) return;
+        loadingTab = true;
+        var id = requestId;
+        LoadingRing.IsActive = true;
+        var result = await AppServices.LyricsSearch.SearchAsync(query);
+        if (id != requestId) return;
+        loadingTab = false;
+        LoadingRing.IsActive = false;
+        lyricsLoaded = true;
+        lyricsRows.Clear();
+        if (result.IsOk)
+        {
+            var number = 1;
+            foreach (var hit in result.Value!)
+                lyricsRows.Add(new TrackRow(number++, hit.Song) { Menu = r => SongMenu.Build(r.Song), Quote = QuoteOf(hit.Match) });
+            TrackRow.MarkCurrent(lyricsRows, AppServices.Player.Current?.VideoId);
+        }
+        AppPaths.Log($"search lyrics ok={result.IsOk} items={lyricsRows.Count} matched={result.Value?.Count(h => h.Match is not null)}");
+        // 読んでいる間にほかの絞り込みへ移っていれば、そちらを出し直す（読むのを待たせていた絞り込みもここで読む）
+        ShowTab();
+    }
+
+    /// <summary>合った歌詞の行の引用。大体合っているときは先頭に「≈ 」（Android と同じ）。</summary>
+    internal static string? QuoteOf(Wave.Core.Lyrics.LyricsMatch? match) =>
+        match is null ? null : (match.Exact ? "" : "≈ ") + "\u201C" + match.Line + "\u201D";
 
     /// <summary>ポッドキャスト（番組）の最初のページ。</summary>
     private async Task LoadPodcastsAsync()

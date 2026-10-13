@@ -27,6 +27,43 @@ internal object MusicParsers {
         return SongPage(songs, nextContinuation(shelf))
     }
 
+    /**
+     * 絞り込まない検索の最初のページから、曲と動画を出てくる順に集める。一番上の結果（musicCardShelfRenderer）が曲なら先頭に置く。
+     * 棚は musicShelfRenderer と itemSectionRenderer のどちらでも来る（2026-10 に両方を見た）。
+     */
+    fun searchTopSongs(root: JsonObject): List<Song> {
+        val sections =
+            root
+                .path("contents", "tabbedSearchResultsRenderer", "tabs")
+                .firstArrayItem()
+                .path("tabRenderer", "content", "sectionListRenderer", "contents")
+                .arrayItems()
+        val songs = mutableListOf<Song>()
+        for (section in sections) {
+            section.path("musicCardShelfRenderer").asObject()?.let(::cardSong)?.let { songs += it }
+            val rows = section.path("musicShelfRenderer", "contents").arrayItems() + section.path("itemSectionRenderer", "contents").arrayItems()
+            rows.mapNotNullTo(songs) { it.path("musicResponsiveListItemRenderer").asObject()?.let(::responsiveListItemSong) }
+        }
+        return songs.distinctBy { it.videoId }
+    }
+
+    /** 一番上の結果の欄が曲・動画なら、その曲。アーティスト・アルバムなどの欄（videoId が無い）は null。 */
+    private fun cardSong(card: JsonObject): Song? {
+        val titleRuns = card.path("title", "runs").arrayItems()
+        val watch = titleRuns.firstNotNullOfOrNull { it.path("navigationEndpoint", "watchEndpoint").asObject() } ?: return null
+        val videoId = watch.path("videoId").string() ?: return null
+        val subtitle = card.path("subtitle", "runs").arrayItems()
+        return Song(
+            videoId = videoId,
+            title = runsText(titleRuns) ?: return null,
+            artists = artistsOf(subtitle),
+            album = albumOf(subtitle),
+            durationSeconds = durationOf(subtitle),
+            thumbnailUrl = lastThumbnailUrl(card.path("thumbnail")),
+            kind = MusicVideoType.of(watch.path("watchEndpointMusicSupportedConfigs", "watchEndpointMusicConfig", "musicVideoType").string()),
+        )
+    }
+
     /** アルバムに絞った検索の最初のページと続きのページ。 */
     fun searchAlbums(root: JsonObject): SearchPage<AlbumSummary> = searchPage(root, ::albumRow)
 

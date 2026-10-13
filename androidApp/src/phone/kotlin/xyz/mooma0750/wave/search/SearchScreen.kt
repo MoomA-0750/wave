@@ -58,6 +58,7 @@ import xyz.mooma0750.wave.core.music.ArtistSummary
 import xyz.mooma0750.wave.core.music.PodcastEpisode
 import xyz.mooma0750.wave.core.music.PodcastSummary
 import xyz.mooma0750.wave.core.music.SearchSuggestions
+import xyz.mooma0750.wave.core.lyrics.LyricsHit
 import xyz.mooma0750.wave.core.music.Song
 import xyz.mooma0750.wave.core.session.FailureKind
 import xyz.mooma0750.wave.navigation.SongActions
@@ -226,7 +227,7 @@ private fun Results(
     }
     when {
         state.failure != null -> Text(failureMessage(state.failure), Modifier.padding(16.dp))
-        state.empty && state.tab !in setOf(SearchTab.Live, SearchTab.Podcasts, SearchTab.Episodes) -> Text(stringResource(R.string.search_not_found), Modifier.padding(16.dp))
+        state.empty && state.tab !in setOf(SearchTab.Live, SearchTab.Podcasts, SearchTab.Episodes, SearchTab.Lyrics) -> Text(stringResource(R.string.search_not_found), Modifier.padding(16.dp))
     }
     val openArtist = opener.artist
     val openAlbum = opener.album
@@ -286,6 +287,11 @@ private fun Results(
             SearchTab.Live -> {
                 pagedItems(state.lives, { "lv-$it-" }, { viewModel.loadMore(SearchTab.Live) }) { songRow(it) }
                 if (state.lives.loaded && state.lives.items.isEmpty() && state.lives.failure == null) item { Text(stringResource(R.string.search_not_found), Modifier.padding(16.dp)) }
+            }
+            SearchTab.Lyrics -> {
+                // 歌詞に語が見つかった曲を先に、見つかった行を添えて出す。見つからなかった曲は検索の順で後ろに
+                pagedItems(state.lyrics, { "ly-$it-" }, {}) { hit -> LyricsHitRow(hit, onClick = { onSongClick(hit.song) }) { SongMenuButton(hit.song, actions) } }
+                notFound(state.lyrics)
             }
         }
         if (state.loading) item { LoadingIndicator(Modifier.padding(16.dp)) }
@@ -437,7 +443,30 @@ private fun tabLabel(tab: SearchTab): String =
         SearchTab.Podcasts -> stringResource(R.string.search_tab_podcasts)
         SearchTab.Episodes -> stringResource(R.string.search_tab_episodes)
         SearchTab.Live -> stringResource(R.string.search_tab_live)
+        SearchTab.Lyrics -> stringResource(R.string.search_tab_lyrics)
     }
+
+/** 歌詞から探した1曲。歌詞に語が見つかったら、その行を曲の下に引用する（大体合っているときは「≈」を付ける）。 */
+@Composable
+private fun LyricsHitRow(
+    hit: LyricsHit,
+    onClick: () -> Unit,
+    trailing: @Composable () -> Unit,
+) {
+    Column(Modifier.fillMaxWidth().clickable(onClick = onClick)) {
+        SongRow(hit.song, onClick = onClick, trailing = trailing)
+        hit.match?.let { match ->
+            Text(
+                (if (match.exact) "" else "≈ ") + "“${match.line}”",
+                Modifier.padding(start = 76.dp, end = 16.dp, bottom = 8.dp),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+    }
+}
 
 private const val PREVIEW_COUNT = 4
 

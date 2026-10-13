@@ -80,6 +80,7 @@
                 <SelectorBarItem Text="{x:Bind app:L.T('ライブ', 'Live')}" Tag="live" />
                 <SelectorBarItem Text="{x:Bind app:L.T('ポッドキャスト', 'Podcasts')}" Tag="podcasts" />
                 <SelectorBarItem Text="{x:Bind app:L.T('エピソード', 'Episodes')}" Tag="episodes" />
+                <SelectorBarItem Text="{x:Bind app:L.T('歌詞', 'Lyrics')}" Tag="lyrics" />
             </SelectorBar>
 
             <ScrollViewer x:Name="AllView" Grid.Row="1">
@@ -147,6 +148,9 @@
                     </DataTemplate>
                 </ListView.ItemTemplate>
             </ListView>
+            <!-- 歌詞から探した曲（歌詞に語が見つかった曲を先に、見つかった行を添えて。押すとほかの曲の行と同じに再生。続きのページは無い） -->
+            <ListView x:Name="LyricsList" Grid.Row="1" Visibility="Collapsed" Padding="12,8" ItemTemplate="{StaticResource LyricsRowTemplate}"
+                      ItemContainerStyle="{StaticResource TrackListItemStyle}" DoubleTapped="OnSongDoubleTapped" />
             <!-- ライブ配信（YouTube Music の動画のライブと、YouTube のライブの絞り込み） -->
             <ListView x:Name="LiveList" Grid.Row="1" Visibility="Collapsed" Padding="12,8" ItemTemplate="{StaticResource TrackRowTemplate}"
                       ItemContainerStyle="{StaticResource TrackListItemStyle}" DoubleTapped="OnSongDoubleTapped" />

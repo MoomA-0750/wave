@@ -50,6 +50,15 @@ enum IOSDebugCommands {
         case "queue": shell.playerOpen = true; shell.queueOpen = arg != "close"
         case "lyrics": shell.playerOpen = true; LyricsSheetState.shared.open = arg != "close"
         case "search": nav.search(arg)
+        case "search-tab":
+            // 検索の結果の絞り込み（all・songs・albums・artists・live・podcasts・episodes・lyrics）を選ぶ。歌詞は読み終わるのを待って記録に書く
+            let ok = SearchDebug.selectTab(arg)
+            if arg == "lyrics" {
+                for _ in 0..<80 where SearchDebug.lyricsLoading { try? await Task.sleep(for: .milliseconds(250)) }
+                AppPaths.log("debug search-tab lyrics ok=\(ok) \(SearchDebug.lyricsSummary)")
+            } else {
+                AppPaths.log("debug search-tab \(arg) ok=\(ok)")
+            }
         case "album": nav.album(arg)
         case "artist": nav.artist(arg)
         case "podcast": nav.podcast(PodcastSummary(browseId: arg, title: arg, author: nil, thumbnailUrl: nil))

@@ -332,7 +332,7 @@ class MainActivity : ComponentActivity() {
                                             )
                                         }
                                     SearchScreen(
-                                        viewModel(key = "search-$loginGeneration") { SearchViewModel(container.music, container.searchHistory, container.podcastFeeds) },
+                                        viewModel(key = "search-$loginGeneration") { SearchViewModel(container.music, container.searchHistory, container.podcastFeeds, container.lyricsSearch) },
                                         onSongClick = playerActions::playSong,
                                         actions = searchActions,
                                         onBack = pop,

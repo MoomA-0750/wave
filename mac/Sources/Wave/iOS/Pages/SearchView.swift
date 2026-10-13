@@ -4,7 +4,7 @@ import WaveCore
 
 /// 検索の結果の絞り込み（Android の SearchTab と同じ）。
 private enum SearchTab: String, CaseIterable, Hashable {
-    case all, songs, albums, artists, live, podcasts, episodes
+    case all, songs, albums, artists, live, podcasts, episodes, lyrics
 
     var label: String {
         switch self {
@@ -15,6 +15,7 @@ private enum SearchTab: String, CaseIterable, Hashable {
         case .podcasts: L.t("ポッドキャスト", "Podcasts")
         case .episodes: L.t("エピソード", "Episodes")
         case .live: L.t("ライブ", "Live")
+        case .lyrics: L.t("歌詞", "Lyrics")
         }
     }
 }
@@ -22,9 +23,17 @@ private enum SearchTab: String, CaseIterable, Hashable {
 /// 検索の状態（Android の SearchViewModel・MoodsViewModel と、Mac の SearchPageModel と同じ読み方）。
 @MainActor @Observable
 private final class SearchModel {
+    /// 開いている検索の画面（開発用の命令から絞り込みを選ぶため）。
+    @ObservationIgnored nonisolated(unsafe) static weak var current: SearchModel?
+
     /// 確定した検索語（nil なら結果を出していない）。
     var committed: String?
-    var tab = SearchTab.all { didSet { if tab == .live { loadLiveIfNeeded() } } }
+    var tab = SearchTab.all {
+        didSet {
+            if tab == .live { loadLiveIfNeeded() }
+            if tab == .lyrics { loadLyricsIfNeeded() }
+        }
+    }
     var loading = false
     var empty = false
     var failure: FailureKind?
@@ -50,6 +59,11 @@ private final class SearchModel {
     var liveFailure: FailureKind?
     @ObservationIgnored private var liveQuery: String?
     @ObservationIgnored private var liveContinuation: String?
+    /// 「歌詞」の絞り込み（打った語を歌詞の一節として探した曲。Android と同じ）。開いたときに読む。続きのページは無い。
+    var lyricsHits: [LyricsHit] = []
+    var lyricsLoading = false
+    var lyricsFailure: FailureKind?
+    @ObservationIgnored private var lyricsQuery: String?
 
     var suggestions: SearchSuggestions?
     var history: [SearchHistoryEntry] = []
@@ -139,6 +153,9 @@ private final class SearchModel {
         liveQuery = nil
         liveContinuation = nil
         liveFailure = nil
+        lyricsHits = []
+        lyricsQuery = nil
+        lyricsFailure = nil
         Task {
             let music = AppServices.music!
             async let s = music.searchSongs(q)
@@ -231,6 +248,26 @@ private final class SearchModel {
         }
     }
 
+    /// 歌詞から探す（絞り込まない検索の上位の曲の歌詞と照らし合わせる。Android と同じ）。歌詞に語が見つかった曲が先に来る。同じ語では読み直さない。
+    func loadLyricsIfNeeded() {
+        guard let q = committed?.trimmingCharacters(in: .whitespaces), !q.isEmpty, lyricsQuery != q else { return }
+        lyricsQuery = q
+        lyricsLoading = true
+        lyricsFailure = nil
+        let id = requestId
+        Task {
+            let result = (try? await AppServices.lyricsSearch.search(q)) ?? .failed(.network)
+            guard id == requestId, lyricsQuery == q else { return }
+            lyricsLoading = false
+            guard let hits = result.value else {
+                lyricsFailure = result.failure ?? .network
+                lyricsQuery = nil
+                return
+            }
+            lyricsHits = hits
+        }
+    }
+
     /// 種類で絞った一覧の最後まで来たら続きを読む。
     func loadMore(_ tab: SearchTab) {
         guard !loadingMore, let q = committed?.trimmingCharacters(in: .whitespaces) else { return }
@@ -297,11 +334,33 @@ private final class SearchModel {
                 let known = Set(liveSongs.map(\.videoId))
                 liveSongs += page.songs.filter { !known.contains($0.videoId) }
             }
-        case .all:
+        // 歌詞は上位の数曲だけを確かめるので、続きは無い
+        case .all, .lyrics:
             return
         }
     }
 }
+
+#if WAVE_DEBUG
+/// 開発用: 開いている検索の画面の絞り込みを選ぶ（IOSDebugCommands の search-tab）。
+@MainActor
+enum SearchDebug {
+    static func selectTab(_ raw: String) -> Bool {
+        guard let model = SearchModel.current, let tab = SearchTab(rawValue: raw) else { return false }
+        model.tab = tab
+        return true
+    }
+
+    static var lyricsLoading: Bool { SearchModel.current?.lyricsLoading ?? false }
+
+    /// 歌詞の絞り込みの件数と先頭の行（曲名・アーティスト・引用）。
+    static var lyricsSummary: String {
+        let hits = SearchModel.current?.lyricsHits ?? []
+        let top = hits.first.map { h in "\(h.song.title) / \(h.song.artistsText) / \(h.match.map { ($0.exact ? "" : "≈ ") + $0.line } ?? "-")" } ?? "-"
+        return "rows=\(hits.count) matched=\(hits.filter { $0.match != nil }.count) failed=\(SearchModel.current?.lyricsFailure != nil) top=\(top)"
+    }
+}
+#endif
 
 /// 読み込みの失敗の文（Android の failureMessage と同じ分け方）。
 private func failureText(_ failure: FailureKind) -> String {
@@ -350,7 +409,10 @@ struct SearchView: View {
                 shell.searchQuery = nil
                 if !query.isEmpty { submit(query) }
             }
-            .onAppear { model.showHistory() }
+            .onAppear {
+                SearchModel.current = model
+                model.showHistory()
+            }
     }
 
     private enum Phase { case browse, typing, results }
@@ -471,7 +533,7 @@ struct SearchView: View {
     private var results: some View {
         List {
             Section {
-                // 種類のチップ（6つあるので横に送る。Android の FilterChip と同じ）
+                // 種類のチップ（画面に収まらないので横に送る。Android の FilterChip と同じ）
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         ForEach(SearchTab.allCases, id: \.self) { tab in
@@ -486,6 +548,8 @@ struct SearchView: View {
             }
             if model.tab == .live {
                 liveRows
+            } else if model.tab == .lyrics {
+                lyricsRows
             } else if model.loading || (model.podcastsLoading && (model.tab == .podcasts || model.tab == .episodes)) {
                 ProgressView().frame(maxWidth: .infinity).padding(.vertical, 40).listRowSeparator(.hidden).listRowBackground(Color.clear)
             } else if let failure = model.failure {
@@ -500,7 +564,7 @@ struct SearchView: View {
                 case .artists: paged(model.artists.map { HomeItem.artist($0) }, more: model.artistContinuation != nil, tab: .artists)
                 case .podcasts: pagedPodcasts
                 case .episodes: pagedEpisodes
-                case .live: EmptyView()
+                case .live, .lyrics: EmptyView()
                 }
             }
         }
@@ -591,6 +655,36 @@ struct SearchView: View {
                     .onAppear { if song.videoId == model.liveSongs.last?.videoId { model.loadMore(.live) } }
             }
             if model.loadingMore { ProgressView().frame(maxWidth: .infinity).listRowSeparator(.hidden) }
+        }
+    }
+
+    /// 「歌詞」: 歌詞に語が見つかった曲を先に、見つかった行を曲の下に引用して出す（大体合っているときは「≈」）。押すとほかの曲の行と同じ。
+    @ViewBuilder private var lyricsRows: some View {
+        if model.lyricsLoading {
+            ProgressView().frame(maxWidth: .infinity).padding(.vertical, 40).listRowSeparator(.hidden).listRowBackground(Color.clear)
+        } else if let failure = model.lyricsFailure {
+            LoadState(loading: false, failure: L.t("歌詞から探せませんでした: ", "Couldn't search by lyrics: ") + failureText(failure)) {
+                model.loadLyricsIfNeeded()
+            }
+            .listRowSeparator(.hidden)
+        } else if model.lyricsHits.isEmpty {
+            Text(L.t("見つかりませんでした", "No results found")).foregroundStyle(.secondary).listRowSeparator(.hidden)
+        } else {
+            ForEach(model.lyricsHits) { hit in
+                VStack(alignment: .leading, spacing: 4) {
+                    SongRow(song: hit.song) { open(.song(hit.song)) }
+                    if let match = hit.match {
+                        // 画像の幅だけ下げて、曲名の下にそろえる
+                        Text((match.exact ? "" : "≈ ") + "\u{201C}" + match.line + "\u{201D}")
+                            .font(.subheadline)
+                            .foregroundStyle(Color.accentColor)
+                            .lineLimit(2)
+                            .padding(.leading, 60)
+                    }
+                }
+                .contentShape(Rectangle())
+                .onTapGesture { open(.song(hit.song)) }
+            }
         }
     }
 

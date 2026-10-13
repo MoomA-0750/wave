@@ -241,6 +241,9 @@ class AppContainer(
             LrclibClient(HttpClient(OkHttp.create { preconfigured = mediaHttpClient }), userAgent = "wave/${BuildConfig.VERSION_NAME}"),
         )
 
+    /** 歌詞の一節から曲を探す（検索の「歌詞」）。歌詞は再生画面と同じところから取り、同じキャッシュを使う。 */
+    val lyricsSearch = xyz.mooma0750.wave.core.lyrics.LyricsSearch(music, lyrics)
+
     /** アーティストの YouTube のチャンネルの投稿（ライブの告知）。認証情報を持たないクライアントで読む。 */
     val channelPosts =
         xyz.mooma0750.wave.core.music.ChannelPostsClient(
