@@ -18,7 +18,9 @@ import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
 import androidx.media3.session.CommandButton
 import androidx.media3.session.MediaSession
-import androidx.media3.session.MediaSessionService
+import androidx.media3.session.LibraryResult
+import androidx.media3.session.MediaLibraryService
+import androidx.media3.session.MediaLibraryService.MediaLibrarySession
 import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionError
 import androidx.media3.session.SessionResult
@@ -31,6 +33,9 @@ import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.guava.future
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.plus
 import xyz.mooma0750.wave.AppContainer
@@ -50,7 +55,7 @@ import xyz.mooma0750.wave.handoff.HandoffSnapshot
 
 /** 再生の本体。画面が無くても動き、キューの続き（サジェスト）もここで取る。 */
 @OptIn(UnstableApi::class)
-class PlaybackService : MediaSessionService() {
+class PlaybackService : MediaLibraryService() {
     // 保存などの例外でサービスごと落とさない（種類だけを記録する）
     private val scope =
         MainScope() +
@@ -60,7 +65,10 @@ class PlaybackService : MediaSessionService() {
 
     /** 直前のエラーが、この曲だけの失敗だったか（次が無くて飛ばせず止まった場合に、続きが来たら再開してよい）。 */
     private var lastErrorWasThisSong = false
-    private var session: MediaSession? = null
+    private var session: MediaLibrarySession? = null
+
+    /** Android Auto に出す一覧（ADR-0014）。 */
+    private val carBrowser by lazy { CarBrowser(container.music, getString(R.string.library_filter_playlists), getString(R.string.home_recently_played)) }
 
     /** 手元の再生器（セッションの再生器は、ほかの端末を映している間だけ remotePlayer に替わる）。 */
     private var localPlayer: ExoPlayer? = null
@@ -348,9 +356,8 @@ class PlaybackService : MediaSessionService() {
             }
         }
         session =
-            MediaSession
-                .Builder(this, player)
-                .setCallback(Callback(queueSession))
+            MediaLibrarySession
+                .Builder(this, player, Callback(queueSession))
                 // 通知・ロック画面・時計から、アプリに戻れるようにする
                 .setSessionActivity(
                     android.app.PendingIntent.getActivity(
@@ -833,7 +840,7 @@ class PlaybackService : MediaSessionService() {
 
     private inner class Callback(
         private val queue: QueueSession,
-    ) : MediaSession.Callback {
+    ) : MediaLibrarySession.Callback {
         override fun onConnect(
             session: MediaSession,
             controller: MediaSession.ControllerInfo,
@@ -979,9 +986,118 @@ class PlaybackService : MediaSessionService() {
             controller: MediaSession.ControllerInfo,
             mediaItems: MutableList<MediaItem>,
         ): ListenableFuture<MutableList<MediaItem>> = Futures.immediateFailedFuture(UnsupportedOperationException("use queue commands"))
+
+        /** ルートはどの相手にも返す（子は車にだけ見せる）。ルートが無いと、時計などの古い作りのアプリがつなげない。 */
+        override fun onGetLibraryRoot(
+            session: MediaLibrarySession,
+            browser: MediaSession.ControllerInfo,
+            params: MediaLibraryService.LibraryParams?,
+        ): ListenableFuture<LibraryResult<MediaItem>> = Futures.immediateFuture(LibraryResult.ofItem(carBrowser.root(), params))
+
+        override fun onGetChildren(
+            session: MediaLibrarySession,
+            browser: MediaSession.ControllerInfo,
+            parentId: String,
+            page: Int,
+            pageSize: Int,
+            params: MediaLibraryService.LibraryParams?,
+        ): ListenableFuture<LibraryResult<com.google.common.collect.ImmutableList<MediaItem>>> {
+            if (!isCarController(session, browser)) return Futures.immediateFuture(LibraryResult.ofItemList(com.google.common.collect.ImmutableList.of(), params))
+            return scope.future {
+                val children = carBrowser.children(parentId) ?: return@future LibraryResult.ofError(SessionError.ERROR_IO)
+                val from = (page.coerceAtLeast(0).toLong() * pageSize.coerceAtLeast(1)).coerceAtMost(children.size.toLong()).toInt()
+                val to = (from + pageSize.coerceAtLeast(1)).coerceAtMost(children.size)
+                LibraryResult.ofItemList(com.google.common.collect.ImmutableList.copyOf(children.subList(from, to)), params)
+            }
+        }
+
+        /** 車で一覧の曲を選んだ: 画面で選んだときと同じキューの操作で流し、できたキューを返す（Media3 がそれを再生器に置き直す）。 */
+        override fun onSetMediaItems(
+            mediaSession: MediaSession,
+            controller: MediaSession.ControllerInfo,
+            mediaItems: MutableList<MediaItem>,
+            startIndex: Int,
+            startPositionMs: Long,
+        ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
+            val selection = mediaItems.singleOrNull()?.mediaId?.takeIf { isCarController(mediaSession, controller) }?.let(carBrowser::selection)
+            val local = localPlayer
+            if (selection == null || local == null) return super.onSetMediaItems(mediaSession, controller, mediaItems, startIndex, startPositionMs)
+            skipGuard.onUserSelection()
+            // ほかの端末を映していたら、手元の再生器に戻してから流す（車では手元で鳴らす）
+            if (mediaSession.player !== local) mediaSession.player = local
+            suppressingV2 { queue.playFrom(selection.songs, selection.index, selection.playlistId, selection.continuation) }
+            container.connectV2Host.listener?.onUserStartedPlayback(newSelection = true)
+            return Futures.immediateFuture(currentItems(local))
+        }
+
+        /**
+         * 再生の再開: キューが空のときに「再生」が来た。車（Android Auto）・システムのメディアの操作からなら、保存したキューを戻して返す。
+         * 明示的な Intent（メディアボタン）からは戻さない（MediaButtonReceiver は置かない、ADR-0006 の 8・ADR-0014）。
+         */
+        override fun onPlaybackResumption(
+            mediaSession: MediaSession,
+            controller: MediaSession.ControllerInfo,
+            isForPlayback: Boolean,
+        ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
+            val local = localPlayer
+            if (local == null || !mayResume(mediaSession, controller)) return Futures.immediateFailedFuture(UnsupportedOperationException("resumption not allowed"))
+            Log.i(WaveApplication.LOG_TAG, "resumption package=${controller.packageName} playback=$isForPlayback")
+            return scope.future {
+                // 起動した直後は、保存したログインの復元が終わっていない
+                withTimeoutOrNull(RESUME_WAIT_MS) { container.authManager.state.first { it !is AuthState.Restoring } }
+                withTimeoutOrNull(RESUME_WAIT_MS) { while (loggedInAt == null) delay(RESUME_POLL_MS) }
+                val obtainedAt = loggedInAt
+                if (local.mediaItemCount == 0 && obtainedAt != null && !restoreStarted) {
+                    restoreStarted = true
+                    restoreSavedQueue(queue, local, obtainedAt)
+                    restoreSettled = true
+                } else {
+                    // 画面からの戻しが進んでいる最中なら、終わるのを待つ
+                    withTimeoutOrNull(RESUME_WAIT_MS) { while (restoreStarted && !restoreSettled) delay(RESUME_POLL_MS) }
+                }
+                if (local.mediaItemCount == 0) throw IllegalStateException("nothing to resume")
+                Log.i(WaveApplication.LOG_TAG, "resumption restored size=${local.mediaItemCount}")
+                currentItems(local)
+            }
+        }
     }
 
-    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = session
+    /** 今の再生器のキュー（Media3 に返すと、同じ並びが置き直される）。 */
+    private fun currentItems(player: Player): MediaSession.MediaItemsWithStartPosition =
+        MediaSession.MediaItemsWithStartPosition(
+            (0 until player.mediaItemCount).map(player::getMediaItemAt),
+            player.currentMediaItemIndex,
+            player.currentPosition,
+        )
+
+    /** onConnect で再生の操作を許した外部の相手か（信頼された・通知を読める）。 */
+    private fun playsOnly(
+        session: MediaSession,
+        controller: MediaSession.ControllerInfo,
+    ): Boolean =
+        ControllerGate.classify(
+            isOwnNotificationController = isOwnNotificationController(session, controller),
+            isOwnUiController = isOwnUiController(session, controller),
+            isTrusted = controller.isTrusted,
+            readsOurNotification = { controller.packageName in notificationListenerPackages() },
+        ) == ControllerGate.Access.PlaybackOnly
+
+    /** Android Auto か。名乗ったパッケージを、つないできた uid が本当に持っているかも確かめる（ADR-0014）。 */
+    private fun isCarController(
+        session: MediaSession,
+        controller: MediaSession.ControllerInfo,
+    ): Boolean =
+        controller.packageName == CarBrowser.CAR_PACKAGE &&
+            runCatching { packageManager.getPackagesForUid(controller.uid)?.contains(CarBrowser.CAR_PACKAGE) == true }.getOrDefault(false) &&
+            playsOnly(session, controller)
+
+    /** 再生の再開で保存したキューを戻してよい相手か（車・システムのメディアの操作。自アプリの画面は画面の側で戻す）。 */
+    private fun mayResume(
+        session: MediaSession,
+        controller: MediaSession.ControllerInfo,
+    ): Boolean = isOwnUiController(session, controller) || (controller.isTrusted && playsOnly(session, controller)) || isCarController(session, controller)
+
+    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? = session
 
     override fun onStartCommand(
         intent: Intent?,
@@ -1078,6 +1194,10 @@ class PlaybackService : MediaSessionService() {
 
         /** 通知・ロック画面・時計に渡す画像の、長辺の上限。 */
         const val ARTWORK_MAX_PIXELS = 1024
+
+        /** 再生の再開で、ログインの復元・画面からの戻しを待つ長さ。 */
+        const val RESUME_WAIT_MS = 10_000L
+        const val RESUME_POLL_MS = 100L
         const val CUSTOM_NOTIFICATION_ACTION = "androidx.media3.session.CUSTOM_NOTIFICATION_ACTION"
         const val EXTRAS_KEY_CUSTOM_NOTIFICATION_ACTION = "androidx.media3.session.EXTRAS_KEY_CUSTOM_NOTIFICATION_ACTION"
         const val EXTRAS_KEY_CUSTOM_NOTIFICATION_ACTION_EXTRAS = "androidx.media3.session.EXTRAS_KEY_CUSTOM_NOTIFICATION_ACTION_EXTRAS"

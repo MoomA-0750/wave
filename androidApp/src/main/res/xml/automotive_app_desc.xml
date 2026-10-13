@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android Auto に、音楽のアプリとして出す（ADR-0014） -->
+<automotiveApp>
+    <uses name="media" />
+</automotiveApp>

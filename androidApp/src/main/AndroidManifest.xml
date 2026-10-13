@@ -16,6 +16,10 @@
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.NoActionBar">
+        <!-- Android Auto に音楽のアプリとして出す（一覧は再生サービスが車にだけ見せる、ADR-0014） -->
+        <meta-data
+            android:name="com.google.android.gms.car.application"
+            android:resource="@xml/automotive_app_desc" />
         <!-- 登録したアーティストの新作を裏で確かめる -->
         <service
             android:name=".releases.ReleaseWatcher"
@@ -26,6 +30,9 @@
             android:name=".playback.PlaybackService"
             android:exported="true"
             android:foregroundServiceType="mediaPlayback">
+            <intent-filter>
+                <action android:name="androidx.media3.session.MediaLibraryService" />
+            </intent-filter>
             <intent-filter>
                 <action android:name="androidx.media3.session.MediaSessionService" />
             </intent-filter>
