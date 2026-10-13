@@ -58,6 +58,12 @@ public sealed partial class PodcastPage : Page
             var emptyNewEpisodes = result.Failure == Core.Net.FailureKind.Parse && summary.BrowseId == MusicRepository.NewEpisodesBrowse;
             if (emptyNewEpisodes) ErrorText.Text = L.T("エピソードがありません", "No episodes");
             ErrorText.Visibility = Visibility.Visible;
+            // YouTube の新着が無くても、RSS で登録した番組の新しい回は出す
+            if (emptyNewEpisodes)
+            {
+                page = new Core.Music.PodcastPage(summary.BrowseId, summary.Title, null, null, null, [], null);
+                await MergeFeedEpisodesAsync(page);
+            }
             return;
         }
         page = result.Value!;
@@ -71,6 +77,40 @@ public sealed partial class PodcastPage : Page
         continuation = page.Continuation;
         PlayButton.IsEnabled = episodes.Count > 0;
         UpdateSave();
+        if (summary.BrowseId == MusicRepository.NewEpisodesBrowse) await MergeFeedEpisodesAsync(page);
+    }
+
+    /// <summary>
+    /// 「新しいエピソード」に、RSS で登録した番組の新しい回を混ぜる（ADR-0012。Android の PodcastViewModel.mergeFeedEpisodes と同じ）。
+    /// 番組のフィードは4つずつ並べて読み、読めなかった番組は飛ばす。混ぜた後の続き（YouTube の続き）はそのまま後ろに付く。
+    /// </summary>
+    private async Task MergeFeedEpisodesAsync(Core.Music.PodcastPage loaded)
+    {
+        var library = AppServices.FeedLibrary;
+        var subscriptions = library.State.Subscriptions;
+        if (subscriptions.Count == 0) return;
+        var started = System.Diagnostics.Stopwatch.StartNew();
+        using var gate = new SemaphoreSlim(4);
+        var shows = (await Task.WhenAll(subscriptions.Select(async subscription =>
+        {
+            await gate.WaitAsync();
+            try
+            {
+                return await AppServices.Feeds.ShowAsync(subscription.FeedUrl) is FeedResult.Ok ok ? ok.Show : null;
+            }
+            finally
+            {
+                gate.Release();
+            }
+        }))).OfType<FeedShow>().ToList();
+        if (page != loaded) return;
+        var merged = NewEpisodes.Merge(episodes.ToList(), shows, DateTimeOffset.UtcNow.ToUnixTimeSeconds(), library.State.Positions.GetValueOrDefault);
+        AppPaths.Log($"podcast new episodes feeds={shows.Count}/{subscriptions.Count} episodes={merged.Count} rss={merged.Count(e => Feed.IsExternal(e.Song.VideoId))} ms={started.ElapsedMilliseconds}");
+        page = loaded with { Episodes = merged };
+        episodes.Clear();
+        foreach (var episode in merged) episodes.Add(episode);
+        PlayButton.IsEnabled = episodes.Count > 0;
+        if (episodes.Count > 0) ErrorText.Visibility = Visibility.Collapsed;
     }
 
     /// <summary>RSS の番組を読む（Android の PodcastViewModel.loadFeed と同じ）。</summary>

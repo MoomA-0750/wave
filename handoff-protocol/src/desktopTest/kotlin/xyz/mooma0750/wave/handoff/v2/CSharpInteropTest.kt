@@ -122,6 +122,17 @@ class CSharpInteropTest {
             capturedAtEpochMs = 1_700_000_000_000,
         )
 
+    /** C# の InteropTests.SampleLibrary と同じもの。 */
+    private fun sampleLibrary() =
+        LibraryBody(
+            feeds =
+                mapOf(
+                    "https://feeds.example/show" to LibraryFeed("番組 \"A\" 🎙", "作者", "https://img.example/a.jpg", 1_700_000_000_000, false, 1_700_000_000_000),
+                    "https://feeds.example/old" to LibraryFeed("", removed = true, updatedAtMs = 1_700_000_000_010),
+                ),
+            positions = mapOf("https://feeds.example/1.mp3" to LibraryPosition(60, 600, false, 1_700_000_000_020), "https://feeds.example/2.mp3" to LibraryPosition(5, null, true, 1_700_000_000_030)),
+        )
+
     private fun accountTag(
         householdId: String,
         accountId: String,
@@ -167,6 +178,9 @@ class CSharpInteropTest {
         val command: CommandBody = CommandBody.Yield("claim-0000000000000001", b.deviceId, a.deviceId, 4, tag)
         val commandDoc = DocSealer.seal(b, chain, DocKind.Command, 1, null, 1_700_000_000_004, ConnectJson.json.encodeToString(CommandBody.serializer(), command).encodeToByteArray())
         val profileDoc = DocSealer.seal(pc, chain, DocKind.Profile, 1, null, 1_700_000_000_005, ConnectJson.json.encodeToString(ProfileBody.serializer(), ProfileBody("Windows PC")).encodeToByteArray())
+        // ライブラリ（ADR-0013）は操作だけの端末（PC）も書ける
+        val libraryBody = sampleLibrary()
+        val libraryDoc = DocSealer.seal(pc, chain, DocKind.Library, 1, null, 1_700_000_000_006, ConnectJson.json.encodeToString(LibraryBody.serializer(), libraryBody).encodeToByteArray())
 
         fun docEntry(
             name: String,
@@ -231,6 +245,13 @@ class CSharpInteropTest {
                 RelayV2.PairConfirmed(pairingJson.encodeToJsonElement(Pairing.Confirm.serializer(), confirm)),
                 RelayV2.Error("not_active"),
                 RelayV2.Error("stale_head", "req-1"),
+                RelayV2.LibraryGet,
+                RelayV2.LibraryPut("req-3", 0, libraryDoc),
+                RelayV2.LibraryOk("req-3", 1),
+                RelayV2.LibraryConflict("req-4"),
+                RelayV2.LibraryConflict("req-4", LibraryState(1, libraryDoc, "store-1")),
+                RelayV2.Library(),
+                RelayV2.Library(LibraryState(1, libraryDoc, "store-1")),
             )
 
         val fixture =
@@ -256,6 +277,7 @@ class CSharpInteropTest {
                         add(docEntry("cursor", cursorDoc, ConnectJson.json.encodeToString(CursorBody.serializer(), cursorBody)))
                         add(docEntry("command", commandDoc, ConnectJson.json.encodeToString(CommandBody.serializer(), command)))
                         add(docEntry("profile", profileDoc, ConnectJson.json.encodeToString(ProfileBody.serializer(), ProfileBody("Windows PC"))))
+                        add(docEntry("library", libraryDoc, ConnectJson.json.encodeToString(LibraryBody.serializer(), libraryBody)))
                     },
                 )
                 put("handoff", buildJsonObject { put("handoffId", handoffId); put("text", snapshotText) })
@@ -325,6 +347,11 @@ class CSharpInteropTest {
                 }
                 "cursor" -> assertEquals(HandoffRepeat.One, ConnectJson.json.decodeFromString(CursorBody.serializer(), str(entry, "plaintext")).repeat)
                 "command" -> assertIs<CommandBody.Yield>(ConnectJson.json.decodeFromString(CommandBody.serializer(), str(entry, "plaintext")))
+                "library" -> {
+                    val body = ConnectJson.json.decodeFromString(LibraryBody.serializer(), str(entry, "plaintext"))
+                    assertEquals(sampleLibrary(), body)
+                    assertEquals(str(entry, "plaintext"), ConnectJson.json.encodeToString(LibraryBody.serializer(), body))
+                }
             }
         }
 

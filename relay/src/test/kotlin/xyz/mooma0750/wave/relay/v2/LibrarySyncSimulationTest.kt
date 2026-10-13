@@ -98,6 +98,29 @@ class LibrarySyncSimulationTest {
     }
 
     @Test
+    fun aRelayThatLostTheLibraryIsWrittenFromTheStartWithoutLooping() {
+        setUp()
+        a.client.library.publish(LibraryBody(feeds = mapOf("https://x/f" to feed("X", 10))))
+        relay.run()
+        // 中継がライブラリだけを失う（同じ保存のまま）
+        val saved = kotlinx.serialization.json.Json.parseToJsonElement(relay.file.readText()).let { it as kotlinx.serialization.json.JsonObject }
+        relay.file.writeText(kotlinx.serialization.json.JsonObject(saved - "library").toString())
+        relay.store = HouseholdStore(relay.file, listOf(a.publicKeyB64), { now })
+        assertNull(relay.store.library())
+        var puts = 0
+        relay.dropIncoming = { _, message ->
+            if (message is RelayV2.LibraryPut) puts++
+            false
+        }
+        // 覚えた版（1）のまま書くと食い違いが返る。中継に無いと分かったら 0 から書き直す
+        a.client.library.publish(LibraryBody(feeds = mapOf("https://x/f" to feed("X", 10), "https://y/f" to feed("Y", 11))))
+        relay.run()
+        assertEquals(1L, relay.store.library()?.version)
+        assertEquals(2, puts)
+        assertEquals(setOf("https://x/f", "https://y/f"), b.library?.feeds?.keys)
+    }
+
+    @Test
     fun oldClientsThatNeverAskGetNoLibraryMessages() {
         setUp()
         val seen = ArrayList<RelayV2>()

@@ -24,6 +24,18 @@ internal sealed class FakeRelay(Func<long> nowMs)
     private readonly Dictionary<string, long> claimOrders = [];
     private Pending? pending;
 
+    /// <summary>ライブラリの文書（ADR-0013）と、library_get を送った端末（配るのはこの端末だけ）。</summary>
+    private StoredDoc? library;
+    private readonly HashSet<string> librarySubscribers = [];
+
+    /// <summary>false なら、ライブラリを知らない古い中継として振る舞う（library_* に unsupported を返す）。</summary>
+    public bool SupportsLibrary { get; set; } = true;
+
+    public long? LibraryVersion => library?.Version;
+
+    /// <summary>中継がライブラリを失った（作り直しなど）。</summary>
+    public void DropLibrary() => library = null;
+
     private readonly Dictionary<string, Action<RelayV2>> connected = [];
     private readonly Queue<(string To, string Text)> outbox = new();
     private readonly List<(string To, string Text)> held = [];
@@ -43,6 +55,7 @@ internal sealed class FakeRelay(Func<long> nowMs)
     public void Disconnect(string deviceId)
     {
         connected.Remove(deviceId);
+        librarySubscribers.Remove(deviceId);
         BroadcastExpired(ExpirePending(deviceId));
         Broadcast(new RelayV2.Presence { Online = connected.Keys.ToList() });
     }
@@ -180,6 +193,18 @@ internal sealed class FakeRelay(Func<long> nowMs)
                 if (control.Doc.Header.WriterId == sender && control.Doc.Header.Kind == DocKind.Command) Broadcast(control, except: sender);
                 else Reply(new RelayV2.Error { Code = "bad_control" });
                 break;
+            case RelayV2.LibraryGet when SupportsLibrary:
+                if (chain is null || !chain.Members.ContainsKey(sender))
+                {
+                    Reply(new RelayV2.Error { Code = "not_member" });
+                    return;
+                }
+                librarySubscribers.Add(sender);
+                Reply(new RelayV2.Library { Stored = LibraryOf() });
+                break;
+            case RelayV2.LibraryPut put when SupportsLibrary:
+                OnLibraryPut(sender, put);
+                break;
             case RelayV2.Release release:
                 if (pending is { } waiting && waiting.ClaimId == release.ClaimId && waiting.Owner == sender) Broadcast(DropPending());
                 break;
@@ -233,6 +258,41 @@ internal sealed class FakeRelay(Func<long> nowMs)
         Post(sender, new RelayV2.StateOk { RequestId = put.RequestId, Kind = put.Kind, Version = doc.Version });
         Broadcast(new RelayV2.State { Stored = StateOf(put.Kind)! }, except: sender);
         if (activeChanged is not null) Broadcast(activeChanged);
+    }
+
+    private LibraryState? LibraryOf() => library is null ? null : new LibraryState { Version = library.Version, Doc = library.Doc, StoreId = StoreId };
+
+    /// <summary>中継の HouseholdStore.putLibrary と同じ: 家のどの端末も書ける（再生中でなくてよい）。版の CAS。</summary>
+    private void OnLibraryPut(string sender, RelayV2.LibraryPut put)
+    {
+        var current = chain;
+        string? problem;
+        if (current is null) problem = "no_household";
+        else if (!current.Members.ContainsKey(sender)) problem = "not_member";
+        else
+        {
+            var header = put.Doc.Header;
+            problem = header.WriterId != sender ? "writer_mismatch"
+                : header.HouseholdId != current.HouseholdId ? "household"
+                : header.Kind != DocKind.Library ? "kind"
+                : header.Version != put.ExpectVersion + 1 ? "version"
+                : header.HeadSeq > current.HeadSeq ? "future_head"
+                : header.HeadSeq < current.HeadSeq ? "stale_head"
+                : null;
+        }
+        if (problem is not null)
+        {
+            Post(sender, new RelayV2.Error { Code = problem, RequestId = put.RequestId });
+            return;
+        }
+        if ((library?.Version ?? 0) != put.ExpectVersion)
+        {
+            Post(sender, new RelayV2.LibraryConflict { RequestId = put.RequestId, Latest = LibraryOf() });
+            return;
+        }
+        library = new StoredDoc(put.ExpectVersion + 1, put.Doc, nowMs());
+        Post(sender, new RelayV2.LibraryOk { RequestId = put.RequestId, Version = library.Version });
+        foreach (var id in connected.Keys.Where(id => id != sender && librarySubscribers.Contains(id)).ToList()) Post(id, new RelayV2.Library { Stored = LibraryOf() });
     }
 
     private void OnClaim(string sender, string claimId, SealedDoc yieldDoc, long? transferBasedOn)
@@ -423,6 +483,11 @@ internal sealed class SimDevice : ConnectClient.IEffects
     }
 
     void ConnectClient.IEffects.Event(ClientEvent clientEvent) => Events.Add(clientEvent);
+
+    /// <summary>中継から届いたライブラリ（合わせた後のもの）。</summary>
+    public LibraryBody? Library { get; private set; }
+
+    void ConnectClient.IEffects.LibraryChanged(LibraryBody body) => Library = body;
 
     void ConnectClient.IEffects.Persist(ClientPersisted state) => Persisted = state;
 
