@@ -246,13 +246,16 @@ public sealed partial class SearchPage : Page
         loadingTab = true;
         var id = requestId;
         LoadingRing.IsActive = true;
+        // Apple の目録の番組（RSS、ADR-0012）を先に、YouTube の番組を後に並べる。どちらかが読めれば、読めた分を出す（Android と同じ）
+        var directory = AppServices.Feeds.SearchAsync(query);
         var page = await AppServices.Music.SearchPodcastsAsync(query);
+        var rss = await directory;
         if (id != requestId) return;
         loadingTab = false;
         LoadingRing.IsActive = false;
-        podcasts = page.IsOk ? page.Value!.Items.ToList() : [];
+        podcasts = [.. rss ?? [], .. page.IsOk ? page.Value!.Items : []];
         podcastContinuation = page.Value?.Continuation;
-        AppPaths.Log($"search podcasts ok={page.IsOk} items={podcasts.Count}");
+        AppPaths.Log($"search podcasts ok={page.IsOk} directory={rss?.Count} items={podcasts.Count}");
         if (SelectedTab == "podcasts") ShowTab();
     }
 

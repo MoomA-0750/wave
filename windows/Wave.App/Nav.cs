@@ -123,6 +123,12 @@ public static class Nav
                 }
                 else player.Message = L.T("アーティストの曲を読み込めませんでした", "Couldn't load the artist's songs");
                 break;
+            case HomeItem.PodcastItem c when Feed.FeedUrlOf(c.Podcast.BrowseId) is { } feedUrl:
+                // RSS の番組（ADR-0012）: フィードの新しいエピソードから順に（プレイリストを出どころにしない）
+                if (await AppServices.Feeds.ShowAsync(feedUrl) is FeedResult.Ok feed && feed.Show.ToPage(null, positions: AppServices.FeedLibrary.State.Positions.GetValueOrDefault) is { Episodes.Count: > 0 } feedPage)
+                    player.PlayList(feedPage.Episodes.Select(x => x.Song).ToList(), 0, null);
+                else player.Message = L.T("エピソードを読み込めませんでした", "Couldn't load the episodes");
+                break;
             case HomeItem.PodcastItem c:
                 // 番組の新しいエピソードから順に（番組のプレイリストを出どころにする。Android と同じ）
                 var podcast = await AppServices.Music.PodcastAsync(c.Podcast.BrowseId);

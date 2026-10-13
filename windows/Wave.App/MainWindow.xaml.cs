@@ -100,6 +100,14 @@ public sealed partial class MainWindow : Window
         AppServices.Library.Artists.CollectionChanged += (_, _) => RenderLibrary();
         AppServices.Library.Albums.CollectionChanged += (_, _) => RenderLibrary();
         AppServices.Library.Podcasts.CollectionChanged += (_, _) => RenderLibrary();
+        // RSS で登録した番組（ADR-0012）。聴いたところの変化でも呼ばれるので、登録が変わったときだけ描き直す
+        var feedSubscriptions = AppServices.FeedLibrary.State.Subscriptions;
+        AppServices.FeedLibrary.Changed += state => DispatcherQueue.TryEnqueue(() =>
+        {
+            if (state.Subscriptions.SequenceEqual(feedSubscriptions)) return;
+            feedSubscriptions = state.Subscriptions;
+            RenderLibrary();
+        });
         AppServices.Library.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(LibraryState.IsLoading)) LibraryLoading.Visibility = Ui.Show(AppServices.Library.IsLoading);
@@ -164,6 +172,15 @@ public sealed partial class MainWindow : Window
     public void DebugFullScreen(bool on) => SetFullScreen(on);
 
     public void DebugVideo(bool on) => ShowVideo(on);
+
+    /// <summary>開発用: マイライブラリの絞り込み（playlist・artist・album・podcast、空なら全部）。並んだ項目の数を返す。</summary>
+    public int DebugLibraryKind(string kind)
+    {
+        libraryKind = kind.Length == 0 ? null : kind;
+        RenderChips();
+        RenderLibrary();
+        return (LibraryList.ItemsSource as System.Collections.ICollection)?.Count ?? 0;
+    }
 #endif
 
     private void SetRightPane(bool open, bool queue)
@@ -347,7 +364,10 @@ public sealed partial class MainWindow : Window
         }
         if (libraryKind is null or "artist") entries.AddRange(lib.Artists.Select(a => new LibraryEntry(a.Name, L.T("アーティスト", "Artist"), a.ThumbnailUrl, new HomeItem.ArtistItem(a))));
         if (libraryKind is null or "album") entries.AddRange(lib.Albums.Select(a => new LibraryEntry(a.Title, L.T("アルバム", "Album") + (string.IsNullOrEmpty(a.Subtitle) ? "" : " • " + a.Subtitle), a.ThumbnailUrl, new HomeItem.AlbumItem(a))));
-        if (libraryKind is null or "podcast") entries.AddRange(lib.Podcasts.Select(c => new LibraryEntry(c.Title, L.T("ポッドキャスト", "Podcast") + (string.IsNullOrEmpty(c.Author) ? "" : " • " + c.Author), c.ThumbnailUrl, new HomeItem.PodcastItem(c))));
+        // YouTube で保存した番組の後ろに、RSS で登録した番組（この端末だけ、ADR-0012）を並べる（Android と同じ）
+        if (libraryKind is null or "podcast")
+            entries.AddRange(lib.Podcasts.Concat(AppServices.FeedLibrary.State.Subscriptions.Select(f => f.Summary)).DistinctBy(c => c.BrowseId)
+                .Select(c => new LibraryEntry(c.Title, L.T("ポッドキャスト", "Podcast") + (string.IsNullOrEmpty(c.Author) ? "" : " • " + c.Author), c.ThumbnailUrl, new HomeItem.PodcastItem(c))));
         if (filter.Length > 0) entries = entries.Where(e => e.Title.Contains(filter, StringComparison.CurrentCultureIgnoreCase)).ToList();
         var sort = AppServices.Settings.LibrarySort;
         if (sort == "alpha") entries = entries.OrderBy(e => e.Title, StringComparer.CurrentCultureIgnoreCase).ToList();
@@ -428,7 +448,8 @@ public sealed partial class MainWindow : Window
         membershipPrefetch?.Cancel();
         var membership = AppServices.Library.Membership;
         Player.InPlaylist = membership.IsSavedNowPlaying(Player.Current?.VideoId);
-        if (Player.Current is not { } song || !AppServices.Client.IsLoggedIn) return;
+        // RSS のエピソードは YouTube のプレイリストに入らない（ADR-0012）
+        if (Player.Current is not { } song || !AppServices.Client.IsLoggedIn || Feed.IsExternal(song.VideoId)) return;
         var token = (membershipPrefetch = new CancellationTokenSource()).Token;
         var ids = AppServices.Library.Editable.Select(p => p.PlaylistId).ToList();
         _ = PrefetchAsync();
@@ -1006,6 +1027,9 @@ public sealed partial class MainWindow : Window
 
     public Visibility HasSong(Song? song) => Ui.Show(song is not null);
 
+    /// <summary>評価のボタンを出すか（RSS のエピソードは YouTube の曲ではないので出さない。ADR-0012）。</summary>
+    public Visibility CanLike(Song? song) => Ui.Show(song is not null && !Feed.IsExternal(song.VideoId));
+
     public string PaneHeader(Song? song) => song?.Album?.Title is { Length: > 0 } album ? album : L.T("再生中", "Now playing");
 
     public string SongTitleOrIdle(Song? song) => song?.Title ?? L.T("何も再生していません", "Nothing playing");
@@ -1045,7 +1069,7 @@ public sealed partial class MainWindow : Window
     /// <summary>評価していなければ評価する。評価済みならプレイリストに追加する画面を開く（Android と同じ）。</summary>
     private void OnLike(object sender, RoutedEventArgs e)
     {
-        if (Player.Current is not { } song) return;
+        if (Player.Current is not { } song || Feed.IsExternal(song.VideoId)) return;
         if (Player.Like == LikeStatus.Like || Player.InPlaylist) _ = Dialogs.AddToPlaylistAsync(song);
         else if (Player.Like is null && AppServices.Client.IsLoggedIn) Player.ReloadLike();
         else Player.ToggleLike();

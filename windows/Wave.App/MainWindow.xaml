@@ -250,7 +250,8 @@
                                     <HyperlinkButton Content="{x:Bind Player.Current.ArtistsText, Mode=OneWay}" Padding="0" Click="OnArtistLink" />
                                 </StackPanel>
                                 <!-- Android・Spotify と同じ: 評価していなければ＋（押すと評価）、評価済みなら✓（押すとプレイリストに追加する画面） -->
-                                <Button Grid.Column="1" Style="{StaticResource IconButtonStyle}" VerticalAlignment="Top" Click="OnLike" ToolTipService.ToolTip="{x:Bind LikeTip(Player.Like, Player.Current, Player.InPlaylist), Mode=OneWay}">
+                                <Button Grid.Column="1" Style="{StaticResource IconButtonStyle}" VerticalAlignment="Top" Click="OnLike" ToolTipService.ToolTip="{x:Bind LikeTip(Player.Like, Player.Current, Player.InPlaylist), Mode=OneWay}"
+                                        Visibility="{x:Bind CanLike(Player.Current), Mode=OneWay}">
                                     <FontIcon Glyph="{x:Bind LikeGlyph(Player.Like, Player.Current, Player.InPlaylist), Mode=OneWay}" Foreground="{x:Bind LikeBrush(Player.Like, Player.InPlaylist), Mode=OneWay}" FontSize="20" />
                                 </Button>
                             </Grid>
@@ -400,7 +401,7 @@
                     </HyperlinkButton>
                 </StackPanel>
                 <Button Grid.Column="2" Style="{StaticResource IconButtonStyle}" VerticalAlignment="Center" Click="OnLike" ToolTipService.ToolTip="{x:Bind LikeTip(Player.Like, Player.Current, Player.InPlaylist), Mode=OneWay}"
-                        Visibility="{x:Bind HasSong(Player.Current), Mode=OneWay}">
+                        Visibility="{x:Bind CanLike(Player.Current), Mode=OneWay}">
                     <FontIcon Glyph="{x:Bind LikeGlyph(Player.Like, Player.Current, Player.InPlaylist), Mode=OneWay}" Foreground="{x:Bind LikeBrush(Player.Like, Player.InPlaylist), Mode=OneWay}" FontSize="18" />
                 </Button>
             </Grid>

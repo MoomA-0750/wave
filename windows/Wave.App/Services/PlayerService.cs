@@ -252,6 +252,8 @@ public sealed partial class PlayerService : ObservableObject
     {
         // ほかの端末を映している間は、この端末で聴いた時間ではない
         if (IsRemote) return;
+        // RSS のエピソードは、止めたらその位置を覚える（ADR-0012）
+        if (!value) RememberEpisode();
         var now = clock.ElapsedMilliseconds;
         if (value) playingSinceMs ??= now;
         else if (playingSinceMs is { } since)
@@ -367,9 +369,10 @@ public sealed partial class PlayerService : ObservableObject
         SourceId = null;
         SetShuffleOrder(null);
         ReplaceQueue([song], QueueOrigin.Source);
-        if (song.IsLive)
+        if (song.IsLive || Feed.IsExternal(song.VideoId))
         {
-            // ライブ配信は終わらずに流れ続けるので、後ろにラジオのおすすめを足さない（Android と同じ）
+            // ライブ配信は終わらずに流れ続けるので、後ろにラジオのおすすめを足さない（Android と同じ）。
+            // RSS のエピソードは YouTube のラジオが作れない（ADR-0012。Android の QueueSession と同じく続きを足さない）
             radioSeed = null;
             radioPlaylistId = null;
             radioContinuation = null;
@@ -700,7 +703,8 @@ public sealed partial class PlayerService : ObservableObject
     /// <summary>今の曲の高評価を切り替える（ライブラリの「高く評価した曲」に入る）。</summary>
     public async void ToggleLike()
     {
-        if (Current is not { } song) return;
+        // RSS のエピソードは YouTube の曲ではないので評価しない（ADR-0012）
+        if (Current is not { } song || Feed.IsExternal(song.VideoId)) return;
         if (!AppServices.Client.IsLoggedIn)
         {
             Message = L.T("高く評価するにはログインしてください", "Log in to like songs");
@@ -851,6 +855,8 @@ public sealed partial class PlayerService : ObservableObject
         }
         if (IsPlaying || IsLoading) return false;
         loadCancel?.Cancel();
+        RememberEpisode();
+        episodeUrl = null;
         player.Source = null;
         SourceId = queue.SourceId;
         radioSeed = queue.RadioSeed;
@@ -891,7 +897,7 @@ public sealed partial class PlayerService : ObservableObject
     /// <summary>曲のラジオの続きを、種の曲から取って足す（まだキューに無い曲だけ）。</summary>
     private async Task ExtendFromSeedAsync(string seed)
     {
-        if (extending) return;
+        if (extending || Feed.IsExternal(seed)) return;
         extending = true;
         try
         {
@@ -959,6 +965,8 @@ public sealed partial class PlayerService : ObservableObject
         {
             // 手元の再生は止めて、キューを退避する（この端末は鳴らしていない）
             loadCancel?.Cancel();
+            RememberEpisode();
+            episodeUrl = null;
             player.Pause();
             player.Source = null;
             IsLoading = false;
@@ -1144,9 +1152,28 @@ public sealed partial class PlayerService : ObservableObject
         }
         seedListened = null;
         playingSinceMs = IsPlaying ? clock.ElapsedMilliseconds : null;
+        // 前に流していたエピソードの位置を書いてから替える（自然に次へ進んだときは OnEnded が「聴いた」を書いてある）
+        RememberEpisode();
+        episodeUrl = null;
         player.Pause();
         try
         {
+            // RSS のエピソード（ext:）は YouTube の解決を通さず、音声の URL をそのまま流す（ADR-0012）
+            if (Feed.IsExternal(song.VideoId))
+            {
+                var episode = Feed.AudioUrlOf(song.VideoId);
+                if (episode is null || !await StartEpisodeAsync(song, episode, seekTo, cancel.Token))
+                {
+                    if (cancel.IsCancellationRequested) return;
+                    await RecoverAsync(song);
+                    return;
+                }
+                consecutiveFailures = 0;
+                Like = null;
+                Video = null;
+                Lyrics = new LyricsService.Result.None();
+                return;
+            }
             ResolvedStream? stream = null;
             if (!song.IsLive)
             {
@@ -1342,6 +1369,78 @@ public sealed partial class PlayerService : ObservableObject
         return MediaSource.CreateFromAdaptiveMediaSource(adaptive);
     }
 
+    // --- RSS のエピソード（ADR-0012） ---
+
+    /// <summary>今流しているエピソードの音声の URL（YouTube の曲なら null）。</summary>
+    private string? episodeUrl;
+    private long lastEpisodeSaveMs;
+
+    /// <summary>覚えている位置がこれより後なら、流し始めにそこへ飛ぶ（Android と同じ）。</summary>
+    private const int ResumeAtLeastSeconds = 5;
+
+    /// <summary>
+    /// エピソードの音声をそのまま流す。cookie を持たない別の HttpClient で取り、リダイレクトは https の間だけ追う。
+    /// 先頭の1バイトで行き先と長さを知り、Range で少しずつ取って再生の部品に渡す（Range に応じない配信元なら URL ごと渡す）。
+    /// 頭から流すときは、覚えている位置（5秒より後）から始める。URL はログに書かない。
+    /// </summary>
+    private async Task<bool> StartEpisodeAsync(Song song, string url, double seekTo, CancellationToken cancel)
+    {
+        currentStream = null;
+        if (seekTo < 1 && AppServices.FeedLibrary.Position(url)?.ResumeSeconds is { } resume && resume > ResumeAtLeastSeconds) seekTo = resume;
+        MediaSource source;
+        bool ranged;
+        string mime;
+        try
+        {
+            var (bytes, final, type) = await RangeStream.OpenEpisodeAsync(AppServices.FeedHttp, url, AppServices.Feeds.UserAgent, cancel);
+            if (cancel.IsCancellationRequested || Current?.VideoId != song.VideoId) return false;
+            mime = EpisodeMime(type, final);
+            ranged = bytes is not null;
+            source = bytes is not null ? MediaSource.CreateFromStream(bytes.AsRandomAccessStream(), mime) : MediaSource.CreateFromUri(new Uri(final));
+        }
+        catch (OperationCanceledException) when (cancel.IsCancellationRequested)
+        {
+            return false;
+        }
+        catch (Exception e) when (e is StreamRejectedException or HttpRequestException or IOException or OperationCanceledException or UriFormatException)
+        {
+            AppPaths.Log($"episode open failed type={e.GetType().Name} status={(e as StreamRejectedException)?.Status}");
+            return false;
+        }
+        PlaySource(song, source, seekTo);
+        episodeUrl = url;
+        lastEpisodeSaveMs = clock.ElapsedMilliseconds;
+        AppPaths.Log($"play episode ranged={ranged} type={mime} resume={(int)seekTo} queue={Queue.Count} index={Index}");
+        return true;
+    }
+
+    /// <summary>応答の種類が音声ならそれを、違えば URL の拡張子から決める。</summary>
+    private static string EpisodeMime(string? contentType, string url)
+    {
+        if (contentType is { } type && type.StartsWith("audio/", StringComparison.OrdinalIgnoreCase)) return type;
+        var path = Uri.TryCreate(url, UriKind.Absolute, out var uri) ? uri.AbsolutePath.ToLowerInvariant() : "";
+        return Path.GetExtension(path) switch
+        {
+            ".m4a" or ".mp4" or ".m4b" => "audio/mp4",
+            ".aac" => "audio/aac",
+            ".ogg" or ".oga" or ".opus" => "audio/ogg",
+            ".wav" => "audio/wav",
+            _ => "audio/mpeg",
+        };
+    }
+
+    /// <summary>今のエピソードの位置を覚える（finished なら最後まで聴いたとする）。エピソードを流していなければ何もしない。</summary>
+    private void RememberEpisode(bool finished = false)
+    {
+        if (episodeUrl is not { } url || player.Source is null || IsRemote) return;
+        var session = player.PlaybackSession;
+        var natural = session.NaturalDuration.TotalSeconds;
+        int? duration = natural > 0 ? (int)natural : Current?.DurationSeconds;
+        var position = finished && duration is { } d ? d : (int)session.Position.TotalSeconds;
+        lastEpisodeSaveMs = clock.ElapsedMilliseconds;
+        AppServices.FeedLibrary.Remember(url, position, duration);
+    }
+
     private void OnEnded()
     {
         // 曲の途中で「終わった」と来たら、読み込みの失敗とみなす（次々に飛ばさない）
@@ -1352,8 +1451,13 @@ public sealed partial class PlayerService : ObservableObject
             _ = RecoverAsync(live);
             return;
         }
-        var known = Current?.DurationSeconds ?? 0;
-        if (known > 10 && Position < known - 5)
+        // RSS のエピソードは最後まで流れた（フィードの長さは当てにならないので、途中で終わったとはみなさない）
+        if (episodeUrl is not null)
+        {
+            RememberEpisode(finished: true);
+            if (Repeat != RepeatMode.One) episodeUrl = null;
+        }
+        else if ((Current?.DurationSeconds ?? 0) is var known && known > 10 && Position < known - 5)
         {
             AppPaths.Log($"ended early position={Position:F1} duration={known}");
             if (Current is { } song) _ = RecoverAsync(song);
@@ -1385,6 +1489,29 @@ public sealed partial class PlayerService : ObservableObject
     /// </summary>
     private async Task RecoverAsync(Song song)
     {
+        // RSS のエピソードはログインが要らない。1回だけ取り直し、だめなら次へ（ADR-0012）
+        if (Feed.IsExternal(song.VideoId))
+        {
+            if (!retried && Feed.AudioUrlOf(song.VideoId) is { } url && Current?.VideoId == song.VideoId)
+            {
+                retried = true;
+                if (await StartEpisodeAsync(song, url, Position, loadCancel?.Token ?? default))
+                {
+                    consecutiveFailures = 0;
+                    return;
+                }
+            }
+            IsLoading = false;
+            if (++consecutiveFailures >= MaxConsecutiveFailures)
+            {
+                Message = L.T("続けて再生できなかったので、止めました", "Stopped after several songs failed to play");
+                consecutiveFailures = 0;
+                return;
+            }
+            Message = L.T("エピソードを再生できなかったので、次に進みます", "Couldn't play this episode, skipping to the next one");
+            if (Index + 1 < Queue.Count) Advance();
+            return;
+        }
         // ライブ配信は ANDROID の匿名の /player で流すので、ログインは要らない
         var live = song.IsLive || IsLive;
         if (!live && !AppServices.Client.IsLoggedIn)
@@ -1442,6 +1569,7 @@ public sealed partial class PlayerService : ObservableObject
             return;
         }
         if (IsPlaying && clock.ElapsedMilliseconds - lastPositionSaveMs > PositionSaveIntervalMs) SaveQueue();
+        if (IsPlaying && episodeUrl is not null && clock.ElapsedMilliseconds - lastEpisodeSaveMs > PositionSaveIntervalMs) RememberEpisode();
         if (player.Source is null) return;
         var session = player.PlaybackSession;
         Position = session.Position.TotalSeconds;
@@ -1463,6 +1591,8 @@ public sealed partial class PlayerService : ObservableObject
     /// <summary>曲の評価（ログイン中だけ）と、重ねられる映像。</summary>
     private async Task LoadSongInfoAsync(Song song, CancellationToken cancel)
     {
+        // RSS のエピソードには YouTube の評価も MV も無い（ADR-0012）
+        if (Feed.IsExternal(song.VideoId)) return;
         var info = await AppServices.Music.SongInfoAsync(song.VideoId, cancel);
         if (!info.IsOk || Current?.VideoId != song.VideoId) return;
         if (AppServices.Client.IsLoggedIn) Like = info.Value!.Like;
@@ -1493,6 +1623,12 @@ public sealed partial class PlayerService : ObservableObject
             if (Current?.VideoId == song.VideoId) Lyrics = null;
             return;
         }
+        // RSS のエピソードも探さない（ADR-0012）
+        if (Feed.IsExternal(song.VideoId))
+        {
+            if (Current?.VideoId == song.VideoId) Lyrics = new LyricsService.Result.None();
+            return;
+        }
         var result = await AppServices.Lyrics.LyricsAsync(song, cancel);
         if (Current?.VideoId == song.VideoId) Lyrics = result;
     }
@@ -1503,7 +1639,7 @@ public sealed partial class PlayerService : ObservableObject
         if (Index + 1 >= Queue.Count) return;
         var next = Queue[Index + 1];
         // ライブ配信は流すときに HLS を解決する（先読みしない）
-        if (next.IsLive || prefetched.ContainsKey(next.VideoId)) return;
+        if (next.IsLive || Feed.IsExternal(next.VideoId) || prefetched.ContainsKey(next.VideoId)) return;
         var result = await AppServices.Resolver.ResolveAsync(next.VideoId);
         if (result.Stream is { } s)
         {
@@ -1545,6 +1681,9 @@ public sealed partial class PlayerService : ObservableObject
         store.Delete();
         LeaveRemote();
         loadCancel?.Cancel();
+        // RSS の聴いたところはアカウントに結びつかないので、ログアウトでも残す（ADR-0012）
+        RememberEpisode();
+        episodeUrl = null;
         player.Pause();
         player.Source = null;
         prefetched.Clear();
