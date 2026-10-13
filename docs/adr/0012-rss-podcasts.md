@@ -12,13 +12,14 @@ YouTube Music の「ポッドキャスト」は、YouTube のプレイリスト�
    - 探すのは Apple の公開の目録（`https://itunes.apple.com/search?media=podcast&entity=podcast&term=…`、キー不要）。結果の `feedUrl` を登録する。検索語のほかは何も送らない
    - RSS の URL を直接打ち込んでも登録できる（目録に無い番組・限定公開の番組）
    - 番組の目印（browseId）は `rss:` + フィードの URL。`PodcastSummary` / `PodcastPage` / `PodcastEpisode` をそのまま使い、画面は YouTube の番組と同じものを出す
-2. **登録は端末ごとに覚える**（Android は DataStore、Windows は settings、Mac・iOS は UserDefaults）。YouTube のアカウントには書かない（書く場所が無い）。端末をまたいだ同期は後で決める
+2. **登録は端末ごとに覚える**（Android は `no_backup/podcast-feeds.json`、Windows・Mac・iOS もそれぞれの端末の中）。ログアウトでは消さない（アカウントに結びつかない）。YouTube のアカウントには書かない（書く場所が無い）。端末をまたいだ同期は後で決める
 3. **エピソードは、RSS の `enclosure` の音声を直接流す**
    - 曲の ID（`Song.videoId`）は `ext:` + 音声の URL にする。端末の間の受け渡し・連携でもそのまま通り、受け取った側も同じ URL を流せる
    - `ext:` の曲は YouTube に関わる処理をしない: ストリームの解決・再生履歴の送信・評価・歌詞・ラジオ（次の曲の自動追加）・共有のリンク
    - 取得は認証情報を持たない HTTP で行う（ADR-0003）。https だけ。リダイレクトは https の間だけ追う（計測用の転送 podtrac・chartable などを通るため）。cookie は持たない
 4. **聴いたところは端末に覚える**（音声の URL ごとに位置と長さ）。同じエピソードを流し直すと続きから始まる。終わり近く（残り30秒未満）まで聴いたら「聴いた」とする
-5. **検索の「ポッドキャスト」では、Apple の目録の結果を先に出し、その後に YouTube の番組を出す**。ライブラリの「ポッドキャスト」には、YouTube で保存した番組と RSS で登録した番組を並べる
+5. **フィードは要る要素だけを読み、エピソードは30件ずつ組み立てる**。Android の debug 版（Pixel 3）では、木を作る読み方で 2MB のフィードに十数秒かかった。`indexOf` で要素へ飛ぶ読み方にして約0.5秒になった
+6. **検索の「ポッドキャスト」では、Apple の目録の結果を先に出し、その後に YouTube の番組を出す**。ライブラリの「ポッドキャスト」には、YouTube で保存した番組と RSS で登録した番組を並べる
 
 ## 結果
 
