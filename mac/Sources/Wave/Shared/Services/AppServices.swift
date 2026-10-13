@@ -15,6 +15,8 @@ enum AppServices {
     private(set) static var resolver: StreamResolver!
     private(set) static var stats: PlaybackStats!
     private(set) static var lyrics: LyricsService!
+    /// 歌詞の一節から曲を探す（検索の「歌詞」）。歌詞は再生画面と同じところから取り、同じキャッシュを使う。
+    private(set) static var lyricsSearch: LyricsSearch!
     private(set) static var credentials: CredentialStore!
     private(set) static var player: PlayerService!
     private(set) static var library: LibraryState!
@@ -55,6 +57,7 @@ enum AppServices {
         // 歌詞の検索（LRCLIB）には YouTube と別の通信を使う
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1.0"
         lyrics = LyricsService(music: music, lrclib: LrclibClient(session: InnerTubeClient.createSession(), userAgent: "wave-mac/\(version)"))
+        lyricsSearch = LyricsSearch(music: music, lyrics: lyrics)
         credentials = CredentialStore()
         toast = ToastCenter()
         nav = Nav()

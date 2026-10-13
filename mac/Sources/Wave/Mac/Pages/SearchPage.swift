@@ -11,7 +11,12 @@ final class SearchPageModel {
     var query: String?
     var loading = false
     var empty = false
-    var tab = "all" { didSet { if tab == "live" { loadLiveIfNeeded() } } }
+    var tab = "all" {
+        didSet {
+            if tab == "live" { loadLiveIfNeeded() }
+            if tab == "lyrics" { loadLyricsIfNeeded() }
+        }
+    }
     var top: HomeItem?
     var songs: [TrackRow] = []
     var albums: [AlbumSummary] = []
@@ -27,6 +32,11 @@ final class SearchPageModel {
     var liveLoading = false
     var liveFailed = false
     @ObservationIgnored private var liveQuery: String?
+    /// 「歌詞」のタブ（打った語を歌詞の一節として探した曲。Android と同じ）。タブを開いたときに読む。続きのページは無い。
+    var lyricsHits: [LyricsHit] = []
+    var lyricsLoading = false
+    var lyricsFailed = false
+    @ObservationIgnored private var lyricsQuery: String?
     @ObservationIgnored private var liveContinuation: String?
     @ObservationIgnored private var songContinuation: String?
     @ObservationIgnored private var albumContinuation: String?
@@ -82,7 +92,11 @@ final class SearchPageModel {
         liveQuery = nil
         liveContinuation = nil
         liveFailed = false
+        lyricsHits = []
+        lyricsQuery = nil
+        lyricsFailed = false
         if tab == "live" { loadLiveIfNeeded() }
+        if tab == "lyrics" { loadLyricsIfNeeded() }
         let music = AppServices.music!
         async let s = music.searchSongs(q)
         async let al = music.searchAlbums(q)
@@ -183,6 +197,28 @@ final class SearchPageModel {
             }
             liveContinuation = page.continuation
             liveSongs = page.songs.enumerated().map { TrackRow(number: $0.offset + 1, song: $0.element) }
+        }
+    }
+
+    /// 歌詞から探す（絞り込まない検索の上位の曲の歌詞と照らし合わせる）。歌詞に語が見つかった曲が先に来る。同じ語では読み直さない。
+    func loadLyricsIfNeeded() {
+        guard let q = query, lyricsQuery != q else { return }
+        lyricsQuery = q
+        lyricsLoading = true
+        lyricsFailed = false
+        let id = requestId
+        Task {
+            let result = (try? await AppServices.lyricsSearch.search(q)) ?? .failed(.network)
+            guard id == requestId, lyricsQuery == q else { return }
+            lyricsLoading = false
+            guard let hits = result.value else {
+                lyricsFailed = true
+                lyricsQuery = nil
+                AppPaths.log("search lyrics failed")
+                return
+            }
+            lyricsHits = hits
+            AppPaths.log("search lyrics n=\(hits.count) matched=\(hits.filter { $0.match != nil }.count)")
         }
     }
 
@@ -300,6 +336,7 @@ struct SearchPageView: View {
                 Text(L.t("ポッドキャスト", "Podcasts")).tag("podcasts")
                 Text(L.t("エピソード", "Episodes")).tag("episodes")
                 Text(L.t("ライブ", "Live")).tag("live")
+                Text(L.t("歌詞", "Lyrics")).tag("lyrics")
             }
             .pickerStyle(.segmented)
             .labelsHidden()
@@ -309,6 +346,8 @@ struct SearchPageView: View {
             .onChange(of: model.tab) { model.tabChanged() }
             if model.tab == "live" {
                 live
+            } else if model.tab == "lyrics" {
+                lyrics
             } else if model.loading || (model.podcastsLoading && (model.tab == "podcasts" || model.tab == "episodes")) {
                 ProgressView().padding(.top, 48)
                 Spacer()
@@ -397,6 +436,48 @@ struct SearchPageView: View {
             }
         }
     }
+
+    /// 「歌詞」のタブ: 歌詞に語が見つかった曲を先に、見つかった行を曲の下に引用して出す（大体合っているときは「≈」）。
+    /// 曲はほかの曲の行と同じに、ダブルクリックで再生する。
+    @ViewBuilder
+    private var lyrics: some View {
+        if model.lyricsLoading {
+            ProgressView().padding(.top, 48)
+            Spacer()
+        } else if model.lyricsFailed {
+            VStack(spacing: 8) {
+                Text(L.t("歌詞から探せませんでした", "Couldn't search by lyrics")).subtitleStyle()
+                Button(L.t("もう一度", "Retry")) { model.loadLyricsIfNeeded() }
+            }
+            .padding(.top, 64)
+            Spacer()
+        } else if model.lyricsHits.isEmpty {
+            Text(L.t("見つかりませんでした", "No results found")).subtitleStyle().padding(.top, 64)
+            Spacer()
+        } else {
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    ForEach(Array(model.lyricsHits.enumerated()), id: \.element.id) { i, hit in
+                        VStack(alignment: .leading, spacing: 0) {
+                            songRow(TrackRow(number: i + 1, song: hit.song))
+                            if let match = hit.match {
+                                // 番号・画像の幅だけ下げて、曲名の下にそろえる
+                                Text(SearchPageView.quote(match))
+                                    .font(.callout)
+                                    .foregroundStyle(Color.accentColor)
+                                    .lineLimit(2)
+                                    .padding(EdgeInsets(top: 0, leading: 108, bottom: 8, trailing: 16))
+                            }
+                        }
+                    }
+                }
+                .padding(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
+            }
+        }
+    }
+
+    /// 合った歌詞の行の引用。大体合っているときは先頭に「≈ 」（Android・Windows と同じ）。
+    static func quote(_ match: LyricsMatch) -> String { (match.exact ? "" : "≈ ") + "\u{201C}" + match.line + "\u{201D}" }
 
     private var all: some View {
         ScrollView {

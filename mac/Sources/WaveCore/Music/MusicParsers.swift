@@ -24,6 +24,32 @@ public enum MusicParsers {
         return SongPage(songs: shelfSongs(shelf), continuation: nextContinuation(shelf))
     }
 
+    /// 絞り込まない検索の最初のページから、曲と動画を出てくる順に集める。一番上の結果（musicCardShelfRenderer）が曲なら先頭に置く。
+    /// 棚は musicShelfRenderer と itemSectionRenderer のどちらでも来る（2026-10 に両方を見た。Android と同じ）。
+    public static func searchTopSongs(_ root: JSON) -> [Song] {
+        let sections = root.path("contents", "tabbedSearchResultsRenderer", "tabs").firstItem
+            .path("tabRenderer", "content", "sectionListRenderer", "contents").items
+        var songs: [Song] = []
+        for section in sections {
+            if let card = section.path("musicCardShelfRenderer").asObject, let song = cardSong(card) { songs.append(song) }
+            let rows = section.path("musicShelfRenderer", "contents").items + section.path("itemSectionRenderer", "contents").items
+            songs += rows.compactMap { $0.path("musicResponsiveListItemRenderer").asObject }.compactMap(responsiveListItemSong)
+        }
+        return songs.distinct(\.videoId)
+    }
+
+    /// 一番上の結果の欄が曲・動画なら、その曲。アーティスト・アルバムなどの欄（videoId が無い）は nil。
+    private static func cardSong(_ card: JSON) -> Song? {
+        let titleRuns = card.path("title", "runs").items
+        guard let watch = titleRuns.lazy.compactMap({ $0.path("navigationEndpoint", "watchEndpoint").asObject }).first,
+            let videoId = watch.path("videoId").str, let title = runsText(titleRuns)
+        else { return nil }
+        let subtitle = card.path("subtitle", "runs").items
+        return Song(videoId: videoId, title: title, artists: artistsOf(subtitle), album: albumOf(subtitle), durationSeconds: durationOf(subtitle),
+                    thumbnailUrl: lastThumbnailUrl(card.path("thumbnail")),
+                    kind: watch.path("watchEndpointMusicSupportedConfigs", "watchEndpointMusicConfig", "musicVideoType").str)
+    }
+
     public static func searchAlbums(_ root: JSON) -> SearchPage<AlbumSummary> { searchPageOf(root, albumRow) }
 
     public static func searchArtists(_ root: JSON) -> SearchPage<ArtistSummary> { searchPageOf(root, artistRow) }

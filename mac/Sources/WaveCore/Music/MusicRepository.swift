@@ -64,6 +64,11 @@ public final class MusicRepository: Sendable {
         try await search(query, filter: MusicRepository.songsFilter, continuation: continuation, parse: MusicParsers.searchSongs)
     }
 
+    /// 絞り込まない検索の、一番上の結果と各棚の曲・動画（検索の順）。歌詞から探すときの候補（LyricsSearch。Android と同じ）。
+    public func searchTopSongs(_ query: String) async throws -> ApiResult<[Song]> {
+        try await client.post("search", body: .obj(["query": .string(query)])).map(MusicParsers.searchTopSongs)
+    }
+
     public func searchAlbums(_ query: String, continuation: String? = nil) async throws -> ApiResult<SearchPage<AlbumSummary>> {
         try await search(query, filter: MusicRepository.albumsFilter, continuation: continuation, parse: MusicParsers.searchAlbums)
     }
