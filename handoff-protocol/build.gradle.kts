@@ -2,7 +2,7 @@
 
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
-// 端末間の受け渡しの形式（Phase 6、ADR-0009）。中継からも使うので、innertubex・Android の API に依存しない
+// 端末の連携の形式と暗号（v1: Phase 6、ADR-0009。v2: Phase 6b、ADR-0010）。中継からも使うので、innertubex・Android の API に依存しない
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
     alias(libs.plugins.android.kotlin.multiplatform.library)

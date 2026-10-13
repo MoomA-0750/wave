@@ -1,4 +1,4 @@
-// 端末間の受け渡しの中継（Phase 6、ADR-0008）。暗号文を振り分けるだけで、本文・曲・アカウントを知らない。
+// 端末の連携の中継（v1: Phase 6、ADR-0008。v2: Phase 6b、ADR-0010。環境変数で切り替える）。暗号文を振り分けて預かるだけで、本文・曲・アカウントを知らない。
 plugins {
     alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.kotlin.serialization)

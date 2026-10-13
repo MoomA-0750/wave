@@ -1,6 +1,8 @@
 # wave
 
-YouTube Music の自作クライアント。いまは Android（Jetpack Compose）・Windows（WinUI 3）・macOS と iPhone（SwiftUI）が対象で、共有コアは Kotlin Multiplatform で書く。
+YouTube Music の自作クライアント。いまは Android のスマホと時計（Jetpack Compose）・Windows（WinUI 3）・macOS と iPhone（SwiftUI）が対象。Android のコアは Kotlin Multiplatform で書き、Windows は C#、macOS・iPhone は Swift へ移したコアを持つ（端末の連携はどれもバイト単位で互換）。iPad は今は対象にしない。
+
+今どう動くべきかは [SPEC.md](SPEC.md)、判断の理由は [docs/decisions.md](docs/decisions.md) にある。
 
 InnerTube との通信には [innertubex](https://github.com/MetrolistGroup/innertubex)（GPL-3.0）を使う。
 
@@ -10,6 +12,11 @@ InnerTube との通信には [innertubex](https://github.com/MetrolistGroup/inne
 |---|---|
 | `core` | 共有コア（KMP: Android + desktop JVM）。desktop ターゲットは、ホスト上でテストを速く回すために置いている |
 | `androidApp` | Android アプリ（Compose）。flavor でスマホ（`phone`、Material 3 Expressive）と時計（`wear`、Wear OS の Material 3）を組む。共通の部品は `src/main`、画面はそれぞれの flavor に置く |
+| `handoff-protocol` | 端末の連携の形式と暗号（KMP: Android + desktop JVM）。中継とアプリの両方から使うので、innertubex・Android の API に依存しない。新しい方式（v2: 家の鎖・SealedDoc・HPKE・ペアリング・ライブラリの同期）と、消す予定の古い方式（v1: 直接の受け渡し）が入っている |
+| `relay` | 端末の連携の中継（Kotlin/JVM のサーバー）。暗号文を振り分けて家の最新の状態を預かるだけで、中身・曲・アカウントは読めない。自宅に置き、tailnet の中だけに出す。v1 と v2 は環境変数で切り替え、別のコンテナで並べて動かす（運用は [docs/connect-v2-operations.md](docs/connect-v2-operations.md)） |
+| `windows/` | Windows 版（WinUI 3、C#）。`Wave.Core` は Android のコアを C# で書き直したもの、`Wave.App` が画面、`Wave.Core.Tests` がテスト（Android と同じ fixture を使う）。試作の扱いで、どこかで作り直す前提 |
+| `mac/` | macOS 版と iPhone 版（SwiftUI、`swift build` で組む）。下の「macOS・iPhone」を参照 |
+| `tools/ai-bridge` | 「Claude に聞く」の中継。家の PC で `claude -p` を呼ぶ小さな HTTP サーバー（[tools/ai-bridge/README.md](tools/ai-bridge/README.md)） |
 
 設計の決定は `docs/adr/` にある。
 
