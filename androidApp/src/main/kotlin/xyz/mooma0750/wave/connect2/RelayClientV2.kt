@@ -24,7 +24,7 @@ import java.util.Base64
 import java.util.concurrent.TimeUnit
 
 /**
- * 中継 v2 への接続（Phase 6b）。プロセスで1本、使う側が参照を数える（v1 の RelayClient と同じ規則: 古いソケットの callback を無視、つなぎ直しの間隔を伸ばす）。
+ * 中継 v2 への接続（Phase 6b）。プロセスで1本、使う側が参照を数える（古いソケットの callback を無視し、つなぎ直しの間隔を伸ばす）。
  * 受けたメッセージは deliver に渡す（呼ぶ側が ConnectClient の1本のスレッドへ移す）。ログは状態と種類だけ。
  */
 class RelayClientV2(

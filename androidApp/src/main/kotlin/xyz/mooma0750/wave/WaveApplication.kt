@@ -27,11 +27,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import xyz.mooma0750.wave.connect.ConnectManager
 import xyz.mooma0750.wave.connect.DeviceIdentity
-import xyz.mooma0750.wave.connect.PairStore
-import xyz.mooma0750.wave.connect.PairingController
-import xyz.mooma0750.wave.connect.RelayClient
+import xyz.mooma0750.wave.connect.LegacyConnectCleanup
 import xyz.mooma0750.wave.connect2.ConnectNotices
 import xyz.mooma0750.wave.connect2.ConnectV2Manager
 import xyz.mooma0750.wave.connect2.PairingV2Controller
@@ -378,7 +375,7 @@ class AppContainer(
         xyz.mooma0750.wave.ai.AiChat(aiTransport, xyz.mooma0750.wave.ai.AiTools(this, texts), appScope, xyz.mooma0750.wave.ai.AiHistoryStore(java.io.File(appContext.filesDir, "ai_history.json"), appScope))
     }
 
-    /** 端末間の受け渡しの、再生サービスへの入口（Phase 6）。 */
+    /** スマホと時計の間の再生の移動の、再生サービスへの入口（Phase 6 で作った形）。 */
     val handoffHost = HandoffHost()
 
     /** Connect v2 の、再生サービスへの入口（Phase 6b）。 */
@@ -387,13 +384,11 @@ class AppContainer(
     /** この端末の身元（Keystore の署名鍵）。 */
     val deviceIdentity = DeviceIdentity()
 
-    /** ペアリングした端末の一覧（信頼の根拠）。 */
-    val pairStore = PairStore(java.io.File(context.noBackupFilesDir, "pairs.bin"))
-
-    /** 中継の場所が設定されているか（local.properties）。無ければ端末間の受け渡しは使えない。 */
-    val connectConfigured: Boolean = BuildConfig.RELAY_URL.isNotEmpty() && BuildConfig.RELAY_HOST.isNotEmpty()
-
-    val relayClient = RelayClient(deviceIdentity, BuildConfig.RELAY_URL, BuildConfig.RELAY_HOST, appScope)
+    init {
+        // v1 の連携（ADR-0009、2026-10-14 に削除）が残したペアの一覧とそれを包む Keystore の鍵、debug の確認用のファイルを消す。
+        // どれも v1 だけのもので、v2 は読まない（身元の鍵 DeviceIdentity は v2 も使うので消さない）
+        appScope.launch(Dispatchers.IO) { LegacyConnectCleanup.run(context) }
+    }
 
     /** 前面にある Activity の数（引き取った曲の再生を始めてよいか）。 */
     @Volatile
@@ -497,31 +492,6 @@ class AppContainer(
         connectV2?.let { manager ->
             PairingV2Controller(deviceIdentity, manager, session, appScope, android.os.Build.MODEL, appContext.resources)
         }
-
-    val connect =
-        ConnectManager(
-            identity = deviceIdentity,
-            pairs = pairStore,
-            relay = relayClient,
-            session = session,
-            host = handoffHost,
-            scope = appScope,
-            uiInForeground = { startedActivities > 0 },
-            ensurePlaybackService = { kotlinx.coroutines.withContext(Dispatchers.Main) { player.controller() } },
-            resources = appContext.resources,
-        )
-
-    val pairing =
-        PairingController(
-            identity = deviceIdentity,
-            pairs = pairStore,
-            relay = relayClient,
-            connect = connect,
-            session = session,
-            scope = appScope,
-            deviceName = android.os.Build.MODEL,
-            resources = appContext.resources,
-        )
 
     /** スマホから時計へのログインの受け渡し（ADR-0011）。 */
     val watchLogin = xyz.mooma0750.wave.watchlink.WatchLogin(context, authManager, appScope)

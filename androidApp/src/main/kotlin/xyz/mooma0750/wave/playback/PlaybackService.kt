@@ -149,15 +149,6 @@ class PlaybackService : MediaLibraryService() {
         }
     }
 
-    /**
-     * 渡した（かもしれない）後、この端末で再生し直すまで true。この間のキューは相手の再生より古いので、引き取りの要求には渡さない
-     * （2台で行き来したあと、古いキューで相手の今の再生を上書きした。2026-09-17 の実機確認）。
-     * snapshot を作った時点で立てる（Ack が落ちても古いキューを渡さない）。Cancel と、この端末での再生で戻す
-     */
-    private var handedOff = false
-
-    /** このプロセスで再生したか。保存から戻しただけのキュー（相手の再生より古いかもしれない）は渡さない。 */
-    private var playedInProcess = false
     private var relayReleaseJob: Job? = null
     private var handoffEndpoint: HandoffHost.Endpoint? = null
 
@@ -289,10 +280,6 @@ class PlaybackService : MediaLibraryService() {
                 override fun onIsPlayingChanged(isPlaying: Boolean) {
                     historyTracker.onIsPlayingChanged(isPlaying)
                     episodePositions.onIsPlayingChanged(isPlaying)
-                    if (isPlaying) {
-                        handedOff = false
-                        playedInProcess = true
-                    }
                     updateRelayHold(isPlaying)
                     val now = android.os.SystemClock.elapsedRealtime()
                     if (isPlaying) {
@@ -392,14 +379,10 @@ class PlaybackService : MediaLibraryService() {
             object : HandoffHost.Endpoint {
                 private var resumeAfterCancel = false
 
-                override fun hasQueue(): Boolean = player.mediaItemCount > 0 && loggedInAt != null && playedInProcess && !handedOff
-
                 override fun markHandedOff() {
                     resumeAfterCancel = false
-                    // Ack より先に、本人がこの端末で再生を再開していたら、その再生は新しい
-                    if (!player.isPlaying) handedOff = true
                     historyTracker.markHandedOff()
-                    // 渡すものが無くなったので、一時停止後の待ち受けを続けない（相手の Ack の再送を受けてから離す）
+                    // 渡すものが無くなったので、一時停止後の待ち受けを続けない（少し待ってから離す）
                     if (!player.isPlaying && relayHeld) {
                         relayReleaseJob?.cancel()
                         relayReleaseJob =
@@ -407,19 +390,14 @@ class PlaybackService : MediaLibraryService() {
                                 delay(HANDED_OFF_RELEASE_DELAY_MS)
                                 relayHeld = false
                                 relayReleaseJob = null
-                                releaseRelays()
+                                container.connectV2?.relay?.release()
                             }
                     }
                 }
 
                 override fun resumeAfterCancel() {
-                    handedOff = false
                     if (resumeAfterCancel) player.play()
                     resumeAfterCancel = false
-                }
-
-                override fun forgetHandedOff() {
-                    handedOff = false
                 }
 
                 override fun capture(
@@ -431,7 +409,6 @@ class PlaybackService : MediaLibraryService() {
                     val wasPlaying = player.isPlaying || player.playWhenReady
                     // 同じ相手の押し直しで2回目の capture が来ても、最初の「再生していた」を消さない
                     resumeAfterCancel = resumeAfterCancel || wasPlaying
-                    handedOff = true
                     player.pause()
                     val (listenedMs, historySent) = historyTracker.handoffState()
                     return queueSession.handoffSnapshot(
@@ -450,7 +427,6 @@ class PlaybackService : MediaLibraryService() {
                     expectedLoginGeneration: Long,
                 ): Boolean {
                     if (loggedInAt == null || container.session.loginGenerationId() != expectedLoginGeneration) return false
-                    handedOff = false
                     // 途中の復元を無効にし、受け取ったキューを保存で上書きしてよい状態にする
                     restoreStarted = true
                     restoreSettled = true
@@ -508,7 +484,6 @@ class PlaybackService : MediaLibraryService() {
                 ): Boolean =
                     suppressingV2 {
                         if (loggedInAt == null || container.session.loginGenerationId() != expectedLoginGeneration || player.playWhenReady) return@suppressingV2 false
-                        handedOff = false
                         // 途中の復元を無効にし、合わせたキューを保存で上書きしてよい状態にする
                         restoreStarted = true
                         restoreSettled = true
@@ -583,36 +558,24 @@ class PlaybackService : MediaLibraryService() {
     }
 
     private fun updateRelayHold(isPlaying: Boolean) {
-        if (!container.connectConfigured && container.connectV2 == null) return
+        val relay = container.connectV2?.relay ?: return
         if (isPlaying) {
             relayReleaseJob?.cancel()
             relayReleaseJob = null
             if (!relayHeld) {
                 relayHeld = true
-                acquireRelays()
+                relay.acquire()
             }
         } else if (relayHeld && relayReleaseJob == null) {
             relayReleaseJob =
                 scope.launch {
-                    // 一時停止から、前面のタイムアウト（10分）の少し前まで待ち受ける。受け渡しの窓の間は延ばす
+                    // 一時停止から、前面のタイムアウト（10分）の少し前まで待ち受ける
                     delay(RELAY_HOLD_AFTER_PAUSE_MS)
-                    while (container.connect.holdingConnection) delay(10_000)
                     relayHeld = false
                     relayReleaseJob = null
-                    releaseRelays()
+                    relay.release()
                 }
         }
-    }
-
-    /** v1 の中継と、設定されていれば Connect v2 の中継（Phase 6b、L-9 で並べて動かす）。 */
-    private fun acquireRelays() {
-        if (container.connectConfigured) container.relayClient.acquire()
-        container.connectV2?.relay?.acquire()
-    }
-
-    private fun releaseRelays() {
-        if (container.connectConfigured) container.relayClient.release()
-        container.connectV2?.relay?.release()
     }
 
     /** 評価を自アプリの画面（コントローラーごとの extras）と通知のボタンへ配る。 */
@@ -1141,7 +1104,7 @@ class PlaybackService : MediaLibraryService() {
         artwork?.release()
         artwork = null
         relayReleaseJob?.cancel()
-        if (relayHeld) releaseRelays()
+        if (relayHeld) container.connectV2?.relay?.release()
         relayHeld = false
         remoteRelayReleaseJob?.cancel()
         if (remoteRelayHeld) container.connectV2?.relay?.release()

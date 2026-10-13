@@ -5,7 +5,8 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
 /**
- * 引き取りのときに、再生中の端末（A）から手元の端末（B）へ送るキューのスナップショット（Phase 6、ADR-0009）。
+ * キューのスナップショット（Phase 6 の ADR-0009 で作った形）。今は Connect v2 の家の状態（ADR-0010）の中身と、スマホと時計の間の再生の移動で使う。
+ * Windows・Mac・iPhone も同じ形を読み書きするので、形を変えるときはすべてをそろえる。
  * 端末の中の状態（キューの世代・ログインの取得時刻・cpn）と認証情報は入れない。評価も送らない（B が読み直す）。
  * 端末の外に出るので、プラットフォームに依らない形に凍結する（Media3 の値・ドメインのクラスを持ち込まない）。
  */

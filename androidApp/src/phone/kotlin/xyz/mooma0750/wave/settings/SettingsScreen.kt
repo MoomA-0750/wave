@@ -142,7 +142,7 @@ fun SettingsScreen(
                     },
                 )
             }
-            if (container.connectConfigured || container.connectV2 != null) {
+            if (container.connectV2 != null) {
                 item {
                     ListItem(
                         headlineContent = { Text(stringResource(R.string.settings_connected_devices)) },

@@ -27,7 +27,7 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
 /**
- * Connect v2 の端末の鍵（Phase 6b、D-1）。身元は v1 と同じ Keystore の署名鍵。どちらもユーザー認証は要求しない（画面ロック中の再生で状態を開くため）。
+ * Connect v2 の端末の鍵（Phase 6b、D-1）。身元は Phase 6 から使っている Keystore の署名鍵（DeviceIdentity）。どちらもユーザー認証は要求しない（画面ロック中の再生で状態を開くため）。
  *
  * 受け取りの鍵（kx）は、Keystore が TEE などで守れる端末では Keystore の P-256 の鍵交換の鍵（取り出せない）。
  * Keystore がソフトウェアでしか守れない端末（Pixel 3、Android 12）では、Keystore の鍵での鍵交換が1回ごとに操作の枠を漏らし、
