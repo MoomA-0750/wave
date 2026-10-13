@@ -32,6 +32,36 @@ public static partial class MusicParsers
         return shelf is null ? new SongPage([], null) : new SongPage(ShelfSongs(shelf), NextContinuation(shelf));
     }
 
+    /// <summary>
+    /// 絞り込まない検索の最初のページから、曲と動画を出てくる順に集める。一番上の結果（musicCardShelfRenderer）が曲なら先頭に置く。
+    /// 棚は musicShelfRenderer と itemSectionRenderer のどちらでも来る（Android 版の searchTopSongs と同じ）。
+    /// </summary>
+    public static List<Song> SearchTopSongs(JsonNode root)
+    {
+        var sections = root.Path("contents", "tabbedSearchResultsRenderer", "tabs").FirstItem()
+            .Path("tabRenderer", "content", "sectionListRenderer", "contents").Items();
+        var songs = new List<Song>();
+        foreach (var section in sections)
+        {
+            if (section.Path("musicCardShelfRenderer").Obj() is { } card && CardSong(card) is { } top) songs.Add(top);
+            var rows = section.Path("musicShelfRenderer", "contents").Items().Concat(section.Path("itemSectionRenderer", "contents").Items());
+            songs.AddRange(rows.Select(r => r.Path("musicResponsiveListItemRenderer").Obj()).OfType<JsonObject>().Select(ResponsiveListItemSong).OfType<Song>());
+        }
+        return songs.DistinctBy(s => s.VideoId).ToList();
+    }
+
+    /// <summary>一番上の結果の欄が曲・動画なら、その曲。アーティスト・アルバムなどの欄（videoId が無い）は null。</summary>
+    private static Song? CardSong(JsonObject card)
+    {
+        var titleRuns = card.Path("title", "runs").Items();
+        var watch = titleRuns.Select(r => r.Path("navigationEndpoint", "watchEndpoint").Obj()).FirstOrDefault(w => w is not null);
+        if (watch?.Path("videoId").Str() is not { } videoId) return null;
+        if (RunsText(titleRuns) is not { } title) return null;
+        var subtitle = card.Path("subtitle", "runs").Items();
+        return new Song(videoId, title, ArtistsOf(subtitle), AlbumOf(subtitle), DurationOf(subtitle), LastThumbnailUrl(card.Path("thumbnail")),
+            watch.Path("watchEndpointMusicSupportedConfigs", "watchEndpointMusicConfig", "musicVideoType").Str());
+    }
+
     public static SearchPage<AlbumSummary> SearchAlbums(JsonNode root) => SearchPageOf(root, AlbumRow);
 
     public static SearchPage<ArtistSummary> SearchArtists(JsonNode root) => SearchPageOf(root, ArtistRow);

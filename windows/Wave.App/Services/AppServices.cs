@@ -28,6 +28,8 @@ public static class AppServices
     public static FeedLibrary FeedLibrary { get; private set; } = null!;
     public static PlaybackStats Stats { get; private set; } = null!;
     public static LyricsService Lyrics { get; private set; } = null!;
+    /// <summary>歌詞の一節から曲を探す（検索の「歌詞」の絞り込み）。</summary>
+    public static LyricsSearch LyricsSearch { get; private set; } = null!;
     public static CredentialStore Credentials { get; private set; } = null!;
     public static PlayerService Player { get; private set; } = null!;
     public static LibraryState Library { get; private set; } = null!;
@@ -56,6 +58,7 @@ public static class AppServices
         // 歌詞の検索（LRCLIB）には YouTube と別の HttpClient を使う
         var version = typeof(AppServices).Assembly.GetName().Version?.ToString(3) ?? "0.1.0";
         Lyrics = new LyricsService(Music, new LrclibClient(InnerTubeClient.CreateHttpClient(), $"wave-windows/{version}"));
+        LyricsSearch = new LyricsSearch(Music, Lyrics);
         FeedHttp = PodcastFeedClient.CreateHttpClient();
         var region = System.Globalization.RegionInfo.CurrentRegion.TwoLetterISORegionName;
         Feeds = new PodcastFeedClient(FeedHttp, region.Length == 2 && region != "IV" ? region : "JP", $"wave/{version}");

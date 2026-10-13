@@ -279,6 +279,53 @@
         </Grid>
     </DataTemplate>
 
+    <!-- 歌詞から探した曲の行: 曲の行の下に、歌詞の合った行を “…” で引用する（大体合っているときは先頭に「≈ 」。Android と同じ） -->
+    <DataTemplate x:Key="LyricsRowTemplate" x:DataType="controls:TrackRow">
+        <Grid ColumnSpacing="12" Background="Transparent" RightTapped="OnRowRightTapped">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="56" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="32" />
+                <ColumnDefinition Width="3*" />
+                <ColumnDefinition Width="2*" />
+                <ColumnDefinition Width="80" />
+                <ColumnDefinition Width="36" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="{x:Bind Number}" HorizontalAlignment="Right" VerticalAlignment="Center"
+                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" Visibility="{x:Bind app:Ui.Hide(IsCurrent), Mode=OneWay}" />
+            <FontIcon Glyph="&#xE767;" FontSize="14" HorizontalAlignment="Right" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                      Visibility="{x:Bind app:Ui.Show(IsCurrent), Mode=OneWay}" />
+            <Grid Grid.Column="1" ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Border Width="40" Height="40" CornerRadius="4" Background="{ThemeResource ControlFillColorSecondaryBrush}">
+                    <Image Source="{x:Bind app:Ui.Small(Song.ThumbnailUrl)}" Stretch="UniformToFill" />
+                </Border>
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock Text="{x:Bind Song.Title}" TextTrimming="CharacterEllipsis"
+                               Foreground="{x:Bind controls:Templates.TitleBrush(IsCurrent), Mode=OneWay}" />
+                    <TextBlock Text="{x:Bind Song.ArtistsText}" Style="{StaticResource SubtleTextStyle}" />
+                </StackPanel>
+            </Grid>
+            <TextBlock Grid.Column="2" Text="{x:Bind AlbumTitle}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+            <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" VerticalAlignment="Center">
+                <FontIcon Glyph="&#xEC61;" FontSize="14" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" Visibility="{x:Bind app:Ui.Show(IsLiked), Mode=OneWay}"
+                          ToolTipService.ToolTip="{x:Bind app:L.T('高く評価済み', 'Liked')}" />
+                <TextBlock Text="{x:Bind app:Ui.Duration(Song.DurationSeconds)}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+            </StackPanel>
+            <Button Grid.Column="4" Style="{StaticResource IconButtonStyle}" Click="OnMoreClick" ToolTipService.ToolTip="{x:Bind app:L.T('その他', 'More')}">
+                <FontIcon Glyph="&#xE712;" FontSize="14" />
+            </Button>
+            <TextBlock Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="3" Margin="52,-6,0,10" Text="{x:Bind Quote}" Visibility="{x:Bind app:Ui.Show(HasQuote)}"
+                       Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis" />
+        </Grid>
+    </DataTemplate>
+
     <!-- 一覧の上の見出しの行 -->
     <Style x:Key="TrackListItemStyle" TargetType="ListViewItem" BasedOn="{StaticResource DefaultListViewItemStyle}">
         <Setter Property="Padding" Value="12,0" />

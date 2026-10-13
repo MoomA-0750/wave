@@ -44,6 +44,10 @@ public sealed class MusicRepository(InnerTubeClient client, LiveClient? live = n
     public Task<ApiResult<SongPage>> SearchSongsAsync(string query, string? continuation = null, CancellationToken cancel = default) =>
         SearchAsync(query, SongsFilter, continuation, MusicParsers.SearchSongs, cancel);
 
+    /// <summary>絞り込まない検索の、一番上の結果と各棚の曲・動画（検索の順）。歌詞から探すときの候補（<see cref="LyricsSearch"/>）。</summary>
+    public async Task<ApiResult<List<Song>>> SearchTopSongsAsync(string query, CancellationToken cancel = default) =>
+        (await client.PostAsync("search", new JsonObject { ["query"] = query }, cancel: cancel)).Map(MusicParsers.SearchTopSongs);
+
     public Task<ApiResult<SearchPage<AlbumSummary>>> SearchAlbumsAsync(string query, string? continuation = null, CancellationToken cancel = default) =>
         SearchAsync(query, AlbumsFilter, continuation, MusicParsers.SearchAlbums, cancel);
 

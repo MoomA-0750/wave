@@ -274,8 +274,8 @@ public static class DebugCommands
                 if (Nav.Frame.Content is Views.SearchPage page)
                 {
                     page.DebugTab(words[0]);
-                    for (var i = 0; i < 40 && page.DebugLiveRows == 0; i++) await Task.Delay(250);
-                    AppPaths.Log($"debug search-tab rows={page.DebugLiveRows}");
+                    for (var i = 0; i < 80 && page.DebugRows(words[0]) == 0; i++) await Task.Delay(250);
+                    AppPaths.Log($"debug search-tab rows={page.DebugRows(words[0])}" + (words[0] == "lyrics" ? $" top={page.DebugLyricsTop}" : ""));
                 }
                 break;
             }
