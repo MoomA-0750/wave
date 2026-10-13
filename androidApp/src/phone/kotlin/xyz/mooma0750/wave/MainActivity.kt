@@ -161,11 +161,7 @@ class MainActivity : ComponentActivity() {
                 LaunchedEffect(container) {
                     for (screen in notificationNavigation) nav.push(screen)
                 }
-                // 端末の連携の結果（引き取り・解除など）は、どの画面にいても短く知らせる（仮の表示）
                 val context = androidx.compose.ui.platform.LocalContext.current
-                LaunchedEffect(container) {
-                    container.connect.events.collect { message -> xyz.mooma0750.wave.ui.Notices.show(message) }
-                }
                 // 時計との間で再生を移した結果
                 LaunchedEffect(container) {
                     container.watchRemote.result.drop(1).collect { result ->
@@ -297,7 +293,7 @@ class MainActivity : ComponentActivity() {
                                         onOpenHistory = { nav.push(Screen.History) },
                                         onOpenSettings = { nav.push(Screen.Settings) },
                                         onConnect = { nav.push(Screen.Connect) },
-                                        showConnect = container.connectConfigured || container.connectV2 != null,
+                                        showConnect = container.connectV2 != null,
                                         newReleases = newReleases,
                                     )
                                 }

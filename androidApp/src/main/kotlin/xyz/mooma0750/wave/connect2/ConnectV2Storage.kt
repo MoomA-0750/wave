@@ -15,7 +15,7 @@ import javax.crypto.spec.GCMParameterSpec
 
 /**
  * Connect v2 の端末の保存（Phase 6b、D-2 の頭・D-4 の storeId と版の床・D-9 の退いた印）。`noBackupFilesDir` に置く。
- * ファイルがあるのに読めないときは空として扱わず、書き込みもしない（v1 の PairStore と同じ）。
+ * ファイルがあるのに読めないときは空として扱わず、書き込みもしない。
  *
  * 本文はデータの鍵（AES-256-GCM、ソフトウェア）で暗号化し、データの鍵を Keystore の AES 鍵で包んで隣のファイルに置く。
  * Keystore を使うのはプロセスごとにデータの鍵を解く1回だけ（書くたびに Keystore の操作をすると、Pixel 3（Android 12）では

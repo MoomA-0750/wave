@@ -12,7 +12,8 @@ import java.security.PublicKey
 /**
  * この端末の身元（Phase 6、ADR-0008）。Android Keystore の P-256 署名鍵で、秘密鍵は取り出せない。
  * ユーザー認証・端末のアンロックは要求しない（画面ロック中の再生で中継に認証するため、ADR-0002 の cookie の鍵と同じ）。
- * 署名だけに使い、鍵交換には使わない（決定 K-9）。
+ * 署名だけに使い、鍵交換には使わない（決定 K-9）。Connect v2（ADR-0010）の身元もこの鍵（別名は v1 の頃のまま）。
+ * 消すと家の端末としての身元が変わるので、v1 の削除（2026-10-14）でも残している。
  */
 class DeviceIdentity(
     private val alias: String = ALIAS,

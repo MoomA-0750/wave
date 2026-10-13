@@ -33,7 +33,7 @@ import xyz.mooma0750.wave.handoff.v2.RelayV2
 
 /**
  * Connect v2 の加入（Phase 6b、D-3）。A（家の端末、QR を出して6桁を入力）と B（QR を読んで6桁を表示）。
- * v1 の PairingController と同じ形（状態と手順は Main、手順は1つの job、中継の参照は job の中で取って戻す）。
+ * 状態と手順は Main、手順は1つの job、中継の参照は job の中で取って戻す。
  * A は6桁の一致の後に B を家に加え、B は A の Confirm の床で加入を待つ。
  */
 class PairingV2Controller(

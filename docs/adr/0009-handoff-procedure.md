@@ -1,6 +1,8 @@
 # 手元の端末が、再生中の端末からキューを引き取る
 
-状態: 採用（2026-09-17、Phase 6。計画 `dev/active/phase6-plan.md` の P6-3、inner gate `review-p634-2026-09-17.md`、Pixel 3 と Galaxy Z Fold7 での実機確認を反映）
+状態: 置き換え済み（[ADR-0010](0010-connect-v2-state-server.md)、2026-10-14 にコードと中継から削除）。もとは採用（2026-09-17、Phase 6。計画 `dev/active/phase6-plan.md` の P6-3、inner gate `review-p634-2026-09-17.md`、Pixel 3 と Galaxy Z Fold7 での実機確認を反映）
+
+> 端末どうしで直接キューを頼む手順（Request・Snapshot・Ack・Cancel の封筒、HandoffTaker・HandoffGiver）は消した。キューのスナップショットの形（`HandoffSnapshot`）は、Connect v2 の家の状態の中身と、スマホと時計の間の再生の移動で今も使う。
 
 ## 背景
 

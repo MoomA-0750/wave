@@ -8,17 +8,14 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import xyz.mooma0750.wave.AppContainer
 import xyz.mooma0750.wave.WaveApplication
-import xyz.mooma0750.wave.connect.PairingController
 import xyz.mooma0750.wave.connect2.PairingV2Controller
 import xyz.mooma0750.wave.connect2.RelayClientV2
 import xyz.mooma0750.wave.core.auth.AuthState
 import xyz.mooma0750.wave.core.music.LikeStatus
 import xyz.mooma0750.wave.core.session.CallResult
 import xyz.mooma0750.wave.core.session.WriteResult
-import xyz.mooma0750.wave.handoff.EnvelopeType
 import xyz.mooma0750.wave.handoff.HandoffCodec
 import xyz.mooma0750.wave.handoff.HandoffDecodeResult
-import xyz.mooma0750.wave.handoff.crypto.EnvelopeSealer
 import xyz.mooma0750.wave.handoff.crypto.Hkdf
 import xyz.mooma0750.wave.handoff.crypto.Pairing
 import xyz.mooma0750.wave.handoff.crypto.WaveCrypto
@@ -137,8 +134,8 @@ object DebugActions {
                         val b = Pairing.Initiator(offer, other.private, other.public, "self-b", "selftest-account")
                         val (code, onB) = b.onConfirm(a.onHello(b.hello()).getOrThrow()).getOrThrow()
                         val onA = a.onCodeEntered(code).getOrThrow()
-                        val env = EnvelopeSealer.seal(onB.sendKey, "b", "a", EnvelopeType.Request, 0, "h", byteArrayOf(9))
-                        EnvelopeSealer.open(env, onA.receiveKey, "a", "b", -1)?.contentEquals(byteArrayOf(9)) == true
+                        // 両側で、向きごとの鍵が食い違わずに導けたか
+                        onB.sendKey.contentEquals(onA.receiveKey) && onA.sendKey.contentEquals(onB.receiveKey)
                     }
                     check("hkdf_rfc_case3") {
                         val prk = Hkdf.extract(ByteArray(0), ByteArray(22) { 0x0b })
@@ -146,32 +143,10 @@ object DebugActions {
                     }
                     Log.i(WaveApplication.LOG_TAG, "debug selftest sdk=${android.os.Build.VERSION.SDK_INT} $results")
                 }
-                // Phase 6: ペアリングと引き取りの確認（DebugReceiver からだけ）。QR の文字列と6桁はアプリの中のファイルに書き、ログには出さない
+                // 身元の公開鍵を書き出す（中継 v2 の家を作り直すときの WAVE_RELAY_BOOTSTRAP_KEYS、docs/connect-v2-operations.md）。ログには出さない
                 "connect_info" -> {
                     java.io.File(context.filesDir, "connect-pubkey.txt").writeText(java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(container.deviceIdentity.encodedPublicKey))
-                    Log.i(WaveApplication.LOG_TAG, "debug connect configured=${container.connectConfigured} pairs=${container.pairStore.all().size} relay=${container.relayClient.status.value}")
-                }
-                "pair_offer" -> {
-                    container.pairing.startOffer()
-                    val shown = kotlinx.coroutines.withTimeoutOrNull(20_000) { container.pairing.state.first { it is PairingController.State.ShowingOffer || it is PairingController.State.Failed } }
-                    (shown as? PairingController.State.ShowingOffer)?.let { java.io.File(context.filesDir, "pair-offer.txt").writeText(it.offerText) }
-                    Log.i(WaveApplication.LOG_TAG, "debug pair offer state=${shown?.let { it::class.simpleName }} message=${(shown as? xyz.mooma0750.wave.connect.PairingController.State.Failed)?.message}")
-                }
-                "pair_accept" -> {
-                    container.pairing.accept(intent.getStringExtra("offer").orEmpty())
-                    val next = kotlinx.coroutines.withTimeoutOrNull(30_000) { container.pairing.state.first { it is PairingController.State.ShowCode || it is PairingController.State.Failed } }
-                    (next as? PairingController.State.ShowCode)?.let { java.io.File(context.filesDir, "pair-code.txt").writeText(it.code) }
-                    Log.i(WaveApplication.LOG_TAG, "debug pair accept state=${next?.let { it::class.simpleName }} message=${(next as? xyz.mooma0750.wave.connect.PairingController.State.Failed)?.message}")
-                }
-                "pair_code" -> {
-                    container.pairing.enterCode(intent.getStringExtra("code").orEmpty())
-                    val next = kotlinx.coroutines.withTimeoutOrNull(20_000) { container.pairing.state.first { it is PairingController.State.Done || it is PairingController.State.Failed || (it as? PairingController.State.EnterCode)?.message != null } }
-                    Log.i(WaveApplication.LOG_TAG, "debug pair code state=${next?.let { it::class.simpleName }} message=${(next as? xyz.mooma0750.wave.connect.PairingController.State.Failed)?.message}")
-                }
-                "pair_continue" -> {
-                    container.pairing.confirmOnB()
-                    val next = kotlinx.coroutines.withTimeoutOrNull(20_000) { container.pairing.state.first { it is PairingController.State.Done || it is PairingController.State.ShowCode || it is PairingController.State.Failed } }
-                    Log.i(WaveApplication.LOG_TAG, "debug pair continue state=${next?.let { it::class.simpleName }} pairs=${container.pairStore.all().size}")
+                    Log.i(WaveApplication.LOG_TAG, "debug connect v2configured=${container.connectV2 != null}")
                 }
                 // Phase 6b: Connect v2 の確認（中継 v2 の場所が local.properties に無ければ何もしない）
                 // Keystore の操作の枠が返らない件の切り分け（Pixel 3、2026-10-06）。op=ecdh|sign|aes を n 回、本番と同じ使い方で行う。
@@ -257,14 +232,6 @@ object DebugActions {
                 "v2_accept_reset" -> container.connectV2?.acceptStoreReset()
                 // 中継の家を作り直した後に、この端末の家の記録を消す（家を作った端末は中継に断られないので、画面の「消す」が出ない）
                 "v2_forget" -> container.connectV2?.forgetHousehold()
-                "take_over" -> {
-                    val peer = container.pairStore.all().firstOrNull()
-                    if (peer == null) {
-                        Log.i(WaveApplication.LOG_TAG, "debug take over no pair")
-                    } else {
-                        Log.i(WaveApplication.LOG_TAG, "debug take over started=${container.connect.takeOver(peer.peerDeviceId)} relay=${container.relayClient.status.value}")
-                    }
-                }
                 // Phase 6: 中継を使わず、同じ端末で自分のキューを書き出して検証し、取り込み直す（adopt の確認）
                 "handoff_self" -> {
                     player.controller() // サービスを起動しておく

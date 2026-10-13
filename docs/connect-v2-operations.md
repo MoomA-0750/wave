@@ -5,13 +5,13 @@
 
 ## 起動
 
-v1 と同じイメージ・同じ配布物で、環境変数で v2 にする。v1 とは別のコンテナ・別のポート・別のデータファイルで並べて動かす（決定 L-9）。
+配布物（`relay/build/install/relay`）を Docker のコンテナで動かす（例は `dev/relay-deploy-v2/compose.yaml`）。中継は v2 だけになった（v1 は 2026-10-14 に消した）。`WAVE_RELAY_PROTOCOL=v2` が無いと起動しない。
 
 | 環境変数 | 値 |
 |---|---|
-| `WAVE_RELAY_PROTOCOL` | `v2` |
-| `WAVE_RELAY_HOST` | 端末の設定（`wave.relayHost`）と同じホスト名とポート。署名の対象に入る |
-| `WAVE_RELAY_DATA` | 家のファイル（Docker のボリューム上）。v1 の登録ファイルとは別にする |
+| `WAVE_RELAY_PROTOCOL` | `v2`（必須。v1 のコンテナが新しい配布物で起き直したときに、はっきり止めるため） |
+| `WAVE_RELAY_HOST` | 端末の設定（`wave.relayV2Host`）と同じホスト名とポート。署名の対象に入る |
+| `WAVE_RELAY_DATA` | 家のファイル（Docker のボリューム上）。v1 の登録ファイル（`registry.json`）は読めないので指さない |
 | `WAVE_RELAY_BOOTSTRAP_KEYS` | 家を作れる端末の署名公開鍵（base64url の SPKI）。家が無い間は、この端末だけが接続できる |
 | `WAVE_RELAY_PORT` / `WAVE_RELAY_BIND` | 待ち受け。`tailscale serve` からだけ届くようにする |
 

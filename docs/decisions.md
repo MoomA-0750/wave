@@ -166,3 +166,12 @@
 - Premium の確認に使う固定の曲が `LOGIN_REQUIRED` を返したときは、今までどおり疑いにする（年齢確認の無い曲なので、ログインが外れた印になる）
 - Windows・Mac・iPhone も同じ失敗の種類と文言にそろえた（これまでは「ログインが必要です」と出していた）
 
+## 2026-10-14 連携の古い方式（v1）を消した
+
+- v2（ADR-0010）が Android・時計（スマホ経由）・Windows・Mac・iPhone のすべてで動き、2026-10-13 に Pixel 3 と Windows の間でライブラリの同期まで確かめたので、SPEC の「予定」どおり v1 を消した。本人の回答は「進めてよい」。Windows・Mac・iPhone には初めから v1 が無かった（確かめた）
+- 消したもの: Android の ConnectManager・PairingController・PairStore・RelayClient と v1 の画面（ペアの一覧・引き取り・解除・ペアリング）、v1 の debug の命令（`pair_*`・`take_over`）、`local.properties` の `wave.relayUrl`・`wave.relayHost`、`handoff-protocol` の Envelope・HandoffFlow・RelayMessages と封筒を封じる・開く処理、中継の RelayServer・Registry と v1 で起動する道
+- 残したもの: 身元の署名鍵 DeviceIdentity（v2 も同じ鍵。消すと家の端末としての身元が変わる）、暗号の部品（WaveCrypto・Hpke・Pairing。Pairing は v2 の加入が拡張付きで使う）、端末 ID を出す `EnvelopeSealer.deviceId`（v2 の鎖・中継・Windows・Mac と同じ値。名前は付け替えずに残した）、`HandoffSnapshot`（v2 の家の状態の中身と、スマホと時計の間の再生の移動が使う。Windows・Mac も同じ形）、HandoffHost（時計との間の再生の移動が使う）
+- 端末に残る v1 のファイル: `pairs.bin` と、それを包む Keystore の `wave-pairs-v1` は、起動時に消すことにした。中身は v1 のペアごとの封筒の鍵だけで、v2 は読まず、身元の鍵とも別なので、残す理由が無い。debug で書いた `pair-offer.txt`・`pair-code.txt` も消す。`connect-pubkey.txt` は v2 の家を作り直すときに `connect_info` で書き出す身元の公開鍵なので、`connect_info` ごと残した
+- 中継は `WAVE_RELAY_PROTOCOL=v2` を必須にした。環境変数を外して v2 を既定にする案もあったが、v1 と v2 のコンテナが同じ配布物を見ているので、配布物を作り直した後に v1 のコンテナ（v2 の指定が無い）が起き直すと、v1 の登録ファイルを家のファイルとして読みにいく。指定が無ければはっきり止まるほうを選んだ
+- v1 の中継のコンテナ（`dev/relay-deploy`、127.0.0.1:8790）は動いたまま。共有の資源なので、止めるのは本人の了承を待つ（SPEC の未決事項）
+- ADR-0009 を「置き換え済み」、ADR-0008 を「一部置き換え済み」（身元・ペアリング・中継への署名の認証は v2 で生きている）にした
