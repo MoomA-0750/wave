@@ -523,7 +523,8 @@ class ConnectClient(
                 pending.forEach(::onState)
                 maybeResume()
                 flush()
-                library.onChainUpdated()
+                // 家に入ったばかりなら、つながったときの library_get は家の外として断られている。頼み直す
+                if (joining) library.onConnected() else library.onChainUpdated()
             }
             ChainVerification.Fork -> effects.event(ClientEvent.ChainForked)
             ChainVerification.Rollback -> effects.event(ClientEvent.ChainRolledBack)
