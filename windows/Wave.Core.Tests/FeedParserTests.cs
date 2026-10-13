@@ -155,6 +155,38 @@ public class FeedParserTests
     }
 }
 
+/// <summary>Android の NewEpisodesTest と同じ期待値。</summary>
+public class NewEpisodesTests
+{
+    private const long Now = 1_791_853_200L; // 2026-10-13 01:00 UTC
+
+    private static PodcastEpisode YouTube(string id, string? published) => new(new Song(id, id, [], null, null, null), published);
+
+    [Fact]
+    public void ReadsYouTubeDates()
+    {
+        Assert.Equal(Now - 6 * 86_400, NewEpisodes.ApproximateEpochSeconds("6 日前", Now));
+        Assert.Equal(Now - 2 * 3_600, NewEpisodes.ApproximateEpochSeconds("2 時間前", Now));
+        Assert.Equal(FeedParser.ParseRfc822("8 Sep 2025 00:00:00 GMT"), NewEpisodes.ApproximateEpochSeconds("2025/09/08", Now));
+        Assert.Null(NewEpisodes.ApproximateEpochSeconds("ライブ", Now));
+    }
+
+    [Fact]
+    public void MergesNewestFirst()
+    {
+        string[] months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        var rfc = string.Concat(new[] { 3, 10, 200 }.Select(days =>
+        {
+            var parts = FeedParser.DateText(Now - days * 86_400L).Split('/');
+            return $"<item><title>r{days}</title><pubDate>{parts[2]} {months[int.Parse(parts[1]) - 1]} {parts[0]} 01:00:00 GMT</pubDate><enclosure url=\"https://x.example/{days}.mp3\"/></item>";
+        }));
+        var show = FeedParser.Parse("https://x.example/f", $"<rss><channel><title>R</title>{rfc}</channel></rss>")!;
+        var merged = NewEpisodes.Merge([YouTube("y1", "1 日前"), YouTube("y6", "6 日前"), YouTube("y?", null), YouTube("y30", "2026/09/13")], [show], Now);
+        // 200 日前の RSS の回は混ぜない。読めない表示の回は一つ前と同じ日時
+        Assert.Equal(["y1", "r3", "y6", "y?", "r10", "y30"], merged.Select(e => e.Song.Title));
+    }
+}
+
 /// <summary>Android の FeedLibrarySyncTest と同じ期待値（ADR-0013）。</summary>
 public class FeedLibrarySyncTests
 {
