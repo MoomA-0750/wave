@@ -140,15 +140,17 @@ final class Nav {
                         MainActor.assumeIsolated {
                             if started || page.songs.isEmpty { return }
                             started = true
-                            player.playList(page.songs, start: 0, source: p.playlistId, shuffleOverride: player.shuffle ? true : nil)
+                            // 残りを読み終えるまでは、最初のページの終わりでラジオへ切り替えない
+                            player.playList(page.songs, start: 0, source: p.playlistId, shuffleOverride: player.shuffle ? true : nil, restPending: true)
                         }
                     }
                 })
                 await withCheckedContinuation { c in DispatchQueue.main.async { c.resume() } }
                 if full?.isOk != true && !started {
                     player.message = L.t("プレイリストを読み込めませんでした", "Couldn't load the playlist")
-                } else if let page = full?.value, player.sourceId == p.playlistId {
-                    player.appendFrom(page.songs)
+                } else if player.sourceId == p.playlistId {
+                    // 残りを読めなかったときも空で足す（読み終えたことにして、一覧の終わりでラジオへ切り替えられるように）
+                    player.appendFrom(full?.value?.songs ?? [])
                 }
             case .artist(let r):
                 if let artist = (try? await AppServices.music.artist(r.browseId))?.value, !artist.topSongs.isEmpty {
