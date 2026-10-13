@@ -167,12 +167,13 @@ public sealed partial class ArtistPage : Page
     internal static async Task PlayArtistAsync(PlayerService player, string browseId, IReadOnlyList<Song> topSongs, int start, bool? shuffle, Task<ApiResult<PlaylistPage>>? allSongs)
     {
         if (topSongs.Count == 0) return;
-        player.PlayList(topSongs, start, browseId, shuffle);
+        // 「すべての曲」を読み終えるまでは、人気の曲の終わりでラジオへ切り替えない
+        player.PlayList(topSongs, start, browseId, shuffle, moreComing: allSongs is not null);
         if (allSongs is null) return;
         var all = await allSongs;
         AppPaths.Log($"artist all songs ok={all.IsOk} songs={all.Value?.Songs.Count}");
-        // 読んでいる間にほかのものを流し始めていたら足さない
-        if (all.IsOk && player.SourceId == browseId) player.AppendFrom(all.Value!.Songs);
+        // 読んでいる間にほかのものを流し始めていたら足さない。読めなかったときも、読み終えた印として空で渡す
+        if (player.SourceId == browseId) player.AppendFrom(all.IsOk ? all.Value!.Songs : []);
     }
 
     /// <summary>

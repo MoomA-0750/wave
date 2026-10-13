@@ -44,6 +44,10 @@ public sealed partial class PlayerService : ObservableObject
     private int consecutiveFailures;
     private const int MaxConsecutiveFailures = 3;
     private string? radioSeed;
+    /// <summary>一覧の残りをまだ読んでいる出どころ（長いプレイリスト・アーティストを最初の分から鳴らし始めたとき）。読み終えるまでラジオへ切り替えない。</summary>
+    private string? pendingSourceId;
+    /// <summary>キューの最後の曲を流し終えて止まっている（あとから曲が足されたら、足した先頭から続ける）。</summary>
+    private bool stoppedAtEnd;
 
     // 端末の連携（Connect v2）: キューの項目ごとの ID と出どころ（Queue と同じ並び）、今の曲を聴いた時間
     private readonly List<QueueItemMeta> itemMeta = [];
@@ -250,6 +254,7 @@ public sealed partial class PlayerService : ObservableObject
 
     partial void OnIsPlayingChanged(bool value)
     {
+        if (value) stoppedAtEnd = false;
         // ほかの端末を映している間は、この端末で聴いた時間ではない
         if (IsRemote) return;
         // RSS のエピソードは、止めたらその位置を覚える（ADR-0012）
@@ -299,8 +304,12 @@ public sealed partial class PlayerService : ObservableObject
         if (!IsRemote) CursorChanged?.Invoke(true);
     }
 
-    /// <summary>曲の一覧を start から再生する（プレイリスト・アルバム・検索の結果）。shuffle が null なら今の設定のまま。</summary>
-    public void PlayList(IReadOnlyList<Song> songs, int start = 0, string? source = null, bool? shuffleOverride = null)
+    /// <summary>
+    /// 曲の一覧を start から再生する（プレイリスト・アルバム・検索の結果）。shuffle が null なら今の設定のまま。
+    /// 流し終える前に、キューの最後の曲から始まるラジオへつなぐ（ExtendRadioIfNeeded。Android の決定 E4 と同じ）。
+    /// moreComing なら一覧の残りをまだ読んでいる: AppendFrom で足し終えるまでラジオへ切り替えない。
+    /// </summary>
+    public void PlayList(IReadOnlyList<Song> songs, int start = 0, string? source = null, bool? shuffleOverride = null, bool moreComing = false)
     {
         if (songs.Count == 0) return;
         var target = RemoteDeviceId;
@@ -330,6 +339,7 @@ public sealed partial class PlayerService : ObservableObject
             first = 0;
         }
         radioSeed = null;
+        pendingSourceId = moreComing ? source : null;
         ReplaceQueue(order, QueueOrigin.Source);
         // 切ったときに戻す並び: 一覧の並び（同じ曲が2回あっても項目ごとに、一覧での位置を当てる）
         SetShuffleOrder(shuffled ? RankBy(songs) : null);
@@ -388,12 +398,16 @@ public sealed partial class PlayerService : ObservableObject
         if (!page.IsOk || Queue.Count == 0 || Queue[0].VideoId != song.VideoId) return;
         radioContinuation = page.Value!.Continuation;
         radioPlaylistId = page.Value.PlaylistId ?? radioPlaylistId;
-        AddAll(page.Value.Songs.Where(s => s.VideoId != song.VideoId), QueueOrigin.Suggestion);
+        AppendAuto(page.Value.Songs.Where(s => s.VideoId != song.VideoId).ToList(), QueueOrigin.Suggestion);
     }
 
-    /// <summary>あとから読めた残りの曲を、まだキューに無い分だけ足す（長いプレイリストを最初のページから鳴らし始めたとき）。</summary>
+    /// <summary>
+    /// あとから読めた残りの曲を、まだキューに無い分だけ足す（長いプレイリストを最初のページから鳴らし始めたとき）。
+    /// 読めなかったときも空で呼ぶ（読み終えた印。そこからラジオへつなげるようになる）。
+    /// </summary>
     public void AppendFrom(IReadOnlyList<Song> songs)
     {
+        pendingSourceId = null;
         var known = Queue.Select(s => s.VideoId).ToHashSet();
         var extra = songs.Where(s => known.Add(s.VideoId)).ToList();
         if (shuffleOrder is { } order)
@@ -404,8 +418,12 @@ public sealed partial class PlayerService : ObservableObject
             AddAll(extra, QueueOrigin.Source);
             var position = songs.Select((song, i) => (song.VideoId, i)).GroupBy(x => x.VideoId).ToDictionary(g => g.Key, g => g.First().i);
             for (var i = start; i < Queue.Count; i++) order[itemMeta[i].ItemId] = position.GetValueOrDefault(Queue[i].VideoId, int.MaxValue);
+            ResumeAfterEnd(start);
         }
-        else AddAll(extra, QueueOrigin.Source);
+        else AppendAuto(extra, QueueOrigin.Source);
+        AppPaths.Log($"source appended added={extra.Count} queue={Queue.Count}");
+        // 読み終えた: 終わりが近ければラジオへつなぐ
+        if (Current is not null && !IsRemote) ExtendRadioIfNeeded();
     }
 
     public void PlayNext(Song song)
@@ -418,6 +436,7 @@ public sealed partial class PlayerService : ObservableObject
         nextOrigin = QueueOrigin.UserAdded;
         Queue.Insert(Index + 1, song);
         nextOrigin = QueueOrigin.Source;
+        ResumeAfterEnd(Index + 1);
         Message = L.T($"「{song.Title}」を次に再生します", $"{song.Title} will play next");
     }
 
@@ -438,6 +457,7 @@ public sealed partial class PlayerService : ObservableObject
             nextOrigin = QueueOrigin.UserAdded;
             for (var i = 0; i < songs.Count; i++) Queue.Insert(Index + 1 + i, songs[i]);
             nextOrigin = QueueOrigin.Source;
+            ResumeAfterEnd(Index + 1);
         }
         else InsertUserItems(songs);
         Message = next ? L.T($"{songs.Count} 曲を次に再生します", $"{L.Songs(songs.Count)} will play next")
@@ -465,6 +485,8 @@ public sealed partial class PlayerService : ObservableObject
         nextOrigin = QueueOrigin.UserAdded;
         for (var i = 0; i < songs.Count; i++) Queue.Insert(at + i, songs[i]);
         nextOrigin = QueueOrigin.Source;
+        // 最後まで行って止まっているなら、足した曲から続ける（Android の addUserItems と同じ）
+        ResumeAfterEnd(at);
     }
 
     /// <summary>自分で足した曲（「次に再生」「キューに追加」）か。</summary>
@@ -520,6 +542,7 @@ public sealed partial class PlayerService : ObservableObject
     private void SelectAt(int position, double seekTo = 0)
     {
         if (position < 0 || position >= Queue.Count) return;
+        stoppedAtEnd = false;
         Index = position;
         Current = Queue[position];
         _ = LoadCurrentAsync(seekTo);
@@ -547,6 +570,7 @@ public sealed partial class PlayerService : ObservableObject
         }
         else
         {
+            stoppedAtEnd = false;
             player.Play();
             UserStartedPlayback?.Invoke(false);
         }
@@ -691,6 +715,8 @@ public sealed partial class PlayerService : ObservableObject
     {
         if (IsRemote) return;
         Repeat = NextRepeat(Repeat);
+        // 全体リピートを切った: 一覧の終わりが近ければラジオへつなぐ（Android の onRepeatModeChanged と同じ）
+        if (Repeat != RepeatMode.All && Current is not null) ExtendRadioIfNeeded();
     }
 
     private static RepeatMode NextRepeat(RepeatMode value) => value switch
@@ -736,6 +762,22 @@ public sealed partial class PlayerService : ObservableObject
         nextOrigin = origin;
         foreach (var s in songs) Queue.Add(s);
         nextOrigin = QueueOrigin.Source;
+    }
+
+    /// <summary>自動で続き（一覧の残り・ラジオ）を最後に足す。最後の曲を流し終えて止まっていたら、足した先頭から続ける（Android の appendItems と同じ）。</summary>
+    private void AppendAuto(IReadOnlyList<Song> songs, QueueOrigin origin)
+    {
+        var start = Queue.Count;
+        AddAll(songs, origin);
+        ResumeAfterEnd(start);
+    }
+
+    private void ResumeAfterEnd(int firstNew)
+    {
+        // 途中の曲で止めたもの（一時停止・失敗）は勝手に再開しない
+        if (!stoppedAtEnd || IsRemote || IsPlaying || IsLoading || Index != firstNew - 1 || firstNew >= Queue.Count) return;
+        AppPaths.Log($"resume after end index={firstNew}");
+        SelectAt(firstNew);
     }
 
     private void OnQueueCollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
@@ -821,6 +863,8 @@ public sealed partial class PlayerService : ObservableObject
         radioSeed = queue.RadioSeed;
         radioContinuation = queue.Continuation;
         radioPlaylistId = queue.RadioPlaylistId;
+        pendingSourceId = null;
+        stoppedAtEnd = false;
         // ほかの端末から受け取ったキューは、シャッフルを切った状態で始める（Android と同じ）
         SetShuffleOrder(null);
         Queue.Clear();
@@ -862,6 +906,8 @@ public sealed partial class PlayerService : ObservableObject
         radioSeed = queue.RadioSeed;
         radioContinuation = queue.Continuation;
         radioPlaylistId = queue.RadioPlaylistId;
+        pendingSourceId = null;
+        stoppedAtEnd = false;
         SetShuffleOrder(null);
         Queue.Clear();
         foreach (var (song, meta) in queue.Items)
@@ -906,7 +952,9 @@ public sealed partial class PlayerService : ObservableObject
             radioContinuation = page.Value!.Continuation;
             radioPlaylistId = page.Value.PlaylistId ?? radioPlaylistId;
             var known = Queue.Select(s => s.VideoId).ToHashSet();
-            AddAll(page.Value.Songs.Where(s => known.Add(s.VideoId)).ToList(), QueueOrigin.Suggestion);
+            var fresh = page.Value.Songs.Where(s => known.Add(s.VideoId)).ToList();
+            AppPaths.Log($"radio from seed added={fresh.Count} more={radioContinuation is not null}");
+            AppendAuto(fresh, QueueOrigin.Suggestion);
         }
         finally
         {
@@ -1083,6 +1131,7 @@ public sealed partial class PlayerService : ObservableObject
         radioSeed = backup.RadioSeed;
         radioContinuation = backup.Continuation;
         radioPlaylistId = backup.RadioPlaylistId;
+        stoppedAtEnd = false;
         SetShuffleOrder(backup.ShuffleOrder);
         if (backup.Repeat is { } repeat) Repeat = repeat;
         if (backup.Index >= 0 && backup.Index < Queue.Count)
@@ -1474,7 +1523,13 @@ public sealed partial class PlayerService : ObservableObject
             return;
         }
         if (Index + 1 < Queue.Count || Repeat == RepeatMode.All) Advance();
-        else IsPlaying = false;
+        else
+        {
+            IsPlaying = false;
+            stoppedAtEnd = true;
+            // 最後の曲で止まった: ラジオの続きが取れていなければ取り直す（取れたら足した先頭から続ける）
+            ExtendRadioIfNeeded();
+        }
     }
 
     private async void OnFailed(MediaPlayerError error)
@@ -1648,16 +1703,31 @@ public sealed partial class PlayerService : ObservableObject
         }
     }
 
-    /// <summary>ラジオの残りが少なくなったら続きを足す。</summary>
+    /// <summary>
+    /// 残りが少なくなったら続きを足す。一覧（プレイリスト・アルバム・アーティスト・検索の結果）なら、ここでキューの最後の曲から
+    /// 始まるラジオへ切り替える（オートプレイ。Android の QueueSession の switchToRadio と同じ）。
+    /// </summary>
     private async void ExtendRadioIfNeeded()
     {
-        if (extending || Queue.Count - Index > 3) return;
-        // ほかの端末から引き取ったラジオは続きの印を持たないので、種の曲から取り直す
+        if (extending || IsRemote || !AutoRadio.NearEnd(Queue.Count, Index)) return;
+        if (radioSeed is null)
+        {
+            var seedAtEnd = AutoRadio.SeedAtEnd(Queue, Index, hasRadio: radioContinuation is not null, Repeat == RepeatMode.All, pendingSourceId is not null && pendingSourceId == SourceId);
+            if (seedAtEnd is null) return;
+            // 書き出し（端末の連携）では、これ以降 SourceId ではなくこの種をラジオとして渡す（Android の source が Radio に替わるのと同じ）
+            radioSeed = seedAtEnd;
+            radioPlaylistId = AutoRadio.PlaylistIdOf(seedAtEnd);
+            radioContinuation = null;
+            AppPaths.Log($"autoplay radio seed={seedAtEnd} queue={Queue.Count} index={Index}");
+        }
+        // ほかの端末から引き取ったラジオ・切り替えたばかりのラジオは続きの印を持たないので、種の曲から取る
         if (radioContinuation is null)
         {
             if (radioSeed is { } seed) await ExtendFromSeedAsync(seed);
             return;
         }
+        // 全体リピート中は今のキューを繰り返すので、ラジオの続きは取らない（Android の blockedByRepeat と同じ）
+        if (Repeat == RepeatMode.All) return;
         extending = true;
         try
         {
@@ -1665,7 +1735,7 @@ public sealed partial class PlayerService : ObservableObject
             if (!page.IsOk) return;
             radioContinuation = page.Value!.Continuation;
             var known = Queue.Select(s => s.VideoId).ToHashSet();
-            AddAll(page.Value.Songs.Where(s => known.Add(s.VideoId)).ToList(), QueueOrigin.Suggestion);
+            AppendAuto(page.Value.Songs.Where(s => known.Add(s.VideoId)).ToList(), QueueOrigin.Suggestion);
         }
         finally
         {

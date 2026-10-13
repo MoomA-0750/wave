@@ -103,16 +103,17 @@ public static class Nav
                 else player.Message = L.T("アルバムを読み込めませんでした", "Couldn't load the album");
                 break;
             case HomeItem.PlaylistItem p:
-                // 最初のページが届いたら鳴らし始め、残りはあとから足す
+                // 最初のページが届いたら鳴らし始め、残りはあとから足す（読み終えるまでラジオへ切り替えない）
                 var started = false;
                 var full = await AppServices.Music.FullPlaylistAsync(p.Playlist.PlaylistId, page =>
                 {
                     if (started || page.Songs.Count == 0) return;
                     started = true;
-                    player.PlayList(page.Songs, 0, p.Playlist.PlaylistId, player.Shuffle ? true : null);
+                    player.PlayList(page.Songs, 0, p.Playlist.PlaylistId, player.Shuffle ? true : null, moreComing: true);
                 });
                 if (!full.IsOk && !started) player.Message = L.T("プレイリストを読み込めませんでした", "Couldn't load the playlist");
-                else if (full.IsOk && player.SourceId == p.Playlist.PlaylistId) player.AppendFrom(full.Value!.Songs);
+                // 読めなかったときも、読み終えた印として空で渡す（そこからラジオへつなげる）
+                else if (started && player.SourceId == p.Playlist.PlaylistId) player.AppendFrom(full.IsOk ? full.Value!.Songs : []);
                 break;
             case HomeItem.ArtistItem r:
                 var artist = await AppServices.Music.ArtistAsync(r.Artist.BrowseId);

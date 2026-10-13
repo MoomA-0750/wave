@@ -285,6 +285,25 @@ public static class DebugCommands
             case "seek":
                 player.Seek(double.Parse(arg));
                 break;
+            case "seek-end":
+                // 曲の終わりの arg 秒前へ（曲の終わりの動きを確かめる）
+                player.Seek(Math.Max(0, player.Duration - double.Parse(arg)));
+                break;
+            case "repeat":
+                // リピートを直に置く（off・all・one。ボタンと違い、ラジオへのつなぎ直しは起こさない）
+                player.Repeat = Enum.Parse<RepeatMode>(arg, ignoreCase: true);
+                break;
+            case "album-play":
+            {
+                // アルバムのカードの再生ボタンと同じ流し方（出どころをアルバムにする）。arg は検索の言葉（先頭の曲のアルバム）
+                var found = await AppServices.Music.SearchSongsAsync(arg);
+                if (found.Value?.Songs.FirstOrDefault(s => s.Album?.BrowseId is not null) is not { } hit) break;
+                var albumId = hit.Album!.BrowseId!;
+                var album = await AppServices.Music.AlbumAsync(albumId);
+                if (album.IsOk) player.PlayList(album.Value!.Songs, 0, albumId);
+                AppPaths.Log($"debug album-play ok={album.IsOk} id={albumId} songs={album.Value?.Songs.Count} artist={hit.Artists.FirstOrDefault()?.BrowseId}");
+                break;
+            }
             case "next":
                 player.Next();
                 break;

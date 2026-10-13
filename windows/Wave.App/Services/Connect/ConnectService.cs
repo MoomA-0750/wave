@@ -845,7 +845,9 @@ public sealed class ConnectService
         index = items.FindIndex(i => i.Meta.ItemId == queue.CurrentItemId);
         if (index < 0) return null;
         var (window, windowIndex, truncated) = HandoffCodec.Window(items, index);
-        HandoffSource? source = queue.RadioSeed is { } seed ? new HandoffSource.Radio { SeedVideoId = seed }
+        // 出どころは Android の handoffSnapshot と同じ形にする（一覧は終わりでラジオへつなぐので、続きが無いとは書かない。AutoRadio）
+        var (radioSeed, radioPlaylistId, exhausted) = AutoRadio.ForHandoff(queue.Items.Select(i => i.Song).ToList(), queue.SourceId, queue.RadioSeed, queue.RadioPlaylistId);
+        HandoffSource? source = radioSeed is { } seed ? new HandoffSource.Radio { SeedVideoId = seed }
             : queue.SourceId is { } id && System.Text.RegularExpressions.Regex.IsMatch(id, @"\A[A-Za-z0-9_-]{2,128}\z") ? new HandoffSource.Playlist { PlaylistId = id }
             : null;
         var snapshot = new HandoffSnapshot
@@ -859,9 +861,8 @@ public sealed class ConnectService
             Repeat = HandoffRepeat.Off,
             Source = source,
             Continuation = truncated ? null : queue.Continuation,
-            RadioPlaylistId = queue.RadioPlaylistId,
-            // プレイリスト・アルバムは全部を読み込んでから鳴らすので、続きは無い
-            Exhausted = queue.RadioSeed is null && !truncated,
+            RadioPlaylistId = radioPlaylistId,
+            Exhausted = exhausted && !truncated,
             ListenedMs = 0,
             HistorySent = false,
             CapturedAtEpochMs = 0,
