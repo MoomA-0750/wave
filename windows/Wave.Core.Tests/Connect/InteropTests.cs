@@ -90,6 +90,13 @@ public class InteropTests
                 case "profile":
                     Assert.Equal("Windows PC", ConnectJson.Decode<ProfileBody>(plaintext)!.Name);
                     break;
+                case "library":
+                    // 操作だけの端末（PC）が書いたライブラリ（ADR-0013）を、家のどの端末も開ける。書き直すと同じバイト
+                    Assert.Equal(DocKind.Library, doc.Header.Kind);
+                    var library = ConnectJson.Decode<LibraryBody>(plaintext)!;
+                    Assert.True(SampleLibrary().SameAs(library));
+                    Assert.Equal(plaintext, ConnectJson.Encode(library));
+                    break;
             }
         }
     }
@@ -191,6 +198,10 @@ public class InteropTests
         var commandDoc = DocSealer.Seal(b, chain, DocKind.Command, 1, null, 1_700_000_000_004, ConnectJson.EncodeToUtf8(command));
         var profile = new ProfileBody { Name = "Windows PC" };
         var profileDoc = DocSealer.Seal(pc, chain, DocKind.Profile, 1, null, 1_700_000_000_005, ConnectJson.EncodeToUtf8(profile));
+        // ライブラリ（ADR-0013）は操作だけの端末（PC）も書ける
+        var libraryBody = SampleLibrary();
+        var libraryDoc = DocSealer.Seal(pc, chain, DocKind.Library, 1, null, 1_700_000_000_006, ConnectJson.EncodeToUtf8(libraryBody));
+        var libraryState = new LibraryState { Version = 1, Doc = libraryDoc, StoreId = "store-1" };
 
         // ペアリング（どちらも C#）。使い捨ての鍵を書き出し、Kotlin が同じ鍵で相手の側を再現する
         var joinInfo = new ConnectClient.JoinInfo { HouseholdId = chain.HouseholdId, HeadSeq = chain.HeadSeq, HeadHash = chain.HeadHash, StoreId = "store-1", CursorFloor = 4, QueueFloor = 1 };
@@ -245,6 +256,13 @@ public class InteropTests
             new RelayV2.PairConfirmed { Confirm = Pairing.ToJson(confirm) },
             new RelayV2.Error { Code = "not_active" },
             new RelayV2.Error { Code = "stale_head", RequestId = "req-1" },
+            RelayV2.LibraryGet.Instance,
+            new RelayV2.LibraryPut { RequestId = "req-3", ExpectVersion = 0, Doc = libraryDoc },
+            new RelayV2.LibraryOk { RequestId = "req-3", Version = 1 },
+            new RelayV2.LibraryConflict { RequestId = "req-4" },
+            new RelayV2.LibraryConflict { RequestId = "req-4", Latest = libraryState },
+            new RelayV2.Library(),
+            new RelayV2.Library { Stored = libraryState },
         ];
 
         JsonObject DocEntry(string name, SealedDoc doc, string plaintext) => new()
@@ -266,7 +284,8 @@ public class InteropTests
                 DocEntry("queue", queueDoc, ConnectJson.Encode(queueBody)),
                 DocEntry("cursor", cursorDoc, ConnectJson.Encode(cursorBody)),
                 DocEntry("command", commandDoc, ConnectJson.Encode(command)),
-                DocEntry("profile", profileDoc, ConnectJson.Encode(profile))),
+                DocEntry("profile", profileDoc, ConnectJson.Encode(profile)),
+                DocEntry("library", libraryDoc, ConnectJson.Encode(libraryBody))),
             ["handoff"] = new JsonObject { ["handoffId"] = HandoffId, ["text"] = snapshotText },
             ["relay"] = new JsonArray(relay.Select(m => (JsonNode)RelayV2.Encode(m)).ToArray()),
             ["pairing"] = new JsonObject
@@ -287,6 +306,21 @@ public class InteropTests
         var directory = SourceFixtureDirectory();
         File.WriteAllText(Path.Combine(directory, "csharp.json"), output.ToJsonString(new JsonSerializerOptions { WriteIndented = true, Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping }) + "\n");
     }
+
+    /// <summary>Kotlin の CSharpInteropTest の sampleLibrary と同じもの。</summary>
+    internal static LibraryBody SampleLibrary() => new()
+    {
+        Feeds = new Dictionary<string, LibraryFeed>
+        {
+            ["https://feeds.example/show"] = new() { Title = "番組 \"A\" 🎙", Author = "作者", ThumbnailUrl = "https://img.example/a.jpg", AddedAtMs = 1_700_000_000_000, UpdatedAtMs = 1_700_000_000_000 },
+            ["https://feeds.example/old"] = new() { Title = "", Removed = true, UpdatedAtMs = 1_700_000_000_010 },
+        },
+        Positions = new Dictionary<string, LibraryPosition>
+        {
+            ["https://feeds.example/1.mp3"] = new() { PositionSeconds = 60, DurationSeconds = 600, UpdatedAtMs = 1_700_000_000_020 },
+            ["https://feeds.example/2.mp3"] = new() { PositionSeconds = 5, Finished = true, UpdatedAtMs = 1_700_000_000_030 },
+        },
+    };
 
     /// <summary>Kotlin の CSharpInteropTest の sampleSnapshot と同じもの。</summary>
     internal static HandoffSnapshot SampleSnapshot() => new()

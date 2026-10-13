@@ -66,6 +66,9 @@ public enum DocKind
     [JsonStringEnumMemberName("queue")] Queue,
     [JsonStringEnumMemberName("command")] Command,
     [JsonStringEnumMemberName("profile")] Profile,
+
+    /// <summary>ライブラリ（RSS で登録した番組・聴いたところ、ADR-0013）。家のどの端末も書ける。</summary>
+    [JsonStringEnumMemberName("library")] Library,
 }
 
 /// <summary>SealedDoc の見出し（平文。署名と、内容・包みの AAD に入る）。</summary>
@@ -206,6 +209,82 @@ public enum ControlAction
 public sealed record ProfileBody
 {
     public required string Name { get; init; }
+}
+
+/// <summary>
+/// ライブラリの文書の中身（ADR-0013。Kotlin の LibraryBody と同じ JSON）。RSS で登録した番組と、エピソードの聴いたところ。
+/// 番組・エピソードごとに、UpdatedAtMs の新しい方を残して合わせる（Merge）。外した番組も印（Removed）として残す。
+/// </summary>
+public sealed record LibraryBody
+{
+    public const int CurrentVersion = 1;
+
+    /// <summary>聴いたところは新しい順にこの数まで（文書を数百 KB に収める）。</summary>
+    public const int MaxPositions = 500;
+
+    /// <summary>外した番組の印は、この日数を過ぎたら捨ててよい（全端末に行き渡った後）。</summary>
+    public const int RemovedKeepDays = 180;
+
+    public int V { get; init; } = CurrentVersion;
+
+    /// <summary>フィードの URL ごと。</summary>
+    public IReadOnlyDictionary<string, LibraryFeed> Feeds { get; init; } = new Dictionary<string, LibraryFeed>();
+
+    /// <summary>音声の URL ごと。</summary>
+    public IReadOnlyDictionary<string, LibraryPosition> Positions { get; init; } = new Dictionary<string, LibraryPosition>();
+
+    /// <summary>
+    /// 2つを合わせる。同じ時刻なら other を残す（自分の書き込みが後から届いた相手の書き込みを消さないよう、呼ぶ側は相手を other に渡す）。
+    /// 並びは Kotlin と同じ（自分の項目の順、その後に相手だけの項目）。
+    /// </summary>
+    public LibraryBody Merge(LibraryBody other)
+    {
+        var feeds = new Dictionary<string, LibraryFeed>();
+        foreach (var key in Feeds.Keys.Concat(other.Feeds.Keys))
+        {
+            if (!feeds.ContainsKey(key)) feeds[key] = Newer(Feeds.GetValueOrDefault(key), other.Feeds.GetValueOrDefault(key), f => f.UpdatedAtMs);
+        }
+        var positions = new Dictionary<string, LibraryPosition>();
+        foreach (var key in Positions.Keys.Concat(other.Positions.Keys))
+        {
+            if (!positions.ContainsKey(key)) positions[key] = Newer(Positions.GetValueOrDefault(key), other.Positions.GetValueOrDefault(key), p => p.UpdatedAtMs);
+        }
+        return new LibraryBody { V = CurrentVersion, Feeds = feeds, Positions = Trim(positions) };
+    }
+
+    /// <summary>中身が同じか（Kotlin の data class の == と同じく、辞書は並びを問わない）。</summary>
+    public bool SameAs(LibraryBody other) =>
+        V == other.V && SameMap(Feeds, other.Feeds) && SameMap(Positions, other.Positions);
+
+    private static bool SameMap<T>(IReadOnlyDictionary<string, T> a, IReadOnlyDictionary<string, T> b) =>
+        a.Count == b.Count && a.All(kv => b.TryGetValue(kv.Key, out var o) && EqualityComparer<T>.Default.Equals(kv.Value, o));
+
+    private static T Newer<T>(T? mine, T? other, Func<T, long> at) where T : class =>
+        mine is null ? other! : other is null ? mine : at(mine) > at(other) ? mine : other;
+
+    private static IReadOnlyDictionary<string, LibraryPosition> Trim(Dictionary<string, LibraryPosition> positions) =>
+        positions.Count <= MaxPositions ? positions : positions.OrderByDescending(p => p.Value.UpdatedAtMs).Take(MaxPositions).ToDictionary(p => p.Key, p => p.Value);
+}
+
+public sealed record LibraryFeed
+{
+    public required string Title { get; init; }
+    public string? Author { get; init; }
+    public string? ThumbnailUrl { get; init; }
+    public long AddedAtMs { get; init; }
+
+    /// <summary>外した（この印のほうが新しければ、ほかの端末でも外す）。</summary>
+    public bool Removed { get; init; }
+
+    public required long UpdatedAtMs { get; init; }
+}
+
+public sealed record LibraryPosition
+{
+    public required int PositionSeconds { get; init; }
+    public int? DurationSeconds { get; init; }
+    public bool Finished { get; init; }
+    public required long UpdatedAtMs { get; init; }
 }
 
 /// <summary>
