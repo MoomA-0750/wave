@@ -1,6 +1,6 @@
 import Foundation
 
-public enum FeedFailure: Hashable, Sendable {
+public enum FeedFailure: Error, Hashable, Sendable {
     /// https でない・形のおかしい URL。
     case notAllowed
     case network

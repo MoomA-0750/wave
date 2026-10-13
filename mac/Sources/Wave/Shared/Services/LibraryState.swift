@@ -11,6 +11,14 @@ final class LibraryState {
     /// 保存したポッドキャストの番組（Android と同じく、マイライブラリの「ポッドキャスト」に並べる）。
     var podcasts: [PodcastSummary] = []
 
+    /// ライブラリの「ポッドキャスト」: YouTube で保存した番組の後ろに、この端末で RSS で登録した番組（ADR-0012。Android と同じ）。
+    var allPodcasts: [PodcastSummary] {
+        let rss = AppServices.feeds.subscriptions.map(\.summary)
+        guard !rss.isEmpty else { return podcasts }
+        var seen = Set<String>()
+        return (podcasts + rss).filter { seen.insert($0.browseId).inserted }
+    }
+
     var isLoading = false
     var failure: String?
     /// 高く評価した曲（LM）のサムネイル。

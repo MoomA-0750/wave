@@ -63,6 +63,12 @@ enum DebugCommands {
             let i = min(Int(p.count > 1 ? p[1] : "0") ?? 0, page.episodes.count - 1)
             player.playList(page.episodes.map(\.song), start: i, source: page.playlistId)
             AppPaths.log("debug podcast-play title=\(page.episodes[i].song.title) artist=\(page.episodes[i].song.artistsText) queue=\(player.queue.count)")
+        // RSS のポッドキャスト（ADR-0012）: 目録で探してフィードを読む・最新のエピソードを流す・聴いたところ・登録・番組のページ
+        case "feed": await FeedDebug.run(arg, play: false)
+        case "feed-play": await FeedDebug.run(arg, play: true)
+        case "feed-state": FeedDebug.state()
+        case "feed-subscribe": await FeedDebug.toggleSubscription(arg)
+        case "feed-open": await FeedDebug.open(arg)
         case "search-tab":
             // 検索の結果の絞り込み（all・songs・artists・albums・podcasts・episodes）を選ぶ
             SearchPageModel.current?.tab = arg

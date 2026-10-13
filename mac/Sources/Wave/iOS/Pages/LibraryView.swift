@@ -163,7 +163,7 @@ struct LibraryView: View {
             }
         }
         if kind == nil || kind == "podcast" {
-            entries += lib.podcasts.map {
+            entries += lib.allPodcasts.map {
                 LibraryViewEntry(title: $0.title, subtitle: L.t("ポッドキャスト", "Podcast") + (($0.author ?? "").isEmpty ? "" : " • " + $0.author!),
                                  thumbnailUrl: $0.thumbnailUrl, podcast: $0)
             }

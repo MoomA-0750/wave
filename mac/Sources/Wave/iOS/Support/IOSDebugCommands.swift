@@ -53,6 +53,12 @@ enum IOSDebugCommands {
         case "album": nav.album(arg)
         case "artist": nav.artist(arg)
         case "podcast": nav.podcast(PodcastSummary(browseId: arg, title: arg, author: nil, thumbnailUrl: nil))
+        // RSS のポッドキャスト（ADR-0012。Mac の DebugCommands と同じ）
+        case "feed": await FeedDebug.run(arg, play: false)
+        case "feed-play": await FeedDebug.run(arg, play: true)
+        case "feed-state": FeedDebug.state()
+        case "feed-subscribe": await FeedDebug.toggleSubscription(arg)
+        case "feed-open": await FeedDebug.open(arg)
         case "playlist": nav.playlist(PlaylistSummary(playlistId: arg, title: arg, subtitle: nil, thumbnailUrl: nil))
         case "liked": nav.likedSongs()
         case "history": nav.history()

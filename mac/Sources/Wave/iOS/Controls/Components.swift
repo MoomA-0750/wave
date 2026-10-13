@@ -107,12 +107,18 @@ struct SongMenuItems: View {
         if let queueIndex {
             Button(L.t("キューから削除", "Remove from queue"), systemImage: "minus.circle", role: .destructive) { player.removeAt(queueIndex) }
         }
-        Button(L.t("プレイリストに追加", "Add to playlist"), systemImage: "plus") { Dialogs.shared.addToPlaylist(song) }
-            .disabled(!AppServices.client.isLoggedIn)
+        // RSS のエピソードは YouTube の曲ではない（プレイリスト・ラジオ・曲の画面・共有のリンクが無い。ADR-0012）
+        let external = Feed.isExternal(song.videoId)
+        if !external {
+            Button(L.t("プレイリストに追加", "Add to playlist"), systemImage: "plus") { Dialogs.shared.addToPlaylist(song) }
+                .disabled(!AppServices.client.isLoggedIn)
+        }
         if let removeFromPlaylist {
             Button(L.t("このプレイリストから削除", "Remove from this playlist"), systemImage: "trash", role: .destructive, action: removeFromPlaylist)
         }
-        Button(L.t("曲のラジオを再生", "Go to song radio"), systemImage: "dot.radiowaves.left.and.right") { player.playSong(song) }
+        if !external {
+            Button(L.t("曲のラジオを再生", "Go to song radio"), systemImage: "dot.radiowaves.left.and.right") { player.playSong(song) }
+        }
         if let albumId = song.album?.browseId {
             Button(L.t("アルバムへ移動", "Go to album"), systemImage: "square.stack") { AppServices.nav.album(albumId) }
         }
@@ -120,9 +126,11 @@ struct SongMenuItems: View {
             Button(song.artists.count > 1 ? L.t("アーティストへ移動: \(artist.name)", "Go to artist: \(artist.name)") : L.t("アーティストへ移動", "Go to artist"),
                    systemImage: "person") { AppServices.nav.artist(artist.browseId!) }
         }
-        Button(L.t("曲の画面を開く", "Open song"), systemImage: "music.note") { AppServices.nav.song(song) }
-        ShareLink(item: SongActions.url(song), subject: Text(song.title), message: Text(SongActions.shareText(song))) {
-            Label(L.t("共有", "Share"), systemImage: "square.and.arrow.up")
+        if !external {
+            Button(L.t("曲の画面を開く", "Open song"), systemImage: "music.note") { AppServices.nav.song(song) }
+            ShareLink(item: SongActions.url(song), subject: Text(song.title), message: Text(SongActions.shareText(song))) {
+                Label(L.t("共有", "Share"), systemImage: "square.and.arrow.up")
+            }
         }
     }
 }
@@ -133,15 +141,18 @@ struct LikeButtonView: View {
 
     var body: some View {
         let player = AppServices.player!
-        Button { LikeButton.press(player) } label: {
-            Image(systemName: LikeButton.symbol(player))
-                .font(.system(size: size))
-                .foregroundStyle(LikeButton.accent(player) ? Color.accentColor : Color.secondary)
-                .frame(width: 44, height: 44)
-                .contentShape(Rectangle())
+        // RSS のエピソード（ADR-0012）は YouTube の曲ではないので出さない
+        if LikeButton.available(player) {
+            Button { LikeButton.press(player) } label: {
+                Image(systemName: LikeButton.symbol(player))
+                    .font(.system(size: size))
+                    .foregroundStyle(LikeButton.accent(player) ? Color.accentColor : Color.secondary)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(LikeButton.tip(player))
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(LikeButton.tip(player))
     }
 }
 

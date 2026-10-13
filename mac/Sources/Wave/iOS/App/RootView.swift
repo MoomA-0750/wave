@@ -102,7 +102,7 @@ struct RootView: View {
             guard url.scheme == "wave" else { return }
             switch url.host {
             case "nowplaying": if player.current != nil { shell.playerOpen = true }
-            case "add-to-playlist": if let song = player.current { Dialogs.shared.addToPlaylist(song) }
+            case "add-to-playlist": if let song = player.current, !Feed.isExternal(song.videoId) { Dialogs.shared.addToPlaylist(song) }
             default: break
             }
         }

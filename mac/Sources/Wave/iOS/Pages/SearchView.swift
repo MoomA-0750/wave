@@ -190,7 +190,8 @@ private final class SearchModel {
             podcastsLoaded = true
             podcastsLoading = true
             Task {
-                let page = (try? await AppServices.music.searchPodcasts(q))?.value
+                // Apple の目録の番組（RSS、ADR-0012）を先に、YouTube の番組を後に並べる
+                let page = await AppServices.feeds.searchFirstPage(q)
                 guard id == requestId else { return }
                 podcastsLoading = false
                 podcasts = page?.items ?? []

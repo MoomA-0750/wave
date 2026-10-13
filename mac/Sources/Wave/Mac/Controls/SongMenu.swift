@@ -17,21 +17,27 @@ struct SongMenuItems: View {
         if let queueIndex {
             Button(L.t("キューから削除", "Remove from queue"), systemImage: "minus.circle") { player.removeAt(queueIndex) }
         }
+        // RSS のエピソードは YouTube の曲ではない（プレイリスト・ラジオ・共有のリンクが無い。ADR-0012）
+        let external = Feed.isExternal(song.videoId)
         Divider()
-        Menu(L.t("プレイリストに追加", "Add to playlist"), systemImage: "plus") {
-            Button(L.t("新しいプレイリスト", "New playlist"), systemImage: "plus") { Dialogs.shared.createPlaylist(with: song) }
-            let editable = AppServices.library.editable
-            if !editable.isEmpty { Divider() }
-            ForEach(editable, id: \.playlistId) { playlist in
-                Button(playlist.title) { Task { await SongActions.add(playlist, song) } }
+        if !external {
+            Menu(L.t("プレイリストに追加", "Add to playlist"), systemImage: "plus") {
+                Button(L.t("新しいプレイリスト", "New playlist"), systemImage: "plus") { Dialogs.shared.createPlaylist(with: song) }
+                let editable = AppServices.library.editable
+                if !editable.isEmpty { Divider() }
+                ForEach(editable, id: \.playlistId) { playlist in
+                    Button(playlist.title) { Task { await SongActions.add(playlist, song) } }
+                }
             }
+            .disabled(!AppServices.client.isLoggedIn)
         }
-        .disabled(!AppServices.client.isLoggedIn)
         if let removeFromPlaylist {
             Button(L.t("このプレイリストから削除", "Remove from this playlist"), systemImage: "trash", action: removeFromPlaylist)
         }
         Divider()
-        Button(L.t("曲のラジオを再生", "Go to song radio"), systemImage: "dot.radiowaves.left.and.right") { player.playSong(song) }
+        if !external {
+            Button(L.t("曲のラジオを再生", "Go to song radio"), systemImage: "dot.radiowaves.left.and.right") { player.playSong(song) }
+        }
         if let albumId = song.album?.browseId {
             Button(L.t("アルバムへ移動", "Go to album"), systemImage: "square.stack") { AppServices.nav.album(albumId) }
         }
@@ -39,11 +45,13 @@ struct SongMenuItems: View {
             Button(song.artists.count > 1 ? L.t("アーティストへ移動: \(artist.name)", "Go to artist: \(artist.name)") : L.t("アーティストへ移動", "Go to artist"),
                    systemImage: "person") { AppServices.nav.artist(artist.browseId!) }
         }
-        Divider()
-        Menu(L.t("共有", "Share"), systemImage: "square.and.arrow.up") {
-            Button(L.t("曲のリンクをコピー", "Copy song link"), systemImage: "link") { SongActions.copyLink(song) }
-            ShareLink(L.t("ほかのアプリで共有…", "Share with…"), item: SongActions.url(song), subject: Text(song.title),
-                      message: Text(SongActions.shareText(song)))
+        if !external {
+            Divider()
+            Menu(L.t("共有", "Share"), systemImage: "square.and.arrow.up") {
+                Button(L.t("曲のリンクをコピー", "Copy song link"), systemImage: "link") { SongActions.copyLink(song) }
+                ShareLink(L.t("ほかのアプリで共有…", "Share with…"), item: SongActions.url(song), subject: Text(song.title),
+                          message: Text(SongActions.shareText(song)))
+            }
         }
     }
 }

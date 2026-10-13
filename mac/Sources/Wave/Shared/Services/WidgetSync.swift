@@ -63,7 +63,7 @@ final class WidgetSync {
     /// ジャケットを置き場に書いてから知らせる（ウィジェットとロック画面は通信せずに読む）。
     private func saveArtwork(_ videoId: String, _ thumbnail: String?) async {
         if let dir = WidgetStore.container, let old = try? FileManager.default.contentsOfDirectory(atPath: dir.path) {
-            for name in old where name.hasPrefix("artwork-") && name != "artwork-\(videoId).jpg" {
+            for name in old where name.hasPrefix("artwork-") && name != WidgetStore.artworkName(videoId) {
                 try? FileManager.default.removeItem(at: dir.appendingPathComponent(name))
             }
         }

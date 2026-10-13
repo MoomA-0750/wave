@@ -134,6 +134,16 @@ final class AudioEngine {
         return await start(AVPlayerItem(url: url))
     }
 
+    /// RSS のエピソードの音声（https）をそのまま鳴らす準備をする（ADR-0012。YouTube の解決・範囲取得の経路は通さない）。
+    /// cookie は渡さない。URL はログに出さない。読み始めに失敗したら false。
+    func loadExternal(_ url: URL, userAgent: String) async -> Bool {
+        clear()
+        let asset = AVURLAsset(url: url, options: [AVURLAssetHTTPUserAgentKey: userAgent, AVURLAssetHTTPCookiesKey: [HTTPCookie]()])
+        let item = AVPlayerItem(asset: asset)
+        item.preferredForwardBufferDuration = 30
+        return await start(item)
+    }
+
     private func start(_ item: AVPlayerItem) async -> Bool {
         observers.append(NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.onEnded?() }
