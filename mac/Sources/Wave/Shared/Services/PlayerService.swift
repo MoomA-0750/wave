@@ -87,6 +87,10 @@ final class PlayerService {
     @ObservationIgnored private var extending = false
     @ObservationIgnored private var consecutiveFailures = 0
     @ObservationIgnored private var radioSeed: String?
+    /// 長い一覧を最初のページから鳴らし始め、残りをまだ読んでいる（appendFrom で足すまで、ラジオへ切り替えない）。
+    @ObservationIgnored private var restPending = false
+    /// 最後の曲を流し終えて止まっている（あとから曲が足されたら、足した先頭から続ける。Android の appendItems と同じ）。
+    @ObservationIgnored private var endedAtLast = false
 
     // 端末の連携（Connect v2）: キューの項目ごとの ID と出どころ（queue と同じ並び）、今の曲を聴いた時間
     @ObservationIgnored private(set) var itemMeta: [QueueItemMeta] = []
@@ -333,6 +337,19 @@ final class PlayerService {
 
     private func append(_ songs: [Song], origin: QueueOrigin) { insert(songs, at: queue.count, origin: origin) }
 
+    /// 一覧の残り・ラジオの続きを自動で足す。最後の曲で止まっていたら、足した先頭から続ける
+    /// （途中の曲で一時的な失敗で止めたものは勝手に再開しない。Android の appendItems と同じ）。
+    private func appendContinuing(_ songs: [Song], origin: QueueOrigin) {
+        guard !songs.isEmpty else { return }
+        let wasEnded = endedAtLast && !isRemote && !isPlaying && !isLoading && index == queue.count - 1
+        let first = queue.count
+        append(songs, origin: origin)
+        if wasEnded {
+            AppPaths.log("queue resumed after end added=\(songs.count)")
+            selectAt(first)
+        }
+    }
+
     private func removeQueueItem(at position: Int) {
         queue.remove(at: position)
         itemMeta.remove(at: position)
@@ -340,7 +357,12 @@ final class PlayerService {
     }
 
     /// キューを丸ごと置き換える（項目の ID と出どころは渡したものを使う）。
-    private func replaceAll(_ items: [(Song, QueueItemMeta)]) {
+    /// reorder は同じキューの並べ直し（シャッフル）で、一覧の残りの読み込み中・最後で止まっているかを保つ。
+    private func replaceAll(_ items: [(Song, QueueItemMeta)], reorder: Bool = false) {
+        if !reorder {
+            restPending = false
+            endedAtLast = false
+        }
         queue = items.map(\.0)
         itemMeta = items.map(\.1)
         queueChanged.forEach { $0() }
@@ -353,7 +375,9 @@ final class PlayerService {
     // MARK: 再生の始め方
 
     /// 曲の一覧を start から再生する（プレイリスト・アルバム・検索の結果）。shuffleOverride が true なら混ぜて始める。
-    func playList(_ songs: [Song], start: Int = 0, source: String? = nil, shuffleOverride: Bool? = nil) {
+    /// restPending は、長い一覧を最初のページから鳴らし始め、残りをあとで appendFrom で足すとき（読み終えるまでラジオへ切り替えない）。
+    /// 一覧を流し終えたら、最後の曲から始まるラジオにつなぐ（Android の QueueSession と同じ。決定 E4）。
+    func playList(_ songs: [Song], start: Int = 0, source: String? = nil, shuffleOverride: Bool? = nil, restPending: Bool = false) {
         guard !songs.isEmpty else { return }
         let target = remoteDeviceId
         leaveRemote()
@@ -369,8 +393,16 @@ final class PlayerService {
             order.shuffle()
             first = 0
         }
+        // 出どころ（プレイリスト・アルバム）の無い一覧（検索の結果など）は、初めから最後の曲のラジオを続きにする
+        // （Android の playFrom で playlistId が無いときと同じ。端末の連携でもラジオとして渡す）。
+        // 出どころがあれば、終わりが近づいたときに extendRadioIfNeeded がラジオへ切り替える
         radioSeed = nil
+        if source == nil, let last = order.last, QueueRadio.canSeed(last) {
+            radioSeed = last.videoId
+            radioPlaylistId = QueueRadio.playlistId(last.videoId)
+        }
         replaceQueue(order, origin: .source)
+        self.restPending = restPending
         // 切ったときに戻す並び: 一覧の並び（同じ曲が2回あっても項目ごとに、一覧での位置を当てる）
         setShuffleOrder(shuffled ? rankBy(songs) : nil)
         startSelection(first, remoteTarget: target)
@@ -414,7 +446,7 @@ final class PlayerService {
         }
         // 曲のラジオの続きは、鳴らす端末が自分で取る（キューには種の曲だけを渡す）
         radioSeed = song.videoId
-        radioPlaylistId = "RDAMVM" + song.videoId
+        radioPlaylistId = QueueRadio.playlistId(song.videoId)
         radioContinuation = nil
         if startSelection(0, remoteTarget: target) { return }
         Task {
@@ -423,26 +455,30 @@ final class PlayerService {
             else { return }
             radioContinuation = page.continuation
             radioPlaylistId = page.playlistId ?? radioPlaylistId
-            append(page.songs.filter { $0.videoId != song.videoId }, origin: .suggestion)
+            appendContinuing(page.songs.filter { $0.videoId != song.videoId }, origin: .suggestion)
         }
     }
 
     /// あとから読めた残りの曲を、まだキューに無い分だけ足す（長いプレイリストを最初のページから鳴らし始めたとき）。
+    /// 残りを読めなかったときも空で呼ぶ（読み終えたことにして、一覧の終わりでラジオへ切り替えられるようにする）。
     func appendFrom(_ songs: [Song]) {
+        restPending = false
         var known = Set(queue.map(\.videoId))
         var extra = songs.filter { known.insert($0.videoId).inserted }
         if var order = shuffleOrder {
             // シャッフル中に一覧の残りが読めた: 混ぜて足し、戻す並びには一覧の位置で加える
             extra.shuffle()
             let start = queue.count
-            append(extra, origin: .source)
+            appendContinuing(extra, origin: .source)
             var position: [String: Int] = [:]
             for (i, s) in songs.enumerated() where position[s.videoId] == nil { position[s.videoId] = i }
             for i in start..<queue.count { order[itemMeta[i].itemId] = position[queue[i].videoId] ?? Int.max }
             shuffleOrder = order
         } else {
-            append(extra, origin: .source)
+            appendContinuing(extra, origin: .source)
         }
+        // 残りが無かった・少なかった: もう一覧の終わりが近ければラジオへ切り替える
+        extendRadioIfNeeded()
     }
 
     func playNext(_ song: Song) {
@@ -669,7 +705,7 @@ final class PlayerService {
     /// 今の曲より後ろを並べ直す（項目の ID と出どころは保つ）。
     private func replaceUpcoming(_ rest: [(song: Song, meta: QueueItemMeta)]) {
         let head = (0...index).map { (queue[$0], itemMeta[$0]) }
-        replaceAll(head + rest.map { ($0.song, $0.meta) })
+        replaceAll(head + rest.map { ($0.song, $0.meta) }, reorder: true)
     }
 
     private func setShuffleOrder(_ order: [String: Int]?) {
@@ -700,6 +736,8 @@ final class PlayerService {
         case .all: setRepeat(.one)
         case .one: setRepeat(.off)
         }
+        // 全体リピートを切ったら、一覧の終わりが近ければラジオへ切り替える
+        extendRadioIfNeeded()
     }
 
     private func setRepeat(_ value: RepeatMode) {
@@ -850,7 +888,7 @@ final class PlayerService {
         radioContinuation = page.continuation
         radioPlaylistId = page.playlistId ?? radioPlaylistId
         var known = Set(queue.map(\.videoId))
-        append(page.songs.filter { known.insert($0.videoId).inserted }, origin: .suggestion)
+        appendContinuing(page.songs.filter { known.insert($0.videoId).inserted }, origin: .suggestion)
     }
 
     // MARK: ほかの端末の再生を映す
@@ -1023,6 +1061,7 @@ final class PlayerService {
         cancelLoad()
         let token = loadToken
         guard let song = current else { return }
+        endedAtLast = false
         isLoading = true
         like = nil
         video = nil
@@ -1265,6 +1304,9 @@ final class PlayerService {
             advance()
         } else {
             isPlaying = false
+            endedAtLast = true
+            // ラジオの続きを取れずに最後まで来た: もう一度取ってみる（足せたら appendContinuing が続きから鳴らす）
+            extendRadioIfNeeded()
         }
     }
 
@@ -1424,21 +1466,36 @@ final class PlayerService {
         }
     }
 
-    /// ラジオの残りが少なくなったら続きを足す。
+    /// 残りが少なくなったら続きを足す。ラジオなら続きのページを、一覧（プレイリスト・アルバム・アーティスト）なら
+    /// 最後の曲から始まるラジオに切り替えて、その最初のページを足す（Android の QueueSession と同じ。決定 E4）。
     private func extendRadioIfNeeded() {
-        if extending || queue.count - index > 3 { return }
+        if extending || isRemote || !QueueRadio.nearEnd(count: queue.count, index: index) { return }
+        if let seed = QueueRadio.switchSeed(queue: queue, index: index, radioSeed: radioSeed, radioContinuation: radioContinuation,
+                                            repeatAll: repeatMode == .all, restPending: restPending)
+        {
+            // 出どころ（sourceId）は「再生中」の表示のために残す。連携へはラジオとして書き出す（exportQueue）
+            radioSeed = seed
+            radioPlaylistId = QueueRadio.playlistId(seed)
+            radioContinuation = nil
+            AppPaths.log("queue switched to radio items=\(queue.count) index=\(index)")
+            queueChanged.forEach { $0() }
+            Task { await extendFromSeed(seed) }
+            return
+        }
         // ほかの端末から引き取ったラジオは続きの印を持たないので、種の曲から取り直す
         guard let continuation = radioContinuation else {
             if let seed = radioSeed { Task { await extendFromSeed(seed) } }
             return
         }
+        // 全体リピート中は今のキューを繰り返すので、ラジオの続きは取らない（Android の blockedByRepeat と同じ）
+        if repeatMode == .all { return }
         extending = true
         Task {
             defer { extending = false }
             guard let page = (try? await AppServices.music.upNext(videoId: nil, playlistId: radioPlaylistId, continuation: continuation))?.value else { return }
             radioContinuation = page.continuation
             var known = Set(queue.map(\.videoId))
-            append(page.songs.filter { known.insert($0.videoId).inserted }, origin: .suggestion)
+            appendContinuing(page.songs.filter { known.insert($0.videoId).inserted }, origin: .suggestion)
         }
     }
 
@@ -1469,11 +1526,12 @@ extension PlayerService {
     /// アーティストのページの再生ボタンと同じ流し方（人気の曲から始め、「すべての曲」の残りを読めたら足す。Android と同じ）。
     func playArtist(_ browseId: String, _ topSongs: [Song], start: Int, shuffle: Bool?, allSongs: Task<ApiResult<PlaylistPage>?, Never>?) async {
         guard !topSongs.isEmpty else { return }
-        playList(topSongs, start: start, source: browseId, shuffleOverride: shuffle)
+        // 「すべての曲」を読み終えるまでは、人気の曲の終わりでラジオへ切り替えない
+        playList(topSongs, start: start, source: browseId, shuffleOverride: shuffle, restPending: allSongs != nil)
         guard let allSongs else { return }
         let all = await allSongs.value
         AppPaths.log("artist all songs ok=\(all?.isOk ?? false) songs=\(all?.value?.songs.count ?? 0)")
-        // 読んでいる間にほかのものを流し始めていたら足さない
-        if let page = all?.value, sourceId == browseId { appendFrom(page.songs) }
+        // 読んでいる間にほかのものを流し始めていたら足さない。読めなくても、読み終えたことにする（ラジオへ切り替えられるように）
+        if sourceId == browseId { appendFrom(all?.value?.songs ?? []) }
     }
 }

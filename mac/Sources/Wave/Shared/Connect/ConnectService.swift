@@ -212,8 +212,9 @@ final class ConnectService {
             schemaVersion: HandoffCodec.schemaVersion, handoffId: ConnectService.snapshotId, items: window.map { ConnectQueue.itemOf($0.song, $0.meta) },
             currentItemId: window[windowIndex].meta.itemId, positionMs: 0, playing: false, repeat: .off, source: source,
             continuation: truncated ? nil : queue.continuation, radioPlaylistId: queue.radioPlaylistId,
-            // プレイリスト・アルバムは全部を読み込んでから鳴らすので、続きは無い
-            exhausted: queue.radioSeed == nil && !truncated, listenedMs: 0, historySent: false, capturedAtEpochMs: 0)
+            // プレイリスト・アルバムは、最後まで行ったら受け取った端末が最後の曲のラジオへ切り替えるので尽きていない（Android と同じ）
+            exhausted: QueueRadio.exhausted(radioSeed: queue.radioSeed, playlistSource: source != nil, last: queue.items.last?.song, truncated: truncated),
+            listenedMs: 0, historySent: false, capturedAtEpochMs: 0)
         guard case .ok = HandoffCodec.validate(snapshot, expectedHandoffId: ConnectService.snapshotId) else { return nil }
         return HandoffCodec.encode(snapshot)
     }

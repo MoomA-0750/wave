@@ -156,6 +156,16 @@ enum DebugCommands {
             AppPaths.log("debug song-card route=\(nav.current.route) playing=\(player.current != nil)")
         case "search-play":
             if let songs = (try? await AppServices.music.searchSongs(arg))?.value?.songs, !songs.isEmpty { player.playList(Array(songs.prefix(5))) }
+        case "album-play":
+            // アルバムの検索の先頭を、アルバムのページの再生と同じく鳴らす。最後の2曲目から始める（流し終えたあとのラジオを確かめる）
+            guard let found = (try? await AppServices.music.searchAlbums(arg))?.value?.items.first,
+                  let album = (try? await AppServices.music.album(found.browseId))?.value, !album.songs.isEmpty
+            else {
+                AppPaths.log("debug album-play failed")
+                break
+            }
+            player.playList(album.songs, start: max(0, album.songs.count - 2), source: found.browseId)
+            AppPaths.log("debug album-play songs=\(album.songs.count) index=\(player.index)")
         case "song-play":
             if let song = await firstSong(arg) { player.playSong(song) }
         case "artist-play":
