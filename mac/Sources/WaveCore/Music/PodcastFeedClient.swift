@@ -28,6 +28,8 @@ public final class PodcastFeedClient: @unchecked Sendable {
     private let country: String
     private let userAgent: String
     private let fetch: @Sendable (URL, String, Int) async throws -> (status: Int, body: Data?)
+    /// 取る・読むのにかかった時間と大きさを知らせる（記録用。URL・中身は渡さない）。
+    nonisolated(unsafe) public static var diagnostics: ((String) -> Void)?
 
     /// fetch は状態コードと本文（上限を超えたら nil）を返す。無ければ FeedHttp で取る。
     public init(country: String, userAgent: String, fetch: (@Sendable (URL, String, Int) async throws -> (status: Int, body: Data?))? = nil) {
@@ -67,6 +69,7 @@ public final class PodcastFeedClient: @unchecked Sendable {
     /// フィードを読む。読むのは呼んだ側のスレッドではなく、別の流れで行う（数 MB のフィードで画面を止めない）。
     public func show(_ feedUrl: String) async -> FeedResult {
         guard Feed.isAllowedFeedUrl(feedUrl), let url = URL(string: feedUrl) else { return .failed(.notAllowed) }
+        let started = Date()
         let response: (status: Int, body: Data?)
         do {
             response = try await fetch(url, userAgent, PodcastFeedClient.maxFeedBytes)
@@ -75,7 +78,10 @@ public final class PodcastFeedClient: @unchecked Sendable {
         }
         guard (200...299).contains(response.status) else { return .failed(.http(response.status)) }
         guard let body = response.body else { return .failed(.tooLarge) }
+        let fetched = Date()
         let parsed = await Task.detached(priority: .userInitiated) { FeedParser.parse(feedUrl: feedUrl, data: body) }.value
+        PodcastFeedClient.diagnostics?("feed fetch ms=\(Int(fetched.timeIntervalSince(started) * 1000)) bytes=\(body.count) " +
+            "parse ms=\(Int(Date().timeIntervalSince(fetched) * 1000)) items=\(parsed?.itemCount ?? -1)")
         guard let show = parsed else { return .failed(.notAFeed) }
         return .ok(show)
     }

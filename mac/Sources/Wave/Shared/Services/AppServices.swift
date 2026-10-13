@@ -43,6 +43,7 @@ enum AppServices {
         settings = Settings.load()
         L.initialize(settings.language)
         RangeStream.diagnostics = { AppPaths.log($0) }
+        PodcastFeedClient.diagnostics = { AppPaths.log($0) }
         let session = InnerTubeClient.createSession()
         mediaSession = InnerTubeClient.createSession()
         // YouTube から届く文字（棚の見出しなど）を画面と同じ言語にする
