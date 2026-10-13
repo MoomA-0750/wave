@@ -140,3 +140,26 @@ class NewEpisodesTest {
         assertEquals(listOf("y1", "r3", "y6", "y?", "r10", "y30"), merged.map { it.song.title })
     }
 }
+
+class FeedLibrarySyncTest {
+    @Test
+    fun roundTripsThroughTheSyncBodyAndRemovalWins() {
+        val a = FeedLibraryState().subscribe(FeedSubscription("https://a.example/f", "A", addedAtMs = 10)).remember("https://a.example/1.mp3", EpisodePosition.of(60, 600, 11))
+        // もう1台: 何も持っていない → 受け取る
+        val b = FeedLibraryState().apply(a.toBody())
+        assertEquals(listOf("A"), b.subscriptions.map { it.title })
+        assertEquals(60, b.positions["https://a.example/1.mp3"]?.positionSeconds)
+        // b で外す（後の時刻）→ a に当てると外れる
+        val removed = b.unsubscribe("https://a.example/f", atMs = 20)
+        val a2 = a.apply(a.toBody().merge(removed.toBody()))
+        assertTrue(a2.subscriptions.isEmpty())
+        assertEquals(20L, a2.removed["https://a.example/f"])
+        // 古い登録の知らせは、新しい「外した」を覆さない
+        assertTrue(a2.apply(a.toBody()).subscriptions.isEmpty())
+        // 外した後にもう一度登録すると、印は消える
+        val again = a2.subscribe(FeedSubscription("https://a.example/f", "A", addedAtMs = 30))
+        assertNull(again.removed["https://a.example/f"])
+        assertEquals(listOf("A"), a2.apply(again.toBody()).subscriptions.map { it.title })
+    }
+}
+

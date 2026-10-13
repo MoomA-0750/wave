@@ -107,6 +107,14 @@ class ConnectV2Manager(
     private val mutableRemote = MutableStateFlow<RemoteView?>(null)
     val remote: StateFlow<RemoteView?> = mutableRemote
 
+    private val mutableLibrary = MutableSharedFlow<xyz.mooma0750.wave.handoff.v2.LibraryBody>(extraBufferCapacity = 4)
+
+    /** ほかの端末と合わせたライブラリ（RSS の登録・聴いたところ、ADR-0013）。手元の状態に取り込む。 */
+    val libraryUpdates: SharedFlow<xyz.mooma0750.wave.handoff.v2.LibraryBody> = mutableLibrary
+
+    /** 手元のライブラリが変わった。中継のものと合わせ、違えば書く。 */
+    fun publishLibrary(body: xyz.mooma0750.wave.handoff.v2.LibraryBody) = post { client?.library?.publish(body) }
+
     private val mutableEvents = MutableSharedFlow<ClientEvent>(extraBufferCapacity = 16)
     val events: SharedFlow<ClientEvent> = mutableEvents
 
@@ -499,6 +507,11 @@ class ConnectV2Manager(
                     return true
                 }
                 return runBlocking(Dispatchers.Main) { host.endpoint?.control(action, positionMs) == true }
+            }
+
+            override fun libraryChanged(body: xyz.mooma0750.wave.handoff.v2.LibraryBody) {
+                Log.i(WaveApplication.LOG_TAG, "connect-v2 library feeds=${body.feeds.size} positions=${body.positions.size}")
+                mutableLibrary.tryEmit(body)
             }
 
             override fun accountTag(): String? = tagState?.takeIf { it.generation == session.loginGenerationId() && it.householdId == client?.householdId }?.tag

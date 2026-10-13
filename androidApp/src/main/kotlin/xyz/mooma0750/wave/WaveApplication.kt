@@ -420,6 +420,35 @@ class AppContainer(
         }
 
     init {
+        // RSS の登録と聴いたところを、家の端末の間で合わせる（ADR-0013）
+        connectV2?.let { manager ->
+            appScope.launch { manager.libraryUpdates.collect { feedLibrary.apply(it) } }
+            appScope.launch {
+                // 登録の変化はすぐ、聴いたところだけの変化は30秒に1回まで書く（再生中は15秒ごとに変わる）
+                var sent: xyz.mooma0750.wave.core.music.FeedLibraryState? = null
+                var sentAtMs = 0L
+                var pending: kotlinx.coroutines.Job? = null
+                feedLibrary.state.collect { state ->
+                    val subscriptionsChanged = sent == null || sent?.subscriptions != state.subscriptions || sent?.removed != state.removed
+                    val now = SystemClock.elapsedRealtime()
+                    pending?.cancel()
+                    if (subscriptionsChanged || now - sentAtMs >= LIBRARY_POSITIONS_EVERY_MS) {
+                        sent = state
+                        sentAtMs = now
+                        manager.publishLibrary(state.toBody())
+                    } else {
+                        pending =
+                            appScope.launch {
+                                kotlinx.coroutines.delay(LIBRARY_POSITIONS_EVERY_MS - (now - sentAtMs))
+                                val latest = feedLibrary.state.value
+                                sent = latest
+                                sentAtMs = SystemClock.elapsedRealtime()
+                                manager.publishLibrary(latest.toBody())
+                            }
+                    }
+                }
+            }
+        }
         // Connect v2: 裏にいるときに他の端末の再生で止まったら、通知で知らせる（Toast は裏では出ない、Opus 低-5）
         connectV2?.let { manager ->
             appScope.launch {
@@ -433,6 +462,7 @@ class AppContainer(
     }
 
     private companion object {
+        const val LIBRARY_POSITIONS_EVERY_MS = 30_000L
         const val CONNECT_CHANNEL_ID = "connect"
         const val CONNECT_NOTIFICATION_ID = 4201
     }
