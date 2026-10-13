@@ -438,6 +438,11 @@ object DebugActions {
                             val page = show.show.toPage(saved = null)
                             Log.i(WaveApplication.LOG_TAG, "debug feed episodes=${page.episodes.size} durations=${page.episodes.count { it.durationText != null }} dates=${page.episodes.count { it.publishedText != null }} image=${page.thumbnailUrl != null}")
                             if (intent.getBooleanExtra("play", false)) player.playFrom(page.episodes.map { it.song }, 0, null, null)
+                            // save なら登録する（画面の Save と同じ。端末の間の同期を画面に触れずに確かめる、ADR-0013）
+                            if (intent.hasExtra("save")) {
+                                if (intent.getBooleanExtra("save", true)) container.feedLibrary.subscribe(show.show.subscription) else container.feedLibrary.unsubscribe(show.show.feedUrl)
+                                Log.i(WaveApplication.LOG_TAG, "debug feed saved=${container.feedLibrary.state.value.isSubscribed(show.show.feedUrl)}")
+                            }
                         }
                         is xyz.mooma0750.wave.core.music.FeedResult.Failed -> Log.i(WaveApplication.LOG_TAG, "debug feed failed ${show.failure}")
                     }
