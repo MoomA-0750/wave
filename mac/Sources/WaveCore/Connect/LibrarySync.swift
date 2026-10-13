@@ -17,23 +17,55 @@ public struct LibraryBody: Equatable, Sendable, ConnectCodable {
     /// 音声の URL ごと。
     public var positions: [String: LibraryPosition]
 
+    /// 書き出す並び（Kotlin の Map は入れた順に出すので、読んだ・合わせた並びを覚えておく。無いキーは URL の順で後ろに付く）。
+    /// 中身の比べには使わない。
+    private var feedOrder: [String] = []
+    private var positionOrder: [String] = []
+
     public init(v: Int = LibraryBody.version, feeds: [String: LibraryFeed] = [:], positions: [String: LibraryPosition] = [:]) {
         self.v = v
         self.feeds = feeds
         self.positions = positions
     }
 
+    public static func == (a: LibraryBody, b: LibraryBody) -> Bool { a.v == b.v && a.feeds == b.feeds && a.positions == b.positions }
+
+    private static func ordered<T>(_ map: [String: T], _ order: [String]) -> [String] {
+        var seen = Set<String>()
+        let known = order.filter { map[$0] != nil && seen.insert($0).inserted }
+        return known + map.keys.filter { !seen.contains($0) }.sorted()
+    }
+
+    private var feedKeys: [String] { LibraryBody.ordered(feeds, feedOrder) }
+    private var positionKeys: [String] { LibraryBody.ordered(positions, positionOrder) }
+
     /// 2つを合わせる。同じ時刻なら other を残す（自分の書き込みが後から届いた相手の書き込みを消さないよう、呼ぶ側は相手を other に渡す）。
     public func merge(_ other: LibraryBody) -> LibraryBody {
+        // 並びは Kotlin の (keys + other.keys) と同じく、自分の並びの後ろに相手にしか無いもの
+        let feedKeys = LibraryBody.union(self.feedKeys, other.feedKeys)
         var feeds: [String: LibraryFeed] = [:]
-        for key in Set(self.feeds.keys).union(other.feeds.keys) {
-            feeds[key] = LibraryBody.newer(self.feeds[key], other.feeds[key], \.updatedAtMs)
-        }
+        for key in feedKeys { feeds[key] = LibraryBody.newer(self.feeds[key], other.feeds[key], \.updatedAtMs) }
+        let positionKeys = LibraryBody.union(self.positionKeys, other.positionKeys)
         var positions: [String: LibraryPosition] = [:]
-        for key in Set(self.positions.keys).union(other.positions.keys) {
-            positions[key] = LibraryBody.newer(self.positions[key], other.positions[key], \.updatedAtMs)
+        for key in positionKeys { positions[key] = LibraryBody.newer(self.positions[key], other.positions[key], \.updatedAtMs) }
+        var merged = LibraryBody(v: LibraryBody.version, feeds: feeds, positions: positions)
+        merged.feedOrder = feedKeys
+        merged.positionOrder = positionKeys
+        if positions.count > LibraryBody.maxPositions {
+            // 新しい順にこの数まで（Kotlin の sortedByDescending と同じく、同じ時刻なら元の並び）
+            let kept = positionKeys.enumerated().sorted { a, b in
+                let ta = positions[a.element]!.updatedAtMs, tb = positions[b.element]!.updatedAtMs
+                return ta != tb ? ta > tb : a.offset < b.offset
+            }.prefix(LibraryBody.maxPositions).map(\.element)
+            merged.positions = Dictionary(uniqueKeysWithValues: kept.map { ($0, positions[$0]!) })
+            merged.positionOrder = kept
         }
-        return LibraryBody(v: LibraryBody.version, feeds: feeds, positions: LibraryBody.trim(positions))
+        return merged
+    }
+
+    private static func union(_ a: [String], _ b: [String]) -> [String] {
+        var seen = Set(a)
+        return a + b.filter { seen.insert($0).inserted }
     }
 
     private static func newer<T>(_ mine: T?, _ other: T?, _ at: KeyPath<T, Int64>) -> T? {
@@ -42,35 +74,32 @@ public struct LibraryBody: Equatable, Sendable, ConnectCodable {
         return mine[keyPath: at] > other[keyPath: at] ? mine : other
     }
 
-    private static func trim(_ positions: [String: LibraryPosition]) -> [String: LibraryPosition] {
-        if positions.count <= maxPositions { return positions }
-        let kept = positions.sorted { $0.value.updatedAtMs > $1.value.updatedAtMs }.prefix(maxPositions)
-        return Dictionary(uniqueKeysWithValues: kept.map { ($0.key, $0.value) })
-    }
-
     public func toJSON() -> JSON {
-        // 辞書の並びは決まらないので、キーの順に出す（同じ中身なら同じ文字列になる）
         .obj([
             "v": JSON(v),
-            "feeds": .object(JSONObject(feeds.keys.sorted().map { ($0, feeds[$0]!.toJSON()) })),
-            "positions": .object(JSONObject(positions.keys.sorted().map { ($0, positions[$0]!.toJSON()) })),
+            "feeds": .object(JSONObject(feedKeys.map { ($0, feeds[$0]!.toJSON()) })),
+            "positions": .object(JSONObject(positionKeys.map { ($0, positions[$0]!.toJSON()) })),
         ])
     }
 
     public static func fromJSON(_ json: JSON) throws -> LibraryBody {
         let r = try FieldReader(json)
-        func map<T: ConnectCodable>(_ key: String, _ type: T.Type) throws -> [String: T] {
+        func map<T: ConnectCodable>(_ key: String, _ type: T.Type) throws -> ([String: T], [String]) {
             switch json[key] {
-            case nil, .null?: return [:]
+            case nil, .null?: return ([:], [])
             case .object(let o)?:
                 var out: [String: T] = [:]
                 for (k, v) in o.pairs { out[k] = try T.fromJSON(v) }
-                return out
+                return (out, o.pairs.map(\.0))
             default: throw ConnectDecodeError(field: key)
             }
         }
-        return LibraryBody(v: try r.int("v", default: LibraryBody.version), feeds: try map("feeds", LibraryFeed.self),
-                           positions: try map("positions", LibraryPosition.self))
+        let (feeds, feedOrder) = try map("feeds", LibraryFeed.self)
+        let (positions, positionOrder) = try map("positions", LibraryPosition.self)
+        var body = LibraryBody(v: try r.int("v", default: LibraryBody.version), feeds: feeds, positions: positions)
+        body.feedOrder = feedOrder
+        body.positionOrder = positionOrder
+        return body
     }
 }
 
@@ -177,6 +206,8 @@ public final class LibrarySync {
     private var remoteVersion: Int64 = 0
     private var remoteBody: LibraryBody?
     private var remoteHash: String?
+    /// remoteVersion の保存の ID（中継が作り直されたら、版の大小で捨てない）。
+    private var remoteStore: String?
     /// 手元の今の中身（書きたいもの）。
     private var local: LibraryBody?
     /// 返事を待っている書き込み。
@@ -232,7 +263,7 @@ public final class LibrarySync {
         switch message {
         case .library(let m):
             synced = true
-            if let state = m.state { adopt(state) }
+            if let state = m.state { adopt(state) } else { forgetRemote() }
             try flush()
         case .libraryOk(let m):
             guard m.requestId == inflight else { return }
@@ -240,25 +271,38 @@ public final class LibrarySync {
             remoteVersion = m.version
             remoteBody = pendingBody
             remoteHash = nil
+            remoteStore = storeId()
             pendingBody = nil
             try flush()
         case .libraryConflict(let m):
             guard m.requestId == inflight else { return }
             inflight = nil
             pendingBody = nil
-            if let latest = m.latest { adopt(latest) }
+            if let latest = m.latest { adopt(latest) } else { forgetRemote() }
             try flush()
         default:
             break
         }
     }
 
+    /// 中継にまだ文書が無い（作り直された中継など）。覚えていた版を捨てて 0 から書く
+    /// （覚えた版のまま書くと、食い違いが返り続けて書き込みが回り続ける）。
+    private func forgetRemote() {
+        if storeId() == nil { return }
+        remoteVersion = 0
+        remoteBody = nil
+        remoteHash = nil
+        remoteStore = nil
+    }
+
     /// 中継の文書を開いて取り込む。古い版・違う保存・開けないものは捨てる。
     private func adopt(_ state: LibraryState) {
         if state.storeId != storeId() { return }
-        if state.version < remoteVersion { return }
+        // 覚えている版が別の保存のもの（中継が作り直された）なら、版の大小では捨てない
+        let sameStore = state.storeId == remoteStore
+        if sameStore && state.version < remoteVersion { return }
         let hash = DocSealer.hash(state.doc)
-        if state.version == remoteVersion && hash == remoteHash { return }
+        if sameStore && state.version == remoteVersion && hash == remoteHash { return }
         guard let current = chain() else {
             deferred = state
             return
@@ -280,6 +324,7 @@ public final class LibrarySync {
         remoteVersion = state.version
         remoteHash = hash
         remoteBody = body
+        remoteStore = state.storeId
         // 手元と合わせたものを取り込んでもらう（手元のほうが新しい分は、次の flush で書く）
         let merged = local?.merge(body) ?? body
         local = merged
@@ -288,7 +333,7 @@ public final class LibrarySync {
 
     /// 手元に中継より新しいものがあれば書く。
     private func flush() throws {
-        if !synced || inflight != nil { return }
+        if !synced || inflight != nil || storeId() == nil { return }
         guard let mine = local else { return }
         let remote = remoteBody
         // 同じ時刻なら中継の側を残す

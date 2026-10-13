@@ -645,7 +645,8 @@ public final class ConnectClient {
             for state in pending { try onState(state) }
             try maybeResume()
             try flush()
-            try library.onChainUpdated()
+            // 家に入ったばかりなら、つながったときの library_get は家の外として断られている。頼み直す
+            if joining { library.onConnected() } else { try library.onChainUpdated() }
         case .fork:
             effects.event(.chainForked)
         case .rollback:

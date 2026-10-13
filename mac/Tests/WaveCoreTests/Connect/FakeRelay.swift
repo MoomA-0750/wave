@@ -47,6 +47,8 @@ final class FakeRelay {
     private var library: StoredDoc?
     /// library_get を送った接続（ライブラリはこの接続にだけ配る）。
     private var librarySubscribers: Set<String> = []
+    /// 中継がライブラリだけを失った（同じ保存のまま）。
+    func dropLibrary() { library = nil }
     /// 中継が持つ最新のライブラリ（試験で見る）。
     var libraryState: LibraryState? { library.map { LibraryState(version: $0.version, doc: $0.doc, storeId: storeId) } }
 

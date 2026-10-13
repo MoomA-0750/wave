@@ -150,7 +150,7 @@ final class InteropTests: XCTestCase {
         let chain = try f["chain"].items.map { try decode(ChainRecord.self, $0) }.verified()
         let devices = try ["a", "b", "pc"].map(device)
         let docs = f["docs"].items
-        XCTAssertEqual(["queue", "cursor", "command", "profile"], try docs.map { try str($0, "name") })
+        XCTAssertEqual(["queue", "cursor", "command", "profile", "library"], try docs.map { try str($0, "name") })
         for entry in docs {
             let doc = try decode(SealedDoc.self, entry["doc"])
             XCTAssertEqual(try str(entry, "hash"), DocSealer.hash(doc))
@@ -174,6 +174,11 @@ final class InteropTests: XCTestCase {
                 XCTAssertEqual(plaintext, ConnectJSON.encode(command))
             case "profile":
                 XCTAssertEqual("Windows PC", ConnectJSON.decode(ProfileBody.self, from: plaintext)?.name)
+            case "library":
+                // ライブラリ（ADR-0013）。読んで書き直すと同じ文字列（Kotlin の Map の並びのまま）
+                let library = try XCTUnwrap(ConnectJSON.decode(LibraryBody.self, from: plaintext))
+                XCTAssertEqual(InteropTests.sampleLibrary(), library)
+                XCTAssertEqual(plaintext, ConnectJSON.encode(library))
             default:
                 XCTFail("知らない doc")
             }
@@ -263,6 +268,10 @@ final class InteropTests: XCTestCase {
         let profile = ProfileBody(name: "Windows PC")
         let profileDoc = try DocSealer.seal(
             signer: pc, chain: chain, kind: .profile, version: 1, prevHash: nil, issuedAtEpochMs: 1_700_000_000_005, plaintext: ConnectJSON.encodeToUTF8(profile))
+        // ライブラリ（ADR-0013）は操作だけの端末（PC）も書ける
+        let libraryBody = InteropTests.sampleLibrary()
+        let libraryDoc = try DocSealer.seal(
+            signer: pc, chain: chain, kind: .library, version: 1, prevHash: nil, issuedAtEpochMs: 1_700_000_000_006, plaintext: ConnectJSON.encodeToUTF8(libraryBody))
 
         // ペアリング（どちらも Swift）。使い捨ての鍵を書き出し、確かめる側が同じ鍵で相手の側を再現する
         let joinInfo = ConnectClient.JoinInfo(
@@ -321,6 +330,13 @@ final class InteropTests: XCTestCase {
             .pairConfirmed(.init(confirm: Pairing.toJSON(confirm))),
             .error(.init(code: "not_active")),
             .error(.init(code: "stale_head", requestId: "req-1")),
+            .libraryGet,
+            .libraryPut(.init(requestId: "req-3", expectVersion: 0, doc: libraryDoc)),
+            .libraryOk(.init(requestId: "req-3", version: 1)),
+            .libraryConflict(.init(requestId: "req-4")),
+            .libraryConflict(.init(requestId: "req-4", latest: LibraryState(version: 1, doc: libraryDoc, storeId: "store-1"))),
+            .library(.init()),
+            .library(.init(state: LibraryState(version: 1, doc: libraryDoc, storeId: "store-1"))),
         ]
 
         func docEntry(_ name: String, _ doc: SealedDoc, _ plaintext: String) -> JSON {
@@ -338,6 +354,7 @@ final class InteropTests: XCTestCase {
                 docEntry("cursor", cursorDoc, ConnectJSON.encode(cursorBody)),
                 docEntry("command", commandDoc, ConnectJSON.encode(command)),
                 docEntry("profile", profileDoc, ConnectJSON.encode(profile)),
+                docEntry("library", libraryDoc, ConnectJSON.encode(libraryBody)),
             ]),
             "handoff": .obj(["handoffId": .string(InteropTests.handoffId), "text": .string(snapshotText)]),
             "relay": .array(relay.map { .string(RelayV2.encode($0)) }),
@@ -355,6 +372,12 @@ final class InteropTests: XCTestCase {
                 "aSendKey": .string(B64.encode(pairOnA.sendKey)),
             ]),
         ])
+    }
+
+    /// Kotlin の CSharpInteropTest の sampleLibrary と同じもの（並びも同じ: 読んだ JSON から作る）。
+    static func sampleLibrary() -> LibraryBody {
+        let json = #"{"v":1,"feeds":{"https://feeds.example/show":{"title":"番組 \"A\" 🎙","author":"作者","thumbnailUrl":"https://img.example/a.jpg","addedAtMs":1700000000000,"removed":false,"updatedAtMs":1700000000000},"https://feeds.example/old":{"title":"","author":null,"thumbnailUrl":null,"addedAtMs":0,"removed":true,"updatedAtMs":1700000000010}},"positions":{"https://feeds.example/1.mp3":{"positionSeconds":60,"durationSeconds":600,"finished":false,"updatedAtMs":1700000000020},"https://feeds.example/2.mp3":{"positionSeconds":5,"durationSeconds":null,"finished":true,"updatedAtMs":1700000000030}}}"#
+        return ConnectJSON.decode(LibraryBody.self, from: json)!
     }
 
     /// Kotlin の CSharpInteropTest の sampleSnapshot と同じもの。

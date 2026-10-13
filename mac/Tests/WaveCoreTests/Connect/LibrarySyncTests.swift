@@ -28,10 +28,7 @@ final class LibrarySyncTests: XCTestCase {
         try relay.run()
         try join(b)
         try join(pc, connect: connectPc)
-        // A は家を作る前につないだので、library_get は断られている（Kotlin の試験と同じく、家ができてからつないだ状態にする）
-        a.disconnect()
-        a.connect()
-        try relay.run()
+        // A は家を作る前につないだので、最初の library_get は家の外として断られている。家に入ったときに頼み直していること
     }
 
     private func join(_ device: SimDevice, connect: Bool = true) throws {
@@ -96,6 +93,22 @@ final class LibrarySyncTests: XCTestCase {
         try relay.run()
         XCTAssertEqual(Set(["https://x/f", "https://p/f"]), Set(pc.library.map { Array($0.feeds.keys) } ?? []))
         XCTAssertEqual(Set(["https://x/f", "https://p/f"]), Set(a.library.map { Array($0.feeds.keys) } ?? []))
+    }
+
+    /// 中継がライブラリだけを失った（同じ保存のまま）: 覚えた版のまま書き続けず、0 から書き直す（Kotlin の b31ea9c と同じ）。
+    func testARelayThatLostTheLibraryIsWrittenFromTheStartWithoutLooping() throws {
+        try setUpHousehold()
+        try a.client.library.publish(LibraryBody(feeds: ["https://x/f": feed("X", 10)]))
+        try relay.run()
+        relay.dropLibrary()
+        var puts = 0
+        relay.onFromClient = { _, message in if case .libraryPut = message { puts += 1 } }
+        // 覚えた版（1）のまま書くと食い違いが返る。中継に無いと分かったら 0 から書き直す
+        try a.client.library.publish(LibraryBody(feeds: ["https://x/f": feed("X", 10), "https://y/f": feed("Y", 11)]))
+        try relay.run()
+        XCTAssertEqual(1, relay.libraryState?.version)
+        XCTAssertEqual(2, puts)
+        XCTAssertEqual(Set(["https://x/f", "https://y/f"]), Set(b.library.map { Array($0.feeds.keys) } ?? []))
     }
 
     func testSameContentIsNotWrittenAgain() throws {
