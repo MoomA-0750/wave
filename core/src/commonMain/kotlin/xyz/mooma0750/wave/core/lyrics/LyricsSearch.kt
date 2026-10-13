@@ -56,13 +56,17 @@ class LyricsSearch(
     internal companion object {
         const val CANDIDATES = 6
 
-        /** そのまま入っていた曲、大体合っている曲、見つからなかった曲の順。同じ組の中は検索の順のまま。 */
+        /**
+         * そのまま入っていた曲、大体合っている曲、見つからなかった曲、見つからなかった投稿者の動画（歌ってみた・歌詞動画など）の順。
+         * 同じ組の中は検索の順のまま。
+         */
         fun rank(hits: List<LyricsHit>): List<LyricsHit> =
             hits.sortedBy {
                 when {
                     it.match?.exact == true -> 0
                     it.match != null -> 1
-                    else -> 2
+                    it.song.kind != MusicVideoType.Ugc -> 2
+                    else -> 3
                 }
             }
 

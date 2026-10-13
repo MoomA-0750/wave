@@ -86,6 +86,14 @@ class LyricsSearchTest {
         }
 
     @Test
+    fun unmatchedUserVideosGoBelowUnmatchedSongs() {
+        val cover = LyricsHit(song("u1", "歌ってみた", kind = MusicVideoType.Ugc), null)
+        val plain = LyricsHit(song("a1", "曲"), null)
+        val matched = LyricsHit(song("u2", "歌詞動画", kind = MusicVideoType.Ugc), LyricsMatch("行", null, exact = false))
+        assertEquals(listOf(matched, plain, cover), LyricsSearch.rank(listOf(cover, plain, matched)))
+    }
+
+    @Test
     fun failedSearchIsPassedOnAndBlankQueryIsEmpty(): Unit =
         runBlocking {
             var asked = false
