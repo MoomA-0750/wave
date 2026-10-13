@@ -18,15 +18,35 @@ public sealed class RangeStream : System.IO.Stream
     private readonly HttpClient http;
     private readonly string url;
     private readonly long length;
+    private readonly string userAgent;
     private long position;
     private byte[]? chunk;
     private long chunkStart;
 
-    private RangeStream(HttpClient http, string url, long length)
+    private RangeStream(HttpClient http, string url, long length, string? userAgent = null)
     {
         this.http = http;
         this.url = url;
         this.length = length;
+        this.userAgent = userAgent ?? Net.InnerTubeClient.UserAgent;
+    }
+
+    /// <summary>
+    /// RSS のエピソードの音声（ADR-0012）。先頭の1バイトを取り、リダイレクトの行き先（https のものだけ）と長さを知る。
+    /// 2回目からは行き先へ直接取りに行く（計測用の転送を何度も通らない）。Range に応じない配信元なら Stream は null。
+    /// http には cookie を持たず、https の間だけリダイレクトを追うクライアントを渡す。
+    /// </summary>
+    public static async Task<(RangeStream? Stream, string Url, string? ContentType)> OpenEpisodeAsync(HttpClient http, string url, string userAgent, CancellationToken cancel = default)
+    {
+        if (!url.StartsWith("https://", StringComparison.OrdinalIgnoreCase)) throw new StreamRejectedException(0);
+        var probe = new RangeStream(http, url, 0, userAgent);
+        using var response = await probe.SendAsync(0, 0, cancel);
+        var final = response.RequestMessage?.RequestUri;
+        if (final is null || final.Scheme != Uri.UriSchemeHttps) throw new StreamRejectedException(0);
+        var type = response.Content.Headers.ContentType?.MediaType;
+        if (response.StatusCode == HttpStatusCode.PartialContent && response.Content.Headers.ContentRange?.Length is { } length and > 0)
+            return (new RangeStream(http, final.AbsoluteUri, length, userAgent), final.AbsoluteUri, type);
+        return (null, final.AbsoluteUri, type);
     }
 
     /// <summary>長さが分からなければ、先頭の1バイトを取って Content-Range から知る。</summary>
@@ -126,7 +146,7 @@ public sealed class RangeStream : System.IO.Stream
     {
         var request = new HttpRequestMessage(HttpMethod.Get, url);
         request.Headers.Range = new RangeHeaderValue(start, end);
-        request.Headers.TryAddWithoutValidation("User-Agent", Net.InnerTubeClient.UserAgent);
+        request.Headers.TryAddWithoutValidation("User-Agent", userAgent);
         var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancel);
         if (response.StatusCode is HttpStatusCode.PartialContent or HttpStatusCode.OK) return response;
         var status = (int)response.StatusCode;

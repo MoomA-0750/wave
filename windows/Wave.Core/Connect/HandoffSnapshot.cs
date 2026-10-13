@@ -114,6 +114,10 @@ public static class HandoffCodec
     private const long MaxTimeMs = 24 * 3600 * 1000L;
 
     private static readonly Regex VideoId = new(@"\A[A-Za-z0-9_-]{11}\z");
+
+    /// <summary>キューの項目の曲の ID: YouTube の動画 ID か、RSS のエピソード（ext: + https の音声の URL。ADR-0012）。</summary>
+    public static bool IsItemVideoId(string id) =>
+        VideoId.IsMatch(id) || Music.Feed.AudioUrlOf(id) is { } url && !url.Any(IsIsoControl);
     private static readonly Regex BrowseId = new(@"\A[A-Za-z0-9_-]{2,64}\z");
     private static readonly Regex PlaylistId = new(@"\A[A-Za-z0-9_-]{2,128}\z");
     private static readonly Regex Uuid = new(@"\A[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\z");
@@ -160,7 +164,7 @@ public static class HandoffCodec
         if (snapshot.ListenedMs < 0 || snapshot.PositionMs < 0) return Reject("negative_time");
         foreach (var item in snapshot.Items)
         {
-            if (!VideoId.IsMatch(item.VideoId)) return Reject("video_id");
+            if (!IsItemVideoId(item.VideoId)) return Reject("video_id");
             if (item.Title.Length == 0 || item.Title.Length > MaxText) return Reject("title");
             if (item.Artists.Count > MaxArtists || item.Artists.Any(a => !ValidRef(a))) return Reject("artist");
             if (item.Album is not null && !ValidRef(item.Album)) return Reject("album");
