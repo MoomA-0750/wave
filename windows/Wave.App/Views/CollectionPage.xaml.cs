@@ -131,10 +131,18 @@ public sealed partial class CollectionPage : Page
         Gradient.Fill = new LinearGradientBrush([new GradientStop { Color = top, Offset = 0 }, new GradientStop { Color = bottom, Offset = 1 }], 90);
     }
 
+    /// <summary>一覧を読んでいる途中か（長いプレイリストはページごとに行が増える）。</summary>
+    private bool loading;
+    /// <summary>読み終える前に鳴らし始めた（読み終えたら残りをキューに足す。それまではラジオへ切り替えない）。</summary>
+    private bool playedWhileLoading;
+    private int loadGeneration;
+
     private async Task LoadAsync()
     {
         cancel?.Cancel();
         var token = (cancel = new CancellationTokenSource()).Token;
+        var generation = ++loadGeneration;
+        loading = true;
         rows.Clear();
         all.Clear();
         LoadingRing.IsActive = true;
@@ -150,7 +158,25 @@ public sealed partial class CollectionPage : Page
         finally
         {
             if (!token.IsCancellationRequested) LoadingRing.IsActive = false;
+            // 読み直し（並べ替え）で新しい読み込みが始まっていたら、そちらが終えたときに足す
+            if (generation == loadGeneration) FinishLoading();
         }
+    }
+
+    private void FinishLoading()
+    {
+        loading = false;
+        if (!playedWhileLoading) return;
+        playedWhileLoading = false;
+        // ほかのものを流し始めていたら足さない。途中で離れた（読み終えなかった）ときも、読み終えた印として渡す
+        if (Player.SourceId == request.Id) Player.AppendFrom(Songs);
+    }
+
+    /// <summary>この一覧を start から再生する。読み終える前なら、残りはあとから足す。</summary>
+    private void PlayHere(int start, bool? shuffle = null)
+    {
+        playedWhileLoading = loading;
+        Player.PlayList(Songs, start, request.Id, shuffle, moreComing: loading);
     }
 
     private ArtistRef? albumArtist;
@@ -393,7 +419,7 @@ public sealed partial class CollectionPage : Page
             Player.TogglePlay();
             return;
         }
-        Player.PlayList(Songs, 0, request.Id, shufflePlay ? true : null);
+        PlayHere(0, shufflePlay ? true : null);
     }
 
     /// <summary>
@@ -412,12 +438,12 @@ public sealed partial class CollectionPage : Page
 
     private void OnDoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
     {
-        if ((e.OriginalSource as FrameworkElement)?.DataContext is TrackRow row) Player.PlayList(Songs, rows.IndexOf(row), request.Id);
+        if ((e.OriginalSource as FrameworkElement)?.DataContext is TrackRow row) PlayHere(rows.IndexOf(row));
     }
 
     private void OnKeyDown(object sender, KeyRoutedEventArgs e)
     {
-        if (e.Key == Windows.System.VirtualKey.Enter && Tracks.SelectedItem is TrackRow row) Player.PlayList(Songs, rows.IndexOf(row), request.Id);
+        if (e.Key == Windows.System.VirtualKey.Enter && Tracks.SelectedItem is TrackRow row) PlayHere(rows.IndexOf(row));
     }
 
     private void OnMore(object sender, RoutedEventArgs e)
