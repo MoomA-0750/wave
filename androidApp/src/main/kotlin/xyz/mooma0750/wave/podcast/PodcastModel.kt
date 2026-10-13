@@ -15,6 +15,10 @@ import xyz.mooma0750.wave.core.music.FeedFailure
 import xyz.mooma0750.wave.core.music.FeedLibrary
 import xyz.mooma0750.wave.core.music.FeedResult
 import xyz.mooma0750.wave.core.music.FeedShow
+import xyz.mooma0750.wave.core.music.NewEpisodes
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.sync.withPermit
 import xyz.mooma0750.wave.core.music.PodcastFeedClient
 import xyz.mooma0750.wave.core.music.MusicRepository
 import xyz.mooma0750.wave.core.music.PodcastEpisode
@@ -105,6 +109,7 @@ class PodcastViewModel(
                 val page = result.value
                 Log.i(WaveApplication.LOG_TAG, "podcast episodes=${page.episodes.size} more=${page.continuation != null} saved=${page.saved}")
                 mutableState.value = PodcastUiState(page = page, episodes = page.episodes, continuation = page.continuation)
+                if (browseId == MusicRepository.NEW_EPISODES_BROWSE) mergeFeedEpisodes()
             }
             is CallResult.Failed -> {
                 Log.i(WaveApplication.LOG_TAG, "podcast failed ${result.kind}" + if (result.kind == FailureKind.Parse) " renderers=${music.lastRendererNames}" else "")
@@ -115,7 +120,33 @@ class PodcastViewModel(
                     } else {
                         PodcastUiState(failure = result.kind)
                     }
+                if (browseId == MusicRepository.NEW_EPISODES_BROWSE && mutableState.value.page != null) mergeFeedEpisodes()
             }
+        }
+    }
+
+    /**
+     * 「新しいエピソード」に、RSS で登録した番組の新しい回を混ぜる（ADR-0012）。番組のフィードは4つずつ並べて読む。
+     * 読めなかった番組は飛ばす。混ぜた後の続き（YouTube の続き）はそのまま後ろに付く。
+     */
+    private suspend fun mergeFeedEpisodes() {
+        val client = feeds ?: return
+        val library = feedLibrary ?: return
+        val subscriptions = library.state.value.subscriptions
+        if (subscriptions.isEmpty()) return
+        val shows =
+            kotlinx.coroutines.coroutineScope {
+                val gate = kotlinx.coroutines.sync.Semaphore(4)
+                subscriptions.map { subscription ->
+                    async { gate.withPermit { (client.show(subscription.feedUrl) as? FeedResult.Ok)?.show } }
+                }.awaitAll().filterNotNull()
+            }
+        val positions = library.state.value.positions
+        val now = System.currentTimeMillis() / 1000
+        Log.i(WaveApplication.LOG_TAG, "podcast new episodes feeds=${shows.size}/${subscriptions.size}")
+        mutableState.update { state ->
+            val merged = NewEpisodes.merge(state.episodes, shows, now) { positions[it] }
+            state.copy(episodes = merged, page = state.page?.copy(episodes = merged))
         }
     }
 

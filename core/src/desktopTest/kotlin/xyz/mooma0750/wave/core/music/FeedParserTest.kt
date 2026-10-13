@@ -110,3 +110,33 @@ class FeedParserTest {
         assertNull(third.continuation)
     }
 }
+
+class NewEpisodesTest {
+    private val now = 1_791_853_200L // 2026-10-13 01:00 UTC
+
+    private fun youtube(
+        id: String,
+        published: String?,
+    ) = PodcastEpisode(Song(id, id, emptyList(), null, null, null), published)
+
+    @Test
+    fun readsYouTubeDates() {
+        assertEquals(now - 6 * 86_400, NewEpisodes.approximateEpochSeconds("6 日前", now))
+        assertEquals(now - 2 * 3_600, NewEpisodes.approximateEpochSeconds("2 時間前", now))
+        assertEquals(FeedParser.parseRfc822("8 Sep 2025 00:00:00 GMT"), NewEpisodes.approximateEpochSeconds("2025/09/08", now))
+        assertNull(NewEpisodes.approximateEpochSeconds("ライブ", now))
+    }
+
+    @Test
+    fun mergesNewestFirst() {
+        val rfc = listOf(3, 10, 200).joinToString("") { days ->
+            val (y, m, d) = FeedParser.dateText(now - days * 86_400L).split('/')
+            val month = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")[m.toInt() - 1]
+            "<item><title>r$days</title><pubDate>$d $month $y 01:00:00 GMT</pubDate><enclosure url=\"https://x.example/$days.mp3\"/></item>"
+        }
+        val show = requireNotNull(FeedParser.parse("https://x.example/f", "<rss><channel><title>R</title>$rfc</channel></rss>"))
+        val merged = NewEpisodes.merge(listOf(youtube("y1", "1 日前"), youtube("y6", "6 日前"), youtube("y?", null), youtube("y30", "2026/09/13")), listOf(show), now)
+        // 200 日前の RSS の回は混ぜない。読めない表示の回は一つ前と同じ日時
+        assertEquals(listOf("y1", "r3", "y6", "y?", "r10", "y30"), merged.map { it.song.title })
+    }
+}
