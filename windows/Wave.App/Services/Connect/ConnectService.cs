@@ -132,6 +132,8 @@ public sealed class ConnectService
         Relay = new RelayConnection(relayUrl, relayHost, device.IdentityPub, device.Sign, Deliver, () => Post(() => client?.OnDisconnected()));
         Relay.StatusChanged += _ => Post(RefreshInfo);
         Post(Load);
+        // RSS の登録と聴いたところを、家の端末の間で合わせる（ADR-0013）
+        AppServices.FeedLibrary.Changed += _ => Post(OnFeedLibraryChanged);
         player.QueueChanged += OnQueueChanged;
         player.CursorChanged += OnCursorChanged;
         player.UserStartedPlayback += OnUserStartedPlayback;
@@ -263,7 +265,47 @@ public sealed class ConnectService
         }
         client = new ConnectClient(keys!, keys!, Role.Player, Send, new Effects(this), () => clock.ElapsedMilliseconds, () => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), () => Guid.NewGuid().ToString(), initial);
         seenGeneration = AppServices.Client.Generation;
+        // 新しい ConnectClient は手元のライブラリを知らないので、今のものを渡す（つながって中継の版を知ってから書く）
+        PublishLibrary(AppServices.FeedLibrary.State);
         RefreshInfo();
+    }
+
+    // --- ライブラリの同期（ADR-0013。Android の AppContainer の init と同じ間引き） ---
+
+    /// <summary>聴いたところだけの変化は、この間隔に1回まで書く（再生中は15秒ごとに変わる）。</summary>
+    private const long LibraryPositionsEveryMs = 30_000;
+
+    private FeedLibraryState? librarySent;
+    private long librarySentAtMs;
+
+    /// <summary>後で書く予定の番号（新しい変化が来たら、前の予定は取り消す）。</summary>
+    private long libraryPending;
+
+    /// <summary>登録・外した印の変化はすぐ、聴いたところだけの変化は30秒に1回まで書く（作業スレッドで呼ぶ）。</summary>
+    private void OnFeedLibraryChanged()
+    {
+        var state = AppServices.FeedLibrary.State;
+        var sent = librarySent;
+        var subscriptionsChanged = sent is null || !sent.Subscriptions.SequenceEqual(state.Subscriptions) ||
+            sent.Removed.Count != state.Removed.Count || sent.Removed.Any(r => !state.Removed.TryGetValue(r.Key, out var at) || at != r.Value);
+        var now = clock.ElapsedMilliseconds;
+        var pending = ++libraryPending;
+        if (subscriptionsChanged || now - librarySentAtMs >= LibraryPositionsEveryMs)
+        {
+            PublishLibrary(state);
+            return;
+        }
+        _ = Task.Delay(TimeSpan.FromMilliseconds(LibraryPositionsEveryMs - (now - librarySentAtMs))).ContinueWith(_ => Post(() =>
+        {
+            if (pending == libraryPending) PublishLibrary(AppServices.FeedLibrary.State);
+        }));
+    }
+
+    private void PublishLibrary(FeedLibraryState state)
+    {
+        librarySent = state;
+        librarySentAtMs = clock.ElapsedMilliseconds;
+        client?.Library.Publish(state.ToBody());
     }
 
     private void Save(ClientPersisted state)
@@ -492,7 +534,7 @@ public sealed class ConnectService
 
         public void Event(ClientEvent clientEvent)
         {
-            AppPaths.Log($"connect-v2 event={clientEvent.GetType().Name}");
+            AppPaths.Log($"connect-v2 event={clientEvent.GetType().Name}" + (clientEvent is ClientEvent.ServerError error ? $" code={error.Code}" : ""));
             owner.OnEvent(clientEvent);
             owner.RefreshInfo();
         }
@@ -512,6 +554,13 @@ public sealed class ConnectService
                 return true;
             }
             return owner.OnUi(() => owner.player.ApplyControl(action, positionMs));
+        }
+
+        /// <summary>ほかの端末と合わせたライブラリが届いた。手元の登録と聴いたところに取り込む（変われば保存し、画面も変わる）。</summary>
+        public void LibraryChanged(LibraryBody body)
+        {
+            AppPaths.Log($"connect-v2 library feeds={body.Feeds.Count} positions={body.Positions.Count}");
+            AppServices.FeedLibrary.Apply(body);
         }
 
         public string? AccountTag() =>

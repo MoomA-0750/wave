@@ -24,6 +24,9 @@ class LibrarySync(
     private var remoteBody: LibraryBody? = null
     private var remoteHash: String? = null
 
+    /** remoteVersion の保存の ID（中継が作り直されたら、版の大小で捨てない）。 */
+    private var remoteStore: String? = null
+
     /** 手元の今の中身（書きたいもの）。 */
     private var local: LibraryBody? = null
 
@@ -66,7 +69,7 @@ class LibrarySync(
         when (message) {
             is RelayV2.Library -> {
                 synced = true
-                message.state?.let(::adopt)
+                message.state?.let(::adopt) ?: forgetRemote()
                 flush()
             }
             is RelayV2.LibraryOk -> {
@@ -75,6 +78,7 @@ class LibrarySync(
                 remoteVersion = message.version
                 remoteBody = pendingBody
                 remoteHash = null
+                remoteStore = storeId()
                 pendingBody = null
                 flush()
             }
@@ -82,7 +86,7 @@ class LibrarySync(
                 if (message.requestId != inflight) return
                 inflight = null
                 pendingBody = null
-                message.latest?.let(::adopt)
+                message.latest?.let(::adopt) ?: forgetRemote()
                 flush()
             }
             else -> Unit
@@ -92,12 +96,26 @@ class LibrarySync(
     /** 書いている中身（返事が来たら中継の中身とする）。 */
     private var pendingBody: LibraryBody? = null
 
+    /**
+     * 中継にまだ文書が無い（作り直された中継など）。覚えていた版を捨てて 0 から書く
+     * （覚えた版のまま書くと、食い違いが返り続けて書き込みが回り続ける）。
+     */
+    private fun forgetRemote() {
+        if (storeId() == null) return
+        remoteVersion = 0
+        remoteBody = null
+        remoteHash = null
+        remoteStore = null
+    }
+
     /** 中継の文書を開いて取り込む。古い版・違う保存・開けないものは捨てる。 */
     private fun adopt(state: LibraryState) {
         if (state.storeId != storeId()) return
-        if (state.version < remoteVersion) return
+        // 覚えている版が別の保存のもの（中継が作り直された）なら、版の大小では捨てない
+        val sameStore = state.storeId == remoteStore
+        if (sameStore && state.version < remoteVersion) return
         val hash = DocSealer.hash(state.doc)
-        if (state.version == remoteVersion && hash == remoteHash) return
+        if (sameStore && state.version == remoteVersion && hash == remoteHash) return
         val current = chain() ?: return run { deferred = state }
         val opened =
             when (val result = DocSealer.open(state.doc, current, opener)) {
@@ -110,6 +128,7 @@ class LibrarySync(
         remoteVersion = state.version
         remoteHash = hash
         remoteBody = body
+        remoteStore = state.storeId
         // 手元と合わせたものを取り込んでもらう（手元のほうが新しい分は、次の flush で書く）
         val merged = local?.merge(body) ?: body
         local = merged
@@ -118,7 +137,7 @@ class LibrarySync(
 
     /** 手元に中継より新しいものがあれば書く。 */
     private fun flush() {
-        if (!synced || inflight != null) return
+        if (!synced || inflight != null || storeId() == null) return
         val mine = local ?: return
         val remote = remoteBody
         // 同じ時刻なら中継の側を残す

@@ -92,6 +92,11 @@ public sealed class ConnectClient
 
         /// <summary>遠隔操作に従う（この端末が鳴らしている）。受け付けなければ false。</summary>
         bool Control(ControlAction action, long? positionMs) => false;
+
+        /// <summary>ほかの端末と合わせたライブラリが届いた（手元に取り込む、ADR-0013）。</summary>
+        void LibraryChanged(LibraryBody body)
+        {
+        }
     }
 
     /// <summary>表示用: ほかの端末の最新のカーソルと、今の時刻に合わせた位置。</summary>
@@ -298,10 +303,16 @@ public sealed class ConnectClient
 
     // --- 受信 ---
 
+    private LibrarySync? library;
+
+    /// <summary>ライブラリの同期（ADR-0013）。手元が変わったら Library.Publish を呼ぶ。</summary>
+    public LibrarySync Library => library ??= new LibrarySync(signer, opener, send, () => chain, () => pendingStoreId is null ? storeId : null, epochMs, newId, body => effects.LibraryChanged(body));
+
     public void OnMessage(RelayV2 message)
     {
         switch (message)
         {
+            case RelayV2.Library or RelayV2.LibraryOk or RelayV2.LibraryConflict: Library.OnMessage(message); break;
             case RelayV2.Welcome welcome: OnWelcome(welcome); break;
             case RelayV2.Chain c: OnChain(c.Records); break;
             // 自分の追記の返事（chain_ok）は、他の端末への chain_changed を受けないので、同じく取り直す（宛先を書き直すため）
@@ -323,6 +334,7 @@ public sealed class ConnectClient
     public void OnDisconnected()
     {
         ResetConnection();
+        Library.OnDisconnected();
         // 取り込む前に切れた引き取りは捨てる（つながり直した後に、古い状態から突然取り込まない）
         var waiting = transfer;
         if (waiting is not null && !waiting.Adopting) FailTransfer("disconnected");
@@ -443,6 +455,7 @@ public sealed class ConnectClient
         // 最新の状態を先に見る（通信を失ったまま鳴っていた端末は、ここで止まる）
         foreach (var state in welcome.States) OnState(state);
         MaybeResume();
+        Library.OnConnected();
     }
 
     /// <summary>本人が「この状態から始める」を押した（L-12）。床を捨てて新しい storeId を受け入れる。</summary>
@@ -466,6 +479,7 @@ public sealed class ConnectClient
         }
         send(RelayV2.StateGet.Instance);
         Flush();
+        Library.OnConnected();
     }
 
     private void OnChain(IReadOnlyList<ChainRecord> newRecords)
@@ -554,6 +568,9 @@ public sealed class ConnectClient
                 foreach (var state in pending) OnState(state);
                 MaybeResume();
                 Flush();
+                // 家に入ったばかりなら、つながったときの library_get は家の外として断られている。頼み直す
+                if (joining) Library.OnConnected();
+                else Library.OnChainUpdated();
                 break;
             }
             case ChainVerification.Fork:

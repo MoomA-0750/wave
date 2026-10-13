@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Wave.Core.Connect;
 
 namespace Wave.Core.Music;
 
@@ -13,13 +14,67 @@ public sealed record FeedLibraryState(IReadOnlyList<FeedSubscription> Subscripti
 
     public static FeedLibraryState Empty { get; } = new([], new Dictionary<string, EpisodePosition>());
 
+    /// <summary>外した番組と、外した時刻（ほかの端末へ「外した」を伝える印、ADR-0013）。</summary>
+    public IReadOnlyDictionary<string, long> Removed { get; init; } = new Dictionary<string, long>();
+
     public bool IsSubscribed(string feedUrl) => Subscriptions.Any(s => s.FeedUrl == feedUrl);
 
-    /// <summary>登録する（新しいものが先。同じフィードは先頭へ動かす）。</summary>
+    /// <summary>登録する（新しいものが先。同じフィードは先頭へ動かす。AddedAtMs が登録した時刻）。外した印は消す。</summary>
     public FeedLibraryState Subscribe(FeedSubscription subscription) =>
-        this with { Subscriptions = [subscription, .. Subscriptions.Where(s => s.FeedUrl != subscription.FeedUrl)] };
+        this with
+        {
+            Subscriptions = [subscription, .. Subscriptions.Where(s => s.FeedUrl != subscription.FeedUrl)],
+            Removed = Removed.Where(r => r.Key != subscription.FeedUrl).ToDictionary(r => r.Key, r => r.Value),
+        };
 
-    public FeedLibraryState Unsubscribe(string feedUrl) => this with { Subscriptions = Subscriptions.Where(s => s.FeedUrl != feedUrl).ToList() };
+    /// <summary>外す（atMs は外した時刻。印として残し、ほかの端末に伝える）。</summary>
+    public FeedLibraryState Unsubscribe(string feedUrl, long atMs = 0) =>
+        this with
+        {
+            Subscriptions = Subscriptions.Where(s => s.FeedUrl != feedUrl).ToList(),
+            Removed = new Dictionary<string, long>(Removed) { [feedUrl] = atMs },
+        };
+
+    /// <summary>端末の間で合わせる形（ADR-0013。Kotlin の toBody と同じ）。</summary>
+    public LibraryBody ToBody()
+    {
+        var feeds = new Dictionary<string, LibraryFeed>();
+        foreach (var (url, at) in Removed) feeds[url] = new LibraryFeed { Title = "", Removed = true, UpdatedAtMs = at };
+        foreach (var s in Subscriptions)
+            feeds[s.FeedUrl] = new LibraryFeed { Title = s.Title, Author = s.Author, ThumbnailUrl = s.ThumbnailUrl, AddedAtMs = s.AddedAtMs, Removed = false, UpdatedAtMs = s.AddedAtMs };
+        return new LibraryBody
+        {
+            Feeds = feeds,
+            Positions = Positions.ToDictionary(p => p.Key, p => new LibraryPosition { PositionSeconds = p.Value.PositionSeconds, DurationSeconds = p.Value.DurationSeconds, Finished = p.Value.Finished, UpdatedAtMs = p.Value.UpdatedAtMs }),
+        };
+    }
+
+    /// <summary>ほかの端末と合わせた結果を取り込む。番組・エピソードごとに、手元より新しいものだけを当てる。</summary>
+    public FeedLibraryState Apply(LibraryBody body)
+    {
+        var next = this;
+        foreach (var (url, feed) in body.Feeds)
+        {
+            if (!Feed.IsAllowedFeedUrl(url)) continue;
+            long? localAt = next.Subscriptions.FirstOrDefault(s => s.FeedUrl == url)?.AddedAtMs ?? (next.Removed.TryGetValue(url, out var removedAt) ? (long?)removedAt : null);
+            if (localAt is { } at && at >= feed.UpdatedAtMs) continue;
+            next = feed.Removed
+                ? next.Unsubscribe(url, feed.UpdatedAtMs)
+                : next.Subscribe(new FeedSubscription(url, feed.Title, feed.Author, feed.ThumbnailUrl is { } thumbnail && Feed.IsAllowedFeedUrl(thumbnail) ? thumbnail : null, feed.UpdatedAtMs));
+        }
+        // 登録の並びは登録した時刻の新しい順
+        next = next with { Subscriptions = next.Subscriptions.OrderByDescending(s => s.AddedAtMs).ToList() };
+        var positions = new Dictionary<string, EpisodePosition>(next.Positions);
+        foreach (var (url, p) in body.Positions)
+        {
+            if (positions.TryGetValue(url, out var local) && local.UpdatedAtMs >= p.UpdatedAtMs) continue;
+            positions[url] = new EpisodePosition(p.PositionSeconds, p.DurationSeconds, p.Finished, p.UpdatedAtMs);
+        }
+        return next.Trimmed(positions);
+    }
+
+    private FeedLibraryState Trimmed(Dictionary<string, EpisodePosition> positions) =>
+        this with { Positions = positions.Count <= MaxPositions ? positions : positions.OrderByDescending(p => p.Value.UpdatedAtMs).Take(MaxPositions).ToDictionary(p => p.Key, p => p.Value) };
 
     /// <summary>番組の名前・画像が変わっていたら、登録の表示を合わせる（登録の順と時刻は変えない）。</summary>
     public FeedLibraryState Refresh(FeedSubscription subscription) =>
@@ -42,9 +97,13 @@ public sealed record FeedLibraryState(IReadOnlyList<FeedSubscription> Subscripti
     /// <summary>中身が同じか（並びも含めて）。</summary>
     public bool SameAs(FeedLibraryState other) =>
         Subscriptions.SequenceEqual(other.Subscriptions) && Positions.Count == other.Positions.Count &&
-        Positions.All(p => other.Positions.TryGetValue(p.Key, out var o) && o == p.Value);
+        Positions.All(p => other.Positions.TryGetValue(p.Key, out var o) && o == p.Value) &&
+        Removed.Count == other.Removed.Count && Removed.All(r => other.Removed.TryGetValue(r.Key, out var o) && o == r.Value);
 
-    /// <summary>Android と同じ形: {"subscriptions":[{feedUrl,title,author,thumbnailUrl,addedAtMs}],"positions":{"URL":{positionSeconds,durationSeconds,finished,updatedAtMs}}}（既定の値は書かない）。</summary>
+    /// <summary>
+    /// Android と同じ形: {"subscriptions":[{feedUrl,title,author,thumbnailUrl,addedAtMs}],"positions":{"URL":{positionSeconds,durationSeconds,finished,updatedAtMs}},"removed":{"URL":外した時刻}}
+    /// （既定の値は書かない）。
+    /// </summary>
     public static string Encode(FeedLibraryState state)
     {
         var root = new JsonObject();
@@ -74,6 +133,12 @@ public sealed record FeedLibraryState(IReadOnlyList<FeedSubscription> Subscripti
             }
             root["positions"] = positions;
         }
+        if (state.Removed.Count > 0)
+        {
+            var removed = new JsonObject();
+            foreach (var (url, at) in state.Removed) removed[url] = at;
+            root["removed"] = removed;
+        }
         return root.ToJsonString();
     }
 
@@ -102,7 +167,16 @@ public sealed record FeedLibraryState(IReadOnlyList<FeedSubscription> Subscripti
                         o["finished"] is JsonValue f && f.GetValueKind() == JsonValueKind.True, Long(o, "updatedAtMs") ?? 0);
                 }
             }
-            return new FeedLibraryState(subscriptions, positions);
+            var removed = new Dictionary<string, long>();
+            if (root["removed"] is JsonObject marks)
+            {
+                foreach (var (url, node) in marks)
+                {
+                    if (node is not JsonValue v || v.GetValueKind() != JsonValueKind.Number) return null;
+                    removed[url] = v.GetValue<long>();
+                }
+            }
+            return new FeedLibraryState(subscriptions, positions) { Removed = removed };
         }
         catch (Exception e) when (e is JsonException or InvalidOperationException or FormatException or OverflowException)
         {
@@ -137,7 +211,10 @@ public sealed class FeedLibrary(FeedLibraryState initial, Func<long> nowMs, Acti
 
     public void Subscribe(FeedSubscription show) => Change(s => s.Subscribe(show with { AddedAtMs = nowMs() }));
 
-    public void Unsubscribe(string feedUrl) => Change(s => s.Unsubscribe(feedUrl));
+    public void Unsubscribe(string feedUrl) => Change(s => s.Unsubscribe(feedUrl, nowMs()));
+
+    /// <summary>ほかの端末と合わせた結果を取り込む（ADR-0013）。</summary>
+    public void Apply(LibraryBody body) => Change(s => s.Apply(body));
 
     public void Refresh(FeedShow show)
     {

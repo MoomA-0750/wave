@@ -28,6 +28,14 @@ public sealed record StoredState
     public string? ActiveDeviceId { get; init; }
 }
 
+/// <summary>中継が持つ最新のライブラリの文書（ADR-0013）。</summary>
+public sealed record LibraryState
+{
+    public required long Version { get; init; }
+    public required SealedDoc Doc { get; init; }
+    public required string StoreId { get; init; }
+}
+
 /// <summary>
 /// 中継 v2 のメッセージ（<c>/v2/connect</c>、<c>/v2/pair</c>。判別子は <c>op</c>）。Android 版の RelayV2 と同じ JSON。
 /// サーバーは SealedDoc の中身を読まない。
@@ -48,6 +56,11 @@ public sealed record StoredState
 [JsonDerivedType(typeof(StateOk), "state_ok")]
 [JsonDerivedType(typeof(StateConflict), "state_conflict")]
 [JsonDerivedType(typeof(State), "state")]
+[JsonDerivedType(typeof(LibraryGet), "library_get")]
+[JsonDerivedType(typeof(LibraryPut), "library_put")]
+[JsonDerivedType(typeof(LibraryOk), "library_ok")]
+[JsonDerivedType(typeof(LibraryConflict), "library_conflict")]
+[JsonDerivedType(typeof(Library), "library")]
 [JsonDerivedType(typeof(Claim), "claim")]
 [JsonDerivedType(typeof(Transfer), "transfer")]
 [JsonDerivedType(typeof(YieldDelivery), "yield")]
@@ -178,6 +191,39 @@ public abstract record RelayV2
     {
         [JsonPropertyName("state")]
         public required StoredState Stored { get; init; }
+    }
+
+    // --- ライブラリ（ADR-0013）。library_get を送った接続にだけ配る（知らない端末の版に新しい種類を流さない） ---
+
+    public sealed record LibraryGet : RelayV2
+    {
+        public static readonly LibraryGet Instance = new();
+    }
+
+    public sealed record LibraryPut : RelayV2
+    {
+        public required string RequestId { get; init; }
+        public required long ExpectVersion { get; init; }
+        public required SealedDoc Doc { get; init; }
+    }
+
+    public sealed record LibraryOk : RelayV2
+    {
+        public required string RequestId { get; init; }
+        public required long Version { get; init; }
+    }
+
+    public sealed record LibraryConflict : RelayV2
+    {
+        public required string RequestId { get; init; }
+        public LibraryState? Latest { get; init; }
+    }
+
+    /// <summary>library_get の返事と、ほかの端末が書いたときの配信。まだ無ければ Stored は null。</summary>
+    public sealed record Library : RelayV2
+    {
+        [JsonPropertyName("state")]
+        public LibraryState? Stored { get; init; }
     }
 
     // --- 再生を始める・引き取る ---
