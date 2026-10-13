@@ -1150,6 +1150,7 @@ final class PlayerService {
         message = switch result.failure {
         case .notLoggedIn: L.t("この曲を再生するにはログインが必要です", "Log in to play this song")
         case .unplayable: L.t("この曲は再生できません", "This song isn't available")
+        case .songLoginRequired: L.t("この曲はログインの確認（年齢の確認など）が要ります", "This song needs a sign-in check (such as age verification)")
         case .network: L.t("通信できませんでした", "Couldn't connect")
         default: L.t("再生の準備ができませんでした（\(String(describing: result.failure))）", "Couldn't prepare playback (\(String(describing: result.failure)))")
         }

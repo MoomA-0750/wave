@@ -20,6 +20,8 @@ public enum StreamFailure
     RejectedUrl,
     /// <summary>ライブ配信だった（ライブの印の無い曲として渡された）。HLS で流し直す。</summary>
     LiveStream,
+    /// <summary>その曲だけがログインの確認を求めた（年齢確認など）。ログインが切れたとは扱わない。</summary>
+    SongLoginRequired,
 }
 
 /// <summary>解決済みのストリーム。署名付き URL を含むので、ToString に出さない。</summary>
@@ -118,7 +120,8 @@ public sealed partial class StreamResolver(InnerTubeClient client, PlayerCipherP
         // ライブ配信は HLS で流す（LiveClient）。WEB_REMIX の応答では再生できない
         if (LiveParsers.IsLive(root)) return ResolveResult.Failed(StreamFailure.LiveStream);
         var status = root.Path("playabilityStatus", "status").Str();
-        if (status == "LOGIN_REQUIRED") return ResolveResult.Failed(StreamFailure.NotLoggedIn);
+        // 年齢確認などで曲ごとに返る。その曲だけの失敗にする（Android と同じ）
+        if (status == "LOGIN_REQUIRED") return ResolveResult.Failed(StreamFailure.SongLoginRequired);
         if (status != "OK") return ResolveResult.Failed(StreamFailure.Unplayable);
         var streaming = root.Path("streamingData");
         var formats = streaming.Path("adaptiveFormats").Items();

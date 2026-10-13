@@ -101,6 +101,7 @@
     <string name="search_failure_http">The server didn\'t respond</string>
     <string name="search_failure_parse">Couldn\'t read the response</string>
     <string name="search_failure_account_unverified">Couldn\'t verify which account to write to (if this persists, log in again)</string>
+    <string name="search_failure_song_login_required">This song needs a sign-in check (such as age verification)</string>
     <string name="search_title">Search</string>
     <string name="search_genres_failed">Couldn\'t load genres (%1$s)</string>
     <string name="search_retry">Try again</string>

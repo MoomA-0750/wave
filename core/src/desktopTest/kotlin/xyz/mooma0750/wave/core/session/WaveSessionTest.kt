@@ -183,6 +183,33 @@ class WaveSessionTest {
         }
 
     @Test
+    fun songLoginRequiredStaysActiveButIsConfirmed(): Unit =
+        runBlocking {
+            handler = { request ->
+                if (request.url.encodedPath.endsWith("/player")) json(player("LOGIN_REQUIRED", emptyList())) else json(accountMenu("Synthetic User"))
+            }
+            val session = loggedInSession()
+            val seen = mutableListOf<SessionState>()
+            val watcher = launch { session.state.collect { seen += it } }
+            assertEquals(CallResult.Failed(FailureKind.SongLoginRequired), callPlayer(session, songLoginRequired = true))
+            withTimeout(5_000) { while (sent.none { it.url.encodedPath.endsWith("/account_menu") }) delay(10) }
+            delay(100)
+            watcher.cancel()
+            assertTrue(seen.none { it is SessionState.Suspect }, "曲ごとのログインの要求で、疑いの状態になった: $seen")
+        }
+
+    @Test
+    fun songLoginRequiredExpiresWhenConfirmationShowsLoggedOut(): Unit =
+        runBlocking {
+            handler = { request ->
+                if (request.url.encodedPath.endsWith("/player")) json(player("LOGIN_REQUIRED", emptyList())) else json(accountMenu(null))
+            }
+            val session = loggedInSession()
+            assertEquals(CallResult.Failed(FailureKind.SongLoginRequired), callPlayer(session, songLoginRequired = true))
+            awaitState(session) { it == SessionState.Expired(ExpiredReason.ConfirmedLoggedOut) }
+        }
+
+    @Test
     fun loginRequiredExpiresWhenConfirmationShowsLoggedOut(): Unit =
         runBlocking {
             handler = { request ->
@@ -771,9 +798,14 @@ class WaveSessionTest {
     private suspend fun callPlayer(
         session: WaveSession,
         parseLoginRequired: Boolean = false,
+        songLoginRequired: Boolean = false,
     ): CallResult<Unit> =
         session.call("player", block = { it.player(YouTubeClient.WEB_REMIX, "synthetic-id", signatureTimestamp = 1) }) {
-            if (parseLoginRequired) ParseOutcome.LoginRequired else ParseOutcome.Parsed(Unit)
+            when {
+                songLoginRequired -> ParseOutcome.SongLoginRequired
+                parseLoginRequired -> ParseOutcome.LoginRequired
+                else -> ParseOutcome.Parsed(Unit)
+            }
         }
 
     private suspend fun awaitState(

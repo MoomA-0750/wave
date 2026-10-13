@@ -1275,6 +1275,7 @@ public sealed partial class PlayerService : ObservableObject
         {
             StreamFailure.NotLoggedIn => L.T("この曲を再生するにはログインが必要です", "Log in to play this song"),
             StreamFailure.Unplayable => L.T("この曲は再生できません", "This song isn't available"),
+            StreamFailure.SongLoginRequired => L.T("この曲はログインの確認（年齢の確認など）が要ります", "This song needs a sign-in check (such as age verification)"),
             StreamFailure.Network => L.T("通信できませんでした", "Couldn't connect"),
             _ => L.T($"再生の準備ができませんでした（{result.Failure}）", $"Couldn't prepare playback ({result.Failure})"),
         };

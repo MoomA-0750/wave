@@ -75,6 +75,9 @@ enum class FailureKind {
 
     /** 書き込み先のアカウント（DATASYNC_ID）を確かめられていない。書き込み・再生履歴・受け渡しをしない（ADR-0007）。 */
     AccountUnverified,
+
+    /** その曲だけがログインの確認を求めた（年齢確認など）。ログインが切れた疑いにはしない。 */
+    SongLoginRequired,
 }
 
 /** 書き込み先のアカウントの確認の結果。 */
@@ -163,6 +166,12 @@ sealed interface ParseOutcome<out T> {
 
     /** playabilityStatus が LOGIN_REQUIRED。 */
     data object LoginRequired : ParseOutcome<Nothing>
+
+    /**
+     * 曲の再生の情報（/player）が LOGIN_REQUIRED。年齢確認などで曲ごとに返るので、その曲だけの失敗にする。
+     * 本当にログインが外れていたときに気づけるよう、状態は変えずにアカウントのメニューで確かめる（外れていたら失効）。
+     */
+    data object SongLoginRequired : ParseOutcome<Nothing>
 
     data object Invalid : ParseOutcome<Nothing>
 }
@@ -603,6 +612,10 @@ class WaveSession internal constructor(
                     }
                     ParseOutcome.LoggedOutResponse -> suspect(generation, SuspectReason.EmptyResponse, status = null)
                     ParseOutcome.LoginRequired -> suspect(generation, SuspectReason.LoginRequired, status = null)
+                    ParseOutcome.SongLoginRequired -> {
+                        if (generation.credentials != null) startConfirm(generation)
+                        CallResult.Failed(FailureKind.SongLoginRequired)
+                    }
                     ParseOutcome.Invalid -> CallResult.Failed(FailureKind.Parse)
                 }
             is Outcome.Status ->

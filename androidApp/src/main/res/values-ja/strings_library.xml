@@ -101,6 +101,7 @@
     <string name="search_failure_http">サーバーから応答がありませんでした</string>
     <string name="search_failure_parse">応答を読み取れませんでした</string>
     <string name="search_failure_account_unverified">書き込み先のアカウントを確かめられませんでした（しばらくして直らなければ、ログインし直してください）</string>
+    <string name="search_failure_song_login_required">この曲はログインの確認（年齢の確認など）が要ります</string>
     <string name="search_title">検索</string>
     <string name="search_genres_failed">ジャンルを読み込めませんでした（%1$s）</string>
     <string name="search_retry">もう一度</string>

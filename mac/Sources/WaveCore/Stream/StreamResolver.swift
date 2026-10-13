@@ -13,6 +13,8 @@ public enum StreamFailure: Sendable, Equatable {
     case rejectedUrl
     /// ライブ配信だった（ライブの印の無い曲として渡された）。HLS（LiveClient）で流し直す。
     case liveStream
+    /// その曲だけがログインの確認を求めた（年齢確認など）。ログインが切れたとは扱わない。
+    case songLoginRequired
 }
 
 /// 解決済みのストリーム。署名付き URL を含むので、description・debugDescription・Mirror に出さない。
@@ -150,7 +152,8 @@ public final class StreamResolver: @unchecked Sendable {
         // ライブ配信は HLS で流す（LiveClient）。WEB_REMIX の応答では再生できない
         if LiveParsers.isLive(root) { return .failed(.liveStream) }
         let status = root.path("playabilityStatus", "status").str
-        if status == "LOGIN_REQUIRED" { return .failed(.notLoggedIn) }
+        // 年齢確認などで曲ごとに返る。その曲だけの失敗にする（Android と同じ）
+        if status == "LOGIN_REQUIRED" { return .failed(.songLoginRequired) }
         if status != "OK" { return .failed(.unplayable) }
         let streaming = root.path("streamingData")
         let formats = streaming.path("adaptiveFormats").items

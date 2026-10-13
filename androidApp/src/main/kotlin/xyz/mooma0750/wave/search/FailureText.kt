@@ -16,5 +16,6 @@ fun failureMessage(kind: FailureKind?): String =
         FailureKind.Http -> stringResource(R.string.search_failure_http)
         FailureKind.Parse -> stringResource(R.string.search_failure_parse)
         FailureKind.AccountUnverified -> stringResource(R.string.search_failure_account_unverified)
+        FailureKind.SongLoginRequired -> stringResource(R.string.search_failure_song_login_required)
         null -> ""
     }

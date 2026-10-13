@@ -236,11 +236,12 @@ class StreamResolverTest {
         }
 
     @Test
-    fun loginRequiredIsReportedAsSuspect(): Unit =
+    fun loginRequiredIsThisSongOnly(): Unit =
         runBlocking {
             ready()
+            // 年齢確認などで曲ごとに返る。ログインが切れた疑いにはしない
             playerJson = player("LOGIN_REQUIRED", emptyList())
-            assertEquals(ResolveResult.Failed(StreamFailure.Suspect), resolver.resolve("a"))
+            assertEquals(ResolveResult.Failed(StreamFailure.SongLoginRequired), resolver.resolve("a"))
         }
 
     @Test

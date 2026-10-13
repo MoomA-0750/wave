@@ -84,6 +84,9 @@ enum class StreamFailure {
 
     /** ライブ配信だった（ライブの印の無い曲として渡された）。HLS で流し直す。 */
     LiveStream,
+
+    /** その曲だけがログインの確認を求めた（年齢確認など）。ほかの曲は流せる。 */
+    SongLoginRequired,
 }
 
 sealed interface ResolveResult {
@@ -177,7 +180,8 @@ class StreamResolver internal constructor(
                 when {
                     // ライブ配信は HLS で流す（LiveClient）。WEB_REMIX の応答では再生できない
                     root is JsonObject && LiveParsers.isLive(root) -> ParseOutcome.Parsed(null)
-                    body.playabilityStatus.status == "LOGIN_REQUIRED" -> ParseOutcome.LoginRequired
+                    // 年齢確認などで曲ごとに返る。ログインが切れた疑いにはしない
+                    body.playabilityStatus.status == "LOGIN_REQUIRED" -> ParseOutcome.SongLoginRequired
                     else -> ParseOutcome.Parsed(body)
                 }
             }
@@ -373,6 +377,7 @@ class StreamResolver internal constructor(
                 FailureKind.Parse -> StreamFailure.Parse
                 // 読み取りでは起きない（書き込みだけが確認を要する）
                 FailureKind.AccountUnverified -> StreamFailure.NotLoggedIn
+                FailureKind.SongLoginRequired -> StreamFailure.SongLoginRequired
             }
     }
 }
