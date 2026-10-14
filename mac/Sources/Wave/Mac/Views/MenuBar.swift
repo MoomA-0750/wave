@@ -14,6 +14,8 @@ final class MenuBarController: NSObject {
     private static let maxArtist = 24
     /// 小窓とメニューバーのすきま。
     private static let gap: CGFloat = 6
+    /// 小窓の影を描くための、ガラスの外側の透明な余白（点）。
+    static let shadowMargin: CGFloat = 24
 
     private var item: NSStatusItem?
     private var panel: GlassPanel?
@@ -168,7 +170,8 @@ final class MenuBarController: NSObject {
         let panel = GlassPanel(contentRect: NSRect(x: 0, y: 0, width: 352, height: 600), styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: true)
         panel.isOpaque = false
         panel.backgroundColor = .clear
-        panel.hasShadow = true
+        // 窓の影は四角い窓の輪郭に沿うため、丸いガラスの外に細い黒い線が出る。影はガラスの形に合わせて中身で描く
+        panel.hasShadow = false
         panel.level = .popUpMenu
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         let root = MenuBarNowPlaying(close: { [weak self] in self?.close() }, resized: { [weak self] size in
@@ -184,9 +187,10 @@ final class MenuBarController: NSObject {
     /// メニューバーの曲名の真下に、画面からはみ出さないよう置く（中身の高さが変わっても上端は動かさない）。
     private func place(_ panel: NSPanel, size: NSSize, under anchor: NSRect) {
         let screen = (NSScreen.screens.first { $0.frame.intersects(anchor) } ?? NSScreen.main)?.visibleFrame ?? .zero
+        let margin = MenuBarController.shadowMargin
         var x = anchor.midX - size.width / 2
-        x = min(max(x, screen.minX + 8), screen.maxX - size.width - 8)
-        let top = anchor.minY - MenuBarController.gap
+        x = min(max(x, screen.minX + 8 - margin), screen.maxX - size.width - 8 + margin)
+        let top = anchor.minY - MenuBarController.gap + margin
         panel.setFrame(NSRect(x: x, y: top - size.height, width: size.width, height: size.height), display: true)
     }
 
@@ -344,6 +348,8 @@ struct MenuBarNowPlaying: View {
         .frame(width: 320)
         .fixedSize(horizontal: false, vertical: true)
         .modifier(GlassBackground())
+        .shadow(color: .black.opacity(0.22), radius: 14, y: 6)
+        .padding(MenuBarController.shadowMargin)
         .onGeometryChange(for: CGSize.self) { $0.size } action: { resized($0) }
         // 小窓の中のリンク（アルバム・アーティスト）で移ったら、主画面を前に出して小窓を閉じる
         .onChange(of: AppServices.nav.current) { _, _ in
