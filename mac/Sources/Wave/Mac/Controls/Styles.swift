@@ -17,8 +17,26 @@ struct PaneBackground: ViewModifier {
     }
 }
 
+/// 浮かせた板（主画面の下の再生の操作。Apple Music と同じく、ページの上に浮かせる）。
+struct FloatingBarBackground: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(macOS 26.0, *) {
+            content
+                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 26))
+                .shadow(color: .black.opacity(0.18), radius: 16, y: 6)
+        } else {
+            content
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 26))
+                .overlay(RoundedRectangle(cornerRadius: 26).strokeBorder(Color.primary.opacity(0.1)))
+                .shadow(color: .black.opacity(0.18), radius: 16, y: 6)
+        }
+    }
+}
+
 extension View {
     func pane() -> some View { modifier(PaneBackground()) }
+
+    func floatingBar() -> some View { modifier(FloatingBarBackground()) }
 
     /// 小さな灰色の文字。
     func subtle() -> some View { font(.caption).foregroundStyle(.secondary).lineLimit(1) }

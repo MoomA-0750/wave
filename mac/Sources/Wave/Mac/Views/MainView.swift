@@ -12,26 +12,30 @@ struct MainView: View {
 
     var body: some View {
         let player = AppServices.player!
-        VStack(spacing: 0) {
-            ZStack(alignment: .top) {
-                if model.fullScreen {
-                    FullView().ignoresSafeArea(edges: .top)
-                } else {
-                    HStack(spacing: 8) {
-                        LibraryPane().frame(width: model.libraryWidth).pane()
-                        ContentPane().pane()
-                        if model.showRight { RightPane().frame(width: 340).pane() }
-                    }
-                    .padding(.horizontal, 8)
-                    .padding(.top, 4)
-                }
-                SuggestionsOverlay(model: model)
-            }
+        Group {
             if model.fullScreen {
-                PlayerBar()
+                VStack(spacing: 0) {
+                    ZStack(alignment: .top) {
+                        FullView().ignoresSafeArea(edges: .top)
+                        SuggestionsOverlay(model: model)
+                    }
+                    PlayerBar()
+                }
             } else {
-                // 下の再生の帯も、上の枠と同じガラスの板にする
-                PlayerBar().pane().padding(8)
+                // Messages と同じく、両脇（ライブラリ・再生中の欄）は窓の地のすりガラスを透かし、真ん中のページだけ不透明な地にする
+                ZStack(alignment: .top) {
+                    HStack(spacing: 0) {
+                        LibraryPane().frame(width: model.libraryWidth).padding(.horizontal, 6)
+                        ContentPane()
+                            .background(Color(nsColor: .windowBackgroundColor).ignoresSafeArea())
+                        if model.showRight { RightPane().frame(width: 340).padding(.horizontal, 6) }
+                    }
+                    SuggestionsOverlay(model: model)
+                }
+                // 下の再生の操作は、Apple Music と同じく下の端に浮かせた板にする（ページはその下まで流れる）
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    PlayerBar().floatingBar().padding(.horizontal, 12).padding(.bottom, 12)
+                }
             }
         }
         .background(GeometryReader { geo in
