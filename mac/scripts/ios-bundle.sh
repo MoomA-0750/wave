@@ -21,9 +21,9 @@ sdk=$(xcrun --sdk $sdkname --show-sdk-path)
 # 組んだ SDK の版を書き込む（swift build は最低の版を書いてしまい、iOS 26 以降の見た目 Liquid Glass にならない）
 ver=$(xcrun --sdk $sdkname --show-sdk-version)
 args=(--triple $triple --sdk "$sdk" --scratch-path $scratch ${config[@]+"${config[@]}"} -Xlinker -platform_version -Xlinker $ldplatform -Xlinker 18.0 -Xlinker "$ver" "${flags[@]}")
-for product in wave WaveWidget; do
-    swift build --product $product "${args[@]}" 2>&1 | grep -E "error|warning: unre|Build" | tail -20
-done
+swift build --product wave "${args[@]}" 2>&1 | grep -E "error|warning: unre|Build" | tail -20
+# ウィジェットは Xcode と同じく入口を _NSExtensionMain にする（普通の main のままだと、実機で起動してすぐ落ち、ウィジェットの一覧に出ない）
+swift build --product WaveWidget "${args[@]}" -Xswiftc -application-extension -Xlinker -e -Xlinker _NSExtensionMain 2>&1 | grep -E "error|warning: unre|Build" | tail -20
 bin=$(swift build --product wave "${args[@]}" --show-bin-path)
 
 # App Intents の一覧を作る（$1 = 製品の名前、$2 = モジュール、$3 = 入れる先のバンドル、$4 = 実行ファイル）

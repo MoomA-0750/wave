@@ -213,3 +213,9 @@
 - iPhone 版にアイコンが無く、ホーム画面で空の型になっていた。Windows 版の `wave.ico` と同じ絵を白地に置き、`actool` で `Assets.car` にして入れる（ばらの PNG と `CFBundleIconFiles` だけでは今の iOS は読まなかった）。暗い表示用（透明な地）と色付き・クリア表示用（黒地に白）も入れた
 - 本人の iPhone はアイコンを「クリア」の表示にしていて、入れ直したあともホーム画面では絵の無いガラスの板に見えた。原因はまだ分からない
 - 同じ版の番号のまま入れ直すと iPhone がアイコンを前の版のまま使い続けたので、組むたびに版の番号（CFBundleVersion）を日時にする
+
+## 2026-10-14 iPhone のウィジェットが一覧に出なかった
+
+- 本人の iPhone（iOS 27.0.1）でウィジェットを追加しようとすると、wave が一覧に無かった。iPhone のクラッシュログを見ると、WaveWidget が入れ直し・起動のたびに `_EXExtension.bootstrap` の中で落ちていた
+- Xcode で組んだウィジェットと比べると、Xcode は実行ファイルの入口を `_NSExtensionMain` にし（`-e _NSExtensionMain`）、`-fapplication-extension` を付けていた。`swift build` の普通の `main` の入口のままだと、拡張機能として立ち上がれずに落ちる
+- ios-bundle.sh でウィジェットだけ同じ指定を付けて組むようにした。入れ直して wave を起動しても、ウィジェットのクラッシュログは増えなくなった
