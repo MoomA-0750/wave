@@ -49,7 +49,9 @@ struct PlayerBar: View {
                                     .foregroundStyle(player.isRemote ? Color.accentColor : Color.primary)
                                 // ほかの端末で鳴っているときは、アイコンの右にその端末名（Spotify と同じく色を付ける）
                                 if player.isRemote, let device = player.remoteDevice {
-                                    Text(device).font(.caption.weight(.semibold)).foregroundStyle(Color.accentColor).lineLimit(1).frame(maxWidth: 140)
+                                    // 名前の長さだけの幅にする（最大幅の枠のままだと短い名前も 140 点に広がり、真ん中に浮く）
+                                    Text(device).font(.caption.weight(.semibold)).foregroundStyle(Color.accentColor).lineLimit(1)
+                                        .frame(maxWidth: 140, alignment: .leading).fixedSize(horizontal: true, vertical: false)
                                 }
                             }
                         }
