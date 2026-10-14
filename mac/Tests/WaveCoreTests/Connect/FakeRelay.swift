@@ -442,7 +442,7 @@ final class SimDevice: ConnectClientEffects {
 
     func localCursor() -> ConnectClient.LocalCursor {
         ConnectClient.LocalCursor(
-            currentItemId: currentItemId, positionMs: positionMs, playing: playing, repeat: .off, listenedMs: 0, historySent: false, capturedAtMs: clock())
+            currentItemId: currentItemId, positionMs: positionMs, playing: playing, repeat: .off, listenedMs: 0, historySent: false, capturedAtMs: clock(), volumePercent: volumePercent)
     }
 
     func stoppedBy(_ other: SimDevice) -> Bool { events.contains(.stopped(by: other.deviceId)) }
@@ -477,6 +477,13 @@ final class SimDevice: ConnectClientEffects {
     var controls: [(action: ControlAction, positionMs: Int64?)] = []
     /// 従ったキューへの追加（項目の ID・次に再生か・どの曲の後ろか）。
     var queueAdds: [(ids: [String], next: Bool, after: String?)] = []
+    /// 偽のアプリの中の音量（0〜100）。
+    var volumePercent = 70
+
+    func volume(_ volumePercent: Int) -> Bool {
+        self.volumePercent = volumePercent
+        return true
+    }
 
     func queueAdd(_ items: [HandoffItem], next: Bool, afterItemId: String?) -> Bool {
         queueAdds.append((items.map(\.itemId), next, afterItemId))

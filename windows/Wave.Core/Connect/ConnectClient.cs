@@ -99,6 +99,9 @@ public sealed class ConnectClient
         /// </summary>
         bool QueueAdd(IReadOnlyList<HandoffItem> items, bool next, string? afterItemId) => false;
 
+        /// <summary>遠隔の音量に従う（この端末が鳴らしている）。アプリの中の音量を volumePercent（0〜100）にする。受け付けなければ false。</summary>
+        bool Volume(int volumePercent) => false;
+
         /// <summary>ほかの端末と合わせたライブラリが届いた（手元に取り込む、ADR-0013）。</summary>
         void LibraryChanged(LibraryBody body)
         {
@@ -110,7 +113,7 @@ public sealed class ConnectClient
 
     /// <summary>手元の再生の、カーソルに入れる値。</summary>
     /// <param name="CapturedAtMs">PositionMs を取った時刻（nowMs と同じ単調時計）。再生中なら、書くときに経過を足す。</param>
-    public sealed record LocalCursor(string CurrentItemId, long PositionMs, bool Playing, HandoffRepeat Repeat, long ListenedMs, bool HistorySent, long CapturedAtMs);
+    public sealed record LocalCursor(string CurrentItemId, long PositionMs, bool Playing, HandoffRepeat Repeat, long ListenedMs, bool HistorySent, long CapturedAtMs, int? VolumePercent = null);
 
     /// <summary>加入の Confirm で受け取った床（D-3）。6桁の照合で確かめた相手（inviter）から、認証された通信路で届いた値。</summary>
     public sealed record JoinInfo
@@ -1068,6 +1071,29 @@ public sealed class ConnectClient
         return send(new RelayV2.Control { Doc = SealCommand(current, command) });
     }
 
+    /// <summary>遠隔の音量を送る（鳴っていない端末から、今鳴らしている同じアカウントの端末へ。そのアプリの中の音量を 0〜100 にする）。</summary>
+    public bool SendVolume(int volumePercent)
+    {
+        if (IsWriter || pendingStoreId is not null) return false;
+        var current = chain;
+        if (current is null) return false;
+        var tag = effects.AccountTag();
+        if (tag is null) return false;
+        var cursor = latestCursor;
+        if (cursor is null || cursor.Writer == signer.DeviceId || cursor.Body.AccountTag != tag) return false;
+        var command = new CommandBody.Control
+        {
+            CommandId = newId(),
+            From = signer.DeviceId,
+            To = cursor.Writer,
+            Action = ControlAction.Volume,
+            BasedOnVersion = cursor.Version,
+            AccountTag = tag,
+            VolumePercent = Math.Clamp(volumePercent, 0, 100),
+        };
+        return send(new RelayV2.Control { Doc = SealCommand(current, command) });
+    }
+
     /// <summary>キューへの追加の命令1件の平文の上限（詰め物の1ブロック 4096 から長さの欄の 4 バイトを引き、余裕を持たせる。Android と同じ）。</summary>
     internal const int MaxQueueAddPlaintext = 3800;
 
@@ -1177,6 +1203,11 @@ public sealed class ConnectClient
         // 今のセッションより前の見え方に基づく命令には従わない
         if (mine.Arbiter.StartVersion is not { } sessionStart || command.BasedOnVersion < sessionStart) return;
         if (command.Action == ControlAction.Seek && command.PositionMs is null) return;
+        if (command.Action == ControlAction.Volume)
+        {
+            if (command.VolumePercent is { } percent && percent is >= 0 and <= 100) effects.Volume(percent);
+            return;
+        }
         // 送り手が見ていた曲から、もう次の曲に変わっていたら従わない（遅れて届いた「次へ」で2曲飛ばさない）
         // 比べるのは手元で今鳴っている曲（中継に書いた最新より先に進んでいることがある）
         if (command.OnItemId is not null && command.OnItemId != (local?.CurrentItemId ?? own.Body.CurrentItemId)) return;
@@ -1348,6 +1379,7 @@ public sealed class ConnectClient
             HistorySent = cursor.HistorySent,
             AccountTag = tag,
             StartedAtEpochMs = epochMs(),
+            VolumePercent = cursor.VolumePercent is { } v ? Math.Clamp(v, 0, 100) : null,
         };
     }
 

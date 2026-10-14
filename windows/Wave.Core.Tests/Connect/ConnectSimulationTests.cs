@@ -253,6 +253,35 @@ public class ConnectSimulationTests
     }
 
     [Fact]
+    public void VolumeIsSharedAndCanBeChangedFromAnotherDevice()
+    {
+        SetUp();
+        a.VolumePercent = 40;
+        a.StartPlaying(snapshot);
+        relay.Run();
+        Assert.Equal(40, b.Client.RemoteNowPosition()?.Cursor.VolumePercent);
+        Assert.True(b.Client.SendVolume(75));
+        relay.Run();
+        Assert.Equal(75, a.VolumePercent);
+        a.PushCursor();
+        relay.Run();
+        Assert.Equal(75, b.Client.RemoteNowPosition()?.Cursor.VolumePercent);
+        Assert.True(b.Client.SendVolume(150));
+        relay.Run();
+        Assert.Equal(100, a.VolumePercent);
+        Assert.False(a.Client.SendVolume(10));
+    }
+
+    [Fact]
+    public void VolumeJsonMatchesKotlin()
+    {
+        const string kotlin = """{"type":"control","commandId":"c1","from":"dev-b","to":"dev-a","action":"volume","positionMs":null,"basedOnVersion":7,"accountTag":"tag","onItemId":null,"volumePercent":35}""";
+        var control = Assert.IsType<CommandBody.Control>(ConnectJson.Decode<CommandBody>(kotlin));
+        Assert.Equal(ControlAction.Volume, control.Action);
+        Assert.Equal(35, control.VolumePercent);
+    }
+
+    [Fact]
     public void QueueAddJsonMatchesKotlin()
     {
         // Android 版（kotlinx.serialization）が書く形

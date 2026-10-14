@@ -132,6 +132,9 @@ public sealed record CursorBody
 
     /// <summary>表示だけ（順序の判断に使わない）。</summary>
     public required long StartedAtEpochMs { get; init; }
+
+    /// <summary>鳴らしている端末のアプリの中の音量（0〜100）。ほかの端末の音量の表示に使う。前の版の書き手は付けない（null）。</summary>
+    public int? VolumePercent { get; init; }
 }
 
 /// <summary>キュー（D-5）。Snapshot は HandoffCodec.Encode の文字列（取り込む側が HandoffCodec.Decode で検証する）。</summary>
@@ -182,6 +185,9 @@ public abstract record CommandBody
         /// 送り手が見ていた、受け手の今の曲（次へ・前へ・シーク）。受け手の今の曲と違えば従わない（Android と同じ）。前の版の送り手は付けない（null）。
         /// </summary>
         public string? OnItemId { get; init; }
+
+        /// <summary>音量（volume のときだけ、0〜100）。鳴らしている端末のアプリの中の音量にする（端末そのものの音量は変えない）。</summary>
+        public int? VolumePercent { get; init; }
     }
 
     /// <summary>
@@ -228,6 +234,9 @@ public enum ControlAction
 
     /// <summary>宛先の端末に「ここで再生（引き取り）」を頼む。宛先は書き手でない端末。</summary>
     [JsonStringEnumMemberName("transfer")] Transfer,
+
+    /// <summary>鳴らしている端末のアプリの中の音量を変える（VolumePercent）。</summary>
+    [JsonStringEnumMemberName("volume")] Volume,
 }
 
 public sealed record ProfileBody

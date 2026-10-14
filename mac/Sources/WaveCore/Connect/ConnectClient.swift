@@ -103,6 +103,9 @@ public protocol ConnectClientEffects: AnyObject {
     /// 遠隔操作に従う（この端末が鳴らしている）。受け付けなければ false。
     func control(_ action: ControlAction, positionMs: Int64?) -> Bool
 
+    /// 遠隔の音量に従う（この端末が鳴らしている）。アプリの中の音量を volumePercent（0〜100）にする。受け付けなければ false。
+    func volume(_ volumePercent: Int) -> Bool
+
     /// 遠隔のキューへの追加に従う（この端末が鳴らしている）。afterItemId の曲があればその直後、無ければ next なら今の曲の直後、
     /// そうでなければ自分で足した曲のかたまりの最後へ、items の ID のまま入れる。受け付けなければ false。
     func queueAdd(_ items: [HandoffItem], next: Bool, afterItemId: String?) -> Bool
@@ -115,6 +118,8 @@ public extension ConnectClientEffects {
     func control(_ action: ControlAction, positionMs: Int64?) -> Bool { false }
 
     func queueAdd(_ items: [HandoffItem], next: Bool, afterItemId: String?) -> Bool { false }
+
+    func volume(_ volumePercent: Int) -> Bool { false }
 
     /// ほかの端末と合わせたライブラリが届いた（手元に取り込む、ADR-0013）。
     func libraryChanged(_ body: LibraryBody) {}
@@ -157,10 +162,14 @@ public final class ConnectClient {
         public var listenedMs: Int64
         public var historySent: Bool
         public var capturedAtMs: Int64
+        /// アプリの中の音量（0〜100）。
+        public var volumePercent: Int?
 
         public init(
-            currentItemId: String, positionMs: Int64, playing: Bool, repeat: HandoffRepeat, listenedMs: Int64, historySent: Bool, capturedAtMs: Int64
+            currentItemId: String, positionMs: Int64, playing: Bool, repeat: HandoffRepeat, listenedMs: Int64, historySent: Bool, capturedAtMs: Int64,
+            volumePercent: Int? = nil
         ) {
+            self.volumePercent = volumePercent
             self.currentItemId = currentItemId
             self.positionMs = positionMs
             self.playing = playing
@@ -1075,6 +1084,20 @@ public final class ConnectClient {
         return send(.control(.init(doc: try sealCommand(current, command))))
     }
 
+    /// 遠隔の音量を送る（鳴っていない端末から、今鳴らしている同じアカウントの端末へ。そのアプリの中の音量を 0〜100 にする）。
+    @discardableResult
+    public func sendVolume(_ volumePercent: Int) throws -> Bool {
+        if isWriter || pendingStoreId != nil { return false }
+        guard let current = chain else { return false }
+        guard let tag = effects.accountTag() else { return false }
+        guard let cursor = latestCursor, cursor.writer != signer.deviceId, cursor.body.accountTag == tag else { return false }
+        let command = CommandBody.control(
+            .init(
+                commandId: newId(), from: signer.deviceId, to: cursor.writer, action: .volume, basedOnVersion: cursor.version, accountTag: tag,
+                volumePercent: min(max(volumePercent, 0), 100)))
+        return send(.control(.init(doc: try sealCommand(current, command))))
+    }
+
     /// キューへの追加の命令1件の平文の上限（詰め物の1ブロック 4096 から長さの欄の 4 バイトを引き、余裕を持たせる。Android 版と同じ）。
     static let maxQueueAddPlaintext = 3800
 
@@ -1169,6 +1192,10 @@ public final class ConnectClient {
         // 今のセッションより前の見え方に基づく命令には従わない
         guard let sessionStart = mine.arbiter.startVersion, command.basedOnVersion >= sessionStart else { return }
         if command.action == .seek && command.positionMs == nil { return }
+        if command.action == .volume {
+            if let percent = command.volumePercent, (0...100).contains(percent) { _ = effects.volume(percent) }
+            return
+        }
         // 送り手が見ていた曲から、もう次の曲に変わっていたら従わない（遅れて届いた「次へ」で2曲飛ばさない）
         // 比べるのは手元で今鳴っている曲（中継に書いた最新より先に進んでいることがある）
         if let onItem = command.onItemId, onItem != (local?.currentItemId ?? own.body.currentItemId) { return }
@@ -1324,7 +1351,8 @@ public final class ConnectClient {
             listenedMs: cursor.listenedMs,
             historySent: cursor.historySent,
             accountTag: tag,
-            startedAtEpochMs: epochMs())
+            startedAtEpochMs: epochMs(),
+            volumePercent: cursor.volumePercent.map { min(max($0, 0), 100) })
     }
 
     /// 再生中なら、位置を取ってからの経過を足す（書くのが遅れても位置を戻さない）。

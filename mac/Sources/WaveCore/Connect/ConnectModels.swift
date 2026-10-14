@@ -248,10 +248,15 @@ public struct CursorBody: Equatable, Sendable, ConnectCodable {
     /// 表示だけ（順序の判断に使わない）。
     public var startedAtEpochMs: Int64
 
+    /// 鳴らしている端末のアプリの中の音量（0〜100）。ほかの端末の音量の表示に使う。前の版の書き手は付けない（nil）。
+    public var volumePercent: Int?
+
     public init(
         queueRef: String, currentItemId: String, positionMs: Int64, playing: Bool, repeat: HandoffRepeat, sessionBase: Int64,
-        sessionStartVersion: Int64?, deviceSeq: Int64, listenedMs: Int64, historySent: Bool, accountTag: String, startedAtEpochMs: Int64
+        sessionStartVersion: Int64?, deviceSeq: Int64, listenedMs: Int64, historySent: Bool, accountTag: String, startedAtEpochMs: Int64,
+        volumePercent: Int? = nil
     ) {
+        self.volumePercent = volumePercent
         self.queueRef = queueRef
         self.currentItemId = currentItemId
         self.positionMs = positionMs
@@ -271,7 +276,7 @@ public struct CursorBody: Equatable, Sendable, ConnectCodable {
             "queueRef": .string(queueRef), "currentItemId": .string(currentItemId), "positionMs": JSON(positionMs), "playing": .bool(playing),
             "repeat": .string(`repeat`.rawValue), "sessionBase": JSON(sessionBase), "sessionStartVersion": JSON(sessionStartVersion),
             "deviceSeq": JSON(deviceSeq), "listenedMs": JSON(listenedMs), "historySent": .bool(historySent), "accountTag": .string(accountTag),
-            "startedAtEpochMs": JSON(startedAtEpochMs),
+            "startedAtEpochMs": JSON(startedAtEpochMs), "volumePercent": JSON(volumePercent.map(Int64.init)),
         ])
     }
 
@@ -281,7 +286,8 @@ public struct CursorBody: Equatable, Sendable, ConnectCodable {
             queueRef: try r.string("queueRef"), currentItemId: try r.string("currentItemId"), positionMs: try r.long("positionMs"),
             playing: try r.bool("playing"), repeat: try r.enumValue("repeat", HandoffRepeat.self), sessionBase: try r.long("sessionBase"),
             sessionStartVersion: try r.optLong("sessionStartVersion"), deviceSeq: try r.long("deviceSeq"), listenedMs: try r.long("listenedMs"),
-            historySent: try r.bool("historySent"), accountTag: try r.string("accountTag"), startedAtEpochMs: try r.long("startedAtEpochMs"))
+            historySent: try r.bool("historySent"), accountTag: try r.string("accountTag"), startedAtEpochMs: try r.long("startedAtEpochMs"),
+            volumePercent: try r.optLong("volumePercent").map { Int(clamping: $0) })
     }
 }
 
@@ -375,10 +381,14 @@ public enum CommandBody: Equatable, Sendable, ConnectCodable {
         /// 送り手が見ていた、受け手の今の曲（次へ・前へ・シーク）。受け手の今の曲と違えば従わない（Android と同じ）。前の版の送り手は付けない（nil）。
         public var onItemId: String?
 
+        /// 音量（volume のときだけ、0〜100）。鳴らしている端末のアプリの中の音量にする（端末そのものの音量は変えない）。
+        public var volumePercent: Int?
+
         public init(
             commandId: String, from: String, to: String, action: ControlAction, positionMs: Int64? = nil, basedOnVersion: Int64, accountTag: String,
-            onItemId: String? = nil
+            onItemId: String? = nil, volumePercent: Int? = nil
         ) {
+            self.volumePercent = volumePercent
             self.commandId = commandId
             self.from = from
             self.to = to
@@ -416,7 +426,7 @@ public enum CommandBody: Equatable, Sendable, ConnectCodable {
             return .obj([
                 "type": "control", "commandId": .string(c.commandId), "from": .string(c.from), "to": .string(c.to), "action": .string(c.action.rawValue),
                 "positionMs": JSON(c.positionMs), "basedOnVersion": JSON(c.basedOnVersion), "accountTag": .string(c.accountTag),
-                "onItemId": JSON(c.onItemId),
+                "onItemId": JSON(c.onItemId), "volumePercent": JSON(c.volumePercent.map(Int64.init)),
             ])
         case .queueAdd(let q):
             return .obj([
@@ -441,7 +451,8 @@ public enum CommandBody: Equatable, Sendable, ConnectCodable {
                 Control(
                     commandId: try r.string("commandId"), from: try r.string("from"), to: try r.string("to"),
                     action: try r.enumValue("action", ControlAction.self), positionMs: try r.optLong("positionMs"),
-                    basedOnVersion: try r.long("basedOnVersion"), accountTag: try r.string("accountTag"), onItemId: try r.optString("onItemId")))
+                    basedOnVersion: try r.long("basedOnVersion"), accountTag: try r.string("accountTag"), onItemId: try r.optString("onItemId"),
+                    volumePercent: try r.optLong("volumePercent").map { Int(clamping: $0) }))
         case "queue_add":
             return .queueAdd(
                 QueueAdd(
@@ -461,6 +472,9 @@ public enum ControlAction: String, Sendable {
 
     /// 宛先の端末に「ここで再生（引き取り）」を頼む。宛先は書き手でない端末。
     case transfer
+
+    /// 鳴らしている端末のアプリの中の音量を変える（volumePercent）。
+    case volume
 }
 
 public struct ProfileBody: Equatable, Sendable, ConnectCodable {

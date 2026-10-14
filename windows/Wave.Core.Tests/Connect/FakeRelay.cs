@@ -461,7 +461,7 @@ internal sealed class SimDevice : ConnectClient.IEffects
 
     public void PushCursor() => Client.SetLocalCursor(LocalCursor());
 
-    public ConnectClient.LocalCursor LocalCursor() => new(CurrentItemId, PositionMs, Playing, HandoffRepeat.Off, 0, false, clock());
+    public ConnectClient.LocalCursor LocalCursor() => new(CurrentItemId, PositionMs, Playing, HandoffRepeat.Off, 0, false, clock(), VolumePercent);
 
     public bool StoppedBy(SimDevice other) => Events.Any(e => e is ClientEvent.Stopped s && s.By == other.DeviceId);
 
@@ -498,6 +498,15 @@ internal sealed class SimDevice : ConnectClient.IEffects
 
     /// <summary>従ったキューへの追加（項目の ID・次に再生か・どの曲の後ろか）。</summary>
     public List<(List<string> Ids, bool Next, string? After)> QueueAdds { get; } = [];
+
+    /// <summary>偽のアプリの中の音量（0〜100）。</summary>
+    public int VolumePercent { get; set; } = 70;
+
+    bool ConnectClient.IEffects.Volume(int volumePercent)
+    {
+        VolumePercent = volumePercent;
+        return true;
+    }
 
     bool ConnectClient.IEffects.QueueAdd(IReadOnlyList<HandoffItem> items, bool next, string? afterItemId)
     {

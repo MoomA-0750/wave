@@ -251,6 +251,31 @@ final class ConnectSimulationTests: XCTestCase {
         XCTAssertTrue(a.queueAdds.allSatisfy(\.next))
     }
 
+    func testVolumeIsSharedAndCanBeChangedFromAnotherDevice() throws {
+        try setUpHousehold()
+        a.volumePercent = 40
+        try a.startPlaying(snapshot)
+        try relay.run()
+        XCTAssertEqual(40, b.client.remoteNowPosition()?.cursor.volumePercent)
+        XCTAssertTrue(try b.client.sendVolume(75))
+        try relay.run()
+        XCTAssertEqual(75, a.volumePercent)
+        try a.pushCursor()
+        try relay.run()
+        XCTAssertEqual(75, b.client.remoteNowPosition()?.cursor.volumePercent)
+        XCTAssertTrue(try b.client.sendVolume(150))
+        try relay.run()
+        XCTAssertEqual(100, a.volumePercent)
+        XCTAssertFalse(try a.client.sendVolume(10))
+    }
+
+    func testVolumeJSONMatchesKotlin() throws {
+        let kotlin = #"{"type":"control","commandId":"c1","from":"dev-b","to":"dev-a","action":"volume","positionMs":null,"basedOnVersion":7,"accountTag":"tag","onItemId":null,"volumePercent":35}"#
+        guard case .control(let control)? = ConnectJSON.decode(CommandBody.self, from: kotlin) else { return XCTFail("読めない") }
+        XCTAssertEqual(.volume, control.action)
+        XCTAssertEqual(35, control.volumePercent)
+    }
+
     func testQueueAddJSONMatchesKotlin() throws {
         // Android 版（kotlinx.serialization）が書く形
         let kotlin = #"{"type":"queue_add","commandId":"c1","from":"dev-b","to":"dev-a","items":[{"itemId":"i1","videoId":"v1","title":"曲","artists":[{"name":"人","browseId":"UC1"}],"album":null,"durationSeconds":200,"thumbnailUrl":null,"origin":"user"}],"next":true,"afterItemId":null,"basedOnVersion":7,"accountTag":"tag"}"#
