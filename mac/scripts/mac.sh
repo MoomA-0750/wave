@@ -13,6 +13,8 @@
 #   mac.sh ios-shot <ファイル> シミュレーターの画面を撮ってこの機械に持ってくる
 #   mac.sh ios-provision      Xcode に実機用の配布設定（wave・ウィジェット、1年）を作らせる
 #   mac.sh ios-device         実機向けに組み、配布設定で署名して、つないだ iPhone へ入れる
+#   mac.sh ios-dev-cmd <命令>... つないだ iPhone の wave に開発用の命令を送る
+#   mac.sh ios-dev-log [行数]   つないだ iPhone の wave のログの末尾
 #   mac.sh ios-ipa [ファイル]  iPhone の実機向けに、署名していない wave.ipa を組んで持ってくる（既定は build/wave.ipa）
 set -euo pipefail
 here=$(cd "$(dirname "$0")/../.." && pwd)
@@ -55,7 +57,12 @@ ios-device)
   ssh mac "cd $remote/mac && WAVE_DEBUG=1 $relay scripts/ios-bundle.sh device && rm -f build/ios-sign.log && open -a Terminal scripts/ios-sign.command"
   until ssh mac "grep -q '^exit=' ~/$remote/mac/build/ios-sign.log 2>/dev/null"; do sleep 2; done
   ssh mac "cat ~/$remote/mac/build/ios-sign.log" | tail -3
-  ssh mac "grep -q '^exit=0' ~/$remote/mac/build/ios-sign.log && xcrun devicectl device install app --device \$(xcrun devicectl list devices 2>/dev/null | grep 'available (paired)' | grep iPhone | grep -oE '[0-9A-F]{8}-[0-9A-F-]{27}' | head -1) ~/$remote/mac/build/ios-device/wave.app 2>&1 | tail -3" ;;
+  ssh mac "grep -q '^exit=0' ~/$remote/mac/build/ios-sign.log && xcrun devicectl device install app --device \$(xcrun devicectl list devices 2>/dev/null | grep -E 'available \(paired\)|connected' | grep iPhone | grep -oE '[0-9A-F]{8}-[0-9A-F-]{27}' | head -1) ~/$remote/mac/build/ios-device/wave.app 2>&1 | tail -3" ;;
+ios-dev-cmd)
+  # つないだ iPhone の wave に開発用の命令を送る（ios-device で入れた版だけ効く）
+  shift; printf "%s\n" "$@" | ssh mac "cat > /tmp/wave-debug-command.txt && xcrun devicectl device copy to --device \$(xcrun devicectl list devices 2>/dev/null | grep -E 'available \(paired\)|connected' | grep iPhone | grep -oE '[0-9A-F]{8}-[0-9A-F-]{27}' | head -1) --domain-type appDataContainer --domain-identifier xyz.mooma0750.wave --source /tmp/wave-debug-command.txt --destination 'Library/Application Support/wave/debug-command.txt' >/dev/null" ;;
+ios-dev-log)
+  ssh mac "xcrun devicectl device copy from --device \$(xcrun devicectl list devices 2>/dev/null | grep -E 'available \(paired\)|connected' | grep iPhone | grep -oE '[0-9A-F]{8}-[0-9A-F-]{27}' | head -1) --domain-type appDataContainer --domain-identifier xyz.mooma0750.wave --source 'Library/Application Support/wave/wave.log' --destination /tmp/wave-device.log >/dev/null && tail -n ${2:-80} /tmp/wave-device.log" ;;
 ios-provision)
   # Xcode に wave とウィジェットの配布設定（1年）を作らせる。GUI のセッションで動かす
   rsync -a --delete scripts/ios-provision/ mac:wave-provision/
