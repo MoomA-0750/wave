@@ -21,6 +21,9 @@ final class MenuBarController: NSObject {
     /// 音量を変えている間だけ、曲名の代わりに音量を出す。
     private var volumeShownUntil: Date?
     private var labelTimer: Timer?
+    /// 曲名の上の受け口。スクロールは見張りから回す（下の watchScroll）。
+    private var catcher: StatusGestureView?
+    private var scrollMonitors: [Any] = []
 
     func start() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -33,8 +36,33 @@ final class MenuBarController: NSObject {
             catcher.onSwipe = { forward in if forward { AppServices.player.next() } else { AppServices.player.previous() } }
             catcher.onVolume = { [weak self] delta in self?.changeVolume(delta) }
             button.addSubview(catcher)
+            self.catcher = catcher
         }
+        watchScroll()
         render()
+    }
+
+    /// メニューバーの項目の上のスクロール（2本指の払い・ホイール）は、項目の view まで届かない。
+    /// アプリ宛て（ローカル）とほかのアプリ宛て（グローバル。メニューバーの上は他の処理が受けることがある）を見張り、
+    /// カーソルが曲名の上にあるものだけを受け口へ回す。
+    private func watchScroll() {
+        if let local = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel, handler: { [weak self] event in
+            (self?.routeScroll(event, via: "local") ?? false) ? nil : event
+        }) { scrollMonitors.append(local) }
+        if let global = NSEvent.addGlobalMonitorForEvents(matching: .scrollWheel, handler: { [weak self] event in
+            _ = self?.routeScroll(event, via: "global")
+        }) { scrollMonitors.append(global) }
+    }
+
+    /// カーソルが曲名の上なら受け口へ回して true。
+    private func routeScroll(_ event: NSEvent, via: String) -> Bool {
+        guard let button = item?.button, let window = button.window, let catcher else { return false }
+        let frame = window.convertToScreen(button.convert(button.bounds, to: nil))
+        guard frame.contains(NSEvent.mouseLocation) else { return false }
+        // 1回の払いに1行（phase の無いものは届くたび）
+        if event.phase == .began || event.phase == [] && event.momentumPhase == [] { AppPaths.log("menubar scroll via=\(via)") }
+        catcher.scrollWheel(with: event)
+        return true
     }
 
     /// 曲が変わるたびに書き直す（Observation で見張る）。
