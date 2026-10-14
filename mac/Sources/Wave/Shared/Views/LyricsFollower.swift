@@ -11,17 +11,25 @@ struct LyricsFollower: View {
     var plainLines = 12
     /// 中で送るか（右の欄・全画面は送る。押せない）。
     var height: CGFloat?
+    /// 手でスクロールできるか（全画面）。時刻付きの歌詞は、手で動かしてしばらくは自動で送らない。
+    var scrollable = false
 
     var body: some View {
         switch lyrics {
         case .synced(let s):
-            SyncedLyrics(lines: s.lines, positionMs: positionMs, fontSize: fontSize)
+            SyncedLyrics(lines: s.lines, positionMs: positionMs, fontSize: fontSize, scrollable: scrollable)
         case .plain(let p):
-            VStack(alignment: .leading, spacing: 6) {
+            let text = VStack(alignment: .leading, spacing: 6) {
                 ForEach(Array(p.text.split(separator: "\n", omittingEmptySubsequences: false).prefix(plainLines).enumerated()), id: \.offset) { _, line in
                     Text(String(line)).font(.system(size: fontSize, weight: .semibold)).lineSpacing(fontSize * 0.375)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
+            }
+            if scrollable {
+                // 枠の高さに収め、はみ出した分はスクロールで読む（並べたままだと高さが窓を超えて、隣の並びを押し出す）
+                ScrollView(.vertical, showsIndicators: false) { text.padding(.bottom, 40) }
+            } else {
+                text
             }
         }
     }
@@ -31,6 +39,9 @@ private struct SyncedLyrics: View {
     var lines: [LyricLine]
     var positionMs: Int64
     var fontSize: CGFloat
+    var scrollable: Bool
+    /// 本人が手でスクロールした時刻（その後しばらくは自動で送らない）。
+    @State private var touchedAt = Date.distantPast
 
     var body: some View {
         let last = LyricsTiming.currentIndex(lines, positionMs: positionMs)
@@ -56,8 +67,13 @@ private struct SyncedLyrics: View {
                     Color.clear.frame(height: 400)
                 }
             }
-            .scrollDisabled(true)
+            .scrollDisabled(!scrollable)
+            .onScrollPhaseChange { _, phase in
+                if phase == .interacting || phase == .decelerating { touchedAt = Date() }
+            }
             .onChange(of: anchor, initial: true) { _, a in
+                // 手で動かしてから 5 秒は、読んでいるところを動かさない
+                guard Date().timeIntervalSince(touchedAt) > 5 else { return }
                 withAnimation(.easeInOut(duration: 0.5)) { proxy.scrollTo(a, anchor: .top) }
             }
             .onChange(of: lines.count) { _, _ in proxy.scrollTo(0, anchor: .top) }

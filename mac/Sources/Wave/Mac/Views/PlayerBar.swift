@@ -256,15 +256,16 @@ struct FullView: View {
                 }
                 .frame(width: left)
                 if case .found(let lyrics) = player.lyrics {
-                    LyricsFollower(lyrics: lyrics, positionMs: Int64(player.position * 1000), fontSize: 30, plainLines: 200)
+                    LyricsFollower(lyrics: lyrics, positionMs: Int64(player.position * 1000), fontSize: 30, plainLines: 200, scrollable: true)
                         .foregroundStyle(.white)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                         .clipped()
-                        .allowsHitTesting(false)
                 } else {
                     Spacer().frame(maxWidth: .infinity)
                 }
             }
+            // 中身が何でも枠の大きさに収める（はみ出すと、下揃えの左の曲が窓の外へ押し出される）
+            .frame(width: outer.size.width, height: outer.size.height)
             }
             .padding(EdgeInsets(top: 56, leading: 56, bottom: 32, trailing: 56))
             Button { model.setFullScreen(false) } label: { Image(systemName: "arrow.down.right.and.arrow.up.left").font(.system(size: 15)) }
