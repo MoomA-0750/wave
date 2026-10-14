@@ -114,6 +114,14 @@ final class ConnectService {
             }
             return true
         }
+        player.sendRemoteVolume = { percent in
+            guard worker.loaded.current, worker.relay.status == .connected else { return false }
+            worker.post {
+                let sent = try worker.client?.sendVolume(percent)
+                AppPaths.log("connect-v2 volume percent=\(percent) sent=\(sent.map { String($0) } ?? "")")
+            }
+            return true
+        }
         player.sendRemoteQueueAdd = { songs, next in
             guard worker.loaded.current, worker.relay.status == .connected else { return false }
             let items = songs.map { ConnectQueue.itemOf($0, QueueItemMeta(itemId: UUID().uuidString.lowercased(), origin: .userAdded)) }
@@ -926,7 +934,7 @@ final class ConnectWorker: ConnectClientEffects, @unchecked Sendable {
         return RemoteSnapshot(
             deviceId: remote.deviceId, deviceLabel: remote.deviceLabel, queueKey: mirroredKey, queue: export, currentItemId: now.cursor.currentItemId,
             positionMs: now.positionMs, capturedAtMs: 0, playing: now.cursor.playing, repeatMode: ConnectQueue.repeatOf(now.cursor.repeat),
-            durationSeconds: current.song.durationSeconds, version: now.version)
+            durationSeconds: current.song.durationSeconds, version: now.version, volumePercent: now.cursor.volumePercent)
     }
 
     private func notify(_ text: String) {
@@ -971,6 +979,11 @@ final class ConnectWorker: ConnectClientEffects, @unchecked Sendable {
             return true
         }
         return onUi { [player] in player.applyControl(action, positionMs: positionMs) }
+    }
+
+    func volume(_ volumePercent: Int) -> Bool {
+        AppPaths.log("connect-v2 volume received percent=\(volumePercent)")
+        return onUi { [player] in player.applyVolume(volumePercent) }
     }
 
     func queueAdd(_ items: [HandoffItem], next: Bool, afterItemId: String?) -> Bool {
@@ -1207,7 +1220,7 @@ final class ConnectWorker: ConnectClientEffects, @unchecked Sendable {
     func toLocal(_ c: PlaybackCursor) -> ConnectClient.LocalCursor {
         ConnectClient.LocalCursor(
             currentItemId: c.currentItemId, positionMs: c.positionMs, playing: c.playing, repeat: ConnectQueue.repeatOf(c.repeatMode), listenedMs: c.listenedMs,
-            historySent: c.historySent, capturedAtMs: clockMs)
+            historySent: c.historySent, capturedAtMs: clockMs, volumePercent: c.volumePercent)
     }
 
     // MARK: 家の作成・記録の削除・鎖の追記

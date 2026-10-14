@@ -36,6 +36,8 @@ struct PlaybackCursor {
     var repeatMode: RepeatMode
     var listenedMs: Int64
     var historySent: Bool
+    /// アプリの中の音量（0〜100）。
+    var volumePercent: Int
 }
 
 /// ほかの端末の再生（表示と遠隔操作のため）。queueKey はキューの中身の目印（同じなら置き直さない）。
@@ -51,6 +53,8 @@ struct RemoteSnapshot {
     var repeatMode: RepeatMode
     var durationSeconds: Int?
     var version: Int64 = 0
+    /// その端末のアプリの中の音量（0〜100）。前の版の端末は付けない（nil）。
+    var volumePercent: Int?
 
     /// 今の位置（再生中なら、取ってからの経過を足す。曲の長さで止める）。
     func positionNow(_ nowMs: Int64) -> Double {
@@ -118,13 +122,30 @@ final class PlayerService {
     var duration = 0.0
     var shuffle = false
     var repeatMode: RepeatMode = .off
+    /// 音量のつまみ。ほかの端末を映している間はその端末の音量を映し、動かすとその端末へ送る（Spotify と同じ）。
+    /// 手元の音量（localVolume）は変えない。端末そのものの音量はどちらの端末でも変えない。
     var volume: Double = 0.7 {
         didSet {
+            if isRemote {
+                if !applyingRemoteVolume { sendVolumeToRemote() }
+                return
+            }
+            localVolume = volume
             engine.volume = volume
             AppServices.settings.volume = volume
             AppServices.settings.save()
+            // 鳴らしている端末の音量は、ほかの端末のつまみに映す
+            cursorChanged.forEach { $0(false) }
         }
     }
+    /// この端末で鳴らすときの音量（設定に残すもの）。
+    @ObservationIgnored private var localVolume = 0.7
+    @ObservationIgnored private var applyingRemoteVolume = false
+    /// 本人が映している端末の音量を動かした直後は、相手の古い値でつまみを戻さない。
+    @ObservationIgnored private var remoteVolumeHoldUntilMs: Int64 = 0
+    @ObservationIgnored private var remoteVolumeWork: DispatchWorkItem?
+    /// ほかの端末の音量（0〜100）を変えてもらう（端末の連携が置く）。送れなければ false。
+    @ObservationIgnored var sendRemoteVolume: ((Int) -> Bool)?
     var like: LikeStatus?
     /// 今の曲がどれかのプレイリストに入っている（先読みで分かったとき。Spotify と同じく評価のボタンに✓を付ける）。
     var inPlaylist = false
@@ -833,7 +854,8 @@ final class PlayerService {
         guard !isRemote, current != nil, index >= 0, index < itemMeta.count else { return nil }
         let positionMs = engine.hasSource ? Int64(engine.positionSeconds * 1000) : 0
         return PlaybackCursor(currentItemId: itemMeta[index].itemId, positionMs: max(0, positionMs), playing: isPlaying || isLoading,
-                              repeatMode: repeatMode, listenedMs: listenedNow(), historySent: statsSent)
+                              repeatMode: repeatMode, listenedMs: listenedNow(), historySent: statsSent,
+                              volumePercent: Int((localVolume * 100).rounded()))
     }
 
     private func listenedNow() -> Int64 { listenedMs + (playingSinceMs.map { clockMs - $0 } ?? 0) }
@@ -1026,6 +1048,12 @@ final class PlayerService {
         isPlaying = next.playing
         // 相手のリピートを映すだけ（この端末の設定には書かない）
         repeatMode = next.repeatMode
+        // 相手の音量をつまみに映す（本人が動かした直後は、届いた古い値で戻さない）
+        if let percent = next.volumePercent, clockMs >= remoteVolumeHoldUntilMs {
+            applyingRemoteVolume = true
+            volume = Double(percent) / 100
+            applyingRemoteVolume = false
+        }
         position = next.positionNow(clockMs)
         updateNowPlayingInfo()
     }
@@ -1043,6 +1071,10 @@ final class PlayerService {
         isPlaying = false
         position = 0
         repeatMode = RepeatMode(rawValue: AppServices.settings.repeatMode) ?? .off
+        // つまみを手元の音量に戻す
+        remoteVolumeWork?.cancel()
+        remoteVolumeHoldUntilMs = 0
+        volume = localVolume
         let backup = localBackup
         localBackup = nil
         guard restoreLocal else { return }
@@ -1071,6 +1103,26 @@ final class PlayerService {
     }
 
     // MARK: ほかの端末からの命令に従う（この端末が鳴らしている）
+
+    /// ほかの端末から音量を変えられた（この端末が鳴らしている）。アプリの中の音量だけを変える。
+    func applyVolume(_ percent: Int) -> Bool {
+        if isRemote { return false }
+        volume = Double(min(max(percent, 0), 100)) / 100
+        return true
+    }
+
+    /// 映している端末の音量を、つまみの値にしてもらう（動かしている間は 150ms に1回まで）。
+    private func sendVolumeToRemote() {
+        remoteVolumeHoldUntilMs = clockMs + 2_000
+        remoteVolumeWork?.cancel()
+        let percent = Int((volume * 100).rounded())
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            if self.sendRemoteVolume?(percent) != true { self.message = L.t("ほかの端末に送れませんでした", "Couldn’t reach the other device") }
+        }
+        remoteVolumeWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: work)
+    }
 
     func applyControl(_ action: ControlAction, positionMs: Int64?) -> Bool {
         if isRemote || current == nil { return false }

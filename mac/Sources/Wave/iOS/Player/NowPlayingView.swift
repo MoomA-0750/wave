@@ -31,6 +31,9 @@ struct NowPlayingView: View {
                 titleRow(player, song)
                 seekBar(player)
                 controls(player)
+                // ほかの端末で鳴っている間は、その端末の音量。この iPhone で鳴らしていて、アプリの中の音量が下がっている
+                // （ほかの端末から下げられた等）ときは、この iPhone のアプリの中の音量（ふだんは音量ボタンだけで変える）
+                if player.isRemote || player.volume < 0.995 { remoteVolume(player) }
                 deviceAndQueue(player)
                 lyricsCard(player)
             }
@@ -162,6 +165,21 @@ struct NowPlayingView: View {
         .font(.title3)
         .buttonStyle(.plain)
         .foregroundStyle(.primary)
+    }
+
+    /// アプリの中の音量のゲージ。ほかの端末で鳴っている間はその端末のもの（iPhone の音量ボタンは横取りできないので、画面で変える）。
+    /// アプリの中の音量だけを変える。この iPhone・その端末そのものの音量は変えない。
+    private func remoteVolume(_ player: PlayerService) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "speaker.fill").font(.caption)
+            Slider(value: Binding(get: { player.volume }, set: { player.volume = $0 }), in: 0...1)
+                .tint(.white)
+                .accessibilityLabel(player.isRemote ? L.t("\(player.remoteDevice ?? "ほかの端末") の音量", "Volume on \(player.remoteDevice ?? "the other device")")
+                    : L.t("wave の音量", "wave volume"))
+            Image(systemName: "speaker.wave.3.fill").font(.caption)
+        }
+        .foregroundStyle(.secondary)
+        .frame(minHeight: 44)
     }
 
     private func deviceAndQueue(_ player: PlayerService) -> some View {
