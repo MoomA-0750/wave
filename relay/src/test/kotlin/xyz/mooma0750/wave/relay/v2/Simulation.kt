@@ -186,6 +186,9 @@ class SimDevice(
             anchorAt = clock()
         }
     var queue: String? = null
+
+    /** 偽のアプリの中の音量（0〜100）。 */
+    var volumePercent = 70
     private var positionAnchor = 0L
     private var anchorAt = 0L
 
@@ -265,6 +268,11 @@ class SimDevice(
                         library = body
                     }
 
+                    override fun volume(volumePercent: Int): Boolean {
+                        this@SimDevice.volumePercent = volumePercent
+                        return true
+                    }
+
                     override fun queueAdd(
                         items: List<xyz.mooma0750.wave.handoff.HandoffItem>,
                         next: Boolean,
@@ -320,7 +328,7 @@ class SimDevice(
         client.setLocalCursor(localCursor())
     }
 
-    fun localCursor() = ConnectClient.LocalCursor(currentItemId, positionMs, playing, HandoffRepeat.Off, 0, false, clock())
+    fun localCursor() = ConnectClient.LocalCursor(currentItemId, positionMs, playing, HandoffRepeat.Off, 0, false, clock(), volumePercent)
 
     fun stoppedBy(other: SimDevice) = events.any { it is ClientEvent.Stopped && it.by == other.deviceId }
 }

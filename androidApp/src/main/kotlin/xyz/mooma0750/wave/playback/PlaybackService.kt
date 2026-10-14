@@ -509,6 +509,7 @@ class PlaybackService : MediaLibraryService() {
                             xyz.mooma0750.wave.handoff.v2.ControlAction.Previous -> player.seekToPrevious()
                             xyz.mooma0750.wave.handoff.v2.ControlAction.Seek -> player.seekTo((positionMs ?: 0).coerceAtLeast(0))
                             xyz.mooma0750.wave.handoff.v2.ControlAction.Transfer -> return@suppressingV2 false
+                            xyz.mooma0750.wave.handoff.v2.ControlAction.Volume -> return@suppressingV2 false
                         }
                         true
                     }

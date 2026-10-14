@@ -115,6 +115,9 @@ class ConnectClient(
             positionMs: Long?,
         ): Boolean = false
 
+        /** 遠隔の音量に従う（この端末が鳴らしている）。アプリの中の音量を volumePercent（0〜100）にする。受け付けなければ false。 */
+        fun volume(volumePercent: Int): Boolean = false
+
         /**
          * 遠隔のキューへの追加に従う（この端末が鳴らしている）。afterItemId の曲が手元のキューにあればその直後、
          * 無ければ next なら今の曲の直後、そうでなければ自分で足した曲のかたまりの最後へ、items の ID のまま入れる。受け付けなければ false。
@@ -146,6 +149,8 @@ class ConnectClient(
         val historySent: Boolean,
         /** positionMs を取った時刻（nowMs と同じ単調時計）。再生中なら、書くときに経過を足す。 */
         val capturedAtMs: Long,
+        /** アプリの中の音量（0〜100）。 */
+        val volumePercent: Int? = null,
     )
 
     /** 加入の Confirm で受け取った床（D-3）。6桁の照合で確かめた相手（inviter）から、認証された通信路で届いた値。 */
@@ -919,6 +924,20 @@ class ConnectClient(
     }
 
     /**
+     * 遠隔の音量を送る（鳴っていない端末から、今鳴らしている同じアカウントの端末へ。そのアプリの中の音量を 0〜100 にする）。
+     * @return 送ったか
+     */
+    fun sendVolume(volumePercent: Int): Boolean {
+        if (isWriter || pendingStoreId != null) return false
+        val current = chain ?: return false
+        val tag = effects.accountTag() ?: return false
+        val cursor = latestCursor ?: return false
+        if (cursor.writer == signer.deviceId || cursor.body.accountTag != tag) return false
+        val command = CommandBody.Control(newId(), signer.deviceId, cursor.writer, ControlAction.Volume, null, cursor.version, tag, volumePercent = volumePercent.coerceIn(0, 100))
+        return send(RelayV2.Control(sealCommand(current, command)))
+    }
+
+    /**
      * 遠隔のキューへの追加を送る（鳴っていない端末から、今鳴らしている同じアカウントの端末へ）。
      * 1件の平文が詰め物の1ブロックに収まるよう分けて送り、2件目からは前の件の最後の曲の後ろに入れてもらう。
      * @return 全部送ったか（家の再生が自分・別のアカウント・最新の状態をまだ見ていない・1曲でも収まらないなら false）
@@ -1063,6 +1082,11 @@ class ConnectClient(
         val sessionStart = mine.arbiter.startVersion ?: return
         if (command.basedOnVersion < sessionStart) return
         if (command.action == ControlAction.Seek && command.positionMs == null) return
+        if (command.action == ControlAction.Volume) {
+            val percent = command.volumePercent ?: return
+            if (percent in 0..100) effects.volume(percent)
+            return
+        }
         // 送り手が見ていた曲から、もう次の曲に変わっていたら従わない（遅れて届いた「次へ」で2曲飛ばさない）
         // 比べるのは手元で今鳴っている曲（中継に書いた最新より先に進んでいることがある）
         if (command.onItemId != null && command.onItemId != (local?.currentItemId ?: own.body.currentItemId)) return
@@ -1200,6 +1224,7 @@ class ConnectClient(
             historySent = cursor.historySent,
             accountTag = tag,
             startedAtEpochMs = epochMs(),
+            volumePercent = cursor.volumePercent?.coerceIn(0, 100),
         )
     }
 

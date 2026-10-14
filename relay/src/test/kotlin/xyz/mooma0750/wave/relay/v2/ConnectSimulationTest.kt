@@ -932,6 +932,28 @@ class ConnectSimulationTest {
     }
 
     @Test
+    fun volumeIsSharedAndCanBeChangedFromAnotherDevice() {
+        setUp()
+        a.volumePercent = 40
+        a.startPlaying("queue-A")
+        relay.run()
+        // 鳴らしている A の音量が、カーソルで B に見える
+        assertEquals(40, b.client.remoteNow()?.cursor?.volumePercent)
+        // B から音量を変える: A のアプリの中の音量が変わり、A が書き直したカーソルで B にも見える
+        assertTrue(b.client.sendVolume(75))
+        relay.run()
+        assertEquals(75, a.volumePercent)
+        a.pushCursor()
+        relay.run()
+        assertEquals(75, b.client.remoteNow()?.cursor?.volumePercent)
+        // 範囲の外は丸めて送る。鳴らしている A 自身は送らない
+        assertTrue(b.client.sendVolume(150))
+        relay.run()
+        assertEquals(100, a.volumePercent)
+        assertFalse(a.client.sendVolume(10))
+    }
+
+    @Test
     fun deviceNamesReachTheWholeHousehold() {
         setUp()
         assertTrue(b.client.sendProfile("Bee"))

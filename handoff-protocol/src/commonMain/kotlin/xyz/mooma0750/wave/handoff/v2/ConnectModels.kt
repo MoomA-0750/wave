@@ -139,6 +139,8 @@ data class CursorBody(
     val accountTag: String,
     /** 表示だけ（順序の判断に使わない）。 */
     val startedAtEpochMs: Long,
+    /** 鳴らしている端末のアプリの中の音量（0〜100）。ほかの端末の音量の表示に使う。前の版の書き手は付けない（null）。 */
+    val volumePercent: Int? = null,
 )
 
 /** キュー（D-5）。snapshot は HandoffCodec.encode の文字列（取り込む側が HandoffCodec.decode で検証する）。 */
@@ -182,6 +184,8 @@ sealed interface CommandBody {
          * （曲の終わりぎわに押した「次へ」が、曲が変わった後に届いて次の曲まで飛ばすのを防ぐ）。前の版の送り手は付けない（null）。
          */
         val onItemId: String? = null,
+        /** 音量（volume のときだけ、0〜100）。鳴らしている端末のアプリの中の音量にする（端末そのものの音量は変えない）。 */
+        val volumePercent: Int? = null,
     ) : CommandBody
 
     /**
@@ -236,6 +240,10 @@ enum class ControlAction {
     /** 宛先の端末に「ここで再生（引き取り）」を頼む。宛先は書き手でない端末。 */
     @SerialName("transfer")
     Transfer,
+
+    /** 鳴らしている端末のアプリの中の音量を変える（volumePercent）。 */
+    @SerialName("volume")
+    Volume,
 }
 
 @Serializable
