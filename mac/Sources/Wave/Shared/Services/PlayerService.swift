@@ -168,6 +168,8 @@ final class PlayerService {
     @ObservationIgnored var playOnRemote: ((String) -> Bool)?
     /// ほかの端末への命令を送る（端末の連携が置く）。送れたら true。
     @ObservationIgnored var sendRemoteControl: ((ControlAction, Int64?) -> Bool)?
+    /// ほかの端末で鳴っている間の「次に再生」（true）・「キューに追加」（false）を、その端末のキューへ送る。送れなければ false。
+    @ObservationIgnored var sendRemoteQueueAdd: (([Song], Bool) -> Bool)?
 
     @ObservationIgnored private var remote: RemoteSnapshot?
     @ObservationIgnored private var remoteQueueKey: String?
@@ -482,6 +484,10 @@ final class PlayerService {
     }
 
     func playNext(_ song: Song) {
+        if isRemote {
+            queueOnRemote([song], next: true)
+            return
+        }
         if queue.isEmpty {
             playSong(song)
             return
@@ -494,6 +500,10 @@ final class PlayerService {
     /// キューが空なら、その一覧を再生する。
     func queueAll(_ songs: [Song], next: Bool) {
         guard !songs.isEmpty else { return }
+        if isRemote {
+            queueOnRemote(songs, next: next)
+            return
+        }
         if queue.isEmpty {
             playList(songs)
             return
@@ -504,12 +514,51 @@ final class PlayerService {
     }
 
     func addToQueue(_ song: Song) {
+        if isRemote {
+            queueOnRemote([song], next: false)
+            return
+        }
         if queue.isEmpty {
             playSong(song)
             return
         }
         insertUserItems([song])
         message = L.t("「\(song.title)」をキューに追加しました", "Added \(song.title) to queue")
+    }
+
+    /// ほかの端末で鳴っている間の追加は、鳴らしている端末のキューへ送る（手元のキューに入れても、その端末は使わない）。
+    /// 映しているキューは、その端末が書き直したものが届いたときに変わる。
+    private func queueOnRemote(_ songs: [Song], next: Bool) {
+        guard sendRemoteQueueAdd?(songs, next) == true else {
+            message = L.t("ほかの端末に送れませんでした", "Couldn’t reach the other device")
+            return
+        }
+        let device = remoteDevice ?? L.t("ほかの端末", "the other device")
+        if songs.count == 1, let song = songs.first {
+            message = next ? L.t("「\(song.title)」を \(device) で次に再生します", "\(song.title) will play next on \(device)")
+                : L.t("「\(song.title)」を \(device) のキューに追加しました", "Added \(song.title) to the queue on \(device)")
+        } else {
+            message = next ? L.t("\(songs.count) 曲を \(device) で次に再生します", "\(L.songs(songs.count)) will play next on \(device)")
+                : L.t("\(songs.count) 曲を \(device) のキューに追加しました", "Added \(L.songs(songs.count)) to the queue on \(device)")
+        }
+    }
+
+    /// ほかの端末で足した曲を、送り手が振った項目の ID のまま入れる（この端末が鳴らしている。Android の QueueSession.addFromRemote と同じ）。
+    /// afterItemId の曲があればその直後（分けて届いた続き）、無ければ next なら今の曲の直後、そうでなければ自分で足した曲のかたまりの最後へ。
+    func applyQueueAdd(_ entries: [(song: Song, meta: QueueItemMeta)], next: Bool, afterItemId: String?) -> Bool {
+        if isRemote || queue.isEmpty || entries.isEmpty { return false }
+        let existing = Set(itemMeta.map(\.itemId))
+        if entries.contains(where: { existing.contains($0.meta.itemId) }) { return false }
+        let at: Int
+        if let afterItemId, let found = itemMeta.firstIndex(where: { $0.itemId == afterItemId }) {
+            at = found + 1
+        } else {
+            at = next ? index + 1 : userQueueEnd
+        }
+        queue.insert(contentsOf: entries.map(\.song), at: at)
+        itemMeta.insert(contentsOf: entries.map { QueueItemMeta(itemId: $0.meta.itemId, origin: .userAdded) }, at: at)
+        queueChanged.forEach { $0() }
+        return true
     }
 
     /// 「キューに追加」（Spotify・Android と同じ）。今の曲の直後に続く、自分で足した曲のかたまりの最後に入れる。

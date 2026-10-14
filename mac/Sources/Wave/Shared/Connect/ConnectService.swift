@@ -114,6 +114,15 @@ final class ConnectService {
             }
             return true
         }
+        player.sendRemoteQueueAdd = { songs, next in
+            guard worker.loaded.current, worker.relay.status == .connected else { return false }
+            let items = songs.map { ConnectQueue.itemOf($0, QueueItemMeta(itemId: UUID().uuidString.lowercased(), origin: .userAdded)) }
+            worker.post {
+                let sent = try worker.client?.sendQueueAdd(items, next: next)
+                AppPaths.log("connect-v2 queue add items=\(items.count) next=\(next) sent=\(sent.map { String($0) } ?? "")")
+            }
+            return true
+        }
         // 接続に関係なく回す（transfer の期限・アカウントタグの計算）
         worker.startTicking()
         // Mac は画面がある間ずっと中継につなぐ（家に入っていなければ、中継は認証で断る）
@@ -964,6 +973,13 @@ final class ConnectWorker: ConnectClientEffects, @unchecked Sendable {
         return onUi { [player] in player.applyControl(action, positionMs: positionMs) }
     }
 
+    func queueAdd(_ items: [HandoffItem], next: Bool, afterItemId: String?) -> Bool {
+        let entries = items.map(ConnectQueue.entryOf)
+        let added = onUi { [player] in player.applyQueueAdd(entries, next: next, afterItemId: afterItemId) }
+        AppPaths.log("connect-v2 queue add received items=\(items.count) next=\(next) added=\(added)")
+        return added
+    }
+
     /// 手元のライブラリを中継と合わせる（作業の列で呼ぶ）。
     func publishLibrary(_ body: LibraryBody) throws {
         library = body
@@ -1288,6 +1304,18 @@ enum ConnectQueue {
             itemId: meta.itemId, videoId: song.videoId, title: truncated(song.title, 500),
             artists: song.artists.filter { $0.name.utf16.count > 0 && $0.name.utf16.count <= 500 }.prefix(20).map { HandoffRef(name: $0.name, browseId: validBrowseId($0.browseId)) },
             album: album, durationSeconds: song.durationSeconds.flatMap { $0 >= 0 && $0 <= 24 * 3600 ? $0 : nil }, thumbnailUrl: song.thumbnailUrl, origin: origin)
+    }
+
+    /// 受け渡しの項目を、キューの曲と項目の情報へ（toExport と同じ変換）。
+    static func entryOf(_ i: HandoffItem) -> (song: Song, meta: QueueItemMeta) {
+        let song = Song(videoId: i.videoId, title: i.title, artists: i.artists.map { ArtistRef(name: $0.name, browseId: $0.browseId) },
+                        album: i.album.map { AlbumRef(title: $0.name, browseId: $0.browseId) }, durationSeconds: i.durationSeconds, thumbnailUrl: i.thumbnailUrl)
+        let origin: QueueOrigin = switch i.origin {
+        case .suggestion: .suggestion
+        case .userAdded: .userAdded
+        case .source: .source
+        }
+        return (song, QueueItemMeta(itemId: i.itemId, origin: origin))
     }
 
     static func decodeQueue(_ text: String) -> HandoffSnapshot? {

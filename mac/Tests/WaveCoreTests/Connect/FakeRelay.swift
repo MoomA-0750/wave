@@ -475,6 +475,13 @@ final class SimDevice: ConnectClientEffects {
 
     /// 従った遠隔操作。
     var controls: [(action: ControlAction, positionMs: Int64?)] = []
+    /// 従ったキューへの追加（項目の ID・次に再生か・どの曲の後ろか）。
+    var queueAdds: [(ids: [String], next: Bool, after: String?)] = []
+
+    func queueAdd(_ items: [HandoffItem], next: Bool, afterItemId: String?) -> Bool {
+        queueAdds.append((items.map(\.itemId), next, afterItemId))
+        return true
+    }
 
     func control(_ action: ControlAction, positionMs: Int64?) -> Bool {
         controls.append((action, positionMs))

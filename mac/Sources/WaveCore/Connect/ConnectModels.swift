@@ -307,7 +307,37 @@ public struct QueueBody: Equatable, Sendable, ConnectCodable {
 public enum CommandBody: Equatable, Sendable, ConnectCodable {
     case yield(Yield)
     case control(Control)
+    case queueAdd(QueueAdd)
     case profile(Profile)
+
+    /// 遠隔のキューへの追加: 鳴っていない端末から、今の再生中の端末へ「この曲をキューに入れて」（Android 版の CommandBody.QueueAdd と同じ）。
+    /// 従う条件は Control と同じ。受け手は afterItemId の曲があればその直後へ、無ければ next なら今の曲の直後、
+    /// そうでなければ自分で足した曲のかたまりの最後へ、送り手が振った項目の ID のまま入れる。
+    public struct QueueAdd: Equatable, Sendable {
+        public var commandId: String
+        public var from: String
+        public var to: String
+        public var items: [HandoffItem]
+        /// 「次に再生」なら true、「キューに追加」なら false。
+        public var next: Bool
+        public var afterItemId: String?
+        /// 送り手が見ていた、受け手のカーソルの版。
+        public var basedOnVersion: Int64
+        public var accountTag: String
+
+        public init(
+            commandId: String, from: String, to: String, items: [HandoffItem], next: Bool, afterItemId: String?, basedOnVersion: Int64, accountTag: String
+        ) {
+            self.commandId = commandId
+            self.from = from
+            self.to = to
+            self.items = items
+            self.next = next
+            self.afterItemId = afterItemId
+            self.basedOnVersion = basedOnVersion
+            self.accountTag = accountTag
+        }
+    }
 
     /// 再生を始めた端末から、今の再生中の端末へ「止まって」（D-7）。
     public struct Yield: Equatable, Sendable {
@@ -388,6 +418,11 @@ public enum CommandBody: Equatable, Sendable, ConnectCodable {
                 "positionMs": JSON(c.positionMs), "basedOnVersion": JSON(c.basedOnVersion), "accountTag": .string(c.accountTag),
                 "onItemId": JSON(c.onItemId),
             ])
+        case .queueAdd(let q):
+            return .obj([
+                "type": "queue_add", "commandId": .string(q.commandId), "from": .string(q.from), "to": .string(q.to), "items": JSON(items: q.items),
+                "next": .bool(q.next), "afterItemId": JSON(q.afterItemId), "basedOnVersion": JSON(q.basedOnVersion), "accountTag": .string(q.accountTag),
+            ])
         case .profile(let p):
             return .obj(["type": "profile", "from": .string(p.from), "name": .string(p.name), "kind": JSON(p.kind)])
         }
@@ -407,6 +442,12 @@ public enum CommandBody: Equatable, Sendable, ConnectCodable {
                     commandId: try r.string("commandId"), from: try r.string("from"), to: try r.string("to"),
                     action: try r.enumValue("action", ControlAction.self), positionMs: try r.optLong("positionMs"),
                     basedOnVersion: try r.long("basedOnVersion"), accountTag: try r.string("accountTag"), onItemId: try r.optString("onItemId")))
+        case "queue_add":
+            return .queueAdd(
+                QueueAdd(
+                    commandId: try r.string("commandId"), from: try r.string("from"), to: try r.string("to"), items: try r.array("items", HandoffItem.self),
+                    next: try r.bool("next"), afterItemId: try r.optString("afterItemId"), basedOnVersion: try r.long("basedOnVersion"),
+                    accountTag: try r.string("accountTag")))
         case "profile":
             return .profile(Profile(from: try r.string("from"), name: try r.string("name"), kind: try r.optString("kind")))
         default:

@@ -216,6 +216,54 @@ final class ConnectSimulationTests: XCTestCase {
         XCTAssertNotNil(b.client.remoteNowPosition())
     }
 
+    private func queueItem(_ id: String) -> HandoffItem {
+        HandoffItem(
+            itemId: id, videoId: "video-\(id)", title: String(repeating: "とても長い曲の名前 ", count: 8) + id,
+            artists: [HandoffRef(name: "アーティスト", browseId: "UC\(id)")], album: HandoffRef(name: "アルバム", browseId: "MPRE\(id)"),
+            durationSeconds: 200, thumbnailUrl: "https://lh3.googleusercontent.com/" + String(repeating: "x", count: 120), origin: .userAdded)
+    }
+
+    func testQueueAddFromAnotherDeviceReachesThePlayingDevice() throws {
+        try setUpHousehold()
+        try a.startPlaying(snapshot)
+        try relay.run()
+        XCTAssertTrue(try b.client.sendQueueAdd([queueItem("q1")], next: false))
+        try relay.run()
+        XCTAssertEqual(1, a.queueAdds.count)
+        XCTAssertEqual(["q1"], a.queueAdds.first?.ids)
+        XCTAssertEqual(false, a.queueAdds.first?.next)
+        XCTAssertNil(a.queueAdds.first?.after)
+        // 鳴らしている A 自身は送らない
+        XCTAssertFalse(try a.client.sendQueueAdd([queueItem("q2")], next: true))
+    }
+
+    func testManySongsAreSplitAndChainedInOrder() throws {
+        try setUpHousehold()
+        try a.startPlaying(snapshot)
+        try relay.run()
+        let songs = (1...30).map { queueItem("s\($0)") }
+        XCTAssertTrue(try b.client.sendQueueAdd(songs, next: true))
+        try relay.run()
+        XCTAssertGreaterThan(a.queueAdds.count, 1, "1件の命令に収まらない曲数なのに分けていない")
+        XCTAssertEqual(songs.map(\.itemId), a.queueAdds.flatMap(\.ids))
+        XCTAssertNil(a.queueAdds.first?.after)
+        for (prev, next) in zip(a.queueAdds, a.queueAdds.dropFirst()) { XCTAssertEqual(prev.ids.last, next.after) }
+        XCTAssertTrue(a.queueAdds.allSatisfy(\.next))
+    }
+
+    func testQueueAddJSONMatchesKotlin() throws {
+        // Android 版（kotlinx.serialization）が書く形
+        let kotlin = #"{"type":"queue_add","commandId":"c1","from":"dev-b","to":"dev-a","items":[{"itemId":"i1","videoId":"v1","title":"曲","artists":[{"name":"人","browseId":"UC1"}],"album":null,"durationSeconds":200,"thumbnailUrl":null,"origin":"user"}],"next":true,"afterItemId":null,"basedOnVersion":7,"accountTag":"tag"}"#
+        guard case .queueAdd(let add)? = ConnectJSON.decode(CommandBody.self, from: kotlin) else { return XCTFail("読めない") }
+        XCTAssertEqual(["i1"], add.items.map(\.itemId))
+        XCTAssertEqual(.userAdded, add.items.first?.origin)
+        XCTAssertTrue(add.next)
+        XCTAssertNil(add.afterItemId)
+        XCTAssertEqual(7, add.basedOnVersion)
+        // 書き戻しても同じ値で読める
+        XCTAssertEqual(CommandBody.queueAdd(add), ConnectJSON.decode(CommandBody.self, from: ConnectJSON.encode(CommandBody.queueAdd(add))))
+    }
+
     func testNextThatArrivesAfterTheSongAlreadyChangedIsIgnored() throws {
         try setUpHousehold()
         try a.startPlaying(snapshot)

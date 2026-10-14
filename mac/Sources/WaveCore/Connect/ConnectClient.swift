@@ -103,12 +103,18 @@ public protocol ConnectClientEffects: AnyObject {
     /// 遠隔操作に従う（この端末が鳴らしている）。受け付けなければ false。
     func control(_ action: ControlAction, positionMs: Int64?) -> Bool
 
+    /// 遠隔のキューへの追加に従う（この端末が鳴らしている）。afterItemId の曲があればその直後、無ければ next なら今の曲の直後、
+    /// そうでなければ自分で足した曲のかたまりの最後へ、items の ID のまま入れる。受け付けなければ false。
+    func queueAdd(_ items: [HandoffItem], next: Bool, afterItemId: String?) -> Bool
+
     /// ほかの端末と合わせたライブラリが届いた（手元に取り込む、ADR-0013）。
     func libraryChanged(_ body: LibraryBody)
 }
 
 public extension ConnectClientEffects {
     func control(_ action: ControlAction, positionMs: Int64?) -> Bool { false }
+
+    func queueAdd(_ items: [HandoffItem], next: Bool, afterItemId: String?) -> Bool { false }
 
     /// ほかの端末と合わせたライブラリが届いた（手元に取り込む、ADR-0013）。
     func libraryChanged(_ body: LibraryBody) {}
@@ -1069,6 +1075,51 @@ public final class ConnectClient {
         return send(.control(.init(doc: try sealCommand(current, command))))
     }
 
+    /// キューへの追加の命令1件の平文の上限（詰め物の1ブロック 4096 から長さの欄の 4 バイトを引き、余裕を持たせる。Android 版と同じ）。
+    static let maxQueueAddPlaintext = 3800
+
+    /// 遠隔のキューへの追加を送る（鳴っていない端末から、今鳴らしている同じアカウントの端末へ）。
+    /// 1件の平文が詰め物の1ブロックに収まるよう分けて送り、2件目からは前の件の最後の曲の後ろに入れてもらう。
+    /// - Returns: 全部送ったか（家の再生が自分・別のアカウント・最新の状態をまだ見ていない・1曲でも収まらないなら false）
+    @discardableResult
+    public func sendQueueAdd(_ items: [HandoffItem], next: Bool) throws -> Bool {
+        if items.isEmpty || isWriter || pendingStoreId != nil { return false }
+        guard let current = chain else { return false }
+        guard let tag = effects.accountTag() else { return false }
+        guard let cursor = latestCursor, cursor.writer != signer.deviceId, cursor.body.accountTag == tag else { return false }
+        // 大きさは、ID の欄を UUID の長さで埋めた形で量る（実際の ID は送るときに振る）
+        let placeholder = "00000000-0000-0000-0000-000000000000"
+        func size(_ list: [HandoffItem]) -> Int {
+            ConnectJSON.encodeToUTF8(
+                CommandBody.queueAdd(
+                    .init(
+                        commandId: placeholder, from: signer.deviceId, to: cursor.writer, items: list, next: next, afterItemId: placeholder,
+                        basedOnVersion: cursor.version, accountTag: tag))
+            ).count
+        }
+        var chunks: [[HandoffItem]] = []
+        var chunk: [HandoffItem] = []
+        for item in items {
+            if size([item]) > ConnectClient.maxQueueAddPlaintext { return false }
+            if !chunk.isEmpty && size(chunk + [item]) > ConnectClient.maxQueueAddPlaintext {
+                chunks.append(chunk)
+                chunk = []
+            }
+            chunk.append(item)
+        }
+        chunks.append(chunk)
+        var after: String?
+        for part in chunks {
+            let command = CommandBody.queueAdd(
+                .init(
+                    commandId: newId(), from: signer.deviceId, to: cursor.writer, items: part, next: next, afterItemId: after,
+                    basedOnVersion: cursor.version, accountTag: tag))
+            if !send(.control(.init(doc: try sealCommand(current, command)))) { return false }
+            after = part.last?.itemId
+        }
+        return true
+    }
+
     /// 表示用: ほかの端末の最新のカーソル（別アカウントのものを含む）と、今の時刻に合わせた位置。
     public func remoteNowPosition() -> RemoteNow? {
         guard let cursor = latestCursor, cursor.writer != signer.deviceId else { return nil }
@@ -1090,6 +1141,10 @@ public final class ConnectClient {
             if profile.from == header.writerId && profile.from != signer.deviceId && current.members[profile.from] != nil {
                 effects.event(.profile(deviceId: profile.from, name: profile.name, kind: profile.kind))
             }
+            return
+        }
+        if case .queueAdd(let add)? = body {
+            onQueueAdd(add, header: header, chain: current)
             return
         }
         guard case .control(let command)? = body else { return }
@@ -1118,6 +1173,21 @@ public final class ConnectClient {
         // 比べるのは手元で今鳴っている曲（中継に書いた最新より先に進んでいることがある）
         if let onItem = command.onItemId, onItem != (local?.currentItemId ?? own.body.currentItemId) { return }
         _ = effects.control(command.action, positionMs: command.positionMs)
+    }
+
+    /// 遠隔のキューへの追加を受けた。従う条件は再生・一時停止などの遠隔操作と同じ。
+    private func onQueueAdd(_ command: CommandBody.QueueAdd, header: DocHeader, chain current: VerifiedChain) {
+        if command.to != signer.deviceId || command.from != header.writerId || command.from == signer.deviceId { return }
+        if abs(epochMs() - header.issuedAtEpochMs) > ConnectClient.maxControlAgeMs { return }
+        guard let from = current.members[command.from], from.keys.role == .player else { return }
+        if handledClaims.contains(command.commandId) { return }
+        remember(command.commandId)
+        if command.accountTag != effects.accountTag() || command.items.isEmpty { return }
+        guard let mine = session else { return }
+        guard let own = latestCursor, own.writer == signer.deviceId else { return }
+        if command.basedOnVersion > own.version || own.version - command.basedOnVersion > ConnectClient.maxControlLag { return }
+        guard let sessionStart = mine.arbiter.startVersion, command.basedOnVersion >= sessionStart else { return }
+        _ = effects.queueAdd(command.items, next: command.next, afterItemId: command.afterItemId)
     }
 
     private func requestTransfer(retried: Bool) throws -> Bool {
