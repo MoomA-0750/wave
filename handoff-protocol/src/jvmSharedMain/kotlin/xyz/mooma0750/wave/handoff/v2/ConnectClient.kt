@@ -115,6 +115,16 @@ class ConnectClient(
             positionMs: Long?,
         ): Boolean = false
 
+        /**
+         * 遠隔のキューへの追加に従う（この端末が鳴らしている）。afterItemId の曲が手元のキューにあればその直後、
+         * 無ければ next なら今の曲の直後、そうでなければ自分で足した曲のかたまりの最後へ、items の ID のまま入れる。受け付けなければ false。
+         */
+        fun queueAdd(
+            items: List<xyz.mooma0750.wave.handoff.HandoffItem>,
+            next: Boolean,
+            afterItemId: String?,
+        ): Boolean = false
+
         /** ほかの端末と合わせたライブラリが届いた（手元に取り込む、ADR-0013）。 */
         fun libraryChanged(body: LibraryBody) {}
     }
@@ -909,6 +919,45 @@ class ConnectClient(
     }
 
     /**
+     * 遠隔のキューへの追加を送る（鳴っていない端末から、今鳴らしている同じアカウントの端末へ）。
+     * 1件の平文が詰め物の1ブロックに収まるよう分けて送り、2件目からは前の件の最後の曲の後ろに入れてもらう。
+     * @return 全部送ったか（家の再生が自分・別のアカウント・最新の状態をまだ見ていない・1曲でも収まらないなら false）
+     */
+    fun sendQueueAdd(
+        items: List<xyz.mooma0750.wave.handoff.HandoffItem>,
+        next: Boolean,
+    ): Boolean {
+        if (items.isEmpty() || isWriter || pendingStoreId != null) return false
+        val current = chain ?: return false
+        val tag = effects.accountTag() ?: return false
+        val cursor = latestCursor ?: return false
+        if (cursor.writer == signer.deviceId || cursor.body.accountTag != tag) return false
+        val chunks = ArrayList<List<xyz.mooma0750.wave.handoff.HandoffItem>>()
+        var chunk = ArrayList<xyz.mooma0750.wave.handoff.HandoffItem>()
+        // 大きさは、ID の欄を UUID の長さで埋めた形で量る（実際の ID は送るときに振る）
+        val placeholder = "00000000-0000-0000-0000-000000000000"
+        fun encoded(list: List<xyz.mooma0750.wave.handoff.HandoffItem>) =
+            ConnectJson.json.encodeToString(CommandBody.serializer(), CommandBody.QueueAdd(placeholder, signer.deviceId, cursor.writer, list, next, placeholder, cursor.version, tag))
+                .encodeToByteArray().size
+        for (item in items) {
+            if (encoded(listOf(item)) > MAX_QUEUE_ADD_PLAINTEXT) return false
+            if (chunk.isNotEmpty() && encoded(chunk + item) > MAX_QUEUE_ADD_PLAINTEXT) {
+                chunks += chunk
+                chunk = ArrayList()
+            }
+            chunk += item
+        }
+        chunks += chunk
+        var after: String? = null
+        for (part in chunks) {
+            val command = CommandBody.QueueAdd(newId(), signer.deviceId, cursor.writer, part, next, after, cursor.version, tag)
+            if (!send(RelayV2.Control(sealCommand(current, command)))) return false
+            after = part.last().itemId
+        }
+        return true
+    }
+
+    /**
      * 家の端末 target に「ここで再生（引き取り）」を頼む（デバイスの一覧で端末を選んだ）。target は書き手でない端末。
      * @return 送ったか
      */
@@ -986,6 +1035,10 @@ class ConnectClient(
             if (body.from == opened.header.writerId && body.from != signer.deviceId && body.from in current.members) effects.event(ClientEvent.Profile(body.from, body.name, body.kind))
             return
         }
+        if (body is CommandBody.QueueAdd) {
+            onQueueAdd(body, opened.header, current)
+            return
+        }
         val command = body as? CommandBody.Control ?: return
         if (command.to != signer.deviceId || command.from != opened.header.writerId || command.from == signer.deviceId) return
         // 出してから5分を超えた命令には従わない（中継が取っておいて後から届けるのを、時間でも縛る。順序の判断には時計を使わない L-10 とは別の目的）
@@ -1014,6 +1067,26 @@ class ConnectClient(
         // 比べるのは手元で今鳴っている曲（中継に書いた最新より先に進んでいることがある）
         if (command.onItemId != null && command.onItemId != (local?.currentItemId ?: own.body.currentItemId)) return
         effects.control(command.action, command.positionMs)
+    }
+
+    /** 遠隔のキューへの追加。従う条件は再生・一時停止などの遠隔操作と同じ。 */
+    private fun onQueueAdd(
+        command: CommandBody.QueueAdd,
+        header: DocHeader,
+        current: VerifiedChain,
+    ) {
+        if (command.to != signer.deviceId || command.from != header.writerId || command.from == signer.deviceId) return
+        if (kotlin.math.abs(epochMs() - header.issuedAtEpochMs) > MAX_CONTROL_AGE_MS) return
+        if (current.members[command.from]?.keys?.role != Role.Player) return
+        if (command.commandId in handledClaims) return
+        remember(command.commandId)
+        if (command.accountTag != effects.accountTag() || command.items.isEmpty()) return
+        val own = latestCursor?.takeIf { it.writer == signer.deviceId } ?: return
+        if (command.basedOnVersion > own.version || own.version - command.basedOnVersion > MAX_CONTROL_LAG) return
+        val mine = session ?: return
+        val sessionStart = mine.arbiter.startVersion ?: return
+        if (command.basedOnVersion < sessionStart) return
+        effects.queueAdd(command.items, command.next, command.afterItemId)
     }
 
     /** 時間の経過。transfer で前の端末から返事が無ければ、最後の状態から取り込む。 */
@@ -1171,6 +1244,9 @@ class ConnectClient(
 
         /** 遠隔操作の送り手が見ていた版と、受け手の最新の書き込みの版の差の上限（それより古い操作には従わない）。 */
         private const val MAX_CONTROL_LAG = 20L
+
+        /** キューへの追加の命令1件の平文の上限（詰め物の1ブロック 4096 から長さの欄の 4 バイトを引き、余裕を持たせる）。 */
+        internal const val MAX_QUEUE_ADD_PLAINTEXT = 3800
 
         /** 遠隔操作の鮮度の上限（命令の見出しの時刻と受け手の時計の差）。 */
         private const val MAX_CONTROL_AGE_MS = 5 * 60 * 1000L

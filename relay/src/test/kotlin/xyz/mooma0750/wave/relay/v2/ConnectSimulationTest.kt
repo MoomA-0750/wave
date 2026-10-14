@@ -7,6 +7,7 @@ import xyz.mooma0750.wave.handoff.v2.RelayV2
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /** 端末なしの多端末テスト（Phase 6b）。本物の家の状態と ConnectClient を、決まった順の配送でつなぐ。 */
@@ -866,6 +867,68 @@ class ConnectSimulationTest {
         assertEquals("item-9", a.currentItemId)
         assertFalse(b.playing)
         assertTrue(a.client.isWriter)
+    }
+
+    private fun item(id: String) =
+        xyz.mooma0750.wave.handoff.HandoffItem(
+            itemId = id,
+            videoId = "video-$id",
+            title = "とても長い曲の名前 ".repeat(8) + id,
+            artists = listOf(xyz.mooma0750.wave.handoff.HandoffRef("アーティスト", "UC$id")),
+            album = xyz.mooma0750.wave.handoff.HandoffRef("アルバム", "MPRE$id"),
+            durationSeconds = 200,
+            thumbnailUrl = "https://lh3.googleusercontent.com/" + "x".repeat(120),
+            origin = xyz.mooma0750.wave.handoff.HandoffOrigin.UserAdded,
+        )
+
+    @Test
+    fun queueAddFromAnotherDeviceReachesThePlayingDevice() {
+        setUp()
+        a.startPlaying("queue-A")
+        relay.run()
+        // 鳴っていない B で「キューに追加」: 鳴らしている A のキューに入る
+        assertTrue(b.client.sendQueueAdd(listOf(item("q1")), next = false))
+        relay.run()
+        assertEquals(listOf(Triple(listOf("q1"), false, null as String?)), a.queueAdds)
+        // 鳴らしている A 自身は送らない
+        assertFalse(a.client.sendQueueAdd(listOf(item("q2")), next = true))
+    }
+
+    @Test
+    fun manySongsAreSplitAndChainedInOrder() {
+        setUp()
+        a.startPlaying("queue-A")
+        relay.run()
+        val songs = (1..30).map { item("s$it") }
+        assertTrue(b.client.sendQueueAdd(songs, next = true))
+        relay.run()
+        assertTrue(a.queueAdds.size > 1, "1件の命令に収まらない曲数なのに分けていない")
+        // 分けた件をつなぐと元の順になり、2件目からは前の件の最後の曲の後ろに入る
+        assertEquals(songs.map { it.itemId }, a.queueAdds.flatMap { it.first })
+        assertNull(a.queueAdds.first().third)
+        a.queueAdds.zipWithNext().forEach { (prev, next) -> assertEquals(prev.first.last(), next.third) }
+        assertTrue(a.queueAdds.all { it.second })
+    }
+
+    @Test
+    fun queueAddFromAnotherAccountOrReplayedIsIgnored() {
+        setUp()
+        a.startPlaying("queue-A")
+        relay.run()
+        b.accountTag = "tag-account-2"
+        assertFalse(b.client.sendQueueAdd(listOf(item("q1")), next = false))
+        b.accountTag = "tag-account-1"
+        val captured = ArrayList<RelayV2>()
+        relay.dropIncoming = { from, message ->
+            if (from == b.deviceId && message is RelayV2.Control) captured += message
+            false
+        }
+        assertTrue(b.client.sendQueueAdd(listOf(item("q1")), next = false))
+        relay.run()
+        assertEquals(1, a.queueAdds.size)
+        relay.inject(a.deviceId, captured.single())
+        relay.run()
+        assertEquals(1, a.queueAdds.size, "再送された追加に二度従った")
     }
 
     @Test

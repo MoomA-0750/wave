@@ -206,6 +206,8 @@ class SimDevice(
 
     /** 従った遠隔操作。 */
     val controls = ArrayList<Pair<xyz.mooma0750.wave.handoff.v2.ControlAction, Long?>>()
+    /** 従ったキューへの追加（項目の ID・次に再生か・どの曲の後ろか）。 */
+    val queueAdds = ArrayList<Triple<List<String>, Boolean, String?>>()
     var persisted = ClientPersisted()
     var persistCount = 0
     var foreground = true
@@ -261,6 +263,15 @@ class SimDevice(
 
                     override fun libraryChanged(body: xyz.mooma0750.wave.handoff.v2.LibraryBody) {
                         library = body
+                    }
+
+                    override fun queueAdd(
+                        items: List<xyz.mooma0750.wave.handoff.HandoffItem>,
+                        next: Boolean,
+                        afterItemId: String?,
+                    ): Boolean {
+                        queueAdds += Triple(items.map { it.itemId }, next, afterItemId)
+                        return true
                     }
 
                     override fun control(

@@ -184,6 +184,27 @@ sealed interface CommandBody {
         val onItemId: String? = null,
     ) : CommandBody
 
+    /**
+     * 遠隔のキューへの追加: 鳴っていない端末から、今の再生中の端末へ「この曲をキューに入れて」。従う条件は Control と同じ。
+     * 受け手は afterItemId の曲が自分のキューにあればその直後へ、無ければ next なら今の曲の直後、そうでなければ
+     * 自分で足した曲のかたまりの最後へ入れる。項目の ID は送り手が振ったものをそのまま使う（分けて送った続きを afterItemId でつなぐ）。
+     * 1件の平文は詰め物の1ブロック（4KB）に収める。曲が多ければ送り手が分けて、2件目からは前の件の最後の曲を afterItemId にする。
+     */
+    @Serializable
+    @SerialName("queue_add")
+    data class QueueAdd(
+        val commandId: String,
+        val from: String,
+        val to: String,
+        val items: List<xyz.mooma0750.wave.handoff.HandoffItem>,
+        /** 「次に再生」なら true、「キューに追加」なら false。 */
+        val next: Boolean,
+        val afterItemId: String? = null,
+        /** 送り手が見ていた、受け手のカーソルの版。 */
+        val basedOnVersion: Long,
+        val accountTag: String,
+    ) : CommandBody
+
     /** 端末の表示名を家のほかの端末に知らせる（名前は鎖に入れないので、加入した2台以外にも伝える）。宛先は家の全端末。 */
     @Serializable
     @SerialName("profile")
