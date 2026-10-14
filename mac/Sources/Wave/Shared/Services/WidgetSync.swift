@@ -30,15 +30,32 @@ final class WidgetSync {
     private static func handle(_ command: WidgetCommand) async {
         guard let player = AppServices.player else { return }
         AppPaths.log("widget command")
+        let wasPlaying = player.isPlaying
+        let shouldPlay: Bool
         switch command {
-        case .togglePlay: player.togglePlay()
-        case .next: player.next()
-        case .previous: player.previous()
+        case .togglePlay:
+            player.togglePlay()
+            shouldPlay = !wasPlaying
+        case .next:
+            player.next()
+            shouldPlay = wasPlaying
+        case .previous:
+            player.previous()
+            shouldPlay = wasPlaying
         case .playPlaylist(let id, let shuffle):
             if player.shuffle != shuffle { player.toggleShuffle() }
             let title = WidgetStore.playlists.first { $0.id == id }?.title ?? ""
             AppServices.nav.play(.playlist(PlaylistSummary(playlistId: id, title: title, subtitle: nil, thumbnailUrl: nil)))
+            shouldPlay = true
         }
+        // iPhone はボタンの処理が終わるとアプリをまた眠らせる。曲は読み込み終えてから鳴るので、
+        // 鳴り始めるまで（長くて30秒。裏では読み込みが遅く、1曲に15秒ほどかかることがある）処理を終えずに待つ（待たないと、読み込みの途中で止まって鳴らない）
+        guard shouldPlay, !player.isRemote else { return }
+        let deadline = Date().addingTimeInterval(30)
+        while !player.isPlaying, Date() < deadline {
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+        AppPaths.log("widget command playing=\(player.isPlaying)")
     }
 
     private func tick() {
