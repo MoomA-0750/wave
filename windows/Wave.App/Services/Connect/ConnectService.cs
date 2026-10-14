@@ -160,6 +160,12 @@ public sealed class ConnectService
             Post(() => AppPaths.Log($"connect-v2 control action={action} sent={client?.SendControl(action, positionMs)}"));
             return true;
         };
+        player.SendRemoteVolume = percent =>
+        {
+            if (client is null || Relay.Status != RelayStatus.Connected) return false;
+            Post(() => AppPaths.Log($"connect-v2 volume percent={percent} sent={client?.SendVolume(percent)}"));
+            return true;
+        };
         player.SendRemoteQueueAdd = (songs, next) =>
         {
             if (client is null || Relay.Status != RelayStatus.Connected) return false;
@@ -507,7 +513,7 @@ public sealed class ConnectService
         }
         if (mirroredQueue is not { } export || export.Items.All(i => i.Meta.ItemId != now.Cursor.CurrentItemId)) return null;
         var duration = export.Items.First(i => i.Meta.ItemId == now.Cursor.CurrentItemId).Song.DurationSeconds;
-        return new RemoteSnapshot(remote.DeviceId, remote.DeviceLabel, mirroredKey, export, now.Cursor.CurrentItemId, now.PositionMs, player.ClockMs, now.Cursor.Playing, RepeatOf(now.Cursor.Repeat), duration, now.Version);
+        return new RemoteSnapshot(remote.DeviceId, remote.DeviceLabel, mirroredKey, export, now.Cursor.CurrentItemId, now.PositionMs, player.ClockMs, now.Cursor.Playing, RepeatOf(now.Cursor.Repeat), duration, now.Version, now.Cursor.VolumePercent);
     }
 
     private void SetPairing(PairingView view) => ui.TryEnqueue(() =>
@@ -561,6 +567,12 @@ public sealed class ConnectService
                 return true;
             }
             return owner.OnUi(() => owner.player.ApplyControl(action, positionMs));
+        }
+
+        public bool Volume(int volumePercent)
+        {
+            AppPaths.Log($"connect-v2 volume received percent={volumePercent}");
+            return owner.OnUi(() => owner.player.ApplyVolume(volumePercent));
         }
 
         public bool QueueAdd(IReadOnlyList<HandoffItem> items, bool next, string? afterItemId)
@@ -846,7 +858,7 @@ public sealed class ConnectService
     }
 
     private ConnectClient.LocalCursor ToLocal(PlaybackCursor c) =>
-        new(c.CurrentItemId, c.PositionMs, c.Playing, RepeatOf(c.Repeat), c.ListenedMs, c.HistorySent, clock.ElapsedMilliseconds);
+        new(c.CurrentItemId, c.PositionMs, c.Playing, RepeatOf(c.Repeat), c.ListenedMs, c.HistorySent, clock.ElapsedMilliseconds, c.VolumePercent);
 
     // --- キューの書き出し・取り込み ---
 

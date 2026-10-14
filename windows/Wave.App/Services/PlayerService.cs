@@ -121,6 +121,7 @@ public sealed partial class PlayerService : ObservableObject
         this.ui = ui;
         var settings = AppServices.Settings;
         volume = settings.Volume;
+        localVolume = volume;
         // シャッフルはキューごとの状態（Android と同じく、新しい再生では切れる）。設定には持ち越さない
         repeat = (RepeatMode)Math.Clamp(settings.Repeat, 0, 2);
         player.Volume = volume;
@@ -241,11 +242,61 @@ public sealed partial class PlayerService : ObservableObject
         AppPaths.Log($"queue restored items={Queue.Count} index={index}");
     }
 
+    /// <summary>
+    /// 音量のつまみ。ほかの端末を映している間はその端末の音量を映し、動かすとその端末へ送る（Spotify と同じ）。
+    /// 手元の音量（localVolume）は変えない。端末そのものの音量はどちらの端末でも変えない。
+    /// </summary>
     partial void OnVolumeChanged(double value)
     {
+        if (IsRemote)
+        {
+            if (!applyingRemoteVolume) SendVolumeToRemote();
+            return;
+        }
+        localVolume = value;
         player.Volume = value;
         AppServices.Settings.Volume = value;
         AppServices.Settings.Save();
+        // 鳴らしている端末の音量は、ほかの端末のつまみに映す
+        CursorChanged?.Invoke(false);
+    }
+
+    /// <summary>この端末で鳴らすときの音量（設定に残すもの）。</summary>
+    private double localVolume;
+    private bool applyingRemoteVolume;
+
+    /// <summary>本人が映している端末の音量を動かした直後は、相手の古い値でつまみを戻さない。</summary>
+    private long remoteVolumeHoldUntilMs;
+    private DispatcherQueueTimer? remoteVolumeTimer;
+
+    /// <summary>ほかの端末の音量（0〜100）を変えてもらう（端末の連携が置く）。送れたら true。</summary>
+    public Func<int, bool>? SendRemoteVolume { get; set; }
+
+    /// <summary>映している端末の音量を、つまみの値にしてもらう（動かしている間は 150ms に1回まで）。</summary>
+    private void SendVolumeToRemote()
+    {
+        remoteVolumeHoldUntilMs = clock.ElapsedMilliseconds + 2_000;
+        if (remoteVolumeTimer is null)
+        {
+            remoteVolumeTimer = ui.CreateTimer();
+            remoteVolumeTimer.Interval = TimeSpan.FromMilliseconds(150);
+            remoteVolumeTimer.IsRepeating = false;
+            remoteVolumeTimer.Tick += (_, _) =>
+            {
+                if (IsRemote && SendRemoteVolume?.Invoke((int)Math.Round(Volume * 100)) != true)
+                    Message = L.T("ほかの端末に送れませんでした", "Couldn’t reach the other device");
+            };
+        }
+        remoteVolumeTimer.Stop();
+        remoteVolumeTimer.Start();
+    }
+
+    /// <summary>ほかの端末から音量を変えられた（この端末が鳴らしている）。アプリの中の音量だけを変える。</summary>
+    public bool ApplyVolume(int percent)
+    {
+        if (IsRemote) return false;
+        Volume = Math.Clamp(percent, 0, 100) / 100.0;
+        return true;
     }
 
     partial void OnRepeatChanged(RepeatMode value)
@@ -889,7 +940,7 @@ public sealed partial class PlayerService : ObservableObject
     {
         if (IsRemote || Current is null || Index < 0 || Index >= itemMeta.Count) return null;
         var position = player.Source is null ? 0 : (long)(player.PlaybackSession.Position.TotalMilliseconds);
-        return new PlaybackCursor(itemMeta[Index].ItemId, Math.Max(0, position), IsPlaying || IsLoading, Repeat, ListenedNow(), statsSent);
+        return new PlaybackCursor(itemMeta[Index].ItemId, Math.Max(0, position), IsPlaying || IsLoading, Repeat, ListenedNow(), statsSent, (int)Math.Round(localVolume * 100));
     }
 
     /// <summary>位置の見積もりに使う時計（ミリ秒、単調）。</summary>
@@ -1129,6 +1180,13 @@ public sealed partial class PlayerService : ObservableObject
             repeat = next.Repeat;
             OnPropertyChanged(nameof(Repeat));
         }
+        // 相手の音量をつまみに映す（本人が動かした直後は、届いた古い値で戻さない）
+        if (next.VolumePercent is { } percent && clock.ElapsedMilliseconds >= remoteVolumeHoldUntilMs)
+        {
+            applyingRemoteVolume = true;
+            Volume = percent / 100.0;
+            applyingRemoteVolume = false;
+        }
         Position = next.PositionNow(clock.ElapsedMilliseconds);
     }
 
@@ -1170,6 +1228,10 @@ public sealed partial class PlayerService : ObservableObject
         remoteSeekTimer?.Stop();
         IsPlaying = false;
         Position = 0;
+        // つまみを手元の音量に戻す
+        remoteVolumeTimer?.Stop();
+        remoteVolumeHoldUntilMs = 0;
+        Volume = localVolume;
         var backup = localBackup;
         localBackup = null;
         if (!restoreLocal) return;
@@ -1842,10 +1904,10 @@ public sealed record QueueExport(
     string? Continuation,
     string? RadioPlaylistId);
 
-public sealed record PlaybackCursor(string CurrentItemId, long PositionMs, bool Playing, RepeatMode Repeat, long ListenedMs, bool HistorySent);
+public sealed record PlaybackCursor(string CurrentItemId, long PositionMs, bool Playing, RepeatMode Repeat, long ListenedMs, bool HistorySent, int VolumePercent);
 
 /// <summary>ほかの端末の再生（表示と遠隔操作のため）。QueueKey はキューの中身の目印（同じなら置き直さない）。</summary>
-public sealed record RemoteSnapshot(string DeviceId, string DeviceLabel, string? QueueKey, QueueExport? Queue, string CurrentItemId, long PositionMs, long CapturedAtMs, bool Playing, RepeatMode Repeat, int? DurationSeconds, long Version = 0)
+public sealed record RemoteSnapshot(string DeviceId, string DeviceLabel, string? QueueKey, QueueExport? Queue, string CurrentItemId, long PositionMs, long CapturedAtMs, bool Playing, RepeatMode Repeat, int? DurationSeconds, long Version = 0, int? VolumePercent = null)
 {
     /// <summary>今の位置（再生中なら、取ってからの経過を足す。曲の長さで止める）。</summary>
     public double PositionNow(long nowMs)
