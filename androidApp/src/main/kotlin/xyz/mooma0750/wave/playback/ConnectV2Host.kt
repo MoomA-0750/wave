@@ -45,6 +45,9 @@ class ConnectV2Host {
             positionMs: Long?,
         ): Boolean
 
+        /** ほかの端末から音量を変えられた。アプリの中の音量（再生器の音量）だけを変える。端末そのものの音量は変えない。 */
+        fun volume(volumePercent: Int): Boolean
+
         /** ほかの端末で足した曲を、自分のキューへ入れる（QueueSession.addFromRemote）。 */
         fun queueAdd(
             items: List<xyz.mooma0750.wave.handoff.HandoffItem>,
@@ -60,6 +63,8 @@ class ConnectV2Host {
         val repeat: HandoffRepeat,
         val listenedMs: Long,
         val historySent: Boolean,
+        /** アプリの中の音量（0〜100）。 */
+        val volumePercent: Int? = null,
     )
 
     interface Listener {

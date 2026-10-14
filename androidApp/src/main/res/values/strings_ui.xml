@@ -53,6 +53,8 @@
     <string name="nowplaying_video">Video</string>
     <string name="nowplaying_previous">Previous</string>
     <string name="nowplaying_next">Next</string>
+    <string name="nowplaying_volume_on_device">Volume on %1$s</string>
+    <string name="nowplaying_volume_app">wave volume</string>
     <string name="nowplaying_repeat_all">Repeat: All</string>
     <string name="nowplaying_repeat_one">Repeat: One</string>
     <string name="nowplaying_repeat_off">Repeat: Off</string>

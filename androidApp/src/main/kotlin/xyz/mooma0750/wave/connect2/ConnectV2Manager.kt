@@ -185,6 +185,8 @@ class ConnectV2Manager(
         val capturedAtMs: Long,
         val playing: Boolean,
         val repeat: HandoffRepeat,
+        /** その端末のアプリの中の音量（0〜100）。前の版の端末は付けない（null）。 */
+        val volumePercent: Int? = null,
     ) {
         val current: xyz.mooma0750.wave.core.music.Song get() = items[currentIndex]
 
@@ -229,7 +231,7 @@ class ConnectV2Manager(
                 )
             }
         val label = labels[now.writer] ?: resources.getString(R.string.connect_v2_member_unknown, now.writer.take(6))
-        return RemotePlayback(now.writer, label, songs, items.map { it.itemId }, index, now.positionMs, SystemClock.elapsedRealtime(), now.cursor.playing, now.cursor.repeat)
+        return RemotePlayback(now.writer, label, songs, items.map { it.itemId }, index, now.positionMs, SystemClock.elapsedRealtime(), now.cursor.playing, now.cursor.repeat, now.cursor.volumePercent)
     }
 
     /** 前に合わせた家の最新の再生（同じ状態で置き直さない）。 */
@@ -337,6 +339,14 @@ class ConnectV2Manager(
         Log.i(WaveApplication.LOG_TAG, "connect-v2 control action=$action sent=$sent")
         if (sent != true) mutableEvents.tryEmit(ClientEvent.ServerError(CONTROL_UNSENT))
     }
+
+    /** 画面・音量ボタンから: 鳴らしている端末のアプリの中の音量を変える（0〜100）。 */
+    fun volume(volumePercent: Int) =
+        post {
+            val sent = client?.sendVolume(volumePercent)
+            Log.i(WaveApplication.LOG_TAG, "connect-v2 volume percent=$volumePercent sent=$sent")
+            if (sent != true) mutableEvents.tryEmit(ClientEvent.ServerError(CONTROL_UNSENT))
+        }
 
     /** 画面から: 鳴らしている端末のキューへ曲を足す（ほかの端末を映している間の「次に再生」「キューに追加」）。 */
     fun queueAdd(
@@ -517,6 +527,11 @@ class ConnectV2Manager(
                     return true
                 }
                 return runBlocking(Dispatchers.Main) { host.endpoint?.control(action, positionMs) == true }
+            }
+
+            override fun volume(volumePercent: Int): Boolean {
+                Log.i(WaveApplication.LOG_TAG, "connect-v2 volume received percent=$volumePercent")
+                return runBlocking(Dispatchers.Main) { host.endpoint?.volume(volumePercent) == true }
             }
 
             override fun queueAdd(
@@ -776,7 +791,7 @@ class ConnectV2Manager(
         }
     }
 
-    private fun ConnectV2Host.Cursor.toLocal() = ConnectClient.LocalCursor(currentItemId, positionMs, playing, repeat, listenedMs, historySent, SystemClock.elapsedRealtime())
+    private fun ConnectV2Host.Cursor.toLocal() = ConnectClient.LocalCursor(currentItemId, positionMs, playing, repeat, listenedMs, historySent, SystemClock.elapsedRealtime(), volumePercent)
 
     // --- 画面・debug からの操作 ---
 

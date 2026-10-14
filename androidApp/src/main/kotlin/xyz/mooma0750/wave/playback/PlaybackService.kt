@@ -262,7 +262,8 @@ class PlaybackService : MediaLibraryService() {
                     // Connect v2（Phase 6b）: 位置の変化を知らせる。キューの変化は onTimelineChanged（並びが変わったときだけ）
                     container.connectV2Host.listener?.let { v2 ->
                         val significant = events.containsAny(Player.EVENT_PLAY_WHEN_READY_CHANGED, Player.EVENT_MEDIA_ITEM_TRANSITION, Player.EVENT_PLAYBACK_STATE_CHANGED)
-                        if (significant || events.containsAny(Player.EVENT_POSITION_DISCONTINUITY, Player.EVENT_REPEAT_MODE_CHANGED)) v2.onCursorChanged(significant)
+                        // 音量（アプリの中の音量）も、ほかの端末のつまみに映すので書き直す
+                        if (significant || events.containsAny(Player.EVENT_POSITION_DISCONTINUITY, Player.EVENT_REPEAT_MODE_CHANGED, Player.EVENT_VOLUME_CHANGED)) v2.onCursorChanged(significant)
                     }
                 }
 
@@ -464,7 +465,7 @@ class PlaybackService : MediaLibraryService() {
                     val repeat = PlaybackDecisions.repeatOf(player.repeatMode)
                     // 最後まで行った・エラーで止まった端末を「再生中」と書かない（レビュー p6b34 中-2）
                     val playing = PlaybackDecisions.isActivelyPlaying(player.playWhenReady, player.playbackState)
-                    return ConnectV2Host.Cursor(itemId, player.currentPosition.coerceAtLeast(0), playing, repeat, listenedMs, historySent)
+                    return ConnectV2Host.Cursor(itemId, player.currentPosition.coerceAtLeast(0), playing, repeat, listenedMs, historySent, kotlin.math.round(player.volume * 100).toInt())
                 }
 
                 // Connect v2 が止める・戻すのは、本人の一時停止・再生ボタンとして知らせない
@@ -513,6 +514,11 @@ class PlaybackService : MediaLibraryService() {
                         }
                         true
                     }
+
+                override fun volume(volumePercent: Int): Boolean {
+                    player.volume = volumePercent.coerceIn(0, 100) / 100f
+                    return true
+                }
 
                 override fun queueAdd(
                     items: List<xyz.mooma0750.wave.handoff.HandoffItem>,
@@ -665,7 +671,7 @@ class PlaybackService : MediaLibraryService() {
         val current = session ?: return
         val local = localPlayer ?: return
         if (remote != null && !local.playWhenReady) {
-            val mirror = remotePlayer ?: RemoteSessionPlayer({ action, position -> manager.control(action, position) }, { artist, device -> getString(xyz.mooma0750.wave.R.string.nowplaying_artist_on_device, artist, device) }).also {
+            val mirror = remotePlayer ?: RemoteSessionPlayer({ action, position -> manager.control(action, position) }, { artist, device -> getString(xyz.mooma0750.wave.R.string.nowplaying_artist_on_device, artist, device) }, { percent -> manager.volume(percent) }).also {
                 remotePlayer = it
                 it.addListener(widgetListener)
             }

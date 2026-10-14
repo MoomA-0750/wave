@@ -3,6 +3,7 @@ package xyz.mooma0750.wave.playback
 import android.os.Looper
 import android.os.SystemClock
 import androidx.media3.common.C
+import androidx.media3.common.DeviceInfo
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
@@ -24,7 +25,12 @@ class RemoteSessionPlayer(
     private val control: (ControlAction, Long?) -> Unit,
     /** 通知のアーティストの行（アーティスト, 端末名 → 「アーティスト • 端末名で再生中」）。 */
     private val artistLine: (String, String) -> String,
+    /** その端末のアプリの中の音量を変えてもらう（0〜100）。 */
+    private val setVolume: (Int) -> Unit,
 ) : SimpleBasePlayer(Looper.getMainLooper()) {
+    /** 本人が音量ボタンで変えた直後の音量（相手の新しいカーソルが届くまで、最大2秒）。 */
+    private var optimisticVolume: Int? = null
+    private var optimisticVolumeUntilMs = 0L
     private var remote: ConnectV2Manager.RemotePlayback? = null
 
     /** 押した直後の再生中か（相手の新しいカーソルが届くまで、最大3秒）。 */
@@ -33,6 +39,7 @@ class RemoteSessionPlayer(
 
     fun update(next: ConnectV2Manager.RemotePlayback) {
         if (optimisticPlaying != null && (SystemClock.elapsedRealtime() > optimisticUntilMs || next.playing == optimisticPlaying)) optimisticPlaying = null
+        if (optimisticVolume != null && (SystemClock.elapsedRealtime() > optimisticVolumeUntilMs || next.volumePercent == optimisticVolume)) optimisticVolume = null
         remote = next
         invalidateState()
     }
@@ -73,8 +80,20 @@ class RemoteSessionPlayer(
                         Player.COMMAND_GET_CURRENT_MEDIA_ITEM,
                         Player.COMMAND_GET_METADATA,
                         Player.COMMAND_GET_TIMELINE,
-                    ).build(),
+                    ).apply {
+                        // 音量を知らせてくる端末なら、音量ボタンでその端末の音量を変える（Spotify と同じ。この端末の音量は変えない）
+                        if (current.volumePercent != null) {
+                            addAll(Player.COMMAND_GET_DEVICE_VOLUME, Player.COMMAND_SET_DEVICE_VOLUME_WITH_FLAGS, Player.COMMAND_ADJUST_DEVICE_VOLUME_WITH_FLAGS)
+                        }
+                    }.build(),
             ).setPlaylist(items)
+            .apply {
+                val volume = optimisticVolume ?: current.volumePercent
+                if (volume != null) {
+                    setDeviceInfo(DeviceInfo.Builder(DeviceInfo.PLAYBACK_TYPE_REMOTE).setMinVolume(0).setMaxVolume(MAX_VOLUME).build())
+                    setDeviceVolume(volume.coerceIn(0, MAX_VOLUME))
+                }
+            }
             .setCurrentMediaItemIndex(current.currentIndex)
             .setPlaybackState(Player.STATE_READY)
             .setPlayWhenReady(playing, Player.PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST)
@@ -93,6 +112,39 @@ class RemoteSessionPlayer(
         optimisticPlaying = playWhenReady
         optimisticUntilMs = SystemClock.elapsedRealtime() + 3_000
         return Futures.immediateVoidFuture()
+    }
+
+    override fun handleSetDeviceVolume(
+        deviceVolume: Int,
+        flags: Int,
+    ): ListenableFuture<*> {
+        sendVolume(deviceVolume)
+        return Futures.immediateVoidFuture()
+    }
+
+    override fun handleIncreaseDeviceVolume(flags: Int): ListenableFuture<*> {
+        (optimisticVolume ?: remote?.volumePercent)?.let { sendVolume(it + VOLUME_STEP) }
+        return Futures.immediateVoidFuture()
+    }
+
+    override fun handleDecreaseDeviceVolume(flags: Int): ListenableFuture<*> {
+        (optimisticVolume ?: remote?.volumePercent)?.let { sendVolume(it - VOLUME_STEP) }
+        return Futures.immediateVoidFuture()
+    }
+
+    private fun sendVolume(percent: Int) {
+        val clamped = percent.coerceIn(0, MAX_VOLUME)
+        optimisticVolume = clamped
+        optimisticVolumeUntilMs = SystemClock.elapsedRealtime() + 2_000
+        setVolume(clamped)
+        invalidateState()
+    }
+
+    private companion object {
+        const val MAX_VOLUME = 100
+
+        /** 音量ボタン1回で変える幅。 */
+        const val VOLUME_STEP = 5
     }
 
     override fun handleSeek(

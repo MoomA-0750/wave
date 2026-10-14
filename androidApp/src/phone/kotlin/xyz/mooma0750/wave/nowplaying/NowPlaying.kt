@@ -10,6 +10,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.material3.Icon
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.material3.TextButton
 import androidx.compose.ui.graphics.Color
 import xyz.mooma0750.wave.connect2.ConnectV2Manager
@@ -462,6 +464,27 @@ fun NowPlayingScreen(
                     enabled = remote == null,
                 )
             }
+            // アプリの中の音量。ほかの端末を映している間はその端末の音量（音量ボタンでも変えられる）。手元で鳴らしていて
+            // 下がっている（ほかの端末から下げられた等）ときは、戻せるように出す。ふだんは端末の音量ボタンだけで足りるので出さない
+            val volume = display.volumePercent
+            if (volume != null && (remote != null || volume < 100)) {
+                // ドラッグの間は表示だけ動かし、指を離したときに1回だけ送る（ほかの端末へは命令ごとに暗号化・鍵交換をする）
+                var draggingVolume by remember { mutableStateOf<Float?>(null) }
+                val volumeLabel = remote?.let { stringResource(R.string.nowplaying_volume_on_device, it.deviceLabel) } ?: stringResource(R.string.nowplaying_volume_app)
+                Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(painterResource(R.drawable.ic_volume_down), null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Slider(
+                        value = draggingVolume ?: (volume / 100f),
+                        onValueChange = { draggingVolume = it },
+                        onValueChangeFinished = {
+                            draggingVolume?.let { display.setVolume(kotlin.math.round(it * 100).toInt()) }
+                            draggingVolume = null
+                        },
+                        modifier = Modifier.weight(1f).padding(horizontal = 8.dp).semantics { contentDescription = volumeLabel },
+                    )
+                    Icon(painterResource(R.drawable.ic_volume_up), null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
             // 左端に端末、右端にキュー（共有は「…」のメニューにある）。weight(fill = false) と Spacer の weight を並べると余りが分かれて、
             // キューのボタンが真ん中寄りに出ていたので、SpaceBetween で両端に寄せる
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
@@ -812,6 +835,18 @@ private class Display(
 
     fun seekTo(positionMs: Long) {
         if (remote != null) connect?.control(ControlAction.Seek, positionMs) else controller?.seekTo(positionMs)
+    }
+
+    /**
+     * アプリの中の音量（0〜100）。ほかの端末を映している間はその端末のもの（音量を知らせない前の版の端末なら null）。
+     * 端末そのものの音量（音量ボタン）とは別。
+     */
+    val volumePercent: Int?
+        get() = if (remote != null) remote.volumePercent else controller?.let { kotlin.math.round(it.volume * 100).toInt() }
+
+    fun setVolume(percent: Int) {
+        val clamped = percent.coerceIn(0, 100)
+        if (remote != null) connect?.volume(clamped) else controller?.volume = clamped / 100f
     }
 }
 
