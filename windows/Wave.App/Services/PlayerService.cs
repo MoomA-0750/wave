@@ -110,6 +110,9 @@ public sealed partial class PlayerService : ObservableObject
     /// <summary>ほかの端末への命令を送る（端末の連携が置く）。送れたら true。</summary>
     public Func<Wave.Core.Connect.ControlAction, long?, bool>? SendRemoteControl { get; set; }
 
+    /// <summary>ほかの端末で鳴っている間の「次に再生」（true）・「キューに追加」（false）を、その端末のキューへ送る（端末の連携が置く）。送れたら true。</summary>
+    public Func<IReadOnlyList<Song>, bool, bool>? SendRemoteQueueAdd { get; set; }
+
     private RemoteSnapshot? remote;
     private string? remoteQueueKey;
 
@@ -428,6 +431,11 @@ public sealed partial class PlayerService : ObservableObject
 
     public void PlayNext(Song song)
     {
+        if (IsRemote)
+        {
+            QueueOnRemote([song], next: true);
+            return;
+        }
         if (Queue.Count == 0)
         {
             PlaySong(song);
@@ -447,6 +455,11 @@ public sealed partial class PlayerService : ObservableObject
     public void QueueAll(IReadOnlyList<Song> songs, bool next)
     {
         if (songs.Count == 0) return;
+        if (IsRemote)
+        {
+            QueueOnRemote(songs, next);
+            return;
+        }
         if (Queue.Count == 0)
         {
             PlayList(songs);
@@ -466,6 +479,11 @@ public sealed partial class PlayerService : ObservableObject
 
     public void AddToQueue(Song song)
     {
+        if (IsRemote)
+        {
+            QueueOnRemote([song], next: false);
+            return;
+        }
         if (Queue.Count == 0)
         {
             PlaySong(song);
@@ -473,6 +491,48 @@ public sealed partial class PlayerService : ObservableObject
         }
         InsertUserItems([song]);
         Message = L.T($"「{song.Title}」をキューに追加しました", $"Added {song.Title} to queue");
+    }
+
+    /// <summary>
+    /// ほかの端末で鳴っている間の追加は、鳴らしている端末のキューへ送る（手元のキューに入れても、その端末は使わない）。
+    /// 映しているキューは、その端末が書き直したものが届いたときに変わる。
+    /// </summary>
+    private void QueueOnRemote(IReadOnlyList<Song> songs, bool next)
+    {
+        if (SendRemoteQueueAdd?.Invoke(songs, next) != true)
+        {
+            Message = L.T("ほかの端末に送れませんでした", "Couldn’t reach the other device");
+            return;
+        }
+        var device = RemoteDevice ?? L.T("ほかの端末", "the other device");
+        Message = songs.Count == 1
+            ? next ? L.T($"「{songs[0].Title}」を {device} で次に再生します", $"{songs[0].Title} will play next on {device}")
+                : L.T($"「{songs[0].Title}」を {device} のキューに追加しました", $"Added {songs[0].Title} to the queue on {device}")
+            : next ? L.T($"{songs.Count} 曲を {device} で次に再生します", $"{L.Songs(songs.Count)} will play next on {device}")
+                : L.T($"{songs.Count} 曲を {device} のキューに追加しました", $"Added {L.Songs(songs.Count)} to the queue on {device}");
+    }
+
+    /// <summary>
+    /// ほかの端末で足した曲を、送り手が振った項目の ID のまま入れる（この端末が鳴らしている。Android の QueueSession.addFromRemote と同じ）。
+    /// afterItemId の曲があればその直後（分けて届いた続き）、無ければ next なら今の曲の直後、そうでなければ自分で足した曲のかたまりの最後へ。
+    /// </summary>
+    public bool ApplyQueueAdd(IReadOnlyList<(Song Song, QueueItemMeta Meta)> entries, bool next, string? afterItemId)
+    {
+        if (IsRemote || Queue.Count == 0 || entries.Count == 0) return false;
+        var existing = itemMeta.Select(m => m.ItemId).ToHashSet();
+        if (entries.Any(e => existing.Contains(e.Meta.ItemId))) return false;
+        var after = afterItemId is null ? -1 : itemMeta.FindIndex(m => m.ItemId == afterItemId);
+        var at = after >= 0 ? after + 1 : next ? Index + 1 : UserQueueEnd;
+        nextOrigin = QueueOrigin.UserAdded;
+        for (var i = 0; i < entries.Count; i++)
+        {
+            adoptIds = new([entries[i].Meta.ItemId]);
+            Queue.Insert(at + i, entries[i].Song);
+        }
+        adoptIds = null;
+        nextOrigin = QueueOrigin.Source;
+        ResumeAfterEnd(at);
+        return true;
     }
 
     /// <summary>

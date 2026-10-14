@@ -208,6 +208,65 @@ public class ConnectSimulationTests
         Assert.NotNull(b.Client.RemoteNowPosition());
     }
 
+    private static HandoffItem QueueItem(string id) => new()
+    {
+        ItemId = id,
+        VideoId = $"video-{id}",
+        Title = string.Concat(Enumerable.Repeat("とても長い曲の名前 ", 8)) + id,
+        Artists = [new HandoffRef { Name = "アーティスト", BrowseId = $"UC{id}" }],
+        Album = new HandoffRef { Name = "アルバム", BrowseId = $"MPRE{id}" },
+        DurationSeconds = 200,
+        ThumbnailUrl = "https://lh3.googleusercontent.com/" + new string('x', 120),
+        Origin = HandoffOrigin.UserAdded,
+    };
+
+    [Fact]
+    public void QueueAddFromAnotherDeviceReachesThePlayingDevice()
+    {
+        SetUp();
+        a.StartPlaying(snapshot);
+        relay.Run();
+        Assert.True(b.Client.SendQueueAdd([QueueItem("q1")], next: false));
+        relay.Run();
+        var add = Assert.Single(a.QueueAdds);
+        Assert.Equal(["q1"], add.Ids);
+        Assert.False(add.Next);
+        Assert.Null(add.After);
+        // 鳴らしている A 自身は送らない
+        Assert.False(a.Client.SendQueueAdd([QueueItem("q2")], next: true));
+    }
+
+    [Fact]
+    public void ManySongsAreSplitAndChainedInOrder()
+    {
+        SetUp();
+        a.StartPlaying(snapshot);
+        relay.Run();
+        var songs = Enumerable.Range(1, 30).Select(i => QueueItem($"s{i}")).ToList();
+        Assert.True(b.Client.SendQueueAdd(songs, next: true));
+        relay.Run();
+        Assert.True(a.QueueAdds.Count > 1, "1件の命令に収まらない曲数なのに分けていない");
+        Assert.Equal(songs.Select(s => s.ItemId), a.QueueAdds.SelectMany(q => q.Ids));
+        Assert.Null(a.QueueAdds[0].After);
+        for (var i = 1; i < a.QueueAdds.Count; i++) Assert.Equal(a.QueueAdds[i - 1].Ids[^1], a.QueueAdds[i].After);
+        Assert.All(a.QueueAdds, q => Assert.True(q.Next));
+    }
+
+    [Fact]
+    public void QueueAddJsonMatchesKotlin()
+    {
+        // Android 版（kotlinx.serialization）が書く形
+        const string kotlin = """{"type":"queue_add","commandId":"c1","from":"dev-b","to":"dev-a","items":[{"itemId":"i1","videoId":"v1","title":"曲","artists":[{"name":"人","browseId":"UC1"}],"album":null,"durationSeconds":200,"thumbnailUrl":null,"origin":"user"}],"next":true,"afterItemId":null,"basedOnVersion":7,"accountTag":"tag"}""";
+        var add = Assert.IsType<CommandBody.QueueAdd>(ConnectJson.Decode<CommandBody>(kotlin));
+        Assert.Equal("i1", Assert.Single(add.Items).ItemId);
+        Assert.Equal(HandoffOrigin.UserAdded, add.Items[0].Origin);
+        Assert.True(add.Next);
+        Assert.Null(add.AfterItemId);
+        Assert.Equal(7, add.BasedOnVersion);
+        // 書き戻しても同じ形（判別子が先頭）
+        Assert.StartsWith("""{"type":"queue_add",""", ConnectJson.Encode<CommandBody>(add));
+    }
+
     [Fact]
     public void NextThatArrivesAfterTheSongAlreadyChangedIsIgnored()
     {

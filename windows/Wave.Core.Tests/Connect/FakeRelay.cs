@@ -496,6 +496,15 @@ internal sealed class SimDevice : ConnectClient.IEffects
     /// <summary>従った遠隔操作。</summary>
     public List<(ControlAction Action, long? PositionMs)> Controls { get; } = [];
 
+    /// <summary>従ったキューへの追加（項目の ID・次に再生か・どの曲の後ろか）。</summary>
+    public List<(List<string> Ids, bool Next, string? After)> QueueAdds { get; } = [];
+
+    bool ConnectClient.IEffects.QueueAdd(IReadOnlyList<HandoffItem> items, bool next, string? afterItemId)
+    {
+        QueueAdds.Add((items.Select(i => i.ItemId).ToList(), next, afterItemId));
+        return true;
+    }
+
     bool ConnectClient.IEffects.Control(ControlAction action, long? positionMs)
     {
         Controls.Add((action, positionMs));

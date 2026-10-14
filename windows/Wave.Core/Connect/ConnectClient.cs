@@ -93,6 +93,12 @@ public sealed class ConnectClient
         /// <summary>遠隔操作に従う（この端末が鳴らしている）。受け付けなければ false。</summary>
         bool Control(ControlAction action, long? positionMs) => false;
 
+        /// <summary>
+        /// 遠隔のキューへの追加に従う（この端末が鳴らしている）。afterItemId の曲があればその直後、無ければ next なら今の曲の直後、
+        /// そうでなければ自分で足した曲のかたまりの最後へ、items の ID のまま入れる。受け付けなければ false。
+        /// </summary>
+        bool QueueAdd(IReadOnlyList<HandoffItem> items, bool next, string? afterItemId) => false;
+
         /// <summary>ほかの端末と合わせたライブラリが届いた（手元に取り込む、ADR-0013）。</summary>
         void LibraryChanged(LibraryBody body)
         {
@@ -1062,6 +1068,59 @@ public sealed class ConnectClient
         return send(new RelayV2.Control { Doc = SealCommand(current, command) });
     }
 
+    /// <summary>キューへの追加の命令1件の平文の上限（詰め物の1ブロック 4096 から長さの欄の 4 バイトを引き、余裕を持たせる。Android と同じ）。</summary>
+    internal const int MaxQueueAddPlaintext = 3800;
+
+    /// <summary>
+    /// 遠隔のキューへの追加を送る（鳴っていない端末から、今鳴らしている同じアカウントの端末へ）。
+    /// 1件の平文が詰め物の1ブロックに収まるよう分けて送り、2件目からは前の件の最後の曲の後ろに入れてもらう。
+    /// </summary>
+    /// <returns>全部送ったか（家の再生が自分・別のアカウント・最新の状態をまだ見ていない・1曲でも収まらないなら false）</returns>
+    public bool SendQueueAdd(IReadOnlyList<HandoffItem> items, bool next)
+    {
+        if (items.Count == 0 || IsWriter || pendingStoreId is not null) return false;
+        var current = chain;
+        if (current is null) return false;
+        var tag = effects.AccountTag();
+        if (tag is null) return false;
+        var cursor = latestCursor;
+        if (cursor is null || cursor.Writer == signer.DeviceId || cursor.Body.AccountTag != tag) return false;
+        // 大きさは、ID の欄を UUID の長さで埋めた形で量る（実際の ID は送るときに振る）
+        const string placeholder = "00000000-0000-0000-0000-000000000000";
+        CommandBody Command(string id, IReadOnlyList<HandoffItem> list, string? after) => new CommandBody.QueueAdd
+        {
+            CommandId = id,
+            From = signer.DeviceId,
+            To = cursor.Writer,
+            Items = list,
+            Next = next,
+            AfterItemId = after,
+            BasedOnVersion = cursor.Version,
+            AccountTag = tag,
+        };
+        int Size(IReadOnlyList<HandoffItem> list) => ConnectJson.EncodeToUtf8(Command(placeholder, list, placeholder)).Length;
+        var chunks = new List<List<HandoffItem>>();
+        var chunk = new List<HandoffItem>();
+        foreach (var item in items)
+        {
+            if (Size([item]) > MaxQueueAddPlaintext) return false;
+            if (chunk.Count > 0 && Size([.. chunk, item]) > MaxQueueAddPlaintext)
+            {
+                chunks.Add(chunk);
+                chunk = [];
+            }
+            chunk.Add(item);
+        }
+        chunks.Add(chunk);
+        string? afterId = null;
+        foreach (var part in chunks)
+        {
+            if (!send(new RelayV2.Control { Doc = SealCommand(current, Command(newId(), part, afterId)) })) return false;
+            afterId = part[^1].ItemId;
+        }
+        return true;
+    }
+
     /// <summary>表示用: ほかの端末の最新のカーソル（別アカウントのものを含む）と、今の時刻に合わせた位置。</summary>
     public RemoteNow? RemoteNowPosition()
     {
@@ -1088,6 +1147,11 @@ public sealed class ConnectClient
         if (body is CommandBody.Profile profile)
         {
             if (profile.From == opened.Header.WriterId && profile.From != signer.DeviceId && current.Members.ContainsKey(profile.From)) effects.Event(new ClientEvent.Profile(profile.From, profile.Name, profile.Kind));
+            return;
+        }
+        if (body is CommandBody.QueueAdd add)
+        {
+            OnQueueAdd(add, opened.Header, current);
             return;
         }
         if (body is not CommandBody.Control command) return;
@@ -1117,6 +1181,22 @@ public sealed class ConnectClient
         // 比べるのは手元で今鳴っている曲（中継に書いた最新より先に進んでいることがある）
         if (command.OnItemId is not null && command.OnItemId != (local?.CurrentItemId ?? own.Body.CurrentItemId)) return;
         effects.Control(command.Action, command.PositionMs);
+    }
+
+    /// <summary>遠隔のキューへの追加を受けた。従う条件は再生・一時停止などの遠隔操作と同じ。</summary>
+    private void OnQueueAdd(CommandBody.QueueAdd command, DocHeader header, VerifiedChain current)
+    {
+        if (command.To != signer.DeviceId || command.From != header.WriterId || command.From == signer.DeviceId) return;
+        if (Math.Abs(epochMs() - header.IssuedAtEpochMs) > MaxControlAgeMs) return;
+        if (!current.Members.TryGetValue(command.From, out var from) || from.Keys.Role != Role.Player) return;
+        if (handledClaims.Contains(command.CommandId)) return;
+        Remember(command.CommandId);
+        if (command.AccountTag != effects.AccountTag() || command.Items.Count == 0) return;
+        if (session is not { } mine) return;
+        if (latestCursor is not { } own || own.Writer != signer.DeviceId) return;
+        if (command.BasedOnVersion > own.Version || own.Version - command.BasedOnVersion > MaxControlLag) return;
+        if (mine.Arbiter.StartVersion is not { } sessionStart || command.BasedOnVersion < sessionStart) return;
+        effects.QueueAdd(command.Items, command.Next, command.AfterItemId);
     }
 
     private bool RequestTransfer(bool retried)

@@ -145,6 +145,7 @@ public sealed record QueueBody
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
 [JsonDerivedType(typeof(Yield), "yield")]
 [JsonDerivedType(typeof(Control), "control")]
+[JsonDerivedType(typeof(QueueAdd), "queue_add")]
 [JsonDerivedType(typeof(Profile), "profile")]
 public abstract record CommandBody
 {
@@ -181,6 +182,29 @@ public abstract record CommandBody
         /// 送り手が見ていた、受け手の今の曲（次へ・前へ・シーク）。受け手の今の曲と違えば従わない（Android と同じ）。前の版の送り手は付けない（null）。
         /// </summary>
         public string? OnItemId { get; init; }
+    }
+
+    /// <summary>
+    /// 遠隔のキューへの追加: 鳴っていない端末から、今の再生中の端末へ「この曲をキューに入れて」（Android の CommandBody.QueueAdd と同じ）。
+    /// 従う条件は Control と同じ。受け手は AfterItemId の曲があればその直後へ、無ければ Next なら今の曲の直後、
+    /// そうでなければ自分で足した曲のかたまりの最後へ、送り手が振った項目の ID のまま入れる。
+    /// </summary>
+    public sealed record QueueAdd : CommandBody
+    {
+        public required string CommandId { get; init; }
+        public required string From { get; init; }
+        public required string To { get; init; }
+        public required IReadOnlyList<HandoffItem> Items { get; init; }
+
+        /// <summary>「次に再生」なら true、「キューに追加」なら false。</summary>
+        public required bool Next { get; init; }
+
+        public string? AfterItemId { get; init; }
+
+        /// <summary>送り手が見ていた、受け手のカーソルの版。</summary>
+        public required long BasedOnVersion { get; init; }
+
+        public required string AccountTag { get; init; }
     }
 
     /// <summary>端末の表示名を家のほかの端末に知らせる（名前は鎖に入れないので、加入した2台以外にも伝える）。</summary>

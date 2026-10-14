@@ -160,6 +160,13 @@ public sealed class ConnectService
             Post(() => AppPaths.Log($"connect-v2 control action={action} sent={client?.SendControl(action, positionMs)}"));
             return true;
         };
+        player.SendRemoteQueueAdd = (songs, next) =>
+        {
+            if (client is null || Relay.Status != RelayStatus.Connected) return false;
+            var items = songs.Select(song => ItemOf(song, new QueueItemMeta(Guid.NewGuid().ToString(), QueueOrigin.UserAdded))).ToList();
+            Post(() => AppPaths.Log($"connect-v2 queue add items={items.Count} next={next} sent={client?.SendQueueAdd(items, next)}"));
+            return true;
+        };
         // 接続に関係なく回す（transfer の期限・アカウントタグの計算）
         _ = Task.Run(async () =>
         {
@@ -556,6 +563,14 @@ public sealed class ConnectService
             return owner.OnUi(() => owner.player.ApplyControl(action, positionMs));
         }
 
+        public bool QueueAdd(IReadOnlyList<HandoffItem> items, bool next, string? afterItemId)
+        {
+            var entries = items.Select(EntryOf).ToList();
+            var added = owner.OnUi(() => owner.player.ApplyQueueAdd(entries, next, afterItemId));
+            AppPaths.Log($"connect-v2 queue add received items={items.Count} next={next} added={added}");
+            return added;
+        }
+
         /// <summary>ほかの端末と合わせたライブラリが届いた。手元の登録と聴いたところに取り込む（変われば保存し、画面も変わる）。</summary>
         public void LibraryChanged(LibraryBody body)
         {
@@ -918,15 +933,18 @@ public sealed class ConnectService
         return HandoffCodec.Validate(moved, moved.HandoffId) is HandoffDecodeResult.Ok ok ? ok.Snapshot : null;
     }
 
+    /// <summary>受け渡しの項目を、キューの曲と項目の情報へ。</summary>
+    private static (Song Song, QueueItemMeta Meta) EntryOf(HandoffItem i) => (
+        new Song(i.VideoId, i.Title, i.Artists.Select(a => new ArtistRef(a.Name, a.BrowseId)).ToList(), i.Album is { } album ? new AlbumRef(album.Name, album.BrowseId) : null, i.DurationSeconds, i.ThumbnailUrl),
+        new QueueItemMeta(i.ItemId, i.Origin switch
+        {
+            HandoffOrigin.Suggestion => QueueOrigin.Suggestion,
+            HandoffOrigin.UserAdded => QueueOrigin.UserAdded,
+            _ => QueueOrigin.Source,
+        }));
+
     private static QueueExport ToExport(HandoffSnapshot snapshot) => new(
-        snapshot.Items.Select(i => (
-            new Song(i.VideoId, i.Title, i.Artists.Select(a => new ArtistRef(a.Name, a.BrowseId)).ToList(), i.Album is { } album ? new AlbumRef(album.Name, album.BrowseId) : null, i.DurationSeconds, i.ThumbnailUrl),
-            new QueueItemMeta(i.ItemId, i.Origin switch
-            {
-                HandoffOrigin.Suggestion => QueueOrigin.Suggestion,
-                HandoffOrigin.UserAdded => QueueOrigin.UserAdded,
-                _ => QueueOrigin.Source,
-            }))).ToList(),
+        snapshot.Items.Select(EntryOf).ToList(),
         snapshot.CurrentItemId,
         (snapshot.Source as HandoffSource.Playlist)?.PlaylistId,
         (snapshot.Source as HandoffSource.Radio)?.SeedVideoId,
