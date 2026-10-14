@@ -24,6 +24,8 @@ final class MenuBarController: NSObject {
     /// 曲名の上の受け口。スクロールは見張りから回す（下の watchScroll）。
     private var catcher: StatusGestureView?
     private var scrollMonitors: [Any] = []
+    /// 曲名の上で始まった払いの途中か。音量を出すと項目の幅と位置が変わり、カーソルが外れるので、払いが終わるまでは回し続ける。
+    private var inGesture = false
 
     func start() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -54,11 +56,14 @@ final class MenuBarController: NSObject {
         }) { scrollMonitors.append(global) }
     }
 
-    /// カーソルが曲名の上なら受け口へ回して true。
+    /// カーソルが曲名の上か、曲名の上で始まった払いの途中なら、受け口へ回して true。
     private func routeScroll(_ event: NSEvent, via: String) -> Bool {
         guard let button = item?.button, let window = button.window, let catcher else { return false }
         let frame = window.convertToScreen(button.convert(button.bounds, to: nil))
-        guard frame.contains(NSEvent.mouseLocation) else { return false }
+        let inside = frame.contains(NSEvent.mouseLocation)
+        if event.phase == .began || event.phase == .mayBegin { inGesture = inside }
+        let continuing = inGesture && (event.phase != [] || event.momentumPhase != [])
+        guard inside || continuing else { return false }
         // 1回の払いに1行（phase の無いものは届くたび）
         if event.phase == .began || event.phase == [] && event.momentumPhase == [] { AppPaths.log("menubar scroll via=\(via)") }
         catcher.scrollWheel(with: event)
