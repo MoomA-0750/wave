@@ -2,3 +2,4 @@
 build/
 *.xcodeproj/
 .swiftpm/
+!scripts/ios-provision/Prov.xcodeproj/

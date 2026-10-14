@@ -11,6 +11,8 @@
 #   mac.sh ios-cmd <命令>...  iPhone 版に開発用の命令を送る
 #   mac.sh ios-log [行数]     iPhone 版のログの末尾
 #   mac.sh ios-shot <ファイル> シミュレーターの画面を撮ってこの機械に持ってくる
+#   mac.sh ios-provision      Xcode に実機用の配布設定（wave・ウィジェット、1年）を作らせる
+#   mac.sh ios-device         実機向けに組み、配布設定で署名して、つないだ iPhone へ入れる
 #   mac.sh ios-ipa [ファイル]  iPhone の実機向けに、署名していない wave.ipa を組んで持ってくる（既定は build/wave.ipa）
 set -euo pipefail
 here=$(cd "$(dirname "$0")/../.." && pwd)
@@ -47,6 +49,19 @@ ios-run)
 ios-cmd) shift; printf "%s\n" "$@" | ssh mac "cat > \"\$(xcrun simctl get_app_container wave-iphone xyz.mooma0750.wave data)/Library/Application Support/wave/debug-command.txt\"" ;;
 ios-log) ssh mac "tail -n ${2:-80} \"\$(xcrun simctl get_app_container wave-iphone xyz.mooma0750.wave data)/Library/Application Support/wave/wave.log\"" ;;
 ios-shot) ssh mac "xcrun simctl io wave-iphone screenshot /tmp/wave-ios.png >/dev/null 2>&1" && scp -q mac:/tmp/wave-ios.png "$2" ;;
+ios-device)
+  # つないだ iPhone へ入れる（配布設定は ios-provision で作っておく）
+  sync
+  ssh mac "cd $remote/mac && WAVE_DEBUG=1 $relay scripts/ios-bundle.sh device && rm -f build/ios-sign.log && open -a Terminal scripts/ios-sign.command"
+  until ssh mac "grep -q '^exit=' ~/$remote/mac/build/ios-sign.log 2>/dev/null"; do sleep 2; done
+  ssh mac "cat ~/$remote/mac/build/ios-sign.log" | tail -3
+  ssh mac "grep -q '^exit=0' ~/$remote/mac/build/ios-sign.log && xcrun devicectl device install app --device \$(xcrun devicectl list devices 2>/dev/null | grep 'available (paired)' | grep iPhone | grep -oE '[0-9A-F]{8}-[0-9A-F-]{27}' | head -1) ~/$remote/mac/build/ios-device/wave.app 2>&1 | tail -3" ;;
+ios-provision)
+  # Xcode に wave とウィジェットの配布設定（1年）を作らせる。GUI のセッションで動かす
+  rsync -a --delete scripts/ios-provision/ mac:wave-provision/
+  ssh mac "rm -f ~/wave-provision/prov.log; open -a Terminal ~/wave-provision/prov.command"
+  until ssh mac "grep -q '^exit=' ~/wave-provision/prov.log 2>/dev/null"; do sleep 3; done
+  ssh mac "grep -E 'Provisioning Profile:|BUILD|exit=' ~/wave-provision/prov.log | sort -u" ;;
 ios-ipa) sync; ssh mac "cd $remote/mac && $relay scripts/ios-bundle.sh device" && scp -q mac:$remote/mac/build/ios-device/wave.ipa "${2:-build/wave.ipa}" ;;
 *) sed -n 2,13p "$0"; exit 1 ;;
 esac
