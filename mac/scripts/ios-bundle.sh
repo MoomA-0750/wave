@@ -51,7 +51,16 @@ rm -rf "$app"
 mkdir -p "$app/PlugIns/WaveWidget.appex"
 cp "$bin/wave" "$app/wave"
 cp Resources/iOS/Info.plist "$app/Info.plist"
+# アイコン（Windows 版の wave.ico と同じ絵を白地に置いたもの。iPhone のアイコンは透明にできない）。
+# 今の iOS はばらの PNG を読まないので、Xcode と同じく actool で Assets.car にし、Info.plist にアイコンの名前を足す
+partial=$(mktemp)
+xcrun actool Resources/iOS/Assets.xcassets --compile "$app" --platform $sdkname --minimum-deployment-target 18.0 \
+    --app-icon AppIcon --target-device iphone --output-partial-info-plist "$partial" --output-format human-readable-text 2>&1 | grep -iE "error" || true
+plutil -replace CFBundleIcons -json "$(plutil -extract CFBundleIcons json -o - "$partial")" "$app/Info.plist"
+rm -f "$partial"
 setplist "$app/Info.plist"
+# 組むたびに版の番号を上げる（同じ番号のまま入れ直すと、iPhone がアイコンなどを前の版のまま使い続ける）
+plutil -replace CFBundleVersion -string "$(date +%Y%m%d%H%M)" "$app/Info.plist"
 # 連携の中継の宛先を書き込む（mac.sh がこの機械の local.properties から渡す。無ければ書かない）
 if [ -n "${WAVE_RELAY_V2_URL:-}" ] && [ -n "${WAVE_RELAY_V2_HOST:-}" ]; then
     plutil -replace WaveRelayV2Url -string "$WAVE_RELAY_V2_URL" "$app/Info.plist"
@@ -61,6 +70,7 @@ appex=$app/PlugIns/WaveWidget.appex
 cp "$bin/WaveWidget" "$appex/WaveWidget"
 cp Resources/iOS/Widget/Info.plist "$appex/Info.plist"
 setplist "$appex/Info.plist"
+plutil -replace CFBundleVersion -string "$(plutil -extract CFBundleVersion raw "$app/Info.plist")" "$appex/Info.plist"
 intents wave Wave "$app" "$app/wave"
 intents WaveWidget WaveWidget "$appex" "$appex/WaveWidget"
 
