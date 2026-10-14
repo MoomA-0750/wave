@@ -512,6 +512,12 @@ class PlaybackService : MediaLibraryService() {
                         }
                         true
                     }
+
+                override fun queueAdd(
+                    items: List<xyz.mooma0750.wave.handoff.HandoffItem>,
+                    next: Boolean,
+                    afterItemId: String?,
+                ): Boolean = suppressingV2 { queueSession.addFromRemote(items, next, afterItemId) }
             }
         connectV2Endpoint = v2Endpoint
         container.connectV2Host.register(v2Endpoint)
@@ -880,6 +886,16 @@ class PlaybackService : MediaLibraryService() {
             if (!isOwnUiController(session, controller)) return Futures.immediateFuture(SessionResult(SessionError.ERROR_PERMISSION_DENIED))
             if (customCommand.customAction in USER_SELECTIONS) skipGuard.onUserSelection()
             val local = localPlayer ?: return Futures.immediateFuture(SessionResult(SessionError.ERROR_INVALID_STATE))
+            // ほかの端末を映している間の「次に再生」「キューに追加」は、鳴らしている端末のキューへ送る（手元のキューに入れても使われない）
+            val manager = container.connectV2
+            if (manager != null && session.player === remotePlayer && manager.remotePlayback.value != null &&
+                (customCommand.customAction == QueueCommands.ADD_NEXT || customCommand.customAction == QueueCommands.ADD_TO_END)
+            ) {
+                val songs = QueueCommands.songsOf(args) ?: QueueCommands.songOf(args)?.let(::listOf)
+                if (songs.isNullOrEmpty()) return Futures.immediateFuture(SessionResult(SessionError.ERROR_BAD_VALUE))
+                manager.queueAdd(queue.remoteItemsOf(songs), next = customCommand.customAction == QueueCommands.ADD_NEXT)
+                return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+            }
             val wasEmpty = local.mediaItemCount == 0
             val wasPlaying = local.playWhenReady
             // 曲を選ぶ処理の中の play() は、再生ボタン（D-9）として知らせない。後で「曲を選んだ」を1回だけ知らせる（レビュー p6b34 高-1）

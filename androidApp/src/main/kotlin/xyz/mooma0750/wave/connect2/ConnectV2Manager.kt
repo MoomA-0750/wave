@@ -338,6 +338,16 @@ class ConnectV2Manager(
         if (sent != true) mutableEvents.tryEmit(ClientEvent.ServerError(CONTROL_UNSENT))
     }
 
+    /** 画面から: 鳴らしている端末のキューへ曲を足す（ほかの端末を映している間の「次に再生」「キューに追加」）。 */
+    fun queueAdd(
+        items: List<xyz.mooma0750.wave.handoff.HandoffItem>,
+        next: Boolean,
+    ) = post {
+        val sent = client?.sendQueueAdd(items, next)
+        Log.i(WaveApplication.LOG_TAG, "connect-v2 queue add items=${items.size} next=$next sent=$sent")
+        if (sent != true) mutableEvents.tryEmit(ClientEvent.ServerError(CONTROL_UNSENT))
+    }
+
     private val mutableUnreadable = MutableStateFlow(false)
 
     /** 端末の保存が読めない（作り直すまで Connect v2 を使わない）。 */
@@ -507,6 +517,16 @@ class ConnectV2Manager(
                     return true
                 }
                 return runBlocking(Dispatchers.Main) { host.endpoint?.control(action, positionMs) == true }
+            }
+
+            override fun queueAdd(
+                items: List<xyz.mooma0750.wave.handoff.HandoffItem>,
+                next: Boolean,
+                afterItemId: String?,
+            ): Boolean {
+                val added = runBlocking(Dispatchers.Main) { host.endpoint?.queueAdd(items, next, afterItemId) == true }
+                Log.i(WaveApplication.LOG_TAG, "connect-v2 queue add received items=${items.size} next=$next added=$added")
+                return added
             }
 
             override fun libraryChanged(body: xyz.mooma0750.wave.handoff.v2.LibraryBody) {

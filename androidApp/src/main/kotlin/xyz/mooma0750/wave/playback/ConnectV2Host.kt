@@ -44,6 +44,13 @@ class ConnectV2Host {
             action: xyz.mooma0750.wave.handoff.v2.ControlAction,
             positionMs: Long?,
         ): Boolean
+
+        /** ほかの端末で足した曲を、自分のキューへ入れる（QueueSession.addFromRemote）。 */
+        fun queueAdd(
+            items: List<xyz.mooma0750.wave.handoff.HandoffItem>,
+            next: Boolean,
+            afterItemId: String?,
+        ): Boolean
     }
 
     data class Cursor(

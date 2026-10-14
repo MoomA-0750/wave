@@ -263,14 +263,49 @@ class QueueSession(
         return ids.size
     }
 
+    /**
+     * ほかの端末で「次に再生」「キューに追加」した曲を、送り手が振った項目の ID のまま入れる（端末の連携の queue_add）。
+     * afterItemId の曲があればその直後へ（分けて届いた続き）、無ければ next なら今の曲の直後、そうでなければ自分で足した曲のかたまりの最後へ。
+     * キューが空・同じ項目がもうある（同じ追加が二度届いた）なら入れずに false。
+     */
+    fun addFromRemote(
+        items: List<xyz.mooma0750.wave.handoff.HandoffItem>,
+        next: Boolean,
+        afterItemId: String?,
+    ): Boolean {
+        if (items.isEmpty() || player.items.isEmpty()) return false
+        val existing = player.items.mapTo(HashSet()) { it.itemId }
+        if (items.any { it.itemId in existing }) return false
+        val queued = items.map { HandoffMapping.queueItemOf(it).copy(origin = ItemOrigin.UserAdded) }
+        val after = afterItemId?.let { id -> player.items.indexOfFirst { it.itemId == id }.takeIf { it >= 0 } }
+        addItems(queued) { list ->
+            when {
+                after != null -> player.insertAt(after + 1, list)
+                next -> player.insertAfterCurrent(list)
+                else -> player.insertAt(userQueueEnd(), list)
+            }
+        }
+        return true
+    }
+
+    /** ほかの端末へ送る「次に再生」「キューに追加」の項目（新しい項目の ID を振る）。 */
+    fun remoteItemsOf(songs: List<Song>): List<xyz.mooma0750.wave.handoff.HandoffItem> = songs.map { HandoffMapping.itemOf(item(it, ItemOrigin.UserAdded)) }
+
     private fun addUserItems(
         songs: List<Song>,
         put: (List<QueueItem>) -> Unit,
     ) {
         if (songs.isEmpty()) return
+        addItems(songs.map { item(it, ItemOrigin.UserAdded) }, put)
+    }
+
+    private fun addItems(
+        items: List<QueueItem>,
+        put: (List<QueueItem>) -> Unit,
+    ) {
         rebindIfEmpty()
         val resumeAt = endedAtLastItem()
-        put(songs.map { item(it, ItemOrigin.UserAdded) })
+        put(items)
         // 最後まで行って止まっているなら、足した曲から続ける（再生を押すと終わった曲の先頭に戻ってしまうため）
         if (resumeAt != null) player.resumeAt(resumeAt)
     }

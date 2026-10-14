@@ -374,6 +374,31 @@ class QueueSessionTest {
         }
 
     @Test
+    fun songsAddedOnAnotherDeviceGoInWithTheirIdsAndInOrder() =
+        runTest {
+            val player = FakePlayer()
+            val queue = session(player, FakeContent())
+            queue.playFrom(listOf(song("a"), song("b"), song("c")), 0, "PL1", null)
+            queue.addToEnd(song("u1"))
+            // ほかの端末の「キューに追加」: 自分で足した曲のかたまりの最後（u1 の後、b の前）
+            val sent = queue.remoteItemsOf(listOf(song("r1"), song("r2")))
+            assertTrue(queue.addFromRemote(sent, next = false, afterItemId = null))
+            assertEquals(listOf("a", "u1", "r1", "r2", "b", "c"), player.videoIds())
+            assertEquals(sent.map { it.itemId }, player.items.drop(2).take(2).map { it.itemId })
+            assertTrue(player.items.drop(1).take(3).all { it.origin == ItemOrigin.UserAdded })
+            // 分けて届いた続きは、前の件の最後の曲の後ろへ
+            val more = queue.remoteItemsOf(listOf(song("r3")))
+            assertTrue(queue.addFromRemote(more, next = false, afterItemId = sent.last().itemId))
+            assertEquals(listOf("a", "u1", "r1", "r2", "r3", "b", "c"), player.videoIds())
+            // 「次に再生」は今の曲の直後
+            assertTrue(queue.addFromRemote(queue.remoteItemsOf(listOf(song("x"))), next = true, afterItemId = null))
+            assertEquals("x", player.videoIds()[1])
+            // 同じ追加が二度届いても入れない
+            assertFalse(queue.addFromRemote(sent, next = false, afterItemId = null))
+            assertEquals(8, player.items.size)
+        }
+
+    @Test
     fun resetClearsTheQueueAndDropsInFlightResults() =
         runTest {
             val player = FakePlayer()
