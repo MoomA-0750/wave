@@ -104,6 +104,7 @@ struct PlayerBar: View {
 /// 再生のボタン（シャッフル・前へ・再生・次へ・リピート）と位置のバー。下の帯とメニューバーの小窓で使う。
 struct TransportControls: View {
     @State private var dragging: Double?
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         let player = AppServices.player!
@@ -115,13 +116,17 @@ struct TransportControls: View {
                 Button(action: player.previous) { Image(systemName: "backward.end.fill").font(.system(size: 15)) }
                     .buttonStyle(IconButtonStyle()).help(L.t("前へ", "Previous"))
                 Button(action: player.togglePlay) {
+                    // primary などの色は、メニューバーの小窓のガラスの上だと透けて灰色になり、押せないように見える。
+                    // 決まった色で塗る（暗い表示は白い丸に黒い記号、明るい表示はその逆）
+                    let fill: Color = scheme == .dark ? .white : .black
+                    let mark: Color = scheme == .dark ? .black : .white
                     ZStack {
-                        Circle().fill(Color.primary).frame(width: 36, height: 36)
+                        Circle().fill(fill).frame(width: 36, height: 36)
                         if player.isLoading {
-                            ProgressView().controlSize(.small).tint(Color(nsColor: .windowBackgroundColor))
+                            ProgressView().controlSize(.small).tint(mark)
                         } else {
                             Image(systemName: player.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 15))
-                                .foregroundStyle(Color(nsColor: .windowBackgroundColor))
+                                .foregroundStyle(mark)
                         }
                     }
                 }
