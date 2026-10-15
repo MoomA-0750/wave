@@ -98,6 +98,8 @@ enum DebugCommands {
         case "video": window.showVideo = arg == "on"
         case "video-expand": window.expandVideo()
         case "video-only": window.toggleVideoOnly()
+        case "video-pip": if arg == "off" { VideoPip.shared.close() } else { VideoPip.shared.open() }
+        case "window-fullscreen": window.setWindowFullScreen(arg == "on")
         case "ai-pair":
             AppPaths.log("debug ai pair ok=\(AiChat.pair(arg))")
         case "ai":

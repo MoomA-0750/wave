@@ -56,9 +56,12 @@ struct MainView: View {
             AppServices.toast.show(message)
             player.message = nil
         }
+        // 緑のボタンなどで窓の全画面が変わっても、映像の右上のボタンの向きを合わせる
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didEnterFullScreenNotification)) { _ in model.windowFullScreen = true }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didExitFullScreenNotification)) { _ in model.windowFullScreen = false }
         .onChange(of: player.current?.videoId) { _, _ in
-            // 曲が変わったら曲の表示に戻す（Android と同じ）
-            model.showVideo = false
+            // 曲が変わったら曲の表示に戻す（Android と同じ）。映像の小窓を出している間は動画のまま（MV の無い曲はジャケットを出す）
+            if !model.pipOpen { model.showVideo = false }
             model.prefetchMembership()
         }
         // ライブは「動画」にしたときだけ、映像を見るための画質で読み直す

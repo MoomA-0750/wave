@@ -56,8 +56,14 @@ final class MainWindowModel {
     var fullScreen = false
     /// 「曲｜動画」の動画を選んでいるか。
     var showVideo = false
-    /// 全画面で、映像だけを画面いっぱいに出しているか（曲名・歌詞・下の操作の帯も隠す）。
+    /// 全画面の再生中の画面で、映像だけを窓いっぱいに出しているか（曲名・歌詞・下の操作の帯も隠す）。
     var videoOnly = false
+    /// 映像だけの表示を、右の欄・小窓の「拡大」から直に開いたか（やめると元の画面に戻す）。
+    @ObservationIgnored private var videoOnlyFromExpand = false
+    /// 窓が macOS の全画面になっているか。
+    var windowFullScreen = false
+    /// 映像の小窓（PiP）を出しているか。
+    var pipOpen = false
 
     // 検索欄
     var searchText = ""
@@ -132,25 +138,48 @@ final class MainWindowModel {
 
     func setFullScreen(_ on: Bool) {
         fullScreen = on
-        if !on { videoOnly = false }
-        // 窓も全画面にする（Windows の FullScreen の表示と同じ）
-        if let window = NSApp.keyWindow ?? NSApp.mainWindow, window.styleMask.contains(.fullScreen) != on {
-            window.toggleFullScreen(nil)
+        if !on {
+            videoOnly = false
+            videoOnlyFromExpand = false
         }
+        // 窓も全画面にする（Windows の FullScreen の表示と同じ）
+        setWindowFullScreen(on)
     }
 
-    /// 映像を大きく見る（右の欄・メニューバーの小窓の映像の「拡大」）。全画面の再生中の画面で映像を出す。
+    /// 窓を macOS の全画面にする・やめる（中の表示は変えない）。
+    func setWindowFullScreen(_ on: Bool) {
+        if let window = Self.mainWindow, window.styleMask.contains(.fullScreen) != on {
+            window.toggleFullScreen(nil)
+        }
+        windowFullScreen = on
+    }
+
+    /// 主の窓（メニューバーの小窓や映像の小窓が前にあっても、主の窓を全画面にする）。
+    static var mainWindow: NSWindow? {
+        NSApp.windows.first { $0.identifier?.rawValue.hasPrefix("main") == true }
+            ?? NSApp.windows.first { $0.canBecomeMain && $0.identifier?.rawValue != "login" }
+    }
+
+    /// 映像を大きく見る（右の欄・メニューバーの小窓の映像の「拡大」）。macOS の全画面にはせず、窓の中で映像だけをいっぱいに出す。
+    /// 映像の右上のボタンで、そこから macOS の全画面にできる。
     func expandVideo() {
         showVideo = true
         MenuBarController.shared.close()
         MenuBarController.showMainWindow()
-        setFullScreen(true)
+        fullScreen = true
+        videoOnly = true
+        videoOnlyFromExpand = true
     }
 
-    /// 全画面で、映像だけを画面いっぱいに出す・やめる。
+    /// 映像だけを窓いっぱいに出す・やめる。「拡大」から開いたときは、やめると元の画面（と元の窓の大きさ）に戻す。
     func toggleVideoOnly() {
-        videoOnly.toggle()
-        if videoOnly && !fullScreen { setFullScreen(true) }
+        if videoOnly {
+            videoOnly = false
+            if videoOnlyFromExpand { setFullScreen(false) }
+        } else {
+            videoOnly = true
+            fullScreen = true
+        }
     }
 
     /// 全画面からページを開くときは、全画面を閉じてから開く。

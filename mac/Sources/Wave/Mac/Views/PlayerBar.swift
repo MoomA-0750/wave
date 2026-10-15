@@ -206,16 +206,33 @@ struct VideoOrCover: View {
         .overlay(alignment: .bottomTrailing) {
             // 右の欄・メニューバーの小窓の映像は、右下のボタンで全画面の再生中の画面に大きく出す
             if !inFullView && model.showVideo && player.hasVideo {
-                Button { model.expandVideo() } label: { Image(systemName: "arrow.up.left.and.arrow.down.right").font(.system(size: 13, weight: .semibold)) }
-                    .buttonStyle(IconButtonStyle(size: 28))
-                    .foregroundStyle(.white)
-                    .background(Circle().fill(Color.black.opacity(0.45)))
-                    .padding(8)
-                    .help(L.t("映像を大きく見る", "Expand video"))
+                HStack(spacing: 2) {
+                    PipButton(size: 28)
+                    Button { model.expandVideo() } label: { Image(systemName: "arrow.up.left.and.arrow.down.right").font(.system(size: 13, weight: .semibold)) }
+                        .buttonStyle(IconButtonStyle(size: 28))
+                        .help(L.t("映像を大きく見る", "Expand video"))
+                }
+                .foregroundStyle(.white)
+                .background(Capsule().fill(Color.black.opacity(0.45)))
+                .padding(8)
             }
         }
         .onChange(of: model.showVideo, initial: true) { _, show in video.setActive(show ? player.video : nil) }
         .onChange(of: player.video) { _, v in if model.showVideo { video.setActive(v) } else { video.setActive(nil) } }
+    }
+}
+
+/// 映像の小窓（PiP）を出す・閉じるボタン。
+struct PipButton: View {
+    var size: CGFloat
+    @State private var model = MainWindowModel.shared
+
+    var body: some View {
+        Button { VideoPip.shared.toggle() } label: {
+            Image(systemName: model.pipOpen ? "pip.exit" : "pip.enter").font(.system(size: size * 0.46, weight: .semibold))
+        }
+        .buttonStyle(IconButtonStyle(size: size))
+        .help(model.pipOpen ? L.t("小窓を閉じる", "Close picture in picture") : L.t("小窓で見る", "Picture in picture"))
     }
 }
 
@@ -244,16 +261,25 @@ struct FullView: View {
         let player = AppServices.player!
         let song = player.current
         if model.videoOnly && model.showVideo && player.hasVideo {
-            // 映像だけを画面いっぱいに（ダブルクリック・右上のボタン・Esc で戻る）
+            // 映像だけを窓いっぱいに（ダブルクリックで macOS の全画面にする・やめる。右上のボタン・Esc で戻る）
             ZStack(alignment: .topTrailing) {
                 Color.black
                 VideoOrCover(size: nil, inFullView: true)
-                    .onTapGesture(count: 2) { model.toggleVideoOnly() }
-                Button { model.toggleVideoOnly() } label: { Image(systemName: "rectangle.inset.filled").font(.system(size: 15)) }
+                    .onTapGesture(count: 2) { model.setWindowFullScreen(!model.windowFullScreen) }
+                HStack(spacing: 4) {
+                    PipButton(size: 32)
+                    Button { model.setWindowFullScreen(!model.windowFullScreen) } label: {
+                        Image(systemName: model.windowFullScreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right").font(.system(size: 15))
+                    }
                     .buttonStyle(IconButtonStyle())
-                    .foregroundStyle(.white)
-                    .help(L.t("映像だけをやめる (Esc)", "Show the player (Esc)"))
-                    .padding(16)
+                    .help(model.windowFullScreen ? L.t("全画面をやめる", "Exit full screen") : L.t("全画面", "Full screen"))
+                    Button { model.toggleVideoOnly() } label: { Image(systemName: "xmark").font(.system(size: 15)) }
+                        .buttonStyle(IconButtonStyle())
+                        .help(L.t("映像だけをやめる (Esc)", "Close video (Esc)"))
+                }
+                .foregroundStyle(.white)
+                .background(Capsule().fill(Color.black.opacity(0.45)))
+                .padding(16)
             }
             .ignoresSafeArea()
             .environment(\.colorScheme, .dark)
@@ -278,13 +304,16 @@ struct FullView: View {
                         if model.showVideo && player.hasVideo {
                             VideoOrCover(size: nil, inFullView: true)
                                 .overlay(alignment: .bottomTrailing) {
-                                    // 映像だけを画面いっぱいに出す（映像のダブルクリックでも）
-                                    Button { model.toggleVideoOnly() } label: { Image(systemName: "arrow.up.left.and.arrow.down.right").font(.system(size: 14, weight: .semibold)) }
-                                        .buttonStyle(IconButtonStyle(size: 30))
-                                        .foregroundStyle(.white)
-                                        .background(Circle().fill(Color.black.opacity(0.45)))
-                                        .padding(10)
-                                        .help(L.t("映像だけを画面いっぱいに", "Video only"))
+                                    HStack(spacing: 2) {
+                                        PipButton(size: 30)
+                                        // 映像だけを窓いっぱいに出す（映像のダブルクリックでも）
+                                        Button { model.toggleVideoOnly() } label: { Image(systemName: "arrow.up.left.and.arrow.down.right").font(.system(size: 14, weight: .semibold)) }
+                                            .buttonStyle(IconButtonStyle(size: 30))
+                                            .help(L.t("映像だけを窓いっぱいに", "Video only"))
+                                    }
+                                    .foregroundStyle(.white)
+                                    .background(Capsule().fill(Color.black.opacity(0.45)))
+                                    .padding(10)
                                 }
                                 .onTapGesture(count: 2) { model.toggleVideoOnly() }
                         } else {
