@@ -224,11 +224,16 @@
                                         </StackPanel>
                                     </Grid>
                                 </Border>
-                                <!-- 映像を大きく見る（全画面の再生中の画面へ） -->
-                                <Button x:Name="VideoExpand" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="8" Visibility="Collapsed" Style="{StaticResource IconButtonStyle}"
-                                        Background="#73000000" Foreground="White" CornerRadius="16" Click="OnVideoExpand" ToolTipService.ToolTip="{x:Bind app:L.T('映像を大きく見る', 'Expand video')}">
-                                    <FontIcon Glyph="&#xE740;" FontSize="13" />
-                                </Button>
+                                <!-- 映像を小窓（PiP）で見る・窓の中で大きく見る -->
+                                <StackPanel x:Name="VideoExpand" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="8" Visibility="Collapsed" Orientation="Horizontal"
+                                            Background="#73000000" CornerRadius="16">
+                                    <Button Style="{StaticResource IconButtonStyle}" Foreground="White" CornerRadius="16" Click="OnVideoPip" ToolTipService.ToolTip="{x:Bind app:L.T('小窓で見る', 'Picture in picture')}">
+                                        <FontIcon Glyph="&#xEE49;" FontSize="13" />
+                                    </Button>
+                                    <Button Style="{StaticResource IconButtonStyle}" Foreground="White" CornerRadius="16" Click="OnVideoExpand" ToolTipService.ToolTip="{x:Bind app:L.T('映像を大きく見る', 'Expand video')}">
+                                        <FontIcon Glyph="&#xE740;" FontSize="13" />
+                                    </Button>
+                                </StackPanel>
                                 <StackPanel x:Name="VideoSwitch" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,10,0,0" Visibility="Collapsed"
                                             Background="#99000000" CornerRadius="16" Padding="3">
                                     <ToggleButton x:Name="SongTab" CornerRadius="13" Padding="14,4" MinWidth="0" FontSize="12" IsChecked="True" Click="OnSongTab"
@@ -517,7 +522,7 @@
                         <MediaPlayerElement x:Name="FullVideo" AreTransportControlsEnabled="False" Stretch="Uniform" Visibility="Collapsed" IsHitTestVisible="False" />
                         <!-- 映像だけを画面いっぱいに出す -->
                         <Button x:Name="FullVideoOnlyButton" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="10" Visibility="Collapsed" Style="{StaticResource IconButtonStyle}"
-                                Background="#73000000" Foreground="White" CornerRadius="16" Click="OnVideoOnly" ToolTipService.ToolTip="{x:Bind app:L.T('映像だけを画面いっぱいに', 'Video only')}">
+                                Background="#73000000" Foreground="White" CornerRadius="16" Click="OnVideoOnly" ToolTipService.ToolTip="{x:Bind app:L.T('映像だけを窓いっぱいに', 'Video only')}">
                             <FontIcon Glyph="&#xE740;" FontSize="14" />
                         </Button>
                     </Grid>
@@ -541,10 +546,21 @@
             <!-- 映像だけ（曲名・歌詞・下の操作の帯も隠す。ダブルクリック・右上のボタン・Esc で戻る） -->
             <Grid x:Name="VideoOnlyView" Visibility="Collapsed" Background="Black" DoubleTapped="OnVideoOnlyDoubleTapped">
                 <MediaPlayerElement x:Name="OnlyVideo" AreTransportControlsEnabled="False" Stretch="Uniform" IsHitTestVisible="False" />
-                <Button HorizontalAlignment="Right" VerticalAlignment="Top" Margin="16" Style="{StaticResource IconButtonStyle}" Foreground="White" Click="OnVideoOnly"
-                        ToolTipService.ToolTip="{x:Bind app:L.T('映像だけをやめる (Esc)', 'Show the player (Esc)')}">
-                    <FontIcon Glyph="&#xE73F;" FontSize="16" />
-                </Button>
+                <!-- 小窓（PiP）・窓の全画面・閉じる（小窓では元の窓に戻す） -->
+                <StackPanel HorizontalAlignment="Right" VerticalAlignment="Top" Margin="12" Orientation="Horizontal" Spacing="2" Background="#73000000" CornerRadius="18" Padding="2">
+                    <Button Style="{StaticResource IconButtonStyle}" Foreground="White" Click="OnVideoPip"
+                            ToolTipService.ToolTip="{x:Bind app:L.T('小窓で見る・元に戻す', 'Picture in picture')}">
+                        <FontIcon x:Name="VideoPipIcon" Glyph="&#xEE49;" FontSize="15" />
+                    </Button>
+                    <Button x:Name="VideoOnlyFullScreenButton" Style="{StaticResource IconButtonStyle}" Foreground="White" Click="OnVideoOnlyFullScreen"
+                            ToolTipService.ToolTip="{x:Bind app:L.T('全画面', 'Full screen')}">
+                        <FontIcon x:Name="VideoOnlyFullScreenIcon" Glyph="&#xE740;" FontSize="15" />
+                    </Button>
+                    <Button Style="{StaticResource IconButtonStyle}" Foreground="White" Click="OnVideoOnlyClose"
+                            ToolTipService.ToolTip="{x:Bind app:L.T('閉じる (Esc)', 'Close (Esc)')}">
+                        <FontIcon Glyph="&#xE711;" FontSize="15" />
+                    </Button>
+                </StackPanel>
             </Grid>
         </Grid>
 

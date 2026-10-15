@@ -148,6 +148,12 @@ public static class DebugCommands
             case "video-only":
                 window.DebugVideoOnly(arg == "on");
                 break;
+            case "video-pip":
+                window.DebugVideoPip(arg != "off");
+                break;
+            case "window-fullscreen":
+                window.DebugWindowFullScreen(arg == "on");
+                break;
             case "ai-pair":
                 AppPaths.Log("debug ai pair ok=" + AiChat.Pair(arg));
                 break;
