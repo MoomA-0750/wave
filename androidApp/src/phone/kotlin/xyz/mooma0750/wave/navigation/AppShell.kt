@@ -71,8 +71,9 @@ fun AppShell(
     }
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val wide = maxWidth >= WIDE_LAYOUT_MIN_WIDTH
-        // 横向きのスマホ（縦が狭い）: 下のタブの代わりに左に縦のレールを出し、縦の場所を中身に回す
-        val rail = !wide && maxWidth > maxHeight && maxHeight < RAIL_MAX_HEIGHT
+        // 横向きのスマホ（縦が狭い）: 下のタブの代わりに左に縦のレールを出し、縦の場所を中身に回す。
+        // 大きいスマホは横にすると右に再生の列も出る幅になるが、縦が狭いのは同じなのでレールにする
+        val rail = maxWidth > maxHeight && maxHeight < RAIL_MAX_HEIGHT
         val panelWidth = (maxWidth * 0.32f).coerceIn(PANEL_MIN_WIDTH, PANEL_MAX_WIDTH)
         Row(Modifier.fillMaxSize()) {
             if (rail) {

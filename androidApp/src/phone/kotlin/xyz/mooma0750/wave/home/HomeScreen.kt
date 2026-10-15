@@ -37,7 +37,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -132,44 +131,46 @@ private fun RecentGrid(
     actions: SongActions,
     onClick: (HomeItem) -> Unit,
 ) {
-    // 広い画面では4列（Spotify のタブレットと同じ）
-    val columns = if (LocalConfiguration.current.screenWidthDp >= 600) 4 else 2
-    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        items.chunked(columns).forEach { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                row.forEach { item ->
-                    val look = HomeItemLook.of(item)
-                    // 曲は長押しで曲のメニューを開く（棚のカードと同じ）
-                    var menu by remember { mutableStateOf(false) }
-                    if (menu && item is HomeItem.SongItem) SongMenuSheet(item.song, actions, onDismiss = { menu = false })
-                    Card(
-                        modifier =
-                            Modifier.weight(1f).height(56.dp).clip(MaterialTheme.shapes.small).combinedClickable(
-                                onLongClick = if (item is HomeItem.SongItem) ({ menu = true }) else null,
-                                onClick = { onClick(item) },
-                            ),
-                        shape = MaterialTheme.shapes.small,
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            coil3.compose.AsyncImage(
-                                model = look.thumbnailUrl,
-                                contentDescription = null,
-                                modifier = Modifier.size(56.dp).then(if (item is HomeItem.ArtistItem) Modifier.padding(4.dp).clip(CircleShape) else Modifier),
-                                contentScale = ContentScale.Crop,
-                            )
-                            Text(
-                                look.title,
-                                Modifier.padding(horizontal = 8.dp),
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                                style = MaterialTheme.typography.labelLargeEmphasized,
-                            )
+    // 広い画面では4列（Spotify のタブレットと同じ）。右の再生の列や左のレールで狭まるので、画面ではなく中身の幅で決める
+    androidx.compose.foundation.layout.BoxWithConstraints {
+        val columns = if (maxWidth >= 600.dp) 4 else 2
+        Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            items.chunked(columns).forEach { row ->
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    row.forEach { item ->
+                        val look = HomeItemLook.of(item)
+                        // 曲は長押しで曲のメニューを開く（棚のカードと同じ）
+                        var menu by remember { mutableStateOf(false) }
+                        if (menu && item is HomeItem.SongItem) SongMenuSheet(item.song, actions, onDismiss = { menu = false })
+                        Card(
+                            modifier =
+                                Modifier.weight(1f).height(56.dp).clip(MaterialTheme.shapes.small).combinedClickable(
+                                    onLongClick = if (item is HomeItem.SongItem) ({ menu = true }) else null,
+                                    onClick = { onClick(item) },
+                                ),
+                            shape = MaterialTheme.shapes.small,
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                coil3.compose.AsyncImage(
+                                    model = look.thumbnailUrl,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(56.dp).then(if (item is HomeItem.ArtistItem) Modifier.padding(4.dp).clip(CircleShape) else Modifier),
+                                    contentScale = ContentScale.Crop,
+                                )
+                                Text(
+                                    look.title,
+                                    Modifier.padding(horizontal = 8.dp),
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                    style = MaterialTheme.typography.labelLargeEmphasized,
+                                )
+                            }
                         }
                     }
+                    repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
                 }
-                repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
             }
-        }
+    }
     }
 }

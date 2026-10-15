@@ -306,7 +306,12 @@ fun NowPlayingScreen(
             if (landscape) {
                 minOf(maxWidth * 0.42f - 48.dp, maxHeight - 120.dp).coerceAtLeast(120.dp)
             } else {
-                minOf(leftWidth - 48.dp, maxHeight - CONTROLS_HEIGHT).coerceAtLeast(160.dp)
+                // 横にしたスマホの右の列（縦が狭い）では、操作の列が切れないようジャケットをさらに小さくする
+                if (maxHeight < LANDSCAPE_MAX_HEIGHT) {
+                    minOf(leftWidth - 48.dp, maxHeight - SHORT_CONTROLS_HEIGHT).coerceAtLeast(96.dp)
+                } else {
+                    minOf(leftWidth - 48.dp, maxHeight - CONTROLS_HEIGHT).coerceAtLeast(160.dp)
+                }
             }
         val hasLyrics by androidx.compose.runtime.produceState<Boolean?>(null, song?.videoId, live) {
             value = if (live || external) false else song?.let { lyrics.lyrics(it) is xyz.mooma0750.wave.core.lyrics.LyricsRepository.Result.Found }
@@ -672,6 +677,9 @@ private fun FullScreenVideo(
 
 /** ジャケットの下の、曲名から端末・キューの列までの高さ（ジャケットの大きさの上限を決める）。 */
 private val CONTROLS_HEIGHT = 400.dp
+
+/** 縦が狭いとき、ジャケットの上下（上の行・曲名・シークバー・操作の列・余白）に要る高さ。 */
+private val SHORT_CONTROLS_HEIGHT = 330.dp
 
 /** 広い画面でも、操作の列が横に間延びしないように（Spotify と同じく中央の列に収める）。 */
 private val MAX_CONTENT_WIDTH = 560.dp
