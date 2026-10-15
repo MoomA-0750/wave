@@ -546,8 +546,8 @@
             <!-- 映像だけ（曲名・歌詞・下の操作の帯も隠す。ダブルクリック・右上のボタン・Esc で戻る） -->
             <Grid x:Name="VideoOnlyView" Visibility="Collapsed" Background="Black" DoubleTapped="OnVideoOnlyDoubleTapped">
                 <MediaPlayerElement x:Name="OnlyVideo" AreTransportControlsEnabled="False" Stretch="Uniform" IsHitTestVisible="False" />
-                <!-- 小窓（PiP）・窓の全画面・閉じる（小窓では元の窓に戻す） -->
-                <StackPanel HorizontalAlignment="Right" VerticalAlignment="Top" Margin="12" Orientation="Horizontal" Spacing="2" Background="#73000000" CornerRadius="18" Padding="2">
+                <!-- 小窓（PiP）・窓の全画面・閉じる（小窓では元の窓に戻す）。右上は窓の最小化・閉じるのボタンと重なるので右下に置く -->
+                <StackPanel HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="12" Orientation="Horizontal" Spacing="2" Background="#73000000" CornerRadius="18" Padding="2">
                     <Button Style="{StaticResource IconButtonStyle}" Foreground="White" Click="OnVideoPip"
                             ToolTipService.ToolTip="{x:Bind app:L.T('小窓で見る・元に戻す', 'Picture in picture')}">
                         <FontIcon x:Name="VideoPipIcon" Glyph="&#xEE49;" FontSize="15" />
