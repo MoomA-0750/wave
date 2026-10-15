@@ -40,6 +40,9 @@ object TrackUri {
 
     private const val EPOCH = "epoch"
 
+    /** ライブを映像を見るための画質で流す印（無ければ音のための小さい画質）。 */
+    private const val LIVE_VIDEO = "video"
+
     /** RSS のエピソード（ADR-0012）。音声の URL を `u` に持つ。 */
     private const val EPISODE_HOST = "episode"
     private const val EPISODE_URL = "u"
@@ -72,6 +75,21 @@ object TrackUri {
 
     fun liveVideoIdOf(uri: Uri): String? = uri.takeIf { it.scheme == SCHEME && it.host == LIVE_HOST }?.lastPathSegment
 
+    /** ライブの URI が映像を見るための画質か。 */
+    fun isLiveVideo(uri: Uri?): Boolean = uri?.takeIf { it.scheme == SCHEME && it.host == LIVE_HOST }?.getQueryParameter(LIVE_VIDEO) == "1"
+
+    /** ライブの URI を、映像を見るための画質（video）か音のための画質に付け替える。ライブでなければそのまま。 */
+    fun withLiveVideo(
+        uri: Uri,
+        video: Boolean,
+    ): Uri {
+        if (uri.scheme != SCHEME || uri.host != LIVE_HOST) return uri
+        val builder = uri.buildUpon().clearQuery()
+        uri.queryParameterNames.filter { it != LIVE_VIDEO }.forEach { name -> uri.getQueryParameter(name)?.let { builder.appendQueryParameter(name, it) } }
+        if (video) builder.appendQueryParameter(LIVE_VIDEO, "1")
+        return builder.build()
+    }
+
     fun epochOf(uri: Uri?): Long? = uri?.takeIf { it.scheme == SCHEME && (it.host == HOST || it.host == LIVE_HOST) }?.getQueryParameter(EPOCH)?.toLongOrNull()
 }
 
@@ -84,9 +102,13 @@ class LiveStreamCache(
     @Synchronized
     fun get(videoId: String): LiveStream? = entries[videoId]?.takeIf { it.expiresAtMs - nowMs() > 0 }
 
+    /** @param key videoId（映像を見るための画質は "videoId#video"） */
     @Synchronized
-    fun put(stream: LiveStream) {
-        entries[stream.videoId] = stream
+    fun put(
+        key: String,
+        stream: LiveStream,
+    ) {
+        entries[key] = stream
         while (entries.size > 8) entries.remove(entries.keys.first())
     }
 
@@ -225,7 +247,7 @@ class WaveStreamDataSource(
     }
 
     override fun open(dataSpec: DataSpec): Long {
-        TrackUri.liveVideoIdOf(dataSpec.uri)?.let { return openLive(it, dataSpec) }
+        TrackUri.liveVideoIdOf(dataSpec.uri)?.let { return openLive(it, dataSpec, video = TrackUri.isLiveVideo(dataSpec.uri)) }
         TrackUri.episodeUrlOf(dataSpec.uri)?.let { return openEpisode(it, dataSpec) }
         // ライブの媒体プレイリストに並ぶ区切り（googlevideo の /videoplayback/…）は、そのまま取る
         if (dataSpec.uri.scheme == "https" && isAllowedLiveSegmentUrl(dataSpec.uri.toString())) {
@@ -297,22 +319,25 @@ class WaveStreamDataSource(
     private fun openLive(
         videoId: String,
         dataSpec: DataSpec,
+        video: Boolean,
     ): Long {
         val client = live ?: throw StreamResolveException(StreamFailure.Unplayable)
         val cache = liveCache ?: throw StreamResolveException(StreamFailure.Unplayable)
         openedSpec = dataSpec
-        val cached = cache.get(videoId)
-        val first = cached ?: resolveLive(client, cache, videoId)
+        // 画質ごとに別の媒体プレイリストなので、使い回しも分ける
+        val key = if (video) "$videoId#video" else videoId
+        val cached = cache.get(key)
+        val first = cached ?: resolveLive(client, cache, videoId, key, video)
         return try {
             openUrl(first.revealUrl(), dataSpec, policy = ::isAllowedLiveManifestUrl)
         } catch (rejected: RejectedException) {
             Log.i(WaveApplication.LOG_TAG, "live playlist rejected status=${rejected.status} cached=${cached != null}; resolving again")
-            cache.invalidate(videoId)
-            val second = resolveLive(client, cache, videoId)
+            cache.invalidate(key)
+            val second = resolveLive(client, cache, videoId, key, video)
             try {
                 openUrl(second.revealUrl(), dataSpec, policy = ::isAllowedLiveManifestUrl)
             } catch (again: RejectedException) {
-                cache.invalidate(videoId)
+                cache.invalidate(key)
                 throw StreamRejectedException(again.status)
             }
         }
@@ -322,9 +347,11 @@ class WaveStreamDataSource(
         client: LiveClient,
         cache: LiveStreamCache,
         videoId: String,
+        key: String,
+        video: Boolean,
     ): LiveStream =
-        when (val result = runBlocking { client.resolve(videoId) }) {
-            is LiveResult.Ok -> result.stream.also(cache::put).also { Log.i(WaveApplication.LOG_TAG, "live resolved") }
+        when (val result = runBlocking { client.resolve(videoId, video) }) {
+            is LiveResult.Ok -> result.stream.also { cache.put(key, it) }.also { Log.i(WaveApplication.LOG_TAG, "live resolved video=$video") }
             is LiveResult.Failed ->
                 throw StreamResolveException(
                     when (result.reason) {

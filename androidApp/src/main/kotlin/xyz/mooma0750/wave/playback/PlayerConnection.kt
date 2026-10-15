@@ -110,6 +110,9 @@ class PlayerConnection(
     /** シャッフルの入り切り（切ると、残りの曲を入れる前の並びに戻す）。 */
     suspend fun toggleShuffle() = send(QueueCommands.TOGGLE_SHUFFLE, android.os.Bundle.EMPTY)
 
+    /** ライブ配信の映像を出す・やめる（出すときだけ映像を見るための画質で読み直す）。 */
+    suspend fun setLiveVideo(on: Boolean) = send(QueueCommands.SET_LIVE_VIDEO, android.os.Bundle().apply { putBoolean(QueueCommands.KEY_ON, on) })
+
     /** オフ → 全体 → 1曲 → オフ。リピートは Player の標準の操作なので、カスタムコマンドにしない。 */
     suspend fun cycleRepeatMode() = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main.immediate) {
         val current = controller()

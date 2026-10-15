@@ -891,6 +891,19 @@ class PlaybackService : MediaLibraryService() {
                 return Futures.immediateFuture(SessionResult(if (accepted) SessionResult.RESULT_SUCCESS else SessionError.ERROR_INVALID_STATE))
             }
             if (!isOwnUiController(session, controller)) return Futures.immediateFuture(SessionResult(SessionError.ERROR_PERMISSION_DENIED))
+            if (customCommand.customAction == QueueCommands.SET_LIVE_VIDEO) {
+                // 今のライブの曲を、映像を見るための画質（または音のための画質）の URI に差し替えて読み直す（ライブは今の時点から流れる）
+                val local = localPlayer ?: return Futures.immediateFuture(SessionResult(SessionError.ERROR_INVALID_STATE))
+                val item = local.currentMediaItem
+                val uri = item?.localConfiguration?.uri
+                if (item == null || uri == null || TrackUri.liveVideoIdOf(uri) == null) return Futures.immediateFuture(SessionResult(SessionError.ERROR_INVALID_STATE))
+                val on = args.getBoolean(QueueCommands.KEY_ON)
+                if (TrackUri.isLiveVideo(uri) != on) {
+                    suppressingV2 { local.replaceMediaItem(local.currentMediaItemIndex, item.buildUpon().setUri(TrackUri.withLiveVideo(uri, on)).build()) }
+                    Log.i(WaveApplication.LOG_TAG, "live video=$on")
+                }
+                return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+            }
             if (customCommand.customAction in USER_SELECTIONS) skipGuard.onUserSelection()
             val local = localPlayer ?: return Futures.immediateFuture(SessionResult(SessionError.ERROR_INVALID_STATE))
             // ほかの端末を映している間の「次に再生」「キューに追加」は、鳴らしている端末のキューへ送る（手元のキューに入れても使われない）

@@ -272,14 +272,22 @@ fun NowPlayingScreen(
     var fullVideo by rememberSaveable { mutableStateOf(false) }
     var pickArtist by remember { mutableStateOf<List<xyz.mooma0750.wave.core.music.ArtistRef>?>(null) }
     // 動画のある曲だけ「動画」を押せるようにする（押してから無いと分かるのを避ける）
-    // ライブ配信には MV も歌詞も無い（長さもシークも無い）
+    // ライブ配信には MV も歌詞も無い（長さもシークも無い）が、鳴らしている HLS に映像が入っているので、この端末で鳴らしていれば「動画」を出せる
     val live = state.isLive
+    val liveVideoPlayer = if (live && remote == null) display.controller else null
     // RSS のエピソード（ADR-0012）にも MV・歌詞は無い
     val external = song?.videoId?.let(xyz.mooma0750.wave.core.music.Feed::isExternal) == true
-    val hasVideo by androidx.compose.runtime.produceState<Boolean?>(null, song?.videoId, live) {
-        value = if (live || external) false else song?.videoId?.let { videos.videoFor(it) is MusicVideos.Result.Found }
+    val hasVideo by androidx.compose.runtime.produceState<Boolean?>(null, song?.videoId, live, liveVideoPlayer != null) {
+        value =
+            when {
+                live -> liveVideoPlayer != null
+                external -> false
+                else -> song?.videoId?.let { videos.videoFor(it) is MusicVideos.Result.Found }
+            }
     }
     LaunchedEffect(hasVideo) { if (hasVideo == false) video = false }
+    // ライブは「動画」にしている間だけ、映像を見るための画質で流す
+    LaunchedEffect(video, live, song?.videoId) { if (live && remote == null) connection.setLiveVideo(video) }
     val art by rememberArtworkColor(song?.thumbnailUrl)
     val background = MaterialTheme.colorScheme.background
     val top = lerp(background, art, 0.6f)
@@ -344,7 +352,13 @@ fun NowPlayingScreen(
                     // ほかの端末を映している間も、その再生の位置（見積もり）に合わせて映像を出す。
                     // 映像は横幅いっぱいの 16:9 で出し（正方形のジャケットの枠だと小さい）、右下のボタンで全画面にする
                     Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f)) {
-                        if (!fullVideo) MusicVideoPanel(song, display.clock, videos, Modifier.fillMaxSize().clip(MaterialTheme.shapes.small))
+                        if (!fullVideo) {
+                            if (liveVideoPlayer != null) {
+                                LiveVideoPanel(liveVideoPlayer, Modifier.fillMaxSize().clip(MaterialTheme.shapes.small))
+                            } else {
+                                MusicVideoPanel(song, display.clock, videos, Modifier.fillMaxSize().clip(MaterialTheme.shapes.small))
+                            }
+                        }
                         IconAction(R.drawable.ic_fullscreen, stringResource(R.string.nowplaying_video_fullscreen), { fullVideo = true }, modifier = Modifier.align(Alignment.BottomEnd))
                     }
                 } else {
@@ -554,7 +568,7 @@ fun NowPlayingScreen(
     }
 
     if (fullVideo && video && song != null) {
-        FullScreenVideo(song, display.clock, videos, onClose = { fullVideo = false })
+        FullScreenVideo(song, display.clock, videos, liveVideoPlayer, onClose = { fullVideo = false })
     }
 
     if (showLyrics && song != null) {
@@ -605,6 +619,8 @@ private fun FullScreenVideo(
     song: xyz.mooma0750.wave.core.music.Song,
     clock: LyricsClock?,
     videos: MusicVideos,
+    /** ライブを鳴らしているなら、その再生器（映像をそのまま出す）。 */
+    livePlayer: Player?,
     onClose: () -> Unit,
 ) {
     val activity = androidx.compose.ui.platform.LocalContext.current as? android.app.Activity
@@ -627,7 +643,7 @@ private fun FullScreenVideo(
             onDispose { controller?.show(androidx.core.view.WindowInsetsCompat.Type.systemBars()) }
         }
         Box(Modifier.fillMaxSize().background(Color.Black)) {
-            MusicVideoPanel(song, clock, videos, Modifier.fillMaxSize())
+            if (livePlayer != null) LiveVideoPanel(livePlayer, Modifier.fillMaxSize()) else MusicVideoPanel(song, clock, videos, Modifier.fillMaxSize())
             IconAction(R.drawable.ic_fullscreen_exit, stringResource(R.string.nowplaying_video_exit_fullscreen), onClose, modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp))
         }
     }

@@ -34,7 +34,11 @@ object QueueCommands {
     const val KEY_TARGET_LIKED = "targetLiked"
     const val KEY_NOTIFICATION_TOKEN = "notificationToken"
 
-    val all = listOf(PLAY_SONG, PLAY_FROM, ADD_NEXT, ADD_TO_END, REMOVE, JUMP, MOVE, TOGGLE_SHUFFLE, CLEAR_USER_QUEUE, TOGGLE_LIKE).map { SessionCommand(it, Bundle.EMPTY) }
+    /** ライブ配信の映像を出す・やめる（KEY_ON）。出すときだけ映像を見るための画質で読み直す。 */
+    const val SET_LIVE_VIDEO = "xyz.mooma0750.wave.SET_LIVE_VIDEO"
+    const val KEY_ON = "on"
+
+    val all = listOf(PLAY_SONG, PLAY_FROM, ADD_NEXT, ADD_TO_END, REMOVE, JUMP, MOVE, TOGGLE_SHUFFLE, CLEAR_USER_QUEUE, TOGGLE_LIKE, SET_LIVE_VIDEO).map { SessionCommand(it, Bundle.EMPTY) }
 
     private const val KEY_SONG = "song"
     private const val KEY_SONGS = "songs"

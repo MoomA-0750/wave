@@ -154,3 +154,43 @@ private fun Note(text: String) {
 }
 
 private const val SYNC_INTERVAL_MS = 200L
+
+/**
+ * ライブ配信の映像。MV と違って別のプレイヤーは作らず、鳴らしている再生器（コントローラー）にそのまま描かせる
+ * （ライブの HLS には映像も入っている。「動画」にしている間は、再生の側が映像を見るための画質で流す）。
+ */
+@Composable
+fun LiveVideoPanel(
+    player: Player,
+    modifier: Modifier = Modifier,
+) {
+    var aspectRatio by remember { mutableFloatStateOf(16f / 9f) }
+    var firstFrame by remember { mutableStateOf(false) }
+    var view by remember { mutableStateOf<TextureView?>(null) }
+    DisposableEffect(player, view) {
+        val target = view
+        val listener =
+            object : Player.Listener {
+                override fun onVideoSizeChanged(videoSize: VideoSize) {
+                    if (videoSize.width > 0 && videoSize.height > 0) aspectRatio = videoSize.width * videoSize.pixelWidthHeightRatio / videoSize.height
+                }
+
+                override fun onRenderedFirstFrame() {
+                    firstFrame = true
+                }
+            }
+        player.addListener(listener)
+        if (target != null) player.setVideoTextureView(target)
+        onDispose {
+            player.removeListener(listener)
+            if (target != null) player.clearVideoTextureView(target)
+        }
+    }
+    Box(modifier.background(Color.Black), contentAlignment = Alignment.Center) {
+        AndroidView(
+            factory = { TextureView(it).also { created -> view = created } },
+            modifier = Modifier.fillMaxWidth().aspectRatio(aspectRatio),
+        )
+        if (!firstFrame) Note(stringResource(R.string.nowplaying_video_loading))
+    }
+}
