@@ -11,36 +11,42 @@ struct NowPlayingView: View {
     @State private var showVideo = false
     @State private var dragging: Double?
     @State private var devicesOpen = false
+    @State private var fullVideo = false
     @Environment(\.dismiss) private var dismiss
+    /// 横向き（縦が狭い）なら、ジャケット・映像と操作を左右に並べる。
+    @Environment(\.verticalSizeClass) private var verticalSize
 
     var body: some View {
         let player = AppServices.player!
         let song = player.current
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                header(player, song)
-                // ジャケット（左右に払うと前後の曲へ）か、MV のある曲・ライブで「動画」を選んでいれば映像
-                if showVideo, player.hasVideo {
-                    VideoSurface()
-                        .aspectRatio(1, contentMode: .fit)
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
-                        .shadow(radius: 16, y: 8)
-                } else {
-                    CoverCarousel()
+        Group {
+            if verticalSize == .compact {
+                // 横向き: 左にジャケット・映像（高さいっぱい）、右に操作から下（右だけ送る）
+                HStack(alignment: .center, spacing: 28) {
+                    media(player)
+                        .frame(maxHeight: .infinity)
+                        .padding(.vertical, 12)
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 16) { details(player, song) }
+                            .padding(.vertical, 12)
+                    }
+                    .scrollIndicators(.hidden)
                 }
-                titleRow(player, song)
-                seekBar(player)
-                controls(player)
-                // ほかの端末で鳴っている間は、その端末の音量。この iPhone で鳴らしていて、アプリの中の音量が下がっている
-                // （ほかの端末から下げられた等）ときは、この iPhone のアプリの中の音量（ふだんは音量ボタンだけで変える）
-                if player.isRemote || player.volume < 0.995 { remoteVolume(player) }
-                deviceAndQueue(player)
-                lyricsCard(player)
+                .padding(.horizontal, 24)
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 20) {
+                        header(player, song)
+                        media(player)
+                        details(player, song, withHeader: false)
+                    }
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 40)
+                }
+                .scrollIndicators(.hidden)
             }
-            .padding(.horizontal, 24)
-            .padding(.bottom, 40)
         }
-        .scrollIndicators(.hidden)
+        .fullScreenCover(isPresented: $fullVideo) { VideoFullScreen() }
         .background {
             LinearGradient(colors: [(tint ?? Color.gray).opacity(0.85), Color.black], startPoint: .top, endPoint: .center)
                 .ignoresSafeArea()
@@ -103,6 +109,41 @@ struct NowPlayingView: View {
             Spacer(minLength: 0)
             if song != nil { LikeButtonView(size: 26) }
         }
+    }
+
+    /// ジャケット（左右に払うと前後の曲へ）か、MV のある曲・ライブで「動画」を選んでいれば映像（右下のボタンで全画面）。
+    @ViewBuilder
+    private func media(_ player: PlayerService) -> some View {
+        if showVideo, player.hasVideo {
+            VideoSurface()
+                .aspectRatio(1, contentMode: .fit)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .overlay(alignment: .bottomTrailing) {
+                    Button { fullVideo = true } label: {
+                        Image(systemName: "arrow.up.left.and.arrow.down.right").font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
+                            .frame(width: 40, height: 40).background(Circle().fill(Color.black.opacity(0.45)))
+                    }
+                    .padding(8)
+                    .accessibilityLabel(L.t("全画面で見る", "Full screen"))
+                }
+                .shadow(radius: 16, y: 8)
+        } else {
+            CoverCarousel()
+        }
+    }
+
+    /// 曲名から下（縦向きはジャケットの下、横向きは右の列）。
+    @ViewBuilder
+    private func details(_ player: PlayerService, _ song: Song?, withHeader: Bool = true) -> some View {
+        if withHeader { header(player, song) }
+        titleRow(player, song)
+        seekBar(player)
+        controls(player)
+        // ほかの端末で鳴っている間は、その端末の音量。この iPhone で鳴らしていて、アプリの中の音量が下がっている
+        // （ほかの端末から下げられた等）ときは、この iPhone のアプリの中の音量（ふだんは音量ボタンだけで変える）
+        if player.isRemote || player.volume < 0.995 { remoteVolume(player) }
+        deviceAndQueue(player)
+        lyricsCard(player)
     }
 
     @ViewBuilder
@@ -326,6 +367,38 @@ final class LyricsSheetState {
 }
 
 /// MV の映像（音の無い再生器。音は PlayerService が鳴らし、位置は VideoSync で合わせる）。
+/// 映像の全画面（横向きに回す。閉じると元の向きに戻す）。
+private struct VideoFullScreen: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var before: UIInterfaceOrientationMask?
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            Color.black.ignoresSafeArea()
+            VideoSurface().ignoresSafeArea()
+            Button { dismiss() } label: {
+                Image(systemName: "arrow.down.right.and.arrow.up.left").font(.system(size: 16, weight: .semibold)).foregroundStyle(.white)
+                    .frame(width: 44, height: 44).background(Circle().fill(Color.black.opacity(0.45)))
+            }
+            .padding(16)
+            .accessibilityLabel(L.t("全画面を終える", "Exit full screen"))
+        }
+        .statusBarHidden()
+        .persistentSystemOverlays(.hidden)
+        .onAppear {
+            guard let scene = scene else { return }
+            if scene.interfaceOrientation.isPortrait { before = .portrait }
+            scene.requestGeometryUpdate(.iOS(interfaceOrientations: .landscapeRight))
+        }
+        .onDisappear {
+            // 縦で見ていたなら縦に戻す
+            if let before, let scene { scene.requestGeometryUpdate(.iOS(interfaceOrientations: before)) }
+        }
+    }
+
+    private var scene: UIWindowScene? { UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first }
+}
+
 struct VideoSurface: View {
     var body: some View {
         let video = MusicVideoPlayer.shared
