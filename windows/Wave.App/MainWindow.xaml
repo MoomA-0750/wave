@@ -224,6 +224,11 @@
                                         </StackPanel>
                                     </Grid>
                                 </Border>
+                                <!-- 映像を大きく見る（全画面の再生中の画面へ） -->
+                                <Button x:Name="VideoExpand" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="8" Visibility="Collapsed" Style="{StaticResource IconButtonStyle}"
+                                        Background="#73000000" Foreground="White" CornerRadius="16" Click="OnVideoExpand" ToolTipService.ToolTip="{x:Bind app:L.T('映像を大きく見る', 'Expand video')}">
+                                    <FontIcon Glyph="&#xE740;" FontSize="13" />
+                                </Button>
                                 <StackPanel x:Name="VideoSwitch" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,10,0,0" Visibility="Collapsed"
                                             Background="#99000000" CornerRadius="16" Padding="3">
                                     <ToggleButton x:Name="SongTab" CornerRadius="13" Padding="14,4" MinWidth="0" FontSize="12" IsChecked="True" Click="OnSongTab"
@@ -377,7 +382,7 @@
         </Grid>
 
         <!-- 再生の操作（Spotify の下の帯: 左に曲、中央にボタンと位置、右に歌詞・キュー・音量） -->
-        <Grid Grid.Row="2" MinHeight="88" Padding="16,10" ColumnSpacing="16">
+        <Grid x:Name="PlayerBarRow" Grid.Row="2" MinHeight="88" Padding="16,10" ColumnSpacing="16">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="3*" />
                 <ColumnDefinition Width="4*" MaxWidth="720" />
@@ -510,6 +515,11 @@
                     <Grid Grid.Row="1">
                         <Image x:Name="FullCover" Stretch="Uniform" HorizontalAlignment="Left" VerticalAlignment="Bottom" />
                         <MediaPlayerElement x:Name="FullVideo" AreTransportControlsEnabled="False" Stretch="Uniform" Visibility="Collapsed" IsHitTestVisible="False" />
+                        <!-- 映像だけを画面いっぱいに出す -->
+                        <Button x:Name="FullVideoOnlyButton" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="10" Visibility="Collapsed" Style="{StaticResource IconButtonStyle}"
+                                Background="#73000000" Foreground="White" CornerRadius="16" Click="OnVideoOnly" ToolTipService.ToolTip="{x:Bind app:L.T('映像だけを画面いっぱいに', 'Video only')}">
+                            <FontIcon Glyph="&#xE740;" FontSize="14" />
+                        </Button>
                     </Grid>
                     <StackPanel Grid.Row="2" Spacing="4">
                         <HyperlinkButton Padding="0" Click="OnAlbumLink" Foreground="{ThemeResource TextFillColorPrimaryBrush}">
@@ -528,6 +538,14 @@
                     ToolTipService.ToolTip="{x:Bind app:L.T('全画面を終える (Esc)', 'Exit full screen (Esc)')}">
                 <FontIcon Glyph="&#xE73F;" FontSize="16" />
             </Button>
+            <!-- 映像だけ（曲名・歌詞・下の操作の帯も隠す。ダブルクリック・右上のボタン・Esc で戻る） -->
+            <Grid x:Name="VideoOnlyView" Visibility="Collapsed" Background="Black" DoubleTapped="OnVideoOnlyDoubleTapped">
+                <MediaPlayerElement x:Name="OnlyVideo" AreTransportControlsEnabled="False" Stretch="Uniform" IsHitTestVisible="False" />
+                <Button HorizontalAlignment="Right" VerticalAlignment="Top" Margin="16" Style="{StaticResource IconButtonStyle}" Foreground="White" Click="OnVideoOnly"
+                        ToolTipService.ToolTip="{x:Bind app:L.T('映像だけをやめる (Esc)', 'Show the player (Esc)')}">
+                    <FontIcon Glyph="&#xE73F;" FontSize="16" />
+                </Button>
+            </Grid>
         </Grid>
 
     </Grid>

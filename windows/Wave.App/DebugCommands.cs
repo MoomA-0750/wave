@@ -142,6 +142,12 @@ public static class DebugCommands
             case "video":
                 window.DebugVideo(arg == "on");
                 break;
+            case "video-expand":
+                window.DebugVideoExpand();
+                break;
+            case "video-only":
+                window.DebugVideoOnly(arg == "on");
+                break;
             case "ai-pair":
                 AppPaths.Log("debug ai pair ok=" + AiChat.Pair(arg));
                 break;

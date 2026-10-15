@@ -173,6 +173,10 @@ public sealed partial class MainWindow : Window
 
     public void DebugVideo(bool on) => ShowVideo(on);
 
+    public void DebugVideoExpand() => SetFullScreen(true);
+
+    public void DebugVideoOnly(bool on) => SetVideoOnly(on);
+
     /// <summary>開発用: マイライブラリの絞り込み（playlist・artist・album・podcast、空なら全部）。並んだ項目の数を返す。</summary>
     public int DebugLibraryKind(string kind)
     {
@@ -552,6 +556,7 @@ public sealed partial class MainWindow : Window
 
     private void SetFullScreen(bool on)
     {
+        if (!on && VideoOnlyView.Visibility == Visibility.Visible) SetVideoOnly(false);
         FullView.Visibility = Ui.Show(on);
         FullScreenToggle.IsChecked = on;
         AppWindow.SetPresenter(on ? AppWindowPresenterKind.FullScreen : AppWindowPresenterKind.Overlapped);
@@ -559,6 +564,23 @@ public sealed partial class MainWindow : Window
         if (Player.HasVideo && VideoTab.IsChecked == true) (on ? FullVideo : PaneVideo).SetMediaPlayer(Player.LiveVideoPlayer ?? videoPlayer.Player);
         RenderFullView();
         RenderLyricsPreview();
+    }
+
+    private void OnVideoExpand(object sender, RoutedEventArgs e) => SetFullScreen(true);
+
+    private void OnVideoOnly(object sender, RoutedEventArgs e) => SetVideoOnly(VideoOnlyView.Visibility != Visibility.Visible);
+
+    private void OnVideoOnlyDoubleTapped(object sender, Microsoft.UI.Xaml.Input.DoubleTappedRoutedEventArgs e) => SetVideoOnly(false);
+
+    /// <summary>全画面で、映像だけを画面いっぱいに出す・やめる（映像は1つの枠にしか映せないので、出す枠を移す）。</summary>
+    private void SetVideoOnly(bool on)
+    {
+        var source = Player.LiveVideoPlayer ?? (Player.Video is not null ? videoPlayer.Player : null);
+        if (on && (source is null || VideoTab.IsChecked != true)) return;
+        if (on && FullView.Visibility != Visibility.Visible) SetFullScreen(true);
+        VideoOnlyView.Visibility = Ui.Show(on);
+        PlayerBarRow.Visibility = Ui.Hide(on);
+        if (source is not null) (on ? OnlyVideo : FullVideo).SetMediaPlayer(source);
     }
 
     private void RenderFullView()
@@ -572,6 +594,8 @@ public sealed partial class MainWindow : Window
         var video = VideoTab.IsChecked == true && Player.HasVideo;
         FullCover.Visibility = Ui.Hide(video);
         FullVideo.Visibility = Ui.Show(video && (Player.LiveVideoPlayer is not null || videoPlayer.Showing));
+        FullVideoOnlyButton.Visibility = FullVideo.Visibility;
+        if (!video && VideoOnlyView.Visibility == Visibility.Visible) SetVideoOnly(false);
         FullVideoSwitch.Visibility = VideoSwitch.Visibility;
         FullSongTab.IsChecked = !video;
         FullVideoTab.IsChecked = video;
@@ -613,6 +637,7 @@ public sealed partial class MainWindow : Window
             VideoNotePanel.Visibility = Visibility.Collapsed;
             (FullView.Visibility == Visibility.Visible ? FullVideo : PaneVideo).SetMediaPlayer(live);
             PaneVideo.Visibility = Visibility.Visible;
+            VideoExpand.Visibility = Visibility.Visible;
             RenderFullView();
             return;
         }
@@ -621,6 +646,7 @@ public sealed partial class MainWindow : Window
             videoTimer?.Stop();
             videoPlayer.Stop();
             PaneVideo.Visibility = Visibility.Collapsed;
+            VideoExpand.Visibility = Visibility.Collapsed;
             VideoNotePanel.Visibility = Visibility.Collapsed;
             CoverImage.Visibility = Visibility.Visible;
             CoverBox.Background = (Brush)Application.Current.Resources["ControlFillColorSecondaryBrush"];
@@ -642,6 +668,7 @@ public sealed partial class MainWindow : Window
         if (VideoTab.IsChecked != true || Player.Video != video) return;
         VideoNotePanel.Visibility = Visibility.Collapsed;
         PaneVideo.Visibility = Visibility.Visible;
+        VideoExpand.Visibility = Visibility.Visible;
         RenderFullView();
         videoTimer ??= CreateVideoTimer();
         videoTimer.Start();
@@ -1152,7 +1179,8 @@ public sealed partial class MainWindow : Window
                 e.Handled = true;
                 break;
             case Windows.System.VirtualKey.Escape when FullView.Visibility == Visibility.Visible:
-                SetFullScreen(false);
+                // 映像だけのときは、まず再生中の画面に戻す
+                if (VideoOnlyView.Visibility == Visibility.Visible) SetVideoOnly(false); else SetFullScreen(false);
                 e.Handled = true;
                 break;
         }
