@@ -177,7 +177,10 @@ final class PlayerService {
         guard liveVideo != on else { return }
         liveVideoFor = on ? current?.videoId : nil
         guard isLive, !isRemote, let song = current, engine.hasSource else { return }
-        let wasPlaying = isPlaying
+        // 鳴っていたかは再生器そのものから取る（一時停止の直後は isPlaying がまだ変わっていないことがある）
+        let wasPlaying = engine.player.timeControlStatus != .paused
+        // 止まっている間に映像をやめるなら読み直さない（次に鳴らすときも今の流れのまま。画質だけの違い）
+        if !on && !wasPlaying { return }
         cancelLoad()
         let token = loadToken
         isLoading = true

@@ -333,6 +333,42 @@ public sealed partial class PlayerService : ObservableObject
     {
         // ライブ配信は位置を動かせない（メディアキー・音量のポップアップのシークも止める。タイムラインも出さない）
         player.CommandManager.PositionBehavior.EnablingRule = value ? MediaCommandEnablingRule.Never : MediaCommandEnablingRule.Auto;
+        OnPropertyChanged(nameof(HasVideo));
+    }
+
+    /// <summary>映像を出せるか（曲の MV、またはこの端末で鳴らしているライブ配信。ライブは鳴らしている HLS に映像も入っている）。</summary>
+    public bool HasVideo => Video is not null || (IsLive && !IsRemote);
+
+    /// <summary>ライブの映像を出す枠に渡す再生器（ライブを鳴らしているときだけ）。</summary>
+    public MediaPlayer? LiveVideoPlayer => IsLive && !IsRemote ? player : null;
+
+    /// <summary>
+    /// ライブで映像を出しているか（映像を見るための画質で流す。出していない間は音のための小さい画質で通信量を抑える）。
+    /// 映像にした曲（liveVideoFor）でだけ効く。曲が変われば音のための画質に戻る。
+    /// </summary>
+    private bool LiveVideo => liveVideoFor is not null && liveVideoFor == Current?.VideoId;
+    private string? liveVideoFor;
+
+    /// <summary>ライブの映像を出す・やめる。今ライブを鳴らしていれば、その画質で読み直す（ライブは今の時点から流れるので、続きの位置は無い）。</summary>
+    public async void SetLiveVideo(bool on)
+    {
+        if (LiveVideo == on) return;
+        liveVideoFor = on ? Current?.VideoId : null;
+        if (!IsLive || IsRemote || Current is not { } song || player.Source is null) return;
+        // 鳴っていたかは再生器そのものから取る（一時停止の直後は IsPlaying がまだ変わっていないことがある）
+        var wasPlaying = player.PlaybackSession.PlaybackState is MediaPlaybackState.Playing or MediaPlaybackState.Buffering or MediaPlaybackState.Opening;
+        // 止まっている間に映像をやめるなら読み直さない（次に鳴らすときも今の流れのまま。画質だけの違い）
+        if (!on && !wasPlaying) return;
+        var cancel = new CancellationTokenSource();
+        loadCancel?.Cancel();
+        loadCancel = cancel;
+        IsLoading = true;
+        if (!await StartLiveAsync(song, cancel.Token))
+        {
+            if (!cancel.IsCancellationRequested) await RecoverAsync(song);
+            return;
+        }
+        if (!wasPlaying) player.Pause();
     }
 
     /// <summary>ライブの印の無い曲がライブ配信だった。キューの項目に印を付け直す（項目の ID と出どころは保つ）。</summary>
@@ -1453,7 +1489,7 @@ public sealed partial class PlayerService : ObservableObject
     private async Task<bool> StartLiveAsync(Song song, CancellationToken cancel)
     {
         currentStream = null;
-        var result = await AppServices.Live.ResolveAsync(song.VideoId, cancel);
+        var result = await AppServices.Live.ResolveAsync(song.VideoId, cancel, video: LiveVideo);
         if (cancel.IsCancellationRequested || Current?.VideoId != song.VideoId) return false;
         if (result.Stream is not { } live)
         {

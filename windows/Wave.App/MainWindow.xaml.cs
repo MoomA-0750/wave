@@ -483,6 +483,7 @@ public sealed partial class MainWindow : Window
                 break;
             case nameof(PlayerService.Video):
             case nameof(PlayerService.IsRemote):
+            case nameof(PlayerService.HasVideo):
                 UpdateVideoSwitch();
                 RenderFullView();
                 break;
@@ -555,7 +556,7 @@ public sealed partial class MainWindow : Window
         FullScreenToggle.IsChecked = on;
         AppWindow.SetPresenter(on ? AppWindowPresenterKind.FullScreen : AppWindowPresenterKind.Overlapped);
         // 映像は1つの枠にしか映せないので、出す枠を移す
-        if (Player.Video is not null && VideoTab.IsChecked == true) (on ? FullVideo : PaneVideo).SetMediaPlayer(videoPlayer.Player);
+        if (Player.HasVideo && VideoTab.IsChecked == true) (on ? FullVideo : PaneVideo).SetMediaPlayer(Player.LiveVideoPlayer ?? videoPlayer.Player);
         RenderFullView();
         RenderLyricsPreview();
     }
@@ -568,9 +569,9 @@ public sealed partial class MainWindow : Window
         FullBackdrop.Source = Ui.Large(song?.ThumbnailUrl);
         FullTitle.Text = song?.Title ?? "";
         FullArtist.Text = song?.ArtistsText ?? "";
-        var video = VideoTab.IsChecked == true && Player.Video is not null;
+        var video = VideoTab.IsChecked == true && Player.HasVideo;
         FullCover.Visibility = Ui.Hide(video);
-        FullVideo.Visibility = Ui.Show(video && videoPlayer.Showing);
+        FullVideo.Visibility = Ui.Show(video && (Player.LiveVideoPlayer is not null || videoPlayer.Showing));
         FullVideoSwitch.Visibility = VideoSwitch.Visibility;
         FullSongTab.IsChecked = !video;
         FullVideoTab.IsChecked = video;
@@ -584,7 +585,7 @@ public sealed partial class MainWindow : Window
     /// <summary>MV のある曲で「曲｜動画」を出す（ほかの端末を映している間は、その再生の位置の見積もりに合わせる）。</summary>
     private void UpdateVideoSwitch()
     {
-        var available = Player.Video is not null;
+        var available = Player.HasVideo;
         VideoSwitch.Visibility = Ui.Show(available);
         if (!available) ShowVideo(false);
     }
@@ -599,7 +600,22 @@ public sealed partial class MainWindow : Window
     {
         SongTab.IsChecked = !show;
         VideoTab.IsChecked = show;
+        // ライブは「動画」にしている間だけ、映像を見るための画質で流す
+        Player.SetLiveVideo(show);
         RenderFullView();
+        if (show && Player.LiveVideoPlayer is { } live)
+        {
+            // ライブは鳴らしている再生器の映像をそのまま出す
+            videoTimer?.Stop();
+            videoPlayer.Stop();
+            CoverBox.Background = new SolidColorBrush(Colors.Black);
+            CoverImage.Visibility = Visibility.Collapsed;
+            VideoNotePanel.Visibility = Visibility.Collapsed;
+            (FullView.Visibility == Visibility.Visible ? FullVideo : PaneVideo).SetMediaPlayer(live);
+            PaneVideo.Visibility = Visibility.Visible;
+            RenderFullView();
+            return;
+        }
         if (!show || Player.Video is not { } video)
         {
             videoTimer?.Stop();
