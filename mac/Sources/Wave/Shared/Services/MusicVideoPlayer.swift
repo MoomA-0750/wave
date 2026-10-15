@@ -113,7 +113,9 @@ final class MusicVideoPlayer {
         let ready = player.currentItem?.isPlaybackLikelyToKeepUp ?? false || player.timeControlStatus == .playing
         switch VideoSync.decide(targetMs: video.videoPositionOf(audioMs), videoMs: videoMs, playing: p.isPlaying, videoReady: ready) {
         case .hide:
+            changingRate = true
             if player.timeControlStatus != .paused { player.pause() }
+            changingRate = false
             // MV に無い区間（前奏など）は、黒地にその旨を出す（Android と同じ）
             showing = false
             note = L.t("この部分には動画がありません", "There's no video for this part")
@@ -128,6 +130,8 @@ final class MusicVideoPlayer {
     }
 
     private func run(_ play: Bool, rate: Float) {
+        changingRate = true
+        defer { changingRate = false }
         if play {
             if player.timeControlStatus == .paused || abs(player.rate - rate) > 0.005 { player.rate = rate }
         } else if player.timeControlStatus != .paused {
@@ -135,13 +139,31 @@ final class MusicVideoPlayer {
         }
     }
 
+    /// 映像の再生器を、ここ以外（PiP の再生・一時停止のボタン）で動かしたときに呼ぶ。引数は再生したか。
+    /// 映像は音に合わせて動くだけなので、PiP のボタンは音の再生・一時停止に回す。
+    @ObservationIgnored var onExternalPlayPause: ((Bool) -> Void)? {
+        didSet {
+            rateObservation = onExternalPlayPause == nil ? nil : player.observe(\.rate, options: [.old, .new]) { [weak self] _, change in
+                guard let old = change.oldValue, let new = change.newValue, (old == 0) != (new == 0) else { return }
+                MainActor.assumeIsolated {
+                    guard let self, !self.changingRate, self.state == .ready else { return }
+                    self.onExternalPlayPause?(new != 0)
+                }
+            }
+        }
+    }
+    @ObservationIgnored private var rateObservation: NSKeyValueObservation?
+    @ObservationIgnored private var changingRate = false
+
     /// 映像を外す（曲が変わった・曲の表示に戻した）。
     func stop() {
         generation += 1
         timer?.invalidate()
         timer = nil
+        changingRate = true
         player.pause()
         player.replaceCurrentItem(with: nil)
+        changingRate = false
         loader?.cancelAll()
         loader = nil
         loadedVideoId = nil

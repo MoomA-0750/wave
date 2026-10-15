@@ -1,0 +1,135 @@
+#if os(iOS)
+import AVKit
+import Observation
+import SwiftUI
+import UIKit
+
+/// 映像の PiP（iPhone の小窓）。映像を出す枠は1つの AVPlayerLayer を使い回し（再生画面・全画面のどちらに出ていても同じ枠）、
+/// PiP はその枠から始める。映像を出したままホームへ戻ると、自動で PiP になる。
+@MainActor @Observable
+final class VideoPip: NSObject, AVPictureInPictureControllerDelegate {
+    static let shared = VideoPip()
+
+    /// PiP で映しているか。
+    private(set) var active = false
+    var supported: Bool { AVPictureInPictureController.isPictureInPictureSupported() }
+
+    @ObservationIgnored let surface = SurfaceView()
+    @ObservationIgnored private var controller: AVPictureInPictureController?
+    /// 枠を置ける場所（後から画面に出たものが上）。上の場所が消えたら、下の場所へ枠を戻す。
+    @ObservationIgnored private var hosts: [HostView] = []
+
+    final class SurfaceView: UIView {
+        override class var layerClass: AnyClass { AVPlayerLayer.self }
+        var playerLayer: AVPlayerLayer { layer as! AVPlayerLayer }
+    }
+
+    /// 枠を置く場所（SwiftUI の中に置く）。
+    final class HostView: UIView {
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            if window != nil { VideoPip.shared.attach(self) } else { VideoPip.shared.detach(self) }
+        }
+
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            for view in subviews { view.frame = bounds }
+        }
+    }
+
+    override init() {
+        super.init()
+        surface.playerLayer.videoGravity = .resizeAspect
+        surface.backgroundColor = .black
+        // MV を PiP で映している間、PiP の再生・一時停止のボタンは音のほうを動かす（映像は音に合わせて付いてくる）
+        MusicVideoPlayer.shared.onExternalPlayPause = { [weak self] playing in
+            guard self?.active == true, let player = AppServices.player, player.isPlaying != playing else { return }
+            player.togglePlay()
+        }
+    }
+
+    /// 映す再生器（ライブは鳴らしている再生器、MV は音の無い再生器）。
+    func setPlayer(_ player: AVPlayer?) {
+        if surface.playerLayer.player !== player { surface.playerLayer.player = player }
+        if player != nil { ensureController() }
+    }
+
+    func toggle() {
+        if active { controller?.stopPictureInPicture() } else { start() }
+    }
+
+    func start() {
+        ensureController()
+        controller?.startPictureInPicture()
+    }
+
+    private func ensureController() {
+        guard controller == nil, supported, let controller = AVPictureInPictureController(playerLayer: surface.playerLayer) else { return }
+        controller.delegate = self
+        // 映像を出したままホームへ戻ったら、自動で PiP にする
+        controller.canStartPictureInPictureAutomaticallyFromInline = true
+        self.controller = controller
+    }
+
+    private func attach(_ host: HostView) {
+        hosts.removeAll { $0 === host }
+        hosts.append(host)
+        place()
+    }
+
+    private func detach(_ host: HostView) {
+        hosts.removeAll { $0 === host }
+        if surface.superview === host { surface.removeFromSuperview() }
+        place()
+    }
+
+    private func place() {
+        guard let top = hosts.last, surface.superview !== top else { return }
+        surface.removeFromSuperview()
+        surface.frame = top.bounds
+        top.addSubview(surface)
+    }
+
+    nonisolated func pictureInPictureControllerDidStartPictureInPicture(_ controller: AVPictureInPictureController) {
+        MainActor.assumeIsolated {
+            active = true
+            AppPaths.log("video pip start")
+        }
+    }
+
+    nonisolated func pictureInPictureControllerDidStopPictureInPicture(_ controller: AVPictureInPictureController) {
+        MainActor.assumeIsolated {
+            active = false
+            AppPaths.log("video pip stop")
+            // 再生画面を閉じていれば、MV の読み込みもやめる
+            if !IOSShell.shared.playerOpen {
+                IOSShell.shared.showVideo = false
+                MusicVideoPlayer.shared.setActive(nil)
+            }
+        }
+    }
+
+    nonisolated func pictureInPictureController(_ controller: AVPictureInPictureController, failedToStartPictureInPictureWithError error: Error) {
+        MainActor.assumeIsolated { AppPaths.log("video pip failed \(error.localizedDescription)") }
+    }
+
+    /// PiP の「元に戻す」: 再生画面を開いて、そこで映像を出す。
+    nonisolated func pictureInPictureController(_ controller: AVPictureInPictureController, restoreUserInterfaceForPictureInPictureStopWithCompletionHandler completionHandler: @escaping (Bool) -> Void) {
+        MainActor.assumeIsolated {
+            IOSShell.shared.playerOpen = true
+            completionHandler(true)
+        }
+    }
+}
+
+/// 映像の枠（VideoPip の1つの枠を、ここに置く）。
+struct PipSurface: UIViewRepresentable {
+    var player: AVPlayer?
+
+    func makeUIView(context: Context) -> VideoPip.HostView { VideoPip.HostView() }
+
+    func updateUIView(_ view: VideoPip.HostView, context: Context) {
+        VideoPip.shared.setPlayer(player)
+    }
+}
+#endif

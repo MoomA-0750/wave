@@ -17,6 +17,8 @@ final class IOSShell {
     var paths: [IOSTab: [Route]] = [.home: [], .search: [], .ai: [], .library: []]
     /// 再生中の画面を開いているか（ミニプレーヤーを押すと下からせり上がる）。
     var playerOpen = false
+    /// 再生中の画面で「曲｜動画」の動画を選んでいるか（PiP から戻ったときも映像を出せるよう、画面の外に持つ）。
+    var showVideo = false
     /// 再生中の画面の上にキューを出しているか。
     var queueOpen = false
     /// 検索のタブに入れておく言葉（ほかの画面から「検索」へ移ったとき）。

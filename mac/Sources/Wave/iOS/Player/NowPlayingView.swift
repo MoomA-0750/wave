@@ -8,7 +8,6 @@ import WaveCore
 struct NowPlayingView: View {
     @State private var shell = IOSShell.shared
     @State private var tint: Color?
-    @State private var showVideo = false
     @State private var dragging: Double?
     @State private var devicesOpen = false
     @State private var fullVideo = false
@@ -53,14 +52,16 @@ struct NowPlayingView: View {
                 .animation(.easeOut(duration: 0.4), value: tint)
         }
         .task(id: song?.thumbnailUrl) { tint = await Artwork.dominantColor(song?.thumbnailUrl) }
-        .onChange(of: song?.videoId) { _, _ in showVideo = false }
-        .onChange(of: showVideo, initial: true) { _, show in
+        // 曲が変わったら曲の表示に戻す（PiP で映している間は動画のまま）
+        .onChange(of: song?.videoId) { _, _ in if !VideoPip.shared.active { shell.showVideo = false } }
+        .onChange(of: shell.showVideo, initial: true) { _, show in
             MusicVideoPlayer.shared.setActive(show ? player.video : nil)
             // ライブは「動画」にしたときだけ、映像を見るための画質で読み直す
             player.setLiveVideo(show)
         }
-        .onChange(of: player.video) { _, v in MusicVideoPlayer.shared.setActive(showVideo ? v : nil) }
-        .onDisappear { MusicVideoPlayer.shared.setActive(nil) }
+        .onChange(of: player.video) { _, v in MusicVideoPlayer.shared.setActive(shell.showVideo ? v : nil) }
+        // 再生画面を閉じたら映像の読み込みをやめる（PiP で映している間は続ける）
+        .onDisappear { if !VideoPip.shared.active { MusicVideoPlayer.shared.setActive(nil) } }
         .sheet(isPresented: $shell.queueOpen) { QueueView().modifier(DialogSheets(layer: .queue)) }
         .sheet(isPresented: $devicesOpen) { DevicesSheet() }
         // 曲のメニューの「プレイリストに追加」は、この画面の上に出す
@@ -73,7 +74,7 @@ struct NowPlayingView: View {
                 .accessibilityLabel(L.t("閉じる", "Close"))
             Spacer()
             if player.hasVideo {
-                Picker("", selection: $showVideo) {
+                Picker("", selection: $shell.showVideo) {
                     Text(L.t("曲", "Song")).tag(false)
                     Text(L.t("動画", "Video")).tag(true)
                 }
@@ -114,17 +115,20 @@ struct NowPlayingView: View {
     /// ジャケット（左右に払うと前後の曲へ）か、MV のある曲・ライブで「動画」を選んでいれば映像（右下のボタンで全画面）。
     @ViewBuilder
     private func media(_ player: PlayerService) -> some View {
-        if showVideo, player.hasVideo {
+        if shell.showVideo, player.hasVideo {
             VideoSurface()
                 .aspectRatio(1, contentMode: .fit)
                 .clipShape(RoundedRectangle(cornerRadius: 10))
                 .overlay(alignment: .bottomTrailing) {
-                    Button { fullVideo = true } label: {
-                        Image(systemName: "arrow.up.left.and.arrow.down.right").font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
-                            .frame(width: 40, height: 40).background(Circle().fill(Color.black.opacity(0.45)))
+                    HStack(spacing: 8) {
+                        PipButton()
+                        Button { fullVideo = true } label: {
+                            Image(systemName: "arrow.up.left.and.arrow.down.right").font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
+                                .frame(width: 40, height: 40).background(Circle().fill(Color.black.opacity(0.45)))
+                        }
+                        .accessibilityLabel(L.t("全画面で見る", "Full screen"))
                     }
                     .padding(8)
-                    .accessibilityLabel(L.t("全画面で見る", "Full screen"))
                 }
                 .shadow(radius: 16, y: 8)
         } else {
@@ -376,12 +380,15 @@ private struct VideoFullScreen: View {
         ZStack(alignment: .topTrailing) {
             Color.black.ignoresSafeArea()
             VideoSurface().ignoresSafeArea()
-            Button { dismiss() } label: {
-                Image(systemName: "arrow.down.right.and.arrow.up.left").font(.system(size: 16, weight: .semibold)).foregroundStyle(.white)
-                    .frame(width: 44, height: 44).background(Circle().fill(Color.black.opacity(0.45)))
+            HStack(spacing: 8) {
+                PipButton()
+                Button { dismiss() } label: {
+                    Image(systemName: "arrow.down.right.and.arrow.up.left").font(.system(size: 16, weight: .semibold)).foregroundStyle(.white)
+                        .frame(width: 44, height: 44).background(Circle().fill(Color.black.opacity(0.45)))
+                }
+                .accessibilityLabel(L.t("全画面を終える", "Exit full screen"))
             }
             .padding(16)
-            .accessibilityLabel(L.t("全画面を終える", "Exit full screen"))
         }
         .statusBarHidden()
         .persistentSystemOverlays(.hidden)
@@ -403,13 +410,10 @@ struct VideoSurface: View {
     var body: some View {
         let video = MusicVideoPlayer.shared
         ZStack {
-            Color.black
-            if let live = AppServices.player.liveVideoPlayer {
-                // ライブは鳴らしている再生器の映像をそのまま出す
-                PlayerLayer(player: live)
-            } else {
-                if video.showing { PlayerLayer(player: video.player) }
-            }
+            // 枠は PiP と共通の1つを使い回す。ライブは鳴らしている再生器の映像をそのまま出す
+            PipSurface(player: AppServices.player.liveVideoPlayer ?? video.player)
+            // MV に無い区間・読み込み中は黒地にする
+            if AppServices.player.liveVideoPlayer == nil && !video.showing { Color.black }
             if AppServices.player.liveVideoPlayer == nil && (!video.showing || video.state != .ready) {
                 VStack(spacing: 8) {
                     Text(video.note).font(.caption).foregroundStyle(.white).multilineTextAlignment(.center)
@@ -421,24 +425,19 @@ struct VideoSurface: View {
     }
 }
 
-/// AVPlayer の映像を出す枠。
-struct PlayerLayer: UIViewRepresentable {
-    var player: AVPlayer
+/// 映像の PiP（小窓）を始める・やめるボタン（PiP を使えない機種では出さない）。
+private struct PipButton: View {
+    @State private var pip = VideoPip.shared
 
-    final class LayerView: UIView {
-        override class var layerClass: AnyClass { AVPlayerLayer.self }
-        var playerLayer: AVPlayerLayer { layer as! AVPlayerLayer }
-    }
-
-    func makeUIView(context: Context) -> LayerView {
-        let view = LayerView()
-        view.playerLayer.videoGravity = .resizeAspect
-        view.playerLayer.player = player
-        return view
-    }
-
-    func updateUIView(_ view: LayerView, context: Context) {
-        if view.playerLayer.player !== player { view.playerLayer.player = player }
+    var body: some View {
+        if pip.supported {
+            Button { pip.toggle() } label: {
+                Image(systemName: pip.active ? "pip.exit" : "pip.enter").font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
+                    .frame(width: 40, height: 40).background(Circle().fill(Color.black.opacity(0.45)))
+            }
+            .accessibilityLabel(pip.active ? L.t("小窓をやめる", "Stop picture in picture") : L.t("小窓で見る", "Picture in picture"))
+        }
     }
 }
+
 #endif
