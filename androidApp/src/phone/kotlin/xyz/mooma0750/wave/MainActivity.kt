@@ -25,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.flow.drop
+import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 import xyz.mooma0750.wave.artist.AlbumScreen
 import xyz.mooma0750.wave.artist.AlbumViewModel
@@ -110,6 +111,24 @@ class MainActivity : ComponentActivity() {
         intent.removeExtra(xyz.mooma0750.wave.releases.ReleaseWatcher.EXTRA_ARTIST)
     }
 
+    // 映像の小窓（PiP）。再生画面で映像を出していれば、ホームへ戻ったときに小窓にする
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        // Android 12 からは setAutoEnterEnabled で自動になる
+        if (android.os.Build.VERSION.SDK_INT < 31 && xyz.mooma0750.wave.nowplaying.VideoPip.showing.value) {
+            xyz.mooma0750.wave.nowplaying.VideoPip.enter(this)
+        }
+    }
+
+    override fun onPictureInPictureModeChanged(
+        isInPictureInPictureMode: Boolean,
+        newConfig: android.content.res.Configuration,
+    ) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        xyz.mooma0750.wave.nowplaying.VideoPip.onModeChanged(isInPictureInPictureMode)
+        android.util.Log.i(WaveApplication.LOG_TAG, "video pip=$isInPictureInPictureMode")
+    }
+
     private val notificationPermission =
         registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { granted ->
             android.util.Log.i(WaveApplication.LOG_TAG, "notification permission granted=$granted")
@@ -126,6 +145,12 @@ class MainActivity : ComponentActivity() {
             androidx.core.content.ContextCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED
         ) {
             notificationPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+        }
+        // 映像を出しているかが変わるたびに、ホームへ戻ったときに小窓にするかを伝える
+        lifecycleScope.launch {
+            xyz.mooma0750.wave.nowplaying.VideoPip.showing.collect {
+                runCatching { setPictureInPictureParams(xyz.mooma0750.wave.nowplaying.VideoPip.params()) }
+            }
         }
         setContent {
             WaveTheme {

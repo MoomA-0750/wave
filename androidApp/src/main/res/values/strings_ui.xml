@@ -109,6 +109,7 @@
     <string name="ui_liked_badge">Liked</string>
     <string name="nowplaying_video_fullscreen">Full screen</string>
     <string name="nowplaying_video_exit_fullscreen">Exit full screen</string>
+    <string name="nowplaying_video_pip">Picture in picture</string>
     <string name="nowplaying_pick_artist">Go to artist</string>
     <string name="nowplaying_history">History</string>
     <string name="nowplaying_history_empty">Nothing played yet</string>

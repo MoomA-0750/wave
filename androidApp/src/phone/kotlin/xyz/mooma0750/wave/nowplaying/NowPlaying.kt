@@ -258,6 +258,7 @@ fun NowPlayingScreen(
     val remote = display.remote
     val scope = rememberCoroutineScope()
     val song = display.song
+    val activity = androidx.compose.ui.platform.LocalContext.current as? android.app.Activity
     var showQueue by remember { mutableStateOf(false) }
     // キューの通知から開いた
     val openQueue by xyz.mooma0750.wave.playback.QueueNotice.openRequested.collectAsStateWithLifecycle()
@@ -268,7 +269,7 @@ fun NowPlayingScreen(
         }
     }
     var showLyrics by remember { mutableStateOf(false) }
-    var video by rememberSaveable { mutableStateOf(false) }
+    var video by VideoPip::selected
     var fullVideo by rememberSaveable { mutableStateOf(false) }
     var pickArtist by remember { mutableStateOf<List<xyz.mooma0750.wave.core.music.ArtistRef>?>(null) }
     // 動画のある曲だけ「動画」を押せるようにする（押してから無いと分かるのを避ける）
@@ -286,8 +287,24 @@ fun NowPlayingScreen(
             }
     }
     LaunchedEffect(hasVideo) { if (hasVideo == false) video = false }
+    // 映像を出していれば、ホームへ戻ったときに小窓にする
+    val pipOwner = remember { Any() }
+    DisposableEffect(video, hasVideo, song != null) {
+        VideoPip.setShowing(pipOwner, video && hasVideo == true && song != null)
+        onDispose { VideoPip.setShowing(pipOwner, false) }
+    }
     // ライブは「動画」にしている間だけ、映像を見るための画質で流す
     LaunchedEffect(video, live, song?.videoId) { if (live && remote == null) connection.setLiveVideo(video) }
+    // 小窓の間は映像だけを出す（小窓には Activity の画面がそのまま縮んで出る）
+    val inPip by VideoPip.inPip.collectAsStateWithLifecycle()
+    if (inPip) {
+        Box(Modifier.fillMaxSize().background(Color.Black)) {
+            if (video && song != null) {
+                if (liveVideoPlayer != null) LiveVideoPanel(liveVideoPlayer, Modifier.fillMaxSize()) else MusicVideoPanel(song, display.clock, videos, Modifier.fillMaxSize())
+            }
+        }
+        return
+    }
     val art by rememberArtworkColor(song?.thumbnailUrl)
     val background = MaterialTheme.colorScheme.background
     val top = lerp(background, art, 0.6f)
@@ -373,7 +390,10 @@ fun NowPlayingScreen(
                                     MusicVideoPanel(song, display.clock, videos, Modifier.fillMaxSize().clip(MaterialTheme.shapes.small))
                                 }
                             }
-                            IconAction(R.drawable.ic_fullscreen, stringResource(R.string.nowplaying_video_fullscreen), { fullVideo = true }, modifier = Modifier.align(Alignment.BottomEnd))
+                            Row(Modifier.align(Alignment.BottomEnd)) {
+                                IconAction(R.drawable.ic_pip, stringResource(R.string.nowplaying_video_pip), { VideoPip.enter(activity) })
+                                IconAction(R.drawable.ic_fullscreen, stringResource(R.string.nowplaying_video_fullscreen), { fullVideo = true })
+                            }
                         }
                     } else {
                         // ジャケットを左右にスワイプして次の曲・前の曲へ（指に付いて動き、離すと戻る）
@@ -670,7 +690,10 @@ private fun FullScreenVideo(
         }
         Box(Modifier.fillMaxSize().background(Color.Black)) {
             if (livePlayer != null) LiveVideoPanel(livePlayer, Modifier.fillMaxSize()) else MusicVideoPanel(song, clock, videos, Modifier.fillMaxSize())
-            IconAction(R.drawable.ic_fullscreen_exit, stringResource(R.string.nowplaying_video_exit_fullscreen), onClose, modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp))
+            Row(Modifier.align(Alignment.BottomEnd).padding(8.dp)) {
+                IconAction(R.drawable.ic_pip, stringResource(R.string.nowplaying_video_pip), { VideoPip.enter(activity) })
+                IconAction(R.drawable.ic_fullscreen_exit, stringResource(R.string.nowplaying_video_exit_fullscreen), onClose)
+            }
         }
     }
 }

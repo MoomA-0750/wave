@@ -9,6 +9,7 @@
     <application>
         <activity
             android:name=".MainActivity"
+            android:supportsPictureInPicture="true"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|density|uiMode|fontScale|locale|layoutDirection"
             android:exported="true">
             <intent-filter>

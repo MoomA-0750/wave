@@ -69,6 +69,9 @@ fun AppShell(
             xyz.mooma0750.wave.widget.WidgetHooks.consumeOpenNowPlaying()
         }
     }
+    // 小窓（PiP）にしたら、全面の再生画面（小窓の間は映像だけを出す）を前に出す
+    val inPip by xyz.mooma0750.wave.nowplaying.VideoPip.inPip.collectAsState()
+    LaunchedEffect(inPip) { if (inPip) playerOpen = true }
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val wide = maxWidth >= WIDE_LAYOUT_MIN_WIDTH
         // 横向きのスマホ（縦が狭い）: 下のタブの代わりに左に縦のレールを出し、縦の場所を中身に回す。
