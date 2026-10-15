@@ -19,8 +19,8 @@ struct NowPlayingView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 header(player, song)
-                // ジャケット（左右に払うと前後の曲へ）か、MV のある曲で「動画」を選んでいれば映像
-                if showVideo, player.video != nil {
+                // ジャケット（左右に払うと前後の曲へ）か、MV のある曲・ライブで「動画」を選んでいれば映像
+                if showVideo, player.hasVideo {
                     VideoSurface()
                         .aspectRatio(1, contentMode: .fit)
                         .clipShape(RoundedRectangle(cornerRadius: 10))
@@ -48,7 +48,11 @@ struct NowPlayingView: View {
         }
         .task(id: song?.thumbnailUrl) { tint = await Artwork.dominantColor(song?.thumbnailUrl) }
         .onChange(of: song?.videoId) { _, _ in showVideo = false }
-        .onChange(of: showVideo, initial: true) { _, show in MusicVideoPlayer.shared.setActive(show ? player.video : nil) }
+        .onChange(of: showVideo, initial: true) { _, show in
+            MusicVideoPlayer.shared.setActive(show ? player.video : nil)
+            // ライブは「動画」にしたときだけ、映像を見るための画質で読み直す
+            player.setLiveVideo(show)
+        }
         .onChange(of: player.video) { _, v in MusicVideoPlayer.shared.setActive(showVideo ? v : nil) }
         .onDisappear { MusicVideoPlayer.shared.setActive(nil) }
         .sheet(isPresented: $shell.queueOpen) { QueueView().modifier(DialogSheets(layer: .queue)) }
@@ -62,7 +66,7 @@ struct NowPlayingView: View {
             Button { dismiss() } label: { Image(systemName: "chevron.down").font(.title3.weight(.semibold)).frame(width: 44, height: 44) }
                 .accessibilityLabel(L.t("閉じる", "Close"))
             Spacer()
-            if player.video != nil {
+            if player.hasVideo {
                 Picker("", selection: $showVideo) {
                     Text(L.t("曲", "Song")).tag(false)
                     Text(L.t("動画", "Video")).tag(true)
@@ -327,8 +331,13 @@ struct VideoSurface: View {
         let video = MusicVideoPlayer.shared
         ZStack {
             Color.black
-            if video.showing { PlayerLayer(player: video.player) }
-            if !video.showing || video.state != .ready {
+            if let live = AppServices.player.liveVideoPlayer {
+                // ライブは鳴らしている再生器の映像をそのまま出す
+                PlayerLayer(player: live)
+            } else {
+                if video.showing { PlayerLayer(player: video.player) }
+            }
+            if AppServices.player.liveVideoPlayer == nil && (!video.showing || video.state != .ready) {
                 VStack(spacing: 8) {
                     Text(video.note).font(.caption).foregroundStyle(.white).multilineTextAlignment(.center)
                     if video.state == .failed { Button(L.t("もう一度", "Retry")) { video.load(AppServices.player.video) } }

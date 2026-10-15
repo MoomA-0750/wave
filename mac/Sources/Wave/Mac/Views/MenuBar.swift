@@ -300,7 +300,7 @@ struct MenuBarNowPlaying: View {
             }
             ZStack(alignment: .top) {
                 VideoOrCover(size: 288, inFullView: false)
-                if player.video != nil { SongVideoSwitch().padding(.top, 10) }
+                if player.hasVideo { SongVideoSwitch().padding(.top, 10) }
             }
             .frame(height: 288)
             HStack(alignment: .top, spacing: 8) {

@@ -60,6 +60,8 @@ struct MainView: View {
             model.showVideo = false
             model.prefetchMembership()
         }
+        // ライブは「動画」にしたときだけ、映像を見るための画質で読み直す
+        .onChange(of: model.showVideo) { _, show in player.setLiveVideo(show) }
         .onChange(of: searchFocus) { _, focused in model.searchFocusChanged(focused) }
         .onChange(of: model.searchFocused) { _, focused in if focused != searchFocus { searchFocus = focused } }
         .onAppear(perform: installKeys)

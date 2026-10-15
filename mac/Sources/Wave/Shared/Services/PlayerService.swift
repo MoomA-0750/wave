@@ -164,6 +164,36 @@ final class PlayerService {
     /// 今の曲がライブ配信（長さ・シーク・歌詞・映像が無い。HLS で流す）。
     var isLive: Bool { current?.isLive == true }
 
+    /// 映像を出せるか（曲の MV、またはこの端末で鳴らしているライブ配信。ライブは鳴らしている HLS に映像も入っている）。
+    var hasVideo: Bool { video != nil || (isLive && !isRemote) }
+
+    /// ライブで映像を出しているか（映像を見るための画質で流す。出していない間は音のための小さい画質で通信量を抑える）。
+    /// 映像にした曲（liveVideoFor）でだけ効く。曲が変われば音のための画質に戻る。
+    private var liveVideo: Bool { liveVideoFor != nil && liveVideoFor == current?.videoId }
+    @ObservationIgnored private var liveVideoFor: String?
+
+    /// ライブの映像を出す・やめる。今ライブを鳴らしていれば、その画質で読み直す（ライブは今の時点から流れるので、続きの位置は無い）。
+    func setLiveVideo(_ on: Bool) {
+        guard liveVideo != on else { return }
+        liveVideoFor = on ? current?.videoId : nil
+        guard isLive, !isRemote, let song = current, engine.hasSource else { return }
+        let wasPlaying = isPlaying
+        cancelLoad()
+        let token = loadToken
+        isLoading = true
+        loadTask = Task {
+            guard await startLive(song, token: token) else {
+                guard token == loadToken else { return }
+                await recover(song)
+                return
+            }
+            if !wasPlaying { engine.pause() }
+        }
+    }
+
+    /// ライブの映像を出す枠に渡す再生器（ライブを鳴らしているときだけ）。
+    var liveVideoPlayer: AVPlayer? { isLive && !isRemote ? engine.player : nil }
+
     /// 今の曲が RSS のエピソード（`ext:`。ADR-0012）。音声の URL をそのまま流し、YouTube のこと（評価・歌詞・MV・ラジオ・履歴・共有）をしない。
     var isExternal: Bool { current.map { Feed.isExternal($0.videoId) } ?? false }
 
@@ -1282,7 +1312,7 @@ final class PlayerService {
     private func startLive(_ song: Song, token: Int) async -> Bool {
         currentStream = nil
         liveStartedAtMs = nil
-        guard let result = try? await AppServices.live.resolve(videoId: song.videoId) else { return false }
+        guard let result = try? await AppServices.live.resolve(videoId: song.videoId, video: liveVideo) else { return false }
         guard current?.videoId == song.videoId, token == loadToken else { return false }
         guard let stream = result.stream, let url = URL(string: stream.revealUrl()) else {
             AppPaths.log("live resolve failed reason=\(String(describing: result.failure))")

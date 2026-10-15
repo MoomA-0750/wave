@@ -180,7 +180,11 @@ struct VideoOrCover: View {
         let player = AppServices.player!
         let video = MusicVideoPlayer.shared
         ZStack {
-            if model.showVideo, player.video != nil {
+            if model.showVideo, let live = player.liveVideoPlayer {
+                // ライブは鳴らしている再生器の映像をそのまま出す
+                Color.black
+                PlayerLayerView(player: live)
+            } else if model.showVideo, player.video != nil {
                 Color.black
                 if video.showing {
                     PlayerLayerView(player: video.player)
@@ -237,10 +241,10 @@ struct FullView: View {
             let left = (outer.size.width - 56) * 0.6
             HStack(alignment: .bottom, spacing: 56) {
                 VStack(alignment: .leading, spacing: 20) {
-                    if player.video != nil { SongVideoSwitch() }
+                    if player.hasVideo { SongVideoSwitch() }
                     // ジャケットは正方形、映像は枠いっぱいの大きさ（縦横比はそのまま）
                     GeometryReader { geo in
-                        if model.showVideo && player.video != nil {
+                        if model.showVideo && player.hasVideo {
                             VideoOrCover(size: nil, inFullView: true)
                         } else {
                             let side = min(geo.size.width, geo.size.height)

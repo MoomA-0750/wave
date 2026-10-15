@@ -92,7 +92,7 @@ struct NowPlayingView: View {
                 // ジャケットか、MV のある曲では映像（Spotify と同じ「曲｜動画」の切り替え）
                 ZStack(alignment: .top) {
                     VideoOrCover(size: 306, inFullView: false)
-                    if player.video != nil { SongVideoSwitch() .padding(.top, 10) }
+                    if player.hasVideo { SongVideoSwitch().padding(.top, 10) }
                 }
                 .frame(height: 306)
                 HStack(alignment: .top, spacing: 8) {
