@@ -114,8 +114,9 @@ class MainActivity : ComponentActivity() {
     // 映像の小窓（PiP）。再生画面で映像を出していれば、ホームへ戻ったときに小窓にする
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
-        // Android 12 からは setAutoEnterEnabled で自動になる
-        if (android.os.Build.VERSION.SDK_INT < 31 && xyz.mooma0750.wave.nowplaying.VideoPip.showing.value) {
+        // Android 12 からは setAutoEnterEnabled で自動になるが、それは Pixel のホームの上スワイプに頼っていて、
+        // ほかのホームのアプリ・ホームのボタンでは入らないことがある。まだ入っていなければ、ここでも入る
+        if (!isInPictureInPictureMode && xyz.mooma0750.wave.nowplaying.VideoPip.showing.value) {
             xyz.mooma0750.wave.nowplaying.VideoPip.enter(this)
         }
     }
