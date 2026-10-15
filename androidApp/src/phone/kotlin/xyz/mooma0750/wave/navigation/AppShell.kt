@@ -22,6 +22,8 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ShortNavigationBar
+import androidx.compose.material3.WideNavigationRail
+import androidx.compose.material3.WideNavigationRailItem
 import androidx.compose.material3.ShortNavigationBarItem
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -69,8 +71,18 @@ fun AppShell(
     }
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val wide = maxWidth >= WIDE_LAYOUT_MIN_WIDTH
+        // 横向きのスマホ（縦が狭い）: 下のタブの代わりに左に縦のレールを出し、縦の場所を中身に回す
+        val rail = !wide && maxWidth > maxHeight && maxHeight < RAIL_MAX_HEIGHT
         val panelWidth = (maxWidth * 0.32f).coerceIn(PANEL_MIN_WIDTH, PANEL_MAX_WIDTH)
         Row(Modifier.fillMaxSize()) {
+            if (rail) {
+                WideNavigationRail(Modifier.fillMaxHeight()) {
+                    RailItem(nav, Tab.Home, R.drawable.ic_home, R.drawable.ic_home_outline, stringResource(R.string.nav_home))
+                    RailItem(nav, Tab.Search, R.drawable.ic_search, R.drawable.ic_search_outline, stringResource(R.string.nav_search))
+                    RailItem(nav, Tab.Ai, R.drawable.ic_ai, R.drawable.ic_ai, stringResource(R.string.nav_ai))
+                    RailItem(nav, Tab.Library, R.drawable.ic_library, R.drawable.ic_library_outline, stringResource(R.string.nav_library))
+                }
+            }
             Column(Modifier.weight(1f).fillMaxHeight()) {
                 // 下のタブがナビゲーションバーの分を受け持つので、中の画面では数えない
                 Box(Modifier.weight(1f).consumeWindowInsets(WindowInsets.navigationBars)) {
@@ -79,7 +91,7 @@ fun AppShell(
                     NoticeHost(Modifier.align(Alignment.BottomCenter))
                 }
                 if (!wide || !hasPlayback) miniPlayer { playerOpen = true }
-                ShortNavigationBar {
+                if (!rail) ShortNavigationBar {
                     TabItem(nav, Tab.Home, R.drawable.ic_home, R.drawable.ic_home_outline, stringResource(R.string.nav_home))
                     TabItem(nav, Tab.Search, R.drawable.ic_search, R.drawable.ic_search_outline, stringResource(R.string.nav_search))
                     // Claude はどの画面からでも聞けるように、行き先（タブ）の1つにする（Material ではバーに押すだけのボタンは置かない）
@@ -109,10 +121,31 @@ fun AppShell(
     }
 }
 
+/** これより縦が狭い横向きの画面（スマホを横にした）では、下のタブの代わりに左のレールにする（Material の Compact の高さ）。 */
+private val RAIL_MAX_HEIGHT = 480.dp
+
 /** これより広ければ、右に再生の列を出す（Material の Expanded の幅）。 */
 private val WIDE_LAYOUT_MIN_WIDTH = 840.dp
 private val PANEL_MIN_WIDTH = 340.dp
 private val PANEL_MAX_WIDTH = 440.dp
+
+@Composable
+private fun RailItem(
+    nav: AppNavigator,
+    tab: Tab,
+    @DrawableRes selectedIcon: Int,
+    @DrawableRes icon: Int,
+    label: String,
+) {
+    val selected = nav.tab == tab
+    WideNavigationRailItem(
+        railExpanded = false,
+        selected = selected,
+        onClick = { nav.select(tab) },
+        icon = { Icon(painterResource(if (selected) selectedIcon else icon), contentDescription = null) },
+        label = { Text(label) },
+    )
+}
 
 @Composable
 private fun TabItem(
