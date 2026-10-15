@@ -212,8 +212,9 @@ struct VideoOrCover: View {
                         .buttonStyle(IconButtonStyle(size: 28))
                         .help(L.t("映像を大きく見る", "Expand video"))
                 }
-                .foregroundStyle(.white)
                 .background(Capsule().fill(Color.black.opacity(0.45)))
+                // ボタンの記号は主の色で塗られるので、ライトモードでも映像の上で白く出るよう暗い配色にする
+                .environment(\.colorScheme, .dark)
                 .padding(8)
             }
         }

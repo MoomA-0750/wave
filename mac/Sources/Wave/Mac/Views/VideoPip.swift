@@ -97,9 +97,38 @@ private struct PipView: View {
         }
         .foregroundStyle(.white)
         .environment(\.colorScheme, .dark)
-        .onHover { hover = $0 }
+        // 小窓は wave を前に出さないので、どのアプリが前でも指の出入りを受ける見張りを使う（onHover は wave が前のときだけ）
+        .background(HoverTracker(hover: $hover))
         .onTapGesture(count: 2) { VideoPip.shared.backToApp() }
         .ignoresSafeArea()
+    }
+}
+
+/// どのアプリが前でも、指の出入りを知らせる。
+private struct HoverTracker: NSViewRepresentable {
+    @Binding var hover: Bool
+
+    final class TrackingView: NSView {
+        var onChange: ((Bool) -> Void)?
+
+        override func updateTrackingAreas() {
+            super.updateTrackingAreas()
+            trackingAreas.forEach(removeTrackingArea)
+            addTrackingArea(NSTrackingArea(rect: bounds, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self))
+        }
+
+        override func mouseEntered(with event: NSEvent) { onChange?(true) }
+        override func mouseExited(with event: NSEvent) { onChange?(false) }
+    }
+
+    func makeNSView(context: Context) -> TrackingView {
+        let view = TrackingView()
+        view.onChange = { hover = $0 }
+        return view
+    }
+
+    func updateNSView(_ view: TrackingView, context: Context) {
+        view.onChange = { hover = $0 }
     }
 }
 #endif
