@@ -5,10 +5,13 @@ public struct HlsVariant: Hashable, Sendable {
     public var bandwidth: Int64
     public var codecs: String?
     public var url: String
-    public init(bandwidth: Int64, codecs: String?, url: String) {
+    /// 映像の高さ（RESOLUTION の縦）。書いていなければ nil。
+    public var height: Int?
+    public init(bandwidth: Int64, codecs: String?, url: String, height: Int? = nil) {
         self.bandwidth = bandwidth
         self.codecs = codecs
         self.url = url
+        self.height = height
     }
 }
 
@@ -57,7 +60,8 @@ public enum LiveParsers {
             let attributes = attributesOf(String(line.dropFirst("#EXT-X-STREAM-INF:".count)))
             let uri = lines[(index + 1)...].first { !$0.isEmpty && !$0.hasPrefix("#") }
             if let uri, let bandwidth = attributes["BANDWIDTH"].flatMap({ Int64($0) }) {
-                variants.append(HlsVariant(bandwidth: bandwidth, codecs: attributes["CODECS"], url: resolveUrl(masterUrl, uri)))
+                let height = attributes["RESOLUTION"].flatMap { $0.split(separator: "x").last.flatMap { Int($0) } }
+                variants.append(HlsVariant(bandwidth: bandwidth, codecs: attributes["CODECS"], url: resolveUrl(masterUrl, uri), height: height))
             }
         }
         return variants
@@ -68,6 +72,18 @@ public enum LiveParsers {
     public static func chooseAudioVariant(_ variants: [HlsVariant]) -> HlsVariant? {
         variants.filter { $0.codecs?.contains("mp4a.40.2") == true }.min { $0.bandwidth < $1.bandwidth }
             ?? variants.min { $0.bandwidth < $1.bandwidth }
+    }
+
+    /// 映像を見るときの画質の上限（高さ）。通信量と、スマホ・小窓で見るときの見え方の釣り合い。
+    public static let maxVideoHeight = 720
+
+    /// 映像を見るための1本を選ぶ。高さ maxVideoHeight（720）以下で最も帯域の大きいもの（AAC-LC を先に）。
+    /// 高さが書かれていなければ音のための1本と同じ（小さい画質のまま）。Kotlin の chooseVideoVariant と同じ。
+    public static func chooseVideoVariant(_ variants: [HlsVariant]) -> HlsVariant? {
+        let fitting = variants.filter { ($0.height ?? .max) <= maxVideoHeight }
+        return fitting.filter { $0.codecs?.contains("mp4a.40.2") == true }.max { $0.bandwidth < $1.bandwidth }
+            ?? fitting.max { $0.bandwidth < $1.bandwidth }
+            ?? chooseAudioVariant(variants)
     }
 
     private static func attributesOf(_ text: String) -> [String: String] {
@@ -197,7 +213,8 @@ public final class LiveClient: Sendable {
     }
 
     /// ライブの HLS（音を聴くための1本の媒体プレイリスト）を解決する。throw するのは取り消しだけ。
-    public func resolve(videoId: String) async throws -> LiveResult {
+    /// ライブの HLS（音を聴くための1本、video なら映像を見るための1本の媒体プレイリスト）を解決する。
+    public func resolve(videoId: String, video: Bool = false) async throws -> LiveResult {
         guard videoId.wholeMatch(of: #/[A-Za-z0-9_-]{11}/#) != nil else { return .failed(.notLive) }
         let requestedAt = nowMs()
         let body = JSON.obj([
@@ -221,7 +238,8 @@ public final class LiveClient: Sendable {
         guard let masterUrl = LiveParsers.hlsManifestUrl(player), let url = URL(string: masterUrl) else { return .failed(.notLive) }
         guard let masterData = try await fetch(URLRequest(url: url)) else { return .failed(.network) }
         let master = String(decoding: masterData, as: UTF8.self)
-        guard let variant = LiveParsers.chooseAudioVariant(LiveParsers.variants(master, masterUrl: masterUrl)),
+        let variants = LiveParsers.variants(master, masterUrl: masterUrl)
+        guard let variant = video ? LiveParsers.chooseVideoVariant(variants) : LiveParsers.chooseAudioVariant(variants),
             isAllowedLiveManifestUrl(variant.url)
         else { return .failed(.noVariant) }
         let seconds = LiveParsers.expiresInSeconds(player).flatMap { $0 > 0 ? $0 : nil } ?? LiveClient.defaultLifetimeSeconds

@@ -62,6 +62,19 @@ class LiveParsersTest {
     }
 
     @Test
+    fun videoVariantIsTheBest720pOrLower() {
+        val masterUrl = "https://manifest.googlevideo.com/api/manifest/hls_variant/expire/1/id/x/file/index.m3u8"
+        val variants = LiveParsers.variants(masterText(), masterUrl)
+        assertEquals(listOf(144, 240, 360, 480, 720, 1080), variants.map { it.height })
+        val chosen = assertNotNull(LiveParsers.chooseVideoVariant(variants))
+        assertEquals(720, chosen.height)
+        assertEquals(2969452L, chosen.bandwidth)
+        // 高さが書かれていなければ、音のための1本と同じ
+        val bare = variants.map { it.copy(height = null) }
+        assertEquals(LiveParsers.chooseAudioVariant(bare), LiveParsers.chooseVideoVariant(bare))
+    }
+
+    @Test
     fun variantsResolveRelativeUrisAndFallBackToSmallest() {
         val master =
             """

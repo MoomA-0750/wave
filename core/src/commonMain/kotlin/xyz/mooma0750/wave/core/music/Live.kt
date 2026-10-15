@@ -23,6 +23,8 @@ data class HlsVariant(
     val bandwidth: Long,
     val codecs: String?,
     val url: String,
+    /** 映像の高さ（RESOLUTION の縦）。書いていなければ null。 */
+    val height: Int? = null,
 )
 
 /**
@@ -85,7 +87,8 @@ object LiveParsers {
                 val attributes = attributesOf(line.removePrefix("#EXT-X-STREAM-INF:"))
                 val uri = lines.drop(index + 1).firstOrNull { it.isNotEmpty() && !it.startsWith("#") }
                 val bandwidth = attributes["BANDWIDTH"]?.toLongOrNull()
-                if (uri != null && bandwidth != null) variants += HlsVariant(bandwidth, attributes["CODECS"], resolveUrl(masterUrl, uri))
+                val height = attributes["RESOLUTION"]?.substringAfter('x', "")?.toIntOrNull()
+                if (uri != null && bandwidth != null) variants += HlsVariant(bandwidth, attributes["CODECS"], resolveUrl(masterUrl, uri), height)
             }
             index++
         }
@@ -99,6 +102,20 @@ object LiveParsers {
     fun chooseAudioVariant(variants: List<HlsVariant>): HlsVariant? =
         variants.filter { it.codecs?.contains("mp4a.40.2") == true }.minByOrNull { it.bandwidth }
             ?: variants.minByOrNull { it.bandwidth }
+
+    /**
+     * 映像を見るための1本を選ぶ。高さ MAX_VIDEO_HEIGHT（720）以下で最も帯域の大きいもの（AAC-LC を先に）。
+     * 高さが書かれていなければ音のための1本と同じ（小さい画質のまま）。
+     */
+    fun chooseVideoVariant(variants: List<HlsVariant>): HlsVariant? {
+        val fitting = variants.filter { it.height != null && it.height <= MAX_VIDEO_HEIGHT }
+        return fitting.filter { it.codecs?.contains("mp4a.40.2") == true }.maxByOrNull { it.bandwidth }
+            ?: fitting.maxByOrNull { it.bandwidth }
+            ?: chooseAudioVariant(variants)
+    }
+
+    /** 映像を見るときの画質の上限（高さ）。通信量と、スマホ・小窓で見るときの見え方の釣り合い。 */
+    const val MAX_VIDEO_HEIGHT = 720
 
     private fun attributesOf(text: String): Map<String, String> {
         val result = HashMap<String, String>()
@@ -241,8 +258,11 @@ class LiveClient(
             null
         }
 
-    /** ライブの HLS（音を聴くための1本の媒体プレイリスト）を解決する。 */
-    suspend fun resolve(videoId: String): LiveResult {
+    /** ライブの HLS（音を聴くための1本、video なら映像を見るための1本の媒体プレイリスト）を解決する。 */
+    suspend fun resolve(
+        videoId: String,
+        video: Boolean = false,
+    ): LiveResult {
         val requestedAt = nowMs()
         val player =
             try {
@@ -289,7 +309,8 @@ class LiveClient(
             } catch (_: Exception) {
                 return LiveResult.Failed(LiveFailure.Network)
             }
-        val variant = LiveParsers.chooseAudioVariant(LiveParsers.variants(master, masterUrl)) ?: return LiveResult.Failed(LiveFailure.NoVariant)
+        val variants = LiveParsers.variants(master, masterUrl)
+        val variant = (if (video) LiveParsers.chooseVideoVariant(variants) else LiveParsers.chooseAudioVariant(variants)) ?: return LiveResult.Failed(LiveFailure.NoVariant)
         if (!isAllowedLiveManifestUrl(variant.url)) return LiveResult.Failed(LiveFailure.NoVariant)
         val lifetimeMs = (LiveParsers.expiresInSeconds(player)?.takeIf { it > 0 } ?: DEFAULT_LIFETIME_SECONDS) * 1000
         return LiveResult.Ok(LiveStream(videoId, variant.url, requestedAt + lifetimeMs - EXPIRY_SAFETY_MS))

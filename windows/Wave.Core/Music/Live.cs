@@ -6,7 +6,7 @@ using Wave.Core.Net;
 namespace Wave.Core.Music;
 
 /// <summary>HLS のマスタープレイリストの1本（画質ごとの媒体プレイリスト）。</summary>
-public sealed record HlsVariant(long Bandwidth, string? Codecs, string Url);
+public sealed record HlsVariant(long Bandwidth, string? Codecs, string Url, int? Height = null);
 
 /// <summary>
 /// ライブ配信（YouTube の生配信）の検索と、再生に使う HLS の解決（応答の読み取りは純粋な関数。Android の LiveParsers と同じ）。
@@ -63,7 +63,11 @@ public static class LiveParsers
             var attributes = AttributesOf(line["#EXT-X-STREAM-INF:".Length..]);
             var uri = lines.Skip(index + 1).FirstOrDefault(l => l.Length > 0 && !l.StartsWith('#'));
             if (uri is not null && attributes.TryGetValue("BANDWIDTH", out var b) && long.TryParse(b, out var bandwidth))
-                variants.Add(new HlsVariant(bandwidth, attributes.GetValueOrDefault("CODECS"), ResolveUrl(masterUrl, uri)));
+            {
+                // 映像の高さ（RESOLUTION の縦）
+                int? height = attributes.TryGetValue("RESOLUTION", out var r) && int.TryParse(r[(r.IndexOf('x') + 1)..], out var h) ? h : null;
+                variants.Add(new HlsVariant(bandwidth, attributes.GetValueOrDefault("CODECS"), ResolveUrl(masterUrl, uri), height));
+            }
         }
         return variants;
     }
@@ -75,6 +79,21 @@ public static class LiveParsers
     public static HlsVariant? ChooseAudioVariant(IReadOnlyList<HlsVariant> variants) =>
         variants.Where(v => v.Codecs?.Contains("mp4a.40.2", StringComparison.Ordinal) == true).MinBy(v => v.Bandwidth)
         ?? variants.MinBy(v => v.Bandwidth);
+
+    /// <summary>映像を見るときの画質の上限（高さ）。通信量と、スマホ・小窓で見るときの見え方の釣り合い。</summary>
+    public const int MaxVideoHeight = 720;
+
+    /// <summary>
+    /// 映像を見るための1本を選ぶ。高さ MaxVideoHeight（720）以下で最も帯域の大きいもの（AAC-LC を先に）。
+    /// 高さが書かれていなければ音のための1本と同じ（小さい画質のまま）。Kotlin の chooseVideoVariant と同じ。
+    /// </summary>
+    public static HlsVariant? ChooseVideoVariant(IReadOnlyList<HlsVariant> variants)
+    {
+        var fitting = variants.Where(v => v.Height is { } h && h <= MaxVideoHeight).ToList();
+        return fitting.Where(v => v.Codecs?.Contains("mp4a.40.2", StringComparison.Ordinal) == true).MaxBy(v => v.Bandwidth)
+            ?? fitting.MaxBy(v => v.Bandwidth)
+            ?? ChooseAudioVariant(variants);
+    }
 
     private static Dictionary<string, string> AttributesOf(string text)
     {
@@ -206,8 +225,8 @@ public sealed class LiveClient(HttpClient http, string hl, string gl, Func<long>
         return root is null ? null : LiveParsers.WebSearch(root);
     }
 
-    /// <summary>ライブの HLS（音を聴くための1本の媒体プレイリスト）を解決する。</summary>
-    public async Task<LiveResult> ResolveAsync(string videoId, CancellationToken cancel = default)
+    /// <summary>ライブの HLS（音を聴くための1本、video なら映像を見るための1本の媒体プレイリスト）を解決する。</summary>
+    public async Task<LiveResult> ResolveAsync(string videoId, CancellationToken cancel = default, bool video = false)
     {
         var requestedAt = nowMs();
         var body = new JsonObject
@@ -254,7 +273,8 @@ public sealed class LiveClient(HttpClient http, string hl, string gl, Func<long>
         {
             return LiveResult.Failed(LiveFailure.Network);
         }
-        var variant = LiveParsers.ChooseAudioVariant(LiveParsers.Variants(master, masterUrl));
+        var variants = LiveParsers.Variants(master, masterUrl);
+        var variant = video ? LiveParsers.ChooseVideoVariant(variants) : LiveParsers.ChooseAudioVariant(variants);
         if (variant is null || !LiveUrls.IsAllowedManifest(variant.Url)) return LiveResult.Failed(LiveFailure.NoVariant);
         var lifetimeMs = (LiveParsers.ExpiresInSeconds(player) is { } s && s > 0 ? s : DefaultLifetimeSeconds) * 1000;
         return LiveResult.Ok(new LiveStream(videoId, variant.Url, requestedAt + lifetimeMs - ExpirySafetyMs));

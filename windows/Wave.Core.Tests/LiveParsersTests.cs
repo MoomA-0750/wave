@@ -50,6 +50,21 @@ public class LiveParsersTests
     }
 
     [Fact]
+    public void VideoVariantIsTheBest720pOrLower()
+    {
+        const string masterUrl = "https://manifest.googlevideo.com/api/manifest/hls_variant/expire/1/id/x/file/index.m3u8";
+        var variants = LiveParsers.Variants(MasterText(), masterUrl);
+        Assert.Equal([144, 240, 360, 480, 720, 1080], variants.Select(v => v.Height ?? 0));
+        var chosen = LiveParsers.ChooseVideoVariant(variants);
+        Assert.NotNull(chosen);
+        Assert.Equal(720, chosen.Height);
+        Assert.Equal(2969452L, chosen.Bandwidth);
+        // 高さが書かれていなければ、音のための1本と同じ
+        var bare = variants.Select(v => v with { Height = null }).ToList();
+        Assert.Equal(LiveParsers.ChooseAudioVariant(bare), LiveParsers.ChooseVideoVariant(bare));
+    }
+
+    [Fact]
     public void MasterPlaylistChoosesSmallestAacLcVariant()
     {
         const string masterUrl = "https://manifest.googlevideo.com/api/manifest/hls_variant/expire/1/id/x/file/index.m3u8";

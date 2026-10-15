@@ -52,6 +52,18 @@ final class LiveParsersTests: XCTestCase {
         XCTAssertTrue(isAllowedLiveManifestUrl(chosen.url))
     }
 
+    func testVideoVariantIsTheBest720pOrLower() throws {
+        let masterUrl = "https://manifest.googlevideo.com/api/manifest/hls_variant/expire/1/id/x/file/index.m3u8"
+        let variants = LiveParsers.variants(try masterText(), masterUrl: masterUrl)
+        XCTAssertEqual([144, 240, 360, 480, 720, 1080], variants.map(\.height))
+        let chosen = try XCTUnwrap(LiveParsers.chooseVideoVariant(variants))
+        XCTAssertEqual(720, chosen.height)
+        XCTAssertEqual(2969452, chosen.bandwidth)
+        // 高さが書かれていなければ、音のための1本と同じ
+        let bare = variants.map { HlsVariant(bandwidth: $0.bandwidth, codecs: $0.codecs, url: $0.url) }
+        XCTAssertEqual(LiveParsers.chooseAudioVariant(bare), LiveParsers.chooseVideoVariant(bare))
+    }
+
     func testVariantsResolveRelativeUrisAndFallBackToSmallest() {
         let master = """
             #EXTM3U
