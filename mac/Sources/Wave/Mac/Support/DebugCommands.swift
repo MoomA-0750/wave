@@ -96,6 +96,8 @@ enum DebugCommands {
             AppPaths.log("debug pane \(arg) right=\(window.showRight) view=\(window.rightView)")
         case "fullscreen": window.setFullScreen(arg == "on")
         case "video": window.showVideo = arg == "on"
+        case "video-expand": window.expandVideo()
+        case "video-only": window.toggleVideoOnly()
         case "ai-pair":
             AppPaths.log("debug ai pair ok=\(AiChat.pair(arg))")
         case "ai":

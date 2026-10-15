@@ -19,7 +19,8 @@ struct MainView: View {
                         FullView().ignoresSafeArea(edges: .top)
                         SuggestionsOverlay(model: model)
                     }
-                    PlayerBar()
+                    // 映像だけのときは下の操作の帯も隠す（スペースで再生・一時停止はできる）
+                    if !(model.videoOnly && model.showVideo && player.hasVideo) { PlayerBar() }
                 }
             } else {
                 // Messages と同じく、両脇（ライブラリ・再生中の欄）は窓の地のすりガラスを透かし、真ん中のページだけ不透明な地にする
@@ -157,7 +158,8 @@ struct MainView: View {
             model.setFullScreen(!model.fullScreen)
             return true
         case 53 where model.fullScreen && !TextInput.composing:  // esc（変換中は取り消しに使わせる）
-            model.setFullScreen(false)
+            // 映像だけのときは、まず再生中の画面に戻す
+            if model.videoOnly { model.toggleVideoOnly() } else { model.setFullScreen(false) }
             return true
         default:
             break

@@ -203,6 +203,17 @@ struct VideoOrCover: View {
         }
         .frame(width: size, height: size)
         .clipShape(RoundedRectangle(cornerRadius: inFullView ? 0 : 8))
+        .overlay(alignment: .bottomTrailing) {
+            // 右の欄・メニューバーの小窓の映像は、右下のボタンで全画面の再生中の画面に大きく出す
+            if !inFullView && model.showVideo && player.hasVideo {
+                Button { model.expandVideo() } label: { Image(systemName: "arrow.up.left.and.arrow.down.right").font(.system(size: 13, weight: .semibold)) }
+                    .buttonStyle(IconButtonStyle(size: 28))
+                    .foregroundStyle(.white)
+                    .background(Circle().fill(Color.black.opacity(0.45)))
+                    .padding(8)
+                    .help(L.t("映像を大きく見る", "Expand video"))
+            }
+        }
         .onChange(of: model.showVideo, initial: true) { _, show in video.setActive(show ? player.video : nil) }
         .onChange(of: player.video) { _, v in if model.showVideo { video.setActive(v) } else { video.setActive(nil) } }
     }
@@ -232,6 +243,26 @@ struct FullView: View {
     var body: some View {
         let player = AppServices.player!
         let song = player.current
+        if model.videoOnly && model.showVideo && player.hasVideo {
+            // 映像だけを画面いっぱいに（ダブルクリック・右上のボタン・Esc で戻る）
+            ZStack(alignment: .topTrailing) {
+                Color.black
+                VideoOrCover(size: nil, inFullView: true)
+                    .onTapGesture(count: 2) { model.toggleVideoOnly() }
+                Button { model.toggleVideoOnly() } label: { Image(systemName: "rectangle.inset.filled").font(.system(size: 15)) }
+                    .buttonStyle(IconButtonStyle())
+                    .foregroundStyle(.white)
+                    .help(L.t("映像だけをやめる (Esc)", "Show the player (Esc)"))
+                    .padding(16)
+            }
+            .ignoresSafeArea()
+            .environment(\.colorScheme, .dark)
+        } else {
+            fullPlayer(player, song)
+        }
+    }
+
+    private func fullPlayer(_ player: PlayerService, _ song: Song?) -> some View {
         ZStack(alignment: .topTrailing) {
             Color(nsColor: .windowBackgroundColor)
             RemoteImage(url: Ui.large(song?.thumbnailUrl)).opacity(0.25)
@@ -246,6 +277,16 @@ struct FullView: View {
                     GeometryReader { geo in
                         if model.showVideo && player.hasVideo {
                             VideoOrCover(size: nil, inFullView: true)
+                                .overlay(alignment: .bottomTrailing) {
+                                    // 映像だけを画面いっぱいに出す（映像のダブルクリックでも）
+                                    Button { model.toggleVideoOnly() } label: { Image(systemName: "arrow.up.left.and.arrow.down.right").font(.system(size: 14, weight: .semibold)) }
+                                        .buttonStyle(IconButtonStyle(size: 30))
+                                        .foregroundStyle(.white)
+                                        .background(Circle().fill(Color.black.opacity(0.45)))
+                                        .padding(10)
+                                        .help(L.t("映像だけを画面いっぱいに", "Video only"))
+                                }
+                                .onTapGesture(count: 2) { model.toggleVideoOnly() }
                         } else {
                             let side = min(geo.size.width, geo.size.height)
                             RemoteImage(url: Ui.large(song?.thumbnailUrl))

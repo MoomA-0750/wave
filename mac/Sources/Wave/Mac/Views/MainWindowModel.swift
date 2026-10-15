@@ -56,6 +56,8 @@ final class MainWindowModel {
     var fullScreen = false
     /// 「曲｜動画」の動画を選んでいるか。
     var showVideo = false
+    /// 全画面で、映像だけを画面いっぱいに出しているか（曲名・歌詞・下の操作の帯も隠す）。
+    var videoOnly = false
 
     // 検索欄
     var searchText = ""
@@ -130,10 +132,25 @@ final class MainWindowModel {
 
     func setFullScreen(_ on: Bool) {
         fullScreen = on
+        if !on { videoOnly = false }
         // 窓も全画面にする（Windows の FullScreen の表示と同じ）
         if let window = NSApp.keyWindow ?? NSApp.mainWindow, window.styleMask.contains(.fullScreen) != on {
             window.toggleFullScreen(nil)
         }
+    }
+
+    /// 映像を大きく見る（右の欄・メニューバーの小窓の映像の「拡大」）。全画面の再生中の画面で映像を出す。
+    func expandVideo() {
+        showVideo = true
+        MenuBarController.shared.close()
+        MenuBarController.showMainWindow()
+        setFullScreen(true)
+    }
+
+    /// 全画面で、映像だけを画面いっぱいに出す・やめる。
+    func toggleVideoOnly() {
+        videoOnly.toggle()
+        if videoOnly && !fullScreen { setFullScreen(true) }
     }
 
     /// 全画面からページを開くときは、全画面を閉じてから開く。
