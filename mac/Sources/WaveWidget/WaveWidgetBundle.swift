@@ -38,22 +38,33 @@ private func loadImage(_ url: URL?) -> WidgetImage? {
 
 private let accent = Color(red: 0.27, green: 0.55, blue: 1.0)
 
-/// ジャケット（無ければ音符）。
+/// ジャケット（無ければ音符）。枠の大きさで切り抜く（映像の 16:9 の絵など、正方形でない絵を枠いっぱいに広げても、はみ出さない）。
 private struct Artwork: View {
     var image: WidgetImage?
     var radius: CGFloat = 10
 
     var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: radius).fill(Color.white.opacity(0.12))
-            if let image {
-                Image(widgetImage: image).resizable().aspectRatio(contentMode: .fill)
-            } else {
-                Image(systemName: "music.note").font(.title2).foregroundStyle(.secondary)
+        // 地（枠の大きさを決める）の上に重ねる。ZStack に入れると、広げた絵の大きさに枠が引っぱられて切り抜きが効かない
+        RoundedRectangle(cornerRadius: radius).fill(Color.primary.opacity(0.08))
+            .overlay {
+                if let image {
+                    // クリア・色付きのアイコン表示では、OS が絵を一色に塗りつぶす（真っ白になる）。絵は白黒の写真として残す
+                    Image(widgetImage: image).resizable().widgetAccentedRenderingMode(.desaturated).aspectRatio(contentMode: .fill)
+                } else {
+                    Image(systemName: "music.note").font(.title2).foregroundStyle(.secondary)
+                }
             }
-        }
-        .clipShape(RoundedRectangle(cornerRadius: radius))
+            .clipShape(RoundedRectangle(cornerRadius: radius))
     }
+}
+
+/// ウィジェットの地（ライト・ダークの表示に合わせる。クリア・色付きの表示では OS が置き換える）。
+private var widgetBackground: Color {
+    #if os(iOS)
+        Color(uiColor: .secondarySystemBackground)
+    #else
+        Color(nsColor: .windowBackgroundColor)
+    #endif
 }
 
 // MARK: 今の曲
@@ -86,7 +97,7 @@ struct NowPlayingWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: WidgetStore.nowPlayingKind, provider: NowPlayingProvider()) { entry in
             NowPlayingWidgetView(entry: entry)
-                .containerBackground(for: .widget) { Color.black.opacity(0.85) }
+                .containerBackground(for: .widget) { widgetBackground }
                 .widgetURL(URL(string: "wave://nowplaying"))
         }
         .configurationDisplayName("再生中")
@@ -107,7 +118,7 @@ private struct Controls: View {
         }
         .font(.system(size: size))
         .buttonStyle(.plain)
-        .foregroundStyle(.white)
+        .foregroundStyle(.primary)
     }
 }
 
@@ -193,7 +204,7 @@ struct PlaylistWidget: Widget {
     var body: some WidgetConfiguration {
         AppIntentConfiguration(kind: WidgetStore.playlistKind, intent: SelectPlaylistIntent.self, provider: PlaylistProvider()) { entry in
             PlaylistWidgetView(entry: entry)
-                .containerBackground(for: .widget) { Color.black.opacity(0.85) }
+                .containerBackground(for: .widget) { widgetBackground }
         }
         .configurationDisplayName("プレイリスト")
         .description("選んだプレイリストを、押すとすぐ再生する。")
@@ -213,8 +224,8 @@ struct PlaylistWidgetView: View {
                         .frame(width: 38, height: 38).background(Circle().fill(accent))
                 }
                 Button(intent: PlayPlaylistIntent(playlistId: playlist.id, shuffle: true)) {
-                    Image(systemName: "shuffle").font(.system(size: 14, weight: .semibold)).foregroundStyle(.white)
-                        .frame(width: 34, height: 34).background(Circle().fill(Color.white.opacity(0.15)))
+                    Image(systemName: "shuffle").font(.system(size: 14, weight: .semibold)).foregroundStyle(.primary)
+                        .frame(width: 34, height: 34).background(Circle().fill(Color.primary.opacity(0.12)))
                 }
             }
             .buttonStyle(.plain)

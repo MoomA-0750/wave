@@ -57,7 +57,10 @@ ios-device)
   ssh mac "cd $remote/mac && WAVE_DEBUG=1 $relay scripts/ios-bundle.sh device && rm -f build/ios-sign.log && open -a Terminal scripts/ios-sign.command"
   until ssh mac "grep -q '^exit=' ~/$remote/mac/build/ios-sign.log 2>/dev/null"; do sleep 2; done
   ssh mac "cat ~/$remote/mac/build/ios-sign.log" | tail -3
-  ssh mac "grep -q '^exit=0' ~/$remote/mac/build/ios-sign.log && xcrun devicectl device install app --device \$(xcrun devicectl list devices 2>/dev/null | grep -E 'available \(paired\)|connected' | grep iPhone | grep -oE '[0-9A-F]{8}-[0-9A-F-]{27}' | head -1) ~/$remote/mac/build/ios-device/wave.app 2>&1 | tail -3" ;;
+  ssh mac "grep -q '^exit=0' ~/$remote/mac/build/ios-sign.log || exit 1
+    d=\$(xcrun devicectl list devices 2>/dev/null | grep -E 'available \(paired\)|connected' | grep iPhone | grep -oE '[0-9A-F]{8}-[0-9A-F-]{27}' | head -1)
+    [ -n \"\$d\" ] || { echo 'iPhone がつながっていません（Mac の近くでロックを外すか、ケーブルでつなぐ）'; exit 1; }
+    xcrun devicectl device install app --device \$d ~/$remote/mac/build/ios-device/wave.app 2>&1 | tail -3" ;;
 ios-dev-cmd)
   # つないだ iPhone の wave に開発用の命令を送る（ios-device で入れた版だけ効く）
   shift; printf "%s\n" "$@" | ssh mac "cat > /tmp/wave-debug-command.txt && xcrun devicectl device copy to --device \$(xcrun devicectl list devices 2>/dev/null | grep -E 'available \(paired\)|connected' | grep iPhone | grep -oE '[0-9A-F]{8}-[0-9A-F-]{27}' | head -1) --domain-type appDataContainer --domain-identifier xyz.mooma0750.wave --source /tmp/wave-debug-command.txt --destination 'Library/Application Support/wave/debug-command.txt' >/dev/null" ;;
