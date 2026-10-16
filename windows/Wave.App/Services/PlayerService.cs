@@ -1382,6 +1382,22 @@ public sealed partial class PlayerService : ObservableObject
                 return;
             }
             ResolvedStream? stream = null;
+            // 残してある曲: URL を調べ直さずに、残した分から鳴らし始める（続きは鳴らしながら取る）
+            if (!song.IsLive && CachedStart(song.VideoId) is { } cachedFormat)
+            {
+                if (!await StartCachedAsync(song, cachedFormat, seekTo))
+                {
+                    if (cancel.IsCancellationRequested) return;
+                    await RecoverAsync(song);
+                    return;
+                }
+                consecutiveFailures = 0;
+                _ = LoadSongInfoAsync(song, cancel.Token);
+                _ = LoadLyricsAsync(song, cancel.Token);
+                Prefetch();
+                ExtendRadioIfNeeded();
+                return;
+            }
             if (!song.IsLive)
             {
                 stream = await ResolveAsync(song.VideoId, cancel.Token);
@@ -1440,6 +1456,53 @@ public sealed partial class PlayerService : ObservableObject
         return null;
     }
 
+    /// <summary>鳴らし始めに残っていてほしいバイト数（256kbps で 15 秒ほど）。</summary>
+    private const long CachedStartBytes = 512 * 1024;
+    /// <summary>次の曲を先に取っておくバイト数（256kbps で 30 秒ほど）。</summary>
+    private const long WarmBytes = 1024 * 1024;
+
+    /// <summary>残してある曲で、鳴らし始めに足りる分（頭の区切りまで）が残っていれば、その形式。</summary>
+    private static CachedFormat? CachedStart(string videoId)
+    {
+        if (AppServices.AudioCache.Entry(videoId) is not { } entry) return null;
+        var need = Math.Max(entry.Format.Dash is { } dash ? dash.IndexEnd + 1 : 0, CachedStartBytes);
+        return entry.Cached >= need || entry.Cached >= entry.Format.Length ? entry.Format : null;
+    }
+
+    private async Task<bool> StartCachedAsync(Song song, CachedFormat format, double seekTo)
+    {
+        currentStream = null;
+        cpn = PlaybackStats.NewCpn();
+        var videoId = song.VideoId;
+        // 続きが要ったとき・再生履歴を送るときに、URL を調べる
+        var bytes = RangeStream.OpenCached(AppServices.Http, format, AppServices.AudioCache, async () =>
+        {
+            var result = await AppServices.Resolver.ResolveAsync(videoId);
+            if (result.Stream is not { } stream) throw new StreamRejectedException(0);
+            ui.TryEnqueue(() =>
+            {
+                if (Current?.VideoId == videoId) currentStream = stream;
+            });
+            return stream;
+        });
+        var source = await CreateDashSourceAsync(videoId, format.Dash, format.MimeType, format.Itag, bytes, "audio");
+        if (source is null || Current?.VideoId != videoId) return false;
+        PlaySource(song, source, seekTo);
+        AppPaths.Log($"play cached itag={format.Itag} queue={Queue.Count} index={Index}");
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await bytes.PrepareSourceAsync();
+            }
+            catch (Exception e) when (e is StreamRejectedException or HttpRequestException or IOException)
+            {
+                AppPaths.Log($"cached source failed type={e.GetType().Name}");
+            }
+        });
+        return true;
+    }
+
     private async Task<bool> StartStreamAsync(Song song, ResolvedStream stream, double seekTo = 0)
     {
         currentStream = stream;
@@ -1447,7 +1510,7 @@ public sealed partial class PlayerService : ObservableObject
         RangeStream bytes;
         try
         {
-            bytes = await RangeStream.OpenAsync(AppServices.Http, stream);
+            bytes = await RangeStream.OpenAsync(AppServices.Http, stream, cache: AppServices.AudioCache);
         }
         catch (Exception e) when (e is StreamRejectedException or HttpRequestException or IOException)
         {
@@ -1535,16 +1598,19 @@ public sealed partial class PlayerService : ObservableObject
     private static Task<MediaSource?> CreateSourceAsync(Song song, ResolvedStream stream, RangeStream bytes) => CreateDashSourceAsync(song.VideoId, stream, bytes, "audio");
 
     /// <summary>音・映像の DASH の再生の元（kind は目次に書く仮の URL の区別）。</summary>
-    internal static async Task<MediaSource?> CreateDashSourceAsync(string videoId, ResolvedStream stream, RangeStream bytes, string kind)
+    internal static Task<MediaSource?> CreateDashSourceAsync(string videoId, ResolvedStream stream, RangeStream bytes, string kind) =>
+        CreateDashSourceAsync(videoId, stream.Dash, stream.MimeType, stream.Itag, bytes, kind);
+
+    internal static async Task<MediaSource?> CreateDashSourceAsync(string videoId, DashInfo? dashInfo, string mimeType, int itag, RangeStream bytes, string kind)
     {
-        if (stream.Dash is not { } dash)
+        if (dashInfo is not { } dash)
         {
             AppPaths.Log("source plain (no dash ranges)");
-            return MediaSource.CreateFromStream(bytes.AsRandomAccessStream(), stream.MimeType.Split(';')[0].Trim());
+            return MediaSource.CreateFromStream(bytes.AsRandomAccessStream(), mimeType.Split(';')[0].Trim());
         }
-        var placeholder = new Uri($"https://wave.invalid/{kind}/{videoId}/{stream.Itag}");
+        var placeholder = new Uri($"https://wave.invalid/{kind}/{videoId}/{itag}");
         var manifest = new InMemoryRandomAccessStream();
-        await manifest.WriteAsync(System.Text.Encoding.UTF8.GetBytes(DashManifest.Build(dash, stream.MimeType, placeholder.ToString())).AsBuffer());
+        await manifest.WriteAsync(System.Text.Encoding.UTF8.GetBytes(DashManifest.Build(dash, mimeType, placeholder.ToString())).AsBuffer());
         manifest.Seek(0);
         var created = await Windows.Media.Streaming.Adaptive.AdaptiveMediaSource.CreateFromStreamAsync(manifest, placeholder, "application/dash+xml");
         if (created.Status != Windows.Media.Streaming.Adaptive.AdaptiveMediaSourceCreationStatus.Success)
@@ -1854,11 +1920,24 @@ public sealed partial class PlayerService : ObservableObject
         var next = Queue[Index + 1];
         // ライブ配信は流すときに HLS を解決する（先読みしない）
         if (next.IsLive || Feed.IsExternal(next.VideoId) || prefetched.ContainsKey(next.VideoId)) return;
+        // 頭を残してある曲は、URL も調べない（鳴らすときに残した分から始める）
+        if (CachedStart(next.VideoId) is not null) return;
         var result = await AppServices.Resolver.ResolveAsync(next.VideoId);
         if (result.Stream is { } s)
         {
             prefetched[next.VideoId] = s;
             while (prefetched.Count > 4) prefetched.Remove(prefetched.Keys.First());
+            // 頭の 30 秒ほどを取って残す（曲送りで、すぐ鳴らせる）
+            try
+            {
+                var warmed = await RangeStream.OpenAsync(AppServices.Http, s, cache: AppServices.AudioCache);
+                await Task.Run(() => warmed.WarmAsync(WarmBytes));
+                AppPaths.Log($"prefetch warmed={AppServices.AudioCache.Entry(next.VideoId)?.Cached ?? 0}");
+            }
+            catch (Exception e) when (e is StreamRejectedException or HttpRequestException or IOException)
+            {
+                AppPaths.Log($"prefetch warm failed type={e.GetType().Name}");
+            }
         }
     }
 
@@ -1916,6 +1995,8 @@ public sealed partial class PlayerService : ObservableObject
         player.Pause();
         player.Source = null;
         prefetched.Clear();
+        // 聴いた曲の音も残さない
+        AppServices.AudioCache.Clear();
         Queue.Clear();
         Current = null;
         Index = -1;

@@ -319,6 +319,9 @@ public static class DebugCommands
             case "next":
                 player.Next();
                 break;
+            case "previous":
+                player.Previous();
+                break;
             case "queue-dump":
                 AppPaths.Log($"debug queue index={player.Index} " + string.Join(" | ", Enumerable.Range(Math.Max(0, player.Index), Math.Min(8, Math.Max(0, player.Queue.Count - player.Index))).Select(i => (player.IsUserAdded(i) ? "U:" : "") + player.Queue[i].Title)));
                 break;

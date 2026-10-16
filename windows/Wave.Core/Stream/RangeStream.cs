@@ -16,19 +16,56 @@ public sealed class RangeStream : System.IO.Stream
     public static Action<string>? Diagnostics { get; set; }
 
     private readonly HttpClient http;
-    private string url;
+    /// <summary>署名付き URL。キャッシュから鳴らし始めたときは、要るまで調べない（source で調べる）。</summary>
+    private string? url;
     private readonly long length;
     private readonly string userAgent;
     private long position;
     private byte[]? chunk;
     private long chunkStart;
+    /// <summary>取ったバイトを残し、残っている分はネットから取らない。</summary>
+    private readonly AudioCache? cache;
+    private readonly string videoId = "";
+    private readonly int itag;
+    /// <summary>URL を調べる（キャッシュから鳴らし始めたとき）。同じ形式（itag・長さ）のものだけを受け取る。</summary>
+    private readonly Func<Task<ResolvedStream>>? source;
+    private Task<string>? sourceTask;
+    private readonly object urlGate = new();
 
-    private RangeStream(HttpClient http, string url, long length, string? userAgent = null)
+    /// <summary>残した分との間がこれ以下なら、間も取って続けて残す。</summary>
+    internal const long GapFillBytes = 256 * 1024;
+
+    private RangeStream(HttpClient http, string? url, long length, string? userAgent = null, AudioCache? cache = null, string videoId = "", int itag = 0,
+        Func<Task<ResolvedStream>>? source = null)
     {
         this.http = http;
         this.url = url;
         this.length = length;
         this.userAgent = userAgent ?? Net.InnerTubeClient.UserAgent;
+        this.cache = cache;
+        this.videoId = videoId;
+        this.itag = itag;
+        this.source = source;
+    }
+
+    /// <summary>キャッシュに残した曲を開く。残した分はすぐ読め、続きが要ったときに source で URL を調べる。</summary>
+    public static RangeStream OpenCached(HttpClient http, CachedFormat format, AudioCache cache, Func<Task<ResolvedStream>> source) =>
+        new(http, null, format.Length, cache: cache, videoId: format.VideoId, itag: format.Itag, source: source);
+
+    /// <summary>URL をまだ調べていなければ、今調べる（鳴らし始めてすぐ、続きを取る前に用意しておく）。</summary>
+    public async Task PrepareSourceAsync() => await CurrentUrlAsync();
+
+    /// <summary>頭から upTo バイトまでを取ってキャッシュに残す（次の曲を先に用意する）。キャッシュが無ければ何もしない。</summary>
+    public async Task WarmAsync(long upTo, CancellationToken cancel = default)
+    {
+        if (cache is null) return;
+        var target = Math.Min(upTo, length);
+        while (true)
+        {
+            var have = cache.Entry(videoId)?.Cached ?? 0;
+            if (have >= target) return;
+            await FetchAsync(have, Math.Min(target - 1, have + ChunkSize - 1), cancel);
+        }
     }
 
     /// <summary>
@@ -50,11 +87,17 @@ public sealed class RangeStream : System.IO.Stream
     }
 
     /// <summary>長さが分からなければ、先頭の1バイトを取って Content-Range から知る。</summary>
-    public static async Task<RangeStream> OpenAsync(HttpClient http, ResolvedStream stream, CancellationToken cancel = default)
+    public static async Task<RangeStream> OpenAsync(HttpClient http, ResolvedStream stream, CancellationToken cancel = default, AudioCache? cache = null)
     {
         var url = stream.RevealUrl();
         if (!StreamResolver.IsAllowedMediaUrl(url)) throw new StreamRejectedException(0);
         var length = stream.ContentLength ?? 0;
+        // 長さの分かる形式だけを残す
+        if (cache is not null && length > 0)
+        {
+            cache.Begin(stream);
+            return new RangeStream(http, url, length, cache: cache, videoId: stream.VideoId, itag: stream.Itag);
+        }
         var opened = new RangeStream(http, url, length);
         if (length <= 0)
         {
@@ -119,7 +162,65 @@ public sealed class RangeStream : System.IO.Stream
     public Task<byte[]> ReadRangeAsync(long start, long end, CancellationToken cancel = default) =>
         FetchAsync(Math.Clamp(start, 0, length - 1), Math.Clamp(end, start, length - 1), cancel);
 
+    /// <summary>キャッシュに残っている分はそこから、足りない分はネットから取る（取った分はキャッシュに足す）。</summary>
     private async Task<byte[]> FetchAsync(long start, long end, CancellationToken cancel)
+    {
+        if (cache is null) return await FetchNetworkAsync(start, end, cancel);
+        if (cache.Read(videoId, start, end) is { } kept) return kept;
+        var have = cache.Entry(videoId)?.Cached ?? 0;
+        // 残した分の少し先から求められた（目次を頭より先に読むなど）: 間も一緒に取り、頭から途切れずに残す
+        if (start > have && start - have <= GapFillBytes)
+        {
+            var all = await FetchNetworkAsync(have, end, cancel);
+            cache.Append(videoId, have, all);
+            return all[(int)(start - have)..];
+        }
+        byte[] head = [];
+        var from = start;
+        if (have > start && cache.Read(videoId, start, have - 1) is { } cached)
+        {
+            head = cached;
+            from = have;
+        }
+        var rest = await FetchNetworkAsync(from, end, cancel);
+        cache.Append(videoId, from, rest);
+        return [.. head, .. rest];
+    }
+
+    /// <summary>今の URL。まだ無ければ source で調べる（同時に何度も調べない）。調べた形式が残した形式と違えば拒否として知らせる。</summary>
+    private async Task<string> CurrentUrlAsync()
+    {
+        Task<string> task;
+        lock (urlGate)
+        {
+            if (url is { } known) return known;
+            if (source is null) throw new StreamRejectedException(0);
+            task = sourceTask ??= ResolveSourceAsync(source, length, itag);
+        }
+        try
+        {
+            var resolved = await task;
+            lock (urlGate) url = resolved;
+            return resolved;
+        }
+        catch
+        {
+            // 次に要ったときに調べ直す
+            lock (urlGate)
+                if (sourceTask == task) sourceTask = null;
+            throw;
+        }
+    }
+
+    private static async Task<string> ResolveSourceAsync(Func<Task<ResolvedStream>> source, long length, int itag)
+    {
+        var stream = await source();
+        var next = stream.RevealUrl();
+        if (stream.Itag != itag || stream.ContentLength != length || !StreamResolver.IsAllowedMediaUrl(next)) throw new StreamRejectedException(0);
+        return next;
+    }
+
+    private async Task<byte[]> FetchNetworkAsync(long start, long end, CancellationToken cancel)
     {
         // 一時的な失敗は2回まで送り直す。拒否はそのまま知らせる
         for (var attempt = 0; ; attempt++)
@@ -146,7 +247,7 @@ public sealed class RangeStream : System.IO.Stream
     {
         // googlevideo は混んでいると別のサーバーへ 302 で回す。行き先が googlevideo の /videoplayback なら1回だけ追い、
         // 以後はその行き先から読む（Android の WaveStreamDataSource と同じ。追わないと、その曲がそこで止まる）
-        var target = url;
+        var target = await CurrentUrlAsync();
         for (var followed = false; ; followed = true)
         {
             var request = new HttpRequestMessage(HttpMethod.Get, target);
@@ -161,7 +262,7 @@ public sealed class RangeStream : System.IO.Stream
                 Diagnostics?.Invoke($"range {start}-{end} redirected status={status}");
                 response.Dispose();
                 target = next;
-                url = next;
+                lock (urlGate) url = next;
                 continue;
             }
             Diagnostics?.Invoke($"range {start}-{end} rejected status={status}");

@@ -15,6 +15,8 @@ public static class AppServices
     public static Settings Settings { get; private set; } = null!;
     /// <summary>YouTube への通信（cookie を自動で持たない）。</summary>
     public static HttpClient Http { get; private set; } = null!;
+    /// <summary>曲の音を端末に残す（曲送り・戻しですぐ鳴らす）。</summary>
+    public static AudioCache AudioCache { get; private set; } = null!;
     public static InnerTubeClient Client { get; private set; } = null!;
     public static MusicRepository Music { get; private set; } = null!;
     /// <summary>ライブ配信の検索と HLS の解決（www.youtube.com。YouTube Music の認証情報を持たない別の HttpClient で送る）。</summary>
@@ -49,6 +51,7 @@ public static class AppServices
         L.Initialize(Settings.Language);
         RangeStream.Diagnostics = AppPaths.Log;
         Http = InnerTubeClient.CreateHttpClient();
+        AudioCache = new AudioCache(Path.Combine(AppPaths.Data, "audio-cache"), () => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
         // YouTube から届く文字（棚の見出しなど）を画面と同じ言語にする
         Client = new InnerTubeClient(Http, L.Hl);
         Live = new LiveClient(InnerTubeClient.CreateHttpClient(), Client.Hl, Client.Gl, () => Clock.ElapsedMilliseconds);
