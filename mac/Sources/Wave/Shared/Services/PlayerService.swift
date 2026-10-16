@@ -249,6 +249,7 @@ final class PlayerService {
             if self.engine.hasSource { self.isPlaying = playing }
         }
         setUpRemoteCommands()
+        OutputRouteWatch.shared.start()
         timer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.tick() }
         }
@@ -262,6 +263,21 @@ final class PlayerService {
     // MARK: メディアキー・コントロールセンター
 
     /// メディアキー・コントロールセンターの再生・一時停止も、本人の操作として扱う（端末の連携に知らせる）。
+    /// OS（メディアキー・コントロールセンター・AirPods）からの一時停止。ほかの端末を映している間は、少し待ってから、
+    /// 音の出口が変わった前後（AirPods がほかの機械へ移った）なら送らない。この端末は鳴らしていないので、送ると AirPods を持っていった
+    /// 機械の再生が止まる。出口の変化の知らせと一時停止のどちらが先に来るかは決まっていないので、待ってから見る。
+    private func pauseFromOS() {
+        guard isRemote else { return togglePlay() }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(400))
+            if OutputRouteWatch.shared.justChanged {
+                AppPaths.log("remote pause ignored: output route changed")
+                return
+            }
+            if isRemote, isPlaying { togglePlay() }
+        }
+    }
+
     private func setUpRemoteCommands() {
         let center = MPRemoteCommandCenter.shared()
         center.playCommand.addTarget { [weak self] _ in
@@ -269,11 +285,11 @@ final class PlayerService {
             return .success
         }
         center.pauseCommand.addTarget { [weak self] _ in
-            MainActor.assumeIsolated { if let self, self.isPlaying { self.togglePlay() } }
+            MainActor.assumeIsolated { if let self, self.isPlaying { self.pauseFromOS() } }
             return .success
         }
         center.togglePlayPauseCommand.addTarget { [weak self] _ in
-            MainActor.assumeIsolated { self?.togglePlay() }
+            MainActor.assumeIsolated { if let self { if self.isPlaying { self.pauseFromOS() } else { self.togglePlay() } } }
             return .success
         }
         center.nextTrackCommand.addTarget { [weak self] _ in
