@@ -1,6 +1,9 @@
 import Foundation
 import Network
 import WaveCore
+#if os(iOS)
+import UIKit
+#endif
 
 /// 曲の音を AVPlayer に HLS で渡すための、この端末の中だけの小さな HTTP の受け口（127.0.0.1 でだけ待つ）。
 /// AVPlayer は HLS の区切りを独自の URL（wave-media://）では読まない（http(s) を求める）ので、ここから渡す。
@@ -35,13 +38,30 @@ final class LocalMediaServer: @unchecked Sendable {
         _ = lock.withLock { entries.removeValue(forKey: token) }
     }
 
+    private init() {
+        #if os(iOS)
+        NotificationCenter.default.addObserver(forName: UIApplication.willEnterForegroundNotification, object: nil, queue: nil) { _ in
+            LocalMediaServer.shared.checkAlive()
+        }
+        #endif
+    }
+
     private func entry(_ token: String) -> Entry? { lock.withLock { entries[token] } }
+
+    /// 前に開いた番号。止められて開き直すときは同じ番号を使う（読みかけの曲の URL に番号が入っているので）。
+    private var lastPort: UInt16?
 
     private func start() async -> UInt16? {
         if let port = lock.withLock({ port }) { return port }
+        if let last = lock.withLock({ lastPort }), let port = await open(NWEndpoint.Port(rawValue: last) ?? .any) { return port }
+        return await open(.any)
+    }
+
+    private func open(_ requested: NWEndpoint.Port) async -> UInt16? {
         let parameters = NWParameters.tcp
-        parameters.requiredLocalEndpoint = .hostPort(host: "127.0.0.1", port: .any)
+        parameters.requiredLocalEndpoint = .hostPort(host: "127.0.0.1", port: requested)
         parameters.acceptLocalOnly = true
+        parameters.allowLocalEndpointReuse = true
         guard let listener = try? NWListener(using: parameters) else { return nil }
         listener.newConnectionHandler = { [weak self] connection in self?.accept(connection) }
         let ready: UInt16? = await withCheckedContinuation { continuation in
@@ -68,24 +88,40 @@ final class LocalMediaServer: @unchecked Sendable {
             AppPaths.log("media server failed to start")
             return nil
         }
-        // 裏で止められたら、次の曲で開き直す
+        // iPhone で止めたまま裏にいると、OS に待ち受けを閉じられる。同じ番号ですぐ開き直す（読みかけの曲がそのまま続けられる）
         listener.stateUpdateHandler = { [weak self] state in
-            if case .failed = state { self?.reset() }
+            guard case .failed(let error) = state, let self else { return }
+            AppPaths.log("media server failed error=\(error); reopening")
+            self.reset(listener)
+            Task { _ = await self.start() }
         }
         lock.withLock {
             self.listener = listener
             port = ready
+            lastPort = ready
         }
         return ready
     }
 
-    private func reset() {
+    private func reset(_ failed: NWListener) {
         lock.withLock {
-            listener?.cancel()
+            failed.cancel()
+            guard listener === failed else { return }
             listener = nil
             port = nil
         }
     }
+
+    #if os(iOS)
+    /// 前に戻ったとき: 待ち受けが閉じられていたら開き直す（失敗の知らせが来ないこともある）。
+    func checkAlive() {
+        guard let listener = lock.withLock({ listener }) else { return }
+        if case .ready = listener.state { return }
+        AppPaths.log("media server not ready state=\(listener.state); reopening")
+        reset(listener)
+        Task { _ = await start() }
+    }
+    #endif
 
     // MARK: 1つのつながり（AVPlayer は同じつながりで続けて求めてくる）
 

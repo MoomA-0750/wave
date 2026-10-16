@@ -103,6 +103,9 @@ public protocol ConnectClientEffects: AnyObject {
     /// 遠隔操作に従う（この端末が鳴らしている）。受け付けなければ false。
     func control(_ action: ControlAction, positionMs: Int64?) -> Bool
 
+    /// 遠隔操作を受け付けた（従う前に、送り主を記録するため）。
+    func controlAccepted(_ action: ControlAction, from deviceId: String)
+
     /// 遠隔の音量に従う（この端末が鳴らしている）。アプリの中の音量を volumePercent（0〜100）にする。受け付けなければ false。
     func volume(_ volumePercent: Int) -> Bool
 
@@ -116,6 +119,8 @@ public protocol ConnectClientEffects: AnyObject {
 
 public extension ConnectClientEffects {
     func control(_ action: ControlAction, positionMs: Int64?) -> Bool { false }
+
+    func controlAccepted(_ action: ControlAction, from deviceId: String) {}
 
     func queueAdd(_ items: [HandoffItem], next: Bool, afterItemId: String?) -> Bool { false }
 
@@ -1199,6 +1204,7 @@ public final class ConnectClient {
         // 送り手が見ていた曲から、もう次の曲に変わっていたら従わない（遅れて届いた「次へ」で2曲飛ばさない）
         // 比べるのは手元で今鳴っている曲（中継に書いた最新より先に進んでいることがある）
         if let onItem = command.onItemId, onItem != (local?.currentItemId ?? own.body.currentItemId) { return }
+        effects.controlAccepted(command.action, from: command.from)
         _ = effects.control(command.action, positionMs: command.positionMs)
     }
 

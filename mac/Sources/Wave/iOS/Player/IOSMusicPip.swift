@@ -37,9 +37,13 @@ final class MusicPip: NSObject, AVPictureInPictureControllerDelegate, AVPictureI
         surface.displayLayer.videoGravity = .resizeAspect
         surface.displayLayer.controlTimebase = timebase
         surface.isUserInteractionEnabled = false
-        // wave に戻ったら小窓は閉じる（画面に同じ曲が出ているので）
+        // wave に戻ったら小窓は閉じる（画面に同じ曲が出ているので）。裏にいる間に枠の絵が捨てられていることがあり、
+        // 絵の無い枠からは次に裏へ回っても小窓が始まらないので、描き直しておく
         NotificationCenter.default.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { _ in
-            MainActor.assumeIsolated { MusicPip.shared.stop() }
+            MainActor.assumeIsolated {
+                MusicPip.shared.stop()
+                MusicPip.shared.redraw()
+            }
         }
         observe()
     }
@@ -100,6 +104,11 @@ final class MusicPip: NSObject, AVPictureInPictureControllerDelegate, AVPictureI
         self.controller = controller
     }
 
+    private func redraw() {
+        drawnKey = nil
+        sync()
+    }
+
     /// 設定を切り替えたとき（設定は見張れないので、ここから合わせ直す）。
     func settingChanged() { sync() }
 
@@ -127,7 +136,7 @@ final class MusicPip: NSObject, AVPictureInPictureControllerDelegate, AVPictureI
         drawnKey = key
         guard let buffer = Self.render(title: song.title, artist: song.artistsText, artwork: artwork) else { return }
         let renderer = surface.displayLayer.sampleBufferRenderer
-        renderer.flush(removingDisplayedImage: false, completionHandler: nil)
+        renderer.flush(removingDisplayedImage: renderer.requiresFlushToResumeDecoding, completionHandler: nil)
         renderer.enqueue(buffer)
     }
 
@@ -143,20 +152,38 @@ final class MusicPip: NSObject, AVPictureInPictureControllerDelegate, AVPictureI
 
     /// 16:9 の絵（ぼかしたジャケットを下に敷き、左にジャケット、右に曲名とアーティスト）を、PiP に渡す形にする。
     private static func render(title: String, artist: String, artwork: UIImage?) -> CMSampleBuffer? {
-        let width = 960, height = 540
+        sampleBuffer(image(title: title, artist: artist, artwork: artwork), width: width, height: height)
+    }
+
+    private static let width = 960, height = 540
+
+    #if WAVE_DEBUG
+    /// 開発用: 今の曲で小窓に渡す絵を PNG で返す。
+    func debugImage() -> Data? {
+        guard let song = AppServices.player.current else { return nil }
+        return Self.image(title: song.title, artist: song.artistsText, artwork: artwork).pngData()
+    }
+    #endif
+
+    private static func image(title: String, artist: String, artwork: UIImage?) -> UIImage {
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
         format.opaque = true
-        let image = UIGraphicsImageRenderer(size: CGSize(width: width, height: height), format: format).image { context in
+        return UIGraphicsImageRenderer(size: CGSize(width: width, height: height), format: format).image { context in
             let rect = CGRect(x: 0, y: 0, width: width, height: height)
             UIColor.black.setFill()
             context.fill(rect)
             if let artwork {
-                // 下敷き: ジャケットを大きく広げて暗くする
+                // 下敷き: ジャケットを小さく縮めてから大きく広げ（ぼける）、暗くする
                 let side = CGFloat(width)
-                artwork.draw(in: CGRect(x: 0, y: (CGFloat(height) - side) / 2, width: side, height: side), blendMode: .normal, alpha: 0.45)
+                let small = UIGraphicsImageRenderer(size: CGSize(width: 12, height: 12), format: format).image { _ in
+                    artwork.draw(in: CGRect(x: 0, y: 0, width: 12, height: 12))
+                }
+                context.cgContext.interpolationQuality = .high
+                small.draw(in: CGRect(x: 0, y: (CGFloat(height) - side) / 2, width: side, height: side), blendMode: .normal, alpha: 0.6)
                 UIColor(white: 0, alpha: 0.45).setFill()
-                context.fill(rect)
+                // fill(_:) だけだと置き換え（copy）で塗られ、下のジャケットが消える
+                context.fill(rect, blendMode: .normal)
             }
             let art = CGRect(x: 60, y: 90, width: 360, height: 360)
             let clip = UIBezierPath(roundedRect: art, cornerRadius: 24)
@@ -192,7 +219,6 @@ final class MusicPip: NSObject, AVPictureInPictureControllerDelegate, AVPictureI
             y += titleSize.height + gap
             (artist as NSString).draw(with: CGRect(x: textX, y: y, width: textWidth, height: artistSize.height), options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine], attributes: artistAttrs, context: nil)
         }
-        return sampleBuffer(image, width: width, height: height)
     }
 
     private static func sampleBuffer(_ image: UIImage, width: Int, height: Int) -> CMSampleBuffer? {

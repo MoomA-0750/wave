@@ -218,8 +218,18 @@ final class AudioEngine {
             "durationIndefinite=\(item?.duration.isIndefinite ?? false) error=\((item?.error as NSError?).map { "\($0.domain)/\($0.code)" } ?? "-")"
     }
 
-    func play() { player.play() }
-    func pause() { player.pause() }
+    /// 最後に頼まれたのが再生か（読み込みに失敗してやり直すとき、止めていた曲を鳴らし出さないため）。
+    private(set) var wantsPlay = false
+
+    func play() {
+        wantsPlay = true
+        player.play()
+    }
+
+    func pause() {
+        wantsPlay = false
+        player.pause()
+    }
 
     func seek(_ seconds: Double) {
         player.seek(to: CMTime(seconds: max(0, seconds), preferredTimescale: 1000), toleranceBefore: .zero, toleranceAfter: .zero)

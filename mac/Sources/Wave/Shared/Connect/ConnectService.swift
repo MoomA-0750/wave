@@ -972,6 +972,10 @@ final class ConnectWorker: ConnectClientEffects, @unchecked Sendable {
         refreshInfo()
     }
 
+    func controlAccepted(_ action: ControlAction, from deviceId: String) {
+        AppPaths.log("connect-v2 control from=\(deviceId.prefix(6)) action=\(action.rawValue)")
+    }
+
     func control(_ action: ControlAction, positionMs: Int64?) -> Bool {
         AppPaths.log("connect-v2 control received action=\(action.rawValue)")
         if action == .transfer {

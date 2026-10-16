@@ -92,9 +92,15 @@ enum IOSDebugCommands {
         case "play": if !player.isPlaying { player.togglePlay() }
         case "like": LikeButton.press(player)
         case "now":
-            AppPaths.log("debug now title=\(player.current?.title ?? "nil") position=\(Int(player.position)) duration=\(Int(player.duration)) playing=\(player.isPlaying) loading=\(player.isLoading) like=\(String(describing: player.like)) lyrics=\(player.lyrics != nil) video=\(player.video != nil) remote=\(player.isRemote) loggedIn=\(AppServices.client.isLoggedIn)")
+            AppPaths.log("debug now title=\(player.current?.title ?? "nil") position=\(Int(player.position)) duration=\(Int(player.duration)) playing=\(player.isPlaying) loading=\(player.isLoading) like=\(String(describing: player.like)) lyrics=\(player.lyrics != nil) video=\(player.video != nil) remote=\(player.isRemote) loggedIn=\(AppServices.client.isLoggedIn) " + player.engine.debugState)
         case "route":
             AppPaths.log("debug tab=\(shell.tab) path=\(shell.paths[shell.tab]?.count ?? 0) player=\(shell.playerOpen) queue=\(shell.queueOpen)")
+        // 連携でほかの端末を映していたら、この端末で鳴らす（Mac の DebugCommands と同じ）
+        case "connect-transfer": AppServices.connect.transfer()
+        case "connect-state":
+            for m in AppServices.connect.members {
+                AppPaths.log("debug connect member label=\(m.label) id=\(m.deviceId.prefix(6)) self=\(m.isSelf) online=\(m.online) active=\(m.active) controller=\(m.isController)")
+            }
         case "music-pip":
             switch arg {
             case "on", "off":
@@ -102,6 +108,7 @@ enum IOSDebugCommands {
                 AppServices.settings.save()
                 MusicPip.shared.settingChanged()
             case "stop": MusicPip.shared.stop()
+            case "dump": try? MusicPip.shared.debugImage()?.write(to: AppPaths.file("music-pip.png"))
             default: MusicPip.shared.start()
             }
             AppPaths.log("debug music-pip setting=\(AppServices.settings.musicPip) active=\(MusicPip.shared.active)")

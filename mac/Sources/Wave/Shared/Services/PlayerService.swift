@@ -1491,12 +1491,14 @@ final class PlayerService {
 
     private func onFailed(_ error: String) {
         AppPaths.log("media failed error=\(error) retried=\(retried)")
-        if let song = current { Task { await recover(song) } }
+        let resume = engine.wantsPlay
+        if let song = current { Task { await recover(song, resume: resume) } }
     }
 
     /// 鳴らせなかったとき。1回だけ解読の準備から取り直してやり直し、だめなら次の曲へ。続けて失敗したら止める
     /// （ログインしていないと、googlevideo は先頭の一部しか返さないので、どの曲も鳴らない）。
-    private func recover(_ song: Song) async {
+    /// resume が false なら（止めていた曲が裏で読めなくなったなど）、やり直した後も止めたままにする。
+    private func recover(_ song: Song, resume: Bool = true) async {
         // ライブ配信はログインなしで鳴る（www.youtube.com の匿名の HLS）。URL は IP に結び付き約6時間で切れるので、解決し直して1回やり直す
         let live = current?.videoId == song.videoId ? isLive : song.isLive
         // RSS のエピソードはログインなしで鳴る（配信元から直接取る）
@@ -1517,6 +1519,7 @@ final class PlayerService {
                 isLoading = true
                 if let song = current, song.isLive, await startLive(song, token: token) {
                     consecutiveFailures = 0
+                    if !resume { holdPaused() }
                     return
                 }
             } else if external {
@@ -1525,6 +1528,7 @@ final class PlayerService {
                 let at = position
                 if current?.videoId == song.videoId, await startExternal(song, seekTo: at, token: token) {
                     consecutiveFailures = 0
+                    if !resume { holdPaused() }
                     return
                 }
             } else {
@@ -1535,6 +1539,7 @@ final class PlayerService {
                     await startStream(song, stream, seekTo: at, token: token)
                 {
                     consecutiveFailures = 0
+                    if !resume { holdPaused() }
                     return
                 }
             }
@@ -1556,6 +1561,13 @@ final class PlayerService {
             message = L.t("再生できなかったので、次の曲に進みます", "Couldn't play this song, skipping to the next one")
         }
         if index + 1 < queue.count { advance() }
+    }
+
+    /// やり直しで鳴り始めた曲を、止めていた状態に戻す。
+    private func holdPaused() {
+        engine.pause()
+        isPlaying = false
+        updateNowPlayingInfo()
     }
 
     private func tick() {
