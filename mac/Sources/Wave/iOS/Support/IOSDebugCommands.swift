@@ -95,6 +95,16 @@ enum IOSDebugCommands {
             AppPaths.log("debug now title=\(player.current?.title ?? "nil") position=\(Int(player.position)) duration=\(Int(player.duration)) playing=\(player.isPlaying) loading=\(player.isLoading) like=\(String(describing: player.like)) lyrics=\(player.lyrics != nil) video=\(player.video != nil) remote=\(player.isRemote) loggedIn=\(AppServices.client.isLoggedIn)")
         case "route":
             AppPaths.log("debug tab=\(shell.tab) path=\(shell.paths[shell.tab]?.count ?? 0) player=\(shell.playerOpen) queue=\(shell.queueOpen)")
+        case "music-pip":
+            switch arg {
+            case "on", "off":
+                AppServices.settings.musicPip = arg == "on"
+                AppServices.settings.save()
+                MusicPip.shared.settingChanged()
+            case "stop": MusicPip.shared.stop()
+            default: MusicPip.shared.start()
+            }
+            AppPaths.log("debug music-pip setting=\(AppServices.settings.musicPip) active=\(MusicPip.shared.active)")
         case "releases-check": await AppServices.releases.check()
         default: AppPaths.log("debug unknown command")
         }

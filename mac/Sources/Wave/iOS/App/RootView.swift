@@ -86,6 +86,8 @@ struct RootView: View {
             }
         }
         .modifier(MiniPlayerAccessory(show: player.current != nil, zoom: playerZoom) { shell.playerOpen = true })
+        // 音楽の PiP の元の枠（画面の後ろに小さく置く）
+        .background(alignment: .bottomLeading) { MusicPipAnchor().frame(width: 16, height: 9) }
         .overlay(alignment: .bottom) { ToastHost().padding(.bottom, player.current != nil ? 120 : 64) }
         .fullScreenCover(isPresented: $shell.playerOpen) {
             NowPlayingView().navigationTransition(.zoom(sourceID: MiniPlayer.zoomId, in: playerZoom))

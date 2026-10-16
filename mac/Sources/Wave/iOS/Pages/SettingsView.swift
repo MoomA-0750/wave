@@ -7,6 +7,7 @@ import WaveCore
 struct SettingsView: View {
     @State private var sendHistory = AppServices.settings.sendHistory
     @State private var releaseNotices = AppServices.settings.releaseNotices
+    @State private var musicPip = AppServices.settings.musicPip
     @State private var language = AppServices.settings.language
     @State private var pairText = ""
     @State private var aiConfigured = AppServices.ai.configured
@@ -24,6 +25,16 @@ struct SettingsView: View {
                 .onChange(of: sendHistory) { _, v in
                     AppServices.settings.sendHistory = v
                     AppServices.settings.save()
+                }
+                Toggle(isOn: $musicPip) {
+                    SettingsLabel(title: L.t("音楽の再生中も小窓を出す", "Picture in picture for music"),
+                                  detail: L.t("ホームへ戻ると、曲名とジャケットを小窓に出す。小窓のボタンで再生・一時停止と、次の曲・前の曲へ",
+                                              "When you leave wave, show the song and artwork in a small window. Its buttons play, pause and skip songs"))
+                }
+                .onChange(of: musicPip) { _, v in
+                    AppServices.settings.musicPip = v
+                    AppServices.settings.save()
+                    MusicPip.shared.settingChanged()
                 }
             } header: {
                 Text(L.t("再生", "Play"))

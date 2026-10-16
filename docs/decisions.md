@@ -293,3 +293,12 @@
 - Mac は macOS の PiP も使えるが、映像の枠を画面ごとに作り直す作りなので PiP の元の枠を保ちにくい。常に手前に浮かぶ NSPanel を別に開き、同じ AVPlayer をそこにも映す（AVPlayer は複数の枠に映せる）
 - Windows は MediaPlayer を1つの枠にしか映せないので、別の窓を開かず、主の窓そのものを CompactOverlay（映画 & テレビのミニ表示と同じ）にして映像だけを出す。戻すときは元の位置・大きさ（全画面だったなら全画面）に戻す
 - 仮決定: Mac と Windows で小窓の作りが違う（Mac は別の窓、Windows は主の窓を小さくする）。そろえるなら Windows も別の窓にして、映像の枠を移す作りにする
+
+## 2026-10-16 iPhone の音楽の小窓（PiP）
+
+- 本人の頼み: iPhone だけでよく、切り替えられるようにして、音楽の再生中も PiP に曲名・ジャケットを出し、PiP の操作で再生・一時停止と送り・戻しをしたい
+- iOS の PiP は映像からしか始められないので、曲名・アーティスト・ジャケットを描いた1枚の絵を AVSampleBufferDisplayLayer に入れ、AVPictureInPictureController.ContentSource（sampleBufferDisplayLayer）で PiP にした。絵は曲・ジャケットが変わったときだけ描き直す
+- PiP の送り・戻しのボタンは本来「秒で動かす」もの（記号も 10・15 秒の形）だが、その知らせ（skipByInterval）を次の曲・前の曲に使う。曲送りのボタンは PiP には無いため（仮）
+- 元の枠は画面に置かないと PiP を始められないので、画面の後ろに 16x9 の大きさで置く
+- 既定はオン（仮）。小窓が毎回出るのが煩わしければ、既定をオフにする
+
