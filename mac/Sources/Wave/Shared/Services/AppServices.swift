@@ -13,6 +13,8 @@ enum AppServices {
     /// ライブ配信の検索と HLS の解決（www.youtube.com。ログインの情報を付けない、別の cookie なしの通信）。
     private(set) static var live: LiveClient!
     private(set) static var resolver: StreamResolver!
+    /// 曲の音を端末に残す（曲送り・戻しですぐ鳴らす）。
+    nonisolated(unsafe) private(set) static var audioCache: AudioCache!
     private(set) static var stats: PlaybackStats!
     private(set) static var lyrics: LyricsService!
     /// 歌詞の一節から曲を探す（検索の「歌詞」）。歌詞は再生画面と同じところから取り、同じキャッシュを使う。
@@ -48,6 +50,8 @@ enum AppServices {
         PodcastFeedClient.diagnostics = { AppPaths.log($0) }
         let session = InnerTubeClient.createSession()
         mediaSession = InnerTubeClient.createSession()
+        let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+        audioCache = AudioCache(directory: caches.appendingPathComponent("wave-audio"), nowMs: { Int64(Date().timeIntervalSince1970 * 1000) })
         // YouTube から届く文字（棚の見出しなど）を画面と同じ言語にする
         client = InnerTubeClient(session: session, hl: L.hl)
         live = LiveClient(session: InnerTubeClient.createSession(), hl: L.hl, gl: client.gl, nowMs: { AppServices.clockMs() })

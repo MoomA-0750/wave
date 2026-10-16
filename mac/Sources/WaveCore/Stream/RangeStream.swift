@@ -27,24 +27,64 @@ public final class RangeStream: @unchecked Sendable {
     /// 全体の長さ（バイト）。
     public let length: Int64
     private let lock = NSLock()
-    private var url: String
+    /// 署名付き URL。キャッシュから鳴らし始めたときは、要るまで調べない（source で調べる）。
+    private var url: String?
+    /// URL を調べる（キャッシュから鳴らし始めたとき）。同じ形式（itag・長さ）のものだけを受け取る。
+    private let source: (@Sendable () async throws -> ResolvedStream)?
+    private var sourceTask: Task<String, Error>?
+    private let itag: Int
+    /// 取ったバイトを残し、残っている分はネットから取らない。
+    private let cache: AudioCache?
+    private let videoId: String
     private var positionValue: Int64 = 0
     private var chunk: [UInt8]?
     private var chunkStart: Int64 = 0
     /// read(count:) を1つずつ通す（位置と手元の区切りを共有するため）。
     private let gate = AsyncGate()
 
-    private init(session: URLSession, url: String, length: Int64) {
+    private init(session: URLSession, url: String?, length: Int64, videoId: String = "", itag: Int = 0, cache: AudioCache? = nil,
+                 source: (@Sendable () async throws -> ResolvedStream)? = nil)
+    {
         self.session = session
         self.url = url
         self.length = length
+        self.videoId = videoId
+        self.itag = itag
+        self.cache = cache
+        self.source = source
+    }
+
+    /// キャッシュに残した曲を開く。残した分はすぐ読め、続きが要ったときに source で URL を調べる。
+    public static func openCached(session: URLSession, format: CachedFormat, cache: AudioCache,
+                                  source: @escaping @Sendable () async throws -> ResolvedStream) -> RangeStream
+    {
+        RangeStream(session: session, url: nil, length: format.length, videoId: format.videoId, itag: format.itag, cache: cache, source: source)
+    }
+
+    /// URL をまだ調べていなければ、今調べる（鳴らし始めてすぐ、続きを取る前に用意しておく）。
+    public func prepareSource() async throws { _ = try await currentUrl() }
+
+    /// 頭から upTo バイトまでを取ってキャッシュに残す（次の曲を先に用意する）。キャッシュが無ければ何もしない。
+    public func warm(upTo: Int64) async throws {
+        guard let cache else { return }
+        let target = min(upTo, length)
+        while true {
+            let have = cache.entry(videoId)?.cached ?? 0
+            guard have < target else { return }
+            _ = try await fetch(start: have, end: min(target - 1, have + Int64(RangeStream.chunkSize) - 1))
+        }
     }
 
     /// 開く。長さが分からなければ、先頭の1バイトを取って Content-Range から知る。
-    public static func open(session: URLSession, stream: ResolvedStream) async throws -> RangeStream {
+    public static func open(session: URLSession, stream: ResolvedStream, cache: AudioCache? = nil) async throws -> RangeStream {
         let url = stream.revealUrl()
         if !StreamResolver.isAllowedMediaUrl(url) { throw StreamRejectedError(status: 0) }
         let length = stream.contentLength ?? 0
+        // 長さの分かる形式だけを残す
+        if let cache, length > 0 {
+            cache.begin(stream)
+            return RangeStream(session: session, url: url, length: length, videoId: stream.videoId, itag: stream.itag, cache: cache)
+        }
         let opened = RangeStream(session: session, url: url, length: length)
         if length <= 0 {
             let (_, response) = try await opened.send(start: 0, end: 0)
@@ -139,7 +179,32 @@ public final class RangeStream: @unchecked Sendable {
         return Data(try await fetch(start: from, end: to))
     }
 
+    /// キャッシュに残っている分はそこから、足りない分はネットから取る（取った分はキャッシュに足す）。
     private func fetch(start: Int64, end: Int64) async throws -> [UInt8] {
+        guard let cache else { return try await fetchNetwork(start: start, end: end) }
+        if let data = cache.read(videoId, start: start, end: end) { return [UInt8](data) }
+        let have = cache.entry(videoId)?.cached ?? 0
+        // 残した分の少し先から求められた（目次を頭より先に読むなど）: 間も一緒に取り、頭から途切れずに残す
+        if start > have, start - have <= RangeStream.gapFillBytes {
+            let all = try await fetchNetwork(start: have, end: end)
+            cache.append(videoId, offset: have, data: Data(all))
+            return Array(all.dropFirst(Int(start - have)))
+        }
+        var head: [UInt8] = []
+        var from = start
+        if have > start, let data = cache.read(videoId, start: start, end: have - 1) {
+            head = [UInt8](data)
+            from = have
+        }
+        let rest = try await fetchNetwork(start: from, end: end)
+        cache.append(videoId, offset: from, data: Data(rest))
+        return head + rest
+    }
+
+    /// 残した分との間がこれ以下なら、間も取って続けて残す。
+    static let gapFillBytes: Int64 = 256 * 1024
+
+    private func fetchNetwork(start: Int64, end: Int64) async throws -> [UInt8] {
         // 一時的な失敗は2回まで送り直す（Windows 版と同じく、拒否も2回まで送り直してから知らせる）
         var attempt = 0
         while true {
@@ -156,8 +221,37 @@ public final class RangeStream: @unchecked Sendable {
         }
     }
 
+    /// 今の URL。まだ無ければ source で調べる（同時に何度も調べない）。調べた形式が残した形式と違えば拒否として知らせる。
+    private func currentUrl() async throws -> String {
+        let (known, running) = lock.withLock { (url, sourceTask) }
+        if let known { return known }
+        let task: Task<String, Error>
+        if let running {
+            task = running
+        } else {
+            guard let source else { throw StreamRejectedError(status: 0) }
+            let (length, itag) = (self.length, self.itag)
+            task = Task {
+                let stream = try await source()
+                let next = stream.revealUrl()
+                guard stream.itag == itag, stream.contentLength == length, StreamResolver.isAllowedMediaUrl(next) else { throw StreamRejectedError(status: 0) }
+                return next
+            }
+            lock.withLock { sourceTask = task }
+        }
+        do {
+            let resolved = try await task.value
+            lock.withLock { url = resolved }
+            return resolved
+        } catch {
+            // 次に要ったときに調べ直す
+            lock.withLock { if sourceTask == task { sourceTask = nil } }
+            throw error
+        }
+    }
+
     private func send(start: Int64, end: Int64) async throws -> (Data, HTTPURLResponse) {
-        guard var target = URL(string: lock.withLock({ url })) else { throw StreamRejectedError(status: 0) }
+        guard var target = URL(string: try await currentUrl()) else { throw StreamRejectedError(status: 0) }
         // googlevideo は混んでいると別のサーバーへ 302 で回す。行き先が googlevideo の /videoplayback なら1回だけ追い、
         // 以後はその行き先から読む（Android の WaveStreamDataSource と同じ。追わないと、その曲がそこで止まる）
         var followed = false

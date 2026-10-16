@@ -62,7 +62,7 @@ public final class ResolvedStream: Sendable, CustomStringConvertible, CustomDebu
 }
 
 /// DASH（SegmentBase）の目次を作るための、形式ごとの値。
-public struct DashInfo: Hashable, Sendable {
+public struct DashInfo: Hashable, Sendable, Codable {
     public var initStart: Int64
     public var initEnd: Int64
     public var indexStart: Int64

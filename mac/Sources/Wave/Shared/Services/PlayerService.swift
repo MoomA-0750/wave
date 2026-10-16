@@ -80,7 +80,7 @@ final class PlayerService {
     @ObservationIgnored private var shuffleOrder: [String: Int]?
     @ObservationIgnored private var loadTask: Task<Void, Never>?
     @ObservationIgnored private var loadToken = 0
-    @ObservationIgnored private var currentStream: ResolvedStream?
+    @ObservationIgnored fileprivate(set) var currentStream: ResolvedStream?
     @ObservationIgnored private var cpn = ""
     @ObservationIgnored private var statsSent = false
     /// 曲の長さに着いて、終わりの扱いをもう済ませたか（AVPlayer の終わりの知らせと二重にしない）。
@@ -1233,6 +1233,14 @@ final class PlayerService {
                     await recover(song)
                     return
                 }
+            } else if let cached = cachedStart(song.videoId) {
+                // 残してある曲: URL を調べ直さずに、残した分から鳴らし始める（続きは鳴らしながら取る）
+                guard token == loadToken, !Task.isCancelled else { return }
+                if !(await startCached(song, cached, seekTo: seekTo, token: token)) {
+                    guard token == loadToken else { return }
+                    await recover(song)
+                    return
+                }
             } else {
                 switch await resolve(song.videoId) {
                 case .failed:
@@ -1386,12 +1394,48 @@ final class PlayerService {
         episode = nil
     }
 
+    /// 残してある曲で、鳴らし始めに足りる分（頭の区切りまで）が残っていれば、その形式。
+    private func cachedStart(_ videoId: String) -> CachedFormat? {
+        guard let entry = AppServices.audioCache.entry(videoId) else { return nil }
+        let need = entry.format.dash.map { $0.indexEnd + 1 } ?? 0
+        return entry.cached >= max(need, PlayerService.cachedStartBytes) || entry.cached >= entry.format.length ? entry.format : nil
+    }
+
+    /// 鳴らし始めに残っていてほしいバイト数（256kbps で 15 秒ほど）。
+    private static let cachedStartBytes: Int64 = 512 * 1024
+    /// 次の曲を先に取っておくバイト数（256kbps で 30 秒ほど）。
+    private static let warmBytes: Int64 = 1024 * 1024
+
+    private func startCached(_ song: Song, _ format: CachedFormat, seekTo: Double, token: Int) async -> Bool {
+        currentStream = nil
+        cpn = PlaybackStats.newCpn()
+        let videoId = song.videoId
+        // 続きが要ったとき・再生履歴を送るときに、URL を調べる
+        let bytes = RangeStream.openCached(session: AppServices.mediaSession, format: format, cache: AppServices.audioCache) { @Sendable in
+            guard let stream = try await AppServices.resolver.resolve(videoId: videoId).stream else { throw StreamRejectedError(status: 0) }
+            await MainActor.run {
+                if AppServices.player.current?.videoId == videoId { AppServices.player.currentStream = stream }
+            }
+            return stream
+        }
+        guard await engine.load(bytes, mimeType: format.mimeType, key: "\(videoId)/\(format.itag)", dash: format.dash) else { return false }
+        guard current?.videoId == videoId, token == loadToken else { return false }
+        if seekTo > 1 { engine.seek(seekTo) }
+        engine.play()
+        isPlaying = true
+        isLoading = false
+        updateNowPlayingInfo()
+        AppPaths.log("play cached itag=\(format.itag) queue=\(queue.count) index=\(index)")
+        Task { try? await bytes.prepareSource() }
+        return true
+    }
+
     private func startStream(_ song: Song, _ stream: ResolvedStream, seekTo: Double, token: Int) async -> Bool {
         currentStream = stream
         cpn = PlaybackStats.newCpn()
         let bytes: RangeStream
         do {
-            bytes = try await RangeStream.open(session: AppServices.mediaSession, stream: stream)
+            bytes = try await RangeStream.open(session: AppServices.mediaSession, stream: stream, cache: AppServices.audioCache)
         } catch {
             AppPaths.log("stream open failed type=\(type(of: error))")
             return false
@@ -1593,11 +1637,17 @@ final class PlayerService {
         guard index + 1 < queue.count else { return }
         let next = queue[index + 1]
         if prefetched[next.videoId] != nil || next.isLive || Feed.isExternal(next.videoId) { return }
+        // 頭を残してある曲は、URL も調べない（鳴らすときに残した分から始める）
+        if cachedStart(next.videoId) != nil { return }
         Task {
             guard let stream = (try? await AppServices.resolver.resolve(videoId: next.videoId))?.stream else { return }
             prefetched[next.videoId] = stream
             prefetchOrder.append(next.videoId)
             while prefetched.count > 4, !prefetchOrder.isEmpty { prefetched.removeValue(forKey: prefetchOrder.removeFirst()) }
+            // 頭の 30 秒ほどを取って残す（曲送りで、すぐ鳴らせる）
+            let warmed = try? await RangeStream.open(session: AppServices.mediaSession, stream: stream, cache: AppServices.audioCache)
+            try? await warmed?.warm(upTo: PlayerService.warmBytes)
+            AppPaths.log("prefetch warmed=\(AppServices.audioCache.entry(next.videoId)?.cached ?? 0)")
         }
     }
 
@@ -1646,6 +1696,8 @@ final class PlayerService {
         engine.clear()
         prefetched.removeAll()
         prefetchOrder.removeAll()
+        // 聴いた曲の音も残さない
+        AppServices.audioCache.clear()
         replaceAll([])
         current = nil
         index = -1
