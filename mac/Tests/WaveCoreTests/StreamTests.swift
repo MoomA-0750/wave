@@ -254,6 +254,37 @@ final class StreamTests: XCTestCase {
                                                                      url: "https://evil.com/videoplayback", expiresAtMs: 0, statsUrl: nil, generation: 0)))
     }
 
+    func testRangeStreamFollowsARedirectToAnotherGooglevideoServerOnce() async throws {
+        let size = 4000
+        let body = Data((0..<size).map { UInt8($0 % 251) })
+        let session = StubURLProtocol.session { request in
+            let url = request.url!.absoluteString
+            if url.contains("evil") { return (206, [:], Data()) }
+            if !url.contains("r2.googlevideo.com") { return (302, ["Location": "https://r2.googlevideo.com/videoplayback?id=1"], Data()) }
+            let range = request.value(forHTTPHeaderField: "Range")!.dropFirst("bytes=".count).split(separator: "-").map { Int($0)! }
+            let end = min(range[1], size - 1)
+            return (206, ["Content-Range": "bytes \(range[0])-\(end)/\(size)"], body.subdata(in: range[0]..<(end + 1)))
+        }
+        let reader = try await RangeStream.open(session: session, stream: stream(length: Int64(size)))
+        let data = try await reader.read(count: 10)
+        XCTAssertEqual((0..<10).map { UInt8($0 % 251) }, [UInt8](data))
+        // 2回目からは行き先から直接読む
+        _ = try await reader.readRange(start: 100, end: 109)
+        XCTAssertEqual(3, StubURLProtocol.recorded.count)
+        XCTAssertTrue(StubURLProtocol.recorded.last!.url!.absoluteString.contains("r2.googlevideo.com"))
+
+        // googlevideo の外への転送は追わない
+        let outside = StubURLProtocol.session { _ in (302, ["Location": "https://evil.com/videoplayback"], Data()) }
+        let refused = try await RangeStream.open(session: outside, stream: stream(length: Int64(size)))
+        do {
+            _ = try await refused.readRange(start: 0, end: 9)
+            XCTFail("外への転送を追った")
+        } catch let e as StreamRejectedError {
+            XCTAssertEqual(302, e.status)
+        }
+        XCTAssertFalse(StubURLProtocol.recorded.contains { $0.url!.host == "evil.com" })
+    }
+
     func testRangeStreamRefusesUrlsOutsideGooglevideo() async {
         let bad = ResolvedStream(videoId: "v", itag: 140, mimeType: "audio/mp4", contentLength: 10, url: "https://evil.com/videoplayback", expiresAtMs: 0, statsUrl: nil, generation: 0)
         do {

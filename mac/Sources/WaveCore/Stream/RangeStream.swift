@@ -157,14 +157,28 @@ public final class RangeStream: @unchecked Sendable {
     }
 
     private func send(start: Int64, end: Int64) async throws -> (Data, HTTPURLResponse) {
-        guard let target = URL(string: lock.withLock({ url })) else { throw StreamRejectedError(status: 0) }
-        var request = URLRequest(url: target)
-        request.setValue("bytes=\(start)-\(end)", forHTTPHeaderField: "Range")
-        request.setValue(InnerTubeClient.userAgent, forHTTPHeaderField: "User-Agent")
-        let (data, response) = try await session.data(for: request)
-        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-        if let http = response as? HTTPURLResponse, status == 206 || status == 200 { return (data, http) }
-        RangeStream.diagnostics?("range \(start)-\(end) rejected status=\(status)")
-        throw StreamRejectedError(status: status)
+        guard var target = URL(string: lock.withLock({ url })) else { throw StreamRejectedError(status: 0) }
+        // googlevideo は混んでいると別のサーバーへ 302 で回す。行き先が googlevideo の /videoplayback なら1回だけ追い、
+        // 以後はその行き先から読む（Android の WaveStreamDataSource と同じ。追わないと、その曲がそこで止まる）
+        var followed = false
+        while true {
+            var request = URLRequest(url: target)
+            request.setValue("bytes=\(start)-\(end)", forHTTPHeaderField: "Range")
+            request.setValue(InnerTubeClient.userAgent, forHTTPHeaderField: "User-Agent")
+            let (data, response) = try await session.data(for: request)
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            if let http = response as? HTTPURLResponse, status == 206 || status == 200 { return (data, http) }
+            if !followed, (300..<400).contains(status), let location = (response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Location"),
+               let next = URL(string: location, relativeTo: target)?.absoluteURL, StreamResolver.isAllowedMediaUrl(next.absoluteString)
+            {
+                RangeStream.diagnostics?("range \(start)-\(end) redirected status=\(status)")
+                followed = true
+                target = next
+                lock.withLock { url = next.absoluteString }
+                continue
+            }
+            RangeStream.diagnostics?("range \(start)-\(end) rejected status=\(status)")
+            throw StreamRejectedError(status: status)
+        }
     }
 }

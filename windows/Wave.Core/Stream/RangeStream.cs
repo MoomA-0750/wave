@@ -16,7 +16,7 @@ public sealed class RangeStream : System.IO.Stream
     public static Action<string>? Diagnostics { get; set; }
 
     private readonly HttpClient http;
-    private readonly string url;
+    private string url;
     private readonly long length;
     private readonly string userAgent;
     private long position;
@@ -144,15 +144,30 @@ public sealed class RangeStream : System.IO.Stream
 
     private async Task<HttpResponseMessage> SendAsync(long start, long end, CancellationToken cancel)
     {
-        var request = new HttpRequestMessage(HttpMethod.Get, url);
-        request.Headers.Range = new RangeHeaderValue(start, end);
-        request.Headers.TryAddWithoutValidation("User-Agent", userAgent);
-        var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancel);
-        if (response.StatusCode is HttpStatusCode.PartialContent or HttpStatusCode.OK) return response;
-        var status = (int)response.StatusCode;
-        Diagnostics?.Invoke($"range {start}-{end} rejected status={status}");
-        response.Dispose();
-        throw new StreamRejectedException(status);
+        // googlevideo は混んでいると別のサーバーへ 302 で回す。行き先が googlevideo の /videoplayback なら1回だけ追い、
+        // 以後はその行き先から読む（Android の WaveStreamDataSource と同じ。追わないと、その曲がそこで止まる）
+        var target = url;
+        for (var followed = false; ; followed = true)
+        {
+            var request = new HttpRequestMessage(HttpMethod.Get, target);
+            request.Headers.Range = new RangeHeaderValue(start, end);
+            request.Headers.TryAddWithoutValidation("User-Agent", userAgent);
+            var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancel);
+            if (response.StatusCode is HttpStatusCode.PartialContent or HttpStatusCode.OK) return response;
+            var status = (int)response.StatusCode;
+            if (!followed && status is >= 300 and < 400 && response.Headers.Location is { } location
+                && new Uri(new Uri(target), location).AbsoluteUri is var next && StreamResolver.IsAllowedMediaUrl(next))
+            {
+                Diagnostics?.Invoke($"range {start}-{end} redirected status={status}");
+                response.Dispose();
+                target = next;
+                url = next;
+                continue;
+            }
+            Diagnostics?.Invoke($"range {start}-{end} rejected status={status}");
+            response.Dispose();
+            throw new StreamRejectedException(status);
+        }
     }
 
     public override void Flush()

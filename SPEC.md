@@ -52,6 +52,7 @@
 
 - （仮）曲を選ぶと音が出る。音質は Premium の高音質（AAC 256kbps か opus）。画面を消してもアプリを離れても鳴り続ける
 - （仮）再生できない曲は飛ばす。拒否が続く曲は少しの間解決し直さない
+- （確定）音のサーバーが別のサーバーへ回したとき（302 など）は、行き先が googlevideo の再生の URL なら1回だけ追い、その曲はそこから読み続ける（曲の途中で回されても止まらない）。ほかの先へは追わない。自動テスト: Mac・iPhone の `StreamTests.testRangeStreamFollowsARedirectToAnotherGooglevideoServerOnce`、Windows の `StreamTests.RangeStreamFollowsARedirectToAnotherGooglevideoServerOnce`（Android は `WaveStreamDataSource` が同じ動き）
 - （仮）曲ごとにログインの確認を求められた曲（年齢の確認など、YouTube の `LOGIN_REQUIRED`）は、その曲だけ再生できないものとして知らせて飛ばす。ログインが切れた疑いにはせず、画面の状態も変えない。ただし裏でアカウントを確かめ、本当にログインが外れていたときだけ「切れた」と扱う
 - （仮）シャッフルは入り切りでき、切ると残りを入れる前の並びに戻す。リピートは1曲・全体
 - （仮）キューは Spotify と同じに分ける。今の曲が一番上、自分で足した曲は足した順に元の流れより上、「キューを消去」でまとめて外せる、流れた曲は「履歴」に分ける。次の曲はドラッグで並べ替えられる（時計を除く）

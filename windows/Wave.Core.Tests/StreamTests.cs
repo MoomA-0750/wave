@@ -110,4 +110,50 @@ public class StreamTests
         Assert.Equal("2ggECAEQAw==", Wave.Core.Music.PlaylistOrder.Params(Wave.Core.Music.PlaylistOrder.Added, descending: false));
         Assert.Equal("2ggECAEQBQ==", Wave.Core.Music.PlaylistOrder.Params(5, descending: false));
     }
+
+    private sealed class RedirectingHandler(int size) : HttpMessageHandler
+    {
+        public List<HttpRequestMessage> Sent { get; } = [];
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancel)
+        {
+            Sent.Add(request);
+            var url = request.RequestUri!.AbsoluteUri;
+            if (!url.Contains("r2.googlevideo.com"))
+            {
+                var moved = new HttpResponseMessage(System.Net.HttpStatusCode.Found);
+                moved.Headers.Location = new Uri(url.Contains("outside") ? "https://evil.com/videoplayback" : "https://r2.googlevideo.com/videoplayback?id=1");
+                return Task.FromResult(moved);
+            }
+            var range = request.Headers.Range!.Ranges.First();
+            var end = Math.Min(range.To!.Value, size - 1);
+            var body = Enumerable.Range((int)range.From!.Value, (int)(end - range.From!.Value + 1)).Select(i => (byte)(i % 251)).ToArray();
+            var response = new HttpResponseMessage(System.Net.HttpStatusCode.PartialContent) { Content = new ByteArrayContent(body) };
+            response.Content.Headers.ContentRange = new System.Net.Http.Headers.ContentRangeHeaderValue(range.From!.Value, end, size);
+            return Task.FromResult(response);
+        }
+    }
+
+    [Fact]
+    public async Task RangeStreamFollowsARedirectToAnotherGooglevideoServerOnce()
+    {
+        var handler = new RedirectingHandler(4000);
+        var http = new HttpClient(handler);
+        var stream = new ResolvedStream("v", 140, "audio/mp4", 4000, "https://x.googlevideo.com/videoplayback?id=1", 0, null, 0);
+        var reader = await RangeStream.OpenAsync(http, stream);
+        var buffer = new byte[10];
+        Assert.Equal(10, await reader.ReadAsync(buffer));
+        Assert.Equal(Enumerable.Range(0, 10).Select(i => (byte)(i % 251)), buffer);
+        // 2回目からは行き先から直接読む
+        await reader.ReadRangeAsync(100, 109);
+        Assert.Equal(3, handler.Sent.Count);
+        Assert.Contains("r2.googlevideo.com", handler.Sent[^1].RequestUri!.AbsoluteUri);
+
+        // googlevideo の外への転送は追わない
+        var outside = new RedirectingHandler(4000);
+        var refused = await RangeStream.OpenAsync(new HttpClient(outside), new ResolvedStream("v", 140, "audio/mp4", 4000, "https://x.googlevideo.com/videoplayback?outside=1", 0, null, 0));
+        var e = await Assert.ThrowsAsync<StreamRejectedException>(() => refused.ReadRangeAsync(0, 9));
+        Assert.Equal(302, e.Status);
+        Assert.DoesNotContain(outside.Sent, r => r.RequestUri!.Host == "evil.com");
+    }
 }
