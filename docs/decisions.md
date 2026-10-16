@@ -307,4 +307,7 @@
 - 調べたこと: Mac・to-fu・Pixel 3 で曲送り・戻しを測り、記録を読んだ。押してから鳴るまで Pixel 0.2〜0.6 秒、Windows 0.4〜1.2 秒、Mac 1.5〜2 秒
 - 止まる原因: googlevideo の 302（別のサーバーへ回す）を、Mac と Windows は追わずに失敗にしていた（通信は転送を追わない設定。認証の漏れを防ぐため）。曲の途中で起きると、手元の分を鳴らし切ったところで止まる（to-fu 10-06 22:54、Mac 10-15 02:37〜03:19 の記録）。Android は1回追っていた。読み手（RangeStream）で、行き先が googlevideo の /videoplayback のときだけ1回追うようにした
 - 待ちの原因: どの端末も音のデータを手元に残さず、先に用意するのは次の曲の URL だけ。Mac・iPhone は加えて、曲のファイルを丸ごと読み終えるまで鳴り始めない
+- Mac・iPhone の丸ごと読み: AVPlayer は YouTube の断片化 MP4 を渡されると、長さを知るためにファイルを最後まで読んでから鳴り始めていた。目次（sidx）から HLS（fMP4・バイト範囲）の一覧を作って渡すことにした
+  - 試してやめたこと: 一覧と区切りを独自の URL（wave-media://、AVAssetResourceLoader）で渡す形。AVPlayer は HLS の区切りを独自の URL では読まず（OS の記録に `-12881 custom url not redirect`）、鳴らなかった
+  - そこで端末の中に 127.0.0.1 でだけ待つ HTTP の受け口（LocalMediaServer）を立て、曲ごとに推測できない名前の下で、一覧と区切りのバイトを返す。署名付き URL は再生の部品に渡さないまま
 

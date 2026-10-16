@@ -79,6 +79,8 @@ final class RangeResourceLoader: NSObject, AVAssetResourceLoaderDelegate, @unche
 final class AudioEngine {
     let player = AVPlayer()
     private var loader: RangeResourceLoader?
+    /// 中の受け口に置いた曲（次の曲を読むとき・止めるときに外す）。
+    private var servedToken: String?
     private let loaderQueue = DispatchQueue(label: "wave.media.loader")
     private var observers: [NSObjectProtocol] = []
     private var statusObservation: NSKeyValueObservation?
@@ -114,8 +116,18 @@ final class AudioEngine {
     }
 
     /// バイトを読む元を渡して、鳴らす準備をする。読み始めに失敗したら false。
-    func load(_ bytes: RangeStream, mimeType: String, key: String) async -> Bool {
+    /// 断片化 MP4 で目次（sidx）が読めれば、HLS の一覧にして、この端末の中の受け口から区切りごとに読ませる
+    /// （MP4 のまま渡すと、AVPlayer は長さを知るためにファイルを最後まで読んでから鳴り始める）。
+    func load(_ bytes: RangeStream, mimeType: String, key: String, dash: DashInfo? = nil) async -> Bool {
         clear()
+        if let playlist = await Self.playlist(bytes, mimeType: mimeType, dash: dash),
+           let served = await LocalMediaServer.shared.register(bytes: bytes, playlist: playlist, contentType: mimeType.hasPrefix("video") ? "video/mp4" : "audio/mp4")
+        {
+            servedToken = served.token
+            let item = AVPlayerItem(asset: AVURLAsset(url: served.url))
+            item.preferredForwardBufferDuration = 30
+            return await start(item)
+        }
         let loader = RangeResourceLoader(bytes: bytes, mimeType: mimeType)
         self.loader = loader
         let url = URL(string: "\(RangeResourceLoader.scheme)://media/\(key)")!
@@ -124,6 +136,17 @@ final class AudioEngine {
         let item = AVPlayerItem(asset: asset)
         item.preferredForwardBufferDuration = 30
         return await start(item)
+    }
+
+    /// 目次を取って HLS の一覧を作る。MP4 で無い・目次が読めないときは nil（そのまま MP4 として渡す）。
+    private static func playlist(_ bytes: RangeStream, mimeType: String, dash: DashInfo?) async -> String? {
+        guard mimeType.hasPrefix("audio/mp4") || mimeType.hasPrefix("video/mp4"), let dash, dash.indexEnd > dash.indexStart else { return nil }
+        guard let data = try? await bytes.readRange(start: dash.indexStart, end: dash.indexEnd),
+              let index = SegmentIndex.parse(data, indexStart: dash.indexStart) else {
+            AppPaths.log("media index unreadable; reading whole file")
+            return nil
+        }
+        return HlsPlaylist.build(index, initEnd: dash.initEnd, mediaUrl: LocalMediaServer.mediaName)
     }
 
     /// ライブ配信の HLS の媒体プレイリストを鳴らす準備をする（AVPlayer が HLS をそのまま読む。範囲取得の経路は通さない）。
@@ -205,5 +228,7 @@ final class AudioEngine {
         player.replaceCurrentItem(with: nil)
         loader?.cancelAll()
         loader = nil
+        if let servedToken { LocalMediaServer.shared.unregister(servedToken) }
+        servedToken = nil
     }
 }

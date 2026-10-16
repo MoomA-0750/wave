@@ -17,6 +17,8 @@
 	<key>LSApplicationCategoryType</key><string>public.app-category.music</string>
 	<key>NSHighResolutionCapable</key><true/>
 	<key>NSPrincipalClass</key><string>NSApplication</string>
+	<!-- 曲の音を、この端末の中の受け口（127.0.0.1）から HLS で再生の部品へ渡す（LocalMediaServer） -->
+	<key>NSAppTransportSecurity</key><dict><key>NSAllowsLocalNetworking</key><true/></dict>
 	<key>NSLocalNetworkUsageDescription</key><string>端末の連携の中継につなぐのに使います。</string>
 </dict>
 </plist>

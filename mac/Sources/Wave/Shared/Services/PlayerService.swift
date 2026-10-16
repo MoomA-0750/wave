@@ -1397,7 +1397,7 @@ final class PlayerService {
             return false
         }
         guard current?.videoId == song.videoId, token == loadToken else { return false }
-        guard await engine.load(bytes, mimeType: stream.mimeType, key: "\(song.videoId)/\(stream.itag)") else { return false }
+        guard await engine.load(bytes, mimeType: stream.mimeType, key: "\(song.videoId)/\(stream.itag)", dash: stream.dash) else { return false }
         guard current?.videoId == song.videoId, token == loadToken else { return false }
         if seekTo > 1 { engine.seek(seekTo) }
         engine.play()

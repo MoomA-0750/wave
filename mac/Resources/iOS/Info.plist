@@ -24,6 +24,8 @@
 	<key>UIUserInterfaceStyle</key><string>Dark</string>
 	<key>NSSupportsLiveActivities</key><true/>
 	<key>CFBundleURLTypes</key><array><dict><key>CFBundleURLName</key><string>xyz.mooma0750.wave</string><key>CFBundleURLSchemes</key><array><string>wave</string></array></dict></array>
+	<!-- 曲の音を、この端末の中の受け口（127.0.0.1）から HLS で再生の部品へ渡す（LocalMediaServer） -->
+	<key>NSAppTransportSecurity</key><dict><key>NSAllowsLocalNetworking</key><true/></dict>
 	<key>NSLocalNetworkUsageDescription</key><string>端末の連携の中継につなぐのに使います。</string>
 </dict>
 </plist>
