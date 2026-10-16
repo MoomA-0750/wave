@@ -131,6 +131,9 @@ struct NowPlayingView: View {
                     .padding(8)
                 }
                 .shadow(radius: 16, y: 8)
+        } else if verticalSize == .compact {
+            // 横向きでは、前後の曲のジャケットが右の操作の欄の下や画面の端にはみ出すので、枠（と影の分）の外は見せない
+            CoverCarousel().mask(Rectangle().padding(-20))
         } else {
             CoverCarousel()
         }

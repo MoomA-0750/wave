@@ -1,5 +1,6 @@
 #if os(iOS) && WAVE_DEBUG
 import Foundation
+import UIKit
 import WaveCore
 
 /// 開発用（WAVE_DEBUG を付けて組んだときだけ）: データの場所の debug-command.txt に書いた命令を行い、結果を記録に書く
@@ -97,6 +98,13 @@ enum IOSDebugCommands {
             AppPaths.log("debug tab=\(shell.tab) path=\(shell.paths[shell.tab]?.count ?? 0) player=\(shell.playerOpen) queue=\(shell.queueOpen)")
         // 連携でほかの端末を映していたら、この端末で鳴らす（Mac の DebugCommands と同じ）
         case "connect-transfer": AppServices.connect.transfer()
+        case "orient":
+            // 画面の向きを変える（実機を回せないときに横向きを確かめる）。landscape・portrait
+            if let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first {
+                scene.requestGeometryUpdate(.iOS(interfaceOrientations: arg == "portrait" ? .portrait : .landscapeRight)) { error in
+                    AppPaths.log("debug orient failed \(error.localizedDescription)")
+                }
+            }
         case "connect-state":
             for m in AppServices.connect.members {
                 AppPaths.log("debug connect member label=\(m.label) id=\(m.deviceId.prefix(6)) self=\(m.isSelf) online=\(m.online) active=\(m.active) controller=\(m.isController)")
