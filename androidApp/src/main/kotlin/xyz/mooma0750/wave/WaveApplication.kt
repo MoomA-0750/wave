@@ -335,6 +335,9 @@ class AppContainer(
     /** 解決済みのストリーム URL。ログアウトで消す。 */
     val streamCache = ResolvedStreamCache(stream.resolver, SystemClock::elapsedRealtime)
 
+    /** 曲の音のバイト（曲送り・戻しですぐ鳴らす）。ログアウトで消す。 */
+    val audioCache = xyz.mooma0750.wave.playback.AudioCache(appContext)
+
     /** 映像の表示用に解決した URL（音声とは別に持つ）。ログアウトで消す。 */
     val videoStreamCache = ResolvedStreamCache(stream.resolver, SystemClock::elapsedRealtime)
 

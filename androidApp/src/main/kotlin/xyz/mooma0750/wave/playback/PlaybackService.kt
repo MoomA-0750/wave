@@ -172,11 +172,14 @@ class PlaybackService : MediaLibraryService() {
     override fun onCreate() {
         super.onCreate()
         container = (application as WaveApplication).container
-        val dataSourceFactory =
+        val streamFactory =
             WaveStreamDataSource
                 .Factory(container.stream.resolver, container.streamCache, container.mediaHttpClient)
                 .withLive(container.live, container.liveCache)
                 .withEpisodes(container.feedHttpClient)
+        upstreamFactory = streamFactory
+        // 曲は端末に残した音から読み、足りない分だけ取る（取った分は残す）
+        val dataSourceFactory = container.audioCache.factory(streamFactory)
         val player =
             ExoPlayer
                 .Builder(this)
@@ -330,6 +333,9 @@ class PlaybackService : MediaLibraryService() {
                     Log.i(WaveApplication.LOG_TAG, "transition index=${player.currentMediaItemIndex} reason=$reason")
                     historyTracker.onMediaItemTransition()
                     episodePositions.onMediaItemTransition(reason)
+                    // 残した音から鳴らし始めた曲は URL を調べていないので、再生履歴のために調べる
+                    resolveCurrentForHistory(player, historyTracker)
+                    warmNext(player)
                     queueSession.onPlaybackProgressed()
                 }
             },
@@ -543,6 +549,8 @@ class PlaybackService : MediaLibraryService() {
             historyTracker.reset()
             queueSession.reset()
             container.streamCache.clear()
+            // 聴いた曲の音も残さない
+            container.audioCache.clear()
             container.videoStreamCache.clear()
             container.liveCache.clear()
             container.queueStore.delete()
@@ -757,6 +765,52 @@ class PlaybackService : MediaLibraryService() {
         if (player.playWhenReady) container.connectV2Host.listener?.onUserStartedPlayback(newSelection = false)
         // 再生ボタンを押してから曲の URL を調べると待たされるので、戻した今の曲だけは先に調べておく（再生は始めない）
         prewarmCurrent(saved.items[saved.currentIndex].song.videoId, queueSession.accountEpoch)
+    }
+
+    /** 曲の URL を調べるための元（キャッシュを通さない）。 */
+    private var upstreamFactory: androidx.media3.datasource.DataSource.Factory? = null
+    private var warming: Pair<Job, AudioCache.Warm>? = null
+
+    /** 次の曲の頭の 1MB（256kbps で 30 秒ほど）を取って残す（曲送りで、すぐ鳴らせる）。 */
+    @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+    private fun warmNext(player: Player) {
+        val next = player.nextMediaItemIndex.takeIf { it != C.INDEX_UNSET } ?: return
+        val uri = player.getMediaItemAt(next).localConfiguration?.uri ?: return
+        val upstream = upstreamFactory ?: return
+        if (container.audioCache.cachedBytes(uri) >= WARM_BYTES) return
+        warming?.let { (job, warm) ->
+            warm.cancel()
+            job.cancel()
+        }
+        val warm = container.audioCache.warm(upstream, uri, WARM_BYTES) ?: return
+        val job =
+            scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                try {
+                    warm.run()
+                    Log.i(WaveApplication.LOG_TAG, "prefetch warmed=${container.audioCache.cachedBytes(uri)}")
+                } catch (e: java.io.IOException) {
+                    Log.i(WaveApplication.LOG_TAG, "prefetch warm failed type=${e.javaClass.simpleName}")
+                }
+            }
+        warming = job to warm
+    }
+
+    /** 今の曲の URL が調べてなければ調べ、再生履歴の見張りに知らせる。 */
+    private fun resolveCurrentForHistory(
+        player: Player,
+        tracker: PlaybackHistoryTracker,
+    ) {
+        val uri = player.currentMediaItem?.localConfiguration?.uri ?: return
+        val videoId = TrackUri.videoIdOf(uri) ?: return
+        val epoch = TrackUri.epochOf(uri)
+        if (container.streamCache.peek(videoId, epoch) != null) return
+        val cache = container.streamCache
+        scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val startedInEpoch = cache.epoch
+            val result = container.stream.resolver.resolve(videoId, expectedGeneration = epoch)
+            if (result is xyz.mooma0750.wave.core.stream.ResolveResult.Ok) cache.put(result.stream, startedInEpoch)
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { tracker.onStreamResolved(videoId) }
+        }
     }
 
     private fun prewarmCurrent(
@@ -1169,6 +1223,9 @@ class PlaybackService : MediaLibraryService() {
     }
 
     private companion object {
+        /** 次の曲を先に取っておくバイト数。 */
+        private const val WARM_BYTES = 1024L * 1024
+
         /** 時計の MainActivity が再生画面を開く印（wear の MainActivity.EXTRA_OPEN_NOW_PLAYING と同じ値）。 */
         const val OPEN_NOW_PLAYING = "open_now_playing"
 

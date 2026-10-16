@@ -17,7 +17,7 @@ import kotlin.random.Random
  * いつ再生履歴を送るかを決める（ADR-0006 の 1・3）。メインスレッドだけから使う。
  * - 再生1回は曲の遷移で始まり次の遷移で終わる（1曲リピートの繰り返しも遷移）。送るのは1回だけ
  * - 聴いた時間は ListenCounter（単調時計で再生中の区間だけ）
- * - 統計 URL は遷移後に最初に再生が始まったときに1回だけキャッシュから取る。無ければ送らない（統計のために解決しない）
+ * - 統計 URL は遷移後に最初に再生が始まったときにキャッシュから取る。残した音から鳴らし始めた曲は URL を後から調べるので、調べ終えたら取り直す
  * - 待ちは一時停止・遷移で取り消すが、始まった送信は取り消さない（取り消すと送ったかどうか分からないまま失われる）。
  *   ログアウト・切り替えでの取り消しは WaveSession の世代のスコープが担う
  */
@@ -83,6 +83,14 @@ class PlaybackHistoryTracker(
                     if (carried?.third == true) it.done = true
                 }
             }
+        if (player.isPlaying) started()
+    }
+
+    /** 今の曲の URL を後から調べ終えた（残した音から鳴らし始めた曲）。統計 URL をもう一度探す。 */
+    fun onStreamResolved(videoId: String) {
+        val current = play ?: return
+        if (current.videoId != videoId || current.stream != null || current.done) return
+        current.looked = false
         if (player.isPlaying) started()
     }
 
