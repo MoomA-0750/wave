@@ -126,7 +126,12 @@ final class AudioEngine {
             servedToken = served.token
             let item = AVPlayerItem(asset: AVURLAsset(url: served.url))
             item.preferredForwardBufferDuration = 30
-            return await start(item)
+            if await start(item) { return true }
+            // 次の曲に替わった（読み込みを追い越された）ときは、そのまま終える
+            guard item.status == .failed, player.currentItem === item else { return false }
+            // 中の受け口から読めなかった（OS が 127.0.0.1 へのつなぎを許さないなど）: 前の読み方（丸ごと読む）で鳴らす
+            AppPaths.log("media hls failed; reading whole file")
+            clear()
         }
         let loader = RangeResourceLoader(bytes: bytes, mimeType: mimeType)
         self.loader = loader
