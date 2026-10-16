@@ -390,9 +390,9 @@ fun NowPlayingScreen(
                                     MusicVideoPanel(song, display.clock, videos, Modifier.fillMaxSize().clip(MaterialTheme.shapes.small))
                                 }
                             }
-                            Row(Modifier.align(Alignment.BottomEnd)) {
-                                IconAction(R.drawable.ic_pip, stringResource(R.string.nowplaying_video_pip), { VideoPip.enter(activity) })
-                                IconAction(R.drawable.ic_fullscreen, stringResource(R.string.nowplaying_video_fullscreen), { fullVideo = true })
+                            Row(Modifier.align(Alignment.BottomEnd).padding(6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                VideoOverlayButton(R.drawable.ic_pip, stringResource(R.string.nowplaying_video_pip), { VideoPip.enter(activity) })
+                                VideoOverlayButton(R.drawable.ic_fullscreen, stringResource(R.string.nowplaying_video_fullscreen), { fullVideo = true })
                             }
                         }
                     } else {
@@ -727,17 +727,22 @@ private fun FullScreenVideo(
                 enter = androidx.compose.animation.fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()),
                 exit = androidx.compose.animation.fadeOut(MaterialTheme.motionScheme.defaultEffectsSpec()),
             ) {
-                // 白い文字が明るい映像に埋もれないよう、上下を暗くする
-                Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.6f), 0.3f to Color.Transparent, 0.65f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.7f)))) {
+                // 白い文字とボタンが明るい映像に埋もれないよう、全体を少し暗くし、上下はさらに暗くする（YouTube と同じ）
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.3f))
+                        .background(Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.5f), 0.3f to Color.Transparent, 0.65f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.6f))),
+                ) {
                     androidx.compose.runtime.CompositionLocalProvider(androidx.compose.material3.LocalContentColor provides Color.White) {
                         Column(Modifier.align(Alignment.TopStart).padding(horizontal = 24.dp, vertical = 16.dp)) {
                             Text(state.title.orEmpty(), style = MaterialTheme.typography.titleLargeEmphasized, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Text(state.artist.orEmpty(), style = MaterialTheme.typography.bodyLarge, color = Color.White.copy(alpha = 0.75f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                         Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(40.dp)) {
-                            IconAction(R.drawable.ic_skip_previous, stringResource(R.string.nowplaying_previous), { display.previous(); touched++ }, enabled = state.hasPrevious, size = 40.dp)
+                            VideoOverlayButton(R.drawable.ic_skip_previous, stringResource(R.string.nowplaying_previous), { display.previous(); touched++ }, enabled = state.hasPrevious, size = 56.dp)
                             PlayFab(state.isPlaying, { display.togglePlay(); touched++ }, size = 72.dp)
-                            IconAction(R.drawable.ic_skip_next, stringResource(R.string.nowplaying_next), { display.next(); touched++ }, enabled = state.hasNext, size = 40.dp)
+                            VideoOverlayButton(R.drawable.ic_skip_next, stringResource(R.string.nowplaying_next), { display.next(); touched++ }, enabled = state.hasNext, size = 56.dp)
                         }
                         Row(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(start = 24.dp, end = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                             if (state.isLive) {
@@ -760,13 +765,39 @@ private fun FullScreenVideo(
                                 )
                                 Text(formatTime(state.durationMs), style = MaterialTheme.typography.bodySmall)
                             }
-                            IconAction(R.drawable.ic_pip, stringResource(R.string.nowplaying_video_pip), { VideoPip.enter(activity) })
-                            IconAction(R.drawable.ic_fullscreen_exit, stringResource(R.string.nowplaying_video_exit_fullscreen), onClose)
+                            VideoOverlayButton(R.drawable.ic_pip, stringResource(R.string.nowplaying_video_pip), { VideoPip.enter(activity) }, modifier = Modifier.padding(start = 4.dp))
+                            VideoOverlayButton(R.drawable.ic_fullscreen_exit, stringResource(R.string.nowplaying_video_exit_fullscreen), onClose, modifier = Modifier.padding(start = 6.dp))
                         }
                     }
                 }
             }
         }
+    }
+}
+
+/** 映像の上に重ねるボタン。明るい映像でも見えるよう、暗い丸の下地に白いアイコンを置く。 */
+@Composable
+private fun VideoOverlayButton(
+    @androidx.annotation.DrawableRes icon: Int,
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    size: androidx.compose.ui.unit.Dp = 40.dp,
+) {
+    androidx.compose.material3.IconButton(
+        onClick = onClick,
+        modifier = modifier.size(size),
+        enabled = enabled,
+        colors =
+            androidx.compose.material3.IconButtonDefaults.iconButtonColors(
+                containerColor = Color.Black.copy(alpha = 0.5f),
+                contentColor = Color.White,
+                disabledContainerColor = Color.Black.copy(alpha = 0.3f),
+                disabledContentColor = Color.White.copy(alpha = 0.4f),
+            ),
+    ) {
+        Icon(painterResource(icon), contentDescription = label, modifier = Modifier.size(size * 0.55f))
     }
 }
 

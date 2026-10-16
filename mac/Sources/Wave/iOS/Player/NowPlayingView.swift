@@ -464,9 +464,10 @@ private struct VideoFullScreen: View {
     private func controls(_ player: PlayerService) -> some View {
         let song = player.current
         return ZStack {
-            // 白い文字が明るい映像に埋もれないよう、上下を暗くする
-            LinearGradient(stops: [.init(color: .black.opacity(0.6), location: 0), .init(color: .clear, location: 0.3),
-                                   .init(color: .clear, location: 0.65), .init(color: .black.opacity(0.7), location: 1)],
+            // 白い文字とボタンが明るい映像に埋もれないよう、全体を少し暗くし、上下はさらに暗くする（YouTube と同じ）
+            Color.black.opacity(0.3).ignoresSafeArea().allowsHitTesting(false)
+            LinearGradient(stops: [.init(color: .black.opacity(0.5), location: 0), .init(color: .clear, location: 0.3),
+                                   .init(color: .clear, location: 0.65), .init(color: .black.opacity(0.6), location: 1)],
                            startPoint: .top, endPoint: .bottom)
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
@@ -505,7 +506,10 @@ private struct VideoFullScreen: View {
             .padding(.horizontal, 24)
             .padding(.vertical, 16)
             HStack(spacing: 56) {
-                Button { player.previous(); touched += 1 } label: { Image(systemName: "backward.end.fill").font(.system(size: 30)) }
+                Button { player.previous(); touched += 1 } label: {
+                    Image(systemName: "backward.end.fill").font(.system(size: 24))
+                        .frame(width: 56, height: 56).background(Circle().fill(Color.black.opacity(0.45)))
+                }
                     .accessibilityLabel(L.t("前へ", "Previous"))
                 Button { player.togglePlay(); touched += 1 } label: {
                     ZStack {
@@ -518,7 +522,10 @@ private struct VideoFullScreen: View {
                     }
                 }
                 .accessibilityLabel(player.isPlaying ? L.t("一時停止", "Pause") : L.t("再生", "Play"))
-                Button { player.next(); touched += 1 } label: { Image(systemName: "forward.end.fill").font(.system(size: 30)) }
+                Button { player.next(); touched += 1 } label: {
+                    Image(systemName: "forward.end.fill").font(.system(size: 24))
+                        .frame(width: 56, height: 56).background(Circle().fill(Color.black.opacity(0.45)))
+                }
                     .accessibilityLabel(L.t("次へ", "Next"))
             }
         }
