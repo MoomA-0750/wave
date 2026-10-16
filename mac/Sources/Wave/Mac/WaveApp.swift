@@ -15,8 +15,9 @@ struct WaveApp: App {
         Window("wave", id: "main") {
             MainView()
                 .frame(minWidth: 900, minHeight: 600)
-                // 窓の地は後ろが透けるすりガラス（枠はその上に Liquid Glass の板として浮かせる）
-                .containerBackground(.ultraThinMaterial, for: .window)
+                // 窓の地は Finder・メールの左の欄と同じサイドバーの素材（ultraThinMaterial はほかのアプリより透けすぎた）。
+                // 枠はその上に Liquid Glass の板として浮かせる
+                .containerBackground(for: .window) { SidebarMaterial().ignoresSafeArea() }
         }
         .defaultSize(width: 1480, height: 940)
         .windowToolbarStyle(.unified(showsTitle: false))
@@ -33,6 +34,19 @@ struct WaveApp: App {
             }
         }
     }
+}
+
+/// OS 標準のサイドバーの素材（後ろの窓・壁紙をぼかして透かす。窓が手前でないときは OS に合わせて落ち着いた色にする）。
+private struct SidebarMaterial: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let view = NSVisualEffectView()
+        view.material = .sidebar
+        view.blendingMode = .behindWindow
+        view.state = .followsWindowActiveState
+        return view
+    }
+
+    func updateNSView(_ view: NSVisualEffectView, context: Context) {}
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
