@@ -28,6 +28,9 @@ final class VideoPip: NSObject, AVPictureInPictureControllerDelegate {
 
     /// 枠を置く場所（SwiftUI の中に置く）。
     final class HostView: UIView {
+        /// 大きいほうへ枠を置く（全画面は、後ろの再生画面が向きの変化で枠を作り直しても、枠を取られない）。
+        var priority = 0
+
         override func didMoveToWindow() {
             super.didMoveToWindow()
             if window != nil { VideoPip.shared.attach(self) } else { VideoPip.shared.detach(self) }
@@ -72,6 +75,11 @@ final class VideoPip: NSObject, AVPictureInPictureControllerDelegate {
         if player != nil { ensureController() }
     }
 
+    /// 開発用: 小窓を始められる状態か。
+    var debugState: String {
+        "controller=\(controller != nil) possible=\(controller?.isPictureInPicturePossible ?? false) player=\(surface.playerLayer.player != nil) ready=\(surface.playerLayer.isReadyForDisplay) inWindow=\(surface.window != nil) hosts=\(hosts.count)"
+    }
+
     func toggle() {
         if active { controller?.stopPictureInPicture() } else { start() }
     }
@@ -102,7 +110,9 @@ final class VideoPip: NSObject, AVPictureInPictureControllerDelegate {
     }
 
     private func place() {
-        guard let top = hosts.last, surface.superview !== top else { return }
+        // 優先が同じなら、後から画面に出たもの
+        guard let top = hosts.enumerated().max(by: { ($0.element.priority, $0.offset) < ($1.element.priority, $1.offset) })?.element,
+              surface.superview !== top else { return }
         surface.removeFromSuperview()
         surface.frame = top.bounds
         top.addSubview(surface)
@@ -143,8 +153,13 @@ final class VideoPip: NSObject, AVPictureInPictureControllerDelegate {
 /// 映像の枠（VideoPip の1つの枠を、ここに置く）。
 struct PipSurface: UIViewRepresentable {
     var player: AVPlayer?
+    var priority = 0
 
-    func makeUIView(context: Context) -> VideoPip.HostView { VideoPip.HostView() }
+    func makeUIView(context: Context) -> VideoPip.HostView {
+        let view = VideoPip.HostView()
+        view.priority = priority
+        return view
+    }
 
     func updateUIView(_ view: VideoPip.HostView, context: Context) {
         VideoPip.shared.setPlayer(player)

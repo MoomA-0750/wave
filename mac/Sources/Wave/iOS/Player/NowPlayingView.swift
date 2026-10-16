@@ -434,7 +434,7 @@ private struct VideoFullScreen: View {
         let player = AppServices.player!
         ZStack {
             Color.black.ignoresSafeArea()
-            VideoSurface().ignoresSafeArea()
+            VideoSurface(priority: 1).ignoresSafeArea()
             if shown { controls(player).transition(.opacity) }
         }
         .contentShape(Rectangle())
@@ -450,10 +450,17 @@ private struct VideoFullScreen: View {
         }
         .statusBarHidden()
         .persistentSystemOverlays(.hidden)
-        .onAppear {
+        .task {
             guard let scene = scene else { return }
             if scene.interfaceOrientation.isPortrait { before = .portrait }
-            scene.requestGeometryUpdate(.iOS(interfaceOrientations: .landscapeRight))
+            // 全画面が出てくる途中は縦しか受け付けない（断られる）ので、横になるまで少しずつ待って頼み直す
+            for _ in 0..<8 {
+                try? await Task.sleep(for: .milliseconds(250))
+                if Task.isCancelled || scene.interfaceOrientation.isLandscape { return }
+                scene.requestGeometryUpdate(.iOS(interfaceOrientations: .landscapeRight)) { error in
+                    AppPaths.log("video full rotate retry \(error.localizedDescription)")
+                }
+            }
         }
         .onDisappear {
             // 縦で見ていたなら縦に戻す
@@ -537,11 +544,14 @@ private struct VideoFullScreen: View {
 }
 
 struct VideoSurface: View {
+    /// 枠を取り合ったときの優先（全画面は 1）。
+    var priority = 0
+
     var body: some View {
         let video = MusicVideoPlayer.shared
         ZStack {
             // 枠は PiP と共通の1つを使い回す。ライブは鳴らしている再生器の映像をそのまま出す
-            PipSurface(player: AppServices.player.liveVideoPlayer ?? video.player)
+            PipSurface(player: AppServices.player.liveVideoPlayer ?? video.player, priority: priority)
             // MV に無い区間・読み込み中は黒地にする
             if AppServices.player.liveVideoPlayer == nil && !video.showing { Color.black }
             if AppServices.player.liveVideoPlayer == nil && (!video.showing || video.state != .ready) {

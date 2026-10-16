@@ -124,7 +124,7 @@ enum IOSDebugCommands {
             case "pip": VideoPip.shared.toggle()
             default: break
             }
-            AppPaths.log("debug video show=\(shell.showVideo) full=\(shell.videoFullScreen) pip=\(VideoPip.shared.active) player=\(shell.playerOpen)")
+            AppPaths.log("debug video show=\(shell.showVideo) full=\(shell.videoFullScreen) pip=\(VideoPip.shared.active) player=\(shell.playerOpen) \(VideoPip.shared.debugState)")
         case "music-pip":
             switch arg {
             case "on", "off":
