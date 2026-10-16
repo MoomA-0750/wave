@@ -11,6 +11,8 @@ struct NowPlayingView: View {
     @State private var dragging: Double?
     @State private var devicesOpen = false
     @State private var fullVideo = false
+    /// 指でスクロールしている間か（一番上からさらに下へ引っ張ったら閉じるため）。
+    @State private var scrollTouching = false
     @Environment(\.dismiss) private var dismiss
     /// 横向き（縦が狭い）なら、ジャケット・映像と操作を左右に並べる。
     @Environment(\.verticalSizeClass) private var verticalSize
@@ -25,11 +27,16 @@ struct NowPlayingView: View {
                     media(player)
                         .frame(maxHeight: .infinity)
                         .padding(.vertical, 12)
+                        // 横向きのジャケットはスクロールの中に無いので、下へ払ったら閉じる
+                        .simultaneousGesture(DragGesture(minimumDistance: 20).onEnded { value in
+                            if value.translation.height > 70, value.translation.height > abs(value.translation.width) { dismiss() }
+                        })
                     ScrollView {
                         VStack(alignment: .leading, spacing: 16) { details(player, song) }
                             .padding(.vertical, 12)
                     }
                     .scrollIndicators(.hidden)
+                    .modifier(PullDownToDismiss(touching: $scrollTouching) { dismiss() })
                 }
                 .padding(.horizontal, 24)
             } else {
@@ -43,6 +50,7 @@ struct NowPlayingView: View {
                     .padding(.bottom, 40)
                 }
                 .scrollIndicators(.hidden)
+                .modifier(PullDownToDismiss(touching: $scrollTouching) { dismiss() })
             }
         }
         .fullScreenCover(isPresented: $fullVideo) { VideoFullScreen() }
@@ -132,8 +140,8 @@ struct NowPlayingView: View {
                 }
                 .shadow(radius: 16, y: 8)
         } else if verticalSize == .compact {
-            // 横向きでは、前後の曲のジャケットが右の操作の欄の下や画面の端にはみ出すので、枠（と影の分）の外は見せない
-            CoverCarousel().mask(Rectangle().padding(-20))
+            // 横向きでは、前後の曲のジャケットが右の操作の欄の下や画面の端にはみ出すので、払っている間だけ出す
+            CoverCarousel(isolated: true)
         } else {
             CoverCarousel()
         }
@@ -146,9 +154,8 @@ struct NowPlayingView: View {
         titleRow(player, song)
         seekBar(player)
         controls(player)
-        // ほかの端末で鳴っている間は、その端末の音量。この iPhone で鳴らしていて、アプリの中の音量が下がっている
-        // （ほかの端末から下げられた等）ときは、この iPhone のアプリの中の音量（ふだんは音量ボタンだけで変える）
-        if player.isRemote || player.volume < 0.995 { remoteVolume(player) }
+        // この iPhone で鳴らしている間は本体の音量（音量ボタンと同じ）。ほかの端末で鳴っている間は、その端末のアプリの中の音量
+        volumeBar(player)
         deviceAndQueue(player)
         lyricsCard(player)
     }
@@ -219,19 +226,33 @@ struct NowPlayingView: View {
         .foregroundStyle(.primary)
     }
 
-    /// アプリの中の音量のゲージ。ほかの端末で鳴っている間はその端末のもの（iPhone の音量ボタンは横取りできないので、画面で変える）。
-    /// アプリの中の音量だけを変える。この iPhone・その端末そのものの音量は変えない。
-    private func remoteVolume(_ player: PlayerService) -> some View {
-        HStack(spacing: 10) {
+    /// 音量のゲージ。この iPhone で鳴らしている間は本体の音量で、ほかの端末から下げられたアプリの中の音量も掛けた実際の大きさを出す
+    /// （触るとアプリの中の音量を 100 に戻し、その分を本体の音量に移すので、音の大きさは跳ねない）。
+    /// ほかの端末で鳴っている間はその端末のアプリの中の音量（iPhone の音量ボタンは横取りできないので、画面で変える）。
+    private func volumeBar(_ player: PlayerService) -> some View {
+        let system = SystemVolume.shared
+        let value = Binding<Double>(
+            get: { player.isRemote ? player.volume : Double(system.value) * player.volume },
+            set: { v in
+                if player.isRemote {
+                    player.volume = v
+                } else {
+                    if player.volume < 1 { player.volume = 1 }
+                    system.set(Float(v))
+                }
+            })
+        return HStack(spacing: 10) {
             Image(systemName: "speaker.fill").font(.caption)
-            Slider(value: Binding(get: { player.volume }, set: { player.volume = $0 }), in: 0...1)
+            Slider(value: value, in: 0...1)
                 .tint(.white)
                 .accessibilityLabel(player.isRemote ? L.t("\(player.remoteDevice ?? "ほかの端末") の音量", "Volume on \(player.remoteDevice ?? "the other device")")
-                    : L.t("wave の音量", "wave volume"))
+                    : L.t("音量", "Volume"))
             Image(systemName: "speaker.wave.3.fill").font(.caption)
         }
         .foregroundStyle(.secondary)
         .frame(minHeight: 44)
+        // 本体の音量を動かすための見えない部品。うっすら透けないよう、画面の外に置く
+        .background { SystemVolumeAnchor().frame(width: 1, height: 1).offset(x: -2000).allowsHitTesting(false) }
     }
 
     private func deviceAndQueue(_ player: PlayerService) -> some View {
@@ -285,21 +306,29 @@ struct NowPlayingView: View {
 /// 再生中の画面のジャケット。前後の曲のジャケットを横に並べておき（先に読んでおく）、指について動く。
 /// 払いきると隣のジャケットが真ん中へ滑ってきて、その曲へ移る（前へ払うと、再生した長さによらず前の曲へ。Android と同じ）。
 private struct CoverCarousel: View {
+    /// 横向き: 前後の曲のジャケットは払っている間だけ出し、間を広く取って、影が収まる広さより外は見せない
+    /// （右の操作の欄の下や画面の端にはみ出さず、真ん中のジャケットの影も切れない）。
+    var isolated = false
     @State private var drag: CGFloat = 0
     @State private var settling = false
+
+    private var gap: CGFloat { isolated ? 64 : 24 }
 
     var body: some View {
         let player = AppServices.player!
         GeometryReader { geo in
-            let step = geo.size.width + 24
+            let step = geo.size.width + gap
             ZStack {
                 ForEach(slots(player), id: \.index) { slot in
                     cover(slot.song)
                         .offset(x: CGFloat(slot.index - player.index) * step + drag)
+                        .opacity(!isolated || slot.index == player.index || drag != 0 || settling ? 1 : 0)
                 }
             }
+            .mask { if isolated { Rectangle().padding(.horizontal, -40).padding(.vertical, -200) } else { Rectangle().padding(-10_000) } }
             .contentShape(Rectangle())
-            .gesture(DragGesture(minimumDistance: 16)
+            // 縦の払い（スクロール・下へ払って閉じる）も通す
+            .simultaneousGesture(DragGesture(minimumDistance: 16)
                 .onChanged { value in
                     guard !settling, abs(value.translation.width) > abs(value.translation.height) else { return }
                     // 隣が無い方へは、少しだけ動かして止める
@@ -363,6 +392,23 @@ private struct CoverCarousel: View {
         guard !player.isRemote, player.index >= 0 else { return nil }
         let i = player.index + d
         return player.queue.indices.contains(i) ? player.queue[i] : nil
+    }
+}
+
+/// 一番上までスクロールしてから、さらに下へ引っ張ったら閉じる（ジャケット以外のどこから払っても閉じられる）。
+private struct PullDownToDismiss: ViewModifier {
+    @Binding var touching: Bool
+    var dismiss: () -> Void
+    @State private var done = false
+
+    func body(content: Content) -> some View {
+        content
+            .onScrollPhaseChange { _, phase in touching = phase == .interacting }
+            .onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.y + $0.contentInsets.top } action: { _, y in
+                guard touching, !done, y < -70 else { return }
+                done = true
+                dismiss()
+            }
     }
 }
 

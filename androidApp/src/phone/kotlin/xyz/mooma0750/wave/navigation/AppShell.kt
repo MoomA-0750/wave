@@ -6,6 +6,16 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.offset
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.unit.Velocity
+import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -111,6 +121,9 @@ fun AppShell(
                 }
             }
         }
+        // 再生画面を一番上からさらに下へ引っ張ると、指に付いて下がり、離したときに十分下がっていれば閉じる（iPhone と同じ）
+        val pullDown = rememberPullDownToClose { playerOpen = false }
+        LaunchedEffect(playerOpen) { if (playerOpen) pullDown.reset() }
         AnimatedVisibility(
             visible = playerOpen,
             enter = slideInVertically(MaterialTheme.motionScheme.defaultSpatialSpec()) { it },
@@ -118,11 +131,82 @@ fun AppShell(
         ) {
             BackHandler { playerOpen = false }
             // 下の画面に触れないよう、全面で受け止める
-            Box(Modifier.fillMaxSize().clickable(MutableInteractionSource(), indication = null) {}) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .offset { androidx.compose.ui.unit.IntOffset(0, pullDown.offset.roundToInt()) }
+                    .nestedScroll(pullDown.connection)
+                    .clickable(MutableInteractionSource(), indication = null) {},
+            ) {
                 nowPlaying({ playerOpen = false }, false)
             }
         }
     }
+}
+
+/** 再生画面を下へ引っ張って閉じる。中のスクロールが一番上で余った下向きの分を、画面のずれとして受け取る。 */
+private class PullDownToClose(
+    private val threshold: Float,
+    private val scope: kotlinx.coroutines.CoroutineScope,
+    private val back: androidx.compose.animation.core.AnimationSpec<Float>,
+    private val close: () -> Unit,
+) {
+    var offset by mutableFloatStateOf(0f)
+        private set
+
+    fun reset() {
+        offset = 0f
+    }
+
+    val connection =
+        object : NestedScrollConnection {
+            override fun onPreScroll(
+                available: Offset,
+                source: NestedScrollSource,
+            ): Offset {
+                // 下げている間に上へ戻したら、まず画面のずれを戻す
+                if (offset > 0f && available.y < 0f) {
+                    val used = maxOf(available.y, -offset)
+                    offset += used
+                    return Offset(0f, used)
+                }
+                return Offset.Zero
+            }
+
+            override fun onPostScroll(
+                consumed: Offset,
+                available: Offset,
+                source: NestedScrollSource,
+            ): Offset {
+                if (available.y > 0f && source == NestedScrollSource.UserInput) {
+                    offset += available.y
+                    return Offset(0f, available.y)
+                }
+                return Offset.Zero
+            }
+
+            override suspend fun onPreFling(available: Velocity): Velocity {
+                if (offset <= 0f) return Velocity.Zero
+                if (offset > threshold || available.y > FLING_CLOSE_VELOCITY) {
+                    close()
+                } else {
+                    scope.launch { androidx.compose.animation.core.animate(offset, 0f, animationSpec = back) { v, _ -> offset = v } }
+                }
+                return available
+            }
+        }
+}
+
+/** これより速く下へ払って離したら、引っ張った量が少なくても閉じる（px/秒）。 */
+private const val FLING_CLOSE_VELOCITY = 2500f
+
+@Composable
+private fun rememberPullDownToClose(close: () -> Unit): PullDownToClose {
+    val threshold = with(androidx.compose.ui.platform.LocalDensity.current) { 120.dp.toPx() }
+    val scope = rememberCoroutineScope()
+    val back = MaterialTheme.motionScheme.fastSpatialSpec<Float>()
+    val latestClose by androidx.compose.runtime.rememberUpdatedState(close)
+    return remember(threshold) { PullDownToClose(threshold, scope, back) { latestClose() } }
 }
 
 /** これより縦が狭い横向きの画面（スマホを横にした）では、下のタブの代わりに左のレールにする（Material の Compact の高さ）。 */

@@ -1,4 +1,5 @@
 #if os(iOS) && WAVE_DEBUG
+import AVFoundation
 import Foundation
 import UIKit
 import WaveCore
@@ -98,6 +99,11 @@ enum IOSDebugCommands {
             AppPaths.log("debug tab=\(shell.tab) path=\(shell.paths[shell.tab]?.count ?? 0) player=\(shell.playerOpen) queue=\(shell.queueOpen)")
         // 連携でほかの端末を映していたら、この端末で鳴らす（Mac の DebugCommands と同じ）
         case "connect-transfer": AppServices.connect.transfer()
+        case "system-volume":
+            // 本体の音量を変える（再生画面を開いている間だけ効く）。変えた後の OS の音量を記録する
+            if let v = Float(arg) { SystemVolume.shared.set(v) }
+            try? await Task.sleep(for: .milliseconds(500))
+            AppPaths.log("debug system-volume output=\(AVAudioSession.sharedInstance().outputVolume) shown=\(SystemVolume.shared.value) slider=\(SystemVolume.shared.hasSlider) route=\(AVAudioSession.sharedInstance().currentRoute.outputs.map { $0.portType.rawValue })")
         case "orient":
             // 画面の向きを変える（実機を回せないときに横向きを確かめる）。landscape・portrait
             if let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first {

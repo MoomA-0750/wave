@@ -514,20 +514,29 @@ fun NowPlayingScreen(
                         enabled = remote == null,
                     )
                 }
-                // アプリの中の音量。ほかの端末を映している間はその端末の音量（音量ボタンでも変えられる）。手元で鳴らしていて
-                // 下がっている（ほかの端末から下げられた等）ときは、戻せるように出す。ふだんは端末の音量ボタンだけで足りるので出さない
+                // 手元で鳴らしている間は端末の音量（音量ボタンと同じ）。ほかの端末を映している間はその端末のアプリの中の音量（音量ボタンでも変えられる）
                 val volume = display.volumePercent
-                if (volume != null && (remote != null || volume < 100)) {
-                    // ドラッグの間は表示だけ動かし、指を離したときに1回だけ送る（ほかの端末へは命令ごとに暗号化・鍵交換をする）
+                val systemVolume = rememberSystemVolume()
+                if (remote != null && volume != null || remote == null && controller != null) {
+                    // 映している間は、ドラッグの間は表示だけ動かし、指を離したときに1回だけ送る（ほかの端末へは命令ごとに暗号化・鍵交換をする）
                     var draggingVolume by remember { mutableStateOf<Float?>(null) }
                     val volumeLabel = remote?.let { stringResource(R.string.nowplaying_volume_on_device, it.deviceLabel) } ?: stringResource(R.string.nowplaying_volume_app)
+                    // 手元では、ほかの端末から下げられたアプリの中の音量も掛けた、実際の大きさを出す
+                    val shown = if (remote != null) (volume ?: 100) / 100f else systemVolume.fraction * (volume ?: 100) / 100f
                     Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically) {
                         Icon(painterResource(R.drawable.ic_volume_down), null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         Slider(
-                            value = draggingVolume ?: (volume / 100f),
-                            onValueChange = { draggingVolume = it },
+                            value = draggingVolume ?: shown,
+                            onValueChange = {
+                                draggingVolume = it
+                                // 手元はすぐ変える。アプリの中の音量は 100 に戻し、その分を端末の音量に移す（音の大きさは跳ねない）
+                                if (remote == null) {
+                                    if ((volume ?: 100) < 100) display.setVolume(100)
+                                    systemVolume.set(it)
+                                }
+                            },
                             onValueChangeFinished = {
-                                draggingVolume?.let { display.setVolume(kotlin.math.round(it * 100).toInt()) }
+                                if (remote != null) draggingVolume?.let { display.setVolume(kotlin.math.round(it * 100).toInt()) }
                                 draggingVolume = null
                             },
                             modifier = Modifier.weight(1f).padding(horizontal = 8.dp).semantics { contentDescription = volumeLabel },
@@ -974,4 +983,41 @@ private fun rememberDisplay(
             }
         }
     return Display(state, current, null, remote, connect, clock)
+}
+
+/** 端末の音楽の音量（0〜1）。音量ボタンなどで変わったら追う。 */
+private class SystemVolume(
+    private val audio: android.media.AudioManager,
+) {
+    var fraction by mutableStateOf(read())
+        private set
+
+    private val max get() = audio.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC).coerceAtLeast(1)
+
+    fun read(): Float = audio.getStreamVolume(android.media.AudioManager.STREAM_MUSIC).toFloat() / max
+
+    fun refresh() {
+        fraction = read()
+    }
+
+    fun set(value: Float) {
+        val step = kotlin.math.round(value.coerceIn(0f, 1f) * max).toInt()
+        if (step != audio.getStreamVolume(android.media.AudioManager.STREAM_MUSIC)) audio.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, step, 0)
+        fraction = value.coerceIn(0f, 1f)
+    }
+}
+
+@Composable
+private fun rememberSystemVolume(): SystemVolume {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val volume = remember { SystemVolume(context.getSystemService(android.media.AudioManager::class.java)) }
+    DisposableEffect(volume) {
+        val observer =
+            object : android.database.ContentObserver(android.os.Handler(android.os.Looper.getMainLooper())) {
+                override fun onChange(selfChange: Boolean) = volume.refresh()
+            }
+        context.contentResolver.registerContentObserver(android.provider.Settings.System.CONTENT_URI, true, observer)
+        onDispose { context.contentResolver.unregisterContentObserver(observer) }
+    }
+    return volume
 }
