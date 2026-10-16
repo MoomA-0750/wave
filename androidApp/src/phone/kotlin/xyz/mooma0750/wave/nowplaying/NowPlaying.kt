@@ -623,7 +623,7 @@ fun NowPlayingScreen(
     }
 
     if (fullVideo && video && song != null) {
-        FullScreenVideo(song, display.clock, videos, liveVideoPlayer, onClose = { fullVideo = false })
+        FullScreenVideo(display, song, videos, liveVideoPlayer, onClose = { fullVideo = false })
     }
 
     if (showLyrics && song != null) {
@@ -668,11 +668,15 @@ fun ArtistPickerDialog(
     )
 }
 
-/** 映像の全画面（横向きにし、上下のバーを隠す）。閉じると元の向きに戻す。 */
+/**
+ * 映像の全画面（横向きにし、上下のバーを隠す）。閉じると元の向きに戻す。
+ * YouTube と同じく、映像を押すと曲名・前後と再生・シークバー・小窓と全画面を終えるボタンを重ねて出し、もう一度押すか、
+ * 鳴らしている間に触らず 3 秒たつと隠す。
+ */
 @Composable
 private fun FullScreenVideo(
+    display: Display,
     song: xyz.mooma0750.wave.core.music.Song,
-    clock: LyricsClock?,
     videos: MusicVideos,
     /** ライブを鳴らしているなら、その再生器（映像をそのまま出す）。 */
     livePlayer: Player?,
@@ -697,15 +701,77 @@ private fun FullScreenVideo(
             controller?.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
             onDispose { controller?.show(androidx.core.view.WindowInsetsCompat.Type.systemBars()) }
         }
-        Box(Modifier.fillMaxSize().background(Color.Black)) {
-            if (livePlayer != null) LiveVideoPanel(livePlayer, Modifier.fillMaxSize()) else MusicVideoPanel(song, clock, videos, Modifier.fillMaxSize())
-            Row(Modifier.align(Alignment.BottomEnd).padding(8.dp)) {
-                IconAction(R.drawable.ic_pip, stringResource(R.string.nowplaying_video_pip), { VideoPip.enter(activity) })
-                IconAction(R.drawable.ic_fullscreen_exit, stringResource(R.string.nowplaying_video_exit_fullscreen), onClose)
+        val state = display.state
+        var shown by remember { mutableStateOf(true) }
+        // 触るたびに増やし、隠すまでの 3 秒を数え直す
+        var touched by remember { mutableStateOf(0) }
+        var dragging by remember { mutableStateOf<Float?>(null) }
+        LaunchedEffect(shown, touched, state.isPlaying, dragging != null) {
+            if (shown && state.isPlaying && dragging == null) {
+                kotlinx.coroutines.delay(FULL_VIDEO_CONTROLS_HIDE_MS)
+                shown = false
+            }
+        }
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(Color.Black)
+                .clickable(interactionSource = null, indication = null) {
+                    shown = !shown
+                    touched++
+                },
+        ) {
+            if (livePlayer != null) LiveVideoPanel(livePlayer, Modifier.fillMaxSize()) else MusicVideoPanel(song, display.clock, videos, Modifier.fillMaxSize())
+            androidx.compose.animation.AnimatedVisibility(
+                visible = shown,
+                enter = androidx.compose.animation.fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()),
+                exit = androidx.compose.animation.fadeOut(MaterialTheme.motionScheme.defaultEffectsSpec()),
+            ) {
+                // 白い文字が明るい映像に埋もれないよう、上下を暗くする
+                Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.6f), 0.3f to Color.Transparent, 0.65f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.7f)))) {
+                    androidx.compose.runtime.CompositionLocalProvider(androidx.compose.material3.LocalContentColor provides Color.White) {
+                        Column(Modifier.align(Alignment.TopStart).padding(horizontal = 24.dp, vertical = 16.dp)) {
+                            Text(state.title.orEmpty(), style = MaterialTheme.typography.titleLargeEmphasized, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(state.artist.orEmpty(), style = MaterialTheme.typography.bodyLarge, color = Color.White.copy(alpha = 0.75f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                        Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(40.dp)) {
+                            IconAction(R.drawable.ic_skip_previous, stringResource(R.string.nowplaying_previous), { display.previous(); touched++ }, enabled = state.hasPrevious, size = 40.dp)
+                            PlayFab(state.isPlaying, { display.togglePlay(); touched++ }, size = 72.dp)
+                            IconAction(R.drawable.ic_skip_next, stringResource(R.string.nowplaying_next), { display.next(); touched++ }, enabled = state.hasNext, size = 40.dp)
+                        }
+                        Row(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(start = 24.dp, end = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            if (state.isLive) {
+                                LiveBadge()
+                                Spacer(Modifier.weight(1f))
+                            } else {
+                                Text(formatTime(dragging?.let { (it * state.durationMs).toLong() } ?: state.positionMs), style = MaterialTheme.typography.bodySmall)
+                                // ほかの端末を映している間もあるので、指を離したときに1回だけ移る
+                                Slider(
+                                    value = dragging ?: if (state.durationMs > 0) (state.positionMs.toFloat() / state.durationMs).coerceIn(0f, 1f) else 0f,
+                                    onValueChange = { dragging = it },
+                                    onValueChangeFinished = {
+                                        val target = dragging
+                                        dragging = null
+                                        touched++
+                                        if (target != null && state.durationMs > 0) display.seekTo((target * state.durationMs).toLong())
+                                    },
+                                    enabled = state.durationMs > 0,
+                                    modifier = Modifier.weight(1f).padding(horizontal = 12.dp),
+                                )
+                                Text(formatTime(state.durationMs), style = MaterialTheme.typography.bodySmall)
+                            }
+                            IconAction(R.drawable.ic_pip, stringResource(R.string.nowplaying_video_pip), { VideoPip.enter(activity) })
+                            IconAction(R.drawable.ic_fullscreen_exit, stringResource(R.string.nowplaying_video_exit_fullscreen), onClose)
+                        }
+                    }
+                }
             }
         }
     }
 }
+
+/** 映像の全画面で、鳴らしている間に触らずこれだけたつと操作を隠す。 */
+private const val FULL_VIDEO_CONTROLS_HIDE_MS = 3000L
 
 /** ジャケットの下の、曲名から端末・キューの列までの高さ（ジャケットの大きさの上限を決める）。 */
 private val CONTROLS_HEIGHT = 400.dp

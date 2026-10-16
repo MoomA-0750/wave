@@ -115,6 +115,16 @@ enum IOSDebugCommands {
             for m in AppServices.connect.members {
                 AppPaths.log("debug connect member label=\(m.label) id=\(m.deviceId.prefix(6)) self=\(m.isSelf) online=\(m.online) active=\(m.active) controller=\(m.isController)")
             }
+        case "video":
+            // 映像: on・off（曲｜動画の切り替え）、full・exit（全画面）、pip（小窓の入り切り）
+            switch arg {
+            case "on", "off": shell.playerOpen = true; shell.showVideo = arg == "on"
+            case "full": shell.playerOpen = true; shell.showVideo = true; shell.videoFullScreen = true
+            case "exit": shell.videoFullScreen = false
+            case "pip": VideoPip.shared.toggle()
+            default: break
+            }
+            AppPaths.log("debug video show=\(shell.showVideo) full=\(shell.videoFullScreen) pip=\(VideoPip.shared.active) player=\(shell.playerOpen)")
         case "music-pip":
             switch arg {
             case "on", "off":

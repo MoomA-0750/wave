@@ -5,7 +5,7 @@ import SwiftUI
 import UIKit
 
 /// 映像の PiP（iPhone の小窓）。映像を出す枠は1つの AVPlayerLayer を使い回し（再生画面・全画面のどちらに出ていても同じ枠）、
-/// PiP はその枠から始める。映像を出したままホームへ戻ると、自動で PiP になる。
+/// PiP はその枠から始める。映像を出したままホームへ戻ると、自動で PiP になり、wave に戻ると PiP を閉じて再生画面で映像を出す。
 @MainActor @Observable
 final class VideoPip: NSObject, AVPictureInPictureControllerDelegate {
     static let shared = VideoPip()
@@ -18,6 +18,8 @@ final class VideoPip: NSObject, AVPictureInPictureControllerDelegate {
     @ObservationIgnored private var controller: AVPictureInPictureController?
     /// 枠を置ける場所（後から画面に出たものが上）。上の場所が消えたら、下の場所へ枠を戻す。
     @ObservationIgnored private var hosts: [HostView] = []
+    /// 裏へ回ったか（戻ったときだけ PiP を閉じる。wave の中で小窓のボタンから出した PiP は、通知の欄を下ろしただけでは閉じない）。
+    @ObservationIgnored private var wentBackground = false
 
     final class SurfaceView: UIView {
         override class var layerClass: AnyClass { AVPlayerLayer.self }
@@ -46,6 +48,22 @@ final class VideoPip: NSObject, AVPictureInPictureControllerDelegate {
             guard self?.active == true, let player = AppServices.player, player.isPlaying != playing else { return }
             player.togglePlay()
         }
+        NotificationCenter.default.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { _ in
+            MainActor.assumeIsolated { VideoPip.shared.wentBackground = true }
+        }
+        // wave に戻ったら PiP を閉じ、再生画面で映像を出す（YouTube と同じ）
+        NotificationCenter.default.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { _ in
+            MainActor.assumeIsolated { VideoPip.shared.returnedToApp() }
+        }
+    }
+
+    private func returnedToApp() {
+        defer { wentBackground = false }
+        guard wentBackground, active, let controller, controller.isPictureInPictureActive else { return }
+        AppPaths.log("video pip back to app")
+        IOSShell.shared.showVideo = true
+        IOSShell.shared.playerOpen = true
+        controller.stopPictureInPicture()
     }
 
     /// 映す再生器（ライブは鳴らしている再生器、MV は音の無い再生器）。

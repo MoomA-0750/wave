@@ -10,7 +10,6 @@ struct NowPlayingView: View {
     @State private var tint: Color?
     @State private var dragging: Double?
     @State private var devicesOpen = false
-    @State private var fullVideo = false
     /// 指でスクロールしている間か（一番上からさらに下へ引っ張ったら閉じるため）。
     @State private var scrollTouching = false
     @Environment(\.dismiss) private var dismiss
@@ -53,7 +52,7 @@ struct NowPlayingView: View {
                 .modifier(PullDownToDismiss(touching: $scrollTouching) { dismiss() })
             }
         }
-        .fullScreenCover(isPresented: $fullVideo) { VideoFullScreen() }
+        .fullScreenCover(isPresented: $shell.videoFullScreen) { VideoFullScreen() }
         .background {
             LinearGradient(colors: [(tint ?? Color.gray).opacity(0.85), Color.black], startPoint: .top, endPoint: .center)
                 .ignoresSafeArea()
@@ -130,7 +129,7 @@ struct NowPlayingView: View {
                 .overlay(alignment: .bottomTrailing) {
                     HStack(spacing: 8) {
                         PipButton()
-                        Button { fullVideo = true } label: {
+                        Button { shell.videoFullScreen = true } label: {
                             Image(systemName: "arrow.up.left.and.arrow.down.right").font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
                                 .frame(width: 40, height: 40).background(Circle().fill(Color.black.opacity(0.45)))
                         }
@@ -421,23 +420,33 @@ final class LyricsSheetState {
 
 /// MV の映像（音の無い再生器。音は PlayerService が鳴らし、位置は VideoSync で合わせる）。
 /// 映像の全画面（横向きに回す。閉じると元の向きに戻す）。
+/// YouTube と同じく、映像を押すと曲名・前後と再生・シークバー・小窓と全画面を終えるボタンを重ねて出し、もう一度押すか、
+/// 鳴らしている間に触らず 3 秒たつと隠す。
 private struct VideoFullScreen: View {
     @Environment(\.dismiss) private var dismiss
     @State private var before: UIInterfaceOrientationMask?
+    @State private var shown = true
+    /// 触るたびに増やし、隠すまでの 3 秒を数え直す。
+    @State private var touched = 0
+    @State private var dragging: Double?
 
     var body: some View {
-        ZStack(alignment: .topTrailing) {
+        let player = AppServices.player!
+        ZStack {
             Color.black.ignoresSafeArea()
             VideoSurface().ignoresSafeArea()
-            HStack(spacing: 8) {
-                PipButton()
-                Button { dismiss() } label: {
-                    Image(systemName: "arrow.down.right.and.arrow.up.left").font(.system(size: 16, weight: .semibold)).foregroundStyle(.white)
-                        .frame(width: 44, height: 44).background(Circle().fill(Color.black.opacity(0.45)))
-                }
-                .accessibilityLabel(L.t("全画面を終える", "Exit full screen"))
-            }
-            .padding(16)
+            if shown { controls(player).transition(.opacity) }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            withAnimation(.easeOut(duration: 0.2)) { shown.toggle() }
+            touched += 1
+        }
+        .task(id: "\(shown)-\(touched)-\(player.isPlaying)-\(dragging != nil)") {
+            guard shown, player.isPlaying, dragging == nil else { return }
+            try? await Task.sleep(for: .seconds(3))
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeOut(duration: 0.3)) { shown = false }
         }
         .statusBarHidden()
         .persistentSystemOverlays(.hidden)
@@ -450,6 +459,71 @@ private struct VideoFullScreen: View {
             // 縦で見ていたなら縦に戻す
             if let before, let scene { scene.requestGeometryUpdate(.iOS(interfaceOrientations: before)) }
         }
+    }
+
+    private func controls(_ player: PlayerService) -> some View {
+        let song = player.current
+        return ZStack {
+            // 白い文字が明るい映像に埋もれないよう、上下を暗くする
+            LinearGradient(stops: [.init(color: .black.opacity(0.6), location: 0), .init(color: .clear, location: 0.3),
+                                   .init(color: .clear, location: 0.65), .init(color: .black.opacity(0.7), location: 1)],
+                           startPoint: .top, endPoint: .bottom)
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
+            VStack(alignment: .leading, spacing: 0) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(song?.title ?? "").font(.title3.weight(.semibold)).lineLimit(1)
+                    Text(song?.artistsText ?? "").font(.subheadline).foregroundStyle(.white.opacity(0.75)).lineLimit(1)
+                }
+                Spacer(minLength: 0)
+                HStack(spacing: 12) {
+                    if player.isLive {
+                        LiveBadge(font: .subheadline.weight(.bold), dot: 9)
+                        Spacer(minLength: 0)
+                    } else {
+                        Text(Ui.time(dragging ?? player.position)).font(.caption).monospacedDigit()
+                        Slider(value: Binding(get: { dragging ?? min(player.position, max(1, player.duration)) }, set: { dragging = $0 }),
+                               in: 0...max(1, player.duration)) { editing in
+                            // 指を離したときだけ移る
+                            if !editing, let value = dragging {
+                                player.seek(value)
+                                dragging = nil
+                                touched += 1
+                            }
+                        }
+                        .tint(.white)
+                        Text(Ui.time(player.duration)).font(.caption).monospacedDigit()
+                    }
+                    PipButton()
+                    Button { dismiss() } label: {
+                        Image(systemName: "arrow.down.right.and.arrow.up.left").font(.system(size: 16, weight: .semibold))
+                            .frame(width: 44, height: 44).background(Circle().fill(Color.black.opacity(0.45)))
+                    }
+                    .accessibilityLabel(L.t("全画面を終える", "Exit full screen"))
+                }
+            }
+            .padding(.horizontal, 24)
+            .padding(.vertical, 16)
+            HStack(spacing: 56) {
+                Button { player.previous(); touched += 1 } label: { Image(systemName: "backward.end.fill").font(.system(size: 30)) }
+                    .accessibilityLabel(L.t("前へ", "Previous"))
+                Button { player.togglePlay(); touched += 1 } label: {
+                    ZStack {
+                        Circle().fill(Color.black.opacity(0.45)).frame(width: 72, height: 72)
+                        if player.isLoading {
+                            ProgressView().tint(.white)
+                        } else {
+                            Image(systemName: player.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 30))
+                        }
+                    }
+                }
+                .accessibilityLabel(player.isPlaying ? L.t("一時停止", "Pause") : L.t("再生", "Play"))
+                Button { player.next(); touched += 1 } label: { Image(systemName: "forward.end.fill").font(.system(size: 30)) }
+                    .accessibilityLabel(L.t("次へ", "Next"))
+            }
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(.white)
     }
 
     private var scene: UIWindowScene? { UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first }
