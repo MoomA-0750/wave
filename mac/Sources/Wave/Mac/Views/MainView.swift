@@ -35,8 +35,11 @@ struct MainView: View {
                             .background(Color(nsColor: .controlBackgroundColor).ignoresSafeArea())
                         SuggestionsOverlay(model: model)
                     }
+                    .onGeometryChange(for: Double.self, of: { $0.size.width }) { model.contentWidth = $0 }
                     .inspector(isPresented: Binding(get: { model.showRight }, set: { if !$0 { model.setRightPane(open: false, queue: model.rightView == .queue) } })) {
-                        RightPane().inspectorColumnWidth(min: 300, ideal: 340, max: 440)
+                        RightPane()
+                            .onGeometryChange(for: Double.self, of: { $0.size.width }) { model.inspectorWidth = $0 }
+                            .inspectorColumnWidth(min: 300, ideal: 340, max: 440)
                     }
                 }
                 // 下の再生の操作は、Apple Music と同じく下の端に浮かせた板にする（ページはその下まで流れる）
@@ -127,6 +130,7 @@ struct MainView: View {
                 .toggleStyle(.button)
                 .help(L.t("Claude に聞く (⌘J)", "Ask Claude (⌘J)"))
             }
+            .padding(.trailing, model.principalTrailing)
         }
         ToolbarItem(placement: .primaryAction) {
             AccountMenu()
