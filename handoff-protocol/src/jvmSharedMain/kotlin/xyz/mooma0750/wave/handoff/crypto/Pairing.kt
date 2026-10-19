@@ -25,6 +25,12 @@ object Pairing {
     const val MAX_ATTEMPTS = 3
     private const val MAX_EXTENSION_CHARS = 2048
 
+    /**
+     * ログインをまだ持たない加わる側（wave-api、ADR-0015）が、アカウントの HMAC に使う値。誰でも計算できる印で、
+     * 「アカウントを照らし合わせられない」ことを A に伝えるだけ（照合は誤操作の防止で防御ではない。守りは6桁の照合）。
+     */
+    const val ACCOUNTLESS_ID = "wave-accountless-v1"
+
     private const val LABEL = "wave-pair-v1"
     private val json = Json { ignoreUnknownKeys = true }
     private val b64 = Base64.getUrlEncoder().withoutPadding()
@@ -85,6 +91,8 @@ object Pairing {
         val accountKey: ByteArray,
         /** 相手の拡張（A から見た B の Hello、B から見た A の Confirm）。署名で確かめた値。 */
         val peerExtension: String? = null,
+        /** A から見て、B がログインをまだ持たない（ACCOUNTLESS_ID で照合した）。加えた後にログインを渡す相手。 */
+        val peerAccountless: Boolean = false,
     )
 
     sealed interface Failure {
@@ -128,6 +136,8 @@ object Pairing {
         private val confirmAccountId: String = accountId,
         /** Connect v2: Confirm に入れる拡張（秘密を入れない）。 */
         private val confirmExtension: String? = null,
+        /** ログインをまだ持たない B（ACCOUNTLESS_ID）を受けるか（ADR-0015）。 */
+        private val acceptAccountless: Boolean = true,
     ) {
         private val pkA = WaveCrypto.encodePublicKey(identityPublic)
         private val ephemeral: KeyPair = WaveCrypto.generateEphemeralKeyPair()
@@ -172,9 +182,15 @@ object Pairing {
             if (body.extension != null && body.extension.length > MAX_EXTENSION_CHARS) return failure(Failure.Malformed)
             if (!WaveCrypto.verify(pkB, "$LABEL-b", signedTranscript(transcript, body.extension), unb64(body.sigB) ?: return failure(Failure.Malformed))) return failure(Failure.BadSignature)
             val keys = schedule(prk, transcript, self = pkA, peer = pkBBytes)
-            if (!WaveCrypto.constantTimeEquals(accountHmac(keys.accountKey, accountId), unb64(body.accountHmac) ?: ByteArray(0))) return failure(Failure.AccountMismatch)
+            val peerHmac = unb64(body.accountHmac) ?: ByteArray(0)
+            val accountless =
+                when {
+                    WaveCrypto.constantTimeEquals(accountHmac(keys.accountKey, accountId), peerHmac) -> false
+                    acceptAccountless && WaveCrypto.constantTimeEquals(accountHmac(keys.accountKey, ACCOUNTLESS_ID), peerHmac) -> true
+                    else -> return failure(Failure.AccountMismatch)
+                }
             used = true
-            pending = PendingPair(keys.sas, Established(pkBBytes, sanitizeName(body.deviceName), keys.sendKey, keys.receiveKey, keys.accountKey, body.extension))
+            pending = PendingPair(keys.sas, Established(pkBBytes, sanitizeName(body.deviceName), keys.sendKey, keys.receiveKey, keys.accountKey, body.extension, accountless))
             val confirm = ConfirmBody(b64.encodeToString(WaveCrypto.sign(identityPrivate, "$LABEL-a", signedTranscript(transcript, confirmExtension))), deviceName, b64.encodeToString(accountHmac(keys.accountKey, confirmAccountId)), confirmExtension)
             val (nonce, ciphertext) = WaveCrypto.seal(handshakeKey(prk, "a->b", transcript0), transcript0, json.encodeToString(ConfirmBody.serializer(), confirm).encodeToByteArray())
             return Result.success(Confirm(b64.encodeToString(nonce), b64.encodeToString(ciphertext)))
@@ -204,7 +220,8 @@ object Pairing {
         private val identityPrivate: PrivateKey,
         identityPublic: PublicKey,
         private val deviceName: String,
-        private val accountId: String,
+        /** null はログインをまだ持たない（ACCOUNTLESS_ID で照合を頼み、A のアカウントは確かめない。ADR-0015）。 */
+        private val accountId: String?,
         /** Connect v2: Hello に入れる拡張（B の家の鍵の記述）。 */
         private val helloExtension: String? = null,
     ) {
@@ -220,7 +237,7 @@ object Pairing {
         private val keys = schedule(prk, transcript, self = pkB, peer = pkA)
 
         fun hello(): Hello {
-            val body = HelloBody(b64.encodeToString(pkB), b64.encodeToString(WaveCrypto.sign(identityPrivate, "$LABEL-b", signedTranscript(transcript, helloExtension))), deviceName, b64.encodeToString(accountHmac(keys.accountKey, accountId)), helloExtension)
+            val body = HelloBody(b64.encodeToString(pkB), b64.encodeToString(WaveCrypto.sign(identityPrivate, "$LABEL-b", signedTranscript(transcript, helloExtension))), deviceName, b64.encodeToString(accountHmac(keys.accountKey, accountId ?: ACCOUNTLESS_ID)), helloExtension)
             val (nonce, ciphertext) = WaveCrypto.seal(handshakeKey(prk, "b->a", transcript0), transcript0, json.encodeToString(HelloBody.serializer(), body).encodeToByteArray())
             return Hello(VERSION, b64.encodeToString(eB), b64.encodeToString(nonce), b64.encodeToString(ciphertext))
         }
@@ -235,7 +252,7 @@ object Pairing {
             val pkAKey = WaveCrypto.decodePublicKey(pkA) ?: return failure(Failure.Malformed)
             if (body.extension != null && body.extension.length > MAX_EXTENSION_CHARS) return failure(Failure.Malformed)
             if (!WaveCrypto.verify(pkAKey, "$LABEL-a", signedTranscript(transcript, body.extension), unb64(body.sigA) ?: return failure(Failure.Malformed))) return failure(Failure.BadSignature)
-            if (!WaveCrypto.constantTimeEquals(accountHmac(keys.accountKey, accountId), unb64(body.accountHmac) ?: ByteArray(0))) return failure(Failure.AccountMismatch)
+            if (accountId != null && !WaveCrypto.constantTimeEquals(accountHmac(keys.accountKey, accountId), unb64(body.accountHmac) ?: ByteArray(0))) return failure(Failure.AccountMismatch)
             return Result.success(keys.sas to Established(pkA, sanitizeName(body.deviceName), keys.sendKey, keys.receiveKey, keys.accountKey, body.extension))
         }
     }

@@ -43,6 +43,22 @@ class PairingTest {
     }
 
     @Test
+    fun aJoinerWithoutLoginIsAcceptedOnlyWhenTheResponderAllowsIt() {
+        // wave-api（ADR-0015）はログインを持たずに加わる。A は印で分かり、加えた後にログインを渡す
+        val a = responder()
+        val api = Pairing.Initiator(a.offer, idB.private, idB.public, "wave API", accountId = null)
+        val (code, _) = api.onConfirm(a.onHello(api.hello()).getOrThrow()).getOrThrow()
+        assertTrue(a.onCodeEntered(code).getOrThrow().peerAccountless)
+        val strict = Pairing.Responder(idA.private, idA.public, "Pixel 3", "account-1", nowMs = { now }, acceptAccountless = false)
+        assertEquals(Pairing.Failure.AccountMismatch, reason(strict.onHello(Pairing.Initiator(strict.offer, idB.private, idB.public, "wave API", accountId = null).hello())))
+        // ふつうの端末は印にならない
+        val other = responder()
+        val normal = initiator(other.offer)
+        val (normalCode, _) = normal.onConfirm(other.onHello(normal.hello()).getOrThrow()).getOrThrow()
+        kotlin.test.assertFalse(other.onCodeEntered(normalCode).getOrThrow().peerAccountless)
+    }
+
+    @Test
     fun thirdPartyWhoPhotographedTheQrIsRejectedByTheCodeB() {
         val a = responder()
         val attacker = WaveCrypto.generateEphemeralKeyPair()
