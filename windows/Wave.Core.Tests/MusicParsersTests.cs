@@ -154,6 +154,9 @@ public class MusicParsersTests
         Assert.StartsWith("OLAK5uy_", page.AllSongsPlaylistId);
         Assert.Equal(2, page.AlbumShelves.Count);
         Assert.All(page.AlbumShelves.SelectMany(s => s.Albums), a => Assert.StartsWith("MPREb_", a.BrowseId));
+        // 動画の棚（アーティストのページの「動画」。iPhone と同じ応答から取る）
+        Assert.Equal(6, page.Videos.Count);
+        Assert.All(page.Videos, v => Assert.Equal(page.Name, v.Artists[0].Name));
         Assert.Null(MusicParsers.ArtistPage(Fixtures.Json("browse_album")));
         Assert.Null(MusicParsers.AlbumPage(Fixtures.Json("search_songs"), "MPREb_x"));
     }

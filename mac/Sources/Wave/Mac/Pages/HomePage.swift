@@ -11,8 +11,13 @@ final class HomeModel {
     var chips: [HomeChip] = []
     var selected: HomeChip?
     var recent: [HomeItem] = []
+    /// YouTube Music の新作（アルバム・シングル）。「すべて」のときだけ読み、棚の先頭に出す（Android と同じ）。
+    var newReleases: [AlbumSummary] = []
     var loading = false
     var failed = false
+
+    /// 出す棚: 新作を先頭に、ホームの棚を続ける（ホームに同じ新作の棚が来ていれば、こちらは出さない）。
+    var displayShelves: [HomeShelf] { HomeShelves.withNewReleases(newReleases, title: L.t("新作", "New releases"), shelves: shelves) }
     @ObservationIgnored private var seen: Set<String> = []
     @ObservationIgnored private var continuation: String?
     @ObservationIgnored private var requestId = 0
@@ -42,6 +47,7 @@ final class HomeModel {
         Task {
             if selected == nil { await loadRecent(id) } else { recent = [] }
         }
+        Task { await loadNewReleases(id) }
         Task {
             // 最初は棚が8つ以上になるまで続きを読む（Android 版と同じ）
             for _ in 0..<4 where id == requestId {
@@ -56,6 +62,15 @@ final class HomeModel {
         guard AppServices.client.isLoggedIn else { return }
         guard let items = (try? await AppServices.music.recentActivity())?.value, id == requestId, !items.isEmpty else { return }
         recent = Array(items.prefix(8))
+    }
+
+    private func loadNewReleases(_ id: Int) async {
+        newReleases = []
+        guard selected == nil else { return }
+        let result = (try? await AppServices.music.newReleases()) ?? .failed(.network)
+        guard id == requestId else { return }
+        newReleases = result.value ?? []
+        AppPaths.log("home newReleases=\(newReleases.count)")
     }
 
     /// 下の端に近づいたら続きの棚を読む。
@@ -126,12 +141,14 @@ struct HomePageView: View {
                 if !releases.isEmpty {
                     ShelfView(title: L.t("登録したアーティストの新作", "New from artists you subscribe to"), items: releases.map(HomeModel.releaseItem))
                 }
-                ForEach(Array(home.shelves.enumerated()), id: \.offset) { i, shelf in
+                let shelves = home.displayShelves
+                ForEach(Array(shelves.enumerated()), id: \.offset) { i, shelf in
                     ShelfView(title: shelf.title, strapline: shelf.strapline, items: shelf.items)
-                        .onAppear { if i >= home.shelves.count - 2 { home.loadMore() } }
+                        .onAppear { if i >= shelves.count - 2 { home.loadMore() } }
                 }
                 if home.loading { ProgressView().frame(maxWidth: .infinity) }
-                if home.failed {
+                // 新作だけでも読めていれば、失敗は出さない（Android と同じ）
+                if home.failed && home.newReleases.isEmpty {
                     VStack(spacing: 8) {
                         Text(L.t("ホームを読み込めませんでした", "Couldn’t load Home"))
                         Button(L.t("もう一度読み込む", "Try again")) { home.reload() }

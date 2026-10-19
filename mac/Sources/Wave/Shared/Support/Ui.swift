@@ -3,23 +3,19 @@ import WaveCore
 
 /// 画面から呼ぶ小さな変換（Windows の Ui と同じ）。
 enum Ui {
-    /// 画像の URL を、表示する大きさに合うものにする（YouTube の画像は URL で大きさを選べる）。
+    /// 画像の URL を、表示する大きさに合うものにする（YouTube の画像は URL で大きさを選べる。`=w…-h…`・`=s…`・指定なしを扱う）。
     static func resize(_ url: String?, _ size: Int) -> URL? {
         guard let url, !url.isEmpty else { return nil }
-        // lh3.googleusercontent.com/...=w120-h120-l90-rj の形
-        let px = max(size * 2, 120)
-        if let regex = try? NSRegularExpression(pattern: #"=w\d+-h\d+((?:-[a-z0-9]+)*)$"#),
-            let match = regex.firstMatch(in: url, range: NSRange(url.startIndex..., in: url)),
-            let range = Range(match.range, in: url)
-        {
-            let suffix = Range(match.range(at: 1), in: url).map { String(url[$0]) } ?? ""
-            return URL(string: url.replacingCharacters(in: range, with: "=w\(px)-h\(px)\(suffix)"))
-        }
-        return URL(string: url)
+        return URL(string: ArtworkUrl.resized(url, px: max(size * 2, 120)))
     }
 
     static func img(_ url: String?) -> URL? { resize(url, 226) }
-    static func large(_ url: String?) -> URL? { resize(url, 544) }
+    /// 大きい画像（Android の largeArtwork と同じ。i.ytimg の動画のサムネイルは hqdefault にする）。
+    static func large(_ url: String?) -> URL? {
+        guard let url, !url.isEmpty else { return nil }
+        // Retina で粗く見えないよう、表示の大きさの2倍で取る（これまでと同じ）
+        return URL(string: ArtworkUrl.large(url, px: 544 * 2))
+    }
     static func small(_ url: String?) -> URL? { resize(url, 96) }
 
     static func duration(_ seconds: Int?) -> String { seconds.map { time(Double($0)) } ?? "" }

@@ -352,10 +352,17 @@ public sealed class MusicRepository(InnerTubeClient client, LiveClient? live = n
     public async Task<ApiResult<AccountInfo>> AccountAsync(CancellationToken cancel = default)
     {
         if (!client.IsLoggedIn) return ApiResult<AccountInfo>.Failed(FailureKind.NotLoggedIn);
+        var generation = client.Generation;
         var result = await client.PostAsync("account/account_menu", new JsonObject(), cancel: cancel);
         if (!result.IsOk) return ApiResult<AccountInfo>.Failed(result.Failure!.Value, result.Status);
         var header = result.Value!.FindAll("activeAccountHeaderRenderer").FirstOrDefault();
-        if (header is null) return ApiResult<AccountInfo>.Failed(FailureKind.NotLoggedIn);
+        // ヘッダが無いだけでは切れたことにしない（疑いにして確かめる。ADR-0004）
+        if (header is null)
+        {
+            client.ReportSuspect(generation);
+            return ApiResult<AccountInfo>.Failed(FailureKind.NotLoggedIn);
+        }
+        client.ReportAuthenticated(generation);
         var name = string.Concat(header.Path("accountName", "runs").Items().Select(r => r.Path("text").Str()));
         var photo = header.Path("accountPhoto", "thumbnails").Items().LastOrDefault().Path("url").Str();
         return ApiResult<AccountInfo>.Ok(new AccountInfo(name, photo));
@@ -420,9 +427,13 @@ public sealed class MusicRepository(InnerTubeClient client, LiveClient? live = n
     private async Task<ApiResult<T>> LoggedInBrowseAsync<T>(string browseId, string? continuation, Func<JsonNode, T> parse, CancellationToken cancel, string? browseParams = null)
     {
         if (!client.IsLoggedIn) return ApiResult<T>.Failed(FailureKind.NotLoggedIn);
+        var generation = client.Generation;
         var result = await BrowseAsync(browseId, continuation, browseParams, cancel);
         if (!result.IsOk) return ApiResult<T>.Failed(result.Failure!.Value, result.Status);
-        return MusicParsers.IsSignInPrompt(result.Value!) ? ApiResult<T>.Failed(FailureKind.NotLoggedIn) : ApiResult<T>.Ok(parse(result.Value!));
+        if (!MusicParsers.IsSignInPrompt(result.Value!)) return ApiResult<T>.Ok(parse(result.Value!));
+        // ログイン中のはずなのにログインの案内だけが返った: 疑いにして確かめる（これだけでは切れたことにしない）
+        client.ReportSuspect(generation);
+        return ApiResult<T>.Failed(FailureKind.NotLoggedIn);
     }
 }
 

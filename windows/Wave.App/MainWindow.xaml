@@ -536,7 +536,8 @@
                         </HyperlinkButton>
                     </StackPanel>
                 </Grid>
-                <ScrollViewer x:Name="FullLyricsScroller" Grid.Column="1" VerticalScrollBarVisibility="Hidden" HorizontalScrollMode="Disabled" IsHitTestVisible="False">
+                <!-- 手でスクロールできる（LyricsFollower の scrollable。手で動かしてから 5 秒は自動で送らない） -->
+                <ScrollViewer x:Name="FullLyricsScroller" Grid.Column="1" VerticalScrollBarVisibility="Hidden" HorizontalScrollMode="Disabled">
                     <StackPanel x:Name="FullLyrics" Padding="0,0,0,400" />
                 </ScrollViewer>
             </Grid>

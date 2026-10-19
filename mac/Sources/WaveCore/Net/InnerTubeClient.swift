@@ -2,11 +2,26 @@ import CryptoKit
 import Foundation
 
 public enum FailureKind: Sendable, Equatable {
-    /// ログインが要る（ログインしていない、または切れた）。
+    /// ログインしていない（呼ぶ前にログインが外れた・変わったときも）。
     case notLoggedIn
+    /// ログインが切れたと確かめられた（もう一度ログインが要る。ADR-0004）。
+    case expired
+    /// ログインが切れた疑いがある（account_menu で確かめている。一時的な拒否のこともある）。
+    case suspect
     case network
     case http
     case parse
+}
+
+/// ログインの状態（Android の WaveSession の SessionState と同じ。ADR-0004）。
+/// 切れたと確かめられたときだけ expired にし、一時的な拒否（403・リダイレクト・ログアウト相当の応答）は suspect にして account_menu で確かめる。
+/// 通信の失敗では変えない。
+public enum SessionState: Sendable, Equatable {
+    case loggedOut
+    case active
+    /// 失効を疑う応答が続いている（consecutive 回）。
+    case suspect(consecutive: Int)
+    case expired
 }
 
 /// InnerTube の呼び出しの結果。
@@ -59,6 +74,15 @@ public final class InnerTubeClient: @unchecked Sendable {
     /// ログインしていないときの訪問者 ID（最初の応答の responseContext から取る。続きのトークンがこれに結び付く）。
     private var anonymousVisitor: String?
     private var generationValue: Int64 = 0
+    private var sessionValue: SessionState = .loggedOut
+    /// 確かめ（account_menu）を走らせている世代と、最後に始めた時刻（同時に1本、30秒に1回まで）。
+    private var confirming = false
+    private var lastConfirmAt: Date?
+    private static let confirmInterval: TimeInterval = 30
+    static let signInHost = "accounts.google.com"
+
+    /// ログインの状態が変わったとき（どのスレッドからも呼ばれる）。
+    public var sessionStateChanged: (@Sendable (SessionState) -> Void)?
 
     /// 表示の言語（YouTube から届く文字の言語）。
     public let hl: String
@@ -82,10 +106,101 @@ public final class InnerTubeClient: @unchecked Sendable {
     public var generation: Int64 { lock.withLock { generationValue } }
 
     public func setCredentials(_ value: Credentials?) {
+        let state: SessionState = value == nil ? .loggedOut : .active
         lock.withLock {
             credentials = value
             anonymousVisitor = nil
             generationValue += 1
+            sessionValue = state
+            confirming = false
+            lastConfirmAt = nil
+        }
+        sessionStateChanged?(state)
+    }
+
+    /// 今のログインの状態。
+    public var sessionState: SessionState { lock.withLock { sessionValue } }
+
+    /// generation の世代のままなら、状態を変える（古い世代の結果で新しい世代を書き換えない）。
+    private func updateSession(_ generation: Int64, _ next: (SessionState) -> SessionState) {
+        let changed: SessionState? = lock.withLock {
+            guard generation == generationValue, credentials != nil else { return nil }
+            let value = next(sessionValue)
+            guard value != sessionValue else { return nil }
+            sessionValue = value
+            return value
+        }
+        if let changed { sessionStateChanged?(changed) }
+    }
+
+    /// ログインが有効だと示す応答を受けた（account_menu のアカウントのヘッダ）。疑い・失効を解く。
+    func markAuthenticated(_ generation: Int64) {
+        updateSession(generation) { _ in .active }
+    }
+
+    /// ログイン中なのに、ログアウト相当の応答（ログインの案内だけ・アカウントのヘッダが無い）が返った。疑いにして確かめる。
+    /// ログインしていなければ notLoggedIn。
+    func suspectLoggedOut(_ generation: Int64) -> FailureKind {
+        guard isLoggedIn else { return .notLoggedIn }
+        suspect(generation)
+        return generation == self.generation ? .suspect : .notLoggedIn
+    }
+
+    private func suspect(_ generation: Int64) {
+        updateSession(generation) { previous in
+            switch previous {
+            case .expired: .expired
+            case .suspect(let n): .suspect(consecutive: n + 1)
+            default: .suspect(consecutive: 1)
+            }
+        }
+        if sessionState != .expired { confirmSession() }
+    }
+
+    /// 本当にログインが外れているかを account_menu で確かめる（曲ごとの LOGIN_REQUIRED のあとなど）。状態は先に変えない。
+    /// 同時に1本、前に始めてから30秒以上あける（レート制限のときに負荷を上乗せしない）。
+    public func confirmSession() {
+        let generation: Int64? = lock.withLock {
+            guard credentials != nil, !confirming else { return nil }
+            if let last = lastConfirmAt, Date().timeIntervalSince(last) < InnerTubeClient.confirmInterval { return nil }
+            confirming = true
+            lastConfirmAt = Date()
+            return generationValue
+        }
+        guard let generation else { return }
+        Task {
+            await confirm(generation)
+            lock.withLock { if generation == generationValue { confirming = false } }
+        }
+    }
+
+    /// テスト用: 確かめを待つ。
+    func confirmNow() async {
+        await confirm(generation)
+    }
+
+    private func confirm(_ generation: Int64) async {
+        guard let creds = currentCredentials, generation == self.generation,
+            let request = try? makeRequest("account/account_menu", body: .obj([:]), creds: creds, query: []),
+            let (data, response) = try? await session.data(for: request), let http = response as? HTTPURLResponse
+        else { return }
+        let status = http.statusCode
+        switch status {
+        case 300...399:
+            let host = http.value(forHTTPHeaderField: "Location").flatMap { URL(string: $0)?.host }
+            if host == InnerTubeClient.signInHost { updateSession(generation) { _ in .expired } }
+        case 401:
+            updateSession(generation) { _ in .expired }
+        case 200...299:
+            guard data.count <= InnerTubeClient.maxResponseBytes, let root = try? JSON.parse(data) else { return }
+            if !root.findAll("activeAccountHeaderRenderer").isEmpty {
+                updateSession(generation) { previous in if case .suspect = previous { .active } else { previous } }
+            } else if !root.path("actions").items.isEmpty {
+                // メニューはあるのにアカウントのヘッダが無い: ログアウトしている
+                updateSession(generation) { _ in .expired }
+            }
+        default:
+            break
         }
     }
 
@@ -97,22 +212,22 @@ public final class InnerTubeClient: @unchecked Sendable {
     public func post(_ endpoint: String, body: JSON, setLogin: Bool = true, query: [(String, String)] = []) async throws -> ApiResult<JSON> {
         let creds = setLogin ? currentCredentials : nil
         let loginGeneration = generation
-        var body = body.obj ?? JSONObject()
-        body["context"] = context(creds)
-        var url = InnerTubeClient.apiBase + endpoint + "?prettyPrint=false"
-        for (name, value) in query { url += "&" + name + "=" + InnerTubeClient.escape(value) }
-        var request = URLRequest(url: URL(string: url)!)
-        request.httpMethod = "POST"
-        request.httpBody = JSON.object(body).data()
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        try addHeaders(&request, creds)
+        let request = try makeRequest(endpoint, body: body, creds: creds, query: query)
         do {
             let (data, response) = try await session.data(for: request)
             let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-            if (status == 401 || status == 403) && creds != nil { return .failed(.notLoggedIn, status: status) }
-            if status < 200 || status > 299 { return .failed(.http, status: status) }
             // 送ったあとでログインが変わっていたら、別のアカウントの結果として使わない
             if creds != nil && loginGeneration != generation { return .failed(.notLoggedIn) }
+            // 401 は切れた。403・リダイレクトは一時的な拒否のこともあるので疑いにして確かめる（ADR-0004）
+            if creds != nil && status == 401 {
+                updateSession(loginGeneration) { _ in .expired }
+                return .failed(.expired, status: status)
+            }
+            if creds != nil && (status == 403 || (300...399).contains(status)) {
+                suspect(loginGeneration)
+                return .failed(sessionState == .expired ? .expired : .suspect, status: status)
+            }
+            if status < 200 || status > 299 { return .failed(.http, status: status) }
             if data.count > InnerTubeClient.maxResponseBytes { return .failed(.network) }
             guard let root = try? JSON.parse(data) else { return .failed(.parse) }
             lock.withLock {
@@ -125,6 +240,19 @@ public final class InnerTubeClient: @unchecked Sendable {
             if Task.isCancelled { throw CancellationError() }
             return .failed(.network)
         }
+    }
+
+    private func makeRequest(_ endpoint: String, body: JSON, creds: Credentials?, query: [(String, String)]) throws -> URLRequest {
+        var body = body.obj ?? JSONObject()
+        body["context"] = context(creds)
+        var url = InnerTubeClient.apiBase + endpoint + "?prettyPrint=false"
+        for (name, value) in query { url += "&" + name + "=" + InnerTubeClient.escape(value) }
+        var request = URLRequest(url: URL(string: url)!)
+        request.httpMethod = "POST"
+        request.httpBody = JSON.object(body).data()
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        try addHeaders(&request, creds)
+        return request
     }
 
     /// YouTube（Music ではない、www.youtube.com の WEB）の youtubei/v1/{endpoint} に、ログインの情報を付けずに POST する

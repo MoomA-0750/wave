@@ -118,6 +118,7 @@
     <string name="nowplaying_clear_queue">Clear queue</string>
     <string name="nowplaying_next_from_source">Next up</string>
     <string name="search_share">Share</string>
+    <string name="search_open_song">Open song</string>
     <string name="ai_title">Ask Claude</string>
     <string name="ai_new_chat">New chat</string>
     <string name="ai_history">Past chats</string>

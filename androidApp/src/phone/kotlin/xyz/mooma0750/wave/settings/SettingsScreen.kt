@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.Switch
@@ -142,6 +144,7 @@ fun SettingsScreen(
                     },
                 )
             }
+            item { LanguageSetting() }
             if (container.connectV2 != null) {
                 item {
                     ListItem(
@@ -203,6 +206,42 @@ fun SettingsScreen(
                         DebugPlaybackButtons(container)
                     }
                 }
+            }
+        }
+    }
+}
+
+/** 画面の言語（端末に合わせる／日本語／English。Mac・Windows・iPhone と同じ）。押すと選ぶメニューを出す。 */
+@Composable
+private fun LanguageSetting() {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val activity = context as? android.app.Activity
+    // 選び直すと画面が作り直されるので、今の値は作るたびに読めばよい
+    val current = remember { AppLanguage.current(context) }
+    var open by remember { mutableStateOf(false) }
+    val label: @Composable (AppLanguage.Choice) -> String = { choice ->
+        when (choice) {
+            AppLanguage.Choice.System -> stringResource(R.string.settings_language_system)
+            AppLanguage.Choice.Japanese -> stringResource(R.string.settings_language_japanese)
+            AppLanguage.Choice.English -> stringResource(R.string.settings_language_english)
+        }
+    }
+    Box {
+        ListItem(
+            headlineContent = { Text(stringResource(R.string.settings_language_title)) },
+            supportingContent = { Text(stringResource(R.string.settings_language_summary, label(current))) },
+            modifier = Modifier.clickable(enabled = activity != null) { open = true },
+        )
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }, modifier = Modifier.align(Alignment.TopEnd)) {
+            AppLanguage.Choice.entries.forEach { choice ->
+                DropdownMenuItem(
+                    text = { Text(label(choice)) },
+                    trailingIcon = { if (choice == current) MenuIcon(R.drawable.ic_check_circle) },
+                    onClick = {
+                        open = false
+                        if (choice != current && activity != null) AppLanguage.set(activity, choice)
+                    },
+                )
             }
         }
     }

@@ -385,7 +385,7 @@ fun NowPlayingScreen(
                     }
                 }
                 if (song != null && onAskAi != null) IconAction(R.drawable.ic_ai, stringResource(R.string.ai_title), onAskAi)
-                song?.let { SongMenuButton(it, actions, inQueue = true) } ?: Spacer(Modifier.size(48.dp))
+                song?.let { SongMenuButton(it, actions) } ?: Spacer(Modifier.size(48.dp))
             }
             // 横向きのスマホ（縦が狭い）では、左にジャケット・映像、右に曲名から下を並べる
             val artBlock = @Composable {
@@ -848,7 +848,7 @@ private fun QueueSheet(
     controller: MediaController?,
     connection: PlayerConnection,
     actions: SongActions,
-    /** ほかの端末のキューを映している（曲を選ぶ・外す・並べ替える操作は無い）。 */
+    /** ほかの端末のキューを映している（外す・並べ替える操作は無い。曲を選ぶと、その端末でその曲を鳴らす）。 */
     remote: Boolean = false,
 ) {
     val scope = rememberCoroutineScope()
@@ -880,7 +880,8 @@ private fun QueueSheet(
                     .zIndex(if (isDragged) 1f else 0f)
                     .graphicsLayer { translationY = if (isDragged) dragOffset else 0f }
                     .background(if (isDragged) MaterialTheme.colorScheme.surfaceContainerHighest else Color.Transparent)
-                    .then(if (remote || isCurrent) Modifier else Modifier.clickable { scope.launch { connection.jumpTo(row.itemId) } })
+                    // ほかの端末を映している間も、選ぶと再生サービスがその端末でその曲を鳴らしてもらう（Mac・Windows・iPhone と同じ）
+                    .then(if (isCurrent) Modifier else Modifier.clickable { scope.launch { connection.jumpTo(row.itemId) } })
                     .padding(start = 16.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -897,7 +898,7 @@ private fun QueueSheet(
                 controller?.let { c ->
                     val position = (0 until c.mediaItemCount).firstOrNull { c.getMediaItemAt(it).mediaId == row.itemId }
                     position?.let { Media3QueuePlayer.songOf(c.getMediaItemAt(it)) }?.let { song ->
-                        SongMenuButton(song, actions, inQueue = true, extraItems = if (!isCurrent && !remote && index > current) listOf(stringResource(R.string.nowplaying_remove_from_queue) to { scope.launch { connection.remove(row.itemId) }; Unit }) else emptyList())
+                        SongMenuButton(song, actions, extraItems = if (!isCurrent && !remote && index > current) listOf(stringResource(R.string.nowplaying_remove_from_queue) to { scope.launch { connection.remove(row.itemId) }; Unit }) else emptyList())
                     }
                 }
                 if (movable) {

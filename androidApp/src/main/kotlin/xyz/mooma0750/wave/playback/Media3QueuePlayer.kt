@@ -208,6 +208,16 @@ class Media3QueuePlayer(
             }
         }
 
+        /** 曲の情報（[songOf] で読む）と出どころを載せた extras。ほかの端末を映す再生器も同じものを載せる。 */
+        fun extrasOf(
+            song: Song,
+            origin: xyz.mooma0750.wave.core.queue.ItemOrigin?,
+        ): android.os.Bundle =
+            android.os.Bundle().apply {
+                putString(SONG_EXTRA, songJson.encodeToString(Song.serializer(), song))
+                origin?.let { putString(ORIGIN_EXTRA, it.name) }
+            }
+
         fun mediaItemOf(
             item: QueueItem,
             epoch: Long?,
@@ -229,12 +239,7 @@ class Media3QueuePlayer(
                         // 画像そのものは ArtworkEmbedder が今の曲にだけ入れる。アプリの画面は曲の情報（extras）の URL から出す
                         .setDurationMs(song.durationSeconds?.takeUnless { song.isLive }?.let { it * 1000L })
                         // 自アプリの画面の曲のメニュー（アーティスト・アルバムを開く）で使う。公開のメタデータだけ
-                        .setExtras(
-                            android.os.Bundle().apply {
-                                putString(SONG_EXTRA, songJson.encodeToString(Song.serializer(), song))
-                                putString(ORIGIN_EXTRA, item.origin.name)
-                            },
-                        )
+                        .setExtras(extrasOf(song, item.origin))
                         .build(),
                 ).build()
         }

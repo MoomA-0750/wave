@@ -9,9 +9,37 @@ namespace Wave.App.Controls;
 /// 再生位置に合わせて送る歌詞（Spotify の再生中の画面と同じく、歌っている行を明るく、前後の行を薄く）。
 /// 時刻付きの歌詞では全文を並べ、歌っているかたまりの1つ前が上端に来るように滑らかに送る。
 /// 右の欄の小さな歌詞と、全画面の大きな歌詞で使う（字の大きさだけ違う）。
+/// 全画面（scrollable）は手でスクロールでき、手で動かしてから 5 秒は自動で送らない（Mac の LyricsFollower(scrollable:) と同じ）。
 /// </summary>
-public sealed class LyricsFollower(ScrollViewer scroller, StackPanel panel, double fontSize, int plainLines = 12)
+public sealed class LyricsFollower
 {
+    /// <summary>手で動かしてから、自動で送らない間（ミリ秒）。</summary>
+    private const long HoldAfterTouchMs = 5000;
+
+    private readonly ScrollViewer scroller;
+    private readonly StackPanel panel;
+    private readonly double fontSize;
+    private readonly int plainLines;
+    /// <summary>本人が手でスクロールした時刻（Environment.TickCount64）。</summary>
+    private long touchedAtMs = long.MinValue / 2;
+
+    public LyricsFollower(ScrollViewer scroller, StackPanel panel, double fontSize, int plainLines = 12, bool scrollable = false)
+    {
+        this.scroller = scroller;
+        this.panel = panel;
+        this.fontSize = fontSize;
+        this.plainLines = plainLines;
+        scroller.IsHitTestVisible = scrollable;
+        if (!scrollable) return;
+        // 手の操作（ホイール・タッチ・タッチパッド・キー）だけを拾う（ChangeView での送りは数えない）
+        scroller.AddHandler(UIElement.PointerWheelChangedEvent, new Microsoft.UI.Xaml.Input.PointerEventHandler((_, _) => Touched()), true);
+        scroller.AddHandler(UIElement.KeyDownEvent, new Microsoft.UI.Xaml.Input.KeyEventHandler((_, _) => Touched()), true);
+        scroller.DirectManipulationStarted += (_, _) => Touched();
+        scroller.DirectManipulationCompleted += (_, _) => Touched();
+    }
+
+    private void Touched() => touchedAtMs = Environment.TickCount64;
+
     private object? source;
     private int index = -2;
     private List<(TextBlock Block, LyricLine Line)> rows = [];
@@ -34,6 +62,8 @@ public sealed class LyricsFollower(ScrollViewer scroller, StackPanel panel, doub
         for (var k = 0; k < rows.Count; k++)
             rows[k].Block.Opacity = i >= 0 && k >= i && k <= last ? 1 : k < i ? 0.5 : 0.4;
         var anchor = i <= 0 ? 0 : rows.FindIndex(r => r.Line.StartMs == synced.Lines[Math.Max(0, i - 1)].StartMs);
+        // 手で動かしてから 5 秒は、読んでいるところを動かさない
+        if (Environment.TickCount64 - touchedAtMs < HoldAfterTouchMs) return;
         panel.UpdateLayout();
         var y = anchor <= 0 ? 0 : rows[anchor].Block.TransformToVisual(panel).TransformPoint(new Windows.Foundation.Point(0, 0)).Y;
         scroller.ChangeView(null, y, null, disableAnimation: false);

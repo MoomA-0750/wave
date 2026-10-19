@@ -38,12 +38,31 @@ public sealed partial class HomePage : Page
         if (selected is null) _ = LoadRecentAsync(id);
         else RecentGrid.Visibility = Visibility.Collapsed;
         RenderReleases();
+        // YouTube Music の新作（アルバム・シングル）は「すべて」のときだけ、ホームの棚と並べて読む（Android と同じ）
+        var newReleases = selected is null ? AppServices.Music.NewReleasesAsync() : null;
         // 最初は棚が8つ以上になるまで続きを読む（Android 版と同じ）
         for (var page = 0; page < 4 && id == requestId; page++)
         {
             if (!await LoadPageAsync(id)) break;
             if (shelves.Count >= 8 || continuation is null) break;
         }
+        if (newReleases is not null) await AddNewReleasesAsync(id, newReleases);
+    }
+
+    /// <summary>
+    /// 新作の棚をホームの棚の先頭に置く（Android と同じ位置）。ホームに新作の棚が来ていれば出さない（同じものが2つ並ぶ）。
+    /// ホームが読めなくても新作が読めたら、新作だけを出す。
+    /// </summary>
+    private async Task AddNewReleasesAsync(int id, Task<ApiResult<List<AlbumSummary>>> pending)
+    {
+        var result = await pending;
+        if (id != requestId) return;
+        var releases = result.IsOk ? result.Value! : [];
+        var duplicated = HomeShelves.DuplicatesNewReleases(releases, shelves);
+        AppPaths.Log($"home newReleases={releases.Count} failure={result.Failure} duplicated={duplicated}");
+        if (duplicated || HomeShelves.NewReleasesShelf(L.T("新作", "New releases"), releases) is not { } shelf) return;
+        shelves.Insert(0, shelf);
+        FailurePanel.Visibility = Visibility.Collapsed;
     }
 
     private void RenderReleases()

@@ -53,6 +53,9 @@ import xyz.mooma0750.wave.ui.WaveTheme
  * 置いた後も、ウィジェットを長押しして選び直せる。
  */
 class PlaylistWidgetConfigActivity : ComponentActivity() {
+    // Android 12 以前は、設定で固定した画面の言語をここで当てる（13 以降は OS が当てる）
+    override fun attachBaseContext(newBase: android.content.Context) = super.attachBaseContext(xyz.mooma0750.wave.settings.AppLanguage.wrap(newBase))
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val widgetId = intent?.extras?.getInt(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID) ?: AppWidgetManager.INVALID_APPWIDGET_ID

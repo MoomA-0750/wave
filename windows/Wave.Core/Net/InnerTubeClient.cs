@@ -66,12 +66,16 @@ public sealed class InnerTubeClient
     /// <summary>地域。端末の設定のまま。</summary>
     public string Gl { get; }
 
-    public InnerTubeClient(HttpClient http, string hl = "ja", string? gl = null)
+    public InnerTubeClient(HttpClient http, string hl = "ja", string? gl = null, Func<long>? nowMs = null)
     {
         this.http = http;
         Hl = hl;
         Gl = gl ?? SafeRegion();
+        Session = new SessionHealth(nowMs ?? (() => Environment.TickCount64));
     }
+
+    /// <summary>ログインの状態（切れたと確かめられたか・疑いか。ADR-0004）。</summary>
+    public SessionHealth Session { get; }
 
     private static string SafeRegion()
     {
@@ -95,7 +99,7 @@ public sealed class InnerTubeClient
     {
         credentials = value;
         anonymousVisitor = null;
-        Interlocked.Increment(ref generation);
+        Session.Reset(Interlocked.Increment(ref generation), value is not null);
     }
 
     internal Credentials? CurrentCredentials => credentials;
@@ -125,7 +129,18 @@ public sealed class InnerTubeClient
         {
             using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancel);
             var status = (int)response.StatusCode;
-            if (status is 401 or 403 && creds is not null) return ApiResult<JsonNode>.Failed(FailureKind.NotLoggedIn, status);
+            // 401 はすぐに失効、403・3xx は疑い（account_menu で確かめ、外れていたときだけ失効。ADR-0004）
+            if (creds is not null && status == 401)
+            {
+                Session.Expire(loginGeneration);
+                return ApiResult<JsonNode>.Failed(FailureKind.NotLoggedIn, status);
+            }
+            if (creds is not null && status == 403)
+            {
+                ReportSuspect(loginGeneration);
+                return ApiResult<JsonNode>.Failed(FailureKind.NotLoggedIn, status);
+            }
+            if (creds is not null && status is >= 300 and <= 399) ReportSuspect(loginGeneration);
             if (status is < 200 or > 299) return ApiResult<JsonNode>.Failed(FailureKind.Http, status);
             // 送ったあとでログインが変わっていたら、別のアカウントの結果として使わない
             if (creds is not null && loginGeneration != Generation) return ApiResult<JsonNode>.Failed(FailureKind.NotLoggedIn);
@@ -146,6 +161,86 @@ public sealed class InnerTubeClient
         catch (Exception e) when (e is HttpRequestException or IOException or TaskCanceledException or InvalidDataException)
         {
             return ApiResult<JsonNode>.Failed(FailureKind.Network);
+        }
+    }
+
+    /// <summary>ログイン中のはずなのにログアウト相当の応答が返った（loginGeneration はその呼び出しを始めたときの世代）。疑いにして確かめる。</summary>
+    public void ReportSuspect(long loginGeneration)
+    {
+        if (Session.Suspect(loginGeneration)) PendingConfirm = ConfirmAsync(loginGeneration);
+    }
+
+    /// <summary>最後に始めた確かめ（テストが終わりを待つのに使う）。</summary>
+    internal Task? PendingConfirm { get; private set; }
+
+    /// <summary>曲ごとの LOGIN_REQUIRED。状態は変えず、裏でアカウントを確かめるだけ（外れていたときだけ失効）。</summary>
+    public void RequestConfirm(long loginGeneration)
+    {
+        if (Session.RequestConfirm(loginGeneration)) PendingConfirm = ConfirmAsync(loginGeneration);
+    }
+
+    /// <summary>アカウントのヘッダが返った（ログインが有効と分かった）。</summary>
+    public void ReportAuthenticated(long loginGeneration) => Session.Proven(loginGeneration, fromConfirm: false);
+
+    /// <summary>
+    /// account_menu で、ログインが外れているかを確かめる（Android の WaveSession.confirm と同じ）。
+    /// Google のログインへ回された・401・actions があるのにアカウントのヘッダが無い、なら失効。ヘッダがあれば疑いを解く。
+    /// 通信の失敗・中身の分からない応答では変えない。
+    /// </summary>
+    internal async Task ConfirmAsync(long loginGeneration)
+    {
+        try
+        {
+            var creds = credentials;
+            if (creds is null || loginGeneration != Generation) return;
+            var body = new JsonObject { ["context"] = Context(creds) };
+            using var request = new HttpRequestMessage(HttpMethod.Post, ApiBase + "account/account_menu?prettyPrint=false")
+            {
+                Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json"),
+            };
+            AddHeaders(request, creds);
+            using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+            var status = (int)response.StatusCode;
+            if (status is >= 300 and <= 399)
+            {
+                if (response.Headers.Location is { } location && (location.IsAbsoluteUri ? location.Host : null) == "accounts.google.com") Session.Expire(loginGeneration);
+                return;
+            }
+            if (status == 401)
+            {
+                Session.Expire(loginGeneration);
+                return;
+            }
+            if (status is < 200 or > 299) return;
+            if (JsonNode.Parse(await ReadLimitedAsync(response, MaxResponseBytes, CancellationToken.None)) is not JsonObject root) return;
+            if (HasActiveAccountHeader(root)) Session.Proven(loginGeneration, fromConfirm: true);
+            else if (root["actions"] is JsonArray { Count: > 0 }) Session.Expire(loginGeneration);
+        }
+        catch (Exception e) when (e is HttpRequestException or IOException or TaskCanceledException or InvalidDataException or JsonException)
+        {
+        }
+        finally
+        {
+            Session.EndConfirm(loginGeneration);
+        }
+    }
+
+    /// <summary>account_menu の応答に、ログイン中のアカウントのヘッダ（activeAccountHeaderRenderer）があるか。</summary>
+    internal static bool HasActiveAccountHeader(JsonNode root)
+    {
+        switch (root)
+        {
+            case JsonObject obj:
+                foreach (var (name, value) in obj)
+                {
+                    if (name == "activeAccountHeaderRenderer" && value is JsonObject) return true;
+                    if (value is not null && HasActiveAccountHeader(value)) return true;
+                }
+                return false;
+            case JsonArray array:
+                return array.Any(item => item is not null && HasActiveAccountHeader(item));
+            default:
+                return false;
         }
     }
 

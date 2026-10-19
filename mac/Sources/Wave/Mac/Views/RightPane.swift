@@ -247,7 +247,8 @@ private struct QueueRow: View {
             .onHover { hover = $0 }
             .onTapGesture { if !entry.isCurrent { AppServices.player.playAt(entry.index) } }
         }
-        .contextMenu { SongMenuItems(song: entry.song, queueIndex: entry.isCurrent ? nil : entry.index) }
+        // ほかの端末を映している間は「キューから削除」を出さない（Android・iPhone と同じ）
+        .contextMenu { SongMenuItems(song: entry.song, queueIndex: entry.isCurrent || AppServices.player.isRemote ? nil : entry.index) }
     }
 }
 #endif

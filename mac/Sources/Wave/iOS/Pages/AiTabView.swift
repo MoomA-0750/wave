@@ -135,15 +135,29 @@ struct AiTabView: View {
     }
 }
 
+/// Claude の画面の「設定を開く」。再生画面のシートから開いたときは、シートを閉じてから設定へ進む（Android と同じ）。
+struct AiOpenSettingsKey: EnvironmentKey {
+    static let defaultValue: @MainActor () -> Void = { AppServices.nav.settings() }
+}
+
+extension EnvironmentValues {
+    var aiOpenSettings: @MainActor () -> Void {
+        get { self[AiOpenSettingsKey.self] }
+        set { self[AiOpenSettingsKey.self] = newValue }
+    }
+}
+
 /// 中継につないでいないときの案内（設定の「Claude」へ）。
 private struct AiSetupNote: View {
+    @Environment(\.aiOpenSettings) private var openSettings
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Label(L.t("Claude につないでいません", "Claude isn't connected"), systemImage: "sparkles").font(.headline)
-            Text(L.t("家の PC の Claude Code で、歌詞の意味・似た曲・プレイリスト作りを頼めます。設定の「Claude」で中継の接続の文字列を貼ってつないでください。",
-                     "Ask about lyrics, find similar songs and make playlists with Claude Code on your PC. Paste the bridge's pairing text in Settings → Claude."))
+            Text(L.t("家の PC の Claude Code で、歌詞の意味・似た曲・プレイリスト作りを頼めます。設定の「Claude」で、中継の QR を読むか接続の文字列を貼ってつないでください。",
+                     "Ask about lyrics, find similar songs and make playlists with Claude Code on your PC. In Settings → Claude, scan the bridge's QR code or paste its pairing text."))
                 .font(.footnote).foregroundStyle(.secondary)
-            Button(L.t("設定を開く", "Open settings")) { AppServices.nav.settings() }
+            Button(L.t("設定を開く", "Open settings")) { openSettings() }
                 .buttonStyle(.borderedProminent)
         }
         .padding(16)
@@ -154,6 +168,7 @@ private struct AiSetupNote: View {
 
 /// 会話の1つ分（自分・Claude・動作の行・曲の一覧・失敗）。
 private struct AiMessageRow: View {
+    @Environment(\.aiOpenSettings) private var openSettings
     var message: AiMessage
     var configured: Bool
 
@@ -175,7 +190,7 @@ private struct AiMessageRow: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text(text).font(.footnote).foregroundStyle(.red)
                 if !configured {
-                    Button(L.t("設定を開く", "Open settings")) { AppServices.nav.settings() }.font(.footnote)
+                    Button(L.t("設定を開く", "Open settings")) { openSettings() }.font(.footnote)
                 }
             }
         case .songs(let songs):

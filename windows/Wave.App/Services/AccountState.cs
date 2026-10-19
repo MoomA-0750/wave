@@ -1,5 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using Microsoft.UI.Dispatching;
 using Wave.Core.Auth;
+using Wave.Core.Net;
 
 namespace Wave.App.Services;
 
@@ -13,8 +15,13 @@ public sealed partial class AccountState : ObservableObject
     [ObservableProperty] private bool savedLoginUnreadable;
     /// <summary>Premium 音質を使えるか（null は確かめている・分からない）。</summary>
     [ObservableProperty] private bool? premiumAudio;
-    /// <summary>ログインを確かめられなかった（期限切れなど。もう一度ログインを勧める）。</summary>
+    /// <summary>アカウントを読めなかった（通信の失敗も含む。Premium 音質を「分かりません」と出すだけで、切れたことにはしない）。</summary>
     [ObservableProperty] private bool accountCheckFailed;
+    /// <summary>
+    /// ログインの状態（Android と同じ分け方。ADR-0004）。Expired は切れたと確かめられた（再ログインが必要）、
+    /// Suspect は疑い（確かめている）。通信の失敗だけではどちらにもしない。
+    /// </summary>
+    [ObservableProperty] private SessionStatus session;
     /// <summary>アカウントを確かめ終えた（確かめている間は「確かめています」と出す）。</summary>
     [ObservableProperty] private bool accountChecked;
 
@@ -22,6 +29,17 @@ public sealed partial class AccountState : ObservableObject
 
     /// <summary>今のログインの取得時刻（ログインしていなければ 0）。保存したキューを、同じログインのときだけ戻すのに使う。</summary>
     public long ObtainedAtEpochMs { get; private set; }
+
+    public AccountState(DispatcherQueue ui)
+    {
+        // 状態は通信の途中から変わるので、画面の糸へ移して持つ
+        AppServices.Client.Session.Changed += status => ui.TryEnqueue(() =>
+        {
+            Session = AppServices.Client.Session.Status;
+            AppPaths.Log($"session status={Session}");
+        });
+        Session = AppServices.Client.Session.Status;
+    }
 
     public void Restore()
     {
@@ -72,6 +90,10 @@ public sealed partial class AccountState : ObservableObject
         AppServices.Releases.Clear();
         // 前のアカウントの Claude との会話を残さない（履歴も消す。Android と同じ）
         AppServices.Ai.Wipe();
+        // 前のアカウントの検索の履歴とプレイリストの並べ方も残さない（Android と同じ）
+        AppServices.Settings.SearchHistory.Clear();
+        AppServices.Settings.PlaylistOrders.Clear();
+        AppServices.Settings.Save();
         ObtainedAtEpochMs = 0;
         IsLoggedIn = false;
         PremiumAudio = null;

@@ -33,16 +33,8 @@ public static partial class Ui
 
     public static ImageSource? Small(string? url) => Img(url, 96);
 
-    internal static string Resize(string url, int size)
-    {
-        // lh3.googleusercontent.com/...=w120-h120-l90-rj の形
-        var px = Math.Max(size * 2, 120);
-        if (SizedGoogle().IsMatch(url)) return SizedGoogle().Replace(url, $"=w{px}-h{px}$1");
-        return url;
-    }
-
-    [GeneratedRegex(@"=w\d+-h\d+((?:-[a-z0-9]+)*)$")]
-    private static partial Regex SizedGoogle();
+    // 形ごとの直し方（=w-h・=s・i.ytimg）は Core の ArtworkUrl（Android の largeArtwork と同じ形を扱う）
+    internal static string Resize(string url, int size) => Wave.Core.Music.ArtworkUrl.Sized(url, Math.Max(size * 2, 120));
 
     public static string Duration(int? seconds) => seconds is { } s ? Time(s) : "";
 

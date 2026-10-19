@@ -97,6 +97,26 @@ class AppSettings(
         }
     }
 
+    /** マイライブラリの並べ方（Windows・Mac・iPhone と同じく覚えておく）。選んでいなければ「最近」。 */
+    val librarySort: Flow<xyz.mooma0750.wave.library.LibrarySort> =
+        store.data
+            .map { prefs -> prefs[LIBRARY_SORT]?.let { name -> xyz.mooma0750.wave.library.LibrarySort.entries.firstOrNull { it.name == name } } ?: xyz.mooma0750.wave.library.LibrarySort.Recents }
+            .catch { if (it is IOException) emit(xyz.mooma0750.wave.library.LibrarySort.Recents) else throw it }
+
+    suspend fun setLibrarySort(sort: xyz.mooma0750.wave.library.LibrarySort) {
+        store.edit { it[LIBRARY_SORT] = sort.name }
+    }
+
+    /** マイライブラリをグリッドで出すか（既定は一覧）。 */
+    val libraryGrid: Flow<Boolean> =
+        store.data
+            .map { it[LIBRARY_GRID] ?: false }
+            .catch { if (it is IOException) emit(false) else throw it }
+
+    suspend fun setLibraryGrid(grid: Boolean) {
+        store.edit { it[LIBRARY_GRID] = grid }
+    }
+
     /** プレイリストごとに選んだ並べ方。選んでいなければカスタム。 */
     val playlistOrders: PlaylistOrderStore =
         object : PlaylistOrderStore {
@@ -127,6 +147,8 @@ class AppSettings(
         val AI_URL = stringPreferencesKey("ai_url")
         val AI_TOKEN = stringPreferencesKey("ai_token")
         val AI_NAME = stringPreferencesKey("ai_name")
+        val LIBRARY_SORT = stringPreferencesKey("library_sort")
+        val LIBRARY_GRID = booleanPreferencesKey("library_grid")
         const val PLAYLIST_ORDER_PREFIX = "playlist_order_"
 
         fun playlistOrderKey(playlistId: String) = stringPreferencesKey(PLAYLIST_ORDER_PREFIX + playlistId)

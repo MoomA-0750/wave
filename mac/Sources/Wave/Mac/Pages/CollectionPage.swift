@@ -233,6 +233,8 @@ final class CollectionModel {
         Task {
             if (try? await AppServices.music.removeFromPlaylist(request.id, videoId: row.song.videoId, setVideoId: setId)) == true {
                 all.removeAll { $0.id == row.id }
+                // 今の曲を外したら、評価のボタンの✓も外す（iPhone・Android と同じ）
+                AppServices.library.membership.noteRemoved(request.id, row.song.videoId)
                 AppServices.player.message = L.t("プレイリストから削除しました", "Removed from playlist")
             } else {
                 AppServices.player.message = L.t("削除できませんでした", "Couldn't remove it")

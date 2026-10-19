@@ -21,7 +21,6 @@ public enum RepeatMode { Off, All, One }
 /// </summary>
 public sealed partial class PlayerService : ObservableObject
 {
-    private const double StatsAfterSeconds = 10;
     private const long FreshMarginMs = 5 * 60 * 1000;
 
     private readonly MediaPlayer player = new() { AudioCategory = MediaPlayerAudioCategory.Media, AutoPlay = false };
@@ -43,6 +42,10 @@ public sealed partial class PlayerService : ObservableObject
     private bool extending;
     private int consecutiveFailures;
     private const int MaxConsecutiveFailures = 3;
+    /// <summary>解決し直しても拒否された曲。2分の間は解決し直さずに飛ばす（Android と同じ。SPEC「拒否が続く曲は少しの間解決し直さない」）。</summary>
+    private readonly RejectedSongs rejectedSongs;
+    /// <summary>直前の StartStreamAsync が、音のサーバーに拒否されて（403 など）開けなかったか。</summary>
+    private bool lastOpenRejected;
     private string? radioSeed;
     /// <summary>一覧の残りをまだ読んでいる出どころ（長いプレイリスト・アーティストを最初の分から鳴らし始めたとき）。読み終えるまでラジオへ切り替えない。</summary>
     private string? pendingSourceId;
@@ -54,8 +57,8 @@ public sealed partial class PlayerService : ObservableObject
     private QueueOrigin nextOrigin = QueueOrigin.Source;
     private Queue<string>? adoptIds;
     private readonly System.Diagnostics.Stopwatch clock = System.Diagnostics.Stopwatch.StartNew();
-    private long listenedMs;
-    private long? playingSinceMs;
+    /// <summary>今の曲を聴いた時間（再生履歴を送る時と、引き取る端末へ渡す値）。</summary>
+    private readonly ListenCounter listen = new();
     private string? listenedItemId;
 
     /// <summary>キューの並び・中身が変わった（端末の連携が書き出す）。</summary>
@@ -119,6 +122,7 @@ public sealed partial class PlayerService : ObservableObject
     public PlayerService(DispatcherQueue ui)
     {
         this.ui = ui;
+        rejectedSongs = new RejectedSongs(() => clock.ElapsedMilliseconds);
         var settings = AppServices.Settings;
         volume = settings.Volume;
         localVolume = volume;
@@ -321,13 +325,8 @@ public sealed partial class PlayerService : ObservableObject
         }
         // RSS のエピソードは、止めたらその位置を覚える（ADR-0012）
         if (!value) RememberEpisode();
-        var now = clock.ElapsedMilliseconds;
-        if (value) playingSinceMs ??= now;
-        else if (playingSinceMs is { } since)
-        {
-            listenedMs += now - since;
-            playingSinceMs = null;
-        }
+        if (value) listen.Start(clock.ElapsedMilliseconds);
+        else listen.Stop(clock.ElapsedMilliseconds);
         CursorChanged?.Invoke(true);
     }
 
@@ -705,7 +704,8 @@ public sealed partial class PlayerService : ObservableObject
 
     public void RemoveAt(int position)
     {
-        if (position <= Index || position >= Queue.Count) return;
+        // ほかの端末を映している間は、映しだけから消さない
+        if (IsRemote || position <= Index || position >= Queue.Count) return;
         Queue.RemoveAt(position);
     }
 
@@ -1014,7 +1014,7 @@ public sealed partial class PlayerService : ObservableObject
     /// <summary>位置の見積もりに使う時計（ミリ秒、単調）。</summary>
     public long ClockMs => clock.ElapsedMilliseconds;
 
-    private long ListenedNow() => listenedMs + (playingSinceMs is { } since ? clock.ElapsedMilliseconds - since : 0);
+    private long ListenedNow() => listen.ListenedMs(clock.ElapsedMilliseconds);
 
     /// <summary>端末の連携が止める（本人の一時停止として知らせない）。</summary>
     public void ConnectPause()
@@ -1378,20 +1378,20 @@ public sealed partial class PlayerService : ObservableObject
         retried = false;
         // 聴いた時間は曲ごと（引き取った曲は相手の値から続ける。同じ曲の読み直しでは数え直さない）
         var itemId = Index >= 0 && Index < itemMeta.Count ? itemMeta[Index].ItemId : null;
+        var now = clock.ElapsedMilliseconds;
         if (seedListened is { } seed && seed.ItemId == itemId)
         {
-            listenedMs = seed.ListenedMs;
+            listen.Reset(seed.ListenedMs, IsPlaying ? now : null);
             statsSent = seed.HistorySent;
             listenedItemId = itemId;
         }
         else if (itemId != listenedItemId)
         {
-            listenedMs = 0;
+            listen.Reset(0, IsPlaying ? now : null);
             statsSent = false;
             listenedItemId = itemId;
         }
         seedListened = null;
-        playingSinceMs = IsPlaying ? clock.ElapsedMilliseconds : null;
         // 前に流していたエピソードの位置を書いてから替える（自然に次へ進んだときは OnEnded が「聴いた」を書いてある）
         RememberEpisode();
         episodeUrl = null;
@@ -1415,6 +1415,13 @@ public sealed partial class PlayerService : ObservableObject
                 return;
             }
             ResolvedStream? stream = null;
+            // 少し前に解決し直しても拒否された曲は、解決し直さずに飛ばす
+            if (!song.IsLive && rejectedSongs.RecentlyRejected(song.VideoId, AppServices.Client.Generation))
+            {
+                AppPaths.Log("play skipped recently rejected");
+                SkipFailed();
+                return;
+            }
             // 残してある曲: URL を調べ直さずに、残した分から鳴らし始める（続きは鳴らしながら取る）
             if (!song.IsLive && CachedStart(song.VideoId) is { } cachedFormat)
             {
@@ -1439,6 +1446,15 @@ public sealed partial class PlayerService : ObservableObject
                 if (stream is null && lastResolveWasLive) song = MarkLive(song);
                 else if (stream is null)
                 {
+                    // その曲だけの失敗（再生不可・曲ごとのログインの確認など）は、知らせて次の曲へ飛ばす。
+                    // ログイン・通信など、どの曲でも起きる失敗では飛ばさずに止める（Android と同じ）
+                    if (lastResolveFailure is { } failure && StreamFailures.IsThisSongOnly(failure))
+                    {
+                        SkipFailed(failure == StreamFailure.SongLoginRequired
+                            ? L.T("この曲はログインの確認（年齢の確認など）が要るので、次の曲に進みます", "This song needs a sign-in check (such as age verification), skipping to the next one")
+                            : L.T("この曲は再生できないので、次の曲に進みます", "This song isn't available, skipping to the next one"));
+                        return;
+                    }
                     IsLoading = false;
                     return;
                 }
@@ -1463,15 +1479,19 @@ public sealed partial class PlayerService : ObservableObject
 
     /// <summary>直前の ResolveAsync が「ライブ配信だった」で終わったか。</summary>
     private bool lastResolveWasLive;
+    /// <summary>直前の ResolveAsync の失敗（成功・ライブ配信なら null）。</summary>
+    private StreamFailure? lastResolveFailure;
 
     private async Task<ResolvedStream?> ResolveAsync(string videoId, CancellationToken cancel)
     {
         if (prefetched.Remove(videoId, out var cached) && AppServices.Resolver.IsFresh(cached, FreshMarginMs) && cached.Generation == AppServices.Client.Generation)
             return cached;
         lastResolveWasLive = false;
+        lastResolveFailure = null;
         var result = await AppServices.Resolver.ResolveAsync(videoId, cancel);
         if (result.Stream is { } stream) return stream;
         AppPaths.Log($"resolve failed reason={result.Failure}");
+        lastResolveFailure = result.Failure;
         if (result.Failure == StreamFailure.LiveStream)
         {
             // ライブ配信だった（呼び出し側が HLS で流し直す）
@@ -1540,6 +1560,7 @@ public sealed partial class PlayerService : ObservableObject
     {
         currentStream = stream;
         cpn = PlaybackStats.NewCpn();
+        lastOpenRejected = false;
         RangeStream bytes;
         try
         {
@@ -1547,6 +1568,7 @@ public sealed partial class PlayerService : ObservableObject
         }
         catch (Exception e) when (e is StreamRejectedException or HttpRequestException or IOException)
         {
+            lastOpenRejected = e is StreamRejectedException;
             AppPaths.Log($"stream open failed type={e.GetType().Name} status={(e as StreamRejectedException)?.Status}");
             return false;
         }
@@ -1784,8 +1806,7 @@ public sealed partial class PlayerService : ObservableObject
             Seek(0);
             player.Play();
             statsSent = false;
-            listenedMs = 0;
-            playingSinceMs = clock.ElapsedMilliseconds;
+            listen.Reset(0, clock.ElapsedMilliseconds);
             cpn = PlaybackStats.NewCpn();
             return;
         }
@@ -1859,11 +1880,18 @@ public sealed partial class PlayerService : ObservableObject
             AppServices.Resolver.OnStreamRejected();
             prefetched.Remove(song.VideoId);
             var position = Position;
+            var generation = AppServices.Client.Generation;
             var stream = await ResolveAsync(song.VideoId, loadCancel?.Token ?? default);
             if (stream is not null && Current?.VideoId == song.VideoId && await StartStreamAsync(song, stream, position))
             {
                 consecutiveFailures = 0;
                 return;
+            }
+            // 解決し直しても拒否された: 少しの間この曲を解決し直さない
+            if (stream is not null && lastOpenRejected)
+            {
+                rejectedSongs.MarkRejected(song.VideoId, generation);
+                AppPaths.Log("stream rejected again; cooling down");
             }
             // 取り直したらライブ配信だった（配信が始まった・印の無い曲だった）
             if (stream is null && lastResolveWasLive && Current?.VideoId == song.VideoId && await StartLiveAsync(MarkLive(song), loadCancel?.Token ?? default))
@@ -1872,6 +1900,12 @@ public sealed partial class PlayerService : ObservableObject
                 return;
             }
         }
+        SkipFailed();
+    }
+
+    /// <summary>今の曲を鳴らせなかったので次へ進む。続けて失敗したら止める。</summary>
+    private void SkipFailed(string? message = null)
+    {
         IsLoading = false;
         if (++consecutiveFailures >= MaxConsecutiveFailures)
         {
@@ -1879,8 +1913,10 @@ public sealed partial class PlayerService : ObservableObject
             consecutiveFailures = 0;
             return;
         }
-        Message = L.T("再生できなかったので、次の曲に進みます", "Couldn't play this song, skipping to the next one");
-        if (Index + 1 < Queue.Count) Advance();
+        // 次の曲が無ければ、進むとは知らせない（理由の知らせはそのまま残す）
+        if (Index + 1 >= Queue.Count) return;
+        Message = message ?? L.T("再生できなかったので、次の曲に進みます", "Couldn't play this song, skipping to the next one");
+        Advance();
     }
 
     private void Tick()
@@ -1897,7 +1933,8 @@ public sealed partial class PlayerService : ObservableObject
         Position = session.Position.TotalSeconds;
         if (IsLive) Duration = 0;
         else if (session.NaturalDuration.TotalSeconds > 0) Duration = session.NaturalDuration.TotalSeconds;
-        if (!statsSent && IsPlaying && Position >= StatsAfterSeconds && currentStream is { } stream && AppServices.Settings.SendHistory && AppServices.Client.IsLoggedIn)
+        // 位置ではなく実際に聴いた時間で決める（30秒、短い曲は長さの半分。シークしただけでは送らない。Android の ListenCounter と同じ）
+        if (!statsSent && IsPlaying && listen.Reached(clock.ElapsedMilliseconds, Duration > 0 ? (long)(Duration * 1000) : null) && currentStream is { } stream && AppServices.Settings.SendHistory && AppServices.Client.IsLoggedIn)
         {
             statsSent = true;
             _ = SendStatsAsync(stream, cpn, Position);
@@ -2068,10 +2105,10 @@ public sealed record PlaybackCursor(string CurrentItemId, long PositionMs, bool 
 /// <summary>ほかの端末の再生（表示と遠隔操作のため）。QueueKey はキューの中身の目印（同じなら置き直さない）。</summary>
 public sealed record RemoteSnapshot(string DeviceId, string DeviceLabel, string? QueueKey, QueueExport? Queue, string CurrentItemId, long PositionMs, long CapturedAtMs, bool Playing, RepeatMode Repeat, int? DurationSeconds, long Version = 0, int? VolumePercent = null, bool IsLive = false)
 {
-    /// <summary>今の位置（再生中なら、取ってからの経過を足す。曲の長さで止める）。ライブ配信には頭も終わりも無いので、届いた位置のまま伸ばさない。</summary>
+    /// <summary>今の位置（再生中なら、取ってからの経過を足す。曲の長さで止める）。ライブ配信には位置が無いので 0（経過で伸ばさない。Android・Mac と同じ）。</summary>
     public double PositionNow(long nowMs)
     {
-        if (IsLive) return PositionMs / 1000.0;
+        if (IsLive) return 0;
         var ms = Playing ? PositionMs + Math.Max(0, nowMs - CapturedAtMs) : PositionMs;
         if (DurationSeconds is { } d && d > 0) ms = Math.Min(ms, d * 1000L);
         return ms / 1000.0;

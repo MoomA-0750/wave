@@ -117,6 +117,7 @@
     <string name="nowplaying_clear_queue">キューを消去</string>
     <string name="nowplaying_next_from_source">次に流れる曲</string>
     <string name="search_share">共有</string>
+    <string name="search_open_song">曲の画面を開く</string>
     <string name="ai_title">Claude に聞く</string>
     <string name="ai_new_chat">新しい会話</string>
     <string name="ai_history">これまでの会話</string>

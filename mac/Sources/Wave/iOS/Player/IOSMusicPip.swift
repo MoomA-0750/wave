@@ -141,7 +141,7 @@ final class MusicPip: NSObject, AVPictureInPictureControllerDelegate, AVPictureI
     }
 
     private func loadArtwork(_ song: Song) {
-        guard let url = Ui.resize(song.thumbnailUrl, 544), url.scheme == "https" else { return }
+        guard let url = Ui.large(song.thumbnailUrl), url.scheme == "https" else { return }
         Task {
             guard let (data, _) = try? await ImageLoader.session.data(from: url), let image = UIImage(data: data) else { return }
             guard artworkFor == song.videoId else { return }

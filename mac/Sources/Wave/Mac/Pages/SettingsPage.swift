@@ -29,7 +29,7 @@ struct SettingsPageView: View {
                             Image(systemName: "person.crop.circle.fill").font(.system(size: 50)).foregroundStyle(.secondary)
                         }
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(account.isLoggedIn ? account.name ?? L.t("ログイン中", "Logged in") : L.t("ログインしていません", "Not logged in")).subtitleStyle()
+                            Text(accountTitle(account)).subtitleStyle()
                             Text(stateText(account)).subtle()
                         }
                         Spacer()
@@ -38,10 +38,16 @@ struct SettingsPageView: View {
                         }
                     }
                 }
-                // ログインを確かめられなかった（期限切れなど）: Android と同じく、もう一度ログインを勧める
-                if account.isLoggedIn && account.accountCheckFailed {
-                    warning(L.t("ログインを確かめられませんでした", "Couldn’t verify your login"),
-                            L.t("ログインの期限が切れたかもしれません。もう一度ログインしてください。", "Your login may have expired. Please log in again.")) {
+                // ログインが切れたと確かめられた・疑いがある（ADR-0004）: Android と同じく、もう一度ログインを勧める。
+                // 通信の失敗だけでは出さない
+                if account.isLoggedIn, account.session == .expired {
+                    warning(L.t("再ログインが必要です", "You need to log in again"),
+                            L.t("ログインが切れました。もう一度ログインしてください。", "Your login has expired. Please log in again.")) {
+                        Button(L.t("もう一度ログイン", "Log in again")) { LoginWindowController.show() }
+                    }
+                } else if account.isLoggedIn, case .suspect = account.session {
+                    warning(L.t("ログイン状態を確認できていません", "Couldn’t verify your login"),
+                            L.t("少し待っても直らなければ、もう一度ログインしてください。", "If this doesn’t clear up soon, log in again.")) {
                         Button(L.t("もう一度ログイン", "Log in again")) { LoginWindowController.show() }
                     }
                 }
@@ -192,6 +198,13 @@ struct SettingsPageView: View {
         if !settings.discordPresence { return "" }
         if settings.discordClientId == nil { return L.t("Application ID を入れると出せます", "Enter the Application ID to turn this on") }
         return AppServices.discord.statusText
+    }
+
+    /// アカウントの名前（読めなかったときは Android と同じく「取得できませんでした」。それだけではログインが切れたことにしない）。
+    private func accountTitle(_ account: AccountState) -> String {
+        if !account.isLoggedIn { return L.t("ログインしていません", "Not logged in") }
+        if let name = account.name { return name }
+        return account.accountCheckFailed ? L.t("アカウントを取得できませんでした", "Couldn’t get your account") : L.t("ログイン中", "Logged in")
     }
 
     private func stateText(_ account: AccountState) -> String {

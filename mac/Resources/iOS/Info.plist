@@ -27,5 +27,7 @@
 	<!-- 曲の音を、この端末の中の受け口（127.0.0.1）から HLS で再生の部品へ渡す（LocalMediaServer） -->
 	<key>NSAppTransportSecurity</key><dict><key>NSAllowsLocalNetworking</key><true/></dict>
 	<key>NSLocalNetworkUsageDescription</key><string>端末の連携の中継につなぐのに使います。</string>
+	<!-- 端末の連携・Claude の接続の QR を読む（QrScanner） -->
+	<key>NSCameraUsageDescription</key><string>端末の連携と Claude の接続の QR コードを読むのに使います。</string>
 </dict>
 </plist>

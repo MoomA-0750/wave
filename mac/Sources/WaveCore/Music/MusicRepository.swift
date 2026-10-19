@@ -394,9 +394,13 @@ public final class MusicRepository: Sendable {
     /// アカウントの名前と画像（ログインの確認を兼ねる）。
     public func account() async throws -> ApiResult<AccountInfo> {
         guard client.isLoggedIn else { return .failed(.notLoggedIn) }
+        let generation = client.generation
         let result = try await client.post("account/account_menu", body: .obj([:]))
         guard result.isOk, let value = result.value else { return .failed(result.failure ?? .parse, status: result.status) }
-        guard let header = value.findAll("activeAccountHeaderRenderer").first else { return .failed(.notLoggedIn) }
+        // アカウントのヘッダが無い: ログアウト相当。疑いにして確かめる（ADR-0004）
+        guard let header = value.findAll("activeAccountHeaderRenderer").first else { return .failed(client.suspectLoggedOut(generation)) }
+        // ヘッダがあればログインは有効（疑い・失効を解く）
+        client.markAuthenticated(generation)
         let name = header.path("accountName", "runs").items.map { $0.path("text").str ?? "" }.joined()
         let photo = header.path("accountPhoto", "thumbnails").items.last.path("url").str
         return .ok(AccountInfo(name: name, photoUrl: photo))
@@ -450,12 +454,14 @@ public final class MusicRepository: Sendable {
         return try await client.post("browse", body: .object(body))
     }
 
-    /// ログイン必須の browse。ログインの案内だけが返ったら notLoggedIn。
+    /// ログイン必須の browse。ログインの案内だけが返ったら suspect（ログインしていなければ notLoggedIn）。
     private func loggedInBrowse<T>(_ browseId: String, continuation: String?, parse: (JSON) -> T, params: String? = nil) async throws -> ApiResult<T> {
         guard client.isLoggedIn else { return .failed(.notLoggedIn) }
+        let generation = client.generation
         let result = try await browse(browseId, continuation: continuation, params: params)
         guard result.isOk, let value = result.value else { return .failed(result.failure ?? .parse, status: result.status) }
-        return MusicParsers.isSignInPrompt(value) ? .failed(.notLoggedIn) : .ok(parse(value))
+        // ログイン中なのにログインの案内だけが返った: 切れた疑い（確かめる）
+        return MusicParsers.isSignInPrompt(value) ? .failed(client.suspectLoggedOut(generation)) : .ok(parse(value))
     }
 }
 

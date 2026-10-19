@@ -92,4 +92,21 @@ class SearchHistoryTest {
         val now = listOf(SearchHistoryEntry.Song("v1", "s", "a", "https://img"), SearchHistoryEntry.Artist("n", "UC1", null, "https://img2"))
         assertEquals(now, json.decodeFromString(serializer, json.encodeToString(serializer, now)))
     }
+
+    @Test
+    fun playlistsAndPodcastsAreKeptByTheirIdWithTheirImage() {
+        val playlist = SearchHistoryEntry.Playlist("Lo-Fi", "PL1", "YouTube Music", "https://img/p")
+        val podcast = SearchHistoryEntry.Podcast("Rebuild", "MPSP1", "miyagawa", "https://img/c")
+        var entries = SearchHistory.add(emptyList(), playlist)
+        entries = SearchHistory.add(entries, podcast)
+        // 同じ ID は上に上げるだけ。画像の無い記録で、前の画像を消さない
+        entries = SearchHistory.add(entries, SearchHistoryEntry.Playlist("Lo-Fi", "PL1"))
+        assertEquals(listOf(playlist, podcast), entries)
+        // 同じ ID でも種類が違えば別のもの
+        assertEquals(3, SearchHistory.add(entries, SearchHistoryEntry.Album("Lo-Fi", "PL1")).size)
+        assertEquals(entries, SearchHistory.add(entries, SearchHistoryEntry.Podcast("x", "")))
+        val json = Json { ignoreUnknownKeys = true }
+        val serializer = ListSerializer(SearchHistoryEntry.serializer())
+        assertEquals(entries, json.decodeFromString(serializer, json.encodeToString(serializer, entries)))
+    }
 }

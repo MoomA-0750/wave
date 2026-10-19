@@ -44,13 +44,12 @@ import xyz.mooma0750.wave.ui.MenuIcon
 fun SongMenuButton(
     song: Song,
     actions: SongActions,
-    inQueue: Boolean = false,
     /** 画面ごとの追加の項目（プレイリストから外す など）。 */
     extraItems: List<Pair<String, () -> Unit>> = emptyList(),
 ) {
     var open by remember { mutableStateOf(false) }
     IconAction(R.drawable.ic_more_vert, stringResource(R.string.search_menu), { open = true })
-    if (open) SongMenuSheet(song, actions, onDismiss = { open = false }, inQueue = inQueue, extraItems = extraItems)
+    if (open) SongMenuSheet(song, actions, onDismiss = { open = false }, extraItems = extraItems)
 }
 
 /** 曲のメニューのシート。「⋯」のボタンのほか、カードの長押しからも開く（Spotify と同じ）。 */
@@ -60,7 +59,6 @@ fun SongMenuSheet(
     song: Song,
     actions: SongActions,
     onDismiss: () -> Unit,
-    inQueue: Boolean = false,
     extraItems: List<Pair<String, () -> Unit>> = emptyList(),
 ) {
     val close = onDismiss
@@ -79,7 +77,7 @@ fun SongMenuSheet(
                 }
             }
             HorizontalDivider(Modifier.padding(vertical = 4.dp))
-            SongMenuItems(song, actions, close, inQueue, extraItems)
+            SongMenuItems(song, actions, close, extraItems)
             Spacer(Modifier.height(8.dp))
         }
     }
@@ -91,10 +89,11 @@ fun SongMenuItems(
     song: Song,
     actions: SongActions,
     close: () -> Unit = {},
-    inQueue: Boolean = false,
     extraItems: List<Pair<String, () -> Unit>> = emptyList(),
     /** 曲の画面では再生ボタンが曲のラジオを始めるので出さない。 */
     showRadio: Boolean = true,
+    /** 曲の画面の中では、その画面を開き直す項目を出さない。 */
+    showOpenSong: Boolean = true,
 ) {
     // RSS のエピソードは YouTube の曲ではない（プレイリスト・ラジオ・共有のリンクが無い。ADR-0012）
     val external = Feed.isExternal(song.videoId)
@@ -104,15 +103,14 @@ fun SongMenuItems(
             actions.addToPlaylist(song)
         }
     }
-    if (!inQueue) {
-        MenuRow(R.drawable.ic_playlist_play, stringResource(R.string.search_play_next)) {
-            close()
-            actions.playNext(song)
-        }
-        MenuRow(R.drawable.ic_queue_music, stringResource(R.string.search_add_to_queue)) {
-            close()
-            actions.addToQueue(song)
-        }
+    // キューの中の曲（再生中の曲も）も、もう一度「次に再生」「キューに追加」できる（Mac・Windows・iPhone と同じ）
+    MenuRow(R.drawable.ic_playlist_play, stringResource(R.string.search_play_next)) {
+        close()
+        actions.playNext(song)
+    }
+    MenuRow(R.drawable.ic_queue_music, stringResource(R.string.search_add_to_queue)) {
+        close()
+        actions.addToQueue(song)
     }
     if (showRadio && !external) {
         MenuRow(R.drawable.ic_graphic_eq, stringResource(R.string.search_start_radio)) {
@@ -140,6 +138,13 @@ fun SongMenuItems(
         }
     }
     val context = androidx.compose.ui.platform.LocalContext.current
+    // RSS のエピソードには曲の画面が無い（iPhone と同じ）
+    if (showOpenSong && !external) {
+        MenuRow(R.drawable.ic_music_note, stringResource(R.string.search_open_song)) {
+            close()
+            actions.openSong(song)
+        }
+    }
     if (!external) {
         MenuRow(R.drawable.ic_share, stringResource(R.string.search_share)) {
             close()

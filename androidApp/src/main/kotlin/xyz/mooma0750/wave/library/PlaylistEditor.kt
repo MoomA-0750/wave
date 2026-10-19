@@ -88,7 +88,12 @@ class PlaylistEditor(
     ) = run("remove:$playlistId:$setVideoId") { generation ->
         val result = music.removeFromPlaylist(playlistId, song.videoId, setVideoId, generation)
         Log.i(WaveApplication.LOG_TAG, "playlist remove result=${result::class.simpleName}")
-        if (result !is WriteResult.Failed) membership?.invalidate(playlistId)
+        // 外せたら、再生中の曲の「入っている」の印もすぐ直す（iPhone と同じ）。結果が分からなければ次に読み直す
+        when (result) {
+            is WriteResult.Done -> membership?.noteRemovedItem(playlistId, song.videoId, setVideoId)
+            WriteResult.Unknown -> membership?.invalidate(playlistId)
+            is WriteResult.Failed -> Unit
+        }
         if (result !is WriteResult.Failed) onChanged()
         when (result) {
             is WriteResult.Done -> context.getString(R.string.library_removed_from_playlist)

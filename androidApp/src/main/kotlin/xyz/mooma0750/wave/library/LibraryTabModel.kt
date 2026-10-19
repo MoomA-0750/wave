@@ -109,18 +109,13 @@ object LibraryOrder {
 
     /**
      * 「マイライブラリを検索」に当たるか。名前と補足（作った人・アーティスト）のどれかに、入力した語がすべて含まれていれば残す
-     * （空白区切りで AND、大文字小文字は無視。プレイリストの中を探すのと同じ）。入力が空なら全部。
+     * （空白区切りで AND。大文字・小文字、全角・半角、ひらがな・カタカナは区別しない。プレイリストの中を探すのと同じ [TextFold]）。入力が空なら全部。
      */
     fun matches(
         title: String,
         subtitle: String?,
         query: String,
-    ): Boolean {
-        val terms = query.lowercase().split(' ', '\u3000').filter { it.isNotBlank() }
-        if (terms.isEmpty()) return true
-        val haystack = "${title.lowercase()} ${subtitle.orEmpty().lowercase()}"
-        return terms.all { it in haystack }
-    }
+    ): Boolean = xyz.mooma0750.wave.core.music.TextFold.matches(query, title, subtitle)
 
     /** 検索に使う補足（サーバーから来た文言だけ。種類の名前は含めない）。 */
     private fun subtitleOf(entry: LibraryEntry): String? =

@@ -4,7 +4,8 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
- * 検索の履歴の1件。検索した語と、検索から開いたアーティスト・アルバム・再生した曲を同じ並びで残す。
+ * 検索の履歴の1件。検索した語と、検索から開いたアーティスト・アルバム・プレイリスト・ポッドキャスト、再生した曲を同じ並びで残す
+ * （種類は Windows と同じ）。
  * 画像と補足の行は表示のためだけ（無い記録もある。前の版の保存には無い）。
  */
 @Serializable
@@ -30,6 +31,27 @@ sealed interface SearchHistoryEntry {
     data class Album(
         val title: String,
         val browseId: String,
+        val subtitle: String? = null,
+        override val thumbnailUrl: String? = null,
+    ) : SearchHistoryEntry
+
+    @Serializable
+    @SerialName("playlist")
+    data class Playlist(
+        val title: String,
+        /** VL を除いた ID。 */
+        val playlistId: String,
+        val subtitle: String? = null,
+        override val thumbnailUrl: String? = null,
+    ) : SearchHistoryEntry
+
+    @Serializable
+    @SerialName("podcast")
+    data class Podcast(
+        val title: String,
+        /** 番組のページ（`MPSP…`、RSS の番組はその ID）。 */
+        val browseId: String,
+        /** 配信者。 */
         val subtitle: String? = null,
         override val thumbnailUrl: String? = null,
     ) : SearchHistoryEntry
@@ -75,6 +97,8 @@ object SearchHistory {
             is SearchHistoryEntry.Query -> entry.text.trim().takeIf { it.isNotEmpty() }?.let { SearchHistoryEntry.Query(it) }
             is SearchHistoryEntry.Artist -> entry.takeIf { it.browseId.isNotEmpty() }
             is SearchHistoryEntry.Album -> entry.takeIf { it.browseId.isNotEmpty() }
+            is SearchHistoryEntry.Playlist -> entry.takeIf { it.playlistId.isNotEmpty() }
+            is SearchHistoryEntry.Podcast -> entry.takeIf { it.browseId.isNotEmpty() }
             is SearchHistoryEntry.Song -> entry.takeIf { it.videoId.isNotEmpty() }
         }
 
@@ -89,6 +113,10 @@ object SearchHistory {
                 entry.copy(subtitle = entry.subtitle ?: old.subtitle, thumbnailUrl = entry.thumbnailUrl ?: old.thumbnailUrl)
             entry is SearchHistoryEntry.Song && old is SearchHistoryEntry.Song ->
                 entry.copy(subtitle = entry.subtitle ?: old.subtitle, thumbnailUrl = entry.thumbnailUrl ?: old.thumbnailUrl)
+            entry is SearchHistoryEntry.Playlist && old is SearchHistoryEntry.Playlist ->
+                entry.copy(subtitle = entry.subtitle ?: old.subtitle, thumbnailUrl = entry.thumbnailUrl ?: old.thumbnailUrl)
+            entry is SearchHistoryEntry.Podcast && old is SearchHistoryEntry.Podcast ->
+                entry.copy(subtitle = entry.subtitle ?: old.subtitle, thumbnailUrl = entry.thumbnailUrl ?: old.thumbnailUrl)
             else -> entry
         }
 
@@ -101,6 +129,8 @@ object SearchHistory {
             a is SearchHistoryEntry.Artist && b is SearchHistoryEntry.Artist -> a.browseId == b.browseId
             a is SearchHistoryEntry.Album && b is SearchHistoryEntry.Album -> a.browseId == b.browseId
             a is SearchHistoryEntry.Song && b is SearchHistoryEntry.Song -> a.videoId == b.videoId
+            a is SearchHistoryEntry.Playlist && b is SearchHistoryEntry.Playlist -> a.playlistId == b.playlistId
+            a is SearchHistoryEntry.Podcast && b is SearchHistoryEntry.Podcast -> a.browseId == b.browseId
             else -> false
         }
 }

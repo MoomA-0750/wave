@@ -125,6 +125,7 @@
     <string name="home_recommendations_failed">おすすめを読み込めませんでした（%1$s）</string>
     <string name="home_retry">もう一度</string>
     <string name="artist_popular">人気</string>
+    <string name="artist_videos">動画</string>
     <string name="artist_see_all_songs">すべての曲を見る</string>
     <string name="artist_liked_songs">高く評価した曲</string>
     <string name="artist_checking">確認しています…</string>
@@ -165,6 +166,9 @@
     <string name="releases_new_video">%1$s の新しい動画</string>
     <string name="settings_release_notices_title">新作の通知</string>
     <string name="settings_release_notices_summary">登録したアーティストの今年のアルバム・シングルを知らせる（数時間おきに確かめる）。通知が鳴るのは高く評価した曲が3曲以上のアーティストだけで、ほかは「新作」に並べる</string>
+    <string name="settings_language_title">画面の言語</string>
+    <string name="settings_language_summary">%1$s。YouTube から届く文字（棚の見出しなど）もこの言語になります。YouTube の文字は次の起動から反映されます</string>
+    <string name="settings_language_system">端末に合わせる</string>
     <string name="releases_new_badge">NEW</string>
     <string name="releases_kind_video">動画</string>
     <string name="releases_kind_release">新作</string>

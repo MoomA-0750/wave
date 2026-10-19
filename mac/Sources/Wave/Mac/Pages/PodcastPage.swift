@@ -218,6 +218,8 @@ struct EpisodeRowView: View {
 /// 番組のカード（検索の結果）。押すと番組のページ。
 struct PodcastCard: View {
     var podcast: PodcastSummary
+    /// 開く前に呼ぶ（検索から開いたものを履歴に残す）。
+    var onOpen: (() -> Void)?
     @State private var hover = false
 
     var body: some View {
@@ -234,7 +236,10 @@ struct PodcastCard: View {
         .background(RoundedRectangle(cornerRadius: 8).fill(hover ? Color.primary.opacity(0.07) : .clear))
         .contentShape(Rectangle())
         .onHover { hover = $0 }
-        .onTapGesture { AppServices.nav.podcast(podcast) }
+        .onTapGesture {
+            onOpen?()
+            AppServices.nav.podcast(podcast)
+        }
     }
 }
 #endif

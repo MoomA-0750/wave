@@ -2,6 +2,7 @@ package xyz.mooma0750.wave.library
 
 import xyz.mooma0750.wave.core.music.MusicVideoType
 import xyz.mooma0750.wave.core.music.Song
+import xyz.mooma0750.wave.core.music.TextFold
 
 /** 曲の種類での絞り込み（プレイリストの中）。 */
 enum class KindFilter {
@@ -28,7 +29,8 @@ enum class KindFilter {
 
 /**
  * 一覧の中の絞り込み（プレイリストの中を探す）。サーバーには絞り込みの口が無いので、読み込んだ曲を手元で絞る。
- * 曲名・アーティスト名・アルバム名のどれかに、入力した語がすべて含まれていれば残す（空白区切りで AND、大文字小文字は無視）。
+ * 曲名・アーティスト名・アルバム名のどれかに、入力した語がすべて含まれていれば残す（空白区切りで AND）。
+ * 照らし方は core の [TextFold]（大文字・小文字、全角・半角、ひらがな・カタカナを区別しない。Mac・Windows・iPhone と同じ）。
  */
 object SongFilter {
     /** @return 残った曲の、元の並びでの位置。入力が空なら全部。 */
@@ -37,7 +39,7 @@ object SongFilter {
         query: String,
         kind: KindFilter = KindFilter.All,
     ): List<Int> {
-        val terms = terms(query)
+        val terms = TextFold.terms(query)
         if (terms.isEmpty() && kind == KindFilter.All) return songs.indices.toList()
         return songs.indices.filter { kind.matches(songs[it]) && (terms.isEmpty() || matches(songs[it], terms)) }
     }
@@ -46,7 +48,7 @@ object SongFilter {
         song: Song,
         query: String,
     ): Boolean {
-        val terms = terms(query)
+        val terms = TextFold.terms(query)
         return terms.isEmpty() || matches(song, terms)
     }
 
@@ -54,20 +56,7 @@ object SongFilter {
         song: Song,
         terms: List<String>,
     ): Boolean {
-        val haystack =
-            buildString {
-                append(song.title.lowercase())
-                song.artists.forEach {
-                    append(' ')
-                    append(it.name.lowercase())
-                }
-                song.album?.let {
-                    append(' ')
-                    append(it.title.lowercase())
-                }
-            }
+        val haystack = TextFold.fold((listOf(song.title) + song.artists.map { it.name } + listOfNotNull(song.album?.title)).joinToString(" "))
         return terms.all { haystack.contains(it) }
     }
-
-    private fun terms(query: String): List<String> = query.lowercase().split(' ', '　').filter { it.isNotBlank() }
 }

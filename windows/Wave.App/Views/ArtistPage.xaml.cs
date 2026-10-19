@@ -47,6 +47,8 @@ public sealed partial class ArtistPage : Page
         // 最近の新作（登録したアーティストの見張りで見つけたもの）を先頭に（Android と同じ）。今のページから消えたもの（同じ名前の別人の作品だった）は出さない
         var releases = ReleaseWatchState.Listed(AppServices.Releases.Recent.Where(r => r.ArtistId == browseId).ToList(), browseId, artist, DateTime.Now.Year).Select(HomePage.ReleaseItem).ToList();
         if (releases.Count > 0) shelves.Insert(0, new HomeShelf(L.T("新作", "New releases"), null, releases));
+        // 動画の棚（MV・YouTube の動画。iPhone と同じくアルバムの棚の後ろ）
+        if (artist.Videos.Count > 0) shelves.Add(new HomeShelf(L.T("動画", "Videos"), null, artist.Videos.Select(v => (HomeItem)new HomeItem.SongItem(v)).ToList()));
         Shelves.ItemsSource = shelves;
         UpdatePlayIcon();
         UpdateSubscribe();

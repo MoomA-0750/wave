@@ -54,6 +54,10 @@ enum AppServices {
         audioCache = AudioCache(directory: caches.appendingPathComponent("wave-audio"), nowMs: { Int64(Date().timeIntervalSince1970 * 1000) })
         // YouTube から届く文字（棚の見出しなど）を画面と同じ言語にする
         client = InnerTubeClient(session: session, hl: L.hl)
+        // ログインの状態（切れた・疑い）を設定の画面へ映す。知らせの順に頼らず、届いたときの今の値を読む
+        client.sessionStateChanged = { _ in
+            Task { @MainActor in AppServices.account?.session = AppServices.client.sessionState }
+        }
         live = LiveClient(session: InnerTubeClient.createSession(), hl: L.hl, gl: client.gl, nowMs: { AppServices.clockMs() })
         music = MusicRepository(client: client, live: live)
         resolver = StreamResolver(client: client, cipher: PlayerCipherProvider(session: session, nowMs: { AppServices.clockMs() }), nowMs: { AppServices.clockMs() })

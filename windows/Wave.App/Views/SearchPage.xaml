@@ -75,8 +75,8 @@
             <SelectorBar x:Name="Tabs" Margin="16,8,16,0" SelectionChanged="OnTabChanged">
                 <SelectorBarItem Text="{x:Bind app:L.T('すべて', 'All')}" Tag="all" IsSelected="True" />
                 <SelectorBarItem Text="{x:Bind app:L.T('曲', 'Songs')}" Tag="songs" />
-                <SelectorBarItem Text="{x:Bind app:L.T('アーティスト', 'Artists')}" Tag="artists" />
                 <SelectorBarItem Text="{x:Bind app:L.T('アルバム', 'Albums')}" Tag="albums" />
+                <SelectorBarItem Text="{x:Bind app:L.T('アーティスト', 'Artists')}" Tag="artists" />
                 <SelectorBarItem Text="{x:Bind app:L.T('ライブ', 'Live')}" Tag="live" />
                 <SelectorBarItem Text="{x:Bind app:L.T('ポッドキャスト', 'Podcasts')}" Tag="podcasts" />
                 <SelectorBarItem Text="{x:Bind app:L.T('エピソード', 'Episodes')}" Tag="episodes" />

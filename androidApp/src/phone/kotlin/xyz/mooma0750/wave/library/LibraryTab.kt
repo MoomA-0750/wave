@@ -90,11 +90,15 @@ fun LibraryTabScreen(
     onOpenAlbum: (AlbumSummary) -> Unit,
     onCreatePlaylist: (String) -> Unit,
     onOpenPodcast: (xyz.mooma0750.wave.core.music.PodcastSummary) -> Unit = {},
+    /** 並べ方とグリッドの保存先（アプリを閉じても覚えておく）。 */
+    settings: xyz.mooma0750.wave.settings.AppSettings,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var filter by rememberSaveable { mutableStateOf<LibraryFilter?>(null) }
-    var sort by rememberSaveable { mutableStateOf(LibrarySort.Recents) }
-    var grid by rememberSaveable { mutableStateOf(false) }
+    // 並べ方と表示は設定に保存する（Windows・Mac・iPhone と同じ）。読めるまでは既定で出す
+    val sort by settings.librarySort.collectAsStateWithLifecycle(initialValue = LibrarySort.Recents)
+    val grid by settings.libraryGrid.collectAsStateWithLifecycle(initialValue = false)
+    val settingsScope = androidx.compose.runtime.rememberCoroutineScope()
     // Spotify の「マイライブラリを検索」: 虫めがねを押すと入力欄に広がる
     var searching by rememberSaveable { mutableStateOf(false) }
     var query by rememberSaveable { mutableStateOf("") }
@@ -165,9 +169,9 @@ fun LibraryTabScreen(
                 TextButton(onClick = closeSearch) { Text(stringResource(R.string.library_cancel)) }
             } else {
                 IconAction(R.drawable.ic_search, stringResource(R.string.library_search_in_library), { searching = true })
-                SortButton(sort) { sort = it }
+                SortButton(sort) { settingsScope.launch { settings.setLibrarySort(it) } }
                 Spacer(Modifier.weight(1f))
-                IconAction(if (grid) R.drawable.ic_view_list else R.drawable.ic_grid_view, if (grid) stringResource(R.string.library_view_as_list) else stringResource(R.string.library_view_as_grid), { grid = !grid })
+                IconAction(if (grid) R.drawable.ic_view_list else R.drawable.ic_grid_view, if (grid) stringResource(R.string.library_view_as_list) else stringResource(R.string.library_view_as_grid), { settingsScope.launch { settings.setLibraryGrid(!grid) } })
             }
         }
         when {

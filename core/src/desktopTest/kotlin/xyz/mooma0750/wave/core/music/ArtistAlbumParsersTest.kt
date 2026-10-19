@@ -47,6 +47,14 @@ class ArtistAlbumParsersTest {
     }
 
     @Test
+    fun artistPageHasTheVideoShelves() {
+        val page = assertNotNull(MusicParsers.artistPage(fixture("browse_artist")))
+        // 動画の棚（「Videos」「Live performances」）のカードは曲の再生（watchEndpoint）。アルバムの棚のカードは入らない
+        assertEquals(listOf("WoosCC6XXTk", "kM6KGbHyEJA", "ZRtdQ81jPUQ", "IvMFMA89Yi8", "8ZN40f8R7eg", "RzXTe-QfWTw"), page.videos.map { it.videoId })
+        assertTrue(page.videos.all { it.title.isNotBlank() && it.thumbnailUrl != null && it.kind == MusicVideoType.Omv && it.artists == listOf(ArtistRef(page.name, null)) })
+    }
+
+    @Test
     fun userChannelsAreNotLinkedAsArtists() {
         val text = fixtureText("browse_artist").replace("MUSIC_PAGE_TYPE_ARTIST", "MUSIC_PAGE_TYPE_USER_CHANNEL")
         val page = assertNotNull(MusicParsers.artistPage(Json.parseToJsonElement(text) as JsonObject))

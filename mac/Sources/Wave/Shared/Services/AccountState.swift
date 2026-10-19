@@ -13,8 +13,11 @@ final class AccountState {
     var savedLoginUnreadable = false
     /// Premium 音質を使えるか（nil は確かめている・分からない）。
     var premiumAudio: Bool?
-    /// ログインを確かめられなかった（期限切れなど。もう一度ログインを勧める）。
+    /// アカウントの名前を読めなかった（通信の失敗なども含む。これだけではログインが切れたことにしない）。
     var accountCheckFailed = false
+    /// ログインの状態（ADR-0004。Android の SessionState と同じ）。切れたと確かめられたら expired、疑いのあいだは suspect。
+    /// 設定で、expired は再ログインを促し、suspect は「確認できていません」と出す。
+    var session: SessionState = .loggedOut
     /// アカウントを確かめ終えた（確かめている間は「確かめています」と出す）。
     var accountChecked = false
 
@@ -65,6 +68,10 @@ final class AccountState {
         AppServices.client.setCredentials(nil)
         AppServices.credentials.clear()
         AppServices.releases.clear()
+        // 前のアカウントの検索の履歴と、プレイリストごとの並べ方を残さない（Android と同じ）
+        AppServices.settings.searchHistory.removeAll()
+        AppServices.settings.playlistOrders.removeAll()
+        AppServices.settings.save()
         // 前のアカウントの Claude との会話を残さない（履歴も消す。Android と同じ）
         AppServices.ai.wipe()
         obtainedAtEpochMs = 0

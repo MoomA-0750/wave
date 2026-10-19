@@ -71,7 +71,6 @@ struct RemoteSnapshot {
 /// 署名付きの URL は再生の部品に渡さず、ログ・画面に出さない。Windows 版の PlayerService と同じ振る舞い。
 @MainActor @Observable
 final class PlayerService {
-    private static let statsAfterSeconds = 10.0
     private static let freshMarginMs: Int64 = 5 * 60 * 1000
     private static let maxConsecutiveFailures = 3
 
@@ -93,6 +92,8 @@ final class PlayerService {
     @ObservationIgnored private var radioPlaylistId: String?
     @ObservationIgnored private var extending = false
     @ObservationIgnored private var consecutiveFailures = 0
+    /// 解決し直しても再生できなかった曲（2分の間は解決し直さずに飛ばす。Android と同じ）。
+    @ObservationIgnored private var rejected = RejectionCooldown()
     @ObservationIgnored private var radioSeed: String?
     /// 長い一覧を最初のページから鳴らし始め、残りをまだ読んでいる（appendFrom で足すまで、ラジオへ切り替えない）。
     @ObservationIgnored private var restPending = false
@@ -102,8 +103,8 @@ final class PlayerService {
     // 端末の連携（Connect v2）: キューの項目ごとの ID と出どころ（queue と同じ並び）、今の曲を聴いた時間
     @ObservationIgnored private(set) var itemMeta: [QueueItemMeta] = []
     @ObservationIgnored private let started = Date()
-    @ObservationIgnored private var listenedMs: Int64 = 0
-    @ObservationIgnored private var playingSinceMs: Int64?
+    /// 今の曲を聴いた時間（再生中の区間だけを足す。シークでは増えない）。再生履歴を送るときと、連携の listenedMs に使う
+    @ObservationIgnored private var listen = ListenCounter()
     @ObservationIgnored private var listenedItemId: String?
 
     /// キューの並び・中身が変わった（端末の連携が書き出す）。
@@ -414,7 +415,8 @@ final class PlayerService {
     }
 
     private func loadArtwork(_ song: Song) {
-        guard let url = Ui.resize(song.thumbnailUrl, 256), url.scheme == "https" else { return }
+        // ロック画面・コントロールセンターの画像は大きいもの（Android の largeArtwork と同じ）
+        guard let url = Ui.large(song.thumbnailUrl), url.scheme == "https" else { return }
         Task {
             guard let (data, _) = try? await ImageLoader.session.data(from: url), let image = PlatformImage(data: data) else { return }
             guard self.current?.videoId == song.videoId else { return }
@@ -742,7 +744,8 @@ final class PlayerService {
     }
 
     func removeAt(_ position: Int) {
-        if position <= index || position >= queue.count { return }
+        // ほかの端末を映している間は、その端末のキューを手元で消さない（Android・iPhone と同じく、項目も出さない）
+        if isRemote || position <= index || position >= queue.count { return }
         removeQueueItem(at: position)
     }
 
@@ -979,7 +982,7 @@ final class PlayerService {
                               volumePercent: Int((localVolume * 100).rounded()))
     }
 
-    private func listenedNow() -> Int64 { listenedMs + (playingSinceMs.map { clockMs - $0 } ?? 0) }
+    private func listenedNow() -> Int64 { listen.listenedMs(clockMs) }
 
     private func onIsPlayingChanged() {
         updateNowPlayingInfo()
@@ -993,13 +996,7 @@ final class PlayerService {
             sampleEpisode()
             saveEpisode()
         }
-        let now = clockMs
-        if isPlaying {
-            if playingSinceMs == nil { playingSinceMs = now }
-        } else if let since = playingSinceMs {
-            listenedMs += now - since
-            playingSinceMs = nil
-        }
+        if isPlaying { listen.start(clockMs) } else { listen.stop(clockMs) }
         cursorChanged.forEach { $0(true) }
     }
 
@@ -1299,16 +1296,19 @@ final class PlayerService {
         // 聴いた時間は曲ごと（引き取った曲は相手の値から続ける。同じ曲の読み直しでは数え直さない）
         let itemId = index >= 0 && index < itemMeta.count ? itemMeta[index].itemId : nil
         if let seed = seedListened, seed.itemId == itemId {
-            listenedMs = seed.listenedMs
+            listen.reset(listenedMs: seed.listenedMs, playing: isPlaying, nowMs: clockMs)
             statsSent = seed.historySent
             listenedItemId = itemId
         } else if itemId != listenedItemId {
-            listenedMs = 0
+            listen.reset(listenedMs: 0, playing: isPlaying, nowMs: clockMs)
             statsSent = false
             listenedItemId = itemId
+        } else {
+            // 同じ曲の読み直し: それまで聴いた時間は残し、今から数え直す
+            listen.stop(clockMs)
+            if isPlaying { listen.start(clockMs) }
         }
         seedListened = nil
-        playingSinceMs = isPlaying ? clockMs : nil
         engine.pause()
         updateNowPlayingInfo()
         loadTask = Task {
@@ -1334,6 +1334,13 @@ final class PlayerService {
                     await recover(song)
                     return
                 }
+            } else if rejected.recentlyRejected(song.videoId, nowMs: clockMs) {
+                // 少し前に解決し直しても再生できなかった曲: /player を連打しないよう、解決し直さずに飛ばす
+                AppPaths.log("resolve skipped recently rejected")
+                guard token == loadToken else { return }
+                retried = true
+                await recover(song)
+                return
             } else {
                 switch await resolve(song.videoId) {
                 case .failed:
@@ -1567,8 +1574,7 @@ final class PlayerService {
             engine.seek(0)
             engine.play()
             statsSent = false
-            listenedMs = 0
-            playingSinceMs = clockMs
+            listen.reset(listenedMs: 0, playing: true, nowMs: clockMs)
             cpn = PlaybackStats.newCpn()
             return
         }
@@ -1638,6 +1644,8 @@ final class PlayerService {
             }
         }
         isLoading = false
+        // 解決し直しても再生できなかった曲は、しばらく解決し直さない（もう覚えていれば、時刻は延ばさない）
+        if !live && !external && !rejected.recentlyRejected(song.videoId, nowMs: clockMs) { rejected.markRejected(song.videoId, nowMs: clockMs) }
         consecutiveFailures += 1
         if consecutiveFailures >= PlayerService.maxConsecutiveFailures {
             message = L.t("続けて再生できなかったので、止めました", "Stopped after several songs failed to play")
@@ -1685,8 +1693,10 @@ final class PlayerService {
         }
         if position < (realEnd > 10 ? realEnd : engine.durationSeconds) - 1 { endHandled = false }
         if isPlaying, !endHandled, realEnd > 10, position >= realEnd - 0.2 { onEnded() }
-        if !statsSent, isPlaying, position >= PlayerService.statsAfterSeconds, let stream = currentStream, AppServices.settings.sendHistory,
-            AppServices.client.isLoggedIn
+        // 1回の再生につき1回、実際に聴いた時間が 30 秒（短い曲は長さの半分）に達したら送る（ADR-0006。Android の ListenCounter と同じ）
+        let lengthMs = realEnd > 0 ? Int64(realEnd * 1000) : duration > 0 ? Int64(duration * 1000) : nil
+        if isPlaying, listen.shouldSend(nowMs: clockMs, durationMs: lengthMs, alreadySent: statsSent), let stream = currentStream,
+            AppServices.settings.sendHistory, AppServices.client.isLoggedIn
         {
             statsSent = true
             let cpn = self.cpn, at = position
@@ -1741,7 +1751,7 @@ final class PlayerService {
     private func prefetch() {
         guard index + 1 < queue.count else { return }
         let next = queue[index + 1]
-        if prefetched[next.videoId] != nil || next.isLive || Feed.isExternal(next.videoId) { return }
+        if prefetched[next.videoId] != nil || next.isLive || Feed.isExternal(next.videoId) || rejected.recentlyRejected(next.videoId, nowMs: clockMs) { return }
         // 頭を残してある曲は、URL も調べない（鳴らすときに残した分から始める）
         if cachedStart(next.videoId) != nil { return }
         Task {
@@ -1801,6 +1811,7 @@ final class PlayerService {
         engine.clear()
         prefetched.removeAll()
         prefetchOrder.removeAll()
+        rejected.clear()
         // 聴いた曲の音も残さない
         AppServices.audioCache.clear()
         replaceAll([])

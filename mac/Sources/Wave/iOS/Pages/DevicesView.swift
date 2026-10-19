@@ -12,6 +12,8 @@ struct DevicesView: View {
     @State private var codeText = ""
     @State private var removing: MemberView?
     @State private var confirmTransfer = false
+    /// 加わるための QR をカメラで読んでいる（Android と同じ。貼り付けも残す）。
+    @State private var scanning = false
     @State private var qr: (offer: String, image: UIImage)?
 
     private var devices: ConnectService { AppServices.connect }
@@ -61,6 +63,9 @@ struct DevicesView: View {
             case .showCode, .idle, .done, .failed: break
             default: devices.cancelPairing()
             }
+        }
+        .sheet(isPresented: $scanning) {
+            QrScanSheet(title: L.t("QR を読んで加わる", "Scan QR code to join")) { text in devices.accept(text) }
         }
         .confirmationDialog(L.t("端末を外しますか？", "Remove this device?"), isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }),
                             titleVisibility: .visible, presenting: removing) { member in
@@ -139,9 +144,10 @@ struct DevicesView: View {
 
     private var joinSection: some View {
         Section {
-            Text(L.t("連携済みの端末の wave で「端末の連携」→「端末を追加」を押し、「文字で共有」で送った文字列をここに貼り付けてください。",
-                     "On a device that’s already set up, open Devices in wave, tap “Add device”, then share the text and paste it here."))
+            Text(L.t("連携済みの端末の wave で「端末の連携」→「端末を追加」を押し、出た QR を読むか、「文字で共有」で送った文字列をここに貼り付けてください。",
+                     "On a device that’s already set up, open Devices in wave and tap “Add device”. Scan the QR code, or share the text and paste it here."))
                 .font(.footnote).foregroundStyle(.secondary)
+            Button(L.t("QR を読んで加わる", "Scan QR code to join"), systemImage: "qrcode.viewfinder") { scanning = true }
             HStack {
                 TextField("wave-pair:…", text: $offerText, axis: .vertical)
                     .lineLimit(1...4)

@@ -226,7 +226,7 @@ enum DebugCommands {
             for _ in 0..<40 where SearchPageModel.current?.liveLoading != false { try? await Task.sleep(for: .milliseconds(250)) }
             try? await Task.sleep(for: .milliseconds(300))
             let rows = SearchPageModel.current?.liveSongs ?? []
-            AppPaths.log("debug live-tab rows=\(rows.count) failed=\(SearchPageModel.current?.liveFailed ?? false) allLive=\(rows.allSatisfy(\.song.isLive))")
+            AppPaths.log("debug live-tab rows=\(rows.count) failed=\(SearchPageModel.current?.liveFailure != nil) allLive=\(rows.allSatisfy(\.song.isLive))")
         case "lyrics-tab":
             // 検索して「歌詞」の絞り込みを開いたのと同じ。先頭の行の曲名・アーティスト・引用を記録に書く
             window.searchFor(arg)
@@ -236,7 +236,7 @@ enum DebugCommands {
             try? await Task.sleep(for: .milliseconds(300))
             let hits = SearchPageModel.current?.lyricsHits ?? []
             let top = hits.first.map { "\($0.song.title) / \($0.song.artistsText) / \($0.match.map(SearchPageView.quote) ?? "-")" } ?? "-"
-            AppPaths.log("debug lyrics-tab rows=\(hits.count) matched=\(hits.filter { $0.match != nil }.count) failed=\(SearchPageModel.current?.lyricsFailed ?? false) top=\(top)")
+            AppPaths.log("debug lyrics-tab rows=\(hits.count) matched=\(hits.filter { $0.match != nil }.count) failed=\(SearchPageModel.current?.lyricsFailure != nil) top=\(top)")
         case "lofi":
             // 検索の「すべてをブラウズ」の Lo-Fi のタイルを押したのと同じ
             let moods = (try? await AppServices.music.moods())?.value ?? []

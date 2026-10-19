@@ -140,6 +140,33 @@ class PlaylistMembership(
         noteNowPlaying(playlistId, videoId, isIn = false)
     }
 
+    /**
+     * プレイリストのページで、項目を1つ外した。同じ曲がほかにも入っていると分かっていれば、その項目だけを忘れて「入っている」のまま。
+     * 曲が残っているか分からなければ（このアプリで足した曲など）次は読み直すが、再生中の曲の印は外したものとしてすぐ直す（iPhone と同じ）。
+     */
+    suspend fun noteRemovedItem(
+        playlistId: String,
+        videoId: String,
+        setVideoId: String,
+    ) {
+        val stillIn =
+            lock.withLock {
+                val cached = cache[playlistId] ?: return@withLock false
+                val rest = cached.setVideoIds[videoId].orEmpty() - setVideoId
+                if (rest.isNotEmpty()) {
+                    cache[playlistId] = Cached(cached.readAtMs, cached.videoIds, cached.setVideoIds + (videoId to rest))
+                    return@withLock true
+                }
+                if (cached.setVideoIds[videoId]?.contains(setVideoId) == true) {
+                    cache[playlistId] = Cached(cached.readAtMs, cached.videoIds - videoId, cached.setVideoIds - videoId)
+                } else {
+                    cache.remove(playlistId)
+                }
+                false
+            }
+        if (!stillIn) noteNowPlaying(playlistId, videoId, isIn = false)
+    }
+
     /** 結果が分からない変更をした（次は読み直す）。 */
     suspend fun invalidate(playlistId: String) {
         lock.withLock { cache.remove(playlistId) }

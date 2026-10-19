@@ -56,6 +56,7 @@ import xyz.mooma0750.wave.core.music.AlbumSummary
 import xyz.mooma0750.wave.core.music.ArtistRef
 import xyz.mooma0750.wave.core.music.ArtistSummary
 import xyz.mooma0750.wave.core.music.PodcastEpisode
+import xyz.mooma0750.wave.core.music.PlaylistSummary
 import xyz.mooma0750.wave.core.music.PodcastSummary
 import xyz.mooma0750.wave.core.music.SearchSuggestions
 import xyz.mooma0750.wave.core.lyrics.LyricsHit
@@ -72,10 +73,12 @@ fun SearchScreen(
     actions: SongActions,
     onBack: () -> Unit,
     bottomBar: @Composable () -> Unit = {},
-    /** 検索の履歴（語・アーティスト・アルバム）。 */
+    /** 検索の履歴（語・アーティスト・アルバム・プレイリスト・ポッドキャスト・曲）。 */
     history: SearchHistoryStore,
     /** ポッドキャストの番組のページを開く。 */
     onOpenPodcast: (PodcastSummary) -> Unit = {},
+    /** プレイリストのページを開く（履歴から）。 */
+    onOpenPlaylist: (PlaylistSummary) -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val historyEntries by history.entries.collectAsStateWithLifecycle()
@@ -108,7 +111,7 @@ fun SearchScreen(
                         }),
                 )
             }
-            // 検索から再生した曲・開いたアーティスト・アルバムは、画像と補足の行も付けて履歴に残す（Spotify と同じ）
+            // 検索から再生した曲・開いたアーティスト・アルバム・ポッドキャストは、画像と補足の行も付けて履歴に残す（Spotify と同じ）
             val playAndRemember = { song: Song ->
                 history.add(SearchHistoryEntry.Song(song.videoId, song.title, song.artists.joinToString(", ") { it.name }.ifEmpty { null }, song.thumbnailUrl))
                 onSongClick(song)
@@ -123,11 +126,14 @@ fun SearchScreen(
                         history.add(SearchHistoryEntry.Album(album.title, album.browseId, album.subtitle, album.thumbnailUrl))
                         actions.openAlbum(AlbumRef(album.title, album.browseId))
                     },
-                    podcast = onOpenPodcast,
+                    podcast = { podcast ->
+                        history.add(SearchHistoryEntry.Podcast(podcast.title, podcast.browseId, podcast.author, podcast.thumbnailUrl))
+                        onOpenPodcast(podcast)
+                    },
                 )
             // 検索欄が空のときは、前の検索の結果ではなく、最近の検索を出す（Spotify と同じ）
             when {
-                state.query.isBlank() -> HistoryList(historyEntries, history, onQuery = { keyboard?.hide(); viewModel.searchFor(it) }, onSongClick, actions)
+                state.query.isBlank() -> HistoryList(historyEntries, history, onQuery = { keyboard?.hide(); viewModel.searchFor(it) }, onSongClick, actions, onOpenPlaylist, onOpenPodcast)
                 state.typing -> SuggestionList(state.suggestions, onQuery = { keyboard?.hide(); viewModel.searchFor(it) }, playAndRemember, opener, actions)
                 else -> Results(state, viewModel, playAndRemember, opener, actions)
             }
@@ -135,7 +141,7 @@ fun SearchScreen(
     }
 }
 
-/** 検索の結果からアーティスト・アルバムを開く（履歴に残してから開く）。 */
+/** 検索の結果からアーティスト・アルバム・ポッドキャストを開く（履歴に残してから開く）。 */
 private class Opener(
     val artist: (ArtistSummary) -> Unit,
     val album: (AlbumSummary) -> Unit,
@@ -149,6 +155,8 @@ private fun HistoryList(
     onQuery: (String) -> Unit,
     onSongClick: (Song) -> Unit,
     actions: SongActions,
+    onOpenPlaylist: (PlaylistSummary) -> Unit,
+    onOpenPodcast: (PodcastSummary) -> Unit,
 ) {
     LazyColumn(Modifier.fillMaxSize()) {
         if (entries.isEmpty()) return@LazyColumn
@@ -169,6 +177,15 @@ private fun HistoryList(
                         is SearchHistoryEntry.Query -> onQuery(entry.text)
                         is SearchHistoryEntry.Artist -> actions.openArtist(ArtistRef(entry.name, entry.browseId))
                         is SearchHistoryEntry.Album -> actions.openAlbum(AlbumRef(entry.title, entry.browseId))
+                        // 押したものを履歴の先頭に上げてから開く（Windows と同じ）
+                        is SearchHistoryEntry.Playlist -> {
+                            history.add(entry)
+                            onOpenPlaylist(PlaylistSummary(entry.playlistId, entry.title, entry.subtitle, entry.thumbnailUrl))
+                        }
+                        is SearchHistoryEntry.Podcast -> {
+                            history.add(entry)
+                            onOpenPodcast(PodcastSummary(entry.browseId, entry.title, entry.subtitle, entry.thumbnailUrl))
+                        }
                         is SearchHistoryEntry.Song -> {
                             // 押した曲を履歴の先頭に上げてから再生する
                             history.add(entry)
@@ -523,6 +540,8 @@ private fun entryKey(entry: SearchHistoryEntry): String =
         is SearchHistoryEntry.Query -> "q-${entry.text}"
         is SearchHistoryEntry.Artist -> "ar-${entry.browseId}"
         is SearchHistoryEntry.Album -> "al-${entry.browseId}"
+        is SearchHistoryEntry.Playlist -> "pl-${entry.playlistId}"
+        is SearchHistoryEntry.Podcast -> "pod-${entry.browseId}"
         is SearchHistoryEntry.Song -> "s-${entry.videoId}"
     }
 
@@ -538,6 +557,8 @@ private fun HistoryRow(
             is SearchHistoryEntry.Query -> entry.text to null
             is SearchHistoryEntry.Artist -> entry.name to stringResource(R.string.search_kind_artist)
             is SearchHistoryEntry.Album -> entry.title to listOfNotNull(stringResource(R.string.search_kind_album), entry.subtitle).joinToString(" • ")
+            is SearchHistoryEntry.Playlist -> entry.title to listOfNotNull(stringResource(R.string.library_kind_playlist), entry.subtitle).joinToString(" • ")
+            is SearchHistoryEntry.Podcast -> entry.title to listOfNotNull(stringResource(R.string.search_kind_podcast), entry.subtitle).joinToString(" • ")
             is SearchHistoryEntry.Song -> entry.title to listOfNotNull(stringResource(R.string.search_kind_song), entry.subtitle).joinToString(" • ")
         }
     Row(
@@ -554,6 +575,8 @@ private fun HistoryRow(
                         is SearchHistoryEntry.Query -> R.drawable.ic_search
                         is SearchHistoryEntry.Artist -> R.drawable.ic_person
                         is SearchHistoryEntry.Album -> R.drawable.ic_album
+                        is SearchHistoryEntry.Playlist -> R.drawable.ic_queue_music
+                        is SearchHistoryEntry.Podcast -> R.drawable.ic_headphones
                         is SearchHistoryEntry.Song -> R.drawable.ic_music_note
                     }
                 Icon(painterResource(icon), contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)

@@ -12,6 +12,8 @@ struct SettingsView: View {
     @State private var pairText = ""
     @State private var aiConfigured = AppServices.ai.configured
     @State private var confirmLogout = false
+    /// Claude の中継の接続の QR をカメラで読んでいる（Android と同じ。貼り付けも残す）。
+    @State private var scanningAi = false
     @State private var account = AppServices.account!
 
     var body: some View {
@@ -108,6 +110,9 @@ struct SettingsView: View {
         }
         .navigationTitle(L.t("設定", "Settings"))
         .onAppear { aiConfigured = AppServices.ai.configured }
+        .sheet(isPresented: $scanningAi) {
+            QrScanSheet(title: L.t("Claude の接続の QR を読む", "Scan Claude pairing QR code")) { text in pairAi(text) }
+        }
         .confirmationDialog(L.t("ログアウトしますか？", "Log out?"), isPresented: $confirmLogout, titleVisibility: .visible) {
             Button(L.t("ログアウト", "Log out"), role: .destructive) { logOut() }
             Button(L.t("キャンセル", "Cancel"), role: .cancel) {}
@@ -125,7 +130,7 @@ struct SettingsView: View {
             HStack(spacing: 14) {
                 SettingsAvatar(name: account.name, photoUrl: account.photoUrl, size: 52)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(account.isLoggedIn ? account.name ?? L.t("ログイン中", "Logged in") : L.t("ログインしていません", "Not logged in"))
+                    Text(SettingsView.accountTitle(account))
                         .font(.headline).lineLimit(1)
                     Text(stateText).font(.footnote).foregroundStyle(.secondary)
                 }
@@ -134,15 +139,24 @@ struct SettingsView: View {
             if !account.isLoggedIn {
                 Button(L.t("ログイン", "Log in")) { LoginGate.shared.skipped = false }
             }
-            // ログインを確かめられなかった（期限切れなど）: Android と同じく、もう一度ログインを勧める
-            if account.isLoggedIn && account.accountCheckFailed {
+            // ログインが切れたと確かめられた・疑いがある（ADR-0004）: Android と同じく、もう一度ログインを勧める。
+            // 通信の失敗だけでは出さない。押してもログアウトはせず、ログインの画面を開くだけ（ログアウトは下の確認付きのボタン）
+            if account.isLoggedIn, account.session == .expired {
                 VStack(alignment: .leading, spacing: 2) {
-                    Label(L.t("ログインを確かめられませんでした", "Couldn’t verify your login"), systemImage: "exclamationmark.triangle.fill")
+                    Label(L.t("再ログインが必要です", "You need to log in again"), systemImage: "exclamationmark.triangle.fill")
                         .foregroundStyle(.orange)
-                    Text(L.t("ログインの期限が切れたかもしれません。もう一度ログインしてください。", "Your login may have expired. Please log in again."))
+                    Text(L.t("ログインが切れました。もう一度ログインしてください。", "Your login has expired. Please log in again."))
                         .font(.footnote).foregroundStyle(.secondary)
                 }
-                Button(L.t("もう一度ログイン", "Log in again")) { logOut() }
+                Button(L.t("もう一度ログイン", "Log in again")) { LoginGate.shared.reLogin = true }
+            } else if account.isLoggedIn, case .suspect = account.session {
+                VStack(alignment: .leading, spacing: 2) {
+                    Label(L.t("ログイン状態を確認できていません", "Couldn’t verify your login"), systemImage: "exclamationmark.circle")
+                        .foregroundStyle(.secondary)
+                    Text(L.t("少し待っても直らなければ、もう一度ログインしてください。", "If this doesn’t clear up soon, log in again."))
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+                Button(L.t("もう一度ログイン", "Log in again")) { LoginGate.shared.reLogin = true }
             }
             if account.savedLoginUnreadable && !account.isLoggedIn {
                 VStack(alignment: .leading, spacing: 2) {
@@ -154,6 +168,13 @@ struct SettingsView: View {
         } header: {
             Text(L.t("アカウント", "Account"))
         }
+    }
+
+    /// アカウントの名前（読めなかったときは Android と同じく「取得できませんでした」。それだけではログインが切れたことにしない）。
+    static func accountTitle(_ account: AccountState) -> String {
+        if !account.isLoggedIn { return L.t("ログインしていません", "Not logged in") }
+        if let name = account.name { return name }
+        return account.accountCheckFailed ? L.t("アカウントを取得できませんでした", "Couldn’t get your account") : L.t("ログイン中", "Logged in")
     }
 
     private var stateText: String {
@@ -175,6 +196,17 @@ struct SettingsView: View {
 
     // MARK: Claude
 
+    /// 接続の文字列（貼り付けたもの・QR から読んだもの）で Claude の中継につなぐ。
+    private func pairAi(_ text: String) {
+        if AiChat.pair(text) {
+            pairText = ""
+            aiConfigured = AppServices.ai.configured
+            AppServices.toast.show(L.t("Claude の中継につなぎました", "Connected to the Claude bridge"))
+        } else {
+            AppServices.toast.show(L.t("wave の Claude の中継の接続の文字列ではありません", "That isn't a wave Claude bridge pairing text"))
+        }
+    }
+
     private var claudeSection: some View {
         Section {
             Text(aiConfigured ? L.t("\(AppServices.settings.aiName ?? AppServices.settings.aiUrl ?? "") の中継につないでいます", "Connected to \(AppServices.settings.aiName ?? AppServices.settings.aiUrl ?? "")")
@@ -185,6 +217,7 @@ struct SettingsView: View {
                     aiConfigured = AppServices.ai.configured
                 }
             } else {
+                Button(L.t("QR を読んでつなぐ", "Scan QR code to connect"), systemImage: "qrcode.viewfinder") { scanningAi = true }
                 HStack {
                     SecureField("waveai://pair?u=…&t=…", text: $pairText)
                         .textInputAutocapitalization(.never)
@@ -195,16 +228,8 @@ struct SettingsView: View {
                     .labelStyle(.iconOnly)
                     .buttonBorderShape(.capsule)
                 }
-                Button(L.t("接続", "Connect")) {
-                    if AiChat.pair(pairText) {
-                        pairText = ""
-                        aiConfigured = AppServices.ai.configured
-                        AppServices.toast.show(L.t("Claude の中継につなぎました", "Connected to the Claude bridge"))
-                    } else {
-                        AppServices.toast.show(L.t("wave の Claude の中継の接続の文字列ではありません", "That isn't a wave Claude bridge pairing text"))
-                    }
-                }
-                .disabled(pairText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                Button(L.t("接続", "Connect")) { pairAi(pairText) }
+                    .disabled(pairText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         } header: {
             Text("Claude")

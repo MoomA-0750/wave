@@ -27,7 +27,13 @@ class RemoteSessionPlayer(
     private val artistLine: (String, String) -> String,
     /** その端末のアプリの中の音量を変えてもらう（0〜100）。 */
     private val setVolume: (Int) -> Unit,
+    /** 今の曲の画像を取る（手元の再生器と同じく、URL ではなく画像そのものを入れる）。 */
+    private val artwork: ArtworkLoader,
 ) : SimpleBasePlayer(Looper.getMainLooper()) {
+    /** 今の曲の画像の URL と、取れた画像（取れるまで null）。 */
+    private var artworkUrl: String? = null
+    private var artworkBytes: ByteArray? = null
+
     /** 本人が音量ボタンで変えた直後の音量（相手の新しいカーソルが届くまで、最大2秒）。 */
     private var optimisticVolume: Int? = null
     private var optimisticVolumeUntilMs = 0L
@@ -41,6 +47,18 @@ class RemoteSessionPlayer(
         if (optimisticPlaying != null && (SystemClock.elapsedRealtime() > optimisticUntilMs || next.playing == optimisticPlaying)) optimisticPlaying = null
         if (optimisticVolume != null && (SystemClock.elapsedRealtime() > optimisticVolumeUntilMs || next.volumePercent == optimisticVolume)) optimisticVolume = null
         remote = next
+        val url = next.current.thumbnailUrl?.let(ArtworkLoader::urlOf)
+        if (url != artworkUrl) {
+            artworkUrl = url
+            artworkBytes = null
+            url?.let {
+                artwork.load(it) { bytes ->
+                    if (artworkUrl != it) return@load
+                    artworkBytes = bytes
+                    invalidateState()
+                }
+            }
+        }
         invalidateState()
     }
 
@@ -56,7 +74,10 @@ class RemoteSessionPlayer(
                         // Spotify と同じく、どの端末で鳴っているかを出す
                         .setArtist(artistLine(song.artists.joinToString(", ") { it.name }, current.deviceLabel))
                         .setAlbumTitle(song.album?.title)
-                        .setArtworkUri(song.thumbnailUrl?.takeIf { it.startsWith("https://") }?.let(android.net.Uri::parse))
+                        // 画像の URL は入れない（プラットフォームのセッションに https の URL があると、時計が画像を出さない。ArtworkEmbedder と同じ）。
+                        // 画像そのものを今の曲にだけ入れ、アプリの画面・ウィジェットは曲の情報（extras）の URL から出す
+                        .apply { if (index == current.currentIndex) artworkBytes?.let { setArtworkData(it, MediaMetadata.PICTURE_TYPE_FRONT_COVER) } }
+                        .setExtras(Media3QueuePlayer.extrasOf(song, null))
                         .build()
                 MediaItemData
                     .Builder(current.itemIds[index])

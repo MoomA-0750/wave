@@ -186,14 +186,16 @@ final class FeedStore {
     // MARK: 検索
 
     /// 検索の「ポッドキャスト」の最初のページ: Apple の目録の番組（RSS）を先に、YouTube の番組を後に並べる。
-    /// どちらかが読めれば、読めた分を出す（Android の podcastsFirstPage と同じ）。両方読めなければ nil。
-    func searchFirstPage(_ query: String) async -> SearchPage<PodcastSummary>? {
+    /// どちらかが読めれば、読めた分を出す（Android の podcastsFirstPage と同じ）。
+    /// 目録に無く、YouTube の番組も読めなかったときは、その失敗を返す（Android と同じ）。
+    func searchFirstPage(_ query: String) async -> ApiResult<SearchPage<PodcastSummary>> {
         async let directory = client.search(query)
-        let youtube = (try? await AppServices.music.searchPodcasts(query))?.value
+        let result = (try? await AppServices.music.searchPodcasts(query)) ?? .failed(.network)
+        let youtube = result.value
         let rss = await directory
         AppPaths.log("search podcast directory=\(rss.map { String($0.count) } ?? "failed") youtube=\(youtube.map { String($0.items.count) } ?? "failed")")
-        guard let rss, !rss.isEmpty else { return youtube }
+        guard let rss, !rss.isEmpty else { return result }
         let known = Set(rss.map(\.browseId))
-        return SearchPage(items: rss + (youtube?.items ?? []).filter { !known.contains($0.browseId) }, continuation: youtube?.continuation)
+        return .ok(SearchPage(items: rss + (youtube?.items ?? []).filter { !known.contains($0.browseId) }, continuation: youtube?.continuation))
     }
 }

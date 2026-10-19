@@ -11,6 +11,8 @@ final class SearchPageModel {
     var query: String?
     var loading = false
     var empty = false
+    /// 曲・アルバム・アーティストのどれも読めなかった（0件の「見つかりませんでした」と分けて理由を出す。Android と同じ）。
+    var failure: FailureKind?
     var tab = "all" {
         didSet {
             if tab == "live" { loadLiveIfNeeded() }
@@ -25,17 +27,19 @@ final class SearchPageModel {
     var podcasts: [PodcastSummary] = []
     var episodes: [PodcastEpisode] = []
     var podcastsLoading = false
+    var podcastsFailure: FailureKind?
+    var episodesFailure: FailureKind?
     var moods: [(MoodCategory, Color)] = []
     var history: [SearchHistoryEntry] = []
     /// 「ライブ」のタブ（ライブ配信の検索）。タブを開いたときに読む。
     var liveSongs: [TrackRow] = []
     var liveLoading = false
-    var liveFailed = false
+    var liveFailure: FailureKind?
     @ObservationIgnored private var liveQuery: String?
     /// 「歌詞」のタブ（打った語を歌詞の一節として探した曲。Android と同じ）。タブを開いたときに読む。続きのページは無い。
     var lyricsHits: [LyricsHit] = []
     var lyricsLoading = false
-    var lyricsFailed = false
+    var lyricsFailure: FailureKind?
     @ObservationIgnored private var lyricsQuery: String?
     @ObservationIgnored private var liveContinuation: String?
     @ObservationIgnored private var songContinuation: String?
@@ -81,9 +85,12 @@ final class SearchPageModel {
         guard let q = query else { return }
         loading = true
         empty = false
+        failure = nil
         songs = []
         podcasts = []
         episodes = []
+        podcastsFailure = nil
+        episodesFailure = nil
         podcastsLoaded = false
         episodesLoaded = false
         podcastContinuation = nil
@@ -91,10 +98,10 @@ final class SearchPageModel {
         liveSongs = []
         liveQuery = nil
         liveContinuation = nil
-        liveFailed = false
+        liveFailure = nil
         lyricsHits = []
         lyricsQuery = nil
-        lyricsFailed = false
+        lyricsFailure = nil
         if tab == "live" { loadLiveIfNeeded() }
         if tab == "lyrics" { loadLyricsIfNeeded() }
         let music = AppServices.music!
@@ -113,7 +120,12 @@ final class SearchPageModel {
         // ポッドキャスト・エピソードで絞っているときは、その一覧も読み直す
         if tab == "podcasts" || tab == "episodes" { tabChanged() }
         if found.isEmpty && albums.isEmpty && artists.isEmpty {
-            empty = true
+            // どれも読めなかったら理由を出す（どれかが読めて0件なら「見つかりませんでした」）
+            if !songsResult.isOk && !albumsResult.isOk && !artistsResult.isOk {
+                failure = songsResult.failure ?? .network
+            } else {
+                empty = true
+            }
             return
         }
         songs = found.enumerated().map { TrackRow(number: $0.offset + 1, song: $0.element) }
@@ -149,6 +161,13 @@ final class SearchPageModel {
         }
     }
 
+    /// 読めなかったポッドキャスト・エピソードを読み直す。
+    func retryTab() {
+        if tab == "podcasts" { podcastsLoaded = false }
+        if tab == "episodes" { episodesLoaded = false }
+        tabChanged()
+    }
+
     /// 絞り込みを変えた。ポッドキャスト・エピソードは初めて選んだときに読む。
     func tabChanged() {
         guard let q = query else { return }
@@ -158,22 +177,24 @@ final class SearchPageModel {
             podcastsLoading = true
             Task {
                 // Apple の目録の番組（RSS、ADR-0012）を先に、YouTube の番組を後に並べる
-                let page = await AppServices.feeds.searchFirstPage(q)
+                let result = await AppServices.feeds.searchFirstPage(q)
                 guard id == requestId else { return }
                 podcastsLoading = false
-                podcasts = page?.items ?? []
-                podcastContinuation = page?.continuation
+                podcasts = result.value?.items ?? []
+                podcastContinuation = result.value?.continuation
+                podcastsFailure = result.value == nil ? result.failure ?? .network : nil
                 AppPaths.log("search podcasts n=\(podcasts.count)")
             }
         } else if tab == "episodes" && !episodesLoaded {
             episodesLoaded = true
             podcastsLoading = true
             Task {
-                let page = (try? await AppServices.music.searchEpisodes(q))?.value
+                let result = (try? await AppServices.music.searchEpisodes(q)) ?? .failed(.network)
                 guard id == requestId else { return }
                 podcastsLoading = false
-                episodes = page?.items ?? []
-                episodeContinuation = page?.continuation
+                episodes = result.value?.items ?? []
+                episodeContinuation = result.value?.continuation
+                episodesFailure = result.value == nil ? result.failure ?? .network : nil
                 AppPaths.log("search episodes n=\(episodes.count)")
             }
         }
@@ -184,14 +205,14 @@ final class SearchPageModel {
         guard let q = query, liveQuery != q else { return }
         liveQuery = q
         liveLoading = true
-        liveFailed = false
+        liveFailure = nil
         let id = requestId
         Task {
             let result = (try? await AppServices.music.searchLive(q)) ?? .failed(.network)
             guard id == requestId, liveQuery == q else { return }
             liveLoading = false
             guard let page = result.value else {
-                liveFailed = true
+                liveFailure = result.failure ?? .network
                 liveQuery = nil
                 return
             }
@@ -205,14 +226,14 @@ final class SearchPageModel {
         guard let q = query, lyricsQuery != q else { return }
         lyricsQuery = q
         lyricsLoading = true
-        lyricsFailed = false
+        lyricsFailure = nil
         let id = requestId
         Task {
             let result = (try? await AppServices.lyricsSearch.search(q)) ?? .failed(.network)
             guard id == requestId, lyricsQuery == q else { return }
             lyricsLoading = false
             guard let hits = result.value else {
-                lyricsFailed = true
+                lyricsFailure = result.failure ?? .network
                 lyricsQuery = nil
                 AppPaths.log("search lyrics failed")
                 return
@@ -331,11 +352,11 @@ struct SearchPageView: View {
             Picker("", selection: $model.tab) {
                 Text(L.t("すべて", "All")).tag("all")
                 Text(L.t("曲", "Songs")).tag("songs")
-                Text(L.t("アーティスト", "Artists")).tag("artists")
                 Text(L.t("アルバム", "Albums")).tag("albums")
+                Text(L.t("アーティスト", "Artists")).tag("artists")
+                Text(L.t("ライブ", "Live")).tag("live")
                 Text(L.t("ポッドキャスト", "Podcasts")).tag("podcasts")
                 Text(L.t("エピソード", "Episodes")).tag("episodes")
-                Text(L.t("ライブ", "Live")).tag("live")
                 Text(L.t("歌詞", "Lyrics")).tag("lyrics")
             }
             .pickerStyle(.segmented)
@@ -353,6 +374,8 @@ struct SearchPageView: View {
                 Spacer()
             } else if model.tab == "podcasts" || model.tab == "episodes" {
                 podcastResults
+            } else if let failure = model.failure {
+                failed(failure) { model.search(model.query) }
             } else if model.empty {
                 Text(L.t("見つかりませんでした", "No results found")).subtitleStyle().padding(.top, 64)
                 Spacer()
@@ -385,14 +408,16 @@ struct SearchPageView: View {
     /// ポッドキャスト（番組のカード）・エピソード（行）の結果。
     @ViewBuilder
     private var podcastResults: some View {
-        if model.tab == "podcasts" ? model.podcasts.isEmpty : model.episodes.isEmpty {
+        if let failure = model.tab == "podcasts" ? model.podcastsFailure : model.episodesFailure {
+            failed(failure) { model.retryTab() }
+        } else if model.tab == "podcasts" ? model.podcasts.isEmpty : model.episodes.isEmpty {
             Text(L.t("見つかりませんでした", "No results found")).subtitleStyle().padding(.top, 64)
             Spacer()
         } else if model.tab == "podcasts" {
             ScrollView {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 176), spacing: 0)], spacing: 8) {
                     ForEach(Array(model.podcasts.enumerated()), id: \.element.id) { i, podcast in
-                        PodcastCard(podcast: podcast).onAppear { if i == model.podcasts.count - 1 { model.loadMoreCards() } }
+                        PodcastCard(podcast: podcast, onOpen: { AppServices.settings.addSearch(.of(podcast)) }).onAppear { if i == model.podcasts.count - 1 { model.loadMoreCards() } }
                     }
                 }
                 .padding(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
@@ -417,13 +442,8 @@ struct SearchPageView: View {
         if model.liveLoading {
             ProgressView().padding(.top, 48)
             Spacer()
-        } else if model.liveFailed {
-            VStack(spacing: 8) {
-                Text(L.t("ライブ配信を検索できませんでした", "Couldn't search live streams")).subtitleStyle()
-                Button(L.t("もう一度", "Retry")) { model.loadLiveIfNeeded() }
-            }
-            .padding(.top, 64)
-            Spacer()
+        } else if let failure = model.liveFailure {
+            failed(failure, L.t("ライブ配信を検索できませんでした", "Couldn't search live streams")) { model.loadLiveIfNeeded() }
         } else if model.liveSongs.isEmpty {
             Text(L.t("配信中のライブは見つかりませんでした", "No live streams found")).subtitleStyle().padding(.top, 64)
             Spacer()
@@ -444,13 +464,8 @@ struct SearchPageView: View {
         if model.lyricsLoading {
             ProgressView().padding(.top, 48)
             Spacer()
-        } else if model.lyricsFailed {
-            VStack(spacing: 8) {
-                Text(L.t("歌詞から探せませんでした", "Couldn't search by lyrics")).subtitleStyle()
-                Button(L.t("もう一度", "Retry")) { model.loadLyricsIfNeeded() }
-            }
-            .padding(.top, 64)
-            Spacer()
+        } else if let failure = model.lyricsFailure {
+            failed(failure, L.t("歌詞から探せませんでした", "Couldn't search by lyrics")) { model.loadLyricsIfNeeded() }
         } else if model.lyricsHits.isEmpty {
             Text(L.t("見つかりませんでした", "No results found")).subtitleStyle().padding(.top, 64)
             Spacer()
@@ -474,6 +489,18 @@ struct SearchPageView: View {
                 .padding(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
             }
         }
+    }
+
+    /// 読み込みの失敗: 0件の「見つかりませんでした」と分けて、理由（ログインしていない・通信できない・応答が無い・読み取れない）を出す。
+    @ViewBuilder
+    private func failed(_ failure: FailureKind, _ title: String = L.t("検索できませんでした", "Couldn't search"), retry: @escaping () -> Void) -> some View {
+        VStack(spacing: 8) {
+            Text(title).subtitleStyle()
+            Text(FailureText.message(failure)).subtle()
+            Button(L.t("もう一度", "Retry"), action: retry)
+        }
+        .padding(.top, 64)
+        Spacer()
     }
 
     /// 合った歌詞の行の引用。大体合っているときは先頭に「≈ 」（Android・Windows と同じ）。
@@ -591,7 +618,13 @@ private struct RecentSearchTile: View {
         .onHover { hover = $0 }
         .onTapGesture {
             AppServices.settings.addSearch(entry)
-            if let item = entry.toItem() { AppServices.nav.open(item) } else { MainWindowModel.shared.searchFor(entry.title) }
+            if let podcast = entry.toPodcast() {
+                AppServices.nav.podcast(podcast)
+            } else if let item = entry.toItem() {
+                AppServices.nav.open(item)
+            } else {
+                MainWindowModel.shared.searchFor(entry.title)
+            }
         }
     }
 }

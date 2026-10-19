@@ -24,6 +24,17 @@ public enum StreamFailure
     SongLoginRequired,
 }
 
+/// <summary>解決の失敗の分け方（Android の PlaybackDecisions.failureOf と同じ考え）。</summary>
+public static class StreamFailures
+{
+    /// <summary>
+    /// その曲だけの失敗か（再生不可・音声の形式が無い・曲ごとのログインの確認）。そうなら知らせて次の曲へ飛ばす。
+    /// ログイン・通信・解読の準備など、どの曲でも起きる失敗では飛ばさない（飛ばすと /player を連打する）。
+    /// </summary>
+    public static bool IsThisSongOnly(StreamFailure failure) =>
+        failure is StreamFailure.Unplayable or StreamFailure.NoAudioFormat or StreamFailure.SongLoginRequired;
+}
+
 /// <summary>解決済みのストリーム。署名付き URL を含むので、ToString に出さない。</summary>
 public sealed class ResolvedStream
 {
@@ -121,7 +132,12 @@ public sealed partial class StreamResolver(InnerTubeClient client, PlayerCipherP
         if (LiveParsers.IsLive(root)) return ResolveResult.Failed(StreamFailure.LiveStream);
         var status = root.Path("playabilityStatus", "status").Str();
         // 年齢確認などで曲ごとに返る。その曲だけの失敗にする（Android と同じ）
-        if (status == "LOGIN_REQUIRED") return ResolveResult.Failed(StreamFailure.SongLoginRequired);
+        // ログインが切れた疑いにはしないが、裏でアカウントを確かめ、本当に外れていたときだけ失効にする（ADR-0004）
+        if (status == "LOGIN_REQUIRED")
+        {
+            client.RequestConfirm(generation);
+            return ResolveResult.Failed(StreamFailure.SongLoginRequired);
+        }
         if (status != "OK") return ResolveResult.Failed(StreamFailure.Unplayable);
         var streaming = root.Path("streamingData");
         var formats = streaming.Path("adaptiveFormats").Items();

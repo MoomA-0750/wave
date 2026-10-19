@@ -45,6 +45,10 @@ struct SongMenuItems: View {
             Button(song.artists.count > 1 ? L.t("アーティストへ移動: \(artist.name)", "Go to artist: \(artist.name)") : L.t("アーティストへ移動", "Go to artist"),
                    systemImage: "person") { AppServices.nav.artist(artist.browseId!) }
         }
+        // 曲の画面（iPhone のメニューと同じ。ライブ配信には曲の画面が無い）
+        if !external && !song.isLive {
+            Button(L.t("曲の画面を開く", "Open song"), systemImage: "music.note") { AppServices.nav.song(song) }
+        }
         if !external {
             Divider()
             Menu(L.t("共有", "Share"), systemImage: "square.and.arrow.up") {

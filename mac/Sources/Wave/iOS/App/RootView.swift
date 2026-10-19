@@ -113,7 +113,9 @@ struct RootView: View {
             }
         }
         // ログインしていなければ、まずログインの画面（Android と同じく、ログインしないと曲が鳴らない）
-        .fullScreenCover(isPresented: Binding(get: { !account.isLoggedIn && !LoginGate.shared.skipped }, set: { _ in })) {
+        // 設定の「もう一度ログイン」でも開く（ログアウトはしない。Android・Mac・Windows と同じ）
+        .fullScreenCover(isPresented: Binding(get: { (!account.isLoggedIn && !LoginGate.shared.skipped) || LoginGate.shared.reLogin },
+                                              set: { if !$0 { LoginGate.shared.reLogin = false } })) {
             LoginView()
         }
     }
@@ -153,6 +155,8 @@ struct DialogSheets: ViewModifier {
 final class LoginGate {
     static let shared = LoginGate()
     var skipped = false
+    /// ログインしたまま、ログインの画面を開いている（設定の「もう一度ログイン」）。ログインし終えるか閉じたら false。
+    var reLogin = false
 }
 
 /// 積んだ画面の中身（共有の Route ごと）。

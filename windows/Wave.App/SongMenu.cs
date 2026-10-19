@@ -28,6 +28,8 @@ public static class SongMenu
         if (removeFromPlaylist is not null) menu.Items.Add(Item(L.T("このプレイリストから削除", "Remove from this playlist"), "", removeFromPlaylist));
         menu.Items.Add(new MenuFlyoutSeparator());
         menu.Items.Add(Item(L.T("曲のラジオを再生", "Go to song radio"), "", () => AppServices.Player.PlaySong(song)));
+        // 曲の画面（Android・Mac・iPhone と同じ。ライブ配信には曲の画面が無い）
+        if (!song.IsLive && Nav.Frame?.Content is not Views.SongPage) menu.Items.Add(Item(L.T("曲の画面を開く", "Go to song"), "\uE8D6", () => Nav.Song(song)));
         if (song.Album?.BrowseId is { } albumId) menu.Items.Add(Item(L.T("アルバムへ移動", "Go to album"), "", () => Nav.Album(albumId)));
         foreach (var artist in song.Artists.Where(a => a.BrowseId is not null))
             menu.Items.Add(Item(song.Artists.Count > 1 ? L.T($"アーティストへ移動: {artist.Name}", $"Go to artist: {artist.Name}") : L.T("アーティストへ移動", "Go to artist"), "", () => Nav.Artist(artist.BrowseId!)));

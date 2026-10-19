@@ -219,6 +219,7 @@ private fun LoggedIn(
                     actions,
                     onPlaySong = play::song,
                     onOpenBrowse = { nav.push(WearScreen.Browse) },
+                    onOpenPlaylist = { nav.push(WearScreen.Playlist(it)) },
                 )
             WearScreen.Browse -> BrowseScreen(viewModel(key = "moods-$loginGeneration") { MoodsViewModel(container.music) }) { title, params -> nav.push(WearScreen.Mood(title, params)) }
             is WearScreen.Mood ->

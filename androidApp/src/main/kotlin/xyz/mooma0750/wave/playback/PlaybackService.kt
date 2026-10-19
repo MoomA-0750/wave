@@ -117,6 +117,9 @@ class PlaybackService : MediaLibraryService() {
     /** 今の曲の画像を、URL ではなく画像そのものとして入れる（時計に出すため）。 */
     private var artwork: ArtworkEmbedder? = null
 
+    /** 画像を取るもの（手元の再生器用と、ほかの端末を映す再生器用。取りかけを互いに捨てないよう別々）。 */
+    private val artworkLoaders = mutableListOf<ArtworkLoader>()
+
     /** 中継に接続しているか（引き取られるのを待ち受ける）。再生中と、一時停止から前面のタイムアウトの少し前までだけ（P6-S の計測で届くことを確認）。 */
     private var relayHeld = false
 
@@ -169,6 +172,9 @@ class PlaybackService : MediaLibraryService() {
         xyz.mooma0750.wave.widget.WidgetHooks.onNowPlayingChanged(this, session?.player?.let(NowPlayingSnapshot::of))
     }
 
+    // Android 12 以前は、設定で固定した画面の言語をここで当てる（13 以降は OS が当てる）
+    override fun attachBaseContext(newBase: android.content.Context) = super.attachBaseContext(xyz.mooma0750.wave.settings.AppLanguage.wrap(newBase))
+
     override fun onCreate() {
         super.onCreate()
         container = (application as WaveApplication).container
@@ -211,7 +217,7 @@ class PlaybackService : MediaLibraryService() {
                 scheduleSave()
             }
         }
-        artwork = ArtworkEmbedder(player, container.mediaHttpClient, scope)
+        artwork = ArtworkEmbedder(player, ArtworkLoader(container.mediaHttpClient, scope).also { artworkLoaders += it })
         val likeController =
             LikeController(
                 container.music,
@@ -679,7 +685,7 @@ class PlaybackService : MediaLibraryService() {
         val current = session ?: return
         val local = localPlayer ?: return
         if (remote != null && !local.playWhenReady) {
-            val mirror = remotePlayer ?: RemoteSessionPlayer({ action, position -> manager.control(action, position) }, { artist, device -> getString(xyz.mooma0750.wave.R.string.nowplaying_artist_on_device, artist, device) }, { percent -> manager.volume(percent) }).also {
+            val mirror = remotePlayer ?: RemoteSessionPlayer({ action, position -> manager.control(action, position) }, { artist, device -> getString(xyz.mooma0750.wave.R.string.nowplaying_artist_on_device, artist, device) }, { percent -> manager.volume(percent) }, ArtworkLoader(container.mediaHttpClient, scope).also { artworkLoaders += it }).also {
                 remotePlayer = it
                 it.addListener(widgetListener)
             }
@@ -970,6 +976,15 @@ class PlaybackService : MediaLibraryService() {
                 manager.queueAdd(queue.remoteItemsOf(songs), next = customCommand.customAction == QueueCommands.ADD_NEXT)
                 return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
             }
+            // ほかの端末を映している間にキューの曲を選んだ: 手元のキューは家の最新の再生に合わせてある（stageLatest）ので、同じ項目へ飛んでその端末で鳴らしてもらう。
+            // 合わせる前で手元に無い曲なら、違う曲を鳴らしてもらわないよう何もしない
+            if (manager != null && session.player === remotePlayer && manager.remotePlayback.value != null && customCommand.customAction == QueueCommands.JUMP) {
+                val itemId = QueueCommands.itemIdOf(args)
+                if (itemId == null || (0 until local.mediaItemCount).none { local.getMediaItemAt(it).mediaId == itemId }) {
+                    Log.i(WaveApplication.LOG_TAG, "connect-v2 jump on remote skipped (not staged)")
+                    return Futures.immediateFuture(SessionResult(SessionError.ERROR_BAD_VALUE))
+                }
+            }
             val wasEmpty = local.mediaItemCount == 0
             val wasPlaying = local.playWhenReady
             // 曲を選ぶ処理の中の play() は、再生ボタン（D-9）として知らせない。後で「曲を選んだ」を1回だけ知らせる（レビュー p6b34 高-1）
@@ -1191,7 +1206,8 @@ class PlaybackService : MediaLibraryService() {
         queueNotice.cancel()
         // 再生が終わった: ウィジェットは「再生していない」に戻す
         xyz.mooma0750.wave.widget.WidgetHooks.onNowPlayingChanged(this, null)
-        artwork?.release()
+        artworkLoaders.forEach(ArtworkLoader::release)
+        artworkLoaders.clear()
         artwork = null
         relayReleaseJob?.cancel()
         if (relayHeld) container.connectV2?.relay?.release()

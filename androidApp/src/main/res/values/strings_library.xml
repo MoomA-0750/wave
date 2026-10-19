@@ -125,6 +125,7 @@
     <string name="home_recommendations_failed">Couldn\'t load recommendations (%1$s)</string>
     <string name="home_retry">Try again</string>
     <string name="artist_popular">Popular</string>
+    <string name="artist_videos">Videos</string>
     <string name="artist_see_all_songs">See all songs</string>
     <string name="artist_liked_songs">Liked songs</string>
     <string name="artist_checking">Checking…</string>
@@ -170,6 +171,11 @@
     <string name="releases_new_video">New video from %1$s</string>
     <string name="settings_release_notices_title">New release notifications</string>
     <string name="settings_release_notices_summary">Notify when artists you subscribe to release albums or singles this year. Only artists with 3 or more liked songs make a sound; the others appear under New releases</string>
+    <string name="settings_language_title">App language</string>
+    <string name="settings_language_summary">%1$s. Text from YouTube (such as shelf titles) also uses this language. YouTube text changes the next time you open wave</string>
+    <string name="settings_language_system">Use device language</string>
+    <string name="settings_language_japanese" translatable="false">日本語</string>
+    <string name="settings_language_english" translatable="false">English</string>
     <string name="releases_new_badge">NEW</string>
     <string name="releases_kind_video">Video</string>
     <string name="releases_kind_release">Release</string>

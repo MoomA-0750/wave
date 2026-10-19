@@ -13,6 +13,9 @@ import xyz.mooma0750.wave.ui.WaveTheme
  * 外からは開けない（exported=false。自アプリの通知の PendingIntent からだけ）。
  */
 class AddToPlaylistActivity : ComponentActivity() {
+    // Android 12 以前は、設定で固定した画面の言語をここで当てる（13 以降は OS が当てる）
+    override fun attachBaseContext(newBase: android.content.Context) = super.attachBaseContext(xyz.mooma0750.wave.settings.AppLanguage.wrap(newBase))
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val container = (application as WaveApplication).container

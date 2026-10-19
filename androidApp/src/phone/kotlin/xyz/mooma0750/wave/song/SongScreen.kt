@@ -33,6 +33,6 @@ fun SongScreen(
         play = null,
         actions = { PlayFab(playing = false, onClick = { onPlay(song) }, modifier = Modifier.padding(start = 12.dp, end = 8.dp)) },
     ) {
-        item(key = "song-actions") { SongMenuItems(song, actions, showRadio = false) }
+        item(key = "song-actions") { SongMenuItems(song, actions, showRadio = false, showOpenSong = false) }
     }
 }

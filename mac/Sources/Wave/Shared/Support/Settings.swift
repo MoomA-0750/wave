@@ -91,7 +91,7 @@ final class Settings: Codable {
     }
 }
 
-/// 検索の履歴の1件（語・曲・アルバム・アーティスト。Spotify のように画像付きで出す）。
+/// 検索の履歴の1件（語・アーティスト・アルバム・曲・プレイリスト・ポッドキャスト。Windows と同じ。Spotify のように画像付きで出す）。
 struct SearchHistoryEntry: Codable, Hashable, Identifiable {
     var kind = "query"
     var title = ""
@@ -123,6 +123,18 @@ struct SearchHistoryEntry: Codable, Hashable, Identifiable {
         case .playlist(let p):
             SearchHistoryEntry(kind: "playlist", title: p.title, subtitle: p.subtitle, thumbnailUrl: p.thumbnailUrl, id_: p.playlistId)
         }
+    }
+
+    /// 検索から開いたポッドキャスト（番組）。
+    static func of(_ podcast: PodcastSummary) -> SearchHistoryEntry {
+        SearchHistoryEntry(kind: "podcast", title: podcast.title, subtitle: podcast.author ?? L.t("ポッドキャスト", "Podcast"),
+                           thumbnailUrl: podcast.thumbnailUrl, id_: podcast.browseId)
+    }
+
+    /// ポッドキャストの履歴なら、その番組。
+    func toPodcast() -> PodcastSummary? {
+        guard kind == "podcast", let id = id_ else { return nil }
+        return PodcastSummary(browseId: id, title: title, author: subtitle, thumbnailUrl: thumbnailUrl)
     }
 
     func toItem() -> HomeItem? {

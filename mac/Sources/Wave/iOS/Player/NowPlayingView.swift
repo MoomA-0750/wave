@@ -10,6 +10,8 @@ struct NowPlayingView: View {
     @State private var tint: Color?
     @State private var dragging: Double?
     @State private var devicesOpen = false
+    /// Claude に聞く（下のタブの「Claude」と同じ会話。Android の再生画面の ✨ と同じ）。
+    @State private var aiOpen = false
     /// 指でスクロールしている間か（一番上からさらに下へ引っ張ったら閉じるため）。
     @State private var scrollTouching = false
     @Environment(\.dismiss) private var dismiss
@@ -77,8 +79,31 @@ struct NowPlayingView: View {
         }
         .sheet(isPresented: $shell.queueOpen) { QueueView().modifier(DialogSheets(layer: .queue)) }
         .sheet(isPresented: $devicesOpen) { DevicesSheet() }
+        .sheet(isPresented: $aiOpen) { AiSheet() }
         // 曲のメニューの「プレイリストに追加」は、この画面の上に出す
         .modifier(DialogSheets(layer: .player))
+    }
+
+    /// 再生画面から開く Claude（下のタブと同じ会話をシートで出す）。
+    private struct AiSheet: View {
+        @Environment(\.dismiss) private var dismiss
+
+        var body: some View {
+            NavigationStack {
+                AiTabView()
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) { Button(L.t("閉じる", "Close")) { dismiss() } }
+                    }
+                    // 「設定を開く」は、シートと再生画面を閉じてから設定へ
+                    .environment(\.aiOpenSettings) {
+                        dismiss()
+                        IOSShell.shared.playerOpen = false
+                        AppServices.nav.settings()
+                    }
+            }
+            .presentationDragIndicator(.visible)
+        }
     }
 
     private func header(_ player: PlayerService, _ song: Song?) -> some View {
@@ -97,6 +122,11 @@ struct NowPlayingView: View {
                 Text(song?.album?.title ?? L.t("再生中", "Now playing")).font(.subheadline.weight(.semibold)).lineLimit(1)
             }
             Spacer()
+            // Claude に聞く（今の曲と歌詞を添えて頼む。Android の再生画面と同じ入口）
+            if song != nil {
+                Button { aiOpen = true } label: { Image(systemName: "sparkles").font(.title3).frame(width: 44, height: 44) }
+                    .accessibilityLabel(L.t("Claude に聞く", "Ask Claude"))
+            }
             Menu {
                 if let song { SongMenuItems(song: song) }
             } label: { Image(systemName: "ellipsis").font(.title3).frame(width: 44, height: 44) }

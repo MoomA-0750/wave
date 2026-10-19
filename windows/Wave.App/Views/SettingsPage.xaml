@@ -21,11 +21,9 @@
                 </StackPanel>
                 <Button x:Name="AccountButton" Grid.Column="2" VerticalAlignment="Center" Click="OnAccount" />
             </Grid>
-            <InfoBar x:Name="ReloginBar" Severity="Warning" IsClosable="False"
-                     Title="{x:Bind app:L.T('ログインを確かめられませんでした', 'Couldn’t verify your login')}"
-                     Message="{x:Bind app:L.T('ログインの期限が切れたかもしれません。もう一度ログインしてください。', 'Your login may have expired. Please log in again.')}">
+            <InfoBar x:Name="ReloginBar" Severity="Warning" IsClosable="False">
                 <InfoBar.ActionButton>
-                    <Button Click="OnRelogin" Content="{x:Bind app:L.T('もう一度ログイン', 'Log in again')}" />
+                    <Button Click="OnRelogin" Content="{x:Bind app:L.T('ログインし直す', 'Log in again')}" />
                 </InfoBar.ActionButton>
             </InfoBar>
             <InfoBar x:Name="UnreadableBar" Severity="Warning" IsClosable="False"

@@ -696,6 +696,29 @@ class WaveSessionTest {
         }
 
     @Test
+    fun contentLanguageAndRegionAreSentAsGiven() {
+        val store =
+            object : xyz.mooma0750.wave.core.auth.CredentialStore {
+                override suspend fun load() = xyz.mooma0750.wave.core.auth.LoadResult.Empty
+
+                override suspend fun save(credentials: Credentials) = xyz.mooma0750.wave.core.auth.SaveResult.Saved
+
+                override suspend fun clear() = true
+            }
+        // 画面の言語を英語に固定した日本の端末: 言語は英語、地域は日本のまま
+        val fixed = WaveSession(client, xyz.mooma0750.wave.core.auth.AuthManager(store), scope, rethrowViolations = false, contentLanguage = "en", contentRegion = "JP")
+        assertEquals("en" to "JP", fixed.innerTube.locale.let { it.hl to it.gl })
+        fixed.close()
+        // 地域を渡さなければ端末の地域のまま（言語だけ変える）
+        val languageOnly = WaveSession(client, xyz.mooma0750.wave.core.auth.AuthManager(store), scope, rethrowViolations = false)
+        val deviceGl = languageOnly.innerTube.locale.gl
+        languageOnly.close()
+        val ja = WaveSession(client, xyz.mooma0750.wave.core.auth.AuthManager(store), scope, rethrowViolations = false, contentLanguage = "ja")
+        assertEquals("ja" to deviceGl, ja.innerTube.locale.let { it.hl to it.gl })
+        ja.close()
+    }
+
+    @Test
     fun writesWhileLoggedOutAreNotSent(): Unit =
         runBlocking {
             val session = session()

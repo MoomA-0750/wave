@@ -52,4 +52,15 @@ class SongFilterTest {
         assertTrue(SongFilter.matches(many[3], "hello"))
         assertFalse(SongFilter.matches(many[1], "hello"))
     }
+
+    @Test
+    fun widthAndKanaTypeAreIgnoredLikeTheOtherDevices() {
+        // 全角の英字・ひらがな・半角のカタカナでも当たる（Mac・iPhone の fold、Windows の IgnoreWidth・IgnoreKanaType と同じ）
+        assertEquals(listOf(0), SongFilter.matchingIndices(songs, "ＨＥＬＬＯ"))
+        assertEquals(listOf(2), SongFilter.matchingIndices(songs, "ぶるー"))
+        assertEquals(listOf(2), SongFilter.matchingIndices(songs, "ﾌﾞﾙｰ"))
+        assertTrue(LibraryOrder.matches("ブルー", null, "ぶるー"))
+        assertTrue(LibraryOrder.matches("Lo-Fi Girl", "ＹｏｕＴｕｂｅ", "lo-fi　youtube"))
+        assertFalse(LibraryOrder.matches("ブルー", null, "ぶるう"))
+    }
 }

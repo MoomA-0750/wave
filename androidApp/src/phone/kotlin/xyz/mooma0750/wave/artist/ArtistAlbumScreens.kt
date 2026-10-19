@@ -3,6 +3,7 @@ package xyz.mooma0750.wave.artist
 import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,6 +32,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -63,6 +65,7 @@ import xyz.mooma0750.wave.library.LikedSongsCache
 import xyz.mooma0750.wave.library.QueueMenu
 import xyz.mooma0750.wave.navigation.SongActions
 import xyz.mooma0750.wave.search.SongMenuButton
+import xyz.mooma0750.wave.search.SongMenuSheet
 import xyz.mooma0750.wave.search.SongRow
 import xyz.mooma0750.wave.search.failureMessage
 import xyz.mooma0750.wave.ui.BackButton
@@ -173,6 +176,17 @@ fun ArtistScreen(
                         }
                     }
                 }
+                // 動画の棚（MV・YouTube の動画。iPhone と同じく1つにまとめる）。棚の曲と同じく、押すと曲の画面を開く
+                if (page.videos.isNotEmpty()) {
+                    item(key = "videos") {
+                        Column(Modifier.padding(top = 8.dp)) {
+                            SectionTitle(stringResource(R.string.artist_videos))
+                            LazyRow(contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                items(page.videos, key = { it.videoId }) { video -> VideoCard(video, actions) }
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -198,6 +212,25 @@ private fun AlbumCard(
         Text(album.title, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium)
         album.subtitle?.let { Text(it, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall) }
     }
+}
+
+/** 動画のカード（横長の画像と題名）。押すと曲の画面、長押しで曲のメニュー（ホームの棚の曲と同じ）。 */
+@Composable
+private fun VideoCard(
+    video: Song,
+    actions: SongActions,
+) {
+    var menu by remember { mutableStateOf(false) }
+    Column(Modifier.width(220.dp).combinedClickable(onLongClick = { menu = true }, onClick = { actions.openSong(video) })) {
+        coil3.compose.AsyncImage(
+            model = video.thumbnailUrl,
+            contentDescription = null,
+            modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(MaterialTheme.shapes.small),
+            contentScale = ContentScale.Crop,
+        )
+        Text(video.title, Modifier.padding(top = 6.dp), maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium)
+    }
+    if (menu) SongMenuSheet(video, actions, onDismiss = { menu = false })
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

@@ -17,7 +17,7 @@ import xyz.mooma0750.wave.playback.QueueFile
 
 /**
  * 検索の履歴の保存（キューの保存と同じ作り: `noBackupFilesDir` の AtomicFile、暗号化しない、書き込みは1つの Mutex で直列）。
- * 中身は検索した語と、検索から開いたアーティスト・アルバムの名前だけ。アカウントを切り替えたら消す。
+ * 中身は検索した語と、検索から開いたもの・再生した曲の名前と画像の URL だけ。アカウントを切り替えたら消す。
  */
 class SearchHistoryStore(
     private val file: QueueFile,

@@ -133,6 +133,8 @@ struct ArtistPageView: View {
         let releases = ReleaseWatchState.listed(AppServices.releases.recent.filter { $0.artistId == browseId }, artistId: browseId, page: page,
                                                 year: Calendar.current.component(.year, from: Date())).map(HomeModel.releaseItem)
         if !releases.isEmpty { list.insert(HomeShelf(title: L.t("新作", "New releases"), strapline: nil, items: releases), at: 0) }
+        // 動画の棚（MV・YouTube の動画。iPhone・Android と同じ）
+        if !page.videos.isEmpty { list.append(HomeShelf(title: L.t("動画", "Videos"), strapline: nil, items: page.videos.map { .song($0) })) }
         shelves = list
         Task { await loadPosts(page) }
         await loadLiked(page)

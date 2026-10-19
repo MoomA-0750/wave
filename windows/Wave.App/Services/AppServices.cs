@@ -67,7 +67,7 @@ public static class AppServices
         Feeds = new PodcastFeedClient(FeedHttp, region.Length == 2 && region != "IV" ? region : "JP", $"wave/{version}");
         FeedLibrary = FeedStore.Create();
         Credentials = new CredentialStore();
-        Account = new AccountState();
+        Account = new AccountState(ui);
         Library = new LibraryState();
         Player = new PlayerService(ui);
         Account.Restore();

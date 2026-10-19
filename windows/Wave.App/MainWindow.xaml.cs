@@ -589,7 +589,7 @@ public sealed partial class MainWindow : Window
         if (FullView.Visibility == Visibility.Visible)
         {
             FullLyricsScroller.Visibility = Ui.Show(lyrics is not null);
-            (fullLyrics ??= new LyricsFollower(FullLyricsScroller, FullLyrics, 30, plainLines: 200)).Update(lyrics, position);
+            (fullLyrics ??= new LyricsFollower(FullLyricsScroller, FullLyrics, 30, plainLines: 200, scrollable: true)).Update(lyrics, position);
         }
     }
 
@@ -892,7 +892,8 @@ public sealed partial class MainWindow : Window
     private void OnQueueRightTapped(object sender, RightTappedRoutedEventArgs e)
     {
         if (sender is FrameworkElement { DataContext: QueueEntry entry } element)
-            SongMenu.Build(entry.Song, queueIndex: entry.IsCurrent ? null : entry.Index).ShowAt(element, e.GetPosition(element));
+            // ほかの端末を映している間は「キューから削除」を出さない（その端末のキューは消せない。Android・iPhone と同じ）
+            SongMenu.Build(entry.Song, queueIndex: entry.IsCurrent || Player.IsRemote ? null : entry.Index).ShowAt(element, e.GetPosition(element));
     }
 
     private void OnShowQueue(object sender, RoutedEventArgs e) => SetRightPane(true, queue: true);

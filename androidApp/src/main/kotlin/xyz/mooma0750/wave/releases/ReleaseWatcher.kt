@@ -30,6 +30,9 @@ class ReleaseWatcher : JobService() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var job: Job? = null
 
+    // Android 12 以前は、設定で固定した画面の言語で通知の文言を作る（13 以降は OS が当てる）
+    override fun attachBaseContext(newBase: android.content.Context) = super.attachBaseContext(xyz.mooma0750.wave.settings.AppLanguage.wrap(newBase))
+
     override fun onStartJob(params: JobParameters): Boolean {
         val container = (application as WaveApplication).container
         job =

@@ -143,7 +143,7 @@ public final class StreamResolver: @unchecked Sendable {
         let response = try await client.post("player", body: body)
         guard response.isOk, let root = response.value else {
             switch response.failure {
-            case .notLoggedIn: return .failed(.notLoggedIn)
+            case .notLoggedIn, .expired: return .failed(.notLoggedIn)
             case .network: return .failed(.network)
             case .parse: return .failed(.parse)
             default: return .failed(.http)
@@ -153,7 +153,11 @@ public final class StreamResolver: @unchecked Sendable {
         if LiveParsers.isLive(root) { return .failed(.liveStream) }
         let status = root.path("playabilityStatus", "status").str
         // 年齢確認などで曲ごとに返る。その曲だけの失敗にする（Android と同じ）
-        if status == "LOGIN_REQUIRED" { return .failed(.songLoginRequired) }
+        // 本当にログインが外れていたときに気づけるよう、状態は変えずに裏でアカウントを確かめる（外れていたら切れた扱い）
+        if status == "LOGIN_REQUIRED" {
+            client.confirmSession()
+            return .failed(.songLoginRequired)
+        }
         if status != "OK" { return .failed(.unplayable) }
         let streaming = root.path("streamingData")
         let formats = streaming.path("adaptiveFormats").items

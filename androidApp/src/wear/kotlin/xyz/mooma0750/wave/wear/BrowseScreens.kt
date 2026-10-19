@@ -170,6 +170,8 @@ fun SearchScreen(
     actions: SongActions,
     onPlaySong: (Song) -> Unit,
     onOpenBrowse: () -> Unit,
+    /** 履歴のプレイリストを開く。 */
+    onOpenPlaylist: (xyz.mooma0750.wave.core.music.PlaylistSummary) -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val entries by history.entries.collectAsStateWithLifecycle()
@@ -188,6 +190,12 @@ fun SearchScreen(
                     is SearchHistoryEntry.Artist -> EntryRow(look, entry.name, stringResource(R.string.search_kind_artist), entry.thumbnailUrl, round = true) { actions.openArtist(ArtistRef(entry.name, entry.browseId)) }
                     is SearchHistoryEntry.Album -> EntryRow(look, entry.title, stringResource(R.string.search_kind_album), entry.thumbnailUrl) { actions.openAlbum(AlbumRef(entry.title, entry.browseId)) }
                     is SearchHistoryEntry.Song -> EntryRow(look, entry.title, entry.subtitle, entry.thumbnailUrl) { viewModel.searchFor(entry.title) }
+                    is SearchHistoryEntry.Playlist ->
+                        EntryRow(look, entry.title, stringResource(R.string.library_kind_playlist), entry.thumbnailUrl) {
+                            onOpenPlaylist(xyz.mooma0750.wave.core.music.PlaylistSummary(entry.playlistId, entry.title, entry.subtitle, entry.thumbnailUrl))
+                        }
+                    // 時計には番組のページが無いので、番組の名前で探す
+                    is SearchHistoryEntry.Podcast -> EntryRow(look, entry.title, stringResource(R.string.search_kind_podcast), entry.thumbnailUrl) { viewModel.searchFor(entry.title) }
                 }
             }
             return@ListScreen

@@ -67,6 +67,9 @@ class WaveApplication :
     lateinit var container: AppContainer
         private set
 
+    // Android 12 以前は、設定で固定した画面の言語をここで当てる（13 以降は OS が当てる）
+    override fun attachBaseContext(base: Context) = super.attachBaseContext(xyz.mooma0750.wave.settings.AppLanguage.wrap(base))
+
     override fun onCreate() {
         super.onCreate()
         // ログイン用 WebView のデータは、このプロセスで WebView を初めて使う前に毎回消す
@@ -144,10 +147,6 @@ class WaveApplication :
         const val LOGIN_WEBVIEW_SUFFIX = "login"
         const val LOG_TAG = "wave"
 
-        /** YouTube に送る言語（画面の言語に合わせる）。日本語の画面なら ja、それ以外は en。 */
-        fun contentLanguage(resources: android.content.res.Resources): String =
-            if (resources.configuration.locales[0].language == "ja") "ja" else "en"
-
         /** 画面の作り直しの間、中継 v2 の接続を残しておく時間。 */
         const val CONFIGURATION_CHANGE_GRACE_MS = 5_000L
 
@@ -196,8 +195,14 @@ class AppContainer(
 
     val httpClient: HttpClient = createWaveHttpClient(guardedEngine)
 
-    // 画面が日本語なので、YouTube の見出しやジャンル名も日本語にそろえる（端末が英語でも混ざらないように）
-    val session = WaveSession(httpClient, authManager, appScope, rethrowViolations = isDebuggable, contentLanguage = WaveApplication.contentLanguage(appContext.resources))
+    /**
+     * YouTube に送る言語（hl）と地域（gl）。画面の言語（設定の「画面の言語」）に合わせ、ここで1回だけ決めて、
+     * YouTube Music・ライブ・チャンネルの投稿・ポッドキャストの目録のどれにも同じものを使う（起動のときに決まる）。
+     */
+    private val youTubeLocale = xyz.mooma0750.wave.settings.AppLanguage.youTubeLocale(appContext)
+
+    // YouTube の見出しやジャンル名も画面と同じ言語にそろえる（端末の言語と画面の言語が違っても混ざらないように）
+    val session = WaveSession(httpClient, authManager, appScope, rethrowViolations = isDebuggable, contentLanguage = youTubeLocale.first, contentRegion = youTubeLocale.second)
 
     /** ストリームの解決（WaveSession のガード付きクライアントを使う）。期限はスリープ中も進む時計で測る。 */
     val stream = StreamComponents.create(session, nowMs = SystemClock::elapsedRealtime, trackCipherPath = isDebuggable)
@@ -212,7 +217,7 @@ class AppContainer(
     val podcastFeeds =
         xyz.mooma0750.wave.core.music.PodcastFeedClient(
             HttpClient(OkHttp.create { preconfigured = feedHttpClient }),
-            country = java.util.Locale.getDefault().country.ifBlank { "JP" },
+            country = youTubeLocale.second,
             userAgent = "wave/${BuildConfig.VERSION_NAME}",
             fetchFeed = { url, agent -> xyz.mooma0750.wave.podcast.FeedFetch.fetch(feedHttpClient, url, agent) },
         )
@@ -224,8 +229,8 @@ class AppContainer(
     val live =
         xyz.mooma0750.wave.core.music.LiveClient(
             HttpClient(OkHttp.create { preconfigured = mediaHttpClient }),
-            hl = java.util.Locale.getDefault().language.ifBlank { "ja" },
-            gl = java.util.Locale.getDefault().country.ifBlank { "JP" },
+            hl = youTubeLocale.first,
+            gl = youTubeLocale.second,
             nowMs = SystemClock::elapsedRealtime,
         )
 
@@ -248,8 +253,8 @@ class AppContainer(
     val channelPosts =
         xyz.mooma0750.wave.core.music.ChannelPostsClient(
             HttpClient(OkHttp.create { preconfigured = mediaHttpClient }),
-            hl = java.util.Locale.getDefault().language.ifBlank { "ja" },
-            gl = java.util.Locale.getDefault().country.ifBlank { "JP" },
+            hl = youTubeLocale.first,
+            gl = youTubeLocale.second,
         )
 
     /** 自アプリの UI のコントローラーを見分けるための、プロセスごとの値（接続ヒントで渡す）。 */

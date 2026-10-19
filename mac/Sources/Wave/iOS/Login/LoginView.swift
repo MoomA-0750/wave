@@ -30,7 +30,10 @@ struct LoginView: View {
                 }
                 ToolbarItem(placement: .cancellationAction) {
                     // ログインせずに使う（検索・歌詞などは見られる。曲は鳴らない）
-                    Button(L.t("あとで", "Later")) { LoginGate.shared.skipped = true }
+                    Button(L.t("あとで", "Later")) {
+                        // ログインし直すために開いたときは、閉じるだけ（今のログインのまま）
+                        if LoginGate.shared.reLogin { LoginGate.shared.reLogin = false } else { LoginGate.shared.skipped = true }
+                    }
                 }
             }
         }
@@ -91,6 +94,7 @@ final class LoginModel {
             finishing = false
             return
         }
+        LoginGate.shared.reLogin = false
         AppServices.toast.show(L.t("ログインしました", "Logged in"))
     }
 

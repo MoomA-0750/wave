@@ -11,8 +11,13 @@ private final class HomeFeedModel {
     var chips: [HomeChip] = []
     var selected: HomeChip?
     var recent: [HomeItem] = []
+    /// YouTube Music の新作（アルバム・シングル）。「すべて」のときだけ読み、棚の先頭に出す（Android と同じ）。
+    var newReleases: [AlbumSummary] = []
     var loading = false
     var failure: FailureKind?
+
+    /// 出す棚: 新作を先頭に、ホームの棚を続ける（ホームに同じ新作の棚が来ていれば、こちらは出さない）。
+    var displayShelves: [HomeShelf] { HomeShelves.withNewReleases(newReleases, title: L.t("新作", "New releases"), shelves: shelves) }
     var hasMore: Bool { continuation != nil }
     private(set) var continuation: String?
     @ObservationIgnored private var seen: Set<String> = []
@@ -54,12 +59,24 @@ private final class HomeFeedModel {
             replacePending = false
         }
         async let recentDone: Void = loadRecent(id)
+        async let releasesDone: Void = loadNewReleases(id)
         // 最初は棚が8つ以上になるまで続きを読む（Android と同じ）
         for _ in 0..<4 where id == requestId {
             if !(await loadPage(id)) { break }
             if shelves.count >= 8 || continuation == nil { break }
         }
         await recentDone
+        await releasesDone
+    }
+
+    private func loadNewReleases(_ id: Int) async {
+        guard selected == nil else {
+            newReleases = []
+            return
+        }
+        let result = (try? await AppServices.music.newReleases()) ?? .failed(.network)
+        guard id == requestId else { return }
+        newReleases = result.value ?? []
     }
 
     private func loadRecent(_ id: Int) async {
@@ -121,14 +138,8 @@ private final class HomeFeedModel {
     }
 }
 
-/// 読み込みの失敗の文（Android の failureMessage と同じ分け方）。
-private func failureText(_ failure: FailureKind) -> String {
-    switch failure {
-    case .notLoggedIn: L.t("ログインが必要です", "You need to log in")
-    case .network: L.t("通信できませんでした", "Couldn't connect")
-    case .http, .parse: L.t("YouTube Music から読み込めませんでした", "Couldn't load from YouTube Music")
-    }
-}
+/// 読み込みの失敗の文（Shared の FailureText。Android の failureMessage と同じ分け方）。
+private func failureText(_ failure: FailureKind) -> String { FailureText.message(failure) }
 
 /// ホーム（Android の HomeScreen と同じ並び）: 絞り込みのチップ、最近聴いたものの2列の格子、登録したアーティストの新作、おすすめの棚。
 /// 右上のアカウントの絵から、最近再生した曲・端末の連携・設定へ。
@@ -146,14 +157,16 @@ struct HomeView: View {
                     ShelfRow(title: L.t("登録したアーティストの新作", "New from artists you subscribe to"), strapline: nil,
                              items: releases.map(HomeFeedModel.releaseItem))
                 }
-                ForEach(Array(home.shelves.enumerated()), id: \.offset) { i, shelf in
+                let shelves = home.displayShelves
+                ForEach(Array(shelves.enumerated()), id: \.offset) { i, shelf in
                     ShelfRow(title: shelf.title, strapline: shelf.strapline, items: shelf.items)
                         // 下の端に近づいたら続きを読む（iPhone ではホームの下に何も続かないので自動で読む）
-                        .onAppear { if i >= home.shelves.count - 2 { home.loadMore() } }
+                        .onAppear { if i >= shelves.count - 2 { home.loadMore() } }
                 }
                 if home.loading {
-                    ProgressView().frame(maxWidth: .infinity).padding(.vertical, home.shelves.isEmpty ? 80 : 8)
-                } else if let failure = home.failure {
+                    ProgressView().frame(maxWidth: .infinity).padding(.vertical, shelves.isEmpty ? 80 : 8)
+                } else if let failure = home.failure, home.newReleases.isEmpty {
+                    // 新作だけでも読めていれば、失敗は出さない（Android と同じ）
                     LoadState(loading: false, failure: L.t("おすすめを読み込めませんでした: ", "Couldn't load recommendations: ") + failureText(failure)) {
                         home.reload()
                     }

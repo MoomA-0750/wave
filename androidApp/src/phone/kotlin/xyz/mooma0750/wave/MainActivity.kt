@@ -135,6 +135,9 @@ class MainActivity : ComponentActivity() {
             android.util.Log.i(WaveApplication.LOG_TAG, "notification permission granted=$granted")
         }
 
+    // Android 12 以前は、設定で固定した画面の言語をここで当てる（13 以降は OS が当てる）
+    override fun attachBaseContext(newBase: android.content.Context) = super.attachBaseContext(xyz.mooma0750.wave.settings.AppLanguage.wrap(newBase))
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -308,6 +311,7 @@ class MainActivity : ComponentActivity() {
                                         onOpenAlbum = { nav.push(Screen.Album(it.browseId, it.title)) },
                                         onOpenPodcast = { nav.push(Screen.Podcast(it.browseId, it.title)) },
                                         onCreatePlaylist = { container.playlistEditor.create(it, null) },
+                                        settings = container.settings,
                                     )
                                 Tab.Home ->
                                     HomeScreen(
@@ -364,6 +368,7 @@ class MainActivity : ComponentActivity() {
                                         onBack = pop,
                                         history = container.searchHistory,
                                         onOpenPodcast = { nav.push(Screen.Podcast(it.browseId, it.title)) },
+                                        onOpenPlaylist = { nav.push(Screen.Playlist(it)) },
                                     )
                                 }
                                 is Screen.Playlist -> {
