@@ -254,7 +254,10 @@ public static partial class MusicParsers
     {
         var panel = root.Path("continuationContents", "playlistPanelContinuation").Obj() ?? QueuePanel(root).Obj();
         if (panel is null) return new UpNextPage([], null, null);
-        var songs = panel.Path("contents").Items().Select(i => i.Path("playlistPanelVideoRenderer").Obj()).OfType<JsonObject>().Select(PlaylistPanelSong).OfType<Song>().ToList();
+        // ログイン中は、MV と対になった曲が playlistPanelVideoWrapperRenderer に包まれて来る（選んだ曲もこの形）。包みの中の曲も読む
+        var songs = panel.Path("contents").Items()
+            .Select(i => i.Path("playlistPanelVideoRenderer").Obj() ?? i.Path("playlistPanelVideoWrapperRenderer", "primaryRenderer", "playlistPanelVideoRenderer").Obj())
+            .OfType<JsonObject>().Select(PlaylistPanelSong).OfType<Song>().ToList();
         var continuation = panel.Path("continuations").Items()
             .Select(c => c.Path("nextRadioContinuationData", "continuation").Str() ?? c.Path("nextContinuationData", "continuation").Str())
             .FirstOrDefault(c => c is not null);

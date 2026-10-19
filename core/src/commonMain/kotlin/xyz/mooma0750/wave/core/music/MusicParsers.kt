@@ -284,7 +284,11 @@ internal object MusicParsers {
                     .path("tabRenderer", "content", "musicQueueRenderer", "content", "playlistPanelRenderer")
                     .asObject()
                 ?: return UpNextPage(emptyList(), null, null)
-        val songs = panel.path("contents").arrayItems().mapNotNull { it.path("playlistPanelVideoRenderer").asObject()?.let(::playlistPanelSong) }
+        // ログイン中は、MV と対になった曲が playlistPanelVideoWrapperRenderer に包まれて来る（選んだ曲もこの形）。包みの中の曲も読む
+        val songs =
+            panel.path("contents").arrayItems().mapNotNull {
+                (it.path("playlistPanelVideoRenderer").asObject() ?: it.path("playlistPanelVideoWrapperRenderer", "primaryRenderer", "playlistPanelVideoRenderer").asObject())?.let(::playlistPanelSong)
+            }
         val continuation =
             panel.path("continuations").arrayItems().firstNotNullOfOrNull {
                 it.path("nextRadioContinuationData", "continuation").string() ?: it.path("nextContinuationData", "continuation").string()

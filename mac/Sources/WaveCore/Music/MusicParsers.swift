@@ -225,7 +225,10 @@ public enum MusicParsers {
         guard let panel = root.path("continuationContents", "playlistPanelContinuation").asObject ?? queuePanel(root).asObject else {
             return UpNextPage(songs: [], continuation: nil, playlistId: nil)
         }
-        let songs = panel.path("contents").items.compactMap { $0.path("playlistPanelVideoRenderer").asObject }.compactMap(playlistPanelSong)
+        // ログイン中は、MV と対になった曲が playlistPanelVideoWrapperRenderer に包まれて来る（選んだ曲もこの形）。包みの中の曲も読む
+        let songs = panel.path("contents").items.compactMap {
+            $0.path("playlistPanelVideoRenderer").asObject ?? $0.path("playlistPanelVideoWrapperRenderer", "primaryRenderer", "playlistPanelVideoRenderer").asObject
+        }.compactMap(playlistPanelSong)
         let continuation = panel.path("continuations").items.lazy
             .compactMap { $0.path("nextRadioContinuationData", "continuation").str ?? $0.path("nextContinuationData", "continuation").str }.first
         return UpNextPage(songs: songs, continuation: continuation, playlistId: panel.path("playlistId").str)

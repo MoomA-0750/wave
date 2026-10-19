@@ -70,6 +70,12 @@ class MusicVideoTest {
     }
 
     @Test
+    fun radioKeepsSongsWrappedWithTheirVideo() {
+        val plain = MusicParsers.upNext(next).songs.map { it.videoId }
+        assertEquals(plain, MusicParsers.upNext(wrappedFirstRow()).songs.map { it.videoId })
+    }
+
+    @Test
     fun audioTrackWithCounterpartMapsTimesThroughTheSegmentMap() {
         val info = requireNotNull(MusicParsers.musicVideoInfo(wrappedFirstRow(), firstVideoId))
         assertEquals(MusicVideoType.Atv, info.type)
