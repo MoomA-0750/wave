@@ -8,6 +8,7 @@ struct PlayerBar: View {
     @State private var model = MainWindowModel.shared
     @State private var volumeBeforeMute = 0.7
     @State private var devicesOpen = false
+    @State private var volumeOpen = false
 
     var body: some View {
         let player = AppServices.player!
@@ -33,48 +34,77 @@ struct PlayerBar: View {
                 // 中央: ボタンと位置
                 TransportControls()
                     .frame(maxWidth: 720)
-                // 右: 歌詞・キュー・デバイス・再生中の画面・全画面・音量
-                HStack(spacing: 4) {
-                    Spacer(minLength: 0)
-                    IconToggle(isOn: isLyrics, help: L.t("歌詞", "Lyrics"), action: toggleLyrics) {
-                        Image(systemName: "quote.bubble").font(.system(size: 15))
-                    }
-                    IconToggle(isOn: model.queueToggleOn, help: L.t("キュー", "Queue"), action: model.toggleQueue) {
-                        Image(systemName: "list.bullet").font(.system(size: 15))
-                    }
-                    if AppServices.connect.configured {
-                        Button { devicesOpen.toggle() } label: {
-                            HStack(spacing: 6) {
-                                Image(systemName: player.isRemote ? "iphone.radiowaves.left.and.right" : "hifispeaker.2").font(.system(size: 15))
-                                    .foregroundStyle(player.isRemote ? Color.accentColor : Color.primary)
-                                // ほかの端末で鳴っているときは、アイコンの右にその端末名（Spotify と同じく色を付ける）
-                                if player.isRemote, let device = player.remoteDevice {
-                                    // 名前の長さだけの幅にする（最大幅の枠のままだと短い名前も 140 点に広がり、真ん中に浮く）
-                                    Text(device).font(.caption.weight(.semibold)).foregroundStyle(Color.accentColor).lineLimit(1)
-                                        .frame(maxWidth: 140, alignment: .leading).fixedSize(horizontal: true, vertical: false)
-                                }
-                            }
-                        }
-                        .buttonStyle(IconButtonStyle())
-                        .help(L.t("デバイスに接続", "Connect to a device"))
-                        .popover(isPresented: $devicesOpen, arrowEdge: .top) { DevicesPopover(isOpen: $devicesOpen) }
-                    }
-                    IconToggle(isOn: model.paneToggleOn, help: L.t("再生中の画面", "Now playing view"), action: model.togglePane) {
-                        Image(systemName: "sidebar.right").font(.system(size: 15))
-                    }
-                    IconToggle(isOn: model.fullScreen, help: L.t("全画面 (F11)", "Full screen (F11)"), action: { model.setFullScreen(!model.fullScreen) }) {
-                        Image(systemName: "arrow.up.left.and.arrow.down.right").font(.system(size: 15))
-                    }
-                    Button(action: mute) { Image(systemName: volumeSymbol(player.volume)).font(.system(size: 15)).frame(width: 20) }
-                        .buttonStyle(IconButtonStyle()).help(L.t("ミュート", "Mute"))
-                    Slider(value: Binding(get: { player.volume }, set: { player.volume = $0 }), in: 0...1).frame(width: 110).controlSize(.small)
+                // 右: 歌詞・キュー・デバイス・再生中の画面・全画面・音量。入りきらなければ、端末名、次に音量のバーを隠す
+                // （隠したものはアイコンを押すと出る: 端末名はデバイスの一覧、音量のバーは音量の小窓）
+                ViewThatFits(in: .horizontal) {
+                    rightControls(player, showDeviceName: true, inlineVolume: true)
+                    rightControls(player, showDeviceName: false, inlineVolume: true)
+                    rightControls(player, showDeviceName: false, inlineVolume: false)
                 }
-                .frame(width: side)
+                .frame(width: side, alignment: .trailing)
             }
             .padding(.horizontal, 16)
             .frame(maxHeight: .infinity)
         }
         .frame(height: 88)
+    }
+
+    @ViewBuilder
+    private func rightControls(_ player: PlayerService, showDeviceName: Bool, inlineVolume: Bool) -> some View {
+        HStack(spacing: 4) {
+            IconToggle(isOn: isLyrics, help: L.t("歌詞", "Lyrics"), action: toggleLyrics) {
+                Image(systemName: "quote.bubble").font(.system(size: 15))
+            }
+            IconToggle(isOn: model.queueToggleOn, help: L.t("キュー", "Queue"), action: model.toggleQueue) {
+                Image(systemName: "list.bullet").font(.system(size: 15))
+            }
+            if AppServices.connect.configured {
+                Button { devicesOpen.toggle() } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: player.isRemote ? "iphone.radiowaves.left.and.right" : "hifispeaker.2").font(.system(size: 15))
+                            .foregroundStyle(player.isRemote ? Color.accentColor : Color.primary)
+                        // ほかの端末で鳴っているときは、アイコンの右にその端末名（Spotify と同じく色を付ける）
+                        if showDeviceName, player.isRemote, let device = player.remoteDevice {
+                            // 名前の長さだけの幅にする（最大幅の枠のままだと短い名前も 140 点に広がり、真ん中に浮く）
+                            Text(device).font(.caption.weight(.semibold)).foregroundStyle(Color.accentColor).lineLimit(1)
+                                .frame(maxWidth: 140, alignment: .leading).fixedSize(horizontal: true, vertical: false)
+                        }
+                    }
+                }
+                .buttonStyle(IconButtonStyle())
+                .help(player.isRemote && player.remoteDevice != nil && !showDeviceName
+                    ? L.t("デバイスに接続（\(player.remoteDevice!) で再生中）", "Connect to a device (playing on \(player.remoteDevice!))")
+                    : L.t("デバイスに接続", "Connect to a device"))
+                .popover(isPresented: $devicesOpen, arrowEdge: .top) { DevicesPopover(isOpen: $devicesOpen) }
+            }
+            IconToggle(isOn: model.paneToggleOn, help: L.t("再生中の画面", "Now playing view"), action: model.togglePane) {
+                Image(systemName: "sidebar.right").font(.system(size: 15))
+            }
+            IconToggle(isOn: model.fullScreen, help: L.t("全画面 (F11)", "Full screen (F11)"), action: { model.setFullScreen(!model.fullScreen) }) {
+                Image(systemName: "arrow.up.left.and.arrow.down.right").font(.system(size: 15))
+            }
+            if inlineVolume {
+                Button(action: mute) { Image(systemName: volumeSymbol(player.volume)).font(.system(size: 15)).frame(width: 20) }
+                    .buttonStyle(IconButtonStyle()).help(L.t("ミュート", "Mute"))
+                volumeSlider(player)
+            } else {
+                // 狭いとき: 音量のアイコンを押すと、ミュートと音量のバーの小窓を出す
+                Button { volumeOpen.toggle() } label: { Image(systemName: volumeSymbol(player.volume)).font(.system(size: 15)).frame(width: 20) }
+                    .buttonStyle(IconButtonStyle()).help(L.t("音量", "Volume"))
+                    .popover(isPresented: $volumeOpen, arrowEdge: .top) {
+                        HStack(spacing: 8) {
+                            Button(action: mute) { Image(systemName: volumeSymbol(player.volume)).font(.system(size: 15)).frame(width: 20) }
+                                .buttonStyle(IconButtonStyle()).help(L.t("ミュート", "Mute"))
+                            volumeSlider(player)
+                        }
+                        .padding(12)
+                    }
+            }
+        }
+    }
+
+    private func volumeSlider(_ player: PlayerService) -> some View {
+        Slider(value: Binding(get: { player.volume }, set: { player.volume = $0 }), in: 0...1).frame(width: 110).controlSize(.small)
     }
 
     private var isLyrics: Bool { if case .lyrics = AppServices.nav.current.route { return true } else { return false } }
