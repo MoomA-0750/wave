@@ -56,15 +56,18 @@ object DocSealer {
         prevHash: String?,
         issuedAtEpochMs: Long,
         plaintext: ByteArray,
+        /** 包む宛先を家の一部の端末に絞る（ログインを渡す命令、ADR-0015）。null なら家の全端末。 */
+        only: Set<String>? = null,
     ): SealedDoc {
         require(plaintext.size <= MAX_PLAINTEXT)
+        require(only == null || (only.isNotEmpty() && only.all { it in chain.members })) { "recipient is not a member" }
         require(signer.deviceId in chain.members) { "writer is not a member" }
         val header = DocHeader(kind = kind, householdId = chain.householdId, writerId = signer.deviceId, version = version, prevHash = prevHash, headSeq = chain.headSeq, headHash = chain.headHash, issuedAtEpochMs = issuedAtEpochMs)
         val headerHash = WaveCrypto.sha256(canonicalHeader(header))
         val contentKey = WaveCrypto.randomBytes(32)
         val (nonce, ciphertext) = WaveCrypto.seal(contentKey, headerHash, pad(plaintext))
         val recipients =
-            chain.members.values.sortedBy { it.keys.deviceId }.map { member ->
+            chain.members.values.filter { only == null || it.keys.deviceId in only }.sortedBy { it.keys.deviceId }.map { member ->
                 val sealed = Hpke.seal(member.kx, wrapInfo(kind, chain.householdId), wrapAad(headerHash, member.keys.deviceId), contentKey)
                 DocRecipient(member.keys.deviceId, b64.encodeToString(sealed.enc), b64.encodeToString(sealed.ciphertext))
             }

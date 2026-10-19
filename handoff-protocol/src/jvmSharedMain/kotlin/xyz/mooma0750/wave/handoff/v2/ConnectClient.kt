@@ -130,6 +130,9 @@ class ConnectClient(
 
         /** ほかの端末と合わせたライブラリが届いた（手元に取り込む、ADR-0013）。 */
         fun libraryChanged(body: LibraryBody) {}
+
+        /** 家の端末からログインが渡された（wave-api だけが受け取る、ADR-0015）。確かめは済んでいる。 */
+        fun loginGranted(grant: CommandBody.LoginGrant) {}
     }
 
     /** 表示用: ほかの端末の最新のカーソルと、今の時刻に合わせた位置。 */
@@ -266,6 +269,9 @@ class ConnectClient(
 
     /** 検証した鎖の記録（追記する前に、追記後の鎖が通るかを確かめるのに使う）。家に入っていなければ null。 */
     fun verifiedRecords(): List<ChainRecord>? = if (chain == null) null else records
+
+    /** 表示用の最新のカーソル（別アカウントのものを含む）。中継のテストと wave-api が使う。 */
+    fun latestCursorBody(): Pair<String, CursorBody>? = latestCursor?.let { it.writer to it.body }
 
     /** 今の接続で最新の状態をそろえた（welcome を処理し、鎖の取り直しを待っている状態が無い）。D-9 の判断はこれが true のときだけ行う。 */
     val stateSettled: Boolean get() = welcomed && deferred.isEmpty()
@@ -974,6 +980,27 @@ class ConnectClient(
     }
 
     /**
+     * 家の端末 target（wave-api）にログインを渡す（ADR-0015）。本人が押したときだけ呼ぶ。target の受け取りの鍵にだけ包む。
+     * @return 送ったか（target が家の player でない・自分・大きすぎるなら false）
+     */
+    fun sendLoginGrant(
+        target: String,
+        cookie: String,
+        visitorData: String?,
+        dataSyncId: String?,
+        obtainedAtEpochMs: Long,
+    ): Boolean {
+        if (pendingStoreId != null || target == signer.deviceId) return false
+        val current = chain ?: return false
+        if (signer.deviceId !in current.members || current.members[target]?.keys?.role != Role.Player) return false
+        val grant = CommandBody.LoginGrant(newId(), signer.deviceId, target, cookie, visitorData, dataSyncId, obtainedAtEpochMs)
+        val plaintext = ConnectJson.json.encodeToString(CommandBody.serializer(), grant).encodeToByteArray()
+        if (plaintext.size > MAX_LOGIN_GRANT_PLAINTEXT) return false
+        val doc = DocSealer.seal(signer, current, DocKind.Command, 1, null, epochMs(), plaintext, only = setOf(target))
+        return send(RelayV2.Control(doc))
+    }
+
+    /**
      * 家の端末 target に「ここで再生（引き取り）」を頼む（デバイスの一覧で端末を選んだ）。target は書き手でない端末。
      * @return 送ったか
      */
@@ -1053,6 +1080,14 @@ class ConnectClient(
         }
         if (body is CommandBody.QueueAdd) {
             onQueueAdd(body, opened.header, current)
+            return
+        }
+        if (body is CommandBody.LoginGrant) {
+            if (body.to != signer.deviceId || body.from != opened.header.writerId || body.from == signer.deviceId) return
+            if (kotlin.math.abs(epochMs() - opened.header.issuedAtEpochMs) > MAX_CONTROL_AGE_MS) return
+            if (current.members[body.from]?.keys?.role != Role.Player || body.commandId in handledClaims) return
+            remember(body.commandId)
+            effects.loginGranted(body)
             return
         }
         val command = body as? CommandBody.Control ?: return
@@ -1269,6 +1304,9 @@ class ConnectClient(
 
         /** キューへの追加の命令1件の平文の上限（詰め物の1ブロック 4096 から長さの欄の 4 バイトを引き、余裕を持たせる）。 */
         internal const val MAX_QUEUE_ADD_PLAINTEXT = 3800
+
+        /** ログインを渡す命令の平文の上限（詰め物の2ブロック、中継の 16KB に収まる）。 */
+        internal const val MAX_LOGIN_GRANT_PLAINTEXT = 8000
 
         /** 遠隔操作の鮮度の上限（命令の見出しの時刻と受け手の時計の差）。 */
         private const val MAX_CONTROL_AGE_MS = 5 * 60 * 1000L

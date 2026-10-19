@@ -110,7 +110,7 @@ internal class HouseholdRouter(
             is RelayV2.Release -> store.release(deviceId, message.claimId)?.let { out.broadcast(it) }
             is RelayV2.Control ->
                 // 書き手が送り主で、命令の doc であるときだけ配る（中身は読まない。保存しない）
-                // 命令は詰め物の1ブロック（4KB）に収まる。大きなものを家の全端末へ配らない
+                // 命令は詰め物の2ブロック（8KB、ログインを渡す命令の cookie が 4KB を超えるため。ADR-0015）に収まる。大きなものを家の全端末へ配らない
                 if (message.doc.header.writerId == deviceId && message.doc.header.kind == xyz.mooma0750.wave.handoff.v2.DocKind.Command && message.doc.ciphertext.length <= MAX_CONTROL_CIPHERTEXT_CHARS) {
                     out.broadcast(message, except = deviceId)
                     log("control")
@@ -156,6 +156,6 @@ internal class HouseholdRouter(
 
     private companion object {
         /** 命令の暗号文の上限（4KB の詰め物1ブロック + GCM のタグを base64url にした長さに余裕を持たせる）。 */
-        const val MAX_CONTROL_CIPHERTEXT_CHARS = 8 * 1024
+        const val MAX_CONTROL_CIPHERTEXT_CHARS = 16 * 1024
     }
 }

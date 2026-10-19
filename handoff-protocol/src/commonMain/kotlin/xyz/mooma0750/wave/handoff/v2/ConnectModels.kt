@@ -209,6 +209,25 @@ sealed interface CommandBody {
         val accountTag: String,
     ) : CommandBody
 
+    /**
+     * ログインを渡す（ADR-0015）: 家の端末から wave-api（種類 api の端末）へ、本人が押したときだけ。宛先の端末の受け取りの鍵にだけ包む
+     * （ほかの端末には包まない）。受け手は、自分宛て・送り主が署名した player・処理していない ID・出してから5分以内のときだけ受け取る。
+     * 値は WebView のログインで取った生の値（Credentials.fromLogin に渡すもの）。
+     */
+    @Serializable
+    @SerialName("login_grant")
+    data class LoginGrant(
+        val commandId: String,
+        val from: String,
+        val to: String,
+        val cookie: String,
+        val visitorData: String? = null,
+        val dataSyncId: String? = null,
+        val obtainedAtEpochMs: Long,
+    ) : CommandBody {
+        override fun toString(): String = "LoginGrant(commandId=$commandId, from=$from, to=$to)"
+    }
+
     /** 端末の表示名を家のほかの端末に知らせる（名前は鎖に入れないので、加入した2台以外にも伝える）。宛先は家の全端末。 */
     @Serializable
     @SerialName("profile")

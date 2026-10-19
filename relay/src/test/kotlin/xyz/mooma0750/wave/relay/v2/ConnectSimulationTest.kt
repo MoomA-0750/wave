@@ -895,6 +895,31 @@ class ConnectSimulationTest {
     }
 
     @Test
+    fun loginGrantReachesOnlyTheTargetAndIsNotReplayed() {
+        val api = SimDevice("API", { relay }, { now })
+        setUp(api)
+        val captured = ArrayList<RelayV2>()
+        relay.dropIncoming = { from, message ->
+            if (from == a.deviceId && message is RelayV2.Control) captured += message
+            false
+        }
+        // cookie は 4KB を超えることがある（中継の命令の上限は 16KB）
+        val cookie = "SAPISID=synthetic; " + "x".repeat(5000)
+        assertTrue(a.client.sendLoginGrant(api.deviceId, cookie, "synthetic-visitor", "synthetic-sync", now))
+        relay.run()
+        assertEquals(listOf(cookie), api.loginGrants)
+        assertTrue(b.loginGrants.isEmpty(), "宛先でない端末が受け取った")
+        // 宛先の受け取りの鍵にだけ包む（ほかの端末は開けない）
+        val doc = (captured.single() as RelayV2.Control).doc
+        assertEquals(listOf(api.deviceId), doc.recipients.map { it.deviceId })
+        relay.inject(api.deviceId, captured.single())
+        relay.run()
+        assertEquals(1, api.loginGrants.size, "再送されたログインを二度受け取った")
+        // 自分には送らない
+        assertFalse(a.client.sendLoginGrant(a.deviceId, cookie, null, null, now))
+    }
+
+    @Test
     fun manySongsAreSplitAndChainedInOrder() {
         setUp()
         a.startPlaying("queue-A")
