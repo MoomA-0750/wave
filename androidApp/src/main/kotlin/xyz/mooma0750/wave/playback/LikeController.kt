@@ -23,6 +23,14 @@ data class LikeState(
     /** 同じ文言が続いても知らせ直すための番号。 */
     val messageId: Int = 0,
 ) {
+    val liked: Boolean get() = status == LikeStatus.Like
+
+    /**
+     * 再生画面の✓を出すか（スマホ・時計で共通）。Spotify と同じく、高く評価していなくても、
+     * どれかのプレイリストに入っていれば✓（[nowIn] は PlaylistMembership.nowPlaying）。
+     */
+    fun savedWith(nowIn: xyz.mooma0750.wave.library.PlaylistMembership.NowPlaying?): Boolean = liked || (nowIn?.videoId == videoId && nowIn?.playlistIds?.isNotEmpty() == true)
+
     fun toBundle(): Bundle =
         Bundle().apply {
             putString(KEY_VIDEO_ID, videoId)

@@ -9,6 +9,7 @@ import xyz.mooma0750.wave.navigation.SongActions
 import xyz.mooma0750.wave.search.SongMenuItems
 import xyz.mooma0750.wave.ui.CollectionScreen
 import xyz.mooma0750.wave.ui.DetailText
+import xyz.mooma0750.wave.ui.Durations
 import xyz.mooma0750.wave.ui.PlayFab
 
 /**
@@ -28,7 +29,7 @@ fun SongScreen(
         onBack = onBack,
         details = {
             song.subtitle.takeIf { it.isNotEmpty() }?.let { DetailText(it) }
-            song.durationSeconds?.let { DetailText("%d:%02d".format(it / 60, it % 60)) }
+            song.durationSeconds?.let { DetailText(Durations.ofSeconds(it.toLong())) }
         },
         play = null,
         actions = { PlayFab(playing = false, onClick = { onPlay(song) }, modifier = Modifier.padding(start = 12.dp, end = 8.dp)) },

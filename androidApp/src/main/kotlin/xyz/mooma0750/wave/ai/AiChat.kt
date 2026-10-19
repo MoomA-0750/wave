@@ -218,7 +218,7 @@ class AiChat(
                         "now_playing",
                         buildJsonObject {
                             put("title", song.title)
-                            put("artists", song.artists.joinToString(", ") { it.name })
+                            put("artists", song.artistsText)
                             put("album", song.album?.title.orEmpty())
                             put("video_id", song.videoId)
                         },

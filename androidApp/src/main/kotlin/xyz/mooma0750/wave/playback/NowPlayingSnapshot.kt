@@ -25,7 +25,7 @@ data class NowPlayingSnapshot(
                     ?: metadata.artworkUri?.toString()?.takeIf { it.startsWith("https://") }
             return NowPlayingSnapshot(
                 title = (metadata.title ?: song?.title)?.toString().orEmpty(),
-                artist = (metadata.artist ?: song?.artists?.joinToString(", ") { it.name })?.toString().orEmpty(),
+                artist = (metadata.artist ?: song?.artistsText)?.toString().orEmpty(),
                 artworkUrl = artwork,
                 playing = player.playWhenReady,
             )

@@ -3,7 +3,6 @@ package xyz.mooma0750.wave.playback
 import android.os.Bundle
 import androidx.media3.session.SessionCommand
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 import xyz.mooma0750.wave.core.music.Song
 
 /**
@@ -45,7 +44,7 @@ object QueueCommands {
     private const val KEY_PLAY_FROM = "playFrom"
     private const val KEY_ITEM_ID = "itemId"
     private const val KEY_TO_INDEX = "toIndex"
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = SongJson.json
 
     @Serializable
     data class PlayFrom(
@@ -56,16 +55,16 @@ object QueueCommands {
         val shuffle: Boolean = false,
     )
 
-    fun songArgs(song: Song): Bundle = Bundle().apply { putString(KEY_SONG, json.encodeToString(Song.serializer(), song)) }
+    fun songArgs(song: Song): Bundle = Bundle().apply { putString(KEY_SONG, SongJson.encode(song)) }
 
-    fun songOf(args: Bundle): Song? = args.getString(KEY_SONG)?.let { runCatching { json.decodeFromString(Song.serializer(), it) }.getOrNull() }
+    fun songOf(args: Bundle): Song? = SongJson.decode(args.getString(KEY_SONG))
 
     /** アルバム・プレイリストを丸ごとキューに入れる。 */
     fun songsArgs(songs: List<Song>): Bundle =
-        Bundle().apply { putString(KEY_SONGS, json.encodeToString(kotlinx.serialization.builtins.ListSerializer(Song.serializer()), songs)) }
+        Bundle().apply { putString(KEY_SONGS, SongJson.encodeList(songs)) }
 
     fun songsOf(args: Bundle): List<Song>? =
-        args.getString(KEY_SONGS)?.let { runCatching { json.decodeFromString(kotlinx.serialization.builtins.ListSerializer(Song.serializer()), it) }.getOrNull() }?.takeIf { it.isNotEmpty() }
+        SongJson.decodeList(args.getString(KEY_SONGS))?.takeIf { it.isNotEmpty() }
 
     fun playFromArgs(playFrom: PlayFrom): Bundle = Bundle().apply { putString(KEY_PLAY_FROM, json.encodeToString(PlayFrom.serializer(), playFrom)) }
 

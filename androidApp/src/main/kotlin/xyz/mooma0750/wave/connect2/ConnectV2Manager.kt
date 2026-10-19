@@ -28,6 +28,7 @@ import kotlinx.serialization.json.Json
 import xyz.mooma0750.wave.R
 import xyz.mooma0750.wave.WaveApplication
 import xyz.mooma0750.wave.connect.DeviceIdentity
+import xyz.mooma0750.wave.core.queue.toSong
 import xyz.mooma0750.wave.core.session.WaveSession
 import xyz.mooma0750.wave.handoff.HandoffCodec
 import xyz.mooma0750.wave.handoff.HandoffDecodeResult
@@ -220,18 +221,7 @@ class ConnectV2Manager(
         val items = mirroredItems ?: return null
         val index = items.indexOfFirst { it.itemId == now.cursor.currentItemId }
         if (index < 0) return null
-        val songs =
-            items.map { item ->
-                xyz.mooma0750.wave.core.music.Song(
-                    videoId = item.videoId,
-                    title = item.title,
-                    artists = item.artists.map { xyz.mooma0750.wave.core.music.ArtistRef(it.name, it.browseId) },
-                    album = item.album?.let { xyz.mooma0750.wave.core.music.AlbumRef(it.name, it.browseId) },
-                    durationSeconds = item.durationSeconds,
-                    thumbnailUrl = item.thumbnailUrl,
-                    isLive = item.isLive,
-                )
-            }
+        val songs = items.map { it.toSong() }
         val label = labels[now.writer] ?: resources.getString(R.string.connect_v2_member_unknown, now.writer.take(6))
         return RemotePlayback(now.writer, label, songs, items.map { it.itemId }, index, now.positionMs, SystemClock.elapsedRealtime(), now.cursor.playing, now.cursor.repeat, now.cursor.volumePercent)
     }

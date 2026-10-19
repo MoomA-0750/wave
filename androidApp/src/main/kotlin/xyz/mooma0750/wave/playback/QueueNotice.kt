@@ -78,7 +78,7 @@ class QueueNotice(
         runCatching { manager.notify(NOTIFICATION_ID, notification) }
     }
 
-    private fun lineOf(song: Song): String = listOf(song.title, song.artists.joinToString(", ") { it.name }).filter(String::isNotBlank).joinToString(" · ")
+    private fun lineOf(song: Song): String = listOf(song.title, song.artistsText).filter(String::isNotBlank).joinToString(" · ")
 
     /** 次に流れる曲（先頭から数曲）と、今の曲の後に残っている曲の数。 */
     data class Upcoming(

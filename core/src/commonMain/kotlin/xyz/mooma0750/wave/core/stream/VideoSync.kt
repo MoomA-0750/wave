@@ -1,4 +1,4 @@
-package xyz.mooma0750.wave.nowplaying
+package xyz.mooma0750.wave.core.stream
 
 import kotlin.math.abs
 
@@ -6,7 +6,7 @@ import kotlin.math.abs
  * 映像だけのプレイヤーを、音の再生位置に合わせる判断。音は止めずに、映像の方を飛ばす・速さを少し変えて追いつかせる。
  * 画面にも Media3 にも依らない。
  */
-internal object VideoSync {
+object VideoSync {
     sealed interface Step {
         /** 映像に当たる部分が無い（MV に無い区間）。映像を止めて隠す。 */
         data object Hide : Step

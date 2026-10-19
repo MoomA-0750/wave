@@ -34,6 +34,7 @@ import kotlinx.coroutines.delay
 import xyz.mooma0750.wave.R
 import xyz.mooma0750.wave.core.music.MusicVideo
 import xyz.mooma0750.wave.core.music.Song
+import xyz.mooma0750.wave.core.stream.VideoSync
 import xyz.mooma0750.wave.ui.IconTextButton
 import androidx.compose.ui.res.stringResource
 

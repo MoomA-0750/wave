@@ -15,7 +15,6 @@
     <string name="watch_login_title">スマホでログイン</string>
     <string name="watch_login_hint">ログインしたスマホの wave を開いてから、下を押してください。</string>
     <string name="watch_login_start">スマホに頼む</string>
-    <string name="watch_login_sending">スマホを探しています…</string>
     <string name="watch_login_waiting">スマホにこの番号が出たら「送る」を押してください:</string>
     <string name="watch_login_no_phone">wave の入ったスマホが見つかりません。スマホに wave を入れ、時計とペア設定してください。</string>
     <string name="watch_login_failed">ログインできませんでした。もう一度試してください。</string>
@@ -31,7 +30,6 @@
     <string name="wear_shuffle_play">シャッフル再生</string>
     <string name="wear_load_more">さらに読み込む</string>
     <string name="wear_log_out_confirm_message">この時計からログアウトしますか？スマホはログインしたままです。</string>
-    <string name="wear_coming_soon">時計ではまだ使えません</string>
     <string name="wear_remote_no_phone">スマホにつながりません。近くにあり、ペア設定されているか確かめてください。</string>
     <string name="wear_remote_pull">この時計で再生</string>
     <string name="wear_remote_push">スマホで再生</string>

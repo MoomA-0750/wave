@@ -44,7 +44,6 @@ import androidx.wear.compose.material3.Text
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import xyz.mooma0750.wave.R
-import xyz.mooma0750.wave.core.music.LikeStatus
 import xyz.mooma0750.wave.core.music.Song
 import xyz.mooma0750.wave.library.PlaylistMembership
 import xyz.mooma0750.wave.nowplaying.rememberPlayerUiState
@@ -199,8 +198,7 @@ private fun LikeButton(
     val like by connection.likeState.collectAsState()
     val nowIn by membership.nowPlaying.collectAsState()
     val videoId = like.videoId
-    val liked = like.status == LikeStatus.Like
-    val saved = liked || (nowIn?.videoId == videoId && nowIn?.playlistIds?.isNotEmpty() == true)
+    val saved = like.savedWith(nowIn)
     IconButton(
         onClick = {
             when {

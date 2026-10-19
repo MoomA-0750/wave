@@ -86,7 +86,6 @@ import androidx.compose.ui.unit.dp
 import androidx.media3.session.MediaController
 import kotlinx.coroutines.launch
 import xyz.mooma0750.wave.core.lyrics.LyricsRepository
-import xyz.mooma0750.wave.core.music.LikeStatus
 import xyz.mooma0750.wave.navigation.SongActions
 import xyz.mooma0750.wave.playback.Media3QueuePlayer
 import xyz.mooma0750.wave.playback.PlayerConnection
@@ -205,11 +204,11 @@ private fun LikeButton(
 ) {
     val like by connection.likeState.collectAsState()
     val videoId = like.videoId
-    val liked = like.status == LikeStatus.Like
-    // Spotify と同じく、高く評価していなくても、どれかのプレイリストに入っていれば✓（押すとプレイリストに追加する画面）
+    val liked = like.liked
+    // どれかのプレイリストに入っていても✓（押すとプレイリストに追加する画面）
     val membership = xyz.mooma0750.wave.library.LocalPlaylistMembership.current
     val nowIn by (membership?.nowPlaying ?: remember { kotlinx.coroutines.flow.MutableStateFlow(null) }).collectAsState()
-    val saved = liked || (nowIn?.videoId == videoId && nowIn?.playlistIds?.isNotEmpty() == true)
+    val saved = like.savedWith(nowIn)
     IconAction(
         when {
             saved -> R.drawable.ic_check_circle
@@ -1062,12 +1061,12 @@ private fun rememberDisplay(
     val state =
         PlayerUiState(
             title = current.title,
-            artist = current.artists.joinToString(", ") { it.name },
+            artist = current.artistsText,
             isPlaying = remote.playing,
             positionMs = remote.positionAt(now),
             durationMs = if (current.isLive) 0 else (current.durationSeconds ?: 0) * 1000L,
             isLive = current.isLive,
-            queue = remote.items.mapIndexed { index, song -> QueueRow(remote.itemIds[index], song.title, song.artists.joinToString(", ") { it.name }, song.thumbnailUrl) },
+            queue = remote.items.mapIndexed { index, song -> QueueRow(remote.itemIds[index], song.title, song.artistsText, song.thumbnailUrl) },
             currentIndex = remote.currentIndex,
             hasNext = remote.currentIndex < remote.items.size - 1 || remote.repeat != HandoffRepeat.Off,
             hasPrevious = true,

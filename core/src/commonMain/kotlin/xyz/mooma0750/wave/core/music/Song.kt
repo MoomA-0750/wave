@@ -16,9 +16,13 @@ data class Song(
     /** ライブ配信（ラジオのように流れ続ける）。長さもシークも無く、HLS で流す。 */
     val isLive: Boolean = false,
 ) {
+    /** アーティスト名を「, 」でつないだもの（無ければ空）。 */
+    val artistsText: String
+        get() = artists.joinToString(", ") { it.name }
+
     /** 「アーティスト • アルバム」の1行。 */
     val subtitle: String
-        get() = listOfNotNull(artists.joinToString(", ") { it.name }.takeIf { it.isNotEmpty() }, album?.title).joinToString(" • ")
+        get() = listOfNotNull(artistsText.takeIf { it.isNotEmpty() }, album?.title).joinToString(" • ")
 }
 
 @Serializable

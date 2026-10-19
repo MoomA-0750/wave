@@ -124,7 +124,6 @@
     <string name="ai_history_empty">まだ会話はありません。会話はこの端末の中だけに残ります。</string>
     <string name="ai_history_delete">会話を消す</string>
     <string name="ai_history_untitled">（質問なし）</string>
-    <string name="ai_seek_to">%1$s へ飛ぶ</string>
     <string name="ai_intro">曲探し・プレイリスト作りを頼めます。再生中の曲について、歌詞の意味や似た曲も聞けます。</string>
     <string name="ai_open_settings">設定を開く</string>
     <string name="ai_suggest_meaning">この歌詞ってどういう意味だと思う？</string>

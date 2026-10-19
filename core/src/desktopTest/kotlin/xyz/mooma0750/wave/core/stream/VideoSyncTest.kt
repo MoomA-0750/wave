@@ -1,7 +1,7 @@
-package xyz.mooma0750.wave.nowplaying
+package xyz.mooma0750.wave.core.stream
 
-import xyz.mooma0750.wave.nowplaying.VideoSync.Step
-import org.junit.Test
+import xyz.mooma0750.wave.core.stream.VideoSync.Step
+import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class VideoSyncTest {

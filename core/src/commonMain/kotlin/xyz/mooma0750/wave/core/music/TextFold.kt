@@ -11,8 +11,13 @@ object TextFold {
     fun matches(
         query: String,
         vararg texts: String?,
+    ): Boolean = matchesTerms(terms(query), texts.asList())
+
+    /** [terms] で区切った語が、文のどれかにすべて含まれているか（たくさんの行を照らすときに、語を区切り直さない）。 */
+    fun matchesTerms(
+        terms: List<String>,
+        texts: List<String?>,
     ): Boolean {
-        val terms = terms(query)
         if (terms.isEmpty()) return true
         val haystack = texts.filterNotNull().joinToString(" ") { fold(it) }
         return terms.all { it in haystack }

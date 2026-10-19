@@ -267,16 +267,13 @@ class ConnectClient(
     /** 検証した鎖の記録（追記する前に、追記後の鎖が通るかを確かめるのに使う）。家に入っていなければ null。 */
     fun verifiedRecords(): List<ChainRecord>? = if (chain == null) null else records
 
-    /** 表示用の最新のカーソル（別アカウントのものを含む）。 */
-    fun latestCursorBody(): Pair<String, CursorBody>? = latestCursor?.let { it.writer to it.body }
+    /** 今の接続で最新の状態をそろえた（welcome を処理し、鎖の取り直しを待っている状態が無い）。D-9 の判断はこれが true のときだけ行う。 */
+    val stateSettled: Boolean get() = welcomed && deferred.isEmpty()
 
     /**
      * 同じアカウントの他の端末が今鳴っているか（D-9 の再生ボタンの判断）。最後のカーソルが再生中で、その端末が中継につながっているとき。
      * 落ちた・通信を失った端末の最後の「再生中」で、再生ボタンを止め続けない（レビュー p6b34 中-2）。通信を失ったまま鳴っている端末は、つながり直したら止まる（L-4）
      */
-    /** 今の接続で最新の状態をそろえた（welcome を処理し、鎖の取り直しを待っている状態が無い）。D-9 の判断はこれが true のときだけ行う。 */
-    val stateSettled: Boolean get() = welcomed && deferred.isEmpty()
-
     fun remotePlayingNow(): Boolean {
         val cursor = latestCursor ?: return false
         val tag = effects.accountTag() ?: return false

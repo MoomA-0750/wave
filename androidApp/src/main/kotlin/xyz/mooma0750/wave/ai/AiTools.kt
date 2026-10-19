@@ -293,7 +293,7 @@ class AiTools(
         buildJsonObject {
             put("video_id", song.videoId)
             put("title", song.title)
-            put("artists", song.artists.joinToString(", ") { it.name })
+            put("artists", song.artistsText)
             song.album?.let { put("album", it.title) }
             song.durationSeconds?.let { put("duration_seconds", it) }
             song.kind?.let { put("kind", it.name) }

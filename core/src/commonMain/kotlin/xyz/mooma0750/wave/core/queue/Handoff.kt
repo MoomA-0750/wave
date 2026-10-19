@@ -11,6 +11,18 @@ import xyz.mooma0750.wave.handoff.HandoffRepeat
 import xyz.mooma0750.wave.handoff.HandoffSnapshot
 import xyz.mooma0750.wave.handoff.HandoffSource
 
+/** 受け渡しの形式の項目を曲にする（ほかの端末のキューを映すときにも使う）。 */
+fun HandoffItem.toSong(): Song =
+    Song(
+        videoId = videoId,
+        title = title,
+        artists = artists.map { ArtistRef(it.name, it.browseId) },
+        album = album?.let { AlbumRef(it.name, it.browseId) },
+        durationSeconds = durationSeconds,
+        thumbnailUrl = thumbnailUrl,
+        isLive = isLive,
+    )
+
 /** 端末の中のキューの表現と、受け渡しの形式（ワイヤ用に凍結した形）の変換。 */
 internal object HandoffMapping {
     fun itemOf(item: QueueItem): HandoffItem =
@@ -34,16 +46,7 @@ internal object HandoffMapping {
     fun queueItemOf(item: HandoffItem): QueueItem =
         QueueItem(
             itemId = item.itemId,
-            song =
-                Song(
-                    videoId = item.videoId,
-                    title = item.title,
-                    artists = item.artists.map { ArtistRef(it.name, it.browseId) },
-                    album = item.album?.let { AlbumRef(it.name, it.browseId) },
-                    durationSeconds = item.durationSeconds,
-                    thumbnailUrl = item.thumbnailUrl,
-                    isLive = item.isLive,
-                ),
+            song = item.toSong(),
             origin =
                 when (item.origin) {
                     HandoffOrigin.Source -> ItemOrigin.Source

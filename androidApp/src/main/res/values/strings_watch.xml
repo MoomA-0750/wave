@@ -15,7 +15,6 @@
     <string name="watch_login_title">Sign in with your phone</string>
     <string name="watch_login_hint">Open wave on your phone, signed in, then tap below.</string>
     <string name="watch_login_start">Ask phone</string>
-    <string name="watch_login_sending">Looking for your phone…</string>
     <string name="watch_login_waiting">Tap Send on your phone if it shows this code:</string>
     <string name="watch_login_no_phone">Couldn\'t find a phone with wave. Install wave on your phone and pair the watch.</string>
     <string name="watch_login_failed">Couldn\'t sign in. Try again.</string>
@@ -31,7 +30,6 @@
     <string name="wear_shuffle_play">Shuffle play</string>
     <string name="wear_load_more">Load more</string>
     <string name="wear_log_out_confirm_message">Sign out on this watch? Your phone stays signed in.</string>
-    <string name="wear_coming_soon">Not available on the watch yet</string>
     <string name="wear_remote_no_phone">Couldn\'t reach your phone. Check that it\'s nearby and paired.</string>
     <string name="wear_remote_pull">Play on this watch</string>
     <string name="wear_remote_push">Play on phone</string>

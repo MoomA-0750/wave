@@ -41,22 +41,16 @@ object SongFilter {
     ): List<Int> {
         val terms = TextFold.terms(query)
         if (terms.isEmpty() && kind == KindFilter.All) return songs.indices.toList()
-        return songs.indices.filter { kind.matches(songs[it]) && (terms.isEmpty() || matches(songs[it], terms)) }
+        return songs.indices.filter { kind.matches(songs[it]) && matches(songs[it], terms) }
     }
 
     fun matches(
         song: Song,
         query: String,
-    ): Boolean {
-        val terms = TextFold.terms(query)
-        return terms.isEmpty() || matches(song, terms)
-    }
+    ): Boolean = matches(song, TextFold.terms(query))
 
     private fun matches(
         song: Song,
         terms: List<String>,
-    ): Boolean {
-        val haystack = TextFold.fold((listOf(song.title) + song.artists.map { it.name } + listOfNotNull(song.album?.title)).joinToString(" "))
-        return terms.all { haystack.contains(it) }
-    }
+    ): Boolean = TextFold.matchesTerms(terms, listOf(song.title) + song.artists.map { it.name } + song.album?.title)
 }

@@ -85,7 +85,7 @@ internal class CarBrowser(
                     MediaMetadata
                         .Builder()
                         .setTitle(song.title)
-                        .setArtist(song.artists.joinToString(", ") { it.name })
+                        .setArtist(song.artistsText)
                         .setAlbumTitle(song.album?.title)
                         .setIsBrowsable(false)
                         .setIsPlayable(true)

@@ -16,7 +16,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.res.stringResource
 import android.app.RemoteInput
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.wear.compose.foundation.lazy.TransformingLazyColumnScope
 import androidx.wear.compose.foundation.lazy.items
 import androidx.wear.compose.foundation.lazy.itemsIndexed
 import androidx.wear.input.RemoteInputIntentHelper
@@ -50,20 +49,6 @@ import xyz.mooma0750.wave.search.SearchHistoryEntry
 import xyz.mooma0750.wave.search.SearchHistoryStore
 import xyz.mooma0750.wave.search.SearchViewModel
 import xyz.mooma0750.wave.search.failureMessage
-
-/** 一覧の曲。押すと onPlay、長押しで曲の画面。 */
-private fun TransformingLazyColumnScope.songRows(
-    look: RowLook,
-    keyPrefix: String,
-    songs: List<Song>,
-    liked: Set<String>,
-    actions: SongActions,
-    onPlay: (Int) -> Unit,
-) {
-    itemsIndexed(songs, key = { index, song -> "$keyPrefix-$index-${song.videoId}" }) { index, song ->
-        SongRow(look, song, liked = song.videoId in liked, onMenu = { actions.openSong(song) }) { onPlay(index) }
-    }
-}
 
 /** ホームの棚（スマホのホームと同じ中身）。 */
 @Composable

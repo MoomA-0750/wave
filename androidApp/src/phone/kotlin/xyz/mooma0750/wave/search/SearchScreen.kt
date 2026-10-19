@@ -113,7 +113,7 @@ fun SearchScreen(
             }
             // 検索から再生した曲・開いたアーティスト・アルバム・ポッドキャストは、画像と補足の行も付けて履歴に残す（Spotify と同じ）
             val playAndRemember = { song: Song ->
-                history.add(SearchHistoryEntry.Song(song.videoId, song.title, song.artists.joinToString(", ") { it.name }.ifEmpty { null }, song.thumbnailUrl))
+                history.add(SearchHistoryEntry.Song(song.videoId, song.title, song.artistsText.ifEmpty { null }, song.thumbnailUrl))
                 onSongClick(song)
             }
             val opener =
@@ -261,7 +261,7 @@ private fun Results(
                         if (topArtist != null) {
                             TopResult(topArtist.thumbnailUrl, topArtist.name, stringResource(R.string.search_kind_artist), CircleShape) { openArtist(topArtist) }
                         } else if (topSong != null) {
-                            TopResult(topSong.thumbnailUrl, topSong.title, listOf(stringResource(R.string.search_kind_song), topSong.artists.joinToString(", ") { it.name }).filter { it.isNotEmpty() }.joinToString(" • "), MaterialTheme.shapes.extraSmall) {
+                            TopResult(topSong.thumbnailUrl, topSong.title, listOf(stringResource(R.string.search_kind_song), topSong.artistsText).filter { it.isNotEmpty() }.joinToString(" • "), MaterialTheme.shapes.extraSmall) {
                                 onSongClick(topSong)
                             }
                         }
@@ -520,7 +520,7 @@ fun SongRow(
                 if (showArtwork) {
                     listOfNotNull(song.subtitle.takeIf { it.isNotEmpty() }, song.durationSeconds?.let { Durations.ofSeconds(it.toLong()) }).joinToString(" • ")
                 } else {
-                    song.artists.joinToString(", ") { it.name }
+                    song.artistsText
                 },
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,

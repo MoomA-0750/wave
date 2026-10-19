@@ -285,9 +285,6 @@ data class LibraryBody(
         /** 聴いたところは新しい順にこの数まで（文書を数百 KB に収める）。 */
         const val MAX_POSITIONS = 500
 
-        /** 外した番組の印は、この日数を過ぎたら捨ててよい（全端末に行き渡った後）。 */
-        const val REMOVED_KEEP_DAYS = 180
-
         private fun <T : Any> newer(
             mine: T?,
             other: T?,

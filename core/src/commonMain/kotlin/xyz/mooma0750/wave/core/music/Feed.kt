@@ -109,9 +109,6 @@ class FeedShow(
 ) {
     private val parsed = HashMap<Int, FeedEpisode?>()
 
-    /** エピソードの項目の数（音声の無いものも数える）。 */
-    val itemCount: Int get() = items.size
-
     val subscription: FeedSubscription get() = FeedSubscription(feedUrl, title, author, thumbnailUrl)
 
     /** [from] 番目から [count] 件の項目のうち、エピソードとして読めたもの。 */

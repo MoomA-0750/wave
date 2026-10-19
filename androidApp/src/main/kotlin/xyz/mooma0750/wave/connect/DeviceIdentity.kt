@@ -31,10 +31,6 @@ class DeviceIdentity(
     val deviceId: String
         get() = EnvelopeSealer.deviceId(encodedPublicKey)
 
-    /** 指紋の表示（先頭 16 バイトを 4 文字ずつ）。 */
-    val fingerprintForDisplay: String
-        get() = WaveCrypto.fingerprint(encodedPublicKey).take(16).joinToString("") { "%02x".format(it) }.chunked(4).joinToString(" ")
-
     fun sign(
         label: String,
         message: ByteArray,

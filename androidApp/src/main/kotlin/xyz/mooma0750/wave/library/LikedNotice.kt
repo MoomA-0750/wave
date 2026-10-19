@@ -6,16 +6,15 @@ import android.content.Intent
 import androidx.core.app.NotificationChannelCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
-import kotlinx.serialization.json.Json
 import xyz.mooma0750.wave.R
 import xyz.mooma0750.wave.core.music.Song
+import xyz.mooma0750.wave.playback.SongJson
 
 /** 高く評価した曲を、プレイリストに足すよう誘う通知（開く画面 [AddToPlaylistActivity] はスマホ・時計がそれぞれ持つ）。 */
 object LikedNotice {
     const val EXTRA_SONG = "song"
     private const val CHANNEL_ID = "liked"
     private const val NOTIFICATION_ID = 4301
-    private val json = Json { ignoreUnknownKeys = true }
 
     /**
      * 通知のハートで高く評価したことを知らせ、「プレイリストに追加」のボタンを付ける。
@@ -35,7 +34,7 @@ object LikedNotice {
                 context,
                 0,
                 Intent(context, AddToPlaylistActivity::class.java)
-                    .putExtra(EXTRA_SONG, json.encodeToString(Song.serializer(), song))
+                    .putExtra(EXTRA_SONG, SongJson.encode(song))
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK),
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
             )
@@ -54,7 +53,7 @@ object LikedNotice {
     }
 
     /** 通知から開いた画面が、足す曲を読む。 */
-    fun songOf(intent: Intent): Song? = intent.getStringExtra(EXTRA_SONG)?.let { runCatching { json.decodeFromString(Song.serializer(), it) }.getOrNull() }
+    fun songOf(intent: Intent): Song? = SongJson.decode(intent.getStringExtra(EXTRA_SONG))
 
     /** 通知は押したら役目を終える。 */
     fun cancel(context: Context) = NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID)

@@ -72,7 +72,7 @@ class RemoteSessionPlayer(
                         .Builder()
                         .setTitle(song.title)
                         // Spotify と同じく、どの端末で鳴っているかを出す
-                        .setArtist(artistLine(song.artists.joinToString(", ") { it.name }, current.deviceLabel))
+                        .setArtist(artistLine(song.artistsText, current.deviceLabel))
                         .setAlbumTitle(song.album?.title)
                         // 画像の URL は入れない（プラットフォームのセッションに https の URL があると、時計が画像を出さない。ArtworkEmbedder と同じ）。
                         // 画像そのものを今の曲にだけ入れ、アプリの画面・ウィジェットは曲の情報（extras）の URL から出す

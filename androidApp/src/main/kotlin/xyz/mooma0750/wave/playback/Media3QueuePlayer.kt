@@ -188,11 +188,10 @@ class Media3QueuePlayer(
 
         /** 自分で足した曲（キューの「次に再生」「キューに追加」）か。 */
         fun isUserAdded(item: MediaItem?): Boolean = item?.mediaMetadata?.extras?.getString(ORIGIN_EXTRA) == xyz.mooma0750.wave.core.queue.ItemOrigin.UserAdded.name
-        private val songJson = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
 
         /** mediaItemOf で載せた曲。読めなければ null。 */
         fun songOf(item: MediaItem?): Song? =
-            item?.mediaMetadata?.extras?.getString(SONG_EXTRA)?.let { runCatching { songJson.decodeFromString(Song.serializer(), it) }.getOrNull() }
+            SongJson.decode(item?.mediaMetadata?.extras?.getString(SONG_EXTRA))
 
         /**
          * 一覧のサムネイル（小さい）を、再生画面・通知・時計に耐える大きさにする。
@@ -214,7 +213,7 @@ class Media3QueuePlayer(
             origin: xyz.mooma0750.wave.core.queue.ItemOrigin?,
         ): android.os.Bundle =
             android.os.Bundle().apply {
-                putString(SONG_EXTRA, songJson.encodeToString(Song.serializer(), song))
+                putString(SONG_EXTRA, SongJson.encode(song))
                 origin?.let { putString(ORIGIN_EXTRA, it.name) }
             }
 
@@ -233,7 +232,7 @@ class Media3QueuePlayer(
                     MediaMetadata
                         .Builder()
                         .setTitle(song.title)
-                        .setArtist(song.artists.joinToString(", ") { it.name })
+                        .setArtist(song.artistsText)
                         .setAlbumTitle(song.album?.title)
                         // 画像の URL は入れない（プラットフォームのセッションに https の URL があると、時計が画像を出さない）。
                         // 画像そのものは ArtworkEmbedder が今の曲にだけ入れる。アプリの画面は曲の情報（extras）の URL から出す

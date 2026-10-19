@@ -54,9 +54,6 @@ fun WaveTheme(content: @Composable () -> Unit) {
     }
 }
 
-/** 2行目（アーティスト名など）の色。 */
-val Subdued: Color @Composable get() = MaterialTheme.colorScheme.onSurfaceVariant
-
 /**
  * ジャケットの色（Spotify の再生画面・プレイリストの上のグラデーション）。暗めに落とした色を返す。
  * 読めない間・画像の無いときは [fallback]。

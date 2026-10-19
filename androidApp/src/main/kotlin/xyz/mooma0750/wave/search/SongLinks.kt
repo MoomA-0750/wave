@@ -12,7 +12,7 @@ fun shareSong(
     context: android.content.Context,
     song: Song,
 ) {
-    val text = listOfNotNull("${song.title} - ${song.artists.joinToString(", ") { it.name }}".takeIf { song.artists.isNotEmpty() } ?: song.title, songUrl(song)).joinToString("\n")
+    val text = listOfNotNull("${song.title} - ${song.artistsText}".takeIf { song.artists.isNotEmpty() } ?: song.title, songUrl(song)).joinToString("\n")
     val send =
         android.content.Intent(android.content.Intent.ACTION_SEND)
             .setType("text/plain")

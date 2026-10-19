@@ -64,7 +64,7 @@ fun DevicePickerSheet(
                 DeviceRow(
                     if (members.firstOrNull { it.deviceId == playing.deviceId }?.isPc == true) R.drawable.ic_computer else R.drawable.ic_smartphone,
                     playing.deviceLabel,
-                    listOf(playing.current.title, playing.current.artists.joinToString(", ") { it.name }).joinToString(" • "),
+                    listOf(playing.current.title, playing.current.artistsText).joinToString(" • "),
                     current = true,
                     enabled = true,
                     onClick = null,
