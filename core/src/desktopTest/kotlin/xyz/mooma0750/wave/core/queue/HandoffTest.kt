@@ -30,4 +30,14 @@ class HandoffTest {
         // キューへの戻しも同じ曲になる
         assertEquals(song, HandoffMapping.queueItemOf(item).song)
     }
+
+    @Test
+    fun uploadedSongsLongAlbumIdIsDroppedSoTheQueueIsAccepted() {
+        // アップロードした曲のアルバムの ID は 64 文字を超える（合成値）。名前は残し、ID だけ外す
+        val uploaded = "FEmusic_library_privately_owned_release_detail" + "x".repeat(80)
+        val song = Song("abcdefghijk", "曲", listOf(ArtistRef("A", uploaded), ArtistRef("", "UC1")), AlbumRef("アルバム", uploaded), 200, null)
+        val item = HandoffMapping.itemOf(QueueItem("i1", song, ItemOrigin.Source))
+        assertEquals(HandoffRef("アルバム", null), item.album)
+        assertEquals(listOf(HandoffRef("A", null)), item.artists)
+    }
 }

@@ -210,6 +210,15 @@ object HandoffCodec {
         )
     }
 
+    /**
+     * 送る側の参照: 名前が空・長すぎるなら null、ID が受け手の検査を通らなければ ID だけ外す（Windows・Mac の送る側と同じ）。
+     * アップロードした曲のアルバムの ID（FEmusic_library_privately_owned_…）は 64 文字を超え、そのまま送るとキュー全体が断られた。
+     */
+    fun ref(
+        name: String,
+        browseId: String?,
+    ): HandoffRef? = if (name.isEmpty() || name.length > MAX_TEXT) null else HandoffRef(name, browseId?.takeIf { BROWSE_ID.matches(it) })
+
     private fun validRef(ref: HandoffRef): Boolean =
         ref.name.isNotEmpty() && ref.name.length <= MAX_TEXT && (ref.browseId == null || BROWSE_ID.matches(ref.browseId))
 

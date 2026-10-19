@@ -6,7 +6,6 @@ import xyz.mooma0750.wave.core.music.Song
 import xyz.mooma0750.wave.handoff.HandoffCodec
 import xyz.mooma0750.wave.handoff.HandoffItem
 import xyz.mooma0750.wave.handoff.HandoffOrigin
-import xyz.mooma0750.wave.handoff.HandoffRef
 import xyz.mooma0750.wave.handoff.HandoffRepeat
 import xyz.mooma0750.wave.handoff.HandoffSnapshot
 import xyz.mooma0750.wave.handoff.HandoffSource
@@ -29,9 +28,9 @@ internal object HandoffMapping {
         HandoffItem(
             itemId = item.itemId,
             videoId = item.song.videoId,
-            title = item.song.title,
-            artists = item.song.artists.map { HandoffRef(it.name, it.browseId) },
-            album = item.song.album?.let { HandoffRef(it.title, it.browseId) },
+            title = item.song.title.take(500),
+            artists = item.song.artists.mapNotNull { HandoffCodec.ref(it.name, it.browseId) }.take(20),
+            album = item.song.album?.let { HandoffCodec.ref(it.title, it.browseId) },
             durationSeconds = item.song.durationSeconds,
             thumbnailUrl = item.song.thumbnailUrl,
             isLive = item.song.isLive,
