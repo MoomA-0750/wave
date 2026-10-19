@@ -36,6 +36,8 @@ struct CollectionPageView: View {
         }
         .background(alignment: .top) {
             LinearGradient(colors: [(model.gradient ?? .clear).opacity(0.6), .clear], startPoint: .top, endPoint: .bottom).frame(height: 360)
+                // 上の帯（検索の欄）の裏まで伸ばす
+                .ignoresSafeArea(edges: .top)
         }
         .onKeyPress(.return) {
             // 一覧の中を探す欄で変換中の Return は確定に使わせる

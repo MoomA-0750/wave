@@ -17,7 +17,14 @@ struct WaveApp: App {
                 .frame(minWidth: 900, minHeight: 600)
                 // 窓の地は Finder・メールの左の欄と同じサイドバーの素材（ultraThinMaterial はほかのアプリより透けすぎた）。
                 // 枠はその上に Liquid Glass の板として浮かせる
-                .containerBackground(for: .window) { SidebarMaterial().ignoresSafeArea() }
+                .containerBackground(for: .window) {
+                    ZStack {
+                        SidebarMaterial()
+                        // 暗い表示では、素材だけだと明るい壁紙が設定・Finder の左の欄より強く透けて明るく見えた。地の色を重ねて透け方をそろえる
+                        Color(nsColor: Self.sidebarTint)
+                    }
+                    .ignoresSafeArea()
+                }
         }
         .defaultSize(width: 1480, height: 940)
         .windowToolbarStyle(.unified(showsTitle: false))
@@ -33,6 +40,13 @@ struct WaveApp: App {
                 Button(L.t("リピート", "Repeat")) { AppServices.player.cycleRepeat() }
             }
         }
+    }
+}
+
+extension WaveApp {
+    /// サイドバーの素材に重ねる色。暗い表示だけ（明るい壁紙の上で設定アプリの左の欄に合わせた値。暗い壁紙の上の色は変わらない）。
+    static let sidebarTint = NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? NSColor(white: 0.145, alpha: 0.78) : .clear
     }
 }
 

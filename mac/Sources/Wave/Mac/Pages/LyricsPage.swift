@@ -42,6 +42,7 @@ struct LyricsPageView: View {
         }
         .background {
             LinearGradient(colors: [(backdrop ?? .clear).opacity(0.67), (backdrop ?? .clear).opacity(0.16)], startPoint: .top, endPoint: .bottom)
+                .ignoresSafeArea(edges: .top)
         }
         .task(id: player.current?.videoId) { backdrop = await Artwork.dominantColor(player.current?.thumbnailUrl) }
     }

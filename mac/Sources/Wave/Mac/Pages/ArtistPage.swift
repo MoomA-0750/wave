@@ -19,80 +19,88 @@ struct ArtistPageView: View {
         let playingHere = model.isPlayingHere
         let artist = model.artist
         let rows = model.topSongs.enumerated().map { TrackRow(number: $0.offset + 1, song: $0.element) }
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 16) {
-                ZStack(alignment: .bottom) {
-                    RemoteImage(url: Ui.resize(artist?.thumbnailUrl, 1080))
-                    LinearGradient(stops: [.init(color: .clear, location: 0.3), .init(color: .black.opacity(0.7), location: 1)], startPoint: .top, endPoint: .bottom)
-                    // 名前と、枠の右端に登録（Spotify の「フォロー」）。登録していなければ色を付けて目立たせる
-                    HStack(alignment: .lastTextBaseline, spacing: 20) {
-                        Text(artist?.name ?? "").font(.system(size: 72, weight: .bold)).foregroundStyle(.white).lineLimit(1).minimumScaleFactor(0.4)
-                        Spacer()
-                        if artist?.channelId != nil && AppServices.client.isLoggedIn {
-                            subscribeButton
-                        }
-                    }
-                    .padding(24)
-                }
-                .frame(height: 320)
-                .clipped()
-                HStack(spacing: 16) {
-                    PlayCircleButton(action: {
-                        model.playOrPause()
-                    }) { Image(systemName: playingHere && player.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 20)) }
-                        .disabled(rows.isEmpty)
-                    IconToggle(isOn: playingHere ? player.shuffle : model.shufflePlay, help: L.t("シャッフル", "Shuffle")) {
-                        model.toggleShuffle()
-                    } label: { Image(systemName: "shuffle").font(.system(size: 20)) }
-                    if model.loading { ProgressView().controlSize(.small) }
-                }
-                .padding(.horizontal, 24)
-                // ライブ・ツアーの告知（アーティストの YouTube のチャンネルの投稿から。Android と同じ）。告知が無ければ出さない
-                if !model.posts.isEmpty {
-                    Text(L.t("ライブ・お知らせ", "Live & news")).subtitleStyle().padding(EdgeInsets(top: 8, leading: 24, bottom: 0, trailing: 24))
-                    ScrollView(.horizontal) {
-                        HStack(alignment: .top, spacing: 12) { ForEach(model.posts, id: \.postId) { LivePostCard(post: $0) } }
-                            .padding(EdgeInsets(top: 0, leading: 24, bottom: 8, trailing: 24))
-                    }
-                }
-                if model.failed { Text(L.t("アーティストを読み込めませんでした", "Couldn’t load the artist")).padding(24) }
-                if !rows.isEmpty {
-                    Text(L.t("人気", "Popular")).subtitleStyle().padding(EdgeInsets(top: 8, leading: 24, bottom: 0, trailing: 24))
-                    VStack(spacing: 0) {
-                        ForEach(Array(rows.enumerated()), id: \.element.id) { i, row in
-                            TrackRowView(row: row, selected: selected == row.id, onPlay: { model.play(start: i, shuffle: nil) }, onSelect: { selected = row.id })
-                        }
-                    }
-                    .padding(.horizontal, 12)
-                }
-                if let id = artist?.allSongsPlaylistId, let artist {
-                    Button(L.t("すべての曲を見る", "See all songs")) {
-                        AppServices.nav.playlist(PlaylistSummary(playlistId: id, title: artist.name + L.t(" のすべての曲", " — all songs"), subtitle: nil, thumbnailUrl: artist.thumbnailUrl))
-                    }
-                    .buttonStyle(.textLink).padding(.horizontal, 24)
-                }
-                // Spotify の「高く評価した曲」の行（このアーティストの、自分が高く評価した曲）。1曲も無ければ出さない
-                if model.checkingLiked || (model.liked?.count ?? 0) > 0, let artist {
-                    Button { AppServices.nav.likedSongsBy(browseId, artist.name) } label: {
-                        HStack(spacing: 16) {
-                            LikedCover(size: 56, round: true)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(L.t("高く評価した曲", "Liked Songs")).font(.body.weight(.semibold))
-                                Text(model.likedText(artist.name)).subtle()
+        // 画像は上の帯（検索の欄）の裏まで伸ばし、帯の下に見える高さはそのままにする
+        GeometryReader { geo in
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 16) {
+                    ZStack(alignment: .bottom) {
+                        RemoteImage(url: Ui.resize(artist?.thumbnailUrl, 1080))
+                        LinearGradient(stops: [.init(color: .clear, location: 0.3), .init(color: .black.opacity(0.7), location: 1)], startPoint: .top, endPoint: .bottom)
+                        // 上の帯の検索の欄・ボタンが明るい画像に埋もれないよう、上の端を暗くする
+                        LinearGradient(colors: [.black.opacity(0.45), .clear], startPoint: .top, endPoint: .bottom)
+                            .frame(height: geo.safeAreaInsets.top + 40)
+                            .frame(maxHeight: .infinity, alignment: .top)
+                        // 名前と、枠の右端に登録（Spotify の「フォロー」）。登録していなければ色を付けて目立たせる
+                        HStack(alignment: .lastTextBaseline, spacing: 20) {
+                            Text(artist?.name ?? "").font(.system(size: 72, weight: .bold)).foregroundStyle(.white).lineLimit(1).minimumScaleFactor(0.4)
+                            Spacer()
+                            if artist?.channelId != nil && AppServices.client.isLoggedIn {
+                                subscribeButton
                             }
                         }
-                        .padding(8)
-                        .contentShape(Rectangle())
+                        .padding(24)
                     }
-                    .buttonStyle(.plain)
-                    .disabled(model.checkingLiked)
+                    .frame(height: 320 + geo.safeAreaInsets.top)
+                    .clipped()
+                    HStack(spacing: 16) {
+                        PlayCircleButton(action: {
+                            model.playOrPause()
+                        }) { Image(systemName: playingHere && player.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 20)) }
+                            .disabled(rows.isEmpty)
+                        IconToggle(isOn: playingHere ? player.shuffle : model.shufflePlay, help: L.t("シャッフル", "Shuffle")) {
+                            model.toggleShuffle()
+                        } label: { Image(systemName: "shuffle").font(.system(size: 20)) }
+                        if model.loading { ProgressView().controlSize(.small) }
+                    }
                     .padding(.horizontal, 24)
+                    // ライブ・ツアーの告知（アーティストの YouTube のチャンネルの投稿から。Android と同じ）。告知が無ければ出さない
+                    if !model.posts.isEmpty {
+                        Text(L.t("ライブ・お知らせ", "Live & news")).subtitleStyle().padding(EdgeInsets(top: 8, leading: 24, bottom: 0, trailing: 24))
+                        ScrollView(.horizontal) {
+                            HStack(alignment: .top, spacing: 12) { ForEach(model.posts, id: \.postId) { LivePostCard(post: $0) } }
+                                .padding(EdgeInsets(top: 0, leading: 24, bottom: 8, trailing: 24))
+                        }
+                    }
+                    if model.failed { Text(L.t("アーティストを読み込めませんでした", "Couldn’t load the artist")).padding(24) }
+                    if !rows.isEmpty {
+                        Text(L.t("人気", "Popular")).subtitleStyle().padding(EdgeInsets(top: 8, leading: 24, bottom: 0, trailing: 24))
+                        VStack(spacing: 0) {
+                            ForEach(Array(rows.enumerated()), id: \.element.id) { i, row in
+                                TrackRowView(row: row, selected: selected == row.id, onPlay: { model.play(start: i, shuffle: nil) }, onSelect: { selected = row.id })
+                            }
+                        }
+                        .padding(.horizontal, 12)
+                    }
+                    if let id = artist?.allSongsPlaylistId, let artist {
+                        Button(L.t("すべての曲を見る", "See all songs")) {
+                            AppServices.nav.playlist(PlaylistSummary(playlistId: id, title: artist.name + L.t(" のすべての曲", " — all songs"), subtitle: nil, thumbnailUrl: artist.thumbnailUrl))
+                        }
+                        .buttonStyle(.textLink).padding(.horizontal, 24)
+                    }
+                    // Spotify の「高く評価した曲」の行（このアーティストの、自分が高く評価した曲）。1曲も無ければ出さない
+                    if model.checkingLiked || (model.liked?.count ?? 0) > 0, let artist {
+                        Button { AppServices.nav.likedSongsBy(browseId, artist.name) } label: {
+                            HStack(spacing: 16) {
+                                LikedCover(size: 56, round: true)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(L.t("高く評価した曲", "Liked Songs")).font(.body.weight(.semibold))
+                                    Text(model.likedText(artist.name)).subtle()
+                                }
+                            }
+                            .padding(8)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(model.checkingLiked)
+                        .padding(.horizontal, 24)
+                    }
+                    ForEach(Array(model.shelves.enumerated()), id: \.offset) { _, shelf in
+                        ShelfView(title: shelf.title, items: shelf.items).padding(.horizontal, 16)
+                    }
                 }
-                ForEach(Array(model.shelves.enumerated()), id: \.offset) { _, shelf in
-                    ShelfView(title: shelf.title, items: shelf.items).padding(.horizontal, 16)
-                }
+                .padding(.bottom, 32)
             }
-            .padding(.bottom, 32)
+            .ignoresSafeArea(edges: .top)
         }
         .task { await model.load() }
     }
@@ -171,6 +179,8 @@ struct SongPageView: View {
         }
         .background(alignment: .top) {
             LinearGradient(colors: [(gradient ?? .clear).opacity(0.6), .clear], startPoint: .top, endPoint: .bottom).frame(height: 360)
+                // 上の帯（検索の欄）の裏まで伸ばす
+                .ignoresSafeArea(edges: .top)
         }
         .task { gradient = await Artwork.dominantColor(song.thumbnailUrl) }
     }

@@ -22,6 +22,11 @@ enum DebugCommands {
         case "login-probe": LoginProbe.run()
         case "lyrics": nav.lyrics()
         case "devices": nav.devices()
+        case "artist":
+            // 引数が無ければ今の曲のアーティスト
+            if let id = arg.isEmpty ? player.current?.artists.first(where: { $0.browseId != nil })?.browseId : arg { nav.artist(id) }
+        case "album":
+            if let id = arg.isEmpty ? player.current?.album?.browseId : arg { nav.album(id) }
         case "back": nav.goBack()
         case "podcast-play":
             // 番組のページでエピソードを押したのと同じ流し方（引数は「browseId [番号]」）

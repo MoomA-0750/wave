@@ -49,6 +49,8 @@ struct PodcastPageView: View {
         }
         .background(alignment: .top) {
             LinearGradient(colors: [(model.gradient ?? .clear).opacity(0.6), .clear], startPoint: .top, endPoint: .bottom).frame(height: 360)
+                // 上の帯（検索の欄）の裏まで伸ばす
+                .ignoresSafeArea(edges: .top)
         }
         .task { await model.load() }
     }
