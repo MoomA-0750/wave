@@ -1148,6 +1148,26 @@ public final class ConnectClient {
         return true
     }
 
+    /// ログインを渡す命令の平文の上限（詰め物の2ブロック、中継の 16KB に収まる。Android 版と同じ）。
+    static let maxLoginGrantPlaintext = 8000
+
+    /// 家の端末 target（wave-api）にログインを渡す（ADR-0015）。本人が押したときだけ呼ぶ。target の受け取りの鍵にだけ包む。
+    /// - Returns: 送ったか（target が家の player でない・自分・大きすぎるなら false）
+    @discardableResult
+    public func sendLoginGrant(to target: String, cookie: String, visitorData: String?, dataSyncId: String?, obtainedAtEpochMs: Int64) throws -> Bool {
+        if pendingStoreId != nil || target == signer.deviceId { return false }
+        guard let current = chain, current.members[signer.deviceId] != nil, current.members[target]?.keys.role == .player else { return false }
+        let grant = CommandBody.loginGrant(
+            .init(
+                commandId: newId(), from: signer.deviceId, to: target, cookie: cookie, visitorData: visitorData, dataSyncId: dataSyncId,
+                obtainedAtEpochMs: obtainedAtEpochMs))
+        let plaintext = ConnectJSON.encodeToUTF8(grant)
+        if plaintext.count > ConnectClient.maxLoginGrantPlaintext { return false }
+        let doc = try DocSealer.seal(
+            signer: signer, chain: current, kind: .command, version: 1, prevHash: nil, issuedAtEpochMs: epochMs(), plaintext: plaintext, only: [target])
+        return send(.control(.init(doc: doc)))
+    }
+
     /// 表示用: ほかの端末の最新のカーソル（別アカウントのものを含む）と、今の時刻に合わせた位置。
     public func remoteNowPosition() -> RemoteNow? {
         guard let cursor = latestCursor, cursor.writer != signer.deviceId else { return nil }

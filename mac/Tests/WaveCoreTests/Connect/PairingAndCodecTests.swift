@@ -34,6 +34,26 @@ final class PairingTests: XCTestCase {
         XCTAssertEqual(#"{"householdId":"h"}"#, confirmed.pair.peerExtension)
     }
 
+    /// ログインをまだ持たない B（wave-api、ADR-0015）は accountlessId で照合を頼み、A はそれを「ログインなしの相手」として受ける（Kotlin と同じ）。
+    func testAccountlessPeerIsAcceptedAndMarked() throws {
+        let a = responder()
+        let b = try Pairing.Initiator(offer: a.offer, identity: idB, deviceName: "wave API", accountId: nil)
+        let confirmed = try b.onConfirm(try a.onHello(try b.hello()).get()).get()
+        let onA = try a.onCodeEntered(confirmed.code).get()
+        XCTAssertTrue(onA.peerAccountless)
+        XCTAssertFalse(confirmed.pair.peerAccountless)
+
+        // 同じアカウントの相手は印を付けない
+        let same = responder()
+        let c = try initiator(same.offer, idB)
+        XCTAssertFalse(try same.onCodeEntered(try c.onConfirm(try same.onHello(try c.hello()).get()).get().code).get().peerAccountless)
+
+        // 受けない設定なら、アカウントが合わない扱い
+        let strict = Pairing.Responder(identity: idA, deviceName: "Pixel 3", accountId: "account-1", nowMs: { 0 }, acceptAccountless: false)
+        let d = try Pairing.Initiator(offer: strict.offer, identity: idB, deviceName: "wave API", accountId: nil)
+        XCTAssertEqual(.accountMismatch, try strict.onHello(try d.hello()).failure)
+    }
+
     func testRejectsWrongCodesAccountsExpiryAndReuse() throws {
         let a = responder()
         _ = try a.onHello(try initiator(a.offer, idB).hello()).get()

@@ -34,10 +34,13 @@ public enum DocSealer {
 
     /// 宛先は、書き手が検証した一覧の今の全端末。
     public static func seal(
-        signer: DeviceSigner, chain: VerifiedChain, kind: DocKind, version: Int64, prevHash: String?, issuedAtEpochMs: Int64, plaintext: Data
+        signer: DeviceSigner, chain: VerifiedChain, kind: DocKind, version: Int64, prevHash: String?, issuedAtEpochMs: Int64, plaintext: Data,
+        only: Set<String>? = nil
     ) throws -> SealedDoc {
         if plaintext.count > maxPlaintext { throw ConnectError.invalidArgument("plaintext too large") }
         if chain.members[signer.deviceId] == nil { throw ConnectError.invalidArgument("writer is not a member") }
+        // 包む宛先を家の一部の端末に絞る（ログインを渡す命令、ADR-0015）。nil なら家の全端末
+        if let only, only.isEmpty || !only.allSatisfy({ chain.members[$0] != nil }) { throw ConnectError.invalidArgument("recipient is not a member") }
         let header = DocHeader(
             kind: kind, householdId: chain.householdId, writerId: signer.deviceId, version: version, prevHash: prevHash, headSeq: chain.headSeq,
             headHash: chain.headHash, issuedAtEpochMs: issuedAtEpochMs)
@@ -45,6 +48,7 @@ public enum DocSealer {
         let contentKey = WaveCrypto.randomBytes(32)
         let (nonce, ciphertext) = try WaveCrypto.seal(key: contentKey, aad: headerHash, plaintext: pad(plaintext))
         let recipients = try chain.members.values
+            .filter { only == nil || only!.contains($0.keys.deviceId) }
             .sorted { ordinalLess($0.keys.deviceId, $1.keys.deviceId) }
             .map { member in
                 let sealedKey = try Hpke.seal(

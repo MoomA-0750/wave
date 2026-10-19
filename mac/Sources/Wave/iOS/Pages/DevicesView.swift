@@ -10,6 +10,7 @@ struct DevicesView: View {
     @State private var offerText = ""
     @State private var codeText = ""
     @State private var removing: MemberView?
+    @State private var granting: MemberView?
     @State private var confirmTransfer = false
     /// 加わるための QR をカメラで読んでいる（Android と同じ。貼り付けも残す）。
     @State private var scanning = false
@@ -73,6 +74,13 @@ struct DevicesView: View {
         } message: { member in
             Text(L.t("「\(member.label)」は、もう再生を引き継げなくなります。もう一度加えるには、QR と6桁の手順が要ります。",
                      "“\(member.label)” won’t be able to move playback anymore. To add it again, you’ll need the QR code and 6-digit steps."))
+        }
+        .confirmationDialog(DevicesText.grantTitle, isPresented: Binding(get: { granting != nil }, set: { if !$0 { granting = nil } }),
+                            titleVisibility: .visible, presenting: granting) { member in
+            Button(L.t("渡す", "Share")) { DevicesText.grantLogin(member) }
+            Button(L.t("やめる", "Cancel"), role: .cancel) {}
+        } message: { member in
+            Text(DevicesText.grantMessage(member))
         }
         .alert(L.t("この iPhone で再生", "Play on this iPhone"), isPresented: $confirmTransfer) {
             Button(L.t("置き換える", "Replace")) { devices.transfer() }
@@ -224,6 +232,11 @@ struct DevicesView: View {
             if pairing.kind == .showCode {
                 Button(L.t("相手に入力したら、続ける", "Continue after entering it")) { devices.confirmOnB() }
             }
+            // 加えたのがログインをまだ持たない wave API なら、続けてログインを渡す
+            if pairing.kind == .done, let id = pairing.grantDeviceId, let member = devices.members.first(where: { $0.deviceId == id }) {
+                Button(L.t("ログインを渡す", "Share sign-in")) { granting = member }
+                    .disabled(!AppServices.client.isLoggedIn)
+            }
             Button(pairing.kind == .done || pairing.kind == .failed ? L.t("閉じる", "Close") : L.t("キャンセル", "Cancel"),
                    role: pairing.kind == .done || pairing.kind == .failed ? nil : .cancel) { devices.cancelPairing() }
         } header: {
@@ -248,7 +261,7 @@ struct DevicesView: View {
     private var householdSection: some View {
         Section {
             ForEach(devices.members) { member in
-                DevicesMemberRow(member: member)
+                DevicesMemberRow(member: member) { granting = member }
                     .swipeActions(edge: .trailing) {
                         if !member.isSelf {
                             Button(L.t("外す", "Remove"), role: .destructive) { removing = member }
@@ -301,18 +314,25 @@ private struct DevicesBanner: View {
 /// 連携している端末の1行。
 private struct DevicesMemberRow: View {
     var member: MemberView
+    /// wave API の行の「ログインを渡す」。
+    var onGrant: () -> Void
 
     var body: some View {
         HStack(spacing: 14) {
-            Image(systemName: member.isPc ? "desktopcomputer" : "iphone")
+            Image(systemName: DevicesText.symbol(member, selfIsPc: false))
                 .font(.title3).frame(width: 28)
                 .foregroundStyle(member.active ? Color.accentColor : Color.primary)
             VStack(alignment: .leading, spacing: 2) {
-                Text(member.isSelf ? L.t("\(member.label)（この iPhone）", "\(member.label) (this iPhone)")
-                    : member.isController ? L.t("\(member.label)（操作だけ）", "\(member.label) (remote only)") : member.label)
+                Text(member.isSelf ? L.t("\(member.label)（この iPhone）", "\(member.label) (this iPhone)") : DevicesText.label(member))
                     .lineLimit(1)
                 Text(member.active ? L.t("再生中の端末", "Active device") : member.online ? L.t("オンライン", "Online") : L.t("オフライン", "Offline"))
                     .font(.caption).foregroundStyle(member.online ? Color.green : Color.secondary)
+            }
+            if member.isApi {
+                Spacer()
+                Button(L.t("ログインを渡す", "Share sign-in"), action: onGrant)
+                    .buttonStyle(.borderless)
+                    .disabled(!AppServices.client.isLoggedIn)
             }
         }
     }
@@ -348,7 +368,8 @@ struct DevicesSheet: View {
                 } else {
                     let others = connect.members
                         .filter { m in remote == nil ? !m.isSelf : m.deviceId != remote?.deviceId }
-                        .filter { !$0.isController }
+                        // 操作だけの端末と wave API（音を出さない）は、再生の行き先にしない
+                        .filter { !$0.isController && !$0.isApi }
                         // 自分を先に、その後はオンラインのものを先に（同じなら家の順のまま）
                         .enumerated()
                         .sorted { a, b in

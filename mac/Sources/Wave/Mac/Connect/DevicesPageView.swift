@@ -8,6 +8,7 @@ struct DevicesPageView: View {
     @State private var offerText = ""
     @State private var codeText = ""
     @State private var removing: MemberView?
+    @State private var granting: MemberView?
     @State private var qr: (offer: String, image: NSImage)?
 
     private var devices: ConnectService { AppServices.connect }
@@ -68,6 +69,13 @@ struct DevicesPageView: View {
         } message: { member in
             Text(L.t("「\(member.label)」は、もう再生を引き継げなくなります。もう一度加えるには、QR と6桁の手順が要ります。",
                      "“\(member.label)” won’t be able to move playback anymore. To add it again, you’ll need the QR code and 6-digit steps."))
+        }
+        .confirmationDialog(DevicesText.grantTitle, isPresented: Binding(get: { granting != nil }, set: { if !$0 { granting = nil } }),
+                            presenting: granting) { member in
+            Button(L.t("渡す", "Share")) { DevicesText.grantLogin(member) }
+            Button(L.t("やめる", "Cancel"), role: .cancel) {}
+        } message: { member in
+            Text(DevicesText.grantMessage(member))
         }
     }
 
@@ -192,6 +200,11 @@ struct DevicesPageView: View {
                 if pairing.kind == .showCode {
                     Button(L.t("相手に入力したら、続ける", "Continue after entering it")) { devices.confirmOnB() }.buttonStyle(.borderedProminent)
                 }
+                // 加えたのがログインをまだ持たない wave API なら、続けてログインを渡す
+                if pairing.kind == .done, let id = pairing.grantDeviceId, let member = devices.members.first(where: { $0.deviceId == id }) {
+                    Button(L.t("ログインを渡す", "Share sign-in")) { granting = member }.buttonStyle(.borderedProminent)
+                        .disabled(!AppServices.client.isLoggedIn)
+                }
                 Button(pairing.kind == .done || pairing.kind == .failed ? L.t("閉じる", "Close") : L.t("キャンセル", "Cancel")) { devices.cancelPairing() }
             }
         }
@@ -241,13 +254,17 @@ struct DevicesPageView: View {
 
     private func memberRow(_ member: MemberView) -> some View {
         HStack(spacing: 16) {
-            Image(systemName: member.isSelf || member.isPc ? "desktopcomputer" : "iphone").font(.system(size: 20)).frame(width: 28)
+            Image(systemName: DevicesText.symbol(member, selfIsPc: true)).font(.system(size: 20)).frame(width: 28)
             VStack(alignment: .leading, spacing: 2) {
-                Text(member.isController ? L.t("\(member.label)（操作だけ）", "\(member.label) (remote only)") : member.label)
+                Text(DevicesText.label(member))
                 Text(member.active ? L.t("再生中の端末", "Active device") : member.online ? L.t("オンライン", "Online") : L.t("オフライン", "Offline"))
                     .font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
+            if member.isApi {
+                Button(L.t("ログインを渡す", "Share sign-in")) { granting = member }
+                    .disabled(!AppServices.client.isLoggedIn)
+            }
             if !member.isSelf {
                 Button(L.t("外す", "Remove")) { removing = member }
             }

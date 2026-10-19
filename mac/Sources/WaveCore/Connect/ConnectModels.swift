@@ -315,6 +315,32 @@ public enum CommandBody: Equatable, Sendable, ConnectCodable {
     case control(Control)
     case queueAdd(QueueAdd)
     case profile(Profile)
+    case loginGrant(LoginGrant)
+
+    /// ログインを渡す（ADR-0015、Android 版の CommandBody.LoginGrant と同じ）: 家の端末から wave-api（種類 api の端末）へ、本人が押したときだけ。
+    /// 宛先の端末の受け取りの鍵にだけ包む。値は WebView のログインで取った生の値。
+    public struct LoginGrant: Equatable, Sendable, CustomStringConvertible {
+        public var commandId: String
+        public var from: String
+        public var to: String
+        public var cookie: String
+        public var visitorData: String?
+        public var dataSyncId: String?
+        public var obtainedAtEpochMs: Int64
+
+        public init(commandId: String, from: String, to: String, cookie: String, visitorData: String?, dataSyncId: String?, obtainedAtEpochMs: Int64) {
+            self.commandId = commandId
+            self.from = from
+            self.to = to
+            self.cookie = cookie
+            self.visitorData = visitorData
+            self.dataSyncId = dataSyncId
+            self.obtainedAtEpochMs = obtainedAtEpochMs
+        }
+
+        /// 値をログに出さない。
+        public var description: String { "LoginGrant(commandId: \(commandId), from: \(from), to: \(to))" }
+    }
 
     /// 遠隔のキューへの追加: 鳴っていない端末から、今の再生中の端末へ「この曲をキューに入れて」（Android 版の CommandBody.QueueAdd と同じ）。
     /// 従う条件は Control と同じ。受け手は afterItemId の曲があればその直後へ、無ければ next なら今の曲の直後、
@@ -435,6 +461,11 @@ public enum CommandBody: Equatable, Sendable, ConnectCodable {
             ])
         case .profile(let p):
             return .obj(["type": "profile", "from": .string(p.from), "name": .string(p.name), "kind": JSON(p.kind)])
+        case .loginGrant(let g):
+            return .obj([
+                "type": "login_grant", "commandId": .string(g.commandId), "from": .string(g.from), "to": .string(g.to), "cookie": .string(g.cookie),
+                "visitorData": JSON(g.visitorData), "dataSyncId": JSON(g.dataSyncId), "obtainedAtEpochMs": JSON(g.obtainedAtEpochMs),
+            ])
         }
     }
 
@@ -461,6 +492,11 @@ public enum CommandBody: Equatable, Sendable, ConnectCodable {
                     accountTag: try r.string("accountTag")))
         case "profile":
             return .profile(Profile(from: try r.string("from"), name: try r.string("name"), kind: try r.optString("kind")))
+        case "login_grant":
+            return .loginGrant(
+                LoginGrant(
+                    commandId: try r.string("commandId"), from: try r.string("from"), to: try r.string("to"), cookie: try r.string("cookie"),
+                    visitorData: try r.optString("visitorData"), dataSyncId: try r.optString("dataSyncId"), obtainedAtEpochMs: try r.long("obtainedAtEpochMs")))
         default:
             throw ConnectDecodeError(field: "type")
         }

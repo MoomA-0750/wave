@@ -401,11 +401,11 @@
 - 絵柄は画像の資産を足さず、Segoe Fluent Icons（Windows 10 では Segoe MDL2 Assets）の字から作る。プレビューの帯は Windows のモード（SystemUsesLightTheme）で明暗が変わるので、明るいときは黒、暗いときは白で描き、モードと拡大率が変わったら作り直す
 - ボタンは TaskbarButtonCreated を受けてから足す（エクスプローラーが起動し直すと同じ知らせが来るので足し直せる）
 
-## 2026-10-19 wave API へのログインの渡し方（Android・Windows）
+## 2026-10-19 wave API へのログインの渡し方（Android・Windows・Mac・iPhone）
 
 - 「ログインを渡す」は家の端末の一覧（設定）の wave API の行にだけ置き、確認を挟む。デバイスの一覧（再生を移す所）には wave API を出さない（音を出さない端末で、選ぶと引き取りに失敗するだけになる）
 - 送る値は WebView で取った生の値（cookie・visitorData・DATASYNC_ID）。Android は AuthManager.exportForService、Windows はログインの保存から読み、送ったらすぐ捨てる
-- 加える側の照合: ログインを持たない wave API はアカウントの HMAC を印で作る。Windows の加える側（Responder）も Android と同じく、印で合えば「ログインなしの相手」として受け、加えた直後にログインを渡すよう促す。照合は誤操作の防止で、守りは6桁の照合のまま
+- 加える側の照合: ログインを持たない wave API はアカウントの HMAC を印で作る。Windows・Mac・iPhone の加える側（Responder）も Android と同じく、印で合えば「ログインなしの相手」として受け、加えた直後にログインを渡すよう促す。照合は誤操作の防止で、守りは6桁の照合のまま
 - 種類 api は、端末が知らせてきたプロフィールの種類で見分ける（鎖には入れない）。確かめのため、開発用に種類を覚え直す命令（Android `v2_kind`、Windows `connect-kind`）と、Windows の端末の画面を開く `devices` を足した
 
 ## 2026-10-19 wave-api（ほかのアプリ向けの API）の作り

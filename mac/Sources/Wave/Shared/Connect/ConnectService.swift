@@ -279,6 +279,25 @@ final class ConnectService {
         worker.post { worker.forgetHousehold() }
     }
 
+    /// 開発用: 家の端末の種類を仮に替える（"api"・"pc"・"phone"）。
+    func debugSetKind(_ deviceId: String, _ kind: String) {
+        guard let worker else { return }
+        worker.post { worker.rememberKind(deviceId, kind) }
+    }
+
+    /// 家の wave-api にログインを渡す（ADR-0015）。本人が確認の画面で「渡す」を押したときだけ呼ぶ。@return 送ったか
+    func grantLogin(_ deviceId: String) async -> Bool {
+        guard let worker, deviceId != worker.keys.deviceId else { return false }
+        guard case (.loaded, let credentials?) = AppServices.credentials.load() else { return false }
+        let sent = try? await worker.onEngine { () -> Bool in
+            try worker.client?.sendLoginGrant(
+                to: deviceId, cookie: credentials.revealCookie(), visitorData: credentials.visitorData, dataSyncId: credentials.revealDataSyncId(),
+                obtainedAtEpochMs: credentials.obtainedAtEpochMs) ?? false
+        }
+        AppPaths.log("connect-v2 login grant sent=\(sent == true)")
+        return sent == true
+    }
+
     /// 家から他の端末を外す。@return 外したか
     func removeMember(_ deviceId: String) async -> Bool {
         guard let worker, deviceId != worker.keys.deviceId else { return false }
@@ -451,9 +470,14 @@ final class ConnectService {
                     fail(L.t("端末を加えられませんでした", "Couldn’t add the device"))
                     return
                 }
-                worker.rememberLabel(WaveCrypto.deviceId(established.peerPublicKey), established.peerDeviceName)
-                AppPaths.log("pairing-v2 established role=A")
-                setPairing(.done(established.peerDeviceName))
+                let peerId = WaveCrypto.deviceId(established.peerPublicKey)
+                worker.rememberLabel(peerId, established.peerDeviceName)
+                // ログインをまだ持たない相手（wave-api、ADR-0015）: 一覧で wave API として出し、続けてログインを渡すよう促す
+                if established.peerAccountless { worker.rememberKind(peerId, "api") }
+                AppPaths.log("pairing-v2 established role=A accountless=\(established.peerAccountless)")
+                var done = PairingView.done(established.peerDeviceName)
+                if established.peerAccountless { done.grantDeviceId = peerId }
+                setPairing(done)
                 return
             }
         } catch is CancellationError where !cancel.isCancelled {
@@ -800,9 +824,11 @@ final class ConnectWorker: ConnectClientEffects, @unchecked Sendable {
         try? data.write(to: url, options: .atomic)
     }
 
-    private func rememberKind(_ deviceId: String, _ kind: String) {
+    /// 開発用の命令からも呼ぶ（端末の種類を仮に替えて、wave API の行の見え方を確かめる）。
+    func rememberKind(_ deviceId: String, _ kind: String) {
         kinds[deviceId] = kind
         Self.writeMap(kindsUrl, kinds)
+        refreshInfo()
     }
 
     func rememberLabel(_ deviceId: String, _ name: String) {
@@ -816,6 +842,7 @@ final class ConnectWorker: ConnectClientEffects, @unchecked Sendable {
     private func labelOf(_ deviceId: String) -> String {
         if deviceId == keys.deviceId { return L.t("この Mac", "This Mac") }
         if let name = labels[deviceId] { return name }
+        if kinds[deviceId] == "api" { return "wave API" }
         let short = String(deviceId.prefix(6))
         return L.t("端末 \(short)", "Device \(short)")
     }
@@ -858,7 +885,8 @@ final class ConnectWorker: ConnectClientEffects, @unchecked Sendable {
             retreated: engine?.hasRetreated == true, storeResetPending: engine?.storeResetPending == true, relay: relay?.status ?? .disconnected)
         let members = (engine?.members ?? []).map { m in
             MemberView(deviceId: m.deviceId, label: labelOf(m.deviceId), isSelf: m.deviceId == keys.deviceId, isController: m.role == .controller,
-                       online: online.contains(m.deviceId), active: m.deviceId == active, isPc: kinds[m.deviceId] == "pc")
+                       online: online.contains(m.deviceId), active: m.deviceId == active, isPc: kinds[m.deviceId] == "pc",
+                       isApi: kinds[m.deviceId] == "api")
         }
         var remote: RemoteView?
         if let engine, let latest = engine.latestCursorBody(), latest.writer != keys.deviceId {
@@ -1041,7 +1069,7 @@ final class ConnectWorker: ConnectClientEffects, @unchecked Sendable {
             var scalars = String.UnicodeScalarView()
             scalars.append(contentsOf: rawName.unicodeScalars.filter { $0.properties.generalCategory != .control && !ConnectWorker.bidiControls.contains($0.value) })
             let name = String(scalars).trimmingCharacters(in: .whitespacesAndNewlines)
-            if let kind, kind == "pc" || kind == "phone", kinds[deviceId] != kind { rememberKind(deviceId, kind) }
+            if let kind, kind == "pc" || kind == "phone" || kind == "api", kinds[deviceId] != kind { rememberKind(deviceId, kind) }
             if !name.isEmpty && labels[deviceId] != name { rememberLabel(deviceId, name) } else { refreshInfo() }
             return
         }
@@ -1416,6 +1444,9 @@ struct MemberView: Equatable, Identifiable {
     var active: Bool
     var isPc = false
 
+    /// wave-api（ほかのアプリ向けの API、ADR-0015）。音を出さないので「ここで再生」の行き先にしない。ログインを渡す行き先になる。
+    var isApi = false
+
     var id: String { deviceId }
 }
 
@@ -1440,6 +1471,9 @@ struct PairingView: Equatable {
     var offerText: String?
     var code: String?
     var peerName: String?
+
+    /// 加えたのがログインをまだ持たない wave-api なら、その端末（続けて「ログインを渡す」を出す）。
+    var grantDeviceId: String?
 
     static let idle = PairingView(kind: .idle)
     static func working(_ text: String) -> PairingView { PairingView(kind: .working, text: text) }

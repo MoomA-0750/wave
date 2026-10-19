@@ -12,6 +12,10 @@ public enum Pairing {
     public static let tokenBytes = 16
     public static let lifetimeMs: Int64 = 2 * 60 * 1000
     public static let maxAttempts = 3
+
+    /// ログインをまだ持たない加わる側（wave-api、ADR-0015）が、アカウントの HMAC に使う値（Kotlin の Pairing.ACCOUNTLESS_ID と同じ）。
+    /// 誰でも計算できる印で、「アカウントを照らし合わせられない」ことを A に伝えるだけ（照合は誤操作の防止で防御ではない。守りは6桁の照合）。
+    public static let accountlessId = "wave-accountless-v1"
     private static let maxExtensionChars = 2048
     private static let label = "wave-pair-v1"
     private static let offerPrefix = "wave-pair:"
@@ -132,6 +136,9 @@ public enum Pairing {
 
         /// 相手の拡張（A から見た B の Hello、B から見た A の Confirm）。署名で確かめた値。
         public let peerExtension: String?
+
+        /// A から見て、B がログインをまだ持たない（accountlessId で照合した）。加えた後にログインを渡す相手。
+        public var peerAccountless = false
     }
 
     /// B 側の結果: 表示する6桁と、確定したときに保存するペア。
@@ -181,6 +188,7 @@ public enum Pairing {
         private let nowMs: () -> Int64
         private let confirmAccountId: String
         private let confirmExtension: String?
+        private let acceptAccountless: Bool
         private let pkA: Data
         private let ephemeral: P256.KeyAgreement.PrivateKey
         private let eA: Data
@@ -200,17 +208,23 @@ public enum Pairing {
         ///   - identity: 身元の署名鍵
         ///   - accountId: アカウントの識別子（正規化した DATASYNC_ID）。HMAC にだけ使う
         ///   - confirmExtension: Connect v2: Confirm に入れる拡張（秘密を入れない）
-        public convenience init(identity: DeviceSigner, deviceName: String, accountId: String, nowMs: @escaping () -> Int64, confirmExtension: String? = nil) {
+        ///   - acceptAccountless: ログインをまだ持たない B（accountlessId）を受けるか（ADR-0015）
+        public convenience init(
+            identity: DeviceSigner, deviceName: String, accountId: String, nowMs: @escaping () -> Int64, confirmExtension: String? = nil,
+            acceptAccountless: Bool = true
+        ) {
             self.init(
                 identity: identity, deviceName: deviceName, accountId: accountId, nowMs: nowMs, confirmAccountId: accountId,
-                confirmExtension: confirmExtension, ephemeral: WaveCrypto.generateEphemeralKeyPair(), token: WaveCrypto.randomBytes(tokenBytes))
+                confirmExtension: confirmExtension, ephemeral: WaveCrypto.generateEphemeralKeyPair(), token: WaveCrypto.randomBytes(tokenBytes),
+                acceptAccountless: acceptAccountless)
         }
 
         /// テスト用: 使い捨ての鍵と token を外から与える・Confirm に入れるアカウントを変える。
         init(
             identity: DeviceSigner, deviceName: String, accountId: String, nowMs: @escaping () -> Int64, confirmAccountId: String,
-            confirmExtension: String?, ephemeral: P256.KeyAgreement.PrivateKey, token: Data
+            confirmExtension: String?, ephemeral: P256.KeyAgreement.PrivateKey, token: Data, acceptAccountless: Bool = true
         ) {
+            self.acceptAccountless = acceptAccountless
             self.identity = identity
             self.deviceName = deviceName
             self.accountId = accountId
@@ -250,7 +264,13 @@ public enum Pairing {
                 return .failure(.badSignature)
             }
             let keys = schedule(prk, transcript, self: pkA, peer: pkBBytes)
-            if !WaveCrypto.constantTimeEquals(accountHmac(keys.accountKey, accountId), B64.decode(body.accountHmac) ?? Data()) {
+            let peerHmac = B64.decode(body.accountHmac) ?? Data()
+            let accountless: Bool
+            if WaveCrypto.constantTimeEquals(accountHmac(keys.accountKey, accountId), peerHmac) {
+                accountless = false
+            } else if acceptAccountless && WaveCrypto.constantTimeEquals(accountHmac(keys.accountKey, Pairing.accountlessId), peerHmac) {
+                accountless = true
+            } else {
                 return .failure(.accountMismatch)
             }
             used = true
@@ -258,7 +278,7 @@ public enum Pairing {
                 keys.sas,
                 Established(
                     peerPublicKey: pkBBytes, peerDeviceName: sanitizeName(body.deviceName), sendKey: keys.sendKey, receiveKey: keys.receiveKey,
-                    accountKey: keys.accountKey, peerExtension: body.extension)
+                    accountKey: keys.accountKey, peerExtension: body.extension, peerAccountless: accountless)
             )
             let confirm = ConfirmBody(
                 sigA: B64.encode(try identity.sign(label: label + "-a", message: signedTranscript(transcript, confirmExtension))),
@@ -293,7 +313,8 @@ public enum Pairing {
     public final class Initiator: @unchecked Sendable {
         private let identity: DeviceSigner
         private let deviceName: String
-        private let accountId: String
+        /// nil はログインをまだ持たない（accountlessId で照合を頼み、A のアカウントは確かめない。ADR-0015）。
+        private let accountId: String?
         private let helloExtension: String?
         private let pkB: Data
         private let eB: Data
@@ -306,7 +327,7 @@ public enum Pairing {
         /// - Parameters:
         ///   - offer: decodeOffer を通したもの（通していなければ投げる）
         ///   - helloExtension: Connect v2: Hello に入れる拡張（B の家の鍵の記述）
-        public convenience init(offer: Offer, identity: DeviceSigner, deviceName: String, accountId: String, helloExtension: String? = nil) throws {
+        public convenience init(offer: Offer, identity: DeviceSigner, deviceName: String, accountId: String?, helloExtension: String? = nil) throws {
             try self.init(
                 offer: offer, identity: identity, deviceName: deviceName, accountId: accountId, helloExtension: helloExtension,
                 ephemeral: WaveCrypto.generateEphemeralKeyPair())
@@ -314,7 +335,7 @@ public enum Pairing {
 
         /// テスト用: 使い捨ての鍵を外から与える。
         init(
-            offer: Offer, identity: DeviceSigner, deviceName: String, accountId: String, helloExtension: String?, ephemeral: P256.KeyAgreement.PrivateKey
+            offer: Offer, identity: DeviceSigner, deviceName: String, accountId: String?, helloExtension: String?, ephemeral: P256.KeyAgreement.PrivateKey
         ) throws {
             self.identity = identity
             self.deviceName = deviceName
@@ -341,7 +362,7 @@ public enum Pairing {
                 pkB: B64.encode(pkB),
                 sigB: B64.encode(try identity.sign(label: label + "-b", message: signedTranscript(transcript, helloExtension))),
                 deviceName: deviceName,
-                accountHmac: B64.encode(accountHmac(keys.accountKey, accountId)),
+                accountHmac: B64.encode(accountHmac(keys.accountKey, accountId ?? Pairing.accountlessId)),
                 extension: helloExtension)
             let (nonce, ciphertext) = try WaveCrypto.seal(
                 key: handshakeKey(prk, "b->a", transcript0), aad: transcript0, plaintext: Data(ConnectJSON.serialize(body.toJSON()).utf8))
@@ -359,7 +380,7 @@ public enum Pairing {
             if !WaveCrypto.verify(pkAKey, label: label + "-a", message: signedTranscript(transcript, body.extension), signature: sigA) {
                 return .failure(.badSignature)
             }
-            if !WaveCrypto.constantTimeEquals(accountHmac(keys.accountKey, accountId), B64.decode(body.accountHmac) ?? Data()) {
+            if let accountId, !WaveCrypto.constantTimeEquals(accountHmac(keys.accountKey, accountId), B64.decode(body.accountHmac) ?? Data()) {
                 return .failure(.accountMismatch)
             }
             return .success(

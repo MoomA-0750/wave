@@ -28,6 +28,10 @@ enum DevicesText {
             return L.t("「\(peer)」に、この6桁の数字を入力してください", "Enter this 6-digit code on “\(peer)”")
         case .done:
             let peer = pairing.peerName ?? ""
+            if pairing.grantDeviceId != nil {
+                return L.t("「\(peer)」を加えました。プレイリストなどを使えるようにするには、ログインを渡してください。",
+                           "Added “\(peer)”. To let it use your playlists and more, share your sign-in.")
+            }
             return L.t("「\(peer)」と連携しました", "Connected with “\(peer)”")
         case .failed: return pairing.text ?? ""
         case .idle: return ""
@@ -49,6 +53,32 @@ enum DevicesText {
         case .notMember: return info.inHousehold ? L.t("受け付けられません", "Not accepted") : L.t("まだ連携していません", "Not set up yet")
         case .failed: return L.t("つながりませんでした", "Couldn’t connect")
         case .disconnected: return L.t("切断", "Disconnected")
+        }
+    }
+
+    /// 端末の絵（wave-api はサーバー、PC はコンピューター、ほかはスマホ）。
+    static func symbol(_ member: MemberView, selfIsPc: Bool) -> String {
+        member.isApi ? "server.rack" : member.isPc || (member.isSelf && selfIsPc) ? "desktopcomputer" : "iphone"
+    }
+
+    /// 一覧の表示名。
+    static func label(_ member: MemberView) -> String {
+        member.isController ? L.t("\(member.label)（操作だけ）", "\(member.label) (remote only)") : member.label
+    }
+
+    static let grantTitle = L.t("ログインを渡しますか？", "Share your sign-in?")
+
+    static func grantMessage(_ member: MemberView) -> String {
+        L.t("「\(label(member))」に、この端末の YouTube のログインを渡します。ほかのアプリ（home-dashboard など）から、あなたのプレイリスト・高く評価した曲・おすすめを使えるようになります。wave API を動かしている機械に入れる人は、それらを読めます。",
+            "This sends this device’s YouTube sign-in to “\(label(member))”, so other apps (such as home-dashboard) can use your playlists, liked songs and recommendations. Anyone with access to the machine running wave API can read them.")
+    }
+
+    /// wave-api にログインを渡し、結果を知らせる（確認の画面で「渡す」を押したときだけ）。
+    static func grantLogin(_ member: MemberView) {
+        Task {
+            let sent = await AppServices.connect.grantLogin(member.deviceId)
+            AppServices.toast.show(sent ? L.t("「\(label(member))」にログインを渡しました", "Shared your sign-in with \(label(member))")
+                : L.t("ログインを渡せませんでした", "Couldn’t share your sign-in"))
         }
     }
 

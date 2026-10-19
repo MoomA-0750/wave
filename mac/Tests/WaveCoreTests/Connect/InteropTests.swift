@@ -109,6 +109,37 @@ final class InteropTests: XCTestCase {
         XCTAssertEqual(confirmed.pair.peerExtension, ConnectJSON.encode(joinInfo))
     }
 
+    /// ログインを渡す命令（ADR-0015）: Kotlin の CommandBody.LoginGrant と同じ JSON を読み書きし、宛先の端末の鍵にだけ包む（ほかの端末は開けない）。
+    func testLoginGrantIsSealedOnlyForTheTarget() throws {
+        // Kotlin（encodeDefaults）の書く形
+        let kotlinText =
+            #"{"type":"login_grant","commandId":"c1","from":"A","to":"P","cookie":"SAPISID=synthetic","visitorData":null,"dataSyncId":"sync","obtainedAtEpochMs":5}"#
+        guard case .loginGrant(let grant)? = ConnectJSON.decode(CommandBody.self, from: kotlinText) else { return XCTFail("読めない") }
+        XCTAssertEqual("SAPISID=synthetic", grant.cookie)
+        XCTAssertNil(grant.visitorData)
+        XCTAssertEqual("sync", grant.dataSyncId)
+        XCTAssertFalse(String(describing: grant).contains("SAPISID"), "記録に cookie が出る")
+        XCTAssertEqual(try JSON.parse(Data(kotlinText.utf8)), try JSON.parse(ConnectJSON.encodeToUTF8(CommandBody.loginGrant(grant))))
+
+        let chain = try kotlin["chain"].items.map { try decode(ChainRecord.self, $0) }.verified()
+        let a = try device("a"), b = try device("b"), pc = try device("pc")
+        let doc = try DocSealer.seal(
+            signer: a, chain: chain, kind: .command, version: 1, prevHash: nil, issuedAtEpochMs: 1, plaintext: Data(kotlinText.utf8), only: [pc.deviceId])
+        XCTAssertEqual([pc.deviceId], doc.recipients.map(\.deviceId))
+        guard case .ok(_, let opened, _) = DocSealer.open(doc, chain: chain, me: pc) else { return XCTFail("宛先が開けない") }
+        XCTAssertEqual(kotlinText, String(decoding: opened, as: UTF8.self))
+        if case .ok = DocSealer.open(doc, chain: chain, me: b) { XCTFail("宛先でない端末が開けた") }
+        XCTAssertThrowsError(
+            try DocSealer.seal(signer: a, chain: chain, kind: .command, version: 1, prevHash: nil, issuedAtEpochMs: 1, plaintext: Data(), only: ["nobody"]))
+    }
+
+    /// Kotlin の CSharpInteropTest.sampleLoginGrant と同じ値（合成値）。
+    static func sampleLoginGrant(from: String, to: String) -> CommandBody.LoginGrant {
+        .init(
+            commandId: "grant-0000000000000001", from: from, to: to, cookie: "SAPISID=synthetic-sapisid; HSID=synthetic", visitorData: "synthetic-visitor",
+            dataSyncId: "synthetic-sync||x", obtainedAtEpochMs: 1_700_000_000_000)
+    }
+
     /// C# が（Kotlin のテスト鍵で）作った成果物を、Swift で同じ規則で検証して開く。
     func testOpensCSharpArtifacts() throws {
         let csharp = try InteropTests.loadFixture("csharp.json")
@@ -148,15 +179,22 @@ final class InteropTests: XCTestCase {
 
     private func checkDocs(_ f: JSON) throws {
         let chain = try f["chain"].items.map { try decode(ChainRecord.self, $0) }.verified()
-        let devices = try ["a", "b", "pc"].map(device)
+        let names = ["a", "b", "pc"]
+        let devices = try names.map(device)
         let docs = f["docs"].items
-        XCTAssertEqual(["queue", "cursor", "command", "profile", "library"], try docs.map { try str($0, "name") })
+        XCTAssertEqual(["queue", "cursor", "command", "profile", "library", "login_grant"], try docs.map { try str($0, "name") })
         for entry in docs {
             let doc = try decode(SealedDoc.self, entry["doc"])
             XCTAssertEqual(try str(entry, "hash"), DocSealer.hash(doc))
             XCTAssertEqual(ConnectJSON.serialize(try XCTUnwrap(entry["doc"])), ConnectJSON.encode(doc))
             let plaintext = try str(entry, "plaintext")
-            for device in devices {
+            // 宛先を絞った doc（ログインを渡す命令）は openers の端末だけが開ける
+            let openers = entry["openers"]?.arr?.compactMap(\.str) ?? names
+            for (name, device) in zip(names, devices) {
+                guard openers.contains(name) else {
+                    if case .ok = DocSealer.open(doc, chain: chain, me: device) { XCTFail("宛先でない端末が開けた") }
+                    continue
+                }
                 guard case .ok(_, let opened, _) = DocSealer.open(doc, chain: chain, me: device) else { return XCTFail("開けない") }
                 XCTAssertEqual(plaintext, String(decoding: opened, as: UTF8.self))
             }
@@ -174,6 +212,11 @@ final class InteropTests: XCTestCase {
                 XCTAssertEqual(plaintext, ConnectJSON.encode(command))
             case "profile":
                 XCTAssertEqual("Windows PC", ConnectJSON.decode(ProfileBody.self, from: plaintext)?.name)
+            case "login_grant":
+                guard case .loginGrant(let grant)? = ConnectJSON.decode(CommandBody.self, from: plaintext) else { return XCTFail("login_grant ではない") }
+                XCTAssertEqual(InteropTests.sampleLoginGrant(from: try device("a").deviceId, to: try device("b").deviceId), grant)
+                XCTAssertEqual([try device("b").deviceId], doc.recipients.map(\.deviceId))
+                XCTAssertEqual(plaintext, ConnectJSON.encode(CommandBody.loginGrant(grant)))
             case "library":
                 // ライブラリ（ADR-0013）。読んで書き直すと同じ文字列（Kotlin の Map の並びのまま）
                 let library = try XCTUnwrap(ConnectJSON.decode(LibraryBody.self, from: plaintext))
@@ -221,6 +264,20 @@ final class InteropTests: XCTestCase {
         if let account = p?["accountKey"]?.str { XCTAssertEqual(account, B64.encode(pairOnA.accountKey)) }
         XCTAssertEqual(try str(p, "helloExtension"), pairOnA.peerExtension)
         XCTAssertEqual("Windows test", pairOnA.peerDeviceName)
+        XCTAssertFalse(pairOnA.peerAccountless)
+        // ログインをまだ持たない B（wave-api、ADR-0015）の Hello: A は印で照合して受け、ログインなしの相手として印を付ける
+        if let accountless = p?["accountless"] {
+            let offer = try XCTUnwrap(Pairing.decodeOffer(try str(accountless, "offer")))
+            let responder = Pairing.Responder(
+                identity: try device("a"), deviceName: responderName, accountId: try str(p, "accountId"), nowMs: { 0 },
+                confirmAccountId: try str(p, "accountId"), confirmExtension: try str(p, "confirmExtension"),
+                ephemeral: try InteropTests.ephemeral(try str(accountless, "responderEphemeral")), token: try XCTUnwrap(B64.decode(offer.token)))
+            XCTAssertEqual(offer, responder.offer)
+            XCTAssertNil(try responder.onHello(try XCTUnwrap(Pairing.decodeHello(try XCTUnwrap(accountless["hello"])))).failure)
+            let pair = try responder.onCodeEntered(try str(accountless, "code")).get()
+            XCTAssertTrue(pair.peerAccountless)
+            XCTAssertEqual(try device("b").identityPub, pair.peerPublicKey)
+        }
         // 拡張は ConnectJSON の MemberKeys
         XCTAssertEqual(try device("b").deviceId, ConnectJSON.decode(MemberKeys.self, from: try XCTUnwrap(pairOnA.peerExtension))?.deviceId)
 
@@ -339,8 +396,16 @@ final class InteropTests: XCTestCase {
             .library(.init(state: LibraryState(version: 1, doc: libraryDoc, storeId: "store-1"))),
         ]
 
-        func docEntry(_ name: String, _ doc: SealedDoc, _ plaintext: String) -> JSON {
-            .obj(["name": .string(name), "doc": doc.toJSON(), "plaintext": .string(plaintext), "hash": .string(DocSealer.hash(doc))])
+        // ログインを渡す命令（ADR-0015）は宛先（b）にだけ包む
+        let grant = CommandBody.loginGrant(InteropTests.sampleLoginGrant(from: a.deviceId, to: b.deviceId))
+        let grantDoc = try DocSealer.seal(
+            signer: a, chain: chain, kind: .command, version: 1, prevHash: nil, issuedAtEpochMs: 1_700_000_000_007, plaintext: ConnectJSON.encodeToUTF8(grant),
+            only: [b.deviceId])
+
+        func docEntry(_ name: String, _ doc: SealedDoc, _ plaintext: String, openers: [String]? = nil) -> JSON {
+            var fields: [(String, JSON)] = [("name", .string(name)), ("doc", doc.toJSON()), ("plaintext", .string(plaintext)), ("hash", .string(DocSealer.hash(doc)))]
+            if let openers { fields.append(("openers", .array(openers.map { .string($0) }))) }
+            return .object(JSONObject(fields))
         }
 
         return .obj([
@@ -355,6 +420,7 @@ final class InteropTests: XCTestCase {
                 docEntry("command", commandDoc, ConnectJSON.encode(command)),
                 docEntry("profile", profileDoc, ConnectJSON.encode(profile)),
                 docEntry("library", libraryDoc, ConnectJSON.encode(libraryBody)),
+                docEntry("login_grant", grantDoc, ConnectJSON.encode(grant), openers: ["b"]),
             ]),
             "handoff": .obj(["handoffId": .string(InteropTests.handoffId), "text": .string(snapshotText)]),
             "relay": .array(relay.map { .string(RelayV2.encode($0)) }),

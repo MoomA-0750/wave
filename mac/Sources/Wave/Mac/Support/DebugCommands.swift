@@ -21,6 +21,7 @@ enum DebugCommands {
         case "login": LoginWindowController.show()
         case "login-probe": LoginProbe.run()
         case "lyrics": nav.lyrics()
+        case "devices": nav.devices()
         case "back": nav.goBack()
         case "podcast-play":
             // 番組のページでエピソードを押したのと同じ流し方（引数は「browseId [番号]」）
@@ -238,11 +239,17 @@ enum DebugCommands {
         case "connect-play":
             // デバイスの一覧で、名前の一致する端末を選んだのと同じ
             if let m = AppServices.connect.members.first(where: { $0.label == arg }) { AppServices.connect.playOnDevice(m.deviceId) }
+        case "connect-kind":
+            // 「connect-kind <名前> <種類>」: 家の端末の種類を仮に替える（wave API の行の見え方を確かめる。戻すときは元の種類を入れる）
+            let parts = arg.split(separator: " ").map(String.init)
+            if parts.count >= 2, let m = AppServices.connect.members.first(where: { $0.label == parts.dropLast().joined(separator: " ") }) {
+                AppServices.connect.debugSetKind(m.deviceId, parts.last!)
+            }
         case "connect-state":
             let c = AppServices.connect!
             let p = c.pairingState
             AppPaths.log("debug connect relay=\(c.info.relay) household=\(c.info.inHousehold) pairing=\(p.kind) code=\(p.code ?? "") peer=\(p.peerName ?? "") offer=\(p.offerText != nil) text=\(p.text ?? "")")
-            for m in c.members { AppPaths.log("debug connect member label=\(m.label) self=\(m.isSelf) online=\(m.online) active=\(m.active) pc=\(m.isPc) controller=\(m.isController)") }
+            for m in c.members { AppPaths.log("debug connect member label=\(m.label) self=\(m.isSelf) online=\(m.online) active=\(m.active) pc=\(m.isPc) api=\(m.isApi) controller=\(m.isController)") }
             if let r = c.remote { AppPaths.log("debug connect remote device=\(r.deviceLabel) title=\(r.title ?? "") playing=\(r.playing) positionMs=\(r.positionMs) online=\(r.online)") }
         case "menubar": MenuBarController.shared.toggle()
         case "notify-plain":

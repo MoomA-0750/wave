@@ -27,7 +27,8 @@ struct DevicesPopover: View {
             } else {
                 let others = connect.members
                     .filter { m in remote == nil ? !m.isSelf : m.deviceId != remote?.deviceId }
-                    .filter { !$0.isController }
+                    // 操作だけの端末と wave API（音を出さない）は、再生の行き先にしない
+                    .filter { !$0.isController && !$0.isApi }
                     // 自分を先に、その後はオンラインのものを先に（同じなら家の順のまま）
                     .enumerated()
                     .sorted { a, b in
