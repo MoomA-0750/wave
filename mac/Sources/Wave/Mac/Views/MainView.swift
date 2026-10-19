@@ -94,47 +94,65 @@ struct MainView: View {
             Button { nav.goForward() } label: { Image(systemName: "chevron.right") }
                 .disabled(!nav.canGoForward).help(L.t("進む", "Forward"))
         }
-        ToolbarItem(placement: .principal) {
-            HStack(spacing: 8) {
-                Button { nav.home() } label: { Image(systemName: "house") }.help(L.t("ホーム", "Home"))
-                HStack(spacing: 6) {
-                    Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                    TextField(L.t("何を聴きたいですか？", "What do you want to play?"), text: $model.searchText)
-                        .textFieldStyle(.plain)
-                        .focused($searchFocus)
-                        .onChange(of: model.searchText) { _, text in
-                            if searchFocus { model.searchTextChanged(text) }
-                        }
-                        .onSubmit { model.searchFor(model.searchText) }
-                        .onKeyPress(.escape) {
-                            if TextInput.composing { return .ignored }  // 変換中の Esc は変換の取り消しに使わせる
-                            model.suggestions = []
-                            return .handled
-                        }
-                    if !model.searchText.isEmpty {
-                        Button {
-                            model.searchText = ""
-                            model.searchTextChanged("")
-                        } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary) }
-                            .buttonStyle(.plain)
+        // macOS 26 からは、ホーム・検索の欄・Claude をそれぞれのガラスにする（帯の項目は1枚のガラスにまとめられ、
+        // 中央に寄せるために後ろに空けた幅までガラスが伸びるので、まとめのガラスは消す）
+        if #available(macOS 26.0, *) {
+            ToolbarItem(placement: .principal) { principal(glass: true) }
+                .sharedBackgroundVisibility(.hidden)
+        } else {
+            ToolbarItem(placement: .principal) { principal(glass: false) }
+        }
+        ToolbarItem(placement: .primaryAction) {
+            AccountMenu()
+        }
+    }
+
+    /// 上の帯の真ん中（ホーム・検索の欄・Claude）。
+    private func principal(glass: Bool) -> some View {
+        let nav = AppServices.nav!
+        return HStack(spacing: 8) {
+            Button { nav.home() } label: { Image(systemName: "house").glassIcon(glass) }
+                .glassButton(glass)
+                .help(L.t("ホーム", "Home"))
+            HStack(spacing: 6) {
+                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                TextField(L.t("何を聴きたいですか？", "What do you want to play?"), text: $model.searchText)
+                    .textFieldStyle(.plain)
+                    .focused($searchFocus)
+                    .onChange(of: model.searchText) { _, text in
+                        if searchFocus { model.searchTextChanged(text) }
                     }
+                    .onSubmit { model.searchFor(model.searchText) }
+                    .onKeyPress(.escape) {
+                        if TextInput.composing { return .ignored }  // 変換中の Esc は変換の取り消しに使わせる
+                        model.suggestions = []
+                        return .handled
+                    }
+                if !model.searchText.isEmpty {
+                    Button {
+                        model.searchText = ""
+                        model.searchTextChanged("")
+                    } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary) }
+                        .buttonStyle(.plain)
                 }
-                .padding(.horizontal, 10)
-                .frame(width: model.searchWidth, height: 28)
-                .background(Capsule().fill(Color.primary.opacity(0.07)))
-                .overlay(Capsule().strokeBorder(searchFocus ? Color.accentColor.opacity(0.6) : Color.primary.opacity(0.1)))
-                // Claude に聞く（どの画面からでも。右の欄に開き、もう一度押すと元に戻す）
+            }
+            .padding(.horizontal, glass ? 14 : 10)
+            .frame(width: model.searchWidth, height: glass ? 36 : 28)
+            .searchFieldBackground(glass: glass, focused: searchFocus)
+            // Claude に聞く（どの画面からでも。右の欄に開き、もう一度押すと元に戻す）
+            if glass {
+                Button { model.toggleAi() } label: { Image(systemName: "sparkles").glassIcon(true) }
+                    .glassButton(true, prominent: model.aiToggleOn)
+                    .help(L.t("Claude に聞く (⌘J)", "Ask Claude (⌘J)"))
+            } else {
                 Toggle(isOn: Binding(get: { model.aiToggleOn }, set: { _ in model.toggleAi() })) {
                     Image(systemName: "sparkles")
                 }
                 .toggleStyle(.button)
                 .help(L.t("Claude に聞く (⌘J)", "Ask Claude (⌘J)"))
             }
-            .padding(.trailing, model.principalTrailing)
         }
-        ToolbarItem(placement: .primaryAction) {
-            AccountMenu()
-        }
+        .padding(.trailing, glass ? 0 : model.principalTrailing)
     }
 
     // MARK: キー
@@ -326,6 +344,42 @@ struct ToastView: View {
             .padding(16)
             .transition(.move(edge: .bottom).combined(with: .opacity))
             .id(toast.shownAt)
+        }
+    }
+}
+
+private extension View {
+    /// ガラスのボタンの絵（検索の欄と同じ高さの丸）。
+    @ViewBuilder
+    func glassIcon(_ glass: Bool) -> some View {
+        if glass {
+            font(.system(size: 15)).frame(width: 36, height: 36).contentShape(Circle())
+        } else {
+            self
+        }
+    }
+
+    /// macOS 26 からはガラスの丸いボタン（prominent は押してある状態の色つき）。それより前は帯の普通のボタン。
+    @ViewBuilder
+    func glassButton(_ glass: Bool, prominent: Bool = false) -> some View {
+        if glass, #available(macOS 26.0, *) {
+            buttonStyle(.plain)
+                .foregroundStyle(prominent ? Color.white : Color.primary)
+                .glassEffect(prominent ? .regular.tint(.accentColor).interactive() : .regular.interactive(), in: Circle())
+        } else {
+            self
+        }
+    }
+
+    /// 検索の欄の地。macOS 26 からはガラスのカプセル、それより前は薄い色のカプセル。
+    @ViewBuilder
+    func searchFieldBackground(glass: Bool, focused: Bool) -> some View {
+        if glass, #available(macOS 26.0, *) {
+            glassEffect(.regular.interactive(), in: Capsule())
+                .overlay(Capsule().strokeBorder(focused ? Color.accentColor.opacity(0.6) : .clear))
+        } else {
+            background(Capsule().fill(Color.primary.opacity(0.07)))
+                .overlay(Capsule().strokeBorder(focused ? Color.accentColor.opacity(0.6) : Color.primary.opacity(0.1)))
         }
     }
 }

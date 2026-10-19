@@ -6,12 +6,19 @@ import WaveCore
 struct RightPane: View {
     @State private var model = MainWindowModel.shared
 
+    /// 見出しの行の右の空き（上の帯の右端のアカウントのボタンと重ならないように）。
+    static let headerTrailing: CGFloat = 48
+
     var body: some View {
-        switch model.rightView {
-        case .nowPlaying: NowPlayingView()
-        case .queue: QueueView()
-        case .ai: AiView()
+        // 上の帯の裏まで伸ばし、見出しの行を帯と同じ高さに置く（帯の下に空白を作らない）
+        Group {
+            switch model.rightView {
+            case .nowPlaying: NowPlayingView()
+            case .queue: QueueView()
+            case .ai: AiView()
+            }
         }
+        .ignoresSafeArea(edges: .top)
     }
 }
 
@@ -81,14 +88,11 @@ struct NowPlayingView: View {
         let song = player.current
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                HStack {
-                    Text(song?.album?.title.isEmpty == false ? song!.album!.title : L.t("再生中", "Now playing"))
-                        .font(.body.weight(.semibold)).lineLimit(1)
-                    Spacer()
-                    // Claude に聞く（歌詞の意味・似た曲・プレイリスト作り）
-                    Button { model.showAi() } label: { Image(systemName: "sparkles") }
-                        .buttonStyle(IconButtonStyle()).help(L.t("Claude に聞く", "Ask Claude"))
-                }
+                // Claude は上の帯のボタンから開く（右の欄には置かない）
+                Text(song?.album?.title.isEmpty == false ? song!.album!.title : L.t("再生中", "Now playing"))
+                    .font(.body.weight(.semibold)).lineLimit(1)
+                    .frame(minHeight: 28)
+                    .padding(.trailing, RightPane.headerTrailing - 16)
                 // ジャケットか、MV のある曲では映像（Spotify と同じ「曲｜動画」の切り替え）
                 ZStack(alignment: .top) {
                     VideoOrCover(size: 306, inFullView: false)
@@ -189,7 +193,7 @@ struct QueueView: View {
                 Button { model.setRightPane(open: true, queue: false) } label: { Image(systemName: "xmark").font(.system(size: 11)) }
                     .buttonStyle(IconButtonStyle()).help(L.t("閉じる", "Close"))
             }
-            .padding(EdgeInsets(top: 12, leading: 16, bottom: 4, trailing: 8))
+            .padding(EdgeInsets(top: 12, leading: 16, bottom: 4, trailing: RightPane.headerTrailing))
             if entries.isEmpty {
                 Spacer()
                 VStack(spacing: 6) {

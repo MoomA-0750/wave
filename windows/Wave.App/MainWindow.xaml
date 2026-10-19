@@ -206,13 +206,8 @@
                 <Grid>
                     <ScrollViewer x:Name="NowPlayingView">
                         <StackPanel Padding="16" Spacing="16">
-                            <Grid>
-                                <TextBlock Text="{x:Bind PaneHeader(Player.Current), Mode=OneWay}" Style="{StaticResource BodyStrongTextBlockStyle}" TextTrimming="CharacterEllipsis" Margin="0,0,40,0" VerticalAlignment="Center" />
-                                <!-- Claude に聞く（歌詞の意味・似た曲・プレイリスト作り） -->
-                                <Button HorizontalAlignment="Right" Style="{StaticResource IconButtonStyle}" Click="OnShowAi" ToolTipService.ToolTip="{x:Bind app:L.T('Claude に聞く', 'Ask Claude')}">
-                                    <FontIcon Glyph="&#xE99A;" FontSize="14" />
-                                </Button>
-                            </Grid>
+                            <!-- Claude は上の帯のボタンから開く（右の欄には置かない） -->
+                            <TextBlock Text="{x:Bind PaneHeader(Player.Current), Mode=OneWay}" Style="{StaticResource BodyStrongTextBlockStyle}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
                             <!-- ジャケットか、MV のある曲では映像（Spotify と同じ「曲｜動画」の切り替え） -->
                             <Grid>
                                 <Border x:Name="CoverBox" CornerRadius="8" Background="{ThemeResource ControlFillColorSecondaryBrush}" Height="{x:Bind CoverSize, Mode=OneWay}">

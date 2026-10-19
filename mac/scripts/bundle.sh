@@ -7,6 +7,8 @@ cd "$(dirname "$0")/.."
 flags=()
 [ "${WAVE_DEBUG:-}" = 1 ] && flags=(-Xswiftc -DWAVE_DEBUG)
 # ウィジェットのボタン・プレイリストの選び（App Intents）の一覧の元を、コンパイラに書き出させる（ios-bundle.sh と同じ）
+# 組んだ SDK の版を書き込む（swift build は最低の版を書いてしまい、macOS 26 以降でも古い見た目になり、上の帯のボタンが Liquid Glass にならない。ios-bundle.sh と同じ）
+flags+=(-Xlinker -platform_version -Xlinker macos -Xlinker 15.0 -Xlinker "$(xcrun --sdk macosx --show-sdk-version)")
 flags+=(-Xswiftc -emit-const-values -Xswiftc -Xfrontend -Xswiftc -const-gather-protocols-file -Xswiftc -Xfrontend -Xswiftc "$PWD/Resources/iOS/const-protocols.json")
 swift build -c release --product wave "${flags[@]}" 2>&1 | grep -E "error|warning: unre|Compiling|Build" | tail -20
 # ウィジェットは Xcode と同じく入口を _NSExtensionMain にする（ios-bundle.sh と同じ。普通の main のままだと起動してすぐ落ち、ウィジェットの一覧に出ない）

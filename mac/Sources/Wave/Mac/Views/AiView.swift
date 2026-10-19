@@ -27,7 +27,7 @@ struct AiView: View {
                 Button { model.setRightPane(open: true, queue: false) } label: { Image(systemName: "xmark").font(.system(size: 11)) }
                     .buttonStyle(IconButtonStyle()).help(L.t("閉じる", "Close"))
             }
-            .padding(EdgeInsets(top: 12, leading: 16, bottom: 4, trailing: 8))
+            .padding(EdgeInsets(top: 12, leading: 16, bottom: 4, trailing: RightPane.headerTrailing))
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(alignment: .leading, spacing: 10) {
