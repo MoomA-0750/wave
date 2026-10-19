@@ -135,10 +135,10 @@ struct NowPlayingWidgetView: View {
         if let song = entry.song {
             if family == .systemSmall {
                 VStack(alignment: .leading, spacing: 6) {
-                    Artwork(image: entry.artwork).frame(width: 56, height: 56)
+                    Artwork(image: entry.artwork).frame(width: 50, height: 50)
                     Spacer(minLength: 0)
-                    Text(song.title).font(.caption.weight(.semibold)).lineLimit(1)
-                    Text(song.device ?? song.artist).font(.caption2).foregroundStyle(song.device != nil ? accent : .secondary).lineLimit(1)
+                    Text(song.title).font(.subheadline.weight(.semibold)).lineLimit(1)
+                    Text(song.device ?? song.artist).font(.caption).foregroundStyle(song.device != nil ? accent : .secondary).lineLimit(1)
                     Controls(playing: song.playing, size: 18)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -147,12 +147,12 @@ struct NowPlayingWidgetView: View {
                     // 上・左・下の余白いっぱいに広げて、絵の角をウィジェットの角にそろえる
                     Artwork(image: entry.artwork).aspectRatio(1, contentMode: .fit).frame(maxHeight: .infinity)
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(song.title).font(.headline).lineLimit(2)
-                        Text(song.artist).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                        Text(song.title).font(.title3.weight(.semibold)).lineLimit(2)
+                        Text(song.artist).font(.body).foregroundStyle(.secondary).lineLimit(1)
                         if let device = song.device {
-                            Label(device, systemImage: "hifispeaker.2").font(.caption).foregroundStyle(accent).lineLimit(1)
+                            Label(device, systemImage: "hifispeaker.2").font(.subheadline).foregroundStyle(accent).lineLimit(1)
                         } else if let next = song.nextTitle {
-                            Text("次: \(next)").font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                            Text("次: \(next)").font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
                         }
                         Spacer(minLength: 0)
                         Controls(playing: song.playing)
@@ -238,18 +238,18 @@ struct PlaylistWidgetView: View {
             if family == .systemSmall {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(alignment: .top) {
-                        Artwork(image: entry.cover).frame(width: 56, height: 56)
+                        Artwork(image: entry.cover).frame(width: 50, height: 50)
                         Spacer(minLength: 0)
                     }
                     Spacer(minLength: 0)
-                    Text(playlist.title).font(.caption.weight(.semibold)).lineLimit(2)
+                    Text(playlist.title).font(.subheadline.weight(.semibold)).lineLimit(2)
                     buttons
                 }
             } else {
                 HStack(spacing: 14) {
                     Artwork(image: entry.cover).aspectRatio(1, contentMode: .fit).frame(maxHeight: .infinity)
                     VStack(alignment: .leading, spacing: 8) {
-                        Text(playlist.title).font(.headline).lineLimit(3)
+                        Text(playlist.title).font(.title3.weight(.semibold)).lineLimit(3)
                         Spacer(minLength: 0)
                         buttons
                     }
