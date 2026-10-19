@@ -62,6 +62,7 @@ public sealed partial class MainWindow : Window
     private static readonly TimeSpan ToastDuration = TimeSpan.FromSeconds(4);
     private Microsoft.UI.Xaml.Media.Animation.Storyboard? toastCountdown;
     private bool rightPaneOpen;
+    private readonly ThumbBar thumbBar;
 
     public PlayerService Player => AppServices.Player;
 
@@ -93,6 +94,8 @@ public sealed partial class MainWindow : Window
 #endif
         rightPaneOpen = AppServices.Settings.RightPaneOpen;
         Player.PropertyChanged += OnPlayerChanged;
+        // タスクバーのプレビューの下の前へ・再生・次へ
+        thumbBar = new ThumbBar(this, Player);
         AppServices.Library.Membership.NowPlayingChanged += () => Player.InPlaylist = AppServices.Library.Membership.IsSavedNowPlaying(Player.Current?.VideoId);
         Player.Queue.CollectionChanged += OnQueueChanged;
         AppServices.Account.PropertyChanged += (_, _) => RenderAccount();
