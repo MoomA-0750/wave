@@ -777,12 +777,20 @@ final class PlayerService {
             return
         }
         if isPlaying {
-            engine.pause()
+            pauseEngine()
             userPaused.forEach { $0() }
         } else {
             engine.play()
             userStartedPlayback.forEach { $0(false) }
         }
+    }
+
+    /// 止める。読み込み中（引き取った直後など）は AVPlayer がまだ止まったままで再生状態の知らせが来ないので、印もここで下ろし、
+    /// 家のカーソルも書き直す（印が前から下りていると変化が起きず、手元は鳴っていないのに家には「再生中」と書いたままになっていた）。
+    private func pauseEngine() {
+        engine.pause()
+        isPlaying = false
+        if !isRemote { cursorChanged.forEach { $0(true) } }
     }
 
     /// 本人の「次へ」（曲を選んだのと同じ扱い）。
@@ -1004,7 +1012,7 @@ final class PlayerService {
     func connectPause() {
         cancelLoad()
         isLoading = false
-        engine.pause()
+        pauseEngine()
     }
 
     /// 端末の連携が戻す。
@@ -1251,7 +1259,7 @@ final class PlayerService {
         if isRemote || current == nil { return false }
         switch action {
         case .play: connectResume()
-        case .pause: engine.pause()
+        case .pause: pauseEngine()
         case .next: advance()
         case .previous:
             if (position > 3 && !isLive) || index <= 0 { seek(0) } else { selectAt(index - 1) }
