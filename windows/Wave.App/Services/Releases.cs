@@ -75,12 +75,14 @@ public sealed class Releases(DispatcherQueue ui)
         checking = true;
         try
         {
-            var subscribed = await AppServices.Music.SubscribedArtistsAsync();
+            var complete = true;
+            var subscribed = await AppServices.Music.SubscribedArtistsAsync(() => complete = false);
             if (!subscribed.IsOk) return;
             var artists = subscribed.Value!.Take(MaxArtists).ToList();
             var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-            // 登録の一覧は途中のページで失敗すると欠けて返るので、一覧に無いアーティストの記録は捨てない（Android と同じ）
+            // 登録をやめたアーティストの記録は、登録の一覧を最後まで読めたときだけ捨てる（途中のページで失敗すると欠けて返るため。Android と同じ）
             var state = Read().Expire(now);
+            if (complete && subscribed.Value!.Count > 0) state = state.Retain(subscribed.Value!.Select(a => a.BrowseId).ToHashSet());
             var found = new List<NewRelease>();
             foreach (var artist in artists)
             {

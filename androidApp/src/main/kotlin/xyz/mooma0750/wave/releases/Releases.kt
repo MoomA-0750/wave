@@ -74,15 +74,18 @@ class Releases(
         if (state !is AuthState.LoggedIn) return true
         if (lock.isLocked) return true
         return lock.withLock {
-            val artists =
-                when (val result = music.subscribedArtists()) {
-                    is CallResult.Ok -> result.value.take(MAX_ARTISTS)
+            var complete = true
+            val subscribed =
+                when (val result = music.subscribedArtists(onIncomplete = { complete = false })) {
+                    is CallResult.Ok -> result.value
                     is CallResult.Failed -> return@withLock false
                 }
+            val artists = subscribed.take(MAX_ARTISTS)
             val now = System.currentTimeMillis()
             val year = java.time.Year.now().value
-            // 登録の一覧は途中のページで失敗すると欠けて返るので、一覧に無いアーティストの記録は捨てない（捨てると次に初めて見る扱いになり、新作を知らせ損ねる）
-            var watch = read().expire(now)
+            // 登録をやめたアーティストの記録は、登録の一覧を最後まで読めたときだけ捨てる（途中のページで失敗すると欠けて返り、
+            // 欠けた人の記録まで捨てると次に初めて見る扱いになって新作を知らせ損ねる）。空で返ったときも捨てない
+            var watch = read().expire(now).let { if (complete && subscribed.isNotEmpty()) it.retain(subscribed.map { a -> a.browseId }.toSet()) else it }
             val found = mutableListOf<NewRelease>()
             for (artist in artists) {
                 val page = (music.artist(artist.browseId) as? CallResult.Ok)?.value ?: continue

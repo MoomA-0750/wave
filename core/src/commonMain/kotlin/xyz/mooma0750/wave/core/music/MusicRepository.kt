@@ -66,9 +66,15 @@ class MusicRepository(
     suspend fun libraryArtists(onPage: (List<ArtistSummary>) -> Unit = {}): CallResult<List<ArtistSummary>> =
         libraryCards(LIBRARY_ARTISTS, onPage) { (it as? HomeItem.ArtistItem)?.artist }
 
-    /** 登録（サブスクライブ）したアーティスト。ログイン必須。新作の知らせに使う。 */
-    suspend fun subscribedArtists(onPage: (List<ArtistSummary>) -> Unit = {}): CallResult<List<ArtistSummary>> =
-        libraryCards(SUBSCRIBED_ARTISTS, onPage) { (it as? HomeItem.ArtistItem)?.artist }
+    /**
+     * 登録（サブスクライブ）したアーティスト。ログイン必須。新作の知らせに使う。
+     * 途中のページで失敗した・ページの上限で打ち切ったときは、そこまでの分を返して onIncomplete を呼ぶ。
+     */
+    suspend fun subscribedArtists(
+        onPage: (List<ArtistSummary>) -> Unit = {},
+        onIncomplete: () -> Unit = {},
+    ): CallResult<List<ArtistSummary>> =
+        allLibraryPages(SUBSCRIBED_ARTISTS, { root -> MusicParsers.libraryCards(root).mapNotNull { (it as? HomeItem.ArtistItem)?.artist } }, { it.browseId }, onPage, onIncomplete)
 
     /** ライブラリのアルバム（保存したアルバム）。ログイン必須。 */
     suspend fun libraryAlbums(onPage: (List<AlbumSummary>) -> Unit = {}): CallResult<List<AlbumSummary>> =
@@ -82,13 +88,15 @@ class MusicRepository(
 
     /**
      * ライブラリの一覧を、続きのページまで読む（Spotify のマイライブラリと同じく全部を並べる）。
-     * 途中のページで失敗したら、そこまでの分を返す。onPage にはページが届くたびに、それまでの分を渡す（画面に順に出す）。
+     * 途中のページで失敗したら、そこまでの分を返す（onIncomplete を呼ぶ。ページの上限で打ち切ったときも）。
+     * onPage にはページが届くたびに、それまでの分を渡す（画面に順に出す）。
      */
     private suspend fun <T> allLibraryPages(
         browseId: String,
         parse: (JsonObject) -> List<T>,
         key: (T) -> Any,
         onPage: (List<T>) -> Unit = {},
+        onIncomplete: () -> Unit = {},
     ): CallResult<List<T>> {
         val items = mutableListOf<T>()
         var token: String? = null
@@ -101,7 +109,7 @@ class MusicRepository(
                     if (MusicParsers.isSignInPrompt(root)) ParseOutcome.LoggedOutResponse else ParseOutcome.Parsed(parse(root) to MusicParsers.libraryContinuation(root))
                 }
             when (page) {
-                is CallResult.Failed -> return if (pages == 0) page else CallResult.Ok(items.distinctBy(key))
+                is CallResult.Failed -> return if (pages == 0) page else CallResult.Ok(items.distinctBy(key)).also { onIncomplete() }
                 is CallResult.Ok -> {
                     items += page.value.first
                     onPage(items.distinctBy(key))
@@ -111,6 +119,7 @@ class MusicRepository(
             }
             pages++
         } while (token != null && pages < MAX_LIBRARY_PAGES)
+        if (token != null) onIncomplete()
         return CallResult.Ok(items.distinctBy(key))
     }
 

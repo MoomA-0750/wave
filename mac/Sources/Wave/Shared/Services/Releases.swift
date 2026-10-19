@@ -55,11 +55,13 @@ final class Releases: NSObject, UNUserNotificationCenterDelegate {
         if checking || !AppServices.client.isLoggedIn || !AppServices.settings.releaseNotices { return }
         checking = true
         defer { checking = false }
-        guard let subscribed = (try? await AppServices.music.subscribedArtists())?.value else { return }
+        var complete = true
+        guard let subscribed = (try? await AppServices.music.subscribedArtists(onIncomplete: { complete = false }))?.value else { return }
         let artists = Array(subscribed.prefix(Releases.maxArtists))
         let now = Releases.nowMs
-        // 登録の一覧は途中のページで失敗すると欠けて返るので、一覧に無いアーティストの記録は捨てない（Android と同じ）
+        // 登録をやめたアーティストの記録は、登録の一覧を最後まで読めたときだけ捨てる（途中のページで失敗すると欠けて返るため。Android と同じ）
         var state = Releases.read().expire(now)
+        if complete && !subscribed.isEmpty { state = state.retain(Set(subscribed.map(\.browseId))) }
         var found: [NewRelease] = []
         let year = Calendar.current.component(.year, from: Date())
         for artist in artists {

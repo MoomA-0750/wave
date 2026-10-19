@@ -194,9 +194,9 @@ public final class MusicRepository: Sendable {
         try await allLibraryPages(MusicRepository.libraryArtists, parse: MusicRepository.artistCards, key: \.browseId, onPage: onPage)
     }
 
-    /// 登録（サブスクライブ）したアーティスト。新作の知らせに使う（Android と同じ）。
-    public func subscribedArtists() async throws -> ApiResult<[ArtistSummary]> {
-        try await allLibraryPages(MusicRepository.subscribedArtists, parse: MusicRepository.artistCards, key: \.browseId, onPage: nil)
+    /// 登録（サブスクライブ）したアーティスト。新作の知らせに使う（Android と同じ）。途中で打ち切ったら onIncomplete を呼ぶ。
+    public func subscribedArtists(onIncomplete: (() -> Void)? = nil) async throws -> ApiResult<[ArtistSummary]> {
+        try await allLibraryPages(MusicRepository.subscribedArtists, parse: MusicRepository.artistCards, key: \.browseId, onPage: nil, onIncomplete: onIncomplete)
     }
 
     public func libraryAlbums(onPage: (([AlbumSummary]) -> Void)? = nil) async throws -> ApiResult<[AlbumSummary]> {
@@ -211,9 +211,10 @@ public final class MusicRepository: Sendable {
         MusicParsers.libraryCards(root).compactMap { if case .album(let a) = $0 { return a } else { return nil } }
     }
 
-    /// ライブラリの一覧を続きのページまで読む。途中で失敗したらそこまでの分を返す。onPage にはそれまでの分を渡す。
+    /// ライブラリの一覧を続きのページまで読む。途中で失敗したらそこまでの分を返す（onIncomplete を呼ぶ。ページの上限で打ち切ったときも）。
+    /// onPage にはそれまでの分を渡す。
     private func allLibraryPages<T, K: Hashable>(_ browseId: String, parse: @escaping (JSON) -> [T], key: (T) -> K,
-                                                 onPage: (([T]) -> Void)?) async throws -> ApiResult<[T]>
+                                                 onPage: (([T]) -> Void)?, onIncomplete: (() -> Void)? = nil) async throws -> ApiResult<[T]>
     {
         var items: [T] = []
         var token: String?
@@ -221,7 +222,9 @@ public final class MusicRepository: Sendable {
         repeat {
             let page = try await loggedInBrowse(browseId, continuation: token) { root in (items: parse(root), next: MusicParsers.libraryContinuation(root)) }
             guard let value = page.value, page.isOk else {
-                return pages == 0 ? .failed(page.failure ?? .parse, status: page.status) : .ok(MusicRepository.distinct(items, key))
+                if pages == 0 { return .failed(page.failure ?? .parse, status: page.status) }
+                onIncomplete?()
+                return .ok(MusicRepository.distinct(items, key))
             }
             items += value.items
             onPage?(MusicRepository.distinct(items, key))
@@ -229,6 +232,7 @@ public final class MusicRepository: Sendable {
             token = value.next != token ? value.next : nil
             pages += 1
         } while token != nil && pages < MusicRepository.maxLibraryPages
+        if token != nil { onIncomplete?() }
         return .ok(MusicRepository.distinct(items, key))
     }
 

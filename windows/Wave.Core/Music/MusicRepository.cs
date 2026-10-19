@@ -167,15 +167,19 @@ public sealed class MusicRepository(InnerTubeClient client, LiveClient? live = n
     public Task<ApiResult<List<ArtistSummary>>> LibraryArtistsAsync(Action<List<ArtistSummary>>? onPage = null, CancellationToken cancel = default) =>
         AllLibraryPagesAsync(LibraryArtists, root => MusicParsers.LibraryCards(root).OfType<HomeItem.ArtistItem>().Select(a => a.Artist).ToList(), a => a.BrowseId, onPage, cancel);
 
-    /// <summary>登録（サブスクライブ）したアーティスト。新作の知らせに使う（Android と同じ）。</summary>
-    public Task<ApiResult<List<ArtistSummary>>> SubscribedArtistsAsync(CancellationToken cancel = default) =>
-        AllLibraryPagesAsync(SubscribedArtists, root => MusicParsers.LibraryCards(root).OfType<HomeItem.ArtistItem>().Select(a => a.Artist).ToList(), a => a.BrowseId, null, cancel);
+    /// <summary>登録（サブスクライブ）したアーティスト。新作の知らせに使う（Android と同じ）。途中で打ち切ったら onIncomplete を呼ぶ。</summary>
+    public Task<ApiResult<List<ArtistSummary>>> SubscribedArtistsAsync(Action? onIncomplete = null, CancellationToken cancel = default) =>
+        AllLibraryPagesAsync(SubscribedArtists, root => MusicParsers.LibraryCards(root).OfType<HomeItem.ArtistItem>().Select(a => a.Artist).ToList(), a => a.BrowseId, null, cancel, onIncomplete);
 
     public Task<ApiResult<List<AlbumSummary>>> LibraryAlbumsAsync(Action<List<AlbumSummary>>? onPage = null, CancellationToken cancel = default) =>
         AllLibraryPagesAsync(LibraryAlbums, root => MusicParsers.LibraryCards(root).OfType<HomeItem.AlbumItem>().Select(a => a.Album).ToList(), a => a.BrowseId, onPage, cancel);
 
-    /// <summary>ライブラリの一覧を続きのページまで読む。途中で失敗したらそこまでの分を返す。onPage にはそれまでの分を渡す。</summary>
-    private async Task<ApiResult<List<T>>> AllLibraryPagesAsync<T>(string browseId, Func<JsonNode, List<T>> parse, Func<T, object> key, Action<List<T>>? onPage, CancellationToken cancel)
+    /// <summary>
+    /// ライブラリの一覧を続きのページまで読む。途中で失敗したらそこまでの分を返す（onIncomplete を呼ぶ。ページの上限で打ち切ったときも）。
+    /// onPage にはそれまでの分を渡す。
+    /// </summary>
+    private async Task<ApiResult<List<T>>> AllLibraryPagesAsync<T>(string browseId, Func<JsonNode, List<T>> parse, Func<T, object> key, Action<List<T>>? onPage, CancellationToken cancel,
+        Action? onIncomplete = null)
     {
         var items = new List<T>();
         string? token = null;
@@ -183,13 +187,19 @@ public sealed class MusicRepository(InnerTubeClient client, LiveClient? live = n
         do
         {
             var page = await LoggedInBrowseAsync(browseId, token, root => (Items: parse(root), Next: MusicParsers.LibraryContinuation(root)), cancel);
-            if (!page.IsOk) return pages == 0 ? ApiResult<List<T>>.Failed(page.Failure!.Value, page.Status) : ApiResult<List<T>>.Ok(items.DistinctBy(key).ToList());
+            if (!page.IsOk)
+            {
+                if (pages == 0) return ApiResult<List<T>>.Failed(page.Failure!.Value, page.Status);
+                onIncomplete?.Invoke();
+                return ApiResult<List<T>>.Ok(items.DistinctBy(key).ToList());
+            }
             items.AddRange(page.Value.Items);
             onPage?.Invoke(items.DistinctBy(key).ToList());
             // 同じトークンが返ったら止める
             token = page.Value.Next != token ? page.Value.Next : null;
             pages++;
         } while (token is not null && pages < MaxLibraryPages);
+        if (token is not null) onIncomplete?.Invoke();
         return ApiResult<List<T>>.Ok(items.DistinctBy(key).ToList());
     }
 
