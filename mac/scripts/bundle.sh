@@ -8,7 +8,9 @@ flags=()
 [ "${WAVE_DEBUG:-}" = 1 ] && flags=(-Xswiftc -DWAVE_DEBUG)
 # ウィジェットのボタン・プレイリストの選び（App Intents）の一覧の元を、コンパイラに書き出させる（ios-bundle.sh と同じ）
 flags+=(-Xswiftc -emit-const-values -Xswiftc -Xfrontend -Xswiftc -const-gather-protocols-file -Xswiftc -Xfrontend -Xswiftc "$PWD/Resources/iOS/const-protocols.json")
-swift build -c release "${flags[@]}" 2>&1 | grep -E "error|warning: unre|Compiling|Build" | tail -20
+swift build -c release --product wave "${flags[@]}" 2>&1 | grep -E "error|warning: unre|Compiling|Build" | tail -20
+# ウィジェットは Xcode と同じく入口を _NSExtensionMain にする（ios-bundle.sh と同じ。普通の main のままだと起動してすぐ落ち、ウィジェットの一覧に出ない）
+swift build -c release --product WaveWidget "${flags[@]}" -Xlinker -e -Xlinker _NSExtensionMain 2>&1 | grep -E "error|warning: unre|Build" | tail -20
 bin=$(swift build -c release "${flags[@]}" --show-bin-path)
 app=build/wave.app
 rm -rf "$app"

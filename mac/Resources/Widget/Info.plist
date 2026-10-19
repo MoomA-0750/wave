@@ -4,7 +4,7 @@
 <dict>
 	<key>CFBundleName</key><string>WaveWidget</string>
 	<key>CFBundleDisplayName</key><string>wave</string>
-	<key>CFBundleIdentifier</key><string>xyz.mooma0750.wave.widget</string>
+	<key>CFBundleIdentifier</key><string>xyz.mooma0750.wave.macwidget</string>
 	<key>CFBundleExecutable</key><string>WaveWidget</string>
 	<key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
 	<key>CFBundlePackageType</key><string>XPC!</string>
