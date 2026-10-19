@@ -30,7 +30,7 @@ class ApiTest {
     private fun videoId(n: Int) = "vid${n.toString().padStart(8, '0')}"
 
     @Test
-    fun playTargetIsTheRequestedOrTheLastWriterWhenOnline() {
+    fun playTargetIsTheRequestedOrTheLastWriterOrAnyOnlinePlayer() {
         val players = setOf("self", "pc", "phone")
         // 指定があればそれ（つながっている player のときだけ）
         assertEquals("phone", Views.target("phone", "self", players, setOf("phone", "pc"), "pc"))
@@ -39,7 +39,9 @@ class ApiTest {
         assertNull(Views.target("stranger", "self", players, setOf("stranger"), null), "家の player でない端末を行き先にした")
         // 無ければ最後に書いた端末
         assertEquals("pc", Views.target(null, "self", players, setOf("pc"), "pc"))
-        assertNull(Views.target(null, "self", players, setOf("phone"), "pc"), "切れている最後の端末を行き先にした")
+        // 最後に書いた端末が切れていれば、つながっている家の端末（wave-api 自身は選ばない）
+        assertEquals("phone", Views.target(null, "self", players, setOf("self", "phone"), "pc"))
+        assertNull(Views.target(null, "self", players, setOf("self"), "pc"), "つながっている端末が無いのに行き先を選んだ")
     }
 
     @Test

@@ -7,7 +7,6 @@ import xyz.mooma0750.wave.core.session.FailureKind
 import xyz.mooma0750.wave.handoff.HandoffCodec
 import xyz.mooma0750.wave.handoff.HandoffItem
 import xyz.mooma0750.wave.handoff.HandoffOrigin
-import xyz.mooma0750.wave.handoff.HandoffRef
 import xyz.mooma0750.wave.handoff.HandoffRepeat
 import xyz.mooma0750.wave.handoff.HandoffSnapshot
 import xyz.mooma0750.wave.handoff.HandoffSource
@@ -31,8 +30,16 @@ class QueueBuilder(
     suspend fun radio(videoId: String): Built {
         val page = music.upNext(videoId, "RDAMVM$videoId")
         if (page !is CallResult.Ok) return Built.Failed((page as CallResult.Failed).kind)
-        val songs = page.value.songs.let { list -> list.firstOrNull { it.videoId == videoId }?.let { first -> listOf(first) + list.filter { it.videoId != videoId } } ?: list }
-        if (songs.firstOrNull()?.videoId != videoId) return Built.Failed(null)
+        // 選んだ曲を先頭に、続きをラジオで並べる（Android で曲を選んだときと同じ）。ラジオの一覧に選んだ曲が無いこと（MV と
+        // 音源で ID が違うなど）があるので、そのときは曲だけを引いて先頭に置く
+        val first =
+            page.value.songs.firstOrNull { it.videoId == videoId }
+                ?: when (val single = music.upNext(videoId, null)) {
+                    is CallResult.Ok -> single.value.songs.firstOrNull { it.videoId == videoId }
+                    is CallResult.Failed -> return Built.Failed(single.kind)
+                }
+                ?: return Built.Failed(null)
+        val songs = listOf(first) + page.value.songs.filter { it.videoId != videoId }
         return Built.Ok(snapshot(songs, 0, HandoffSource.Radio(videoId), page.value.continuation, page.value.playlistId))
     }
 
@@ -91,7 +98,8 @@ class QueueBuilder(
     ): Built {
         val songs = all.filter { HandoffCodec.isItemVideoId(it.videoId) && it.title.isNotEmpty() }.distinctBy { it.videoId }
         if (songs.isEmpty()) return Built.Failed(null)
-        val start = startVideoId?.let { id -> songs.indexOfFirst { it.videoId == id } }?.takeIf { it >= 0 } ?: 0
+        // 最初の曲を選んでいないシャッフルは、最初の曲も混ぜる
+        val start = startVideoId?.let { id -> songs.indexOfFirst { it.videoId == id } }?.takeIf { it >= 0 } ?: if (shuffle) songs.indices.random() else 0
         if (!shuffle) return Built.Ok(snapshot(songs, start, source, continuation, null))
         val first = songs[start]
         val rest = (songs - first).shuffled()
@@ -111,8 +119,8 @@ class QueueBuilder(
             itemId = UUID.randomUUID().toString(),
             videoId = song.videoId,
             title = song.title.take(500),
-            artists = song.artists.take(20).map { HandoffRef(it.name, it.browseId) },
-            album = song.album?.let { HandoffRef(it.title, it.browseId) },
+            artists = song.artists.mapNotNull { HandoffCodec.ref(it.name, it.browseId) }.take(20),
+            album = song.album?.let { HandoffCodec.ref(it.title, it.browseId) },
             durationSeconds = song.durationSeconds,
             thumbnailUrl = song.thumbnailUrl,
             origin = origin,

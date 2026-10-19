@@ -134,6 +134,7 @@ object Views {
     ): String? {
         fun usable(id: String?) = id != null && id != self && id in players && id in online
         if (requested != null) return requested.takeIf(::usable)
-        return lastWriter.takeIf(::usable)
+        // 最後に鳴った端末がつながっていなければ（wave-api を起動し直して覚えていないときも）、つながっている家の端末のどれか
+        return lastWriter.takeIf(::usable) ?: players.sorted().firstOrNull(::usable)
     }
 }

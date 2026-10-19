@@ -131,9 +131,46 @@ class ApiHub(
         scope.launch {
             while (true) {
                 delay(1_000)
-                post { client.tick() }
+                post {
+                    client.tick()
+                    retryHandOff()
+                }
             }
         }
+    }
+
+    /** 「鳴らす」で引き取りを頼んだ端末と、頼んだ時刻・回数（引き取られなければ頼み直す）。engine の上で触る。 */
+    private class HandOffWait(
+        val target: String,
+        var sentAtMs: Long,
+        var attempts: Int,
+    )
+
+    private var handOffWait: HandOffWait? = null
+
+    /** wave-api 以外で最後に家の再生を書いた端末（wave-api が書き手のままになったときの行き先）。engine の上で触る。 */
+    private var lastOtherWriter: String? = null
+
+    /**
+     * 引き取りが失敗した（行き先の端末が鳴っている最中に、こちらが再生を引き受けた直後など）ままだと、家の再生が wave-api に残って
+     * どの端末でも鳴らない。数秒たっても書き手が自分なら、同じ端末に引き取りを頼み直す。
+     */
+    private fun retryHandOff() {
+        val wait = handOffWait ?: return
+        val writer = client.latestCursorBody()?.first
+        if (writer != null && writer != keys.deviceId) {
+            handOffWait = null
+            return
+        }
+        if (nowMs() - wait.sentAtMs < HANDOFF_RETRY_MS) return
+        if (wait.attempts >= HANDOFF_ATTEMPTS || writer != keys.deviceId) {
+            log("handoff gave up attempts=${wait.attempts}")
+            handOffWait = null
+            return
+        }
+        wait.attempts++
+        wait.sentAtMs = nowMs()
+        log("handoff retry attempt=${wait.attempts} sent=${client.requestRemoteTransfer(wait.target)}")
     }
 
     private fun nowMs(): Long = clock.elapsedNow().inWholeMilliseconds
@@ -186,7 +223,7 @@ class ApiHub(
                         sendProfile(force = true)
                         scope.launch { refreshTag() }
                     }
-                    is ClientEvent.RemoteChanged -> Unit
+                    is ClientEvent.RemoteChanged -> if (event.writer != keys.deviceId) lastOtherWriter = event.writer
                     else -> log("event=${event::class.simpleName}")
                 }
                 mutableChanges.tryEmit(Unit)
@@ -242,9 +279,13 @@ class ApiHub(
         mutableChanges.tryEmit(Unit)
     }
 
-    /** 家のほかの端末に名前と種類（api）を知らせる。新しくつながった端末がいれば送り直す。 */
+    /**
+     * 家のほかの端末に名前と種類（api）を知らせる。新しくつながった端末がいれば送り直す。
+     * 切れた端末は送った先から外す（アプリを入れ直してつなぎ直した端末は、前の版が知らなかった種類を捨てていることがある）。
+     */
     private fun sendProfile(force: Boolean) {
         val online = client.onlineDevices()
+        profileSentTo = profileSentTo intersect online
         if (!force && (online - profileSentTo - keys.deviceId).isEmpty()) return
         if (client.sendProfile(NAME, KIND)) profileSentTo = online
     }
@@ -417,10 +458,23 @@ class ApiHub(
         onEngine {
             val chain = client.verifiedChain() ?: return@onEngine PlayResult.NoDevice
             val players = chain.members.filterValues { it.keys.role == Role.Player }.keys
-            val target = Views.target(requested, keys.deviceId, players, client.onlineDevices(), client.latestCursorBody()?.first) ?: return@onEngine PlayResult.NoDevice
-            client.setLocalQueue(HandoffCodec.encode(snapshot))
+            val writer = client.latestCursorBody()?.first
+            if (writer != null && writer != keys.deviceId) lastOtherWriter = writer
+            val target = Views.target(requested, keys.deviceId, players, client.onlineDevices(), writer.takeUnless { it == keys.deviceId } ?: lastOtherWriter) ?: return@onEngine PlayResult.NoDevice
+            val encoded = HandoffCodec.encode(snapshot)
+            // 作ったキューが受け手の検査を通るか確かめる（通らないキューを置くと、どの端末も引き取れず家の再生が wave-api に残る）
+            (HandoffCodec.decode(encoded, snapshot.handoffId) as? xyz.mooma0750.wave.handoff.HandoffDecodeResult.Rejected)?.let {
+                log("queue rejected reason=${it.reason}")
+                return@onEngine PlayResult.NotSent
+            }
+            client.setLocalQueue(encoded)
             client.setLocalCursor(ConnectClient.LocalCursor(snapshot.currentItemId, 0, false, HandoffRepeat.Off, 0, false, nowMs(), null))
-            if (client.playOn(target)) PlayResult.Sent(target) else PlayResult.NotSent
+            if (client.playOn(target)) {
+                handOffWait = HandOffWait(target, nowMs(), 0)
+                PlayResult.Sent(target)
+            } else {
+                PlayResult.NotSent
+            }
         }
 
     companion object {
@@ -428,6 +482,10 @@ class ApiHub(
         const val KIND = "api"
         const val JOIN_WAIT_MS = 5 * 60 * 1000L
         const val JOIN_RETRY_MS = 4_000L
+
+        /** 引き取りを頼み直すまでの間と回数（中継の引き取りの期限は10秒）。 */
+        const val HANDOFF_RETRY_MS = 4_000L
+        const val HANDOFF_ATTEMPTS = 2
     }
 }
 

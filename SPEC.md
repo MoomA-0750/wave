@@ -115,7 +115,8 @@
 
 - （仮）ほかのアプリ（home-dashboard など）から、家で再生中の曲を読み、操作し、曲・アルバム・プレイリストを選んで家の端末で鳴らせる。口は中継の機械で常駐する `wave-api` が HTTP（JSON・SSE、トークンが要る）で出す（[ADR-0015](docs/adr/0015-wave-api.md)、[docs/wave-api.md](docs/wave-api.md)）
 - （仮）`wave-api` は家の端末の1つ（「wave API」）として QR の文字と6桁で加わる。音は出さず、「ここで再生」の行き先にならない。ログインは加えた後に家の端末から本人が渡し、渡すまでは今の曲・キュー・操作・端末の切り替えだけ。シャッフル・繰り返しは操作できない（連携の取り決めに無い）
-- （仮）自動テスト: `api` の `ApiTest`（トークン・ログインの要る口・操作の受け付け・鳴らす行き先・作るキューの形）、`handoff-protocol` の `PairingTest.aJoinerWithoutLogin…`。手で確かめる手順: 中継の機械で wave-api を動かし、Pixel 3 の QR の文字で加え（`api pair`）、to-fu で鳴らして `/v1/playback`・`/v1/devices`・`/v1/queue` が読め、`/v1/control` の一時停止・再生・シーク・音量が to-fu に届く（2026-10-19 に確かめた）
+- （仮）自動テスト: `api` の `ApiTest`（トークン・ログインの要る口・操作の受け付け・鳴らす行き先・作るキューの形）、`handoff-protocol` の `PairingTest.aJoinerWithoutLogin…`。手で確かめる手順: 中継の機械で wave-api を動かし、Pixel 3 の QR の文字で加え（`api pair`）、to-fu で鳴らして `/v1/playback`・`/v1/devices`・`/v1/queue` が読め、`/v1/control` の一時停止・再生・シーク・音量が to-fu に届く。Pixel 3 からログインを渡し、プレイリスト（34件）・検索・おすすめが読め、`/v1/play`（曲から・高く評価した曲をシャッフルで）・`/v1/queue`・次へが Pixel 3 で鳴る（2026-10-19 に確かめた）
+- （仮）「鳴らす」の行き先を指定しなければ、最後に鳴った端末、それが切れていればつながっている家の端末のどれか。引き取られなければ、4秒おきに2回まで同じ端末に頼み直す
 
 ## 時計（Wear OS）
 
