@@ -125,6 +125,30 @@ final class HandoffCodecTests: XCTestCase {
         XCTAssertEqual(.rejected("video_id"), HandoffCodec.decode(HandoffCodec.encode(badVideo), expectedHandoffId: sample().handoffId))
     }
 
+    func testItemLiveMarkIsWrittenOnlyWhenTrueAndDefaultsToFalse() throws {
+        // ライブの曲は "isLive": true を書く（最後に足す）
+        var live = sample().items[1]
+        live.isLive = true
+        XCTAssertTrue(ConnectJSON.encode(live).hasSuffix(#","origin":"user","isLive":true}"#))
+        XCTAssertEqual(true, ConnectJSON.decode(HandoffItem.self, from: ConnectJSON.encode(live))?.isLive)
+        // ライブでない曲は書かない（前の版と同じ形）
+        let plain = sample().items[1]
+        XCTAssertFalse(plain.isLive)
+        XCTAssertFalse(ConnectJSON.encode(plain).contains("isLive"))
+        // 無ければ false。false と書かれていても読める
+        let missing = #"{"itemId":"00000000-0000-4000-8000-000000000002","videoId":"abcdefghijB","title":"second","artists":[],"origin":"user"}"#
+        XCTAssertEqual(false, ConnectJSON.decode(HandoffItem.self, from: missing)?.isLive)
+        let explicitFalse = missing.replacingOccurrences(of: "}", with: #","isLive":false}"#)
+        XCTAssertEqual(false, ConnectJSON.decode(HandoffItem.self, from: explicitFalse)?.isLive)
+        // 受け渡し全体を通しても残る
+        var snapshot = sample()
+        snapshot.items[1].isLive = true
+        guard case .ok(let decoded) = HandoffCodec.decode(HandoffCodec.encode(snapshot), expectedHandoffId: snapshot.handoffId) else {
+            return XCTFail("読めない")
+        }
+        XCTAssertEqual([false, true], decoded.items.map(\.isLive))
+    }
+
     func testEscapesLikeKotlinx() {
         // 必要な文字だけを逃がす（制御文字は短い形か \u00xx の小文字）
         XCTAssertEqual(

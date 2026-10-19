@@ -125,6 +125,10 @@ public sealed partial class PlayerService : ObservableObject
         // シャッフルはキューごとの状態（Android と同じく、新しい再生では切れる）。設定には持ち越さない
         repeat = (RepeatMode)Math.Clamp(settings.Repeat, 0, 2);
         player.Volume = volume;
+        remoteLiveVideo.Failed += () =>
+        {
+            if (IsRemote) Message = L.T("ライブの映像を読み込めませんでした", "Couldn't load the live video");
+        };
         player.MediaEnded += (_, _) => ui.TryEnqueue(OnEnded);
         player.MediaOpened += (s, _) =>
         {
@@ -309,8 +313,12 @@ public sealed partial class PlayerService : ObservableObject
     partial void OnIsPlayingChanged(bool value)
     {
         if (value) stoppedAtEnd = false;
-        // ほかの端末を映している間は、この端末で聴いた時間ではない
-        if (IsRemote) return;
+        // ほかの端末を映している間は、この端末で聴いた時間ではない。ライブの映像は鳴らしている端末に合わせて止める・流す
+        if (IsRemote)
+        {
+            remoteLiveVideo.SetPlaying(value);
+            return;
+        }
         // RSS のエピソードは、止めたらその位置を覚える（ADR-0012）
         if (!value) RememberEpisode();
         var now = clock.ElapsedMilliseconds;
@@ -326,6 +334,8 @@ public sealed partial class PlayerService : ObservableObject
     partial void OnCurrentChanged(Song? value)
     {
         IsLive = value?.IsLive == true;
+        // ほかの端末のライブの映像は、その曲の間だけ
+        if (remoteLiveVideo.Wanted is { } wanted && wanted != value?.VideoId) remoteLiveVideo.Stop();
         CursorChanged?.Invoke(true);
     }
 
@@ -336,11 +346,28 @@ public sealed partial class PlayerService : ObservableObject
         OnPropertyChanged(nameof(HasVideo));
     }
 
-    /// <summary>映像を出せるか（曲の MV、またはこの端末で鳴らしているライブ配信。ライブは鳴らしている HLS に映像も入っている）。</summary>
-    public bool HasVideo => Video is not null || (IsLive && !IsRemote);
+    /// <summary>
+    /// 映像を出せるか（曲の MV、またはライブ配信。この端末で鳴らしているライブは鳴らしている HLS に映像も入っている。
+    /// ほかの端末で鳴っているライブは、この端末で同じ配信を音を出さずに読んで映す）。
+    /// </summary>
+    public bool HasVideo => Video is not null || IsLive;
 
-    /// <summary>ライブの映像を出す枠に渡す再生器（ライブを鳴らしているときだけ）。</summary>
-    public MediaPlayer? LiveVideoPlayer => IsLive && !IsRemote ? player : null;
+    /// <summary>ライブの映像を出す枠に渡す再生器（この端末で鳴らしているライブは鳴らしている再生器、ほかの端末のライブは音の無い映像用の再生器）。</summary>
+    public MediaPlayer? LiveVideoPlayer => !IsLive ? null : IsRemote ? remoteLiveVideo.Player : player;
+
+    /// <summary>ほかの端末で鳴っているライブの映像（この端末で同じ配信を、音を出さずに映像の画質で読む）。</summary>
+    private readonly RemoteLiveVideo remoteLiveVideo = new();
+
+    /// <summary>ほかの端末で鳴っているライブの映像を出す・やめる（位置は合わせない。ライブは今の時点から流れる）。</summary>
+    private void SetRemoteLiveVideo(bool on)
+    {
+        if (!on || !IsLive || Current is not { } song)
+        {
+            remoteLiveVideo.Stop();
+            return;
+        }
+        _ = remoteLiveVideo.LoadAsync(song.VideoId, IsPlaying);
+    }
 
     /// <summary>
     /// ライブで映像を出しているか（映像を見るための画質で流す。出していない間は音のための小さい画質で通信量を抑える）。
@@ -352,6 +379,11 @@ public sealed partial class PlayerService : ObservableObject
     /// <summary>ライブの映像を出す・やめる。今ライブを鳴らしていれば、その画質で読み直す（ライブは今の時点から流れるので、続きの位置は無い）。</summary>
     public async void SetLiveVideo(bool on)
     {
+        if (IsRemote)
+        {
+            SetRemoteLiveVideo(on);
+            return;
+        }
         if (LiveVideo == on) return;
         liveVideoFor = on ? Current?.VideoId : null;
         if (!IsLive || IsRemote || Current is not { } song || player.Source is null) return;
@@ -1255,6 +1287,7 @@ public sealed partial class PlayerService : ObservableObject
     private void LeaveRemote(bool restoreLocal = false)
     {
         if (!IsRemote) return;
+        remoteLiveVideo.Stop();
         IsRemote = false;
         RemoteDevice = null;
         shownOnSmtc = null;
@@ -1565,18 +1598,30 @@ public sealed partial class PlayerService : ObservableObject
             };
             return false;
         }
+        var source = await CreateLiveSourceAsync(live);
+        if (cancel.IsCancellationRequested || Current?.VideoId != song.VideoId || source is null) return false;
+        PlaySource(song, source, 0);
+        liveStartedMs = clock.ElapsedMilliseconds;
+        AppPaths.Log($"play live queue={Queue.Count} index={Index}");
+        return true;
+    }
+
+    /// <summary>
+    /// ライブの HLS の媒体プレイリストから再生の元を作る（ほかの端末のライブの映像を出す RemoteLiveVideo も使う）。
+    /// 媒体プレイリストの読み直しと区切り（googlevideo）のほかは取らない。作れなければ null。
+    /// </summary>
+    internal static async Task<MediaSource?> CreateLiveSourceAsync(LiveStream live)
+    {
         var created = await Windows.Media.Streaming.Adaptive.AdaptiveMediaSource.CreateFromUriAsync(new Uri(live.RevealUrl()));
-        if (cancel.IsCancellationRequested || Current?.VideoId != song.VideoId) return false;
         if (created.Status != Windows.Media.Streaming.Adaptive.AdaptiveMediaSourceCreationStatus.Success)
         {
             AppPaths.Log($"live create failed status={created.Status} http={created.HttpResponseMessage?.StatusCode}");
-            return false;
+            return null;
         }
         var adaptive = created.MediaSource;
         AppPaths.Log($"live source live={adaptive.IsLive} bitrates={adaptive.AvailableBitrates.Count}");
         adaptive.DownloadRequested += (_, e) =>
         {
-            // 媒体プレイリストの読み直しと区切り（googlevideo）のほかは取らない
             var uri = e.ResourceUri.ToString();
             if (LiveUrls.IsAllowedManifest(uri) || LiveUrls.IsAllowedSegment(uri)) return;
             AppPaths.Log($"live download blocked host={e.ResourceUri.Host}");
@@ -1584,10 +1629,7 @@ public sealed partial class PlayerService : ObservableObject
             e.Result.ExtendedStatus = 403;
         };
         adaptive.DownloadFailed += (_, e) => AppPaths.Log($"live download failed type={e.ResourceType} http={e.HttpResponseMessage?.StatusCode}");
-        PlaySource(song, MediaSource.CreateFromAdaptiveMediaSource(adaptive), 0);
-        liveStartedMs = clock.ElapsedMilliseconds;
-        AppPaths.Log($"play live queue={Queue.Count} index={Index}");
-        return true;
+        return MediaSource.CreateFromAdaptiveMediaSource(adaptive);
     }
 
     /// <summary>
@@ -2024,11 +2066,12 @@ public sealed record QueueExport(
 public sealed record PlaybackCursor(string CurrentItemId, long PositionMs, bool Playing, RepeatMode Repeat, long ListenedMs, bool HistorySent, int VolumePercent);
 
 /// <summary>ほかの端末の再生（表示と遠隔操作のため）。QueueKey はキューの中身の目印（同じなら置き直さない）。</summary>
-public sealed record RemoteSnapshot(string DeviceId, string DeviceLabel, string? QueueKey, QueueExport? Queue, string CurrentItemId, long PositionMs, long CapturedAtMs, bool Playing, RepeatMode Repeat, int? DurationSeconds, long Version = 0, int? VolumePercent = null)
+public sealed record RemoteSnapshot(string DeviceId, string DeviceLabel, string? QueueKey, QueueExport? Queue, string CurrentItemId, long PositionMs, long CapturedAtMs, bool Playing, RepeatMode Repeat, int? DurationSeconds, long Version = 0, int? VolumePercent = null, bool IsLive = false)
 {
-    /// <summary>今の位置（再生中なら、取ってからの経過を足す。曲の長さで止める）。</summary>
+    /// <summary>今の位置（再生中なら、取ってからの経過を足す。曲の長さで止める）。ライブ配信には頭も終わりも無いので、届いた位置のまま伸ばさない。</summary>
     public double PositionNow(long nowMs)
     {
+        if (IsLive) return PositionMs / 1000.0;
         var ms = Playing ? PositionMs + Math.Max(0, nowMs - CapturedAtMs) : PositionMs;
         if (DurationSeconds is { } d && d > 0) ms = Math.Min(ms, d * 1000L);
         return ms / 1000.0;

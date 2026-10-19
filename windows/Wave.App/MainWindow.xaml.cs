@@ -523,8 +523,13 @@ public sealed partial class MainWindow : Window
                 Title = Player.Current is { } current ? $"{current.Title} • {current.ArtistsText}" : "wave";
                 PrefetchMembership();
                 break;
-            case nameof(PlayerService.Video):
             case nameof(PlayerService.IsRemote):
+                // ライブの映像を出す再生器が替わる（手元の再生器 ⇔ ほかの端末のライブを映す音の無い再生器）ので、曲の表示に戻す
+                if (Player.IsLive && VideoTab.IsChecked == true) ShowVideo(false);
+                UpdateVideoSwitch();
+                RenderFullView();
+                break;
+            case nameof(PlayerService.Video):
             case nameof(PlayerService.HasVideo):
                 UpdateVideoSwitch();
                 RenderFullView();

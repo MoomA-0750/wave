@@ -62,8 +62,11 @@ class RemoteSessionPlayer(
                     .Builder(current.itemIds[index])
                     .setMediaItem(MediaItem.Builder().setMediaId(current.itemIds[index]).setMediaMetadata(metadata).build())
                     .setMediaMetadata(metadata)
-                    .setDurationUs(song.durationSeconds?.let { it * 1_000_000L } ?: C.TIME_UNSET)
-                    .build()
+                    .setDurationUs(song.durationSeconds?.takeUnless { song.isLive }?.let { it * 1_000_000L } ?: C.TIME_UNSET)
+                    .apply {
+                        // ライブはロック画面・通知でもシークバーを出さず、ライブとして出す
+                        if (song.isLive) setIsDynamic(true).setIsSeekable(false).setLiveConfiguration(MediaItem.LiveConfiguration.UNSET)
+                    }.build()
             }
         return State
             .Builder()

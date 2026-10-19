@@ -190,8 +190,9 @@ class ConnectV2Manager(
     ) {
         val current: xyz.mooma0750.wave.core.music.Song get() = items[currentIndex]
 
-        /** 今の位置（再生中なら経過を足す。曲の長さで止める）。 */
+        /** 今の位置（再生中なら経過を足す。曲の長さで止める）。ライブには位置が無いので 0。 */
         fun positionAt(nowMs: Long): Long {
+            if (current.isLive) return 0
             val position = if (playing) positionMs + (nowMs - capturedAtMs).coerceAtLeast(0) else positionMs
             return current.durationSeconds?.let { position.coerceAtMost(it * 1000L) } ?: position
         }
@@ -228,6 +229,7 @@ class ConnectV2Manager(
                     album = item.album?.let { xyz.mooma0750.wave.core.music.AlbumRef(it.name, it.browseId) },
                     durationSeconds = item.durationSeconds,
                     thumbnailUrl = item.thumbnailUrl,
+                    isLive = item.isLive,
                 )
             }
         val label = labels[now.writer] ?: resources.getString(R.string.connect_v2_member_unknown, now.writer.take(6))

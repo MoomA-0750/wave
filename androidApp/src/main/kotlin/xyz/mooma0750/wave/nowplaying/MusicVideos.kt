@@ -4,17 +4,20 @@ import android.content.Context
 import androidx.annotation.OptIn
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import okhttp3.OkHttpClient
+import xyz.mooma0750.wave.core.music.LiveClient
 import xyz.mooma0750.wave.core.music.MusicRepository
 import xyz.mooma0750.wave.core.music.MusicVideo
 import xyz.mooma0750.wave.core.session.CallResult
 import xyz.mooma0750.wave.core.stream.StreamKind
 import xyz.mooma0750.wave.core.stream.StreamResolver
+import xyz.mooma0750.wave.playback.LiveStreamCache
 import xyz.mooma0750.wave.playback.ResolvedStreamCache
 import xyz.mooma0750.wave.playback.TrackUri
 import xyz.mooma0750.wave.playback.WaveStreamDataSource
@@ -28,6 +31,9 @@ class MusicVideos(
     private val resolver: StreamResolver,
     private val cache: ResolvedStreamCache,
     private val http: OkHttpClient,
+    /** ほかの端末で鳴っているライブの映像を、この端末で別に読み込むため。 */
+    private val live: LiveClient,
+    private val liveCache: LiveStreamCache,
 ) {
     sealed interface Result {
         data class Found(
@@ -62,7 +68,7 @@ class MusicVideos(
     fun createPlayer(context: Context): ExoPlayer =
         ExoPlayer
             .Builder(context)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(WaveStreamDataSource.Factory(resolver, cache, http, StreamKind.Video)))
+            .setMediaSourceFactory(DefaultMediaSourceFactory(WaveStreamDataSource.Factory(resolver, cache, http, StreamKind.Video).withLive(live, liveCache)))
             .build()
             .apply {
                 volume = 0f
@@ -71,4 +77,12 @@ class MusicVideos(
 
     /** 解決は今のログインの世代でだけ行う（ADR-0007）。 */
     fun mediaItem(videoId: String): MediaItem = MediaItem.fromUri(TrackUri.of(videoId, music.currentLoginGeneration()))
+
+    /** ライブ配信を映像を見るための画質で（HLS）。 */
+    fun liveMediaItem(videoId: String): MediaItem =
+        MediaItem
+            .Builder()
+            .setUri(TrackUri.withLiveVideo(TrackUri.of(videoId, music.currentLoginGeneration(), live = true), video = true))
+            .setMimeType(MimeTypes.APPLICATION_M3U8)
+            .build()
 }

@@ -159,6 +159,29 @@ private const val SYNC_INTERVAL_MS = 200L
  * ライブ配信の映像。MV と違って別のプレイヤーは作らず、鳴らしている再生器（コントローラー）にそのまま描かせる
  * （ライブの HLS には映像も入っている。「動画」にしている間は、再生の側が映像を見るための画質で流す）。
  */
+/**
+ * ほかの端末で鳴っているライブの映像。この端末で同じライブを映像の画質で、音を出さずに別に読み込む（ライブは今の時点から流れるので位置は合わせない）。
+ * videoId が null の間（映像を出していない・画面が裏）は読み込まない。鳴らしている端末が止めている間は映像も止める。
+ */
+@Composable
+fun rememberRemoteLivePlayer(
+    videoId: String?,
+    playing: Boolean,
+    videos: MusicVideos,
+): Player? {
+    val context = LocalContext.current
+    val player = remember(videoId) { videoId?.let { videos.createPlayer(context) } }
+    DisposableEffect(player) {
+        if (player != null && videoId != null) {
+            player.setMediaItem(videos.liveMediaItem(videoId))
+            player.prepare()
+        }
+        onDispose { player?.release() }
+    }
+    LaunchedEffect(player, playing) { player?.playWhenReady = playing }
+    return player
+}
+
 @Composable
 fun LiveVideoPanel(
     player: Player,

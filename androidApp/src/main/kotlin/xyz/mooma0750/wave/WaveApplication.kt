@@ -342,7 +342,7 @@ class AppContainer(
     val videoStreamCache = ResolvedStreamCache(stream.resolver, SystemClock::elapsedRealtime)
 
     /** 曲に重ねる映像（MV）。 */
-    val musicVideos = MusicVideos(music, stream.resolver, videoStreamCache, mediaHttpClient)
+    val musicVideos = MusicVideos(music, stream.resolver, videoStreamCache, mediaHttpClient, live, liveCache)
 
     val settings = AppSettings(context)
 

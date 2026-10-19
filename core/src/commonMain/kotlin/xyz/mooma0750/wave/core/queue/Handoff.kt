@@ -22,6 +22,7 @@ internal object HandoffMapping {
             album = item.song.album?.let { HandoffRef(it.title, it.browseId) },
             durationSeconds = item.song.durationSeconds,
             thumbnailUrl = item.song.thumbnailUrl,
+            isLive = item.song.isLive,
             origin =
                 when (item.origin) {
                     ItemOrigin.Source -> HandoffOrigin.Source
@@ -41,6 +42,7 @@ internal object HandoffMapping {
                     album = item.album?.let { AlbumRef(it.name, it.browseId) },
                     durationSeconds = item.durationSeconds,
                     thumbnailUrl = item.thumbnailUrl,
+                    isLive = item.isLive,
                 ),
             origin =
                 when (item.origin) {

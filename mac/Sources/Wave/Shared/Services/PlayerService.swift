@@ -52,12 +52,15 @@ struct RemoteSnapshot {
     var playing: Bool
     var repeatMode: RepeatMode
     var durationSeconds: Int?
+    /// 今の曲がライブ配信（位置も長さも無い）。
+    var isLive = false
     var version: Int64 = 0
     /// その端末のアプリの中の音量（0〜100）。前の版の端末は付けない（nil）。
     var volumePercent: Int?
 
-    /// 今の位置（再生中なら、取ってからの経過を足す。曲の長さで止める）。
+    /// 今の位置（再生中なら、取ってからの経過を足す。曲の長さで止める）。ライブ配信には位置が無いので 0（経過で伸ばさない）。
     func positionNow(_ nowMs: Int64) -> Double {
+        if isLive { return 0 }
         var ms = playing ? positionMs + max(0, nowMs - capturedAtMs) : positionMs
         if let d = durationSeconds, d > 0 { ms = min(ms, Int64(d) * 1000) }
         return Double(ms) / 1000
@@ -164,8 +167,9 @@ final class PlayerService {
     /// 今の曲がライブ配信（長さ・シーク・歌詞・映像が無い。HLS で流す）。
     var isLive: Bool { current?.isLive == true }
 
-    /// 映像を出せるか（曲の MV、またはこの端末で鳴らしているライブ配信。ライブは鳴らしている HLS に映像も入っている）。
-    var hasVideo: Bool { video != nil || (isLive && !isRemote) }
+    /// 映像を出せるか（曲の MV、またはライブ配信）。この端末で鳴らしているライブは鳴らしている HLS に映像も入っている。
+    /// ほかの端末で鳴っているライブは、この端末で同じライブを音を出さずに読んで映す（remoteLivePlayer）。
+    var hasVideo: Bool { video != nil || isLive }
 
     /// ライブで映像を出しているか（映像を見るための画質で流す。出していない間は音のための小さい画質で通信量を抑える）。
     /// 映像にした曲（liveVideoFor）でだけ効く。曲が変われば音のための画質に戻る。
@@ -176,7 +180,11 @@ final class PlayerService {
     func setLiveVideo(_ on: Bool) {
         guard liveVideo != on else { return }
         liveVideoFor = on ? current?.videoId : nil
-        guard isLive, !isRemote, let song = current, engine.hasSource else { return }
+        if isRemote {
+            syncRemoteLiveVideo()
+            return
+        }
+        guard isLive, let song = current, engine.hasSource else { return }
         // 鳴っていたかは再生器そのものから取る（一時停止の直後は isPlaying がまだ変わっていないことがある）
         let wasPlaying = engine.player.timeControlStatus != .paused
         // 止まっている間に映像をやめるなら読み直さない（次に鳴らすときも今の流れのまま。画質だけの違い）
@@ -194,8 +202,72 @@ final class PlayerService {
         }
     }
 
-    /// ライブの映像を出す枠に渡す再生器（ライブを鳴らしているときだけ）。
-    var liveVideoPlayer: AVPlayer? { isLive && !isRemote ? engine.player : nil }
+    /// ライブの映像を出す枠に渡す再生器（ライブのときだけ）。この端末で鳴らしていれば鳴らしている再生器、
+    /// ほかの端末で鳴っていれば映像だけの再生器（読み込むまでは黒）。
+    var liveVideoPlayer: AVPlayer? {
+        guard isLive else { return nil }
+        return isRemote ? remoteLivePlayer : engine.player
+    }
+
+    /// ほかの端末で鳴っているライブの映像を出す、音の無い再生器（MusicVideoPlayer と同じく音は出さない）。
+    /// ライブは今の時点から流れるので、鳴らしている端末と位置は合わせない。再生・一時停止だけをその端末に合わせる。
+    @ObservationIgnored let remoteLivePlayer: AVPlayer = {
+        let p = AVPlayer()
+        p.isMuted = true
+        return p
+    }()
+    /// remoteLivePlayer に読んでいる（読もうとしている）ライブの videoId。
+    @ObservationIgnored private var remoteLiveFor: String?
+    @ObservationIgnored private var remoteLiveTask: Task<Void, Never>?
+
+    /// ほかの端末で鳴っているライブの映像を、今の状態に合わせる（「動画」を選んだライブを映している間だけ読み、曲が変わった・
+    /// 映像を閉じた・映すのをやめたら捨てる）。
+    private func syncRemoteLiveVideo() {
+        let want = isRemote && isLive && liveVideo ? current?.videoId : nil
+        if want != remoteLiveFor {
+            stopRemoteLiveVideo()
+            if let want { startRemoteLiveVideo(want) }
+            return
+        }
+        applyRemoteLivePlaying()
+    }
+
+    /// 同じライブの HLS を映像を見るための画質で解決して読む（手元でライブを鳴らすときと同じ解決を使う）。
+    private func startRemoteLiveVideo(_ videoId: String) {
+        remoteLiveFor = videoId
+        remoteLiveTask = Task {
+            let result = try? await AppServices.live.resolve(videoId: videoId, video: true)
+            guard !Task.isCancelled, remoteLiveFor == videoId else { return }
+            guard let stream = result?.stream, let url = URL(string: stream.revealUrl()) else {
+                AppPaths.log("remote live video resolve failed reason=\(String(describing: result?.failure))")
+                return
+            }
+            remoteLivePlayer.replaceCurrentItem(with: AVPlayerItem(url: url))
+            AppPaths.log("remote live video loaded")
+            applyRemoteLivePlaying()
+        }
+    }
+
+    /// 鳴らしている端末が再生中なら映像も流し、一時停止中なら止める。止めたあと流し直すときは、今の時点（ライブの先頭）へ戻る。
+    private func applyRemoteLivePlaying() {
+        let p = remoteLivePlayer
+        guard remoteLiveFor != nil, let item = p.currentItem else { return }
+        if isPlaying {
+            guard p.timeControlStatus == .paused else { return }
+            if let edge = item.seekableTimeRanges.last?.timeRangeValue.end, edge.isNumeric { p.seek(to: edge) }
+            p.play()
+        } else if p.timeControlStatus != .paused {
+            p.pause()
+        }
+    }
+
+    private func stopRemoteLiveVideo() {
+        remoteLiveTask?.cancel()
+        remoteLiveTask = nil
+        remoteLiveFor = nil
+        remoteLivePlayer.pause()
+        remoteLivePlayer.replaceCurrentItem(with: nil)
+    }
 
     /// 今の曲が RSS のエピソード（`ext:`。ADR-0012）。音声の URL をそのまま流し、YouTube のこと（評価・歌詞・MV・ラジオ・履歴・共有）をしない。
     var isExternal: Bool { current.map { Feed.isExternal($0.videoId) } ?? false }
@@ -911,8 +983,11 @@ final class PlayerService {
 
     private func onIsPlayingChanged() {
         updateNowPlayingInfo()
-        // ほかの端末を映している間は、この端末で聴いた時間ではない
-        if isRemote { return }
+        // ほかの端末を映している間は、この端末で聴いた時間ではない（ライブの映像だけ、再生・一時停止を合わせる）
+        if isRemote {
+            syncRemoteLiveVideo()
+            return
+        }
         // RSS のエピソードは、止めたらその位置を覚える
         if !isPlaying {
             sampleEpisode()
@@ -1105,6 +1180,7 @@ final class PlayerService {
         }
         position = next.positionNow(clockMs)
         updateNowPlayingInfo()
+        syncRemoteLiveVideo()
     }
 
     /// 映すのをやめる。この端末で鳴らし始めたとき（曲を選んだ・引き取った）は、そのままキューを置き換える。
@@ -1112,6 +1188,7 @@ final class PlayerService {
     private func leaveRemote(restoreLocal: Bool = false) {
         guard isRemote else { return }
         isRemote = false
+        stopRemoteLiveVideo()
         remoteDevice = nil
         remote = nil
         remoteQueueKey = nil

@@ -68,6 +68,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.currentStateAsState
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -273,15 +276,23 @@ fun NowPlayingScreen(
     var fullVideo by rememberSaveable { mutableStateOf(false) }
     var pickArtist by remember { mutableStateOf<List<xyz.mooma0750.wave.core.music.ArtistRef>?>(null) }
     // 動画のある曲だけ「動画」を押せるようにする（押してから無いと分かるのを避ける）
-    // ライブ配信には MV も歌詞も無い（長さもシークも無い）が、鳴らしている HLS に映像が入っているので、この端末で鳴らしていれば「動画」を出せる
+    // ライブ配信には MV も歌詞も無い（長さもシークも無い）が、HLS に映像が入っている。この端末で鳴らしていればそのプレイヤーの映像を出し、
+    // ほかの端末で鳴っていれば、映像を出している間だけこの端末で同じライブを音なしで読み込む
     val live = state.isLive
-    val liveVideoPlayer = if (live && remote == null) display.controller else null
+    val visible by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
+    val remoteLivePlayer =
+        rememberRemoteLivePlayer(
+            song?.videoId?.takeIf { live && remote != null && video && (visible.isAtLeast(Lifecycle.State.STARTED) || VideoPip.inPip.value) },
+            playing = state.isPlaying,
+            videos = videos,
+        )
+    val liveVideoPlayer = if (live && remote == null) display.controller else remoteLivePlayer
     // RSS のエピソード（ADR-0012）にも MV・歌詞は無い
     val external = song?.videoId?.let(xyz.mooma0750.wave.core.music.Feed::isExternal) == true
-    val hasVideo by androidx.compose.runtime.produceState<Boolean?>(null, song?.videoId, live, liveVideoPlayer != null) {
+    val hasVideo by androidx.compose.runtime.produceState<Boolean?>(null, song?.videoId, live, remote != null, liveVideoPlayer != null) {
         value =
             when {
-                live -> liveVideoPlayer != null
+                live -> remote != null || liveVideoPlayer != null
                 external -> false
                 else -> song?.videoId?.let { videos.videoFor(it) is MusicVideos.Result.Found }
             }

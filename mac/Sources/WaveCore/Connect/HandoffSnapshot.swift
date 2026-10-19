@@ -79,10 +79,12 @@ public struct HandoffItem: Equatable, Sendable, ConnectCodable {
     public var durationSeconds: Int?
     public var thumbnailUrl: String?
     public var origin: HandoffOrigin
+    /// ライブ配信か（JSON 名 "isLive"）。false のときは JSON に書かない（前の版の端末と同じ形のまま）。無ければ false。
+    public var isLive: Bool
 
     public init(
         itemId: String, videoId: String, title: String, artists: [HandoffRef], album: HandoffRef? = nil, durationSeconds: Int? = nil,
-        thumbnailUrl: String? = nil, origin: HandoffOrigin
+        thumbnailUrl: String? = nil, origin: HandoffOrigin, isLive: Bool = false
     ) {
         self.itemId = itemId
         self.videoId = videoId
@@ -92,13 +94,18 @@ public struct HandoffItem: Equatable, Sendable, ConnectCodable {
         self.durationSeconds = durationSeconds
         self.thumbnailUrl = thumbnailUrl
         self.origin = origin
+        self.isLive = isLive
     }
 
     public func toJSON() -> JSON {
-        .obj([
+        let json = JSON.obj([
             "itemId": .string(itemId), "videoId": .string(videoId), "title": .string(title), "artists": JSON(items: artists), "album": JSON(album),
             "durationSeconds": JSON(durationSeconds), "thumbnailUrl": JSON(thumbnailUrl), "origin": .string(origin.rawValue),
         ])
+        // ライブのときだけ印を足す（false は書かない）
+        guard isLive, case .object(var o) = json else { return json }
+        o["isLive"] = .bool(true)
+        return .object(o)
     }
 
     public static func fromJSON(_ json: JSON) throws -> HandoffItem {
@@ -106,7 +113,7 @@ public struct HandoffItem: Equatable, Sendable, ConnectCodable {
         return HandoffItem(
             itemId: try r.string("itemId"), videoId: try r.string("videoId"), title: try r.string("title"), artists: try r.array("artists", HandoffRef.self),
             album: try r.optValue("album", HandoffRef.self), durationSeconds: try r.optInt("durationSeconds"), thumbnailUrl: try r.optString("thumbnailUrl"),
-            origin: try r.enumValue("origin", HandoffOrigin.self))
+            origin: try r.enumValue("origin", HandoffOrigin.self), isLive: try r.bool("isLive", default: false))
     }
 }
 

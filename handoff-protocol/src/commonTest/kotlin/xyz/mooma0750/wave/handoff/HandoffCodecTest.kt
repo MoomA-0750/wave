@@ -53,6 +53,17 @@ class HandoffCodecTest {
     }
 
     @Test
+    fun liveFlagIsWrittenOnlyForLive() {
+        // ライブの印はライブのときだけ書く（前の版の端末と同じ形のまま）。無ければライブではない
+        val live = snapshot(items = listOf(item(0).copy(durationSeconds = null, isLive = true), item(1)))
+        val encoded = HandoffCodec.encode(live)
+        assertEquals(1, Regex("\"isLive\"").findAll(encoded).count())
+        assertTrue(encoded.contains("\"isLive\":true"))
+        assertEquals(live, assertIs<HandoffDecodeResult.Ok>(HandoffCodec.decode(encoded, handoffId)).snapshot)
+        assertTrue(!HandoffCodec.encode(snapshot()).contains("isLive"))
+    }
+
+    @Test
     fun rejectsAnotherHandoffOrVersion() {
         assertIs<HandoffDecodeResult.Rejected>(HandoffCodec.decode(HandoffCodec.encode(snapshot()), "11111111-1111-4111-8111-111111111111"))
         assertEquals(HandoffDecodeResult.UnsupportedVersion(2), HandoffCodec.decode(HandoffCodec.encode(snapshot().copy(schemaVersion = 2)), handoffId))

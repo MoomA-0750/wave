@@ -48,6 +48,13 @@ public sealed record HandoffItem
     public int? DurationSeconds { get; init; }
     public string? ThumbnailUrl { get; init; }
     public required HandoffOrigin Origin { get; init; }
+
+    /// <summary>
+    /// ライブ配信か（長さもシークも無い。映す側はライブの印を出し、映像はその端末で同じ配信の HLS を読んで出す）。
+    /// false のときは書かない（ライブのときだけ "isLive": true。無ければ false として読む）。
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool IsLive { get; init; }
 }
 
 public sealed record HandoffRef

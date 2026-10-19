@@ -934,7 +934,7 @@ final class ConnectWorker: ConnectClientEffects, @unchecked Sendable {
         return RemoteSnapshot(
             deviceId: remote.deviceId, deviceLabel: remote.deviceLabel, queueKey: mirroredKey, queue: export, currentItemId: now.cursor.currentItemId,
             positionMs: now.positionMs, capturedAtMs: 0, playing: now.cursor.playing, repeatMode: ConnectQueue.repeatOf(now.cursor.repeat),
-            durationSeconds: current.song.durationSeconds, version: now.version, volumePercent: now.cursor.volumePercent)
+            durationSeconds: current.song.durationSeconds, isLive: current.song.isLive, version: now.version, volumePercent: now.cursor.volumePercent)
     }
 
     private func notify(_ text: String) {
@@ -1320,13 +1320,15 @@ enum ConnectQueue {
         return HandoffItem(
             itemId: meta.itemId, videoId: song.videoId, title: truncated(song.title, 500),
             artists: song.artists.filter { $0.name.utf16.count > 0 && $0.name.utf16.count <= 500 }.prefix(20).map { HandoffRef(name: $0.name, browseId: validBrowseId($0.browseId)) },
-            album: album, durationSeconds: song.durationSeconds.flatMap { $0 >= 0 && $0 <= 24 * 3600 ? $0 : nil }, thumbnailUrl: song.thumbnailUrl, origin: origin)
+            album: album, durationSeconds: song.durationSeconds.flatMap { $0 >= 0 && $0 <= 24 * 3600 ? $0 : nil }, thumbnailUrl: song.thumbnailUrl, origin: origin,
+            isLive: song.isLive)
     }
 
     /// 受け渡しの項目を、キューの曲と項目の情報へ（toExport と同じ変換）。
     static func entryOf(_ i: HandoffItem) -> (song: Song, meta: QueueItemMeta) {
         let song = Song(videoId: i.videoId, title: i.title, artists: i.artists.map { ArtistRef(name: $0.name, browseId: $0.browseId) },
-                        album: i.album.map { AlbumRef(title: $0.name, browseId: $0.browseId) }, durationSeconds: i.durationSeconds, thumbnailUrl: i.thumbnailUrl)
+                        album: i.album.map { AlbumRef(title: $0.name, browseId: $0.browseId) }, durationSeconds: i.durationSeconds, thumbnailUrl: i.thumbnailUrl,
+                        isLive: i.isLive)
         let origin: QueueOrigin = switch i.origin {
         case .suggestion: .suggestion
         case .userAdded: .userAdded
@@ -1370,7 +1372,8 @@ enum ConnectQueue {
         return QueueExport(
             items: snapshot.items.map { i in
                 let song = Song(videoId: i.videoId, title: i.title, artists: i.artists.map { ArtistRef(name: $0.name, browseId: $0.browseId) },
-                                album: i.album.map { AlbumRef(title: $0.name, browseId: $0.browseId) }, durationSeconds: i.durationSeconds, thumbnailUrl: i.thumbnailUrl)
+                                album: i.album.map { AlbumRef(title: $0.name, browseId: $0.browseId) }, durationSeconds: i.durationSeconds, thumbnailUrl: i.thumbnailUrl,
+                        isLive: i.isLive)
                 let origin: QueueOrigin = switch i.origin {
                 case .suggestion: .suggestion
                 case .userAdded: .userAdded

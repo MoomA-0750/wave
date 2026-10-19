@@ -68,7 +68,13 @@ struct NowPlayingView: View {
         }
         .onChange(of: player.video) { _, v in MusicVideoPlayer.shared.setActive(shell.showVideo ? v : nil) }
         // 再生画面を閉じたら映像の読み込みをやめる（PiP で映している間は続ける）
-        .onDisappear { if !VideoPip.shared.active { MusicVideoPlayer.shared.setActive(nil) } }
+        // ほかの端末で鳴っているライブの映像（この iPhone で別に読んでいる）も捨てる。開き直すと onChange が読み直す
+        .onDisappear {
+            if !VideoPip.shared.active {
+                MusicVideoPlayer.shared.setActive(nil)
+                if player.isRemote { player.setLiveVideo(false) }
+            }
+        }
         .sheet(isPresented: $shell.queueOpen) { QueueView().modifier(DialogSheets(layer: .queue)) }
         .sheet(isPresented: $devicesOpen) { DevicesSheet() }
         // 曲のメニューの「プレイリストに追加」は、この画面の上に出す

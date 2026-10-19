@@ -512,8 +512,8 @@ public sealed class ConnectService
             mirroredKey = Guid.NewGuid().ToString();
         }
         if (mirroredQueue is not { } export || export.Items.All(i => i.Meta.ItemId != now.Cursor.CurrentItemId)) return null;
-        var duration = export.Items.First(i => i.Meta.ItemId == now.Cursor.CurrentItemId).Song.DurationSeconds;
-        return new RemoteSnapshot(remote.DeviceId, remote.DeviceLabel, mirroredKey, export, now.Cursor.CurrentItemId, now.PositionMs, player.ClockMs, now.Cursor.Playing, RepeatOf(now.Cursor.Repeat), duration, now.Version, now.Cursor.VolumePercent);
+        var song = export.Items.First(i => i.Meta.ItemId == now.Cursor.CurrentItemId).Song;
+        return new RemoteSnapshot(remote.DeviceId, remote.DeviceLabel, mirroredKey, export, now.Cursor.CurrentItemId, now.PositionMs, player.ClockMs, now.Cursor.Playing, RepeatOf(now.Cursor.Repeat), song.DurationSeconds, now.Version, now.Cursor.VolumePercent, song.IsLive);
     }
 
     private void SetPairing(PairingView view) => ui.TryEnqueue(() =>
@@ -914,6 +914,7 @@ public sealed class ConnectService
             QueueOrigin.UserAdded => HandoffOrigin.UserAdded,
             _ => HandoffOrigin.Source,
         },
+        IsLive = song.IsLive,
     };
 
     private static string? ValidBrowseId(string? id) => id is not null && System.Text.RegularExpressions.Regex.IsMatch(id, @"\A[A-Za-z0-9_-]{2,64}\z") ? id : null;
@@ -947,7 +948,7 @@ public sealed class ConnectService
 
     /// <summary>受け渡しの項目を、キューの曲と項目の情報へ。</summary>
     private static (Song Song, QueueItemMeta Meta) EntryOf(HandoffItem i) => (
-        new Song(i.VideoId, i.Title, i.Artists.Select(a => new ArtistRef(a.Name, a.BrowseId)).ToList(), i.Album is { } album ? new AlbumRef(album.Name, album.BrowseId) : null, i.DurationSeconds, i.ThumbnailUrl),
+        new Song(i.VideoId, i.Title, i.Artists.Select(a => new ArtistRef(a.Name, a.BrowseId)).ToList(), i.Album is { } album ? new AlbumRef(album.Name, album.BrowseId) : null, i.IsLive ? null : i.DurationSeconds, i.ThumbnailUrl, IsLive: i.IsLive),
         new QueueItemMeta(i.ItemId, i.Origin switch
         {
             HandoffOrigin.Suggestion => QueueOrigin.Suggestion,

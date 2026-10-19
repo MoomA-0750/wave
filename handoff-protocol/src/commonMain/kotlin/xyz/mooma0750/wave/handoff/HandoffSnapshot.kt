@@ -1,5 +1,7 @@
 package xyz.mooma0750.wave.handoff
 
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -32,6 +34,7 @@ data class HandoffSnapshot(
     val capturedAtEpochMs: Long,
 )
 
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class HandoffItem(
     /** 項目ごとの ID（UUID）。 */
@@ -43,6 +46,9 @@ data class HandoffItem(
     val durationSeconds: Int?,
     val thumbnailUrl: String?,
     val origin: HandoffOrigin,
+    /** ライブ配信か（長さもシークも無い）。ライブのときだけ書く（古い端末とも形が変わらない）。 */
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val isLive: Boolean = false,
 )
 
 @Serializable
