@@ -23,12 +23,13 @@ struct MainView: View {
                     if !(model.videoOnly && model.showVideo && player.hasVideo) { PlayerBar() }
                 }
             } else {
-                // Messages と同じく、両脇（ライブラリ・再生中の欄）は窓の地のすりガラスを透かし、真ん中のページだけ不透明な地にする
+                // Messages と同じく、両脇（ライブラリ・再生中の欄）は窓の地のすりガラスを透かし、真ん中のページだけ不透明な地にする。
+                // 真ん中は Finder・メールの中身の欄と同じ色（windowBackgroundColor は暗い表示で両脇より明るく、窓全体が明るく見えた）
                 ZStack(alignment: .top) {
                     HStack(spacing: 0) {
                         LibraryPane().frame(width: model.libraryWidth).padding(.horizontal, 6)
                         ContentPane()
-                            .background(Color(nsColor: .windowBackgroundColor).ignoresSafeArea())
+                            .background(Color(nsColor: .controlBackgroundColor).ignoresSafeArea())
                         if model.showRight { RightPane().frame(width: 340).padding(.horizontal, 6) }
                     }
                     SuggestionsOverlay(model: model)
