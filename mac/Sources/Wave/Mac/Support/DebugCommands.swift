@@ -37,6 +37,18 @@ enum DebugCommands {
             SearchPageModel.current?.tab = arg
             try? await Task.sleep(for: .milliseconds(2500))
             AppPaths.log("debug search-tab \(arg) podcasts=\(SearchPageModel.current?.podcasts.count ?? -1) episodes=\(SearchPageModel.current?.episodes.count ?? -1)")
+        case "search-fail":
+            // 開発用: 開いている検索のページを「読み込めなかった」にする（失敗の出し方の確かめ。network・http・parse・notLoggedIn）
+            let kinds: [String: FailureKind] = ["network": .network, "http": .http, "parse": .parse, "notLoggedIn": .notLoggedIn]
+            if let model = SearchPageModel.current {
+                model.songs = []
+                model.albums = []
+                model.artists = []
+                model.top = nil
+                model.failure = kinds[arg] ?? .network
+                model.podcastsFailure = kinds[arg] ?? .network
+                model.liveFailure = kinds[arg] ?? .network
+            }
         case "library-kind": window.libraryKind = arg.isEmpty || arg == "all" ? nil : arg
         case "search":
             // 上の検索欄に打って Enter を押したのと同じ
