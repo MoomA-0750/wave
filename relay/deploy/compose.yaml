@@ -1,0 +1,19 @@
+# Connect v2 の中継を Docker で動かす例（docs/connect-v2-operations.md）。このディレクトリで docker compose up -d
+services:
+  wave-relay-v2:
+    image: eclipse-temurin:21-jre-alpine
+    command: ["/app/bin/relay"]
+    working_dir: /app
+    environment:
+      WAVE_RELAY_PROTOCOL: "v2"
+      WAVE_RELAY_HOST: "${WAVE_RELAY_V2_HOST}"
+      WAVE_RELAY_DATA: "/data/household.json"
+      WAVE_RELAY_BIND: "0.0.0.0"
+      WAVE_RELAY_PORT: "8791"
+      WAVE_RELAY_BOOTSTRAP_KEYS: "${WAVE_RELAY_BOOTSTRAP_KEYS}"
+    volumes:
+      - ../build/install/relay:/app:ro
+      - ./data:/data
+    ports:
+      - "127.0.0.1:8792:8791"
+    restart: unless-stopped

@@ -1,11 +1,11 @@
 # Connect v2 の中継の運用（Phase 6b）
 
-中継 v2 は、家の端末一覧（署名付きの記録の鎖）と、暗号化した最新の再生状態を持つ（`dev/active/phase6b-plan.md`、ADR-0010 予定）。
+中継 v2 は、家の端末一覧（署名付きの記録の鎖）と、暗号化した最新の再生状態を持つ（[ADR-0010](adr/0010-connect-v2-state-server.md)）。
 中継は中身を読めない。ここに書くのは、中継を動かす人（本人）が general-console で行う操作だけ。
 
 ## 起動
 
-配布物（`relay/build/install/relay`）を Docker のコンテナで動かす（例は `dev/relay-deploy-v2/compose.yaml`）。中継は v2 だけになった（v1 は 2026-10-14 に消した）。`WAVE_RELAY_PROTOCOL=v2` が無いと起動しない。
+配布物（`relay/build/install/relay`）を Docker のコンテナで動かす（例は `relay/deploy/compose.yaml`。`relay/deploy/` で `docker compose up -d`）。中継は v2 だけになった（v1 は 2026-10-14 に消した）。`WAVE_RELAY_PROTOCOL=v2` が無いと起動しない。
 
 | 環境変数 | 値 |
 |---|---|

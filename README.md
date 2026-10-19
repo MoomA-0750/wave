@@ -76,7 +76,7 @@ mac/scripts/mac.sh ios-ipa  # iPhone 版の wave.ipa を組んで、この機械
 
 - 署名は Mac の画面側のターミナルで行う（`scripts/sign.command`。ssh からはログインキーチェーンが閉じていて署名できない）。Team ID の付いた署名にしておくと、組み直してもキーチェーンに保存したログイン情報をそのまま読める
 - ログイン情報は macOS のキーチェーン（このユーザー・この Mac だけ）に保存する。Windows の DPAPI に当たる
-- 再生は AVPlayer。署名付きの URL は渡さず、仮の URL（`wave-media://`）を渡して、求められた範囲をアプリが取って返す（Windows の DASH の DownloadRequested と同じ考え）
+- 再生は AVPlayer。署名付きの URL は渡さず、アプリの中の受け口（127.0.0.1 の LocalMediaServer）から HLS として渡し、求められた範囲をアプリが取って返す。目次が読めない形式と MV は仮の URL（`wave-media://`）で同じことをする
 
 ## Discord に再生中の曲を出す（Windows・macOS）
 

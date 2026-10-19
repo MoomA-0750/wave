@@ -8,3 +8,5 @@ build/
 .kotlin/
 scripts/win.env
 .claude/worktrees/
+__pycache__/
+relay/deploy/data/
