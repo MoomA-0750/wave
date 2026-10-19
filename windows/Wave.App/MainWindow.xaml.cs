@@ -142,6 +142,40 @@ public sealed partial class MainWindow : Window
         SearchBox.Width = width < 1100 ? 300 : 440;
     }
 
+    // 大きさが変わったあと（並べ終えてから）呼ばれるので、ここで位置を測る
+    private void OnSearchBarSizeChanged(object sender, SizeChangedEventArgs e) => CenterSearch();
+
+    /// <summary>
+    /// 検索の並びを窓の中央に置く。TitleBar の中身は「戻る・進む」と「アカウント＋窓の操作ボタン」の間の欄に
+    /// 置かれ、右の方が広いので、欄の中で中央に置くと窓の中央より左へずれる。窓の中央に来る分だけ片側に余白を足す。
+    /// 中身の置き場は、ふだんは中身の幅で欄の中央に置かれ（余白を足すと置き場ごと半分戻る）、窓が低いときは左詰めになる。
+    /// </summary>
+    private void CenterSearch()
+    {
+        if (Root.ActualWidth <= 0 || SearchBar.ActualWidth <= 0) return;
+        if (VisualTreeHelper.GetParent(SearchBar) is not FrameworkElement presenter) return;
+        if (VisualTreeHelper.GetParent(presenter) is not FrameworkElement column) return;
+        var width = SearchBar.ActualWidth;
+        var target = Root.ActualWidth / 2 - width / 2;
+        var columnLeft = column.TransformToVisual(Root).TransformPoint(new Windows.Foundation.Point(0, 0)).X;
+        double shift;
+        if (presenter.HorizontalAlignment == HorizontalAlignment.Left)
+        {
+            var origin = presenter.TransformToVisual(Root).TransformPoint(new Windows.Foundation.Point(0, 0)).X;
+            shift = target - origin;
+        }
+        else
+        {
+            // 置き場の左 = 欄の左 + (欄の幅 - 中身 - 余白) / 2、中身の左 = 置き場の左 + 余白
+            shift = 2 * (target - columnLeft) - column.ActualWidth + width;
+        }
+        var room = Math.Max(0, column.ActualWidth - width);
+        shift = Math.Clamp(shift, -room, room);
+        var next = new Thickness(Math.Max(0, shift), 0, Math.Max(0, -shift), 0);
+        if (Math.Abs(next.Left - SearchBar.Margin.Left) < 1 && Math.Abs(next.Right - SearchBar.Margin.Right) < 1) return;
+        SearchBar.Margin = next;
+    }
+
 #if DEBUG
     /// <summary>開発用: 右の欄を切り替える（nowplaying / queue / history / ai / ai-toggle）。</summary>
     public void DebugPane(string which)

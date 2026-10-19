@@ -18,7 +18,7 @@
         </Grid.RowDefinitions>
 
         <!-- 左上のアイコンと名前は出さない（タスクバーの名前はウィンドウの Title で出る） -->
-        <TitleBar x:Name="AppTitleBar" IsBackButtonVisible="False">
+        <TitleBar x:Name="AppTitleBar" IsBackButtonVisible="False" SizeChanged="OnSearchBarSizeChanged">
             <TitleBar.LeftHeader>
                 <!-- 戻る・進む（同じ大きさの2つのボタン。タイトルバー備え付けの戻るは使わない） -->
                 <StackPanel Orientation="Horizontal" Spacing="2" Margin="4,0,4,0" VerticalAlignment="Center">
@@ -33,7 +33,8 @@
                 </StackPanel>
             </TitleBar.LeftHeader>
             <TitleBar.Content>
-                <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
+                <!-- 中身の置き場は左右の欄と窓の操作ボタンの間なので、そのままだと左へ寄る。CenterSearch で窓の中央へ寄せる -->
+                <StackPanel x:Name="SearchBar" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center" SizeChanged="OnSearchBarSizeChanged">
                     <Button x:Name="HomeButton" Click="OnHome" ToolTipService.ToolTip="{x:Bind app:L.T('ホーム', 'Home')}" CornerRadius="16" Height="32" Width="40" Padding="0">
                         <FontIcon Glyph="&#xE80F;" FontSize="14" />
                     </Button>
