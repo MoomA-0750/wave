@@ -75,7 +75,7 @@ fun DevicePickerSheet(
             } else {
                 val others =
                     members
-                        .filter { it.role == Role.Player && if (playing == null) !it.isSelf else it.deviceId != playing.deviceId }
+                        .filter { it.role == Role.Player && !it.isApi && if (playing == null) !it.isSelf else it.deviceId != playing.deviceId }
                         .sortedWith(compareByDescending<ConnectV2Manager.MemberView> { it.isSelf }.thenByDescending { it.online })
                 if (others.isNotEmpty()) {
                     Text(stringResource(R.string.devices_select_another), Modifier.padding(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 8.dp), style = MaterialTheme.typography.titleMediumEmphasized)

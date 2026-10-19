@@ -21,6 +21,12 @@ public static class Pairing
     public const long LifetimeMs = 2 * 60 * 1000L;
     public const int MaxAttempts = 3;
     private const int MaxExtensionChars = 2048;
+    /// <summary>
+    /// ログインをまだ持たない加わる側（wave-api、ADR-0015）が、アカウントの HMAC に使う値（Android の Pairing.ACCOUNTLESS_ID と同じ）。
+    /// 誰でも計算できる印で、「アカウントを照らし合わせられない」ことを A に伝えるだけ（照合は誤操作の防止で防御ではない。守りは6桁の照合）。
+    /// </summary>
+    public const string AccountlessId = "wave-accountless-v1";
+
     private const string Label = "wave-pair-v1";
     private const string OfferPrefix = "wave-pair:";
 
@@ -83,7 +89,8 @@ public static class Pairing
 
     /// <summary>確定したペア。</summary>
     /// <param name="PeerExtension">相手の拡張（A から見た B の Hello、B から見た A の Confirm）。署名で確かめた値。</param>
-    public sealed record Established(byte[] PeerPublicKey, string PeerDeviceName, byte[] SendKey, byte[] ReceiveKey, byte[] AccountKey, string? PeerExtension = null);
+    /// <param name="PeerAccountless">A から見て、B がログインをまだ持たない（AccountlessId で照合した）。加えた後にログインを渡す相手</param>
+    public sealed record Established(byte[] PeerPublicKey, string PeerDeviceName, byte[] SendKey, byte[] ReceiveKey, byte[] AccountKey, string? PeerExtension = null, bool PeerAccountless = false);
 
     /// <summary>B 側の結果: 表示する6桁と、確定したときに保存するペア。</summary>
     public sealed record Confirmed(string Code, Established Pair);
@@ -219,9 +226,14 @@ public static class Pairing
                 if (sigB is null) return Result<Confirm>.Fail(Failure.Malformed);
                 if (!WaveCrypto.Verify(pkB, Label + "-b", SignedTranscript(transcript, body.Extension), sigB)) return Result<Confirm>.Fail(Failure.BadSignature);
                 var keys = Schedule(prk, transcript, self: pkA, peer: pkBBytes);
-                if (!WaveCrypto.ConstantTimeEquals(AccountHmac(keys.AccountKey, accountId), B64.Decode(body.AccountHmac) ?? [])) return Result<Confirm>.Fail(Failure.AccountMismatch);
+                var peerHmac = B64.Decode(body.AccountHmac) ?? [];
+                bool accountless;
+                if (WaveCrypto.ConstantTimeEquals(AccountHmac(keys.AccountKey, accountId), peerHmac)) accountless = false;
+                // ログインをまだ持たない B（wave-api）は印で照合する（ADR-0015）
+                else if (WaveCrypto.ConstantTimeEquals(AccountHmac(keys.AccountKey, AccountlessId), peerHmac)) accountless = true;
+                else return Result<Confirm>.Fail(Failure.AccountMismatch);
                 used = true;
-                pending = (keys.Sas, new Established(pkBBytes, SanitizeName(body.DeviceName), keys.SendKey, keys.ReceiveKey, keys.AccountKey, body.Extension));
+                pending = (keys.Sas, new Established(pkBBytes, SanitizeName(body.DeviceName), keys.SendKey, keys.ReceiveKey, keys.AccountKey, body.Extension, accountless));
                 var confirm = new ConfirmBody
                 {
                     SigA = B64.Encode(identity.Sign(Label + "-a", SignedTranscript(transcript, confirmExtension))),

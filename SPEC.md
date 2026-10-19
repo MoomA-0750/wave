@@ -109,6 +109,7 @@
 - （仮）Mac・iPhone でほかの端末を映しているとき、OS（メディアキー・コントロールセンター・AirPods）からの一時停止は 0.4 秒待ってから送り、その前後 2 秒の間に音の出口が変わっていたら送らない。AirPods がほかの機械へ自動で移ると、OS が一時停止を送ってくるため（送ると、AirPods を持っていった機械の再生が止まる）。手で確かめる手順: AirPods をつないだ Mac で iPhone を映し、iPhone で鳴らして AirPods が iPhone へ移っても、iPhone が止まらないこと（未確認）
 - （仮）止まっている端末のキューと位置は、家で最後に鳴った再生に合わせておく
 - （仮）家から外された・中継の家が作り直されたときは画面で知らせ、本人が押したら家の記録を消して加わり直せる
+- （仮）家の端末に wave API（ほかのアプリ向けの API、[ADR-0015](docs/adr/0015-wave-api.md)）があると、Android・Windows の端末の一覧に「wave API」として出し、デバイスの一覧（「ここで再生」の行き先）には出さない。家の端末の一覧のその行に「ログインを渡す」があり、確認で「渡す」を押したときだけ、今のログインを wave API の鍵にだけ包んで送る（ログインしていなければ押せない）。ログインをまだ持たない wave API を加えた直後は、ログインを渡すよう促す。加える側は、ログインを持たない相手のアカウントの照合を印（`wave-accountless-v1`）で通す。自動テスト: `relay` の `ConnectSimulationTest.loginGrantReachesOnlyTheTargetAndIsNotReplayed`、相互運用（`CSharpInteropTest`・C# の `InteropTests` の login_grant・`AcceptsAccountlessKotlinPeer`）。手で確かめる手順: Pixel 3 で開発用の `v2_kind`（Windows は `connect-kind`）で家の端末を api にすると、デバイスの一覧から消え、端末の一覧に「ログインを渡す」と確認が出る（2026-10-19 に Pixel 3 で確かめた。Windows はボタンが出るところまで）
 
 ## 時計（Wear OS）
 

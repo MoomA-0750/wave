@@ -142,6 +142,8 @@ class ConnectV2Manager(
         val online: Boolean = false,
         /** PC（端末が知らせてきた種類。表示の絵だけ）。 */
         val isPc: Boolean = false,
+        /** wave-api（ほかのアプリ向けの API、ADR-0015）。音を出さないので「ここで再生」の行き先にしない。ログインを渡せる。 */
+        val isApi: Boolean = false,
     )
 
     private val mutableMembers = MutableStateFlow<List<MemberView>>(emptyList())
@@ -170,7 +172,7 @@ class ConnectV2Manager(
         mutableMembers.value =
             engine?.members.orEmpty().map { member ->
                 val self = member.deviceId == identity.deviceId
-                MemberView(member.deviceId, if (self) resources.getString(R.string.connect_v2_member_self) else known[member.deviceId] ?: resources.getString(R.string.connect_v2_member_unknown, member.deviceId.take(6)), self, member.role, member.deviceId in online, kinds[member.deviceId] == "pc")
+                MemberView(member.deviceId, if (self) resources.getString(R.string.connect_v2_member_self) else known[member.deviceId] ?: resources.getString(R.string.connect_v2_member_unknown, member.deviceId.take(6)), self, member.role, member.deviceId in online, kinds[member.deviceId] == "pc", kinds[member.deviceId] == "api")
             }
     }
 
@@ -411,6 +413,16 @@ class ConnectV2Manager(
             temp.writeText(labelsJson.encodeToString(kinds))
             if (!temp.renameTo(kindsFile)) temp.delete()
         }
+    }
+
+    /** 開発用: 家の端末（ID の頭か表示名）の種類を覚え直す（wave-api の行を、wave-api が加わる前に確かめる）。 */
+    fun debugSetKind(
+        device: String,
+        kind: String,
+    ) = post {
+        val target = client?.members?.firstOrNull { it.deviceId.startsWith(device) || labels[it.deviceId] == device } ?: return@post
+        rememberKind(target.deviceId, kind)
+        refreshInfo()
     }
 
     /** 加入の相手の名前を覚える（表示だけ）。 */
@@ -873,6 +885,23 @@ class ConnectV2Manager(
      * 家から他の端末を外す（player だけ、最後の player は外せない。中継はその端末の接続を切る）。@return 外したか
      * この端末自身を外すのは、まだ扱わない。
      */
+    /**
+     * 家の wave-api にログインを渡す（ADR-0015）。本人が確かめて押したときだけ呼ぶ。宛先の鍵にだけ包む。
+     * @return 送ったか（届いたかは分からない）
+     */
+    suspend fun grantLogin(
+        deviceId: String,
+        login: xyz.mooma0750.wave.core.auth.ExportedLogin,
+    ): Boolean {
+        if (deviceId == identity.deviceId) return false
+        val sent =
+            withContext(dispatcher) {
+                client?.sendLoginGrant(deviceId, login.cookie.reveal(), login.visitorData, login.dataSyncId?.reveal(), login.obtainedAtEpochMs) == true
+            }
+        Log.i(WaveApplication.LOG_TAG, "connect-v2 login grant sent=$sent")
+        return sent
+    }
+
     suspend fun removeMember(deviceId: String): Boolean {
         if (deviceId == identity.deviceId) return false
         val record =
@@ -997,6 +1026,6 @@ class ConnectV2Manager(
         const val QUEUE_DEBOUNCE_MS = 1_000L
         const val SETTLE_WAIT_MS = 10_000L
         const val MAX_LABEL_CHARS = 64
-        val KNOWN_KINDS = setOf("pc", "phone")
+        val KNOWN_KINDS = setOf("pc", "phone", "api")
     }
 }

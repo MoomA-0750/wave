@@ -1003,6 +1003,24 @@ public sealed class ConnectClient
     /// </summary>
     public bool RequestTransfer() => RequestTransfer(retried: false);
 
+    /// <summary>ログインを渡す命令の平文の上限（詰め物の2ブロック、中継の 16KB に収まる。Android と同じ）。</summary>
+    internal const int MaxLoginGrantPlaintext = 8000;
+
+    /// <summary>
+    /// 家の端末 target（wave-api）にログインを渡す（ADR-0015、Android の sendLoginGrant と同じ）。本人が押したときだけ呼ぶ。target の受け取りの鍵にだけ包む。
+    /// </summary>
+    /// <returns>送ったか（target が家の player でない・自分・大きすぎるなら false）</returns>
+    public bool SendLoginGrant(string target, string cookie, string? visitorData, string? dataSyncId, long obtainedAtEpochMs)
+    {
+        if (pendingStoreId is not null || target == signer.DeviceId) return false;
+        var current = chain;
+        if (current is null || !current.Members.ContainsKey(signer.DeviceId) || !current.Members.TryGetValue(target, out var member) || member.Keys.Role != Role.Player) return false;
+        var grant = new CommandBody.LoginGrant { CommandId = newId(), From = signer.DeviceId, To = target, Cookie = cookie, VisitorData = visitorData, DataSyncId = dataSyncId, ObtainedAtEpochMs = obtainedAtEpochMs };
+        var plaintext = ConnectJson.EncodeToUtf8<CommandBody>(grant);
+        if (plaintext.Length > MaxLoginGrantPlaintext) return false;
+        return send(new RelayV2.Control { Doc = DocSealer.Seal(signer, current, DocKind.Command, 1, null, epochMs(), plaintext, new HashSet<string> { target }) });
+    }
+
     /// <summary>家の端末 target に「ここで再生（引き取り）」を頼む（デバイスの一覧で端末を選んだ）。</summary>
     public bool RequestRemoteTransfer(string target)
     {

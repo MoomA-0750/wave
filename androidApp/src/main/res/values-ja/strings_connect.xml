@@ -98,4 +98,11 @@
     <string name="devices_not_set_up">ほかの端末と連携すると、再生を引き継げます</string>
     <string name="devices_settings">端末の連携の設定</string>
     <string name="nowplaying_artist_on_device">%1$s • %2$sで再生中</string>
+    <string name="connect_v2_grant_login">ログインを渡す</string>
+    <string name="connect_v2_grant_login_title">wave API にログインを渡しますか？</string>
+    <string name="connect_v2_grant_login_text">%1$s に YouTube のログインを渡します。ほかのアプリ（home-dashboard など）で、あなたのプレイリストや高く評価した曲を出せるようになります。wave API を動かす機械に入れる人は、これらを読めます。</string>
+    <string name="connect_v2_grant_login_confirm">渡す</string>
+    <string name="connect_v2_grant_login_sent">%1$s にログインを渡しました</string>
+    <string name="connect_v2_grant_login_failed">%1$s にログインを渡せませんでした（中継への接続を確かめてください）</string>
+    <string name="connect_v2_grant_login_prompt">%1$s はまだログインしていません。ログインを渡すと、あなたのプレイリストなどを出せるようになります。</string>
 </resources>

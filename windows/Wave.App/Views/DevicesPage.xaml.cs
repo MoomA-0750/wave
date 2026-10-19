@@ -116,14 +116,43 @@ public sealed partial class DevicesPage : Page
             row.Children.Add(text);
             if (!member.IsSelf)
             {
-                var remove = new Button { Content = L.T("外す", "Remove"), VerticalAlignment = VerticalAlignment.Center };
+                var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center };
+                // wave-api（ADR-0015）: 本人が押したときだけログインを渡す。ログインしていなければ押せない
+                if (member.IsApi)
+                {
+                    var grant = new Button { Content = L.T("ログインを渡す", "Give login"), IsEnabled = AppServices.Client.IsLoggedIn };
+                    grant.Click += async (_, _) => await GrantLoginAsync(member);
+                    actions.Children.Add(grant);
+                }
+                var remove = new Button { Content = L.T("外す", "Remove") };
                 remove.Click += async (_, _) => await RemoveAsync(member);
-                Grid.SetColumn(remove, 2);
-                row.Children.Add(remove);
+                actions.Children.Add(remove);
+                Grid.SetColumn(actions, 2);
+                row.Children.Add(actions);
             }
             if (i > 0) MemberList.Children.Add(new Border { Height = 1, Background = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"] });
             MemberList.Children.Add(row);
         }
+    }
+
+    private async Task GrantLoginAsync(MemberView member)
+    {
+        var dialog = new ContentDialog
+        {
+            Title = L.T("wave API にログインを渡しますか？", "Give your login to wave API?"),
+            Content = new TextBlock
+            {
+                TextWrapping = TextWrapping.Wrap,
+                Text = L.T($"「{member.Label}」に YouTube のログインを渡します。ほかのアプリ（home-dashboard など）で、あなたのプレイリストや高く評価した曲を出せるようになります。wave API を動かす機械に入れる人は、これらを読めます。",
+                    $"Your YouTube login will be sent to “{member.Label}”, so other apps (such as home-dashboard) can show your playlists and liked songs. Anyone who can get into the computer running wave API can read them."),
+            },
+            PrimaryButtonText = L.T("渡す", "Give"),
+            CloseButtonText = L.T("キャンセル", "Cancel"),
+            XamlRoot = XamlRoot,
+        };
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+        var sent = await Devices.GrantLoginAsync(member.DeviceId);
+        App.Window?.ShowToast(sent ? L.T($"「{member.Label}」にログインを渡しました", $"Sent your login to {member.Label}") : L.T("ログインを渡せませんでした（中継への接続を確かめてください）", "Couldn’t send your login (check your connection to the relay)"));
     }
 
     private async Task RemoveAsync(MemberView member)
@@ -158,6 +187,8 @@ public sealed partial class DevicesPage : Page
             PairingKind.ShowingOffer => L.T("加える端末で wave の「端末の連携」を開き、この QR を読み取ってください（PC なら下の文字列をコピーして貼り付けます）。2分で無効になります。", "On the device you’re adding, open Devices in wave and scan this QR code (on a PC, copy the text below and paste it). Expires in 2 minutes."),
             PairingKind.EnterCode => (pairing.Text is { } error ? error + "\n" : "") + L.T("加える端末に出ている6桁の数字を入力してください", "Enter the 6-digit code shown on the device you’re adding"),
             PairingKind.ShowCode => L.T($"「{pairing.PeerName}」に、この6桁の数字を入力してください", $"Enter this 6-digit code on “{pairing.PeerName}”"),
+            PairingKind.Done when pairing.GrantDeviceId is not null => L.T($"「{pairing.PeerName}」と連携しました。まだログインしていないので、下の端末の一覧の「ログインを渡す」から渡すと、あなたのプレイリストなどを出せるようになります。",
+                $"Connected with “{pairing.PeerName}”. It isn’t signed in yet — use “Give login” in the device list below so it can show your playlists."),
             PairingKind.Done => L.T($"「{pairing.PeerName}」と連携しました", $"Connected with “{pairing.PeerName}”"),
             PairingKind.Failed => pairing.Text ?? "",
             _ => "",

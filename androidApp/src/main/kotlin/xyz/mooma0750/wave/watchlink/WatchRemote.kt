@@ -259,7 +259,7 @@ class WatchRemote(
         val remote = manager.remotePlayback.value
         val devices =
             manager.members.value
-                .filter { it.role == xyz.mooma0750.wave.handoff.v2.Role.Player && !it.isSelf && it.deviceId != remote?.deviceId }
+                .filter { it.role == xyz.mooma0750.wave.handoff.v2.Role.Player && !it.isApi && !it.isSelf && it.deviceId != remote?.deviceId }
                 .map { RemoteDevice(it.deviceId, it.label, it.online, it.isPc) }
         return copy(playingOn = remote?.deviceLabel, devices = devices)
     }

@@ -67,6 +67,8 @@ class PairingV2Controller(
 
         data class Done(
             val peerName: String,
+            /** 加えた相手がログインをまだ持たない（wave-api、ADR-0015）。加えた直後にログインを渡すよう促す相手の ID。 */
+            val grantDeviceId: String? = null,
         ) : State
 
         data class Failed(
@@ -215,9 +217,10 @@ class PairingV2Controller(
                         if (memberKeys == null || !manager.addMember(memberKeys, established.peerPublicKey)) {
                             fail(str(R.string.connect_v2_add_failed))
                         } else {
-                            manager.rememberLabel(EnvelopeSealer.deviceId(established.peerPublicKey), established.peerDeviceName)
-                            Log.i(WaveApplication.LOG_TAG, "pairing-v2 established role=A")
-                            mutableState.value = State.Done(established.peerDeviceName)
+                            val peerId = EnvelopeSealer.deviceId(established.peerPublicKey)
+                            manager.rememberLabel(peerId, established.peerDeviceName)
+                            Log.i(WaveApplication.LOG_TAG, "pairing-v2 established role=A accountless=${established.peerAccountless}")
+                            mutableState.value = State.Done(established.peerDeviceName, peerId.takeIf { established.peerAccountless })
                         }
                         return@withTimeoutOrNull true
                     }

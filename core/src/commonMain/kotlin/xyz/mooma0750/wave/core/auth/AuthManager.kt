@@ -92,6 +92,12 @@ class AuthManager(
      */
     fun exportForWatch(): ByteArray? = mutableCredentials.value?.let(CredentialCodec::encode)
 
+    /**
+     * 家の wave-api へ渡すための、今のログインの値（ADR-0015）。ログインしていなければ null。
+     * 呼ぶのは本人が渡すと決めたときだけ。返した値は暗号化してすぐ捨てる（保存しない・ログに出さない）。
+     */
+    fun exportForService(): ExportedLogin? = mutableCredentials.value?.let { ExportedLogin(it.cookie, it.visitorData, it.dataSyncId, it.obtainedAtEpochMs) }
+
     /** 自分のスマホから受け取ったログインを保存する（[exportForWatch] の逆）。読めなければ null。 */
     suspend fun importFromPhone(bytes: ByteArray): SaveResult? {
         val credentials = (CredentialCodec.decode(bytes) as? DecodeResult.Ok)?.credentials ?: return null
@@ -113,3 +119,11 @@ class AuthManager(
         mutableState.value = state
     }
 }
+
+/** wave-api へ渡すログインの値（[AuthManager.exportForService]）。data class にしない（toString に値を出さない）。 */
+class ExportedLogin(
+    val cookie: Secret,
+    val visitorData: String?,
+    val dataSyncId: Secret?,
+    val obtainedAtEpochMs: Long,
+)

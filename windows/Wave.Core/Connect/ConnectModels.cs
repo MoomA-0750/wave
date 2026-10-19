@@ -150,6 +150,7 @@ public sealed record QueueBody
 [JsonDerivedType(typeof(Control), "control")]
 [JsonDerivedType(typeof(QueueAdd), "queue_add")]
 [JsonDerivedType(typeof(Profile), "profile")]
+[JsonDerivedType(typeof(LoginGrant), "login_grant")]
 public abstract record CommandBody
 {
     /// <summary>再生を始めた端末から、今の再生中の端末へ「止まって」（D-7）。</summary>
@@ -211,6 +212,23 @@ public abstract record CommandBody
         public required long BasedOnVersion { get; init; }
 
         public required string AccountTag { get; init; }
+    }
+
+    /// <summary>
+    /// ログインを渡す（ADR-0015、Android の CommandBody.LoginGrant と同じ）: 家の端末から wave-api（種類 api の端末）へ、本人が押したときだけ。
+    /// 宛先の端末の受け取りの鍵にだけ包む。値は WebView のログインで取った生の値。
+    /// </summary>
+    public sealed record LoginGrant : CommandBody
+    {
+        public required string CommandId { get; init; }
+        public required string From { get; init; }
+        public required string To { get; init; }
+        public required string Cookie { get; init; }
+        public string? VisitorData { get; init; }
+        public string? DataSyncId { get; init; }
+        public required long ObtainedAtEpochMs { get; init; }
+
+        public override string ToString() => $"LoginGrant {{ CommandId = {CommandId}, From = {From}, To = {To} }}";
     }
 
     /// <summary>端末の表示名を家のほかの端末に知らせる（名前は鎖に入れないので、加入した2台以外にも伝える）。</summary>

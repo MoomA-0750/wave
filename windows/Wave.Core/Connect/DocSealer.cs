@@ -38,15 +38,19 @@ public static class DocSealer
     public const int MaxPlaintext = 1024 * 1024;
 
     /// <summary>宛先は、書き手が検証した一覧の今の全端末。</summary>
-    public static SealedDoc Seal(IDeviceSigner signer, VerifiedChain chain, DocKind kind, long version, string? prevHash, long issuedAtEpochMs, byte[] plaintext)
+    /// <param name="only">包む宛先を家の一部の端末に絞る（ログインを渡す命令、ADR-0015）。null なら家の全端末</param>
+    public static SealedDoc Seal(IDeviceSigner signer, VerifiedChain chain, DocKind kind, long version, string? prevHash, long issuedAtEpochMs, byte[] plaintext,
+        IReadOnlySet<string>? only = null)
     {
         if (plaintext.Length > MaxPlaintext) throw new ArgumentException("plaintext too large", nameof(plaintext));
         if (!chain.Members.ContainsKey(signer.DeviceId)) throw new ArgumentException("writer is not a member", nameof(signer));
+        if (only is not null && (only.Count == 0 || !only.All(chain.Members.ContainsKey))) throw new ArgumentException("recipient is not a member", nameof(only));
         var header = new DocHeader { Kind = kind, HouseholdId = chain.HouseholdId, WriterId = signer.DeviceId, Version = version, PrevHash = prevHash, HeadSeq = chain.HeadSeq, HeadHash = chain.HeadHash, IssuedAtEpochMs = issuedAtEpochMs };
         var headerHash = WaveCrypto.Sha256(CanonicalHeader(header));
         var contentKey = WaveCrypto.RandomBytes(32);
         var (nonce, ciphertext) = WaveCrypto.Seal(contentKey, headerHash, Pad(plaintext));
         var recipients = chain.Members.Values
+            .Where(m => only is null || only.Contains(m.Keys.DeviceId))
             .OrderBy(m => m.Keys.DeviceId, StringComparer.Ordinal)
             .Select(member =>
             {

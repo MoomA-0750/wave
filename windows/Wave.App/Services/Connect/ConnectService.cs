@@ -428,7 +428,7 @@ public sealed class ConnectService
             engine?.HasRetreated == true,
             engine?.StoreResetPending == true,
             Relay?.Status ?? RelayStatus.Disconnected);
-        var members = (engine?.Members ?? []).Select(m => new MemberView(m.DeviceId, LabelOf(m.DeviceId), m.DeviceId == keys?.DeviceId, m.Role == Role.Controller, online.Contains(m.DeviceId), m.DeviceId == active, kinds.TryGetValue(m.DeviceId, out var k) && k == "pc")).ToList();
+        var members = (engine?.Members ?? []).Select(m => new MemberView(m.DeviceId, LabelOf(m.DeviceId), m.DeviceId == keys?.DeviceId, m.Role == Role.Controller, online.Contains(m.DeviceId), m.DeviceId == active, kinds.TryGetValue(m.DeviceId, out var k) && k == "pc", k == "api")).ToList();
         RemoteView? remote = null;
         if (engine?.LatestCursorBody() is { } latest && latest.Writer != keys?.DeviceId)
         {
@@ -599,7 +599,7 @@ public sealed class ConnectService
         if (e is ClientEvent.Profile profile)
         {
             var name = new string(profile.Name.Where(ch => !char.IsControl(ch) && ch is not ('\u202A' or '\u202B' or '\u202C' or '\u202D' or '\u202E' or '\u2066' or '\u2067' or '\u2068' or '\u2069' or '\u200E' or '\u200F')).ToArray()).Trim();
-            if (profile.Kind is "pc" or "phone" && (!kinds.TryGetValue(profile.DeviceId, out var knownKind) || knownKind != profile.Kind)) RememberKind(profile.DeviceId, profile.Kind);
+            if (profile.Kind is "pc" or "phone" or "api" && (!kinds.TryGetValue(profile.DeviceId, out var knownKind) || knownKind != profile.Kind)) RememberKind(profile.DeviceId, profile.Kind);
             if (name.Length > 0 && (!labels.TryGetValue(profile.DeviceId, out var known) || known != name)) RememberLabel(profile.DeviceId, name);
             else RefreshInfo();
             return;
@@ -1021,6 +1021,28 @@ public sealed class ConnectService
     });
 
     /// <summary>家から他の端末を外す。@return 外したか</summary>
+    /// <summary>
+    /// 家の wave-api にログインを渡す（ADR-0015）。本人が確かめて押したときだけ呼ぶ。宛先の鍵にだけ包む。
+    /// </summary>
+    /// <returns>送ったか（届いたかは分からない）。ログインしていなければ false</returns>
+    public async Task<bool> GrantLoginAsync(string deviceId)
+    {
+        if (deviceId == keys?.DeviceId) return false;
+        var (_, credentials) = AppServices.Credentials.Load();
+        if (credentials is null) return false;
+        var sent = await OnEngine(() => client?.SendLoginGrant(deviceId, credentials.RevealCookie(), credentials.VisitorData, credentials.RevealDataSyncId(), credentials.ObtainedAtEpochMs) == true);
+        AppPaths.Log($"connect-v2 login grant sent={sent}");
+        return sent;
+    }
+
+    /// <summary>開発用: 家の端末（表示名）の種類を覚え直す（wave-api の行を、wave-api が加わる前に確かめる）。</summary>
+    public void DebugSetKind(string label, string kind) => Post(() =>
+    {
+        if (Members.FirstOrDefault(m => m.Label == label) is not { } member) return;
+        RememberKind(member.DeviceId, kind);
+        RefreshInfo();
+    });
+
     public async Task<bool> RemoveMemberAsync(string deviceId)
     {
         if (deviceId == keys?.DeviceId) return false;
@@ -1241,9 +1263,11 @@ public sealed class ConnectService
                         Fail(L.T("端末を加えられませんでした", "Couldn’t add the device"));
                         return;
                     }
-                    RememberLabel(WaveCrypto.DeviceId(established.PeerPublicKey), established.PeerDeviceName);
-                    AppPaths.Log("pairing-v2 established role=A");
-                    SetPairing(PairingView.Done(established.PeerDeviceName));
+                    var peerId = WaveCrypto.DeviceId(established.PeerPublicKey);
+                    RememberLabel(peerId, established.PeerDeviceName);
+                    AppPaths.Log($"pairing-v2 established role=A accountless={established.PeerAccountless}");
+                    // ログインをまだ持たない相手（wave-api、ADR-0015）なら、続けてログインを渡すよう促す
+                    SetPairing(PairingView.Done(established.PeerDeviceName, established.PeerAccountless ? peerId : null));
                     return;
                 }
             }
@@ -1400,19 +1424,21 @@ public sealed record ConnectInfo(
     bool StoreResetPending = false,
     RelayStatus Relay = RelayStatus.Disconnected);
 
-public sealed record MemberView(string DeviceId, string Label, bool IsSelf, bool IsController, bool Online, bool Active, bool IsPc = false);
+/// <param name="IsApi">wave-api（ほかのアプリ向けの API、ADR-0015）。音を出さないので「ここで再生」の行き先にしない。ログインを渡せる</param>
+public sealed record MemberView(string DeviceId, string Label, bool IsSelf, bool IsController, bool Online, bool Active, bool IsPc = false, bool IsApi = false);
 
 public sealed record RemoteView(string DeviceId, string DeviceLabel, string? Title, string? Artist, string? ThumbnailUrl, int? DurationSeconds, bool Playing, long PositionMs, bool AccountMatches, bool Online);
 
 public enum PairingKind { Idle, Working, ShowingOffer, EnterCode, ShowCode, Done, Failed }
 
-public sealed record PairingView(PairingKind Kind, string? Text = null, string? OfferText = null, string? Code = null, string? PeerName = null)
+/// <param name="GrantDeviceId">加えた相手がログインをまだ持たない（wave-api、ADR-0015）。加えた直後にログインを渡すよう促す相手の ID</param>
+public sealed record PairingView(PairingKind Kind, string? Text = null, string? OfferText = null, string? Code = null, string? PeerName = null, string? GrantDeviceId = null)
 {
     public static readonly PairingView Idle = new(PairingKind.Idle);
     public static PairingView Working(string text) => new(PairingKind.Working, text);
     public static PairingView ShowingOffer(string offer) => new(PairingKind.ShowingOffer, OfferText: offer);
     public static PairingView EnterCode(string? message) => new(PairingKind.EnterCode, message);
     public static PairingView ShowCode(string code, string peer) => new(PairingKind.ShowCode, Code: code, PeerName: peer);
-    public static PairingView Done(string peer) => new(PairingKind.Done, PeerName: peer);
+    public static PairingView Done(string peer, string? grantDeviceId = null) => new(PairingKind.Done, PeerName: peer, GrantDeviceId: grantDeviceId);
     public static PairingView Failed(string message) => new(PairingKind.Failed, message);
 }

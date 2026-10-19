@@ -133,6 +133,12 @@ class CSharpInteropTest {
             positions = mapOf("https://feeds.example/1.mp3" to LibraryPosition(60, 600, false, 1_700_000_000_020), "https://feeds.example/2.mp3" to LibraryPosition(5, null, true, 1_700_000_000_030)),
         )
 
+    /** C# の InteropTests.SampleLoginGrant と同じもの（値は合成）。 */
+    private fun sampleLoginGrant(
+        from: String,
+        to: String,
+    ) = CommandBody.LoginGrant("grant-0000000000000001", from, to, "SAPISID=synthetic-sapisid; HSID=synthetic", "synthetic-visitor", "synthetic-sync||x", 1_700_000_000_000)
+
     private fun accountTag(
         householdId: String,
         accountId: String,
@@ -181,16 +187,23 @@ class CSharpInteropTest {
         // ライブラリ（ADR-0013）は操作だけの端末（PC）も書ける
         val libraryBody = sampleLibrary()
         val libraryDoc = DocSealer.seal(pc, chain, DocKind.Library, 1, null, 1_700_000_000_006, ConnectJson.json.encodeToString(LibraryBody.serializer(), libraryBody).encodeToByteArray())
+        // ログインを渡す命令（ADR-0015）: 宛先（B）の鍵にだけ包む。値は合成
+        val grant: CommandBody = sampleLoginGrant(a.deviceId, b.deviceId)
+        val grantText = ConnectJson.json.encodeToString(CommandBody.serializer(), grant)
+        val grantDoc = DocSealer.seal(a, chain, DocKind.Command, 1, null, 1_700_000_000_007, grantText.encodeToByteArray(), only = setOf(b.deviceId))
 
         fun docEntry(
             name: String,
             doc: SealedDoc,
             plaintext: String,
+            openers: List<String>? = null,
         ) = buildJsonObject {
             put("name", name)
             put("doc", ConnectJson.json.encodeToJsonElement(SealedDoc.serializer(), doc))
             put("plaintext", plaintext)
             put("hash", DocSealer.hash(doc))
+            // 開ける端末（無ければ家の全端末）
+            openers?.let { list -> put("openers", buildJsonArray { list.forEach { add(JsonPrimitive(it)) } }) }
         }
 
         // ペアリング（A = Responder、B = Initiator）。使い捨ての鍵を書き出し、C# が同じ鍵で相手の側を再現する
@@ -207,6 +220,13 @@ class CSharpInteropTest {
         val responderEphemeral = field<KeyPair>(responder, "ephemeral")
         val initiatorEphemeral = field<KeyPair>(initiator, "ephemeral")
         val pairingJson = Pairing::class.java.getDeclaredField("json").let { it.isAccessible = true; it.get(Pairing) as kotlinx.serialization.json.Json }
+        // ログインをまだ持たない B（wave-api、ADR-0015）: A は印で照合して受ける
+        val responderAccountless = Pairing.Responder(a.identityPrivate, a.identityPublic, "Pixel 3", "account-1", nowMs = { 0 }, confirmExtension = joinInfoJson)
+        val accountlessOfferText = Pairing.encodeOffer(responderAccountless.offer)
+        val initiatorAccountless = Pairing.Initiator(Pairing.decodeOffer(accountlessOfferText)!!, b.identityPrivate, b.identityPublic, "wave API", null, helloExtension = memberKeysJson)
+        val accountlessHello = initiatorAccountless.hello()
+        val (accountlessCode, _) = initiatorAccountless.onConfirm(responderAccountless.onHello(accountlessHello).getOrThrow()).getOrThrow()
+        check(responderAccountless.onCodeEntered(accountlessCode).getOrThrow().peerAccountless)
 
         val stored = StoredState(StateKind.Cursor, 4, cursorDoc, "store-1", 1_700_000_000_100, 1_700_000_000_200, a.deviceId)
         val relay =
@@ -278,6 +298,7 @@ class CSharpInteropTest {
                         add(docEntry("command", commandDoc, ConnectJson.json.encodeToString(CommandBody.serializer(), command)))
                         add(docEntry("profile", profileDoc, ConnectJson.json.encodeToString(ProfileBody.serializer(), ProfileBody("Windows PC"))))
                         add(docEntry("library", libraryDoc, ConnectJson.json.encodeToString(LibraryBody.serializer(), libraryBody)))
+                        add(docEntry("login_grant", grantDoc, grantText, openers = listOf("b")))
                     },
                 )
                 put("handoff", buildJsonObject { put("handoffId", handoffId); put("text", snapshotText) })
@@ -301,6 +322,15 @@ class CSharpInteropTest {
                         put("aReceiveKey", b64.encodeToString(pairOnA.receiveKey))
                         put("accountKey", b64.encodeToString(pairOnA.accountKey))
                         put("bSendKey", b64.encodeToString(pairOnB.sendKey))
+                        put(
+                            "accountless",
+                            buildJsonObject {
+                                put("offer", accountlessOfferText)
+                                put("responderEphemeral", b64.encodeToString(field<KeyPair>(responderAccountless, "ephemeral").private.encoded))
+                                put("hello", pairingJson.encodeToJsonElement(Pairing.Hello.serializer(), accountlessHello))
+                                put("code", accountlessCode)
+                            },
+                        )
                     },
                 )
             }
@@ -335,7 +365,12 @@ class CSharpInteropTest {
         for (entry in fixture.getValue("docs").jsonArray.map { it.jsonObject }) {
             val doc = ConnectJson.json.decodeFromJsonElement(SealedDoc.serializer(), entry.getValue("doc"))
             assertEquals(str(entry, "hash"), DocSealer.hash(doc), str(entry, "name"))
-            for (device in listOf(a, b, pc)) {
+            val openers = entry["openers"]?.jsonArray?.map { it.jsonPrimitive.content }?.toSet() ?: setOf("a", "b", "pc")
+            for ((name, device) in listOf("a" to a, "b" to b, "pc" to pc)) {
+                if (name !in openers) {
+                    assertEquals(DocOpen.Rejected("not_for_me"), DocSealer.open(doc, chain, device), str(entry, "name"))
+                    continue
+                }
                 val opened = assertIs<DocOpen.Ok>(DocSealer.open(doc, chain, device), str(entry, "name"))
                 assertEquals(str(entry, "plaintext"), opened.plaintext.decodeToString())
             }
@@ -347,6 +382,11 @@ class CSharpInteropTest {
                 }
                 "cursor" -> assertEquals(HandoffRepeat.One, ConnectJson.json.decodeFromString(CursorBody.serializer(), str(entry, "plaintext")).repeat)
                 "command" -> assertIs<CommandBody.Yield>(ConnectJson.json.decodeFromString(CommandBody.serializer(), str(entry, "plaintext")))
+                "login_grant" -> {
+                    val grant = assertIs<CommandBody.LoginGrant>(ConnectJson.json.decodeFromString(CommandBody.serializer(), str(entry, "plaintext")))
+                    assertEquals(sampleLoginGrant(a.deviceId, b.deviceId), grant)
+                    assertEquals(listOf(b.deviceId), doc.recipients.map { it.deviceId })
+                }
                 "library" -> {
                     val body = ConnectJson.json.decodeFromString(LibraryBody.serializer(), str(entry, "plaintext"))
                     assertEquals(sampleLibrary(), body)

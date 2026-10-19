@@ -157,6 +157,8 @@ object DebugActions {
                     val result = kotlinx.coroutines.withContext(Dispatchers.IO) { KeystoreProbe.run(container, op, count) }
                     Log.i(WaveApplication.LOG_TAG, "debug keystore_probe op=$op $result")
                 }
+                // 家の端末の種類を覚え直す（device=ID の頭、kind=api|pc|phone）。wave-api の行の見た目を確かめる
+                "v2_kind" -> container.connectV2?.debugSetKind(intent.getStringExtra("device").orEmpty().ifEmpty { "-" }, intent.getStringExtra("kind").orEmpty())
                 "v2_info" -> {
                     val manager = container.connectV2
                     if (manager == null) {

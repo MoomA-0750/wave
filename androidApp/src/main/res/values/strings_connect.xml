@@ -99,4 +99,11 @@
     <string name="devices_not_set_up">Connect your other devices to move playback between them</string>
     <string name="devices_settings">Device settings</string>
     <string name="nowplaying_artist_on_device">%1$s • Playing on %2$s</string>
+    <string name="connect_v2_grant_login">Give login</string>
+    <string name="connect_v2_grant_login_title">Give your login to wave API?</string>
+    <string name="connect_v2_grant_login_text">Your YouTube login will be sent to %1$s, so other apps (such as home-dashboard) can show your playlists and liked songs. Anyone who can get into the computer running wave API can read them.</string>
+    <string name="connect_v2_grant_login_confirm">Give</string>
+    <string name="connect_v2_grant_login_sent">Sent your login to %1$s</string>
+    <string name="connect_v2_grant_login_failed">Couldn\'t send your login to %1$s (check your connection to the relay)</string>
+    <string name="connect_v2_grant_login_prompt">%1$s isn\'t signed in yet. Give it your login so it can show your playlists.</string>
 </resources>

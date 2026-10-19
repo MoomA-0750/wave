@@ -65,6 +65,9 @@ public static class DebugCommands
             case "settings":
                 Nav.Settings();
                 break;
+            case "devices":
+                Nav.Devices();
+                break;
             case "liked":
                 Nav.LikedSongs();
                 break;
@@ -393,12 +396,16 @@ public static class DebugCommands
                 // デバイスの一覧で、名前の一致する端末を選んだのと同じ
                 if (AppServices.Connect.Members.FirstOrDefault(m => m.Label == arg) is { } device) AppServices.Connect.PlayOnDevice(device.DeviceId);
                 break;
+            case "connect-kind":
+                // 「表示名|種類」の端末の種類を覚え直す（wave-api の行の見た目を確かめる）
+                if (arg.Split('|') is [var label, var kind]) AppServices.Connect.DebugSetKind(label, kind);
+                break;
             case "connect-state":
                 {
                     var c = AppServices.Connect;
                     var p = c.PairingState;
                     AppPaths.Log($"debug connect relay={c.Info.Relay} household={c.Info.InHousehold} pairing={p.Kind} code={p.Code} peer={p.PeerName} offer={p.OfferText != null} text={p.Text}");
-                    foreach (var m in c.Members) AppPaths.Log($"debug connect member label={m.Label} self={m.IsSelf} online={m.Online} active={m.Active} pc={m.IsPc} controller={m.IsController}");
+                    foreach (var m in c.Members) AppPaths.Log($"debug connect member label={m.Label} self={m.IsSelf} online={m.Online} active={m.Active} pc={m.IsPc} controller={m.IsController} api={m.IsApi}");
                     if (c.Remote is { } r) AppPaths.Log($"debug connect remote device={r.DeviceLabel} title={r.Title} playing={r.Playing} positionMs={r.PositionMs} online={r.Online}");
                     break;
                 }

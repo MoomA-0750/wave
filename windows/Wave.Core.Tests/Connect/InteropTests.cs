@@ -58,14 +58,21 @@ public class InteropTests
     public void OpensKotlinDocs()
     {
         var chain = fixture["chain"]!.AsArray().Select(n => Decode<ChainRecord>(n!)).ToList().Verified();
-        var devices = new[] { "a", "b", "pc" }.Select(Device).ToList();
+        var devices = new[] { "a", "b", "pc" }.ToDictionary(n => n, Device);
         foreach (var entry in fixture["docs"]!.AsArray())
         {
             var doc = Decode<SealedDoc>(entry!["doc"]!);
             Assert.Equal(Str(entry, "hash"), DocSealer.Hash(doc));
             Assert.Equal(entry["doc"]!.ToJsonString(), ConnectJson.Encode(doc));
-            foreach (var device in devices)
+            // 開ける端末（無ければ家の全端末）。宛先を絞った doc は、ほかの端末では開けない
+            var openers = entry["openers"]?.AsArray().Select(n => n!.GetValue<string>()).ToHashSet() ?? ["a", "b", "pc"];
+            foreach (var (name, device) in devices)
             {
+                if (!openers.Contains(name))
+                {
+                    Assert.Equal(new DocOpen.Rejected("not_for_me"), DocSealer.Open(doc, chain, device));
+                    continue;
+                }
                 var opened = Assert.IsType<DocOpen.Ok>(DocSealer.Open(doc, chain, device));
                 Assert.Equal(Str(entry, "plaintext"), Encoding.UTF8.GetString(opened.Plaintext));
             }
@@ -89,6 +96,13 @@ public class InteropTests
                     break;
                 case "profile":
                     Assert.Equal("Windows PC", ConnectJson.Decode<ProfileBody>(plaintext)!.Name);
+                    break;
+                case "login_grant":
+                    // ログインを渡す命令（ADR-0015）: 宛先（B）にだけ包まれ、書き直すと同じ文字列
+                    var grant = Assert.IsType<CommandBody.LoginGrant>(ConnectJson.Decode<CommandBody>(plaintext));
+                    Assert.Equal(SampleLoginGrant(devices["a"].DeviceId, devices["b"].DeviceId), grant);
+                    Assert.Equal(plaintext, ConnectJson.Encode<CommandBody>(grant));
+                    Assert.Equal([devices["b"].DeviceId], doc.Recipients.Select(r => r.DeviceId));
                     break;
                 case "library":
                     // 操作だけの端末（PC）が書いたライブラリ（ADR-0013）を、家のどの端末も開ける。書き直すと同じバイト
@@ -170,6 +184,21 @@ public class InteropTests
         Assert.Equal(confirmed.Pair.PeerExtension, ConnectJson.Encode(joinInfo));
     }
 
+    /// <summary>ログインをまだ持たない Kotlin の B（wave-api、ADR-0015）を、C# の A が印で照合して受ける。</summary>
+    [Fact]
+    public void AcceptsAccountlessKotlinPeer()
+    {
+        var p = fixture["pairing"]!["accountless"]!;
+        var offer = Pairing.DecodeOffer(Str(p, "offer"))!;
+        var hello = Pairing.DecodeHello(JsonSerializer.SerializeToElement(p["hello"]))!;
+        using var a = Device("a");
+        var responder = new Pairing.Responder(a, "Pixel 3", "account-1", () => 0, "account-1", null, EphemeralFromPkcs8(Str(p, "responderEphemeral")), B64.Decode(offer.Token)!);
+        Assert.True(responder.OnHello(hello).IsSuccess);
+        var pair = responder.OnCodeEntered(Str(p, "code")).GetOrThrow();
+        Assert.True(pair.PeerAccountless);
+        Assert.Equal("wave API", pair.PeerDeviceName);
+    }
+
     /// <summary>C# で作った成果物を書き出す（Kotlin の CSharpInteropTest.verifyCSharpFixtures が検証する）。</summary>
     [Fact]
     public void WriteCSharpFixtures()
@@ -202,6 +231,9 @@ public class InteropTests
         var libraryBody = SampleLibrary();
         var libraryDoc = DocSealer.Seal(pc, chain, DocKind.Library, 1, null, 1_700_000_000_006, ConnectJson.EncodeToUtf8(libraryBody));
         var libraryState = new LibraryState { Version = 1, Doc = libraryDoc, StoreId = "store-1" };
+        // ログインを渡す命令（ADR-0015）: 宛先（B）の鍵にだけ包む。値は合成
+        CommandBody grant = SampleLoginGrant(a.DeviceId, b.DeviceId);
+        var grantDoc = DocSealer.Seal(a, chain, DocKind.Command, 1, null, 1_700_000_000_007, ConnectJson.EncodeToUtf8(grant), new HashSet<string> { b.DeviceId });
 
         // ペアリング（どちらも C#）。使い捨ての鍵を書き出し、Kotlin が同じ鍵で相手の側を再現する
         var joinInfo = new ConnectClient.JoinInfo { HouseholdId = chain.HouseholdId, HeadSeq = chain.HeadSeq, HeadHash = chain.HeadHash, StoreId = "store-1", CursorFloor = 4, QueueFloor = 1 };
@@ -265,13 +297,19 @@ public class InteropTests
             new RelayV2.Library { Stored = libraryState },
         ];
 
-        JsonObject DocEntry(string name, SealedDoc doc, string plaintext) => new()
+        JsonObject DocEntry(string name, SealedDoc doc, string plaintext, string[]? openers = null)
         {
-            ["name"] = name,
-            ["doc"] = JsonSerializer.SerializeToNode(doc, ConnectJson.Options),
-            ["plaintext"] = plaintext,
-            ["hash"] = DocSealer.Hash(doc),
-        };
+            var entry = new JsonObject
+            {
+                ["name"] = name,
+                ["doc"] = JsonSerializer.SerializeToNode(doc, ConnectJson.Options),
+                ["plaintext"] = plaintext,
+                ["hash"] = DocSealer.Hash(doc),
+            };
+            // 開ける端末（無ければ家の全端末）
+            if (openers is not null) entry["openers"] = new JsonArray(openers.Select(o => (JsonNode)o).ToArray());
+            return entry;
+        }
 
         var output = new JsonObject
         {
@@ -285,7 +323,8 @@ public class InteropTests
                 DocEntry("cursor", cursorDoc, ConnectJson.Encode(cursorBody)),
                 DocEntry("command", commandDoc, ConnectJson.Encode(command)),
                 DocEntry("profile", profileDoc, ConnectJson.Encode(profile)),
-                DocEntry("library", libraryDoc, ConnectJson.Encode(libraryBody))),
+                DocEntry("library", libraryDoc, ConnectJson.Encode(libraryBody)),
+                DocEntry("login_grant", grantDoc, ConnectJson.Encode(grant), ["b"])),
             ["handoff"] = new JsonObject { ["handoffId"] = HandoffId, ["text"] = snapshotText },
             ["relay"] = new JsonArray(relay.Select(m => (JsonNode)RelayV2.Encode(m)).ToArray()),
             ["pairing"] = new JsonObject
@@ -306,6 +345,13 @@ public class InteropTests
         var directory = SourceFixtureDirectory();
         File.WriteAllText(Path.Combine(directory, "csharp.json"), output.ToJsonString(new JsonSerializerOptions { WriteIndented = true, Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping }) + "\n");
     }
+
+    /// <summary>Kotlin の CSharpInteropTest の sampleLoginGrant と同じもの（値は合成）。</summary>
+    internal static CommandBody.LoginGrant SampleLoginGrant(string from, string to) => new()
+    {
+        CommandId = "grant-0000000000000001", From = from, To = to, Cookie = "SAPISID=synthetic-sapisid; HSID=synthetic",
+        VisitorData = "synthetic-visitor", DataSyncId = "synthetic-sync||x", ObtainedAtEpochMs = 1_700_000_000_000,
+    };
 
     /// <summary>Kotlin の CSharpInteropTest の sampleLibrary と同じもの。</summary>
     internal static LibraryBody SampleLibrary() => new()

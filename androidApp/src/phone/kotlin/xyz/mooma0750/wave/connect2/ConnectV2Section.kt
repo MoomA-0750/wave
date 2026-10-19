@@ -70,6 +70,10 @@ fun ConnectV2Section(container: AppContainer) {
     var removeMessage by remember { mutableStateOf<String?>(null) }
     var scanning by remember { mutableStateOf(false) }
     var confirmTransfer by remember { mutableStateOf(false) }
+    // ログインを渡す相手（ID と表示名）
+    var granting by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var grantMessage by remember { mutableStateOf<String?>(null) }
+    val authState by container.authManager.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val cameraPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted -> scanning = granted }
     val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
@@ -151,12 +155,17 @@ fun ConnectV2Section(container: AppContainer) {
         for (member in members) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(if (member.role == Role.Controller) stringResource(R.string.connect_v2_member_controller, member.label) else member.label, modifier = Modifier.weight(1f))
+                // wave-api（ADR-0015）: 本人が押したときだけログインを渡す。ログインしていなければ押せない
+                if (member.isApi) {
+                    TextButton(enabled = authState is xyz.mooma0750.wave.core.auth.AuthState.LoggedIn, onClick = { granting = member.deviceId to member.label }) { Text(stringResource(R.string.connect_v2_grant_login)) }
+                }
                 if (!member.isSelf) {
                     TextButton(enabled = !removeBusy, onClick = { removing = member }) { Text(stringResource(R.string.connect_v2_remove)) }
                 }
             }
         }
         removeMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+        grantMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
     }
 
     if (scanning) {
@@ -213,7 +222,22 @@ fun ConnectV2Section(container: AppContainer) {
         }
         is PairingV2Controller.State.Done -> {
             Text(stringResource(R.string.connect_v2_joined, state.peerName))
-            OutlinedButton(onClick = { pairing.cancel() }) { Text(stringResource(R.string.connect_close)) }
+            val grantTo = state.grantDeviceId
+            if (grantTo == null) {
+                OutlinedButton(onClick = { pairing.cancel() }) { Text(stringResource(R.string.connect_close)) }
+            } else {
+                // ログインをまだ持たない相手（wave-api）: 続けてログインを渡すよう促す（渡すかは本人が確かめて決める）
+                Text(stringResource(R.string.connect_v2_grant_login_prompt, state.peerName), style = MaterialTheme.typography.bodySmall)
+                ActionButtonGroup(
+                    listOf(
+                        GroupAction(stringResource(R.string.connect_v2_grant_login), primary = true, enabled = authState is xyz.mooma0750.wave.core.auth.AuthState.LoggedIn) {
+                            granting = grantTo to state.peerName
+                            pairing.cancel()
+                        },
+                        GroupAction(stringResource(R.string.connect_close)) { pairing.cancel() },
+                    ),
+                )
+            }
         }
         is PairingV2Controller.State.Failed -> {
             Text(state.message, color = MaterialTheme.colorScheme.error)
@@ -240,6 +264,26 @@ fun ConnectV2Section(container: AppContainer) {
                 }) { Text(stringResource(R.string.connect_v2_remove)) }
             },
             dismissButton = { TextButton(onClick = { removing = null }) { Text(stringResource(R.string.connect_cancel)) } },
+        )
+    }
+
+    granting?.let { (deviceId, label) ->
+        AlertDialog(
+            onDismissRequest = { granting = null },
+            title = { Text(stringResource(R.string.connect_v2_grant_login_title)) },
+            text = { Text(stringResource(R.string.connect_v2_grant_login_text, label)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    granting = null
+                    grantMessage = null
+                    scope.launch {
+                        val login = container.authManager.exportForService()
+                        val sent = login != null && manager.grantLogin(deviceId, login)
+                        grantMessage = context.getString(if (sent) R.string.connect_v2_grant_login_sent else R.string.connect_v2_grant_login_failed, label)
+                    }
+                }) { Text(stringResource(R.string.connect_v2_grant_login_confirm)) }
+            },
+            dismissButton = { TextButton(onClick = { granting = null }) { Text(stringResource(R.string.connect_cancel)) } },
         )
     }
 
