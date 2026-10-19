@@ -94,7 +94,9 @@ final class AudioEngine {
         player.automaticallyWaitsToMinimizeStalling = true
         rateObservation = player.observe(\.timeControlStatus, options: [.new]) { [weak self] p, _ in
             let playing = p.timeControlStatus != .paused
-            MainActor.assumeIsolated { self?.onPlayingChanged?(playing) }
+            // 通知は AVPlayer が中のロックを持ったまま（play() の中など）送ってくる。ここで位置（currentTime）を読むと
+            // ライブの HLS で止まったままになった（メインスレッドが固まる）ので、AVPlayer の処理が終わってから回す
+            DispatchQueue.main.async { MainActor.assumeIsolated { self?.onPlayingChanged?(playing) } }
         }
     }
 

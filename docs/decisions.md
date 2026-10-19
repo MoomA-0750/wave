@@ -375,3 +375,8 @@
 - ADR が参照する `dev/active/…`（計画・レビュー）は、手元だけに置く作業の文書で、リポジトリには入れていない（`dev/` は .gitignore）。参照は記録として残す
 - 中継 v2 の起動の例は `dev/relay-deploy-v2/compose.yaml` にしか無く、文書から辿れなかったので、`relay/deploy/compose.yaml` に入れた（動いているコンテナは今も `dev/relay-deploy-v2` から起動したもの）
 - git に入っていた Python の .pyc を外し、`__pycache__/` を .gitignore に足した。dev/ の Phase 0 の試作（spike-phase0）と Phase 6 の計測用の echo サーバー（p6s-echo）はゴミ箱へ移した
+
+## 2026-10-19 Mac でライブを鳴らし始めると固まることがあった
+
+- AVPlayer は timeControlStatus の通知を、play() の中で中のロックを持ったまま送ってくる。その通知の中で記録のために位置（currentTime）を読んでいて、ライブの HLS ではロックを待ったままメインスレッドが止まった（sample で確かめた）。通知の処理は main の次の回に回す
+- 同じ日、Mac では Apple の見本の HLS も素の AVPlayer で読めなくなっていた（アプリの外の swift の台本でも同じ。曲は 127.0.0.1 の受け口から渡すので鳴る）。OS 側の状態なので、Mac の再起動で戻るかを確かめる
