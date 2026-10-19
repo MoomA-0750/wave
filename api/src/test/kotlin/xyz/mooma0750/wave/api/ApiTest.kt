@@ -64,6 +64,37 @@ class ApiTest {
     }
 
     @Test
+    fun jumpRebuildsTheQueueFromTheChosenUpcomingSong() {
+        val snapshot = QueueBuilder.snapshot((1..40).map { song(videoId(it)) }, 0, null, "synthetic-continuation", null)
+        val cursor = CursorBody("ref", snapshot.items[0].itemId, 5_000, true, HandoffRepeat.All, 0, null, 1, 3_000, true, "tag", 0)
+        // index は GET /v1/queue の何番目か（0 が次の曲）。選んだ曲の頭から、繰り返しはそのまま
+        val handoffId = "00000000-0000-4000-8000-000000000002"
+        val jumped = Views.jump(snapshot, cursor, 29, null, handoffId, 0)!!
+        val current = jumped.items.first { it.itemId == jumped.currentItemId }
+        assertEquals(videoId(31), current.videoId)
+        assertEquals(snapshot.items.first { it.videoId == videoId(31) }.itemId, current.itemId, "項目の ID を振り直した")
+        assertEquals(0, jumped.positionMs)
+        assertEquals(0, jumped.listenedMs)
+        assertEquals(HandoffRepeat.All, jumped.repeat)
+        // 前の曲を 20 曲までに切り直して、受け手の検査を通る
+        assertEquals(videoId(11), jumped.items.first().videoId)
+        assertIs<HandoffDecodeResult.Ok>(HandoffCodec.decode(HandoffCodec.encode(jumped), handoffId))
+        // videoId だけでも、両方でも（合わなければ飛ばない）
+        assertEquals(videoId(3), Views.jump(snapshot, cursor, null, videoId(3), "h3", 0)!!.let { j -> j.items.first { it.itemId == j.currentItemId }.videoId })
+        assertNull(Views.jump(snapshot, cursor, 1, videoId(5), "h4", 0), "番号と曲が合わないのに飛んだ")
+        assertNull(Views.jump(snapshot, cursor, 39, null, "h5", 0), "キューの外へ飛んだ")
+        assertNull(Views.jump(snapshot, cursor, null, videoId(1), "h6", 0), "今の曲より前へ飛んだ")
+    }
+
+    @Test
+    fun nowPlayingArtworkIsLarge() {
+        val item = QueueBuilder.item(song(videoId(1)).copy(thumbnailUrl = "https://lh3.googleusercontent.com/synthetic=w120-h120-l90-rj"), xyz.mooma0750.wave.handoff.HandoffOrigin.Source)
+        assertEquals("https://lh3.googleusercontent.com/synthetic=w544-h544", Views.nowPlaying(item).artUrl)
+        // 一覧（キュー）は小さいまま
+        assertEquals("https://lh3.googleusercontent.com/synthetic=w120-h120-l90-rj", Views.track(item).artUrl)
+    }
+
+    @Test
     fun tokenIsCheckedExactly() {
         assertTrue(tokenMatches("Bearer abc", "abc"))
         assertTrue(!tokenMatches("Bearer abcd", "abc"))
@@ -96,6 +127,8 @@ class ApiTest {
         override suspend fun play(request: PlayRequest) = HttpStatusCode.Unauthorized to """{"error":"login_required"}"""
 
         override suspend fun queueAdd(request: QueueRequest) = HttpStatusCode.Unauthorized to """{"error":"login_required"}"""
+
+        override suspend fun jump(request: JumpRequest) = HttpStatusCode.NotFound to """{"error":"not_found"}"""
 
         override suspend fun search(query: String): CallResult<List<TrackView>> = CallResult.Failed(FailureKind.NotLoggedIn)
 
@@ -149,6 +182,9 @@ class ApiTest {
             assertEquals(HttpStatusCode.BadRequest, post("/v1/control", """{"action":"volume","volumePercent":300}""").status)
             assertEquals(HttpStatusCode.BadRequest, post("/v1/control", """{"action":"seek"}""").status)
             assertEquals(HttpStatusCode.BadRequest, post("/v1/control", """{"action":"shuffle"}""").status)
+            assertEquals(HttpStatusCode.BadRequest, post("/v1/queue/jump", """{}""").status)
+            assertEquals(HttpStatusCode.BadRequest, post("/v1/queue/jump", """{"index":-1}""").status)
+            assertEquals(HttpStatusCode.NotFound, post("/v1/queue/jump", """{"index":3}""").status)
             assertEquals(listOf(Triple(ControlAction.Pause, null, null), Triple(ControlAction.Seek, 1000L, null), Triple(ControlAction.Volume, null, 30)), backend.controls)
         }
 }

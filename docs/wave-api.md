@@ -40,13 +40,14 @@ home-dashboard などほかのアプリから、wave で再生中の曲を読み
 | 口 | 中身 |
 |---|---|
 | `GET /v1/health` | `{"ok": true}` |
-| `GET /v1/playback` | `joined`・`loggedIn`・`isPlaying`・`repeat`（`off`・`track`・`context`）・`track`（`videoId`・`title`・`artist`・`album`・`artUrl`・`durationMs`・`isLive`）・`progressMs`・`observedAt`（ISO 8601。ここから位置を進める）・`device`（`id`・`name`・`kind`・`online`・`active`）・`volumePercent` |
+| `GET /v1/playback` | `joined`・`loggedIn`・`isPlaying`・`repeat`（`off`・`track`・`context`）・`track`（`videoId`・`title`・`artist`・`album`・`artUrl`・`durationMs`・`isLive`。`artUrl` は大きく出せる大きさ（googleusercontent は `=w544-h544`、動画の絵は `hqdefault.jpg`）。ほかの口の `artUrl` は一覧用の小さいまま）・`progressMs`・`observedAt`（ISO 8601。ここから位置を進める）・`device`（`id`・`name`・`kind`・`online`・`active`）・`volumePercent` |
 | `GET /v1/queue` | 今の曲の後の曲（`track` と同じ形の配列） |
 | `GET /v1/devices` | 家の端末（`id`・`name`・`kind`・`online`・`active`・`self`） |
 | `POST /v1/control` | `{"action": "play"｜"pause"｜"next"｜"previous"｜"seek"｜"volume", "positionMs"?, "volumePercent"?}`。シャッフル・繰り返しは連携の取り決めに無いので `400 unsupported` |
 | `POST /v1/transfer` | `{"deviceId"}`。その端末に再生を移す |
 | `POST /v1/play` | `{"videoId"? ｜ "playlistId"? ｜ "albumBrowseId"?, "startVideoId"?, "shuffle"?, "deviceId"?}`。曲だけならその曲からのラジオ。行き先は `deviceId`、無ければ家の最後の再生の端末（中継につながっているとき）。無ければ `409 no_device` |
 | `POST /v1/queue` | `{"videoIds": [...], "next": false}`。鳴っている端末のキューに足す（`next` なら今の曲の直後） |
+| `POST /v1/queue/jump` | `{"index": n, "videoId"?}`。`GET /v1/queue` の n 番目（0 が次の曲）へ飛ぶ。`videoId` も付けると、n 番目がその曲のときだけ飛ぶ（読んだ後にキューが動いていたら `404 not_found`）。`videoId` だけなら後ろの最初のその曲。鳴らしている端末に、選んだ曲からの同じキューを引き取り直してもらう（端末でほかの端末を映している間にキューの曲を選んだときと同じ）。ログインは要らない。応答は `/v1/play` と同じ |
 | `GET /v1/search?q=` | 曲を探す |
 | `GET /v1/playlists` | ライブラリのプレイリスト（`id`・`name`・`subtitle`・`artUrl`）。高く評価した曲は、この一覧に無くても `/v1/playlists/LM/tracks` で読める |
 | `GET /v1/playlists/{id}/tracks` | プレイリストの曲（400 曲まで） |

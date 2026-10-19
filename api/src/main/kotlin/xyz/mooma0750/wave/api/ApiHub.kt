@@ -21,7 +21,6 @@ import xyz.mooma0750.wave.core.net.createWaveHttpClient
 import xyz.mooma0750.wave.core.session.WaveSession
 import xyz.mooma0750.wave.handoff.HandoffCodec
 import xyz.mooma0750.wave.handoff.HandoffItem
-import xyz.mooma0750.wave.handoff.HandoffRepeat
 import xyz.mooma0750.wave.handoff.HandoffSnapshot
 import xyz.mooma0750.wave.handoff.crypto.EnvelopeSealer
 import xyz.mooma0750.wave.handoff.crypto.Pairing
@@ -375,7 +374,7 @@ class ApiHub(
             loggedIn = loggedIn,
             isPlaying = cursor.playing && online,
             repeat = Views.repeat(cursor.repeat),
-            track = item?.let(Views::track),
+            track = item?.let(Views::nowPlaying),
             progressMs = if (item?.isLive == true) null else position,
             observedAt = observedAt,
             device = device(writer, active = true),
@@ -468,7 +467,7 @@ class ApiHub(
                 return@onEngine PlayResult.NotSent
             }
             client.setLocalQueue(encoded)
-            client.setLocalCursor(ConnectClient.LocalCursor(snapshot.currentItemId, 0, false, HandoffRepeat.Off, 0, false, nowMs(), null))
+            client.setLocalCursor(ConnectClient.LocalCursor(snapshot.currentItemId, 0, false, snapshot.repeat, 0, false, nowMs(), null))
             if (client.playOn(target)) {
                 handOffWait = HandOffWait(target, nowMs(), 0)
                 PlayResult.Sent(target)
@@ -476,6 +475,28 @@ class ApiHub(
                 PlayResult.NotSent
             }
         }
+
+    sealed interface JumpResult {
+        data class Played(
+            val result: PlayResult,
+        ) : JumpResult
+
+        data object NotFound : JumpResult
+    }
+
+    /** キューの曲へ飛ぶ（Views.jump）。今鳴らしている端末に、選んだ曲からのキューを引き取り直してもらう。 */
+    suspend fun jump(
+        index: Int?,
+        videoId: String?,
+    ): JumpResult {
+        val (writer, snapshot) =
+            onEngine {
+                val (writer, cursor) = client.latestCursorBody() ?: return@onEngine null
+                val queue = client.latestQueueBody()?.second?.snapshot?.let(Views::snapshot)
+                Views.jump(queue, cursor, index, videoId, java.util.UUID.randomUUID().toString(), System.currentTimeMillis())?.let { writer to it }
+            } ?: return JumpResult.NotFound
+        return JumpResult.Played(play(snapshot, writer.takeUnless { it == keys.deviceId }))
+    }
 
     companion object {
         const val NAME = "wave API"

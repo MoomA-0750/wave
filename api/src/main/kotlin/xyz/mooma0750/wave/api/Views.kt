@@ -2,10 +2,12 @@ package xyz.mooma0750.wave.api
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import xyz.mooma0750.wave.core.music.Artwork
 import xyz.mooma0750.wave.core.music.HomeItem
 import xyz.mooma0750.wave.core.music.HomeShelf
 import xyz.mooma0750.wave.core.music.PlaylistSummary
 import xyz.mooma0750.wave.core.music.Song
+import xyz.mooma0750.wave.handoff.HandoffCodec
 import xyz.mooma0750.wave.handoff.HandoffItem
 import xyz.mooma0750.wave.handoff.HandoffRepeat
 import xyz.mooma0750.wave.handoff.HandoffSnapshot
@@ -83,6 +85,9 @@ object Views {
     fun track(item: HandoffItem) =
         TrackView(item.videoId, item.title, item.artists.joinToString(", ") { it.name }, item.album?.name, item.thumbnailUrl, item.durationSeconds?.let { it * 1000L }?.takeUnless { item.isLive }, item.isLive)
 
+    /** 再生中の曲（大きく出すので、絵は一覧用の小さい大きさから再生画面の大きさにする）。 */
+    fun nowPlaying(item: HandoffItem) = track(item).let { it.copy(artUrl = it.artUrl?.let(Artwork::large)) }
+
     fun track(song: Song) =
         TrackView(song.videoId, song.title, song.artistsText, song.album?.title, song.thumbnailUrl, song.durationSeconds?.let { it * 1000L }?.takeUnless { song.isLive }, song.isLive)
 
@@ -119,6 +124,44 @@ object Views {
         val items = snapshot?.items ?: return emptyList()
         val index = items.indexOfFirst { it.itemId == cursor.currentItemId }
         return if (index < 0) emptyList() else items.drop(index + 1)
+    }
+
+    /**
+     * キューの曲へ飛ぶ: 今のキューを、選んだ曲を今の曲にして作り直す（Android でほかの端末を映している間にキューの曲を選んだときと同じく、
+     * 鳴らしている端末に引き取り直してもらう）。index は [upcoming] の何番目か（0 が次の曲）、videoId はその曲。
+     * 両方あれば両方が合うとき、videoId だけなら後ろの最初のその曲。見つからなければ null。
+     */
+    fun jump(
+        snapshot: HandoffSnapshot?,
+        cursor: CursorBody,
+        index: Int?,
+        videoId: String?,
+        handoffId: String,
+        nowEpochMs: Long,
+    ): HandoffSnapshot? {
+        val items = snapshot?.items ?: return null
+        val upcoming = upcoming(snapshot, cursor)
+        val chosen =
+            when {
+                index != null -> upcoming.getOrNull(index)?.takeIf { videoId == null || it.videoId == videoId }
+                videoId != null -> upcoming.firstOrNull { it.videoId == videoId }
+                else -> null
+            } ?: return null
+        // 選んだ曲より前が増えるので、受け手の検査（前は 20 曲まで）に収まるよう切り直す
+        val (window, current, cut) = HandoffCodec.window(items, items.indexOf(chosen))
+        return snapshot.copy(
+            handoffId = handoffId,
+            items = window,
+            currentItemId = window[current].itemId,
+            positionMs = 0,
+            playing = true,
+            repeat = cursor.repeat,
+            continuation = snapshot.continuation.takeUnless { cut },
+            exhausted = snapshot.exhausted || cut,
+            listenedMs = 0,
+            historySent = false,
+            capturedAtEpochMs = nowEpochMs,
+        )
     }
 
     /**

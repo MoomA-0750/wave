@@ -52,6 +52,8 @@ interface ApiBackend {
 
     suspend fun queueAdd(request: QueueRequest): Pair<HttpStatusCode, String>
 
+    suspend fun jump(request: JumpRequest): Pair<HttpStatusCode, String>
+
     suspend fun search(query: String): CallResult<List<TrackView>>
 
     suspend fun playlists(): CallResult<List<PlaylistView>>
@@ -91,6 +93,13 @@ data class PlayRequest(
 data class QueueRequest(
     val videoIds: List<String>,
     val next: Boolean = false,
+)
+
+@Serializable
+data class JumpRequest(
+    /** GET /v1/queue の何番目か（0 が次の曲）。 */
+    val index: Int? = null,
+    val videoId: String? = null,
 )
 
 @Serializable
@@ -210,6 +219,11 @@ fun Application.apiModule(
             val (status, text) = backend.queueAdd(request)
             call.json(text, status)
         }
+        post("/v1/queue/jump") {
+            val request = call.body(JumpRequest.serializer())?.takeIf { (it.index ?: 0) >= 0 && (it.index != null || it.videoId != null) } ?: return@post call.error(HttpStatusCode.BadRequest, "bad_request")
+            val (status, text) = backend.jump(request)
+            call.json(text, status)
+        }
         get("/v1/search") {
             val query = call.request.queryParameters["q"]?.trim()?.takeIf { it.isNotEmpty() && it.length <= 200 } ?: return@get call.error(HttpStatusCode.BadRequest, "bad_request")
             call.result(backend.search(query), ListSerializer(TrackView.serializer()))
@@ -287,12 +301,15 @@ class HubBackend(
                 is QueueBuilder.Built.Ok -> built.snapshot
                 is QueueBuilder.Built.Failed -> return failure(built.kind).let { (status, code) -> errorBody(status, code) }
             }
-        return when (val result = hub.play(snapshot, request.deviceId)) {
+        return playResult(hub.play(snapshot, request.deviceId))
+    }
+
+    private fun playResult(result: ApiHub.PlayResult) =
+        when (result) {
             is ApiHub.PlayResult.Sent -> HttpStatusCode.OK to encode(OkView.serializer(), OkView(deviceId = result.deviceId))
             ApiHub.PlayResult.NoDevice -> errorBody(HttpStatusCode.Conflict, "no_device")
             ApiHub.PlayResult.NotSent -> errorBody(HttpStatusCode.Conflict, "not_sent")
         }
-    }
 
     override suspend fun queueAdd(request: QueueRequest): Pair<HttpStatusCode, String> {
         if (!hub.loggedIn) return errorBody(HttpStatusCode.Unauthorized, "login_required")
@@ -300,6 +317,12 @@ class HubBackend(
         if (items.isEmpty()) return errorBody(HttpStatusCode.NotFound, "not_found")
         return if (hub.queueAdd(items, request.next)) HttpStatusCode.OK to encode(OkView.serializer(), OkView()) else errorBody(HttpStatusCode.Conflict, "not_sent")
     }
+
+    override suspend fun jump(request: JumpRequest): Pair<HttpStatusCode, String> =
+        when (val result = hub.jump(request.index, request.videoId)) {
+            ApiHub.JumpResult.NotFound -> errorBody(HttpStatusCode.NotFound, "not_found")
+            is ApiHub.JumpResult.Played -> playResult(result.result)
+        }
 
     override suspend fun search(query: String): CallResult<List<TrackView>> =
         when (val result = hub.music.searchSongs(query)) {

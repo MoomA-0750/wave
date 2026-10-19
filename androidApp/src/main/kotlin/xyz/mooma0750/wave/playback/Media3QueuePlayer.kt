@@ -181,8 +181,6 @@ class Media3QueuePlayer(
     private fun indexOf(itemId: String): Int? = (0 until player.mediaItemCount).firstOrNull { player.getMediaItemAt(it).mediaId == itemId }
 
     companion object {
-        /** i.ytimg.com/vi/<id>/<名前>.jpg の「<名前>.jpg（と後ろの指定）」。 */
-        private val YTIMG_THUMBNAIL = Regex("/[a-z0-9_]+\\.jpg.*$")
         private const val SONG_EXTRA = "xyz.mooma0750.wave.SONG"
         private const val ORIGIN_EXTRA = "xyz.mooma0750.wave.ORIGIN"
 
@@ -193,19 +191,8 @@ class Media3QueuePlayer(
         fun songOf(item: MediaItem?): Song? =
             SongJson.decode(item?.mediaMetadata?.extras?.getString(SONG_EXTRA))
 
-        /**
-         * 一覧のサムネイル（小さい）を、再生画面・通知・時計に耐える大きさにする。
-         * googleusercontent / ggpht は `=w…-h…` や `=s…` のサイズ指定を書き換え、指定が無ければ足す。
-         * 動画のサムネイル（i.ytimg.com）は、いつでもある大きめの hqdefault.jpg にする（小さいままだと時計に画像が出ない）。
-         */
-        fun largeArtwork(url: String): String {
-            val withoutQuery = url.substringBefore('?')
-            return when {
-                "googleusercontent.com" in withoutQuery || "ggpht.com" in withoutQuery -> withoutQuery.substringBefore('=') + "=w544-h544"
-                "i.ytimg.com" in withoutQuery && YTIMG_THUMBNAIL.containsMatchIn(withoutQuery) -> withoutQuery.replace(YTIMG_THUMBNAIL, "/hqdefault.jpg")
-                else -> url
-            }
-        }
+        /** 一覧のサムネイル（小さい）を、再生画面・通知・時計に耐える大きさにする（core の Artwork.large）。 */
+        fun largeArtwork(url: String): String = xyz.mooma0750.wave.core.music.Artwork.large(url)
 
         /** 曲の情報（[songOf] で読む）と出どころを載せた extras。ほかの端末を映す再生器も同じものを載せる。 */
         fun extrasOf(
