@@ -17,3 +17,22 @@ services:
     ports:
       - "127.0.0.1:8792:8791"
     restart: unless-stopped
+  # ほかのアプリ向けの API（ADR-0015、docs/wave-api.md）。家の端末の1つとして中継につなぐ。家の鍵とログインは ./api-data に置く
+  wave-api:
+    image: eclipse-temurin:21-jre-alpine
+    command: ["/app/bin/api"]
+    working_dir: /app
+    environment:
+      WAVE_API_DATA: "/data"
+      WAVE_API_BIND: "0.0.0.0"
+      WAVE_API_PORT: "8793"
+      WAVE_RELAY_URL: "ws://wave-relay-v2:8791"
+      WAVE_RELAY_HOST: "${WAVE_RELAY_V2_HOST}"
+    volumes:
+      - ../../api/build/install/api:/app:ro
+      - ./api-data:/data
+    ports:
+      - "127.0.0.1:8793:8793"
+    depends_on:
+      - wave-relay-v2
+    restart: unless-stopped

@@ -407,3 +407,12 @@
 - 送る値は WebView で取った生の値（cookie・visitorData・DATASYNC_ID）。Android は AuthManager.exportForService、Windows はログインの保存から読み、送ったらすぐ捨てる
 - 加える側の照合: ログインを持たない wave API はアカウントの HMAC を印で作る。Windows の加える側（Responder）も Android と同じく、印で合えば「ログインなしの相手」として受け、加えた直後にログインを渡すよう促す。照合は誤操作の防止で、守りは6桁の照合のまま
 - 種類 api は、端末が知らせてきたプロフィールの種類で見分ける（鎖には入れない）。確かめのため、開発用に種類を覚え直す命令（Android `v2_kind`、Windows `connect-kind`）と、Windows の端末の画面を開く `devices` を足した
+
+## 2026-10-19 wave-api（ほかのアプリ向けの API）の作り
+
+- `wave-api` は Kotlin の JVM のプログラム（`api/`）で、handoff-protocol の ConnectClient と core の MusicRepository をそのまま使う。中継への接続は Android の RelayClientV2 と同じ手順（OkHttp の WebSocket）。鍵は Keystore が無いのでソフトウェアで作り、データのディレクトリに権限 600 で置く
+- 加入の第一歩で、加える側がアカウントの HMAC を照らし合わせて、ログインの無い wave-api を断ることが分かった。Kotlin の Pairing に「ログインなしの印」（`wave-accountless-v1`）を足し、加える側は既定で受ける（ADR-0015 に書き足した）。Windows・Mac・iPhone の加える側にも同じものが要る
+- core の WaveSession はログインが無いと YouTube に問い合わせないので、ログインを渡すまでは検索・プレイリスト・鳴らすも使えない（ADR の初めの案の「ログインなしでも検索できる」は取り消した）
+- 加わった直後は今の再生が読めない（加わる前の状態は前の端末にだけ包まれている）。読めるのは、どこかの端末が次に書いたとき。書き手に包み直させる仕組みは足していない
+- 「鳴らす」は、ほかの端末で鳴っている間に曲を選んだときの手順（playOn）をそのまま使う。行き先が引き取らなければ、中継が10秒で前の端末に戻す
+- シャッフル・繰り返しは連携の取り決めに無いので、API では受けない（400 unsupported）

@@ -111,6 +111,12 @@
 - （仮）家から外された・中継の家が作り直されたときは画面で知らせ、本人が押したら家の記録を消して加わり直せる
 - （仮）家の端末に wave API（ほかのアプリ向けの API、[ADR-0015](docs/adr/0015-wave-api.md)）があると、Android・Windows の端末の一覧に「wave API」として出し、デバイスの一覧（「ここで再生」の行き先）には出さない。家の端末の一覧のその行に「ログインを渡す」があり、確認で「渡す」を押したときだけ、今のログインを wave API の鍵にだけ包んで送る（ログインしていなければ押せない）。ログインをまだ持たない wave API を加えた直後は、ログインを渡すよう促す。加える側は、ログインを持たない相手のアカウントの照合を印（`wave-accountless-v1`）で通す。自動テスト: `relay` の `ConnectSimulationTest.loginGrantReachesOnlyTheTargetAndIsNotReplayed`、相互運用（`CSharpInteropTest`・C# の `InteropTests` の login_grant・`AcceptsAccountlessKotlinPeer`）。手で確かめる手順: Pixel 3 で開発用の `v2_kind`（Windows は `connect-kind`）で家の端末を api にすると、デバイスの一覧から消え、端末の一覧に「ログインを渡す」と確認が出る（2026-10-19 に Pixel 3 で確かめた。Windows はボタンが出るところまで）
 
+## ほかのアプリとの連携
+
+- （仮）ほかのアプリ（home-dashboard など）から、家で再生中の曲を読み、操作し、曲・アルバム・プレイリストを選んで家の端末で鳴らせる。口は中継の機械で常駐する `wave-api` が HTTP（JSON・SSE、トークンが要る）で出す（[ADR-0015](docs/adr/0015-wave-api.md)、[docs/wave-api.md](docs/wave-api.md)）
+- （仮）`wave-api` は家の端末の1つ（「wave API」）として QR の文字と6桁で加わる。音は出さず、「ここで再生」の行き先にならない。ログインは加えた後に家の端末から本人が渡し、渡すまでは今の曲・キュー・操作・端末の切り替えだけ。シャッフル・繰り返しは操作できない（連携の取り決めに無い）
+- （仮）自動テスト: `api` の `ApiTest`（トークン・ログインの要る口・操作の受け付け・鳴らす行き先・作るキューの形）、`handoff-protocol` の `PairingTest.aJoinerWithoutLogin…`。手で確かめる手順: 中継の機械で wave-api を動かし、Pixel 3 の QR の文字で加え（`api pair`）、to-fu で鳴らして `/v1/playback`・`/v1/devices`・`/v1/queue` が読め、`/v1/control` の一時停止・再生・シーク・音量が to-fu に届く（2026-10-19 に確かめた）
+
 ## 時計（Wear OS）
 
 - （仮）スマホと同じことを時計でもできるようにする。できること・できないことの一覧は [docs/wear.md](docs/wear.md)
