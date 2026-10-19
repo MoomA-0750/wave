@@ -7,8 +7,12 @@ import WaveCore
 struct AddToPlaylistSheet: View {
     var song: Song
     @Environment(\.dismiss) private var dismiss
-    @State private var status: [String: PlaylistMembership.Status] = [:]
-    @State private var busy: Set<String> = []
+    @State private var model: AddToPlaylistModel
+
+    init(song: Song) {
+        self.song = song
+        _model = State(initialValue: AddToPlaylistModel(song: song))
+    }
 
     var body: some View {
         let player = AppServices.player!
@@ -47,10 +51,10 @@ struct AddToPlaylistSheet: View {
                 }
                 Section(L.t("プレイリスト", "Playlists")) {
                     ForEach(AppServices.library.editable, id: \.playlistId) { playlist in
-                        Button { toggle(playlist) } label: {
+                        Button { model.toggle(playlist) } label: {
                             PlaylistSheetsRow(title: playlist.title, icon: "music.note.list") {
-                                let s = status[playlist.playlistId] ?? .checking
-                                if busy.contains(playlist.playlistId) || s == .checking {
+                                let s = model.state(playlist)
+                                if s == .checking {
                                     ProgressView()
                                 } else if s == .isIn {
                                     Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.accentColor)
@@ -62,10 +66,7 @@ struct AddToPlaylistSheet: View {
                                 }
                             }
                         }
-                        .task {
-                            let s = await AppServices.library.membership.check(playlist.playlistId, song.videoId)
-                            status[playlist.playlistId] = s
-                        }
+                        .task { await model.check(playlist) }
                     }
                 }
             }
@@ -78,22 +79,6 @@ struct AddToPlaylistSheet: View {
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
-    }
-
-    private func toggle(_ playlist: PlaylistSummary) {
-        let id = playlist.playlistId
-        let s = status[id] ?? .checking
-        guard !busy.contains(id), s != .checking else { return }
-        busy.insert(id)
-        Task {
-            if s == .isIn {
-                if await SongActions.remove(playlist, song) { status[id] = .notIn }
-            } else {
-                let result = await SongActions.add(playlist, song)
-                if result == .added || result == .alreadyInPlaylist { status[id] = .isIn }
-            }
-            busy.remove(id)
-        }
     }
 }
 

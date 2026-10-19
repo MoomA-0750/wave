@@ -213,7 +213,7 @@ final class InteropTests: XCTestCase {
             confirmAccountId: try str(p, "accountId"), confirmExtension: try str(p, "confirmExtension"),
             ephemeral: try InteropTests.ephemeral(try str(p, "responderEphemeral")), token: try XCTUnwrap(B64.decode(offer.token)))
         XCTAssertEqual(offer, responder.offer)
-        XCTAssertTrue(try responder.onHello(hello).isSuccess)
+        XCTAssertNil(try responder.onHello(hello).failure)
         XCTAssertEqual(.wrongCode, responder.onCodeEntered(code == "000000" ? "111111" : "000000").failure)
         let pairOnA = try responder.onCodeEntered(code).get()
         XCTAssertEqual(try str(p, "aSendKey"), B64.encode(pairOnA.sendKey))

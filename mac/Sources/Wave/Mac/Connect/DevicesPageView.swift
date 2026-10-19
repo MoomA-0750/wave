@@ -1,6 +1,5 @@
 #if os(macOS)
 import AppKit
-import CoreImage
 import SwiftUI
 import WaveCore
 
@@ -45,7 +44,7 @@ struct DevicesPageView: View {
                     householdPanel
                 }
 
-                Text(L.t("中継: ", "Relay: ") + relayText(info)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true).padding(.top, 16)
+                Text(L.t("中継: ", "Relay: ") + DevicesText.relay(info)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true).padding(.top, 16)
             }
             .padding(.horizontal, 40)
             .padding(.vertical, 32)
@@ -64,7 +63,7 @@ struct DevicesPageView: View {
         }
         .confirmationDialog(L.t("端末を外しますか？", "Remove this device?"), isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }),
                             presenting: removing) { member in
-            Button(L.t("外す", "Remove"), role: .destructive) { remove(member) }
+            Button(L.t("外す", "Remove"), role: .destructive) { DevicesText.remove(member) }
             Button(L.t("キャンセル", "Cancel"), role: .cancel) {}
         } message: { member in
             Text(L.t("「\(member.label)」は、もう再生を引き継げなくなります。もう一度加えるには、QR と6桁の手順が要ります。",
@@ -162,7 +161,7 @@ struct DevicesPageView: View {
 
     private func pairingPanel(_ pairing: PairingView) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(pairingText(pairing)).foregroundStyle(pairing.kind == .failed ? Color.red : Color.primary).fixedSize(horizontal: false, vertical: true)
+            Text(DevicesText.pairing(pairing)).foregroundStyle(pairing.kind == .failed ? Color.red : Color.primary).fixedSize(horizontal: false, vertical: true)
             if pairing.kind == .showingOffer, let offer = pairing.offerText {
                 Group {
                     if let qr, qr.offer == offer {
@@ -199,25 +198,6 @@ struct DevicesPageView: View {
         .card()
     }
 
-    private func pairingText(_ pairing: PairingView) -> String {
-        switch pairing.kind {
-        case .working: return pairing.text ?? ""
-        case .showingOffer:
-            return L.t("加える端末で wave の「端末の連携」を開き、この QR を読み取ってください（PC なら下の文字列をコピーして貼り付けます）。2分で無効になります。",
-                       "On the device you’re adding, open Devices in wave and scan this QR code (on a PC, copy the text below and paste it). Expires in 2 minutes.")
-        case .enterCode:
-            return (pairing.text.map { $0 + "\n" } ?? "") + L.t("加える端末に出ている6桁の数字を入力してください", "Enter the 6-digit code shown on the device you’re adding")
-        case .showCode:
-            let peer = pairing.peerName ?? ""
-            return L.t("「\(peer)」に、この6桁の数字を入力してください", "Enter this 6-digit code on “\(peer)”")
-        case .done:
-            let peer = pairing.peerName ?? ""
-            return L.t("「\(peer)」と連携しました", "Connected with “\(peer)”")
-        case .failed: return pairing.text ?? ""
-        case .idle: return ""
-        }
-    }
-
     private func enterCode() {
         let code = String(codeText.filter { $0.isASCII && $0.isNumber })
         if code.count != 6 { return }
@@ -227,21 +207,7 @@ struct DevicesPageView: View {
 
     private func makeQr(_ offer: String) {
         if qr?.offer == offer { return }
-        if let image = DevicesPageView.qrImage(offer) { qr = (offer, image) }
-    }
-
-    /// 文字列の QR（誤り訂正 M、1つの点を 8 px）。読み取れるよう白地に黒で、周りに余白を付ける。
-    static func qrImage(_ text: String) -> NSImage? {
-        guard let filter = CIFilter(name: "CIQRCodeGenerator") else { return nil }
-        filter.setValue(Data(text.utf8), forKey: "inputMessage")
-        filter.setValue("M", forKey: "inputCorrectionLevel")
-        guard let output = filter.outputImage else { return nil }
-        let scaled = output.transformed(by: CGAffineTransform(scaleX: 8, y: 8))
-        let margin: CGFloat = 32
-        let canvas = scaled.extent.insetBy(dx: -margin, dy: -margin)
-        let framed = scaled.composited(over: CIImage(color: .white).cropped(to: canvas))
-        guard let cg = CIContext().createCGImage(framed, from: canvas) else { return nil }
-        return NSImage(cgImage: cg, size: NSSize(width: canvas.width, height: canvas.height))
+        if let image = DevicesText.qrImage(offer) { qr = (offer, image) }
     }
 
     private func copyOffer() {
@@ -288,24 +254,6 @@ struct DevicesPageView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
-    }
-
-    private func remove(_ member: MemberView) {
-        Task {
-            let removed = await devices.removeMember(member.deviceId)
-            AppServices.toast.show(removed ? L.t("「\(member.label)」を外しました", "Removed \(member.label)") : L.t("外せませんでした", "Couldn’t remove the device"))
-        }
-    }
-
-    private func relayText(_ info: ConnectInfo) -> String {
-        switch info.relay {
-        case .connected: return L.t("接続中", "Connected")
-        case .connecting: return L.t("接続しています…", "Connecting…")
-        case .tailnetUnreachable: return L.t("届きません（Tailscale につながっているか確かめてください）", "Unreachable (check that Tailscale is connected)")
-        case .notMember: return info.inHousehold ? L.t("受け付けられません", "Not accepted") : L.t("まだ連携していません", "Not set up yet")
-        case .failed: return L.t("つながりませんでした", "Couldn’t connect")
-        case .disconnected: return L.t("切断", "Disconnected")
-        }
     }
 }
 

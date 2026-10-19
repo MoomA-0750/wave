@@ -436,6 +436,4 @@ public extension Result where Failure == Pairing.Failure {
         if case .failure(let f) = self { return f }
         return nil
     }
-
-    var isSuccess: Bool { failure == nil }
 }

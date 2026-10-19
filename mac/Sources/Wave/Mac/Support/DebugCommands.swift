@@ -6,53 +6,22 @@ import UserNotifications
 import WaveCore
 
 /// 開発用（WAVE_DEBUG を付けて組んだときだけ）: データの場所の debug-command.txt に書いた命令を行い、結果を記録に書く
-/// （Windows の DebugCommands・Android の DebugActions と同じ）。画面の操作を外から確かめるためのもの。1行に1命令。読んだらファイルを消す。
+/// （Windows の DebugCommands・Android の DebugActions と同じ）。画面の操作を外から確かめるためのもの。iPhone と同じ命令は Shared の DebugCommon で行う。
 @MainActor
 enum DebugCommands {
-    private static let fileURL = AppPaths.file("debug-command.txt")
-    private static var timer: Timer?
-
-    static func start() {
-        timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { _ in
-            MainActor.assumeIsolated {
-                guard let text = try? String(contentsOf: fileURL, encoding: .utf8) else { return }
-                try? FileManager.default.removeItem(at: fileURL)
-                let lines = text.split(separator: "\n").map(String.init).filter { !$0.isEmpty }
-                Task {
-                    for line in lines {
-                        AppPaths.log("debug command=" + (line.split(separator: " ").first.map(String.init) ?? ""))
-                        await run(line)
-                    }
-                }
-            }
-        }
-    }
-
-    private static func firstSong(_ query: String) async -> Song? {
-        (try? await AppServices.music.searchSongs(query))?.value?.songs.first
-    }
+    static func start() { DebugCommon.start(run) }
 
     private static func run(_ line: String) async {
-        let parts = line.split(separator: " ", maxSplits: 1).map(String.init)
-        let arg = parts.count > 1 ? parts[1] : ""
+        let (command, arg) = DebugCommon.split(line)
         let player = AppServices.player!
         let nav = AppServices.nav!
         let window = MainWindowModel.shared
-        switch parts[0] {
-        case "wait":
-            try? await Task.sleep(for: .milliseconds(Int(arg) ?? 0))
+        switch command {
         case "home": nav.home()
-        case "settings": nav.settings()
         case "login": LoginWindowController.show()
         case "login-probe": LoginProbe.run()
-        case "devices": nav.devices()
-        case "history": nav.history()
         case "lyrics": nav.lyrics()
-        case "liked": nav.likedSongs()
         case "back": nav.goBack()
-        case "album": nav.album(arg)
-        case "artist": nav.artist(arg)
-        case "podcast": nav.podcast(PodcastSummary(browseId: arg, title: arg, author: nil, thumbnailUrl: nil))
         case "podcast-play":
             // 番組のページでエピソードを押したのと同じ流し方（引数は「browseId [番号]」）
             let p = arg.split(separator: " ").map(String.init)
@@ -63,19 +32,12 @@ enum DebugCommands {
             let i = min(Int(p.count > 1 ? p[1] : "0") ?? 0, page.episodes.count - 1)
             player.playList(page.episodes.map(\.song), start: i, source: page.playlistId)
             AppPaths.log("debug podcast-play title=\(page.episodes[i].song.title) artist=\(page.episodes[i].song.artistsText) queue=\(player.queue.count)")
-        // RSS のポッドキャスト（ADR-0012）: 目録で探してフィードを読む・最新のエピソードを流す・聴いたところ・登録・番組のページ
-        case "feed": await FeedDebug.run(arg, play: false)
-        case "feed-play": await FeedDebug.run(arg, play: true)
-        case "feed-state": FeedDebug.state()
-        case "feed-subscribe": await FeedDebug.toggleSubscription(arg)
-        case "feed-open": await FeedDebug.open(arg)
         case "search-tab":
             // 検索の結果の絞り込み（all・songs・artists・albums・podcasts・episodes・live・lyrics）を選ぶ
             SearchPageModel.current?.tab = arg
             try? await Task.sleep(for: .milliseconds(2500))
             AppPaths.log("debug search-tab \(arg) podcasts=\(SearchPageModel.current?.podcasts.count ?? -1) episodes=\(SearchPageModel.current?.episodes.count ?? -1)")
         case "library-kind": window.libraryKind = arg.isEmpty || arg == "all" ? nil : arg
-        case "playlist": nav.playlist(PlaylistSummary(playlistId: arg, title: arg, subtitle: nil, thumbnailUrl: nil))
         case "search":
             // 上の検索欄に打って Enter を押したのと同じ
             window.searchFor(arg)
@@ -154,12 +116,6 @@ enum DebugCommands {
             let status = await AppServices.library.membership.check(target.playlistId, song.videoId)
             if status == .isIn { _ = await SongActions.remove(target, song) } else { await SongActions.add(target, song) }
             AppPaths.log("debug membership-toggle was=\(status) inPlaylist=\(player.inPlaylist)")
-        case "song-card":
-            // 検索の先頭の曲を、棚のカードを押したのと同じ開き方で開く
-            if let song = await firstSong(arg) { nav.openCard(.song(song)) }
-            AppPaths.log("debug song-card route=\(nav.current.route) playing=\(player.current != nil)")
-        case "search-play":
-            if let songs = (try? await AppServices.music.searchSongs(arg))?.value?.songs, !songs.isEmpty { player.playList(Array(songs.prefix(5))) }
         case "album-play":
             // アルバムの検索の先頭を、アルバムのページの再生と同じく鳴らす。最後の2曲目から始める（流し終えたあとのラジオを確かめる）
             guard let found = (try? await AppServices.music.searchAlbums(arg))?.value?.items.first,
@@ -170,36 +126,18 @@ enum DebugCommands {
             }
             player.playList(album.songs, start: max(0, album.songs.count - 2), source: found.browseId)
             AppPaths.log("debug album-play songs=\(album.songs.count) index=\(player.index)")
-        case "song-play":
-            if let song = await firstSong(arg) { player.playSong(song) }
         case "artist-play":
             // アーティストのページの再生ボタンと同じ流し方（人気の曲から始め、「すべての曲」の残りを足す）
             guard let artist = (try? await AppServices.music.artist(arg))?.value else { break }
             let all = artist.allSongsPlaylistId.map { id in Task { try? await AppServices.music.fullPlaylist(id) } }
-            await ArtistPageView.playArtist(player, arg, artist.topSongs, start: 0, shuffle: nil, allSongs: all)
+            await player.playArtist(arg, artist.topSongs, start: 0, shuffle: nil, allSongs: all)
             AppPaths.log("debug artist-play queue=\(player.queue.count) artists=\(Set(player.queue.compactMap { $0.artists.first?.name }).count)")
-        case "queue-add":
-            if let song = await firstSong(arg) { player.addToQueue(song) }
-        case "queue-next":
-            if let song = await firstSong(arg) { player.playNext(song) }
-        case "queue-dump":
-            let from = max(0, player.index)
-            let shown = (from..<min(player.queue.count, from + 8)).map { (player.isUserAdded($0) ? "U:" : "") + player.queue[$0].title }
-            AppPaths.log("debug queue index=\(player.index) count=\(player.queue.count) " + shown.joined(separator: " | "))
         case "queue-clear": player.clearUserQueue()
-        case "shuffle": player.toggleShuffle()
-        case "repeat": player.cycleRepeat()
-        case "next": player.next()
-        case "previous": player.previous()
-        case "seek": player.seek(Double(arg) ?? 0)
         case "volume": player.volume = Double(arg) ?? player.volume
-        case "pause": if player.isPlaying { player.togglePlay() }
-        case "play": if !player.isPlaying { player.togglePlay() }
-        case "like": LikeButton.press(player)
         case "set-like":
             // 検索の先頭の曲の評価を直接変える（確かめで変えた評価を戻す）。引数は「on|off 検索語」
             let p = arg.split(separator: " ", maxSplits: 1).map(String.init)
-            guard p.count == 2, let song = await firstSong(p[1]) else { break }
+            guard p.count == 2, let song = await DebugCommon.firstSong(p[1]) else { break }
             let r = try? await AppServices.music.setLiked(song.videoId, liked: p[0] == "on")
             if r?.isOk == true { AppServices.library.likedChanged(song.videoId, p[0] == "on") }
             AppPaths.log("debug set-like \(p[0]) ok=\(r?.isOk ?? false) liked=\(AppServices.library.isLiked(song.videoId))")
@@ -285,7 +223,6 @@ enum DebugCommands {
         case "connect-code": AppServices.connect.enterCode(arg)
         case "connect-confirm": AppServices.connect.confirmOnB()
         case "connect-cancel": AppServices.connect.cancelPairing()
-        case "connect-transfer": AppServices.connect.transfer()
         case "connect-play":
             // デバイスの一覧で、名前の一致する端末を選んだのと同じ
             if let m = AppServices.connect.members.first(where: { $0.label == arg }) { AppServices.connect.playOnDevice(m.deviceId) }
@@ -310,10 +247,7 @@ enum DebugCommands {
             AppPaths.log("debug notify status=\(settings.authorizationStatus.rawValue) recent=\(AppServices.releases.recent.count)")
             if let release = AppServices.releases.recent.first { await AppServices.releases.notify(release) }
             AppPaths.log("debug notify delivered=\(await UNUserNotificationCenter.current().deliveredNotifications().count)")
-        case "releases-check":
-            await AppServices.releases.check()
-        default:
-            AppPaths.log("debug unknown command")
+        default: await DebugCommon.run(command, arg)
         }
     }
 }

@@ -51,7 +51,6 @@ public struct StoredState: Equatable, Sendable, ConnectCodable {
 public enum RelayV2: Equatable, Sendable {
     public static let authLabel = "wave-relay-v2-auth"
     public static let maxFrameChars = 1_200_000
-    public static let maxPairFrameChars = 8 * 1024
 
     // --- 接続 ---
     case challenge(Challenge)

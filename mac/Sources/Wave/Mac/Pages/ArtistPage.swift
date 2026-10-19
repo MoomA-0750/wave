@@ -6,23 +6,19 @@ import WaveCore
 /// アーティストのページ（Spotify と同じ: 横いっぱいの画像に名前、再生ボタン、人気の曲、ディスコグラフィー）。
 struct ArtistPageView: View {
     var browseId: String
-    @State private var artist: ArtistPage?
-    @State private var rows: [TrackRow] = []
-    @State private var shelves: [HomeShelf] = []
-    @State private var posts: [ArtistPost] = []
-    @State private var loading = true
-    @State private var failed = false
-    @State private var shufflePlay = false
-    @State private var subscribing = false
-    @State private var liked: (count: Int, complete: Bool)?
-    @State private var checkingLiked = false
+    @State private var model: ArtistModel
     @State private var selected: String?
-    /// 「すべての曲」の一覧（ページを開いたときに読み始める。再生のたびに読み直さない）。
-    @State private var allSongs: Task<ApiResult<PlaylistPage>?, Never>?
+
+    init(browseId: String) {
+        self.browseId = browseId
+        _model = State(initialValue: ArtistModel(browseId: browseId))
+    }
 
     var body: some View {
         let player = AppServices.player!
-        let playingHere = player.sourceId == browseId && player.current != nil
+        let playingHere = model.isPlayingHere
+        let artist = model.artist
+        let rows = model.topSongs.enumerated().map { TrackRow(number: $0.offset + 1, song: $0.element) }
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 16) {
                 ZStack(alignment: .bottom) {
@@ -42,29 +38,29 @@ struct ArtistPageView: View {
                 .clipped()
                 HStack(spacing: 16) {
                     PlayCircleButton(action: {
-                        if playingHere { player.togglePlay() } else { play(start: 0, shuffle: shufflePlay ? true : nil) }
+                        model.playOrPause()
                     }) { Image(systemName: playingHere && player.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 20)) }
                         .disabled(rows.isEmpty)
-                    IconToggle(isOn: playingHere ? player.shuffle : shufflePlay, help: L.t("シャッフル", "Shuffle")) {
-                        if playingHere { player.toggleShuffle() } else { shufflePlay.toggle() }
+                    IconToggle(isOn: playingHere ? player.shuffle : model.shufflePlay, help: L.t("シャッフル", "Shuffle")) {
+                        model.toggleShuffle()
                     } label: { Image(systemName: "shuffle").font(.system(size: 20)) }
-                    if loading { ProgressView().controlSize(.small) }
+                    if model.loading { ProgressView().controlSize(.small) }
                 }
                 .padding(.horizontal, 24)
                 // ライブ・ツアーの告知（アーティストの YouTube のチャンネルの投稿から。Android と同じ）。告知が無ければ出さない
-                if !posts.isEmpty {
+                if !model.posts.isEmpty {
                     Text(L.t("ライブ・お知らせ", "Live & news")).subtitleStyle().padding(EdgeInsets(top: 8, leading: 24, bottom: 0, trailing: 24))
                     ScrollView(.horizontal) {
-                        HStack(alignment: .top, spacing: 12) { ForEach(posts, id: \.postId) { LivePostCard(post: $0) } }
+                        HStack(alignment: .top, spacing: 12) { ForEach(model.posts, id: \.postId) { LivePostCard(post: $0) } }
                             .padding(EdgeInsets(top: 0, leading: 24, bottom: 8, trailing: 24))
                     }
                 }
-                if failed { Text(L.t("アーティストを読み込めませんでした", "Couldn’t load the artist")).padding(24) }
+                if model.failed { Text(L.t("アーティストを読み込めませんでした", "Couldn’t load the artist")).padding(24) }
                 if !rows.isEmpty {
                     Text(L.t("人気", "Popular")).subtitleStyle().padding(EdgeInsets(top: 8, leading: 24, bottom: 0, trailing: 24))
                     VStack(spacing: 0) {
                         ForEach(Array(rows.enumerated()), id: \.element.id) { i, row in
-                            TrackRowView(row: row, selected: selected == row.id, onPlay: { play(start: i, shuffle: nil) }, onSelect: { selected = row.id })
+                            TrackRowView(row: row, selected: selected == row.id, onPlay: { model.play(start: i, shuffle: nil) }, onSelect: { selected = row.id })
                         }
                     }
                     .padding(.horizontal, 12)
@@ -76,116 +72,40 @@ struct ArtistPageView: View {
                     .buttonStyle(.textLink).padding(.horizontal, 24)
                 }
                 // Spotify の「高く評価した曲」の行（このアーティストの、自分が高く評価した曲）。1曲も無ければ出さない
-                if checkingLiked || (liked?.count ?? 0) > 0, let artist {
+                if model.checkingLiked || (model.liked?.count ?? 0) > 0, let artist {
                     Button { AppServices.nav.likedSongsBy(browseId, artist.name) } label: {
                         HStack(spacing: 16) {
                             LikedCover(size: 56, round: true)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(L.t("高く評価した曲", "Liked Songs")).font(.body.weight(.semibold))
-                                Text(likedText(artist.name)).subtle()
+                                Text(model.likedText(artist.name)).subtle()
                             }
                         }
                         .padding(8)
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .disabled(checkingLiked)
+                    .disabled(model.checkingLiked)
                     .padding(.horizontal, 24)
                 }
-                ForEach(Array(shelves.enumerated()), id: \.offset) { _, shelf in
+                ForEach(Array(model.shelves.enumerated()), id: \.offset) { _, shelf in
                     ShelfView(title: shelf.title, items: shelf.items).padding(.horizontal, 16)
                 }
             }
             .padding(.bottom, 32)
         }
-        .task { await load() }
+        .task { await model.load() }
     }
 
     private var subscribeButton: some View {
-        let subscribed = artist?.subscribed == true
-        return Button(subscribed ? L.t("登録済み", "Subscribed") : L.t("登録", "Subscribe")) { toggleSubscribe() }
+        let subscribed = model.artist?.subscribed == true
+        return Button(subscribed ? L.t("登録済み", "Subscribed") : L.t("登録", "Subscribe")) { model.toggleSubscribe() }
             .buttonStyle(.borderedProminent)
             .tint(subscribed ? Color.gray.opacity(0.5) : Color.accentColor)
             .buttonBorderShape(.capsule)
             .controlSize(.large)
-            .disabled(subscribing || artist?.subscribed == nil)
+            .disabled(model.subscribing || model.artist?.subscribed == nil)
             .padding(.bottom, 16)
-    }
-
-    private func likedText(_ name: String) -> String {
-        guard let liked else { return L.t("確かめています…", "Checking…") }
-        let n = liked.count
-        return liked.complete ? L.t("\(name) の \(n) 曲", "\(n) \(n == 1 ? "song" : "songs") by \(name)") : L.t("\(name) の \(n) 曲以上", "\(n)+ songs by \(name)")
-    }
-
-    private func load() async {
-        let result = (try? await AppServices.music.artist(browseId)) ?? .failed(.network)
-        loading = false
-        guard let page = result.value else {
-            failed = true
-            return
-        }
-        artist = page
-        rows = page.topSongs.enumerated().map { TrackRow(number: $0.offset + 1, song: $0.element) }
-        if let id = page.allSongsPlaylistId { allSongs = Task { try? await AppServices.music.fullPlaylist(id) } }
-        var list = page.albumShelves.map { HomeShelf(title: $0.title, strapline: nil, items: $0.albums.map { .album($0) }) }
-        // 最近の新作（登録したアーティストの見張りで見つけたもの）を先頭に（Android と同じ）。今のページから消えたもの（同じ名前の別人の作品だった）は出さない
-        let releases = ReleaseWatchState.listed(AppServices.releases.recent.filter { $0.artistId == browseId }, artistId: browseId, page: page,
-                                                year: Calendar.current.component(.year, from: Date())).map(HomeModel.releaseItem)
-        if !releases.isEmpty { list.insert(HomeShelf(title: L.t("新作", "New releases"), strapline: nil, items: releases), at: 0) }
-        // 動画の棚（MV・YouTube の動画。iPhone・Android と同じ）
-        if !page.videos.isEmpty { list.append(HomeShelf(title: L.t("動画", "Videos"), strapline: nil, items: page.videos.map { .song($0) })) }
-        shelves = list
-        Task { await loadPosts(page) }
-        await loadLiked(page)
-    }
-
-    /// チャンネルの投稿のうち、ライブ・ツアーの告知らしいものを並べる（押すと YouTube の投稿を開く）。
-    private func loadPosts(_ page: ArtistPage) async {
-        guard let channelId = page.channelId ?? (browseId.hasPrefix("UC") ? browseId : nil) else { return }
-        let result = try? await AppServices.music.artistPosts(channelId)
-        let found = Array(LiveNews.of(result?.value ?? []).prefix(6))
-        AppPaths.log("artist posts ok=\(result?.isOk ?? false) posts=\(result?.value?.count ?? 0) live=\(found.count)")
-        posts = found
-    }
-
-    /// このアーティストの、自分が高く評価した曲の数（ログインしていなければ出さない）。
-    private func loadLiked(_ page: ArtistPage) async {
-        guard AppServices.client.isLoggedIn else { return }
-        checkingLiked = true
-        let (songs, complete) = await AppServices.library.likedSongs()
-        liked = (LibraryState.byArtist(songs, browseId, page.name).count, complete)
-        checkingLiked = false
-    }
-
-    /// 登録の切り替え。書けたら表示を変える（Android と同じく楽観的に変えない）。
-    private func toggleSubscribe() {
-        guard let page = artist, let channelId = page.channelId, !subscribing else { return }
-        let target = page.subscribed != true
-        subscribing = true
-        Task {
-            let result = (try? await AppServices.music.setSubscribed(channelId, subscribe: target)) ?? .failed(.network)
-            subscribing = false
-            if result.isOk {
-                artist?.subscribed = target
-            } else {
-                AppServices.player.message = L.t("登録を変更できませんでした", "Couldn't change your subscription")
-            }
-        }
-    }
-
-    private func play(start: Int, shuffle: Bool?) {
-        let all = allSongs
-        Task { await ArtistPageView.playArtist(AppServices.player, browseId, rows.map(\.song), start: start, shuffle: shuffle, allSongs: all) }
-    }
-
-    /// アーティストを流す: 人気の曲からすぐ鳴らし始め、「すべての曲」の一覧が読めたら残りを後ろに足す（Android と同じ）。
-    /// 人気の曲だけだと、終わったところで最後の曲のラジオに切り替わり、ほかのアーティストの曲が混ざっていた。
-    @MainActor
-    static func playArtist(_ player: PlayerService, _ browseId: String, _ topSongs: [Song], start: Int, shuffle: Bool?,
-                           allSongs: Task<ApiResult<PlaylistPage>?, Never>?) async
-    {
-        await player.playArtist(browseId, topSongs, start: start, shuffle: shuffle, allSongs: allSongs)
     }
 }
 
@@ -256,7 +176,7 @@ struct SongPageView: View {
     }
 
     private var detail: String {
-        [song.artistsText, song.album?.title, song.durationSeconds.map { String(format: "%d:%02d", $0 / 60, $0 % 60) }]
+        [song.artistsText, song.album?.title, song.durationSeconds.map { Ui.duration($0) }]
             .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " • ")
     }
 

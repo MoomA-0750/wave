@@ -1324,7 +1324,7 @@ enum ConnectQueue {
             isLive: song.isLive)
     }
 
-    /// 受け渡しの項目を、キューの曲と項目の情報へ（toExport と同じ変換）。
+    /// 受け渡しの項目を、キューの曲と項目の情報へ（toExport でも使う）。
     static func entryOf(_ i: HandoffItem) -> (song: Song, meta: QueueItemMeta) {
         let song = Song(videoId: i.videoId, title: i.title, artists: i.artists.map { ArtistRef(name: $0.name, browseId: $0.browseId) },
                         album: i.album.map { AlbumRef(title: $0.name, browseId: $0.browseId) }, durationSeconds: i.durationSeconds, thumbnailUrl: i.thumbnailUrl,
@@ -1370,17 +1370,7 @@ enum ConnectQueue {
         }
         let isPlaylist = playlistId != nil
         return QueueExport(
-            items: snapshot.items.map { i in
-                let song = Song(videoId: i.videoId, title: i.title, artists: i.artists.map { ArtistRef(name: $0.name, browseId: $0.browseId) },
-                                album: i.album.map { AlbumRef(title: $0.name, browseId: $0.browseId) }, durationSeconds: i.durationSeconds, thumbnailUrl: i.thumbnailUrl,
-                        isLive: i.isLive)
-                let origin: QueueOrigin = switch i.origin {
-                case .suggestion: .suggestion
-                case .userAdded: .userAdded
-                case .source: .source
-                }
-                return (song: song, meta: QueueItemMeta(itemId: i.itemId, origin: origin))
-            },
+            items: snapshot.items.map(entryOf),
             currentItemId: snapshot.currentItemId, sourceId: playlistId, radioSeed: radioSeed,
             // プレイリストの続き（Android が途中まで読んだもの）は、Mac のラジオの続きとは別物なので使わない
             continuation: isPlaylist || snapshot.exhausted ? nil : snapshot.continuation,

@@ -29,8 +29,8 @@ struct SettingsPageView: View {
                             Image(systemName: "person.crop.circle.fill").font(.system(size: 50)).foregroundStyle(.secondary)
                         }
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(accountTitle(account)).subtitleStyle()
-                            Text(stateText(account)).subtle()
+                            Text(account.titleText).subtitleStyle()
+                            Text(account.stateText).subtle()
                         }
                         Spacer()
                         Button(account.isLoggedIn ? L.t("ログアウト", "Log out") : L.t("ログイン", "Log in")) {
@@ -198,24 +198,6 @@ struct SettingsPageView: View {
         if !settings.discordPresence { return "" }
         if settings.discordClientId == nil { return L.t("Application ID を入れると出せます", "Enter the Application ID to turn this on") }
         return AppServices.discord.statusText
-    }
-
-    /// アカウントの名前（読めなかったときは Android と同じく「取得できませんでした」。それだけではログインが切れたことにしない）。
-    private func accountTitle(_ account: AccountState) -> String {
-        if !account.isLoggedIn { return L.t("ログインしていません", "Not logged in") }
-        if let name = account.name { return name }
-        return account.accountCheckFailed ? L.t("アカウントを取得できませんでした", "Couldn’t get your account") : L.t("ログイン中", "Logged in")
-    }
-
-    private func stateText(_ account: AccountState) -> String {
-        if !account.isLoggedIn { return L.t("ログインすると、ライブラリやおすすめが使えます", "Log in to use your library and recommendations") }
-        if !account.accountChecked { return L.t("アカウントを確かめています…", "Checking account…") }
-        let premium: String = switch account.premiumAudio {
-        case true?: L.t("使えます", "Available")
-        case false?: L.t("使えません", "Unavailable")
-        case nil: account.accountCheckFailed ? L.t("分かりません", "Unknown") : L.t("確かめています…", "Checking…")
-        }
-        return L.t("Premium 音質: ", "Premium audio: ") + premium
     }
 
     private func section(_ title: String) -> some View {

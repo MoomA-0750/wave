@@ -89,3 +89,24 @@ final class AccountState {
         changed.forEach { $0() }
     }
 }
+
+extension AccountState {
+    /// アカウントの名前（読めなかったときは Android と同じく「取得できませんでした」。それだけではログインが切れたことにしない）。設定の画面に出す。
+    var titleText: String {
+        if !isLoggedIn { return L.t("ログインしていません", "Not logged in") }
+        if let name { return name }
+        return accountCheckFailed ? L.t("アカウントを取得できませんでした", "Couldn’t get your account") : L.t("ログイン中", "Logged in")
+    }
+
+    /// アカウントの状態の補足（Premium 音質が使えるか）。
+    var stateText: String {
+        if !isLoggedIn { return L.t("ログインすると、ライブラリやおすすめが使えます", "Log in to use your library and recommendations") }
+        if !accountChecked { return L.t("アカウントを確かめています…", "Checking account…") }
+        let premium: String = switch premiumAudio {
+        case true?: L.t("使えます", "Available")
+        case false?: L.t("使えません", "Unavailable")
+        case nil: accountCheckFailed ? L.t("分かりません", "Unknown") : L.t("確かめています…", "Checking…")
+        }
+        return L.t("Premium 音質: ", "Premium audio: ") + premium
+    }
+}

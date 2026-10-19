@@ -2,19 +2,6 @@
 import SwiftUI
 import WaveCore
 
-/// 曲の一覧の1行（番号・画像・曲名・アーティスト・アルバム・長さ）。
-struct TrackRow: Identifiable, Hashable {
-    var number: Int
-    var song: Song
-    var setVideoId: String?
-    var showAlbum = true
-    var showArtwork = true
-    /// 同じ曲が2回ある一覧でも見分けられるよう、作った順の番号を持つ。
-    var id: String { "\(number):\(song.videoId):\(setVideoId ?? "")" }
-
-    var albumTitle: String { song.album?.title ?? "" }
-}
-
 /// 曲の一覧の行（Spotify の表と同じ列: # / タイトル / アルバム / 時間 / …）。ダブルクリックで再生、右クリックで曲のメニュー。
 struct TrackRowView: View {
     var row: TrackRow

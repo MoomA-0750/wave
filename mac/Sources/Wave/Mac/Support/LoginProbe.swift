@@ -16,12 +16,7 @@ final class LoginProbe: NSObject, WKNavigationDelegate {
     }
 
     private override init() {
-        let config = WKWebViewConfiguration()
-        config.websiteDataStore = .default()
-        // 既定の UA には Safari の名が無く、YouTube Music が「対応していないブラウザ」のページを返す（yt.config_ が無い）。Safari と名乗る
-        config.applicationNameForUserAgent = LoginWindowController.safariName
-        webView = WKWebView(frame: NSRect(x: 0, y: 0, width: 800, height: 600), configuration: config)
-        webView.isInspectable = false
+        webView = WebLogin.makeWebView(frame: NSRect(x: 0, y: 0, width: 800, height: 600))
         super.init()
         webView.navigationDelegate = self
     }

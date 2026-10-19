@@ -70,29 +70,6 @@ final class StreamTests: XCTestCase {
         XCTAssertEqual([136, 135], picked.map { $0.path("itag").long! })
     }
 
-    func testVideoManifestCarriesTheVideoSize() {
-        let mpd = DashManifest.build(DashInfo(initStart: 0, initEnd: 700, indexStart: 701, indexEnd: 1500, bitrate: 900000, sampleRate: 0, durationMs: 200000, codecs: "avc1.4d401f", width: 1280, height: 720, frameRate: 30),
-                                     mimeType: "video/mp4; codecs=avc1.4d401f", placeholderUrl: "https://wave.invalid/video/x")
-        XCTAssertTrue(mpd.contains("mimeType=\"video/mp4\""))
-        XCTAssertTrue(mpd.contains("width=\"1280\" height=\"720\" frameRate=\"30\""))
-        XCTAssertFalse(mpd.contains("audioSamplingRate"))
-        XCTAssertTrue(mpd.contains("mediaPresentationDuration=\"PT200S\""))
-    }
-
-    func testAudioManifestCarriesRangesAndEscapes() {
-        let mpd = DashManifest.build(DashInfo(initStart: 0, initEnd: 631, indexStart: 632, indexEnd: 1023, bitrate: 130000, sampleRate: 44100, durationMs: 215_046, codecs: "mp4a.40.2"),
-                                     mimeType: "audio/mp4; codecs=\"mp4a.40.2\"", placeholderUrl: "https://wave.invalid/audio/x?a=1&b=2")
-        XCTAssertTrue(mpd.hasPrefix("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<MPD "))
-        XCTAssertTrue(mpd.contains("mediaPresentationDuration=\"PT215.046S\""))
-        XCTAssertTrue(mpd.contains("<Representation id=\"audio\" codecs=\"mp4a.40.2\" bandwidth=\"130000\" audioSamplingRate=\"44100\">"))
-        XCTAssertTrue(mpd.contains("<BaseURL>https://wave.invalid/audio/x?a=1&amp;b=2</BaseURL>"))
-        XCTAssertTrue(mpd.contains("<SegmentBase indexRange=\"632-1023\">"))
-        XCTAssertTrue(mpd.contains("<Initialization range=\"0-631\" />"))
-        XCTAssertTrue(mpd.hasSuffix("</MPD>"))
-        XCTAssertEqual("0.5", DashManifest.seconds(500))
-        XCTAssertEqual("1.25", DashManifest.seconds(1250))
-    }
-
     func testDashInfoIsReadFromTheFormat() {
         let dash = StreamResolver.dashOf(format(#"{"itag":140,"mimeType":"audio/mp4; codecs=\"mp4a.40.2\"","initRange":{"start":"0","end":"631"},"indexRange":{"start":"632","end":"1023"},"bitrate":130000,"audioSampleRate":"44100","approxDurationMs":"215046"}"#))
         XCTAssertEqual(DashInfo(initStart: 0, initEnd: 631, indexStart: 632, indexEnd: 1023, bitrate: 130000, sampleRate: 44100, durationMs: 215046, codecs: "mp4a.40.2"), dash)

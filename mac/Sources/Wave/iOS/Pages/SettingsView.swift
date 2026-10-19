@@ -130,9 +130,9 @@ struct SettingsView: View {
             HStack(spacing: 14) {
                 SettingsAvatar(name: account.name, photoUrl: account.photoUrl, size: 52)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(SettingsView.accountTitle(account))
+                    Text(account.titleText)
                         .font(.headline).lineLimit(1)
-                    Text(stateText).font(.footnote).foregroundStyle(.secondary)
+                    Text(account.stateText).font(.footnote).foregroundStyle(.secondary)
                 }
             }
             .padding(.vertical, 4)
@@ -168,24 +168,6 @@ struct SettingsView: View {
         } header: {
             Text(L.t("アカウント", "Account"))
         }
-    }
-
-    /// アカウントの名前（読めなかったときは Android と同じく「取得できませんでした」。それだけではログインが切れたことにしない）。
-    static func accountTitle(_ account: AccountState) -> String {
-        if !account.isLoggedIn { return L.t("ログインしていません", "Not logged in") }
-        if let name = account.name { return name }
-        return account.accountCheckFailed ? L.t("アカウントを取得できませんでした", "Couldn’t get your account") : L.t("ログイン中", "Logged in")
-    }
-
-    private var stateText: String {
-        if !account.isLoggedIn { return L.t("ログインすると、ライブラリやおすすめが使えます", "Log in to use your library and recommendations") }
-        if !account.accountChecked { return L.t("アカウントを確かめています…", "Checking account…") }
-        let premium: String = switch account.premiumAudio {
-        case true?: L.t("使えます", "Available")
-        case false?: L.t("使えません", "Unavailable")
-        case nil: account.accountCheckFailed ? L.t("分かりません", "Unknown") : L.t("確かめています…", "Checking…")
-        }
-        return L.t("Premium 音質: ", "Premium audio: ") + premium
     }
 
     /// ログアウトして、ログインの画面を出す。

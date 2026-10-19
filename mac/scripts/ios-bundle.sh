@@ -31,8 +31,11 @@ intents() {
     local base=$1 module=$2 dest=$3 binary=$4 list cv sl
     cv=$(find $scratch -path "*$confdir*" -name "$base-primary.swiftconstvalues" | head -1)
     sl=$(find $scratch -path "*$confdir*" -name "$base.SwiftFileList" | head -1)
-    if [ -z "$cv" ] || [ -z "$sl" ]; then echo "no const values for $module" >&2; return 1; fi
-    list=$(mktemp); echo "$PWD/$cv" > "$list"
+    [ -n "$sl" ] || { echo "no source list for $module" >&2; return 1; }
+    # 全体を1つに組む（release）と1つのファイル、ファイルごとに組む（debug）とソースのファイルごとに書き出される
+    list=$(mktemp)
+    if [ -n "$cv" ]; then echo "$PWD/$cv" > "$list"; else find "$PWD/$(dirname "$sl")" -name "*.swiftconstvalues" > "$list"; fi
+    [ -s "$list" ] || { rm -f "$list"; echo "no const values for $module" >&2; return 1; }
     xcrun appintentsmetadataprocessor --output "$dest" --toolchain-dir "$(xcode-select -p)/Toolchains/XcodeDefault.xctoolchain" \
         --module-name $module --sdk-root "$sdk" --xcode-version "$(xcodebuild -version | awk '/Build version/ {print $3}')" \
         --platform-family iOS --deployment-target 18.0 --target-triple $triple --source-file-list "$sl" \

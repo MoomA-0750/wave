@@ -8,8 +8,6 @@ public struct LibraryBody: Equatable, Sendable, ConnectCodable {
     public static let version = 1
     /// 聴いたところは新しい順にこの数まで（文書を数百 KB に収める）。
     public static let maxPositions = 500
-    /// 外した番組の印は、この日数を過ぎたら捨ててよい（全端末に行き渡った後）。
-    public static let removedKeepDays = 180
 
     public var v: Int
     /// フィードの URL ごと。

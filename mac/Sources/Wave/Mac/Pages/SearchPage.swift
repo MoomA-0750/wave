@@ -129,21 +129,7 @@ final class SearchPageModel {
             return
         }
         songs = found.enumerated().map { TrackRow(number: $0.offset + 1, song: $0.element) }
-        top = SearchPageModel.topResult(q, found, artists, albums)
-    }
-
-    /// トップの検索結果: アーティストの名前が検索語と同じならアーティスト、ほかは最初の曲（Android 版の SearchOrder と同じ）。
-    static func topResult(_ q: String, _ songs: [Song], _ artists: [ArtistSummary], _ albums: [AlbumSummary]) -> HomeItem? {
-        let key = normalize(q)
-        if let artist = artists.first(where: { normalize($0.name) == key }) { return .artist(artist) }
-        if let album = albums.first(where: { normalize($0.title) == key }) { return .album(album) }
-        if let song = songs.first { return .song(song) }
-        if let artist = artists.first { return .artist(artist) }
-        return albums.first.map { .album($0) }
-    }
-
-    static func normalize(_ text: String) -> String {
-        text.precomposedStringWithCompatibilityMapping.lowercased().filter { !$0.isWhitespace }
+        top = SearchOrder.topResult(q, found, artists, albums)
     }
 
     func remember(_ item: HomeItem) { AppServices.settings.addSearch(.of(item)) }

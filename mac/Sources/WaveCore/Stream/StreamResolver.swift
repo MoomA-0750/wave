@@ -43,8 +43,6 @@ public final class ResolvedStream: Sendable, CustomStringConvertible, CustomDebu
         self.generation = generation
     }
 
-    public var hasPlaybackStats: Bool { statsUrl != nil }
-
     /// 音声を取得するところだけが呼ぶ。ログ・例外文・画面に渡さない。
     public func revealUrl() -> String { url }
 

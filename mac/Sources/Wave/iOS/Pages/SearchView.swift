@@ -187,26 +187,12 @@ private final class SearchModel {
                 }
                 return
             }
-            top = SearchModel.topResult(q, songs, artists, albums)
+            top = SearchOrder.topResult(q, songs, artists, albums)
         }
     }
 
     /// 語の名前のアーティストがいれば、アーティストを曲より先に出す（Android の artistFirst と同じ）。
     var artistFirst: Bool { top?.isArtist == true }
-
-    /// トップの検索結果: アーティストの名前が検索語と同じならアーティスト、ほかは最初の曲（Android の SearchOrder・Mac と同じ）。
-    static func topResult(_ q: String, _ songs: [Song], _ artists: [ArtistSummary], _ albums: [AlbumSummary]) -> HomeItem? {
-        let key = normalize(q)
-        if let artist = artists.first(where: { normalize($0.name) == key }) { return .artist(artist) }
-        if let album = albums.first(where: { normalize($0.title) == key }) { return .album(album) }
-        if let song = songs.first { return .song(song) }
-        if let artist = artists.first { return .artist(artist) }
-        return albums.first.map { .album($0) }
-    }
-
-    static func normalize(_ text: String) -> String {
-        text.precomposedStringWithCompatibilityMapping.lowercased().filter { !$0.isWhitespace }
-    }
 
     /// 読めなかったポッドキャスト・エピソードを読み直す。
     func retryTab() {
@@ -380,9 +366,6 @@ enum SearchDebug {
 }
 #endif
 
-/// 読み込みの失敗の文（Shared の FailureText。Android の failureMessage と同じ分け方）。
-private func failureText(_ failure: FailureKind) -> String { FailureText.message(failure) }
-
 /// 種類の絞り込みで、すべての一覧の中に出す件数（Android と同じ）。
 private let previewCount = 4
 
@@ -472,7 +455,7 @@ struct SearchView: View {
                 ProgressView().frame(maxWidth: .infinity).listRowBackground(Color.clear)
             } else if let failure = model.moodsFailure {
                 Section {
-                    LoadState(loading: false, failure: L.t("ジャンルを読み込めませんでした: ", "Couldn't load genres: ") + failureText(failure)) {
+                    LoadState(loading: false, failure: L.t("ジャンルを読み込めませんでした: ", "Couldn't load genres: ") + FailureText.message(failure)) {
                         Task { await model.loadMoods() }
                     }
                 }
@@ -576,7 +559,7 @@ struct SearchView: View {
             } else if model.tab == .episodes {
                 pagedEpisodes
             } else if let failure = model.failure {
-                Text(failureText(failure)).foregroundStyle(.secondary).listRowSeparator(.hidden)
+                Text(FailureText.message(failure)).foregroundStyle(.secondary).listRowSeparator(.hidden)
             } else if model.empty {
                 Text(L.t("見つかりませんでした", "No results found")).foregroundStyle(.secondary).listRowSeparator(.hidden)
             } else {
@@ -597,7 +580,7 @@ struct SearchView: View {
 
     @ViewBuilder private var pagedPodcasts: some View {
         if let failure = model.podcastsFailure {
-            LoadState(loading: false, failure: L.t("ポッドキャストを検索できませんでした: ", "Couldn't search podcasts: ") + failureText(failure)) {
+            LoadState(loading: false, failure: L.t("ポッドキャストを検索できませんでした: ", "Couldn't search podcasts: ") + FailureText.message(failure)) {
                 model.retryTab()
             }
             .listRowSeparator(.hidden)
@@ -618,7 +601,7 @@ struct SearchView: View {
 
     @ViewBuilder private var pagedEpisodes: some View {
         if let failure = model.episodesFailure {
-            LoadState(loading: false, failure: L.t("エピソードを検索できませんでした: ", "Couldn't search episodes: ") + failureText(failure)) {
+            LoadState(loading: false, failure: L.t("エピソードを検索できませんでした: ", "Couldn't search episodes: ") + FailureText.message(failure)) {
                 model.retryTab()
             }
             .listRowSeparator(.hidden)
@@ -679,7 +662,7 @@ struct SearchView: View {
         if model.liveLoading {
             ProgressView().frame(maxWidth: .infinity).padding(.vertical, 40).listRowSeparator(.hidden).listRowBackground(Color.clear)
         } else if let failure = model.liveFailure {
-            LoadState(loading: false, failure: L.t("ライブ配信を検索できませんでした: ", "Couldn't search live streams: ") + failureText(failure)) {
+            LoadState(loading: false, failure: L.t("ライブ配信を検索できませんでした: ", "Couldn't search live streams: ") + FailureText.message(failure)) {
                 model.loadLiveIfNeeded()
             }
             .listRowSeparator(.hidden)
@@ -699,7 +682,7 @@ struct SearchView: View {
         if model.lyricsLoading {
             ProgressView().frame(maxWidth: .infinity).padding(.vertical, 40).listRowSeparator(.hidden).listRowBackground(Color.clear)
         } else if let failure = model.lyricsFailure {
-            LoadState(loading: false, failure: L.t("歌詞から探せませんでした: ", "Couldn't search by lyrics: ") + failureText(failure)) {
+            LoadState(loading: false, failure: L.t("歌詞から探せませんでした: ", "Couldn't search by lyrics: ") + FailureText.message(failure)) {
                 model.loadLyricsIfNeeded()
             }
             .listRowSeparator(.hidden)

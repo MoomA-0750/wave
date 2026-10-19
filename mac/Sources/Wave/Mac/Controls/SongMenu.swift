@@ -100,8 +100,12 @@ struct CreatePlaylistSheet: View {
 struct AddToPlaylistSheet: View {
     var song: Song
     @Environment(\.dismiss) private var dismiss
-    @State private var status: [String: PlaylistMembership.Status] = [:]
-    @State private var busy: Set<String> = []
+    @State private var model: AddToPlaylistModel
+
+    init(song: Song) {
+        self.song = song
+        _model = State(initialValue: AddToPlaylistModel(song: song))
+    }
 
     var body: some View {
         let player = AppServices.player!
@@ -123,10 +127,10 @@ struct AddToPlaylistSheet: View {
                     }
                     ForEach(AppServices.library.editable, id: \.playlistId) { playlist in
                         row(playlist.title, icon: "music.note.list") {
-                            toggle(playlist)
+                            model.toggle(playlist)
                         } trailing: {
-                            let s = status[playlist.playlistId] ?? .checking
-                            if busy.contains(playlist.playlistId) || s == .checking {
+                            let s = model.state(playlist)
+                            if s == .checking {
                                 ProgressView().controlSize(.small)
                             } else if s == .isIn {
                                 Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.accentColor)
@@ -134,10 +138,7 @@ struct AddToPlaylistSheet: View {
                                 Image(systemName: "questionmark.circle").foregroundStyle(.secondary).help(L.t("入っているか確かめられませんでした", "Couldn't check"))
                             }
                         }
-                        .task {
-                            let s = await AppServices.library.membership.check(playlist.playlistId, song.videoId)
-                            status[playlist.playlistId] = s
-                        }
+                        .task { await model.check(playlist) }
                     }
                 }
             }
@@ -148,22 +149,6 @@ struct AddToPlaylistSheet: View {
             }
         }
         .padding(24)
-    }
-
-    private func toggle(_ playlist: PlaylistSummary) {
-        let id = playlist.playlistId
-        let s = status[id] ?? .checking
-        guard !busy.contains(id), s != .checking else { return }
-        busy.insert(id)
-        Task {
-            if s == .isIn {
-                if await SongActions.remove(playlist, song) { status[id] = .notIn }
-            } else {
-                let result = await SongActions.add(playlist, song)
-                if result == .added || result == .alreadyInPlaylist { status[id] = .isIn }
-            }
-            busy.remove(id)
-        }
     }
 
     private func row<T: View>(_ title: String, icon: String, accentIcon: Bool = false, action: @escaping () -> Void, @ViewBuilder trailing: () -> T) -> some View {

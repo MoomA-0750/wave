@@ -2,21 +2,6 @@
 import SwiftUI
 import WaveCore
 
-/// ライブラリの1行（プレイリスト・アーティスト・アルバム。先頭の「高く評価した曲」は item が nil）。
-private struct LibraryViewEntry: Identifiable, Hashable {
-    var title: String
-    var subtitle: String?
-    var thumbnailUrl: String?
-    var item: HomeItem?
-    var isLiked = false
-    /// 保存したポッドキャストの番組。
-    var podcast: PodcastSummary?
-    /// 「新しいエピソード」（ポッドキャストで絞ったときだけ先頭に出す）。
-    var isNewEpisodes = false
-    var id: String { item?.key ?? podcast.map { "pod-" + $0.browseId } ?? (isNewEpisodes ? "new-episodes" : "liked") }
-    var isArtist: Bool { item?.isArtist ?? false }
-}
-
 /// ライブラリのタブ（Android の LibraryTabScreen と同じ並び: アカウントの絵と「ライブラリ」・＋、種類のチップ、並べ替えと一覧／格子の切り替え、
 /// 先頭に「高く評価した曲」、その下にプレイリスト・アーティスト・アルバム）。絞り込みは iOS の検索欄、再読み込みは引っぱって。
 struct LibraryView: View {
@@ -143,60 +128,12 @@ struct LibraryView: View {
         }
     }
 
-    /// 出す行（Mac の libraryEntries と同じ: 種類と語で絞り、並べ、先頭に「高く評価した曲」）。
-    private func entries(_ lib: LibraryState) -> [LibraryViewEntry] {
-        let filter = self.filter.trimmingCharacters(in: .whitespaces)
-        var entries: [LibraryViewEntry] = []
-        if kind == nil || kind == "playlist" {
-            entries += lib.playlists.map {
-                LibraryViewEntry(title: $0.title, subtitle: L.t("プレイリスト", "Playlist") + (($0.subtitle ?? "").isEmpty ? "" : " • " + $0.subtitle!),
-                                 thumbnailUrl: $0.thumbnailUrl, item: .playlist($0))
-            }
-        }
-        if kind == nil || kind == "artist" {
-            entries += lib.artists.map { LibraryViewEntry(title: $0.name, subtitle: L.t("アーティスト", "Artist"), thumbnailUrl: $0.thumbnailUrl, item: .artist($0)) }
-        }
-        if kind == nil || kind == "album" {
-            entries += lib.albums.map {
-                LibraryViewEntry(title: $0.title, subtitle: L.t("アルバム", "Album") + (($0.subtitle ?? "").isEmpty ? "" : " • " + $0.subtitle!),
-                                 thumbnailUrl: $0.thumbnailUrl, item: .album($0))
-            }
-        }
-        if kind == nil || kind == "podcast" {
-            entries += lib.allPodcasts.map {
-                LibraryViewEntry(title: $0.title, subtitle: L.t("ポッドキャスト", "Podcast") + (($0.author ?? "").isEmpty ? "" : " • " + $0.author!),
-                                 thumbnailUrl: $0.thumbnailUrl, podcast: $0)
-            }
-        }
-        if !filter.isEmpty {
-            entries = entries.filter { $0.title.localizedCaseInsensitiveContains(filter) || ($0.subtitle ?? "").localizedCaseInsensitiveContains(filter) }
-        }
-        if sort == "alpha" {
-            entries.sort { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
-        } else if sort == "recent" {
-            // 最近再生したものを先に、残りは追加した順のまま（Android と同じ）
-            var rank: [String: Int] = [:]
-            for (i, key) in lib.recentKeys.enumerated() where rank[key] == nil { rank[key] = i }
-            entries = entries.enumerated().sorted { a, b in
-                let ra = a.element.item.flatMap(LibraryState.keyOf).flatMap { rank[$0] } ?? Int.max
-                let rb = b.element.item.flatMap(LibraryState.keyOf).flatMap { rank[$0] } ?? Int.max
-                return ra != rb ? ra < rb : a.offset < b.offset
-            }.map(\.element)
-        }
-        // 高く評価した曲はいつも先頭（Spotify の「お気に入りの曲」と同じ）
-        let likedTitle = L.t("高く評価した曲", "Liked Songs")
-        if (kind == nil || kind == "playlist") && (filter.isEmpty || likedTitle.localizedCaseInsensitiveContains(filter)) {
-            entries.insert(LibraryViewEntry(title: likedTitle, subtitle: L.t("プレイリスト • 自動", "Playlist • Auto"), thumbnailUrl: lib.likedThumbnail, isLiked: true), at: 0)
-        }
-        // ポッドキャストで絞ったときは「新しいエピソード」を先頭に（Android と同じ）
-        let newEpisodesTitle = L.t("新しいエピソード", "New episodes")
-        if kind == "podcast" && (filter.isEmpty || newEpisodesTitle.localizedCaseInsensitiveContains(filter)) {
-            entries.insert(LibraryViewEntry(title: newEpisodesTitle, subtitle: L.t("プレイリスト • 自動", "Playlist • Auto"), isNewEpisodes: true), at: 0)
-        }
-        return entries
+    /// 出す行（Mac と同じ: 種類と語で絞り、並べ、先頭に「高く評価した曲」）。語は補足の行（種類・アーティスト）にも当てる。
+    private func entries(_ lib: LibraryState) -> [LibraryEntry] {
+        LibraryEntry.list(lib, kind: kind, filter: filter, sort: sort, matchSubtitle: true)
     }
 
-    private func open(_ entry: LibraryViewEntry) {
+    private func open(_ entry: LibraryEntry) {
         if entry.isLiked {
             AppServices.nav.likedSongs()
         } else if entry.isNewEpisodes {
@@ -209,12 +146,12 @@ struct LibraryView: View {
     }
 
     @ViewBuilder
-    private func menu(_ entry: LibraryViewEntry) -> some View {
+    private func menu(_ entry: LibraryEntry) -> some View {
         if entry.podcast == nil && !entry.isNewEpisodes { playMenu(entry) }
     }
 
     @ViewBuilder
-    private func playMenu(_ entry: LibraryViewEntry) -> some View {
+    private func playMenu(_ entry: LibraryEntry) -> some View {
         let item = entry.item ?? .playlist(PlaylistSummary(playlistId: MusicRepository.likedSongs, title: entry.title, subtitle: nil, thumbnailUrl: nil))
         Button(L.t("再生", "Play"), systemImage: "play.fill") { AppServices.nav.play(item) }
     }
@@ -261,7 +198,7 @@ private struct LibraryViewChip: View {
 }
 
 private struct LibraryViewRow: View {
-    var entry: LibraryViewEntry
+    var entry: LibraryEntry
 
     var body: some View {
         HStack(spacing: 12) {
@@ -283,7 +220,7 @@ private struct LibraryViewRow: View {
 }
 
 private struct LibraryViewGridCell: View {
-    var entry: LibraryViewEntry
+    var entry: LibraryEntry
 
     var body: some View {
         VStack(alignment: entry.isArtist ? .center : .leading, spacing: 4) {

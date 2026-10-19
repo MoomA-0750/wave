@@ -112,12 +112,6 @@ public final class RelayConnection: @unchecked Sendable {
         }
     }
 
-    public func holding<T>(_ block: () async throws -> T) async rethrows -> T {
-        acquire()
-        defer { release() }
-        return try await block()
-    }
-
     /// つながっていれば送る（呼んだ順に送る）。送れなければ false。
     @discardableResult
     public func send(_ json: String) -> Bool {

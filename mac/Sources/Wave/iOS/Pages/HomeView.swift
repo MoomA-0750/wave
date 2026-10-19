@@ -2,149 +2,10 @@
 import SwiftUI
 import WaveCore
 
-/// ホームの状態（タブを切り替えても持っておく。Android の HomeFeedViewModel と同じ読み方）。
-@MainActor @Observable
-private final class HomeFeedModel {
-    static let shared = HomeFeedModel()
-
-    var shelves: [HomeShelf] = []
-    var chips: [HomeChip] = []
-    var selected: HomeChip?
-    var recent: [HomeItem] = []
-    /// YouTube Music の新作（アルバム・シングル）。「すべて」のときだけ読み、棚の先頭に出す（Android と同じ）。
-    var newReleases: [AlbumSummary] = []
-    var loading = false
-    var failure: FailureKind?
-
-    /// 出す棚: 新作を先頭に、ホームの棚を続ける（ホームに同じ新作の棚が来ていれば、こちらは出さない）。
-    var displayShelves: [HomeShelf] { HomeShelves.withNewReleases(newReleases, title: L.t("新作", "New releases"), shelves: shelves) }
-    var hasMore: Bool { continuation != nil }
-    private(set) var continuation: String?
-    @ObservationIgnored private var seen: Set<String> = []
-    @ObservationIgnored private var requestId = 0
-    @ObservationIgnored private var started = false
-    /// 引っぱって読み直すときは、新しい棚が届くまで前の棚を出しておく。
-    @ObservationIgnored private var replacePending = false
-
-    private init() {}
-
-    func start() {
-        guard !started else { return }
-        started = true
-        AppServices.account.changed.append { [weak self] in self?.reload() }
-        reload()
-    }
-
-    func select(_ chip: HomeChip?) {
-        selected = selected == chip ? nil : chip
-        reload()
-    }
-
-    func reload() {
-        Task { await refresh(keep: false) }
-    }
-
-    /// 読み直す（最初の棚が揃うまで待つ）。keep なら届くまで前の棚を残す。
-    func refresh(keep: Bool) async {
-        requestId += 1
-        let id = requestId
-        continuation = nil
-        failure = nil
-        loading = false
-        if keep {
-            replacePending = true
-        } else {
-            shelves = []
-            seen = []
-            replacePending = false
-        }
-        async let recentDone: Void = loadRecent(id)
-        async let releasesDone: Void = loadNewReleases(id)
-        // 最初は棚が8つ以上になるまで続きを読む（Android と同じ）
-        for _ in 0..<4 where id == requestId {
-            if !(await loadPage(id)) { break }
-            if shelves.count >= 8 || continuation == nil { break }
-        }
-        await recentDone
-        await releasesDone
-    }
-
-    private func loadNewReleases(_ id: Int) async {
-        guard selected == nil else {
-            newReleases = []
-            return
-        }
-        let result = (try? await AppServices.music.newReleases()) ?? .failed(.network)
-        guard id == requestId else { return }
-        newReleases = result.value ?? []
-    }
-
-    private func loadRecent(_ id: Int) async {
-        guard selected == nil, AppServices.client.isLoggedIn else {
-            recent = []
-            return
-        }
-        let items = (try? await AppServices.music.recentActivity())?.value ?? []
-        guard id == requestId else { return }
-        recent = Array(items.prefix(8))
-    }
-
-    /// 下の端に近づいたら続きの棚を読む。
-    func loadMore() {
-        guard continuation != nil, !loading else { return }
-        let id = requestId
-        Task { await loadPage(id) }
-    }
-
-    @discardableResult
-    private func loadPage(_ id: Int) async -> Bool {
-        if loading { return false }
-        loading = true
-        defer { loading = false }
-        let startedAt = Date()
-        let params = continuation == nil ? selected?.params : nil
-        var result = (try? await AppServices.music.home(continuation: continuation, chipParams: params)) ?? .failed(.network)
-        // 起動直後はほかの読み込みと重なって時間切れになることがあるので、通信の失敗は1回だけやり直す
-        if !result.isOk && result.failure == .network && id == requestId {
-            result = (try? await AppServices.music.home(continuation: continuation, chipParams: params)) ?? .failed(.network)
-        }
-        guard id == requestId else { return false }
-        guard let page = result.value else {
-            AppPaths.log("home failed failure=\(String(describing: result.failure)) ms=\(Int(Date().timeIntervalSince(startedAt) * 1000))")
-            if replacePending { replacePending = false }
-            if shelves.isEmpty { failure = result.failure ?? .network }
-            return false
-        }
-        if replacePending {
-            shelves = []
-            seen = []
-            replacePending = false
-        }
-        if continuation == nil && selected == nil && !page.chips.isEmpty { chips = page.chips }
-        for shelf in page.shelves where seen.insert(shelf.title + "|" + shelf.items.prefix(3).map(\.key).joined(separator: ",")).inserted {
-            shelves.append(shelf)
-        }
-        continuation = page.continuation
-        return true
-    }
-
-    /// 新作をカードにする（アルバムは開く、動画は曲の画面へ。見つけて7日は補足に NEW を付ける。Mac・Android と同じ）。
-    static func releaseItem(_ r: NewRelease) -> HomeItem {
-        let fresh = !r.seeded && Int64(Date().timeIntervalSince1970 * 1000) - r.foundAtEpochMs < 7 * 24 * 60 * 60 * 1000
-        let subtitle = (fresh ? "NEW • " : "") + r.artistName
-        if let album = r.albumBrowseId { return .album(AlbumSummary(browseId: album, title: r.title, subtitle: subtitle, thumbnailUrl: r.thumbnailUrl)) }
-        return .song(Song(videoId: r.videoId ?? "", title: r.title, artists: [ArtistRef(name: r.artistName, browseId: r.artistId)], album: nil,
-                          durationSeconds: nil, thumbnailUrl: r.thumbnailUrl))
-    }
-}
-
-/// 読み込みの失敗の文（Shared の FailureText。Android の failureMessage と同じ分け方）。
-private func failureText(_ failure: FailureKind) -> String { FailureText.message(failure) }
-
 /// ホーム（Android の HomeScreen と同じ並び）: 絞り込みのチップ、最近聴いたものの2列の格子、登録したアーティストの新作、おすすめの棚。
 /// 右上のアカウントの絵から、最近再生した曲・端末の連携・設定へ。
 struct HomeView: View {
-    @State private var home = HomeFeedModel.shared
+    @State private var home = HomeModel.shared
 
     var body: some View {
         let releases = home.selected == nil ? Array(ReleaseWatchState.diversified(AppServices.releases.recent).prefix(20)) : []
@@ -155,7 +16,7 @@ struct HomeView: View {
                 // 登録したアーティストの新作（最近聴いたものの下）。絞り込み中は出さない
                 if !releases.isEmpty {
                     ShelfRow(title: L.t("登録したアーティストの新作", "New from artists you subscribe to"), strapline: nil,
-                             items: releases.map(HomeFeedModel.releaseItem))
+                             items: releases.map(HomeModel.releaseItem))
                 }
                 let shelves = home.displayShelves
                 ForEach(Array(shelves.enumerated()), id: \.offset) { i, shelf in
@@ -167,7 +28,7 @@ struct HomeView: View {
                     ProgressView().frame(maxWidth: .infinity).padding(.vertical, shelves.isEmpty ? 80 : 8)
                 } else if let failure = home.failure, home.newReleases.isEmpty {
                     // 新作だけでも読めていれば、失敗は出さない（Android と同じ）
-                    LoadState(loading: false, failure: L.t("おすすめを読み込めませんでした: ", "Couldn't load recommendations: ") + failureText(failure)) {
+                    LoadState(loading: false, failure: L.t("おすすめを読み込めませんでした: ", "Couldn't load recommendations: ") + FailureText.message(failure)) {
                         home.reload()
                     }
                 }
@@ -336,7 +197,7 @@ struct MoodView: View {
                 ForEach(Array(shelves.enumerated()), id: \.offset) { _, shelf in
                     ShelfRow(title: shelf.title, strapline: shelf.strapline, items: shelf.items)
                 }
-                LoadState(loading: loading && shelves.isEmpty, failure: failure.map(failureText)) { Task { await load() } }
+                LoadState(loading: loading && shelves.isEmpty, failure: failure.map(FailureText.message)) { Task { await load() } }
             }
             .padding(.vertical, 8)
         }
