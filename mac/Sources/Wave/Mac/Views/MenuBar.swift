@@ -144,7 +144,8 @@ final class MenuBarController: NSObject {
             MainActor.assumeIsolated { self?.close() }
         } as Any)
         clickMonitors.append(NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .keyDown]) { [weak self] event in
-            let isKey = event.type == .keyDown, isEsc = event.keyCode == 53, window = event.window
+            // keyCode はキーのイベントでしか読めない（マウスの押下で読むと例外になり、押下が捨てられて小窓のボタンが効かなくなる）
+            let isKey = event.type == .keyDown, isEsc = isKey && event.keyCode == 53, window = event.window
             let swallow = MainActor.assumeIsolated { () -> Bool in
                 guard let self, let panel = self.panel else { return false }
                 if isKey {
