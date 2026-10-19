@@ -337,8 +337,16 @@ public static class DebugCommands
             case "play":
                 if (!player.IsPlaying) player.TogglePlay();
                 break;
+            case "lyrics-probe":
+                // 開発用: 今の曲の時刻なしの歌詞（YouTube Music）の取得だけを試す（歌詞の失敗の切り分け）
+                if (player.Current is { } probe)
+                {
+                    var plain = await AppServices.Music.PlainLyricsAsync(probe.VideoId);
+                    AppPaths.Log($"debug lyrics-probe plainOk={plain.IsOk} failure={plain.Failure} hasText={plain.Value is not null}");
+                }
+                break;
             case "now":
-                AppPaths.Log($"debug now title={player.Current?.Title} position={player.Position:0} playing={player.IsPlaying} remote={player.IsRemote}");
+                AppPaths.Log($"debug now title={player.Current?.Title} position={player.Position:0} playing={player.IsPlaying} remote={player.IsRemote} lyrics={player.Lyrics?.GetType().Name}");
                 break;
             case "playlist-delete":
             {
