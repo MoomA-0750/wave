@@ -15,16 +15,6 @@ struct WaveApp: App {
         Window("wave", id: "main") {
             MainView()
                 .frame(minWidth: 900, minHeight: 600)
-                // 窓の地は Finder・メールの左の欄と同じサイドバーの素材（ultraThinMaterial はほかのアプリより透けすぎた）。
-                // 枠はその上に Liquid Glass の板として浮かせる
-                .containerBackground(for: .window) {
-                    ZStack {
-                        SidebarMaterial()
-                        // 素材だけだと壁紙が設定・Finder の左の欄より強く透けた（暗い表示では明るく、明るい表示では暗く見えた）。地の色を重ねて透け方をそろえる
-                        Color(nsColor: Self.sidebarTint)
-                    }
-                    .ignoresSafeArea()
-                }
         }
         .defaultSize(width: 1480, height: 940)
         .windowToolbarStyle(.unified(showsTitle: false))
@@ -41,28 +31,6 @@ struct WaveApp: App {
             }
         }
     }
-}
-
-extension WaveApp {
-    /// サイドバーの素材に重ねる色（本人の壁紙の上で、同じ位置に置いた設定アプリの左の欄に、暗い表示・明るい表示それぞれで合わせた値）。
-    static let sidebarTint = NSColor(name: nil) { appearance in
-        appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-            ? NSColor(srgbRed: 0.139, green: 0.137, blue: 0.165, alpha: 0.9)
-            : NSColor(srgbRed: 0.94, green: 0.94, blue: 0.947, alpha: 0.8)
-    }
-}
-
-/// OS 標準のサイドバーの素材（後ろの窓・壁紙をぼかして透かす。窓が手前でないときは OS に合わせて落ち着いた色にする）。
-private struct SidebarMaterial: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSVisualEffectView {
-        let view = NSVisualEffectView()
-        view.material = .sidebar
-        view.blendingMode = .behindWindow
-        view.state = .followsWindowActiveState
-        return view
-    }
-
-    func updateNSView(_ view: NSVisualEffectView, context: Context) {}
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate {

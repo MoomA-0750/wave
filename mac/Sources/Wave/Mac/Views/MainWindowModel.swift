@@ -76,8 +76,8 @@ final class MainWindowModel {
 
     /// Claude は上のボタンから呼ぶので、少し狭い窓でも右の欄に出す（再生中の画面・キューは広いときだけ）。
     var showRight: Bool { rightPaneOpen && (windowWidth >= 1180 || (rightView == .ai && windowWidth >= 880)) }
-    var libraryWidth: Double { windowWidth < 1000 ? 240 : 300 }
-    var searchWidth: Double { windowWidth < 1100 ? 300 : 440 }
+    /// 上の帯の検索の欄の幅。帯の項目は真ん中と右の欄を合わせた幅の中央に並ぶので、右の欄を開いているときは短くして、右の欄の境にかからないようにする。
+    var searchWidth: Double { windowWidth < (showRight ? 1600 : 1100) ? 300 : 440 }
     var paneToggleOn: Bool { showRight && rightView == .nowPlaying }
     var queueToggleOn: Bool { showRight && rightView == .queue }
     var aiToggleOn: Bool { showRight && rightView == .ai }

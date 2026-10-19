@@ -23,16 +23,21 @@ struct MainView: View {
                     if !(model.videoOnly && model.showVideo && player.hasVideo) { PlayerBar() }
                 }
             } else {
-                // Messages と同じく、両脇（ライブラリ・再生中の欄）は窓の地のすりガラスを透かし、真ん中のページだけ不透明な地にする。
-                // 真ん中は Finder・メールの中身の欄と同じ色（windowBackgroundColor は暗い表示で両脇より明るく、窓全体が明るく見えた）
-                ZStack(alignment: .top) {
-                    HStack(spacing: 0) {
-                        LibraryPane().frame(width: model.libraryWidth).padding(.horizontal, 6)
+                // 左のマイライブラリは OS のサイドバー（NavigationSplitView）、右の再生中の欄は OS の右の欄（inspector）にする。
+                // 地は OS が描く（Liquid Glass。色は後ろの壁紙に合わせて OS が決めるので、設定・Finder の左の欄と同じになる）
+                NavigationSplitView {
+                    LibraryPane()
+                        .navigationSplitViewColumnWidth(min: 240, ideal: 300, max: 420)
+                } detail: {
+                    ZStack(alignment: .top) {
+                        // 真ん中は Finder・メールの中身の欄と同じ色
                         ContentPane()
                             .background(Color(nsColor: .controlBackgroundColor).ignoresSafeArea())
-                        if model.showRight { RightPane().frame(width: 340).padding(.horizontal, 6) }
+                        SuggestionsOverlay(model: model)
                     }
-                    SuggestionsOverlay(model: model)
+                    .inspector(isPresented: Binding(get: { model.showRight }, set: { if !$0 { model.setRightPane(open: false, queue: model.rightView == .queue) } })) {
+                        RightPane().inspectorColumnWidth(min: 300, ideal: 340, max: 440)
+                    }
                 }
                 // 下の再生の操作は、Apple Music と同じく下の端に浮かせた板にする（ページはその下まで流れる）
                 .safeAreaInset(edge: .bottom, spacing: 0) {
