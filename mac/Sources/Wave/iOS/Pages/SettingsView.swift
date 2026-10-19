@@ -45,12 +45,13 @@ struct SettingsView: View {
             Section {
                 Toggle(isOn: $releaseNotices) {
                     SettingsLabel(title: L.t("新作の通知", "New release notifications"),
-                                  detail: L.t("登録したアーティストのアルバム・シングル・動画が出たら知らせる（wave が動いている間、6時間おきに確かめる）",
-                                              "Notify when artists you subscribe to release albums, singles or videos (checked every 6 hours while wave is running)"))
+                                  detail: L.t("登録したアーティストのアルバム・シングル・動画が出たら知らせる（6時間ほどおきに確かめる。閉じている間は iPhone が決めた時に）",
+                                              "Notify when artists you subscribe to release albums, singles or videos (checked about every 6 hours; while wave is closed, when iPhone allows)"))
                 }
                 .onChange(of: releaseNotices) { _, v in
                     AppServices.settings.releaseNotices = v
                     AppServices.settings.save()
+                    ReleaseRefresh.schedule()
                 }
             } header: {
                 Text(L.t("通知", "Notifications"))

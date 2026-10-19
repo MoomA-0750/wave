@@ -20,7 +20,9 @@
 	<key>UILaunchScreen</key><dict/>
 	<key>UIApplicationSupportsIndirectInputEvents</key><true/>
 	<key>UISupportedInterfaceOrientations</key><array><string>UIInterfaceOrientationPortrait</string><string>UIInterfaceOrientationLandscapeLeft</string><string>UIInterfaceOrientationLandscapeRight</string></array>
-	<key>UIBackgroundModes</key><array><string>audio</string></array>
+	<!-- processing: アプリを閉じていても新作を確かめる（ReleaseRefresh） -->
+	<key>UIBackgroundModes</key><array><string>audio</string><string>processing</string></array>
+	<key>BGTaskSchedulerPermittedIdentifiers</key><array><string>xyz.mooma0750.wave.releases</string></array>
 	<key>UIUserInterfaceStyle</key><string>Dark</string>
 	<key>NSSupportsLiveActivities</key><true/>
 	<key>CFBundleURLTypes</key><array><dict><key>CFBundleURLName</key><string>xyz.mooma0750.wave</string><key>CFBundleURLSchemes</key><array><string>wave</string></array></dict></array>

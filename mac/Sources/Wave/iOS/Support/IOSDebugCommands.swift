@@ -40,6 +40,10 @@ enum IOSDebugCommands {
             }
         case "now":
             AppPaths.log("debug now title=\(player.current?.title ?? "nil") position=\(Int(player.position)) duration=\(Int(player.duration)) playing=\(player.isPlaying) loading=\(player.isLoading) like=\(String(describing: player.like)) lyrics=\(player.lyrics != nil) video=\(player.video != nil) remote=\(player.isRemote) loggedIn=\(AppServices.client.isLoggedIn) " + player.engine.debugState)
+        // 裏の新作の確かめ: 頼んである分を記録に書く（release-refresh schedule で頼み直す）
+        case "release-refresh":
+            if arg == "schedule" { ReleaseRefresh.schedule() }
+            await ReleaseRefresh.logPending()
         case "route":
             AppPaths.log("debug tab=\(shell.tab) path=\(shell.paths[shell.tab]?.count ?? 0) player=\(shell.playerOpen) queue=\(shell.queueOpen)")
         case "system-volume":

@@ -23,6 +23,10 @@ final class CredentialStore {
         if status == errSecItemNotFound { return (.none, nil) }
         guard status == errSecSuccess, let data = item as? Data, let text = String(data: data, encoding: .utf8) else { return (.unreadable, nil) }
         guard let credentials = Credentials.deserialize(text) else { return (.unreadable, nil) }
+        #if os(iOS)
+            // 前の版はロック中に読めない形で保存していた。裏の新作の確かめはロック中にも動くので、読めた時に入れ替える
+            SecItemUpdate(query as CFDictionary, [kSecAttrAccessible as String: CredentialStore.accessible] as CFDictionary)
+        #endif
         return (.loaded, credentials)
     }
 
@@ -31,10 +35,17 @@ final class CredentialStore {
         SecItemDelete(query as CFDictionary)
         var q = query
         q[kSecValueData as String] = data
-        q[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+        q[kSecAttrAccessible as String] = CredentialStore.accessible
         q[kSecAttrLabel as String] = "wave"
         return SecItemAdd(q as CFDictionary, nil) == errSecSuccess
     }
+
+    /// iPhone は、起動してから一度ロックを解いた後ならロック中でも読める（裏の新作の確かめのため）。どちらもこの端末からだけ。
+    #if os(iOS)
+        private static let accessible = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+    #else
+        private static let accessible = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+    #endif
 
     func clear() {
         SecItemDelete(query as CFDictionary)

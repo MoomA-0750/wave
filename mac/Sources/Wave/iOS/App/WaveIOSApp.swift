@@ -16,6 +16,9 @@ struct WaveIOSApp: App {
         RemoteKeepAlive.shared.start()
         // ウィジェット・ロック画面の再生中に今の曲を渡し、そのボタンの頼みを受ける
         WidgetSync.shared.start()
+        // アプリを閉じていても新作を確かめる
+        ReleaseRefresh.register()
+        ReleaseRefresh.schedule()
         #if WAVE_DEBUG
             IOSDebugCommands.start()
         #endif
@@ -28,7 +31,10 @@ struct WaveIOSApp: App {
         }
         .onChange(of: scenePhase) { _, phase in
             // 裏へ回ったら、キューと位置を書いておく（そのまま終了されても次の起動で戻す）
-            if phase == .background { AppServices.player.saveQueue() }
+            if phase == .background {
+                AppServices.player.saveQueue()
+                ReleaseRefresh.schedule()
+            }
         }
     }
 }
