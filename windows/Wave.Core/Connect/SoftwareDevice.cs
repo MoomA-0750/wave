@@ -38,10 +38,6 @@ public sealed class SoftwareDevice : IDeviceSigner, IKxOpener, IDisposable
     public byte[] IdentityPub { get; }
     public EcPublicKey KxPub { get; }
 
-    public byte[] ExportIdentityPkcs8() => identity.ExportPkcs8PrivateKey();
-
-    public byte[] ExportKxPkcs8() => kx.ExportPkcs8PrivateKey();
-
     public byte[] Sign(string label, byte[] message) => WaveCrypto.Sign(identity, label, message);
 
     public byte[] Dh(EcPublicKey peer) => WaveCrypto.Ecdh(kx, peer);

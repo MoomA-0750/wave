@@ -9,8 +9,6 @@ public sealed partial class Templates : ResourceDictionary
 {
     public Templates() => InitializeComponent();
 
-    public static GridLength AlbumColumn(bool show) => show ? new GridLength(2, GridUnitType.Star) : new GridLength(0);
-
     public static Brush TitleBrush(bool current) =>
         (Brush)Application.Current.Resources[current ? "AccentTextFillColorPrimaryBrush" : "TextFillColorPrimaryBrush"];
 

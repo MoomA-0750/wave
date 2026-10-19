@@ -28,7 +28,7 @@ public sealed class LibraryEntry(string title, string? subtitle, string? thumbna
     public bool IsLiked { get; } = isLiked;
     public bool IsArtist => Item is HomeItem.ArtistItem;
     public Brush CoverBackground => IsLiked
-        ? new LinearGradientBrush([new GradientStop { Color = Windows.UI.Color.FromArgb(255, 0x45, 0x0A, 0xF5), Offset = 0 }, new GradientStop { Color = Windows.UI.Color.FromArgb(255, 0xC4, 0xEF, 0xD9), Offset = 1 }], 45)
+        ? Ui.LikedCover()
         : (Brush)Application.Current.Resources["ControlFillColorSecondaryBrush"];
 }
 
@@ -842,10 +842,10 @@ public sealed partial class MainWindow : Window
             ClearQueueButton.Visibility = Ui.Show(userEnd > Player.Index + 1 && !Player.IsRemote);
         }
         QueueList.ItemsSource = entries;
-        QueueEmpty.Visibility = entries.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        QueueEmpty.Visibility = Ui.Show(entries.Count == 0);
         QueueEmptyTitle.Text = queueHistory ? L.T("まだ流れた曲はありません", "Nothing played yet") : L.T("キューは空です", "Your queue is empty");
         QueueEmptyText.Text = queueHistory ? L.T("流れた曲は、ここに新しい順に並びます", "Songs you've played will show up here") : L.T("曲を再生すると、ここに次の曲が並びます", "Play something and upcoming songs will show up here");
-        QueueList.Visibility = entries.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
+        QueueList.Visibility = Ui.Hide(entries.Count == 0);
         QueueList.CanReorderItems = !queueHistory;
         QueueList.CanDragItems = !queueHistory;
     }
@@ -1190,8 +1190,6 @@ public sealed partial class MainWindow : Window
 
     public string RepeatGlyph(RepeatMode mode) => mode == RepeatMode.One ? "" : "";
 
-    public Visibility HasSong(Song? song) => Ui.Show(song is not null);
-
     /// <summary>評価のボタンを出すか（RSS のエピソードは YouTube の曲ではないので出さない。ADR-0012）。</summary>
     public Visibility CanLike(Song? song) => Ui.Show(song is not null && !Feed.IsExternal(song.VideoId));
 
@@ -1360,10 +1358,10 @@ public sealed partial class MainWindow : Window
     private void RenderConnect()
     {
         var connect = AppServices.Connect;
-        DevicesButton.Visibility = connect.Configured ? Visibility.Visible : Visibility.Collapsed;
+        DevicesButton.Visibility = Ui.Show(connect.Configured);
         // ほかの端末で鳴っているときは、アイコンの右にその端末名（Spotify と同じく色を付ける）
         var remote = Player.IsRemote ? Player.RemoteDevice : null;
-        DevicesLabel.Visibility = remote is null ? Visibility.Collapsed : Visibility.Visible;
+        DevicesLabel.Visibility = Ui.Hide(remote is null);
         DevicesLabel.Text = remote ?? "";
         DevicesIcon.Glyph = remote is null ? "\uE772" : "\uE8EA";
         DevicesIcon.Foreground = remote is not null ? (Brush)Application.Current.Resources["AccentTextFillColorPrimaryBrush"] : (Brush)Application.Current.Resources["TextFillColorPrimaryBrush"];

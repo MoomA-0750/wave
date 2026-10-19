@@ -69,10 +69,6 @@ public sealed partial class SearchPage : Page
         LiveList.Loaded += (_, _) => Attach(LiveList, () => LoadMoreLiveAsync());
     }
 
-    public static Visibility IsQuery(string kind) => kind == "query" ? Visibility.Visible : Visibility.Collapsed;
-
-    public static bool IsRound(string kind) => kind == "artist";
-
     protected override void OnNavigatedTo(NavigationEventArgs e)
     {
         Search(e.Parameter as string);
@@ -209,9 +205,6 @@ public sealed partial class SearchPage : Page
 #if DEBUG
     /// <summary>開発用: タブを選ぶ（DebugCommands の search-tab）。</summary>
     public void DebugTab(string tag) => Tabs.SelectedItem = Tabs.Items.FirstOrDefault(i => i.Tag as string == tag);
-
-    /// <summary>開発用: ライブのタブの行の数。</summary>
-    public int DebugLiveRows => liveRows.Count;
 
     /// <summary>開発用: そのタブの行の数（ライブ・歌詞）。</summary>
     public int DebugRows(string tag) => tag == "lyrics" ? lyricsRows.Count : liveRows.Count;

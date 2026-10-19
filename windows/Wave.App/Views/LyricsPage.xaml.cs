@@ -84,13 +84,7 @@ public sealed partial class LyricsPage : Page
             return;
         }
         if (await Artwork.DominantColorAsync(song.ThumbnailUrl) is { } color && Player.Current?.VideoId == song.VideoId)
-        {
-            var top = color;
-            top.A = 170;
-            var bottom = color;
-            bottom.A = 40;
-            Backdrop.Fill = new LinearGradientBrush([new GradientStop { Color = top, Offset = 0 }, new GradientStop { Color = bottom, Offset = 1 }], 90);
-        }
+            Backdrop.Fill = Ui.Fade(color, 170, 40);
         switch (Player.Lyrics)
         {
             case null:

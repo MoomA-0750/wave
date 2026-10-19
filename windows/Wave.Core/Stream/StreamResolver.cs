@@ -60,7 +60,6 @@ public sealed class ResolvedStream
     public long? ContentLength { get; }
     public long ExpiresAtMs { get; }
     public long Generation { get; }
-    public bool HasPlaybackStats => statsUrl is not null;
 
     /// <summary>DASH の目次を作るための値（初期化と索引のバイト範囲など）。無ければ null。</summary>
     public DashInfo? Dash { get; }

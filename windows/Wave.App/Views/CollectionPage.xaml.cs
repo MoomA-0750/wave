@@ -103,9 +103,8 @@ public sealed partial class CollectionPage : Page
         LikedIcon.Visibility = Ui.Show(liked);
         if (liked)
         {
-            CoverBorder.Background = new LinearGradientBrush(
-                [new GradientStop { Color = Windows.UI.Color.FromArgb(255, 0x45, 0x0A, 0xF5), Offset = 0 }, new GradientStop { Color = Windows.UI.Color.FromArgb(255, 0xC4, 0xEF, 0xD9), Offset = 1 }], 45);
-            SetGradient(Windows.UI.Color.FromArgb(255, 0x50, 0x38, 0xA0));
+            CoverBorder.Background = Ui.LikedCover();
+            SetGradient(Ui.LikedTint);
         }
         else
         {
@@ -122,14 +121,7 @@ public sealed partial class CollectionPage : Page
         if (await Artwork.DominantColorAsync(url) is { } color) SetGradient(color);
     }
 
-    private void SetGradient(Windows.UI.Color color)
-    {
-        var top = color;
-        top.A = 150;
-        var bottom = color;
-        bottom.A = 0;
-        Gradient.Fill = new LinearGradientBrush([new GradientStop { Color = top, Offset = 0 }, new GradientStop { Color = bottom, Offset = 1 }], 90);
-    }
+    private void SetGradient(Windows.UI.Color color) => Gradient.Fill = Ui.Fade(color, 150, 0);
 
     /// <summary>一覧を読んでいる途中か（長いプレイリストはページごとに行が増える）。</summary>
     private bool loading;

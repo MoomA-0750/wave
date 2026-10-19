@@ -56,7 +56,7 @@ public sealed partial class DevicesPage : Page
         }
 
         var remote = Devices.Remote;
-        RemoteCard.Visibility = info.InHousehold && info.Relay != RelayStatus.NotMember && remote is { AccountMatches: true } && !info.IsWriter ? Visibility.Visible : Visibility.Collapsed;
+        RemoteCard.Visibility = Ui.Show(info.InHousehold && info.Relay != RelayStatus.NotMember && remote is { AccountMatches: true } && !info.IsWriter);
         if (remote is not null && RemoteCard.Visibility == Visibility.Visible)
         {
             RemoteDevice.Text = remote.Playing ? L.T($"{remote.DeviceLabel}で再生中", $"Playing on {remote.DeviceLabel}") : L.T($"{remote.DeviceLabel}で一時停止中", $"Paused on {remote.DeviceLabel}");
@@ -66,8 +66,8 @@ public sealed partial class DevicesPage : Page
         }
 
         var pairing = Devices.PairingState;
-        JoinPanel.Visibility = info.Loaded && !info.InHousehold && pairing.Kind is PairingKind.Idle or PairingKind.Failed ? Visibility.Visible : Visibility.Collapsed;
-        HouseholdPanel.Visibility = info.InHousehold ? Visibility.Visible : Visibility.Collapsed;
+        JoinPanel.Visibility = Ui.Show(info.Loaded && !info.InHousehold && pairing.Kind is PairingKind.Idle or PairingKind.Failed);
+        HouseholdPanel.Visibility = Ui.Show(info.InHousehold);
         RenderMembers();
         RenderPairing(pairing);
         RelayText.Text = L.T("中継: ", "Relay: ") + info.Relay switch
@@ -143,13 +143,13 @@ public sealed partial class DevicesPage : Page
 
     private void RenderPairing(PairingView pairing)
     {
-        PairingPanel.Visibility = pairing.Kind == PairingKind.Idle ? Visibility.Collapsed : Visibility.Visible;
-        QrImage.Visibility = OfferTextPanel.Visibility = pairing.Kind == PairingKind.ShowingOffer ? Visibility.Visible : Visibility.Collapsed;
-        CodeText.Visibility = pairing.Kind == PairingKind.ShowCode ? Visibility.Visible : Visibility.Collapsed;
-        CodeEntry.Visibility = pairing.Kind == PairingKind.EnterCode ? Visibility.Visible : Visibility.Collapsed;
-        ContinueButton.Visibility = pairing.Kind == PairingKind.ShowCode ? Visibility.Visible : Visibility.Collapsed;
+        PairingPanel.Visibility = Ui.Hide(pairing.Kind == PairingKind.Idle);
+        QrImage.Visibility = OfferTextPanel.Visibility = Ui.Show(pairing.Kind == PairingKind.ShowingOffer);
+        CodeText.Visibility = Ui.Show(pairing.Kind == PairingKind.ShowCode);
+        CodeEntry.Visibility = Ui.Show(pairing.Kind == PairingKind.EnterCode);
+        ContinueButton.Visibility = Ui.Show(pairing.Kind == PairingKind.ShowCode);
         PairingRing.IsActive = pairing.Kind == PairingKind.Working;
-        PairingRing.Visibility = pairing.Kind == PairingKind.Working ? Visibility.Visible : Visibility.Collapsed;
+        PairingRing.Visibility = Ui.Show(pairing.Kind == PairingKind.Working);
         PairingCloseButton.Content = pairing.Kind is PairingKind.Done or PairingKind.Failed ? L.T("閉じる", "Close") : L.T("キャンセル", "Cancel");
         PairingText.Foreground = pairing.Kind == PairingKind.Failed ? (Brush)Application.Current.Resources["SystemFillColorCriticalBrush"] : (Brush)Application.Current.Resources["TextFillColorPrimaryBrush"];
         PairingText.Text = pairing.Kind switch

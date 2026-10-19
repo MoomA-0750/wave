@@ -50,8 +50,6 @@ public static partial class Ui
 
     public static Visibility Hide(bool value) => value ? Visibility.Collapsed : Visibility.Visible;
 
-    public static string Or(string? value, string fallback) => string.IsNullOrEmpty(value) ? fallback : value;
-
     public static bool IsArtist(HomeItem item) => item is HomeItem.ArtistItem;
 
     /// <summary>アーティストは丸、ほかは角の少し丸い四角（Spotify と同じ）。</summary>
@@ -68,6 +66,23 @@ public static partial class Ui
         HomeItem.PodcastItem => L.T("ポッドキャスト", "Podcast"),
         _ => "",
     };
+
+    /// <summary>高く評価した曲のジャケット（紫から緑への斜めのグラデーション。ArtistPage.xaml の行の丸も同じ色）。</summary>
+    public static Brush LikedCover() => new LinearGradientBrush(
+        [new GradientStop { Color = Windows.UI.Color.FromArgb(255, 0x45, 0x0A, 0xF5), Offset = 0 }, new GradientStop { Color = Windows.UI.Color.FromArgb(255, 0xC4, 0xEF, 0xD9), Offset = 1 }], 45);
+
+    /// <summary>高く評価した曲の一覧の、上の帯の色（ジャケットの色の代わり）。</summary>
+    public static readonly Windows.UI.Color LikedTint = Windows.UI.Color.FromArgb(255, 0x50, 0x38, 0xA0);
+
+    /// <summary>ジャケットの色を、上の濃さ（top）から下の濃さ（bottom）へ薄くしていく縦のグラデーション。</summary>
+    public static Brush Fade(Windows.UI.Color color, byte top, byte bottom)
+    {
+        var from = color;
+        from.A = top;
+        var to = color;
+        to.A = bottom;
+        return new LinearGradientBrush([new GradientStop { Color = from, Offset = 0 }, new GradientStop { Color = to, Offset = 1 }], 90);
+    }
 
     /// <summary>白い文字が読めるよう、明るすぎる色を暗くする（YouTube の色は淡いものがある）。</summary>
     private static Windows.UI.Color Readable(byte r, byte g, byte b)

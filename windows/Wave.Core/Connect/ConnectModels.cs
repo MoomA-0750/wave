@@ -255,9 +255,6 @@ public sealed record LibraryBody
     /// <summary>聴いたところは新しい順にこの数まで（文書を数百 KB に収める）。</summary>
     public const int MaxPositions = 500;
 
-    /// <summary>外した番組の印は、この日数を過ぎたら捨ててよい（全端末に行き渡った後）。</summary>
-    public const int RemovedKeepDays = 180;
-
     public int V { get; init; } = CurrentVersion;
 
     /// <summary>フィードの URL ごと。</summary>

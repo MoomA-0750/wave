@@ -1,5 +1,3 @@
-using Windows.Media.Playback;
-
 namespace Wave.App.Services;
 
 /// <summary>
@@ -7,21 +5,11 @@ namespace Wave.App.Services;
 /// この端末で同じ videoId のライブの HLS を映像を見るための画質で読み、映像の枠に出す。
 /// 位置は合わせない（ライブは今の時点から流れる）。鳴らしている端末が止まっていれば止める。
 /// </summary>
-public sealed class RemoteLiveVideo
+public sealed class RemoteLiveVideo : MutedVideo
 {
-    private readonly MediaPlayer player = new() { IsMuted = true, AutoPlay = false };
     private string? loadedVideoId;
-    private int generation;
     private bool playing;
     private bool pausedSinceLoad;
-
-    public RemoteLiveVideo()
-    {
-        // メディアキー・音量のポップアップ（SMTC）は音の再生器のものだけにする
-        player.CommandManager.IsEnabled = false;
-    }
-
-    public MediaPlayer Player => player;
 
     /// <summary>映像を出そうとしている配信（読み込み中も含む）。出していなければ null。</summary>
     public string? Wanted { get; private set; }
@@ -41,9 +29,9 @@ public sealed class RemoteLiveVideo
         }
         Stop();
         Wanted = videoId;
-        var mine = ++generation;
+        var mine = Begin();
         var result = await AppServices.Live.ResolveAsync(videoId, video: true);
-        if (mine != generation) return false;
+        if (Stale(mine)) return false;
         if (result.Stream is not { } live)
         {
             AppPaths.Log($"remote live video resolve failed reason={result.Failure}");
@@ -52,7 +40,7 @@ public sealed class RemoteLiveVideo
             return false;
         }
         var source = await PlayerService.CreateLiveSourceAsync(live);
-        if (mine != generation) return false;
+        if (Stale(mine)) return false;
         if (source is null)
         {
             Wanted = null;
@@ -61,8 +49,8 @@ public sealed class RemoteLiveVideo
         }
         loadedVideoId = videoId;
         pausedSinceLoad = false;
-        player.Source = source;
-        if (playing) player.Play();
+        Player.Source = source;
+        if (playing) Player.Play();
         AppPaths.Log($"remote live video loaded playing={playing}");
         return true;
     }
@@ -74,10 +62,10 @@ public sealed class RemoteLiveVideo
     public void SetPlaying(bool play)
     {
         playing = play;
-        if (player.Source is null || loadedVideoId is not { } videoId) return;
+        if (Player.Source is null || loadedVideoId is not { } videoId) return;
         if (!play)
         {
-            player.Pause();
+            Player.Pause();
             pausedSinceLoad = true;
             return;
         }
@@ -86,7 +74,7 @@ public sealed class RemoteLiveVideo
             Reload(videoId);
             return;
         }
-        player.Play();
+        Player.Play();
     }
 
     private async void Reload(string videoId)
@@ -96,13 +84,11 @@ public sealed class RemoteLiveVideo
     }
 
     /// <summary>映像を外す（映像を閉じた・曲が変わった・映すのをやめた）。</summary>
-    public void Stop()
+    public override void Stop()
     {
-        generation++;
+        base.Stop();
         Wanted = null;
         loadedVideoId = null;
         pausedSinceLoad = false;
-        player.Pause();
-        player.Source = null;
     }
 }

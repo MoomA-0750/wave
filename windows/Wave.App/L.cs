@@ -36,7 +36,4 @@ public static class L
         if (t.TotalHours >= 1) return Ja ? $"{(int)t.TotalHours} 時間 {t.Minutes} 分" : $"{(int)t.TotalHours} hr {t.Minutes} min";
         return Ja ? $"{t.Minutes} 分 {t.Seconds} 秒" : $"{t.Minutes} min {t.Seconds} sec";
     }
-
-    /// <summary>引用（「…」/ "…"）。</summary>
-    public static string Q(string text) => Ja ? $"「{text}」" : $"“{text}”";
 }

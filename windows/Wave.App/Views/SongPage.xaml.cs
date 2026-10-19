@@ -25,7 +25,7 @@ public sealed partial class SongPage : Page
         base.OnNavigatedTo(e);
         song = (Song)e.Parameter;
         TitleText.Text = song.Title;
-        DetailText.Text = string.Join(" • ", new[] { song.ArtistsText, song.Album?.Title, song.DurationSeconds is { } d ? $"{d / 60}:{d % 60:00}" : null }.Where(t => !string.IsNullOrEmpty(t)));
+        DetailText.Text = string.Join(" • ", new[] { song.ArtistsText, song.Album?.Title, Ui.Duration(song.DurationSeconds) }.Where(t => !string.IsNullOrEmpty(t)));
         Cover.Source = Ui.Large(song.ThumbnailUrl);
         _ = ColorAsync(song.ThumbnailUrl);
         // 並びは Android の曲の画面と同じ（曲のラジオは再生ボタンと同じなので出さない）
@@ -62,11 +62,6 @@ public sealed partial class SongPage : Page
 
     private async Task ColorAsync(string? url)
     {
-        if (await Artwork.DominantColorAsync(url) is not { } color) return;
-        var top = color;
-        top.A = 150;
-        var bottom = color;
-        bottom.A = 0;
-        Gradient.Fill = new LinearGradientBrush([new GradientStop { Color = top, Offset = 0 }, new GradientStop { Color = bottom, Offset = 1 }], 90);
+        if (await Artwork.DominantColorAsync(url) is { } color) Gradient.Fill = Ui.Fade(color, 150, 0);
     }
 }

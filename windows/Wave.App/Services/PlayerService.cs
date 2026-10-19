@@ -1539,7 +1539,12 @@ public sealed partial class PlayerService : ObservableObject
             return stream;
         });
         var source = await CreateDashSourceAsync(videoId, format.Dash, format.MimeType, format.Itag, bytes, "audio");
-        if (source is null || Current?.VideoId != videoId) return false;
+        // 使わずに戻るときは、開いた読み手を閉じる（MusicVideoPlayer と同じ）
+        if (source is null || Current?.VideoId != videoId)
+        {
+            bytes.Dispose();
+            return false;
+        }
         PlaySource(song, source, seekTo);
         AppPaths.Log($"play cached itag={format.Itag} queue={Queue.Count} index={Index}");
         _ = Task.Run(async () =>
