@@ -41,10 +41,11 @@ final class CredentialStore {
     }
 
     /// iPhone は、起動してから一度ロックを解いた後ならロック中でも読める（裏の新作の確かめのため）。どちらもこの端末からだけ。
+    /// 端末の連携の鍵と家の記録（ConnectKeychain）も同じにする。
     #if os(iOS)
-        private static let accessible = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        static let accessible = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
     #else
-        private static let accessible = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+        static let accessible = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
     #endif
 
     func clear() {

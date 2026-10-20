@@ -76,18 +76,23 @@ enum ConnectKeychain {
         let status = SecItemCopyMatching(q as CFDictionary, &item)
         if status == errSecItemNotFound { return .missing }
         guard status == errSecSuccess, let data = item as? Data else { return .failed }
+        #if os(iOS)
+            // 前の版はロック中に読めない形で保存していた。ロック中に起こされる（裏の新作の確かめ・ウィジェットのボタン）と鍵を読めず、
+            // そのまま連携が無いことになって再生画面の連携のボタンが消えた。読めた時にログインと同じ形へ入れ替える
+            SecItemUpdate(query(account) as CFDictionary, [kSecAttrAccessible as String: CredentialStore.accessible] as CFDictionary)
+        #endif
         return .found(data)
     }
 
     /// 置き換える（あれば中身だけ書き換え、無ければ足す。途中で落ちても前の値か新しい値のどちらかが残る）。
     static func write(_ account: String, _ data: Data) -> Bool {
-        let attributes: [String: Any] = [kSecValueData as String: data, kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly]
+        let attributes: [String: Any] = [kSecValueData as String: data, kSecAttrAccessible as String: CredentialStore.accessible]
         let updated = SecItemUpdate(query(account) as CFDictionary, attributes as CFDictionary)
         if updated == errSecSuccess { return true }
         if updated != errSecItemNotFound { return false }
         var q = query(account)
         q[kSecValueData as String] = data
-        q[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+        q[kSecAttrAccessible as String] = CredentialStore.accessible
         q[kSecAttrLabel as String] = "wave"
         return SecItemAdd(q as CFDictionary, nil) == errSecSuccess
     }

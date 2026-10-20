@@ -31,6 +31,8 @@ final class Settings: Codable {
     var discordClientId: String?
     /// 映像の無い曲を鳴らしているときも、ホームへ戻ったら小窓（PiP）に曲名とジャケットを出す（iPhone だけ。既定はオン）。
     var musicPip = true
+    /// 下のタブの欄で、右に離して置き、欄を畳んでも出しておくタブ（search・ai・library。iPhone だけ。既定は検索）。
+    var pinnedTab = "search"
 
     private static var fileURL: URL { AppPaths.file("settings.json") }
 
@@ -38,7 +40,8 @@ final class Settings: Codable {
 
     enum CodingKeys: String, CodingKey {
         case volume, shuffle, repeatMode, sendHistory, rightPaneOpen, releaseNotices, librarySort, libraryGrid, playlistOrders, language,
-            searchHistory, relayV2Url, relayV2Host, aiUrl, aiToken, aiName, discordPresence, discordClientId, musicPip
+            searchHistory, relayV2Url, relayV2Host, aiUrl, aiToken, aiName, discordPresence, discordClientId, musicPip,
+            pinnedTab
     }
 
     // 項目が足りないファイル（前の版）も読めるよう、無い項目は既定のまま
@@ -63,6 +66,7 @@ final class Settings: Codable {
         discordPresence = try c.decodeIfPresent(Bool.self, forKey: .discordPresence) ?? discordPresence
         discordClientId = try c.decodeIfPresent(String.self, forKey: .discordClientId)
         musicPip = try c.decodeIfPresent(Bool.self, forKey: .musicPip) ?? musicPip
+        pinnedTab = try c.decodeIfPresent(String.self, forKey: .pinnedTab) ?? pinnedTab
     }
 
     static func load() -> Settings {

@@ -3,7 +3,7 @@ import SwiftUI
 import WaveCore
 
 /// 下のタブ（Android と同じ4つ: ホーム・検索・Claude・ライブラリ）。
-enum IOSTab: Hashable {
+enum IOSTab: String, Hashable {
     case home, search, ai, library
 }
 
@@ -13,6 +13,8 @@ final class IOSShell {
     static let shared = IOSShell()
 
     var tab = IOSTab.home
+    /// 下のタブの欄で右に離して置くタブ（設定で選ぶ。欄を畳んでも出ている）。
+    var pinnedTab = IOSTab(rawValue: AppServices.settings.pinnedTab).flatMap { $0 == .home ? nil : $0 } ?? .search
     /// タブごとの、上に積んだ画面（Android の AppNavigator と同じく、タブを切り替えても積み重ねを覚えておく）。
     var paths: [IOSTab: [Route]] = [.home: [], .search: [], .ai: [], .library: []]
     /// 再生中の画面を開いているか（ミニプレーヤーを押すと下からせり上がる）。
@@ -74,17 +76,12 @@ struct RootView: View {
     var body: some View {
         let player = AppServices.player!
         TabView(selection: Binding(get: { shell.tab }, set: { shell.select($0) })) {
-            Tab(L.t("ホーム", "Home"), systemImage: "house.fill", value: IOSTab.home) {
-                stack(.home) { HomeView() }
-            }
-            Tab(L.t("検索", "Search"), systemImage: "magnifyingglass", value: IOSTab.search) {
-                stack(.search) { SearchView() }
-            }
-            Tab("Claude", systemImage: "sparkles", value: IOSTab.ai) {
-                stack(.ai) { AiTabView() }
-            }
-            Tab(L.t("ライブラリ", "Library"), systemImage: "books.vertical.fill", value: IOSTab.library) {
-                stack(.library) { LibraryView() }
+            // 設定で選んだタブは、検索の役（role: .search）にして右に離して置く。iOS 26 では欄を下へ送って畳んでも、
+            // 左の再生中のタブと並んで右に残る（OS が離して置くのは検索の役のタブだけ）
+            ForEach(tabOrder, id: \.self) { tab in
+                Tab(tab.title, systemImage: tab.symbol, value: tab, role: tab == shell.pinnedTab ? .search : nil) {
+                    stack(tab) { TabRoot(tab: tab) }
+                }
             }
         }
         .modifier(MiniPlayerAccessory(show: player.current != nil, zoom: playerZoom) { shell.playerOpen = true })
@@ -120,9 +117,48 @@ struct RootView: View {
         }
     }
 
+    /// 右に離すタブを最後にした並び（ほかはホーム・検索・Claude・ライブラリの順のまま）。
+    private var tabOrder: [IOSTab] {
+        [IOSTab.home, .search, .ai, .library].filter { $0 != shell.pinnedTab } + [shell.pinnedTab]
+    }
+
     private func stack(_ tab: IOSTab, @ViewBuilder root: () -> some View) -> some View {
         NavigationStack(path: shell.path(tab)) {
             root().navigationDestination(for: Route.self) { route in RouteView(route: route) }
+        }
+    }
+}
+
+extension IOSTab {
+    var title: String {
+        switch self {
+        case .home: L.t("ホーム", "Home")
+        case .search: L.t("検索", "Search")
+        case .ai: "Claude"
+        case .library: L.t("ライブラリ", "Library")
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .home: "house.fill"
+        case .search: "magnifyingglass"
+        case .ai: "sparkles"
+        case .library: "books.vertical.fill"
+        }
+    }
+}
+
+/// タブの一番下の画面。
+private struct TabRoot: View {
+    let tab: IOSTab
+
+    var body: some View {
+        switch tab {
+        case .home: HomeView()
+        case .search: SearchView()
+        case .ai: AiTabView()
+        case .library: LibraryView()
         }
     }
 }

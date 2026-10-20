@@ -9,6 +9,7 @@ struct SettingsView: View {
     @State private var releaseNotices = AppServices.settings.releaseNotices
     @State private var musicPip = AppServices.settings.musicPip
     @State private var language = AppServices.settings.language
+    @State private var pinnedTab = IOSShell.shared.pinnedTab
     @State private var pairText = ""
     @State private var aiConfigured = AppServices.ai.configured
     @State private var confirmLogout = false
@@ -73,6 +74,21 @@ struct SettingsView: View {
             } footer: {
                 Text(L.t("YouTube から届く文字（棚の見出しなど）もこの言語になります。次の起動から反映されます",
                          "Text from YouTube (such as shelf titles) also uses this language. Takes effect the next time you open wave"))
+            }
+            Section {
+                Picker(selection: $pinnedTab) {
+                    ForEach([IOSTab.search, .ai, .library], id: \.self) { Text($0.title).tag($0) }
+                } label: {
+                    SettingsLabel(title: L.t("右に離して置くボタン", "Button on the right"),
+                                  detail: L.t("下の欄の右に離して置き、下へ送って欄を畳んでも出しておく", "Kept on the right of the tab bar, even when it shrinks as you scroll"))
+                }
+                .onChange(of: pinnedTab) { _, v in
+                    IOSShell.shared.pinnedTab = v
+                    AppServices.settings.pinnedTab = v.rawValue
+                    AppServices.settings.save()
+                }
+            } header: {
+                Text(L.t("下の欄", "Tab bar"))
             }
             if AppServices.connect.configured {
                 Section {

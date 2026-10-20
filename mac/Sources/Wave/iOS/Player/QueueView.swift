@@ -7,6 +7,8 @@ import WaveCore
 /// 次の曲は長押しのドラッグ（または「編集」のつまみ）で並べ替え、左へ払うと外し、押すとその曲へ。ほかの端末のキューを映している間は並べ替え・外すは出さない。
 struct QueueView: View {
     @State private var history = false
+    /// 並べ替えの「編集」。EditButton に任せると、曲の進みなどで画面を描き直すたびに編集の状態が揺れ、右のつまみが出たり消えたりしたので、自分で持つ
+    @State private var editMode: EditMode = .inactive
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -25,6 +27,7 @@ struct QueueView: View {
                 }
             }
             .listStyle(.insetGrouped)
+            .environment(\.editMode, $editMode)
             .navigationTitle(L.t("キュー", "Queue"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -32,12 +35,19 @@ struct QueueView: View {
                     Button { dismiss() } label: { Image(systemName: "xmark") }
                         .accessibilityLabel(L.t("閉じる", "Close"))
                 }
-                if !history && !player.isRemote && player.queue.count > player.index + 1 {
-                    ToolbarItem(placement: .topBarTrailing) { EditButton() }
+                ToolbarItem(placement: .topBarTrailing) {
+                    if !history && !player.isRemote && player.queue.count > player.index + 1 {
+                        Button(editMode.isEditing ? L.t("完了", "Done") : L.t("編集", "Edit")) {
+                            withAnimation { editMode = editMode.isEditing ? .inactive : .active }
+                        }
+                        .fontWeight(editMode.isEditing ? .semibold : .regular)
+                    }
                 }
             }
         }
         .presentationDragIndicator(.visible)
+        // 履歴へ切り替えた・並べ替えられなくなったら編集をやめる
+        .onChange(of: history) { if history { editMode = .inactive } }
     }
 
     // MARK: 次の曲
@@ -168,9 +178,11 @@ private struct QueueModeControls: View {
 private struct QueueSongRow: View {
     var position: Int
     var isCurrent: Bool
+    @Environment(\.editMode) private var editMode
 
     var body: some View {
         let player = AppServices.player!
+        let editing = editMode?.wrappedValue.isEditing == true
         if position < player.queue.count {
             let song = player.queue[position]
             HStack(spacing: 12) {
@@ -185,16 +197,19 @@ private struct QueueSongRow: View {
                 if isCurrent && player.isPlaying {
                     Image(systemName: "waveform").foregroundStyle(Color.accentColor).symbolEffect(.variableColor.iterative)
                 }
-                Menu {
-                    // 外せるのは今の曲より後ろだけ（ほかの端末のキューは外せない。Android と同じ）
-                    SongMenuItems(song: song, queueIndex: !isCurrent && position > player.index && !player.isRemote ? position : nil)
-                } label: {
-                    Image(systemName: "ellipsis").frame(width: 32, height: 44).contentShape(Rectangle())
+                // 編集中は右に並べ替えのつまみが出るので、「…」は出さない（つまみと重なって押し分けにくい）
+                if !editing {
+                    Menu {
+                        // 外せるのは今の曲より後ろだけ（ほかの端末のキューは外せない。Android と同じ）
+                        SongMenuItems(song: song, queueIndex: !isCurrent && position > player.index && !player.isRemote ? position : nil)
+                    } label: {
+                        Image(systemName: "ellipsis").frame(width: 32, height: 44).contentShape(Rectangle())
+                    }
+                    .foregroundStyle(.secondary)
                 }
-                .foregroundStyle(.secondary)
             }
             .contentShape(Rectangle())
-            .onTapGesture { if !isCurrent { player.playAt(position) } }
+            .onTapGesture { if !isCurrent && !editing { player.playAt(position) } }
         }
     }
 }

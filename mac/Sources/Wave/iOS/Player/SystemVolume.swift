@@ -23,10 +23,28 @@ final class SystemVolume {
 
     var hasSlider: Bool { slider != nil }
 
+    @ObservationIgnored private var settle: Task<Void, Never>?
+
     func set(_ v: Float) {
-        let clamped = min(max(v, 0), 1)
+        // 端の近くは端にする（指で左端まで寄せても 0 ちょうどにならないことがある）
+        let clamped = v < 0.01 ? 0 : v > 0.99 ? 1 : min(max(v, 0), 1)
         value = clamped
-        slider?.setValue(clamped, animated: false)
+        apply(clamped)
+        // つまみを速く動かすと OS が途中の値を間引き、最後の値（左端の 0 など）が届かずに 1% ほど残ることがある。
+        // 動かし終えて少し待ち、OS の音量が違っていれば送り直す
+        settle?.cancel()
+        settle = Task { [weak self] in
+            for _ in 0..<3 {
+                try? await Task.sleep(for: .milliseconds(250))
+                guard !Task.isCancelled, let self else { return }
+                if abs(AVAudioSession.sharedInstance().outputVolume - clamped) < 0.001 { return }
+                self.apply(clamped)
+            }
+        }
+    }
+
+    private func apply(_ v: Float) {
+        slider?.setValue(v, animated: false)
         slider?.sendActions(for: .valueChanged)
     }
 }
