@@ -18,6 +18,7 @@ import xyz.mooma0750.wave.connect2.ConnectV2Manager
 import xyz.mooma0750.wave.handoff.HandoffRepeat
 import xyz.mooma0750.wave.handoff.v2.ControlAction
 import androidx.compose.runtime.mutableLongStateOf
+import xyz.mooma0750.wave.ui.ChoiceButtonGroup
 import xyz.mooma0750.wave.ui.IconAction
 import xyz.mooma0750.wave.R
 import androidx.media3.common.Player
@@ -35,9 +36,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.LinearWavyProgressIndicator
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.ui.graphics.Brush
@@ -377,10 +375,7 @@ fun NowPlayingScreen(
                 Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
                     // Spotify の「曲｜動画」の切り替え。動画のある曲だけ出す（無い曲・調べている間・ほかの端末を映している間は出さない）
                     if (song != null && hasVideo == true) {
-                        SingleChoiceSegmentedButtonRow {
-                            SegmentedButton(selected = !video, onClick = { video = false }, shape = SegmentedButtonDefaults.itemShape(0, 2), icon = {}) { Text(stringResource(R.string.nowplaying_song)) }
-                            SegmentedButton(selected = video, onClick = { video = true }, shape = SegmentedButtonDefaults.itemShape(1, 2), icon = {}) { Text(stringResource(R.string.nowplaying_video)) }
-                        }
+                        ChoiceButtonGroup(listOf(stringResource(R.string.nowplaying_song), stringResource(R.string.nowplaying_video)), if (video) 1 else 0, { video = it == 1 })
                     }
                 }
                 if (song != null && onAskAi != null) IconAction(R.drawable.ic_ai, stringResource(R.string.ai_title), onAskAi)
@@ -646,7 +641,7 @@ fun NowPlayingScreen(
 
     if (showQueue) {
         ModalBottomSheet(onDismissRequest = { showQueue = false }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
-            QueueSheet(state, controller, connection, actions.closing { showQueue = false }, remote = remote != null)
+            QueueSheet(state, controller, connection, actions.closing { showQueue = false }, remote = remote != null, remoteSongs = remote?.items)
         }
     }
 }
@@ -849,6 +844,8 @@ private fun QueueSheet(
     actions: SongActions,
     /** ほかの端末のキューを映している（曲を選ぶと、その端末でその曲を鳴らす。外す・並べ替えるはその端末のキューへ送る）。 */
     remote: Boolean = false,
+    /** ほかの端末のキューの曲（映している間の「…」に使う。手元の再生器には無い）。 */
+    remoteSongs: List<xyz.mooma0750.wave.core.music.Song>? = null,
 ) {
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
@@ -860,10 +857,7 @@ private fun QueueSheet(
     val current = state.currentIndex
     Column(Modifier.fillMaxWidth()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            SingleChoiceSegmentedButtonRow {
-                SegmentedButton(selected = !history, onClick = { history = false }, shape = SegmentedButtonDefaults.itemShape(0, 2), icon = {}) { Text(stringResource(R.string.nowplaying_queue)) }
-                SegmentedButton(selected = history, onClick = { history = true }, shape = SegmentedButtonDefaults.itemShape(1, 2), icon = {}) { Text(stringResource(R.string.nowplaying_history)) }
-            }
+            ChoiceButtonGroup(listOf(stringResource(R.string.nowplaying_queue), stringResource(R.string.nowplaying_history)), if (history) 1 else 0, { history = it == 1 })
         }
         @Composable
         fun songRow(
@@ -894,11 +888,17 @@ private fun QueueSheet(
                     Text(row.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = if (isCurrent) MaterialTheme.typography.bodyLargeEmphasized else MaterialTheme.typography.bodyLarge, color = if (isCurrent) MaterialTheme.colorScheme.primary else Color.Unspecified)
                     Text(row.artist, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                controller?.let { c ->
-                    val position = (0 until c.mediaItemCount).firstOrNull { c.getMediaItemAt(it).mediaId == row.itemId }
-                    position?.let { Media3QueuePlayer.songOf(c.getMediaItemAt(it)) }?.let { song ->
-                        SongMenuButton(song, actions, extraItems = if (!isCurrent && index > current) listOf(stringResource(R.string.nowplaying_remove_from_queue) to { scope.launch { connection.remove(row.itemId) }; Unit }) else emptyList())
+                val song =
+                    if (remoteSongs != null) {
+                        state.queue.indexOfFirst { it.itemId == row.itemId }.let { remoteSongs.getOrNull(it) }
+                    } else {
+                        controller?.let { c ->
+                            val position = (0 until c.mediaItemCount).firstOrNull { c.getMediaItemAt(it).mediaId == row.itemId }
+                            position?.let { Media3QueuePlayer.songOf(c.getMediaItemAt(it)) }
+                        }
                     }
+                song?.let {
+                    SongMenuButton(it, actions, extraItems = if (!isCurrent && index > current) listOf(stringResource(R.string.nowplaying_remove_from_queue) to { scope.launch { connection.remove(row.itemId) }; Unit }) else emptyList())
                 }
                 if (movable) {
                     // 並べ替えのつまみ（Spotify と同じく右端。上下にドラッグする）
@@ -1066,7 +1066,7 @@ private fun rememberDisplay(
             positionMs = remote.positionAt(now),
             durationMs = if (current.isLive) 0 else (current.durationSeconds ?: 0) * 1000L,
             isLive = current.isLive,
-            queue = remote.items.mapIndexed { index, song -> QueueRow(remote.itemIds[index], song.title, song.artistsText, song.thumbnailUrl) },
+            queue = remote.items.mapIndexed { index, song -> QueueRow(remote.itemIds[index], song.title, song.artistsText, song.thumbnailUrl, remote.userAdded.getOrElse(index) { false }) },
             currentIndex = remote.currentIndex,
             hasNext = remote.currentIndex < remote.items.size - 1 || remote.repeat != HandoffRepeat.Off,
             hasPrevious = true,

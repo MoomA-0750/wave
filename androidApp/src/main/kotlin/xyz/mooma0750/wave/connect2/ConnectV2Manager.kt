@@ -190,6 +190,8 @@ class ConnectV2Manager(
         val repeat: HandoffRepeat,
         /** その端末のアプリの中の音量（0〜100）。前の版の端末は付けない（null）。 */
         val volumePercent: Int? = null,
+        /** 項目ごとの、自分で足した曲か（キューの画面の「キューの次の曲」とキューを消去）。 */
+        val userAdded: List<Boolean> = emptyList(),
     ) {
         val current: xyz.mooma0750.wave.core.music.Song get() = items[currentIndex]
 
@@ -225,7 +227,9 @@ class ConnectV2Manager(
         if (index < 0) return null
         val songs = items.map { it.toSong() }
         val label = labels[now.writer] ?: resources.getString(R.string.connect_v2_member_unknown, now.writer.take(6))
-        return RemotePlayback(now.writer, label, songs, items.map { it.itemId }, index, now.positionMs, SystemClock.elapsedRealtime(), now.cursor.playing, now.cursor.repeat, now.cursor.volumePercent)
+        return RemotePlayback(now.writer, label, songs, items.map { it.itemId }, index, now.positionMs, SystemClock.elapsedRealtime(), now.cursor.playing, now.cursor.repeat, now.cursor.volumePercent,
+            items.map { it.origin == xyz.mooma0750.wave.handoff.HandoffOrigin.UserAdded },
+        )
     }
 
     /** 前に合わせた家の最新の再生（同じ状態で置き直さない）。 */

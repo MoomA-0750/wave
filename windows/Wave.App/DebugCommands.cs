@@ -338,6 +338,19 @@ public static class DebugCommands
             case "queue-clear":
                 player.ClearUserQueue();
                 break;
+            // キューの並べ替え・外す（ほかの端末で鳴っている間は、その端末へ queue_edit で送る）。位置はキュー全体の番号
+            case "queue-move":
+                {
+                    var moveArgs = arg.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                    if (moveArgs.Length == 2 && int.TryParse(moveArgs[0], out var moveFrom) && int.TryParse(moveArgs[1], out var moveTo)) player.MoveUpcoming(moveFrom, moveTo);
+                }
+                break;
+            case "volume":
+                if (double.TryParse(arg, System.Globalization.CultureInfo.InvariantCulture, out var debugVolume)) player.Volume = debugVolume;
+                break;
+            case "queue-remove":
+                if (int.TryParse(arg, out var removeAt)) player.RemoveAt(removeAt);
+                break;
             case "shuffle":
                 player.ToggleShuffle();
                 break;

@@ -25,9 +25,9 @@ report() { # $1=説明 $2=grep -E の式 $3=テーマファイルを除くか(1/
 report 'material3 のワイルドカード import（検査をすり抜ける）' \
   '^import androidx\.compose\.material3\.\*' 0
 report '無印の部品 → 置き換え表を見る' \
-  '^import androidx\.compose\.material3\.(CircularProgressIndicator|LinearProgressIndicator|NavigationBar|NavigationBarItem|NavigationRail|NavigationRailItem|BottomAppBar|MediumTopAppBar|LargeTopAppBar|ExtendedFloatingActionButton)$' 0
+  '^import androidx\.compose\.material3\.(CircularProgressIndicator|LinearProgressIndicator|NavigationBar|NavigationBarItem|NavigationRail|NavigationRailItem|BottomAppBar|MediumTopAppBar|LargeTopAppBar|ExtendedFloatingActionButton|SegmentedButton|SegmentedButtonDefaults|SingleChoiceSegmentedButtonRow|MultiChoiceSegmentedButtonRow)$' 0
 report '無印の部品を完全名で呼んでいる → 置き換え表を見る' \
-  'androidx\.compose\.material3\.(CircularProgressIndicator|LinearProgressIndicator|NavigationBar|NavigationBarItem|NavigationRail|NavigationRailItem|BottomAppBar|MediumTopAppBar|LargeTopAppBar|ExtendedFloatingActionButton)[[:space:]]*[({]' 0
+  'androidx\.compose\.material3\.(CircularProgressIndicator|LinearProgressIndicator|NavigationBar|NavigationBarItem|NavigationRail|NavigationRailItem|BottomAppBar|MediumTopAppBar|LargeTopAppBar|ExtendedFloatingActionButton|SegmentedButton|SingleChoiceSegmentedButtonRow|MultiChoiceSegmentedButtonRow)[[:space:]]*[({]' 0
 report 'animate…AsState の動きを省いている（既定のばね）→ MaterialTheme.motionScheme.*Spec() を渡す' \
   'animate[A-Za-z]*AsState\([^,]*,[[:space:]]*label[[:space:]]*=' 0
 report 'MaterialTheme(...) でテーマを張っている → MaterialExpressiveTheme' \
