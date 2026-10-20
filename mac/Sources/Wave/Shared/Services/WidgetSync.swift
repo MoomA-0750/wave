@@ -79,15 +79,17 @@ final class WidgetSync {
             return WidgetNowPlaying(videoId: song.videoId, title: song.title, artist: song.artistsText, playing: player.isPlaying,
                                     device: player.isRemote ? player.remoteDevice : nil, nextTitle: next?.title, nextArtist: next?.artistsText,
                                     liked: LikeButton.available(player) && AppServices.client.isLoggedIn ? player.like == .like : nil,
-                                    upNext: player.queue.indices.dropFirst(player.index + 1).prefix(3).map { i in
+                                    upNext: player.queue.indices.dropFirst(player.index + 1).prefix(4).map { i in
                                         WidgetQueueItem(index: i, videoId: player.queue[i].videoId, title: player.queue[i].title, artist: player.queue[i].artistsText)
                                     })
         }
         if now != shown {
-            let songChanged = now?.videoId != shown?.videoId
+            // 今の曲か次の曲が替わったら、ジャケットを書いてから知らせる
+            let artChanged = now?.videoId != shown?.videoId || now?.upNext?.map(\.videoId) != shown?.upNext?.map(\.videoId)
             shown = now
-            if let now, songChanged {
-                Task { await saveArtwork(now.videoId, player.current?.thumbnailUrl) }
+            if let now, artChanged {
+                let upNext = (now.upNext ?? []).map { ($0.videoId, Ui.resize(player.queue[$0.index].thumbnailUrl, 60)) }
+                Task { await saveArtwork(now.videoId, [(now.videoId, Ui.resize(player.current?.thumbnailUrl, 240))] + upNext) }
             } else {
                 publish(now)
             }
@@ -95,17 +97,20 @@ final class WidgetSync {
         syncPlaylists()
     }
 
-    /// ジャケットを置き場に書いてから知らせる（ウィジェットとロック画面は通信せずに読む）。
-    private func saveArtwork(_ videoId: String, _ thumbnail: String?) async {
+    /// ジャケット（今の曲と次に流れる曲）を置き場に書いてから知らせる（ウィジェットとロック画面は通信せずに読む）。
+    private func saveArtwork(_ videoId: String, _ images: [(videoId: String, url: URL?)]) async {
+        let keep = Set(images.map { WidgetStore.artworkName($0.videoId) })
         if let dir = WidgetStore.container, let old = try? FileManager.default.contentsOfDirectory(atPath: dir.path) {
-            for name in old where name.hasPrefix("artwork-") && name != WidgetStore.artworkName(videoId) {
+            for name in old where name.hasPrefix("artwork-") && !keep.contains(name) {
                 try? FileManager.default.removeItem(at: dir.appendingPathComponent(name))
             }
         }
-        if let url = Ui.resize(thumbnail, 240), url.scheme == "https", let file = WidgetStore.artworkFile(videoId),
-           !FileManager.default.fileExists(atPath: file.path), let (data, _) = try? await ImageLoader.session.data(from: url)
-        {
-            try? data.write(to: file, options: .atomic)
+        for image in images {
+            if let url = image.url, url.scheme == "https", let file = WidgetStore.artworkFile(image.videoId),
+               !FileManager.default.fileExists(atPath: file.path), let (data, _) = try? await ImageLoader.session.data(from: url)
+            {
+                try? data.write(to: file, options: .atomic)
+            }
         }
         guard shown?.videoId == videoId else { return }
         publish(shown)

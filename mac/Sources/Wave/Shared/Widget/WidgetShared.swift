@@ -78,7 +78,7 @@ struct WidgetNowPlaying: Codable, Equatable {
     var nextArtist: String?
     /// 今の曲を高く評価しているか。評価のボタンを出せないとき（ログインしていない・RSS のエピソード）は nil。
     var liked: Bool?
-    /// 次に流れる曲（3曲まで。ウィジェットの右側に並べ、押すとその曲へ飛ぶ）。
+    /// 次に流れる曲（4曲まで。ウィジェットの右側に並べ、押すとその曲へ飛ぶ。iPhone は3曲を出す）。
     var upNext: [WidgetQueueItem]?
 }
 

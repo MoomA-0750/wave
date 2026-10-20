@@ -43,7 +43,14 @@ private let accent = Color(red: 0.27, green: 0.55, blue: 1.0)
 #if os(iOS)
     private let widgetPadding: CGFloat = 16
 #else
-    private let widgetPadding: CGFloat = 14
+    private let widgetPadding: CGFloat = 17
+#endif
+
+/// 右側に並べる次の曲の数（iPhone は文字が大きく、4曲は入りきらない）。
+#if os(iOS)
+    private let upNextRows = 3
+#else
+    private let upNextRows = 4
 #endif
 
 /// ジャケット（無ければ音符）。枠の大きさで切り抜く（映像の 16:9 の絵など、正方形でない絵を枠いっぱいに広げても、はみ出さない）。
@@ -115,6 +122,8 @@ struct NowPlayingEntry: TimelineEntry {
     let date: Date
     let song: WidgetNowPlaying?
     let artwork: WidgetImage?
+    /// 次に流れる曲のジャケット（videoId ごと）。
+    var queueArtwork: [String: WidgetImage] = [:]
 }
 
 struct NowPlayingProvider: TimelineProvider {
@@ -131,7 +140,11 @@ struct NowPlayingProvider: TimelineProvider {
 
     private func entry() -> NowPlayingEntry {
         let song = WidgetStore.nowPlaying
-        return NowPlayingEntry(date: Date(), song: song, artwork: song.flatMap { loadImage(WidgetStore.artworkFile($0.videoId)) })
+        var queueArtwork: [String: WidgetImage] = [:]
+        for item in song?.upNext?.prefix(upNextRows) ?? [] {
+            queueArtwork[item.videoId] = loadImage(WidgetStore.artworkFile(item.videoId))
+        }
+        return NowPlayingEntry(date: Date(), song: song, artwork: song.flatMap { loadImage(WidgetStore.artworkFile($0.videoId)) }, queueArtwork: queueArtwork)
     }
 }
 
@@ -231,23 +244,24 @@ struct NowPlayingWidgetView: View {
                         Controls(playing: song.playing, size: 20)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    // 右側: 次に流れる曲（押すとその曲へ飛ぶ）
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text(WidgetText.t("次に流れる曲", "Up next")).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                        ForEach(song.upNext ?? []) { item in
+                    // 右側: 次に流れる曲（押すとその曲へ飛ぶ）。行を上下いっぱいに等しく割り振り、下に余白を残さない
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach((song.upNext ?? []).prefix(upNextRows)) { item in
                             Button(intent: PlayQueueItemIntent(index: item.index, videoId: item.videoId)) {
-                                VStack(alignment: .leading, spacing: 0) {
-                                    Text(item.title).font(.subheadline.weight(.medium)).lineLimit(1)
-                                    Text(item.artist).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                                HStack(spacing: 8) {
+                                    Artwork(image: entry.queueArtwork[item.videoId], radius: 5).frame(width: 28, height: 28)
+                                    VStack(alignment: .leading, spacing: 0) {
+                                        Text(item.title).font(.subheadline.weight(.medium)).lineLimit(1)
+                                        Text(item.artist).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                                    }
                                 }
-                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
                                 .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
                         }
-                        Spacer(minLength: 0)
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 }
             }
         } else {
