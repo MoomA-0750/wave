@@ -70,12 +70,14 @@ struct CollectionPageView: View {
 
     private func controls(_ player: PlayerService) -> some View {
         HStack(spacing: 16) {
-            PlayCircleButton(action: {
-                if model.isPlayingHere { player.togglePlay() } else { model.play(rows: model.rows, shuffle: model.shufflePlay ? true : nil) }
-            }) {
-                Image(systemName: model.isPlayingHere && player.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 20))
+            // 押せるとき（曲があるとき）だけ出す
+            if !model.rows.isEmpty {
+                PlayCircleButton(action: {
+                    if model.isPlayingHere { player.togglePlay() } else { model.play(rows: model.rows, shuffle: model.shufflePlay ? true : nil) }
+                }) {
+                    Image(systemName: model.isPlayingHere && player.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 20))
+                }
             }
-            .disabled(model.rows.isEmpty)
             IconToggle(isOn: model.isPlayingHere ? player.shuffle : model.shufflePlay, help: L.t("シャッフル", "Shuffle")) {
                 if model.isPlayingHere { player.toggleShuffle() } else { model.shufflePlay.toggle() }
             } label: { Image(systemName: "shuffle").font(.system(size: 20)) }

@@ -20,7 +20,8 @@ struct SongMenuItems: View {
         // RSS のエピソードは YouTube の曲ではない（プレイリスト・ラジオ・共有のリンクが無い。ADR-0012）
         let external = Feed.isExternal(song.videoId)
         Divider()
-        if !external {
+        // プレイリストへの追加はログインしているときだけ出す
+        if !external && AppServices.client.isLoggedIn {
             Menu(L.t("プレイリストに追加", "Add to playlist"), systemImage: "plus") {
                 Button(L.t("新しいプレイリスト", "New playlist"), systemImage: "plus") { Dialogs.shared.createPlaylist(with: song) }
                 let editable = AppServices.library.editable
@@ -29,7 +30,6 @@ struct SongMenuItems: View {
                     Button(playlist.title) { Task { await SongActions.add(playlist, song) } }
                 }
             }
-            .disabled(!AppServices.client.isLoggedIn)
         }
         if let removeFromPlaylist {
             Button(L.t("このプレイリストから削除", "Remove from this playlist"), systemImage: "trash", action: removeFromPlaylist)

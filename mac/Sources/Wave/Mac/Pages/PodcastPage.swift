@@ -22,10 +22,12 @@ struct PodcastPageView: View {
             LazyVStack(alignment: .leading, spacing: 0) {
                 header
                 HStack(spacing: 16) {
-                    PlayCircleButton(action: {
-                        model.playOrPause()
-                    }) { Image(systemName: playingHere && player.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 20)) }
-                        .disabled(episodes.isEmpty)
+                    // 押せるとき（エピソードがあるとき）だけ出す
+                    if !episodes.isEmpty {
+                        PlayCircleButton(action: {
+                            model.playOrPause()
+                        }) { Image(systemName: playingHere && player.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 20)) }
+                    }
                     if let saved = model.saved, model.isFeed || AppServices.client.isLoggedIn {
                         Button(saved ? L.t("保存済み", "Saved") : L.t("ライブラリに保存", "Save to library")) { model.toggleSaved() }
                             .buttonStyle(.bordered)

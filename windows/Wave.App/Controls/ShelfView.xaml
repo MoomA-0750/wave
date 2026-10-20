@@ -12,17 +12,18 @@
                 <TextBlock Text="{x:Bind Title, Mode=OneWay}" Style="{StaticResource ShelfTitleStyle}" />
             </StackPanel>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Bottom" Spacing="4">
-                <Button Style="{StaticResource IconButtonStyle}" Click="OnLeft" ToolTipService.ToolTip="{x:Bind app:L.T('前へ', 'Previous')}">
+                <!-- 押せないほうは見えなくする（場所は残し、見出しの高さが変わらないようにする） -->
+                <Button x:Name="LeftButton" Style="{StaticResource IconButtonStyle}" Click="OnLeft" Opacity="0" IsEnabled="False" ToolTipService.ToolTip="{x:Bind app:L.T('前へ', 'Previous')}">
                     <FontIcon Glyph="&#xE76B;" FontSize="12" />
                 </Button>
-                <Button Style="{StaticResource IconButtonStyle}" Click="OnRight" ToolTipService.ToolTip="{x:Bind app:L.T('次へ', 'Next')}">
+                <Button x:Name="RightButton" Style="{StaticResource IconButtonStyle}" Click="OnRight" Opacity="0" IsEnabled="False" ToolTipService.ToolTip="{x:Bind app:L.T('次へ', 'Next')}">
                     <FontIcon Glyph="&#xE76C;" FontSize="12" />
                 </Button>
             </StackPanel>
         </Grid>
-        <ScrollViewer x:Name="Scroller" HorizontalScrollMode="Enabled" HorizontalScrollBarVisibility="Hidden"
+        <ScrollViewer x:Name="Scroller" ViewChanged="OnViewChanged" SizeChanged="OnScrollerSizeChanged" HorizontalScrollMode="Enabled" HorizontalScrollBarVisibility="Hidden"
                       VerticalScrollMode="Disabled" VerticalScrollBarVisibility="Disabled">
-            <ItemsRepeater ItemsSource="{x:Bind Items, Mode=OneWay}">
+            <ItemsRepeater ItemsSource="{x:Bind Items, Mode=OneWay}" SizeChanged="OnScrollerSizeChanged">
                 <ItemsRepeater.Layout>
                     <StackLayout Orientation="Horizontal" />
                 </ItemsRepeater.Layout>

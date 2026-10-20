@@ -33,4 +33,20 @@ public sealed partial class ShelfView : UserControl
     private void OnLeft(object sender, RoutedEventArgs e) => Scroller.ChangeView(Math.Max(0, Scroller.HorizontalOffset - Scroller.ViewportWidth * 0.8), null, null);
 
     private void OnRight(object sender, RoutedEventArgs e) => Scroller.ChangeView(Scroller.HorizontalOffset + Scroller.ViewportWidth * 0.8, null, null);
+
+    private void OnViewChanged(object? sender, ScrollViewerViewChangedEventArgs e) => UpdateArrows();
+
+    // 並びの大きさが変わった直後は、ScrollViewer の送れる幅（ScrollableWidth）がまだ前の値なので、置き終えてから見る
+    private void OnScrollerSizeChanged(object sender, SizeChangedEventArgs e) => DispatcherQueue.TryEnqueue(UpdateArrows);
+
+    /// <summary>送るボタンは、その向きに続きがあるときだけ見せる。</summary>
+    private void UpdateArrows()
+    {
+        var left = Scroller.HorizontalOffset > 1;
+        var right = Scroller.HorizontalOffset < Scroller.ScrollableWidth - 1;
+        LeftButton.Opacity = left ? 1 : 0;
+        LeftButton.IsEnabled = left;
+        RightButton.Opacity = right ? 1 : 0;
+        RightButton.IsEnabled = right;
+    }
 }

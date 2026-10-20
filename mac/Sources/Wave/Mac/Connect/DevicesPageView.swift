@@ -201,9 +201,10 @@ struct DevicesPageView: View {
                     Button(L.t("相手に入力したら、続ける", "Continue after entering it")) { devices.confirmOnB() }.buttonStyle(.borderedProminent)
                 }
                 // 加えたのがログインをまだ持たない wave API なら、続けてログインを渡す
-                if pairing.kind == .done, let id = pairing.grantDeviceId, let member = devices.members.first(where: { $0.deviceId == id }) {
+                if pairing.kind == .done, AppServices.client.isLoggedIn, let id = pairing.grantDeviceId,
+                   let member = devices.members.first(where: { $0.deviceId == id })
+                {
                     Button(L.t("ログインを渡す", "Share sign-in")) { granting = member }.buttonStyle(.borderedProminent)
-                        .disabled(!AppServices.client.isLoggedIn)
                 }
                 Button(pairing.kind == .done || pairing.kind == .failed ? L.t("閉じる", "Close") : L.t("キャンセル", "Cancel")) { devices.cancelPairing() }
             }
@@ -261,9 +262,9 @@ struct DevicesPageView: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
-            if member.isApi {
+            // ログインしているときだけ出す（渡すログインが無い）
+            if member.isApi && AppServices.client.isLoggedIn {
                 Button(L.t("ログインを渡す", "Share sign-in")) { granting = member }
-                    .disabled(!AppServices.client.isLoggedIn)
             }
             if !member.isSelf {
                 Button(L.t("外す", "Remove")) { removing = member }

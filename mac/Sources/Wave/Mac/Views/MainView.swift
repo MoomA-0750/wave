@@ -87,12 +87,14 @@ struct MainView: View {
     @ToolbarContentBuilder
     private var titleBar: some ToolbarContent {
         let nav = AppServices.nav!
-        // 戻る・進む（同じ大きさの2つのボタン）
+        // 戻る・進む（同じ大きさの2つのボタン）。押せるときだけ出す
         ToolbarItemGroup(placement: .navigation) {
-            Button { nav.goBack() } label: { Image(systemName: "chevron.left") }
-                .disabled(!nav.canGoBack).help(L.t("戻る", "Back"))
-            Button { nav.goForward() } label: { Image(systemName: "chevron.right") }
-                .disabled(!nav.canGoForward).help(L.t("進む", "Forward"))
+            if nav.canGoBack {
+                Button { nav.goBack() } label: { Image(systemName: "chevron.left") }.help(L.t("戻る", "Back"))
+            }
+            if nav.canGoForward {
+                Button { nav.goForward() } label: { Image(systemName: "chevron.right") }.help(L.t("進む", "Forward"))
+            }
         }
         // macOS 26 からは、ホーム・検索の欄・Claude をそれぞれのガラスにする（帯の項目は1枚のガラスにまとめられ、
         // 中央に寄せるために後ろに空けた幅までガラスが伸びるので、まとめのガラスは消す）

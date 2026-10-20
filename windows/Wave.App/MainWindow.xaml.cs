@@ -254,8 +254,16 @@ public sealed partial class MainWindow : Window
 
     private void OnNavigated(object sender, NavigationEventArgs e)
     {
-        BackButton.IsEnabled = ContentFrame.CanGoBack;
-        ForwardButton.IsEnabled = ContentFrame.CanGoForward;
+        // 押せるときだけ出す。出し入れで検索の並びの欄の位置が変わるので、置き直してから中央に寄せ直す
+        var back = Ui.Show(ContentFrame.CanGoBack);
+        var forward = Ui.Show(ContentFrame.CanGoForward);
+        if (BackButton.Visibility != back || ForwardButton.Visibility != forward)
+        {
+            BackButton.Visibility = back;
+            ForwardButton.Visibility = forward;
+            Root.UpdateLayout();
+            CenterSearch();
+        }
         LyricsToggle.IsChecked = e.SourcePageType == typeof(LyricsPage);
     }
 

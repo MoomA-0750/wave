@@ -20,13 +20,13 @@
         <!-- 左上のアイコンと名前は出さない（タスクバーの名前はウィンドウの Title で出る） -->
         <TitleBar x:Name="AppTitleBar" IsBackButtonVisible="False" SizeChanged="OnSearchBarSizeChanged">
             <TitleBar.LeftHeader>
-                <!-- 戻る・進む（同じ大きさの2つのボタン。タイトルバー備え付けの戻るは使わない） -->
+                <!-- 戻る・進む（同じ大きさの2つのボタン。タイトルバー備え付けの戻るは使わない）。押せるときだけ出す -->
                 <StackPanel Orientation="Horizontal" Spacing="2" Margin="4,0,4,0" VerticalAlignment="Center">
-                    <Button x:Name="BackButton" Style="{StaticResource IconButtonStyle}" Click="OnBackClick" IsEnabled="False"
+                    <Button x:Name="BackButton" Style="{StaticResource IconButtonStyle}" Click="OnBackClick" Visibility="Collapsed"
                             ToolTipService.ToolTip="{x:Bind app:L.T('戻る', 'Back')}" Height="32" Width="40" MinHeight="32" Padding="0">
                         <FontIcon Glyph="&#xE72B;" FontSize="12" />
                     </Button>
-                    <Button x:Name="ForwardButton" Style="{StaticResource IconButtonStyle}" Click="OnForward" IsEnabled="False"
+                    <Button x:Name="ForwardButton" Style="{StaticResource IconButtonStyle}" Click="OnForward" Visibility="Collapsed"
                             ToolTipService.ToolTip="{x:Bind app:L.T('進む', 'Forward')}" Height="32" Width="40" MinHeight="32" Padding="0">
                         <FontIcon Glyph="&#xE72A;" FontSize="12" />
                     </Button>

@@ -16,10 +16,12 @@ struct LibraryPane: View {
                 Image(systemName: "books.vertical").font(.system(size: 16))
                 Text(L.t("マイライブラリ", "Your Library")).font(.body.weight(.semibold))
                 Spacer()
-                Button { Dialogs.shared.createPlaylist() } label: { Image(systemName: "plus") }
-                    .buttonStyle(IconButtonStyle())
-                    .disabled(!account.isLoggedIn)
-                    .help(L.t("プレイリストを作成", "Create playlist"))
+                // ログインしているときだけ出す
+                if account.isLoggedIn {
+                    Button { Dialogs.shared.createPlaylist() } label: { Image(systemName: "plus") }
+                        .buttonStyle(IconButtonStyle())
+                        .help(L.t("プレイリストを作成", "Create playlist"))
+                }
             }
             .padding(EdgeInsets(top: 12, leading: 16, bottom: 4, trailing: 8))
             // 種類のチップ（4つ並ぶと欄の幅に収まらないことがあるので横に送れるように）

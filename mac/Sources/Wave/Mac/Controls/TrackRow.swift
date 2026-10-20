@@ -142,6 +142,8 @@ struct ShelfView: View {
 
     @State private var position = ScrollPosition(idType: Int.self)
     @State private var first = 0
+    /// 見えている最後のカード（分かるまでは -1。送るボタンは、その向きに続きがあるときだけ出す）。
+    @State private var last = -1
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -151,10 +153,13 @@ struct ShelfView: View {
                     Text(title).subtitleStyle().lineLimit(1)
                 }
                 Spacer()
+                // 押せないほうは見えなくする（場所は残し、見出しの高さが変わらないようにする）
                 Button { scroll(-4) } label: { Image(systemName: "chevron.left").font(.system(size: 11, weight: .semibold)) }
                     .buttonStyle(IconButtonStyle()).help(L.t("前へ", "Previous"))
+                    .opacity(first > 0 ? 1 : 0).disabled(first <= 0)
                 Button { scroll(4) } label: { Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold)) }
                     .buttonStyle(IconButtonStyle()).help(L.t("次へ", "Next"))
+                    .opacity(canScrollRight ? 1 : 0).disabled(!canScrollRight)
             }
             .padding(.horizontal, 8)
             ScrollView(.horizontal, showsIndicators: false) {
@@ -166,9 +171,14 @@ struct ShelfView: View {
                 .scrollTargetLayout()
             }
             .scrollPosition($position)
-            .onScrollTargetVisibilityChange(idType: Int.self) { visible in first = visible.min() ?? 0 }
+            .onScrollTargetVisibilityChange(idType: Int.self) { visible in
+                first = visible.min() ?? 0
+                last = visible.max() ?? -1
+            }
         }
     }
+
+    private var canScrollRight: Bool { last >= 0 && last < items.count - 1 }
 
     private func scroll(_ by: Int) {
         let target = min(max(0, first + by), max(0, items.count - 1))

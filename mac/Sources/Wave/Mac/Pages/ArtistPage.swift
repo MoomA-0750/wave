@@ -43,10 +43,12 @@ struct ArtistPageView: View {
                     .frame(height: 320 + geo.safeAreaInsets.top)
                     .clipped()
                     HStack(spacing: 16) {
-                        PlayCircleButton(action: {
-                            model.playOrPause()
-                        }) { Image(systemName: playingHere && player.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 20)) }
-                            .disabled(rows.isEmpty)
+                        // 押せるとき（曲があるとき）だけ出す
+                        if !rows.isEmpty {
+                            PlayCircleButton(action: {
+                                model.playOrPause()
+                            }) { Image(systemName: playingHere && player.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 20)) }
+                        }
                         IconToggle(isOn: playingHere ? player.shuffle : model.shufflePlay, help: L.t("シャッフル", "Shuffle")) {
                             model.toggleShuffle()
                         } label: { Image(systemName: "shuffle").font(.system(size: 20)) }
