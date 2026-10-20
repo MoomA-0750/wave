@@ -11,6 +11,7 @@
 	<key>CFBundleShortVersionString</key><string>0.1.0</string>
 	<key>CFBundleVersion</key><string>1</string>
 	<key>CFBundleDevelopmentRegion</key><string>ja</string>
+	<key>CFBundleLocalizations</key><array><string>ja</string><string>en</string></array>
 	<key>CFBundleSupportedPlatforms</key><array><string>iPhoneOS</string></array>
 	<key>DTPlatformName</key><string>iphoneos</string>
 	<key>MinimumOSVersion</key><string>18.0</string>

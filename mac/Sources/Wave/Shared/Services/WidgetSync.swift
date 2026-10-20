@@ -19,6 +19,8 @@ final class WidgetSync {
 
     func start() {
         WidgetBridge.handler = { command in await WidgetSync.handle(command) }
+        // ウィジェットの文言を画面の言語に合わせる
+        WidgetStore.write(L.ja ? "ja" : "en", "language.json")
         #if os(iOS)
             activity = Activity<NowPlayingAttributes>.activities.first
         #endif
@@ -42,6 +44,10 @@ final class WidgetSync {
         case .previous:
             player.previous()
             shouldPlay = wasPlaying
+        case .toggleLike:
+            // ウィジェットでは✓を押すと評価を外す（アプリの中のボタンと違い、プレイリストに追加する画面は開かない）
+            player.toggleLike()
+            shouldPlay = false
         case .playPlaylist(let id, let shuffle):
             if player.shuffle != shuffle { player.toggleShuffle() }
             let title = WidgetStore.playlists.first { $0.id == id }?.title ?? ""
@@ -63,7 +69,8 @@ final class WidgetSync {
         let now = player.current.map { song in
             let next = player.isRemote || player.index + 1 >= player.queue.count ? nil : player.queue[player.index + 1]
             return WidgetNowPlaying(videoId: song.videoId, title: song.title, artist: song.artistsText, playing: player.isPlaying,
-                                    device: player.isRemote ? player.remoteDevice : nil, nextTitle: next?.title, nextArtist: next?.artistsText)
+                                    device: player.isRemote ? player.remoteDevice : nil, nextTitle: next?.title, nextArtist: next?.artistsText,
+                                    liked: LikeButton.available(player) && AppServices.client.isLoggedIn ? player.like == .like : nil)
         }
         if now != shown {
             let songChanged = now?.videoId != shown?.videoId

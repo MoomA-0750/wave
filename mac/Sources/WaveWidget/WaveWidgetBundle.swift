@@ -72,6 +72,35 @@ private var widgetBackground: Color {
     #endif
 }
 
+/// 絵があれば、絵をぼかして暗くした地（上の文字は白で出す）。無ければ普通の地。
+private struct ArtworkBackground: View {
+    var image: WidgetImage?
+
+    var body: some View {
+        if let image {
+            Image(widgetImage: image).resizable().aspectRatio(contentMode: .fill)
+                .blur(radius: 30, opaque: true)
+                .overlay(Color.black.opacity(0.35))
+        } else {
+            widgetBackground
+        }
+    }
+}
+
+/// ぼかした絵の地の上では、ライトモードでも文字を白にする（暗い地として描く）。クリア・色付きの表示は OS が地を置き換えるので、そのまま。
+private struct OnArtwork: ViewModifier {
+    var image: WidgetImage?
+    @Environment(\.widgetRenderingMode) private var mode
+
+    func body(content: Content) -> some View {
+        if image != nil && mode == .fullColor { content.environment(\.colorScheme, .dark) } else { content }
+    }
+}
+
+extension View {
+    fileprivate func onArtwork(_ image: WidgetImage?) -> some View { modifier(OnArtwork(image: image)) }
+}
+
 // MARK: 今の曲
 
 struct NowPlayingEntry: TimelineEntry {
@@ -102,12 +131,27 @@ struct NowPlayingWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: WidgetStore.nowPlayingKind, provider: NowPlayingProvider()) { entry in
             NowPlayingWidgetView(entry: entry)
-                .containerBackground(for: .widget) { widgetBackground }
+                .onArtwork(entry.artwork)
+                .containerBackground(for: .widget) { ArtworkBackground(image: entry.artwork) }
                 .widgetURL(URL(string: "wave://nowplaying"))
         }
-        .configurationDisplayName("再生中")
-        .description("今の曲と、再生・一時停止・曲送り。")
+        .configurationDisplayName(WidgetText.t("再生中", "Now Playing"))
+        .description(WidgetText.t("今の曲と、再生・一時停止・曲送り・高く評価。", "The current song, with play/pause, skip and like."))
         .supportedFamilies([.systemSmall, .systemMedium])
+    }
+}
+
+/// 高く評価のボタン（アプリの評価のボタンと同じ印。評価していれば✓）。
+private struct LikeControl: View {
+    var liked: Bool
+    var size: CGFloat = 22
+
+    var body: some View {
+        Button(intent: ToggleLikeIntent()) {
+            Image(systemName: liked ? "checkmark.circle.fill" : "plus.circle").font(.system(size: size))
+                .foregroundStyle(liked ? accent : .primary)
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -135,9 +179,13 @@ struct NowPlayingWidgetView: View {
         if let song = entry.song {
             if family == .systemSmall {
                 VStack(alignment: .leading, spacing: 6) {
-                    Artwork(image: entry.artwork).frame(width: 50, height: 50)
+                    HStack(alignment: .top) {
+                        Artwork(image: entry.artwork).frame(width: 50, height: 50)
+                        Spacer(minLength: 0)
+                        if let liked = song.liked { LikeControl(liked: liked, size: 20) }
+                    }
                     Spacer(minLength: 0)
-                    Text(song.title).font(.subheadline.weight(.semibold)).lineLimit(1)
+                    Text(song.title).font(.headline).lineLimit(1)
                     Text(song.device ?? song.artist).font(.caption).foregroundStyle(song.device != nil ? accent : .secondary).lineLimit(1)
                     Controls(playing: song.playing, size: 18)
                 }
@@ -147,15 +195,19 @@ struct NowPlayingWidgetView: View {
                     // 上・左・下の余白いっぱいに広げて、絵の角をウィジェットの角にそろえる
                     Artwork(image: entry.artwork).aspectRatio(1, contentMode: .fit).frame(maxHeight: .infinity)
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(song.title).font(.title3.weight(.semibold)).lineLimit(2)
+                        Text(song.title).font(.title2.weight(.semibold)).lineLimit(2)
                         Text(song.artist).font(.body).foregroundStyle(.secondary).lineLimit(1)
                         if let device = song.device {
                             Label(device, systemImage: "hifispeaker.2").font(.subheadline).foregroundStyle(accent).lineLimit(1)
                         } else if let next = song.nextTitle {
-                            Text("次: \(next)").font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                            Text(WidgetText.t("次: ", "Next: ") + next).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
                         }
                         Spacer(minLength: 0)
-                        Controls(playing: song.playing)
+                        HStack {
+                            Controls(playing: song.playing)
+                            Spacer(minLength: 8)
+                            if let liked = song.liked { LikeControl(liked: liked) }
+                        }
                     }
                     Spacer(minLength: 0)
                 }
@@ -163,7 +215,7 @@ struct NowPlayingWidgetView: View {
         } else {
             VStack(spacing: 6) {
                 Image(systemName: "music.note").font(.title)
-                Text("何も再生していません").font(.caption).foregroundStyle(.secondary)
+                Text(WidgetText.t("何も再生していません", "Nothing playing")).font(.caption).foregroundStyle(.secondary)
             }
         }
     }
@@ -179,7 +231,7 @@ struct PlaylistEntry: TimelineEntry {
 
 struct PlaylistProvider: AppIntentTimelineProvider {
     func placeholder(in context: Context) -> PlaylistEntry {
-        PlaylistEntry(date: Date(), playlist: WidgetPlaylist(id: "", title: "プレイリスト"), cover: nil)
+        PlaylistEntry(date: Date(), playlist: WidgetPlaylist(id: "", title: WidgetText.t("プレイリスト", "Playlist")), cover: nil)
     }
 
     func snapshot(for configuration: SelectPlaylistIntent, in context: Context) async -> PlaylistEntry {
@@ -210,10 +262,11 @@ struct PlaylistWidget: Widget {
     var body: some WidgetConfiguration {
         AppIntentConfiguration(kind: WidgetStore.playlistKind, intent: SelectPlaylistIntent.self, provider: PlaylistProvider()) { entry in
             PlaylistWidgetView(entry: entry)
-                .containerBackground(for: .widget) { widgetBackground }
+                .onArtwork(entry.cover)
+                .containerBackground(for: .widget) { ArtworkBackground(image: entry.cover) }
         }
-        .configurationDisplayName("プレイリスト")
-        .description("選んだプレイリストを、押すとすぐ再生する。")
+        .configurationDisplayName(WidgetText.t("プレイリスト", "Playlist"))
+        .description(WidgetText.t("選んだプレイリストを、押すとすぐ再生する。", "Play the playlist you choose with one tap."))
         .supportedFamilies([.systemSmall, .systemMedium])
     }
 }
@@ -259,7 +312,7 @@ struct PlaylistWidgetView: View {
         } else {
             VStack(spacing: 6) {
                 Image(systemName: "music.note.list").font(.title)
-                Text("wave を開いてログインすると、プレイリストを選べます").font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                Text(WidgetText.t("wave を開いてログインすると、プレイリストを選べます", "Open wave and log in to choose a playlist")).font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
             }
         }
     }
@@ -299,7 +352,7 @@ struct PlaylistWidgetView: View {
                         VStack(spacing: 6) {
                             Controls(playing: state.playing, size: 20)
                             if let next = state.nextTitle {
-                                Text("次: \(next)").font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                                Text(WidgetText.t("次: ", "Next: ") + next).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
                             }
                         }
                     }

@@ -1,0 +1,9 @@
+/* ウィジェットのボタン・プレイリストの選び（App Intents）の英語。キーは日本語の文言（開発の言語は ja）。Mac と iPhone の両方に入れる */
+"再生・一時停止" = "Play/Pause";
+"次の曲" = "Next Track";
+"前の曲" = "Previous Track";
+"高く評価" = "Like";
+"プレイリストを再生" = "Play Playlist";
+"プレイリスト" = "Playlist";
+"シャッフル" = "Shuffle";
+"プレイリストを選ぶ" = "Choose Playlist";

@@ -53,7 +53,17 @@ enum WidgetStore {
         }
         return "artwork-x\(String(hash, radix: 16)).jpg"
     }
+    /// ウィジェットの文言の言語（アプリの画面の言語。アプリが起動のたびに書く）。
+    static var language: String? { read(String.self, "language.json") }
+
     static func coverFile(_ playlistId: String) -> URL? { file("cover-\(playlistId.replacingOccurrences(of: "/", with: "_")).jpg") }
+}
+
+/// ウィジェットの文言（アプリの L と同じく日本語と英語を並べて書く）。アプリの画面の言語に合わせ、分からなければ端末の言語。
+enum WidgetText {
+    static var ja: Bool { WidgetStore.language.map { $0 == "ja" } ?? (Locale.preferredLanguages.first ?? "").hasPrefix("ja") }
+
+    static func t(_ ja: String, _ en: String) -> String { Self.ja ? ja : en }
 }
 
 /// 今の曲（ウィジェットに出す分だけ）。
@@ -66,6 +76,8 @@ struct WidgetNowPlaying: Codable, Equatable {
     var device: String?
     var nextTitle: String?
     var nextArtist: String?
+    /// 今の曲を高く評価しているか。評価のボタンを出せないとき（ログインしていない・RSS のエピソード）は nil。
+    var liked: Bool?
 }
 
 /// ライブラリのプレイリスト（ウィジェットで選ぶ）。
@@ -77,7 +89,7 @@ struct WidgetPlaylist: Codable, Equatable, Hashable {
 
 /// ウィジェット・ロック画面のボタンから、アプリに頼むこと。
 enum WidgetCommand: Sendable {
-    case togglePlay, next, previous
+    case togglePlay, next, previous, toggleLike
     case playPlaylist(id: String, shuffle: Bool)
 }
 
@@ -114,6 +126,16 @@ struct PreviousTrackIntent: AudioPlaybackIntent {
     init() {}
     func perform() async throws -> some IntentResult {
         await WidgetBridge.run(.previous)
+        return .result()
+    }
+}
+
+/// 高く評価する・外す。評価は再生ではないが、AudioPlaybackIntent にするとアプリの中で行われる（ほかの頼みと同じくアプリの評価の手順を使う）。
+struct ToggleLikeIntent: AudioPlaybackIntent {
+    static let title: LocalizedStringResource = "高く評価"
+    init() {}
+    func perform() async throws -> some IntentResult {
+        await WidgetBridge.run(.toggleLike)
         return .result()
     }
 }

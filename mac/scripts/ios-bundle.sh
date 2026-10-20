@@ -76,6 +76,9 @@ setplist "$appex/Info.plist"
 plutil -replace CFBundleVersion -string "$(plutil -extract CFBundleVersion raw "$app/Info.plist")" "$appex/Info.plist"
 intents wave Wave "$app" "$app/wave"
 intents WaveWidget WaveWidget "$appex" "$appex/WaveWidget"
+# ボタン・プレイリストの選びの名前の英語（Mac と同じファイル。bundle.sh と同じ）
+cp -R Resources/Widget/en.lproj "$appex/"
+cp -R Resources/Widget/en.lproj "$app/"
 
 # ウィジェットとアプリグループを分け合うため、権限（entitlements）を書いた署名にしておく。
 # 実機ではこれを Sideloadly などが本人の Apple ID で署名し直す（権限は引き継がれる）

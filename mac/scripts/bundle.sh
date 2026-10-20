@@ -41,6 +41,9 @@ intents() {
 }
 intents wave Wave "$app/Contents/Resources" "$app/Contents/MacOS/wave"
 intents WaveWidget WaveWidget "$appex/Contents/Resources" "$appex/Contents/MacOS/WaveWidget"
+# ボタン・プレイリストの選びの名前の英語（キーは日本語。アプリの中のショートカットにも同じ名前が出る）
+cp -R Resources/Widget/en.lproj "$appex/Contents/Resources/"
+cp -R Resources/Widget/en.lproj "$app/Contents/Resources/"
 cp Resources/Info.plist "$app/Contents/Info.plist"
 # 連携の中継の宛先を書き込む（mac.sh がこの機械の local.properties から渡す。無ければ書かない）
 if [ -n "${WAVE_RELAY_V2_URL:-}" ] && [ -n "${WAVE_RELAY_V2_HOST:-}" ]; then
