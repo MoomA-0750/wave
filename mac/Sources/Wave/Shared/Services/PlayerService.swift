@@ -297,6 +297,10 @@ final class PlayerService {
     @ObservationIgnored var sendRemoteControl: ((ControlAction, Int64?) -> Bool)?
     /// ほかの端末で鳴っている間の「次に再生」（true）・「キューに追加」（false）を、その端末のキューへ送る。送れなければ false。
     @ObservationIgnored var sendRemoteQueueAdd: (([Song], Bool) -> Bool)?
+    /// ほかの端末で鳴っている間のキューの並べ替え（動かす曲の項目の ID・どの曲の後ろか。nil なら今の曲の直後）を、その端末へ送る。送れなければ false。
+    @ObservationIgnored var sendRemoteQueueMove: ((String, String?) -> Bool)?
+    /// ほかの端末で鳴っている間のキューから外す（項目の ID）を、その端末へ送る。送れなければ false。
+    @ObservationIgnored var sendRemoteQueueRemove: (([String]) -> Bool)?
 
     @ObservationIgnored private var remote: RemoteSnapshot?
     @ObservationIgnored private var remoteQueueKey: String?
@@ -720,22 +724,26 @@ final class PlayerService {
 
     /// 今の曲より後ろの、自分で足した曲をまとめて外す（Spotify の「キューを消去」）。
     func clearUserQueue() {
-        if isRemote { return }
-        var removed = 0
-        var i = queue.count - 1
-        while i > index {
-            if isUserAdded(i) {
-                removeQueueItem(at: i)
-                removed += 1
-            }
-            i -= 1
-        }
-        if removed > 0 { message = L.t("キューから \(removed) 曲を外しました", "Removed \(L.songs(removed)) from the queue") }
+        let positions = itemMeta.indices.filter { $0 > index && isUserAdded($0) }
+        guard removeUpcoming(positions) else { return }
+        if !positions.isEmpty { message = L.t("キューから \(positions.count) 曲を外しました", "Removed \(L.songs(positions.count)) from the queue") }
     }
 
     /// キューの次の曲を並べ替える（今の曲より後ろだけ）。
+    /// ほかの端末で鳴っている間は、その端末へ送ってから映しているキューも先に動かす（その端末が書き直したキューが届けば置き換わる）。
     func moveUpcoming(_ from: Int, _ to: Int) {
-        if isRemote || from <= index || to <= index || from >= queue.count || to >= queue.count || from == to { return }
+        if from <= index || to <= index || from >= queue.count || to >= queue.count || from == to { return }
+        if isRemote {
+            // 動かした後の並びで直前に来る曲の後ろへ、と頼む（今の曲の直後なら nil）。位置でなく項目の ID で伝える
+            let itemId = itemMeta[from].itemId
+            var ids = itemMeta.map(\.itemId)
+            ids.remove(at: from)
+            ids.insert(itemId, at: to)
+            guard sendRemoteQueueMove?(itemId, to - 1 > index ? ids[to - 1] : nil) == true else {
+                message = L.t("ほかの端末に送れませんでした", "Couldn’t reach the other device")
+                return
+            }
+        }
         let song = queue.remove(at: from)
         let meta = itemMeta.remove(at: from)
         queue.insert(song, at: to)
@@ -743,10 +751,49 @@ final class PlayerService {
         queueChanged.forEach { $0() }
     }
 
-    func removeAt(_ position: Int) {
-        // ほかの端末を映している間は、その端末のキューを手元で消さない（Android・iPhone と同じく、項目も出さない）
-        if isRemote || position <= index || position >= queue.count { return }
-        removeQueueItem(at: position)
+    func removeAt(_ position: Int) { removeUpcoming([position]) }
+
+    /// キューの次の曲をまとめて外す（今の曲より後ろだけ）。ほかの端末で鳴っている間は、その端末へ1件の命令で送ってから
+    /// 映しているキューからも先に外す。送れなければ何もせず false。
+    @discardableResult
+    func removeUpcoming(_ positions: [Int]) -> Bool {
+        let targets = Set(positions.filter { $0 > index && $0 < queue.count }).sorted(by: >)
+        if targets.isEmpty { return true }
+        if isRemote {
+            guard sendRemoteQueueRemove?(targets.reversed().map { itemMeta[$0].itemId }) == true else {
+                message = L.t("ほかの端末に送れませんでした", "Couldn’t reach the other device")
+                return false
+            }
+        }
+        for position in targets { removeQueueItem(at: position) }
+        return true
+    }
+
+    /// ほかの端末のキューの画面で並べ替えた曲を動かす（この端末が鳴らしている。Android の QueueSession と同じ）。
+    /// itemId の曲（今の曲より後ろ）を afterItemId の曲の直後へ、afterItemId が無ければ今の曲の直後へ。
+    /// 自分で足した曲かどうかは手元で並べ替えたときと同じく変えない。どちらかの曲が無い・今の曲より前なら false。
+    func applyQueueMove(_ itemId: String, afterItemId: String?) -> Bool {
+        if isRemote { return false }
+        guard let from = itemMeta.firstIndex(where: { $0.itemId == itemId }), from > index else { return false }
+        var after = index
+        if let afterItemId {
+            guard let found = itemMeta.firstIndex(where: { $0.itemId == afterItemId }), found >= index, found != from else { return false }
+            after = found
+        }
+        // 外してから入れるので、動かす曲より後ろの曲の後ろへは1つ前の位置になる
+        let to = after < from ? after + 1 : after
+        if to != from { moveUpcoming(from, to) }
+        return true
+    }
+
+    /// ほかの端末のキューの画面で外した曲を外す（この端末が鳴らしている）。今の曲より後ろの曲だけで、手元に無い ID は無視する。
+    func applyQueueRemove(_ itemIds: [String]) -> Bool {
+        if isRemote { return false }
+        let ids = Set(itemIds)
+        let positions = itemMeta.indices.filter { $0 > index && ids.contains(itemMeta[$0].itemId) }
+        if positions.isEmpty { return false }
+        removeUpcoming(positions)
+        return true
     }
 
     /// キューの曲を選んで鳴らす（本人の選択）。

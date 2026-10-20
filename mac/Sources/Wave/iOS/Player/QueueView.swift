@@ -4,7 +4,7 @@ import WaveCore
 
 /// キュー（Android の QueueSheet・Mac の QueueView と同じ並び）。一番上に今の曲、その下に自分で足した曲（「キューを消去」でまとめて外せる）、
 /// その下に元から流れる予定の曲。もう流れた曲は「履歴」に分ける。
-/// 次の曲は長押しのドラッグ（または「編集」のつまみ）で並べ替え、左へ払うと外し、押すとその曲へ。ほかの端末のキューを映している間は並べ替え・外すは出さない。
+/// 次の曲は長押しのドラッグ（または「編集」のつまみ）で並べ替え、左へ払うと外し、押すとその曲へ。ほかの端末のキューを映している間も、並べ替え・外すはその端末のキューへ送る（queue_edit）。
 struct QueueView: View {
     @State private var history = false
     /// 並べ替えの「編集」。EditButton に任せると、曲の進みなどで画面を描き直すたびに編集の状態が揺れ、右のつまみが出たり消えたりしたので、自分で持つ
@@ -36,7 +36,7 @@ struct QueueView: View {
                         .accessibilityLabel(L.t("閉じる", "Close"))
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    if !history && !player.isRemote && player.queue.count > player.index + 1 {
+                    if !history && player.queue.count > player.index + 1 {
                         Button(editMode.isEditing ? L.t("完了", "Done") : L.t("編集", "Edit")) {
                             withAnimation { editMode = editMode.isEditing ? .inactive : .active }
                         }
@@ -76,11 +76,10 @@ struct QueueView: View {
                 HStack {
                     Text(L.t("キューの次の曲", "Next in queue"))
                     Spacer()
-                    if !player.isRemote {
-                        Button(L.t("キューを消去", "Clear queue")) { player.clearUserQueue() }
-                            .font(.footnote.weight(.semibold))
-                            .textCase(nil)
-                    }
+                    // ほかの端末で鳴っている間は、その端末のキューから外してもらう
+                    Button(L.t("キューを消去", "Clear queue")) { player.clearUserQueue() }
+                        .font(.footnote.weight(.semibold))
+                        .textCase(nil)
                 }
             }
         }
@@ -103,11 +102,9 @@ struct QueueView: View {
             player.moveUpcoming(start + first, start + dest)
         }
         .onDelete { offsets in
-            // 後ろから外す（前を外すと後ろの位置がずれる）
-            for offset in offsets.sorted(by: >) { player.removeAt(start + offset) }
+            // まとめて外す（ほかの端末で鳴っている間は、1件の命令でその端末へ送る）
+            player.removeUpcoming(offsets.map { start + $0 })
         }
-        .moveDisabled(player.isRemote)
-        .deleteDisabled(player.isRemote)
     }
 
     // MARK: 履歴
@@ -200,8 +197,8 @@ private struct QueueSongRow: View {
                 // 編集中は右に並べ替えのつまみが出るので、「…」は出さない（つまみと重なって押し分けにくい）
                 if !editing {
                     Menu {
-                        // 外せるのは今の曲より後ろだけ（ほかの端末のキューは外せない。Android と同じ）
-                        SongMenuItems(song: song, queueIndex: !isCurrent && position > player.index && !player.isRemote ? position : nil)
+                        // 外せるのは今の曲より後ろだけ（ほかの端末で鳴っている間は、その端末へ送る）
+                        SongMenuItems(song: song, queueIndex: !isCurrent && position > player.index ? position : nil)
                     } label: {
                         Image(systemName: "ellipsis").frame(width: 32, height: 44).contentShape(Rectangle())
                     }

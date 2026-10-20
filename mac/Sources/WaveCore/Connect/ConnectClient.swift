@@ -113,6 +113,13 @@ public protocol ConnectClientEffects: AnyObject {
     /// そうでなければ自分で足した曲のかたまりの最後へ、items の ID のまま入れる。受け付けなければ false。
     func queueAdd(_ items: [HandoffItem], next: Bool, afterItemId: String?) -> Bool
 
+    /// 遠隔のキューの並べ替えに従う（この端末が鳴らしている）。itemId の曲（今の曲より後ろ）を、afterItemId の曲の直後
+    /// （afterItemId が無ければ今の曲の直後）へ動かす。どちらかが手元のキューに無い・今の曲より前なら何もせず false。
+    func queueMove(_ itemId: String, afterItemId: String?) -> Bool
+
+    /// 遠隔のキューから外す（この端末が鳴らしている）。今の曲より後ろにある itemIds の曲だけを外す。
+    func queueRemove(_ itemIds: [String]) -> Bool
+
     /// ほかの端末と合わせたライブラリが届いた（手元に取り込む、ADR-0013）。
     func libraryChanged(_ body: LibraryBody)
 }
@@ -123,6 +130,10 @@ public extension ConnectClientEffects {
     func controlAccepted(_ action: ControlAction, from deviceId: String) {}
 
     func queueAdd(_ items: [HandoffItem], next: Bool, afterItemId: String?) -> Bool { false }
+
+    func queueMove(_ itemId: String, afterItemId: String?) -> Bool { false }
+
+    func queueRemove(_ itemIds: [String]) -> Bool { false }
 
     func volume(_ volumePercent: Int) -> Bool { false }
 
@@ -1148,6 +1159,33 @@ public final class ConnectClient {
         return true
     }
 
+    /// 遠隔のキューの並べ替えを送る（鳴っていない端末のキューの画面から、今鳴らしている同じアカウントの端末へ）。
+    /// itemId の曲を afterItemId の曲の直後へ（無ければ今の曲の直後へ）動かしてもらう。
+    /// - Returns: 送ったか（家の再生が自分・別のアカウント・最新の状態をまだ見ていないなら false）
+    @discardableResult
+    public func sendQueueMove(_ itemId: String, afterItemId: String?) throws -> Bool {
+        try sendQueueEdit(CommandBody.QueueEdit.move, itemIds: [itemId], afterItemId: afterItemId)
+    }
+
+    /// 遠隔のキューから外すのを送る。条件は sendQueueMove と同じ。
+    @discardableResult
+    public func sendQueueRemove(_ itemIds: [String]) throws -> Bool {
+        try sendQueueEdit(CommandBody.QueueEdit.remove, itemIds: itemIds, afterItemId: nil)
+    }
+
+    private func sendQueueEdit(_ op: String, itemIds: [String], afterItemId: String?) throws -> Bool {
+        if itemIds.isEmpty || isWriter || pendingStoreId != nil { return false }
+        guard let current = chain else { return false }
+        guard let tag = effects.accountTag() else { return false }
+        guard let cursor = latestCursor, cursor.writer != signer.deviceId, cursor.body.accountTag == tag else { return false }
+        let command = CommandBody.queueEdit(
+            .init(
+                commandId: newId(), from: signer.deviceId, to: cursor.writer, op: op, itemIds: itemIds, afterItemId: afterItemId,
+                basedOnVersion: cursor.version, accountTag: tag))
+        if ConnectJSON.encodeToUTF8(command).count > ConnectClient.maxQueueAddPlaintext { return false }
+        return send(.control(.init(doc: try sealCommand(current, command))))
+    }
+
     /// ログインを渡す命令の平文の上限（詰め物の2ブロック、中継の 16KB に収まる。Android 版と同じ）。
     static let maxLoginGrantPlaintext = 8000
 
@@ -1193,6 +1231,10 @@ public final class ConnectClient {
         }
         if case .queueAdd(let add)? = body {
             onQueueAdd(add, header: header, chain: current)
+            return
+        }
+        if case .queueEdit(let edit)? = body {
+            onQueueEdit(edit, header: header, chain: current)
             return
         }
         guard case .control(let command)? = body else { return }
@@ -1241,6 +1283,28 @@ public final class ConnectClient {
         if command.basedOnVersion > own.version || own.version - command.basedOnVersion > ConnectClient.maxControlLag { return }
         guard let sessionStart = mine.arbiter.startVersion, command.basedOnVersion >= sessionStart else { return }
         _ = effects.queueAdd(command.items, next: command.next, afterItemId: command.afterItemId)
+    }
+
+    /// 遠隔のキューの並べ替え・外すを受けた。従う条件は遠隔のキューへの追加と同じ。
+    private func onQueueEdit(_ command: CommandBody.QueueEdit, header: DocHeader, chain current: VerifiedChain) {
+        if command.to != signer.deviceId || command.from != header.writerId || command.from == signer.deviceId { return }
+        if abs(epochMs() - header.issuedAtEpochMs) > ConnectClient.maxControlAgeMs { return }
+        guard let from = current.members[command.from], from.keys.role == .player else { return }
+        if handledClaims.contains(command.commandId) { return }
+        remember(command.commandId)
+        if command.accountTag != effects.accountTag() || command.itemIds.isEmpty { return }
+        guard let mine = session else { return }
+        guard let own = latestCursor, own.writer == signer.deviceId else { return }
+        if command.basedOnVersion > own.version || own.version - command.basedOnVersion > ConnectClient.maxControlLag { return }
+        guard let sessionStart = mine.arbiter.startVersion, command.basedOnVersion >= sessionStart else { return }
+        switch command.op {
+        case CommandBody.QueueEdit.move:
+            if command.itemIds.count == 1 { _ = effects.queueMove(command.itemIds[0], afterItemId: command.afterItemId) }
+        case CommandBody.QueueEdit.remove:
+            _ = effects.queueRemove(command.itemIds)
+        default:
+            break
+        }
     }
 
     private func requestTransfer(retried: Bool) throws -> Bool {

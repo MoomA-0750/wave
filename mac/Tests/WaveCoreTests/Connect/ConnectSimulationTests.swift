@@ -289,6 +289,58 @@ final class ConnectSimulationTests: XCTestCase {
         XCTAssertEqual(CommandBody.queueAdd(add), ConnectJSON.decode(CommandBody.self, from: ConnectJSON.encode(CommandBody.queueAdd(add))))
     }
 
+    func testQueueEditFromAnotherDeviceReachesThePlayingDevice() throws {
+        try setUpHousehold()
+        try a.startPlaying(snapshot)
+        try relay.run()
+        // 鳴っていない B のキューの画面で並べ替え・外す: 鳴らしている A が従う
+        XCTAssertTrue(try b.client.sendQueueMove("q2", afterItemId: "q5"))
+        XCTAssertTrue(try b.client.sendQueueMove("q3", afterItemId: nil))
+        XCTAssertTrue(try b.client.sendQueueRemove(["q4", "q6"]))
+        try relay.run()
+        XCTAssertEqual(["q2", "q3"], a.queueMoves.map(\.itemId))
+        XCTAssertEqual(["q5", nil], a.queueMoves.map(\.after))
+        XCTAssertEqual([["q4", "q6"]], a.queueRemoves)
+        // 鳴らしている A 自身は送らない
+        XCTAssertFalse(try a.client.sendQueueRemove(["q1"]))
+    }
+
+    func testQueueEditFromAnotherAccountOrReplayedIsIgnored() throws {
+        try setUpHousehold()
+        try a.startPlaying(snapshot)
+        try relay.run()
+        b.tag = "tag-account-2"
+        XCTAssertFalse(try b.client.sendQueueRemove(["q1"]))
+        b.tag = "tag-account-1"
+        var captured: RelayV2?
+        relay.onFromClient = { [b] from, message in
+            if from == b!.deviceId, case .control = message { captured = message }
+        }
+        XCTAssertTrue(try b.client.sendQueueRemove(["q1"]))
+        try relay.run()
+        XCTAssertEqual(1, a.queueRemoves.count)
+        relay.inject(a.deviceId, try XCTUnwrap(captured))
+        try relay.run()
+        XCTAssertEqual(1, a.queueRemoves.count, "再送された外すに二度従った")
+    }
+
+    func testQueueEditJSONMatchesKotlin() throws {
+        // Android 版（kotlinx.serialization）が書く形
+        let kotlin = #"{"type":"queue_edit","commandId":"c1","from":"dev-b","to":"dev-a","op":"move","itemIds":["i2"],"afterItemId":"i5","basedOnVersion":7,"accountTag":"tag"}"#
+        guard case .queueEdit(let edit)? = ConnectJSON.decode(CommandBody.self, from: kotlin) else { return XCTFail("読めない") }
+        XCTAssertEqual(CommandBody.QueueEdit.move, edit.op)
+        XCTAssertEqual(["i2"], edit.itemIds)
+        XCTAssertEqual("i5", edit.afterItemId)
+        XCTAssertEqual(7, edit.basedOnVersion)
+        // afterItemId を省いた形（remove）も読める
+        let removal = #"{"type":"queue_edit","commandId":"c2","from":"dev-b","to":"dev-a","op":"remove","itemIds":["i3","i4"],"basedOnVersion":7,"accountTag":"tag"}"#
+        guard case .queueEdit(let remove)? = ConnectJSON.decode(CommandBody.self, from: removal) else { return XCTFail("読めない") }
+        XCTAssertEqual(["i3", "i4"], remove.itemIds)
+        XCTAssertNil(remove.afterItemId)
+        // 書き戻しても同じ値で読める
+        XCTAssertEqual(CommandBody.queueEdit(edit), ConnectJSON.decode(CommandBody.self, from: ConnectJSON.encode(CommandBody.queueEdit(edit))))
+    }
+
     func testNextThatArrivesAfterTheSongAlreadyChangedIsIgnored() throws {
         try setUpHousehold()
         try a.startPlaying(snapshot)

@@ -187,7 +187,7 @@ struct QueueView: View {
                 Chip(title: L.t("キュー", "Queue"), isOn: !model.queueHistory) { model.queueHistory = false }
                 Chip(title: L.t("履歴", "History"), isOn: model.queueHistory) { model.queueHistory = true }
                 Spacer()
-                if !model.queueHistory && player.userQueueEnd > player.index + 1 && !player.isRemote {
+                if !model.queueHistory && player.userQueueEnd > player.index + 1 {
                     Button(L.t("キューを消去", "Clear queue")) { player.clearUserQueue() }.buttonStyle(.textLink)
                 }
                 Button { model.setRightPane(open: true, queue: false) } label: { Image(systemName: "xmark").font(.system(size: 11)) }
@@ -209,7 +209,7 @@ struct QueueView: View {
                 List {
                     ForEach(entries) { entry in
                         QueueRow(entry: entry)
-                            .moveDisabled(model.queueHistory || entry.isCurrent || player.isRemote)
+                            .moveDisabled(model.queueHistory || entry.isCurrent)
                             .listRowSeparator(.hidden)
                     }
                     .onMove { from, to in
@@ -251,8 +251,8 @@ private struct QueueRow: View {
             .onHover { hover = $0 }
             .onTapGesture { if !entry.isCurrent { AppServices.player.playAt(entry.index) } }
         }
-        // ほかの端末を映している間は「キューから削除」を出さない（Android・iPhone と同じ）
-        .contextMenu { SongMenuItems(song: entry.song, queueIndex: entry.isCurrent || AppServices.player.isRemote ? nil : entry.index) }
+        // ほかの端末を映している間の「キューから削除」は、その端末へ送る
+        .contextMenu { SongMenuItems(song: entry.song, queueIndex: entry.isCurrent ? nil : entry.index) }
     }
 }
 #endif

@@ -314,6 +314,7 @@ public enum CommandBody: Equatable, Sendable, ConnectCodable {
     case yield(Yield)
     case control(Control)
     case queueAdd(QueueAdd)
+    case queueEdit(QueueEdit)
     case profile(Profile)
     case loginGrant(LoginGrant)
 
@@ -365,6 +366,38 @@ public enum CommandBody: Equatable, Sendable, ConnectCodable {
             self.to = to
             self.items = items
             self.next = next
+            self.afterItemId = afterItemId
+            self.basedOnVersion = basedOnVersion
+            self.accountTag = accountTag
+        }
+    }
+
+    /// 遠隔のキューの並べ替え・外す: 鳴っていない端末のキューの画面から、今の再生中の端末へ（Android 版の CommandBody.QueueEdit と同じ）。
+    /// 従う条件は QueueAdd と同じ。op が move なら itemIds の1曲を afterItemId の曲の直後へ（afterItemId が無ければ今の曲の直後へ）動かす。
+    /// remove なら itemIds の曲を外す。どれも今の曲より後ろの曲だけで、受け手のキューに無い ID・今の曲・前の曲は無視する。
+    public struct QueueEdit: Equatable, Sendable {
+        public static let move = "move"
+        public static let remove = "remove"
+
+        public var commandId: String
+        public var from: String
+        public var to: String
+        /// move か remove（知らない値は受け手が無視する）。
+        public var op: String
+        public var itemIds: [String]
+        public var afterItemId: String?
+        /// 送り手が見ていた、受け手のカーソルの版。
+        public var basedOnVersion: Int64
+        public var accountTag: String
+
+        public init(
+            commandId: String, from: String, to: String, op: String, itemIds: [String], afterItemId: String?, basedOnVersion: Int64, accountTag: String
+        ) {
+            self.commandId = commandId
+            self.from = from
+            self.to = to
+            self.op = op
+            self.itemIds = itemIds
             self.afterItemId = afterItemId
             self.basedOnVersion = basedOnVersion
             self.accountTag = accountTag
@@ -459,6 +492,12 @@ public enum CommandBody: Equatable, Sendable, ConnectCodable {
                 "type": "queue_add", "commandId": .string(q.commandId), "from": .string(q.from), "to": .string(q.to), "items": JSON(items: q.items),
                 "next": .bool(q.next), "afterItemId": JSON(q.afterItemId), "basedOnVersion": JSON(q.basedOnVersion), "accountTag": .string(q.accountTag),
             ])
+        case .queueEdit(let q):
+            return .obj([
+                "type": "queue_edit", "commandId": .string(q.commandId), "from": .string(q.from), "to": .string(q.to), "op": .string(q.op),
+                "itemIds": JSON(strings: q.itemIds), "afterItemId": JSON(q.afterItemId), "basedOnVersion": JSON(q.basedOnVersion),
+                "accountTag": .string(q.accountTag),
+            ])
         case .profile(let p):
             return .obj(["type": "profile", "from": .string(p.from), "name": .string(p.name), "kind": JSON(p.kind)])
         case .loginGrant(let g):
@@ -489,6 +528,12 @@ public enum CommandBody: Equatable, Sendable, ConnectCodable {
                 QueueAdd(
                     commandId: try r.string("commandId"), from: try r.string("from"), to: try r.string("to"), items: try r.array("items", HandoffItem.self),
                     next: try r.bool("next"), afterItemId: try r.optString("afterItemId"), basedOnVersion: try r.long("basedOnVersion"),
+                    accountTag: try r.string("accountTag")))
+        case "queue_edit":
+            return .queueEdit(
+                QueueEdit(
+                    commandId: try r.string("commandId"), from: try r.string("from"), to: try r.string("to"), op: try r.string("op"),
+                    itemIds: try r.strings("itemIds"), afterItemId: try r.optString("afterItemId"), basedOnVersion: try r.long("basedOnVersion"),
                     accountTag: try r.string("accountTag")))
         case "profile":
             return .profile(Profile(from: try r.string("from"), name: try r.string("name"), kind: try r.optString("kind")))

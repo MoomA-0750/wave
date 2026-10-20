@@ -131,6 +131,22 @@ final class ConnectService {
             }
             return true
         }
+        player.sendRemoteQueueMove = { itemId, afterItemId in
+            guard worker.loaded.current, worker.relay.status == .connected else { return false }
+            worker.post {
+                let sent = try worker.client?.sendQueueMove(itemId, afterItemId: afterItemId)
+                AppPaths.log("connect-v2 queue move after=\(afterItemId == nil ? "current" : "item") sent=\(sent.map { String($0) } ?? "")")
+            }
+            return true
+        }
+        player.sendRemoteQueueRemove = { itemIds in
+            guard worker.loaded.current, worker.relay.status == .connected else { return false }
+            worker.post {
+                let sent = try worker.client?.sendQueueRemove(itemIds)
+                AppPaths.log("connect-v2 queue remove items=\(itemIds.count) sent=\(sent.map { String($0) } ?? "")")
+            }
+            return true
+        }
         // 接続に関係なく回す（transfer の期限・アカウントタグの計算）
         worker.startTicking()
         // Mac は画面がある間ずっと中継につなぐ（家に入っていなければ、中継は認証で断る）
@@ -1023,6 +1039,18 @@ final class ConnectWorker: ConnectClientEffects, @unchecked Sendable {
         let added = onUi { [player] in player.applyQueueAdd(entries, next: next, afterItemId: afterItemId) }
         AppPaths.log("connect-v2 queue add received items=\(items.count) next=\(next) added=\(added)")
         return added
+    }
+
+    func queueMove(_ itemId: String, afterItemId: String?) -> Bool {
+        let moved = onUi { [player] in player.applyQueueMove(itemId, afterItemId: afterItemId) }
+        AppPaths.log("connect-v2 queue move received after=\(afterItemId == nil ? "current" : "item") moved=\(moved)")
+        return moved
+    }
+
+    func queueRemove(_ itemIds: [String]) -> Bool {
+        let removed = onUi { [player] in player.applyQueueRemove(itemIds) }
+        AppPaths.log("connect-v2 queue remove received items=\(itemIds.count) removed=\(removed)")
+        return removed
     }
 
     /// 手元のライブラリを中継と合わせる（作業の列で呼ぶ）。

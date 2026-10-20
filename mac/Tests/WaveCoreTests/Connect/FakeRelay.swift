@@ -490,6 +490,20 @@ final class SimDevice: ConnectClientEffects {
         return true
     }
 
+    /// 従ったキューの並べ替え（動かす曲・どの曲の後ろか）と、外した曲。
+    var queueMoves: [(itemId: String, after: String?)] = []
+    var queueRemoves: [[String]] = []
+
+    func queueMove(_ itemId: String, afterItemId: String?) -> Bool {
+        queueMoves.append((itemId, afterItemId))
+        return true
+    }
+
+    func queueRemove(_ itemIds: [String]) -> Bool {
+        queueRemoves.append(itemIds)
+        return true
+    }
+
     func control(_ action: ControlAction, positionMs: Int64?) -> Bool {
         controls.append((action, positionMs))
         switch action {
