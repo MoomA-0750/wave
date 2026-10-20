@@ -852,7 +852,7 @@ public sealed partial class MainWindow : Window
                     : null;
                 entries.Add(new QueueEntry(i, Player.Queue[i], i == Player.Index, section));
             }
-            ClearQueueButton.Visibility = Ui.Show(userEnd > Player.Index + 1 && !Player.IsRemote);
+            ClearQueueButton.Visibility = Ui.Show(userEnd > Player.Index + 1);
         }
         QueueList.ItemsSource = entries;
         QueueEmpty.Visibility = Ui.Show(entries.Count == 0);
@@ -883,8 +883,8 @@ public sealed partial class MainWindow : Window
 
     private void OnQueueDragStarting(object sender, DragItemsStartingEventArgs e)
     {
-        // 今の曲と、ほかの端末を映している間は並べ替えない
-        if (Player.IsRemote || e.Items.OfType<QueueEntry>().Any(q => q.IsCurrent)) e.Cancel = true;
+        // 今の曲は並べ替えない（ほかの端末を映している間の並べ替えは、その端末へ送る）
+        if (e.Items.OfType<QueueEntry>().Any(q => q.IsCurrent)) e.Cancel = true;
     }
 
     private void OnQueueDragCompleted(ListViewBase sender, DragItemsCompletedEventArgs e)
@@ -905,8 +905,8 @@ public sealed partial class MainWindow : Window
     private void OnQueueRightTapped(object sender, RightTappedRoutedEventArgs e)
     {
         if (sender is FrameworkElement { DataContext: QueueEntry entry } element)
-            // ほかの端末を映している間は「キューから削除」を出さない（その端末のキューは消せない。Android・iPhone と同じ）
-            SongMenu.Build(entry.Song, queueIndex: entry.IsCurrent || Player.IsRemote ? null : entry.Index).ShowAt(element, e.GetPosition(element));
+            // ほかの端末を映している間の「キューから削除」は、その端末へ送る
+            SongMenu.Build(entry.Song, queueIndex: entry.IsCurrent ? null : entry.Index).ShowAt(element, e.GetPosition(element));
     }
 
     private void OnShowQueue(object sender, RoutedEventArgs e) => SetRightPane(true, queue: true);

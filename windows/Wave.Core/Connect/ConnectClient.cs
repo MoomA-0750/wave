@@ -99,6 +99,15 @@ public sealed class ConnectClient
         /// </summary>
         bool QueueAdd(IReadOnlyList<HandoffItem> items, bool next, string? afterItemId) => false;
 
+        /// <summary>
+        /// 遠隔のキューの並べ替えに従う（この端末が鳴らしている）。itemId の曲（今の曲より後ろ）を、afterItemId の曲の直後
+        /// （afterItemId が無ければ今の曲の直後）へ動かす。どちらかが手元のキューに無い・今の曲より前なら何もせず false。
+        /// </summary>
+        bool QueueMove(string itemId, string? afterItemId) => false;
+
+        /// <summary>遠隔のキューから外す（この端末が鳴らしている）。今の曲より後ろにある itemIds の曲だけを外す。</summary>
+        bool QueueRemove(IReadOnlyList<string> itemIds) => false;
+
         /// <summary>遠隔の音量に従う（この端末が鳴らしている）。アプリの中の音量を volumePercent（0〜100）にする。受け付けなければ false。</summary>
         bool Volume(int volumePercent) => false;
 
@@ -1165,6 +1174,40 @@ public sealed class ConnectClient
         return true;
     }
 
+    /// <summary>
+    /// 遠隔のキューの並べ替えを送る（鳴っていない端末のキューの画面から、今鳴らしている同じアカウントの端末へ）。
+    /// itemId の曲を afterItemId の曲の直後へ（無ければ今の曲の直後へ）動かしてもらう。
+    /// </summary>
+    /// <returns>送ったか（家の再生が自分・別のアカウント・最新の状態をまだ見ていないなら false）</returns>
+    public bool SendQueueMove(string itemId, string? afterItemId) => SendQueueEdit(CommandBody.QueueEdit.Move, [itemId], afterItemId);
+
+    /// <summary>遠隔のキューから外すのを送る。条件は SendQueueMove と同じ。</summary>
+    public bool SendQueueRemove(IReadOnlyList<string> itemIds) => SendQueueEdit(CommandBody.QueueEdit.Remove, itemIds, null);
+
+    private bool SendQueueEdit(string op, IReadOnlyList<string> itemIds, string? afterItemId)
+    {
+        if (itemIds.Count == 0 || IsWriter || pendingStoreId is not null) return false;
+        var current = chain;
+        if (current is null) return false;
+        var tag = effects.AccountTag();
+        if (tag is null) return false;
+        var cursor = latestCursor;
+        if (cursor is null || cursor.Writer == signer.DeviceId || cursor.Body.AccountTag != tag) return false;
+        CommandBody command = new CommandBody.QueueEdit
+        {
+            CommandId = newId(),
+            From = signer.DeviceId,
+            To = cursor.Writer,
+            Op = op,
+            ItemIds = itemIds,
+            AfterItemId = afterItemId,
+            BasedOnVersion = cursor.Version,
+            AccountTag = tag,
+        };
+        if (ConnectJson.EncodeToUtf8(command).Length > MaxQueueAddPlaintext) return false;
+        return send(new RelayV2.Control { Doc = SealCommand(current, command) });
+    }
+
     /// <summary>表示用: ほかの端末の最新のカーソル（別アカウントのものを含む）と、今の時刻に合わせた位置。</summary>
     public RemoteNow? RemoteNowPosition()
     {
@@ -1196,6 +1239,11 @@ public sealed class ConnectClient
         if (body is CommandBody.QueueAdd add)
         {
             OnQueueAdd(add, opened.Header, current);
+            return;
+        }
+        if (body is CommandBody.QueueEdit edit)
+        {
+            OnQueueEdit(edit, opened.Header, current);
             return;
         }
         if (body is not CommandBody.Control command) return;
@@ -1246,6 +1294,30 @@ public sealed class ConnectClient
         if (command.BasedOnVersion > own.Version || own.Version - command.BasedOnVersion > MaxControlLag) return;
         if (mine.Arbiter.StartVersion is not { } sessionStart || command.BasedOnVersion < sessionStart) return;
         effects.QueueAdd(command.Items, command.Next, command.AfterItemId);
+    }
+
+    /// <summary>遠隔のキューの並べ替え・外すを受けた。従う条件は遠隔のキューへの追加と同じ。</summary>
+    private void OnQueueEdit(CommandBody.QueueEdit command, DocHeader header, VerifiedChain current)
+    {
+        if (command.To != signer.DeviceId || command.From != header.WriterId || command.From == signer.DeviceId) return;
+        if (Math.Abs(epochMs() - header.IssuedAtEpochMs) > MaxControlAgeMs) return;
+        if (!current.Members.TryGetValue(command.From, out var from) || from.Keys.Role != Role.Player) return;
+        if (handledClaims.Contains(command.CommandId)) return;
+        Remember(command.CommandId);
+        if (command.AccountTag != effects.AccountTag() || command.ItemIds.Count == 0) return;
+        if (session is not { } mine) return;
+        if (latestCursor is not { } own || own.Writer != signer.DeviceId) return;
+        if (command.BasedOnVersion > own.Version || own.Version - command.BasedOnVersion > MaxControlLag) return;
+        if (mine.Arbiter.StartVersion is not { } sessionStart || command.BasedOnVersion < sessionStart) return;
+        switch (command.Op)
+        {
+            case CommandBody.QueueEdit.Move when command.ItemIds.Count == 1:
+                effects.QueueMove(command.ItemIds[0], command.AfterItemId);
+                break;
+            case CommandBody.QueueEdit.Remove:
+                effects.QueueRemove(command.ItemIds);
+                break;
+        }
     }
 
     private bool RequestTransfer(bool retried)

@@ -116,6 +116,12 @@ public sealed partial class PlayerService : ObservableObject
     /// <summary>ほかの端末で鳴っている間の「次に再生」（true）・「キューに追加」（false）を、その端末のキューへ送る（端末の連携が置く）。送れたら true。</summary>
     public Func<IReadOnlyList<Song>, bool, bool>? SendRemoteQueueAdd { get; set; }
 
+    /// <summary>ほかの端末で鳴っている間のキューの並べ替え（動かす曲の項目の ID・どの曲の直後か、null なら今の曲の直後）を、その端末へ送る（端末の連携が置く）。送れたら true。</summary>
+    public Func<string, string?, bool>? SendRemoteQueueMove { get; set; }
+
+    /// <summary>ほかの端末で鳴っている間のキューから外す（項目の ID）を、その端末へ送る（端末の連携が置く）。送れたら true。</summary>
+    public Func<IReadOnlyList<string>, bool>? SendRemoteQueueRemove { get; set; }
+
     private RemoteSnapshot? remote;
     private string? remoteQueueKey;
 
@@ -684,7 +690,14 @@ public sealed partial class PlayerService : ObservableObject
     /// <summary>今の曲より後ろの、自分で足した曲をまとめて外す（Spotify の「キューを消去」）。</summary>
     public void ClearUserQueue()
     {
-        if (IsRemote) return;
+        if (IsRemote)
+        {
+            var ids = Enumerable.Range(Index + 1, Math.Max(0, Queue.Count - Index - 1)).Where(IsUserAdded).Select(i => itemMeta[i].ItemId).ToList();
+            if (ids.Count == 0 || !RemoveOnRemote(ids)) return;
+            var device = RemoteDevice ?? L.T("ほかの端末", "the other device");
+            Message = L.T($"{device} のキューから {ids.Count} 曲を外しました", $"Removed {L.Songs(ids.Count)} from the queue on {device}");
+            return;
+        }
         var removed = 0;
         for (var i = Queue.Count - 1; i > Index; i--)
         {
@@ -695,18 +708,85 @@ public sealed partial class PlayerService : ObservableObject
         if (removed > 0) Message = L.T($"キューから {removed} 曲を外しました", $"Removed {L.Songs(removed)} from the queue");
     }
 
-    /// <summary>キューの次の曲を並べ替える（今の曲より後ろだけ）。</summary>
+    /// <summary>キューの次の曲を並べ替える（今の曲より後ろだけ）。ほかの端末で鳴っている間は、その端末へ送る。</summary>
     public void MoveUpcoming(int from, int to)
     {
-        if (IsRemote || from <= Index || to <= Index || from >= Queue.Count || to >= Queue.Count || from == to) return;
+        if (from <= Index || to <= Index || from >= Queue.Count || to >= Queue.Count || from == to) return;
+        if (IsRemote)
+        {
+            // 動かした後に直前に来る曲の後ろへ、と送る（今の曲の直後なら null）
+            var before = to > from ? to : to - 1;
+            var after = before == Index ? null : itemMeta[before].ItemId;
+            if (SendRemoteQueueMove?.Invoke(itemMeta[from].ItemId, after) != true)
+            {
+                Message = L.T("ほかの端末に送れませんでした", "Couldn’t reach the other device");
+                return;
+            }
+            HoldRemoteQueue();
+        }
         Queue.Move(from, to);
     }
 
     public void RemoveAt(int position)
     {
-        // ほかの端末を映している間は、映しだけから消さない
-        if (IsRemote || position <= Index || position >= Queue.Count) return;
+        if (position <= Index || position >= Queue.Count) return;
+        if (IsRemote && !RemoveOnRemote([itemMeta[position].ItemId])) return;
         Queue.RemoveAt(position);
+    }
+
+    /// <summary>
+    /// ほかの端末で鳴っている間の「外す」を、その端末へ送る。送れたら映しからも先に外す
+    /// （映しは、その端末が書き直したキューが届いたときに置き直る）。
+    /// </summary>
+    private bool RemoveOnRemote(IReadOnlyList<string> itemIds)
+    {
+        if (SendRemoteQueueRemove?.Invoke(itemIds) != true)
+        {
+            Message = L.T("ほかの端末に送れませんでした", "Couldn’t reach the other device");
+            return false;
+        }
+        HoldRemoteQueue();
+        for (var i = Queue.Count - 1; i > Index; i--)
+            if (itemIds.Contains(itemMeta[i].ItemId)) Queue.RemoveAt(i);
+        return true;
+    }
+
+    /// <summary>
+    /// 映しのキューを先に変えたとき、その端末が書き直したキューが届くまで（届かなければ期限まで）映しを置き直さない。
+    /// 期限を過ぎても同じキューのままなら（その端末が従わなかった）、届いている形に戻す。
+    /// </summary>
+    private void HoldRemoteQueue() => remoteQueueHeldUntilMs = clock.ElapsedMilliseconds + 5_000;
+
+    private long remoteQueueHeldUntilMs;
+
+    /// <summary>
+    /// ほかの端末のキューの画面での並べ替えに従う（この端末が鳴らしている。Android の QueueSession と同じ）。
+    /// itemId の曲（今の曲より後ろ）を、afterItemId の曲の直後（null なら今の曲の直後）へ動かす。手元で並べ替えたときと同じく MoveUpcoming で動かす。
+    /// </summary>
+    public bool ApplyQueueMove(string itemId, string? afterItemId)
+    {
+        if (IsRemote) return false;
+        var from = itemMeta.FindIndex(m => m.ItemId == itemId);
+        var after = afterItemId is null ? Index : itemMeta.FindIndex(m => m.ItemId == afterItemId);
+        if (from <= Index || after < Index || from == after) return false;
+        var to = from > after ? after + 1 : after;
+        if (to == from) return true;
+        MoveUpcoming(from, to);
+        return true;
+    }
+
+    /// <summary>ほかの端末のキューの画面での「外す」に従う（この端末が鳴らしている）。今の曲より後ろの該当する曲だけを外す。</summary>
+    public bool ApplyQueueRemove(IReadOnlyList<string> itemIds)
+    {
+        if (IsRemote) return false;
+        var removed = false;
+        for (var i = Queue.Count - 1; i > Index; i--)
+        {
+            if (!itemIds.Contains(itemMeta[i].ItemId)) continue;
+            Queue.RemoveAt(i);
+            removed = true;
+        }
+        return removed;
     }
 
     /// <summary>キューの曲を選んで鳴らす（本人の選択）。</summary>
@@ -1215,9 +1295,10 @@ public sealed partial class PlayerService : ObservableObject
         remote = next;
         RemoteDevice = next.DeviceLabel;
         // キューは中身が変わったときだけ置き直す
-        if (next.QueueKey != remoteQueueKey && next.Queue is { } queue)
+        if ((next.QueueKey != remoteQueueKey || (remoteQueueHeldUntilMs != 0 && clock.ElapsedMilliseconds >= remoteQueueHeldUntilMs)) && next.Queue is { } queue)
         {
             remoteQueueKey = next.QueueKey;
+            remoteQueueHeldUntilMs = 0;
             Queue.Clear();
             foreach (var (song, meta) in queue.Items)
             {
@@ -1301,6 +1382,7 @@ public sealed partial class PlayerService : ObservableObject
         shownOnSmtc = null;
         remote = null;
         remoteQueueKey = null;
+        remoteQueueHeldUntilMs = 0;
         pendingRemoteSeek = null;
         remoteSeekTimer?.Stop();
         IsPlaying = false;

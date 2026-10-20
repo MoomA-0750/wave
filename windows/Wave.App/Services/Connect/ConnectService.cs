@@ -173,6 +173,19 @@ public sealed class ConnectService
             Post(() => AppPaths.Log($"connect-v2 queue add items={items.Count} next={next} sent={client?.SendQueueAdd(items, next)}"));
             return true;
         };
+        player.SendRemoteQueueMove = (itemId, afterItemId) =>
+        {
+            if (client is null || Relay.Status != RelayStatus.Connected) return false;
+            Post(() => AppPaths.Log($"connect-v2 queue move after={afterItemId is not null} sent={client?.SendQueueMove(itemId, afterItemId)}"));
+            return true;
+        };
+        player.SendRemoteQueueRemove = itemIds =>
+        {
+            if (client is null || Relay.Status != RelayStatus.Connected) return false;
+            var ids = itemIds.ToList();
+            Post(() => AppPaths.Log($"connect-v2 queue remove items={ids.Count} sent={client?.SendQueueRemove(ids)}"));
+            return true;
+        };
         // 接続に関係なく回す（transfer の期限・アカウントタグの計算）
         _ = Task.Run(async () =>
         {
@@ -581,6 +594,20 @@ public sealed class ConnectService
             var added = owner.OnUi(() => owner.player.ApplyQueueAdd(entries, next, afterItemId));
             AppPaths.Log($"connect-v2 queue add received items={items.Count} next={next} added={added}");
             return added;
+        }
+
+        public bool QueueMove(string itemId, string? afterItemId)
+        {
+            var moved = owner.OnUi(() => owner.player.ApplyQueueMove(itemId, afterItemId));
+            AppPaths.Log($"connect-v2 queue move received after={afterItemId is not null} moved={moved}");
+            return moved;
+        }
+
+        public bool QueueRemove(IReadOnlyList<string> itemIds)
+        {
+            var removed = owner.OnUi(() => owner.player.ApplyQueueRemove(itemIds));
+            AppPaths.Log($"connect-v2 queue remove received items={itemIds.Count} removed={removed}");
+            return removed;
         }
 
         /// <summary>ほかの端末と合わせたライブラリが届いた。手元の登録と聴いたところに取り込む（変われば保存し、画面も変わる）。</summary>

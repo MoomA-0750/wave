@@ -253,6 +253,45 @@ public class ConnectSimulationTests
     }
 
     [Fact]
+    public void QueueEditFromAnotherDeviceReachesThePlayingDevice()
+    {
+        SetUp();
+        a.StartPlaying(snapshot);
+        relay.Run();
+        // 鳴っていない B のキューの画面で並べ替え・外す: 鳴らしている A が従う
+        Assert.True(b.Client.SendQueueMove("q2", "q5"));
+        Assert.True(b.Client.SendQueueMove("q3", null));
+        Assert.True(b.Client.SendQueueRemove(["q4", "q6"]));
+        relay.Run();
+        Assert.Equal(new List<(string, string?)> { ("q2", "q5"), ("q3", null) }, a.QueueMoves);
+        Assert.Equal(["q4", "q6"], Assert.Single(a.QueueRemoves));
+        // 鳴らしている A 自身は送らない
+        Assert.False(a.Client.SendQueueRemove(["q1"]));
+    }
+
+    [Fact]
+    public void QueueEditFromAnotherAccountOrReplayedIsIgnored()
+    {
+        SetUp();
+        a.StartPlaying(snapshot);
+        relay.Run();
+        b.Tag = "tag-account-2";
+        Assert.False(b.Client.SendQueueRemove(["q1"]));
+        b.Tag = "tag-account-1";
+        RelayV2.Control? captured = null;
+        relay.OnFromClient = (from, message) =>
+        {
+            if (from == b.DeviceId && message is RelayV2.Control c) captured = c;
+        };
+        Assert.True(b.Client.SendQueueRemove(["q1"]));
+        relay.Run();
+        Assert.Single(a.QueueRemoves);
+        relay.Inject(a.DeviceId, captured!);
+        relay.Run();
+        Assert.Single(a.QueueRemoves);
+    }
+
+    [Fact]
     public void VolumeIsSharedAndCanBeChangedFromAnotherDevice()
     {
         SetUp();
@@ -294,6 +333,25 @@ public class ConnectSimulationTests
         Assert.Equal(7, add.BasedOnVersion);
         // 書き戻しても同じ形（判別子が先頭）
         Assert.StartsWith("""{"type":"queue_add",""", ConnectJson.Encode<CommandBody>(add));
+    }
+
+    [Fact]
+    public void QueueEditJsonMatchesKotlin()
+    {
+        // Android 版（kotlinx.serialization）が書く形
+        const string kotlin = """{"type":"queue_edit","commandId":"c1","from":"dev-b","to":"dev-a","op":"move","itemIds":["i2"],"afterItemId":"i5","basedOnVersion":7,"accountTag":"tag"}""";
+        var edit = Assert.IsType<CommandBody.QueueEdit>(ConnectJson.Decode<CommandBody>(kotlin));
+        Assert.Equal(CommandBody.QueueEdit.Move, edit.Op);
+        Assert.Equal(["i2"], edit.ItemIds);
+        Assert.Equal("i5", edit.AfterItemId);
+        Assert.Equal(7, edit.BasedOnVersion);
+        // afterItemId を省いた形も読める
+        const string remove = """{"type":"queue_edit","commandId":"c2","from":"dev-b","to":"dev-a","op":"remove","itemIds":["i3","i4"],"basedOnVersion":7,"accountTag":"tag"}""";
+        var removed = Assert.IsType<CommandBody.QueueEdit>(ConnectJson.Decode<CommandBody>(remove));
+        Assert.Equal(CommandBody.QueueEdit.Remove, removed.Op);
+        Assert.Null(removed.AfterItemId);
+        // 書き戻しても同じ形（判別子が先頭）
+        Assert.StartsWith("""{"type":"queue_edit",""", ConnectJson.Encode<CommandBody>(edit));
     }
 
     [Fact]

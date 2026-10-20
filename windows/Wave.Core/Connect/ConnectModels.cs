@@ -149,6 +149,7 @@ public sealed record QueueBody
 [JsonDerivedType(typeof(Yield), "yield")]
 [JsonDerivedType(typeof(Control), "control")]
 [JsonDerivedType(typeof(QueueAdd), "queue_add")]
+[JsonDerivedType(typeof(QueueEdit), "queue_edit")]
 [JsonDerivedType(typeof(Profile), "profile")]
 [JsonDerivedType(typeof(LoginGrant), "login_grant")]
 public abstract record CommandBody
@@ -206,6 +207,29 @@ public abstract record CommandBody
         /// <summary>「次に再生」なら true、「キューに追加」なら false。</summary>
         public required bool Next { get; init; }
 
+        public string? AfterItemId { get; init; }
+
+        /// <summary>送り手が見ていた、受け手のカーソルの版。</summary>
+        public required long BasedOnVersion { get; init; }
+
+        public required string AccountTag { get; init; }
+    }
+
+    /// <summary>
+    /// 遠隔のキューの並べ替え・外す: 鳴っていない端末のキューの画面から、今の再生中の端末へ（Android の CommandBody.QueueEdit と同じ）。従う条件は QueueAdd と同じ。
+    /// Op が "move" なら ItemIds の1曲を AfterItemId の曲の直後へ（AfterItemId が無ければ今の曲の直後へ）動かす。
+    /// "remove" なら ItemIds の曲を外す。どれも今の曲より後ろの曲だけで、受け手のキューに無い ID・今の曲・前の曲は無視する。
+    /// </summary>
+    public sealed record QueueEdit : CommandBody
+    {
+        public const string Move = "move";
+        public const string Remove = "remove";
+
+        public required string CommandId { get; init; }
+        public required string From { get; init; }
+        public required string To { get; init; }
+        public required string Op { get; init; }
+        public required IReadOnlyList<string> ItemIds { get; init; }
         public string? AfterItemId { get; init; }
 
         /// <summary>送り手が見ていた、受け手のカーソルの版。</summary>

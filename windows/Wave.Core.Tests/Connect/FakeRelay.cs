@@ -514,6 +514,23 @@ internal sealed class SimDevice : ConnectClient.IEffects
         return true;
     }
 
+    /// <summary>従ったキューの並べ替え（動かす曲・どの曲の後ろか）と、外した曲。</summary>
+    public List<(string ItemId, string? After)> QueueMoves { get; } = [];
+
+    public List<List<string>> QueueRemoves { get; } = [];
+
+    bool ConnectClient.IEffects.QueueMove(string itemId, string? afterItemId)
+    {
+        QueueMoves.Add((itemId, afterItemId));
+        return true;
+    }
+
+    bool ConnectClient.IEffects.QueueRemove(IReadOnlyList<string> itemIds)
+    {
+        QueueRemoves.Add([.. itemIds]);
+        return true;
+    }
+
     bool ConnectClient.IEffects.Control(ControlAction action, long? positionMs)
     {
         Controls.Add((action, positionMs));
