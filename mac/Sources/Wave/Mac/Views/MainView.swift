@@ -87,10 +87,11 @@ struct MainView: View {
     @ToolbarContentBuilder
     private var titleBar: some ToolbarContent {
         let nav = AppServices.nav!
-        // 戻る・進む（同じ大きさの2つのボタン）。押せるときだけ出す
+        // 戻る・進む（同じ大きさの2つのボタン）。戻れるときは戻るだけ、進めるときは2つとも出す（進むだけにはしない。戻れなければ戻るは薄く）
         ToolbarItemGroup(placement: .navigation) {
-            if nav.canGoBack {
+            if nav.canGoBack || nav.canGoForward {
                 Button { nav.goBack() } label: { Image(systemName: "chevron.left") }.help(L.t("戻る", "Back"))
+                    .disabled(!nav.canGoBack)
             }
             if nav.canGoForward {
                 Button { nav.goForward() } label: { Image(systemName: "chevron.right") }.help(L.t("進む", "Forward"))

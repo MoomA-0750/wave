@@ -139,6 +139,9 @@ public static class DebugCommands
             case "pane":
                 window.DebugPane(arg);
                 break;
+            case "back":
+                if (Nav.Frame.CanGoBack) Nav.Frame.GoBack();
+                break;
             case "shelf-right":
                 // ページの最初の棚を右へ送る（送るボタンを押したのと同じ）
                 Shelves(Nav.Frame.Content as DependencyObject).FirstOrDefault()?.DebugRight();

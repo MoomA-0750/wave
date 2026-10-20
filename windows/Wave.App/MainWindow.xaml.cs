@@ -254,8 +254,10 @@ public sealed partial class MainWindow : Window
 
     private void OnNavigated(object sender, NavigationEventArgs e)
     {
-        // 押せるときだけ出す。出し入れで検索の並びの欄の位置が変わるので、置き直してから中央に寄せ直す
-        var back = Ui.Show(ContentFrame.CanGoBack);
+        // 戻れるときは戻るだけ、進めるときは2つとも出す（進むだけにはしない。戻れなければ戻るは押せなくする）。
+        // 出し入れで検索の並びの欄の位置が変わるので、置き直してから中央に寄せ直す
+        BackButton.IsEnabled = ContentFrame.CanGoBack;
+        var back = Ui.Show(ContentFrame.CanGoBack || ContentFrame.CanGoForward);
         var forward = Ui.Show(ContentFrame.CanGoForward);
         if (BackButton.Visibility != back || ForwardButton.Visibility != forward)
         {
