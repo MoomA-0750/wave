@@ -161,8 +161,14 @@ final class WidgetSync {
 
     private func syncPlaylists() {
         guard let library = AppServices.library else { return }
-        var list = [WidgetPlaylist(id: MusicRepository.likedSongs, title: L.t("高く評価した曲", "Liked songs"), thumbnailUrl: nil)]
-        list += library.playlists.map { WidgetPlaylist(id: $0.playlistId, title: $0.title, thumbnailUrl: Ui.resize($0.thumbnailUrl, 240)?.absoluteString) }
+        // ライブラリの「最近」と同じ並び（高く評価した曲を先頭に、あとは最近再生した順。ウィジェットはこの順で並べる）
+        let list = LibraryEntry.list(library, kind: "playlist", filter: "", sort: "recent", matchSubtitle: false).map { entry in
+            if case .playlist(let p) = entry.item {
+                WidgetPlaylist(id: p.playlistId, title: p.title, thumbnailUrl: Ui.resize(p.thumbnailUrl, 240)?.absoluteString)
+            } else {
+                WidgetPlaylist(id: MusicRepository.likedSongs, title: entry.title, thumbnailUrl: Ui.resize(entry.thumbnailUrl, 240)?.absoluteString)
+            }
+        }
         guard AppServices.client.isLoggedIn, list != shownPlaylists, !library.playlists.isEmpty else { return }
         shownPlaylists = list
         WidgetStore.write(list, "playlists.json")

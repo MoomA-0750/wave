@@ -213,11 +213,34 @@ struct PlaylistQuery: EntityQuery {
     }
 }
 
-/// プレイリストのウィジェットの設定（どのプレイリストを出すか）。
+/// プレイリストのウィジェットに出すもの。
+enum PlaylistWidgetSource: String, AppEnum {
+    case recent, chosen
+
+    static let typeDisplayRepresentation: TypeDisplayRepresentation = "出すもの"
+    static let caseDisplayRepresentations: [Self: DisplayRepresentation] = [
+        .recent: "最近再生した順",
+        .chosen: "選んだプレイリスト",
+    ]
+}
+
+/// プレイリストのウィジェットの設定（最近再生した順か、選んだプレイリストか）。
 struct SelectPlaylistIntent: WidgetConfigurationIntent {
     static let title: LocalizedStringResource = "プレイリストを選ぶ"
-    @Parameter(title: "プレイリスト") var playlist: PlaylistEntity?
+    @Parameter(title: "出すもの", default: .recent) var source: PlaylistWidgetSource
+    @Parameter(title: "プレイリスト", size: [.systemSmall: 4, .systemMedium: 4, .systemLarge: 8]) var playlists: [PlaylistEntity]?
     init() {}
+
+    static var parameterSummary: some ParameterSummary {
+        When(\.$source, .equalTo, .chosen) {
+            Summary {
+                \.$source
+                \.$playlists
+            }
+        } otherwise: {
+            Summary { \.$source }
+        }
+    }
 }
 
 #if os(iOS)

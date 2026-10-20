@@ -6,11 +6,14 @@
 "プレイリストを再生" = "Play Playlist";
 "プレイリスト" = "Playlist";
 "シャッフル" = "Shuffle";
-"プレイリストを選ぶ" = "Choose Playlist";
+"プレイリストを選ぶ" = "Choose Playlists";
+"出すもの" = "Show";
+"最近再生した順" = "Recently Played";
+"選んだプレイリスト" = "Chosen Playlists";
 "キューの曲を再生" = "Play Song in Queue";
 "位置" = "Position";
 "曲" = "Song";
 /* ウィジェットの一覧に出る名前と説明 */
 "再生中" = "Now Playing";
 "今の曲と次に流れる曲、再生の操作、高く評価。" = "The current song and what's up next, with playback controls and like.";
-"選んだプレイリストを、押すとすぐ再生する。" = "Play the playlist you choose with one tap.";
+"最近再生したプレイリストか、選んだプレイリストを並べ、押すとすぐ再生する。" = "Your recently played or chosen playlists. Tap one to play it.";

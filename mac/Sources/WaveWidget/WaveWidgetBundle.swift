@@ -275,39 +275,65 @@ struct NowPlayingWidgetView: View {
 
 // MARK: プレイリスト
 
+/// 並べるプレイリストの1つ（絵つき）。
+struct PlaylistTile: Identifiable {
+    let playlist: WidgetPlaylist
+    let cover: WidgetImage?
+    var id: String { playlist.id }
+}
+
 struct PlaylistEntry: TimelineEntry {
     let date: Date
-    let playlist: WidgetPlaylist?
-    let cover: WidgetImage?
+    let tiles: [PlaylistTile]
+    /// 最近再生した順で並べたか（見出しの文言を変える）
+    var recent = true
 }
 
 struct PlaylistProvider: AppIntentTimelineProvider {
     func placeholder(in context: Context) -> PlaylistEntry {
-        PlaylistEntry(date: Date(), playlist: WidgetPlaylist(id: "", title: WidgetText.t("プレイリスト", "Playlist")), cover: nil)
+        PlaylistEntry(date: Date(), tiles: (0 ..< playlistCount(context.family)).map {
+            PlaylistTile(playlist: WidgetPlaylist(id: "\($0)", title: WidgetText.t("プレイリスト", "Playlist")), cover: nil)
+        })
     }
 
     func snapshot(for configuration: SelectPlaylistIntent, in context: Context) async -> PlaylistEntry {
-        await entry(configuration)
+        await entry(configuration, context.family)
     }
 
     func timeline(for configuration: SelectPlaylistIntent, in context: Context) async -> Timeline<PlaylistEntry> {
-        Timeline(entries: [await entry(configuration)], policy: .never)
+        Timeline(entries: [await entry(configuration, context.family)], policy: .never)
     }
 
-    private func entry(_ configuration: SelectPlaylistIntent) async -> PlaylistEntry {
+    private func entry(_ configuration: SelectPlaylistIntent, _ family: WidgetFamily) async -> PlaylistEntry {
+        // アプリが書いた一覧は、ライブラリの「最近」と同じ並び（最近再生した順）
         let all = WidgetStore.playlists
-        let chosen = configuration.playlist.flatMap { p in all.first { $0.id == p.id } ?? WidgetPlaylist(id: p.id, title: p.title) } ?? all.first
-        guard let chosen else { return PlaylistEntry(date: Date(), playlist: nil, cover: nil) }
-        // 絵はアプリが置いた分を読み、無ければ取りに行って置いておく
-        var cover = loadImage(WidgetStore.coverFile(chosen.id))
-        if cover == nil, let raw = chosen.thumbnailUrl, let url = URL(string: raw), url.scheme == "https",
-           let (data, _) = try? await URLSession.shared.data(from: url)
-        {
-            cover = WidgetImage(data: data)
-            if cover != nil, let file = WidgetStore.coverFile(chosen.id) { try? data.write(to: file) }
+        let chosen = configuration.source == .chosen
+            ? (configuration.playlists ?? []).map { p in all.first { $0.id == p.id } ?? WidgetPlaylist(id: p.id, title: p.title) }
+            : []
+        // 選ぶにしていても1つも選んでいなければ、最近再生した順で埋める
+        let shown = Array((chosen.isEmpty ? all : chosen).prefix(playlistCount(family)))
+        let covers = await withTaskGroup(of: (String, WidgetImage?).self) { group in
+            for playlist in shown { group.addTask { (playlist.id, await cover(playlist)) } }
+            var found: [String: WidgetImage] = [:]
+            for await (id, image) in group { found[id] = image }
+            return found
         }
-        return PlaylistEntry(date: Date(), playlist: chosen, cover: cover)
+        return PlaylistEntry(date: Date(), tiles: shown.map { PlaylistTile(playlist: $0, cover: covers[$0.id]) }, recent: chosen.isEmpty)
     }
+
+    /// 絵はアプリが置いた分を読み、無ければ取りに行って置いておく。
+    private func cover(_ playlist: WidgetPlaylist) async -> WidgetImage? {
+        if let image = loadImage(WidgetStore.coverFile(playlist.id)) { return image }
+        guard let raw = playlist.thumbnailUrl, let url = URL(string: raw), url.scheme == "https",
+              let (data, _) = try? await URLSession.shared.data(from: url), let image = WidgetImage(data: data) else { return nil }
+        if let file = WidgetStore.coverFile(playlist.id) { try? data.write(to: file) }
+        return image
+    }
+}
+
+/// 大きさごとに並べる数（小: 2×2、中: 1段に4つ、大: 2段に4つずつ）。
+private func playlistCount(_ family: WidgetFamily) -> Int {
+    family == .systemLarge ? 8 : 4
 }
 
 struct PlaylistWidget: Widget {
@@ -315,12 +341,12 @@ struct PlaylistWidget: Widget {
         AppIntentConfiguration(kind: WidgetStore.playlistKind, intent: SelectPlaylistIntent.self, provider: PlaylistProvider()) { entry in
             PlaylistWidgetView(entry: entry)
                 .padding(widgetPadding)
-                .onArtwork(entry.cover)
-                .containerBackground(for: .widget) { ArtworkBackground(image: entry.cover) }
+                .onArtwork(entry.tiles.first?.cover)
+                .containerBackground(for: .widget) { ArtworkBackground(image: entry.tiles.first?.cover) }
         }
         .configurationDisplayName(Text("プレイリスト"))
-        .description(Text("選んだプレイリストを、押すとすぐ再生する。"))
-        .supportedFamilies([.systemSmall, .systemMedium])
+        .description(Text("最近再生したプレイリストか、選んだプレイリストを並べ、押すとすぐ再生する。"))
+        .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
         .contentMarginsDisabled()
     }
 }
@@ -330,44 +356,59 @@ struct PlaylistWidgetView: View {
     @Environment(\.widgetFamily) private var family
 
     var body: some View {
-        if let playlist = entry.playlist {
-            let buttons = HStack(spacing: 10) {
-                Button(intent: PlayPlaylistIntent(playlistId: playlist.id, shuffle: false)) {
-                    Image(systemName: "play.fill").font(.system(size: 19, weight: .bold)).foregroundStyle(.white)
-                        .frame(width: 44, height: 44).background(Circle().fill(accent))
-                }
-                Button(intent: PlayPlaylistIntent(playlistId: playlist.id, shuffle: true)) {
-                    Image(systemName: "shuffle").font(.system(size: 16, weight: .semibold)).foregroundStyle(.primary)
-                        .frame(width: 40, height: 40).background(Circle().fill(Color.primary.opacity(0.12)))
-                }
+        if entry.tiles.isEmpty {
+            VStack(spacing: 6) {
+                Image(systemName: "music.note.list").font(.title)
+                Text(WidgetText.t("wave を開いてログインすると、プレイリストが出ます", "Open wave and log in to see your playlists")).font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
             }
-            .buttonStyle(.plain)
-            if family == .systemSmall {
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack(alignment: .top) {
-                        Artwork(image: entry.cover).frame(width: 50, height: 50)
-                        Spacer(minLength: 0)
+        } else if family == .systemSmall {
+            // 小さいものは絵だけを 2×2 に（名前を入れる幅が無い）
+            Grid(horizontalSpacing: 8, verticalSpacing: 8) {
+                ForEach(0 ..< 2, id: \.self) { row in
+                    GridRow {
+                        ForEach(0 ..< 2, id: \.self) { column in
+                            slot(row * 2 + column, titled: false)
+                        }
                     }
-                    Spacer(minLength: 0)
-                    Text(playlist.title).font(.subheadline.weight(.semibold)).lineLimit(2)
-                    buttons
-                }
-            } else {
-                HStack(spacing: 14) {
-                    Artwork(image: entry.cover).aspectRatio(1, contentMode: .fit).frame(maxHeight: .infinity)
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(playlist.title).font(.title3.weight(.semibold)).lineLimit(3)
-                        Spacer(minLength: 0)
-                        buttons
-                    }
-                    Spacer(minLength: 0)
                 }
             }
         } else {
-            VStack(spacing: 6) {
-                Image(systemName: "music.note.list").font(.title)
-                Text(WidgetText.t("wave を開いてログインすると、プレイリストを選べます", "Open wave and log in to choose a playlist")).font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
+            // 中・大は見出しを上に、絵と名前を下に寄せる（絵の大きさは幅で決まるので、余った高さは見出しとの間に回す）
+            let rows = family == .systemLarge ? 2 : 1
+            VStack(alignment: .leading, spacing: 0) {
+                Text(entry.recent ? WidgetText.t("最近再生したプレイリスト", "Recently played") : WidgetText.t("プレイリスト", "Playlists"))
+                    .font(.headline).foregroundStyle(.secondary)
+                Spacer(minLength: 6)
+                Grid(horizontalSpacing: 10, verticalSpacing: 12) {
+                    ForEach(0 ..< rows, id: \.self) { row in
+                        GridRow {
+                            ForEach(0 ..< 4, id: \.self) { column in
+                                slot(row * 4 + column, titled: true)
+                            }
+                        }
+                    }
+                }
             }
+        }
+    }
+
+    /// i 番目の枠（足りなければ空けておく。並びの大きさをそろえる）。
+    @ViewBuilder
+    private func slot(_ i: Int, titled: Bool) -> some View {
+        if i < entry.tiles.count {
+            let tile = entry.tiles[i]
+            Button(intent: PlayPlaylistIntent(playlistId: tile.playlist.id, shuffle: false)) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Artwork(image: tile.cover, radius: 8).aspectRatio(1, contentMode: .fit)
+                    if titled {
+                        Text(tile.playlist.title).font(.subheadline.weight(.medium)).lineLimit(1)
+                    }
+                }
+            }
+            .buttonStyle(.plain)
+            .frame(maxWidth: .infinity, alignment: .top)
+        } else {
+            Color.clear.frame(maxWidth: .infinity)
         }
     }
 }
