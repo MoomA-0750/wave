@@ -82,11 +82,15 @@ private var widgetBackground: Color {
 }
 
 /// 絵があれば、絵をぼかして暗くした地（上の文字は白で出す）。無ければ普通の地。
+/// クリア・色付きの表示（フルカラー以外）では地を置かず、OS のガラスだけにする（絵が透けて残らないように）。
 private struct ArtworkBackground: View {
     var image: WidgetImage?
+    @Environment(\.widgetRenderingMode) private var renderingMode
 
     var body: some View {
-        if let image {
+        if renderingMode != .fullColor {
+            Color.clear
+        } else if let image {
             Image(widgetImage: image).resizable().aspectRatio(contentMode: .fill)
                 .blur(radius: 30, opaque: true)
                 .overlay(Color.black.opacity(0.35))
