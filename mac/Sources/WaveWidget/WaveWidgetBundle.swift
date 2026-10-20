@@ -57,8 +57,9 @@ private struct Artwork: View {
         shape.fill(Color.primary.opacity(0.08))
             .overlay {
                 if let image {
-                    // クリア・色付きのアイコン表示では、OS が絵を一色に塗りつぶす（真っ白になる）。絵は白黒の写真として残す
-                    Image(widgetImage: image).resizable().widgetAccentedRenderingMode(.desaturated).aspectRatio(contentMode: .fill)
+                    // クリア・色付きのアイコン表示では、OS が絵を一色に塗りつぶす（真っ白になる）。絵はそのままの色で残す
+                    // （白黒の写真にする desaturated は、Mac のデスクトップでボタンの中の絵を押しても意図が届かず、アプリが開くだけになった）
+                    Image(widgetImage: image).resizable().widgetAccentedRenderingMode(.fullColor).aspectRatio(contentMode: .fill)
                 } else {
                     Image(systemName: "music.note").font(.title2).foregroundStyle(.secondary)
                 }
@@ -401,9 +402,9 @@ struct PlaylistWidgetView: View {
     }
 
     private func grid(rows: Int, columns: Int, spacing: CGFloat) -> some View {
-        Grid(horizontalSpacing: spacing, verticalSpacing: spacing) {
+        VStack(spacing: spacing) {
             ForEach(0 ..< rows, id: \.self) { row in
-                GridRow {
+                HStack(spacing: spacing) {
                     ForEach(0 ..< columns, id: \.self) { column in
                         slot(row * columns + column)
                     }
