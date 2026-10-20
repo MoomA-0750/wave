@@ -46,6 +46,28 @@ private let accent = Color(red: 0.27, green: 0.55, blue: 1.0)
     private let widgetPadding: CGFloat = 17
 #endif
 
+/// ウィジェットの文字の大きさ。同じ名前の大きさ（.headline など）でも iPhone は Mac より2〜5pt 大きく、
+/// 同じ広さのウィジェットで iPhone だけ文字が大きく見えたので、iPhone でも Mac の大きさに固定する。
+private enum WidgetFont {
+    #if os(iOS)
+        static let title = Font.system(size: 22)
+        static let title2 = Font.system(size: 17)
+        static let title3 = Font.system(size: 15)
+        static let headline = Font.system(size: 13, weight: .bold)
+        static let subheadline = Font.system(size: 11)
+        static let caption = Font.system(size: 10)
+        static let caption2 = Font.system(size: 10)
+    #else
+        static let title = Font.title
+        static let title2 = Font.title2
+        static let title3 = Font.title3
+        static let headline = Font.headline
+        static let subheadline = Font.subheadline
+        static let caption = Font.caption
+        static let caption2 = Font.caption2
+    #endif
+}
+
 /// ジャケット（無ければ音符）。枠の大きさで切り抜く（映像の 16:9 の絵など、正方形でない絵を枠いっぱいに広げても、はみ出さない）。
 /// radius を渡さなければ、ウィジェットの角と中心をそろえた丸み（ContainerRelativeShape）にする（ウィジェットの角に置く絵）。
 private struct Artwork: View {
@@ -61,7 +83,7 @@ private struct Artwork: View {
                     // （白黒の写真にする desaturated は、Mac のデスクトップでボタンの中の絵を押しても意図が届かず、アプリが開くだけになった）
                     Image(widgetImage: image).resizable().widgetAccentedRenderingMode(.fullColor).aspectRatio(contentMode: .fill)
                 } else {
-                    Image(systemName: "music.note").font(.title2).foregroundStyle(.secondary)
+                    Image(systemName: "music.note").font(WidgetFont.title2).foregroundStyle(.secondary)
                 }
             }
             .clipShape(shape)
@@ -227,8 +249,8 @@ struct NowPlayingWidgetView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     ArtworkWithLike(image: entry.artwork, liked: song.liked, likeSize: 16).frame(width: 54, height: 54)
                     Spacer(minLength: 0)
-                    Text(song.title).font(.headline).lineLimit(1)
-                    Text(song.device ?? song.artist).font(.caption).foregroundStyle(song.device != nil ? accent : .secondary).lineLimit(1)
+                    Text(song.title).font(WidgetFont.headline).lineLimit(1)
+                    Text(song.device ?? song.artist).font(WidgetFont.caption).foregroundStyle(song.device != nil ? accent : .secondary).lineLimit(1)
                     Controls(playing: song.playing, size: 18)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -238,11 +260,11 @@ struct NowPlayingWidgetView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         ArtworkWithLike(image: entry.artwork, liked: song.liked, likeSize: 18).frame(width: 56, height: 56)
                         Spacer(minLength: 0)
-                        Text(song.title).font(.title3.weight(.semibold)).lineLimit(1)
+                        Text(song.title).font(WidgetFont.title3.weight(.semibold)).lineLimit(1)
                         if let device = song.device {
-                            Label(device, systemImage: "hifispeaker.2").font(.subheadline).foregroundStyle(accent).lineLimit(1)
+                            Label(device, systemImage: "hifispeaker.2").font(WidgetFont.subheadline).foregroundStyle(accent).lineLimit(1)
                         } else {
-                            Text(song.artist).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                            Text(song.artist).font(WidgetFont.subheadline).foregroundStyle(.secondary).lineLimit(1)
                         }
                         Spacer(minLength: 0)
                         Controls(playing: song.playing, size: 20)
@@ -250,14 +272,14 @@ struct NowPlayingWidgetView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     // 右側: 次に流れる曲（押すとその曲へ飛ぶ）。見出しの下の行を上下いっぱいに等しく割り振り、下に余白を残さない
                     VStack(alignment: .leading, spacing: 0) {
-                        Text(WidgetText.t("次に流れる曲", "Up next")).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                        Text(WidgetText.t("次に流れる曲", "Up next")).font(WidgetFont.caption.weight(.semibold)).foregroundStyle(.secondary)
                         ForEach(song.upNext ?? []) { item in
                             Button(intent: PlayQueueItemIntent(index: item.index, videoId: item.videoId)) {
                                 HStack(spacing: 8) {
                                     Artwork(image: entry.queueArtwork[item.videoId], radius: 5).frame(width: 28, height: 28)
                                     VStack(alignment: .leading, spacing: 0) {
-                                        Text(item.title).font(.subheadline.weight(.medium)).lineLimit(1)
-                                        Text(item.artist).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                                        Text(item.title).font(WidgetFont.subheadline.weight(.medium)).lineLimit(1)
+                                        Text(item.artist).font(WidgetFont.caption).foregroundStyle(.secondary).lineLimit(1)
                                     }
                                 }
                                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
@@ -271,8 +293,8 @@ struct NowPlayingWidgetView: View {
             }
         } else {
             VStack(spacing: 6) {
-                Image(systemName: "music.note").font(.title)
-                Text(WidgetText.t("何も再生していません", "Nothing playing")).font(.caption).foregroundStyle(.secondary)
+                Image(systemName: "music.note").font(WidgetFont.title)
+                Text(WidgetText.t("何も再生していません", "Nothing playing")).font(WidgetFont.caption).foregroundStyle(.secondary)
             }
         }
     }
@@ -371,8 +393,8 @@ struct PlaylistWidgetView: View {
     var body: some View {
         if entry.tiles.isEmpty {
             VStack(spacing: 6) {
-                Image(systemName: "music.note.list").font(.title)
-                Text(WidgetText.t("wave を開いてログインすると、プレイリストが出ます", "Open wave and log in to see your playlists")).font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                Image(systemName: "music.note.list").font(WidgetFont.title)
+                Text(WidgetText.t("wave を開いてログインすると、プレイリストが出ます", "Open wave and log in to see your playlists")).font(WidgetFont.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
             }
         } else if family == .systemSmall {
             // 小は表紙だけを 2×2 に
@@ -393,13 +415,13 @@ struct PlaylistWidgetView: View {
             if let song = entry.song {
                 Artwork(image: entry.artwork, radius: 6).frame(width: 40, height: 40)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(song.title).font(.headline).lineLimit(1)
-                    Text(song.device ?? song.artist).font(.subheadline).foregroundStyle(song.device != nil ? accent : .secondary).lineLimit(1)
+                    Text(song.title).font(WidgetFont.headline).lineLimit(1)
+                    Text(song.device ?? song.artist).font(WidgetFont.subheadline).foregroundStyle(song.device != nil ? accent : .secondary).lineLimit(1)
                 }
                 Spacer(minLength: 0)
                 Controls(playing: song.playing, size: 18)
             } else {
-                Text(WidgetText.t("何も再生していません", "Nothing playing")).font(.subheadline).foregroundStyle(.secondary)
+                Text(WidgetText.t("何も再生していません", "Nothing playing")).font(WidgetFont.subheadline).foregroundStyle(.secondary)
                 Spacer(minLength: 0)
             }
         }
