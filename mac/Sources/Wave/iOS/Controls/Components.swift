@@ -113,6 +113,12 @@ struct SongMenuItems: View {
             Button(L.t("プレイリストに追加", "Add to playlist"), systemImage: "plus") { Dialogs.shared.addToPlaylist(song) }
                 .disabled(!AppServices.client.isLoggedIn)
         }
+        // 高く評価した曲に足す・外す（Spotify の「お気に入りに追加」。Android・Windows と同じ）
+        if !external && AppServices.client.isLoggedIn {
+            let liked = player.isLiked(song)
+            Button(liked ? L.t("高く評価した曲から削除", "Remove from Liked Songs") : L.t("高く評価した曲に追加", "Add to Liked Songs"),
+                   systemImage: liked ? "checkmark.circle.fill" : "plus.circle") { player.setLiked(song, !liked) }
+        }
         if let removeFromPlaylist {
             Button(L.t("このプレイリストから削除", "Remove from this playlist"), systemImage: "trash", role: .destructive, action: removeFromPlaylist)
         }

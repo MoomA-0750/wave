@@ -65,6 +65,8 @@ data class SongActions(
     val startRadio: (Song) -> Unit,
     /** 曲の画面を開く。 */
     val openSong: (Song) -> Unit = {},
+    /** 高く評価する（true）・評価を外す（false）。曲のメニューから、再生中でない曲にも使う。null なら項目を出さない。 */
+    val setLiked: ((Song, Boolean) -> Unit)? = null,
 ) {
     /** シートの上から画面を開くときに、先にシートを閉じる。 */
     fun closing(close: () -> Unit): SongActions =

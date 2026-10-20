@@ -952,18 +952,28 @@ final class PlayerService {
 
     /// 今の曲の高評価を切り替える（ライブラリの「高く評価した曲」に入る）。
     func toggleLike() {
+        guard let song = current else { return }
+        setLiked(song, like != .like)
+    }
+
+    /// 曲が高く評価されているか（再生中の曲は再生画面の印と同じ値、ほかの曲は高く評価した曲の一覧から）。
+    func isLiked(_ song: Song) -> Bool {
+        current?.videoId == song.videoId ? like == .like : AppServices.library.isLiked(song.videoId)
+    }
+
+    /// 曲を高く評価する・評価を外す。曲のメニューから、再生中でない曲にも使う（再生中の曲なら再生画面の印も変える）。
+    func setLiked(_ song: Song, _ liked: Bool) {
         // RSS のエピソードは YouTube の曲ではない（評価できない）
-        guard let song = current, !Feed.isExternal(song.videoId) else { return }
+        guard !Feed.isExternal(song.videoId) else { return }
         guard AppServices.client.isLoggedIn else {
             message = L.t("高く評価するにはログインしてください", "Log in to like songs")
             return
         }
-        let liked = like != .like
-        like = liked ? .like : .indifferent
+        if current?.videoId == song.videoId { like = liked ? .like : .indifferent }
         Task {
             let result = (try? await AppServices.music.setLiked(song.videoId, liked: liked)) ?? .failed(.network)
-            if !result.isOk && current?.videoId == song.videoId {
-                like = liked ? .indifferent : .like
+            if !result.isOk {
+                if current?.videoId == song.videoId { like = liked ? .indifferent : .like }
                 message = L.t("高評価を変更できませんでした", "Couldn't update your likes")
             } else {
                 message = liked ? L.t("高く評価した曲に追加しました", "Added to Liked Songs") : L.t("高く評価した曲から削除しました", "Removed from Liked Songs")

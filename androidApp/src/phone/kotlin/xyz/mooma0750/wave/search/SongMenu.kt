@@ -103,6 +103,20 @@ fun SongMenuItems(
             actions.addToPlaylist(song)
         }
     }
+    // 高く評価した曲に足す・外す（Spotify の「お気に入りに追加」。Mac・Windows・iPhone と同じ）
+    if (!external) {
+        actions.setLiked?.let { setLiked ->
+            val liked = song.videoId in xyz.mooma0750.wave.ui.LocalLikedIds.current
+            MenuRow(
+                if (liked) R.drawable.ic_check_circle else R.drawable.ic_add_circle,
+                stringResource(if (liked) R.string.search_remove_from_liked else R.string.search_add_to_liked),
+                tint = if (liked) MaterialTheme.colorScheme.primary else null,
+            ) {
+                close()
+                setLiked(song, !liked)
+            }
+        }
+    }
     // キューの中の曲（再生中の曲も）も、もう一度「次に再生」「キューに追加」できる（Mac・Windows・iPhone と同じ）
     MenuRow(R.drawable.ic_playlist_play, stringResource(R.string.search_play_next)) {
         close()
@@ -157,11 +171,12 @@ fun SongMenuItems(
 private fun MenuRow(
     @DrawableRes icon: Int,
     label: String,
+    tint: Color? = null,
     onClick: () -> Unit,
 ) {
     ListItem(
         headlineContent = { Text(label) },
-        leadingContent = { MenuIcon(icon) },
+        leadingContent = { if (tint != null) androidx.compose.material3.Icon(androidx.compose.ui.res.painterResource(icon), contentDescription = null, tint = tint) else MenuIcon(icon) },
         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
         modifier = Modifier.clickable(onClick = onClick),
     )

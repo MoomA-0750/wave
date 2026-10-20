@@ -332,7 +332,7 @@ class AppContainer(
         mutablePlaylistsVersion.update { it + 1 }
     }
 
-    val playlistEditor = PlaylistEditor(context.applicationContext, music, appScope, onChanged = { mutablePlaylistsVersion.update { it + 1 } }, membership = playlistMembership)
+    val playlistEditor = PlaylistEditor(context.applicationContext, music, appScope, onChanged = { mutablePlaylistsVersion.update { it + 1 } }, membership = playlistMembership, onLikedChanged = { videoId, liked -> onLikedSongsChanged(videoId, liked) })
 
     /** UI から再生サービスへの接続。 */
     val player = PlayerConnection(context, controllerToken)

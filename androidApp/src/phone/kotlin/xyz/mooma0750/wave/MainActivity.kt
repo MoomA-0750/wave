@@ -182,6 +182,14 @@ class MainActivity : ComponentActivity() {
                             // 1曲を選んで再生するのと同じ（その曲から始まるラジオになる）
                             startRadio = playerActions::playSong,
                             openSong = { song -> nav.push(Screen.Song(song)) },
+                            // 再生中の曲は再生画面の✓と同じ道を通す（表示がそろう）。ほかの曲は直に書く
+                            setLiked = { song, liked ->
+                                if (container.player.likeState.value.videoId == song.videoId) {
+                                    scope.launch { container.player.setLiked(song.videoId, liked) }
+                                } else {
+                                    container.playlistEditor.setLiked(song, liked)
+                                }
+                            },
                         )
                     }
                 LaunchedEffect(container) {

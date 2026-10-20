@@ -906,21 +906,29 @@ public sealed partial class PlayerService : ObservableObject
     };
 
     /// <summary>今の曲の高評価を切り替える（ライブラリの「高く評価した曲」に入る）。</summary>
-    public async void ToggleLike()
+    public void ToggleLike()
+    {
+        if (Current is { } song) SetLiked(song, Like != LikeStatus.Like);
+    }
+
+    /// <summary>曲が高く評価されているか（再生中の曲は再生画面の印と同じ値、ほかの曲は高く評価した曲の一覧から）。</summary>
+    public bool IsLiked(Song song) => Current?.VideoId == song.VideoId ? Like == LikeStatus.Like : AppServices.Library.IsLiked(song.VideoId);
+
+    /// <summary>曲を高く評価する・評価を外す。曲のメニューから、再生中でない曲にも使う（再生中の曲なら再生画面の印も変える）。</summary>
+    public async void SetLiked(Song song, bool liked)
     {
         // RSS のエピソードは YouTube の曲ではないので評価しない（ADR-0012）
-        if (Current is not { } song || Feed.IsExternal(song.VideoId)) return;
+        if (Feed.IsExternal(song.VideoId)) return;
         if (!AppServices.Client.IsLoggedIn)
         {
             Message = L.T("高く評価するにはログインしてください", "Log in to like songs");
             return;
         }
-        var liked = Like != LikeStatus.Like;
-        Like = liked ? LikeStatus.Like : LikeStatus.Indifferent;
+        if (Current?.VideoId == song.VideoId) Like = liked ? LikeStatus.Like : LikeStatus.Indifferent;
         var result = await AppServices.Music.SetLikedAsync(song.VideoId, liked);
-        if (!result.IsOk && Current?.VideoId == song.VideoId)
+        if (!result.IsOk)
         {
-            Like = liked ? LikeStatus.Indifferent : LikeStatus.Like;
+            if (Current?.VideoId == song.VideoId) Like = liked ? LikeStatus.Indifferent : LikeStatus.Like;
             Message = L.T("高評価を変更できませんでした", "Couldn't update your likes");
         }
         else

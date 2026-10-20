@@ -26,6 +26,8 @@ class PlaylistEditor(
     private val onChanged: () -> Unit,
     /** 「どのプレイリストに入っているか」の覚え。変えたプレイリストの分だけ直す。 */
     private val membership: PlaylistMembership? = null,
+    /** 高く評価した曲が変わった（かもしれない）。向きが分からなければ null。 */
+    private val onLikedChanged: (videoId: String, liked: Boolean?) -> Unit = { _, _ -> },
 ) {
     private val inFlight = mutableSetOf<String>()
 
@@ -126,6 +128,24 @@ class PlaylistEditor(
                 }
             is WriteResult.Failed -> context.getString(R.string.library_create_playlist_failed)
             WriteResult.Unknown -> context.getString(R.string.library_create_playlist_unknown)
+        }
+    }
+
+    /**
+     * 曲のメニューから、再生中でない曲を高く評価する・評価を外す（再生中の曲は LikeController を通す）。
+     * 書き込みの規則は WaveSession.callWrite（自動で送り直さない）。
+     */
+    fun setLiked(
+        song: Song,
+        liked: Boolean,
+    ) = run("like:${song.videoId}") { generation ->
+        val result = music.setLiked(song.videoId, liked, generation)
+        Log.i(WaveApplication.LOG_TAG, "like write result=${result::class.simpleName} liked=$liked")
+        if (result !is WriteResult.Failed) onLikedChanged(song.videoId, liked.takeIf { result is WriteResult.Done })
+        when (result) {
+            is WriteResult.Done -> context.getString(if (liked) R.string.library_added_to_liked else R.string.library_removed_from_liked)
+            is WriteResult.Failed -> context.getString(R.string.playback_like_change_failed)
+            WriteResult.Unknown -> context.getString(R.string.playback_like_change_unknown)
         }
     }
 

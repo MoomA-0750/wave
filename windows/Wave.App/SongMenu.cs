@@ -27,6 +27,10 @@ public static class SongMenu
             if (editable.Count > 0) add.Items.Add(new MenuFlyoutSeparator());
             foreach (var playlist in editable) add.Items.Add(Item(playlist.Title, null, () => _ = AddAsync(playlist, song)));
             menu.Items.Add(add);
+            // 高く評価した曲に足す・外す（Spotify の「お気に入りに追加」。Android・Mac・iPhone と同じ）
+            var liked = AppServices.Player.IsLiked(song);
+            menu.Items.Add(Item(liked ? L.T("高く評価した曲から削除", "Remove from Liked Songs") : L.T("高く評価した曲に追加", "Add to Liked Songs"),
+                liked ? "\uEC61" : "\uECC8", () => AppServices.Player.SetLiked(song, !liked)));
         }
         if (removeFromPlaylist is not null) menu.Items.Add(Item(L.T("このプレイリストから削除", "Remove from this playlist"), "", removeFromPlaylist));
         menu.Items.Add(new MenuFlyoutSeparator());

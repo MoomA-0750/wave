@@ -108,6 +108,10 @@
     <string name="search_retry">もう一度</string>
     <string name="search_menu">メニュー</string>
     <string name="search_add_to_playlist">プレイリストに追加</string>
+    <string name="search_add_to_liked">高く評価した曲に追加</string>
+    <string name="search_remove_from_liked">高く評価した曲から削除</string>
+    <string name="library_added_to_liked">高く評価した曲に追加しました</string>
+    <string name="library_removed_from_liked">高く評価した曲から削除しました</string>
     <string name="search_play_next">次に再生</string>
     <string name="search_add_to_queue">キューに追加</string>
     <string name="search_go_to_album">アルバムへ移動</string>
