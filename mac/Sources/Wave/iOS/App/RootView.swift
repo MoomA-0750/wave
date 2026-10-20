@@ -76,13 +76,14 @@ struct RootView: View {
     var body: some View {
         let player = AppServices.player!
         TabView(selection: Binding(get: { shell.tab }, set: { shell.select($0) })) {
-            // 設定で選んだタブは、検索の役（role: .search）にして右に離して置く。iOS 26 では欄を下へ送って畳んでも、
-            // 左の再生中のタブと並んで右に残る（OS が離して置くのは検索の役のタブだけ）
-            ForEach(tabOrder, id: \.self) { tab in
-                Tab(tab.title, systemImage: tab.symbol, value: tab, role: tab == shell.pinnedTab ? .search : nil) {
-                    stack(tab) { TabRoot(tab: tab) }
-                }
-            }
+            // 設定で選んだタブは、右に離して置く役（pinnedRole）にする。欄を下へ送って畳んでも、
+            // 左の再生中のタブと並んで右に残る
+            // （ForEach で並べると OS が役を見ず、欄の中に並べてしまったので、1つずつ書く）
+            tab(.home)
+            if shell.pinnedTab != .search { tab(.search) }
+            if shell.pinnedTab != .ai { tab(.ai) }
+            if shell.pinnedTab != .library { tab(.library) }
+            tab(shell.pinnedTab, role: pinnedRole)
         }
         .modifier(MiniPlayerAccessory(show: player.current != nil, zoom: playerZoom) { shell.playerOpen = true })
         // 音楽の PiP の元の枠（画面の後ろに小さく置く）
@@ -117,9 +118,16 @@ struct RootView: View {
         }
     }
 
-    /// 右に離すタブを最後にした並び（ほかはホーム・検索・Claude・ライブラリの順のまま）。
-    private var tabOrder: [IOSTab] {
-        [IOSTab.home, .search, .ai, .library].filter { $0 != shell.pinnedTab } + [shell.pinnedTab]
+    /// 右に離して置く役。iOS 26 は検索の役（.search）だけが離れるが、iOS 27 では検索の役も欄の中に並び、離すのは .prominent になった
+    private var pinnedRole: TabRole {
+        if #available(iOS 27.0, *) { return .prominent }
+        return .search
+    }
+
+    private func tab(_ tab: IOSTab, role: TabRole? = nil) -> some TabContent<IOSTab> {
+        Tab(tab.title, systemImage: tab.symbol, value: tab, role: role) {
+            stack(tab) { TabRoot(tab: tab) }
+        }
     }
 
     private func stack(_ tab: IOSTab, @ViewBuilder root: () -> some View) -> some View {
