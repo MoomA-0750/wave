@@ -45,6 +45,10 @@ intents WaveWidget WaveWidget "$appex/Contents/Resources" "$appex/Contents/MacOS
 cp -R Resources/Widget/en.lproj "$appex/Contents/Resources/"
 cp -R Resources/Widget/en.lproj "$app/Contents/Resources/"
 cp Resources/Info.plist "$app/Contents/Info.plist"
+# 組むたびに版の番号を上げる（同じ番号のままだと、ウィジェットの一覧が前の版の名前・説明を覚えたまま出す。ios-bundle.sh と同じ）
+version=$(date +%Y%m%d%H%M)
+plutil -replace CFBundleVersion -string "$version" "$app/Contents/Info.plist"
+plutil -replace CFBundleVersion -string "$version" "$appex/Contents/Info.plist"
 # 連携の中継の宛先を書き込む（mac.sh がこの機械の local.properties から渡す。無ければ書かない）
 if [ -n "${WAVE_RELAY_V2_URL:-}" ] && [ -n "${WAVE_RELAY_V2_HOST:-}" ]; then
     plutil -replace WaveRelayV2Url -string "$WAVE_RELAY_V2_URL" "$app/Contents/Info.plist"

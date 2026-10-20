@@ -7,3 +7,10 @@
 "プレイリスト" = "Playlist";
 "シャッフル" = "Shuffle";
 "プレイリストを選ぶ" = "Choose Playlist";
+"キューの曲を再生" = "Play Song in Queue";
+"位置" = "Position";
+"曲" = "Song";
+/* ウィジェットの一覧に出る名前と説明 */
+"再生中" = "Now Playing";
+"今の曲と次に流れる曲、再生の操作、高く評価。" = "The current song and what's up next, with playback controls and like.";
+"選んだプレイリストを、押すとすぐ再生する。" = "Play the playlist you choose with one tap.";

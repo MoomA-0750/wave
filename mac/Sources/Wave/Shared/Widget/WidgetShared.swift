@@ -78,6 +78,18 @@ struct WidgetNowPlaying: Codable, Equatable {
     var nextArtist: String?
     /// 今の曲を高く評価しているか。評価のボタンを出せないとき（ログインしていない・RSS のエピソード）は nil。
     var liked: Bool?
+    /// 次に流れる曲（3曲まで。ウィジェットの右側に並べ、押すとその曲へ飛ぶ）。
+    var upNext: [WidgetQueueItem]?
+}
+
+/// キューの曲（index はキューの中の位置。押されたとき、videoId と合わなければ探し直す）。
+struct WidgetQueueItem: Codable, Equatable, Identifiable {
+    var index: Int
+    var videoId: String
+    var title: String
+    var artist: String
+
+    var id: Int { index }
 }
 
 /// ライブラリのプレイリスト（ウィジェットで選ぶ）。
@@ -90,6 +102,7 @@ struct WidgetPlaylist: Codable, Equatable, Hashable {
 /// ウィジェット・ロック画面のボタンから、アプリに頼むこと。
 enum WidgetCommand: Sendable {
     case togglePlay, next, previous, toggleLike
+    case playQueueItem(index: Int, videoId: String)
     case playPlaylist(id: String, shuffle: Bool)
 }
 
@@ -136,6 +149,25 @@ struct ToggleLikeIntent: AudioPlaybackIntent {
     init() {}
     func perform() async throws -> some IntentResult {
         await WidgetBridge.run(.toggleLike)
+        return .result()
+    }
+}
+
+/// キューの曲を選んで鳴らす（ウィジェットの「次に流れる曲」）。
+struct PlayQueueItemIntent: AudioPlaybackIntent {
+    static let title: LocalizedStringResource = "キューの曲を再生"
+    @Parameter(title: "位置") var index: Int
+    @Parameter(title: "曲") var videoId: String
+
+    init() {}
+
+    init(index: Int, videoId: String) {
+        self.index = index
+        self.videoId = videoId
+    }
+
+    func perform() async throws -> some IntentResult {
+        await WidgetBridge.run(.playQueueItem(index: index, videoId: videoId))
         return .result()
     }
 }

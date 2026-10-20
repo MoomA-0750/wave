@@ -38,6 +38,14 @@ private func loadImage(_ url: URL?) -> WidgetImage? {
 
 private let accent = Color(red: 0.27, green: 0.55, blue: 1.0)
 
+/// ウィジェットの中身の余白。OS の余白（contentMargins）は Mac で上下と左右が違い、角に置いた絵の丸みがウィジェットの角と
+/// 中心がずれて見えたので、OS の余白を切って四方を同じにする（ContainerRelativeShape はこの余白の分だけ丸みを小さくする）。
+#if os(iOS)
+    private let widgetPadding: CGFloat = 16
+#else
+    private let widgetPadding: CGFloat = 14
+#endif
+
 /// ジャケット（無ければ音符）。枠の大きさで切り抜く（映像の 16:9 の絵など、正方形でない絵を枠いっぱいに広げても、はみ出さない）。
 /// radius を渡さなければ、ウィジェットの角と中心をそろえた丸み（ContainerRelativeShape）にする（ウィジェットの角に置く絵）。
 private struct Artwork: View {
@@ -131,13 +139,15 @@ struct NowPlayingWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: WidgetStore.nowPlayingKind, provider: NowPlayingProvider()) { entry in
             NowPlayingWidgetView(entry: entry)
+                .padding(widgetPadding)
                 .onArtwork(entry.artwork)
                 .containerBackground(for: .widget) { ArtworkBackground(image: entry.artwork) }
                 .widgetURL(URL(string: "wave://nowplaying"))
         }
-        .configurationDisplayName(WidgetText.t("再生中", "Now Playing"))
-        .description(WidgetText.t("今の曲と、再生・一時停止・曲送り・高く評価。", "The current song, with play/pause, skip and like."))
+        .configurationDisplayName(Text("再生中"))
+        .description(Text("今の曲と次に流れる曲、再生の操作、高く評価。"))
         .supportedFamilies([.systemSmall, .systemMedium])
+        .contentMarginsDisabled()
     }
 }
 
@@ -152,6 +162,26 @@ private struct LikeControl: View {
                 .foregroundStyle(liked ? accent : .primary)
         }
         .buttonStyle(.plain)
+    }
+}
+
+/// ジャケットの右下に高く評価のボタンを重ねたもの（評価のボタンを出せないときは絵だけ）。
+private struct ArtworkWithLike: View {
+    var image: WidgetImage?
+    var liked: Bool?
+    var likeSize: CGFloat
+
+    var body: some View {
+        Artwork(image: image)
+            .overlay(alignment: .bottomTrailing) {
+                if let liked {
+                    // 絵の上でも見えるよう、暗い丸を敷いて白（評価済みは色）で出す
+                    LikeControl(liked: liked, size: likeSize)
+                        .environment(\.colorScheme, .dark)
+                        .background(Circle().fill(Color.black.opacity(0.45)))
+                        .padding(3)
+                }
+            }
     }
 }
 
@@ -179,11 +209,7 @@ struct NowPlayingWidgetView: View {
         if let song = entry.song {
             if family == .systemSmall {
                 VStack(alignment: .leading, spacing: 6) {
-                    HStack(alignment: .top) {
-                        Artwork(image: entry.artwork).frame(width: 50, height: 50)
-                        Spacer(minLength: 0)
-                        if let liked = song.liked { LikeControl(liked: liked, size: 20) }
-                    }
+                    ArtworkWithLike(image: entry.artwork, liked: song.liked, likeSize: 16).frame(width: 54, height: 54)
                     Spacer(minLength: 0)
                     Text(song.title).font(.headline).lineLimit(1)
                     Text(song.device ?? song.artist).font(.caption).foregroundStyle(song.device != nil ? accent : .secondary).lineLimit(1)
@@ -191,25 +217,37 @@ struct NowPlayingWidgetView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             } else {
-                HStack(spacing: 14) {
-                    // 上・左・下の余白いっぱいに広げて、絵の角をウィジェットの角にそろえる
-                    Artwork(image: entry.artwork).aspectRatio(1, contentMode: .fit).frame(maxHeight: .infinity)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(song.title).font(.title2.weight(.semibold)).lineLimit(2)
-                        Text(song.artist).font(.body).foregroundStyle(.secondary).lineLimit(1)
+                HStack(alignment: .top, spacing: 14) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        ArtworkWithLike(image: entry.artwork, liked: song.liked, likeSize: 18).frame(width: 60, height: 60)
+                        Spacer(minLength: 4)
+                        Text(song.title).font(.title3.weight(.semibold)).lineLimit(1)
                         if let device = song.device {
                             Label(device, systemImage: "hifispeaker.2").font(.subheadline).foregroundStyle(accent).lineLimit(1)
-                        } else if let next = song.nextTitle {
-                            Text(WidgetText.t("次: ", "Next: ") + next).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                        } else {
+                            Text(song.artist).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                        }
+                        Spacer(minLength: 4)
+                        Controls(playing: song.playing, size: 20)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    // 右側: 次に流れる曲（押すとその曲へ飛ぶ）
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(WidgetText.t("次に流れる曲", "Up next")).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                        ForEach(song.upNext ?? []) { item in
+                            Button(intent: PlayQueueItemIntent(index: item.index, videoId: item.videoId)) {
+                                VStack(alignment: .leading, spacing: 0) {
+                                    Text(item.title).font(.subheadline.weight(.medium)).lineLimit(1)
+                                    Text(item.artist).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
                         }
                         Spacer(minLength: 0)
-                        HStack {
-                            Controls(playing: song.playing)
-                            Spacer(minLength: 8)
-                            if let liked = song.liked { LikeControl(liked: liked) }
-                        }
                     }
-                    Spacer(minLength: 0)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
         } else {
@@ -262,12 +300,14 @@ struct PlaylistWidget: Widget {
     var body: some WidgetConfiguration {
         AppIntentConfiguration(kind: WidgetStore.playlistKind, intent: SelectPlaylistIntent.self, provider: PlaylistProvider()) { entry in
             PlaylistWidgetView(entry: entry)
+                .padding(widgetPadding)
                 .onArtwork(entry.cover)
                 .containerBackground(for: .widget) { ArtworkBackground(image: entry.cover) }
         }
-        .configurationDisplayName(WidgetText.t("プレイリスト", "Playlist"))
-        .description(WidgetText.t("選んだプレイリストを、押すとすぐ再生する。", "Play the playlist you choose with one tap."))
+        .configurationDisplayName(Text("プレイリスト"))
+        .description(Text("選んだプレイリストを、押すとすぐ再生する。"))
         .supportedFamilies([.systemSmall, .systemMedium])
+        .contentMarginsDisabled()
     }
 }
 

@@ -48,6 +48,14 @@ final class WidgetSync {
             // ウィジェットでは✓を押すと評価を外す（アプリの中のボタンと違い、プレイリストに追加する画面は開かない）
             player.toggleLike()
             shouldPlay = false
+        case .playQueueItem(let index, let videoId):
+            // 押すまでにキューが動いていたら、今の曲より後ろで同じ曲を探す
+            let queue = player.queue
+            let position = index < queue.count && queue[index].videoId == videoId ? index
+                : queue.indices.first { $0 > player.index && queue[$0].videoId == videoId }
+            guard let position else { return }
+            player.playAt(position)
+            shouldPlay = true
         case .playPlaylist(let id, let shuffle):
             if player.shuffle != shuffle { player.toggleShuffle() }
             let title = WidgetStore.playlists.first { $0.id == id }?.title ?? ""
@@ -70,7 +78,10 @@ final class WidgetSync {
             let next = player.isRemote || player.index + 1 >= player.queue.count ? nil : player.queue[player.index + 1]
             return WidgetNowPlaying(videoId: song.videoId, title: song.title, artist: song.artistsText, playing: player.isPlaying,
                                     device: player.isRemote ? player.remoteDevice : nil, nextTitle: next?.title, nextArtist: next?.artistsText,
-                                    liked: LikeButton.available(player) && AppServices.client.isLoggedIn ? player.like == .like : nil)
+                                    liked: LikeButton.available(player) && AppServices.client.isLoggedIn ? player.like == .like : nil,
+                                    upNext: player.queue.indices.dropFirst(player.index + 1).prefix(3).map { i in
+                                        WidgetQueueItem(index: i, videoId: player.queue[i].videoId, title: player.queue[i].title, artist: player.queue[i].artistsText)
+                                    })
         }
         if now != shown {
             let songChanged = now?.videoId != shown?.videoId
