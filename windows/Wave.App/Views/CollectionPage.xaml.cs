@@ -222,7 +222,7 @@ public sealed partial class CollectionPage : Page
                 var setId = i < page.SetVideoIds.Count ? page.SetVideoIds[i] : null;
                 AddRow(new TrackRow(i + 1, page.Songs[i], setId) { Menu = MenuFor });
             }
-            PlayButton.IsEnabled = rows.Count > 0;
+            PlayButton.Visibility = Ui.Show(rows.Count > 0);
             TrackRow.MarkCurrent(rows, Player.Current?.VideoId);
         }, token, ServerOrder);
         if (!result.IsOk)
@@ -271,7 +271,7 @@ public sealed partial class CollectionPage : Page
 
     private void Done()
     {
-        PlayButton.IsEnabled = rows.Count > 0;
+        PlayButton.Visibility = Ui.Show(rows.Count > 0);
         TrackRow.MarkCurrent(rows, Player.Current?.VideoId);
         if (all.Count == 0) Fail(L.T("曲がありません", "No songs"));
         ApplyView();

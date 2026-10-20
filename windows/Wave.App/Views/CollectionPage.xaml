@@ -34,7 +34,7 @@
                 </Grid>
                 <Grid Padding="12,8,12,16">
                 <StackPanel Orientation="Horizontal" Spacing="16">
-                    <Button x:Name="PlayButton" Style="{StaticResource PlayCircleButtonStyle}" Click="OnPlay" ToolTipService.ToolTip="{x:Bind app:L.T('再生', 'Play')}" IsEnabled="False">
+                    <Button x:Name="PlayButton" Style="{StaticResource PlayCircleButtonStyle}" Click="OnPlay" ToolTipService.ToolTip="{x:Bind app:L.T('再生', 'Play')}" Visibility="Collapsed">
                         <FontIcon x:Name="PlayIcon" Glyph="&#xF5B0;" FontSize="20" />
                     </Button>
                     <ToggleButton x:Name="ShuffleButton" Style="{StaticResource IconToggleStyle}" Click="OnShuffle" ToolTipService.ToolTip="{x:Bind app:L.T('シャッフル', 'Shuffle')}">

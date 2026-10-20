@@ -117,10 +117,10 @@ public sealed partial class DevicesPage : Page
             if (!member.IsSelf)
             {
                 var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center };
-                // wave-api（ADR-0015）: 本人が押したときだけログインを渡す。ログインしていなければ押せない
-                if (member.IsApi)
+                // wave-api（ADR-0015）: 本人が押したときだけログインを渡す。ログインしていなければ出さない
+                if (member.IsApi && AppServices.Client.IsLoggedIn)
                 {
-                    var grant = new Button { Content = L.T("ログインを渡す", "Give login"), IsEnabled = AppServices.Client.IsLoggedIn };
+                    var grant = new Button { Content = L.T("ログインを渡す", "Give login") };
                     grant.Click += async (_, _) => await GrantLoginAsync(member);
                     actions.Children.Add(grant);
                 }

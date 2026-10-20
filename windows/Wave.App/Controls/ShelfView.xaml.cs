@@ -34,6 +34,10 @@ public sealed partial class ShelfView : UserControl
 
     private void OnRight(object sender, RoutedEventArgs e) => Scroller.ChangeView(Scroller.HorizontalOffset + Scroller.ViewportWidth * 0.8, null, null);
 
+#if DEBUG
+    public void DebugRight() => OnRight(this, new RoutedEventArgs());
+#endif
+
     private void OnViewChanged(object? sender, ScrollViewerViewChangedEventArgs e) => UpdateArrows();
 
     // 並びの大きさが変わった直後は、ScrollViewer の送れる幅（ScrollableWidth）がまだ前の値なので、置き終えてから見る

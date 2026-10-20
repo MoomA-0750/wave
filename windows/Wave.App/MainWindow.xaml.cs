@@ -341,7 +341,7 @@ public sealed partial class MainWindow : Window
         var account = AppServices.Account;
         AccountPicture.DisplayName = account.Name ?? "";
         AccountPicture.ProfilePicture = Ui.Small(account.PhotoUrl);
-        CreateButton.IsEnabled = account.IsLoggedIn;
+        CreateButton.Visibility = Ui.Show(account.IsLoggedIn);
         LoggedOutPanel.Visibility = Ui.Hide(account.IsLoggedIn);
         LibraryList.Visibility = Ui.Show(account.IsLoggedIn);
     }

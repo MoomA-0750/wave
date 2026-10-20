@@ -75,7 +75,7 @@ public sealed partial class PodcastPage : Page
         if (page.ThumbnailUrl is not null) Cover.Source = Ui.Img(page.ThumbnailUrl, 544);
         foreach (var episode in page.Episodes) episodes.Add(episode);
         continuation = page.Continuation;
-        PlayButton.IsEnabled = episodes.Count > 0;
+        PlayButton.Visibility = Ui.Show(episodes.Count > 0);
         UpdateSave();
         if (summary.BrowseId == MusicRepository.NewEpisodesBrowse) await MergeFeedEpisodesAsync(page);
     }
@@ -109,7 +109,7 @@ public sealed partial class PodcastPage : Page
         page = loaded with { Episodes = merged };
         episodes.Clear();
         foreach (var episode in merged) episodes.Add(episode);
-        PlayButton.IsEnabled = episodes.Count > 0;
+        PlayButton.Visibility = Ui.Show(episodes.Count > 0);
         if (episodes.Count > 0) ErrorText.Visibility = Visibility.Collapsed;
     }
 
@@ -139,7 +139,7 @@ public sealed partial class PodcastPage : Page
         if (page.ThumbnailUrl is not null) Cover.Source = Ui.Img(page.ThumbnailUrl, 544);
         foreach (var episode in page.Episodes) episodes.Add(episode);
         continuation = page.Continuation;
-        PlayButton.IsEnabled = episodes.Count > 0;
+        PlayButton.Visibility = Ui.Show(episodes.Count > 0);
         UpdateSave();
         library.Changed += OnFeedLibraryChanged;
     }

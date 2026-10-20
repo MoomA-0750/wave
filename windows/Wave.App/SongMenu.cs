@@ -18,13 +18,16 @@ public static class SongMenu
         // RSS のエピソードは YouTube の曲ではない（プレイリスト・ラジオ・共有のリンクが無い。ADR-0012。Android と同じ）
         if (Feed.IsExternal(song.VideoId)) return menu;
         menu.Items.Add(new MenuFlyoutSeparator());
-        var add = new MenuFlyoutSubItem { Text = L.T("プレイリストに追加", "Add to playlist"), Icon = new FontIcon { Glyph = "" } };
-        add.Items.Add(Item(L.T("新しいプレイリスト", "New playlist"), "", () => _ = Dialogs.CreatePlaylistAsync(song)));
-        var editable = AppServices.Library.Editable.ToList();
-        if (editable.Count > 0) add.Items.Add(new MenuFlyoutSeparator());
-        foreach (var playlist in editable) add.Items.Add(Item(playlist.Title, null, () => _ = AddAsync(playlist, song)));
-        if (!AppServices.Client.IsLoggedIn) add.IsEnabled = false;
-        menu.Items.Add(add);
+        // ログインしていなければ出さない（押せないものは出さない。Mac と同じ）
+        if (AppServices.Client.IsLoggedIn)
+        {
+            var add = new MenuFlyoutSubItem { Text = L.T("プレイリストに追加", "Add to playlist"), Icon = new FontIcon { Glyph = "" } };
+            add.Items.Add(Item(L.T("新しいプレイリスト", "New playlist"), "", () => _ = Dialogs.CreatePlaylistAsync(song)));
+            var editable = AppServices.Library.Editable.ToList();
+            if (editable.Count > 0) add.Items.Add(new MenuFlyoutSeparator());
+            foreach (var playlist in editable) add.Items.Add(Item(playlist.Title, null, () => _ = AddAsync(playlist, song)));
+            menu.Items.Add(add);
+        }
         if (removeFromPlaylist is not null) menu.Items.Add(Item(L.T("このプレイリストから削除", "Remove from this playlist"), "", removeFromPlaylist));
         menu.Items.Add(new MenuFlyoutSeparator());
         menu.Items.Add(Item(L.T("曲のラジオを再生", "Go to song radio"), "", () => AppServices.Player.PlaySong(song)));

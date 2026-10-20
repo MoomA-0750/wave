@@ -32,7 +32,7 @@
                     </StackPanel>
                 </Grid>
                 <StackPanel Orientation="Horizontal" Spacing="16" Padding="12,0,12,16">
-                    <Button x:Name="PlayButton" Style="{StaticResource PlayCircleButtonStyle}" Click="OnPlay" ToolTipService.ToolTip="{x:Bind app:L.T('再生', 'Play')}" IsEnabled="False">
+                    <Button x:Name="PlayButton" Style="{StaticResource PlayCircleButtonStyle}" Click="OnPlay" ToolTipService.ToolTip="{x:Bind app:L.T('再生', 'Play')}" Visibility="Collapsed">
                         <FontIcon Glyph="&#xF5B0;" FontSize="20" />
                     </Button>
                     <Button x:Name="SaveButton" Visibility="Collapsed" Click="OnSave" VerticalAlignment="Center" CornerRadius="16" Padding="16,6" />

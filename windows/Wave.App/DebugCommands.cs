@@ -139,6 +139,10 @@ public static class DebugCommands
             case "pane":
                 window.DebugPane(arg);
                 break;
+            case "shelf-right":
+                // ページの最初の棚を右へ送る（送るボタンを押したのと同じ）
+                Shelves(Nav.Frame.Content as DependencyObject).FirstOrDefault()?.DebugRight();
+                break;
             case "fullscreen":
                 window.DebugFullScreen(arg == "on");
                 break;
@@ -410,6 +414,14 @@ public static class DebugCommands
                     break;
                 }
         }
+    }
+
+    private static IEnumerable<Controls.ShelfView> Shelves(DependencyObject? node)
+    {
+        if (node is null) yield break;
+        if (node is Controls.ShelfView shelf) { yield return shelf; yield break; }
+        for (var i = 0; i < Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChildrenCount(node); i++)
+            foreach (var found in Shelves(Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChild(node, i))) yield return found;
     }
 }
 #endif

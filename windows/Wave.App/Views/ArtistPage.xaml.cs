@@ -40,7 +40,7 @@ public sealed partial class ArtistPage : Page
         rows = artist.TopSongs.Select(s => new TrackRow(n++, s) { ShowAlbum = true, Menu = r => SongMenu.Build(r.Song) }).ToList();
         TrackRow.MarkCurrent(rows, Player.Current?.VideoId);
         TopSongs.ItemsSource = rows;
-        PlayButton.IsEnabled = rows.Count > 0;
+        PlayButton.Visibility = Ui.Show(rows.Count > 0);
         AllSongs.Visibility = Ui.Show(artist.AllSongsPlaylistId is not null);
         allSongs = artist.AllSongsPlaylistId is { } allId ? AppServices.Music.FullPlaylistAsync(allId) : null;
         var shelves = artist.AlbumShelves.Select(s => new HomeShelf(s.Title, null, s.Albums.Select(a => (HomeItem)new HomeItem.AlbumItem(a)).ToList())).ToList();
