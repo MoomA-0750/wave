@@ -352,6 +352,24 @@ class ConnectV2Manager(
         if (sent != true) mutableEvents.tryEmit(ClientEvent.ServerError(CONTROL_UNSENT))
     }
 
+    /** 画面から: 鳴らしている端末のキューを並べ替える（ほかの端末を映している間のキューの画面）。 */
+    fun queueMove(
+        itemId: String,
+        afterItemId: String?,
+    ) = post {
+        val sent = client?.sendQueueMove(itemId, afterItemId)
+        Log.i(WaveApplication.LOG_TAG, "connect-v2 queue move sent=$sent")
+        if (sent != true) mutableEvents.tryEmit(ClientEvent.ServerError(CONTROL_UNSENT))
+    }
+
+    /** 画面から: 鳴らしている端末のキューから外す（「キューから削除」「キューを消去」）。 */
+    fun queueRemove(itemIds: List<String>) =
+        post {
+            val sent = client?.sendQueueRemove(itemIds)
+            Log.i(WaveApplication.LOG_TAG, "connect-v2 queue remove items=${itemIds.size} sent=$sent")
+            if (sent != true) mutableEvents.tryEmit(ClientEvent.ServerError(CONTROL_UNSENT))
+        }
+
     private val mutableUnreadable = MutableStateFlow(false)
 
     /** 端末の保存が読めない（作り直すまで Connect v2 を使わない）。 */
@@ -546,6 +564,21 @@ class ConnectV2Manager(
                 val added = runBlocking(Dispatchers.Main) { host.endpoint?.queueAdd(items, next, afterItemId) == true }
                 Log.i(WaveApplication.LOG_TAG, "connect-v2 queue add received items=${items.size} next=$next added=$added")
                 return added
+            }
+
+            override fun queueMove(
+                itemId: String,
+                afterItemId: String?,
+            ): Boolean {
+                val moved = runBlocking(Dispatchers.Main) { host.endpoint?.queueMove(itemId, afterItemId) == true }
+                Log.i(WaveApplication.LOG_TAG, "connect-v2 queue move received moved=$moved")
+                return moved
+            }
+
+            override fun queueRemove(itemIds: List<String>): Boolean {
+                val removed = runBlocking(Dispatchers.Main) { host.endpoint?.queueRemove(itemIds) == true }
+                Log.i(WaveApplication.LOG_TAG, "connect-v2 queue remove received items=${itemIds.size} removed=$removed")
+                return removed
             }
 
             override fun libraryChanged(body: xyz.mooma0750.wave.handoff.v2.LibraryBody) {

@@ -979,6 +979,43 @@ class ConnectSimulationTest {
     }
 
     @Test
+    fun queueEditFromAnotherDeviceReachesThePlayingDevice() {
+        setUp()
+        a.startPlaying("queue-A")
+        relay.run()
+        // 鳴っていない B のキューの画面で並べ替え・外す: 鳴らしている A が従う
+        assertTrue(b.client.sendQueueMove("q2", "q5"))
+        assertTrue(b.client.sendQueueMove("q3", null))
+        assertTrue(b.client.sendQueueRemove(listOf("q4", "q6")))
+        relay.run()
+        assertEquals(listOf("q2" to "q5", "q3" to null), a.queueMoves)
+        assertEquals(listOf(listOf("q4", "q6")), a.queueRemoves)
+        // 鳴らしている A 自身は送らない
+        assertFalse(a.client.sendQueueRemove(listOf("q1")))
+    }
+
+    @Test
+    fun queueEditFromAnotherAccountOrReplayedIsIgnored() {
+        setUp()
+        a.startPlaying("queue-A")
+        relay.run()
+        b.accountTag = "tag-account-2"
+        assertFalse(b.client.sendQueueRemove(listOf("q1")))
+        b.accountTag = "tag-account-1"
+        val captured = ArrayList<RelayV2>()
+        relay.dropIncoming = { from, message ->
+            if (from == b.deviceId && message is RelayV2.Control) captured += message
+            false
+        }
+        assertTrue(b.client.sendQueueRemove(listOf("q1")))
+        relay.run()
+        assertEquals(1, a.queueRemoves.size)
+        relay.inject(a.deviceId, captured.single())
+        relay.run()
+        assertEquals(1, a.queueRemoves.size, "再送された外すに二度従った")
+    }
+
+    @Test
     fun deviceNamesReachTheWholeHousehold() {
         setUp()
         assertTrue(b.client.sendProfile("Bee"))

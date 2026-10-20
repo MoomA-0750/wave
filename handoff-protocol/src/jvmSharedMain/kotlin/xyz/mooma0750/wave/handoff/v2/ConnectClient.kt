@@ -128,6 +128,18 @@ class ConnectClient(
             afterItemId: String?,
         ): Boolean = false
 
+        /**
+         * 遠隔のキューの並べ替えに従う（この端末が鳴らしている）。itemId の曲（今の曲より後ろ）を、afterItemId の曲の直後
+         * （afterItemId が無ければ今の曲の直後）へ動かす。どちらかが手元のキューに無い・今の曲より前なら何もせず false。
+         */
+        fun queueMove(
+            itemId: String,
+            afterItemId: String?,
+        ): Boolean = false
+
+        /** 遠隔のキューから外す（この端末が鳴らしている）。今の曲より後ろにある itemIds の曲だけを外す。 */
+        fun queueRemove(itemIds: List<String>): Boolean = false
+
         /** ほかの端末と合わせたライブラリが届いた（手元に取り込む、ADR-0013）。 */
         fun libraryChanged(body: LibraryBody) {}
 
@@ -1001,6 +1013,34 @@ class ConnectClient(
     }
 
     /**
+     * 遠隔のキューの並べ替えを送る（鳴っていない端末のキューの画面から、今鳴らしている同じアカウントの端末へ）。
+     * itemId の曲を afterItemId の曲の直後へ（無ければ今の曲の直後へ）動かしてもらう。
+     * @return 送ったか（家の再生が自分・別のアカウント・最新の状態をまだ見ていないなら false）
+     */
+    fun sendQueueMove(
+        itemId: String,
+        afterItemId: String?,
+    ): Boolean = sendQueueEdit(CommandBody.QueueEdit.MOVE, listOf(itemId), afterItemId)
+
+    /** 遠隔のキューから外すのを送る。条件は sendQueueMove と同じ。 */
+    fun sendQueueRemove(itemIds: List<String>): Boolean = sendQueueEdit(CommandBody.QueueEdit.REMOVE, itemIds, null)
+
+    private fun sendQueueEdit(
+        op: String,
+        itemIds: List<String>,
+        afterItemId: String?,
+    ): Boolean {
+        if (itemIds.isEmpty() || isWriter || pendingStoreId != null) return false
+        val current = chain ?: return false
+        val tag = effects.accountTag() ?: return false
+        val cursor = latestCursor ?: return false
+        if (cursor.writer == signer.deviceId || cursor.body.accountTag != tag) return false
+        val command = CommandBody.QueueEdit(newId(), signer.deviceId, cursor.writer, op, itemIds, afterItemId, cursor.version, tag)
+        if (ConnectJson.json.encodeToString(CommandBody.serializer(), command).encodeToByteArray().size > MAX_QUEUE_ADD_PLAINTEXT) return false
+        return send(RelayV2.Control(sealCommand(current, command)))
+    }
+
+    /**
      * 家の端末 target に「ここで再生（引き取り）」を頼む（デバイスの一覧で端末を選んだ）。target は書き手でない端末。
      * @return 送ったか
      */
@@ -1082,6 +1122,10 @@ class ConnectClient(
             onQueueAdd(body, opened.header, current)
             return
         }
+        if (body is CommandBody.QueueEdit) {
+            onQueueEdit(body, opened.header, current)
+            return
+        }
         if (body is CommandBody.LoginGrant) {
             if (body.to != signer.deviceId || body.from != opened.header.writerId || body.from == signer.deviceId) return
             if (kotlin.math.abs(epochMs() - opened.header.issuedAtEpochMs) > MAX_CONTROL_AGE_MS) return
@@ -1143,6 +1187,29 @@ class ConnectClient(
         val sessionStart = mine.arbiter.startVersion ?: return
         if (command.basedOnVersion < sessionStart) return
         effects.queueAdd(command.items, command.next, command.afterItemId)
+    }
+
+    /** 遠隔のキューの並べ替え・外す。従う条件は遠隔のキューへの追加と同じ。 */
+    private fun onQueueEdit(
+        command: CommandBody.QueueEdit,
+        header: DocHeader,
+        current: VerifiedChain,
+    ) {
+        if (command.to != signer.deviceId || command.from != header.writerId || command.from == signer.deviceId) return
+        if (kotlin.math.abs(epochMs() - header.issuedAtEpochMs) > MAX_CONTROL_AGE_MS) return
+        if (current.members[command.from]?.keys?.role != Role.Player) return
+        if (command.commandId in handledClaims) return
+        remember(command.commandId)
+        if (command.accountTag != effects.accountTag() || command.itemIds.isEmpty()) return
+        val own = latestCursor?.takeIf { it.writer == signer.deviceId } ?: return
+        if (command.basedOnVersion > own.version || own.version - command.basedOnVersion > MAX_CONTROL_LAG) return
+        val mine = session ?: return
+        val sessionStart = mine.arbiter.startVersion ?: return
+        if (command.basedOnVersion < sessionStart) return
+        when (command.op) {
+            CommandBody.QueueEdit.MOVE -> if (command.itemIds.size == 1) effects.queueMove(command.itemIds[0], command.afterItemId)
+            CommandBody.QueueEdit.REMOVE -> effects.queueRemove(command.itemIds)
+        }
     }
 
     /** 時間の経過。transfer で前の端末から返事が無ければ、最後の状態から取り込む。 */

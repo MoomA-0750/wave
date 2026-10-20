@@ -399,6 +399,32 @@ class QueueSessionTest {
         }
 
     @Test
+    fun queueEditedOnAnotherDeviceMovesAndRemovesUpcomingSongs() =
+        runTest {
+            val player = FakePlayer()
+            val queue = session(player, FakeContent())
+            queue.playFrom(listOf(song("a"), song("b"), song("c"), song("d"), song("e")), 1, "PL1", null)
+            val id = { v: String -> player.items.first { it.song.videoId == v }.itemId }
+            // 後ろへ: c を e の直後へ
+            assertTrue(queue.moveFromRemote(id("c"), id("e")))
+            assertEquals(listOf("a", "b", "d", "e", "c"), player.videoIds())
+            // 前へ・今の曲の直後へ（afterItemId なし）
+            assertTrue(queue.moveFromRemote(id("c"), null))
+            assertEquals(listOf("a", "b", "c", "d", "e"), player.videoIds())
+            // 今の曲・前の曲は動かさない、前の曲の後ろへも置かない
+            assertFalse(queue.moveFromRemote(id("b"), id("e")))
+            assertFalse(queue.moveFromRemote(id("d"), id("a")))
+            assertFalse(queue.moveFromRemote("unknown", null))
+            assertEquals(listOf("a", "b", "c", "d", "e"), player.videoIds())
+            // 外すのは今の曲より後ろだけ
+            assertEquals(2, queue.removeFromRemote(listOf(id("a"), id("b"), id("d"), id("e"), "unknown")))
+            assertEquals(listOf("a", "b", "c"), player.videoIds())
+            // 「キューを消去」で送る ID は、自分で足した曲だけ
+            queue.addToEnd(song("u1"))
+            assertEquals(listOf(id("u1")), queue.upcomingUserItemIds())
+        }
+
+    @Test
     fun resetClearsTheQueueAndDropsInFlightResults() =
         runTest {
             val player = FakePlayer()

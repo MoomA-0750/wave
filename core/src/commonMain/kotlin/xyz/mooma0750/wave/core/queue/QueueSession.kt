@@ -288,6 +288,43 @@ class QueueSession(
         return true
     }
 
+    /**
+     * ほかの端末のキューの画面で並べ替えた（端末の連携の queue_edit）。itemId の曲を afterItemId の曲の直後へ
+     * （afterItemId が無ければ今の曲の直後へ）動かす。どちらも今の曲より後ろ（afterItemId は今の曲でもよい）でなければ何もせず false。
+     */
+    fun moveFromRemote(
+        itemId: String,
+        afterItemId: String?,
+    ): Boolean {
+        val items = player.items
+        val current = player.currentIndex
+        val from = items.indexOfFirst { it.itemId == itemId }
+        if (current < 0 || from <= current) return false
+        val after = if (afterItemId == null) current else items.indexOfFirst { it.itemId == afterItemId }
+        if (after < current || after == from) return false
+        // 動かす曲を抜いた後の並びで、after の直後
+        player.move(itemId, if (after < from) after + 1 else after)
+        return true
+    }
+
+    /** ほかの端末のキューの画面で外した（queue_edit）。今の曲より後ろにある曲だけを外す。外した件数。 */
+    fun removeFromRemote(itemIds: List<String>): Int {
+        val current = player.currentIndex
+        if (current < 0) return 0
+        val ids = itemIds.toSet()
+        val targets = player.items.drop(current + 1).filter { it.itemId in ids }.map { it.itemId }
+        targets.forEach(player::remove)
+        if (targets.isNotEmpty()) maybeFetch()
+        return targets.size
+    }
+
+    /** 今の曲より後ろの、自分で足した曲の項目の ID（ほかの端末へ「キューを消去」を送るとき）。 */
+    fun upcomingUserItemIds(): List<String> {
+        val current = player.currentIndex
+        if (current < 0) return emptyList()
+        return player.items.drop(current + 1).filter { it.origin == ItemOrigin.UserAdded }.map { it.itemId }
+    }
+
     /** ほかの端末へ送る「次に再生」「キューに追加」の項目（新しい項目の ID を振る）。 */
     fun remoteItemsOf(songs: List<Song>): List<xyz.mooma0750.wave.handoff.HandoffItem> = songs.map { HandoffMapping.itemOf(item(it, ItemOrigin.UserAdded)) }
 

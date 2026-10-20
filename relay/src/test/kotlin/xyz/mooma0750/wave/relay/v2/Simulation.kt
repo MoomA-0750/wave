@@ -211,6 +211,9 @@ class SimDevice(
     val controls = ArrayList<Pair<xyz.mooma0750.wave.handoff.v2.ControlAction, Long?>>()
     /** 従ったキューへの追加（項目の ID・次に再生か・どの曲の後ろか）。 */
     val queueAdds = ArrayList<Triple<List<String>, Boolean, String?>>()
+    /** 従ったキューの並べ替え（動かす曲・どの曲の後ろか）と、外した曲。 */
+    val queueMoves = ArrayList<Pair<String, String?>>()
+    val queueRemoves = ArrayList<List<String>>()
 
     /** 受け取ったログイン（cookie だけ）。 */
     val loginGrants = ArrayList<String>()
@@ -286,6 +289,19 @@ class SimDevice(
                         afterItemId: String?,
                     ): Boolean {
                         queueAdds += Triple(items.map { it.itemId }, next, afterItemId)
+                        return true
+                    }
+
+                    override fun queueMove(
+                        itemId: String,
+                        afterItemId: String?,
+                    ): Boolean {
+                        queueMoves += itemId to afterItemId
+                        return true
+                    }
+
+                    override fun queueRemove(itemIds: List<String>): Boolean {
+                        queueRemoves += itemIds
                         return true
                     }
 

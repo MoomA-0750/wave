@@ -210,6 +210,30 @@ sealed interface CommandBody {
     ) : CommandBody
 
     /**
+     * 遠隔のキューの並べ替え・外す: 鳴っていない端末のキューの画面から、今の再生中の端末へ。従う条件は QueueAdd と同じ。
+     * op が "move" なら itemIds の1曲を afterItemId の曲の直後へ（afterItemId が無ければ今の曲の直後へ）動かす。
+     * "remove" なら itemIds の曲を外す。どれも今の曲より後ろの曲だけで、受け手のキューに無い ID・今の曲・前の曲は無視する。
+     */
+    @Serializable
+    @SerialName("queue_edit")
+    data class QueueEdit(
+        val commandId: String,
+        val from: String,
+        val to: String,
+        val op: String,
+        val itemIds: List<String>,
+        val afterItemId: String? = null,
+        /** 送り手が見ていた、受け手のカーソルの版。 */
+        val basedOnVersion: Long,
+        val accountTag: String,
+    ) : CommandBody {
+        companion object {
+            const val MOVE = "move"
+            const val REMOVE = "remove"
+        }
+    }
+
+    /**
      * ログインを渡す（ADR-0015）: 家の端末から wave-api（種類 api の端末）へ、本人が押したときだけ。宛先の端末の受け取りの鍵にだけ包む
      * （ほかの端末には包まない）。受け手は、自分宛て・送り主が署名した player・処理していない ID・出してから5分以内のときだけ受け取る。
      * 値は WebView のログインで取った生の値（Credentials.fromLogin に渡すもの）。

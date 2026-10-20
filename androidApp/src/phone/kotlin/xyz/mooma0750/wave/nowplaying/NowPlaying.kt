@@ -646,7 +646,7 @@ fun NowPlayingScreen(
 
     if (showQueue) {
         ModalBottomSheet(onDismissRequest = { showQueue = false }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
-            QueueSheet(state, if (remote == null) controller else null, connection, actions.closing { showQueue = false }, remote = remote != null)
+            QueueSheet(state, controller, connection, actions.closing { showQueue = false }, remote = remote != null)
         }
     }
 }
@@ -847,7 +847,7 @@ private fun QueueSheet(
     controller: MediaController?,
     connection: PlayerConnection,
     actions: SongActions,
-    /** ほかの端末のキューを映している（外す・並べ替える操作は無い。曲を選ぶと、その端末でその曲を鳴らす）。 */
+    /** ほかの端末のキューを映している（曲を選ぶと、その端末でその曲を鳴らす。外す・並べ替えるはその端末のキューへ送る）。 */
     remote: Boolean = false,
 ) {
     val scope = rememberCoroutineScope()
@@ -897,7 +897,7 @@ private fun QueueSheet(
                 controller?.let { c ->
                     val position = (0 until c.mediaItemCount).firstOrNull { c.getMediaItemAt(it).mediaId == row.itemId }
                     position?.let { Media3QueuePlayer.songOf(c.getMediaItemAt(it)) }?.let { song ->
-                        SongMenuButton(song, actions, extraItems = if (!isCurrent && !remote && index > current) listOf(stringResource(R.string.nowplaying_remove_from_queue) to { scope.launch { connection.remove(row.itemId) }; Unit }) else emptyList())
+                        SongMenuButton(song, actions, extraItems = if (!isCurrent && index > current) listOf(stringResource(R.string.nowplaying_remove_from_queue) to { scope.launch { connection.remove(row.itemId) }; Unit }) else emptyList())
                     }
                 }
                 if (movable) {
@@ -980,14 +980,14 @@ private fun QueueSheet(
                 if (userEnd > current + 1) {
                     item(key = "h-user") {
                         header(stringResource(R.string.nowplaying_next_in_queue)) {
-                            if (!remote) TextButton(onClick = { scope.launch { connection.clearUserQueue() } }) { Text(stringResource(R.string.nowplaying_clear_queue)) }
+                            TextButton(onClick = { scope.launch { connection.clearUserQueue() } }) { Text(stringResource(R.string.nowplaying_clear_queue)) }
                         }
                     }
-                    items((current + 1 until userEnd).toList(), key = { rows[it].itemId }) { index -> songRow(index, rows[index], movable = !remote) }
+                    items((current + 1 until userEnd).toList(), key = { rows[it].itemId }) { index -> songRow(index, rows[index], movable = true) }
                 }
                 if (userEnd < rows.size) {
                     item(key = "h-rest") { header(stringResource(R.string.nowplaying_next_from_source)) }
-                    items((userEnd until rows.size).toList(), key = { rows[it].itemId }) { index -> songRow(index, rows[index], movable = !remote) }
+                    items((userEnd until rows.size).toList(), key = { rows[it].itemId }) { index -> songRow(index, rows[index], movable = true) }
                 }
             }
         }

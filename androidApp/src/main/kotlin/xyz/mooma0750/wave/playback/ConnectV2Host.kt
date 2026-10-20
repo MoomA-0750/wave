@@ -54,6 +54,15 @@ class ConnectV2Host {
             next: Boolean,
             afterItemId: String?,
         ): Boolean
+
+        /** ほかの端末のキューの画面で並べ替えた曲を動かす（QueueSession.moveFromRemote）。 */
+        fun queueMove(
+            itemId: String,
+            afterItemId: String?,
+        ): Boolean
+
+        /** ほかの端末のキューの画面で外した曲を外す（QueueSession.removeFromRemote）。 */
+        fun queueRemove(itemIds: List<String>): Boolean
     }
 
     data class Cursor(

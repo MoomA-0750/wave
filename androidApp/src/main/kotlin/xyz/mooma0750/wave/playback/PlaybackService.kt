@@ -537,6 +537,13 @@ class PlaybackService : MediaLibraryService() {
                     next: Boolean,
                     afterItemId: String?,
                 ): Boolean = suppressingV2 { queueSession.addFromRemote(items, next, afterItemId) }
+
+                override fun queueMove(
+                    itemId: String,
+                    afterItemId: String?,
+                ): Boolean = suppressingV2 { queueSession.moveFromRemote(itemId, afterItemId) }
+
+                override fun queueRemove(itemIds: List<String>): Boolean = suppressingV2 { queueSession.removeFromRemote(itemIds) > 0 }
             }
         connectV2Endpoint = v2Endpoint
         container.connectV2Host.register(v2Endpoint)
@@ -974,6 +981,36 @@ class PlaybackService : MediaLibraryService() {
                 val songs = QueueCommands.songsOf(args) ?: QueueCommands.songOf(args)?.let(::listOf)
                 if (songs.isNullOrEmpty()) return Futures.immediateFuture(SessionResult(SessionError.ERROR_BAD_VALUE))
                 manager.queueAdd(queue.remoteItemsOf(songs), next = customCommand.customAction == QueueCommands.ADD_NEXT)
+                return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+            }
+            // ほかの端末を映している間のキューの並べ替え・外す・消去は、鳴らしている端末のキューへ送る。手元のキューは家の最新の再生に
+            // 合わせてある（stageLatest）ので項目の ID は同じ。見た目がすぐ変わるよう手元でも動かす（その端末から届くキューで上書きされる）
+            if (manager != null && session.player === remotePlayer && manager.remotePlayback.value != null &&
+                customCommand.customAction in setOf(QueueCommands.MOVE, QueueCommands.REMOVE, QueueCommands.CLEAR_USER_QUEUE)
+            ) {
+                when (customCommand.customAction) {
+                    QueueCommands.MOVE -> {
+                        val id = QueueCommands.itemIdOf(args)
+                        val to = QueueCommands.toIndexOf(args)
+                        // 画面の並びは、その端末から届いたキュー（remotePlayback の項目の ID）
+                        val ids = manager.remotePlayback.value?.itemIds.orEmpty()
+                        if (id == null || to == null || id !in ids) return Futures.immediateFuture(SessionResult(SessionError.ERROR_BAD_VALUE))
+                        // 動かした後の並びで、すぐ上の曲の後ろへ（すぐ上が今の曲なら今の曲の直後）
+                        val after = (ids - id).getOrNull(to - 1) ?: return Futures.immediateFuture(SessionResult(SessionError.ERROR_BAD_VALUE))
+                        manager.queueMove(id, after)
+                        suppressingV2 { queue.move(id, to) }
+                    }
+                    QueueCommands.REMOVE -> {
+                        val id = QueueCommands.itemIdOf(args) ?: return Futures.immediateFuture(SessionResult(SessionError.ERROR_BAD_VALUE))
+                        manager.queueRemove(listOf(id))
+                        suppressingV2 { queue.remove(id) }
+                    }
+                    else -> {
+                        val ids = queue.upcomingUserItemIds()
+                        if (ids.isNotEmpty()) manager.queueRemove(ids)
+                        suppressingV2 { queue.clearUserQueue() }
+                    }
+                }
                 return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
             }
             // ほかの端末を映している間にキューの曲を選んだ: 手元のキューは家の最新の再生に合わせてある（stageLatest）ので、同じ項目へ飛んでその端末で鳴らしてもらう。
