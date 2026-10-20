@@ -81,7 +81,8 @@ final class WidgetSync {
                                     liked: LikeButton.available(player) && AppServices.client.isLoggedIn ? LikeButton.accent(player) : nil,
                                     upNext: player.queue.indices.dropFirst(player.index + 1).prefix(3).map { i in
                                         WidgetQueueItem(index: i, videoId: player.queue[i].videoId, title: player.queue[i].title, artist: player.queue[i].artistsText)
-                                    })
+                                    },
+                                    sourceId: player.sourceId)
         }
         if now != shown {
             // 今の曲か次の曲が替わったら、ジャケットを書いてから知らせる
@@ -123,6 +124,8 @@ final class WidgetSync {
             try? FileManager.default.removeItem(at: file)
         }
         WidgetCenter.shared.reloadTimelines(ofKind: WidgetStore.nowPlayingKind)
+        // プレイリストのウィジェットも、上に再生中の曲を出し、鳴っているプレイリストに印を付ける
+        WidgetCenter.shared.reloadTimelines(ofKind: WidgetStore.playlistKind)
         #if os(iOS)
             updateActivity(now)
         #endif

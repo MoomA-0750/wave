@@ -1,0 +1,16 @@
+/* ウィジェットのボタン・設定の項目（App Intents）の日本語。キーは英語の文言（英語の Mac ではキーがそのまま出る）。Mac と iPhone の両方に入れる */
+"Play/Pause" = "再生・一時停止";
+"Next Track" = "次の曲";
+"Previous Track" = "前の曲";
+"Like" = "高く評価";
+"Play Song in Queue" = "キューの曲を再生";
+"Position" = "位置";
+"Song" = "曲";
+"Play Playlist" = "プレイリストを再生";
+"Playlist" = "プレイリスト";
+"Shuffle" = "シャッフル";
+"Show" = "出すもの";
+"Recently Played" = "最近再生した順";
+"Chosen Playlists" = "選んだプレイリスト";
+"Choose Playlists" = "プレイリストを選ぶ";
+"Playlists" = "プレイリスト";

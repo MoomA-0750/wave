@@ -1,19 +1,5 @@
-/* ウィジェットのボタン・プレイリストの選び（App Intents）の英語。キーは日本語の文言（開発の言語は ja）。Mac と iPhone の両方に入れる */
-"再生・一時停止" = "Play/Pause";
-"次の曲" = "Next Track";
-"前の曲" = "Previous Track";
-"高く評価" = "Like";
-"プレイリストを再生" = "Play Playlist";
-"プレイリスト" = "Playlist";
-"シャッフル" = "Shuffle";
-"プレイリストを選ぶ" = "Choose Playlists";
-"出すもの" = "Show";
-"最近再生した順" = "Recently Played";
-"選んだプレイリスト" = "Chosen Playlists";
-"キューの曲を再生" = "Play Song in Queue";
-"位置" = "Position";
-"曲" = "Song";
-/* ウィジェットの一覧に出る名前と説明 */
+/* ウィジェットの一覧に出る名前と説明（SwiftUI の Text のキーは日本語）の英語。Mac と iPhone の両方に入れる */
 "再生中" = "Now Playing";
+"プレイリスト" = "Playlist";
 "今の曲と次に流れる曲、再生の操作、高く評価。" = "The current song and what's up next, with playback controls and like.";
 "最近再生したプレイリストか、選んだプレイリストを並べ、押すとすぐ再生する。" = "Your recently played or chosen playlists. Tap one to play it.";

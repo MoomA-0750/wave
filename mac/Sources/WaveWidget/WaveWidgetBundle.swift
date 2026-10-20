@@ -285,8 +285,9 @@ struct PlaylistTile: Identifiable {
 struct PlaylistEntry: TimelineEntry {
     let date: Date
     let tiles: [PlaylistTile]
-    /// 最近再生した順で並べたか（見出しの文言を変える）
-    var recent = true
+    /// 再生中の曲（中・大の上に出す）とそのジャケット
+    var song: WidgetNowPlaying?
+    var artwork: WidgetImage?
 }
 
 struct PlaylistProvider: AppIntentTimelineProvider {
@@ -318,7 +319,9 @@ struct PlaylistProvider: AppIntentTimelineProvider {
             for await (id, image) in group { found[id] = image }
             return found
         }
-        return PlaylistEntry(date: Date(), tiles: shown.map { PlaylistTile(playlist: $0, cover: covers[$0.id]) }, recent: chosen.isEmpty)
+        let song = WidgetStore.nowPlaying
+        return PlaylistEntry(date: Date(), tiles: shown.map { PlaylistTile(playlist: $0, cover: covers[$0.id]) },
+                             song: song, artwork: song.flatMap { loadImage(WidgetStore.artworkFile($0.videoId)) })
     }
 
     /// 絵はアプリが置いた分を読み、無ければ取りに行って置いておく。
@@ -331,13 +334,9 @@ struct PlaylistProvider: AppIntentTimelineProvider {
     }
 }
 
-/// 大きさごとに並べる数（小: 2つ、中: 1段に4つ、大: 2段に4つずつ）。
+/// 大きさごとに並べる数（小: 2×2、中: 1段に4つ、大: 2段に4つずつ）。
 private func playlistCount(_ family: WidgetFamily) -> Int {
-    switch family {
-    case .systemSmall: 2
-    case .systemLarge: 8
-    default: 4
-    }
+    family == .systemLarge ? 8 : 4
 }
 
 struct PlaylistWidget: Widget {
@@ -345,14 +344,19 @@ struct PlaylistWidget: Widget {
         AppIntentConfiguration(kind: WidgetStore.playlistKind, intent: SelectPlaylistIntent.self, provider: PlaylistProvider()) { entry in
             PlaylistWidgetView(entry: entry)
                 .padding(widgetPadding)
-                .onArtwork(entry.tiles.first?.cover)
-                .containerBackground(for: .widget) { ArtworkBackground(image: entry.tiles.first?.cover) }
+                .onArtwork(entry.background)
+                .containerBackground(for: .widget) { ArtworkBackground(image: entry.background) }
         }
         .configurationDisplayName(Text("プレイリスト"))
         .description(Text("最近再生したプレイリストか、選んだプレイリストを並べ、押すとすぐ再生する。"))
         .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
         .contentMarginsDisabled()
     }
+}
+
+extension PlaylistEntry {
+    /// 地にぼかす絵（中・大は再生中のジャケット、無ければ・小は先頭の表紙）。
+    var background: WidgetImage? { artwork ?? tiles.first?.cover }
 }
 
 struct PlaylistWidgetView: View {
@@ -365,31 +369,47 @@ struct PlaylistWidgetView: View {
                 Image(systemName: "music.note.list").font(.title)
                 Text(WidgetText.t("wave を開いてログインすると、プレイリストが出ます", "Open wave and log in to see your playlists")).font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
             }
+        } else if family == .systemSmall {
+            // 小は表紙だけを 2×2 に
+            grid(rows: 2, columns: 2, spacing: 8)
         } else {
-            // 見出しと絵・名前をまとめて下に寄せる（絵の大きさは幅で決まるので、余った高さは上に回す）。小は1段に2つ、中は1段に4つ、大は2段に4つずつ
-            let rows = family == .systemLarge ? 2 : 1
-            let columns = family == .systemSmall ? 2 : 4
-            VStack(alignment: .leading, spacing: 8) {
+            // 中・大は上に再生中の曲と操作、下に表紙を寄せる
+            VStack(alignment: .leading, spacing: 10) {
+                nowPlaying
                 Spacer(minLength: 0)
-                Text(heading)
-                    .font(family == .systemSmall ? .headline : .title3.weight(.semibold)).lineLimit(1)
-                Grid(horizontalSpacing: 10, verticalSpacing: 12) {
-                    ForEach(0 ..< rows, id: \.self) { row in
-                        GridRow {
-                            ForEach(0 ..< columns, id: \.self) { column in
-                                slot(row * columns + column)
-                            }
-                        }
-                    }
-                }
+                grid(rows: family == .systemLarge ? 2 : 1, columns: 4, spacing: 10)
             }
         }
     }
 
-    /// 見出し（小は幅が無いので短く）。
-    private var heading: String {
-        if !entry.recent { return WidgetText.t("プレイリスト", "Playlists") }
-        return family == .systemSmall ? WidgetText.t("最近再生", "Recent") : WidgetText.t("最近再生したプレイリスト", "Recently played")
+    /// 再生中の曲（ジャケット・曲名・アーティストか端末名）と前へ・再生/一時停止・次へ。
+    private var nowPlaying: some View {
+        HStack(spacing: 10) {
+            if let song = entry.song {
+                Artwork(image: entry.artwork, radius: 6).frame(width: 40, height: 40)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(song.title).font(.headline).lineLimit(1)
+                    Text(song.device ?? song.artist).font(.subheadline).foregroundStyle(song.device != nil ? accent : .secondary).lineLimit(1)
+                }
+                Spacer(minLength: 0)
+                Controls(playing: song.playing, size: 18)
+            } else {
+                Text(WidgetText.t("何も再生していません", "Nothing playing")).font(.subheadline).foregroundStyle(.secondary)
+                Spacer(minLength: 0)
+            }
+        }
+    }
+
+    private func grid(rows: Int, columns: Int, spacing: CGFloat) -> some View {
+        Grid(horizontalSpacing: spacing, verticalSpacing: spacing) {
+            ForEach(0 ..< rows, id: \.self) { row in
+                GridRow {
+                    ForEach(0 ..< columns, id: \.self) { column in
+                        slot(row * columns + column)
+                    }
+                }
+            }
+        }
     }
 
     /// i 番目の枠（足りなければ空けておく。並びの大きさをそろえる）。
@@ -397,16 +417,28 @@ struct PlaylistWidgetView: View {
     private func slot(_ i: Int) -> some View {
         if i < entry.tiles.count {
             let tile = entry.tiles[i]
+            // 鳴らしているプレイリストは、表紙をアクセントの色で縁取り、右下に鳴っている印を出す（アプリの一覧と同じ考え）
+            let current = entry.song?.sourceId == tile.playlist.id
             Button(intent: PlayPlaylistIntent(playlistId: tile.playlist.id, shuffle: false)) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Artwork(image: tile.cover, radius: 8).aspectRatio(1, contentMode: .fit)
-                    Text(tile.playlist.title).font(.subheadline.weight(.medium)).lineLimit(1)
-                }
+                Artwork(image: tile.cover, radius: 8)
+                    .aspectRatio(1, contentMode: .fit)
+                    .overlay {
+                        if current { RoundedRectangle(cornerRadius: 8).strokeBorder(accent, lineWidth: 3) }
+                    }
+                    .overlay(alignment: .bottomTrailing) {
+                        if current {
+                            Image(systemName: entry.song?.playing == true ? "speaker.wave.2.fill" : "pause.fill")
+                                .font(.system(size: 11, weight: .bold)).foregroundStyle(.white)
+                                // デスクトップで OS が色を抜いて描く（色付き・クリアの表示）ときも見えるよう、暗い丸に白い絵柄にする
+                                .frame(width: 22, height: 22).background(Circle().fill(Color.black.opacity(0.6)))
+                                .padding(5)
+                        }
+                    }
             }
             .buttonStyle(.plain)
-            .frame(maxWidth: .infinity, alignment: .top)
+            .frame(maxWidth: .infinity)
         } else {
-            Color.clear.frame(maxWidth: .infinity)
+            Color.clear.aspectRatio(1, contentMode: .fit).frame(maxWidth: .infinity)
         }
     }
 }

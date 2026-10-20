@@ -80,6 +80,8 @@ struct WidgetNowPlaying: Codable, Equatable {
     var liked: Bool?
     /// 次に流れる曲（3曲まで。ウィジェットの右側に並べ、押すとその曲へ飛ぶ）。
     var upNext: [WidgetQueueItem]?
+    /// 鳴らしているプレイリスト・アルバムの ID（プレイリストのウィジェットで、鳴っているものに印を付ける）。
+    var sourceId: String?
 }
 
 /// キューの曲（index はキューの中の位置。押されたとき、videoId と合わなければ探し直す）。
@@ -117,7 +119,7 @@ enum WidgetBridge {
 }
 
 struct TogglePlayIntent: AudioPlaybackIntent {
-    static let title: LocalizedStringResource = "再生・一時停止"
+    static let title: LocalizedStringResource = "Play/Pause"
     init() {}
     func perform() async throws -> some IntentResult {
         await WidgetBridge.run(.togglePlay)
@@ -126,7 +128,7 @@ struct TogglePlayIntent: AudioPlaybackIntent {
 }
 
 struct NextTrackIntent: AudioPlaybackIntent {
-    static let title: LocalizedStringResource = "次の曲"
+    static let title: LocalizedStringResource = "Next Track"
     init() {}
     func perform() async throws -> some IntentResult {
         await WidgetBridge.run(.next)
@@ -135,7 +137,7 @@ struct NextTrackIntent: AudioPlaybackIntent {
 }
 
 struct PreviousTrackIntent: AudioPlaybackIntent {
-    static let title: LocalizedStringResource = "前の曲"
+    static let title: LocalizedStringResource = "Previous Track"
     init() {}
     func perform() async throws -> some IntentResult {
         await WidgetBridge.run(.previous)
@@ -145,7 +147,7 @@ struct PreviousTrackIntent: AudioPlaybackIntent {
 
 /// 高く評価する（＋のとき）。評価は再生ではないが、AudioPlaybackIntent にするとアプリの中で行われる（ほかの頼みと同じくアプリの評価の手順を使う）。
 struct ToggleLikeIntent: AudioPlaybackIntent {
-    static let title: LocalizedStringResource = "高く評価"
+    static let title: LocalizedStringResource = "Like"
     init() {}
     func perform() async throws -> some IntentResult {
         await WidgetBridge.run(.toggleLike)
@@ -155,9 +157,9 @@ struct ToggleLikeIntent: AudioPlaybackIntent {
 
 /// キューの曲を選んで鳴らす（ウィジェットの「次に流れる曲」）。
 struct PlayQueueItemIntent: AudioPlaybackIntent {
-    static let title: LocalizedStringResource = "キューの曲を再生"
-    @Parameter(title: "位置") var index: Int
-    @Parameter(title: "曲") var videoId: String
+    static let title: LocalizedStringResource = "Play Song in Queue"
+    @Parameter(title: "Position") var index: Int
+    @Parameter(title: "Song") var videoId: String
 
     init() {}
 
@@ -173,9 +175,9 @@ struct PlayQueueItemIntent: AudioPlaybackIntent {
 }
 
 struct PlayPlaylistIntent: AudioPlaybackIntent {
-    static let title: LocalizedStringResource = "プレイリストを再生"
-    @Parameter(title: "プレイリスト") var playlistId: String
-    @Parameter(title: "シャッフル") var shuffle: Bool
+    static let title: LocalizedStringResource = "Play Playlist"
+    @Parameter(title: "Playlist") var playlistId: String
+    @Parameter(title: "Shuffle") var shuffle: Bool
 
     init() {}
 
@@ -192,7 +194,7 @@ struct PlayPlaylistIntent: AudioPlaybackIntent {
 
 /// ウィジェットで選ぶプレイリスト。
 struct PlaylistEntity: AppEntity {
-    static let typeDisplayRepresentation: TypeDisplayRepresentation = "プレイリスト"
+    static let typeDisplayRepresentation: TypeDisplayRepresentation = "Playlist"
     static let defaultQuery = PlaylistQuery()
 
     var id: String
@@ -217,18 +219,18 @@ struct PlaylistQuery: EntityQuery {
 enum PlaylistWidgetSource: String, AppEnum {
     case recent, chosen
 
-    static let typeDisplayRepresentation: TypeDisplayRepresentation = "出すもの"
+    static let typeDisplayRepresentation: TypeDisplayRepresentation = "Show"
     static let caseDisplayRepresentations: [Self: DisplayRepresentation] = [
-        .recent: "最近再生した順",
-        .chosen: "選んだプレイリスト",
+        .recent: "Recently Played",
+        .chosen: "Chosen Playlists",
     ]
 }
 
 /// プレイリストのウィジェットの設定（最近再生した順か、選んだプレイリストか）。
 struct SelectPlaylistIntent: WidgetConfigurationIntent {
-    static let title: LocalizedStringResource = "プレイリストを選ぶ"
-    @Parameter(title: "出すもの", default: .recent) var source: PlaylistWidgetSource
-    @Parameter(title: "プレイリスト", size: [.systemSmall: 2, .systemMedium: 4, .systemLarge: 8]) var playlists: [PlaylistEntity]?
+    static let title: LocalizedStringResource = "Choose Playlists"
+    @Parameter(title: "Show", default: .recent) var source: PlaylistWidgetSource
+    @Parameter(title: "Playlists", size: [.systemSmall: 4, .systemMedium: 4, .systemLarge: 8]) var playlists: [PlaylistEntity]?
     init() {}
 
     static var parameterSummary: some ParameterSummary {
