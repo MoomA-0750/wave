@@ -69,6 +69,11 @@ enum DebugCommon {
             let from = max(0, player.index)
             let shown = (from..<min(player.queue.count, from + 8)).map { (player.isUserAdded($0) ? "U:" : "") + player.queue[$0].title }
             AppPaths.log("debug queue index=\(player.index) count=\(player.queue.count) " + shown.joined(separator: " | "))
+        // キューの並べ替え・外す（ほかの端末を映している間は、その端末へ queue_edit で送る）。位置はキュー全体の番号
+        case "queue-move":
+            let parts = arg.split(separator: " ").compactMap { Int($0) }
+            if parts.count == 2 { player.moveUpcoming(parts[0], parts[1]) }
+        case "queue-remove": if let position = Int(arg) { player.removeAt(position) }
         case "shuffle": player.toggleShuffle()
         case "repeat": player.cycleRepeat()
         case "next": player.next()
