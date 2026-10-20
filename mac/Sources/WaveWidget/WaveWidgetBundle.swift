@@ -331,9 +331,13 @@ struct PlaylistProvider: AppIntentTimelineProvider {
     }
 }
 
-/// 大きさごとに並べる数（小: 2×2、中: 1段に4つ、大: 2段に4つずつ）。
+/// 大きさごとに並べる数（小: 2つ、中: 1段に4つ、大: 2段に4つずつ）。
 private func playlistCount(_ family: WidgetFamily) -> Int {
-    family == .systemLarge ? 8 : 4
+    switch family {
+    case .systemSmall: 2
+    case .systemLarge: 8
+    default: 4
+    }
 }
 
 struct PlaylistWidget: Widget {
@@ -361,29 +365,19 @@ struct PlaylistWidgetView: View {
                 Image(systemName: "music.note.list").font(.title)
                 Text(WidgetText.t("wave を開いてログインすると、プレイリストが出ます", "Open wave and log in to see your playlists")).font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
             }
-        } else if family == .systemSmall {
-            // 小さいものは絵だけを 2×2 に（名前を入れる幅が無い）
-            Grid(horizontalSpacing: 8, verticalSpacing: 8) {
-                ForEach(0 ..< 2, id: \.self) { row in
-                    GridRow {
-                        ForEach(0 ..< 2, id: \.self) { column in
-                            slot(row * 2 + column, titled: false)
-                        }
-                    }
-                }
-            }
         } else {
-            // 中・大は見出しを上に、絵と名前を下に寄せる（絵の大きさは幅で決まるので、余った高さは見出しとの間に回す）
+            // 見出しと絵・名前をまとめて下に寄せる（絵の大きさは幅で決まるので、余った高さは上に回す）。小は1段に2つ、中は1段に4つ、大は2段に4つずつ
             let rows = family == .systemLarge ? 2 : 1
-            VStack(alignment: .leading, spacing: 0) {
-                Text(entry.recent ? WidgetText.t("最近再生したプレイリスト", "Recently played") : WidgetText.t("プレイリスト", "Playlists"))
-                    .font(.headline).foregroundStyle(.secondary)
-                Spacer(minLength: 6)
+            let columns = family == .systemSmall ? 2 : 4
+            VStack(alignment: .leading, spacing: 8) {
+                Spacer(minLength: 0)
+                Text(heading)
+                    .font(family == .systemSmall ? .headline : .title3.weight(.semibold)).lineLimit(1)
                 Grid(horizontalSpacing: 10, verticalSpacing: 12) {
                     ForEach(0 ..< rows, id: \.self) { row in
                         GridRow {
-                            ForEach(0 ..< 4, id: \.self) { column in
-                                slot(row * 4 + column, titled: true)
+                            ForEach(0 ..< columns, id: \.self) { column in
+                                slot(row * columns + column)
                             }
                         }
                     }
@@ -392,17 +386,21 @@ struct PlaylistWidgetView: View {
         }
     }
 
+    /// 見出し（小は幅が無いので短く）。
+    private var heading: String {
+        if !entry.recent { return WidgetText.t("プレイリスト", "Playlists") }
+        return family == .systemSmall ? WidgetText.t("最近再生", "Recent") : WidgetText.t("最近再生したプレイリスト", "Recently played")
+    }
+
     /// i 番目の枠（足りなければ空けておく。並びの大きさをそろえる）。
     @ViewBuilder
-    private func slot(_ i: Int, titled: Bool) -> some View {
+    private func slot(_ i: Int) -> some View {
         if i < entry.tiles.count {
             let tile = entry.tiles[i]
             Button(intent: PlayPlaylistIntent(playlistId: tile.playlist.id, shuffle: false)) {
                 VStack(alignment: .leading, spacing: 4) {
                     Artwork(image: tile.cover, radius: 8).aspectRatio(1, contentMode: .fit)
-                    if titled {
-                        Text(tile.playlist.title).font(.subheadline.weight(.medium)).lineLimit(1)
-                    }
+                    Text(tile.playlist.title).font(.subheadline.weight(.medium)).lineLimit(1)
                 }
             }
             .buttonStyle(.plain)

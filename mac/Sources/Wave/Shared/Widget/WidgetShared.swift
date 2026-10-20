@@ -228,7 +228,7 @@ enum PlaylistWidgetSource: String, AppEnum {
 struct SelectPlaylistIntent: WidgetConfigurationIntent {
     static let title: LocalizedStringResource = "プレイリストを選ぶ"
     @Parameter(title: "出すもの", default: .recent) var source: PlaylistWidgetSource
-    @Parameter(title: "プレイリスト", size: [.systemSmall: 4, .systemMedium: 4, .systemLarge: 8]) var playlists: [PlaylistEntity]?
+    @Parameter(title: "プレイリスト", size: [.systemSmall: 2, .systemMedium: 4, .systemLarge: 8]) var playlists: [PlaylistEntity]?
     init() {}
 
     static var parameterSummary: some ParameterSummary {
