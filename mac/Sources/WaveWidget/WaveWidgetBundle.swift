@@ -46,13 +46,6 @@ private let accent = Color(red: 0.27, green: 0.55, blue: 1.0)
     private let widgetPadding: CGFloat = 17
 #endif
 
-/// 右側に並べる次の曲の数（iPhone は文字が大きく、4曲は入りきらない）。
-#if os(iOS)
-    private let upNextRows = 3
-#else
-    private let upNextRows = 4
-#endif
-
 /// ジャケット（無ければ音符）。枠の大きさで切り抜く（映像の 16:9 の絵など、正方形でない絵を枠いっぱいに広げても、はみ出さない）。
 /// radius を渡さなければ、ウィジェットの角と中心をそろえた丸み（ContainerRelativeShape）にする（ウィジェットの角に置く絵）。
 private struct Artwork: View {
@@ -141,7 +134,7 @@ struct NowPlayingProvider: TimelineProvider {
     private func entry() -> NowPlayingEntry {
         let song = WidgetStore.nowPlaying
         var queueArtwork: [String: WidgetImage] = [:]
-        for item in song?.upNext?.prefix(upNextRows) ?? [] {
+        for item in song?.upNext ?? [] {
             queueArtwork[item.videoId] = loadImage(WidgetStore.artworkFile(item.videoId))
         }
         return NowPlayingEntry(date: Date(), song: song, artwork: song.flatMap { loadImage(WidgetStore.artworkFile($0.videoId)) }, queueArtwork: queueArtwork)
@@ -231,22 +224,24 @@ struct NowPlayingWidgetView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             } else {
                 HStack(alignment: .top, spacing: 14) {
+                    // 高さに収まる大きさにする（収まらないと列が上下にはみ出し、上の余白がほかより狭くなる）
                     VStack(alignment: .leading, spacing: 2) {
-                        ArtworkWithLike(image: entry.artwork, liked: song.liked, likeSize: 18).frame(width: 60, height: 60)
-                        Spacer(minLength: 4)
+                        ArtworkWithLike(image: entry.artwork, liked: song.liked, likeSize: 18).frame(width: 56, height: 56)
+                        Spacer(minLength: 0)
                         Text(song.title).font(.title3.weight(.semibold)).lineLimit(1)
                         if let device = song.device {
                             Label(device, systemImage: "hifispeaker.2").font(.subheadline).foregroundStyle(accent).lineLimit(1)
                         } else {
                             Text(song.artist).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
                         }
-                        Spacer(minLength: 4)
+                        Spacer(minLength: 0)
                         Controls(playing: song.playing, size: 20)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    // 右側: 次に流れる曲（押すとその曲へ飛ぶ）。行を上下いっぱいに等しく割り振り、下に余白を残さない
+                    // 右側: 次に流れる曲（押すとその曲へ飛ぶ）。見出しの下の行を上下いっぱいに等しく割り振り、下に余白を残さない
                     VStack(alignment: .leading, spacing: 0) {
-                        ForEach((song.upNext ?? []).prefix(upNextRows)) { item in
+                        Text(WidgetText.t("次に流れる曲", "Up next")).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                        ForEach(song.upNext ?? []) { item in
                             Button(intent: PlayQueueItemIntent(index: item.index, videoId: item.videoId)) {
                                 HStack(spacing: 8) {
                                     Artwork(image: entry.queueArtwork[item.videoId], radius: 5).frame(width: 28, height: 28)

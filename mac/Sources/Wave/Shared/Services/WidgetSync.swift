@@ -79,7 +79,7 @@ final class WidgetSync {
             return WidgetNowPlaying(videoId: song.videoId, title: song.title, artist: song.artistsText, playing: player.isPlaying,
                                     device: player.isRemote ? player.remoteDevice : nil, nextTitle: next?.title, nextArtist: next?.artistsText,
                                     liked: LikeButton.available(player) && AppServices.client.isLoggedIn ? player.like == .like : nil,
-                                    upNext: player.queue.indices.dropFirst(player.index + 1).prefix(4).map { i in
+                                    upNext: player.queue.indices.dropFirst(player.index + 1).prefix(3).map { i in
                                         WidgetQueueItem(index: i, videoId: player.queue[i].videoId, title: player.queue[i].title, artist: player.queue[i].artistsText)
                                     })
         }
