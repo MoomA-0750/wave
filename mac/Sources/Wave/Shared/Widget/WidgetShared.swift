@@ -76,7 +76,7 @@ struct WidgetNowPlaying: Codable, Equatable {
     var device: String?
     var nextTitle: String?
     var nextArtist: String?
-    /// 今の曲を高く評価しているか。評価のボタンを出せないとき（ログインしていない・RSS のエピソード）は nil。
+    /// 評価のボタンを✓にするか（アプリと同じく、高く評価したか、どれかのプレイリストに入っている）。出せないとき（ログインしていない・RSS のエピソード）は nil。
     var liked: Bool?
     /// 次に流れる曲（3曲まで。ウィジェットの右側に並べ、押すとその曲へ飛ぶ）。
     var upNext: [WidgetQueueItem]?
@@ -143,7 +143,7 @@ struct PreviousTrackIntent: AudioPlaybackIntent {
     }
 }
 
-/// 高く評価する・外す。評価は再生ではないが、AudioPlaybackIntent にするとアプリの中で行われる（ほかの頼みと同じくアプリの評価の手順を使う）。
+/// 高く評価する（＋のとき）。評価は再生ではないが、AudioPlaybackIntent にするとアプリの中で行われる（ほかの頼みと同じくアプリの評価の手順を使う）。
 struct ToggleLikeIntent: AudioPlaybackIntent {
     static let title: LocalizedStringResource = "高く評価"
     init() {}

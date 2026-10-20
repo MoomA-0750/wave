@@ -157,17 +157,22 @@ struct NowPlayingWidget: Widget {
     }
 }
 
-/// 高く評価のボタン（アプリの評価のボタンと同じ印。評価していれば✓）。
+/// 評価のボタン（アプリと同じ）。＋は押すと高く評価し、✓（評価済み・プレイリストに入っている）はアプリを開いてプレイリストに追加する画面を出す。
 private struct LikeControl: View {
     var liked: Bool
     var size: CGFloat = 22
 
     var body: some View {
-        Button(intent: ToggleLikeIntent()) {
-            Image(systemName: liked ? "checkmark.circle.fill" : "plus.circle").font(.system(size: size))
-                .foregroundStyle(liked ? accent : .primary)
+        if liked {
+            Link(destination: URL(string: "wave://add-to-playlist")!) {
+                Image(systemName: "checkmark.circle.fill").font(.system(size: size)).foregroundStyle(accent)
+            }
+        } else {
+            Button(intent: ToggleLikeIntent()) {
+                Image(systemName: "plus.circle").font(.system(size: size)).foregroundStyle(.primary)
+            }
+            .buttonStyle(.plain)
         }
-        .buttonStyle(.plain)
     }
 }
 

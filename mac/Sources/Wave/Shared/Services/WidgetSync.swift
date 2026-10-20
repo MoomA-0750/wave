@@ -45,8 +45,8 @@ final class WidgetSync {
             player.previous()
             shouldPlay = wasPlaying
         case .toggleLike:
-            // ウィジェットでは✓を押すと評価を外す（アプリの中のボタンと違い、プレイリストに追加する画面は開かない）
-            player.toggleLike()
+            // ＋のときだけ届く（✓はアプリを開いてプレイリストに追加する画面を出す）。届くまでに評価が変わっていたら何もしない
+            if player.like != .like && !player.inPlaylist { player.toggleLike() }
             shouldPlay = false
         case .playQueueItem(let index, let videoId):
             // 押すまでにキューが動いていたら、今の曲より後ろで同じ曲を探す
@@ -78,7 +78,7 @@ final class WidgetSync {
             let next = player.isRemote || player.index + 1 >= player.queue.count ? nil : player.queue[player.index + 1]
             return WidgetNowPlaying(videoId: song.videoId, title: song.title, artist: song.artistsText, playing: player.isPlaying,
                                     device: player.isRemote ? player.remoteDevice : nil, nextTitle: next?.title, nextArtist: next?.artistsText,
-                                    liked: LikeButton.available(player) && AppServices.client.isLoggedIn ? player.like == .like : nil,
+                                    liked: LikeButton.available(player) && AppServices.client.isLoggedIn ? LikeButton.accent(player) : nil,
                                     upNext: player.queue.indices.dropFirst(player.index + 1).prefix(3).map { i in
                                         WidgetQueueItem(index: i, videoId: player.queue[i].videoId, title: player.queue[i].title, artist: player.queue[i].artistsText)
                                     })
