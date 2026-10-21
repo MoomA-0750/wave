@@ -20,7 +20,6 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -74,14 +73,16 @@ data class AiChatState(
 )
 
 /**
- * Claude との会話（Kite の AI と同じく、家の PC などで動く中継 tools/ai-bridge 経由で Claude Code を使う）。
- * 中継は状態を持たないので、毎回それまでのやりとりと、今の曲・歌詞を送る。道具の呼び出しは AiTools が手元で行う。
+ * Claude との会話（家の PC などで動く汎用の中継 ai-bridge 経由で Claude Code を使う）。
+ * 中継は状態もアプリのことも持たないので、毎回システムプロンプト・道具の定義（AiAgentSpec）と、
+ * それまでのやりとり・今の曲・歌詞を入れた頼みの文を送る。道具の呼び出しは AiTools が手元で行う。
  * 会話は端末の中の履歴（AiHistoryStore）に残し、「新しい会話」で次の会話へ移る。履歴から開いた会話はそのまま続けられる
  * （中継へは毎回それまでのやりとりを送る）。YouTube の認証情報は中継へ送らない（別の HTTP クライアントを使う）。
  */
 class AiChat(
     private val transport: AiTransport,
     private val tools: AiTools,
+    private val spec: AiAgentSpec,
     private val scope: CoroutineScope,
     private val store: AiHistoryStore,
 ) {
@@ -211,35 +212,7 @@ class AiChat(
         history: List<Pair<String, String>>,
     ) {
         val context = tools.context()
-        val body =
-            buildJsonObject {
-                context.song?.let { song ->
-                    put(
-                        "now_playing",
-                        buildJsonObject {
-                            put("title", song.title)
-                            put("artists", song.artistsText)
-                            put("album", song.album?.title.orEmpty())
-                            put("video_id", song.videoId)
-                        },
-                    )
-                }
-                context.lyrics?.let { put("lyrics", it) }
-                put(
-                    "messages",
-                    buildJsonArray {
-                        history.forEach { (role, content) ->
-                            add(
-                                buildJsonObject {
-                                    put("role", role)
-                                    put("content", content)
-                                },
-                            )
-                        }
-                    },
-                )
-                put("task", task)
-            }.toString()
+        val body = spec.body(task, history, context)
         var session: String? = null
         // 答えの区切り（message_stop の空行）ごとに、新しい吹き出しにする
         var appending = false

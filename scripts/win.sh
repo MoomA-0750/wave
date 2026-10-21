@@ -42,8 +42,8 @@ PS
   push)
     ensure_remote
     # 未コミットの変更も送れるよう、作業ツリーを一時コミット（stash create）にして送る。
-    # stash create は追跡していないファイルを含めないので、windows/ の新しいファイルは先に索引へ入れる
-    git -C "$REPO" add -A windows
+    # stash create は追跡していないファイルを含めないので、windows/ と ai/（Claude の定義）の新しいファイルは先に索引へ入れる
+    git -C "$REPO" add -A windows ai
     rev=$(git -C "$REPO" stash create)
     rev=${rev:-$(git -C "$REPO" rev-parse HEAD)}
     git -C "$REPO" push -q -f win "$rev:refs/heads/main"

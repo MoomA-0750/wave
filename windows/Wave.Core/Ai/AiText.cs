@@ -9,7 +9,7 @@ namespace Wave.Core.Ai;
 /// <summary>
 /// Claude に送る歌詞と、Claude の答えの中の時刻（Android の core.ai.AiText と同じ）。
 /// 時刻付きの歌詞は行ごとに「[01:23] 本文」の形で送り、Claude には歌詞を引くときに同じ形で時刻を添えてもらう
-/// （tools/ai-bridge の指示）。答えの中の [mm:ss] は、押すとその位置へ飛べるようにする。
+/// （ai/agent.json の指示）。答えの中の [mm:ss] は、押すとその位置へ飛べるようにする。
 /// </summary>
 public static partial class AiText
 {

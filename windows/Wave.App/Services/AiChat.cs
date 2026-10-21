@@ -21,8 +21,9 @@ public abstract record AiMessage
 }
 
 /// <summary>
-/// Claude との会話（Android の AiChat・AiTools と同じ）。家の PC などで動く中継 tools/ai-bridge 経由で Claude Code を使う。
-/// 中継は状態を持たないので、毎回それまでのやりとりと、今の曲・歌詞を送る。道具の呼び出しは手元で行う。
+/// Claude との会話（Android の AiChat・AiTools と同じ）。家の PC などで動く汎用の中継 ai-bridge 経由で Claude Code を使う。
+/// 中継は状態もアプリのことも持たないので、毎回システムプロンプト・道具の定義（AiAgentSpec、ai/agent.json）と、
+/// それまでのやりとり・今の曲・歌詞を入れた頼みの文を送る。道具の呼び出しは手元で行う。
 /// 会話は端末の中の履歴（AiHistoryStore）に残し、「新しい会話」で次の会話へ移る。履歴から開いた会話はそのまま続けられる。
 /// YouTube の認証情報は中継へ送らない（別の HttpClient を使う）。
 /// </summary>
@@ -182,10 +183,10 @@ public sealed class AiChat
         if (task.Length == 0 || Running) return;
         var history = Messages.Select(m => m switch
         {
-            AiMessage.User u => new JsonObject { ["role"] = "user", ["content"] = u.Text },
-            AiMessage.Assistant a => new JsonObject { ["role"] = "assistant", ["content"] = a.Text },
-            _ => null,
-        }).OfType<JsonObject>().ToList();
+            AiMessage.User u => ("user", u.Text),
+            AiMessage.Assistant a => ("assistant", a.Text),
+            _ => ((string Role, string Content)?)null,
+        }).OfType<(string Role, string Content)>().ToList();
         Messages.Add(new AiMessage.User(task));
         Running = true;
         Archive();
@@ -221,23 +222,32 @@ public sealed class AiChat
         }
     }
 
-    private async Task RunAsync(string task, List<JsonObject> history, CancellationToken token)
+    /// <summary>アプリに埋め込んだ ai/agent.json（Wave.App.csproj の EmbeddedResource）。</summary>
+    private static readonly Lazy<AiAgentSpec> Spec = new(() =>
+    {
+        using var stream = typeof(AiChat).Assembly.GetManifestResourceStream("agent.json") ?? throw new InvalidOperationException("agent.json が埋め込まれていない");
+        using var reader = new StreamReader(stream);
+        return AiAgentSpec.Parse(reader.ReadToEnd());
+    });
+
+    private async Task RunAsync(string task, List<(string Role, string Content)> history, CancellationToken token)
     {
         var settings = AppServices.Settings;
-        var body = new JsonObject { ["task"] = task, ["messages"] = new JsonArray([.. history]) };
         string? syncedVideoId = null;
-        if (AppServices.Player.Current is { } song)
+        string? lyricsText = null;
+        var song = AppServices.Player.Current;
+        if (song is not null)
         {
             Remember(song);
-            body["now_playing"] = new JsonObject { ["title"] = song.Title, ["artists"] = song.ArtistsText, ["album"] = song.Album?.Title ?? "", ["video_id"] = song.VideoId };
             if (await LyricsOfAsync(song, token) is { } lyrics)
             {
                 // 時刻付きなら行ごとに [mm:ss] を付けて送る（Claude が歌詞を引くときに時刻を添える）
-                body["lyrics"] = AiText.LyricsText(lyrics);
+                lyricsText = AiText.LyricsText(lyrics);
                 if (lyrics is SongLyrics.Synced) syncedVideoId = song.VideoId;
             }
         }
-        using var request = new HttpRequestMessage(HttpMethod.Post, settings.AiUrl + "/v1/agent") { Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json") };
+        var body = Spec.Value.Body(task, history, song, lyricsText);
+        using var request = new HttpRequestMessage(HttpMethod.Post, settings.AiUrl + "/v1/run") { Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json") };
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", settings.AiToken);
         using var response = await Http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, token);
         if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
@@ -280,7 +290,7 @@ public sealed class AiChat
                 var reply = new JsonObject { ["session"] = session ?? "", ["id"] = call["id"]?.GetValue<string>() ?? "" };
                 if (error is not null) reply["error"] = error;
                 else reply["result"] = result;
-                using var post = new HttpRequestMessage(HttpMethod.Post, settings.AiUrl + "/v1/agent/result") { Content = new StringContent(reply.ToJsonString(), Encoding.UTF8, "application/json") };
+                using var post = new HttpRequestMessage(HttpMethod.Post, settings.AiUrl + "/v1/run/result") { Content = new StringContent(reply.ToJsonString(), Encoding.UTF8, "application/json") };
                 post.Headers.Authorization = new AuthenticationHeaderValue("Bearer", settings.AiToken);
                 (await Http.SendAsync(post, token)).Dispose();
             }
@@ -311,7 +321,7 @@ public sealed class AiChat
 
     private static (JsonNode?, string?, AiMessage?) Unknown(List<string> missing) => (null, $"unknown video_ids (use search_songs first): {string.Join(",", missing)}", null);
 
-    /// <summary>道具を手元で行う（tools/ai-bridge/wave_agent_mcp.py の道具）。この会話で出てきた曲の id だけを受ける。</summary>
+    /// <summary>道具を手元で行う（ai/agent.json で定義した道具）。この会話で出てきた曲の id だけを受ける。</summary>
     private async Task<(JsonNode? Result, string? Error, AiMessage? Shown)> CallToolAsync(string name, JsonObject args, CancellationToken token)
     {
         AppPaths.Log($"ai tool={name}");

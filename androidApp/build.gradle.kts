@@ -48,6 +48,9 @@ android {
         compose = true
         buildConfig = true
     }
+
+    // 「Claude に聞く」のシステムプロンプトと道具の定義（ai/agent.json。Mac/iOS・Windows と同じファイル）
+    sourceSets["main"].assets.srcDir(rootProject.file("ai"))
 }
 
 kotlin {

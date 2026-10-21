@@ -140,7 +140,7 @@
     <string name="ai_searched">Searched for “%1$s”</string>
     <string name="ai_read_liked">Looked at your liked songs</string>
     <string name="settings_ai_title">Claude</string>
-    <string name="settings_ai_summary_off">Ask about lyrics, find similar songs and make playlists with Claude Code on your PC (tools/ai-bridge)</string>
+    <string name="settings_ai_summary_off">Ask about lyrics, find similar songs and make playlists with Claude Code on your PC (ai-bridge)</string>
     <string name="settings_ai_connected">Connected to %1$s</string>
     <string name="settings_ai_scan">Connect with QR code</string>
     <string name="settings_ai_disconnect">Disconnect</string>

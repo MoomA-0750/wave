@@ -23,17 +23,17 @@ import xyz.mooma0750.wave.settings.AppSettings
 import xyz.mooma0750.wave.watchlink.WatchLogin
 import xyz.mooma0750.wave.watchlink.await
 
-/** Claude の中継（tools/ai-bridge）への行き方。スマホは直接、時計はスマホに中継してもらう（時計は tailnet に届かない）。 */
+/** Claude の中継（ai-bridge）への行き方。スマホは直接、時計はスマホに中継してもらう（時計は tailnet に届かない）。 */
 interface AiTransport {
     enum class Outcome { Done, NotConfigured, Unauthorized, Unreachable }
 
-    /** /v1/agent に頼みを送り、返ってくる行ごとに onLine を呼ぶ。onLine が false を返したら（答えの終わり）読むのをやめる。 */
+    /** /v1/run に頼みを送り、返ってくる行ごとに onLine を呼ぶ。onLine が false を返したら（答えの終わり）読むのをやめる。 */
     suspend fun stream(
         body: String,
         onLine: suspend (String) -> Boolean,
     ): Outcome
 
-    /** 道具の結果を返す（/v1/agent/result）。 */
+    /** 道具の結果を返す（/v1/run/result）。 */
     suspend fun postResult(body: String)
 }
 
@@ -59,7 +59,7 @@ class DirectAiTransport(
         val request =
             Request
                 .Builder()
-                .url(config.url + "/v1/agent")
+                .url(config.url + "/v1/run")
                 .header("Authorization", "Bearer " + config.token)
                 .post(body.toRequestBody(JSON))
                 .build()
@@ -79,7 +79,7 @@ class DirectAiTransport(
         val request =
             Request
                 .Builder()
-                .url(config.url + "/v1/agent/result")
+                .url(config.url + "/v1/run/result")
                 .header("Authorization", "Bearer " + config.token)
                 .post(body.toRequestBody(JSON))
                 .build()

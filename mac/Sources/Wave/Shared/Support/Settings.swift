@@ -22,7 +22,7 @@ final class Settings: Codable {
     /// 端末の連携の中継 v2 の場所（例: wss://ホスト:ポート）と、署名に入れるホスト名とポート。空なら連携を使わない。
     var relayV2Url: String?
     var relayV2Host: String?
-    /// Claude の中継（tools/ai-bridge）の接続先・トークン・機械の名前。空なら使わない。
+    /// Claude の中継（ai-bridge）の接続先・トークン・機械の名前。空なら使わない。
     var aiUrl: String?
     var aiToken: String?
     var aiName: String?

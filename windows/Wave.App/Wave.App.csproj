@@ -32,4 +32,8 @@
   <ItemGroup>
     <Content Include="Assets\**" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- 「Claude に聞く」のシステムプロンプトと道具の定義（Android・Mac/iOS と同じファイル） -->
+    <EmbeddedResource Include="..\..\ai\agent.json" LogicalName="agent.json" />
+  </ItemGroup>
 </Project>

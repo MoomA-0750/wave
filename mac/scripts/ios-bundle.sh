@@ -54,6 +54,8 @@ rm -rf "$app"
 mkdir -p "$app/PlugIns/WaveWidget.appex"
 cp "$bin/wave" "$app/wave"
 cp Resources/iOS/Info.plist "$app/Info.plist"
+# 「Claude に聞く」のシステムプロンプトと道具の定義（Android・Windows と同じファイル。bundle.sh と同じ）
+cp ../ai/agent.json "$app/agent.json"
 # アイコン（Windows 版の wave.ico と同じ絵を白地に置いたもの。iPhone のアイコンは透明にできない）。
 # 今の iOS はばらの PNG を読まないので、Xcode と同じく actool で Assets.car にし、Info.plist にアイコンの名前を足す
 partial=$(mktemp)

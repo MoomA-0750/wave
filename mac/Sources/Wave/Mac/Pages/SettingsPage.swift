@@ -103,8 +103,8 @@ struct SettingsPageView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text(aiConfigured ? L.t("\(AppServices.settings.aiName ?? AppServices.settings.aiUrl ?? "") の中継につないでいます", "Connected to \(AppServices.settings.aiName ?? AppServices.settings.aiUrl ?? "")")
                             : L.t("家の PC の Claude Code で、歌詞の意味・似た曲・プレイリスト作りを頼めます", "Ask about lyrics, find similar songs and make playlists with Claude Code on your PC"))
-                        Text(L.t("家の PC で tools/ai-bridge の wave_ai_bridge.py --pair を動かし、出てきた waveai://pair?… の文字列を貼ってください。",
-                                 "Run wave_ai_bridge.py --pair from tools/ai-bridge on your PC and paste the waveai://pair?… text it prints."))
+                        Text(L.t("家の PC で ai-bridge の ai_bridge.py --name wave --pair を動かし、出てきた waveai://pair?… の文字列を貼ってください。",
+                                 "Run ai_bridge.py --name wave --pair from ai-bridge on your PC and paste the waveai://pair?… text it prints."))
                             .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                         HStack(spacing: 8) {
                             SecureField("waveai://pair?u=…&t=…", text: $pairText).textFieldStyle(.roundedBorder)

@@ -77,7 +77,7 @@ class AppSettings(
         store.edit { it[QUEUE_NOTICE] = enabled }
     }
 
-    /** Claude の中継（tools/ai-bridge）の接続先とトークン。設定していなければ null。 */
+    /** Claude の中継（ai-bridge）の接続先とトークン。設定していなければ null。 */
     val aiBridge: Flow<AiBridgeConfig?> =
         store.data
             .map { prefs -> prefs[AI_URL]?.let { url -> prefs[AI_TOKEN]?.let { AiBridgeConfig(url, it, prefs[AI_NAME]) } } }

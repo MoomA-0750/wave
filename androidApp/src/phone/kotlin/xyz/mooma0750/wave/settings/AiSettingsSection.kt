@@ -30,7 +30,7 @@ import xyz.mooma0750.wave.R
 import xyz.mooma0750.wave.connect.QrScanner
 
 /**
- * Claude の中継（tools/ai-bridge）への接続。中継の `--pair` が出す QR（waveai://pair?u=&t=&n=）を読む（Kite と同じ）。
+ * Claude の中継（ai-bridge）への接続。中継の `--pair` が出す QR（waveai://pair?u=&t=&n=）を読む（Kite と同じ）。
  */
 @Composable
 fun AiSettingsSection(settings: AppSettings) {

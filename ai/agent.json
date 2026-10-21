@@ -1,0 +1,169 @@
+{
+  "_about": "「Claude に聞く」で中継（ai-bridge の /v1/run）へ送るシステムプロンプトと道具の定義。Android・Mac/iOS・Windows が同じこのファイルをアプリに入れて読む。道具を行うのは各 OS の AiTools。",
+  "system": "あなたは音楽プレイヤー wave に組み込まれたアシスタントです。利用者がいま聴いている曲が <now_playing> に、あれば歌詞が <lyrics> に入っています。利用者と同じ言語で、簡潔に答えてください。歌詞の意味を聞かれたら、歌詞に基づいて解釈し、確かでないことは推測だと断ってください。歌詞の行の頭に [01:23] のような時刻が付いているときは、歌詞の行を引用したり、ある部分について話したりするたびに、その行の時刻を同じ [mm:ss] の形で添えてください（例: [01:23]「…」）。wave はこの時刻を押すとその位置へ飛べるようにします。時刻は歌詞に書かれたものだけを使い、作らないでください。歌詞に時刻が無ければ時刻は書かないでください。似た曲やおすすめを聞かれたら、search_songs で実在を確かめた曲だけを挙げ、show_songs で画面に並べてください。利用者の好みが要るときは liked_songs を見てください。プレイリストを作る・キューに足す・再生するように頼まれたら、wave の道具で実際に行い、何をしたかを短く報告してください。頼まれていないのに再生を始めたり、キューを置き換えたりしないでください。",
+  "max_lyrics_chars": 20000,
+  "tools": [
+    {
+      "name": "now_playing",
+      "description": "いま流れている曲（題名・アーティスト・アルバム・video_id）と、あれば歌詞を返す。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "get_queue",
+      "description": "再生キュー（今の曲と、これから流れる曲）を返す。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "search_songs",
+      "description": "YouTube Music で曲を探す。曲名・アーティスト名・「アーティスト 曲名」などで探し、video_id・題名・アーティスト・アルバムの一覧を返す。おすすめする曲は、必ずこれで実在を確かめてから出す。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer",
+            "description": "最大件数（既定 5、最大 20）"
+          }
+        },
+        "required": [
+          "query"
+        ]
+      }
+    },
+    {
+      "name": "liked_songs",
+      "description": "利用者が高く評価した曲（新しい順）を返す。好みを知るのに使う。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "limit": {
+            "type": "integer",
+            "description": "最大件数（既定 50、最大 200）"
+          }
+        }
+      }
+    },
+    {
+      "name": "show_songs",
+      "description": "曲を利用者の画面にカードで並べる（押すと再生できる）。おすすめや似た曲を答えるときは、文章だけでなくこれで並べる。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "video_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "曲の video_id（search_songs などが返したもの）"
+          }
+        },
+        "required": [
+          "video_ids"
+        ]
+      }
+    },
+    {
+      "name": "play_songs",
+      "description": "曲をこの順でキューに置き換えて再生する（いま流れている曲は止まる）。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "video_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "曲の video_id（search_songs などが返したもの）"
+          }
+        },
+        "required": [
+          "video_ids"
+        ]
+      }
+    },
+    {
+      "name": "add_to_queue",
+      "description": "曲をキューに足す。next が true なら今の曲の次に、そうでなければ自分で足した曲の最後に入れる。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "video_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "曲の video_id（search_songs などが返したもの）"
+          },
+          "next": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "video_ids"
+        ]
+      }
+    },
+    {
+      "name": "list_playlists",
+      "description": "利用者が編集できるプレイリスト（playlist_id・名前）の一覧を返す。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "create_playlist",
+      "description": "非公開のプレイリストを作って曲を入れる。作ったプレイリストの playlist_id を返す。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "video_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "曲の video_id（search_songs などが返したもの）"
+          }
+        },
+        "required": [
+          "title",
+          "video_ids"
+        ]
+      }
+    },
+    {
+      "name": "add_to_playlist",
+      "description": "既にあるプレイリストに曲を足す（もう入っている曲は足さない）。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "playlist_id": {
+            "type": "string"
+          },
+          "video_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "曲の video_id（search_songs などが返したもの）"
+          }
+        },
+        "required": [
+          "playlist_id",
+          "video_ids"
+        ]
+      }
+    }
+  ]
+}

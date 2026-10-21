@@ -16,7 +16,7 @@ InnerTube との通信には [innertubex](https://github.com/MetrolistGroup/inne
 | `relay` | 端末の連携の中継（Kotlin/JVM のサーバー）。暗号文を振り分けて家の最新の状態を預かるだけで、中身・曲・アカウントは読めない。自宅に置き、tailnet の中だけに出す。v2 だけで動く（運用は [docs/connect-v2-operations.md](docs/connect-v2-operations.md)） |
 | `windows/` | Windows 版（WinUI 3、C#）。`Wave.Core` は Android のコアを C# で書き直したもの、`Wave.App` が画面、`Wave.Core.Tests` がテスト（Android と同じ fixture を使う）。試作の扱いで、どこかで作り直す前提 |
 | `mac/` | macOS 版と iPhone 版（SwiftUI、`swift build` で組む）。下の「macOS・iPhone」を参照 |
-| `tools/ai-bridge` | 「Claude に聞く」の中継。家の PC で `claude -p` を呼ぶ小さな HTTP サーバー（[tools/ai-bridge/README.md](tools/ai-bridge/README.md)） |
+| `ai` | 「Claude に聞く」のシステムプロンプトと道具の定義（`agent.json`。4つの OS が同じファイルをアプリに入れる）。中継は別のリポジトリの汎用の中継 ai-bridge（[tools/ai-bridge/README.md](tools/ai-bridge/README.md)） |
 
 設計の決定は `docs/adr/` にある。
 

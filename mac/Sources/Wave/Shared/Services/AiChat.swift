@@ -22,8 +22,9 @@ enum AiMessage: Identifiable {
     }
 }
 
-/// Claude との会話（Android の AiChat・AiTools と同じ）。家の PC などで動く中継 tools/ai-bridge 経由で Claude Code を使う。
-/// 中継は状態を持たないので、毎回それまでのやりとりと、今の曲・歌詞を送る。道具の呼び出しは手元で行う。
+/// Claude との会話（Android の AiChat・AiTools と同じ）。家の PC などで動く汎用の中継 ai-bridge 経由で Claude Code を使う。
+/// 中継は状態もアプリのことも持たないので、毎回システムプロンプト・道具の定義（AiAgentSpec、ai/agent.json）と、
+/// それまでのやりとり・今の曲・歌詞を入れた頼みの文を送る。道具の呼び出しは手元で行う。
 /// 会話は端末の中の履歴（AiHistoryStore）に残し、「新しい会話」で次の会話へ移る。履歴から開いた会話はそのまま続けられる。
 /// YouTube の認証情報は中継へ送らない（別の通信を使う）。
 @MainActor @Observable
@@ -174,10 +175,10 @@ final class AiChat {
     func send(_ text: String) {
         let request = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !request.isEmpty, !running else { return }
-        let history: [JSON] = messages.compactMap {
+        let history: [(String, String)] = messages.compactMap {
             switch $0 {
-            case .user(let t): .obj(["role": "user", "content": .string(t)])
-            case .assistant(let t, _): .obj(["role": "assistant", "content": .string(t)])
+            case .user(let t): ("user", t)
+            case .assistant(let t, _): ("assistant", t)
             default: nil
             }
         }
@@ -218,20 +219,27 @@ final class AiChat {
         return request
     }
 
-    private func run(_ request: String, history: [JSON]) async throws {
-        var body = JSONObject([("task", .string(request)), ("messages", .array(history))])
+    /// アプリに入れた ai/agent.json（読めなければ組み方の誤りなので止める）。
+    private static let spec: AiAgentSpec = {
+        guard let url = Bundle.main.url(forResource: "agent", withExtension: "json"), let data = try? Data(contentsOf: url),
+              let json = try? JSON.parse(data), let spec = try? AiAgentSpec(json: json) else { fatalError("agent.json が読めない") }
+        return spec
+    }()
+
+    private func run(_ request: String, history: [(String, String)]) async throws {
         var syncedVideoId: String?
-        if let song = AppServices.player.current {
+        var lyricsText: String?
+        let song = AppServices.player.current
+        if let song {
             remember(song)
-            body["now_playing"] = .obj(["title": .string(song.title), "artists": .string(song.artistsText), "album": .string(song.album?.title ?? ""),
-                                        "video_id": .string(song.videoId)])
             if let lyrics = await lyricsOf(song) {
                 // 時刻付きなら行ごとに [mm:ss] を付けて送る（Claude が歌詞を引くときに時刻を添える）
-                body["lyrics"] = .string(AiText.lyrics(lyrics))
+                lyricsText = AiText.lyrics(lyrics)
                 if case .synced = lyrics { syncedVideoId = song.videoId }
             }
         }
-        let (bytes, response) = try await session.bytes(for: post("/v1/agent", .object(body)))
+        let body = AiChat.spec.body(task: request, history: history, song: song, lyrics: lyricsText)
+        let (bytes, response) = try await session.bytes(for: post("/v1/run", body))
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         if status == 401 {
             messages.append(.failure(L.t("Claude の中継にトークンを断られました。設定でつなぎ直してください。", "The Claude bridge refused the token. Connect again in Settings.")))
@@ -258,7 +266,7 @@ final class AiChat {
                 if let shown { messages.append(shown) }
                 var reply = JSONObject([("session", .string(session ?? "")), ("id", .string(call["id"].str ?? ""))])
                 if let error { reply["error"] = .string(error) } else { reply["result"] = result ?? .null }
-                _ = try await self.session.data(for: post("/v1/agent/result", .object(reply)))
+                _ = try await self.session.data(for: post("/v1/run/result", .object(reply)))
             } else if let e = ev["error"] {
                 let text = e.str ?? e.serialized()
                 messages.append(.failure(L.t("Claude が失敗しました: \(text)", "Claude failed: \(text)")))
@@ -292,7 +300,7 @@ final class AiChat {
         (nil, "unknown video_ids (use search_songs first): \(missing.joined(separator: ","))", nil)
     }
 
-    /// 道具を手元で行う（tools/ai-bridge/wave_agent_mcp.py の道具）。この会話で出てきた曲の id だけを受ける。
+    /// 道具を手元で行う（ai/agent.json で定義した道具）。この会話で出てきた曲の id だけを受ける。
     private func callTool(_ name: String, args: JSON) async -> (JSON?, String?, AiMessage?) {
         AppPaths.log("ai tool=\(name)")
         let player = AppServices.player!

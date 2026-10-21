@@ -234,8 +234,8 @@ struct SettingsView: View {
             Text("Claude")
         } footer: {
             if !aiConfigured {
-                Text(L.t("家の PC で tools/ai-bridge の wave_ai_bridge.py --pair を動かし、出てきた waveai://pair?… の文字列を貼ってください。",
-                         "Run wave_ai_bridge.py --pair from tools/ai-bridge on your PC and paste the waveai://pair?… text it prints."))
+                Text(L.t("家の PC で ai-bridge の ai_bridge.py --name wave --pair を動かし、出てきた waveai://pair?… の文字列を貼ってください。",
+                         "Run ai_bridge.py --name wave --pair from ai-bridge on your PC and paste the waveai://pair?… text it prints."))
             }
         }
     }

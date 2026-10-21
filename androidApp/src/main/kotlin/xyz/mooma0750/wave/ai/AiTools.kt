@@ -30,7 +30,7 @@ import xyz.mooma0750.wave.core.session.WriteResult
 import xyz.mooma0750.wave.playback.Media3QueuePlayer
 
 /**
- * Claude が使う音楽の道具（tools/ai-bridge/wave_agent_mcp.py の道具を、手元で行う）。
+ * Claude が使う音楽の道具（ai/agent.json で定義した道具を、手元で行う）。
  * 曲は video_id で受け渡す。この会話で出てきた曲（今の曲・キュー・検索・高評価）だけを覚えていて、それ以外の id は断る
  * （Claude が作った id で知らない曲を入れない）。
  */

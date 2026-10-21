@@ -45,6 +45,8 @@ intents WaveWidget WaveWidget "$appex/Contents/Resources" "$appex/Contents/MacOS
 cp -R Resources/Widget/en.lproj Resources/Widget/ja.lproj "$appex/Contents/Resources/"
 cp -R Resources/Widget/en.lproj Resources/Widget/ja.lproj "$app/Contents/Resources/"
 cp Resources/Info.plist "$app/Contents/Info.plist"
+# 「Claude に聞く」のシステムプロンプトと道具の定義（Android・Windows と同じファイル）
+cp ../ai/agent.json "$app/Contents/Resources/agent.json"
 # 組むたびに版の番号を上げる（同じ番号のままだと、ウィジェットの一覧が前の版の名前・説明を覚えたまま出す。ios-bundle.sh と同じ）
 version=$(date +%Y%m%d%H%M)
 plutil -replace CFBundleVersion -string "$version" "$app/Contents/Info.plist"

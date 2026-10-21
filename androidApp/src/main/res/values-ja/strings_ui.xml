@@ -139,7 +139,7 @@
     <string name="ai_searched">「%1$s」を探しました</string>
     <string name="ai_read_liked">高く評価した曲を見ました</string>
     <string name="settings_ai_title">Claude</string>
-    <string name="settings_ai_summary_off">家の PC の Claude Code（tools/ai-bridge）で、歌詞の意味・似た曲・プレイリスト作りを頼める</string>
+    <string name="settings_ai_summary_off">家の PC の Claude Code（ai-bridge）で、歌詞の意味・似た曲・プレイリスト作りを頼める</string>
     <string name="settings_ai_connected">%1$s の中継につないでいます</string>
     <string name="settings_ai_scan">QR コードで接続</string>
     <string name="settings_ai_disconnect">接続を外す</string>

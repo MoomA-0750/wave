@@ -2,7 +2,7 @@ import Foundation
 
 /// Claude に送る歌詞と、Claude の答えの中の時刻（Android の core.ai.AiText・Windows の Wave.Core.Ai.AiText と同じ）。
 /// 時刻付きの歌詞は行ごとに「[01:23] 本文」の形で送り、Claude には歌詞を引くときに同じ形で時刻を添えてもらう
-/// （tools/ai-bridge の指示）。答えの中の [mm:ss] は、押すとその位置へ飛べるようにする。
+/// （ai/agent.json の指示）。答えの中の [mm:ss] は、押すとその位置へ飛べるようにする。
 public enum AiText {
     /// 中継へ送る歌詞。時刻付きなら行ごとに [mm:ss] 本文（空の行は飛ばす）、時刻が無ければ本文のまま。
     public static func lyrics(_ lyrics: SongLyrics) -> String {
