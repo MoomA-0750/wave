@@ -7,6 +7,20 @@ import xyz.mooma0750.wave.handoff.HandoffRepeat
 
 /** 再生サービスの判断のうち、Android の状態に依らないもの（そのままテストできる）。 */
 internal object PlaybackDecisions {
+    /** 本体の音量の段（min〜max）を、ほかの端末と合わせる 0〜100 にする。 */
+    fun devicePercent(
+        step: Int,
+        min: Int,
+        max: Int,
+    ): Int = if (max <= min) 100 else kotlin.math.round((step - min).coerceIn(0, max - min) * 100f / (max - min)).toInt()
+
+    /** ほかの端末から届いた 0〜100 を、本体の音量の段（min〜max）にする。 */
+    fun deviceStep(
+        percent: Int,
+        min: Int,
+        max: Int,
+    ): Int = if (max <= min) max else min + kotlin.math.round(percent.coerceIn(0, 100) * (max - min) / 100f).toInt()
+
     /** 再生の失敗の分類。cause は PlaybackException.cause、errorCode は PlaybackException.errorCode。 */
     fun failureOf(
         cause: Throwable?,

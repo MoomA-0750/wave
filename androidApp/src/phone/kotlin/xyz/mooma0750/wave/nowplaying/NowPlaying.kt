@@ -519,26 +519,22 @@ fun NowPlayingScreen(
                         enabled = remote == null,
                     )
                 }
-                // 手元で鳴らしている間は端末の音量（音量ボタンと同じ）。ほかの端末を映している間はその端末のアプリの中の音量（音量ボタンでも変えられる）
+                // 手元で鳴らしている間は本体の音量（音量ボタンと同じ）。ほかの端末を映している間はその端末の音量（PC はアプリの中の音量、スマホは本体の音量。音量ボタンでも変えられる）
                 val volume = display.volumePercent
                 val systemVolume = rememberSystemVolume()
                 if (remote != null && volume != null || remote == null && controller != null) {
                     // 映している間は、ドラッグの間は表示だけ動かし、指を離したときに1回だけ送る（ほかの端末へは命令ごとに暗号化・鍵交換をする）
                     var draggingVolume by remember { mutableStateOf<Float?>(null) }
                     val volumeLabel = remote?.let { stringResource(R.string.nowplaying_volume_on_device, it.deviceLabel) } ?: stringResource(R.string.nowplaying_volume_app)
-                    // 手元では、ほかの端末から下げられたアプリの中の音量も掛けた、実際の大きさを出す
-                    val shown = if (remote != null) (volume ?: 100) / 100f else systemVolume.fraction * (volume ?: 100) / 100f
+                    val shown = if (remote != null) (volume ?: 100) / 100f else systemVolume.fraction
                     Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically) {
                         Icon(painterResource(R.drawable.ic_volume_down), null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         Slider(
                             value = draggingVolume ?: shown,
                             onValueChange = {
                                 draggingVolume = it
-                                // 手元はすぐ変える。アプリの中の音量は 100 に戻し、その分を端末の音量に移す（音の大きさは跳ねない）
-                                if (remote == null) {
-                                    if ((volume ?: 100) < 100) display.setVolume(100)
-                                    systemVolume.set(it)
-                                }
+                                // 手元はすぐ変える
+                                if (remote == null) systemVolume.set(it)
                             },
                             onValueChangeFinished = {
                                 if (remote != null) draggingVolume?.let { display.setVolume(kotlin.math.round(it * 100).toInt()) }
@@ -1026,15 +1022,14 @@ private class Display(
     }
 
     /**
-     * アプリの中の音量（0〜100）。ほかの端末を映している間はその端末のもの（音量を知らせない前の版の端末なら null）。
-     * 端末そのものの音量（音量ボタン）とは別。
+     * ほかの端末を映している間の、その端末の音量（0〜100。PC はアプリの中の音量、スマホは本体の音量）。音量を知らせない前の版の端末・手元で鳴らしている間は null
+     * （手元は本体の音量を SystemVolume で直に読む）。
      */
     val volumePercent: Int?
-        get() = if (remote != null) remote.volumePercent else controller?.let { kotlin.math.round(it.volume * 100).toInt() }
+        get() = remote?.volumePercent
 
     fun setVolume(percent: Int) {
-        val clamped = percent.coerceIn(0, 100)
-        if (remote != null) connect?.volume(clamped) else controller?.volume = clamped / 100f
+        if (remote != null) connect?.volume(percent.coerceIn(0, 100))
     }
 }
 

@@ -45,7 +45,7 @@ class ConnectV2Host {
             positionMs: Long?,
         ): Boolean
 
-        /** ほかの端末から音量を変えられた。アプリの中の音量（再生器の音量）だけを変える。端末そのものの音量は変えない。 */
+        /** ほかの端末から音量を変えられた。スマホ・時計なので本体の音量を変える（PC はアプリの中の音量）。 */
         fun volume(volumePercent: Int): Boolean
 
         /** ほかの端末で足した曲を、自分のキューへ入れる（QueueSession.addFromRemote）。 */
@@ -72,7 +72,7 @@ class ConnectV2Host {
         val repeat: HandoffRepeat,
         val listenedMs: Long,
         val historySent: Boolean,
-        /** アプリの中の音量（0〜100）。 */
+        /** この端末の音量（0〜100）（PC はアプリの中の音量、スマホ・時計は本体の音量）。 */
         val volumePercent: Int? = null,
     )
 

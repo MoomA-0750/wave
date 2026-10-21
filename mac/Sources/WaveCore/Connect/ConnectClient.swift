@@ -106,7 +106,7 @@ public protocol ConnectClientEffects: AnyObject {
     /// 遠隔操作を受け付けた（従う前に、送り主を記録するため）。
     func controlAccepted(_ action: ControlAction, from deviceId: String)
 
-    /// 遠隔の音量に従う（この端末が鳴らしている）。アプリの中の音量を volumePercent（0〜100）にする。受け付けなければ false。
+    /// 遠隔の音量に従う（この端末が鳴らしている）。この端末の音量（PC はアプリの中の音量、スマホ・時計は本体の音量）を volumePercent（0〜100）にする。受け付けなければ false。
     func volume(_ volumePercent: Int) -> Bool
 
     /// 遠隔のキューへの追加に従う（この端末が鳴らしている）。afterItemId の曲があればその直後、無ければ next なら今の曲の直後、
@@ -178,7 +178,7 @@ public final class ConnectClient {
         public var listenedMs: Int64
         public var historySent: Bool
         public var capturedAtMs: Int64
-        /// アプリの中の音量（0〜100）。
+        /// この端末の音量（0〜100）（PC はアプリの中の音量、スマホ・時計は本体の音量）。
         public var volumePercent: Int?
 
         public init(
@@ -1100,7 +1100,7 @@ public final class ConnectClient {
         return send(.control(.init(doc: try sealCommand(current, command))))
     }
 
-    /// 遠隔の音量を送る（鳴っていない端末から、今鳴らしている同じアカウントの端末へ。そのアプリの中の音量を 0〜100 にする）。
+    /// 遠隔の音量を送る（鳴っていない端末から、今鳴らしている同じアカウントの端末へ。その端末の音量（PC はアプリの中の音量、スマホ・時計は本体の音量）を 0〜100 にする）。
     @discardableResult
     public func sendVolume(_ volumePercent: Int) throws -> Bool {
         if isWriter || pendingStoreId != nil { return false }

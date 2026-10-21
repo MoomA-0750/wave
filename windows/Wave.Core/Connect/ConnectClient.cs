@@ -108,7 +108,7 @@ public sealed class ConnectClient
         /// <summary>遠隔のキューから外す（この端末が鳴らしている）。今の曲より後ろにある itemIds の曲だけを外す。</summary>
         bool QueueRemove(IReadOnlyList<string> itemIds) => false;
 
-        /// <summary>遠隔の音量に従う（この端末が鳴らしている）。アプリの中の音量を volumePercent（0〜100）にする。受け付けなければ false。</summary>
+        /// <summary>遠隔の音量に従う（この端末が鳴らしている）。この端末の音量（PC はアプリの中の音量、スマホ・時計は本体の音量）を volumePercent（0〜100）にする。受け付けなければ false。</summary>
         bool Volume(int volumePercent) => false;
 
         /// <summary>ほかの端末と合わせたライブラリが届いた（手元に取り込む、ADR-0013）。</summary>
@@ -1098,7 +1098,7 @@ public sealed class ConnectClient
         return send(new RelayV2.Control { Doc = SealCommand(current, command) });
     }
 
-    /// <summary>遠隔の音量を送る（鳴っていない端末から、今鳴らしている同じアカウントの端末へ。そのアプリの中の音量を 0〜100 にする）。</summary>
+    /// <summary>遠隔の音量を送る（鳴っていない端末から、今鳴らしている同じアカウントの端末へ。その端末の音量（PC はアプリの中の音量、スマホ・時計は本体の音量）を 0〜100 にする）。</summary>
     public bool SendVolume(int volumePercent)
     {
         if (IsWriter || pendingStoreId is not null) return false;

@@ -189,7 +189,7 @@ struct NowPlayingView: View {
         titleRow(player, song)
         seekBar(player)
         controls(player)
-        // この iPhone で鳴らしている間は本体の音量（音量ボタンと同じ）。ほかの端末で鳴っている間は、その端末のアプリの中の音量
+        // この iPhone で鳴らしている間は本体の音量（音量ボタンと同じ）。ほかの端末で鳴っている間は、その端末の音量（PC はアプリの中の音量、スマホは本体の音量）
         volumeBar(player)
         deviceAndQueue(player)
         lyricsCard(player)
@@ -261,21 +261,10 @@ struct NowPlayingView: View {
         .foregroundStyle(.primary)
     }
 
-    /// 音量のゲージ。この iPhone で鳴らしている間は本体の音量で、ほかの端末から下げられたアプリの中の音量も掛けた実際の大きさを出す
-    /// （触るとアプリの中の音量を 100 に戻し、その分を本体の音量に移すので、音の大きさは跳ねない）。
-    /// ほかの端末で鳴っている間はその端末のアプリの中の音量（iPhone の音量ボタンは横取りできないので、画面で変える）。
+    /// 音量のゲージ。この iPhone で鳴らしている間は本体の音量（PlayerService.volume が本体の音量を映す）。
+    /// ほかの端末で鳴っている間はその端末の音量（iPhone の音量ボタンは横取りできないので、画面で変える）。
     private func volumeBar(_ player: PlayerService) -> some View {
-        let system = SystemVolume.shared
-        let value = Binding<Double>(
-            get: { player.isRemote ? player.volume : Double(system.value) * player.volume },
-            set: { v in
-                if player.isRemote {
-                    player.volume = v
-                } else {
-                    if player.volume < 1 { player.volume = 1 }
-                    system.set(Float(v))
-                }
-            })
+        let value = Binding<Double>(get: { player.volume }, set: { player.volume = $0 })
         return HStack(spacing: 10) {
             Image(systemName: "speaker.fill").font(.caption)
             Slider(value: value, in: 0...1)

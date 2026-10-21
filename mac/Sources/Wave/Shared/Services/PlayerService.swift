@@ -36,7 +36,7 @@ struct PlaybackCursor {
     var repeatMode: RepeatMode
     var listenedMs: Int64
     var historySent: Bool
-    /// アプリの中の音量（0〜100）。
+    /// この端末の音量（0〜100）（PC はアプリの中の音量、スマホ・時計は本体の音量）。
     var volumePercent: Int
 }
 
@@ -55,7 +55,7 @@ struct RemoteSnapshot {
     /// 今の曲がライブ配信（位置も長さも無い）。
     var isLive = false
     var version: Int64 = 0
-    /// その端末のアプリの中の音量（0〜100）。前の版の端末は付けない（nil）。
+    /// その端末の音量（PC はアプリの中の音量、スマホ・時計は本体の音量）（0〜100）。前の版の端末は付けない（nil）。
     var volumePercent: Int?
 
     /// 今の位置（再生中なら、取ってからの経過を足す。曲の長さで止める）。ライブ配信には位置が無いので 0（経過で伸ばさない）。
@@ -127,23 +127,40 @@ final class PlayerService {
     var shuffle = false
     var repeatMode: RepeatMode = .off
     /// 音量のつまみ。ほかの端末を映している間はその端末の音量を映し、動かすとその端末へ送る（Spotify と同じ）。
-    /// 手元の音量（localVolume）は変えない。端末そのものの音量はどちらの端末でも変えない。
+    /// 手元で鳴らしている間は、Mac ではアプリの中の音量、iPhone では本体の音量（音量ボタンと同じ。アプリの中の音量はいつも 100）。
     var volume: Double = 0.7 {
         didSet {
             if isRemote {
                 if !applyingRemoteVolume { sendVolumeToRemote() }
                 return
             }
+            #if os(iOS)
+            if !applyingSystemVolume { SystemVolume.shared.set(Float(volume)) }
+            cursorChanged.forEach { $0(false) }
+            #else
             localVolume = volume
             engine.volume = volume
             AppServices.settings.volume = volume
             AppServices.settings.save()
             // 鳴らしている端末の音量は、ほかの端末のつまみに映す
             cursorChanged.forEach { $0(false) }
+            #endif
         }
     }
-    /// この端末で鳴らすときの音量（設定に残すもの）。
-    @ObservationIgnored private var localVolume = 0.7
+    /// この端末で鳴らすときの音量（Mac は設定に残すアプリの中の音量、iPhone は本体の音量）。
+    private var localVolume: Double {
+        get {
+            #if os(iOS)
+            Double(SystemVolume.shared.value)
+            #else
+            storedLocalVolume
+            #endif
+        }
+        set { storedLocalVolume = newValue }
+    }
+    @ObservationIgnored private var storedLocalVolume = 0.7
+    /// 本体の音量が音量ボタンなどで変わったのを、つまみへ映している間（本体へ送り返さない）。
+    @ObservationIgnored private var applyingSystemVolume = false
     @ObservationIgnored private var applyingRemoteVolume = false
     /// 本人が映している端末の音量を動かした直後は、相手の古い値でつまみを戻さない。
     @ObservationIgnored private var remoteVolumeHoldUntilMs: Int64 = 0
@@ -314,10 +331,16 @@ final class PlayerService {
 
     init() {
         let settings = AppServices.settings!
+        #if os(iOS)
+        // iPhone はアプリの中の音量を使わない（前の版で下げていても 100 にする）。つまみは本体の音量
+        volume = Double(SystemVolume.shared.value)
+        engine.volume = 1
+        #else
         volume = settings.volume
+        engine.volume = volume
+        #endif
         // シャッフルはキューごとの状態（Android と同じく、新しい再生では切れる）。設定には持ち越さない
         repeatMode = RepeatMode(rawValue: min(max(settings.repeatMode, 0), 2)) ?? .off
-        engine.volume = volume
         engine.onEnded = { [weak self] in self?.onEnded() }
         engine.onFailed = { [weak self] error in self?.onFailed(error) }
         engine.onPlayingChanged = { [weak self] playing in
@@ -1262,7 +1285,9 @@ final class PlayerService {
         // つまみを手元の音量に戻す
         remoteVolumeWork?.cancel()
         remoteVolumeHoldUntilMs = 0
+        applyingSystemVolume = true
         volume = localVolume
+        applyingSystemVolume = false
         let backup = localBackup
         localBackup = nil
         guard restoreLocal else { return }
@@ -1292,12 +1317,22 @@ final class PlayerService {
 
     // MARK: ほかの端末からの命令に従う（この端末が鳴らしている）
 
-    /// ほかの端末から音量を変えられた（この端末が鳴らしている）。アプリの中の音量だけを変える。
+    /// ほかの端末から音量を変えられた（この端末が鳴らしている）。Mac はアプリの中の音量、iPhone は本体の音量を変える。
     func applyVolume(_ percent: Int) -> Bool {
         if isRemote { return false }
         volume = Double(min(max(percent, 0), 100)) / 100
         return true
     }
+
+    #if os(iOS)
+    /// 本体の音量が変わった（音量ボタン・コントロールセンター）。手元で鳴らしている間は、つまみとほかの端末へ映す。
+    func systemVolumeChanged(_ value: Float) {
+        guard !isRemote, abs(volume - Double(value)) >= 0.005 else { return }
+        applyingSystemVolume = true
+        volume = Double(value)
+        applyingSystemVolume = false
+    }
+    #endif
 
     /// 映している端末の音量を、つまみの値にしてもらう（動かしている間は 150ms に1回まで）。
     private func sendVolumeToRemote() {

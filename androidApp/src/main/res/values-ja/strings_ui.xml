@@ -54,7 +54,7 @@
     <string name="nowplaying_previous">前の曲</string>
     <string name="nowplaying_next">次の曲</string>
     <string name="nowplaying_volume_on_device">%1$s の音量</string>
-    <string name="nowplaying_volume_app">wave の音量</string>
+    <string name="nowplaying_volume_app">音量</string>
     <string name="nowplaying_repeat_all">リピート: 全体</string>
     <string name="nowplaying_repeat_one">リピート: 1曲</string>
     <string name="nowplaying_repeat_off">リピート: オフ</string>

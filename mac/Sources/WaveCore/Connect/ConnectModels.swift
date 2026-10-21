@@ -248,7 +248,7 @@ public struct CursorBody: Equatable, Sendable, ConnectCodable {
     /// 表示だけ（順序の判断に使わない）。
     public var startedAtEpochMs: Int64
 
-    /// 鳴らしている端末のアプリの中の音量（0〜100）。ほかの端末の音量の表示に使う。前の版の書き手は付けない（nil）。
+    /// 鳴らしている端末の音量（PC はアプリの中の音量、スマホ・時計は本体の音量）（0〜100）。ほかの端末の音量の表示に使う。前の版の書き手は付けない（nil）。
     public var volumePercent: Int?
 
     public init(
@@ -440,7 +440,7 @@ public enum CommandBody: Equatable, Sendable, ConnectCodable {
         /// 送り手が見ていた、受け手の今の曲（次へ・前へ・シーク）。受け手の今の曲と違えば従わない（Android と同じ）。前の版の送り手は付けない（nil）。
         public var onItemId: String?
 
-        /// 音量（volume のときだけ、0〜100）。鳴らしている端末のアプリの中の音量にする（端末そのものの音量は変えない）。
+        /// 音量（volume のときだけ、0〜100）。鳴らしている端末の音量（PC はアプリの中の音量、スマホ・時計は本体の音量）にする。
         public var volumePercent: Int?
 
         public init(
@@ -554,7 +554,7 @@ public enum ControlAction: String, Sendable {
     /// 宛先の端末に「ここで再生（引き取り）」を頼む。宛先は書き手でない端末。
     case transfer
 
-    /// 鳴らしている端末のアプリの中の音量を変える（volumePercent）。
+    /// 鳴らしている端末の音量（PC はアプリの中の音量、スマホ・時計は本体の音量）を変える（volumePercent）。
     case volume
 }
 

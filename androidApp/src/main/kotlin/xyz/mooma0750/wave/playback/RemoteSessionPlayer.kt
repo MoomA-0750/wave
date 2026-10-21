@@ -25,7 +25,7 @@ class RemoteSessionPlayer(
     private val control: (ControlAction, Long?) -> Unit,
     /** 通知のアーティストの行（アーティスト, 端末名 → 「アーティスト • 端末名で再生中」）。 */
     private val artistLine: (String, String) -> String,
-    /** その端末のアプリの中の音量を変えてもらう（0〜100）。 */
+    /** その端末の音量（PC はアプリの中の音量、スマホ・時計は本体の音量）を変えてもらう（0〜100）。 */
     private val setVolume: (Int) -> Unit,
     /** 今の曲の画像を取る（手元の再生器と同じく、URL ではなく画像そのものを入れる）。 */
     private val artwork: ArtworkLoader,

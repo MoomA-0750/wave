@@ -199,6 +199,8 @@ class PlaybackService : MediaLibraryService() {
                 // 時計でも本体のスピーカーで鳴らす（本人の希望。Galaxy Watch 7 はスピーカーを持つ）。イヤホンがつながっていればイヤホンへ流れる。
                 // Wear OS の既定（スピーカーでは鳴らさない）に戻すなら true にする
                 .setSuppressPlaybackOnUnsuitableOutput(false)
+                // スマホ・時計で鳴らすときの音量は本体の音量（ほかの端末からも本体の音量を動かす）。変わったら EVENT_DEVICE_VOLUME_CHANGED で知る
+                .setDeviceVolumeControlEnabled(true)
                 .build()
         val queuePlayer = Media3QueuePlayer(player, stoppedOnSkippableError = { lastErrorWasThisSong })
         val queueSession =
@@ -271,8 +273,8 @@ class PlaybackService : MediaLibraryService() {
                     // Connect v2（Phase 6b）: 位置の変化を知らせる。キューの変化は onTimelineChanged（並びが変わったときだけ）
                     container.connectV2Host.listener?.let { v2 ->
                         val significant = events.containsAny(Player.EVENT_PLAY_WHEN_READY_CHANGED, Player.EVENT_MEDIA_ITEM_TRANSITION, Player.EVENT_PLAYBACK_STATE_CHANGED)
-                        // 音量（アプリの中の音量）も、ほかの端末のつまみに映すので書き直す
-                        if (significant || events.containsAny(Player.EVENT_POSITION_DISCONTINUITY, Player.EVENT_REPEAT_MODE_CHANGED, Player.EVENT_VOLUME_CHANGED)) v2.onCursorChanged(significant)
+                        // 音量（本体の音量。音量ボタンで変えたときも）も、ほかの端末のつまみに映すので書き直す
+                        if (significant || events.containsAny(Player.EVENT_POSITION_DISCONTINUITY, Player.EVENT_REPEAT_MODE_CHANGED, Player.EVENT_DEVICE_VOLUME_CHANGED)) v2.onCursorChanged(significant)
                     }
                 }
 
@@ -477,7 +479,7 @@ class PlaybackService : MediaLibraryService() {
                     val repeat = PlaybackDecisions.repeatOf(player.repeatMode)
                     // 最後まで行った・エラーで止まった端末を「再生中」と書かない（レビュー p6b34 中-2）
                     val playing = PlaybackDecisions.isActivelyPlaying(player.playWhenReady, player.playbackState)
-                    return ConnectV2Host.Cursor(itemId, player.currentPosition.coerceAtLeast(0), playing, repeat, listenedMs, historySent, kotlin.math.round(player.volume * 100).toInt())
+                    return ConnectV2Host.Cursor(itemId, player.currentPosition.coerceAtLeast(0), playing, repeat, listenedMs, historySent, PlaybackDecisions.devicePercent(player.deviceVolume, player.deviceInfo.minVolume, player.deviceInfo.maxVolume))
                 }
 
                 // Connect v2 が止める・戻すのは、本人の一時停止・再生ボタンとして知らせない
@@ -528,7 +530,9 @@ class PlaybackService : MediaLibraryService() {
                     }
 
                 override fun volume(volumePercent: Int): Boolean {
-                    player.volume = volumePercent.coerceIn(0, 100) / 100f
+                    // 本体の音量にする（OS の音量の表示は出さない）。アプリの中の音量は前の版で下げられていても 100 に戻す
+                    player.volume = 1f
+                    player.setDeviceVolume(PlaybackDecisions.deviceStep(volumePercent, player.deviceInfo.minVolume, player.deviceInfo.maxVolume), 0)
                     return true
                 }
 
