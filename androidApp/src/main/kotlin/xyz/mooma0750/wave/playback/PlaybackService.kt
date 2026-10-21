@@ -136,6 +136,13 @@ class PlaybackService : MediaLibraryService() {
     /** 取り込み・曲の選択・再開の処理の中（サービスの中の play() を、本人の再生ボタンとして知らせない）。 */
     private var connectV2Suppressed = false
 
+    /**
+     * ほかの端末が入れた本体の音量の段。本人がこの端末で変え直すまで持ち、再生を終えたら本体の音量を 0 にする
+     * （遠隔で上げた音量が wave を閉じても残り、あとで別のアプリや着信が大きな音で鳴るのを防ぐ。iPhone と同じ）。
+     */
+    private var remoteSetDeviceStep: Int? = null
+    private var remoteVolumeResetJob: Job? = null
+
     /** 渡す再生の操作（シャッフルのモードは除く）。 */
     private val playerCommands by lazy { withoutShuffleMode(MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS) }
 
@@ -273,6 +280,8 @@ class PlaybackService : MediaLibraryService() {
                     // Connect v2（Phase 6b）: 位置の変化を知らせる。キューの変化は onTimelineChanged（並びが変わったときだけ）
                     container.connectV2Host.listener?.let { v2 ->
                         val significant = events.containsAny(Player.EVENT_PLAY_WHEN_READY_CHANGED, Player.EVENT_MEDIA_ITEM_TRANSITION, Player.EVENT_PLAYBACK_STATE_CHANGED)
+                        // 本人がこの端末で音量を変え直した（ほかの端末が入れた段から離れた）なら、終えたときに 0 にはしない
+                        if (events.contains(Player.EVENT_DEVICE_VOLUME_CHANGED) && remoteSetDeviceStep != null && player.deviceVolume != remoteSetDeviceStep) remoteSetDeviceStep = null
                         // 音量（本体の音量。音量ボタンで変えたときも）も、ほかの端末のつまみに映すので書き直す
                         if (significant || events.containsAny(Player.EVENT_POSITION_DISCONTINUITY, Player.EVENT_REPEAT_MODE_CHANGED, Player.EVENT_DEVICE_VOLUME_CHANGED)) v2.onCursorChanged(significant)
                     }
@@ -290,6 +299,7 @@ class PlaybackService : MediaLibraryService() {
                 }
 
                 override fun onIsPlayingChanged(isPlaying: Boolean) {
+                    scheduleRemoteVolumeReset()
                     historyTracker.onIsPlayingChanged(isPlaying)
                     episodePositions.onIsPlayingChanged(isPlaying)
                     updateRelayHold(isPlaying)
@@ -532,7 +542,10 @@ class PlaybackService : MediaLibraryService() {
                 override fun volume(volumePercent: Int): Boolean {
                     // 本体の音量にする（OS の音量の表示は出さない）。アプリの中の音量は前の版で下げられていても 100 に戻す
                     player.volume = 1f
-                    player.setDeviceVolume(PlaybackDecisions.deviceStep(volumePercent, player.deviceInfo.minVolume, player.deviceInfo.maxVolume), 0)
+                    val step = PlaybackDecisions.deviceStep(volumePercent, player.deviceInfo.minVolume, player.deviceInfo.maxVolume)
+                    player.setDeviceVolume(step, 0)
+                    // 止めている間に届いた音量は、次に鳴らして終えたときに 0 にする（届いてすぐ 0 に戻すと、動かした側のつまみが跳ね返る）
+                    remoteSetDeviceStep = step
                     return true
                 }
 
@@ -1243,7 +1256,32 @@ class PlaybackService : MediaLibraryService() {
         if (!playing) pauseAllPlayersAndStopSelf()
     }
 
+    /**
+     * ほかの端末が本体の音量を入れたまま再生を終えたら（一時停止・最後の曲の終わり・ほかの端末へ移した）、本体の音量を 0 にする。
+     * 曲の切り替え・読み込みの間も一瞬止まるので、1.5 秒たっても止まったままのときだけにする。
+     */
+    private fun scheduleRemoteVolumeReset() {
+        remoteVolumeResetJob?.cancel()
+        val player = localPlayer ?: return
+        if (player.isPlaying || remoteSetDeviceStep == null) return
+        remoteVolumeResetJob =
+            scope.launch {
+                delay(1_500)
+                val stopped = !player.playWhenReady || player.playbackState == Player.STATE_ENDED || player.playbackState == Player.STATE_IDLE
+                if (stopped && remoteSetDeviceStep != null) resetRemoteVolume()
+            }
+    }
+
+    private fun resetRemoteVolume() {
+        remoteSetDeviceStep = null
+        val player = localPlayer ?: return
+        Log.i(WaveApplication.LOG_TAG, "volume reset to 0 after remote control")
+        player.setDeviceVolume(player.deviceInfo.minVolume, 0)
+    }
+
     override fun onDestroy() {
+        remoteVolumeResetJob?.cancel()
+        if (remoteSetDeviceStep != null) resetRemoteVolume()
         queueNotice.cancel()
         // 再生が終わった: ウィジェットは「再生していない」に戻す
         xyz.mooma0750.wave.widget.WidgetHooks.onNowPlayingChanged(this, null)

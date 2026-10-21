@@ -161,6 +161,10 @@ final class PlayerService {
     @ObservationIgnored private var storedLocalVolume = 0.7
     /// 本体の音量が音量ボタンなどで変わったのを、つまみへ映している間（本体へ送り返さない）。
     @ObservationIgnored private var applyingSystemVolume = false
+    /// ほかの端末が入れた本体の音量（iPhone）。本人がこの iPhone で変え直すまで持ち、再生を終えたら本体の音量を 0 にする
+    /// （遠隔で上げた音量が wave を閉じても残り、あとで別のアプリや着信が大きな音で鳴るのを防ぐ）。
+    @ObservationIgnored private var remoteSetSystemVolume: Float?
+    @ObservationIgnored private var remoteVolumeResetWork: DispatchWorkItem?
     @ObservationIgnored private var applyingRemoteVolume = false
     /// 本人が映している端末の音量を動かした直後は、相手の古い値でつまみを戻さない。
     @ObservationIgnored private var remoteVolumeHoldUntilMs: Int64 = 0
@@ -1086,7 +1090,32 @@ final class PlayerService {
         }
         if isPlaying { listen.start(clockMs) } else { listen.stop(clockMs) }
         cursorChanged.forEach { $0(true) }
+        #if os(iOS)
+        scheduleRemoteVolumeReset()
+        #endif
     }
+
+    #if os(iOS)
+    /// ほかの端末が本体の音量を入れたまま再生を終えたら（一時停止・最後の曲の終わり・ほかの端末へ移した）、本体の音量を 0 にする。
+    /// 曲の切り替えの間も一瞬止まるので、1.5 秒たっても止まったままのときだけにする。
+    private func scheduleRemoteVolumeReset() {
+        remoteVolumeResetWork?.cancel()
+        guard !isPlaying, remoteSetSystemVolume != nil else { return }
+        let work = DispatchWorkItem { [weak self] in
+            guard let self, !self.isPlaying, !self.isLoading, self.remoteSetSystemVolume != nil else { return }
+            self.remoteSetSystemVolume = nil
+            AppPaths.log("volume reset to 0 after remote control")
+            SystemVolume.shared.set(0)
+            if !self.isRemote {
+                self.applyingSystemVolume = true
+                self.volume = 0
+                self.applyingSystemVolume = false
+            }
+        }
+        remoteVolumeResetWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: work)
+    }
+    #endif
 
     /// 端末の連携が止める（本人の一時停止として知らせない）。
     func connectPause() {
@@ -1321,12 +1350,18 @@ final class PlayerService {
     func applyVolume(_ percent: Int) -> Bool {
         if isRemote { return false }
         volume = Double(min(max(percent, 0), 100)) / 100
+        #if os(iOS)
+        // 止めている間に届いた音量は、次に鳴らして終えたときに 0 にする（届いてすぐ 0 に戻すと、動かした側のつまみが跳ね返る）
+        remoteSetSystemVolume = Float(volume)
+        #endif
         return true
     }
 
     #if os(iOS)
     /// 本体の音量が変わった（音量ボタン・コントロールセンター）。手元で鳴らしている間は、つまみとほかの端末へ映す。
     func systemVolumeChanged(_ value: Float) {
+        // 本人がこの iPhone で変え直した（ほかの端末が入れた値から離れた）なら、終えたときに 0 にはしない
+        if let set = remoteSetSystemVolume, abs(set - value) > 0.07 { remoteSetSystemVolume = nil }
         guard !isRemote, abs(volume - Double(value)) >= 0.005 else { return }
         applyingSystemVolume = true
         volume = Double(value)
