@@ -71,6 +71,8 @@ androidx-camera-view = { module = "androidx.camera:camera-view", version.ref = "
 zxing-core = { module = "com.google.zxing:core", version.ref = "zxing" }
 wear-compose-material3 = { module = "androidx.wear.compose:compose-material3", version.ref = "wearCompose" }
 wear-compose-foundation = { module = "androidx.wear.compose:compose-foundation", version.ref = "wearCompose" }
+# 時計の再生ボタンの形を変える（Wear の Material 3 が使っているものと同じ版）
+androidx-graphics-shapes = { module = "androidx.graphics:graphics-shapes", version = "1.0.1" }
 wear-input = { module = "androidx.wear:wear-input", version.ref = "wearInput" }
 wear-ongoing = { module = "androidx.wear:wear-ongoing", version.ref = "wearOngoing" }
 wear-phone-interactions = { module = "androidx.wear:wear-phone-interactions", version.ref = "wearPhoneInteractions" }

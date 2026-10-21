@@ -93,6 +93,7 @@ dependencies {
     // 時計の画面
     "wearImplementation"(libs.wear.compose.material3)
     "wearImplementation"(libs.wear.compose.foundation)
+    "wearImplementation"(libs.androidx.graphics.shapes)
     "wearImplementation"(libs.wear.input)
     "wearImplementation"(libs.wear.ongoing)
     "wearImplementation"(libs.wear.phone.interactions)

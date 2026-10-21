@@ -58,7 +58,7 @@ if [ "${#wear_files[@]}" -gt 0 ]; then
     "$(awk '
       FNR == 1 { open = 0 }
       !open && /(^|[^A-Za-z.])(Filled|FilledTonal|Outlined)?Icon(Toggle)?Button[[:space:]]*\(/ && !/m3e-allow/ { open = 1; start = FILENAME ":" FNR ": " $0; ok = 0 }
-      open { if (/[Aa]nimatedShapes\(\)/) ok = 1; if (/\)[[:space:]]*\{/ || /\{[[:space:]]*$/) { if (!ok) print start; open = 0 } }
+      open { if (/[Aa]nimatedShapes\(/) ok = 1; if (/\)[[:space:]]*\{/ || /\{[[:space:]]*$/) { if (!ok) print start; open = 0 } }
     ' "${wear_files[@]}" | sed -E 's/[[:space:]]+/ /g')"
 fi
 

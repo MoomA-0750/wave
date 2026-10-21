@@ -89,6 +89,7 @@ fun PhoneNowPlayingScreen(
             title = stringResource(if (status == WatchRemote.PeerStatus.NotFound) R.string.wear_remote_no_phone_short else R.string.wear_remote_searching),
             subtitle = "",
             onSubtitle = null,
+            deviceIcon = R.drawable.ic_smartphone,
             deviceLabel = deviceLabel,
             onDeviceLabel = onDeviceLabel,
             isPlaying = false,
@@ -99,7 +100,7 @@ fun PhoneNowPlayingScreen(
             onNext = {},
             volume = { null },
             onRotate = { false },
-            likeButton = {},
+            likeButton = null,
             onOpenQueue = null,
             onOpenMenu = null,
         )
@@ -117,6 +118,7 @@ fun PhoneNowPlayingScreen(
         title = phone.title ?: stringResource(R.string.wear_nothing_playing),
         subtitle = listOfNotNull(phone.artist, phone.playingOn?.let { stringResource(R.string.nowplaying_playing_on, it) }).joinToString(" · "),
         onSubtitle = null,
+        deviceIcon = R.drawable.ic_smartphone,
         deviceLabel = deviceLabel,
         onDeviceLabel = onDeviceLabel,
         isPlaying = playing,
@@ -141,13 +143,12 @@ fun PhoneNowPlayingScreen(
         },
         likeButton = {
             val liked = phone.liked
-            IconButton(shapes = IconButtonDefaults.animatedShapes(), onClick = { liked?.let { remote.command(if (it) WatchRemote.CMD_UNLIKE else WatchRemote.CMD_LIKE) } }, enabled = liked != null) {
-                Icon(
-                    painterResource(if (liked == true) R.drawable.ic_check_circle else R.drawable.ic_add_circle),
-                    stringResource(if (liked == true) R.string.nowplaying_unlike else R.string.nowplaying_like),
-                    tint = if (liked == true) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                )
-            }
+            SecondaryButton(
+                if (liked == true) R.drawable.ic_check_circle else R.drawable.ic_add_circle,
+                stringResource(if (liked == true) R.string.nowplaying_unlike else R.string.nowplaying_like),
+                selected = liked == true,
+                enabled = liked != null,
+            ) { liked?.let { remote.command(if (it) WatchRemote.CMD_UNLIKE else WatchRemote.CMD_LIKE) } }
         },
         onOpenQueue = if (phone.playingOn == null && phone.queue.isNotEmpty()) onOpenQueue else null,
         onOpenMenu = null,
