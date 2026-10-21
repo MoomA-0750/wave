@@ -114,6 +114,8 @@ final class MenuBarController: NSObject {
     /// 縦の払いで音量を変え、少しの間メニューバーに音量を出す。
     private func changeVolume(_ delta: Double) {
         let player = AppServices.player!
+        // スマホで鳴っている間は変えない（スマホの音量はそのスマホで変える）
+        guard player.canChangeVolume else { return }
         player.volume = min(1, max(0, player.volume + delta))
         volumeShownUntil = Date().addingTimeInterval(1.2)
         render()

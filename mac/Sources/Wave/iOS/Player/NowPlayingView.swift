@@ -189,8 +189,9 @@ struct NowPlayingView: View {
         titleRow(player, song)
         seekBar(player)
         controls(player)
-        // この iPhone で鳴らしている間は本体の音量（音量ボタンと同じ）。ほかの端末で鳴っている間は、その端末の音量（PC はアプリの中の音量、スマホは本体の音量）
-        volumeBar(player)
+        // この iPhone で鳴らしている間は本体の音量（音量ボタンと同じ）。PC で鳴っている間は、その PC のアプリの中の音量。
+        // ほかのスマホで鳴っている間は出さない（スマホの音量はそのスマホで変える。Spotify と同じ）
+        if player.canChangeVolume { volumeBar(player) }
         deviceAndQueue(player)
         lyricsCard(player)
     }
@@ -262,7 +263,7 @@ struct NowPlayingView: View {
     }
 
     /// 音量のゲージ。この iPhone で鳴らしている間は本体の音量（PlayerService.volume が本体の音量を映す）。
-    /// ほかの端末で鳴っている間はその端末の音量（iPhone の音量ボタンは横取りできないので、画面で変える）。
+    /// PC で鳴っている間はその PC のアプリの中の音量（iPhone の音量ボタンは横取りできないので、画面で変える）。
     private func volumeBar(_ player: PlayerService) -> some View {
         let value = Binding<Double>(get: { player.volume }, set: { player.volume = $0 })
         return HStack(spacing: 10) {

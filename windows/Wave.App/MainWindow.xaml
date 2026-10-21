@@ -479,10 +479,11 @@
                 <ToggleButton x:Name="FullScreenToggle" Style="{StaticResource IconToggleStyle}" Click="OnFullScreenToggle" ToolTipService.ToolTip="{x:Bind app:L.T('全画面 (F11)', 'Full screen (F11)')}">
                     <FontIcon Glyph="&#xE740;" FontSize="16" />
                 </ToggleButton>
-                <Button Style="{StaticResource IconButtonStyle}" Click="OnMute" ToolTipService.ToolTip="{x:Bind app:L.T('ミュート', 'Mute')}">
+                <!-- スマホで鳴っている間は灰色（スマホの音量はそのスマホで変える。Spotify と同じ） -->
+                <Button Style="{StaticResource IconButtonStyle}" Click="OnMute" IsEnabled="{x:Bind Player.CanChangeVolume, Mode=OneWay}" ToolTipService.ToolTip="{x:Bind app:L.T('ミュート', 'Mute')}">
                     <FontIcon Glyph="{x:Bind VolumeGlyph(Player.Volume), Mode=OneWay}" FontSize="16" />
                 </Button>
-                <Slider Width="110" Minimum="0" Maximum="1" StepFrequency="0.01" Value="{x:Bind Player.Volume, Mode=TwoWay}" VerticalAlignment="Center" IsThumbToolTipEnabled="False" />
+                <Slider Width="110" Minimum="0" Maximum="1" StepFrequency="0.01" Value="{x:Bind Player.Volume, Mode=TwoWay}" IsEnabled="{x:Bind Player.CanChangeVolume, Mode=OneWay}" VerticalAlignment="Center" IsThumbToolTipEnabled="False" />
             </StackPanel>
         </Grid>
 

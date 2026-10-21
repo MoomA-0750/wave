@@ -100,7 +100,13 @@ public sealed partial class PlayerService : ObservableObject
     [ObservableProperty] private string? sourceId;
 
     /// <summary>ほかの端末で鳴っている（下のバー・右の欄・キューは、その端末の再生を映し、操作はその端末への命令になる）。</summary>
-    [ObservableProperty] private bool isRemote;
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(CanChangeVolume))] private bool isRemote;
+
+    /// <summary>映している端末が音量を知らせている（PC）。スマホ・前の版の端末なら false で、音量のつまみは灰色（Spotify と同じ）。</summary>
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(CanChangeVolume))] private bool remoteVolumeKnown;
+
+    /// <summary>音量のつまみを動かせる（手元で鳴らしている、または映している端末が PC）。</summary>
+    public bool CanChangeVolume => !IsRemote || RemoteVolumeKnown;
 
     /// <summary>鳴らしている端末の名前（IsRemote のとき）。</summary>
     [ObservableProperty] private string? remoteDevice;
@@ -257,16 +263,29 @@ public sealed partial class PlayerService : ObservableObject
     }
 
     /// <summary>
-    /// 音量のつまみ。ほかの端末を映している間はその端末の音量を映し、動かすとその端末へ送る（Spotify と同じ）。
+    /// 音量のつまみ。ほかの端末を映している間はその端末のアプリの中の音量を映し、動かすとその端末へ送る（Spotify と同じ）。
+    /// 映している端末がスマホ（音量を知らせない）なら動かせない（スマホの音量はそのスマホで変える）。
     /// 手元の音量（localVolume）は変えない。端末そのものの音量はどちらの端末でも変えない。
     /// </summary>
-    partial void OnVolumeChanged(double value)
+    partial void OnVolumeChanged(double oldValue, double newValue)
     {
         if (IsRemote)
         {
-            if (!applyingRemoteVolume) SendVolumeToRemote();
+            if (applyingRemoteVolume) return;
+            if (RemoteVolumeKnown)
+            {
+                SendVolumeToRemote();
+            }
+            else
+            {
+                // 遠隔で本体の音量を上げると、あとで別のアプリが大きな音で鳴るので、つまみを戻す
+                applyingRemoteVolume = true;
+                Volume = oldValue;
+                applyingRemoteVolume = false;
+            }
             return;
         }
+        var value = newValue;
         localVolume = value;
         player.Volume = value;
         AppServices.Settings.Volume = value;
@@ -1338,6 +1357,7 @@ public sealed partial class PlayerService : ObservableObject
             OnPropertyChanged(nameof(Repeat));
         }
         // 相手の音量をつまみに映す（本人が動かした直後は、届いた古い値で戻さない）
+        RemoteVolumeKnown = next.VolumePercent is not null;
         if (next.VolumePercent is { } percent && clock.ElapsedMilliseconds >= remoteVolumeHoldUntilMs)
         {
             applyingRemoteVolume = true;
@@ -1390,6 +1410,7 @@ public sealed partial class PlayerService : ObservableObject
         // つまみを手元の音量に戻す
         remoteVolumeTimer?.Stop();
         remoteVolumeHoldUntilMs = 0;
+        RemoteVolumeKnown = false;
         Volume = localVolume;
         var backup = localBackup;
         localBackup = null;

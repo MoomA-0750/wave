@@ -133,7 +133,7 @@ public sealed record CursorBody
     /// <summary>表示だけ（順序の判断に使わない）。</summary>
     public required long StartedAtEpochMs { get; init; }
 
-    /// <summary>鳴らしている端末の音量（PC はアプリの中の音量、スマホ・時計は本体の音量）（0〜100）。ほかの端末の音量の表示に使う。前の版の書き手は付けない（null）。</summary>
+    /// <summary>鳴らしている端末の音量（PC のアプリの中の音量。スマホ・時計は音量を合わせないので載せない・受けない）（0〜100）。ほかの端末の音量の表示に使う。前の版の書き手は付けない（null）。</summary>
     public int? VolumePercent { get; init; }
 }
 
@@ -188,7 +188,7 @@ public abstract record CommandBody
         /// </summary>
         public string? OnItemId { get; init; }
 
-        /// <summary>音量（volume のときだけ、0〜100）。鳴らしている端末の音量（PC はアプリの中の音量、スマホ・時計は本体の音量）にする。</summary>
+        /// <summary>音量（volume のときだけ、0〜100）。鳴らしている端末の音量（PC のアプリの中の音量。スマホ・時計は音量を合わせないので載せない・受けない）にする。</summary>
         public int? VolumePercent { get; init; }
     }
 
@@ -277,7 +277,7 @@ public enum ControlAction
     /// <summary>宛先の端末に「ここで再生（引き取り）」を頼む。宛先は書き手でない端末。</summary>
     [JsonStringEnumMemberName("transfer")] Transfer,
 
-    /// <summary>鳴らしている端末の音量（PC はアプリの中の音量、スマホ・時計は本体の音量）を変える（VolumePercent）。</summary>
+    /// <summary>鳴らしている端末の音量（PC のアプリの中の音量。スマホ・時計は音量を合わせないので載せない・受けない）を変える（VolumePercent）。</summary>
     [JsonStringEnumMemberName("volume")] Volume,
 }
 

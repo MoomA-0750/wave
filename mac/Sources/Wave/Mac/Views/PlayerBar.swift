@@ -86,6 +86,7 @@ struct PlayerBar: View {
             if inlineVolume {
                 Button(action: mute) { Image(systemName: volumeSymbol(player.volume)).font(.system(size: 15)).frame(width: 20) }
                     .buttonStyle(IconButtonStyle()).help(L.t("ミュート", "Mute"))
+                    .disabled(!player.canChangeVolume)
                 volumeSlider(player)
             } else {
                 // 狭いとき: 音量のアイコンを押すと、ミュートと音量のバーの小窓を出す
@@ -95,6 +96,7 @@ struct PlayerBar: View {
                         HStack(spacing: 8) {
                             Button(action: mute) { Image(systemName: volumeSymbol(player.volume)).font(.system(size: 15)).frame(width: 20) }
                                 .buttonStyle(IconButtonStyle()).help(L.t("ミュート", "Mute"))
+                                .disabled(!player.canChangeVolume)
                             volumeSlider(player)
                         }
                         .padding(12)
@@ -104,7 +106,10 @@ struct PlayerBar: View {
     }
 
     private func volumeSlider(_ player: PlayerService) -> some View {
+        // スマホで鳴っている間は灰色（スマホの音量はそのスマホで変える。Spotify と同じ）
         Slider(value: Binding(get: { player.volume }, set: { player.volume = $0 }), in: 0...1).frame(width: 110).controlSize(.small)
+            .disabled(!player.canChangeVolume)
+            .help(player.canChangeVolume ? "" : L.t("スマホで鳴っている間は、そのスマホで音量を変えます", "Change the volume on the phone that's playing"))
     }
 
     private var isLyrics: Bool { if case .lyrics = AppServices.nav.current.route { return true } else { return false } }

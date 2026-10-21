@@ -139,7 +139,7 @@ data class CursorBody(
     val accountTag: String,
     /** 表示だけ（順序の判断に使わない）。 */
     val startedAtEpochMs: Long,
-    /** 鳴らしている端末の音量（PC はアプリの中の音量、スマホ・時計は本体の音量）（0〜100）。ほかの端末の音量の表示に使う。前の版の書き手は付けない（null）。 */
+    /** 鳴らしている端末の音量（PC のアプリの中の音量。スマホ・時計は音量を合わせないので載せない・受けない）（0〜100）。ほかの端末の音量の表示に使う。前の版の書き手は付けない（null）。 */
     val volumePercent: Int? = null,
 )
 
@@ -184,7 +184,7 @@ sealed interface CommandBody {
          * （曲の終わりぎわに押した「次へ」が、曲が変わった後に届いて次の曲まで飛ばすのを防ぐ）。前の版の送り手は付けない（null）。
          */
         val onItemId: String? = null,
-        /** 音量（volume のときだけ、0〜100）。鳴らしている端末の音量（PC はアプリの中の音量、スマホ・時計は本体の音量）にする。 */
+        /** 音量（volume のときだけ、0〜100）。鳴らしている端末の音量（PC のアプリの中の音量。スマホ・時計は音量を合わせないので載せない・受けない）にする。 */
         val volumePercent: Int? = null,
     ) : CommandBody
 
@@ -284,7 +284,7 @@ enum class ControlAction {
     @SerialName("transfer")
     Transfer,
 
-    /** 鳴らしている端末の音量（PC はアプリの中の音量、スマホ・時計は本体の音量）を変える（volumePercent）。 */
+    /** 鳴らしている端末の音量（PC のアプリの中の音量。スマホ・時計は音量を合わせないので載せない・受けない）を変える（volumePercent）。 */
     @SerialName("volume")
     Volume,
 }

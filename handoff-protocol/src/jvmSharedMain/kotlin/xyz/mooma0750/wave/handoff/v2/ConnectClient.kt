@@ -115,7 +115,7 @@ class ConnectClient(
             positionMs: Long?,
         ): Boolean = false
 
-        /** 遠隔の音量に従う（この端末が鳴らしている）。この端末の音量（PC はアプリの中の音量、スマホ・時計は本体の音量）を volumePercent（0〜100）にする。受け付けなければ false。 */
+        /** 遠隔の音量に従う（この端末が鳴らしている）。この端末の音量（PC のアプリの中の音量。スマホ・時計は音量を合わせないので載せない・受けない）を volumePercent（0〜100）にする。受け付けなければ false。 */
         fun volume(volumePercent: Int): Boolean = false
 
         /**
@@ -164,7 +164,7 @@ class ConnectClient(
         val historySent: Boolean,
         /** positionMs を取った時刻（nowMs と同じ単調時計）。再生中なら、書くときに経過を足す。 */
         val capturedAtMs: Long,
-        /** この端末の音量（0〜100）（PC はアプリの中の音量、スマホ・時計は本体の音量）。 */
+        /** この端末の音量（0〜100）（PC のアプリの中の音量。スマホ・時計は音量を合わせないので載せない・受けない）。 */
         val volumePercent: Int? = null,
     )
 
@@ -939,7 +939,7 @@ class ConnectClient(
     }
 
     /**
-     * 遠隔の音量を送る（鳴っていない端末から、今鳴らしている同じアカウントの端末へ。その端末の音量（PC はアプリの中の音量、スマホ・時計は本体の音量）を 0〜100 にする）。
+     * 遠隔の音量を送る（鳴っていない端末から、今鳴らしている同じアカウントの端末へ。その端末の音量（PC のアプリの中の音量。スマホ・時計は音量を合わせないので載せない・受けない）を 0〜100 にする）。
      * @return 送ったか
      */
     fun sendVolume(volumePercent: Int): Boolean {

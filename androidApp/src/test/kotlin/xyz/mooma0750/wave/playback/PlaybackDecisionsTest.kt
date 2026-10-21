@@ -101,20 +101,4 @@ class PlaybackDecisionsTest {
         assertFalse(selection(wasPlaying = false, playingAfter = false))
         assertFalse(selection(wasEmpty = true, countAfter = 0))
     }
-
-    @Test
-    fun deviceVolumeMapsToSharedPercentAndBack() {
-        // Pixel 3 の音楽の音量は 0〜25 段
-        assertEquals(0, PlaybackDecisions.devicePercent(0, 0, 25))
-        assertEquals(100, PlaybackDecisions.devicePercent(25, 0, 25))
-        assertEquals(40, PlaybackDecisions.devicePercent(10, 0, 25))
-        assertEquals(0, PlaybackDecisions.deviceStep(0, 0, 25))
-        assertEquals(25, PlaybackDecisions.deviceStep(100, 0, 25))
-        assertEquals(9, PlaybackDecisions.deviceStep(37, 0, 25))
-        // 範囲の外は端にする
-        assertEquals(25, PlaybackDecisions.deviceStep(140, 0, 25))
-        assertEquals(0, PlaybackDecisions.deviceStep(-3, 0, 25))
-        // 往復しても段がずれない
-        for (step in 0..25) assertEquals(step, PlaybackDecisions.deviceStep(PlaybackDecisions.devicePercent(step, 0, 25), 0, 25))
-    }
 }

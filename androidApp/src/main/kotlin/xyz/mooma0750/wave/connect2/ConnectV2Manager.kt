@@ -188,7 +188,7 @@ class ConnectV2Manager(
         val capturedAtMs: Long,
         val playing: Boolean,
         val repeat: HandoffRepeat,
-        /** その端末の音量（PC はアプリの中の音量、スマホ・時計は本体の音量）（0〜100）。前の版の端末は付けない（null）。 */
+        /** その端末の音量（PC のアプリの中の音量。スマホ・時計は音量を合わせないので載せない・受けない）（0〜100）。前の版の端末は付けない（null）。 */
         val volumePercent: Int? = null,
         /** 項目ごとの、自分で足した曲か（キューの画面の「キューの次の曲」とキューを消去）。 */
         val userAdded: List<Boolean> = emptyList(),
@@ -338,7 +338,7 @@ class ConnectV2Manager(
         if (sent != true) mutableEvents.tryEmit(ClientEvent.ServerError(CONTROL_UNSENT))
     }
 
-    /** 画面・音量ボタンから: 鳴らしている端末の音量（PC はアプリの中の音量、スマホ・時計は本体の音量）を変える（0〜100）。 */
+    /** 画面・音量ボタンから: 鳴らしている端末の音量（PC のアプリの中の音量。スマホ・時計は音量を合わせないので載せない・受けない）を変える（0〜100）。 */
     fun volume(volumePercent: Int) =
         post {
             val sent = client?.sendVolume(volumePercent)

@@ -519,7 +519,8 @@ fun NowPlayingScreen(
                         enabled = remote == null,
                     )
                 }
-                // 手元で鳴らしている間は本体の音量（音量ボタンと同じ）。ほかの端末を映している間はその端末の音量（PC はアプリの中の音量、スマホは本体の音量。音量ボタンでも変えられる）
+                // 手元で鳴らしている間は本体の音量（音量ボタンと同じ）。PC を映している間はその PC のアプリの中の音量（音量ボタンでも変えられる）。
+                // ほかのスマホを映している間は出さない（スマホの音量はそのスマホで変える。Spotify と同じ）
                 val volume = display.volumePercent
                 val systemVolume = rememberSystemVolume()
                 if (remote != null && volume != null || remote == null && controller != null) {
@@ -1022,7 +1023,7 @@ private class Display(
     }
 
     /**
-     * ほかの端末を映している間の、その端末の音量（0〜100。PC はアプリの中の音量、スマホは本体の音量）。音量を知らせない前の版の端末・手元で鳴らしている間は null
+     * PC を映している間の、その PC のアプリの中の音量（0〜100）。スマホ・音量を知らせない前の版の端末を映している間・手元で鳴らしている間は null
      * （手元は本体の音量を SystemVolume で直に読む）。
      */
     val volumePercent: Int?
