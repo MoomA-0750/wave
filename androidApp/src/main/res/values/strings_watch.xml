@@ -46,7 +46,6 @@
     <string name="wear_connect_headphones">Connect headphones to play</string>
     <string name="wear_remote_searching">Looking for your phone…</string>
     <string name="wear_remote_no_phone_short">Phone not found</string>
-    <string name="wear_this_watch">This watch</string>
     <string name="wear_phone">Phone</string>
     <string name="wear_open_on_phone_playback">Open the player when your phone starts playing</string>
 </resources>

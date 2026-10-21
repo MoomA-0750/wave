@@ -10,16 +10,12 @@ import androidx.wear.compose.foundation.rememberSwipeToDismissBoxState
 import xyz.mooma0750.wave.core.music.PlaylistSummary
 import xyz.mooma0750.wave.core.music.Song
 
-/** 時計の画面。スマホの Screen と同じものに、時計だけのもの（再生画面・キュー・歌詞・音量・曲のメニューなど）を足す。 */
+/** 時計の画面。スマホの Screen と同じものに、時計だけのもの（再生画面・歌詞・音量・曲のメニューなど。キューは再生画面の下のページ）を足す。 */
 sealed interface WearScreen {
     data object Home : WearScreen
 
     data object NowPlaying : WearScreen
 
-    data object Queue : WearScreen
-
-    /** スマホのキュー（スマホの再生画面から）。 */
-    data object PhoneQueue : WearScreen
 
     data object Lyrics : WearScreen
 

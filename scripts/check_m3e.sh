@@ -7,14 +7,21 @@ root="${1:-.}"
 fail=0
 
 # Compose を import している .kt だけを見る（build・third_party は除く）
+# Wear の画面（androidx.wear.compose を import している）は決まりが違うので check_m3e_wear.sh に回す
 mapfile -t files < <(grep -rlE --include='*.kt' '^import androidx\.compose\.' "$root" 2>/dev/null \
-  | grep -vE '/(build|third_party)/')
-[ "${#files[@]}" -eq 0 ] && { echo 'm3e: Compose のファイルなし'; exit 0; }
+  | grep -vE '/(build|third_party)/' \
+  | while read -r f; do grep -qE '^import androidx\.wear\.compose\.' "$f" || echo "$f"; done)
+wear="$(dirname "$0")/check_m3e_wear.sh"
+if [ "${#files[@]}" -eq 0 ]; then
+  if [ -x "$wear" ]; then exec "$wear" "$root"; fi
+  echo 'm3e: Compose のファイルなし'; exit 0
+fi
 
 report() { # $1=説明 $2=grep -E の式 $3=テーマファイルを除くか(1/0)
   local hits
-  hits=$(grep -nE "$2" "${files[@]}" 2>/dev/null \
+  hits=$(grep -HnE "$2" "${files[@]}" 2>/dev/null \
     | grep -v 'm3e-allow' \
+    | grep -vE '^[^:]+:[0-9]+:[[:space:]]*(//|\*|/\*)' \
     | { if [ "$3" = 1 ]; then grep -vE '/(Theme|Color|Shape|Type)\.kt:'; else cat; fi; })
   if [ -n "$hits" ]; then
     printf '\n## %s\n%s\n' "$1" "$hits"
@@ -41,26 +48,7 @@ report '色の直書き → MaterialTheme.colorScheme' \
 report '角丸の直書き → MaterialTheme.shapes / MaterialShapes' \
   'RoundedCornerShape\(' 1
 
-# Wear OS（androidx.wear.compose.material3）は名前が同じでも中身が Expressive。そのかわり、既定のままだと Expressive にならないものを見る
-mapfile -t wear_files < <(grep -lE '^import androidx\.wear\.compose\.material3\.' "${files[@]}" 2>/dev/null)
-if [ "${#wear_files[@]}" -gt 0 ]; then
-  report_wear() { # $1=説明 $2=見つけた行
-    if [ -n "$2" ]; then
-      printf '\n## %s\n%s\n' "$1" "$2"
-      fail=1
-    fi
-  }
-  # テーマの動きの既定は Standard。MotionScheme.expressive() を渡す（m3e-allow があっても見る）
-  report_wear 'Wear のテーマに Expressive の動きを渡していない → MaterialTheme(…, motionScheme = MotionScheme.expressive())' \
-    "$(grep -nE '(^|[^.A-Za-z])MaterialTheme[[:space:]]*\(' "${wear_files[@]}" | grep -v 'MotionScheme\.expressive()')"
-  # アイコンのボタンの形の既定は押しても変わらない。呼び出しの引数（中身の { まで）に shapes = …animatedShapes() を探す
-  report_wear 'Wear のアイコンのボタンが押しても形が変わらない → shapes = IconButtonDefaults.animatedShapes()（トグルは IconToggleButtonDefaults.animatedShapes()）' \
-    "$(awk '
-      FNR == 1 { open = 0 }
-      !open && /(^|[^A-Za-z.])(Filled|FilledTonal|Outlined)?Icon(Toggle)?Button[[:space:]]*\(/ && !/m3e-allow/ { open = 1; start = FILENAME ":" FNR ": " $0; ok = 0 }
-      open { if (/[Aa]nimatedShapes\(/) ok = 1; if (/\)[[:space:]]*\{/ || /\{[[:space:]]*$/) { if (!ok) print start; open = 0 } }
-    ' "${wear_files[@]}" | sed -E 's/[[:space:]]+/ /g')"
-fi
-
 if [ "$fail" = 0 ]; then echo 'm3e: 問題なし'; fi
+# 同じ場所に Wear 版があれば続けて走らせる（Wear のファイルが無ければ何も出さない）
+if [ -x "$wear" ]; then "$wear" "$root" --quiet-if-none || fail=1; fi
 exit "$fail"

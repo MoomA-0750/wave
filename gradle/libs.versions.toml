@@ -28,6 +28,7 @@ androidxTestExtJunit = "1.3.0"
 androidxTestRunner = "1.7.0"
 # Wear OS 版（時計の画面は Wear の Material 3 で作る）
 wearCompose = "1.7.1"
+horologist = "0.8.4-alpha"
 wearInput = "1.2.0"
 wearOngoing = "1.1.0"
 wearPhoneInteractions = "1.1.1"
@@ -71,8 +72,9 @@ androidx-camera-view = { module = "androidx.camera:camera-view", version.ref = "
 zxing-core = { module = "com.google.zxing:core", version.ref = "zxing" }
 wear-compose-material3 = { module = "androidx.wear.compose:compose-material3", version.ref = "wearCompose" }
 wear-compose-foundation = { module = "androidx.wear.compose:compose-foundation", version.ref = "wearCompose" }
-# 時計の再生ボタンの形を変える（Wear の Material 3 が使っているものと同じ版）
-androidx-graphics-shapes = { module = "androidx.graphics:graphics-shapes", version = "1.0.1" }
+# 時計の再生画面（Google の Wear 向けライブラリ。Wear OS のメディア操作の指針どおりの部品）
+horologist-media-ui-material3 = { module = "com.google.android.horologist:horologist-media-ui-material3", version.ref = "horologist" }
+horologist-audio-ui-material3 = { module = "com.google.android.horologist:horologist-audio-ui-material3", version.ref = "horologist" }
 wear-input = { module = "androidx.wear:wear-input", version.ref = "wearInput" }
 wear-ongoing = { module = "androidx.wear:wear-ongoing", version.ref = "wearOngoing" }
 wear-phone-interactions = { module = "androidx.wear:wear-phone-interactions", version.ref = "wearPhoneInteractions" }

@@ -93,7 +93,12 @@ dependencies {
     // 時計の画面
     "wearImplementation"(libs.wear.compose.material3)
     "wearImplementation"(libs.wear.compose.foundation)
-    "wearImplementation"(libs.androidx.graphics.shapes)
+    // 画像は wave の Coil 3 で渡すので、Horologist が連れてくる Coil 2 は入れない
+    "wearImplementation"(libs.horologist.media.ui.material3) {
+        exclude(group = "io.coil-kt")
+        exclude(group = "com.google.android.horologist", module = "horologist-images-coil")
+    }
+    "wearImplementation"(libs.horologist.audio.ui.material3)
     "wearImplementation"(libs.wear.input)
     "wearImplementation"(libs.wear.ongoing)
     "wearImplementation"(libs.wear.phone.interactions)

@@ -607,3 +607,13 @@
 - 再生ボタンは指針の 70・54dp だと輪に重なって見えたので、64・50dp にした
 - 下のボタンは大きい画面で3つ（評価・キュー・メニュー）、小さい画面で2つ。小さい画面でメニューがあるときは評価を外す（メニューの「プレイリストに追加」で代わりになる）
 - 背景のアートワークはぼかした。指針はアートワークから色の組を作るとしているが、Wear の Material 3 には種の色から色の組を作る口が無いので、まだしていない
+
+## 2026-10-21 時計の再生画面は Horologist の部品を使う。キューは下のページ
+
+- 前の版では、波打つ輪と再生ボタンの形の移り変わりを自分で描いていた。本人に「公式にあるのに自分で書く必要は無いはず」と言われて調べ直すと、Google の Horologist（`horologist-media-ui-material3`・`horologist-audio-ui-material3` 0.8.4-alpha）に、手本の動画と同じ再生画面（`PlayerScreen`・`AnimatedMediaControlButtons`・`AnimatedMediaInfoDisplay`・`ArtworkImageBackground`・`SettingsButton`）があったので置き換えた。自前の描画と graphics-shapes の直接の依存は消した
+- Horologist の画像の部品（`horologist-images-coil`）は Coil 2 を連れてくるので外し、アートワークは wave の Coil 3 で渡す（`Paintable` を自分で実装）
+- 本人の希望で、下のボタンからキューを外し、「再生する端末」と評価を置いた。キューは Wear の Material 3 の縦のページ送り（`VerticalPagerScaffold`）で、再生画面の下のページにした。ベゼルは再生画面では音量なので、ページ送りには使わない
+- 再生画面の上の端末名を押してスマホと時計の表示を入れ替える仕組みはやめた。端末のボタンから端末の画面を開き、再生そのものを移す
+- Wear の Material 3 1.7.1 の `MaterialTheme` は、動きを渡さないと Standard になる（`LocalMotionScheme` の既定が `MotionScheme.standard()`。バイトコードで確かめた）ので、`MotionScheme.expressive()` を渡したままにする
+- デバッグ版の APK は Horologist が連れてくるもの（アイコン集・Lottie など）で 58MB から 108MB に増えた
+

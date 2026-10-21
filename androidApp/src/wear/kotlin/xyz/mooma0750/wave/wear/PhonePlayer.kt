@@ -7,15 +7,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.Player
 import androidx.wear.compose.foundation.lazy.items
-import androidx.wear.compose.material3.Icon
-import androidx.wear.compose.material3.IconButton
-import androidx.wear.compose.material3.IconButtonDefaults
-import androidx.wear.compose.material3.MaterialTheme
 import kotlinx.coroutines.delay
 import xyz.mooma0750.wave.R
 import xyz.mooma0750.wave.watchlink.RemoteState
@@ -74,84 +69,69 @@ private fun rememberPhonePosition(
 @Composable
 fun PhoneNowPlayingScreen(
     remote: WatchRemote,
-    deviceLabel: String?,
-    onDeviceLabel: () -> Unit,
-    onOpenQueue: () -> Unit,
+    onOpenDevices: () -> Unit,
 ) {
     WatchPhone(remote)
     val peer by remote.peer.collectAsStateWithLifecycle()
     val status by remote.peerStatus.collectAsStateWithLifecycle()
     val phone = peer
-    if (phone == null) {
-        PlayerLayout(
-            artworkUrl = null,
-            progress = 0f,
-            title = stringResource(if (status == WatchRemote.PeerStatus.NotFound) R.string.wear_remote_no_phone_short else R.string.wear_remote_searching),
-            subtitle = "",
-            onSubtitle = null,
-            deviceIcon = R.drawable.ic_smartphone,
-            deviceLabel = deviceLabel,
-            onDeviceLabel = onDeviceLabel,
-            isPlaying = false,
-            enabled = false,
-            hasNext = false,
-            onPrevious = {},
-            onPlayPause = {},
-            onNext = {},
-            volume = { null },
-            onRotate = { false },
-            likeButton = null,
-            onOpenQueue = null,
-            onOpenMenu = null,
-        )
-        return
-    }
-    val position = rememberPhonePosition(remote, phone)
+    val position = phone?.let { rememberPhonePosition(remote, it) } ?: 0L
     // 押した直後は、スマホの答えが来るまで押したほうの見た目にしておく
     var pressedPlay by remember { androidx.compose.runtime.mutableStateOf<Boolean?>(null) }
-    LaunchedEffect(phone.playing) { pressedPlay = null }
-    val playing = pressedPlay ?: phone.playing
+    LaunchedEffect(phone?.playing) { pressedPlay = null }
+    val playing = pressedPlay ?: (phone?.playing == true)
     var lastVolumeAt by remember { mutableLongStateOf(0L) }
-    PlayerLayout(
-        artworkUrl = phone.thumbnailUrl,
-        progress = if (phone.durationMs > 0) (position.toFloat() / phone.durationMs).coerceIn(0f, 1f) else 0f,
-        title = phone.title ?: stringResource(R.string.wear_nothing_playing),
-        subtitle = listOfNotNull(phone.artist, phone.playingOn?.let { stringResource(R.string.nowplaying_playing_on, it) }).joinToString(" · "),
-        onSubtitle = null,
-        deviceIcon = R.drawable.ic_smartphone,
-        deviceLabel = deviceLabel,
-        onDeviceLabel = onDeviceLabel,
-        isPlaying = playing,
-        enabled = phone.hasQueue,
+    // ほかの端末を映していれば、その端末のアイコン
+    val deviceIcon = if (phone?.playingOn != null) R.drawable.ic_computer else R.drawable.ic_smartphone
+    val liked = phone?.liked
+    WavePlayer(
+        title =
+            when {
+                phone != null -> phone.title ?: stringResource(R.string.wear_nothing_playing)
+                status == WatchRemote.PeerStatus.NotFound -> stringResource(R.string.wear_remote_no_phone_short)
+                else -> null
+            },
+        subtitle = listOfNotNull(phone?.artist, phone?.playingOn?.let { stringResource(R.string.nowplaying_playing_on, it) }).joinToString(" · "),
+        artworkUrl = phone?.thumbnailUrl,
+        deviceIcon = deviceIcon,
+        loading = phone == null && status != WatchRemote.PeerStatus.NotFound,
+        playing = playing,
+        buffering = false,
+        enabled = phone?.hasQueue == true,
+        hasPrevious = true,
         hasNext = true,
-        onPrevious = { remote.command(WatchRemote.CMD_PREVIOUS) },
-        onPlayPause = {
-            pressedPlay = !playing
-            remote.command(if (playing) WatchRemote.CMD_PAUSE else WatchRemote.CMD_PLAY)
+        positionMs = position,
+        durationMs = phone?.durationMs ?: 0L,
+        onPlay = {
+            pressedPlay = true
+            remote.command(WatchRemote.CMD_PLAY)
         },
+        onPause = {
+            pressedPlay = false
+            remote.command(WatchRemote.CMD_PAUSE)
+        },
+        onPrevious = { remote.command(WatchRemote.CMD_PREVIOUS) },
         onNext = { remote.command(WatchRemote.CMD_NEXT) },
         // スマホの音量は数で届かないので、ゲージは出さない
         volume = { null },
         onRotate = { up ->
             // 回し続けたときに送りすぎない
             val now = SystemClock.elapsedRealtime()
-            if (now - lastVolumeAt >= VOLUME_STEP_MS) {
+            if (phone != null && now - lastVolumeAt >= VOLUME_STEP_MS) {
                 lastVolumeAt = now
                 remote.command(if (up) WatchRemote.CMD_VOLUME_UP else WatchRemote.CMD_VOLUME_DOWN)
             }
             false
         },
-        likeButton = {
-            val liked = phone.liked
-            SecondaryButton(
+        device = PlayerAction(deviceIcon, stringResource(R.string.nowplaying_connected_devices), onClick = onOpenDevices),
+        like =
+            PlayerAction(
                 if (liked == true) R.drawable.ic_check_circle else R.drawable.ic_add_circle,
                 stringResource(if (liked == true) R.string.nowplaying_unlike else R.string.nowplaying_like),
                 selected = liked == true,
                 enabled = liked != null,
-            ) { liked?.let { remote.command(if (it) WatchRemote.CMD_UNLIKE else WatchRemote.CMD_LIKE) } }
-        },
-        onOpenQueue = if (phone.playingOn == null && phone.queue.isNotEmpty()) onOpenQueue else null,
-        onOpenMenu = null,
+            ) { liked?.let { remote.command(if (it) WatchRemote.CMD_UNLIKE else WatchRemote.CMD_LIKE) } },
+        menu = null,
     )
 }
 
