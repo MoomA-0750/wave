@@ -32,7 +32,7 @@ report 'ScalingLazyColumn → TransformingLazyColumn ＋ 各項目に transforme
   '(^import androidx\.wear\.compose\.foundation\.lazy\.ScalingLazyColumn$|(^|[^A-Za-z.])ScalingLazyColumn[[:space:]]*[({])' 0
 report '形が動かない shapes() → animatedShapes()（トグルでオン・オフも形で見せるなら variantAnimatedShapes()）' \
   '(IconButton|IconToggleButton|TextButton|TextToggleButton)Defaults\.shapes\(' 0
-report 'MotionScheme.standard() → 渡さない（Wear の MaterialTheme の既定が Expressive）' \
+report 'MotionScheme.standard() → MotionScheme.expressive()（Wear 1.7 の MaterialTheme の既定は standard）' \
   'MotionScheme\.standard\(' 0
 report 'tween / 自前の spring → MaterialTheme.motionScheme.*Spec()' \
   '(^|[^A-Za-z.])(tween|spring)[[:space:]]*[(<]' 0
@@ -42,6 +42,28 @@ report '色の直書き → MaterialTheme.colorScheme' \
   '(^|[^A-Za-z])Color\(0x' 1
 report '角丸の直書き → MaterialTheme.shapes / MaterialShapes' \
   'RoundedCornerShape\(' 1
+
+# テーマを張るファイルに MotionScheme.expressive() が無い（Wear 1.7 の既定は standard で、弾まない）
+for f in "${files[@]}"; do
+  if grep -nE '(^|[^.A-Za-z])MaterialTheme[[:space:]]*[({]' "$f" | grep -v 'm3e-allow' | grep -qvE '^[0-9]+:[[:space:]]*(//|\*)' \
+     && ! grep -q 'MotionScheme\.expressive()' "$f"; then
+    printf '\n## [Wear] MaterialTheme に motionScheme = MotionScheme.expressive() を渡していない（既定は standard）\n%s\n' \
+      "$(grep -nE '(^|[^.A-Za-z])MaterialTheme[[:space:]]*[({]' "$f" | grep -v 'm3e-allow' | sed "s|^|$f:|")"
+    fail=1
+  fi
+done
+
+# アイコンのボタン・文字のボタンに animatedShapes を渡していない（既定の形は押しても変わらない）。
+# 呼び出しの引数（中身の { まで）に animatedShapes( / variantAnimatedShapes( / shapes = を探す（wave の検査から）
+hits=$(awk '
+  FNR == 1 { open = 0 }
+  !open && /(^|[^A-Za-z.])(Filled|FilledTonal|Outlined)?(Icon|Text)(Toggle)?Button[[:space:]]*\(/ && !/m3e-allow/ && !/^[[:space:]]*(\/\/|\*)/ && !/fun / { open = 1; start = FILENAME ":" FNR ": " $0; ok = 0 }
+  open { if (/[Aa]nimatedShapes\(|shapes[[:space:]]*=/) ok = 1; if (/\)[[:space:]]*\{/ || /\{[[:space:]]*$/ || /\)[[:space:]]*$/ && !/\($/) { if (!ok) print start; open = 0 } }
+' "${files[@]}")
+if [ -n "$hits" ]; then
+  printf '\n## [Wear] アイコン／文字のボタンに shapes を渡していない（押しても形が変わらない）→ shapes = …Defaults.animatedShapes()（トグルでオン・オフも見せるなら variantAnimatedShapes()）\n%s\n' "$hits"
+  fail=1
+fi
 
 # ファイル単位: transformedHeight を使っているのに SurfaceTransformation が無い（高さだけ縮んで形が変わらない）
 for f in "${files[@]}"; do
