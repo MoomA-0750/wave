@@ -265,6 +265,12 @@ object DebugActions {
                     }
                 // 名前の一致する自分のプレイリストを消す（確かめで作ったものの後片付け。Windows 版の playlist-delete と同じ）
                 "nav_log" -> navLogRequests.tryEmit(Unit)
+                // 時計: スマホの再生が届いたことにする（path は state か started、json は RemoteState）
+                "remote_fake" ->
+                    container.watchRemote.debugReceive(
+                        "/wave/remote/" + (intent.getStringExtra("path") ?: "state"),
+                        (intent.getStringExtra("json") ?: return@launch).encodeToByteArray(),
+                    )
                 "playlist_delete_named" -> {
                     val title = intent.getStringExtra("title") ?: "wave 確認用"
                     val playlists = (container.music.libraryPlaylists() as? CallResult.Ok)?.value.orEmpty().filter { it.editable && it.title == title }

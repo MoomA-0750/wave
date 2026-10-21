@@ -8,6 +8,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.res.stringResource
@@ -73,7 +74,7 @@ class MainActivity : ComponentActivity() {
 
     private fun openFromIntent(intent: android.content.Intent?) {
         // 再生中の通知・進行中の表示から開いた: 再生画面へ
-        if (intent?.getBooleanExtra(EXTRA_OPEN_NOW_PLAYING, false) == true) nav.openNowPlaying()
+        if (intent?.getBooleanExtra(EXTRA_OPEN_NOW_PLAYING, false) == true || intent?.action == ACTION_REMOTE_MEDIA_ACTIVITY) nav.openNowPlaying()
         val album = intent?.getStringExtra(xyz.mooma0750.wave.releases.ReleaseWatcher.EXTRA_ALBUM)
         val artist = intent?.getStringExtra(xyz.mooma0750.wave.releases.ReleaseWatcher.EXTRA_ARTIST)
         when {
@@ -88,9 +89,20 @@ class MainActivity : ComponentActivity() {
      */
     private val previewUi = androidx.compose.runtime.mutableStateOf(false)
 
+    private val notificationPermission =
+        registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { granted ->
+            Log.i(WaveApplication.LOG_TAG, "notification permission granted=$granted")
+        }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val container = (application as WaveApplication).container
+        // 通知の許可が無いと、スマホで再生が始まったときに裏から再生画面を開けない（全画面で開く通知を使う）。時計の再生中の通知も出ない
+        if (android.os.Build.VERSION.SDK_INT >= 33 &&
+            androidx.core.content.ContextCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+        }
         if (container.isDebuggable && intent?.getBooleanExtra("preview_ui", false) == true) previewUi.value = true
         DebugActions.handle(intent, container)
         if (savedInstanceState == null) openFromIntent(intent)
@@ -109,8 +121,24 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        (application as WaveApplication).container.watchRemote.let {
+            it.uiVisible = true
+            it.closePlayerNotice()
+        }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        (application as WaveApplication).container.watchRemote.uiVisible = false
+    }
+
     companion object {
-        const val EXTRA_OPEN_NOW_PLAYING = "open_now_playing"
+        const val EXTRA_OPEN_NOW_PLAYING = xyz.mooma0750.wave.watchlink.WatchRemote.EXTRA_OPEN_NOW_PLAYING
+
+        /** Wear OS がスマホの再生に合わせて開く（MediaManager.ACTION_REMOTE_MEDIA_ACTIVITY）。 */
+        private const val ACTION_REMOTE_MEDIA_ACTIVITY = "com.google.wear.services.media.action.REMOTE_MEDIA_ACTIVITY"
     }
 }
 
@@ -189,6 +217,33 @@ private fun LoggedIn(
         }
     }
     val likedTitle = stringResource(R.string.main_liked_songs)
+    // 再生画面にどちらを出すか。スマホの操作を主にし、この時計で鳴らしている間は時計（choosePlayerTarget）。上の端末名を押すと入れ替える
+    val remote = container.watchRemote
+    val phone by remote.peer.collectAsStateWithLifecycle()
+    val (watchState, _) = xyz.mooma0750.wave.nowplaying.rememberPlayerUiState(container.player)
+    val chosen = xyz.mooma0750.wave.wear.choosePlayerTarget(watchState.isPlaying, watchState.queue.isNotEmpty(), phone)
+    var override by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<xyz.mooma0750.wave.wear.PlayerTarget?>(null) }
+    // 時計で鳴り始めたら、入れ替えた表示を戻す
+    LaunchedEffect(watchState.isPlaying) { if (watchState.isPlaying) override = null }
+    val target = override ?: chosen
+    val canSwap = phone != null && (watchState.queue.isNotEmpty() || target == xyz.mooma0750.wave.wear.PlayerTarget.Watch)
+    val deviceLabel =
+        when (target) {
+            xyz.mooma0750.wave.wear.PlayerTarget.Phone -> phone?.deviceName ?: stringResource(R.string.wear_phone)
+            xyz.mooma0750.wave.wear.PlayerTarget.Watch -> stringResource(R.string.wear_this_watch)
+        }
+    val swapTarget = {
+        if (canSwap) override = if (target == xyz.mooma0750.wave.wear.PlayerTarget.Phone) xyz.mooma0750.wave.wear.PlayerTarget.Watch else xyz.mooma0750.wave.wear.PlayerTarget.Phone
+    }
+    // スマホで再生が始まったら（スマホが知らせてくる）、スマホの再生画面へ
+    LaunchedEffect(remote) {
+        remote.phoneStarted.collect {
+            override = null
+            nav.openNowPlaying()
+        }
+    }
+    // メニューを開いている間もスマホの様子を見る（いちばん上にスマホの曲を出す）
+    xyz.mooma0750.wave.wear.WatchPhone(remote)
     // スマホの再生を時計へ引き取ったら、再生画面へ
     LaunchedEffect(container) {
         // 前に済んだ結果（StateFlow が最初に返すもの）では開かない
@@ -199,15 +254,28 @@ private fun LoggedIn(
 
     WearNavHost(nav) { screen ->
         when (screen) {
-            WearScreen.Home -> HomeMenu(container.player, hasDevices = true, onOpen = nav::push)
+            WearScreen.Home -> HomeMenu(container.player, phone.takeIf { target == xyz.mooma0750.wave.wear.PlayerTarget.Phone }, hasDevices = true, onOpen = nav::push)
             WearScreen.NowPlaying ->
-                NowPlayingScreen(
-                    container.player,
-                    container.playlistMembership,
-                    onOpenQueue = { nav.push(WearScreen.Queue) },
-                    onOpenMenu = { nav.push(WearScreen.SongPage(it)) },
-                    onAddToPlaylist = { nav.push(WearScreen.AddToPlaylist(it)) },
-                )
+                when (target) {
+                    xyz.mooma0750.wave.wear.PlayerTarget.Phone ->
+                        xyz.mooma0750.wave.wear.PhoneNowPlayingScreen(
+                            remote,
+                            deviceLabel = deviceLabel,
+                            onDeviceLabel = swapTarget,
+                            onOpenQueue = { nav.push(WearScreen.PhoneQueue) },
+                        )
+                    xyz.mooma0750.wave.wear.PlayerTarget.Watch ->
+                        NowPlayingScreen(
+                            container.player,
+                            container.playlistMembership,
+                            deviceLabel = deviceLabel.takeIf { phone != null },
+                            onDeviceLabel = swapTarget,
+                            onOpenQueue = { nav.push(WearScreen.Queue) },
+                            onOpenMenu = { nav.push(WearScreen.SongPage(it)) },
+                            onAddToPlaylist = { nav.push(WearScreen.AddToPlaylist(it)) },
+                        )
+                }
+            WearScreen.PhoneQueue -> xyz.mooma0750.wave.wear.PhoneQueueScreen(remote)
             WearScreen.Queue -> QueueScreen(container.player, onOpenSong = { song, itemId -> nav.push(WearScreen.SongPage(song, queueItemId = itemId)) })
             WearScreen.Lyrics -> LyricsScreen(container.player, container.lyrics)
             WearScreen.Volume -> VolumeScreen()
@@ -316,8 +384,7 @@ private fun LoggedIn(
             }
             WearScreen.Settings -> SettingsScreen(container, account, onOpenDevices = { nav.push(WearScreen.Devices) })
             WearScreen.Devices -> {
-                val (playerState, _) = xyz.mooma0750.wave.nowplaying.rememberPlayerUiState(container.player)
-                xyz.mooma0750.wave.wear.DevicesScreen(container.watchRemote, watchHasQueue = playerState.queue.isNotEmpty())
+                xyz.mooma0750.wave.wear.DevicesScreen(container.watchRemote, watchHasQueue = watchState.queue.isNotEmpty())
             }
             WearScreen.Ai -> xyz.mooma0750.wave.wear.AiScreen(container.aiChat, onPlay = play::song)
         }

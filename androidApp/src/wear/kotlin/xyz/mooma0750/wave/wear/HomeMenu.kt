@@ -12,16 +12,28 @@ import xyz.mooma0750.wave.playback.PlayerConnection
 @Composable
 fun HomeMenu(
     connection: PlayerConnection,
+    /** 再生画面にスマホの再生を出すときの、スマホの様子（この時計の再生を出すときは null）。 */
+    phone: xyz.mooma0750.wave.watchlink.RemoteState?,
     hasDevices: Boolean,
     onOpen: (WearScreen) -> Unit,
 ) {
     val (state, _) = rememberPlayerUiState(connection)
     val liked = stringResource(R.string.main_liked_songs)
     ListScreen(stringResource(R.string.app_name)) { look ->
-        if (state.title != null) {
-            item(key = "now") {
-                ActionRow(look, if (state.isPlaying) R.drawable.ic_graphic_eq else R.drawable.ic_play_circle, state.title.orEmpty(), state.artist) { onOpen(WearScreen.NowPlaying) }
-            }
+        when {
+            phone != null ->
+                item(key = "now") {
+                    ActionRow(
+                        look,
+                        if (phone.playing) R.drawable.ic_graphic_eq else R.drawable.ic_smartphone,
+                        phone.title ?: stringResource(R.string.wear_nothing_playing),
+                        listOfNotNull(phone.playingOn ?: phone.deviceName, phone.artist).joinToString(" · "),
+                    ) { onOpen(WearScreen.NowPlaying) }
+                }
+            state.title != null ->
+                item(key = "now") {
+                    ActionRow(look, if (state.isPlaying) R.drawable.ic_graphic_eq else R.drawable.ic_play_circle, state.title.orEmpty(), state.artist) { onOpen(WearScreen.NowPlaying) }
+                }
         }
         item(key = "search") { ActionRow(look, R.drawable.ic_search, stringResource(R.string.nav_search)) { onOpen(WearScreen.Search) } }
         item(key = "home") { ActionRow(look, R.drawable.ic_home, stringResource(R.string.nav_home)) { onOpen(WearScreen.Feed) } }

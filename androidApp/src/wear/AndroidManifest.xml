@@ -5,6 +5,8 @@
     <uses-feature android:name="android.hardware.type.watch" />
     <!-- 曲を流している間、画面が消えても再生画面へすぐ戻れるようにする（進行中の操作として出す） -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- スマホで再生が始まったとき、裏から再生画面を開く（全画面で開く通知） -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
 
     <application>
         <!-- スマホが無くても単独で動く（ログインだけはスマホから受け取る） -->
@@ -24,6 +26,11 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- スマホで再生が始まったとき、Wear OS が自動で開く（本人が時計の設定で「メディアの自動起動」を入れているとき）。再生画面を開く -->
+            <intent-filter>
+                <action android:name="com.google.wear.services.media.action.REMOTE_MEDIA_ACTIVITY" />
+                <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
 

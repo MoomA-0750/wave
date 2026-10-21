@@ -44,4 +44,9 @@
     <string name="wear_ai_not_configured">スマホの wave で Claude が設定されていません。先にスマホで設定してください。</string>
     <string name="wear_ai_unreachable">スマホを通して Claude につながりませんでした。スマホが近くにあるか確かめてください。</string>
     <string name="wear_connect_headphones">イヤホンをつなぐと鳴ります</string>
+    <string name="wear_remote_searching">スマホを探しています…</string>
+    <string name="wear_remote_no_phone_short">スマホが見つかりません</string>
+    <string name="wear_this_watch">この時計</string>
+    <string name="wear_phone">スマホ</string>
+    <string name="wear_open_on_phone_playback">スマホで再生したら再生画面を出す</string>
 </resources>

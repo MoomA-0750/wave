@@ -44,4 +44,9 @@
     <string name="wear_ai_not_configured">Claude isn\'t set up on your phone. Set it up in wave on your phone first.</string>
     <string name="wear_ai_unreachable">Couldn\'t reach Claude through your phone. Check that your phone is nearby.</string>
     <string name="wear_connect_headphones">Connect headphones to play</string>
+    <string name="wear_remote_searching">Looking for your phone…</string>
+    <string name="wear_remote_no_phone_short">Phone not found</string>
+    <string name="wear_this_watch">This watch</string>
+    <string name="wear_phone">Phone</string>
+    <string name="wear_open_on_phone_playback">Open the player when your phone starts playing</string>
 </resources>

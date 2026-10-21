@@ -51,13 +51,15 @@ import xyz.mooma0750.wave.playback.Media3QueuePlayer
 import xyz.mooma0750.wave.playback.PlayerConnection
 
 /**
- * 時計の再生画面。周りの輪が進み具合、真ん中に曲名と前・再生・次、下に評価（✓）・キュー・メニュー。
+ * 時計の再生画面（この時計で鳴らしている曲）。周りの輪が進み具合、真ん中に曲名と前・再生・次、下に評価（✓）・キュー・メニュー。
  * ベゼル（回転入力）で音量を変える（Wear OS の音楽アプリと同じ）。
  */
 @Composable
 fun NowPlayingScreen(
     connection: PlayerConnection,
     membership: PlaylistMembership,
+    deviceLabel: String?,
+    onDeviceLabel: () -> Unit,
     onOpenQueue: () -> Unit,
     onOpenMenu: (Song) -> Unit,
     onAddToPlaylist: (Song) -> Unit,
@@ -68,7 +70,6 @@ fun NowPlayingScreen(
     val context = LocalContext.current
     val audio = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
     var volume by remember { mutableFloatStateOf(audio.volumeFraction()) }
-    var volumeShownAt by remember { mutableLongStateOf(0L) }
     // 時計のスピーカーでは鳴らさない（Wear OS の決まり）。イヤホンが無くて止められたら、出力先を選ぶ画面を1回だけ開き、案内も出す
     var suppressed by remember { androidx.compose.runtime.mutableStateOf(false) }
     androidx.compose.runtime.DisposableEffect(controller) {
@@ -89,14 +90,72 @@ fun NowPlayingScreen(
         read()
         onDispose { current.removeListener(listener) }
     }
+    val progress = if (state.durationMs > 0) (state.positionMs.toFloat() / state.durationMs).coerceIn(0f, 1f) else 0f
+    PlayerLayout(
+        artworkUrl = song?.thumbnailUrl,
+        progress = progress,
+        title = state.title ?: stringResource(R.string.wear_nothing_playing),
+        subtitle =
+            when {
+                suppressed -> stringResource(R.string.wear_connect_headphones)
+                state.error != null -> stringResource(R.string.nowplaying_error)
+                state.buffering -> stringResource(R.string.nowplaying_buffering)
+                else -> state.artist.orEmpty()
+            },
+        // イヤホンが無いときは、押すと出力先を選ぶ画面を開く
+        onSubtitle = if (suppressed) ({ openOutputSwitcher(context) }) else null,
+        deviceLabel = deviceLabel,
+        onDeviceLabel = onDeviceLabel,
+        isPlaying = state.isPlaying,
+        enabled = controller != null,
+        hasNext = state.hasNext,
+        onPrevious = { controller?.seekToPrevious() },
+        onPlayPause = { controller?.let { if (it.isPlaying) it.pause() else it.play() } },
+        onNext = { controller?.seekToNext() },
+        volume = { volume },
+        onRotate = { up ->
+            audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, if (up) AudioManager.ADJUST_RAISE else AudioManager.ADJUST_LOWER, 0)
+            volume = audio.volumeFraction()
+            true
+        },
+        likeButton = { LikeButton(connection, membership, song, onSaved = { song?.let(onAddToPlaylist) }, scope = scope) },
+        onOpenQueue = onOpenQueue,
+        onOpenMenu = song?.let { { onOpenMenu(it) } },
+    )
+}
+
+/**
+ * 再生画面の並び（この時計の再生とスマホの再生で同じ形）。周りの輪が進み具合、上にどこで鳴っているか、真ん中に曲名と前・再生・次、下に評価・キュー・メニュー。
+ * ベゼルを回すと onRotate（true を返したら少しの間だけ音量を出す）。
+ */
+@Composable
+fun PlayerLayout(
+    artworkUrl: String?,
+    progress: Float,
+    title: String,
+    subtitle: String,
+    onSubtitle: (() -> Unit)?,
+    deviceLabel: String?,
+    onDeviceLabel: () -> Unit,
+    isPlaying: Boolean,
+    enabled: Boolean,
+    hasNext: Boolean,
+    onPrevious: () -> Unit,
+    onPlayPause: () -> Unit,
+    onNext: () -> Unit,
+    volume: () -> Float?,
+    onRotate: (up: Boolean) -> Boolean,
+    likeButton: @Composable () -> Unit,
+    onOpenQueue: (() -> Unit)?,
+    onOpenMenu: (() -> Unit)?,
+) {
+    var volumeShownAt by remember { mutableLongStateOf(0L) }
     ScreenScaffold {
         Box(
             Modifier
                 .fillMaxSize()
                 .onRotaryScrollEvent { event ->
-                    audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, if (event.verticalScrollPixels > 0) AudioManager.ADJUST_RAISE else AudioManager.ADJUST_LOWER, 0)
-                    volume = audio.volumeFraction()
-                    volumeShownAt = System.currentTimeMillis()
+                    if (onRotate(event.verticalScrollPixels > 0)) volumeShownAt = System.currentTimeMillis()
                     true
                 }
                 // Wear の画面の重なり（スワイプで戻る箱など）ではフォーカスを階層で配るので、表に出たときに受け取る（requestFocus では届かなかった）
@@ -105,7 +164,7 @@ fun NowPlayingScreen(
             contentAlignment = Alignment.Center,
         ) {
             // 背景に今の曲のアートワーク（文字とボタンが読めるよう、上に暗い幕をかける）
-            song?.thumbnailUrl?.let { url ->
+            artworkUrl?.let { url ->
                 coil3.compose.AsyncImage(
                     model = Media3QueuePlayer.largeArtwork(url),
                     contentDescription = null,
@@ -114,7 +173,6 @@ fun NowPlayingScreen(
                 )
                 androidx.compose.foundation.layout.Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background.copy(alpha = 0.6f)))
             }
-            val progress = if (state.durationMs > 0) (state.positionMs.toFloat() / state.durationMs).coerceIn(0f, 1f) else 0f
             // 部品は渡した関数の中で読んだ状態の変化だけを追うので、状態を通して渡す（値をそのまま渡すと最初の値のまま動かない）
             val progressState = androidx.compose.runtime.rememberUpdatedState(progress)
             CircularProgressIndicator(progress = { progressState.value }, modifier = Modifier.fillMaxSize().padding(3.dp), strokeWidth = 5.dp)
@@ -126,58 +184,64 @@ fun NowPlayingScreen(
                 delay(1_500)
                 showVolume = 0f
             }
-            if (showVolume > 0f) LevelIndicator(value = { volume }, modifier = Modifier.align(Alignment.CenterStart).padding(start = 10.dp))
+            val level = volume()
+            if (showVolume > 0f && level != null) LevelIndicator(value = { level }, modifier = Modifier.align(Alignment.CenterStart).padding(start = 10.dp))
             Column(
-                Modifier.fillMaxSize().padding(horizontal = 28.dp, vertical = 30.dp),
+                Modifier.fillMaxSize().padding(horizontal = 28.dp, vertical = 22.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.SpaceBetween,
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(top = 14.dp)) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    // どこで鳴っているか（押すとスマホとこの時計の表示を切り替える）
                     Text(
-                        state.title ?: stringResource(R.string.wear_nothing_playing),
+                        deviceLabel.orEmpty(),
+                        modifier = Modifier.clickable(enabled = deviceLabel != null, onClick = onDeviceLabel).padding(horizontal = 8.dp, vertical = 2.dp),
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
+                        style = MaterialTheme.typography.labelSmall,
+                        textAlign = TextAlign.Center,
+                    )
+                    Text(
+                        title,
                         modifier = Modifier.basicMarquee(),
                         maxLines = 1,
                         style = MaterialTheme.typography.titleMedium,
                         textAlign = TextAlign.Center,
                     )
                     Text(
-                        when {
-                            suppressed -> stringResource(R.string.wear_connect_headphones)
-                            state.error != null -> stringResource(R.string.nowplaying_error)
-                            state.buffering -> stringResource(R.string.nowplaying_buffering)
-                            else -> state.artist.orEmpty()
-                        },
-                        // イヤホンが無いときは、押すと出力先を選ぶ画面を開く
-                        modifier = if (suppressed) Modifier.clickable { openOutputSwitcher(context) } else Modifier,
-                        color = if (suppressed) MaterialTheme.colorScheme.primary else androidx.compose.ui.graphics.Color.Unspecified,
+                        subtitle,
+                        modifier = if (onSubtitle != null) Modifier.clickable(onClick = onSubtitle) else Modifier,
+                        color = if (onSubtitle != null) MaterialTheme.colorScheme.primary else androidx.compose.ui.graphics.Color.Unspecified,
                         maxLines = 1,
                         style = MaterialTheme.typography.bodySmall,
                         textAlign = TextAlign.Center,
                     )
                 }
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    IconButton(onClick = { controller?.seekToPrevious() }, enabled = controller != null) {
+                    IconButton(onClick = onPrevious, enabled = enabled) {
                         Icon(painterResource(R.drawable.ic_skip_previous), stringResource(R.string.nowplaying_previous))
                     }
                     FilledIconButton(
-                        onClick = { controller?.let { if (it.isPlaying) it.pause() else it.play() } },
+                        onClick = onPlayPause,
                         modifier = Modifier.size(IconButtonDefaults.LargeButtonSize),
-                        enabled = controller != null,
+                        enabled = enabled,
                     ) {
                         Icon(
-                            painterResource(if (state.isPlaying) R.drawable.ic_pause else R.drawable.ic_play_arrow),
-                            stringResource(if (state.isPlaying) R.string.nowplaying_pause else R.string.nowplaying_play),
+                            painterResource(if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play_arrow),
+                            stringResource(if (isPlaying) R.string.nowplaying_pause else R.string.nowplaying_play),
                             modifier = Modifier.size(IconButtonDefaults.LargeIconSize),
                         )
                     }
-                    IconButton(onClick = { controller?.seekToNext() }, enabled = state.hasNext) {
+                    IconButton(onClick = onNext, enabled = enabled && hasNext) {
                         Icon(painterResource(R.drawable.ic_skip_next), stringResource(R.string.nowplaying_next))
                     }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    LikeButton(connection, membership, song, onSaved = { song?.let(onAddToPlaylist) }, scope = scope)
-                    IconButton(onClick = onOpenQueue) { Icon(painterResource(R.drawable.ic_queue_music), stringResource(R.string.nowplaying_queue)) }
-                    IconButton(onClick = { song?.let(onOpenMenu) }, enabled = song != null) {
+                    likeButton()
+                    IconButton(onClick = { onOpenQueue?.invoke() }, enabled = onOpenQueue != null) {
+                        Icon(painterResource(R.drawable.ic_queue_music), stringResource(R.string.nowplaying_queue))
+                    }
+                    IconButton(onClick = { onOpenMenu?.invoke() }, enabled = onOpenMenu != null) {
                         Icon(painterResource(R.drawable.ic_more_horiz), stringResource(R.string.library_more_options))
                     }
                 }

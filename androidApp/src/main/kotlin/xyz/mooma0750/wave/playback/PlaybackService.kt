@@ -292,6 +292,8 @@ class PlaybackService : MediaLibraryService() {
                     updateRelayHold(isPlaying)
                     val now = android.os.SystemClock.elapsedRealtime()
                     if (isPlaying) {
+                        // 時計に知らせ、時計の再生画面を出す（スマホだけ。ほかの端末を映している間は鳴っていないので来ない）
+                        container.watchRemote.onLocalPlaybackStarted()
                         skipGuard.onPlaying(now)
                         lastErrorWasThisSong = false
                         // 復元したキューを再生し始めたときなど、曲の遷移を待たずに続きの取得を判断する

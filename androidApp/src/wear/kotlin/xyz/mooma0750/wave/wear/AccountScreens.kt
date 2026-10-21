@@ -74,6 +74,7 @@ fun SettingsScreen(
     val history by container.settings.historyEnabled.collectAsStateWithLifecycle(initialValue = null)
     val queueNotice by container.settings.queueNotice.collectAsStateWithLifecycle(initialValue = null)
     val releaseNotices by container.settings.releaseNotices.collectAsStateWithLifecycle(initialValue = null)
+    val openOnPhone by container.settings.openOnPhonePlayback.collectAsStateWithLifecycle(initialValue = null)
     ListScreen(stringResource(R.string.settings_title)) { look ->
         item(key = "account") {
             val name =
@@ -96,6 +97,7 @@ fun SettingsScreen(
         item(key = "history") { Toggle(look, history, R.string.settings_history_title) { container.appScope.launch { container.settings.setHistoryEnabled(it) } } }
         item(key = "queue") { Toggle(look, queueNotice, R.string.settings_queue_notice_title) { container.appScope.launch { container.settings.setQueueNotice(it) } } }
         item(key = "releases") { Toggle(look, releaseNotices, R.string.settings_release_notices_title) { container.appScope.launch { container.settings.setReleaseNotices(it) } } }
+        item(key = "open-on-phone") { Toggle(look, openOnPhone, R.string.wear_open_on_phone_playback) { container.appScope.launch { container.settings.setOpenOnPhonePlayback(it) } } }
         item(key = "devices") { ActionRow(look, R.drawable.ic_devices, stringResource(R.string.settings_connected_devices), onClick = onOpenDevices) }
         item(key = "logout") { ActionRow(look, R.drawable.ic_logout, stringResource(R.string.settings_log_out)) { confirmLogout = true } }
         item(key = "about") { MessageRow(look, stringResource(R.string.settings_version, BuildConfig.VERSION_NAME)) }

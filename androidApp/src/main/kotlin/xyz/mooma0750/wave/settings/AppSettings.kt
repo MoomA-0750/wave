@@ -77,6 +77,16 @@ class AppSettings(
         store.edit { it[QUEUE_NOTICE] = enabled }
     }
 
+    /** 時計: スマホで再生が始まったら、時計に再生画面を出すか（既定は出す）。 */
+    val openOnPhonePlayback: Flow<Boolean> =
+        store.data
+            .map { it[OPEN_ON_PHONE_PLAYBACK] ?: true }
+            .catch { if (it is IOException) emit(false) else throw it }
+
+    suspend fun setOpenOnPhonePlayback(enabled: Boolean) {
+        store.edit { it[OPEN_ON_PHONE_PLAYBACK] = enabled }
+    }
+
     /** Claude の中継（ai-bridge）の接続先とトークン。設定していなければ null。 */
     val aiBridge: Flow<AiBridgeConfig?> =
         store.data
@@ -144,6 +154,7 @@ class AppSettings(
         val HISTORY_ENABLED = booleanPreferencesKey("history_enabled")
         val RELEASE_NOTICES = booleanPreferencesKey("release_notices")
         val QUEUE_NOTICE = booleanPreferencesKey("queue_notice")
+        val OPEN_ON_PHONE_PLAYBACK = booleanPreferencesKey("open_on_phone_playback")
         val AI_URL = stringPreferencesKey("ai_url")
         val AI_TOKEN = stringPreferencesKey("ai_token")
         val AI_NAME = stringPreferencesKey("ai_name")

@@ -18,6 +18,9 @@ sealed interface WearScreen {
 
     data object Queue : WearScreen
 
+    /** スマホのキュー（スマホの再生画面から）。 */
+    data object PhoneQueue : WearScreen
+
     data object Lyrics : WearScreen
 
     data object Volume : WearScreen
