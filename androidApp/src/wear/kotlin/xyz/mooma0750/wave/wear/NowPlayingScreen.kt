@@ -218,10 +218,11 @@ fun PlayerLayout(
                     )
                 }
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    IconButton(onClick = onPrevious, enabled = enabled) {
+                    IconButton(shapes = IconButtonDefaults.animatedShapes(), onClick = onPrevious, enabled = enabled) {
                         Icon(painterResource(R.drawable.ic_skip_previous), stringResource(R.string.nowplaying_previous))
                     }
                     FilledIconButton(
+                        shapes = IconButtonDefaults.animatedShapes(),
                         onClick = onPlayPause,
                         modifier = Modifier.size(IconButtonDefaults.LargeButtonSize),
                         enabled = enabled,
@@ -232,16 +233,16 @@ fun PlayerLayout(
                             modifier = Modifier.size(IconButtonDefaults.LargeIconSize),
                         )
                     }
-                    IconButton(onClick = onNext, enabled = enabled && hasNext) {
+                    IconButton(shapes = IconButtonDefaults.animatedShapes(), onClick = onNext, enabled = enabled && hasNext) {
                         Icon(painterResource(R.drawable.ic_skip_next), stringResource(R.string.nowplaying_next))
                     }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     likeButton()
-                    IconButton(onClick = { onOpenQueue?.invoke() }, enabled = onOpenQueue != null) {
+                    IconButton(shapes = IconButtonDefaults.animatedShapes(), onClick = { onOpenQueue?.invoke() }, enabled = onOpenQueue != null) {
                         Icon(painterResource(R.drawable.ic_queue_music), stringResource(R.string.nowplaying_queue))
                     }
-                    IconButton(onClick = { onOpenMenu?.invoke() }, enabled = onOpenMenu != null) {
+                    IconButton(shapes = IconButtonDefaults.animatedShapes(), onClick = { onOpenMenu?.invoke() }, enabled = onOpenMenu != null) {
                         Icon(painterResource(R.drawable.ic_more_horiz), stringResource(R.string.library_more_options))
                     }
                 }
@@ -264,6 +265,7 @@ private fun LikeButton(
     val videoId = like.videoId
     val saved = like.savedWith(nowIn)
     IconButton(
+        shapes = IconButtonDefaults.animatedShapes(),
         onClick = {
             when {
                 videoId == null -> Unit

@@ -14,6 +14,7 @@ import androidx.media3.common.Player
 import androidx.wear.compose.foundation.lazy.items
 import androidx.wear.compose.material3.Icon
 import androidx.wear.compose.material3.IconButton
+import androidx.wear.compose.material3.IconButtonDefaults
 import androidx.wear.compose.material3.MaterialTheme
 import kotlinx.coroutines.delay
 import xyz.mooma0750.wave.R
@@ -140,7 +141,7 @@ fun PhoneNowPlayingScreen(
         },
         likeButton = {
             val liked = phone.liked
-            IconButton(onClick = { liked?.let { remote.command(if (it) WatchRemote.CMD_UNLIKE else WatchRemote.CMD_LIKE) } }, enabled = liked != null) {
+            IconButton(shapes = IconButtonDefaults.animatedShapes(), onClick = { liked?.let { remote.command(if (it) WatchRemote.CMD_UNLIKE else WatchRemote.CMD_LIKE) } }, enabled = liked != null) {
                 Icon(
                     painterResource(if (liked == true) R.drawable.ic_check_circle else R.drawable.ic_add_circle),
                     stringResource(if (liked == true) R.string.nowplaying_unlike else R.string.nowplaying_like),

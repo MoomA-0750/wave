@@ -14,6 +14,7 @@ import androidx.wear.compose.foundation.lazy.items
 import androidx.wear.compose.material3.FilledIconButton
 import androidx.wear.compose.material3.Icon
 import androidx.wear.compose.material3.IconButton
+import androidx.wear.compose.material3.IconButtonDefaults
 import xyz.mooma0750.wave.R
 import xyz.mooma0750.wave.watchlink.WatchRemote
 
@@ -66,22 +67,22 @@ fun DevicesScreen(
                 if (phone.hasQueue) {
                     item(key = "controls") {
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                            IconButton(onClick = { remote.command(WatchRemote.CMD_PREVIOUS) }) { Icon(painterResource(R.drawable.ic_skip_previous), stringResource(R.string.nowplaying_previous)) }
-                            FilledIconButton(onClick = { remote.command(if (phone.playing) WatchRemote.CMD_PAUSE else WatchRemote.CMD_PLAY) }) {
+                            IconButton(shapes = IconButtonDefaults.animatedShapes(), onClick = { remote.command(WatchRemote.CMD_PREVIOUS) }) { Icon(painterResource(R.drawable.ic_skip_previous), stringResource(R.string.nowplaying_previous)) }
+                            FilledIconButton(shapes = IconButtonDefaults.animatedShapes(), onClick = { remote.command(if (phone.playing) WatchRemote.CMD_PAUSE else WatchRemote.CMD_PLAY) }) {
                                 Icon(painterResource(if (phone.playing) R.drawable.ic_pause else R.drawable.ic_play_arrow), stringResource(if (phone.playing) R.string.nowplaying_pause else R.string.nowplaying_play))
                             }
-                            IconButton(onClick = { remote.command(WatchRemote.CMD_NEXT) }) { Icon(painterResource(R.drawable.ic_skip_next), stringResource(R.string.nowplaying_next)) }
+                            IconButton(shapes = IconButtonDefaults.animatedShapes(), onClick = { remote.command(WatchRemote.CMD_NEXT) }) { Icon(painterResource(R.drawable.ic_skip_next), stringResource(R.string.nowplaying_next)) }
                         }
                     }
                     item(key = "volume") {
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            IconButton(onClick = { remote.command(WatchRemote.CMD_VOLUME_DOWN) }) { Icon(painterResource(R.drawable.ic_volume_down), stringResource(R.string.wear_volume_down)) }
+                            IconButton(shapes = IconButtonDefaults.animatedShapes(), onClick = { remote.command(WatchRemote.CMD_VOLUME_DOWN) }) { Icon(painterResource(R.drawable.ic_volume_down), stringResource(R.string.wear_volume_down)) }
                             phone.liked?.let { liked ->
-                                IconButton(onClick = { remote.command(if (liked) WatchRemote.CMD_UNLIKE else WatchRemote.CMD_LIKE) }) {
+                                IconButton(shapes = IconButtonDefaults.animatedShapes(), onClick = { remote.command(if (liked) WatchRemote.CMD_UNLIKE else WatchRemote.CMD_LIKE) }) {
                                     Icon(painterResource(if (liked) R.drawable.ic_check_circle else R.drawable.ic_add_circle), stringResource(if (liked) R.string.nowplaying_unlike else R.string.nowplaying_like))
                                 }
                             }
-                            IconButton(onClick = { remote.command(WatchRemote.CMD_VOLUME_UP) }) { Icon(painterResource(R.drawable.ic_volume_up), stringResource(R.string.wear_volume_up)) }
+                            IconButton(shapes = IconButtonDefaults.animatedShapes(), onClick = { remote.command(WatchRemote.CMD_VOLUME_UP) }) { Icon(painterResource(R.drawable.ic_volume_up), stringResource(R.string.wear_volume_up)) }
                         }
                     }
                     // ほかの端末の再生を映しているときは、スマホのキューではないので引き取らない（先にスマホへ移す）

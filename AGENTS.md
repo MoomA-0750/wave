@@ -6,6 +6,7 @@
 - 何を何へ置き換えるかは `android-m3-expressive` スキルの置き換え表を見る
 - 画面を書いたら `scripts/check_m3e.sh androidApp` が「問題なし」になること（CC では編集のたびにフックで自動検査される）
 - どうしても無印・直書きが正しい行だけ、同じ行の末尾に `// m3e-allow: 理由` を書く
+- 時計（`androidApp/src/wear`）は Wear の Material 3（`androidx.wear.compose.material3`。これが Wear の Expressive）で作り、スマホの部品へ置き換えない。既定のままでは Expressive にならないので、テーマに `MotionScheme.expressive()`、アイコンのボタンに `shapes = IconButtonDefaults.animatedShapes()` を渡す（検査が見る）
 - Windows 版など Android 以外のコードには当てはめない
 
 ## 仕様の管理
