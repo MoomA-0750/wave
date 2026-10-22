@@ -107,7 +107,7 @@ class ApiTest {
         override val changes = MutableSharedFlow<Unit>()
         val controls = ArrayList<Triple<ControlAction, Long?, Int?>>()
 
-        override suspend fun playback() = PlaybackView(true, loggedIn, false, "off", null, null, "2026-10-19T00:00:00Z", null, null)
+        override suspend fun playback() = PlaybackView(true, loggedIn, false, "off", null, null, "2026-10-19T00:00:00Z", null, null, null)
 
         override suspend fun queue() = emptyList<TrackView>()
 
@@ -119,6 +119,16 @@ class ApiTest {
             volumePercent: Int?,
         ): Boolean {
             controls += Triple(action, positionMs, volumePercent)
+            return true
+        }
+
+        val modes = mutableListOf<Pair<Boolean?, HandoffRepeat?>>()
+
+        override suspend fun modes(
+            shuffle: Boolean?,
+            repeat: HandoffRepeat?,
+        ): Boolean {
+            modes += shuffle to repeat
             return true
         }
 
@@ -182,6 +192,10 @@ class ApiTest {
             assertEquals(HttpStatusCode.BadRequest, post("/v1/control", """{"action":"volume","volumePercent":300}""").status)
             assertEquals(HttpStatusCode.BadRequest, post("/v1/control", """{"action":"seek"}""").status)
             assertEquals(HttpStatusCode.BadRequest, post("/v1/control", """{"action":"shuffle"}""").status)
+            assertEquals(HttpStatusCode.OK, post("/v1/control", """{"action":"shuffle","shuffle":true}""").status)
+            assertEquals(HttpStatusCode.OK, post("/v1/control", """{"action":"repeat","repeat":"track"}""").status)
+            assertEquals(HttpStatusCode.BadRequest, post("/v1/control", """{"action":"repeat","repeat":"one"}""").status)
+            assertEquals(listOf<Pair<Boolean?, HandoffRepeat?>>(true to null, null to HandoffRepeat.One), backend.modes)
             assertEquals(HttpStatusCode.BadRequest, post("/v1/queue/jump", """{}""").status)
             assertEquals(HttpStatusCode.BadRequest, post("/v1/queue/jump", """{"index":-1}""").status)
             assertEquals(HttpStatusCode.NotFound, post("/v1/queue/jump", """{"index":3}""").status)

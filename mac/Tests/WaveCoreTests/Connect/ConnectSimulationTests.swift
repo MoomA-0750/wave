@@ -269,6 +269,48 @@ final class ConnectSimulationTests: XCTestCase {
         XCTAssertFalse(try a.client.sendVolume(10))
     }
 
+    func testShuffleAndRepeatCanBeChangedFromAnotherDevice() throws {
+        try setUpHousehold()
+        try a.startPlaying(snapshot)
+        try relay.run()
+        XCTAssertEqual(false, b.client.remoteNowPosition()?.cursor.shuffle)
+        XCTAssertTrue(try b.client.sendShuffle(true))
+        XCTAssertTrue(try b.client.sendRepeat(.one))
+        try relay.run()
+        XCTAssertEqual(true, a.shuffle)
+        XCTAssertEqual(.one, a.repeatMode)
+        try a.pushCursor()
+        try relay.run()
+        XCTAssertEqual(true, b.client.remoteNowPosition()?.cursor.shuffle)
+        XCTAssertEqual(.one, b.client.remoteNowPosition()?.cursor.repeat)
+        XCTAssertFalse(try a.client.sendShuffle(false))
+    }
+
+    func testShuffleAndRepeatAreNotSentToAnOlderDevice() throws {
+        try setUpHousehold()
+        a.shuffle = nil
+        try a.startPlaying(snapshot)
+        try relay.run()
+        XCTAssertNil(b.client.remoteNowPosition()?.cursor.shuffle)
+        XCTAssertFalse(try b.client.sendShuffle(true))
+        XCTAssertFalse(try b.client.sendRepeat(.all))
+    }
+
+    func testShuffleAndRepeatJSONMatchesKotlin() throws {
+        // Kotlin の ModeControlJsonTest と同じ文字列
+        let shuffle = #"{"type":"control","commandId":"c1","from":"dev-b","to":"dev-a","action":"shuffle","positionMs":null,"basedOnVersion":7,"accountTag":"tag","onItemId":null,"volumePercent":null,"shuffle":true,"repeat":null}"#
+        let repeatJSON = #"{"type":"control","commandId":"c2","from":"dev-b","to":"dev-a","action":"repeat","positionMs":null,"basedOnVersion":7,"accountTag":"tag","onItemId":null,"volumePercent":null,"shuffle":null,"repeat":"one"}"#
+        guard case .control(let s)? = ConnectJSON.decode(CommandBody.self, from: shuffle) else { return XCTFail("読めない") }
+        XCTAssertEqual(.shuffle, s.action)
+        XCTAssertEqual(true, s.shuffle)
+        guard case .control(let r)? = ConnectJSON.decode(CommandBody.self, from: repeatJSON) else { return XCTFail("読めない") }
+        XCTAssertEqual(.repeat, r.action)
+        XCTAssertEqual(.one, r.repeat)
+        // Swift が書く形も Kotlin と同じ
+        XCTAssertEqual(shuffle, ConnectJSON.encode(CommandBody.control(s)))
+        XCTAssertEqual(repeatJSON, ConnectJSON.encode(CommandBody.control(r)))
+    }
+
     func testVolumeJSONMatchesKotlin() throws {
         let kotlin = #"{"type":"control","commandId":"c1","from":"dev-b","to":"dev-a","action":"volume","positionMs":null,"basedOnVersion":7,"accountTag":"tag","onItemId":null,"volumePercent":35}"#
         guard case .control(let control)? = ConnectJSON.decode(CommandBody.self, from: kotlin) else { return XCTFail("読めない") }

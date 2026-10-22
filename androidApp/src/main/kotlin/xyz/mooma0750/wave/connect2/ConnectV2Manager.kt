@@ -192,7 +192,12 @@ class ConnectV2Manager(
         val volumePercent: Int? = null,
         /** 項目ごとの、自分で足した曲か（キューの画面の「キューの次の曲」とキューを消去）。 */
         val userAdded: List<Boolean> = emptyList(),
+        /** その端末のシャッフル。前の版の端末は付けない（null）。null の端末にはシャッフル・繰り返しを送れない。 */
+        val shuffle: Boolean? = null,
     ) {
+        /** シャッフル・繰り返しを遠隔で変えられる相手か。 */
+        val modesControllable: Boolean get() = shuffle != null
+
         val current: xyz.mooma0750.wave.core.music.Song get() = items[currentIndex]
 
         /** 今の位置（再生中なら経過を足す。曲の長さで止める）。ライブには位置が無いので 0。 */
@@ -229,6 +234,7 @@ class ConnectV2Manager(
         val label = labels[now.writer] ?: resources.getString(R.string.connect_v2_member_unknown, now.writer.take(6))
         return RemotePlayback(now.writer, label, songs, items.map { it.itemId }, index, now.positionMs, SystemClock.elapsedRealtime(), now.cursor.playing, now.cursor.repeat, now.cursor.volumePercent,
             items.map { it.origin == xyz.mooma0750.wave.handoff.HandoffOrigin.UserAdded },
+            now.cursor.shuffle,
         )
     }
 
@@ -343,6 +349,22 @@ class ConnectV2Manager(
         post {
             val sent = client?.sendVolume(volumePercent)
             Log.i(WaveApplication.LOG_TAG, "connect-v2 volume percent=$volumePercent sent=$sent")
+            if (sent != true) mutableEvents.tryEmit(ClientEvent.ServerError(CONTROL_UNSENT))
+        }
+
+    /** 画面から: 鳴らしている端末のシャッフルを入れる・切る。 */
+    fun shuffle(on: Boolean) =
+        post {
+            val sent = client?.sendShuffle(on)
+            Log.i(WaveApplication.LOG_TAG, "connect-v2 shuffle on=$on sent=$sent")
+            if (sent != true) mutableEvents.tryEmit(ClientEvent.ServerError(CONTROL_UNSENT))
+        }
+
+    /** 画面から: 鳴らしている端末の繰り返しを変える。 */
+    fun repeat(mode: xyz.mooma0750.wave.handoff.HandoffRepeat) =
+        post {
+            val sent = client?.sendRepeat(mode)
+            Log.i(WaveApplication.LOG_TAG, "connect-v2 repeat mode=$mode sent=$sent")
             if (sent != true) mutableEvents.tryEmit(ClientEvent.ServerError(CONTROL_UNSENT))
         }
 
@@ -558,6 +580,16 @@ class ConnectV2Manager(
             override fun volume(volumePercent: Int): Boolean {
                 Log.i(WaveApplication.LOG_TAG, "connect-v2 volume received percent=$volumePercent")
                 return runBlocking(Dispatchers.Main) { host.endpoint?.volume(volumePercent) == true }
+            }
+
+            override fun shuffle(on: Boolean): Boolean {
+                Log.i(WaveApplication.LOG_TAG, "connect-v2 shuffle received on=$on")
+                return runBlocking(Dispatchers.Main) { host.endpoint?.shuffle(on) == true }
+            }
+
+            override fun repeat(mode: xyz.mooma0750.wave.handoff.HandoffRepeat): Boolean {
+                Log.i(WaveApplication.LOG_TAG, "connect-v2 repeat received mode=$mode")
+                return runBlocking(Dispatchers.Main) { host.endpoint?.repeat(mode) == true }
             }
 
             override fun queueAdd(
@@ -832,7 +864,7 @@ class ConnectV2Manager(
         }
     }
 
-    private fun ConnectV2Host.Cursor.toLocal() = ConnectClient.LocalCursor(currentItemId, positionMs, playing, repeat, listenedMs, historySent, SystemClock.elapsedRealtime(), volumePercent)
+    private fun ConnectV2Host.Cursor.toLocal() = ConnectClient.LocalCursor(currentItemId, positionMs, playing, repeat, listenedMs, historySent, SystemClock.elapsedRealtime(), volumePercent, shuffle)
 
     // --- 画面・debug からの操作 ---
 

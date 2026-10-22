@@ -312,6 +312,51 @@ public class ConnectSimulationTests
     }
 
     [Fact]
+    public void ShuffleAndRepeatCanBeChangedFromAnotherDevice()
+    {
+        SetUp();
+        a.StartPlaying(snapshot);
+        relay.Run();
+        Assert.False(b.Client.RemoteNowPosition()?.Cursor.Shuffle);
+        Assert.True(b.Client.SendShuffle(true));
+        Assert.True(b.Client.SendRepeat(HandoffRepeat.One));
+        relay.Run();
+        Assert.Equal((true, HandoffRepeat.One), (a.Shuffle, a.Repeat));
+        a.PushCursor();
+        relay.Run();
+        var cursor = b.Client.RemoteNowPosition()!.Cursor;
+        Assert.Equal((true, HandoffRepeat.One), (cursor.Shuffle, cursor.Repeat));
+        Assert.False(a.Client.SendShuffle(false));
+    }
+
+    [Fact]
+    public void ShuffleAndRepeatAreNotSentToAnOlderDevice()
+    {
+        SetUp();
+        a.Shuffle = null;
+        a.StartPlaying(snapshot);
+        relay.Run();
+        Assert.Null(b.Client.RemoteNowPosition()?.Cursor.Shuffle);
+        Assert.False(b.Client.SendShuffle(true));
+        Assert.False(b.Client.SendRepeat(HandoffRepeat.All));
+    }
+
+    [Fact]
+    public void ShuffleAndRepeatJsonMatchesKotlin()
+    {
+        // Kotlin の ModeControlJsonTest と同じ文字列
+        const string shuffle = """{"type":"control","commandId":"c1","from":"dev-b","to":"dev-a","action":"shuffle","positionMs":null,"basedOnVersion":7,"accountTag":"tag","onItemId":null,"volumePercent":null,"shuffle":true,"repeat":null}""";
+        const string repeat = """{"type":"control","commandId":"c2","from":"dev-b","to":"dev-a","action":"repeat","positionMs":null,"basedOnVersion":7,"accountTag":"tag","onItemId":null,"volumePercent":null,"shuffle":null,"repeat":"one"}""";
+        var s = Assert.IsType<CommandBody.Control>(ConnectJson.Decode<CommandBody>(shuffle));
+        Assert.Equal((ControlAction.Shuffle, true), (s.Action, s.Shuffle));
+        var r = Assert.IsType<CommandBody.Control>(ConnectJson.Decode<CommandBody>(repeat));
+        Assert.Equal((ControlAction.Repeat, HandoffRepeat.One), (r.Action, r.Repeat));
+        // C# が書く形も Kotlin と同じ
+        Assert.Equal(shuffle, ConnectJson.Encode<CommandBody>(s));
+        Assert.Equal(repeat, ConnectJson.Encode<CommandBody>(r));
+    }
+
+    [Fact]
     public void VolumeJsonMatchesKotlin()
     {
         const string kotlin = """{"type":"control","commandId":"c1","from":"dev-b","to":"dev-a","action":"volume","positionMs":null,"basedOnVersion":7,"accountTag":"tag","onItemId":null,"volumePercent":35}""";

@@ -100,7 +100,13 @@ public sealed partial class PlayerService : ObservableObject
     [ObservableProperty] private string? sourceId;
 
     /// <summary>ほかの端末で鳴っている（下のバー・右の欄・キューは、その端末の再生を映し、操作はその端末への命令になる）。</summary>
-    [ObservableProperty] [NotifyPropertyChangedFor(nameof(CanChangeVolume))] private bool isRemote;
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(CanChangeVolume))] [NotifyPropertyChangedFor(nameof(CanChangeModes))] private bool isRemote;
+
+    /// <summary>映している端末がシャッフルを知らせている（遠隔のシャッフル・繰り返しに従う版）。前の版の端末なら false で、シャッフル・リピートは灰色。</summary>
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(CanChangeModes))] private bool remoteModesKnown;
+
+    /// <summary>シャッフル・リピートを変えられる（手元で鳴らしている、または映している端末が従える版）。</summary>
+    public bool CanChangeModes => !IsRemote || RemoteModesKnown;
 
     /// <summary>映している端末が音量を知らせている（PC）。スマホ・前の版の端末なら false で、音量のつまみは灰色（Spotify と同じ）。</summary>
     [ObservableProperty] [NotifyPropertyChangedFor(nameof(CanChangeVolume))] private bool remoteVolumeKnown;
@@ -304,6 +310,26 @@ public sealed partial class PlayerService : ObservableObject
 
     /// <summary>ほかの端末の音量（0〜100）を変えてもらう（端末の連携が置く）。送れたら true。</summary>
     public Func<int, bool>? SendRemoteVolume { get; set; }
+
+    /// <summary>ほかの端末のシャッフル・繰り返しを変えてもらう（端末の連携が置く）。送れたら true。</summary>
+    public Func<bool, bool>? SendRemoteShuffle { get; set; }
+    public Func<RepeatMode, bool>? SendRemoteRepeat { get; set; }
+
+    /// <summary>本人が映している端末のシャッフル・繰り返しを変えた直後は、相手の古い値で戻さない（新しいカーソルが届くまで、最大3秒）。</summary>
+    private long remoteModesHoldUntilMs;
+    private bool? wantedRemoteShuffle;
+    private RepeatMode? wantedRemoteRepeat;
+
+    /// <summary>ほかの端末からシャッフルを入れた・切った（この端末が鳴らしている）。</summary>
+    public bool ApplyShuffle(bool on)
+    {
+        if (IsRemote || Current is null) return false;
+        if (Shuffle != on) ToggleShuffle();
+        return true;
+    }
+
+    /// <summary>ほかの端末から繰り返しを変えた（この端末が鳴らしている）。</summary>
+    public bool ApplyRepeat(RepeatMode mode) => !IsRemote && SetRepeat(mode);
 
     /// <summary>映している端末の音量を、つまみの値にしてもらう（動かしている間は 150ms に1回まで）。</summary>
     private void SendVolumeToRemote()
@@ -937,8 +963,13 @@ public sealed partial class PlayerService : ObservableObject
     /// </summary>
     public void ToggleShuffle()
     {
-        // ほかの端末のキューは並べ替えられない（命令が無い）
-        if (IsRemote || Queue.Count == 0 || Current is null || Index < 0) return;
+        // ほかの端末を映している間は、その端末のシャッフルを入れ切りしてもらう（前の版の端末は変えられない）
+        if (IsRemote)
+        {
+            SendModes(!Shuffle, null);
+            return;
+        }
+        if (Queue.Count == 0 || Current is null || Index < 0) return;
         var upcoming = Enumerable.Range(Index + 1, Queue.Count - Index - 1).Select(i => (Song: Queue[i], Meta: itemMeta[i])).ToList();
         // 自分で足した曲（キュー）はシャッフルせず、そのままの順で先頭に置く（Spotify・Android と同じ）
         List<(Song Song, QueueItemMeta Meta)> rest;
@@ -976,7 +1007,41 @@ public sealed partial class PlayerService : ObservableObject
     private void SetShuffleOrder(Dictionary<string, int>? order)
     {
         shuffleOrder = order;
+        var changed = Shuffle != (order is not null);
         Shuffle = order is not null;
+        // ほかの端末にシャッフルの印を知らせる（カーソルに載る）
+        if (changed && !IsRemote) CursorChanged?.Invoke(true);
+    }
+
+    /// <summary>映している端末へシャッフル・繰り返しを送り、届くまでの間は押した値を見せる。</summary>
+    private void SendModes(bool? shuffle, RepeatMode? mode)
+    {
+        if (!RemoteModesKnown) return;
+        var sent = shuffle is { } on ? SendRemoteShuffle?.Invoke(on) : mode is { } m ? SendRemoteRepeat?.Invoke(m) : false;
+        if (sent != true)
+        {
+            Message = L.T("ほかの端末に送れませんでした", "Couldn’t reach the other device");
+            return;
+        }
+        remoteModesHoldUntilMs = clock.ElapsedMilliseconds + 3_000;
+        if (shuffle is { } s)
+        {
+            wantedRemoteShuffle = s;
+            if (this.shuffle != s)
+            {
+                this.shuffle = s;
+                OnPropertyChanged(nameof(Shuffle));
+            }
+        }
+        if (mode is { } r)
+        {
+            wantedRemoteRepeat = r;
+            if (repeat != r)
+            {
+                repeat = r;
+                OnPropertyChanged(nameof(Repeat));
+            }
+        }
     }
 
     /// <summary>キューの項目ごとに、元の一覧での位置を当てる（同じ曲が何度も出るときは前から順に）。</summary>
@@ -994,7 +1059,12 @@ public sealed partial class PlayerService : ObservableObject
     /// <summary>繰り返しを決める（同じなら何もしない）。できなければ false。</summary>
     public bool SetRepeat(RepeatMode mode)
     {
-        if (IsRemote) return false;
+        if (IsRemote)
+        {
+            if (!RemoteModesKnown) return false;
+            SendModes(null, mode);
+            return true;
+        }
         if (Repeat == mode) return true;
         Repeat = mode;
         // 全体リピートを切った: 一覧の終わりが近ければラジオへつなぐ（Android の onRepeatModeChanged と同じ）
@@ -1002,10 +1072,16 @@ public sealed partial class PlayerService : ObservableObject
         return true;
     }
 
-    /// <summary>シャッフルを入れる・切る（同じなら何もしない）。できなければ false。</summary>
+    /// <summary>シャッフルを入れる・切る（同じなら何もしない。ほかの端末を映している間はその端末へ送る）。できなければ false。</summary>
     public bool SetShuffle(bool on)
     {
-        if (IsRemote || Current is null) return false;
+        if (IsRemote)
+        {
+            if (!RemoteModesKnown) return false;
+            if (Shuffle != on) SendModes(on, null);
+            return true;
+        }
+        if (Current is null) return false;
         if (Shuffle != on) ToggleShuffle();
         return true;
     }
@@ -1128,7 +1204,7 @@ public sealed partial class PlayerService : ObservableObject
     {
         if (IsRemote || Current is null || Index < 0 || Index >= itemMeta.Count) return null;
         var position = player.Source is null ? 0 : (long)(player.PlaybackSession.Position.TotalMilliseconds);
-        return new PlaybackCursor(itemMeta[Index].ItemId, Math.Max(0, position), IsPlaying || IsLoading, Repeat, ListenedNow(), statsSent, (int)Math.Round(localVolume * 100));
+        return new PlaybackCursor(itemMeta[Index].ItemId, Math.Max(0, position), IsPlaying || IsLoading, Repeat, ListenedNow(), statsSent, (int)Math.Round(localVolume * 100), Shuffle);
     }
 
     /// <summary>位置の見積もりに使う時計（ミリ秒、単調）。</summary>
@@ -1363,11 +1439,20 @@ public sealed partial class PlayerService : ObservableObject
         }
         IsPlaying = next.Playing;
         UpdateRemoteMediaControls();
-        // 相手のリピートを映すだけ（この端末の設定には書かない）
-        if (repeat != next.Repeat)
+        // 相手のリピート・シャッフルを映すだけ（この端末の設定には書かない）。本人が変えた直後は、それが届くまで古い値で戻さない
+        var holding = clock.ElapsedMilliseconds < remoteModesHoldUntilMs;
+        if (wantedRemoteRepeat is { } wantedRepeat && (!holding || next.Repeat == wantedRepeat)) wantedRemoteRepeat = null;
+        if (wantedRemoteShuffle is { } wantedShuffle && (!holding || next.Shuffle == wantedShuffle)) wantedRemoteShuffle = null;
+        if (wantedRemoteRepeat is null && repeat != next.Repeat)
         {
             repeat = next.Repeat;
             OnPropertyChanged(nameof(Repeat));
+        }
+        RemoteModesKnown = next.Shuffle is not null;
+        if (wantedRemoteShuffle is null && shuffle != (next.Shuffle == true))
+        {
+            shuffle = next.Shuffle == true;
+            OnPropertyChanged(nameof(Shuffle));
         }
         // 相手の音量をつまみに映す（本人が動かした直後は、届いた古い値で戻さない）
         RemoteVolumeKnown = next.VolumePercent is not null;
@@ -1425,6 +1510,15 @@ public sealed partial class PlayerService : ObservableObject
         remoteVolumeHoldUntilMs = 0;
         RemoteVolumeKnown = false;
         Volume = localVolume;
+        // シャッフル・リピートの印を手元のものに戻す
+        RemoteModesKnown = false;
+        remoteModesHoldUntilMs = 0;
+        wantedRemoteShuffle = null;
+        wantedRemoteRepeat = null;
+        shuffle = shuffleOrder is not null;
+        OnPropertyChanged(nameof(Shuffle));
+        this.repeat = (RepeatMode)AppServices.Settings.Repeat;
+        OnPropertyChanged(nameof(Repeat));
         var backup = localBackup;
         localBackup = null;
         if (!restoreLocal) return;
@@ -2229,10 +2323,10 @@ public sealed record QueueExport(
     string? Continuation,
     string? RadioPlaylistId);
 
-public sealed record PlaybackCursor(string CurrentItemId, long PositionMs, bool Playing, RepeatMode Repeat, long ListenedMs, bool HistorySent, int VolumePercent);
+public sealed record PlaybackCursor(string CurrentItemId, long PositionMs, bool Playing, RepeatMode Repeat, long ListenedMs, bool HistorySent, int VolumePercent, bool Shuffle = false);
 
 /// <summary>ほかの端末の再生（表示と遠隔操作のため）。QueueKey はキューの中身の目印（同じなら置き直さない）。</summary>
-public sealed record RemoteSnapshot(string DeviceId, string DeviceLabel, string? QueueKey, QueueExport? Queue, string CurrentItemId, long PositionMs, long CapturedAtMs, bool Playing, RepeatMode Repeat, int? DurationSeconds, long Version = 0, int? VolumePercent = null, bool IsLive = false)
+public sealed record RemoteSnapshot(string DeviceId, string DeviceLabel, string? QueueKey, QueueExport? Queue, string CurrentItemId, long PositionMs, long CapturedAtMs, bool Playing, RepeatMode Repeat, int? DurationSeconds, long Version = 0, int? VolumePercent = null, bool IsLive = false, bool? Shuffle = null)
 {
     /// <summary>今の位置（再生中なら、取ってからの経過を足す。曲の長さで止める）。ライブ配信には位置が無いので 0（経過で伸ばさない。Android・Mac と同じ）。</summary>
     public double PositionNow(long nowMs)

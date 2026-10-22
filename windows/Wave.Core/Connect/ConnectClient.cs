@@ -111,6 +111,12 @@ public sealed class ConnectClient
         /// <summary>遠隔の音量に従う（この端末が鳴らしている）。この端末の音量（PC のアプリの中の音量。スマホ・時計は音量を合わせないので載せない・受けない）を volumePercent（0〜100）にする。受け付けなければ false。</summary>
         bool Volume(int volumePercent) => false;
 
+        /// <summary>遠隔のシャッフルに従う（この端末が鳴らしている）。シャッフルを on にする（同じなら何もしない）。受け付けなければ false。</summary>
+        bool Shuffle(bool on) => false;
+
+        /// <summary>遠隔の繰り返しに従う（この端末が鳴らしている）。受け付けなければ false。</summary>
+        bool Repeat(HandoffRepeat mode) => false;
+
         /// <summary>ほかの端末と合わせたライブラリが届いた（手元に取り込む、ADR-0013）。</summary>
         void LibraryChanged(LibraryBody body)
         {
@@ -122,7 +128,8 @@ public sealed class ConnectClient
 
     /// <summary>手元の再生の、カーソルに入れる値。</summary>
     /// <param name="CapturedAtMs">PositionMs を取った時刻（nowMs と同じ単調時計）。再生中なら、書くときに経過を足す。</param>
-    public sealed record LocalCursor(string CurrentItemId, long PositionMs, bool Playing, HandoffRepeat Repeat, long ListenedMs, bool HistorySent, long CapturedAtMs, int? VolumePercent = null);
+    /// <param name="Shuffle">シャッフル中か（遠隔のシャッフル・繰り返しに従う端末は必ず入れる。ほかの端末はこれを見て操作を出す）。</param>
+    public sealed record LocalCursor(string CurrentItemId, long PositionMs, bool Playing, HandoffRepeat Repeat, long ListenedMs, bool HistorySent, long CapturedAtMs, int? VolumePercent = null, bool? Shuffle = null);
 
     /// <summary>加入の Confirm で受け取った床（D-3）。6桁の照合で確かめた相手（inviter）から、認証された通信路で届いた値。</summary>
     public sealed record JoinInfo
@@ -1121,6 +1128,35 @@ public sealed class ConnectClient
         return send(new RelayV2.Control { Doc = SealCommand(current, command) });
     }
 
+    /// <summary>遠隔のシャッフルを送る（鳴っていない端末から、今鳴らしている同じアカウントの端末へ）。相手のカーソルに Shuffle が無い前の版の端末なら false。</summary>
+    public bool SendShuffle(bool on) => SendModeControl(ControlAction.Shuffle, on, null);
+
+    /// <summary>遠隔の繰り返しを送る。送る条件は <see cref="SendShuffle"/> と同じ。</summary>
+    public bool SendRepeat(HandoffRepeat mode) => SendModeControl(ControlAction.Repeat, null, mode);
+
+    private bool SendModeControl(ControlAction action, bool? shuffle, HandoffRepeat? repeat)
+    {
+        if (IsWriter || pendingStoreId is not null) return false;
+        var current = chain;
+        if (current is null) return false;
+        var tag = effects.AccountTag();
+        if (tag is null) return false;
+        var cursor = latestCursor;
+        if (cursor is null || cursor.Writer == signer.DeviceId || cursor.Body.AccountTag != tag || cursor.Body.Shuffle is null) return false;
+        var command = new CommandBody.Control
+        {
+            CommandId = newId(),
+            From = signer.DeviceId,
+            To = cursor.Writer,
+            Action = action,
+            BasedOnVersion = cursor.Version,
+            AccountTag = tag,
+            Shuffle = shuffle,
+            Repeat = repeat,
+        };
+        return send(new RelayV2.Control { Doc = SealCommand(current, command) });
+    }
+
     /// <summary>キューへの追加の命令1件の平文の上限（詰め物の1ブロック 4096 から長さの欄の 4 バイトを引き、余裕を持たせる。Android と同じ）。</summary>
     internal const int MaxQueueAddPlaintext = 3800;
 
@@ -1274,6 +1310,16 @@ public sealed class ConnectClient
             if (command.VolumePercent is { } percent && percent is >= 0 and <= 100) effects.Volume(percent);
             return;
         }
+        if (command.Action == ControlAction.Shuffle)
+        {
+            if (command.Shuffle is { } on) effects.Shuffle(on);
+            return;
+        }
+        if (command.Action == ControlAction.Repeat)
+        {
+            if (command.Repeat is { } mode) effects.Repeat(mode);
+            return;
+        }
         // 送り手が見ていた曲から、もう次の曲に変わっていたら従わない（遅れて届いた「次へ」で2曲飛ばさない）
         // 比べるのは手元で今鳴っている曲（中継に書いた最新より先に進んでいることがある）
         if (command.OnItemId is not null && command.OnItemId != (local?.CurrentItemId ?? own.Body.CurrentItemId)) return;
@@ -1378,7 +1424,7 @@ public sealed class ConnectClient
         if (claimOrders.TryGetValue(signer.DeviceId, out var order)) session.ClaimOrder = order;
         deferredEvidence.Clear();
         retreated = false;
-        local = new LocalCursor(cursor.Body.CurrentItemId, position, true, cursor.Body.Repeat, cursor.Body.ListenedMs, cursor.Body.HistorySent, nowMs());
+        local = new LocalCursor(cursor.Body.CurrentItemId, position, true, cursor.Body.Repeat, cursor.Body.ListenedMs, cursor.Body.HistorySent, nowMs(), Shuffle: false);
         Persist();
         // B の最初のカーソルで再生中が確定する（D-7）。キューは前の端末の doc をそのまま指す
         dirtyCursor = true;
@@ -1470,6 +1516,7 @@ public sealed class ConnectClient
             AccountTag = tag,
             StartedAtEpochMs = epochMs(),
             VolumePercent = cursor.VolumePercent is { } v ? Math.Clamp(v, 0, 100) : null,
+            Shuffle = cursor.Shuffle,
         };
     }
 

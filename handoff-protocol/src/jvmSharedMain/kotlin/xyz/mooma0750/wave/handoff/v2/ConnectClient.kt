@@ -118,6 +118,12 @@ class ConnectClient(
         /** 遠隔の音量に従う（この端末が鳴らしている）。この端末の音量（PC のアプリの中の音量。スマホ・時計は音量を合わせないので載せない・受けない）を volumePercent（0〜100）にする。受け付けなければ false。 */
         fun volume(volumePercent: Int): Boolean = false
 
+        /** 遠隔のシャッフルに従う（この端末が鳴らしている）。シャッフルを on にする（同じなら何もしない）。受け付けなければ false。 */
+        fun shuffle(on: Boolean): Boolean = false
+
+        /** 遠隔の繰り返しに従う（この端末が鳴らしている）。受け付けなければ false。 */
+        fun repeat(mode: xyz.mooma0750.wave.handoff.HandoffRepeat): Boolean = false
+
         /**
          * 遠隔のキューへの追加に従う（この端末が鳴らしている）。afterItemId の曲が手元のキューにあればその直後、
          * 無ければ next なら今の曲の直後、そうでなければ自分で足した曲のかたまりの最後へ、items の ID のまま入れる。受け付けなければ false。
@@ -166,6 +172,8 @@ class ConnectClient(
         val capturedAtMs: Long,
         /** この端末の音量（0〜100）（PC のアプリの中の音量。スマホ・時計は音量を合わせないので載せない・受けない）。 */
         val volumePercent: Int? = null,
+        /** シャッフル中か（遠隔のシャッフル・繰り返しに従う端末は必ず入れる。ほかの端末はこれを見て操作を出す）。 */
+        val shuffle: Boolean? = null,
     )
 
     /** 加入の Confirm で受け取った床（D-3）。6桁の照合で確かめた相手（inviter）から、認証された通信路で届いた値。 */
@@ -953,6 +961,32 @@ class ConnectClient(
     }
 
     /**
+     * 遠隔のシャッフルを送る（鳴っていない端末から、今鳴らしている同じアカウントの端末へ）。
+     * @return 送ったか（相手のカーソルに shuffle が無い前の版の端末なら false）
+     */
+    fun sendShuffle(on: Boolean): Boolean = sendModeControl(ControlAction.Shuffle, shuffle = on)
+
+    /**
+     * 遠隔の繰り返しを送る。送る条件は [sendShuffle] と同じ。
+     * @return 送ったか
+     */
+    fun sendRepeat(mode: xyz.mooma0750.wave.handoff.HandoffRepeat): Boolean = sendModeControl(ControlAction.Repeat, repeat = mode)
+
+    private fun sendModeControl(
+        action: ControlAction,
+        shuffle: Boolean? = null,
+        repeat: xyz.mooma0750.wave.handoff.HandoffRepeat? = null,
+    ): Boolean {
+        if (isWriter || pendingStoreId != null) return false
+        val current = chain ?: return false
+        val tag = effects.accountTag() ?: return false
+        val cursor = latestCursor ?: return false
+        if (cursor.writer == signer.deviceId || cursor.body.accountTag != tag || cursor.body.shuffle == null) return false
+        val command = CommandBody.Control(newId(), signer.deviceId, cursor.writer, action, null, cursor.version, tag, shuffle = shuffle, repeat = repeat)
+        return send(RelayV2.Control(sealCommand(current, command)))
+    }
+
+    /**
      * 遠隔のキューへの追加を送る（鳴っていない端末から、今鳴らしている同じアカウントの端末へ）。
      * 1件の平文が詰め物の1ブロックに収まるよう分けて送り、2件目からは前の件の最後の曲の後ろに入れてもらう。
      * @return 全部送ったか（家の再生が自分・別のアカウント・最新の状態をまだ見ていない・1曲でも収まらないなら false）
@@ -1163,6 +1197,14 @@ class ConnectClient(
             if (percent in 0..100) effects.volume(percent)
             return
         }
+        if (command.action == ControlAction.Shuffle) {
+            effects.shuffle(command.shuffle ?: return)
+            return
+        }
+        if (command.action == ControlAction.Repeat) {
+            effects.repeat(command.repeat ?: return)
+            return
+        }
         // 送り手が見ていた曲から、もう次の曲に変わっていたら従わない（遅れて届いた「次へ」で2曲飛ばさない）
         // 比べるのは手元で今鳴っている曲（中継に書いた最新より先に進んでいることがある）
         if (command.onItemId != null && command.onItemId != (local?.currentItemId ?: own.body.currentItemId)) return
@@ -1241,7 +1283,7 @@ class ConnectClient(
         claimOrders[signer.deviceId]?.let { session?.claimOrder = it }
         deferredEvidence.clear()
         retreated = false
-        local = LocalCursor(cursor.body.currentItemId, position, true, cursor.body.repeat, cursor.body.listenedMs, cursor.body.historySent, nowMs())
+        local = LocalCursor(cursor.body.currentItemId, position, true, cursor.body.repeat, cursor.body.listenedMs, cursor.body.historySent, nowMs(), shuffle = false)
         persist()
         // B の最初のカーソルで再生中が確定する（D-7）。キューは前の端末の doc をそのまま指す
         dirtyCursor = true
@@ -1324,6 +1366,7 @@ class ConnectClient(
             accountTag = tag,
             startedAtEpochMs = epochMs(),
             volumePercent = cursor.volumePercent?.coerceIn(0, 100),
+            shuffle = cursor.shuffle,
         )
     }
 

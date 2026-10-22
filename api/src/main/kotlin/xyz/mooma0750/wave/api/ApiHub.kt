@@ -21,6 +21,7 @@ import xyz.mooma0750.wave.core.net.createWaveHttpClient
 import xyz.mooma0750.wave.core.session.WaveSession
 import xyz.mooma0750.wave.handoff.HandoffCodec
 import xyz.mooma0750.wave.handoff.HandoffItem
+import xyz.mooma0750.wave.handoff.HandoffRepeat
 import xyz.mooma0750.wave.handoff.HandoffSnapshot
 import xyz.mooma0750.wave.handoff.crypto.EnvelopeSealer
 import xyz.mooma0750.wave.handoff.crypto.Pairing
@@ -363,7 +364,7 @@ class ApiHub(
         val loggedIn = loginStore.exists()
         val joined = ::client.isInitialized && client.verifiedChain()?.members?.containsKey(keys.deviceId) == true
         val latest = if (joined) client.latestCursorBody() else null
-        if (latest == null) return PlaybackView(joined, loggedIn, false, "off", null, null, observedAt, null, null)
+        if (latest == null) return PlaybackView(joined, loggedIn, false, "off", null, null, observedAt, null, null, null)
         val (writer, cursor) = latest
         val snapshot = client.latestQueueBody()?.second?.snapshot?.let(Views::snapshot)
         val item = Views.currentItem(snapshot, cursor)
@@ -379,6 +380,7 @@ class ApiHub(
             observedAt = observedAt,
             device = device(writer, active = true),
             volumePercent = cursor.volumePercent,
+            shuffle = cursor.shuffle,
         )
     }
 
@@ -426,6 +428,19 @@ class ApiHub(
                 ControlAction.Volume -> volumePercent != null && client.sendVolume(volumePercent)
                 ControlAction.Transfer -> false
                 else -> client.sendControl(action, positionMs)
+            }
+        }
+
+    /** 鳴らしている端末のシャッフル・繰り返しを変える。@return 送ったか */
+    suspend fun modes(
+        shuffle: Boolean?,
+        repeat: HandoffRepeat?,
+    ): Boolean =
+        onEngine {
+            when {
+                shuffle != null -> client.sendShuffle(shuffle)
+                repeat != null -> client.sendRepeat(repeat)
+                else -> false
             }
         }
 

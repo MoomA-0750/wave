@@ -495,14 +495,16 @@ fun NowPlayingScreen(
                     }
                 }
                 Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                    // シャッフルは入り切り（切ると残りの曲を入れる前の並びに戻す）。入っている間は色を付ける
+                    // シャッフルは入り切り（切ると残りの曲を入れる前の並びに戻す）。入っている間は色を付ける。
+                    // ほかの端末を映している間は、その端末のシャッフル・繰り返しを変える（前の版の端末は変えられないので灰色）
                     val shuffled by connection.shuffled.collectAsState()
+                    val modesEnabled = remote == null || remote.modesControllable
                     IconAction(
                         R.drawable.ic_shuffle,
                         if (shuffled) stringResource(R.string.ui_shuffle_on) else stringResource(R.string.ui_shuffle_off),
                         { scope.launch { connection.toggleShuffle() } },
-                        active = shuffled && remote == null,
-                        enabled = remote == null && state.currentIndex >= 0,
+                        active = shuffled && modesEnabled,
+                        enabled = modesEnabled && state.currentIndex >= 0,
                     )
                     IconAction(R.drawable.ic_skip_previous, stringResource(R.string.nowplaying_previous), { display.previous() }, enabled = state.hasPrevious, size = 36.dp)
                     PlayFab(state.isPlaying, { display.togglePlay() }, size = 72.dp)
@@ -515,8 +517,8 @@ fun NowPlayingScreen(
                             else -> stringResource(R.string.nowplaying_repeat_off)
                         },
                         { scope.launch { connection.cycleRepeatMode() } },
-                        active = state.repeatMode != Player.REPEAT_MODE_OFF,
-                        enabled = remote == null,
+                        active = state.repeatMode != Player.REPEAT_MODE_OFF && modesEnabled,
+                        enabled = modesEnabled,
                     )
                 }
                 // 手元で鳴らしている間は本体の音量（音量ボタンと同じ）。PC を映している間はその PC のアプリの中の音量（音量ボタンでも変えられる）。

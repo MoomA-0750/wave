@@ -414,7 +414,7 @@
 
             <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="12">
-                    <ToggleButton Style="{StaticResource IconToggleStyle}" IsChecked="{x:Bind Player.Shuffle, Mode=OneWay}" Click="OnShuffle" ToolTipService.ToolTip="{x:Bind app:L.T('シャッフル', 'Shuffle')}">
+                    <ToggleButton Style="{StaticResource IconToggleStyle}" IsChecked="{x:Bind Player.Shuffle, Mode=OneWay}" IsEnabled="{x:Bind Player.CanChangeModes, Mode=OneWay}" Click="OnShuffle" ToolTipService.ToolTip="{x:Bind app:L.T('シャッフル', 'Shuffle')}">
                         <FontIcon Glyph="&#xE8B1;" FontSize="16" />
                     </ToggleButton>
                     <Button Style="{StaticResource IconButtonStyle}" Click="OnPrevious" ToolTipService.ToolTip="{x:Bind app:L.T('前へ', 'Previous')}">
@@ -429,7 +429,7 @@
                     <Button Style="{StaticResource IconButtonStyle}" Click="OnNext" ToolTipService.ToolTip="{x:Bind app:L.T('次へ', 'Next')}">
                         <FontIcon Glyph="&#xE893;" FontSize="16" />
                     </Button>
-                    <ToggleButton Style="{StaticResource IconToggleStyle}" IsChecked="{x:Bind IsRepeating(Player.Repeat), Mode=OneWay}" Click="OnRepeat" ToolTipService.ToolTip="{x:Bind app:L.T('リピート', 'Repeat')}">
+                    <ToggleButton Style="{StaticResource IconToggleStyle}" IsChecked="{x:Bind IsRepeating(Player.Repeat), Mode=OneWay}" IsEnabled="{x:Bind Player.CanChangeModes, Mode=OneWay}" Click="OnRepeat" ToolTipService.ToolTip="{x:Bind app:L.T('リピート', 'Repeat')}">
                         <FontIcon Glyph="{x:Bind RepeatGlyph(Player.Repeat), Mode=OneWay}" FontSize="16" />
                     </ToggleButton>
                 </StackPanel>

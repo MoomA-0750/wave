@@ -461,7 +461,7 @@ internal sealed class SimDevice : ConnectClient.IEffects
 
     public void PushCursor() => Client.SetLocalCursor(LocalCursor());
 
-    public ConnectClient.LocalCursor LocalCursor() => new(CurrentItemId, PositionMs, Playing, HandoffRepeat.Off, 0, false, clock(), VolumePercent);
+    public ConnectClient.LocalCursor LocalCursor() => new(CurrentItemId, PositionMs, Playing, Repeat, 0, false, clock(), VolumePercent, Shuffle);
 
     public bool StoppedBy(SimDevice other) => Events.Any(e => e is ClientEvent.Stopped s && s.By == other.DeviceId);
 
@@ -505,6 +505,24 @@ internal sealed class SimDevice : ConnectClient.IEffects
     bool ConnectClient.IEffects.Volume(int volumePercent)
     {
         VolumePercent = volumePercent;
+        return true;
+    }
+
+    /// <summary>偽のシャッフル・繰り返し。null のシャッフルは、遠隔のシャッフル・繰り返しを知らない前の版の端末。</summary>
+    public bool? Shuffle { get; set; } = false;
+    public HandoffRepeat Repeat { get; set; } = HandoffRepeat.Off;
+
+    bool ConnectClient.IEffects.Shuffle(bool on)
+    {
+        if (Shuffle is null) return false;
+        Shuffle = on;
+        return true;
+    }
+
+    bool ConnectClient.IEffects.Repeat(HandoffRepeat mode)
+    {
+        if (Shuffle is null) return false;
+        Repeat = mode;
         return true;
     }
 

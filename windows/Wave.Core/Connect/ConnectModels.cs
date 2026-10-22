@@ -135,6 +135,12 @@ public sealed record CursorBody
 
     /// <summary>鳴らしている端末の音量（PC のアプリの中の音量。スマホ・時計は音量を合わせないので載せない・受けない）（0〜100）。ほかの端末の音量の表示に使う。前の版の書き手は付けない（null）。</summary>
     public int? VolumePercent { get; init; }
+
+    /// <summary>
+    /// 鳴らしている端末のシャッフル。前の版の書き手は付けない（null）。付いている書き手は遠隔のシャッフル・繰り返し（ControlAction.Shuffle・Repeat）に従うので、
+    /// ほかの端末はこれが null でないときだけその操作を出す（Android と同じ）。
+    /// </summary>
+    public bool? Shuffle { get; init; }
 }
 
 /// <summary>キュー（D-5）。Snapshot は HandoffCodec.Encode の文字列（取り込む側が HandoffCodec.Decode で検証する）。</summary>
@@ -190,6 +196,12 @@ public abstract record CommandBody
 
         /// <summary>音量（volume のときだけ、0〜100）。鳴らしている端末の音量（PC のアプリの中の音量。スマホ・時計は音量を合わせないので載せない・受けない）にする。</summary>
         public int? VolumePercent { get; init; }
+
+        /// <summary>シャッフルを入れるか切るか（shuffle のときだけ）。</summary>
+        public bool? Shuffle { get; init; }
+
+        /// <summary>繰り返し（repeat のときだけ）。</summary>
+        public HandoffRepeat? Repeat { get; init; }
     }
 
     /// <summary>
@@ -279,6 +291,12 @@ public enum ControlAction
 
     /// <summary>鳴らしている端末の音量（PC のアプリの中の音量。スマホ・時計は音量を合わせないので載せない・受けない）を変える（VolumePercent）。</summary>
     [JsonStringEnumMemberName("volume")] Volume,
+
+    /// <summary>鳴らしている端末のシャッフルを入れる・切る（Shuffle）。前の版の受け手は読めずに捨てる（カーソルの Shuffle が null の相手には送らない）。</summary>
+    [JsonStringEnumMemberName("shuffle")] Shuffle,
+
+    /// <summary>鳴らしている端末の繰り返しを決める（Repeat）。送る条件は Shuffle と同じ。</summary>
+    [JsonStringEnumMemberName("repeat")] Repeat,
 }
 
 public sealed record ProfileBody

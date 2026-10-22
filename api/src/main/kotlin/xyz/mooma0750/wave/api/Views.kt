@@ -51,6 +51,8 @@ data class PlaybackView(
     val observedAt: String,
     val device: DeviceView?,
     val volumePercent: Int?,
+    /** 鳴っている端末のシャッフル。前の版の端末なら null（シャッフル・繰り返しを変えられない）。 */
+    val shuffle: Boolean?,
 )
 
 @Serializable
@@ -105,6 +107,15 @@ object Views {
             HandoffRepeat.Off -> "off"
             HandoffRepeat.One -> "track"
             HandoffRepeat.All -> "context"
+        }
+
+    /** `/v1/control` の repeat の名前から（知らない名前は null）。 */
+    fun repeatOf(name: String?) =
+        when (name) {
+            "off" -> HandoffRepeat.Off
+            "track" -> HandoffRepeat.One
+            "context" -> HandoffRepeat.All
+            else -> null
         }
 
     /** キューの doc の文字列を読む（検証は鳴らしている端末が済ませているので、形だけ）。読めなければ null。 */

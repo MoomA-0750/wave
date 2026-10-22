@@ -109,6 +109,12 @@ public protocol ConnectClientEffects: AnyObject {
     /// 遠隔の音量に従う（この端末が鳴らしている）。この端末の音量（PC のアプリの中の音量。スマホ・時計は音量を合わせないので載せない・受けない）を volumePercent（0〜100）にする。受け付けなければ false。
     func volume(_ volumePercent: Int) -> Bool
 
+    /// 遠隔のシャッフルに従う（この端末が鳴らしている）。シャッフルを on にする（同じなら何もしない）。受け付けなければ false。
+    func shuffle(_ on: Bool) -> Bool
+
+    /// 遠隔の繰り返しに従う（この端末が鳴らしている）。受け付けなければ false。
+    func setRepeat(_ mode: HandoffRepeat) -> Bool
+
     /// 遠隔のキューへの追加に従う（この端末が鳴らしている）。afterItemId の曲があればその直後、無ければ next なら今の曲の直後、
     /// そうでなければ自分で足した曲のかたまりの最後へ、items の ID のまま入れる。受け付けなければ false。
     func queueAdd(_ items: [HandoffItem], next: Bool, afterItemId: String?) -> Bool
@@ -136,6 +142,10 @@ public extension ConnectClientEffects {
     func queueRemove(_ itemIds: [String]) -> Bool { false }
 
     func volume(_ volumePercent: Int) -> Bool { false }
+
+    func shuffle(_ on: Bool) -> Bool { false }
+
+    func setRepeat(_ mode: HandoffRepeat) -> Bool { false }
 
     /// ほかの端末と合わせたライブラリが届いた（手元に取り込む、ADR-0013）。
     func libraryChanged(_ body: LibraryBody) {}
@@ -180,12 +190,15 @@ public final class ConnectClient {
         public var capturedAtMs: Int64
         /// この端末の音量（0〜100）（PC のアプリの中の音量。スマホ・時計は音量を合わせないので載せない・受けない）。
         public var volumePercent: Int?
+        /// シャッフル中か（遠隔のシャッフル・繰り返しに従う端末は必ず入れる。ほかの端末はこれを見て操作を出す）。
+        public var shuffle: Bool?
 
         public init(
             currentItemId: String, positionMs: Int64, playing: Bool, repeat: HandoffRepeat, listenedMs: Int64, historySent: Bool, capturedAtMs: Int64,
-            volumePercent: Int? = nil
+            volumePercent: Int? = nil, shuffle: Bool? = nil
         ) {
             self.volumePercent = volumePercent
+            self.shuffle = shuffle
             self.currentItemId = currentItemId
             self.positionMs = positionMs
             self.playing = playing
@@ -1114,6 +1127,26 @@ public final class ConnectClient {
         return send(.control(.init(doc: try sealCommand(current, command))))
     }
 
+    /// 遠隔のシャッフルを送る（鳴っていない端末から、今鳴らしている同じアカウントの端末へ）。相手のカーソルに shuffle が無い前の版の端末なら false。
+    @discardableResult
+    public func sendShuffle(_ on: Bool) throws -> Bool { try sendModeControl(.shuffle, shuffle: on, repeat: nil) }
+
+    /// 遠隔の繰り返しを送る。送る条件は sendShuffle と同じ。
+    @discardableResult
+    public func sendRepeat(_ mode: HandoffRepeat) throws -> Bool { try sendModeControl(.repeat, shuffle: nil, repeat: mode) }
+
+    private func sendModeControl(_ action: ControlAction, shuffle: Bool?, repeat mode: HandoffRepeat?) throws -> Bool {
+        if isWriter || pendingStoreId != nil { return false }
+        guard let current = chain else { return false }
+        guard let tag = effects.accountTag() else { return false }
+        guard let cursor = latestCursor, cursor.writer != signer.deviceId, cursor.body.accountTag == tag, cursor.body.shuffle != nil else { return false }
+        let command = CommandBody.control(
+            .init(
+                commandId: newId(), from: signer.deviceId, to: cursor.writer, action: action, basedOnVersion: cursor.version, accountTag: tag,
+                shuffle: shuffle, repeat: mode))
+        return send(.control(.init(doc: try sealCommand(current, command))))
+    }
+
     /// キューへの追加の命令1件の平文の上限（詰め物の1ブロック 4096 から長さの欄の 4 バイトを引き、余裕を持たせる。Android 版と同じ）。
     static let maxQueueAddPlaintext = 3800
 
@@ -1263,6 +1296,14 @@ public final class ConnectClient {
             if let percent = command.volumePercent, (0...100).contains(percent) { _ = effects.volume(percent) }
             return
         }
+        if command.action == .shuffle {
+            if let on = command.shuffle { _ = effects.shuffle(on) }
+            return
+        }
+        if command.action == .repeat {
+            if let mode = command.repeat { _ = effects.setRepeat(mode) }
+            return
+        }
         // 送り手が見ていた曲から、もう次の曲に変わっていたら従わない（遅れて届いた「次へ」で2曲飛ばさない）
         // 比べるのは手元で今鳴っている曲（中継に書いた最新より先に進んでいることがある）
         if let onItem = command.onItemId, onItem != (local?.currentItemId ?? own.body.currentItemId) { return }
@@ -1364,7 +1405,7 @@ public final class ConnectClient {
         retreated = false
         local = LocalCursor(
             currentItemId: cursor.body.currentItemId, positionMs: position, playing: true, repeat: cursor.body.repeat, listenedMs: cursor.body.listenedMs,
-            historySent: cursor.body.historySent, capturedAtMs: nowMs())
+            historySent: cursor.body.historySent, capturedAtMs: nowMs(), shuffle: false)
         persist()
         // B の最初のカーソルで再生中が確定する（D-7）。キューは前の端末の doc をそのまま指す
         dirtyCursor = true
@@ -1442,7 +1483,7 @@ public final class ConnectClient {
             historySent: cursor.historySent,
             accountTag: tag,
             startedAtEpochMs: epochMs(),
-            volumePercent: cursor.volumePercent.map { min(max($0, 0), 100) })
+            volumePercent: cursor.volumePercent.map { min(max($0, 0), 100) }, shuffle: cursor.shuffle)
     }
 
     /// 再生中なら、位置を取ってからの経過を足す（書くのが遅れても位置を戻さない）。

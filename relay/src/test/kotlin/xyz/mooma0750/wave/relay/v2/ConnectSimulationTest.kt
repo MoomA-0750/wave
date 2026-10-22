@@ -1,5 +1,6 @@
 package xyz.mooma0750.wave.relay.v2
 
+import xyz.mooma0750.wave.handoff.HandoffRepeat
 import xyz.mooma0750.wave.handoff.v2.ClientEvent
 import xyz.mooma0750.wave.handoff.v2.ConnectClient
 import xyz.mooma0750.wave.handoff.v2.MemberChain
@@ -976,6 +977,37 @@ class ConnectSimulationTest {
         relay.run()
         assertEquals(100, a.volumePercent)
         assertFalse(a.client.sendVolume(10))
+    }
+
+    @Test
+    fun shuffleAndRepeatCanBeChangedFromAnotherDevice() {
+        setUp()
+        a.startPlaying("queue-A")
+        relay.run()
+        // 鳴らしている A のシャッフル・繰り返しが、カーソルで B に見える
+        assertEquals(false, b.client.remoteNow()?.cursor?.shuffle)
+        // B から変える: A が従い、A が書き直したカーソルで B にも見える
+        assertTrue(b.client.sendShuffle(true))
+        assertTrue(b.client.sendRepeat(HandoffRepeat.One))
+        relay.run()
+        assertEquals(true to HandoffRepeat.One, a.shuffle to a.repeat)
+        a.pushCursor()
+        relay.run()
+        assertEquals(true to HandoffRepeat.One, b.client.remoteNow()?.cursor?.let { it.shuffle to it.repeat })
+        // 鳴らしている A 自身は送らない
+        assertFalse(a.client.sendShuffle(false))
+    }
+
+    @Test
+    fun shuffleAndRepeatAreNotSentToAnOlderDevice() {
+        setUp()
+        // シャッフルをカーソルに載せない前の版の端末には送らない（読めずに捨てるので、押しても何も起きなくなる）
+        a.shuffle = null
+        a.startPlaying("queue-A")
+        relay.run()
+        assertEquals(null, b.client.remoteNow()?.cursor?.shuffle)
+        assertFalse(b.client.sendShuffle(true))
+        assertFalse(b.client.sendRepeat(HandoffRepeat.All))
     }
 
     @Test

@@ -27,6 +27,8 @@ class RemoteSessionPlayer(
     private val artistLine: (String, String) -> String,
     /** その端末の音量（PC のアプリの中の音量。スマホ・時計は音量を合わせないので載せない・受けない）を変えてもらう（0〜100）。 */
     private val setVolume: (Int) -> Unit,
+    /** その端末の繰り返しを変えてもらう。 */
+    private val setRepeat: (HandoffRepeat) -> Unit,
     /** 今の曲の画像を取る（手元の再生器と同じく、URL ではなく画像そのものを入れる）。 */
     private val artwork: ArtworkLoader,
 ) : SimpleBasePlayer(Looper.getMainLooper()) {
@@ -43,9 +45,14 @@ class RemoteSessionPlayer(
     private var optimisticPlaying: Boolean? = null
     private var optimisticUntilMs = 0L
 
+    /** 押した直後の繰り返し（相手の新しいカーソルが届くまで、最大3秒）。 */
+    private var optimisticRepeat: HandoffRepeat? = null
+    private var optimisticRepeatUntilMs = 0L
+
     fun update(next: ConnectV2Manager.RemotePlayback) {
         if (optimisticPlaying != null && (SystemClock.elapsedRealtime() > optimisticUntilMs || next.playing == optimisticPlaying)) optimisticPlaying = null
         if (optimisticVolume != null && (SystemClock.elapsedRealtime() > optimisticVolumeUntilMs || next.volumePercent == optimisticVolume)) optimisticVolume = null
+        if (optimisticRepeat != null && (SystemClock.elapsedRealtime() > optimisticRepeatUntilMs || next.repeat == optimisticRepeat)) optimisticRepeat = null
         remote = next
         val url = next.current.thumbnailUrl?.let(ArtworkLoader::urlOf)
         if (url != artworkUrl) {
@@ -109,6 +116,8 @@ class RemoteSessionPlayer(
                         if (current.volumePercent != null) {
                             addAll(Player.COMMAND_GET_DEVICE_VOLUME, Player.COMMAND_SET_DEVICE_VOLUME_WITH_FLAGS, Player.COMMAND_ADJUST_DEVICE_VOLUME_WITH_FLAGS)
                         }
+                        // 遠隔の繰り返しに従う端末なら、繰り返しのボタンでその端末の繰り返しを変える
+                        if (current.modesControllable) add(Player.COMMAND_SET_REPEAT_MODE)
                     }.build(),
             ).setPlaylist(items)
             .apply {
@@ -122,7 +131,7 @@ class RemoteSessionPlayer(
             .setPlaybackState(Player.STATE_READY)
             .setPlayWhenReady(playing, Player.PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST)
             .setRepeatMode(
-                when (current.repeat) {
+                when (optimisticRepeat ?: current.repeat) {
                     HandoffRepeat.One -> Player.REPEAT_MODE_ONE
                     HandoffRepeat.All -> Player.REPEAT_MODE_ALL
                     HandoffRepeat.Off -> Player.REPEAT_MODE_OFF
@@ -169,6 +178,19 @@ class RemoteSessionPlayer(
 
         /** 音量ボタン1回で変える幅。 */
         const val VOLUME_STEP = 5
+    }
+
+    override fun handleSetRepeatMode(repeatMode: Int): ListenableFuture<*> {
+        val mode =
+            when (repeatMode) {
+                Player.REPEAT_MODE_ONE -> HandoffRepeat.One
+                Player.REPEAT_MODE_ALL -> HandoffRepeat.All
+                else -> HandoffRepeat.Off
+            }
+        optimisticRepeat = mode
+        optimisticRepeatUntilMs = SystemClock.elapsedRealtime() + 3_000
+        setRepeat(mode)
+        return Futures.immediateVoidFuture()
     }
 
     override fun handleSeek(

@@ -51,6 +51,7 @@ import xyz.mooma0750.wave.core.queue.QueueContentSource
 import xyz.mooma0750.wave.core.queue.QueueSession
 import xyz.mooma0750.wave.core.session.CallResult
 import xyz.mooma0750.wave.core.stream.StreamFailure
+import xyz.mooma0750.wave.handoff.HandoffRepeat
 import xyz.mooma0750.wave.handoff.HandoffSnapshot
 
 /** 再生の本体。画面が無くても動き、キューの続き（サジェスト）もここで取る。 */
@@ -218,6 +219,8 @@ class PlaybackService : MediaLibraryService() {
             queueSession.shuffled.drop(1).collect {
                 session?.let { publishOwnUiExtras(it) }
                 scheduleSave()
+                // ほかの端末にシャッフルの印を知らせる（カーソルに載る）
+                container.connectV2Host.listener?.onCursorChanged(true)
             }
         }
         artwork = ArtworkEmbedder(player, ArtworkLoader(container.mediaHttpClient, scope).also { artworkLoaders += it })
@@ -481,7 +484,7 @@ class PlaybackService : MediaLibraryService() {
                     val repeat = PlaybackDecisions.repeatOf(player.repeatMode)
                     // 最後まで行った・エラーで止まった端末を「再生中」と書かない（レビュー p6b34 中-2）
                     val playing = PlaybackDecisions.isActivelyPlaying(player.playWhenReady, player.playbackState)
-                    return ConnectV2Host.Cursor(itemId, player.currentPosition.coerceAtLeast(0), playing, repeat, listenedMs, historySent)
+                    return ConnectV2Host.Cursor(itemId, player.currentPosition.coerceAtLeast(0), playing, repeat, listenedMs, historySent, shuffle = queueSession.shuffled.value)
                 }
 
                 // Connect v2 が止める・戻すのは、本人の一時停止・再生ボタンとして知らせない
@@ -526,7 +529,11 @@ class PlaybackService : MediaLibraryService() {
                             xyz.mooma0750.wave.handoff.v2.ControlAction.Previous -> player.seekToPrevious()
                             xyz.mooma0750.wave.handoff.v2.ControlAction.Seek -> player.seekTo((positionMs ?: 0).coerceAtLeast(0))
                             xyz.mooma0750.wave.handoff.v2.ControlAction.Transfer -> return@suppressingV2 false
-                            xyz.mooma0750.wave.handoff.v2.ControlAction.Volume -> return@suppressingV2 false
+                            // 音量・シャッフル・繰り返しは volume・shuffle・repeat で受ける
+                            xyz.mooma0750.wave.handoff.v2.ControlAction.Volume,
+                            xyz.mooma0750.wave.handoff.v2.ControlAction.Shuffle,
+                            xyz.mooma0750.wave.handoff.v2.ControlAction.Repeat,
+                            -> return@suppressingV2 false
                         }
                         true
                     }
@@ -534,6 +541,20 @@ class PlaybackService : MediaLibraryService() {
                 // スマホ・時計の音量は、その端末でだけ変える（遠隔で本体の音量を上げると、あとで別のアプリが大きな音で鳴る。Spotify と同じ）。
                 // カーソルにも音量を載せないので、ほかの端末のつまみは灰色になる
                 override fun volume(volumePercent: Int): Boolean = false
+
+                override fun shuffle(on: Boolean): Boolean =
+                    suppressingV2 {
+                        if (player.mediaItemCount == 0) return@suppressingV2 false
+                        if (queueSession.shuffled.value != on) queueSession.toggleShuffle()
+                        true
+                    }
+
+                override fun repeat(mode: HandoffRepeat): Boolean =
+                    suppressingV2 {
+                        if (player.mediaItemCount == 0) return@suppressingV2 false
+                        player.repeatMode = PlaybackDecisions.repeatModeOf(mode)
+                        true
+                    }
 
                 override fun queueAdd(
                     items: List<xyz.mooma0750.wave.handoff.HandoffItem>,
@@ -637,9 +658,12 @@ class PlaybackService : MediaLibraryService() {
         current.setMediaButtonPreferences(likeButtons(state))
     }
 
-    /** 自アプリの画面に配る extras（評価と、シャッフルが入っているか）。 */
-    private fun ownUiExtras(state: LikeState = likes?.state ?: LikeState()): Bundle =
-        state.toBundle().apply { putBoolean(QueueCommands.KEY_SHUFFLED, queue?.shuffled?.value == true) }
+    /** 自アプリの画面に配る extras（評価と、シャッフルが入っているか。ほかの端末を映している間はその端末のシャッフル）。 */
+    private fun ownUiExtras(state: LikeState = likes?.state ?: LikeState()): Bundle {
+        val mirrored = container.connectV2?.remotePlayback?.value?.takeIf { session?.player === remotePlayer }
+        val shuffled = if (mirrored != null) mirrored.shuffle == true else queue?.shuffled?.value == true
+        return state.toBundle().apply { putBoolean(QueueCommands.KEY_SHUFFLED, shuffled) }
+    }
 
     private fun publishOwnUiExtras(
         current: MediaSession,
@@ -695,16 +719,19 @@ class PlaybackService : MediaLibraryService() {
         val current = session ?: return
         val local = localPlayer ?: return
         if (remote != null && !local.playWhenReady) {
-            val mirror = remotePlayer ?: RemoteSessionPlayer({ action, position -> manager.control(action, position) }, { artist, device -> getString(xyz.mooma0750.wave.R.string.nowplaying_artist_on_device, artist, device) }, { percent -> manager.volume(percent) }, ArtworkLoader(container.mediaHttpClient, scope).also { artworkLoaders += it }).also {
+            val mirror = remotePlayer ?: RemoteSessionPlayer({ action, position -> manager.control(action, position) }, { artist, device -> getString(xyz.mooma0750.wave.R.string.nowplaying_artist_on_device, artist, device) }, { percent -> manager.volume(percent) }, { mode -> manager.repeat(mode) }, ArtworkLoader(container.mediaHttpClient, scope).also { artworkLoaders += it }).also {
                 remotePlayer = it
                 it.addListener(widgetListener)
             }
             mirror.update(remote)
             if (current.player !== mirror) current.player = mirror
+            // シャッフルの印は映している端末のもの
+            publishOwnUiExtras(current)
             // 映している曲の評価を読み書きする（評価はアカウントに付くので、どの端末で鳴っていても同じ）
             likes?.onCurrentSong(remote.current.videoId.takeUnless(Feed::isExternal), container.music.currentLoginGeneration())
         } else if (current.player !== local) {
             current.player = local
+            publishOwnUiExtras(current)
             likes?.onCurrentSong(Media3QueuePlayer.songOf(local.currentMediaItem)?.videoId?.takeUnless(Feed::isExternal), TrackUri.epochOf(local.currentMediaItem?.localConfiguration?.uri))
         }
         val following = current.player === remotePlayer && remote != null
@@ -978,6 +1005,13 @@ class PlaybackService : MediaLibraryService() {
             val local = localPlayer ?: return Futures.immediateFuture(SessionResult(SessionError.ERROR_INVALID_STATE))
             // ほかの端末を映している間の「次に再生」「キューに追加」は、鳴らしている端末のキューへ送る（手元のキューに入れても使われない）
             val manager = container.connectV2
+            // ほかの端末を映している間のシャッフルは、鳴らしている端末のシャッフルを入れ切りする
+            if (manager != null && session.player === remotePlayer && customCommand.customAction == QueueCommands.TOGGLE_SHUFFLE) {
+                val mirrored = manager.remotePlayback.value
+                if (mirrored?.modesControllable != true) return Futures.immediateFuture(SessionResult(SessionError.ERROR_NOT_SUPPORTED))
+                manager.shuffle(mirrored.shuffle != true)
+                return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+            }
             if (manager != null && session.player === remotePlayer && manager.remotePlayback.value != null &&
                 (customCommand.customAction == QueueCommands.ADD_NEXT || customCommand.customAction == QueueCommands.ADD_TO_END)
             ) {

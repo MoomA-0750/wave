@@ -189,6 +189,10 @@ class SimDevice(
 
     /** 偽のアプリの中の音量（0〜100）。 */
     var volumePercent = 70
+
+    /** この端末のシャッフル・繰り返し。null のシャッフルは、遠隔のシャッフル・繰り返しを知らない前の版の端末。 */
+    var shuffle: Boolean? = false
+    var repeat = HandoffRepeat.Off
     private var positionAnchor = 0L
     private var anchorAt = 0L
 
@@ -278,6 +282,18 @@ class SimDevice(
                         loginGrants += grant.cookie
                     }
 
+                    override fun shuffle(on: Boolean): Boolean {
+                        if (shuffle == null) return false
+                        shuffle = on
+                        return true
+                    }
+
+                    override fun repeat(mode: HandoffRepeat): Boolean {
+                        if (shuffle == null) return false
+                        repeat = mode
+                        return true
+                    }
+
                     override fun volume(volumePercent: Int): Boolean {
                         this@SimDevice.volumePercent = volumePercent
                         return true
@@ -351,7 +367,7 @@ class SimDevice(
         client.setLocalCursor(localCursor())
     }
 
-    fun localCursor() = ConnectClient.LocalCursor(currentItemId, positionMs, playing, HandoffRepeat.Off, 0, false, clock(), volumePercent)
+    fun localCursor() = ConnectClient.LocalCursor(currentItemId, positionMs, playing, repeat, 0, false, clock(), volumePercent, shuffle)
 
     fun stoppedBy(other: SimDevice) = events.any { it is ClientEvent.Stopped && it.by == other.deviceId }
 }

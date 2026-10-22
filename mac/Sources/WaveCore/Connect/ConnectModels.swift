@@ -251,12 +251,17 @@ public struct CursorBody: Equatable, Sendable, ConnectCodable {
     /// 鳴らしている端末の音量（PC のアプリの中の音量。スマホ・時計は音量を合わせないので載せない・受けない）（0〜100）。ほかの端末の音量の表示に使う。前の版の書き手は付けない（nil）。
     public var volumePercent: Int?
 
+    /// 鳴らしている端末のシャッフル。前の版の書き手は付けない（nil）。付いている書き手は遠隔のシャッフル・繰り返し（ControlAction.shuffle・repeat）に従うので、
+    /// ほかの端末はこれが nil でないときだけその操作を出す（Android と同じ）。
+    public var shuffle: Bool?
+
     public init(
         queueRef: String, currentItemId: String, positionMs: Int64, playing: Bool, repeat: HandoffRepeat, sessionBase: Int64,
         sessionStartVersion: Int64?, deviceSeq: Int64, listenedMs: Int64, historySent: Bool, accountTag: String, startedAtEpochMs: Int64,
-        volumePercent: Int? = nil
+        volumePercent: Int? = nil, shuffle: Bool? = nil
     ) {
         self.volumePercent = volumePercent
+        self.shuffle = shuffle
         self.queueRef = queueRef
         self.currentItemId = currentItemId
         self.positionMs = positionMs
@@ -276,7 +281,7 @@ public struct CursorBody: Equatable, Sendable, ConnectCodable {
             "queueRef": .string(queueRef), "currentItemId": .string(currentItemId), "positionMs": JSON(positionMs), "playing": .bool(playing),
             "repeat": .string(`repeat`.rawValue), "sessionBase": JSON(sessionBase), "sessionStartVersion": JSON(sessionStartVersion),
             "deviceSeq": JSON(deviceSeq), "listenedMs": JSON(listenedMs), "historySent": .bool(historySent), "accountTag": .string(accountTag),
-            "startedAtEpochMs": JSON(startedAtEpochMs), "volumePercent": JSON(volumePercent.map(Int64.init)),
+            "startedAtEpochMs": JSON(startedAtEpochMs), "volumePercent": JSON(volumePercent.map(Int64.init)), "shuffle": shuffle.map { .bool($0) } ?? .null,
         ])
     }
 
@@ -287,7 +292,7 @@ public struct CursorBody: Equatable, Sendable, ConnectCodable {
             playing: try r.bool("playing"), repeat: try r.enumValue("repeat", HandoffRepeat.self), sessionBase: try r.long("sessionBase"),
             sessionStartVersion: try r.optLong("sessionStartVersion"), deviceSeq: try r.long("deviceSeq"), listenedMs: try r.long("listenedMs"),
             historySent: try r.bool("historySent"), accountTag: try r.string("accountTag"), startedAtEpochMs: try r.long("startedAtEpochMs"),
-            volumePercent: try r.optLong("volumePercent").map { Int(clamping: $0) })
+            volumePercent: try r.optLong("volumePercent").map { Int(clamping: $0) }, shuffle: try r.optBool("shuffle"))
     }
 }
 
@@ -443,11 +448,19 @@ public enum CommandBody: Equatable, Sendable, ConnectCodable {
         /// 音量（volume のときだけ、0〜100）。鳴らしている端末の音量（PC のアプリの中の音量。スマホ・時計は音量を合わせないので載せない・受けない）にする。
         public var volumePercent: Int?
 
+        /// シャッフルを入れるか切るか（shuffle のときだけ）。
+        public var shuffle: Bool?
+
+        /// 繰り返し（repeat のときだけ）。
+        public var `repeat`: HandoffRepeat?
+
         public init(
             commandId: String, from: String, to: String, action: ControlAction, positionMs: Int64? = nil, basedOnVersion: Int64, accountTag: String,
-            onItemId: String? = nil, volumePercent: Int? = nil
+            onItemId: String? = nil, volumePercent: Int? = nil, shuffle: Bool? = nil, repeat: HandoffRepeat? = nil
         ) {
             self.volumePercent = volumePercent
+            self.shuffle = shuffle
+            self.repeat = `repeat`
             self.commandId = commandId
             self.from = from
             self.to = to
@@ -485,7 +498,8 @@ public enum CommandBody: Equatable, Sendable, ConnectCodable {
             return .obj([
                 "type": "control", "commandId": .string(c.commandId), "from": .string(c.from), "to": .string(c.to), "action": .string(c.action.rawValue),
                 "positionMs": JSON(c.positionMs), "basedOnVersion": JSON(c.basedOnVersion), "accountTag": .string(c.accountTag),
-                "onItemId": JSON(c.onItemId), "volumePercent": JSON(c.volumePercent.map(Int64.init)),
+                "onItemId": JSON(c.onItemId), "volumePercent": JSON(c.volumePercent.map(Int64.init)), "shuffle": c.shuffle.map { .bool($0) } ?? .null,
+                "repeat": c.repeat.map { .string($0.rawValue) } ?? .null,
             ])
         case .queueAdd(let q):
             return .obj([
@@ -522,7 +536,8 @@ public enum CommandBody: Equatable, Sendable, ConnectCodable {
                     commandId: try r.string("commandId"), from: try r.string("from"), to: try r.string("to"),
                     action: try r.enumValue("action", ControlAction.self), positionMs: try r.optLong("positionMs"),
                     basedOnVersion: try r.long("basedOnVersion"), accountTag: try r.string("accountTag"), onItemId: try r.optString("onItemId"),
-                    volumePercent: try r.optLong("volumePercent").map { Int(clamping: $0) }))
+                    volumePercent: try r.optLong("volumePercent").map { Int(clamping: $0) }, shuffle: try r.optBool("shuffle"),
+                    repeat: try r.optEnumValue("repeat", HandoffRepeat.self)))
         case "queue_add":
             return .queueAdd(
                 QueueAdd(
@@ -556,6 +571,12 @@ public enum ControlAction: String, Sendable {
 
     /// 鳴らしている端末の音量（PC のアプリの中の音量。スマホ・時計は音量を合わせないので載せない・受けない）を変える（volumePercent）。
     case volume
+
+    /// 鳴らしている端末のシャッフルを入れる・切る（shuffle）。前の版の受け手は読めずに捨てる（カーソルの shuffle が nil の相手には送らない）。
+    case shuffle
+
+    /// 鳴らしている端末の繰り返しを決める（repeat）。送る条件は shuffle と同じ。
+    case `repeat`
 }
 
 public struct ProfileBody: Equatable, Sendable, ConnectCodable {

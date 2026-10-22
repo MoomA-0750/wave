@@ -166,6 +166,18 @@ public sealed class ConnectService
             Post(() => AppPaths.Log($"connect-v2 volume percent={percent} sent={client?.SendVolume(percent)}"));
             return true;
         };
+        player.SendRemoteShuffle = on =>
+        {
+            if (client is null || Relay.Status != RelayStatus.Connected) return false;
+            Post(() => AppPaths.Log($"connect-v2 shuffle on={on} sent={client?.SendShuffle(on)}"));
+            return true;
+        };
+        player.SendRemoteRepeat = mode =>
+        {
+            if (client is null || Relay.Status != RelayStatus.Connected) return false;
+            Post(() => AppPaths.Log($"connect-v2 repeat mode={mode} sent={client?.SendRepeat(RepeatOf(mode))}"));
+            return true;
+        };
         player.SendRemoteQueueAdd = (songs, next) =>
         {
             if (client is null || Relay.Status != RelayStatus.Connected) return false;
@@ -526,7 +538,7 @@ public sealed class ConnectService
         }
         if (mirroredQueue is not { } export || export.Items.All(i => i.Meta.ItemId != now.Cursor.CurrentItemId)) return null;
         var song = export.Items.First(i => i.Meta.ItemId == now.Cursor.CurrentItemId).Song;
-        return new RemoteSnapshot(remote.DeviceId, remote.DeviceLabel, mirroredKey, export, now.Cursor.CurrentItemId, now.PositionMs, player.ClockMs, now.Cursor.Playing, RepeatOf(now.Cursor.Repeat), song.DurationSeconds, now.Version, now.Cursor.VolumePercent, song.IsLive);
+        return new RemoteSnapshot(remote.DeviceId, remote.DeviceLabel, mirroredKey, export, now.Cursor.CurrentItemId, now.PositionMs, player.ClockMs, now.Cursor.Playing, RepeatOf(now.Cursor.Repeat), song.DurationSeconds, now.Version, now.Cursor.VolumePercent, song.IsLive, now.Cursor.Shuffle);
     }
 
     private void SetPairing(PairingView view) => ui.TryEnqueue(() =>
@@ -586,6 +598,18 @@ public sealed class ConnectService
         {
             AppPaths.Log($"connect-v2 volume received percent={volumePercent}");
             return owner.OnUi(() => owner.player.ApplyVolume(volumePercent));
+        }
+
+        public bool Shuffle(bool on)
+        {
+            AppPaths.Log($"connect-v2 shuffle received on={on}");
+            return owner.OnUi(() => owner.player.ApplyShuffle(on));
+        }
+
+        public bool Repeat(HandoffRepeat mode)
+        {
+            AppPaths.Log($"connect-v2 repeat received mode={mode}");
+            return owner.OnUi(() => owner.player.ApplyRepeat(RepeatOf(mode)));
         }
 
         public bool QueueAdd(IReadOnlyList<HandoffItem> items, bool next, string? afterItemId)
@@ -885,7 +909,7 @@ public sealed class ConnectService
     }
 
     private ConnectClient.LocalCursor ToLocal(PlaybackCursor c) =>
-        new(c.CurrentItemId, c.PositionMs, c.Playing, RepeatOf(c.Repeat), c.ListenedMs, c.HistorySent, clock.ElapsedMilliseconds, c.VolumePercent);
+        new(c.CurrentItemId, c.PositionMs, c.Playing, RepeatOf(c.Repeat), c.ListenedMs, c.HistorySent, clock.ElapsedMilliseconds, c.VolumePercent, c.Shuffle);
 
     // --- キューの書き出し・取り込み ---
 

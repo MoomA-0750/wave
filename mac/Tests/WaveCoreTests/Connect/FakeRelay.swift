@@ -442,7 +442,8 @@ final class SimDevice: ConnectClientEffects {
 
     func localCursor() -> ConnectClient.LocalCursor {
         ConnectClient.LocalCursor(
-            currentItemId: currentItemId, positionMs: positionMs, playing: playing, repeat: .off, listenedMs: 0, historySent: false, capturedAtMs: clock(), volumePercent: volumePercent)
+            currentItemId: currentItemId, positionMs: positionMs, playing: playing, repeat: repeatMode, listenedMs: 0, historySent: false, capturedAtMs: clock(), volumePercent: volumePercent,
+            shuffle: shuffle)
     }
 
     func stoppedBy(_ other: SimDevice) -> Bool { events.contains(.stopped(by: other.deviceId)) }
@@ -479,6 +480,22 @@ final class SimDevice: ConnectClientEffects {
     var queueAdds: [(ids: [String], next: Bool, after: String?)] = []
     /// 偽のアプリの中の音量（0〜100）。
     var volumePercent = 70
+
+    /// 偽のシャッフル・繰り返し。nil のシャッフルは、遠隔のシャッフル・繰り返しを知らない前の版の端末。
+    var shuffle: Bool? = false
+    var repeatMode: HandoffRepeat = .off
+
+    func shuffle(_ on: Bool) -> Bool {
+        guard shuffle != nil else { return false }
+        shuffle = on
+        return true
+    }
+
+    func setRepeat(_ mode: HandoffRepeat) -> Bool {
+        guard shuffle != nil else { return false }
+        repeatMode = mode
+        return true
+    }
 
     func volume(_ volumePercent: Int) -> Bool {
         self.volumePercent = volumePercent

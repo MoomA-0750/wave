@@ -26,6 +26,7 @@ import kotlinx.serialization.builtins.ListSerializer
 import xyz.mooma0750.wave.core.music.HomeItem
 import xyz.mooma0750.wave.core.session.CallResult
 import xyz.mooma0750.wave.core.session.FailureKind
+import xyz.mooma0750.wave.handoff.HandoffRepeat
 import xyz.mooma0750.wave.handoff.v2.ControlAction
 import java.security.MessageDigest
 
@@ -44,6 +45,12 @@ interface ApiBackend {
         action: ControlAction,
         positionMs: Long?,
         volumePercent: Int?,
+    ): Boolean
+
+    /** 鳴らしている端末のシャッフル・繰り返しを変える。@return 送ったか（相手が前の版の端末なら false） */
+    suspend fun modes(
+        shuffle: Boolean?,
+        repeat: HandoffRepeat?,
     ): Boolean
 
     suspend fun transfer(deviceId: String): Boolean
@@ -72,6 +79,8 @@ data class ControlRequest(
     val action: String,
     val positionMs: Long? = null,
     val volumePercent: Int? = null,
+    val shuffle: Boolean? = null,
+    val repeat: String? = null,
 )
 
 @Serializable
@@ -199,8 +208,13 @@ fun Application.apiModule(
                     "previous" -> ControlAction.Previous
                     "seek" -> ControlAction.Seek.takeIf { request.positionMs != null }
                     "volume" -> ControlAction.Volume.takeIf { request.volumePercent in 0..100 }
-                    // シャッフル・繰り返しは連携の取り決めに無い（鳴らしている端末の画面で切り替える）
-                    "shuffle", "repeat" -> return@post call.error(HttpStatusCode.BadRequest, "unsupported")
+                    "shuffle", "repeat" -> {
+                        val shuffle = request.shuffle.takeIf { request.action == "shuffle" }
+                        val repeat = if (request.action == "repeat") Views.repeatOf(request.repeat) else null
+                        if (shuffle == null && repeat == null) return@post call.error(HttpStatusCode.BadRequest, "bad_request")
+                        // 鳴らしている端末が前の版（シャッフル・繰り返しの命令を知らない）なら送らない
+                        return@post if (backend.modes(shuffle, repeat)) call.json(encode(OkView.serializer(), OkView())) else call.error(HttpStatusCode.Conflict, "not_sent")
+                    }
                     else -> null
                 } ?: return@post call.error(HttpStatusCode.BadRequest, "bad_request")
             if (backend.control(action, request.positionMs, request.volumePercent)) call.json(encode(OkView.serializer(), OkView())) else call.error(HttpStatusCode.Conflict, "not_sent")
@@ -284,6 +298,11 @@ class HubBackend(
         positionMs: Long?,
         volumePercent: Int?,
     ) = hub.control(action, positionMs, volumePercent)
+
+    override suspend fun modes(
+        shuffle: Boolean?,
+        repeat: HandoffRepeat?,
+    ) = hub.modes(shuffle, repeat)
 
     override suspend fun transfer(deviceId: String) = hub.transfer(deviceId)
 

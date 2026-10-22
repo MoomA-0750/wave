@@ -231,6 +231,7 @@ struct NowPlayingView: View {
             Button(action: player.toggleShuffle) {
                 Image(systemName: "shuffle").foregroundStyle(player.shuffle ? Color.accentColor : Color.primary)
             }
+            .disabled(!player.canChangeModes)
             .accessibilityLabel(L.t("シャッフル", "Shuffle"))
             Spacer()
             Button(action: player.previous) { Image(systemName: "backward.end.fill").font(.title) }
@@ -255,6 +256,7 @@ struct NowPlayingView: View {
                 Image(systemName: player.repeatMode == .one ? "repeat.1" : "repeat")
                     .foregroundStyle(player.repeatMode != .off ? Color.accentColor : Color.primary)
             }
+            .disabled(!player.canChangeModes)
             .accessibilityLabel(L.t("リピート", "Repeat"))
         }
         .font(.title3)

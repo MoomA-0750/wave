@@ -40,10 +40,10 @@ home-dashboard などほかのアプリから、wave で再生中の曲を読み
 | 口 | 中身 |
 |---|---|
 | `GET /v1/health` | `{"ok": true}` |
-| `GET /v1/playback` | `joined`・`loggedIn`・`isPlaying`・`repeat`（`off`・`track`・`context`）・`track`（`videoId`・`title`・`artist`・`album`・`artUrl`・`durationMs`・`isLive`。`artUrl` は大きく出せる大きさ（googleusercontent は `=w544-h544`、動画の絵は `hqdefault.jpg`）。ほかの口の `artUrl` は一覧用の小さいまま）・`progressMs`・`observedAt`（ISO 8601。ここから位置を進める）・`device`（`id`・`name`・`kind`・`online`・`active`）・`volumePercent` |
+| `GET /v1/playback` | `joined`・`loggedIn`・`isPlaying`・`repeat`（`off`・`track`・`context`）・`track`（`videoId`・`title`・`artist`・`album`・`artUrl`・`durationMs`・`isLive`。`artUrl` は大きく出せる大きさ（googleusercontent は `=w544-h544`、動画の絵は `hqdefault.jpg`）。ほかの口の `artUrl` は一覧用の小さいまま）・`progressMs`・`observedAt`（ISO 8601。ここから位置を進める）・`device`（`id`・`name`・`kind`・`online`・`active`）・`volumePercent`・`shuffle`（鳴っている端末のシャッフル。前の版の端末なら null で、シャッフル・繰り返しを変えられない） |
 | `GET /v1/queue` | 今の曲の後の曲（`track` と同じ形の配列） |
 | `GET /v1/devices` | 家の端末（`id`・`name`・`kind`・`online`・`active`・`self`） |
-| `POST /v1/control` | `{"action": "play"｜"pause"｜"next"｜"previous"｜"seek"｜"volume", "positionMs"?, "volumePercent"?}`。シャッフル・繰り返しは連携の取り決めに無いので `400 unsupported` |
+| `POST /v1/control` | `{"action": "play"｜"pause"｜"next"｜"previous"｜"seek"｜"volume"｜"shuffle"｜"repeat", "positionMs"?, "volumePercent"?, "shuffle"?（true・false）, "repeat"?（`off`・`track`・`context`）}`。シャッフル・繰り返しは、鳴っている端末がその命令を知らない前の版なら `409 not_sent` |
 | `POST /v1/transfer` | `{"deviceId"}`。その端末に再生を移す |
 | `POST /v1/play` | `{"videoId"? ｜ "playlistId"? ｜ "albumBrowseId"?, "startVideoId"?, "shuffle"?, "deviceId"?}`。曲だけならその曲からのラジオ。行き先は `deviceId`、無ければ家の最後の再生の端末（中継につながっているとき）。無ければ `409 no_device` |
 | `POST /v1/queue` | `{"videoIds": [...], "next": false}`。鳴っている端末のキューに足す（`next` なら今の曲の直後） |
@@ -55,7 +55,7 @@ home-dashboard などほかのアプリから、wave で再生中の曲を読み
 | `GET /v1/events` | SSE。家の再生が変わるたびに `event: playback`（`/v1/playback` と同じ形）を流す。15 秒ごとに空の行 |
 | `POST /v1/admin/pair`・`GET /v1/admin/pair` | 加入（`api pair` が使う） |
 
-状態の名前: `token_required`（401）・`login_required`（401、ログインを渡していない・切れた）・`not_sent`（409、鳴っている端末が無い・別のアカウント・まだ家の状態を受けていない）・`no_device`（409）・`bad_request`・`unsupported`（400）・`not_found`（404）・それ以外の通信の失敗（502）。
+状態の名前: `token_required`（401）・`login_required`（401、ログインを渡していない・切れた）・`not_sent`（409、鳴っている端末が無い・別のアカウント・まだ家の状態を受けていない）・`no_device`（409）・`bad_request`（400）・`not_found`（404）・それ以外の通信の失敗（502）。
 
 ## 注意
 

@@ -150,6 +150,7 @@ struct TransportControls: View {
                 IconToggle(isOn: player.shuffle, help: L.t("シャッフル", "Shuffle"), action: player.toggleShuffle) {
                     Image(systemName: "shuffle").font(.system(size: 15))
                 }
+                .disabled(!player.canChangeModes)
                 Button(action: player.previous) { Image(systemName: "backward.end.fill").font(.system(size: 15)) }
                     .buttonStyle(IconButtonStyle()).help(L.t("前へ", "Previous"))
                 Button(action: player.togglePlay) {
@@ -174,6 +175,7 @@ struct TransportControls: View {
                 IconToggle(isOn: player.repeatMode != .off, help: L.t("リピート", "Repeat"), action: player.cycleRepeat) {
                     Image(systemName: player.repeatMode == .one ? "repeat.1" : "repeat").font(.system(size: 15))
                 }
+                .disabled(!player.canChangeModes)
             }
             if player.isLive {
                 // ライブ配信: 長さも位置も無く、シークしない

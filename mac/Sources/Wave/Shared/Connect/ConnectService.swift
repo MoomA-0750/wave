@@ -114,6 +114,22 @@ final class ConnectService {
             }
             return true
         }
+        player.sendRemoteShuffle = { on in
+            guard worker.loaded.current, worker.relay.status == .connected else { return false }
+            worker.post {
+                let sent = try worker.client?.sendShuffle(on)
+                AppPaths.log("connect-v2 shuffle on=\(on) sent=\(sent.map { String($0) } ?? "")")
+            }
+            return true
+        }
+        player.sendRemoteRepeat = { mode in
+            guard worker.loaded.current, worker.relay.status == .connected else { return false }
+            worker.post {
+                let sent = try worker.client?.sendRepeat(ConnectQueue.repeatOf(mode))
+                AppPaths.log("connect-v2 repeat mode=\(mode.rawValue) sent=\(sent.map { String($0) } ?? "")")
+            }
+            return true
+        }
         player.sendRemoteVolume = { percent in
             guard worker.loaded.current, worker.relay.status == .connected else { return false }
             worker.post {
@@ -978,7 +994,7 @@ final class ConnectWorker: ConnectClientEffects, @unchecked Sendable {
         return RemoteSnapshot(
             deviceId: remote.deviceId, deviceLabel: remote.deviceLabel, queueKey: mirroredKey, queue: export, currentItemId: now.cursor.currentItemId,
             positionMs: now.positionMs, capturedAtMs: 0, playing: now.cursor.playing, repeatMode: ConnectQueue.repeatOf(now.cursor.repeat),
-            durationSeconds: current.song.durationSeconds, isLive: current.song.isLive, version: now.version, volumePercent: now.cursor.volumePercent)
+            durationSeconds: current.song.durationSeconds, isLive: current.song.isLive, version: now.version, volumePercent: now.cursor.volumePercent, shuffle: now.cursor.shuffle)
     }
 
     private func notify(_ text: String) {
@@ -1032,6 +1048,16 @@ final class ConnectWorker: ConnectClientEffects, @unchecked Sendable {
     func volume(_ volumePercent: Int) -> Bool {
         AppPaths.log("connect-v2 volume received percent=\(volumePercent)")
         return onUi { [player] in player.applyVolume(volumePercent) }
+    }
+
+    func shuffle(_ on: Bool) -> Bool {
+        AppPaths.log("connect-v2 shuffle received on=\(on)")
+        return onUi { [player] in player.applyShuffle(on) }
+    }
+
+    func setRepeat(_ mode: HandoffRepeat) -> Bool {
+        AppPaths.log("connect-v2 repeat received mode=\(mode.rawValue)")
+        return onUi { [player] in player.applyRepeat(ConnectQueue.repeatOf(mode)) }
     }
 
     func queueAdd(_ items: [HandoffItem], next: Bool, afterItemId: String?) -> Bool {
@@ -1280,7 +1306,7 @@ final class ConnectWorker: ConnectClientEffects, @unchecked Sendable {
     func toLocal(_ c: PlaybackCursor) -> ConnectClient.LocalCursor {
         ConnectClient.LocalCursor(
             currentItemId: c.currentItemId, positionMs: c.positionMs, playing: c.playing, repeat: ConnectQueue.repeatOf(c.repeatMode), listenedMs: c.listenedMs,
-            historySent: c.historySent, capturedAtMs: clockMs, volumePercent: c.volumePercent)
+            historySent: c.historySent, capturedAtMs: clockMs, volumePercent: c.volumePercent, shuffle: c.shuffle)
     }
 
     // MARK: 家の作成・記録の削除・鎖の追記

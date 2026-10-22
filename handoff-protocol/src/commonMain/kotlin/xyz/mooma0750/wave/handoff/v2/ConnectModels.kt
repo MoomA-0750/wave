@@ -141,6 +141,11 @@ data class CursorBody(
     val startedAtEpochMs: Long,
     /** 鳴らしている端末の音量（PC のアプリの中の音量。スマホ・時計は音量を合わせないので載せない・受けない）（0〜100）。ほかの端末の音量の表示に使う。前の版の書き手は付けない（null）。 */
     val volumePercent: Int? = null,
+    /**
+     * 鳴らしている端末のシャッフル。前の版の書き手は付けない（null）。付いている書き手は、遠隔のシャッフル・繰り返し
+     * （[ControlAction.Shuffle]・[ControlAction.Repeat]）に従うので、ほかの端末はこれが null でないときだけその操作を出す。
+     */
+    val shuffle: Boolean? = null,
 )
 
 /** キュー（D-5）。snapshot は HandoffCodec.encode の文字列（取り込む側が HandoffCodec.decode で検証する）。 */
@@ -186,6 +191,10 @@ sealed interface CommandBody {
         val onItemId: String? = null,
         /** 音量（volume のときだけ、0〜100）。鳴らしている端末の音量（PC のアプリの中の音量。スマホ・時計は音量を合わせないので載せない・受けない）にする。 */
         val volumePercent: Int? = null,
+        /** シャッフルを入れるか切るか（shuffle のときだけ）。 */
+        val shuffle: Boolean? = null,
+        /** 繰り返し（repeat のときだけ）。 */
+        val repeat: HandoffRepeat? = null,
     ) : CommandBody
 
     /**
@@ -287,6 +296,14 @@ enum class ControlAction {
     /** 鳴らしている端末の音量（PC のアプリの中の音量。スマホ・時計は音量を合わせないので載せない・受けない）を変える（volumePercent）。 */
     @SerialName("volume")
     Volume,
+
+    /** 鳴らしている端末のシャッフルを入れる・切る（shuffle）。前の版の受け手は読めずに捨てる（カーソルの shuffle が null の相手には送らない）。 */
+    @SerialName("shuffle")
+    Shuffle,
+
+    /** 鳴らしている端末の繰り返しを決める（repeat）。送る条件は Shuffle と同じ。 */
+    @SerialName("repeat")
+    Repeat,
 }
 
 @Serializable

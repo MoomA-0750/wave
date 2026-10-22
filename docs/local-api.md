@@ -40,8 +40,8 @@ Windows 版の wave は、動いている間、同じ PC のほかのアプリ�
 
 | 口 | 中身 |
 |---|---|
-| `GET /v1/playback` | `shuffle`（シャッフル中か）と、`track.likeStatus`（`like`・`dislike`・`indifferent`。読めていなければ null）が増える |
-| `POST /v1/control` | `{"action": "shuffle", "shuffle": true｜false}`・`{"action": "repeat", "repeat": "off"｜"track"｜"context"}` も受ける |
+| `GET /v1/playback` | `track.likeStatus`（`like`・`dislike`・`indifferent`。読めていなければ null）が増える。`shuffle` は wave-api と違い null にならない（前の版の端末を映していれば false） |
+| `POST /v1/control` | シャッフル・繰り返しは wave-api と同じ形。ほかの端末で鳴っていればその端末へ送る（前の版の端末なら `409 not_sent`） |
 | `POST /v1/rate` | `{"likeStatus": "like"｜"indifferent", "videoId"?}`。曲を高く評価する・外す。`videoId` が無ければ今の曲。ログインが要る |
 | `GET /v1/lyrics` | 今の曲の歌詞。`videoId`・`state`（`found`・`none`（無い）・`loading`・`failed`・`idle`（曲が無い））・`synced`・`source`・`lines`（`synced` のとき。`timeMs`・`text`）・`text`（時刻の無い本文） |
 | `GET /v1/theme` | wave の色。`dark`（暗い表示か）・`accent`・`accentLight1`〜`3`・`accentDark1`〜`3`（Windows の強調色、`#RRGGBB`）。暗い地の文字は `accentLight2`、明るい地の文字は `accentDark1`（WinUI と同じ） |

@@ -125,6 +125,12 @@ struct FieldReader {
         return b
     }
 
+    func optBool(_ key: String) throws -> Bool? {
+        guard let value = optional(key) else { return nil }
+        guard case .bool(let b) = value else { throw ConnectDecodeError(field: key) }
+        return b
+    }
+
     func bool(_ key: String, default value: Bool) throws -> Bool {
         object[key] == nil ? value : try bool(key)
     }
@@ -181,6 +187,12 @@ struct FieldReader {
 
     func enumValue<E: RawRepresentable>(_ key: String, _ type: E.Type) throws -> E where E.RawValue == String {
         guard let e = E(rawValue: try string(key)) else { throw ConnectDecodeError(field: key) }
+        return e
+    }
+
+    func optEnumValue<E: RawRepresentable>(_ key: String, _ type: E.Type) throws -> E? where E.RawValue == String {
+        guard let raw = try optString(key) else { return nil }
+        guard let e = E(rawValue: raw) else { throw ConnectDecodeError(field: key) }
         return e
     }
 

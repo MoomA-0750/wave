@@ -38,6 +38,8 @@ struct PlaybackCursor {
     var historySent: Bool
     /// この端末のアプリの中の音量（0〜100）。PC だけが載せる。スマホは載せない（nil。ほかの端末から音量を変えられないことの印。Spotify と同じ）。
     var volumePercent: Int?
+    /// シャッフル中か（ほかの端末はこれを見てシャッフル・繰り返しの操作を出す）。
+    var shuffle = false
 }
 
 /// ほかの端末の再生（表示と遠隔操作のため）。queueKey はキューの中身の目印（同じなら置き直さない）。
@@ -57,6 +59,8 @@ struct RemoteSnapshot {
     var version: Int64 = 0
     /// その端末のアプリの中の音量（0〜100）。スマホ・前の版の端末は付けない（nil。そのときはほかの端末から音量を変えられない）。
     var volumePercent: Int?
+    /// その端末のシャッフル。前の版の端末は付けない（nil。そのときはほかの端末からシャッフル・繰り返しを変えられない）。
+    var shuffle: Bool?
 
     /// 今の位置（再生中なら、取ってからの経過を足す。曲の長さで止める）。ライブ配信には位置が無いので 0（経過で伸ばさない）。
     func positionNow(_ nowMs: Int64) -> Double {
@@ -179,6 +183,17 @@ final class PlayerService {
     @ObservationIgnored private var remoteVolumeWork: DispatchWorkItem?
     /// ほかの端末の音量（0〜100）を変えてもらう（端末の連携が置く）。送れなければ false。
     @ObservationIgnored var sendRemoteVolume: ((Int) -> Bool)?
+    /// 映している端末がシャッフルを知らせている（遠隔のシャッフル・繰り返しに従う版）。前の版の端末なら false で、シャッフル・リピートは押せない。
+    private(set) var remoteModesKnown = false
+    /// シャッフル・リピートを変えられる（手元で鳴らしている、または映している端末が従える版）。
+    var canChangeModes: Bool { !isRemote || remoteModesKnown }
+    /// ほかの端末のシャッフル・繰り返しを変えてもらう（端末の連携が置く）。送れなければ false。
+    @ObservationIgnored var sendRemoteShuffle: ((Bool) -> Bool)?
+    @ObservationIgnored var sendRemoteRepeat: ((RepeatMode) -> Bool)?
+    /// 本人が映している端末のシャッフル・繰り返しを変えた直後は、相手の古い値で戻さない（新しいカーソルが届くまで、最大3秒）。
+    @ObservationIgnored private var remoteModesHoldUntilMs: Int64 = 0
+    @ObservationIgnored private var wantedRemoteShuffle: Bool?
+    @ObservationIgnored private var wantedRemoteRepeat: RepeatMode?
     var like: LikeStatus?
     /// 今の曲がどれかのプレイリストに入っている（先読みで分かったとき。Spotify と同じく評価のボタンに✓を付ける）。
     var inPlaylist = false
@@ -959,8 +974,12 @@ final class PlayerService {
     /// シャッフルの入り切り（Android と同じ）。入れると今の曲より後ろの並びを覚えて混ぜ、切ると残りを覚えた並びに戻す
     /// （シャッフル中に足した曲は今の順のまま最後に付く。曲を外しはしない）。
     func toggleShuffle() {
-        // ほかの端末のキューは並べ替えられない（命令が無い）
-        if isRemote || queue.isEmpty || current == nil || index < 0 { return }
+        // ほかの端末を映している間は、その端末のシャッフルを入れ切りしてもらう（前の版の端末は変えられない）
+        if isRemote {
+            sendModes(shuffle: !shuffle, repeat: nil)
+            return
+        }
+        if queue.isEmpty || current == nil || index < 0 { return }
         let upcoming = (index + 1..<queue.count).map { (song: queue[$0], meta: itemMeta[$0]) }
         // 自分で足した曲（キュー）はシャッフルせず、そのままの順で先頭に置く（Spotify・Android と同じ）
         var rest: [(song: Song, meta: QueueItemMeta)]
@@ -994,7 +1013,49 @@ final class PlayerService {
 
     private func setShuffleOrder(_ order: [String: Int]?) {
         shuffleOrder = order
+        let changed = shuffle != (order != nil)
         shuffle = order != nil
+        // ほかの端末にシャッフルの印を知らせる（カーソルに載る）
+        if changed && !isRemote { cursorChanged.forEach { $0(true) } }
+    }
+
+    /// 映している端末へシャッフル・繰り返しを送り、届くまでの間は押した値を見せる。
+    private func sendModes(shuffle on: Bool?, repeat mode: RepeatMode?) {
+        guard remoteModesKnown else { return }
+        let sent = on.map { sendRemoteShuffle?($0) } ?? mode.map { sendRemoteRepeat?($0) } ?? false
+        guard sent == true else {
+            message = L.t("ほかの端末に送れませんでした", "Couldn’t reach the other device")
+            return
+        }
+        remoteModesHoldUntilMs = clockMs + 3_000
+        if let on {
+            wantedRemoteShuffle = on
+            shuffle = on
+        }
+        if let mode {
+            wantedRemoteRepeat = mode
+            repeatMode = mode
+        }
+    }
+
+    /// シャッフルを入れる・切る（同じなら何もしない。ほかの端末を映している間はその端末へ送る）。
+    func setShuffle(_ on: Bool) {
+        if shuffle != on { toggleShuffle() }
+    }
+
+    /// ほかの端末からシャッフルを入れた・切った（この端末が鳴らしている）。
+    func applyShuffle(_ on: Bool) -> Bool {
+        if isRemote || current == nil { return false }
+        if shuffle != on { toggleShuffle() }
+        return true
+    }
+
+    /// ほかの端末から繰り返しを変えた（この端末が鳴らしている）。
+    func applyRepeat(_ mode: RepeatMode) -> Bool {
+        if isRemote { return false }
+        setRepeat(mode)
+        extendRadioIfNeeded()
+        return true
     }
 
     /// キューの項目ごとに、元の一覧での位置を当てる（同じ曲が何度も出るときは前から順に）。
@@ -1014,7 +1075,10 @@ final class PlayerService {
     }
 
     func cycleRepeat() {
-        if isRemote { return }
+        if isRemote {
+            sendModes(shuffle: nil, repeat: { switch repeatMode { case .off: .all; case .all: .one; case .one: .off } }())
+            return
+        }
         switch repeatMode {
         case .off: setRepeat(.all)
         case .all: setRepeat(.one)
@@ -1079,7 +1143,7 @@ final class PlayerService {
         let positionMs = engine.hasSource ? Int64(engine.positionSeconds * 1000) : 0
         return PlaybackCursor(currentItemId: itemMeta[index].itemId, positionMs: max(0, positionMs), playing: isPlaying || isLoading,
                               repeatMode: repeatMode, listenedMs: listenedNow(), historySent: statsSent,
-                              volumePercent: Self.sharesVolume ? Int((localVolume * 100).rounded()) : nil)
+                              volumePercent: Self.sharesVolume ? Int((localVolume * 100).rounded()) : nil, shuffle: shuffle)
     }
 
     private func listenedNow() -> Int64 { listen.listenedMs(clockMs) }
@@ -1267,8 +1331,13 @@ final class PlayerService {
             restartSideLoads(queue[i])
         }
         isPlaying = next.playing
-        // 相手のリピートを映すだけ（この端末の設定には書かない）
-        repeatMode = next.repeatMode
+        // 相手のリピート・シャッフルを映すだけ（この端末の設定には書かない）。本人が変えた直後は、それが届くまで古い値で戻さない
+        let holding = clockMs < remoteModesHoldUntilMs
+        if let wanted = wantedRemoteRepeat, !holding || next.repeatMode == wanted { wantedRemoteRepeat = nil }
+        if let wanted = wantedRemoteShuffle, !holding || next.shuffle == wanted { wantedRemoteShuffle = nil }
+        if wantedRemoteRepeat == nil { repeatMode = next.repeatMode }
+        remoteModesKnown = next.shuffle != nil
+        if wantedRemoteShuffle == nil { shuffle = next.shuffle == true }
         // 相手の音量をつまみに映す（本人が動かした直後は、届いた古い値で戻さない）
         remoteVolumeKnown = next.volumePercent != nil
         if let percent = next.volumePercent, clockMs >= remoteVolumeHoldUntilMs {
@@ -1295,6 +1364,12 @@ final class PlayerService {
         isPlaying = false
         position = 0
         repeatMode = RepeatMode(rawValue: AppServices.settings.repeatMode) ?? .off
+        // シャッフルの印を手元のものに戻す
+        remoteModesKnown = false
+        remoteModesHoldUntilMs = 0
+        wantedRemoteShuffle = nil
+        wantedRemoteRepeat = nil
+        shuffle = shuffleOrder != nil
         // つまみを手元の音量に戻す
         remoteVolumeWork?.cancel()
         remoteVolumeHoldUntilMs = 0

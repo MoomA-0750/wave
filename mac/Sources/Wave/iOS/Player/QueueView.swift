@@ -157,6 +157,7 @@ private struct QueueModeControls: View {
                     .frame(width: 44, height: 44)
                     .glassCard(22, interactive: true)
             }
+            .disabled(!player.canChangeModes)
             .accessibilityLabel(L.t("シャッフル", "Shuffle"))
             .accessibilityValue(player.shuffle ? L.t("オン", "On") : L.t("オフ", "Off"))
             Button(action: player.cycleRepeat) {
@@ -165,6 +166,7 @@ private struct QueueModeControls: View {
                     .frame(width: 44, height: 44)
                     .glassCard(22, interactive: true)
             }
+            .disabled(!player.canChangeModes)
             .accessibilityLabel(L.t("リピート", "Repeat"))
         }
         .buttonStyle(.plain)

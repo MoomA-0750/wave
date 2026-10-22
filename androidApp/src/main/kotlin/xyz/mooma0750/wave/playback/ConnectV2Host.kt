@@ -48,6 +48,12 @@ class ConnectV2Host {
         /** ほかの端末から音量を変えられた。スマホ・時計は受けない（false。音量はその端末でだけ変える）。 */
         fun volume(volumePercent: Int): Boolean
 
+        /** ほかの端末からシャッフルを入れた・切った（同じなら何もしない）。 */
+        fun shuffle(on: Boolean): Boolean
+
+        /** ほかの端末から繰り返しを変えた。 */
+        fun repeat(mode: HandoffRepeat): Boolean
+
         /** ほかの端末で足した曲を、自分のキューへ入れる（QueueSession.addFromRemote）。 */
         fun queueAdd(
             items: List<xyz.mooma0750.wave.handoff.HandoffItem>,
@@ -74,6 +80,8 @@ class ConnectV2Host {
         val historySent: Boolean,
         /** この端末の音量（0〜100）（PC のアプリの中の音量。スマホ・時計は音量を合わせないので載せない・受けない）。 */
         val volumePercent: Int? = null,
+        /** シャッフル中か（ほかの端末はこれを見てシャッフル・繰り返しの操作を出す）。 */
+        val shuffle: Boolean = false,
     )
 
     interface Listener {
