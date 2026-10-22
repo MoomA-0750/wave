@@ -103,6 +103,9 @@ public class LocalApiTests : IDisposable
             return Task.FromResult(ApiResult<IReadOnlyList<ShelfView>>.Ok(shelves));
         }
 
+        public Task<ApiResult<IReadOnlyList<ItemView>>> RecentAsync() =>
+            Task.FromResult(ApiResult<IReadOnlyList<ItemView>>.Ok([new("playlist", "LM", "Liked Music", null, null), new("artist", "UC1", "歌手", null, null)]));
+
         public Task<ApiResult<IReadOnlyList<MoodView>>> MoodsAsync() => Task.FromResult(ApiResult<IReadOnlyList<MoodView>>.Ok([new("Relax", "ggMPOg1uX1JO"), new("Workout", "ggMPOg1uX1Jw")]));
     }
 
@@ -328,6 +331,7 @@ public class LocalApiTests : IDisposable
         Assert.Equal(("PLall", "MPREb_3"), (artist["allSongsPlaylistId"]!.GetValue<string>(), artist["albumShelves"]![0]!["albums"]![0]!["id"]!.GetValue<string>()));
         Assert.Equal(HttpStatusCode.NotFound, (await Get("/v1/artists/UC9/x")).Status);
         Assert.Equal("Relax", (await Get("/v1/moods")).Body![0]!["title"]!.GetValue<string>());
+        Assert.Equal("artist", (await Get("/v1/recent")).Body![1]!["type"]!.GetValue<string>());
         var home = (await Get("/v1/suggestions?mood=ggMPOg1uX1JO")).Body!;
         var items = home[0]!["items"]!.AsArray();
         Assert.Equal(["artist", "track", "playlist"], items.Select(i => i!["type"]!.GetValue<string>()));

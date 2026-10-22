@@ -46,8 +46,9 @@ Windows 版の wave は、動いている間、同じ PC のほかのアプリ�
 | `GET /v1/lyrics` | 今の曲の歌詞。`videoId`・`state`（`found`・`none`（無い）・`loading`・`failed`・`idle`（曲が無い））・`synced`・`source`・`lines`（`synced` のとき。`timeMs`・`text`）・`text`（時刻の無い本文） |
 | `GET /v1/theme` | wave の色。`dark`（暗い表示か）・`accent`・`accentLight1`〜`3`・`accentDark1`〜`3`（Windows の強調色、`#RRGGBB`）。暗い地の文字は `accentLight2`、明るい地の文字は `accentDark1`（WinUI と同じ） |
 | `GET /v1/search?q=&type=` | `type` は `song`（既定）・`live`（`track` の形）・`album`・`playlist`（`id`・`name`・`subtitle`・`artUrl`。アルバムの `id` は browseId）・`artist`（`id`・`name`・`subtitle`・`artUrl`） |
-| `GET /v1/suggestions?mood=` | 棚に `items`（元の並びのまま。`type`（`track`・`playlist`・`album`・`artist`）・`id`（videoId・playlistId・browseId）・`title`・`subtitle`・`artUrl`・`isLive`）・`strapline`（見出しの上の小さな文字）・`albums` が増える。`tracks`・`playlists` は wave-api と同じ。`mood` に気分の札の `params` を渡すと、その札を選んだホーム |
+| `GET /v1/suggestions?mood=` | 棚に `items`（元の並びのまま。`type`（`track`・`playlist`・`album`・`artist`）・`id`（videoId・playlistId・browseId）・`title`・`subtitle`・`artUrl`・`isLive`）・`strapline`（見出しの上の小さな文字）・`albums` が増える。`tracks`・`playlists` は wave-api と同じ。`mood` に気分の札の `params` を渡すと、その札を選んだホーム。棚の並びはデスクトップのホームと同じ（棚が8つ以上になるまで続きを読み、`mood` が無ければ先頭に「登録したアーティストの新作」と「新作」。この2つの見出しは wave の文字で、`hl` があればその言語） |
 | `GET /v1/moods` | ホームの気分の札（`title`・`params`） |
+| `GET /v1/recent` | ホームの上の2列のタイル（最近聴いたもの、8つまで。`items` と同じ形） |
 | `GET /v1/library/albums` | ライブラリのアルバム（`/v1/playlists` と同じ形。`id` は browseId） |
 | `GET /v1/library/artists` | ライブラリのアーティスト（`id`・`name`・`subtitle`・`artUrl`） |
 | `GET /v1/albums/{browseId}` | アルバム（`id`・`name`・`subtitle`・`artUrl`・`playlistId`・`tracks`）。`/tracks` を付けると曲だけ |

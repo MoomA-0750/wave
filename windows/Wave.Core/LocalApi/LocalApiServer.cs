@@ -109,6 +109,8 @@ public interface ILocalApiBackend
     /// <param name="mood">気分の札の params（null ならふつうのホーム）。</param>
     Task<ApiResult<IReadOnlyList<ShelfView>>> SuggestionsAsync(string? mood);
     Task<ApiResult<IReadOnlyList<MoodView>>> MoodsAsync();
+    /// <summary>ホームの上の2列のタイル（最近聴いたもの）。</summary>
+    Task<ApiResult<IReadOnlyList<ItemView>>> RecentAsync();
 }
 
 /// <summary>
@@ -289,6 +291,9 @@ public sealed class LocalApiServer : IDisposable
                 return;
             case ("GET", "/v1/library/artists"):
                 await ResultAsync(response, await backend.LibraryArtistsAsync());
+                return;
+            case ("GET", "/v1/recent"):
+                await ResultAsync(response, await backend.RecentAsync());
                 return;
             case ("GET", "/v1/moods"):
                 await ResultAsync(response, await backend.MoodsAsync());

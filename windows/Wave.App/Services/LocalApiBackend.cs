@@ -305,8 +305,38 @@ public sealed class LocalApiBackend(DispatcherQueue ui) : ILocalApiBackend
         (await AppServices.Music.ArtistAsync(browseId)).Map(a => new ArtistPageView(browseId, a.Name, a.ThumbnailUrl, a.TopSongs.Select(s => TrackView.Of(s)).ToList(), a.AllSongsPlaylistId,
             a.AlbumShelves.Select(shelf => new AlbumShelfView(shelf.Title, shelf.Albums.Select(Album).ToList())).ToList())));
 
+    /// <summary>
+    /// ホームの棚。デスクトップのホームと同じ組み立て（棚が8つ以上になるまで続きを読む。「すべて」のときは、
+    /// 先頭に登録したアーティストの新作と YouTube Music の新作の棚を置く）。上の2列のタイルは <see cref="RecentAsync"/>。
+    /// </summary>
     public Task<ApiResult<IReadOnlyList<ShelfView>>> SuggestionsAsync(string? mood) => OnUi(async () =>
-        (await AppServices.Music.HomeAsync(null, mood)).Map<IReadOnlyList<ShelfView>>(home => home.Shelves
+    {
+        var shelves = new List<HomeShelf>();
+        var seen = new HashSet<string>();
+        var newReleases = mood is null ? AppServices.Music.NewReleasesAsync() : null;
+        string? continuation = null;
+        ApiResult<HomePage>? failed = null;
+        for (var page = 0; page < 4; page++)
+        {
+            var result = await AppServices.Music.HomeAsync(continuation, continuation is null ? mood : null);
+            if (!result.IsOk)
+            {
+                failed = result;
+                break;
+            }
+            foreach (var shelf in result.Value!.Shelves)
+                if (seen.Add(shelf.Title + "|" + string.Join(",", shelf.Items.Take(3).Select(i => i.Key)))) shelves.Add(shelf);
+            continuation = result.Value.Continuation;
+            if (shelves.Count >= 8 || continuation is null) break;
+        }
+        if (newReleases is not null && await newReleases is { IsOk: true } releases
+            && !HomeShelves.DuplicatesNewReleases(releases.Value!, shelves)
+            && HomeShelves.NewReleasesShelf(T("新作", "New releases"), releases.Value!) is { } newShelf)
+            shelves.Insert(0, newShelf);
+        if (mood is null && ReleaseWatchState.Diversified(AppServices.Releases.Recent).Take(20).ToList() is { Count: > 0 } subscribed)
+            shelves.Insert(0, new HomeShelf(T("登録したアーティストの新作", "New from artists you subscribe to"), null, subscribed.Select(Views.HomePage.ReleaseItem).ToList()));
+        if (shelves.Count == 0 && failed is not null) return failed.Map<IReadOnlyList<ShelfView>>(_ => []);
+        return ApiResult<IReadOnlyList<ShelfView>>.Ok(shelves
             .Select(shelf => new ShelfView(shelf.Title,
                 shelf.Items.OfType<HomeItem.SongItem>().Select(s => TrackView.Of(s.Song)).ToList(),
                 shelf.Items.OfType<HomeItem.PlaylistItem>().Select(p => Playlist(p.Playlist)).ToList(),
@@ -314,7 +344,17 @@ public sealed class LocalApiBackend(DispatcherQueue ui) : ILocalApiBackend
                 shelf.Items.Select(Item).OfType<ItemView>().ToList(),
                 shelf.Strapline))
             .Where(s => s.Items.Count > 0)
-            .ToList()));
+            .ToList());
+    });
+
+    /// <summary>ホームの上の2列のタイル（最近聴いたもの。デスクトップと同じく8つまで）。</summary>
+    public Task<ApiResult<IReadOnlyList<ItemView>>> RecentAsync() => OnUi(async () =>
+        AppServices.Client.IsLoggedIn
+            ? (await AppServices.Music.RecentActivityAsync()).Map<IReadOnlyList<ItemView>>(items => items.Select(Item).OfType<ItemView>().Take(8).ToList())
+            : ApiResult<IReadOnlyList<ItemView>>.Failed(FailureKind.NotLoggedIn));
+
+    /// <summary>wave が出す文字（棚の見出しなど）。問い合わせの言語（hl）があればそれ、無ければ画面の言語。</summary>
+    private static string T(string ja, string en) => InnerTubeClient.HlOverride is { } hl ? (hl.StartsWith("ja", StringComparison.OrdinalIgnoreCase) ? ja : en) : L.T(ja, en);
 
     public Task<ApiResult<IReadOnlyList<MoodView>>> MoodsAsync() => OnUi(async () =>
         (await AppServices.Music.HomeAsync()).Map<IReadOnlyList<MoodView>>(home => home.Chips.Select(c => new MoodView(c.Title, c.Params)).ToList()));
