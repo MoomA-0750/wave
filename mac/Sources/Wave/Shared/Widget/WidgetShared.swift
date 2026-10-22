@@ -147,7 +147,12 @@ struct WidgetItem: Codable, Equatable, Hashable {
     }
 
     /// 選んだものを丸ごと文字にした ID（候補から外れても、置いたウィジェットが空にならないように）。
-    var token: String { (try? JSONEncoder().encode(self))?.base64EncodedString() ?? "" }
+    /// 鍵の並びを固定する（並びが変わると同じものでも別の ID になり、OS が選んだものを読み戻せなかった）
+    var token: String {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+        return (try? encoder.encode(self))?.base64EncodedString() ?? ""
+    }
 
     init(kind: Kind, id: String, title: String, subtitle: String?, thumbnailUrl: String?) {
         self.kind = kind
@@ -282,8 +287,8 @@ struct PlayItemEntity: AppEntity {
     var id: String
     var item: WidgetItem
 
-    init(_ item: WidgetItem) {
-        id = item.token
+    init(_ item: WidgetItem, id: String? = nil) {
+        self.id = id ?? item.token
         self.item = item
     }
 
@@ -298,7 +303,8 @@ struct PlayItemQuery: EntityStringQuery {
     init() {}
 
     func entities(for identifiers: [String]) async throws -> [PlayItemEntity] {
-        identifiers.compactMap { WidgetItem(token: $0).map(PlayItemEntity.init) }
+        // 頼まれた ID のまま返す（作り直した ID が違うと、OS が答えを捨てる）
+        identifiers.compactMap { id in WidgetItem(token: id).map { PlayItemEntity($0, id: id) } }
     }
 
     func entities(matching string: String) async throws -> IntentItemCollection<PlayItemEntity> {
@@ -309,6 +315,11 @@ struct PlayItemQuery: EntityStringQuery {
 
     func suggestedEntities() async throws -> IntentItemCollection<PlayItemEntity> {
         Self.sections(WidgetStore.items)
+    }
+
+    /// 置いたときに最初から選んでおくもの（候補の先頭。ふつうは高く評価した曲）。これが無いと、OS が最初の設定を作れず、置いたウィジェットを描かなかった（Mac）
+    func defaultResult() async -> PlayItemEntity? {
+        WidgetStore.items.first.map { PlayItemEntity($0) }
     }
 
     /// 種類ごとの見出しを付けて並べる。
@@ -328,6 +339,10 @@ struct SelectItemIntent: WidgetConfigurationIntent {
     static let title: LocalizedStringResource = "Choose What to Play"
     @Parameter(title: "Play") var item: PlayItemEntity?
     init() {}
+
+    static var parameterSummary: some ParameterSummary {
+        Summary { \.$item }
+    }
 }
 
 /// ウィジェットで選ぶプレイリスト。

@@ -627,4 +627,6 @@
 - iPhone・Mac は、ウィジェットの中では YouTube に触れない決まり（WaveCore を組み込まない）なので、検索はできない。アプリが候補（ライブラリのプレイリスト・アルバム、再生履歴と鳴らした曲・ライブ）を置き場（`items.json`）に書き、ウィジェットの設定（App Intents の `EntityStringQuery`）はそれを種類ごとに見出しを付けて並べ、名前で絞り込む
 - 設定で選んだものの ID には中身（種類・ID・名前・副題・絵の URL）を丸ごと入れた（`WidgetItem.token`）。候補は履歴とともに入れ替わるので、ID だけを覚えると、候補から外れたときに置いたウィジェットが空になる
 - Mac のウィジェットの一覧は、拡張を同じ場所で入れ替えても新しい種類を出さなかった（版の番号を上げても、chronod を立ち上げ直しても、OS が覚えた種類の一覧のまま）。`pluginkit -r` と `lsregister -u` で登録を外してから付け直し、chronod を立ち上げ直すと出た
+- Mac で置いたワンタップ再生が描かれなかった原因は3つあった。(1) 設定に最初の値（`defaultResult`）が無く、OS が最初の設定を作れなかった（chronod の記録で hasDefaultIntent = NO、「Intent configuration is required but was not provided」）。候補の先頭を最初の値にした。(2) 選んだものの ID を JSON から作っていて、鍵の並びが毎回変わり、OS が渡した ID と作り直した ID が合わずに答えが捨てられた（「Query returned unrequested identifiers that have been dropped」）。鍵の並びを固定し、頼まれた ID のまま返すようにした。(3) 組み直しても、動いていた古いウィジェットの処理（WaveWidget）が残っていて古い作りで描いていた。確かめるときは `pkill -x WaveWidget` してから chronod を立ち上げ直す
+- 登録を外して付け直した直後は、linkd がアプリを信用せず（「is not trusted, rejecting」）、プレイリストのウィジェットも描けなくなった。wave をいったん起動すると直った
 
