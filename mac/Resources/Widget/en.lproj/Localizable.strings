@@ -3,3 +3,5 @@
 "プレイリスト" = "Playlist";
 "今の曲と次に流れる曲、再生の操作、高く評価。" = "The current song and what's up next, with playback controls and like.";
 "最近再生したプレイリストか、選んだプレイリストを並べ、押すとすぐ再生する。" = "Your recently played or chosen playlists. Tap one to play it.";
+"ワンタップ再生" = "Quick Play";
+"選んだプレイリスト・アルバム・曲・ライブを、押すだけで再生する。" = "Play a playlist, album, song or live stream you choose with one tap.";

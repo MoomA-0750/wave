@@ -13,6 +13,10 @@ final class WidgetSync {
     private var timer: Timer?
     private var shown: WidgetNowPlaying?
     private var shownPlaylists: [WidgetPlaylist]?
+    private var shownItems: [WidgetItem]?
+    /// 再生履歴の最初のページ（起動して一度だけ読む）と、その後にこの端末で鳴らした曲・ライブ（新しい順）。ワンタップ再生の候補にする
+    private var history: [Song] = []
+    private var played: [Song] = []
     #if os(iOS)
         private var activity: Activity<NowPlayingAttributes>?
     #endif
@@ -27,6 +31,24 @@ final class WidgetSync {
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
             MainActor.assumeIsolated { WidgetSync.shared.tick() }
         }
+        Task { await loadHistory() }
+    }
+
+    private func loadHistory() async {
+        // ログインを読み終えるまで待つ（起動の直後は、まだ読めていない）
+        var waited = 0
+        while !(AppServices.client?.isLoggedIn ?? false), waited < 30 {
+            try? await Task.sleep(for: .seconds(1))
+            waited += 1
+        }
+        if let page = (try? await AppServices.music.history())?.value {
+            history = page.sections.flatMap(\.songs)
+        }
+        // ライブは履歴に無いことが多いので、無ければ Lo-Fi のページと同じライブを後ろに足す（Android の選ぶ画面と同じ）
+        if !history.contains(where: \.isLive), let lives = (try? await AppServices.music.searchLive(LofiGenre.liveQuery))?.value {
+            history += lives.songs.filter(\.isLive)
+        }
+        AppPaths.log("widget history songs=\(history.count) live=\(history.filter(\.isLive).count)")
     }
 
     private static func handle(_ command: WidgetCommand) async {
@@ -61,6 +83,26 @@ final class WidgetSync {
             let title = WidgetStore.playlists.first { $0.id == id }?.title ?? ""
             AppServices.nav.play(.playlist(PlaylistSummary(playlistId: id, title: title, subtitle: nil, thumbnailUrl: nil)))
             shouldPlay = true
+        case .playItem(let item, let shuffle):
+            // 今鳴っているものなら、頭からやり直さずに一時停止・再開
+            if !shuffle, item.isCurrent(WidgetSync.shared.shown) {
+                player.togglePlay()
+                shouldPlay = !wasPlaying
+                break
+            }
+            switch item.kind {
+            case .playlist:
+                if player.shuffle != shuffle { player.toggleShuffle() }
+                AppServices.nav.play(.playlist(PlaylistSummary(playlistId: item.id, title: item.title, subtitle: item.subtitle, thumbnailUrl: item.thumbnailUrl)))
+            case .album:
+                if player.shuffle != shuffle { player.toggleShuffle() }
+                AppServices.nav.play(.album(AlbumSummary(browseId: item.id, title: item.title, subtitle: item.subtitle, thumbnailUrl: item.thumbnailUrl)))
+            case .song, .live:
+                let artists = (item.subtitle ?? "").isEmpty ? [] : [ArtistRef(name: item.subtitle!, browseId: nil)]
+                player.playSong(Song(videoId: item.id, title: item.title, artists: artists, album: nil, durationSeconds: nil,
+                                     thumbnailUrl: item.thumbnailUrl, isLive: item.kind == .live))
+            }
+            shouldPlay = true
         }
         // iPhone はボタンの処理が終わるとアプリをまた眠らせる。曲は読み込み終えてから鳴るので、
         // 鳴り始めるまで（長くて30秒。裏では読み込みが遅く、1曲に15秒ほどかかることがある）処理を終えずに待つ（待たないと、読み込みの途中で止まって鳴らない）
@@ -83,6 +125,12 @@ final class WidgetSync {
                                         WidgetQueueItem(index: i, videoId: player.queue[i].videoId, title: player.queue[i].title, artist: player.queue[i].artistsText)
                                     },
                                     sourceId: player.sourceId)
+        }
+        if let song = player.current, song.videoId != shown?.videoId, !song.videoId.hasPrefix("ext:") {
+            // 鳴らした曲・ライブを、ワンタップ再生の候補の先頭に足す
+            played.removeAll { $0.videoId == song.videoId }
+            played.insert(song, at: 0)
+            if played.count > 50 { played.removeLast(played.count - 50) }
         }
         if now != shown {
             // 今の曲か次の曲が替わったら、ジャケットを書いてから知らせる
@@ -126,6 +174,8 @@ final class WidgetSync {
         WidgetCenter.shared.reloadTimelines(ofKind: WidgetStore.nowPlayingKind)
         // プレイリストのウィジェットも、上に再生中の曲を出し、鳴っているプレイリストに印を付ける
         WidgetCenter.shared.reloadTimelines(ofKind: WidgetStore.playlistKind)
+        // ワンタップ再生も、鳴っているものは一時停止のボタンにする
+        WidgetCenter.shared.reloadTimelines(ofKind: WidgetStore.itemKind)
         #if os(iOS)
             updateActivity(now)
         #endif
@@ -172,9 +222,29 @@ final class WidgetSync {
                 WidgetPlaylist(id: MusicRepository.likedSongs, title: entry.title, thumbnailUrl: Ui.resize(entry.thumbnailUrl, 240)?.absoluteString)
             }
         }
-        guard AppServices.client.isLoggedIn, list != shownPlaylists, !library.playlists.isEmpty else { return }
+        guard AppServices.client.isLoggedIn, !library.playlists.isEmpty else { return }
+        syncItems(library, list)
+        guard list != shownPlaylists else { return }
         shownPlaylists = list
         WidgetStore.write(list, "playlists.json")
         WidgetCenter.shared.reloadTimelines(ofKind: WidgetStore.playlistKind)
+    }
+
+    /// ワンタップ再生の候補（ライブラリのプレイリスト・アルバム、最近再生した曲・ライブ）。置いたウィジェットは中身を ID に持つので、ここは選ぶときの一覧だけ。
+    private func syncItems(_ library: LibraryState, _ playlists: [WidgetPlaylist]) {
+        let albums = LibraryEntry.list(library, kind: "album", filter: "", sort: "recent", matchSubtitle: false).compactMap { entry -> WidgetItem? in
+            guard case .album(let a) = entry.item else { return nil }
+            return WidgetItem(kind: .album, id: a.browseId, title: a.title, subtitle: a.subtitle, thumbnailUrl: Ui.resize(a.thumbnailUrl, 240)?.absoluteString)
+        }
+        var seen = Set<String>()
+        let songs = (played + history).filter { !$0.videoId.hasPrefix("ext:") && seen.insert($0.videoId).inserted }.map { song in
+            WidgetItem(kind: song.isLive ? .live : .song, id: song.videoId, title: song.title, subtitle: song.artistsText,
+                       thumbnailUrl: Ui.resize(song.thumbnailUrl, 240)?.absoluteString)
+        }
+        let items = playlists.map { WidgetItem(kind: .playlist, id: $0.id, title: $0.title, subtitle: nil, thumbnailUrl: $0.thumbnailUrl) }
+            + albums + songs.filter { $0.kind == .song }.prefix(50) + songs.filter { $0.kind == .live }.prefix(20)
+        guard items != shownItems else { return }
+        shownItems = items
+        WidgetStore.write(items, "items.json")
     }
 }

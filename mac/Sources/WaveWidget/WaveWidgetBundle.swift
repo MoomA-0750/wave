@@ -5,7 +5,7 @@ import WidgetKit
     import ActivityKit
 #endif
 
-// wave のウィジェット（アプリの PlugIns/WaveWidget.appex）。今の曲・選んだプレイリスト・ロック画面の再生中（iPhone）。
+// wave のウィジェット（アプリの PlugIns/WaveWidget.appex）。今の曲・選んだプレイリスト・ワンタップ再生・ロック画面の再生中（iPhone）。
 // アプリが書いた置き場（WidgetStore）を読むだけで、YouTube には触れない（プレイリストの絵だけは取りに行く）。
 
 @main
@@ -13,6 +13,7 @@ struct WaveWidgets: WidgetBundle {
     var body: some Widget {
         NowPlayingWidget()
         PlaylistWidget()
+        ItemWidget()
         #if os(iOS)
             NowPlayingLiveActivity()
         #endif
@@ -467,6 +468,159 @@ struct PlaylistWidgetView: View {
         } else {
             Color.clear.aspectRatio(1, contentMode: .fit).frame(maxWidth: .infinity)
         }
+    }
+}
+
+// MARK: ワンタップ再生
+
+struct ItemEntry: TimelineEntry {
+    let date: Date
+    /// 選んだもの（まだ選んでいなければ nil）
+    var item: WidgetItem?
+    var cover: WidgetImage?
+    var song: WidgetNowPlaying?
+}
+
+struct ItemProvider: AppIntentTimelineProvider {
+    func placeholder(in context: Context) -> ItemEntry {
+        ItemEntry(date: Date(), item: WidgetItem(kind: .playlist, id: "", title: WidgetText.t("プレイリスト", "Playlist"), subtitle: nil, thumbnailUrl: nil))
+    }
+
+    func snapshot(for configuration: SelectItemIntent, in context: Context) async -> ItemEntry {
+        // 一覧で見せるときは、まだ選んでいなくても候補の先頭で見せる
+        await entry(configuration.item?.item ?? (context.isPreview ? WidgetStore.items.first : nil))
+    }
+
+    func timeline(for configuration: SelectItemIntent, in context: Context) async -> Timeline<ItemEntry> {
+        Timeline(entries: [await entry(configuration.item?.item)], policy: .never)
+    }
+
+    private func entry(_ item: WidgetItem?) async -> ItemEntry {
+        guard let item else { return ItemEntry(date: Date(), item: nil) }
+        return ItemEntry(date: Date(), item: item, cover: await cover(item), song: WidgetStore.nowPlaying)
+    }
+
+    /// 絵は置き場に残した分を読み、無ければ取りに行って残しておく（プレイリストのウィジェットと同じ置き場）。
+    private func cover(_ item: WidgetItem) async -> WidgetImage? {
+        let key = "\(item.kind.rawValue)-\(item.id)"
+        if let image = loadImage(WidgetStore.coverFile(key)) { return image }
+        guard let raw = item.thumbnailUrl, let url = URL(string: raw), url.scheme == "https",
+              let (data, _) = try? await URLSession.shared.data(from: url), let image = WidgetImage(data: data) else { return nil }
+        if let file = WidgetStore.coverFile(key) { try? data.write(to: file) }
+        return image
+    }
+}
+
+struct ItemWidget: Widget {
+    var body: some WidgetConfiguration {
+        AppIntentConfiguration(kind: WidgetStore.itemKind, intent: SelectItemIntent.self, provider: ItemProvider()) { entry in
+            ItemWidgetView(entry: entry)
+                .padding(widgetPadding)
+                .onArtwork(entry.cover)
+                .containerBackground(for: .widget) { ArtworkBackground(image: entry.cover) }
+        }
+        .configurationDisplayName(Text("ワンタップ再生"))
+        .description(Text("選んだプレイリスト・アルバム・曲・ライブを、押すだけで再生する。"))
+        .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
+        .contentMarginsDisabled()
+    }
+}
+
+struct ItemWidgetView: View {
+    var entry: ItemEntry
+    @Environment(\.widgetFamily) private var family
+
+    var body: some View {
+        if let item = entry.item {
+            let playing = item.isCurrent(entry.song) && entry.song?.playing == true
+            switch family {
+            case .systemSmall:
+                // どこを押しても鳴らす（鳴っている間は止める）
+                Button(intent: PlayItemIntent(item: item, shuffle: false)) {
+                    cover(item)
+                        .overlay(alignment: .bottomTrailing) { PlayMark(playing: playing, size: 40).padding(6) }
+                }
+                .buttonStyle(.plain)
+            case .systemMedium:
+                HStack(spacing: 14) {
+                    Button(intent: PlayItemIntent(item: item, shuffle: false)) {
+                        HStack(spacing: 14) {
+                            cover(item).aspectRatio(1, contentMode: .fit)
+                            names(item, titleFont: WidgetFont.title3.weight(.semibold))
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    buttons(item, playing: playing)
+                }
+            default:
+                VStack(alignment: .leading, spacing: 12) {
+                    Button(intent: PlayItemIntent(item: item, shuffle: false)) {
+                        cover(item).frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
+                    .buttonStyle(.plain)
+                    HStack(spacing: 12) {
+                        Button(intent: PlayItemIntent(item: item, shuffle: false)) { names(item, titleFont: WidgetFont.title2.weight(.semibold)).contentShape(Rectangle()) }
+                            .buttonStyle(.plain)
+                        buttons(item, playing: playing)
+                    }
+                }
+            }
+        } else {
+            VStack(spacing: 6) {
+                Image(systemName: "play.circle").font(WidgetFont.title)
+                Text(WidgetText.t("長押しして「ウィジェットを編集」から、再生するものを選んでください", "Long-press and choose Edit Widget to pick what to play"))
+                    .font(WidgetFont.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
+            }
+        }
+    }
+
+    /// 絵（無ければ種類の印）。
+    private func cover(_ item: WidgetItem) -> some View {
+        Artwork(image: entry.cover)
+            .overlay {
+                if entry.cover == nil { Image(systemName: item.symbol).font(WidgetFont.title).foregroundStyle(.secondary) }
+            }
+    }
+
+    /// 名前と、種類・アーティスト（アルバムの副題は種類を含む）。
+    private func names(_ item: WidgetItem, titleFont: Font) -> some View {
+        let subtitle = [item.kind == .live ? item.kindLabel : nil, item.kind == .playlist ? nil : item.subtitle]
+            .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " • ")
+        return VStack(alignment: .leading, spacing: 2) {
+            Text(item.title).font(titleFont).lineLimit(2)
+            if !subtitle.isEmpty { Text(subtitle).font(WidgetFont.subheadline).foregroundStyle(.secondary).lineLimit(1) }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// シャッフル（プレイリスト・アルバムだけ）と、主役の再生ボタン。
+    private func buttons(_ item: WidgetItem, playing: Bool) -> some View {
+        HStack(spacing: 10) {
+            if item.kind == .playlist || item.kind == .album {
+                Button(intent: PlayItemIntent(item: item, shuffle: true)) {
+                    Image(systemName: "shuffle").font(.system(size: 17, weight: .semibold)).frame(width: 40, height: 40)
+                        .background(Circle().fill(Color.primary.opacity(0.12)))
+                }
+                .buttonStyle(.plain)
+            }
+            Button(intent: PlayItemIntent(item: item, shuffle: false)) { PlayMark(playing: playing, size: 48) }
+                .buttonStyle(.plain)
+        }
+    }
+}
+
+/// 主役の再生（鳴っている間は一時停止）の丸いボタン。絵の上でも見えるよう、アクセントの色で塗る。
+private struct PlayMark: View {
+    var playing: Bool
+    var size: CGFloat
+
+    var body: some View {
+        Image(systemName: playing ? "pause.fill" : "play.fill")
+            .font(.system(size: size * 0.42, weight: .bold))
+            .foregroundStyle(.white)
+            .frame(width: size, height: size)
+            .background(Circle().fill(accent))
     }
 }
 

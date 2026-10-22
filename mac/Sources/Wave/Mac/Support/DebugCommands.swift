@@ -166,6 +166,21 @@ enum DebugCommands {
             AppPaths.log("debug now title=\(player.current?.title ?? "nil") position=\(Int(player.position)) duration=\(Int(player.duration)) playing=\(player.isPlaying) loading=\(player.isLoading) like=\(String(describing: player.like)) lyrics=\(player.lyrics != nil) video=\(player.video != nil) remote=\(player.isRemote) videoSize=\(MusicVideoPlayer.shared.player.currentItem?.presentationSize ?? .zero) remoteLive=\(player.remoteLivePlayer.timeControlStatus.rawValue) waiting=\(player.remoteLivePlayer.reasonForWaitingToPlay?.rawValue ?? "-") item=\(player.remoteLivePlayer.currentItem?.status.rawValue ?? -1) itemError=\(player.remoteLivePlayer.currentItem?.error?.localizedDescription ?? "-") liveSize=\(player.remoteLivePlayer.currentItem?.presentationSize ?? .zero)")
         case "route":
             AppPaths.log("debug route=\(nav.current.route) back=\(nav.canGoBack)")
+        case "widget-items":
+            // ワンタップ再生の候補（種類ごとの数と先頭）
+            let items = WidgetStore.items
+            for kind in WidgetItem.Kind.allCases {
+                let some = items.filter { $0.kind == kind }
+                AppPaths.log("debug widget-items \(kind.rawValue)=\(some.count) first=\(some.first?.title ?? "-")")
+            }
+        case "widget-item":
+            // ワンタップ再生のボタンを押したのと同じ頼み（引数は「種類 何番目 [shuffle]」。例: widget-item live 0）
+            let p = arg.split(separator: " ").map(String.init)
+            let some = WidgetStore.items.filter { $0.kind.rawValue == p.first }
+            guard p.count >= 2, let i = Int(p[1]), i < some.count else { break }
+            AppPaths.log("debug widget-item \(some[i].kind.rawValue) title=\(some[i].title) current=\(some[i].isCurrent(WidgetStore.nowPlaying))")
+            await WidgetBridge.run(.playItem(some[i], shuffle: p.count > 2))
+            AppPaths.log("debug widget-item done playing=\(player.isPlaying) source=\(player.sourceId ?? "-") title=\(player.current?.title ?? "-")")
         case "live-play":
             // ライブ配信の検索の先頭を、検索の行を押したのと同じく鳴らす
             let page = (try? await AppServices.music.searchLive(arg))?.value
