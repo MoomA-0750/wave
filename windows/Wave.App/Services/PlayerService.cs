@@ -156,6 +156,15 @@ public sealed partial class PlayerService : ObservableObject
         {
             var d = s.PlaybackSession.NaturalDuration.TotalSeconds;
             AppPaths.Log($"media opened duration={d:F1}");
+            // 開き終わってから、途中の位置へ飛ぶ（UI のスレッドで）
+            ui.TryEnqueue(() =>
+            {
+                lock (openSeekGate)
+                {
+                    if (openSeek is { } seek && ReferenceEquals(player.Source, seek.Item)) player.PlaybackSession.Position = TimeSpan.FromSeconds(seek.Seconds);
+                    openSeek = null;
+                }
+            });
         };
         player.MediaFailed += (_, e) => ui.TryEnqueue(() => OnFailed(e.Error));
         player.PlaybackSession.PlaybackStateChanged += (s, _) =>
@@ -952,7 +961,7 @@ public sealed partial class PlayerService : ObservableObject
             return;
         }
         if (player.Source is null || IsLive) return;
-        player.PlaybackSession.Position = TimeSpan.FromSeconds(Math.Max(0, seconds));
+        if (!SeekWhenOpened(Math.Max(0, seconds))) player.PlaybackSession.Position = TimeSpan.FromSeconds(Math.Max(0, seconds));
         Position = seconds;
         CursorChanged?.Invoke(false);
     }
@@ -1312,7 +1321,7 @@ public sealed partial class PlayerService : ObservableObject
     {
         if (IsRemote || IsPlaying || IsLoading || Current is null || IsLive) return;
         if (player.Source is null) Position = positionMs / 1000.0;
-        else player.PlaybackSession.Position = TimeSpan.FromMilliseconds(positionMs);
+        else if (!SeekWhenOpened(positionMs / 1000.0)) player.PlaybackSession.Position = TimeSpan.FromMilliseconds(positionMs);
     }
 
     /// <summary>曲のラジオの続きを、種の曲から取って足す（まだキューに無い曲だけ）。</summary>
@@ -1814,10 +1823,27 @@ public sealed partial class PlayerService : ObservableObject
         if (song.Album?.Title is { } album) props.MusicProperties.AlbumTitle = album;
         if (Uri.TryCreate(song.ThumbnailUrl, UriKind.Absolute, out var art)) props.Thumbnail = RandomAccessStreamReference.CreateFromUri(art);
         item.ApplyDisplayProperties(props);
+        // 途中から鳴らすときは、開き終わってから位置を合わせる。開く前に Position を変えても DASH の再生部品は頭から先読みを始め、
+        // 先読みの上限で止まって決めた位置まで届かず、開き終わらないまま鳴らない（長い曲の途中から引き取ったときに起きた）
+        lock (openSeekGate) openSeek = seekTo > 1 && !song.IsLive ? (item, seekTo) : null;
         player.Source = item;
-        if (seekTo > 1 && !song.IsLive) player.PlaybackSession.Position = TimeSpan.FromSeconds(seekTo);
         player.Play();
         IsLoading = false;
+    }
+
+    /// <summary>開き終わったら飛ぶ位置（MediaOpened は再生部品のスレッドで来るので openSeekGate で守る）。</summary>
+    private (MediaPlaybackItem Item, double Seconds)? openSeek;
+    private readonly object openSeekGate = new();
+
+    /// <summary>まだ開いている途中なら、開き終わったときに飛ぶ位置を差し替える（開く前の Position の変更は効かないため）。</summary>
+    private bool SeekWhenOpened(double seconds)
+    {
+        lock (openSeekGate)
+        {
+            if (openSeek is not { } seek || !ReferenceEquals(player.Source, seek.Item)) return false;
+            openSeek = (seek.Item, seconds);
+            return true;
+        }
     }
 
     /// <summary>ライブ配信を流し始めた時刻（長く流れたあとの失敗は、もう一度だけ取り直してよい）。</summary>
@@ -2153,6 +2179,9 @@ public sealed partial class PlayerService : ObservableObject
         if (IsPlaying && episodeUrl is not null && clock.ElapsedMilliseconds - lastEpisodeSaveMs > PositionSaveIntervalMs) RememberEpisode();
         if (player.Source is null) return;
         var session = player.PlaybackSession;
+        // 開いている途中は、再生部品の位置（まだ頭）ではなく、これから飛ぶ位置を出したままにする
+        lock (openSeekGate)
+            if (openSeek is { } pending && ReferenceEquals(player.Source, pending.Item)) return;
         Position = session.Position.TotalSeconds;
         if (IsLive) Duration = 0;
         else if (session.NaturalDuration.TotalSeconds > 0) Duration = session.NaturalDuration.TotalSeconds;

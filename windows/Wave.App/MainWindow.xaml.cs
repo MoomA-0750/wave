@@ -1257,9 +1257,19 @@ public sealed partial class MainWindow : Window
 
     /// <summary>本人がシークバーを触っている（押している・キーで動かした直後）。これ以外の値の変化（曲が変わって最大値が縮んだなど）ではシークしない。</summary>
     private bool sliderByUser;
+    /// <summary>シークバーの上に指・ペン・マウスがある（マウスなら、その種類も覚える）。バーの地を押したときは、Slider が押下の中で値を動かすのが
+    /// 上の PointerPressed より先なので、そのときの値の変化は「上にあって押されている」で本人の操作と見なす。</summary>
+    private bool sliderPointerOver;
+    private bool sliderMouse;
 
     private void InitPositionSlider()
     {
+        PositionSlider.AddHandler(UIElement.PointerEnteredEvent, new PointerEventHandler((_, e) =>
+        {
+            sliderPointerOver = true;
+            sliderMouse = e.Pointer.PointerDeviceType == Microsoft.UI.Input.PointerDeviceType.Mouse;
+        }), handledEventsToo: true);
+        PositionSlider.AddHandler(UIElement.PointerExitedEvent, new PointerEventHandler((_, _) => sliderPointerOver = false), handledEventsToo: true);
         PositionSlider.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler((_, _) => sliderByUser = true), handledEventsToo: true);
         PositionSlider.AddHandler(UIElement.PointerReleasedEvent, new PointerEventHandler((_, _) => sliderByUser = false), handledEventsToo: true);
         PositionSlider.AddHandler(UIElement.PointerCaptureLostEvent, new PointerEventHandler((_, _) => sliderByUser = false), handledEventsToo: true);
@@ -1270,8 +1280,12 @@ public sealed partial class MainWindow : Window
     private void OnPositionChanged(object sender, RangeBaseValueChangedEventArgs e)
     {
         // 再生位置の更新による変化は小さい。本人が触っていて、大きく動いたときだけ移る
-        if (sliderByUser && Math.Abs(e.NewValue - Player.Position) > 1.5) Player.Seek(e.NewValue);
+        if ((sliderByUser || SliderPressedNow()) && Math.Abs(e.NewValue - Player.Position) > 1.5) Player.Seek(e.NewValue);
     }
+
+    /// <summary>今まさにシークバーが押されている（指・ペンは触れている間だけ上にいる。マウスは左ボタンが押されている）。</summary>
+    private bool SliderPressedNow() =>
+        sliderPointerOver && (!sliderMouse || Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.LeftButton).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down));
 
     private void OnLyricsToggle(object sender, RoutedEventArgs e)
     {
