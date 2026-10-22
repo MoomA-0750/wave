@@ -167,6 +167,10 @@ class QueueSession(
     var generation: Long = 0
         private set
     private var source: QueueSource? = null
+
+    /** 鳴らしているプレイリスト・アルバムの ID（ラジオなら null）。ウィジェットで、鳴っているものを見分ける。 */
+    val sourcePlaylistId: String?
+        get() = (source as? QueueSource.Playlist)?.playlistId
     private var continuation: String? = null
     private var radioPlaylistId: String? = null
     private var exhausted = true

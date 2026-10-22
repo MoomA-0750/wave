@@ -2,16 +2,20 @@
 <resources>
     <string name="widget_now_playing_label">再生中</string>
     <string name="widget_now_playing_description">再生中の曲と、再生・一時停止・次へ・前へ</string>
-    <string name="widget_playlist_label">プレイリスト</string>
-    <string name="widget_playlist_description">ホーム画面からプレイリストを再生する</string>
+    <string name="widget_playlist_label">ワンタップ再生</string>
+    <string name="widget_playlist_description">選んだプレイリスト・アルバム・曲・ライブを、押すだけで再生する</string>
     <string name="widget_nothing_playing">再生していません</string>
     <string name="widget_open_app">押すと wave を開きます</string>
     <string name="widget_play">再生</string>
     <string name="widget_play_playlist">%1$s を再生</string>
     <string name="widget_shuffle_playlist">%1$s をシャッフル再生</string>
-    <string name="widget_choose_playlist">プレイリストを選ぶ</string>
-    <string name="widget_playlist_not_chosen">長押ししてプレイリストを選んでください</string>
+    <string name="widget_choose_playlist">ウィジェットで再生するもの</string>
+    <string name="widget_playlist_not_chosen">長押しして、再生するものを選んでください</string>
     <string name="widget_playlist_empty">このプレイリストには曲がありません</string>
     <string name="widget_playlist_failed">プレイリストを読み込めませんでした</string>
     <string name="widget_sign_in">先に wave でログインしてください</string>
+    <string name="widget_pause">一時停止</string>
+    <string name="widget_load_failed">読み込めませんでした</string>
+    <string name="widget_search_hint">検索</string>
+    <string name="widget_no_history">最近再生したものはありません。検索して選んでください</string>
 </resources>

@@ -169,7 +169,10 @@ class PlaybackService : MediaLibraryService() {
         }
 
     private fun publishNowPlaying() {
-        xyz.mooma0750.wave.widget.WidgetHooks.onNowPlayingChanged(this, session?.player?.let(NowPlayingSnapshot::of))
+        val player = session?.player
+        // 出どころはこの端末のキューのものだけ（ほかの端末を映している間は分からない）
+        val sourceId = if (player != null && player !== remotePlayer) queue?.sourcePlaylistId else null
+        xyz.mooma0750.wave.widget.WidgetHooks.onNowPlayingChanged(this, player?.let { NowPlayingSnapshot.of(it, sourceId) })
     }
 
     // Android 12 以前は、設定で固定した画面の言語をここで当てる（13 以降は OS が当てる）

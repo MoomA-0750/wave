@@ -2,16 +2,20 @@
 <resources>
     <string name="widget_now_playing_label">Now playing</string>
     <string name="widget_now_playing_description">The song that\'s playing, with play/pause, next and previous</string>
-    <string name="widget_playlist_label">Playlist</string>
-    <string name="widget_playlist_description">Start one of your playlists from the home screen</string>
+    <string name="widget_playlist_label">Quick play</string>
+    <string name="widget_playlist_description">Play a playlist, album, song or live stream you choose with one tap</string>
     <string name="widget_nothing_playing">Nothing playing</string>
     <string name="widget_open_app">Tap to open wave</string>
     <string name="widget_play">Play</string>
     <string name="widget_play_playlist">Play %1$s</string>
     <string name="widget_shuffle_playlist">Shuffle %1$s</string>
-    <string name="widget_choose_playlist">Choose a playlist</string>
-    <string name="widget_playlist_not_chosen">Long-press to choose a playlist</string>
+    <string name="widget_choose_playlist">Choose what to play</string>
+    <string name="widget_playlist_not_chosen">Long-press to choose what to play</string>
     <string name="widget_playlist_empty">This playlist has no songs</string>
     <string name="widget_playlist_failed">Couldn\'t load the playlist</string>
     <string name="widget_sign_in">Sign in to wave first</string>
+    <string name="widget_pause">Pause</string>
+    <string name="widget_load_failed">Couldn\'t load it</string>
+    <string name="widget_search_hint">Search</string>
+    <string name="widget_no_history">Nothing played recently. Search to choose one</string>
 </resources>

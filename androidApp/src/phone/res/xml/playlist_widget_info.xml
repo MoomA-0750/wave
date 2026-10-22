@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 1つのプレイリストのウィジェット。置くときにプレイリストを選ぶ（長押しで選び直せる） -->
+<!-- ワンタップ再生のウィジェット。置くときにプレイリスト・アルバム・曲・ライブから1つ選ぶ（長押しで選び直せる） -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:configure="xyz.mooma0750.wave.widget.PlaylistWidgetConfigActivity"
     android:description="@string/widget_playlist_description"

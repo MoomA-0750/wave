@@ -21,11 +21,14 @@ import xyz.mooma0750.wave.core.music.MusicRepository
 import xyz.mooma0750.wave.widget.NowPlayingWidgetReceiver
 import xyz.mooma0750.wave.widget.PlaylistWidget
 import xyz.mooma0750.wave.widget.PlaylistWidgetReceiver
+import xyz.mooma0750.wave.widget.WidgetItem
+import xyz.mooma0750.wave.widget.WidgetItemKind
 
 /**
  * 確認用（debug だけ）: ホーム画面に置かなくても、ウィジェットを大きさを変えて並べて描く。押すと本物と同じく動く。
  * 先に `adb shell appwidget grantbind --package xyz.mooma0750.wave` で、このアプリに置く許可を出しておく。
- * `--es playlist <ID>` でプレイリストのウィジェットの中身を決める（無ければ高く評価した曲）。
+ * `--es playlist <ID>` でワンタップ再生のウィジェットの中身を決める（無ければ高く評価した曲）。
+ * `--es kind Album|Song|Live` と `--es subtitle <文>` で、プレイリスト以外にもできる（ID は playlist に渡す）。
  */
 class WidgetHostActivity : Activity() {
     private lateinit var host: AppWidgetHost
@@ -74,9 +77,8 @@ class WidgetHostActivity : Activity() {
                     runCatching {
                         val glanceId = GlanceAppWidgetManager(this@WidgetHostActivity).getGlanceIdBy(id)
                         updateAppWidgetState(this@WidgetHostActivity, glanceId) {
-                            it[PlaylistWidget.PLAYLIST_ID] = playlistId
-                            it[PlaylistWidget.TITLE] = playlistTitle
-                            intent.getStringExtra("thumbnail")?.let { url -> it[PlaylistWidget.THUMBNAIL] = url }
+                            val kind = intent.getStringExtra("kind")?.let { name -> WidgetItemKind.entries.firstOrNull { k -> k.name == name } } ?: WidgetItemKind.Playlist
+                            WidgetItem(kind, playlistId, playlistTitle, intent.getStringExtra("subtitle"), intent.getStringExtra("thumbnail")).writeTo(it)
                         }
                         PlaylistWidget().update(this@WidgetHostActivity, glanceId)
                     }.onFailure { Log.w(WaveApplication.LOG_TAG, "widget host state failed", it) }

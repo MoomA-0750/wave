@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <application>
         <!-- 確認用: ホーム画面に置かずにウィジェットを並べて描く（ロック中でも出る）。adb shell（DUMP 権限）からだけ開ける -->
         <activity
@@ -8,5 +9,10 @@
             android:permission="android.permission.DUMP"
             android:taskAffinity=""
             android:excludeFromRecents="true" />
+        <!-- 確認用: ウィジェットで鳴らすものを選ぶ画面も、ロック中に出して撮れるようにする -->
+        <activity
+            android:name=".widget.PlaylistWidgetConfigActivity"
+            android:showWhenLocked="true"
+            tools:node="merge" />
     </application>
 </manifest>

@@ -13,9 +13,16 @@ data class NowPlayingSnapshot(
     /** https の画像だけ。 */
     val artworkUrl: String?,
     val playing: Boolean,
+    /** 今の曲の videoId（ウィジェットで、鳴っている曲・ライブを見分ける）。 */
+    val videoId: String? = null,
+    /** 鳴らしているプレイリスト・アルバムの ID（この端末で鳴らしているときだけ。ほかの端末を映している間は null）。 */
+    val sourceId: String? = null,
 ) {
     companion object {
-        fun of(player: Player): NowPlayingSnapshot? {
+        fun of(
+            player: Player,
+            sourceId: String? = null,
+        ): NowPlayingSnapshot? {
             if (player.mediaItemCount == 0) return null
             val item = player.currentMediaItem ?: return null
             val metadata = player.mediaMetadata
@@ -28,6 +35,8 @@ data class NowPlayingSnapshot(
                 artist = (metadata.artist ?: song?.artistsText)?.toString().orEmpty(),
                 artworkUrl = artwork,
                 playing = player.playWhenReady,
+                videoId = song?.videoId,
+                sourceId = sourceId,
             )
         }
     }

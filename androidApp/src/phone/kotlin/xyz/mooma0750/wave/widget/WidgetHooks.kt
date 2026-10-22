@@ -6,6 +6,8 @@ import androidx.glance.appwidget.updateAll
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import xyz.mooma0750.wave.WaveApplication
 import xyz.mooma0750.wave.playback.NowPlayingSnapshot
@@ -40,6 +42,13 @@ object WidgetHooks {
                     .onFailure { Log.w(WaveApplication.LOG_TAG, "widget update failed type=${it::class.simpleName}") }
             }
         }
+        // ワンタップ再生は、鳴っているもの・再生中かが変わったときだけ（再生・一時停止のボタンを替える）
+        container.appScope.launch {
+            nowPlaying.map { now -> now?.let { Triple(it.sourceId, it.videoId, it.playing) } }.distinctUntilChanged().collect {
+                runCatching { PlaylistWidget().updateAll(app) }
+                    .onFailure { Log.w(WaveApplication.LOG_TAG, "widget update failed type=${it::class.simpleName}") }
+            }
+        }
     }
 
     private val mutableOpenNowPlaying = MutableStateFlow(false)
@@ -57,6 +66,4 @@ object WidgetHooks {
 
     /** ウィジェットから開いたときの印（MainActivity が読む）。 */
     const val EXTRA_OPEN_NOW_PLAYING = "xyz.mooma0750.wave.widget.OPEN_NOW_PLAYING"
-    const val EXTRA_OPEN_PLAYLIST_ID = "xyz.mooma0750.wave.widget.OPEN_PLAYLIST_ID"
-    const val EXTRA_OPEN_PLAYLIST_TITLE = "xyz.mooma0750.wave.widget.OPEN_PLAYLIST_TITLE"
 }

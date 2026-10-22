@@ -310,7 +310,7 @@ private fun LargeLayout(
 }
 
 /** ボタンの操作は再生サービスのセッションへ送る（ほかの端末を映している間は、その端末の遠隔操作になる）。 */
-private suspend fun withController(
+internal suspend fun withController(
     context: Context,
     block: (androidx.media3.session.MediaController) -> Unit,
 ) {
