@@ -989,12 +989,25 @@ public sealed partial class PlayerService : ObservableObject
         return rank;
     }
 
-    public void CycleRepeat()
+    public void CycleRepeat() => SetRepeat(NextRepeat(Repeat));
+
+    /// <summary>繰り返しを決める（同じなら何もしない）。できなければ false。</summary>
+    public bool SetRepeat(RepeatMode mode)
     {
-        if (IsRemote) return;
-        Repeat = NextRepeat(Repeat);
+        if (IsRemote) return false;
+        if (Repeat == mode) return true;
+        Repeat = mode;
         // 全体リピートを切った: 一覧の終わりが近ければラジオへつなぐ（Android の onRepeatModeChanged と同じ）
         if (Repeat != RepeatMode.All && Current is not null) ExtendRadioIfNeeded();
+        return true;
+    }
+
+    /// <summary>シャッフルを入れる・切る（同じなら何もしない）。できなければ false。</summary>
+    public bool SetShuffle(bool on)
+    {
+        if (IsRemote || Current is null) return false;
+        if (Shuffle != on) ToggleShuffle();
+        return true;
     }
 
     private static RepeatMode NextRepeat(RepeatMode value) => value switch

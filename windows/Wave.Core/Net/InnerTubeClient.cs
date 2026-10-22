@@ -60,8 +60,21 @@ public sealed class InnerTubeClient
     private volatile string? anonymousVisitor;
     private long generation;
 
-    /// <summary>表示の言語（YouTube から届く文字の言語）。画面に合わせて日本語に固定する。</summary>
-    public string Hl { get; }
+    private readonly string hl;
+    private static readonly AsyncLocal<string?> hlOverride = new();
+
+    /// <summary>表示の言語（YouTube から届く文字の言語）。画面に合わせる。<see cref="HlOverride"/> があればその流れの間だけそれ。</summary>
+    public string Hl => hlOverride.Value ?? hl;
+
+    /// <summary>
+    /// 今の非同期の流れの間だけ使う言語（PC の wave の口の `hl`。画面の言語は変えない）。null なら画面の言語。
+    /// async のメソッドの中で入れたものは、そのメソッドを抜けると戻る。
+    /// </summary>
+    public static string? HlOverride
+    {
+        get => hlOverride.Value;
+        set => hlOverride.Value = value;
+    }
 
     /// <summary>地域。端末の設定のまま。</summary>
     public string Gl { get; }
@@ -69,7 +82,7 @@ public sealed class InnerTubeClient
     public InnerTubeClient(HttpClient http, string hl = "ja", string? gl = null, Func<long>? nowMs = null)
     {
         this.http = http;
-        Hl = hl;
+        this.hl = hl;
         Gl = gl ?? SafeRegion();
         Session = new SessionHealth(nowMs ?? (() => Environment.TickCount64));
     }

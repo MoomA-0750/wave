@@ -16,15 +16,22 @@ public class LocalApiTests : IDisposable
     {
         public readonly List<string> Calls = [];
         public PlaybackView Now = Playback(true, 30_000);
+        public IReadOnlyList<TrackView> Upcoming = [Track("b"), Track("c")];
         public bool LoggedIn = true;
+        public int PlaybackReads;
 
-        public Task<PlaybackView> PlaybackAsync() => Task.FromResult(Now);
-        public Task<IReadOnlyList<TrackView>> QueueAsync() => Task.FromResult<IReadOnlyList<TrackView>>([Track("b"), Track("c")]);
+        public Task<PlaybackView> PlaybackAsync()
+        {
+            Interlocked.Increment(ref PlaybackReads);
+            return Task.FromResult(Now);
+        }
+
+        public Task<IReadOnlyList<TrackView>> QueueAsync() => Task.FromResult(Upcoming);
         public Task<IReadOnlyList<DeviceView>> DevicesAsync() => Task.FromResult<IReadOnlyList<DeviceView>>([new("pc1", "TO-FU", "pc", true, true, true), new("ph", "Pixel", "phone", true, false)]);
 
-        public Task<Reply> ControlAsync(string action, long? positionMs, int? volumePercent)
+        public Task<Reply> ControlAsync(ControlRequest request)
         {
-            Calls.Add($"control {action} {positionMs} {volumePercent}".TrimEnd());
+            Calls.Add($"control {request.Action} {request.PositionMs} {request.VolumePercent} {request.Shuffle} {request.Repeat}".TrimEnd());
             return Task.FromResult(Reply.Ok);
         }
 
@@ -36,7 +43,7 @@ public class LocalApiTests : IDisposable
 
         public Task<Reply> PlayAsync(PlayRequest request)
         {
-            Calls.Add($"play {request.PlaylistId ?? request.AlbumBrowseId ?? request.VideoId} start={request.StartVideoId} shuffle={request.Shuffle}");
+            Calls.Add($"play {request.PlaylistId ?? request.AlbumBrowseId ?? request.ArtistBrowseId ?? request.VideoId} start={request.StartVideoId} shuffle={request.Shuffle}");
             return Task.FromResult(new Reply(DeviceId: "pc1"));
         }
 
@@ -52,23 +59,57 @@ public class LocalApiTests : IDisposable
             return Task.FromResult(new Reply(DeviceId: "pc1"));
         }
 
-        public Task<ApiResult<IReadOnlyList<TrackView>>> SearchAsync(string query)
+        public Task<Reply> RateAsync(string? videoId, bool liked)
         {
-            Calls.Add("search " + query);
-            return Task.FromResult(ApiResult<IReadOnlyList<TrackView>>.Ok([Track("s")]));
+            Calls.Add($"rate {videoId ?? "now"} {liked}");
+            return Task.FromResult(Reply.Ok);
+        }
+
+        public Task<LyricsView> LyricsAsync() => Task.FromResult(new LyricsView("a", "found", true, "LRCLIB", [new(1000, "一行目"), new(4000, "二行目")], null));
+        public Task<ThemeView> ThemeAsync() => Task.FromResult(new ThemeView(true, "#F7630C", "#F99A5B", "#FAB487", "#FCCEB0", "#C75000", "#963C00", "#642800"));
+
+        public Task<ApiResult<IReadOnlyList<object>>> SearchAsync(string query, SearchKind kind)
+        {
+            Calls.Add($"search {query} {kind} {InnerTubeClient.HlOverride}".TrimEnd());
+            IReadOnlyList<object> found = kind switch
+            {
+                SearchKind.Album => [new PlaylistView("MPREb_1", "アルバム", null, null)],
+                SearchKind.Artist => [new ArtistView("UC1", "歌手", null, null)],
+                _ => [Track("s")],
+            };
+            return Task.FromResult(ApiResult<IReadOnlyList<object>>.Ok(found));
         }
 
         public Task<ApiResult<IReadOnlyList<PlaylistView>>> PlaylistsAsync() =>
             Task.FromResult(LoggedIn ? ApiResult<IReadOnlyList<PlaylistView>>.Ok([new("PL1", "お気に入り", null, null)]) : ApiResult<IReadOnlyList<PlaylistView>>.Failed(FailureKind.NotLoggedIn));
 
+        public Task<ApiResult<IReadOnlyList<PlaylistView>>> LibraryAlbumsAsync() => Task.FromResult(ApiResult<IReadOnlyList<PlaylistView>>.Ok([new("MPREb_2", "アルバム", null, null)]));
+        public Task<ApiResult<IReadOnlyList<ArtistView>>> LibraryArtistsAsync() => Task.FromResult(ApiResult<IReadOnlyList<ArtistView>>.Ok([new("UC2", "歌手", null, null)]));
         public Task<ApiResult<IReadOnlyList<TrackView>>> PlaylistTracksAsync(string id) => Task.FromResult(ApiResult<IReadOnlyList<TrackView>>.Ok([Track(id + "1")]));
-        public Task<ApiResult<IReadOnlyList<ShelfView>>> SuggestionsAsync() => Task.FromResult(ApiResult<IReadOnlyList<ShelfView>>.Failed(FailureKind.Network));
+        public Task<ApiResult<AlbumView>> AlbumAsync(string browseId) => Task.FromResult(ApiResult<AlbumView>.Ok(new AlbumView(browseId, "アルバム", "歌手", null, "OLAK5uy_1", [Track("t1"), Track("t2")])));
+
+        public Task<ApiResult<ArtistPageView>> ArtistAsync(string browseId) =>
+            Task.FromResult(ApiResult<ArtistPageView>.Ok(new ArtistPageView(browseId, "歌手", null, [Track("top")], "PLall", [new("Albums", [new("MPREb_3", "アルバム", "2024", null)])])));
+
+        public Task<ApiResult<IReadOnlyList<ShelfView>>> SuggestionsAsync(string? mood)
+        {
+            if (mood is null) return Task.FromResult(ApiResult<IReadOnlyList<ShelfView>>.Failed(FailureKind.Network));
+            Calls.Add("suggestions " + mood);
+            IReadOnlyList<ShelfView> shelves =
+            [
+                new("Quick picks", [Track("q")], [new("PLq", "まとめ", null, null)], [],
+                    [new("artist", "UC1", "歌手", null, null), new("track", "q", "曲q", "歌手", null), new("playlist", "PLq", "まとめ", null, null)]),
+            ];
+            return Task.FromResult(ApiResult<IReadOnlyList<ShelfView>>.Ok(shelves));
+        }
+
+        public Task<ApiResult<IReadOnlyList<MoodView>>> MoodsAsync() => Task.FromResult(ApiResult<IReadOnlyList<MoodView>>.Ok([new("Relax", "ggMPOg1uX1JO"), new("Workout", "ggMPOg1uX1Jw")]));
     }
 
     private static TrackView Track(string id) => new(id, "曲" + id, "歌手", null, null, 200_000, false);
 
-    private static PlaybackView Playback(bool playing, long progress, string video = "a", DateTimeOffset? at = null, int? volume = 50) =>
-        new(true, true, playing, "off", Track(video), progress, (at ?? DateTimeOffset.UtcNow).ToString("O"), new("pc1", "TO-FU", "pc", true, true, true), volume);
+    private static PlaybackView Playback(bool playing, long progress, string video = "a", DateTimeOffset? at = null, int? volume = 50, bool shuffle = false, string? like = null, string? title = null) =>
+        new(true, true, playing, "off", Track(video) with { LikeStatus = like, Title = title ?? "曲" + video }, progress, (at ?? DateTimeOffset.UtcNow).ToString("O"), new("pc1", "TO-FU", "pc", true, true, true), volume, shuffle);
 
     private readonly FakeBackend backend = new();
     private readonly LocalApiServer server;
@@ -127,12 +168,13 @@ public class LocalApiTests : IDisposable
         var (status, body) = await Get("/v1/playback");
         Assert.Equal(HttpStatusCode.OK, status);
         var o = body!.AsObject();
-        foreach (var key in new[] { "joined", "loggedIn", "isPlaying", "repeat", "track", "progressMs", "observedAt", "device", "volumePercent" })
+        foreach (var key in new[] { "joined", "loggedIn", "isPlaying", "repeat", "track", "progressMs", "observedAt", "device", "volumePercent", "shuffle" })
             Assert.True(o.ContainsKey(key), key);
         Assert.Equal("a", o["track"]!["videoId"]!.GetValue<string>());
         Assert.Null(o["track"]!["album"]);
         Assert.True(o["track"]!.AsObject().ContainsKey("album"));
         Assert.True(o["device"]!["self"]!.GetValue<bool>());
+        Assert.True(o["track"]!.AsObject().ContainsKey("likeStatus"));
         Assert.Equal(2, (await Get("/v1/queue")).Body!.AsArray().Count);
         Assert.Equal("Pixel", (await Get("/v1/devices")).Body![1]!["name"]!.GetValue<string>());
     }
@@ -145,10 +187,12 @@ public class LocalApiTests : IDisposable
         Assert.Equal(HttpStatusCode.OK, (await Post("/v1/control", """{"action":"volume","volumePercent":30}""")).Status);
         Assert.Equal(HttpStatusCode.BadRequest, (await Post("/v1/control", """{"action":"volume","volumePercent":130}""")).Status);
         Assert.Equal(HttpStatusCode.BadRequest, (await Post("/v1/control", """{"action":"seek"}""")).Status);
-        var shuffle = await Post("/v1/control", """{"action":"shuffle"}""");
-        Assert.Equal("unsupported", shuffle.Body!["error"]!.GetValue<string>());
+        Assert.Equal(HttpStatusCode.OK, (await Post("/v1/control", """{"action":"shuffle","shuffle":true}""")).Status);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Post("/v1/control", """{"action":"shuffle"}""")).Status);
+        Assert.Equal(HttpStatusCode.OK, (await Post("/v1/control", """{"action":"repeat","repeat":"track"}""")).Status);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Post("/v1/control", """{"action":"repeat","repeat":"one"}""")).Status);
         Assert.Equal(HttpStatusCode.BadRequest, (await Post("/v1/control", "not json")).Status);
-        Assert.Equal(["control pause", "control seek 61000", "control volume  30"], backend.Calls);
+        Assert.Equal(["control pause", "control seek 61000", "control volume  30", "control shuffle   True", "control repeat    track"], backend.Calls);
     }
 
     [Fact]
@@ -158,6 +202,7 @@ public class LocalApiTests : IDisposable
         Assert.Equal(HttpStatusCode.OK, play.Status);
         Assert.Equal("pc1", play.Body!["deviceId"]!.GetValue<string>());
         Assert.Equal(HttpStatusCode.BadRequest, (await Post("/v1/play", "{}")).Status);
+        Assert.Equal(HttpStatusCode.OK, (await Post("/v1/play", """{"artistBrowseId":"UCxyz","shuffle":true}""")).Status);
         Assert.Equal(HttpStatusCode.BadRequest, (await Post("/v1/play", """{"videoId":"../x"}""")).Status);
         Assert.Equal(HttpStatusCode.OK, (await Post("/v1/queue", """{"videoIds":["v1","v2"],"next":true}""")).Status);
         Assert.Equal(HttpStatusCode.BadRequest, (await Post("/v1/queue", """{"videoIds":[]}""")).Status);
@@ -165,14 +210,14 @@ public class LocalApiTests : IDisposable
         Assert.Equal(HttpStatusCode.BadRequest, (await Post("/v1/queue/jump", """{"index":-1}""")).Status);
         Assert.Equal(HttpStatusCode.OK, (await Post("/v1/transfer", """{"deviceId":"ph"}""")).Status);
         Assert.Equal(HttpStatusCode.NotFound, (await Post("/v1/transfer", """{"deviceId":"zz"}""")).Status);
-        Assert.Equal(["play PLabc start=x1 shuffle=True", "queue v1,v2 next=True", "jump 1 c", "transfer ph", "transfer zz"], backend.Calls);
+        Assert.Equal(["play PLabc start=x1 shuffle=True", "play UCxyz start= shuffle=True", "queue v1,v2 next=True", "jump 1 c", "transfer ph", "transfer zz"], backend.Calls);
     }
 
     [Fact]
     public async Task LibraryFailuresBecomeNamedErrors()
     {
         Assert.Equal("s", (await Get("/v1/search?q=%E7%B1%B3%E6%B4%A5")).Body![0]!["videoId"]!.GetValue<string>());
-        Assert.Equal("search 米津", backend.Calls.Single());
+        Assert.Equal("search 米津 Song", backend.Calls.Single());
         Assert.Equal(HttpStatusCode.BadRequest, (await Get("/v1/search?q=")).Status);
         Assert.Equal("LM1", (await Get("/v1/playlists/LM/tracks")).Body![0]!["videoId"]!.GetValue<string>());
         backend.LoggedIn = false;
@@ -182,19 +227,120 @@ public class LocalApiTests : IDisposable
         Assert.Equal((HttpStatusCode.BadGateway, "network"), (suggestions.Status, suggestions.Body!["error"]!.GetValue<string>()));
     }
 
+    /// <summary>次の出来事（event: と data: の2行と空の行）を読む。keepalive は読み飛ばす。</summary>
+    private static async Task<(string Name, string Data)> NextEvent(StreamReader reader)
+    {
+        while (true)
+        {
+            var read = reader.ReadLineAsync();
+            Assert.Same(read, await Task.WhenAny(read, Task.Delay(5000)));
+            var line = await read;
+            if (line is null) throw new EndOfStreamException();
+            if (!line.StartsWith("event: ")) continue;
+            var data = (await reader.ReadLineAsync())!;
+            await reader.ReadLineAsync();
+            return (line["event: ".Length..], data["data: ".Length..]);
+        }
+    }
+
     [Fact]
-    public async Task EventsStreamPlaybackWhenItChanges()
+    public async Task EventsStreamPlaybackAndQueueWhenTheyChange()
     {
         using var stream = await http.GetStreamAsync("/v1/events");
         using var reader = new StreamReader(stream);
-        Assert.Equal("event: playback", await reader.ReadLineAsync());
-        Assert.Contains("\"videoId\":\"a\"", await reader.ReadLineAsync());
-        await reader.ReadLineAsync();
+        var first = await NextEvent(reader);
+        Assert.Equal("playback", first.Name);
+        Assert.Contains("\"videoId\":\"a\"", first.Data);
+        var queue = await NextEvent(reader);
+        Assert.Equal("queue", queue.Name);
+        Assert.Contains("\"videoId\":\"c\"", queue.Data);
         backend.Now = Playback(false, 31_000, "b");
-        var next = reader.ReadLineAsync();
-        Assert.Same(next, await Task.WhenAny(next, Task.Delay(5000)));
-        Assert.Equal("event: playback", await next);
-        Assert.Contains("\"videoId\":\"b\"", await reader.ReadLineAsync());
+        var next = await NextEvent(reader);
+        Assert.Equal("playback", next.Name);
+        Assert.Contains("\"videoId\":\"b\"", next.Data);
+        backend.Upcoming = [Track("d")];
+        var changed = await NextEvent(reader);
+        Assert.Equal("queue", changed.Name);
+        Assert.Contains("\"videoId\":\"d\"", changed.Data);
+    }
+
+    [Fact]
+    public async Task OneWatcherServesEveryListener()
+    {
+        using var one = await http.GetStreamAsync("/v1/events");
+        using var two = await http.GetStreamAsync("/v1/events");
+        using var readerOne = new StreamReader(one);
+        using var readerTwo = new StreamReader(two);
+        await NextEvent(readerOne);
+        await NextEvent(readerTwo);
+        // 見張りが1つなら、2つつないでいても読む回数は 0.5 秒に1回くらい（つないだときの1回ずつを除く）
+        var before = backend.PlaybackReads;
+        await Task.Delay(2000);
+        Assert.InRange(backend.PlaybackReads - before, 2, 6);
+        backend.Now = Playback(true, 30_000, "z");
+        Assert.Contains("\"z\"", (await NextEvent(readerOne) is var e1 && e1.Name == "queue" ? await NextEvent(readerOne) : e1).Data);
+        Assert.Contains("\"z\"", (await NextEvent(readerTwo) is var e2 && e2.Name == "queue" ? await NextEvent(readerTwo) : e2).Data);
+    }
+
+    [Fact]
+    public async Task ClosingWaveEndsTheStreamQuietly()
+    {
+        var logs = new List<string>();
+        using var own = LocalApiServer.Start(backend, 19400 + Random.Shared.Next(0, 500), logs.Add)!;
+        using var client = new HttpClient { BaseAddress = new Uri(own.Url) };
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", own.Token);
+        using var stream = await client.GetStreamAsync("/v1/events");
+        using var reader = new StreamReader(stream);
+        await NextEvent(reader);
+        own.Dispose();
+        await Task.Delay(1000);
+        Assert.DoesNotContain(logs, l => l.Contains("failed"));
+    }
+
+    [Fact]
+    public async Task RatingLyricsAndTheme()
+    {
+        Assert.Equal(HttpStatusCode.OK, (await Post("/v1/rate", """{"likeStatus":"like"}""")).Status);
+        Assert.Equal(HttpStatusCode.OK, (await Post("/v1/rate", """{"videoId":"abcdefghijk","likeStatus":"indifferent"}""")).Status);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Post("/v1/rate", """{"likeStatus":"love"}""")).Status);
+        Assert.Equal(["rate now True", "rate abcdefghijk False"], backend.Calls);
+        var lyrics = (await Get("/v1/lyrics")).Body!;
+        Assert.Equal(("found", true), (lyrics["state"]!.GetValue<string>(), lyrics["synced"]!.GetValue<bool>()));
+        Assert.Equal(4000, lyrics["lines"]![1]!["timeMs"]!.GetValue<long>());
+        var theme = (await Get("/v1/theme")).Body!;
+        Assert.Matches("^#[0-9A-F]{6}$", theme["accent"]!.GetValue<string>());
+        Assert.True(theme["dark"]!.GetValue<bool>());
+    }
+
+    [Fact]
+    public async Task LibraryAlbumsArtistsAndMoods()
+    {
+        Assert.Equal("MPREb_1", (await Get("/v1/search?q=x&type=album")).Body![0]!["id"]!.GetValue<string>());
+        Assert.Equal("UC1", (await Get("/v1/search?q=x&type=artist")).Body![0]!["id"]!.GetValue<string>());
+        Assert.Equal(HttpStatusCode.OK, (await Get("/v1/search?q=x&type=live")).Status);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Get("/v1/search?q=x&type=podcast")).Status);
+        Assert.Equal("MPREb_2", (await Get("/v1/library/albums")).Body![0]!["id"]!.GetValue<string>());
+        Assert.Equal("UC2", (await Get("/v1/library/artists")).Body![0]!["id"]!.GetValue<string>());
+        var album = (await Get("/v1/albums/MPREb_9")).Body!;
+        Assert.Equal(("MPREb_9", "OLAK5uy_1", 2), (album["id"]!.GetValue<string>(), album["playlistId"]!.GetValue<string>(), album["tracks"]!.AsArray().Count));
+        Assert.Equal("t2", (await Get("/v1/albums/MPREb_9/tracks")).Body![1]!["videoId"]!.GetValue<string>());
+        var artist = (await Get("/v1/artists/UC9")).Body!;
+        Assert.Equal(("PLall", "MPREb_3"), (artist["allSongsPlaylistId"]!.GetValue<string>(), artist["albumShelves"]![0]!["albums"]![0]!["id"]!.GetValue<string>()));
+        Assert.Equal(HttpStatusCode.NotFound, (await Get("/v1/artists/UC9/x")).Status);
+        Assert.Equal("Relax", (await Get("/v1/moods")).Body![0]!["title"]!.GetValue<string>());
+        var home = (await Get("/v1/suggestions?mood=ggMPOg1uX1JO")).Body!;
+        var items = home[0]!["items"]!.AsArray();
+        Assert.Equal(["artist", "track", "playlist"], items.Select(i => i!["type"]!.GetValue<string>()));
+        Assert.Equal(HttpStatusCode.BadRequest, (await Get("/v1/suggestions?mood=%3Cx%3E")).Status);
+    }
+
+    [Fact]
+    public async Task LanguageIsOnlyForThatRequest()
+    {
+        await Get("/v1/search?q=x&hl=en");
+        await Get("/v1/search?q=y");
+        Assert.Equal(["search x Song en", "search y Song"], backend.Calls);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Get("/v1/search?q=x&hl=e%3Bn")).Status);
     }
 
     [Fact]
@@ -211,6 +357,10 @@ public class LocalApiTests : IDisposable
         Assert.True(LocalApiServer.Changed(before, Playback(false, 10_000, at: t0)));
         Assert.True(LocalApiServer.Changed(before, Playback(true, 10_000, "z", t0)));
         Assert.True(LocalApiServer.Changed(before, Playback(true, 10_000, at: t0, volume: 51)));
+        // ライブの曲名が変わった・評価・シャッフル
+        Assert.True(LocalApiServer.Changed(before, Playback(true, 10_000, at: t0, title: "次の曲")));
+        Assert.True(LocalApiServer.Changed(before, Playback(true, 10_000, at: t0, like: "like")));
+        Assert.True(LocalApiServer.Changed(before, Playback(true, 10_000, at: t0, shuffle: true)));
     }
 
     [Fact]

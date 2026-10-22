@@ -151,6 +151,18 @@ public sealed class MusicRepository(InnerTubeClient client, LiveClient? live = n
         return ApiResult<HomePage>.Ok(new HomePage([], null, []));
     }
 
+    /// <summary>プレイリストの検索（YouTube Music のおすすめのものを先に、みんなのものを後に）。</summary>
+    public async Task<ApiResult<List<PlaylistSummary>>> SearchPlaylistsAsync(string query, CancellationToken cancel = default)
+    {
+        var featuredTask = SearchPlaylistsAsync(query, FeaturedPlaylistsFilter, cancel);
+        var communityTask = SearchPlaylistsAsync(query, CommunityPlaylistsFilter, cancel);
+        await Task.WhenAll(featuredTask, communityTask);
+        var featured = featuredTask.Result;
+        var community = communityTask.Result;
+        if (!featured.IsOk && !community.IsOk) return featured.Map(_ => new List<PlaylistSummary>());
+        return ApiResult<List<PlaylistSummary>>.Ok([.. featured.Value?.Items ?? [], .. community.Value?.Items ?? []]);
+    }
+
     private Task<ApiResult<SearchPage<PlaylistSummary>>> SearchPlaylistsAsync(string query, string filter, CancellationToken cancel) =>
         SearchAsync(query, filter, null, MusicParsers.SearchPlaylists, cancel);
 

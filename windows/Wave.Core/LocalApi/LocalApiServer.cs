@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Threading.Channels;
 using Wave.Core.Music;
 using Wave.Core.Net;
 
@@ -11,25 +12,63 @@ namespace Wave.Core.LocalApi;
 // 同じ PC のほかのアプリ向けの口（docs/local-api.md）。形は wave-api（docs/wave-api.md）と同じにし、
 // どちらにもつなげるようにする。違いは、ここでは「この PC」も鳴らす先に選べることと、ログインは PC の wave のものを使うこと。
 
-public sealed record TrackView(string VideoId, string Title, string Artist, string? Album, string? ArtUrl, long? DurationMs, bool IsLive)
+public sealed record TrackView(string VideoId, string Title, string Artist, string? Album, string? ArtUrl, long? DurationMs, bool IsLive, string? LikeStatus = null)
 {
     public static TrackView Of(Song song, int? artPx = null) =>
         new(song.VideoId, song.Title, song.ArtistsText, song.Album?.Title,
             song.ThumbnailUrl is { } url && artPx is { } px ? ArtworkUrl.Sized(url, px) : song.ThumbnailUrl,
             song.IsLive ? null : song.DurationSeconds * 1000L, song.IsLive);
+
+    /// <summary>評価の名前（like・dislike・indifferent）。分からなければ null。</summary>
+    public static string? LikeName(LikeStatus? like) => like?.ToString().ToLowerInvariant();
 }
 
 /// <param name="Self">この PC の wave（鳴らす先に選べる。wave-api の self と違う）。</param>
 public sealed record DeviceView(string Id, string Name, string? Kind, bool Online, bool Active, bool Self = false);
 
-public sealed record PlaybackView(bool Joined, bool LoggedIn, bool IsPlaying, string Repeat, TrackView? Track, long? ProgressMs, string ObservedAt, DeviceView? Device, int? VolumePercent);
+/// <param name="Shuffle">鳴っている端末のシャッフル（前の版の端末を映していて分からなければ false）。</param>
+public sealed record PlaybackView(bool Joined, bool LoggedIn, bool IsPlaying, string Repeat, TrackView? Track, long? ProgressMs, string ObservedAt, DeviceView? Device, int? VolumePercent, bool Shuffle = false);
 
 public sealed record PlaylistView(string Id, string Name, string? Subtitle, string? ArtUrl);
 
-/// <param name="Albums">wave-api には無い（PC の wave だけ）。id はアルバムの browseId。</param>
-public sealed record ShelfView(string Title, IReadOnlyList<TrackView> Tracks, IReadOnlyList<PlaylistView> Playlists, IReadOnlyList<PlaylistView> Albums);
+public sealed record ArtistView(string Id, string Name, string? Subtitle, string? ArtUrl);
 
-public sealed record PlayRequest(string? VideoId = null, string? PlaylistId = null, string? AlbumBrowseId = null, string? StartVideoId = null, bool Shuffle = false, string? DeviceId = null);
+/// <summary>ホームの棚の1枚（元の並びのまま）。type は track・playlist・album・artist。id は videoId・playlistId・browseId。</summary>
+public sealed record ItemView(string Type, string Id, string Title, string? Subtitle, string? ArtUrl, bool IsLive = false);
+
+/// <param name="Albums">wave-api には無い（PC の wave だけ）。id はアルバムの browseId。</param>
+/// <param name="Items">wave-api には無い。曲・プレイリスト・アルバム・アーティストを元の並びのまま。</param>
+public sealed record ShelfView(string Title, IReadOnlyList<TrackView> Tracks, IReadOnlyList<PlaylistView> Playlists, IReadOnlyList<PlaylistView> Albums, IReadOnlyList<ItemView> Items, string? Strapline = null);
+
+/// <summary>ホームの気分の札（Relax など）。params を `GET /v1/suggestions?mood=` に渡すと、その札を選んだホーム。</summary>
+public sealed record MoodView(string Title, string Params);
+
+public sealed record AlbumView(string Id, string Name, string? Subtitle, string? ArtUrl, string? PlaylistId, IReadOnlyList<TrackView> Tracks);
+
+public sealed record AlbumShelfView(string Title, IReadOnlyList<PlaylistView> Albums);
+
+/// <param name="AllSongsPlaylistId">「すべての曲」のプレイリスト（無ければ null）。</param>
+public sealed record ArtistPageView(string Id, string Name, string? ArtUrl, IReadOnlyList<TrackView> Tracks, string? AllSongsPlaylistId, IReadOnlyList<AlbumShelfView> AlbumShelves);
+
+public sealed record LyricLineView(long TimeMs, string Text);
+
+/// <param name="State">found・none（歌詞が無い）・loading・failed・idle（曲が無い）。</param>
+/// <param name="Lines">時刻つきの行（synced のときだけ）。</param>
+/// <param name="Text">時刻の無い本文（synced でないときだけ）。</param>
+public sealed record LyricsView(string? VideoId, string State, bool Synced, string? Source, IReadOnlyList<LyricLineView>? Lines, string? Text);
+
+/// <summary>wave の色（Windows の強調色。#RRGGBB）と明暗。暗い地の文字には AccentLight2、明るい地には AccentDark1 を使う（WinUI と同じ）。</summary>
+public sealed record ThemeView(bool Dark, string Accent, string AccentLight1, string AccentLight2, string AccentLight3, string AccentDark1, string AccentDark2, string AccentDark3);
+
+public sealed record PlayRequest(string? VideoId = null, string? PlaylistId = null, string? AlbumBrowseId = null, string? StartVideoId = null, bool Shuffle = false, string? DeviceId = null, string? ArtistBrowseId = null);
+
+/// <param name="Action">play・pause・next・previous・seek・volume・shuffle・repeat。</param>
+/// <param name="Shuffle">shuffle のとき、入れるか切るか。</param>
+/// <param name="Repeat">repeat のとき、off・track・context。</param>
+public sealed record ControlRequest(string Action, long? PositionMs = null, int? VolumePercent = null, bool? Shuffle = null, string? Repeat = null);
+
+/// <summary>検索の種類（`GET /v1/search?type=`）。</summary>
+public enum SearchKind { Song, Live, Album, Playlist, Artist }
 
 /// <summary>操作の答え。Error が null なら 200 で {"ok":true,"deviceId"}。</summary>
 public sealed record Reply(int Status = 200, string? Error = null, string? DeviceId = null)
@@ -49,16 +88,27 @@ public interface ILocalApiBackend
     Task<PlaybackView> PlaybackAsync();
     Task<IReadOnlyList<TrackView>> QueueAsync();
     Task<IReadOnlyList<DeviceView>> DevicesAsync();
-    /// <param name="action">play・pause・next・previous・seek・volume（シャッフル・繰り返しは来ない）。</param>
-    Task<Reply> ControlAsync(string action, long? positionMs, int? volumePercent);
+    Task<Reply> ControlAsync(ControlRequest request);
     Task<Reply> TransferAsync(string deviceId);
     Task<Reply> PlayAsync(PlayRequest request);
     Task<Reply> QueueAddAsync(IReadOnlyList<string> videoIds, bool next);
     Task<Reply> JumpAsync(int? index, string? videoId);
-    Task<ApiResult<IReadOnlyList<TrackView>>> SearchAsync(string query);
+    /// <summary>曲を高く評価する・外す（videoId が null なら今の曲）。</summary>
+    Task<Reply> RateAsync(string? videoId, bool liked);
+    /// <summary>今の曲の歌詞。</summary>
+    Task<LyricsView> LyricsAsync();
+    Task<ThemeView> ThemeAsync();
+    /// <param name="kind">Song・Live なら TrackView、Album・Playlist なら PlaylistView、Artist なら ArtistView の一覧。</param>
+    Task<ApiResult<IReadOnlyList<object>>> SearchAsync(string query, SearchKind kind);
     Task<ApiResult<IReadOnlyList<PlaylistView>>> PlaylistsAsync();
+    Task<ApiResult<IReadOnlyList<PlaylistView>>> LibraryAlbumsAsync();
+    Task<ApiResult<IReadOnlyList<ArtistView>>> LibraryArtistsAsync();
     Task<ApiResult<IReadOnlyList<TrackView>>> PlaylistTracksAsync(string id);
-    Task<ApiResult<IReadOnlyList<ShelfView>>> SuggestionsAsync();
+    Task<ApiResult<AlbumView>> AlbumAsync(string browseId);
+    Task<ApiResult<ArtistPageView>> ArtistAsync(string browseId);
+    /// <param name="mood">気分の札の params（null ならふつうのホーム）。</param>
+    Task<ApiResult<IReadOnlyList<ShelfView>>> SuggestionsAsync(string? mood);
+    Task<ApiResult<IReadOnlyList<MoodView>>> MoodsAsync();
 }
 
 /// <summary>
@@ -146,9 +196,9 @@ public sealed class LocalApiServer : IDisposable
         {
             await RouteAsync(context.Request, response);
         }
-        catch (Exception e) when (e is HttpListenerException or IOException or ObjectDisposedException)
+        catch (Exception e) when (e is HttpListenerException or IOException or ObjectDisposedException or OperationCanceledException)
         {
-            // 相手が切った
+            // 相手が切った・wave を閉じた
         }
         catch (Exception e)
         {
@@ -193,6 +243,16 @@ public sealed class LocalApiServer : IDisposable
             await WriteAsync(response, 401, new { error = "token_required" });
             return;
         }
+        // YouTube から届く文字の言語（この問い合わせだけ。画面の言語は変えない）
+        if (request.QueryString["hl"] is { } hl)
+        {
+            if (!IsLanguage(hl))
+            {
+                await ReplyAsync(response, Reply.BadRequest);
+                return;
+            }
+            InnerTubeClient.HlOverride = hl;
+        }
         switch (method, path)
         {
             case ("GET", "/v1/playback"):
@@ -207,29 +267,67 @@ public sealed class LocalApiServer : IDisposable
             case ("GET", "/v1/events"):
                 await EventsAsync(response);
                 return;
+            case ("GET", "/v1/lyrics"):
+                await WriteAsync(response, 200, await backend.LyricsAsync());
+                return;
+            case ("GET", "/v1/theme"):
+                await WriteAsync(response, 200, await backend.ThemeAsync());
+                return;
             case ("GET", "/v1/search"):
             {
                 var q = request.QueryString["q"]?.Trim();
-                if (string.IsNullOrEmpty(q) || q.Length > 200) await ReplyAsync(response, Reply.BadRequest);
-                else await ResultAsync(response, await backend.SearchAsync(q));
+                var kind = SearchKindOf(request.QueryString["type"]);
+                if (string.IsNullOrEmpty(q) || q.Length > 200 || kind is null) await ReplyAsync(response, Reply.BadRequest);
+                else await ResultAsync(response, await backend.SearchAsync(q, kind.Value));
                 return;
             }
             case ("GET", "/v1/playlists"):
                 await ResultAsync(response, await backend.PlaylistsAsync());
                 return;
-            case ("GET", "/v1/suggestions"):
-                await ResultAsync(response, await backend.SuggestionsAsync());
+            case ("GET", "/v1/library/albums"):
+                await ResultAsync(response, await backend.LibraryAlbumsAsync());
                 return;
-            case ("GET", _) when path.StartsWith("/v1/playlists/") && path.EndsWith("/tracks"):
+            case ("GET", "/v1/library/artists"):
+                await ResultAsync(response, await backend.LibraryArtistsAsync());
+                return;
+            case ("GET", "/v1/moods"):
+                await ResultAsync(response, await backend.MoodsAsync());
+                return;
+            case ("GET", "/v1/suggestions"):
             {
-                var id = path["/v1/playlists/".Length..^"/tracks".Length];
+                var mood = request.QueryString["mood"];
+                if (mood is not null && !IsParams(mood)) await ReplyAsync(response, Reply.BadRequest);
+                else await ResultAsync(response, await backend.SuggestionsAsync(mood));
+                return;
+            }
+            case ("GET", _) when Segment(path, "/v1/playlists/", "/tracks") is { } id:
                 if (!IsId(id)) await ReplyAsync(response, Reply.BadRequest);
                 else await ResultAsync(response, await backend.PlaylistTracksAsync(id));
                 return;
-            }
+            case ("GET", _) when Segment(path, "/v1/albums/", "/tracks") is { } id:
+                if (!IsId(id)) await ReplyAsync(response, Reply.BadRequest);
+                else await ResultAsync(response, (await backend.AlbumAsync(id)).Map(a => a.Tracks));
+                return;
+            case ("GET", _) when Segment(path, "/v1/albums/", "") is { } id:
+                if (!IsId(id)) await ReplyAsync(response, Reply.BadRequest);
+                else await ResultAsync(response, await backend.AlbumAsync(id));
+                return;
+            case ("GET", _) when Segment(path, "/v1/artists/", "") is { } id:
+                if (!IsId(id)) await ReplyAsync(response, Reply.BadRequest);
+                else await ResultAsync(response, await backend.ArtistAsync(id));
+                return;
             case ("POST", "/v1/control"):
                 await ReplyAsync(response, await ControlAsync(await BodyAsync(request)));
                 return;
+            case ("POST", "/v1/rate"):
+            {
+                var body = await BodyAsync(request);
+                var videoId = Str(body, "videoId");
+                var like = Str(body, "likeStatus");
+                var valid = like is "like" or "indifferent" && (videoId is null || IsId(videoId));
+                await ReplyAsync(response, valid ? await backend.RateAsync(videoId, like == "like") : Reply.BadRequest);
+                return;
+            }
             case ("POST", "/v1/transfer"):
             {
                 var body = await BodyAsync(request);
@@ -241,9 +339,9 @@ public sealed class LocalApiServer : IDisposable
             {
                 var body = await BodyAsync(request);
                 var play = new PlayRequest(Str(body, "videoId"), Str(body, "playlistId"), Str(body, "albumBrowseId"), Str(body, "startVideoId"),
-                    body is { } b && b.TryGetProperty("shuffle", out var s) && s.ValueKind == JsonValueKind.True, Str(body, "deviceId"));
-                var valid = (play.VideoId ?? play.PlaylistId ?? play.AlbumBrowseId) is not null
-                    && new[] { play.VideoId, play.PlaylistId, play.AlbumBrowseId, play.StartVideoId }.All(x => x is null || IsId(x));
+                    body is { } b && b.TryGetProperty("shuffle", out var s) && s.ValueKind == JsonValueKind.True, Str(body, "deviceId"), Str(body, "artistBrowseId"));
+                var valid = (play.VideoId ?? play.PlaylistId ?? play.AlbumBrowseId ?? play.ArtistBrowseId) is not null
+                    && new[] { play.VideoId, play.PlaylistId, play.AlbumBrowseId, play.StartVideoId, play.ArtistBrowseId }.All(x => x is null || IsId(x));
                 await ReplyAsync(response, valid ? await backend.PlayAsync(play) : Reply.BadRequest);
                 return;
             }
@@ -273,23 +371,52 @@ public sealed class LocalApiServer : IDisposable
         }
     }
 
+    /// <summary>`prefix{id}suffix` の id（suffix が空なら、id の後ろに何も無いものだけ）。合わなければ null。</summary>
+    private static string? Segment(string path, string prefix, string suffix)
+    {
+        if (!path.StartsWith(prefix, StringComparison.Ordinal) || !path.EndsWith(suffix, StringComparison.Ordinal) || path.Length <= prefix.Length + suffix.Length) return null;
+        var id = path[prefix.Length..^suffix.Length];
+        return id.Contains('/') ? null : id;
+    }
+
+    private static SearchKind? SearchKindOf(string? type) => type switch
+    {
+        null or "" or "song" => SearchKind.Song,
+        "live" => SearchKind.Live,
+        "album" => SearchKind.Album,
+        "playlist" => SearchKind.Playlist,
+        "artist" => SearchKind.Artist,
+        _ => null,
+    };
+
     private async Task<Reply> ControlAsync(JsonElement? body)
     {
         var action = Str(body, "action");
         long? position = body is { } b && b.TryGetProperty("positionMs", out var p) && p.TryGetInt64(out var pv) ? pv : null;
         int? volume = body is { } c && c.TryGetProperty("volumePercent", out var vol) && vol.TryGetInt32(out var vv) ? vv : null;
+        bool? shuffle = body is { } d && d.TryGetProperty("shuffle", out var sh) && sh.ValueKind is JsonValueKind.True or JsonValueKind.False ? sh.GetBoolean() : null;
+        var repeat = Str(body, "repeat");
         return action switch
         {
-            "play" or "pause" or "next" or "previous" => await backend.ControlAsync(action, null, null),
-            "seek" when position >= 0 => await backend.ControlAsync(action, position, null),
-            "volume" when volume is >= 0 and <= 100 => await backend.ControlAsync(action, null, volume),
-            // シャッフル・繰り返しは wave-api と同じく受けない（連携の取り決めに無い）
-            "shuffle" or "repeat" => Reply.Fail(400, "unsupported"),
+            "play" or "pause" or "next" or "previous" => await backend.ControlAsync(new(action)),
+            "seek" when position >= 0 => await backend.ControlAsync(new(action, PositionMs: position)),
+            "volume" when volume is >= 0 and <= 100 => await backend.ControlAsync(new(action, VolumePercent: volume)),
+            "shuffle" when shuffle is not null => await backend.ControlAsync(new(action, Shuffle: shuffle)),
+            "repeat" when repeat is "off" or "track" or "context" => await backend.ControlAsync(new(action, Repeat: repeat)),
             _ => Reply.BadRequest,
         };
     }
 
-    /// <summary>家の再生が変わるたびに playback を流す（0.5 秒おきに見て、変わったときだけ。15 秒ごとに空の行）。</summary>
+    // --- /v1/events: 見張りは1つで、つないでいる相手みなに配る ---
+
+    private readonly object watchLock = new();
+    private readonly List<Channel<string>> watchers = [];
+    private bool watching;
+
+    /// <summary>
+    /// 家の再生が変わるたびに playback を、キューが変わるたびに queue を流す。つないだときは今の両方を流す。
+    /// 見張り（<see cref="WatchAsync"/>）は、つないでいる相手がいる間だけ1つ動く。
+    /// </summary>
     private async Task EventsAsync(HttpListenerResponse response)
     {
         response.StatusCode = 200;
@@ -297,42 +424,99 @@ public sealed class LocalApiServer : IDisposable
         response.Headers["Cache-Control"] = "no-cache";
         response.SendChunked = true;
         var output = response.OutputStream;
-        PlaybackView? last = null;
-        var lastSentAt = DateTimeOffset.MinValue;
-        while (!stop.IsCancellationRequested)
+        var channel = Channel.CreateBounded<string>(new BoundedChannelOptions(64) { FullMode = BoundedChannelFullMode.DropOldest, SingleReader = true });
+        lock (watchLock)
         {
-            var now = await backend.PlaybackAsync();
-            var at = DateTimeOffset.UtcNow;
-            string? chunk = null;
-            if (last is null || Changed(last, now))
+            watchers.Add(channel);
+            if (!watching)
             {
-                chunk = $"event: playback\ndata: {JsonSerializer.Serialize(now, Json)}\n\n";
-                last = now;
+                watching = true;
+                _ = WatchAsync();
             }
-            else if (at - lastSentAt > TimeSpan.FromSeconds(15))
+        }
+        try
+        {
+            await SendAsync(output, Event("playback", await backend.PlaybackAsync()));
+            await SendAsync(output, Event("queue", await backend.QueueAsync()));
+            await foreach (var chunk in channel.Reader.ReadAllAsync(stop.Token))
+                await SendAsync(output, chunk);
+        }
+        finally
+        {
+            lock (watchLock) watchers.Remove(channel);
+        }
+    }
+
+    private async Task SendAsync(System.IO.Stream output, string chunk)
+    {
+        var bytes = Encoding.UTF8.GetBytes(chunk);
+        await output.WriteAsync(bytes, stop.Token);
+        await output.FlushAsync(stop.Token);
+    }
+
+    private static string Event(string name, object value) => $"event: {name}\ndata: {JsonSerializer.Serialize(value, Json)}\n\n";
+
+    /// <summary>0.5 秒おきに再生とキューを見て、変わったときだけ配る（位置が進むだけでは配らない）。15 秒ごとに空の行（切れた相手に気づくため）。</summary>
+    private async Task WatchAsync()
+    {
+        PlaybackView? lastPlayback = null;
+        IReadOnlyList<TrackView>? lastQueue = null;
+        var lastSentAt = DateTimeOffset.UtcNow;
+        try
+        {
+            while (!stop.IsCancellationRequested)
             {
-                chunk = ": keepalive\n\n";
+                lock (watchLock)
+                {
+                    if (watchers.Count == 0)
+                    {
+                        watching = false;
+                        return;
+                    }
+                }
+                var now = await backend.PlaybackAsync();
+                var queue = await backend.QueueAsync();
+                var chunks = new List<string>();
+                // 最初の回は覚えるだけ（つないだ相手には、つないだときに今の両方を流している）
+                var playbackChanged = lastPlayback is not null && Changed(lastPlayback, now);
+                if (playbackChanged) chunks.Add(Event("playback", now));
+                if (lastQueue is not null && !lastQueue.SequenceEqual(queue)) chunks.Add(Event("queue", queue));
+                if (playbackChanged || lastPlayback is null) lastPlayback = now;
+                lastQueue = queue;
+                var at = DateTimeOffset.UtcNow;
+                if (chunks.Count == 0 && at - lastSentAt > TimeSpan.FromSeconds(15)) chunks.Add(": keepalive\n\n");
+                if (chunks.Count > 0)
+                {
+                    lastSentAt = at;
+                    lock (watchLock)
+                        foreach (var watcher in watchers)
+                            foreach (var chunk in chunks)
+                                watcher.Writer.TryWrite(chunk);
+                }
+                await Task.Delay(500, stop.Token);
             }
-            if (chunk is not null)
-            {
-                var bytes = Encoding.UTF8.GetBytes(chunk);
-                await output.WriteAsync(bytes, stop.Token);
-                await output.FlushAsync(stop.Token);
-                lastSentAt = at;
-            }
-            await Task.Delay(500, stop.Token);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception e)
+        {
+            log?.Invoke($"local-api watch failed type={e.GetType().Name}");
+        }
+        lock (watchLock)
+        {
+            watching = false;
+            foreach (var watcher in watchers) watcher.Writer.TryComplete();
         }
     }
 
     /// <summary>
-    /// 流すに値する変化か: 曲・再生中か・繰り返し・音量・鳴らしている端末・ログインが変わった、または位置が
-    /// 前の値から進めた位置と 1.5 秒より大きくずれた（シーク）。位置が進むだけでは流さない（受け手が observedAt から進める）。
+    /// 流すに値する変化か: 位置と見た時刻を除いたどれか（曲の中身・評価・再生中か・シャッフル・繰り返し・音量・鳴らしている端末・ログイン）が変わった、
+    /// または位置が前の値から進めた位置と 1.5 秒より大きくずれた（シーク）。位置が進むだけでは流さない（受け手が observedAt から進める）。
     /// </summary>
     internal static bool Changed(PlaybackView before, PlaybackView after)
     {
-        if (before.Track?.VideoId != after.Track?.VideoId || before.IsPlaying != after.IsPlaying || before.Repeat != after.Repeat
-            || before.VolumePercent != after.VolumePercent || before.Device?.Id != after.Device?.Id || before.LoggedIn != after.LoggedIn
-            || before.Joined != after.Joined) return true;
+        if (before with { ProgressMs = null, ObservedAt = "" } != after with { ProgressMs = null, ObservedAt = "" }) return true;
         if (before.ProgressMs is not { } p0 || after.ProgressMs is not { } p1) return before.ProgressMs != after.ProgressMs;
         var elapsed = before.IsPlaying && DateTimeOffset.TryParse(before.ObservedAt, out var t0) && DateTimeOffset.TryParse(after.ObservedAt, out var t1)
             ? (long)(t1 - t0).TotalMilliseconds
@@ -345,6 +529,11 @@ public sealed class LocalApiServer : IDisposable
         if (header is null || !header.StartsWith("Bearer ", StringComparison.Ordinal)) return false;
         return CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(header["Bearer ".Length..]), Encoding.UTF8.GetBytes(token));
     }
+
+    private static bool IsLanguage(string value) => value.Length is >= 2 and <= 10 && value.All(c => char.IsAsciiLetter(c) || c == '-');
+
+    /// <summary>気分の札の params（base64 の文字と %）。</summary>
+    private static bool IsParams(string value) => value.Length is >= 2 and <= 512 && value.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '-' or '%' or '=' or '+' or '/');
 
     private static bool IsId(string id) => id.Length is >= 2 and <= 128 && id.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '-');
 
