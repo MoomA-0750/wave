@@ -44,6 +44,8 @@ public static class AppServices
     public static global::Wave.App.Services.Connect.ConnectService Connect { get; private set; } = null!;
     /// <summary>Discord に再生中の曲を出す（設定でオンにしたときだけ）。</summary>
     public static DiscordStatus Discord { get; private set; } = null!;
+    /// <summary>同じ PC のほかのアプリ向けの口（docs/local-api.md）。待ち受けられなければ null。</summary>
+    public static Wave.Core.LocalApi.LocalApiServer? LocalApi { get; private set; }
 
     public static void Initialize(DispatcherQueue ui)
     {
@@ -77,5 +79,30 @@ public static class AppServices
         Releases = new Releases(ui);
         Releases.Start();
         Discord = new DiscordStatus(ui);
+        StartLocalApi(ui);
+    }
+
+    private static void StartLocalApi(DispatcherQueue ui)
+    {
+        LocalApi = Wave.Core.LocalApi.LocalApiServer.Start(new LocalApiBackend(ui), log: AppPaths.Log);
+        if (LocalApi is null) return;
+        try
+        {
+            Wave.Core.LocalApi.LocalApiFile.Write(AppPaths.Data, new(LocalApi.Url, LocalApi.Token, Environment.ProcessId, Environment.ProcessPath));
+            AppPaths.Log("local-api started");
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            AppPaths.Log($"local-api file failed type={e.GetType().Name}");
+        }
+    }
+
+    /// <summary>窓を閉じるとき: 口を止め、置き場のファイルから場所とトークンを消す（wave の場所は残す）。</summary>
+    public static void StopLocalApi()
+    {
+        if (LocalApi is null) return;
+        LocalApi.Dispose();
+        LocalApi = null;
+        Wave.Core.LocalApi.LocalApiFile.Clear(AppPaths.Data, Environment.ProcessPath);
     }
 }

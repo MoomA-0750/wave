@@ -630,3 +630,15 @@
 - Mac で置いたワンタップ再生が描かれなかった原因は3つあった。(1) 設定に最初の値（`defaultResult`）が無く、OS が最初の設定を作れなかった（chronod の記録で hasDefaultIntent = NO、「Intent configuration is required but was not provided」）。候補の先頭を最初の値にした。(2) 選んだものの ID を JSON から作っていて、鍵の並びが毎回変わり、OS が渡した ID と作り直した ID が合わずに答えが捨てられた（「Query returned unrequested identifiers that have been dropped」）。鍵の並びを固定し、頼まれた ID のまま返すようにした。(3) 組み直しても、動いていた古いウィジェットの処理（WaveWidget）が残っていて古い作りで描いていた。確かめるときは `pkill -x WaveWidget` してから chronod を立ち上げ直す
 - 登録を外して付け直した直後は、linkd がアプリを信用せず（「is not trusted, rejecting」）、プレイリストのウィジェットも描けなくなった。wave をいったん起動すると直った
 
+
+## 2026-10-22 PC の wave に同じ PC のほかのアプリ向けの口を開ける
+
+- 本人の希望（visor の中から wave を使いたい。ログイン・連携の情報を PC の wave から取れるなら取ってほしい）。visor は to-fu（Windows）で動くので、同じ PC の wave に、wave-api と同じ形の HTTP の口を `localhost` に開けた。visor のアプリはこれを読む
+- 考えた形と、やめた理由
+  - visor のアプリが PC の wave のログイン（DPAPI。同じユーザーなら解ける）と家の鍵を読み、自分で wave の端末になる: 同じ家の鍵で2つの端末が中継につながると取り合いになる。別の端末として加えるなら QR と6桁が要り、ログインを読んでも YouTube の再生を自前で作り直すことになる
+  - 中継の機械の wave-api につなぐ: wave-api は中継の機械の 127.0.0.1 にしか出ておらず、トークンもそこにしか無い。to-fu から使うには tailnet に出してトークンを写す手間が要る
+  - PC の wave に口を開ける: wave が動いていれば、ログイン・家の連携・音の出口をそのまま使える。ほかの端末で鳴っていても操作できる（画面と同じ手順）。Stream Deck・AutoHotkey など visor 以外からも使えるので、visor のためだけの変更にならない
+- 形は wave-api と同じにした（つなぐ側がどちらにもつなげるように）。違いは「この PC」を行き先に選べることと、`/v1/play` の `deviceId` を見ないこと（画面で曲を選んだときと同じ行き先にする）。おすすめの棚にはアルバムも足した（VR の中で選べるものを増やすため。wave-api の受け手は知らない鍵を読み飛ばす）
+- トークンは起動ごとに作り直し、`%LOCALAPPDATA%\wave\local-api.json` に書く。同じユーザーのプロセスはもともと DPAPI のログインを解けるので、このファイルで守りが下がることはない。ほかのユーザー・ほかの機械からは届かない（localhost だけ）。ブラウザのページから叩かれないよう、`Origin` の付いた呼び出しは断る
+- 設定でオン・オフを選ばせない（選択肢を増やさない。開いていて困ることが無い）
+- HttpListener は 127.0.0.1 で待つと管理者の予約が要るので、`localhost` で待つ（http.sys は Host が localhost のものだけ渡す）。HTTP の口そのものは Linux でもテストを回せるよう `Wave.Core` に置き、アプリは中身（`LocalApiBackend`）をつなぐだけにした

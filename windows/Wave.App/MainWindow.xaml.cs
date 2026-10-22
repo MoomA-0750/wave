@@ -72,7 +72,11 @@ public sealed partial class MainWindow : Window
     {
         InitializeComponent();
         // 閉じるときに、キューと位置を書いておく（次の起動で戻す）
-        Closed += (_, _) => Player.SaveQueue();
+        Closed += (_, _) =>
+        {
+            Player.SaveQueue();
+            AppServices.StopLocalApi();
+        };
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);
         AppWindow.TitleBar.PreferredHeightOption = TitleBarHeightOption.Tall;
