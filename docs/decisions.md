@@ -667,3 +667,9 @@
 
 - 本人の指摘（ほかのウィジェットはアイコンをそのまま置いているのに、ワンタップ再生だけ丸い地に載っている。揃えてほしい、地を無くす方向で）。再生中の曲のウィジェット（前・再生・次）と同じく、アイコンだけを置く。小は絵の上に置くので、明るい絵でも見えるよう白にして影を付ける
 - Android はそのまま。Android は再生中の曲のウィジェットもワンタップ再生も Glance の塗ったボタン（Material 3 の部品）で揃っている
+
+## 2026-10-22 Mac で右の欄を開いたまま検索すると落ちていたのを直す
+
+- 症状: 右の欄（再生中・キュー）を開いた状態で、上の検索欄に打って Return を押すと、結果が届いたところで固まって落ちる。落ちた記録は AppKit の制約の更新の中止（`SplitViewChildController.hostingView(_:didUpdateMinSize:maxSize:)` から `setNeedsUpdateConstraints` が繰り返される）。右の欄を閉じていれば落ちない。ほかのページへ移っても落ちない
+- 原因: 真ん中の欄（NavigationSplitView の detail）の中身の最小の大きさが、そのまま分け目（右の欄の inspector と並ぶ分割）の最小の大きさとして AppKit へ伝わっていた。検索の結果のページは ScrollView でない VStack の下に区切りボタン・結果を置くため、結果が届くと最小の大きさが変わり、分け目の計算と中身の計算が往復して止まらなくなった
+- 直し方: detail の根元に `.frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)` を付け、中身の最小の大きさを分け目へ伝えない。`maxWidth`・`maxHeight` だけの frame では中身の最小がそのまま外へ出るので直らなかった（試した）。区切りボタンの `.fixedSize()` を外す・読み込み中の輪を外す、も直らなかった

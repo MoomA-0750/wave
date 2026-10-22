@@ -35,6 +35,9 @@ struct MainView: View {
                             .background(Color(nsColor: .controlBackgroundColor).ignoresSafeArea())
                         SuggestionsOverlay(model: model)
                     }
+                    // ページの中身の最小の大きさを分け目へ伝えない（伝わると、右の欄を開いた状態で検索の結果が出たときに
+                    // 分け目の大きさの計算が終わらなくなり、AppKit が中止して落ちていた）
+                    .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
                     .onGeometryChange(for: Double.self, of: { $0.size.width }) { model.contentWidth = $0 }
                     .inspector(isPresented: Binding(get: { model.showRight }, set: { if !$0 { model.setRightPane(open: false, queue: model.rightView == .queue) } })) {
                         RightPane()
