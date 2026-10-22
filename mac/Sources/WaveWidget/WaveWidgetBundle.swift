@@ -538,7 +538,7 @@ struct ItemWidgetView: View {
                 // どこを押しても鳴らす（鳴っている間は止める）
                 Button(intent: PlayItemIntent(item: item, shuffle: false)) {
                     cover(item)
-                        .overlay(alignment: .bottomTrailing) { PlayMark(playing: playing, size: 40).padding(6) }
+                        .overlay(alignment: .bottomTrailing) { PlayMark(playing: playing, size: 26, onArtwork: true).padding(10) }
                 }
                 .buttonStyle(.plain)
             case .systemMedium:
@@ -594,33 +594,34 @@ struct ItemWidgetView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// シャッフル（プレイリスト・アルバムだけ）と、主役の再生ボタン。
+    /// シャッフル（プレイリスト・アルバムだけ）と、再生ボタン。再生中の曲のウィジェット（Controls）と同じく、アイコンだけを置く。
     private func buttons(_ item: WidgetItem, playing: Bool) -> some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 22) {
             if item.kind == .playlist || item.kind == .album {
                 Button(intent: PlayItemIntent(item: item, shuffle: true)) {
-                    Image(systemName: "shuffle").font(.system(size: 17, weight: .semibold)).frame(width: 40, height: 40)
-                        .background(Circle().fill(Color.primary.opacity(0.12)))
+                    Image(systemName: "shuffle").font(.system(size: 22)).frame(width: 32, height: 40).contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
-            Button(intent: PlayItemIntent(item: item, shuffle: false)) { PlayMark(playing: playing, size: 48) }
+            Button(intent: PlayItemIntent(item: item, shuffle: false)) { PlayMark(playing: playing, size: 28).frame(width: 32, height: 40).contentShape(Rectangle()) }
                 .buttonStyle(.plain)
         }
+        .foregroundStyle(.primary)
     }
 }
 
-/// 主役の再生（鳴っている間は一時停止）の丸いボタン。絵の上でも見えるよう、アクセントの色で塗る。
+/// 再生（鳴っている間は一時停止）のアイコン。再生中の曲のウィジェットと同じく、丸を敷かずにそのまま置く。
+/// 絵の上（小）では、明るい絵でも見えるよう白にして影を付ける。
 private struct PlayMark: View {
     var playing: Bool
     var size: CGFloat
+    var onArtwork = false
 
     var body: some View {
         Image(systemName: playing ? "pause.fill" : "play.fill")
-            .font(.system(size: size * 0.42, weight: .bold))
-            .foregroundStyle(.white)
-            .frame(width: size, height: size)
-            .background(Circle().fill(accent))
+            .font(.system(size: size))
+            .foregroundStyle(onArtwork ? AnyShapeStyle(Color.white) : AnyShapeStyle(.primary))
+            .shadow(color: .black.opacity(onArtwork ? 0.5 : 0), radius: 3)
     }
 }
 
