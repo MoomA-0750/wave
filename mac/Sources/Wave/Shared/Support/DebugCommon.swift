@@ -95,11 +95,22 @@ enum DebugCommon {
             let limit = parts.count > 1 ? Int(parts[1]) : nil
             let songs = album ? (try? await AppServices.music.album(id))?.value?.songs : (try? await AppServices.music.fullPlaylist(id))?.value?.songs
             if let songs, !songs.isEmpty {
-                AppServices.downloads.downloadCollection(album ? .album : id == MusicRepository.likedSongs ? .liked : .playlist, id: id, title: id, thumbnailUrl: nil,
+                AppServices.downloads.downloadCollection(album ? .album : id == MusicRepository.likedSongs ? .liked : .playlist, id: id, title: id == MusicRepository.likedSongs ? L.t("高く評価した曲", "Liked Songs") : id, thumbnailUrl: nil,
                                                          songs: Array(songs.prefix(limit ?? songs.count)))
             }
             AppPaths.log("debug \(command) songs=\(songs?.count ?? -1)")
         case "dl-song": if let song = await firstSong(arg) { AppServices.downloads.download(song) }
+        // 目録で探した最初の番組の、新しい10件のうち一番短い RSS のエピソードを取る
+        case "dl-feed":
+            let feeds = AppServices.feeds!
+            if let first = await feeds.client.search(arg)?.first, let url = Feed.feedUrlOf(first.browseId), case .ok(let show) = await feeds.client.show(url),
+               let episode = show.toPage(saved: false).episodes.prefix(10).min(by: { ($0.song.durationSeconds ?? .max) < ($1.song.durationSeconds ?? .max) })
+            {
+                AppServices.downloads.download(episode.song, episode: true)
+                AppPaths.log("debug dl-feed duration=\(episode.song.durationSeconds ?? -1)")
+            } else {
+                AppPaths.log("debug dl-feed failed")
+            }
         case "dl-state":
             let d = AppServices.downloads!
             let collections = d.manifest.collections.map { "\($0.kind.rawValue):\(d.state($0.id))" }.joined(separator: ",")

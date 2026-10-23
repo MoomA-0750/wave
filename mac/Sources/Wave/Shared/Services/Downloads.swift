@@ -120,14 +120,14 @@ final class Downloads {
     }
 
     private func networkChanged(connected: Bool, metered: Bool) {
-        let before = allowed
         let changed = self.connected != connected || self.metered != metered
         self.connected = connected
         self.metered = metered
-        // 通信が変わったら、通信の失敗で待っている曲を待たずに取り直す
-        if changed { retryAt = [:] }
+        // 通信が変わったら、通信の失敗で待っている曲を待たずに取り直す（変わらない知らせは記録にも書かない）
+        guard changed else { return }
+        retryAt = [:]
         AppPaths.log("downloads network connected=\(connected) metered=\(metered) allowed=\(allowed)")
-        if allowed && !before { kick() }
+        if allowed { kick() }
     }
 
     /// 一覧の読み直し（collections が true なら必ず、ほかは1日1回の時だけ）とスマートダウンロードの選び直し（1日1回）をして、取る。
