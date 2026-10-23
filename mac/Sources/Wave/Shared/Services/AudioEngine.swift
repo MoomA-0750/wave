@@ -174,6 +174,14 @@ final class AudioEngine {
         return await start(item)
     }
 
+    /// 取って置いた RSS のエピソード（端末の中のファイル）を鳴らす準備をする。名前に拡張子が無いので、形式は渡したものを使う。
+    func loadFile(_ url: URL, mimeType: String) async -> Bool {
+        clear()
+        let asset = AVURLAsset(url: url, options: [AVURLAssetOverrideMIMETypeKey: mimeType])
+        let item = AVPlayerItem(asset: asset)
+        return await start(item)
+    }
+
     private func start(_ item: AVPlayerItem) async -> Bool {
         observers.append(NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.onEnded?() }

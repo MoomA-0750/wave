@@ -33,6 +33,11 @@ final class Settings: Codable {
     var musicPip = true
     /// 下のタブの欄で、右に離して置き、欄を畳んでも出しておくタブ（search・ai・library。iPhone だけ。既定は検索）。
     var pinnedTab = "search"
+    /// ダウンロードに使う通信（unmetered: Wi-Fi など従量制でない通信だけ・any: どの通信でも。ADR-0016）。
+    var downloadNetwork = "unmetered"
+    /// スマートダウンロード（既定は切）と、取る曲数（25・50・100・200）。
+    var smartDownloads = false
+    var smartDownloadCount = 50
 
     private static var fileURL: URL { AppPaths.file("settings.json") }
 
@@ -41,7 +46,7 @@ final class Settings: Codable {
     enum CodingKeys: String, CodingKey {
         case volume, shuffle, repeatMode, sendHistory, rightPaneOpen, releaseNotices, librarySort, libraryGrid, playlistOrders, language,
             searchHistory, relayV2Url, relayV2Host, aiUrl, aiToken, aiName, discordPresence, discordClientId, musicPip,
-            pinnedTab
+            pinnedTab, downloadNetwork, smartDownloads, smartDownloadCount
     }
 
     // 項目が足りないファイル（前の版）も読めるよう、無い項目は既定のまま
@@ -67,6 +72,9 @@ final class Settings: Codable {
         discordClientId = try c.decodeIfPresent(String.self, forKey: .discordClientId)
         musicPip = try c.decodeIfPresent(Bool.self, forKey: .musicPip) ?? musicPip
         pinnedTab = try c.decodeIfPresent(String.self, forKey: .pinnedTab) ?? pinnedTab
+        downloadNetwork = try c.decodeIfPresent(String.self, forKey: .downloadNetwork) ?? downloadNetwork
+        smartDownloads = try c.decodeIfPresent(Bool.self, forKey: .smartDownloads) ?? smartDownloads
+        smartDownloadCount = try c.decodeIfPresent(Int.self, forKey: .smartDownloadCount) ?? smartDownloadCount
     }
 
     static func load() -> Settings {

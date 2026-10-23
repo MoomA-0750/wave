@@ -87,6 +87,56 @@ enum DebugCommon {
         // 連携でほかの端末を映していたら、この端末で鳴らす
         case "connect-transfer": AppServices.connect.transfer()
         case "releases-check": await AppServices.releases.check()
+        // ダウンロード（ADR-0016）: 画面を開く・プレイリスト（liked は高く評価した曲。2つ目の引数で先頭の曲数に絞る）・アルバムを取る・
+        // 検索の先頭の曲を取る・状態を記録に書く・一覧の読み直しとスマートダウンロードの選び直し・通信できないことにする（on・off）・すべて消す
+        case "downloads": nav.downloads()
+        case "dl-playlist", "dl-album":
+            let album = command == "dl-album"
+            let parts = arg.split(separator: " ").map(String.init)
+            let id = parts.first == "liked" ? MusicRepository.likedSongs : parts.first ?? ""
+            let limit = parts.count > 1 ? Int(parts[1]) : nil
+            let songs = album ? (try? await AppServices.music.album(id))?.value?.songs : (try? await AppServices.music.fullPlaylist(id))?.value?.songs
+            if let songs, !songs.isEmpty {
+                AppServices.downloads.downloadCollection(album ? .album : id == MusicRepository.likedSongs ? .liked : .playlist, id: id, title: id == MusicRepository.likedSongs ? L.t("高く評価した曲", "Liked Songs") : id, thumbnailUrl: nil,
+                                                         songs: Array(songs.prefix(limit ?? songs.count)))
+            }
+            AppPaths.log("debug \(command) songs=\(songs?.count ?? -1)")
+        case "dl-song": if let song = await firstSong(arg) { AppServices.downloads.download(song) }
+        // 目録で探した最初の番組の、新しい10件のうち一番短い RSS のエピソードを取る
+        case "dl-feed":
+            let feeds = AppServices.feeds!
+            if let first = await feeds.client.search(arg)?.first, let url = Feed.feedUrlOf(first.browseId), case .ok(let show) = await feeds.client.show(url),
+               let episode = show.toPage(saved: false).episodes.prefix(10).min(by: { ($0.song.durationSeconds ?? .max) < ($1.song.durationSeconds ?? .max) })
+            {
+                AppServices.downloads.download(episode.song, episode: true)
+                AppPaths.log("debug dl-feed duration=\(episode.song.durationSeconds ?? -1)")
+            } else {
+                AppPaths.log("debug dl-feed failed")
+            }
+        case "dl-state":
+            let d = AppServices.downloads!
+            let collections = d.manifest.collections.map { "\($0.kind.rawValue):\(d.state($0.id))" }.joined(separator: ",")
+            let smart = SmartCategory.allCases.map { "\($0.rawValue)=\(d.manifest.smartIds($0).count)" }.joined(separator: ",")
+            AppPaths.log("debug dl-state wanted=\(d.manifest.wanted.count) completed=\(d.completed.count) pending=\(d.pending.count) active=\(d.active != nil) " +
+                "progress=\(Int(d.activeProgress * 100)) bytes=\(d.totalBytes) connected=\(d.connected) metered=\(d.metered) allowed=\(d.allowed) " +
+                "offline=\(d.offline) collections=[\(collections)] smart=[\(smart)]")
+        case "dl-refresh": await AppServices.downloads.refresh(collections: true)
+        case "dl-smart":
+            if arg == "off" {
+                AppServices.downloads.setSmart(false)
+            } else {
+                if let n = Int(arg) { AppServices.downloads.settings.smartDownloadCount = n }
+                AppServices.downloads.settings.smartDownloads = true
+                await AppServices.downloads.refreshSmart(force: true)
+            }
+        case "dl-offline": AppServices.downloads.debugOffline = arg != "off"
+        case "dl-policy": AppServices.downloads.setPolicy(arg == "any" ? .any : .unmetered)
+        case "dl-delete-all": AppServices.downloads.deleteAll()
+        // 取った曲だけを並べて鳴らす（引数は曲数）。取っていない曲を混ぜるときは dl-play-mixed
+        case "dl-play", "dl-play-mixed":
+            let d = AppServices.downloads!
+            let ids = command == "dl-play" ? d.manifest.wanted.filter { d.isDownloaded($0) } : d.manifest.wanted
+            player.playList(ids.prefix(Int(arg) ?? 5).compactMap { d.song($0) })
         default: AppPaths.log("debug unknown command")
         }
     }

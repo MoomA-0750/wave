@@ -74,6 +74,8 @@ struct CollectionView: View {
                     .disabled(model.albumArtist?.browseId == nil)
             }
             if let detail = model.detail { Text(detail).font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center).lineLimit(3) }
+            // ダウンロード（取っていない／途中／取り終えた。ADR-0016 の 15）。アーティストで絞った高く評価した曲には出さない
+            if model.request.artist == nil { CollectionDownloadButton(model: model) }
             // 再生・シャッフル再生（iOS のミュージックと同じ大きな2つのボタン）。この一覧を流していれば再生は一時停止・再開になる
             HStack(spacing: 12) {
                 CollectionViewBigButton(title: model.isPlayingHere && player.isPlaying ? L.t("一時停止", "Pause") : L.t("再生", "Play"),

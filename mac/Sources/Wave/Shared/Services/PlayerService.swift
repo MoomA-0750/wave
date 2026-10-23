@@ -115,6 +115,8 @@ final class PlayerService {
     /// 今の曲を聴いた時間（再生中の区間だけを足す。シークでは増えない）。再生履歴を送るときと、連携の listenedMs に使う
     @ObservationIgnored private var listen = ListenCounter()
     @ObservationIgnored private var listenedItemId: String?
+    /// この端末の再生回数を数えた項目（1回の再生につき1回。ADR-0016）。
+    @ObservationIgnored private var countedItemId: String?
 
     /// キューの並び・中身が変わった（端末の連携が書き出す）。
     @ObservationIgnored var queueChanged: [() -> Void] = []
@@ -1556,6 +1558,13 @@ final class PlayerService {
         updateNowPlayingInfo()
         loadTask = Task {
             var song = song
+            // 通信できないときは、取っていない曲を飛ばして、取った曲へ進む（取った曲が無ければ、通信の失敗と同じく止まる。ADR-0016 の 18）
+            if AppServices.downloads.offline, !AppServices.downloads.isDownloaded(song.videoId), let next = nextDownloaded() {
+                guard token == loadToken else { return }
+                AppPaths.log("offline skip to=\(next) from=\(index)")
+                selectAt(next)
+                return
+            }
             if Feed.isExternal(song.videoId) {
                 // RSS のエピソード: YouTube の解決を通さず、音声の URL をそのまま流す（ADR-0012）
                 if !(await startExternal(song, seekTo: seekTo, token: token)) {
@@ -1565,6 +1574,13 @@ final class PlayerService {
                 }
             } else if song.isLive {
                 if !(await startLive(song, token: token)) {
+                    guard token == loadToken else { return }
+                    await recover(song)
+                    return
+                }
+            } else if let file = AppServices.downloads.playable(song.videoId) {
+                // 取り終えた曲: 通信も URL の調べ直しもせずに、置き場から鳴らす（ADR-0016 の 6）
+                if !(await startDownloaded(song, file, seekTo: seekTo, token: token)) {
                     guard token == loadToken else { return }
                     await recover(song)
                     return
@@ -1694,7 +1710,13 @@ final class PlayerService {
             return false
         }
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1.0"
-        guard await engine.loadExternal(url, userAgent: "wave/\(version)") else { return false }
+        if let file = AppServices.downloads.playable(song.videoId) {
+            // 取ったエピソードは置き場のファイルから鳴らす（通信しない）
+            guard await engine.loadFile(AppServices.downloads.store.bytesUrl(song.videoId), mimeType: file.mimeType) else { return false }
+            AppPaths.log("play episode downloaded")
+        } else {
+            guard await engine.loadExternal(url, userAgent: "wave/\(version)") else { return false }
+        }
         guard current?.videoId == song.videoId, token == loadToken else { return false }
         // 覚えている位置が5秒より後で、今の位置が1秒未満なら、そこへ飛ぶ（Android の EpisodePositions と同じ）
         let stored = Double(AppServices.feeds.position(audio)?.resumeSeconds ?? 0)
@@ -1771,6 +1793,40 @@ final class PlayerService {
         AppPaths.log("play cached itag=\(format.itag) queue=\(queue.count) index=\(index)")
         Task { try? await bytes.prepareSource() }
         return true
+    }
+
+    /// 取り終えた曲を置き場から鳴らす（続きを取ることはない）。再生履歴を送るための URL は、通信できるときだけ裏で調べる。
+    private func startDownloaded(_ song: Song, _ file: DownloadedFile, seekTo: Double, token: Int) async -> Bool {
+        currentStream = nil
+        cpn = PlaybackStats.newCpn()
+        let videoId = song.videoId
+        let bytes = RangeStream.openCached(session: AppServices.mediaSession, format: file.format, cache: AppServices.downloads.store) { @Sendable in
+            guard let stream = try await AppServices.resolver.resolve(videoId: videoId).stream else { throw StreamRejectedError(status: 0) }
+            await MainActor.run {
+                if AppServices.player.current?.videoId == videoId { AppServices.player.currentStream = stream }
+            }
+            return stream
+        }
+        guard await engine.load(bytes, mimeType: file.mimeType, key: "\(videoId)/\(file.itag)/dl", dash: file.dash) else { return false }
+        guard current?.videoId == videoId, token == loadToken else { return false }
+        if seekTo > 1 { engine.seek(seekTo) }
+        engine.play()
+        isPlaying = true
+        isLoading = false
+        updateNowPlayingInfo()
+        AppPaths.log("play downloaded itag=\(file.itag) queue=\(queue.count) index=\(index)")
+        if !AppServices.downloads.offline && AppServices.settings.sendHistory && AppServices.client.isLoggedIn {
+            Task { try? await bytes.prepareSource() }
+        }
+        return true
+    }
+
+    /// 今の曲の後ろで、最初の取り終えた曲の位置（全体リピートなら頭へ回る）。無ければ nil。
+    private func nextDownloaded() -> Int? {
+        let downloads = AppServices.downloads!
+        var order = Array((index + 1)..<max(index + 1, queue.count))
+        if repeatMode == .all && index > 0 { order += Array(0..<index) }
+        return order.first { downloads.isDownloaded(queue[$0].videoId) }
     }
 
     private func startStream(_ song: Song, _ stream: ResolvedStream, seekTo: Double, token: Int) async -> Bool {
@@ -1938,6 +1994,13 @@ final class PlayerService {
         if isPlaying, !endHandled, realEnd > 10, position >= realEnd - 0.2 { onEnded() }
         // 1回の再生につき1回、実際に聴いた時間が 30 秒（短い曲は長さの半分）に達したら送る（ADR-0006。Android の ListenCounter と同じ）
         let lengthMs = realEnd > 0 ? Int64(realEnd * 1000) : duration > 0 ? Int64(duration * 1000) : nil
+        // この端末の再生回数（スマートダウンロードの「いつも聴いている」）も、履歴を送るのと同じだけ聴いたら1回と数える
+        if isPlaying, !external, let song = current, !song.isLive, countedItemId != (listenedItemId ?? "-"),
+           listen.shouldSend(nowMs: clockMs, durationMs: lengthMs, alreadySent: false)
+        {
+            countedItemId = listenedItemId ?? "-"
+            AppServices.downloads.recordPlay(song)
+        }
         if isPlaying, listen.shouldSend(nowMs: clockMs, durationMs: lengthMs, alreadySent: statsSent), let stream = currentStream,
             AppServices.settings.sendHistory, AppServices.client.isLoggedIn
         {
@@ -1997,6 +2060,8 @@ final class PlayerService {
         if prefetched[next.videoId] != nil || next.isLive || Feed.isExternal(next.videoId) || rejected.recentlyRejected(next.videoId, nowMs: clockMs) { return }
         // 頭を残してある曲は、URL も調べない（鳴らすときに残した分から始める）
         if cachedStart(next.videoId) != nil { return }
+        // 取り終えた曲・通信できないときも調べない
+        if AppServices.downloads.isDownloaded(next.videoId) || AppServices.downloads.offline { return }
         Task {
             guard let stream = (try? await AppServices.resolver.resolve(videoId: next.videoId))?.stream else { return }
             prefetched[next.videoId] = stream

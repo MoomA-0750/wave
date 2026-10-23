@@ -28,6 +28,7 @@ struct ContentPane: View {
         case .song(let song): SongPageView(song: song)
         case .mood(let mood): MoodPageView(mood: mood)
         case .history: HistoryPageView()
+        case .downloads: DownloadsPageView()
         case .settings: SettingsPageView()
         case .devices: DevicesPageView()
         case .lyrics: LyricsPageView()

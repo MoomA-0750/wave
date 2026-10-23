@@ -33,8 +33,8 @@ public final class RangeStream: @unchecked Sendable {
     private let source: (@Sendable () async throws -> ResolvedStream)?
     private var sourceTask: Task<String, Error>?
     private let itag: Int
-    /// 取ったバイトを残し、残っている分はネットから取らない。
-    private let cache: AudioCache?
+    /// 取ったバイトを残し、残っている分はネットから取らない（速く鳴らすための置き場か、ダウンロードの置き場）。
+    private let cache: (any ByteStore)?
     private let videoId: String
     private var positionValue: Int64 = 0
     private var chunk: [UInt8]?
@@ -42,7 +42,7 @@ public final class RangeStream: @unchecked Sendable {
     /// read(count:) を1つずつ通す（位置と手元の区切りを共有するため）。
     private let gate = AsyncGate()
 
-    private init(session: URLSession, url: String?, length: Int64, videoId: String = "", itag: Int = 0, cache: AudioCache? = nil,
+    private init(session: URLSession, url: String?, length: Int64, videoId: String = "", itag: Int = 0, cache: (any ByteStore)? = nil,
                  source: (@Sendable () async throws -> ResolvedStream)? = nil)
     {
         self.session = session
@@ -55,7 +55,7 @@ public final class RangeStream: @unchecked Sendable {
     }
 
     /// キャッシュに残した曲を開く。残した分はすぐ読め、続きが要ったときに source で URL を調べる。
-    public static func openCached(session: URLSession, format: CachedFormat, cache: AudioCache,
+    public static func openCached(session: URLSession, format: CachedFormat, cache: any ByteStore,
                                   source: @escaping @Sendable () async throws -> ResolvedStream) -> RangeStream
     {
         RangeStream(session: session, url: nil, length: format.length, videoId: format.videoId, itag: format.itag, cache: cache, source: source)
@@ -76,7 +76,7 @@ public final class RangeStream: @unchecked Sendable {
     }
 
     /// 開く。長さが分からなければ、先頭の1バイトを取って Content-Range から知る。
-    public static func open(session: URLSession, stream: ResolvedStream, cache: AudioCache? = nil) async throws -> RangeStream {
+    public static func open(session: URLSession, stream: ResolvedStream, cache: (any ByteStore)? = nil) async throws -> RangeStream {
         let url = stream.revealUrl()
         if !StreamResolver.isAllowedMediaUrl(url) { throw StreamRejectedError(status: 0) }
         let length = stream.contentLength ?? 0

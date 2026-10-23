@@ -9,6 +9,8 @@ struct SongMenuItems: View {
     var song: Song
     var removeFromPlaylist: (() -> Void)?
     var queueIndex: Int?
+    /// ポッドキャストのエピソード（ダウンロードの画面で曲と分けて出す）。
+    var episode = false
 
     var body: some View {
         let player = AppServices.player!
@@ -17,6 +19,7 @@ struct SongMenuItems: View {
         if let queueIndex {
             Button(L.t("キューから削除", "Remove from queue"), systemImage: "minus.circle") { player.removeAt(queueIndex) }
         }
+        DownloadMenuItems(song: song, episode: episode)
         // RSS のエピソードは YouTube の曲ではない（プレイリスト・ラジオ・共有のリンクが無い。ADR-0012）
         let external = Feed.isExternal(song.videoId)
         Divider()

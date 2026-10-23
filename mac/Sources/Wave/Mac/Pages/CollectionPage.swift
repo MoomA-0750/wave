@@ -81,6 +81,8 @@ struct CollectionPageView: View {
             IconToggle(isOn: model.isPlayingHere ? player.shuffle : model.shufflePlay, help: L.t("シャッフル", "Shuffle")) {
                 if model.isPlayingHere { player.toggleShuffle() } else { model.shufflePlay.toggle() }
             } label: { Image(systemName: "shuffle").font(.system(size: 20)) }
+            // ダウンロード（取っていない／途中／取り終えた。ADR-0016 の 15）。アーティストで絞った高く評価した曲には出さない
+            if model.request.artist == nil { CollectionDownloadButton(model: model, size: 20) }
             Menu {
                 Button(L.t("次に再生", "Play next"), systemImage: "text.line.first.and.arrowtriangle.forward") { player.queueAll(model.rows.map(\.song), next: true) }
                 Button(L.t("キューに追加", "Add to queue"), systemImage: "text.badge.plus") { player.queueAll(model.rows.map(\.song), next: false) }

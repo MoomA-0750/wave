@@ -29,6 +29,8 @@ enum Route: Hashable {
     case song(Song)
     case mood(MoodCategory)
     case history
+    /// ダウンロード（ADR-0016）。
+    case downloads
     case settings
     case devices
     case lyrics
@@ -99,6 +101,7 @@ final class Nav {
     func song(_ song: Song) { go(.song(song)) }
     func mood(_ mood: MoodCategory) { go(.mood(mood)) }
     func history() { go(.history) }
+    func downloads() { go(.downloads) }
     func settings() { go(.settings) }
     func devices() { go(.devices) }
     func lyrics() { go(.lyrics) }

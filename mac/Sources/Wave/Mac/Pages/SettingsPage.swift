@@ -10,6 +10,7 @@ struct SettingsPageView: View {
     @State private var pairText = ""
     @State private var aiConfigured = AppServices.ai.configured
     @State private var confirmLogout = false
+    @State private var confirmDeleteDownloads = false
     @State private var discordOn = AppServices.settings.discordPresence
     @State private var discordId = AppServices.settings.discordClientId ?? ""
     @State private var discordState = SettingsPageView.discordStateText()
@@ -77,6 +78,8 @@ struct SettingsPageView: View {
                             AppServices.settings.save()
                         }
                 }
+
+                downloadsSection
 
                 section("Discord")
                 card {
@@ -178,6 +181,61 @@ struct SettingsPageView: View {
             Button(L.t("キャンセル", "Cancel"), role: .cancel) {}
         } message: {
             Text(L.t("この Mac に保存したログイン情報を消します。", "This removes your login saved on this Mac."))
+        }
+    }
+
+    // ダウンロード（ADR-0016 の 17）
+    @ViewBuilder
+    private var downloadsSection: some View {
+        let downloads = AppServices.downloads!
+        section(L.t("ダウンロード", "Downloads"))
+        card {
+            HStack {
+                Text(L.t("ダウンロードに使う通信", "Download over"))
+                Spacer(minLength: 40)
+                Picker("", selection: Binding(get: { downloads.policy }, set: { downloads.setPolicy($0) })) {
+                    ForEach(DownloadNetworkPolicy.allCases, id: \.self) { Text(DownloadsModel.policyLabel($0)).tag($0) }
+                }
+                .labelsHidden()
+                .frame(width: 280)
+            }
+        }
+        card {
+            VStack(alignment: .leading, spacing: 8) {
+                toggleRow(L.t("スマートダウンロード", "Smart downloads"),
+                          L.t("いつも聴いている曲・好きそうな曲・おすすめから、聴きそうな曲を毎日選び直して取っておく",
+                              "Automatically download songs you might like from your favorites, something new and recommendations, refreshed daily"),
+                          isOn: Binding(get: { downloads.settings.smartDownloads }, set: { downloads.setSmart($0) }))
+                if downloads.settings.smartDownloads {
+                    HStack {
+                        Text(L.t("曲数", "Songs"))
+                        Spacer()
+                        Picker("", selection: Binding(get: { downloads.settings.smartDownloadCount }, set: { downloads.setSmartCount($0) })) {
+                            ForEach(SmartDownloads.countChoices, id: \.self) { Text(DownloadsModel.countLabel($0)).tag($0) }
+                        }
+                        .labelsHidden()
+                        .fixedSize()
+                    }
+                }
+            }
+        }
+        card {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(L.t("ダウンロード", "Downloads"))
+                    Text(DownloadsModel.statusText(downloads)).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 40)
+                Button(L.t("開く", "Open")) { AppServices.nav.downloads() }
+                Button(L.t("すべて削除", "Delete all"), role: .destructive) { confirmDeleteDownloads = true }
+                    .disabled(downloads.totalBytes == 0 && downloads.manifest.wanted.isEmpty)
+            }
+        }
+        .confirmationDialog(L.t("ダウンロードをすべて削除しますか？", "Delete all downloads?"), isPresented: $confirmDeleteDownloads) {
+            Button(L.t("すべて削除", "Delete all"), role: .destructive) { downloads.deleteAll() }
+            Button(L.t("キャンセル", "Cancel"), role: .cancel) {}
+        } message: {
+            Text(L.t("この Mac に取った曲をすべて消します。", "This removes all songs saved on this Mac."))
         }
     }
 

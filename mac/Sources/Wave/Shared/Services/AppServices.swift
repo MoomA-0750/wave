@@ -25,6 +25,8 @@ enum AppServices {
     /// RSS のポッドキャスト（この端末の登録と聴いたところ、目録の検索とフィードの取得。ADR-0012）。
     private(set) static var feeds: FeedStore!
     private(set) static var account: AccountState!
+    /// ダウンロードとスマートダウンロード（ADR-0016）。
+    private(set) static var downloads: Downloads!
     /// 登録したアーティストの新作。
     private(set) static var releases: Releases!
     /// Claude との会話（アプリが動いている間だけ持つ）。
@@ -76,6 +78,7 @@ enum AppServices {
         account = AccountState()
         feeds = FeedStore()
         library = LibraryState()
+        downloads = Downloads()
         player = PlayerService()
         ai = AiChat()
         account.restore()
@@ -89,6 +92,7 @@ enum AppServices {
         feeds.startSync()
         releases = Releases()
         releases.start()
+        downloads.start()
         #if os(macOS)
             discord = DiscordStatus()
         #endif

@@ -135,9 +135,10 @@ final class CollectionModel {
 
     private func loadAlbum(_ mine: Int) async {
         guard let album = (try? await AppServices.music.album(request.id))?.value, mine == generation else {
-            if mine == generation { error = L.t("アルバムを読み込めませんでした", "Couldn't load the album") }
+            if mine == generation && !showOffline() { error = L.t("アルバムを読み込めませんでした", "Couldn't load the album") }
             return
         }
+        AppServices.downloads.pageLoaded(request.id, title: album.title, thumbnailUrl: album.thumbnailUrl, songs: album.songs)
         title = album.title
         let changedArt = thumbnailUrl != album.thumbnailUrl
         thumbnailUrl = album.thumbnailUrl ?? thumbnailUrl
@@ -182,14 +183,45 @@ final class CollectionModel {
         await withCheckedContinuation { c in DispatchQueue.main.async { c.resume() } }
         guard mine == generation else { return }
         guard let page = result.value else {
+            if showOffline() { return }
             error = result.failure == .notLoggedIn ? L.t("このプレイリストを見るにはログインしてください", "Log in to see this playlist")
                 : L.t("プレイリストを読み込めませんでした", "Couldn't load the playlist")
             return
         }
+        // 最後まで読めた一覧だけで、取っている中身を合わせる
+        if page.continuation == nil { AppServices.downloads.pageLoaded(request.id, title: page.title, thumbnailUrl: nil, songs: page.songs) }
         let total = all.reduce(0) { $0 + ($1.song.durationSeconds ?? 0) }
         // サーバーの補足（曲数・時間を含む）があればそれを出す。無ければ読めた曲から数える
         detail = page.subtitle ?? request.subtitle ?? "\(L.songs(all.count)), \(L.length(total))"
     }
+
+    /// 読み込めなかったとき、取っていれば取り終えた曲を出す（通信なしでも開ける。ADR-0016 の 18）。出したら true。
+    private func showOffline() -> Bool {
+        guard request.artist == nil, let songs = AppServices.downloads.offlineSongs(request.id), !songs.isEmpty else { return false }
+        if let c = AppServices.downloads.manifest.collection(request.id) {
+            title = title ?? c.title
+            thumbnailUrl = thumbnailUrl ?? c.thumbnailUrl
+        }
+        all = songs.enumerated().map { TrackRow(number: $0.offset + 1, song: $0.element, showAlbum: !request.isAlbum, showArtwork: !request.isAlbum) }
+        detail = L.t("ダウンロード済み", "Downloaded") + " • " + L.songs(songs.count)
+        AppPaths.log("collection offline songs=\(songs.count)")
+        return true
+    }
+
+    // MARK: ダウンロード（ページの頭のボタン）
+
+    var downloadState: Downloads.CollectionState { AppServices.downloads.state(request.id) }
+
+    /// 丸ごと取れる（読み込み終えた・アーティストで絞っていない）。
+    var canDownload: Bool { request.artist == nil && !loading && !all.isEmpty }
+
+    func download() {
+        let kind: DownloadCollectionKind = request.isAlbum ? .album : isLiked ? .liked : .playlist
+        AppServices.downloads.downloadCollection(kind, id: request.id, title: title ?? request.title ?? "", thumbnailUrl: isLiked ? nil : thumbnailUrl,
+                                                 songs: all.map(\.song))
+    }
+
+    func removeDownload() { AppServices.downloads.removeCollection(request.id) }
 
     /// 高く評価した曲のうち、そのアーティストのもの（ライブラリで覚えた一覧から絞る）。
     private func loadLikedByArtist(_ artist: ArtistFilter, _ mine: Int) async {

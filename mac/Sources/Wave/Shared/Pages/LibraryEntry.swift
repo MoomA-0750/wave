@@ -12,7 +12,9 @@ struct LibraryEntry: Identifiable, Hashable {
     var podcast: PodcastSummary?
     /// 「新しいエピソード」（保存した番組の新着の自動のプレイリスト。ポッドキャストで絞ったときだけ先頭に出す）。
     var isNewEpisodes = false
-    var id: String { item?.key ?? podcast.map { "pod-" + $0.browseId } ?? (isNewEpisodes ? "new-episodes" : "liked") }
+    /// 「ダウンロード」（ADR-0016。高く評価した曲の下にいつも出す）。
+    var isDownloads = false
+    var id: String { item?.key ?? podcast.map { "pod-" + $0.browseId } ?? (isNewEpisodes ? "new-episodes" : isDownloads ? "downloads" : "liked") }
     var isArtist: Bool { item?.isArtist ?? false }
 }
 
@@ -60,6 +62,12 @@ extension LibraryEntry {
                 let rb = b.element.item.flatMap(LibraryState.keyOf).flatMap { rank[$0] } ?? Int.max
                 return ra != rb ? ra < rb : a.offset < b.offset
             }.map(\.element)
+        }
+        // ダウンロードは高く評価した曲の次（下で先頭に高く評価した曲を入れる）
+        let downloadsTitle = L.t("ダウンロード", "Downloads")
+        if (kind == nil || kind == "playlist") && (filter.isEmpty || downloadsTitle.localizedCaseInsensitiveContains(filter)) {
+            let count = AppServices.downloads.completed.count
+            entries.insert(LibraryEntry(title: downloadsTitle, subtitle: L.t("プレイリスト • 自動", "Playlist • Auto") + " • " + L.songs(count), isDownloads: true), at: 0)
         }
         // 高く評価した曲はいつも先頭（Spotify の「お気に入りの曲」と同じ）
         let likedTitle = L.t("高く評価した曲", "Liked Songs")
