@@ -13,7 +13,8 @@
     "watch": "node build.mjs --watch",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node --test test/*.test.ts",
-    "test:e2e": "node --test test/e2e/*.test.ts"
+    "test:e2e": "node --test test/e2e/*.test.ts",
+    "test:browser": "node test/browser/run.ts chromium && node test/browser/run.ts firefox"
   },
   "devDependencies": {
     "@types/chrome": "0.1.40",

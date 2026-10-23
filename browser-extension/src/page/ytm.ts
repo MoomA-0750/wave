@@ -184,7 +184,7 @@ export function readState(): PageState {
     const ms = !ad ? navigator.mediaSession?.metadata : null;
     if (ms && ms.title === base.title) {
       if (!base.album && ms.album) base.album = ms.album;
-      if (!base.thumbnailUrl && ms.artwork?.length) base.thumbnailUrl = ms.artwork[ms.artwork.length - 1].src;
+      if (!base.thumbnailUrl && ms.artwork?.length) base.thumbnailUrl = ms.artwork[ms.artwork.length - 1]!.src;
     }
     const d = p.getDuration();
     if (!ad && d > 0) base.durationMs = Math.round(d * 1000);
@@ -339,7 +339,7 @@ function applyPending(): void {
 }
 
 async function loadQueue(videoIds: string[], index: number, positionMs: number, playing: boolean, autoplay?: boolean): Promise<void> {
-  const target = videoIds[index];
+  const target = videoIds[index]!;
   const beforeItems = reduxState()?.queue?.items;
   if (autoplay !== undefined) setAutoplay(autoplay);
   pending = { videoId: target, positionMs, playing, until: Date.now() + 120000, tries: 0 };

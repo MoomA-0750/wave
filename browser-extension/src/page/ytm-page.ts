@@ -4,7 +4,7 @@
 
 import {
   BRIDGE_NS, BRIDGE_VERSION, type BridgeMessage, type CommandResult, type PageCommand, type PageState,
-  parseCommand, parsePageState, parseResult, readBridge,
+  parseAccount, parseCommand, parsePageState, parseResult, readBridge,
 } from './protocol';
 
 export interface YtmPage {
@@ -12,6 +12,8 @@ export interface YtmPage {
   onState(cb: (s: PageState) => void): () => void;
   /** 最後に受けた状態 */
   latest(): PageState | null;
+  /** ログイン（DATASYNC_ID、ログインしていなければ null）が分かった・変わったときに呼ぶ。登録した時点で分かっていれば、すぐ1回呼ぶ */
+  onAccount(cb: (dataSyncId: string | null) => void): () => void;
   /** 指示を送り、ページでやり終えるのを待つ。形の悪い指示は送らずに失敗を返す */
   command(cmd: PageCommand, timeoutMs?: number): Promise<CommandResult>;
   dispose(): void;
@@ -20,6 +22,8 @@ export interface YtmPage {
 export function createYtmPage(): YtmPage {
   let state: PageState | null = null;
   const listeners = new Set<(s: PageState) => void>();
+  let account: string | null | undefined;
+  const accountListeners = new Set<(a: string | null) => void>();
   const waiting = new Map<number, { resolve: (r: CommandResult) => void; timer: ReturnType<typeof setTimeout> }>();
   let nextId = 1;
 
@@ -35,6 +39,13 @@ export function createYtmPage(): YtmPage {
       state = s;
       for (const cb of listeners) {
         try { cb(s); } catch (e) { console.error('[wave] onState', e); }
+      }
+    } else if (m.kind === 'account') {
+      const a = parseAccount(m.dataSyncId);
+      if (a === undefined) return;
+      account = a;
+      for (const cb of accountListeners) {
+        try { cb(a); } catch (e) { console.error('[wave] onAccount', e); }
       }
     } else if (m.kind === 'result' && typeof m.id === 'number') {
       const w = waiting.get(m.id);
@@ -54,6 +65,11 @@ export function createYtmPage(): YtmPage {
       return () => listeners.delete(cb);
     },
     latest: () => state,
+    onAccount(cb) {
+      accountListeners.add(cb);
+      if (account !== undefined) cb(account);
+      return () => accountListeners.delete(cb);
+    },
     command(cmd, timeoutMs = 30000) {
       const c = parseCommand(cmd);
       if (!c) return Promise.resolve({ ok: false, error: 'bad command' });
@@ -67,6 +83,7 @@ export function createYtmPage(): YtmPage {
     dispose() {
       window.removeEventListener('message', onMessage);
       listeners.clear();
+      accountListeners.clear();
       for (const [, w] of waiting) { clearTimeout(w.timer); w.resolve({ ok: false, error: 'disposed' }); }
       waiting.clear();
     },

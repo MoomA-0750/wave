@@ -76,6 +76,11 @@ test("拡張が QR の文字と6桁で、ログインなし（wave-accountless-v
     shownCode = view.code;
     return view.code;
   });
+  // ページがログインを知らせる前は加われない
+  assert.equal((await ext.join(offer.text)).state, "failed");
+  assert.deepEqual(ext.status().pairing, { state: "failed", reason: "account_unknown" });
+  // ログインしていない（null）と知らせると、ログインなしで加わる
+  await ext.setAccount(null);
   const joining = ext.join(offer.text);
   const view = await joining;
   assert.equal(view.state, "show_code");
@@ -167,7 +172,8 @@ test("wave-api（Kotlin）の遠隔操作がページへの命令になる", { s
   assert.equal((await api.post("/v1/control", { action: "volume", volumePercent: 30 })).status, 200);
   assert.equal((await nextCommand("volume")).volumePercent, 30);
   assert.equal((await api.post("/v1/control", { action: "shuffle", shuffle: true })).status, 200);
-  assert.equal((await nextCommand("shuffle")).on, true);
+  // シャッフルは YouTube Music のものを使わず、背景が並びを決める（入ったことは家に知らせる）
+  await waitFor("wave-api がシャッフルを見る", async () => (await api.get<{ shuffle: boolean | null }>("/v1/playback")).shuffle === true);
   assert.equal((await api.post("/v1/control", { action: "repeat", repeat: "context" })).status, 200);
   assert.equal((await nextCommand("repeat")).mode, "all");
   assert.equal((await api.post("/v1/control", { action: "next" })).status, 200);

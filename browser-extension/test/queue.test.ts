@@ -125,3 +125,21 @@ test("届いたキューを、カーソルの曲・位置に合わせて取り�
     snapshot.items.map((i) => i.itemId),
   );
 });
+
+test("途中の知らせで一度消えた曲・並べ替えの途中でも、ID と由来を保つ", () => {
+  const q = new QueueTracker();
+  q.update([t("aaaaaaaaaaA"), t("aaaaaaaaaaB"), t("aaaaaaaaaaC"), t("aaaaaaaaaaD")], 0, {}, 0);
+  const ids = new Map(q.items.map((i) => [i.videoId, i.itemId]));
+  const added: HandoffItem = { ...q.items[0]!, itemId: "22222222-2222-4222-8222-222222222222", videoId: "aaaaaaaaaaX", title: "X", origin: "user" };
+  q.insert(0, [added]);
+  // ページの途中の知らせ（まだ X が無い・並びが動いている途中）
+  q.update([t("aaaaaaaaaaA"), t("aaaaaaaaaaD"), t("aaaaaaaaaaB"), t("aaaaaaaaaaC")], 0, {}, 1_000);
+  q.update([t("aaaaaaaaaaA"), t("aaaaaaaaaaX"), t("aaaaaaaaaaC"), t("aaaaaaaaaaB"), t("aaaaaaaaaaD")], 0, {}, 2_000);
+  assert.equal(q.items[1]!.itemId, added.itemId);
+  assert.equal(q.items[1]!.origin, "user");
+  for (const item of q.items.slice(2)) assert.equal(item.itemId, ids.get(item.videoId));
+  // 時間がたてば忘れる
+  q.update([t("aaaaaaaaaaA")], 0, {}, 3_000);
+  q.update([t("aaaaaaaaaaA"), t("aaaaaaaaaaX")], 0, {}, 100_000);
+  assert.notEqual(q.items[1]!.itemId, added.itemId);
+});

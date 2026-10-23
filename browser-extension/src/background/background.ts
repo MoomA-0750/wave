@@ -10,11 +10,16 @@ import { PortHub, type HubPort } from "./hub.ts";
 
 const PAGE_ORIGIN = "https://music.youtube.com/";
 
-const ready: Promise<PortHub> = ConnectService.open({
-  store: new IndexedDbStore(),
-  defaultDeviceName: `YouTube Music (${browserName()})`,
-  log: (message) => console.debug(message),
-}).then((service) => new PortHub(service));
+/** 背景を始める（試験用の背景もこれを呼ぶ）。開き終わった Port の振り分けを返す。 */
+export function startBackground(): Promise<PortHub> {
+  const ready: Promise<PortHub> = ConnectService.open({
+    store: new IndexedDbStore(),
+    defaultDeviceName: `YouTube Music (${browserName()})`,
+    log: (message) => console.debug(message),
+  }).then((service) => new PortHub(service));
+  listen(ready);
+  return ready;
+}
 
 /** 背景が開き終わるまでに届いたメッセージと切断を取っておく Port。 */
 function buffered(port: chrome.runtime.Port): HubPort {
@@ -46,16 +51,18 @@ function buffered(port: chrome.runtime.Port): HubPort {
   };
 }
 
-ext.runtime.onConnect.addListener((port) => {
-  const senderUrl = port.sender?.url ?? "";
-  const fromExtension = port.sender?.id === ext.runtime.id;
-  if (port.name === PAGE_PORT && fromExtension && senderUrl.startsWith(PAGE_ORIGIN)) {
-    const hubPort = buffered(port);
-    void ready.then((hub) => hub.addPage(hubPort));
-  } else if (port.name === OPTIONS_PORT && fromExtension && senderUrl.startsWith(ext.runtime.getURL(""))) {
-    const hubPort = buffered(port);
-    void ready.then((hub) => hub.addOptions(hubPort));
-  } else {
-    port.disconnect();
-  }
-});
+function listen(ready: Promise<PortHub>): void {
+  ext.runtime.onConnect.addListener((port) => {
+    const senderUrl = port.sender?.url ?? "";
+    const fromExtension = port.sender?.id === ext.runtime.id;
+    if (port.name === PAGE_PORT && fromExtension && senderUrl.startsWith(PAGE_ORIGIN)) {
+      const hubPort = buffered(port);
+      void ready.then((hub) => hub.addPage(hubPort));
+    } else if (port.name === OPTIONS_PORT && fromExtension && senderUrl.startsWith(ext.runtime.getURL(""))) {
+      const hubPort = buffered(port);
+      void ready.then((hub) => hub.addOptions(hubPort));
+    } else {
+      port.disconnect();
+    }
+  });
+}

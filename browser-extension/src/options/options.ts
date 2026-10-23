@@ -44,6 +44,7 @@ const relayLabels: Record<string, string> = {
 
 const pairingReasons: Record<string, string> = {
   not_configured: "先に中継の宛先を保存してください",
+  account_unknown: "先に music.youtube.com のタブを開き、読み込み終わってから加わってください（ログインしていればそのアカウントで加わります）",
   already_joined: "この端末はもう家に入っています",
   not_wave_pair: "wave の連携の文字ではありません",
   relay_unreachable: "中継につながりませんでした",

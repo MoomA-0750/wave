@@ -12,6 +12,12 @@
   "content_scripts": [
     {
       "matches": ["https://music.youtube.com/*"],
+      "js": ["page/page-main.js"],
+      "world": "MAIN",
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://music.youtube.com/*"],
       "js": ["page/content.js"],
       "run_at": "document_idle"
     }
@@ -28,7 +34,7 @@
   "browser_specific_settings": {
     "gecko": {
       "id": "wave-youtube-music@mooma0750.xyz",
-      "strict_min_version": "121.0"
+      "strict_min_version": "128.0"
     }
   }
 }

@@ -99,7 +99,9 @@ export type BridgeMessage =
   | { ns: typeof BRIDGE_NS; v: number; dir: 'toMain'; kind: 'command'; id: number; command: PageCommand }
   | { ns: typeof BRIDGE_NS; v: number; dir: 'toMain'; kind: 'hello' }
   | { ns: typeof BRIDGE_NS; v: number; dir: 'toContent'; kind: 'state'; state: PageState }
-  | { ns: typeof BRIDGE_NS; v: number; dir: 'toContent'; kind: 'result'; id: number; result: CommandResult };
+  | { ns: typeof BRIDGE_NS; v: number; dir: 'toContent'; kind: 'result'; id: number; result: CommandResult }
+  /** ログイン（ytcfg の LOGGED_IN と DATASYNC_ID）。dataSyncId は、ログインしていなければ null。ytcfg がまだ無ければ送らない */
+  | { ns: typeof BRIDGE_NS; v: number; dir: 'toContent'; kind: 'account'; dataSyncId: string | null };
 
 // ---- Port（隔離 world ⇔ background）のメッセージ ----
 
@@ -278,4 +280,11 @@ export function readBridge(data: unknown, dir: 'toMain' | 'toContent'): Record<s
   const o = obj(data);
   if (!o || o.ns !== BRIDGE_NS || o.v !== BRIDGE_VERSION || o.dir !== dir) return null;
   return o;
+}
+
+/** MAIN から来たログインの値を検査する。形が違えば undefined（知らせが無かったのと同じに扱う）。値はログに出さない */
+export function parseAccount(x: unknown): string | null | undefined {
+  if (x === null) return null;
+  if (typeof x !== 'string' ||x.length === 0 || x.length > 200) return undefined;
+  return /^[A-Za-z0-9_|-]+$/.test(x) ? x : undefined;
 }

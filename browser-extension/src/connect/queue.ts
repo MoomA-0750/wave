@@ -10,6 +10,9 @@ import { readSnapshot, type CursorBody, type HandoffItem, type HandoffOrigin, ty
 /** キューの doc の handoffId（Android の V2_SNAPSHOT_ID と同じ。中身の同じキューは同じ文字列になる）。 */
 export const SNAPSHOT_ID = "00000000-0000-4000-8000-000000000000";
 
+/** 並びから消えた項目を覚えておく時間。 */
+const RECENT_MS = 60_000;
+
 /** ページが知らせる曲（YouTube Music の再生キューの1曲）。 */
 export interface PageTrack {
   videoId: string;
@@ -119,30 +122,32 @@ export class QueueTracker {
   items: HandoffItem[] = [];
   index = -1;
   meta: QueueMeta = {};
+  private recent: { item: HandoffItem; until: number }[] = [];
 
-  /** ページが知らせたキューに ID を当てる。前の並びと同じ曲が同じ順で残っていれば、その ID を使う。 */
-  update(tracks: PageTrack[], index: number, meta: QueueMeta = {}): void {
-    const previous = this.items;
-    const used = new Set<string>();
-    let from = 0;
+  /** ページが知らせたキューに ID を当てる。前の並びにあった曲には、その ID を使う。 */
+  update(tracks: PageTrack[], index: number, meta: QueueMeta = {}, nowMs = Date.now()): void {
+    // 少し前に並びから消えた項目も候補にする（遠隔で足した曲・動かしている途中の並びが、途中の知らせで一度消えても ID と由来を保つ）
+    this.recent = this.recent.filter((r) => r.until > nowMs);
+    const previous = [...this.items, ...this.recent.map((r) => r.item)];
+    // 同じ曲の前の項目を、前の並びの順に当てる（並べ替え・動かしている途中の並びでも ID が保たれる。同じ曲が2回あれば前から順に）
+    const byVideo = new Map<string, HandoffItem[]>();
+    for (const item of previous) {
+      const list = byVideo.get(item.videoId);
+      if (list) list.push(item);
+      else byVideo.set(item.videoId, [item]);
+    }
     const next: HandoffItem[] = [];
     let nextIndex = -1;
     tracks.forEach((track, i) => {
-      let match = -1;
-      for (let k = from; k < previous.length; k++) {
-        if (previous[k]!.videoId === track.videoId && !used.has(previous[k]!.itemId)) {
-          match = k;
-          break;
-        }
-      }
-      const reuse = match >= 0 ? previous[match]! : null;
-      if (match >= 0) from = match + 1;
+      const reuse = byVideo.get(track.videoId)?.shift() ?? null;
       const item = itemOf(track, reuse?.itemId ?? uuid(), reuse?.origin ?? "source");
       if (item === null) return;
-      used.add(item.itemId);
       if (i === index) nextIndex = next.length;
       next.push(item);
     });
+    const kept = new Set(next.map((i) => i.itemId));
+    for (const item of this.items) if (!kept.has(item.itemId)) this.recent.push({ item, until: nowMs + RECENT_MS });
+    this.recent = this.recent.filter((r) => !kept.has(r.item.itemId));
     this.items = next;
     this.index = nextIndex;
     this.meta = meta;

@@ -9,6 +9,17 @@ declare global {
   interface Window { __waveYtmMain?: boolean }
 }
 
+/** ytcfg のログイン。ytcfg がまだ無ければ undefined、ログインしていなければ null。 */
+function readAccount(): string | null | undefined {
+  const cfg = (window as unknown as { ytcfg?: { get?: (k: string) => unknown } }).ytcfg;
+  if (!cfg || typeof cfg.get !== 'function') return undefined;
+  const loggedIn = cfg.get('LOGGED_IN');
+  if (loggedIn === false) return null;
+  const id = cfg.get('DATASYNC_ID');
+  if (typeof id === 'string' && id.length > 0) return id;
+  return loggedIn === true ? undefined : null;
+}
+
 function post(m: BridgeMessage): void {
   window.postMessage(m, location.origin);
 }
@@ -18,6 +29,16 @@ function start(): void {
   if (window.__waveYtmMain) return;
   window.__waveYtmMain = true;
 
+  // ログイン（DATASYNC_ID）は変わったときだけ送る。値はページの外へは隔離 world までしか出さない
+  let sentAccount: string | null | undefined;
+  const sendAccount = (force: boolean) => {
+    const account = readAccount();
+    if (account === undefined || (!force && account === sentAccount)) return;
+    sentAccount = account;
+    post({ ns: BRIDGE_NS, v: BRIDGE_VERSION, dir: 'toContent', kind: 'account', dataSyncId: account });
+  };
+  setInterval(() => sendAccount(false), 2000);
+
   const sendState = (state: PageState) => post({ ns: BRIDGE_NS, v: BRIDGE_VERSION, dir: 'toContent', kind: 'state', state });
 
   window.addEventListener('message', ev => {
@@ -25,6 +46,7 @@ function start(): void {
     const m = readBridge(ev.data, 'toMain');
     if (!m) return;
     if (m.kind === 'hello') {
+      sendAccount(true);
       try { sendState(readState()); } catch { /* まだ画面が無い */ }
       return;
     }

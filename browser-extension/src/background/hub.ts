@@ -13,7 +13,7 @@ export interface HubPort {
 }
 
 export class PortHub {
-  private readonly service: ConnectService;
+  readonly service: ConnectService;
   private readonly pages: HubPort[] = [];
   private readonly options = new Set<HubPort>();
   private activePage: HubPort | null = null;

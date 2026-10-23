@@ -35,6 +35,9 @@ background ──Port('wave-ytm-page')── page-content.ts（隔離 world）�
 
 ### Port の約束
 
+> 配る拡張では、隔離 world の入口は `src/page/content.ts`（Port 名 `wave-page`、取り決めは `src/shared/protocol.ts` と README）。下の `wave-ytm-page` の約束は、`page-content.ts` と `harness/` の確かめ用のもの。ログイン（`DATASYNC_ID`）は MAIN から隔離 world へ `kind: "account"` で渡す（`parseAccount` で形を確かめる）。
+
+
 - タブ → background: `{ type: 'state', state: PageState }`（変わるたび・つないだ直後・20 秒おき）、`{ type: 'result', id, result: { ok, error? } }`
 - background → タブ: `{ type: 'command', id, command: PageCommand }`
 - 20 秒おきに読み直して送るのは、位置の見込みを直すためと、Chrome の service worker が 30 秒の無音で止まって Port が切れるのを防ぐため。切れたら 1 秒後につなぎ直す。切れているあいだに送られた指示は届かないので、background は送り直すこと

@@ -57,6 +57,7 @@ export interface PageState {
   positionMs: number;
   playing: boolean;
   repeat?: HandoffRepeat;
+  /** 使わない（シャッフルは wave の決まりで、背景が並びを決めて queue_order で送る。YouTube Music のシャッフルはキューを作り直すので使わない）。 */
   shuffle?: boolean;
   /** YouTube Music の音量（0〜100）。 */
   volumePercent?: number | null;
@@ -80,7 +81,8 @@ export type PageCommand =
   | { kind: "previous"; onItemId: string | null }
   | { kind: "seek"; positionMs: number }
   | { kind: "volume"; volumePercent: number }
-  | { kind: "shuffle"; on: boolean }
+  /** 今の曲より後ろを並べ替える: 後ろの k 番目に、並べ替える前の fromIndices[k] の曲を置く（シャッフルの入り切り）。 */
+  | { kind: "queue_order"; fromIndices: number[] }
   | { kind: "repeat"; mode: HandoffRepeat }
   /** afterIndex の曲の直後に tracks を入れる（-1 は先頭）。インデックスは最後に知らせてもらったキューの並び。 */
   | { kind: "queue_add"; tracks: IdentifiedTrack[]; afterIndex: number; next: boolean }
@@ -159,6 +161,8 @@ export interface ConnectStatus {
   pageOpen: boolean;
   /** アカウントタグの出どころ: own はページのログイン（DATASYNC_ID）、borrowed は家の最後の再生のものを借りている。 */
   accountTag: "own" | "borrowed" | "none";
+  /** ページが知らせたログイン: unknown はまだ知らせていない（タブが無い・読み込み中）。値そのものは出さない。 */
+  account: "unknown" | "logged_in" | "logged_out";
   pairing: PairingView;
 }
 
@@ -218,10 +222,15 @@ export class ConnectService {
   private accountId: string | null | undefined = undefined;
   private ownTag: { householdId: string; accountId: string; tag: string } | null = null;
   private lastState: { state: PageState; capturedAtMs: number } | null = null;
+  /** シャッフル中なら、入れる前の後ろの並び（itemId から順番）。Kotlin の QueueSession.toggleShuffle と同じ扱い。 */
+  private shuffleOrder: Map<string, number> | null = null;
+  private reportedState: PageState | null = null;
   private lastPushed: { key: string; positionMs: number; playing: boolean; atMs: number; snapshot: string | null } | null = null;
   private pages = 0;
   private profileSentForMembers = -1;
   private profileSeenOnline = new Set<string>();
+  /** 名前をもう一度知らせる時刻（新しくつながった端末のため）。 */
+  private profileRepeatAt: number[] = [];
   private lastEmitted = new Map<string, string>();
   private tickTimer: ReturnType<typeof setInterval> | null = null;
   /** 起き直した後の claim し直しを試した（つながり直すたびに戻す）。 */
@@ -515,7 +524,7 @@ export class ConnectService {
   private tagSource(): "own" | "borrowed" | "none" {
     const household = this.client.householdId;
     if (household && this.ownTag?.householdId === household) return "own";
-    if (household && this.accountId === undefined && this.client.latestCursorBody()?.cursor.accountTag) return "borrowed";
+    if (household && typeof this.accountId !== "string" && this.client.latestCursorBody()?.cursor.accountTag) return "borrowed";
     return "none";
   }
 
@@ -536,6 +545,7 @@ export class ConnectService {
       const adjusted = decoded && atCursor(decoded, cursor, positionMs);
       if (!adjusted) return false;
       this.tracker.adopt(adjusted);
+      this.shuffleOrder = null;
       const index = adjusted.items.findIndex((i) => i.itemId === adjusted.currentItemId);
       const from = this.client.latestCursorBody()?.writer ?? "";
       this.command({
@@ -575,8 +585,9 @@ export class ConnectService {
       const household = this.client?.householdId;
       if (!household) return null;
       if (this.ownTag?.householdId === household) return this.ownTag.tag;
-      // ページがログインを知らせるまでは、家の最後の再生のアカウントタグを借りる（wave-api と同じ）
-      if (this.accountId === undefined) return this.client.latestCursorBody()?.cursor.accountTag ?? null;
+      // ページがログインしていない（または、まだ知らせていない）間は、家の最後の再生のアカウントタグを借りる（wave-api と同じ）。
+      // ログインなしの YouTube Music は別のアカウントではなく、家の「スピーカー」として鳴らす
+      if (typeof this.accountId !== "string") return this.client.latestCursorBody()?.cursor.accountTag ?? null;
       return null;
     },
     control: (action: ControlAction, positionMs: number | null): boolean => {
@@ -613,7 +624,7 @@ export class ConnectService {
     },
     shuffle: (on: boolean): boolean => {
       if (this.pages === 0) return false;
-      this.command({ kind: "shuffle", on });
+      this.applyShuffle(on);
       return true;
     },
     setRepeat: (mode: HandoffRepeat): boolean => {
@@ -708,6 +719,48 @@ export class ConnectService {
     }
   }
 
+  /**
+   * シャッフルの入り切り（Kotlin の QueueSession.toggleShuffle と同じ）。入れるときは今の曲より後ろのうち自分で足した曲を先頭にそのまま置き、
+   * 残りを並べ替える（入れる前の並びを覚える）。切るときは覚えた並びに戻し、シャッフル中に足した曲は今の順のまま後ろに付ける。
+   * 並びはページへ queue_order で送り、手元の見込みにも当てる（ページが知らせ直したときに同じ ID が当たる）。
+   */
+  private applyShuffle(on: boolean): void {
+    const current = this.tracker.index;
+    if (current < 0 || on === (this.shuffleOrder !== null)) return;
+    const upcoming = this.tracker.items.slice(current + 1);
+    let target: HandoffItem[];
+    if (on) {
+      const user = upcoming.filter((i) => i.origin === "user");
+      const rest = upcoming.filter((i) => i.origin !== "user");
+      this.shuffleOrder = new Map(rest.map((i, k) => [i.itemId, k]));
+      const shuffled = [...rest];
+      for (let k = shuffled.length - 1; k > 0; k--) {
+        const j = Math.floor(Math.random() * (k + 1));
+        [shuffled[k], shuffled[j]] = [shuffled[j]!, shuffled[k]!];
+      }
+      target = rest.length >= 2 ? [...user, ...shuffled] : upcoming;
+    } else {
+      const order = this.shuffleOrder!;
+      this.shuffleOrder = null;
+      const user = upcoming.filter((i) => i.origin === "user" && !order.has(i.itemId));
+      const rest = upcoming.filter((i) => !(i.origin === "user" && !order.has(i.itemId)));
+      const known = rest.filter((i) => order.has(i.itemId)).sort((a, b) => order.get(a.itemId)! - order.get(b.itemId)!);
+      const added = rest.filter((i) => !order.has(i.itemId));
+      target = [...user, ...known, ...added];
+    }
+    const fromIndices = target.map((i) => this.tracker.indexOf(i.itemId));
+    this.tracker.items = [...this.tracker.items.slice(0, current + 1), ...target];
+    this.lastPushed = null;
+    // 入り切りをすぐ家に知らせる（今の作業の後に並べる）
+    void this.run(() => this.pushLocal(true));
+    if (fromIndices.some((from, k) => from !== current + 1 + k)) this.command({ kind: "queue_order", fromIndices });
+  }
+
+  /** 試験・表示用: 最後にページが知らせた再生の様子（取り込んだときに見込みで置いたものは含めない）。 */
+  lastPageState(): PageState | null {
+    return this.reportedState;
+  }
+
   // --- 加入（B の側。wave-api の ApiHub.pair・Swift の runAccept と同じ手順） ---
 
   private setPairing(view: PairingView): void {
@@ -729,6 +782,8 @@ export class ConnectService {
     if (this.client.householdId !== null) return fail("already_joined");
     const offer = await decodeOffer(offerText.trim());
     if (offer === null) return fail("not_wave_pair");
+    // ページがログインを知らせてから加わる（ログインしていればそのアカウントで照合し、ほかの端末で wave API 扱いにならない）
+    if (this.accountId === undefined) return fail("account_unknown");
     const token = ++this.joinToken;
     this.setPairing({ state: "working", step: "sending" });
     const memberKeys = serialize(memberKeysToJson(await this.device.memberKeys("player")));
@@ -832,7 +887,7 @@ export class ConnectService {
       capturedAtMs: this.nowMs(),
       volumePercent: s.volumePercent == null ? null : Math.min(100, Math.max(0, Math.round(s.volumePercent))),
       // 遠隔のシャッフル・繰り返しに従う端末なので、必ず入れる（ほかの端末はこれを見て操作を出す）
-      shuffle: s.shuffle ?? false,
+      shuffle: this.shuffleOrder !== null,
     };
   }
 
@@ -864,7 +919,13 @@ export class ConnectService {
         radioPlaylistId: state.radioPlaylistId ?? null,
         exhausted: state.exhausted === true,
       });
+      // 覚えた並びの曲が後ろに1つも残っていなければ（キューを置き換えた）、シャッフルを解く
+      if (this.shuffleOrder !== null) {
+        const order = this.shuffleOrder;
+        if (!this.tracker.items.slice(this.tracker.index + 1).some((i) => order.has(i.itemId))) this.shuffleOrder = null;
+      }
       this.lastState = { state, capturedAtMs: this.nowMs() };
+      this.reportedState = state;
       if (this.tracker.current === null) {
         await this.client.endLocal(this.effects.accountTag());
         this.lastPushed = null;
@@ -983,6 +1044,7 @@ export class ConnectService {
       storeResetPending: this.client.storeResetPending,
       pageOpen: this.pages > 0,
       accountTag: this.tagSource(),
+      account: this.accountId === undefined ? "unknown" : this.accountId === null ? "logged_out" : "logged_in",
       pairing: this.pairing,
     };
   }
@@ -1051,8 +1113,15 @@ export class ConnectService {
     const online = this.client.online;
     const newcomer = [...online].some((id) => id !== this.device.deviceId && !this.profileSeenOnline.has(id));
     this.profileSeenOnline = new Set(online);
-    if (count === this.profileSentForMembers && !newcomer) return;
-    if (await this.client.sendProfile(this.settings.deviceName, DEVICE_KIND)) this.profileSentForMembers = count;
+    const now = this.nowMs();
+    // 新しくつながった端末は、つながった直後はまだ鎖を取り終えておらず、知らせを捨てることがある。少し後にもう2回送る
+    if (newcomer) this.profileRepeatAt = [now + 3_000, now + 10_000];
+    const due = this.profileRepeatAt.length > 0 && this.profileRepeatAt[0]! <= now;
+    if (due) this.profileRepeatAt.shift();
+    if (count === this.profileSentForMembers && !newcomer && !due) return;
+    const sent = await this.client.sendProfile(this.settings.deviceName, DEVICE_KIND);
+    this.log(`profile sent=${sent} members=${count} online=${online.size}`);
+    if (sent) this.profileSentForMembers = count;
   }
 }
 
