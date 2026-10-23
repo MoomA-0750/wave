@@ -59,6 +59,7 @@ class WidgetHostActivity : Activity() {
                 Triple(nowPlaying, 180f, 56f),
                 Triple(nowPlaying, 160f, 160f),
                 Triple(nowPlaying, 320f, 70f),
+                Triple(nowPlaying, 340f, 140f),
                 Triple(nowPlaying, 340f, 160f),
                 Triple(nowPlaying, 340f, 190f),
                 Triple(playlist, 160f, 160f),

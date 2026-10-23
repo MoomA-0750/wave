@@ -131,16 +131,11 @@ class NowPlayingWidget : GlanceAppWidget() {
         val MEDIUM: DpSize
             @Composable get() = widgetSize(250, 130)
 
-        /** 4×3 ほど: 中と同じ並びで、ジャケットの下に曲名を置く（iPhone の中と同じ）。 */
-        val MEDIUM_TALL: DpSize
-            @Composable get() = widgetSize(250, 170)
-
         /** 置いた大きさに収まる、いちばん広い並べ方。 */
         @Composable
         fun layoutFor(size: DpSize): NowPlayingLayout {
             fun fits(bound: DpSize) = size.width >= bound.width && size.height >= bound.height
             return when {
-                fits(MEDIUM_TALL) -> NowPlayingLayout.MediumTall
                 fits(MEDIUM) -> NowPlayingLayout.Medium
                 fits(SQUARE) -> NowPlayingLayout.Square
                 fits(WIDE) -> NowPlayingLayout.Wide
@@ -150,7 +145,7 @@ class NowPlayingWidget : GlanceAppWidget() {
     }
 }
 
-enum class NowPlayingLayout { Controls, Square, Wide, Medium, MediumTall }
+enum class NowPlayingLayout { Controls, Square, Wide, Medium }
 
 class NowPlayingWidgetReceiver : GlanceAppWidgetReceiver() {
     override val glanceAppWidget = NowPlayingWidget()
@@ -179,7 +174,7 @@ private fun NowPlayingContent(
     val open = actionStartActivity(openAppIntent(context).putExtra(WidgetHooks.EXTRA_OPEN_NOW_PLAYING, true))
     // 中くらいは、今の曲と次に流れる曲を色違いの入れ物に分けて左右につなぐ
     val layout = NowPlayingWidget.layoutFor(size)
-    val split = snapshot != null && (layout == NowPlayingLayout.Medium || layout == NowPlayingLayout.MediumTall)
+    val split = snapshot != null && layout == NowPlayingLayout.Medium
     WidgetSurface(GlanceModifier.clickable(open), split = split) {
         // Responsive では、置いた大きさに収まる宣言した大きさのうち最も大きいものが来る
         when {
@@ -338,7 +333,7 @@ internal fun TitleAndArtist(
 
 /**
  * 前へ・再生・次へ（m3e-lab の再生のボタングループと同じく、地のあるボタンを並べる。前へ・次へは淡い tonal で幅を狭め、
- * 再生は primary で幅を広くとる）。maxWidth に収まらなければ、ボタンの高さごと縮める。
+ * 再生は primary で幅を広くとる）。maxWidth を渡すとその幅いっぱいに広げ（右に余りを残さない）、収まらなければ高さごと縮める。
  */
 @Composable
 internal fun Controls(
@@ -350,13 +345,16 @@ internal fun Controls(
     maxWidth: Dp? = null,
 ) {
     val context = LocalContext.current
-    val h = maxWidth?.let { minOf(height, (it - ButtonGap * 2) / (SIDE_RATIO * 2 + PLAY_RATIO)) } ?: height
+    // 幅の単位（比 1 に当たる幅）。幅を渡されたらその幅を比で割り振る
+    val unit = maxWidth?.let { (it - ButtonGap * 2) / (SIDE_RATIO * 2 + PLAY_RATIO) }
+    val h = unit?.let { minOf(height, it) } ?: height
+    val w = unit ?: h
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
-        WidgetIconButton(R.drawable.ic_skip_previous, context.getString(R.string.nowplaying_previous), actionRunCallback<PreviousAction>(), GlanceModifier.width(h * SIDE_RATIO).height(h), h)
+        WidgetIconButton(R.drawable.ic_skip_previous, context.getString(R.string.nowplaying_previous), actionRunCallback<PreviousAction>(), GlanceModifier.width(w * SIDE_RATIO).height(h), h)
         Spacer(GlanceModifier.width(ButtonGap))
-        PlayPauseButton(snapshot.playing, GlanceModifier.width(h * PLAY_RATIO).height(h), h)
+        PlayPauseButton(snapshot.playing, GlanceModifier.width(w * PLAY_RATIO).height(h), h)
         Spacer(GlanceModifier.width(ButtonGap))
-        WidgetIconButton(R.drawable.ic_skip_next, context.getString(R.string.nowplaying_next), actionRunCallback<NextAction>(), GlanceModifier.width(h * SIDE_RATIO).height(h), h)
+        WidgetIconButton(R.drawable.ic_skip_next, context.getString(R.string.nowplaying_next), actionRunCallback<NextAction>(), GlanceModifier.width(w * SIDE_RATIO).height(h), h)
     }
 }
 
@@ -418,7 +416,7 @@ private fun WideLayout(
 
 /**
  * iPhone の中: 左にジャケット（右下に評価）・曲名・アーティスト・ボタン、右に「次に流れる曲」を3曲（上下いっぱいに等しく割り振る）。
- * 低くてジャケットの下に曲名を置けないときは、ジャケットの横に曲名を置く。
+ * ボタンを縮めてでもジャケットの下に曲名が入る高さなら下に置き（間を空けない）、入らないときだけジャケットの横に置く。
  */
 @Composable
 private fun MediumLayout(
@@ -428,27 +426,34 @@ private fun MediumLayout(
     open: Action,
 ) {
     val context = LocalContext.current
-    // Responsive では宣言した段の大きさが来る
-    val tall = NowPlayingWidget.layoutFor(LocalSize.current) == NowPlayingLayout.MediumTall
+    val size = LocalSize.current
+    // 曲名とアーティストの2行の高さ（文字の大きさの設定も掛かる）
+    val text = (TEXT_BLOCK * context.resources.configuration.fontScale * LocalWidgetScale.current).dp
+    // ジャケットの下に曲名を置くとき、ボタン・ジャケットを最も縮めた高さ。余りはボタン、ジャケットの順に戻す
+    var spare = size.height - ContainerPadding * 2 - (STACK_ARTWORK_MIN.wdp + STACK_GAP.wdp + text + STACK_GAP.wdp + STACK_BUTTON_MIN.wdp)
+    val stacked = spare >= 0.dp
+    val button = STACK_BUTTON_MIN.wdp + spare.coerceIn(0.dp, COMPACT_BUTTON - STACK_BUTTON_MIN.wdp)
+    spare -= button - STACK_BUTTON_MIN.wdp
+    val art = STACK_ARTWORK_MIN.wdp + spare.coerceIn(0.dp, (STACK_ARTWORK_MAX - STACK_ARTWORK_MIN).wdp)
     Row(GlanceModifier.fillMaxSize()) {
         WidgetContainer(GlanceModifier.defaultWeight().fillMaxHeight(), secondary = false) {
         Column(GlanceModifier.fillMaxSize().padding(ContainerPadding)) {
-            if (tall) {
-                ArtworkWithLike(snapshot, artwork, 56.wdp, open)
+            if (stacked) {
+                ArtworkWithLike(snapshot, artwork, art, open)
                 Spacer(GlanceModifier.defaultWeight())
                 TitleAndArtist(snapshot, GlanceModifier.fillMaxWidth().clickable(open))
+                Spacer(GlanceModifier.height(STACK_GAP.wdp))
             } else {
                 Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     ArtworkWithLike(snapshot, artwork, 48.wdp, open)
                     Spacer(GlanceModifier.width(10.wdp))
                     TitleAndArtist(snapshot, GlanceModifier.defaultWeight().clickable(open), WidgetText.headline())
                 }
+                Spacer(GlanceModifier.defaultWeight())
             }
-            Spacer(GlanceModifier.defaultWeight())
-            Controls(snapshot, maxWidth = (LocalSize.current.width - ContainerGap) / 2 - ContainerPadding * 2)
+            Controls(snapshot, height = if (stacked) button else COMPACT_BUTTON, maxWidth = size.width / 2 - ContainerPadding * 2)
         }
         }
-        Spacer(GlanceModifier.width(ContainerGap))
         // 右側: 次に流れる曲（押すとその曲へ飛ぶ。ほかの端末で鳴っていればその端末で）
         WidgetContainer(GlanceModifier.defaultWeight().fillMaxHeight(), secondary = true) {
         Column(GlanceModifier.fillMaxSize().padding(ContainerPadding)) {
@@ -500,6 +505,13 @@ internal suspend fun withController(
 }
 
 private const val RESTORE_WAIT_MS = 5_000L
+
+/** 中でジャケットの下に曲名を置くときの大きさ（dp。倍率を掛ける前）。曲名とアーティストの2行は、文字の余白込みで 33 ほど（Pixel 3 で測った）なので少し余裕を見る。 */
+private const val TEXT_BLOCK = 36f
+private const val STACK_GAP = 6
+private const val STACK_ARTWORK_MIN = 44
+private const val STACK_ARTWORK_MAX = 56
+private const val STACK_BUTTON_MIN = 36
 
 /** 狭い・低いウィジェットの再生ボタンの大きさ（既定は 60dp）。 */
 internal val COMPACT_BUTTON: Dp

@@ -213,7 +213,6 @@ private fun GridContent(
                     WidgetContainer(GlanceModifier.fillMaxWidth().height(TOP_HEIGHT), secondary = false) {
                         Box(GlanceModifier.fillMaxSize().padding(horizontal = ContainerPadding), contentAlignment = Alignment.CenterStart) { NowPlayingRow(now, artwork) }
                     }
-                    Spacer(GlanceModifier.height(ContainerGap))
                     WidgetContainer(GlanceModifier.fillMaxWidth().defaultWeight(), secondary = true) {
                         Box(GlanceModifier.fillMaxSize().padding(TILE_INSET), contentAlignment = Alignment.Center) {
                             Grid(
@@ -224,7 +223,7 @@ private fun GridContent(
                                 columns = 4,
                                 spacing = TILE_GAP,
                                 width = size.width - TILE_INSET * 2,
-                                height = size.height - TOP_HEIGHT - ContainerGap - TILE_INSET * 2,
+                                height = size.height - TOP_HEIGHT - TILE_INSET * 2,
                             )
                         }
                     }

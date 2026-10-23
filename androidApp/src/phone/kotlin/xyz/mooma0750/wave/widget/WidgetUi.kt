@@ -43,8 +43,8 @@ fun WaveGlanceTheme(
 
 /**
  * ウィジェットの下地（端末の角の丸みで切る）。地は Material の単色。
- * split にすると地を塗らず、中に [WidgetContainer] を並べる（YouTube Music のウィジェットのように、
- * 角の丸い色違いの入れ物を細い隙間で重ねた見た目。隙間と角の外からは壁紙が見える）。
+ * split にすると地を塗らず、中に [WidgetContainer] を隙間なく並べる（YouTube Music のウィジェットのように、色違いの入れ物を
+ * つないだ見た目）。外側の角はこの下地の丸みで切るので、入れ物どうしが接する角だけが入れ物の控えめな丸みになり、そこから壁紙が少し見える。
  */
 @Composable
 fun WidgetSurface(
@@ -63,7 +63,7 @@ fun WidgetSurface(
 }
 
 /**
- * 重ねる入れ物の1つ。四隅ともウィジェットと同じ丸み。今の曲の側は surfaceContainerLow、もう一方（プレイリスト・次に流れる曲）は
+ * つなぐ入れ物の1つ。角の丸みはウィジェットの丸みより控えめ（[containerCorner]。外側は [WidgetSurface] が切る）。今の曲の側は surfaceContainerLow、もう一方（プレイリスト・次に流れる曲）は
  * secondaryContainer（YouTube Music と同じく、もう一方を一段濃く色付ける）。Glance の色の組には surfaceContainer の段が無く、
  * surfaceVariant は端末の色の組によって secondaryContainer（＝ widgetBackground）とほぼ同じ色になったので、明るさの離れた組にする。
  */
@@ -76,7 +76,7 @@ fun WidgetContainer(
     Box(
         modifier
             .background(if (secondary) GlanceTheme.colors.secondaryContainer else playerContainerColor())
-            .cornerRadius(widgetCorner()),
+            .cornerRadius(containerCorner()),
         content = { content() },
     )
 }
@@ -98,6 +98,10 @@ fun widgetCorner(): Dp {
     val system = resources.getDimension(android.R.dimen.system_app_widget_background_radius) / resources.displayMetrics.density
     return (system * LocalWidgetScale.current).dp
 }
+
+/** つないだ入れ物どうしが接する角の丸み（YouTube Music・YouTube と同じく、外側より控えめにする）。 */
+@Composable
+fun containerCorner(): Dp = widgetCorner() * 0.6f
 
 /**
  * 地のあるアイコンのボタン（Glance の部品は形と大きさが決まっているので、自分で組む）。primary は主役（再生）で、
@@ -132,10 +136,6 @@ fun WidgetIconButton(
 /** 並べたボタンの隙間。 */
 val ButtonGap: Dp
     @Composable get() = 4.wdp
-
-/** 重ねる入れ物の隙間（YouTube Music はほとんど空けない）。 */
-val ContainerGap: Dp
-    @Composable get() = 2.wdp
 
 /** つないだ入れ物の中の余白（2つに分けると幅が狭くなるので、1つのときより詰める）。 */
 val ContainerPadding: Dp
