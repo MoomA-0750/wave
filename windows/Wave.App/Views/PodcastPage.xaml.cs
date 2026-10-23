@@ -38,6 +38,9 @@ public sealed partial class PodcastPage : Page
 
     public static Visibility ProgressVisible(int? percent) => Ui.Show(percent is not null);
 
+    /// <summary>取り終えたエピソードか（開いたときの状態で印を出す）。</summary>
+    public static Visibility DownloadedVisible(string videoId) => Ui.Show(AppServices.Downloads.IsDownloaded(videoId));
+
     protected override async void OnNavigatedTo(NavigationEventArgs e)
     {
         summary = (PodcastSummary)e.Parameter;
@@ -237,7 +240,7 @@ public sealed partial class PodcastPage : Page
     {
         if (sender is FrameworkElement { DataContext: PodcastEpisode episode } element)
         {
-            SongMenu.Build(episode.Song).ShowAt(element, e.GetPosition(element));
+            SongMenu.Build(episode.Song, episode: true).ShowAt(element, e.GetPosition(element));
             e.Handled = true;
         }
     }

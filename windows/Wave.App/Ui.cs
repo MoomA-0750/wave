@@ -71,6 +71,10 @@ public static partial class Ui
     public static Brush LikedCover() => new LinearGradientBrush(
         [new GradientStop { Color = Windows.UI.Color.FromArgb(255, 0x45, 0x0A, 0xF5), Offset = 0 }, new GradientStop { Color = Windows.UI.Color.FromArgb(255, 0xC4, 0xEF, 0xD9), Offset = 1 }], 45);
 
+    /// <summary>ダウンロードの絵（マイライブラリ。高く評価した曲と並べて見分けられる色）。</summary>
+    public static Brush DownloadsCover() => new LinearGradientBrush(
+        [new GradientStop { Color = Windows.UI.Color.FromArgb(255, 0x0B, 0x6E, 0x4F), Offset = 0 }, new GradientStop { Color = Windows.UI.Color.FromArgb(255, 0x5F, 0xC9, 0x9A), Offset = 1 }], 45);
+
     /// <summary>高く評価した曲の一覧の、上の帯の色（ジャケットの色の代わり）。</summary>
     public static readonly Windows.UI.Color LikedTint = Windows.UI.Color.FromArgb(255, 0x50, 0x38, 0xA0);
 

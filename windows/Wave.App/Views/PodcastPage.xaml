@@ -53,7 +53,12 @@
                     </Border>
                     <StackPanel Grid.Column="1" Spacing="2">
                         <TextBlock Text="{x:Bind Song.Title}" Style="{StaticResource BodyStrongTextBlockStyle}" TextTrimming="CharacterEllipsis" />
-                        <TextBlock Text="{x:Bind DateAndLength}" Style="{StaticResource SubtleTextStyle}" />
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <!-- 取り終えたエピソードには↓の印（ADR-0016） -->
+                            <FontIcon Glyph="&#xE896;" FontSize="12" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" Visibility="{x:Bind views:PodcastPage.DownloadedVisible(Song.VideoId)}"
+                                      ToolTipService.ToolTip="{x:Bind app:L.T('ダウンロード済み', 'Downloaded')}" />
+                            <TextBlock Text="{x:Bind DateAndLength}" Style="{StaticResource SubtleTextStyle}" />
+                        </StackPanel>
                         <TextBlock Text="{x:Bind Description}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis" />
                         <ProgressBar Width="160" HorizontalAlignment="Left" Margin="0,4,0,0" Maximum="100"
                                      Value="{x:Bind views:PodcastPage.ProgressValue(ProgressPercent)}" Visibility="{x:Bind views:PodcastPage.ProgressVisible(ProgressPercent)}" />

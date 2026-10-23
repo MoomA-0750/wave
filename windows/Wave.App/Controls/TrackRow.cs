@@ -14,6 +14,7 @@ public sealed partial class TrackRow : ObservableObject
         Song = song;
         SetVideoId = setVideoId;
         isLiked = AppServices.Library.IsLiked(song.VideoId);
+        isDownloaded = AppServices.Downloads.IsDownloaded(song.VideoId);
         live.RemoveAll(r => !r.TryGetTarget(out _));
         live.Add(new WeakReference<TrackRow>(this));
     }
@@ -32,6 +33,8 @@ public sealed partial class TrackRow : ObservableObject
     [ObservableProperty] private bool isCurrent;
     /// <summary>高く評価した曲（右に✓のバッジを出す。Android・Spotify と同じ）。</summary>
     [ObservableProperty] private bool isLiked;
+    /// <summary>取り終えた曲（小さな印を出す。ADR-0016 の 16）。</summary>
+    [ObservableProperty] private bool isDownloaded;
 
     /// <summary>作った行（評価が変わったら印を付け直す）。弱参照で持ち、ページが捨てた行は残さない。</summary>
     private static readonly List<WeakReference<TrackRow>> live = [];
@@ -43,6 +46,12 @@ public sealed partial class TrackRow : ObservableObject
             live.RemoveAll(r => !r.TryGetTarget(out _));
             foreach (var r in live)
                 if (r.TryGetTarget(out var row)) row.IsLiked = AppServices.Library.IsLiked(row.Song.VideoId);
+        };
+        AppServices.Downloads.Changed += () =>
+        {
+            live.RemoveAll(r => !r.TryGetTarget(out _));
+            foreach (var r in live)
+                if (r.TryGetTarget(out var row)) row.IsDownloaded = AppServices.Downloads.IsDownloaded(row.Song.VideoId);
         };
     }
 

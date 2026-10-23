@@ -19,16 +19,22 @@ using Wave.Core.Music;
 namespace Wave.App;
 
 /// <summary>マイライブラリの1行。</summary>
-public sealed class LibraryEntry(string title, string? subtitle, string? thumbnailUrl, HomeItem? item, bool isLiked = false)
+public sealed class LibraryEntry(string title, string? subtitle, string? thumbnailUrl, HomeItem? item, bool isLiked = false, bool isDownloads = false)
 {
     public string Title { get; } = title;
     public string? Subtitle { get; } = subtitle;
     public string? ThumbnailUrl { get; } = thumbnailUrl;
     public HomeItem? Item { get; } = item;
     public bool IsLiked { get; } = isLiked;
+    /// <summary>ダウンロード（ADR-0016 の 14。押すとダウンロードの画面）。</summary>
+    public bool IsDownloads { get; } = isDownloads;
+    /// <summary>画像の代わりに絵文字を出す行（高く評価した曲・ダウンロード）。</summary>
+    public bool HasGlyph => IsLiked || IsDownloads;
+    public string Glyph => IsDownloads ? "\uE896" : "\uEB52";
     public bool IsArtist => Item is HomeItem.ArtistItem;
     public Brush CoverBackground => IsLiked
         ? Ui.LikedCover()
+        : IsDownloads ? Ui.DownloadsCover()
         : (Brush)Application.Current.Resources["ControlFillColorSecondaryBrush"];
 }
 
@@ -107,6 +113,7 @@ public sealed partial class MainWindow : Window
         AppServices.Library.Artists.CollectionChanged += (_, _) => RenderLibrary();
         AppServices.Library.Albums.CollectionChanged += (_, _) => RenderLibrary();
         AppServices.Library.Podcasts.CollectionChanged += (_, _) => RenderLibrary();
+        AppServices.Downloads.Changed += RenderLibrary;
         // RSS で登録した番組（ADR-0012）。聴いたところの変化でも呼ばれるので、登録が変わったときだけ描き直す
         var feedSubscriptions = AppServices.FeedLibrary.State.Subscriptions;
         AppServices.FeedLibrary.Changed += state => DispatcherQueue.TryEnqueue(() =>
@@ -437,6 +444,9 @@ public sealed partial class MainWindow : Window
             entries = entries.Select((e, i) => (e, i)).OrderBy(x => x.e.Item is { } item && LibraryState.KeyOf(item) is { } k && rank.TryGetValue(k, out var r) ? r : int.MaxValue)
                 .ThenBy(x => x.i).Select(x => x.e).ToList();
         }
+        // ダウンロードは高く評価した曲の次（いつも先頭の方。ADR-0016 の 14）
+        if (libraryKind is null or "playlist" && (filter.Length == 0 || L.T("ダウンロード", "Downloads").Contains(filter, StringComparison.CurrentCultureIgnoreCase)))
+            entries.Insert(0, new LibraryEntry(L.T("ダウンロード", "Downloads"), L.T("自動 • ", "Auto • ") + L.Songs(AppServices.Downloads.DownloadedCount), null, null, isDownloads: true));
         // 高く評価した曲はいつも先頭（Spotify の「お気に入りの曲」と同じ）
         if (libraryKind is null or "playlist" && (filter.Length == 0 || L.T("高く評価した曲", "Liked Songs").Contains(filter)))
             entries.Insert(0, new LibraryEntry(L.T("高く評価した曲", "Liked Songs"), L.T("プレイリスト • 自動", "Playlist • Auto"), lib.LikedThumbnail, null, isLiked: true));
@@ -483,6 +493,7 @@ public sealed partial class MainWindow : Window
     {
         if (e.ClickedItem is not LibraryEntry entry) return;
         if (entry.IsLiked) Nav.LikedSongs();
+        else if (entry.IsDownloads) Nav.Downloads();
         else if (entry.Item is { } item) Nav.Open(item);
     }
 

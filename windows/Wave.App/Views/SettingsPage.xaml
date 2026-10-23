@@ -48,6 +48,39 @@
                 <ToggleSwitch x:Name="ReleaseSwitch" HorizontalAlignment="Right" OnContent="" OffContent="" MinWidth="0" Toggled="OnReleaseToggled" />
             </Grid>
 
+            <!-- ダウンロード（ADR-0016 の 17） -->
+            <TextBlock Text="{x:Bind app:L.T('ダウンロード', 'Downloads')}" Style="{StaticResource BodyStrongTextBlockStyle}" Margin="0,16,0,4" />
+            <Grid Padding="16" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                  BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+                <StackPanel Margin="0,0,300,0">
+                    <TextBlock Text="{x:Bind app:L.T('ダウンロードに使う通信', 'Download using')}" />
+                    <TextBlock Text="{x:Bind app:L.T('手で選んだものも、スマートダウンロードも、この設定に従います。合わない通信の間は待ちます', 'Applies to everything you download, including smart downloads. Downloads wait while the network doesn’t match')}" Style="{StaticResource SubtleTextStyle}" TextWrapping="Wrap" MaxLines="3" />
+                </StackPanel>
+                <ComboBox x:Name="NetworkBox" HorizontalAlignment="Right" VerticalAlignment="Center" MinWidth="260" SelectionChanged="OnNetworkChanged" />
+            </Grid>
+            <Grid Padding="16" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" Margin="0,8,0,0"
+                  BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" ColumnSpacing="16">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Text="{x:Bind app:L.T('スマートダウンロード', 'Smart downloads')}" />
+                    <TextBlock Text="{x:Bind app:L.T('いつも聴いている曲・聴いたことのない好きそうな曲・おすすめを、1日1回選び直して取っておきます（wave が動いている間）', 'Keeps songs you play often, new songs you might like and recommendations, refreshed once a day while wave is running')}" Style="{StaticResource SubtleTextStyle}" TextWrapping="Wrap" MaxLines="3" />
+                </StackPanel>
+                <ComboBox x:Name="SmartCountBox" Grid.Column="1" VerticalAlignment="Center" MinWidth="110" SelectionChanged="OnSmartCountChanged" />
+                <ToggleSwitch x:Name="SmartSwitch" Grid.Column="2" VerticalAlignment="Center" OnContent="" OffContent="" MinWidth="0" Toggled="OnSmartToggled" />
+            </Grid>
+            <Grid Padding="16" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" Margin="0,8,0,0"
+                  BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+                <StackPanel Margin="0,0,240,0">
+                    <TextBlock Text="{x:Bind app:L.T('使っている容量', 'Storage used')}" />
+                    <TextBlock x:Name="StorageText" Style="{StaticResource SubtleTextStyle}" />
+                </StackPanel>
+                <Button x:Name="DeleteDownloadsButton" HorizontalAlignment="Right" VerticalAlignment="Center" Click="OnDeleteDownloads" Content="{x:Bind app:L.T('ダウンロードをすべて削除', 'Delete all downloads')}" />
+            </Grid>
+
             <TextBlock Text="Discord" Style="{StaticResource BodyStrongTextBlockStyle}" Margin="0,16,0,4" />
             <StackPanel Padding="16" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                         BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Spacing="8">

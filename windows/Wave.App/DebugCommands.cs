@@ -429,6 +429,81 @@ public static class DebugCommands
                     if (c.Remote is { } r) AppPaths.Log($"debug connect remote device={r.DeviceLabel} title={r.Title} playing={r.Playing} positionMs={r.PositionMs} online={r.Online}");
                     break;
                 }
+            // ---- ダウンロード（ADR-0016） ----
+            case "downloads":
+                Nav.Downloads();
+                break;
+            case "downloads-category":
+                // ダウンロードの画面の分類のチップ（all・frequent・likely・recommended）を選び、出た行の数
+                if (Nav.Frame.Content is Views.DownloadsPage downloadsPage) AppPaths.Log($"debug downloads-category {arg} rows={downloadsPage.DebugCategory(arg)}");
+                break;
+            case "download-collection":
+                // 開いているプレイリスト・アルバムのページのダウンロードのボタンを押す
+                if (Nav.Frame.Content is Views.CollectionPage downloadPage) downloadPage.DebugDownload();
+                break;
+            case "download-collection-state":
+                if (Nav.Frame.Content is Views.CollectionPage statePage) AppPaths.Log("debug download-collection " + statePage.DebugDownloadState);
+                break;
+            case "download-current":
+                if (player.Current is { } currentSong) AppServices.Downloads.AddSingle(currentSong);
+                break;
+            case "downloads-state":
+            {
+                var d = AppServices.Downloads;
+                var m = d.Manifest;
+                AppPaths.Log($"debug downloads collections={m.Collections.Count} singles={m.Singles.Count} smart={m.Smart.Count} wanted={m.WantedIds().Count} done={d.DownloadedCount} bytes={d.UsedBytes} pending={d.PendingCount} active={d.ActiveTitle is not null} waiting={d.WaitingForNetwork} allows={d.NetworkAllows} network={NetworkState.Describe()} policy={d.Network} "
+                    + string.Join(' ', m.Collections.Select(c => $"[{c.Kind} {d.StateOf(c.Id).Done}/{d.StateOf(c.Id).Total}]"))
+                    + " smart:" + string.Join(',', m.Smart.GroupBy(t => t.Category).Select(g => $"{g.Key}={g.Count()}")));
+                break;
+            }
+            case "download-network":
+                // any・unmetered
+                AppServices.Downloads.SetNetwork(Wave.Core.Downloads.DownloadPolicy.Parse(arg));
+                break;
+            case "smart-on":
+                if (int.TryParse(arg, out var smartCount)) AppServices.Downloads.SetSmartCount(smartCount);
+                AppServices.Downloads.SetSmart(true);
+                break;
+            case "smart-off":
+                AppServices.Downloads.SetSmart(false);
+                break;
+            case "smart-refresh":
+                await AppServices.Downloads.RefreshSmartAsync(force: true);
+                break;
+            case "downloads-sync":
+                await AppServices.Downloads.RefreshAsync();
+                break;
+            case "play-downloaded":
+            {
+                // 取り終えた曲だけを、目録の順に流す
+                // 取り終えた曲だけを、目録の順に流す（episodes なら RSS のエピソードだけ）
+                var done = AppServices.Downloads.Manifest.WantedSongs().Where(s => AppServices.Downloads.IsDownloaded(s.VideoId) && (arg != "episodes" || Feed.IsExternal(s.VideoId))).ToList();
+                if (done.Count > 0) player.PlayList(done, 0, null);
+                AppPaths.Log($"debug play-downloaded songs={done.Count}");
+                break;
+            }
+            case "play-mixed":
+            {
+                // 取っていない曲・取った曲の順に混ぜて流す（通信できないときに、取った曲へ飛ぶかを確かめる）
+                var d = AppServices.Downloads;
+                var wanted = d.Manifest.WantedSongs();
+                var done = wanted.Where(s => d.IsDownloaded(s.VideoId)).Take(2).ToList();
+                var (liked, _) = await AppServices.Library.LikedSongsAsync();
+                var missing = liked.Where(s => !d.IsDownloaded(s.VideoId)).Take(2).ToList();
+                player.PlayList([.. missing, .. done], 0, null);
+                AppPaths.Log($"debug play-mixed missing={missing.Count} done={done.Count}");
+                break;
+            }
+            case "network-fake":
+                // offline・metered・off（ふりをやめる）
+                NetworkState.DebugOffline = arg == "offline" ? true : null;
+                NetworkState.DebugMetered = arg == "metered" ? true : null;
+                NetworkState.DebugChanged();
+                AppPaths.Log($"debug network-fake {NetworkState.Describe()} connected={NetworkState.IsConnected} metered={NetworkState.IsMetered}");
+                break;
+            case "downloads-delete-all":
+                AppServices.Downloads.DeleteAll();
+                break;
         }
     }
 

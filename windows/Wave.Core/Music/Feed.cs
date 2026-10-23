@@ -27,6 +27,21 @@ public static class Feed
     /// <summary>YouTube の曲ではない（ストリームの解決・履歴・評価・歌詞・ラジオをしない）。</summary>
     public static bool IsExternal(string? videoId) => videoId?.StartsWith(AudioPrefix, StringComparison.Ordinal) == true;
 
+    /// <summary>音声の種類。応答の種類が音声ならそれを、違えば URL の拡張子から決める。</summary>
+    public static string AudioMime(string? contentType, string url)
+    {
+        if (contentType is { } type && type.StartsWith("audio/", StringComparison.OrdinalIgnoreCase)) return type;
+        var path = Uri.TryCreate(url, UriKind.Absolute, out var uri) ? uri.AbsolutePath.ToLowerInvariant() : "";
+        return Path.GetExtension(path) switch
+        {
+            ".m4a" or ".mp4" or ".m4b" => "audio/mp4",
+            ".aac" => "audio/aac",
+            ".ogg" or ".oga" or ".opus" => "audio/ogg",
+            ".wav" => "audio/wav",
+            _ => "audio/mpeg",
+        };
+    }
+
     /// <summary>取りに行ってよい URL（https だけ。ADR-0012）。</summary>
     public static bool IsAllowedFeedUrl(string url) =>
         url.StartsWith("https://", StringComparison.OrdinalIgnoreCase) && url.Length is >= 12 and <= 4096 && !url.Any(char.IsWhiteSpace);

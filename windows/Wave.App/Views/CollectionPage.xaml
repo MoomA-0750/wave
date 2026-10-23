@@ -43,6 +43,16 @@
                     <Button x:Name="MoreButton" Style="{StaticResource IconButtonStyle}" Click="OnMore" ToolTipService.ToolTip="{x:Bind app:L.T('その他', 'More')}">
                         <FontIcon Glyph="&#xE712;" FontSize="20" />
                     </Button>
+                    <!-- ダウンロード（ADR-0016 の 15）: 取っていない／取っている途中（何曲中何曲）／取り終えた。取っているものを押すと、消すか確かめる -->
+                    <StackPanel Orientation="Horizontal" Spacing="4">
+                        <Button x:Name="DownloadButton" Style="{StaticResource IconButtonStyle}" Click="OnDownload" Visibility="Collapsed" Width="40" Height="40">
+                            <Grid>
+                                <ProgressRing x:Name="DownloadRing" Width="30" Height="30" IsIndeterminate="False" Maximum="1" Visibility="Collapsed" />
+                                <FontIcon x:Name="DownloadIcon" Glyph="&#xE896;" FontSize="20" />
+                            </Grid>
+                        </Button>
+                        <TextBlock x:Name="DownloadText" VerticalAlignment="Center" Style="{StaticResource SubtleTextStyle}" FontSize="13" />
+                    </StackPanel>
                     <ProgressRing x:Name="LoadingRing" IsActive="True" Width="20" Height="20" />
                 </StackPanel>
                 <!-- 右端: 一覧の中を探す（🔍で開く）と並べ替え（Spotify と同じ） -->

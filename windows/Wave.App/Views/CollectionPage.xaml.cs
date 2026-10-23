@@ -7,6 +7,7 @@ using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Navigation;
 using Wave.App.Controls;
 using Wave.App.Services;
+using Wave.Core.Downloads;
 using Wave.Core.Music;
 
 namespace Wave.App.Views;
@@ -71,6 +72,7 @@ public sealed partial class CollectionPage : Page
         RestoreOrder();
         SortText.Text = SortLabels().First(x => x.Key == sort).Label;
         Player.PropertyChanged += OnPlayerChanged;
+        AppServices.Downloads.Changed += UpdateDownloadButton;
         shufflePlay = false;
         UpdateShuffleButton();
         ArtistLink.Visibility = Visibility.Collapsed;
@@ -81,6 +83,7 @@ public sealed partial class CollectionPage : Page
     protected override void OnNavigatedFrom(NavigationEventArgs e)
     {
         Player.PropertyChanged -= OnPlayerChanged;
+        AppServices.Downloads.Changed -= UpdateDownloadButton;
         cancel?.Cancel();
     }
 
@@ -100,6 +103,7 @@ public sealed partial class CollectionPage : Page
         var liked = request.Id == MusicRepository.LikedSongs;
         TitleText.Text = title ?? "";
         DetailText.Text = detail ?? "";
+        headerThumbnail = liked ? AppServices.Library.LikedThumbnail : thumbnail ?? headerThumbnail;
         LikedIcon.Visibility = Ui.Show(liked);
         if (liked)
         {
@@ -158,6 +162,7 @@ public sealed partial class CollectionPage : Page
     private void FinishLoading()
     {
         loading = false;
+        UpdateDownloadButton();
         if (!playedWhileLoading) return;
         playedWhileLoading = false;
         // ほかのものを流し始めていたら足さない。途中で離れた（読み終えなかった）ときも、読み終えた印として渡す
@@ -183,6 +188,7 @@ public sealed partial class CollectionPage : Page
         var result = await AppServices.Music.AlbumAsync(request.Id, token);
         if (!result.IsOk)
         {
+            if (ShowSaved()) return;
             Fail(L.T("アルバムを読み込めませんでした", "Couldn't load the album"));
             return;
         }
@@ -196,6 +202,8 @@ public sealed partial class CollectionPage : Page
         ArtistLink.Visibility = Ui.Show(album.Artists.Count > 0);
         var n = 1;
         foreach (var s in album.Songs) AddRow(new TrackRow(n++, s) { ShowAlbum = false, ShowArtwork = false, Menu = r => SongMenu.Build(r.Song) });
+        // 丸ごと取っているなら、開いたときの曲に合わせる（ADR-0016 の 2）
+        AppServices.Downloads.SyncCollection(request.Id, album.Songs);
         Done();
     }
 
@@ -227,6 +235,7 @@ public sealed partial class CollectionPage : Page
         }, token, ServerOrder);
         if (!result.IsOk)
         {
+            if (ShowSaved()) return;
             Fail(result.Failure == Core.Net.FailureKind.NotLoggedIn ? L.T("このプレイリストを見るにはログインしてください", "Log in to see this playlist") : L.T("プレイリストを読み込めませんでした", "Couldn't load the playlist"));
             return;
         }
@@ -234,6 +243,8 @@ public sealed partial class CollectionPage : Page
         // サーバーの補足（曲数・時間を含む）があればそれを出す。無ければ読めた曲から数える
         var subtitle = result.Value!.Subtitle ?? request.Subtitle;
         DetailText.Text = subtitle ?? $"{L.Songs(all.Count)}, {L.Length(total)}";
+        // 丸ごと取っているなら、最後まで読めたときだけ開いたときの曲に合わせる（ADR-0016 の 2）
+        if (result.Value.Continuation is null) AppServices.Downloads.SyncCollection(request.Id, all.Select(r => r.Song).ToList());
         Done();
     }
 
@@ -276,6 +287,104 @@ public sealed partial class CollectionPage : Page
         if (all.Count == 0) Fail(L.T("曲がありません", "No songs"));
         ApplyView();
     }
+
+    /// <summary>通信できないとき: 丸ごと取ってあれば、覚えている曲の並びで出す（ADR-0016 の 18）。出せたら true。</summary>
+    private bool ShowSaved()
+    {
+        if (all.Count > 0 || AppServices.Downloads.Manifest.Collection(request.Id) is not { } saved) return false;
+        AppPaths.Log($"collection offline saved songs={saved.Songs.Count}");
+        ShowHeader(saved.Title, saved.ThumbnailUrl, $"{L.Songs(saved.Songs.Count)} • {L.T("ダウンロード済み", "Downloaded")}");
+        var n = 1;
+        foreach (var song in saved.Songs)
+            AddRow(new TrackRow(n++, song) { ShowAlbum = !request.IsAlbum, ShowArtwork = !request.IsAlbum, Menu = r => SongMenu.Build(r.Song) });
+        Done();
+        return true;
+    }
+
+    // --- ダウンロード（ADR-0016 の 15） ---
+
+    private string? headerThumbnail;
+
+    /// <summary>このページを丸ごと取るときの種類（アーティストで絞った高く評価した曲は取れない）。</summary>
+    private string? DownloadKindOf => request.Artist is not null ? null
+        : request.IsAlbum ? DownloadKind.Album
+        : request.Id == MusicRepository.LikedSongs ? DownloadKind.Liked
+        : DownloadKind.Playlist;
+
+    private void UpdateDownloadButton()
+    {
+        var state = AppServices.Downloads.StateOf(request.Id);
+        DownloadButton.Visibility = Ui.Show(DownloadKindOf is not null && (state.Saved || AppServices.Client.IsLoggedIn));
+        DownloadButton.IsEnabled = state.Saved || !loading && all.Count > 0;
+        var accent = (Brush)Application.Current.Resources["AccentTextFillColorPrimaryBrush"];
+        var normal = (Brush)Application.Current.Resources["TextFillColorPrimaryBrush"];
+        if (!state.Saved)
+        {
+            DownloadIcon.Glyph = "\uE896";
+            DownloadIcon.FontSize = 20;
+            DownloadIcon.Foreground = normal;
+            DownloadRing.Visibility = Visibility.Collapsed;
+            DownloadText.Text = "";
+            ToolTipService.SetToolTip(DownloadButton, L.T("ダウンロード", "Download"));
+        }
+        else if (!state.Complete)
+        {
+            DownloadIcon.Glyph = "\uE896";
+            DownloadIcon.FontSize = 14;
+            DownloadIcon.Foreground = accent;
+            DownloadRing.Visibility = Visibility.Visible;
+            DownloadRing.Value = state.Total > 0 ? (double)state.Done / state.Total : 0;
+            DownloadText.Text = L.T($"{state.Done} / {state.Total} 曲", $"{state.Done} of {state.Total}");
+            ToolTipService.SetToolTip(DownloadButton, AppServices.Downloads.WaitingForNetwork
+                ? L.T("通信が設定に合うのを待っています（押すと削除）", "Waiting for a suitable network (click to remove)")
+                : L.T("ダウンロード中（押すと削除）", "Downloading (click to remove)"));
+        }
+        else
+        {
+            DownloadIcon.Glyph = "\uE73E";
+            DownloadIcon.FontSize = 20;
+            DownloadIcon.Foreground = accent;
+            DownloadRing.Visibility = Visibility.Collapsed;
+            DownloadText.Text = L.T("ダウンロード済み", "Downloaded");
+            ToolTipService.SetToolTip(DownloadButton, L.T("ダウンロード済み（押すと削除）", "Downloaded (click to remove)"));
+        }
+    }
+
+    private async void OnDownload(object sender, RoutedEventArgs e)
+    {
+        var downloads = AppServices.Downloads;
+        if (downloads.StateOf(request.Id).Saved)
+        {
+            var dialog = new ContentDialog
+            {
+                Title = L.T("ダウンロードを削除しますか？", "Remove download?"),
+                Content = L.T("この PC に取った曲を消します（ほかのプレイリストなどで取っている曲は残ります）。", "Songs saved on this PC will be removed (songs also downloaded elsewhere stay)."),
+                PrimaryButtonText = L.T("削除", "Remove"),
+                CloseButtonText = L.T("キャンセル", "Cancel"),
+                DefaultButton = ContentDialogButton.Close,
+                XamlRoot = XamlRoot,
+            };
+            if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+            downloads.RemoveCollection(request.Id);
+            Player.Message = L.T("ダウンロードを削除しました", "Download removed");
+            return;
+        }
+        if (DownloadKindOf is not { } kind || loading || all.Count == 0) return;
+        downloads.AddCollection(kind, request.Id, TitleText.Text.Length > 0 ? TitleText.Text : request.Title ?? request.Id, headerThumbnail, all.Select(r => r.Song).ToList());
+        Player.Message = downloads.NetworkAllows
+            ? L.T("ダウンロードを始めました", "Downloading")
+            : L.T("通信が設定に合うまで待ってからダウンロードします", "Will download when a suitable network is available");
+    }
+
+#if DEBUG
+    /// <summary>開発用: ダウンロードのボタンを押す（取っていなければ取り始める。取っていれば何もしない）。</summary>
+    public void DebugDownload()
+    {
+        if (!AppServices.Downloads.StateOf(request.Id).Saved) OnDownload(this, new RoutedEventArgs());
+    }
+
+    public string DebugDownloadState => $"visible={DownloadButton.Visibility} text={DownloadText.Text.Length > 0} glyph={(int)DownloadIcon.Glyph[0]:X} ring={DownloadRing.Visibility}";
+#endif
 
     private void Fail(string text)
     {

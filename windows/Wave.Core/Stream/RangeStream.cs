@@ -15,7 +15,9 @@ public sealed class RangeStream : System.IO.Stream
     /// <summary>動作の記録（位置・状態・バイト数だけ。URL は渡さない）。</summary>
     public static Action<string>? Diagnostics { get; set; }
 
-    private readonly HttpClient http;
+    private readonly HttpClient? http;
+    /// <summary>端末に取ったファイル（ADR-0016）。あればネットから取らずに、ここから読む。</summary>
+    private readonly string? localPath;
     /// <summary>署名付き URL。キャッシュから鳴らし始めたときは、要るまで調べない（source で調べる）。</summary>
     private string? url;
     private readonly long length;
@@ -35,10 +37,11 @@ public sealed class RangeStream : System.IO.Stream
     /// <summary>残した分との間がこれ以下なら、間も取って続けて残す。</summary>
     internal const long GapFillBytes = 256 * 1024;
 
-    private RangeStream(HttpClient http, string? url, long length, string? userAgent = null, AudioCache? cache = null, string videoId = "", int itag = 0,
-        Func<Task<ResolvedStream>>? source = null)
+    private RangeStream(HttpClient? http, string? url, long length, string? userAgent = null, AudioCache? cache = null, string videoId = "", int itag = 0,
+        Func<Task<ResolvedStream>>? source = null, string? localPath = null)
     {
         this.http = http;
+        this.localPath = localPath;
         this.url = url;
         this.length = length;
         this.userAgent = userAgent ?? Net.InnerTubeClient.UserAgent;
@@ -51,6 +54,9 @@ public sealed class RangeStream : System.IO.Stream
     /// <summary>キャッシュに残した曲を開く。残した分はすぐ読め、続きが要ったときに source で URL を調べる。</summary>
     public static RangeStream OpenCached(HttpClient http, CachedFormat format, AudioCache cache, Func<Task<ResolvedStream>> source) =>
         new(http, null, format.Length, cache: cache, videoId: format.VideoId, itag: format.Itag, source: source);
+
+    /// <summary>取り終えた曲のファイルを開く（ADR-0016 の 6）。通信もしないし、URL も調べない。</summary>
+    public static RangeStream OpenLocal(string path, long length) => new(null, null, length, localPath: path);
 
     /// <summary>URL をまだ調べていなければ、今調べる（鳴らし始めてすぐ、続きを取る前に用意しておく）。</summary>
     public async Task PrepareSourceAsync() => await CurrentUrlAsync();
@@ -165,6 +171,7 @@ public sealed class RangeStream : System.IO.Stream
     /// <summary>キャッシュに残っている分はそこから、足りない分はネットから取る（取った分はキャッシュに足す）。</summary>
     private async Task<byte[]> FetchAsync(long start, long end, CancellationToken cancel)
     {
+        if (localPath is not null) return await ReadLocalAsync(localPath, start, end, cancel);
         if (cache is null) return await FetchNetworkAsync(start, end, cancel);
         if (cache.Read(videoId, start, end) is { } kept) return kept;
         var have = cache.Entry(videoId)?.Cached ?? 0;
@@ -185,6 +192,18 @@ public sealed class RangeStream : System.IO.Stream
         var rest = await FetchNetworkAsync(from, end, cancel);
         cache.Append(videoId, from, rest);
         return [.. head, .. rest];
+    }
+
+    /// <summary>取ったファイルから読む。鳴らしている間に消されても読めるよう、消すことを許して開く。</summary>
+    private static async Task<byte[]> ReadLocalAsync(string path, long start, long end, CancellationToken cancel)
+    {
+        await using var file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 4096, useAsync: true);
+        var last = Math.Min(end, file.Length - 1);
+        if (last < start) return [];
+        file.Position = start;
+        var data = new byte[last - start + 1];
+        await file.ReadExactlyAsync(data, cancel);
+        return data;
     }
 
     /// <summary>今の URL。まだ無ければ source で調べる（同時に何度も調べない）。調べた形式が残した形式と違えば拒否として知らせる。</summary>
@@ -253,7 +272,7 @@ public sealed class RangeStream : System.IO.Stream
             var request = new HttpRequestMessage(HttpMethod.Get, target);
             request.Headers.Range = new RangeHeaderValue(start, end);
             request.Headers.TryAddWithoutValidation("User-Agent", userAgent);
-            var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancel);
+            var response = await (http ?? throw new StreamRejectedException(0)).SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancel);
             if (response.StatusCode is HttpStatusCode.PartialContent or HttpStatusCode.OK) return response;
             var status = (int)response.StatusCode;
             if (!followed && status is >= 300 and < 400 && response.Headers.Location is { } location

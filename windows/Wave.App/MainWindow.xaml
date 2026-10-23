@@ -149,8 +149,8 @@
                                     </Grid.ColumnDefinitions>
                                     <Border Width="48" Height="48" CornerRadius="{x:Bind app:Ui.Radius(IsArtist)}" Background="{x:Bind CoverBackground}">
                                         <Grid>
-                                            <FontIcon Glyph="&#xEB52;" Foreground="White" FontSize="18" Visibility="{x:Bind app:Ui.Show(IsLiked)}" />
-                                            <Image Source="{x:Bind app:Ui.Small(ThumbnailUrl)}" Stretch="UniformToFill" Visibility="{x:Bind app:Ui.Hide(IsLiked)}" />
+                                            <FontIcon Glyph="{x:Bind Glyph}" Foreground="White" FontSize="18" Visibility="{x:Bind app:Ui.Show(HasGlyph)}" />
+                                            <Image Source="{x:Bind app:Ui.Small(ThumbnailUrl)}" Stretch="UniformToFill" Visibility="{x:Bind app:Ui.Hide(HasGlyph)}" />
                                         </Grid>
                                     </Border>
                                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
@@ -167,8 +167,8 @@
                                 <StackPanel Width="96" Spacing="4" Padding="0,0,0,6" RightTapped="OnLibraryRightTapped">
                                     <Border Width="96" Height="96" CornerRadius="{x:Bind app:Ui.Radius(IsArtist)}" Background="{x:Bind CoverBackground}">
                                         <Grid>
-                                            <FontIcon Glyph="&#xEB52;" Foreground="White" FontSize="28" Visibility="{x:Bind app:Ui.Show(IsLiked)}" />
-                                            <Image Source="{x:Bind app:Ui.Small(ThumbnailUrl)}" Stretch="UniformToFill" Visibility="{x:Bind app:Ui.Hide(IsLiked)}" />
+                                            <FontIcon Glyph="{x:Bind Glyph}" Foreground="White" FontSize="28" Visibility="{x:Bind app:Ui.Show(HasGlyph)}" />
+                                            <Image Source="{x:Bind app:Ui.Small(ThumbnailUrl)}" Stretch="UniformToFill" Visibility="{x:Bind app:Ui.Hide(HasGlyph)}" />
                                         </Grid>
                                     </Border>
                                     <TextBlock Text="{x:Bind Title}" TextTrimming="CharacterEllipsis" FontSize="12" />

@@ -32,6 +32,7 @@ public sealed partial class SettingsPage : Page
         LanguageBox.SelectedIndex = Math.Max(0, Array.FindIndex(Languages, l => l.Key == AppServices.Settings.Language));
         VersionText.Text = $"wave for Windows {typeof(SettingsPage).Assembly.GetName().Version?.ToString(3)}";
         DataPath.Text = L.T("データの場所: ", "Data folder: ") + AppPaths.Data;
+        RenderDownloads();
         Render();
     }
 
@@ -100,6 +101,60 @@ public sealed partial class SettingsPage : Page
         AppServices.Settings.Language = key;
         AppServices.Settings.Save();
         App.Window?.ShowToast(L.T("次の起動から反映されます", "Takes effect the next time you open wave"));
+    }
+
+    // --- ダウンロード（ADR-0016 の 17） ---
+
+    private bool renderingDownloads;
+
+    private void RenderDownloads()
+    {
+        renderingDownloads = true;
+        var settings = AppServices.Settings;
+        NetworkBox.Items.Clear();
+        NetworkBox.Items.Add(new ComboBoxItem { Content = L.T("Wi-Fi など従量制でない通信だけ", "Wi-Fi and other unmetered networks only"), Tag = Wave.Core.Downloads.DownloadNetwork.Unmetered });
+        NetworkBox.Items.Add(new ComboBoxItem { Content = L.T("どの通信でも", "Any network"), Tag = Wave.Core.Downloads.DownloadNetwork.Any });
+        NetworkBox.SelectedIndex = AppServices.Downloads.Network == Wave.Core.Downloads.DownloadNetwork.Any ? 1 : 0;
+        SmartCountBox.Items.Clear();
+        foreach (var count in Wave.Core.Downloads.SmartDownloads.Counts) SmartCountBox.Items.Add(new ComboBoxItem { Content = L.Songs(count), Tag = count });
+        SmartCountBox.SelectedIndex = Math.Max(0, Array.IndexOf(Wave.Core.Downloads.SmartDownloads.Counts, Wave.Core.Downloads.SmartDownloads.NormalizeCount(settings.SmartDownloadCount)));
+        SmartSwitch.IsOn = settings.SmartDownloads;
+        renderingDownloads = false;
+        StorageText.Text = $"{L.Songs(AppServices.Downloads.DownloadedCount)} • {DownloadsPage.Size(AppServices.Downloads.UsedBytes)}";
+    }
+
+    private void OnNetworkChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (renderingDownloads || NetworkBox.SelectedItem is not ComboBoxItem { Tag: Wave.Core.Downloads.DownloadNetwork network }) return;
+        AppServices.Downloads.SetNetwork(network);
+    }
+
+    private void OnSmartCountChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (renderingDownloads || SmartCountBox.SelectedItem is not ComboBoxItem { Tag: int count }) return;
+        AppServices.Downloads.SetSmartCount(count);
+    }
+
+    private void OnSmartToggled(object sender, RoutedEventArgs e)
+    {
+        if (renderingDownloads) return;
+        AppServices.Downloads.SetSmart(SmartSwitch.IsOn);
+    }
+
+    private async void OnDeleteDownloads(object sender, RoutedEventArgs e)
+    {
+        var dialog = new ContentDialog
+        {
+            Title = L.T("ダウンロードをすべて削除しますか？", "Delete all downloads?"),
+            Content = L.T("この PC に取ったプレイリスト・アルバム・曲・エピソードを全部消します。スマートダウンロードの設定はそのままです。", "This removes every playlist, album, song and episode saved on this PC. Your smart download setting stays as it is."),
+            PrimaryButtonText = L.T("削除", "Delete"),
+            CloseButtonText = L.T("キャンセル", "Cancel"),
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = XamlRoot,
+        };
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+        AppServices.Downloads.DeleteAll();
+        RenderDownloads();
     }
 
     private void OnReleaseToggled(object sender, RoutedEventArgs e)

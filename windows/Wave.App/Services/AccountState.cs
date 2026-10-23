@@ -88,6 +88,8 @@ public sealed partial class AccountState : ObservableObject
         AppServices.Client.SetCredentials(null);
         AppServices.Credentials.Clear();
         AppServices.Releases.Clear();
+        // 取った曲も残さない（ほかのアカウントに前のアカウントの音を残さない。ADR-0016 の 9）
+        AppServices.Downloads.Clear();
         // 前のアカウントの Claude との会話を残さない（履歴も消す。Android と同じ）
         AppServices.Ai.Wipe();
         // 前のアカウントの検索の履歴とプレイリストの並べ方も残さない（Android と同じ）
