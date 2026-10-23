@@ -432,15 +432,29 @@ final class Downloads {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1.0"
         request.setValue("wave/\(version)", forHTTPHeaderField: "User-Agent")
         do {
-            let (temp, response) = try await AppServices.mediaSession.download(for: request)
+            let (temp, response) = try await Downloads.episodeSession.download(for: request)
             guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+                AppPaths.log("downloads episode status=\((response as? HTTPURLResponse)?.statusCode ?? 0)")
                 try? FileManager.default.removeItem(at: temp)
                 return .failed
             }
             try store.storeWhole(song, mimeType: http.mimeType ?? "audio/mpeg", from: temp)
             return .done
         } catch {
+            AppPaths.log("downloads episode failed error=\((error as NSError).domain)/\((error as NSError).code)")
             return Task.isCancelled ? .paused : .failed
         }
     }
+
+    /// エピソードを取る通信（cookie・キャッシュを持たない）。配信元は計測の中継などを通して転送するので、転送には従う
+    /// （YouTube の音を取る mediaSession は転送を追わない）。
+    private static let episodeSession: URLSession = {
+        let config = URLSessionConfiguration.ephemeral
+        config.httpShouldSetCookies = false
+        config.httpCookieAcceptPolicy = .never
+        config.httpCookieStorage = nil
+        config.urlCache = nil
+        config.timeoutIntervalForRequest = 60
+        return URLSession(configuration: config)
+    }()
 }
