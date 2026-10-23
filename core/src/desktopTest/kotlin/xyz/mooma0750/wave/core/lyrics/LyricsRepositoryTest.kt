@@ -80,9 +80,10 @@ class LyricsRepositoryTest {
         )
     private val lrclibHttp =
         HttpClient(
-            MockEngine {
+            MockEngine { request ->
                 lrclibRequests++
-                respond("", HttpStatusCode.NotFound)
+                // LRCLIB は、1件を引いて無ければ 404、検索で無ければ空の一覧を返す
+                if (request.url.encodedPath.endsWith("/search")) jsonResponse("[]") else respond("", HttpStatusCode.NotFound)
             },
         )
 
@@ -110,5 +111,63 @@ class LyricsRepositoryTest {
 
             assertEquals(result, repository.lyrics(song))
             assertEquals(calls, youtube.size to lrclibRequests, "覚えた結果を使わずに読み直した")
+        }
+
+    @Test
+    fun timedYouTubeLyricsAreReadAndUntimedLinesAreNot() {
+        val synced = assertNotNull(YouTubeTimedLyricsClient.parse(Fixtures.json("browse_lyrics_timed")))
+        assertEquals(listOf(LyricLine(1530, "一行目"), LyricLine(9040, "二行目"), LyricLine(17000, "")), synced.lines)
+        assertEquals("提供元: Musixmatch", synced.source)
+        // MV の歌詞（時刻の無い行だけ）と、古い形（時刻なしの棚）は時刻付きにしない
+        val untimed = Fixtures.text("browse_lyrics_timed").replace("\"cueRange\"", "\"noCueRange\"")
+        assertNull(YouTubeTimedLyricsClient.parse(kotlinx.serialization.json.Json.parseToJsonElement(untimed) as kotlinx.serialization.json.JsonObject))
+        assertNull(YouTubeTimedLyricsClient.parse(Fixtures.json("browse_lyrics")))
+    }
+
+    private fun timedClient(
+        status: HttpStatusCode,
+        requests: MutableList<String>,
+    ) = YouTubeTimedLyricsClient(
+        HttpClient(
+            MockEngine { request ->
+                requests += request.body.toByteArray().decodeToString()
+                if (status == HttpStatusCode.OK) jsonResponse(Fixtures.text("browse_lyrics_timed")) else respond("", status)
+            },
+        ),
+        hl = "ja",
+        gl = "JP",
+    )
+
+    private suspend fun activeSession(): WaveSession {
+        val credentials = MutableStateFlow<Credentials?>(assertNotNull(Credentials.fromLogin("SAPISID=synthetic-sapisid", "synthetic-visitor", "synthetic-sync", 1)))
+        val session = WaveSession.create(httpClient = youtubeClient, credentials = credentials, scope = scope)
+        withTimeout(5_000) { session.state.first { it == SessionState.Active } }
+        return session
+    }
+
+    @Test
+    fun timedYouTubeLyricsComeFirstWithoutAskingLrclib(): Unit =
+        runBlocking {
+            val requests = mutableListOf<String>()
+            val repository = LyricsRepository(MusicRepository(activeSession()), LrclibClient(lrclibHttp, "wave-test/1"), timedClient(HttpStatusCode.OK, requests))
+            val song = Song("vid", "t", listOf(ArtistRef("a", null)), null, 262, null)
+
+            val result = assertIs<LyricsRepository.Result.Found>(repository.lyrics(song))
+            assertEquals("提供元: Musixmatch", assertIs<Lyrics.Synced>(result.lyrics).source)
+            // 歌詞のタブの ID だけを ANDROID_MUSIC として送る。LRCLIB には聞かない
+            assertTrue(requests.single().contains("MPLYt_LfJd6hctedK-1") && requests.single().contains("ANDROID_MUSIC"))
+            assertEquals(0, lrclibRequests)
+        }
+
+    @Test
+    fun plainLyricsShownAfterAFailureAreNotRemembered(): Unit =
+        runBlocking {
+            val requests = mutableListOf<String>()
+            val repository = LyricsRepository(MusicRepository(activeSession()), LrclibClient(lrclibHttp, "wave-test/1"), timedClient(HttpStatusCode.ServiceUnavailable, requests))
+            val song = Song("vid", "t", listOf(ArtistRef("a", null)), null, 262, null)
+
+            assertIs<Lyrics.Plain>(assertIs<LyricsRepository.Result.Found>(repository.lyrics(song)).lyrics)
+            repository.lyrics(song)
+            assertEquals(2, requests.size, "時刻付きの失敗のあとの時刻なしを覚えてしまった")
         }
 }

@@ -9,13 +9,15 @@ import xyz.mooma0750.wave.core.music.Song
 import xyz.mooma0750.wave.core.session.CallResult
 
 /**
- * 曲の歌詞を選ぶ。時刻付きは LRCLIB から、無ければ YouTube Music の時刻なしの歌詞（公式の出典）。
- * YouTube Music の時刻付きの歌詞は ANDROID_MUSIC を名乗らないと返らないので使わない（ADR-0001 の WEB_REMIX の1経路を守る）。
- * 見つかった・無かった結果は曲ごとに覚えておく。失敗は覚えない（開き直せば探し直す）。
+ * 曲の歌詞を選ぶ。YouTube Music の時刻付き（ANDROID_MUSIC として匿名で読む。曲の照合が要らず、出典は Musixmatch・LyricFind）、
+ * 無ければ LRCLIB の時刻付き（曲名・アーティスト・長さで照らし合わせる）、それも無ければ YouTube Music の時刻なし。
+ * 見つかった・無かった結果は曲ごとに覚えておく。失敗は覚えない（開き直せば探し直す）。時刻付きを探すのに失敗して時刻なしを出したときも
+ * 覚えない（一時の失敗で、時刻なしが残り続けないように）。
  */
 class LyricsRepository(
     private val music: MusicRepository,
     private val lrclib: LrclibClient,
+    private val timed: YouTubeTimedLyricsClient? = null,
 ) {
     sealed interface Result {
         data class Found(
@@ -34,17 +36,25 @@ class LyricsRepository(
 
     suspend fun lyrics(song: Song): Result {
         lock.withLock { cache[song.videoId] }?.let { return it }
+        var timedFailed = false
+        var syncedResult: LrclibClient.Result = LrclibClient.Result.NotFound
         val result =
             coroutineScope {
-                val synced =
-                    async {
-                        val artist = song.artists.firstOrNull()?.name ?: return@async LrclibClient.Result.NotFound
-                        lrclib.synced(song.title, artist, song.album?.title, song.durationSeconds)
-                    }
-                val plain = async { music.lyrics(song.videoId) }
-                choose(synced.await(), plain.await())
+                val tab = music.lyricsBrowseId(song.videoId)
+                val browseId = (tab as? CallResult.Ok)?.value
+                val fromYouTube = browseId?.let { id -> timed?.let { client -> async { client.timed(id) } } }
+                val plain = async { if (browseId == null) (tab as? CallResult.Failed) ?: CallResult.Ok(null) else music.plainLyrics(browseId) }
+                when (val found = fromYouTube?.await()) {
+                    is YouTubeTimedLyricsClient.Result.Found -> return@coroutineScope Result.Found(found.lyrics)
+                    YouTubeTimedLyricsClient.Result.Failed -> timedFailed = true
+                    else -> {}
+                }
+                val artist = song.artists.firstOrNull()?.name
+                syncedResult = if (artist == null) LrclibClient.Result.NotFound else lrclib.synced(song.title, artist, song.album?.title, song.durationSeconds)
+                choose(syncedResult, plain.await())
             }
-        if (result != Result.Failed) {
+        val provisional = (result as? Result.Found)?.lyrics is Lyrics.Plain && (timedFailed || syncedResult == LrclibClient.Result.Failed)
+        if (result != Result.Failed && !provisional) {
             lock.withLock {
                 cache[song.videoId] = result
                 while (cache.size > CACHE_SIZE) cache.remove(cache.keys.first())

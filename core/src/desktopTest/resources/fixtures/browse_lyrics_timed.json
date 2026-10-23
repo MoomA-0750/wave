@@ -1,0 +1,51 @@
+{
+ "contents": {
+  "elementRenderer": {
+   "newElement": {
+    "type": {
+     "componentType": {
+      "model": {
+       "timedLyricsModel": {
+        "lyricsData": {
+         "timedLyricsData": [
+          {
+           "lyricLine": "二行目",
+           "cueRange": {
+            "startTimeMilliseconds": "9040",
+            "endTimeMilliseconds": "16720",
+            "metadata": {
+             "id": "1"
+            }
+           }
+          },
+          {
+           "lyricLine": "一行目",
+           "cueRange": {
+            "startTimeMilliseconds": "1530",
+            "endTimeMilliseconds": "6500",
+            "metadata": {
+             "id": "0"
+            }
+           }
+          },
+          {
+           "lyricLine": "♪",
+           "cueRange": {
+            "startTimeMilliseconds": "17000",
+            "endTimeMilliseconds": "20000",
+            "metadata": {
+             "id": "2"
+            }
+           }
+          }
+         ],
+         "sourceMessage": "提供元: Musixmatch"
+        }
+       }
+      }
+     }
+    }
+   }
+  }
+ }
+}

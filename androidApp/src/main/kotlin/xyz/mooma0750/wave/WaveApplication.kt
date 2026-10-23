@@ -240,11 +240,19 @@ class AppContainer(
 
     val music = MusicRepository(session, live)
 
-    /** 歌詞。LRCLIB へは認証情報を持たないクライアントで、曲名・アーティスト名・アルバム名・長さだけを送る。 */
+    /**
+     * 歌詞。YouTube Music の時刻付き（歌詞のタブの ID だけを送る）と LRCLIB（曲名・アーティスト名・アルバム名・長さだけを送る）へは、
+     * 認証情報を持たないクライアントで送る（ADR-0003）。
+     */
     val lyrics =
         LyricsRepository(
             music,
             LrclibClient(HttpClient(OkHttp.create { preconfigured = mediaHttpClient }), userAgent = "wave/${BuildConfig.VERSION_NAME}"),
+            xyz.mooma0750.wave.core.lyrics.YouTubeTimedLyricsClient(
+                HttpClient(OkHttp.create { preconfigured = mediaHttpClient }),
+                hl = youTubeLocale.first,
+                gl = youTubeLocale.second,
+            ),
         )
 
     /** 歌詞の一節から曲を探す（検索の「歌詞」）。歌詞は再生画面と同じところから取り、同じキャッシュを使う。 */

@@ -373,21 +373,26 @@ class MusicRepository(
      */
     suspend fun lyrics(videoId: String): CallResult<Lyrics.Plain?> {
         val browseId =
-            when (
-                val tab =
-                    session.call(
-                        operation = "next",
-                        block = { it.next(YouTubeClient.WEB_REMIX, videoId = videoId, playlistId = null) },
-                    ) { response -> ParseOutcome.Parsed(MusicParsers.lyricsBrowseId(json(response))) }
-            ) {
+            when (val tab = lyricsBrowseId(videoId)) {
                 is CallResult.Failed -> return tab
                 is CallResult.Ok -> tab.value ?: return CallResult.Ok(null)
             }
-        return session.call(
+        return plainLyrics(browseId)
+    }
+
+    /** 曲の歌詞のタブの行き先（MPLY…）。歌詞の無い曲は Ok(null)。 */
+    suspend fun lyricsBrowseId(videoId: String): CallResult<String?> =
+        session.call(
+            operation = "next",
+            block = { it.next(YouTubeClient.WEB_REMIX, videoId = videoId, playlistId = null) },
+        ) { response -> ParseOutcome.Parsed(MusicParsers.lyricsBrowseId(json(response))) }
+
+    /** 歌詞のタブの時刻なしの本文。 */
+    suspend fun plainLyrics(browseId: String): CallResult<Lyrics.Plain?> =
+        session.call(
             operation = "browse",
             block = browseOrContinue(browseId, continuation = null),
         ) { response -> ParseOutcome.Parsed(MusicParsers.plainLyrics(json(response))) }
-    }
 
     /**
      * 高く評価する（liked = true）・評価を外す（false）。書き込みの規則は WaveSession.callWrite。
