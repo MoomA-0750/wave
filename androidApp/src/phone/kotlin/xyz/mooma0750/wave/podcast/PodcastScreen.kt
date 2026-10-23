@@ -139,6 +139,7 @@ private fun EpisodeRow(
                 LinearWavyProgressIndicator(progress = { percent / 100f }, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
             }
         }
+        xyz.mooma0750.wave.ui.DownloadedBadge(episode.song.videoId, Modifier.padding(top = 12.dp))
         trailing()
     }
 }

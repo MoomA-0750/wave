@@ -244,6 +244,8 @@ fun AlbumScreen(
     onQueue: (page: AlbumPage, next: Boolean) -> Unit,
     onBack: () -> Unit,
     bottomBar: @Composable () -> Unit = {},
+    /** ダウンロードのボタン（ADR-0016 の 15）。読めたアルバムを渡す。 */
+    downloadButton: @Composable (AlbumPage) -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val page = state.page
@@ -265,7 +267,10 @@ fun AlbumScreen(
                 DetailText(listOfNotNull(album.subtitle, "$count, ${totalLength(album.songs.sumOf { it.durationSeconds ?: 0 })}").joinToString(" • "))
             }
         },
-        actions = { QueueMenu(enabled = page?.songs?.isNotEmpty() == true, onQueue = { next -> page?.let { onQueue(it, next) } }) },
+        actions = {
+            page?.let { downloadButton(it) }
+            QueueMenu(enabled = page?.songs?.isNotEmpty() == true, onQueue = { next -> page?.let { onQueue(it, next) } })
+        },
         play = PlayControls(shuffle, { shuffle = it }, enabled = page?.songs?.isNotEmpty() == true) { page?.let { onPlay(it, 0, shuffle) } },
     ) {
         when {

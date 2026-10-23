@@ -46,7 +46,7 @@ object DebugActions {
      * 公開 Activity から受けてよい action（画面の遷移だけ）。再生を始めるものも、再生履歴というアカウントへの書き込みにつながるので
      * DebugReceiver からだけ受ける（F1 outer gate 指摘2）。
      */
-    private val ACTIVITY_ACTIONS = setOf("open_artist", "open_album", "open_podcast", "open_settings", "notice")
+    private val ACTIVITY_ACTIONS = setOf("open_artist", "open_album", "open_podcast", "open_settings", "open_downloads", "notice")
 
     /** 確認用に作ったプレイリスト。プロセスの中だけに持ち、ログに出さない。 */
     private var createdPlaylistId: String? = null
@@ -373,6 +373,38 @@ object DebugActions {
                 "open_artist" -> intent.getStringExtra("browse_id")?.let { navigationChannel.trySend(Screen.Artist(it, "")) }
                 "open_album" -> intent.getStringExtra("browse_id")?.let { navigationChannel.trySend(Screen.Album(it, "")) }
                 "open_settings" -> navigationChannel.trySend(Screen.Settings)
+                "open_downloads" -> navigationChannel.trySend(Screen.Downloads)
+                // ダウンロード（ADR-0016）の確かめ: プレイリスト（playlist_id、無ければ公開の確認用）を丸ごと取る
+                "download_playlist" -> {
+                    val id = intent.getStringExtra("playlist_id") ?: DebugPlayback.PUBLIC_PLAYLIST_ID
+                    when (val page = container.music.playlist(id)) {
+                        is CallResult.Ok -> container.downloads?.downloadCollection(if (id == xyz.mooma0750.wave.core.music.MusicRepository.LIKED_SONGS) xyz.mooma0750.wave.core.download.CollectionKind.Liked else xyz.mooma0750.wave.core.download.CollectionKind.Playlist, id, page.value.title ?: id, null, page.value.songs)
+                        is CallResult.Failed -> Log.i(WaveApplication.LOG_TAG, "debug download playlist failed ${page.kind}")
+                    }
+                }
+                "download_remove_playlist" -> (intent.getStringExtra("playlist_id") ?: DebugPlayback.PUBLIC_PLAYLIST_ID).let { container.downloads?.removeCollection(xyz.mooma0750.wave.core.download.CollectionKind.Playlist, it) }
+                "smart_enable" -> container.settings.setSmartDownloads(intent.getBooleanExtra("enabled", true))
+                "smart_count" -> container.settings.setSmartDownloadCount(intent.getIntExtra("count", 25))
+                "smart_refresh" -> container.downloads?.refreshSmart(force = true)
+                "download_any_network" -> container.settings.setDownloadOnAnyNetwork(intent.getBooleanExtra("enabled", true))
+                "downloads_delete_all" -> container.downloads?.deleteAll()
+                // 件数だけを記録する（曲名・ID は出さない）
+                "downloads_state" ->
+                    container.downloads?.state?.value?.let { st ->
+                        Log.i(
+                            WaveApplication.LOG_TAG,
+                            "debug downloads collections=${st.manifest.collections.size} singles=${st.manifest.singles.size} smart=${st.manifest.smart.groupingBy { it.category }.eachCount()} complete=${st.complete.size} pending=${st.pending} failed=${st.failed.size} waiting=${st.waitingForNetwork} active=${st.active != null} bytes=${st.bytesUsed} online=${container.network.state.value}",
+                        )
+                    }
+                // 取った曲だけでキューを作って流す（通信なしの確かめ用）。first_missing=true なら先頭に取っていない曲を混ぜる
+                "play_downloads" ->
+                    container.downloads?.state?.value?.let { st ->
+                        val done = st.manifest.wantedIds().mapNotNull { id -> st.manifest.songOf(id)?.takeIf { id in st.complete } }
+                        val missing = st.manifest.wantedIds().mapNotNull { id -> st.manifest.songOf(id)?.takeIf { id !in st.complete } }
+                        val songs = if (intent.getBooleanExtra("first_missing", false)) missing.take(2) + done.take(3) else done
+                        Log.i(WaveApplication.LOG_TAG, "debug play downloads n=${songs.size} missing=${songs.count { it.videoId !in st.complete }}")
+                        if (songs.isNotEmpty()) player.playFrom(songs, 0, null, null, false)
+                    }
                 // ポッドキャストの読み取りを確かめる（件数と形だけを記録する。題などの中身は出さない）
                 "podcast_probe" -> {
                     val music = container.music

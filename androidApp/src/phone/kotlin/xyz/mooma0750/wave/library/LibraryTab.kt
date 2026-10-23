@@ -90,6 +90,8 @@ fun LibraryTabScreen(
     onOpenAlbum: (AlbumSummary) -> Unit,
     onCreatePlaylist: (String) -> Unit,
     onOpenPodcast: (xyz.mooma0750.wave.core.music.PodcastSummary) -> Unit = {},
+    /** ダウンロードの画面を開く。null なら「ダウンロード」を出さない（ADR-0016 の 14）。 */
+    onOpenDownloads: (() -> Unit)? = null,
     /** 並べ方とグリッドの保存先（アプリを閉じても覚えておく）。 */
     settings: xyz.mooma0750.wave.settings.AppSettings,
 ) {
@@ -113,6 +115,9 @@ fun LibraryTabScreen(
     val entries = LibraryOrder.arrange(state, filter, sort, query).filterNot { it is LibraryEntry.Playlist && it.playlist.playlistId == MusicRepository.LIKED_SONGS }
     val liked = PlaylistSummary(MusicRepository.LIKED_SONGS, stringResource(R.string.library_liked_songs), stringResource(R.string.library_liked_songs_subtitle), serverLiked?.thumbnailUrl)
     val showLiked = (filter == null || filter == LibraryFilter.Playlists) && LibraryOrder.matches(liked.title, liked.subtitle, query)
+    // 「ダウンロード」も「高く評価した曲」と同じく、いつも先頭の方に出す（ADR-0016 の 14）
+    val downloadsEntry = PlaylistSummary(DOWNLOADS_ENTRY_ID, stringResource(R.string.downloads_title), stringResource(R.string.downloads_library_subtitle), null)
+    val showDownloads = onOpenDownloads != null && filter == null && LibraryOrder.matches(downloadsEntry.title, downloadsEntry.subtitle, query)
     // ポッドキャストに絞ったときは、先頭に「新しいエピソード」（保存した番組の新しいエピソードの自動のプレイリスト）
     val newEpisodes = PlaylistSummary(MusicRepository.NEW_EPISODES, stringResource(R.string.library_new_episodes), stringResource(R.string.library_new_episodes_subtitle), null)
     val showNewEpisodes = filter == LibraryFilter.Podcasts && LibraryOrder.matches(newEpisodes.title, newEpisodes.subtitle, query)
@@ -181,6 +186,7 @@ fun LibraryTabScreen(
         if (grid) {
             LazyVerticalGrid(GridCells.Fixed(3), Modifier.fillMaxSize(), contentPadding = PaddingValues(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 if (showLiked) item { GridCell(LibraryEntry.Playlist(liked)) { onOpenPlaylist(liked) } }
+                if (showDownloads) item { GridCell(LibraryEntry.Playlist(downloadsEntry)) { onOpenDownloads?.invoke() } }
                 if (showNewEpisodes) item { GridCell(LibraryEntry.Playlist(newEpisodes)) { openNewEpisodes() } }
                 items(entries, key = { it.key }) { entry -> GridCell(entry) { open(entry) } }
                 item(span = { GridItemSpan(maxLineSpan) }) { Spacer(Modifier.height(8.dp)) }
@@ -188,6 +194,7 @@ fun LibraryTabScreen(
         } else {
             LazyColumn(Modifier.fillMaxSize()) {
                 if (showLiked) item { LibraryRow(LibraryEntry.Playlist(liked)) { onOpenPlaylist(liked) } }
+                if (showDownloads) item { LibraryRow(LibraryEntry.Playlist(downloadsEntry)) { onOpenDownloads?.invoke() } }
                 if (showNewEpisodes) item { LibraryRow(LibraryEntry.Playlist(newEpisodes)) { openNewEpisodes() } }
                 items(entries, key = { it.key }) { entry -> LibraryRow(entry) { open(entry) } }
             }
@@ -211,6 +218,9 @@ fun LibraryTabScreen(
         )
     }
 }
+
+/** マイライブラリの「ダウンロード」の行に付ける印（YouTube の ID とは重ならない形）。 */
+private const val DOWNLOADS_ENTRY_ID = "wave:downloads"
 
 @Composable
 private fun SortButton(
@@ -276,8 +286,14 @@ private fun Thumbnail(
         // 「高く評価した曲」など画像の無いもの（Spotify の紫のタイルの代わりに、テーマの色のタイル）
         Box(modifier.clip(shape).background(MaterialTheme.colorScheme.primaryContainer), contentAlignment = Alignment.Center) {
             // 「新しいエピソード」はヘッドホン、ほかは「高く評価した曲」のハート
-            val newEpisodes = (entry as? LibraryEntry.Playlist)?.playlist?.playlistId == MusicRepository.NEW_EPISODES
-            Icon(painterResource(if (newEpisodes) R.drawable.ic_headphones else R.drawable.ic_favorite), contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
+            val id = (entry as? LibraryEntry.Playlist)?.playlist?.playlistId
+            val icon =
+                when (id) {
+                    MusicRepository.NEW_EPISODES -> R.drawable.ic_headphones
+                    DOWNLOADS_ENTRY_ID -> R.drawable.ic_download
+                    else -> R.drawable.ic_favorite
+                }
+            Icon(painterResource(icon), contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
         }
     } else {
         coil3.compose.AsyncImage(model = url, contentDescription = null, modifier = modifier.clip(shape), contentScale = ContentScale.Crop)

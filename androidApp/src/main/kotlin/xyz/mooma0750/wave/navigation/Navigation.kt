@@ -17,6 +17,9 @@ sealed interface Screen {
     /** 再生履歴（自分が聴いた曲）。 */
     data object History : Screen
 
+    /** ダウンロード（ADR-0016）。 */
+    data object Downloads : Screen
+
     /** 気分・ジャンルのページ。 */
     data class Mood(
         val title: String,
@@ -67,6 +70,8 @@ data class SongActions(
     val openSong: (Song) -> Unit = {},
     /** 高く評価する（true）・評価を外す（false）。曲のメニューから、再生中でない曲にも使う。null なら項目を出さない。 */
     val setLiked: ((Song, Boolean) -> Unit)? = null,
+    /** ダウンロードする（true）・ダウンロードを削除する（false）。null なら項目を出さない（ADR-0016 の 16）。 */
+    val setDownloaded: ((Song, Boolean) -> Unit)? = null,
 ) {
     /** シートの上から画面を開くときに、先にシートを閉じる。 */
     fun closing(close: () -> Unit): SongActions =

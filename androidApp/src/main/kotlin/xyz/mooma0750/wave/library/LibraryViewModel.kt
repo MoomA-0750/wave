@@ -91,6 +91,8 @@ class PlaylistViewModel(
     initialTitle: String?,
     initialQuery: String? = null,
     private val orders: PlaylistOrderStore,
+    /** 読めなかったときに出す、取ってある曲（ダウンロードしたプレイリストは通信なしで開ける、ADR-0016 の 18）。 */
+    private val offline: (() -> List<Song>?)? = null,
 ) : ViewModel() {
     private companion object {
         /** 1ページ100曲。中を探すときに読むページ数の上限。 */
@@ -162,7 +164,14 @@ class PlaylistViewModel(
                         )
                     }
                 }
-                is CallResult.Failed -> mutableState.update { it.copy(loading = false, failure = result.kind) }
+                is CallResult.Failed -> {
+                    val local = offline?.invoke()
+                    if (local != null) {
+                        mutableState.update { it.copy(songs = local, setVideoIds = emptyList(), continuation = null, loading = false, failure = null) }
+                    } else {
+                        mutableState.update { it.copy(loading = false, failure = result.kind) }
+                    }
+                }
             }
             // 絞り込みを入れて開いたら、その場で残りのページも読む。カスタムの降順・長さは全部読んでから手元で並べる
             if (state.value.query.isNotBlank() || order.arrangedLocally) loadAll()

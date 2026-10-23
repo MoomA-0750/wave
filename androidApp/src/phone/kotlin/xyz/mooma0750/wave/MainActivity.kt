@@ -184,6 +184,8 @@ class MainActivity : ComponentActivity() {
                                     container.playlistEditor.setLiked(song, liked)
                                 }
                             },
+                            // ダウンロード・ダウンロードを削除（ADR-0016 の 16）
+                            setDownloaded = container.downloads?.let { downloads -> { song, on -> if (on) downloads.downloadSong(song) else downloads.removeSong(song.videoId) } },
                         )
                     }
                 LaunchedEffect(container) {
@@ -231,6 +233,19 @@ class MainActivity : ComponentActivity() {
                         // 一覧の曲に「高く評価した」のバッジを付けるため、評価した曲の ID を読んでおく
                         LaunchedEffect(loginGeneration) { container.loadLikedIds() }
                         val likedIds by container.likedIds.collectAsStateWithLifecycle()
+                        // 取り終えた曲の ID（曲の行の印とメニューに使う）
+                        val downloadsState = container.downloads?.state?.collectAsStateWithLifecycle()?.value
+                        val downloadedIds = downloadsState?.complete ?: emptySet()
+                        val collectionOnlyDownloads =
+                            remember(downloadsState?.manifest) {
+                                downloadsState?.manifest?.let { m ->
+                                    val own = HashSet<String>().apply {
+                                        m.singles.forEach { add(it.song.videoId) }
+                                        m.smart.forEach { add(it.song.videoId) }
+                                    }
+                                    m.collections.flatMap { c -> c.songs.map { it.videoId } }.filterNot { it in own }.toSet()
+                                } ?: emptySet()
+                            }
                         // 登録したアーティストの新作（ホームとアーティストのページに出す）
                         LaunchedEffect(loginGeneration) { container.releases.load() }
                         val newReleases by container.releases.recent.collectAsStateWithLifecycle()
@@ -246,7 +261,7 @@ class MainActivity : ComponentActivity() {
                                 viewModel(key = "relogin-$loginGeneration") { LoginViewModel(container) },
                                 onCancel = { reLogin = false },
                             )
-                        } else androidx.compose.runtime.CompositionLocalProvider(xyz.mooma0750.wave.ui.LocalLikedIds provides likedIds, xyz.mooma0750.wave.library.LocalPlaylistMembership provides container.playlistMembership) {
+                        } else androidx.compose.runtime.CompositionLocalProvider(xyz.mooma0750.wave.ui.LocalLikedIds provides likedIds, xyz.mooma0750.wave.ui.LocalDownloadedIds provides downloadedIds, xyz.mooma0750.wave.ui.LocalCollectionOnlyDownloads provides collectionOnlyDownloads, xyz.mooma0750.wave.library.LocalPlaylistMembership provides container.playlistMembership) {
                             // 再生が始まった曲がどのプレイリストに入っているかを先に調べておく（追加の画面をすぐ出し、評価のボタンに✓を付ける）
                             val playingId = container.player.likeState.collectAsState().value.videoId
                             LaunchedEffect(playingId, playlistsVersion) { playingId?.let(container::prefetchMembership) }
@@ -313,6 +328,7 @@ class MainActivity : ComponentActivity() {
                                         onOpenAlbum = { nav.push(Screen.Album(it.browseId, it.title)) },
                                         onOpenPodcast = { nav.push(Screen.Podcast(it.browseId, it.title)) },
                                         onCreatePlaylist = { container.playlistEditor.create(it, null) },
+                                        onOpenDownloads = container.downloads?.let { { nav.push(Screen.Downloads) } },
                                         settings = container.settings,
                                     )
                                 Tab.Home ->
@@ -341,6 +357,22 @@ class MainActivity : ComponentActivity() {
                                     SettingsScreen(container, account, onReLogin = { reLogin = true }, onConnect = { nav.push(Screen.Connect) }, onBack = pop)
                                 Screen.Connect ->
                                     ConnectScreen(container, onBack = pop)
+                                Screen.Downloads ->
+                                    container.downloads?.let { downloads ->
+                                        xyz.mooma0750.wave.download.DownloadsScreen(
+                                            downloads,
+                                            container.settings,
+                                            actions = songActions,
+                                            onPlay = { songs, index, shuffle -> playerActions.playFrom(songs, index, shuffle = shuffle) },
+                                            onOpenCollection = { collection ->
+                                                when (collection.kind) {
+                                                    xyz.mooma0750.wave.core.download.CollectionKind.Album -> nav.push(Screen.Album(collection.id, collection.title))
+                                                    else -> nav.push(Screen.Playlist(PlaylistSummary(collection.id, collection.title, null, collection.thumbnailUrl)))
+                                                }
+                                            },
+                                            onBack = pop,
+                                        )
+                                    }
                                 Screen.History ->
                                     HistoryScreen(
                                         viewModel(key = "history-$loginGeneration") { HistoryViewModel(container.music) },
@@ -381,7 +413,20 @@ class MainActivity : ComponentActivity() {
                                     PlaylistScreen(
                                         summary = playlist,
                                         viewModel = viewModel(key = "playlist-$loginGeneration-${playlist.playlistId}-$version-$playlistsVersion-${screen.initialQuery}") {
-                                            PlaylistViewModel(container.music, playlist.playlistId, playlist.title, screen.initialQuery, container.settings.playlistOrders)
+                                            PlaylistViewModel(
+                                                container.music,
+                                                playlist.playlistId,
+                                                playlist.title,
+                                                screen.initialQuery,
+                                                container.settings.playlistOrders,
+                                                // 取ってあるプレイリストは通信なしでも開ける
+                                                offline = { container.downloads?.offlineCollection(collectionKindOf(playlist.playlistId), playlist.playlistId)?.songs },
+                                            )
+                                        },
+                                        downloadButton = { title, songs ->
+                                            container.downloads?.takeIf { playlist.playlistId != MusicRepository.NEW_EPISODES }?.let { downloads ->
+                                                xyz.mooma0750.wave.download.CollectionDownloadButton(downloads, collectionKindOf(playlist.playlistId), playlist.playlistId, title, playlist.thumbnailUrl, songs)
+                                            }
                                         },
                                         onPlay = { songs, index, continuation -> playerActions.playFrom(songs, index, playlist.playlistId, continuation) },
                                         onShufflePlay = { songs, continuation -> playerActions.playFrom(songs, 0, playlist.playlistId, continuation, shuffle = true) },
@@ -415,7 +460,19 @@ class MainActivity : ComponentActivity() {
                                 }
                                 is Screen.Album ->
                                     AlbumScreen(
-                                        viewModel(key = "album-$loginGeneration-${screen.browseId}") { AlbumViewModel(container.music, screen.browseId) },
+                                        viewModel(key = "album-$loginGeneration-${screen.browseId}") {
+                                            AlbumViewModel(container.music, screen.browseId, offline = {
+                                                // 取ってあるアルバムは通信なしでも開ける
+                                                container.downloads?.offlineCollection(xyz.mooma0750.wave.core.download.CollectionKind.Album, screen.browseId)?.let { c ->
+                                                    xyz.mooma0750.wave.core.music.AlbumPage(c.id, c.title, null, c.songs.firstOrNull()?.artists.orEmpty(), c.thumbnailUrl, null, c.songs)
+                                                }
+                                            })
+                                        },
+                                        downloadButton = { page ->
+                                            container.downloads?.let { downloads ->
+                                                xyz.mooma0750.wave.download.CollectionDownloadButton(downloads, xyz.mooma0750.wave.core.download.CollectionKind.Album, screen.browseId, page.title, page.thumbnailUrl, page.songs)
+                                            }
+                                        },
                                         title = screen.title,
                                         actions = songActions,
                                         onPlay = { page, index, shuffle -> playerActions.playFrom(page.songs, index, page.playlistId, shuffle = shuffle) },
@@ -426,7 +483,8 @@ class MainActivity : ComponentActivity() {
                                     xyz.mooma0750.wave.podcast.PodcastScreen(
                                         viewModel(key = "podcast-$loginGeneration-${screen.browseId}") { xyz.mooma0750.wave.podcast.PodcastViewModel(container.music, screen.browseId, screen.title, container.podcastFeeds, container.feedLibrary) },
                                         title = screen.title,
-                                        actions = songActions,
+                                        // エピソードとして取る（ダウンロードの画面で曲と分けて出す）
+                                        actions = songActions.copy(setDownloaded = container.downloads?.let { downloads -> { song, on -> if (on) downloads.downloadSong(song, episode = true) else downloads.removeSong(song.videoId) } }),
                                         // 押したエピソードから、番組の一覧を続けて流す（読んだ分の後はラジオにつなぐ）
                                         onPlay = { songs, index, playlistId, shuffle -> playerActions.playFrom(songs, index, playlistId, shuffle = shuffle) },
                                         onBack = pop,
@@ -476,3 +534,7 @@ private fun Progress(message: String? = null) {
         if (message != null) Text(message)
     }
 }
+
+/** プレイリストの ID から、丸ごと取るものの種類（高く評価した曲は LM）。 */
+private fun collectionKindOf(playlistId: String): xyz.mooma0750.wave.core.download.CollectionKind =
+    if (playlistId == MusicRepository.LIKED_SONGS) xyz.mooma0750.wave.core.download.CollectionKind.Liked else xyz.mooma0750.wave.core.download.CollectionKind.Playlist

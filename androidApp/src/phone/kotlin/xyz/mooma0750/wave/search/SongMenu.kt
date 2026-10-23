@@ -117,6 +117,20 @@ fun SongMenuItems(
             }
         }
     }
+    // ダウンロード・ダウンロードを削除（ADR-0016 の 16）。ライブ配信は取らない。
+    // 丸ごと取ったものの中の曲は、その丸ごとのものを消すまで残るので、ここでは消す項目を出さない
+    if (!song.isLive && song.videoId !in xyz.mooma0750.wave.ui.LocalCollectionOnlyDownloads.current) {
+        actions.setDownloaded?.let { setDownloaded ->
+            val downloaded = song.videoId in xyz.mooma0750.wave.ui.LocalDownloadedIds.current
+            MenuRow(
+                if (downloaded) R.drawable.ic_delete else R.drawable.ic_download,
+                stringResource(if (downloaded) R.string.downloads_remove else R.string.downloads_download),
+            ) {
+                close()
+                setDownloaded(song, !downloaded)
+            }
+        }
+    }
     // キューの中の曲（再生中の曲も）も、もう一度「次に再生」「キューに追加」できる（Mac・Windows・iPhone と同じ）
     MenuRow(R.drawable.ic_playlist_play, stringResource(R.string.search_play_next)) {
         close()

@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="downloads_title">ダウンロード</string>
+    <string name="downloads_library_subtitle">この端末に保存</string>
+    <string name="downloads_download">ダウンロード</string>
+    <string name="downloads_remove">ダウンロードを削除</string>
+    <string name="downloads_downloaded">ダウンロード済み</string>
+    <string name="downloads_badge">ダウンロード済み</string>
+    <string name="downloads_in_progress">%2$d曲中%1$d曲をダウンロード済み</string>
+    <string name="downloads_remove_confirm_title">ダウンロードを削除しますか？</string>
+    <string name="downloads_remove_confirm_message">「%1$s」は通信なしでは聴けなくなります。</string>
+    <string name="downloads_remove_confirm">削除</string>
+    <string name="downloads_cancel">キャンセル</string>
+    <string name="downloads_smart">スマートダウンロード</string>
+    <string name="downloads_smart_summary">聴きそうな曲を自動で取っておきます。1日1回入れ替えます</string>
+    <string name="downloads_smart_all">すべて</string>
+    <string name="downloads_smart_frequent">いつも聴いている</string>
+    <string name="downloads_smart_discover">好きそう</string>
+    <string name="downloads_smart_recommended">おすすめ</string>
+    <string name="downloads_smart_refreshing">曲を選んでいます…</string>
+    <string name="downloads_smart_empty">まだ曲がありません</string>
+    <string name="downloads_collections">プレイリストとアルバム</string>
+    <string name="downloads_episodes">エピソード</string>
+    <string name="downloads_songs">曲</string>
+    <string name="downloads_storage">%1$s 使用中</string>
+    <string name="downloads_waiting_network">設定で選んだ通信を待っています</string>
+    <string name="downloads_downloading">ダウンロード中: %1$s</string>
+    <string name="downloads_pending">残り %1$d曲</string>
+    <string name="downloads_empty">まだ何もダウンロードしていません。曲・プレイリスト・アルバム・エピソードをダウンロードすると、通信なしで聴けます。</string>
+    <string name="downloads_play">再生</string>
+    <string name="downloads_shuffle">シャッフル</string>
+    <string name="downloads_offline">通信できません。ダウンロードした曲を出しています</string>
+    <string name="settings_downloads_network">ダウンロードに使う通信</string>
+    <string name="settings_downloads_network_unmetered">Wi‑Fi など従量制でない通信だけ</string>
+    <string name="settings_downloads_network_any">どの通信でも</string>
+    <string name="settings_smart_count">スマートダウンロードの曲数</string>
+    <string name="settings_smart_count_value">%1$d曲</string>
+    <string name="settings_downloads_delete_all">ダウンロードをすべて削除</string>
+    <string name="settings_downloads_delete_all_confirm">この端末に取った曲とエピソードをすべて削除しますか？</string>
+    <string name="settings_downloads_storage">使用中の容量: %1$s</string>
+</resources>

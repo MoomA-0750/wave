@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="downloads_title">Downloads</string>
+    <string name="downloads_library_subtitle">Saved on this device</string>
+    <string name="downloads_download">Download</string>
+    <string name="downloads_remove">Remove download</string>
+    <string name="downloads_downloaded">Downloaded</string>
+    <string name="downloads_badge">Downloaded</string>
+    <string name="downloads_in_progress">%1$d of %2$d downloaded</string>
+    <string name="downloads_remove_confirm_title">Remove download?</string>
+    <string name="downloads_remove_confirm_message">“%1$s” will no longer be available without a connection.</string>
+    <string name="downloads_remove_confirm">Remove</string>
+    <string name="downloads_cancel">Cancel</string>
+    <string name="downloads_smart">Smart downloads</string>
+    <string name="downloads_smart_summary">Automatically keep songs you’re likely to play. Refreshed once a day</string>
+    <string name="downloads_smart_all">All</string>
+    <string name="downloads_smart_frequent">Listen often</string>
+    <string name="downloads_smart_discover">You might like</string>
+    <string name="downloads_smart_recommended">Recommended</string>
+    <string name="downloads_smart_refreshing">Choosing songs…</string>
+    <string name="downloads_smart_empty">No songs yet</string>
+    <string name="downloads_collections">Playlists and albums</string>
+    <string name="downloads_episodes">Episodes</string>
+    <string name="downloads_songs">Songs</string>
+    <string name="downloads_storage">%1$s used</string>
+    <string name="downloads_waiting_network">Waiting for a network allowed in settings</string>
+    <string name="downloads_downloading">Downloading: %1$s</string>
+    <string name="downloads_pending">%1$d left</string>
+    <string name="downloads_empty">Nothing downloaded yet. Download songs, playlists, albums and episodes to listen without a connection.</string>
+    <string name="downloads_play">Play</string>
+    <string name="downloads_shuffle">Shuffle</string>
+    <string name="downloads_offline">You’re offline. Showing downloaded songs</string>
+    <string name="settings_downloads_network">Download over</string>
+    <string name="settings_downloads_network_unmetered">Wi‑Fi and other unmetered networks only</string>
+    <string name="settings_downloads_network_any">Any network</string>
+    <string name="settings_smart_count">Smart download size</string>
+    <string name="settings_smart_count_value">%1$d songs</string>
+    <string name="settings_downloads_delete_all">Delete all downloads</string>
+    <string name="settings_downloads_delete_all_confirm">Delete all downloaded songs and episodes from this device?</string>
+    <string name="settings_downloads_storage">Storage used: %1$s</string>
+</resources>

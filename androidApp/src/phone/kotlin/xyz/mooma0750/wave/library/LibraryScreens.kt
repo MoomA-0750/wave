@@ -77,6 +77,8 @@ fun PlaylistScreen(
     onRemove: (song: Song, setVideoId: String) -> Unit,
     onBack: () -> Unit,
     bottomBar: @Composable () -> Unit = {},
+    /** ダウンロードのボタン（ADR-0016 の 15）。題と読んだ曲を渡す。 */
+    downloadButton: @Composable (title: String, songs: List<Song>) -> Unit = { _, _ -> },
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var shuffle by rememberSaveable { mutableStateOf(false) }
@@ -124,6 +126,7 @@ fun PlaylistScreen(
             DetailText(summary.subtitle ?: if (state.continuation != null) pluralStringResource(R.plurals.library_song_count_more, state.songs.size, state.songs.size) else pluralStringResource(R.plurals.library_song_count, state.songs.size, state.songs.size))
         },
         actions = {
+            downloadButton(state.title ?: summary.title, state.songs)
             QueueMenu(enabled = kindSongs.isNotEmpty(), onQueue = { next -> onQueue(kindSongs, next) })
         },
         play =

@@ -163,6 +163,8 @@ data class ArtistPlay(
 class AlbumViewModel(
     music: MusicRepository,
     browseId: String,
+    /** 読めなかったときに出す、取ってあるアルバム（通信なしで開ける、ADR-0016 の 18）。 */
+    offline: (() -> AlbumPage?)? = null,
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(PageUiState<AlbumPage>())
     val state: StateFlow<PageUiState<AlbumPage>> = mutableState.asStateFlow()
@@ -179,7 +181,7 @@ class AlbumViewModel(
                     }
                     is CallResult.Failed -> {
                         Log.i(WaveApplication.LOG_TAG, "album failed ${result.kind}" + if (result.kind == FailureKind.Parse) " renderers=${music.lastRendererNames}" else "")
-                        PageUiState(failure = result.kind)
+                        offline?.invoke()?.let { PageUiState(page = it) } ?: PageUiState(failure = result.kind)
                     }
                 }
         }

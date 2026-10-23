@@ -29,3 +29,24 @@ fun LikedBadge(
         modifier = modifier.padding(horizontal = 4.dp).size(18.dp),
     )
 }
+
+/** 取り終えた曲の ID（ダウンロード、ADR-0016 の 16）。曲の行が印を出すかを決める（MainActivity が渡す）。 */
+val LocalDownloadedIds = compositionLocalOf<Set<String>> { emptySet() }
+
+/** 丸ごと取ったもの（プレイリスト・アルバム・高く評価した曲）だけが持ち主の曲。曲のメニューから1曲だけは消せない。 */
+val LocalCollectionOnlyDownloads = compositionLocalOf<Set<String>> { emptySet() }
+
+/** 取り終えた曲の小さな印（Spotify の、曲の行の下向きの矢印）。取っていなければ何も出さない。 */
+@Composable
+fun DownloadedBadge(
+    videoId: String,
+    modifier: Modifier = Modifier,
+) {
+    if (videoId !in LocalDownloadedIds.current) return
+    Icon(
+        painterResource(R.drawable.ic_download),
+        contentDescription = stringResource(R.string.downloads_badge),
+        tint = MaterialTheme.colorScheme.primary,
+        modifier = modifier.padding(horizontal = 4.dp).size(18.dp),
+    )
+}

@@ -144,6 +144,12 @@ fun SettingsScreen(
                     },
                 )
             }
+            // ダウンロード（ADR-0016 の 17）
+            container.downloads?.let { downloads ->
+                item { HorizontalDivider() }
+                item { xyz.mooma0750.wave.download.DownloadSettings(downloads, container.settings) }
+                item { HorizontalDivider() }
+            }
             item { LanguageSetting() }
             item { WidgetScaleSetting(container.appScope) }
             if (container.connectV2 != null) {

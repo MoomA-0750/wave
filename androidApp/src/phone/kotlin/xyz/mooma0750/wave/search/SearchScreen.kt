@@ -531,6 +531,8 @@ fun SongRow(
         }
         // 高く評価した曲には印を付ける（Spotify と同じ）
         xyz.mooma0750.wave.ui.LikedBadge(song.videoId)
+        // 取り終えた曲にも印を付ける（ADR-0016 の 16）
+        xyz.mooma0750.wave.ui.DownloadedBadge(song.videoId)
         trailing()
     }
 }
