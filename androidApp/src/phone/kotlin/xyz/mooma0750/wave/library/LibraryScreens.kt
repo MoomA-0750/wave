@@ -82,10 +82,14 @@ fun PlaylistScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var shuffle by rememberSaveable { mutableStateOf(false) }
-    // 曲の種類の絞り込み（曲・MV・投稿者の動画）。絞っている間は、再生も絞った曲だけにする
+    // 曲の種類（曲・MV・投稿者の動画）と中の検索での絞り込み。絞っている間は、再生もキューも絞った曲だけにする
+    // （アーティストのページの「高く評価した曲」は、アーティスト名で検索した状態で開く）
     var kind by rememberSaveable { mutableStateOf(KindFilter.All) }
-    val kindSongs = if (kind == KindFilter.All) state.songs else state.songs.filter(kind::matches)
-    val playContinuation = if (kind == KindFilter.All) state.continuation else null
+    val filtering = state.query.isNotBlank() || kind != KindFilter.All
+    // 絞り込み中は、元の並びでの位置を持ったまま出す（「外す」は元の位置に当てる）
+    val shown = SongFilter.matchingIndices(state.songs, state.query, kind)
+    val kindSongs = if (filtering) shown.map { state.songs[it] } else state.songs
+    val playContinuation = if (filtering) null else state.continuation
     CollectionScreen(
         title = state.title ?: summary.title,
         coverUrl = summary.thumbnailUrl ?: state.songs.firstOrNull()?.thumbnailUrl,
@@ -146,9 +150,7 @@ fun PlaylistScreen(
         }
         state.failure?.let { item { Text(failureMessage(it), Modifier.padding(16.dp)) } }
         if (!state.loading && state.failure == null && state.songs.isEmpty()) item { Text(stringResource(R.string.library_no_songs), Modifier.padding(16.dp)) }
-        // 絞り込み中は、元の並びでの位置を持ったまま出す（再生も「外す」も元の位置に当てる）
-        val shown = SongFilter.matchingIndices(state.songs, state.query, kind)
-        if (state.query.isNotBlank() || kind != KindFilter.All) {
+        if (filtering) {
             item {
                 Column(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
                     Text(pluralStringResource(R.plurals.library_match_count, shown.size, shown.size), style = MaterialTheme.typography.bodySmall)
@@ -161,7 +163,7 @@ fun PlaylistScreen(
         items(shown, key = { index -> "$index-${state.songs[index].videoId}" }) { index ->
             val song = state.songs[index]
             val setVideoId = state.setVideoIds.getOrNull(index)
-            SongRow(song, onClick = { if (kind == KindFilter.All) onPlay(state.songs, index, state.continuation) else onPlay(kindSongs, kindSongs.indexOf(song).coerceAtLeast(0), null) }) {
+            SongRow(song, onClick = { if (filtering) onPlay(kindSongs, shown.indexOf(index).coerceAtLeast(0), null) else onPlay(state.songs, index, state.continuation) }) {
                 SongMenuButton(
                     song,
                     actions,
