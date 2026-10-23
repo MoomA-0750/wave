@@ -127,6 +127,7 @@ PageTrack = { videoId, title, artists?: {name, browseId?}[], album?: {name, brow
 - 履歴: YouTube Music が自分で再生履歴を送るので、`historySent` は既定で true
 - 鍵: 身元の署名鍵と受け取りの鍵（kx）は WebCrypto で書き出せない形で作り、CryptoKey のまま IndexedDB に置く
 - 中継の生存確認: ブラウザの WebSocket は ping を送れないので、中継の ping（30 秒ごと）に任せる。背景が止まらないようにするのはページの Port の ping
+- 背景が止まって起き直したとき、中継ではまだこの端末が再生中で（退いた印も無く）、つなぎ直したページが鳴っていると知らせてきたら、本人の操作を待たずに claim し直して書き続ける
 - ページが1つも無い間は中継から離れ、引き取り（`adopt`）・遠隔操作を受けない。鳴らしていたタブが閉じたら一時停止のカーソルを置いて手元を捨てる
 - 受け取った `login_grant`（ログインを渡す命令）は開いても使わず、どこにも置かない
 - ライブラリの同期（ADR-0013）は扱わない（`library_get` を送らないので、中継も配らない）

@@ -17,6 +17,7 @@ let relay: { url: string; host: string };
 let phone: Phone;
 let api: WaveApi;
 let ext: ConnectService;
+const store = new MemoryStore();
 const commands: PageCommand[] = [];
 const notices: string[] = [];
 
@@ -46,7 +47,7 @@ before(async () => {
   await phone.connect(relay);
   await phone.createHousehold("account-1");
   api = await startApi(workspace, relay);
-  ext = await ConnectService.open({ store: new MemoryStore(), defaultDeviceName: "YouTube Music (試験)", log: () => {} });
+  ext = await ConnectService.open({ store, defaultDeviceName: "YouTube Music (試験)", log: () => {} });
   ext.on((e: ConnectEvent) => {
     if (e.type === "command") commands.push(e.command);
     if (e.type === "notice") notices.push(e.code);
@@ -285,4 +286,29 @@ test("wave-api（Kotlin）の「端末の切り替え」で、拡張の再生を
   await waitFor("JS の端末に transfer が届く", () => phone.controls.find((c) => c.action === "transfer"), 20_000);
   assert.equal((await nextCommand("pause")).reason, "taken_over");
   await waitFor("JS の端末が取り込む（2回目）", () => phone.adopted.length > 1, 20_000);
+});
+
+test("背景が止まって起き直しても、ページが鳴り続けていれば家の再生を書き続ける", { skip }, async () => {
+  // もう一度この拡張で鳴らす
+  await ext.publishState(state({ positionMs: 20_000 }));
+  assert.equal(await ext.userStartedPlayback(), true);
+  await waitFor("拡張が書き手", () => ext.status().isWriter && ext.status().activeDeviceId === ext.deviceId, 20_000);
+  // 背景が止まる（保存はそのまま）
+  ext.dispose();
+  const restarted = await ConnectService.open({ store, defaultDeviceName: "YouTube Music (試験)", log: () => {} });
+  try {
+    assert.equal(restarted.deviceId, ext.deviceId, "端末 ID は保存した鍵のまま");
+    assert.equal(restarted.status().joined, true);
+    restarted.pageConnected();
+    // ページはつなぎ直して、ログインと状態を送り直す（再生ボタンは押さない）
+    await restarted.setAccount("account-1||extra");
+    await restarted.publishState(state({ positionMs: 30_000 }));
+    await waitFor("起き直した拡張が書き手に戻る", () => restarted.status().isWriter, 30_000);
+    await waitFor("JS の端末が起き直した拡張の再生を見る", () => {
+      const c = phone.client.latestCursorBody();
+      return c && c.writer === ext.deviceId && c.cursor.playing && c.cursor.positionMs >= 30_000;
+    });
+  } finally {
+    restarted.dispose();
+  }
 });

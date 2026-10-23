@@ -224,6 +224,8 @@ export class ConnectService {
   private profileSeenOnline = new Set<string>();
   private lastEmitted = new Map<string, string>();
   private tickTimer: ReturnType<typeof setInterval> | null = null;
+  /** 起き直した後の claim し直しを試した（つながり直すたびに戻す）。 */
+  private resumeTried = false;
   private readonly autoTick: boolean;
 
   private constructor(options: ServiceOptions, settings: ConnectSettings) {
@@ -404,6 +406,7 @@ export class ConnectService {
       onConnectionLost: () => {
         if (this.relay !== relay) return;
         void this.run(() => {
+          this.resumeTried = false;
           this.client.onDisconnected();
           this.refresh();
         });
@@ -458,9 +461,25 @@ export class ConnectService {
     await this.run(async () => {
       await this.client.tick();
       await this.refreshTag();
+      await this.maybeResumeAfterRestart();
       await this.maybeSendProfile();
       this.refresh();
     });
+  }
+
+  /**
+   * 背景が止まって起き直した（MV3 の背景は止まることがある）: 中継ではまだこの端末が再生中で、ページも鳴り続けているのに、
+   * 手元のセッションが無い。本人が続けて聴いているのと同じなので、claim し直して書き続ける（1回の接続で1回だけ）。
+   */
+  private async maybeResumeAfterRestart(): Promise<void> {
+    // 止められた・引き取られた端末（退いた印がある）は再開しない
+    if (this.resumeTried || this.client.isWriter || this.client.hasRetreated || !this.client.stateSettled) return;
+    if (this.client.activeDeviceId !== this.device.deviceId || this.lastState?.state.playing !== true) return;
+    if (this.effects.accountTag() === null) return;
+    this.resumeTried = true;
+    await this.pushLocal(true);
+    const claimed = await this.client.userStartedPlayback();
+    this.log(`resumed after restart claimed=${claimed}`);
   }
 
   // --- アカウント ---
