@@ -31,9 +31,12 @@ public enum QueueRadio {
 
     /// 端末の連携へ書き出すキューが「尽きた」（続きもラジオへの切り替えも無い）か。
     /// プレイリスト・アルバムは最後まで行ったら受け取った端末がラジオへ切り替えるので、尽きていない（Android の Playlist と同じ）。
-    /// 尽きているのは、ラジオでも一覧でもない（1曲のライブ配信・RSS など）か、最後の曲からラジオが作れないときだけ。
-    public static func exhausted(radioSeed: String?, playlistSource: Bool, last: Song?, truncated: Bool) -> Bool {
-        if truncated || radioSeed != nil { return false }
+    /// 尽きているのは、ラジオでも一覧でもない（1曲のライブ配信・RSS など）か、最後の曲からラジオが作れないとき、
+    /// 「次に流れる曲」を消去して流れを止めている（flowStopped）とき（受け取った側も埋め直さない。Android の exhausted と同じ）。
+    public static func exhausted(radioSeed: String?, playlistSource: Bool, last: Song?, truncated: Bool, flowStopped: Bool = false) -> Bool {
+        if truncated { return false }
+        if flowStopped { return true }
+        if radioSeed != nil { return false }
         guard playlistSource, let last else { return true }
         return !canSeed(last)
     }

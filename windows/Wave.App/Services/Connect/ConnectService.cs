@@ -198,6 +198,12 @@ public sealed class ConnectService
             Post(() => AppPaths.Log($"connect-v2 queue remove items={ids.Count} sent={client?.SendQueueRemove(ids)}"));
             return true;
         };
+        player.SendRemoteQueueClearFlow = currentItemId =>
+        {
+            if (client is null || Relay.Status != RelayStatus.Connected) return false;
+            Post(() => AppPaths.Log($"connect-v2 queue clear-flow sent={client?.SendQueueClearFlow(currentItemId)}"));
+            return true;
+        };
         // 接続に関係なく回す（transfer の期限・アカウントタグの計算）
         _ = Task.Run(async () =>
         {
@@ -634,6 +640,13 @@ public sealed class ConnectService
             return removed;
         }
 
+        public bool QueueClearFlow(string currentItemId)
+        {
+            var cleared = owner.OnUi(() => owner.player.ApplyQueueClearFlow(currentItemId));
+            AppPaths.Log($"connect-v2 queue clear-flow received cleared={cleared}");
+            return cleared;
+        }
+
         /// <summary>ほかの端末と合わせたライブラリが届いた。手元の登録と聴いたところに取り込む（変われば保存し、画面も変わる）。</summary>
         public void LibraryChanged(LibraryBody body)
         {
@@ -924,7 +937,7 @@ public sealed class ConnectService
         if (index < 0) return null;
         var (window, windowIndex, truncated) = HandoffCodec.Window(items, index);
         // 出どころは Android の handoffSnapshot と同じ形にする（一覧は終わりでラジオへつなぐので、続きが無いとは書かない。AutoRadio）
-        var (radioSeed, radioPlaylistId, exhausted) = AutoRadio.ForHandoff(queue.Items.Select(i => i.Song).ToList(), queue.SourceId, queue.RadioSeed, queue.RadioPlaylistId);
+        var (radioSeed, radioPlaylistId, exhausted) = AutoRadio.ForHandoff(queue.Items.Select(i => i.Song).ToList(), queue.SourceId, queue.RadioSeed, queue.RadioPlaylistId, queue.FlowStopped);
         HandoffSource? source = radioSeed is { } seed ? new HandoffSource.Radio { SeedVideoId = seed }
             : queue.SourceId is { } id && System.Text.RegularExpressions.Regex.IsMatch(id, @"\A[A-Za-z0-9_-]{2,128}\z") ? new HandoffSource.Playlist { PlaylistId = id }
             : null;
@@ -1014,7 +1027,9 @@ public sealed class ConnectService
         (snapshot.Source as HandoffSource.Radio)?.SeedVideoId,
         // プレイリストの続き（Android が途中まで読んだもの）は、Windows のラジオの続きとは別物なので使わない
         snapshot.Source is HandoffSource.Playlist || snapshot.Exhausted ? null : snapshot.Continuation,
-        snapshot.RadioPlaylistId);
+        snapshot.RadioPlaylistId,
+        // 続きが無い（「次に流れる曲」を消去した・ラジオが尽きた）キューは、受け取ってからも埋め直さない（Android の exhausted と同じ）
+        snapshot.Exhausted);
 
     private static HandoffRepeat RepeatOf(RepeatMode mode) => mode switch
     {

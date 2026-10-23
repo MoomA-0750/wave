@@ -126,6 +126,9 @@ public protocol ConnectClientEffects: AnyObject {
     /// 遠隔のキューから外す（この端末が鳴らしている）。今の曲より後ろにある itemIds の曲だけを外す。
     func queueRemove(_ itemIds: [String]) -> Bool
 
+    /// 遠隔のキューの「次に流れる曲」を消去する（この端末が鳴らしている）。今の曲が currentItemId のときだけ。
+    func queueClearFlow(_ currentItemId: String) -> Bool
+
     /// ほかの端末と合わせたライブラリが届いた（手元に取り込む、ADR-0013）。
     func libraryChanged(_ body: LibraryBody)
 }
@@ -140,6 +143,8 @@ public extension ConnectClientEffects {
     func queueMove(_ itemId: String, afterItemId: String?) -> Bool { false }
 
     func queueRemove(_ itemIds: [String]) -> Bool { false }
+
+    func queueClearFlow(_ currentItemId: String) -> Bool { false }
 
     func volume(_ volumePercent: Int) -> Bool { false }
 
@@ -1206,6 +1211,12 @@ public final class ConnectClient {
         try sendQueueEdit(CommandBody.QueueEdit.remove, itemIds: itemIds, afterItemId: nil)
     }
 
+    /// 遠隔のキューの「次に流れる曲」の消去を送る。currentItemId は画面に出ている今の曲。条件は sendQueueMove と同じ。
+    @discardableResult
+    public func sendQueueClearFlow(_ currentItemId: String) throws -> Bool {
+        try sendQueueEdit(CommandBody.QueueEdit.clearFlow, itemIds: [currentItemId], afterItemId: nil)
+    }
+
     private func sendQueueEdit(_ op: String, itemIds: [String], afterItemId: String?) throws -> Bool {
         if itemIds.isEmpty || isWriter || pendingStoreId != nil { return false }
         guard let current = chain else { return false }
@@ -1343,6 +1354,8 @@ public final class ConnectClient {
             if command.itemIds.count == 1 { _ = effects.queueMove(command.itemIds[0], afterItemId: command.afterItemId) }
         case CommandBody.QueueEdit.remove:
             _ = effects.queueRemove(command.itemIds)
+        case CommandBody.QueueEdit.clearFlow:
+            if command.itemIds.count == 1 { _ = effects.queueClearFlow(command.itemIds[0]) }
         default:
             break
         }

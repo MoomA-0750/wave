@@ -235,7 +235,15 @@ private struct QueueRow: View {
         VStack(alignment: .leading, spacing: 0) {
             // かたまりの見出し（最初の行にだけ出す）
             if let section = entry.section {
-                Text(section).font(.body.weight(.semibold)).padding(.top, 10).padding(.bottom, 2)
+                HStack {
+                    Text(section).font(.body.weight(.semibold))
+                    Spacer()
+                    // 「次に流れる曲」の見出しにだけ: 元の流れの曲をまとめて外し、流れも止める（自分で足した曲は残す）
+                    if entry.isFlowHeader {
+                        Button(L.t("消去", "Clear")) { AppServices.player.clearFlow() }.buttonStyle(.textLink)
+                    }
+                }
+                .padding(.top, 10).padding(.bottom, 2)
             }
             HStack(spacing: 12) {
                 Cover(url: Ui.small(entry.song.thumbnailUrl), size: 44, radius: 4)

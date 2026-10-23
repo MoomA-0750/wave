@@ -74,6 +74,8 @@ enum DebugCommon {
             let parts = arg.split(separator: " ").compactMap { Int($0) }
             if parts.count == 2 { player.moveUpcoming(parts[0], parts[1]) }
         case "queue-remove": if let position = Int(arg) { player.removeAt(position) }
+        // 「次に流れる曲」の消去（元の流れの曲を外して流れを止める。ほかの端末で鳴っている間は queue_edit の clear_flow で送る）
+        case "queue-clear-flow": player.clearFlow()
         case "shuffle": player.toggleShuffle()
         case "repeat": player.cycleRepeat()
         case "next": player.next()

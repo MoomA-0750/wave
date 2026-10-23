@@ -57,4 +57,12 @@ final class QueueRadioTests: XCTestCase {
         XCTAssertTrue(QueueRadio.exhausted(radioSeed: nil, playlistSource: true, last: song(Feed.audioPrefix + "https://example.com/1.mp3"),
                                            truncated: false))
     }
+
+    func testExportedQueueIsExhaustedAfterTheFlowWasCleared() {
+        // 「次に流れる曲」を消去した: 受け手もプレイリストの続き・ラジオで埋め直さない（Android の exhausted と同じ）
+        XCTAssertTrue(QueueRadio.exhausted(radioSeed: nil, playlistSource: true, last: song("e"), truncated: false, flowStopped: true))
+        XCTAssertTrue(QueueRadio.exhausted(radioSeed: "e", playlistSource: false, last: song("e"), truncated: false, flowStopped: true))
+        // 後ろを切った（Android と同じく、尽きたとは書かない）
+        XCTAssertFalse(QueueRadio.exhausted(radioSeed: nil, playlistSource: true, last: song("e"), truncated: true, flowStopped: true))
+    }
 }

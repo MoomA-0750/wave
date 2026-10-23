@@ -339,10 +339,12 @@ final class ConnectSimulationTests: XCTestCase {
         XCTAssertTrue(try b.client.sendQueueMove("q2", afterItemId: "q5"))
         XCTAssertTrue(try b.client.sendQueueMove("q3", afterItemId: nil))
         XCTAssertTrue(try b.client.sendQueueRemove(["q4", "q6"]))
+        XCTAssertTrue(try b.client.sendQueueClearFlow("q1"))
         try relay.run()
         XCTAssertEqual(["q2", "q3"], a.queueMoves.map(\.itemId))
         XCTAssertEqual(["q5", nil], a.queueMoves.map(\.after))
         XCTAssertEqual([["q4", "q6"]], a.queueRemoves)
+        XCTAssertEqual(["q1"], a.queueClearFlows)
         // 鳴らしている A 自身は送らない
         XCTAssertFalse(try a.client.sendQueueRemove(["q1"]))
     }

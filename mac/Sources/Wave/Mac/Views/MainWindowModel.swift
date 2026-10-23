@@ -22,6 +22,8 @@ struct QueueEntry: Identifiable, Hashable {
     var song: Song
     var isCurrent: Bool
     var section: String?
+    /// 「次に流れる曲」の見出しの行（見出しに「消去」を出す）。
+    var isFlowHeader = false
     var id: Int { index }
 }
 
@@ -257,7 +259,8 @@ final class MainWindowModel {
                     : i == player.index + 1 && i < userEnd ? L.t("キューの次の曲", "Next in queue")
                     : i == userEnd ? L.t("次に流れる曲", "Next up")
                     : nil
-                entries.append(QueueEntry(index: i, song: player.queue[i], isCurrent: i == player.index, section: section))
+                entries.append(QueueEntry(index: i, song: player.queue[i], isCurrent: i == player.index, section: section,
+                                          isFlowHeader: i == userEnd && i > player.index))
                 i += 1
             }
         }

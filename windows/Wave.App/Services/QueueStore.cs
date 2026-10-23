@@ -22,7 +22,9 @@ public sealed record SavedQueue(
     string? Continuation,
     string? RadioPlaylistId,
     /// <summary>シャッフル中なら、切ったときに戻す並び（項目の ID → 位置）。前の形式のファイルには無い（切った状態で戻す）。</summary>
-    Dictionary<string, int>? ShuffleOrder = null)
+    Dictionary<string, int>? ShuffleOrder = null,
+    /// <summary>「次に流れる曲」を消去して流れを止めている（続きを足さない）。前の形式のファイルには無い（止めていない）。</summary>
+    bool FlowStopped = false)
 {
     public const int CurrentVersion = 1;
 }

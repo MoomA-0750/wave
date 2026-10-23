@@ -380,9 +380,12 @@ public enum CommandBody: Equatable, Sendable, ConnectCodable {
     /// 遠隔のキューの並べ替え・外す: 鳴っていない端末のキューの画面から、今の再生中の端末へ（Android 版の CommandBody.QueueEdit と同じ）。
     /// 従う条件は QueueAdd と同じ。op が move なら itemIds の1曲を afterItemId の曲の直後へ（afterItemId が無ければ今の曲の直後へ）動かす。
     /// remove なら itemIds の曲を外す。どれも今の曲より後ろの曲だけで、受け手のキューに無い ID・今の曲・前の曲は無視する。
+    /// clear_flow なら「次に流れる曲」（元の流れの曲）をまとめて外して流れを止める（自分で足した曲は残す）。
+    /// itemIds は送り手が見ていた今の曲だけで、受け手の今の曲と違えば無視する。
     public struct QueueEdit: Equatable, Sendable {
         public static let move = "move"
         public static let remove = "remove"
+        public static let clearFlow = "clear_flow"
 
         public var commandId: String
         public var from: String

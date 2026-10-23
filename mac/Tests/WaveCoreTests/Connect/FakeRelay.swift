@@ -521,6 +521,14 @@ final class SimDevice: ConnectClientEffects {
         return true
     }
 
+    /// 従った「次に流れる曲」の消去（送り手が見ていた今の曲）。
+    var queueClearFlows: [String] = []
+
+    func queueClearFlow(_ currentItemId: String) -> Bool {
+        queueClearFlows.append(currentItemId)
+        return true
+    }
+
     func control(_ action: ControlAction, positionMs: Int64?) -> Bool {
         controls.append((action, positionMs))
         switch action {

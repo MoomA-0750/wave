@@ -338,6 +338,10 @@ public static class DebugCommands
             case "queue-clear":
                 player.ClearUserQueue();
                 break;
+            // 「次に流れる曲」の消去（元の流れの曲を外して流れを止める。ほかの端末で鳴っている間は queue_edit の clear_flow で送る）
+            case "queue-clear-flow":
+                player.ClearFlow();
+                break;
             // キューの並べ替え・外す（ほかの端末で鳴っている間は、その端末へ queue_edit で送る）。位置はキュー全体の番号
             case "queue-move":
                 {

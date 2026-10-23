@@ -108,6 +108,9 @@ public sealed class ConnectClient
         /// <summary>遠隔のキューから外す（この端末が鳴らしている）。今の曲より後ろにある itemIds の曲だけを外す。</summary>
         bool QueueRemove(IReadOnlyList<string> itemIds) => false;
 
+        /// <summary>遠隔のキューの「次に流れる曲」を消去する（この端末が鳴らしている）。今の曲が currentItemId のときだけ。</summary>
+        bool QueueClearFlow(string currentItemId) => false;
+
         /// <summary>遠隔の音量に従う（この端末が鳴らしている）。この端末の音量（PC のアプリの中の音量。スマホ・時計は音量を合わせないので載せない・受けない）を volumePercent（0〜100）にする。受け付けなければ false。</summary>
         bool Volume(int volumePercent) => false;
 
@@ -1220,6 +1223,9 @@ public sealed class ConnectClient
     /// <summary>遠隔のキューから外すのを送る。条件は SendQueueMove と同じ。</summary>
     public bool SendQueueRemove(IReadOnlyList<string> itemIds) => SendQueueEdit(CommandBody.QueueEdit.Remove, itemIds, null);
 
+    /// <summary>遠隔のキューの「次に流れる曲」の消去を送る。currentItemId は画面に出ている今の曲。条件は SendQueueMove と同じ。</summary>
+    public bool SendQueueClearFlow(string currentItemId) => SendQueueEdit(CommandBody.QueueEdit.ClearFlow, [currentItemId], null);
+
     private bool SendQueueEdit(string op, IReadOnlyList<string> itemIds, string? afterItemId)
     {
         if (itemIds.Count == 0 || IsWriter || pendingStoreId is not null) return false;
@@ -1362,6 +1368,9 @@ public sealed class ConnectClient
                 break;
             case CommandBody.QueueEdit.Remove:
                 effects.QueueRemove(command.ItemIds);
+                break;
+            case CommandBody.QueueEdit.ClearFlow when command.ItemIds.Count == 1:
+                effects.QueueClearFlow(command.ItemIds[0]);
                 break;
         }
     }

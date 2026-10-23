@@ -53,6 +53,11 @@ public sealed partial class PlayerService : ObservableObject
     private string? pendingSourceId;
     /// <summary>キューの最後の曲を流し終えて止まっている（あとから曲が足されたら、足した先頭から続ける）。</summary>
     private bool stoppedAtEnd;
+    /// <summary>
+    /// 「次に流れる曲」を消去して、流れを止めた（一覧の続きもラジオも足さない。Android の QueueSession の exhausted と同じ）。
+    /// 新しく曲を選ぶと戻る。保存・端末への受け渡しにも載せる（受け取った側も埋め直さない）。
+    /// </summary>
+    private bool flowStopped;
 
     // 端末の連携（Connect v2）: キューの項目ごとの ID と出どころ（Queue と同じ並び）、今の曲を聴いた時間
     private readonly List<QueueItemMeta> itemMeta = [];
@@ -135,6 +140,9 @@ public sealed partial class PlayerService : ObservableObject
 
     /// <summary>ほかの端末で鳴っている間のキューから外す（項目の ID）を、その端末へ送る（端末の連携が置く）。送れたら true。</summary>
     public Func<IReadOnlyList<string>, bool>? SendRemoteQueueRemove { get; set; }
+
+    /// <summary>ほかの端末で鳴っている間の「次に流れる曲」の消去（映している今の曲の項目の ID）を、その端末へ送る（端末の連携が置く）。送れたら true。</summary>
+    public Func<string, bool>? SendRemoteQueueClearFlow { get; set; }
 
     private RemoteSnapshot? remote;
     private string? remoteQueueKey;
@@ -238,7 +246,7 @@ public sealed partial class PlayerService : ObservableObject
         }
         store.Save(new SavedQueue(SavedQueue.CurrentVersion, AppServices.Account.ObtainedAtEpochMs,
             queue.Items.Select(i => new SavedQueueItem(i.Song, i.Meta.ItemId, i.Meta.Origin)).ToList(),
-            cursor.CurrentItemId, cursor.PositionMs, (int)Repeat, SourceId, queue.RadioSeed, queue.Continuation, queue.RadioPlaylistId, shuffleOrder));
+            cursor.CurrentItemId, cursor.PositionMs, (int)Repeat, SourceId, queue.RadioSeed, queue.Continuation, queue.RadioPlaylistId, shuffleOrder, queue.FlowStopped));
     }
 
     /// <summary>起動時に、前回のキューを再生を始めずに戻す（保存したときと今のログインが違えば消す）。</summary>
@@ -256,6 +264,7 @@ public sealed partial class PlayerService : ObservableObject
         radioSeed = saved.RadioSeed;
         radioContinuation = saved.Continuation;
         radioPlaylistId = saved.RadioPlaylistId;
+        flowStopped = saved.FlowStopped;
         SetShuffleOrder(saved.ShuffleOrder);
         foreach (var item in saved.Items)
         {
@@ -499,6 +508,7 @@ public sealed partial class PlayerService : ObservableObject
         LeaveRemote();
         radioContinuation = null;
         radioPlaylistId = null;
+        flowStopped = false;
         SourceId = source;
         // 一覧の「シャッフル再生」のときだけシャッフルを入れて始める。それ以外は切る（Android と同じ）
         var shuffled = shuffleOverride == true;
@@ -560,6 +570,7 @@ public sealed partial class PlayerService : ObservableObject
         var target = RemoteDeviceId;
         LeaveRemote();
         SourceId = null;
+        flowStopped = false;
         SetShuffleOrder(null);
         ReplaceQueue([song], QueueOrigin.Source);
         if (song.IsLive || Feed.IsExternal(song.VideoId))
@@ -578,7 +589,7 @@ public sealed partial class PlayerService : ObservableObject
         radioContinuation = null;
         if (StartSelection(0, target)) return;
         var page = await AppServices.Music.UpNextAsync(song.VideoId, radioPlaylistId);
-        if (!page.IsOk || Queue.Count == 0 || Queue[0].VideoId != song.VideoId) return;
+        if (!page.IsOk || flowStopped || Queue.Count == 0 || Queue[0].VideoId != song.VideoId) return;
         radioContinuation = page.Value!.Continuation;
         radioPlaylistId = page.Value.PlaylistId ?? radioPlaylistId;
         AppendAuto(page.Value.Songs.Where(s => s.VideoId != song.VideoId).ToList(), QueueOrigin.Suggestion);
@@ -591,6 +602,8 @@ public sealed partial class PlayerService : ObservableObject
     public void AppendFrom(IReadOnlyList<Song> songs)
     {
         pendingSourceId = null;
+        // 「次に流れる曲」を消去した後に届いた残りは足さない
+        if (flowStopped) return;
         var known = Queue.Select(s => s.VideoId).ToHashSet();
         var extra = songs.Where(s => known.Add(s.VideoId)).ToList();
         if (shuffleOrder is { } order)
@@ -762,6 +775,47 @@ public sealed partial class PlayerService : ObservableObject
             removed++;
         }
         if (removed > 0) Message = L.T($"キューから {removed} 曲を外しました", $"Removed {L.Songs(removed)} from the queue");
+    }
+
+    /// <summary>
+    /// 「次に流れる曲」（元の流れ: 一覧の残り・サジェスト）を消去する。自分で足した曲は残す（Android の QueueSession.clearFlow と同じ）。
+    /// 後から一覧の続きやラジオで埋め直さないよう、流れも止める（自分で足した曲が終われば止まる）。
+    /// ほかの端末で鳴っている間は、その端末へ送り（queue_edit の clear_flow）、映しからも先に外す。
+    /// </summary>
+    public void ClearFlow()
+    {
+        if (Index < 0 || Index >= Queue.Count) return;
+        if (IsRemote)
+        {
+            if (SendRemoteQueueClearFlow?.Invoke(itemMeta[Index].ItemId) != true)
+            {
+                Message = L.T("ほかの端末に送れませんでした", "Couldn’t reach the other device");
+                return;
+            }
+            HoldRemoteQueue();
+            RemoveFlowItems();
+            return;
+        }
+        flowStopped = true;
+        radioSeed = null;
+        radioContinuation = null;
+        pendingSourceId = null;
+        RemoveFlowItems();
+        SaveQueue();
+    }
+
+    private void RemoveFlowItems()
+    {
+        for (var i = Queue.Count - 1; i > Index; i--)
+            if (!IsUserAdded(i)) Queue.RemoveAt(i);
+    }
+
+    /// <summary>ほかの端末のキューの画面での「次に流れる曲」の消去に従う（この端末が鳴らしている）。送り手が見ていた今の曲が同じときだけ。</summary>
+    public bool ApplyQueueClearFlow(string currentItemId)
+    {
+        if (IsRemote || Index < 0 || Index >= itemMeta.Count || itemMeta[Index].ItemId != currentItemId) return false;
+        ClearFlow();
+        return true;
     }
 
     /// <summary>キューの次の曲を並べ替える（今の曲より後ろだけ）。ほかの端末で鳴っている間は、その端末へ送る。</summary>
@@ -1153,6 +1207,8 @@ public sealed partial class PlayerService : ObservableObject
     /// <summary>自動で続き（一覧の残り・ラジオ）を最後に足す。最後の曲を流し終えて止まっていたら、足した先頭から続ける（Android の appendItems と同じ）。</summary>
     private void AppendAuto(IReadOnlyList<Song> songs, QueueOrigin origin)
     {
+        // 「次に流れる曲」を消去した後に届いた続き（取りに行っている途中だったもの）は足さない
+        if (flowStopped) return;
         var start = Queue.Count;
         AddAll(songs, origin);
         ResumeAfterEnd(start);
@@ -1207,7 +1263,8 @@ public sealed partial class PlayerService : ObservableObject
             radioSeed is not null ? null : SourceId,
             radioSeed,
             radioContinuation,
-            radioPlaylistId);
+            radioPlaylistId,
+            flowStopped);
     }
 
     /// <summary>今の再生の位置など。キューが空なら null。</summary>
@@ -1249,6 +1306,7 @@ public sealed partial class PlayerService : ObservableObject
         radioSeed = queue.RadioSeed;
         radioContinuation = queue.Continuation;
         radioPlaylistId = queue.RadioPlaylistId;
+        flowStopped = queue.FlowStopped;
         pendingSourceId = null;
         stoppedAtEnd = false;
         // ほかの端末から受け取ったキューは、シャッフルを切った状態で始める（Android と同じ）
@@ -1280,7 +1338,7 @@ public sealed partial class PlayerService : ObservableObject
         if (index < 0) return false;
         if (IsRemote)
         {
-            localBackup = new LocalQueueBackup(queue.Items, index, queue.SourceId, queue.RadioSeed, queue.Continuation, queue.RadioPlaylistId, null, positionMs / 1000.0, repeat);
+            localBackup = new LocalQueueBackup(queue.Items, index, queue.SourceId, queue.RadioSeed, queue.Continuation, queue.RadioPlaylistId, null, positionMs / 1000.0, repeat, queue.FlowStopped);
             return true;
         }
         if (IsPlaying || IsLoading) return false;
@@ -1292,6 +1350,7 @@ public sealed partial class PlayerService : ObservableObject
         radioSeed = queue.RadioSeed;
         radioContinuation = queue.Continuation;
         radioPlaylistId = queue.RadioPlaylistId;
+        flowStopped = queue.FlowStopped;
         pendingSourceId = null;
         stoppedAtEnd = false;
         SetShuffleOrder(null);
@@ -1383,7 +1442,7 @@ public sealed partial class PlayerService : ObservableObject
     }
 
     /// <summary>映し始める前の手元のキュー（映すのをやめたら戻す。Android と同じく、手元のキューは相手のキューで消さない）。</summary>
-    private sealed record LocalQueueBackup(List<(Song Song, QueueItemMeta Meta)> Items, int Index, string? SourceId, string? RadioSeed, string? Continuation, string? RadioPlaylistId, Dictionary<string, int>? ShuffleOrder, double PositionSeconds = 0, RepeatMode? Repeat = null);
+    private sealed record LocalQueueBackup(List<(Song Song, QueueItemMeta Meta)> Items, int Index, string? SourceId, string? RadioSeed, string? Continuation, string? RadioPlaylistId, Dictionary<string, int>? ShuffleOrder, double PositionSeconds = 0, RepeatMode? Repeat = null, bool FlowStopped = false);
 
     private LocalQueueBackup? localBackup;
 
@@ -1405,7 +1464,7 @@ public sealed partial class PlayerService : ObservableObject
             player.Source = null;
             IsLoading = false;
             localBackup = Queue.Count == 0 ? null : new LocalQueueBackup(
-                Queue.Select((song, i) => (song, itemMeta[i])).ToList(), Index, SourceId, radioSeed, radioContinuation, radioPlaylistId, shuffleOrder is null ? null : new Dictionary<string, int>(shuffleOrder), Position);
+                Queue.Select((song, i) => (song, itemMeta[i])).ToList(), Index, SourceId, radioSeed, radioContinuation, radioPlaylistId, shuffleOrder is null ? null : new Dictionary<string, int>(shuffleOrder), Position, FlowStopped: flowStopped);
             IsRemote = true;
         }
         // 押した直後は、相手の新しいカーソルが届くまで表示を保つ
@@ -1551,6 +1610,7 @@ public sealed partial class PlayerService : ObservableObject
         radioSeed = backup.RadioSeed;
         radioContinuation = backup.Continuation;
         radioPlaylistId = backup.RadioPlaylistId;
+        flowStopped = backup.FlowStopped;
         stoppedAtEnd = false;
         SetShuffleOrder(backup.ShuffleOrder);
         if (backup.Repeat is { } repeat) Repeat = repeat;
@@ -2358,7 +2418,7 @@ public sealed partial class PlayerService : ObservableObject
     /// </summary>
     private async void ExtendRadioIfNeeded()
     {
-        if (extending || IsRemote || !AutoRadio.NearEnd(Queue.Count, Index)) return;
+        if (extending || IsRemote || flowStopped || !AutoRadio.NearEnd(Queue.Count, Index)) return;
         if (radioSeed is null)
         {
             var seedAtEnd = AutoRadio.SeedAtEnd(Queue, Index, hasRadio: radioContinuation is not null, Repeat == RepeatMode.All, pendingSourceId is not null && pendingSourceId == SourceId);
@@ -2381,7 +2441,7 @@ public sealed partial class PlayerService : ObservableObject
         try
         {
             var page = await AppServices.Music.UpNextAsync(null, radioPlaylistId, radioContinuation);
-            if (!page.IsOk) return;
+            if (!page.IsOk || flowStopped) return;
             radioContinuation = page.Value!.Continuation;
             var known = Queue.Select(s => s.VideoId).ToHashSet();
             AppendAuto(page.Value.Songs.Where(s => known.Add(s.VideoId)).ToList(), QueueOrigin.Suggestion);
@@ -2430,7 +2490,9 @@ public sealed record QueueExport(
     string? SourceId,
     string? RadioSeed,
     string? Continuation,
-    string? RadioPlaylistId);
+    string? RadioPlaylistId,
+    /// <summary>流れを止めている（「次に流れる曲」を消去した。続きを足さない）。</summary>
+    bool FlowStopped = false);
 
 public sealed record PlaybackCursor(string CurrentItemId, long PositionMs, bool Playing, RepeatMode Repeat, long ListenedMs, bool HistorySent, int VolumePercent, bool Shuffle = false);
 

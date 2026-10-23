@@ -27,6 +27,8 @@ struct QueueExport {
     var radioSeed: String?
     var continuation: String?
     var radioPlaylistId: String?
+    /// 流れを止めている（「次に流れる曲」を消去した。続きを足さない）。
+    var flowStopped = false
 }
 
 struct PlaybackCursor {
@@ -103,6 +105,9 @@ final class PlayerService {
     @ObservationIgnored private var restPending = false
     /// 最後の曲を流し終えて止まっている（あとから曲が足されたら、足した先頭から続ける。Android の appendItems と同じ）。
     @ObservationIgnored private var endedAtLast = false
+    /// 「次に流れる曲」を消去して、流れを止めた（一覧の続きもラジオも足さない。Android の QueueSession の exhausted と同じ）。
+    /// 新しく曲を選ぶと戻る。保存・端末への受け渡しにも載せる（受け取った側も埋め直さない）。
+    @ObservationIgnored private var flowStopped = false
 
     // 端末の連携（Connect v2）: キューの項目ごとの ID と出どころ（queue と同じ並び）、今の曲を聴いた時間
     @ObservationIgnored private(set) var itemMeta: [QueueItemMeta] = []
@@ -345,6 +350,8 @@ final class PlayerService {
     @ObservationIgnored var sendRemoteQueueMove: ((String, String?) -> Bool)?
     /// ほかの端末で鳴っている間のキューから外す（項目の ID）を、その端末へ送る。送れなければ false。
     @ObservationIgnored var sendRemoteQueueRemove: (([String]) -> Bool)?
+    /// ほかの端末で鳴っている間の「次に流れる曲」の消去（映している今の曲の項目の ID）を、その端末へ送る。送れなければ false。
+    @ObservationIgnored var sendRemoteQueueClearFlow: ((String) -> Bool)?
 
     @ObservationIgnored private var remote: RemoteSnapshot?
     @ObservationIgnored private var remoteQueueKey: String?
@@ -500,7 +507,8 @@ final class PlayerService {
         store.save(SavedQueue(version: SavedQueue.currentVersion, obtainedAtEpochMs: AppServices.account.obtainedAtEpochMs,
                               items: queue.items.map { SavedQueueItem(song: SongRecord($0.song), itemId: $0.meta.itemId, origin: $0.meta.origin) },
                               currentItemId: cursor.currentItemId, positionMs: cursor.positionMs, repeatMode: repeatMode.rawValue, sourceId: sourceId,
-                              radioSeed: queue.radioSeed, continuation: queue.continuation, radioPlaylistId: queue.radioPlaylistId, shuffleOrder: shuffleOrder))
+                              radioSeed: queue.radioSeed, continuation: queue.continuation, radioPlaylistId: queue.radioPlaylistId, shuffleOrder: shuffleOrder,
+                              flowStopped: queue.flowStopped ? true : nil))
     }
 
     /// 起動時に、前回のキューを再生を始めずに戻す（保存したときと今のログインが違えば消す）。
@@ -515,6 +523,7 @@ final class PlayerService {
         radioSeed = saved.radioSeed
         radioContinuation = saved.continuation
         radioPlaylistId = saved.radioPlaylistId
+        flowStopped = saved.flowStopped == true
         setShuffleOrder(saved.shuffleOrder)
         replaceAll(saved.items.map { ($0.song.song, QueueItemMeta(itemId: $0.itemId, origin: $0.origin)) })
         setRepeat(RepeatMode(rawValue: saved.repeatMode) ?? .off)
@@ -540,7 +549,8 @@ final class PlayerService {
     /// 一覧の残り・ラジオの続きを自動で足す。最後の曲で止まっていたら、足した先頭から続ける
     /// （途中の曲で一時的な失敗で止めたものは勝手に再開しない。Android の appendItems と同じ）。
     private func appendContinuing(_ songs: [Song], origin: QueueOrigin) {
-        guard !songs.isEmpty else { return }
+        // 「次に流れる曲」を消去した後に届いた続き（取りに行っている途中だったもの）は足さない
+        guard !songs.isEmpty, !flowStopped else { return }
         let wasEnded = endedAtLast && !isRemote && !isPlaying && !isLoading && index == queue.count - 1
         let first = queue.count
         append(songs, origin: origin)
@@ -583,6 +593,7 @@ final class PlayerService {
         leaveRemote()
         radioContinuation = nil
         radioPlaylistId = nil
+        flowStopped = false
         sourceId = source
         // 一覧の「シャッフル再生」のときだけシャッフルを入れて始める。それ以外は切る（Android と同じ）
         let shuffled = shuffleOverride == true
@@ -633,6 +644,7 @@ final class PlayerService {
         let target = remoteDeviceId
         leaveRemote()
         sourceId = nil
+        flowStopped = false
         setShuffleOrder(nil)
         replaceQueue([song], origin: .source)
         // ライブ配信は終わらずに流れ続けるので、後ろにラジオのおすすめを足さない（Android と同じ）。
@@ -651,7 +663,7 @@ final class PlayerService {
         if startSelection(0, remoteTarget: target) { return }
         Task {
             guard let page = (try? await AppServices.music.upNext(videoId: song.videoId, playlistId: radioPlaylistId))?.value,
-                let first = queue.first, first.videoId == song.videoId
+                !flowStopped, let first = queue.first, first.videoId == song.videoId
             else { return }
             radioContinuation = page.continuation
             radioPlaylistId = page.playlistId ?? radioPlaylistId
@@ -663,6 +675,8 @@ final class PlayerService {
     /// 残りを読めなかったときも空で呼ぶ（読み終えたことにして、一覧の終わりでラジオへ切り替えられるようにする）。
     func appendFrom(_ songs: [Song]) {
         restPending = false
+        // 「次に流れる曲」を消去した後に届いた残りは足さない
+        if flowStopped { return }
         var known = Set(queue.map(\.videoId))
         var extra = songs.filter { known.insert($0.videoId).inserted }
         if var order = shuffleOrder {
@@ -777,6 +791,33 @@ final class PlayerService {
         let positions = itemMeta.indices.filter { $0 > index && isUserAdded($0) }
         guard removeUpcoming(positions) else { return }
         if !positions.isEmpty { message = L.t("キューから \(positions.count) 曲を外しました", "Removed \(L.songs(positions.count)) from the queue") }
+    }
+
+    /// 「次に流れる曲」（元の流れ: 一覧の残り・サジェスト）を消去する。自分で足した曲は残す（Android の QueueSession.clearFlow と同じ）。
+    /// 後から一覧の続きやラジオで埋め直さないよう、流れも止める（自分で足した曲が終われば止まる）。
+    /// ほかの端末で鳴っている間は、その端末へ送り（queue_edit の clear_flow）、映しているキューからも先に外す。
+    func clearFlow() {
+        guard index >= 0, index < queue.count else { return }
+        if isRemote {
+            guard sendRemoteQueueClearFlow?(itemMeta[index].itemId) == true else {
+                message = L.t("ほかの端末に送れませんでした", "Couldn’t reach the other device")
+                return
+            }
+        } else {
+            flowStopped = true
+            radioSeed = nil
+            radioContinuation = nil
+            restPending = false
+        }
+        for position in itemMeta.indices.reversed() where position > index && !isUserAdded(position) { removeQueueItem(at: position) }
+        if !isRemote { saveQueue() }
+    }
+
+    /// ほかの端末のキューの画面での「次に流れる曲」の消去に従う（この端末が鳴らしている）。送り手が見ていた今の曲が同じときだけ。
+    func applyQueueClearFlow(_ currentItemId: String) -> Bool {
+        guard !isRemote, index >= 0, index < itemMeta.count, itemMeta[index].itemId == currentItemId else { return false }
+        clearFlow()
+        return true
     }
 
     /// キューの次の曲を並べ替える（今の曲より後ろだけ）。
@@ -1134,7 +1175,8 @@ final class PlayerService {
     func exportQueue() -> QueueExport? {
         guard !isRemote, !queue.isEmpty, index >= 0, index < queue.count else { return nil }
         return QueueExport(items: zip(queue, itemMeta).map { ($0, $1) }, currentItemId: itemMeta[index].itemId,
-                           sourceId: radioSeed != nil ? nil : sourceId, radioSeed: radioSeed, continuation: radioContinuation, radioPlaylistId: radioPlaylistId)
+                           sourceId: radioSeed != nil ? nil : sourceId, radioSeed: radioSeed, continuation: radioContinuation, radioPlaylistId: radioPlaylistId,
+                           flowStopped: flowStopped)
     }
 
     /// 今の再生の位置など。キューが空なら nil。
@@ -1188,6 +1230,7 @@ final class PlayerService {
         radioSeed = queue.radioSeed
         radioContinuation = queue.continuation
         radioPlaylistId = queue.radioPlaylistId
+        flowStopped = queue.flowStopped
         // ほかの端末から受け取ったキューは、シャッフルを切った状態で始める（Android と同じ）
         setShuffleOrder(nil)
         replaceAll(queue.items.map { ($0.song, $0.meta) })
@@ -1207,7 +1250,7 @@ final class PlayerService {
         if isRemote {
             localBackup = LocalQueueBackup(items: queue.items, index: index, sourceId: queue.sourceId, radioSeed: queue.radioSeed,
                                            continuation: queue.continuation, radioPlaylistId: queue.radioPlaylistId, shuffleOrder: nil,
-                                           positionSeconds: Double(positionMs) / 1000, repeatMode: repeatMode)
+                                           positionSeconds: Double(positionMs) / 1000, repeatMode: repeatMode, flowStopped: queue.flowStopped)
             return true
         }
         if isPlaying || isLoading { return false }
@@ -1217,6 +1260,7 @@ final class PlayerService {
         radioSeed = queue.radioSeed
         radioContinuation = queue.continuation
         radioPlaylistId = queue.radioPlaylistId
+        flowStopped = queue.flowStopped
         setShuffleOrder(nil)
         replaceAll(queue.items.map { ($0.song, $0.meta) })
         setRepeat(repeatMode)
@@ -1286,6 +1330,7 @@ final class PlayerService {
         var shuffleOrder: [String: Int]?
         var positionSeconds: Double = 0
         var repeatMode: RepeatMode?
+        var flowStopped = false
     }
 
     @ObservationIgnored private var localBackup: LocalQueueBackup?
@@ -1304,7 +1349,7 @@ final class PlayerService {
             isLoading = false
             localBackup = queue.isEmpty ? nil : LocalQueueBackup(items: zip(queue, itemMeta).map { ($0, $1) }, index: index, sourceId: sourceId,
                                                                  radioSeed: radioSeed, continuation: radioContinuation, radioPlaylistId: radioPlaylistId,
-                                                                 shuffleOrder: shuffleOrder, positionSeconds: position)
+                                                                 shuffleOrder: shuffleOrder, positionSeconds: position, flowStopped: flowStopped)
             isRemote = true
         }
         // 押した直後は、相手の新しいカーソルが届くまで表示を保つ
@@ -1392,6 +1437,7 @@ final class PlayerService {
         radioSeed = backup.radioSeed
         radioContinuation = backup.continuation
         radioPlaylistId = backup.radioPlaylistId
+        flowStopped = backup.flowStopped
         setShuffleOrder(backup.shuffleOrder)
         if let r = backup.repeatMode { setRepeat(r) }
         if backup.index >= 0 && backup.index < queue.count {
@@ -1966,7 +2012,7 @@ final class PlayerService {
     /// 残りが少なくなったら続きを足す。ラジオなら続きのページを、一覧（プレイリスト・アルバム・アーティスト）なら
     /// 最後の曲から始まるラジオに切り替えて、その最初のページを足す（Android の QueueSession と同じ。決定 E4）。
     private func extendRadioIfNeeded() {
-        if extending || isRemote || !QueueRadio.nearEnd(count: queue.count, index: index) { return }
+        if extending || isRemote || flowStopped || !QueueRadio.nearEnd(count: queue.count, index: index) { return }
         if let seed = QueueRadio.switchSeed(queue: queue, index: index, radioSeed: radioSeed, radioContinuation: radioContinuation,
                                             repeatAll: repeatMode == .all, restPending: restPending)
         {
@@ -1989,7 +2035,7 @@ final class PlayerService {
         extending = true
         Task {
             defer { extending = false }
-            guard let page = (try? await AppServices.music.upNext(videoId: nil, playlistId: radioPlaylistId, continuation: continuation))?.value else { return }
+            guard let page = (try? await AppServices.music.upNext(videoId: nil, playlistId: radioPlaylistId, continuation: continuation))?.value, !self.flowStopped else { return }
             radioContinuation = page.continuation
             var known = Set(queue.map(\.videoId))
             appendContinuing(page.songs.filter { known.insert($0.videoId).inserted }, origin: .suggestion)

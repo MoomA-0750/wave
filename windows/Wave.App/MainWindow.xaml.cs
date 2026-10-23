@@ -38,9 +38,13 @@ public sealed class LibraryEntry(string title, string? subtitle, string? thumbna
         : (Brush)Application.Current.Resources["ControlFillColorSecondaryBrush"];
 }
 
-/// <summary>キューの1行。Section はかたまりの最初の行にだけ付く見出し（「再生中」「キューの次の曲」「次に流れる曲」）。</summary>
-public sealed class QueueEntry(int index, Song song, bool isCurrent, string? section = null)
+/// <summary>
+/// キューの1行。Section はかたまりの最初の行にだけ付く見出し（「再生中」「キューの次の曲」「次に流れる曲」）。
+/// IsFlowHeader は「次に流れる曲」の見出しの行（見出しに「消去」を出す）。
+/// </summary>
+public sealed class QueueEntry(int index, Song song, bool isCurrent, string? section = null, bool isFlowHeader = false)
 {
+    public bool IsFlowHeader { get; } = isFlowHeader;
     public int Index { get; } = index;
     public Song Song { get; } = song;
     public bool IsCurrent { get; } = isCurrent;
@@ -865,7 +869,7 @@ public sealed partial class MainWindow : Window
                     : i == Player.Index + 1 && i < userEnd ? L.T("キューの次の曲", "Next in queue")
                     : i == userEnd ? L.T("次に流れる曲", "Next up")
                     : null;
-                entries.Add(new QueueEntry(i, Player.Queue[i], i == Player.Index, section));
+                entries.Add(new QueueEntry(i, Player.Queue[i], i == Player.Index, section, isFlowHeader: i == userEnd && i > Player.Index));
             }
             ClearQueueButton.Visibility = Ui.Show(userEnd > Player.Index + 1);
         }
@@ -893,6 +897,13 @@ public sealed partial class MainWindow : Window
     private void OnClearQueue(object sender, RoutedEventArgs e)
     {
         Player.ClearUserQueue();
+        RenderQueue();
+    }
+
+    /// <summary>「次に流れる曲」の見出しの「消去」: 元の流れの曲をまとめて外し、流れも止める（自分で足した曲は残す）。</summary>
+    private void OnClearFlow(object sender, RoutedEventArgs e)
+    {
+        Player.ClearFlow();
         RenderQueue();
     }
 

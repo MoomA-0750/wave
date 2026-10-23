@@ -163,6 +163,14 @@ final class ConnectService {
             }
             return true
         }
+        player.sendRemoteQueueClearFlow = { currentItemId in
+            guard worker.loaded.current, worker.relay.status == .connected else { return false }
+            worker.post {
+                let sent = try worker.client?.sendQueueClearFlow(currentItemId)
+                AppPaths.log("connect-v2 queue clear-flow sent=\(sent.map { String($0) } ?? "")")
+            }
+            return true
+        }
         // 接続に関係なく回す（transfer の期限・アカウントタグの計算）
         worker.startTicking()
         // Mac は画面がある間ずっと中継につなぐ（家に入っていなければ、中継は認証で断る）
@@ -262,7 +270,8 @@ final class ConnectService {
             currentItemId: window[windowIndex].meta.itemId, positionMs: 0, playing: false, repeat: .off, source: source,
             continuation: truncated ? nil : queue.continuation, radioPlaylistId: queue.radioPlaylistId,
             // プレイリスト・アルバムは、最後まで行ったら受け取った端末が最後の曲のラジオへ切り替えるので尽きていない（Android と同じ）
-            exhausted: QueueRadio.exhausted(radioSeed: queue.radioSeed, playlistSource: source != nil, last: queue.items.last?.song, truncated: truncated),
+            exhausted: QueueRadio.exhausted(radioSeed: queue.radioSeed, playlistSource: source != nil, last: queue.items.last?.song, truncated: truncated,
+                                            flowStopped: queue.flowStopped),
             listenedMs: 0, historySent: false, capturedAtEpochMs: 0)
         guard case .ok = HandoffCodec.validate(snapshot, expectedHandoffId: ConnectService.snapshotId) else { return nil }
         return HandoffCodec.encode(snapshot)
@@ -1079,6 +1088,12 @@ final class ConnectWorker: ConnectClientEffects, @unchecked Sendable {
         return removed
     }
 
+    func queueClearFlow(_ currentItemId: String) -> Bool {
+        let cleared = onUi { [player] in player.applyQueueClearFlow(currentItemId) }
+        AppPaths.log("connect-v2 queue clear-flow received cleared=\(cleared)")
+        return cleared
+    }
+
     /// 手元のライブラリを中継と合わせる（作業の列で呼ぶ）。
     func publishLibrary(_ body: LibraryBody) throws {
         library = body
@@ -1456,7 +1471,9 @@ enum ConnectQueue {
             currentItemId: snapshot.currentItemId, sourceId: playlistId, radioSeed: radioSeed,
             // プレイリストの続き（Android が途中まで読んだもの）は、Mac のラジオの続きとは別物なので使わない
             continuation: isPlaylist || snapshot.exhausted ? nil : snapshot.continuation,
-            radioPlaylistId: snapshot.radioPlaylistId)
+            radioPlaylistId: snapshot.radioPlaylistId,
+            // 続きが無い（「次に流れる曲」を消去した・ラジオが尽きた）キューは、受け取ってからも埋め直さない（Android の exhausted と同じ）
+            flowStopped: snapshot.exhausted)
     }
 
     static func repeatOf(_ mode: RepeatMode) -> HandoffRepeat {

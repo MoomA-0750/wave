@@ -71,4 +71,12 @@ public class AutoRadioTests
         Assert.Equal((null, null, true), AutoRadio.ForHandoff(episodes, null, null, null));
         Assert.Equal((null, null, true), AutoRadio.ForHandoff(new List<Song> { S("a", live: true) }, "PL1", null, null));
     }
+
+    [Fact]
+    public void HandsOffAsExhaustedAfterTheFlowWasCleared()
+    {
+        // 「次に流れる曲」を消去した: 受け手もプレイリストの続き・ラジオで埋め直さない（Android の exhausted と同じ）
+        Assert.Equal((null, null, true), AutoRadio.ForHandoff(Queue("a", "b"), "PL1", null, null, flowStopped: true));
+        Assert.Equal((null, null, true), AutoRadio.ForHandoff(Queue("a", "b"), null, null, null, flowStopped: true));
+    }
 }

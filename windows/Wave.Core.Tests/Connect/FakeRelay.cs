@@ -537,6 +537,15 @@ internal sealed class SimDevice : ConnectClient.IEffects
 
     public List<List<string>> QueueRemoves { get; } = [];
 
+    /// <summary>従った「次に流れる曲」の消去（送り手が見ていた今の曲）。</summary>
+    public List<string> QueueClearFlows { get; } = [];
+
+    bool ConnectClient.IEffects.QueueClearFlow(string currentItemId)
+    {
+        QueueClearFlows.Add(currentItemId);
+        return true;
+    }
+
     bool ConnectClient.IEffects.QueueMove(string itemId, string? afterItemId)
     {
         QueueMoves.Add((itemId, afterItemId));

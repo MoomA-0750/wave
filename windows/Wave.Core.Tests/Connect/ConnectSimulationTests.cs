@@ -262,9 +262,11 @@ public class ConnectSimulationTests
         Assert.True(b.Client.SendQueueMove("q2", "q5"));
         Assert.True(b.Client.SendQueueMove("q3", null));
         Assert.True(b.Client.SendQueueRemove(["q4", "q6"]));
+        Assert.True(b.Client.SendQueueClearFlow("q1"));
         relay.Run();
         Assert.Equal(new List<(string, string?)> { ("q2", "q5"), ("q3", null) }, a.QueueMoves);
         Assert.Equal(["q4", "q6"], Assert.Single(a.QueueRemoves));
+        Assert.Equal("q1", Assert.Single(a.QueueClearFlows));
         // 鳴らしている A 自身は送らない
         Assert.False(a.Client.SendQueueRemove(["q1"]));
     }

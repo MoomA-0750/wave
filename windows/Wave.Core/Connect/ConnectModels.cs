@@ -231,11 +231,13 @@ public abstract record CommandBody
     /// 遠隔のキューの並べ替え・外す: 鳴っていない端末のキューの画面から、今の再生中の端末へ（Android の CommandBody.QueueEdit と同じ）。従う条件は QueueAdd と同じ。
     /// Op が "move" なら ItemIds の1曲を AfterItemId の曲の直後へ（AfterItemId が無ければ今の曲の直後へ）動かす。
     /// "remove" なら ItemIds の曲を外す。どれも今の曲より後ろの曲だけで、受け手のキューに無い ID・今の曲・前の曲は無視する。
+    /// "clear_flow" なら「次に流れる曲」（元の流れの曲）をまとめて外して流れを止める（自分で足した曲は残す）。ItemIds は送り手が見ていた今の曲だけで、受け手の今の曲と違えば無視する。
     /// </summary>
     public sealed record QueueEdit : CommandBody
     {
         public const string Move = "move";
         public const string Remove = "remove";
+        public const string ClearFlow = "clear_flow";
 
         public required string CommandId { get; init; }
         public required string From { get; init; }

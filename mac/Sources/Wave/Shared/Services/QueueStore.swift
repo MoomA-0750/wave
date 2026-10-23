@@ -24,6 +24,8 @@ struct SavedQueue: Codable {
     var radioPlaylistId: String?
     /// シャッフル中なら、切ったときに戻す並び（項目の ID → 位置）。
     var shuffleOrder: [String: Int]?
+    /// 「次に流れる曲」を消去して流れを止めている（続きを足さない）。前の形式のファイルには無い（止めていない）。
+    var flowStopped: Bool?
 }
 
 /// キューの保存ファイル。データの置き場に置き、暗号化はしない（曲の情報だけで、ログイン情報は入れない。Android と同じ）。

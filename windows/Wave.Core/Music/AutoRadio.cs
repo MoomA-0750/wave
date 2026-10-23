@@ -33,9 +33,11 @@ public static class AutoRadio
     /// 端末の間で受け渡すキューの出どころ（Android の handoffSnapshot と同じ形にする）。
     /// 出どころの無い一覧（検索の結果など）は、Android と同じく最後の曲から始まるラジオとして書く。
     /// Exhausted は「続きが無い」: 最後の曲が種にできず、ラジオにもつながらないときだけ true（プレイリスト・アルバムは終わりでラジオにつなぐので false）。
+    /// 「次に流れる曲」を消去して流れを止めている（flowStopped）ときも true（受け取った側も埋め直さない。Android の exhausted と同じ）。
     /// </summary>
-    public static (string? RadioSeed, string? RadioPlaylistId, bool Exhausted) ForHandoff(IReadOnlyList<Song> queue, string? sourceId, string? radioSeed, string? radioPlaylistId)
+    public static (string? RadioSeed, string? RadioPlaylistId, bool Exhausted) ForHandoff(IReadOnlyList<Song> queue, string? sourceId, string? radioSeed, string? radioPlaylistId, bool flowStopped = false)
     {
+        if (flowStopped) return (null, null, true);
         if (radioSeed is not null) return (radioSeed, radioPlaylistId ?? PlaylistIdOf(radioSeed), false);
         var seed = queue.Count > 0 && CanSeed(queue[^1]) ? queue[^1].VideoId : null;
         if (seed is null) return (null, null, true);
