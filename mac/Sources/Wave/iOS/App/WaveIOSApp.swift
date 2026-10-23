@@ -19,6 +19,9 @@ struct WaveIOSApp: App {
         // アプリを閉じていても新作を確かめる
         ReleaseRefresh.register()
         ReleaseRefresh.schedule()
+        // 1日1回、ダウンロードを入れ替える（ADR-0016）
+        DownloadRefresh.register()
+        DownloadRefresh.schedule()
         #if WAVE_DEBUG
             IOSDebugCommands.start()
         #endif
@@ -34,6 +37,7 @@ struct WaveIOSApp: App {
             if phase == .background {
                 AppServices.player.saveQueue()
                 ReleaseRefresh.schedule()
+                DownloadRefresh.schedule()
             }
         }
     }

@@ -68,6 +68,8 @@ final class AccountState {
         AppServices.client.setCredentials(nil)
         AppServices.credentials.clear()
         AppServices.releases.clear()
+        // 取った曲と、この端末の再生回数も残さない（ADR-0016 の 9）
+        AppServices.downloads.clearAccount()
         // 前のアカウントの検索の履歴と、プレイリストごとの並べ方を残さない（Android と同じ）
         AppServices.settings.searchHistory.removeAll()
         AppServices.settings.playlistOrders.removeAll()
