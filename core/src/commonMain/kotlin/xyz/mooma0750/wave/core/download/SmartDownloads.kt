@@ -121,7 +121,7 @@ object SmartDownloads {
                 var added = false
                 while (iterator.hasNext()) {
                     val song = iterator.next()
-                    if (song.isLive || song.videoId in taken) continue
+                    if (song.isLive || song.videoId in taken || tooLong(song)) continue
                     val artist = artistKey(song)
                     if (artist != null && (perArtist[artist] ?: 0) >= maxPerArtist) continue
                     taken += song.videoId
@@ -135,6 +135,12 @@ object SmartDownloads {
         }
         return picked
     }
+
+    /** 長すぎる曲（作業用のまとめの動画など）は取らない。長さが分からなければ取る。 */
+    fun tooLong(song: Song): Boolean = (song.durationSeconds ?: 0) > MAX_SECONDS
+
+    /** 自動で取る曲の長さの上限（15分）。 */
+    const val MAX_SECONDS = 15 * 60
 
     /** 同じアーティストかを見分ける鍵（最初のアーティスト）。分からなければ null（数えない）。 */
     fun artistKey(song: Song): String? {

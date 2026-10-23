@@ -12,7 +12,8 @@ private fun song(
     id: String,
     artist: String = "a-$id",
     live: Boolean = false,
-) = Song(id, "t-$id", listOf(ArtistRef(artist, "UC$artist")), null, 200, null, isLive = live)
+    seconds: Int? = 200,
+) = Song(id, "t-$id", listOf(ArtistRef(artist, "UC$artist")), null, seconds, null, isLive = live)
 
 class DownloadManifestTest {
     @Test
@@ -135,6 +136,12 @@ class SmartDownloadsTest {
         val candidates = SmartCategory.entries.associateWith { category -> (1..10).map { song("${category.name}$it") } }
         val picked = SmartDownloads.pick(candidates, total = 6)
         assertEquals(SmartCategory.entries.associateWith { 2 }, picked.groupingBy { it.category }.eachCount())
+    }
+
+    @Test
+    fun songsLongerThanFifteenMinutesAreNotPicked() {
+        val candidates = mapOf(SmartCategory.entries.first() to listOf(song("long", seconds = 3600), song("ok", seconds = 15 * 60), song("unknown", seconds = null)))
+        assertEquals(listOf("ok", "unknown"), SmartDownloads.pick(candidates, total = 10).map { it.song.videoId })
     }
 
     @Test
