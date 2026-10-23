@@ -440,8 +440,10 @@ private fun MediumLayout(
         Column(GlanceModifier.fillMaxSize().padding(ContainerPadding)) {
             if (stacked) {
                 ArtworkWithLike(snapshot, artwork, art, open)
-                Spacer(GlanceModifier.defaultWeight())
-                TitleAndArtist(snapshot, GlanceModifier.fillMaxWidth().clickable(open))
+                // 曲名は残りの高さの中で下に寄せる（文字の高さの見積もりが外れても、切れるのは曲名の上の余白でボタンではない）
+                Box(GlanceModifier.fillMaxWidth().defaultWeight(), contentAlignment = Alignment.BottomStart) {
+                    TitleAndArtist(snapshot, GlanceModifier.fillMaxWidth().clickable(open))
+                }
                 Spacer(GlanceModifier.height(STACK_GAP.wdp))
             } else {
                 Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -506,8 +508,11 @@ internal suspend fun withController(
 
 private const val RESTORE_WAIT_MS = 5_000L
 
-/** 中でジャケットの下に曲名を置くときの大きさ（dp。倍率を掛ける前）。曲名とアーティストの2行は、文字の余白込みで 33 ほど（Pixel 3 で測った）なので少し余裕を見る。 */
-private const val TEXT_BLOCK = 36f
+/**
+ * 中でジャケットの下に曲名を置くときの大きさ（dp。倍率を掛ける前）。曲名とアーティストの2行は、文字の余白込みで Pixel 3 では 33 ほどだが、
+ * 端末の書体によっては 37 ほどになって下のボタンが切れたので、余裕を見る。
+ */
+private const val TEXT_BLOCK = 42f
 private const val STACK_GAP = 6
 private const val STACK_ARTWORK_MIN = 44
 private const val STACK_ARTWORK_MAX = 56
