@@ -1,0 +1,24 @@
+{
+  "name": "wave-browser-extension",
+  "private": true,
+  "version": "0.1.0",
+  "description": "music.youtube.com のタブを wave の端末の連携（Connect v2）の1台にする拡張機能",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "watch": "node build.mjs --watch",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test test/*.test.ts",
+    "test:e2e": "node --test test/e2e/*.test.ts"
+  },
+  "devDependencies": {
+    "@types/chrome": "0.1.40",
+    "@types/node": "22.20.5",
+    "esbuild": "0.25.12",
+    "typescript": "5.9.3"
+  }
+}
