@@ -62,9 +62,13 @@ public static class AppServices
         Music = new MusicRepository(Client, Live);
         Resolver = new StreamResolver(Client, new PlayerCipherProvider(Http, () => Clock.ElapsedMilliseconds), () => Clock.ElapsedMilliseconds);
         Stats = new PlaybackStats(Client);
-        // 歌詞の検索（LRCLIB）には YouTube と別の HttpClient を使う
+        // 歌詞の YouTube Music の時刻付き（歌詞のタブの ID だけを送る）と LRCLIB（曲名・アーティスト名・アルバム名・長さだけを送る）へは、
+        // 認証情報を持たない別の HttpClient で送る（ADR-0003）
         var version = typeof(AppServices).Assembly.GetName().Version?.ToString(3) ?? "0.1.0";
-        Lyrics = new LyricsService(Music, new LrclibClient(InnerTubeClient.CreateHttpClient(), $"wave-windows/{version}"));
+        Lyrics = new LyricsService(
+            Music,
+            new LrclibClient(InnerTubeClient.CreateHttpClient(), $"wave-windows/{version}"),
+            new YouTubeTimedLyricsClient(InnerTubeClient.CreateHttpClient(), Client.Hl, Client.Gl));
         LyricsSearch = new LyricsSearch(Music, Lyrics);
         FeedHttp = PodcastFeedClient.CreateHttpClient();
         var region = System.Globalization.RegionInfo.CurrentRegion.TwoLetterISORegionName;

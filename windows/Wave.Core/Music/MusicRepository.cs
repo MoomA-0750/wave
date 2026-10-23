@@ -263,11 +263,19 @@ public sealed class MusicRepository(InnerTubeClient client, LiveClient? live = n
     /// <summary>YouTube Music の時刻なしの歌詞。無ければ Ok(null)。</summary>
     public async Task<ApiResult<SongLyrics.Plain?>> PlainLyricsAsync(string videoId, CancellationToken cancel = default)
     {
-        var info = await SongInfoAsync(videoId, cancel);
-        if (!info.IsOk) return ApiResult<SongLyrics.Plain?>.Failed(info.Failure!.Value, info.Status);
-        if (info.Value!.LyricsBrowseId is not { } browseId) return ApiResult<SongLyrics.Plain?>.Ok(null);
-        return (await BrowseAsync(browseId, null, null, cancel)).Map(MusicParsers.PlainLyrics);
+        var tab = await LyricsBrowseIdAsync(videoId, cancel);
+        if (!tab.IsOk) return ApiResult<SongLyrics.Plain?>.Failed(tab.Failure!.Value, tab.Status);
+        if (tab.Value is not { } browseId) return ApiResult<SongLyrics.Plain?>.Ok(null);
+        return await PlainLyricsOfTabAsync(browseId, cancel);
     }
+
+    /// <summary>曲の歌詞のタブの行き先（MPLY…）。歌詞の無い曲は Ok(null)。</summary>
+    public async Task<ApiResult<string?>> LyricsBrowseIdAsync(string videoId, CancellationToken cancel = default) =>
+        (await SongInfoAsync(videoId, cancel)).Map(info => info.LyricsBrowseId);
+
+    /// <summary>歌詞のタブの時刻なしの本文。</summary>
+    public async Task<ApiResult<SongLyrics.Plain?>> PlainLyricsOfTabAsync(string browseId, CancellationToken cancel = default) =>
+        (await BrowseAsync(browseId, null, null, cancel)).Map(MusicParsers.PlainLyrics);
 
     /// <summary>アーティストの YouTube のチャンネルの投稿（本人のお知らせ。ライブ・ツアーの告知を拾うのに使う。Android と同じ）。</summary>
     public async Task<ApiResult<List<ArtistPost>>> ArtistPostsAsync(string channelId, CancellationToken cancel = default) =>

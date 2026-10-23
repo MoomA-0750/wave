@@ -296,10 +296,20 @@ public final class MusicRepository: Sendable {
 
     /// YouTube Music の時刻なしの歌詞。無ければ ok(nil)。
     public func plainLyrics(_ videoId: String) async throws -> ApiResult<SongLyrics.Plain?> {
-        let info = try await songInfo(videoId)
-        guard info.isOk, let value = info.value else { return .failed(info.failure ?? .parse, status: info.status) }
-        guard let browseId = value.lyricsBrowseId else { return .ok(nil) }
-        return try await browse(browseId, continuation: nil, params: nil).map(MusicParsers.plainLyrics)
+        let tab = try await lyricsBrowseId(videoId: videoId)
+        guard tab.isOk else { return .failed(tab.failure ?? .parse, status: tab.status) }
+        guard let browseId = tab.value ?? nil else { return .ok(nil) }
+        return try await plainLyrics(browseId: browseId)
+    }
+
+    /// 曲の歌詞のタブの行き先（MPLY…）。歌詞の無い曲は ok(nil)。
+    public func lyricsBrowseId(videoId: String) async throws -> ApiResult<String?> {
+        try await songInfo(videoId).map { $0.lyricsBrowseId }
+    }
+
+    /// 歌詞のタブの時刻なしの本文。
+    public func plainLyrics(browseId: String) async throws -> ApiResult<SongLyrics.Plain?> {
+        try await browse(browseId, continuation: nil, params: nil).map(MusicParsers.plainLyrics)
     }
 
     /// アーティストの YouTube のチャンネルの投稿（本人のお知らせ。ライブ・ツアーの告知を拾うのに使う。Android と同じ）。
@@ -469,6 +479,4 @@ public final class MusicRepository: Sendable {
     }
 }
 
-extension MusicRepository: PlainLyricsSource {
-    public func plainLyrics(videoId: String) async throws -> ApiResult<SongLyrics.Plain?> { try await plainLyrics(videoId) }
-}
+extension MusicRepository: PlainLyricsSource {}

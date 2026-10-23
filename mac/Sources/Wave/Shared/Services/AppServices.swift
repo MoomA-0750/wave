@@ -62,9 +62,13 @@ enum AppServices {
         music = MusicRepository(client: client, live: live)
         resolver = StreamResolver(client: client, cipher: PlayerCipherProvider(session: session, nowMs: { AppServices.clockMs() }), nowMs: { AppServices.clockMs() })
         stats = PlaybackStats(client: client)
-        // 歌詞の検索（LRCLIB）には YouTube と別の通信を使う
+        // 歌詞の YouTube Music の時刻付き（歌詞のタブの ID だけを送る）と LRCLIB（曲名・アーティスト名・アルバム名・長さだけを送る）へは、
+        // 認証情報を持たない別の通信で送る（ADR-0003）
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1.0"
-        lyrics = LyricsService(music: music, lrclib: LrclibClient(session: InnerTubeClient.createSession(), userAgent: "wave-mac/\(version)"))
+        lyrics = LyricsService(
+            music: music,
+            lrclib: LrclibClient(session: InnerTubeClient.createSession(), userAgent: "wave-mac/\(version)"),
+            timed: YouTubeTimedLyricsClient(session: InnerTubeClient.createSession(), hl: L.hl, gl: client.gl))
         lyricsSearch = LyricsSearch(music: music, lyrics: lyrics)
         credentials = CredentialStore()
         toast = ToastCenter()

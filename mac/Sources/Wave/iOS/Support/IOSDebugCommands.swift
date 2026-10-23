@@ -40,6 +40,13 @@ enum IOSDebugCommands {
             }
         case "now":
             AppPaths.log("debug now title=\(player.current?.title ?? "nil") position=\(Int(player.position)) duration=\(Int(player.duration)) playing=\(player.isPlaying) loading=\(player.isLoading) like=\(String(describing: player.like)) lyrics=\(player.lyrics != nil) video=\(player.video != nil) remote=\(player.isRemote) loggedIn=\(AppServices.client.isLoggedIn) " + player.engine.debugState)
+        case "lyrics-source":
+            // 今の曲の歌詞の種類と出典（時刻付きを YouTube Music・LRCLIB のどちらから取ったかの確かめ）
+            switch player.lyrics {
+            case .found(.synced(let synced))?: AppPaths.log("debug lyrics synced source=\(synced.source ?? "nil") lines=\(synced.lines.count)")
+            case .found(.plain(let plain))?: AppPaths.log("debug lyrics plain source=\(plain.source ?? "nil")")
+            case let other: AppPaths.log("debug lyrics \(String(describing: other))")
+            }
         // 裏の新作の確かめ: 頼んである分を記録に書く（release-refresh schedule で頼み直す）
         case "release-refresh":
             if arg == "schedule" { ReleaseRefresh.schedule() }

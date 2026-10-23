@@ -70,14 +70,21 @@ final class LyricsTests: XCTestCase {
 
     // MARK: LyricsService
 
+    /// YouTube Music。歌詞のタブは browseId（result が失敗ならタブを探すのも失敗）、時刻なしは result。
     private final class FakeMusic: PlainLyricsSource, @unchecked Sendable {
         var result: ApiResult<SongLyrics.Plain?>
+        let browseId: String
         var calls = 0
-        init(_ result: ApiResult<SongLyrics.Plain?>) { self.result = result }
-        func plainLyrics(videoId: String) async throws -> ApiResult<SongLyrics.Plain?> {
-            calls += 1
-            return result
+        init(_ result: ApiResult<SongLyrics.Plain?>, browseId: String = "MPLYt_LfJd6hctedK-1") {
+            self.result = result
+            self.browseId = browseId
         }
+        func lyricsBrowseId(videoId: String) async throws -> ApiResult<String?> {
+            calls += 1
+            if let failure = result.failure { return .failed(failure) }
+            return .ok(browseId)
+        }
+        func plainLyrics(browseId: String) async throws -> ApiResult<SongLyrics.Plain?> { result }
     }
 
     private struct FakeLrclib: SyncedLyricsSource {
@@ -116,5 +123,71 @@ final class LyricsTests: XCTestCase {
         XCTAssertEqual(.failed, failed)
         _ = try await service.lyrics(song: song)
         XCTAssertEqual(2, music.calls)
+    }
+
+    // MARK: YouTube Music の時刻付き（Android 版の LyricsRepositoryTest と同じ確かめ方）
+
+    func testTimedYouTubeLyricsAreReadAndUntimedLinesAreNot() throws {
+        let synced = try XCTUnwrap(YouTubeTimedLyricsClient.parse(Fixtures.json("browse_lyrics_timed")))
+        XCTAssertEqual([LyricLine(startMs: 1530, text: "一行目"), LyricLine(startMs: 9040, text: "二行目"), LyricLine(startMs: 17000, text: "")], synced.lines)
+        XCTAssertEqual("提供元: Musixmatch", synced.source)
+        // MV の歌詞（時刻の無い行だけ）と、古い形（時刻なしの棚）は時刻付きにしない
+        XCTAssertNil(YouTubeTimedLyricsClient.parse(Fixtures.parse(Fixtures.text("browse_lyrics_timed").replacingOccurrences(of: "\"cueRange\"", with: "\"noCueRange\""))))
+        XCTAssertNil(YouTubeTimedLyricsClient.parse(Fixtures.json("browse_lyrics")))
+    }
+
+    /// LRCLIB へ尋ねた回数を数える。
+    private final class CountingLrclib: SyncedLyricsSource, @unchecked Sendable {
+        var calls = 0
+        func synced(title: String, artist: String, album: String?, durationSeconds: Int?) async throws -> LrclibClient.Result {
+            calls += 1
+            return .notFound
+        }
+    }
+
+    private func timedClient(status: Int) -> YouTubeTimedLyricsClient {
+        let session = StubURLProtocol.session { _ in
+            status == 200 ? (200, [:], Data(Fixtures.text("browse_lyrics_timed").utf8)) : (status, [:], Data())
+        }
+        return YouTubeTimedLyricsClient(session: session, hl: "ja", gl: "JP")
+    }
+
+    /// URLProtocol に渡ると本文が httpBodyStream に移るので、そこから読む。
+    private func bodyOf(_ request: URLRequest) -> String {
+        if let body = request.httpBody { return String(decoding: body, as: UTF8.self) }
+        guard let stream = request.httpBodyStream else { return "" }
+        stream.open()
+        defer { stream.close() }
+        var data = Data()
+        var buffer = [UInt8](repeating: 0, count: 4096)
+        while stream.hasBytesAvailable {
+            let read = stream.read(&buffer, maxLength: buffer.count)
+            if read <= 0 { break }
+            data.append(buffer, count: read)
+        }
+        return String(decoding: data, as: UTF8.self)
+    }
+
+    func testTimedYouTubeLyricsComeFirstWithoutAskingLrclib() async throws {
+        let lrclib = CountingLrclib()
+        let service = LyricsService(music: FakeMusic(.ok(SongLyrics.Plain(text: "p", source: "s"))), lrclib: lrclib, timed: timedClient(status: 200))
+        let result = try await service.lyrics(song: song)
+        guard case .found(.synced(let synced)) = result else { return XCTFail("時刻付きにならない: \(result)") }
+        XCTAssertEqual("提供元: Musixmatch", synced.source)
+        // 歌詞のタブの ID だけを ANDROID_MUSIC として送る。LRCLIB には聞かない
+        let requests = StubURLProtocol.recorded
+        XCTAssertEqual(1, requests.count)
+        let body = bodyOf(requests[0])
+        XCTAssertTrue(body.contains("MPLYt_LfJd6hctedK-1") && body.contains("ANDROID_MUSIC"), body)
+        XCTAssertNil(requests[0].value(forHTTPHeaderField: "Cookie"))
+        XCTAssertEqual(0, lrclib.calls)
+    }
+
+    func testPlainLyricsShownAfterAFailureAreNotRemembered() async throws {
+        let service = LyricsService(music: FakeMusic(.ok(SongLyrics.Plain(text: "p", source: "s"))), lrclib: CountingLrclib(), timed: timedClient(status: 503))
+        let first = try await service.lyrics(song: song)
+        XCTAssertEqual(.found(.plain(SongLyrics.Plain(text: "p", source: "s"))), first)
+        _ = try await service.lyrics(song: song)
+        XCTAssertEqual(2, StubURLProtocol.recorded.count, "時刻付きの失敗のあとの時刻なしを覚えてしまった")
     }
 }
