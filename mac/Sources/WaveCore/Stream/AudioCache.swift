@@ -10,10 +10,23 @@ public struct CachedFormat: Codable, Equatable, Sendable {
     public var lastUsedMs: Int64
 }
 
+/// 曲の音のバイトを頭から途切れずに残す置き場（RangeStream が読み書きする）。速く鳴らすための AudioCache と、
+/// 消えないダウンロードの置き場（DownloadStore）が持つ。
+public protocol ByteStore: AnyObject, Sendable {
+    /// 残してある曲の形式と、頭から残っているバイト数。無ければ nil。
+    func entry(_ videoId: String) -> (format: CachedFormat, cached: Int64)?
+    /// これから取る曲の形式を書く。
+    func begin(_ stream: ResolvedStream)
+    /// start から end（含む）までが残っていれば返す。
+    func read(_ videoId: String, start: Int64, end: Int64) -> Data?
+    /// offset から取ったバイトを足す（残している分の続きだけ）。
+    func append(_ videoId: String, offset: Int64, data: Data)
+}
+
 /// 曲の音のバイトを端末に残す（Android の SimpleCache と同じ役目）。曲ごとに、頭から途切れずに取れた分だけを1つのファイルに持つ。
 /// 曲送り・戻しでは残した分から鳴らし、続きは鳴らしながら取る。上限を超えたら、最後に使ったのが古い曲から消す。
 /// ファイルには音のバイトと形式だけを書き、署名付き URL は書かない。
-public final class AudioCache: @unchecked Sendable {
+public final class AudioCache: ByteStore, @unchecked Sendable {
     public static let defaultMaxBytes: Int64 = 300 * 1024 * 1024
 
     private let directory: URL
