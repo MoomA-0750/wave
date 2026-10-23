@@ -66,7 +66,7 @@
 
 ## ダウンロード
 
-[ADR-0016](docs/adr/0016-downloads.md)。Android・iPhone・Mac・Windows で同じにする（時計は対象外）。Android と Windows はできた（2026-10-23）。Mac・iPhone もできた（2026-10-24。自動テスト: `WaveCoreTests` の `DownloadsTests`。Mac のアプリで、高く評価した曲・スマートダウンロード 25 曲・プレイリストをページの頭のボタンで取り、開発用の命令 `dl-offline on` で通信できないことにして、取った曲が通信なしで鳴り、取っていない曲が飛ばされ、RSS のエピソードが取ったファイルで鳴ることを確かめた。iPhone は実機に入れたところまで。実機での確かめと、iPhone の1日1回の入れ替え（BGProcessingTask）が動くかはまだ）。
+[ADR-0016](docs/adr/0016-downloads.md)。Android・iPhone・Mac・Windows で同じにする（時計は対象外）。Android と Windows はできた（2026-10-23）。Mac・iPhone もできた（2026-10-24。自動テスト: `WaveCoreTests` の `DownloadsTests`。Mac のアプリで、高く評価した曲・スマートダウンロード 25 曲・プレイリストをページの頭のボタンで取り、開発用の命令 `dl-offline on` で通信できないことにして、取った曲が通信なしで鳴り、取っていない曲が飛ばされ、RSS のエピソードが取ったファイルで鳴ることを確かめた。同じ日に iPhone の実機で、高く評価した曲の4曲を取り、`dl-offline on` で取った曲が通信なしで鳴り（`play downloaded`）、ダウンロードの画面に 26 MB と「高く評価した曲・4曲」が出ることを確かめた。iPhone の1日1回の入れ替え（BGProcessingTask）が動くかはまだ）。
 
 - （仮）1曲ずつ・プレイリスト・アルバム・高く評価した曲・ポッドキャストのエピソード（YouTube と RSS）を取っておき、通信なしで聴ける。ライブ配信は取らない。プレイリスト・アルバム・高く評価した曲は丸ごとを覚え、起動したとき・ページを開いたとき・1日1回読み直して、増えた曲を取り、外れた曲を消す（ほかの理由でも取っている曲は残す）
 - （仮）取った音は消えない置き場に置き（速く鳴らすための 300MB の置き場とは別）、鳴らすときは最初にそこを見て、通信も URL の調べ直しもせずに鳴らす。音質は再生と同じ。ログアウトすると全部消す
@@ -79,7 +79,7 @@
 ## 再生画面
 
 - （仮）ジャケットを左右に払うと次・前の曲へ。曲名でアルバム、アーティスト名でアーティストのページへ（複数なら選ぶ）
-- （仮）歌詞を出す。時刻付きは、まず YouTube Music の時刻付き（歌詞のタブを ANDROID_MUSIC として匿名で読む。出典は Musixmatch・LyricFind で、曲の照合が要らない）、無ければ LRCLIB（曲名・アーティスト・長さで照らし合わせる）から取り、歌っている行を強調して送る。行を押すとその位置へ。どちらにも無ければ YouTube Music の時刻なしの歌詞（MV など）。時刻付きを探すのに失敗して時刻なしを出したときは覚えず、次に開いたとき探し直す（Android・Windows・Mac・iPhone。自動テスト: `core` の `LyricsRepositoryTest`、Windows の `LyricsTests`（`TimedYouTubeLyricsAreReadAndUntimedLinesAreNot`・`TimedYouTubeLyricsComeFirstWithoutAskingLrclib`・`PlainLyricsShownAfterAFailureAreNotRemembered`）、Mac・iPhone の `WaveCoreTests` の `LyricsTests`（`testTimedYouTubeLyricsAreReadAndUntimedLinesAreNot`・`testTimedYouTubeLyricsComeFirstWithoutAskingLrclib`・`testPlainLyricsShownAfterAFailureAreNotRemembered`）。2026-10-24 に Pixel 3 で、Alone Together の歌詞が「Source: Musixmatch」の時刻付きで出ることを確かめた。同じ日に Windows のアプリで Alone Together の歌詞が「Source: Musixmatch」の時刻付き（45行）になること（ローカル API の `/v1/lyrics`）、iPhone のシミュレーターでログインなしで Forever の歌詞が「Source: Musixmatch」の時刻付きになることを確かめた）
+- （仮）歌詞を出す。時刻付きは、まず YouTube Music の時刻付き（歌詞のタブを ANDROID_MUSIC として匿名で読む。出典は Musixmatch・LyricFind で、曲の照合が要らない）、無ければ LRCLIB（曲名・アーティスト・長さで照らし合わせる）から取り、歌っている行を強調して送る。行を押すとその位置へ。どちらにも無ければ YouTube Music の時刻なしの歌詞（MV など）。時刻付きを探すのに失敗して時刻なしを出したときは覚えず、次に開いたとき探し直す（Android・Windows・Mac・iPhone。自動テスト: `core` の `LyricsRepositoryTest`、Windows の `LyricsTests`（`TimedYouTubeLyricsAreReadAndUntimedLinesAreNot`・`TimedYouTubeLyricsComeFirstWithoutAskingLrclib`・`PlainLyricsShownAfterAFailureAreNotRemembered`）、Mac・iPhone の `WaveCoreTests` の `LyricsTests`（`testTimedYouTubeLyricsAreReadAndUntimedLinesAreNot`・`testTimedYouTubeLyricsComeFirstWithoutAskingLrclib`・`testPlainLyricsShownAfterAFailureAreNotRemembered`）。2026-10-24 に Pixel 3 で、Alone Together の歌詞が「Source: Musixmatch」の時刻付きで出ることを確かめた。同じ日に Windows のアプリで Alone Together の歌詞が「Source: Musixmatch」の時刻付き（45行）になること（ローカル API の `/v1/lyrics`）、iPhone のシミュレーターでログインなしで Forever の歌詞が、iPhone の実機で Tequila の歌詞が「Source: Musixmatch」の時刻付きになることを確かめた）
 - （仮）Mac・Windows の全画面の再生中の画面の歌詞は手でスクロールでき、手で動かしてから5秒は今の行に合わせて送らない（右の欄・メニューバーの小窓・スマホの歌詞は動かさない）（Windows は 2026-10-19 にホイールで動くのを確かめた）
 - （仮）MV のある曲は「曲｜動画」を切り替えて映像を重ねられる。音は止めず、映像は音に合わせる。全画面で見られる
 - （仮）次の曲の欄を出す。共有は「…」のメニューから
