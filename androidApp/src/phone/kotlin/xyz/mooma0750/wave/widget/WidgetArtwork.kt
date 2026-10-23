@@ -42,28 +42,6 @@ object WidgetArtwork {
         }
     }
 
-    private val backdrops = LruCache<Bitmap, Bitmap>(4)
-
-    /**
-     * ウィジェットの地に敷く絵（iPhone のウィジェットと同じく、ぼかして暗くしたもの）。Glance はぼかせないので、
-     * 小さく縮めてから広げ直してぼかし、黒を重ねる。
-     */
-    fun backdrop(source: Bitmap): Bitmap =
-        backdrops.get(source) ?: run {
-            var blurred = Bitmap.createScaledBitmap(source, BACKDROP_SMALL, BACKDROP_SMALL, true)
-            // 一度に広げると升目が見えるので、2倍ずつ広げる
-            while (blurred.width < BACKDROP_SIZE) blurred = Bitmap.createScaledBitmap(blurred, blurred.width * 2, blurred.height * 2, true)
-            val out = blurred.copy(Bitmap.Config.ARGB_8888, true)
-            android.graphics.Canvas(out).drawColor(android.graphics.Color.argb(BACKDROP_DIM, 0, 0, 0))
-            out.also { backdrops.put(source, it) }
-        }
-
-    private const val BACKDROP_SMALL = 12
-    private const val BACKDROP_SIZE = 192
-
-    /** 重ねる黒の濃さ（iPhone と同じ 35%）。 */
-    private const val BACKDROP_DIM = 89
-
     private fun decode(bytes: ByteArray): Bitmap? {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)

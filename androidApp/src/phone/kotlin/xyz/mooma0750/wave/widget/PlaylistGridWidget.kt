@@ -91,11 +91,8 @@ class PlaylistGridWidget : GlanceAppWidget() {
             val now by WidgetHooks.nowPlaying.collectAsState()
             val covers = rememberWidgetArtworks(client, shown.mapNotNull { it.thumbnailUrl })
             val artwork = rememberWidgetArtwork(client, now?.artworkUrl)
-            val small = layout == GridLayout.Small
-            // 地にぼかす絵（中・大は再生中のジャケット、無ければ・小は先頭の表紙）
-            val background = (if (small) null else artwork) ?: shown.firstOrNull()?.thumbnailUrl?.let(covers::get)
-            WaveGlanceTheme(context, dark = background != null) {
-                GridContent(shown, covers, now, artwork, background)
+            WaveGlanceTheme(context) {
+                GridContent(shown, covers, now, artwork)
             }
         }
     }
@@ -146,13 +143,14 @@ private fun GridContent(
     covers: Map<String, Bitmap>,
     now: NowPlayingSnapshot?,
     artwork: Bitmap?,
-    background: Bitmap?,
 ) {
     val context = LocalContext.current
-    val layout = PlaylistGridWidget.layoutFor(LocalSize.current)
-    val backdrop = background?.let(WidgetArtwork::backdrop)
+    val size = LocalSize.current
+    val layout = PlaylistGridWidget.layoutFor(size)
     val open = actionStartActivity(openAppIntent(context))
-    WidgetSurface(backdrop = backdrop) {
+    // 中・大は、再生中の曲とプレイリストを色違いの入れ物に分けて上下につなぐ（YouTube Music のウィジェットと同じ見た目）
+    val split = shown.isNotEmpty() && layout != GridLayout.Small
+    WidgetSurface(split = split) {
         when {
             shown.isEmpty() ->
                 Column(
@@ -171,15 +169,30 @@ private fun GridContent(
                 }
             // 小は表紙だけを 2×2 に
             layout == GridLayout.Small ->
-                Box(GlanceModifier.fillMaxSize().padding(WidgetPadding)) {
-                    Grid(shown, covers, now, rows = 2, columns = 2, spacing = 8.dp)
+                Box(GlanceModifier.fillMaxSize().padding(WidgetPadding), contentAlignment = Alignment.Center) {
+                    Grid(shown, covers, now, rows = 2, columns = 2, spacing = 8.dp, width = size.width - WidgetPadding * 2, height = size.height - WidgetPadding * 2)
                 }
-            // 中・大は上に再生中の曲と操作、下に表紙を寄せる
+            // 中・大は上の入れ物に再生中の曲と操作、下の入れ物に表紙
             else ->
-                Column(GlanceModifier.fillMaxSize().padding(WidgetPadding)) {
-                    NowPlayingRow(now, artwork)
-                    Spacer(GlanceModifier.defaultWeight())
-                    Grid(shown, covers, now, rows = if (layout == GridLayout.Large) 2 else 1, columns = 4, spacing = 10.dp)
+                Column(GlanceModifier.fillMaxSize()) {
+                    WidgetContainer(GlanceModifier.fillMaxWidth().height(TOP_HEIGHT), accent = true) {
+                        Box(GlanceModifier.fillMaxSize().padding(horizontal = ContainerPadding), contentAlignment = Alignment.CenterStart) { NowPlayingRow(now, artwork) }
+                    }
+                    Spacer(GlanceModifier.height(ContainerGap))
+                    WidgetContainer(GlanceModifier.fillMaxWidth().defaultWeight(), accent = false) {
+                        Box(GlanceModifier.fillMaxSize().padding(ContainerPadding), contentAlignment = Alignment.Center) {
+                            Grid(
+                                shown,
+                                covers,
+                                now,
+                                rows = if (layout == GridLayout.Large) 2 else 1,
+                                columns = 4,
+                                spacing = 10.dp,
+                                width = size.width - ContainerPadding * 2,
+                                height = size.height - TOP_HEIGHT - ContainerGap - ContainerPadding * 2,
+                            )
+                        }
+                    }
                 }
         }
     }
@@ -214,12 +227,13 @@ private fun Grid(
     rows: Int,
     columns: Int,
     spacing: Dp,
+    /** 並べられる広さ。 */
+    width: Dp,
+    height: Dp,
 ) {
-    val size = LocalSize.current
     // 幅と高さの両方に収まる正方形の大きさ
-    val reserved = if (PlaylistGridWidget.layoutFor(size) == GridLayout.Small) 0.dp else NOW_PLAYING_ROW + spacing
-    val byWidth = (size.width - WidgetPadding * 2 - spacing * (columns - 1)) / columns
-    val byHeight = (size.height - WidgetPadding * 2 - reserved - spacing * (rows - 1)) / rows
+    val byWidth = (width - spacing * (columns - 1)) / columns
+    val byHeight = (height - spacing * (rows - 1)) / rows
     val side = minOf(byWidth, byHeight).coerceAtLeast(24.dp)
     Column(GlanceModifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
         for (row in 0 until rows) {
@@ -288,8 +302,8 @@ private fun Tile(
 private val TILE_CORNER = 8.dp
 private val TILE_BORDER = 3.dp
 
-/** 中・大の上の再生中の行の高さ（再生ボタンの高さ）。 */
-private val NOW_PLAYING_ROW = COMPACT_BUTTON
+/** 中・大の上の入れ物（再生中の行）の高さ。 */
+private val TOP_HEIGHT = COMPACT_BUTTON + ContainerPadding * 2
 
 /** 表紙を押した: そのプレイリストを頭から鳴らす（iPhone と同じ）。 */
 class PlayGridPlaylistAction : ActionCallback {

@@ -86,8 +86,7 @@ class PlaylistWidget : GlanceAppWidget() {
             val item = WidgetItem.of(prefs)
             val now by WidgetHooks.nowPlaying.collectAsState()
             val artwork = rememberWidgetArtwork(client, item?.thumbnailUrl?.let(Media3QueuePlayer::largeArtwork))
-            // 地は絵をぼかして暗くしたもの（iPhone と同じ）。その上では暗い地として描く
-            WaveGlanceTheme(context, dark = artwork != null) {
+            WaveGlanceTheme(context) {
                 ItemContent(item, artwork, loading = prefs[LOADING] == true, playing = item?.isCurrent(now) == true && now?.playing == true)
             }
         }
@@ -147,7 +146,7 @@ private fun ItemContent(
     val surface = if (loading) GlanceModifier else GlanceModifier.clickable(play)
     val size = LocalSize.current
     val shuffle = item.kind == WidgetItemKind.Playlist || item.kind == WidgetItemKind.Album
-    WidgetSurface(surface, backdrop = artwork?.let(WidgetArtwork::backdrop)) {
+    WidgetSurface(surface) {
         when (size) {
             PlaylistWidget.SMALL ->
                 Box(GlanceModifier.fillMaxSize().padding(WidgetPadding), contentAlignment = Alignment.BottomEnd) {

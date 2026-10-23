@@ -87,7 +87,7 @@ class NowPlayingWidget : GlanceAppWidget() {
             val snapshot by WidgetHooks.nowPlaying.collectAsState()
             val artwork = rememberWidgetArtwork(container.mediaHttpClient, snapshot?.artworkUrl)
             val queueArtwork = rememberWidgetArtworks(container.mediaHttpClient, snapshot?.upNext.orEmpty().mapNotNull { it.artworkUrl })
-            WaveGlanceTheme(context, dark = artwork != null) {
+            WaveGlanceTheme(context) {
                 NowPlayingContent(snapshot, artwork, queueArtwork)
             }
         }
@@ -127,7 +127,9 @@ private fun NowPlayingContent(
     val context = LocalContext.current
     val size = LocalSize.current
     val open = actionStartActivity(openAppIntent(context).putExtra(WidgetHooks.EXTRA_OPEN_NOW_PLAYING, true))
-    WidgetSurface(GlanceModifier.clickable(open), backdrop = artwork?.let(WidgetArtwork::backdrop)) {
+    // 中くらいは、今の曲と次に流れる曲を色違いの入れ物に分けて左右につなぐ
+    val split = snapshot != null && (size == NowPlayingWidget.MEDIUM || size == NowPlayingWidget.MEDIUM_TALL)
+    WidgetSurface(GlanceModifier.clickable(open), split = split) {
         // Responsive では、置いた大きさに収まる宣言した大きさのうち最も大きいものが来る
         when {
             snapshot == null -> EmptyState(open)
@@ -389,8 +391,9 @@ private fun MediumLayout(
     val context = LocalContext.current
     // Responsive では宣言した段の大きさが来る
     val tall = LocalSize.current == NowPlayingWidget.MEDIUM_TALL
-    Row(GlanceModifier.fillMaxSize().padding(WidgetPadding)) {
-        Column(GlanceModifier.defaultWeight().fillMaxHeight()) {
+    Row(GlanceModifier.fillMaxSize()) {
+        WidgetContainer(GlanceModifier.defaultWeight().fillMaxHeight(), accent = true) {
+        Column(GlanceModifier.fillMaxSize().padding(ContainerPadding)) {
             if (tall) {
                 ArtworkWithLike(snapshot, artwork, 56.dp, open)
                 Spacer(GlanceModifier.defaultWeight())
@@ -405,9 +408,11 @@ private fun MediumLayout(
             Spacer(GlanceModifier.defaultWeight())
             Controls(snapshot, GlanceModifier.fillMaxWidth(), compact = true, alignment = Alignment.Start)
         }
-        Spacer(GlanceModifier.width(14.dp))
+        }
+        Spacer(GlanceModifier.width(ContainerGap))
         // 右側: 次に流れる曲（押すとその曲へ飛ぶ。ほかの端末で鳴っていればその端末で）
-        Column(GlanceModifier.defaultWeight().fillMaxHeight()) {
+        WidgetContainer(GlanceModifier.defaultWeight().fillMaxHeight(), accent = false) {
+        Column(GlanceModifier.fillMaxSize().padding(ContainerPadding)) {
             Text(context.getString(R.string.widget_up_next), style = WidgetText.caption().copy(fontWeight = FontWeight.Medium), maxLines = 1)
             for (item in snapshot.upNext) {
                 Row(
@@ -425,6 +430,7 @@ private fun MediumLayout(
             }
             // 次の曲が少なくても、行の高さをそろえる
             repeat(NowPlayingSnapshot.UP_NEXT_COUNT - snapshot.upNext.size) { Spacer(GlanceModifier.defaultWeight()) }
+        }
         }
     }
 }
