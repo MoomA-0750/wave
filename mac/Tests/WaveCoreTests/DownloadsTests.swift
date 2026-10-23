@@ -91,9 +91,35 @@ final class DownloadsTests: XCTestCase {
         counts.record(DownloadSong(song("b")), nowMs: 2000)
         counts.record(DownloadSong(song("b")), nowMs: 3000)
         counts.record(DownloadSong(song("c")), nowMs: 9_000_000)
-        // 履歴にだけ出る h は1回。履歴の上ほど新しい
-        let ranked = SmartDownloads.frequent(counts: counts, history: [song("h"), song("a"), song("live", live: true)], nowMs: 10_000_000)
-        XCTAssertEqual(["b", "h", "c", "a"], ids(ranked))
+        // 履歴に出る曲は1を足す（a は 2 回）。履歴にだけ出る曲は1回で、同じ回数のこの端末の曲の後。履歴の上ほど先
+        let ranked = SmartDownloads.frequent(counts: counts, history: [song("h"), song("a"), song("g"), song("live", live: true)])
+        XCTAssertEqual(["b", "a", "c", "h", "g"], ids(ranked))
+    }
+
+    func testLongSongsAreNotPicked() {
+        var long = song("long")
+        long.durationSeconds = 16 * 60
+        var unknown = song("unknown")
+        unknown.durationSeconds = nil
+        let picked = SmartDownloads.pick([.frequent: [long, unknown, song("ok")]], count: 5)
+        XCTAssertEqual(["unknown", "ok"], picked.map(\.song.videoId))
+    }
+
+    func testOrdinaryVideosAreNotPicked() {
+        var atv = song("atv")
+        atv.kind = Song.kindSong
+        var omv = song("omv")
+        omv.kind = Song.kindMusicVideo
+        var ugc = song("ugc")
+        ugc.kind = Song.kindUserVideo
+        var episode = song("episode")
+        episode.kind = "MUSIC_VIDEO_TYPE_PODCAST_EPISODE"
+        // アーティストの上限に掛からないよう、別のアーティストにする
+        let unknown = song("unknown", artist: "U")
+        omv.artists = [ArtistRef(name: "O", browseId: nil)]
+        let picked = SmartDownloads.pick([.recommended: [ugc, atv, episode, omv, unknown]], count: 10)
+        XCTAssertEqual(["atv", "omv", "unknown"], picked.map(\.song.videoId))
+        XCTAssertEqual(["atv"], SmartDownloads.frequent(counts: PlayCounts(), history: [ugc, atv]).map(\.videoId))
     }
 
     func testPlayCountsForgetTheOldestBeyondTheLimit() {
