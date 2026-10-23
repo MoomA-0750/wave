@@ -8,5 +8,7 @@
     "noEmit": true,
     "skipLibCheck": true
   },
-  "include": ["../*.ts", "./*.ts"]
+  "include": ["../*.ts", "./*.ts"],
+  // 本体の入口（content.ts）は本体の tsconfig で確かめる
+  "exclude": ["../content.ts"]
 }
