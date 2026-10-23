@@ -180,7 +180,10 @@ private fun NowPlayingContent(
         when {
             snapshot == null -> EmptyState(open)
             layout == NowPlayingLayout.Controls ->
-                Box(GlanceModifier.fillMaxSize().padding(horizontal = 8.wdp), contentAlignment = Alignment.Center) { Controls(snapshot, maxWidth = size.width - 16.wdp) }
+                Box(GlanceModifier.fillMaxSize().padding(horizontal = 8.wdp), contentAlignment = Alignment.Center) {
+                    // 低い枠でも上下が切れないよう、ボタンの高さを枠に収める
+                    Controls(snapshot, height = minOf(COMPACT_BUTTON, size.height - 8.wdp), maxWidth = size.width - 16.wdp)
+                }
             layout == NowPlayingLayout.Square -> SmallLayout(snapshot, artwork, open)
             layout == NowPlayingLayout.Wide -> WideLayout(snapshot, artwork, open)
             else -> MediumLayout(snapshot, artwork, queueArtwork, open)
@@ -386,11 +389,16 @@ private fun SmallLayout(
     artwork: Bitmap?,
     open: Action,
 ) {
-    // 2×2 は端末によって 140dp ほどしかないので、余白を詰める
+    val context = LocalContext.current
+    // 2×2 は端末によって 140dp ほどしかないので、余白を詰める。端末の書体で曲名の2行が高いときは、ジャケットを縮めてボタンを切らさない
+    val text = (SMALL_TEXT_BLOCK * context.resources.configuration.fontScale * LocalWidgetScale.current).dp
+    val art = (LocalSize.current.height - 24.wdp - text - 2.wdp - SMALL_PLAY_BUTTON).coerceIn(24.wdp, 44.wdp)
     Column(GlanceModifier.fillMaxSize().padding(12.wdp)) {
-        ArtworkWithLike(snapshot, artwork, 44.wdp, open)
-        Spacer(GlanceModifier.defaultWeight())
-        TitleAndArtist(snapshot, GlanceModifier.fillMaxWidth().clickable(open), WidgetText.headline())
+        ArtworkWithLike(snapshot, artwork, art, open)
+        // 曲名は残りの高さの中で下に寄せる（はみ出しても切れるのは曲名の側で、ボタンではない）
+        Box(GlanceModifier.fillMaxWidth().defaultWeight(), contentAlignment = Alignment.BottomStart) {
+            TitleAndArtist(snapshot, GlanceModifier.fillMaxWidth().clickable(open), WidgetText.headline())
+        }
         Spacer(GlanceModifier.height(2.wdp))
         // 2×2 の高さに収まるよう、ボタンは小さめにする
         Controls(snapshot, height = SMALL_PLAY_BUTTON, maxWidth = LocalSize.current.width - 24.wdp)
@@ -513,6 +521,9 @@ private const val RESTORE_WAIT_MS = 5_000L
  * 端末の書体によっては 37 ほどになって下のボタンが切れたので、余裕を見る。
  */
 private const val TEXT_BLOCK = 42f
+
+/** 2×2 の曲名（headline）とアーティストの2行の高さの見積もり（dp。倍率を掛ける前）。 */
+private const val SMALL_TEXT_BLOCK = 40f
 private const val STACK_GAP = 6
 private const val STACK_ARTWORK_MIN = 44
 private const val STACK_ARTWORK_MAX = 56
