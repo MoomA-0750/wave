@@ -23,6 +23,8 @@ public sealed class DownloadStore(string directory, Func<long> nowMs)
 
     private readonly object gate = new();
     private readonly Dictionary<string, DownloadedFile> files = [];
+    /// <summary>この起動で取り始めた曲（途中の分から続けるのは、これだけ。起動し直したら頭から取り直す。ほかの端末と同じ）。</summary>
+    private readonly HashSet<string> begun = [];
     private bool loaded;
 
     public string Directory => directory;
@@ -66,7 +68,8 @@ public sealed class DownloadStore(string directory, Func<long> nowMs)
     }
 
     /// <summary>
-    /// これから取る曲の形式を書き、続きを取り始める位置を返す。前に取った分が同じ形式（itag・長さ）なら続きから、違えば捨てて頭から。
+    /// これから取る曲の形式を書き、続きを取り始める位置を返す。この起動で取り始めた分が同じ形式（itag・長さ）なら続きから、
+    /// 違う・前の起動の途中の分なら捨てて頭から。
     /// </summary>
     public long Begin(DownloadedFile format)
     {
@@ -74,12 +77,13 @@ public sealed class DownloadStore(string directory, Func<long> nowMs)
         {
             LoadIfNeeded();
             if (KeyOf(format.VideoId) is not { } key) throw new ArgumentException("unsafe id");
-            if (files.TryGetValue(key, out var old) && old.Itag == format.Itag && old.Length == format.Length && old.Length > 0)
+            if (begun.Contains(key) && files.TryGetValue(key, out var old) && old.Itag == format.Itag && old.Length == format.Length && old.Length > 0)
             {
                 var have = Size(key);
                 if (have <= old.Length) return have;
             }
             System.IO.Directory.CreateDirectory(directory);
+            begun.Add(key);
             var fresh = format with { Complete = false, DownloadedAtMs = 0 };
             files[key] = fresh;
             File.WriteAllBytes(BytesPathOf(key), []);

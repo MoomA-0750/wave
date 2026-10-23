@@ -36,6 +36,8 @@ public sealed partial class PlayerService : ObservableObject
     private ResolvedStream? currentStream;
     private string cpn = "";
     private bool statsSent;
+    /// <summary>今の曲をこの端末の再生回数に数えたか。</summary>
+    private bool countedLocally;
     private bool retried;
     private string? radioContinuation;
     private string? radioPlaylistId;
@@ -1610,12 +1612,14 @@ public sealed partial class PlayerService : ObservableObject
         {
             listen.Reset(seed.ListenedMs, IsPlaying ? now : null);
             statsSent = seed.HistorySent;
+            countedLocally = false;
             listenedItemId = itemId;
         }
         else if (itemId != listenedItemId)
         {
             listen.Reset(0, IsPlaying ? now : null);
             statsSent = false;
+            countedLocally = false;
             listenedItemId = itemId;
         }
         seedListened = null;
@@ -1625,6 +1629,27 @@ public sealed partial class PlayerService : ObservableObject
         player.Pause();
         try
         {
+            // 取り終えた曲（ADR-0016 の 6）: 通信もしないし、URL も調べ直さずに、取ったファイルから鳴らす
+            if (!song.IsLive && AppServices.Downloads.Local(song.VideoId) is { } local)
+            {
+                if (await StartDownloadedAsync(song, local, seekTo))
+                {
+                    consecutiveFailures = 0;
+                    if (Feed.IsExternal(song.VideoId)) Lyrics = new LyricsService.Result.None();
+                    else
+                    {
+                        _ = LoadSongInfoAsync(song, cancel.Token);
+                        _ = LoadLyricsAsync(song, cancel.Token);
+                    }
+                    Prefetch();
+                    ExtendRadioIfNeeded();
+                    return;
+                }
+                if (cancel.IsCancellationRequested) return;
+                AppPaths.Log("play downloaded failed; trying the network");
+            }
+            // 通信できないとき: 取っていない曲は飛ばして、取った曲へ進む（ADR-0016 の 18。取った曲が無ければ今までどおり）
+            if (!song.IsLive && !NetworkState.IsConnected && SkipToDownloaded()) return;
             // RSS のエピソード（ext:）は YouTube の解決を通さず、音声の URL をそのまま流す（ADR-0012）
             if (Feed.IsExternal(song.VideoId))
             {
@@ -1682,6 +1707,8 @@ public sealed partial class PlayerService : ObservableObject
                             : L.T("この曲は再生できないので、次の曲に進みます", "This song isn't available, skipping to the next one"));
                         return;
                     }
+                    // 通信の失敗: 取った曲がこの先にあれば、そこへ進む（ADR-0016 の 18）
+                    if (lastResolveFailure == StreamFailure.Network && SkipToDownloaded()) return;
                     IsLoading = false;
                     return;
                 }
@@ -1786,6 +1813,67 @@ public sealed partial class PlayerService : ObservableObject
             }
         });
         return true;
+    }
+
+    /// <summary>
+    /// 取り終えた曲を、取ったファイルから鳴らす（ADR-0016 の 6）。通信も URL の調べ直しもしない。
+    /// 再生履歴を YouTube に送るための URL は、通信できるときだけ裏で調べる。RSS のエピソードは覚えている位置から。
+    /// </summary>
+    private async Task<bool> StartDownloadedAsync(Song song, Wave.Core.Downloads.DownloadedFile local, double seekTo)
+    {
+        currentStream = null;
+        cpn = PlaybackStats.NewCpn();
+        var videoId = song.VideoId;
+        var bytes = RangeStream.OpenLocal(AppServices.Downloads.BytesPath(videoId), local.Length);
+        MediaSource? source;
+        var episode = Feed.AudioUrlOf(videoId);
+        if (episode is not null)
+        {
+            if (seekTo < 1 && AppServices.FeedLibrary.Position(episode)?.ResumeSeconds is { } resume && resume > ResumeAtLeastSeconds) seekTo = resume;
+            source = MediaSource.CreateFromStream(bytes.AsRandomAccessStream(), local.MimeType);
+        }
+        else source = await CreateDashSourceAsync(videoId, local.Dash, local.MimeType, local.Itag, bytes, "audio");
+        if (source is null || Current?.VideoId != videoId)
+        {
+            bytes.Dispose();
+            return false;
+        }
+        PlaySource(song, source, seekTo);
+        if (episode is not null)
+        {
+            episodeUrl = episode;
+            lastEpisodeSaveMs = clock.ElapsedMilliseconds;
+        }
+        AppPaths.Log($"play downloaded itag={local.Itag} episode={episode is not null} queue={Queue.Count} index={Index}");
+        if (episode is null && AppServices.Settings.SendHistory && AppServices.Client.IsLoggedIn && NetworkState.IsConnected)
+        {
+            _ = Task.Run(async () =>
+            {
+                var result = await AppServices.Resolver.ResolveAsync(videoId);
+                if (result.Stream is { } stream) ui.TryEnqueue(() =>
+                {
+                    if (Current?.VideoId == videoId) currentStream = stream;
+                });
+            });
+        }
+        return true;
+    }
+
+    /// <summary>通信できないときに、キューのこの先（全体リピートなら頭から）で取り終えた曲へ進む（ADR-0016 の 18）。進んだら true。</summary>
+    private bool SkipToDownloaded()
+    {
+        var order = Enumerable.Range(Index + 1, Math.Max(0, Queue.Count - Index - 1));
+        if (Repeat == RepeatMode.All) order = order.Concat(Enumerable.Range(0, Math.Max(0, Index)));
+        foreach (var i in order)
+        {
+            if (AppServices.Downloads.Local(Queue[i].VideoId) is null) continue;
+            AppPaths.Log($"offline skip to downloaded from={Index} to={i}");
+            Message = L.T("通信できないので、ダウンロードした曲へ進みます", "You're offline, skipping to a downloaded song");
+            IsLoading = false;
+            SelectAt(i);
+            return true;
+        }
+        return false;
     }
 
     private async Task<bool> StartStreamAsync(Song song, ResolvedStream stream, double seekTo = 0)
@@ -2040,6 +2128,7 @@ public sealed partial class PlayerService : ObservableObject
             Seek(0);
             player.Play();
             statsSent = false;
+            countedLocally = false;
             listen.Reset(0, clock.ElapsedMilliseconds);
             cpn = PlaybackStats.NewCpn();
             return;
@@ -2176,6 +2265,12 @@ public sealed partial class PlayerService : ObservableObject
             statsSent = true;
             _ = SendStatsAsync(stream, cpn, Position);
         }
+        // この端末の再生回数（スマートダウンロードの「いつも聴いている」。ADR-0016 の 10）。履歴を送る設定・ログインに依らず、同じ聴いた時間で数える
+        if (!countedLocally && IsPlaying && Current is { } played && listen.Reached(clock.ElapsedMilliseconds, Duration > 0 ? (long)(Duration * 1000) : null))
+        {
+            countedLocally = true;
+            AppServices.Downloads.RecordPlay(played);
+        }
     }
 
     private static async Task SendStatsAsync(ResolvedStream stream, string cpn, double position)
@@ -2236,8 +2331,8 @@ public sealed partial class PlayerService : ObservableObject
         var next = Queue[Index + 1];
         // ライブ配信は流すときに HLS を解決する（先読みしない）
         if (next.IsLive || Feed.IsExternal(next.VideoId) || prefetched.ContainsKey(next.VideoId)) return;
-        // 頭を残してある曲は、URL も調べない（鳴らすときに残した分から始める）
-        if (CachedStart(next.VideoId) is not null) return;
+        // 取り終えた曲・頭を残してある曲は、URL も調べない（鳴らすときにファイル・残した分から始める）
+        if (AppServices.Downloads.Local(next.VideoId) is not null || CachedStart(next.VideoId) is not null) return;
         var result = await AppServices.Resolver.ResolveAsync(next.VideoId);
         if (result.Stream is { } s)
         {

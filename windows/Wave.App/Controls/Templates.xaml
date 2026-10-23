@@ -265,8 +265,10 @@
             </Grid>
             <TextBlock Grid.Column="2" Text="{x:Bind AlbumTitle}" Visibility="{x:Bind app:Ui.Show(ShowAlbum)}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-            <!-- 高く評価した曲は長さの左に✓（Spotify と同じ） -->
+            <!-- 高く評価した曲は長さの左に✓（Spotify と同じ）。取り終えた曲には↓の印（ADR-0016） -->
             <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" VerticalAlignment="Center">
+                <FontIcon Glyph="&#xE896;" FontSize="13" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" Visibility="{x:Bind app:Ui.Show(IsDownloaded), Mode=OneWay}"
+                          ToolTipService.ToolTip="{x:Bind app:L.T('ダウンロード済み', 'Downloaded')}" />
                 <FontIcon Glyph="&#xEC61;" FontSize="14" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" Visibility="{x:Bind app:Ui.Show(IsLiked), Mode=OneWay}"
                           ToolTipService.ToolTip="{x:Bind app:L.T('高く評価済み', 'Liked')}" />
                 <TextBlock Text="{x:Bind app:Ui.Duration(Song.DurationSeconds)}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Visibility="{x:Bind app:Ui.Hide(Song.IsLive)}" />

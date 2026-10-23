@@ -41,7 +41,10 @@ public static class SmartDownloads
     /// <summary>選び直す頃か。</summary>
     public static bool IsDue(long refreshedAtMs, long nowMs) => refreshedAtMs <= 0 || nowMs - refreshedAtMs >= RefreshIntervalMs || nowMs < refreshedAtMs;
 
-    private static bool Usable(Song song) => !song.IsLive && !Feed.IsExternal(song.VideoId);
+    /// <summary>これより長い曲は選ばない（再生履歴に出る1時間の動画などを取らない）。長さが分からなければ選んでよい。</summary>
+    public const int MaxDurationSeconds = 15 * 60;
+
+    private static bool Usable(Song song) => !song.IsLive && !Feed.IsExternal(song.VideoId) && (song.DurationSeconds is not { } d || d <= MaxDurationSeconds);
 
     /// <summary>
     /// 「いつも聴いている」の候補: この端末の再生回数と、YouTube の再生履歴（新しい順）に出る曲。回数（履歴に出た回も1回と数える）の多い順、

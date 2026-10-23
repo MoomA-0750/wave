@@ -102,10 +102,12 @@ public sealed class DownloadsTests : IDisposable
         // 続きでない位置には足さない
         Assert.False(store.Append(id, 5, [9]));
         Assert.False(store.IsComplete(id));
-        // 同じ形式なら続きから、違う形式なら頭から
-        Assert.Equal(3, Store().Begin(new DownloadedFile(id, "audio/mp4", 6, 140)));
+        // この起動の中で同じ形式なら続きから
+        Assert.Equal(3, store.Begin(new DownloadedFile(id, "audio/mp4", 6, 140)));
+        // 起動し直したら（別の置き場の口）、途中の分は捨てて頭から
         var reopened = Store();
-        Assert.Equal(3, reopened.Begin(new DownloadedFile(id, "audio/mp4", 6, 140)));
+        Assert.Equal(0, reopened.Begin(new DownloadedFile(id, "audio/mp4", 6, 140)));
+        Assert.True(reopened.Append(id, 0, [1, 2, 3]));
         Assert.True(reopened.Append(id, 3, [4, 5, 6]));
         Assert.True(reopened.Complete(id));
         Assert.True(Store().IsComplete(id));
@@ -318,6 +320,17 @@ public sealed class DownloadsTests : IDisposable
         Assert.Equal([Id("f1"), Id("r1"), Id("f2"), Id("r2"), Id("f4")], picked.Select(t => t.Song.VideoId));
         Assert.Equal(SmartCategory.Frequent, picked[0].Category);
         Assert.Equal(2, picked.Count(t => t.Song.Artists[0].Name == "A"));
+    }
+
+    [Fact]
+    public void SongsLongerThanFifteenMinutesAreNotPicked()
+    {
+        var hour = S("hour") with { DurationSeconds = 3600 };
+        var unknown = S("unknown") with { DurationSeconds = null };
+        var limit = S("limit") with { DurationSeconds = SmartDownloads.MaxDurationSeconds };
+        var picked = SmartDownloads.Select([hour, unknown, limit], [], [], 10);
+        Assert.Equal([Id("unknown"), Id("limit")], picked.Select(t => t.Song.VideoId));
+        Assert.Empty(SmartDownloads.Frequent([], [hour]));
     }
 
     [Fact]

@@ -32,6 +32,11 @@ public sealed class Settings
     /// <summary>Discord に再生中の曲を出す（既定はオフ）と、そのための Discord のアプリケーション ID（discord.com/developers で作る）。</summary>
     public bool DiscordPresence { get; set; }
     public string? DiscordClientId { get; set; }
+    /// <summary>ダウンロードに使う通信（"unmetered": Wi-Fi など従量制でない通信だけ（既定）・"any": どの通信でも。ADR-0016）。</summary>
+    public string DownloadNetwork { get; set; } = "unmetered";
+    /// <summary>スマートダウンロード（既定は切）と曲数（25・50・100・200。既定は 50）。</summary>
+    public bool SmartDownloads { get; set; }
+    public int SmartDownloadCount { get; set; } = Wave.Core.Downloads.SmartDownloads.DefaultCount;
 
     private static readonly string FilePath = Path.Combine(AppPaths.Data, "settings.json");
     private static readonly JsonSerializerOptions Options = new() { WriteIndented = true };

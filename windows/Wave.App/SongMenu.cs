@@ -8,13 +8,14 @@ namespace Wave.App;
 /// <summary>曲の右クリック・「…」のメニュー（Spotify と同じ並び）。</summary>
 public static class SongMenu
 {
-    /// <summary>removeFromPlaylist を渡すと「このプレイリストから削除」を出す。</summary>
-    public static MenuFlyout Build(Song song, Action? removeFromPlaylist = null, int? queueIndex = null)
+    /// <summary>removeFromPlaylist を渡すと「このプレイリストから削除」を出す。episode はポッドキャストのエピソード（ダウンロードの画面で分けて出す）。</summary>
+    public static MenuFlyout Build(Song song, Action? removeFromPlaylist = null, int? queueIndex = null, bool episode = false)
     {
         var menu = new MenuFlyout();
         menu.Items.Add(Item(L.T("次に再生", "Play next"), "", () => AppServices.Player.PlayNext(song)));
         menu.Items.Add(Item(L.T("キューに追加", "Add to queue"), "", () => AppServices.Player.AddToQueue(song)));
         if (queueIndex is { } qi) menu.Items.Add(Item(L.T("キューから削除", "Remove from queue"), "", () => AppServices.Player.RemoveAt(qi)));
+        AddDownloadItems(menu, song, episode || Feed.IsExternal(song.VideoId));
         // RSS のエピソードは YouTube の曲ではない（プレイリスト・ラジオ・共有のリンクが無い。ADR-0012。Android と同じ）
         if (Feed.IsExternal(song.VideoId)) return menu;
         menu.Items.Add(new MenuFlyoutSeparator());
@@ -46,6 +47,31 @@ public static class SongMenu
         share.Items.Add(Item(L.T("ほかのアプリで共有…", "Share with…"), "\uE72D", () => Share(song)));
         menu.Items.Add(share);
         return menu;
+    }
+
+    /// <summary>
+    /// 「ダウンロード」「ダウンロードを削除」（ADR-0016 の 16）。外せるのは1曲ずつ取った曲とスマートダウンロードの曲で、
+    /// プレイリスト・アルバムとして丸ごと取っている曲は、そのページのボタンで外す（ここには出さない）。ライブ配信は取らない。
+    /// </summary>
+    private static void AddDownloadItems(MenuFlyout menu, Song song, bool episode)
+    {
+        if (song.IsLive) return;
+        var downloads = AppServices.Downloads;
+        if (downloads.IsRemovable(song.VideoId))
+            menu.Items.Add(Item(L.T("ダウンロードを削除", "Remove download"), "\uE74D", () =>
+            {
+                downloads.RemoveSingle(song.VideoId);
+                AppServices.Player.Message = L.T("ダウンロードを削除しました", "Download removed");
+            }));
+        // YouTube の曲を取るにはログインが要る（RSS のエピソードは要らない）
+        else if (!downloads.IsWanted(song.VideoId) && (AppServices.Client.IsLoggedIn || Feed.IsExternal(song.VideoId)))
+            menu.Items.Add(Item(L.T("ダウンロード", "Download"), "\uE896", () =>
+            {
+                downloads.AddSingle(song, episode);
+                AppServices.Player.Message = downloads.NetworkAllows
+                    ? L.T("ダウンロードを始めました", "Downloading")
+                    : L.T("通信が設定に合うまで待ってからダウンロードします", "Will download when a suitable network is available");
+            }));
     }
 
     /// <summary>YouTube Music の曲の URL（Android と同じ）。</summary>

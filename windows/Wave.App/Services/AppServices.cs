@@ -36,6 +36,8 @@ public static class AppServices
     public static PlayerService Player { get; private set; } = null!;
     public static LibraryState Library { get; private set; } = null!;
     public static AccountState Account { get; private set; } = null!;
+    /// <summary>ダウンロードとスマートダウンロード（ADR-0016）。</summary>
+    public static Downloads Downloads { get; private set; } = null!;
     /// <summary>登録したアーティストの新作。</summary>
     public static Releases Releases { get; private set; } = null!;
     /// <summary>Claude との会話（アプリが動いている間だけ持つ）。</summary>
@@ -72,12 +74,14 @@ public static class AppServices
         Account = new AccountState(ui);
         Library = new LibraryState();
         Player = new PlayerService(ui);
+        Downloads = new Downloads(ui);
         Account.Restore();
         // 前回のキューを、再生を始めずに戻す（同じログインのときだけ）
         Player.RestoreSavedQueue();
         Connect = new global::Wave.App.Services.Connect.ConnectService(ui, Player, Settings.RelayV2Url, Settings.RelayV2Host);
         Releases = new Releases(ui);
         Releases.Start();
+        Downloads.Start();
         Discord = new DiscordStatus(ui);
         StartLocalApi(ui);
     }

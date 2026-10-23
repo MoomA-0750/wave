@@ -59,6 +59,9 @@ public static class Nav
 
     public static void History() => Go(typeof(Views.HistoryPage));
 
+    /// <summary>ダウンロード（マイライブラリの「ダウンロード」。ADR-0016 の 14）。</summary>
+    public static void Downloads() => Go(typeof(Views.DownloadsPage));
+
     public static void Settings() => Go(typeof(Views.SettingsPage));
 
     public static void Devices() => Go(typeof(Views.DevicesPage));
