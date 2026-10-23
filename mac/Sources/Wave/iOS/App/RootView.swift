@@ -219,6 +219,7 @@ struct RouteView: View {
         case .song(let song): SongView(song: song)
         case .mood(let mood): MoodView(mood: mood)
         case .history: HistoryView()
+        case .downloads: DownloadsView()
         case .settings: SettingsView()
         case .devices: DevicesView()
         case .lyrics: LyricsView()

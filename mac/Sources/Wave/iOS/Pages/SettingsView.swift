@@ -13,6 +13,7 @@ struct SettingsView: View {
     @State private var pairText = ""
     @State private var aiConfigured = AppServices.ai.configured
     @State private var confirmLogout = false
+    @State private var confirmDeleteDownloads = false
     /// Claude の中継の接続の QR をカメラで読んでいる（Android と同じ。貼り付けも残す）。
     @State private var scanningAi = false
     @State private var account = AppServices.account!
@@ -42,6 +43,7 @@ struct SettingsView: View {
             } header: {
                 Text(L.t("再生", "Play"))
             }
+            downloadsSection
             claudeSection
             Section {
                 Toggle(isOn: $releaseNotices) {
@@ -191,6 +193,45 @@ struct SettingsView: View {
     private func logOut() {
         account.logOut()
         LoginGate.shared.skipped = false
+    }
+
+    // MARK: ダウンロード（ADR-0016 の 17）
+
+    private var downloadsSection: some View {
+        let downloads = AppServices.downloads!
+        return Section {
+            Picker(L.t("ダウンロードに使う通信", "Download over"), selection: Binding(get: { downloads.policy }, set: { downloads.setPolicy($0) })) {
+                ForEach(DownloadNetworkPolicy.allCases, id: \.self) { Text(DownloadsModel.policyLabel($0)).tag($0) }
+            }
+            Toggle(isOn: Binding(get: { downloads.settings.smartDownloads }, set: { downloads.setSmart($0) })) {
+                SettingsLabel(title: L.t("スマートダウンロード", "Smart downloads"),
+                              detail: L.t("聴きそうな曲を毎日選び直して取っておく", "Automatically download songs you might like, refreshed daily"))
+            }
+            if downloads.settings.smartDownloads {
+                Picker(L.t("曲数", "Songs"), selection: Binding(get: { downloads.settings.smartDownloadCount }, set: { downloads.setSmartCount($0) })) {
+                    ForEach(SmartDownloads.countChoices, id: \.self) { Text(DownloadsModel.countLabel($0)).tag($0) }
+                }
+            }
+            Button { AppServices.nav.downloads() } label: {
+                HStack {
+                    SettingsLabel(title: L.t("ダウンロード", "Downloads"), detail: DownloadsModel.statusText(downloads))
+                    Spacer()
+                    Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            Button(L.t("ダウンロードをすべて削除", "Delete all downloads"), role: .destructive) { confirmDeleteDownloads = true }
+                .disabled(downloads.totalBytes == 0 && downloads.manifest.wanted.isEmpty)
+                .confirmationDialog(L.t("ダウンロードをすべて削除しますか？", "Delete all downloads?"), isPresented: $confirmDeleteDownloads, titleVisibility: .visible) {
+                    Button(L.t("すべて削除", "Delete all"), role: .destructive) { downloads.deleteAll() }
+                    Button(L.t("キャンセル", "Cancel"), role: .cancel) {}
+                } message: {
+                    Text(L.t("この iPhone に取った曲をすべて消します。", "This removes all songs saved on this iPhone."))
+                }
+        } header: {
+            Text(L.t("ダウンロード", "Downloads"))
+        }
     }
 
     // MARK: Claude

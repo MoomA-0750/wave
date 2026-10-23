@@ -136,6 +136,8 @@ struct LibraryView: View {
     private func open(_ entry: LibraryEntry) {
         if entry.isLiked {
             AppServices.nav.likedSongs()
+        } else if entry.isDownloads {
+            AppServices.nav.downloads()
         } else if entry.isNewEpisodes {
             AppServices.nav.newEpisodes()
         } else if let podcast = entry.podcast {
@@ -147,7 +149,7 @@ struct LibraryView: View {
 
     @ViewBuilder
     private func menu(_ entry: LibraryEntry) -> some View {
-        if entry.podcast == nil && !entry.isNewEpisodes { playMenu(entry) }
+        if entry.podcast == nil && !entry.isNewEpisodes && !entry.isDownloads { playMenu(entry) }
     }
 
     @ViewBuilder
@@ -204,6 +206,8 @@ private struct LibraryViewRow: View {
         HStack(spacing: 12) {
             if entry.isLiked {
                 LikedCover(size: 56)
+            } else if entry.isDownloads {
+                DownloadsCover(size: 56, radius: 6)
             } else if entry.isNewEpisodes {
                 NewEpisodesCover(size: 56)
             } else {
@@ -230,6 +234,8 @@ private struct LibraryViewGridCell: View {
                     GeometryReader { geo in
                         if entry.isLiked {
                             LikedCover(size: geo.size.width)
+                        } else if entry.isDownloads {
+                            DownloadsCover(size: geo.size.width, radius: 6)
                         } else if entry.isNewEpisodes {
                             NewEpisodesCover(size: geo.size.width, radius: 8)
                         } else {

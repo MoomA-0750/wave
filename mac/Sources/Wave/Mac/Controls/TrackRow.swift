@@ -40,6 +40,7 @@ struct TrackRowView: View {
                     .layoutPriority(2)
             }
             HStack(spacing: 8) {
+                DownloadedMark(videoId: row.song.videoId, font: .system(size: 13))
                 // 高く評価した曲は長さの左に✓（Spotify と同じ）
                 if isLiked {
                     Image(systemName: "checkmark.circle.fill").font(.system(size: 13)).foregroundStyle(Color.accentColor).help(L.t("高く評価済み", "Liked"))

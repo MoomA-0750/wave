@@ -101,7 +101,10 @@ struct EpisodeRowView: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(episode.song.title).font(.body.weight(.semibold)).lineLimit(2).foregroundStyle(isCurrent ? Color.accentColor : Color.primary)
                 let detail = showShow ? episode.showAndDate : episode.dateAndLength
-                if !detail.isEmpty { Text(detail).subtle() }
+                HStack(spacing: 4) {
+                    DownloadedMark(videoId: episode.song.videoId)
+                    if !detail.isEmpty { Text(detail).subtle() }
+                }
                 if !showShow, let description = episode.description {
                     Text(description).font(.callout).foregroundStyle(.secondary).lineLimit(2)
                 }
@@ -120,7 +123,7 @@ struct EpisodeRowView: View {
         .contentShape(Rectangle())
         .onHover { hover = $0 }
         .onTapGesture(perform: onPlay)
-        .contextMenu { SongMenuItems(song: episode.song) }
+        .contextMenu { SongMenuItems(song: episode.song, episode: true) }
     }
 }
 

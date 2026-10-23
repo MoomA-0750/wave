@@ -119,6 +119,8 @@ struct LibraryPane: View {
     private func entryCover(_ entry: LibraryEntry, size: CGFloat) -> some View {
         if entry.isLiked {
             LikedCover(size: size)
+        } else if entry.isDownloads {
+            DownloadsCover(size: size, radius: 6)
         } else if entry.isNewEpisodes {
             NewEpisodesCover(size: size)
         } else {
@@ -129,6 +131,8 @@ struct LibraryPane: View {
     private func open(_ entry: LibraryEntry) {
         if entry.isLiked {
             AppServices.nav.likedSongs()
+        } else if entry.isDownloads {
+            AppServices.nav.downloads()
         } else if entry.isNewEpisodes {
             AppServices.nav.newEpisodes()
         } else if let podcast = entry.podcast {
@@ -159,6 +163,8 @@ private struct LibraryRow: View {
         HStack(spacing: 12) {
             if entry.isLiked {
                 LikedCover(size: 48)
+            } else if entry.isDownloads {
+                DownloadsCover(size: 48, radius: 6)
             } else if entry.isNewEpisodes {
                 NewEpisodesCover(size: 48)
             } else {

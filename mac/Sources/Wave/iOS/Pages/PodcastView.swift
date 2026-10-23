@@ -140,7 +140,10 @@ struct EpisodeRow: View {
                         Text(episode.song.title).font(showShow ? .body : .subheadline.weight(.semibold)).lineLimit(2)
                             .foregroundStyle(isCurrent ? Color.accentColor : Color.primary)
                         let detail = showShow ? episode.showAndDate : episode.dateAndLength
-                        if !detail.isEmpty { Text(detail).subtle() }
+                        HStack(spacing: 4) {
+                            DownloadedMark(videoId: episode.song.videoId)
+                            if !detail.isEmpty { Text(detail).subtle() }
+                        }
                         if !showShow, let description = episode.description {
                             Text(description).font(.caption).foregroundStyle(.secondary).lineLimit(2)
                         }
@@ -154,7 +157,7 @@ struct EpisodeRow: View {
             }
             .buttonStyle(.plain)
             Menu {
-                SongMenuItems(song: episode.song)
+                SongMenuItems(song: episode.song, episode: true)
             } label: {
                 Image(systemName: "ellipsis").frame(width: 32, height: 44).contentShape(Rectangle())
             }
