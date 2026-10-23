@@ -65,7 +65,12 @@ class WidgetHostActivity : Activity() {
                 Triple(grid, 160f, 160f),
                 Triple(grid, 340f, 160f),
                 Triple(grid, 340f, 340f),
-            ).filter { (provider, _, _) ->
+            ).let { own ->
+                // `--es provider <パッケージ/クラス>` で、ほかのアプリのウィジェットを同じ大きさで並べる（見比べるため）
+                val other = intent.getStringExtra("provider")?.let(ComponentName::unflattenFromString) ?: return@let own
+                listOf(160f to 160f, 340f to 160f, 340f to 250f, 340f to 340f).map { (w, h) -> Triple(other, w, h) }
+            }.filter { (provider, _, _) ->
+                if (provider.packageName != packageName) return@filter true
                 when (only) {
                     "now" -> provider == nowPlaying
                     "item" -> provider == playlist

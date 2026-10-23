@@ -392,7 +392,7 @@ private fun MediumLayout(
     // Responsive では宣言した段の大きさが来る
     val tall = LocalSize.current == NowPlayingWidget.MEDIUM_TALL
     Row(GlanceModifier.fillMaxSize()) {
-        WidgetContainer(GlanceModifier.defaultWeight().fillMaxHeight(), accent = true) {
+        WidgetContainer(GlanceModifier.defaultWeight().fillMaxHeight(), secondary = false) {
         Column(GlanceModifier.fillMaxSize().padding(ContainerPadding)) {
             if (tall) {
                 ArtworkWithLike(snapshot, artwork, 56.dp, open)
@@ -411,7 +411,7 @@ private fun MediumLayout(
         }
         Spacer(GlanceModifier.width(ContainerGap))
         // 右側: 次に流れる曲（押すとその曲へ飛ぶ。ほかの端末で鳴っていればその端末で）
-        WidgetContainer(GlanceModifier.defaultWeight().fillMaxHeight(), accent = false) {
+        WidgetContainer(GlanceModifier.defaultWeight().fillMaxHeight(), secondary = true) {
         Column(GlanceModifier.fillMaxSize().padding(ContainerPadding)) {
             Text(context.getString(R.string.widget_up_next), style = WidgetText.caption().copy(fontWeight = FontWeight.Medium), maxLines = 1)
             for (item in snapshot.upNext) {

@@ -33,8 +33,8 @@ fun WaveGlanceTheme(
 
 /**
  * ウィジェットの下地（端末の角の丸みで切る）。地は Material の単色。
- * split にすると地を塗らず、中に置いた [WidgetContainer] どうしの隙間から壁紙が見える（YouTube Music のウィジェットのように、
- * 色違いの入れ物をつないだ見た目。外側の角は端末の丸みで切られ、つなぎ目の角だけ小さくなる）。
+ * split にすると地を塗らず、中に [WidgetContainer] を並べる（YouTube Music のウィジェットのように、
+ * 角の丸い色違いの入れ物を細い隙間で重ねた見た目。隙間と角の外からは壁紙が見える）。
  */
 @Composable
 fun WidgetSurface(
@@ -52,24 +52,26 @@ fun WidgetSurface(
     )
 }
 
-/** つないだ入れ物の1つ。accent は主役の側（再生中の曲）で、色を変える。 */
+/**
+ * 重ねる入れ物の1つ。四隅ともウィジェットと同じ丸み。今の曲の側は普通の地、もう一方（プレイリスト・次に流れる曲）は
+ * 一段明るい surfaceVariant（YouTube Music と同じ組み合わせ）。
+ */
 @Composable
 fun WidgetContainer(
     modifier: GlanceModifier,
-    accent: Boolean,
+    secondary: Boolean,
     content: @Composable () -> Unit,
 ) {
     Box(
         modifier
-            .background(if (accent) GlanceTheme.colors.secondaryContainer else GlanceTheme.colors.widgetBackground)
-            .cornerRadius(ContainerInnerCorner),
+            .background(if (secondary) GlanceTheme.colors.surfaceVariant else GlanceTheme.colors.widgetBackground)
+            .cornerRadius(android.R.dimen.system_app_widget_background_radius),
         content = { content() },
     )
 }
 
-/** つないだ入れ物の隙間と、つなぎ目の角。 */
-val ContainerGap = 4.dp
-val ContainerInnerCorner = 6.dp
+/** 重ねる入れ物の隙間（YouTube Music はほとんど空けない）。 */
+val ContainerGap = 2.dp
 
 /** つないだ入れ物の中の余白（2つに分けると幅が狭くなるので、1つのときより詰める）。 */
 val ContainerPadding = 12.dp

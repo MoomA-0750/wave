@@ -170,26 +170,26 @@ private fun GridContent(
             // 小は表紙だけを 2×2 に
             layout == GridLayout.Small ->
                 Box(GlanceModifier.fillMaxSize().padding(WidgetPadding), contentAlignment = Alignment.Center) {
-                    Grid(shown, covers, now, rows = 2, columns = 2, spacing = 8.dp, width = size.width - WidgetPadding * 2, height = size.height - WidgetPadding * 2)
+                    Grid(shown, covers, now, rows = 2, columns = 2, spacing = TILE_GAP * 2, width = size.width - WidgetPadding * 2, height = size.height - WidgetPadding * 2)
                 }
             // 中・大は上の入れ物に再生中の曲と操作、下の入れ物に表紙
             else ->
                 Column(GlanceModifier.fillMaxSize()) {
-                    WidgetContainer(GlanceModifier.fillMaxWidth().height(TOP_HEIGHT), accent = true) {
+                    WidgetContainer(GlanceModifier.fillMaxWidth().height(TOP_HEIGHT), secondary = false) {
                         Box(GlanceModifier.fillMaxSize().padding(horizontal = ContainerPadding), contentAlignment = Alignment.CenterStart) { NowPlayingRow(now, artwork) }
                     }
                     Spacer(GlanceModifier.height(ContainerGap))
-                    WidgetContainer(GlanceModifier.fillMaxWidth().defaultWeight(), accent = false) {
-                        Box(GlanceModifier.fillMaxSize().padding(ContainerPadding), contentAlignment = Alignment.Center) {
+                    WidgetContainer(GlanceModifier.fillMaxWidth().defaultWeight(), secondary = true) {
+                        Box(GlanceModifier.fillMaxSize().padding(TILE_INSET), contentAlignment = Alignment.Center) {
                             Grid(
                                 shown,
                                 covers,
                                 now,
                                 rows = if (layout == GridLayout.Large) 2 else 1,
                                 columns = 4,
-                                spacing = 10.dp,
-                                width = size.width - ContainerPadding * 2,
-                                height = size.height - TOP_HEIGHT - ContainerGap - ContainerPadding * 2,
+                                spacing = TILE_GAP,
+                                width = size.width - TILE_INSET * 2,
+                                height = size.height - TOP_HEIGHT - ContainerGap - TILE_INSET * 2,
                             )
                         }
                     }
@@ -271,11 +271,11 @@ private fun Tile(
         if (cover != null) {
             Image(ImageProvider(cover), contentDescription = context.getString(R.string.widget_play_playlist, playlist.title), contentScale = ContentScale.Crop, modifier = inner)
         } else {
-            Box(inner.background(GlanceTheme.colors.secondaryContainer), contentAlignment = Alignment.Center) {
+            Box(inner.background(GlanceTheme.colors.widgetBackground), contentAlignment = Alignment.Center) {
                 Image(
                     ImageProvider(if (playlist.id == MusicRepository.LIKED_SONGS) R.drawable.ic_favorite else R.drawable.ic_queue_music),
                     contentDescription = context.getString(R.string.widget_play_playlist, playlist.title),
-                    colorFilter = ColorFilter.tint(GlanceTheme.colors.onSecondaryContainer),
+                    colorFilter = ColorFilter.tint(GlanceTheme.colors.onSurfaceVariant),
                     modifier = GlanceModifier.size((side / 3).coerceAtMost(28.dp)),
                 )
             }
@@ -299,7 +299,11 @@ private fun Tile(
     }
 }
 
-private val TILE_CORNER = 8.dp
+private val TILE_CORNER = 10.dp
+
+/** 表紙どうしの隙間と、入れ物の縁から表紙までの余白（YouTube Music の並びに合わせて詰める）。 */
+private val TILE_GAP = 3.dp
+private val TILE_INSET = 8.dp
 private val TILE_BORDER = 3.dp
 
 /** 中・大の上の入れ物（再生中の行）の高さ。 */
