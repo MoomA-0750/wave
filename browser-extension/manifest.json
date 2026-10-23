@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "wave for YouTube Music",
+  "short_name": "wave",
+  "version": "0.1.0",
+  "description": "music.youtube.com のタブを、wave の端末の連携（家の端末の一覧・遠隔操作・端末の切り替え）の1台にする",
+  "background": {
+    "service_worker": "background.js",
+    "scripts": ["background.js"]
+  },
+  "host_permissions": ["https://music.youtube.com/*"],
+  "content_scripts": [
+    {
+      "matches": ["https://music.youtube.com/*"],
+      "js": ["page/content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_title": "wave の連携",
+    "default_popup": "options.html"
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": false
+  },
+  "minimum_chrome_version": "116",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "wave-youtube-music@mooma0750.xyz",
+      "strict_min_version": "121.0"
+    }
+  }
+}

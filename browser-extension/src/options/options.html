@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>wave の連携</title>
+    <link rel="stylesheet" href="options.css" />
+  </head>
+  <body>
+    <main>
+      <h1>wave の連携</h1>
+      <p id="status" class="status">読み込み中…</p>
+
+      <section id="pairing-section">
+        <h2>家に加わる</h2>
+        <p class="hint">家の端末（スマホ・PC）の「端末の連携」で「端末を追加」を押し、出た文字（wave-pair:…）を貼り付けてください。</p>
+        <textarea id="offer" rows="3" placeholder="wave-pair:…" spellcheck="false"></textarea>
+        <div class="row">
+          <button id="join" type="button">加わる</button>
+          <button id="cancel-join" type="button" class="secondary">やめる</button>
+        </div>
+        <div id="code-box" hidden>
+          <p><span id="code-peer"></span>に、この6桁を入れてください</p>
+          <p id="code" class="code"></p>
+        </div>
+        <p id="pairing-message" class="message"></p>
+      </section>
+
+      <section>
+        <h2>端末</h2>
+        <ul id="devices" class="devices"></ul>
+        <p id="remote" class="hint"></p>
+        <button id="accept-reset" type="button" hidden>中継の今の状態から始める</button>
+      </section>
+
+      <section>
+        <h2>設定</h2>
+        <label>中継の宛先<input id="relay-url" type="url" placeholder="wss://<中継のホスト>:<ポート>" spellcheck="false" /></label>
+        <label>署名に入れるホスト名（空なら宛先のホストとポート）<input id="relay-host" type="text" placeholder="<中継のホスト>:<ポート>" spellcheck="false" /></label>
+        <label>この端末の名前<input id="device-name" type="text" maxlength="64" /></label>
+        <div class="row">
+          <button id="save" type="button">保存</button>
+          <button id="forget" type="button" class="danger">この端末の家の記録を消す</button>
+        </div>
+        <p id="settings-message" class="message"></p>
+      </section>
+    </main>
+    <script src="options.js"></script>
+  </body>
+</html>

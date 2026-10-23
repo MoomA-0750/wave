@@ -155,6 +155,8 @@ export interface ConnectStatus {
   isWriter: boolean;
   activeDeviceId: string | null;
   storeResetPending: boolean;
+  /** music.youtube.com のタブがつながっている（引き取り・遠隔操作を受けられる）。 */
+  pageOpen: boolean;
   /** アカウントタグの出どころ: own はページのログイン（DATASYNC_ID）、borrowed は家の最後の再生のものを借りている。 */
   accountTag: "own" | "borrowed" | "none";
   pairing: PairingView;
@@ -431,12 +433,14 @@ export class ConnectService {
   pageConnected(): void {
     this.pages++;
     this.acquire();
+    this.refresh();
   }
 
   pageDisconnected(): void {
     if (this.pages === 0) return;
     this.pages--;
     this.release();
+    this.refresh();
     if (this.pages === 0) {
       // 鳴らしていたタブが閉じた: 一時停止のカーソルを置いて手元を捨てる
       void this.run(async () => {
@@ -958,6 +962,7 @@ export class ConnectService {
       isWriter: this.client.isWriter,
       activeDeviceId: this.client.activeDeviceId,
       storeResetPending: this.client.storeResetPending,
+      pageOpen: this.pages > 0,
       accountTag: this.tagSource(),
       pairing: this.pairing,
     };
