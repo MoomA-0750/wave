@@ -28,4 +28,7 @@
     <string name="widget_playlists_recent_note">Shows your playlists in the order you last played them, with Liked Songs first</string>
     <string name="widget_playlists_chosen_note">Choose up to %1$d. They\'re shown in the order you pick them</string>
     <string name="widget_playlists_done">Done</string>
+    <string name="settings_widget_scale_title">Widget size</string>
+    <string name="settings_widget_scale_summary">Make the text and buttons in home screen widgets bigger or smaller, for when your launcher or display size makes them look too small</string>
+    <string name="settings_widget_scale_value">%1$d%%</string>
 </resources>

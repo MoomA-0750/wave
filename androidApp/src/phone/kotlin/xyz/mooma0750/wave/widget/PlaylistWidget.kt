@@ -7,6 +7,7 @@ import android.widget.Toast
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.datastore.preferences.core.Preferences
@@ -30,8 +31,6 @@ import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.ActionCallback
 import androidx.glance.appwidget.action.actionRunCallback
-import androidx.glance.appwidget.components.CircleIconButton
-import androidx.glance.appwidget.components.SquareIconButton
 import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.provideContent
 import androidx.glance.appwidget.state.getAppWidgetState
@@ -72,7 +71,8 @@ import xyz.mooma0750.wave.playback.playFromButton
  * クラス名はプレイリストだけを選べた頃のまま（置いてあるウィジェットが受け口の名前で結び付いているため）。
  */
 class PlaylistWidget : GlanceAppWidget() {
-    override val sizeMode = SizeMode.Responsive(setOf(SMALL, WIDE, WIDE_TALL, LARGE))
+    // 境目に大きさの倍率を掛けるので、並べ方は置いた実際の大きさから自分で決める（再生中のウィジェットと同じ）
+    override val sizeMode = SizeMode.Exact
 
     override val stateDefinition: GlanceStateDefinition<*> = PreferencesGlanceStateDefinition
 
@@ -80,6 +80,7 @@ class PlaylistWidget : GlanceAppWidget() {
         context: Context,
         id: GlanceId,
     ) {
+        WidgetScale.load(context)
         val client = (context.applicationContext as WaveApplication).container.mediaHttpClient
         provideContent {
             val prefs = currentState<Preferences>()
@@ -94,16 +95,28 @@ class PlaylistWidget : GlanceAppWidget() {
 
     companion object {
         /** 2×2 ほど: 絵と再生ボタン。 */
-        val SMALL = DpSize(110.dp, 110.dp)
+        val SMALL get() = widgetSize(80, 90)
 
         /** 4×1〜4×2: 絵の横に名前とボタン。 */
-        val WIDE = DpSize(220.dp, 48.dp)
+        val WIDE get() = widgetSize(220, 48)
 
         /** 4×2: 4×1 と同じ並びで、余白を iPhone と同じにする。 */
-        val WIDE_TALL = DpSize(220.dp, 110.dp)
+        val WIDE_TALL get() = widgetSize(220, 110)
 
         /** 3×3 以上: 大きな絵の下に名前とボタン。 */
-        val LARGE = DpSize(180.dp, 220.dp)
+        val LARGE get() = widgetSize(180, 220)
+
+        /** 置いた大きさに収まる、いちばん広い並べ方。 */
+        fun layoutFor(size: DpSize): ItemLayout {
+            fun fits(bound: DpSize) = size.width >= bound.width && size.height >= bound.height
+            return when {
+                fits(LARGE) -> ItemLayout.Large
+                fits(WIDE_TALL) -> ItemLayout.WideTall
+                // 低い（4×1 など）ときだけ1列にし、狭くても高さがあれば絵の上に再生ボタンを重ねる
+                fits(WIDE) && !fits(SMALL) -> ItemLayout.Wide
+                else -> ItemLayout.Small
+            }
+        }
 
         /** 選んだものの ID（鍵の名前はプレイリストだけを選べた頃のまま）。 */
         val ITEM_ID = stringPreferencesKey("playlistId")
@@ -118,8 +131,19 @@ class PlaylistWidget : GlanceAppWidget() {
     }
 }
 
+enum class ItemLayout { Small, Wide, WideTall, Large }
+
 class PlaylistWidgetReceiver : GlanceAppWidgetReceiver() {
     override val glanceAppWidget = PlaylistWidget()
+
+    override fun onReceive(
+        context: Context,
+        intent: android.content.Intent,
+    ) {
+        // 並べ方の境目に倍率を掛けるので、描き始める前に読んでおく
+        WidgetScale.load(context)
+        super.onReceive(context, intent)
+    }
 }
 
 private val shuffleKey = ActionParameters.Key<Boolean>("shuffle")
@@ -135,7 +159,7 @@ private fun ItemContent(
     if (item == null) {
         // 選ぶ前（置いている途中）
         WidgetSurface {
-            Box(GlanceModifier.fillMaxSize().padding(12.dp), contentAlignment = Alignment.Center) {
+            Box(GlanceModifier.fillMaxSize().padding(12.wdp), contentAlignment = Alignment.Center) {
                 Text(context.getString(R.string.widget_playlist_not_chosen), style = WidgetText.subtitle(), maxLines = 3)
             }
         }
@@ -147,32 +171,33 @@ private fun ItemContent(
     val size = LocalSize.current
     val shuffle = item.kind == WidgetItemKind.Playlist || item.kind == WidgetItemKind.Album
     WidgetSurface(surface) {
-        when (size) {
-            PlaylistWidget.SMALL ->
+        val layout = PlaylistWidget.layoutFor(size)
+        when (layout) {
+            ItemLayout.Small ->
                 Box(GlanceModifier.fillMaxSize().padding(WidgetPadding), contentAlignment = Alignment.BottomEnd) {
                     Cover(item, artwork, GlanceModifier.fillMaxSize(), play, Alignment.TopStart)
-                    Box(GlanceModifier.padding(6.dp)) { PlayButton(item, loading, playing, GlanceModifier.size(COMPACT_BUTTON)) }
+                    Box(GlanceModifier.padding(6.wdp)) { PlayButton(item, loading, playing, COMPACT_BUTTON) }
                 }
-            PlaylistWidget.WIDE, PlaylistWidget.WIDE_TALL -> {
+            ItemLayout.Wide, ItemLayout.WideTall -> {
                 // 低い（4×1）ときは余白を詰める（iPhone に無い大きさ）
-                val tall = size == PlaylistWidget.WIDE_TALL
-                val padding = if (tall) GlanceModifier.padding(WidgetPadding) else GlanceModifier.padding(horizontal = 8.dp, vertical = 6.dp)
+                val tall = layout == ItemLayout.WideTall
+                val padding = if (tall) GlanceModifier.padding(WidgetPadding) else GlanceModifier.padding(horizontal = 8.wdp, vertical = 6.wdp)
                 Row(GlanceModifier.fillMaxSize().then(padding), verticalAlignment = Alignment.CenterVertically) {
-                    val side = (size.height - if (tall) WidgetPadding * 2 else 12.dp).coerceIn(44.dp, 140.dp)
+                    val side = (size.height - if (tall) WidgetPadding * 2 else 12.wdp).coerceIn(44.wdp, 140.wdp)
                     Cover(item, artwork, GlanceModifier.size(side), play)
-                    Spacer(GlanceModifier.width(14.dp))
+                    Spacer(GlanceModifier.width(14.wdp))
                     Names(item, GlanceModifier.defaultWeight(), play)
                     if (shuffle) ShuffleButton(item, loading)
-                    PlayButton(item, loading, playing, GlanceModifier.size(COMPACT_BUTTON))
+                    PlayButton(item, loading, playing, COMPACT_BUTTON)
                 }
             }
             else ->
                 Column(GlanceModifier.fillMaxSize().padding(WidgetPadding)) {
                     Cover(item, artwork, GlanceModifier.fillMaxWidth().defaultWeight(), play)
-                    Spacer(GlanceModifier.height(12.dp))
+                    Spacer(GlanceModifier.height(12.wdp))
                     Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Names(item, GlanceModifier.defaultWeight(), play)
-                        if (shuffle) ShuffleButton(item, loading)
+                        if (shuffle) ShuffleButton(item, loading, 60.wdp)
                         PlayButton(item, loading, playing)
                     }
                 }
@@ -214,12 +239,12 @@ private fun Cover(
     if (artwork != null) {
         Image(ImageProvider(artwork), contentDescription = null, contentScale = ContentScale.Crop, modifier = base)
     } else {
-        Box(base.background(GlanceTheme.colors.secondaryContainer).padding(12.dp), contentAlignment = iconAlignment) {
+        Box(base.background(GlanceTheme.colors.secondaryContainer).padding(12.wdp), contentAlignment = iconAlignment) {
             Image(
                 ImageProvider(placeholderIcon(item)),
                 contentDescription = null,
                 colorFilter = ColorFilter.tint(GlanceTheme.colors.onSecondaryContainer),
-                modifier = GlanceModifier.size(36.dp),
+                modifier = GlanceModifier.size(36.wdp),
             )
         }
     }
@@ -239,22 +264,24 @@ private fun PlayButton(
     item: WidgetItem,
     loading: Boolean,
     playing: Boolean,
-    modifier: GlanceModifier = GlanceModifier.size(60.dp),
+    height: Dp = 60.wdp,
 ) {
     val context = LocalContext.current
+    // 主役は primary の幅の広い角丸の四角（再生中のウィジェットの再生ボタンと同じ）
+    val modifier = GlanceModifier.width(height * 1.3f).height(height)
     if (loading) {
-        Box(modifier.cornerRadius(16.dp).background(GlanceTheme.colors.primary), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator(GlanceModifier.size(28.dp), color = GlanceTheme.colors.onPrimary)
+        Box(modifier.cornerRadius(height * 0.3f).background(GlanceTheme.colors.primary), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator(GlanceModifier.size(height * 0.45f), color = GlanceTheme.colors.onPrimary)
         }
         return
     }
-    SquareIconButton(
-        ImageProvider(if (playing) R.drawable.ic_pause else R.drawable.ic_play_arrow),
-        contentDescription = if (playing) context.getString(R.string.widget_pause) else context.getString(R.string.widget_play_playlist, item.title),
-        onClick = actionRunCallback<PlayItemAction>(actionParametersOf(shuffleKey to false)),
-        modifier = modifier,
-        backgroundColor = GlanceTheme.colors.primary,
-        contentColor = GlanceTheme.colors.onPrimary,
+    WidgetIconButton(
+        if (playing) R.drawable.ic_pause else R.drawable.ic_play_arrow,
+        if (playing) context.getString(R.string.widget_pause) else context.getString(R.string.widget_play_playlist, item.title),
+        actionRunCallback<PlayItemAction>(actionParametersOf(shuffleKey to false)),
+        modifier,
+        height,
+        primary = true,
     )
 }
 
@@ -262,17 +289,18 @@ private fun PlayButton(
 private fun ShuffleButton(
     item: WidgetItem,
     loading: Boolean,
+    height: Dp = COMPACT_BUTTON,
 ) {
     val context = LocalContext.current
-    CircleIconButton(
-        ImageProvider(R.drawable.ic_shuffle),
-        contentDescription = context.getString(R.string.widget_shuffle_playlist, item.title),
-        onClick = actionRunCallback<PlayItemAction>(actionParametersOf(shuffleKey to true)),
+    WidgetIconButton(
+        R.drawable.ic_shuffle,
+        context.getString(R.string.widget_shuffle_playlist, item.title),
+        actionRunCallback<PlayItemAction>(actionParametersOf(shuffleKey to true)),
+        GlanceModifier.size(height),
+        height,
         enabled = !loading,
-        backgroundColor = GlanceTheme.colors.secondaryContainer,
-        contentColor = GlanceTheme.colors.onSecondaryContainer,
     )
-    Spacer(GlanceModifier.width(6.dp))
+    Spacer(GlanceModifier.width(ButtonGap))
 }
 
 /**

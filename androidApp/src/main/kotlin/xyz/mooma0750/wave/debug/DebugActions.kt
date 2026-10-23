@@ -46,7 +46,7 @@ object DebugActions {
      * 公開 Activity から受けてよい action（画面の遷移だけ）。再生を始めるものも、再生履歴というアカウントへの書き込みにつながるので
      * DebugReceiver からだけ受ける（F1 outer gate 指摘2）。
      */
-    private val ACTIVITY_ACTIONS = setOf("open_artist", "open_album", "open_podcast", "notice")
+    private val ACTIVITY_ACTIONS = setOf("open_artist", "open_album", "open_podcast", "open_settings", "notice")
 
     /** 確認用に作ったプレイリスト。プロセスの中だけに持ち、ログに出さない。 */
     private var createdPlaylistId: String? = null
@@ -372,6 +372,7 @@ object DebugActions {
                     }
                 "open_artist" -> intent.getStringExtra("browse_id")?.let { navigationChannel.trySend(Screen.Artist(it, "")) }
                 "open_album" -> intent.getStringExtra("browse_id")?.let { navigationChannel.trySend(Screen.Album(it, "")) }
+                "open_settings" -> navigationChannel.trySend(Screen.Settings)
                 // ポッドキャストの読み取りを確かめる（件数と形だけを記録する。題などの中身は出さない）
                 "podcast_probe" -> {
                     val music = container.music

@@ -74,6 +74,7 @@ class PlaylistGridWidget : GlanceAppWidget() {
         context: Context,
         id: GlanceId,
     ) {
+        WidgetScale.load(context)
         val container = (context.applicationContext as WaveApplication).container
         // プロセスを起こしたばかりなら、ログインを読み終えるのを待つ
         withTimeoutOrNull(AUTH_WAIT_MS) { container.authManager.state.first { it !is AuthState.Restoring } }
@@ -99,13 +100,13 @@ class PlaylistGridWidget : GlanceAppWidget() {
 
     companion object {
         /** 2×2 ほど: 表紙を 2×2。 */
-        val SMALL = DpSize(110.dp, 110.dp)
+        val SMALL get() = widgetSize(110, 110)
 
         /** 4×2: 上に再生中、下に表紙を4つ。 */
-        val MEDIUM = DpSize(250.dp, 140.dp)
+        val MEDIUM get() = widgetSize(250, 140)
 
         /** 4×4: 上に再生中、下に表紙を 4×2。 */
-        val LARGE = DpSize(250.dp, 260.dp)
+        val LARGE get() = widgetSize(250, 260)
 
         const val LARGE_COUNT = 8
 
@@ -133,6 +134,15 @@ enum class GridLayout { Small, Medium, Large }
 
 class PlaylistGridWidgetReceiver : GlanceAppWidgetReceiver() {
     override val glanceAppWidget = PlaylistGridWidget()
+
+    override fun onReceive(
+        context: Context,
+        intent: android.content.Intent,
+    ) {
+        // 並べ方の境目に倍率を掛けるので、描き始める前に読んでおく
+        WidgetScale.load(context)
+        super.onReceive(context, intent)
+    }
 }
 
 private val playlistIdKey = ActionParameters.Key<String>("playlistId")
@@ -162,9 +172,9 @@ private fun GridContent(
                         ImageProvider(R.drawable.ic_queue_music),
                         contentDescription = null,
                         colorFilter = ColorFilter.tint(GlanceTheme.colors.onSurface),
-                        modifier = GlanceModifier.size(32.dp),
+                        modifier = GlanceModifier.size(32.wdp),
                     )
-                    Spacer(GlanceModifier.height(6.dp))
+                    Spacer(GlanceModifier.height(6.wdp))
                     Text(context.getString(R.string.widget_playlists_sign_in), style = WidgetText.caption().copy(textAlign = TextAlign.Center), maxLines = 3)
                 }
             // 小は表紙だけを 2×2 に
@@ -210,10 +220,10 @@ private fun NowPlayingRow(
         if (now == null) {
             Text(context.getString(R.string.widget_nothing_playing), style = WidgetText.subtitle(), maxLines = 1, modifier = GlanceModifier.defaultWeight())
         } else {
-            Artwork(artwork, GlanceModifier.size(40.dp), open, corner = 6.dp, iconSize = 20.dp)
-            Spacer(GlanceModifier.width(10.dp))
+            Artwork(artwork, GlanceModifier.size(40.wdp), open, corner = 6.wdp, iconSize = 20.wdp)
+            Spacer(GlanceModifier.width(10.wdp))
             TitleAndArtist(now, GlanceModifier.defaultWeight().clickable(open), WidgetText.headline())
-            Controls(now, compact = true)
+            Controls(now, height = COMPACT_BUTTON)
         }
     }
 }
@@ -234,7 +244,7 @@ private fun Grid(
     // 幅と高さの両方に収まる正方形の大きさ
     val byWidth = (width - spacing * (columns - 1)) / columns
     val byHeight = (height - spacing * (rows - 1)) / rows
-    val side = minOf(byWidth, byHeight).coerceAtLeast(24.dp)
+    val side = minOf(byWidth, byHeight).coerceAtLeast(24.wdp)
     Column(GlanceModifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
         for (row in 0 until rows) {
             if (row > 0) Spacer(GlanceModifier.height(spacing))
@@ -276,22 +286,22 @@ private fun Tile(
                     ImageProvider(if (playlist.id == MusicRepository.LIKED_SONGS) R.drawable.ic_favorite else R.drawable.ic_queue_music),
                     contentDescription = context.getString(R.string.widget_play_playlist, playlist.title),
                     colorFilter = ColorFilter.tint(GlanceTheme.colors.onSurfaceVariant),
-                    modifier = GlanceModifier.size((side / 3).coerceAtMost(28.dp)),
+                    modifier = GlanceModifier.size((side / 3).coerceAtMost(28.wdp)),
                 )
             }
         }
         if (current) {
             // 明るい表紙の上でも見えるよう、暗い丸に白い印
-            Box(GlanceModifier.padding(4.dp)) {
+            Box(GlanceModifier.padding(4.wdp)) {
                 Box(
-                    GlanceModifier.size(20.dp).cornerRadius(10.dp).background(ColorProvider(Color.Black.copy(alpha = 0.6f))),
+                    GlanceModifier.size(20.wdp).cornerRadius(10.wdp).background(ColorProvider(Color.Black.copy(alpha = 0.6f))),
                     contentAlignment = Alignment.Center,
                 ) {
                     Image(
                         ImageProvider(if (now?.playing == true) R.drawable.ic_graphic_eq else R.drawable.ic_pause),
                         contentDescription = null,
                         colorFilter = ColorFilter.tint(ColorProvider(Color.White)),
-                        modifier = GlanceModifier.size(13.dp),
+                        modifier = GlanceModifier.size(13.wdp),
                     )
                 }
             }
@@ -299,15 +309,15 @@ private fun Tile(
     }
 }
 
-private val TILE_CORNER = 10.dp
+private val TILE_CORNER get() = 10.wdp
 
 /** 表紙どうしの隙間と、入れ物の縁から表紙までの余白（YouTube Music の並びに合わせて詰める）。 */
-private val TILE_GAP = 3.dp
-private val TILE_INSET = 8.dp
-private val TILE_BORDER = 3.dp
+private val TILE_GAP get() = 3.wdp
+private val TILE_INSET get() = 8.wdp
+private val TILE_BORDER get() = 3.wdp
 
 /** 中・大の上の入れ物（再生中の行）の高さ。 */
-private val TOP_HEIGHT = COMPACT_BUTTON + ContainerPadding * 2
+private val TOP_HEIGHT get() = COMPACT_BUTTON + ContainerPadding * 2
 
 /** 表紙を押した: そのプレイリストを頭から鳴らす（iPhone と同じ）。 */
 class PlayGridPlaylistAction : ActionCallback {

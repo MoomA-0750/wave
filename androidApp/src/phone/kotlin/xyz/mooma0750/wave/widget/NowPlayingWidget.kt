@@ -8,6 +8,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.glance.ColorFilter
@@ -28,8 +29,6 @@ import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.ActionCallback
 import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.action.actionStartActivity
-import androidx.glance.appwidget.components.CircleIconButton
-import androidx.glance.appwidget.components.SquareIconButton
 import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.provideContent
 import androidx.glance.appwidget.updateAll
@@ -71,12 +70,15 @@ import xyz.mooma0750.wave.playback.playFromButton
  * 低いとき（iPhone に無い大きさ）は、ボタンだけか1列にする。
  */
 class NowPlayingWidget : GlanceAppWidget() {
-    override val sizeMode = SizeMode.Responsive(setOf(CONTROLS, SQUARE, WIDE, MEDIUM, MEDIUM_TALL))
+    // 境目に大きさの倍率を掛けるので、どの並べ方にするかは置いた実際の大きさから自分で決める（Responsive のままだと、
+    // 境目より狭いときにホーム画面の側がボタンだけの並べ方を選んでいた）
+    override val sizeMode = SizeMode.Exact
 
     override suspend fun provideGlance(
         context: Context,
         id: GlanceId,
     ) {
+        WidgetScale.load(context)
         val container = (context.applicationContext as WaveApplication).container
         // 最初の描画で画像が抜けないよう、今の曲の画像は先に取っておく
         val first = WidgetHooks.nowPlaying.value
@@ -95,24 +97,47 @@ class NowPlayingWidget : GlanceAppWidget() {
 
     companion object {
         /** 2×1 ほど: ボタンだけ。 */
-        val CONTROLS = DpSize(150.dp, 48.dp)
+        val CONTROLS get() = widgetSize(150, 48)
 
         /** 2×2 ほど（iPhone の小）: ジャケットと評価、曲名、ボタン。 */
-        val SQUARE = DpSize(110.dp, 110.dp)
+        val SQUARE get() = widgetSize(110, 140)
 
         /** 4×1: ジャケット・曲名・再生・次へを1列に（ボタンだけの大きさより広いとき）。 */
-        val WIDE = DpSize(250.dp, 48.dp)
+        val WIDE get() = widgetSize(200, 48)
 
         /** 4×2 以上（iPhone の中）: 左に今の曲とボタン、右に次に流れる曲。 */
-        val MEDIUM = DpSize(250.dp, 110.dp)
+        val MEDIUM get() = widgetSize(250, 130)
 
         /** 4×3 ほど: 中と同じ並びで、ジャケットの下に曲名を置く（iPhone の中と同じ）。 */
-        val MEDIUM_TALL = DpSize(250.dp, 200.dp)
+        val MEDIUM_TALL get() = widgetSize(250, 200)
+
+        /** 置いた大きさに収まる、いちばん広い並べ方。 */
+        fun layoutFor(size: DpSize): NowPlayingLayout {
+            fun fits(bound: DpSize) = size.width >= bound.width && size.height >= bound.height
+            return when {
+                fits(MEDIUM_TALL) -> NowPlayingLayout.MediumTall
+                fits(MEDIUM) -> NowPlayingLayout.Medium
+                fits(SQUARE) -> NowPlayingLayout.Square
+                fits(WIDE) -> NowPlayingLayout.Wide
+                else -> NowPlayingLayout.Controls
+            }
+        }
     }
 }
 
+enum class NowPlayingLayout { Controls, Square, Wide, Medium, MediumTall }
+
 class NowPlayingWidgetReceiver : GlanceAppWidgetReceiver() {
     override val glanceAppWidget = NowPlayingWidget()
+
+    override fun onReceive(
+        context: Context,
+        intent: android.content.Intent,
+    ) {
+        // 並べ方の境目に倍率を掛けるので、描き始める前に読んでおく
+        WidgetScale.load(context)
+        super.onReceive(context, intent)
+    }
 }
 
 private val itemIdKey = ActionParameters.Key<String>("itemId")
@@ -128,14 +153,16 @@ private fun NowPlayingContent(
     val size = LocalSize.current
     val open = actionStartActivity(openAppIntent(context).putExtra(WidgetHooks.EXTRA_OPEN_NOW_PLAYING, true))
     // 中くらいは、今の曲と次に流れる曲を色違いの入れ物に分けて左右につなぐ
-    val split = snapshot != null && (size == NowPlayingWidget.MEDIUM || size == NowPlayingWidget.MEDIUM_TALL)
+    val layout = NowPlayingWidget.layoutFor(size)
+    val split = snapshot != null && (layout == NowPlayingLayout.Medium || layout == NowPlayingLayout.MediumTall)
     WidgetSurface(GlanceModifier.clickable(open), split = split) {
         // Responsive では、置いた大きさに収まる宣言した大きさのうち最も大きいものが来る
         when {
             snapshot == null -> EmptyState(open)
-            size == NowPlayingWidget.CONTROLS -> Controls(snapshot, GlanceModifier.fillMaxSize().padding(horizontal = 8.dp), compact = true)
-            size == NowPlayingWidget.SQUARE -> SmallLayout(snapshot, artwork, open)
-            size == NowPlayingWidget.WIDE -> WideLayout(snapshot, artwork, open)
+            layout == NowPlayingLayout.Controls ->
+                Box(GlanceModifier.fillMaxSize().padding(horizontal = 8.wdp), contentAlignment = Alignment.Center) { Controls(snapshot, maxWidth = size.width - 16.wdp) }
+            layout == NowPlayingLayout.Square -> SmallLayout(snapshot, artwork, open)
+            layout == NowPlayingLayout.Wide -> WideLayout(snapshot, artwork, open)
             else -> MediumLayout(snapshot, artwork, queueArtwork, open)
         }
     }
@@ -156,22 +183,22 @@ private fun EmptyState(open: Action) {
     when {
         // 低い: 1行だけ
         size.height < NowPlayingWidget.SQUARE.height ->
-            Row(GlanceModifier.fillMaxSize().padding(horizontal = 14.dp).clickable(open), verticalAlignment = Alignment.CenterVertically) {
-                icon(24.dp)
-                Spacer(GlanceModifier.width(10.dp))
+            Row(GlanceModifier.fillMaxSize().padding(horizontal = 14.wdp).clickable(open), verticalAlignment = Alignment.CenterVertically) {
+                icon(24.wdp)
+                Spacer(GlanceModifier.width(10.wdp))
                 Text(context.getString(R.string.widget_nothing_playing), style = WidgetText.title(), maxLines = 1)
             }
         // 狭い: 縦に並べる
         size.width < NowPlayingWidget.WIDE.width ->
-            Column(GlanceModifier.fillMaxSize().padding(14.dp).clickable(open), verticalAlignment = Alignment.CenterVertically, horizontalAlignment = Alignment.CenterHorizontally) {
-                icon(32.dp)
-                Spacer(GlanceModifier.height(8.dp))
+            Column(GlanceModifier.fillMaxSize().padding(14.wdp).clickable(open), verticalAlignment = Alignment.CenterVertically, horizontalAlignment = Alignment.CenterHorizontally) {
+                icon(32.wdp)
+                Spacer(GlanceModifier.height(8.wdp))
                 Text(context.getString(R.string.widget_nothing_playing), style = WidgetText.title().copy(textAlign = androidx.glance.text.TextAlign.Center), maxLines = 2)
             }
         else ->
-            Row(GlanceModifier.fillMaxSize().padding(16.dp).clickable(open), verticalAlignment = Alignment.CenterVertically) {
-                icon(32.dp)
-                Spacer(GlanceModifier.width(12.dp))
+            Row(GlanceModifier.fillMaxSize().padding(16.wdp).clickable(open), verticalAlignment = Alignment.CenterVertically) {
+                icon(32.wdp)
+                Spacer(GlanceModifier.width(12.wdp))
                 Column(GlanceModifier.defaultWeight()) {
                     Text(context.getString(R.string.widget_nothing_playing), style = WidgetText.title(), maxLines = 1)
                     Text(context.getString(R.string.widget_open_app), style = WidgetText.subtitle(), maxLines = 1)
@@ -187,7 +214,7 @@ internal fun Artwork(
     /** null なら押せない（押すのは外の行に任せる）。 */
     open: Action?,
     corner: androidx.compose.ui.unit.Dp = ArtworkCorner,
-    iconSize: androidx.compose.ui.unit.Dp = 28.dp,
+    iconSize: androidx.compose.ui.unit.Dp = 28.wdp,
 ) {
     val base = modifier.cornerRadius(corner).let { if (open != null) it.clickable(open) else it }
     if (artwork != null) {
@@ -241,7 +268,7 @@ private fun LikeButton(
         }
     Box(
         GlanceModifier
-            .padding(3.dp)
+            .padding(3.wdp)
             .size(LIKE_BUTTON)
             .cornerRadius(LIKE_BUTTON / 2)
             .background(ColorProvider(Color.Black.copy(alpha = 0.45f)))
@@ -252,7 +279,7 @@ private fun LikeButton(
             ImageProvider(if (saved) R.drawable.ic_check_circle else R.drawable.ic_add_circle),
             contentDescription = context.getString(if (saved) R.string.library_add_to_playlist else R.string.playback_like),
             colorFilter = ColorFilter.tint(if (saved) GlanceTheme.colors.primary else ColorProvider(Color.White)),
-            modifier = GlanceModifier.size(LIKE_BUTTON - 6.dp),
+            modifier = GlanceModifier.size(LIKE_BUTTON - 6.wdp),
         )
     }
 }
@@ -273,9 +300,9 @@ internal fun TitleAndArtist(
                     ImageProvider(R.drawable.ic_devices),
                     contentDescription = null,
                     colorFilter = ColorFilter.tint(GlanceTheme.colors.primary),
-                    modifier = GlanceModifier.size(14.dp),
+                    modifier = GlanceModifier.size(14.wdp),
                 )
-                Spacer(GlanceModifier.width(4.dp))
+                Spacer(GlanceModifier.width(4.wdp))
                 Text(device, style = WidgetText.device(), maxLines = 1)
             }
         } else if (snapshot.artist.isNotEmpty()) {
@@ -284,56 +311,48 @@ internal fun TitleAndArtist(
     }
 }
 
-/** 前へ・再生（主役なので塗る）・次へ。 */
+/**
+ * 前へ・再生・次へ（m3e-lab の再生のボタングループと同じく、地のあるボタンを並べる。前へ・次へは淡い tonal で幅を狭め、
+ * 再生は primary で幅を広くとる）。maxWidth に収まらなければ、ボタンの高さごと縮める。
+ */
 @Composable
 internal fun Controls(
     snapshot: NowPlayingSnapshot,
     modifier: GlanceModifier = GlanceModifier,
-    /** 低い・狭いウィジェット: ボタンを小さくする（はみ出さないように）。 */
-    compact: Boolean = false,
-    alignment: Alignment.Horizontal = Alignment.CenterHorizontally,
-    /** 再生ボタンの大きさ（既定は compact で決める）。 */
-    playSize: androidx.compose.ui.unit.Dp = if (compact) COMPACT_BUTTON else PLAY_BUTTON,
+    /** ボタンの高さ（収まる限り）。 */
+    height: Dp = COMPACT_BUTTON,
+    /** 並べられる幅。 */
+    maxWidth: Dp? = null,
 ) {
     val context = LocalContext.current
-    val side = if (playSize < COMPACT_BUTTON) SMALL_SIDE_BUTTON else if (compact) COMPACT_SIDE_BUTTON else SIDE_BUTTON
-    Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalAlignment = alignment) {
-        CircleIconButton(
-            ImageProvider(R.drawable.ic_skip_previous),
-            contentDescription = context.getString(R.string.nowplaying_previous),
-            onClick = actionRunCallback<PreviousAction>(),
-            modifier = GlanceModifier.size(side),
-            backgroundColor = null,
-            contentColor = GlanceTheme.colors.onSurface,
-        )
-        Spacer(GlanceModifier.width(4.dp))
-        PlayPauseButton(snapshot.playing, GlanceModifier.size(playSize))
-        Spacer(GlanceModifier.width(4.dp))
-        CircleIconButton(
-            ImageProvider(R.drawable.ic_skip_next),
-            contentDescription = context.getString(R.string.nowplaying_next),
-            onClick = actionRunCallback<NextAction>(),
-            modifier = GlanceModifier.size(side),
-            backgroundColor = null,
-            contentColor = GlanceTheme.colors.onSurface,
-        )
+    val h = maxWidth?.let { minOf(height, (it - ButtonGap * 2) / (SIDE_RATIO * 2 + PLAY_RATIO)) } ?: height
+    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+        WidgetIconButton(R.drawable.ic_skip_previous, context.getString(R.string.nowplaying_previous), actionRunCallback<PreviousAction>(), GlanceModifier.width(h * SIDE_RATIO).height(h), h)
+        Spacer(GlanceModifier.width(ButtonGap))
+        PlayPauseButton(snapshot.playing, GlanceModifier.width(h * PLAY_RATIO).height(h), h)
+        Spacer(GlanceModifier.width(ButtonGap))
+        WidgetIconButton(R.drawable.ic_skip_next, context.getString(R.string.nowplaying_next), actionRunCallback<NextAction>(), GlanceModifier.width(h * SIDE_RATIO).height(h), h)
     }
 }
+
+/** 前へ・次へと再生の幅（高さに対する比）。 */
+private const val SIDE_RATIO = 0.7f
+private const val PLAY_RATIO = 1.3f
 
 @Composable
 internal fun PlayPauseButton(
     playing: Boolean,
-    modifier: GlanceModifier = GlanceModifier,
+    modifier: GlanceModifier,
+    height: Dp,
 ) {
     val context = LocalContext.current
-    // 主役の操作は角の丸い四角で塗る（Expressive の再生ボタン）
-    SquareIconButton(
-        ImageProvider(if (playing) R.drawable.ic_pause else R.drawable.ic_play_arrow),
-        contentDescription = context.getString(if (playing) R.string.nowplaying_pause else R.string.widget_play),
-        onClick = actionRunCallback<PlayPauseAction>(),
-        modifier = modifier,
-        backgroundColor = GlanceTheme.colors.primary,
-        contentColor = GlanceTheme.colors.onPrimary,
+    WidgetIconButton(
+        if (playing) R.drawable.ic_pause else R.drawable.ic_play_arrow,
+        context.getString(if (playing) R.string.nowplaying_pause else R.string.widget_play),
+        actionRunCallback<PlayPauseAction>(),
+        modifier,
+        height,
+        primary = true,
     )
 }
 
@@ -345,13 +364,13 @@ private fun SmallLayout(
     open: Action,
 ) {
     // 2×2 は端末によって 140dp ほどしかないので、余白を詰める
-    Column(GlanceModifier.fillMaxSize().padding(12.dp)) {
-        ArtworkWithLike(snapshot, artwork, 44.dp, open)
+    Column(GlanceModifier.fillMaxSize().padding(12.wdp)) {
+        ArtworkWithLike(snapshot, artwork, 44.wdp, open)
         Spacer(GlanceModifier.defaultWeight())
         TitleAndArtist(snapshot, GlanceModifier.fillMaxWidth().clickable(open), WidgetText.headline())
-        Spacer(GlanceModifier.height(2.dp))
+        Spacer(GlanceModifier.height(2.wdp))
         // 2×2 の高さに収まるよう、ボタンは小さめにする
-        Controls(snapshot, GlanceModifier.fillMaxWidth(), compact = true, alignment = Alignment.Start, playSize = SMALL_PLAY_BUTTON)
+        Controls(snapshot, height = SMALL_PLAY_BUTTON, maxWidth = LocalSize.current.width - 24.wdp)
     }
 }
 
@@ -362,18 +381,13 @@ private fun WideLayout(
     open: Action,
 ) {
     val context = LocalContext.current
-    Row(GlanceModifier.fillMaxSize().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Artwork(artwork, GlanceModifier.size(44.dp), open)
-        Spacer(GlanceModifier.width(10.dp))
+    Row(GlanceModifier.fillMaxSize().padding(horizontal = 8.wdp), verticalAlignment = Alignment.CenterVertically) {
+        Artwork(artwork, GlanceModifier.size(44.wdp), open)
+        Spacer(GlanceModifier.width(10.wdp))
         TitleAndArtist(snapshot, GlanceModifier.defaultWeight().clickable(open))
-        PlayPauseButton(snapshot.playing, GlanceModifier.size(COMPACT_BUTTON))
-        CircleIconButton(
-            ImageProvider(R.drawable.ic_skip_next),
-            contentDescription = context.getString(R.string.nowplaying_next),
-            onClick = actionRunCallback<NextAction>(),
-            backgroundColor = null,
-            contentColor = GlanceTheme.colors.onSurface,
-        )
+        PlayPauseButton(snapshot.playing, GlanceModifier.width(COMPACT_BUTTON * PLAY_RATIO).height(COMPACT_BUTTON), COMPACT_BUTTON)
+        Spacer(GlanceModifier.width(ButtonGap))
+        WidgetIconButton(R.drawable.ic_skip_next, context.getString(R.string.nowplaying_next), actionRunCallback<NextAction>(), GlanceModifier.width(COMPACT_BUTTON * SIDE_RATIO).height(COMPACT_BUTTON), COMPACT_BUTTON)
     }
 }
 
@@ -390,23 +404,23 @@ private fun MediumLayout(
 ) {
     val context = LocalContext.current
     // Responsive では宣言した段の大きさが来る
-    val tall = LocalSize.current == NowPlayingWidget.MEDIUM_TALL
+    val tall = NowPlayingWidget.layoutFor(LocalSize.current) == NowPlayingLayout.MediumTall
     Row(GlanceModifier.fillMaxSize()) {
         WidgetContainer(GlanceModifier.defaultWeight().fillMaxHeight(), secondary = false) {
         Column(GlanceModifier.fillMaxSize().padding(ContainerPadding)) {
             if (tall) {
-                ArtworkWithLike(snapshot, artwork, 56.dp, open)
+                ArtworkWithLike(snapshot, artwork, 56.wdp, open)
                 Spacer(GlanceModifier.defaultWeight())
                 TitleAndArtist(snapshot, GlanceModifier.fillMaxWidth().clickable(open))
             } else {
                 Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    ArtworkWithLike(snapshot, artwork, 48.dp, open)
-                    Spacer(GlanceModifier.width(10.dp))
+                    ArtworkWithLike(snapshot, artwork, 48.wdp, open)
+                    Spacer(GlanceModifier.width(10.wdp))
                     TitleAndArtist(snapshot, GlanceModifier.defaultWeight().clickable(open), WidgetText.headline())
                 }
             }
             Spacer(GlanceModifier.defaultWeight())
-            Controls(snapshot, GlanceModifier.fillMaxWidth(), compact = true, alignment = Alignment.Start)
+            Controls(snapshot, maxWidth = (LocalSize.current.width - ContainerGap) / 2 - ContainerPadding * 2)
         }
         }
         Spacer(GlanceModifier.width(ContainerGap))
@@ -420,8 +434,8 @@ private fun MediumLayout(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     val thumb = item.artworkUrl?.let(queueArtwork::get)
-                    Artwork(thumb, GlanceModifier.size(28.dp), null, corner = 5.dp, iconSize = 16.dp)
-                    Spacer(GlanceModifier.width(8.dp))
+                    Artwork(thumb, GlanceModifier.size(28.wdp), null, corner = 5.wdp, iconSize = 16.wdp)
+                    Spacer(GlanceModifier.width(8.wdp))
                     Column(GlanceModifier.defaultWeight()) {
                         Text(item.title, style = WidgetText.subtitle().copy(color = GlanceTheme.colors.onSurface, fontWeight = FontWeight.Medium), maxLines = 1)
                         if (item.artist.isNotEmpty()) Text(item.artist, style = WidgetText.caption(), maxLines = 1)
@@ -463,15 +477,11 @@ internal suspend fun withController(
 private const val RESTORE_WAIT_MS = 5_000L
 
 /** 狭い・低いウィジェットの再生ボタンの大きさ（既定は 60dp）。 */
-internal val COMPACT_BUTTON = 48.dp
+internal val COMPACT_BUTTON get() = 48.wdp
 
 /** 広さのあるウィジェットの再生ボタンの大きさ。 */
-private val PLAY_BUTTON = 52.dp
-private val SIDE_BUTTON = 44.dp
-private val COMPACT_SIDE_BUTTON = 40.dp
-private val LIKE_BUTTON = 22.dp
-private val SMALL_PLAY_BUTTON = 36.dp
-private val SMALL_SIDE_BUTTON = 32.dp
+private val LIKE_BUTTON get() = 22.wdp
+private val SMALL_PLAY_BUTTON get() = 36.wdp
 
 
 class JumpAction : ActionCallback {

@@ -28,4 +28,7 @@
     <string name="widget_playlists_recent_note">最近再生した順に並べます（高く評価した曲が先頭）</string>
     <string name="widget_playlists_chosen_note">%1$d 個まで選べます。選んだ順に並べます</string>
     <string name="widget_playlists_done">完了</string>
+    <string name="settings_widget_scale_title">ウィジェットの大きさ</string>
+    <string name="settings_widget_scale_summary">ホーム画面のウィジェットの文字やボタンの大きさを変えます。ランチャーや表示サイズの設定で小さく見えるときに</string>
+    <string name="settings_widget_scale_value">%1$d%%</string>
 </resources>

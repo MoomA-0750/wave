@@ -145,6 +145,7 @@ fun SettingsScreen(
                 )
             }
             item { LanguageSetting() }
+            item { WidgetScaleSetting(container.appScope) }
             if (container.connectV2 != null) {
                 item {
                     ListItem(

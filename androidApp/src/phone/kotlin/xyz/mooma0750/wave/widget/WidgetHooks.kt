@@ -34,6 +34,7 @@ object WidgetHooks {
         if (started) return
         started = true
         val app = context.applicationContext
+        WidgetScale.load(app)
         val container = (app as WaveApplication).container
         // 同じ値は StateFlow が落とす。描き直しの途中に変わったら、最後の値で描き直す
         container.appScope.launch {
@@ -61,6 +62,15 @@ object WidgetHooks {
     private suspend fun updatePlaylistGrid(context: Context) {
         runCatching { PlaylistGridWidget().updateAll(context) }
             .onFailure { Log.w(WaveApplication.LOG_TAG, "widget update failed type=${it::class.simpleName}") }
+    }
+
+    /** 置いてあるウィジェットを全部描き直す（大きさの倍率を変えたときなど）。 */
+    suspend fun updateAllWidgets(context: Context) {
+        runCatching {
+            NowPlayingWidget().updateAll(context)
+            PlaylistWidget().updateAll(context)
+            PlaylistGridWidget().updateAll(context)
+        }.onFailure { Log.w(WaveApplication.LOG_TAG, "widget update failed type=${it::class.simpleName}") }
     }
 
     /** ログアウトした: 残したプレイリストの一覧を消して描き直す。 */
