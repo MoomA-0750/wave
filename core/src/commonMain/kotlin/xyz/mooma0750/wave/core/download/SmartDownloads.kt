@@ -1,6 +1,7 @@
 package xyz.mooma0750.wave.core.download
 
 import kotlinx.serialization.Serializable
+import xyz.mooma0750.wave.core.music.MusicVideoType
 import xyz.mooma0750.wave.core.music.Song
 
 /** この端末で聴いた回数（スマートダウンロードの「いつも聴いている」に使う）。 */
@@ -121,7 +122,7 @@ object SmartDownloads {
                 var added = false
                 while (iterator.hasNext()) {
                     val song = iterator.next()
-                    if (song.isLive || song.videoId in taken || tooLong(song)) continue
+                    if (song.isLive || song.videoId in taken || tooLong(song) || !isMusic(song)) continue
                     val artist = artistKey(song)
                     if (artist != null && (perArtist[artist] ?: 0) >= maxPerArtist) continue
                     taken += song.videoId
@@ -138,6 +139,9 @@ object SmartDownloads {
 
     /** 長すぎる曲（作業用のまとめの動画など）は取らない。長さが分からなければ取る。 */
     fun tooLong(song: Song): Boolean = (song.durationSeconds ?: 0) > MAX_SECONDS
+
+    /** 曲（音源・公式の MV）か。投稿者の動画（作業用のまとめなど）は自動では取らない。種類が分からなければ取る。 */
+    fun isMusic(song: Song): Boolean = song.kind == null || song.kind == MusicVideoType.Atv || song.kind == MusicVideoType.Omv
 
     /** 自動で取る曲の長さの上限（15分）。 */
     const val MAX_SECONDS = 15 * 60

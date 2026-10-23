@@ -334,6 +334,17 @@ public sealed class DownloadsTests : IDisposable
     }
 
     [Fact]
+    public void OrdinaryVideosAreNotPicked()
+    {
+        var video = S("video") with { Kind = Song.KindUserVideo };
+        var mv = S("mv") with { Kind = Song.KindMusicVideo };
+        var song = S("song") with { Kind = Song.KindSong };
+        var unknown = S("unknown") with { Kind = null };
+        var picked = SmartDownloads.Select([video, mv, song, unknown], [], [], 10);
+        Assert.Equal([Id("mv"), Id("song"), Id("unknown")], picked.Select(t => t.Song.VideoId));
+    }
+
+    [Fact]
     public void RefreshIsDueOnceADay()
     {
         Assert.True(SmartDownloads.IsDue(0, 100));

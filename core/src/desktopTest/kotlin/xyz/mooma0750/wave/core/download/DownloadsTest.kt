@@ -2,6 +2,7 @@ package xyz.mooma0750.wave.core.download
 
 import kotlinx.serialization.json.Json
 import xyz.mooma0750.wave.core.music.ArtistRef
+import xyz.mooma0750.wave.core.music.MusicVideoType
 import xyz.mooma0750.wave.core.music.Song
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -13,7 +14,8 @@ private fun song(
     artist: String = "a-$id",
     live: Boolean = false,
     seconds: Int? = 200,
-) = Song(id, "t-$id", listOf(ArtistRef(artist, "UC$artist")), null, seconds, null, isLive = live)
+    kind: MusicVideoType? = null,
+) = Song(id, "t-$id", listOf(ArtistRef(artist, "UC$artist")), null, seconds, null, kind = kind, isLive = live)
 
 class DownloadManifestTest {
     @Test
@@ -142,6 +144,12 @@ class SmartDownloadsTest {
     fun songsLongerThanFifteenMinutesAreNotPicked() {
         val candidates = mapOf(SmartCategory.entries.first() to listOf(song("long", seconds = 3600), song("ok", seconds = 15 * 60), song("unknown", seconds = null)))
         assertEquals(listOf("ok", "unknown"), SmartDownloads.pick(candidates, total = 10).map { it.song.videoId })
+    }
+
+    @Test
+    fun ordinaryVideosAreNotPicked() {
+        val candidates = mapOf(SmartCategory.entries.first() to listOf(song("video", kind = MusicVideoType.Ugc), song("mv", kind = MusicVideoType.Omv), song("song", kind = MusicVideoType.Atv), song("unknown")))
+        assertEquals(listOf("mv", "song", "unknown"), SmartDownloads.pick(candidates, total = 10).map { it.song.videoId })
     }
 
     @Test

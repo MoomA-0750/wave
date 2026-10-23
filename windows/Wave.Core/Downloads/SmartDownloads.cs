@@ -44,7 +44,10 @@ public static class SmartDownloads
     /// <summary>これより長い曲は選ばない（再生履歴に出る1時間の動画などを取らない）。長さが分からなければ選んでよい。</summary>
     public const int MaxDurationSeconds = 15 * 60;
 
-    private static bool Usable(Song song) => !song.IsLive && !Feed.IsExternal(song.VideoId) && (song.DurationSeconds is not { } d || d <= MaxDurationSeconds);
+    /// <summary>曲（音源・公式の MV）か。投稿者の動画（作業用のまとめなど）やエピソードは選ばない。種類が分からなければ選んでよい。</summary>
+    private static bool IsMusic(Song song) => song.Kind is null or Song.KindSong or Song.KindMusicVideo;
+
+    private static bool Usable(Song song) => !song.IsLive && !Feed.IsExternal(song.VideoId) && IsMusic(song) && (song.DurationSeconds is not { } d || d <= MaxDurationSeconds);
 
     /// <summary>
     /// 「いつも聴いている」の候補: この端末の再生回数と、YouTube の再生履歴（新しい順）に出る曲。回数（履歴に出た回も1回と数える）の多い順、
