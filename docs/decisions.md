@@ -778,3 +778,13 @@
 - 「すべて削除」をしても、スマートダウンロードの入り切りは残す。選び直しは次の1日1回のときにする
 - RSS のエピソードは、リダイレクトを追う通信で取る（再生用の通信はリダイレクトを追わないので、配信元の計測用の中継を通る URL が取れなかった）。取ったエピソードのファイルには拡張子が無いので、鳴らすときに形式を指定する（`AVURLAssetOverrideMIMETypeKey`）
 - iPhone はログインしていないとライブラリのタブがログインの案内になるので、「ダウンロード」の入口が見えない（設定の「ダウンロード」からは開ける）。ログイン中の普段の使い方では困らないので、そのままにした
+
+## 2026-10-24 拡張で YouTube Music のタブを操作する道（ページ側）
+
+ブラウザー拡張で music.youtube.com のタブを Connect の1台にするため、ページの読み書きを調べて作った（`browser-extension/docs/ytm-page.md`）。
+
+- **YTM の内部を MAIN world から使う**: 読むのは `#movie_player` の API・`ytmusic-app` の redux の state・`ytmusic-player-queue` のキューの係。動かすのは、YTM の画面が使う関数（バーのボタンの処理、メニューの `handleCommand`、`onDrop`）を呼ぶ。DOM のボタンを押すだけでは、キューの途中への追加・並べ替え・位置を指定した読み込みができないため
+- **キューの読み込みはキューの操作の組み合わせ**: 1曲を開き、前後の曲を `queueAddEndpoint`（`queueTargets` で複数）で足し、今の曲を動かす。やめたこと: `watch_videos?video_ids=` の一時プレイリスト（`TLGG…`）。YTM でも流せたが、www.youtube.com にしかなく、ページからは CORS で読めない
+- **自動再生（ラジオ）は redux の `SET_AUTOPLAY_ENABLED` で止める**: 切ると最後の曲で止まることを確かめた
+- **YTM のシャッフルは使わない方向**: サーバーにキューを作り直させ、足した曲が消える。並びは wave 側で決めて送る
+- **自動の確かめは自動操作の印を消して行う**: 印があると YTM が 30 秒ほどで読み込みを止める。Chromium は `--enable-automation` を外す、Firefox は WebDriver をやめて web-ext（RDP）で入れる

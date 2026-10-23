@@ -1,0 +1,36 @@
+{
+  "manifest_version": 3,
+  "name": "wave YTM page (dev)",
+  "version": "0.0.1",
+  "description": "src/page の確かめ用。配らない",
+  "background": {
+    "service_worker": "background.js",
+    "scripts": ["background.js"]
+  },
+  "host_permissions": ["https://music.youtube.com/*", "http://127.0.0.1/*"],
+  "content_scripts": [
+    {
+      "matches": ["https://music.youtube.com/*"],
+      "js": ["dev-main.js"],
+      "world": "MAIN",
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["https://music.youtube.com/*"],
+      "js": ["page-main.js"],
+      "world": "MAIN",
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://music.youtube.com/*"],
+      "js": ["dev-content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "wave-ytm-page-dev@wave.invalid",
+      "strict_min_version": "128.0"
+    }
+  }
+}
