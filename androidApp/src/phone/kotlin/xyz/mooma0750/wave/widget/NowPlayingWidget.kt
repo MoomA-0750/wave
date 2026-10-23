@@ -79,6 +79,7 @@ class NowPlayingWidget : GlanceAppWidget() {
         id: GlanceId,
     ) {
         WidgetScale.load(context)
+        if (WidgetPreview.forced) return providePreviewContent(context)
         val container = (context.applicationContext as WaveApplication).container
         // 最初の描画で画像が抜けないよう、今の曲の画像は先に取っておく
         val first = WidgetHooks.nowPlaying.value
@@ -97,6 +98,21 @@ class NowPlayingWidget : GlanceAppWidget() {
             }
         }
     }
+
+    /** ランチャーのウィジェット追加画面の見本（Android 15 以降。[WidgetPreview]）。 */
+    override suspend fun providePreview(
+        context: Context,
+        widgetCategory: Int,
+    ) = providePreviewContent(context)
+
+    private suspend fun providePreviewContent(context: Context): Nothing =
+        provideContent {
+            WidgetScaled(minWidth = 150, minHeight = 48) {
+                WaveGlanceTheme(context) {
+                    NowPlayingContent(WidgetPreview.nowPlaying(context), null, emptyMap())
+                }
+            }
+        }
 
     companion object {
         /** 2×1 ほど: ボタンだけ。 */
@@ -117,7 +133,7 @@ class NowPlayingWidget : GlanceAppWidget() {
 
         /** 4×3 ほど: 中と同じ並びで、ジャケットの下に曲名を置く（iPhone の中と同じ）。 */
         val MEDIUM_TALL: DpSize
-            @Composable get() = widgetSize(250, 200)
+            @Composable get() = widgetSize(250, 170)
 
         /** 置いた大きさに収まる、いちばん広い並べ方。 */
         @Composable

@@ -10,7 +10,7 @@
     android:minResizeHeight="40dp"
     android:targetCellWidth="2"
     android:targetCellHeight="2"
-    android:previewImage="@drawable/ic_playlist_play"
+    android:previewImage="@drawable/widget_preview_quick_play"
     android:resizeMode="horizontal|vertical"
     android:updatePeriodMillis="0"
     android:widgetCategory="home_screen"

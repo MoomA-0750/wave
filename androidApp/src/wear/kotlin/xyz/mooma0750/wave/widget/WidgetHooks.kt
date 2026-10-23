@@ -13,4 +13,7 @@ object WidgetHooks {
 
     @Suppress("UNUSED_PARAMETER")
     fun onLoggedOut(context: Context) = Unit
+
+    @Suppress("UNUSED_PARAMETER")
+    fun onAppStarted(context: Context) = Unit
 }

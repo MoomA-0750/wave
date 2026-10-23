@@ -17,6 +17,8 @@ import androidx.glance.layout.size
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceModifier
 import androidx.glance.GlanceTheme
+import androidx.glance.LocalContext
+import androidx.glance.unit.ColorProvider
 import androidx.glance.appwidget.appWidgetBackground
 import androidx.glance.appwidget.cornerRadius
 import androidx.glance.background
@@ -55,14 +57,15 @@ fun WidgetSurface(
             .fillMaxSize()
             .appWidgetBackground()
             .let { if (split) it else it.background(GlanceTheme.colors.widgetBackground) }
-            .cornerRadius(android.R.dimen.system_app_widget_background_radius),
+            .cornerRadius(widgetCorner()),
         content = { content() },
     )
 }
 
 /**
- * 重ねる入れ物の1つ。四隅ともウィジェットと同じ丸み。今の曲の側は普通の地、もう一方（プレイリスト・次に流れる曲）は
- * 一段明るい surfaceVariant（YouTube Music と同じ組み合わせ）。
+ * 重ねる入れ物の1つ。四隅ともウィジェットと同じ丸み。今の曲の側は surfaceContainerLow、もう一方（プレイリスト・次に流れる曲）は
+ * secondaryContainer（YouTube Music と同じく、もう一方を一段濃く色付ける）。Glance の色の組には surfaceContainer の段が無く、
+ * surfaceVariant は端末の色の組によって secondaryContainer（＝ widgetBackground）とほぼ同じ色になったので、明るさの離れた組にする。
  */
 @Composable
 fun WidgetContainer(
@@ -72,10 +75,28 @@ fun WidgetContainer(
 ) {
     Box(
         modifier
-            .background(if (secondary) GlanceTheme.colors.surfaceVariant else GlanceTheme.colors.widgetBackground)
-            .cornerRadius(android.R.dimen.system_app_widget_background_radius),
+            .background(if (secondary) GlanceTheme.colors.secondaryContainer else playerContainerColor())
+            .cornerRadius(widgetCorner()),
         content = { content() },
     )
+}
+
+/** 今の曲の側の入れ物の色（ライト・ダークで端末の動的な色の surfaceContainerLow）。 */
+@Composable
+fun playerContainerColor(): ColorProvider {
+    val context = LocalContext.current
+    return androidx.glance.color.ColorProvider(
+        day = dynamicLightColorScheme(context).surfaceContainerLow,
+        night = dynamicDarkColorScheme(context).surfaceContainerLow,
+    )
+}
+
+/** ウィジェットの角の丸み（端末の丸みに大きさの倍率を掛ける。文字やボタンと一緒に大きくする）。 */
+@Composable
+fun widgetCorner(): Dp {
+    val resources = LocalContext.current.resources
+    val system = resources.getDimension(android.R.dimen.system_app_widget_background_radius) / resources.displayMetrics.density
+    return (system * LocalWidgetScale.current).dp
 }
 
 /**

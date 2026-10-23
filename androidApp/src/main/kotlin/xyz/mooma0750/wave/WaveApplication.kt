@@ -80,6 +80,7 @@ class WaveApplication :
         WebView.setDataDirectorySuffix(LOGIN_WEBVIEW_SUFFIX)
         container = AppContainer(this)
         container.appScope.launch { container.authManager.restore() }
+        xyz.mooma0750.wave.widget.WidgetHooks.onAppStarted(this)
         // ログインしていれば、登録したアーティストの新作の確かめを予約する（設定で切っていれば取り消す）
         container.appScope.launch {
             kotlinx.coroutines.flow.combine(container.authManager.state, container.settings.releaseNotices) { auth, enabled -> auth is AuthState.LoggedIn && enabled }

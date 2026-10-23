@@ -64,6 +64,12 @@ object WidgetHooks {
             .onFailure { Log.w(WaveApplication.LOG_TAG, "widget update failed type=${it::class.simpleName}") }
     }
 
+    /** アプリが起動した: ランチャーのウィジェット追加画面の見本を OS に渡す（Android 15 以降、版ごとに一度）。 */
+    fun onAppStarted(context: Context) {
+        val app = context.applicationContext
+        (app as WaveApplication).container.appScope.launch { WidgetPreview.publish(app) }
+    }
+
     /** 置いてあるウィジェットを全部描き直す（大きさの倍率を変えたときなど）。 */
     suspend fun updateAllWidgets(context: Context) {
         runCatching {

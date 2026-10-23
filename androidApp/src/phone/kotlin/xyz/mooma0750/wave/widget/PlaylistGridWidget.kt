@@ -75,6 +75,7 @@ class PlaylistGridWidget : GlanceAppWidget() {
         id: GlanceId,
     ) {
         WidgetScale.load(context)
+        if (WidgetPreview.forced) return providePreviewContent(context)
         val container = (context.applicationContext as WaveApplication).container
         // プロセスを起こしたばかりなら、ログインを読み終えるのを待つ
         withTimeoutOrNull(AUTH_WAIT_MS) { container.authManager.state.first { it !is AuthState.Restoring } }
@@ -100,6 +101,23 @@ class PlaylistGridWidget : GlanceAppWidget() {
             }
         }
     }
+
+    /** ランチャーのウィジェット追加画面の見本（Android 15 以降。[WidgetPreview]）。 */
+    override suspend fun providePreview(
+        context: Context,
+        widgetCategory: Int,
+    ) = providePreviewContent(context)
+
+    private suspend fun providePreviewContent(context: Context): Nothing =
+        provideContent {
+            WidgetScaled(minWidth = 100, minHeight = 100) {
+                val layout = layoutFor(LocalSize.current)
+                val shown = WidgetPreview.playlists(context).take(if (layout == GridLayout.Large) LARGE_COUNT else 4)
+                WaveGlanceTheme(context) {
+                    GridContent(shown, emptyMap(), WidgetPreview.nowPlaying(context), null)
+                }
+            }
+        }
 
     companion object {
         /** 2×2 ほど: 表紙を 2×2。 */
@@ -288,7 +306,7 @@ private fun Tile(
         if (cover != null) {
             Image(ImageProvider(cover), contentDescription = context.getString(R.string.widget_play_playlist, playlist.title), contentScale = ContentScale.Crop, modifier = inner)
         } else {
-            Box(inner.background(GlanceTheme.colors.widgetBackground), contentAlignment = Alignment.Center) {
+            Box(inner.background(playerContainerColor()), contentAlignment = Alignment.Center) {
                 Image(
                     ImageProvider(if (playlist.id == MusicRepository.LIKED_SONGS) R.drawable.ic_favorite else R.drawable.ic_queue_music),
                     contentDescription = context.getString(R.string.widget_play_playlist, playlist.title),

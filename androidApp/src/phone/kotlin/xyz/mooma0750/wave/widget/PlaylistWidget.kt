@@ -81,6 +81,7 @@ class PlaylistWidget : GlanceAppWidget() {
         id: GlanceId,
     ) {
         WidgetScale.load(context)
+        if (WidgetPreview.forced) return providePreviewContent(context)
         val client = (context.applicationContext as WaveApplication).container.mediaHttpClient
         provideContent {
             val prefs = currentState<Preferences>()
@@ -95,6 +96,21 @@ class PlaylistWidget : GlanceAppWidget() {
             }
         }
     }
+
+    /** ランチャーのウィジェット追加画面の見本（Android 15 以降。[WidgetPreview]）。 */
+    override suspend fun providePreview(
+        context: Context,
+        widgetCategory: Int,
+    ) = providePreviewContent(context)
+
+    private suspend fun providePreviewContent(context: Context): Nothing =
+        provideContent {
+            WidgetScaled(minWidth = 90, minHeight = 90) {
+                WaveGlanceTheme(context) {
+                    ItemContent(WidgetPreview.item(context), null, loading = false, playing = false)
+                }
+            }
+        }
 
     companion object {
         /** 2×2 ほど: 絵と再生ボタン。 */

@@ -31,4 +31,8 @@
     <string name="settings_widget_scale_title">Widget size</string>
     <string name="settings_widget_scale_summary">Make the text and buttons in home screen widgets bigger or smaller, for when your launcher or display size makes them look too small</string>
     <string name="settings_widget_scale_value">%1$d%%</string>
+    <string name="widget_preview_song">Song title</string>
+    <string name="widget_preview_artist">Artist</string>
+    <string name="widget_preview_next_song">Next song %1$d</string>
+    <string name="widget_preview_playlist">Playlist %1$d</string>
 </resources>

@@ -720,3 +720,10 @@
 - Glance の CircleIconButton・SquareIconButton は形とアイコンの大きさが決まっていて倍率を掛けられず、幅も狭められないので、地のあるボタン（WidgetIconButton）を Box と Image で自分で組んだ。Glance の重みは比を付けられないので、ボタンの幅は高さに対する比（前へ・次へ 0.7、再生 1.3）で決め、並べる幅が足りなければ高さごと縮める。
 - 確かめ用に、開発版で `--es debug_action open_settings` から設定画面を開けるようにした。
 - 同じ日、本人の頼みで上限を 300% にした。Pixel 3 の小さい枠では 300% で中身がはみ出したので、効く倍率を大きさごとに「一番小さい並べ方が収まるところまで」に抑える（WidgetScaled が LocalSize から決め、CompositionLocal で中身に渡す）。倍率を1つのグローバルな値で持つと、SizeMode.Exact で大きさごとに組む中身が同じ値を読み合うため、CompositionLocal にした。
+
+## 2026-10-23 ウィジェットの角・色・プレビュー（本人の端末で見て）
+
+- 角の丸みも倍率で大きくする（端末の system_app_widget_background_radius を dp に直して倍率を掛ける）。品質の指針（WS-2）は端末の丸みをそのまま使うよう求めるが、本人の頼みを優先した。倍率 100% なら端末の丸みのまま。
+- 左右（上下）の入れ物が本人の端末で同じ色に見えた。Glance の widgetBackground は secondaryContainer で、本人の端末の色の組では surfaceVariant とほぼ同じ色だった。Glance の色の組には surfaceContainer の段が無いので、今の曲の側は端末の動的な色の surfaceContainerLow を自分で ColorProvider にし、もう一方を secondaryContainer にした（明るさの段が離れていて、どの色の組でも分かれる）。プレイリストの表紙の仮の地も surfaceContainerLow にした。
+- 中くらいの再生中で、ジャケットの横に曲名を置く並べ方だと下に大きな余白が空いた。ジャケットの下に曲名を置く境目を高さ 200dp から 170dp に下げた（Pixel 3 で 4×3 相当の 174dp が収まる）。
+- ランチャーのウィジェット追加画面にプレビューが出ない（previewImage がアイコンだった）。Glance 1.2 の providePreview と GlanceAppWidgetManager.setWidgetPreviews（Android 15 以降。OS が回数を絞るので版ごとに一度、絞られたら次の起動でやり直す）で見本を渡し、それより前の端末と、生成したプレビューに対応していないランチャー（SquareHome など）向けに、同じ見本を撮った PNG を previewImage に入れた。PNG は見本を描いた画面を撮り、外とつながる灰色の地だけを透かして作った。

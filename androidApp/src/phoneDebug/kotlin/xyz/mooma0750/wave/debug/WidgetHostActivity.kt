@@ -39,6 +39,8 @@ class WidgetHostActivity : Activity() {
         super.onCreate(savedInstanceState)
         setShowWhenLocked(true)
         setTurnScreenOn(true)
+        // `--ez preview true` で、置いたウィジェットを見本で描く（previewImage の画像を撮るため）
+        xyz.mooma0750.wave.widget.WidgetPreview.forced = intent.getBooleanExtra("preview", false)
         host = AppWidgetHost(this, HOST_ID)
         val manager = AppWidgetManager.getInstance(this)
         // 前回の分を片付けてから置き直す
