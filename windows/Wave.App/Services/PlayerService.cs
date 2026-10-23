@@ -1981,7 +1981,7 @@ public sealed partial class PlayerService : ObservableObject
         {
             var (bytes, final, type) = await RangeStream.OpenEpisodeAsync(AppServices.FeedHttp, url, AppServices.Feeds.UserAgent, cancel);
             if (cancel.IsCancellationRequested || Current?.VideoId != song.VideoId) return false;
-            mime = EpisodeMime(type, final);
+            mime = Feed.AudioMime(type, final);
             ranged = bytes is not null;
             source = bytes is not null ? MediaSource.CreateFromStream(bytes.AsRandomAccessStream(), mime) : MediaSource.CreateFromUri(new Uri(final));
         }
@@ -1999,21 +1999,6 @@ public sealed partial class PlayerService : ObservableObject
         lastEpisodeSaveMs = clock.ElapsedMilliseconds;
         AppPaths.Log($"play episode ranged={ranged} type={mime} resume={(int)seekTo} queue={Queue.Count} index={Index}");
         return true;
-    }
-
-    /// <summary>応答の種類が音声ならそれを、違えば URL の拡張子から決める。</summary>
-    private static string EpisodeMime(string? contentType, string url)
-    {
-        if (contentType is { } type && type.StartsWith("audio/", StringComparison.OrdinalIgnoreCase)) return type;
-        var path = Uri.TryCreate(url, UriKind.Absolute, out var uri) ? uri.AbsolutePath.ToLowerInvariant() : "";
-        return Path.GetExtension(path) switch
-        {
-            ".m4a" or ".mp4" or ".m4b" => "audio/mp4",
-            ".aac" => "audio/aac",
-            ".ogg" or ".oga" or ".opus" => "audio/ogg",
-            ".wav" => "audio/wav",
-            _ => "audio/mpeg",
-        };
     }
 
     /// <summary>今のエピソードの位置を覚える（finished なら最後まで聴いたとする）。エピソードを流していなければ何もしない。</summary>
