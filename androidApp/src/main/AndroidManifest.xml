@@ -2,6 +2,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- ダウンロードに使う通信（従量制かどうか）と、通信できないときに取った曲へ進むために見る（ADR-0016） -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -23,6 +25,12 @@
         <!-- 登録したアーティストの新作を裏で確かめる -->
         <service
             android:name=".releases.ReleaseWatcher"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
+
+        <!-- ダウンロードの1日1回の入れ替えと取り残し（ADR-0016） -->
+        <service
+            android:name=".download.DownloadJob"
             android:exported="false"
             android:permission="android.permission.BIND_JOB_SERVICE" />
 

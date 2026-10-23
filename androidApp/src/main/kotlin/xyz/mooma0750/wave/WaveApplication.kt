@@ -352,6 +352,42 @@ class AppContainer(
 
     val settings = AppSettings(context)
 
+    /** 時計か（時計にはダウンロードしない、ADR-0016 の 19）。 */
+    private val isWatch = context.packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_WATCH)
+
+    /** 通信の見張り（ダウンロードの待ちと、通信できないときに取った曲へ進むため）。 */
+    val network = xyz.mooma0750.wave.download.NetworkMonitor(appContext)
+
+    /** ダウンロードとスマートダウンロード（ADR-0016）。時計では null。 */
+    val downloads: xyz.mooma0750.wave.download.DownloadManager? =
+        if (isWatch) {
+            null
+        } else {
+            xyz.mooma0750.wave.download.DownloadManager(
+                scope = appScope,
+                store = xyz.mooma0750.wave.download.DownloadStore(appContext.filesDir),
+                playCounts = xyz.mooma0750.wave.download.PlayCountStore(appContext.noBackupFilesDir),
+                network = network,
+                settings = settings,
+                music = music,
+                session = session,
+                authManager = authManager,
+                streamCache = streamCache,
+                // 再生と同じ道で取る（403 は調べ直して取り直す）。速く鳴らすための置き場は通さない
+                sourceFactory = xyz.mooma0750.wave.playback.WaveStreamDataSource.Factory(stream.resolver, streamCache, mediaHttpClient).withEpisodes(feedHttpClient),
+                likedSongs = likedSongs,
+                likedVersion = { likedSongsVersion.value },
+            ).also { manager ->
+                manager.start()
+                // ログインしていれば1日1回の入れ替えを予約する（使う通信は設定に従う）
+                appScope.launch {
+                    kotlinx.coroutines.flow.combine(authManager.state, settings.downloadOnAnyNetwork) { auth, any -> (auth is AuthState.LoggedIn) to any }
+                        .distinctUntilChanged()
+                        .collect { (loggedIn, any) -> xyz.mooma0750.wave.download.DownloadJob.schedule(appContext, loggedIn, any) }
+                }
+            }
+        }
+
     /** 登録したアーティストの新作。 */
     val releases = xyz.mooma0750.wave.releases.Releases(appContext, music, authManager, settings)
 
@@ -563,6 +599,8 @@ class AppContainer(
         videoStreamCache.clear()
         liveCache.clear()
         settings.clearPlaylistOrders()
+        // 取った音と、この端末の再生回数も残さない（ADR-0016 の 9）
+        downloads?.clearAccount()
         likedIdsJob?.cancel()
         mutableLikedIds.value = emptySet()
         playlistMembership.clear()

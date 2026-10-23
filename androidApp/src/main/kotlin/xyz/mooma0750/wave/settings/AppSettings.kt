@@ -127,6 +127,36 @@ class AppSettings(
         store.edit { it[LIBRARY_GRID] = grid }
     }
 
+    /** ダウンロードに「どの通信でも」使うか（既定は Wi-Fi など従量制でない通信だけ、ADR-0016 の 8）。 */
+    val downloadOnAnyNetwork: Flow<Boolean> =
+        store.data
+            .map { it[DOWNLOAD_ANY_NETWORK] ?: false }
+            .catch { if (it is IOException) emit(false) else throw it }
+
+    suspend fun setDownloadOnAnyNetwork(any: Boolean) {
+        store.edit { it[DOWNLOAD_ANY_NETWORK] = any }
+    }
+
+    /** スマートダウンロード（既定は切、ADR-0016 の 10）。 */
+    val smartDownloads: Flow<Boolean> =
+        store.data
+            .map { it[SMART_DOWNLOADS] ?: false }
+            .catch { if (it is IOException) emit(false) else throw it }
+
+    suspend fun setSmartDownloads(enabled: Boolean) {
+        store.edit { it[SMART_DOWNLOADS] = enabled }
+    }
+
+    /** スマートダウンロードの曲数（25・50・100・200。既定は 50）。 */
+    val smartDownloadCount: Flow<Int> =
+        store.data
+            .map { prefs -> prefs[SMART_DOWNLOAD_COUNT]?.takeIf { it in xyz.mooma0750.wave.core.download.SmartDownloads.COUNTS } ?: xyz.mooma0750.wave.core.download.SmartDownloads.DEFAULT_COUNT }
+            .catch { if (it is IOException) emit(xyz.mooma0750.wave.core.download.SmartDownloads.DEFAULT_COUNT) else throw it }
+
+    suspend fun setSmartDownloadCount(count: Int) {
+        store.edit { it[SMART_DOWNLOAD_COUNT] = count }
+    }
+
     /** プレイリストごとに選んだ並べ方。選んでいなければカスタム。 */
     val playlistOrders: PlaylistOrderStore =
         object : PlaylistOrderStore {
@@ -160,6 +190,9 @@ class AppSettings(
         val AI_NAME = stringPreferencesKey("ai_name")
         val LIBRARY_SORT = stringPreferencesKey("library_sort")
         val LIBRARY_GRID = booleanPreferencesKey("library_grid")
+        val DOWNLOAD_ANY_NETWORK = booleanPreferencesKey("download_any_network")
+        val SMART_DOWNLOADS = booleanPreferencesKey("smart_downloads")
+        val SMART_DOWNLOAD_COUNT = androidx.datastore.preferences.core.intPreferencesKey("smart_download_count")
         const val PLAYLIST_ORDER_PREFIX = "playlist_order_"
 
         fun playlistOrderKey(playlistId: String) = stringPreferencesKey(PLAYLIST_ORDER_PREFIX + playlistId)

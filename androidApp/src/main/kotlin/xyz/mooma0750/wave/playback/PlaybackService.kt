@@ -193,8 +193,8 @@ class PlaybackService : MediaLibraryService() {
                 .withLive(container.live, container.liveCache)
                 .withEpisodes(container.feedHttpClient)
         upstreamFactory = streamFactory
-        // 曲は端末に残した音から読み、足りない分だけ取る（取った分は残す）
-        val dataSourceFactory = container.audioCache.factory(streamFactory)
+        // 取り終えた曲（ダウンロード）はファイルから鳴らす。ほかは端末に残した音から読み、足りない分だけ取る（取った分は残す）
+        val dataSourceFactory = DownloadedFirstDataSource.Factory({ videoId -> container.downloads?.store?.audioFile(videoId) }, container.audioCache.factory(streamFactory))
         val player =
             ExoPlayer
                 .Builder(this)
@@ -251,6 +251,11 @@ class PlaybackService : MediaLibraryService() {
                 random = java.security.SecureRandom().asKotlinRandom(),
             )
         val episodePositions = EpisodePositions(player, container.feedLibrary, scope)
+        // この端末で聴いた回数（スマートダウンロードの「いつも聴いている」）
+        val playCounter =
+            container.downloads?.let { downloads ->
+                LocalPlayCounter(player, scope, android.os.SystemClock::elapsedRealtime) { song -> downloads.playCounts.record(song, System.currentTimeMillis()) }
+            }
         player.addListener(
             object : Player.Listener {
                 override fun onPlayerError(error: PlaybackException) {
@@ -259,6 +264,12 @@ class PlaybackService : MediaLibraryService() {
                     Log.w(WaveApplication.LOG_TAG, "playback error code=${error.errorCodeName} cause=${cause?.javaClass?.simpleName} reason=${(cause as? StreamResolveException)?.reason}")
                     // ライブの印の無いまま入ったライブ配信は、HLS で流し直す（端末から受け取ったキューなど）
                     if ((cause as? StreamResolveException)?.reason == StreamFailure.LiveStream && queuePlayer.replayCurrentAsLive()) return
+                    // 通信できないときは、取っていない曲を飛ばして取った曲へ進む（ADR-0016 の 18）
+                    if (skipToDownloadedIfOffline(player)) {
+                        player.prepare()
+                        player.play()
+                        return
+                    }
                     val failure = failureOf(error)
                     lastErrorWasThisSong = failure == PlaybackFailure.ThisSong
                     if (skipGuard.onError(failure, player.hasNextMediaItem(), android.os.SystemClock.elapsedRealtime())) {
@@ -301,6 +312,7 @@ class PlaybackService : MediaLibraryService() {
 
                 override fun onIsPlayingChanged(isPlaying: Boolean) {
                     historyTracker.onIsPlayingChanged(isPlaying)
+                    playCounter?.onIsPlayingChanged(isPlaying)
                     episodePositions.onIsPlayingChanged(isPlaying)
                     updateRelayHold(isPlaying)
                     val now = android.os.SystemClock.elapsedRealtime()
@@ -351,6 +363,9 @@ class PlaybackService : MediaLibraryService() {
                     reason: Int,
                 ) {
                     Log.i(WaveApplication.LOG_TAG, "transition index=${player.currentMediaItemIndex} reason=$reason")
+                    // 通信できないときは、取っていない曲を飛ばして取った曲へ進む（ADR-0016 の 18。進んだ先の遷移でまた来る）
+                    if (skipToDownloadedIfOffline(player)) return
+                    playCounter?.onMediaItemTransition()
                     historyTracker.onMediaItemTransition()
                     episodePositions.onMediaItemTransition(reason)
                     // 残した音から鳴らし始めた曲は URL を調べていないので、再生履歴のために調べる
@@ -591,6 +606,7 @@ class PlaybackService : MediaLibraryService() {
             loggedInAt = null
             likeController.reset()
             historyTracker.reset()
+            playCounter?.reset()
             queueSession.reset()
             container.streamCache.clear()
             // 聴いた曲の音も残さない
@@ -822,12 +838,44 @@ class PlaybackService : MediaLibraryService() {
     private var upstreamFactory: androidx.media3.datasource.DataSource.Factory? = null
     private var warming: Pair<Job, AudioCache.Warm>? = null
 
+    /** 曲（wave://track・wave://episode）を取り終えているか。 */
+    private fun isDownloaded(item: MediaItem?): Boolean {
+        val uri = item?.localConfiguration?.uri ?: return false
+        val videoId = TrackUri.videoIdOf(uri) ?: TrackUri.episodeUrlOf(uri)?.let(Feed::audioVideoId) ?: return false
+        return container.downloads?.store?.isComplete(videoId) == true
+    }
+
+    /**
+     * 通信できないとき、今の曲を取っていなければ、キューの先の取った曲へ進む（ADR-0016 の 18）。進んだら true。
+     * 取った曲が先に無ければ何もしない（通信の失敗と同じく止まる）。
+     */
+    private fun skipToDownloadedIfOffline(player: Player): Boolean {
+        if (container.network.online || container.downloads == null) return false
+        val current = player.currentMediaItem ?: return false
+        if (isDownloaded(current)) return false
+        val timeline = player.currentTimeline
+        val repeat = if (player.repeatMode == Player.REPEAT_MODE_ALL) Player.REPEAT_MODE_ALL else Player.REPEAT_MODE_OFF
+        var index = player.currentMediaItemIndex
+        repeat(timeline.windowCount) {
+            index = timeline.getNextWindowIndex(index, repeat, player.shuffleModeEnabled)
+            if (index == C.INDEX_UNSET || index == player.currentMediaItemIndex) return false
+            if (isDownloaded(player.getMediaItemAt(index))) {
+                Log.i(WaveApplication.LOG_TAG, "offline skip to downloaded index=$index")
+                player.seekTo(index, 0)
+                return true
+            }
+        }
+        return false
+    }
+
     /** 次の曲の頭の 1MB（256kbps で 30 秒ほど）を取って残す（曲送りで、すぐ鳴らせる）。 */
     @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
     private fun warmNext(player: Player) {
         val next = player.nextMediaItemIndex.takeIf { it != C.INDEX_UNSET } ?: return
         val uri = player.getMediaItemAt(next).localConfiguration?.uri ?: return
         val upstream = upstreamFactory ?: return
+        // 取り終えた曲・通信できないときは先に取らない
+        if (!container.network.online || isDownloaded(player.getMediaItemAt(next))) return
         if (container.audioCache.cachedBytes(uri) >= WARM_BYTES) return
         warming?.let { (job, warm) ->
             warm.cancel()
@@ -855,6 +903,8 @@ class PlaybackService : MediaLibraryService() {
         val videoId = TrackUri.videoIdOf(uri) ?: return
         val epoch = TrackUri.epochOf(uri)
         if (container.streamCache.peek(videoId, epoch) != null) return
+        // 取った曲を通信なしで鳴らしているときは調べない（通信できるときだけ裏で調べる、ADR-0016 の 6）
+        if (!container.network.online) return
         val cache = container.streamCache
         scope.launch(kotlinx.coroutines.Dispatchers.IO) {
             val startedInEpoch = cache.epoch
