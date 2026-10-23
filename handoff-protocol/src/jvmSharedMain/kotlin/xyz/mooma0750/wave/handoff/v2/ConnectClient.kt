@@ -146,6 +146,9 @@ class ConnectClient(
         /** 遠隔のキューから外す（この端末が鳴らしている）。今の曲より後ろにある itemIds の曲だけを外す。 */
         fun queueRemove(itemIds: List<String>): Boolean = false
 
+        /** 遠隔のキューの「次に流れる曲」を消去する（この端末が鳴らしている）。今の曲が currentItemId のときだけ。 */
+        fun queueClearFlow(currentItemId: String): Boolean = false
+
         /** ほかの端末と合わせたライブラリが届いた（手元に取り込む、ADR-0013）。 */
         fun libraryChanged(body: LibraryBody) {}
 
@@ -1059,6 +1062,9 @@ class ConnectClient(
     /** 遠隔のキューから外すのを送る。条件は sendQueueMove と同じ。 */
     fun sendQueueRemove(itemIds: List<String>): Boolean = sendQueueEdit(CommandBody.QueueEdit.REMOVE, itemIds, null)
 
+    /** 遠隔のキューの「次に流れる曲」の消去を送る。currentItemId は画面に出ている今の曲。条件は sendQueueMove と同じ。 */
+    fun sendQueueClearFlow(currentItemId: String): Boolean = sendQueueEdit(CommandBody.QueueEdit.CLEAR_FLOW, listOf(currentItemId), null)
+
     private fun sendQueueEdit(
         op: String,
         itemIds: List<String>,
@@ -1251,6 +1257,7 @@ class ConnectClient(
         when (command.op) {
             CommandBody.QueueEdit.MOVE -> if (command.itemIds.size == 1) effects.queueMove(command.itemIds[0], command.afterItemId)
             CommandBody.QueueEdit.REMOVE -> effects.queueRemove(command.itemIds)
+            CommandBody.QueueEdit.CLEAR_FLOW -> if (command.itemIds.size == 1) effects.queueClearFlow(command.itemIds[0])
         }
     }
 

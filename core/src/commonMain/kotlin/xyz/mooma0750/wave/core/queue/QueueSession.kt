@@ -322,6 +322,29 @@ class QueueSession(
         return targets.size
     }
 
+    /**
+     * 「次に流れる曲」（元の流れ: 一覧の残り・サジェスト）を消去する。自分で足した曲は残す。
+     * 後からプレイリストの続きやラジオで埋め直さないよう、流れも止める（自分で足した曲が終われば止まる）。外した件数。
+     */
+    fun clearFlow(): Int {
+        val current = player.currentIndex
+        if (current < 0) return 0
+        val ids = player.items.drop(current + 1).filter { it.origin != ItemOrigin.UserAdded }.map { it.itemId }
+        fetchJob?.cancel()
+        fetchJob = null
+        continuation = null
+        exhausted = true
+        ids.forEach(player::remove)
+        return ids.size
+    }
+
+    /** ほかの端末のキューの画面で「次に流れる曲」を消去した（queue_edit の clear_flow）。送り手が見ていた今の曲が同じときだけ従う。従ったか。 */
+    fun clearFlowFromRemote(currentItemId: String): Boolean {
+        if (player.items.getOrNull(player.currentIndex)?.itemId != currentItemId) return false
+        clearFlow()
+        return true
+    }
+
     /** 今の曲より後ろの、自分で足した曲の項目の ID（ほかの端末へ「キューを消去」を送るとき）。 */
     fun upcomingUserItemIds(): List<String> {
         val current = player.currentIndex

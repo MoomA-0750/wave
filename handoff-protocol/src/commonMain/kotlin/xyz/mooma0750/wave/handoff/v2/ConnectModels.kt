@@ -239,6 +239,9 @@ sealed interface CommandBody {
         companion object {
             const val MOVE = "move"
             const val REMOVE = "remove"
+
+            /** 「次に流れる曲」の消去（元の流れの曲を外して流れを止める。自分で足した曲は残す）。itemIds は送り手が見ていた今の曲だけ。 */
+            const val CLEAR_FLOW = "clear_flow"
         }
     }
 

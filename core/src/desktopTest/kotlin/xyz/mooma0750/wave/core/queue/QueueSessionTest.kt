@@ -982,4 +982,25 @@ class QueueSessionTest {
             assertEquals(listOf("p1", "p2", "p3"), player.videoIds())
             assertEquals(0, queue.clearUserQueue())
         }
+
+    @Test
+    fun clearingTheFlowKeepsSongsAddedByHandAndDoesNotRefill() =
+        runTest {
+            val player = FakePlayer()
+            val content = FakeContent()
+            content.playlistResult = { _, _ -> CallResult.Ok(SongPage(listOf(song("p9")), continuation = null)) }
+            content.upNextResult = { _, _, _ -> CallResult.Ok(UpNextPage(listOf(song("r1")), playlistId = null, continuation = null)) }
+            val queue = session(player, content)
+            queue.playFrom(listOf(song("p1"), song("p2"), song("p3")), startIndex = 0, playlistId = "PL", playlistContinuation = "c1")
+            queue.addToEnd(song("u1"))
+            assertEquals(2, queue.clearFlow())
+            advanceUntilIdle()
+            // 一覧の続きもラジオも取りに行かない。自分で足した曲は残る
+            assertEquals(listOf("p1", "u1"), player.videoIds())
+            assertTrue(queue.snapshot().exhausted)
+            assertEquals(emptyList(), content.playlistCalls)
+            assertEquals(emptyList(), content.upNextCalls)
+            // 送り手の見ていた今の曲が違えば何もしない
+            assertFalse(queue.clearFlowFromRemote("other"))
+        }
 }

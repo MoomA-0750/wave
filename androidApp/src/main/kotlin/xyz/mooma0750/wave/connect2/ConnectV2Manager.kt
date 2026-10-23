@@ -396,6 +396,14 @@ class ConnectV2Manager(
             if (sent != true) mutableEvents.tryEmit(ClientEvent.ServerError(CONTROL_UNSENT))
         }
 
+    /** 画面から: 鳴らしている端末のキューの「次に流れる曲」を消去する。currentItemId は映している今の曲。 */
+    fun queueClearFlow(currentItemId: String) =
+        post {
+            val sent = client?.sendQueueClearFlow(currentItemId)
+            Log.i(WaveApplication.LOG_TAG, "connect-v2 queue clear-flow sent=$sent")
+            if (sent != true) mutableEvents.tryEmit(ClientEvent.ServerError(CONTROL_UNSENT))
+        }
+
     private val mutableUnreadable = MutableStateFlow(false)
 
     /** 端末の保存が読めない（作り直すまで Connect v2 を使わない）。 */
@@ -615,6 +623,12 @@ class ConnectV2Manager(
                 val removed = runBlocking(Dispatchers.Main) { host.endpoint?.queueRemove(itemIds) == true }
                 Log.i(WaveApplication.LOG_TAG, "connect-v2 queue remove received items=${itemIds.size} removed=$removed")
                 return removed
+            }
+
+            override fun queueClearFlow(currentItemId: String): Boolean {
+                val cleared = runBlocking(Dispatchers.Main) { host.endpoint?.queueClearFlow(currentItemId) == true }
+                Log.i(WaveApplication.LOG_TAG, "connect-v2 queue clear-flow received cleared=$cleared")
+                return cleared
             }
 
             override fun libraryChanged(body: xyz.mooma0750.wave.handoff.v2.LibraryBody) {

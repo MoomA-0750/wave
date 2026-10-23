@@ -218,6 +218,8 @@ class SimDevice(
     /** 従ったキューの並べ替え（動かす曲・どの曲の後ろか）と、外した曲。 */
     val queueMoves = ArrayList<Pair<String, String?>>()
     val queueRemoves = ArrayList<List<String>>()
+    /** 従った「次に流れる曲」の消去（送り手が見ていた今の曲）。 */
+    val queueClearFlows = ArrayList<String>()
 
     /** 受け取ったログイン（cookie だけ）。 */
     val loginGrants = ArrayList<String>()
@@ -318,6 +320,11 @@ class SimDevice(
 
                     override fun queueRemove(itemIds: List<String>): Boolean {
                         queueRemoves += itemIds
+                        return true
+                    }
+
+                    override fun queueClearFlow(currentItemId: String): Boolean {
+                        queueClearFlows += currentItemId
                         return true
                     }
 

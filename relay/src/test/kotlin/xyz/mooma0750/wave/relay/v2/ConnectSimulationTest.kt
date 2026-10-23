@@ -1019,9 +1019,11 @@ class ConnectSimulationTest {
         assertTrue(b.client.sendQueueMove("q2", "q5"))
         assertTrue(b.client.sendQueueMove("q3", null))
         assertTrue(b.client.sendQueueRemove(listOf("q4", "q6")))
+        assertTrue(b.client.sendQueueClearFlow("q1"))
         relay.run()
         assertEquals(listOf("q2" to "q5", "q3" to null), a.queueMoves)
         assertEquals(listOf(listOf("q4", "q6")), a.queueRemoves)
+        assertEquals(listOf("q1"), a.queueClearFlows)
         // 鳴らしている A 自身は送らない
         assertFalse(a.client.sendQueueRemove(listOf("q1")))
     }

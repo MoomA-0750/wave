@@ -69,6 +69,9 @@ class ConnectV2Host {
 
         /** ほかの端末のキューの画面で外した曲を外す（QueueSession.removeFromRemote）。 */
         fun queueRemove(itemIds: List<String>): Boolean
+
+        /** ほかの端末のキューの画面で「次に流れる曲」を消去した（QueueSession.clearFlowFromRemote）。 */
+        fun queueClearFlow(currentItemId: String): Boolean
     }
 
     data class Cursor(

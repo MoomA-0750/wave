@@ -590,6 +590,8 @@ class PlaybackService : MediaLibraryService() {
                 ): Boolean = suppressingV2 { queueSession.moveFromRemote(itemId, afterItemId) }
 
                 override fun queueRemove(itemIds: List<String>): Boolean = suppressingV2 { queueSession.removeFromRemote(itemIds) > 0 }
+
+                override fun queueClearFlow(currentItemId: String): Boolean = suppressingV2 { queueSession.clearFlowFromRemote(currentItemId) }
             }
         connectV2Endpoint = v2Endpoint
         container.connectV2Host.register(v2Endpoint)
@@ -1081,7 +1083,7 @@ class PlaybackService : MediaLibraryService() {
             // ほかの端末を映している間のキューの並べ替え・外す・消去は、鳴らしている端末のキューへ送る。手元のキューは家の最新の再生に
             // 合わせてある（stageLatest）ので項目の ID は同じ。見た目がすぐ変わるよう手元でも動かす（その端末から届くキューで上書きされる）
             if (manager != null && session.player === remotePlayer && manager.remotePlayback.value != null &&
-                customCommand.customAction in setOf(QueueCommands.MOVE, QueueCommands.REMOVE, QueueCommands.CLEAR_USER_QUEUE)
+                customCommand.customAction in setOf(QueueCommands.MOVE, QueueCommands.REMOVE, QueueCommands.CLEAR_USER_QUEUE, QueueCommands.CLEAR_FLOW)
             ) {
                 when (customCommand.customAction) {
                     QueueCommands.MOVE -> {
@@ -1099,6 +1101,11 @@ class PlaybackService : MediaLibraryService() {
                         val id = QueueCommands.itemIdOf(args) ?: return Futures.immediateFuture(SessionResult(SessionError.ERROR_BAD_VALUE))
                         manager.queueRemove(listOf(id))
                         suppressingV2 { queue.remove(id) }
+                    }
+                    QueueCommands.CLEAR_FLOW -> {
+                        val currentId = local.currentMediaItem?.mediaId ?: return Futures.immediateFuture(SessionResult(SessionError.ERROR_BAD_VALUE))
+                        manager.queueClearFlow(currentId)
+                        suppressingV2 { queue.clearFlow() }
                     }
                     else -> {
                         val ids = queue.upcomingUserItemIds()
@@ -1133,6 +1140,7 @@ class PlaybackService : MediaLibraryService() {
                         QueueCommands.MOVE -> QueueCommands.itemIdOf(args)?.let { id -> QueueCommands.toIndexOf(args)?.let { queue.move(id, it) } }
                         QueueCommands.TOGGLE_SHUFFLE -> queue.toggleShuffle()
                         QueueCommands.CLEAR_USER_QUEUE -> queue.clearUserQueue()
+                        QueueCommands.CLEAR_FLOW -> queue.clearFlow()
                         else -> null
                     }
                 }

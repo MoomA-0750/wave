@@ -985,7 +985,11 @@ private fun QueueSheet(
                     items((current + 1 until userEnd).toList(), key = { rows[it].itemId }) { index -> songRow(index, rows[index], movable = true) }
                 }
                 if (userEnd < rows.size) {
-                    item(key = "h-rest") { header(stringResource(R.string.nowplaying_next_from_source)) }
+                    item(key = "h-rest") {
+                        header(stringResource(R.string.nowplaying_next_from_source)) {
+                            TextButton(onClick = { scope.launch { connection.clearFlow() } }) { Text(stringResource(R.string.nowplaying_clear_flow)) }
+                        }
+                    }
                     items((userEnd until rows.size).toList(), key = { rows[it].itemId }) { index -> songRow(index, rows[index], movable = true) }
                 }
             }
