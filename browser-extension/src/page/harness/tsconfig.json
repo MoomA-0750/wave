@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true
+  },
+  "include": ["../*.ts", "./*.ts"],
+  // 本体の入口（content.ts）は本体の tsconfig で確かめる
+  "exclude": ["../content.ts"]
+}

@@ -1,0 +1,18 @@
+{
+  "name": "wave-ytm-page-dev",
+  "private": true,
+  "type": "module",
+  "description": "src/page の確かめ用（配る拡張のビルドとは別）",
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "tsc -p tsconfig.json",
+    "test:chromium": "node build.mjs && node run.mjs chromium",
+    "test:firefox": "node build.mjs && node run.mjs firefox"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "puppeteer-core": "^24.0.0",
+    "typescript": "^5.6.0",
+    "web-ext": "^10.8.0"
+  }
+}
