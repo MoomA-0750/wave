@@ -89,29 +89,38 @@ class NowPlayingWidget : GlanceAppWidget() {
             val snapshot by WidgetHooks.nowPlaying.collectAsState()
             val artwork = rememberWidgetArtwork(container.mediaHttpClient, snapshot?.artworkUrl)
             val queueArtwork = rememberWidgetArtworks(container.mediaHttpClient, snapshot?.upNext.orEmpty().mapNotNull { it.artworkUrl })
-            WaveGlanceTheme(context) {
-                NowPlayingContent(snapshot, artwork, queueArtwork)
+            // 倍率は、ボタンだけの並べ方が収まるところまで
+            WidgetScaled(minWidth = 150, minHeight = 48) {
+                WaveGlanceTheme(context) {
+                    NowPlayingContent(snapshot, artwork, queueArtwork)
+                }
             }
         }
     }
 
     companion object {
         /** 2×1 ほど: ボタンだけ。 */
-        val CONTROLS get() = widgetSize(150, 48)
+        val CONTROLS: DpSize
+            @Composable get() = widgetSize(150, 48)
 
         /** 2×2 ほど（iPhone の小）: ジャケットと評価、曲名、ボタン。 */
-        val SQUARE get() = widgetSize(110, 140)
+        val SQUARE: DpSize
+            @Composable get() = widgetSize(110, 140)
 
         /** 4×1: ジャケット・曲名・再生・次へを1列に（ボタンだけの大きさより広いとき）。 */
-        val WIDE get() = widgetSize(200, 48)
+        val WIDE: DpSize
+            @Composable get() = widgetSize(200, 48)
 
         /** 4×2 以上（iPhone の中）: 左に今の曲とボタン、右に次に流れる曲。 */
-        val MEDIUM get() = widgetSize(250, 130)
+        val MEDIUM: DpSize
+            @Composable get() = widgetSize(250, 130)
 
         /** 4×3 ほど: 中と同じ並びで、ジャケットの下に曲名を置く（iPhone の中と同じ）。 */
-        val MEDIUM_TALL get() = widgetSize(250, 200)
+        val MEDIUM_TALL: DpSize
+            @Composable get() = widgetSize(250, 200)
 
         /** 置いた大きさに収まる、いちばん広い並べ方。 */
+        @Composable
         fun layoutFor(size: DpSize): NowPlayingLayout {
             fun fits(bound: DpSize) = size.width >= bound.width && size.height >= bound.height
             return when {
@@ -477,11 +486,14 @@ internal suspend fun withController(
 private const val RESTORE_WAIT_MS = 5_000L
 
 /** 狭い・低いウィジェットの再生ボタンの大きさ（既定は 60dp）。 */
-internal val COMPACT_BUTTON get() = 48.wdp
+internal val COMPACT_BUTTON: Dp
+    @Composable get() = 48.wdp
 
 /** 広さのあるウィジェットの再生ボタンの大きさ。 */
-private val LIKE_BUTTON get() = 22.wdp
-private val SMALL_PLAY_BUTTON get() = 36.wdp
+private val LIKE_BUTTON: Dp
+    @Composable get() = 22.wdp
+private val SMALL_PLAY_BUTTON: Dp
+    @Composable get() = 36.wdp
 
 
 class JumpAction : ActionCallback {

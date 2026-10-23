@@ -86,27 +86,33 @@ class PlaylistGridWidget : GlanceAppWidget() {
         provideContent {
             val prefs = currentState<Preferences>()
             val chosen = WidgetPlaylist.listOf(prefs[CHOSEN]).takeIf { prefs[SOURCE] == SOURCE_CHOSEN }.orEmpty()
-            // 選ぶにしていても1つも選んでいなければ、最近再生した順で埋める
-            val layout = layoutFor(LocalSize.current)
-            val shown = (chosen.ifEmpty { recent }).take(if (layout == GridLayout.Large) LARGE_COUNT else 4)
             val now by WidgetHooks.nowPlaying.collectAsState()
-            val covers = rememberWidgetArtworks(client, shown.mapNotNull { it.thumbnailUrl })
             val artwork = rememberWidgetArtwork(client, now?.artworkUrl)
-            WaveGlanceTheme(context) {
-                GridContent(shown, covers, now, artwork)
+            // 倍率は、表紙 2×2 が収まるところまで
+            WidgetScaled(minWidth = 100, minHeight = 100) {
+                // 選ぶにしていても1つも選んでいなければ、最近再生した順で埋める
+                val layout = layoutFor(LocalSize.current)
+                val shown = (chosen.ifEmpty { recent }).take(if (layout == GridLayout.Large) LARGE_COUNT else 4)
+                val covers = rememberWidgetArtworks(client, shown.mapNotNull { it.thumbnailUrl })
+                WaveGlanceTheme(context) {
+                    GridContent(shown, covers, now, artwork)
+                }
             }
         }
     }
 
     companion object {
         /** 2×2 ほど: 表紙を 2×2。 */
-        val SMALL get() = widgetSize(110, 110)
+        val SMALL: DpSize
+            @Composable get() = widgetSize(110, 110)
 
         /** 4×2: 上に再生中、下に表紙を4つ。 */
-        val MEDIUM get() = widgetSize(250, 140)
+        val MEDIUM: DpSize
+            @Composable get() = widgetSize(250, 140)
 
         /** 4×4: 上に再生中、下に表紙を 4×2。 */
-        val LARGE get() = widgetSize(250, 260)
+        val LARGE: DpSize
+            @Composable get() = widgetSize(250, 260)
 
         const val LARGE_COUNT = 8
 
@@ -121,6 +127,7 @@ class PlaylistGridWidget : GlanceAppWidget() {
         private const val AUTH_WAIT_MS = 5_000L
 
         /** 置いた大きさから並べ方を決める（iPhone の小・中・大に当てる）。 */
+        @Composable
         fun layoutFor(size: DpSize): GridLayout =
             when {
                 size.width < MEDIUM.width || size.height < MEDIUM.height -> GridLayout.Small
@@ -244,7 +251,7 @@ private fun Grid(
     // 幅と高さの両方に収まる正方形の大きさ
     val byWidth = (width - spacing * (columns - 1)) / columns
     val byHeight = (height - spacing * (rows - 1)) / rows
-    val side = minOf(byWidth, byHeight).coerceAtLeast(24.wdp)
+    val side = minOf(byWidth, byHeight).coerceAtLeast(12.dp)
     Column(GlanceModifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
         for (row in 0 until rows) {
             if (row > 0) Spacer(GlanceModifier.height(spacing))
@@ -309,15 +316,20 @@ private fun Tile(
     }
 }
 
-private val TILE_CORNER get() = 10.wdp
+private val TILE_CORNER: Dp
+    @Composable get() = 10.wdp
 
 /** 表紙どうしの隙間と、入れ物の縁から表紙までの余白（YouTube Music の並びに合わせて詰める）。 */
-private val TILE_GAP get() = 3.wdp
-private val TILE_INSET get() = 8.wdp
-private val TILE_BORDER get() = 3.wdp
+private val TILE_GAP: Dp
+    @Composable get() = 3.wdp
+private val TILE_INSET: Dp
+    @Composable get() = 8.wdp
+private val TILE_BORDER: Dp
+    @Composable get() = 3.wdp
 
 /** 中・大の上の入れ物（再生中の行）の高さ。 */
-private val TOP_HEIGHT get() = COMPACT_BUTTON + ContainerPadding * 2
+private val TOP_HEIGHT: Dp
+    @Composable get() = COMPACT_BUTTON + ContainerPadding * 2
 
 /** 表紙を押した: そのプレイリストを頭から鳴らす（iPhone と同じ）。 */
 class PlayGridPlaylistAction : ActionCallback {

@@ -87,26 +87,34 @@ class PlaylistWidget : GlanceAppWidget() {
             val item = WidgetItem.of(prefs)
             val now by WidgetHooks.nowPlaying.collectAsState()
             val artwork = rememberWidgetArtwork(client, item?.thumbnailUrl?.let(Media3QueuePlayer::largeArtwork))
-            WaveGlanceTheme(context) {
-                ItemContent(item, artwork, loading = prefs[LOADING] == true, playing = item?.isCurrent(now) == true && now?.playing == true)
+            // 倍率は、絵の上に再生ボタンを重ねる並べ方が収まるところまで（低いときは 100% のまま）
+            WidgetScaled(minWidth = 90, minHeight = 90) {
+                WaveGlanceTheme(context) {
+                    ItemContent(item, artwork, loading = prefs[LOADING] == true, playing = item?.isCurrent(now) == true && now?.playing == true)
+                }
             }
         }
     }
 
     companion object {
         /** 2×2 ほど: 絵と再生ボタン。 */
-        val SMALL get() = widgetSize(80, 90)
+        val SMALL: DpSize
+            @Composable get() = widgetSize(80, 90)
 
         /** 4×1〜4×2: 絵の横に名前とボタン。 */
-        val WIDE get() = widgetSize(220, 48)
+        val WIDE: DpSize
+            @Composable get() = widgetSize(220, 48)
 
         /** 4×2: 4×1 と同じ並びで、余白を iPhone と同じにする。 */
-        val WIDE_TALL get() = widgetSize(220, 110)
+        val WIDE_TALL: DpSize
+            @Composable get() = widgetSize(220, 110)
 
         /** 3×3 以上: 大きな絵の下に名前とボタン。 */
-        val LARGE get() = widgetSize(180, 220)
+        val LARGE: DpSize
+            @Composable get() = widgetSize(180, 220)
 
         /** 置いた大きさに収まる、いちばん広い並べ方。 */
+        @Composable
         fun layoutFor(size: DpSize): ItemLayout {
             fun fits(bound: DpSize) = size.width >= bound.width && size.height >= bound.height
             return when {
@@ -176,7 +184,9 @@ private fun ItemContent(
             ItemLayout.Small ->
                 Box(GlanceModifier.fillMaxSize().padding(WidgetPadding), contentAlignment = Alignment.BottomEnd) {
                     Cover(item, artwork, GlanceModifier.fillMaxSize(), play, Alignment.TopStart)
-                    Box(GlanceModifier.padding(6.wdp)) { PlayButton(item, loading, playing, COMPACT_BUTTON) }
+                    // 再生ボタンは絵の短い辺の 4 割まで（大きくしても絵を隠しすぎない）
+                    val cover = minOf(size.width, size.height) - WidgetPadding * 2
+                    Box(GlanceModifier.padding(6.wdp)) { PlayButton(item, loading, playing, minOf(COMPACT_BUTTON, cover * 0.4f)) }
                 }
             ItemLayout.Wide, ItemLayout.WideTall -> {
                 // 低い（4×1）ときは余白を詰める（iPhone に無い大きさ）

@@ -109,13 +109,16 @@ fun WidgetIconButton(
 }
 
 /** 並べたボタンの隙間。 */
-val ButtonGap get() = 4.wdp
+val ButtonGap: Dp
+    @Composable get() = 4.wdp
 
 /** 重ねる入れ物の隙間（YouTube Music はほとんど空けない）。 */
-val ContainerGap get() = 2.wdp
+val ContainerGap: Dp
+    @Composable get() = 2.wdp
 
 /** つないだ入れ物の中の余白（2つに分けると幅が狭くなるので、1つのときより詰める）。 */
-val ContainerPadding get() = 12.wdp
+val ContainerPadding: Dp
+    @Composable get() = 12.wdp
 
 object WidgetText {
     @Composable
@@ -138,10 +141,12 @@ object WidgetText {
 }
 
 /** ウィジェットの中身の余白（iPhone と同じく四方をそろえる）。 */
-val WidgetPadding get() = 16.wdp
+val WidgetPadding: Dp
+    @Composable get() = 16.wdp
 
 /** 画像の角（Expressive の中くらいの角）。 */
-val ArtworkCorner get() = 16.wdp
+val ArtworkCorner: Dp
+    @Composable get() = 16.wdp
 
 /** アプリを開く Intent（開いていれば今の画面の上で onNewIntent に届く）。 */
 fun openAppIntent(context: Context): Intent =
