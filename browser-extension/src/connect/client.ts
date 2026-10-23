@@ -1061,7 +1061,7 @@ export class ConnectClient {
     const t = this.remoteTarget();
     if (!t) return false;
     const onItemId = action === "next" || action === "previous" || action === "seek" ? t.cursor.body.currentItemId : null;
-    const command = this.controlOf(t, action, { positionMs: positionMs === null ? null : Math.max(0, positionMs), onItemId });
+    const command = this.controlOf(t, action, { positionMs: positionMs === null ? null : Math.max(0, Math.round(positionMs)), onItemId });
     return this.send({ op: "control", doc: await this.sealCommand(t.current, command) });
   }
 
@@ -1376,7 +1376,7 @@ export class ConnectClient {
     if (!cursor.body.playing) return cursor.body.positionMs;
     const elapsed = cursor.stored.serverNowMs - cursor.stored.receivedAtServerMs + (this.nowMs() - cursor.receivedAtLocalMs);
     if (elapsed < 0 || elapsed > MAX_EXTRAPOLATION_MS) return cursor.body.positionMs;
-    return cursor.body.positionMs + elapsed;
+    return Math.round(cursor.body.positionMs + elapsed);
   }
 
   // --- 書き込み ---
@@ -1451,7 +1451,7 @@ export class ConnectClient {
       sessionBase: mine?.arbiter.base ?? 0,
       sessionStartVersion: mine?.arbiter.startVersion ?? null,
       deviceSeq: this.deviceSeq,
-      listenedMs: cursor.listenedMs,
+      listenedMs: Math.max(0, Math.round(cursor.listenedMs)),
       historySent: cursor.historySent,
       accountTag: tag,
       startedAtEpochMs: this.epochMs(),
@@ -1462,7 +1462,9 @@ export class ConnectClient {
 
   /** 再生中なら、位置を取ってからの経過を足す（書くのが遅れても位置を戻さない）。 */
   private currentPosition(cursor: LocalCursor): number {
-    return cursor.playing ? cursor.positionMs + Math.min(Math.max(this.nowMs() - cursor.capturedAtMs, 0), MAX_EXTRAPOLATION_MS) : cursor.positionMs;
+    // 中継に書く値は整数（Kotlin の Long）。単調時計は小数を返すことがあるので丸める
+    const position = cursor.playing ? cursor.positionMs + Math.min(Math.max(this.nowMs() - cursor.capturedAtMs, 0), MAX_EXTRAPOLATION_MS) : cursor.positionMs;
+    return Math.round(position);
   }
 
   private sealCommand(current: VerifiedChain, command: CommandBody): Promise<SealedDoc> {
