@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- プレイリストのウィジェット。置いたときは最近再生した順で、長押しで選んだプレイリストに替えられる -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:configure="xyz.mooma0750.wave.widget.PlaylistGridConfigActivity"
+    android:description="@string/widget_playlists_description"
+    android:initialLayout="@layout/glance_default_loading_layout"
+    android:minWidth="110dp"
+    android:minHeight="110dp"
+    android:minResizeWidth="110dp"
+    android:minResizeHeight="110dp"
+    android:targetCellWidth="4"
+    android:targetCellHeight="2"
+    android:previewImage="@drawable/ic_queue_music"
+    android:resizeMode="horizontal|vertical"
+    android:updatePeriodMillis="0"
+    android:widgetCategory="home_screen"
+    android:widgetFeatures="reconfigurable|configuration_optional" />

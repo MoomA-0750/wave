@@ -172,8 +172,13 @@ class PlaybackService : MediaLibraryService() {
     private fun publishNowPlaying() {
         val player = session?.player
         // 出どころはこの端末のキューのものだけ（ほかの端末を映している間は分からない）
-        val sourceId = if (player != null && player !== remotePlayer) queue?.sourcePlaylistId else null
-        xyz.mooma0750.wave.widget.WidgetHooks.onNowPlayingChanged(this, player?.let { NowPlayingSnapshot.of(it, sourceId) })
+        val mirroring = player != null && player === remotePlayer
+        val sourceId = if (player != null && !mirroring) queue?.sourcePlaylistId else null
+        val device = if (mirroring) container.connectV2?.remotePlayback?.value?.deviceLabel else null
+        // 評価のボタンは、今の曲の評価を読めているときだけ（再生画面と同じく、プレイリストに入っていても✓）
+        val videoId = player?.currentMediaItem?.let(Media3QueuePlayer::songOf)?.videoId
+        val saved = likes?.state?.takeIf { it.videoId != null && it.videoId == videoId && it.status != null }?.savedWith(container.playlistMembership.nowPlaying.value)
+        xyz.mooma0750.wave.widget.WidgetHooks.onNowPlayingChanged(this, player?.let { NowPlayingSnapshot.of(it, sourceId, device, saved) })
     }
 
     // Android 12 以前は、設定で固定した画面の言語をここで当てる（13 以降は OS が当てる）
@@ -233,6 +238,8 @@ class PlaybackService : MediaLibraryService() {
                 resources = resources,
             )
         likes = likeController
+        // どのプレイリストに入っているかが分かったら、ウィジェットの評価のボタンを描き直す
+        scope.launch { container.playlistMembership.nowPlaying.collect { publishNowPlaying() } }
         val historyTracker =
             PlaybackHistoryTracker(
                 player,
@@ -653,6 +660,7 @@ class PlaybackService : MediaLibraryService() {
                 if (state.status == LikeStatus.Like && song != null) xyz.mooma0750.wave.library.LikedNotice.notifyLiked(this, song)
             }
         }
+        publishNowPlaying()
         val current = session ?: return
         publishOwnUiExtras(current, state)
         current.setMediaButtonPreferences(likeButtons(state))

@@ -566,6 +566,8 @@ class AppContainer(
         mutableLikedIds.value = emptySet()
         playlistMembership.clear()
         libraryCache.clear()
+        // ウィジェットに残したプレイリストの一覧も
+        xyz.mooma0750.wave.widget.WidgetHooks.onLoggedOut(appContext)
         // 前のアカウントの会話を残さない（履歴も消す）
         aiChat.wipe()
         releases.clear()

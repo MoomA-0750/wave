@@ -1,11 +1,13 @@
 package xyz.mooma0750.wave.widget
 
 import android.content.Context
+import android.content.Intent
 import android.graphics.Bitmap
 import android.util.Log
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.glance.ColorFilter
@@ -18,6 +20,7 @@ import androidx.glance.LocalContext
 import androidx.glance.LocalSize
 import androidx.glance.action.Action
 import androidx.glance.action.ActionParameters
+import androidx.glance.action.actionParametersOf
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
@@ -44,23 +47,31 @@ import androidx.glance.layout.height
 import androidx.glance.layout.padding
 import androidx.glance.layout.size
 import androidx.glance.layout.width
+import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
+import androidx.glance.text.TextStyle
+import androidx.glance.unit.ColorProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import xyz.mooma0750.wave.R
 import xyz.mooma0750.wave.WaveApplication
+import xyz.mooma0750.wave.library.AddToPlaylistActivity
+import xyz.mooma0750.wave.library.LikedNotice
 import xyz.mooma0750.wave.playback.NowPlayingSnapshot
+import xyz.mooma0750.wave.playback.SongJson
 import xyz.mooma0750.wave.playback.playFromButton
 
 /**
- * 再生中の曲のウィジェット。ジャケット・曲名・アーティストと、前へ・再生/一時停止・次へ。押すとアプリの再生画面を開く。
+ * 再生中の曲のウィジェット（iPhone の「再生中」と同じ並び）。ジャケット（右下に評価のボタン）・曲名・アーティスト
+ * （ほかの端末で鳴っていれば端末名）と、前へ・再生/一時停止・次へ。広ければ右に「次に流れる曲」を3曲並べ、押すとその曲へ飛ぶ。
+ * 地はジャケットをぼかして暗くしたもの。押すとアプリの再生画面を開く。
  * ほかの端末の再生を映している間はその端末の曲を出し、ボタンはその端末の遠隔操作になる（再生サービスのセッションの再生器が替わるため）。
- * 大きさで出し方を変える（小さい横長はボタンだけ、小さい正方形はジャケットと再生ボタン、広ければ全部）。
+ * 低いとき（iPhone に無い大きさ）は、ボタンだけか1列にする。
  */
 class NowPlayingWidget : GlanceAppWidget() {
-    override val sizeMode = SizeMode.Responsive(setOf(CONTROLS, SQUARE, WIDE, WIDE_TALL, LARGE))
+    override val sizeMode = SizeMode.Responsive(setOf(CONTROLS, SQUARE, WIDE, MEDIUM, MEDIUM_TALL))
 
     override suspend fun provideGlance(
         context: Context,
@@ -68,13 +79,16 @@ class NowPlayingWidget : GlanceAppWidget() {
     ) {
         val container = (context.applicationContext as WaveApplication).container
         // 最初の描画で画像が抜けないよう、今の曲の画像は先に取っておく
-        WidgetArtwork.load(container.mediaHttpClient, WidgetHooks.nowPlaying.value?.artworkUrl)
+        val first = WidgetHooks.nowPlaying.value
+        WidgetArtwork.load(container.mediaHttpClient, first?.artworkUrl)
+        first?.upNext?.forEach { WidgetArtwork.load(container.mediaHttpClient, it.artworkUrl) }
         provideContent {
             // 描いている間に曲が変わったら、そのまま描き直す
             val snapshot by WidgetHooks.nowPlaying.collectAsState()
             val artwork = rememberWidgetArtwork(container.mediaHttpClient, snapshot?.artworkUrl)
-            WaveGlanceTheme(context) {
-                NowPlayingContent(snapshot, artwork)
+            val queueArtwork = rememberWidgetArtworks(container.mediaHttpClient, snapshot?.upNext.orEmpty().mapNotNull { it.artworkUrl })
+            WaveGlanceTheme(context, dark = artwork != null) {
+                NowPlayingContent(snapshot, artwork, queueArtwork)
             }
         }
     }
@@ -83,17 +97,17 @@ class NowPlayingWidget : GlanceAppWidget() {
         /** 2×1 ほど: ボタンだけ。 */
         val CONTROLS = DpSize(150.dp, 48.dp)
 
-        /** 2×2 ほど: ジャケットと再生ボタン。 */
+        /** 2×2 ほど（iPhone の小）: ジャケットと評価、曲名、ボタン。 */
         val SQUARE = DpSize(110.dp, 110.dp)
 
         /** 4×1: ジャケット・曲名・再生・次へを1列に（ボタンだけの大きさより広いとき）。 */
         val WIDE = DpSize(250.dp, 48.dp)
 
-        /** 4×2: ジャケットの横に曲名とボタン。 */
-        val WIDE_TALL = DpSize(250.dp, 110.dp)
+        /** 4×2 以上（iPhone の中）: 左に今の曲とボタン、右に次に流れる曲。 */
+        val MEDIUM = DpSize(250.dp, 110.dp)
 
-        /** 3×3 以上: 大きなジャケットの下に曲名とボタン。 */
-        val LARGE = DpSize(200.dp, 250.dp)
+        /** 4×3 ほど: 中と同じ並びで、ジャケットの下に曲名を置く（iPhone の中と同じ）。 */
+        val MEDIUM_TALL = DpSize(250.dp, 200.dp)
     }
 }
 
@@ -101,23 +115,26 @@ class NowPlayingWidgetReceiver : GlanceAppWidgetReceiver() {
     override val glanceAppWidget = NowPlayingWidget()
 }
 
+private val itemIdKey = ActionParameters.Key<String>("itemId")
+private val videoIdKey = ActionParameters.Key<String>("videoId")
+
 @Composable
 private fun NowPlayingContent(
     snapshot: NowPlayingSnapshot?,
     artwork: Bitmap?,
+    queueArtwork: Map<String, Bitmap>,
 ) {
     val context = LocalContext.current
     val size = LocalSize.current
     val open = actionStartActivity(openAppIntent(context).putExtra(WidgetHooks.EXTRA_OPEN_NOW_PLAYING, true))
-    WidgetSurface(GlanceModifier.clickable(open)) {
+    WidgetSurface(GlanceModifier.clickable(open), backdrop = artwork?.let(WidgetArtwork::backdrop)) {
         // Responsive では、置いた大きさに収まる宣言した大きさのうち最も大きいものが来る
         when {
             snapshot == null -> EmptyState(open)
             size == NowPlayingWidget.CONTROLS -> Controls(snapshot, GlanceModifier.fillMaxSize().padding(horizontal = 8.dp), compact = true)
-            size == NowPlayingWidget.SQUARE -> SquareLayout(snapshot, artwork, open)
+            size == NowPlayingWidget.SQUARE -> SmallLayout(snapshot, artwork, open)
             size == NowPlayingWidget.WIDE -> WideLayout(snapshot, artwork, open)
-            size == NowPlayingWidget.WIDE_TALL -> WideTallLayout(snapshot, artwork, open)
-            else -> LargeLayout(snapshot, artwork, open)
+            else -> MediumLayout(snapshot, artwork, queueArtwork, open)
         }
     }
 }
@@ -162,76 +179,152 @@ private fun EmptyState(open: Action) {
 }
 
 @Composable
-private fun Artwork(
+internal fun Artwork(
     artwork: Bitmap?,
     modifier: GlanceModifier,
-    open: Action,
-    /** 再生ボタンを重ねるとき、仮の絵を左上に寄せる（ボタンで隠れないように）。 */
-    iconAlignment: Alignment = Alignment.Center,
+    /** null なら押せない（押すのは外の行に任せる）。 */
+    open: Action?,
+    corner: androidx.compose.ui.unit.Dp = ArtworkCorner,
+    iconSize: androidx.compose.ui.unit.Dp = 28.dp,
 ) {
-    val base = modifier.cornerRadius(ArtworkCorner).clickable(open)
+    val base = modifier.cornerRadius(corner).let { if (open != null) it.clickable(open) else it }
     if (artwork != null) {
         Image(ImageProvider(artwork), contentDescription = null, contentScale = ContentScale.Crop, modifier = base)
     } else {
-        Box(base.background(GlanceTheme.colors.secondaryContainer).padding(12.dp), contentAlignment = iconAlignment) {
+        Box(base.background(GlanceTheme.colors.secondaryContainer), contentAlignment = Alignment.Center) {
             Image(
                 ImageProvider(R.drawable.ic_music_note),
                 contentDescription = null,
                 colorFilter = ColorFilter.tint(GlanceTheme.colors.onSecondaryContainer),
-                modifier = GlanceModifier.size(36.dp),
+                modifier = GlanceModifier.size(iconSize),
             )
         }
     }
 }
 
+/** ジャケットの右下に評価のボタンを重ねたもの（出せないときは絵だけ）。 */
 @Composable
-private fun TitleAndArtist(
+private fun ArtworkWithLike(
     snapshot: NowPlayingSnapshot,
-    modifier: GlanceModifier = GlanceModifier,
+    artwork: Bitmap?,
+    side: androidx.compose.ui.unit.Dp,
+    open: Action,
 ) {
-    Column(modifier) {
-        Text(snapshot.title, style = WidgetText.title(), maxLines = 1)
-        if (snapshot.artist.isNotEmpty()) Text(snapshot.artist, style = WidgetText.subtitle(), maxLines = 1)
+    Box(GlanceModifier.size(side), contentAlignment = Alignment.BottomEnd) {
+        Artwork(artwork, GlanceModifier.size(side), open)
+        snapshot.saved?.let { saved -> LikeButton(snapshot, saved) }
     }
 }
 
-/** 前へ・再生（主役なので大きく塗る）・次へ。 */
+/**
+ * 評価のボタン（アプリと同じ）。＋は押すと高く評価し、✓（高く評価したかプレイリストに入っている）は
+ * プレイリストに追加する画面を出す。絵の上でも見えるよう、暗い丸を敷く。
+ */
 @Composable
-private fun Controls(
+private fun LikeButton(
     snapshot: NowPlayingSnapshot,
-    modifier: GlanceModifier = GlanceModifier,
-    /** 低いウィジェット: 再生ボタンを小さくする（はみ出さないように）。 */
-    compact: Boolean = false,
+    saved: Boolean,
 ) {
     val context = LocalContext.current
-    Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalAlignment = Alignment.CenterHorizontally) {
+    val song = snapshot.song
+    val action =
+        if (saved && song != null) {
+            actionStartActivity(
+                Intent(context, AddToPlaylistActivity::class.java)
+                    .putExtra(LikedNotice.EXTRA_SONG, SongJson.encode(song))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK),
+            )
+        } else {
+            actionRunCallback<LikeAction>(actionParametersOf(videoIdKey to snapshot.videoId.orEmpty()))
+        }
+    Box(
+        GlanceModifier
+            .padding(3.dp)
+            .size(LIKE_BUTTON)
+            .cornerRadius(LIKE_BUTTON / 2)
+            .background(ColorProvider(Color.Black.copy(alpha = 0.45f)))
+            .clickable(action),
+        contentAlignment = Alignment.Center,
+    ) {
+        Image(
+            ImageProvider(if (saved) R.drawable.ic_check_circle else R.drawable.ic_add_circle),
+            contentDescription = context.getString(if (saved) R.string.library_add_to_playlist else R.string.playback_like),
+            colorFilter = ColorFilter.tint(if (saved) GlanceTheme.colors.primary else ColorProvider(Color.White)),
+            modifier = GlanceModifier.size(LIKE_BUTTON - 6.dp),
+        )
+    }
+}
+
+/** 曲名と、アーティストかほかの端末の名前（端末名は印付きで色を変える）。 */
+@Composable
+internal fun TitleAndArtist(
+    snapshot: NowPlayingSnapshot,
+    modifier: GlanceModifier = GlanceModifier,
+    titleStyle: TextStyle = WidgetText.title(),
+) {
+    Column(modifier) {
+        Text(snapshot.title, style = titleStyle, maxLines = 1)
+        val device = snapshot.device
+        if (device != null) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Image(
+                    ImageProvider(R.drawable.ic_devices),
+                    contentDescription = null,
+                    colorFilter = ColorFilter.tint(GlanceTheme.colors.primary),
+                    modifier = GlanceModifier.size(14.dp),
+                )
+                Spacer(GlanceModifier.width(4.dp))
+                Text(device, style = WidgetText.device(), maxLines = 1)
+            }
+        } else if (snapshot.artist.isNotEmpty()) {
+            Text(snapshot.artist, style = WidgetText.subtitle(), maxLines = 1)
+        }
+    }
+}
+
+/** 前へ・再生（主役なので塗る）・次へ。 */
+@Composable
+internal fun Controls(
+    snapshot: NowPlayingSnapshot,
+    modifier: GlanceModifier = GlanceModifier,
+    /** 低い・狭いウィジェット: ボタンを小さくする（はみ出さないように）。 */
+    compact: Boolean = false,
+    alignment: Alignment.Horizontal = Alignment.CenterHorizontally,
+    /** 再生ボタンの大きさ（既定は compact で決める）。 */
+    playSize: androidx.compose.ui.unit.Dp = if (compact) COMPACT_BUTTON else PLAY_BUTTON,
+) {
+    val context = LocalContext.current
+    val side = if (playSize < COMPACT_BUTTON) SMALL_SIDE_BUTTON else if (compact) COMPACT_SIDE_BUTTON else SIDE_BUTTON
+    Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalAlignment = alignment) {
         CircleIconButton(
             ImageProvider(R.drawable.ic_skip_previous),
             contentDescription = context.getString(R.string.nowplaying_previous),
             onClick = actionRunCallback<PreviousAction>(),
+            modifier = GlanceModifier.size(side),
             backgroundColor = null,
-            contentColor = GlanceTheme.colors.onSurfaceVariant,
+            contentColor = GlanceTheme.colors.onSurface,
         )
-        Spacer(GlanceModifier.width(8.dp))
-        PlayPauseButton(snapshot.playing, if (compact) GlanceModifier.size(COMPACT_BUTTON) else GlanceModifier)
-        Spacer(GlanceModifier.width(8.dp))
+        Spacer(GlanceModifier.width(4.dp))
+        PlayPauseButton(snapshot.playing, GlanceModifier.size(playSize))
+        Spacer(GlanceModifier.width(4.dp))
         CircleIconButton(
             ImageProvider(R.drawable.ic_skip_next),
             contentDescription = context.getString(R.string.nowplaying_next),
             onClick = actionRunCallback<NextAction>(),
+            modifier = GlanceModifier.size(side),
             backgroundColor = null,
-            contentColor = GlanceTheme.colors.onSurfaceVariant,
+            contentColor = GlanceTheme.colors.onSurface,
         )
     }
 }
 
 @Composable
-private fun PlayPauseButton(
+internal fun PlayPauseButton(
     playing: Boolean,
     modifier: GlanceModifier = GlanceModifier,
 ) {
     val context = LocalContext.current
-    // 主役の操作は角の丸い四角で大きく（Expressive の再生ボタン）
+    // 主役の操作は角の丸い四角で塗る（Expressive の再生ボタン）
     SquareIconButton(
         ImageProvider(if (playing) R.drawable.ic_pause else R.drawable.ic_play_arrow),
         contentDescription = context.getString(if (playing) R.string.nowplaying_pause else R.string.widget_play),
@@ -242,15 +335,21 @@ private fun PlayPauseButton(
     )
 }
 
+/** iPhone の小: 左上にジャケット（右下に評価）、下に曲名・アーティスト・ボタン。 */
 @Composable
-private fun SquareLayout(
+private fun SmallLayout(
     snapshot: NowPlayingSnapshot,
     artwork: Bitmap?,
     open: Action,
 ) {
-    Box(GlanceModifier.fillMaxSize().padding(8.dp), contentAlignment = Alignment.BottomEnd) {
-        Artwork(artwork, GlanceModifier.fillMaxSize(), open, Alignment.TopStart)
-        Box(GlanceModifier.padding(6.dp)) { PlayPauseButton(snapshot.playing, GlanceModifier.size(COMPACT_BUTTON)) }
+    // 2×2 は端末によって 140dp ほどしかないので、余白を詰める
+    Column(GlanceModifier.fillMaxSize().padding(12.dp)) {
+        ArtworkWithLike(snapshot, artwork, 44.dp, open)
+        Spacer(GlanceModifier.defaultWeight())
+        TitleAndArtist(snapshot, GlanceModifier.fillMaxWidth().clickable(open), WidgetText.headline())
+        Spacer(GlanceModifier.height(2.dp))
+        // 2×2 の高さに収まるよう、ボタンは小さめにする
+        Controls(snapshot, GlanceModifier.fillMaxWidth(), compact = true, alignment = Alignment.Start, playSize = SMALL_PLAY_BUTTON)
     }
 }
 
@@ -271,41 +370,62 @@ private fun WideLayout(
             contentDescription = context.getString(R.string.nowplaying_next),
             onClick = actionRunCallback<NextAction>(),
             backgroundColor = null,
-            contentColor = GlanceTheme.colors.onSurfaceVariant,
+            contentColor = GlanceTheme.colors.onSurface,
         )
     }
 }
 
+/**
+ * iPhone の中: 左にジャケット（右下に評価）・曲名・アーティスト・ボタン、右に「次に流れる曲」を3曲（上下いっぱいに等しく割り振る）。
+ * 低くてジャケットの下に曲名を置けないときは、ジャケットの横に曲名を置く。
+ */
 @Composable
-private fun WideTallLayout(
+private fun MediumLayout(
     snapshot: NowPlayingSnapshot,
     artwork: Bitmap?,
+    queueArtwork: Map<String, Bitmap>,
     open: Action,
 ) {
-    Row(GlanceModifier.fillMaxSize().padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-        val side = (LocalSize.current.height - 20.dp).coerceIn(56.dp, 140.dp)
-        Artwork(artwork, GlanceModifier.size(side), open)
-        Spacer(GlanceModifier.width(12.dp))
-        Column(GlanceModifier.defaultWeight().fillMaxHeight(), verticalAlignment = Alignment.CenterVertically) {
-            TitleAndArtist(snapshot, GlanceModifier.fillMaxWidth().clickable(open))
-            Spacer(GlanceModifier.height(4.dp))
-            Controls(snapshot, GlanceModifier.fillMaxWidth())
+    val context = LocalContext.current
+    // Responsive では宣言した段の大きさが来る
+    val tall = LocalSize.current == NowPlayingWidget.MEDIUM_TALL
+    Row(GlanceModifier.fillMaxSize().padding(WidgetPadding)) {
+        Column(GlanceModifier.defaultWeight().fillMaxHeight()) {
+            if (tall) {
+                ArtworkWithLike(snapshot, artwork, 56.dp, open)
+                Spacer(GlanceModifier.defaultWeight())
+                TitleAndArtist(snapshot, GlanceModifier.fillMaxWidth().clickable(open))
+            } else {
+                Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    ArtworkWithLike(snapshot, artwork, 48.dp, open)
+                    Spacer(GlanceModifier.width(10.dp))
+                    TitleAndArtist(snapshot, GlanceModifier.defaultWeight().clickable(open), WidgetText.headline())
+                }
+            }
+            Spacer(GlanceModifier.defaultWeight())
+            Controls(snapshot, GlanceModifier.fillMaxWidth(), compact = true, alignment = Alignment.Start)
         }
-    }
-}
-
-@Composable
-private fun LargeLayout(
-    snapshot: NowPlayingSnapshot,
-    artwork: Bitmap?,
-    open: Action,
-) {
-    Column(GlanceModifier.fillMaxSize().padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Artwork(artwork, GlanceModifier.fillMaxWidth().defaultWeight(), open)
-        Spacer(GlanceModifier.height(8.dp))
-        TitleAndArtist(snapshot, GlanceModifier.fillMaxWidth().clickable(open))
-        Spacer(GlanceModifier.height(4.dp))
-        Controls(snapshot, GlanceModifier.fillMaxWidth())
+        Spacer(GlanceModifier.width(14.dp))
+        // 右側: 次に流れる曲（押すとその曲へ飛ぶ。ほかの端末で鳴っていればその端末で）
+        Column(GlanceModifier.defaultWeight().fillMaxHeight()) {
+            Text(context.getString(R.string.widget_up_next), style = WidgetText.caption().copy(fontWeight = FontWeight.Medium), maxLines = 1)
+            for (item in snapshot.upNext) {
+                Row(
+                    GlanceModifier.fillMaxWidth().defaultWeight().clickable(actionRunCallback<JumpAction>(actionParametersOf(itemIdKey to item.itemId))),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    val thumb = item.artworkUrl?.let(queueArtwork::get)
+                    Artwork(thumb, GlanceModifier.size(28.dp), null, corner = 5.dp, iconSize = 16.dp)
+                    Spacer(GlanceModifier.width(8.dp))
+                    Column(GlanceModifier.defaultWeight()) {
+                        Text(item.title, style = WidgetText.subtitle().copy(color = GlanceTheme.colors.onSurface, fontWeight = FontWeight.Medium), maxLines = 1)
+                        if (item.artist.isNotEmpty()) Text(item.artist, style = WidgetText.caption(), maxLines = 1)
+                    }
+                }
+            }
+            // 次の曲が少なくても、行の高さをそろえる
+            repeat(NowPlayingSnapshot.UP_NEXT_COUNT - snapshot.upNext.size) { Spacer(GlanceModifier.defaultWeight()) }
+        }
     }
 }
 
@@ -338,6 +458,42 @@ private const val RESTORE_WAIT_MS = 5_000L
 
 /** 狭い・低いウィジェットの再生ボタンの大きさ（既定は 60dp）。 */
 internal val COMPACT_BUTTON = 48.dp
+
+/** 広さのあるウィジェットの再生ボタンの大きさ。 */
+private val PLAY_BUTTON = 52.dp
+private val SIDE_BUTTON = 44.dp
+private val COMPACT_SIDE_BUTTON = 40.dp
+private val LIKE_BUTTON = 22.dp
+private val SMALL_PLAY_BUTTON = 36.dp
+private val SMALL_SIDE_BUTTON = 32.dp
+
+
+class JumpAction : ActionCallback {
+    override suspend fun onAction(
+        context: Context,
+        glanceId: GlanceId,
+        parameters: ActionParameters,
+    ) {
+        val itemId = parameters[itemIdKey] ?: return
+        val container = (context.applicationContext as WaveApplication).container
+        runCatching { container.player.jumpTo(itemId) }
+            .onFailure { Log.w(WaveApplication.LOG_TAG, "widget jump failed type=${it::class.simpleName}") }
+    }
+}
+
+/** ＋: 今の曲を高く評価する（曲が替わっていたら再生サービスが受け付けない）。 */
+class LikeAction : ActionCallback {
+    override suspend fun onAction(
+        context: Context,
+        glanceId: GlanceId,
+        parameters: ActionParameters,
+    ) {
+        val videoId = parameters[videoIdKey]?.takeIf { it.isNotEmpty() } ?: return
+        val container = (context.applicationContext as WaveApplication).container
+        runCatching { container.player.setLiked(videoId, true) }
+            .onFailure { Log.w(WaveApplication.LOG_TAG, "widget like failed type=${it::class.simpleName}") }
+    }
+}
 
 class PlayPauseAction : ActionCallback {
     override suspend fun onAction(

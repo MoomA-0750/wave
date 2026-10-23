@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="widget_now_playing_label">再生中</string>
-    <string name="widget_now_playing_description">再生中の曲と、再生・一時停止・次へ・前へ</string>
+    <string name="widget_now_playing_description">今の曲と次に流れる曲、再生の操作、高く評価</string>
     <string name="widget_playlist_label">ワンタップ再生</string>
     <string name="widget_playlist_description">選んだプレイリスト・アルバム・曲・ライブを、押すだけで再生する</string>
     <string name="widget_nothing_playing">再生していません</string>
@@ -18,4 +18,14 @@
     <string name="widget_load_failed">読み込めませんでした</string>
     <string name="widget_search_hint">検索</string>
     <string name="widget_no_history">最近再生したものはありません。検索して選んでください</string>
+    <string name="widget_up_next">次に流れる曲</string>
+    <string name="widget_playlists_label">プレイリスト</string>
+    <string name="widget_playlists_description">最近再生したプレイリストか、選んだプレイリストを並べ、押すとすぐ再生する</string>
+    <string name="widget_playlists_sign_in">wave を開いてログインすると、プレイリストが出ます</string>
+    <string name="widget_playlists_title">並べるプレイリスト</string>
+    <string name="widget_playlists_recent">最近再生した順</string>
+    <string name="widget_playlists_chosen">選ぶ</string>
+    <string name="widget_playlists_recent_note">最近再生した順に並べます（高く評価した曲が先頭）</string>
+    <string name="widget_playlists_chosen_note">%1$d 個まで選べます。選んだ順に並べます</string>
+    <string name="widget_playlists_done">完了</string>
 </resources>

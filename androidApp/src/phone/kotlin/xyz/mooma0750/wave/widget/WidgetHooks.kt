@@ -49,6 +49,24 @@ object WidgetHooks {
                     .onFailure { Log.w(WaveApplication.LOG_TAG, "widget update failed type=${it::class.simpleName}") }
             }
         }
+        // プレイリストのウィジェットは、上に出す今の曲と、鳴らしているプレイリストの印が変わったとき
+        container.appScope.launch {
+            nowPlaying
+                .map { now -> now?.let { listOf(it.title, it.artist, it.device, it.artworkUrl, it.sourceId, it.playing) } }
+                .distinctUntilChanged()
+                .collect { updatePlaylistGrid(app) }
+        }
+    }
+
+    private suspend fun updatePlaylistGrid(context: Context) {
+        runCatching { PlaylistGridWidget().updateAll(context) }
+            .onFailure { Log.w(WaveApplication.LOG_TAG, "widget update failed type=${it::class.simpleName}") }
+    }
+
+    /** ログアウトした: 残したプレイリストの一覧を消して描き直す。 */
+    fun onLoggedOut(context: Context) {
+        WidgetPlaylists.clear(context)
+        (context.applicationContext as WaveApplication).container.appScope.launch { updatePlaylistGrid(context) }
     }
 
     private val mutableOpenNowPlaying = MutableStateFlow(false)

@@ -10,4 +10,7 @@ object WidgetHooks {
         context: Context,
         snapshot: NowPlayingSnapshot?,
     ) = Unit
+
+    @Suppress("UNUSED_PARAMETER")
+    fun onLoggedOut(context: Context) = Unit
 }

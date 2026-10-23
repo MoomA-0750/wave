@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="widget_now_playing_label">Now playing</string>
-    <string name="widget_now_playing_description">The song that\'s playing, with play/pause, next and previous</string>
+    <string name="widget_now_playing_description">The song that\'s playing and what\'s up next, with playback controls and Like</string>
     <string name="widget_playlist_label">Quick play</string>
     <string name="widget_playlist_description">Play a playlist, album, song or live stream you choose with one tap</string>
     <string name="widget_nothing_playing">Nothing playing</string>
@@ -18,4 +18,14 @@
     <string name="widget_load_failed">Couldn\'t load it</string>
     <string name="widget_search_hint">Search</string>
     <string name="widget_no_history">Nothing played recently. Search to choose one</string>
+    <string name="widget_up_next">Up next</string>
+    <string name="widget_playlists_label">Playlists</string>
+    <string name="widget_playlists_description">Your recently played playlists, or ones you choose. Tap one to play it</string>
+    <string name="widget_playlists_sign_in">Open wave and sign in to see your playlists</string>
+    <string name="widget_playlists_title">Playlists to show</string>
+    <string name="widget_playlists_recent">Recently played</string>
+    <string name="widget_playlists_chosen">Choose</string>
+    <string name="widget_playlists_recent_note">Shows your playlists in the order you last played them, with Liked Songs first</string>
+    <string name="widget_playlists_chosen_note">Choose up to %1$d. They\'re shown in the order you pick them</string>
+    <string name="widget_playlists_done">Done</string>
 </resources>

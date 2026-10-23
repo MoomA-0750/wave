@@ -19,6 +19,7 @@ import kotlinx.coroutines.launch
 import xyz.mooma0750.wave.WaveApplication
 import xyz.mooma0750.wave.core.music.MusicRepository
 import xyz.mooma0750.wave.widget.NowPlayingWidgetReceiver
+import xyz.mooma0750.wave.widget.PlaylistGridWidgetReceiver
 import xyz.mooma0750.wave.widget.PlaylistWidget
 import xyz.mooma0750.wave.widget.PlaylistWidgetReceiver
 import xyz.mooma0750.wave.widget.WidgetItem
@@ -48,17 +49,30 @@ class WidgetHostActivity : Activity() {
         val playlistTitle = intent.getStringExtra("title") ?: "Liked Songs"
         val nowPlaying = ComponentName(this, NowPlayingWidgetReceiver::class.java)
         val playlist = ComponentName(this, PlaylistWidgetReceiver::class.java)
+        val grid = ComponentName(this, PlaylistGridWidgetReceiver::class.java)
+        // `--es only now|item|grid` でその種類だけを並べる（画面に収めて撮るため）
+        val only = intent.getStringExtra("only")
         val cases =
             listOf(
                 Triple(nowPlaying, 180f, 56f),
-                Triple(nowPlaying, 130f, 130f),
+                Triple(nowPlaying, 160f, 160f),
                 Triple(nowPlaying, 320f, 70f),
-                Triple(nowPlaying, 320f, 130f),
-                Triple(nowPlaying, 260f, 290f),
-                Triple(playlist, 130f, 130f),
-                Triple(playlist, 320f, 80f),
-                Triple(playlist, 220f, 250f),
-            )
+                Triple(nowPlaying, 340f, 160f),
+                Triple(nowPlaying, 340f, 190f),
+                Triple(playlist, 160f, 160f),
+                Triple(playlist, 340f, 160f),
+                Triple(playlist, 340f, 340f),
+                Triple(grid, 160f, 160f),
+                Triple(grid, 340f, 160f),
+                Triple(grid, 340f, 340f),
+            ).filter { (provider, _, _) ->
+                when (only) {
+                    "now" -> provider == nowPlaying
+                    "item" -> provider == playlist
+                    "grid" -> provider == grid
+                    else -> true
+                }
+            }
         for ((provider, width, height) in cases) {
             val id = host.allocateAppWidgetId()
             if (!manager.bindAppWidgetIdIfAllowed(id, provider)) {

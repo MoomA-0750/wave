@@ -72,7 +72,7 @@ import xyz.mooma0750.wave.playback.playFromButton
  * クラス名はプレイリストだけを選べた頃のまま（置いてあるウィジェットが受け口の名前で結び付いているため）。
  */
 class PlaylistWidget : GlanceAppWidget() {
-    override val sizeMode = SizeMode.Responsive(setOf(SMALL, WIDE, LARGE))
+    override val sizeMode = SizeMode.Responsive(setOf(SMALL, WIDE, WIDE_TALL, LARGE))
 
     override val stateDefinition: GlanceStateDefinition<*> = PreferencesGlanceStateDefinition
 
@@ -86,7 +86,8 @@ class PlaylistWidget : GlanceAppWidget() {
             val item = WidgetItem.of(prefs)
             val now by WidgetHooks.nowPlaying.collectAsState()
             val artwork = rememberWidgetArtwork(client, item?.thumbnailUrl?.let(Media3QueuePlayer::largeArtwork))
-            WaveGlanceTheme(context) {
+            // 地は絵をぼかして暗くしたもの（iPhone と同じ）。その上では暗い地として描く
+            WaveGlanceTheme(context, dark = artwork != null) {
                 ItemContent(item, artwork, loading = prefs[LOADING] == true, playing = item?.isCurrent(now) == true && now?.playing == true)
             }
         }
@@ -98,6 +99,9 @@ class PlaylistWidget : GlanceAppWidget() {
 
         /** 4×1〜4×2: 絵の横に名前とボタン。 */
         val WIDE = DpSize(220.dp, 48.dp)
+
+        /** 4×2: 4×1 と同じ並びで、余白を iPhone と同じにする。 */
+        val WIDE_TALL = DpSize(220.dp, 110.dp)
 
         /** 3×3 以上: 大きな絵の下に名前とボタン。 */
         val LARGE = DpSize(180.dp, 220.dp)
@@ -143,26 +147,30 @@ private fun ItemContent(
     val surface = if (loading) GlanceModifier else GlanceModifier.clickable(play)
     val size = LocalSize.current
     val shuffle = item.kind == WidgetItemKind.Playlist || item.kind == WidgetItemKind.Album
-    WidgetSurface(surface) {
+    WidgetSurface(surface, backdrop = artwork?.let(WidgetArtwork::backdrop)) {
         when (size) {
             PlaylistWidget.SMALL ->
-                Box(GlanceModifier.fillMaxSize().padding(8.dp), contentAlignment = Alignment.BottomEnd) {
+                Box(GlanceModifier.fillMaxSize().padding(WidgetPadding), contentAlignment = Alignment.BottomEnd) {
                     Cover(item, artwork, GlanceModifier.fillMaxSize(), play, Alignment.TopStart)
                     Box(GlanceModifier.padding(6.dp)) { PlayButton(item, loading, playing, GlanceModifier.size(COMPACT_BUTTON)) }
                 }
-            PlaylistWidget.WIDE ->
-                Row(GlanceModifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    val side = (size.height - 12.dp).coerceIn(44.dp, 120.dp)
+            PlaylistWidget.WIDE, PlaylistWidget.WIDE_TALL -> {
+                // 低い（4×1）ときは余白を詰める（iPhone に無い大きさ）
+                val tall = size == PlaylistWidget.WIDE_TALL
+                val padding = if (tall) GlanceModifier.padding(WidgetPadding) else GlanceModifier.padding(horizontal = 8.dp, vertical = 6.dp)
+                Row(GlanceModifier.fillMaxSize().then(padding), verticalAlignment = Alignment.CenterVertically) {
+                    val side = (size.height - if (tall) WidgetPadding * 2 else 12.dp).coerceIn(44.dp, 140.dp)
                     Cover(item, artwork, GlanceModifier.size(side), play)
-                    Spacer(GlanceModifier.width(10.dp))
+                    Spacer(GlanceModifier.width(14.dp))
                     Names(item, GlanceModifier.defaultWeight(), play)
                     if (shuffle) ShuffleButton(item, loading)
                     PlayButton(item, loading, playing, GlanceModifier.size(COMPACT_BUTTON))
                 }
+            }
             else ->
-                Column(GlanceModifier.fillMaxSize().padding(12.dp)) {
+                Column(GlanceModifier.fillMaxSize().padding(WidgetPadding)) {
                     Cover(item, artwork, GlanceModifier.fillMaxWidth().defaultWeight(), play)
-                    Spacer(GlanceModifier.height(8.dp))
+                    Spacer(GlanceModifier.height(12.dp))
                     Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Names(item, GlanceModifier.defaultWeight(), play)
                         if (shuffle) ShuffleButton(item, loading)
@@ -303,22 +311,7 @@ class PlayItemAction : ActionCallback {
                 return
             }
             when (item.kind) {
-                WidgetItemKind.Playlist -> {
-                    val order = container.settings.playlistOrders.get(item.id)
-                    // 手元で並べる並べ方（全部読んでから並べる）は、ウィジェットでは最初のページをサーバーの並びで始める
-                    when (val page = container.music.playlist(item.id, order = order.takeUnless { it.arrangedLocally })) {
-                        is CallResult.Ok ->
-                            if (page.value.songs.isEmpty()) {
-                                toast(context, R.string.widget_playlist_empty)
-                            } else {
-                                container.player.playFrom(page.value.songs, 0, item.id, page.value.continuation, shuffle)
-                            }
-                        is CallResult.Failed -> {
-                            Log.w(WaveApplication.LOG_TAG, "widget playlist failed kind=${page.kind}")
-                            toast(context, R.string.widget_playlist_failed)
-                        }
-                    }
-                }
+                WidgetItemKind.Playlist -> playPlaylist(context, item.id, shuffle)
                 WidgetItemKind.Album ->
                     when (val page = container.music.album(item.id)) {
                         is CallResult.Ok ->
@@ -341,13 +334,39 @@ class PlayItemAction : ActionCallback {
         }
     }
 
-    private suspend fun toast(
-        context: Context,
-        text: Int,
-    ) = withContext(Dispatchers.Main) { Toast.makeText(context, text, Toast.LENGTH_SHORT).show() }
-
     private companion object {
         const val AUTH_WAIT_MS = 5_000L
+    }
+}
+
+internal suspend fun toast(
+    context: Context,
+    text: Int,
+) = withContext(Dispatchers.Main) { Toast.makeText(context, text, Toast.LENGTH_SHORT).show() }
+
+/**
+ * プレイリストを最初のページから鳴らす（続きはキューが読み足す。ほかの端末を映している間はその端末で）。
+ * ワンタップ再生とプレイリストのウィジェットで共通。ログインは呼ぶ側で確かめておく。
+ */
+internal suspend fun playPlaylist(
+    context: Context,
+    playlistId: String,
+    shuffle: Boolean,
+) {
+    val container = (context.applicationContext as WaveApplication).container
+    val order = container.settings.playlistOrders.get(playlistId)
+    // 手元で並べる並べ方（全部読んでから並べる）は、ウィジェットでは最初のページをサーバーの並びで始める
+    when (val page = container.music.playlist(playlistId, order = order.takeUnless { it.arrangedLocally })) {
+        is CallResult.Ok ->
+            if (page.value.songs.isEmpty()) {
+                toast(context, R.string.widget_playlist_empty)
+            } else {
+                container.player.playFrom(page.value.songs, 0, playlistId, page.value.continuation, shuffle)
+            }
+        is CallResult.Failed -> {
+            Log.w(WaveApplication.LOG_TAG, "widget playlist failed kind=${page.kind}")
+            toast(context, R.string.widget_playlist_failed)
+        }
     }
 }
 

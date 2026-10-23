@@ -14,5 +14,9 @@
             android:name=".widget.PlaylistWidgetConfigActivity"
             android:showWhenLocked="true"
             tools:node="merge" />
+        <activity
+            android:name=".widget.PlaylistGridConfigActivity"
+            android:showWhenLocked="true"
+            tools:node="merge" />
     </application>
 </manifest>
