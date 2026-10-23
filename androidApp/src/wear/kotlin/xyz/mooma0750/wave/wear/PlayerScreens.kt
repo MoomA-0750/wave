@@ -51,6 +51,10 @@ fun QueueScreen(
         if (state.queue.any { it.userAdded }) {
             item(key = "clear") { ActionRow(look, R.drawable.ic_delete, stringResource(R.string.nowplaying_clear_queue)) { scope.launch { connection.clearUserQueue() } } }
         }
+        // 「次に流れる曲」（元の流れ）の消去。スマホの見出しの「消去」と同じ
+        if (state.queue.drop(state.currentIndex + 1).any { !it.userAdded }) {
+            item(key = "clear-flow") { ActionRow(look, R.drawable.ic_delete, stringResource(R.string.nowplaying_clear_flow_long)) { scope.launch { connection.clearFlow() } } }
+        }
         // 今の曲から後ろ（前の曲は1曲だけ残す）
         val start = (state.currentIndex - 1).coerceAtLeast(0)
         val rows = state.queue.drop(start)
