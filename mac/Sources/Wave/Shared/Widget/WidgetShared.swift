@@ -18,6 +18,7 @@ enum WidgetStore {
     static let nowPlayingKind = "xyz.mooma0750.wave.nowplaying"
     static let playlistKind = "xyz.mooma0750.wave.playlist"
     static let itemKind = "xyz.mooma0750.wave.item"
+    static let queueKind = "xyz.mooma0750.wave.queue"
 
     static var container: URL? { FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: group) }
 
@@ -81,7 +82,7 @@ struct WidgetNowPlaying: Codable, Equatable {
     var nextArtist: String?
     /// 評価のボタンを✓にするか（アプリと同じく、高く評価したか、どれかのプレイリストに入っている）。出せないとき（ログインしていない・RSS のエピソード）は nil。
     var liked: Bool?
-    /// 次に流れる曲（3曲まで。ウィジェットの右側に並べ、押すとその曲へ飛ぶ）。
+    /// 次に流れる曲（8曲まで。再生中のウィジェットは3曲、キューのウィジェットは大きさに合わせて並べ、押すとその曲へ飛ぶ）。
     var upNext: [WidgetQueueItem]?
     /// 鳴らしているプレイリスト・アルバムの ID（プレイリストのウィジェットで、鳴っているものに印を付ける）。
     var sourceId: String?
@@ -226,6 +227,8 @@ struct ToggleLikeIntent: AudioPlaybackIntent {
 /// キューの曲を選んで鳴らす（ウィジェットの「次に流れる曲」）。
 struct PlayQueueItemIntent: AudioPlaybackIntent {
     static let title: LocalizedStringResource = "Play Song in Queue"
+    /// ウィジェットのボタンだけが使う（ID を文字で受ける）。ショートカットには選べる形の別の頼みを出す
+    static let isDiscoverable = false
     @Parameter(title: "Position") var index: Int
     @Parameter(title: "Song") var videoId: String
 
@@ -244,6 +247,8 @@ struct PlayQueueItemIntent: AudioPlaybackIntent {
 
 struct PlayPlaylistIntent: AudioPlaybackIntent {
     static let title: LocalizedStringResource = "Play Playlist"
+    /// ウィジェットのボタンだけが使う（ID を文字で受ける）。ショートカットには選べる形の別の頼みを出す
+    static let isDiscoverable = false
     @Parameter(title: "Playlist") var playlistId: String
     @Parameter(title: "Shuffle") var shuffle: Bool
 
@@ -263,6 +268,8 @@ struct PlayPlaylistIntent: AudioPlaybackIntent {
 /// ワンタップ再生の1つを鳴らす（今鳴っているものなら、一時停止・再開）。
 struct PlayItemIntent: AudioPlaybackIntent {
     static let title: LocalizedStringResource = "Play Item"
+    /// ウィジェットのボタンだけが使う（ID を文字で受ける）。ショートカットには選べる形の別の頼みを出す
+    static let isDiscoverable = false
     @Parameter(title: "Item") var token: String
     @Parameter(title: "Shuffle") var shuffle: Bool
 
@@ -276,6 +283,62 @@ struct PlayItemIntent: AudioPlaybackIntent {
     func perform() async throws -> some IntentResult {
         if let item = WidgetItem(token: token) { await WidgetBridge.run(.playItem(item, shuffle: shuffle)) }
         return .result()
+    }
+}
+
+// MARK: ショートカット（再生・一時停止・次へ・前へ・高く評価は、上のボタンの頼みをそのまま出す）
+
+/// プレイリストを選んで鳴らす（ショートカット・Siri）。
+struct PlayPlaylistShortcutIntent: AudioPlaybackIntent {
+    static let title: LocalizedStringResource = "Play a Playlist"
+    static let description = IntentDescription("Plays a playlist from your library.")
+    @Parameter(title: "Playlist") var playlist: PlaylistEntity
+    @Parameter(title: "Shuffle", default: false) var shuffle: Bool
+
+    init() {}
+
+    static var parameterSummary: some ParameterSummary {
+        Summary("Play \(\.$playlist)") { \.$shuffle }
+    }
+
+    func perform() async throws -> some IntentResult {
+        await WidgetBridge.run(.playPlaylist(id: playlist.id, shuffle: shuffle))
+        return .result()
+    }
+}
+
+/// ワンタップ再生と同じ候補（プレイリスト・アルバム・最近再生した曲・ライブ）から選んで鳴らす。
+struct PlayItemShortcutIntent: AudioPlaybackIntent {
+    static let title: LocalizedStringResource = "Play Something"
+    static let description = IntentDescription("Plays a playlist, album, recently played song or live stream.")
+    @Parameter(title: "Play") var item: PlayItemEntity
+    @Parameter(title: "Shuffle", default: false) var shuffle: Bool
+
+    init() {}
+
+    static var parameterSummary: some ParameterSummary {
+        Summary("Play \(\.$item)") { \.$shuffle }
+    }
+
+    func perform() async throws -> some IntentResult {
+        await WidgetBridge.run(.playItem(item.item, shuffle: shuffle))
+        return .result()
+    }
+}
+
+/// 今の曲を文字で返す（「曲名 — アーティスト」。何も鳴っていなければ空）。アプリが書いた置き場を読むだけ。
+struct GetNowPlayingIntent: AppIntent {
+    static let title: LocalizedStringResource = "Get Current Song"
+    static let description = IntentDescription("Returns the title and artist of the song playing in wave.")
+
+    init() {}
+
+    func perform() async throws -> some IntentResult & ReturnsValue<String> & ProvidesDialog {
+        guard let song = WidgetStore.nowPlaying else {
+            return .result(value: "", dialog: IntentDialog(stringLiteral: WidgetText.t("何も再生していません", "Nothing playing")))
+        }
+        let text = song.artist.isEmpty ? song.title : "\(song.title) — \(song.artist)"
+        return .result(value: text, dialog: IntentDialog(stringLiteral: text))
     }
 }
 
@@ -356,8 +419,12 @@ struct PlaylistEntity: AppEntity {
     var displayRepresentation: DisplayRepresentation { DisplayRepresentation(title: "\(title)") }
 }
 
-struct PlaylistQuery: EntityQuery {
+struct PlaylistQuery: EntityStringQuery {
     init() {}
+
+    func entities(matching string: String) async throws -> [PlaylistEntity] {
+        WidgetStore.playlists.filter { $0.title.localizedStandardContains(string) }.map { PlaylistEntity(id: $0.id, title: $0.title) }
+    }
 
     func entities(for identifiers: [String]) async throws -> [PlaylistEntity] {
         WidgetStore.playlists.filter { identifiers.contains($0.id) }.map { PlaylistEntity(id: $0.id, title: $0.title) }
@@ -383,7 +450,12 @@ enum PlaylistWidgetSource: String, AppEnum {
 struct SelectPlaylistIntent: WidgetConfigurationIntent {
     static let title: LocalizedStringResource = "Choose Playlists"
     @Parameter(title: "Show", default: .recent) var source: PlaylistWidgetSource
-    @Parameter(title: "Playlists", size: [.systemSmall: 4, .systemMedium: 4, .systemLarge: 8]) var playlists: [PlaylistEntity]?
+    #if os(iOS)
+        @Parameter(title: "Playlists", size: [.systemSmall: 4, .systemMedium: 4, .systemLarge: 8, .accessoryCircular: 1, .accessoryRectangular: 3])
+        var playlists: [PlaylistEntity]?
+    #else
+        @Parameter(title: "Playlists", size: [.systemSmall: 4, .systemMedium: 4, .systemLarge: 8]) var playlists: [PlaylistEntity]?
+    #endif
     init() {}
 
     static var parameterSummary: some ParameterSummary {

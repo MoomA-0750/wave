@@ -14,6 +14,7 @@ struct WaveWidgets: WidgetBundle {
         NowPlayingWidget()
         PlaylistWidget()
         ItemWidget()
+        QueueWidget()
         #if os(iOS)
             NowPlayingLiveActivity()
         #endif
@@ -274,7 +275,7 @@ struct NowPlayingWidgetView: View {
                     // 右側: 次に流れる曲（押すとその曲へ飛ぶ）。見出しの下の行を上下いっぱいに等しく割り振り、下に余白を残さない
                     VStack(alignment: .leading, spacing: 0) {
                         Text(WidgetText.t("次に流れる曲", "Up next")).font(WidgetFont.caption.weight(.semibold)).foregroundStyle(.secondary)
-                        ForEach(song.upNext ?? []) { item in
+                        ForEach((song.upNext ?? []).prefix(3)) { item in
                             Button(intent: PlayQueueItemIntent(index: item.index, videoId: item.videoId)) {
                                 HStack(spacing: 8) {
                                     Artwork(image: entry.queueArtwork[item.videoId], radius: 5).frame(width: 28, height: 28)
@@ -298,6 +299,89 @@ struct NowPlayingWidgetView: View {
                 Text(WidgetText.t("何も再生していません", "Nothing playing")).font(WidgetFont.caption).foregroundStyle(.secondary)
             }
         }
+    }
+}
+
+// MARK: キュー
+
+struct QueueWidget: Widget {
+    var body: some WidgetConfiguration {
+        // 中身は再生中のウィジェットと同じ（今の曲・次に流れる曲とそのジャケット）
+        StaticConfiguration(kind: WidgetStore.queueKind, provider: NowPlayingProvider()) { entry in
+            QueueWidgetView(entry: entry)
+                .padding(widgetPadding)
+                .onArtwork(entry.artwork)
+                .containerBackground(for: .widget) { ArtworkBackground(image: entry.artwork) }
+                .widgetURL(URL(string: "wave://nowplaying"))
+        }
+        .configurationDisplayName(Text("キュー"))
+        .description(Text("次に流れる曲を並べ、押すとその曲へ飛ぶ。"))
+        .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
+        .contentMarginsDisabled()
+    }
+}
+
+struct QueueWidgetView: View {
+    var entry: NowPlayingEntry
+    @Environment(\.widgetFamily) private var family
+
+    var body: some View {
+        let items = entry.song?.upNext ?? []
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                Text(WidgetText.t("次に流れる曲", "Up next")).font(WidgetFont.caption.weight(.semibold)).foregroundStyle(.secondary)
+                Spacer(minLength: 0)
+                if let device = entry.song?.device {
+                    Label(device, systemImage: "hifispeaker.2").font(WidgetFont.caption).foregroundStyle(accent).lineLimit(1)
+                }
+            }
+            if items.isEmpty {
+                Spacer(minLength: 0)
+                Text(entry.song == nil ? WidgetText.t("何も再生していません", "Nothing playing") : WidgetText.t("次に流れる曲はありません", "Nothing up next"))
+                    .font(WidgetFont.caption).foregroundStyle(.secondary).frame(maxWidth: .infinity)
+                Spacer(minLength: 0)
+            } else if family == .systemMedium {
+                // 中は2列に3曲ずつ（左の列を上から、続きを右の列に）
+                HStack(spacing: 12) {
+                    column(Array(items.prefix(3)), rows: 3)
+                    column(Array(items.dropFirst(3).prefix(3)), rows: 3)
+                }
+            } else {
+                let rows = family == .systemLarge ? 8 : 3
+                column(Array(items.prefix(rows)), rows: rows)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    /// 曲を縦に並べる（rows 行分の高さを等しく割り振る。曲が足りなければ下を空ける）。
+    private func column(_ items: [WidgetQueueItem], rows: Int) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(0 ..< rows, id: \.self) { i in
+                if i < items.count {
+                    row(items[i])
+                } else {
+                    Color.clear.frame(maxHeight: .infinity)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func row(_ item: WidgetQueueItem) -> some View {
+        let small = family == .systemSmall
+        return Button(intent: PlayQueueItemIntent(index: item.index, videoId: item.videoId)) {
+            HStack(spacing: 8) {
+                Artwork(image: entry.queueArtwork[item.videoId], radius: 5).frame(width: small ? 26 : 32, height: small ? 26 : 32)
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(item.title).font(WidgetFont.subheadline.weight(.medium)).lineLimit(1)
+                    Text(item.artist).font(WidgetFont.caption).foregroundStyle(.secondary).lineLimit(1)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -362,23 +446,56 @@ struct PlaylistProvider: AppIntentTimelineProvider {
     }
 }
 
-/// 大きさごとに並べる数（小: 2×2、中: 1段に4つ、大: 2段に4つずつ）。
+/// 大きさごとに並べる数（小: 2×2、中: 1段に4つ、大: 2段に4つずつ、ロック画面: 丸は1つ・横長は3つ）。
 private func playlistCount(_ family: WidgetFamily) -> Int {
-    family == .systemLarge ? 8 : 4
+    switch family {
+    case .systemLarge: 8
+    #if os(iOS)
+        case .accessoryCircular: 1
+        case .accessoryRectangular: 3
+    #endif
+    default: 4
+    }
+}
+
+/// 中身の余白（ロック画面は OS が決めた枠いっぱいに描く）。
+private func playlistPadding(_ family: WidgetFamily) -> CGFloat {
+    #if os(iOS)
+        if family == .accessoryCircular || family == .accessoryRectangular { return 0 }
+    #endif
+    return widgetPadding
+}
+
+/// 置ける大きさ（iPhone はロック画面の丸・横長も）。
+private var playlistFamilies: [WidgetFamily] {
+    #if os(iOS)
+        [.systemSmall, .systemMedium, .systemLarge, .accessoryCircular, .accessoryRectangular]
+    #else
+        [.systemSmall, .systemMedium, .systemLarge]
+    #endif
 }
 
 struct PlaylistWidget: Widget {
     var body: some WidgetConfiguration {
         AppIntentConfiguration(kind: WidgetStore.playlistKind, intent: SelectPlaylistIntent.self, provider: PlaylistProvider()) { entry in
-            PlaylistWidgetView(entry: entry)
-                .padding(widgetPadding)
+            PlaylistWidgetFamilyView(entry: entry)
                 .onArtwork(entry.background)
                 .containerBackground(for: .widget) { ArtworkBackground(image: entry.background) }
         }
         .configurationDisplayName(Text("プレイリスト"))
         .description(Text("最近再生したプレイリストか、選んだプレイリストを並べ、押すとすぐ再生する。"))
-        .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
+        .supportedFamilies(playlistFamilies)
         .contentMarginsDisabled()
+    }
+}
+
+/// 大きさで余白を変える（widgetFamily は描く中でしか読めない）。
+private struct PlaylistWidgetFamilyView: View {
+    var entry: PlaylistEntry
+    @Environment(\.widgetFamily) private var family
+
+    var body: some View {
+        PlaylistWidgetView(entry: entry).padding(playlistPadding(family))
     }
 }
 
@@ -392,23 +509,91 @@ struct PlaylistWidgetView: View {
     @Environment(\.widgetFamily) private var family
 
     var body: some View {
+        let count = entry.tiles.count
         if entry.tiles.isEmpty {
-            VStack(spacing: 6) {
-                Image(systemName: "music.note.list").font(WidgetFont.title)
-                Text(WidgetText.t("wave を開いてログインすると、プレイリストが出ます", "Open wave and log in to see your playlists")).font(WidgetFont.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
-            }
+            #if os(iOS)
+                if isAccessory {
+                    ZStack {
+                        AccessoryWidgetBackground()
+                        Image(systemName: "music.note.list").font(WidgetFont.title2)
+                    }
+                    .clipShape(family == .accessoryCircular ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: 10)))
+                } else {
+                    emptyMessage
+                }
+            #else
+                emptyMessage
+            #endif
+        } else if isAccessory {
+            #if os(iOS)
+                accessory
+            #endif
         } else if family == .systemSmall {
-            // 小は表紙だけを 2×2 に
-            grid(rows: 2, columns: 2, spacing: 8)
+            // 小は表紙だけを 2×2 に（2つ以下なら、表紙の右に名前を置く）
+            if count <= 2 { namedGrid(rows: 2, pairs: 1, spacing: 8) } else { grid(rows: 2, columns: 2, spacing: 8) }
+        } else if family == .systemLarge && count > 4 {
+            // 大で2段目に入る数なら、再生中の曲を出さず、表紙と名前を 4×2 に並べる
+            VStack(spacing: 0) {
+                Spacer(minLength: 0)
+                grid(rows: 2, columns: 4, spacing: 12, captions: true)
+                Spacer(minLength: 0)
+            }
         } else {
-            // 中・大は上に再生中の曲と操作、下に表紙を寄せる
+            // 中・大は上に再生中の曲と操作、下に表紙を1段（2つ以下なら、表紙の右に名前を置く）
             VStack(alignment: .leading, spacing: 10) {
                 nowPlaying
                 Spacer(minLength: 0)
-                grid(rows: family == .systemLarge ? 2 : 1, columns: 4, spacing: 10)
+                if count <= 2 { namedGrid(rows: 1, pairs: 2, spacing: 10) } else { grid(rows: 1, columns: 4, spacing: 10) }
             }
         }
     }
+
+    private var isAccessory: Bool {
+        #if os(iOS)
+            family == .accessoryCircular || family == .accessoryRectangular
+        #else
+            false
+        #endif
+    }
+
+    private var emptyMessage: some View {
+        VStack(spacing: 6) {
+            Image(systemName: "music.note.list").font(WidgetFont.title)
+            Text(WidgetText.t("wave を開いてログインすると、プレイリストが出ます", "Open wave and log in to see your playlists")).font(WidgetFont.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
+        }
+    }
+
+    #if os(iOS)
+        /// ロック画面: 丸は先頭の表紙を1つ、横長は表紙を3つまで（1つだけなら右に名前）。押すとそのプレイリストを鳴らす。
+        @ViewBuilder
+        private var accessory: some View {
+            if family == .accessoryCircular, let tile = entry.tiles.first {
+                Button(intent: PlayPlaylistIntent(playlistId: tile.playlist.id, shuffle: false)) {
+                    Artwork(image: tile.cover).clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+            } else if entry.tiles.count == 1, let tile = entry.tiles.first {
+                Button(intent: PlayPlaylistIntent(playlistId: tile.playlist.id, shuffle: false)) {
+                    HStack(spacing: 8) {
+                        Artwork(image: tile.cover, radius: 8).aspectRatio(1, contentMode: .fit)
+                        Text(tile.playlist.title).font(WidgetFont.headline).lineLimit(3)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+                .buttonStyle(.plain)
+            } else {
+                HStack(spacing: 6) {
+                    ForEach(entry.tiles.prefix(3)) { tile in
+                        Button(intent: PlayPlaylistIntent(playlistId: tile.playlist.id, shuffle: false)) {
+                            Artwork(image: tile.cover, radius: 8).aspectRatio(1, contentMode: .fit)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+    #endif
 
     /// 再生中の曲（ジャケット・曲名・アーティストか端末名）と前へ・再生/一時停止・次へ。
     private var nowPlaying: some View {
@@ -428,12 +613,43 @@ struct PlaylistWidgetView: View {
         }
     }
 
-    private func grid(rows: Int, columns: Int, spacing: CGFloat) -> some View {
+    /// 表紙を並べる。captions なら表紙の下に名前（2行まで）を付ける。
+    private func grid(rows: Int, columns: Int, spacing: CGFloat, captions: Bool = false) -> some View {
+        VStack(spacing: spacing) {
+            ForEach(0 ..< rows, id: \.self) { row in
+                HStack(alignment: .top, spacing: spacing) {
+                    ForEach(0 ..< columns, id: \.self) { column in
+                        slot(row * columns + column, caption: captions)
+                    }
+                }
+            }
+        }
+    }
+
+    /// 表紙と、その右に表紙1つ分の幅の名前を組にして並べる（2つ以下のとき。枠の幅は表紙だけを並べたときと同じ）。
+    private func namedGrid(rows: Int, pairs: Int, spacing: CGFloat) -> some View {
         VStack(spacing: spacing) {
             ForEach(0 ..< rows, id: \.self) { row in
                 HStack(spacing: spacing) {
-                    ForEach(0 ..< columns, id: \.self) { column in
-                        slot(row * columns + column)
+                    ForEach(0 ..< pairs, id: \.self) { pair in
+                        let i = row * pairs + pair
+                        if i < entry.tiles.count {
+                            let tile = entry.tiles[i]
+                            Button(intent: PlayPlaylistIntent(playlistId: tile.playlist.id, shuffle: false)) {
+                                HStack(spacing: spacing) {
+                                    cover(tile).frame(maxWidth: .infinity)
+                                    Text(tile.playlist.title).font(WidgetFont.headline).lineLimit(3)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                        } else {
+                            HStack(spacing: spacing) {
+                                Color.clear.aspectRatio(1, contentMode: .fit).frame(maxWidth: .infinity)
+                                Color.clear.frame(maxWidth: .infinity)
+                            }
+                        }
                     }
                 }
             }
@@ -442,32 +658,42 @@ struct PlaylistWidgetView: View {
 
     /// i 番目の枠（足りなければ空けておく。並びの大きさをそろえる）。
     @ViewBuilder
-    private func slot(_ i: Int) -> some View {
+    private func slot(_ i: Int, caption: Bool) -> some View {
         if i < entry.tiles.count {
             let tile = entry.tiles[i]
-            // 鳴らしているプレイリストは、表紙をアクセントの色で縁取り、右下に鳴っている印を出す（アプリの一覧と同じ考え）
-            let current = entry.song?.sourceId == tile.playlist.id
             Button(intent: PlayPlaylistIntent(playlistId: tile.playlist.id, shuffle: false)) {
-                Artwork(image: tile.cover, radius: 8)
-                    .aspectRatio(1, contentMode: .fit)
-                    .overlay {
-                        if current { RoundedRectangle(cornerRadius: 8).strokeBorder(accent, lineWidth: 3) }
+                VStack(alignment: .leading, spacing: 4) {
+                    cover(tile)
+                    if caption {
+                        Text(tile.playlist.title).font(WidgetFont.caption.weight(.medium)).lineLimit(2)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    .overlay(alignment: .bottomTrailing) {
-                        if current {
-                            Image(systemName: entry.song?.playing == true ? "speaker.wave.2.fill" : "pause.fill")
-                                .font(.system(size: 11, weight: .bold)).foregroundStyle(.white)
-                                // デスクトップで OS が色を抜いて描く（色付き・クリアの表示）ときも見えるよう、暗い丸に白い絵柄にする
-                                .frame(width: 22, height: 22).background(Circle().fill(Color.black.opacity(0.6)))
-                                .padding(5)
-                        }
-                    }
+                }
             }
             .buttonStyle(.plain)
             .frame(maxWidth: .infinity)
         } else {
             Color.clear.aspectRatio(1, contentMode: .fit).frame(maxWidth: .infinity)
         }
+    }
+
+    /// 表紙。鳴らしているプレイリストは、アクセントの色で縁取り、右下に鳴っている印を出す（アプリの一覧と同じ考え）。
+    private func cover(_ tile: PlaylistTile) -> some View {
+        let current = entry.song?.sourceId == tile.playlist.id
+        return Artwork(image: tile.cover, radius: 8)
+            .aspectRatio(1, contentMode: .fit)
+            .overlay {
+                if current { RoundedRectangle(cornerRadius: 8).strokeBorder(accent, lineWidth: 3) }
+            }
+            .overlay(alignment: .bottomTrailing) {
+                if current {
+                    Image(systemName: entry.song?.playing == true ? "speaker.wave.2.fill" : "pause.fill")
+                        .font(.system(size: 11, weight: .bold)).foregroundStyle(.white)
+                        // デスクトップで OS が色を抜いて描く（色付き・クリアの表示）ときも見えるよう、暗い丸に白い絵柄にする
+                        .frame(width: 22, height: 22).background(Circle().fill(Color.black.opacity(0.6)))
+                        .padding(5)
+                }
+            }
     }
 }
 

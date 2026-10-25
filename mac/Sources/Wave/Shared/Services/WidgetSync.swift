@@ -121,7 +121,7 @@ final class WidgetSync {
             return WidgetNowPlaying(videoId: song.videoId, title: song.title, artist: song.artistsText, playing: player.isPlaying,
                                     device: player.isRemote ? player.remoteDevice : nil, nextTitle: next?.title, nextArtist: next?.artistsText,
                                     liked: LikeButton.available(player) && AppServices.client.isLoggedIn ? LikeButton.accent(player) : nil,
-                                    upNext: player.queue.indices.dropFirst(player.index + 1).prefix(3).map { i in
+                                    upNext: player.queue.indices.dropFirst(player.index + 1).prefix(8).map { i in
                                         WidgetQueueItem(index: i, videoId: player.queue[i].videoId, title: player.queue[i].title, artist: player.queue[i].artistsText)
                                     },
                                     sourceId: player.sourceId)
@@ -176,6 +176,7 @@ final class WidgetSync {
         WidgetCenter.shared.reloadTimelines(ofKind: WidgetStore.playlistKind)
         // ワンタップ再生も、鳴っているものは一時停止のボタンにする
         WidgetCenter.shared.reloadTimelines(ofKind: WidgetStore.itemKind)
+        WidgetCenter.shared.reloadTimelines(ofKind: WidgetStore.queueKind)
         #if os(iOS)
             updateActivity(now)
         #endif
@@ -228,6 +229,8 @@ final class WidgetSync {
         shownPlaylists = list
         WidgetStore.write(list, "playlists.json")
         WidgetCenter.shared.reloadTimelines(ofKind: WidgetStore.playlistKind)
+        // Siri の「wave で〈プレイリスト〉を再生」が知るプレイリストを読み直させる
+        WaveShortcuts.updateAppShortcutParameters()
     }
 
     /// ワンタップ再生の候補（ライブラリのプレイリスト・アルバム、最近再生した曲・ライブ）。置いたウィジェットは中身を ID に持つので、ここは選ぶときの一覧だけ。

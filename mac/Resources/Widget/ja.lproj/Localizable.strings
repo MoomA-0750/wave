@@ -21,3 +21,11 @@
 "Albums" = "アルバム";
 "Recently Played Songs" = "最近再生した曲";
 "Live" = "ライブ";
+"Play a Playlist" = "プレイリストを再生";
+"Plays a playlist from your library." = "ライブラリのプレイリストを再生します。";
+"Play ${playlist}" = "${playlist}を再生";
+"Play Something" = "選んだものを再生";
+"Plays a playlist, album, recently played song or live stream." = "プレイリスト・アルバム・最近再生した曲・ライブを再生します。";
+"Play ${item}" = "${item}を再生";
+"Get Current Song" = "今の曲を取得";
+"Returns the title and artist of the song playing in wave." = "wave で流れている曲の曲名とアーティストを返します。";
