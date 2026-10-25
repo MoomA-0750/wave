@@ -19,6 +19,9 @@
     <string name="widget_search_hint">検索</string>
     <string name="widget_no_history">最近再生したものはありません。検索して選んでください</string>
     <string name="widget_up_next">次に流れる曲</string>
+    <string name="widget_nothing_up_next">次に流れる曲はありません</string>
+    <string name="widget_queue_label">キュー</string>
+    <string name="widget_queue_description">次に流れる曲を並べ、押すとその曲へ飛ぶ</string>
     <string name="widget_playlists_label">プレイリスト</string>
     <string name="widget_playlists_description">最近再生したプレイリストか、選んだプレイリストを並べ、押すとすぐ再生する</string>
     <string name="widget_playlists_sign_in">wave を開いてログインすると、プレイリストが出ます</string>

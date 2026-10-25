@@ -54,6 +54,7 @@ object WidgetPreview {
                     manager.setWidgetPreviews(NowPlayingWidgetReceiver::class),
                     manager.setWidgetPreviews(PlaylistWidgetReceiver::class),
                     manager.setWidgetPreviews(PlaylistGridWidgetReceiver::class),
+                    manager.setWidgetPreviews(QueueWidgetReceiver::class),
                 )
             }.onFailure { Log.w(WaveApplication.LOG_TAG, "widget previews failed type=${it::class.simpleName}") }
                 .getOrNull() ?: return

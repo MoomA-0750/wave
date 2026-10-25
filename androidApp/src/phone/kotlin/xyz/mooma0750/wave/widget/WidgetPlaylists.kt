@@ -81,6 +81,8 @@ object WidgetPlaylists {
             }
             loadedAt = SystemClock.elapsedRealtime()
             context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(KEY_RECENT, WidgetPlaylist.encode(fresh)).apply()
+            // アイコンの長押しの「最近のプレイリスト」も同じ並びにする（変わっていなければ何もしない）
+            PlaylistShortcuts.publish(context, fresh)
             fresh
         }
 

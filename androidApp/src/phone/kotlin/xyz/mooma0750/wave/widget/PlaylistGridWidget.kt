@@ -47,6 +47,7 @@ import androidx.glance.layout.size
 import androidx.glance.layout.width
 import androidx.glance.state.GlanceStateDefinition
 import androidx.glance.state.PreferencesGlanceStateDefinition
+import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextAlign
 import androidx.glance.unit.ColorProvider
@@ -60,8 +61,10 @@ import xyz.mooma0750.wave.playback.NowPlayingSnapshot
 
 /**
  * プレイリストのウィジェット（iPhone の「プレイリスト」と同じ並び）。最近再生した順（既定）か、選んだプレイリストの表紙を並べ、
- * 押すとアプリを開かずにそのプレイリストを頭から鳴らす（ほかの端末を映している間はその端末で）。名前は出さない。
- * 小は表紙を 2×2、中は上に再生中の曲と前へ・再生/一時停止・次へ、下に表紙を4つ、大は下を 4×2 にする。
+ * 押すとアプリを開かずにそのプレイリストを頭から鳴らす（ほかの端末を映している間はその端末で）。
+ * 小は表紙を 2×2、中は上に再生中の曲と前へ・再生/一時停止・次へ、下に表紙を4つ。大は、並べるのが5つ以上なら再生中を出さずに
+ * 表紙を 4×2 に並べて下に名前（2行まで）を付け、4つ以下なら中と同じ並び。並べるのが2つ以下なら、どの大きさでも表紙の右に
+ * 表紙1つ分の幅で名前（3行まで）を出す（[gridPlan]）。
  * 鳴らしているプレイリストは表紙を縁取り、右下に鳴っている・止まっている印を出す。地は再生中のジャケット（無ければ先頭の表紙）をぼかしたもの。
  */
 class PlaylistGridWidget : GlanceAppWidget() {
@@ -128,7 +131,7 @@ class PlaylistGridWidget : GlanceAppWidget() {
         val MEDIUM: DpSize
             @Composable get() = widgetSize(250, 140)
 
-        /** 4×4: 上に再生中、下に表紙を 4×2。 */
+        /** 4×4: 5つ以上なら表紙と名前を 4×2（再生中は出さない）、4つ以下なら中と同じ。 */
         val LARGE: DpSize
             @Composable get() = widgetSize(250, 260)
 
@@ -172,6 +175,42 @@ class PlaylistGridWidgetReceiver : GlanceAppWidgetReceiver() {
 
 private val playlistIdKey = ActionParameters.Key<String>("playlistId")
 
+/**
+ * 並べ方。player なら上に再生中の曲を出す。rows×columns の枠に表紙を並べ、style が Named なら columns は「表紙と名前の組」の数。
+ */
+internal data class GridPlan(
+    val player: Boolean,
+    val rows: Int,
+    val columns: Int,
+    val style: GridStyle,
+)
+
+enum class GridStyle {
+    /** 表紙だけ。 */
+    Covers,
+
+    /** 表紙の右に、表紙1つ分の幅で名前（3行まで）。 */
+    Named,
+
+    /** 表紙の下に名前（2行まで）。 */
+    Captioned,
+}
+
+/** 大きさと並べる数から並べ方を決める（iPhone と同じ）。 */
+internal fun gridPlan(
+    layout: GridLayout,
+    count: Int,
+): GridPlan =
+    when {
+        // 2つ以下なら、空いた枠の代わりに名前を出す
+        layout == GridLayout.Small && count <= 2 -> GridPlan(player = false, rows = 2, columns = 1, style = GridStyle.Named)
+        layout == GridLayout.Small -> GridPlan(player = false, rows = 2, columns = 2, style = GridStyle.Covers)
+        // 大で2段目に入る数なら、再生中の曲を出さず、表紙と名前を 4×2 に並べる
+        layout == GridLayout.Large && count > 4 -> GridPlan(player = false, rows = 2, columns = 4, style = GridStyle.Captioned)
+        count <= 2 -> GridPlan(player = true, rows = 1, columns = 2, style = GridStyle.Named)
+        else -> GridPlan(player = true, rows = 1, columns = 4, style = GridStyle.Covers)
+    }
+
 @Composable
 private fun GridContent(
     shown: List<WidgetPlaylist>,
@@ -181,10 +220,10 @@ private fun GridContent(
 ) {
     val context = LocalContext.current
     val size = LocalSize.current
-    val layout = PlaylistGridWidget.layoutFor(size)
+    val plan = gridPlan(PlaylistGridWidget.layoutFor(size), shown.size)
     val open = actionStartActivity(openAppIntent(context))
-    // 中・大は、再生中の曲とプレイリストを色違いの入れ物に分けて上下につなぐ（YouTube Music のウィジェットと同じ見た目）
-    val split = shown.isNotEmpty() && layout != GridLayout.Small
+    // 再生中を出すときは、再生中の曲とプレイリストを色違いの入れ物に分けて上下につなぐ（YouTube Music のウィジェットと同じ見た目）
+    val split = shown.isNotEmpty() && plan.player
     WidgetSurface(split = split) {
         when {
             shown.isEmpty() ->
@@ -202,12 +241,15 @@ private fun GridContent(
                     Spacer(GlanceModifier.height(6.wdp))
                     Text(context.getString(R.string.widget_playlists_sign_in), style = WidgetText.caption().copy(textAlign = TextAlign.Center), maxLines = 3)
                 }
-            // 小は表紙だけを 2×2 に
-            layout == GridLayout.Small ->
+            // 再生中を出さない（小・大の 4×2）: 表紙だけを1つの地に
+            !plan.player -> {
+                // 名前を付けて並べるときは、表紙どうしを少し離す
+                val spacing = if (plan.style == GridStyle.Captioned) CAPTIONED_GAP else TILE_GAP * 2
                 Box(GlanceModifier.fillMaxSize().padding(WidgetPadding), contentAlignment = Alignment.Center) {
-                    Grid(shown, covers, now, rows = 2, columns = 2, spacing = TILE_GAP * 2, width = size.width - WidgetPadding * 2, height = size.height - WidgetPadding * 2)
+                    Grid(shown, covers, now, plan, spacing = spacing, width = size.width - WidgetPadding * 2, height = size.height - WidgetPadding * 2)
                 }
-            // 中・大は上の入れ物に再生中の曲と操作、下の入れ物に表紙
+            }
+            // 上の入れ物に再生中の曲と操作、下の入れ物に表紙
             else ->
                 Column(GlanceModifier.fillMaxSize()) {
                     WidgetContainer(GlanceModifier.fillMaxWidth().height(TOP_HEIGHT), secondary = false) {
@@ -219,8 +261,7 @@ private fun GridContent(
                                 shown,
                                 covers,
                                 now,
-                                rows = if (layout == GridLayout.Large) 2 else 1,
-                                columns = 4,
+                                plan,
                                 spacing = TILE_GAP,
                                 width = size.width - TILE_INSET * 2,
                                 height = size.height - TOP_HEIGHT - TILE_INSET * 2,
@@ -252,22 +293,28 @@ private fun NowPlayingRow(
     }
 }
 
-/** 表紙を rows×columns に並べる（足りなければ空けておく。並びの大きさをそろえる）。 */
+/** 表紙を plan の rows×columns に並べる（足りなければ空けておく。並びの大きさをそろえる）。 */
 @Composable
 private fun Grid(
     shown: List<WidgetPlaylist>,
     covers: Map<String, Bitmap>,
     now: NowPlayingSnapshot?,
-    rows: Int,
-    columns: Int,
+    plan: GridPlan,
     spacing: Dp,
     /** 並べられる広さ。 */
     width: Dp,
     height: Dp,
 ) {
+    val context = LocalContext.current
+    val rows = plan.rows
+    val columns = plan.columns
+    // 名前の組は表紙2つ分の幅をとる
+    val slots = if (plan.style == GridStyle.Named) columns * 2 else columns
+    // 表紙の下の名前の2行の高さ（文字の大きさの設定も掛かる）
+    val caption = if (plan.style == GridStyle.Captioned) CAPTION_GAP + (CAPTION_BLOCK * context.resources.configuration.fontScale * LocalWidgetScale.current).dp else 0.dp
     // 幅と高さの両方に収まる正方形の大きさ
-    val byWidth = (width - spacing * (columns - 1)) / columns
-    val byHeight = (height - spacing * (rows - 1)) / rows
+    val byWidth = (width - spacing * (slots - 1)) / slots
+    val byHeight = (height - spacing * (rows - 1)) / rows - caption
     val side = minOf(byWidth, byHeight).coerceAtLeast(12.dp)
     Column(GlanceModifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
         for (row in 0 until rows) {
@@ -276,16 +323,55 @@ private fun Grid(
                 for (column in 0 until columns) {
                     if (column > 0) Spacer(GlanceModifier.width(spacing))
                     val playlist = shown.getOrNull(row * columns + column)
-                    if (playlist == null) {
-                        Spacer(GlanceModifier.size(side))
-                    } else {
-                        Tile(playlist, playlist.thumbnailUrl?.let(covers::get), now, side)
+                    when {
+                        playlist == null && plan.style == GridStyle.Named -> Spacer(GlanceModifier.width(side * 2 + spacing).height(side))
+                        playlist == null -> Spacer(GlanceModifier.width(side).height(side + caption))
+                        plan.style == GridStyle.Named -> NamedTile(playlist, playlist.thumbnailUrl?.let(covers::get), now, side, spacing)
+                        plan.style == GridStyle.Captioned -> CaptionedTile(playlist, playlist.thumbnailUrl?.let(covers::get), now, side, caption)
+                        else -> Tile(playlist, playlist.thumbnailUrl?.let(covers::get), now, side)
                     }
                 }
             }
         }
     }
 }
+
+/** 表紙と、その右に表紙1つ分の幅の名前（3行まで）。どこを押してもそのプレイリストを鳴らす。 */
+@Composable
+private fun NamedTile(
+    playlist: WidgetPlaylist,
+    cover: Bitmap?,
+    now: NowPlayingSnapshot?,
+    side: Dp,
+    spacing: Dp,
+) {
+    Row(GlanceModifier.clickable(playAction(playlist)), verticalAlignment = Alignment.CenterVertically) {
+        Tile(playlist, cover, now, side)
+        Spacer(GlanceModifier.width(spacing))
+        Box(GlanceModifier.width(side).height(side), contentAlignment = Alignment.CenterStart) {
+            Text(playlist.title, style = WidgetText.headline(), maxLines = 3)
+        }
+    }
+}
+
+/** 表紙と、その下の名前（2行まで）。 */
+@Composable
+private fun CaptionedTile(
+    playlist: WidgetPlaylist,
+    cover: Bitmap?,
+    now: NowPlayingSnapshot?,
+    side: Dp,
+    /** 名前の分の高さ（表紙との間を含む）。 */
+    caption: Dp,
+) {
+    Column(GlanceModifier.width(side).height(side + caption).clickable(playAction(playlist))) {
+        Tile(playlist, cover, now, side)
+        Spacer(GlanceModifier.height(CAPTION_GAP))
+        Text(playlist.title, style = WidgetText.caption().copy(color = GlanceTheme.colors.onSurface, fontWeight = FontWeight.Medium), maxLines = 2)
+    }
+}
+
+private fun playAction(playlist: WidgetPlaylist): Action = actionRunCallback<PlayGridPlaylistAction>(actionParametersOf(playlistIdKey to playlist.id))
 
 /** 表紙1つ。鳴らしているプレイリストは縁取り、右下に鳴っている・止まっている印を出す（アプリの一覧と同じ考え）。 */
 @Composable
@@ -297,7 +383,7 @@ private fun Tile(
 ) {
     val context = LocalContext.current
     val current = now?.sourceId == playlist.id
-    val play = actionRunCallback<PlayGridPlaylistAction>(actionParametersOf(playlistIdKey to playlist.id))
+    val play = playAction(playlist)
     // Glance には枠線が無いので、色を塗った角丸の上に一回り小さい表紙を重ねる
     val frame = if (current) GlanceModifier.background(GlanceTheme.colors.primary).padding(TILE_BORDER) else GlanceModifier
     Box(GlanceModifier.size(side).cornerRadius(TILE_CORNER).then(frame).clickable(play), contentAlignment = Alignment.BottomEnd) {
@@ -343,6 +429,15 @@ private val TILE_INSET: Dp
     @Composable get() = 8.wdp
 private val TILE_BORDER: Dp
     @Composable get() = 3.wdp
+
+/** 4×2 に名前を付けて並べるときの表紙どうしの隙間と、表紙と名前の間。 */
+private val CAPTIONED_GAP: Dp
+    @Composable get() = 10.wdp
+private val CAPTION_GAP: Dp
+    @Composable get() = 4.wdp
+
+/** 表紙の下の名前（caption の2行）の高さの見積もり（dp。倍率を掛ける前）。 */
+private const val CAPTION_BLOCK = 30f
 
 /** 中・大の上の入れ物（再生中の行）の高さ。 */
 private val TOP_HEIGHT: Dp

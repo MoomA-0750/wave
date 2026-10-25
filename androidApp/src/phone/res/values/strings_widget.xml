@@ -19,6 +19,9 @@
     <string name="widget_search_hint">Search</string>
     <string name="widget_no_history">Nothing played recently. Search to choose one</string>
     <string name="widget_up_next">Up next</string>
+    <string name="widget_nothing_up_next">Nothing up next</string>
+    <string name="widget_queue_label">Queue</string>
+    <string name="widget_queue_description">The songs up next. Tap one to skip to it</string>
     <string name="widget_playlists_label">Playlists</string>
     <string name="widget_playlists_description">Your recently played playlists, or ones you choose. Tap one to play it</string>
     <string name="widget_playlists_sign_in">Open wave and sign in to see your playlists</string>

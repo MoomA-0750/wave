@@ -36,7 +36,8 @@ data class NowPlayingSnapshot(
     )
 
     companion object {
-        const val UP_NEXT_COUNT = 3
+        /** 次に流れる曲を持つ数（キューのウィジェットの大に並べる数。再生中のウィジェットは先頭の3曲だけを出す）。 */
+        const val UP_NEXT_COUNT = 8
 
         fun of(
             player: Player,

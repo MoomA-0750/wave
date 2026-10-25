@@ -19,17 +19,22 @@ import kotlinx.coroutines.launch
 import xyz.mooma0750.wave.WaveApplication
 import xyz.mooma0750.wave.core.music.MusicRepository
 import xyz.mooma0750.wave.widget.NowPlayingWidgetReceiver
+import xyz.mooma0750.wave.widget.PlaylistGridWidget
 import xyz.mooma0750.wave.widget.PlaylistGridWidgetReceiver
 import xyz.mooma0750.wave.widget.PlaylistWidget
 import xyz.mooma0750.wave.widget.PlaylistWidgetReceiver
+import xyz.mooma0750.wave.widget.QueueWidgetReceiver
 import xyz.mooma0750.wave.widget.WidgetItem
 import xyz.mooma0750.wave.widget.WidgetItemKind
+import xyz.mooma0750.wave.widget.WidgetPlaylist
+import xyz.mooma0750.wave.widget.WidgetPlaylists
 
 /**
  * 確認用（debug だけ）: ホーム画面に置かなくても、ウィジェットを大きさを変えて並べて描く。押すと本物と同じく動く。
  * 先に `adb shell appwidget grantbind --package xyz.mooma0750.wave` で、このアプリに置く許可を出しておく。
  * `--es playlist <ID>` でワンタップ再生のウィジェットの中身を決める（無ければ高く評価した曲）。
  * `--es kind Album|Song|Live` と `--es subtitle <文>` で、プレイリスト以外にもできる（ID は playlist に渡す）。
+ * `--ei grid <数>` で、プレイリストのウィジェットを「選んだプレイリスト」にして、最近再生した順の先頭からその数だけ並べる。
  */
 class WidgetHostActivity : Activity() {
     private lateinit var host: AppWidgetHost
@@ -52,7 +57,9 @@ class WidgetHostActivity : Activity() {
         val nowPlaying = ComponentName(this, NowPlayingWidgetReceiver::class.java)
         val playlist = ComponentName(this, PlaylistWidgetReceiver::class.java)
         val grid = ComponentName(this, PlaylistGridWidgetReceiver::class.java)
-        // `--es only now|item|grid` でその種類だけを並べる（画面に収めて撮るため）
+        val queue = ComponentName(this, QueueWidgetReceiver::class.java)
+        val gridCount = intent.getIntExtra("grid", 0)
+        // `--es only now|item|grid|queue` でその種類だけを並べる（画面に収めて撮るため）
         val only = intent.getStringExtra("only")
         val cases =
             listOf(
@@ -68,6 +75,9 @@ class WidgetHostActivity : Activity() {
                 Triple(grid, 160f, 160f),
                 Triple(grid, 340f, 160f),
                 Triple(grid, 340f, 340f),
+                Triple(queue, 160f, 160f),
+                Triple(queue, 340f, 160f),
+                Triple(queue, 340f, 340f),
             ).let { own ->
                 // `--es provider <パッケージ/クラス>` で、ほかのアプリのウィジェットを同じ大きさで並べる（見比べるため）
                 val other = intent.getStringExtra("provider")?.let(ComponentName::unflattenFromString) ?: return@let own
@@ -78,6 +88,7 @@ class WidgetHostActivity : Activity() {
                     "now" -> provider == nowPlaying
                     "item" -> provider == playlist
                     "grid" -> provider == grid
+                    "queue" -> provider == queue
                     else -> true
                 }
             }
@@ -104,6 +115,19 @@ class WidgetHostActivity : Activity() {
                         }
                         PlaylistWidget().update(this@WidgetHostActivity, glanceId)
                     }.onFailure { Log.w(WaveApplication.LOG_TAG, "widget host state failed", it) }
+                }
+            }
+            if (provider == grid && gridCount > 0) {
+                scope.launch {
+                    runCatching {
+                        val chosen = WidgetPlaylists.recent(this@WidgetHostActivity).take(gridCount)
+                        val glanceId = GlanceAppWidgetManager(this@WidgetHostActivity).getGlanceIdBy(id)
+                        updateAppWidgetState(this@WidgetHostActivity, glanceId) {
+                            it[PlaylistGridWidget.SOURCE] = PlaylistGridWidget.SOURCE_CHOSEN
+                            it[PlaylistGridWidget.CHOSEN] = WidgetPlaylist.encode(chosen)
+                        }
+                        PlaylistGridWidget().update(this@WidgetHostActivity, glanceId)
+                    }.onFailure { Log.w(WaveApplication.LOG_TAG, "widget host grid state failed", it) }
                 }
             }
             Log.i(WaveApplication.LOG_TAG, "widget host bound id=$id provider=${provider.shortClassName} size=${width}x$height")

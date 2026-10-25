@@ -50,6 +50,16 @@ object WidgetHooks {
                     .onFailure { Log.w(WaveApplication.LOG_TAG, "widget update failed type=${it::class.simpleName}") }
             }
         }
+        // キューのウィジェットは、次に流れる曲とほかの端末の名前が変わったとき（何も鳴っていない・次が無いの出し分けも）
+        container.appScope.launch {
+            nowPlaying
+                .map { now -> now?.let { it.upNext to it.device } }
+                .distinctUntilChanged()
+                .collect {
+                    runCatching { QueueWidget().updateAll(app) }
+                        .onFailure { Log.w(WaveApplication.LOG_TAG, "widget update failed type=${it::class.simpleName}") }
+                }
+        }
         // プレイリストのウィジェットは、上に出す今の曲と、鳴らしているプレイリストの印が変わったとき
         container.appScope.launch {
             nowPlaying
@@ -64,10 +74,15 @@ object WidgetHooks {
             .onFailure { Log.w(WaveApplication.LOG_TAG, "widget update failed type=${it::class.simpleName}") }
     }
 
-    /** アプリが起動した: ランチャーのウィジェット追加画面の見本を OS に渡す（Android 15 以降、版ごとに一度）。 */
+    /**
+     * アプリが起動した: ランチャーのウィジェット追加画面の見本を OS に渡し（Android 15 以降、版ごとに一度）、
+     * アイコンの長押しに出す「最近のプレイリスト」を最近再生した順に合わせる。
+     */
     fun onAppStarted(context: Context) {
         val app = context.applicationContext
-        (app as WaveApplication).container.appScope.launch { WidgetPreview.publish(app) }
+        val scope = (app as WaveApplication).container.appScope
+        scope.launch { WidgetPreview.publish(app) }
+        scope.launch { PlaylistShortcuts.refresh(app) }
     }
 
     /** 置いてあるウィジェットを全部描き直す（大きさの倍率を変えたときなど）。 */
@@ -76,12 +91,14 @@ object WidgetHooks {
             NowPlayingWidget().updateAll(context)
             PlaylistWidget().updateAll(context)
             PlaylistGridWidget().updateAll(context)
+            QueueWidget().updateAll(context)
         }.onFailure { Log.w(WaveApplication.LOG_TAG, "widget update failed type=${it::class.simpleName}") }
     }
 
     /** ログアウトした: 残したプレイリストの一覧を消して描き直す。 */
     fun onLoggedOut(context: Context) {
         WidgetPlaylists.clear(context)
+        PlaylistShortcuts.clear(context)
         (context.applicationContext as WaveApplication).container.appScope.launch { updatePlaylistGrid(context) }
     }
 

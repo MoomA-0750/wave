@@ -84,12 +84,12 @@ class NowPlayingWidget : GlanceAppWidget() {
         // 最初の描画で画像が抜けないよう、今の曲の画像は先に取っておく
         val first = WidgetHooks.nowPlaying.value
         WidgetArtwork.load(container.mediaHttpClient, first?.artworkUrl)
-        first?.upNext?.forEach { WidgetArtwork.load(container.mediaHttpClient, it.artworkUrl) }
+        first?.upNext?.take(UP_NEXT_SHOWN)?.forEach { WidgetArtwork.load(container.mediaHttpClient, it.artworkUrl) }
         provideContent {
             // 描いている間に曲が変わったら、そのまま描き直す
             val snapshot by WidgetHooks.nowPlaying.collectAsState()
             val artwork = rememberWidgetArtwork(container.mediaHttpClient, snapshot?.artworkUrl)
-            val queueArtwork = rememberWidgetArtworks(container.mediaHttpClient, snapshot?.upNext.orEmpty().mapNotNull { it.artworkUrl })
+            val queueArtwork = rememberWidgetArtworks(container.mediaHttpClient, snapshot?.upNext.orEmpty().take(UP_NEXT_SHOWN).mapNotNull { it.artworkUrl })
             // 倍率は、ボタンだけの並べ方が収まるところまで
             WidgetScaled(minWidth = 150, minHeight = 48) {
                 WaveGlanceTheme(context) {
@@ -160,7 +160,7 @@ class NowPlayingWidgetReceiver : GlanceAppWidgetReceiver() {
     }
 }
 
-private val itemIdKey = ActionParameters.Key<String>("itemId")
+internal val itemIdKey = ActionParameters.Key<String>("itemId")
 private val videoIdKey = ActionParameters.Key<String>("videoId")
 
 @Composable
@@ -468,7 +468,8 @@ private fun MediumLayout(
         WidgetContainer(GlanceModifier.defaultWeight().fillMaxHeight(), secondary = true) {
         Column(GlanceModifier.fillMaxSize().padding(ContainerPadding)) {
             Text(context.getString(R.string.widget_up_next), style = WidgetText.caption().copy(fontWeight = FontWeight.Medium), maxLines = 1)
-            for (item in snapshot.upNext) {
+            val shown = snapshot.upNext.take(UP_NEXT_SHOWN)
+            for (item in shown) {
                 Row(
                     GlanceModifier.fillMaxWidth().defaultWeight().clickable(actionRunCallback<JumpAction>(actionParametersOf(itemIdKey to item.itemId))),
                     verticalAlignment = Alignment.CenterVertically,
@@ -483,7 +484,7 @@ private fun MediumLayout(
                 }
             }
             // 次の曲が少なくても、行の高さをそろえる
-            repeat(NowPlayingSnapshot.UP_NEXT_COUNT - snapshot.upNext.size) { Spacer(GlanceModifier.defaultWeight()) }
+            repeat(UP_NEXT_SHOWN - shown.size) { Spacer(GlanceModifier.defaultWeight()) }
         }
         }
     }
@@ -515,6 +516,9 @@ internal suspend fun withController(
 }
 
 private const val RESTORE_WAIT_MS = 5_000L
+
+/** 中くらいの右側に並べる次に流れる曲の数（iPhone と同じ。持っている残りはキューのウィジェットが使う）。 */
+private const val UP_NEXT_SHOWN = 3
 
 /**
  * 中でジャケットの下に曲名を置くときの大きさ（dp。倍率を掛ける前）。曲名とアーティストの2行は、文字の余白込みで Pixel 3 では 33 ほどだが、
