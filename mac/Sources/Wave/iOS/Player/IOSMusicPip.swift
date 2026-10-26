@@ -1,5 +1,6 @@
 #if os(iOS)
 import AVKit
+import CoreImage
 import CoreMedia
 import SwiftUI
 import UIKit
@@ -237,13 +238,16 @@ final class MusicPip: NSObject, AVPictureInPictureControllerDelegate, AVPictureI
             (artist as NSString).draw(with: CGRect(x: textX, y: art.minY + 62, width: headWidth, height: 36), options: options, attributes: artistAttrs, context: nil)
 
             // 歌っている行は3行まで、次の行は2行まで。小さい小窓でも読めるよう大きめに
+            // （byTruncatingTail は1行に切ってしまうので、折り返して最後の行だけを「…」にする）
+            let wrapping = NSMutableParagraphStyle()
+            wrapping.lineBreakMode = .byWordWrapping
             let lyricX: CGFloat = 56
             let lyricWidth = CGFloat(width) - lyricX * 2
             let currentAttrs: [NSAttributedString.Key: Any] = [
-                .font: UIFont.systemFont(ofSize: 60, weight: .bold), .foregroundColor: UIColor.white, .paragraphStyle: paragraph,
+                .font: UIFont.systemFont(ofSize: 60, weight: .bold), .foregroundColor: UIColor.white, .paragraphStyle: wrapping,
             ]
             let nextAttrs: [NSAttributedString.Key: Any] = [
-                .font: UIFont.systemFont(ofSize: 42, weight: .semibold), .foregroundColor: UIColor(white: 1, alpha: 0.45), .paragraphStyle: paragraph,
+                .font: UIFont.systemFont(ofSize: 42, weight: .semibold), .foregroundColor: UIColor(white: 1, alpha: 0.45), .paragraphStyle: wrapping,
             ]
             var y = art.maxY + 36
             if let current = lyric.current {
@@ -263,17 +267,33 @@ final class MusicPip: NSObject, AVPictureInPictureControllerDelegate, AVPictureI
         let rect = CGRect(x: 0, y: 0, width: width, height: height)
         UIColor.black.setFill()
         context.fill(rect)
-        guard let artwork else { return }
-        // 下敷き: ジャケットを小さく縮めてから大きく広げ（ぼける）、暗くする
+        guard let artwork, let blurred = blurred(artwork) else { return }
+        // 下敷き: ジャケットをガウスぼかしで滑らかにぼかし、横いっぱいに広げて暗くする
+        // （小さく縮めてから広げるぼかしは、升目が見えてドットのようになった）
         let side = CGFloat(width)
-        let small = UIGraphicsImageRenderer(size: CGSize(width: 12, height: 12), format: format).image { _ in
-            artwork.draw(in: CGRect(x: 0, y: 0, width: 12, height: 12))
-        }
-        context.cgContext.interpolationQuality = .high
-        small.draw(in: CGRect(x: 0, y: (CGFloat(height) - side) / 2, width: side, height: side), blendMode: .normal, alpha: 0.6)
+        UIImage(cgImage: blurred).draw(in: CGRect(x: 0, y: (CGFloat(height) - side) / 2, width: side, height: side), blendMode: .normal, alpha: 0.6)
         UIColor(white: 0, alpha: 0.45).setFill()
         // fill(_:) だけだと置き換え（copy）で塗られ、下のジャケットが消える
         context.fill(rect, blendMode: .normal)
+    }
+
+    private static let ciContext = CIContext()
+
+    /// ジャケットを小さめ（240px）にしてからガウスぼかしをかける（端は伸ばして、縁が暗く抜けないように）。
+    private static var lastBlur: (source: UIImage, blurred: CGImage)?
+
+    private static func blurred(_ artwork: UIImage) -> CGImage? {
+        // 歌詞の行が変わるたびに描き直すので、同じジャケットのぼかしは使い回す
+        if let lastBlur, lastBlur.source === artwork { return lastBlur.blurred }
+        guard let cg = artwork.cgImage else { return nil }
+        let size: CGFloat = 240
+        var image = CIImage(cgImage: cg)
+        image = image.transformed(by: CGAffineTransform(scaleX: size / image.extent.width, y: size / image.extent.height))
+        let extent = image.extent
+        let blur = image.clampedToExtent().applyingGaussianBlur(sigma: 18).cropped(to: extent)
+        guard let result = ciContext.createCGImage(blur, from: extent) else { return nil }
+        lastBlur = (artwork, result)
+        return result
     }
 
     /// 角を丸めたジャケット（無ければ音符）。
