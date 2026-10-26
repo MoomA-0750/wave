@@ -26,6 +26,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -90,8 +91,14 @@ object PlayerOverlay {
         scope.launch(Dispatchers.Main) {
             combine(container.settings.playerOverlay, foreground, WidgetHooks.nowPlaying.map { it != null }.distinctUntilChanged()) { on, front, hasSong ->
                 on && !front && hasSong
-            }.distinctUntilChanged().collect { want ->
-                if (want && Settings.canDrawOverlays(app)) show(app) else hide()
+            }.distinctUntilChanged().collectLatest { want ->
+                if (!want) {
+                    hide()
+                    return@collectLatest
+                }
+                // 設定でオンにすると許可の画面が開き、wave はその時点で裏に回る。許可は後から下りるので、下りるまで見て待つ
+                while (!Settings.canDrawOverlays(app)) delay(PERMISSION_POLL_MS)
+                show(app)
             }
         }
         // 曲が変わったら、吹き出しを出し、歌詞を読み直す
@@ -219,6 +226,9 @@ object PlayerOverlay {
                 PixelFormat.TRANSLUCENT,
             ).apply { windowAnimations = android.R.style.Animation_Toast }
         private var startX = 0
+
+        /** 右端から測っているか（右端の丸）。 */
+        private var fromEnd = false
         private var startY = 0
 
         private fun dp(value: Int) = (value * density).roundToInt()
@@ -275,7 +285,8 @@ object PlayerOverlay {
                 )
             }
             val bounds = screen()
-            params.gravity = Gravity.TOP or if (ui.mode == Mode.Bubble && ui.atEnd) Gravity.END else Gravity.START
+            fromEnd = ui.mode == Mode.Bubble && ui.atEnd
+            params.gravity = Gravity.TOP or if (fromEnd) Gravity.END else Gravity.START
             params.x = if (ui.mode == Mode.Bubble) 0 else x.coerceIn(0, bounds.width())
             params.y = if (y < 0) bounds.height() / 3 else y.coerceIn(0, bounds.height() - dp(BUBBLE_DP))
             wm.addView(view, params)
@@ -291,9 +302,11 @@ object PlayerOverlay {
             ui.dragging = true
             ui.tooltip = false
             val width = screen().width()
-            if (params.gravity and Gravity.HORIZONTAL_GRAVITY_MASK == Gravity.END) {
+            // （gravity の END は向きの印も含むので、値を比べずに覚えておく）
+            if (fromEnd) {
                 params.x = width - view.width - params.x
                 params.gravity = Gravity.TOP or Gravity.START
+                fromEnd = false
             }
             startX = params.x
             startY = params.y
@@ -342,6 +355,7 @@ object PlayerOverlay {
         private fun snapToEdge(atEnd: Boolean) {
             ui.mode = Mode.Bubble
             ui.atEnd = atEnd
+            fromEnd = atEnd
             params.gravity = Gravity.TOP or if (atEnd) Gravity.END else Gravity.START
             params.x = 0
         }
@@ -354,6 +368,7 @@ object PlayerOverlay {
     private const val KEY_Y = "y"
     private const val TOOLTIP_MS = 4_000L
     private const val LYRIC_TICK_MS = 250L
+    private const val PERMISSION_POLL_MS = 1_000L
 
     /** 丸（影の余白を含む）。 */
     internal const val BUBBLE_DP = 68
