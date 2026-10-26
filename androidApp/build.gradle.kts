@@ -87,6 +87,7 @@ dependencies {
     "phoneImplementation"(libs.androidx.glance.material3)
     "phoneImplementation"(libs.androidx.camera.camera2)
     "phoneImplementation"(libs.androidx.camera.lifecycle)
+    "phoneImplementation"(libs.androidx.lifecycle.process)
     "phoneImplementation"(libs.androidx.camera.view)
     // スマホと時計の間でログインを渡す
     implementation(libs.play.services.wearable)

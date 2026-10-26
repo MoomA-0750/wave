@@ -120,6 +120,7 @@ fun SettingsScreen(
                 )
             }
             item { AiSettingsSection(container.settings) }
+            item { PlayerOverlaySetting(container) }
             item {
                 val queueNotice by container.settings.queueNotice.collectAsStateWithLifecycle(initialValue = null)
                 ListItem(
@@ -305,4 +306,44 @@ private fun DebugPlaybackButtons(container: AppContainer) {
             scope.launch { container.player.controller().run { if (duration > 10_000) seekTo(duration - 5_000) } }
         }) { Text(stringResource(R.string.settings_debug_song_end)) }
     }
+}
+
+/** ほかのアプリの上に再生の丸を重ねるか。オンにしたとき重ねて表示する許可が無ければ、許可の画面を開く。 */
+@Composable
+private fun PlayerOverlaySetting(container: AppContainer) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val enabled by container.settings.playerOverlay.collectAsStateWithLifecycle(initialValue = null)
+    // 許可の画面から戻ったときに読み直す
+    var permitted by remember { mutableStateOf(android.provider.Settings.canDrawOverlays(context)) }
+    LifecycleResumeEffect(Unit) {
+        permitted = android.provider.Settings.canDrawOverlays(context)
+        onPauseOrDispose {}
+    }
+    ListItem(
+        headlineContent = { Text(stringResource(R.string.settings_player_overlay_title)) },
+        supportingContent = {
+            Column {
+                Text(stringResource(R.string.settings_player_overlay_summary))
+                if (enabled == true && !permitted) {
+                    Text(stringResource(R.string.settings_player_overlay_permission), color = MaterialTheme.colorScheme.error)
+                }
+            }
+        },
+        trailingContent = {
+            enabled?.let { on ->
+                Switch(
+                    checked = on,
+                    onCheckedChange = {
+                        container.appScope.launch { container.settings.setPlayerOverlay(it) }
+                        if (it && !permitted) {
+                            val intent =
+                                android.content.Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION, android.net.Uri.parse("package:${context.packageName}"))
+                                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                            runCatching { context.startActivity(intent) }
+                        }
+                    },
+                )
+            }
+        },
+    )
 }

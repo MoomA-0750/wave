@@ -6,6 +6,7 @@ import UIKit
 import WaveCore
 
 /// 音楽の PiP（映像を出していない曲でも、ホームへ戻ると小窓に曲名・アーティスト・ジャケットを出す）。
+/// 時刻付きの歌詞があれば、歌っている行を大きく、次の行を薄く出す（行が変わるたびに絵を描き直す）。
 /// 1枚の絵を AVSampleBufferDisplayLayer に入れて PiP にし、PiP の再生・一時停止は曲の再生・一時停止、
 /// 送り・戻しのボタンは次の曲・前の曲に回す。設定の「音楽の再生中も小窓を出す」がオンのときだけ。
 @MainActor
@@ -90,7 +91,7 @@ final class MusicPip: NSObject, AVPictureInPictureControllerDelegate, AVPictureI
             CMTimebaseSetTime(timebase, time: CMTime(seconds: song.isLive ? 0 : position, preferredTimescale: 600))
             CMTimebaseSetRate(timebase, rate: playing ? 1 : 0)
         }
-        draw(song)
+        draw(song, lyric: lyricLine(song, positionMs: Int64(position * 1000)))
         controller?.invalidatePlaybackState()
     }
 
@@ -125,16 +126,28 @@ final class MusicPip: NSObject, AVPictureInPictureControllerDelegate, AVPictureI
 
     // MARK: 絵
 
-    private func draw(_ song: Song) {
+    /// 時刻付きの歌詞があるときの、歌っている行と次の行。無ければ nil（曲名の絵のまま）。
+    private func lyricLine(_ song: Song, positionMs: Int64) -> LyricPair? {
+        guard !song.isLive, case .found(.synced(let synced)) = AppServices.player.lyrics, !synced.lines.isEmpty else { return nil }
+        let (current, next) = LyricsTiming.currentAndNext(synced.lines, positionMs: positionMs)
+        return LyricPair(current: current, next: next)
+    }
+
+    struct LyricPair: Equatable {
+        var current: String?
+        var next: String?
+    }
+
+    private func draw(_ song: Song, lyric: LyricPair?) {
         if artworkFor != song.videoId {
             artworkFor = song.videoId
             artwork = nil
             loadArtwork(song)
         }
-        let key = "\(song.videoId)|\(song.title)|\(song.artistsText)|\(artwork != nil)"
+        let key = "\(song.videoId)|\(song.title)|\(song.artistsText)|\(artwork != nil)|\(lyric?.current ?? "-")|\(lyric?.next ?? "-")"
         guard key != drawnKey else { return }
         drawnKey = key
-        guard let buffer = Self.render(title: song.title, artist: song.artistsText, artwork: artwork) else { return }
+        guard let buffer = Self.render(title: song.title, artist: song.artistsText, artwork: artwork, lyric: lyric) else { return }
         let renderer = surface.displayLayer.sampleBufferRenderer
         renderer.flush(removingDisplayedImage: renderer.requiresFlushToResumeDecoding, completionHandler: nil)
         renderer.enqueue(buffer)
@@ -146,13 +159,14 @@ final class MusicPip: NSObject, AVPictureInPictureControllerDelegate, AVPictureI
             guard let (data, _) = try? await ImageLoader.session.data(from: url), let image = UIImage(data: data) else { return }
             guard artworkFor == song.videoId else { return }
             artwork = image
-            if let current = AppServices.player.current, current.videoId == song.videoId { draw(current) }
+            if let current = AppServices.player.current, current.videoId == song.videoId { redraw() }
         }
     }
 
     /// 16:9 の絵（ぼかしたジャケットを下に敷き、左にジャケット、右に曲名とアーティスト）を、PiP に渡す形にする。
-    private static func render(title: String, artist: String, artwork: UIImage?) -> CMSampleBuffer? {
-        sampleBuffer(image(title: title, artist: artist, artwork: artwork), width: width, height: height)
+    private static func render(title: String, artist: String, artwork: UIImage?, lyric: LyricPair?) -> CMSampleBuffer? {
+        let image = lyric.map { lyricImage(title: title, artist: artist, artwork: artwork, lyric: $0) } ?? image(title: title, artist: artist, artwork: artwork)
+        return sampleBuffer(image, width: width, height: height)
     }
 
     private static let width = 960, height = 540
@@ -161,6 +175,9 @@ final class MusicPip: NSObject, AVPictureInPictureControllerDelegate, AVPictureI
     /// 開発用: 今の曲で小窓に渡す絵を PNG で返す。
     func debugImage() -> Data? {
         guard let song = AppServices.player.current else { return nil }
+        if let lyric = lyricLine(song, positionMs: Int64(AppServices.player.position * 1000)) {
+            return Self.lyricImage(title: song.title, artist: song.artistsText, artwork: artwork, lyric: lyric).pngData()
+        }
         return Self.image(title: song.title, artist: song.artistsText, artwork: artwork).pngData()
     }
     #endif
@@ -170,35 +187,9 @@ final class MusicPip: NSObject, AVPictureInPictureControllerDelegate, AVPictureI
         format.scale = 1
         format.opaque = true
         return UIGraphicsImageRenderer(size: CGSize(width: width, height: height), format: format).image { context in
-            let rect = CGRect(x: 0, y: 0, width: width, height: height)
-            UIColor.black.setFill()
-            context.fill(rect)
-            if let artwork {
-                // 下敷き: ジャケットを小さく縮めてから大きく広げ（ぼける）、暗くする
-                let side = CGFloat(width)
-                let small = UIGraphicsImageRenderer(size: CGSize(width: 12, height: 12), format: format).image { _ in
-                    artwork.draw(in: CGRect(x: 0, y: 0, width: 12, height: 12))
-                }
-                context.cgContext.interpolationQuality = .high
-                small.draw(in: CGRect(x: 0, y: (CGFloat(height) - side) / 2, width: side, height: side), blendMode: .normal, alpha: 0.6)
-                UIColor(white: 0, alpha: 0.45).setFill()
-                // fill(_:) だけだと置き換え（copy）で塗られ、下のジャケットが消える
-                context.fill(rect, blendMode: .normal)
-            }
+            drawBackdrop(context, artwork: artwork, format: format)
             let art = CGRect(x: 60, y: 90, width: 360, height: 360)
-            let clip = UIBezierPath(roundedRect: art, cornerRadius: 24)
-            context.cgContext.saveGState()
-            clip.addClip()
-            if let artwork {
-                artwork.draw(in: art)
-            } else {
-                UIColor(white: 0.2, alpha: 1).setFill()
-                context.fill(art)
-                let note = UIImage(systemName: "music.note", withConfiguration: UIImage.SymbolConfiguration(pointSize: 140, weight: .medium))?
-                    .withTintColor(UIColor(white: 0.6, alpha: 1), renderingMode: .alwaysOriginal)
-                if let note { note.draw(at: CGPoint(x: art.midX - note.size.width / 2, y: art.midY - note.size.height / 2)) }
-            }
-            context.cgContext.restoreGState()
+            drawArtwork(context, artwork: artwork, in: art, cornerRadius: 24, notePoint: 140)
 
             let paragraph = NSMutableParagraphStyle()
             paragraph.lineBreakMode = .byTruncatingTail
@@ -219,6 +210,86 @@ final class MusicPip: NSObject, AVPictureInPictureControllerDelegate, AVPictureI
             y += titleSize.height + gap
             (artist as NSString).draw(with: CGRect(x: textX, y: y, width: textWidth, height: artistSize.height), options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine], attributes: artistAttrs, context: nil)
         }
+    }
+
+    /// 時刻付きの歌詞の絵: 上に小さなジャケットと曲名・アーティスト、その下に歌っている行を大きく、次の行を薄く。
+    private static func lyricImage(title: String, artist: String, artwork: UIImage?, lyric: LyricPair) -> UIImage {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = true
+        return UIGraphicsImageRenderer(size: CGSize(width: width, height: height), format: format).image { context in
+            drawBackdrop(context, artwork: artwork, format: format)
+            let art = CGRect(x: 56, y: 44, width: 112, height: 112)
+            drawArtwork(context, artwork: artwork, in: art, cornerRadius: 12, notePoint: 48)
+
+            let paragraph = NSMutableParagraphStyle()
+            paragraph.lineBreakMode = .byTruncatingTail
+            let options: NSStringDrawingOptions = [.usesLineFragmentOrigin, .truncatesLastVisibleLine]
+            let textX = art.maxX + 28
+            let headWidth = CGFloat(width) - textX - 56
+            let titleAttrs: [NSAttributedString.Key: Any] = [
+                .font: UIFont.systemFont(ofSize: 36, weight: .bold), .foregroundColor: UIColor.white, .paragraphStyle: paragraph,
+            ]
+            let artistAttrs: [NSAttributedString.Key: Any] = [
+                .font: UIFont.systemFont(ofSize: 28, weight: .regular), .foregroundColor: UIColor(white: 1, alpha: 0.7), .paragraphStyle: paragraph,
+            ]
+            (title as NSString).draw(with: CGRect(x: textX, y: art.minY + 14, width: headWidth, height: 44), options: options, attributes: titleAttrs, context: nil)
+            (artist as NSString).draw(with: CGRect(x: textX, y: art.minY + 62, width: headWidth, height: 36), options: options, attributes: artistAttrs, context: nil)
+
+            // 歌っている行は3行まで、次の行は2行まで。小さい小窓でも読めるよう大きめに
+            let lyricX: CGFloat = 56
+            let lyricWidth = CGFloat(width) - lyricX * 2
+            let currentAttrs: [NSAttributedString.Key: Any] = [
+                .font: UIFont.systemFont(ofSize: 60, weight: .bold), .foregroundColor: UIColor.white, .paragraphStyle: paragraph,
+            ]
+            let nextAttrs: [NSAttributedString.Key: Any] = [
+                .font: UIFont.systemFont(ofSize: 42, weight: .semibold), .foregroundColor: UIColor(white: 1, alpha: 0.45), .paragraphStyle: paragraph,
+            ]
+            var y = art.maxY + 36
+            if let current = lyric.current {
+                let size = (current as NSString).boundingRect(with: CGSize(width: lyricWidth, height: 72 * 3), options: options, attributes: currentAttrs, context: nil).size
+                (current as NSString).draw(with: CGRect(x: lyricX, y: y, width: lyricWidth, height: size.height), options: options, attributes: currentAttrs, context: nil)
+                y += size.height + 18
+            }
+            if let next = lyric.next, y < CGFloat(height) - 60 {
+                let room = min(52 * 2, CGFloat(height) - 30 - y)
+                (next as NSString).draw(with: CGRect(x: lyricX, y: y, width: lyricWidth, height: room), options: options, attributes: nextAttrs, context: nil)
+            }
+        }
+    }
+
+    /// 黒の地に、ぼかして暗くしたジャケットを敷く。
+    private static func drawBackdrop(_ context: UIGraphicsImageRendererContext, artwork: UIImage?, format: UIGraphicsImageRendererFormat) {
+        let rect = CGRect(x: 0, y: 0, width: width, height: height)
+        UIColor.black.setFill()
+        context.fill(rect)
+        guard let artwork else { return }
+        // 下敷き: ジャケットを小さく縮めてから大きく広げ（ぼける）、暗くする
+        let side = CGFloat(width)
+        let small = UIGraphicsImageRenderer(size: CGSize(width: 12, height: 12), format: format).image { _ in
+            artwork.draw(in: CGRect(x: 0, y: 0, width: 12, height: 12))
+        }
+        context.cgContext.interpolationQuality = .high
+        small.draw(in: CGRect(x: 0, y: (CGFloat(height) - side) / 2, width: side, height: side), blendMode: .normal, alpha: 0.6)
+        UIColor(white: 0, alpha: 0.45).setFill()
+        // fill(_:) だけだと置き換え（copy）で塗られ、下のジャケットが消える
+        context.fill(rect, blendMode: .normal)
+    }
+
+    /// 角を丸めたジャケット（無ければ音符）。
+    private static func drawArtwork(_ context: UIGraphicsImageRendererContext, artwork: UIImage?, in art: CGRect, cornerRadius: CGFloat, notePoint: CGFloat) {
+        context.cgContext.saveGState()
+        UIBezierPath(roundedRect: art, cornerRadius: cornerRadius).addClip()
+        if let artwork {
+            artwork.draw(in: art)
+        } else {
+            UIColor(white: 0.2, alpha: 1).setFill()
+            context.fill(art)
+            let note = UIImage(systemName: "music.note", withConfiguration: UIImage.SymbolConfiguration(pointSize: notePoint, weight: .medium))?
+                .withTintColor(UIColor(white: 0.6, alpha: 1), renderingMode: .alwaysOriginal)
+            if let note { note.draw(at: CGPoint(x: art.midX - note.size.width / 2, y: art.midY - note.size.height / 2)) }
+        }
+        context.cgContext.restoreGState()
     }
 
     private static func sampleBuffer(_ image: UIImage, width: Int, height: Int) -> CMSampleBuffer? {

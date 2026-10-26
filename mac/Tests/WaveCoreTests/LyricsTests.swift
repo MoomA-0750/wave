@@ -21,6 +21,17 @@ final class LyricsTests: XCTestCase {
         XCTAssertEqual(-1, LyricsTiming.currentIndex([], positionMs: 5000))
     }
 
+    func testCurrentAndNextSkipsReadingsAndMarksBlankLines() {
+        let lines = [
+            LyricLine(startMs: 1000, text: "原文"), LyricLine(startMs: 1000, text: "よみ"),
+            LyricLine(startMs: 3000, text: " "), LyricLine(startMs: 5000, text: "次"),
+        ]
+        XCTAssertTrue(LyricsTiming.currentAndNext(lines, positionMs: 0) == (nil, "原文"))
+        XCTAssertTrue(LyricsTiming.currentAndNext(lines, positionMs: 1500) == ("原文", "♪"))
+        XCTAssertTrue(LyricsTiming.currentAndNext(lines, positionMs: 3500) == ("♪", "次"))
+        XCTAssertTrue(LyricsTiming.currentAndNext(lines, positionMs: 9000) == ("次", nil))
+    }
+
     func testSearchTitlesDropDecorations() {
         XCTAssertEqual(["夜に駆ける (From \"THE FIRST TAKE\")", "夜に駆ける"], LrclibClient.searchTitles("夜に駆ける (From \"THE FIRST TAKE\")"))
         XCTAssertEqual(["Song - Orion", "Song"], LrclibClient.searchTitles("Song - Orion"))

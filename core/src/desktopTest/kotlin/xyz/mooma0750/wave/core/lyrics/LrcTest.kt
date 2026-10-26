@@ -42,4 +42,13 @@ class LrcTest {
         assertEquals(2, LyricsTiming.currentIndex(lines, 600_000))
         assertEquals(-1, LyricsTiming.currentIndex(emptyList(), 1_000))
     }
+
+    @Test
+    fun currentAndNextSkipsReadingsAndMarksBlankLines() {
+        val lines = listOf(LyricLine(1_000, "原文"), LyricLine(1_000, "よみ"), LyricLine(3_000, " "), LyricLine(5_000, "次"))
+        assertEquals(null to "原文", LyricsTiming.currentAndNext(lines, 0))
+        assertEquals("原文" to "♪", LyricsTiming.currentAndNext(lines, 1_500))
+        assertEquals("♪" to "次", LyricsTiming.currentAndNext(lines, 3_500))
+        assertEquals("次" to null, LyricsTiming.currentAndNext(lines, 9_000))
+    }
 }

@@ -187,6 +187,10 @@
     <string name="releases_artist_title">New releases</string>
     <string name="artist_live_news">Live &amp; news</string>
     <string name="settings_queue_notice_title">Show the queue in notifications</string>
+    <string name="overlay_bubble_description">Now playing in wave</string>
+    <string name="settings_player_overlay_title">Show a player bubble over other apps</string>
+    <string name="settings_player_overlay_summary">While wave is closed, keep an artwork bubble at the screen edge. Tap to play or pause, double-tap for the next song, triple-tap for the previous one, long-press to open wave. Drag it inward for a mini player</string>
+    <string name="settings_player_overlay_permission">Allow \"Display over other apps\" to turn this on</string>
     <string name="settings_queue_notice_summary">While playing, show the songs coming up next in the notification shade. Tap it to open the queue</string>
     <string name="queue_notice_channel">Queue</string>
     <string name="queue_notice_more">+%1$d more</string>

@@ -87,4 +87,20 @@ object LyricsTiming {
         }
         return found
     }
+
+    /**
+     * 小窓・重ね表示に出す1行: 歌っている行と次の行（同じ時刻に並ぶ読み・訳は除き、原文だけ）。
+     * 空の行は「♪」。最初の行より前なら current は null。
+     */
+    fun currentAndNext(
+        lines: List<LyricLine>,
+        positionMs: Long,
+    ): Pair<String?, String?> {
+        val last = currentIndex(lines, positionMs)
+        val start = if (last < 0) -1 else lines.indexOfFirst { it.startMs == lines[last].startMs }
+        val following = lines.indices.firstOrNull { it > last && (start < 0 || lines[it].startMs != lines[start].startMs) }
+
+        fun shown(i: Int) = lines[i].text.trim().ifEmpty { "♪" }
+        return (if (start < 0) null else shown(start)) to following?.let(::shown)
+    }
 }

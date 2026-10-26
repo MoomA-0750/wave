@@ -105,4 +105,17 @@ public enum LyricsTiming {
         }
         return found
     }
+
+    /// 小窓・重ね表示に出す1行: 歌っている行と次の行（同じ時刻に並ぶ読み・訳は除き、原文だけ）。
+    /// 空の行は「♪」。最初の行より前なら current は nil。
+    public static func currentAndNext(_ lines: [LyricLine], positionMs: Int64) -> (current: String?, next: String?) {
+        let last = currentIndex(lines, positionMs: positionMs)
+        let start = last < 0 ? -1 : (lines.firstIndex { $0.startMs == lines[last].startMs } ?? last)
+        let following = lines.indices.first { $0 > last && (start < 0 || lines[$0].startMs != lines[start].startMs) }
+        func shown(_ i: Int) -> String {
+            let text = lines[i].text.trimmingCharacters(in: .whitespaces)
+            return text.isEmpty ? "♪" : text
+        }
+        return (start < 0 ? nil : shown(start), following.map(shown))
+    }
 }

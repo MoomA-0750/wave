@@ -180,6 +180,10 @@
     <string name="releases_artist_title">新作</string>
     <string name="artist_live_news">ライブ・お知らせ</string>
     <string name="settings_queue_notice_title">キューを通知に出す</string>
+    <string name="overlay_bubble_description">wave の再生中の曲</string>
+    <string name="settings_player_overlay_title">ほかのアプリの上に再生の丸を出す</string>
+    <string name="settings_player_overlay_summary">wave を閉じている間、画面の端にジャケットの丸を出す。タップで再生・一時停止、2回で次の曲、3回で前の曲、長押しで wave を開く。内側へ引き出すとミニプレーヤー</string>
+    <string name="settings_player_overlay_permission">オンにするには「ほかのアプリの上に重ねて表示」を許可してください</string>
     <string name="settings_queue_notice_summary">再生中、通知センターに次に流れる曲を出す。押すとキューを開く</string>
     <string name="queue_notice_channel">キュー</string>
     <string name="queue_notice_more">ほか %1$d 曲</string>

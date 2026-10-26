@@ -36,6 +36,8 @@ object WidgetHooks {
         val app = context.applicationContext
         WidgetScale.load(app)
         val container = (app as WaveApplication).container
+        // ほかのアプリの上に重ねる再生の丸（設定でオンのときだけ出る）
+        xyz.mooma0750.wave.overlay.PlayerOverlay.start(app)
         // 同じ値は StateFlow が落とす。描き直しの途中に変わったら、最後の値で描き直す
         container.appScope.launch {
             nowPlaying.collect {

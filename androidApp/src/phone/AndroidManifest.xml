@@ -4,6 +4,8 @@
 
     <!-- ペアリングの QR を読むときだけ使う -->
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- wave が裏にいる間、ほかのアプリの上に再生の丸を重ねる（設定でオンにしたときだけ） -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-feature android:name="android.hardware.camera.any" android:required="false" />
 
     <application>

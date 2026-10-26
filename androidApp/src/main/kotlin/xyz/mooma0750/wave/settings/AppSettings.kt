@@ -77,6 +77,16 @@ class AppSettings(
         store.edit { it[QUEUE_NOTICE] = enabled }
     }
 
+    /** wave が裏にいる間、ほかのアプリの上に再生の丸（引き出すとミニプレーヤー）を重ねて出すか。既定は出さない。 */
+    val playerOverlay: Flow<Boolean> =
+        store.data
+            .map { it[PLAYER_OVERLAY] ?: false }
+            .catch { if (it is IOException) emit(false) else throw it }
+
+    suspend fun setPlayerOverlay(enabled: Boolean) {
+        store.edit { it[PLAYER_OVERLAY] = enabled }
+    }
+
     /** 時計: スマホで再生が始まったら、時計に再生画面を出すか（既定は出す）。 */
     val openOnPhonePlayback: Flow<Boolean> =
         store.data
@@ -184,6 +194,7 @@ class AppSettings(
         val HISTORY_ENABLED = booleanPreferencesKey("history_enabled")
         val RELEASE_NOTICES = booleanPreferencesKey("release_notices")
         val QUEUE_NOTICE = booleanPreferencesKey("queue_notice")
+        val PLAYER_OVERLAY = booleanPreferencesKey("player_overlay")
         val OPEN_ON_PHONE_PLAYBACK = booleanPreferencesKey("open_on_phone_playback")
         val AI_URL = stringPreferencesKey("ai_url")
         val AI_TOKEN = stringPreferencesKey("ai_token")
