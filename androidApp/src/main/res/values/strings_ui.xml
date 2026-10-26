@@ -49,6 +49,7 @@
     <string name="nowplaying_like">Add to Liked Songs</string>
     <string name="nowplaying_close">Close</string>
     <string name="nowplaying_expand">Expand</string>
+    <string name="nowplaying_hide_panel">Hide player</string>
     <string name="nowplaying_song">Song</string>
     <string name="nowplaying_video">Video</string>
     <string name="nowplaying_previous">Previous</string>

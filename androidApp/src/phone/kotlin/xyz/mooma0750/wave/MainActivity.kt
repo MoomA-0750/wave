@@ -290,7 +290,7 @@ class MainActivity : ComponentActivity() {
                                 nav,
                                 hasPlayback = rememberHasPlayback(container.player, container.connectV2),
                                 miniPlayer = { open -> MiniPlayer(container.player, container.connectV2, onOpen = open, onOpenDevices = openDevices, actions = songActions) },
-                                nowPlaying = { close, inPanel ->
+                                nowPlaying = { close, inPanel, hidePanel ->
                                     NowPlayingScreen(
                                         connect = container.connectV2,
                                         connection = container.player,
@@ -301,6 +301,7 @@ class MainActivity : ComponentActivity() {
                                         onClose = close,
                                         onOpenDevices = openDevices,
                                         inPanel = inPanel,
+                                        onHidePanel = hidePanel,
                                         onAskAi = { showAi = true },
                                     )
                                 },

@@ -249,6 +249,8 @@ fun NowPlayingScreen(
     connect: ConnectV2Manager? = null,
     /** 広い画面の右の列として出す（左上は閉じる代わりに全面に広げる。onClose が広げる）。 */
     inPanel: Boolean = false,
+    /** 広い画面の右の列をしまう（列のときだけ。左上に出す）。 */
+    onHidePanel: (() -> Unit)? = null,
     /** Claude に聞く（null なら出さない）。 */
     onAskAi: (() -> Unit)? = null,
 ) {
@@ -368,6 +370,7 @@ fun NowPlayingScreen(
         ) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (inPanel) {
+                    onHidePanel?.let { IconAction(R.drawable.ic_right_panel_close, stringResource(R.string.nowplaying_hide_panel), it) }
                     IconAction(R.drawable.ic_open_in_full, stringResource(R.string.nowplaying_expand), onClose)
                 } else {
                     IconAction(R.drawable.ic_arrow_down, stringResource(R.string.nowplaying_close), onClose)

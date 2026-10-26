@@ -3,7 +3,11 @@ package xyz.mooma0750.wave.navigation
 import androidx.activity.compose.BackHandler
 import androidx.annotation.DrawableRes
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.offset
@@ -28,10 +32,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ShortNavigationBar
+import androidx.compose.material3.ShortNavigationBarDefaults
+import androidx.compose.foundation.background
 import androidx.compose.material3.WideNavigationRail
 import androidx.compose.material3.WideNavigationRailItem
 import androidx.compose.material3.ShortNavigationBarItem
@@ -55,7 +62,8 @@ import androidx.compose.ui.res.stringResource
  * ミニプレーヤーを押すと、再生画面が下からせり上がって全面を覆う。部品は Material のもの。
  *
  * 広い画面（開いた折りたたみ・タブレット）では Spotify のタブレット版と同じく、左に中身と下のタブ、右に再生の列を常に出す
- * （ミニプレーヤーは出さない。右の列の「全面に広げる」で全面の再生画面を開く）。
+ * （ミニプレーヤーは出さない。右の列の「全面に広げる」で全面の再生画面を開く）。右の列の左上の「しまう」で列を畳み、
+ * Spotify のタブレット版と同じく、下のタブの右にミニプレーヤーを並べる（押すと列を戻す。畳んだかは覚えておく）。
  */
 @Composable
 fun AppShell(
@@ -63,11 +71,17 @@ fun AppShell(
     /** 何か再生している（ほかの端末の再生を映している）か。広い画面で右の列を出すかを決める。 */
     hasPlayback: Boolean,
     miniPlayer: @Composable (onOpen: () -> Unit) -> Unit,
-    /** inPanel: 広い画面の右の列として出す（閉じる代わりに全面に広げる）。 */
-    nowPlaying: @Composable (onClose: () -> Unit, inPanel: Boolean) -> Unit,
+    /** inPanel: 広い画面の右の列として出す（閉じる代わりに全面に広げる）。onHidePanel: 右の列をしまう（列のときだけ）。 */
+    nowPlaying: @Composable (onClose: () -> Unit, inPanel: Boolean, onHidePanel: (() -> Unit)?) -> Unit,
     content: @Composable () -> Unit,
 ) {
     var playerOpen by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    var panelHidden by remember { mutableStateOf(PlayerPanelPrefs.hidden(context)) }
+    val setPanelHidden: (Boolean) -> Unit = {
+        panelHidden = it
+        PlayerPanelPrefs.setHidden(context, it)
+    }
     // キューの通知から開いた: 狭い画面では再生画面を開く（キューは再生画面が出す）
     val openQueue by xyz.mooma0750.wave.playback.QueueNotice.openRequested.collectAsState()
     LaunchedEffect(openQueue) { if (openQueue) playerOpen = true }
@@ -88,6 +102,11 @@ fun AppShell(
         // 大きいスマホは横にすると右に再生の列も出る幅になるが、縦が狭いのは同じなのでレールにする
         val rail = maxWidth > maxHeight && maxHeight < RAIL_MAX_HEIGHT
         val panelWidth = (maxWidth * 0.32f).coerceIn(PANEL_MIN_WIDTH, PANEL_MAX_WIDTH)
+        val panelShown = wide && hasPlayback && !panelHidden
+        // 列をしまったら、ミニプレーヤーは下のタブの右に列と同じ幅で並べる（レールのときはタブが無いので中身の下）
+        val miniBesideTabs = wide && hasPlayback && panelHidden && !rail
+        // 広い画面でしまっている間のミニプレーヤーは、押すと列を戻す
+        val openFromMini: () -> Unit = { if (wide && hasPlayback) setPanelHidden(false) else playerOpen = true }
         Row(Modifier.fillMaxSize()) {
             if (rail) {
                 WideNavigationRail(Modifier.fillMaxHeight()) {
@@ -104,20 +123,35 @@ fun AppShell(
                     // 知らせはミニプレーヤーのすぐ上に出す
                     NoticeHost(Modifier.align(Alignment.BottomCenter))
                 }
-                if (!wide || !hasPlayback) miniPlayer { playerOpen = true }
-                if (!rail) ShortNavigationBar {
-                    TabItem(nav, Tab.Home, R.drawable.ic_home, R.drawable.ic_home_outline, stringResource(R.string.nav_home))
-                    TabItem(nav, Tab.Search, R.drawable.ic_search, R.drawable.ic_search_outline, stringResource(R.string.nav_search))
-                    // Claude はどの画面からでも聞けるように、行き先（タブ）の1つにする（Material ではバーに押すだけのボタンは置かない）
-                    TabItem(nav, Tab.Ai, R.drawable.ic_ai, R.drawable.ic_ai, stringResource(R.string.nav_ai))
-                    TabItem(nav, Tab.Library, R.drawable.ic_library, R.drawable.ic_library_outline, stringResource(R.string.nav_library))
+                if (!panelShown && !miniBesideTabs) miniPlayer(openFromMini)
+                if (!rail) {
+                    // 右に空けたところもタブの欄と同じ地にする
+                    Box(Modifier.background(ShortNavigationBarDefaults.containerColor)) {
+                        // Row の中で weight を付けて並べるとタブが1つしか出なかったので、バーは横いっぱいのまま右を空け、ミニプレーヤーを重ねる
+                        ShortNavigationBar(if (miniBesideTabs) Modifier.padding(end = panelWidth) else Modifier) {
+                            TabItem(nav, Tab.Home, R.drawable.ic_home, R.drawable.ic_home_outline, stringResource(R.string.nav_home))
+                            TabItem(nav, Tab.Search, R.drawable.ic_search, R.drawable.ic_search_outline, stringResource(R.string.nav_search))
+                            // Claude はどの画面からでも聞けるように、行き先（タブ）の1つにする（Material ではバーに押すだけのボタンは置かない）
+                            TabItem(nav, Tab.Ai, R.drawable.ic_ai, R.drawable.ic_ai, stringResource(R.string.nav_ai))
+                            TabItem(nav, Tab.Library, R.drawable.ic_library, R.drawable.ic_library_outline, stringResource(R.string.nav_library))
+                        }
+                        if (miniBesideTabs) {
+                            Box(Modifier.align(Alignment.CenterEnd).width(panelWidth).navigationBarsPadding()) { miniPlayer(openFromMini) }
+                        }
+                    }
                 }
             }
-            if (wide && hasPlayback) {
-                VerticalDivider()
-                // 右の再生の列（幅は画面の3割ほど。狭すぎず、左の中身を潰さない）
-                Box(Modifier.width(panelWidth).fillMaxHeight()) {
-                    nowPlaying({ playerOpen = true }, true)
+            AnimatedVisibility(
+                visible = panelShown,
+                enter = expandHorizontally(MaterialTheme.motionScheme.defaultSpatialSpec()),
+                exit = shrinkHorizontally(MaterialTheme.motionScheme.fastSpatialSpec()),
+            ) {
+                Row {
+                    VerticalDivider()
+                    // 右の再生の列（幅は画面の3割ほど。狭すぎず、左の中身を潰さない）
+                    Box(Modifier.width(panelWidth).fillMaxHeight()) {
+                        nowPlaying({ playerOpen = true }, true) { setPanelHidden(true) }
+                    }
                 }
             }
         }
@@ -138,7 +172,7 @@ fun AppShell(
                     .nestedScroll(pullDown.connection)
                     .clickable(MutableInteractionSource(), indication = null) {},
             ) {
-                nowPlaying({ playerOpen = false }, false)
+                nowPlaying({ playerOpen = false }, false, null)
             }
         }
     }
@@ -250,4 +284,19 @@ private fun TabItem(
         icon = { Icon(painterResource(if (selected) selectedIcon else icon), contentDescription = null) },
         label = { Text(label) },
     )
+}
+
+/** 広い画面で右の再生の列をしまっているか（アプリを開き直しても覚えておく）。 */
+private object PlayerPanelPrefs {
+    private const val PREFS = "player_panel"
+    private const val KEY_HIDDEN = "hidden"
+
+    fun hidden(context: android.content.Context): Boolean = context.getSharedPreferences(PREFS, android.content.Context.MODE_PRIVATE).getBoolean(KEY_HIDDEN, false)
+
+    fun setHidden(
+        context: android.content.Context,
+        value: Boolean,
+    ) {
+        context.getSharedPreferences(PREFS, android.content.Context.MODE_PRIVATE).edit().putBoolean(KEY_HIDDEN, value).apply()
+    }
 }
