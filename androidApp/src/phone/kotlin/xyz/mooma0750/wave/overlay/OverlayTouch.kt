@@ -3,12 +3,14 @@ package xyz.mooma0750.wave.overlay
 import android.os.Handler
 import android.os.Looper
 import android.view.MotionEvent
+import android.view.VelocityTracker
 import android.view.ViewConfiguration
 
 /**
  * 重ね表示の指の動きを、タップの回数・長押し・ドラッグに分ける。窓ごと動かすので、位置は画面の座標（raw）で見る
  * （窓の中の座標は、窓が指に付いて動くと変わらなくなる）。
  * タップは続けて押された回数を数え、[maxTaps] に届くか、間が空いたところで [onTaps] に渡す。
+ * 離したときは、指の速さ（画面の座標で px/秒）も渡す（投げた勢いで動かす）。
  */
 internal class OverlayTouch(
     private val slop: Int,
@@ -17,7 +19,7 @@ internal class OverlayTouch(
     private val onLongPress: (() -> Unit)?,
     private val onDragStart: () -> Unit,
     private val onDrag: (dx: Float, dy: Float) -> Unit,
-    private val onDragEnd: () -> Unit,
+    private val onDragEnd: (vx: Float, vy: Float) -> Unit,
 ) {
     private val handler = Handler(Looper.getMainLooper())
     private var downX = 0f
@@ -25,6 +27,7 @@ internal class OverlayTouch(
     private var dragging = false
     private var longPressed = false
     private var taps = 0
+    private var velocity: VelocityTracker? = null
     private val longPress =
         Runnable {
             longPressed = true
@@ -39,6 +42,7 @@ internal class OverlayTouch(
         }
 
     fun onTouch(event: MotionEvent): Boolean {
+        track(event)
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 downX = event.rawX
@@ -63,7 +67,10 @@ internal class OverlayTouch(
             MotionEvent.ACTION_UP -> {
                 handler.removeCallbacks(longPress)
                 when {
-                    dragging -> onDragEnd()
+                    dragging -> {
+                        val (vx, vy) = speed()
+                        onDragEnd(vx, vy)
+                    }
                     longPressed -> Unit
                     else -> {
                         taps += 1
@@ -78,11 +85,34 @@ internal class OverlayTouch(
             }
             MotionEvent.ACTION_CANCEL -> {
                 handler.removeCallbacks(longPress)
-                if (dragging) onDragEnd()
+                if (dragging) onDragEnd(0f, 0f)
                 dragging = false
             }
         }
+        if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) {
+            velocity?.recycle()
+            velocity = null
+        }
         return true
+    }
+
+    /** 速さは画面の座標で測る（窓が指に付いて動くので、窓の中の座標では速さが出ない）。 */
+    private fun track(event: MotionEvent) {
+        if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+            velocity?.recycle()
+            velocity = VelocityTracker.obtain()
+        }
+        val tracker = velocity ?: return
+        val screen = MotionEvent.obtain(event)
+        screen.setLocation(event.rawX, event.rawY)
+        tracker.addMovement(screen)
+        screen.recycle()
+    }
+
+    private fun speed(): Pair<Float, Float> {
+        val tracker = velocity ?: return 0f to 0f
+        tracker.computeCurrentVelocity(1000)
+        return tracker.xVelocity to tracker.yVelocity
     }
 
     fun cancel() {

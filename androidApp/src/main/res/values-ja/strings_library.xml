@@ -180,6 +180,7 @@
     <string name="releases_artist_title">新作</string>
     <string name="artist_live_news">ライブ・お知らせ</string>
     <string name="settings_queue_notice_title">キューを通知に出す</string>
+    <string name="overlay_dismiss">再生の丸を消す</string>
     <string name="overlay_bubble_description">wave の再生中の曲</string>
     <string name="settings_player_overlay_title">ほかのアプリの上に再生の丸を出す</string>
     <string name="settings_player_overlay_summary">wave を閉じている間、画面の端にジャケットの丸を出す。タップで再生・一時停止、2回で次の曲、3回で前の曲、長押しで wave を開く。内側へ引き出すとミニプレーヤー</string>

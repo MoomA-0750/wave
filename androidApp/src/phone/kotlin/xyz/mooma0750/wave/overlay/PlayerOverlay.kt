@@ -11,6 +11,11 @@ import android.view.WindowManager
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.VectorConverter
+import androidx.compose.material3.MotionScheme
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.platform.AndroidUiDispatcher
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
@@ -43,6 +48,8 @@ import xyz.mooma0750.wave.playback.NowPlayingSnapshot
 import xyz.mooma0750.wave.playback.playFromButton
 import xyz.mooma0750.wave.widget.WidgetHooks
 import xyz.mooma0750.wave.widget.openAppIntent
+import kotlin.math.abs
+import kotlin.math.hypot
 import kotlin.math.roundToInt
 
 /**
@@ -66,6 +73,15 @@ object PlayerOverlay {
 
         /** 切り替えの動きの途中（窓は横いっぱいの帯）。 */
         var morph by mutableStateOf<Morph?>(null)
+
+        /** 切り替えの途中に掴まれた: 動きを終わりまでとばして、すぐ掴めるようにする。 */
+        var finishMorph by mutableStateOf(false)
+
+        /** 丸を掴んでいる間、画面の下に消すための × を出す。 */
+        var dismissShown by mutableStateOf(false)
+
+        /** 丸が × の上にある（離すと消える）。 */
+        var dismissHover by mutableStateOf(false)
     }
 
     /** 切り替えの動き。帯の上端（画面の座標）と高さ、中身の中心の始まりと終わり（帯の中の座標）。 */
@@ -77,6 +93,9 @@ object PlayerOverlay {
     )
 
     private val foreground = MutableStateFlow(true)
+
+    /** × に乗せて消した。wave を開くまでは出さない。 */
+    private val dismissed = MutableStateFlow(false)
     private var started = false
     private var window: OverlayWindow? = null
     private var lines: List<LyricLine>? = null
@@ -94,7 +113,10 @@ object PlayerOverlay {
         lifecycle.addObserver(
             LifecycleEventObserver { _, event ->
                 when (event) {
-                    Lifecycle.Event.ON_START -> foreground.value = true
+                    Lifecycle.Event.ON_START -> {
+                        foreground.value = true
+                        dismissed.value = false
+                    }
                     Lifecycle.Event.ON_STOP -> foreground.value = false
                     else -> Unit
                 }
@@ -102,8 +124,8 @@ object PlayerOverlay {
         )
         val scope = container.appScope
         scope.launch(Dispatchers.Main) {
-            combine(container.settings.playerOverlay, foreground, WidgetHooks.nowPlaying.map { it != null }.distinctUntilChanged()) { on, front, hasSong ->
-                on && !front && hasSong
+            combine(container.settings.playerOverlay, foreground, WidgetHooks.nowPlaying.map { it != null }.distinctUntilChanged(), dismissed) { on, front, hasSong, gone ->
+                on && !front && hasSong && !gone
             }.distinctUntilChanged().collectLatest { want ->
                 if (!want) {
                     hide()
@@ -217,7 +239,10 @@ object PlayerOverlay {
             .onFailure { Log.w(WaveApplication.LOG_TAG, "overlay open failed type=${it::class.simpleName}") }
     }
 
-    /** 重ねる窓。位置は窓ごと動かす。端の丸は寄せた側の端から測り（吹き出しが内側へ伸びる）、ミニプレーヤーは左から測る。 */
+    /**
+     * 重ねる窓。位置は窓ごと動かす。落ち着いた丸は寄せた側の端から測り（吹き出しが内側へ伸びる）、少し画面の外へはみ出させる。
+     * 動かしている間・投げた後の動きの間は左上から測る。
+     */
     private class OverlayWindow(
         private val app: WaveApplication,
     ) : LifecycleOwner,
@@ -235,12 +260,15 @@ object PlayerOverlay {
                 WindowManager.LayoutParams.WRAP_CONTENT,
                 WindowManager.LayoutParams.WRAP_CONTENT,
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+                // 端の丸ははみ出させ、投げたときは端の向こうまで行って戻るので、画面の外にも置けるようにする
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
                 PixelFormat.TRANSLUCENT,
             ).apply {
                 windowAnimations = android.R.style.Animation_Toast
                 noMoveAnimation()
             }
+        private val dismiss = DismissTarget(app)
+        private val motion = MotionScheme.expressive()
         private var startX = 0
 
         /** 右端から測っているか（右端の丸）。 */
@@ -250,6 +278,15 @@ object PlayerOverlay {
         /** このドラッグの起点を取ったか（切り替えの途中に掴んだら、落ち着いてから取る）。 */
         private var armed = false
         private var attached = false
+
+        /** 投げた後の動き。掴んだら止める。 */
+        private var fling: Job? = null
+
+        /** 掴む前の位置（× に乗せて消したら、次に出すときはここに戻す）。 */
+        private var grabbedAt = IntOffset.Zero
+
+        /** 窓の位置（params）と画面の座標のずれ（上の帯の分など）。掴んだ時に測る。 */
+        private var screenOffset = IntOffset.Zero
 
         private fun dp(value: Int) = (value * density).roundToInt()
 
@@ -282,7 +319,7 @@ object PlayerOverlay {
                     },
                     onDragStart = ::dragStart,
                     onDrag = ::drag,
-                    onDragEnd = ::bubbleDropped,
+                    onDragEnd = ::dropped,
                 )
             val miniTouch =
                 OverlayTouch(
@@ -292,7 +329,7 @@ object PlayerOverlay {
                     onLongPress = null,
                     onDragStart = ::dragStart,
                     onDrag = ::drag,
-                    onDragEnd = ::miniDropped,
+                    onDragEnd = ::dropped,
                 )
             view.setContent {
                 OverlayContent(
@@ -308,19 +345,29 @@ object PlayerOverlay {
             val bounds = screen()
             fromEnd = ui.mode == Mode.Bubble && ui.atEnd
             params.gravity = Gravity.TOP or if (fromEnd) Gravity.END else Gravity.START
-            params.x = if (ui.mode == Mode.Bubble) 0 else x.coerceIn(0, bounds.width())
+            params.x = if (ui.mode == Mode.Bubble) -dp(OVERHANG_DP) else x.coerceIn(0, bounds.width())
             params.y = if (y < 0) bounds.height() / 3 else y.coerceIn(0, bounds.height() - dp(BUBBLE_DP))
+            // 端の丸は画面の端に重なるので、掴もうとするとジェスチャーナビの「戻る」に取られる。窓の中は端のジェスチャーから外す
+            view.addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
+                v.systemGestureExclusionRects = listOf(android.graphics.Rect(0, 0, v.width, v.height))
+            }
+            // × は丸の下に重ねる（丸を × に乗せたとき、丸の周りに × の縁が見える）ので、先に置く
+            dismiss.attach()
             wm.addView(view, params)
             attached = true
         }
 
         fun detach() {
+            fling?.cancel()
             // 切り替えの途中で消えたら、落ち着く先へ置いたことにする
             ui.morph?.let { settle(it, if (ui.mode == Mode.Mini) IntSize(dp(MINI_WIDTH_DP), dp(BUBBLE_DP)) else IntSize(dp(BUBBLE_DP), dp(BUBBLE_DP))) }
+            ui.dismissShown = false
+            ui.dismissHover = false
             savePlace(app, params.x, params.y)
             attached = false
             registry.currentState = Lifecycle.State.DESTROYED
             runCatching { wm.removeView(view) }
+            dismiss.detach()
         }
 
         private fun relayout() {
@@ -330,32 +377,49 @@ object PlayerOverlay {
         /** 今の窓の左端（右端から測っていれば左から測り直した値）。 */
         private fun left() = if (fromEnd) screen().width() - view.width - params.x else params.x
 
-        /** ドラッグの間は左上から測る（端から測ったままだと、右端の丸を動かす向きが逆になる）。 */
-        private fun dragStart() {
-            ui.dragging = true
-            ui.tooltip = false
-            armed = false
-            // 落ち着いていれば、掴んだ時の位置を起点にする（指が動き始めるまでのずれも追いつく）
-            if (ui.morph == null) arm(0f, 0f)
-        }
-
-        /**
-         * 起点は、指が動き始めた後の最初の動きで取る。切り替えの途中に掴んだときは、窓が落ち着くまで待ってから、
-         * その時の指のずれを差し引いて取る（掴んだ時の古い位置を起点にすると、落ち着いた途端に別の所へ飛んだ）。
-         */
-        private fun arm(
-            dx: Float,
-            dy: Float,
-        ) {
+        /** 左上から測るのに切り替える。 */
+        private fun measureFromLeft() {
             // （gravity の END は向きの印も含むので、値を比べずに覚えておく）
             if (fromEnd) {
                 params.x = left()
                 params.gravity = Gravity.TOP or Gravity.START
                 fromEnd = false
             }
+        }
+
+        private fun dragStart() {
+            // 投げた後の動きの途中でも、掴んだ所で止める
+            fling?.cancel()
+            ui.dragging = true
+            ui.tooltip = false
+            armed = false
+            if (ui.morph == null) {
+                // 落ち着いていれば、掴んだ時の位置を起点にする（指が動き始めるまでのずれも追いつく）
+                arm(0f, 0f)
+            } else {
+                // 切り替えの途中なら、動きを終わりまでとばして落ち着かせる（起点は落ち着いてから取る）
+                ui.finishMorph = true
+            }
+        }
+
+        /**
+         * 起点を取る。切り替えの途中に掴んだときは、落ち着くまで待ってから、その時の指のずれを差し引いて取る
+         * （掴んだ時の古い位置を起点にすると、落ち着いた途端に別の所へ飛んだ）。
+         */
+        private fun arm(
+            dx: Float,
+            dy: Float,
+        ) {
+            measureFromLeft()
+            grabbedAt = IntOffset(params.x, params.y)
+            // 落ち着いている今の、窓の画面上の位置と params の差（× の位置と比べるのに使う）
+            val at = IntArray(2)
+            view.getLocationOnScreen(at)
+            screenOffset = IntOffset(at[0] - params.x, at[1] - params.y)
             startX = params.x - dx.roundToInt()
             startY = params.y - dy.roundToInt()
             armed = true
+            relayout()
         }
 
         private fun drag(
@@ -365,47 +429,136 @@ object PlayerOverlay {
             if (ui.morph != null) return
             if (!armed) arm(dx, dy)
             val bounds = screen()
-            params.x = (startX + dx.roundToInt()).coerceIn(0, (bounds.width() - view.width).coerceAtLeast(0))
-            params.y = (startY + dy.roundToInt()).coerceIn(0, (bounds.height() - view.height).coerceAtLeast(0))
+            val overhang = dp(OVERHANG_DP)
+            var x = (startX + dx.roundToInt()).coerceIn(-overhang, bounds.width() - view.width + overhang)
+            var y = (startY + dy.roundToInt()).coerceIn(0, (bounds.height() - view.height).coerceAtLeast(0))
+            if (ui.mode == Mode.Bubble) {
+                ui.dismissShown = true
+                // × の近くに来たら、丸を × に吸い付ける
+                val target = dismiss.center()?.let { it - screenOffset }
+                val cx = x + view.width / 2
+                val cy = y + view.height / 2
+                val near = if (ui.dismissHover) dp(DISMISS_LEAVE_DP) else dp(DISMISS_ENTER_DP)
+                val hover = target != null && hypot((cx - target.x).toFloat(), (cy - target.y).toFloat()) < near
+                if (hover && !ui.dismissHover) view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+                ui.dismissHover = hover
+                if (hover && target != null) {
+                    x = target.x - view.width / 2
+                    y = target.y - view.height / 2
+                }
+            }
+            params.x = x
+            params.y = y
             relayout()
         }
 
-        /** 丸を離した: 端から十分に内側ならミニプレーヤーにし、そうでなければ近い方の端へ寄せる。 */
-        private fun bubbleDropped() {
+        /** 離した: × の上なら消し、丸は投げた勢いで端へ（ゆっくり内側で離したらミニプレーヤー）、ミニプレーヤーは勢いで滑らせる。 */
+        private fun dropped(
+            vx: Float,
+            vy: Float,
+        ) {
             ui.dragging = false
+            val hover = ui.dismissHover
+            ui.dismissShown = false
+            ui.dismissHover = false
             if (ui.morph != null || !armed) return
+            if (ui.mode == Mode.Bubble && hover) {
+                dismissNow()
+                return
+            }
+            if (ui.mode == Mode.Bubble) bubbleReleased(vx, vy) else miniReleased(vx, vy)
+        }
+
+        private fun bubbleReleased(
+            vx: Float,
+            vy: Float,
+        ) {
             val width = screen().width()
-            val center = left() + view.width / 2
+            val center = params.x + view.width / 2
             val edge = dp(MINI_EDGE_DP)
-            if (center in edge..(width - edge)) {
-                // 離した所を中心に、丸からミニプレーヤーへ広げる（画面からはみ出す分は内側へ寄せる）
+            val fast = hypot(vx, vy) > dp(FLING_DP_PER_S)
+            if (!fast && center in edge..(width - edge)) {
+                // 内側でそっと離した: 離した所を中心に、丸からミニプレーヤーへ広げる（画面からはみ出す分は内側へ寄せる）
                 val half = dp(MINI_WIDTH_DP) / 2
                 morph(Mode.Mini, ui.atEnd, center.coerceIn(half, (width - half).coerceAtLeast(half)))
-            } else {
-                toEdge(center > width / 2)
+                return
+            }
+            // 投げた向き（横の勢いが弱ければ近い方）の端へ。勢いのまま端の向こうまで行って跳ね返る
+            val atEnd = if (abs(vx) > dp(FLING_DP_PER_S)) vx > 0 else center + vx * PROJECTION_S > width / 2
+            val overhang = dp(OVERHANG_DP)
+            val toX = if (atEnd) width - view.width + overhang else -overhang
+            val toY = (params.y + vy * PROJECTION_S).roundToInt().coerceIn(0, (screen().height() - view.height).coerceAtLeast(0))
+            ui.atEnd = atEnd
+            throwTo(IntOffset(toX, toY), vx, vy) {
+                fromEnd = atEnd
+                params.gravity = Gravity.TOP or if (atEnd) Gravity.END else Gravity.START
+                params.x = -overhang
+                relayout()
             }
         }
 
-        /** ミニプレーヤーを離した: 端に寄せていれば丸に戻す。 */
-        private fun miniDropped() {
-            ui.dragging = false
-            if (ui.morph != null || !armed) return
-            val width = screen().width()
+        private fun miniReleased(
+            vx: Float,
+            vy: Float,
+        ) {
+            val bounds = screen()
             val near = dp(EDGE_SNAP_DP)
+            val throwPast = dp(MINI_THROW_DP)
+            val left = params.x + vx * PROJECTION_S
+            val right = left + view.width
             when {
-                params.x <= near -> toEdge(false)
-                params.x + view.width >= width - near -> toEdge(true)
-                else -> savePlace(app, params.x, params.y)
+                // 端に寄せたか、端の向こうへ投げた: 丸に戻す
+                params.x <= near || left < -throwPast -> toEdge(false)
+                params.x + view.width >= bounds.width() - near || right > bounds.width() + throwPast -> toEdge(true)
+                else -> {
+                    // 勢いのまま滑らせ、画面の端では向こうへ少し行って戻る
+                    val toX = left.roundToInt().coerceIn(0, (bounds.width() - view.width).coerceAtLeast(0))
+                    val toY = (params.y + vy * PROJECTION_S).roundToInt().coerceIn(0, (bounds.height() - view.height).coerceAtLeast(0))
+                    throwTo(IntOffset(toX, toY), vx, vy) {}
+                }
             }
+        }
+
+        /** 投げた勢い（初速）のまま、ばねで行き先へ動かす。勢いが強ければ行き先を越えてから戻る（端なら画面の外まで行って跳ね返る）。 */
+        private fun throwTo(
+            to: IntOffset,
+            vx: Float,
+            vy: Float,
+            settled: () -> Unit,
+        ) {
+            fling?.cancel()
+            fling =
+                app.container.appScope.launch(AndroidUiDispatcher.Main) {
+                    val position = Animatable(Offset(params.x.toFloat(), params.y.toFloat()), Offset.VectorConverter)
+                    position.animateTo(Offset(to.x.toFloat(), to.y.toFloat()), motion.defaultSpatialSpec(), initialVelocity = Offset(vx, vy)) {
+                        params.x = value.x.roundToInt()
+                        params.y = value.y.roundToInt()
+                        relayout()
+                    }
+                    settled()
+                    savePlace(app, params.x, params.y)
+                }
+        }
+
+        /** × に乗せて離した: 丸を消す（wave を開くまで出さない）。次に出すときは掴む前の位置に出す。 */
+        private fun dismissNow() {
+            view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+            // 掴む前の高さの、元の端の丸として覚え直す（消すときに [detach] がこの位置を書き残す）
+            fromEnd = ui.atEnd
+            params.gravity = Gravity.TOP or if (ui.atEnd) Gravity.END else Gravity.START
+            params.x = -dp(OVERHANG_DP)
+            params.y = grabbedAt.y
+            dismissed.value = true
         }
 
         private fun toEdge(atEnd: Boolean) {
             val half = dp(BUBBLE_DP) / 2
-            morph(Mode.Bubble, atEnd, if (atEnd) screen().width() - half else half)
+            val overhang = dp(OVERHANG_DP)
+            morph(Mode.Bubble, atEnd, if (atEnd) screen().width() - half + overhang else half - overhang)
         }
 
         /**
-         * 丸⇔ミニプレーヤーの切り替えと、端へ寄せる動き。窓を動かしながら中身の大きさを変えると、窓が1コマ遅れて付いてきて揺れるので、
+         * 丸⇔ミニプレーヤーの切り替え。窓を動かしながら中身の大きさを変えると、窓が1コマ遅れて付いてきて揺れるので、
          * 動く間だけ窓を横いっぱいの帯にして止めておき、その中で中身の位置と大きさを動かす（[OverlayContent]）。
          * 落ち着いたら [morphDone] で窓を中身の大きさに戻す。帯の間（0.5秒ほど）は帯の中のほかのアプリを触れない。
          */
@@ -414,6 +567,7 @@ object PlayerOverlay {
             atEnd: Boolean,
             toCenterX: Int,
         ) {
+            fling?.cancel()
             val bounds = screen()
             val strip = dp(MORPH_STRIP_DP).coerceAtMost(bounds.height())
             val from = IntOffset(left() + view.width / 2, params.y + view.height / 2)
@@ -452,12 +606,62 @@ object PlayerOverlay {
             if (ui.mode == Mode.Bubble) {
                 fromEnd = ui.atEnd
                 params.gravity = Gravity.TOP or if (ui.atEnd) Gravity.END else Gravity.START
-                params.x = 0
+                params.x = -dp(OVERHANG_DP)
             } else {
                 params.gravity = Gravity.TOP or Gravity.START
                 params.x = (done.to.x - size.width / 2).coerceIn(0, (bounds.width() - size.width).coerceAtLeast(0))
             }
             ui.morph = null
+            ui.finishMorph = false
+        }
+    }
+
+    /** 丸を掴んでいる間、画面の下の真ん中に出す ×。触れない窓（下のアプリの操作を邪魔しない）。 */
+    private class DismissTarget(
+        private val app: WaveApplication,
+    ) : LifecycleOwner,
+        SavedStateRegistryOwner {
+        private val registry = LifecycleRegistry(this)
+        private val savedState = SavedStateRegistryController.create(this)
+        override val lifecycle: Lifecycle get() = registry
+        override val savedStateRegistry: SavedStateRegistry get() = savedState.savedStateRegistry
+        private val wm = app.getSystemService(WindowManager::class.java)
+        private val view = ComposeView(app)
+        private var attached = false
+
+        fun attach() {
+            savedState.performRestore(null)
+            registry.currentState = Lifecycle.State.RESUMED
+            view.setViewTreeLifecycleOwner(this)
+            view.setViewTreeSavedStateRegistryOwner(this)
+            view.setContent { DismissContent(ui) }
+            val density = app.resources.displayMetrics.density
+            val params =
+                WindowManager.LayoutParams(
+                    WindowManager.LayoutParams.WRAP_CONTENT,
+                    WindowManager.LayoutParams.WRAP_CONTENT,
+                    WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
+                    PixelFormat.TRANSLUCENT,
+                ).apply {
+                    gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+                    y = (DISMISS_BOTTOM_DP * density).roundToInt()
+                }
+            runCatching { wm.addView(view, params) }.onSuccess { attached = true }
+        }
+
+        fun detach() {
+            registry.currentState = Lifecycle.State.DESTROYED
+            if (attached) runCatching { wm.removeView(view) }
+            attached = false
+        }
+
+        /** × の中心（画面の座標）。まだ置かれていなければ null。 */
+        fun center(): IntOffset? {
+            if (!attached || view.width == 0) return null
+            val at = IntArray(2)
+            view.getLocationOnScreen(at)
+            return IntOffset(at[0] + view.width / 2, at[1] + view.height / 2)
         }
     }
 
@@ -483,6 +687,25 @@ object PlayerOverlay {
     private const val TOOLTIP_MS = 4_000L
     private const val LYRIC_TICK_MS = 250L
     private const val PERMISSION_POLL_MS = 1_000L
+
+    /** 端の丸を画面の外へはみ出させる幅（影の余白 6dp を含む。丸そのものは 14dp ほど外に出る）。 */
+    private const val OVERHANG_DP = 20
+
+    /** これより速く離したら「投げた」とみなす。 */
+    private const val FLING_DP_PER_S = 900
+
+    /** 投げた勢いで、どこまで進むとみなすか（秒。速さにこれを掛けた所を行き先にする）。 */
+    private const val PROJECTION_S = 0.18f
+
+    /** ミニプレーヤーをこれより端の向こうへ投げたら、丸に戻す。 */
+    private const val MINI_THROW_DP = 40
+
+    /** 丸の中心が × からこれより近づいたら吸い付け、吸い付いた後はこれより離れたら外す。 */
+    private const val DISMISS_ENTER_DP = 64
+    private const val DISMISS_LEAVE_DP = 96
+
+    /** × の下端の位置（画面の下から）。 */
+    internal const val DISMISS_BOTTOM_DP = 72
 
     /** 切り替えの間の帯の高さ（ミニプレーヤーが入る高さ）。 */
     private const val MORPH_STRIP_DP = 280

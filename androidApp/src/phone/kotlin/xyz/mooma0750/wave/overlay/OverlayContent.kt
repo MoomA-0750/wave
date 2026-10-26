@@ -2,6 +2,10 @@ package xyz.mooma0750.wave.overlay
 
 import android.view.MotionEvent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.scaleIn
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -96,14 +100,28 @@ internal fun OverlayContent(
         LaunchedEffect(morph) {
             if (morph == null || center == null) return@LaunchedEffect
             coroutineScope {
-                launch { center.animateTo(morph.to, motion.defaultSpatialSpec()) }
-                // 大きさと見え方の変化が終わるまで待つ（位置がほとんど動かないときは、位置のばねはすぐ止まる。
-                // 位置だけを待つと、広がる途中で窓を戻してしまい、残りの広がりで窓が1コマずつ遅れて揺れた）
-                withFrameNanos {}
-                snapshotFlow {
-                    modeTransition.currentState == modeTransition.targetState && !modeTransition.isRunning &&
-                        !shownSize.isRunning && shownSize.value == targetSize
-                }.first { it }
+                val moving =
+                    launch {
+                        launch { center.animateTo(morph.to, motion.defaultSpatialSpec()) }
+                        // 大きさと見え方の変化が終わるまで待つ（位置がほとんど動かないときは、位置のばねはすぐ止まる。
+                        // 位置だけを待つと、広がる途中で窓を戻してしまい、残りの広がりで窓が1コマずつ遅れて揺れた）
+                        withFrameNanos {}
+                        snapshotFlow {
+                            modeTransition.currentState == modeTransition.targetState && !modeTransition.isRunning &&
+                                !shownSize.isRunning && shownSize.value == targetSize
+                        }.first { it }
+                    }
+                // 途中で掴まれたら、位置と大きさを終わりまでとばす（透明度・拡大は落ち着いた窓の中で続ける）
+                val grabbed =
+                    launch {
+                        snapshotFlow { ui.finishMorph }.first { it }
+                        moving.cancel()
+                        center.snapTo(morph.to)
+                        if (targetSize != IntSize.Zero) shownSize.snapTo(targetSize)
+                    }
+                moving.join()
+                // 掴まれていたら、とばし終えるまで待つ（先に取り消すと、大きさが広がりかけのまま残った）
+                if (ui.finishMorph) grabbed.join() else grabbed.cancel()
             }
             onMorphDone(morph, shownSize.value)
         }
@@ -180,11 +198,12 @@ private fun ModeContent(
         val target = if (ui.mode == PlayerOverlay.Mode.Bubble) IntSize(bubble.width, bubble.height) else IntSize(mini.width, mini.height)
         onTargetSize(target)
         val size = shownSize().takeIf { it != IntSize.Zero } ?: target
-        val moving = transition.isRunning || transition.currentState != transition.targetState
+        val bubbleOnTop = ui.mode == PlayerOverlay.Mode.Bubble
         layout(size.width, size.height) {
-            // 見えていない方は置かない（描かず、触れない）
-            if (ui.mode == PlayerOverlay.Mode.Bubble || moving) bubble.place((size.width - bubble.width) / 2, (size.height - bubble.height) / 2)
-            if (ui.mode == PlayerOverlay.Mode.Mini || moving) mini.place((size.width - mini.width) / 2, (size.height - mini.height) / 2)
+            // 両方とも置いたままにし、今の方を上に重ねる（触れるのは上だけ）。見えていない方を外すと、
+            // 切り替えの途中から掴んでいた指がその時点で取り消され、掴んだそばから離れてしまった
+            bubble.place((size.width - bubble.width) / 2, (size.height - bubble.height) / 2, zIndex = if (bubbleOnTop) 1f else 0f)
+            mini.place((size.width - mini.width) / 2, (size.height - mini.height) / 2, zIndex = if (bubbleOnTop) 0f else 1f)
         }
     }
 }
@@ -306,3 +325,50 @@ private fun Mini(
         }
     }
 }
+
+/** 丸を掴んでいる間に画面の下に出す ×。丸が乗ると大きくなり、色が変わる。 */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+internal fun DismissContent(ui: PlayerOverlay.UiState) {
+    val context = LocalContext.current
+    val colorScheme = if (isSystemInDarkTheme()) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+    MaterialExpressiveTheme(colorScheme = colorScheme, motionScheme = MotionScheme.expressive(), typography = WaveTypography) {
+        val motion = MaterialTheme.motionScheme
+        val scale by animateFloatAsState(if (ui.dismissHover) 1.25f else 1f, motion.fastSpatialSpec(), label = "dismiss-scale")
+        val color by animateColorAsState(
+            if (ui.dismissHover) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.inverseSurface,
+            motion.defaultEffectsSpec(),
+            label = "dismiss-color",
+        )
+        // 窓の大きさは変えない（丸を吸い付ける位置が動かないように）
+        Box(Modifier.size(DISMISS_BOX_DP.dp), contentAlignment = Alignment.Center) {
+            AnimatedVisibility(
+                visible = ui.dismissShown,
+                enter = fadeIn(motion.defaultEffectsSpec()) + scaleIn(motion.defaultSpatialSpec(), initialScale = 0.5f),
+                exit = fadeOut(motion.fastEffectsSpec()) + scaleOut(motion.fastSpatialSpec(), targetScale = 0.5f),
+            ) {
+                Surface(
+                    shape = CircleShape,
+                    color = color,
+                    shadowElevation = 4.dp,
+                    modifier =
+                        Modifier.size(56.dp).graphicsLayer {
+                            scaleX = scale
+                            scaleY = scale
+                        },
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            painterResource(R.drawable.ic_close),
+                            contentDescription = stringResource(R.string.overlay_dismiss),
+                            tint = if (ui.dismissHover) MaterialTheme.colorScheme.onError else MaterialTheme.colorScheme.inverseOnSurface,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** × の窓の大きさ（大きくなった × と影が収まる）。 */
+private const val DISMISS_BOX_DP = 88
