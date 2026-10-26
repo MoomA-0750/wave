@@ -424,7 +424,8 @@ struct PlaylistProvider: AppIntentTimelineProvider {
             ? (configuration.playlists ?? []).map { p in all.first { $0.id == p.id } ?? WidgetPlaylist(id: p.id, title: p.title) }
             : []
         // 選ぶにしていても1つも選んでいなければ、最近再生した順で埋める
-        let shown = Array((chosen.isEmpty ? all : chosen).prefix(playlistCount(family)))
+        // 選んだものは中に8つ・大に16まで並べ、最近再生した順は中に4つ・大に8つ
+        let shown = chosen.isEmpty ? Array(all.prefix(playlistCount(family))) : Array(chosen.prefix(chosenPlaylistCount(family)))
         let covers = await withTaskGroup(of: (String, WidgetImage?).self) { group in
             for playlist in shown { group.addTask { (playlist.id, await cover(playlist)) } }
             var found: [String: WidgetImage] = [:]
@@ -455,6 +456,15 @@ private func playlistCount(_ family: WidgetFamily) -> Int {
         case .accessoryRectangular: 3
     #endif
     default: 4
+    }
+}
+
+/// 選んだプレイリストを並べる数の上限（中は 4×2、大は 4×4 まで。ほかは最近再生した順と同じ）。
+private func chosenPlaylistCount(_ family: WidgetFamily) -> Int {
+    switch family {
+    case .systemMedium: 8
+    case .systemLarge: 16
+    default: playlistCount(family)
     }
 }
 
@@ -531,12 +541,19 @@ struct PlaylistWidgetView: View {
         } else if family == .systemSmall {
             // 小は表紙だけを 2×2 に（2つ以下なら、表紙の右に名前を置く）
             if count <= 2 { namedGrid(rows: 2, pairs: 1, spacing: 8) } else { grid(rows: 2, columns: 2, spacing: 8) }
+        } else if family == .systemMedium && count > 4 {
+            // 中で2段目に入る数なら、再生中の曲を出さず、表紙を 4×2 に並べる
+            grid(rows: 2, columns: 4, spacing: 8).frame(maxHeight: .infinity)
+        } else if family == .systemLarge && count > 12 {
+            // 大で4段目に入る数なら、再生中の曲を出さず、表紙を 4×4 に並べる
+            grid(rows: 4, columns: 4, spacing: 10).frame(maxHeight: .infinity)
         } else if family == .systemLarge && count > 4 {
-            // 大で2段目に入る数なら、再生中の曲を出さず、表紙と名前を 4×2 に並べる
-            VStack(spacing: 0) {
+            // 大で2〜3段なら、上に再生中の曲と操作、下に表紙（2段なら名前も付ける）
+            let rows = (count + 3) / 4
+            VStack(alignment: .leading, spacing: 10) {
+                nowPlaying
                 Spacer(minLength: 0)
-                grid(rows: 2, columns: 4, spacing: 12, captions: true)
-                Spacer(minLength: 0)
+                grid(rows: rows, columns: 4, spacing: rows == 2 ? 12 : 10, captions: rows == 2)
             }
         } else {
             // 中・大は上に再生中の曲と操作、下に表紙を1段（2つ以下なら、表紙の右に名前を置く）

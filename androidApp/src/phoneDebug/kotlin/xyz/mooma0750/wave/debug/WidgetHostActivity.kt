@@ -91,6 +91,10 @@ class WidgetHostActivity : Activity() {
                     "queue" -> provider == queue
                     else -> true
                 }
+            }.let { own ->
+                // `--es with <パッケージ/クラス>` で、wave のものの先頭にほかのアプリのウィジェットを 340×160 で1つ足す（地の色を見比べるため）
+                val other = intent.getStringExtra("with")?.let(ComponentName::unflattenFromString) ?: return@let own
+                listOf(Triple(other, 340f, 160f)) + own
             }
         for ((provider, width, height) in cases) {
             val id = host.allocateAppWidgetId()

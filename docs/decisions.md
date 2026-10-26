@@ -816,3 +816,8 @@
 - 長押しから押したときは、ウィジェットの表紙と同じくアプリの画面を出さずに鳴らす（透明な Activity が鳴らす頼みだけを出して閉じる）。動的ショートカットは Activity を開く形でしか作れないため
 - 動的ショートカットの書き換えは、裏から呼ぶと OS が回数を絞るので、出した中身（ID・名前・表紙の URL・表紙を取れたか）を覚えておき、変わったときだけ書く
 - Pixel 3 の本人のランチャー（Square Home）は長押しで動的ショートカットを出さないので、確かめるときだけ既定のホームを Pixel Launcher に替え、終わってから戻した
+
+## 2026-10-26 iPhone のプレイリストのウィジェットの数・Android のウィジェットの地の色
+
+- iPhone・Mac: 選んだプレイリストは中（4×2）に8つ・大（4×4）に16まで並べ、中は5つ以上、大は13以上で再生中の曲を外して表紙だけにする（本人の指定）。大の5〜12は再生中を残して表紙を2〜3段にする（以前は5つ以上で再生中を外していたが、指定の「13以上で隠す」に合わせた）。名前は余裕のある2段のときだけ付ける。最近再生した順の数（中4・大8）はそのまま
+- Android: ウィジェットの地がほかのウィジェット（YouTube Music）と少し違う色だった。YouTube Music の APK の資源を見ると、再生中のウィジェットの地は system_accent2_50 / 800、下の入れ物は system_accent2_100 / 600 で、Glance の既定の widgetBackground も同じ 50 / 800。wave は Compose の dynamicLight/DarkColorScheme（Android 14 以降は system_surface_container_* などの新しい段）から surfaceContainerLow と secondaryContainer を取っていたので、端末によって系統の違う色になっていた。Glance の既定の GlanceTheme（資源のまま渡す）に替え、地を widgetBackground、もう一方の入れ物を accent2_100 / 600 にした。色を描くときに値にせず資源で渡すので、壁紙を替えたときも描き直しを待たずに替わる

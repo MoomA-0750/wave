@@ -2,8 +2,6 @@ package xyz.mooma0750.wave.widget
 
 import android.content.Context
 import android.content.Intent
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -24,21 +22,22 @@ import androidx.glance.appwidget.cornerRadius
 import androidx.glance.background
 import androidx.glance.layout.Box
 import androidx.glance.layout.fillMaxSize
-import androidx.glance.material3.ColorProviders
 import androidx.glance.text.FontWeight
 import androidx.glance.text.TextStyle
 import xyz.mooma0750.wave.MainActivity
+import xyz.mooma0750.wave.R
 
 /**
- * ウィジェットの見た目の共通部分。色はアプリと同じ動的な色（壁紙から取る）、角は端末のウィジェットの丸みに合わせる。
- * 中の部品は Material 3 Expressive に寄せて、主役の操作（再生）を大きく塗り、ほかはトーンを落とす。
+ * ウィジェットの見た目の共通部分。色は Glance の既定の動的な色（端末の system_accent・neutral の段を資源のまま渡すので、
+ * 壁紙を替えると描き直さなくても OS の側で色が替わる。地は Google のウィジェット（YouTube Music など）と同じ system_accent2_50 / 800）。
+ * 角は端末のウィジェットの丸みに合わせる。中の部品は Material 3 Expressive に寄せて、主役の操作（再生）を大きく塗り、ほかはトーンを落とす。
  */
 @Composable
 fun WaveGlanceTheme(
-    context: Context,
+    @Suppress("UNUSED_PARAMETER") context: Context,
     content: @Composable () -> Unit,
 ) {
-    GlanceTheme(colors = ColorProviders(light = dynamicLightColorScheme(context), dark = dynamicDarkColorScheme(context)), content = content)
+    GlanceTheme(content = content)
 }
 
 /**
@@ -63,9 +62,9 @@ fun WidgetSurface(
 }
 
 /**
- * つなぐ入れ物の1つ。角の丸みはウィジェットの丸みより控えめ（[containerCorner]。外側は [WidgetSurface] が切る）。今の曲の側は surfaceContainerLow、もう一方（プレイリスト・次に流れる曲）は
- * secondaryContainer（YouTube Music と同じく、もう一方を一段濃く色付ける）。Glance の色の組には surfaceContainer の段が無く、
- * surfaceVariant は端末の色の組によって secondaryContainer（＝ widgetBackground）とほぼ同じ色になったので、明るさの離れた組にする。
+ * つなぐ入れ物の1つ。角の丸みはウィジェットの丸みより控えめ（[containerCorner]。外側は [WidgetSurface] が切る）。今の曲の側は
+ * ほかのウィジェットと同じ地（widgetBackground）、もう一方（プレイリスト・次に流れる曲）は YouTube Music と同じく一段濃く色付ける
+ * （[R.color.widget_second_container]。ライトは system_accent2_100、ダークは system_accent2_600）。
  */
 @Composable
 fun WidgetContainer(
@@ -75,21 +74,15 @@ fun WidgetContainer(
 ) {
     Box(
         modifier
-            .background(if (secondary) GlanceTheme.colors.secondaryContainer else playerContainerColor())
+            .background(if (secondary) ColorProvider(R.color.widget_second_container) else playerContainerColor())
             .cornerRadius(containerCorner()),
         content = { content() },
     )
 }
 
-/** 今の曲の側の入れ物の色（ライト・ダークで端末の動的な色の surfaceContainerLow）。 */
+/** 今の曲の側の入れ物の色（ほかのウィジェットと同じ地）。 */
 @Composable
-fun playerContainerColor(): ColorProvider {
-    val context = LocalContext.current
-    return androidx.glance.color.ColorProvider(
-        day = dynamicLightColorScheme(context).surfaceContainerLow,
-        night = dynamicDarkColorScheme(context).surfaceContainerLow,
-    )
-}
+fun playerContainerColor(): ColorProvider = GlanceTheme.colors.widgetBackground
 
 /** ウィジェットの角の丸み（端末の丸みに大きさの倍率を掛ける。文字やボタンと一緒に大きくする）。 */
 @Composable

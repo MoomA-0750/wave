@@ -451,10 +451,10 @@ struct SelectPlaylistIntent: WidgetConfigurationIntent {
     static let title: LocalizedStringResource = "Choose Playlists"
     @Parameter(title: "Show", default: .recent) var source: PlaylistWidgetSource
     #if os(iOS)
-        @Parameter(title: "Playlists", size: [.systemSmall: 4, .systemMedium: 4, .systemLarge: 8, .accessoryCircular: 1, .accessoryRectangular: 3])
+        @Parameter(title: "Playlists", size: [.systemSmall: 4, .systemMedium: 8, .systemLarge: 16, .accessoryCircular: 1, .accessoryRectangular: 3])
         var playlists: [PlaylistEntity]?
     #else
-        @Parameter(title: "Playlists", size: [.systemSmall: 4, .systemMedium: 4, .systemLarge: 8]) var playlists: [PlaylistEntity]?
+        @Parameter(title: "Playlists", size: [.systemSmall: 4, .systemMedium: 8, .systemLarge: 16]) var playlists: [PlaylistEntity]?
     #endif
     init() {}
 

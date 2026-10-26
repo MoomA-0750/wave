@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- ウィジェットの2つ目の入れ物（プレイリスト・次に流れる曲）。YouTube Music のウィジェットの surfaceVariant と同じ段（地は Glance の widgetBackground ＝ system_accent2_50 / 800） -->
+    <color name="widget_second_container">@android:color/system_accent2_100</color>
+</resources>
