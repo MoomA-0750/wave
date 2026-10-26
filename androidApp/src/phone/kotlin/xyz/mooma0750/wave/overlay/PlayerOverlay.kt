@@ -12,6 +12,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.LifecycleOwner
@@ -61,7 +63,18 @@ object PlayerOverlay {
         var lyric by mutableStateOf<String?>(null)
         var tooltip by mutableStateOf(false)
         var dragging by mutableStateOf(false)
+
+        /** 切り替えの動きの途中（窓は横いっぱいの帯）。 */
+        var morph by mutableStateOf<Morph?>(null)
     }
+
+    /** 切り替えの動き。帯の上端（画面の座標）と高さ、中身の中心の始まりと終わり（帯の中の座標）。 */
+    internal class Morph(
+        val top: Int,
+        val height: Int,
+        val from: IntOffset,
+        val to: IntOffset,
+    )
 
     private val foreground = MutableStateFlow(true)
     private var started = false
@@ -230,6 +243,7 @@ object PlayerOverlay {
         /** 右端から測っているか（右端の丸）。 */
         private var fromEnd = false
         private var startY = 0
+        private var attached = false
 
         private fun dp(value: Int) = (value * density).roundToInt()
 
@@ -282,6 +296,7 @@ object PlayerOverlay {
                     onPrevious = { previous(app) },
                     onTogglePlay = { togglePlay(app) },
                     onNext = { next(app) },
+                    onMorphDone = ::morphDone,
                 )
             }
             val bounds = screen()
@@ -290,74 +305,140 @@ object PlayerOverlay {
             params.x = if (ui.mode == Mode.Bubble) 0 else x.coerceIn(0, bounds.width())
             params.y = if (y < 0) bounds.height() / 3 else y.coerceIn(0, bounds.height() - dp(BUBBLE_DP))
             wm.addView(view, params)
+            attached = true
         }
 
         fun detach() {
+            // 切り替えの途中で消えたら、落ち着く先へ置いたことにする
+            ui.morph?.let { settle(it, if (ui.mode == Mode.Mini) IntSize(dp(MINI_WIDTH_DP), dp(BUBBLE_DP)) else IntSize(dp(BUBBLE_DP), dp(BUBBLE_DP))) }
+            savePlace(app, params.x, params.y)
+            attached = false
             registry.currentState = Lifecycle.State.DESTROYED
             runCatching { wm.removeView(view) }
         }
 
+        private fun relayout() {
+            if (attached) runCatching { wm.updateViewLayout(view, params) }
+        }
+
+        /** 今の窓の左端（右端から測っていれば左から測り直した値）。 */
+        private fun left() = if (fromEnd) screen().width() - view.width - params.x else params.x
+
         /** ドラッグの間は左上から測る（端から測ったままだと、右端の丸を動かす向きが逆になる）。 */
         private fun dragStart() {
+            if (ui.morph != null) return
             ui.dragging = true
             ui.tooltip = false
-            val width = screen().width()
             // （gravity の END は向きの印も含むので、値を比べずに覚えておく）
             if (fromEnd) {
-                params.x = width - view.width - params.x
+                params.x = left()
                 params.gravity = Gravity.TOP or Gravity.START
                 fromEnd = false
             }
             startX = params.x
             startY = params.y
-            wm.updateViewLayout(view, params)
+            relayout()
         }
 
         private fun drag(
             dx: Float,
             dy: Float,
         ) {
+            if (ui.morph != null) return
             val bounds = screen()
             params.x = (startX + dx.roundToInt()).coerceIn(0, (bounds.width() - view.width).coerceAtLeast(0))
             params.y = (startY + dy.roundToInt()).coerceIn(0, (bounds.height() - view.height).coerceAtLeast(0))
-            wm.updateViewLayout(view, params)
+            relayout()
         }
 
         /** 丸を離した: 端から十分に内側ならミニプレーヤーにし、そうでなければ近い方の端へ寄せる。 */
         private fun bubbleDropped() {
             ui.dragging = false
+            if (ui.morph != null) return
             val width = screen().width()
-            val center = params.x + view.width / 2
+            val center = left() + view.width / 2
             val edge = dp(MINI_EDGE_DP)
             if (center in edge..(width - edge)) {
-                ui.mode = Mode.Mini
-                params.x = (center - dp(MINI_WIDTH_DP) / 2).coerceIn(0, (width - dp(MINI_WIDTH_DP)).coerceAtLeast(0))
+                // 離した所を中心に、丸からミニプレーヤーへ広げる（画面からはみ出す分は内側へ寄せる）
+                val half = dp(MINI_WIDTH_DP) / 2
+                morph(Mode.Mini, ui.atEnd, center.coerceIn(half, (width - half).coerceAtLeast(half)))
             } else {
-                snapToEdge(center > width / 2)
+                toEdge(center > width / 2)
             }
-            wm.updateViewLayout(view, params)
-            savePlace(app, params.x, params.y)
         }
 
         /** ミニプレーヤーを離した: 端に寄せていれば丸に戻す。 */
         private fun miniDropped() {
             ui.dragging = false
+            if (ui.morph != null) return
             val width = screen().width()
             val near = dp(EDGE_SNAP_DP)
             when {
-                params.x <= near -> snapToEdge(false)
-                params.x + view.width >= width - near -> snapToEdge(true)
+                params.x <= near -> toEdge(false)
+                params.x + view.width >= width - near -> toEdge(true)
+                else -> savePlace(app, params.x, params.y)
             }
-            wm.updateViewLayout(view, params)
+        }
+
+        private fun toEdge(atEnd: Boolean) {
+            val half = dp(BUBBLE_DP) / 2
+            morph(Mode.Bubble, atEnd, if (atEnd) screen().width() - half else half)
+        }
+
+        /**
+         * 丸⇔ミニプレーヤーの切り替えと、端へ寄せる動き。窓を動かしながら中身の大きさを変えると、窓が1コマ遅れて付いてきて揺れるので、
+         * 動く間だけ窓を横いっぱいの帯にして止めておき、その中で中身の位置と大きさを動かす（[OverlayContent]）。
+         * 落ち着いたら [morphDone] で窓を中身の大きさに戻す。帯の間（0.5秒ほど）は帯の中のほかのアプリを触れない。
+         */
+        private fun morph(
+            mode: Mode,
+            atEnd: Boolean,
+            toCenterX: Int,
+        ) {
+            val bounds = screen()
+            val strip = dp(MORPH_STRIP_DP).coerceAtMost(bounds.height())
+            val from = IntOffset(left() + view.width / 2, params.y + view.height / 2)
+            val top = (from.y - strip / 2).coerceIn(0, bounds.height() - strip)
+            ui.morph = Morph(top = top, height = strip, from = IntOffset(from.x, from.y - top), to = IntOffset(toCenterX, strip / 2))
+            ui.mode = mode
+            ui.atEnd = atEnd
+            fromEnd = false
+            params.gravity = Gravity.TOP or Gravity.START
+            params.x = 0
+            params.y = top
+            params.width = bounds.width()
+            params.height = strip
+            relayout()
+        }
+
+        /** 動き終えた: 窓を中身の大きさに戻し、落ち着いた所に置く（中身を帯の中に置くのをやめるのと同じコマで）。 */
+        private fun morphDone(
+            done: Morph,
+            size: IntSize,
+        ) {
+            if (ui.morph !== done) return
+            settle(done, size)
+            relayout()
             savePlace(app, params.x, params.y)
         }
 
-        private fun snapToEdge(atEnd: Boolean) {
-            ui.mode = Mode.Bubble
-            ui.atEnd = atEnd
-            fromEnd = atEnd
-            params.gravity = Gravity.TOP or if (atEnd) Gravity.END else Gravity.START
-            params.x = 0
+        private fun settle(
+            done: Morph,
+            size: IntSize,
+        ) {
+            val bounds = screen()
+            params.width = WindowManager.LayoutParams.WRAP_CONTENT
+            params.height = WindowManager.LayoutParams.WRAP_CONTENT
+            params.y = (done.top + done.to.y - size.height / 2).coerceIn(0, (bounds.height() - size.height).coerceAtLeast(0))
+            if (ui.mode == Mode.Bubble) {
+                fromEnd = ui.atEnd
+                params.gravity = Gravity.TOP or if (ui.atEnd) Gravity.END else Gravity.START
+                params.x = 0
+            } else {
+                params.gravity = Gravity.TOP or Gravity.START
+                params.x = (done.to.x - size.width / 2).coerceIn(0, (bounds.width() - size.width).coerceAtLeast(0))
+            }
+            ui.morph = null
         }
     }
 
@@ -369,6 +450,9 @@ object PlayerOverlay {
     private const val TOOLTIP_MS = 4_000L
     private const val LYRIC_TICK_MS = 250L
     private const val PERMISSION_POLL_MS = 1_000L
+
+    /** 切り替えの間の帯の高さ（ミニプレーヤーが入る高さ）。 */
+    private const val MORPH_STRIP_DP = 280
 
     /** 丸（影の余白を含む）。 */
     internal const val BUBBLE_DP = 68

@@ -1,7 +1,12 @@
 package xyz.mooma0750.wave.overlay
 
 import android.view.MotionEvent
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -34,10 +39,22 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.VectorConverter
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.layout.layout
+import kotlinx.coroutines.delay
 import androidx.compose.ui.unit.dp
 import xyz.mooma0750.wave.R
 import xyz.mooma0750.wave.ui.IconAction
@@ -53,12 +70,68 @@ internal fun OverlayContent(
     onPrevious: () -> Unit,
     onTogglePlay: () -> Unit,
     onNext: () -> Unit,
+    onMorphDone: (PlayerOverlay.Morph, IntSize) -> Unit,
 ) {
     val context = LocalContext.current
     val colorScheme = if (isSystemInDarkTheme()) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
     MaterialExpressiveTheme(colorScheme = colorScheme, motionScheme = MotionScheme.expressive(), typography = WaveTypography) {
         val now = ui.now ?: return@MaterialExpressiveTheme
-        when (ui.mode) {
+        val motion = MaterialTheme.motionScheme
+        val morph = ui.morph
+        // 切り替えの間（窓は横いっぱいの帯）は、中身の中心を始まりから終わりへばねで動かす。
+        // 始まりの位置は同じコマで使うので、作るときに入れておく（LaunchedEffect で入れると1コマ前の位置が出る）
+        val center = remember(morph) { morph?.let { Animatable(it.from, IntOffset.VectorConverter) } }
+        var contentSize by remember { mutableStateOf(IntSize.Zero) }
+        LaunchedEffect(morph) {
+            if (morph == null || center == null) return@LaunchedEffect
+            center.animateTo(morph.to, motion.defaultSpatialSpec())
+            // 大きさの変化（同じばね）が落ち着くのを少し待ってから、窓を中身の大きさに戻す
+            delay(MORPH_SETTLE_MS)
+            onMorphDone(morph, contentSize)
+        }
+        Box(
+            Modifier.layout { measurable, constraints ->
+                val placeable = measurable.measure(constraints.copy(minWidth = 0, minHeight = 0))
+                if (center == null) {
+                    layout(placeable.width, placeable.height) { placeable.place(0, 0) }
+                } else {
+                    layout(constraints.maxWidth, constraints.maxHeight) {
+                        val c = center.value
+                        placeable.place(c.x - placeable.width / 2, c.y - placeable.height / 2)
+                    }
+                }
+            },
+        ) {
+            ModeContent(ui, now, motion, Modifier.onSizeChanged { contentSize = it }, bubbleTouch, miniTouch, onPrevious, onTogglePlay, onNext)
+        }
+    }
+}
+
+/** 丸とミニプレーヤーは、大きさを滑らかに変えながら入れ替える。 */
+@Composable
+private fun ModeContent(
+    ui: PlayerOverlay.UiState,
+    now: xyz.mooma0750.wave.playback.NowPlayingSnapshot,
+    motion: androidx.compose.material3.MotionScheme,
+    modifier: Modifier,
+    bubbleTouch: (MotionEvent) -> Boolean,
+    miniTouch: (MotionEvent) -> Boolean,
+    onPrevious: () -> Unit,
+    onTogglePlay: () -> Unit,
+    onNext: () -> Unit,
+) {
+    AnimatedContent(
+        targetState = ui.mode,
+        modifier = modifier,
+        contentAlignment = Alignment.Center,
+        transitionSpec = {
+            (fadeIn(motion.defaultEffectsSpec()) + scaleIn(motion.defaultSpatialSpec(), initialScale = 0.6f)) togetherWith
+                (fadeOut(motion.fastEffectsSpec()) + scaleOut(motion.fastSpatialSpec(), targetScale = 0.6f)) using
+                SizeTransform(clip = false) { _, _ -> motion.defaultSpatialSpec() }
+        },
+        label = "overlay-mode",
+    ) { mode ->
+        when (mode) {
             PlayerOverlay.Mode.Bubble ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     // 吹き出しは丸の内側（画面の中央の側）へ出す
@@ -185,3 +258,6 @@ private fun Mini(
         }
     }
 }
+
+/** 中心の動きが止まってから、窓を戻すまでに待つ時間（大きさのばねが落ち着くまで）。 */
+private const val MORPH_SETTLE_MS = 120L
