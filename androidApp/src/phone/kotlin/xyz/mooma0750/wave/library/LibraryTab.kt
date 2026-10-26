@@ -94,6 +94,8 @@ fun LibraryTabScreen(
     onOpenDownloads: (() -> Unit)? = null,
     /** 並べ方とグリッドの保存先（アプリを閉じても覚えておく）。 */
     settings: xyz.mooma0750.wave.settings.AppSettings,
+    /** 見出しの左にアカウントのアイコンを出す。デスクトップと同じ並びの左の欄では上の帯の右に出すので出さない。 */
+    showAvatar: Boolean = true,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var filter by rememberSaveable { mutableStateOf<LibraryFilter?>(null) }
@@ -134,8 +136,8 @@ fun LibraryTabScreen(
 
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.statusBarsPadding().padding(start = 16.dp, end = 4.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Avatar(account, 32.dp)
-            Text(stringResource(R.string.library_title), Modifier.weight(1f).padding(start = 12.dp), style = MaterialTheme.typography.headlineSmallEmphasized)
+            if (showAvatar) Avatar(account, 32.dp)
+            Text(stringResource(R.string.library_title), Modifier.weight(1f).padding(start = if (showAvatar) 12.dp else 0.dp), style = MaterialTheme.typography.headlineSmallEmphasized)
             IconAction(R.drawable.ic_add, stringResource(R.string.library_create_playlist), { creating = true })
         }
         LazyRow(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {

@@ -39,6 +39,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
@@ -79,16 +80,18 @@ fun SearchScreen(
     onOpenPodcast: (PodcastSummary) -> Unit = {},
     /** プレイリストのページを開く（履歴から）。 */
     onOpenPlaylist: (PlaylistSummary) -> Unit = {},
+    /** 検索の欄を出す。デスクトップと同じ並びでは上の帯の欄（[DesktopSearchField]）で打つので出さない。 */
+    showField: Boolean = true,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val historyEntries by history.entries.collectAsStateWithLifecycle()
     val keyboard = LocalSoftwareKeyboardController.current
     // 開いたらすぐ打てるように（Spotify と同じ）。結果を見ている途中で戻ってきたときは開かない
     val focus = remember { FocusRequester() }
-    LaunchedEffect(Unit) { if (state.query.isBlank()) focus.requestFocus() }
+    LaunchedEffect(Unit) { if (showField && state.query.isBlank()) focus.requestFocus() }
     Scaffold(bottomBar = bottomBar) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
-            Row(Modifier.padding(start = 4.dp, end = 16.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (showField) Row(Modifier.padding(start = 4.dp, end = 16.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 BackButton(onBack)
                 TextField(
                     value = state.query,
@@ -139,6 +142,44 @@ fun SearchScreen(
             }
         }
     }
+}
+
+/**
+ * デスクトップと同じ並びの上の帯の検索の欄（Mac・Windows と同じく窓の中央）。打ち始めるか押すと、中央に検索のページを開く
+ * （[SearchScreen] と同じ ViewModel を使い、ページの側の欄は出さない）。
+ */
+@Composable
+fun DesktopSearchField(
+    viewModel: SearchViewModel,
+    onOpen: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val state by viewModel.state.collectAsStateWithLifecycle()
+    val keyboard = LocalSoftwareKeyboardController.current
+    TextField(
+        value = state.query,
+        onValueChange = {
+            viewModel.onQueryChange(it)
+            onOpen()
+        },
+        modifier = modifier.onFocusChanged { if (it.isFocused) onOpen() },
+        singleLine = true,
+        placeholder = { Text(stringResource(R.string.search_hint)) },
+        leadingIcon = { xyz.mooma0750.wave.ui.MenuIcon(R.drawable.ic_search) },
+        trailingIcon = { if (state.query.isNotEmpty()) IconAction(R.drawable.ic_close, stringResource(R.string.search_clear), { viewModel.onQueryChange("") }) },
+        shape = MaterialTheme.shapes.extraLarge,
+        colors =
+            TextFieldDefaults.colors(
+                focusedIndicatorColor = Color.Transparent,
+                unfocusedIndicatorColor = Color.Transparent,
+            ),
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+        keyboardActions =
+            KeyboardActions(onSearch = {
+                keyboard?.hide()
+                viewModel.search()
+            }),
+    )
 }
 
 /** 検索の結果からアーティスト・アルバム・ポッドキャストを開く（履歴に残してから開く）。 */

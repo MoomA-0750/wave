@@ -35,6 +35,17 @@ class AppNavigator {
         if (next == tab) stacks.getValue(tab).clear() else tab = next
     }
 
+    /** タブを切り替えるだけ（奥の画面は閉じない）。デスクトップと同じ並びに変わったとき、下のタブの無いライブラリ・Claude から移す。 */
+    fun show(next: Tab) {
+        tab = next
+    }
+
+    /** デスクトップと同じ並びの上の帯の「ホーム」: どこにいてもホームの最初を出す。 */
+    fun goHome() {
+        stacks.getValue(Tab.Home).clear()
+        tab = Tab.Home
+    }
+
     fun clearAll() {
         stacks.values.forEach { it.clear() }
         tab = Tab.Home

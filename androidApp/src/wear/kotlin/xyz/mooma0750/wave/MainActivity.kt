@@ -215,6 +215,8 @@ private fun LoggedIn(
                 is xyz.mooma0750.wave.navigation.Screen.Podcast -> null
                 // 時計にはダウンロードしない（ADR-0016 の 19）
                 xyz.mooma0750.wave.navigation.Screen.Downloads -> null
+                // 歌詞のページはスマホのデスクトップと同じ並びだけ（時計は再生画面から歌詞を開く）
+                xyz.mooma0750.wave.navigation.Screen.Lyrics -> null
             }?.let(nav::push)
         }
     }

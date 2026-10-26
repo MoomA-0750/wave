@@ -17,6 +17,9 @@ sealed interface Screen {
     /** 再生履歴（自分が聴いた曲）。 */
     data object History : Screen
 
+    /** 歌詞（デスクトップと同じ並びの中央。下の帯の歌詞のボタンで開く）。 */
+    data object Lyrics : Screen
+
     /** ダウンロード（ADR-0016）。 */
     data object Downloads : Screen
 

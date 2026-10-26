@@ -286,8 +286,64 @@ class MainActivity : ComponentActivity() {
                                     xyz.mooma0750.wave.connect2.DevicePickerSheet(manager, onDismiss = { showDevices = false }, onOpenSettings = { nav.push(Screen.Connect) }, watch = container.watchRemote, phonePlaying = xyz.mooma0750.wave.nowplaying.rememberPlayerUiState(container.player).first.isPlaying)
                                 }
                             }
+                            // マイライブラリ（下のタブのライブラリと、デスクトップと同じ並びの左の欄）
+                            val library: @Composable (Boolean) -> Unit = { showAvatar ->
+                                LibraryTabScreen(
+                                    viewModel(key = "library-tab-$loginGeneration-$playlistsVersion") { LibraryTabViewModel(container.music, container.libraryCache, feeds = container.feedLibrary.state) },
+                                    account = account,
+                                    onOpenPlaylist = { nav.push(Screen.Playlist(it)) },
+                                    onOpenArtist = { nav.push(Screen.Artist(it.browseId, it.name)) },
+                                    onOpenAlbum = { nav.push(Screen.Album(it.browseId, it.title)) },
+                                    onOpenPodcast = { nav.push(Screen.Podcast(it.browseId, it.title)) },
+                                    onCreatePlaylist = { container.playlistEditor.create(it, null) },
+                                    onOpenDownloads = container.downloads?.let { { nav.push(Screen.Downloads) } },
+                                    settings = container.settings,
+                                    showAvatar = showAvatar,
+                                )
+                            }
+                            val searchViewModel = @Composable { viewModel(key = "search-$loginGeneration") { SearchViewModel(container.music, container.searchHistory, container.podcastFeeds, container.lyricsSearch) } }
+                            // 縦横とも大きい画面では Mac・Windows と同じ並び（上に検索、左にマイライブラリ）
+                            var desktopLayout by remember { mutableStateOf(false) }
+                            val desktopParts =
+                                    xyz.mooma0750.wave.navigation.DesktopParts(
+                                        searchField = { modifier ->
+                                            xyz.mooma0750.wave.search.DesktopSearchField(searchViewModel(), onOpen = { if (nav.current != Screen.Search) nav.push(Screen.Search) }, modifier)
+                                        },
+                                        account = {
+                                            androidx.compose.material3.IconButton(onClick = { nav.push(Screen.Settings) }) {
+                                                xyz.mooma0750.wave.settings.Avatar(account, androidx.compose.ui.unit.Dp(32f))
+                                            }
+                                        },
+                                        library = { library(false) },
+                                        queue = { xyz.mooma0750.wave.nowplaying.QueuePane(container.player, container.connectV2, songActions) },
+                                        ai = {
+                                            xyz.mooma0750.wave.ai.AiChatScreen(
+                                                container.aiChat,
+                                                onPlay = playerActions::playSong,
+                                                onOpenSettings = { nav.push(Screen.Settings) },
+                                            )
+                                        },
+                                        playerBar = { bar ->
+                                            xyz.mooma0750.wave.nowplaying.PlayerBar(
+                                                container.player,
+                                                container.connectV2,
+                                                songActions,
+                                                onOpenDevices = openDevices,
+                                                // 歌詞は中央のページに出す（もう一度押すと閉じる。Windows と同じ）
+                                                lyricsShown = nav.current == Screen.Lyrics,
+                                                onLyrics = { if (nav.current == Screen.Lyrics) nav.back() else nav.push(Screen.Lyrics) },
+                                                queueShown = bar.queueShown,
+                                                onQueue = bar.onQueue,
+                                                panelShown = bar.panelShown,
+                                                onPanel = bar.onPanel,
+                                                onExpand = bar.onExpand,
+                                            )
+                                        },
+                                        onActive = { desktopLayout = it },
+                                    )
                             AppShell(
                                 nav,
+                                desktop = desktopParts,
                                 hasPlayback = rememberHasPlayback(container.player, container.connectV2),
                                 miniPlayer = { open -> MiniPlayer(container.player, container.connectV2, onOpen = open, onOpenDevices = openDevices, actions = songActions) },
                                 nowPlaying = { close, inPanel, hidePanel ->
@@ -303,6 +359,8 @@ class MainActivity : ComponentActivity() {
                                         inPanel = inPanel,
                                         onHidePanel = hidePanel,
                                         onAskAi = { showAi = true },
+                                        // デスクトップと同じ並びの右の欄では、操作は下の帯にある
+                                        controlsInBar = inPanel && desktopLayout,
                                     )
                                 },
                             ) {
@@ -320,18 +378,7 @@ class MainActivity : ComponentActivity() {
                                         onPlay = playerActions::playSong,
                                         onOpenSettings = { nav.push(Screen.Settings) },
                                     )
-                                Tab.Library ->
-                                    LibraryTabScreen(
-                                        viewModel(key = "library-tab-$loginGeneration-$playlistsVersion") { LibraryTabViewModel(container.music, container.libraryCache, feeds = container.feedLibrary.state) },
-                                        account = account,
-                                        onOpenPlaylist = { nav.push(Screen.Playlist(it)) },
-                                        onOpenArtist = { nav.push(Screen.Artist(it.browseId, it.name)) },
-                                        onOpenAlbum = { nav.push(Screen.Album(it.browseId, it.title)) },
-                                        onOpenPodcast = { nav.push(Screen.Podcast(it.browseId, it.title)) },
-                                        onCreatePlaylist = { container.playlistEditor.create(it, null) },
-                                        onOpenDownloads = container.downloads?.let { { nav.push(Screen.Downloads) } },
-                                        settings = container.settings,
-                                    )
+                                Tab.Library -> library(true)
                                 Tab.Home ->
                                     HomeScreen(
                                         account = account,
@@ -374,6 +421,7 @@ class MainActivity : ComponentActivity() {
                                             onBack = pop,
                                         )
                                     }
+                                Screen.Lyrics -> xyz.mooma0750.wave.nowplaying.LyricsPage(container.player, container.connectV2, container.lyrics, onBack = pop)
                                 Screen.History ->
                                     HistoryScreen(
                                         viewModel(key = "history-$loginGeneration") { HistoryViewModel(container.music) },
@@ -397,7 +445,8 @@ class MainActivity : ComponentActivity() {
                                             )
                                         }
                                     SearchScreen(
-                                        viewModel(key = "search-$loginGeneration") { SearchViewModel(container.music, container.searchHistory, container.podcastFeeds, container.lyricsSearch) },
+                                        searchViewModel(),
+                                        showField = !desktopLayout,
                                         onSongClick = playerActions::playSong,
                                         actions = searchActions,
                                         onBack = pop,

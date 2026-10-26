@@ -41,4 +41,17 @@ class AppNavigatorTest {
         nav.select(Tab.Home)
         assertNull(nav.current)
     }
+
+    @Test
+    fun showKeepsTheStackAndGoHomeClearsIt() {
+        val nav = AppNavigator()
+        nav.push(Screen.History)
+        nav.select(Tab.Library)
+        nav.show(Tab.Home)
+        assertEquals(Screen.History, nav.current)
+        nav.select(Tab.Library)
+        nav.goHome()
+        assertEquals(Tab.Home, nav.tab)
+        assertNull(nav.current)
+    }
 }

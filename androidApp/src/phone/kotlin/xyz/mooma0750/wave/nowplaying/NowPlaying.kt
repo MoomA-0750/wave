@@ -253,6 +253,8 @@ fun NowPlayingScreen(
     onHidePanel: (() -> Unit)? = null,
     /** Claude に聞く（null なら出さない）。 */
     onAskAi: (() -> Unit)? = null,
+    /** シーク・操作・音量・端末とキューは下の再生の帯にある（デスクトップと同じ並びの右の欄）。出さない。 */
+    controlsInBar: Boolean = false,
 ) {
     val display = rememberDisplay(connection, connect)
     val state = display.state
@@ -468,109 +470,31 @@ fun NowPlayingScreen(
                     }
                     LikeButton(connection, scope, size = 28.dp, onLikedTap = song?.let { current -> { actions.addToPlaylist(current) } })
                 }
-                Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
-                    // ほかの端末を映している間は、ドラッグの間は表示だけ動かし、指を離したときに1回だけ命令を送る（命令ごとに暗号化・鍵交換をする）
-                    var dragging by remember { mutableStateOf<Float?>(null) }
-                    if (live) {
-                        LiveBadge(Modifier.align(Alignment.CenterHorizontally).padding(vertical = 14.dp))
-                        return@Column
-                    }
-                    Slider(
-                        value = dragging ?: if (state.durationMs > 0) (state.positionMs.toFloat() / state.durationMs).coerceIn(0f, 1f) else 0f,
-                        onValueChange = {
+                if (!controlsInBar) {
+                    SeekBar(display, Modifier.fillMaxWidth().padding(horizontal = 24.dp))
+                    Transport(display, connection, Modifier.fillMaxWidth().padding(horizontal = 16.dp), Arrangement.SpaceBetween, playSize = 72.dp, skipSize = 36.dp)
+                    VolumeSlider(display, Modifier.fillMaxWidth().padding(horizontal = 24.dp))
+                    // 左端に端末、右端にキュー（共有は「…」のメニューにある）。weight(fill = false) と Spacer の weight を並べると余りが分かれて、
+                    // キューのボタンが真ん中寄りに出ていたので、SpaceBetween で両端に寄せる
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                        // 端末名が出ているときは、名前まで含めて押せるようにする（アイコンだけが反応するのは分かりにくい）
+                        Row(
+                            Modifier.weight(1f, fill = false).clip(CircleShape).clickable(onClick = onOpenDevices).padding(end = if (remote != null) 12.dp else 0.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            IconAction(R.drawable.ic_devices, stringResource(R.string.nowplaying_connected_devices), onOpenDevices, active = remote != null)
                             if (remote != null) {
-                                dragging = it
-                            } else if (state.durationMs > 0) {
-                                display.seekTo((it * state.durationMs).toLong())
+                                Text(
+                                    stringResource(R.string.nowplaying_playing_on, remote.deviceLabel),
+                                    style = MaterialTheme.typography.bodySmallEmphasized,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
                             }
-                        },
-                        onValueChangeFinished = {
-                            val target = dragging
-                            dragging = null
-                            if (remote != null && target != null && state.durationMs > 0) display.seekTo((target * state.durationMs).toLong())
-                        },
-                        enabled = state.durationMs > 0,
-                    )
-                    Row(Modifier.fillMaxWidth()) {
-                        Text(formatTime(state.positionMs), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Spacer(Modifier.weight(1f))
-                        Text(formatTime(state.durationMs), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                    // シャッフルは入り切り（切ると残りの曲を入れる前の並びに戻す）。入っている間は色を付ける。
-                    // ほかの端末を映している間は、その端末のシャッフル・繰り返しを変える（前の版の端末は変えられないので灰色）
-                    val shuffled by connection.shuffled.collectAsState()
-                    val modesEnabled = remote == null || remote.modesControllable
-                    IconAction(
-                        R.drawable.ic_shuffle,
-                        if (shuffled) stringResource(R.string.ui_shuffle_on) else stringResource(R.string.ui_shuffle_off),
-                        { scope.launch { connection.toggleShuffle() } },
-                        active = shuffled && modesEnabled,
-                        enabled = modesEnabled && state.currentIndex >= 0,
-                    )
-                    IconAction(R.drawable.ic_skip_previous, stringResource(R.string.nowplaying_previous), { display.previous() }, enabled = state.hasPrevious, size = 36.dp)
-                    PlayFab(state.isPlaying, { display.togglePlay() }, size = 72.dp)
-                    IconAction(R.drawable.ic_skip_next, stringResource(R.string.nowplaying_next), { display.next() }, enabled = state.hasNext, size = 36.dp)
-                    IconAction(
-                        if (state.repeatMode == Player.REPEAT_MODE_ONE) R.drawable.ic_repeat_one else R.drawable.ic_repeat,
-                        when (state.repeatMode) {
-                            Player.REPEAT_MODE_ALL -> stringResource(R.string.nowplaying_repeat_all)
-                            Player.REPEAT_MODE_ONE -> stringResource(R.string.nowplaying_repeat_one)
-                            else -> stringResource(R.string.nowplaying_repeat_off)
-                        },
-                        { scope.launch { connection.cycleRepeatMode() } },
-                        active = state.repeatMode != Player.REPEAT_MODE_OFF && modesEnabled,
-                        enabled = modesEnabled,
-                    )
-                }
-                // 手元で鳴らしている間は本体の音量（音量ボタンと同じ）。PC を映している間はその PC のアプリの中の音量（音量ボタンでも変えられる）。
-                // ほかのスマホを映している間は出さない（スマホの音量はそのスマホで変える。Spotify と同じ）
-                val volume = display.volumePercent
-                val systemVolume = rememberSystemVolume()
-                if (remote != null && volume != null || remote == null && controller != null) {
-                    // 映している間は、ドラッグの間は表示だけ動かし、指を離したときに1回だけ送る（ほかの端末へは命令ごとに暗号化・鍵交換をする）
-                    var draggingVolume by remember { mutableStateOf<Float?>(null) }
-                    val volumeLabel = remote?.let { stringResource(R.string.nowplaying_volume_on_device, it.deviceLabel) } ?: stringResource(R.string.nowplaying_volume_app)
-                    val shown = if (remote != null) (volume ?: 100) / 100f else systemVolume.fraction
-                    Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(painterResource(R.drawable.ic_volume_down), null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Slider(
-                            value = draggingVolume ?: shown,
-                            onValueChange = {
-                                draggingVolume = it
-                                // 手元はすぐ変える
-                                if (remote == null) systemVolume.set(it)
-                            },
-                            onValueChangeFinished = {
-                                if (remote != null) draggingVolume?.let { display.setVolume(kotlin.math.round(it * 100).toInt()) }
-                                draggingVolume = null
-                            },
-                            modifier = Modifier.weight(1f).padding(horizontal = 8.dp).semantics { contentDescription = volumeLabel },
-                        )
-                        Icon(painterResource(R.drawable.ic_volume_up), null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-                // 左端に端末、右端にキュー（共有は「…」のメニューにある）。weight(fill = false) と Spacer の weight を並べると余りが分かれて、
-                // キューのボタンが真ん中寄りに出ていたので、SpaceBetween で両端に寄せる
-                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                    // 端末名が出ているときは、名前まで含めて押せるようにする（アイコンだけが反応するのは分かりにくい）
-                    Row(
-                        Modifier.weight(1f, fill = false).clip(CircleShape).clickable(onClick = onOpenDevices).padding(end = if (remote != null) 12.dp else 0.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        IconAction(R.drawable.ic_devices, stringResource(R.string.nowplaying_connected_devices), onOpenDevices, active = remote != null)
-                        if (remote != null) {
-                            Text(
-                                stringResource(R.string.nowplaying_playing_on, remote.deviceLabel),
-                                style = MaterialTheme.typography.bodySmallEmphasized,
-                                color = MaterialTheme.colorScheme.primary,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
                         }
+                        IconAction(R.drawable.ic_queue_music, pluralStringResource(R.plurals.nowplaying_queue_with_count, state.queue.size, state.queue.size), { showQueue = true })
                     }
-                    IconAction(R.drawable.ic_queue_music, pluralStringResource(R.plurals.nowplaying_queue_with_count, state.queue.size, state.queue.size), { showQueue = true })
                 }
                 // 次の曲（Windows・Spotify と同じく、操作の下に出す。押すとキューを開く）
                 state.queue.getOrNull(state.currentIndex + 1)?.let { next ->
@@ -1133,4 +1057,257 @@ private fun rememberSystemVolume(): SystemVolume {
         onDispose { context.contentResolver.unregisterContentObserver(observer) }
     }
     return volume
+}
+
+/** シークバーと位置・長さ（ライブ配信は代わりに「ライブ」の印）。再生画面と、デスクトップと同じ並びの下の帯で使う。 */
+@Composable
+private fun SeekBar(
+    display: Display,
+    modifier: Modifier = Modifier,
+    /** 位置と長さをバーの左右に並べる（下の帯）。false ならバーの下に出す（再生画面）。 */
+    timesBeside: Boolean = false,
+) {
+    val state = display.state
+    val remote = display.remote
+    // ほかの端末を映している間は、ドラッグの間は表示だけ動かし、指を離したときに1回だけ命令を送る（命令ごとに暗号化・鍵交換をする）
+    var dragging by remember { mutableStateOf<Float?>(null) }
+    if (state.isLive) {
+        Box(modifier, contentAlignment = Alignment.Center) { LiveBadge(Modifier.padding(vertical = 14.dp)) }
+        return
+    }
+    val slider = @Composable { sliderModifier: Modifier ->
+        Slider(
+            value = dragging ?: if (state.durationMs > 0) (state.positionMs.toFloat() / state.durationMs).coerceIn(0f, 1f) else 0f,
+            onValueChange = {
+                if (remote != null) {
+                    dragging = it
+                } else if (state.durationMs > 0) {
+                    display.seekTo((it * state.durationMs).toLong())
+                }
+            },
+            onValueChangeFinished = {
+                val target = dragging
+                dragging = null
+                if (remote != null && target != null && state.durationMs > 0) display.seekTo((target * state.durationMs).toLong())
+            },
+            enabled = state.durationMs > 0,
+            modifier = sliderModifier,
+        )
+    }
+    val position = @Composable { Text(formatTime(state.positionMs), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+    val duration = @Composable { Text(formatTime(state.durationMs), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+    if (timesBeside) {
+        Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            position()
+            slider(Modifier.weight(1f))
+            duration()
+        }
+    } else {
+        Column(modifier) {
+            slider(Modifier.fillMaxWidth())
+            Row(Modifier.fillMaxWidth()) {
+                position()
+                Spacer(Modifier.weight(1f))
+                duration()
+            }
+        }
+    }
+}
+
+/** シャッフル・前・再生・次・繰り返しの列。 */
+@Composable
+private fun Transport(
+    display: Display,
+    connection: PlayerConnection,
+    modifier: Modifier,
+    arrangement: Arrangement.Horizontal,
+    playSize: androidx.compose.ui.unit.Dp,
+    skipSize: androidx.compose.ui.unit.Dp,
+) {
+    val state = display.state
+    val remote = display.remote
+    val scope = rememberCoroutineScope()
+    Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = arrangement) {
+        // シャッフルは入り切り（切ると残りの曲を入れる前の並びに戻す）。入っている間は色を付ける。
+        // ほかの端末を映している間は、その端末のシャッフル・繰り返しを変える（前の版の端末は変えられないので灰色）
+        val shuffled by connection.shuffled.collectAsState()
+        val modesEnabled = remote == null || remote.modesControllable
+        IconAction(
+            R.drawable.ic_shuffle,
+            if (shuffled) stringResource(R.string.ui_shuffle_on) else stringResource(R.string.ui_shuffle_off),
+            { scope.launch { connection.toggleShuffle() } },
+            active = shuffled && modesEnabled,
+            enabled = modesEnabled && state.currentIndex >= 0,
+        )
+        IconAction(R.drawable.ic_skip_previous, stringResource(R.string.nowplaying_previous), { display.previous() }, enabled = state.hasPrevious, size = skipSize)
+        PlayFab(state.isPlaying, { display.togglePlay() }, size = playSize)
+        IconAction(R.drawable.ic_skip_next, stringResource(R.string.nowplaying_next), { display.next() }, enabled = state.hasNext, size = skipSize)
+        IconAction(
+            if (state.repeatMode == Player.REPEAT_MODE_ONE) R.drawable.ic_repeat_one else R.drawable.ic_repeat,
+            when (state.repeatMode) {
+                Player.REPEAT_MODE_ALL -> stringResource(R.string.nowplaying_repeat_all)
+                Player.REPEAT_MODE_ONE -> stringResource(R.string.nowplaying_repeat_one)
+                else -> stringResource(R.string.nowplaying_repeat_off)
+            },
+            { scope.launch { connection.cycleRepeatMode() } },
+            active = state.repeatMode != Player.REPEAT_MODE_OFF && modesEnabled,
+            enabled = modesEnabled,
+        )
+    }
+}
+
+/**
+ * 音量。手元で鳴らしている間は本体の音量（音量ボタンと同じ）。PC を映している間はその PC のアプリの中の音量（音量ボタンでも変えられる）。
+ * ほかのスマホを映している間は出さない（スマホの音量はそのスマホで変える。Spotify と同じ）。
+ */
+@Composable
+private fun VolumeSlider(
+    display: Display,
+    modifier: Modifier,
+) {
+    val remote = display.remote
+    val volume = display.volumePercent
+    val systemVolume = rememberSystemVolume()
+    if (!(remote != null && volume != null || remote == null && display.controller != null)) return
+    // 映している間は、ドラッグの間は表示だけ動かし、指を離したときに1回だけ送る（ほかの端末へは命令ごとに暗号化・鍵交換をする）
+    var draggingVolume by remember { mutableStateOf<Float?>(null) }
+    val volumeLabel = remote?.let { stringResource(R.string.nowplaying_volume_on_device, it.deviceLabel) } ?: stringResource(R.string.nowplaying_volume_app)
+    val shown = if (remote != null) (volume ?: 100) / 100f else systemVolume.fraction
+    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+        Icon(painterResource(R.drawable.ic_volume_down), null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        Slider(
+            value = draggingVolume ?: shown,
+            onValueChange = {
+                draggingVolume = it
+                // 手元はすぐ変える
+                if (remote == null) systemVolume.set(it)
+            },
+            onValueChangeFinished = {
+                if (remote != null) draggingVolume?.let { display.setVolume(kotlin.math.round(it * 100).toInt()) }
+                draggingVolume = null
+            },
+            modifier = Modifier.weight(1f).padding(horizontal = 8.dp).semantics { contentDescription = volumeLabel },
+        )
+        Icon(painterResource(R.drawable.ic_volume_up), null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+/**
+ * デスクトップと同じ並びの下の再生の帯（Mac・Windows・Spotify と同じ）: 左に曲と評価、中央に操作と位置、
+ * 右に歌詞・キュー・端末・再生中の画面（右の欄）・全面に広げる・音量。何も鳴っていなければ出さない。
+ */
+@Composable
+fun PlayerBar(
+    connection: PlayerConnection,
+    connect: ConnectV2Manager?,
+    actions: SongActions,
+    onOpenDevices: () -> Unit,
+    lyricsShown: Boolean,
+    onLyrics: () -> Unit,
+    queueShown: Boolean,
+    onQueue: () -> Unit,
+    panelShown: Boolean,
+    onPanel: () -> Unit,
+    onExpand: () -> Unit,
+) {
+    val display = rememberDisplay(connection, connect)
+    val state = display.state
+    if (state.title == null) return
+    val scope = rememberCoroutineScope()
+    val song = display.song
+    var pickArtist by remember { mutableStateOf<List<xyz.mooma0750.wave.core.music.ArtistRef>?>(null) }
+    Row(Modifier.fillMaxWidth().height(PLAYER_BAR_HEIGHT).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.weight(0.3f), verticalAlignment = Alignment.CenterVertically) {
+            coil3.compose.AsyncImage(
+                model = song?.thumbnailUrl,
+                contentDescription = null,
+                modifier = Modifier.size(56.dp).clip(MaterialTheme.shapes.small),
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+            )
+            Column(Modifier.weight(1f, fill = false).padding(start = 12.dp)) {
+                // 曲名を押すとアルバムへ、アーティストを押すとアーティストのページへ（複数なら選ぶ）
+                val album = song?.album?.takeIf { it.browseId != null }
+                Text(
+                    state.title,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.bodyLargeEmphasized,
+                    modifier = Modifier.then(if (album != null) Modifier.clickable { actions.openAlbum(album) } else Modifier),
+                )
+                val remote = display.remote
+                val artists = song?.artists?.filter { it.browseId != null }.orEmpty()
+                Text(
+                    if (remote != null) stringResource(R.string.nowplaying_playing_on, remote.deviceLabel) else state.artist.orEmpty(),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = if (remote != null) MaterialTheme.typography.bodySmallEmphasized else MaterialTheme.typography.bodySmall,
+                    color = if (remote != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier =
+                        Modifier.then(
+                            when {
+                                remote != null || artists.isEmpty() -> Modifier
+                                artists.size == 1 -> Modifier.clickable { actions.openArtist(artists.single()) }
+                                else -> Modifier.clickable { pickArtist = artists }
+                            },
+                        ),
+                )
+            }
+            LikeButton(connection, scope, onLikedTap = song?.let { current -> { actions.addToPlaylist(current) } })
+        }
+        Column(Modifier.weight(0.4f), horizontalAlignment = Alignment.CenterHorizontally) {
+            Transport(display, connection, Modifier, Arrangement.spacedBy(8.dp), playSize = 48.dp, skipSize = 28.dp)
+            SeekBar(display, Modifier.fillMaxWidth().widthIn(max = 640.dp), timesBeside = true)
+        }
+        Row(Modifier.weight(0.3f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.End) {
+            IconAction(R.drawable.ic_lyrics, stringResource(R.string.nowplaying_lyrics), onLyrics, active = lyricsShown)
+            IconAction(R.drawable.ic_queue_music, stringResource(R.string.nowplaying_queue), onQueue, active = queueShown)
+            IconAction(R.drawable.ic_devices, stringResource(R.string.nowplaying_connected_devices), onOpenDevices, active = display.remote != null)
+            IconAction(R.drawable.ic_right_panel_close, stringResource(R.string.nowplaying_panel_toggle), onPanel, active = panelShown)
+            IconAction(R.drawable.ic_open_in_full, stringResource(R.string.nowplaying_expand), onExpand)
+            VolumeSlider(display, Modifier.width(160.dp))
+        }
+    }
+    pickArtist?.let { artists ->
+        ArtistPickerDialog(artists, onPick = { pickArtist = null; actions.openArtist(it) }, onDismiss = { pickArtist = null })
+    }
+}
+
+private val PLAYER_BAR_HEIGHT = 88.dp
+
+/** デスクトップと同じ並びの右の欄のキュー（再生画面のキューのシートと同じ中身）。 */
+@Composable
+fun QueuePane(
+    connection: PlayerConnection,
+    connect: ConnectV2Manager?,
+    actions: SongActions,
+) {
+    val display = rememberDisplay(connection, connect)
+    val remote = display.remote
+    Column(Modifier.fillMaxSize()) {
+        Text(stringResource(R.string.nowplaying_queue), Modifier.padding(start = 16.dp, top = 16.dp, bottom = 4.dp), style = MaterialTheme.typography.titleMediumEmphasized)
+        QueueSheet(display.state, display.controller, connection, actions, remote = remote != null, remoteSongs = remote?.items)
+    }
+}
+
+/** デスクトップと同じ並びの中央に出す歌詞（Windows の歌詞のページと同じ。下の帯の歌詞のボタンで開く）。 */
+@Composable
+fun LyricsPage(
+    connection: PlayerConnection,
+    connect: ConnectV2Manager?,
+    lyrics: LyricsRepository,
+    onBack: () -> Unit,
+) {
+    val display = rememberDisplay(connection, connect)
+    val song = display.song
+    val art by rememberArtworkColor(song?.thumbnailUrl)
+    Column(Modifier.fillMaxSize().background(lerp(MaterialTheme.colorScheme.surfaceContainerHigh, art, 0.5f))) {
+        Row(Modifier.fillMaxWidth().padding(start = 4.dp, top = 8.dp, end = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+            xyz.mooma0750.wave.ui.BackButton(onBack)
+            Column(Modifier.weight(1f).padding(start = 4.dp)) {
+                Text(display.state.title.orEmpty(), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMediumEmphasized)
+                Text(display.state.artist.orEmpty(), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        if (song != null) LyricsPanel(song, display.clock, lyrics, Modifier.fillMaxSize().padding(horizontal = 16.dp))
+    }
 }
