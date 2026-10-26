@@ -64,6 +64,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
 import xyz.mooma0750.wave.R
 import xyz.mooma0750.wave.ui.IconAction
 import xyz.mooma0750.wave.ui.WaveTypography
@@ -78,67 +79,39 @@ internal fun OverlayContent(
     onPrevious: () -> Unit,
     onTogglePlay: () -> Unit,
     onNext: () -> Unit,
-    onMorphDone: (PlayerOverlay.Morph, IntSize) -> Unit,
+    onSizeSettled: () -> Unit,
 ) {
     val context = LocalContext.current
     val colorScheme = if (isSystemInDarkTheme()) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
     MaterialExpressiveTheme(colorScheme = colorScheme, motionScheme = MotionScheme.expressive(), typography = WaveTypography) {
         val now = ui.now ?: return@MaterialExpressiveTheme
         val motion = MaterialTheme.motionScheme
-        val morph = ui.morph
-        // 切り替えの間（窓は横いっぱいの帯）は、中身の中心を始まりから終わりへばねで動かす。
-        // 始まりの位置は同じコマで使うので、作るときに入れておく（LaunchedEffect で入れると1コマ前の位置が出る）
-        val center = remember(morph) { morph?.let { Animatable(it.from, IntOffset.VectorConverter) } }
         val modeTransition = updateTransition(ui.mode, label = "overlay-mode")
-        // 外から見える大きさ。切り替えの間は、丸とミニプレーヤーの大きさの間をばねで動かす（落ち着いている間はそのまま合わせる）
+        // 外から見える大きさ。掴んでいる間・動いている間（窓は画面いっぱい）は、丸とミニプレーヤーの大きさの間をばねで動かす。
+        // 落ち着いている間（窓は中身の大きさ）はそのまま合わせる（吹き出し・歌詞の行の出し入れ）
         val shownSize = remember { Animatable(IntSize.Zero, IntSize.VectorConverter) }
         var targetSize by remember { mutableStateOf(IntSize.Zero) }
         LaunchedEffect(targetSize) {
             if (targetSize == IntSize.Zero) return@LaunchedEffect
-            if (shownSize.value == IntSize.Zero || ui.morph == null) shownSize.snapTo(targetSize) else shownSize.animateTo(targetSize, motion.defaultSpatialSpec())
-        }
-        LaunchedEffect(morph) {
-            if (morph == null || center == null) return@LaunchedEffect
-            coroutineScope {
-                val moving =
-                    launch {
-                        launch { center.animateTo(morph.to, motion.defaultSpatialSpec()) }
-                        // 大きさと見え方の変化が終わるまで待つ（位置がほとんど動かないときは、位置のばねはすぐ止まる。
-                        // 位置だけを待つと、広がる途中で窓を戻してしまい、残りの広がりで窓が1コマずつ遅れて揺れた）
-                        withFrameNanos {}
-                        snapshotFlow {
-                            modeTransition.currentState == modeTransition.targetState && !modeTransition.isRunning &&
-                                !shownSize.isRunning && shownSize.value == targetSize
-                        }.first { it }
-                    }
-                // 途中で掴まれたら、位置と大きさを終わりまでとばす（透明度・拡大は落ち着いた窓の中で続ける）
-                val grabbed =
-                    launch {
-                        snapshotFlow { ui.finishMorph }.first { it }
-                        moving.cancel()
-                        center.snapTo(morph.to)
-                        if (targetSize != IntSize.Zero) shownSize.snapTo(targetSize)
-                    }
-                moving.join()
-                // 掴まれていたら、とばし終えるまで待つ（先に取り消すと、大きさが広がりかけのまま残った）
-                if (ui.finishMorph) grabbed.join() else grabbed.cancel()
-            }
-            onMorphDone(morph, shownSize.value)
+            if (shownSize.value == IntSize.Zero || !ui.stage) shownSize.snapTo(targetSize) else shownSize.animateTo(targetSize, motion.defaultSpatialSpec())
+            onSizeSettled()
         }
         Box(
             Modifier.layout { measurable, constraints ->
                 val placeable = measurable.measure(constraints.copy(minWidth = 0, minHeight = 0))
-                if (center == null) {
+                ui.shownSizeNow = IntSize(placeable.width, placeable.height)
+                if (!ui.stage) {
                     layout(placeable.width, placeable.height) { placeable.place(0, 0) }
                 } else {
+                    // 窓は画面いっぱい（窓の左上が params の 0,0）。指の位置と、掴んだ所の中身の中の割合から置く
                     layout(constraints.maxWidth, constraints.maxHeight) {
-                        val c = center.value
-                                        placeable.place(c.x - placeable.width / 2, c.y - placeable.height / 2)
+                        val c = ui.centerFor(ui.finger, placeable.width, placeable.height)
+                        placeable.place((c.x - placeable.width / 2f).roundToInt(), (c.y - placeable.height / 2f).roundToInt())
                     }
                 }
             },
         ) {
-            ModeContent(ui, now, motion, modeTransition, { shownSize.value }, { targetSize = it }, bubbleTouch, miniTouch, onPrevious, onTogglePlay, onNext)
+            ModeContent(ui, now, motion, modeTransition, { shownSize.value }, { targetSize = it; ui.targetSizeNow = it }, bubbleTouch, miniTouch, onPrevious, onTogglePlay, onNext)
         }
     }
 }

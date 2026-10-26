@@ -17,7 +17,7 @@ internal class OverlayTouch(
     private val maxTaps: Int,
     private val onTaps: (Int) -> Unit,
     private val onLongPress: (() -> Unit)?,
-    private val onDragStart: () -> Unit,
+    private val onDragStart: (downX: Float, downY: Float) -> Unit,
     private val onDrag: (dx: Float, dy: Float) -> Unit,
     private val onDragEnd: (vx: Float, vy: Float) -> Unit,
 ) {
@@ -60,7 +60,7 @@ internal class OverlayTouch(
                     handler.removeCallbacks(longPress)
                     // ドラッグに入ったら、その前のタップは数えない
                     taps = 0
-                    onDragStart()
+                    onDragStart(downX, downY)
                 }
                 if (dragging) onDrag(dx, dy)
             }
