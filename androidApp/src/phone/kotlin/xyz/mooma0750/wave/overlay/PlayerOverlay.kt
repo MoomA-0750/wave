@@ -237,12 +237,18 @@ object PlayerOverlay {
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
                 PixelFormat.TRANSLUCENT,
-            ).apply { windowAnimations = android.R.style.Animation_Toast }
+            ).apply {
+                windowAnimations = android.R.style.Animation_Toast
+                noMoveAnimation()
+            }
         private var startX = 0
 
         /** 右端から測っているか（右端の丸）。 */
         private var fromEnd = false
         private var startY = 0
+
+        /** このドラッグの起点を取ったか（切り替えの途中に掴んだら、落ち着いてから取る）。 */
+        private var armed = false
         private var attached = false
 
         private fun dp(value: Int) = (value * density).roundToInt()
@@ -326,18 +332,30 @@ object PlayerOverlay {
 
         /** ドラッグの間は左上から測る（端から測ったままだと、右端の丸を動かす向きが逆になる）。 */
         private fun dragStart() {
-            if (ui.morph != null) return
             ui.dragging = true
             ui.tooltip = false
+            armed = false
+            // 落ち着いていれば、掴んだ時の位置を起点にする（指が動き始めるまでのずれも追いつく）
+            if (ui.morph == null) arm(0f, 0f)
+        }
+
+        /**
+         * 起点は、指が動き始めた後の最初の動きで取る。切り替えの途中に掴んだときは、窓が落ち着くまで待ってから、
+         * その時の指のずれを差し引いて取る（掴んだ時の古い位置を起点にすると、落ち着いた途端に別の所へ飛んだ）。
+         */
+        private fun arm(
+            dx: Float,
+            dy: Float,
+        ) {
             // （gravity の END は向きの印も含むので、値を比べずに覚えておく）
             if (fromEnd) {
                 params.x = left()
                 params.gravity = Gravity.TOP or Gravity.START
                 fromEnd = false
             }
-            startX = params.x
-            startY = params.y
-            relayout()
+            startX = params.x - dx.roundToInt()
+            startY = params.y - dy.roundToInt()
+            armed = true
         }
 
         private fun drag(
@@ -345,6 +363,7 @@ object PlayerOverlay {
             dy: Float,
         ) {
             if (ui.morph != null) return
+            if (!armed) arm(dx, dy)
             val bounds = screen()
             params.x = (startX + dx.roundToInt()).coerceIn(0, (bounds.width() - view.width).coerceAtLeast(0))
             params.y = (startY + dy.roundToInt()).coerceIn(0, (bounds.height() - view.height).coerceAtLeast(0))
@@ -354,7 +373,7 @@ object PlayerOverlay {
         /** 丸を離した: 端から十分に内側ならミニプレーヤーにし、そうでなければ近い方の端へ寄せる。 */
         private fun bubbleDropped() {
             ui.dragging = false
-            if (ui.morph != null) return
+            if (ui.morph != null || !armed) return
             val width = screen().width()
             val center = left() + view.width / 2
             val edge = dp(MINI_EDGE_DP)
@@ -370,7 +389,7 @@ object PlayerOverlay {
         /** ミニプレーヤーを離した: 端に寄せていれば丸に戻す。 */
         private fun miniDropped() {
             ui.dragging = false
-            if (ui.morph != null) return
+            if (ui.morph != null || !armed) return
             val width = screen().width()
             val near = dp(EDGE_SNAP_DP)
             when {
@@ -441,6 +460,20 @@ object PlayerOverlay {
             ui.morph = null
         }
     }
+
+    /**
+     * 窓の位置を変えたとき、OS が古い位置から新しい位置へ窓を滑らせるのを止める（非公開の印 PRIVATE_FLAG_NO_MOVE_ANIMATION）。
+     * 滑らせると、ドラッグでは指より遅れて揺れ、切り替えの終わりでは一度帯の端に出てから滑って戻って見えた。
+     * 読めない OS では何もしない。
+     */
+    private fun WindowManager.LayoutParams.noMoveAnimation() {
+        runCatching {
+            val field = WindowManager.LayoutParams::class.java.getField("privateFlags")
+            field.setInt(this, field.getInt(this) or PRIVATE_FLAG_NO_MOVE_ANIMATION)
+        }.onFailure { Log.w(WaveApplication.LOG_TAG, "overlay no-move-animation unavailable type=${it::class.simpleName}") }
+    }
+
+    private const val PRIVATE_FLAG_NO_MOVE_ANIMATION = 0x40
 
     private const val PREFS = "player_overlay"
     private const val KEY_MODE = "mode"

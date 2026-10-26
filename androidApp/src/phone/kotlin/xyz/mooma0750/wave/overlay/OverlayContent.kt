@@ -1,12 +1,7 @@
 package xyz.mooma0750.wave.overlay
 
 import android.view.MotionEvent
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.SizeTransform
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
-import androidx.compose.animation.togetherWith
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -39,7 +34,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -54,7 +48,17 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.layout.layout
-import kotlinx.coroutines.delay
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.layout.Layout
+import androidx.compose.animation.core.Transition
+import androidx.compose.animation.core.updateTransition
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import androidx.compose.ui.unit.dp
 import xyz.mooma0750.wave.R
 import xyz.mooma0750.wave.ui.IconAction
@@ -81,13 +85,27 @@ internal fun OverlayContent(
         // 切り替えの間（窓は横いっぱいの帯）は、中身の中心を始まりから終わりへばねで動かす。
         // 始まりの位置は同じコマで使うので、作るときに入れておく（LaunchedEffect で入れると1コマ前の位置が出る）
         val center = remember(morph) { morph?.let { Animatable(it.from, IntOffset.VectorConverter) } }
-        var contentSize by remember { mutableStateOf(IntSize.Zero) }
+        val modeTransition = updateTransition(ui.mode, label = "overlay-mode")
+        // 外から見える大きさ。切り替えの間は、丸とミニプレーヤーの大きさの間をばねで動かす（落ち着いている間はそのまま合わせる）
+        val shownSize = remember { Animatable(IntSize.Zero, IntSize.VectorConverter) }
+        var targetSize by remember { mutableStateOf(IntSize.Zero) }
+        LaunchedEffect(targetSize) {
+            if (targetSize == IntSize.Zero) return@LaunchedEffect
+            if (shownSize.value == IntSize.Zero || ui.morph == null) shownSize.snapTo(targetSize) else shownSize.animateTo(targetSize, motion.defaultSpatialSpec())
+        }
         LaunchedEffect(morph) {
             if (morph == null || center == null) return@LaunchedEffect
-            center.animateTo(morph.to, motion.defaultSpatialSpec())
-            // 大きさの変化（同じばね）が落ち着くのを少し待ってから、窓を中身の大きさに戻す
-            delay(MORPH_SETTLE_MS)
-            onMorphDone(morph, contentSize)
+            coroutineScope {
+                launch { center.animateTo(morph.to, motion.defaultSpatialSpec()) }
+                // 大きさと見え方の変化が終わるまで待つ（位置がほとんど動かないときは、位置のばねはすぐ止まる。
+                // 位置だけを待つと、広がる途中で窓を戻してしまい、残りの広がりで窓が1コマずつ遅れて揺れた）
+                withFrameNanos {}
+                snapshotFlow {
+                    modeTransition.currentState == modeTransition.targetState && !modeTransition.isRunning &&
+                        !shownSize.isRunning && shownSize.value == targetSize
+                }.first { it }
+            }
+            onMorphDone(morph, shownSize.value)
         }
         Box(
             Modifier.layout { measurable, constraints ->
@@ -97,52 +115,82 @@ internal fun OverlayContent(
                 } else {
                     layout(constraints.maxWidth, constraints.maxHeight) {
                         val c = center.value
-                        placeable.place(c.x - placeable.width / 2, c.y - placeable.height / 2)
+                                        placeable.place(c.x - placeable.width / 2, c.y - placeable.height / 2)
                     }
                 }
             },
         ) {
-            ModeContent(ui, now, motion, Modifier.onSizeChanged { contentSize = it }, bubbleTouch, miniTouch, onPrevious, onTogglePlay, onNext)
+            ModeContent(ui, now, motion, modeTransition, { shownSize.value }, { targetSize = it }, bubbleTouch, miniTouch, onPrevious, onTogglePlay, onNext)
         }
     }
 }
 
-/** 丸とミニプレーヤーは、大きさを滑らかに変えながら入れ替える。 */
+/**
+ * 丸とミニプレーヤーは、どちらも組み立てたまま持っておき、切り替えでは見え方（透明度・拡大）と外の大きさだけを動かす。
+ * 切り替えるたびに新しい方を組み立てると、その1コマに 30ms ほどかかって止まって見えた。
+ */
 @Composable
 private fun ModeContent(
     ui: PlayerOverlay.UiState,
     now: xyz.mooma0750.wave.playback.NowPlayingSnapshot,
     motion: androidx.compose.material3.MotionScheme,
-    modifier: Modifier,
+    transition: Transition<PlayerOverlay.Mode>,
+    shownSize: () -> IntSize,
+    onTargetSize: (IntSize) -> Unit,
     bubbleTouch: (MotionEvent) -> Boolean,
     miniTouch: (MotionEvent) -> Boolean,
     onPrevious: () -> Unit,
     onTogglePlay: () -> Unit,
     onNext: () -> Unit,
 ) {
-    AnimatedContent(
-        targetState = ui.mode,
-        modifier = modifier,
-        contentAlignment = Alignment.Center,
-        transitionSpec = {
-            (fadeIn(motion.defaultEffectsSpec()) + scaleIn(motion.defaultSpatialSpec(), initialScale = 0.6f)) togetherWith
-                (fadeOut(motion.fastEffectsSpec()) + scaleOut(motion.fastSpatialSpec(), targetScale = 0.6f)) using
-                SizeTransform(clip = false) { _, _ -> motion.defaultSpatialSpec() }
+    val bubbleAlpha by transition.animateFloat({ if (targetState == PlayerOverlay.Mode.Bubble) motion.defaultEffectsSpec() else motion.fastEffectsSpec() }, label = "bubble-alpha") {
+        if (it == PlayerOverlay.Mode.Bubble) 1f else 0f
+    }
+    val miniAlpha by transition.animateFloat({ if (targetState == PlayerOverlay.Mode.Mini) motion.defaultEffectsSpec() else motion.fastEffectsSpec() }, label = "mini-alpha") {
+        if (it == PlayerOverlay.Mode.Mini) 1f else 0f
+    }
+    val bubbleScale by transition.animateFloat({ motion.defaultSpatialSpec() }, label = "bubble-scale") { if (it == PlayerOverlay.Mode.Bubble) 1f else HIDDEN_SCALE }
+    val miniScale by transition.animateFloat({ motion.defaultSpatialSpec() }, label = "mini-scale") { if (it == PlayerOverlay.Mode.Mini) 1f else HIDDEN_SCALE }
+    Layout(
+        content = {
+            Row(
+                Modifier.graphicsLayer {
+                    alpha = bubbleAlpha
+                    scaleX = bubbleScale
+                    scaleY = bubbleScale
+                },
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                // 吹き出しは丸の内側（画面の中央の側）へ出す
+                if (ui.atEnd) Tooltip(ui, now.title, now.artist)
+                Bubble(now.artworkUrl, now.playing, bubbleTouch)
+                if (!ui.atEnd) Tooltip(ui, now.title, now.artist)
+            }
+            Box(
+                Modifier.graphicsLayer {
+                    alpha = miniAlpha
+                    scaleX = miniScale
+                    scaleY = miniScale
+                },
+            ) { Mini(ui, now, miniTouch, onPrevious, onTogglePlay, onNext) }
         },
-        label = "overlay-mode",
-    ) { mode ->
-        when (mode) {
-            PlayerOverlay.Mode.Bubble ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    // 吹き出しは丸の内側（画面の中央の側）へ出す
-                    if (ui.atEnd) Tooltip(ui, now.title, now.artist)
-                    Bubble(now.artworkUrl, now.playing, bubbleTouch)
-                    if (!ui.atEnd) Tooltip(ui, now.title, now.artist)
-                }
-            PlayerOverlay.Mode.Mini -> Mini(ui, now, miniTouch, onPrevious, onTogglePlay, onNext)
+    ) { measurables, _ ->
+        val bubble = measurables[0].measure(Constraints())
+        val mini = measurables[1].measure(Constraints())
+        val target = if (ui.mode == PlayerOverlay.Mode.Bubble) IntSize(bubble.width, bubble.height) else IntSize(mini.width, mini.height)
+        onTargetSize(target)
+        val size = shownSize().takeIf { it != IntSize.Zero } ?: target
+        val moving = transition.isRunning || transition.currentState != transition.targetState
+        layout(size.width, size.height) {
+            // 見えていない方は置かない（描かず、触れない）
+            if (ui.mode == PlayerOverlay.Mode.Bubble || moving) bubble.place((size.width - bubble.width) / 2, (size.height - bubble.height) / 2)
+            if (ui.mode == PlayerOverlay.Mode.Mini || moving) mini.place((size.width - mini.width) / 2, (size.height - mini.height) / 2)
         }
     }
 }
+
+/** 見えていない方の拡大率（切り替えでは、ここから広がり、ここへ縮む）。 */
+private const val HIDDEN_SCALE = 0.6f
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
@@ -258,6 +306,3 @@ private fun Mini(
         }
     }
 }
-
-/** 中心の動きが止まってから、窓を戻すまでに待つ時間（大きさのばねが落ち着くまで）。 */
-private const val MORPH_SETTLE_MS = 120L
