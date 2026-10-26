@@ -835,4 +835,5 @@
 - Android の丸は再生サービスが最初に曲を知らせたとき（WidgetHooks）に見張りを始め、アプリが裏か表かは ProcessLifecycleOwner で見る。窓は WindowManager の TYPE_APPLICATION_OVERLAY に ComposeView を置く。窓ごと指に付けて動かすので、指の位置は画面の座標（MotionEvent の raw）で見る（pointerInteropFilter）
 - タップを3回まで数えるため、1回のタップ（再生・一時停止）はダブルタップの待ち時間（300ms ほど）だけ遅れて効く
 - 右端の丸は右端から測る（吹き出しが内側へ伸びても丸が動かないように）。ドラッグの間だけ左から測り直す
-- Windows には同じものを入れていない（要るかは本人に確認する）
+- 画面の大きさは WindowManager の maximumWindowMetrics で取る。アプリの Context の currentWindowMetrics は窓が無いので画面の大きさにならず、内側へ引き出しても端へ戻っていた
+- Windows には入れない（本人が不要と判断）

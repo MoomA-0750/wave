@@ -223,7 +223,8 @@ object PlayerOverlay {
 
         private fun dp(value: Int) = (value * density).roundToInt()
 
-        private fun screen() = wm.currentWindowMetrics.bounds
+        // アプリの Context の currentWindowMetrics は窓が無いので画面の大きさにならない。画面いっぱいの大きさを使う
+        private fun screen() = wm.maximumWindowMetrics.bounds
 
         fun attach(
             x: Int,
