@@ -20,11 +20,19 @@ const MAX_PLAYLIST_PAGES: usize = 50;
 #[derive(Clone)]
 pub struct MusicRepository {
     client: InnerTube,
+    /// ライブ配信の検索と HLS の解決（www.youtube.com へ。認証情報を送らない）。
+    live: crate::stream::live::LiveClient,
 }
 
 impl MusicRepository {
     pub fn new(client: InnerTube) -> Self {
-        Self { client }
+        let (hl, gl) = client.locale();
+        let live = crate::stream::live::LiveClient::new(hl, gl);
+        Self { client, live }
+    }
+
+    pub fn live(&self) -> &crate::stream::live::LiveClient {
+        &self.live
     }
 
     pub fn client(&self) -> &InnerTube {
@@ -48,11 +56,26 @@ impl MusicRepository {
         Ok(parsers::search_artists(&self.search_raw(query, ARTISTS_FILTER, continuation).await?))
     }
 
-    /// ライブ配信（動画に絞った検索のうち、ライブの印のあるもの）。
+    /// ライブ配信（Windows と同じく、YouTube Music の動画の検索のうちライブの印のあるものと、YouTube のライブの検索を合わせる）。
+    /// 続きは YouTube のライブの検索の続き。
     pub async fn search_live(&self, query: &str, continuation: Option<&str>) -> ApiResult<SongPage> {
-        let mut page = parsers::search_songs(&self.search_raw(query, VIDEOS_FILTER, continuation).await?);
-        page.songs.retain(|s| s.is_live);
-        Ok(page)
+        if let Some(token) = continuation {
+            let (songs, continuation) = self.live.search(query, Some(token)).await.ok_or(Failure::Network)?;
+            return Ok(SongPage { songs, continuation });
+        }
+        let (music, web) = tokio::join!(self.search_raw(query, VIDEOS_FILTER, None), self.live.search(query, None));
+        let music_live: Option<Vec<_>> = music.as_ref().ok().map(|root| parsers::search_songs(root).songs.into_iter().filter(|s| s.is_live).collect());
+        if music_live.is_none() && web.is_none() {
+            return Err(music.err().unwrap_or(Failure::Network));
+        }
+        let mut songs = music_live.unwrap_or_default();
+        let continuation = web.as_ref().and_then(|(_, c)| c.clone());
+        for song in web.map(|(s, _)| s).unwrap_or_default() {
+            if !songs.iter().any(|s| s.video_id == song.video_id) {
+                songs.push(song);
+            }
+        }
+        Ok(SongPage { songs, continuation })
     }
 
     /// 打ち込み中の候補（ログインの情報は付けない）。

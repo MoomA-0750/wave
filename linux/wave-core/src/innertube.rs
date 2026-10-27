@@ -65,6 +65,11 @@ impl InnerTube {
         Self { http, state: Arc::default(), hl: hl.to_string(), gl: gl.to_string() }
     }
 
+    /// 表示の言語と地域（ほかの口に同じ値を渡す）。
+    pub fn locale(&self) -> (&str, &str) {
+        (&self.hl, &self.gl)
+    }
+
     pub fn set_credentials(&self, credentials: Option<Credentials>) {
         let mut state = self.state.write().unwrap();
         state.credentials = credentials;

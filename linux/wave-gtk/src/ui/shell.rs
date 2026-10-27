@@ -1220,9 +1220,14 @@ fn player_bar(app: &Rc<App>, side: &gtk::Widget, side_stack: &gtk::Stack) -> gtk
                 player.duration_ms().or_else(|| app.playback.current().and_then(|s| s.duration_seconds).map(|d| u64::from(d) * 1000)).unwrap_or(0),
             ),
         };
+        // ライブ配信には長さもシークも無い
+        let live = app.connect.mirror().map(|m| m.song.is_live).unwrap_or_else(|| app.playback.current().is_some_and(|s| s.is_live));
+        seek.set_sensitive(!live);
         position.set_label(&pages::format_seconds((pos / 1000) as u32));
-        duration.set_label(&pages::format_seconds((total / 1000) as u32));
-        if !dragging.get() && total > 0 {
+        duration.set_label(&if live { "ライブ".to_string() } else { pages::format_seconds((total / 1000) as u32) });
+        if live {
+            seek.set_value(1.0);
+        } else if !dragging.get() && total > 0 {
             seek.set_value(pos as f64 / total as f64);
         }
         refresh();

@@ -89,7 +89,7 @@ async fn show_home(toolbar: &adw::ToolbarView, repo: &MusicRepository) {
     let resolver = StreamResolver::new(repo.client().clone(), PlayerCipherProvider::default());
     let video = video::VideoPlayer::new(resolver.clone());
     let downloads = downloads::Downloads::new(resolver.clone(), repo.clone());
-    let playback = playback::Playback::new(player::Player::new(resolver, Some(downloads.store())), repo.clone());
+    let playback = playback::Playback::new(player::Player::new(resolver, Some(downloads.store())).with_live(repo.live().clone()), repo.clone());
     // 聴いた曲を数える（スマートダウンロードの「いつも聴いている」に使う）
     downloads.track_listens(&playback);
     // 前回のキューを戻し、以後は変わるたびに書く（同じログインのときだけ）

@@ -23,6 +23,8 @@ pub struct Player {
     feed: Arc<Mutex<Feed>>,
     /// 読み込みが済んだら（ASYNC_DONE）飛ぶ位置と、そのあと鳴らすか（引き取った曲を途中から鳴らす）。
     pending_start: Arc<Mutex<Option<(u64, bool)>>>,
+    /// ライブ配信の HLS を解く口（無ければライブは流せない）。
+    live: Option<wave_core::stream::live::LiveClient>,
 }
 
 #[derive(Default)]
@@ -85,7 +87,13 @@ impl Player {
             configure_source(&source, setup_feed.clone());
             None
         });
-        Self { playbin, resolver, downloads, feed, pending_start: Arc::default() }
+        Self { playbin, resolver, downloads, feed, pending_start: Arc::default(), live: None }
+    }
+
+    /// ライブ配信を流せるようにする（HLS を GStreamer に直に読ませる）。
+    pub fn with_live(mut self, live: wave_core::stream::live::LiveClient) -> Self {
+        self.live = Some(live);
+        self
     }
 
     /// その曲を頭から鳴らす。取り終えていればファイルから、ほかは解いて範囲で取る。
@@ -111,11 +119,26 @@ impl Player {
         }
         let resolver = self.resolver.clone();
         let id = video_id.to_string();
-        let reader = runtime::run(async move {
+        let opened = runtime::run(async move {
             let stream = resolver.resolve(&id).await?;
             RangeReader::open(stream).await.map_err(|_| StreamFailure::RejectedUrl)
         })
-        .await?;
+        .await;
+        let reader = match opened {
+            // ライブ配信は HLS で流す（長さもシークも無い。途中の位置へは飛ばない）
+            Err(StreamFailure::LiveStream) if self.live.is_some() => {
+                let live = self.live.clone().expect("checked above");
+                let id = video_id.to_string();
+                let stream = runtime::run(async move { live.resolve(&id, false).await }).await.map_err(|_| StreamFailure::LiveStream)?;
+                *self.pending_start.lock().unwrap() = None;
+                self.playbin.set_state(gst::State::Null).ok();
+                eprintln!("play source=live");
+                self.playbin.set_property("uri", stream.reveal_url());
+                self.playbin.set_state(if playing { gst::State::Playing } else { gst::State::Paused }).map_err(|_| StreamFailure::Unplayable)?;
+                return Ok(());
+            }
+            other => other?,
+        };
         self.playbin.set_state(gst::State::Null).ok();
         *self.feed.lock().unwrap() = Feed { reader: Some(reader), local: None, offset: 0, cache: None };
         self.playbin.set_property("uri", "appsrc://");
