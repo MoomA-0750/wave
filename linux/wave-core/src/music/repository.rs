@@ -2,11 +2,14 @@
 
 use serde_json::json;
 
-use super::models::{Account, AddToPlaylistResult, AlbumPage, LikeStatus, MusicVideo, ArtistPage, HomePage, PlaylistPage, PlaylistSummary, SongPage, UpNextPage, VerifiedAccount};
+use super::models::{Account, AddToPlaylistResult, AlbumPage, LikeStatus, MusicVideo, ArtistPage, HomePage, PlaylistPage, PlaylistSummary, SongPage, UpNextPage, VerifiedAccount, AlbumSummary, ArtistSummary, SearchPage, SearchSuggestions};
 use super::parsers;
 use crate::innertube::{ApiResult, Failure, InnerTube};
 
 pub const SONGS_FILTER: &str = "EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D";
+pub const ALBUMS_FILTER: &str = "EgWKAQIYAWoKEAkQBRAKEAMQBA%3D%3D";
+pub const ARTISTS_FILTER: &str = "EgWKAQIgAWoKEAkQBRAKEAMQBA%3D%3D";
+pub const VIDEOS_FILTER: &str = "EgWKAQIQAWoSEAUQBBAJEAMQChAVEA4QERAQ";
 pub const HOME: &str = "FEmusic_home";
 pub const LIBRARY_PLAYLISTS: &str = "FEmusic_liked_playlists";
 /// 高く評価した曲のプレイリスト。
@@ -29,6 +32,34 @@ impl MusicRepository {
     }
 
     /// 曲だけに絞った検索。continuation があれば続きのページ。
+    /// 絞った検索（filter は *_FILTER）の生の応答。続きなら filter は使わない。
+    async fn search_raw(&self, query: &str, filter: &str, continuation: Option<&str>) -> ApiResult<serde_json::Value> {
+        match continuation {
+            None => self.client.post("search", json!({ "query": query, "params": filter }), true, &[]).await,
+            Some(token) => self.client.post("search", json!({}), true, &[("continuation", token), ("ctoken", token)]).await,
+        }
+    }
+
+    pub async fn search_albums(&self, query: &str, continuation: Option<&str>) -> ApiResult<SearchPage<AlbumSummary>> {
+        Ok(parsers::search_albums(&self.search_raw(query, ALBUMS_FILTER, continuation).await?))
+    }
+
+    pub async fn search_artists(&self, query: &str, continuation: Option<&str>) -> ApiResult<SearchPage<ArtistSummary>> {
+        Ok(parsers::search_artists(&self.search_raw(query, ARTISTS_FILTER, continuation).await?))
+    }
+
+    /// ライブ配信（動画に絞った検索のうち、ライブの印のあるもの）。
+    pub async fn search_live(&self, query: &str, continuation: Option<&str>) -> ApiResult<SongPage> {
+        let mut page = parsers::search_songs(&self.search_raw(query, VIDEOS_FILTER, continuation).await?);
+        page.songs.retain(|s| s.is_live);
+        Ok(page)
+    }
+
+    /// 打ち込み中の候補（ログインの情報は付けない）。
+    pub async fn suggestions(&self, input: &str) -> ApiResult<SearchSuggestions> {
+        Ok(parsers::search_suggestions(&self.client.post("music/get_search_suggestions", json!({ "input": input }), false, &[]).await?))
+    }
+
     pub async fn search_songs(&self, query: &str, continuation: Option<&str>) -> ApiResult<SongPage> {
         let root = match continuation {
             None => self.client.post("search", json!({ "query": query, "params": SONGS_FILTER }), true, &[]).await?,

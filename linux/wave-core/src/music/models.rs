@@ -257,3 +257,19 @@ impl std::fmt::Debug for VerifiedAccount {
         write!(f, "VerifiedAccount(generation={})", self.generation)
     }
 }
+
+/// 検索の結果の1ページ（続きのトークンつき）。
+#[derive(Debug, Clone, PartialEq)]
+pub struct SearchPage<T> {
+    pub items: Vec<T>,
+    pub continuation: Option<String>,
+}
+
+/// 打ち込み中の候補（語の候補と、曲・アルバム・アーティストの行）。
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct SearchSuggestions {
+    pub queries: Vec<String>,
+    pub songs: Vec<Song>,
+    pub albums: Vec<AlbumSummary>,
+    pub artists: Vec<ArtistSummary>,
+}

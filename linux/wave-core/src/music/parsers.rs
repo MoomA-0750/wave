@@ -25,6 +25,46 @@ pub fn search_songs(root: &Value) -> SongPage {
     }
 }
 
+/// アルバムに絞った検索。
+pub fn search_albums(root: &Value) -> SearchPage<AlbumSummary> {
+    search_page_of(root, album_row)
+}
+
+/// アーティストに絞った検索。
+pub fn search_artists(root: &Value) -> SearchPage<ArtistSummary> {
+    search_page_of(root, artist_row)
+}
+
+/// 打ち込み中の候補。1つめの区切りに語の候補、2つめに曲・アルバム・アーティストの行。
+pub fn search_suggestions(root: &Value) -> SearchSuggestions {
+    let contents: Vec<&Value> = root.path(&["contents"]).items().into_iter().flat_map(|i| i.path(&["searchSuggestionsSectionRenderer", "contents"]).items()).collect();
+    let mut queries: Vec<String> = Vec::new();
+    for item in &contents {
+        let Some(s) = item.path(&["searchSuggestionRenderer"]).or_else(|| item.path(&["historySuggestionRenderer"])) else { continue };
+        let query = s.path(&["navigationEndpoint", "searchEndpoint", "query"]).str_().map(String::from).or_else(|| runs_text(&s.path(&["suggestion", "runs"]).items()));
+        if let Some(query) = query.filter(|q| !queries.contains(q)) {
+            queries.push(query);
+        }
+    }
+    let rows: Vec<&Value> = contents.iter().filter_map(|i| i.path(&["musicResponsiveListItemRenderer"])).collect();
+    SearchSuggestions {
+        queries,
+        songs: rows.iter().filter(|r| page_type_of_browse(r.path(&["navigationEndpoint", "browseEndpoint"])).is_none()).filter_map(|r| responsive_list_item_song(r)).collect(),
+        albums: rows.iter().filter_map(|r| album_row(r)).collect(),
+        artists: rows.iter().filter_map(|r| artist_row(r)).collect(),
+    }
+}
+
+fn search_page_of<'a, T>(root: &'a Value, row: impl Fn(&'a Value) -> Option<T>) -> SearchPage<T> {
+    match search_shelf(root) {
+        Some(shelf) => SearchPage {
+            items: shelf.path(&["contents"]).items().into_iter().filter_map(|i| i.path(&["musicResponsiveListItemRenderer"])).filter_map(row).collect(),
+            continuation: next_continuation(shelf),
+        },
+        None => SearchPage { items: Vec::new(), continuation: None },
+    }
+}
+
 fn search_shelf(root: &Value) -> Option<&Value> {
     root.path(&["continuationContents", "musicShelfContinuation"]).or_else(|| {
         root.path(&["contents", "tabbedSearchResultsRenderer", "tabs", "0", "tabRenderer", "content", "sectionListRenderer", "contents"])
@@ -926,5 +966,28 @@ mod tests {
         assert_eq!(sections[0].1.iter().map(|s| s.title.as_str()).collect::<Vec<_>>(), ["One", "Two"]);
         assert_eq!(sections[1].0.as_deref(), Some("Yesterday"));
         assert_eq!(history_songs(&root).len(), 3);
+    }
+
+    #[test]
+    fn search_albums_and_artists_read_rows_that_open_pages() {
+        let albums = search_albums(&fixture("search_albums"));
+        assert!(!albums.items.is_empty());
+        assert!(albums.items.iter().all(|a| a.browse_id.starts_with("MPRE") && !a.title.is_empty()));
+        let artists = search_artists(&fixture("search_artists"));
+        assert!(!artists.items.is_empty());
+        assert!(artists.items.iter().all(|a| a.browse_id.starts_with("UC") && !a.name.is_empty()));
+    }
+
+    #[test]
+    fn search_suggestions_have_queries_and_rows() {
+        let suggestions = search_suggestions(&fixture("search_suggestions"));
+        assert_eq!(suggestions.queries.first().map(String::as_str), Some("yoasobi"));
+        assert!(!suggestions.songs.is_empty() || !suggestions.albums.is_empty() || !suggestions.artists.is_empty());
+    }
+
+    #[test]
+    fn video_search_marks_live_streams() {
+        let page = search_songs(&fixture("search_videos_live"));
+        assert!(page.songs.iter().any(|s| s.is_live));
     }
 }

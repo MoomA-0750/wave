@@ -180,28 +180,166 @@ pub fn format_seconds(seconds: u32) -> String {
 }
 
 /// 検索の結果（曲）。
+/// 検索の結果。上の切り替えで「曲・アルバム・アーティスト・ライブ」に絞る（Mac・Windows と同じ）。続きは下の「もっと見る」で読む。
 pub fn search(app: &Rc<App>, query: &str) -> adw::NavigationPage {
-    let bin = holder();
-    let app = app.clone();
-    let target = bin.clone();
-    let q = query.to_string();
-    gtk::glib::spawn_future_local(async move {
-        let repo = app.repo.clone();
-        let query = q.clone();
-        let result = runtime::run(async move { repo.search_songs(&query, None).await }).await;
-        let content: gtk::Widget = match result {
-            Ok(page) if page.songs.is_empty() => adw::StatusPage::builder().icon_name("edit-find-symbolic").title("見つかりませんでした").vexpand(true).build().upcast(),
-            Ok(page) => {
-                let column = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(12).margin_top(16).margin_bottom(24).margin_start(20).margin_end(20).build();
-                column.append(&gtk::Label::builder().label("曲").xalign(0.0).css_classes(["title-2"]).build());
-                column.append(&song_list(&app, page.songs));
-                gtk::ScrolledWindow::builder().child(&clamp(&column)).hscrollbar_policy(gtk::PolicyType::Never).vexpand(true).build().upcast()
+    let tabs = adw::ToggleGroup::builder().halign(gtk::Align::Start).css_classes(["round"]).build();
+    for (name, label) in [("songs", "曲"), ("albums", "アルバム"), ("artists", "アーティスト"), ("live", "ライブ")] {
+        tabs.add(adw::Toggle::builder().label(label).name(name).build());
+    }
+    tabs.set_active_name(Some("songs"));
+    let stack = gtk::Stack::builder().transition_type(gtk::StackTransitionType::Crossfade).vexpand(true).build();
+    let column = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(12).margin_top(16).margin_start(20).margin_end(20).build();
+    column.append(&tabs);
+    column.append(&stack);
+    // 種類ごとの結果は、初めて開いたときに読む
+    let open = {
+        let (app, stack, query) = (app.clone(), stack.clone(), query.to_string());
+        move |kind: &str| {
+            if stack.child_by_name(kind).is_none() {
+                stack.add_named(&search_results(&app, &query, kind), Some(kind));
             }
-            Err(e) => failure(&format!("検索できませんでした（{e}）")),
-        };
-        target.set_child(Some(&content));
+            stack.set_visible_child_name(kind);
+        }
+    };
+    open("songs");
+    tabs.connect_active_name_notify(move |tabs| {
+        if let Some(name) = tabs.active_name() {
+            open(&name);
+        }
     });
-    page(&format!("「{query}」の検索"), "search", &bin)
+    page(&format!("「{query}」の検索"), "search", &column)
+}
+
+/// 1つの種類の検索の結果（続きを読める一覧）。
+fn search_results(app: &Rc<App>, query: &str, kind: &str) -> gtk::Widget {
+    let list = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(12).margin_bottom(24).build();
+    let more = gtk::Button::builder().label("もっと見る").halign(gtk::Align::Center).visible(false).css_classes(["pill"]).build();
+    let body = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(12).build();
+    body.append(&list);
+    body.append(&more);
+    let bin = adw::Bin::builder().child(&spinner()).vexpand(true).build();
+    let scroller = gtk::ScrolledWindow::builder().child(&clamp(&body)).hscrollbar_policy(gtk::PolicyType::Never).vexpand(true).build();
+    let continuation: Rc<std::cell::RefCell<Option<String>>> = Rc::default();
+    let load: Rc<dyn Fn(bool)> = {
+        let (app, query, kind, list, more, bin, scroller, continuation) =
+            (app.clone(), query.to_string(), kind.to_string(), list.clone(), more.clone(), bin.clone(), scroller.clone(), continuation.clone());
+        Rc::new(move |next: bool| {
+            let token = if next { continuation.borrow().clone() } else { None };
+            if next && token.is_none() {
+                return;
+            }
+            more.set_sensitive(false);
+            let (app, query, kind, list, more, bin, scroller, continuation) =
+                (app.clone(), query.clone(), kind.clone(), list.clone(), more.clone(), bin.clone(), scroller.clone(), continuation.clone());
+            gtk::glib::spawn_future_local(async move {
+                let repo = app.repo.clone();
+                let (q, k, t) = (query.clone(), kind.clone(), token.clone());
+                let result = runtime::run(async move {
+                    let t = t.as_deref();
+                    match k.as_str() {
+                        "albums" => repo.search_albums(&q, t).await.map(|p| (SearchRows::Albums(p.items), p.continuation)),
+                        "artists" => repo.search_artists(&q, t).await.map(|p| (SearchRows::Artists(p.items), p.continuation)),
+                        "live" => repo.search_live(&q, t).await.map(|p| (SearchRows::Songs(p.songs), p.continuation)),
+                        _ => repo.search_songs(&q, t).await.map(|p| (SearchRows::Songs(p.songs), p.continuation)),
+                    }
+                })
+                .await;
+                more.set_sensitive(true);
+                match result {
+                    Ok((rows, next_token)) => {
+                        if !next && rows.is_empty() {
+                            bin.set_child(Some(&adw::StatusPage::builder().icon_name("edit-find-symbolic").title("見つかりませんでした").vexpand(true).build()));
+                            return;
+                        }
+                        list.append(&rows.widget(&app));
+                        more.set_visible(next_token.is_some());
+                        *continuation.borrow_mut() = next_token;
+                        bin.set_child(Some(&scroller));
+                    }
+                    // 読めなかったときは、0件とは分けて理由を出す
+                    Err(e) if !next => bin.set_child(Some(&failure(&search_failure(&e)))),
+                    Err(e) => app.toast(&search_failure(&e)),
+                }
+            });
+        })
+    };
+    {
+        let load = load.clone();
+        more.connect_clicked(move |_| load(true));
+    }
+    load(false);
+    bin.upcast()
+}
+
+enum SearchRows {
+    Songs(Vec<Song>),
+    Albums(Vec<wave_core::music::models::AlbumSummary>),
+    Artists(Vec<wave_core::music::models::ArtistSummary>),
+}
+
+impl SearchRows {
+    fn is_empty(&self) -> bool {
+        match self {
+            SearchRows::Songs(v) => v.is_empty(),
+            SearchRows::Albums(v) => v.is_empty(),
+            SearchRows::Artists(v) => v.is_empty(),
+        }
+    }
+
+    fn widget(self, app: &Rc<App>) -> gtk::Widget {
+        match self {
+            SearchRows::Songs(songs) => song_list(app, songs).upcast(),
+            SearchRows::Albums(albums) => {
+                let list = gtk::ListBox::builder().selection_mode(gtk::SelectionMode::None).css_classes(["boxed-list"]).build();
+                for album in albums {
+                    let row = summary_row(&album.title, album.subtitle.as_deref(), album.thumbnail_url.as_deref(), false);
+                    let (app, id, title) = (app.clone(), album.browse_id, album.title);
+                    row.connect_activated(move |_| app.push(self::album(&app, &id, &title)));
+                    list.append(&row);
+                }
+                list.upcast()
+            }
+            SearchRows::Artists(artists) => {
+                let list = gtk::ListBox::builder().selection_mode(gtk::SelectionMode::None).css_classes(["boxed-list"]).build();
+                for artist in artists {
+                    let row = summary_row(&artist.name, artist.subtitle.as_deref(), artist.thumbnail_url.as_deref(), true);
+                    let (app, id, name) = (app.clone(), artist.browse_id, artist.name);
+                    row.connect_activated(move |_| app.push(self::artist(&app, &id, &name)));
+                    list.append(&row);
+                }
+                list.upcast()
+            }
+        }
+    }
+}
+
+/// アルバム・アーティストの行（押すとそのページ）。round ならアーティストの丸い写真。
+fn summary_row(title: &str, subtitle: Option<&str>, thumbnail: Option<&str>, round: bool) -> adw::ActionRow {
+    let row = adw::ActionRow::builder()
+        .title(gtk::glib::markup_escape_text(title))
+        .subtitle(gtk::glib::markup_escape_text(subtitle.unwrap_or("")))
+        .title_lines(1)
+        .subtitle_lines(1)
+        .activatable(true)
+        .build();
+    let art = super::images::square(48);
+    if round {
+        art.add_css_class("round");
+    }
+    art.load(thumbnail, 96);
+    row.add_prefix(&art.root);
+    row.add_suffix(&gtk::Image::from_icon_name("go-next-symbolic"));
+    row
+}
+
+fn search_failure(e: &wave_core::innertube::Failure) -> String {
+    use wave_core::innertube::Failure;
+    match e {
+        Failure::NotLoggedIn => "ログインしていません".into(),
+        Failure::Network => "通信できませんでした".into(),
+        Failure::Parse => "応答を読み取れませんでした".into(),
+        other => format!("検索できませんでした（{other}）"),
+    }
 }
 
 /// 最近再生した曲（再生履歴。「今日」「昨日」などの区切りごと。Windows と同じくアカウントのメニューから）。

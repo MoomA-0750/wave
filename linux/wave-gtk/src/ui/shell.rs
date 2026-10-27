@@ -366,8 +366,10 @@ fn header(app: &Rc<App>) -> adw::HeaderBar {
     });
     let back_button = back.clone();
     app.nav.connect_visible_page_notify(move |nav| back_button.set_visible(nav.navigation_stack().n_items() > 1));
+    let suggestions = suggestions_popover(&app, &search);
     let app = app.clone();
     search.connect_activate(move |entry| {
+        suggestions.popdown();
         let query = entry.text().trim().to_string();
         if query.is_empty() {
             return;
@@ -379,6 +381,114 @@ fn header(app: &Rc<App>) -> adw::HeaderBar {
         app.push(pages::search(&app, &query));
     });
     bar
+}
+
+/// 入力の欄（中の文字の部品も含めて）に手が乗っているか。
+fn focused(entry: &gtk::SearchEntry) -> bool {
+    entry.root().and_then(|r| r.focus()).is_some_and(|f| f == *entry.upcast_ref::<gtk::Widget>() || f.is_ancestor(entry))
+}
+
+/// 打ち込み中の候補（語・アーティスト・アルバム・曲）。語を押すとその語で検索し、アーティスト・アルバムはそのページ、曲は鳴らす。
+fn suggestions_popover(app: &Rc<App>, entry: &gtk::SearchEntry) -> gtk::Popover {
+    let list = gtk::ListBox::builder().selection_mode(gtk::SelectionMode::None).width_request(440).css_classes(["navigation-sidebar"]).build();
+    // 打ち続けられるよう、候補を出しても入力の欄から手を離させない
+    let popover = gtk::Popover::builder().child(&list).autohide(false).has_arrow(false).position(gtk::PositionType::Bottom).can_focus(false).build();
+    popover.set_parent(entry);
+    let request = Rc::new(Cell::new(0u64));
+    // 検索した語（打ち直すまで候補を出し直さない。候補を押して欄の文字を替えたときも）
+    let searched: Rc<RefCell<String>> = Rc::default();
+    {
+        let (request, searched, popover) = (request.clone(), searched.clone(), popover.clone());
+        entry.connect_activate(move |entry| {
+            request.set(request.get() + 1);
+            *searched.borrow_mut() = entry.text().trim().to_string();
+            popover.popdown();
+        });
+    }
+    let (app_c, popover_c, list_c) = (app.clone(), popover.clone(), list.clone());
+    entry.connect_search_changed(move |entry| {
+        let input = entry.text().trim().to_string();
+        let id = request.get() + 1;
+        request.set(id);
+        if input.is_empty() || !focused(entry) || *searched.borrow() == input {
+            popover_c.popdown();
+            return;
+        }
+        let (app, popover, list, request, entry) = (app_c.clone(), popover_c.clone(), list_c.clone(), request.clone(), entry.clone());
+        gtk::glib::spawn_future_local(async move {
+            let repo = app.repo.clone();
+            let Ok(found) = runtime::run(async move { repo.suggestions(&input).await }).await else { return };
+            // 打ち直した後に古い候補を出さない
+            if request.get() != id || !focused(&entry) {
+                return;
+            }
+            while let Some(row) = list.first_child() {
+                list.remove(&row);
+            }
+            let close = |popover: &gtk::Popover, entry: &gtk::SearchEntry| {
+                popover.popdown();
+                entry.set_text("");
+            };
+            for query in found.queries.into_iter().take(6) {
+                let row = adw::ActionRow::builder().title(gtk::glib::markup_escape_text(&query)).activatable(true).build();
+                row.add_prefix(&gtk::Image::from_icon_name("system-search-symbolic"));
+                let (entry, popover) = (entry.clone(), popover.clone());
+                row.connect_activated(move |_| {
+                    popover.popdown();
+                    entry.set_text(&query);
+                    entry.emit_activate();
+                });
+                list.append(&row);
+            }
+            for artist in found.artists.into_iter().take(2) {
+                let row = adw::ActionRow::builder().title(gtk::glib::markup_escape_text(&artist.name)).subtitle("アーティスト").activatable(true).build();
+                row.add_prefix(&gtk::Image::from_icon_name("avatar-default-symbolic"));
+                let (app, entry, popover) = (app.clone(), entry.clone(), popover.clone());
+                row.connect_activated(move |_| {
+                    close(&popover, &entry);
+                    app.push(pages::artist(&app, &artist.browse_id, &artist.name));
+                });
+                list.append(&row);
+            }
+            for album in found.albums.into_iter().take(2) {
+                let row = adw::ActionRow::builder().title(gtk::glib::markup_escape_text(&album.title)).subtitle(gtk::glib::markup_escape_text(album.subtitle.as_deref().unwrap_or("アルバム"))).activatable(true).build();
+                row.add_prefix(&gtk::Image::from_icon_name("media-optical-symbolic"));
+                let (app, entry, popover) = (app.clone(), entry.clone(), popover.clone());
+                row.connect_activated(move |_| {
+                    close(&popover, &entry);
+                    app.push(pages::album(&app, &album.browse_id, &album.title));
+                });
+                list.append(&row);
+            }
+            for song in found.songs.into_iter().take(3) {
+                let row = adw::ActionRow::builder().title(gtk::glib::markup_escape_text(&song.title)).subtitle(gtk::glib::markup_escape_text(&song.artists_text())).activatable(true).build();
+                row.add_prefix(&gtk::Image::from_icon_name("audio-x-generic-symbolic"));
+                let (app, entry, popover) = (app.clone(), entry.clone(), popover.clone());
+                row.connect_activated(move |_| {
+                    close(&popover, &entry);
+                    app.playback.play_list(vec![song.clone()], 0);
+                });
+                list.append(&row);
+            }
+            if list.first_child().is_some() {
+                popover.popup();
+            } else {
+                popover.popdown();
+            }
+        });
+    });
+    // 欄から離れたら・Esc で閉じる
+    let focus = gtk::EventControllerFocus::new();
+    let popover_f = popover.clone();
+    focus.connect_leave(move |_| {
+        let popover = popover_f.clone();
+        // 候補を押したときは、押し終わってから閉じる
+        gtk::glib::timeout_add_local_once(std::time::Duration::from_millis(200), move || popover.popdown());
+    });
+    entry.add_controller(focus);
+    let popover_s = popover.clone();
+    entry.connect_stop_search(move |_| popover_s.popdown());
+    popover
 }
 
 /// 左の欄: マイライブラリ（先頭に高く評価した曲、続いてライブラリのプレイリスト）。
