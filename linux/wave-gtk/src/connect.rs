@@ -23,7 +23,7 @@ use wave_core::connect::socket::{RelayEndpoint, RelaySocket, RelayStatus, Socket
 use wave_core::music::models::{AlbumRef, ArtistRef, Song};
 use wave_core::music::repository::MusicRepository;
 
-use crate::playback::{Origin, Playback, QueueItem, QueueSource, Transport, UserAction};
+use crate::playback::{Origin, Playback, QueueItem, QueueSource, Repeat, Transport, UserAction};
 use crate::{keyring, runtime};
 
 const TICK_MS: u64 = 1_000;
@@ -68,6 +68,9 @@ pub struct Mirror {
     pub volume_percent: Option<i32>,
     /// 次に流れる曲（右の欄の「次の曲」）。
     pub next: Option<Song>,
+    /// その端末のシャッフル（None は、シャッフル・繰り返しの命令を受けない前の版の端末）。
+    pub shuffle: Option<bool>,
+    pub repeat: Repeat,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -193,6 +196,18 @@ impl Effects for GtkEffects {
 
     fn queue_clear_flow(&self, current_item_id: &str) -> bool {
         self.shared.playback.clear_flow(current_item_id)
+    }
+
+    fn shuffle(&self, on: bool) -> bool {
+        eprintln!("connect-v2 shuffle received on={on}");
+        self.shared.playback.set_shuffle(on);
+        true
+    }
+
+    fn repeat(&self, mode: HandoffRepeat) -> bool {
+        eprintln!("connect-v2 repeat received mode={mode:?}");
+        self.shared.playback.set_repeat(repeat_of(mode));
+        true
     }
 
     fn volume(&self, volume_percent: i32) -> bool {
@@ -468,6 +483,8 @@ impl Connect {
             position_ms: now.position_ms,
             volume_percent: now.cursor.volume_percent,
             next: items.get(index + 1).map(|i| i.song.clone()),
+            shuffle: now.cursor.shuffle,
+            repeat: repeat_of(now.cursor.repeat),
         })
     }
 
@@ -920,6 +937,31 @@ impl Connect {
     /// 映している端末へのシーク・音量。
     pub fn remote_seek(self: &Rc<Self>, position_ms: i64) {
         self.with_client(|c| c.send_control(ControlAction::Seek, Some(position_ms)));
+    }
+
+    /// シャッフル・繰り返しのボタン: ほかの端末を映していればその端末へ、そうでなければ手元で切り替える。
+    pub fn toggle_shuffle(self: &Rc<Self>) {
+        match self.mirror() {
+            Some(mirror) => {
+                let on = !mirror.shuffle.unwrap_or(false);
+                self.with_client(|c| c.send_shuffle(on));
+            }
+            None => self.shared.playback.set_shuffle(!self.shared.playback.shuffled()),
+        }
+    }
+
+    pub fn cycle_repeat(self: &Rc<Self>) {
+        match self.mirror() {
+            Some(mirror) => {
+                let next = match mirror.repeat {
+                    Repeat::Off => HandoffRepeat::All,
+                    Repeat::All => HandoffRepeat::One,
+                    Repeat::One => HandoffRepeat::Off,
+                };
+                self.with_client(|c| c.send_repeat(next));
+            }
+            None => self.shared.playback.cycle_repeat(),
+        }
     }
 
     pub fn remote_volume(self: &Rc<Self>, percent: i32) {
@@ -1446,7 +1488,23 @@ fn decode_queue(text: &str, current_item_id: &str) -> Option<(Vec<QueueItem>, us
     Some((items, index, source))
 }
 
-/// 手元の再生の、カーソルに入れる値（Linux 版はシャッフル・繰り返しを持たない）。
+fn handoff_repeat(repeat: Repeat) -> HandoffRepeat {
+    match repeat {
+        Repeat::Off => HandoffRepeat::Off,
+        Repeat::All => HandoffRepeat::All,
+        Repeat::One => HandoffRepeat::One,
+    }
+}
+
+fn repeat_of(repeat: HandoffRepeat) -> Repeat {
+    match repeat {
+        HandoffRepeat::Off => Repeat::Off,
+        HandoffRepeat::All => Repeat::All,
+        HandoffRepeat::One => Repeat::One,
+    }
+}
+
+/// 手元の再生の、カーソルに入れる値。
 fn local_cursor(playback: &Playback, now: i64) -> Option<LocalCursor> {
     let item = playback.current_item()?;
     let player = playback.player();
@@ -1454,12 +1512,12 @@ fn local_cursor(playback: &Playback, now: i64) -> Option<LocalCursor> {
         current_item_id: item.item_id,
         position_ms: player.position_ms().unwrap_or(0) as i64,
         playing: player.is_playing(),
-        repeat: HandoffRepeat::Off,
+        repeat: handoff_repeat(playback.repeat()),
         listened_ms: 0,
         history_sent: false,
         captured_at_ms: now,
         volume_percent: Some((player.volume() * 100.0).round() as i32),
-        shuffle: None,
+        shuffle: Some(playback.shuffled()),
     })
 }
 

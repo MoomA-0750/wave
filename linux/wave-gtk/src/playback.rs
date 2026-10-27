@@ -58,6 +58,17 @@ pub enum Transport {
     Previous,
 }
 
+/// 繰り返し（ほかの端末と同じ3つ）。
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Repeat {
+    #[default]
+    Off,
+    /// キュー全体を繰り返す（最後の曲の次は最初の曲）。
+    All,
+    /// 今の曲を繰り返す（曲の終わりで同じ曲を頭から）。
+    One,
+}
+
 /// 本人が手元で再生を始めた・止めたことの知らせ（端末の連携が、家の再生を引き受けるのに使う）。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum UserAction {
@@ -94,6 +105,9 @@ pub struct Playback {
     /// 選んだ一覧の ID（ほかの端末に渡す出どころ）。
     source_id: RefCell<Option<String>>,
     refilling: Cell<bool>,
+    repeat: Cell<Repeat>,
+    /// シャッフルを入れる前の並び（項目の ID）。シャッフル中だけ持つ。
+    unshuffled: RefCell<Option<Vec<String>>>,
     /// 曲を頼んだ回数。読み込みの途中で別の曲が頼まれたら、古い方の結果は捨てる。
     request: Cell<u64>,
     listeners: RefCell<Vec<Box<dyn Fn()>>>,
@@ -115,6 +129,8 @@ impl Playback {
             radio: RefCell::default(),
             source_id: RefCell::default(),
             refilling: Cell::default(),
+            repeat: Cell::default(),
+            unshuffled: RefCell::default(),
             request: Cell::default(),
             listeners: RefCell::default(),
             user_listeners: RefCell::default(),
@@ -128,7 +144,11 @@ impl Playback {
                 if failed {
                     eprintln!("song failed, skipping");
                 }
-                playback.advance();
+                // 1曲の繰り返しは、曲の終わりで同じ曲を頭から（失敗したときは次へ）
+                match (failed, playback.repeat.get(), playback.index.get()) {
+                    (false, Repeat::One, Some(i)) => playback.start_at(i, 0, true),
+                    _ => playback.advance(),
+                }
             }
         });
         *playback._watch.borrow_mut() = Some(watch);
@@ -244,11 +264,58 @@ impl Playback {
         self.index.set(None);
         *self.radio.borrow_mut() = None;
         *self.source_id.borrow_mut() = None;
+        self.unshuffled.borrow_mut().take();
         self.changed();
     }
 
     pub fn has_next(&self) -> bool {
-        self.index.get().is_some_and(|i| i + 1 < self.queue.borrow().len())
+        self.index.get().is_some_and(|i| i + 1 < self.queue.borrow().len() || (self.repeat.get() == Repeat::All && !self.queue.borrow().is_empty()))
+    }
+
+    pub fn repeat(&self) -> Repeat {
+        self.repeat.get()
+    }
+
+    pub fn set_repeat(&self, repeat: Repeat) {
+        if self.repeat.replace(repeat) != repeat {
+            self.changed();
+        }
+    }
+
+    /// 繰り返しのボタン: 切 → 全体 → 1曲 → 切。
+    pub fn cycle_repeat(&self) {
+        self.set_repeat(match self.repeat.get() {
+            Repeat::Off => Repeat::All,
+            Repeat::All => Repeat::One,
+            Repeat::One => Repeat::Off,
+        });
+    }
+
+    pub fn shuffled(&self) -> bool {
+        self.unshuffled.borrow().is_some()
+    }
+
+    /// シャッフルを入れると今の曲より後ろを混ぜ、切ると残りを入れる前の並びに戻す（後から足した曲は後ろのまま）。同じなら何もしない。
+    pub fn set_shuffle(&self, on: bool) {
+        if on == self.shuffled() {
+            return;
+        }
+        let start = self.index.get().map_or(0, |i| i + 1);
+        let mut queue = self.queue.borrow_mut();
+        if on {
+            *self.unshuffled.borrow_mut() = Some(queue.iter().map(|q| q.item_id.clone()).collect());
+            if start < queue.len() {
+                shuffle(&mut queue[start..]);
+            }
+        } else {
+            let order = self.unshuffled.borrow_mut().take().unwrap_or_default();
+            if start < queue.len() {
+                let rank = |item: &QueueItem| order.iter().position(|id| *id == item.item_id).unwrap_or(usize::MAX);
+                queue[start..].sort_by_key(rank);
+            }
+        }
+        drop(queue);
+        self.changed();
     }
 
     /// songs を新しいキューにして、index の曲から鳴らす。1曲だけなら、その曲のラジオを続ける（Android・Windows と同じ）。
@@ -265,6 +332,8 @@ impl Playback {
         *self.radio.borrow_mut() = single.then_some((None, None));
         *self.source_id.borrow_mut() = source_id;
         *self.queue.borrow_mut() = songs.into_iter().map(|s| QueueItem::new(s, Origin::Source)).collect();
+        // 新しい一覧はその並びで流す（シャッフルは切る）
+        self.unshuffled.borrow_mut().take();
         self.start_at(index, 0, true);
         self.user(UserAction::Selected);
         if single {
@@ -284,6 +353,7 @@ impl Playback {
             return;
         }
         *self.queue.borrow_mut() = items;
+        self.unshuffled.borrow_mut().take();
         *self.source_id.borrow_mut() = source.playlist_id;
         *self.radio.borrow_mut() = source.radio.then_some((source.radio_playlist_id, source.continuation));
         self.start_at(index, position_ms, playing);
@@ -331,6 +401,8 @@ impl Playback {
     pub fn advance(self: &Rc<Self>) {
         match self.index.get() {
             Some(i) if i + 1 < self.queue.borrow().len() => self.start_at(i + 1, 0, true),
+            // 全体の繰り返しは、最後の曲の次は最初の曲
+            Some(_) if self.repeat.get() == Repeat::All && !self.queue.borrow().is_empty() => self.start_at(0, 0, true),
             _ => {
                 self.player.stop();
                 self.changed();
@@ -494,6 +566,16 @@ impl Playback {
     }
 }
 
+/// 並びを混ぜる（Fisher–Yates）。
+fn shuffle<T>(items: &mut [T]) {
+    for i in (1..items.len()).rev() {
+        let mut bytes = [0u8; 8];
+        getrandom::fill(&mut bytes).expect("the OS random source");
+        let j = (u64::from_le_bytes(bytes) % (i as u64 + 1)) as usize;
+        items.swap(i, j);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -504,5 +586,14 @@ mod tests {
         assert_eq!(id.len(), 36);
         assert_eq!(&id[14..15], "4");
         assert_ne!(id, new_item_id());
+    }
+
+    #[test]
+    fn shuffle_keeps_every_item() {
+        let mut items: Vec<u32> = (0..50).collect();
+        shuffle(&mut items);
+        let mut sorted = items.clone();
+        sorted.sort();
+        assert_eq!(sorted, (0..50).collect::<Vec<_>>());
     }
 }

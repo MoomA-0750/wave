@@ -829,6 +829,21 @@ fn link_side_toggle(toggle: &gtk::ToggleButton, stack: &gtk::Stack, name: &'stat
 }
 
 /// 下の帯: 左に曲、中央に操作と位置（窓の左右の中央）、右にキュー・音量・右の欄の出し入れ。
+/// シャッフル・繰り返しのボタンの見た目（前の版の端末を映している間は押せない）。
+fn show_modes(shuffle: &gtk::ToggleButton, repeat: &gtk::ToggleButton, shuffled: bool, mode: crate::playback::Repeat, usable: bool) {
+    use crate::playback::Repeat;
+    shuffle.set_active(shuffled);
+    repeat.set_active(mode != Repeat::Off);
+    repeat.set_icon_name(if mode == Repeat::One { "media-playlist-repeat-song-symbolic" } else { "media-playlist-repeat-symbolic" });
+    repeat.set_tooltip_text(Some(match mode {
+        Repeat::Off => "繰り返し",
+        Repeat::All => "全体を繰り返し中",
+        Repeat::One => "1曲を繰り返し中",
+    }));
+    shuffle.set_sensitive(usable);
+    repeat.set_sensitive(usable);
+}
+
 /// 再生する端末を選ぶボタン（家の端末の一覧。押した端末へ再生を移す。この PC を押すと、ほかの端末の再生を引き取る）。
 fn devices_button(app: &Rc<App>) -> gtk::MenuButton {
     let list = gtk::ListBox::builder().selection_mode(gtk::SelectionMode::None).width_request(280).css_classes(["navigation-sidebar"]).build();
@@ -902,10 +917,15 @@ fn player_bar(app: &Rc<App>, side: &gtk::Widget, side_stack: &gtk::Stack) -> gtk
     let previous = gtk::Button::builder().icon_name("media-skip-backward-symbolic").tooltip_text("前の曲").css_classes(["circular", "flat"]).build();
     let play = gtk::Button::builder().icon_name("media-playback-start-symbolic").tooltip_text("再生").css_classes(["circular", "suggested-action", "play-large"]).build();
     let next = gtk::Button::builder().icon_name("media-skip-forward-symbolic").tooltip_text("次の曲").css_classes(["circular", "flat"]).build();
+    // シャッフルと繰り返し（Mac・Windows と同じく前・次の外側）
+    let shuffle = gtk::ToggleButton::builder().icon_name("media-playlist-shuffle-symbolic").tooltip_text("シャッフル").css_classes(["circular", "flat"]).build();
+    let repeat = gtk::ToggleButton::builder().icon_name("media-playlist-repeat-symbolic").tooltip_text("繰り返し").css_classes(["circular", "flat"]).build();
     let controls = gtk::Box::builder().spacing(12).halign(gtk::Align::Center).build();
+    controls.append(&shuffle);
     controls.append(&previous);
     controls.append(&play);
     controls.append(&next);
+    controls.append(&repeat);
     let position = gtk::Label::builder().label("0:00").width_chars(5).xalign(1.0).css_classes(["caption", "numeric", "dim-label"]).build();
     let duration = gtk::Label::builder().label("0:00").width_chars(5).xalign(0.0).css_classes(["caption", "numeric", "dim-label"]).build();
     let seek = gtk::Scale::builder().orientation(gtk::Orientation::Horizontal).hexpand(true).width_request(420).build();
@@ -947,6 +967,11 @@ fn player_bar(app: &Rc<App>, side: &gtk::Widget, side_stack: &gtk::Stack) -> gtk
     group.add_widget(&end);
 
     {
+        // 押した結果は描き直しで合わせる（押した瞬間の切り替わりは打ち消す）
+        let app_for_shuffle = app.clone();
+        shuffle.connect_clicked(move |_| app_for_shuffle.connect.toggle_shuffle());
+        let app_for_repeat = app.clone();
+        repeat.connect_clicked(move |_| app_for_repeat.connect.cycle_repeat());
         let playback = app.playback.clone();
         previous.connect_clicked(move |_| playback.previous());
         let playback = app.playback.clone();
@@ -1025,7 +1050,13 @@ fn player_bar(app: &Rc<App>, side: &gtk::Widget, side_stack: &gtk::Stack) -> gtk
     }
     let refresh = {
         let (app, bar, play, next, song, volume) = (app.clone(), bar.clone(), play.clone(), next.clone(), song.clone(), volume.clone());
+        let (shuffle, repeat) = (shuffle.clone(), repeat.clone());
         move || {
+            let (shuffled, repeat_mode, modes_usable) = match app.connect.mirror() {
+                Some(mirror) => (mirror.shuffle.unwrap_or(false), mirror.repeat, mirror.shuffle.is_some()),
+                None => (app.playback.shuffled(), app.playback.repeat(), true),
+            };
+            show_modes(&shuffle, &repeat, shuffled, repeat_mode, modes_usable);
             // ほかの端末で鳴っていれば、それを映す（操作はその端末への命令になる）
             if let Some(mirror) = app.connect.mirror() {
                 bar.set_sensitive(true);

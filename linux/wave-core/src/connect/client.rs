@@ -1257,6 +1257,38 @@ impl ConnectClient {
         self.send(RelayMessage::Control { doc })
     }
 
+    /// 遠隔のシャッフルを送る。相手のカーソルに shuffle が無い（前の版・シャッフルを持たない）端末なら false。
+    pub fn send_shuffle(&mut self, on: bool) -> bool {
+        self.send_mode_control(ControlAction::Shuffle, Some(on), None)
+    }
+
+    /// 遠隔の繰り返しを送る。送る条件は send_shuffle と同じ。
+    pub fn send_repeat(&mut self, mode: HandoffRepeat) -> bool {
+        self.send_mode_control(ControlAction::Repeat, None, Some(mode))
+    }
+
+    fn send_mode_control(&mut self, action: ControlAction, shuffle: Option<bool>, repeat: Option<HandoffRepeat>) -> bool {
+        let Some((to, version, tag, _)) = self.control_target() else { return false };
+        if self.latest_cursor.as_ref().is_none_or(|c| c.body.shuffle.is_none()) {
+            return false;
+        }
+        let command = CommandBody::Control(ControlCommand {
+            command_id: self.new_id(),
+            from: self.my_id().to_string(),
+            to,
+            action,
+            position_ms: None,
+            based_on_version: version,
+            account_tag: tag,
+            on_item_id: None,
+            volume_percent: None,
+            shuffle,
+            repeat,
+        });
+        let Some(doc) = self.seal_command(self.chain.as_ref().expect("checked in control_target"), &command) else { return false };
+        self.send(RelayMessage::Control { doc })
+    }
+
     /// 遠隔のキューへの追加を送る。1件の平文が詰め物の1ブロックに収まるよう分けて送り、2件目からは前の件の最後の曲の後ろに入れてもらう。
     pub fn send_queue_add(&mut self, items: &[HandoffItem], next: bool) -> bool {
         if items.is_empty() {
