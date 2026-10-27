@@ -19,11 +19,11 @@ pub struct Player {
 }
 
 #[derive(Default)]
-struct Feed {
-    reader: Option<RangeReader>,
-    offset: u64,
+pub(crate) struct Feed {
+    pub(crate) reader: Option<RangeReader>,
+    pub(crate) offset: u64,
     /// 最後に取った塊（始まりの位置と中身）。demuxer は小さく何度も求めるので、ここから切り出す。
-    cache: Option<(u64, Vec<u8>)>,
+    pub(crate) cache: Option<(u64, Vec<u8>)>,
 }
 
 impl Feed {
@@ -137,7 +137,7 @@ impl Player {
 }
 
 /// appsrc を「どこからでも読める長さの決まった流れ」にし、求められた分を範囲で取って渡す。
-fn configure_source(source: &gst_app::AppSrc, feed: Arc<Mutex<Feed>>) {
+pub(crate) fn configure_source(source: &gst_app::AppSrc, feed: Arc<Mutex<Feed>>) {
     let length = feed.lock().unwrap().reader.as_ref().map_or(0, RangeReader::length);
     source.set_format(gst::Format::Bytes);
     source.set_stream_type(gst_app::AppStreamType::RandomAccess);

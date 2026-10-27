@@ -909,3 +909,5 @@
 - Claude の欄は Windows の AiChat と同じ作り（中継 ai-bridge、ai/agent.json を core に埋め込む、道具は手元で行う、知らない video_id は断る）。中継から届く1行ごとの出来事は tokio の上で読み、チャネルで主スレッドへ渡す。トークンは Debug に出さない
 - 右の欄の中身を切り替える Stack は、既定ではいちばん広い中身に幅を合わせ、さらに中の入力の欄の hexpand が欄全体に伝わって、右の欄が 500px 以上に広がった。Stack を hhomogeneous=false にし、Clamp で 340px に抑え、欄の hexpand を明示的に切る
 - 確かめは、手元に立てた試しの中継（答えを少しずつ返し、search_songs と show_songs を呼ぶ）で行った。本物の中継（本人の PC の ai-bridge）では未確認
+- MV は Windows の MusicVideoPlayer と同じく、音とは別の音を消した映像を音の位置に合わせ続ける（ずれが 400ms を超えたら映像を飛ばす）。映像は gtk4paintablesink（Fedora の GStreamer に入っている）で描き、その絵を gtk::Picture に渡す。範囲で取って appsrc に流し込む仕組みは音と共有する。解読の準備（プレイヤーの JS）も音と映像で1つを共有する
+- 見えない画面（mutter の headless）で映像を流していると、窓の並べ直しが止まって窓の写しが空になることが、数回に1回あった（「割り当てられた大きさが無い部品を描こうとした」の警告）。大きさをなめらかに変える Stack の interpolate_size を外すと減った。写しが空なら窓の中身を直接描かせ、0.5 秒ごとに 10 回まで取り直す。本物の GNOME の画面で並べ直しが止まるかは未確認

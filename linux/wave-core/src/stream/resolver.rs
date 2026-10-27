@@ -90,6 +90,11 @@ impl StreamResolver {
     }
 
     pub async fn resolve(&self, video_id: &str) -> Result<ResolvedStream, StreamFailure> {
+        self.resolve_kind(video_id, StreamKind::Audio).await
+    }
+
+    /// 音（StreamKind::Audio）か、音の無い映像（StreamKind::Video。曲に重ねる MV）を解く。
+    pub async fn resolve_kind(&self, video_id: &str, kind: StreamKind) -> Result<ResolvedStream, StreamFailure> {
         if !VIDEO_ID.is_match(video_id) {
             return Err(StreamFailure::Parse);
         }
@@ -118,7 +123,10 @@ impl StreamResolver {
             _ => return Err(StreamFailure::Unplayable),
         }
         let formats = root.path(&["streamingData", "adaptiveFormats"]).items();
-        let candidates = audio_candidates(&formats);
+        let candidates = match kind {
+            StreamKind::Audio => audio_candidates(&formats),
+            StreamKind::Video => video_candidates(&formats),
+        };
         if candidates.is_empty() {
             let sabr_only = !formats.is_empty() && formats.iter().all(|f| !has_source(f));
             return Err(if sabr_only { StreamFailure::SabrOnly } else { StreamFailure::NoAudioFormat });
@@ -145,6 +153,30 @@ impl StreamResolver {
     pub async fn on_stream_rejected(&self) {
         self.cipher.invalidate().await;
     }
+}
+
+/// 取るもの。映像は音の無い映像だけ（曲に重ねる MV）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StreamKind {
+    Audio,
+    Video,
+}
+
+/// 映像の高さの上限（右の欄・全画面でも足りる高さで、通信量を抑える）。
+pub const MAX_VIDEO_HEIGHT: u64 = 720;
+
+/// 映像だけのフォーマット。確実に鳴らせる H.264（mp4・avc1）だけを、高い方から（Windows と同じ）。
+pub fn video_candidates<'a>(formats: &[&'a Value]) -> Vec<&'a Value> {
+    let height = |f: &Value| f.path(&["height"]).and_then(Value::as_u64);
+    let mut list: Vec<&Value> = formats
+        .iter()
+        .copied()
+        .filter(|f| f.path(&["mimeType"]).str_().is_some_and(|m| m.starts_with("video/mp4") && m.contains("avc1")))
+        .filter(|f| height(f).is_none_or(|h| h <= MAX_VIDEO_HEIGHT))
+        .filter(|f| has_source(f))
+        .collect();
+    list.sort_by_key(|f| std::cmp::Reverse(height(f).unwrap_or(0)));
+    list
 }
 
 pub fn audio_candidates<'a>(formats: &[&'a Value]) -> Vec<&'a Value> {
@@ -238,6 +270,22 @@ mod tests {
         let list: Vec<&Value> = formats.as_array().unwrap().iter().collect();
         let itags: Vec<u64> = audio_candidates(&list).iter().map(|f| f["itag"].as_u64().unwrap()).collect();
         assert_eq!(itags, [140, 251]);
+    }
+
+    #[test]
+    fn video_candidates_are_h264_up_to_720p_highest_first() {
+        let formats: Value = serde_json::from_str(
+            r#"[{"itag":137,"mimeType":"video/mp4; codecs=avc1.640028","height":1080,"url":"u"},
+                {"itag":136,"mimeType":"video/mp4; codecs=avc1.4d401f","height":720,"url":"u"},
+                {"itag":135,"mimeType":"video/mp4; codecs=avc1.4d401e","height":480,"url":"u"},
+                {"itag":247,"mimeType":"video/webm; codecs=vp9","height":720,"url":"u"},
+                {"itag":398,"mimeType":"video/mp4; codecs=av01.0.05M.08","height":720,"url":"u"},
+                {"itag":140,"mimeType":"audio/mp4; codecs=mp4a.40.2","height":0,"url":"u"}]"#,
+        )
+        .unwrap();
+        let list: Vec<&Value> = formats.as_array().unwrap().iter().collect();
+        let itags: Vec<u64> = video_candidates(&list).iter().map(|f| f["itag"].as_u64().unwrap()).collect();
+        assert_eq!(itags, [136, 135]);
     }
 
     #[test]

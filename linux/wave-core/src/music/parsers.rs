@@ -349,6 +349,43 @@ pub fn like_status(root: &Value, video_id: &str) -> Option<LikeStatus> {
     }
 }
 
+/// next の最初の応答から、その曲に見せる映像。音源（ATV）なら対になった MV と時刻の対応、MV・動画ならその曲そのもの。
+/// 対応表が無い MV は時刻を合わせられないので使わない。
+pub fn music_video_of(root: &Value, video_id: &str) -> Option<MusicVideo> {
+    let panel = root.path(&[
+        "contents", "singleColumnMusicWatchNextResultsRenderer", "tabbedRenderer", "watchNextTabbedResultsRenderer", "tabs", "0",
+        "tabRenderer", "content", "musicQueueRenderer", "content", "playlistPanelRenderer",
+    ]);
+    let as_ms = |v: Option<&Value>| v.and_then(|v| v.as_str().and_then(|s| s.parse().ok()).or_else(|| v.as_u64()));
+    for item in panel.path(&["contents"]).items() {
+        let wrapper = item.path(&["playlistPanelVideoWrapperRenderer"]);
+        let renderer = item.path(&["playlistPanelVideoRenderer"]).or_else(|| wrapper.path(&["primaryRenderer", "playlistPanelVideoRenderer"]));
+        if renderer.path(&["videoId"]).str_() != Some(video_id) {
+            continue;
+        }
+        let kind = renderer.path(&["navigationEndpoint"]).path(&MUSIC_CONFIG).str_()?;
+        if kind != "MUSIC_VIDEO_TYPE_ATV" {
+            return Some(MusicVideo { video_id: video_id.to_string(), segments: Vec::new() });
+        }
+        let counterpart = wrapper.path(&["counterpart", "0"]);
+        let counterpart_id = counterpart.path(&["counterpartRenderer", "playlistPanelVideoRenderer", "videoId"]).str_()?;
+        let segments: Vec<TimeSegment> = counterpart
+            .path(&["segmentMap", "segment"])
+            .items()
+            .into_iter()
+            .filter_map(|s| {
+                Some(TimeSegment {
+                    primary_start_ms: as_ms(s.path(&["primaryVideoStartTimeMilliseconds"]))?,
+                    counterpart_start_ms: as_ms(s.path(&["counterpartVideoStartTimeMilliseconds"]))?,
+                    duration_ms: as_ms(s.path(&["durationMilliseconds"]))?,
+                })
+            })
+            .collect();
+        return (!segments.is_empty()).then(|| MusicVideo { video_id: counterpart_id.to_string(), segments });
+    }
+    None
+}
+
 /// next の最初の応答から、歌詞のタブ（MPLY…）の ID。
 pub fn lyrics_browse_id(root: &Value) -> Option<String> {
     root.path(&["contents", "singleColumnMusicWatchNextResultsRenderer", "tabbedRenderer", "watchNextTabbedResultsRenderer", "tabs"])
@@ -786,6 +823,24 @@ mod tests {
         assert_eq!(like_status(&fixture("next_radio"), "other"), None);
         let liked: Value = serde_json::from_str(&text.replace("\"INDIFFERENT\"", "\"LIKE\"")).unwrap();
         assert_eq!(like_status(&liked, video_id), Some(LikeStatus::Like));
+    }
+
+    #[test]
+    fn music_video_maps_song_time_to_video_time() {
+        let video = MusicVideo {
+            video_id: "v".into(),
+            segments: vec![TimeSegment { primary_start_ms: 0, counterpart_start_ms: 12_000, duration_ms: 60_000 }],
+        };
+        assert_eq!(video.video_position_of(1_000), Some(13_000));
+        assert_eq!(video.video_position_of(61_000), None);
+        assert_eq!(MusicVideo { video_id: "v".into(), segments: vec![] }.video_position_of(5), Some(5));
+        // 手本の応答の曲はどれも音源ではないので、曲そのものを映像にする
+        let root = fixture("next_radio");
+        let first = up_next(&root).songs.into_iter().next().unwrap();
+        if first.kind.as_deref() != Some("MUSIC_VIDEO_TYPE_ATV") {
+            assert_eq!(music_video_of(&root, &first.video_id).map(|v| v.video_id), Some(first.video_id));
+        }
+        assert_eq!(music_video_of(&root, "nope"), None);
     }
 
     #[test]

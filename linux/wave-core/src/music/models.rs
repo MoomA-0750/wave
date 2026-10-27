@@ -209,3 +209,31 @@ pub enum AddToPlaylistResult {
     NotChecked,
     Failed,
 }
+
+/// 音源と MV の時刻の対応の1区間（MV には前奏や間奏が足されていて、同じ時刻にはならない）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TimeSegment {
+    pub primary_start_ms: u64,
+    pub counterpart_start_ms: u64,
+    pub duration_ms: u64,
+}
+
+/// 曲に見せる映像（Windows・Android の MusicVideo と同じ）。segments が空なら曲そのものが映像（時刻は同じ）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MusicVideo {
+    pub video_id: String,
+    pub segments: Vec<TimeSegment>,
+}
+
+impl MusicVideo {
+    /// 曲の position_ms に当たる映像の時刻。対応する区間の外（MV に無い部分）なら None。
+    pub fn video_position_of(&self, position_ms: u64) -> Option<u64> {
+        if self.segments.is_empty() {
+            return Some(position_ms);
+        }
+        self.segments
+            .iter()
+            .find(|s| position_ms >= s.primary_start_ms && position_ms < s.primary_start_ms + s.duration_ms)
+            .map(|s| s.counterpart_start_ms + (position_ms - s.primary_start_ms))
+    }
+}

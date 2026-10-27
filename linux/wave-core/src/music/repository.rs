@@ -2,7 +2,7 @@
 
 use serde_json::json;
 
-use super::models::{Account, AddToPlaylistResult, AlbumPage, LikeStatus, ArtistPage, HomePage, PlaylistPage, PlaylistSummary, SongPage, UpNextPage};
+use super::models::{Account, AddToPlaylistResult, AlbumPage, LikeStatus, MusicVideo, ArtistPage, HomePage, PlaylistPage, PlaylistSummary, SongPage, UpNextPage};
 use super::parsers;
 use crate::innertube::{ApiResult, Failure, InnerTube};
 
@@ -212,5 +212,11 @@ impl MusicRepository {
         }
         let root = self.client.post("playlist/create", json!({ "title": title, "privacyStatus": "PRIVATE" }), true, &[]).await?;
         root.get("playlistId").and_then(|p| p.as_str()).map(String::from).ok_or(Failure::Parse)
+    }
+
+    /// 曲に見せる映像（next の最初の応答から）。無ければ None。
+    pub async fn music_video(&self, video_id: &str) -> ApiResult<Option<MusicVideo>> {
+        let root = self.client.post("next", json!({ "videoId": video_id, "contentCheckOk": true, "racyCheckOk": true }), true, &[]).await?;
+        Ok(parsers::music_video_of(&root, video_id))
     }
 }

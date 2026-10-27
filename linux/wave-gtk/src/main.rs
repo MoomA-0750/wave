@@ -8,6 +8,7 @@ mod playback;
 mod player;
 mod runtime;
 mod ui;
+mod video;
 
 use adw::prelude::*;
 use wave_core::innertube::InnerTube;
@@ -80,7 +81,9 @@ fn show_login(window: &adw::ApplicationWindow, toolbar: &adw::ToolbarView, repo:
 
 /// ログインできたら、Mac・Windows と同じ並びの画面に入れ替える（上の帯も画面の側が持つ）。
 async fn show_home(toolbar: &adw::ToolbarView, repo: &MusicRepository) {
+    // 解読の準備（プレイヤーの JS）は音と映像で1つを共有する
     let resolver = StreamResolver::new(repo.client().clone(), PlayerCipherProvider::default());
+    let video = video::VideoPlayer::new(resolver.clone());
     let playback = playback::Playback::new(player::Player::new(resolver), repo.clone());
     let on_logout: std::rc::Rc<dyn Fn()> = {
         let (toolbar, repo, playback) = (toolbar.clone(), repo.clone(), playback.clone());
@@ -107,7 +110,7 @@ async fn show_home(toolbar: &adw::ToolbarView, repo: &MusicRepository) {
         wave_core::lyrics::lrclib::LrclibClient::default(),
         wave_core::lyrics::timed::TimedLyricsClient::new(&language(), &region()),
     );
-    let (shell, app) = ui::shell::build(repo.clone(), lyrics, playback.clone(), on_logout);
+    let (shell, app) = ui::shell::build(repo.clone(), lyrics, playback.clone(), video, on_logout);
     if let Some(window) = toolbar.root().and_downcast::<adw::ApplicationWindow>() {
         // GNOME のメディアの操作・メディアキーから操作できるようにする（窓がある間だけ出す）
         let (raise, quit) = (window.clone(), window.clone());
@@ -158,18 +161,42 @@ fn snapshot_if_asked(window: &adw::ApplicationWindow) {
     let delay = std::env::var("WAVE_SNAPSHOT_DELAY_MS").ok().and_then(|v| v.parse().ok()).unwrap_or(1500);
     let window = window.clone();
     gtk::glib::timeout_add_local_once(std::time::Duration::from_millis(delay), move || {
-        let paintable = gtk::WidgetPaintable::new(Some(&window));
-        let (width, height) = (window.width() as f64, window.height() as f64);
-        let snapshot = gtk::Snapshot::new();
-        paintable.snapshot(&snapshot, width, height);
-        if let (Some(node), Some(renderer)) = (snapshot.to_node(), window.native().and_then(|n| n.renderer())) {
-            let texture = renderer.render_texture(&node, None);
-            if let Err(e) = texture.save_to_png(&path) {
-                eprintln!("snapshot failed: {e}");
+        let tries = std::cell::Cell::new(0);
+        // 描き直しの最中だと絵が空のことがある（映像を流しているときなど）。0.5 秒あけて取り直す
+        gtk::glib::timeout_add_local(std::time::Duration::from_millis(500), move || {
+            let paintable = gtk::WidgetPaintable::new(Some(&window));
+            let (width, height) = (window.width() as f64, window.height() as f64);
+            let snapshot = gtk::Snapshot::new();
+            paintable.snapshot(&snapshot, width, height);
+            // 窓の絵が空なら、窓の中身を直接描かせる（映像の絵を含むと WidgetPaintable が空を返すことがあった）
+            let node = snapshot.to_node().or_else(|| {
+                let direct = gtk::Snapshot::new();
+                let mut child = window.first_child();
+                while let Some(widget) = child {
+                    window.snapshot_child(&widget, &direct);
+                    child = widget.next_sibling();
+                }
+                direct.to_node()
+            });
+            match (node, window.native().and_then(|n| n.renderer())) {
+                (Some(node), Some(renderer)) => {
+                    let texture = renderer.render_texture(&node, None);
+                    if let Err(e) = texture.save_to_png(&path) {
+                        eprintln!("snapshot failed: {e}");
+                    }
+                }
+                (node, renderer) => {
+                    tries.set(tries.get() + 1);
+                    if tries.get() < 10 {
+                        return gtk::glib::ControlFlow::Continue;
+                    }
+                    eprintln!("snapshot failed: node={} renderer={} mapped={} visible={} size={}x{}", node.is_some(), renderer.is_some(), window.is_mapped(), window.is_visible(), window.width(), window.height());
+                }
             }
-        }
-        if let Some(app) = window.application() {
-            app.quit();
-        }
+            if let Some(app) = window.application() {
+                app.quit();
+            }
+            gtk::glib::ControlFlow::Break
+        });
     });
 }

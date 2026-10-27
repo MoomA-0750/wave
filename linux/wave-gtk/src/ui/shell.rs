@@ -17,6 +17,8 @@ pub struct App {
     pub playback: Rc<Playback>,
     nav: adw::NavigationView,
     toasts: adw::ToastOverlay,
+    /// 曲に重ねる MV の流し手（gtk4paintablesink が無ければ None）。
+    pub video: Option<crate::video::VideoPlayer>,
     /// Claude との会話。
     pub ai: Rc<crate::ai_chat::AiChat>,
     /// 上の帯の Claude のボタン（右の欄を Claude にする。下の帯を作るときにつなぐ）。
@@ -55,20 +57,27 @@ const STYLE: &str = "
 .song-list { background: transparent; }
 .lyric-line { font-size: 24px; font-weight: 800; opacity: 0.4; }
 .lyric-line.lyric-current { opacity: 1; color: @accent_color; }
+.video { background-color: black; }
 .ai-user { background-color: alpha(@accent_bg_color, 0.15); border-radius: 12px; padding: 6px 10px; }
 .like-button:checked { color: @accent_color; background: transparent; }
 .lyric-plain { font-size: 17px; line-height: 1.6; }
 ";
 
 /// 窓の中身（上の帯を含む）を作る。
-pub fn build(repo: MusicRepository, lyrics: wave_core::lyrics::service::LyricsService, playback: Rc<Playback>, on_logout: Rc<dyn Fn()>) -> (gtk::Widget, Rc<App>) {
+pub fn build(
+    repo: MusicRepository,
+    lyrics: wave_core::lyrics::service::LyricsService,
+    playback: Rc<Playback>,
+    video: Option<crate::video::VideoPlayer>,
+    on_logout: Rc<dyn Fn()>,
+) -> (gtk::Widget, Rc<App>) {
     let css = gtk::CssProvider::new();
     css.load_from_string(STYLE);
     gtk::style_context_add_provider_for_display(&gtk::gdk::Display::default().expect("display"), &css, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION);
 
     let nav = adw::NavigationView::new();
     let toasts = adw::ToastOverlay::new();
-    let app = Rc::new(App { repo, lyrics, playback, nav: nav.clone(), toasts: toasts.clone(), ai: Default::default(), claude_toggle: Default::default(), editable_playlists: Default::default() });
+    let app = Rc::new(App { repo, lyrics, playback, nav: nav.clone(), toasts: toasts.clone(), video, ai: Default::default(), claude_toggle: Default::default(), editable_playlists: Default::default() });
     {
         let app = app.clone();
         gtk::glib::spawn_future_local(async move {
@@ -251,6 +260,101 @@ fn library_row(title: &str, subtitle: &str, thumbnail: Option<&str>) -> gtk::Lis
     gtk::ListBoxRow::builder().child(&row).build()
 }
 
+/// 右の欄の上: ジャケットか、MV のある曲では映像（Mac・Windows と同じ「曲｜動画」の切り替え）。
+/// 映像は音の位置に合わせ続け、MV に無い区間ではジャケットに戻す。
+fn media_area(app: &Rc<App>, art: &images::Art) -> gtk::Widget {
+    let column = gtk::Box::new(gtk::Orientation::Vertical, 8);
+    let Some(video_player) = app.video.as_ref() else {
+        column.append(&art.root);
+        return column.upcast();
+    };
+    let switch = adw::ToggleGroup::builder().halign(gtk::Align::Center).visible(false).css_classes(["round"]).build();
+    switch.add(adw::Toggle::builder().label("曲").name("song").build());
+    switch.add(adw::Toggle::builder().label("動画").name("video").build());
+    switch.set_active_name(Some("song"));
+    let picture = gtk::Picture::builder().paintable(video_player.paintable()).content_fit(gtk::ContentFit::Contain).width_request(308).height_request(174).css_classes(["artwork", "video"]).build();
+    picture.set_overflow(gtk::Overflow::Hidden);
+    // 映像のときは横長の枠にする（正方形のままだと上下に黒い帯が出る）
+    let stack = gtk::Stack::builder().transition_type(gtk::StackTransitionType::Crossfade).vhomogeneous(false).build();
+    stack.add_named(&art.root, Some("art"));
+    stack.add_named(&picture, Some("video"));
+    column.append(&switch);
+    column.append(&stack);
+
+    // 今の曲の映像（曲が変わるたびに next から探す）
+    let current: Rc<std::cell::RefCell<Option<wave_core::music::models::MusicVideo>>> = Rc::default();
+    let looked_up: Rc<std::cell::RefCell<Option<String>>> = Rc::default();
+    let want_video = || std::env::var("WAVE_DEMO_VIDEO").is_ok();
+    {
+        let (app, switch, current, looked_up) = (app.clone(), switch.clone(), current.clone(), looked_up.clone());
+        let playback = app.playback.clone();
+        playback.on_change(move || {
+            let id = app.playback.current().map(|s| s.video_id);
+            if *looked_up.borrow() == id {
+                return;
+            }
+            *looked_up.borrow_mut() = id.clone();
+            *current.borrow_mut() = None;
+            switch.set_visible(false);
+            if let Some(video) = app.video.as_ref() {
+                video.stop();
+            }
+            let Some(id) = id else { return };
+            let (repo, switch, current, looked_up) = (app.repo.clone(), switch.clone(), current.clone(), looked_up.clone());
+            gtk::glib::spawn_future_local(async move {
+                let wanted = id.clone();
+                let found = runtime::run(async move { repo.music_video(&wanted).await }).await.ok().flatten();
+                if looked_up.borrow().as_deref() != Some(id.as_str()) {
+                    return;
+                }
+                switch.set_visible(found.is_some());
+                *current.borrow_mut() = found;
+                // 確かめ用: WAVE_DEMO_VIDEO があれば動画にする
+                if switch.is_visible() && want_video() {
+                    switch.set_active_name(Some("video"));
+                }
+            });
+        });
+    }
+    // 動画にしたら読み込み、曲に戻したら止める
+    {
+        let (app, current, stack) = (app.clone(), current.clone(), stack.clone());
+        switch.connect_active_name_notify(move |switch| {
+            let on = switch.active_name().as_deref() == Some("video");
+            let Some(video) = app.video.as_ref() else { return };
+            if !on {
+                video.stop();
+                stack.set_visible_child_name("art");
+                return;
+            }
+            let Some(mv) = current.borrow().clone() else { return };
+            let app = app.clone();
+            gtk::glib::spawn_future_local(async move {
+                if let Some(video) = app.video.as_ref()
+                    && !video.load(&mv).await
+                {
+                    app.toast("動画を読み込めませんでした");
+                }
+            });
+        });
+    }
+    // 音の位置に合わせ続ける（MV に無い区間ではジャケットに戻す）
+    let (app, weak_switch) = (app.clone(), switch.downgrade());
+    gtk::glib::timeout_add_local(std::time::Duration::from_millis(300), move || {
+        let Some(switch) = weak_switch.upgrade() else { return gtk::glib::ControlFlow::Break };
+        if switch.active_name().as_deref() != Some("video") || !switch.is_visible() {
+            stack.set_visible_child_name("art");
+            return gtk::glib::ControlFlow::Continue;
+        }
+        let (Some(video), Some(mv)) = (app.video.as_ref(), current.borrow().clone()) else { return gtk::glib::ControlFlow::Continue };
+        let player = app.playback.player();
+        let showing = video.sync(&mv, player.position_ms().unwrap_or(0), player.is_playing());
+        stack.set_visible_child_name(if showing { "video" } else { "art" });
+        gtk::glib::ControlFlow::Continue
+    });
+    column.upcast()
+}
+
 /// 右の欄: 再生中の曲（大きなジャケット・曲名・アーティスト）と次の曲。
 fn now_playing(app: &Rc<App>) -> gtk::Widget {
     let column = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(12).margin_top(16).margin_bottom(16).margin_start(16).margin_end(16).build();
@@ -259,7 +363,7 @@ fn now_playing(app: &Rc<App>) -> gtk::Widget {
     let artist = gtk::Label::builder().xalign(0.0).wrap(true).css_classes(["dim-label"]).build();
     let next_title = gtk::Label::builder().label("次の曲").xalign(0.0).margin_top(12).css_classes(["heading"]).build();
     let next_list = gtk::ListBox::builder().css_classes(["boxed-list"]).selection_mode(gtk::SelectionMode::None).build();
-    column.append(&picture.root);
+    column.append(&media_area(app, &picture));
     column.append(&title);
     column.append(&artist);
     column.append(&next_title);
