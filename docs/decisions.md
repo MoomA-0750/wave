@@ -932,3 +932,4 @@
 - 途中から引き取った曲が頭から鳴った。GStreamer は読み込み（preroll）が済むまでシークを受けないので、止めたまま読み込み、ASYNC_DONE で飛んでから鳴らす
 - Windows（to-fu）を招く側にしようとしたが、ログインが切れていてアカウントを確かめられず、招けなかった。Pixel 3 の debug の v2_pair_offer・v2_pair_code で確かめた
 - 招く側の文字列は Windows と同じく QR にも出す（誤り訂正 M）。読み取りの道具がこの PC に無いので、rqrr で読み戻す試験で中身を確かめる。窓の高さを超えるので、小窓の中身は流せるようにした
+- VPN だけのつながりを通信なしと見るのは、Windows（口の種類がトンネルか）と同じ考えで、Linux では経路の表（/proc/net/route・ipv6_route）の既定の経路が、トンネルでない口（/sys/class/net の type が ARPHRD_NONE・IP トンネルでない）にあるかで見る。Tailscale は自分の経路を別の表に置くので、機内モードでは既定の経路が無くなり、通信なしになる。NetworkManager の connectivity には頼らない（NM の無い環境もあるため）

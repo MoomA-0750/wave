@@ -9,6 +9,7 @@ pub mod innertube;
 mod json;
 pub mod lyrics;
 pub mod music;
+pub mod net;
 pub mod stream;
 
 /// この core の版（画面に出して、どの core で動いているかを確かめる）。

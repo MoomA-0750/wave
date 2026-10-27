@@ -110,7 +110,12 @@ impl Downloads {
 
     /// 今の通信で取ってよいか（設定の通信の種類と、つながっているか・従量制か）。
     pub fn network_allows(&self) -> bool {
-        smart::allows(self.settings.borrow().download_network, self.network.is_network_available(), self.network.is_network_metered())
+        smart::allows(self.settings.borrow().download_network, self.online(), self.network.is_network_metered())
+    }
+
+    /// インターネットに出られるか。VPN・トンネル（Tailscale など）の口だけがつながっているときは出られないとみなす（Windows と同じ）。
+    pub fn online(&self) -> bool {
+        self.network.is_network_available() && internet_route()
     }
 
     pub fn update_settings(self: &Rc<Self>, change: impl FnOnce(&mut Settings)) {
@@ -177,7 +182,7 @@ impl Downloads {
             }
             return;
         }
-        if !self.settings.borrow().smart_downloads || !self.repo.client().is_logged_in() || !self.network.is_network_available() {
+        if !self.settings.borrow().smart_downloads || !self.repo.client().is_logged_in() || !self.online() {
             return;
         }
         if !force && !smart::is_due(self.manifest.borrow().smart_refreshed_at_ms, now_ms()) {
@@ -397,4 +402,12 @@ fn now_ms() -> i64 {
 pub fn format_bytes(bytes: u64) -> String {
     let mb = bytes as f64 / 1_000_000.0;
     if mb >= 1000.0 { format!("{:.1} GB", mb / 1000.0) } else { format!("{mb:.0} MB") }
+}
+
+/// 既定の経路が、トンネルでない口にあるか（経路の表が読めなければ、つながっているとみなす）。
+fn internet_route() -> bool {
+    let (Ok(v4), v6) = (std::fs::read_to_string("/proc/net/route"), std::fs::read_to_string("/proc/net/ipv6_route").unwrap_or_default()) else { return true };
+    wave_core::net::has_internet_route(&v4, &v6, |name| {
+        std::fs::read_to_string(format!("/sys/class/net/{name}/type")).ok().and_then(|t| t.trim().parse().ok()).is_some_and(wave_core::net::is_tunnel_type)
+    })
 }
