@@ -255,7 +255,7 @@ private fun LanguageSetting() {
     }
 }
 
-/** アカウントの頭文字の丸（Spotify の左上のプロフィールのアイコン）。 */
+/** アカウントの写真の丸（写真が無ければ頭文字。Spotify の左上のプロフィールのアイコン）。 */
 @Composable
 fun Avatar(
     info: AccountInfo,
@@ -272,6 +272,15 @@ fun Avatar(
             color = MaterialTheme.colorScheme.onTertiaryContainer,
             style = if (size >= 48.dp) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleSmall,
         )
+        // アカウントの写真があれば頭文字の上に重ねる（読めるまで・読めなければ頭文字が見える。Windows・Mac と同じ）
+        (info.account as? AccountResult.Ok)?.thumbnailUrl?.takeIf { it.startsWith("https://") }?.let { url ->
+            coil3.compose.AsyncImage(
+                model = url,
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+            )
+        }
     }
 }
 

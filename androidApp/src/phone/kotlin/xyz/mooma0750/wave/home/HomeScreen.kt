@@ -70,6 +70,8 @@ fun HomeScreen(
     showConnect: Boolean,
     /** 登録したアーティストの新作。 */
     newReleases: List<xyz.mooma0750.wave.core.music.NewRelease> = emptyList(),
+    /** 左上にアカウントのアイコン（押すと引き出し）を出す。デスクトップと同じ並びでは上の帯の右にあるので出さない。 */
+    showAvatar: Boolean = true,
 ) {
     val state by feed.state.collectAsStateWithLifecycle()
     val drawer = rememberDrawerState(DrawerValue.Closed)
@@ -102,8 +104,8 @@ fun HomeScreen(
         LazyColumn(Modifier.fillMaxSize()) {
             item(key = "top") {
                 Row(Modifier.statusBarsPadding().padding(top = 8.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Avatar(account, 32.dp, Modifier.padding(start = 16.dp).clip(CircleShape).clickable { scope.launch { drawer.open() } })
-                    LazyRow(contentPadding = PaddingValues(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (showAvatar) Avatar(account, 32.dp, Modifier.padding(start = 16.dp).clip(CircleShape).clickable { scope.launch { drawer.open() } })
+                    LazyRow(contentPadding = PaddingValues(horizontal = if (showAvatar) 12.dp else 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         item { FilterChip(selected = state.selected == null, onClick = { feed.select(null) }, label = { Text(stringResource(R.string.home_chip_all)) }) }
                         items(state.chips) { chip -> FilterChip(selected = state.selected == chip, onClick = { feed.select(chip) }, label = { Text(chip.title) }) }
                     }
@@ -172,5 +174,39 @@ private fun RecentGrid(
                 }
             }
     }
+    }
+}
+
+/**
+ * デスクトップと同じ並びの上の帯の右端のアカウント。押すと、ホームの左上のアイコンの引き出しと同じ行き先（最近再生した曲・端末・設定）を
+ * メニューで出す（Windows のアカウントのメニューと同じ）。
+ */
+@Composable
+fun AccountMenuButton(
+    account: AccountInfo,
+    onOpenHistory: () -> Unit,
+    onConnect: () -> Unit,
+    showConnect: Boolean,
+    onOpenSettings: () -> Unit,
+) {
+    var open by remember { mutableStateOf(false) }
+    val pick = { action: () -> Unit ->
+        open = false
+        action()
+    }
+    androidx.compose.foundation.layout.Box {
+        Avatar(account, 36.dp, Modifier.clip(CircleShape).clickable { open = true })
+        androidx.compose.material3.DropdownMenu(open, onDismissRequest = { open = false }) {
+            Text(
+                (account.account as? AccountResult.Ok)?.name ?: stringResource(R.string.home_account),
+                Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                style = MaterialTheme.typography.titleSmallEmphasized,
+            )
+            androidx.compose.material3.DropdownMenuItem(text = { Text(stringResource(R.string.home_recently_played)) }, leadingIcon = { MenuIcon(R.drawable.ic_history) }, onClick = { pick(onOpenHistory) })
+            if (showConnect) {
+                androidx.compose.material3.DropdownMenuItem(text = { Text(stringResource(R.string.home_connect_devices)) }, leadingIcon = { MenuIcon(R.drawable.ic_devices) }, onClick = { pick(onConnect) })
+            }
+            androidx.compose.material3.DropdownMenuItem(text = { Text(stringResource(R.string.home_settings)) }, leadingIcon = { MenuIcon(R.drawable.ic_settings) }, onClick = { pick(onOpenSettings) })
+        }
     }
 }

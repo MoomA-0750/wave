@@ -1206,9 +1206,8 @@ fun PlayerBar(
     onLyrics: () -> Unit,
     queueShown: Boolean,
     onQueue: () -> Unit,
-    panelShown: Boolean,
-    onPanel: () -> Unit,
-    onExpand: () -> Unit,
+    /** ジャケットを押した: 右の欄に再生中を出す（しまってあれば戻す）。全面に広げる・しまうのボタンは右の欄の見出しにある。 */
+    onShowPanel: () -> Unit,
 ) {
     val display = rememberDisplay(connection, connect)
     val state = display.state
@@ -1216,12 +1215,13 @@ fun PlayerBar(
     val scope = rememberCoroutineScope()
     val song = display.song
     var pickArtist by remember { mutableStateOf<List<xyz.mooma0750.wave.core.music.ArtistRef>?>(null) }
+    // 左右の幅をそろえて、再生のボタンを窓の左右の中央に置く（Mac・Windows・Spotify と同じ）
     Row(Modifier.fillMaxWidth().height(PLAYER_BAR_HEIGHT).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Row(Modifier.weight(0.28f), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.weight(PLAYER_BAR_SIDE), verticalAlignment = Alignment.CenterVertically) {
             coil3.compose.AsyncImage(
                 model = song?.thumbnailUrl,
-                contentDescription = null,
-                modifier = Modifier.size(56.dp).clip(MaterialTheme.shapes.small),
+                contentDescription = stringResource(R.string.nowplaying_panel_toggle),
+                modifier = Modifier.size(56.dp).clip(MaterialTheme.shapes.small).clickable(onClick = onShowPanel),
                 contentScale = androidx.compose.ui.layout.ContentScale.Crop,
             )
             Column(Modifier.weight(1f, fill = false).padding(start = 12.dp)) {
@@ -1254,19 +1254,17 @@ fun PlayerBar(
             }
             LikeButton(connection, scope, onLikedTap = song?.let { current -> { actions.addToPlaylist(current) } })
         }
-        Column(Modifier.weight(0.36f), horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(Modifier.weight(1f - 2 * PLAYER_BAR_SIDE).padding(top = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Transport(display, connection, Modifier, Arrangement.spacedBy(8.dp), playSize = 48.dp, skipSize = 28.dp)
             SeekBar(display, Modifier.fillMaxWidth().widthIn(max = 640.dp), timesBeside = true)
         }
-        // 右はボタン5つ（240dp）と音量（96dp 以上）が入る幅にする（幅 1000dp で 360dp）
-        Row(Modifier.weight(0.36f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.End) {
+        // 右はボタン3つと音量。狭いときは音量を縮める
+        Row(Modifier.weight(PLAYER_BAR_SIDE), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.End) {
             IconAction(R.drawable.ic_lyrics, stringResource(R.string.nowplaying_lyrics), onLyrics, active = lyricsShown)
             IconAction(R.drawable.ic_queue_music, stringResource(R.string.nowplaying_queue), onQueue, active = queueShown)
             IconAction(R.drawable.ic_devices, stringResource(R.string.nowplaying_connected_devices), onOpenDevices, active = display.remote != null)
-            IconAction(R.drawable.ic_right_panel_close, stringResource(R.string.nowplaying_panel_toggle), onPanel, active = panelShown)
-            IconAction(R.drawable.ic_open_in_full, stringResource(R.string.nowplaying_expand), onExpand)
             // 帯が狭いときはボタンを優先し、音量は残りの幅に縮める
-            VolumeSlider(display, Modifier.weight(1f, fill = false).widthIn(min = 96.dp, max = 160.dp))
+            VolumeSlider(display, Modifier.weight(1f, fill = false).widthIn(max = 180.dp))
         }
     }
     pickArtist?.let { artists ->
@@ -1274,7 +1272,10 @@ fun PlayerBar(
     }
 }
 
-private val PLAYER_BAR_HEIGHT = 88.dp
+private val PLAYER_BAR_HEIGHT = 104.dp
+
+/** 下の帯の左右それぞれの幅の割合（中央は残り）。 */
+private const val PLAYER_BAR_SIDE = 0.3f
 
 /** デスクトップと同じ並びの右の欄のキュー（再生画面のキューのシートと同じ中身）。 */
 @Composable

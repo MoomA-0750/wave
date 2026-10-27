@@ -309,11 +309,8 @@ class MainActivity : ComponentActivity() {
                                         searchField = { modifier ->
                                             xyz.mooma0750.wave.search.DesktopSearchField(searchViewModel(), onOpen = { if (nav.current != Screen.Search) nav.push(Screen.Search) }, modifier)
                                         },
-                                        account = {
-                                            androidx.compose.material3.IconButton(onClick = { nav.push(Screen.Settings) }) {
-                                                xyz.mooma0750.wave.settings.Avatar(account, androidx.compose.ui.unit.Dp(32f))
-                                            }
-                                        },
+                                        // ホームの左上のアイコンの引き出しと同じ行き先を、メニューで出す（Windows のアカウントのメニューと同じ）
+                                        account = { xyz.mooma0750.wave.home.AccountMenuButton(account, onOpenHistory = { nav.push(Screen.History) }, onConnect = { nav.push(Screen.Connect) }, showConnect = container.connectV2 != null, onOpenSettings = { nav.push(Screen.Settings) }) },
                                         library = { library(false) },
                                         queue = { xyz.mooma0750.wave.nowplaying.QueuePane(container.player, container.connectV2, songActions) },
                                         ai = {
@@ -334,9 +331,7 @@ class MainActivity : ComponentActivity() {
                                                 onLyrics = { if (nav.current == Screen.Lyrics) nav.back() else nav.push(Screen.Lyrics) },
                                                 queueShown = bar.queueShown,
                                                 onQueue = bar.onQueue,
-                                                panelShown = bar.panelShown,
-                                                onPanel = bar.onPanel,
-                                                onExpand = bar.onExpand,
+                                                onShowPanel = bar.onShowPanel,
                                             )
                                         },
                                         onActive = { desktopLayout = it },
@@ -391,6 +386,7 @@ class MainActivity : ComponentActivity() {
                                         onConnect = { nav.push(Screen.Connect) },
                                         showConnect = container.connectV2 != null,
                                         newReleases = newReleases,
+                                        showAvatar = !desktopLayout,
                                     )
                                 }
                                 is Screen.Mood ->

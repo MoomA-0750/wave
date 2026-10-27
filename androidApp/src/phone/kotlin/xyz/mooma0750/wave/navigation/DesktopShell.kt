@@ -65,9 +65,8 @@ enum class SidePane { NowPlaying, Queue, Ai }
 class DesktopBar(
     val queueShown: Boolean,
     val onQueue: () -> Unit,
-    val panelShown: Boolean,
-    val onPanel: () -> Unit,
-    val onExpand: () -> Unit,
+    /** 右の欄に再生中を出す（しまってあれば戻す）。 */
+    val onShowPanel: () -> Unit,
 )
 
 /**
@@ -140,9 +139,10 @@ internal fun DesktopShell(
                 DesktopBar(
                     queueShown = panelShown && side == SidePane.Queue,
                     onQueue = { toggleSide(SidePane.Queue) },
-                    panelShown = panelShown && side == SidePane.NowPlaying,
-                    onPanel = { toggleSide(SidePane.NowPlaying) },
-                    onExpand = openPlayer,
+                    onShowPanel = {
+                        side = SidePane.NowPlaying
+                        setPanelHidden(false)
+                    },
                 ),
             )
         }
