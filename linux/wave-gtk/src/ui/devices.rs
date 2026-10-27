@@ -159,7 +159,8 @@ fn open_dialog(app: &Rc<App>) {
     let body = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(16).margin_top(24).margin_bottom(24).margin_start(24).margin_end(24).build();
     let toolbar = adw::ToolbarView::new();
     toolbar.add_top_bar(&adw::HeaderBar::new());
-    toolbar.set_content(Some(&body));
+    // 文字列と QR で窓より高くなることがあるので、中身は流せるようにする
+    toolbar.set_content(Some(&gtk::ScrolledWindow::builder().child(&body).hscrollbar_policy(gtk::PolicyType::Never).propagate_natural_height(true).min_content_height(460).build()));
     dialog.set_child(Some(&toolbar));
 
     let last = Rc::new(RefCell::new(None::<PairingView>));
@@ -195,6 +196,35 @@ fn text(label: &str, classes: &[&str]) -> gtk::Label {
     gtk::Label::builder().label(label).wrap(true).xalign(0.0).css_classes(classes.to_vec()).build()
 }
 
+/// 文字列の QR（Windows と同じく誤り訂正 M）。暗い色で描き、まわりに4マスの白の余白を付ける。
+fn qr_texture(text: &str) -> Option<gtk::gdk::MemoryTexture> {
+    let (pixels, size) = qr_pixels(text)?;
+    let bytes = gtk::glib::Bytes::from_owned(pixels);
+    Some(gtk::gdk::MemoryTexture::new(size as i32, size as i32, gtk::gdk::MemoryFormat::G8, &bytes, size))
+}
+
+/// QR の灰色の画素（1画素1バイト、0 が黒）と一辺の画素数。
+fn qr_pixels(text: &str) -> Option<(Vec<u8>, usize)> {
+    const SCALE: usize = 4;
+    const QUIET: usize = 4;
+    let code = qrcode::QrCode::with_error_correction_level(text.as_bytes(), qrcode::EcLevel::M).ok()?;
+    let width = code.width();
+    let size = (width + QUIET * 2) * SCALE;
+    let mut pixels = vec![255u8; size * size];
+    for y in 0..width {
+        for x in 0..width {
+            if code[(x, y)] == qrcode::Color::Dark {
+                for dy in 0..SCALE {
+                    let row = (y + QUIET) * SCALE + dy;
+                    let start = row * size + (x + QUIET) * SCALE;
+                    pixels[start..start + SCALE].fill(0);
+                }
+            }
+        }
+    }
+    Some((pixels, size))
+}
+
 /// 結果の見出し（絵と題）。
 fn result_heading(icon: &str, title: &str) -> gtk::Box {
     let heading = gtk::Box::builder().spacing(12).build();
@@ -227,7 +257,10 @@ fn render_view(app: &Rc<App>, body: &gtk::Box, dialog: &adw::Dialog, view: Pairi
         }
         // 招く側: 文字列を見せる（加わる端末が PC ならコピーして貼る）
         PairingView::ShowingOffer(offer) => {
-            body.append(&text("加える端末で wave の「端末の連携」を開き、この文字列を貼ってください（スマホなら QR の代わりに文字列を貼ります）。2分で無効になります。", &[]));
+            body.append(&text("加える端末で wave の「端末の連携」を開き、この QR を読み取ってください（PC なら下の文字列をコピーして貼り付けます）。2分で無効になります。", &[]));
+            if let Some(texture) = qr_texture(&offer) {
+                body.append(&gtk::Picture::builder().paintable(&texture).can_shrink(false).halign(gtk::Align::Center).build());
+            }
             let shown = gtk::Label::builder().label(&offer).wrap(true).wrap_mode(gtk::pango::WrapMode::Char).selectable(true).xalign(0.0).css_classes(["monospace", "caption"]).build();
             body.append(&shown);
             let copy = gtk::Button::builder().label("コピー").halign(gtk::Align::End).css_classes(["pill"]).build();
@@ -286,5 +319,21 @@ fn render_view(app: &Rc<App>, body: &gtk::Box, dialog: &adw::Dialog, view: Pairi
             });
             body.append(&close);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn qr_reads_back_as_the_offer_text() {
+        let offer = "wave-pair:eyJ2IjoxLCJwa0EiOiJ0ZXN0IiwiZUEiOiJ0ZXN0IiwidG9rZW4iOiJ0ZXN0In0";
+        let (pixels, size) = qr_pixels(offer).unwrap();
+        let mut image = rqrr::PreparedImage::prepare_from_greyscale(size, size, |x, y| pixels[y * size + x]);
+        let grids = image.detect_grids();
+        assert_eq!(grids.len(), 1);
+        let (_, content) = grids[0].decode().unwrap();
+        assert_eq!(content, offer);
     }
 }

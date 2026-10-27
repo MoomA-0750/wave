@@ -11,6 +11,7 @@ gst_app = { version = "0.25.2", package = "gstreamer-app" }
 gtk = { version = "0.11.5", package = "gtk4", features = ["v4_18"] }
 hex = "0.4"
 oo7 = { version = "0.6.0", default-features = false, features = ["tokio", "native_crypto"] }
+qrcode = { version = "0.14", default-features = false }
 regex = "1.13.1"
 reqwest = { version = "0.13.5", default-features = false, features = ["rustls"] }
 serde = { version = "1.0.229", features = ["derive"] }
@@ -19,3 +20,6 @@ soup = { version = "0.9.0", package = "soup3" }
 tokio = { version = "1.54.1", features = ["rt-multi-thread"] }
 wave-core = { version = "0.1.0", path = "../wave-core" }
 webkit6 = "0.6.1"
+
+[dev-dependencies]
+rqrr = "0.10"
