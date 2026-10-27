@@ -233,6 +233,11 @@ impl MusicRepository {
     }
 
     /// 再生履歴の曲（最初のページ。新しい順）。ログイン必須。
+    /// 再生履歴を区切り（「今日」など）ごとに。ログイン必須。
+    pub async fn history_sections(&self) -> ApiResult<Vec<(Option<String>, Vec<super::models::Song>)>> {
+        Ok(parsers::history_sections(&self.logged_in_post("browse", json!({ "browseId": "FEmusic_history" })).await?))
+    }
+
     pub async fn history(&self) -> ApiResult<Vec<super::models::Song>> {
         Ok(parsers::history_songs(&self.logged_in_post("browse", json!({ "browseId": "FEmusic_history" })).await?))
     }

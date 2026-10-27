@@ -659,10 +659,12 @@ fn now_playing(app: &Rc<App>) -> gtk::Widget {
 fn account_button(app: &Rc<App>, on_logout: Rc<dyn Fn()>) -> gtk::MenuButton {
     let avatar = adw::Avatar::builder().size(30).show_initials(true).build();
     let name = gtk::Label::builder().css_classes(["heading"]).margin_bottom(6).build();
+    let history = gtk::Button::builder().label("最近再生した曲").css_classes(["flat"]).build();
     let settings = gtk::Button::builder().label("設定").css_classes(["flat"]).build();
     let logout = gtk::Button::builder().label("ログアウト").css_classes(["flat"]).build();
     let column = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(4).margin_top(6).margin_bottom(6).margin_start(6).margin_end(6).build();
     column.append(&name);
+    column.append(&history);
     column.append(&settings);
     column.append(&logout);
     let popover = gtk::Popover::builder().child(&column).build();
@@ -672,6 +674,13 @@ fn account_button(app: &Rc<App>, on_logout: Rc<dyn Fn()>) -> gtk::MenuButton {
         settings.connect_clicked(move |_| {
             popover.popdown();
             app.push(super::settings::page(&app));
+        });
+    }
+    {
+        let (app, popover) = (app.clone(), popover.clone());
+        history.connect_clicked(move |_| {
+            popover.popdown();
+            app.push(super::pages::history(&app));
         });
     }
     logout.connect_clicked(move |_| {

@@ -204,6 +204,22 @@ pub fn playlists(root: &Value) -> Vec<PlaylistSummary> {
 }
 
 /// 再生履歴（FEmusic_history）の曲（「今日」「今週」などの区切りをまとめて新しい順）。
+/// 再生履歴の区切り（「今日」「昨日」など）ごとの曲。
+pub fn history_sections(root: &Value) -> Vec<(Option<String>, Vec<Song>)> {
+    let container = root
+        .path(&["continuationContents", "sectionListContinuation"])
+        .or_else(|| root.path(&["contents", "singleColumnBrowseResultsRenderer", "tabs", "0", "tabRenderer", "content", "sectionListRenderer"]));
+    container
+        .map(|c| {
+            find_all(c, "musicShelfRenderer")
+                .into_iter()
+                .map(|shelf| (shelf.path(&["title", "runs", "0", "text"]).str_().map(String::from), shelf_songs(shelf)))
+                .filter(|(_, songs)| !songs.is_empty())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 pub fn history_songs(root: &Value) -> Vec<Song> {
     let container = root
         .path(&["continuationContents", "sectionListContinuation"])
@@ -889,5 +905,26 @@ mod tests {
             { "accountItem": { "isSelected": false, "serviceEndpoint": { "x": { "datasyncIdToken": "333||" } } } }
         ] }] });
         assert_eq!(account_tokens(&root), vec![(true, "111".to_string()), (false, "333".to_string())]);
+    }
+
+    #[test]
+    fn history_keeps_each_section_title_with_its_songs() {
+        let item = |id: &str, title: &str| {
+            serde_json::json!({ "musicResponsiveListItemRenderer": {
+                "playlistItemData": { "videoId": id },
+                "flexColumns": [{ "musicResponsiveListItemFlexColumnRenderer": { "text": { "runs": [{ "text": title }] } } }]
+            } })
+        };
+        let shelf = |title: &str, items: Vec<Value>| serde_json::json!({ "musicShelfRenderer": { "title": { "runs": [{ "text": title }] }, "contents": items } });
+        let root = serde_json::json!({ "contents": { "singleColumnBrowseResultsRenderer": { "tabs": [{ "tabRenderer": { "content": { "sectionListRenderer": { "contents": [
+            shelf("Today", vec![item("aaaaaaaaaaa", "One"), item("bbbbbbbbbbb", "Two")]),
+            shelf("Yesterday", vec![item("ccccccccccc", "Three")])
+        ] } } } }] } } });
+        let sections = history_sections(&root);
+        assert_eq!(sections.len(), 2);
+        assert_eq!(sections[0].0.as_deref(), Some("Today"));
+        assert_eq!(sections[0].1.iter().map(|s| s.title.as_str()).collect::<Vec<_>>(), ["One", "Two"]);
+        assert_eq!(sections[1].0.as_deref(), Some("Yesterday"));
+        assert_eq!(history_songs(&root).len(), 3);
     }
 }

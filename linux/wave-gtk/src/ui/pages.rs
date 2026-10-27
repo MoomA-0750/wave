@@ -204,6 +204,35 @@ pub fn search(app: &Rc<App>, query: &str) -> adw::NavigationPage {
     page(&format!("「{query}」の検索"), "search", &bin)
 }
 
+/// 最近再生した曲（再生履歴。「今日」「昨日」などの区切りごと。Windows と同じくアカウントのメニューから）。
+pub fn history(app: &Rc<App>) -> adw::NavigationPage {
+    let bin = holder();
+    let app = app.clone();
+    let target = bin.clone();
+    gtk::glib::spawn_future_local(async move {
+        let repo = app.repo.clone();
+        let result = runtime::run(async move { repo.history_sections().await }).await;
+        let content: gtk::Widget = match result {
+            Ok(sections) if sections.is_empty() => adw::StatusPage::builder().icon_name("document-open-recent-symbolic").title("再生履歴はまだありません").vexpand(true).build().upcast(),
+            Ok(sections) => {
+                let column = page_column();
+                column.append(&gtk::Label::builder().label("最近再生した曲").xalign(0.0).css_classes(["title-1"]).build());
+                for (title, songs) in sections {
+                    if let Some(title) = title {
+                        column.append(&gtk::Label::builder().label(title).xalign(0.0).margin_top(8).css_classes(["title-3"]).build());
+                    }
+                    column.append(&song_list(&app, songs));
+                }
+                scrolling_column(&column)
+            }
+            Err(wave_core::innertube::Failure::NotLoggedIn) => failure("再生履歴を見るにはログインしてください"),
+            Err(e) => failure(&format!("再生履歴を読み込めませんでした（{e}）")),
+        };
+        target.set_child(Some(&content));
+    });
+    page("最近再生した曲", "history", &bin)
+}
+
 /// プレイリストのページ（頭にジャケット・名前・再生のボタン、下に曲）。
 pub fn playlist(app: &Rc<App>, playlist_id: &str, title: &str) -> adw::NavigationPage {
     let bin = holder();
