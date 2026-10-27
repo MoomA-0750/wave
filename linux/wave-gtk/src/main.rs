@@ -8,6 +8,7 @@ mod mpris;
 mod playback;
 mod player;
 mod runtime;
+mod settings;
 mod ui;
 mod video;
 
@@ -85,8 +86,10 @@ async fn show_home(toolbar: &adw::ToolbarView, repo: &MusicRepository) {
     // 解読の準備（プレイヤーの JS）は音と映像で1つを共有する
     let resolver = StreamResolver::new(repo.client().clone(), PlayerCipherProvider::default());
     let video = video::VideoPlayer::new(resolver.clone());
-    let downloads = downloads::Downloads::new(resolver.clone());
+    let downloads = downloads::Downloads::new(resolver.clone(), repo.clone());
     let playback = playback::Playback::new(player::Player::new(resolver, Some(downloads.store())), repo.clone());
+    // 聴いた曲を数える（スマートダウンロードの「いつも聴いている」に使う）
+    downloads.track_listens(&playback);
     let on_logout: std::rc::Rc<dyn Fn()> = {
         let (toolbar, repo, playback, downloads) = (toolbar.clone(), repo.clone(), playback.clone(), downloads.clone());
         std::rc::Rc::new(move || {

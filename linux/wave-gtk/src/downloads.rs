@@ -6,13 +6,19 @@ use std::collections::HashSet;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
+use gtk::gio;
+use gtk::prelude::*;
 use wave_core::download::downloader::{self, DownloadOutcome};
 use wave_core::download::manifest::{DownloadCollection, DownloadManifest};
+use wave_core::download::smart::{self, PlayCounts};
 use wave_core::download::store::DownloadStore;
 use wave_core::music::models::Song;
+use wave_core::music::repository::{LIKED_SONGS, MusicRepository};
 use wave_core::stream::resolver::StreamResolver;
 
+use crate::playback::Playback;
 use crate::runtime;
+use crate::settings::Settings;
 
 /// 曲のダウンロードの状態（行の印・メニューに使う）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -26,6 +32,14 @@ pub enum SongState {
 pub struct Downloads {
     store: Arc<DownloadStore>,
     resolver: StreamResolver,
+    repo: MusicRepository,
+    pub settings: RefCell<Settings>,
+    /// この端末での再生回数（「いつも聴いている」に使う）。
+    counts: RefCell<PlayCounts>,
+    refreshing_smart: Cell<bool>,
+    /// 選び直しの途中に、もう一度選び直すよう頼まれた（曲数を変えたなど）。
+    smart_again: Cell<bool>,
+    network: gio::NetworkMonitor,
     manifest: RefCell<DownloadManifest>,
     /// 持ち主のいる曲（裏で取っている途中に、消されたかを見る）。
     wanted: Arc<Mutex<HashSet<String>>>,
@@ -38,6 +52,10 @@ pub struct Downloads {
     listeners: RefCell<Vec<Box<dyn Fn() -> bool>>>,
 }
 
+fn counts_path() -> std::path::PathBuf {
+    gtk::glib::user_data_dir().join("wave").join("play_counts.json")
+}
+
 pub fn directory() -> std::path::PathBuf {
     // 確かめ用: WAVE_DOWNLOADS_DIR があればそこに置く（本人のホームに曲を置かない）
     if let Some(dir) = std::env::var_os("WAVE_DOWNLOADS_DIR") {
@@ -47,13 +65,20 @@ pub fn directory() -> std::path::PathBuf {
 }
 
 impl Downloads {
-    pub fn new(resolver: StreamResolver) -> Rc<Self> {
+    pub fn new(resolver: StreamResolver, repo: MusicRepository) -> Rc<Self> {
         let store = Arc::new(DownloadStore::new(directory()));
+        let counts = std::fs::read_to_string(counts_path()).map(|t| PlayCounts::decode(&t)).unwrap_or_default();
         let manifest = store.read_manifest();
         let wanted = manifest.wanted_songs().into_iter().map(|s| s.video_id).collect();
         let downloads = Rc::new(Self {
             store,
             resolver,
+            repo,
+            settings: RefCell::new(Settings::load()),
+            counts: RefCell::new(counts),
+            refreshing_smart: Cell::new(false),
+            smart_again: Cell::new(false),
+            network: gio::NetworkMonitor::default(),
             manifest: RefCell::new(manifest),
             wanted: Arc::new(Mutex::new(wanted)),
             progress: Arc::default(),
@@ -61,9 +86,158 @@ impl Downloads {
             working: Cell::new(false),
             listeners: RefCell::default(),
         });
-        // 前の起動で取り終えていない曲を続ける
+        // 前の起動で取り終えていない曲を続ける。通信が変わったら（従量制でなくなった・つながった）取り直す
         downloads.work();
+        let weak = Rc::downgrade(&downloads);
+        downloads.network.connect_network_changed(move |_, _| {
+            if let Some(d) = weak.upgrade() {
+                d.work();
+                d.changed();
+            }
+        });
+        // スマートダウンロードは起動のときと、1時間ごとに選び直す頃かを見る（選び直すのは1日1回）
+        let weak = Rc::downgrade(&downloads);
+        gtk::glib::timeout_add_seconds_local(60 * 60, move || match weak.upgrade() {
+            Some(d) => {
+                d.refresh_smart(false);
+                gtk::glib::ControlFlow::Continue
+            }
+            None => gtk::glib::ControlFlow::Break,
+        });
+        downloads.refresh_smart(false);
         downloads
+    }
+
+    /// 今の通信で取ってよいか（設定の通信の種類と、つながっているか・従量制か）。
+    pub fn network_allows(&self) -> bool {
+        smart::allows(self.settings.borrow().download_network, self.network.is_network_available(), self.network.is_network_metered())
+    }
+
+    pub fn update_settings(self: &Rc<Self>, change: impl FnOnce(&mut Settings)) {
+        let before = self.settings.borrow().clone();
+        change(&mut self.settings.borrow_mut());
+        let after = self.settings.borrow().clone();
+        after.save();
+        if !after.smart_downloads && before.smart_downloads {
+            // 切ったら、スマートで選んだ曲を外す
+            let next = self.manifest.borrow().with_smart(Vec::new(), 0);
+            self.apply(next);
+        } else if after.smart_downloads && (!before.smart_downloads || after.smart_download_count != before.smart_download_count) {
+            self.refresh_smart(true);
+        }
+        self.work();
+        self.changed();
+    }
+
+    /// 曲を聴いた（30秒か長さの半分）。再生回数に足す。
+    pub fn record_listen(&self, song: &Song) {
+        let next = self.counts.borrow().record(song, now_ms());
+        if let Err(e) = std::fs::create_dir_all(counts_path().parent().unwrap()).and_then(|_| std::fs::write(counts_path(), next.encode())) {
+            eprintln!("play counts save failed: {}", e.kind());
+        }
+        *self.counts.borrow_mut() = next;
+    }
+
+    /// 再生を見張って、聴いた曲を数える（同じ曲は1回の再生で1回まで）。
+    pub fn track_listens(self: &Rc<Self>, playback: &Rc<Playback>) {
+        let (weak, playback) = (Rc::downgrade(self), playback.clone());
+        let counted: RefCell<Option<String>> = RefCell::default();
+        let listened = Cell::new(0u64);
+        let last: RefCell<Option<String>> = RefCell::default();
+        gtk::glib::timeout_add_seconds_local(1, move || {
+            let Some(downloads) = weak.upgrade() else { return gtk::glib::ControlFlow::Break };
+            let current = playback.current();
+            let id = current.as_ref().map(|s| s.video_id.clone());
+            if *last.borrow() != id {
+                *last.borrow_mut() = id.clone();
+                *counted.borrow_mut() = None;
+                listened.set(0);
+            }
+            if let Some(song) = current
+                && playback.player().is_playing()
+            {
+                listened.set(listened.get() + 1000);
+                let threshold = smart::listen_threshold_ms(playback.player().duration_ms());
+                if listened.get() >= threshold && counted.borrow().is_none() {
+                    *counted.borrow_mut() = id;
+                    downloads.record_listen(&song);
+                }
+            }
+            gtk::glib::ControlFlow::Continue
+        });
+    }
+
+    /// スマートダウンロードを選び直す（入っていて、ログインしていて、通信できて、1日たったとき。force なら日を待たない）。
+    /// 1曲も選べなければ前の曲を残す。
+    pub fn refresh_smart(self: &Rc<Self>, force: bool) {
+        if self.refreshing_smart.get() {
+            // 途中なら、終わってからもう一度（変えた曲数で選び直す）
+            if force {
+                self.smart_again.set(true);
+            }
+            return;
+        }
+        if !self.settings.borrow().smart_downloads || !self.repo.client().is_logged_in() || !self.network.is_network_available() {
+            return;
+        }
+        if !force && !smart::is_due(self.manifest.borrow().smart_refreshed_at_ms, now_ms()) {
+            return;
+        }
+        self.refreshing_smart.set(true);
+        let count = smart::normalize_count(self.settings.borrow().smart_download_count);
+        let (repo, counts) = (self.repo.clone(), self.counts.borrow().entries.clone());
+        let this = self.clone();
+        gtk::glib::spawn_future_local(async move {
+            let picked = runtime::run(async move {
+                let history = repo.history().await;
+                let history_songs = history.clone().unwrap_or_default();
+                let liked = repo.playlist(LIKED_SONGS, None).await.map(|p| p.songs).unwrap_or_default();
+                let frequent = smart::frequent(&counts, &history_songs);
+                let known: HashSet<String> =
+                    counts.iter().map(|c| c.song.video_id.clone()).chain(history_songs.iter().map(|s| s.video_id.clone())).chain(liked.iter().map(|s| s.video_id.clone())).collect();
+                let mut radios = Vec::new();
+                for seed in frequent.iter().take(smart::MAX_SEEDS) {
+                    if let Ok(radio) = repo.up_next(Some(&seed.video_id), Some(&format!("RDAMVM{}", seed.video_id)), None).await {
+                        radios.push(radio.songs);
+                    }
+                }
+                let likely = smart::likely(&radios, &known);
+                let home = repo.home(None, None).await;
+                let mut recommended = home.as_ref().map(|h| smart::recommended(&h.shelves)).unwrap_or_default();
+                // 曲の棚で足りなければ、ホームの最初のミックスの曲
+                if let Ok(h) = &home
+                    && recommended.len() < count
+                    && let Some(mix) = smart::first_mix(&h.shelves)
+                    && let Ok(page) = repo.playlist(&mix.playlist_id, None).await
+                {
+                    for song in page.songs {
+                        if !recommended.iter().any(|r| r.video_id == song.video_id) {
+                            recommended.push(song);
+                        }
+                    }
+                }
+                if history.is_err() && home.is_err() {
+                    return None;
+                }
+                Some(smart::select(&frequent, &likely, &recommended, count))
+            })
+            .await;
+            this.refreshing_smart.set(false);
+            if this.smart_again.replace(false) {
+                this.refresh_smart(true);
+                return;
+            }
+            match picked {
+                Some(tracks) if !tracks.is_empty() && this.settings.borrow().smart_downloads => {
+                    eprintln!("smart refresh picked={}", tracks.len());
+                    // 選び直したら、取れなかった曲も取り直してみる
+                    this.unavailable.borrow_mut().clear();
+                    let next = this.manifest.borrow().with_smart(tracks, now_ms());
+                    this.apply(next);
+                }
+                _ => eprintln!("smart refresh kept previous"),
+            }
+        });
     }
 
     pub fn store(&self) -> Arc<DownloadStore> {
@@ -139,6 +313,7 @@ impl Downloads {
 
     /// 全部消す。
     pub fn clear(self: &Rc<Self>) {
+        // スマートダウンロードの入り切りは残す（選び直しは次の1日1回のとき。ほかの端末と同じ）
         *self.manifest.borrow_mut() = DownloadManifest::default();
         self.wanted.lock().unwrap().clear();
         self.store.clear();
@@ -166,6 +341,10 @@ impl Downloads {
         let this = self.clone();
         gtk::glib::spawn_future_local(async move {
             loop {
+                // 設定の通信で取れないあいだは待つ（通信が変わったら work が呼ばれ直す）
+                if !this.network_allows() {
+                    break;
+                }
                 let next = this
                     .manifest
                     .borrow()

@@ -441,6 +441,9 @@ pub fn downloads(app: &Rc<App>) -> adw::NavigationPage {
             if let Some((_, got, total)) = progress.filter(|(_, _, t)| *t > 0) {
                 status.push_str(&format!("（取っている曲 {}%）", got * 100 / total.max(1)));
             }
+            if done < wanted.len() && !app.downloads.network_allows() {
+                status.push_str("・今の通信では取らない設定です（設定で変えられます）");
+            }
             usage.set_label(&status);
             if wanted.is_empty() {
                 body.append(&adw::StatusPage::builder().icon_name("folder-download-symbolic").title("ダウンロードした曲はありません").description("曲のメニュー、プレイリスト・アルバムのページのボタンから取れます").build());
@@ -469,6 +472,16 @@ pub fn downloads(app: &Rc<App>) -> adw::NavigationPage {
             if !manifest.singles.is_empty() {
                 body.append(&gtk::Label::builder().label("曲").xalign(0.0).css_classes(["title-3"]).build());
                 body.append(&song_list(&app, manifest.singles.iter().map(|s| s.song.clone()).collect()));
+            }
+            // スマートダウンロード（分類ごとに分けて出す）
+            use wave_core::download::smart::SmartCategory;
+            for (category, label) in [(SmartCategory::Frequent, "いつも聴いている"), (SmartCategory::Likely, "好きそう"), (SmartCategory::Recommended, "おすすめ")] {
+                let songs: Vec<Song> = manifest.smart.iter().filter(|t| t.category == category).map(|t| t.song.clone()).collect();
+                if songs.is_empty() {
+                    continue;
+                }
+                body.append(&gtk::Label::builder().label(format!("スマートダウンロード: {label}")).xalign(0.0).css_classes(["title-3"]).build());
+                body.append(&song_list(&app, songs));
             }
         }
     };

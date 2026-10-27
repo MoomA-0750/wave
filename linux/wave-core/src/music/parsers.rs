@@ -203,6 +203,14 @@ pub fn playlists(root: &Value) -> Vec<PlaylistSummary> {
         .collect()
 }
 
+/// 再生履歴（FEmusic_history）の曲（「今日」「今週」などの区切りをまとめて新しい順）。
+pub fn history_songs(root: &Value) -> Vec<Song> {
+    let container = root
+        .path(&["continuationContents", "sectionListContinuation"])
+        .or_else(|| root.path(&["contents", "singleColumnBrowseResultsRenderer", "tabs", "0", "tabRenderer", "content", "sectionListRenderer"]));
+    container.map(|c| find_all(c, "musicShelfRenderer").into_iter().flat_map(shelf_songs).collect()).unwrap_or_default()
+}
+
 /// ライブラリの一覧の続きのトークン。
 pub fn library_continuation(root: &Value) -> Option<String> {
     find_all(root, "nextContinuationData")

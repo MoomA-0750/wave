@@ -3,6 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use super::smart::SmartTrack;
 use crate::music::models::Song;
 
 pub const KIND_PLAYLIST: &str = "playlist";
@@ -35,6 +36,9 @@ pub struct DownloadSingle {
 pub struct DownloadManifest {
     pub collections: Vec<DownloadCollection>,
     pub singles: Vec<DownloadSingle>,
+    /// スマートダウンロードで選んだ曲。
+    pub smart: Vec<SmartTrack>,
+    pub smart_refreshed_at_ms: i64,
 }
 
 impl DownloadManifest {
@@ -50,6 +54,7 @@ impl DownloadManifest {
             .iter()
             .flat_map(|c| c.songs.iter())
             .chain(self.singles.iter().map(|s| &s.song))
+            .chain(self.smart.iter().map(|s| &s.song))
             .filter(|s| Self::downloadable(s) && seen.insert(s.video_id.clone()))
             .cloned()
             .collect()
@@ -95,11 +100,20 @@ impl DownloadManifest {
         next
     }
 
-    /// 1曲ずつ取ったものから外す（丸ごと取っているものに入っていれば、ファイルは残る）。
+    pub fn is_smart(&self, video_id: &str) -> bool {
+        self.smart.iter().any(|s| s.song.video_id == video_id)
+    }
+
+    /// 1曲ずつ取ったもの・スマートダウンロードから外す（丸ごと取っているものに入っていれば、ファイルは残る）。
     pub fn without_single(&self, video_id: &str) -> Self {
         let mut next = self.clone();
         next.singles.retain(|s| s.song.video_id != video_id);
+        next.smart.retain(|s| s.song.video_id != video_id);
         next
+    }
+
+    pub fn with_smart(&self, tracks: Vec<SmartTrack>, now_ms: i64) -> Self {
+        Self { smart: tracks, smart_refreshed_at_ms: now_ms, ..self.clone() }
     }
 
     pub fn encode(&self) -> String {

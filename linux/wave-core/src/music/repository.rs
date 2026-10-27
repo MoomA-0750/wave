@@ -219,4 +219,9 @@ impl MusicRepository {
         let root = self.client.post("next", json!({ "videoId": video_id, "contentCheckOk": true, "racyCheckOk": true }), true, &[]).await?;
         Ok(parsers::music_video_of(&root, video_id))
     }
+
+    /// 再生履歴の曲（最初のページ。新しい順）。ログイン必須。
+    pub async fn history(&self) -> ApiResult<Vec<super::models::Song>> {
+        Ok(parsers::history_songs(&self.logged_in_post("browse", json!({ "browseId": "FEmusic_history" })).await?))
+    }
 }

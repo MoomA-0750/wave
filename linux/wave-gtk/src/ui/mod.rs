@@ -4,5 +4,6 @@ pub mod ai;
 pub mod images;
 pub mod lyrics;
 pub mod pages;
+pub mod settings;
 pub mod shell;
 pub mod song_menu;

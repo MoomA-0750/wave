@@ -42,13 +42,36 @@ impl App {
         self.toasts.add_toast(adw::Toast::new(text));
     }
 
+    /// ページを積む。同じタグのページが下に残っていると AdwNavigationView が積むのを断るので、
+    /// そのときは番号を付けて重ならないようにする（アルバム → アーティスト → 別のアルバム、設定を2回開く、など）。
     pub fn push(&self, page: adw::NavigationPage) {
+        if let Some(tag) = page.tag() {
+            let mut n = 2;
+            while self.nav.find_page(&page_tag(&tag, n - 1)).is_some() {
+                page.set_tag(Some(&page_tag(&tag, n)));
+                n += 1;
+            }
+        }
         self.nav.push(&page);
+    }
+
+    /// 今いちばん上のページの種類（タグの番号を除いた名前）。
+    pub fn visible_kind(&self) -> Option<String> {
+        visible_kind(&self.nav)
     }
 }
 
 /// 右の欄の幅。
 const SIDE_WIDTH: i32 = 340;
+
+/// 種類 kind の n 枚目のページのタグ（1枚目は種類の名前のまま）。
+fn page_tag(kind: &str, n: usize) -> String {
+    if n <= 1 { kind.to_string() } else { format!("{kind}#{n}") }
+}
+
+fn visible_kind(nav: &adw::NavigationView) -> Option<String> {
+    nav.visible_page().and_then(|p| p.tag()).map(|t| t.split('#').next().unwrap_or("").to_string())
+}
 
 const STYLE: &str = "
 .artwork { border-radius: 8px; }
@@ -338,7 +361,7 @@ fn header(app: &Rc<App>) -> adw::HeaderBar {
             return;
         }
         // 検索のページは1枚だけ積む（打ち直したら置き換える）
-        if app.nav.visible_page().and_then(|p| p.tag()).as_deref() == Some("search") {
+        if app.visible_kind().as_deref() == Some("search") {
             app.nav.pop();
         }
         app.push(pages::search(&app, &query));
@@ -611,12 +634,21 @@ fn now_playing(app: &Rc<App>) -> gtk::Widget {
 fn account_button(app: &Rc<App>, on_logout: Rc<dyn Fn()>) -> gtk::MenuButton {
     let avatar = adw::Avatar::builder().size(30).show_initials(true).build();
     let name = gtk::Label::builder().css_classes(["heading"]).margin_bottom(6).build();
+    let settings = gtk::Button::builder().label("設定").css_classes(["flat"]).build();
     let logout = gtk::Button::builder().label("ログアウト").css_classes(["flat"]).build();
     let column = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(4).margin_top(6).margin_bottom(6).margin_start(6).margin_end(6).build();
     column.append(&name);
+    column.append(&settings);
     column.append(&logout);
     let popover = gtk::Popover::builder().child(&column).build();
     let button = gtk::MenuButton::builder().child(&avatar).popover(&popover).tooltip_text("アカウント").css_classes(["flat", "circular"]).build();
+    {
+        let (app, popover) = (app.clone(), popover.clone());
+        settings.connect_clicked(move |_| {
+            popover.popdown();
+            app.push(super::settings::page(&app));
+        });
+    }
     logout.connect_clicked(move |_| {
         popover.popdown();
         on_logout();
@@ -858,7 +890,7 @@ fn player_bar(app: &Rc<App>, side: &gtk::Widget, side_stack: &gtk::Stack) -> gtk
     {
         let app_for_toggle = app.clone();
         lyrics_toggle.connect_toggled(move |t| {
-            let open = app_for_toggle.nav.visible_page().and_then(|p| p.tag()).as_deref() == Some("lyrics");
+            let open = app_for_toggle.visible_kind().as_deref() == Some("lyrics");
             if t.is_active() && !open {
                 app_for_toggle.push(super::lyrics::page(&app_for_toggle));
             } else if !t.is_active() && open {
@@ -867,7 +899,7 @@ fn player_bar(app: &Rc<App>, side: &gtk::Widget, side_stack: &gtk::Stack) -> gtk
         });
         let toggle = lyrics_toggle.clone();
         app.nav.connect_visible_page_notify(move |nav| {
-            let open = nav.visible_page().and_then(|p| p.tag()).as_deref() == Some("lyrics");
+            let open = visible_kind(nav).as_deref() == Some("lyrics");
             if toggle.is_active() != open {
                 toggle.set_active(open);
             }
