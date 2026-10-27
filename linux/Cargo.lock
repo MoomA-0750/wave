@@ -2914,6 +2914,7 @@ dependencies = [
  "oo7",
  "regex",
  "reqwest",
+ "serde_json",
  "soup3",
  "tokio",
  "wave-core",

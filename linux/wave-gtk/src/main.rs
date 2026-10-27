@@ -1,5 +1,6 @@
 //! wave の Linux（GNOME）版。画面は GTK4 + libadwaita で作り、YouTube Music とのやり取りは wave-core に任せる。
 
+mod ai_chat;
 mod keyring;
 mod login;
 mod mpris;

@@ -17,6 +17,10 @@ pub struct App {
     pub playback: Rc<Playback>,
     nav: adw::NavigationView,
     toasts: adw::ToastOverlay,
+    /// Claude との会話。
+    pub ai: Rc<crate::ai_chat::AiChat>,
+    /// 上の帯の Claude のボタン（右の欄を Claude にする。下の帯を作るときにつなぐ）。
+    claude_toggle: std::cell::RefCell<Option<gtk::ToggleButton>>,
     /// 自分で編集できるプレイリスト（曲のメニューの「プレイリストに追加」に並べる）。
     pub editable_playlists: std::cell::RefCell<Vec<wave_core::music::models::PlaylistSummary>>,
 }
@@ -37,6 +41,9 @@ impl App {
     }
 }
 
+/// 右の欄の幅。
+const SIDE_WIDTH: i32 = 340;
+
 const STYLE: &str = "
 .artwork { border-radius: 8px; }
 .artwork-frame { background-color: alpha(currentColor, 0.08); }
@@ -48,6 +55,7 @@ const STYLE: &str = "
 .song-list { background: transparent; }
 .lyric-line { font-size: 24px; font-weight: 800; opacity: 0.4; }
 .lyric-line.lyric-current { opacity: 1; color: @accent_color; }
+.ai-user { background-color: alpha(@accent_bg_color, 0.15); border-radius: 12px; padding: 6px 10px; }
 .like-button:checked { color: @accent_color; background: transparent; }
 .lyric-plain { font-size: 17px; line-height: 1.6; }
 ";
@@ -60,7 +68,18 @@ pub fn build(repo: MusicRepository, lyrics: wave_core::lyrics::service::LyricsSe
 
     let nav = adw::NavigationView::new();
     let toasts = adw::ToastOverlay::new();
-    let app = Rc::new(App { repo, lyrics, playback, nav: nav.clone(), toasts: toasts.clone(), editable_playlists: Default::default() });
+    let app = Rc::new(App { repo, lyrics, playback, nav: nav.clone(), toasts: toasts.clone(), ai: Default::default(), claude_toggle: Default::default(), editable_playlists: Default::default() });
+    {
+        let app = app.clone();
+        gtk::glib::spawn_future_local(async move {
+            app.ai.load().await;
+            // 確かめ用: WAVE_DEMO_AI_ASK の頼みを、曲が流れ始めるのを待ってから送る
+            if let Ok(ask) = std::env::var("WAVE_DEMO_AI_ASK") {
+                gtk::glib::timeout_future_seconds(6).await;
+                app.ai.send(&app, &ask);
+            }
+        });
+    }
     nav.add(&pages::home(&app));
 
     let toolbar = adw::ToolbarView::new();
@@ -76,7 +95,11 @@ pub fn build(repo: MusicRepository, lyrics: wave_core::lyrics::service::LyricsSe
     let side_stack = gtk::Stack::builder().transition_type(gtk::StackTransitionType::Crossfade).build();
     side_stack.add_named(&now_playing(&app), Some("now"));
     side_stack.add_named(&queue(&app), Some("queue"));
-    let side = pane(&side_stack, Some(340));
+    side_stack.add_named(&super::ai::panel(&app), Some("ai"));
+    // 中身ごとに幅を変えず、いつも同じ幅にする（Claude の長い文に合わせて広がらないように）
+    side_stack.set_hhomogeneous(false);
+    let side_width = adw::Clamp::builder().maximum_size(SIDE_WIDTH).tightening_threshold(SIDE_WIDTH).child(&side_stack).build();
+    let side = pane(&side_width, Some(SIDE_WIDTH));
     body.append(&side);
     toasts.set_child(Some(&body));
     toolbar.set_content(Some(&toasts));
@@ -121,6 +144,8 @@ fn pane(child: &impl IsA<gtk::Widget>, width: Option<i32>) -> gtk::Widget {
     frame.set_overflow(gtk::Overflow::Hidden);
     if let Some(width) = width {
         frame.set_width_request(width);
+        // 中の部品（入力の欄など）が横に広がりたがっても、欄の幅は変えない（明示しないと子の hexpand が伝わる）
+        frame.set_hexpand(false);
     }
     frame.upcast()
 }
@@ -133,6 +158,21 @@ fn header(app: &Rc<App>) -> adw::HeaderBar {
     let center = gtk::Box::builder().spacing(8).build();
     center.append(&home);
     center.append(&search);
+    // Claude は検索の欄の右（Mac・Windows と同じ）。右の欄に出す
+    let claude = gtk::ToggleButton::builder().icon_name("chat-message-new-symbolic").tooltip_text("Claude に聞く (Ctrl+J)").css_classes(["circular", "flat"]).build();
+    center.append(&claude);
+    *app.claude_toggle.borrow_mut() = Some(claude.clone());
+    let shortcut = gtk::ShortcutController::new();
+    shortcut.set_scope(gtk::ShortcutScope::Managed);
+    let toggle = claude.clone();
+    shortcut.add_shortcut(gtk::Shortcut::new(
+        gtk::ShortcutTrigger::parse_string("<Control>j"),
+        Some(gtk::CallbackAction::new(move |_, _| {
+            toggle.set_active(!toggle.is_active());
+            gtk::glib::Propagation::Stop
+        })),
+    ));
+    center.add_controller(shortcut);
     let bar = adw::HeaderBar::builder().title_widget(&center).build();
     bar.pack_start(&back);
 
@@ -430,6 +470,27 @@ fn like_behaviour(app: &Rc<App>, like: &gtk::ToggleButton) {
     });
 }
 
+/// 右の欄の切り替えのボタン（キュー・Claude）: 押すと右の欄をその中身にし（しまってあれば出す）、もう一度押すと再生中に戻す。
+/// ほかのボタンで切り替わったら、このボタンも戻す。
+fn link_side_toggle(toggle: &gtk::ToggleButton, stack: &gtk::Stack, name: &'static str, side_toggle: &gtk::ToggleButton) {
+    let (stack_for_toggle, side_toggle) = (stack.clone(), side_toggle.clone());
+    toggle.connect_toggled(move |t| {
+        if t.is_active() {
+            stack_for_toggle.set_visible_child_name(name);
+            side_toggle.set_active(true);
+        } else if stack_for_toggle.visible_child_name().as_deref() == Some(name) {
+            stack_for_toggle.set_visible_child_name("now");
+        }
+    });
+    let toggle = toggle.clone();
+    stack.connect_visible_child_name_notify(move |stack| {
+        let shown = stack.visible_child_name().as_deref() == Some(name);
+        if toggle.is_active() != shown {
+            toggle.set_active(shown);
+        }
+    });
+}
+
 /// 下の帯: 左に曲、中央に操作と位置（窓の左右の中央）、右にキュー・音量・右の欄の出し入れ。
 fn player_bar(app: &Rc<App>, side: &gtk::Widget, side_stack: &gtk::Stack) -> gtk::Widget {
     // 左: 曲
@@ -500,21 +561,18 @@ fn player_bar(app: &Rc<App>, side: &gtk::Widget, side_stack: &gtk::Stack) -> gtk
         next.connect_clicked(move |_| playback.next());
         let playback = app.playback.clone();
         volume.connect_value_changed(move |s| playback.player().set_volume(s.value()));
-        let (side, queue_toggle_for_side) = (side.clone(), queue_toggle.clone());
+        // 右の欄をしまったら、次に出すときは再生中から
+        let (side, stack) = (side.clone(), side_stack.clone());
         side_toggle.connect_toggled(move |t| {
             side.set_visible(t.is_active());
             if !t.is_active() {
-                queue_toggle_for_side.set_active(false);
+                stack.set_visible_child_name("now");
             }
         });
-        // キューを押すと右の欄をキューにし（しまってあれば出す）、もう一度押すと再生中に戻す
-        let (stack, side_toggle) = (side_stack.clone(), side_toggle.clone());
-        queue_toggle.connect_toggled(move |t| {
-            stack.set_visible_child_name(if t.is_active() { "queue" } else { "now" });
-            if t.is_active() {
-                side_toggle.set_active(true);
-            }
-        });
+        link_side_toggle(&queue_toggle, side_stack, "queue", &side_toggle);
+        if let Some(claude) = app.claude_toggle.borrow().as_ref() {
+            link_side_toggle(claude, side_stack, "ai", &side_toggle);
+        }
     }
     // 歌詞は中央のページに出す（もう一度押すと閉じる。Mac・Windows と同じ）。ページを戻る・ホームで閉じたらボタンも戻す
     {
@@ -535,9 +593,15 @@ fn player_bar(app: &Rc<App>, side: &gtk::Widget, side_stack: &gtk::Stack) -> gtk
             }
         });
     }
-
-    if std::env::var("WAVE_DEMO_SIDE").as_deref() == Ok("queue") {
-        queue_toggle.set_active(true);
+    // 確かめ用: 起動したら右の欄をキュー（WAVE_DEMO_SIDE=queue）か Claude（=ai）にする
+    match std::env::var("WAVE_DEMO_SIDE").as_deref() {
+        Ok("queue") => queue_toggle.set_active(true),
+        Ok("ai") => {
+            if let Some(claude) = app.claude_toggle.borrow().as_ref() {
+                claude.set_active(true);
+            }
+        }
+        _ => {}
     }
     // 利用者が動かしたときだけシークする（位置の書き換えでは呼ばれない）
     let dragging = Rc::new(Cell::new(false));

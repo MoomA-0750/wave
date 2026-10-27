@@ -15,3 +15,8 @@ pub async fn run<T: Send + 'static>(future: impl Future<Output = T> + Send + 'st
 pub fn block_on<T>(future: impl Future<Output = T>) -> T {
     RUNTIME.block_on(future)
 }
+
+/// 裏（tokio）で動かしっぱなしにする（止めるときは返したものの abort）。
+pub fn spawn<T: Send + 'static>(future: impl Future<Output = T> + Send + 'static) -> tokio::task::JoinHandle<T> {
+    RUNTIME.spawn(future)
+}

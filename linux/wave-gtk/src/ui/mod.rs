@@ -1,5 +1,6 @@
 //! 画面（GTK4 + libadwaita）。
 
+pub mod ai;
 pub mod images;
 pub mod lyrics;
 pub mod pages;

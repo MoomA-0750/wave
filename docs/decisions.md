@@ -906,3 +906,6 @@
 - GTK の CSS で var(--accent-color) を使うと、その規則が効かなかった（歌詞の大きさ・強調が出なかった）。@accent_color・@view_bg_color の書き方にする
 - LRCLIB は Cloudflare の向こうで、一時的に 503 を返すことがあった（同じ問い合わせが少し後には 404）。失敗として扱い、結果を覚えない作りのままでよい
 - 評価のボタンは emblem-favorite-symbolic だと色付きのハートで出て、付けたか見分けられなかった。GNOME の標準の starred-symbolic・non-starred-symbolic（色が変わる星）にする
+- Claude の欄は Windows の AiChat と同じ作り（中継 ai-bridge、ai/agent.json を core に埋め込む、道具は手元で行う、知らない video_id は断る）。中継から届く1行ごとの出来事は tokio の上で読み、チャネルで主スレッドへ渡す。トークンは Debug に出さない
+- 右の欄の中身を切り替える Stack は、既定ではいちばん広い中身に幅を合わせ、さらに中の入力の欄の hexpand が欄全体に伝わって、右の欄が 500px 以上に広がった。Stack を hhomogeneous=false にし、Clamp で 340px に抑え、欄の hexpand を明示的に切る
+- 確かめは、手元に立てた試しの中継（答えを少しずつ返し、search_songs と show_songs を呼ぶ）で行った。本物の中継（本人の PC の ai-bridge）では未確認
