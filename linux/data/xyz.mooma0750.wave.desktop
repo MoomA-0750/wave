@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=wave
+Comment=YouTube Music を聴く
+Comment[en]=Listen to YouTube Music
+Exec=wave-gtk
+Icon=xyz.mooma0750.wave
+Terminal=false
+Categories=AudioVideo;Audio;Player;GTK;
+Keywords=music;youtube;player;
+StartupNotify=true
+StartupWMClass=xyz.mooma0750.wave
+DBusActivatable=false

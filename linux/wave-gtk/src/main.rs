@@ -23,6 +23,8 @@ fn main() -> gtk::glib::ExitCode {
 }
 
 fn build_window(app: &adw::Application) {
+    // ランチャー・Alt+Tab のアイコン（scripts/install.sh で入れた絵）
+    gtk::Window::set_default_icon_name(APP_ID);
     let repo = MusicRepository::new(InnerTube::new(&language(), &region()));
     let toolbar = adw::ToolbarView::new();
     toolbar.add_top_bar(&adw::HeaderBar::new());
