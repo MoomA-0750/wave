@@ -1217,7 +1217,7 @@ fun PlayerBar(
     val song = display.song
     var pickArtist by remember { mutableStateOf<List<xyz.mooma0750.wave.core.music.ArtistRef>?>(null) }
     Row(Modifier.fillMaxWidth().height(PLAYER_BAR_HEIGHT).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Row(Modifier.weight(0.3f), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.weight(0.28f), verticalAlignment = Alignment.CenterVertically) {
             coil3.compose.AsyncImage(
                 model = song?.thumbnailUrl,
                 contentDescription = null,
@@ -1254,17 +1254,19 @@ fun PlayerBar(
             }
             LikeButton(connection, scope, onLikedTap = song?.let { current -> { actions.addToPlaylist(current) } })
         }
-        Column(Modifier.weight(0.4f), horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(Modifier.weight(0.36f), horizontalAlignment = Alignment.CenterHorizontally) {
             Transport(display, connection, Modifier, Arrangement.spacedBy(8.dp), playSize = 48.dp, skipSize = 28.dp)
             SeekBar(display, Modifier.fillMaxWidth().widthIn(max = 640.dp), timesBeside = true)
         }
-        Row(Modifier.weight(0.3f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.End) {
+        // 右はボタン5つ（240dp）と音量（96dp 以上）が入る幅にする（幅 1000dp で 360dp）
+        Row(Modifier.weight(0.36f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.End) {
             IconAction(R.drawable.ic_lyrics, stringResource(R.string.nowplaying_lyrics), onLyrics, active = lyricsShown)
             IconAction(R.drawable.ic_queue_music, stringResource(R.string.nowplaying_queue), onQueue, active = queueShown)
             IconAction(R.drawable.ic_devices, stringResource(R.string.nowplaying_connected_devices), onOpenDevices, active = display.remote != null)
             IconAction(R.drawable.ic_right_panel_close, stringResource(R.string.nowplaying_panel_toggle), onPanel, active = panelShown)
             IconAction(R.drawable.ic_open_in_full, stringResource(R.string.nowplaying_expand), onExpand)
-            VolumeSlider(display, Modifier.width(160.dp))
+            // 帯が狭いときはボタンを優先し、音量は残りの幅に縮める
+            VolumeSlider(display, Modifier.weight(1f, fill = false).widthIn(min = 96.dp, max = 160.dp))
         }
     }
     pickArtist?.let { artists ->
