@@ -895,3 +895,8 @@
 - googlevideo は範囲を付けない取り方（丸ごと・bytes=0-）を 403 で拒む。playbin に URL を渡さず、core の RangeReader が 512KB ずつ範囲で取ったものを appsrc で流し込む（シークはその位置から取り直す。Windows の RangeStream と同じ考え）
 - ログインしていないと、先頭の 1MB ほどの先が 403 になった（po_token が無い WEB の再生の振る舞いと見ている）。本人がログインした状態では 403 は出ず、検索から約 3.8 秒で鳴り始め、実時間で進んだ（音を出さない fakesink sync=true で確かめた）
 - appsrc をどこからでも読める流れにすると、qtdemux は求めた長さ（例: 24 バイト目から 735 バイト）ちょうどを待ち、多く返すと「ファイルが壊れている」で止まった。512KB ずつ取った塊をとっておき、求められた長さだけを切り出して渡す
+- 画面の並びは Mac・Windows と同じにし、部品は libadwaita（HeaderBar・NavigationView・ActionRow・StatusPage）。左・中央・右は角を丸めた欄（view の色）にする
+- ジャケットは gtk::Picture だけだと画像の縦横の比に合わせて枠が伸び、横長の画像で正方形にならなかった。大きさの決まった枠の上に画像を重ねて切り抜く（gtk::Overlay と clip_overlay）
+- ホームの横に流れる棚は、ScrolledWindow が中身の高さを測らず2行目の補足が切れたので、propagate_natural_height を付ける
+- 下の帯の再生のボタンは、左右を SizeGroup で同じ幅にして窓の中央に置く。中央（シークバー）と左右の合計が窓に収まらないと中央からずれる（1280px の窓で 12px ずれた）ので、曲名を 22 文字・シークバーを 420px にした
+- 見えない画面では押せないので、確かめるときだけ WAVE_DEMO_QUERY で「その語で検索して1曲目から流す」を指示できる

@@ -99,6 +99,38 @@ impl Player {
         self.playbin.query_duration::<gst::ClockTime>().map(|t| t.mseconds())
     }
 
+    /// 0〜1 の音量。
+    pub fn set_volume(&self, volume: f64) {
+        self.playbin.set_property("volume", volume.clamp(0.0, 1.0));
+    }
+
+    pub fn volume(&self) -> f64 {
+        self.playbin.property("volume")
+    }
+
+    /// 曲が終わった・流せなくなったときに主スレッドで呼ぶ（返したものを持っている間だけ）。
+    pub fn watch(&self, on_end: impl Fn(bool) + 'static) -> gst::bus::BusWatchGuard {
+        self.playbin
+            .bus()
+            .expect("playbin has a bus")
+            .add_watch_local(move |_, message| {
+                match message.view() {
+                    gst::MessageView::Eos(_) => on_end(false),
+                    gst::MessageView::Error(e) => {
+                        eprintln!("playback error: {}", e.error());
+                        on_end(true);
+                    }
+                    _ => {}
+                }
+                gtk::glib::ControlFlow::Continue
+            })
+            .expect("one bus watch")
+    }
+
+    pub fn stop(&self) {
+        self.playbin.set_state(gst::State::Null).ok();
+    }
+
     pub fn seek_ms(&self, position: u64) {
         self.playbin.seek_simple(gst::SeekFlags::FLUSH | gst::SeekFlags::KEY_UNIT, gst::ClockTime::from_mseconds(position)).ok();
     }

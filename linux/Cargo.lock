@@ -2912,6 +2912,8 @@ dependencies = [
  "gtk4",
  "libadwaita",
  "oo7",
+ "regex",
+ "reqwest",
  "soup3",
  "tokio",
  "wave-core",

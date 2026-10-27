@@ -132,3 +132,20 @@ pub struct HomePage {
     pub continuation: Option<String>,
     pub chips: Vec<HomeChip>,
 }
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct PlaylistPage {
+    pub title: Option<String>,
+    pub songs: Vec<Song>,
+    pub continuation: Option<String>,
+    pub subtitle: Option<String>,
+    pub thumbnail_url: Option<String>,
+}
+
+/// 次に流れる曲（ラジオ）。
+#[derive(Debug, Clone, PartialEq)]
+pub struct UpNextPage {
+    pub songs: Vec<Song>,
+    pub continuation: Option<String>,
+    pub playlist_id: Option<String>,
+}

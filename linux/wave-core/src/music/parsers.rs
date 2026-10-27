@@ -180,6 +180,135 @@ fn menu_icons(card: &Value) -> Vec<String> {
     icons
 }
 
+/// ライブラリのプレイリスト一覧などのカード。
+pub fn playlists(root: &Value) -> Vec<PlaylistSummary> {
+    let mut seen = std::collections::HashSet::new();
+    find_all(root, "musicTwoRowItemRenderer")
+        .into_iter()
+        .filter_map(|item| {
+            let browse = item.path(&["navigationEndpoint", "browseEndpoint"]);
+            let browse_id = browse.path(&["browseId"]).str_()?;
+            if page_type_of_browse(browse) != Some("MUSIC_PAGE_TYPE_PLAYLIST") && !browse_id.starts_with("VL") {
+                return None;
+            }
+            Some(PlaylistSummary {
+                playlist_id: remove_vl(browse_id),
+                title: text_of(item.path(&["title"]))?,
+                subtitle: text_of(item.path(&["subtitle"])),
+                thumbnail_url: last_thumbnail_url(item.path(&["thumbnailRenderer"])),
+                editable: menu_icons(item).iter().any(|i| i == EDIT_ICON),
+            })
+        })
+        .filter(|p| seen.insert(p.playlist_id.clone()))
+        .collect()
+}
+
+/// ライブラリの一覧の続きのトークン。
+pub fn library_continuation(root: &Value) -> Option<String> {
+    find_all(root, "nextContinuationData")
+        .into_iter()
+        .find_map(|c| c.path(&["continuation"]).str_())
+        .or_else(|| {
+            find_all(root, "continuationItemRenderer")
+                .into_iter()
+                .find_map(|c| c.path(&["continuationEndpoint", "continuationCommand", "token"]).str_())
+        })
+        .map(String::from)
+}
+
+/// プレイリストのページ（最初のページと続き）。
+pub fn playlist_page(root: &Value) -> PlaylistPage {
+    let appended = root
+        .path(&["onResponseReceivedActions"])
+        .items()
+        .into_iter()
+        .find_map(|a| a.path(&["appendContinuationItemsAction", "continuationItems"]).filter(|v| v.is_array()));
+    let shelf = find_all(root, "musicPlaylistShelfRenderer").into_iter().next();
+    let items = match appended {
+        Some(list) => list.items(),
+        None => shelf.path(&["contents"]).items(),
+    };
+    let songs = items.iter().filter_map(|i| i.path(&["musicResponsiveListItemRenderer"])).filter_map(responsive_list_item_song).collect();
+    let continuation = items
+        .last()
+        .and_then(|last| last.path(&["continuationItemRenderer", "continuationEndpoint", "continuationCommand", "token"]).str_())
+        .or_else(|| shelf.path(&["continuations"]).items().into_iter().find_map(|c| c.path(&["nextContinuationData", "continuation"]).str_()))
+        .map(String::from);
+    let header = find_all(root, "musicResponsiveHeaderRenderer").into_iter().next().or_else(|| find_all(root, "musicDetailHeaderRenderer").into_iter().next());
+    let subtitle = header.map(|h| {
+        [text_of(h.path(&["subtitle"])), text_of(h.path(&["secondSubtitle"]))].into_iter().flatten().collect::<Vec<_>>().join(" • ")
+    });
+    let thumbnail = header.and_then(|h| {
+        last_thumbnail_url(h.path(&["thumbnail"])).or_else(|| {
+            find_all(h, "musicThumbnailRenderer")
+                .into_iter()
+                .find_map(|t| t.path(&["thumbnail", "thumbnails"]).items().last().and_then(|u| u.path(&["url"]).str_()).map(String::from))
+        })
+    });
+    PlaylistPage {
+        title: text_of(header.path(&["title"])),
+        songs,
+        continuation,
+        subtitle: subtitle.filter(|s| !s.is_empty()),
+        thumbnail_url: thumbnail,
+    }
+}
+
+/// 次に流れる曲（ラジオ）の最初の応答と続き。
+pub fn up_next(root: &Value) -> UpNextPage {
+    let panel = root.path(&["continuationContents", "playlistPanelContinuation"]).or_else(|| {
+        root.path(&["contents", "singleColumnMusicWatchNextResultsRenderer", "tabbedRenderer", "watchNextTabbedResultsRenderer", "tabs", "0", "tabRenderer", "content", "musicQueueRenderer", "content", "playlistPanelRenderer"])
+    });
+    let Some(panel) = panel else {
+        return UpNextPage { songs: Vec::new(), continuation: None, playlist_id: None };
+    };
+    // ログイン中は、MV と対になった曲が playlistPanelVideoWrapperRenderer に包まれて来る。包みの中の曲も読む
+    let songs = panel
+        .path(&["contents"])
+        .items()
+        .into_iter()
+        .filter_map(|i| i.path(&["playlistPanelVideoRenderer"]).or_else(|| i.path(&["playlistPanelVideoWrapperRenderer", "primaryRenderer", "playlistPanelVideoRenderer"])))
+        .filter_map(playlist_panel_song)
+        .collect();
+    let continuation = panel
+        .path(&["continuations"])
+        .items()
+        .into_iter()
+        .find_map(|c| c.path(&["nextRadioContinuationData", "continuation"]).str_().or_else(|| c.path(&["nextContinuationData", "continuation"]).str_()))
+        .map(String::from);
+    UpNextPage { songs, continuation, playlist_id: panel.path(&["playlistId"]).str_().map(String::from) }
+}
+
+/// ラジオ・キューの行（playlistPanelVideoRenderer）。
+pub fn playlist_panel_song(item: &Value) -> Option<Song> {
+    let video_id = item.path(&["videoId"]).str_().or_else(|| item.path(&["navigationEndpoint", "watchEndpoint", "videoId"]).str_())?;
+    let title = text_of(item.path(&["title"]))?;
+    let mut byline = item.path(&["longBylineText", "runs"]).items();
+    if byline.is_empty() {
+        byline = item.path(&["shortBylineText", "runs"]).items();
+    }
+    Some(Song {
+        video_id: video_id.to_string(),
+        title,
+        artists: artists_of(&byline),
+        album: album_of(&byline),
+        duration_seconds: duration_of(&item.path(&["lengthText", "runs"]).items()),
+        thumbnail_url: item.path(&["thumbnail", "thumbnails"]).items().last().and_then(|t| t.path(&["url"]).str_()).map(String::from),
+        kind: item.path(&["navigationEndpoint"]).path(&MUSIC_CONFIG).str_().map(String::from),
+        is_live: false,
+    })
+}
+
+const CONTENT_RENDERERS: [&str; 6] = [
+    "musicTwoRowItemRenderer", "musicResponsiveListItemRenderer", "musicResponsiveHeaderRenderer",
+    "musicDetailHeaderRenderer", "musicEditablePlaylistDetailHeaderRenderer", "musicPlaylistShelfRenderer",
+];
+
+/// ログインの案内だけが返った（中身の部品が1つも無い）。
+pub fn is_sign_in_prompt(root: &Value) -> bool {
+    !find_all(root, "messageRenderer").is_empty() && CONTENT_RENDERERS.iter().all(|r| find_all(root, r).is_empty())
+}
+
 /// 検索・プレイリストの行（musicResponsiveListItemRenderer）。
 pub fn responsive_list_item_song(item: &Value) -> Option<Song> {
     // 地域・権利の都合で再生できない行（グレーアウト）は除く
@@ -375,6 +504,35 @@ mod tests {
         assert!(page.continuation.is_some());
         assert_eq!(page.chips.len(), 10);
         assert_eq!(page.chips[0].title, "Sleep");
+    }
+
+    #[test]
+    fn up_next_pages() {
+        let first = up_next(&fixture("next_radio"));
+        assert_eq!(first.songs.len(), 4);
+        assert!(first.songs.iter().all(|s| !s.artists.is_empty() && s.duration_seconds.is_some()));
+        assert!(first.playlist_id.as_deref().unwrap().starts_with("RDAMVM"));
+        assert!(first.continuation.is_some());
+        let next = up_next(&fixture("next_radio_continuation"));
+        assert_eq!(next.songs.len(), 4);
+        assert_ne!(first.songs.iter().map(|s| &s.video_id).collect::<Vec<_>>(), next.songs.iter().map(|s| &s.video_id).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn playlist_pages_and_sign_in_prompt() {
+        let page = playlist_page(&fixture("browse_playlist"));
+        assert!(!page.songs.is_empty());
+        assert!(page.title.is_some());
+        assert!(!playlist_page(&fixture("browse_playlist_continuation")).songs.is_empty());
+        assert!(is_sign_in_prompt(&fixture("browse_library_logged_out")));
+        assert!(!is_sign_in_prompt(&fixture("browse_playlist")));
+    }
+
+    #[test]
+    fn library_playlists_from_home_cards() {
+        let list = playlists(&fixture("browse_home_playlists"));
+        assert!(!list.is_empty());
+        assert!(list.iter().all(|p| !p.playlist_id.starts_with("VL")));
     }
 
     #[test]

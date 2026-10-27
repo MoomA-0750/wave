@@ -2,12 +2,16 @@
 
 mod keyring;
 mod login;
+mod playback;
 mod player;
 mod runtime;
+mod ui;
 
 use adw::prelude::*;
 use wave_core::innertube::InnerTube;
 use wave_core::music::repository::MusicRepository;
+use wave_core::stream::player::PlayerCipherProvider;
+use wave_core::stream::resolver::StreamResolver;
 
 const APP_ID: &str = "xyz.mooma0750.wave";
 
@@ -70,28 +74,18 @@ fn show_login(window: &adw::ApplicationWindow, toolbar: &adw::ToolbarView, repo:
     });
 }
 
-/// 仮のホーム: 棚の見出しと中身の名前を並べる（並びは後で Mac・Windows と同じにする）。
+/// ログインできたら、Mac・Windows と同じ並びの画面に入れ替える（上の帯も画面の側が持つ）。
 async fn show_home(toolbar: &adw::ToolbarView, repo: &MusicRepository) {
-    toolbar.set_content(Some(&loading_page()));
-    let core = repo.clone();
-    let result = runtime::run(async move { core.home(None, None).await }).await;
-    let list = gtk::Box::new(gtk::Orientation::Vertical, 12);
-    list.set_margin_top(24);
-    list.set_margin_bottom(24);
-    list.set_margin_start(24);
-    list.set_margin_end(24);
-    match result {
-        Ok(page) => {
-            for shelf in page.shelves {
-                list.append(&gtk::Label::builder().label(&shelf.title).xalign(0.0).css_classes(["title-2"]).build());
-                let names: Vec<&str> = shelf.items.iter().map(|i| i.title()).collect();
-                list.append(&gtk::Label::builder().label(names.join(" ・ ")).xalign(0.0).wrap(true).build());
-            }
-        }
-        Err(e) => list.append(&gtk::Label::new(Some(&format!("ホームを読めませんでした（{e}）")))),
+    let resolver = StreamResolver::new(repo.client().clone(), PlayerCipherProvider::default());
+    let playback = playback::Playback::new(player::Player::new(resolver), repo.clone());
+    let (shell, app) = ui::shell::build(repo.clone(), playback);
+    if let Ok(query) = std::env::var("WAVE_DEMO_QUERY") {
+        app.demo(&query);
     }
-    let scroller = gtk::ScrolledWindow::builder().child(&list).build();
-    toolbar.set_content(Some(&scroller));
+    // 入れ物（読み込み中の上の帯）ごと、画面の上の帯を持つ並びに替える
+    if let Some(window) = toolbar.root().and_downcast::<adw::ApplicationWindow>() {
+        window.set_content(Some(&shell));
+    }
 }
 
 /// 表示の言語（YouTube から届く文字の言語）。LANG が日本語なら ja、ほかは en。
