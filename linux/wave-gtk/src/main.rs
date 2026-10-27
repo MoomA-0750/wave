@@ -1,6 +1,7 @@
 //! wave の Linux（GNOME）版。画面は GTK4 + libadwaita で作り、YouTube Music とのやり取りは wave-core に任せる。
 
 mod ai_chat;
+mod downloads;
 mod keyring;
 mod login;
 mod mpris;
@@ -84,11 +85,14 @@ async fn show_home(toolbar: &adw::ToolbarView, repo: &MusicRepository) {
     // 解読の準備（プレイヤーの JS）は音と映像で1つを共有する
     let resolver = StreamResolver::new(repo.client().clone(), PlayerCipherProvider::default());
     let video = video::VideoPlayer::new(resolver.clone());
-    let playback = playback::Playback::new(player::Player::new(resolver), repo.clone());
+    let downloads = downloads::Downloads::new(resolver.clone());
+    let playback = playback::Playback::new(player::Player::new(resolver, Some(downloads.store())), repo.clone());
     let on_logout: std::rc::Rc<dyn Fn()> = {
-        let (toolbar, repo, playback) = (toolbar.clone(), repo.clone(), playback.clone());
+        let (toolbar, repo, playback, downloads) = (toolbar.clone(), repo.clone(), playback.clone(), downloads.clone());
         std::rc::Rc::new(move || {
             playback.clear();
+            // ログアウトしたら、取った曲も消す（ほかの端末と同じ）
+            downloads.clear();
             let (toolbar, repo) = (toolbar.clone(), repo.clone());
             gtk::glib::spawn_future_local(async move {
                 keyring::delete().await;
@@ -110,7 +114,7 @@ async fn show_home(toolbar: &adw::ToolbarView, repo: &MusicRepository) {
         wave_core::lyrics::lrclib::LrclibClient::default(),
         wave_core::lyrics::timed::TimedLyricsClient::new(&language(), &region()),
     );
-    let (shell, app) = ui::shell::build(repo.clone(), lyrics, playback.clone(), video, on_logout);
+    let (shell, app) = ui::shell::build(repo.clone(), lyrics, playback.clone(), video, downloads, on_logout);
     if let Some(window) = toolbar.root().and_downcast::<adw::ApplicationWindow>() {
         // GNOME のメディアの操作・メディアキーから操作できるようにする（窓がある間だけ出す）
         let (raise, quit) = (window.clone(), window.clone());

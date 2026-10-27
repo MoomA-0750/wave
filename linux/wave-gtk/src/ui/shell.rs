@@ -19,6 +19,8 @@ pub struct App {
     toasts: adw::ToastOverlay,
     /// 曲に重ねる MV の流し手（gtk4paintablesink が無ければ None）。
     pub video: Option<crate::video::VideoPlayer>,
+    /// ダウンロード（取った曲・丸ごと取ったもの）。
+    pub downloads: Rc<crate::downloads::Downloads>,
     /// Claude との会話。
     pub ai: Rc<crate::ai_chat::AiChat>,
     /// 上の帯の Claude のボタン（右の欄を Claude にする。下の帯を作るときにつなぐ）。
@@ -69,6 +71,7 @@ pub fn build(
     lyrics: wave_core::lyrics::service::LyricsService,
     playback: Rc<Playback>,
     video: Option<crate::video::VideoPlayer>,
+    downloads: Rc<crate::downloads::Downloads>,
     on_logout: Rc<dyn Fn()>,
 ) -> (gtk::Widget, Rc<App>) {
     let css = gtk::CssProvider::new();
@@ -77,7 +80,7 @@ pub fn build(
 
     let nav = adw::NavigationView::new();
     let toasts = adw::ToastOverlay::new();
-    let app = Rc::new(App { repo, lyrics, playback, nav: nav.clone(), toasts: toasts.clone(), video, ai: Default::default(), claude_toggle: Default::default(), editable_playlists: Default::default() });
+    let app = Rc::new(App { repo, lyrics, playback, nav: nav.clone(), toasts: toasts.clone(), video, downloads, ai: Default::default(), claude_toggle: Default::default(), editable_playlists: Default::default() });
     {
         let app = app.clone();
         gtk::glib::spawn_future_local(async move {
@@ -127,6 +130,13 @@ impl App {
             if let Ok(page) = runtime::run(async move { repo.search_songs(&query, None).await }).await {
                 let first = page.songs.first().cloned();
                 app.playback.play_list(page.songs, 0);
+                // 確かめ用: WAVE_DEMO_DOWNLOAD があれば1曲目を取り、ダウンロードのページを開く
+                if std::env::var("WAVE_DEMO_DOWNLOAD").is_ok()
+                    && let Some(song) = first.clone()
+                {
+                    app.downloads.download_song(&song);
+                    app.push(pages::downloads(&app));
+                }
                 if std::env::var("WAVE_DEMO_SIDE").as_deref() == Ok("lyrics") {
                     app.push(super::lyrics::page(&app));
                 }
@@ -217,15 +227,22 @@ fn library(app: &Rc<App>) -> gtk::Widget {
     let list = gtk::ListBox::builder().css_classes(["navigation-sidebar"]).build();
     let liked = library_row("高く評価した曲", "自動のプレイリスト", None);
     list.append(&liked);
+    // ダウンロード（高く評価した曲と同じく、いつも先頭の方に出す）
+    let downloads_row = library_row_icon("ダウンロード", "この PC に保存", "folder-download-symbolic");
+    list.append(&downloads_row);
     let scroller = gtk::ScrolledWindow::builder().child(&list).hscrollbar_policy(gtk::PolicyType::Never).vexpand(true).build();
     column.append(&scroller);
 
-    let entries: Rc<std::cell::RefCell<Vec<(String, String)>>> = Rc::new(std::cell::RefCell::new(vec![(LIKED_SONGS.to_string(), "高く評価した曲".to_string())]));
+    // 行の順の行き先（2行目のダウンロードはプレイリストではないので、印の ID にする）
+    let entries: Rc<std::cell::RefCell<Vec<(String, String)>>> =
+        Rc::new(std::cell::RefCell::new(vec![(LIKED_SONGS.to_string(), "高く評価した曲".to_string()), (DOWNLOADS_ENTRY.to_string(), String::new())]));
     {
         let (app, entries) = (app.clone(), entries.clone());
         list.connect_row_activated(move |_, row| {
-            if let Some((id, title)) = entries.borrow().get(row.index() as usize).cloned() {
-                app.push(pages::playlist(&app, &id, &title));
+            match entries.borrow().get(row.index() as usize).cloned() {
+                Some((id, _)) if id == DOWNLOADS_ENTRY => app.push(pages::downloads(&app)),
+                Some((id, title)) => app.push(pages::playlist(&app, &id, &title)),
+                None => {}
             }
         });
     }
@@ -240,6 +257,19 @@ fn library(app: &Rc<App>) -> gtk::Widget {
         }
     });
     column.upcast()
+}
+
+/// マイライブラリの「ダウンロード」の行の印（YouTube の ID とは重ならない形）。
+const DOWNLOADS_ENTRY: &str = "wave:downloads";
+
+fn library_row_icon(title: &str, subtitle: &str, icon: &str) -> gtk::ListBoxRow {
+    let row = gtk::Box::builder().spacing(12).margin_top(4).margin_bottom(4).build();
+    row.append(&gtk::Image::builder().icon_name(icon).pixel_size(24).width_request(48).height_request(48).css_classes(["artwork", "accent"]).build());
+    let text = gtk::Box::builder().orientation(gtk::Orientation::Vertical).valign(gtk::Align::Center).build();
+    text.append(&gtk::Label::builder().label(title).xalign(0.0).ellipsize(gtk::pango::EllipsizeMode::End).build());
+    text.append(&gtk::Label::builder().label(subtitle).xalign(0.0).ellipsize(gtk::pango::EllipsizeMode::End).css_classes(["caption", "dim-label"]).build());
+    row.append(&text);
+    gtk::ListBoxRow::builder().child(&row).build()
 }
 
 fn library_row(title: &str, subtitle: &str, thumbnail: Option<&str>) -> gtk::ListBoxRow {

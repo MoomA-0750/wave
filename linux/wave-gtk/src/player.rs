@@ -1,8 +1,11 @@
 //! GStreamer（playbin）で曲を鳴らす。再生の URL は wave-core の StreamResolver で解く。
 //! googlevideo は範囲を付けない取り方を 403 で拒むので、URL を playbin に渡さず、core の RangeReader で
 //! 範囲を区切って取ったものを appsrc で流し込む（シークされたらその位置から取り直す）。
+//! 取り終えた曲（ダウンロード）は、通信せずにファイルから同じように流し込む。
 //! URL は署名付きなので、ログ・画面に出さない。
 
+use std::io::{Read, Seek, SeekFrom};
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use gst::prelude::*;
@@ -14,6 +17,8 @@ use crate::runtime;
 pub struct Player {
     playbin: gst::Element,
     resolver: StreamResolver,
+    /// 取り終えた曲の置き場（あればそこから鳴らす）。
+    downloads: Option<Arc<wave_core::download::store::DownloadStore>>,
     /// 今流している曲の読み手と、次に読む位置（appsrc の糸から読み書きする）。
     feed: Arc<Mutex<Feed>>,
 }
@@ -21,6 +26,8 @@ pub struct Player {
 #[derive(Default)]
 pub(crate) struct Feed {
     pub(crate) reader: Option<RangeReader>,
+    /// 取り終えた曲のファイルと長さ（あれば reader の代わりに読む）。
+    pub(crate) local: Option<(PathBuf, u64)>,
     pub(crate) offset: u64,
     /// 最後に取った塊（始まりの位置と中身）。demuxer は小さく何度も求めるので、ここから切り出す。
     pub(crate) cache: Option<(u64, Vec<u8>)>,
@@ -28,7 +35,21 @@ pub(crate) struct Feed {
 
 impl Feed {
     /// offset から length バイト（終わりで切れる）。塊に無ければ範囲で取り直す。
+    /// 流しているものの長さ。
+    pub(crate) fn length(&self) -> u64 {
+        self.local.as_ref().map(|(_, l)| *l).or_else(|| self.reader.as_ref().map(RangeReader::length)).unwrap_or(0)
+    }
+
     fn read(&mut self, offset: u64, length: u64) -> Result<Vec<u8>, wave_core::stream::range::RangeError> {
+        if let Some((path, total)) = &self.local {
+            let length = length.min(total.saturating_sub(offset)) as usize;
+            let mut bytes = vec![0; length];
+            let read = std::fs::File::open(path).and_then(|mut f| {
+                f.seek(SeekFrom::Start(offset))?;
+                f.read_exact(&mut bytes)
+            });
+            return read.map(|_| bytes).map_err(|_| wave_core::stream::range::RangeError::Network);
+        }
         let reader = self.reader.clone().expect("reader is set before playing");
         let length = length.min(reader.length().saturating_sub(offset));
         let cached = |cache: &Option<(u64, Vec<u8>)>| {
@@ -48,7 +69,7 @@ impl Feed {
 
 impl Player {
     /// 音の出口は既定（PulseAudio・PipeWire）。WAVE_AUDIO_SINK があればその要素（確かめ用の「fakesink sync=true」など）。
-    pub fn new(resolver: StreamResolver) -> Self {
+    pub fn new(resolver: StreamResolver, downloads: Option<Arc<wave_core::download::store::DownloadStore>>) -> Self {
         gst::init().expect("GStreamer");
         let playbin = gst::ElementFactory::make("playbin").property_from_str("flags", "audio").build().expect("playbin");
         if let Ok(sink) = std::env::var("WAVE_AUDIO_SINK") {
@@ -62,11 +83,21 @@ impl Player {
             configure_source(&source, setup_feed.clone());
             None
         });
-        Self { playbin, resolver, feed }
+        Self { playbin, resolver, downloads, feed }
     }
 
-    /// その曲を解いて頭から鳴らす。
+    /// その曲を頭から鳴らす。取り終えていればファイルから、ほかは解いて範囲で取る。
     pub async fn play(&self, video_id: &str) -> Result<(), StreamFailure> {
+        if let Some(store) = &self.downloads
+            && let (Some(file), Some(path)) = (store.completed(video_id), store.bytes_path(video_id))
+        {
+            self.playbin.set_state(gst::State::Null).ok();
+            eprintln!("play source=download");
+            *self.feed.lock().unwrap() = Feed { reader: None, local: Some((path, file.length)), offset: 0, cache: None };
+            self.playbin.set_property("uri", "appsrc://");
+            self.playbin.set_state(gst::State::Playing).map_err(|_| StreamFailure::Unplayable)?;
+            return Ok(());
+        }
         let resolver = self.resolver.clone();
         let id = video_id.to_string();
         let reader = runtime::run(async move {
@@ -75,7 +106,7 @@ impl Player {
         })
         .await?;
         self.playbin.set_state(gst::State::Null).ok();
-        *self.feed.lock().unwrap() = Feed { reader: Some(reader), offset: 0, cache: None };
+        *self.feed.lock().unwrap() = Feed { reader: Some(reader), local: None, offset: 0, cache: None };
         self.playbin.set_property("uri", "appsrc://");
         self.playbin.set_state(gst::State::Playing).map_err(|_| StreamFailure::Unplayable)?;
         Ok(())
@@ -138,7 +169,7 @@ impl Player {
 
 /// appsrc を「どこからでも読める長さの決まった流れ」にし、求められた分を範囲で取って渡す。
 pub(crate) fn configure_source(source: &gst_app::AppSrc, feed: Arc<Mutex<Feed>>) {
-    let length = feed.lock().unwrap().reader.as_ref().map_or(0, RangeReader::length);
+    let length = feed.lock().unwrap().length();
     source.set_format(gst::Format::Bytes);
     source.set_stream_type(gst_app::AppStreamType::RandomAccess);
     source.set_size(length as i64);
@@ -148,7 +179,7 @@ pub(crate) fn configure_source(source: &gst_app::AppSrc, feed: Arc<Mutex<Feed>>)
             .need_data(move |source, length| {
                 let mut feed = feed.lock().unwrap();
                 let offset = feed.offset;
-                if feed.reader.as_ref().is_none_or(|r| offset >= r.length()) {
+                if offset >= feed.length() {
                     let _ = source.end_of_stream();
                     return;
                 }

@@ -27,7 +27,7 @@ fn main() {
         let repo = MusicRepository::new(client.clone());
         let page = runtime::run(async move { repo.search_songs(&query, None).await }).await.expect("search");
         let song = page.songs.into_iter().next().expect("no songs");
-        let player = player::Player::new(StreamResolver::new(client, PlayerCipherProvider::default()));
+        let player = player::Player::new(StreamResolver::new(client, PlayerCipherProvider::default()), None);
         let started = std::time::Instant::now();
         match player.play(&song.video_id).await {
             Ok(()) => {

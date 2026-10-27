@@ -3,6 +3,7 @@
 
 pub mod ai;
 pub mod credentials;
+pub mod download;
 pub mod innertube;
 mod json;
 pub mod lyrics;

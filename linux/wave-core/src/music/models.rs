@@ -1,7 +1,10 @@
 //! 画面に依らない曲・棚などの表現（Windows の Wave.Core.Music.Models と同じ形）。
 
-/// 曲。
-#[derive(Debug, Clone, PartialEq)]
+use serde::{Deserialize, Serialize};
+
+/// 曲。ダウンロードの目録にも書く（JSON の名前は Windows と同じ）。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "PascalCase")]
 pub struct Song {
     pub video_id: String,
     pub title: String,
@@ -10,8 +13,10 @@ pub struct Song {
     pub duration_seconds: Option<u32>,
     pub thumbnail_url: Option<String>,
     /// 曲の種類（musicVideoType。MUSIC_VIDEO_TYPE_ATV は音源、_OMV は公式の MV、_UGC は投稿者の動画）。
+    #[serde(default)]
     pub kind: Option<String>,
     /// ライブ配信（長さもシークも無い）。
+    #[serde(default)]
     pub is_live: bool,
 }
 
@@ -31,13 +36,15 @@ impl Song {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "PascalCase")]
 pub struct ArtistRef {
     pub name: String,
     pub browse_id: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "PascalCase")]
 pub struct AlbumRef {
     pub title: String,
     pub browse_id: Option<String>,
