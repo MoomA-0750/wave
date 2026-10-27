@@ -886,3 +886,5 @@
 - Rust の core（linux/wave-core）は GTK に頼らず、外へ出す型を単純にして、後で UniFFI で Kotlin・Swift・C# から呼べる形にしておく。ほかの OS をこの core に寄せるかは Linux 版が動いてから、壊れやすい所（再生の URL の取り方など）から1つずつ決める（一度に置き換えると全 OS の確かめ直しが要るため）
 - core の手本は、外の部品に頼らず自前で書いている Windows の Wave.Core（C#）にする
 - 見た目の確かめは、mutter の headless（見えない仮の画面）の中で開き、アプリ自身に窓を PNG に書き出させる（linux/scripts/shot.sh）。作業中の画面に窓を出さない
+- core の最初の分として、InnerTube の呼び出し（cookie・SAPISIDHASH・PREF・訪問者 ID・ログインの世代）、認証の情報（Debug に値を出さない）、曲の検索とホームの読み取りを Windows の Wave.Core から移した。読み取りの確かめは Android の core と同じ手本の応答（core/src/desktopTest/resources/fixtures）を使い、Windows のテストと同じことを確かめる
+- HTTP は reqwest（rustls）。cookie はこちらで付け、転送（リダイレクト）は追わない（Windows と同じ）
