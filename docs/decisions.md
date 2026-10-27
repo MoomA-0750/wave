@@ -877,3 +877,12 @@
   - 再生のボタンの上が詰まっていたので、帯を 88dp から 104dp にし、中央の上に 8dp 空けた
   - アカウントのアイコンが上の帯とホームの左上に2つ出ていた。大きい画面ではホームの方を消し、上の帯のアイコンでホームの引き出しと同じ行き先をメニューで出す
   - アカウントのアイコンが頭文字だけだった。accountMenu から写真の URL は取れていたので、Android のアイコンも写真を出す（Windows・Mac と同じ。読めるまでは頭文字）
+
+## 2026-10-27 Linux 版を Rust + GTK4/libadwaita で作り始める
+
+- 本人の頼み: Linux 版を作る。GNOME を主に使うので画面は GTK。言葉は速さと効率で選び、各 OS で書き直している core を共通化できるならしたい
+- 候補は Kotlin + java-gi（Android の core をすぐ使える）、Rust + gtk-rs、Python + PyGObject。本人の「速さと効率」に合わせて Rust にした
+- Android の core はそのままでは共通化できない。innertubex が JVM（Android とデスクトップの JVM）でしか動かず、Kotlin/Native でも Swift・C# からも呼べないため
+- Rust の core（linux/wave-core）は GTK に頼らず、外へ出す型を単純にして、後で UniFFI で Kotlin・Swift・C# から呼べる形にしておく。ほかの OS をこの core に寄せるかは Linux 版が動いてから、壊れやすい所（再生の URL の取り方など）から1つずつ決める（一度に置き換えると全 OS の確かめ直しが要るため）
+- core の手本は、外の部品に頼らず自前で書いている Windows の Wave.Core（C#）にする
+- 見た目の確かめは、mutter の headless（見えない仮の画面）の中で開き、アプリ自身に窓を PNG に書き出させる（linux/scripts/shot.sh）。作業中の画面に窓を出さない

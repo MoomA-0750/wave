@@ -1,0 +1,7 @@
+[workspace]
+resolver = "3"
+members = ["wave-core", "wave-gtk"]
+
+[workspace.package]
+edition = "2024"
+license = "MIT"
