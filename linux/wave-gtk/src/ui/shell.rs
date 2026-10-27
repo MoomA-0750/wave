@@ -21,6 +21,8 @@ pub struct App {
     pub video: Option<crate::video::VideoPlayer>,
     /// ダウンロード（取った曲・丸ごと取ったもの）。
     pub downloads: Rc<crate::downloads::Downloads>,
+    /// 映像を窓いっぱいに出す層（gtk4paintablesink が無ければ None）。
+    video_layer: std::cell::RefCell<Option<gtk::Widget>>,
     /// Claude との会話。
     pub ai: Rc<crate::ai_chat::AiChat>,
     /// 上の帯の Claude のボタン（右の欄を Claude にする。下の帯を作るときにつなぐ）。
@@ -60,6 +62,7 @@ const STYLE: &str = "
 .lyric-line { font-size: 24px; font-weight: 800; opacity: 0.4; }
 .lyric-line.lyric-current { opacity: 1; color: @accent_color; }
 .video { background-color: black; }
+.video-layer { background-color: black; }
 .ai-user { background-color: alpha(@accent_bg_color, 0.15); border-radius: 12px; padding: 6px 10px; }
 .like-button:checked { color: @accent_color; background: transparent; }
 .lyric-plain { font-size: 17px; line-height: 1.6; }
@@ -80,7 +83,7 @@ pub fn build(
 
     let nav = adw::NavigationView::new();
     let toasts = adw::ToastOverlay::new();
-    let app = Rc::new(App { repo, lyrics, playback, nav: nav.clone(), toasts: toasts.clone(), video, downloads, ai: Default::default(), claude_toggle: Default::default(), editable_playlists: Default::default() });
+    let app = Rc::new(App { repo, lyrics, playback, nav: nav.clone(), toasts: toasts.clone(), video, downloads, video_layer: Default::default(), ai: Default::default(), claude_toggle: Default::default(), editable_playlists: Default::default() });
     {
         let app = app.clone();
         gtk::glib::spawn_future_local(async move {
@@ -116,7 +119,79 @@ pub fn build(
     toasts.set_child(Some(&body));
     toolbar.set_content(Some(&toasts));
     toolbar.add_bottom_bar(&player_bar(&app, &side, &side_stack));
-    (toolbar.upcast(), app)
+    // 映像を窓いっぱいに出す層（右の欄の映像の「拡大」で出す。Mac・Windows と同じ）
+    let root = gtk::Overlay::builder().child(&toolbar).build();
+    if let Some(layer) = video_layer(&app) {
+        root.add_overlay(&layer);
+        *app.video_layer.borrow_mut() = Some(layer);
+    }
+    (root.upcast(), app)
+}
+
+/// 窓いっぱいの映像の層。右下に「全画面」（窓を全画面にする・戻す）と「×」（元の画面に戻る）。Esc でも戻る。ダブルクリックで全画面。
+fn video_layer(app: &Rc<App>) -> Option<gtk::Widget> {
+    let paintable = app.video.as_ref()?.paintable().clone();
+    let picture = gtk::Picture::builder().paintable(&paintable).content_fit(gtk::ContentFit::Contain).hexpand(true).vexpand(true).build();
+    let fullscreen = gtk::Button::builder().icon_name("view-fullscreen-symbolic").tooltip_text("全画面").css_classes(["osd", "circular"]).build();
+    let close = gtk::Button::builder().icon_name("window-close-symbolic").tooltip_text("元の画面に戻る (Esc)").css_classes(["osd", "circular"]).build();
+    let buttons = gtk::Box::builder().spacing(8).halign(gtk::Align::End).valign(gtk::Align::End).margin_end(16).margin_bottom(16).build();
+    buttons.append(&fullscreen);
+    buttons.append(&close);
+    let layer = gtk::Overlay::builder().child(&picture).visible(false).css_classes(["video-layer"]).build();
+    layer.add_overlay(&buttons);
+    let toggle_fullscreen = {
+        let layer = layer.clone();
+        move || {
+            if let Some(window) = layer.root().and_downcast::<gtk::Window>() {
+                if window.is_fullscreen() { window.unfullscreen() } else { window.fullscreen() }
+            }
+        }
+    };
+    let t = toggle_fullscreen.clone();
+    fullscreen.connect_clicked(move |_| t());
+    let double = gtk::GestureClick::new();
+    let t = toggle_fullscreen.clone();
+    double.connect_pressed(move |_, n, _, _| {
+        if n == 2 {
+            t();
+        }
+    });
+    picture.add_controller(double);
+    {
+        let app = app.clone();
+        close.connect_clicked(move |_| app.expand_video(false));
+    }
+    let keys = gtk::EventControllerKey::new();
+    keys.set_propagation_phase(gtk::PropagationPhase::Capture);
+    {
+        let app = app.clone();
+        keys.connect_key_pressed(move |_, key, _, _| {
+            if key == gtk::gdk::Key::Escape && app.video_layer.borrow().as_ref().is_some_and(|l| l.is_visible()) {
+                app.expand_video(false);
+                return gtk::glib::Propagation::Stop;
+            }
+            gtk::glib::Propagation::Proceed
+        });
+    }
+    // 窓が出てからキーを受ける（層そのものは焦点を持たないので、窓の側で受ける）
+    layer.connect_realize(move |layer| {
+        if let Some(window) = layer.root().and_downcast::<gtk::Window>() {
+            window.add_controller(keys.clone());
+        }
+    });
+    Some(layer.upcast())
+}
+
+impl App {
+    /// 映像を窓いっぱいに出す・やめる（やめたら窓の全画面も戻す）。
+    pub fn expand_video(&self, on: bool) {
+        let Some(layer) = self.video_layer.borrow().clone() else { return };
+        layer.set_visible(on);
+
+        if !on && let Some(window) = layer.root().and_downcast::<gtk::Window>() {
+            window.unfullscreen();
+        }
+    }
 }
 
 impl App {
@@ -304,10 +379,18 @@ fn media_area(app: &Rc<App>, art: &images::Art) -> gtk::Widget {
     switch.set_active_name(Some("song"));
     let picture = gtk::Picture::builder().paintable(video_player.paintable()).content_fit(gtk::ContentFit::Contain).width_request(308).height_request(174).css_classes(["artwork", "video"]).build();
     picture.set_overflow(gtk::Overflow::Hidden);
+    // 映像の右下の「拡大」で、窓いっぱいに出す
+    let expand = gtk::Button::builder().icon_name("view-fullscreen-symbolic").tooltip_text("拡大").halign(gtk::Align::End).valign(gtk::Align::End).margin_end(6).margin_bottom(6).css_classes(["osd", "circular"]).build();
+    {
+        let app = app.clone();
+        expand.connect_clicked(move |_| app.expand_video(true));
+    }
+    let video_box = gtk::Overlay::builder().child(&picture).build();
+    video_box.add_overlay(&expand);
     // 映像のときは横長の枠にする（正方形のままだと上下に黒い帯が出る）
     let stack = gtk::Stack::builder().transition_type(gtk::StackTransitionType::Crossfade).vhomogeneous(false).build();
     stack.add_named(&art.root, Some("art"));
-    stack.add_named(&picture, Some("video"));
+    stack.add_named(&video_box, Some("video"));
     column.append(&switch);
     column.append(&stack);
 
@@ -355,6 +438,7 @@ fn media_area(app: &Rc<App>, art: &images::Art) -> gtk::Widget {
             if !on {
                 video.stop();
                 stack.set_visible_child_name("art");
+                app.expand_video(false);
                 return;
             }
             let Some(mv) = current.borrow().clone() else { return };
