@@ -902,3 +902,6 @@
 - 見えない画面では押せないので、確かめるときだけ WAVE_DEMO_QUERY で「その語で検索して1曲目から流す」を指示できる
 - GNOME のメディアの操作・メディアキーは MPRIS（org.mpris.MediaPlayer2.wave）で受ける。部品を足さず gio の D-Bus で直に出す。再生の状態は GStreamer から遅れて届くので、変化の知らせに加えて 0.5 秒ごとにも見て、変わったときだけ PropertiesChanged を出す。trackid は videoId の - を _ に替える（D-Bus のパスに - は使えない）
 - ログアウトして入り直すと、MPRIS の口が古い再生を指したまま残り、メディアキーが止めたキューを操作し続ける。口は1つだけ持ち、入れ替えるときに D-Bus から外す（unregister_object と bus_unown_name）
+- 歌詞は Windows の LyricsService と同じ順と覚え方で core に移した（YouTube Music の時刻付きは ANDROID_MUSIC として匿名で、LRCLIB は cookie を持たないクライアントで）。画面は Windows と同じく中央のページ
+- GTK の CSS で var(--accent-color) を使うと、その規則が効かなかった（歌詞の大きさ・強調が出なかった）。@accent_color・@view_bg_color の書き方にする
+- LRCLIB は Cloudflare の向こうで、一時的に 503 を返すことがあった（同じ問い合わせが少し後には 404）。失敗として扱い、結果を覚えない作りのままでよい

@@ -130,4 +130,16 @@ impl MusicRepository {
         let root = self.logged_in_post("account/account_menu", json!({})).await?;
         parsers::account(&root).ok_or(Failure::NotLoggedIn)
     }
+
+    /// 曲の歌詞のタブ（MPLY…）の ID（next の最初の応答から）。無ければ None。
+    pub async fn lyrics_browse_id(&self, video_id: &str) -> ApiResult<Option<String>> {
+        let root = self.client.post("next", json!({ "videoId": video_id, "contentCheckOk": true, "racyCheckOk": true }), true, &[]).await?;
+        Ok(parsers::lyrics_browse_id(&root))
+    }
+
+    /// 歌詞のタブの時刻なしの本文。無ければ None。
+    pub async fn plain_lyrics_of_tab(&self, browse_id: &str) -> ApiResult<Option<crate::lyrics::SongLyrics>> {
+        let root = self.client.post("browse", json!({ "browseId": browse_id }), true, &[]).await?;
+        Ok(parsers::plain_lyrics(&root))
+    }
 }

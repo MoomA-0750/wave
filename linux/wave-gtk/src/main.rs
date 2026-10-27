@@ -99,7 +99,12 @@ async fn show_home(toolbar: &adw::ToolbarView, repo: &MusicRepository) {
     if let Some(window) = &window {
         WINDOW.with(|w| *w.borrow_mut() = Some(window.clone()));
     }
-    let (shell, app) = ui::shell::build(repo.clone(), playback.clone(), on_logout);
+    let lyrics = wave_core::lyrics::service::LyricsService::new(
+        repo.clone(),
+        wave_core::lyrics::lrclib::LrclibClient::default(),
+        wave_core::lyrics::timed::TimedLyricsClient::new(&language(), &region()),
+    );
+    let (shell, app) = ui::shell::build(repo.clone(), lyrics, playback.clone(), on_logout);
     if let Some(window) = toolbar.root().and_downcast::<adw::ApplicationWindow>() {
         // GNOME のメディアの操作・メディアキーから操作できるようにする（窓がある間だけ出す）
         let (raise, quit) = (window.clone(), window.clone());

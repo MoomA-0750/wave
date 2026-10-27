@@ -13,6 +13,7 @@ use crate::runtime;
 
 pub struct App {
     pub repo: MusicRepository,
+    pub lyrics: wave_core::lyrics::service::LyricsService,
     pub playback: Rc<Playback>,
     nav: adw::NavigationView,
 }
@@ -27,21 +28,24 @@ const STYLE: &str = "
 .artwork { border-radius: 8px; }
 .artwork-frame { background-color: alpha(currentColor, 0.08); }
 .artwork.round { border-radius: 9999px; }
-.pane { background-color: var(--view-bg-color); border-radius: 12px; }
+.pane { background-color: @view_bg_color; border-radius: 12px; }
 .card-button { padding: 6px; border-radius: 12px; }
 .play-large { min-width: 48px; min-height: 48px; }
 .player-bar { padding: 8px 16px; }
 .song-list { background: transparent; }
+.lyric-line { font-size: 24px; font-weight: 800; opacity: 0.4; }
+.lyric-line.lyric-current { opacity: 1; color: @accent_color; }
+.lyric-plain { font-size: 17px; line-height: 1.6; }
 ";
 
 /// 窓の中身（上の帯を含む）を作る。
-pub fn build(repo: MusicRepository, playback: Rc<Playback>, on_logout: Rc<dyn Fn()>) -> (gtk::Widget, Rc<App>) {
+pub fn build(repo: MusicRepository, lyrics: wave_core::lyrics::service::LyricsService, playback: Rc<Playback>, on_logout: Rc<dyn Fn()>) -> (gtk::Widget, Rc<App>) {
     let css = gtk::CssProvider::new();
     css.load_from_string(STYLE);
     gtk::style_context_add_provider_for_display(&gtk::gdk::Display::default().expect("display"), &css, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION);
 
     let nav = adw::NavigationView::new();
-    let app = Rc::new(App { repo, playback, nav: nav.clone() });
+    let app = Rc::new(App { repo, lyrics, playback, nav: nav.clone() });
     nav.add(&pages::home(&app));
 
     let toolbar = adw::ToolbarView::new();
@@ -66,7 +70,7 @@ pub fn build(repo: MusicRepository, playback: Rc<Playback>, on_logout: Rc<dyn Fn
 
 impl App {
     /// 確かめ用（WAVE_DEMO_QUERY）: その語で検索のページを開き、1曲目から流す。
-    /// WAVE_DEMO_PAGE が artist・album なら、続けてその曲のアーティスト・アルバムのページを開く。
+    /// WAVE_DEMO_SIDE=lyrics なら歌詞のページも開く。WAVE_DEMO_PAGE が artist・album なら、続けてその曲のアーティスト・アルバムのページを開く。
     pub fn demo(self: &Rc<Self>, query: &str) {
         self.push(pages::search(self, query));
         let (app, query) = (self.clone(), query.to_string());
@@ -75,6 +79,9 @@ impl App {
             if let Ok(page) = runtime::run(async move { repo.search_songs(&query, None).await }).await {
                 let first = page.songs.first().cloned();
                 app.playback.play_list(page.songs, 0);
+                if std::env::var("WAVE_DEMO_SIDE").as_deref() == Ok("lyrics") {
+                    app.push(super::lyrics::page(&app));
+                }
                 match (std::env::var("WAVE_DEMO_PAGE").as_deref(), first) {
                     (Ok("artist"), Some(song)) => {
                         if let Some((id, name)) = song.artists.into_iter().find_map(|a| Some((a.browse_id?, a.name))) {
@@ -389,8 +396,10 @@ fn player_bar(app: &Rc<App>, side: &gtk::Widget, side_stack: &gtk::Stack) -> gtk
     volume.set_range(0.0, 1.0);
     volume.set_value(app.playback.player().volume());
     let side_toggle = gtk::ToggleButton::builder().icon_name("sidebar-show-right-symbolic").tooltip_text("再生中の画面").active(true).css_classes(["flat"]).build();
+    let lyrics_toggle = gtk::ToggleButton::builder().icon_name("text-x-generic-symbolic").tooltip_text("歌詞").css_classes(["flat"]).build();
     let queue_toggle = gtk::ToggleButton::builder().icon_name("view-list-symbolic").tooltip_text("キュー").css_classes(["flat"]).build();
     let end = gtk::Box::builder().spacing(8).valign(gtk::Align::Center).build();
+    end.append(&lyrics_toggle);
     end.append(&queue_toggle);
     end.append(&volume_icon);
     end.append(&volume);
@@ -430,7 +439,26 @@ fn player_bar(app: &Rc<App>, side: &gtk::Widget, side_stack: &gtk::Stack) -> gtk
             }
         });
     }
-    // 確かめ用: 起動したら右の欄をキューにする
+    // 歌詞は中央のページに出す（もう一度押すと閉じる。Mac・Windows と同じ）。ページを戻る・ホームで閉じたらボタンも戻す
+    {
+        let app_for_toggle = app.clone();
+        lyrics_toggle.connect_toggled(move |t| {
+            let open = app_for_toggle.nav.visible_page().and_then(|p| p.tag()).as_deref() == Some("lyrics");
+            if t.is_active() && !open {
+                app_for_toggle.push(super::lyrics::page(&app_for_toggle));
+            } else if !t.is_active() && open {
+                app_for_toggle.nav.pop();
+            }
+        });
+        let toggle = lyrics_toggle.clone();
+        app.nav.connect_visible_page_notify(move |nav| {
+            let open = nav.visible_page().and_then(|p| p.tag()).as_deref() == Some("lyrics");
+            if toggle.is_active() != open {
+                toggle.set_active(open);
+            }
+        });
+    }
+
     if std::env::var("WAVE_DEMO_SIDE").as_deref() == Ok("queue") {
         queue_toggle.set_active(true);
     }

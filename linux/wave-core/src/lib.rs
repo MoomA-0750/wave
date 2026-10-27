@@ -4,6 +4,7 @@
 pub mod credentials;
 pub mod innertube;
 mod json;
+pub mod lyrics;
 pub mod music;
 pub mod stream;
 

@@ -308,6 +308,23 @@ pub fn account(root: &Value) -> Option<Account> {
     })
 }
 
+/// next の最初の応答から、歌詞のタブ（MPLY…）の ID。
+pub fn lyrics_browse_id(root: &Value) -> Option<String> {
+    root.path(&["contents", "singleColumnMusicWatchNextResultsRenderer", "tabbedRenderer", "watchNextTabbedResultsRenderer", "tabs"])
+        .items()
+        .into_iter()
+        .map(|t| t.path(&["tabRenderer", "endpoint", "browseEndpoint"]))
+        .find(|b| page_type_of_browse(*b) == Some("MUSIC_PAGE_TYPE_TRACK_LYRICS"))
+        .and_then(|b| b.path(&["browseId"]).str_())
+        .map(String::from)
+}
+
+/// 歌詞のタブの時刻なしの本文と出典。
+pub fn plain_lyrics(root: &Value) -> Option<crate::lyrics::SongLyrics> {
+    let shelf = root.path(&["contents", "sectionListRenderer", "contents"]).items().into_iter().find_map(|i| i.path(&["musicDescriptionShelfRenderer"]));
+    Some(crate::lyrics::SongLyrics::Plain { text: text_of(shelf.path(&["description"]))?, source: text_of(shelf.path(&["footer"])) })
+}
+
 const CONTENT_RENDERERS: [&str; 6] = [
     "musicTwoRowItemRenderer", "musicResponsiveListItemRenderer", "musicResponsiveHeaderRenderer",
     "musicDetailHeaderRenderer", "musicEditablePlaylistDetailHeaderRenderer", "musicPlaylistShelfRenderer",
@@ -708,6 +725,13 @@ mod tests {
         .unwrap();
         assert_eq!(account(&root), Some(Account { name: Some("Name".into()), photo_url: Some("https://a/s88".into()) }));
         assert_eq!(account(&serde_json::json!({ "actions": [] })), None);
+    }
+
+    #[test]
+    fn lyrics_tab_and_plain_text() {
+        assert!(lyrics_browse_id(&fixture("next_radio")).unwrap().starts_with("MPLY"));
+        let Some(crate::lyrics::SongLyrics::Plain { text, .. }) = plain_lyrics(&fixture("browse_lyrics")) else { panic!("no lyrics") };
+        assert!(!text.trim().is_empty());
     }
 
     #[test]
