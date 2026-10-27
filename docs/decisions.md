@@ -915,3 +915,5 @@
 - 取り終えた曲は、Player が appsrc にファイルから流し込む（通信の流し込みと同じ道）。曲の行の印は数が多いので、行が消えたら見張りも外れる形（WeakRef）にした
 - Claude の会話の履歴は Windows の AiHistory と同じ決まり（版 1、最大 50 件、題名は最初の自分の発言を 80 文字まで、JSON の名前も同じ）で core に置いた
 - 実際の GNOME の画面での確かめは、mutter の遠隔操作の口（org.gnome.Mutter.RemoteDesktop と ScreenCast）を使う。GNOME Shell のスクリーンショットの口は「許可されていない」で断られる。画面は PipeWire の流れから写し、押す・打つは遠隔操作の口へ送る（作業用の道具。リポジトリには入れない）。この間、GNOME の上部に画面を流している印が出る
+- MV の拡大は、窓の中身の上に映像だけの層を重ねる（gtk::Overlay）。同じ gtk4paintablesink の絵を、右の欄・拡大の層・小窓の3つの gtk::Picture に出せる
+- 映像の小窓は、Mac の常に手前の小窓に当たるものとして別の窓にした。GNOME（Wayland）ではアプリから常に手前に固定する手段が無いので、手前にするのは本人が窓のメニューで行う

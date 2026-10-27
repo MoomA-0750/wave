@@ -182,6 +182,57 @@ fn video_layer(app: &Rc<App>) -> Option<gtk::Widget> {
     Some(layer.upcast())
 }
 
+/// 映像の小窓: 小さな別の窓に映像と前・再生・次を出す。指を乗せたときだけ操作を出す（Mac と同じ）。閉じても音は続ける。
+fn open_mini_window(app: &Rc<App>) {
+    let Some(video) = app.video.as_ref() else { return };
+    let picture = gtk::Picture::builder().paintable(video.paintable()).content_fit(gtk::ContentFit::Contain).hexpand(true).vexpand(true).build();
+    let previous = gtk::Button::builder().icon_name("media-skip-backward-symbolic").tooltip_text("前の曲").css_classes(["osd", "circular"]).build();
+    let play = gtk::Button::builder().icon_name("media-playback-pause-symbolic").tooltip_text("再生・一時停止").css_classes(["osd", "circular"]).build();
+    let next = gtk::Button::builder().icon_name("media-skip-forward-symbolic").tooltip_text("次の曲").css_classes(["osd", "circular"]).build();
+    let back = gtk::Button::builder().icon_name("go-up-symbolic").tooltip_text("wave に戻す").css_classes(["osd", "circular"]).build();
+    let controls = gtk::Box::builder().spacing(8).halign(gtk::Align::Center).valign(gtk::Align::End).margin_bottom(10).visible(false).build();
+    for b in [&previous, &play, &next, &back] {
+        controls.append(b);
+    }
+    let overlay = gtk::Overlay::builder().child(&picture).css_classes(["video-layer"]).build();
+    overlay.add_overlay(&controls);
+    let window = gtk::Window::builder().title("wave の小窓").default_width(426).default_height(240).child(&overlay).build();
+    if let Some(parent) = app.window() {
+        window.set_transient_for(None::<&gtk::Window>);
+        window.set_application(parent.application().as_ref());
+    }
+    // 指を乗せたときだけ操作を出す
+    let motion = gtk::EventControllerMotion::new();
+    let c = controls.clone();
+    motion.connect_enter(move |_, _, _| c.set_visible(true));
+    let c = controls.clone();
+    motion.connect_leave(move |_| c.set_visible(false));
+    overlay.add_controller(motion);
+    let playback = app.playback.clone();
+    previous.connect_clicked(move |_| playback.previous());
+    let playback = app.playback.clone();
+    play.connect_clicked(move |_| playback.toggle());
+    let playback = app.playback.clone();
+    next.connect_clicked(move |_| playback.next());
+    let (w, parent) = (window.clone(), app.window());
+    back.connect_clicked(move |_| {
+        if let Some(parent) = &parent {
+            parent.present();
+        }
+        w.close();
+    });
+    let playback = app.playback.clone();
+    let p = play.clone();
+    gtk::glib::timeout_add_local(std::time::Duration::from_millis(500), move || {
+        if !p.is_mapped() && p.root().is_none() {
+            return gtk::glib::ControlFlow::Break;
+        }
+        p.set_icon_name(if playback.player().is_playing() { "media-playback-pause-symbolic" } else { "media-playback-start-symbolic" });
+        gtk::glib::ControlFlow::Continue
+    });
+    window.present();
+}
+
 impl App {
     /// 映像を窓いっぱいに出す・やめる（やめたら窓の全画面も戻す）。
     pub fn expand_video(&self, on: bool) {
@@ -385,8 +436,19 @@ fn media_area(app: &Rc<App>, art: &images::Art) -> gtk::Widget {
         let app = app.clone();
         expand.connect_clicked(move |_| app.expand_video(true));
     }
+    // 小窓（小さな別の窓。常に手前にするのは GNOME の窓のメニューで。Wayland ではアプリから手前に固定できない）
+    let mini = gtk::Button::builder().icon_name("view-restore-symbolic").tooltip_text("小窓").css_classes(["osd", "circular"]).build();
+    {
+        let app = app.clone();
+        mini.connect_clicked(move |_| open_mini_window(&app));
+    }
+    let corner = gtk::Box::builder().spacing(6).halign(gtk::Align::End).valign(gtk::Align::End).margin_end(6).margin_bottom(6).build();
+    expand.set_margin_end(0);
+    expand.set_margin_bottom(0);
+    corner.append(&mini);
+    corner.append(&expand);
     let video_box = gtk::Overlay::builder().child(&picture).build();
-    video_box.add_overlay(&expand);
+    video_box.add_overlay(&corner);
     // 映像のときは横長の枠にする（正方形のままだと上下に黒い帯が出る）
     let stack = gtk::Stack::builder().transition_type(gtk::StackTransitionType::Crossfade).vhomogeneous(false).build();
     stack.add_named(&art.root, Some("art"));
