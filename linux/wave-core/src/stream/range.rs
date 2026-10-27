@@ -49,12 +49,12 @@ impl RangeReader {
         &self.stream.video_id
     }
 
-    /// start から最大 CHUNK_SIZE を読む。終わりを過ぎていれば空。
-    pub async fn read_chunk(&self, start: u64) -> Result<Vec<u8>, RangeError> {
+    /// start から、少なくとも at_least（CHUNK_SIZE に満たなければ CHUNK_SIZE）を読む。終わりで切れる。終わりを過ぎていれば空。
+    pub async fn read_chunk(&self, start: u64, at_least: u64) -> Result<Vec<u8>, RangeError> {
         if start >= self.length {
             return Ok(Vec::new());
         }
-        let end = (start + CHUNK_SIZE - 1).min(self.length - 1);
+        let end = (start + at_least.max(CHUNK_SIZE) - 1).min(self.length - 1);
         let response = self.request(start, end).await?;
         Ok(response.bytes().await.map_err(|_| RangeError::Network)?.to_vec())
     }

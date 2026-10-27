@@ -893,4 +893,5 @@
 - core の通信は tokio の上で動かし、GTK の主スレッドからは結果を待つだけにする（linux/wave-gtk/src/runtime.rs）
 - 再生の URL は Windows と同じく faraday の表とプレイヤーの JS で解く。JS の動作環境は QuickJS（rquickjs）。ネットワーク・ファイルに触れる手段は渡さない。プレイヤーは非 strict の JS（先頭の `var window=this;`）なので、rquickjs の既定の strict を切って読み込む（strict のままだと「window is undefined」で止まった）
 - googlevideo は範囲を付けない取り方（丸ごと・bytes=0-）を 403 で拒む。playbin に URL を渡さず、core の RangeReader が 512KB ずつ範囲で取ったものを appsrc で流し込む（シークはその位置から取り直す。Windows の RangeStream と同じ考え）
-- ログインしていないと、先頭の 1MB ほどの先が 403 になった（po_token が無い WEB の再生の振る舞いと見ている）。ログインした状態での確かめは本人のログイン待ち
+- ログインしていないと、先頭の 1MB ほどの先が 403 になった（po_token が無い WEB の再生の振る舞いと見ている）。本人がログインした状態では 403 は出ず、検索から約 3.8 秒で鳴り始め、実時間で進んだ（音を出さない fakesink sync=true で確かめた）
+- appsrc をどこからでも読める流れにすると、qtdemux は求めた長さ（例: 24 バイト目から 735 バイト）ちょうどを待ち、多く返すと「ファイルが壊れている」で止まった。512KB ずつ取った塊をとっておき、求められた長さだけを切り出して渡す

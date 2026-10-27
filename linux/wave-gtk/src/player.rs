@@ -22,15 +22,38 @@ pub struct Player {
 struct Feed {
     reader: Option<RangeReader>,
     offset: u64,
+    /// 最後に取った塊（始まりの位置と中身）。demuxer は小さく何度も求めるので、ここから切り出す。
+    cache: Option<(u64, Vec<u8>)>,
+}
+
+impl Feed {
+    /// offset から length バイト（終わりで切れる）。塊に無ければ範囲で取り直す。
+    fn read(&mut self, offset: u64, length: u64) -> Result<Vec<u8>, wave_core::stream::range::RangeError> {
+        let reader = self.reader.clone().expect("reader is set before playing");
+        let length = length.min(reader.length().saturating_sub(offset));
+        let cached = |cache: &Option<(u64, Vec<u8>)>| {
+            cache.as_ref().filter(|(start, data)| offset >= *start && offset + length <= start + data.len() as u64).map(|(start, data)| {
+                let from = (offset - start) as usize;
+                data[from..from + length as usize].to_vec()
+            })
+        };
+        if let Some(bytes) = cached(&self.cache) {
+            return Ok(bytes);
+        }
+        let chunk = runtime::block_on(reader.read_chunk(offset, length))?;
+        self.cache = Some((offset, chunk));
+        Ok(cached(&self.cache).unwrap_or_default())
+    }
 }
 
 impl Player {
-    /// 音の出口は既定（PulseAudio・PipeWire）。WAVE_AUDIO_SINK があればその要素（確かめ用の fakesink など）。
+    /// 音の出口は既定（PulseAudio・PipeWire）。WAVE_AUDIO_SINK があればその要素（確かめ用の「fakesink sync=true」など）。
     pub fn new(resolver: StreamResolver) -> Self {
         gst::init().expect("GStreamer");
         let playbin = gst::ElementFactory::make("playbin").property_from_str("flags", "audio").build().expect("playbin");
         if let Ok(sink) = std::env::var("WAVE_AUDIO_SINK") {
-            playbin.set_property("audio-sink", gst::ElementFactory::make(&sink).build().expect("audio sink"));
+            // 「fakesink sync=true」のように属性も書ける
+            playbin.set_property("audio-sink", gst::parse::launch(&sink).expect("audio sink"));
         }
         let feed: Arc<Mutex<Feed>> = Arc::default();
         let setup_feed = feed.clone();
@@ -52,7 +75,7 @@ impl Player {
         })
         .await?;
         self.playbin.set_state(gst::State::Null).ok();
-        *self.feed.lock().unwrap() = Feed { reader: Some(reader), offset: 0 };
+        *self.feed.lock().unwrap() = Feed { reader: Some(reader), offset: 0, cache: None };
         self.playbin.set_property("uri", "appsrc://");
         self.playbin.set_state(gst::State::Playing).map_err(|_| StreamFailure::Unplayable)?;
         Ok(())
@@ -90,25 +113,26 @@ fn configure_source(source: &gst_app::AppSrc, feed: Arc<Mutex<Feed>>) {
     let seek_feed = feed.clone();
     source.set_callbacks(
         gst_app::AppSrcCallbacks::builder()
-            .need_data(move |source, _| {
-                let (reader, offset) = {
-                    let feed = feed.lock().unwrap();
-                    (feed.reader.clone(), feed.offset)
-                };
-                let Some(reader) = reader else { return };
-                match runtime::block_on(reader.read_chunk(offset)) {
-                    Ok(bytes) if bytes.is_empty() => {
-                        let _ = source.end_of_stream();
-                    }
+            .need_data(move |source, length| {
+                let mut feed = feed.lock().unwrap();
+                let offset = feed.offset;
+                if feed.reader.as_ref().is_none_or(|r| offset >= r.length()) {
+                    let _ = source.end_of_stream();
+                    return;
+                }
+                // 流しで読むとき（push）は長さの指定が無い（u32::MAX）ので、塊の大きさで渡す
+                let want = if length == u32::MAX { wave_core::stream::range::CHUNK_SIZE } else { length as u64 };
+                match feed.read(offset, want) {
                     Ok(bytes) => {
-                        let read = bytes.len() as u64;
+                        feed.offset = offset + bytes.len() as u64;
+                        drop(feed);
                         let mut buffer = gst::Buffer::from_mut_slice(bytes);
                         buffer.get_mut().expect("new buffer").set_offset(offset);
-                        feed.lock().unwrap().offset = offset + read;
                         let _ = source.push_buffer(buffer);
                     }
                     Err(e) => {
-                        eprintln!("audio range failed at={offset} len={}: {e}", reader.length());
+                        eprintln!("audio range failed at={offset}: {e}");
+                        drop(feed);
                         let _ = source.end_of_stream();
                     }
                 }
