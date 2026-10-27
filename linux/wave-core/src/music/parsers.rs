@@ -308,6 +308,24 @@ pub fn account(root: &Value) -> Option<Account> {
     })
 }
 
+/// next の最初の応答から、頼んだ曲の評価（別の曲の評価のボタンなら None）。
+pub fn like_status(root: &Value, video_id: &str) -> Option<LikeStatus> {
+    let button = root
+        .path(&["playerOverlays", "playerOverlayRenderer", "actions"])
+        .items()
+        .into_iter()
+        .find_map(|a| a.path(&["likeButtonRenderer"]))?;
+    if button.path(&["target", "videoId"]).str_() != Some(video_id) {
+        return None;
+    }
+    match button.path(&["likeStatus"]).str_()? {
+        "LIKE" => Some(LikeStatus::Like),
+        "DISLIKE" => Some(LikeStatus::Dislike),
+        "INDIFFERENT" => Some(LikeStatus::Indifferent),
+        _ => None,
+    }
+}
+
 /// next の最初の応答から、歌詞のタブ（MPLY…）の ID。
 pub fn lyrics_browse_id(root: &Value) -> Option<String> {
     root.path(&["contents", "singleColumnMusicWatchNextResultsRenderer", "tabbedRenderer", "watchNextTabbedResultsRenderer", "tabs"])
@@ -732,6 +750,18 @@ mod tests {
         assert!(lyrics_browse_id(&fixture("next_radio")).unwrap().starts_with("MPLY"));
         let Some(crate::lyrics::SongLyrics::Plain { text, .. }) = plain_lyrics(&fixture("browse_lyrics")) else { panic!("no lyrics") };
         assert!(!text.trim().is_empty());
+    }
+
+    #[test]
+    fn like_status_is_read_only_for_the_requested_song() {
+        let text = std::fs::read_to_string(format!("{}/../../core/src/desktopTest/resources/fixtures/next_radio.json", env!("CARGO_MANIFEST_DIR"))).unwrap();
+        let compact = text.replace(' ', "");
+        let at = compact.find("\"target\":{\"videoId\":\"").unwrap() + "\"target\":{\"videoId\":\"".len();
+        let video_id = &compact[at..at + compact[at..].find('"').unwrap()];
+        assert_eq!(like_status(&fixture("next_radio"), video_id), Some(LikeStatus::Indifferent));
+        assert_eq!(like_status(&fixture("next_radio"), "other"), None);
+        let liked: Value = serde_json::from_str(&text.replace("\"INDIFFERENT\"", "\"LIKE\"")).unwrap();
+        assert_eq!(like_status(&liked, video_id), Some(LikeStatus::Like));
     }
 
     #[test]

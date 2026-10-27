@@ -35,6 +35,7 @@ const STYLE: &str = "
 .song-list { background: transparent; }
 .lyric-line { font-size: 24px; font-weight: 800; opacity: 0.4; }
 .lyric-line.lyric-current { opacity: 1; color: @accent_color; }
+.like-button:checked { color: @accent_color; background: transparent; }
 .lyric-plain { font-size: 17px; line-height: 1.6; }
 ";
 
@@ -182,7 +183,7 @@ fn library_row(title: &str, subtitle: &str, thumbnail: Option<&str>) -> gtk::Lis
     picture.load(thumbnail, 96);
     if thumbnail.is_none() {
         // 高く評価した曲は画像の代わりに印
-        let icon = gtk::Image::builder().icon_name("emblem-favorite-symbolic").pixel_size(24).width_request(48).height_request(48).css_classes(["artwork", "accent"]).build();
+        let icon = gtk::Image::builder().icon_name("starred-symbolic").pixel_size(24).width_request(48).height_request(48).css_classes(["artwork", "accent"]).build();
         row.append(&icon);
     } else {
         row.append(&picture.root);
@@ -357,6 +358,62 @@ fn queue_row(song: &wave_core::music::models::Song, activatable: bool) -> adw::A
     row
 }
 
+/// 評価のボタン: 曲が変わったら評価を読み直し、押されたら書き込む（失敗したら元に戻す）。
+fn like_behaviour(app: &Rc<App>, like: &gtk::ToggleButton) {
+    // 評価済みは塗った星、まだなら輪郭の星
+    like.connect_active_notify(|b| b.set_icon_name(if b.is_active() { "starred-symbolic" } else { "non-starred-symbolic" }));
+    // 読み直した値を入れている間は書き込まない
+    let updating = Rc::new(Cell::new(false));
+    let shown: Rc<std::cell::RefCell<Option<String>>> = Rc::default();
+    {
+        let (app, like, updating, shown) = (app.clone(), like.clone(), updating.clone(), shown.clone());
+        let playback = app.playback.clone();
+        playback.on_change(move || {
+            let id = app.playback.current().map(|s| s.video_id);
+            if *shown.borrow() == id {
+                return;
+            }
+            *shown.borrow_mut() = id.clone();
+            updating.set(true);
+            like.set_active(false);
+            like.set_sensitive(false);
+            updating.set(false);
+            let Some(id) = id else { return };
+            let (repo, like, updating, shown) = (app.repo.clone(), like.clone(), updating.clone(), shown.clone());
+            gtk::glib::spawn_future_local(async move {
+                let wanted = id.clone();
+                let status = runtime::run(async move { repo.like_status(&wanted).await }).await;
+                if shown.borrow().as_deref() != Some(id.as_str()) {
+                    return;
+                }
+                if let Ok(status) = status {
+                    updating.set(true);
+                    like.set_active(status == Some(wave_core::music::models::LikeStatus::Like));
+                    updating.set(false);
+                    like.set_sensitive(status.is_some());
+                }
+            });
+        });
+    }
+    let app = app.clone();
+    like.connect_toggled(move |button| {
+        if updating.get() {
+            return;
+        }
+        let Some(song) = app.playback.current() else { return };
+        let (repo, liked, button, updating) = (app.repo.clone(), button.is_active(), button.clone(), updating.clone());
+        button.set_tooltip_text(Some(if liked { "高く評価を外す" } else { "高く評価" }));
+        gtk::glib::spawn_future_local(async move {
+            let id = song.video_id.clone();
+            if runtime::run(async move { repo.set_liked(&id, liked).await }).await.is_err() {
+                updating.set(true);
+                button.set_active(!liked);
+                updating.set(false);
+            }
+        });
+    });
+}
+
 /// 下の帯: 左に曲、中央に操作と位置（窓の左右の中央）、右にキュー・音量・右の欄の出し入れ。
 fn player_bar(app: &Rc<App>, side: &gtk::Widget, side_stack: &gtk::Stack) -> gtk::Widget {
     // 左: 曲
@@ -369,6 +426,10 @@ fn player_bar(app: &Rc<App>, side: &gtk::Widget, side_stack: &gtk::Stack) -> gtk
     let song = gtk::Box::builder().spacing(12).build();
     song.append(&art.root);
     song.append(&text);
+    // 評価（高く評価の付け外し。Mac・Windows と同じく曲名の右）
+    let like = gtk::ToggleButton::builder().icon_name("non-starred-symbolic").tooltip_text("高く評価").valign(gtk::Align::Center).css_classes(["flat", "circular", "like-button"]).build();
+    song.append(&like);
+    like_behaviour(app, &like);
 
     // 中央: 操作と位置
     let previous = gtk::Button::builder().icon_name("media-skip-backward-symbolic").tooltip_text("前の曲").css_classes(["circular", "flat"]).build();

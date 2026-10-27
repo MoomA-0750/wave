@@ -185,3 +185,11 @@ pub struct Account {
     pub name: Option<String>,
     pub photo_url: Option<String>,
 }
+
+/// 曲の評価。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LikeStatus {
+    Like,
+    Dislike,
+    Indifferent,
+}

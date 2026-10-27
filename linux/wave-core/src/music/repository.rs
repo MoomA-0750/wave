@@ -2,7 +2,7 @@
 
 use serde_json::json;
 
-use super::models::{Account, AlbumPage, ArtistPage, HomePage, PlaylistPage, PlaylistSummary, SongPage, UpNextPage};
+use super::models::{Account, AlbumPage, LikeStatus, ArtistPage, HomePage, PlaylistPage, PlaylistSummary, SongPage, UpNextPage};
 use super::parsers;
 use crate::innertube::{ApiResult, Failure, InnerTube};
 
@@ -141,5 +141,20 @@ impl MusicRepository {
     pub async fn plain_lyrics_of_tab(&self, browse_id: &str) -> ApiResult<Option<crate::lyrics::SongLyrics>> {
         let root = self.client.post("browse", json!({ "browseId": browse_id }), true, &[]).await?;
         Ok(parsers::plain_lyrics(&root))
+    }
+
+    /// 曲の評価（next の最初の応答から）。分からなければ None。
+    pub async fn like_status(&self, video_id: &str) -> ApiResult<Option<LikeStatus>> {
+        let root = self.client.post("next", json!({ "videoId": video_id, "contentCheckOk": true, "racyCheckOk": true }), true, &[]).await?;
+        Ok(parsers::like_status(&root, video_id))
+    }
+
+    /// 「高く評価」を付ける・外す。ログイン必須。
+    pub async fn set_liked(&self, video_id: &str, liked: bool) -> ApiResult<()> {
+        if !self.client.is_logged_in() {
+            return Err(Failure::NotLoggedIn);
+        }
+        let endpoint = if liked { "like/like" } else { "like/removelike" };
+        self.client.post(endpoint, json!({ "target": { "videoId": video_id } }), true, &[]).await.map(|_| ())
     }
 }

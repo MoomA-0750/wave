@@ -905,3 +905,4 @@
 - 歌詞は Windows の LyricsService と同じ順と覚え方で core に移した（YouTube Music の時刻付きは ANDROID_MUSIC として匿名で、LRCLIB は cookie を持たないクライアントで）。画面は Windows と同じく中央のページ
 - GTK の CSS で var(--accent-color) を使うと、その規則が効かなかった（歌詞の大きさ・強調が出なかった）。@accent_color・@view_bg_color の書き方にする
 - LRCLIB は Cloudflare の向こうで、一時的に 503 を返すことがあった（同じ問い合わせが少し後には 404）。失敗として扱い、結果を覚えない作りのままでよい
+- 評価のボタンは emblem-favorite-symbolic だと色付きのハートで出て、付けたか見分けられなかった。GNOME の標準の starred-symbolic・non-starred-symbolic（色が変わる星）にする
