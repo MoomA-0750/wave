@@ -888,3 +888,6 @@
 - 見た目の確かめは、mutter の headless（見えない仮の画面）の中で開き、アプリ自身に窓を PNG に書き出させる（linux/scripts/shot.sh）。作業中の画面に窓を出さない
 - core の最初の分として、InnerTube の呼び出し（cookie・SAPISIDHASH・PREF・訪問者 ID・ログインの世代）、認証の情報（Debug に値を出さない）、曲の検索とホームの読み取りを Windows の Wave.Core から移した。読み取りの確かめは Android の core と同じ手本の応答（core/src/desktopTest/resources/fixtures）を使い、Windows のテストと同じことを確かめる
 - HTTP は reqwest（rustls）。cookie はこちらで付け、転送（リダイレクト）は追わない（Windows と同じ）
+- ログインは WebKitGTK（webkit6）で Windows と同じ流れにした。開いてよいホストを同じ一覧に絞り、music.youtube.com に着いたら cookie と yt.config_ の VISITOR_DATA・DATASYNC_ID を読む。ブラウザの記録は使い捨ての通信のまとまり（NetworkSession::new_ephemeral）にしてディスクに残さない。開発者ツールは切る
+- ログインの情報は GNOME のキーリング（Secret Service）に oo7 で置き、ファイルには書かない
+- core の通信は tokio の上で動かし、GTK の主スレッドからは結果を待つだけにする（linux/wave-gtk/src/runtime.rs）
