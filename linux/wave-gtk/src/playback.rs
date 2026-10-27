@@ -301,16 +301,13 @@ impl Playback {
             if this.request.get() != request {
                 return;
             }
-            match result {
-                Err(e) => {
-                    eprintln!("play failed: {e}");
-                    // その曲だけの失敗なら次へ。どの曲でも起きる失敗では止める（飛ばし続けない）
-                    if e.is_this_song_only() {
-                        this.advance();
-                        return;
-                    }
+            if let Err(e) = result {
+                eprintln!("play failed: {e}");
+                // その曲だけの失敗なら次へ。どの曲でも起きる失敗では止める（飛ばし続けない）
+                if e.is_this_song_only() {
+                    this.advance();
+                    return;
                 }
-                Ok(()) => {}
             }
             this.changed();
             if this.upcoming().len() <= RADIO_REFILL_LEFT {

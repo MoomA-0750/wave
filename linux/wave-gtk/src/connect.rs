@@ -907,6 +907,16 @@ impl Connect {
         }
     }
 
+    /// 家の wave API にログインを渡す（ADR-0015）。本人が確かめて押したときだけ呼ぶ。宛先の鍵にだけ包む。
+    pub async fn grant_login(self: &Rc<Self>, device_id: &str) -> bool {
+        let Some(credentials) = keyring::load().await else { return false };
+        let sent = self.with_client(|c| {
+            c.send_login_grant(device_id, credentials.reveal_cookie(), credentials.visitor_data.as_deref(), credentials.reveal_data_sync_id(), credentials.obtained_at_epoch_ms)
+        }) == Some(true);
+        eprintln!("connect-v2 login grant sent={sent}");
+        sent
+    }
+
     /// 映している端末へのシーク・音量。
     pub fn remote_seek(self: &Rc<Self>, position_ms: i64) {
         self.with_client(|c| c.send_control(ControlAction::Seek, Some(position_ms)));

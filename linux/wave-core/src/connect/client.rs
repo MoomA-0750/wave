@@ -14,7 +14,7 @@ use super::doc::{self, DocOpen};
 use super::hpke;
 pub use super::models::JoinInfo;
 use super::models::{
-    ChainRecord, ChainType, CommandBody, ControlAction, ControlCommand, CursorBody, DocHeader, DocKind, MemberKeys, ProfileCommand, QueueAddCommand, QueueBody,
+    ChainRecord, ChainType, CommandBody, ControlAction, ControlCommand, CursorBody, DocHeader, DocKind, LoginGrantCommand, MemberKeys, ProfileCommand, QueueAddCommand, QueueBody,
     QueueEditCommand, Role, SealedDoc, YieldCommand, connect_json,
 };
 use super::snapshot::{HandoffItem, HandoffRepeat};
@@ -31,6 +31,8 @@ const MAX_CONTROL_AGE_MS: i64 = 5 * 60 * 1000;
 /// キューへの追加の命令1件の平文の上限（詰め物の1ブロックに収める。Android・Windows と同じ）。
 pub const MAX_QUEUE_ADD_PLAINTEXT: usize = 3800;
 const HAND_OFF_WAIT_MS: i64 = 10_000;
+/// ログインを渡す命令の平文の上限（詰め物の2ブロック、中継の 16KB に収まる。Android・Windows と同じ）。
+pub const MAX_LOGIN_GRANT_PLAINTEXT: usize = 8000;
 
 /// 端末が保存しておくもの（D-2 の頭、D-4 の storeId と版の床、D-9 の退いた印、処理した claimId）。
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -1109,6 +1111,34 @@ impl ConnectClient {
         self.request_transfer_with(false)
     }
 
+    /// 家の端末 target（wave API、ADR-0015）にログインを渡す。本人が押したときだけ呼ぶ。target の受け取りの鍵にだけ包む。
+    /// 送ったか（target が家の player でない・自分・大きすぎるなら false）。
+    pub fn send_login_grant(&mut self, target: &str, cookie: &str, visitor_data: Option<&str>, data_sync_id: Option<&str>, obtained_at_epoch_ms: i64) -> bool {
+        if self.pending_store_id.is_some() || target == self.my_id() {
+            return false;
+        }
+        let Some(chain) = &self.chain else { return false };
+        if !chain.members().contains_key(self.my_id()) || !chain.members().get(target).is_some_and(|m| m.keys.role == Role::Player) {
+            return false;
+        }
+        let grant = CommandBody::LoginGrant(LoginGrantCommand {
+            command_id: self.new_id(),
+            from: self.my_id().to_string(),
+            to: target.to_string(),
+            cookie: cookie.to_string(),
+            visitor_data: visitor_data.map(String::from),
+            data_sync_id: data_sync_id.map(String::from),
+            obtained_at_epoch_ms,
+        });
+        let plaintext = to_json(&grant);
+        if plaintext.len() > MAX_LOGIN_GRANT_PLAINTEXT {
+            return false;
+        }
+        let only: HashSet<String> = [target.to_string()].into();
+        let Ok(doc) = doc::seal(&*self.device, chain, DocKind::Command, 1, None, self.epoch(), &plaintext, Some(&only)) else { return false };
+        self.send(RelayMessage::Control { doc })
+    }
+
     /// 家の端末 target に「ここで再生（引き取り）」を頼む（デバイスの一覧で端末を選んだ）。
     pub fn request_remote_transfer(&mut self, target: &str) -> bool {
         if self.pending_store_id.is_some() || target == self.my_id() {
@@ -1681,4 +1711,97 @@ fn to_json<T: Serialize>(value: &T) -> Vec<u8> {
 
 fn from_json<T: for<'de> Deserialize<'de>>(bytes: &[u8]) -> Option<T> {
     serde_json::from_slice(bytes).ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    use super::*;
+
+    #[derive(Default)]
+    struct Recorder {
+        events: RefCell<Vec<ClientEvent>>,
+    }
+
+    struct TestEffects(Rc<Recorder>);
+
+    impl Effects for TestEffects {
+        fn pause(&self) -> Option<LocalCursor> {
+            None
+        }
+        fn adopt(&self, _: &str, _: &CursorBody, _: i64) -> bool {
+            false
+        }
+        fn event(&self, event: ClientEvent) {
+            self.0.events.borrow_mut().push(event);
+        }
+        fn persist(&self, _: &ClientPersisted) {}
+        fn account_tag(&self) -> Option<String> {
+            Some("tag".into())
+        }
+    }
+
+    fn client(device: Arc<SoftwareDevice>, initial: ClientPersisted, sent: Rc<RefCell<Vec<RelayMessage>>>, recorder: Rc<Recorder>) -> ConnectClient {
+        let clock = Clock { now_ms: Box::new(|| 1_000), epoch_ms: Box::new(|| 1_700_000_000_000), new_id: Box::new(|| "id".into()) };
+        ConnectClient::new(device, Role::Player, Box::new(move |m| {
+            sent.borrow_mut().push(m);
+            true
+        }), Box::new(TestEffects(recorder)), clock, initial)
+    }
+
+    /// A が家を作り、B と C を加えた鎖。
+    fn household() -> (Arc<SoftwareDevice>, Arc<SoftwareDevice>, Arc<SoftwareDevice>, Vec<ChainRecord>) {
+        let (a, b, c) = (Arc::new(SoftwareDevice::generate()), Arc::new(SoftwareDevice::generate()), Arc::new(SoftwareDevice::generate()));
+        let genesis = chain::genesis(&*a, &a.member_keys(Role::Player)).unwrap();
+        let mut records = vec![genesis];
+        for member in [&b, &c] {
+            let ChainVerification::Ok(verified) = chain::verify(&records, None) else { panic!("chain") };
+            records.push(chain::add(&*a, &verified, &member.member_keys(Role::Player)));
+        }
+        (a, b, c, records)
+    }
+
+    #[test]
+    fn login_grant_is_wrapped_only_for_the_target() {
+        let (a, b, c, records) = household();
+        let sent = Rc::new(RefCell::new(Vec::new()));
+        let initial = ClientPersisted { chain: records.clone(), store_id: Some("store".into()), ..Default::default() };
+        let mut client = client(a.clone(), initial, sent.clone(), Rc::default());
+        assert!(client.send_login_grant(b.device_id(), "SID=secret", None, Some("123"), 5));
+        let Some(RelayMessage::Control { doc: sealed }) = sent.borrow().last().cloned() else { panic!("no control") };
+        let ChainVerification::Ok(verified) = chain::verify(&records, None) else { panic!("chain") };
+        let DocOpen::Ok { plaintext, .. } = doc::open(&sealed, &verified, &*b) else { panic!("target cannot open") };
+        assert!(matches!(from_json::<CommandBody>(&plaintext), Some(CommandBody::LoginGrant(g)) if g.cookie == "SID=secret" && g.to == b.device_id()));
+        assert!(!matches!(doc::open(&sealed, &verified, &*c), DocOpen::Ok { .. }), "others must not open it");
+        // 自分宛てには送らない
+        assert!(!client.send_login_grant(a.device_id(), "SID=secret", None, None, 5));
+    }
+
+    #[test]
+    fn joining_accepts_only_a_chain_where_the_inviter_added_this_device() {
+        let (a, b, _c, records) = household();
+        let recorder = Rc::new(Recorder::default());
+        let sent = Rc::new(RefCell::new(Vec::new()));
+        let mut joiner = client(b.clone(), ClientPersisted::default(), sent, recorder.clone());
+        // 加入を待っていない端末は、中継が見せた家を受け入れない
+        joiner.on_message(RelayMessage::Chain { records: records.clone() });
+        assert_eq!(joiner.household_id(), None);
+        assert!(recorder.events.borrow().iter().any(|e| matches!(e, ClientEvent::ChainInvalid { .. })));
+        // Confirm で受けた頭（genesis だけの時点）と、招いた端末 A
+        let ChainVerification::Ok(head) = chain::verify(&records[..1], None) else { panic!("chain") };
+        let info = JoinInfo {
+            household_id: head.household_id().to_string(),
+            head_seq: head.head_seq(),
+            head_hash: head.head_hash().to_string(),
+            store_id: "store".into(),
+            cursor_floor: 0,
+            queue_floor: 0,
+        };
+        joiner.expect_join(info, a.device_id().to_string());
+        joiner.on_message(RelayMessage::Chain { records });
+        assert_eq!(joiner.household_id(), Some(head.household_id()));
+        assert!(recorder.events.borrow().contains(&ClientEvent::Joined));
+    }
 }

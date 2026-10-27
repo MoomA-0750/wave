@@ -104,6 +104,12 @@ pub fn add_to(prefs: &adw::PreferencesPage, app: &Rc<App>) {
                     _ => "オフライン",
                 };
                 let row = adw::ActionRow::builder().title(gtk::glib::markup_escape_text(&member.label)).subtitle(subtitle).build();
+                if member.kind.as_deref() == Some("api") {
+                    let grant = gtk::Button::builder().label("ログインを渡す").valign(gtk::Align::Center).css_classes(["flat"]).build();
+                    let (app, device_id) = (app.clone(), member.device_id.clone());
+                    grant.connect_clicked(move |_| confirm_grant(&app, device_id.clone()));
+                    row.add_suffix(&grant);
+                }
                 if !member.is_self {
                     let remove = gtk::Button::builder().label("外す").valign(gtk::Align::Center).css_classes(["flat"]).build();
                     let (app, device_id) = (app.clone(), member.device_id.clone());
@@ -126,6 +132,30 @@ pub fn add_to(prefs: &adw::PreferencesPage, app: &Rc<App>) {
     };
     refresh();
     app.connect.on_change(refresh);
+}
+
+/// wave API にログインを渡す前に確かめる（渡すと、その端末がこのアカウントで YouTube Music を使える）。
+fn confirm_grant(app: &Rc<App>, device_id: String) {
+    let dialog = adw::AlertDialog::builder()
+        .heading("wave API にログインを渡しますか？")
+        .body("渡すと、その端末がこのアカウントで YouTube Music を使えるようになります")
+        .build();
+    dialog.add_responses(&[("cancel", "キャンセル"), ("grant", "渡す")]);
+    dialog.set_response_appearance("grant", adw::ResponseAppearance::Suggested);
+    let app2 = app.clone();
+    dialog.connect_response(None, move |_, response| {
+        if response != "grant" {
+            return;
+        }
+        let (app, device_id) = (app2.clone(), device_id.clone());
+        gtk::glib::spawn_future_local(async move {
+            let sent = app.connect.grant_login(&device_id).await;
+            app.toast(if sent { "ログインを渡しました" } else { "ログインを渡せませんでした（中継への接続を確かめてください）" });
+        });
+    });
+    if let Some(window) = app.window() {
+        dialog.present(Some(&window));
+    }
 }
 
 fn status_text(info: &crate::connect::ConnectInfo) -> String {
