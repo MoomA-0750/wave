@@ -2,7 +2,7 @@
 
 use serde_json::json;
 
-use super::models::{AlbumPage, ArtistPage, HomePage, PlaylistPage, PlaylistSummary, SongPage, UpNextPage};
+use super::models::{Account, AlbumPage, ArtistPage, HomePage, PlaylistPage, PlaylistSummary, SongPage, UpNextPage};
 use super::parsers;
 use crate::innertube::{ApiResult, Failure, InnerTube};
 
@@ -123,5 +123,11 @@ impl MusicRepository {
     pub async fn artist(&self, browse_id: &str) -> ApiResult<ArtistPage> {
         let root = self.client.post("browse", json!({ "browseId": browse_id }), true, &[]).await?;
         parsers::artist_page(&root).ok_or(Failure::Parse)
+    }
+
+    /// ログイン中のアカウントの名前と写真。
+    pub async fn account(&self) -> ApiResult<Account> {
+        let root = self.logged_in_post("account/account_menu", json!({})).await?;
+        parsers::account(&root).ok_or(Failure::NotLoggedIn)
     }
 }

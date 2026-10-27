@@ -78,6 +78,21 @@ impl Playback {
         self.queue.borrow().iter().skip(start).cloned().collect()
     }
 
+    /// キューの全部と、今の曲の位置。
+    pub fn queue(&self) -> (Vec<Song>, Option<usize>) {
+        (self.queue.borrow().clone(), self.index.get())
+    }
+
+    /// ログアウトしたときなど: 止めてキューを空にする。
+    pub fn clear(&self) {
+        self.request.set(self.request.get() + 1);
+        self.player.stop();
+        self.queue.borrow_mut().clear();
+        self.index.set(None);
+        *self.radio.borrow_mut() = None;
+        self.changed();
+    }
+
     pub fn has_next(&self) -> bool {
         self.index.get().is_some_and(|i| i + 1 < self.queue.borrow().len())
     }

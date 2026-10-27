@@ -61,13 +61,14 @@ const INTROSPECTION: &str = r#"
 /// D-Bus に出している間だけ持つ。
 pub struct Mpris {
     connection: RefCell<Option<gio::DBusConnection>>,
+    registrations: RefCell<Vec<gio::RegistrationId>>,
     /// 最後に知らせた値（変わったときだけ PropertiesChanged を出す）。
     last: RefCell<Option<(String, String, bool)>>,
     _owner: RefCell<Option<gio::OwnerId>>,
 }
 
 pub fn start(playback: Rc<Playback>, raise: impl Fn() + 'static, quit: impl Fn() + 'static) -> Rc<Mpris> {
-    let mpris = Rc::new(Mpris { connection: RefCell::default(), last: RefCell::default(), _owner: RefCell::default() });
+    let mpris = Rc::new(Mpris { connection: RefCell::default(), registrations: RefCell::default(), last: RefCell::default(), _owner: RefCell::default() });
     let node = gio::DBusNodeInfo::for_xml(INTROSPECTION).expect("MPRIS introspection");
     let (raise, quit) = (Rc::new(raise), Rc::new(quit));
     let weak = Rc::downgrade(&mpris);
@@ -77,6 +78,7 @@ pub fn start(playback: Rc<Playback>, raise: impl Fn() + 'static, quit: impl Fn()
         BUS_NAME,
         gio::BusNameOwnerFlags::NONE,
         move |connection, _| {
+            let mut ids = Vec::new();
             for iface in [ROOT_IFACE, PLAYER_IFACE] {
                 let info = node.lookup_interface(iface).expect("interface in introspection");
                 let (calls, props, setter) = (pb.clone(), pb.clone(), pb.clone());
@@ -97,12 +99,14 @@ pub fn start(playback: Rc<Playback>, raise: impl Fn() + 'static, quit: impl Fn()
                         true
                     })
                     .build();
-                if let Err(e) = registered {
-                    eprintln!("mpris register failed: {e}");
+                match registered {
+                    Ok(id) => ids.push(id),
+                    Err(e) => eprintln!("mpris register failed: {e}"),
                 }
             }
             if let Some(mpris) = weak.upgrade() {
                 *mpris.connection.borrow_mut() = Some(connection);
+                *mpris.registrations.borrow_mut() = ids;
             }
         },
         |_, _| {},
@@ -127,6 +131,20 @@ pub fn start(playback: Rc<Playback>, raise: impl Fn() + 'static, quit: impl Fn()
         None => glib::ControlFlow::Break,
     });
     mpris
+}
+
+impl Drop for Mpris {
+    /// ログアウトして入り直すときなど: D-Bus から外す（残すと、古い再生をメディアキーが操作し続ける）。
+    fn drop(&mut self) {
+        if let Some(connection) = self.connection.borrow().as_ref() {
+            for id in self.registrations.borrow_mut().drain(..) {
+                let _ = connection.unregister_object(id);
+            }
+        }
+        if let Some(owner) = self._owner.borrow_mut().take() {
+            gio::bus_unown_name(owner);
+        }
+    }
 }
 
 impl Mpris {

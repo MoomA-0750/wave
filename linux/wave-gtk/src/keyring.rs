@@ -27,3 +27,13 @@ pub async fn save(credentials: &Credentials) -> bool {
     })
     .await
 }
+
+/// ログアウト: キーリングからログインの情報を消す。
+pub async fn delete() {
+    runtime::run(async {
+        if let Ok(keyring) = oo7::Keyring::new().await {
+            let _ = keyring.delete(&ATTRIBUTES).await;
+        }
+    })
+    .await
+}

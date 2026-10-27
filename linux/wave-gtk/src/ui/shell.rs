@@ -35,7 +35,7 @@ const STYLE: &str = "
 ";
 
 /// 窓の中身（上の帯を含む）を作る。
-pub fn build(repo: MusicRepository, playback: Rc<Playback>) -> (gtk::Widget, Rc<App>) {
+pub fn build(repo: MusicRepository, playback: Rc<Playback>, on_logout: Rc<dyn Fn()>) -> (gtk::Widget, Rc<App>) {
     let css = gtk::CssProvider::new();
     css.load_from_string(STYLE);
     gtk::style_context_add_provider_for_display(&gtk::gdk::Display::default().expect("display"), &css, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION);
@@ -45,16 +45,22 @@ pub fn build(repo: MusicRepository, playback: Rc<Playback>) -> (gtk::Widget, Rc<
     nav.add(&pages::home(&app));
 
     let toolbar = adw::ToolbarView::new();
-    toolbar.add_top_bar(&header(&app));
+    let bar = header(&app);
+    bar.pack_end(&account_button(&app, on_logout));
+    toolbar.add_top_bar(&bar);
     let body = gtk::Box::builder().spacing(8).margin_start(8).margin_end(8).build();
     body.append(&pane(&library(&app), Some(300)));
     let center = pane(&nav, None);
     center.set_hexpand(true);
     body.append(&center);
-    let now_playing = pane(&now_playing(&app), Some(340));
-    body.append(&now_playing);
+    // 右の欄は再生中とキューを切り替える（下の帯のキューのボタン。Mac・Windows と同じ）
+    let side_stack = gtk::Stack::builder().transition_type(gtk::StackTransitionType::Crossfade).build();
+    side_stack.add_named(&now_playing(&app), Some("now"));
+    side_stack.add_named(&queue(&app), Some("queue"));
+    let side = pane(&side_stack, Some(340));
+    body.append(&side);
     toolbar.set_content(Some(&body));
-    toolbar.add_bottom_bar(&player_bar(&app, &now_playing));
+    toolbar.add_bottom_bar(&player_bar(&app, &side, &side_stack));
     (toolbar.upcast(), app)
 }
 
@@ -257,8 +263,95 @@ fn now_playing(app: &Rc<App>) -> gtk::Widget {
     stack.upcast()
 }
 
-/// 下の帯: 左に曲、中央に操作と位置（窓の左右の中央）、右に音量と右の欄の出し入れ。
-fn player_bar(app: &Rc<App>, side: &gtk::Widget) -> gtk::Widget {
+/// 上の帯の右端: アカウントの写真。押すと名前とログアウト。
+fn account_button(app: &Rc<App>, on_logout: Rc<dyn Fn()>) -> gtk::MenuButton {
+    let avatar = adw::Avatar::builder().size(30).show_initials(true).build();
+    let name = gtk::Label::builder().css_classes(["heading"]).margin_bottom(6).build();
+    let logout = gtk::Button::builder().label("ログアウト").css_classes(["flat"]).build();
+    let column = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(4).margin_top(6).margin_bottom(6).margin_start(6).margin_end(6).build();
+    column.append(&name);
+    column.append(&logout);
+    let popover = gtk::Popover::builder().child(&column).build();
+    let button = gtk::MenuButton::builder().child(&avatar).popover(&popover).tooltip_text("アカウント").css_classes(["flat", "circular"]).build();
+    logout.connect_clicked(move |_| {
+        popover.popdown();
+        on_logout();
+    });
+    let repo = app.repo.clone();
+    gtk::glib::spawn_future_local(async move {
+        let Ok(account) = runtime::run(async move { repo.account().await }).await else { return };
+        if let Some(text) = &account.name {
+            avatar.set_text(Some(text));
+            name.set_label(text);
+        }
+        if let Some(url) = account.photo_url {
+            images::texture(&url, 88, move |texture| avatar.set_custom_image(Some(&texture)));
+        }
+    });
+    button
+}
+
+/// 右の欄のキュー: 今の曲と、次に流れる曲（押すとその曲へ）。
+fn queue(app: &Rc<App>) -> gtk::Widget {
+    let column = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(8).margin_top(16).margin_bottom(16).margin_start(12).margin_end(12).build();
+    column.append(&gtk::Label::builder().label("キュー").xalign(0.0).margin_start(4).css_classes(["title-3"]).build());
+    let now_label = gtk::Label::builder().label("再生中").xalign(0.0).margin_start(4).css_classes(["heading"]).build();
+    let now_list = gtk::ListBox::builder().css_classes(["boxed-list"]).selection_mode(gtk::SelectionMode::None).build();
+    let next_label = gtk::Label::builder().label("次に流れる曲").xalign(0.0).margin_start(4).margin_top(8).css_classes(["heading"]).build();
+    let next_list = gtk::ListBox::builder().css_classes(["boxed-list"]).selection_mode(gtk::SelectionMode::None).build();
+    for widget in [now_label.upcast_ref::<gtk::Widget>(), now_list.upcast_ref(), next_label.upcast_ref(), next_list.upcast_ref()] {
+        column.append(widget);
+    }
+    // 次に流れる曲の何番目の行が、キューの何番目か
+    let offset = Rc::new(Cell::new(0usize));
+    {
+        let (app, offset) = (app.clone(), offset.clone());
+        next_list.connect_row_activated(move |_, row| app.playback.play_at(offset.get() + row.index() as usize));
+    }
+    let refresh = {
+        let app = app.clone();
+        move || {
+            for list in [&now_list, &next_list] {
+                while let Some(row) = list.first_child() {
+                    list.remove(&row);
+                }
+            }
+            let (songs, index) = app.playback.queue();
+            let start = index.map_or(0, |i| i + 1);
+            offset.set(start);
+            if let Some(current) = index.and_then(|i| songs.get(i)) {
+                now_list.append(&queue_row(current, false));
+            }
+            now_label.set_visible(index.is_some());
+            now_list.set_visible(index.is_some());
+            next_label.set_visible(songs.len() > start);
+            next_list.set_visible(songs.len() > start);
+            for song in songs.iter().skip(start) {
+                next_list.append(&queue_row(song, true));
+            }
+        }
+    };
+    refresh();
+    app.playback.on_change(refresh);
+    gtk::ScrolledWindow::builder().child(&column).hscrollbar_policy(gtk::PolicyType::Never).build().upcast()
+}
+
+fn queue_row(song: &wave_core::music::models::Song, activatable: bool) -> adw::ActionRow {
+    let row = adw::ActionRow::builder()
+        .title(gtk::glib::markup_escape_text(&song.title))
+        .subtitle(gtk::glib::markup_escape_text(&song.artists_text()))
+        .title_lines(1)
+        .subtitle_lines(1)
+        .activatable(activatable)
+        .build();
+    let art = images::square(40);
+    art.load(song.thumbnail_url.as_deref(), 80);
+    row.add_prefix(&art.root);
+    row
+}
+
+/// 下の帯: 左に曲、中央に操作と位置（窓の左右の中央）、右にキュー・音量・右の欄の出し入れ。
+fn player_bar(app: &Rc<App>, side: &gtk::Widget, side_stack: &gtk::Stack) -> gtk::Widget {
     // 左: 曲
     let art = images::square(56);
     let title = gtk::Label::builder().xalign(0.0).ellipsize(gtk::pango::EllipsizeMode::End).max_width_chars(22).css_classes(["heading"]).build();
@@ -296,7 +389,9 @@ fn player_bar(app: &Rc<App>, side: &gtk::Widget) -> gtk::Widget {
     volume.set_range(0.0, 1.0);
     volume.set_value(app.playback.player().volume());
     let side_toggle = gtk::ToggleButton::builder().icon_name("sidebar-show-right-symbolic").tooltip_text("再生中の画面").active(true).css_classes(["flat"]).build();
+    let queue_toggle = gtk::ToggleButton::builder().icon_name("view-list-symbolic").tooltip_text("キュー").css_classes(["flat"]).build();
     let end = gtk::Box::builder().spacing(8).valign(gtk::Align::Center).build();
+    end.append(&queue_toggle);
     end.append(&volume_icon);
     end.append(&volume);
     end.append(&side_toggle);
@@ -319,8 +414,25 @@ fn player_bar(app: &Rc<App>, side: &gtk::Widget) -> gtk::Widget {
         next.connect_clicked(move |_| playback.next());
         let playback = app.playback.clone();
         volume.connect_value_changed(move |s| playback.player().set_volume(s.value()));
-        let side = side.clone();
-        side_toggle.connect_toggled(move |t| side.set_visible(t.is_active()));
+        let (side, queue_toggle_for_side) = (side.clone(), queue_toggle.clone());
+        side_toggle.connect_toggled(move |t| {
+            side.set_visible(t.is_active());
+            if !t.is_active() {
+                queue_toggle_for_side.set_active(false);
+            }
+        });
+        // キューを押すと右の欄をキューにし（しまってあれば出す）、もう一度押すと再生中に戻す
+        let (stack, side_toggle) = (side_stack.clone(), side_toggle.clone());
+        queue_toggle.connect_toggled(move |t| {
+            stack.set_visible_child_name(if t.is_active() { "queue" } else { "now" });
+            if t.is_active() {
+                side_toggle.set_active(true);
+            }
+        });
+    }
+    // 確かめ用: 起動したら右の欄をキューにする
+    if std::env::var("WAVE_DEMO_SIDE").as_deref() == Ok("queue") {
+        queue_toggle.set_active(true);
     }
     // 利用者が動かしたときだけシークする（位置の書き換えでは呼ばれない）
     let dragging = Rc::new(Cell::new(false));

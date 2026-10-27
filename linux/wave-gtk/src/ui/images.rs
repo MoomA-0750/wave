@@ -88,6 +88,22 @@ fn load(picture: &gtk::Picture, url: Option<&str>, px: u32) {
     });
 }
 
+/// url の画像を読み、読めたら on_loaded に渡す（同じ URL は一度だけ読む）。
+pub fn texture(url: &str, px: u32, on_loaded: impl FnOnce(gtk::gdk::Texture) + 'static) {
+    let url = sized(url, px);
+    if let Some(texture) = CACHE.with(|c| c.borrow().get(&url).cloned()) {
+        on_loaded(texture);
+        return;
+    }
+    gtk::glib::spawn_future_local(async move {
+        let fetched = url.clone();
+        let bytes = runtime::run(async move { HTTP.get(&fetched).send().await.ok()?.error_for_status().ok()?.bytes().await.ok().map(|b| b.to_vec()) }).await;
+        let Some(texture) = bytes.and_then(|b| gtk::gdk::Texture::from_bytes(&gtk::glib::Bytes::from_owned(b)).ok()) else { return };
+        CACHE.with(|c| c.borrow_mut().insert(url, texture.clone()));
+        on_loaded(texture);
+    });
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -299,6 +299,15 @@ pub fn playlist_panel_song(item: &Value) -> Option<Song> {
     })
 }
 
+/// account_menu の応答から、ログイン中のアカウントの名前と写真。アカウントのヘッダが無ければ None。
+pub fn account(root: &Value) -> Option<Account> {
+    let header = find_all(root, "activeAccountHeaderRenderer").into_iter().next()?;
+    Some(Account {
+        name: header.path(&["accountName", "runs", "0", "text"]).str_().map(String::from),
+        photo_url: header.path(&["accountPhoto", "thumbnails"]).items().last().and_then(|t| t.path(&["url"]).str_()).map(String::from),
+    })
+}
+
 const CONTENT_RENDERERS: [&str; 6] = [
     "musicTwoRowItemRenderer", "musicResponsiveListItemRenderer", "musicResponsiveHeaderRenderer",
     "musicDetailHeaderRenderer", "musicEditablePlaylistDetailHeaderRenderer", "musicPlaylistShelfRenderer",
@@ -688,6 +697,17 @@ mod tests {
         assert!(page.videos.iter().all(|v| v.artists[0].name == page.name));
         assert!(artist_page(&fixture("browse_album")).is_none());
         assert!(album_page(&fixture("search_songs"), "MPREb_x").is_none());
+    }
+
+    #[test]
+    fn account_from_the_menu_header() {
+        let root: Value = serde_json::from_str(
+            r#"{"actions":[{"openPopupAction":{"popup":{"multiPageMenuRenderer":{"header":{"activeAccountHeaderRenderer":{
+                "accountName":{"runs":[{"text":"Name"}]},"accountPhoto":{"thumbnails":[{"url":"https://a/s48"},{"url":"https://a/s88"}]}}}}}}}]}"#,
+        )
+        .unwrap();
+        assert_eq!(account(&root), Some(Account { name: Some("Name".into()), photo_url: Some("https://a/s88".into()) }));
+        assert_eq!(account(&serde_json::json!({ "actions": [] })), None);
     }
 
     #[test]

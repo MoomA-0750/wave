@@ -79,14 +79,34 @@ fn show_login(window: &adw::ApplicationWindow, toolbar: &adw::ToolbarView, repo:
 async fn show_home(toolbar: &adw::ToolbarView, repo: &MusicRepository) {
     let resolver = StreamResolver::new(repo.client().clone(), PlayerCipherProvider::default());
     let playback = playback::Playback::new(player::Player::new(resolver), repo.clone());
-    let (shell, app) = ui::shell::build(repo.clone(), playback.clone());
+    let on_logout: std::rc::Rc<dyn Fn()> = {
+        let (toolbar, repo, playback) = (toolbar.clone(), repo.clone(), playback.clone());
+        std::rc::Rc::new(move || {
+            playback.clear();
+            let (toolbar, repo) = (toolbar.clone(), repo.clone());
+            gtk::glib::spawn_future_local(async move {
+                keyring::delete().await;
+                repo.client().set_credentials(None);
+                // 入れ物（読み込み中の上の帯）に戻し、ログインの入り口を出す
+                if let Some(window) = toolbar_window(&toolbar) {
+                    window.set_content(Some(&toolbar));
+                    show_login(&window, &toolbar, &repo);
+                }
+            });
+        })
+    };
+    let window = toolbar.root().and_downcast::<adw::ApplicationWindow>();
+    if let Some(window) = &window {
+        WINDOW.with(|w| *w.borrow_mut() = Some(window.clone()));
+    }
+    let (shell, app) = ui::shell::build(repo.clone(), playback.clone(), on_logout);
     if let Some(window) = toolbar.root().and_downcast::<adw::ApplicationWindow>() {
         // GNOME のメディアの操作・メディアキーから操作できるようにする（窓がある間だけ出す）
         let (raise, quit) = (window.clone(), window.clone());
-        let mpris = mpris::start(playback, move || raise.present(), move || quit.close());
-        window.connect_destroy(move |_| {
-            let _ = &mpris;
-        });
+        // ログアウトして入り直したら、古い方を外してから置き換える
+        MPRIS.with(|m| *m.borrow_mut() = None);
+        let started = mpris::start(playback, move || raise.present(), move || quit.close());
+        MPRIS.with(|m| *m.borrow_mut() = Some(started));
     }
     if let Ok(query) = std::env::var("WAVE_DEMO_QUERY") {
         app.demo(&query);
@@ -95,6 +115,17 @@ async fn show_home(toolbar: &adw::ToolbarView, repo: &MusicRepository) {
     if let Some(window) = toolbar.root().and_downcast::<adw::ApplicationWindow>() {
         window.set_content(Some(&shell));
     }
+}
+
+thread_local! {
+    /// 窓（ログアウトして入れ物に戻すとき、入れ物はもう窓に付いていないので覚えておく）。
+    static WINDOW: std::cell::RefCell<Option<adw::ApplicationWindow>> = const { std::cell::RefCell::new(None) };
+    /// GNOME のメディアの操作への口（1つだけ）。
+    static MPRIS: std::cell::RefCell<Option<std::rc::Rc<mpris::Mpris>>> = const { std::cell::RefCell::new(None) };
+}
+
+fn toolbar_window(toolbar: &adw::ToolbarView) -> Option<adw::ApplicationWindow> {
+    toolbar.root().and_downcast::<adw::ApplicationWindow>().or_else(|| WINDOW.with(|w| w.borrow().clone()))
 }
 
 /// 表示の言語（YouTube から届く文字の言語）。LANG が日本語なら ja、ほかは en。

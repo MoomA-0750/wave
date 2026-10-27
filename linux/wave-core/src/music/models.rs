@@ -178,3 +178,10 @@ pub struct ArtistPage {
     /// 動画の棚（MV・YouTube の動画）。
     pub videos: Vec<Song>,
 }
+
+/// ログイン中のアカウント（名前と写真）。
+#[derive(Debug, Clone, PartialEq)]
+pub struct Account {
+    pub name: Option<String>,
+    pub photo_url: Option<String>,
+}
