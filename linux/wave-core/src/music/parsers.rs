@@ -309,6 +309,123 @@ pub fn is_sign_in_prompt(root: &Value) -> bool {
     !find_all(root, "messageRenderer").is_empty() && CONTENT_RENDERERS.iter().all(|r| find_all(root, r).is_empty())
 }
 
+const ALBUM_PLAYLIST_PREFIX: &str = "OLAK5uy_";
+
+/// アルバムのページ。見出しが無ければ None。
+pub fn album_page(root: &Value, browse_id: &str) -> Option<AlbumPage> {
+    let header = find_all(root, "musicResponsiveHeaderRenderer").into_iter().next()?;
+    let title = text_of(header.path(&["title"]))?;
+    let artists = artists_of(&header.path(&["straplineTextOne", "runs"]).items());
+    let thumbnail = last_thumbnail_url(header.path(&["thumbnail"]));
+    let playlist_id = header
+        .path(&["buttons"])
+        .items()
+        .into_iter()
+        .find_map(|b| b.path(&["musicPlayButtonRenderer", "playNavigationEndpoint", "watchPlaylistEndpoint", "playlistId"]).str_())
+        .map(String::from)
+        .or_else(|| canonical_list(root.path(&["microformat", "microformatDataRenderer", "urlCanonical"]).str_()))
+        .or_else(|| {
+            find_all(root, "watchPlaylistEndpoint")
+                .into_iter()
+                .find_map(|w| w.path(&["playlistId"]).str_().filter(|p| p.starts_with(ALBUM_PLAYLIST_PREFIX)).map(String::from))
+        });
+    let album = AlbumRef { title: title.clone(), browse_id: Some(browse_id.to_string()) };
+    let shelf = root
+        .path(&["contents", "twoColumnBrowseResultsRenderer", "secondaryContents", "sectionListRenderer", "contents"])
+        .items()
+        .into_iter()
+        .find_map(|i| i.path(&["musicShelfRenderer"]));
+    let songs = shelf
+        .path(&["contents"])
+        .items()
+        .into_iter()
+        .filter_map(|row| {
+            let item = row.path(&["musicResponsiveListItemRenderer"])?;
+            let mut song = responsive_list_item_song(item)?;
+            let row_runs: Vec<&Value> = flex_column_runs(item).into_iter().skip(1).flatten().collect();
+            let typed = typed_artists_of(&row_runs);
+            song.artists = if typed.is_empty() { artists.clone() } else { typed };
+            song.album = song.album.or_else(|| Some(album.clone()));
+            song.thumbnail_url = song.thumbnail_url.or_else(|| thumbnail.clone());
+            Some(song)
+        })
+        .collect();
+    Some(AlbumPage { browse_id: browse_id.to_string(), title, subtitle: text_of(header.path(&["subtitle"])), artists, thumbnail_url: thumbnail, playlist_id, songs })
+}
+
+fn canonical_list(url: Option<&str>) -> Option<String> {
+    let rest = &url?[url?.find("list=")? + 5..];
+    let id = rest.split('&').next()?;
+    id.starts_with(ALBUM_PLAYLIST_PREFIX).then(|| id.to_string())
+}
+
+/// アーティストのページ。見出しが無ければ None。
+pub fn artist_page(root: &Value) -> Option<ArtistPage> {
+    let header = root.path(&["header", "musicImmersiveHeaderRenderer"]).or_else(|| root.path(&["header", "musicVisualHeaderRenderer"]))?;
+    let name = text_of(header.path(&["title"]))?;
+    let sections = root.path(&["contents", "singleColumnBrowseResultsRenderer", "tabs", "0", "tabRenderer", "content", "sectionListRenderer", "contents"]).items();
+    let song_shelf = sections.iter().find_map(|s| s.path(&["musicShelfRenderer"]));
+    let all_songs = song_shelf
+        .path(&["title", "runs", "0", "navigationEndpoint", "browseEndpoint", "browseId"])
+        .str_()
+        .or_else(|| song_shelf.path(&["bottomEndpoint", "browseEndpoint", "browseId"]).str_());
+    let album_shelves = sections
+        .iter()
+        .filter_map(|section| {
+            let carousel = section.path(&["musicCarouselShelfRenderer"])?;
+            let albums: Vec<AlbumSummary> = carousel
+                .path(&["contents"])
+                .items()
+                .into_iter()
+                .filter_map(|card| {
+                    let item = card.path(&["musicTwoRowItemRenderer"])?;
+                    let browse = item.path(&["navigationEndpoint", "browseEndpoint"]);
+                    if page_type_of_browse(browse) != Some("MUSIC_PAGE_TYPE_ALBUM") {
+                        return None;
+                    }
+                    Some(AlbumSummary {
+                        browse_id: browse.path(&["browseId"]).str_()?.to_string(),
+                        title: text_of(item.path(&["title"]))?,
+                        subtitle: text_of(item.path(&["subtitle"])),
+                        thumbnail_url: last_thumbnail_url(item.path(&["thumbnailRenderer"])),
+                    })
+                })
+                .collect();
+            (!albums.is_empty()).then(|| AlbumShelf {
+                title: text_of(carousel.path(&["header", "musicCarouselShelfBasicHeaderRenderer", "title"])).unwrap_or_default(),
+                albums,
+            })
+        })
+        .collect();
+    // 動画の棚: カードが曲の再生（watchEndpoint）になっている棚
+    let videos = sections
+        .iter()
+        .flat_map(|section| section.path(&["musicCarouselShelfRenderer", "contents"]).items())
+        .filter_map(|card| {
+            let item = card.path(&["musicTwoRowItemRenderer"]);
+            let watch = item.path(&["navigationEndpoint", "watchEndpoint"]);
+            Some(Song {
+                video_id: watch.path(&["videoId"]).str_()?.to_string(),
+                title: text_of(item.path(&["title"]))?,
+                artists: vec![ArtistRef { name: name.clone(), browse_id: None }],
+                album: None,
+                duration_seconds: None,
+                thumbnail_url: last_thumbnail_url(item.path(&["thumbnailRenderer"])),
+                kind: watch.path(&["watchEndpointMusicSupportedConfigs", "watchEndpointMusicConfig", "musicVideoType"]).str_().map(String::from),
+                is_live: false,
+            })
+        })
+        .collect();
+    Some(ArtistPage {
+        name,
+        thumbnail_url: last_thumbnail_url(header.path(&["thumbnail"])),
+        top_songs: song_shelf.map(shelf_songs).unwrap_or_default(),
+        all_songs_playlist_id: all_songs.and_then(|id| id.strip_prefix("VL")).map(String::from),
+        album_shelves,
+        videos,
+    })
+}
+
 /// 検索・プレイリストの行（musicResponsiveListItemRenderer）。
 pub fn responsive_list_item_song(item: &Value) -> Option<Song> {
     // 地域・権利の都合で再生できない行（グレーアウト）は除く
@@ -368,10 +485,8 @@ fn flex_column_runs(item: &Value) -> Vec<Vec<&Value>> {
         .collect()
 }
 
-/// アーティストの runs。ページ種別が付いていればそれを、無ければ区切り（" • "）の前をアーティストとみなす。
-fn artists_of(runs: &[&Value]) -> Vec<ArtistRef> {
-    let typed: Vec<ArtistRef> = runs
-        .iter()
+fn typed_artists_of(runs: &[&Value]) -> Vec<ArtistRef> {
+    runs.iter()
         .filter(|r| matches!(page_type_of(r), Some(ARTIST_PAGE_TYPE | "MUSIC_PAGE_TYPE_USER_CHANNEL")))
         .filter_map(|run| {
             // チャンネル（USER_CHANNEL）はアーティストのページとして開けないので、名前だけにする
@@ -380,7 +495,12 @@ fn artists_of(runs: &[&Value]) -> Vec<ArtistRef> {
                 .flatten();
             Some(ArtistRef { name: run.path(&["text"]).str_()?.to_string(), browse_id })
         })
-        .collect();
+        .collect()
+}
+
+/// アーティストの runs。ページ種別が付いていればそれを、無ければ区切り（" • "）の前をアーティストとみなす。
+fn artists_of(runs: &[&Value]) -> Vec<ArtistRef> {
+    let typed = typed_artists_of(runs);
     if !typed.is_empty() {
         return typed;
     }
@@ -533,6 +653,41 @@ mod tests {
         let list = playlists(&fixture("browse_home_playlists"));
         assert!(!list.is_empty());
         assert!(list.iter().all(|p| !p.playlist_id.starts_with("VL")));
+    }
+
+    #[test]
+    fn album_page_fills_artists_album_and_artwork() {
+        let page = album_page(&fixture("browse_album"), "MPREb_test").unwrap();
+        assert_eq!(page.songs.len(), 4);
+        assert!(page.playlist_id.as_deref().unwrap().starts_with("OLAK5uy_"));
+        assert_eq!(page.artists.len(), 1);
+        assert!(page.artists[0].browse_id.as_deref().unwrap().starts_with("UC"));
+        for song in &page.songs {
+            assert!(song.duration_seconds.is_some());
+            assert_eq!(song.artists, page.artists);
+            assert_eq!(song.album, Some(AlbumRef { title: page.title.clone(), browse_id: Some("MPREb_test".into()) }));
+            assert_eq!(song.thumbnail_url, page.thumbnail_url);
+        }
+        let text = std::fs::read_to_string(format!("{}/../../core/src/desktopTest/resources/fixtures/browse_album.json", env!("CARGO_MANIFEST_DIR"))).unwrap();
+        let greyed = text.replacen(
+            "\"musicResponsiveListItemRenderer\":{",
+            "\"musicResponsiveListItemRenderer\":{\"musicItemRendererDisplayPolicy\":\"MUSIC_ITEM_RENDERER_DISPLAY_POLICY_GREY_OUT\",",
+            1,
+        );
+        assert_eq!(album_page(&serde_json::from_str(&greyed).unwrap(), "MPREb_test").unwrap().songs.len(), 3);
+    }
+
+    #[test]
+    fn artist_page_shelves() {
+        let page = artist_page(&fixture("browse_artist")).unwrap();
+        assert_eq!(page.top_songs.len(), 5);
+        assert!(page.all_songs_playlist_id.as_deref().unwrap().starts_with("OLAK5uy_"));
+        assert_eq!(page.album_shelves.len(), 2);
+        assert!(page.album_shelves.iter().flat_map(|s| &s.albums).all(|a| a.browse_id.starts_with("MPREb_")));
+        assert_eq!(page.videos.len(), 6);
+        assert!(page.videos.iter().all(|v| v.artists[0].name == page.name));
+        assert!(artist_page(&fixture("browse_album")).is_none());
+        assert!(album_page(&fixture("search_songs"), "MPREb_x").is_none());
     }
 
     #[test]

@@ -60,13 +60,28 @@ pub fn build(repo: MusicRepository, playback: Rc<Playback>) -> (gtk::Widget, Rc<
 
 impl App {
     /// 確かめ用（WAVE_DEMO_QUERY）: その語で検索のページを開き、1曲目から流す。
+    /// WAVE_DEMO_PAGE が artist・album なら、続けてその曲のアーティスト・アルバムのページを開く。
     pub fn demo(self: &Rc<Self>, query: &str) {
         self.push(pages::search(self, query));
         let (app, query) = (self.clone(), query.to_string());
         gtk::glib::spawn_future_local(async move {
             let repo = app.repo.clone();
             if let Ok(page) = runtime::run(async move { repo.search_songs(&query, None).await }).await {
+                let first = page.songs.first().cloned();
                 app.playback.play_list(page.songs, 0);
+                match (std::env::var("WAVE_DEMO_PAGE").as_deref(), first) {
+                    (Ok("artist"), Some(song)) => {
+                        if let Some((id, name)) = song.artists.into_iter().find_map(|a| Some((a.browse_id?, a.name))) {
+                            app.push(pages::artist(&app, &id, &name));
+                        }
+                    }
+                    (Ok("album"), Some(song)) => {
+                        if let Some((id, title)) = song.album.and_then(|a| Some((a.browse_id?, a.title))) {
+                            app.push(pages::album(&app, &id, &title));
+                        }
+                    }
+                    _ => {}
+                }
             }
         });
     }
@@ -184,6 +199,28 @@ fn now_playing(app: &Rc<App>) -> gtk::Widget {
     stack.add_named(&empty, Some("empty"));
     stack.add_named(&gtk::ScrolledWindow::builder().child(&column).hscrollbar_policy(gtk::PolicyType::Never).build(), Some("song"));
 
+    // 曲名を押すとアルバムへ、アーティストを押すとアーティストのページへ（Mac・Windows と同じ）
+    {
+        let app_for_artist = app.clone();
+        let app = app.clone();
+        let click = gtk::GestureClick::new();
+        click.connect_released(move |_, _, _, _| {
+            if let Some(album) = app.playback.current().and_then(|s| s.album).and_then(|a| Some((a.browse_id?, a.title))) {
+                app.push(pages::album(&app, &album.0, &album.1));
+            }
+        });
+        title.add_controller(click);
+        let app = app_for_artist;
+        let click = gtk::GestureClick::new();
+        click.connect_released(move |_, _, _, _| {
+            if let Some((id, name)) = app.playback.current().and_then(|s| s.artists.into_iter().find_map(|a| Some((a.browse_id?, a.name)))) {
+                app.push(pages::artist(&app, &id, &name));
+            }
+        });
+        artist.add_controller(click);
+        title.set_cursor_from_name(Some("pointer"));
+        artist.set_cursor_from_name(Some("pointer"));
+    }
     let refresh = {
         let (app, stack, next_list) = (app.clone(), stack.clone(), next_list.clone());
         move || {

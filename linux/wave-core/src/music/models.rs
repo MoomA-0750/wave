@@ -149,3 +149,32 @@ pub struct UpNextPage {
     pub continuation: Option<String>,
     pub playlist_id: Option<String>,
 }
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AlbumPage {
+    pub browse_id: String,
+    pub title: String,
+    pub subtitle: Option<String>,
+    pub artists: Vec<ArtistRef>,
+    pub thumbnail_url: Option<String>,
+    pub playlist_id: Option<String>,
+    pub songs: Vec<Song>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AlbumShelf {
+    pub title: String,
+    pub albums: Vec<AlbumSummary>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ArtistPage {
+    pub name: String,
+    pub thumbnail_url: Option<String>,
+    pub top_songs: Vec<Song>,
+    /// 「すべての曲」のプレイリスト。
+    pub all_songs_playlist_id: Option<String>,
+    pub album_shelves: Vec<AlbumShelf>,
+    /// 動画の棚（MV・YouTube の動画）。
+    pub videos: Vec<Song>,
+}
