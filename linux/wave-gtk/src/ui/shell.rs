@@ -1104,7 +1104,11 @@ fn player_bar(app: &Rc<App>, side: &gtk::Widget, side_stack: &gtk::Stack) -> gtk
         let player = app.playback.player();
         let (pos, total) = match app.connect.mirror() {
             Some(mirror) => (mirror.position_ms.max(0) as u64, u64::from(mirror.song.duration_seconds.unwrap_or(0)) * 1000),
-            None => (player.position_ms().unwrap_or(0), player.duration_ms().unwrap_or(0)),
+            // 前回のキューを戻しただけのときは、戻した位置と曲の長さを出す
+            None => (
+                app.playback.position_ms(),
+                player.duration_ms().or_else(|| app.playback.current().and_then(|s| s.duration_seconds).map(|d| u64::from(d) * 1000)).unwrap_or(0),
+            ),
         };
         position.set_label(&pages::format_seconds((pos / 1000) as u32));
         duration.set_label(&pages::format_seconds((total / 1000) as u32));

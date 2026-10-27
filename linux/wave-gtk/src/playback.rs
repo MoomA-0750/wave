@@ -108,6 +108,8 @@ pub struct Playback {
     repeat: Cell<Repeat>,
     /// シャッフルを入れる前の並び（項目の ID）。シャッフル中だけ持つ。
     unshuffled: RefCell<Option<Vec<String>>>,
+    /// 前回のキューを戻して、まだ読み込んでいない（再生を押したら、この位置から読み込んで鳴らす）。
+    restored_position: Cell<Option<u64>>,
     /// 曲を頼んだ回数。読み込みの途中で別の曲が頼まれたら、古い方の結果は捨てる。
     request: Cell<u64>,
     listeners: RefCell<Vec<Box<dyn Fn()>>>,
@@ -131,6 +133,7 @@ impl Playback {
             refilling: Cell::default(),
             repeat: Cell::default(),
             unshuffled: RefCell::default(),
+            restored_position: Cell::default(),
             request: Cell::default(),
             listeners: RefCell::default(),
             user_listeners: RefCell::default(),
@@ -265,6 +268,7 @@ impl Playback {
         *self.radio.borrow_mut() = None;
         *self.source_id.borrow_mut() = None;
         self.unshuffled.borrow_mut().take();
+        self.restored_position.set(None);
         self.changed();
     }
 
@@ -361,6 +365,7 @@ impl Playback {
 
     fn start_at(self: &Rc<Self>, index: usize, position_ms: u64, playing: bool) {
         let Some(song) = self.queue.borrow().get(index).map(|i| i.song.clone()) else { return };
+        self.restored_position.set(None);
         self.index.set(Some(index));
         let request = self.request.get() + 1;
         self.request.set(request);
@@ -433,8 +438,14 @@ impl Playback {
         }
     }
 
-    pub fn toggle(&self) {
+    pub fn toggle(self: &Rc<Self>) {
         if self.intercepted(Transport::Toggle) {
+            return;
+        }
+        // 前回のキューを戻しただけなら、ここで読み込んで続きから鳴らす
+        if let (Some(position), Some(index)) = (self.restored_position.get(), self.index.get()) {
+            self.start_at(index, position, true);
+            self.user(UserAction::Resumed);
             return;
         }
         let was_playing = self.player.is_playing();
@@ -446,11 +457,40 @@ impl Playback {
     }
 
     /// 遠隔の再生・一時停止（本人の操作としては知らせない）。
-    pub fn set_playing(&self, playing: bool) {
+    pub fn set_playing(self: &Rc<Self>, playing: bool) {
+        if let (true, Some(position), Some(index)) = (playing, self.restored_position.get(), self.index.get()) {
+            self.start_at(index, position, true);
+            return;
+        }
         if self.current_item().is_some() && self.player.is_playing() != playing {
             self.player.toggle();
             self.changed();
         }
+    }
+
+    /// 前回のキューを戻す（読み込まずに、今の曲と位置だけ置く。再生を押すと続きから鳴らす）。
+    pub fn restore(&self, items: Vec<QueueItem>, index: usize, position_ms: u64, source: QueueSource, repeat: Repeat, unshuffled: Option<Vec<String>>) {
+        if items.get(index).is_none() {
+            return;
+        }
+        *self.queue.borrow_mut() = items;
+        self.index.set(Some(index));
+        *self.source_id.borrow_mut() = source.playlist_id;
+        *self.radio.borrow_mut() = source.radio.then_some((source.radio_playlist_id, source.continuation));
+        self.repeat.set(repeat);
+        *self.unshuffled.borrow_mut() = unshuffled;
+        self.restored_position.set(Some(position_ms));
+        self.changed();
+    }
+
+    /// 次の起動に持ち越す位置（読み込む前なら戻した位置）。
+    pub fn position_ms(&self) -> u64 {
+        self.restored_position.get().unwrap_or_else(|| self.player.position_ms().unwrap_or(0))
+    }
+
+    /// シャッフルを入れる前の並び（保存用）。
+    pub fn unshuffled_order(&self) -> Option<Vec<String>> {
+        self.unshuffled.borrow().clone()
     }
 
     /// 遠隔のキューへの追加: after_item_id の曲の直後、無ければ next なら今の曲の直後、そうでなければ自分で足した曲のかたまりの最後へ。同じ ID がもうあれば入れない。

@@ -8,6 +8,7 @@ mod login;
 mod mpris;
 mod playback;
 mod player;
+mod queue_store;
 mod runtime;
 mod settings;
 mod ui;
@@ -91,10 +92,13 @@ async fn show_home(toolbar: &adw::ToolbarView, repo: &MusicRepository) {
     let playback = playback::Playback::new(player::Player::new(resolver, Some(downloads.store())), repo.clone());
     // 聴いた曲を数える（スマートダウンロードの「いつも聴いている」に使う）
     downloads.track_listens(&playback);
+    // 前回のキューを戻し、以後は変わるたびに書く（同じログインのときだけ）
+    queue_store::attach(&playback, repo.client().obtained_at());
     let on_logout: std::rc::Rc<dyn Fn()> = {
         let (toolbar, repo, playback, downloads) = (toolbar.clone(), repo.clone(), playback.clone(), downloads.clone());
         std::rc::Rc::new(move || {
             playback.clear();
+            queue_store::clear();
             // ログアウトしたら、取った曲と Claude との会話も消す（ほかの端末と同じ）
             downloads.clear();
             if let Some(app) = APP.with(|a| a.borrow().clone()) {

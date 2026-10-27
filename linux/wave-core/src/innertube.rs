@@ -76,6 +76,11 @@ impl InnerTube {
         self.state.read().unwrap().credentials.is_some()
     }
 
+    /// 今のログインの取得時刻（ログインしていなければ None）。キューを持ち越すときに、同じログインかを見る。
+    pub fn obtained_at(&self) -> Option<i64> {
+        self.state.read().unwrap().credentials.as_ref().map(|c| c.obtained_at_epoch_ms)
+    }
+
     /// 今のログインの世代（ログイン・ログアウトのたびに変わる）。
     pub fn generation(&self) -> u64 {
         self.state.read().unwrap().generation
