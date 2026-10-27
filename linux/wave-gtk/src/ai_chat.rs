@@ -8,6 +8,7 @@ use std::rc::Rc;
 use serde_json::{Value, json};
 use tokio::sync::mpsc;
 use wave_core::ai::bridge::{Bridge, BridgeConfig, BridgeEvent};
+use wave_core::ai::history::{self, Conversation, SavedMessage};
 use wave_core::ai::spec::AgentSpec;
 use wave_core::ai::text;
 use wave_core::lyrics::service::LyricsResult;
@@ -29,7 +30,6 @@ pub enum AiMessage {
     Failure(String),
 }
 
-#[derive(Default)]
 pub struct AiChat {
     pub messages: RefCell<Vec<AiMessage>>,
     pub running: Cell<bool>,
@@ -39,9 +39,119 @@ pub struct AiChat {
     /// 会話の世代。止めた・新しい会話にしたら変え、古い流れの結果を捨てる。
     generation: Cell<u64>,
     listeners: RefCell<Vec<Box<dyn Fn()>>>,
+    /// 今の会話の id（新しい会話ごとに変わる。履歴から開けばその会話の id）と、始めた時刻。
+    conversation_id: RefCell<String>,
+    created_at_ms: Cell<i64>,
+    /// これまでの会話（~/.local/share/wave/ai_history.json。新しく話した順）。
+    pub history: RefCell<Vec<Conversation>>,
+}
+
+fn history_path() -> std::path::PathBuf {
+    gtk::glib::user_data_dir().join("wave").join("ai_history.json")
+}
+
+fn now_ms() -> i64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as i64).unwrap_or(0)
+}
+
+fn new_id() -> String {
+    format!("{:x}-{:x}", now_ms(), std::process::id())
+}
+
+impl Default for AiChat {
+    fn default() -> Self {
+        let history = std::fs::read_to_string(history_path()).map(|t| history::decode(&t)).unwrap_or_default();
+        Self {
+            messages: RefCell::default(),
+            running: Cell::default(),
+            config: RefCell::default(),
+            known: RefCell::default(),
+            task: RefCell::default(),
+            generation: Cell::default(),
+            listeners: RefCell::default(),
+            conversation_id: RefCell::new(new_id()),
+            created_at_ms: Cell::new(now_ms()),
+            history: RefCell::new(history),
+        }
+    }
 }
 
 impl AiChat {
+    /// 今の会話を履歴に残す（自分の発言が無ければ残さない）。
+    fn archive(&self) {
+        let saved: Vec<SavedMessage> = self.messages.borrow().iter().map(saved_of).collect();
+        if !saved.iter().any(|m| m.kind == history::USER) {
+            return;
+        }
+        let conversation = Conversation {
+            id: self.conversation_id.borrow().clone(),
+            title: history::title(&saved),
+            created_at_ms: self.created_at_ms.get(),
+            updated_at_ms: now_ms(),
+            messages: saved,
+        };
+        let list = history::upsert(&self.history.borrow(), conversation);
+        self.write_history(list);
+    }
+
+    fn write_history(&self, list: Vec<Conversation>) {
+        let path = history_path();
+        let written = if list.is_empty() {
+            std::fs::remove_file(&path).or_else(|e| if e.kind() == std::io::ErrorKind::NotFound { Ok(()) } else { Err(e) })
+        } else {
+            std::fs::create_dir_all(path.parent().unwrap())
+                .and_then(|_| std::fs::write(path.with_extension("json.tmp"), history::encode(&list)))
+                .and_then(|_| std::fs::rename(path.with_extension("json.tmp"), &path))
+        };
+        if let Err(e) = written {
+            eprintln!("ai history save failed: {}", e.kind());
+        }
+        *self.history.borrow_mut() = list;
+    }
+
+    /// 履歴の会話を開いて続ける。
+    pub fn open(&self, id: &str) {
+        let Some(conversation) = self.history.borrow().iter().find(|c| c.id == id).cloned() else { return };
+        self.stop();
+        self.archive();
+        let messages: Vec<AiMessage> = conversation.messages.iter().filter_map(message_of).collect();
+        for message in &messages {
+            if let AiMessage::Songs(songs) = message {
+                songs.iter().for_each(|s| self.remember(s));
+            }
+        }
+        *self.messages.borrow_mut() = messages;
+        *self.conversation_id.borrow_mut() = conversation.id;
+        self.created_at_ms.set(conversation.created_at_ms);
+        self.changed();
+    }
+
+    /// 履歴から消す。開いている会話なら、新しい会話にする。
+    pub fn delete(&self, id: &str) {
+        if *self.conversation_id.borrow() == id {
+            self.stop();
+            self.reset();
+        }
+        let list = history::remove(&self.history.borrow(), id);
+        self.write_history(list);
+        self.changed();
+    }
+
+    /// ログアウトのとき: 今の会話も履歴も消す。
+    pub fn wipe(&self) {
+        self.stop();
+        self.write_history(Vec::new());
+        self.reset();
+    }
+
+    fn reset(&self) {
+        self.messages.borrow_mut().clear();
+        self.known.borrow_mut().clear();
+        *self.conversation_id.borrow_mut() = new_id();
+        self.created_at_ms.set(now_ms());
+        self.changed();
+    }
+
     pub fn on_change(&self, listener: impl Fn() + 'static) {
         self.listeners.borrow_mut().push(Box::new(listener));
     }
@@ -95,12 +205,11 @@ impl AiChat {
         self.changed();
     }
 
-    /// 新しい会話にする。
+    /// 新しい会話にする（今の会話は履歴に残す）。
     pub fn clear(&self) {
         self.stop();
-        self.messages.borrow_mut().clear();
-        self.known.borrow_mut().clear();
-        self.changed();
+        self.archive();
+        self.reset();
     }
 
     fn push(&self, message: AiMessage) {
@@ -129,6 +238,7 @@ impl AiChat {
             })
             .collect();
         self.push(AiMessage::User(task.clone()));
+        self.archive();
         let Some(config) = self.config.borrow().clone() else {
             self.push(AiMessage::Failure("Claude につないでいません。右上の「つなぐ」から、中継の接続の文字列を貼ってください。".into()));
             return;
@@ -139,8 +249,10 @@ impl AiChat {
         let (this, app) = (self.clone(), app.clone());
         gtk::glib::spawn_future_local(async move {
             this.run(&app, Bridge::new(config), task, history, generation).await;
+            // 止めたあとに別の会話へ移っていれば、そちらには触れない
             if this.generation.get() == generation {
                 this.running.set(false);
+                this.archive();
                 this.changed();
             }
         });
@@ -357,6 +469,28 @@ impl AiChat {
             _ => (Err(format!("unknown tool: {name}")), None),
         }
     }
+}
+
+fn saved_of(message: &AiMessage) -> SavedMessage {
+    let plain = |kind: &str, text: &str| SavedMessage { kind: kind.into(), text: text.into(), video_id: None, songs: None };
+    match message {
+        AiMessage::User(t) => plain(history::USER, t),
+        AiMessage::Assistant(t, video) => SavedMessage { video_id: video.clone(), ..plain(history::ASSISTANT, t) },
+        AiMessage::Action(t) => plain(history::ACTION, t),
+        AiMessage::Songs(songs) => SavedMessage { songs: Some(songs.clone()), ..plain(history::SONGS, "") },
+        AiMessage::Failure(t) => plain(history::FAILURE, t),
+    }
+}
+
+fn message_of(saved: &SavedMessage) -> Option<AiMessage> {
+    Some(match saved.kind.as_str() {
+        history::USER => AiMessage::User(saved.text.clone()),
+        history::ASSISTANT => AiMessage::Assistant(saved.text.clone(), saved.video_id.clone()),
+        history::ACTION => AiMessage::Action(saved.text.clone()),
+        history::SONGS => AiMessage::Songs(saved.songs.clone().filter(|s| !s.is_empty())?),
+        history::FAILURE => AiMessage::Failure(saved.text.clone()),
+        _ => return None,
+    })
 }
 
 async fn lyrics_of(app: &Rc<App>, song: &Song) -> Option<wave_core::lyrics::SongLyrics> {

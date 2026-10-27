@@ -66,6 +66,7 @@ fn conversation(app: &Rc<App>) -> gtk::Widget {
     let unpair = gtk::Button::builder().icon_name("network-offline-symbolic").tooltip_text("つなぎ先を外す").css_classes(["flat", "circular"]).build();
     let header = gtk::Box::builder().spacing(4).margin_top(12).margin_start(16).margin_end(8).build();
     header.append(&title);
+    header.append(&history_button(app));
     header.append(&new_chat);
     header.append(&unpair);
 
@@ -183,6 +184,42 @@ fn message_widget(app: &Rc<App>, message: AiMessage) -> gtk::Widget {
         AiMessage::Songs(songs) => pages::song_list(app, songs).upcast(),
         AiMessage::Failure(text) => gtk::Label::builder().label(text).wrap(true).xalign(0.0).css_classes(["error"]).build().upcast(),
     }
+}
+
+/// これまでの会話（押すと開いて続ける。右の × で消す）。
+fn history_button(app: &Rc<App>) -> gtk::MenuButton {
+    // 題名が読める幅にする（決めないと題名が1文字まで縮む）
+    let list = gtk::ListBox::builder().selection_mode(gtk::SelectionMode::None).width_request(320).css_classes(["navigation-sidebar"]).build();
+    let scroller = gtk::ScrolledWindow::builder().child(&list).propagate_natural_height(true).propagate_natural_width(true).max_content_height(420).hscrollbar_policy(gtk::PolicyType::Never).build();
+    let popover = gtk::Popover::builder().child(&scroller).build();
+    let button = gtk::MenuButton::builder().icon_name("document-open-recent-symbolic").tooltip_text("これまでの会話").popover(&popover).css_classes(["flat", "circular"]).build();
+    let app = app.clone();
+    popover.connect_show(move |popover| {
+        while let Some(row) = list.first_child() {
+            list.remove(&row);
+        }
+        let conversations = app.ai.history.borrow().clone();
+        if conversations.is_empty() {
+            list.append(&gtk::Label::builder().label("まだ会話はありません").margin_top(12).margin_bottom(12).css_classes(["dim-label"]).build());
+        }
+        for c in conversations {
+            let row = adw::ActionRow::builder().title(gtk::glib::markup_escape_text(&c.title)).title_lines(2).activatable(true).build();
+            let delete = gtk::Button::builder().icon_name("user-trash-symbolic").tooltip_text("消す").valign(gtk::Align::Center).css_classes(["flat", "circular"]).build();
+            row.add_suffix(&delete);
+            let (app_open, id_open, pop) = (app.clone(), c.id.clone(), popover.clone());
+            row.connect_activated(move |_| {
+                app_open.ai.open(&id_open);
+                pop.popdown();
+            });
+            let (app_del, id_del, pop) = (app.clone(), c.id.clone(), popover.clone());
+            delete.connect_clicked(move |_| {
+                app_del.ai.delete(&id_del);
+                pop.popdown();
+            });
+            list.append(&row);
+        }
+    });
+    button
 }
 
 /// 答えを Pango の書式にする（そのままの文字は逃がし、[mm:ss] だけを押せるリンクにする）。

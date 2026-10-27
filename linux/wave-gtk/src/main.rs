@@ -91,8 +91,11 @@ async fn show_home(toolbar: &adw::ToolbarView, repo: &MusicRepository) {
         let (toolbar, repo, playback, downloads) = (toolbar.clone(), repo.clone(), playback.clone(), downloads.clone());
         std::rc::Rc::new(move || {
             playback.clear();
-            // ログアウトしたら、取った曲も消す（ほかの端末と同じ）
+            // ログアウトしたら、取った曲と Claude との会話も消す（ほかの端末と同じ）
             downloads.clear();
+            if let Some(app) = APP.with(|a| a.borrow().clone()) {
+                app.ai.wipe();
+            }
             let (toolbar, repo) = (toolbar.clone(), repo.clone());
             gtk::glib::spawn_future_local(async move {
                 keyring::delete().await;
@@ -123,6 +126,7 @@ async fn show_home(toolbar: &adw::ToolbarView, repo: &MusicRepository) {
         let started = mpris::start(playback, move || raise.present(), move || quit.close());
         MPRIS.with(|m| *m.borrow_mut() = Some(started));
     }
+    APP.with(|a| *a.borrow_mut() = Some(app.clone()));
     if let Ok(query) = std::env::var("WAVE_DEMO_QUERY") {
         app.demo(&query);
     }
@@ -135,6 +139,8 @@ async fn show_home(toolbar: &adw::ToolbarView, repo: &MusicRepository) {
 thread_local! {
     /// 窓（ログアウトして入れ物に戻すとき、入れ物はもう窓に付いていないので覚えておく）。
     static WINDOW: std::cell::RefCell<Option<adw::ApplicationWindow>> = const { std::cell::RefCell::new(None) };
+    /// 今の画面の中身（ログアウトのときに Claude の履歴を消すのに使う）。
+    static APP: std::cell::RefCell<Option<std::rc::Rc<ui::shell::App>>> = const { std::cell::RefCell::new(None) };
     /// GNOME のメディアの操作への口（1つだけ）。
     static MPRIS: std::cell::RefCell<Option<std::rc::Rc<mpris::Mpris>>> = const { std::cell::RefCell::new(None) };
 }

@@ -3,5 +3,6 @@
 //! 入れた頼みの文を送る。道具の呼び出しはアプリの側で行う。YouTube の認証情報は中継へ送らない（別のクライアントを使う）。
 
 pub mod bridge;
+pub mod history;
 pub mod spec;
 pub mod text;
