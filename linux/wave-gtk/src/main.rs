@@ -2,6 +2,7 @@
 
 mod keyring;
 mod login;
+mod mpris;
 mod playback;
 mod player;
 mod runtime;
@@ -78,7 +79,15 @@ fn show_login(window: &adw::ApplicationWindow, toolbar: &adw::ToolbarView, repo:
 async fn show_home(toolbar: &adw::ToolbarView, repo: &MusicRepository) {
     let resolver = StreamResolver::new(repo.client().clone(), PlayerCipherProvider::default());
     let playback = playback::Playback::new(player::Player::new(resolver), repo.clone());
-    let (shell, app) = ui::shell::build(repo.clone(), playback);
+    let (shell, app) = ui::shell::build(repo.clone(), playback.clone());
+    if let Some(window) = toolbar.root().and_downcast::<adw::ApplicationWindow>() {
+        // GNOME のメディアの操作・メディアキーから操作できるようにする（窓がある間だけ出す）
+        let (raise, quit) = (window.clone(), window.clone());
+        let mpris = mpris::start(playback, move || raise.present(), move || quit.close());
+        window.connect_destroy(move |_| {
+            let _ = &mpris;
+        });
+    }
     if let Ok(query) = std::env::var("WAVE_DEMO_QUERY") {
         app.demo(&query);
     }

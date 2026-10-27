@@ -900,3 +900,4 @@
 - ホームの横に流れる棚は、ScrolledWindow が中身の高さを測らず2行目の補足が切れたので、propagate_natural_height を付ける
 - 下の帯の再生のボタンは、左右を SizeGroup で同じ幅にして窓の中央に置く。中央（シークバー）と左右の合計が窓に収まらないと中央からずれる（1280px の窓で 12px ずれた）ので、曲名を 22 文字・シークバーを 420px にした
 - 見えない画面では押せないので、確かめるときだけ WAVE_DEMO_QUERY で「その語で検索して1曲目から流す」を指示できる
+- GNOME のメディアの操作・メディアキーは MPRIS（org.mpris.MediaPlayer2.wave）で受ける。部品を足さず gio の D-Bus で直に出す。再生の状態は GStreamer から遅れて届くので、変化の知らせに加えて 0.5 秒ごとにも見て、変わったときだけ PropertiesChanged を出す。trackid は videoId の - を _ に替える（D-Bus のパスに - は使えない）
