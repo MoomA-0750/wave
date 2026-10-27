@@ -244,3 +244,16 @@ impl MusicVideo {
             .map(|s| s.counterpart_start_ms + (position_ms - s.primary_start_ms))
     }
 }
+
+/// 確かめたログインのアカウント（端末の連携の照合に使う）。id は DATASYNC_ID なので、外へ送らない・ログに出さない。
+#[derive(Clone, PartialEq, Eq)]
+pub struct VerifiedAccount {
+    pub generation: u64,
+    pub id: String,
+}
+
+impl std::fmt::Debug for VerifiedAccount {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "VerifiedAccount(generation={})", self.generation)
+    }
+}

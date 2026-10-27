@@ -1,5 +1,6 @@
 //! 再生の流れ（主スレッド）: キュー・今の曲・次と前・曲の終わりで次へ・キューの終わりでラジオを継ぎ足す。
 //! 画面は on_change に登録して、変わるたびに描き直す。
+//! キューの曲には項目の ID を振る（端末の連携で、ほかの端末と同じ曲を指すのに使う）。
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -15,17 +16,92 @@ const RESTART_THRESHOLD_MS: u64 = 3000;
 /// 残りがこれ以下になったらラジオを継ぎ足す。
 const RADIO_REFILL_LEFT: usize = 2;
 
+/// キューの曲がどこから来たか（ほかの端末と同じ区別）。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Origin {
+    /// 選んだ一覧・アルバムの曲。
+    Source,
+    /// ラジオで継ぎ足した曲。
+    Suggestion,
+    /// 「次に再生」「キューに追加」で足した曲。
+    UserAdded,
+}
+
+#[derive(Clone, Debug)]
+pub struct QueueItem {
+    pub song: Song,
+    pub item_id: String,
+    pub origin: Origin,
+}
+
+impl QueueItem {
+    pub fn new(song: Song, origin: Origin) -> Self {
+        Self { song, item_id: new_item_id(), origin }
+    }
+}
+
+/// 項目の ID（UUID v4 の形）。
+pub fn new_item_id() -> String {
+    let mut b = [0u8; 16];
+    getrandom::fill(&mut b).expect("the OS random source");
+    b[6] = (b[6] & 0x0f) | 0x40;
+    b[8] = (b[8] & 0x3f) | 0x80;
+    let h = hex::encode(b);
+    format!("{}-{}-{}-{}-{}", &h[0..8], &h[8..12], &h[12..16], &h[16..20], &h[20..32])
+}
+
+/// 手元の操作のうち、ほかの端末を操作している間は、その端末への命令にするもの。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Transport {
+    Toggle,
+    Next,
+    Previous,
+}
+
+/// 本人が手元で再生を始めた・止めたことの知らせ（端末の連携が、家の再生を引き受けるのに使う）。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum UserAction {
+    /// 曲を選んだ（キューを置き換えた・飛んだ）。
+    Selected,
+    /// 再生ボタンで再開した。
+    Resumed,
+    Paused,
+}
+
+/// ラジオ・一覧の出どころ（ほかの端末に渡すキューに入れる）。
+#[derive(Clone, Debug, Default)]
+pub struct QueueSource {
+    /// 一覧（プレイリスト・アルバム）の ID。
+    pub playlist_id: Option<String>,
+    /// ラジオを続けているか（続けていれば最初の曲が種）。
+    pub radio: bool,
+    pub radio_playlist_id: Option<String>,
+    pub continuation: Option<String>,
+}
+
+type UserListeners = RefCell<Vec<Box<dyn Fn(UserAction)>>>;
+type Interceptor = Box<dyn Fn(Transport) -> bool>;
+/// 曲と「次に再生」か。true を返したら手元のキューには入れない。
+type QueueInterceptor = Box<dyn Fn(&Song, bool) -> bool>;
+
 pub struct Playback {
     player: Player,
     repo: MusicRepository,
-    queue: RefCell<Vec<Song>>,
+    queue: RefCell<Vec<QueueItem>>,
     index: Cell<Option<usize>>,
     /// ラジオの続き（RDAMVM の流れ）。無ければ最初の曲から始める。
     radio: RefCell<Option<(Option<String>, Option<String>)>>,
+    /// 選んだ一覧の ID（ほかの端末に渡す出どころ）。
+    source_id: RefCell<Option<String>>,
     refilling: Cell<bool>,
     /// 曲を頼んだ回数。読み込みの途中で別の曲が頼まれたら、古い方の結果は捨てる。
     request: Cell<u64>,
     listeners: RefCell<Vec<Box<dyn Fn()>>>,
+    user_listeners: UserListeners,
+    /// ほかの端末を操作している間に、手元の再生・次・前を横取りする（true を返したら手元では何もしない）。
+    interceptor: RefCell<Option<Interceptor>>,
+    /// ほかの端末を操作している間に、「次に再生」「キューに追加」をその端末のキューへの追加にする。
+    queue_interceptor: RefCell<Option<QueueInterceptor>>,
     _watch: RefCell<Option<gst::bus::BusWatchGuard>>,
 }
 
@@ -37,9 +113,13 @@ impl Playback {
             queue: RefCell::default(),
             index: Cell::default(),
             radio: RefCell::default(),
+            source_id: RefCell::default(),
             refilling: Cell::default(),
             request: Cell::default(),
             listeners: RefCell::default(),
+            user_listeners: RefCell::default(),
+            interceptor: RefCell::default(),
+            queue_interceptor: RefCell::default(),
             _watch: RefCell::default(),
         });
         let weak = Rc::downgrade(&playback);
@@ -48,7 +128,7 @@ impl Playback {
                 if failed {
                     eprintln!("song failed, skipping");
                 }
-                playback.next();
+                playback.advance();
             }
         });
         *playback._watch.borrow_mut() = Some(watch);
@@ -63,6 +143,33 @@ impl Playback {
         self.listeners.borrow_mut().push(Box::new(listener));
     }
 
+    /// 本人の手元の操作（曲を選んだ・再開した・止めた）を聞く。
+    pub fn on_user(&self, listener: impl Fn(UserAction) + 'static) {
+        self.user_listeners.borrow_mut().push(Box::new(listener));
+    }
+
+    pub fn set_interceptor(&self, interceptor: Option<Interceptor>) {
+        *self.interceptor.borrow_mut() = interceptor;
+    }
+
+    pub fn set_queue_interceptor(&self, interceptor: Option<QueueInterceptor>) {
+        *self.queue_interceptor.borrow_mut() = interceptor;
+    }
+
+    fn queue_intercepted(&self, song: &Song, next: bool) -> bool {
+        self.queue_interceptor.borrow().as_ref().is_some_and(|f| f(song, next))
+    }
+
+    fn intercepted(&self, transport: Transport) -> bool {
+        self.interceptor.borrow().as_ref().is_some_and(|f| f(transport))
+    }
+
+    fn user(&self, action: UserAction) {
+        for listener in self.user_listeners.borrow().iter() {
+            listener(action);
+        }
+    }
+
     fn changed(&self) {
         for listener in self.listeners.borrow().iter() {
             listener();
@@ -70,19 +177,26 @@ impl Playback {
     }
 
     pub fn current(&self) -> Option<Song> {
+        self.current_item().map(|i| i.song)
+    }
+
+    pub fn current_item(&self) -> Option<QueueItem> {
         self.index.get().and_then(|i| self.queue.borrow().get(i).cloned())
     }
 
     pub fn upcoming(&self) -> Vec<Song> {
         let start = self.index.get().map_or(0, |i| i + 1);
-        self.queue.borrow().iter().skip(start).cloned().collect()
+        self.queue.borrow().iter().skip(start).map(|i| i.song.clone()).collect()
     }
 
     /// 今の曲のすぐ後に入れる（何も鳴っていなければ、その曲から流す）。
     pub fn play_next(self: &Rc<Self>, song: Song) {
+        if self.queue_intercepted(&song, true) {
+            return;
+        }
         match self.index.get() {
             Some(i) => {
-                self.queue.borrow_mut().insert(i + 1, song);
+                self.queue.borrow_mut().insert(i + 1, QueueItem::new(song, Origin::UserAdded));
                 self.changed();
             }
             None => self.play_list(vec![song], 0),
@@ -91,17 +205,35 @@ impl Playback {
 
     /// キューの最後に入れる（何も鳴っていなければ、その曲から流す）。ラジオの曲より前に入れる作りにはしない（Windows と同じく後ろ）。
     pub fn add_to_queue(self: &Rc<Self>, song: Song) {
+        if self.queue_intercepted(&song, false) {
+            return;
+        }
         if self.index.get().is_none() {
             self.play_list(vec![song], 0);
             return;
         }
-        self.queue.borrow_mut().push(song);
+        self.queue.borrow_mut().push(QueueItem::new(song, Origin::UserAdded));
         self.changed();
     }
 
     /// キューの全部と、今の曲の位置。
     pub fn queue(&self) -> (Vec<Song>, Option<usize>) {
+        (self.queue.borrow().iter().map(|i| i.song.clone()).collect(), self.index.get())
+    }
+
+    /// キューの項目（ID つき）と、今の曲の位置。
+    pub fn queue_items(&self) -> (Vec<QueueItem>, Option<usize>) {
         (self.queue.borrow().clone(), self.index.get())
+    }
+
+    pub fn source(&self) -> QueueSource {
+        let radio = self.radio.borrow().clone();
+        QueueSource {
+            playlist_id: self.source_id.borrow().clone(),
+            radio: radio.is_some(),
+            radio_playlist_id: radio.as_ref().and_then(|r| r.0.clone()),
+            continuation: radio.and_then(|r| r.1),
+        }
     }
 
     /// ログアウトしたときなど: 止めてキューを空にする。
@@ -111,6 +243,7 @@ impl Playback {
         self.queue.borrow_mut().clear();
         self.index.set(None);
         *self.radio.borrow_mut() = None;
+        *self.source_id.borrow_mut() = None;
         self.changed();
     }
 
@@ -120,37 +253,64 @@ impl Playback {
 
     /// songs を新しいキューにして、index の曲から鳴らす。1曲だけなら、その曲のラジオを続ける（Android・Windows と同じ）。
     pub fn play_list(self: &Rc<Self>, songs: Vec<Song>, index: usize) {
+        self.play_list_from(songs, index, None);
+    }
+
+    /// 一覧（プレイリスト・アルバム）から鳴らす。source_id はほかの端末に渡す出どころ。
+    pub fn play_list_from(self: &Rc<Self>, songs: Vec<Song>, index: usize, source_id: Option<String>) {
         if songs.is_empty() {
             return;
         }
         let single = songs.len() == 1;
-        *self.radio.borrow_mut() = single.then(|| (None, None));
-        *self.queue.borrow_mut() = songs;
-        self.play_at(index);
+        *self.radio.borrow_mut() = single.then_some((None, None));
+        *self.source_id.borrow_mut() = source_id;
+        *self.queue.borrow_mut() = songs.into_iter().map(|s| QueueItem::new(s, Origin::Source)).collect();
+        self.start_at(index, 0, true);
+        self.user(UserAction::Selected);
         if single {
             self.refill();
         }
     }
 
+    /// 本人がキューの曲を選んだ。
     pub fn play_at(self: &Rc<Self>, index: usize) {
-        let Some(song) = self.queue.borrow().get(index).cloned() else { return };
+        self.start_at(index, 0, true);
+        self.user(UserAction::Selected);
+    }
+
+    /// ほかの端末から引き取ったキューを、position_ms から鳴らす（playing でなければ止めたまま用意する）。本人の操作としては知らせない。
+    pub fn adopt(self: &Rc<Self>, items: Vec<QueueItem>, index: usize, position_ms: u64, playing: bool, source: QueueSource) {
+        if items.get(index).is_none() {
+            return;
+        }
+        *self.queue.borrow_mut() = items;
+        *self.source_id.borrow_mut() = source.playlist_id;
+        *self.radio.borrow_mut() = source.radio.then_some((source.radio_playlist_id, source.continuation));
+        self.start_at(index, position_ms, playing);
+    }
+
+    fn start_at(self: &Rc<Self>, index: usize, position_ms: u64, playing: bool) {
+        let Some(song) = self.queue.borrow().get(index).map(|i| i.song.clone()) else { return };
         self.index.set(Some(index));
         let request = self.request.get() + 1;
         self.request.set(request);
         self.changed();
         let this = self.clone();
         gtk::glib::spawn_future_local(async move {
-            let result = this.player.play(&song.video_id).await;
+            let result = this.player.play_from(&song.video_id, position_ms, playing).await;
             if this.request.get() != request {
                 return;
             }
-            if let Err(e) = result {
-                eprintln!("play failed: {e}");
-                // その曲だけの失敗なら次へ。どの曲でも起きる失敗では止める（飛ばし続けない）
-                if e.is_this_song_only() {
-                    this.next();
-                    return;
+            match result {
+                Err(e) => {
+                    eprintln!("play failed: {e}");
+                    // その曲だけの失敗なら次へ。どの曲でも起きる失敗では止める（飛ばし続けない）
+                    if e.is_this_song_only() {
+                        this.advance();
+                        return;
+                    }
                 }
+                Ok(()) => {}
             }
             this.changed();
             if this.upcoming().len() <= RADIO_REFILL_LEFT {
@@ -159,9 +319,21 @@ impl Playback {
         });
     }
 
+    /// 次へ（本人の操作。ほかの端末を操作している間は、その端末への命令になる）。
     pub fn next(self: &Rc<Self>) {
+        if self.intercepted(Transport::Next) {
+            return;
+        }
+        self.advance();
+        if self.index.get().is_some() {
+            self.user(UserAction::Selected);
+        }
+    }
+
+    /// 曲の終わり・失敗・遠隔の「次へ」。
+    pub fn advance(self: &Rc<Self>) {
         match self.index.get() {
-            Some(i) if i + 1 < self.queue.borrow().len() => self.play_at(i + 1),
+            Some(i) if i + 1 < self.queue.borrow().len() => self.start_at(i + 1, 0, true),
             _ => {
                 self.player.stop();
                 self.changed();
@@ -170,19 +342,129 @@ impl Playback {
     }
 
     pub fn previous(self: &Rc<Self>) {
+        if self.intercepted(Transport::Previous) {
+            return;
+        }
+        self.back();
+    }
+
+    /// 前へ（遠隔の「前へ」もここ）。
+    pub fn back(self: &Rc<Self>) {
         if self.player.position_ms().unwrap_or(0) > RESTART_THRESHOLD_MS {
             self.player.seek_ms(0);
+            self.changed();
             return;
         }
         match self.index.get() {
-            Some(i) if i > 0 => self.play_at(i - 1),
-            _ => self.player.seek_ms(0),
+            Some(i) if i > 0 => self.start_at(i - 1, 0, true),
+            _ => {
+                self.player.seek_ms(0);
+                self.changed();
+            }
         }
     }
 
     pub fn toggle(&self) {
+        if self.intercepted(Transport::Toggle) {
+            return;
+        }
+        let was_playing = self.player.is_playing();
         self.player.toggle();
         self.changed();
+        if self.current_item().is_some() {
+            self.user(if was_playing { UserAction::Paused } else { UserAction::Resumed });
+        }
+    }
+
+    /// 遠隔の再生・一時停止（本人の操作としては知らせない）。
+    pub fn set_playing(&self, playing: bool) {
+        if self.current_item().is_some() && self.player.is_playing() != playing {
+            self.player.toggle();
+            self.changed();
+        }
+    }
+
+    /// 遠隔のキューへの追加: after_item_id の曲の直後、無ければ next なら今の曲の直後、そうでなければ自分で足した曲のかたまりの最後へ。同じ ID がもうあれば入れない。
+    pub fn insert_items(&self, items: Vec<QueueItem>, next: bool, after_item_id: Option<&str>) -> bool {
+        let Some(current) = self.index.get() else { return false };
+        let mut queue = self.queue.borrow_mut();
+        let fresh: Vec<QueueItem> = items.into_iter().filter(|i| !queue.iter().any(|q| q.item_id == i.item_id)).collect();
+        if fresh.is_empty() {
+            return false;
+        }
+        let after = after_item_id.and_then(|id| queue.iter().position(|q| q.item_id == id)).filter(|&p| p >= current);
+        let at = match after {
+            Some(p) => p + 1,
+            None if next => current + 1,
+            None => {
+                // 今の曲の後ろに続く、足した曲のかたまりの最後
+                let mut p = current + 1;
+                while queue.get(p).is_some_and(|q| q.origin == Origin::UserAdded) {
+                    p += 1;
+                }
+                p
+            }
+        };
+        let at = at.min(queue.len());
+        for (offset, item) in fresh.into_iter().enumerate() {
+            queue.insert(at + offset, item);
+        }
+        drop(queue);
+        self.changed();
+        true
+    }
+
+    /// 遠隔の並べ替え: item_id の曲（今の曲より後ろ）を after_item_id の曲の直後（無ければ今の曲の直後）へ。
+    pub fn move_item(&self, item_id: &str, after_item_id: Option<&str>) -> bool {
+        let Some(current) = self.index.get() else { return false };
+        let mut queue = self.queue.borrow_mut();
+        let Some(from) = queue.iter().position(|q| q.item_id == item_id).filter(|&p| p > current) else { return false };
+        let item = queue.remove(from);
+        let at = match after_item_id {
+            Some(id) => match queue.iter().position(|q| q.item_id == id).filter(|&p| p >= current) {
+                Some(p) => p + 1,
+                None => {
+                    queue.insert(from, item);
+                    return false;
+                }
+            },
+            None => current + 1,
+        };
+        queue.insert(at, item);
+        drop(queue);
+        self.changed();
+        true
+    }
+
+    /// 遠隔のキューから外す: 今の曲より後ろにある item_ids の曲だけ。
+    pub fn remove_items(&self, item_ids: &[String]) -> bool {
+        let Some(current) = self.index.get() else { return false };
+        let mut queue = self.queue.borrow_mut();
+        let before = queue.len();
+        let mut position = 0;
+        queue.retain(|q| {
+            let keep = position <= current || !item_ids.contains(&q.item_id);
+            position += 1;
+            keep
+        });
+        let removed = queue.len() != before;
+        drop(queue);
+        if removed {
+            self.changed();
+        }
+        removed
+    }
+
+    /// 遠隔の「次に流れる曲」の消去（今の曲が current_item_id のときだけ）。ラジオも止める。
+    pub fn clear_flow(&self, current_item_id: &str) -> bool {
+        let Some(current) = self.index.get() else { return false };
+        if self.queue.borrow().get(current).map(|q| q.item_id.as_str()) != Some(current_item_id) {
+            return false;
+        }
+        self.queue.borrow_mut().truncate(current + 1);
+        *self.radio.borrow_mut() = None;
+        self.changed();
+        true
     }
 
     /// ラジオの曲をキューの後ろに足す（ラジオを続けているときだけ）。
@@ -191,7 +473,7 @@ impl Playback {
         if self.refilling.replace(true) {
             return;
         }
-        let seed = self.queue.borrow().first().map(|s| s.video_id.clone());
+        let seed = self.queue.borrow().first().map(|s| s.song.video_id.clone());
         let repo = self.repo.clone();
         let this = self.clone();
         gtk::glib::spawn_future_local(async move {
@@ -205,11 +487,25 @@ impl Playback {
                 return;
             }
             let mut queue = this.queue.borrow_mut();
-            let fresh: Vec<Song> = page.songs.into_iter().filter(|s| !queue.iter().any(|q| q.video_id == s.video_id)).collect();
+            let fresh: Vec<QueueItem> =
+                page.songs.into_iter().filter(|s| !queue.iter().any(|q| q.song.video_id == s.video_id)).map(|s| QueueItem::new(s, Origin::Suggestion)).collect();
             queue.extend(fresh);
             drop(queue);
             *this.radio.borrow_mut() = Some((page.playlist_id.or(playlist), page.continuation));
             this.changed();
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn item_ids_look_like_uuid_v4() {
+        let id = new_item_id();
+        assert_eq!(id.len(), 36);
+        assert_eq!(&id[14..15], "4");
+        assert_ne!(id, new_item_id());
     }
 }

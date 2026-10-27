@@ -331,6 +331,30 @@ pub fn playlist_panel_song(item: &Value) -> Option<Song> {
 }
 
 /// account_menu の応答から、ログイン中のアカウントの名前と写真。アカウントのヘッダが無ければ None。
+/// accounts_list の応答から、各アカウントの（選択中か, datasyncIdToken の "||" より前）を集める。
+pub fn account_tokens(root: &Value) -> Vec<(bool, String)> {
+    fn walk(node: &Value, selected: bool, out: &mut Vec<(bool, String)>) {
+        match node {
+            Value::Object(map) => {
+                let is_selected = selected || map.get("isSelected").is_some_and(|v| v == &Value::Bool(true) || v.as_str() == Some("true"));
+                for (name, value) in map {
+                    if name == "datasyncIdToken"
+                        && let Some(id) = crate::credentials::normalize_data_sync_id(value.as_str())
+                    {
+                        out.push((is_selected, id));
+                    }
+                    walk(value, is_selected, out);
+                }
+            }
+            Value::Array(items) => items.iter().for_each(|item| walk(item, selected, out)),
+            _ => {}
+        }
+    }
+    let mut out = Vec::new();
+    walk(root, false, &mut out);
+    out
+}
+
 pub fn account(root: &Value) -> Option<Account> {
     let header = find_all(root, "activeAccountHeaderRenderer").into_iter().next()?;
     Some(Account {
@@ -856,5 +880,14 @@ mod tests {
         assert_eq!(parse_duration("4:22"), Some(262));
         assert_eq!(parse_duration("1:02:03"), Some(3723));
         assert_eq!(parse_duration("2024"), None);
+    }
+
+    #[test]
+    fn account_tokens_marks_only_the_selected_account() {
+        let root: Value = serde_json::json!({ "actions": [{ "contents": [
+            { "accountItem": { "isSelected": true, "serviceEndpoint": { "x": { "datasyncIdToken": "111||222" } } } },
+            { "accountItem": { "isSelected": false, "serviceEndpoint": { "x": { "datasyncIdToken": "333||" } } } }
+        ] }] });
+        assert_eq!(account_tokens(&root), vec![(true, "111".to_string()), (false, "333".to_string())]);
     }
 }

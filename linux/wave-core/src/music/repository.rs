@@ -2,7 +2,7 @@
 
 use serde_json::json;
 
-use super::models::{Account, AddToPlaylistResult, AlbumPage, LikeStatus, MusicVideo, ArtistPage, HomePage, PlaylistPage, PlaylistSummary, SongPage, UpNextPage};
+use super::models::{Account, AddToPlaylistResult, AlbumPage, LikeStatus, MusicVideo, ArtistPage, HomePage, PlaylistPage, PlaylistSummary, SongPage, UpNextPage, VerifiedAccount};
 use super::parsers;
 use crate::innertube::{ApiResult, Failure, InnerTube};
 
@@ -130,6 +130,18 @@ impl MusicRepository {
     pub async fn account(&self) -> ApiResult<Account> {
         let root = self.logged_in_post("account/account_menu", json!({})).await?;
         parsers::account(&root).ok_or(Failure::NotLoggedIn)
+    }
+
+    /// 今のログインが、保存した DATASYNC_ID のアカウントか（Windows の VerifiedAccountAsync と同じ）。端末の連携でアカウントの照合に使う。
+    /// accounts_list の選択中のアカウントがちょうど1件で、その datasyncIdToken（"||" より前）が保存した値と同じで、
+    /// 確かめている間にログインが変わっていないときだけ返す。値はログ・画面に出さない。
+    pub async fn verified_account(&self) -> Option<VerifiedAccount> {
+        let generation = self.client.generation();
+        let saved = self.client.data_sync_id()?;
+        let root = self.client.post("account/accounts_list", json!({}), true, &[]).await.ok()?;
+        let mut selected: Vec<String> = parsers::account_tokens(&root).into_iter().filter(|(s, _)| *s).map(|(_, id)| id).collect();
+        selected.dedup();
+        (selected.len() == 1 && selected[0] == saved && self.client.generation() == generation).then_some(VerifiedAccount { generation, id: saved })
     }
 
     /// 曲の歌詞のタブ（MPLY…）の ID（next の最初の応答から）。無ければ None。

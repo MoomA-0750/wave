@@ -20,3 +20,8 @@ pub fn block_on<T>(future: impl Future<Output = T>) -> T {
 pub fn spawn<T: Send + 'static>(future: impl Future<Output = T> + Send + 'static) -> tokio::task::JoinHandle<T> {
     RUNTIME.spawn(future)
 }
+
+/// 主スレッドから tokio の仕事を起こすとき（tokio::spawn を中で呼ぶもの）に、tokio の中に入る。
+pub fn enter() -> tokio::runtime::EnterGuard<'static> {
+    RUNTIME.enter()
+}

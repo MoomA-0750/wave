@@ -21,6 +21,8 @@ pub struct Player {
     downloads: Option<Arc<wave_core::download::store::DownloadStore>>,
     /// 今流している曲の読み手と、次に読む位置（appsrc の糸から読み書きする）。
     feed: Arc<Mutex<Feed>>,
+    /// 読み込みが済んだら（ASYNC_DONE）飛ぶ位置と、そのあと鳴らすか（引き取った曲を途中から鳴らす）。
+    pending_start: Arc<Mutex<Option<(u64, bool)>>>,
 }
 
 #[derive(Default)]
@@ -83,11 +85,20 @@ impl Player {
             configure_source(&source, setup_feed.clone());
             None
         });
-        Self { playbin, resolver, downloads, feed }
+        Self { playbin, resolver, downloads, feed, pending_start: Arc::default() }
     }
 
     /// その曲を頭から鳴らす。取り終えていればファイルから、ほかは解いて範囲で取る。
+    #[allow(dead_code)] // examples/play.rs が使う
     pub async fn play(&self, video_id: &str) -> Result<(), StreamFailure> {
+        self.play_from(video_id, 0, true).await
+    }
+
+    /// その曲を start_ms から鳴らす（playing でなければ止めたまま用意する）。読み込みが済むまでは飛べないので、済んでから飛ぶ。
+    pub async fn play_from(&self, video_id: &str, start_ms: u64, playing: bool) -> Result<(), StreamFailure> {
+        let immediate = start_ms == 0 && playing;
+        *self.pending_start.lock().unwrap() = (!immediate).then_some((start_ms, playing));
+        let target = if immediate { gst::State::Playing } else { gst::State::Paused };
         if let Some(store) = &self.downloads
             && let (Some(file), Some(path)) = (store.completed(video_id), store.bytes_path(video_id))
         {
@@ -95,7 +106,7 @@ impl Player {
             eprintln!("play source=download");
             *self.feed.lock().unwrap() = Feed { reader: None, local: Some((path, file.length)), offset: 0, cache: None };
             self.playbin.set_property("uri", "appsrc://");
-            self.playbin.set_state(gst::State::Playing).map_err(|_| StreamFailure::Unplayable)?;
+            self.playbin.set_state(target).map_err(|_| StreamFailure::Unplayable)?;
             return Ok(());
         }
         let resolver = self.resolver.clone();
@@ -108,7 +119,7 @@ impl Player {
         self.playbin.set_state(gst::State::Null).ok();
         *self.feed.lock().unwrap() = Feed { reader: Some(reader), local: None, offset: 0, cache: None };
         self.playbin.set_property("uri", "appsrc://");
-        self.playbin.set_state(gst::State::Playing).map_err(|_| StreamFailure::Unplayable)?;
+        self.playbin.set_state(target).map_err(|_| StreamFailure::Unplayable)?;
         Ok(())
     }
 
@@ -141,12 +152,24 @@ impl Player {
 
     /// 曲が終わった・流せなくなったときに主スレッドで呼ぶ（返したものを持っている間だけ）。
     pub fn watch(&self, on_end: impl Fn(bool) + 'static) -> gst::bus::BusWatchGuard {
+        let (pending, playbin) = (self.pending_start.clone(), self.playbin.clone());
         self.playbin
             .bus()
             .expect("playbin has a bus")
             .add_watch_local(move |_, message| {
                 match message.view() {
                     gst::MessageView::Eos(_) => on_end(false),
+                    // 途中から鳴らす曲: 読み込みが済んだので飛んでから鳴らす
+                    gst::MessageView::AsyncDone(_) => {
+                        if let Some((position, playing)) = pending.lock().unwrap().take() {
+                            if position > 0 {
+                                playbin.seek_simple(gst::SeekFlags::FLUSH | gst::SeekFlags::KEY_UNIT, gst::ClockTime::from_mseconds(position)).ok();
+                            }
+                            if playing {
+                                playbin.set_state(gst::State::Playing).ok();
+                            }
+                        }
+                    }
                     gst::MessageView::Error(e) => {
                         eprintln!("playback error: {}", e.error());
                         on_end(true);

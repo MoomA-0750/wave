@@ -1,6 +1,7 @@
 //! wave の Linux（GNOME）版。画面は GTK4 + libadwaita で作り、YouTube Music とのやり取りは wave-core に任せる。
 
 mod ai_chat;
+mod connect;
 mod downloads;
 mod keyring;
 mod login;
@@ -120,7 +121,10 @@ async fn show_home(toolbar: &adw::ToolbarView, repo: &MusicRepository) {
         wave_core::lyrics::lrclib::LrclibClient::default(),
         wave_core::lyrics::timed::TimedLyricsClient::new(&language(), &region()),
     );
-    let (shell, app) = ui::shell::build(repo.clone(), lyrics, playback.clone(), video, downloads, on_logout);
+    // 端末の連携（中継の場所が設定にあるときだけ）
+    let relay_url = downloads.settings.borrow().relay_url.clone();
+    let connect = connect::Connect::start(repo.clone(), playback.clone(), relay_url).await;
+    let (shell, app) = ui::shell::build(repo.clone(), lyrics, playback.clone(), video, downloads, connect, on_logout);
     if let Some(window) = toolbar.root().and_downcast::<adw::ApplicationWindow>() {
         // GNOME のメディアの操作・メディアキーから操作できるようにする（窓がある間だけ出す）
         let (raise, quit) = (window.clone(), window.clone());

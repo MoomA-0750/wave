@@ -83,8 +83,12 @@ fn build(app: &Rc<App>, song: &Song, removal: Option<Rc<Removal>>) -> (gio::Menu
     {
         let (app, song) = (app.clone(), song.clone());
         add("add-queue", Box::new(move |_| {
+            // ほかの端末を映している間は、その端末のキューへの追加として知らせる（連携の側が出す）
+            let remote = app.connect.mirror().is_some();
             app.playback.add_to_queue(song.clone());
-            app.toast("キューに追加しました");
+            if !remote {
+                app.toast("キューに追加しました");
+            }
         }), false);
     }
 

@@ -2,6 +2,7 @@
 //! 画面の部品（GTK など）には頼らない。後で UniFFI でほかの OS からも呼べるよう、外へ出す型は単純にしておく。
 
 pub mod ai;
+pub mod connect;
 pub mod credentials;
 pub mod download;
 pub mod innertube;

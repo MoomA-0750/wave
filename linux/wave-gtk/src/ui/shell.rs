@@ -1,7 +1,7 @@
 //! 窓の並び（Mac・Windows と同じ）: 上の帯に戻る・ホーム・検索の欄、左にマイライブラリ、中央にページ、
 //! 右に再生中の欄（しまえる）、下に再生の操作の帯。部品は libadwaita のもの。
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use adw::prelude::*;
@@ -21,6 +21,8 @@ pub struct App {
     pub video: Option<crate::video::VideoPlayer>,
     /// ダウンロード（取った曲・丸ごと取ったもの）。
     pub downloads: Rc<crate::downloads::Downloads>,
+    /// 端末の連携。
+    pub connect: Rc<crate::connect::Connect>,
     /// 映像を窓いっぱいに出す層（gtk4paintablesink が無ければ None）。
     video_layer: std::cell::RefCell<Option<gtk::Widget>>,
     /// Claude との会話。
@@ -98,6 +100,7 @@ pub fn build(
     playback: Rc<Playback>,
     video: Option<crate::video::VideoPlayer>,
     downloads: Rc<crate::downloads::Downloads>,
+    connect: Rc<crate::connect::Connect>,
     on_logout: Rc<dyn Fn()>,
 ) -> (gtk::Widget, Rc<App>) {
     let css = gtk::CssProvider::new();
@@ -106,7 +109,7 @@ pub fn build(
 
     let nav = adw::NavigationView::new();
     let toasts = adw::ToastOverlay::new();
-    let app = Rc::new(App { repo, lyrics, playback, nav: nav.clone(), toasts: toasts.clone(), video, downloads, video_layer: Default::default(), ai: Default::default(), claude_toggle: Default::default(), editable_playlists: Default::default() });
+    let app = Rc::new(App { repo, lyrics, playback, nav: nav.clone(), toasts: toasts.clone(), video, downloads, connect, video_layer: Default::default(), ai: Default::default(), claude_toggle: Default::default(), editable_playlists: Default::default() });
     {
         let app = app.clone();
         gtk::glib::spawn_future_local(async move {
@@ -115,6 +118,15 @@ pub fn build(
             if let Ok(ask) = std::env::var("WAVE_DEMO_AI_ASK") {
                 gtk::glib::timeout_future_seconds(6).await;
                 app.ai.send(&app, &ask);
+            }
+        });
+    }
+    {
+        // 端末の連携の知らせはトーストで出す
+        let weak = Rc::downgrade(&app);
+        app.connect.on_notice(move |text| {
+            if let Some(app) = weak.upgrade() {
+                app.toast(text);
             }
         });
     }
@@ -594,13 +606,26 @@ fn now_playing(app: &Rc<App>) -> gtk::Widget {
         title.set_cursor_from_name(Some("pointer"));
         artist.set_cursor_from_name(Some("pointer"));
     }
+    let shown = Rc::new(RefCell::new(None::<(String, Option<String>)>));
     let refresh = {
         let (app, stack, next_list) = (app.clone(), stack.clone(), next_list.clone());
         move || {
-            let Some(song) = app.playback.current() else {
+            // ほかの端末で鳴っていれば、それを出す
+            let (song, upcoming) = match app.connect.mirror() {
+                Some(mirror) => (Some(mirror.song), mirror.next.into_iter().collect()),
+                None => (app.playback.current(), app.playback.upcoming()),
+            };
+            let Some(song) = song else {
+                *shown.borrow_mut() = None;
                 stack.set_visible_child_name("empty");
                 return;
             };
+            // 連携の知らせは毎秒来るので、曲と次の曲が同じなら描き直さない
+            let key = (song.video_id.clone(), upcoming.first().map(|s: &wave_core::music::models::Song| s.video_id.clone()));
+            if shown.borrow().as_ref() == Some(&key) {
+                return;
+            }
+            *shown.borrow_mut() = Some(key);
             stack.set_visible_child_name("song");
             picture.load(song.thumbnail_url.as_deref(), 616);
             title.set_label(&song.title);
@@ -608,7 +633,6 @@ fn now_playing(app: &Rc<App>) -> gtk::Widget {
             while let Some(row) = next_list.first_child() {
                 next_list.remove(&row);
             }
-            let upcoming = app.playback.upcoming();
             next_title.set_visible(!upcoming.is_empty());
             next_list.set_visible(!upcoming.is_empty());
             if let Some(next) = upcoming.first() {
@@ -626,7 +650,8 @@ fn now_playing(app: &Rc<App>) -> gtk::Widget {
         }
     };
     refresh();
-    app.playback.on_change(refresh);
+    app.playback.on_change(refresh.clone());
+    app.connect.on_change(refresh);
     stack.upcast()
 }
 
@@ -804,6 +829,59 @@ fn link_side_toggle(toggle: &gtk::ToggleButton, stack: &gtk::Stack, name: &'stat
 }
 
 /// 下の帯: 左に曲、中央に操作と位置（窓の左右の中央）、右にキュー・音量・右の欄の出し入れ。
+/// 再生する端末を選ぶボタン（家の端末の一覧。押した端末へ再生を移す。この PC を押すと、ほかの端末の再生を引き取る）。
+fn devices_button(app: &Rc<App>) -> gtk::MenuButton {
+    let list = gtk::ListBox::builder().selection_mode(gtk::SelectionMode::None).width_request(280).css_classes(["navigation-sidebar"]).build();
+    let popover = gtk::Popover::builder().child(&list).build();
+    let button = gtk::MenuButton::builder().icon_name("network-wireless-symbolic").tooltip_text("再生する端末").popover(&popover).css_classes(["flat"]).build();
+    let app = app.clone();
+    popover.connect_show(move |popover| {
+        while let Some(row) = list.first_child() {
+            list.remove(&row);
+        }
+        let info = app.connect.info();
+        let members = app.connect.members();
+        if !info.in_household || members.is_empty() {
+            list.append(&gtk::Label::builder().label("まだ連携していません（設定の「端末の連携」から）").wrap(true).margin_top(12).margin_bottom(12).margin_start(12).margin_end(12).css_classes(["dim-label"]).build());
+            return;
+        }
+        let mirror = app.connect.mirror();
+        for member in members.into_iter().filter(|m| m.kind.as_deref() != Some("api")) {
+            // 今鳴っている端末（手元で鳴っていればこの PC、ほかを映していればその端末）
+            let playing_here = if member.is_self { mirror.is_none() && info.is_writer } else { mirror.as_ref().is_some_and(|m| m.device_id == member.device_id) };
+            let subtitle = if playing_here {
+                "再生中"
+            } else if member.is_self || member.online {
+                "つながっています"
+            } else {
+                "オフライン"
+            };
+            let icon = match member.kind.as_deref() {
+                Some("phone") => "phone-symbolic",
+                _ if member.is_self => "computer-symbolic",
+                Some("pc") => "computer-symbolic",
+                _ => "audio-speakers-symbolic",
+            };
+            let row = adw::ActionRow::builder().title(gtk::glib::markup_escape_text(&member.label)).subtitle(subtitle).activatable(!playing_here && (member.is_self || member.online)).build();
+            row.add_prefix(&gtk::Image::from_icon_name(icon));
+            if playing_here {
+                row.add_suffix(&gtk::Image::from_icon_name("object-select-symbolic"));
+            }
+            let (app, pop, device_id, is_self) = (app.clone(), popover.clone(), member.device_id.clone(), member.is_self);
+            row.connect_activated(move |_| {
+                if is_self {
+                    app.connect.transfer_here();
+                } else {
+                    app.connect.play_on_device(&device_id);
+                }
+                pop.popdown();
+            });
+            list.append(&row);
+        }
+    });
+    button
+}
+
 fn player_bar(app: &Rc<App>, side: &gtk::Widget, side_stack: &gtk::Stack) -> gtk::Widget {
     // 左: 曲
     let art = images::square(56);
@@ -849,6 +927,10 @@ fn player_bar(app: &Rc<App>, side: &gtk::Widget, side_stack: &gtk::Stack) -> gtk
     let lyrics_toggle = gtk::ToggleButton::builder().icon_name("text-x-generic-symbolic").tooltip_text("歌詞").css_classes(["flat"]).build();
     let queue_toggle = gtk::ToggleButton::builder().icon_name("view-list-symbolic").tooltip_text("キュー").css_classes(["flat"]).build();
     let end = gtk::Box::builder().spacing(8).valign(gtk::Align::Center).build();
+    // 端末の連携が使えるときだけ、再生する端末を選ぶボタン
+    if app.connect.info().configured {
+        end.append(&devices_button(app));
+    }
     end.append(&lyrics_toggle);
     end.append(&queue_toggle);
     end.append(&volume_icon);
@@ -871,8 +953,17 @@ fn player_bar(app: &Rc<App>, side: &gtk::Widget, side_stack: &gtk::Stack) -> gtk
         play.connect_clicked(move |_| playback.toggle());
         let playback = app.playback.clone();
         next.connect_clicked(move |_| playback.next());
-        let playback = app.playback.clone();
-        volume.connect_value_changed(move |s| playback.player().set_volume(s.value()));
+        let app_for_volume = app.clone();
+        volume.connect_change_value(move |_, _, value| {
+            let value = value.clamp(0.0, 1.0);
+            // ほかの端末を映している間は、その端末の音量を変える
+            if app_for_volume.connect.mirror().is_some() {
+                app_for_volume.connect.remote_volume((value * 100.0).round() as i32);
+            } else {
+                app_for_volume.playback.player().set_volume(value);
+            }
+            gtk::glib::Propagation::Proceed
+        });
         // 右の欄をしまったら、次に出すときは再生中から
         let (side, stack) = (side.clone(), side_stack.clone());
         side_toggle.connect_toggled(move |t| {
@@ -918,9 +1009,14 @@ fn player_bar(app: &Rc<App>, side: &gtk::Widget, side_stack: &gtk::Stack) -> gtk
     // 利用者が動かしたときだけシークする（位置の書き換えでは呼ばれない）
     let dragging = Rc::new(Cell::new(false));
     {
-        let (playback, dragging) = (app.playback.clone(), dragging.clone());
+        let (app, dragging) = (app.clone(), dragging.clone());
         seek.connect_change_value(move |_, _, value| {
-            if let Some(total) = playback.player().duration_ms() {
+            let playback = &app.playback;
+            if let Some(mirror) = app.connect.mirror() {
+                if let Some(seconds) = mirror.song.duration_seconds {
+                    app.connect.remote_seek((value.clamp(0.0, 1.0) * f64::from(seconds) * 1000.0) as i64);
+                }
+            } else if let Some(total) = playback.player().duration_ms() {
                 playback.player().seek_ms((value.clamp(0.0, 1.0) * total as f64) as u64);
             }
             dragging.set(false);
@@ -928,8 +1024,23 @@ fn player_bar(app: &Rc<App>, side: &gtk::Widget, side_stack: &gtk::Stack) -> gtk
         });
     }
     let refresh = {
-        let (app, bar, play, next, song) = (app.clone(), bar.clone(), play.clone(), next.clone(), song.clone());
+        let (app, bar, play, next, song, volume) = (app.clone(), bar.clone(), play.clone(), next.clone(), song.clone(), volume.clone());
         move || {
+            // ほかの端末で鳴っていれば、それを映す（操作はその端末への命令になる）
+            if let Some(mirror) = app.connect.mirror() {
+                bar.set_sensitive(true);
+                song.set_visible(true);
+                art.load(mirror.song.thumbnail_url.as_deref(), 112);
+                title.set_label(&mirror.song.title);
+                artist.set_label(&format!("{}で再生中 · {}", mirror.label, mirror.song.artists_text()));
+                next.set_sensitive(mirror.next.is_some());
+                play.set_icon_name(if mirror.playing { "media-playback-pause-symbolic" } else { "media-playback-start-symbolic" });
+                play.set_tooltip_text(Some(if mirror.playing { "一時停止" } else { "再生" }));
+                if let Some(percent) = mirror.volume_percent {
+                    volume.set_value(f64::from(percent) / 100.0);
+                }
+                return;
+            }
             let current = app.playback.current();
             bar.set_sensitive(current.is_some());
             song.set_visible(current.is_some());
@@ -947,10 +1058,14 @@ fn player_bar(app: &Rc<App>, side: &gtk::Widget, side_stack: &gtk::Stack) -> gtk
     refresh();
     app.playback.on_change(refresh.clone());
     // 位置は 0.5 秒ごとに描き直す（再生・一時停止の印も、状態の変化が遅れて届くのでここでも合わせる）
-    let playback = app.playback.clone();
+    app.connect.on_change(refresh.clone());
+    let app = app.clone();
     gtk::glib::timeout_add_local(std::time::Duration::from_millis(500), move || {
-        let player = playback.player();
-        let (pos, total) = (player.position_ms().unwrap_or(0), player.duration_ms().unwrap_or(0));
+        let player = app.playback.player();
+        let (pos, total) = match app.connect.mirror() {
+            Some(mirror) => (mirror.position_ms.max(0) as u64, u64::from(mirror.song.duration_seconds.unwrap_or(0)) * 1000),
+            None => (player.position_ms().unwrap_or(0), player.duration_ms().unwrap_or(0)),
+        };
         position.set_label(&pages::format_seconds((pos / 1000) as u32));
         duration.set_label(&pages::format_seconds((total / 1000) as u32));
         if !dragging.get() && total > 0 {

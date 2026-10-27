@@ -38,6 +38,8 @@ pub fn page(app: &Rc<App>) -> adw::NavigationPage {
     }
     prefs.add(&downloads);
 
+    super::devices::add_to(&prefs, app);
+
     let claude = adw::PreferencesGroup::builder().title("Claude").build();
     let bridge = adw::ActionRow::builder().title("中継（ai-bridge）").build();
     let unpair = gtk::Button::builder().label("外す").valign(gtk::Align::Center).build();

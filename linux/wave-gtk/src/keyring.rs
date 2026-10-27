@@ -69,3 +69,26 @@ pub async fn delete_ai() {
     })
     .await
 }
+
+/// 端末の連携の、この端末の鍵（身元の署名鍵と受け取りの鍵の PKCS#8）。ログアウトしても消さない（端末 ID が変わると家に入り直しになる）。
+const CONNECT_ATTRIBUTES: [(&str, &str); 2] = [("application", "xyz.mooma0750.wave"), ("kind", "connect-device-keys")];
+
+pub async fn load_connect_keys() -> Option<String> {
+    runtime::run(async {
+        let keyring = oo7::Keyring::new().await.ok()?;
+        let _ = keyring.unlock().await;
+        let item = keyring.search_items(&CONNECT_ATTRIBUTES).await.ok()?.into_iter().next()?;
+        let secret = item.secret().await.ok()?;
+        std::str::from_utf8(&secret).ok().map(String::from)
+    })
+    .await
+}
+
+pub async fn save_connect_keys(text: String) -> bool {
+    runtime::run(async move {
+        let Ok(keyring) = oo7::Keyring::new().await else { return false };
+        let _ = keyring.unlock().await;
+        keyring.create_item("wave (端末の連携の鍵)", &CONNECT_ATTRIBUTES, oo7::Secret::text(text), true).await.is_ok()
+    })
+    .await
+}

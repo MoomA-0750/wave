@@ -92,7 +92,7 @@ fn sapisid_of(cookie: &str) -> Option<&str> {
 }
 
 /// DATASYNC_ID は "||" の前だけを onBehalfOfUser に使う（丸ごと渡すと 500 になる）。
-fn normalize_data_sync_id(raw: Option<&str>) -> Option<String> {
+pub(crate) fn normalize_data_sync_id(raw: Option<&str>) -> Option<String> {
     let raw = raw?;
     let value = raw.split("||").next().unwrap_or("").trim();
     (!value.is_empty()).then(|| value.to_string())

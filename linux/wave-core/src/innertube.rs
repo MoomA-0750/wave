@@ -76,6 +76,16 @@ impl InnerTube {
         self.state.read().unwrap().credentials.is_some()
     }
 
+    /// 今のログインの世代（ログイン・ログアウトのたびに変わる）。
+    pub fn generation(&self) -> u64 {
+        self.state.read().unwrap().generation
+    }
+
+    /// 今のログインの DATASYNC_ID（"||" の前）。外へ送らない・ログに出さない。
+    pub fn data_sync_id(&self) -> Option<String> {
+        self.state.read().unwrap().credentials.as_ref().and_then(|c| c.reveal_data_sync_id().map(String::from))
+    }
+
     /// youtubei/v1/{endpoint} に POST する。set_login なら（ログイン中のとき）認証のヘッダを付ける。
     pub async fn post(&self, endpoint: &str, mut body: Value, set_login: bool, query: &[(&str, &str)]) -> ApiResult<Value> {
         let (creds, generation, anonymous) = {
