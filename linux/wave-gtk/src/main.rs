@@ -2,6 +2,7 @@
 
 mod keyring;
 mod login;
+mod player;
 mod runtime;
 
 use adw::prelude::*;

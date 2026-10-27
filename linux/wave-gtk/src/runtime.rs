@@ -10,3 +10,8 @@ static RUNTIME: LazyLock<tokio::runtime::Runtime> =
 pub async fn run<T: Send + 'static>(future: impl Future<Output = T> + Send + 'static) -> T {
     RUNTIME.spawn(future).await.expect("background task panicked")
 }
+
+/// 主スレッドでも tokio の中でもない糸（GStreamer の流しの糸）から、裏の仕事を待つ。
+pub fn block_on<T>(future: impl Future<Output = T>) -> T {
+    RUNTIME.block_on(future)
+}

@@ -891,3 +891,6 @@
 - ログインは WebKitGTK（webkit6）で Windows と同じ流れにした。開いてよいホストを同じ一覧に絞り、music.youtube.com に着いたら cookie と yt.config_ の VISITOR_DATA・DATASYNC_ID を読む。ブラウザの記録は使い捨ての通信のまとまり（NetworkSession::new_ephemeral）にしてディスクに残さない。開発者ツールは切る
 - ログインの情報は GNOME のキーリング（Secret Service）に oo7 で置き、ファイルには書かない
 - core の通信は tokio の上で動かし、GTK の主スレッドからは結果を待つだけにする（linux/wave-gtk/src/runtime.rs）
+- 再生の URL は Windows と同じく faraday の表とプレイヤーの JS で解く。JS の動作環境は QuickJS（rquickjs）。ネットワーク・ファイルに触れる手段は渡さない。プレイヤーは非 strict の JS（先頭の `var window=this;`）なので、rquickjs の既定の strict を切って読み込む（strict のままだと「window is undefined」で止まった）
+- googlevideo は範囲を付けない取り方（丸ごと・bytes=0-）を 403 で拒む。playbin に URL を渡さず、core の RangeReader が 512KB ずつ範囲で取ったものを appsrc で流し込む（シークはその位置から取り直す。Windows の RangeStream と同じ考え）
+- ログインしていないと、先頭の 1MB ほどの先が 403 になった（po_token が無い WEB の再生の振る舞いと見ている）。ログインした状態での確かめは本人のログイン待ち

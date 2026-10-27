@@ -5,6 +5,7 @@ pub mod credentials;
 pub mod innertube;
 mod json;
 pub mod music;
+pub mod stream;
 
 /// この core の版（画面に出して、どの core で動いているかを確かめる）。
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
