@@ -97,16 +97,48 @@ fn card(app: &Rc<App>, item: HomeItem) -> gtk::Widget {
 
 /// 曲の一覧（検索の結果・プレイリスト）。行を押すと、その一覧をキューにしてその曲から鳴らす。
 pub fn song_list(app: &Rc<App>, songs: Vec<Song>) -> gtk::ListBox {
+    song_list_in(app, songs, None)
+}
+
+/// 自分のプレイリストの曲の一覧（曲のメニューに「このプレイリストから削除」を出す）。set_video_ids は曲ごとのプレイリストの中の項目の ID。
+pub fn song_list_in(app: &Rc<App>, songs: Vec<Song>, playlist: Option<(String, Vec<Option<String>>)>) -> gtk::ListBox {
     let list = gtk::ListBox::builder().selection_mode(gtk::SelectionMode::None).css_classes(["boxed-list-separate", "song-list"]).build();
-    for song in &songs {
-        list.append(&song_row(song));
+    // 外した行があっても正しい曲を流せるよう、行ごとに曲を覚えておき、押した時点で残っている行から並べ直す
+    let shown: Rc<std::cell::RefCell<Vec<(gtk::ListBoxRow, Song)>>> = Rc::default();
+    for (i, song) in songs.iter().enumerate() {
+        let removal = playlist.as_ref().and_then(|(playlist_id, set_ids)| {
+            let set_video_id = set_ids.get(i).cloned().flatten()?;
+            let (list, shown) = (list.downgrade(), shown.clone());
+            let row_index = i;
+            Some(super::song_menu::Removal {
+                playlist_id: playlist_id.clone(),
+                set_video_id,
+                on_removed: Rc::new(move || {
+                    let mut rows = shown.borrow_mut();
+                    if let (Some(list), Some(pos)) = (list.upgrade(), rows.iter().position(|(r, _)| r.widget_name() == format!("song-{row_index}"))) {
+                        list.remove(&rows[pos].0);
+                        rows.remove(pos);
+                    }
+                }),
+            })
+        });
+        let row = song_row(app, song, removal);
+        row.set_widget_name(&format!("song-{i}"));
+        list.append(&row);
+        shown.borrow_mut().push((row.upcast(), song.clone()));
     }
     let app = app.clone();
-    list.connect_row_activated(move |_, row| app.playback.play_list(songs.clone(), row.index() as usize));
+    list.connect_row_activated(move |_, row| {
+        let rows = shown.borrow();
+        let songs: Vec<Song> = rows.iter().map(|(_, s)| s.clone()).collect();
+        if let Some(index) = rows.iter().position(|(r, _)| r == row) {
+            app.playback.play_list(songs, index);
+        }
+    });
     list
 }
 
-fn song_row(song: &Song) -> adw::ActionRow {
+fn song_row(app: &Rc<App>, song: &Song, removal: Option<super::song_menu::Removal>) -> adw::ActionRow {
     let picture = images::square(44);
     picture.load(song.thumbnail_url.as_deref(), 88);
     let row = adw::ActionRow::builder()
@@ -120,6 +152,7 @@ fn song_row(song: &Song) -> adw::ActionRow {
     if let Some(seconds) = song.duration_seconds {
         row.add_suffix(&gtk::Label::builder().label(format_seconds(seconds)).css_classes(["dim-label", "numeric"]).build());
     }
+    row.add_suffix(&super::song_menu::button(app, song, removal, Some(row.upcast_ref())));
     row
 }
 
@@ -159,6 +192,7 @@ pub fn playlist(app: &Rc<App>, playlist_id: &str, title: &str) -> adw::Navigatio
     let app = app.clone();
     let target = bin.clone();
     let id = playlist_id.to_string();
+    let id_for_list = id.clone();
     gtk::glib::spawn_future_local(async move {
         let repo = app.repo.clone();
         let result = runtime::run(async move { repo.playlist(&id, None).await }).await;
@@ -166,7 +200,9 @@ pub fn playlist(app: &Rc<App>, playlist_id: &str, title: &str) -> adw::Navigatio
             Ok(page) => {
                 let column = page_column();
                 column.append(&page_header(&app, page.thumbnail_url.as_deref(), page.title.as_deref().unwrap_or(""), page.subtitle.as_deref(), false, page.songs.clone()));
-                column.append(&song_list(&app, page.songs));
+                // 自分のプレイリストなら、曲のメニューから外せる
+                let removable = page.editable.then(|| (id_for_list.clone(), page.set_video_ids.clone()));
+                column.append(&song_list_in(&app, page.songs, removable));
                 scrolling_column(&column)
             }
             Err(e) => failure(&format!("プレイリストを読めませんでした（{e}）")),

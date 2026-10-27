@@ -4,3 +4,4 @@ pub mod images;
 pub mod lyrics;
 pub mod pages;
 pub mod shell;
+pub mod song_menu;

@@ -228,7 +228,11 @@ pub fn playlist_page(root: &Value) -> PlaylistPage {
         Some(list) => list.items(),
         None => shelf.path(&["contents"]).items(),
     };
-    let songs = items.iter().filter_map(|i| i.path(&["musicResponsiveListItemRenderer"])).filter_map(responsive_list_item_song).collect();
+    let rows: Vec<(Song, Option<String>)> = items
+        .iter()
+        .filter_map(|i| i.path(&["musicResponsiveListItemRenderer"]))
+        .filter_map(|row| Some((responsive_list_item_song(row)?, row.path(&["playlistItemData", "playlistSetVideoId"]).str_().map(String::from))))
+        .collect();
     let continuation = items
         .last()
         .and_then(|last| last.path(&["continuationItemRenderer", "continuationEndpoint", "continuationCommand", "token"]).str_())
@@ -245,12 +249,31 @@ pub fn playlist_page(root: &Value) -> PlaylistPage {
                 .find_map(|t| t.path(&["thumbnail", "thumbnails"]).items().last().and_then(|u| u.path(&["url"]).str_()).map(String::from))
         })
     });
+    let song_area = appended.or(shelf);
+    let end_confirmed = continuation.is_none() && song_area.is_some_and(|area| !contains_key_like(area, "continuation"));
+    let (songs, set_video_ids) = rows.into_iter().unzip();
     PlaylistPage {
         title: text_of(header.path(&["title"])),
         songs,
+        set_video_ids,
+        editable: !find_all(root, "musicEditablePlaylistDetailHeaderRenderer").is_empty(),
+        end_confirmed,
         continuation,
         subtitle: subtitle.filter(|s| !s.is_empty()),
         thumbnail_url: thumbnail,
+    }
+}
+
+const CONTINUATION_CONTAINERS: [&str; 2] = ["appendContinuationItemsAction", "continuationItems"];
+
+/// 名前に fragment を含むキーがあるか（続きを入れる入れ物の名前は数えない）。
+fn contains_key_like(node: &Value, fragment: &str) -> bool {
+    match node {
+        Value::Object(map) => map.iter().any(|(key, value)| {
+            (!CONTINUATION_CONTAINERS.contains(&key.as_str()) && key.to_lowercase().contains(fragment)) || contains_key_like(value, fragment)
+        }),
+        Value::Array(list) => list.iter().any(|v| contains_key_like(v, fragment)),
+        _ => false,
     }
 }
 
@@ -687,6 +710,7 @@ mod tests {
         let page = playlist_page(&fixture("browse_playlist"));
         assert!(!page.songs.is_empty());
         assert!(page.title.is_some());
+        assert_eq!(page.songs.len(), page.set_video_ids.len());
         assert!(!playlist_page(&fixture("browse_playlist_continuation")).songs.is_empty());
         assert!(is_sign_in_prompt(&fixture("browse_library_logged_out")));
         assert!(!is_sign_in_prompt(&fixture("browse_playlist")));

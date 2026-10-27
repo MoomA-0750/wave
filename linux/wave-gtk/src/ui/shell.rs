@@ -16,9 +16,22 @@ pub struct App {
     pub lyrics: wave_core::lyrics::service::LyricsService,
     pub playback: Rc<Playback>,
     nav: adw::NavigationView,
+    toasts: adw::ToastOverlay,
+    /// 自分で編集できるプレイリスト（曲のメニューの「プレイリストに追加」に並べる）。
+    pub editable_playlists: std::cell::RefCell<Vec<wave_core::music::models::PlaylistSummary>>,
 }
 
 impl App {
+    /// 窓（ダイアログの親）。
+    pub fn window(&self) -> Option<gtk::Window> {
+        self.nav.root().and_downcast::<gtk::Window>()
+    }
+
+    /// 画面の下に短い知らせを出す。
+    pub fn toast(&self, text: &str) {
+        self.toasts.add_toast(adw::Toast::new(text));
+    }
+
     pub fn push(&self, page: adw::NavigationPage) {
         self.nav.push(&page);
     }
@@ -46,7 +59,8 @@ pub fn build(repo: MusicRepository, lyrics: wave_core::lyrics::service::LyricsSe
     gtk::style_context_add_provider_for_display(&gtk::gdk::Display::default().expect("display"), &css, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION);
 
     let nav = adw::NavigationView::new();
-    let app = Rc::new(App { repo, lyrics, playback, nav: nav.clone() });
+    let toasts = adw::ToastOverlay::new();
+    let app = Rc::new(App { repo, lyrics, playback, nav: nav.clone(), toasts: toasts.clone(), editable_playlists: Default::default() });
     nav.add(&pages::home(&app));
 
     let toolbar = adw::ToolbarView::new();
@@ -64,7 +78,8 @@ pub fn build(repo: MusicRepository, lyrics: wave_core::lyrics::service::LyricsSe
     side_stack.add_named(&queue(&app), Some("queue"));
     let side = pane(&side_stack, Some(340));
     body.append(&side);
-    toolbar.set_content(Some(&body));
+    toasts.set_child(Some(&body));
+    toolbar.set_content(Some(&toasts));
     toolbar.add_bottom_bar(&player_bar(&app, &side, &side_stack));
     (toolbar.upcast(), app)
 }
@@ -169,6 +184,7 @@ fn library(app: &Rc<App>) -> gtk::Widget {
     gtk::glib::spawn_future_local(async move {
         let repo = app.repo.clone();
         let Ok(playlists) = runtime::run(async move { repo.library_playlists().await }).await else { return };
+        *app.editable_playlists.borrow_mut() = playlists.iter().filter(|p| p.editable).cloned().collect();
         for p in playlists.into_iter().filter(|p| p.playlist_id != LIKED_SONGS) {
             list.append(&library_row(&p.title, p.subtitle.as_deref().unwrap_or(""), p.thumbnail_url.as_deref()));
             entries.borrow_mut().push((p.playlist_id, p.title));

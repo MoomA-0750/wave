@@ -78,6 +78,27 @@ impl Playback {
         self.queue.borrow().iter().skip(start).cloned().collect()
     }
 
+    /// 今の曲のすぐ後に入れる（何も鳴っていなければ、その曲から流す）。
+    pub fn play_next(self: &Rc<Self>, song: Song) {
+        match self.index.get() {
+            Some(i) => {
+                self.queue.borrow_mut().insert(i + 1, song);
+                self.changed();
+            }
+            None => self.play_list(vec![song], 0),
+        }
+    }
+
+    /// キューの最後に入れる（何も鳴っていなければ、その曲から流す）。ラジオの曲より前に入れる作りにはしない（Windows と同じく後ろ）。
+    pub fn add_to_queue(self: &Rc<Self>, song: Song) {
+        if self.index.get().is_none() {
+            self.play_list(vec![song], 0);
+            return;
+        }
+        self.queue.borrow_mut().push(song);
+        self.changed();
+    }
+
     /// キューの全部と、今の曲の位置。
     pub fn queue(&self) -> (Vec<Song>, Option<usize>) {
         (self.queue.borrow().clone(), self.index.get())

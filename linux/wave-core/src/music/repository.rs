@@ -2,7 +2,7 @@
 
 use serde_json::json;
 
-use super::models::{Account, AlbumPage, LikeStatus, ArtistPage, HomePage, PlaylistPage, PlaylistSummary, SongPage, UpNextPage};
+use super::models::{Account, AddToPlaylistResult, AlbumPage, LikeStatus, ArtistPage, HomePage, PlaylistPage, PlaylistSummary, SongPage, UpNextPage};
 use super::parsers;
 use crate::innertube::{ApiResult, Failure, InnerTube};
 
@@ -12,6 +12,7 @@ pub const LIBRARY_PLAYLISTS: &str = "FEmusic_liked_playlists";
 /// 高く評価した曲のプレイリスト。
 pub const LIKED_SONGS: &str = "LM";
 const MAX_LIBRARY_PAGES: usize = 20;
+const MAX_PLAYLIST_PAGES: usize = 50;
 
 #[derive(Clone)]
 pub struct MusicRepository {
@@ -156,5 +157,60 @@ impl MusicRepository {
         }
         let endpoint = if liked { "like/like" } else { "like/removelike" };
         self.client.post(endpoint, json!({ "target": { "videoId": video_id } }), true, &[]).await.map(|_| ())
+    }
+
+    /// プレイリストの中の曲の videoId を全部読む。最後まで読めなければ None（重複を確かめられない）。
+    pub async fn scan_playlist(&self, playlist_id: &str) -> Option<std::collections::HashSet<String>> {
+        let mut ids = std::collections::HashSet::new();
+        let mut token: Option<String> = None;
+        for _ in 0..MAX_PLAYLIST_PAGES {
+            let page = self.playlist(playlist_id, token.as_deref()).await.ok()?;
+            ids.extend(page.songs.into_iter().map(|s| s.video_id));
+            match page.continuation {
+                None if page.end_confirmed => return Some(ids),
+                None => return None,
+                next => token = next,
+            }
+        }
+        None
+    }
+
+    /// 曲をプレイリストに追加する。先に全ページを読んで重複を確かめ、読めなければ追加しない（known_empty なら確かめない）。
+    pub async fn add_to_playlist(&self, playlist_id: &str, video_id: &str, known_empty: bool) -> AddToPlaylistResult {
+        if !known_empty {
+            match self.scan_playlist(playlist_id).await {
+                None => return AddToPlaylistResult::NotChecked,
+                Some(ids) if ids.contains(video_id) => return AddToPlaylistResult::AlreadyInPlaylist,
+                Some(_) => {}
+            }
+        }
+        if self.edit_playlist(playlist_id, json!({ "action": "ACTION_ADD_VIDEO", "addedVideoId": video_id })).await {
+            AddToPlaylistResult::Added
+        } else {
+            AddToPlaylistResult::Failed
+        }
+    }
+
+    /// プレイリストから曲を外す（set_video_id はプレイリストの中の項目の ID）。
+    pub async fn remove_from_playlist(&self, playlist_id: &str, video_id: &str, set_video_id: &str) -> bool {
+        self.edit_playlist(playlist_id, json!({ "action": "ACTION_REMOVE_VIDEO", "setVideoId": set_video_id, "removedVideoId": video_id })).await
+    }
+
+    async fn edit_playlist(&self, playlist_id: &str, action: serde_json::Value) -> bool {
+        if !self.client.is_logged_in() {
+            return false;
+        }
+        let id = playlist_id.strip_prefix("VL").unwrap_or(playlist_id);
+        let result = self.client.post("browse/edit_playlist", json!({ "playlistId": id, "actions": [action] }), true, &[]).await;
+        result.is_ok_and(|root| root.get("status").and_then(|s| s.as_str()) == Some("STATUS_SUCCEEDED"))
+    }
+
+    /// 非公開のプレイリストを作る。作った playlistId を返す。
+    pub async fn create_playlist(&self, title: &str) -> ApiResult<String> {
+        if !self.client.is_logged_in() {
+            return Err(Failure::NotLoggedIn);
+        }
+        let root = self.client.post("playlist/create", json!({ "title": title, "privacyStatus": "PRIVATE" }), true, &[]).await?;
+        root.get("playlistId").and_then(|p| p.as_str()).map(String::from).ok_or(Failure::Parse)
     }
 }

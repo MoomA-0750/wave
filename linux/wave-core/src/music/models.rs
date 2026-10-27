@@ -137,6 +137,12 @@ pub struct HomePage {
 pub struct PlaylistPage {
     pub title: Option<String>,
     pub songs: Vec<Song>,
+    /// 曲ごとのプレイリストの中の項目の ID（外すのに使う。取れなければ None）。
+    pub set_video_ids: Vec<Option<String>>,
+    /// 自分で編集できるプレイリスト（曲を外せる）。
+    pub editable: bool,
+    /// 最後のページだと確かめられた（続きのトークンも、続きらしい印も無い）。
+    pub end_confirmed: bool,
     pub continuation: Option<String>,
     pub subtitle: Option<String>,
     pub thumbnail_url: Option<String>,
@@ -192,4 +198,14 @@ pub enum LikeStatus {
     Like,
     Dislike,
     Indifferent,
+}
+
+/// プレイリストへの追加の結果（Android 版の決定 G-1: 先に全ページを読んで重複を確かめる）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AddToPlaylistResult {
+    Added,
+    AlreadyInPlaylist,
+    /// 全ページを読めず、重複を確かめられなかったので足さなかった。
+    NotChecked,
+    Failed,
 }
