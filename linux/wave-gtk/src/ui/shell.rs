@@ -41,6 +41,11 @@ impl App {
         self.nav.root().and_downcast::<gtk::Window>()
     }
 
+    /// 検索の履歴に足す。
+    pub fn remember_search(&self, entry: crate::settings::SearchHistoryEntry) {
+        self.downloads.update_settings(|s| s.add_search(entry));
+    }
+
     /// 画面の下に短い知らせを出す。
     pub fn toast(&self, text: &str) {
         self.toasts.add_toast(adw::Toast::new(text));
@@ -380,6 +385,13 @@ fn header(app: &Rc<App>) -> adw::HeaderBar {
     let back_button = back.clone();
     app.nav.connect_visible_page_notify(move |nav| back_button.set_visible(nav.navigation_stack().n_items() > 1));
     let suggestions = suggestions_popover(&app, &search);
+    // 確かめ用: WAVE_DEMO_FOCUS_SEARCH があれば、開いて少ししたら検索の欄に入る（検索の履歴が出る）
+    if std::env::var_os("WAVE_DEMO_FOCUS_SEARCH").is_some() {
+        let search = search.clone();
+        gtk::glib::timeout_add_local_once(std::time::Duration::from_secs(3), move || {
+            search.grab_focus();
+        });
+    }
     let app = app.clone();
     search.connect_activate(move |entry| {
         suggestions.popdown();
@@ -394,6 +406,66 @@ fn header(app: &Rc<App>) -> adw::HeaderBar {
         app.push(pages::search(&app, &query));
     });
     bar
+}
+
+/// 検索の履歴の行（画像付き。押すと開く・右の × で消す・最後に「すべて消す」）。
+fn history_rows(app: &Rc<App>, popover: &gtk::Popover, list: &gtk::ListBox, entry: &gtk::SearchEntry) {
+    while let Some(row) = list.first_child() {
+        list.remove(&row);
+    }
+    let history = app.downloads.settings.borrow().search_history.clone();
+    if history.is_empty() {
+        popover.popdown();
+        return;
+    }
+    list.append(&gtk::Label::builder().label("最近の検索").xalign(0.0).margin_start(12).margin_top(6).css_classes(["heading"]).build());
+    for item in history.into_iter().take(10) {
+        let row = adw::ActionRow::builder().title(gtk::glib::markup_escape_text(&item.title)).subtitle(gtk::glib::markup_escape_text(item.subtitle.as_deref().unwrap_or(""))).activatable(true).build();
+        if item.kind == "query" {
+            row.add_prefix(&gtk::Image::from_icon_name("document-open-recent-symbolic"));
+        } else {
+            let art = images::square(36);
+            if item.kind == "artist" {
+                art.add_css_class("round");
+            }
+            art.load(item.thumbnail_url.as_deref(), 72);
+            row.add_prefix(&art.root);
+        }
+        let remove = gtk::Button::builder().icon_name("window-close-symbolic").tooltip_text("履歴から消す").valign(gtk::Align::Center).css_classes(["flat", "circular"]).build();
+        row.add_suffix(&remove);
+        {
+            let (app, key, popover, list, entry) = (app.clone(), item.key(), popover.clone(), list.clone(), entry.clone());
+            remove.connect_clicked(move |_| {
+                app.downloads.update_settings(|s| s.search_history.retain(|e| e.key() != key));
+                history_rows(&app, &popover, &list, &entry);
+            });
+        }
+        let (app, popover, entry) = (app.clone(), popover.clone(), entry.clone());
+        row.connect_activated(move |_| {
+            popover.popdown();
+            app.remember_search(item.clone());
+            match (item.kind.as_str(), &item.id, &item.song) {
+                ("album", Some(id), _) => app.push(pages::album(&app, id, &item.title)),
+                ("artist", Some(id), _) => app.push(pages::artist(&app, id, &item.title)),
+                ("song", _, Some(song)) => app.playback.play_list(vec![song.clone()], 0),
+                _ => {
+                    entry.set_text(&item.title);
+                    entry.emit_activate();
+                }
+            }
+        });
+        list.append(&row);
+    }
+    let clear = gtk::Button::builder().label("すべて消す").halign(gtk::Align::End).margin_end(8).margin_bottom(6).css_classes(["flat"]).build();
+    {
+        let (app, popover) = (app.clone(), popover.clone());
+        clear.connect_clicked(move |_| {
+            app.downloads.update_settings(|s| s.search_history.clear());
+            popover.popdown();
+        });
+    }
+    list.append(&clear);
+    popover.popup();
 }
 
 /// 入力の欄（中の文字の部品も含めて）に手が乗っているか。
@@ -412,17 +484,32 @@ fn suggestions_popover(app: &Rc<App>, entry: &gtk::SearchEntry) -> gtk::Popover 
     let searched: Rc<RefCell<String>> = Rc::default();
     {
         let (request, searched, popover) = (request.clone(), searched.clone(), popover.clone());
+        let app = app.clone();
         entry.connect_activate(move |entry| {
             request.set(request.get() + 1);
-            *searched.borrow_mut() = entry.text().trim().to_string();
+            let text = entry.text().trim().to_string();
+            if !text.is_empty() {
+                app.remember_search(crate::settings::SearchHistoryEntry::query(&text));
+            }
+            *searched.borrow_mut() = text;
             popover.popdown();
         });
     }
-    let (app_c, popover_c, list_c) = (app.clone(), popover.clone(), list.clone());
+    // 空のまま欄に入ったら、検索の履歴を出す
+    let show_history: Rc<dyn Fn()> = {
+        let (app, popover, list, entry) = (app.clone(), popover.clone(), list.clone(), entry.clone());
+        Rc::new(move || history_rows(&app, &popover, &list, &entry))
+    };
+    let (app_c, popover_c, list_c, history_c) = (app.clone(), popover.clone(), list.clone(), show_history.clone());
     entry.connect_search_changed(move |entry| {
+        let show_history = &history_c;
         let input = entry.text().trim().to_string();
         let id = request.get() + 1;
         request.set(id);
+        if input.is_empty() && focused(entry) {
+            show_history();
+            return;
+        }
         if input.is_empty() || !focused(entry) || *searched.borrow() == input {
             popover_c.popdown();
             return;
@@ -459,6 +546,7 @@ fn suggestions_popover(app: &Rc<App>, entry: &gtk::SearchEntry) -> gtk::Popover 
                 let (app, entry, popover) = (app.clone(), entry.clone(), popover.clone());
                 row.connect_activated(move |_| {
                     close(&popover, &entry);
+                    app.remember_search(crate::settings::SearchHistoryEntry::artist(&artist.browse_id, &artist.name, artist.thumbnail_url.as_deref()));
                     app.push(pages::artist(&app, &artist.browse_id, &artist.name));
                 });
                 list.append(&row);
@@ -469,6 +557,7 @@ fn suggestions_popover(app: &Rc<App>, entry: &gtk::SearchEntry) -> gtk::Popover 
                 let (app, entry, popover) = (app.clone(), entry.clone(), popover.clone());
                 row.connect_activated(move |_| {
                     close(&popover, &entry);
+                    app.remember_search(crate::settings::SearchHistoryEntry::album(&album.browse_id, &album.title, album.subtitle.as_deref(), album.thumbnail_url.as_deref()));
                     app.push(pages::album(&app, &album.browse_id, &album.title));
                 });
                 list.append(&row);
@@ -479,6 +568,7 @@ fn suggestions_popover(app: &Rc<App>, entry: &gtk::SearchEntry) -> gtk::Popover 
                 let (app, entry, popover) = (app.clone(), entry.clone(), popover.clone());
                 row.connect_activated(move |_| {
                     close(&popover, &entry);
+                    app.remember_search(crate::settings::SearchHistoryEntry::song(&song));
                     app.playback.play_list(vec![song.clone()], 0);
                 });
                 list.append(&row);
@@ -490,8 +580,16 @@ fn suggestions_popover(app: &Rc<App>, entry: &gtk::SearchEntry) -> gtk::Popover 
             }
         });
     });
-    // 欄から離れたら・Esc で閉じる
+    // 欄から離れたら・Esc で閉じる。空のまま入ったら履歴を出す
     let focus = gtk::EventControllerFocus::new();
+    {
+        let (entry, show_history) = (entry.clone(), show_history.clone());
+        focus.connect_enter(move |_| {
+            if entry.text().trim().is_empty() {
+                show_history();
+            }
+        });
+    }
     let popover_f = popover.clone();
     focus.connect_leave(move |_| {
         let popover = popover_f.clone();

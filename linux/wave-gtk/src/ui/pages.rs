@@ -390,7 +390,12 @@ impl SearchRows {
                 for album in albums {
                     let row = summary_row(&album.title, album.subtitle.as_deref(), album.thumbnail_url.as_deref(), false);
                     let (app, id, title) = (app.clone(), album.browse_id, album.title);
-                    row.connect_activated(move |_| app.push(self::album(&app, &id, &title)));
+                    let subtitle = album.subtitle.clone();
+                    let thumbnail = album.thumbnail_url.clone();
+                    row.connect_activated(move |_| {
+                        app.remember_search(crate::settings::SearchHistoryEntry::album(&id, &title, subtitle.as_deref(), thumbnail.as_deref()));
+                        app.push(self::album(&app, &id, &title));
+                    });
                     list.append(&row);
                 }
                 list.upcast()
@@ -400,7 +405,11 @@ impl SearchRows {
                 for artist in artists {
                     let row = summary_row(&artist.name, artist.subtitle.as_deref(), artist.thumbnail_url.as_deref(), true);
                     let (app, id, name) = (app.clone(), artist.browse_id, artist.name);
-                    row.connect_activated(move |_| app.push(self::artist(&app, &id, &name)));
+                    let thumbnail = artist.thumbnail_url.clone();
+                    row.connect_activated(move |_| {
+                        app.remember_search(crate::settings::SearchHistoryEntry::artist(&id, &name, thumbnail.as_deref()));
+                        app.push(self::artist(&app, &id, &name));
+                    });
                     list.append(&row);
                 }
                 list.upcast()

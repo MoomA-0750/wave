@@ -121,6 +121,8 @@ async fn show_home(toolbar: &adw::ToolbarView, repo: &MusicRepository) {
         std::rc::Rc::new(move || {
             playback.clear();
             queue_store::clear();
+            // 検索の履歴も消す（ほかの端末と同じ）
+            downloads.update_settings(|s| s.search_history.clear());
             // ログアウトしたら、取った曲と Claude との会話も消す（ほかの端末と同じ）
             downloads.clear();
             if let Some(app) = APP.with(|a| a.borrow().clone()) {
