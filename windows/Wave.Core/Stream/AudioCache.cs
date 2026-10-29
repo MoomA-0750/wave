@@ -107,7 +107,8 @@ public sealed partial class AudioCache(string directory, Func<long> nowMs, long 
             {
             }
             formats.Clear();
-            loaded = true;
+            // 次に使うときに置き場を作り直す（作り直さないと、ログインし直した後の曲がすべて開けずに飛ばされた）
+            loaded = false;
         }
     }
 

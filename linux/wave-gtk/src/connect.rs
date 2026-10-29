@@ -1328,8 +1328,10 @@ impl Connect {
                 outcome = Some(ClientEvent::Joined);
                 break;
             }
-            // 家に入れてもらったら、つなぎ直して鎖を取る（認証は中継の鎖の今の端末で行う）
+            // 家に入れてもらったら、つなぎ直して鎖を取る（認証は中継の鎖の今の端末で行う）。
+            // 前から家にいる端末（同じ鍵で加わり直す）は接続が切れず、新しい記録も来ないので、つながっていれば鎖を頼む
             self.with_socket(RelaySocket::reconnect);
+            self.send(RelayMessage::ChainGet { from_seq: 0 });
             match glib::future_with_timeout(Duration::from_millis(wait), &mut rx).await {
                 Ok(Ok(event)) => {
                     outcome = Some(event);

@@ -108,6 +108,19 @@ public sealed class AudioCacheTests : IDisposable
     }
 
     [Fact]
+    public async Task CachingWorksAgainAfterClear()
+    {
+        // ログアウトで消した後（ログインし直した後）も、置き場を作り直して残せる
+        var cache = new AudioCache(directory, () => 0);
+        var first = await RangeStream.OpenAsync(new HttpClient(new RangeServer(100)), Stream("ggggggggggg", 100), cache: cache);
+        await first.ReadRangeAsync(0, 99);
+        cache.Clear();
+        var again = await RangeStream.OpenAsync(new HttpClient(new RangeServer(100)), Stream("hhhhhhhhhhh", 100), cache: cache);
+        await again.ReadRangeAsync(0, 99);
+        Assert.Equal(100, cache.Entry("hhhhhhhhhhh")?.Cached);
+    }
+
+    [Fact]
     public async Task FilesHoldNoUrl()
     {
         var cache = new AudioCache(directory, () => 0);
