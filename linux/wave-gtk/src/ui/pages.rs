@@ -279,7 +279,7 @@ pub fn format_seconds(seconds: u32) -> String {
 /// 検索の結果。上の切り替えで「曲・アルバム・アーティスト・ライブ」に絞る（Mac・Windows と同じ）。続きは下の「もっと見る」で読む。
 pub fn search(app: &Rc<App>, query: &str) -> adw::NavigationPage {
     let tabs = adw::ToggleGroup::builder().halign(gtk::Align::Start).css_classes(["round"]).build();
-    for (name, label) in [("songs", "曲"), ("albums", "アルバム"), ("artists", "アーティスト"), ("live", "ライブ")] {
+    for (name, label) in [("songs", "曲"), ("albums", "アルバム"), ("artists", "アーティスト"), ("live", "ライブ"), ("podcasts", "ポッドキャスト"), ("episodes", "エピソード")] {
         tabs.add(adw::Toggle::builder().label(label).name(name).build());
     }
     tabs.set_active_name(Some("songs"));
@@ -336,6 +336,8 @@ fn search_results(app: &Rc<App>, query: &str, kind: &str) -> gtk::Widget {
                         "albums" => repo.search_albums(&q, t).await.map(|p| (SearchRows::Albums(p.items), p.continuation)),
                         "artists" => repo.search_artists(&q, t).await.map(|p| (SearchRows::Artists(p.items), p.continuation)),
                         "live" => repo.search_live(&q, t).await.map(|p| (SearchRows::Songs(p.songs), p.continuation)),
+                        "podcasts" => repo.search_podcasts(&q, t).await.map(|p| (SearchRows::Podcasts(p.items), p.continuation)),
+                        "episodes" => repo.search_episodes(&q, t).await.map(|p| (SearchRows::Episodes(p.items), p.continuation)),
                         _ => repo.search_songs(&q, t).await.map(|p| (SearchRows::Songs(p.songs), p.continuation)),
                     }
                 })
@@ -371,6 +373,8 @@ enum SearchRows {
     Songs(Vec<Song>),
     Albums(Vec<wave_core::music::models::AlbumSummary>),
     Artists(Vec<wave_core::music::models::ArtistSummary>),
+    Podcasts(Vec<wave_core::music::podcast::PodcastSummary>),
+    Episodes(Vec<wave_core::music::podcast::PodcastEpisode>),
 }
 
 impl SearchRows {
@@ -379,12 +383,16 @@ impl SearchRows {
             SearchRows::Songs(v) => v.is_empty(),
             SearchRows::Albums(v) => v.is_empty(),
             SearchRows::Artists(v) => v.is_empty(),
+            SearchRows::Podcasts(v) => v.is_empty(),
+            SearchRows::Episodes(v) => v.is_empty(),
         }
     }
 
     fn widget(self, app: &Rc<App>) -> gtk::Widget {
         match self {
             SearchRows::Songs(songs) => song_list(app, songs).upcast(),
+            SearchRows::Podcasts(shows) => super::podcasts::search_shows(app, shows),
+            SearchRows::Episodes(episodes) => super::podcasts::search_episodes(app, episodes),
             SearchRows::Albums(albums) => {
                 let list = gtk::ListBox::builder().selection_mode(gtk::SelectionMode::None).css_classes(["boxed-list"]).build();
                 for album in albums {

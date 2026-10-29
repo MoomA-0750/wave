@@ -21,6 +21,11 @@ static ABSOLUTE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"([0-9]{4})[/年
 
 /// YouTube の新しいエピソード（新しい順）に、RSS の番組の新しい回を混ぜて新しい順にする。positions は音声の URL から聴いたところ。
 pub fn merge(youtube: &[PodcastEpisode], feeds: &[FeedShow], now_epoch_seconds: i64, positions: impl Fn(&str) -> Option<EpisodePosition>) -> Vec<PodcastEpisode> {
+    merge_refs(youtube, &feeds.iter().collect::<Vec<_>>(), now_epoch_seconds, positions)
+}
+
+/// merge と同じ（番組を参照の並びで受ける。読んだ番組を共有して持つ側から呼ぶ）。
+pub fn merge_refs(youtube: &[PodcastEpisode], feeds: &[&FeedShow], now_epoch_seconds: i64, positions: impl Fn(&str) -> Option<EpisodePosition>) -> Vec<PodcastEpisode> {
     // 読めない表示の YouTube の回は、一つ前の回と同じ日時にする（並びを崩さない）
     let mut previous = now_epoch_seconds;
     let mut dated: Vec<(i64, PodcastEpisode)> = Vec::new();

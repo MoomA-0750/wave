@@ -25,6 +25,8 @@ pub struct App {
     pub connect: Rc<crate::connect::Connect>,
     /// 登録したアーティストの新作。
     pub releases: Rc<crate::releases::Releases>,
+    /// RSS の番組（登録と聴いたところ）。
+    pub podcasts: Rc<crate::podcasts::Podcasts>,
     /// 映像を窓いっぱいに出す層（gtk4paintablesink が無ければ None）。
     video_layer: std::cell::RefCell<Option<gtk::Widget>>,
     /// Claude との会話。
@@ -109,6 +111,7 @@ pub fn build(
     downloads: Rc<crate::downloads::Downloads>,
     connect: Rc<crate::connect::Connect>,
     releases: Rc<crate::releases::Releases>,
+    podcasts: Rc<crate::podcasts::Podcasts>,
     on_logout: Rc<dyn Fn()>,
 ) -> (gtk::Widget, Rc<App>) {
     let css = gtk::CssProvider::new();
@@ -117,7 +120,7 @@ pub fn build(
 
     let nav = adw::NavigationView::new();
     let toasts = adw::ToastOverlay::new();
-    let app = Rc::new(App { repo, lyrics, playback, nav: nav.clone(), toasts: toasts.clone(), video, downloads, connect, releases, video_layer: Default::default(), ai: Default::default(), claude_toggle: Default::default(), editable_playlists: Default::default() });
+    let app = Rc::new(App { repo, lyrics, playback, nav: nav.clone(), toasts: toasts.clone(), video, downloads, connect, releases, podcasts, video_layer: Default::default(), ai: Default::default(), claude_toggle: Default::default(), editable_playlists: Default::default() });
     {
         let app = app.clone();
         gtk::glib::spawn_future_local(async move {
@@ -612,17 +615,19 @@ fn library(app: &Rc<App>) -> gtk::Widget {
     // ダウンロード（高く評価した曲と同じく、いつも先頭の方に出す）
     let downloads_row = library_row_icon("ダウンロード", "この PC に保存", "folder-download-symbolic");
     list.append(&downloads_row);
+    list.append(&library_row_icon("ポッドキャスト", "番組と新しいエピソード", "audio-input-microphone-symbolic"));
     let scroller = gtk::ScrolledWindow::builder().child(&list).hscrollbar_policy(gtk::PolicyType::Never).vexpand(true).build();
     column.append(&scroller);
 
     // 行の順の行き先（2行目のダウンロードはプレイリストではないので、印の ID にする）
     let entries: Rc<std::cell::RefCell<Vec<(String, String)>>> =
-        Rc::new(std::cell::RefCell::new(vec![(LIKED_SONGS.to_string(), "高く評価した曲".to_string()), (DOWNLOADS_ENTRY.to_string(), String::new())]));
+        Rc::new(std::cell::RefCell::new(vec![(LIKED_SONGS.to_string(), "高く評価した曲".to_string()), (DOWNLOADS_ENTRY.to_string(), String::new()), (PODCASTS_ENTRY.to_string(), String::new())]));
     {
         let (app, entries) = (app.clone(), entries.clone());
         list.connect_row_activated(move |_, row| {
             match entries.borrow().get(row.index() as usize).cloned() {
                 Some((id, _)) if id == DOWNLOADS_ENTRY => app.push(pages::downloads(&app)),
+                Some((id, _)) if id == PODCASTS_ENTRY => app.push(super::podcasts::library(&app)),
                 Some((id, title)) => app.push(pages::playlist(&app, &id, &title)),
                 None => {}
             }
@@ -643,6 +648,8 @@ fn library(app: &Rc<App>) -> gtk::Widget {
 
 /// マイライブラリの「ダウンロード」の行の印（YouTube の ID とは重ならない形）。
 const DOWNLOADS_ENTRY: &str = "wave:downloads";
+/// マイライブラリの「ポッドキャスト」の行の印。
+const PODCASTS_ENTRY: &str = "wave:podcasts";
 
 fn library_row_icon(title: &str, subtitle: &str, icon: &str) -> gtk::ListBoxRow {
     let row = gtk::Box::builder().spacing(12).margin_top(4).margin_bottom(4).build();
@@ -1301,6 +1308,10 @@ fn player_bar(app: &Rc<App>, side: &gtk::Widget, side_stack: &gtk::Stack) -> gtk
                     volume.set_value(f64::from(percent) / 100.0);
                 }
                 return;
+            }
+            // 映し終えたら、手元の音量に戻す
+            if (volume.value() - app.playback.player().volume()).abs() > 0.001 {
+                volume.set_value(app.playback.player().volume());
             }
             let current = app.playback.current();
             bar.set_sensitive(current.is_some());

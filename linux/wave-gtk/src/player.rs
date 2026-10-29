@@ -27,6 +27,8 @@ pub struct Player {
     live: Option<wave_core::stream::live::LiveClient>,
     /// 今の曲を解いた結果（再生履歴を送るのに使う。取った曲から鳴らしたときは裏で解き直す）。
     current_stream: Arc<Mutex<Option<wave_core::stream::resolver::ResolvedStream>>>,
+    /// RSS のエピソードの続きから流す位置（音声の URL → ミリ秒）。
+    external_resume: std::cell::RefCell<Option<Box<dyn Fn(&str) -> u64>>>,
 }
 
 #[derive(Default)]
@@ -89,13 +91,18 @@ impl Player {
             configure_source(&source, setup_feed.clone());
             None
         });
-        Self { playbin, resolver, downloads, feed, pending_start: Arc::default(), live: None, current_stream: Arc::default() }
+        Self { playbin, resolver, downloads, feed, pending_start: Arc::default(), live: None, current_stream: Arc::default(), external_resume: Default::default() }
     }
 
     /// ライブ配信を流せるようにする（HLS を GStreamer に直に読ませる）。
     pub fn with_live(mut self, live: wave_core::stream::live::LiveClient) -> Self {
         self.live = Some(live);
         self
+    }
+
+    /// RSS のエピソードを続きから流すための、聴いたところの引き方。
+    pub fn set_external_resume(&self, resume: impl Fn(&str) -> u64 + 'static) {
+        *self.external_resume.borrow_mut() = Some(Box::new(resume));
     }
 
     /// その曲を頭から鳴らす。取り終えていればファイルから、ほかは解いて範囲で取る。
@@ -110,6 +117,17 @@ impl Player {
         *self.pending_start.lock().unwrap() = (!immediate).then_some((start_ms, playing));
         let target = if immediate { gst::State::Playing } else { gst::State::Paused };
         *self.current_stream.lock().unwrap() = None;
+        // RSS のエピソード（ext:）は、音声の URL を GStreamer に直に読ませる（続きから）
+        if let Some(url) = wave_core::music::feed::audio_url_of(video_id) {
+            let start = if start_ms > 0 { start_ms } else { self.external_resume.borrow().as_ref().map_or(0, |f| f(url)) };
+            *self.pending_start.lock().unwrap() = (start > 0 || !playing).then_some((start, playing));
+            self.playbin.set_state(gst::State::Null).ok();
+            eprintln!("play source=feed");
+            self.playbin.set_property("uri", url);
+            let state = if start > 0 || !playing { gst::State::Paused } else { gst::State::Playing };
+            self.playbin.set_state(state).map_err(|_| StreamFailure::Unplayable)?;
+            return Ok(());
+        }
         if let Some(store) = &self.downloads
             && let (Some(file), Some(path)) = (store.completed(video_id), store.bytes_path(video_id))
         {

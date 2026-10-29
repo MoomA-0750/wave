@@ -56,8 +56,8 @@ fn build(app: &Rc<App>, song: &Song, removal: Option<Rc<Removal>>) -> (gio::Menu
     let queue_section = gio::Menu::new();
     queue_section.append(Some("次に再生"), Some("song.play-next"));
     queue_section.append(Some("キューに追加"), Some("song.add-queue"));
-    // ダウンロード（取っていれば「ダウンロードを削除」。ライブ配信は取らない）
-    if !song.is_live {
+    // ダウンロード（取っていれば「ダウンロードを削除」。ライブ配信と RSS のエピソードはまだ取らない）
+    if !song.is_live && !wave_core::music::feed::is_external(&song.video_id) {
         let state = app.downloads.state(&song.video_id);
         let single = app.downloads.manifest().is_single(&song.video_id);
         if single || state == crate::downloads::SongState::Done && !app.downloads.manifest().is_wanted(&song.video_id) {

@@ -7,6 +7,7 @@ mod keyring;
 mod login;
 mod mpris;
 mod playback;
+mod podcasts;
 mod player;
 mod queue_store;
 mod releases;
@@ -153,8 +154,15 @@ async fn show_home(toolbar: &adw::ToolbarView, repo: &MusicRepository) {
     // 端末の連携（中継の場所が設定にあるときだけ）
     let relay_url = downloads.settings.borrow().relay_url.clone();
     let connect = connect::Connect::start(repo.clone(), playback.clone(), relay_url).await;
+    // RSS の番組（登録と聴いたところ）。エピソードは続きから流し、鳴らしている間は聴いたところを書き留める
+    let podcasts = podcasts::Podcasts::new(&region());
+    {
+        let podcasts = podcasts.clone();
+        playback.player().set_external_resume(move |url| podcasts.resume_ms(url));
+    }
+    podcasts.track(&playback);
     let releases = releases::Releases::start(repo.clone(), downloads.settings.borrow().release_notices);
-    let (shell, app) = ui::shell::build(repo.clone(), lyrics, playback.clone(), video, downloads, connect, releases, on_logout);
+    let (shell, app) = ui::shell::build(repo.clone(), lyrics, playback.clone(), video, downloads, connect, releases, podcasts, on_logout);
     if let Some(window) = toolbar.root().and_downcast::<adw::ApplicationWindow>() {
         // GNOME のメディアの操作・メディアキーから操作できるようにする（窓がある間だけ出す）
         let (raise, quit) = (window.clone(), window.clone());
@@ -166,6 +174,12 @@ async fn show_home(toolbar: &adw::ToolbarView, repo: &MusicRepository) {
     APP.with(|a| *a.borrow_mut() = Some(app.clone()));
     if let Ok(query) = std::env::var("WAVE_DEMO_QUERY") {
         app.demo(&query);
+    }
+    // 確かめ用: WAVE_DEMO_PODCAST に番組の browseId（MPSP… か rss:…）、podcasts ならマイライブラリのポッドキャストを開く
+    match std::env::var("WAVE_DEMO_PODCAST").as_deref() {
+        Ok("podcasts") => app.push(ui::podcasts::library(&app)),
+        Ok(id) => app.push(ui::podcasts::show(&app, id, "ポッドキャスト")),
+        Err(_) => {}
     }
     // 確かめ用: WAVE_DEMO_PLAYLIST にプレイリストの ID（LM は高く評価した曲）があれば開く
     if let Ok(id) = std::env::var("WAVE_DEMO_PLAYLIST") {
