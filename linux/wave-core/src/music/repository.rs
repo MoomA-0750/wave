@@ -3,7 +3,9 @@
 use serde_json::json;
 
 use super::models::{Account, AddToPlaylistResult, AlbumPage, LikeStatus, MusicVideo, ArtistPage, HomePage, PlaylistPage, PlaylistSummary, SongPage, UpNextPage, VerifiedAccount, AlbumSummary, ArtistSummary, SearchPage, SearchSuggestions, MoodSection, HomeItem};
+use super::models::ArtistRef;
 use super::parsers;
+use super::podcast::{self, PodcastEpisode, PodcastPage, PodcastSummary};
 use crate::innertube::{ApiResult, Failure, InnerTube};
 
 /// プレイリストの並べ方: 追加した日。
@@ -35,6 +37,13 @@ pub const ARTISTS_FILTER: &str = "EgWKAQIgAWoKEAkQBRAKEAMQBA%3D%3D";
 pub const FEATURED_PLAYLISTS_FILTER: &str = "EgeKAQQoADgBahIQBRAEEAkQAxAKEBUQDhAREBA%3D";
 pub const COMMUNITY_PLAYLISTS_FILTER: &str = "EgeKAQQoAEABahIQBRAEEAkQAxAKEBUQDhAREBA%3D";
 pub const VIDEOS_FILTER: &str = "EgWKAQIQAWoSEAUQBBAJEAMQChAVEA4QERAQ";
+pub const PODCASTS_FILTER: &str = "EgWKAQJQAWoKEAkQBRAKEAMQBA%3D%3D";
+pub const EPISODES_FILTER: &str = "EgWKAQJIAWoKEAkQBRAKEAMQBA%3D%3D";
+/// ライブラリのポッドキャスト（保存した番組）。
+pub const LIBRARY_PODCASTS: &str = "FEmusic_library_non_music_audio_list";
+/// 「新しいエピソード」のプレイリスト（再生の出どころ）と、その browseId。
+pub const NEW_EPISODES: &str = "RDPN";
+pub const NEW_EPISODES_BROWSE: &str = "VLRDPN";
 pub const HOME: &str = "FEmusic_home";
 pub const LIBRARY_PLAYLISTS: &str = "FEmusic_liked_playlists";
 /// 高く評価した曲のプレイリスト。
@@ -265,6 +274,75 @@ impl MusicRepository {
             body["continuation"] = json!(c);
         }
         Ok(parsers::up_next(&self.client.post("next", body, true, &[]).await?))
+    }
+
+    pub async fn search_podcasts(&self, query: &str, continuation: Option<&str>) -> ApiResult<SearchPage<PodcastSummary>> {
+        Ok(podcast::search_podcasts(&self.search_raw(query, PODCASTS_FILTER, continuation).await?))
+    }
+
+    pub async fn search_episodes(&self, query: &str, continuation: Option<&str>) -> ApiResult<SearchPage<PodcastEpisode>> {
+        Ok(podcast::search_episodes(&self.search_raw(query, EPISODES_FILTER, continuation).await?))
+    }
+
+    /// ポッドキャストの番組のページ（MPSP…）。エピソードは新しい順。
+    pub async fn podcast(&self, browse_id: &str) -> ApiResult<PodcastPage> {
+        let root = self.client.post("browse", json!({ "browseId": browse_id }), true, &[]).await?;
+        podcast::podcast_page(&root, browse_id).ok_or(Failure::Parse)
+    }
+
+    /// 番組のページのエピソードの続き。show は番組名（行に無いのでエピソードのアーティストとして入れる）。
+    /// 「新しいエピソード」の続きは行ごとに番組が付くので、show は何でもよい。
+    pub async fn podcast_episodes(&self, continuation: &str, show: &ArtistRef, show_browse_id: Option<&str>) -> ApiResult<SearchPage<PodcastEpisode>> {
+        let root = self.client.post("browse", json!({ "continuation": continuation }), true, &[]).await?;
+        Ok(podcast::podcast_episodes(&root, show, show_browse_id))
+    }
+
+    /// ライブラリの「新しいエピソード」（VLRDPN。YouTube の分だけ、新しい順）。ログイン必須。
+    /// 空のときは番組のページの形で返らないので、読めなければ空にする。RSS の回は new_episodes::merge で混ぜる。
+    pub async fn new_episodes(&self) -> ApiResult<SearchPage<PodcastEpisode>> {
+        let root = self.logged_in_post("browse", json!({ "browseId": NEW_EPISODES_BROWSE })).await?;
+        Ok(match podcast::podcast_page(&root, NEW_EPISODES_BROWSE) {
+            Some(page) => SearchPage { items: page.episodes, continuation: page.continuation },
+            None => SearchPage { items: Vec::new(), continuation: None },
+        })
+    }
+
+    /// ライブラリのポッドキャスト（保存した番組。続きのページまで。途中で失敗したらそこまでの分）。ログイン必須。
+    pub async fn library_podcasts(&self) -> ApiResult<Vec<PodcastSummary>> {
+        let mut items: Vec<PodcastSummary> = Vec::new();
+        let mut token: Option<String> = None;
+        for page in 0..MAX_LIBRARY_PAGES {
+            let body = match &token {
+                Some(t) => json!({ "continuation": t }),
+                None => json!({ "browseId": LIBRARY_PODCASTS }),
+            };
+            let root = match self.logged_in_post("browse", body).await {
+                Ok(root) => root,
+                Err(e) if page == 0 => return Err(e),
+                Err(_) => break,
+            };
+            for p in podcast::library_podcasts(&root) {
+                if !items.iter().any(|x| x.browse_id == p.browse_id) {
+                    items.push(p);
+                }
+            }
+            let next = parsers::library_continuation(&root);
+            if next.is_none() || next == token {
+                break;
+            }
+            token = next;
+        }
+        Ok(items)
+    }
+
+    /// ポッドキャストをライブラリに保存する・外す（番組のプレイリスト PL… を高く評価するのと同じ書き込み。Windows・Android と同じ）。
+    /// playlist_id は PodcastSummary::playlist_id・PodcastPage::playlist_id。ログイン必須。
+    pub async fn set_podcast_saved(&self, playlist_id: &str, saved: bool) -> ApiResult<()> {
+        if !self.client.is_logged_in() {
+            return Err(Failure::NotLoggedIn);
+        }
+        let endpoint = if saved { "like/like" } else { "like/removelike" };
+        self.client.post(endpoint, json!({ "target": { "playlistId": playlist_id } }), true, &[]).await.map(|_| ())
     }
 
     /// ログイン必須の呼び出し。ログインの案内だけが返ったら NotLoggedIn。
