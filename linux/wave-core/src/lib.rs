@@ -4,6 +4,7 @@
 pub mod ai;
 pub mod connect;
 pub mod credentials;
+pub mod discord;
 pub mod download;
 pub mod innertube;
 mod json;

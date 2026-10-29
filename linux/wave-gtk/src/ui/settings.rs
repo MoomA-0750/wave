@@ -86,6 +86,46 @@ pub fn page(app: &Rc<App>) -> adw::NavigationPage {
 
     super::devices::add_to(&prefs, app);
 
+    let discord = adw::PreferencesGroup::builder()
+        .title("Discord")
+        .description("discord.com/developers/applications で「wave」という名前のアプリケーションを作り、その Application ID を入れてください")
+        .build();
+    let discord_on = adw::SwitchRow::builder()
+        .title("Discord に再生中の曲を出す")
+        .subtitle(crate::discord_status::status_text())
+        .active(settings.discord_presence)
+        .build();
+    let discord_id = adw::EntryRow::builder().title("Application ID").text(settings.discord_client_id.as_deref().unwrap_or("")).show_apply_button(true).build();
+    discord.add(&discord_on);
+    discord.add(&discord_id);
+    prefs.add(&discord);
+    {
+        let app = app.clone();
+        discord_on.connect_active_notify(move |row| {
+            let on = row.is_active();
+            app.downloads.update_settings(|s| s.discord_presence = on);
+            crate::discord_status::push();
+        });
+    }
+    {
+        let app = app.clone();
+        discord_id.connect_apply(move |row| {
+            let id: String = row.text().chars().filter(char::is_ascii_digit).collect();
+            row.set_text(&id);
+            app.downloads.update_settings(|s| s.discord_client_id = (!id.is_empty()).then_some(id));
+            crate::discord_status::push();
+        });
+    }
+    {
+        // 状態の文を追う（ページを閉じたら止める）
+        let row = discord_on.downgrade();
+        gtk::glib::timeout_add_local(std::time::Duration::from_secs(1), move || {
+            let Some(row) = row.upgrade() else { return gtk::glib::ControlFlow::Break };
+            row.set_subtitle(crate::discord_status::status_text());
+            gtk::glib::ControlFlow::Continue
+        });
+    }
+
     let claude = adw::PreferencesGroup::builder().title("Claude").build();
     let bridge = adw::ActionRow::builder().title("中継（ai-bridge）").build();
     let unpair = gtk::Button::builder().label("外す").valign(gtk::Align::Center).build();

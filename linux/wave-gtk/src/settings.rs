@@ -17,13 +17,17 @@ pub struct Settings {
     pub release_notices: bool,
     /// 検索の履歴（新しい順、最大 30 件。Windows と同じ）。ログアウトで消す。
     pub search_history: Vec<SearchHistoryEntry>,
+    /// Discord に再生中の曲を出す（既定は切。Windows と同じ）。
+    pub discord_presence: bool,
+    /// Discord のアプリケーション ID（本人が discord.com/developers で作ったもの）。
+    pub discord_client_id: Option<String>,
     /// 端末の連携の中継（wss://ホスト:ポート）。リポジトリには書かない、本人がここで入れる値。ログに出さない。
     pub relay_url: Option<String>,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { smart_downloads: false, smart_download_count: DEFAULT_COUNT, download_network: DownloadNetwork::Unmetered, relay_url: None, send_history: true, release_notices: true, search_history: Vec::new() }
+        Self { smart_downloads: false, smart_download_count: DEFAULT_COUNT, download_network: DownloadNetwork::Unmetered, relay_url: None, send_history: true, release_notices: true, search_history: Vec::new(), discord_presence: false, discord_client_id: None }
     }
 }
 

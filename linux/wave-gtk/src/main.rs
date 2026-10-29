@@ -2,6 +2,7 @@
 
 mod ai_chat;
 mod connect;
+mod discord_status;
 mod downloads;
 mod keyring;
 mod login;
@@ -179,6 +180,7 @@ async fn show_home(toolbar: &adw::ToolbarView, repo: &MusicRepository) {
         MPRIS.with(|m| *m.borrow_mut() = Some(started));
     }
     APP.with(|a| *a.borrow_mut() = Some(app.clone()));
+    discord_status::start(&app);
     if let Ok(query) = std::env::var("WAVE_DEMO_QUERY") {
         app.demo(&query);
     }
