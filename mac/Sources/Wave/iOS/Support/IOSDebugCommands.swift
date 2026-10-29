@@ -87,6 +87,11 @@ enum IOSDebugCommands {
                 MusicPip.shared.settingChanged()
             case "stop": MusicPip.shared.stop()
             case "dump": try? MusicPip.shared.debugImage()?.write(to: AppPaths.file("music-pip.png"))
+            case "dump-scroll", "dump-morph":
+                // 移り変わりの途中の絵を 4 枚（0・0.3・0.6・1）
+                for (i, progress) in [0, 0.3, 0.6, 1].enumerated() {
+                    try? MusicPip.shared.debugMotionImage(String(arg.dropFirst(5)), progress: progress)?.write(to: AppPaths.file("music-pip-\(arg.dropFirst(5))-\(i).png"))
+                }
             default: MusicPip.shared.start()
             }
             AppPaths.log("debug music-pip setting=\(AppServices.settings.musicPip) active=\(MusicPip.shared.active)")

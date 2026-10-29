@@ -949,3 +949,10 @@
 - 同じ書き込みの止まらない不具合と包み直しの欠けは Android（Kotlin）・Mac・iPhone（Swift）・Windows（C#）の LibrarySync にもあったので、同じ直し方を入れた（自動テスト: Kotlin の `LibrarySyncTest`、C# の `LibrarySyncSimulationTests`、Swift の `LibrarySyncUnitTests`。Swift はこの機械で組めないので未確認）
 - Linux 版で、起動してすぐ曲を選ぶと、アカウントを確かめ終える前の claim が断られ、確かめ終えたときには曲がまだ読み込み中で「止まっている」と見て claim し直さなかった（この端末で鳴っているのに、ほかの端末を映したままになった）。カーソルの「再生中」は、読み込み中で鳴らそうとしているときも含める
 - 2026-10-29: iPhone で Galaxy の再生を映すと、位置が 10 秒ほど遅れたままになっていた。iPhone・Mac の連携の時計（ConnectWorker.clockMs）が DispatchTime（眠っている間・アプリが止められている間に止まる）で、受けたカーソルからの経過がその分足りなかった（書き手は曲の変わり目などにしか書かないので、次に書かれるまで遅れたまま）。眠っている間も進む CLOCK_MONOTONIC にした（Android は前から elapsedRealtime）。Linux も Instant（休止で止まる）だったので CLOCK_BOOTTIME にした。Pixel 3 を Linux で映して測ると、ずれは 0.8〜0.9 秒（PC と Pixel の時計の差を含む）で、書き手の位置と外挿の式は正しかった。Windows の Stopwatch は確かめていない
+
+## 2026-10-29 iPhone の音楽の小窓の移り変わりを動かす
+
+- 小窓は AVSampleBufferDisplayLayer に1枚ずつ絵を渡す作りなので、OS の動きは使えない。移り変わりの間だけ 33ms ごとに途中の絵を描いて渡す（すぐ出す印を付けたまま。時刻で並べると、曲の位置に合わせて timebase を動かしているので狂う）
+- 裏にいる間は画面の更新に付いた CADisplayLink が止まるので、Task の sleep で回す
+- 行の送りは、次の行を「薄い小さな字」と「濃い大きな字」の2つで同じ場所に重ね、拡大しながら入れ替える。字の大きさを1コマずつ変えると折り返しの位置が途中で飛ぶため
+- 小窓を出していないとき（wave の画面にいるとき）は動かさずに描く（見えない絵を描かない）

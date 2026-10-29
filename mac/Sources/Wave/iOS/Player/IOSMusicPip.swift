@@ -24,8 +24,7 @@ final class MusicPip: NSObject, AVPictureInPictureControllerDelegate, AVPictureI
         CMTimebaseCreateWithSourceClock(allocator: kCFAllocatorDefault, sourceClock: CMClockGetHostTimeClock(), timebaseOut: &timebase)
         return timebase
     }()
-    /// 絵にした曲（同じ曲・同じジャケットなら描き直さない）と、読み込んだジャケット。
-    private var drawnKey: String?
+    /// 読み込んだジャケット。
     private var artwork: UIImage?
     private var artworkFor: String?
 
@@ -106,8 +105,9 @@ final class MusicPip: NSObject, AVPictureInPictureControllerDelegate, AVPictureI
         self.controller = controller
     }
 
+    /// 動かさずに描き直す。
     private func redraw() {
-        drawnKey = nil
+        shown = nil
         sync()
     }
 
@@ -139,16 +139,92 @@ final class MusicPip: NSObject, AVPictureInPictureControllerDelegate, AVPictureI
         var next: String?
     }
 
+    /// 小窓に出す中身（変わったら描き直す）。
+    private struct Scene: Equatable {
+        var videoId: String
+        var title: String
+        var artist: String
+        var hasArtwork: Bool
+        var lyric: LyricPair?
+    }
+
+    /// 前の絵から次の絵への移り方。
+    private enum Motion {
+        /// 前の絵を薄めながら次の絵を重ねる（曲が変わったとき・ジャケットが届いたとき・行が飛んだとき）。
+        case crossfade(UIImage)
+        /// 曲名の絵と歌詞の絵の間: ジャケットが大きさと場所を変え、文字を入れ替える。lyric は歌詞の絵の側の行。
+        case morph(lyric: LyricPair, toLyric: Bool)
+        /// 行が次へ進んだ: 歌っていた行が上へ抜け、次の行が上がって大きくなり、その次の行が下から出る。
+        case scroll(from: LyricPair)
+    }
+
+    /// 出している（か移っている先の）中身と、最後に渡した絵。
+    private var shown: Scene?
+    private var lastFrame: UIImage?
+    private var animation: Task<Void, Never>?
+
+    /// 移り変わりの長さ（ばねがほぼ止まるまで）と、絵を送る間隔（30 コマ）。
+    private static let motionDuration: CFTimeInterval = 0.55
+    private static let frameInterval: Duration = .milliseconds(33)
+
     private func draw(_ song: Song, lyric: LyricPair?) {
         if artworkFor != song.videoId {
             artworkFor = song.videoId
             artwork = nil
             loadArtwork(song)
         }
-        let key = "\(song.videoId)|\(song.title)|\(song.artistsText)|\(artwork != nil)|\(lyric?.current ?? "-")|\(lyric?.next ?? "-")"
-        guard key != drawnKey else { return }
-        drawnKey = key
-        guard let buffer = Self.render(title: song.title, artist: song.artistsText, artwork: artwork, lyric: lyric) else { return }
+        let scene = Scene(videoId: song.videoId, title: song.title, artist: song.artistsText, hasArtwork: artwork != nil, lyric: lyric)
+        guard scene != shown else { return }
+        let from = shown
+        shown = scene
+        let interrupted = animation != nil
+        animation?.cancel()
+        animation = nil
+        // 小窓を出していないとき（wave の画面にいるとき）は動かさずに描く
+        guard active, let from, let lastFrame, let motion = Self.motion(from: from, to: scene, lastFrame: lastFrame, interrupted: interrupted) else {
+            enqueue(Self.frame(scene, artwork: artwork, motion: nil, progress: 1))
+            return
+        }
+        let artwork = artwork
+        animation = Task { @MainActor [weak self] in
+            let start = CACurrentMediaTime()
+            while !Task.isCancelled {
+                let elapsed = CACurrentMediaTime() - start
+                let done = elapsed >= Self.motionDuration
+                self?.enqueue(Self.frame(scene, artwork: artwork, motion: done ? nil : motion, progress: Self.spring(elapsed)))
+                if done { break }
+                try? await Task.sleep(for: Self.frameInterval)
+            }
+            if !Task.isCancelled { self?.animation = nil }
+        }
+    }
+
+    /// 前の中身から次の中身への移り方。動かさずに描くなら nil。
+    private static func motion(from: Scene, to: Scene, lastFrame: UIImage, interrupted: Bool) -> Motion? {
+        // 動きを減らす設定のとき・前の移り変わりの途中で次が来たときは、見えている絵から薄めて重ねる
+        let fade = Motion.crossfade(lastFrame)
+        if UIAccessibility.isReduceMotionEnabled || interrupted { return fade }
+        guard from.videoId == to.videoId, from.title == to.title, from.artist == to.artist, from.hasArtwork == to.hasArtwork else { return fade }
+        switch (from.lyric, to.lyric) {
+        case let (old?, new?):
+            // 次の行が歌っている行になった（ふつうに進んだ）ときだけ送る。シークで飛んだときは重ねる
+            if let current = new.current, current == old.next { return .scroll(from: old) }
+            return fade
+        case let (nil, new?): return .morph(lyric: new, toLyric: true)
+        case let (old?, nil): return .morph(lyric: old, toLyric: false)
+        case (nil, nil): return fade
+        }
+    }
+
+    /// 減衰のちょうどよいばね（行き過ぎない）。0 から始まり 1 に寄っていく。
+    private static func spring(_ t: CFTimeInterval) -> CGFloat {
+        let omega = 2 * Double.pi / 0.4
+        return CGFloat(min(1, 1 - (1 + omega * t) * exp(-omega * t)))
+    }
+
+    private func enqueue(_ image: UIImage) {
+        lastFrame = image
+        guard let buffer = Self.sampleBuffer(image, width: Self.width, height: Self.height) else { return }
         let renderer = surface.displayLayer.sampleBufferRenderer
         renderer.flush(removingDisplayedImage: renderer.requiresFlushToResumeDecoding, completionHandler: nil)
         renderer.enqueue(buffer)
@@ -160,14 +236,9 @@ final class MusicPip: NSObject, AVPictureInPictureControllerDelegate, AVPictureI
             guard let (data, _) = try? await ImageLoader.session.data(from: url), let image = UIImage(data: data) else { return }
             guard artworkFor == song.videoId else { return }
             artwork = image
-            if let current = AppServices.player.current, current.videoId == song.videoId { redraw() }
+            // 届いたジャケットは、音符の絵から薄めて重ねる
+            if let current = AppServices.player.current, current.videoId == song.videoId { sync() }
         }
-    }
-
-    /// 16:9 の絵（ぼかしたジャケットを下に敷き、左にジャケット、右に曲名とアーティスト）を、PiP に渡す形にする。
-    private static func render(title: String, artist: String, artwork: UIImage?, lyric: LyricPair?) -> CMSampleBuffer? {
-        let image = lyric.map { lyricImage(title: title, artist: artist, artwork: artwork, lyric: $0) } ?? image(title: title, artist: artist, artwork: artwork)
-        return sampleBuffer(image, width: width, height: height)
     }
 
     private static let width = 960, height = 540
@@ -176,94 +247,216 @@ final class MusicPip: NSObject, AVPictureInPictureControllerDelegate, AVPictureI
     /// 開発用: 今の曲で小窓に渡す絵を PNG で返す。
     func debugImage() -> Data? {
         guard let song = AppServices.player.current else { return nil }
-        if let lyric = lyricLine(song, positionMs: Int64(AppServices.player.position * 1000)) {
-            return Self.lyricImage(title: song.title, artist: song.artistsText, artwork: artwork, lyric: lyric).pngData()
+        let scene = Scene(videoId: song.videoId, title: song.title, artist: song.artistsText, hasArtwork: artwork != nil,
+                          lyric: lyricLine(song, positionMs: Int64(AppServices.player.position * 1000)))
+        return Self.frame(scene, artwork: artwork, motion: nil, progress: 1).pngData()
+    }
+
+    /// 開発用: 今の絵から、次の行へ送る・曲名の絵へ移る途中の絵を、progress（0〜1）の所で PNG にする。
+    func debugMotionImage(_ kind: String, progress: Double) -> Data? {
+        guard let song = AppServices.player.current,
+              let lyric = lyricLine(song, positionMs: Int64(AppServices.player.position * 1000)) else { return nil }
+        var scene = Scene(videoId: song.videoId, title: song.title, artist: song.artistsText, hasArtwork: artwork != nil, lyric: lyric)
+        let motion: Motion
+        switch kind {
+        case "scroll":
+            // 今の行から次の行へ進んだつもりで、次の次は空にする
+            motion = .scroll(from: lyric)
+            scene.lyric = LyricPair(current: lyric.next, next: nil)
+        default:
+            motion = .morph(lyric: lyric, toLyric: true)
         }
-        return Self.image(title: song.title, artist: song.artistsText, artwork: artwork).pngData()
+        return Self.frame(scene, artwork: artwork, motion: motion, progress: CGFloat(progress)).pngData()
     }
     #endif
 
-    private static func image(title: String, artist: String, artwork: UIImage?) -> UIImage {
+    // 曲名の絵のジャケットと、歌詞の絵の小さなジャケット。
+    private static let titleArt = CGRect(x: 60, y: 90, width: 360, height: 360)
+    private static let lyricArt = CGRect(x: 56, y: 44, width: 112, height: 112)
+    // 歌詞の行の置き場
+    private static let lyricX: CGFloat = 56
+    private static var lyricWidth: CGFloat { CGFloat(width) - lyricX * 2 }
+    private static var lyricTop: CGFloat { lyricArt.maxY + 36 }
+    private static let lineGap: CGFloat = 18
+    private static let options: NSStringDrawingOptions = [.usesLineFragmentOrigin, .truncatesLastVisibleLine]
+
+    private static let truncating: NSParagraphStyle = {
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.lineBreakMode = .byTruncatingTail
+        return paragraph
+    }()
+
+    // （byTruncatingTail は1行に切ってしまうので、歌詞は折り返して最後の行だけを「…」にする）
+    private static let wrapping: NSParagraphStyle = {
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.lineBreakMode = .byWordWrapping
+        return paragraph
+    }()
+
+    // 歌っている行は3行まで、次の行は2行まで。小さい小窓でも読めるよう大きめに
+    private static let currentSize: CGFloat = 60, nextSize: CGFloat = 42
+    private static let currentAttrs: [NSAttributedString.Key: Any] = [
+        .font: UIFont.systemFont(ofSize: currentSize, weight: .bold), .foregroundColor: UIColor.white, .paragraphStyle: wrapping,
+    ]
+    private static let nextAttrs: [NSAttributedString.Key: Any] = [
+        .font: UIFont.systemFont(ofSize: nextSize, weight: .semibold), .foregroundColor: UIColor(white: 1, alpha: 0.45), .paragraphStyle: wrapping,
+    ]
+
+    /// 中身を1枚の絵にする。motion があれば、前の絵から progress（0〜1）まで移った所の絵。
+    private static func frame(_ scene: Scene, artwork: UIImage?, motion: Motion?, progress p: CGFloat) -> UIImage {
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
         format.opaque = true
-        return UIGraphicsImageRenderer(size: CGSize(width: width, height: height), format: format).image { context in
-            drawBackdrop(context, artwork: artwork, format: format)
-            let art = CGRect(x: 60, y: 90, width: 360, height: 360)
-            drawArtwork(context, artwork: artwork, in: art, cornerRadius: 24, notePoint: 140)
-
-            let paragraph = NSMutableParagraphStyle()
-            paragraph.lineBreakMode = .byTruncatingTail
-            let textX = art.maxX + 44
-            let textWidth = CGFloat(width) - textX - 50
-            let titleAttrs: [NSAttributedString.Key: Any] = [
-                .font: UIFont.systemFont(ofSize: 52, weight: .bold), .foregroundColor: UIColor.white, .paragraphStyle: paragraph,
-            ]
-            let artistAttrs: [NSAttributedString.Key: Any] = [
-                .font: UIFont.systemFont(ofSize: 38, weight: .regular), .foregroundColor: UIColor(white: 1, alpha: 0.7), .paragraphStyle: paragraph,
-            ]
-            // 曲名は3行まで、アーティストは2行まで。2つをまとめて縦の真ん中に置く
-            let titleSize = (title as NSString).boundingRect(with: CGSize(width: textWidth, height: 62 * 3), options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine], attributes: titleAttrs, context: nil).size
-            let artistSize = (artist as NSString).boundingRect(with: CGSize(width: textWidth, height: 46 * 2), options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine], attributes: artistAttrs, context: nil).size
-            let gap: CGFloat = artist.isEmpty ? 0 : 14
-            var y = art.midY - (titleSize.height + gap + artistSize.height) / 2
-            (title as NSString).draw(with: CGRect(x: textX, y: y, width: textWidth, height: titleSize.height), options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine], attributes: titleAttrs, context: nil)
-            y += titleSize.height + gap
-            (artist as NSString).draw(with: CGRect(x: textX, y: y, width: textWidth, height: artistSize.height), options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine], attributes: artistAttrs, context: nil)
+        let rect = CGRect(x: 0, y: 0, width: width, height: height)
+        return UIGraphicsImageRenderer(size: rect.size, format: format).image { context in
+            let cg = context.cgContext
+            switch motion {
+            case .crossfade(let old)?:
+                old.draw(in: rect)
+                cg.setAlpha(p)
+                cg.beginTransparencyLayer(auxiliaryInfo: nil)
+                paint(context, scene, artwork: artwork)
+                cg.endTransparencyLayer()
+            case .morph(let lyric, let toLyric)?:
+                // q: 0 が曲名の絵、1 が歌詞の絵
+                let q = toLyric ? p : 1 - p
+                drawBackdrop(context, artwork: artwork)
+                drawArtwork(context, artwork: artwork, in: lerp(titleArt, lyricArt, q), cornerRadius: lerp(24, 12, q), notePoint: lerp(140, 48, q))
+                cg.setAlpha(1 - q)
+                drawTitleText(title: scene.title, artist: scene.artist)
+                cg.setAlpha(q)
+                drawLyricHeader(title: scene.title, artist: scene.artist)
+                drawLines(lyric)
+            case .scroll(let old)?:
+                drawBackdrop(context, artwork: artwork)
+                drawArtwork(context, artwork: artwork, in: lyricArt, cornerRadius: 12, notePoint: 48)
+                drawLyricHeader(title: scene.title, artist: scene.artist)
+                drawScroll(cg, from: old, to: scene.lyric ?? LyricPair(), progress: p)
+            case nil:
+                paint(context, scene, artwork: artwork)
+            }
         }
     }
 
-    /// 時刻付きの歌詞の絵: 上に小さなジャケットと曲名・アーティスト、その下に歌っている行を大きく、次の行を薄く。
-    private static func lyricImage(title: String, artist: String, artwork: UIImage?, lyric: LyricPair) -> UIImage {
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = 1
-        format.opaque = true
-        return UIGraphicsImageRenderer(size: CGSize(width: width, height: height), format: format).image { context in
-            drawBackdrop(context, artwork: artwork, format: format)
-            let art = CGRect(x: 56, y: 44, width: 112, height: 112)
-            drawArtwork(context, artwork: artwork, in: art, cornerRadius: 12, notePoint: 48)
-
-            let paragraph = NSMutableParagraphStyle()
-            paragraph.lineBreakMode = .byTruncatingTail
-            let options: NSStringDrawingOptions = [.usesLineFragmentOrigin, .truncatesLastVisibleLine]
-            let textX = art.maxX + 28
-            let headWidth = CGFloat(width) - textX - 56
-            let titleAttrs: [NSAttributedString.Key: Any] = [
-                .font: UIFont.systemFont(ofSize: 36, weight: .bold), .foregroundColor: UIColor.white, .paragraphStyle: paragraph,
-            ]
-            let artistAttrs: [NSAttributedString.Key: Any] = [
-                .font: UIFont.systemFont(ofSize: 28, weight: .regular), .foregroundColor: UIColor(white: 1, alpha: 0.7), .paragraphStyle: paragraph,
-            ]
-            (title as NSString).draw(with: CGRect(x: textX, y: art.minY + 14, width: headWidth, height: 44), options: options, attributes: titleAttrs, context: nil)
-            (artist as NSString).draw(with: CGRect(x: textX, y: art.minY + 62, width: headWidth, height: 36), options: options, attributes: artistAttrs, context: nil)
-
-            // 歌っている行は3行まで、次の行は2行まで。小さい小窓でも読めるよう大きめに
-            // （byTruncatingTail は1行に切ってしまうので、折り返して最後の行だけを「…」にする）
-            let wrapping = NSMutableParagraphStyle()
-            wrapping.lineBreakMode = .byWordWrapping
-            let lyricX: CGFloat = 56
-            let lyricWidth = CGFloat(width) - lyricX * 2
-            let currentAttrs: [NSAttributedString.Key: Any] = [
-                .font: UIFont.systemFont(ofSize: 60, weight: .bold), .foregroundColor: UIColor.white, .paragraphStyle: wrapping,
-            ]
-            let nextAttrs: [NSAttributedString.Key: Any] = [
-                .font: UIFont.systemFont(ofSize: 42, weight: .semibold), .foregroundColor: UIColor(white: 1, alpha: 0.45), .paragraphStyle: wrapping,
-            ]
-            var y = art.maxY + 36
-            if let current = lyric.current {
-                let size = (current as NSString).boundingRect(with: CGSize(width: lyricWidth, height: 72 * 3), options: options, attributes: currentAttrs, context: nil).size
-                (current as NSString).draw(with: CGRect(x: lyricX, y: y, width: lyricWidth, height: size.height), options: options, attributes: currentAttrs, context: nil)
-                y += size.height + 18
-            }
-            if let next = lyric.next, y < CGFloat(height) - 60 {
-                let room = min(52 * 2, CGFloat(height) - 30 - y)
-                (next as NSString).draw(with: CGRect(x: lyricX, y: y, width: lyricWidth, height: room), options: options, attributes: nextAttrs, context: nil)
-            }
+    /// 止まっている絵。時刻付きの歌詞があれば歌詞の絵（上に小さなジャケットと曲名・アーティスト、その下に歌っている行を大きく、次の行を薄く）、
+    /// 無ければ曲名の絵（ぼかしたジャケットを下に敷き、左にジャケット、右に曲名とアーティスト）。
+    private static func paint(_ context: UIGraphicsImageRendererContext, _ scene: Scene, artwork: UIImage?) {
+        drawBackdrop(context, artwork: artwork)
+        if let lyric = scene.lyric {
+            drawArtwork(context, artwork: artwork, in: lyricArt, cornerRadius: 12, notePoint: 48)
+            drawLyricHeader(title: scene.title, artist: scene.artist)
+            drawLines(lyric)
+        } else {
+            drawArtwork(context, artwork: artwork, in: titleArt, cornerRadius: 24, notePoint: 140)
+            drawTitleText(title: scene.title, artist: scene.artist)
         }
+    }
+
+    /// 曲名の絵の文字: 曲名は3行まで、アーティストは2行まで。2つをまとめてジャケットの縦の真ん中に置く。
+    private static func drawTitleText(title: String, artist: String) {
+        let textX = titleArt.maxX + 44
+        let textWidth = CGFloat(width) - textX - 50
+        let titleAttrs: [NSAttributedString.Key: Any] = [
+            .font: UIFont.systemFont(ofSize: 52, weight: .bold), .foregroundColor: UIColor.white, .paragraphStyle: truncating,
+        ]
+        let artistAttrs: [NSAttributedString.Key: Any] = [
+            .font: UIFont.systemFont(ofSize: 38, weight: .regular), .foregroundColor: UIColor(white: 1, alpha: 0.7), .paragraphStyle: truncating,
+        ]
+        let titleSize = (title as NSString).boundingRect(with: CGSize(width: textWidth, height: 62 * 3), options: options, attributes: titleAttrs, context: nil).size
+        let artistSize = (artist as NSString).boundingRect(with: CGSize(width: textWidth, height: 46 * 2), options: options, attributes: artistAttrs, context: nil).size
+        let gap: CGFloat = artist.isEmpty ? 0 : 14
+        var y = titleArt.midY - (titleSize.height + gap + artistSize.height) / 2
+        (title as NSString).draw(with: CGRect(x: textX, y: y, width: textWidth, height: titleSize.height), options: options, attributes: titleAttrs, context: nil)
+        y += titleSize.height + gap
+        (artist as NSString).draw(with: CGRect(x: textX, y: y, width: textWidth, height: artistSize.height), options: options, attributes: artistAttrs, context: nil)
+    }
+
+    /// 歌詞の絵の上の、小さなジャケットの右の曲名とアーティスト。
+    private static func drawLyricHeader(title: String, artist: String) {
+        let textX = lyricArt.maxX + 28
+        let headWidth = CGFloat(width) - textX - 56
+        let titleAttrs: [NSAttributedString.Key: Any] = [
+            .font: UIFont.systemFont(ofSize: 36, weight: .bold), .foregroundColor: UIColor.white, .paragraphStyle: truncating,
+        ]
+        let artistAttrs: [NSAttributedString.Key: Any] = [
+            .font: UIFont.systemFont(ofSize: 28, weight: .regular), .foregroundColor: UIColor(white: 1, alpha: 0.7), .paragraphStyle: truncating,
+        ]
+        (title as NSString).draw(with: CGRect(x: textX, y: lyricArt.minY + 14, width: headWidth, height: 44), options: options, attributes: titleAttrs, context: nil)
+        (artist as NSString).draw(with: CGRect(x: textX, y: lyricArt.minY + 62, width: headWidth, height: 36), options: options, attributes: artistAttrs, context: nil)
+    }
+
+    /// 歌っている行の高さ（3行まで）。
+    private static func currentHeight(_ line: String) -> CGFloat {
+        (line as NSString).boundingRect(with: CGSize(width: lyricWidth, height: 72 * 3), options: options, attributes: currentAttrs, context: nil).height
+    }
+
+    /// 次の行を置ける高さ（2行まで。下の端に近すぎれば置かない）。
+    private static func nextRoom(at y: CGFloat) -> CGFloat? {
+        y < CGFloat(height) - 60 ? min(52 * 2, CGFloat(height) - 30 - y) : nil
+    }
+
+    /// 次の行の上の端（歌っている行の下）。
+    private static func nextTop(below current: String?) -> CGFloat {
+        current.map { lyricTop + currentHeight($0) + lineGap } ?? lyricTop
+    }
+
+    private static func drawLines(_ lyric: LyricPair) {
+        if let current = lyric.current {
+            (current as NSString).draw(with: CGRect(x: lyricX, y: lyricTop, width: lyricWidth, height: currentHeight(current)), options: options, attributes: currentAttrs, context: nil)
+        }
+        let y = nextTop(below: lyric.current)
+        if let next = lyric.next, let room = nextRoom(at: y) {
+            (next as NSString).draw(with: CGRect(x: lyricX, y: y, width: lyricWidth, height: room), options: options, attributes: nextAttrs, context: nil)
+        }
+    }
+
+    /// 行を送る途中の絵（progress が 0 で前の行の絵、1 で次の行の絵と同じになる）。
+    private static func drawScroll(_ cg: CGContext, from old: LyricPair, to new: LyricPair, progress p: CGFloat) {
+        cg.saveGState()
+        // 上の曲名に重ならないよう、行はジャケットの下だけに描く
+        cg.clip(to: CGRect(x: 0, y: lyricArt.maxY + 12, width: CGFloat(width), height: CGFloat(height) - lyricArt.maxY - 12))
+        let rise = nextTop(below: old.current) - lyricTop
+        // 歌っていた行は上へ抜けながら早めに消える
+        if let current = old.current {
+            cg.setAlpha(max(0, 1 - p * 1.6))
+            (current as NSString).draw(with: CGRect(x: lyricX, y: lyricTop - rise * p, width: lyricWidth, height: currentHeight(current)), options: options, attributes: currentAttrs, context: nil)
+        }
+        // 次の行が上がりながら大きくなる（薄い字から濃い字へ重ねて入れ替える）
+        if let line = new.current {
+            let y = lyricTop + rise * (1 - p)
+            let startRoom = nextRoom(at: lyricTop + rise) ?? 52 * 2
+            let grow = currentSize / nextSize
+            drawScaled(cg, line, attrs: nextAttrs, at: CGPoint(x: lyricX, y: y), scale: 1 + (grow - 1) * p, height: startRoom, alpha: 1 - p)
+            drawScaled(cg, line, attrs: currentAttrs, at: CGPoint(x: lyricX, y: y), scale: 1 / grow + (1 - 1 / grow) * p, height: currentHeight(line), alpha: p)
+        }
+        // その次の行は下から浮かび上がる
+        let y = nextTop(below: new.current)
+        if let next = new.next, let room = nextRoom(at: y) {
+            cg.setAlpha(p)
+            (next as NSString).draw(with: CGRect(x: lyricX, y: y + 48 * (1 - p), width: lyricWidth, height: room), options: options, attributes: nextAttrs, context: nil)
+        }
+        cg.restoreGState()
+    }
+
+    /// 左上を軸に scale 倍した行（折り返しは scale 前の幅で決める）。
+    private static func drawScaled(_ cg: CGContext, _ line: String, attrs: [NSAttributedString.Key: Any], at origin: CGPoint, scale: CGFloat, height: CGFloat, alpha: CGFloat) {
+        guard alpha > 0 else { return }
+        cg.saveGState()
+        cg.setAlpha(alpha)
+        cg.translateBy(x: origin.x, y: origin.y)
+        cg.scaleBy(x: scale, y: scale)
+        (line as NSString).draw(with: CGRect(x: 0, y: 0, width: lyricWidth, height: height), options: options, attributes: attrs, context: nil)
+        cg.restoreGState()
+    }
+
+    private static func lerp(_ a: CGFloat, _ b: CGFloat, _ t: CGFloat) -> CGFloat { a + (b - a) * t }
+
+    private static func lerp(_ a: CGRect, _ b: CGRect, _ t: CGFloat) -> CGRect {
+        CGRect(x: lerp(a.minX, b.minX, t), y: lerp(a.minY, b.minY, t), width: lerp(a.width, b.width, t), height: lerp(a.height, b.height, t))
     }
 
     /// 黒の地に、ぼかして暗くしたジャケットを敷く。
-    private static func drawBackdrop(_ context: UIGraphicsImageRendererContext, artwork: UIImage?, format: UIGraphicsImageRendererFormat) {
+    private static func drawBackdrop(_ context: UIGraphicsImageRendererContext, artwork: UIImage?) {
         let rect = CGRect(x: 0, y: 0, width: width, height: height)
         UIColor.black.setFill()
         context.fill(rect)
