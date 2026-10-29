@@ -50,6 +50,82 @@ pub fn home(app: &Rc<App>) -> adw::NavigationPage {
     page("ホーム", "home", &bin)
 }
 
+/// 見つける: 気分・ジャンルのタイル（Lo-Fi を含む）。押すとそのタイルの棚のページ（Windows の検索の空のページと同じ中身）。
+pub fn moods(app: &Rc<App>) -> adw::NavigationPage {
+    let bin = holder();
+    let app = app.clone();
+    let target = bin.clone();
+    gtk::glib::spawn_future_local(async move {
+        let repo = app.repo.clone();
+        let result = runtime::run(async move { repo.moods().await }).await;
+        let content: gtk::Widget = match result {
+            Ok(sections) if !sections.is_empty() => {
+                let column = page_column();
+                column.append(&gtk::Label::builder().label("見つける").xalign(0.0).css_classes(["title-1"]).build());
+                for section in sections {
+                    column.append(&gtk::Label::builder().label(&section.title).xalign(0.0).margin_top(8).css_classes(["title-3"]).build());
+                    let grid = gtk::FlowBox::builder().selection_mode(gtk::SelectionMode::None).min_children_per_line(2).max_children_per_line(6).column_spacing(10).row_spacing(10).homogeneous(true).build();
+                    for category in section.categories {
+                        grid.append(&mood_tile(&app, category));
+                    }
+                    column.append(&grid);
+                }
+                scrolling_column(&column)
+            }
+            Ok(_) => failure("気分・ジャンルを読めませんでした"),
+            Err(e) => failure(&format!("気分・ジャンルを読めませんでした（{e}）")),
+        };
+        target.set_child(Some(&content));
+    });
+    page("見つける", "moods", &bin)
+}
+
+/// 気分・ジャンルのタイル（左に YouTube Music の帯の色）。
+fn mood_tile(app: &Rc<App>, category: wave_core::music::models::MoodCategory) -> gtk::Widget {
+    let label = gtk::Label::builder().label(&category.title).xalign(0.0).ellipsize(gtk::pango::EllipsizeMode::End).css_classes(["heading"]).build();
+    let stripe = gtk::Box::builder().width_request(6).css_classes(["mood-stripe"]).build();
+    if let Some(color) = category.color {
+        let provider = gtk::CssProvider::new();
+        provider.load_from_string(&format!(".mood-stripe {{ background-color: #{:06x}; border-radius: 3px; }}", color & 0x00ff_ffff));
+        #[allow(deprecated)] // 1つの部品だけの色。テーマ全体には足さない
+        stripe.style_context().add_provider(&provider, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION);
+    }
+    let row = gtk::Box::builder().spacing(10).margin_top(14).margin_bottom(14).margin_end(10).build();
+    row.append(&stripe);
+    row.append(&label);
+    let button = gtk::Button::builder().child(&row).css_classes(["card"]).build();
+    let app = app.clone();
+    button.connect_clicked(move |_| app.push(mood_category(&app, &category.title, &category.params)));
+    button.upcast()
+}
+
+/// 気分・ジャンルの1つのページ（ホームと同じ棚の並び）。
+pub fn mood_category(app: &Rc<App>, title: &str, params: &str) -> adw::NavigationPage {
+    let bin = holder();
+    let app = app.clone();
+    let target = bin.clone();
+    let params = params.to_string();
+    let heading = title.to_string();
+    gtk::glib::spawn_future_local(async move {
+        let repo = app.repo.clone();
+        let result = runtime::run(async move { repo.mood_category(&params).await }).await;
+        let content: gtk::Widget = match result {
+            Ok(home) if !home.shelves.is_empty() => {
+                let column = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(24).margin_top(16).margin_bottom(24).build();
+                column.append(&gtk::Label::builder().label(&heading).xalign(0.0).margin_start(20).css_classes(["title-1"]).build());
+                for shelf in home.shelves {
+                    column.append(&shelf_widget(&app, &shelf.title, shelf.strapline.as_deref(), shelf.items));
+                }
+                gtk::ScrolledWindow::builder().child(&column).hscrollbar_policy(gtk::PolicyType::Never).vexpand(true).build().upcast()
+            }
+            Ok(_) => failure("このページには何もありませんでした"),
+            Err(e) => failure(&format!("読めませんでした（{e}）")),
+        };
+        target.set_child(Some(&content));
+    });
+    page(title, "mood", &bin)
+}
+
 /// 見出しと、横に流れるカードの棚。
 fn shelf_widget(app: &Rc<App>, title: &str, strapline: Option<&str>, items: Vec<HomeItem>) -> gtk::Widget {
     let column = gtk::Box::new(gtk::Orientation::Vertical, 8);

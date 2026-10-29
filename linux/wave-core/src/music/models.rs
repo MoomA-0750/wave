@@ -273,3 +273,18 @@ pub struct SearchSuggestions {
     pub albums: Vec<AlbumSummary>,
     pub artists: Vec<ArtistSummary>,
 }
+
+/// 気分・ジャンルのタイル（押すとその棚のページ）。color はタイルの左の帯の色（ARGB）。
+#[derive(Debug, Clone, PartialEq)]
+pub struct MoodCategory {
+    pub title: String,
+    pub params: String,
+    pub color: Option<u32>,
+}
+
+/// 気分・ジャンルのページの1区切り（「気分」「ジャンル」など）。
+#[derive(Debug, Clone, PartialEq)]
+pub struct MoodSection {
+    pub title: String,
+    pub categories: Vec<MoodCategory>,
+}

@@ -112,7 +112,8 @@ fn save(playback: &Playback, obtained_at: i64) {
         obtained_at_epoch_ms: obtained_at,
         items: items.into_iter().map(|i| SavedItem { song: i.song, item_id: i.item_id, origin: origin_name(i.origin).to_string() }).collect(),
         current_item_id: current,
-        position_ms: playback.position_ms(),
+        // ライブ配信には戻る位置が無い
+        position_ms: if playback.current().is_some_and(|s| s.is_live) { 0 } else { playback.position_ms() },
         repeat: match playback.repeat() {
             Repeat::Off => "off",
             Repeat::All => "all",

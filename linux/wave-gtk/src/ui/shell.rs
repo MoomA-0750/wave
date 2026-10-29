@@ -334,9 +334,11 @@ fn pane(child: &impl IsA<gtk::Widget>, width: Option<i32>) -> gtk::Widget {
 fn header(app: &Rc<App>) -> adw::HeaderBar {
     let back = gtk::Button::builder().icon_name("go-previous-symbolic").tooltip_text("戻る").visible(false).build();
     let home = gtk::Button::builder().icon_name("go-home-symbolic").tooltip_text("ホーム").css_classes(["circular"]).build();
+    let browse = gtk::Button::builder().icon_name("view-grid-symbolic").tooltip_text("見つける（気分・ジャンル）").css_classes(["circular"]).build();
     let search = gtk::SearchEntry::builder().placeholder_text("何を聴きたいですか？").width_request(440).build();
     let center = gtk::Box::builder().spacing(8).build();
     center.append(&home);
+    center.append(&browse);
     center.append(&search);
     // Claude は検索の欄の右（Mac・Windows と同じ）。右の欄に出す
     let claude = gtk::ToggleButton::builder().icon_name("chat-message-new-symbolic").tooltip_text("Claude に聞く (Ctrl+J)").css_classes(["circular", "flat"]).build();
@@ -364,6 +366,14 @@ fn header(app: &Rc<App>) -> adw::HeaderBar {
     home.connect_clicked(move |_| {
         nav.pop_to_tag("home");
     });
+    {
+        let app = app.clone();
+        browse.connect_clicked(move |_| {
+            if app.visible_kind().as_deref() != Some("moods") {
+                app.push(pages::moods(&app));
+            }
+        });
+    }
     let back_button = back.clone();
     app.nav.connect_visible_page_notify(move |nav| back_button.set_visible(nav.navigation_stack().n_items() > 1));
     let suggestions = suggestions_popover(&app, &search);

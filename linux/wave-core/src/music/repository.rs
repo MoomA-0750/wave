@@ -2,13 +2,15 @@
 
 use serde_json::json;
 
-use super::models::{Account, AddToPlaylistResult, AlbumPage, LikeStatus, MusicVideo, ArtistPage, HomePage, PlaylistPage, PlaylistSummary, SongPage, UpNextPage, VerifiedAccount, AlbumSummary, ArtistSummary, SearchPage, SearchSuggestions};
+use super::models::{Account, AddToPlaylistResult, AlbumPage, LikeStatus, MusicVideo, ArtistPage, HomePage, PlaylistPage, PlaylistSummary, SongPage, UpNextPage, VerifiedAccount, AlbumSummary, ArtistSummary, SearchPage, SearchSuggestions, MoodSection, HomeItem};
 use super::parsers;
 use crate::innertube::{ApiResult, Failure, InnerTube};
 
 pub const SONGS_FILTER: &str = "EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D";
 pub const ALBUMS_FILTER: &str = "EgWKAQIYAWoKEAkQBRAKEAMQBA%3D%3D";
 pub const ARTISTS_FILTER: &str = "EgWKAQIgAWoKEAkQBRAKEAMQBA%3D%3D";
+pub const FEATURED_PLAYLISTS_FILTER: &str = "EgeKAQQoADgBahIQBRAEEAkQAxAKEBUQDhAREBA%3D";
+pub const COMMUNITY_PLAYLISTS_FILTER: &str = "EgeKAQQoAEABahIQBRAEEAkQAxAKEBUQDhAREBA%3D";
 pub const VIDEOS_FILTER: &str = "EgWKAQIQAWoSEAUQBBAJEAMQChAVEA4QERAQ";
 pub const HOME: &str = "FEmusic_home";
 pub const LIBRARY_PLAYLISTS: &str = "FEmusic_liked_playlists";
@@ -76,6 +78,45 @@ impl MusicRepository {
             }
         }
         Ok(SongPage { songs, continuation })
+    }
+
+    /// 気分・ジャンルのタイル（ジャンルの区切りの先頭に、アプリで足した Lo-Fi を入れる。Windows と同じ）。
+    pub async fn moods(&self) -> ApiResult<Vec<MoodSection>> {
+        let root = self.client.post("browse", json!({ "browseId": "FEmusic_moods_and_genres" }), true, &[]).await?;
+        Ok(super::lofi::add_to(parsers::moods(&root)))
+    }
+
+    /// 気分・ジャンルのタイルのページ（棚の並び）。Lo-Fi はアプリで組んだページ。
+    pub async fn mood_category(&self, params: &str) -> ApiResult<HomePage> {
+        if params == super::lofi::PARAMS {
+            return self.lofi_page().await;
+        }
+        let root = self.client.post("browse", json!({ "browseId": "FEmusic_moods_and_genres_category", "params": params }), true, &[]).await?;
+        Ok(parsers::home_page(&root))
+    }
+
+    /// Lo-Fi のページ: ライブ配信・YouTube Music のプレイリスト・みんなのプレイリストの棚。
+    async fn lofi_page(&self) -> ApiResult<HomePage> {
+        use super::lofi;
+        let (lives, featured, community) = tokio::join!(
+            self.search_live(lofi::LIVE_QUERY, None),
+            self.search_raw(lofi::PLAYLIST_QUERY, FEATURED_PLAYLISTS_FILTER, None),
+            self.search_raw(lofi::PLAYLIST_QUERY, COMMUNITY_PLAYLISTS_FILTER, None),
+        );
+        let mut shelves = Vec::new();
+        if let Ok(page) = &lives {
+            lofi::push_shelf(&mut shelves, lofi::LIVE_TITLE, page.songs.iter().take(lofi::MAX_ITEMS).cloned().map(HomeItem::Song).collect());
+        }
+        if let Ok(root) = &featured {
+            lofi::push_shelf(&mut shelves, lofi::FEATURED_TITLE, lofi::featured(parsers::search_playlists(root).items).into_iter().map(HomeItem::Playlist).collect());
+        }
+        if let Ok(root) = &community {
+            lofi::push_shelf(&mut shelves, lofi::COMMUNITY_TITLE, parsers::search_playlists(root).items.into_iter().take(lofi::MAX_ITEMS).map(HomeItem::Playlist).collect());
+        }
+        if shelves.is_empty() {
+            return Err(lives.err().unwrap_or(Failure::Network));
+        }
+        Ok(HomePage { shelves, continuation: None, chips: Vec::new() })
     }
 
     /// 打ち込み中の候補（ログインの情報は付けない）。

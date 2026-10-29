@@ -141,6 +141,13 @@ async fn show_home(toolbar: &adw::ToolbarView, repo: &MusicRepository) {
     if let Ok(query) = std::env::var("WAVE_DEMO_QUERY") {
         app.demo(&query);
     }
+    // 確かめ用: WAVE_DEMO_MOOD=moods で見つける、lofi で Lo-Fi のページ、ほかはその params の気分・ジャンルのページを開く
+    match std::env::var("WAVE_DEMO_MOOD").as_deref() {
+        Ok("moods") => app.push(ui::pages::moods(&app)),
+        Ok("lofi") => app.push(ui::pages::mood_category(&app, "Lo-Fi", wave_core::music::lofi::PARAMS)),
+        Ok(params) => app.push(ui::pages::mood_category(&app, "気分・ジャンル", params)),
+        Err(_) => {}
+    }
     // 入れ物（読み込み中の上の帯）ごと、画面の上の帯を持つ並びに替える
     if let Some(window) = toolbar.root().and_downcast::<adw::ApplicationWindow>() {
         window.set_content(Some(&shell));

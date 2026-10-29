@@ -55,6 +55,47 @@ pub fn search_suggestions(root: &Value) -> SearchSuggestions {
     }
 }
 
+/// 気分・ジャンルのページ（FEmusic_moods_and_genres）の区切りとタイル。
+pub fn moods(root: &Value) -> Vec<MoodSection> {
+    find_all(root, "gridRenderer")
+        .into_iter()
+        .filter_map(|grid| {
+            let categories: Vec<MoodCategory> = grid
+                .path(&["items"])
+                .items()
+                .into_iter()
+                .filter_map(|item| {
+                    let button = item.path(&["musicNavigationButtonRenderer"])?;
+                    let title = text_of(button.path(&["buttonText"]))?;
+                    let params = button.path(&["clickCommand", "browseEndpoint", "params"]).str_()?.to_string();
+                    let color = button.path(&["solid", "leftStripeColor"]).and_then(Value::as_u64).map(|c| c as u32);
+                    Some(MoodCategory { title, params, color })
+                })
+                .collect();
+            (!categories.is_empty()).then(|| MoodSection { title: text_of(grid.path(&["header", "gridHeaderRenderer", "title"])).unwrap_or_default(), categories })
+        })
+        .collect()
+}
+
+/// プレイリストに絞った検索（おすすめ・みんなのプレイリスト）。
+pub fn search_playlists(root: &Value) -> SearchPage<PlaylistSummary> {
+    search_page_of(root, |item| {
+        let browse = item.path(&["navigationEndpoint", "browseEndpoint"]);
+        if page_type_of_browse(browse) != Some("MUSIC_PAGE_TYPE_PLAYLIST") {
+            return None;
+        }
+        let id = browse.path(&["browseId"]).str_()?;
+        let columns = flex_column_runs(item);
+        Some(PlaylistSummary {
+            playlist_id: id.strip_prefix("VL").unwrap_or(id).to_string(),
+            title: runs_text(columns.first()?)?,
+            subtitle: runs_text(&columns.iter().skip(1).flatten().copied().collect::<Vec<_>>()),
+            thumbnail_url: last_thumbnail_url(item.path(&["thumbnail"])),
+            editable: false,
+        })
+    })
+}
+
 fn search_page_of<'a, T>(root: &'a Value, row: impl Fn(&'a Value) -> Option<T>) -> SearchPage<T> {
     match search_shelf(root) {
         Some(shelf) => SearchPage {
@@ -989,5 +1030,21 @@ mod tests {
     fn video_search_marks_live_streams() {
         let page = search_songs(&fixture("search_videos_live"));
         assert!(page.songs.iter().any(|s| s.is_live));
+    }
+
+    #[test]
+    fn moods_read_sections_and_tiles() {
+        let sections = moods(&fixture("browse_moods"));
+        assert!(sections.len() >= 2);
+        assert!(sections.iter().all(|s| !s.title.is_empty() && s.categories.iter().all(|c| !c.title.is_empty() && !c.params.is_empty())));
+        let category = home_page(&fixture("browse_mood_category"));
+        assert!(!category.shelves.is_empty());
+    }
+
+    #[test]
+    fn playlist_search_reads_playlists_without_the_vl_prefix() {
+        let page = search_playlists(&fixture("search_playlists_lofi"));
+        assert!(!page.items.is_empty());
+        assert!(page.items.iter().all(|p| !p.playlist_id.starts_with("VL") && !p.title.is_empty()));
     }
 }
