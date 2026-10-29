@@ -3,4 +3,5 @@
 pub mod lofi;
 pub mod models;
 pub mod parsers;
+pub mod releases;
 pub mod repository;

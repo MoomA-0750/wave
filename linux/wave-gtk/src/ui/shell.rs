@@ -23,6 +23,8 @@ pub struct App {
     pub downloads: Rc<crate::downloads::Downloads>,
     /// 端末の連携。
     pub connect: Rc<crate::connect::Connect>,
+    /// 登録したアーティストの新作。
+    pub releases: Rc<crate::releases::Releases>,
     /// 映像を窓いっぱいに出す層（gtk4paintablesink が無ければ None）。
     video_layer: std::cell::RefCell<Option<gtk::Widget>>,
     /// Claude との会話。
@@ -101,6 +103,7 @@ pub fn build(
     video: Option<crate::video::VideoPlayer>,
     downloads: Rc<crate::downloads::Downloads>,
     connect: Rc<crate::connect::Connect>,
+    releases: Rc<crate::releases::Releases>,
     on_logout: Rc<dyn Fn()>,
 ) -> (gtk::Widget, Rc<App>) {
     let css = gtk::CssProvider::new();
@@ -109,7 +112,7 @@ pub fn build(
 
     let nav = adw::NavigationView::new();
     let toasts = adw::ToastOverlay::new();
-    let app = Rc::new(App { repo, lyrics, playback, nav: nav.clone(), toasts: toasts.clone(), video, downloads, connect, video_layer: Default::default(), ai: Default::default(), claude_toggle: Default::default(), editable_playlists: Default::default() });
+    let app = Rc::new(App { repo, lyrics, playback, nav: nav.clone(), toasts: toasts.clone(), video, downloads, connect, releases, video_layer: Default::default(), ai: Default::default(), claude_toggle: Default::default(), editable_playlists: Default::default() });
     {
         let app = app.clone();
         gtk::glib::spawn_future_local(async move {

@@ -148,6 +148,44 @@ impl MusicRepository {
     }
 
     /// ライブラリのプレイリスト（続きのページまで。途中で失敗したらそこまでの分）。ログイン必須。
+    /// 登録したアーティスト（続きのページまで）。2つめは、最後まで読めたか（途中で失敗・打ち切ったら false）。
+    pub async fn subscribed_artists(&self) -> ApiResult<(Vec<ArtistSummary>, bool)> {
+        let mut items: Vec<ArtistSummary> = Vec::new();
+        let mut token: Option<String> = None;
+        let mut complete = false;
+        for page in 0..MAX_LIBRARY_PAGES {
+            let body = match &token {
+                Some(t) => json!({ "continuation": t }),
+                None => json!({ "browseId": "FEmusic_library_corpus_artists" }),
+            };
+            let root = match self.logged_in_post("browse", body).await {
+                Ok(root) => root,
+                Err(e) if page == 0 => return Err(e),
+                Err(_) => break,
+            };
+            for item in parsers::library_cards(&root) {
+                if let HomeItem::Artist(a) = item
+                    && !items.iter().any(|x| x.browse_id == a.browse_id)
+                {
+                    items.push(a);
+                }
+            }
+            let next = parsers::library_continuation(&root);
+            if next.is_none() || next == token {
+                complete = true;
+                break;
+            }
+            token = next;
+        }
+        Ok((items, complete))
+    }
+
+    /// YouTube Music の新作のアルバム。
+    pub async fn new_releases(&self) -> ApiResult<Vec<AlbumSummary>> {
+        let root = self.client.post("browse", json!({ "browseId": "FEmusic_new_releases_albums" }), true, &[]).await?;
+        Ok(parsers::new_releases(&root))
+    }
+
     pub async fn library_playlists(&self) -> ApiResult<Vec<PlaylistSummary>> {
         let mut items: Vec<PlaylistSummary> = Vec::new();
         let mut token: Option<String> = None;

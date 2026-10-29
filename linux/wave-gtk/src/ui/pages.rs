@@ -34,10 +34,30 @@ pub fn home(app: &Rc<App>) -> adw::NavigationPage {
     let target = bin.clone();
     gtk::glib::spawn_future_local(async move {
         let repo = app.repo.clone();
-        let result = runtime::run(async move { repo.home(None, None).await }).await;
+        let result = runtime::run(async move {
+            let (home, releases) = tokio::join!(repo.home(None, None), repo.new_releases());
+            home.map(|h| (h, releases.unwrap_or_default()))
+        })
+        .await;
         let content: gtk::Widget = match result {
-            Ok(home) => {
+            Ok((home, new_releases)) => {
                 let column = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(24).margin_top(16).margin_bottom(24).build();
+                // 先頭に、登録したアーティストの新作と、YouTube Music の新作（ホームに同じ新作の棚が来ていれば出さない）。Windows と同じ
+                let subscribed: Vec<HomeItem> = wave_core::music::releases::diversified(&app.releases.recent(), 2)
+                    .into_iter()
+                    .take(wave_core::music::releases::NEW_RELEASES_COUNT)
+                    .filter_map(|r| {
+                        Some(HomeItem::Album(wave_core::music::models::AlbumSummary { browse_id: r.album_browse_id?, title: r.title, subtitle: Some(r.artist_name), thumbnail_url: r.thumbnail_url }))
+                    })
+                    .collect();
+                if !subscribed.is_empty() {
+                    column.append(&shelf_widget(&app, "登録したアーティストの新作", None, subscribed));
+                }
+                if !wave_core::music::releases::duplicates_new_releases(&new_releases, &home.shelves)
+                    && let Some(shelf) = wave_core::music::releases::new_releases_shelf("新作", new_releases)
+                {
+                    column.append(&shelf_widget(&app, &shelf.title, None, shelf.items));
+                }
                 for shelf in home.shelves {
                     column.append(&shelf_widget(&app, &shelf.title, shelf.strapline.as_deref(), shelf.items));
                 }

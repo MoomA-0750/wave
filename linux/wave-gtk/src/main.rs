@@ -9,6 +9,7 @@ mod mpris;
 mod playback;
 mod player;
 mod queue_store;
+mod releases;
 mod runtime;
 mod settings;
 mod ui;
@@ -28,7 +29,28 @@ fn main() -> gtk::glib::ExitCode {
     app.run()
 }
 
+/// 通知を押したとき（新作のアルバム・アーティストを開く）。
+fn add_open_actions(app: &adw::Application) {
+    for (name, album) in [("open-album", true), ("open-artist", false)] {
+        let action = gtk::gio::SimpleAction::new(name, Some(gtk::glib::VariantTy::STRING));
+        action.connect_activate(move |_, parameter| {
+            let Some(id) = parameter.and_then(|p| p.get::<String>()) else { return };
+            let Some(app) = APP.with(|a| a.borrow().clone()) else { return };
+            if let Some(window) = app.window() {
+                window.present();
+            }
+            if album {
+                app.push(ui::pages::album(&app, &id, "アルバム"));
+            } else {
+                app.push(ui::pages::artist(&app, &id, "アーティスト"));
+            }
+        });
+        app.add_action(&action);
+    }
+}
+
 fn build_window(app: &adw::Application) {
+    add_open_actions(app);
     // ランチャー・Alt+Tab のアイコン（scripts/install.sh で入れた絵）
     gtk::Window::set_default_icon_name(APP_ID);
     let repo = MusicRepository::new(InnerTube::new(&language(), &region()));
@@ -103,6 +125,7 @@ async fn show_home(toolbar: &adw::ToolbarView, repo: &MusicRepository) {
             downloads.clear();
             if let Some(app) = APP.with(|a| a.borrow().clone()) {
                 app.ai.wipe();
+                app.releases.clear();
             }
             let (toolbar, repo) = (toolbar.clone(), repo.clone());
             gtk::glib::spawn_future_local(async move {
@@ -128,7 +151,8 @@ async fn show_home(toolbar: &adw::ToolbarView, repo: &MusicRepository) {
     // 端末の連携（中継の場所が設定にあるときだけ）
     let relay_url = downloads.settings.borrow().relay_url.clone();
     let connect = connect::Connect::start(repo.clone(), playback.clone(), relay_url).await;
-    let (shell, app) = ui::shell::build(repo.clone(), lyrics, playback.clone(), video, downloads, connect, on_logout);
+    let releases = releases::Releases::start(repo.clone(), downloads.settings.borrow().release_notices);
+    let (shell, app) = ui::shell::build(repo.clone(), lyrics, playback.clone(), video, downloads, connect, releases, on_logout);
     if let Some(window) = toolbar.root().and_downcast::<adw::ApplicationWindow>() {
         // GNOME のメディアの操作・メディアキーから操作できるようにする（窓がある間だけ出す）
         let (raise, quit) = (window.clone(), window.clone());

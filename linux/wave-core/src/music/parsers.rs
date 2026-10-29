@@ -162,6 +162,29 @@ pub fn home_page(root: &Value) -> HomePage {
     HomePage { shelves, continuation, chips }
 }
 
+/// ライブラリ・新作の格子と棚の項目（カードと行のどちらの形でも、続きのページも）。
+pub fn library_cards(root: &Value) -> Vec<HomeItem> {
+    let mut items: Vec<HomeItem> = Vec::new();
+    for grid in find_all(root, "gridRenderer").into_iter().chain(find_all(root, "gridContinuation")) {
+        items.extend(grid.path(&["items"]).items().into_iter().filter_map(home_item_of));
+    }
+    for shelf in find_all(root, "musicShelfRenderer").into_iter().chain(find_all(root, "musicShelfContinuation")) {
+        items.extend(shelf.path(&["contents"]).items().into_iter().filter_map(home_item_of));
+    }
+    items
+}
+
+/// YouTube Music の新作のアルバム（FEmusic_new_releases_albums）。
+pub fn new_releases(root: &Value) -> Vec<AlbumSummary> {
+    library_cards(root)
+        .into_iter()
+        .filter_map(|i| match i {
+            HomeItem::Album(a) => Some(a),
+            _ => None,
+        })
+        .collect()
+}
+
 fn home_item_of(card: &Value) -> Option<HomeItem> {
     if let Some(row) = card.path(&["musicResponsiveListItemRenderer"]) {
         if let Some(album) = album_row(row) {
@@ -1046,5 +1069,12 @@ mod tests {
         let page = search_playlists(&fixture("search_playlists_lofi"));
         assert!(!page.items.is_empty());
         assert!(page.items.iter().all(|p| !p.playlist_id.starts_with("VL") && !p.title.is_empty()));
+    }
+
+    #[test]
+    fn new_releases_are_albums() {
+        let albums = new_releases(&fixture("browse_new_releases"));
+        assert!(albums.len() >= 3);
+        assert!(albums.iter().all(|a| a.browse_id.starts_with("MPRE")));
     }
 }

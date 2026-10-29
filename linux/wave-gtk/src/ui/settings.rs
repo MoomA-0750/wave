@@ -38,13 +38,26 @@ pub fn page(app: &Rc<App>) -> adw::NavigationPage {
     }
     prefs.add(&downloads);
 
-    let history = adw::PreferencesGroup::builder().title("再生履歴").build();
+    let history = adw::PreferencesGroup::builder().title("再生履歴と新作").build();
     let send_history = adw::SwitchRow::builder()
         .title("聴いた曲を再生履歴に載せる")
         .subtitle("30秒（短い曲は半分）聴いた曲を、YouTube Music の再生履歴に送る")
         .active(app.downloads.settings.borrow().send_history)
         .build();
     history.add(&send_history);
+    let notices = adw::SwitchRow::builder()
+        .title("登録したアーティストの新作を知らせる")
+        .subtitle("6時間おきに確かめ、よく聴くアーティストの新作を通知する。新作はホームにも出す（次に開いたときから）")
+        .active(app.downloads.settings.borrow().release_notices)
+        .build();
+    history.add(&notices);
+    {
+        let app = app.clone();
+        notices.connect_active_notify(move |row| {
+            let on = row.is_active();
+            app.downloads.update_settings(|s| s.release_notices = on);
+        });
+    }
     prefs.add(&history);
     {
         let app = app.clone();

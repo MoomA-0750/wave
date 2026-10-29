@@ -10,5 +10,5 @@ mutter --headless --wayland --no-x11 --wayland-display "$sock" --virtual-monitor
 mutter_pid=$!
 trap 'kill $mutter_pid 2>/dev/null' EXIT
 for _ in $(seq 50); do [ -S "$XDG_RUNTIME_DIR/$sock" ] && break; sleep 0.1; done
-WAYLAND_DISPLAY=$sock GDK_BACKEND=wayland WAVE_SNAPSHOT="$out" WAVE_SNAPSHOT_DELAY_MS="$delay" timeout 60 target/debug/wave-gtk
+WAYLAND_DISPLAY=$sock GDK_BACKEND=wayland WAVE_SNAPSHOT="$out" WAVE_SNAPSHOT_DELAY_MS="$delay" timeout "${WAVE_SHOT_TIMEOUT:-60}" target/debug/wave-gtk
 echo "$out"
