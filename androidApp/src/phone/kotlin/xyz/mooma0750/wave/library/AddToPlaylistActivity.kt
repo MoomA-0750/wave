@@ -3,13 +3,17 @@ package xyz.mooma0750.wave.library
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.lifecycle.viewmodel.compose.viewModel
 import xyz.mooma0750.wave.WaveApplication
 import xyz.mooma0750.wave.core.auth.AuthState
 import xyz.mooma0750.wave.ui.WaveTheme
 
 /**
- * アプリを開かずにプレイリストに足す（通知の「プレイリストに追加」から開く）。透明な Activity にダイアログだけを出し、閉じたら終わる。
+ * アプリを開かずにプレイリストに足す（通知の「プレイリストに追加」・ウィジェットと浮いている再生の窓の✓から開く）。透明な Activity にダイアログだけを出し、閉じたら終わる。
  * 外からは開けない（exported=false。自アプリの通知の PendingIntent からだけ）。
  */
 class AddToPlaylistActivity : ComponentActivity() {
@@ -28,6 +32,10 @@ class AddToPlaylistActivity : ComponentActivity() {
         LikedNotice.cancel(this)
         setContent {
             WaveTheme {
+                // 鳴っている曲なら、アプリの中と同じく先頭に「高く評価した曲」を出し、ここで評価を外せる
+                val like by container.player.likeState.collectAsState()
+                val likeScope = rememberCoroutineScope()
+                val likedNow = if (like.videoId == song.videoId) like.status?.let { it == xyz.mooma0750.wave.core.music.LikeStatus.Like } else null
                 AddToPlaylistDialog(
                     viewModel { LibraryViewModel(container.music, container.libraryCache) },
                     onDismiss = ::finish,
@@ -39,6 +47,8 @@ class AddToPlaylistActivity : ComponentActivity() {
                     },
                     song = song,
                     membership = container.playlistMembership,
+                    liked = likedNow,
+                    onToggleLiked = { likedNow?.let { now -> likeScope.launch { container.player.setLiked(song.videoId, !now) } } },
                 )
             }
         }

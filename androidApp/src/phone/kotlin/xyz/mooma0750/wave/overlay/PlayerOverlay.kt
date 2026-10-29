@@ -239,6 +239,31 @@ object PlayerOverlay {
         }
     }
 
+    /**
+     * 評価のボタン（ウィジェットと同じ）。＋なら高く評価し、✓ならアプリを開かずにプレイリストに追加する画面（透明な画面のダイアログ）を出す。
+     */
+    internal fun like(
+        app: WaveApplication,
+        now: NowPlayingSnapshot?,
+    ) {
+        val song = now?.song
+        if (now?.saved == true && song != null) {
+            runCatching {
+                app.startActivity(
+                    android.content.Intent(app, xyz.mooma0750.wave.library.AddToPlaylistActivity::class.java)
+                        .putExtra(xyz.mooma0750.wave.library.LikedNotice.EXTRA_SONG, xyz.mooma0750.wave.playback.SongJson.encode(song))
+                        .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK),
+                )
+            }.onFailure { Log.w(WaveApplication.LOG_TAG, "overlay add to playlist failed type=${it::class.simpleName}") }
+            return
+        }
+        val videoId = now?.videoId ?: return
+        app.container.appScope.launch(Dispatchers.Main) {
+            runCatching { app.container.player.setLiked(videoId, true) }
+                .onFailure { Log.w(WaveApplication.LOG_TAG, "overlay like failed type=${it::class.simpleName}") }
+        }
+    }
+
     internal fun togglePlay(app: WaveApplication) = withPlayer(app) { if (it.playWhenReady) it.pause() else it.playFromButton() }
 
     internal fun next(app: WaveApplication) = withPlayer(app) { it.seekToNext() }
@@ -354,6 +379,7 @@ object PlayerOverlay {
                     onPrevious = { previous(app) },
                     onTogglePlay = { togglePlay(app) },
                     onNext = { next(app) },
+                    onLike = { like(app, ui.now) },
                     onSizeSettled = {},
                 )
             }

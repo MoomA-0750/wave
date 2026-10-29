@@ -79,6 +79,7 @@ internal fun OverlayContent(
     onPrevious: () -> Unit,
     onTogglePlay: () -> Unit,
     onNext: () -> Unit,
+    onLike: () -> Unit,
     onSizeSettled: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -111,7 +112,7 @@ internal fun OverlayContent(
                 }
             },
         ) {
-            ModeContent(ui, now, motion, modeTransition, { shownSize.value }, { targetSize = it; ui.targetSizeNow = it }, bubbleTouch, miniTouch, onPrevious, onTogglePlay, onNext)
+            ModeContent(ui, now, motion, modeTransition, { shownSize.value }, { targetSize = it; ui.targetSizeNow = it }, bubbleTouch, miniTouch, onPrevious, onTogglePlay, onNext, onLike)
         }
     }
 }
@@ -133,6 +134,7 @@ private fun ModeContent(
     onPrevious: () -> Unit,
     onTogglePlay: () -> Unit,
     onNext: () -> Unit,
+    onLike: () -> Unit,
 ) {
     val bubbleAlpha by transition.animateFloat({ if (targetState == PlayerOverlay.Mode.Bubble) motion.defaultEffectsSpec() else motion.fastEffectsSpec() }, label = "bubble-alpha") {
         if (it == PlayerOverlay.Mode.Bubble) 1f else 0f
@@ -163,7 +165,7 @@ private fun ModeContent(
                     scaleX = miniScale
                     scaleY = miniScale
                 },
-            ) { Mini(ui, now, miniTouch, onPrevious, onTogglePlay, onNext) }
+            ) { Mini(ui, now, miniTouch, onPrevious, onTogglePlay, onNext, onLike) }
         },
     ) { measurables, _ ->
         val bubble = measurables[0].measure(Constraints())
@@ -252,6 +254,7 @@ private fun Mini(
     onPrevious: () -> Unit,
     onTogglePlay: () -> Unit,
     onNext: () -> Unit,
+    onLike: () -> Unit,
 ) {
     Surface(
         shape = MaterialTheme.shapes.large,
@@ -294,6 +297,15 @@ private fun Mini(
                     size = 32.dp,
                 )
                 IconAction(R.drawable.ic_skip_next, stringResource(R.string.nowplaying_next), onNext)
+                // 評価（アプリ・ウィジェットと同じ）。＋は押すと高く評価し、✓はプレイリストに追加する画面を出す。出せないとき（ログインしていない・RSS のエピソードなど）は出さない
+                now.saved?.let { saved ->
+                    IconAction(
+                        if (saved) R.drawable.ic_check_circle else R.drawable.ic_add_circle,
+                        if (saved) stringResource(R.string.library_add_to_playlist) else stringResource(R.string.playback_like),
+                        onLike,
+                        active = saved,
+                    )
+                }
             }
         }
     }
