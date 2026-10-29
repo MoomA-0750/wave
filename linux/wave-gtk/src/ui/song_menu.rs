@@ -1,4 +1,5 @@
 //! 曲のメニュー（行の右端の「…」と右クリック。Mac・Windows と同じ並び）: 次に再生・キューに追加・プレイリストに追加（新しいプレイリストも）・
+//! 高く評価した曲に追加（評価済みなら削除）・
 //! このプレイリストから削除・曲のラジオ・アルバムへ・アーティストへ・リンクをコピー。
 
 use std::rc::Rc;
@@ -108,6 +109,38 @@ fn build(app: &Rc<App>, song: &Song, removal: Option<Rc<Removal>>) -> (gio::Menu
             submenu.append_section(None, &list);
         }
         playlist_section.append_submenu(Some("プレイリストに追加"), &submenu);
+        // 高く評価した曲に足す・外す（開いた時点の評価を読んでから、外すほうに替える。RSS のエピソードには出さない）
+        if !song.video_id.starts_with("ext:") {
+            playlist_section.append(Some("高く評価した曲に追加"), Some("song.like"));
+            let (repo, id, section) = (app.repo.clone(), song.video_id.clone(), playlist_section.clone());
+            gtk::glib::spawn_future_local(async move {
+                let status = runtime::run(async move { repo.like_status(&id).await }).await;
+                if let Ok(Some(wave_core::music::models::LikeStatus::Like)) = status {
+                    for i in 0..section.n_items() {
+                        if section.item_attribute_value(i, "action", None).and_then(|v| v.get::<String>()).as_deref() == Some("song.like") {
+                            section.remove(i);
+                            section.insert(i, Some("高く評価した曲から削除"), Some("song.unlike"));
+                            break;
+                        }
+                    }
+                }
+            });
+            for (name, liked) in [("like", true), ("unlike", false)] {
+                let (app, song) = (app.clone(), song.clone());
+                add(name, Box::new(move |_| {
+                    let (app, song) = (app.clone(), song.clone());
+                    gtk::glib::spawn_future_local(async move {
+                        let (repo, id) = (app.repo.clone(), song.video_id.clone());
+                        let ok = runtime::run(async move { repo.set_liked(&id, liked).await }).await.is_ok();
+                        app.toast(match (ok, liked) {
+                            (true, true) => "高く評価した曲に追加しました",
+                            (true, false) => "高く評価した曲から削除しました",
+                            (false, _) => "評価を変えられませんでした",
+                        });
+                    });
+                }), false);
+            }
+        }
         if removal.is_some() {
             playlist_section.append(Some("このプレイリストから削除"), Some("song.remove"));
         }
