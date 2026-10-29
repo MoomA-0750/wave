@@ -110,7 +110,6 @@ struct Shared {
     events: RefCell<Vec<ClientEvent>>,
     /// ほかの端末に「ここで再生」を頼まれた（止められた知らせを抑えるのに使う）。
     transfer_requested_at: Cell<Option<Instant>>,
-    started: Instant,
 }
 
 struct GtkEffects {
@@ -268,7 +267,6 @@ impl Connect {
             tag: RefCell::default(),
             events: RefCell::default(),
             transfer_requested_at: Cell::default(),
-            started: Instant::now(),
         });
         let endpoint = relay_url.as_deref().and_then(RelayEndpoint::parse);
         let (device, unreadable) = if endpoint.is_some() { load_or_create_device().await } else { (None, false) };
@@ -328,6 +326,13 @@ impl Connect {
         glib::timeout_add_local(Duration::from_millis(TICK_MS), move || {
             let Some(connect) = weak.upgrade() else { return glib::ControlFlow::Break };
             connect.on_tick();
+            // 確かめ用: WAVE_DEBUG_MIRROR があれば、映している端末の位置を手元の時刻と並べて書く（ずれの測り）
+            if std::env::var_os("WAVE_DEBUG_MIRROR").is_some()
+                && let Some(mirror) = connect.mirror()
+            {
+                let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis());
+                eprintln!("mirror at={now} position={} playing={}", mirror.position_ms, mirror.playing);
+            }
             glib::ControlFlow::Continue
         });
         // PC は画面がある間ずっと中継につなぐ（家に入っていなければ、中継は認証で断る）
@@ -392,9 +397,8 @@ impl Connect {
         };
         let socket = self.socket.clone();
         let send: Box<dyn Fn(RelayMessage) -> bool> = Box::new(move |message| socket.as_ref().is_some_and(|s| s.send(message.encode())));
-        let started = self.shared.started;
         let clock = Clock {
-            now_ms: Box::new(move || started.elapsed().as_millis() as i64),
+            now_ms: Box::new(boot_clock_ms),
             epoch_ms: Box::new(epoch_ms),
             new_id: Box::new(crate::playback::new_item_id),
         };
@@ -1562,8 +1566,9 @@ fn local_cursor(playback: &Playback, now: i64) -> Option<LocalCursor> {
     })
 }
 
-fn now_ms(shared: &Shared) -> i64 {
-    shared.started.elapsed().as_millis() as i64
+fn now_ms(_shared: &Shared) -> i64 {
+    // エンジンの時計（Clock::now_ms）と同じ時計で測る
+    boot_clock_ms()
 }
 
 fn epoch_ms() -> i64 {
@@ -1767,4 +1772,13 @@ pub mod play_policy {
             assert_eq!(after_wait(WaitOutcome::Ready, false, true, false, false), Decision::Nothing);
         }
     }
+}
+
+/// 休止の間も進む単調時計（CLOCK_BOOTTIME。Android の elapsedRealtime と同じ）。Instant は PC が休止すると止まり、
+/// ほかの端末の位置の経過がその分足りなくなる。
+fn boot_clock_ms() -> i64 {
+    let mut ts = libc::timespec { tv_sec: 0, tv_nsec: 0 };
+    // SAFETY: ts は書き込める timespec で、CLOCK_BOOTTIME は Linux にある
+    unsafe { libc::clock_gettime(libc::CLOCK_BOOTTIME, &mut ts) };
+    ts.tv_sec * 1000 + ts.tv_nsec / 1_000_000
 }

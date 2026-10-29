@@ -659,7 +659,7 @@ final class ConnectWorker: ConnectClientEffects, @unchecked Sendable {
     private static let positionToleranceMs: Int64 = 3_000
 
     private let queue = DispatchQueue(label: "connect-v2")
-    private let clockStart = DispatchTime.now().uptimeNanoseconds
+    private let clockStart = clock_gettime_nsec_np(CLOCK_MONOTONIC)
     private let labelsUrl = AppPaths.file("connect-v2-labels.json")
 
     /// 家の端末の種類（表示の絵だけ）。相手は中継につながったときにしか知らせないので、名前と同じくファイルに覚える。
@@ -726,7 +726,9 @@ final class ConnectWorker: ConnectClientEffects, @unchecked Sendable {
         }
     }
 
-    var clockMs: Int64 { Int64((DispatchTime.now().uptimeNanoseconds - clockStart) / 1_000_000) }
+    /// 眠っている間も進む単調時計（CLOCK_MONOTONIC。Android の elapsedRealtime と同じ）。DispatchTime は眠っている間・アプリが止められている間に
+    /// 止まるので、ほかの端末の位置の経過が止められていた分だけ足りず、映している位置が遅れたままになった。
+    var clockMs: Int64 { Int64((clock_gettime_nsec_np(CLOCK_MONOTONIC) - clockStart) / 1_000_000) }
 
     static var deviceName: String {
         #if os(macOS)

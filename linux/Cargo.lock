@@ -3353,6 +3353,7 @@ dependencies = [
  "gtk4",
  "hex",
  "libadwaita",
+ "libc",
  "oo7",
  "qrcode",
  "regex",
