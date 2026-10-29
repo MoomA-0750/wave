@@ -614,6 +614,7 @@ pub fn album(app: &Rc<App>, browse_id: &str, title: &str) -> adw::NavigationPage
 pub fn artist(app: &Rc<App>, browse_id: &str, name: &str) -> adw::NavigationPage {
     let bin = holder();
     let (app, target, id) = (app.clone(), bin.clone(), browse_id.to_string());
+    let artist_id = id.clone();
     gtk::glib::spawn_future_local(async move {
         let repo = app.repo.clone();
         let content: gtk::Widget = match runtime::run(async move { repo.artist(&id).await }).await {
@@ -632,6 +633,17 @@ pub fn artist(app: &Rc<App>, browse_id: &str, name: &str) -> adw::NavigationPage
                     top.append(&button);
                 }
                 column.append(&clamp(&top));
+                // 登録したアーティストなら、見張りで見つけた最近の新作（Windows と同じ）
+                let fresh: Vec<HomeItem> = app
+                    .releases
+                    .recent()
+                    .into_iter()
+                    .filter(|r| r.artist_id == artist_id)
+                    .filter_map(|r| Some(HomeItem::Album(wave_core::music::models::AlbumSummary { browse_id: r.album_browse_id?, title: r.title, subtitle: None, thumbnail_url: r.thumbnail_url })))
+                    .collect();
+                if !fresh.is_empty() {
+                    column.append(&shelf_widget(&app, "新作", None, fresh));
+                }
                 for shelf in page.album_shelves {
                     column.append(&shelf_widget(&app, &shelf.title, None, shelf.albums.into_iter().map(HomeItem::Album).collect()));
                 }
