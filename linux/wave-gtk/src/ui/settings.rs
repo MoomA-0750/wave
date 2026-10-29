@@ -11,6 +11,23 @@ use crate::downloads::format_bytes;
 pub fn page(app: &Rc<App>) -> adw::NavigationPage {
     let prefs = adw::PreferencesPage::new();
 
+    // アカウント: Premium 音質を使えるか（Windows・Android と同じ。開くたびに確かめる）
+    let account = adw::PreferencesGroup::builder().title("アカウント").build();
+    let premium = adw::ActionRow::builder().title("Premium 音質").subtitle("確かめています…").build();
+    account.add(&premium);
+    prefs.add(&account);
+    {
+        let (app, premium) = (app.clone(), premium.clone());
+        gtk::glib::spawn_future_local(async move {
+            let found = app.playback.player().premium_audio().await;
+            premium.set_subtitle(match found {
+                Some(true) => "使えます（256kbps）",
+                Some(false) => "使えません",
+                None => "分かりません",
+            });
+        });
+    }
+
     let downloads = adw::PreferencesGroup::builder().title("ダウンロード").build();
     let settings = app.downloads.settings.borrow().clone();
     let smart = adw::SwitchRow::builder()

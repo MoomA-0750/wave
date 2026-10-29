@@ -178,6 +178,12 @@ impl Player {
         self
     }
 
+    /// Premium 音質を使えるか（分からなければ None）。
+    pub async fn premium_audio(&self) -> Option<bool> {
+        let resolver = self.resolver.clone();
+        runtime::run(async move { resolver.premium_audio().await }).await
+    }
+
     /// ログアウトのとき: 残した曲の音を消す。
     pub fn clear_audio_cache(&self) {
         if let Some(cache) = &self.audio_cache {

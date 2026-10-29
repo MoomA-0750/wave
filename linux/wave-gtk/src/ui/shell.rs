@@ -323,6 +323,7 @@ impl App {
                             app.push(pages::album(&app, &id, &title));
                         }
                     }
+                    (Ok("settings"), _) => app.push(super::settings::page(&app)),
                     _ => {}
                 }
             }

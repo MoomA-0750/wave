@@ -92,6 +92,10 @@ static VIDEO_ID: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[A-Za-z0-9_-]{1
 static QUERY_NAME: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[A-Za-z0-9_]{1,32}$").unwrap());
 static N_PARAMETER: LazyLock<Regex> = LazyLock::new(|| Regex::new("([?&])n=([^&]+)").unwrap());
 
+/// Premium 音質の形式の itag。
+pub const PREMIUM_ITAGS: [u32; 2] = [141, 774];
+const PREMIUM_PROBE_VIDEO_ID: &str = "dQw4w9WgXcQ";
+
 #[derive(Clone)]
 pub struct StreamResolver {
     client: InnerTube,
@@ -101,6 +105,22 @@ pub struct StreamResolver {
 impl StreamResolver {
     pub fn new(client: InnerTube, cipher: PlayerCipherProvider) -> Self {
         Self { client, cipher }
+    }
+
+    /// Premium 音質（AAC 256kbps・opus 約 256kbps）を使えるか（Windows・Android と同じ）。決まった1曲で Premium の形式が返るかを見る。分からなければ None。
+    pub async fn premium_audio(&self) -> Option<bool> {
+        let ready = self.cipher.get().await?;
+        let body = json!({
+            "videoId": PREMIUM_PROBE_VIDEO_ID,
+            "playbackContext": { "contentPlaybackContext": { "signatureTimestamp": ready.signature_timestamp } },
+            "contentCheckOk": true,
+            "racyCheckOk": true,
+        });
+        let root = self.client.post("player", body, true, &[]).await.ok()?;
+        if root.path(&["playabilityStatus", "status"]).str_() != Some("OK") {
+            return None;
+        }
+        Some(root.path(&["streamingData", "adaptiveFormats"]).items().iter().any(|f| f.get("itag").and_then(Value::as_u64).is_some_and(|i| PREMIUM_ITAGS.contains(&(i as u32)))))
     }
 
     pub async fn resolve(&self, video_id: &str) -> Result<ResolvedStream, StreamFailure> {
