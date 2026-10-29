@@ -38,6 +38,15 @@ public sealed class LibrarySync(
     /// <summary>開けなかった文書（一覧が古い）。一覧が届いたら開き直す。</summary>
     private LibraryState? deferred;
 
+    /// <summary>
+    /// 中継の最新の文書を開けなかった理由（開けるまで書かない。読めないまま書くと、ほかの端末の登録を消し、
+    /// 食い違いが返り続けて書き込みが回り続ける）。記録用で値を含めない。
+    /// </summary>
+    public string? Unreadable { get; private set; }
+
+    /// <summary>中継の文書が、今の一覧の端末の一部にしか包まれていない（後から加わった端末が開けない）。中身が同じでも書き直す。</summary>
+    private bool rewrap;
+
     /// <summary>つながった（welcome の後）。最新を頼む。古い中継は知らない命令として error を返すだけ（synced のまま false なので書かない）。</summary>
     public void OnConnected()
     {
@@ -82,6 +91,7 @@ public sealed class LibrarySync(
             case RelayV2.LibraryOk ok:
                 if (ok.RequestId != inflight) return;
                 inflight = null;
+                rewrap = false;
                 remoteVersion = ok.Version;
                 remoteBody = pendingBody;
                 remoteHash = null;
@@ -107,6 +117,7 @@ public sealed class LibrarySync(
     private void ForgetRemote()
     {
         if (storeId() is null) return;
+        Unreadable = null;
         remoteVersion = 0;
         remoteBody = null;
         remoteHash = null;
@@ -126,6 +137,7 @@ public sealed class LibrarySync(
         if (current is null)
         {
             deferred = state;
+            Unreadable = "no_chain";
             return;
         }
         DocOpen.Ok opened;
@@ -136,12 +148,32 @@ public sealed class LibrarySync(
                 break;
             case DocOpen.NeedChain:
                 deferred = state;
+                Unreadable = "need_chain";
+                return;
+            case DocOpen.Fork:
+                Unreadable = "fork";
+                return;
+            case DocOpen.Rejected rejected:
+                Unreadable = rejected.Reason;
                 return;
             default:
+                Unreadable = "unknown";
                 return;
         }
-        if (opened.Header.Kind != DocKind.Library || opened.Header.Version != state.Version) return;
-        if (ConnectJson.Decode<LibraryBody>(opened.Plaintext) is not { } body) return;
+        if (opened.Header.Kind != DocKind.Library || opened.Header.Version != state.Version)
+        {
+            Unreadable = "header";
+            return;
+        }
+        if (ConnectJson.Decode<LibraryBody>(opened.Plaintext) is not { } body)
+        {
+            Unreadable = "body";
+            return;
+        }
+        Unreadable = null;
+        // 後から加わった端末にも開けるよう、宛先が欠けていれば書き直す（ほかの端末の版は、中身が変わるまで包み直さない）
+        var wrapped = state.Doc.Recipients.Select(r => r.DeviceId).ToHashSet();
+        rewrap = !current.Members.Keys.All(wrapped.Contains);
         remoteVersion = state.Version;
         remoteHash = hash;
         remoteBody = body;
@@ -155,13 +187,13 @@ public sealed class LibrarySync(
     /// <summary>手元に中継より新しいものがあれば書く。</summary>
     private void Flush()
     {
-        if (!synced || inflight is not null || storeId() is null) return;
+        if (!synced || inflight is not null || storeId() is null || Unreadable is not null) return;
         var mine = local;
         if (mine is null) return;
         var remote = remoteBody;
         // 同じ時刻なら中継の側を残す
         var merged = remote is null ? mine : mine.Merge(remote);
-        if (remote is not null && merged.SameAs(remote)) return;
+        if (remote is not null && merged.SameAs(remote) && !rewrap) return;
         if (remote is null && merged.Feeds.Count == 0 && merged.Positions.Count == 0) return;
         var current = chain();
         if (current is null || !current.Members.ContainsKey(signer.DeviceId)) return;

@@ -216,6 +216,11 @@ public final class LibrarySync {
     private var synced = false
     /// 開けなかった文書（一覧が古い）。一覧が届いたら開き直す。
     private var deferred: LibraryState?
+    /// 中継の最新の文書を開けなかった理由（開けるまで書かない。読めないまま書くと、ほかの端末の登録を消し、
+    /// 食い違いが返り続けて書き込みが回り続ける）。記録用で値を含めない。
+    public private(set) var unreadable: String?
+    /// 中継の文書が、今の一覧の端末の一部にしか包まれていない（後から加わった端末が開けない）。中身が同じでも書き直す。
+    private var rewrap = false
 
     public init(
         signer: DeviceSigner, opener: KxOpener, send: @escaping (RelayV2) -> Bool, chain: @escaping () -> VerifiedChain?, storeId: @escaping () -> String?,
@@ -266,6 +271,7 @@ public final class LibrarySync {
         case .libraryOk(let m):
             guard m.requestId == inflight else { return }
             inflight = nil
+            rewrap = false
             remoteVersion = m.version
             remoteBody = pendingBody
             remoteHash = nil
@@ -287,6 +293,7 @@ public final class LibrarySync {
     /// （覚えた版のまま書くと、食い違いが返り続けて書き込みが回り続ける）。
     private func forgetRemote() {
         if storeId() == nil { return }
+        unreadable = nil
         remoteVersion = 0
         remoteBody = nil
         remoteHash = nil
@@ -303,6 +310,7 @@ public final class LibrarySync {
         if sameStore && state.version == remoteVersion && hash == remoteHash { return }
         guard let current = chain() else {
             deferred = state
+            unreadable = "no_chain"
             return
         }
         let header: DocHeader
@@ -313,12 +321,27 @@ public final class LibrarySync {
             plaintext = p
         case .needChain:
             deferred = state
+            unreadable = "need_chain"
             return
-        default:
+        case .fork:
+            unreadable = "fork"
+            return
+        case .rejected(let reason):
+            unreadable = reason
             return
         }
-        if header.kind != .library || header.version != state.version { return }
-        guard let body = ConnectJSON.decode(LibraryBody.self, from: plaintext) else { return }
+        if header.kind != .library || header.version != state.version {
+            unreadable = "header"
+            return
+        }
+        guard let body = ConnectJSON.decode(LibraryBody.self, from: plaintext) else {
+            unreadable = "body"
+            return
+        }
+        unreadable = nil
+        // 後から加わった端末にも開けるよう、宛先が欠けていれば書き直す（ほかの端末の版は、中身が変わるまで包み直さない）
+        let wrapped = Set(state.doc.recipients.map(\.deviceId))
+        rewrap = !current.members.keys.allSatisfy { wrapped.contains($0) }
         remoteVersion = state.version
         remoteHash = hash
         remoteBody = body
@@ -331,12 +354,12 @@ public final class LibrarySync {
 
     /// 手元に中継より新しいものがあれば書く。
     private func flush() throws {
-        if !synced || inflight != nil || storeId() == nil { return }
+        if !synced || inflight != nil || storeId() == nil || unreadable != nil { return }
         guard let mine = local else { return }
         let remote = remoteBody
         // 同じ時刻なら中継の側を残す
         let merged = remote.map { mine.merge($0) } ?? mine
-        if let remote, merged == remote { return }
+        if let remote, merged == remote, !rewrap { return }
         if remote == nil && merged.feeds.isEmpty && merged.positions.isEmpty { return }
         guard let current = chain(), current.members[signer.deviceId] != nil else { return }
         let plaintext = ConnectJSON.encodeToUTF8(merged)

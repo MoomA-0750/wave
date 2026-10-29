@@ -170,4 +170,91 @@ public class LibrarySyncSimulationTests
         Assert.True(b.Playing);
         Assert.False(a.Playing);
     }
+    /// <summary>版の CAS だけをする中継（library のところだけ）。LibrarySync だけをつないで確かめる。</summary>
+    private sealed class CasRelay(LibraryState? stored)
+    {
+        public LibraryState? Stored { get; private set; } = stored;
+        public Queue<RelayV2> Inbox { get; } = new();
+        public int Puts { get; private set; }
+
+        public void Handle(RelayV2 message)
+        {
+            switch (message)
+            {
+                case RelayV2.LibraryGet:
+                    Inbox.Enqueue(new RelayV2.Library { Stored = Stored });
+                    break;
+                case RelayV2.LibraryPut put:
+                    Puts++;
+                    var current = Stored?.Version ?? 0;
+                    if (current != put.ExpectVersion)
+                    {
+                        Inbox.Enqueue(new RelayV2.LibraryConflict { RequestId = put.RequestId, Latest = Stored });
+                        return;
+                    }
+                    Stored = new LibraryState { Version = current + 1, Doc = put.Doc, StoreId = "store-1" };
+                    Inbox.Enqueue(new RelayV2.LibraryOk { RequestId = put.RequestId, Version = current + 1 });
+                    break;
+            }
+        }
+    }
+
+    /// <summary>device が chain で中継につながる。返す pump は、送ったもの・届いたものが無くなるまで回す。</summary>
+    private static (LibrarySync Sync, Action Pump) ConnectAlone(ConnectTestSupport.TestDevice device, VerifiedChain chain, CasRelay cas)
+    {
+        var outbox = new Queue<RelayV2>();
+        var ids = 0;
+        var sync = new LibrarySync(device, device, m => { outbox.Enqueue(m); return true; }, () => chain, () => "store-1", () => 1, () => $"req-{++ids}", _ => { });
+        void Pump()
+        {
+            while (outbox.Count > 0 || cas.Inbox.Count > 0)
+            {
+                while (outbox.Count > 0) cas.Handle(outbox.Dequeue());
+                if (cas.Inbox.Count > 0) sync.OnMessage(cas.Inbox.Dequeue());
+            }
+        }
+        sync.OnConnected();
+        Pump();
+        return (sync, Pump);
+    }
+
+    [Fact]
+    public void AnUnreadableRemoteDocumentIsNeverOverwritten()
+    {
+        // 中継の最新の文書を、この端末が開けない（別の一覧で書かれた・宛先にいない）
+        var other = new ConnectTestSupport.TestDevice();
+        var otherChain = new[] { MemberChain.Genesis(other, other.Keys) }.Verified();
+        var doc = DocSealer.Seal(other, otherChain, DocKind.Library, 5, null, 1, ConnectJson.EncodeToUtf8(Feeds(("https://feeds.example/x", Feed("X", 5)))));
+        var cas = new CasRelay(new LibraryState { Version = 5, Doc = doc, StoreId = "store-1" });
+        var me = new ConnectTestSupport.TestDevice();
+        var (sync, pump) = ConnectAlone(me, new[] { MemberChain.Genesis(me, me.Keys) }.Verified(), cas);
+        sync.Publish(Feeds(("https://feeds.example/a", Feed("A", 10))));
+        pump();
+        // 書かない（書けば開けなかった登録を消し、食い違いが返り続ける）
+        Assert.Equal(0, cas.Puts);
+        Assert.NotNull(sync.Unreadable);
+        Assert.Equal(5L, cas.Stored?.Version);
+    }
+
+    [Fact]
+    public void ADocumentMissingAMemberIsRewrappedEvenWithTheSameContent()
+    {
+        var me = new ConnectTestSupport.TestDevice();
+        var later = new ConnectTestSupport.TestDevice(Role.Controller);
+        var genesis = MemberChain.Genesis(me, me.Keys);
+        var chain = new[] { genesis, MemberChain.Add(me, new[] { genesis }.Verified(), later.Keys) }.Verified();
+        // 後の端末が加わる前に書かれた（宛先が自分だけ）
+        var same = Feeds(("https://feeds.example/x", Feed("X", 5)));
+        var doc = DocSealer.Seal(me, chain, DocKind.Library, 3, null, 1, ConnectJson.EncodeToUtf8(same), new HashSet<string> { me.DeviceId });
+        var cas = new CasRelay(new LibraryState { Version = 3, Doc = doc, StoreId = "store-1" });
+        var (sync, pump) = ConnectAlone(me, chain, cas);
+        Assert.Null(sync.Unreadable);
+        // 中身が同じでも、全員に包み直して1回だけ書く
+        Assert.Equal(1, cas.Puts);
+        Assert.Equal(4L, cas.Stored?.Version);
+        Assert.Equal(new[] { me.DeviceId, later.DeviceId }.Order(StringComparer.Ordinal), cas.Stored!.Doc.Recipients.Select(r => r.DeviceId).Order(StringComparer.Ordinal));
+        sync.Publish(same);
+        pump();
+        Assert.Equal(1, cas.Puts);
+    }
 }

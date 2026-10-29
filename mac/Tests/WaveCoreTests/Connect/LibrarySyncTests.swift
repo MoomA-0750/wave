@@ -177,3 +177,97 @@ final class LibrarySyncTests: XCTestCase {
         XCTAssertEqual(#"{"op":"library","state":null}"#, RelayV2.encode(.library(.init())))
     }
 }
+
+/// LibrarySync だけを、版の CAS だけをする中継（library のところだけ）とつないで確かめる。
+final class LibrarySyncUnitTests: XCTestCase {
+    private typealias TestDevice = ConnectTestSupport.TestDevice
+    private static let store = "store-1"
+
+    private final class Relay {
+        var stored: LibraryState?
+        var inbox: [RelayV2] = []
+        var puts = 0
+
+        init(_ stored: LibraryState?) { self.stored = stored }
+
+        func handle(_ message: RelayV2) {
+            switch message {
+            case .libraryGet:
+                inbox.append(.library(.init(state: stored)))
+            case .libraryPut(let m):
+                puts += 1
+                let current = stored?.version ?? 0
+                if current != m.expectVersion {
+                    inbox.append(.libraryConflict(.init(requestId: m.requestId, latest: stored)))
+                    return
+                }
+                stored = LibraryState(version: current + 1, doc: m.doc, storeId: LibrarySyncUnitTests.store)
+                inbox.append(.libraryOk(.init(requestId: m.requestId, version: current + 1)))
+            default:
+                break
+            }
+        }
+    }
+
+    private var outbox: [RelayV2] = []
+
+    private func feed(_ title: String, _ at: Int64) -> LibraryFeed { LibraryFeed(title: title, updatedAtMs: at) }
+
+    /// device が chain で中継につながる。届いたものが無くなるまで回す。
+    private func connect(_ device: TestDevice, _ chain: VerifiedChain, _ relay: Relay) throws -> LibrarySync {
+        var ids = 0
+        let sync = LibrarySync(
+            signer: device, opener: device, send: { [unowned self] in self.outbox.append($0); return true }, chain: { chain },
+            storeId: { LibrarySyncUnitTests.store }, epochMs: { 1 }, newId: { ids += 1; return "req-\(ids)" }, onRemote: { _ in })
+        sync.onConnected()
+        try pump(sync, relay)
+        return sync
+    }
+
+    private func pump(_ sync: LibrarySync, _ relay: Relay) throws {
+        while !outbox.isEmpty || !relay.inbox.isEmpty {
+            while !outbox.isEmpty { relay.handle(outbox.removeFirst()) }
+            if !relay.inbox.isEmpty { try sync.onMessage(relay.inbox.removeFirst()) }
+        }
+    }
+
+    func testAnUnreadableRemoteDocumentIsNeverOverwritten() throws {
+        // 中継の最新の文書を、この端末が開けない（別の一覧で書かれた・宛先にいない）
+        let other = TestDevice()
+        let otherChain = try [try MemberChain.genesis(signer: other, keys: other.keys)].verified()
+        let doc = try DocSealer.seal(
+            signer: other, chain: otherChain, kind: .library, version: 5, prevHash: nil, issuedAtEpochMs: 1,
+            plaintext: ConnectJSON.encodeToUTF8(LibraryBody(feeds: ["https://feeds.example/x": feed("X", 5)])))
+        let relay = Relay(LibraryState(version: 5, doc: doc, storeId: LibrarySyncUnitTests.store))
+        let a = TestDevice()
+        let sync = try connect(a, try [try MemberChain.genesis(signer: a, keys: a.keys)].verified(), relay)
+        try sync.publish(LibraryBody(feeds: ["https://feeds.example/a": feed("A", 10)]))
+        try pump(sync, relay)
+        // 書かない（書けば開けなかった登録を消し、食い違いが返り続ける）
+        XCTAssertEqual(0, relay.puts)
+        XCTAssertNotNil(sync.unreadable)
+        XCTAssertEqual(5, relay.stored?.version)
+    }
+
+    func testADocumentMissingAMemberIsRewrappedEvenWithTheSameContent() throws {
+        let a = TestDevice()
+        let pc = TestDevice(.controller)
+        let genesis = try MemberChain.genesis(signer: a, keys: a.keys)
+        let chain = try [genesis, try MemberChain.add(signer: a, chain: try [genesis].verified(), target: pc.keys)].verified()
+        // PC が加わる前に書かれた（宛先が A だけ）
+        let same = LibraryBody(feeds: ["https://feeds.example/x": feed("X", 5)])
+        let doc = try DocSealer.seal(
+            signer: a, chain: chain, kind: .library, version: 3, prevHash: nil, issuedAtEpochMs: 1, plaintext: ConnectJSON.encodeToUTF8(same),
+            only: [a.deviceId])
+        let relay = Relay(LibraryState(version: 3, doc: doc, storeId: LibrarySyncUnitTests.store))
+        let sync = try connect(a, chain, relay)
+        XCTAssertNil(sync.unreadable)
+        // 中身が同じでも、全員に包み直して1回だけ書く
+        XCTAssertEqual(1, relay.puts)
+        XCTAssertEqual(4, relay.stored?.version)
+        XCTAssertEqual(Set([a.deviceId, pc.deviceId]), Set(relay.stored?.doc.recipients.map(\.deviceId) ?? []))
+        try sync.publish(same)
+        try pump(sync, relay)
+        XCTAssertEqual(1, relay.puts)
+    }
+}

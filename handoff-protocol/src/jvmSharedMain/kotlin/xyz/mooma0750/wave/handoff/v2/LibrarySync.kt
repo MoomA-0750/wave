@@ -39,6 +39,16 @@ class LibrarySync(
     /** 開けなかった文書（一覧が古い）。一覧が届いたら開き直す。 */
     private var deferred: LibraryState? = null
 
+    /**
+     * 中継の最新の文書を開けなかった理由（開けるまで書かない。読めないまま書くと、ほかの端末の登録を消し、
+     * 食い違いが返り続けて書き込みが回り続ける）。記録用で値を含めない。
+     */
+    var unreadable: String? = null
+        private set
+
+    /** 中継の文書が、今の一覧の端末の一部にしか包まれていない（後から加わった端末が開けない）。中身が同じでも書き直す。 */
+    private var rewrap = false
+
     /** つながった（welcome の後）。最新を頼む。 */
     fun onConnected() {
         synced = false
@@ -75,6 +85,7 @@ class LibrarySync(
             is RelayV2.LibraryOk -> {
                 if (message.requestId != inflight) return
                 inflight = null
+                rewrap = false
                 remoteVersion = message.version
                 remoteBody = pendingBody
                 remoteHash = null
@@ -102,6 +113,7 @@ class LibrarySync(
      */
     private fun forgetRemote() {
         if (storeId() == null) return
+        unreadable = null
         remoteVersion = 0
         remoteBody = null
         remoteHash = null
@@ -116,15 +128,29 @@ class LibrarySync(
         if (sameStore && state.version < remoteVersion) return
         val hash = DocSealer.hash(state.doc)
         if (sameStore && state.version == remoteVersion && hash == remoteHash) return
-        val current = chain() ?: return run { deferred = state }
+        val current =
+            chain() ?: return run {
+                deferred = state
+                unreadable = "no_chain"
+            }
         val opened =
             when (val result = DocSealer.open(state.doc, current, opener)) {
                 is DocOpen.Ok -> result
-                is DocOpen.NeedChain -> return run { deferred = state }
-                else -> return
+                is DocOpen.NeedChain -> return run {
+                    deferred = state
+                    unreadable = "need_chain"
+                }
+                is DocOpen.Fork -> return run { unreadable = "fork" }
+                is DocOpen.Rejected -> return run { unreadable = result.reason }
             }
-        if (opened.header.kind != DocKind.Library || opened.header.version != state.version) return
-        val body = runCatching { ConnectJson.json.decodeFromString(LibraryBody.serializer(), opened.plaintext.decodeToString()) }.getOrNull() ?: return
+        if (opened.header.kind != DocKind.Library || opened.header.version != state.version) return run { unreadable = "header" }
+        val body =
+            runCatching { ConnectJson.json.decodeFromString(LibraryBody.serializer(), opened.plaintext.decodeToString()) }.getOrNull()
+                ?: return run { unreadable = "body" }
+        unreadable = null
+        // 後から加わった端末にも開けるよう、宛先が欠けていれば書き直す（ほかの端末の版は、中身が変わるまで包み直さない）
+        val wrapped = state.doc.recipients.mapTo(HashSet()) { it.deviceId }
+        rewrap = !wrapped.containsAll(current.members.keys)
         remoteVersion = state.version
         remoteHash = hash
         remoteBody = body
@@ -137,12 +163,12 @@ class LibrarySync(
 
     /** 手元に中継より新しいものがあれば書く。 */
     private fun flush() {
-        if (!synced || inflight != null || storeId() == null) return
+        if (!synced || inflight != null || storeId() == null || unreadable != null) return
         val mine = local ?: return
         val remote = remoteBody
         // 同じ時刻なら中継の側を残す
         val merged = remote?.let(mine::merge) ?: mine
-        if (remote != null && merged == remote) return
+        if (remote != null && merged == remote && !rewrap) return
         if (remote == null && merged.feeds.isEmpty() && merged.positions.isEmpty()) return
         val current = chain() ?: return
         if (signer.deviceId !in current.members) return
