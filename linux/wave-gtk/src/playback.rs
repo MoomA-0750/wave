@@ -397,6 +397,10 @@ impl Playback {
                 }
             }
             this.changed();
+            // 次の曲の頭を先に取っておく（曲送りですぐ鳴らす。ライブと RSS のエピソードは残さない）
+            if let Some(next) = this.upcoming().first().filter(|s| !s.is_live && !wave_core::music::feed::is_external(&s.video_id)) {
+                this.player.warm(&next.video_id);
+            }
             if this.upcoming().len() <= RADIO_REFILL_LEFT {
                 this.refill();
             }

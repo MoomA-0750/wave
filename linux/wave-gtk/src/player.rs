@@ -9,10 +9,14 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use gst::prelude::*;
+use wave_core::stream::audio_cache::AudioCache;
 use wave_core::stream::range::RangeReader;
 use wave_core::stream::resolver::{StreamFailure, StreamResolver};
 
 use crate::runtime;
+
+/// 残した分から鳴らし始めるのに要る頭の大きさ（これより少なければ、URL を調べてから鳴らす）。
+const MIN_CACHED_START: u64 = 256 * 1024;
 
 pub struct Player {
     playbin: gst::Element,
@@ -29,6 +33,8 @@ pub struct Player {
     current_stream: Arc<Mutex<Option<wave_core::stream::resolver::ResolvedStream>>>,
     /// RSS のエピソードの続きから流す位置（音声の URL → ミリ秒）。
     external_resume: std::cell::RefCell<Option<Box<dyn Fn(&str) -> u64>>>,
+    /// 曲の音を残す置き場（無ければ残さない）。
+    audio_cache: Option<Arc<AudioCache>>,
 }
 
 #[derive(Default)]
@@ -39,13 +45,76 @@ pub(crate) struct Feed {
     pub(crate) offset: u64,
     /// 最後に取った塊（始まりの位置と中身）。demuxer は小さく何度も求めるので、ここから切り出す。
     pub(crate) cache: Option<(u64, Vec<u8>)>,
+    /// 曲の音を残す置き場と、その曲の ID（残っている分はそこから読み、取った分は足す）。
+    pub(crate) audio: Option<(Arc<AudioCache>, String)>,
+    /// 残した分から鳴らし始めた曲: 続きが要ったときに URL を調べる口と、同じ形式か確かめる itag・長さ。
+    pub(crate) source: Option<(StreamResolver, u32, u64)>,
 }
 
 impl Feed {
     /// offset から length バイト（終わりで切れる）。塊に無ければ範囲で取り直す。
     /// 流しているものの長さ。
     pub(crate) fn length(&self) -> u64 {
-        self.local.as_ref().map(|(_, l)| *l).or_else(|| self.reader.as_ref().map(RangeReader::length)).unwrap_or(0)
+        self.local
+            .as_ref()
+            .map(|(_, l)| *l)
+            .or_else(|| self.reader.as_ref().map(RangeReader::length))
+            .or_else(|| self.source.as_ref().map(|(_, _, l)| *l))
+            .unwrap_or(0)
+    }
+
+    /// 読み手が無ければ（残した分から鳴らし始めた曲）、今 URL を調べる。残した形式と違えば読めない。
+    fn ensure_reader(&mut self) -> Result<RangeReader, wave_core::stream::range::RangeError> {
+        if let Some(reader) = &self.reader {
+            return Ok(reader.clone());
+        }
+        let (resolver, itag, length) = self.source.clone().ok_or(wave_core::stream::range::RangeError::Network)?;
+        let video_id = self.audio.as_ref().map(|(_, id)| id.clone()).ok_or(wave_core::stream::range::RangeError::Network)?;
+        let reader = runtime::block_on(async move {
+            let stream = resolver.resolve(&video_id).await.map_err(|_| wave_core::stream::range::RangeError::Network)?;
+            if stream.itag != itag || stream.content_length != Some(length) {
+                return Err(wave_core::stream::range::RangeError::Rejected(0));
+            }
+            RangeReader::open(stream).await
+        })?;
+        self.reader = Some(reader.clone());
+        Ok(reader)
+    }
+
+    /// 残した分から読む。足りなければ、残した分の続きから取って足してから読む（頭から途切れずに残す）。
+    /// 残した分より遠く先を求められた（シーク）ときは None（残さずにネットから読む）。
+    fn read_cached(&mut self, offset: u64, length: u64) -> Option<Result<Vec<u8>, wave_core::stream::range::RangeError>> {
+        let (cache, id) = self.audio.clone()?;
+        let total = self.length();
+        let length = length.min(total.saturating_sub(offset));
+        if length == 0 {
+            return Some(Ok(Vec::new()));
+        }
+        let end = offset + length - 1;
+        loop {
+            if let Some(bytes) = cache.read(&id, offset, end) {
+                return Some(Ok(bytes));
+            }
+            let have = cache.entry(&id).map_or(0, |e| e.1);
+            if have >= total || offset > have + wave_core::stream::audio_cache::GAP_FILL_BYTES {
+                return None;
+            }
+            let reader = match self.ensure_reader() {
+                Ok(reader) => reader,
+                Err(e) => return Some(Err(e)),
+            };
+            let chunk = match runtime::block_on(reader.read_chunk(have, end + 1 - have)) {
+                Ok(chunk) if !chunk.is_empty() => chunk,
+                Ok(_) => return None,
+                Err(e) => return Some(Err(e)),
+            };
+            let before = have;
+            cache.append(&id, have, &chunk);
+            // 足せなかった（形式が替わった等）なら、残さずに読む
+            if cache.entry(&id).map_or(0, |e| e.1) == before {
+                return None;
+            }
+        }
     }
 
     fn read(&mut self, offset: u64, length: u64) -> Result<Vec<u8>, wave_core::stream::range::RangeError> {
@@ -58,7 +127,10 @@ impl Feed {
             });
             return read.map(|_| bytes).map_err(|_| wave_core::stream::range::RangeError::Network);
         }
-        let reader = self.reader.clone().expect("reader is set before playing");
+        if let Some(result) = self.read_cached(offset, length) {
+            return result;
+        }
+        let reader = self.ensure_reader()?;
         let length = length.min(reader.length().saturating_sub(offset));
         let cached = |cache: &Option<(u64, Vec<u8>)>| {
             cache.as_ref().filter(|(start, data)| offset >= *start && offset + length <= start + data.len() as u64).map(|(start, data)| {
@@ -91,13 +163,55 @@ impl Player {
             configure_source(&source, setup_feed.clone());
             None
         });
-        Self { playbin, resolver, downloads, feed, pending_start: Arc::default(), live: None, current_stream: Arc::default(), external_resume: Default::default() }
+        Self { playbin, resolver, downloads, feed, pending_start: Arc::default(), live: None, current_stream: Arc::default(), external_resume: Default::default(), audio_cache: None }
     }
 
     /// ライブ配信を流せるようにする（HLS を GStreamer に直に読ませる）。
     pub fn with_live(mut self, live: wave_core::stream::live::LiveClient) -> Self {
         self.live = Some(live);
         self
+    }
+
+    /// 曲の音を残す（頭が残っている曲は、URL を調べずにすぐ鳴らし始める）。
+    pub fn with_audio_cache(mut self, cache: Arc<AudioCache>) -> Self {
+        self.audio_cache = Some(cache);
+        self
+    }
+
+    /// ログアウトのとき: 残した曲の音を消す。
+    pub fn clear_audio_cache(&self) {
+        if let Some(cache) = &self.audio_cache {
+            cache.clear();
+        }
+    }
+
+    /// 次の曲の頭（1MB、30秒ほど）を先に取って残しておく（曲送りですぐ鳴らす）。
+    pub fn warm(&self, video_id: &str) {
+        let Some(cache) = self.audio_cache.clone() else { return };
+        if !wave_core::stream::audio_cache::is_safe_id(video_id) || cache.entry(video_id).is_some_and(|e| e.1 >= wave_core::stream::audio_cache::WARM_BYTES) {
+            return;
+        }
+        let (resolver, id) = (self.resolver.clone(), video_id.to_string());
+        runtime::spawn(async move {
+            let Ok(stream) = resolver.resolve(&id).await else { return };
+            cache.begin(&stream);
+            let Ok(reader) = RangeReader::open(stream).await else { return };
+            let target = wave_core::stream::audio_cache::WARM_BYTES.min(reader.length());
+            loop {
+                let have = cache.entry(&id).map_or(0, |e| e.1);
+                if have >= target {
+                    break;
+                }
+                let Ok(chunk) = reader.read_chunk(have, target - have).await else { break };
+                if chunk.is_empty() {
+                    break;
+                }
+                cache.append(&id, have, &chunk);
+                if cache.entry(&id).map_or(0, |e| e.1) == have {
+                    break;
+                }
+            }
+        });
     }
 
     /// RSS のエピソードを続きから流すための、聴いたところの引き方。
@@ -133,7 +247,7 @@ impl Player {
         {
             self.playbin.set_state(gst::State::Null).ok();
             eprintln!("play source=download");
-            *self.feed.lock().unwrap() = Feed { reader: None, local: Some((path, file.length)), offset: 0, cache: None };
+            *self.feed.lock().unwrap() = Feed { reader: None, local: Some((path, file.length)), offset: 0, cache: None, audio: None, source: None };
             self.playbin.set_property("uri", "appsrc://");
             self.playbin.set_state(target).map_err(|_| StreamFailure::Unplayable)?;
             // 再生履歴のために、裏で解いておく（通信できなければ送らないだけ）
@@ -148,12 +262,43 @@ impl Player {
             });
             return Ok(());
         }
+        // 頭が残っている曲は、URL を調べずにすぐ鳴らし始める（続きが要ったら調べる。再生履歴のために裏でも調べておく）
+        if let Some(cache) = &self.audio_cache
+            && let Some((format, cached)) = cache.entry(video_id)
+            && cached >= MIN_CACHED_START.min(format.length)
+        {
+            self.playbin.set_state(gst::State::Null).ok();
+            eprintln!("play source=cache");
+            *self.feed.lock().unwrap() = Feed {
+                reader: None,
+                local: None,
+                offset: 0,
+                cache: None,
+                audio: Some((cache.clone(), video_id.to_string())),
+                source: Some((self.resolver.clone(), format.itag, format.length)),
+            };
+            self.playbin.set_property("uri", "appsrc://");
+            self.playbin.set_state(target).map_err(|_| StreamFailure::Unplayable)?;
+            let (resolver, id, slot) = (self.resolver.clone(), video_id.to_string(), self.current_stream.clone());
+            runtime::spawn(async move {
+                if let Ok(stream) = resolver.resolve(&id).await {
+                    *slot.lock().unwrap() = Some(stream);
+                }
+            });
+            return Ok(());
+        }
         let resolver = self.resolver.clone();
         let id = video_id.to_string();
         let slot = self.current_stream.clone();
+        let audio_cache = self.audio_cache.clone();
         let opened = runtime::run(async move {
             let stream = resolver.resolve(&id).await?;
             *slot.lock().unwrap() = Some(stream.clone());
+            if let Some(cache) = &audio_cache
+                && !stream.video_id.is_empty()
+            {
+                cache.begin(&stream);
+            }
             RangeReader::open(stream).await.map_err(|_| StreamFailure::RejectedUrl)
         })
         .await;
@@ -173,7 +318,8 @@ impl Player {
             other => other?,
         };
         self.playbin.set_state(gst::State::Null).ok();
-        *self.feed.lock().unwrap() = Feed { reader: Some(reader), local: None, offset: 0, cache: None };
+        let audio = self.audio_cache.clone().filter(|c| c.entry(video_id).is_some()).map(|c| (c, video_id.to_string()));
+        *self.feed.lock().unwrap() = Feed { reader: Some(reader), local: None, offset: 0, cache: None, audio, source: None };
         self.playbin.set_property("uri", "appsrc://");
         self.playbin.set_state(target).map_err(|_| StreamFailure::Unplayable)?;
         Ok(())
@@ -188,6 +334,12 @@ impl Player {
         let (_, state, _) = self.playbin.state(gst::ClockTime::ZERO);
         let next = if state == gst::State::Playing { gst::State::Paused } else { gst::State::Playing };
         self.playbin.set_state(next).ok();
+    }
+
+    /// 鳴っているか、鳴らそうとしている（読み込み中）か。端末の連携のカーソルの「再生中」に使う（読み込みの間に止まっている扱いにしない）。
+    pub fn wants_to_play(&self) -> bool {
+        let (_, current, pending) = self.playbin.state(gst::ClockTime::ZERO);
+        current == gst::State::Playing || pending == gst::State::Playing || self.pending_start.lock().unwrap().is_some_and(|(_, playing)| playing)
     }
 
     pub fn is_playing(&self) -> bool {

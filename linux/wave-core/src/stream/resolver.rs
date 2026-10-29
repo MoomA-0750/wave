@@ -72,6 +72,12 @@ impl ResolvedStream {
         &self.url
     }
 
+    /// 試験用: URL を持たない解決済みのストリーム。
+    #[doc(hidden)]
+    pub fn for_test(video_id: &str, itag: u32, mime_type: &str, content_length: Option<u64>) -> Self {
+        Self { video_id: video_id.into(), itag, mime_type: mime_type.into(), content_length, url: String::new(), stats_url: None, generation: 0 }
+    }
+
     /// 再生履歴の統計の URL（送るところだけが呼ぶ。ログに出さない）。
     pub fn reveal_stats_url(&self) -> Option<&str> {
         self.stats_url.as_deref()

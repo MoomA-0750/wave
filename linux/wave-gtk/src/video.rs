@@ -57,7 +57,7 @@ impl VideoPlayer {
         })
         .await;
         let Some(reader) = reader else { return false };
-        *self.feed.lock().unwrap() = Feed { reader: Some(reader), local: None, offset: 0, cache: None };
+        *self.feed.lock().unwrap() = Feed { reader: Some(reader), local: None, offset: 0, cache: None, audio: None, source: None };
         self.playbin.set_property("uri", "appsrc://");
         self.playbin.set_state(gst::State::Paused).ok();
         *self.loaded.borrow_mut() = Some(video.video_id.clone());

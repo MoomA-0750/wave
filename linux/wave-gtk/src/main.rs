@@ -112,7 +112,12 @@ async fn show_home(toolbar: &adw::ToolbarView, repo: &MusicRepository) {
     let resolver = StreamResolver::new(repo.client().clone(), PlayerCipherProvider::default());
     let video = video::VideoPlayer::new(resolver.clone());
     let downloads = downloads::Downloads::new(resolver.clone(), repo.clone());
-    let playback = playback::Playback::new(player::Player::new(resolver, Some(downloads.store())).with_live(repo.live().clone()), repo.clone());
+    let playback = playback::Playback::new(player::Player::new(resolver, Some(downloads.store())).with_live(repo.live().clone()).with_audio_cache(std::sync::Arc::new(
+            // 曲の音を残す（上限 300MB。Windows と同じ）
+            wave_core::stream::audio_cache::AudioCache::new(gtk::glib::user_cache_dir().join("wave").join("audio"), wave_core::stream::audio_cache::DEFAULT_MAX_BYTES, || {
+                std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as i64)
+            }),
+        )), repo.clone());
     // 聴いた曲を数える（スマートダウンロードの「いつも聴いている」に使う）
     downloads.track_listens(&playback);
     // 前回のキューを戻し、以後は変わるたびに書く（同じログインのときだけ）
@@ -122,6 +127,8 @@ async fn show_home(toolbar: &adw::ToolbarView, repo: &MusicRepository) {
         std::rc::Rc::new(move || {
             playback.clear();
             queue_store::clear();
+            // 聴いた曲の音も残さない
+            playback.player().clear_audio_cache();
             // 検索の履歴も消す（ほかの端末と同じ）
             downloads.update_settings(|s| s.search_history.clear());
             // ログアウトしたら、取った曲と Claude との会話も消す（ほかの端末と同じ）

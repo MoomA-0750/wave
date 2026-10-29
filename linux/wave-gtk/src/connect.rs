@@ -671,7 +671,10 @@ impl Connect {
             let account = runtime::run(async move { repo.verified_account().await }).await;
             let Some(connect) = weak.upgrade() else { return };
             connect.tag_computing.set(false);
-            let Some(account) = account else { return };
+            let Some(account) = account else {
+                eprintln!("connect-v2 account not verified");
+                return;
+            };
             connect.check_login_generation();
             if account.generation != connect.shared.repo.client().generation() {
                 return;
@@ -686,6 +689,7 @@ impl Connect {
                 connect.load_local_from_player();
             }
             connect.with_client(ConnectClient::on_account_tag_available);
+            eprintln!("connect-v2 account tag ready writer={}", connect.client.borrow().as_ref().is_some_and(ConnectClient::is_writer));
             connect.changed();
         });
     }
@@ -1548,7 +1552,7 @@ fn local_cursor(playback: &Playback, now: i64) -> Option<LocalCursor> {
     Some(LocalCursor {
         current_item_id: item.item_id,
         position_ms: player.position_ms().unwrap_or(0) as i64,
-        playing: player.is_playing(),
+        playing: player.wants_to_play(),
         repeat: handoff_repeat(playback.repeat()),
         listened_ms: 0,
         history_sent: false,
