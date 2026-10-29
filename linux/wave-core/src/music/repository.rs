@@ -156,6 +156,11 @@ impl MusicRepository {
         Ok(parsers::search_suggestions(&self.client.post("music/get_search_suggestions", json!({ "input": input }), false, &[]).await?))
     }
 
+    /// 絞り込まない検索の上位の曲（歌詞から探すのに使う）。
+    pub async fn search_top_songs(&self, query: &str) -> ApiResult<Vec<super::models::Song>> {
+        Ok(parsers::search_top_songs(&self.client.post("search", json!({ "query": query }), true, &[]).await?))
+    }
+
     pub async fn search_songs(&self, query: &str, continuation: Option<&str>) -> ApiResult<SongPage> {
         let root = match continuation {
             None => self.client.post("search", json!({ "query": query, "params": SONGS_FILTER }), true, &[]).await?,

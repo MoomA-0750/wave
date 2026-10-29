@@ -2,6 +2,7 @@
 
 pub mod lrc;
 pub mod lrclib;
+pub mod search;
 pub mod service;
 pub mod timed;
 

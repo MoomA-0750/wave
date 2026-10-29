@@ -25,6 +25,41 @@ pub fn search_songs(root: &Value) -> SongPage {
     }
 }
 
+/// 絞り込まない検索の曲（一番上の結果の欄が曲ならそれを先に、続けて各欄の曲。歌詞の一節でも曲が上に来る）。
+pub fn search_top_songs(root: &Value) -> Vec<Song> {
+    let sections = root.path(&["contents", "tabbedSearchResultsRenderer", "tabs", "0", "tabRenderer", "content", "sectionListRenderer", "contents"]).items();
+    let mut songs: Vec<Song> = Vec::new();
+    for section in sections {
+        if let Some(top) = section.path(&["musicCardShelfRenderer"]).and_then(card_song) {
+            songs.push(top);
+        }
+        let rows = section.path(&["musicShelfRenderer", "contents"]).items().into_iter().chain(section.path(&["itemSectionRenderer", "contents"]).items());
+        songs.extend(rows.filter_map(|r| r.path(&["musicResponsiveListItemRenderer"])).filter_map(responsive_list_item_song));
+    }
+    let mut seen = std::collections::HashSet::new();
+    songs.retain(|s| seen.insert(s.video_id.clone()));
+    songs
+}
+
+/// 一番上の結果の欄が曲・動画なら、その曲。アーティスト・アルバムなどの欄（videoId が無い）は None。
+fn card_song(card: &Value) -> Option<Song> {
+    let title_runs = card.path(&["title", "runs"]).items();
+    let watch = title_runs.iter().find_map(|r| r.path(&["navigationEndpoint", "watchEndpoint"]))?;
+    let video_id = watch.path(&["videoId"]).str_()?.to_string();
+    let title = runs_text(&title_runs)?;
+    let subtitle = card.path(&["subtitle", "runs"]).items();
+    Some(Song {
+        video_id,
+        title,
+        artists: artists_of(&subtitle),
+        album: album_of(&subtitle),
+        duration_seconds: duration_of(&subtitle),
+        thumbnail_url: last_thumbnail_url(card.path(&["thumbnail"])),
+        kind: watch.path(&["watchEndpointMusicSupportedConfigs", "watchEndpointMusicConfig", "musicVideoType"]).str_().map(String::from),
+        is_live: false,
+    })
+}
+
 /// アルバムに絞った検索。
 pub fn search_albums(root: &Value) -> SearchPage<AlbumSummary> {
     search_page_of(root, album_row)
@@ -844,6 +879,19 @@ mod tests {
         // 手本の応答は Android の core と共通（core/src/desktopTest/resources/fixtures）
         let path = format!("{}/../../core/src/desktopTest/resources/fixtures/{name}.json", env!("CARGO_MANIFEST_DIR"));
         serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap()
+    }
+
+    #[test]
+    fn unfiltered_search_puts_the_top_card_first_and_skips_artists() {
+        // 歌詞の一節「沈むように溶けてゆくように」で匿名に取った応答（棚は itemSectionRenderer）
+        let songs = search_top_songs(&fixture("search_all_lyrics"));
+        assert_eq!(songs[0].video_id, "x8VYWazR5mE");
+        assert_eq!(songs[0].title, "夜に駆ける");
+        assert_eq!(songs[0].kind.as_deref(), Some("MUSIC_VIDEO_TYPE_OMV"));
+        assert_eq!(songs[0].artists.iter().map(|a| a.name.as_str()).collect::<Vec<_>>(), ["YOASOBI"]);
+        assert_eq!(songs[0].duration_seconds, Some(4 * 60 + 36));
+        assert_eq!(songs[1].video_id, "by4SYYWlhEs");
+        assert!(songs.len() >= 4);
     }
 
     #[test]

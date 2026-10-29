@@ -278,14 +278,16 @@ pub fn format_seconds(seconds: u32) -> String {
 /// 検索の結果（曲）。
 /// 検索の結果。上の切り替えで「曲・アルバム・アーティスト・ライブ」に絞る（Mac・Windows と同じ）。続きは下の「もっと見る」で読む。
 pub fn search(app: &Rc<App>, query: &str) -> adw::NavigationPage {
-    let tabs = adw::ToggleGroup::builder().halign(gtk::Align::Start).css_classes(["round"]).build();
-    for (name, label) in [("songs", "曲"), ("albums", "アルバム"), ("artists", "アーティスト"), ("live", "ライブ"), ("podcasts", "ポッドキャスト"), ("episodes", "エピソード")] {
-        tabs.add(adw::Toggle::builder().label(label).name(name).build());
+    let tabs = adw::ToggleGroup::builder().halign(gtk::Align::Start).homogeneous(false).css_classes(["round"]).build();
+    for (name, label) in [("songs", "曲"), ("albums", "アルバム"), ("artists", "アーティスト"), ("live", "ライブ"), ("podcasts", "ポッドキャスト"), ("episodes", "エピソード"), ("lyrics", "歌詞")] {
+        // 既定の名前の文字は縮めると切れるので、切れない文字を中身にする
+        tabs.add(adw::Toggle::builder().child(&gtk::Label::new(Some(label))).name(name).build());
     }
     tabs.set_active_name(Some("songs"));
     let stack = gtk::Stack::builder().transition_type(gtk::StackTransitionType::Crossfade).vexpand(true).build();
     let column = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(12).margin_top(16).margin_start(20).margin_end(20).build();
-    column.append(&tabs);
+    // 種類が多く欄に収まらないときは、名前を切らずに横に送れるようにする
+    column.append(&gtk::ScrolledWindow::builder().child(&tabs).vscrollbar_policy(gtk::PolicyType::Never).propagate_natural_height(true).build());
     column.append(&stack);
     // 種類ごとの結果は、初めて開いたときに読む
     let open = {
@@ -303,6 +305,10 @@ pub fn search(app: &Rc<App>, query: &str) -> adw::NavigationPage {
             open(&name);
         }
     });
+    // 確かめ用: WAVE_DEMO_SEARCH_TAB にある種類（lyrics など）を開く
+    if let Ok(kind) = std::env::var("WAVE_DEMO_SEARCH_TAB") {
+        tabs.set_active_name(Some(&kind));
+    }
     page(&format!("「{query}」の検索"), "search", &column)
 }
 
@@ -328,7 +334,7 @@ fn search_results(app: &Rc<App>, query: &str, kind: &str) -> gtk::Widget {
             let (app, query, kind, list, more, bin, scroller, continuation) =
                 (app.clone(), query.clone(), kind.clone(), list.clone(), more.clone(), bin.clone(), scroller.clone(), continuation.clone());
             gtk::glib::spawn_future_local(async move {
-                let repo = app.repo.clone();
+                let (repo, lyrics) = (app.repo.clone(), app.lyrics.clone());
                 let (q, k, t) = (query.clone(), kind.clone(), token.clone());
                 let result = runtime::run(async move {
                     let t = t.as_deref();
@@ -338,6 +344,16 @@ fn search_results(app: &Rc<App>, query: &str, kind: &str) -> gtk::Widget {
                         "live" => repo.search_live(&q, t).await.map(|p| (SearchRows::Songs(p.songs), p.continuation)),
                         "podcasts" => repo.search_podcasts(&q, t).await.map(|p| (SearchRows::Podcasts(p.items), p.continuation)),
                         "episodes" => repo.search_episodes(&q, t).await.map(|p| (SearchRows::Episodes(p.items), p.continuation)),
+                        // 歌詞の一節から（検索の上位の曲の歌詞と照らし合わせる。続きは無い）
+                        "lyrics" => {
+                            let lyrics = lyrics.clone();
+                            wave_core::lyrics::search::search(&q, |q| async move { repo.search_top_songs(&q).await }, |song| {
+                                let lyrics = lyrics.clone();
+                                async move { lyrics.lyrics(&song).await }
+                            })
+                            .await
+                            .map(|hits| (SearchRows::Lyrics(hits), None))
+                        }
                         _ => repo.search_songs(&q, t).await.map(|p| (SearchRows::Songs(p.songs), p.continuation)),
                     }
                 })
@@ -375,6 +391,7 @@ enum SearchRows {
     Artists(Vec<wave_core::music::models::ArtistSummary>),
     Podcasts(Vec<wave_core::music::podcast::PodcastSummary>),
     Episodes(Vec<wave_core::music::podcast::PodcastEpisode>),
+    Lyrics(Vec<wave_core::lyrics::search::LyricsHit>),
 }
 
 impl SearchRows {
@@ -385,6 +402,7 @@ impl SearchRows {
             SearchRows::Artists(v) => v.is_empty(),
             SearchRows::Podcasts(v) => v.is_empty(),
             SearchRows::Episodes(v) => v.is_empty(),
+            SearchRows::Lyrics(v) => v.is_empty(),
         }
     }
 
@@ -393,6 +411,18 @@ impl SearchRows {
             SearchRows::Songs(songs) => song_list(app, songs).upcast(),
             SearchRows::Podcasts(shows) => super::podcasts::search_shows(app, shows),
             SearchRows::Episodes(episodes) => super::podcasts::search_episodes(app, episodes),
+            SearchRows::Lyrics(hits) => {
+                // 合った歌詞の行を引用して添える（大体合っているときは先頭に「≈ 」。Windows・Android と同じ）
+                let quotes: Vec<Option<String>> = hits.iter().map(|h| h.matched.as_ref().map(|m| format!("{}\u{201C}{}\u{201D}", if m.exact { "" } else { "≈ " }, m.line))).collect();
+                let list = song_list(app, hits.into_iter().map(|h| h.song).collect());
+                for (i, quote) in quotes.into_iter().enumerate() {
+                    if let (Some(quote), Some(row)) = (quote, list.row_at_index(i as i32).and_downcast::<adw::ActionRow>()) {
+                        row.set_subtitle_lines(2);
+                        row.set_subtitle(&format!("{}\n{}", row.subtitle().unwrap_or_default(), gtk::glib::markup_escape_text(&quote)));
+                    }
+                }
+                list.upcast()
+            }
             SearchRows::Albums(albums) => {
                 let list = gtk::ListBox::builder().selection_mode(gtk::SelectionMode::None).css_classes(["boxed-list"]).build();
                 for album in albums {

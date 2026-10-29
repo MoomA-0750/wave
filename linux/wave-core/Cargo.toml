@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 aes-gcm = "0.10"
-futures-util = { version = "0.3", default-features = false, features = ["sink"] }
+futures-util = { version = "0.3", default-features = false, features = ["sink", "alloc"] }
 getrandom = "0.3"
 hex = "0.4.3"
 hmac = "0.12"
