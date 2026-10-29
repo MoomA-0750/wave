@@ -5,5 +5,6 @@ pub mod cipher;
 pub mod live;
 pub mod player;
 pub mod range;
+pub mod rejected;
 pub mod resolver;
 pub mod stats;

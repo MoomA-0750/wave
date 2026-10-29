@@ -119,6 +119,19 @@ pub struct Playback {
     /// ほかの端末を操作している間に、「次に再生」「キューに追加」をその端末のキューへの追加にする。
     queue_interceptor: RefCell<Option<QueueInterceptor>>,
     _watch: RefCell<Option<gst::bus::BusWatchGuard>>,
+    /// 続けて鳴らせなかった曲の数（3曲で止める）。
+    failures: Cell<u32>,
+    /// 解き直しても音の取得を拒まれた曲（2分は飛ばす）。
+    rejected: RefCell<wave_core::stream::rejected::RejectedSongs>,
+    /// 本人に知らせる文（画面の下の短い知らせ）。
+    notices: RefCell<Vec<Box<dyn Fn(&str)>>>,
+}
+
+/// 続けて鳴らせなかったら止める曲の数（Windows・Android と同じ）。
+const MAX_CONSECUTIVE_FAILURES: u32 = 3;
+
+fn now_ms() -> i64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as i64)
 }
 
 impl Playback {
@@ -140,16 +153,23 @@ impl Playback {
             interceptor: RefCell::default(),
             queue_interceptor: RefCell::default(),
             _watch: RefCell::default(),
+            failures: Cell::default(),
+            rejected: RefCell::default(),
+            notices: RefCell::default(),
         });
         let weak = Rc::downgrade(&playback);
         let watch = playback.player.watch(move |failed| {
             if let Some(playback) = weak.upgrade() {
                 if failed {
                     eprintln!("song failed, skipping");
+                    playback.skip_failed(None);
+                    return;
                 }
-                // 1曲の繰り返しは、曲の終わりで同じ曲を頭から（失敗したときは次へ）
-                match (failed, playback.repeat.get(), playback.index.get()) {
-                    (false, Repeat::One, Some(i)) => playback.start_at(i, 0, true),
+                // 最後まで鳴った: 続けての失敗を数え直す
+                playback.failures.set(0);
+                // 1曲の繰り返しは、曲の終わりで同じ曲を頭から
+                match (playback.repeat.get(), playback.index.get()) {
+                    (Repeat::One, Some(i)) => playback.start_at(i, 0, true),
                     _ => playback.advance(),
                 }
             }
@@ -185,6 +205,39 @@ impl Playback {
 
     fn intercepted(&self, transport: Transport) -> bool {
         self.interceptor.borrow().as_ref().is_some_and(|f| f(transport))
+    }
+
+    /// 本人に知らせる文を受け取る（画面の下の短い知らせに出す）。
+    pub fn on_notice(&self, listener: impl Fn(&str) + 'static) {
+        self.notices.borrow_mut().push(Box::new(listener));
+    }
+
+    fn notice(&self, text: &str) {
+        for listener in self.notices.borrow().iter() {
+            listener(text);
+        }
+    }
+
+    /// 今の曲を鳴らせなかったので次へ進む。続けて失敗したら止める（Windows の SkipFailed と同じ）。
+    fn skip_failed(self: &Rc<Self>, message: Option<&str>) {
+        let failures = self.failures.get() + 1;
+        if failures >= MAX_CONSECUTIVE_FAILURES {
+            self.failures.set(0);
+            self.player.stop();
+            self.notice("続けて再生できなかったので、止めました");
+            self.changed();
+            return;
+        }
+        self.failures.set(failures);
+        // 次の曲が無ければ、進むとは知らせない
+        let has_next = self.index.get().is_some_and(|i| i + 1 < self.queue.borrow().len());
+        if !has_next {
+            self.player.stop();
+            self.changed();
+            return;
+        }
+        self.notice(message.unwrap_or("再生できなかったので、次の曲に進みます"));
+        self.advance();
     }
 
     fn user(&self, action: UserAction) {
@@ -332,6 +385,7 @@ impl Playback {
         if songs.is_empty() {
             return;
         }
+        self.failures.set(0);
         let single = songs.len() == 1;
         *self.radio.borrow_mut() = single.then_some((None, None));
         *self.source_id.borrow_mut() = source_id;
@@ -359,6 +413,7 @@ impl Playback {
 
     /// 本人がキューの曲を選んだ。
     pub fn play_at(self: &Rc<Self>, index: usize) {
+        self.failures.set(0);
         self.start_at(index, 0, true);
         self.user(UserAction::Selected);
     }
@@ -384,17 +439,39 @@ impl Playback {
         self.changed();
         let this = self.clone();
         gtk::glib::spawn_future_local(async move {
-            let result = this.player.play_from(&song.video_id, position_ms, playing).await;
+            use wave_core::stream::resolver::StreamFailure;
+            let generation = this.player.login_generation();
+            // 少し前に拒まれた曲は、解き直さずに飛ばす（取った曲・RSS のエピソードは通信しないので除く）
+            let external = wave_core::music::feed::is_external(&song.video_id);
+            if !external && !this.player.is_downloaded(&song.video_id) && this.rejected.borrow_mut().recently_rejected(&song.video_id, generation, now_ms()) {
+                this.skip_failed(None);
+                return;
+            }
+            let mut result = this.player.play_from(&song.video_id, position_ms, playing).await;
+            // 拒まれたら、解読の準備から取り直して1回だけやり直す
+            if result == Err(StreamFailure::RejectedUrl) && this.request.get() == request {
+                this.player.on_stream_rejected().await;
+                result = this.player.play_from(&song.video_id, position_ms, playing).await;
+                if result == Err(StreamFailure::RejectedUrl) {
+                    eprintln!("stream rejected again; cooling down");
+                    this.rejected.borrow_mut().mark_rejected(&song.video_id, generation, now_ms());
+                }
+            }
             if this.request.get() != request {
                 return;
             }
             if let Err(e) = result {
                 eprintln!("play failed: {e}");
-                // その曲だけの失敗なら次へ。どの曲でも起きる失敗では止める（飛ばし続けない）
-                if e.is_this_song_only() {
-                    this.advance();
+                // その曲だけの失敗なら知らせて次へ。どの曲でも起きる失敗では理由を知らせて止める（飛ばし続けない）
+                if e.is_this_song_only() || e == StreamFailure::RejectedUrl {
+                    this.skip_failed(None);
                     return;
                 }
+                this.notice(match e {
+                    StreamFailure::NotLoggedIn => "曲を再生するにはログインしてください",
+                    StreamFailure::Network => "通信できないため再生できませんでした",
+                    _ => "再生できませんでした",
+                });
             }
             this.changed();
             // 次の曲の頭を先に取っておく（曲送りですぐ鳴らす。ライブと RSS のエピソードは残さない）

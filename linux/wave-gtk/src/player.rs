@@ -178,6 +178,22 @@ impl Player {
         self
     }
 
+    /// 音の取得を拒まれた（403 など）。次は解読の準備を取り直す。
+    pub async fn on_stream_rejected(&self) {
+        let resolver = self.resolver.clone();
+        runtime::run(async move { resolver.on_stream_rejected().await }).await;
+    }
+
+    /// 取り終えた曲か（通信せずにファイルから鳴らす）。
+    pub fn is_downloaded(&self, video_id: &str) -> bool {
+        self.downloads.as_ref().is_some_and(|store| store.completed(video_id).is_some())
+    }
+
+    /// ログインの世代。
+    pub fn login_generation(&self) -> u64 {
+        self.resolver.generation()
+    }
+
     /// Premium 音質を使えるか（分からなければ None）。
     pub async fn premium_audio(&self) -> Option<bool> {
         let resolver = self.resolver.clone();

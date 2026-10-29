@@ -122,6 +122,15 @@ pub fn build(
     let toasts = adw::ToastOverlay::new();
     let app = Rc::new(App { repo, lyrics, playback, nav: nav.clone(), toasts: toasts.clone(), video, downloads, connect, releases, podcasts, video_layer: Default::default(), ai: Default::default(), claude_toggle: Default::default(), editable_playlists: Default::default() });
     {
+        // 再生の知らせ（飛ばした・止めた理由）を画面の下に出す
+        let weak = Rc::downgrade(&app);
+        app.playback.on_notice(move |text| {
+            if let Some(app) = weak.upgrade() {
+                app.toast(text);
+            }
+        });
+    }
+    {
         let app = app.clone();
         gtk::glib::spawn_future_local(async move {
             app.ai.load().await;
@@ -301,7 +310,16 @@ impl App {
             let repo = app.repo.clone();
             if let Ok(page) = runtime::run(async move { repo.search_songs(&query, None).await }).await {
                 let first = page.songs.first().cloned();
-                app.playback.play_list(page.songs, 0);
+                let mut songs = page.songs;
+                // 確かめ用: WAVE_DEMO_UNPLAYABLE=N なら、鳴らせない曲を N 曲先頭に入れる（飛ばす・続けば止める）
+                if let Some(n) = std::env::var("WAVE_DEMO_UNPLAYABLE").ok().and_then(|n| n.parse::<usize>().ok())
+                    && let Some(template) = songs.first().cloned()
+                {
+                    for i in 0..n {
+                        songs.insert(0, wave_core::music::models::Song { video_id: format!("zzzzzzzzzz{i}"), title: format!("鳴らせない曲 {i}"), ..template.clone() });
+                    }
+                }
+                app.playback.play_list(songs, 0);
                 // 確かめ用: WAVE_DEMO_DOWNLOAD があれば1曲目を取り、ダウンロードのページを開く
                 if std::env::var("WAVE_DEMO_DOWNLOAD").is_ok()
                     && let Some(song) = first.clone()

@@ -188,6 +188,11 @@ impl StreamResolver {
         Err(StreamFailure::DecipherFailed)
     }
 
+    /// ログインの世代（ログイン・ログアウトで変わる）。
+    pub fn generation(&self) -> u64 {
+        self.client.generation()
+    }
+
     /// 解決した URL が拒否された（403 など）。次は解読の準備を取り直す。
     pub async fn on_stream_rejected(&self) {
         self.cipher.invalidate().await;
