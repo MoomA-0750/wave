@@ -467,7 +467,7 @@ pub fn history(app: &Rc<App>) -> adw::NavigationPage {
     page("最近再生した曲", "history", &bin)
 }
 
-/// プレイリストのページ（頭にジャケット・名前・再生のボタン、下に曲）。
+/// プレイリストのページ（頭にジャケット・名前・再生のボタン、中の検索・並べ替え・種類の絞り込み、下に曲）。
 pub fn playlist(app: &Rc<App>, playlist_id: &str, title: &str) -> adw::NavigationPage {
     let bin = holder();
     let app = app.clone();
@@ -482,12 +482,13 @@ pub fn playlist(app: &Rc<App>, playlist_id: &str, title: &str) -> adw::Navigatio
                 let column = page_column();
                 let kind = if id_for_list == wave_core::music::repository::LIKED_SONGS { wave_core::download::manifest::KIND_LIKED } else { wave_core::download::manifest::KIND_PLAYLIST };
                 let collection = Collection { kind, id: id_for_list.clone() };
-                // 丸ごと取るときは最後のページまで読んだ曲にする（最初のページだけだと途中までしか取らない）
-                let all_songs = if page.continuation.is_some() { full_playlist(&app, &id_for_list, &page).await } else { page.songs.clone() };
-                column.append(&page_header_with(&app, page.thumbnail_url.as_deref(), page.title.as_deref().unwrap_or(""), page.subtitle.as_deref(), false, all_songs, Some(collection)));
-                // 自分のプレイリストなら、曲のメニューから外せる
-                let removable = page.editable.then(|| (id_for_list.clone(), page.set_video_ids.clone()));
-                column.append(&song_list_in(&app, page.songs, removable));
+                // 最後のページまで読む（丸ごと取る・絞り込む・並べ替えるのは全部の曲）
+                let all = full_playlist_entries(&app, &id_for_list, &page).await;
+                let songs: Vec<Song> = all.iter().map(|(s, _)| s.clone()).collect();
+                let view = Rc::new(std::cell::RefCell::new(songs.clone()));
+                let source = (id_for_list != wave_core::music::repository::LIKED_SONGS).then(|| id_for_list.clone());
+                column.append(&page_header_view(&app, page.thumbnail_url.as_deref(), page.title.as_deref().unwrap_or(""), page.subtitle.as_deref(), false, view.clone(), songs, Some(collection), source));
+                column.append(&playlist_tools(&app, &id_for_list, all, page.editable, view));
                 scrolling_column(&column)
             }
             // 通信できなくても、丸ごと取ったプレイリストは目録から出す
@@ -496,6 +497,158 @@ pub fn playlist(app: &Rc<App>, playlist_id: &str, title: &str) -> adw::Navigatio
         target.set_child(Some(&content));
     });
     page(title, "playlist", &bin)
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum SortKey {
+    Custom,
+    Added,
+    Published,
+    Title,
+    Artist,
+    Album,
+    Duration,
+}
+
+const SORT_LABELS: [(SortKey, &str); 7] = [
+    (SortKey::Custom, "カスタム順"),
+    (SortKey::Added, "追加した日"),
+    (SortKey::Published, "リリース日"),
+    (SortKey::Title, "タイトル"),
+    (SortKey::Artist, "アーティスト"),
+    (SortKey::Album, "アルバム"),
+    (SortKey::Duration, "再生時間"),
+];
+
+/// プレイリストの中の検索（曲名・アーティスト・アルバム）・並べ替え（追加した日とリリース日は YouTube Music に並べてもらう）・
+/// 種類（曲・MV・その他の動画）の絞り込みと、その結果の曲の一覧。view には今出している曲を入れる（頭の再生のボタンが流す）。
+fn playlist_tools(app: &Rc<App>, playlist_id: &str, all: Vec<(Song, Option<String>)>, editable: bool, view: Rc<std::cell::RefCell<Vec<Song>>>) -> gtk::Widget {
+    let column = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(12).build();
+    let bar = gtk::Box::builder().spacing(8).build();
+    let filter = gtk::SearchEntry::builder().placeholder_text("プレイリストの中を検索").hexpand(true).build();
+    let kinds = adw::ToggleGroup::builder().homogeneous(false).css_classes(["round"]).build();
+    for (name, label) in [("all", "すべて"), ("MUSIC_VIDEO_TYPE_ATV", "曲"), ("MUSIC_VIDEO_TYPE_OMV", "MV"), ("MUSIC_VIDEO_TYPE_UGC", "その他の動画")] {
+        kinds.add(adw::Toggle::builder().label(label).name(name).build());
+    }
+    kinds.set_active_name(Some("all"));
+    let sort_label = gtk::Label::new(Some("カスタム順"));
+    let sort_list = gtk::ListBox::builder().selection_mode(gtk::SelectionMode::None).css_classes(["navigation-sidebar"]).build();
+    let sort_popover = gtk::Popover::builder().child(&sort_list).build();
+    let sort = gtk::MenuButton::builder().child(&sort_label).popover(&sort_popover).tooltip_text("並べ替え").css_classes(["flat"]).build();
+    bar.append(&filter);
+    bar.append(&kinds);
+    bar.append(&sort);
+    column.append(&bar);
+    let list_holder = adw::Bin::new();
+    column.append(&list_holder);
+
+    struct State {
+        all: Vec<(Song, Option<String>)>,
+        /// YouTube Music に並べてもらった曲（追加した日・リリース日のとき）。
+        server: Option<Vec<(Song, Option<String>)>>,
+        sort: SortKey,
+        descending: bool,
+    }
+    let state = Rc::new(std::cell::RefCell::new(State { all, server: None, sort: SortKey::Custom, descending: false }));
+    let render: Rc<dyn Fn()> = {
+        let (app, state, filter, kinds, list_holder, view, playlist_id, sort_label) =
+            (app.clone(), state.clone(), filter.clone(), kinds.clone(), list_holder.clone(), view.clone(), playlist_id.to_string(), sort_label.clone());
+        Rc::new(move || {
+            let st = state.borrow();
+            let query = filter.text().trim().to_lowercase();
+            let kind = kinds.active_name().filter(|k| k != "all").map(|k| k.to_string());
+            let base = st.server.as_ref().unwrap_or(&st.all);
+            let mut shown: Vec<(Song, Option<String>)> = base
+                .iter()
+                .filter(|(s, _)| {
+                    query.is_empty()
+                        || s.title.to_lowercase().contains(&query)
+                        || s.artists_text().to_lowercase().contains(&query)
+                        || s.album.as_ref().is_some_and(|a| a.title.to_lowercase().contains(&query))
+                })
+                .filter(|(s, _)| kind.is_none() || s.kind == kind)
+                .cloned()
+                .collect();
+            match st.sort {
+                SortKey::Title => shown.sort_by(|a, b| a.0.title.to_lowercase().cmp(&b.0.title.to_lowercase())),
+                SortKey::Artist => shown.sort_by(|a, b| a.0.artists_text().to_lowercase().cmp(&b.0.artists_text().to_lowercase())),
+                SortKey::Album => shown.sort_by(|a, b| {
+                    let album = |s: &Song| s.album.as_ref().map(|x| x.title.to_lowercase()).unwrap_or_default();
+                    album(&a.0).cmp(&album(&b.0))
+                }),
+                SortKey::Duration => shown.sort_by_key(|(s, _)| s.duration_seconds.unwrap_or(0)),
+                _ => {}
+            }
+            // 並べ替えの向き（YouTube Music に並べてもらったものは向きも頼んである）
+            if st.descending && !matches!(st.sort, SortKey::Added | SortKey::Published) {
+                shown.reverse();
+            }
+            let label = SORT_LABELS.iter().find(|(k, _)| *k == st.sort).map(|(_, l)| *l).unwrap_or("");
+            sort_label.set_label(&if st.sort == SortKey::Custom { label.to_string() } else { format!("{label} {}", if st.descending { "↓" } else { "↑" }) });
+            *view.borrow_mut() = shown.iter().map(|(s, _)| s.clone()).collect();
+            // 自分のプレイリストなら、曲のメニューから外せる
+            let removable = editable.then(|| (playlist_id.clone(), shown.iter().map(|(_, id)| id.clone()).collect()));
+            let songs: Vec<Song> = shown.into_iter().map(|(s, _)| s).collect();
+            if songs.is_empty() {
+                list_holder.set_child(Some(&gtk::Label::builder().label("当てはまる曲はありません").margin_top(24).css_classes(["dim-label"]).build()));
+            } else {
+                list_holder.set_child(Some(&song_list_in(&app, songs, removable)));
+            }
+        })
+    };
+    render();
+    {
+        let render = render.clone();
+        filter.connect_search_changed(move |_| render());
+    }
+    {
+        let render = render.clone();
+        kinds.connect_active_name_notify(move |_| render());
+    }
+    // 並べ替えのメニュー: 同じものをもう一度押すと向きが変わる。追加した日・リリース日は YouTube Music に並べて読み直してもらう
+    for (key, label) in SORT_LABELS {
+        let row = adw::ActionRow::builder().title(label).activatable(true).build();
+        let (app, state, render, popover, playlist_id) = (app.clone(), state.clone(), render.clone(), sort_popover.clone(), playlist_id.to_string());
+        row.connect_activated(move |_| {
+            popover.popdown();
+            {
+                let mut st = state.borrow_mut();
+                if st.sort == key && key != SortKey::Custom {
+                    st.descending = !st.descending;
+                } else {
+                    st.sort = key;
+                    // 追加した日は新しい順から
+                    st.descending = key == SortKey::Added;
+                }
+                st.server = None;
+            }
+            let order = match key {
+                SortKey::Added => Some(wave_core::music::repository::ORDER_ADDED),
+                SortKey::Published => Some(wave_core::music::repository::ORDER_PUBLISHED),
+                _ => None,
+            };
+            let Some(order) = order else {
+                render();
+                return;
+            };
+            let descending = state.borrow().descending;
+            let (app, state, render, playlist_id) = (app.clone(), state.clone(), render.clone(), playlist_id.clone());
+            gtk::glib::spawn_future_local(async move {
+                let params = wave_core::music::repository::order_params(order, descending);
+                let repo = app.repo.clone();
+                let (id, p) = (playlist_id.clone(), params.clone());
+                let Ok(first) = runtime::run(async move { repo.playlist_in_order(&id, None, Some(&p)).await }).await else {
+                    app.toast("並べ替えて読めませんでした");
+                    return;
+                };
+                let entries = full_playlist_entries(&app, &playlist_id, &first).await;
+                state.borrow_mut().server = Some(entries);
+                render();
+            });
+        });
+        sort_list.append(&row);
+    }
+    column.upcast()
 }
 
 /// ページの頭（ジャケット・名前・補足・再生のボタン）。round ならアーティストの丸い写真。
@@ -510,6 +663,23 @@ fn page_header(app: &Rc<App>, thumbnail: Option<&str>, title: &str, subtitle: Op
 }
 
 fn page_header_with(app: &Rc<App>, thumbnail: Option<&str>, title: &str, subtitle: Option<&str>, round: bool, songs: Vec<Song>, collection: Option<Collection>) -> gtk::Widget {
+    let view = Rc::new(std::cell::RefCell::new(songs.clone()));
+    page_header_view(app, thumbnail, title, subtitle, round, view, songs, collection, None)
+}
+
+/// ページの頭。再生・シャッフル・次に再生・キューに追加は view（絞り込んだときは絞った曲）を流す。丸ごと取るのは all。
+#[allow(clippy::too_many_arguments)]
+fn page_header_view(
+    app: &Rc<App>,
+    thumbnail: Option<&str>,
+    title: &str,
+    subtitle: Option<&str>,
+    round: bool,
+    view: Rc<std::cell::RefCell<Vec<Song>>>,
+    all: Vec<Song>,
+    collection: Option<Collection>,
+    source_id: Option<String>,
+) -> gtk::Widget {
     let header = gtk::Box::builder().spacing(20).build();
     let picture = images::square(180);
     if round {
@@ -522,15 +692,49 @@ fn page_header_with(app: &Rc<App>, thumbnail: Option<&str>, title: &str, subtitl
     if let Some(subtitle) = subtitle {
         info.append(&gtk::Label::builder().label(subtitle).xalign(0.0).wrap(true).css_classes(["dim-label"]).build());
     }
-    if !songs.is_empty() {
+    if !all.is_empty() {
         let buttons = gtk::Box::builder().spacing(12).build();
         let play = gtk::Button::builder().icon_name("media-playback-start-symbolic").tooltip_text("再生").halign(gtk::Align::Start).css_classes(["circular", "suggested-action", "play-large"]).build();
-        let app_for_play = app.clone();
-        let songs_for_play = songs.clone();
-        play.connect_clicked(move |_| app_for_play.playback.play_list(songs_for_play.clone(), 0));
+        let shuffle = gtk::Button::builder().icon_name("media-playlist-shuffle-symbolic").tooltip_text("シャッフル再生").valign(gtk::Align::Center).css_classes(["circular", "flat"]).build();
+        let next = gtk::Button::builder().icon_name("format-indent-more-symbolic").tooltip_text("次に再生").valign(gtk::Align::Center).css_classes(["circular", "flat"]).build();
+        let queue = gtk::Button::builder().icon_name("list-add-symbolic").tooltip_text("キューに追加").valign(gtk::Align::Center).css_classes(["circular", "flat"]).build();
+        {
+            let (app, view, source) = (app.clone(), view.clone(), source_id.clone());
+            play.connect_clicked(move |_| app.playback.play_list_from(view.borrow().clone(), 0, source.clone()));
+        }
+        {
+            let (app, view, source) = (app.clone(), view.clone(), source_id.clone());
+            shuffle.connect_clicked(move |_| app.playback.play_shuffled(view.borrow().clone(), source.clone()));
+        }
+        {
+            // 次に再生は、並びが保たれるよう後ろから今の曲の直後へ入れる
+            let (app, view) = (app.clone(), view.clone());
+            next.connect_clicked(move |_| {
+                let songs = view.borrow().clone();
+                let count = songs.len();
+                for song in songs.into_iter().rev() {
+                    app.playback.play_next(song);
+                }
+                app.toast(&format!("{count} 曲を次に再生します"));
+            });
+        }
+        {
+            let (app, view) = (app.clone(), view.clone());
+            queue.connect_clicked(move |_| {
+                let songs = view.borrow().clone();
+                let count = songs.len();
+                for song in songs {
+                    app.playback.add_to_queue(song);
+                }
+                app.toast(&format!("{count} 曲をキューに追加しました"));
+            });
+        }
         buttons.append(&play);
+        buttons.append(&shuffle);
+        buttons.append(&next);
+        buttons.append(&queue);
         if let Some(collection) = collection {
-            buttons.append(&download_button(app, collection, title, thumbnail, songs));
+            buttons.append(&download_button(app, collection, title, thumbnail, all));
         }
         info.append(&buttons);
     }
@@ -660,16 +864,20 @@ pub fn artist(app: &Rc<App>, browse_id: &str, name: &str) -> adw::NavigationPage
 }
 
 /// プレイリストの曲を最後のページまで読む（読めなかったらそこまで）。
-async fn full_playlist(app: &Rc<App>, id: &str, first: &wave_core::music::models::PlaylistPage) -> Vec<Song> {
-    let (repo, id, mut songs, mut token) = (app.repo.clone(), id.to_string(), first.songs.clone(), first.continuation.clone());
+/// プレイリストの曲を、外すときの項目の ID と一緒に最後のページまで読む。
+async fn full_playlist_entries(app: &Rc<App>, id: &str, first: &wave_core::music::models::PlaylistPage) -> Vec<(Song, Option<String>)> {
+    let (repo, id) = (app.repo.clone(), id.to_string());
+    let mut entries: Vec<(Song, Option<String>)> =
+        first.songs.iter().cloned().zip(first.set_video_ids.iter().cloned().chain(std::iter::repeat(None))).collect();
+    let mut token = first.continuation.clone();
     runtime::run(async move {
         for _ in 0..50 {
             let Some(t) = token.clone() else { break };
             let Ok(next) = repo.playlist(&id, Some(&t)).await else { break };
-            songs.extend(next.songs);
+            entries.extend(next.songs.into_iter().zip(next.set_video_ids.into_iter().chain(std::iter::repeat(None))));
             token = next.continuation.filter(|n| *n != t);
         }
-        songs
+        entries
     })
     .await
 }

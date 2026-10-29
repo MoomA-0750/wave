@@ -6,6 +6,29 @@ use super::models::{Account, AddToPlaylistResult, AlbumPage, LikeStatus, MusicVi
 use super::parsers;
 use crate::innertube::{ApiResult, Failure, InnerTube};
 
+/// プレイリストの並べ方: 追加した日。
+pub const ORDER_ADDED: u8 = 3;
+/// プレイリストの並べ方: 動画の公開日（リリース順の代わり）。
+pub const ORDER_PUBLISHED: u8 = 1;
+
+/// プレイリストの並べ方の params（Windows の PlaylistOrder と同じバイト列の base64）。
+pub fn order_params(key: u8, descending: bool) -> String {
+    const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let bytes = [0xda, 0x08, 0x04, 0x08, if descending { 2 } else { 1 }, 0x10, key];
+    let mut out = String::new();
+    for chunk in bytes.chunks(3) {
+        let n = chunk.iter().enumerate().fold(0u32, |acc, (i, b)| acc | (u32::from(*b) << (16 - 8 * i)));
+        for i in 0..4 {
+            if i <= chunk.len() {
+                out.push(TABLE[((n >> (18 - 6 * i)) & 63) as usize] as char);
+            } else {
+                out.push('=');
+            }
+        }
+    }
+    out
+}
+
 pub const SONGS_FILTER: &str = "EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D";
 pub const ALBUMS_FILTER: &str = "EgWKAQIYAWoKEAkQBRAKEAMQBA%3D%3D";
 pub const ARTISTS_FILTER: &str = "EgWKAQIgAWoKEAkQBRAKEAMQBA%3D%3D";
@@ -216,9 +239,15 @@ impl MusicRepository {
 
     /// プレイリストの曲（高く評価した曲は LM）。continuation で続き。
     pub async fn playlist(&self, playlist_id: &str, continuation: Option<&str>) -> ApiResult<PlaylistPage> {
-        let body = match continuation {
-            Some(t) => json!({ "continuation": t }),
-            None => json!({ "browseId": format!("VL{playlist_id}") }),
+        self.playlist_in_order(playlist_id, continuation, None).await
+    }
+
+    /// プレイリストを YouTube Music の並べ方（order_params で作る）で読む。続きのページは最初の並べ方のまま返る。
+    pub async fn playlist_in_order(&self, playlist_id: &str, continuation: Option<&str>, order: Option<&str>) -> ApiResult<PlaylistPage> {
+        let body = match (continuation, order) {
+            (Some(t), _) => json!({ "continuation": t }),
+            (None, Some(params)) => json!({ "browseId": format!("VL{playlist_id}"), "params": params }),
+            (None, None) => json!({ "browseId": format!("VL{playlist_id}") }),
         };
         Ok(parsers::playlist_page(&self.logged_in_post("browse", body).await?))
     }
@@ -373,5 +402,17 @@ impl MusicRepository {
 
     pub async fn history(&self) -> ApiResult<Vec<super::models::Song>> {
         Ok(parsers::history_songs(&self.logged_in_post("browse", json!({ "browseId": "FEmusic_history" })).await?))
+    }
+}
+
+#[cfg(test)]
+mod order_tests {
+    use super::*;
+
+    #[test]
+    fn order_params_match_the_base64_of_the_sort_bytes() {
+        // [0xda, 0x08, 0x04, 0x08, 0x02, 0x10, 0x03] → 2ggECAIQAw==
+        assert_eq!(order_params(ORDER_ADDED, true), "2ggECAIQAw==");
+        assert_eq!(order_params(ORDER_PUBLISHED, false), "2ggECAEQAQ==");
     }
 }

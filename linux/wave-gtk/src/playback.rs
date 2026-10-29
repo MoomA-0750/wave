@@ -345,6 +345,18 @@ impl Playback {
         }
     }
 
+    /// 一覧をシャッフルで流す（どこかの曲から始め、シャッフルを入れる）。
+    pub fn play_shuffled(self: &Rc<Self>, songs: Vec<Song>, source_id: Option<String>) {
+        if songs.is_empty() {
+            return;
+        }
+        let mut b = [0u8; 8];
+        getrandom::fill(&mut b).expect("the OS random source");
+        let start = (u64::from_le_bytes(b) % songs.len() as u64) as usize;
+        self.play_list_from(songs, start, source_id);
+        self.set_shuffle(true);
+    }
+
     /// 本人がキューの曲を選んだ。
     pub fn play_at(self: &Rc<Self>, index: usize) {
         self.start_at(index, 0, true);

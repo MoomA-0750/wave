@@ -165,6 +165,10 @@ async fn show_home(toolbar: &adw::ToolbarView, repo: &MusicRepository) {
     if let Ok(query) = std::env::var("WAVE_DEMO_QUERY") {
         app.demo(&query);
     }
+    // 確かめ用: WAVE_DEMO_PLAYLIST にプレイリストの ID（LM は高く評価した曲）があれば開く
+    if let Ok(id) = std::env::var("WAVE_DEMO_PLAYLIST") {
+        app.push(ui::pages::playlist(&app, &id, "プレイリスト"));
+    }
     // 確かめ用: WAVE_DEMO_MOOD=moods で見つける、lofi で Lo-Fi のページ、ほかはその params の気分・ジャンルのページを開く
     match std::env::var("WAVE_DEMO_MOOD").as_deref() {
         Ok("moods") => app.push(ui::pages::moods(&app)),
