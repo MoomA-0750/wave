@@ -216,6 +216,21 @@ impl LiveClient {
         Some(web_search(&root))
     }
 
+    /// YouTube の browse（チャンネルのタブなど）。認証情報は送らない。読めなければ None。
+    pub async fn browse(&self, browse_id: &str, params: &str) -> Option<Value> {
+        let body = json!({
+            "context": { "client": { "clientName": "WEB", "clientVersion": WEB_CLIENT_VERSION, "hl": self.hl, "gl": self.gl } },
+            "browseId": browse_id, "params": params,
+        });
+        let request = self
+            .http
+            .post("https://www.youtube.com/youtubei/v1/browse?prettyPrint=false")
+            .header("user-agent", crate::innertube::USER_AGENT)
+            .header("origin", "https://www.youtube.com")
+            .json(&body);
+        self.send_json(request).await
+    }
+
     /// ライブの HLS（音を聴くための1本、video なら映像を見るための1本の媒体プレイリスト）を解決する。
     pub async fn resolve(&self, video_id: &str, video: bool) -> Result<LiveStream, LiveFailure> {
         let body = json!({

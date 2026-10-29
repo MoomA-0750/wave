@@ -192,6 +192,8 @@ mod tests {
                 .iter()
                 .map(|v| Song { video_id: v.to_string(), title: format!("video-{v}"), artists: vec![], album: None, duration_seconds: None, thumbnail_url: None, kind: None, is_live: false })
                 .collect(),
+            channel_id: None,
+            subscribed: None,
         }
     }
 

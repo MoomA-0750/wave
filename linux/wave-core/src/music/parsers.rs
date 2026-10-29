@@ -688,6 +688,7 @@ pub fn artist_page(root: &Value) -> Option<ArtistPage> {
             })
         })
         .collect();
+    let subscribe = header.path(&["subscriptionButton", "subscribeButtonRenderer"]);
     // 動画の棚: カードが曲の再生（watchEndpoint）になっている棚
     let videos = sections
         .iter()
@@ -714,7 +715,32 @@ pub fn artist_page(root: &Value) -> Option<ArtistPage> {
         all_songs_playlist_id: all_songs.and_then(|id| id.strip_prefix("VL")).map(String::from),
         album_shelves,
         videos,
+        channel_id: subscribe.path(&["channelId"]).str_().map(String::from),
+        subscribed: subscribe.path(&["subscribed"]).and_then(Value::as_bool),
     })
+}
+
+/// チャンネルの「投稿」タブの投稿（新しい順。Windows・Android と同じ）。
+pub fn artist_posts(root: &Value) -> Vec<ArtistPost> {
+    let mut seen = std::collections::HashSet::new();
+    find_all(root, "backstagePostRenderer")
+        .into_iter()
+        .filter_map(|post| {
+            let post_id = post.path(&["postId"]).str_()?.to_string();
+            let text = runs_text(&post.path(&["contentText", "runs"]).items())?;
+            let attachment = post.path(&["backstageAttachment"]);
+            let image = attachment
+                .path(&["backstageImageRenderer", "image", "thumbnails"])
+                .items()
+                .last()
+                .copied()
+                .or_else(|| attachment.path(&["postMultiImageRenderer", "images", "0", "backstageImageRenderer", "image", "thumbnails"]).items().last().copied())
+                .and_then(|t| t.path(&["url"]).str_())
+                .map(|url| if url.starts_with("//") { format!("https:{url}") } else { url.to_string() });
+            Some(ArtistPost { post_id, text, published_text: text_of(post.path(&["publishedTimeText"])), image_url: image })
+        })
+        .filter(|p| seen.insert(p.post_id.clone()))
+        .collect()
 }
 
 /// 検索・プレイリストの行（musicResponsiveListItemRenderer）。
@@ -991,8 +1017,35 @@ mod tests {
         assert!(page.album_shelves.iter().flat_map(|s| &s.albums).all(|a| a.browse_id.starts_with("MPREb_")));
         assert_eq!(page.videos.len(), 6);
         assert!(page.videos.iter().all(|v| v.artists[0].name == page.name));
+        // 登録のボタンのチャンネルと、登録しているか
+        assert_eq!(page.channel_id.as_deref(), Some("UCvpredjG93ifbCP1Y77JyFA"));
+        assert_eq!(page.subscribed, Some(false));
         assert!(artist_page(&fixture("browse_album")).is_none());
         assert!(album_page(&fixture("search_songs"), "MPREb_x").is_none());
+    }
+
+    #[test]
+    fn artist_posts_are_read_in_order_without_duplicates() {
+        let root: Value = serde_json::from_str(
+            r#"{"contents":{"tabs":[{"tabRenderer":{"content":{"items":[
+            {"backstagePostThreadRenderer":{"post":{"backstagePostRenderer":{"postId":"Ugkx1","contentText":{"runs":[{"text":"台北ドーム2DAYS開催決定！\n"},{"text":"チケット販売は9月16日から"}]},
+              "publishedTimeText":{"runs":[{"text":"2 日前"}]},
+              "backstageAttachment":{"backstageImageRenderer":{"image":{"thumbnails":[{"url":"//yt3.ggpht.com/small"},{"url":"//yt3.ggpht.com/large"}]}}}}}}},
+            {"backstagePostThreadRenderer":{"post":{"backstagePostRenderer":{"postId":"Ugkx2","contentText":{"runs":[{"text":"新曲 10/14 配信リリース決定！"}]},
+              "backstageAttachment":{"postMultiImageRenderer":{"images":[{"backstageImageRenderer":{"image":{"thumbnails":[{"url":"https://yt3.ggpht.com/multi"}]}}}]}}}}}},
+            {"backstagePostThreadRenderer":{"post":{"backstagePostRenderer":{"postId":"Ugkx1","contentText":{"runs":[{"text":"重複"}]}}}}},
+            {"backstagePostThreadRenderer":{"post":{"backstagePostRenderer":{"postId":"Ugkx3"}}}}
+            ]}}}]}}"#,
+        )
+        .unwrap();
+        let posts = artist_posts(&root);
+        assert_eq!(posts.iter().map(|p| p.post_id.as_str()).collect::<Vec<_>>(), ["Ugkx1", "Ugkx2"]);
+        assert_eq!(posts[0].text, "台北ドーム2DAYS開催決定！\nチケット販売は9月16日から");
+        assert_eq!(posts[0].published_text.as_deref(), Some("2 日前"));
+        assert_eq!(posts[0].image_url.as_deref(), Some("https://yt3.ggpht.com/large"));
+        assert_eq!(posts[0].url(), "https://www.youtube.com/post/Ugkx1");
+        assert_eq!(posts[1].image_url.as_deref(), Some("https://yt3.ggpht.com/multi"));
+        assert_eq!(posts[1].published_text, None);
     }
 
     #[test]

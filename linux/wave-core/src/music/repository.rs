@@ -3,7 +3,7 @@
 use serde_json::json;
 
 use super::models::{Account, AddToPlaylistResult, AlbumPage, LikeStatus, MusicVideo, ArtistPage, HomePage, PlaylistPage, PlaylistSummary, SongPage, UpNextPage, VerifiedAccount, AlbumSummary, ArtistSummary, SearchPage, SearchSuggestions, MoodSection, HomeItem};
-use super::models::ArtistRef;
+use super::models::{ArtistPost, ArtistRef};
 use super::parsers;
 use super::podcast::{self, PodcastEpisode, PodcastPage, PodcastSummary};
 use crate::innertube::{ApiResult, Failure, InnerTube};
@@ -50,6 +50,8 @@ pub const LIBRARY_PLAYLISTS: &str = "FEmusic_liked_playlists";
 pub const LIKED_SONGS: &str = "LM";
 const MAX_LIBRARY_PAGES: usize = 20;
 const MAX_PLAYLIST_PAGES: usize = 50;
+/// チャンネルの「投稿」タブを開く params。
+const POSTS_PARAMS: &str = "EgVwb3N0c_IGBAoCSgA=";
 
 #[derive(Clone)]
 pub struct MusicRepository {
@@ -186,6 +188,49 @@ impl MusicRepository {
 
     /// ライブラリのプレイリスト（続きのページまで。途中で失敗したらそこまでの分）。ログイン必須。
     /// 登録したアーティスト（続きのページまで）。2つめは、最後まで読めたか（途中で失敗・打ち切ったら false）。
+    /// ライブラリの一覧（カードの並び）を続きのページまで読み、pick で拾ったものを重ねずに集める（途中で失敗したらそこまで）。
+    async fn library_cards_all<T>(&self, browse_id: &str, pick: impl Fn(HomeItem) -> Option<T>, key: impl Fn(&T) -> String) -> ApiResult<Vec<T>> {
+        let mut items: Vec<T> = Vec::new();
+        let mut token: Option<String> = None;
+        for page in 0..MAX_LIBRARY_PAGES {
+            let body = match &token {
+                Some(t) => json!({ "continuation": t }),
+                None => json!({ "browseId": browse_id }),
+            };
+            let root = match self.logged_in_post("browse", body).await {
+                Ok(root) => root,
+                Err(e) if page == 0 => return Err(e),
+                Err(_) => break,
+            };
+            for item in parsers::library_cards(&root).into_iter().filter_map(&pick) {
+                if !items.iter().any(|x| key(x) == key(&item)) {
+                    items.push(item);
+                }
+            }
+            let next = parsers::library_continuation(&root);
+            if next.is_none() || next == token {
+                break;
+            }
+            token = next;
+        }
+        Ok(items)
+    }
+
+    /// ライブラリのアーティスト（曲を保存したアーティスト。Windows の LibraryArtistsAsync と同じ）。
+    pub async fn library_artists(&self) -> ApiResult<Vec<ArtistSummary>> {
+        self.library_cards_all("FEmusic_library_corpus_track_artists", |i| if let HomeItem::Artist(a) = i { Some(a) } else { None }, |a| a.browse_id.clone()).await
+    }
+
+    /// ライブラリのアルバム。
+    pub async fn library_albums(&self) -> ApiResult<Vec<AlbumSummary>> {
+        self.library_cards_all("FEmusic_liked_albums", |i| if let HomeItem::Album(a) = i { Some(a) } else { None }, |a| a.browse_id.clone()).await
+    }
+
+    /// 最近再生したアルバム・プレイリスト・アーティスト（マイライブラリの「最近」の並べ方に使う）。
+    pub async fn recent_activity(&self) -> ApiResult<Vec<HomeItem>> {
+        Ok(parsers::library_cards(&self.logged_in_post("browse", json!({ "browseId": "FEmusic_library_landing" })).await?))
+    }
+
     pub async fn subscribed_artists(&self) -> ApiResult<(Vec<ArtistSummary>, bool)> {
         let mut items: Vec<ArtistSummary> = Vec::new();
         let mut token: Option<String> = None;
@@ -369,6 +414,35 @@ impl MusicRepository {
     pub async fn artist(&self, browse_id: &str) -> ApiResult<ArtistPage> {
         let root = self.client.post("browse", json!({ "browseId": browse_id }), true, &[]).await?;
         parsers::artist_page(&root).ok_or(Failure::Parse)
+    }
+
+    /// アーティストの YouTube のチャンネルの投稿（本人のお知らせ。ライブ・ツアーの告知を拾うのに使う。Windows・Android と同じ）。
+    /// www.youtube.com へ認証情報なしで送る。
+    pub async fn artist_posts(&self, channel_id: &str) -> ApiResult<Vec<ArtistPost>> {
+        let root = self.live.browse(channel_id, POSTS_PARAMS).await.ok_or(Failure::Network)?;
+        Ok(parsers::artist_posts(&root))
+    }
+
+    /// アーティスト（チャンネル）を登録する・登録を外す（Windows・Android と同じ）。ログイン必須。
+    pub async fn set_subscribed(&self, channel_id: &str, subscribe: bool) -> ApiResult<()> {
+        if !self.client.is_logged_in() {
+            return Err(Failure::NotLoggedIn);
+        }
+        let endpoint = if subscribe { "subscription/subscribe" } else { "subscription/unsubscribe" };
+        self.client.post(endpoint, json!({ "channelIds": [channel_id] }), true, &[]).await.map(|_| ())
+    }
+
+    /// 高く評価した曲を最後のページまで。最後まで読めたか（途中で切れたら false）も返す。
+    pub async fn liked_songs(&self) -> ApiResult<(Vec<super::models::Song>, bool)> {
+        let first = self.playlist(LIKED_SONGS, None).await?;
+        let (mut songs, mut token) = (first.songs, first.continuation);
+        for _ in 0..MAX_PLAYLIST_PAGES {
+            let Some(t) = token.take() else { return Ok((songs, true)) };
+            let Ok(next) = self.playlist(LIKED_SONGS, Some(&t)).await else { return Ok((songs, false)) };
+            songs.extend(next.songs);
+            token = next.continuation.filter(|n| *n != t);
+        }
+        Ok((songs, token.is_none()))
     }
 
     /// ログイン中のアカウントの名前と写真。

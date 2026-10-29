@@ -138,7 +138,7 @@ fn show_content(app: &Rc<App>, page: PodcastPage) -> gtk::Widget {
     }
     let list = gtk::ListBox::builder().selection_mode(gtk::SelectionMode::None).css_classes(["boxed-list-separate", "song-list"]).build();
     for episode in page.episodes.iter() {
-        list.append(&episode_row(episode, &episode.date_and_length()));
+        list.append(&episode_row(&app, episode, &episode.date_and_length()));
     }
     {
         let (app, episodes) = (app.clone(), episodes.clone());
@@ -148,6 +148,12 @@ fn show_content(app: &Rc<App>, page: PodcastPage) -> gtk::Widget {
         });
     }
     column.append(&list);
+    // 確かめ用: WAVE_DEMO_PODCAST_DOWNLOAD があれば、開いたらすぐ最新の回を取る
+    if std::env::var_os("WAVE_DEMO_PODCAST_DOWNLOAD").is_some()
+        && let Some(first) = episodes.borrow().first()
+    {
+        app.downloads.download_song(&first.song);
+    }
     // 確かめ用: WAVE_DEMO_PODCAST_PLAY があれば、開いたらすぐ最新の回を流す
     if std::env::var_os("WAVE_DEMO_PODCAST_PLAY").is_some() {
         let songs: Vec<Song> = episodes.borrow().iter().map(|e| e.song.clone()).collect();
@@ -181,7 +187,7 @@ fn show_content(app: &Rc<App>, page: PodcastPage) -> gtk::Widget {
                     return;
                 };
                 for episode in &next.items {
-                    list.append(&episode_row(episode, &episode.date_and_length()));
+                    list.append(&episode_row(&app, episode, &episode.date_and_length()));
                 }
                 episodes.borrow_mut().extend(next.items);
                 button.set_visible(next.continuation.is_some());
@@ -194,7 +200,7 @@ fn show_content(app: &Rc<App>, page: PodcastPage) -> gtk::Widget {
 }
 
 /// エピソードの行（絵・題・補足・聴いたところ）。押すと一覧の中のその回から流す（行の並びのまま）。
-fn episode_row(episode: &PodcastEpisode, subtitle: &str) -> adw::ActionRow {
+fn episode_row(app: &Rc<App>, episode: &PodcastEpisode, subtitle: &str) -> adw::ActionRow {
     let row = adw::ActionRow::builder()
         .title(gtk::glib::markup_escape_text(&episode.song.title))
         .subtitle(gtk::glib::markup_escape_text(subtitle))
@@ -209,6 +215,30 @@ fn episode_row(episode: &PodcastEpisode, subtitle: &str) -> adw::ActionRow {
         let label = if percent >= 100 { "聴いた".to_string() } else { format!("{percent}%") };
         row.add_suffix(&gtk::Label::builder().label(label).css_classes(["caption", "dim-label"]).build());
     }
+    // 取っておく（取った回は通信せずに聴ける。もう一度押すと消す）
+    let download = gtk::Button::builder().valign(gtk::Align::Center).css_classes(["flat", "circular"]).build();
+    let id = episode.song.video_id.clone();
+    let downloads = app.downloads.clone();
+    app.downloads.watch(&download, move |button| {
+        let (icon, tip) = match downloads.state(&id) {
+            crate::downloads::SongState::Done => ("object-select-symbolic", "ダウンロードを削除"),
+            crate::downloads::SongState::Downloading | crate::downloads::SongState::Waiting => ("content-loading-symbolic", "ダウンロードをやめる"),
+            crate::downloads::SongState::None => ("folder-download-symbolic", "ダウンロード"),
+        };
+        button.set_icon_name(icon);
+        button.set_tooltip_text(Some(tip));
+    });
+    {
+        let (app, song) = (app.clone(), episode.song.clone());
+        download.connect_clicked(move |_| {
+            if app.downloads.state(&song.video_id) == crate::downloads::SongState::None {
+                app.downloads.download_song(&song);
+            } else {
+                app.downloads.remove_song(&song.video_id);
+            }
+        });
+    }
+    row.add_suffix(&download);
     row
 }
 
@@ -269,7 +299,7 @@ pub fn library(app: &Rc<App>) -> adw::NavigationPage {
         } else {
             let list = gtk::ListBox::builder().selection_mode(gtk::SelectionMode::None).css_classes(["boxed-list-separate", "song-list"]).build();
             for episode in merged.iter().take(30) {
-                list.append(&episode_row(episode, &episode.subtitle()));
+                list.append(&episode_row(&app, episode, &episode.subtitle()));
             }
             let songs: Vec<Song> = merged.iter().take(30).map(|e| e.song.clone()).collect();
             let app = app.clone();
@@ -369,7 +399,7 @@ pub fn search_shows(app: &Rc<App>, shows: Vec<PodcastSummary>) -> gtk::Widget {
 pub fn search_episodes(app: &Rc<App>, episodes: Vec<PodcastEpisode>) -> gtk::Widget {
     let list = gtk::ListBox::builder().selection_mode(gtk::SelectionMode::None).css_classes(["boxed-list-separate", "song-list"]).build();
     for episode in &episodes {
-        list.append(&episode_row(episode, &episode.subtitle()));
+        list.append(&episode_row(&app, episode, &episode.subtitle()));
     }
     let songs: Vec<Song> = episodes.into_iter().map(|e| e.song).collect();
     let app = app.clone();

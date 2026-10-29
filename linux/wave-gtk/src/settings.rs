@@ -17,6 +17,10 @@ pub struct Settings {
     pub release_notices: bool,
     /// 検索の履歴（新しい順、最大 30 件。Windows と同じ）。ログアウトで消す。
     pub search_history: Vec<SearchHistoryEntry>,
+    /// マイライブラリの並べ方（"recent"・"added"・"alpha"。Windows と同じ）。
+    pub library_sort: String,
+    /// マイライブラリをグリッドで出す。
+    pub library_grid: bool,
     /// Discord に再生中の曲を出す（既定は切。Windows と同じ）。
     pub discord_presence: bool,
     /// Discord のアプリケーション ID（本人が discord.com/developers で作ったもの）。
@@ -27,7 +31,7 @@ pub struct Settings {
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { smart_downloads: false, smart_download_count: DEFAULT_COUNT, download_network: DownloadNetwork::Unmetered, relay_url: None, send_history: true, release_notices: true, search_history: Vec::new(), discord_presence: false, discord_client_id: None }
+        Self { smart_downloads: false, smart_download_count: DEFAULT_COUNT, download_network: DownloadNetwork::Unmetered, relay_url: None, send_history: true, release_notices: true, search_history: Vec::new(), discord_presence: false, discord_client_id: None, library_sort: "recent".into(), library_grid: false }
     }
 }
 

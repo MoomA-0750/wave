@@ -383,7 +383,12 @@ impl Downloads {
                         let (progress, id) = (progress.clone(), id.clone());
                         move |got, total| *progress.lock().unwrap() = Some((id.clone(), got, total))
                     };
-                    downloader::download_song(&resolver, &store, &song, still, report).await
+                    // RSS のエピソードは音声を直に取る（ADR-0012）
+                    if wave_core::music::feed::is_external(&song.video_id) {
+                        downloader::download_episode(&store, &song, concat!("wave/", env!("CARGO_PKG_VERSION")), still, report).await
+                    } else {
+                        downloader::download_song(&resolver, &store, &song, still, report).await
+                    }
                 })
                 .await;
                 *this.progress.lock().unwrap() = None;

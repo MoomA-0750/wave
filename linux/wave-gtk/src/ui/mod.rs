@@ -3,6 +3,7 @@
 pub mod ai;
 pub mod devices;
 pub mod images;
+pub mod library;
 pub mod lyrics;
 pub mod pages;
 pub mod podcasts;

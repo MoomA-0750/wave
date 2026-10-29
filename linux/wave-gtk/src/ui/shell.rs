@@ -5,7 +5,7 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use adw::prelude::*;
-use wave_core::music::repository::{LIKED_SONGS, MusicRepository};
+use wave_core::music::repository::MusicRepository;
 
 use super::{images, pages};
 use crate::playback::Playback;
@@ -157,7 +157,7 @@ pub fn build(
     bar.pack_end(&account_button(&app, on_logout));
     toolbar.add_top_bar(&bar);
     let body = gtk::Box::builder().spacing(8).margin_start(8).margin_end(8).build();
-    body.append(&pane(&library(&app), Some(300)));
+    body.append(&pane(&super::library::sidebar(&app), Some(300)));
     let center = pane(&nav, None);
     center.set_hexpand(true);
     body.append(&center);
@@ -625,79 +625,6 @@ fn suggestions_popover(app: &Rc<App>, entry: &gtk::SearchEntry) -> gtk::Popover 
 }
 
 /// 左の欄: マイライブラリ（先頭に高く評価した曲、続いてライブラリのプレイリスト）。
-fn library(app: &Rc<App>) -> gtk::Widget {
-    let column = gtk::Box::new(gtk::Orientation::Vertical, 0);
-    column.append(&gtk::Label::builder().label("マイライブラリ").xalign(0.0).margin_top(16).margin_bottom(8).margin_start(16).css_classes(["title-3"]).build());
-    let list = gtk::ListBox::builder().css_classes(["navigation-sidebar"]).build();
-    let liked = library_row("高く評価した曲", "自動のプレイリスト", None);
-    list.append(&liked);
-    // ダウンロード（高く評価した曲と同じく、いつも先頭の方に出す）
-    let downloads_row = library_row_icon("ダウンロード", "この PC に保存", "folder-download-symbolic");
-    list.append(&downloads_row);
-    list.append(&library_row_icon("ポッドキャスト", "番組と新しいエピソード", "audio-input-microphone-symbolic"));
-    let scroller = gtk::ScrolledWindow::builder().child(&list).hscrollbar_policy(gtk::PolicyType::Never).vexpand(true).build();
-    column.append(&scroller);
-
-    // 行の順の行き先（2行目のダウンロードはプレイリストではないので、印の ID にする）
-    let entries: Rc<std::cell::RefCell<Vec<(String, String)>>> =
-        Rc::new(std::cell::RefCell::new(vec![(LIKED_SONGS.to_string(), "高く評価した曲".to_string()), (DOWNLOADS_ENTRY.to_string(), String::new()), (PODCASTS_ENTRY.to_string(), String::new())]));
-    {
-        let (app, entries) = (app.clone(), entries.clone());
-        list.connect_row_activated(move |_, row| {
-            match entries.borrow().get(row.index() as usize).cloned() {
-                Some((id, _)) if id == DOWNLOADS_ENTRY => app.push(pages::downloads(&app)),
-                Some((id, _)) if id == PODCASTS_ENTRY => app.push(super::podcasts::library(&app)),
-                Some((id, title)) => app.push(pages::playlist(&app, &id, &title)),
-                None => {}
-            }
-        });
-    }
-    let (app, list) = (app.clone(), list.clone());
-    gtk::glib::spawn_future_local(async move {
-        let repo = app.repo.clone();
-        let Ok(playlists) = runtime::run(async move { repo.library_playlists().await }).await else { return };
-        *app.editable_playlists.borrow_mut() = playlists.iter().filter(|p| p.editable).cloned().collect();
-        for p in playlists.into_iter().filter(|p| p.playlist_id != LIKED_SONGS) {
-            list.append(&library_row(&p.title, p.subtitle.as_deref().unwrap_or(""), p.thumbnail_url.as_deref()));
-            entries.borrow_mut().push((p.playlist_id, p.title));
-        }
-    });
-    column.upcast()
-}
-
-/// マイライブラリの「ダウンロード」の行の印（YouTube の ID とは重ならない形）。
-const DOWNLOADS_ENTRY: &str = "wave:downloads";
-/// マイライブラリの「ポッドキャスト」の行の印。
-const PODCASTS_ENTRY: &str = "wave:podcasts";
-
-fn library_row_icon(title: &str, subtitle: &str, icon: &str) -> gtk::ListBoxRow {
-    let row = gtk::Box::builder().spacing(12).margin_top(4).margin_bottom(4).build();
-    row.append(&gtk::Image::builder().icon_name(icon).pixel_size(24).width_request(48).height_request(48).css_classes(["artwork", "accent"]).build());
-    let text = gtk::Box::builder().orientation(gtk::Orientation::Vertical).valign(gtk::Align::Center).build();
-    text.append(&gtk::Label::builder().label(title).xalign(0.0).ellipsize(gtk::pango::EllipsizeMode::End).build());
-    text.append(&gtk::Label::builder().label(subtitle).xalign(0.0).ellipsize(gtk::pango::EllipsizeMode::End).css_classes(["caption", "dim-label"]).build());
-    row.append(&text);
-    gtk::ListBoxRow::builder().child(&row).build()
-}
-
-fn library_row(title: &str, subtitle: &str, thumbnail: Option<&str>) -> gtk::ListBoxRow {
-    let row = gtk::Box::builder().spacing(12).margin_top(4).margin_bottom(4).build();
-    let picture = images::square(48);
-    picture.load(thumbnail, 96);
-    if thumbnail.is_none() {
-        // 高く評価した曲は画像の代わりに印
-        let icon = gtk::Image::builder().icon_name("starred-symbolic").pixel_size(24).width_request(48).height_request(48).css_classes(["artwork", "accent"]).build();
-        row.append(&icon);
-    } else {
-        row.append(&picture.root);
-    }
-    let text = gtk::Box::builder().orientation(gtk::Orientation::Vertical).valign(gtk::Align::Center).build();
-    text.append(&gtk::Label::builder().label(title).xalign(0.0).ellipsize(gtk::pango::EllipsizeMode::End).build());
-    text.append(&gtk::Label::builder().label(subtitle).xalign(0.0).ellipsize(gtk::pango::EllipsizeMode::End).css_classes(["caption", "dim-label"]).build());
-    row.append(&text);
-    gtk::ListBoxRow::builder().child(&row).build()
-}
-
 /// 右の欄の上: ジャケットか、MV のある曲では映像（Mac・Windows と同じ「曲｜動画」の切り替え）。
 /// 映像は音の位置に合わせ続け、MV に無い区間ではジャケットに戻す。
 fn media_area(app: &Rc<App>, art: &images::Art) -> gtk::Widget {

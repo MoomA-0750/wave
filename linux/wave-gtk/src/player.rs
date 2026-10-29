@@ -258,8 +258,18 @@ impl Player {
             let start = if start_ms > 0 { start_ms } else { self.external_resume.borrow().as_ref().map_or(0, |f| f(url)) };
             *self.pending_start.lock().unwrap() = (start > 0 || !playing).then_some((start, playing));
             self.playbin.set_state(gst::State::Null).ok();
-            eprintln!("play source=feed");
-            self.playbin.set_property("uri", url);
+            // 取り終えたエピソードは、通信せずにファイルから
+            let downloaded = self
+                .downloads
+                .as_ref()
+                .filter(|store| store.completed(video_id).is_some())
+                .and_then(|store| store.bytes_path(video_id))
+                .and_then(|path| gtk::glib::filename_to_uri(path, None).ok());
+            eprintln!("play source={}", if downloaded.is_some() { "feed-download" } else { "feed" });
+            match &downloaded {
+                Some(uri) => self.playbin.set_property("uri", uri.as_str()),
+                None => self.playbin.set_property("uri", url),
+            }
             let state = if start > 0 || !playing { gst::State::Paused } else { gst::State::Playing };
             self.playbin.set_state(state).map_err(|_| StreamFailure::Unplayable)?;
             return Ok(());

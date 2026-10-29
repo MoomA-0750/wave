@@ -190,6 +190,25 @@ pub struct ArtistPage {
     pub album_shelves: Vec<AlbumShelf>,
     /// 動画の棚（MV・YouTube の動画）。
     pub videos: Vec<Song>,
+    /// 登録（サブスクライブ）に使うチャンネル。
+    pub channel_id: Option<String>,
+    /// 登録しているか（分からなければ None）。
+    pub subscribed: Option<bool>,
+}
+
+/// アーティストの YouTube のチャンネルの投稿（本人のお知らせ）。published_text は「2 日前」など応答の表示のまま。
+#[derive(Debug, Clone, PartialEq)]
+pub struct ArtistPost {
+    pub post_id: String,
+    pub text: String,
+    pub published_text: Option<String>,
+    pub image_url: Option<String>,
+}
+
+impl ArtistPost {
+    pub fn url(&self) -> String {
+        format!("https://www.youtube.com/post/{}", self.post_id)
+    }
 }
 
 /// ログイン中のアカウント（名前と写真）。

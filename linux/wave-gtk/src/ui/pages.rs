@@ -861,7 +861,8 @@ pub fn album(app: &Rc<App>, browse_id: &str, title: &str) -> adw::NavigationPage
     page(title, "album", &bin)
 }
 
-/// アーティストのページ（頭に丸い写真と名前、人気の曲、アルバムの棚、動画の棚）。
+/// アーティストのページ（頭に丸い写真と名前・登録のボタン、ライブ・お知らせ、人気の曲、高く評価した曲、新作・アルバム・動画の棚）。
+/// 並びは Windows と同じ。
 pub fn artist(app: &Rc<App>, browse_id: &str, name: &str) -> adw::NavigationPage {
     let bin = holder();
     let (app, target, id) = (app.clone(), bin.clone(), browse_id.to_string());
@@ -871,8 +872,25 @@ pub fn artist(app: &Rc<App>, browse_id: &str, name: &str) -> adw::NavigationPage
         let content: gtk::Widget = match runtime::run(async move { repo.artist(&id).await }).await {
             Ok(page) => {
                 let column = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(24).margin_bottom(24).build();
+                let head = page_column();
+                let header_row = gtk::Box::builder().spacing(12).build();
+                let header = page_header(&app, page.thumbnail_url.as_deref(), &page.name, None, true, page.top_songs.clone());
+                header.set_hexpand(true);
+                header_row.append(&header);
+                if let Some(channel_id) = page.channel_id.clone().filter(|_| app.repo.client().is_logged_in()) {
+                    header_row.append(&subscribe_button(&app, channel_id, page.subscribed));
+                }
+                head.append(&header_row);
+                column.append(&clamp(&head));
+                // ライブ・お知らせ（チャンネルの投稿のうち、1年以内のライブ・ツアーの告知）。読めたら差し込む
+                let live = gtk::Box::new(gtk::Orientation::Vertical, 0);
+                column.append(&live);
+                let channel_id = page.channel_id.clone().or_else(|| artist_id.starts_with("UC").then(|| artist_id.clone()));
+                if let Some(channel_id) = channel_id {
+                    show_live_posts(&app, channel_id, &live);
+                }
                 let top = page_column();
-                top.append(&page_header(&app, page.thumbnail_url.as_deref(), &page.name, None, true, page.top_songs.clone()));
+                top.set_margin_top(0);
                 if !page.top_songs.is_empty() {
                     top.append(&gtk::Label::builder().label("人気の曲").xalign(0.0).css_classes(["title-2"]).build());
                     top.append(&song_list(&app, page.top_songs));
@@ -882,6 +900,9 @@ pub fn artist(app: &Rc<App>, browse_id: &str, name: &str) -> adw::NavigationPage
                     let (app, name) = (app.clone(), page.name.clone());
                     button.connect_clicked(move |_| app.push(playlist(&app, &all, &name)));
                     top.append(&button);
+                }
+                if app.repo.client().is_logged_in() {
+                    top.append(&liked_by_artist(&app, &artist_id, &page.name));
                 }
                 column.append(&clamp(&top));
                 // 登録したアーティストなら、見張りで見つけた最近の新作（Windows と同じ）
@@ -901,13 +922,151 @@ pub fn artist(app: &Rc<App>, browse_id: &str, name: &str) -> adw::NavigationPage
                 if !page.videos.is_empty() {
                     column.append(&shelf_widget(&app, "動画", None, page.videos.into_iter().map(HomeItem::Song).collect()));
                 }
-                gtk::ScrolledWindow::builder().child(&column).hscrollbar_policy(gtk::PolicyType::Never).vexpand(true).build().upcast()
+                let scrolled = gtk::ScrolledWindow::builder().child(&column).hscrollbar_policy(gtk::PolicyType::Never).vexpand(true).build();
+                // 確かめ用: WAVE_DEMO_ARTIST_SCROLL の px だけ、読み終わるころに下へ送る
+                if let Some(px) = std::env::var("WAVE_DEMO_ARTIST_SCROLL").ok().and_then(|v| v.parse::<f64>().ok()) {
+                    let scrolled = scrolled.clone();
+                    gtk::glib::timeout_add_local_once(std::time::Duration::from_secs(8), move || scrolled.vadjustment().set_value(px));
+                }
+                scrolled.upcast()
             }
             Err(e) => failure(&format!("アーティストを読めませんでした（{e}）")),
         };
         target.set_child(Some(&content));
     });
     page(name, "artist", &bin)
+}
+
+/// 登録のボタン。登録していなければ色付き、登録済みなら控えめに。書けたら表示を変える（Windows・Android と同じく楽観的に変えない）。
+/// 登録しているか分からなければ押せない。
+fn subscribe_button(app: &Rc<App>, channel_id: String, subscribed: Option<bool>) -> gtk::Widget {
+    let button = gtk::Button::builder().valign(gtk::Align::End).css_classes(["pill"]).build();
+    let state = Rc::new(std::cell::Cell::new(subscribed));
+    let show = {
+        let (button, state) = (button.clone(), state.clone());
+        move |busy: bool| {
+            let on = state.get() == Some(true);
+            button.set_label(if on { "登録済み" } else { "登録" });
+            if on { button.remove_css_class("suggested-action") } else { button.add_css_class("suggested-action") }
+            button.set_sensitive(!busy && state.get().is_some());
+        }
+    };
+    show(false);
+    let app = app.clone();
+    button.connect_clicked(move |_| {
+        let Some(current) = state.get() else { return };
+        let target = !current;
+        show(true);
+        let (app, state, show, channel_id) = (app.clone(), state.clone(), show.clone(), channel_id.clone());
+        gtk::glib::spawn_future_local(async move {
+            let repo = app.repo.clone();
+            let result = runtime::run(async move { repo.set_subscribed(&channel_id, target).await }).await;
+            eprintln!("artist subscribe target={target} ok={}", result.is_ok());
+            match result {
+                Ok(()) => state.set(Some(target)),
+                Err(_) => app.toast("登録を変更できませんでした"),
+            }
+            show(false);
+        });
+    });
+    button.upcast()
+}
+
+/// チャンネルの投稿のうち、ライブ・ツアーの告知らしいものを横に並べて slot に入れる（押すと YouTube の投稿を開く。Windows と同じく6件まで）。
+fn show_live_posts(app: &Rc<App>, channel_id: String, slot: &gtk::Box) {
+    let (repo, slot) = (app.repo.clone(), slot.clone());
+    gtk::glib::spawn_future_local(async move {
+        let result = runtime::run(async move { repo.artist_posts(&channel_id).await }).await;
+        let count = result.as_ref().map(Vec::len).ok();
+        let posts: Vec<_> = result.map(wave_core::music::artist::live_news).unwrap_or_default().into_iter().take(6).collect();
+        eprintln!("artist posts ok={} posts={count:?} live={}", count.is_some(), posts.len());
+        if posts.is_empty() {
+            return;
+        }
+        let column = gtk::Box::new(gtk::Orientation::Vertical, 8);
+        column.append(&gtk::Label::builder().label("ライブ・お知らせ").xalign(0.0).margin_start(20).css_classes(["title-2"]).build());
+        let row = gtk::Box::builder().spacing(16).margin_start(20).margin_end(20).valign(gtk::Align::Start).build();
+        for post in posts {
+            row.append(&live_post_card(post));
+        }
+        column.append(&gtk::ScrolledWindow::builder().child(&row).vscrollbar_policy(gtk::PolicyType::Never).propagate_natural_height(true).build());
+        slot.append(&column);
+    });
+}
+
+const POST_WIDTH: i32 = 260;
+
+/// 告知のカード（画像・本文・投稿の時期）。
+fn live_post_card(post: wave_core::music::models::ArtistPost) -> gtk::Widget {
+    let body = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(6).width_request(POST_WIDTH - 24).margin_top(12).margin_bottom(12).margin_start(12).margin_end(12).build();
+    if let Some(url) = post.image_url.as_deref().filter(|u| u.starts_with("https://")) {
+        // 枠の大きさを決めて画像を重ね、横長・縦長でも枠は変えない
+        let frame = gtk::Box::builder().width_request(POST_WIDTH - 24).height_request(140).css_classes(["artwork", "artwork-frame"]).build();
+        let picture = gtk::Picture::builder().content_fit(gtk::ContentFit::Cover).can_shrink(true).css_classes(["artwork"]).build();
+        picture.set_overflow(gtk::Overflow::Hidden);
+        let overlay = gtk::Overlay::builder().child(&frame).build();
+        overlay.add_overlay(&picture);
+        overlay.set_clip_overlay(&picture, true);
+        let target = picture.clone();
+        images::texture(url, 520, move |texture| target.set_paintable(Some(&texture)));
+        body.append(&overlay);
+    }
+    // 6行で切る。Pango の行の上限は段落ごとなので、改行を段落の中の改行（U+2028）にして本文全体を6行にする
+    let text = post.text.trim().replace("\r\n", "\n").replace(['\r', '\n'], "\u{2028}");
+    body.append(&gtk::Label::builder().label(&text).xalign(0.0).wrap(true).wrap_mode(gtk::pango::WrapMode::WordChar).lines(6).ellipsize(gtk::pango::EllipsizeMode::End).max_width_chars(1).build());
+    if let Some(published) = post.published_text.as_deref() {
+        body.append(&gtk::Label::builder().label(published).xalign(0.0).css_classes(["caption", "dim-label"]).build());
+    }
+    // 長い本文でカードが横に伸びないよう、幅の上限を決める
+    let clamp = adw::Clamp::builder().child(&body).maximum_size(POST_WIDTH).tightening_threshold(POST_WIDTH).build();
+    let button = gtk::Button::builder().child(&clamp).css_classes(["card"]).halign(gtk::Align::Start).valign(gtk::Align::Start).tooltip_text("YouTube で開く").build();
+    let url = post.url();
+    button.connect_clicked(move |_| gtk::UriLauncher::new(&url).launch(None::<&gtk::Window>, None::<&gtk::gio::Cancellable>, |_| {}));
+    button.upcast()
+}
+
+/// 高く評価した曲のうち、このアーティストのもの（数の行。押すとその曲の一覧）。読むまでは「確かめています…」、無ければ出さない。
+fn liked_by_artist(app: &Rc<App>, browse_id: &str, name: &str) -> gtk::Widget {
+    let column = gtk::Box::new(gtk::Orientation::Vertical, 8);
+    column.append(&gtk::Label::builder().label("高く評価した曲").xalign(0.0).css_classes(["title-2"]).build());
+    let row = adw::ActionRow::builder().title("確かめています…").sensitive(false).build();
+    row.add_prefix(&gtk::Image::from_icon_name("starred-symbolic"));
+    row.add_suffix(&gtk::Image::from_icon_name("go-next-symbolic"));
+    let list = gtk::ListBox::builder().selection_mode(gtk::SelectionMode::None).css_classes(["boxed-list"]).build();
+    list.append(&row);
+    column.append(&list);
+    let found: Rc<std::cell::RefCell<Vec<Song>>> = Rc::default();
+    {
+        let (app, found, name) = (app.clone(), found.clone(), name.to_string());
+        row.set_activatable(true);
+        row.connect_activated(move |_| app.push(liked_songs_page(&app, &name, found.borrow().clone())));
+    }
+    let (app, browse_id, name, weak) = (app.clone(), browse_id.to_string(), name.to_string(), column.downgrade());
+    gtk::glib::spawn_future_local(async move {
+        let repo = app.repo.clone();
+        let result = runtime::run(async move { repo.liked_songs().await }).await;
+        let Some(column) = weak.upgrade() else { return };
+        let Ok((songs, complete)) = result else {
+            column.set_visible(false);
+            return;
+        };
+        let mine = wave_core::music::artist::songs_by_artist(&songs, Some(&browse_id), &name);
+        eprintln!("artist liked songs={} mine={} complete={complete}", songs.len(), mine.len());
+        column.set_visible(!mine.is_empty());
+        row.set_title(&if complete { format!("{name} の {} 曲", mine.len()) } else { format!("{name} の {} 曲以上", mine.len()) });
+        row.set_sensitive(true);
+        *found.borrow_mut() = mine;
+    });
+    column.upcast()
+}
+
+/// 高く評価した曲のうち、そのアーティストのもの。
+fn liked_songs_page(app: &Rc<App>, name: &str, songs: Vec<Song>) -> adw::NavigationPage {
+    let column = page_column();
+    let title = format!("高く評価した曲（{name}）");
+    column.append(&page_header(app, songs.first().and_then(|s| s.thumbnail_url.as_deref()), "高く評価した曲", Some(name), false, songs.clone()));
+    column.append(&song_list(app, songs));
+    page(&title, "liked-by-artist", &scrolling_column(&column))
 }
 
 /// プレイリストの曲を最後のページまで読む（読めなかったらそこまで）。

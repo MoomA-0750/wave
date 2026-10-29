@@ -1,4 +1,5 @@
 //! 取った曲を置く、消えない置き場。曲は <videoId>.bin（音）と <videoId>.json（形式と曲の情報）、目録は downloads.json。
+//! RSS のエピソード（ext:<音声の URL>）は、URL の SHA-256 の16進をファイル名にする（Windows と同じ）。
 //! 取っている途中の曲は complete が false のまま、頭から取れた分だけを .bin に持つ。署名付き URL は書かない。
 
 use std::collections::HashSet;
@@ -16,6 +17,7 @@ use crate::music::models::Song;
 pub const MANIFEST_NAME: &str = "downloads.json";
 
 static SAFE_ID: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[A-Za-z0-9_-]{11}$").unwrap());
+static EPISODE_KEY: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-f]{64}$").unwrap());
 
 /// 取った曲の形式。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -46,8 +48,13 @@ impl DownloadStore {
         &self.directory
     }
 
-    fn key_of(video_id: &str) -> Option<&str> {
-        SAFE_ID.is_match(video_id).then_some(video_id)
+    /// ファイル名にする名前（曲は videoId、エピソードは音声の URL のハッシュ。置き場のファイル名そのものも受ける）。
+    fn key_of(video_id: &str) -> Option<String> {
+        if let Some(url) = crate::music::feed::audio_url_of(video_id) {
+            use sha2::Digest;
+            return Some(hex::encode(sha2::Sha256::digest(url.as_bytes())));
+        }
+        (SAFE_ID.is_match(video_id) || EPISODE_KEY.is_match(video_id)).then(|| video_id.to_string())
     }
 
     pub fn bytes_path(&self, video_id: &str) -> Option<PathBuf> {
@@ -78,7 +85,7 @@ impl DownloadStore {
 
     /// これから取る曲の形式を書き、続きを取り始める位置を返す。この起動で取り始めた同じ形式の分なら続きから、ほかは頭から。
     pub fn begin(&self, format: DownloadedFile) -> std::io::Result<u64> {
-        let key = Self::key_of(&format.video_id).ok_or_else(|| std::io::Error::other("unsafe id"))?.to_string();
+        let key = Self::key_of(&format.video_id).ok_or_else(|| std::io::Error::other("unsafe id"))?;
         let mut begun = self.begun.lock().unwrap();
         if begun.contains(&key)
             && let Some(old) = self.entry(&key)
@@ -93,7 +100,7 @@ impl DownloadStore {
         }
         fs::create_dir_all(&self.directory)?;
         begun.insert(key.clone());
-        fs::write(self.bytes_path(&key).unwrap(), [])?;
+        fs::write(self.bytes_path(&format.video_id).unwrap(), [])?;
         self.write_format(&DownloadedFile { complete: false, ..format })?;
         Ok(0)
     }
@@ -105,6 +112,15 @@ impl DownloadStore {
         }
         let Some(path) = self.bytes_path(video_id) else { return false };
         fs::OpenOptions::new().append(true).open(path).and_then(|mut f| f.write_all(data)).is_ok()
+    }
+
+    /// 長さを取り終えて知った（Range に応じない配信元のエピソード）。取れた大きさを長さにして印を付ける。
+    pub fn complete_with_length(&self, video_id: &str, length: u64) -> bool {
+        let Some(format) = self.entry(video_id) else { return false };
+        if length == 0 || self.size(video_id) != length {
+            return false;
+        }
+        self.write_format(&DownloadedFile { length, complete: true, ..format }).is_ok()
     }
 
     /// 取り終えた印を付ける（大きさが合わなければ付けない）。
@@ -126,7 +142,7 @@ impl DownloadStore {
             let _ = fs::remove_file(path);
         }
         if let Some(key) = Self::key_of(video_id) {
-            self.begun.lock().unwrap().remove(key);
+            self.begun.lock().unwrap().remove(&key);
         }
     }
 
@@ -141,7 +157,8 @@ impl DownloadStore {
 
     /// 持ち主のいない曲のファイルを消す（目録を変えたあと）。消した数を返す。
     pub fn purge(&self, wanted: &HashSet<String>) -> usize {
-        let stale: Vec<String> = self.stored_ids().into_iter().filter(|id| !wanted.contains(id)).collect();
+        let keep: HashSet<String> = wanted.iter().filter_map(|id| Self::key_of(id)).collect();
+        let stale: Vec<String> = self.stored_ids().into_iter().filter(|key| !keep.contains(key)).collect();
         stale.iter().for_each(|id| self.remove(id));
         stale.len()
     }
@@ -201,6 +218,28 @@ mod tests {
         // 形式が違えば頭から
         assert_eq!(store.begin(format(7)).unwrap(), 0);
         store.clear();
+    }
+
+    #[test]
+    fn episodes_are_named_by_the_hash_of_their_url_and_can_finish_without_a_known_length() {
+        let store = temp_store("episode");
+        let id = "ext:https://cdn.example/show/1.mp3?x=1";
+        let episode = DownloadedFile { video_id: id.into(), mime_type: "audio/mpeg".into(), length: 0, itag: 0, complete: false, song: None };
+        assert_eq!(store.begin(episode).unwrap(), 0);
+        let name = store.bytes_path(id).unwrap().file_name().unwrap().to_string_lossy().into_owned();
+        assert_eq!(name.len(), 64 + 4);
+        assert!(!name.contains("example"));
+        assert!(store.append(id, 0, b"mp3data"));
+        assert!(!store.complete(id));
+        assert!(store.complete_with_length(id, 7));
+        assert_eq!(store.completed(id).map(|f| (f.length, f.video_id)), Some((7, id.to_string())));
+        // 持ち主がいれば残し、いなければ消す
+        assert_eq!(store.purge(&HashSet::from([id.to_string()])), 0);
+        assert_eq!(store.total_bytes(), 7);
+        assert_eq!(store.purge(&HashSet::new()), 1);
+        assert!(store.completed(id).is_none());
+        // https でない音声は名前を付けない
+        assert!(store.bytes_path("ext:http://cdn.example/1.mp3").is_none());
     }
 
     #[test]
