@@ -25,6 +25,8 @@ pub struct Player {
     pending_start: Arc<Mutex<Option<(u64, bool)>>>,
     /// ライブ配信の HLS を解く口（無ければライブは流せない）。
     live: Option<wave_core::stream::live::LiveClient>,
+    /// 今の曲を解いた結果（再生履歴を送るのに使う。取った曲から鳴らしたときは裏で解き直す）。
+    current_stream: Arc<Mutex<Option<wave_core::stream::resolver::ResolvedStream>>>,
 }
 
 #[derive(Default)]
@@ -87,7 +89,7 @@ impl Player {
             configure_source(&source, setup_feed.clone());
             None
         });
-        Self { playbin, resolver, downloads, feed, pending_start: Arc::default(), live: None }
+        Self { playbin, resolver, downloads, feed, pending_start: Arc::default(), live: None, current_stream: Arc::default() }
     }
 
     /// ライブ配信を流せるようにする（HLS を GStreamer に直に読ませる）。
@@ -107,6 +109,7 @@ impl Player {
         let immediate = start_ms == 0 && playing;
         *self.pending_start.lock().unwrap() = (!immediate).then_some((start_ms, playing));
         let target = if immediate { gst::State::Playing } else { gst::State::Paused };
+        *self.current_stream.lock().unwrap() = None;
         if let Some(store) = &self.downloads
             && let (Some(file), Some(path)) = (store.completed(video_id), store.bytes_path(video_id))
         {
@@ -115,12 +118,24 @@ impl Player {
             *self.feed.lock().unwrap() = Feed { reader: None, local: Some((path, file.length)), offset: 0, cache: None };
             self.playbin.set_property("uri", "appsrc://");
             self.playbin.set_state(target).map_err(|_| StreamFailure::Unplayable)?;
+            // 再生履歴のために、裏で解いておく（通信できなければ送らないだけ）
+            let (resolver, id, slot) = (self.resolver.clone(), video_id.to_string(), self.current_stream.clone());
+            runtime::spawn(async move {
+                if let Ok(stream) = resolver.resolve(&id).await {
+                    let mut slot = slot.lock().unwrap();
+                    if slot.is_none() {
+                        *slot = Some(stream);
+                    }
+                }
+            });
             return Ok(());
         }
         let resolver = self.resolver.clone();
         let id = video_id.to_string();
+        let slot = self.current_stream.clone();
         let opened = runtime::run(async move {
             let stream = resolver.resolve(&id).await?;
+            *slot.lock().unwrap() = Some(stream.clone());
             RangeReader::open(stream).await.map_err(|_| StreamFailure::RejectedUrl)
         })
         .await;
@@ -144,6 +159,11 @@ impl Player {
         self.playbin.set_property("uri", "appsrc://");
         self.playbin.set_state(target).map_err(|_| StreamFailure::Unplayable)?;
         Ok(())
+    }
+
+    /// 今の曲を解いた結果（video_id の曲のときだけ）。
+    pub fn current_stream(&self, video_id: &str) -> Option<wave_core::stream::resolver::ResolvedStream> {
+        self.current_stream.lock().unwrap().clone().filter(|s| s.video_id == video_id)
     }
 
     pub fn toggle(&self) {

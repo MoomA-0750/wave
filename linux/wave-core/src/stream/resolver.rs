@@ -55,6 +55,9 @@ pub struct ResolvedStream {
     pub mime_type: String,
     pub content_length: Option<u64>,
     url: String,
+    /// 再生履歴を送る統計の URL（音で、ログイン中に解いたときだけ）と、解いたときのログインの世代。
+    stats_url: Option<String>,
+    pub generation: u64,
 }
 
 impl std::fmt::Debug for ResolvedStream {
@@ -67,6 +70,11 @@ impl ResolvedStream {
     /// 音声を取得するところだけが呼ぶ。ログ・エラーの文・画面に渡さない。
     pub fn reveal_url(&self) -> &str {
         &self.url
+    }
+
+    /// 再生履歴の統計の URL（送るところだけが呼ぶ。ログに出さない）。
+    pub fn reveal_stats_url(&self) -> Option<&str> {
+        self.stats_url.as_deref()
     }
 }
 
@@ -99,6 +107,7 @@ impl StreamResolver {
             return Err(StreamFailure::Parse);
         }
         let ready = self.cipher.get().await.ok_or(StreamFailure::PlayerConfigUnavailable)?;
+        let generation = self.client.generation();
         let body = json!({
             "videoId": video_id,
             "playbackContext": { "contentPlaybackContext": { "html5Preference": "HTML5_PREF_WANTS", "signatureTimestamp": ready.signature_timestamp } },
@@ -143,6 +152,10 @@ impl StreamResolver {
                 mime_type: format.path(&["mimeType"]).str_().unwrap_or("audio/mp4").to_string(),
                 content_length: format.path(&["contentLength"]).str_().and_then(|s| s.parse().ok()),
                 url,
+                stats_url: (kind == StreamKind::Audio && self.client.is_logged_in() && self.client.generation() == generation)
+                    .then(|| root.path(&["playbackTracking", "videostatsPlaybackUrl", "baseUrl"]).str_().map(String::from))
+                    .flatten(),
+                generation,
             });
         }
         self.cipher.invalidate().await;

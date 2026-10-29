@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 aes-gcm = "0.10"
 futures-util = { version = "0.3", default-features = false, features = ["sink"] }
+getrandom = "0.3"
 hex = "0.4.3"
 hmac = "0.12"
 indexmap = { version = "2", features = ["serde"] }

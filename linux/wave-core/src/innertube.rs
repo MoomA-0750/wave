@@ -128,6 +128,23 @@ impl InnerTube {
         Ok(root)
     }
 
+    /// 再生履歴の統計（music.youtube.com の /api/stats/playback）へ GET する。送れたら HTTP の状態。
+    /// 解いたときとログインが変わっていたら送らない（別のアカウントの履歴に載せない）。
+    pub async fn get_stats(&self, url: &str, expected_generation: u64) -> Option<u16> {
+        let creds = {
+            let state = self.state.read().unwrap();
+            if state.generation != expected_generation {
+                return None;
+            }
+            state.credentials.clone()?
+        };
+        let url = reqwest::Url::parse(url).ok()?;
+        let mut headers = self.headers(&url, Some(&creds), creds.visitor_data.as_deref()).ok()?;
+        headers.insert(HeaderName::from_static("cache-control"), HeaderValue::from_static("no-cache"));
+        let response = self.http.get(url).headers(headers).send().await.ok()?;
+        Some(response.status().as_u16())
+    }
+
     fn context(&self, creds: Option<&Credentials>, visitor: Option<&str>) -> Value {
         let mut client = json!({ "clientName": CLIENT_NAME, "clientVersion": CLIENT_VERSION, "gl": self.gl, "hl": self.hl });
         if let Some(visitor) = visitor {

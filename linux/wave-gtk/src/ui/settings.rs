@@ -38,6 +38,22 @@ pub fn page(app: &Rc<App>) -> adw::NavigationPage {
     }
     prefs.add(&downloads);
 
+    let history = adw::PreferencesGroup::builder().title("再生履歴").build();
+    let send_history = adw::SwitchRow::builder()
+        .title("聴いた曲を再生履歴に載せる")
+        .subtitle("30秒（短い曲は半分）聴いた曲を、YouTube Music の再生履歴に送る")
+        .active(app.downloads.settings.borrow().send_history)
+        .build();
+    history.add(&send_history);
+    prefs.add(&history);
+    {
+        let app = app.clone();
+        send_history.connect_active_notify(move |row| {
+            let on = row.is_active();
+            app.downloads.update_settings(|s| s.send_history = on);
+        });
+    }
+
     super::devices::add_to(&prefs, app);
 
     let claude = adw::PreferencesGroup::builder().title("Claude").build();

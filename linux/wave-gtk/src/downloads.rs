@@ -166,6 +166,18 @@ impl Downloads {
                 if listened.get() >= threshold && counted.borrow().is_none() {
                     *counted.borrow_mut() = id;
                     downloads.record_listen(&song);
+                    // YouTube Music の再生履歴にも載せる（設定で切れる。ライブは送らない。Windows と同じ基準）
+                    if downloads.settings.borrow().send_history && !song.is_live && downloads.repo.client().is_logged_in() {
+                        let position = playback.player().position_ms().unwrap_or(0) as f64 / 1000.0;
+                        if let Some(stream) = playback.player().current_stream(&song.video_id) {
+                            let repo = downloads.repo.clone();
+                            gtk::glib::spawn_future_local(async move {
+                                let cpn = wave_core::stream::stats::new_cpn();
+                                let status = crate::runtime::run(async move { wave_core::stream::stats::report(repo.client(), &stream, &cpn, position).await }).await;
+                                eprintln!("stats status={}", status.map_or("skipped".to_string(), |s| s.to_string()));
+                            });
+                        }
+                    }
                 }
             }
             gtk::glib::ControlFlow::Continue

@@ -5,3 +5,4 @@ pub mod live;
 pub mod player;
 pub mod range;
 pub mod resolver;
+pub mod stats;
