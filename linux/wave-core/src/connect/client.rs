@@ -15,9 +15,10 @@ use super::hpke;
 pub use super::models::JoinInfo;
 use super::models::{
     ChainRecord, ChainType, CommandBody, ControlAction, ControlCommand, CursorBody, DocHeader, DocKind, LoginGrantCommand, MemberKeys, ProfileCommand, QueueAddCommand, QueueBody,
-    QueueEditCommand, Role, SealedDoc, YieldCommand, connect_json,
+    QueueEditCommand, Role, SealedDoc, YieldCommand, connect_json, LibraryBody,
 };
 use super::snapshot::{HandoffItem, HandoffRepeat};
+use super::library_sync::{LibraryHost, LibraryReply, LibraryRequest, LibrarySync};
 use super::relay::{RelayMessage, StateKind, StoredState};
 
 pub const TRANSFER_WAIT_MS: i64 = 3_000;
@@ -134,6 +135,8 @@ pub trait Effects {
     fn repeat(&self, _mode: HandoffRepeat) -> bool {
         false
     }
+    /// ほかの端末と合わせたライブラリが届いた（手元に取り込む、ADR-0013）。
+    fn library_changed(&self, _body: LibraryBody) {}
 }
 
 struct Opened<T> {
@@ -236,6 +239,8 @@ pub struct ConnectClient {
     resume_pending: bool,
     floor_dirty: bool,
     last_persist_ms: Option<i64>,
+    /// ライブラリの同期（ADR-0013）。
+    library: LibrarySync,
 }
 
 impl ConnectClient {
@@ -294,6 +299,7 @@ impl ConnectClient {
             resume_pending: false,
             floor_dirty: false,
             last_persist_ms: None,
+            library: LibrarySync::new(),
         }
     }
 
@@ -414,6 +420,9 @@ impl ConnectClient {
             RelayMessage::ActiveChanged { active_device_id, claim_id, claim_order, pending_owner } => self.on_active_changed(active_device_id, claim_id, claim_order, pending_owner),
             RelayMessage::PendingExpired { claim_id } => self.on_pending_expired(&claim_id),
             RelayMessage::Presence { online } => self.online = online.into_iter().collect(),
+            RelayMessage::Library { state } => self.with_library(|sync, host| sync.on_message(LibraryReply::Library { stored: state }, host)),
+            RelayMessage::LibraryOk { request_id, version } => self.with_library(|sync, host| sync.on_message(LibraryReply::Ok { request_id, version }, host)),
+            RelayMessage::LibraryConflict { request_id, latest } => self.with_library(|sync, host| sync.on_message(LibraryReply::Conflict { request_id, latest }, host)),
             _ => {}
         }
     }
@@ -421,6 +430,7 @@ impl ConnectClient {
     /// 接続が切れた。返事を待っていた書き込みは、つながり直した後に最新の版へ積み直す。
     pub fn on_disconnected(&mut self) {
         self.reset_connection();
+        self.library.on_disconnected();
         // 取り込む前に切れた引き取りは捨てる（つながり直した後に、古い状態から突然取り込まない）
         if self.transfer.as_ref().is_some_and(|t| !t.adopting) {
             self.fail_transfer("disconnected", None);
@@ -555,6 +565,7 @@ impl ConnectClient {
             self.on_state(state);
         }
         self.maybe_resume();
+        self.with_library(|sync, host| sync.on_connected(host));
     }
 
     /// 本人が「この状態から始める」を押した（L-12）。床を捨てて新しい storeId を受け入れる。
@@ -576,6 +587,7 @@ impl ConnectClient {
         }
         self.send(RelayMessage::StateGet {});
         self.flush();
+        self.with_library(|sync, host| sync.on_connected(host));
     }
 
     fn on_chain(&mut self, new_records: Vec<ChainRecord>) {
@@ -659,6 +671,12 @@ impl ConnectClient {
                 }
                 self.maybe_resume();
                 self.flush();
+                // 家に入ったばかりなら、つながったときの library_get は家の外として断られている。頼み直す
+                if joining {
+                    self.with_library(|sync, host| sync.on_connected(host));
+                } else {
+                    self.with_library(|sync, host| sync.on_chain_updated(host));
+                }
             }
             ChainVerification::Fork => self.effects.event(ClientEvent::ChainForked),
             ChainVerification::Rollback => self.effects.event(ClientEvent::ChainRolledBack),
@@ -1001,6 +1019,24 @@ impl ConnectClient {
     }
 
     // --- 手元の操作 ---
+
+    /// ライブラリの同期が、中継の文書を開けずに止まっている理由（記録用）。
+    pub fn library_unreadable(&self) -> Option<&'static str> {
+        self.library.unreadable()
+    }
+
+    /// 手元のライブラリ（RSS の登録・聴いたところ）が変わった。中継の最新と合わせて書く（ADR-0013）。
+    pub fn publish_library(&mut self, body: LibraryBody) {
+        self.with_library(|sync, host| sync.publish(body, host));
+    }
+
+    /// ライブラリの同期を、この端末の鍵・鎖・送り口で動かす（同期の状態を一時的に取り出して借りを分ける）。
+    fn with_library(&mut self, f: impl FnOnce(&mut LibrarySync, &mut dyn LibraryHost)) {
+        let mut sync = std::mem::take(&mut self.library);
+        let mut host = ClientLibraryHost { client: self };
+        f(&mut sync, &mut host);
+        self.library = sync;
+    }
 
     /// 手元のキューが変わった（受け渡しの JSON）。書き手なら置く。
     pub fn set_local_queue(&mut self, snapshot: String) {
@@ -1730,6 +1766,41 @@ impl ConnectClient {
 /// 封じる。封じられなければ（この端末が一覧から外された・大きすぎる）None で、書かない。
 fn seal_doc(device: &SoftwareDevice, chain: &VerifiedChain, kind: DocKind, version: i64, prev_hash: Option<&str>, issued_at: i64, plaintext: &[u8]) -> Option<SealedDoc> {
     doc::seal(device, chain, kind, version, prev_hash, issued_at, plaintext, None).ok()
+}
+
+struct ClientLibraryHost<'a> {
+    client: &'a mut ConnectClient,
+}
+
+impl LibraryHost for ClientLibraryHost<'_> {
+    fn signer(&self) -> &dyn chain::DeviceSigner {
+        &*self.client.device
+    }
+    fn opener(&self) -> &dyn doc::KxOpener {
+        &*self.client.device
+    }
+    fn send(&mut self, request: LibraryRequest) -> bool {
+        let message = match request {
+            LibraryRequest::Get => RelayMessage::LibraryGet {},
+            LibraryRequest::Put { request_id, expect_version, doc } => RelayMessage::LibraryPut { request_id, expect_version, doc: *doc },
+        };
+        self.client.send(message)
+    }
+    fn chain(&self) -> Option<&VerifiedChain> {
+        self.client.chain.as_ref()
+    }
+    fn store_id(&self) -> Option<&str> {
+        if self.client.pending_store_id.is_some() { None } else { self.client.store_id.as_deref() }
+    }
+    fn epoch_ms(&self) -> i64 {
+        self.client.epoch()
+    }
+    fn new_id(&mut self) -> String {
+        self.client.new_id()
+    }
+    fn on_remote(&mut self, body: LibraryBody) {
+        self.client.effects.library_changed(body);
+    }
 }
 
 /// 再生中なら、位置を取ってからの経過を足す（書くのが遅れても位置を戻さない）。

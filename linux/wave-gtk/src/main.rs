@@ -151,9 +151,6 @@ async fn show_home(toolbar: &adw::ToolbarView, repo: &MusicRepository) {
         wave_core::lyrics::lrclib::LrclibClient::default(),
         wave_core::lyrics::timed::TimedLyricsClient::new(&language(), &region()),
     );
-    // 端末の連携（中継の場所が設定にあるときだけ）
-    let relay_url = downloads.settings.borrow().relay_url.clone();
-    let connect = connect::Connect::start(repo.clone(), playback.clone(), relay_url).await;
     // RSS の番組（登録と聴いたところ）。エピソードは続きから流し、鳴らしている間は聴いたところを書き留める
     let podcasts = podcasts::Podcasts::new(&region());
     {
@@ -161,6 +158,9 @@ async fn show_home(toolbar: &adw::ToolbarView, repo: &MusicRepository) {
         playback.player().set_external_resume(move |url| podcasts.resume_ms(url));
     }
     podcasts.track(&playback);
+    // 端末の連携（中継の場所が設定にあるときだけ）
+    let relay_url = downloads.settings.borrow().relay_url.clone();
+    let connect = connect::Connect::start(repo.clone(), playback.clone(), podcasts.clone(), relay_url).await;
     let releases = releases::Releases::start(repo.clone(), downloads.settings.borrow().release_notices);
     let (shell, app) = ui::shell::build(repo.clone(), lyrics, playback.clone(), video, downloads, connect, releases, podcasts, on_logout);
     if let Some(window) = toolbar.root().and_downcast::<adw::ApplicationWindow>() {

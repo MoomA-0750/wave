@@ -56,6 +56,11 @@ pub struct LibrarySync {
     synced: bool,
     /// 開けなかった文書（一覧が古い）。一覧が届いたら開き直す。
     deferred: Option<LibraryState>,
+    /// 中継の最新の文書を開けなかった理由（開けるまで書かない。読めないまま書くと、ほかの端末の登録を消し、
+    /// 食い違いが返り続けて書き込みが回り続ける）。
+    unreadable: Option<&'static str>,
+    /// 中継の文書が、今の一覧の端末の一部にしか包まれていない（後から加わった端末が開けない）。中身が同じでも書き直す。
+    rewrap: bool,
 }
 
 impl LibrarySync {
@@ -68,6 +73,11 @@ impl LibrarySync {
         self.synced = false;
         self.inflight = None;
         host.send(LibraryRequest::Get);
+    }
+
+    /// 中継の最新の文書を開けずに書くのを止めているなら、その理由（記録用。値を含めない）。
+    pub fn unreadable(&self) -> Option<&'static str> {
+        self.unreadable
     }
 
     pub fn on_disconnected(&mut self) {
@@ -105,6 +115,7 @@ impl LibrarySync {
                     return;
                 }
                 self.inflight = None;
+                self.rewrap = false;
                 self.remote_version = version;
                 self.remote_body = self.pending_body.take();
                 self.remote_hash = None;
@@ -132,6 +143,7 @@ impl LibrarySync {
         if host.store_id().is_none() {
             return;
         }
+        self.unreadable = None;
         self.remote_version = 0;
         self.remote_body = None;
         self.remote_hash = None;
@@ -154,22 +166,36 @@ impl LibrarySync {
         }
         let Some(chain) = host.chain() else {
             self.deferred = Some(state);
+            self.unreadable = Some("no_chain");
             return;
         };
         let (header, plaintext) = match doc::open(&state.doc, chain, host.opener()) {
             DocOpen::Ok { header, plaintext, .. } => (header, plaintext),
             DocOpen::NeedChain { .. } => {
                 self.deferred = Some(state);
+                self.unreadable = Some("need_chain");
                 return;
             }
-            _ => return,
+            DocOpen::Fork => {
+                self.unreadable = Some("fork");
+                return;
+            }
+            DocOpen::Rejected(reason) => {
+                self.unreadable = Some(reason);
+                return;
+            }
         };
         if header.kind != DocKind::Library || header.version != state.version {
+            self.unreadable = Some("header");
             return;
         }
         let Some(body) = connect_json::decode_utf8::<LibraryBody>(&plaintext) else {
+            self.unreadable = Some("body");
             return;
         };
+        self.unreadable = None;
+        // 後から加わった端末にも開けるよう、宛先が欠けていれば書き直す（ほかの端末の版は、中身が変わるまで包み直さない）
+        self.rewrap = !chain.members().keys().all(|id| state.doc.recipients.iter().any(|r| &r.device_id == id));
         self.remote_version = state.version;
         self.remote_hash = Some(hash);
         self.remote_store = Some(state.store_id);
@@ -185,7 +211,7 @@ impl LibrarySync {
 
     /// 手元に中継より新しいものがあれば書く。
     fn flush(&mut self, host: &mut dyn LibraryHost) {
-        if !self.synced || self.inflight.is_some() || host.store_id().is_none() {
+        if !self.synced || self.inflight.is_some() || host.store_id().is_none() || self.unreadable.is_some() {
             return;
         }
         let Some(mine) = &self.local else {
@@ -197,7 +223,7 @@ impl LibrarySync {
             None => mine.clone(),
         };
         match &self.remote_body {
-            Some(remote) if merged.same_as(remote) => return,
+            Some(remote) if merged.same_as(remote) && !self.rewrap => return,
             None if merged.feeds.is_empty() && merged.positions.is_empty() => return,
             _ => {}
         }
@@ -407,5 +433,31 @@ mod tests {
         assert!(host.outbox.is_empty());
         sync.on_connected(&mut host);
         assert_eq!(vec![LibraryRequest::Get], host.outbox);
+    }
+
+    #[test]
+    fn an_unreadable_remote_document_is_never_overwritten() {
+        // 中継の最新の文書を、この端末が開けない（別の一覧で書かれた・宛先にいない）
+        let other = TestDevice::new(Role::Player);
+        let other_chain = verified(&[chain::genesis(&other, &other.keys).unwrap()]);
+        let plaintext = connect_json::encode_to_utf8(&body(&[("https://feeds.example/x", feed("X", 5))]));
+        let doc = doc::seal(&other, &other_chain, DocKind::Library, 5, None, 1, &plaintext, None).unwrap();
+        let a = TestDevice::new(Role::Player);
+        let chain = verified(&[chain::genesis(&a, &a.keys).unwrap()]);
+        let relay = Rc::new(RefCell::new(Relay {
+            stored: Some(LibraryState { version: 5, doc, store_id: "store-1".into() }),
+            inboxes: vec![VecDeque::new()],
+            ..Default::default()
+        }));
+        let mut syncs = vec![LibrarySync::new()];
+        let mut hosts = vec![Host { index: 0, device: a, chain, relay: relay.clone(), outbox: vec![], received: vec![], ids: 0 }];
+        syncs[0].on_connected(&mut hosts[0]);
+        run(&mut syncs, &mut hosts);
+        syncs[0].publish(body(&[("https://feeds.example/a", feed("A", 10))]), &mut hosts[0]);
+        run(&mut syncs, &mut hosts);
+        // 書かない（書けば開けなかった登録を消し、食い違いが返り続ける）
+        assert_eq!(0, relay.borrow().puts);
+        assert!(syncs[0].unreadable().is_some());
+        assert_eq!(5, relay.borrow().stored.as_ref().unwrap().version);
     }
 }

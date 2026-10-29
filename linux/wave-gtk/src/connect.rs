@@ -103,6 +103,8 @@ struct TagState {
 /// ConnectClient の外の作用と共有する値（ConnectClient の中から呼ばれるので、ConnectClient を借りない）。
 struct Shared {
     playback: Rc<Playback>,
+    /// RSS の番組（ほかの端末と合わせる、ADR-0013）。
+    podcasts: Rc<crate::podcasts::Podcasts>,
     repo: MusicRepository,
     tag: RefCell<Option<TagState>>,
     events: RefCell<Vec<ClientEvent>>,
@@ -210,6 +212,11 @@ impl Effects for GtkEffects {
         true
     }
 
+    fn library_changed(&self, body: wave_core::connect::models::LibraryBody) {
+        eprintln!("connect-v2 library feeds={} positions={}", body.feeds.len(), body.positions.len());
+        self.shared.podcasts.library.apply(&body);
+    }
+
     fn volume(&self, volume_percent: i32) -> bool {
         self.shared.playback.player().set_volume(f64::from(volume_percent.clamp(0, 100)) / 100.0);
         true
@@ -245,15 +252,18 @@ pub struct Connect {
     profile_seen_online: RefCell<HashSet<String>>,
     /// 映している再生のキュー（doc のハッシュと、読んだ曲）。
     mirrored: RefCell<Option<(String, Vec<QueueItem>)>>,
+    /// 最後に中継へ渡したライブラリと、その時刻（聴いたところだけの変化は30秒に1回まで書く。Windows と同じ）。
+    library_sent: RefCell<Option<(wave_core::connect::models::LibraryBody, Instant)>>,
     last_info: RefCell<ConnectInfo>,
     last_members: RefCell<Vec<MemberView>>,
 }
 
 impl Connect {
     /// relay_url が無ければ、連携を使わない（画面には「設定されていません」と出す）。
-    pub async fn start(repo: MusicRepository, playback: Rc<Playback>, relay_url: Option<String>) -> Rc<Self> {
+    pub async fn start(repo: MusicRepository, playback: Rc<Playback>, podcasts: Rc<crate::podcasts::Podcasts>, relay_url: Option<String>) -> Rc<Self> {
         let shared = Rc::new(Shared {
             playback: playback.clone(),
+            podcasts,
             repo,
             tag: RefCell::default(),
             events: RefCell::default(),
@@ -296,6 +306,7 @@ impl Connect {
             profile_sent_for: Cell::new(None),
             profile_seen_online: RefCell::default(),
             mirrored: RefCell::default(),
+            library_sent: RefCell::default(),
             last_info: RefCell::default(),
             last_members: RefCell::default(),
         });
@@ -503,7 +514,12 @@ impl Connect {
                 self.with_client(ConnectClient::on_disconnected);
             }
             SocketEvent::Text(text) => {
-                let Some(message) = RelayMessage::decode(&text) else { return };
+                let Some(message) = RelayMessage::decode(&text) else {
+                    // 読めなかったものは種類だけ残す（本文は出さない）
+                    let op = serde_json::from_str::<serde_json::Value>(&text).ok().and_then(|v| v.get("op").and_then(|o| o.as_str()).map(String::from));
+                    eprintln!("connect-v2 unreadable op={}", op.as_deref().unwrap_or("?"));
+                    return;
+                };
                 match &message {
                     RelayMessage::PairHello { token_hash, hello } => {
                         if let Some(tx) = self.pair_hellos.borrow().as_ref() {
@@ -519,7 +535,11 @@ impl Connect {
                     }
                     _ => {}
                 }
+                let library = matches!(message, RelayMessage::Library { .. } | RelayMessage::LibraryConflict { .. });
                 self.with_client(|c| c.on_message(message));
+                if library && let Some(reason) = self.client.borrow().as_ref().and_then(ConnectClient::library_unreadable) {
+                    eprintln!("connect-v2 library unreadable reason={reason}");
+                }
                 self.changed();
             }
         }
@@ -608,7 +628,22 @@ impl Connect {
             self.refresh_account_tag(household);
         }
         self.maybe_send_profile();
+        self.maybe_publish_library();
         self.changed();
+    }
+
+    /// RSS の登録・外したはすぐ、聴いたところだけの変化は30秒に1回まで、中継に合わせる（ADR-0013）。
+    fn maybe_publish_library(self: &Rc<Self>) {
+        let body = self.shared.podcasts.library.state().to_body();
+        let due = match self.library_sent.borrow().as_ref() {
+            None => true,
+            Some((sent, at)) => sent.feeds != body.feeds || (sent.positions != body.positions && at.elapsed() >= Duration::from_secs(30)),
+        };
+        if !due {
+            return;
+        }
+        *self.library_sent.borrow_mut() = Some((body.clone(), Instant::now()));
+        self.with_client(|c| c.publish_library(body));
     }
 
     /// ログインが変わった（ログアウト・別のアカウント）: 書き手なら前のアカウントのタグで止めたカーソルを置いて、手元を捨てる。

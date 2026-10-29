@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use super::models::{ChainRecord, DocKind, SealedDoc};
+use super::models::{ChainRecord, DocKind, LibraryState, SealedDoc};
 
 /// 状態の種類（中継が版を持つもの）。
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -123,7 +123,27 @@ pub enum RelayMessage {
         state: StoredState,
     },
 
-    // --- ライブラリ（ADR-0013）。Linux 版は RSS を持たないので読まない（library_get を送らなければ届かない） ---
+    // --- ライブラリ（ADR-0013）。library_get を送った接続にだけ配る ---
+    LibraryGet {},
+    LibraryPut {
+        request_id: String,
+        expect_version: i64,
+        doc: SealedDoc,
+    },
+    LibraryOk {
+        request_id: String,
+        version: i64,
+    },
+    LibraryConflict {
+        request_id: String,
+        #[serde(default)]
+        latest: Option<LibraryState>,
+    },
+    /// library_get の返事と、ほかの端末が書いたときの配信。まだ無ければ state は None。
+    Library {
+        #[serde(default)]
+        state: Option<LibraryState>,
+    },
 
     // --- 再生を始める・引き取る ---
     Claim {
@@ -220,7 +240,8 @@ mod tests {
 
     #[test]
     fn unknown_ops_and_missing_optional_fields_are_handled() {
-        assert!(RelayMessage::decode(r#"{"op":"library","state":null}"#).is_none());
+        assert_eq!(RelayMessage::decode(r#"{"op":"library","state":null}"#), Some(RelayMessage::Library { state: None }));
+        assert!(RelayMessage::decode(r#"{"op":"something_new"}"#).is_none());
         let changed = RelayMessage::decode(r#"{"op":"active_changed","claimOrder":7}"#).unwrap();
         assert_eq!(changed, RelayMessage::ActiveChanged { active_device_id: None, claim_id: None, claim_order: 7, pending_owner: None });
         let welcome = RelayMessage::decode(r#"{"op":"welcome","deviceId":"d","storeId":"s"}"#).unwrap();
