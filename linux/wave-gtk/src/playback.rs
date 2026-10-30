@@ -175,6 +175,15 @@ impl Playback {
             }
         });
         *playback._watch.borrow_mut() = Some(watch);
+        // 先に取るのに失敗した次の曲を、鳴っている間に時々もう一度試す（試す間と回数は Player::warm が決める）
+        let weak = Rc::downgrade(&playback);
+        gtk::glib::timeout_add_seconds_local(5, move || {
+            let Some(playback) = weak.upgrade() else { return gtk::glib::ControlFlow::Break };
+            if playback.player.is_playing() {
+                playback.warm_next();
+            }
+            gtk::glib::ControlFlow::Continue
+        });
         playback
     }
 
@@ -249,6 +258,15 @@ impl Playback {
     fn changed(&self) {
         for listener in self.listeners.borrow().iter() {
             listener();
+        }
+        // 次に再生・シャッフル・ラジオの継ぎ足しなどで次の曲が替わったら、その曲の頭を先に取る（取ってある・取っている途中なら何もしない）
+        self.warm_next();
+    }
+
+    fn warm_next(&self) {
+        let next = self.index.get().and_then(|i| self.queue.borrow().get(i + 1).map(|item| item.song.clone()));
+        if let Some(next) = next.filter(|s| !s.is_live && !wave_core::music::feed::is_external(&s.video_id)) {
+            self.player.warm(&next.video_id);
         }
     }
 
@@ -475,9 +493,7 @@ impl Playback {
             }
             this.changed();
             // 次の曲の頭を先に取っておく（曲送りですぐ鳴らす。ライブと RSS のエピソードは残さない）
-            if let Some(next) = this.upcoming().first().filter(|s| !s.is_live && !wave_core::music::feed::is_external(&s.video_id)) {
-                this.player.warm(&next.video_id);
-            }
+            this.warm_next();
             if this.upcoming().len() <= RADIO_REFILL_LEFT {
                 this.refill();
             }

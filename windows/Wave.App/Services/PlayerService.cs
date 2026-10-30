@@ -2312,6 +2312,12 @@ public sealed partial class PlayerService : ObservableObject
         if (IsPlaying && clock.ElapsedMilliseconds - lastPositionSaveMs > PositionSaveIntervalMs) SaveQueue();
         if (IsPlaying && episodeUrl is not null && clock.ElapsedMilliseconds - lastEpisodeSaveMs > PositionSaveIntervalMs) RememberEpisode();
         if (player.Source is null) return;
+        // 次の曲が替わった（次に再生・シャッフル・ラジオの継ぎ足しなど）・先読みに失敗したときのために、時々先読みし直す
+        if (IsPlaying && clock.ElapsedMilliseconds - lastPrefetchCheckMs >= PrefetchCheckMs)
+        {
+            lastPrefetchCheckMs = clock.ElapsedMilliseconds;
+            Prefetch();
+        }
         var session = player.PlaybackSession;
         // 開いている途中は、再生部品の位置（まだ頭）ではなく、これから飛ぶ位置を出したままにする
         lock (openSeekGate)
@@ -2384,16 +2390,50 @@ public sealed partial class PlayerService : ObservableObject
         if (Current?.VideoId == song.VideoId) Lyrics = result;
     }
 
-    /// <summary>次の曲の URL を先に解決しておく（曲の切り替えを速くする）。</summary>
+    /// <summary>先読みし直すかを見る間隔と、失敗した曲をもう一度試すまでの間・回数。</summary>
+    private const long PrefetchCheckMs = 5_000;
+    private const long PrefetchRetryMs = 15_000;
+    private const int PrefetchMaxAttempts = 3;
+    private long lastPrefetchCheckMs;
+    private readonly HashSet<string> prefetching = [];
+    private readonly Dictionary<string, (int Count, long AtMs)> prefetchFailures = [];
+
+    /// <summary>
+    /// 次の曲の URL を先に解決し、頭を取っておく（曲の切り替えを速くする）。曲が鳴り始めたときと、鳴っている間は時々呼ぶ
+    /// （次の曲が替わったら、その曲を先読みする）。失敗したら少し置いて、3回まで試す。
+    /// </summary>
     private async void Prefetch()
     {
         if (Index + 1 >= Queue.Count) return;
         var next = Queue[Index + 1];
         // ライブ配信は流すときに HLS を解決する（先読みしない）
-        if (next.IsLive || Feed.IsExternal(next.VideoId) || prefetched.ContainsKey(next.VideoId)) return;
+        if (next.IsLive || Feed.IsExternal(next.VideoId) || prefetched.ContainsKey(next.VideoId) || prefetching.Contains(next.VideoId)) return;
+        if (prefetchFailures.TryGetValue(next.VideoId, out var failure)
+            && (failure.Count >= PrefetchMaxAttempts || clock.ElapsedMilliseconds - failure.AtMs < PrefetchRetryMs)) return;
         // 取り終えた曲・頭を残してある曲は、URL も調べない（鳴らすときにファイル・残した分から始める）
         if (AppServices.Downloads.Local(next.VideoId) is not null || CachedStart(next.VideoId) is not null) return;
+        prefetching.Add(next.VideoId);
+        try
+        {
+            await PrefetchAsync(next);
+        }
+        finally
+        {
+            prefetching.Remove(next.VideoId);
+        }
+    }
+
+    private async Task PrefetchAsync(Song next)
+    {
         var result = await AppServices.Resolver.ResolveAsync(next.VideoId);
+        if (result.Stream is null)
+        {
+            var count = (prefetchFailures.TryGetValue(next.VideoId, out var f) ? f.Count : 0) + 1;
+            prefetchFailures[next.VideoId] = (count, clock.ElapsedMilliseconds);
+            AppPaths.Log($"prefetch failed attempt={count}");
+            return;
+        }
+        prefetchFailures.Remove(next.VideoId);
         if (result.Stream is { } s)
         {
             prefetched[next.VideoId] = s;
@@ -2466,6 +2506,7 @@ public sealed partial class PlayerService : ObservableObject
         player.Pause();
         player.Source = null;
         prefetched.Clear();
+        prefetchFailures.Clear();
         // 聴いた曲の音も残さない
         AppServices.AudioCache.Clear();
         Queue.Clear();

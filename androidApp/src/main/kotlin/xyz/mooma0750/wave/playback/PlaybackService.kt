@@ -355,8 +355,12 @@ class PlaybackService : MediaLibraryService() {
                         Log.i(WaveApplication.LOG_TAG, "queue size=${player.mediaItemCount} index=${player.currentMediaItemIndex}")
                         // 曲のソースの準備（SOURCE_UPDATE）では知らせない（レビュー p6b34 中-1）
                         container.connectV2Host.listener?.onQueueChanged()
+                        // 次に再生・並べ替え・ラジオの継ぎ足しなどで次の曲が替わったら、その曲を先に取る
+                        warmNext(player)
                     }
                 }
+
+                override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) = warmNext(player)
 
                 override fun onMediaItemTransition(
                     mediaItem: MediaItem?,
@@ -870,31 +874,52 @@ class PlaybackService : MediaLibraryService() {
         return false
     }
 
-    /** 次の曲の頭の 1MB（256kbps で 30 秒ほど）を取って残す（曲送りで、すぐ鳴らせる）。 */
+    /**
+     * 次の曲の頭の 1MB（256kbps で 30 秒ほど）を取って残す（曲送りで、すぐ鳴らせる）。曲が替わったときと、キュー・シャッフルが変わったときに呼ぶ
+     * （次の曲が替わっていなければ、取っている途中のものはそのまま）。失敗したら少し置いて、3回まで試す。
+     */
     @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
-    private fun warmNext(player: Player) {
+    private fun warmNext(
+        player: Player,
+        attempt: Int = 1,
+    ) {
         val next = player.nextMediaItemIndex.takeIf { it != C.INDEX_UNSET } ?: return
         val uri = player.getMediaItemAt(next).localConfiguration?.uri ?: return
         val upstream = upstreamFactory ?: return
         // 取り終えた曲・通信できないときは先に取らない
         if (!container.network.online || isDownloaded(player.getMediaItemAt(next))) return
         if (container.audioCache.cachedBytes(uri) >= WARM_BYTES) return
+        // 同じ曲を取っている途中なら、そのまま
+        if (warmingUri == uri && warming?.first?.isActive == true) return
         warming?.let { (job, warm) ->
             warm.cancel()
             job.cancel()
         }
         val warm = container.audioCache.warm(upstream, uri, WARM_BYTES) ?: return
+        warmingUri = uri
         val job =
             scope.launch(kotlinx.coroutines.Dispatchers.IO) {
                 try {
                     warm.run()
                     Log.i(WaveApplication.LOG_TAG, "prefetch warmed=${container.audioCache.cachedBytes(uri)}")
                 } catch (e: java.io.IOException) {
-                    Log.i(WaveApplication.LOG_TAG, "prefetch warm failed type=${e.javaClass.simpleName}")
+                    Log.i(WaveApplication.LOG_TAG, "prefetch warm failed type=${e.javaClass.simpleName} attempt=$attempt")
+                    if (attempt < WARM_MAX_ATTEMPTS) {
+                        kotlinx.coroutines.delay(WARM_RETRY_MS)
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                            // 次の曲が替わっていれば、替わった先で取り直している
+                            if (warmingUri == uri) {
+                                warmingUri = null
+                                warmNext(player, attempt + 1)
+                            }
+                        }
+                    }
                 }
             }
         warming = job to warm
     }
+
+    private var warmingUri: android.net.Uri? = null
 
     /** 今の曲の URL が調べてなければ調べ、再生履歴の見張りに知らせる。 */
     private fun resolveCurrentForHistory(
@@ -1379,6 +1404,9 @@ class PlaybackService : MediaLibraryService() {
     }
 
     private companion object {
+        /** 次の曲の頭を取るのに失敗したとき、もう一度試すまでの間と回数。 */
+        const val WARM_MAX_ATTEMPTS = 3
+        const val WARM_RETRY_MS = 15_000L
         /** 次の曲を先に取っておくバイト数。 */
         private const val WARM_BYTES = 1024L * 1024
 

@@ -1978,6 +1978,11 @@ final class PlayerService {
         if isPlaying && clockMs - lastPositionSaveMs > PlayerService.positionSaveIntervalMs { saveQueue() }
         guard engine.hasSource, !isLoading else { return }
         position = engine.positionSeconds
+        // 次の曲が替わった（次に再生・シャッフル・ラジオの継ぎ足しなど）・先読みに失敗したときのために、時々先読みし直す
+        if isPlaying && clockMs - lastPrefetchCheckMs >= PlayerService.prefetchCheckMs {
+            lastPrefetchCheckMs = clockMs
+            prefetch()
+        }
         let external = isExternal
         // 断片の MP4 では AVPlayer の読む長さが実際より長いことがある。曲の長さが分かっていればそちらを使う。
         // RSS のエピソードは配信元の長さ（itunes:duration）がずれていることがあるので、音声から読んだ長さを使う
@@ -2053,17 +2058,37 @@ final class PlayerService {
         if current?.videoId == song.videoId { lyrics = result }
     }
 
-    /// 次の曲の URL を先に解決しておく（曲の切り替えを速くする）。
+    /// 先読みし直すかを見る間隔と、失敗した曲をもう一度試すまでの間・回数。
+    private static let prefetchCheckMs: Int64 = 5_000
+    private static let prefetchRetryMs: Int64 = 15_000
+    private static let prefetchMaxAttempts = 3
+    @ObservationIgnored private var lastPrefetchCheckMs: Int64 = 0
+    @ObservationIgnored private var prefetching: Set<String> = []
+    @ObservationIgnored private var prefetchFailures: [String: (count: Int, atMs: Int64)] = [:]
+
+    /// 次の曲の URL を先に解決し、頭を取っておく（曲の切り替えを速くする）。曲が鳴り始めたときと、鳴っている間は時々呼ぶ
+    /// （次の曲が替わったら、その曲を先読みする）。失敗したら少し置いて、3回まで試す。
     private func prefetch() {
         guard index + 1 < queue.count else { return }
         let next = queue[index + 1]
-        if prefetched[next.videoId] != nil || next.isLive || Feed.isExternal(next.videoId) || rejected.recentlyRejected(next.videoId, nowMs: clockMs) { return }
+        if prefetched[next.videoId] != nil || prefetching.contains(next.videoId) || next.isLive || Feed.isExternal(next.videoId)
+            || rejected.recentlyRejected(next.videoId, nowMs: clockMs) { return }
+        if let failure = prefetchFailures[next.videoId],
+           failure.count >= PlayerService.prefetchMaxAttempts || clockMs - failure.atMs < PlayerService.prefetchRetryMs { return }
         // 頭を残してある曲は、URL も調べない（鳴らすときに残した分から始める）
         if cachedStart(next.videoId) != nil { return }
         // 取り終えた曲・通信できないときも調べない
         if AppServices.downloads.isDownloaded(next.videoId) || AppServices.downloads.offline { return }
+        prefetching.insert(next.videoId)
         Task {
-            guard let stream = (try? await AppServices.resolver.resolve(videoId: next.videoId))?.stream else { return }
+            defer { prefetching.remove(next.videoId) }
+            guard let stream = (try? await AppServices.resolver.resolve(videoId: next.videoId))?.stream else {
+                let count = (prefetchFailures[next.videoId]?.count ?? 0) + 1
+                prefetchFailures[next.videoId] = (count, clockMs)
+                AppPaths.log("prefetch failed attempt=\(count)")
+                return
+            }
+            prefetchFailures[next.videoId] = nil
             prefetched[next.videoId] = stream
             prefetchOrder.append(next.videoId)
             while prefetched.count > 4, !prefetchOrder.isEmpty { prefetched.removeValue(forKey: prefetchOrder.removeFirst()) }
@@ -2119,6 +2144,7 @@ final class PlayerService {
         engine.clear()
         prefetched.removeAll()
         prefetchOrder.removeAll()
+        prefetchFailures.removeAll()
         rejected.clear()
         // 聴いた曲の音も残さない
         AppServices.audioCache.clear()

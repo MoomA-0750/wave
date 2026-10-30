@@ -18,6 +18,21 @@ use crate::runtime;
 /// 残した分から鳴らし始めるのに要る頭の大きさ（これより少なければ、URL を調べてから鳴らす）。
 const MIN_CACHED_START: u64 = 256 * 1024;
 
+#[derive(Default)]
+struct Warming {
+    active: std::collections::HashSet<String>,
+    failures: std::collections::HashMap<String, (u32, i64)>,
+}
+
+/// 頭を取れなかった曲をもう一度試すまでの間と回数。
+const WARM_RETRY_MS: i64 = 15_000;
+const WARM_MAX_ATTEMPTS: u32 = 3;
+
+fn now_ms() -> i64 {
+    static START: std::sync::LazyLock<std::time::Instant> = std::sync::LazyLock::new(std::time::Instant::now);
+    START.elapsed().as_millis() as i64
+}
+
 pub struct Player {
     playbin: gst::Element,
     resolver: StreamResolver,
@@ -35,6 +50,8 @@ pub struct Player {
     external_resume: std::cell::RefCell<Option<Box<dyn Fn(&str) -> u64>>>,
     /// 曲の音を残す置き場（無ければ残さない）。
     audio_cache: Option<Arc<AudioCache>>,
+    /// 頭を取っている途中の曲と、取れなかった曲（回数と時刻）。
+    warming: Arc<Mutex<Warming>>,
 }
 
 #[derive(Default)]
@@ -163,7 +180,7 @@ impl Player {
             configure_source(&source, setup_feed.clone());
             None
         });
-        Self { playbin, resolver, downloads, feed, pending_start: Arc::default(), live: None, current_stream: Arc::default(), external_resume: Default::default(), audio_cache: None }
+        Self { playbin, resolver, downloads, feed, pending_start: Arc::default(), live: None, current_stream: Arc::default(), external_resume: Default::default(), audio_cache: None, warming: Arc::default() }
     }
 
     /// ライブ配信を流せるようにする（HLS を GStreamer に直に読ませる）。
@@ -208,32 +225,60 @@ impl Player {
     }
 
     /// 次の曲の頭（1MB、30秒ほど）を先に取って残しておく（曲送りですぐ鳴らす）。
+    /// 曲の頭を先に取っておく。同じ曲を取っている途中なら何もしない。失敗したら、少し置いて（呼ばれたときに）3回まで試す。
     pub fn warm(&self, video_id: &str) {
         let Some(cache) = self.audio_cache.clone() else { return };
         if !wave_core::stream::audio_cache::is_safe_id(video_id) || cache.entry(video_id).is_some_and(|e| e.1 >= wave_core::stream::audio_cache::WARM_BYTES) {
             return;
         }
-        let (resolver, id) = (self.resolver.clone(), video_id.to_string());
+        let now = now_ms();
+        {
+            let mut warming = self.warming.lock().unwrap();
+            if warming.active.contains(video_id) {
+                return;
+            }
+            if let Some((count, at)) = warming.failures.get(video_id)
+                && (*count >= WARM_MAX_ATTEMPTS || now - at < WARM_RETRY_MS)
+            {
+                return;
+            }
+            warming.active.insert(video_id.to_string());
+        }
+        let (resolver, id, warming) = (self.resolver.clone(), video_id.to_string(), self.warming.clone());
         runtime::spawn(async move {
-            let Ok(stream) = resolver.resolve(&id).await else { return };
-            cache.begin(&stream);
-            let Ok(reader) = RangeReader::open(stream).await else { return };
-            let target = wave_core::stream::audio_cache::WARM_BYTES.min(reader.length());
-            loop {
-                let have = cache.entry(&id).map_or(0, |e| e.1);
-                if have >= target {
-                    break;
-                }
-                let Ok(chunk) = reader.read_chunk(have, target - have).await else { break };
-                if chunk.is_empty() {
-                    break;
-                }
-                cache.append(&id, have, &chunk);
-                if cache.entry(&id).map_or(0, |e| e.1) == have {
-                    break;
-                }
+            let ok = Self::warm_bytes(&resolver, &cache, &id).await;
+            let mut warming = warming.lock().unwrap();
+            warming.active.remove(&id);
+            if ok {
+                warming.failures.remove(&id);
+            } else {
+                let count = warming.failures.get(&id).map_or(0, |f| f.0) + 1;
+                warming.failures.insert(id, (count, now_ms()));
+                eprintln!("prefetch failed attempt={count}");
             }
         });
+    }
+
+    /// 曲を解いて、頭の WARM_BYTES を残す。解けた・取れたら true（途中で切れても、取れた分は残る）。
+    async fn warm_bytes(resolver: &StreamResolver, cache: &AudioCache, id: &str) -> bool {
+        let Ok(stream) = resolver.resolve(id).await else { return false };
+        cache.begin(&stream);
+        let Ok(reader) = RangeReader::open(stream).await else { return false };
+        let target = wave_core::stream::audio_cache::WARM_BYTES.min(reader.length());
+        loop {
+            let have = cache.entry(id).map_or(0, |e| e.1);
+            if have >= target {
+                return true;
+            }
+            let Ok(chunk) = reader.read_chunk(have, target - have).await else { return false };
+            if chunk.is_empty() {
+                return false;
+            }
+            cache.append(id, have, &chunk);
+            if cache.entry(id).map_or(0, |e| e.1) == have {
+                return false;
+            }
+        }
     }
 
     /// RSS のエピソードを続きから流すための、聴いたところの引き方。
