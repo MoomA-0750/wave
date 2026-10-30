@@ -900,6 +900,7 @@ private struct PlayMark: View {
                     }
                     DynamicIslandExpandedRegion(.bottom) {
                         VStack(spacing: 6) {
+                            ActivityProgress(state: state)
                             Controls(playing: state.playing, size: 20)
                             if let next = state.nextTitle {
                                 Text(WidgetText.t("次: ", "Next: ") + next).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
@@ -914,6 +915,20 @@ private struct PlayMark: View {
                     Image(systemName: state.playing ? "waveform" : "pause.fill").foregroundStyle(accent)
                 }
                 .widgetURL(URL(string: "wave://nowplaying"))
+            }
+        }
+    }
+
+    /// 位置の棒。鳴っている間は OS が時刻で進め（アプリが知らせなくても進む）、止めている間はその位置で止める。
+    private struct ActivityProgress: View {
+        var state: NowPlayingAttributes.ContentState
+
+        var body: some View {
+            if let start = state.startedAt, let end = state.endsAt, end > start {
+                ProgressView(timerInterval: start...end, countsDown: false, label: { EmptyView() }, currentValueLabel: { EmptyView() })
+                    .tint(accent)
+            } else if let fraction = state.fraction {
+                ProgressView(value: min(max(fraction, 0), 1)).tint(accent)
             }
         }
     }
@@ -938,6 +953,7 @@ private struct PlayMark: View {
                         Image(systemName: "plus.circle").font(.title2).foregroundStyle(.white)
                     }
                 }
+                ActivityProgress(state: state)
                 HStack {
                     if let next = state.nextTitle {
                         Label(next, systemImage: "text.line.first.and.arrowtriangle.forward").font(.caption).foregroundStyle(.secondary).lineLimit(1)

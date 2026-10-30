@@ -480,6 +480,13 @@ struct SelectPlaylistIntent: WidgetConfigurationIntent {
             var playing: Bool
             var device: String?
             var nextTitle: String?
+            /// 鳴っている間の、曲の頭の時刻と終わりの時刻（位置の棒を OS に進めてもらう）。止めている間・ライブ・長さが分からないときは nil。
+            var startedAt: Date?
+            var endsAt: Date?
+            /// 止めている間の位置（0〜1）。
+            var fraction: Double?
+            /// ジャケットを置き場に書き終えたか（書き終えたら知らせ直して、ジャケットを読み直させる）。
+            var artwork: Bool?
         }
     }
 #endif
