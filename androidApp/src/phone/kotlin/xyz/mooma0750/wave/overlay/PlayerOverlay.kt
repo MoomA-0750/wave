@@ -345,6 +345,8 @@ object PlayerOverlay {
             val bubbleTouch =
                 OverlayTouch(
                     slop = slop,
+                    // 長押しを待つ間は、指のずれを 3 倍まで許す
+                    longPressSlop = slop * 3,
                     maxTaps = 3,
                     onTaps = { count ->
                         when (count) {

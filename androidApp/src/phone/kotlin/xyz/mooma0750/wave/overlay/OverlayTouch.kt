@@ -11,9 +11,12 @@ import android.view.ViewConfiguration
  * （窓の中の座標は、窓が指に付いて動くと変わらなくなる）。
  * タップは続けて押された回数を数え、[maxTaps] に届くか、間が空いたところで [onTaps] に渡す。
  * 離したときは、指の速さ（画面の座標で px/秒）も渡す（投げた勢いで動かす）。
+ * 長押しがあるときは長押しに寄せる: 押してすぐ（[QUICK_DRAG_MS] まで）に [slop] を越えたらドラッグ、
+ * それより後は、押したまま指が少しずれても [longPressSlop] を越えるまでは長押しを待つ。
  */
 internal class OverlayTouch(
     private val slop: Int,
+    private val longPressSlop: Int = slop,
     private val maxTaps: Int,
     private val onTaps: (Int) -> Unit,
     private val onLongPress: (() -> Unit)?,
@@ -55,7 +58,10 @@ internal class OverlayTouch(
             MotionEvent.ACTION_MOVE -> {
                 val dx = event.rawX - downX
                 val dy = event.rawY - downY
-                if (!dragging && !longPressed && dx * dx + dy * dy > slop.toFloat() * slop) {
+                val distance = dx * dx + dy * dy
+                val quick = event.eventTime - event.downTime < QUICK_DRAG_MS
+                val limit = if (onLongPress == null || quick) slop else longPressSlop
+                if (!dragging && !longPressed && distance > limit.toFloat() * limit) {
                     dragging = true
                     handler.removeCallbacks(longPress)
                     // ドラッグに入ったら、その前のタップは数えない
@@ -113,6 +119,11 @@ internal class OverlayTouch(
         val tracker = velocity ?: return 0f to 0f
         tracker.computeCurrentVelocity(1000)
         return tracker.xVelocity to tracker.yVelocity
+    }
+
+    private companion object {
+        /** 押してからこの間に指が動き出したら、長押しでなくドラッグのつもりと見る。 */
+        const val QUICK_DRAG_MS = 150L
     }
 
     fun cancel() {
