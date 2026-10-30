@@ -283,7 +283,7 @@ class MainActivity : ComponentActivity() {
                             val openDevices: () -> Unit = { if (container.connectV2 != null) showDevices = true else nav.push(Screen.Connect) }
                             if (showDevices) {
                                 container.connectV2?.let { manager ->
-                                    xyz.mooma0750.wave.connect2.DevicePickerSheet(manager, onDismiss = { showDevices = false }, onOpenSettings = { nav.push(Screen.Connect) }, watch = container.watchRemote, phonePlaying = xyz.mooma0750.wave.nowplaying.rememberPlayerUiState(container.player).first.isPlaying)
+                                    xyz.mooma0750.wave.connect2.DevicePickerSheet(manager, onDismiss = { showDevices = false }, onOpenSettings = { nav.push(Screen.Connect) }, watch = container.watchRemote, phonePlaying = xyz.mooma0750.wave.nowplaying.rememberPlaybackPresence(container.player).first)
                                 }
                             }
                             // マイライブラリ（下のタブのライブラリと、デスクトップと同じ並びの左の欄）

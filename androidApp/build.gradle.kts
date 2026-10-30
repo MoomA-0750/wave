@@ -44,6 +44,21 @@ android {
         }
     }
 
+    buildTypes {
+        // 本人の端末に入れる組み立て。開発用（debuggable）は ART が最適化せず、Compose の画面が数倍重い（時計で特に目立つ）。
+        // 時計とスマホの間の Data Layer は同じ署名が要るので、開発用と同じ鍵で署名する（入れ替えても上書きできる）。
+        // 縮小（R8）はまだ確かめていないので切っておく。開発用の命令（DebugActions）は効かない
+        getByName("release") {
+            signingConfig = signingConfigs.getByName("debug")
+            isMinifyEnabled = false
+        }
+    }
+
+    lint {
+        // 古い fragment が混ざっていると出る。fragment は使っておらず、ComponentActivity の registerForActivityResult なので当たらない
+        disable += "InvalidFragmentVersionForActivityResult"
+    }
+
     buildFeatures {
         compose = true
         buildConfig = true

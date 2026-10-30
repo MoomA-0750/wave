@@ -15,7 +15,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.wear.compose.material3.AppScaffold
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import xyz.mooma0750.wave.artist.AlbumViewModel
 import xyz.mooma0750.wave.artist.ArtistViewModel
@@ -223,9 +225,12 @@ private fun LoggedIn(
     val likedTitle = stringResource(R.string.main_liked_songs)
     // 再生画面にどちらを出すか。スマホの操作を主にし、この時計で鳴らしている間は時計（choosePlayerTarget）。切り替えは下の端末のボタンから
     val remote = container.watchRemote
-    val phone by remote.peer.collectAsStateWithLifecycle()
-    val (watchState, _) = xyz.mooma0750.wave.nowplaying.rememberPlayerUiState(container.player)
-    val target = xyz.mooma0750.wave.wear.choosePlayerTarget(watchState.isPlaying, watchState.queue.isNotEmpty(), phone)
+    // ここは画面全体の並びを決める所なので、位置のように毎秒変わるものは読まない（読むと毎秒、全体を組み直して重くなる）
+    val phonePresence by remember(remote) {
+        remote.peer.map { it?.let { phone -> phone.hasQueue } }.distinctUntilChanged()
+    }.collectAsStateWithLifecycle(remote.peer.value?.hasQueue)
+    val (watchPlaying, watchHasQueue) = xyz.mooma0750.wave.nowplaying.rememberPlaybackPresence(container.player)
+    val target = xyz.mooma0750.wave.wear.choosePlayerTarget(watchPlaying, watchHasQueue, phonePresence)
     // スマホで再生が始まったら（スマホが知らせてくる）、スマホの再生画面へ
     LaunchedEffect(remote) {
         remote.phoneStarted.collect { nav.openNowPlaying() }
@@ -242,7 +247,7 @@ private fun LoggedIn(
 
     WearNavHost(nav) { screen ->
         when (screen) {
-            WearScreen.Home -> HomeMenu(container.player, phone.takeIf { target == xyz.mooma0750.wave.wear.PlayerTarget.Phone }, hasDevices = true, onOpen = nav::push)
+            WearScreen.Home -> HomeMenu(container.player, remote.takeIf { target == xyz.mooma0750.wave.wear.PlayerTarget.Phone }, hasDevices = true, onOpen = nav::push)
             // 再生画面。下へ送るとキュー（この時計の再生なら、その下に歌詞）
             WearScreen.NowPlaying ->
                 when (target) {
@@ -377,7 +382,7 @@ private fun LoggedIn(
             }
             WearScreen.Settings -> SettingsScreen(container, account, onOpenDevices = { nav.push(WearScreen.Devices) })
             WearScreen.Devices -> {
-                xyz.mooma0750.wave.wear.DevicesScreen(container.watchRemote, watchHasQueue = watchState.queue.isNotEmpty())
+                xyz.mooma0750.wave.wear.DevicesScreen(container.watchRemote, watchHasQueue = watchHasQueue)
             }
             WearScreen.Ai -> xyz.mooma0750.wave.wear.AiScreen(container.aiChat, onPlay = play::song)
         }

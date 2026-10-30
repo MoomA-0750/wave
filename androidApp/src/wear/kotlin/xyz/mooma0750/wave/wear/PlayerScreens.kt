@@ -84,7 +84,7 @@ fun LyricsScreen(
     connection: PlayerConnection,
     repository: LyricsRepository,
 ) {
-    val (state, controller) = rememberPlayerUiState(connection)
+    val (state, controller) = rememberPlayerUiState(connection, withQueue = false)
     val song = controller?.currentMediaItem?.let(Media3QueuePlayer::songOf)
     val result by produceState<LyricsRepository.Result?>(null, song?.videoId) { value = song?.let { repository.lyrics(it) } }
     val listState = rememberTransformingLazyColumnState()

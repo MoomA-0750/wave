@@ -26,13 +26,14 @@ enum class PlayerTarget { Phone, Watch }
 fun choosePlayerTarget(
     watchPlaying: Boolean,
     watchHasQueue: Boolean,
-    phone: RemoteState?,
+    /** スマホの再生が届いていれば、スマホにキューがあるか。届いていなければ null。 */
+    phoneHasQueue: Boolean?,
 ): PlayerTarget =
     when {
         watchPlaying -> PlayerTarget.Watch
-        phone?.hasQueue == true -> PlayerTarget.Phone
+        phoneHasQueue == true -> PlayerTarget.Phone
         watchHasQueue -> PlayerTarget.Watch
-        phone != null -> PlayerTarget.Phone
+        phoneHasQueue != null -> PlayerTarget.Phone
         else -> PlayerTarget.Watch
     }
 

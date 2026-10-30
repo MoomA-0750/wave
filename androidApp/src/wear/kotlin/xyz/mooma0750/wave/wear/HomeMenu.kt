@@ -2,6 +2,7 @@ package xyz.mooma0750.wave.wear
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.stringResource
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import xyz.mooma0750.wave.R
 import xyz.mooma0750.wave.core.music.MusicRepository
 import xyz.mooma0750.wave.core.music.PlaylistSummary
@@ -12,12 +13,14 @@ import xyz.mooma0750.wave.playback.PlayerConnection
 @Composable
 fun HomeMenu(
     connection: PlayerConnection,
-    /** 再生画面にスマホの再生を出すときの、スマホの様子（この時計の再生を出すときは null）。 */
-    phone: xyz.mooma0750.wave.watchlink.RemoteState?,
+    /** 再生画面にスマホの再生を出すときの、スマホとのつながり（この時計の再生を出すときは null）。 */
+    remote: xyz.mooma0750.wave.watchlink.WatchRemote?,
     hasDevices: Boolean,
     onOpen: (WearScreen) -> Unit,
 ) {
-    val (state, _) = rememberPlayerUiState(connection)
+    val (state, _) = rememberPlayerUiState(connection, withQueue = false)
+    val peer = remote?.peer?.collectAsStateWithLifecycle()
+    val phone = peer?.value
     val liked = stringResource(R.string.main_liked_songs)
     ListScreen(stringResource(R.string.app_name)) { look ->
         when {

@@ -112,7 +112,7 @@ fun NowPlayingScreen(
     onOpenMenu: (Song) -> Unit,
     onAddToPlaylist: (Song) -> Unit,
 ) {
-    val (state, controller) = rememberPlayerUiState(connection)
+    val (state, controller) = rememberPlayerUiState(connection, withQueue = false)
     val scope = rememberCoroutineScope()
     val song = controller?.currentMediaItem?.let(Media3QueuePlayer::songOf)
     val context = LocalContext.current
