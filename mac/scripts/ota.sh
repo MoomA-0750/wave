@@ -30,10 +30,13 @@ tmp=$(mktemp -d)
 mkdir "$tmp/Payload"
 cp -R "$app" "$tmp/Payload/"
 (cd "$tmp" && zip -qry "$name.ipa" Payload)
-mv "$tmp/$name.ipa" "$dir/$name.ipa"
+# 名前に版を入れて、古いものを掴まないようにする
+rm -f "$dir"/*.ipa
+ipa="$name-$build.ipa"
+mv "$tmp/$name.ipa" "$dir/$ipa"
 rm -rf "$tmp"
 
-# iPhone が読む manifest。IPA の URL に版を付けて、古いものを掴まないようにする
+# iPhone が読む manifest
 cat > "$dir/manifest.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -41,7 +44,7 @@ cat > "$dir/manifest.plist" <<EOF
 <key>items</key><array><dict>
 <key>assets</key><array><dict>
 <key>kind</key><string>software-package</string>
-<key>url</key><string>$base/$name.ipa?b=$build</string>
+<key>url</key><string>$base/$ipa</string>
 </dict></array>
 <key>metadata</key><dict>
 <key>bundle-identifier</key><string>$bid</string>
@@ -53,7 +56,8 @@ cat > "$dir/manifest.plist" <<EOF
 </dict></plist>
 EOF
 
-link="itms-services://?action=download-manifest&amp;url=$base/manifest.plist?b=$build"
+# manifest の URL は符号化して渡す
+link="itms-services://?action=download-manifest&amp;url=$(/usr/bin/python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$base/manifest.plist")"
 cat > "$dir/index.html" <<EOF
 <!doctype html>
 <html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -65,7 +69,7 @@ p{color:#888;font-size:14px}</style></head>
 <body><h1>$title</h1>
 <p>$ver（$build）・$(date '+%Y-%m-%d %H:%M')</p>
 <a class="b" href="$link">入れる</a>
-<p>押したあと、ホーム画面で入るのを待つ。</p>
+<p>Safari で開いて押す（ほかのアプリの中の画面では入れられない）。押したら確かめの窓が出るので「インストール」を選び、ホーム画面で入るのを待つ。</p>
 </body></html>
 EOF
 
