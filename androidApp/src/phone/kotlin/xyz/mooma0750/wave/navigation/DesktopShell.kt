@@ -4,6 +4,8 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -28,12 +30,19 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import xyz.mooma0750.wave.R
@@ -104,8 +113,36 @@ internal fun DesktopShell(
             setPanelHidden(false)
         }
     }
-    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceContainerLowest)) {
-        TopBar(nav, parts, aiShown = panelShown && side == SidePane.Ai) { toggleSide(SidePane.Ai) }
+    // 上の帯の検索の欄は中央のページと別の所にあるので、ほかを操作しても欄に残り続け、キーボードが閉じられない。
+    // 欄の外を押したら欄を離す（押した操作そのものは邪魔しない）
+    val focusManager = LocalFocusManager.current
+    var searchFocused by remember { mutableStateOf(false) }
+    var searchBounds by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    var rootBounds by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.surfaceContainerLowest)
+            .onGloballyPositioned { rootBounds = it }
+            .pointerInput(searchFocused) {
+                if (!searchFocused) return@pointerInput
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                    val field = searchBounds
+                    val root = rootBounds
+                    val inField =
+                        field != null && root != null && field.isAttached && root.isAttached &&
+                            field.localPositionOf(root, down.position).let { it.x in 0f..field.size.width.toFloat() && it.y in 0f..field.size.height.toFloat() }
+                    if (!inField) focusManager.clearFocus()
+                }
+            },
+    ) {
+        TopBar(
+            nav,
+            parts,
+            aiShown = panelShown && side == SidePane.Ai,
+            searchModifier = Modifier.onGloballyPositioned { searchBounds = it }.onFocusChanged { searchFocused = it.hasFocus },
+        ) { toggleSide(SidePane.Ai) }
         Row(
             Modifier
                 .weight(1f)
@@ -155,6 +192,7 @@ private fun TopBar(
     nav: AppNavigator,
     parts: DesktopParts,
     aiShown: Boolean,
+    searchModifier: Modifier,
     onAi: () -> Unit,
 ) {
     Box(Modifier.fillMaxWidth().statusBarsPadding().height(TOP_BAR_HEIGHT).padding(horizontal = 8.dp)) {
@@ -165,7 +203,7 @@ private fun TopBar(
                 stringResource(R.string.nav_home),
                 nav::goHome,
             )
-            parts.searchField(Modifier.widthIn(max = SEARCH_WIDTH).width(SEARCH_WIDTH))
+            parts.searchField(searchModifier.widthIn(max = SEARCH_WIDTH).width(SEARCH_WIDTH))
             // Claude は検索の欄の右（Mac・Windows と同じ）。右の欄に出す
             IconAction(R.drawable.ic_ai, stringResource(R.string.ai_title), onAi, active = aiShown)
         }

@@ -6,8 +6,11 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -34,7 +37,9 @@ import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -44,6 +49,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -148,6 +154,7 @@ fun SearchScreen(
  * デスクトップと同じ並びの上の帯の検索の欄（Mac・Windows と同じく窓の中央）。打ち始めるか押すと、中央に検索のページを開く
  * （[SearchScreen] と同じ ViewModel を使い、ページの側の欄は出さない）。
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun DesktopSearchField(
     viewModel: SearchViewModel,
@@ -155,14 +162,26 @@ fun DesktopSearchField(
     modifier: Modifier = Modifier,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    val keyboard = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
+    var focused by remember { mutableStateOf(false) }
+    // 戻るの操作でキーボードだけ閉じたときも欄を離す（欄に残ると、押すたびにキーボードがまた出る）
+    val imeVisible = WindowInsets.isImeVisible
+    var imeWasVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(imeVisible) {
+        if (imeWasVisible && !imeVisible && focused) focusManager.clearFocus()
+        imeWasVisible = imeVisible
+    }
     TextField(
         value = state.query,
         onValueChange = {
             viewModel.onQueryChange(it)
             onOpen()
         },
-        modifier = modifier.onFocusChanged { if (it.isFocused) onOpen() },
+        modifier =
+            modifier.onFocusChanged {
+                focused = it.isFocused
+                if (it.isFocused) onOpen()
+            },
         singleLine = true,
         placeholder = { Text(stringResource(R.string.search_hint)) },
         leadingIcon = { xyz.mooma0750.wave.ui.MenuIcon(R.drawable.ic_search) },
@@ -176,7 +195,7 @@ fun DesktopSearchField(
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
         keyboardActions =
             KeyboardActions(onSearch = {
-                keyboard?.hide()
+                focusManager.clearFocus()
                 viewModel.search()
             }),
     )
