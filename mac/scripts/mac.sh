@@ -13,6 +13,7 @@
 #   mac.sh ios-shot <ファイル> シミュレーターの画面を撮ってこの機械に持ってくる
 #   mac.sh ios-provision      Xcode に実機用の配布設定（wave・ウィジェット、1年）を作らせる
 #   mac.sh ios-device         実機向けに組み、配布設定で署名して、つないだ iPhone へ入れる
+#   mac.sh ios-ota            ios-device と同じに組んで署名し、tailnet のページに置いて iPhone へ iMessage で知らせる
 #   mac.sh ios-dev-cmd <命令>... つないだ iPhone の wave に開発用の命令を送る
 #   mac.sh ios-dev-log [行数]   つないだ iPhone の wave のログの末尾
 #   mac.sh ios-ipa [ファイル]  iPhone の実機向けに、署名していない wave.ipa を組んで持ってくる（既定は build/wave.ipa）
@@ -38,6 +39,14 @@ sign() {
   done
   ssh mac "cat ~/$remote/mac/build/sign.log; codesign -dv ~/$remote/mac/build/wave.app 2>&1 | grep TeamIdentifier"
 }
+# 実機向けに組み、GUI のセッションで本人の開発用の証明書と配布設定で署名する
+ios_signed() {
+  sync
+  ssh mac "cd $remote/mac && WAVE_DEBUG=1 $relay scripts/ios-bundle.sh device && rm -f build/ios-sign.log && open -a Terminal scripts/ios-sign.command"
+  until ssh mac "grep -q '^exit=' ~/$remote/mac/build/ios-sign.log 2>/dev/null"; do sleep 2; done
+  ssh mac "cat ~/$remote/mac/build/ios-sign.log" | tail -3
+  ssh mac "grep -q '^exit=0' ~/$remote/mac/build/ios-sign.log"
+}
 case "${1:-}" in
 sync) sync ;;
 build) sync; ssh mac "cd $remote/mac && swift build 2>&1" ;;
@@ -54,14 +63,14 @@ ios-log) ssh mac "tail -n ${2:-80} \"\$(xcrun simctl get_app_container wave-ipho
 ios-shot) ssh mac "xcrun simctl io wave-iphone screenshot /tmp/wave-ios.png >/dev/null 2>&1" && scp -q mac:/tmp/wave-ios.png "$2" ;;
 ios-device)
   # つないだ iPhone へ入れる（配布設定は ios-provision で作っておく）
-  sync
-  ssh mac "cd $remote/mac && WAVE_DEBUG=1 $relay scripts/ios-bundle.sh device && rm -f build/ios-sign.log && open -a Terminal scripts/ios-sign.command"
-  until ssh mac "grep -q '^exit=' ~/$remote/mac/build/ios-sign.log 2>/dev/null"; do sleep 2; done
-  ssh mac "cat ~/$remote/mac/build/ios-sign.log" | tail -3
-  ssh mac "grep -q '^exit=0' ~/$remote/mac/build/ios-sign.log || exit 1
-    d=\$(xcrun devicectl list devices 2>/dev/null | grep -E 'available \(paired\)|connected' | grep iPhone | grep -oE '[0-9A-F]{8}-[0-9A-F-]{27}' | head -1)
+  ios_signed
+  ssh mac "d=\$(xcrun devicectl list devices 2>/dev/null | grep -E 'available \(paired\)|connected' | grep iPhone | grep -oE '[0-9A-F]{8}-[0-9A-F-]{27}' | head -1)
     [ -n \"\$d\" ] || { echo 'iPhone がつながっていません（Mac の近くでロックを外すか、ケーブルでつなぐ）'; exit 1; }
     xcrun devicectl device install app --device \$d ~/$remote/mac/build/ios-device/wave.app 2>&1 | tail -3" ;;
+ios-ota)
+  # 組んで署名し、tailnet のページに置いて iPhone へ iMessage で知らせる（外からでもリンクで入れられる）
+  ios_signed
+  ssh mac "~/$remote/mac/scripts/ota.sh ~/$remote/mac/build/ios-device/wave.app wave wave" ;;
 ios-dev-cmd)
   # つないだ iPhone の wave に開発用の命令を送る（ios-device で入れた版だけ効く）
   shift; printf "%s\n" "$@" | ssh mac "cat > /tmp/wave-debug-command.txt && xcrun devicectl device copy to --device \$(xcrun devicectl list devices 2>/dev/null | grep -E 'available \(paired\)|connected' | grep iPhone | grep -oE '[0-9A-F]{8}-[0-9A-F-]{27}' | head -1) --domain-type appDataContainer --domain-identifier xyz.mooma0750.wave --source /tmp/wave-debug-command.txt --destination 'Library/Application Support/wave/debug-command.txt' >/dev/null" ;;

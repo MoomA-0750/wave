@@ -977,3 +977,10 @@
 - 先読みに失敗しても試し直していなかった
 - Android はキュー（PLAYLIST_CHANGED）とシャッフルの知らせで先読みし直す。Mac・iPhone・Windows は再生の見張りの中で 5 秒おきに、Linux はキューが変わるたびと 5 秒おきに、次の曲を先読みする（取ってある・取っている途中なら何もしない）。失敗は 15 秒置いて 3 回まで
 - 夜間に本人に聞けなかったので、推奨案で仮に決めた。曲と曲の間を詰める（次の曲を前もって再生器に入れる）のは手が大きいので入れていない
+
+## 2026-10-31 iOS 版を外からリンクで入れる（mac.sh ios-ota）
+
+- 本人は PC を持ち歩かないため、iOS 版を直しても、iPhone で使えるのは帰宅してからになっていた。家の Mac で組み、tailnet の HTTPS のページ（`itms-services://`）から入れる形にした。
+- 署名は `ios-device` と同じにした。Apple Development の証明書と、Xcode が作る Team Provisioning Profile を使う。iPhone 13 Pro の UDID は登録済みなので、Ad Hoc の証明書や xcodebuild archive は使わない。
+- TestFlight はやめた。Apple の処理を待つうえ、beta 版の Xcode で作ったものはアップロードを断られるおそれがある。
+- 置き場は Mac の `~/ota/<名前>/`。LaunchAgent の `local.ota-web`（127.0.0.1:8791）が出し、`tailscale serve --https=8444` で tailnet にだけ載せる。宛先が `~/ota/notify-to` にあれば imsg で知らせる。`ota.sh` は他のアプリでも使える。
