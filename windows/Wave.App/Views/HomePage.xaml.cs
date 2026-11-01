@@ -74,11 +74,14 @@ public sealed partial class HomePage : Page
         NewReleasesShelf.Items = releases.Select(ReleaseItem).ToList();
     }
 
-    /// <summary>新作をカードにする（アルバムは開く、動画は再生する。見つけて7日は補足に NEW を付ける）。</summary>
+    /// <summary>
+    /// 新作をカードにする（アルバムは開く、動画は再生する。見つけて7日は補足に NEW を付ける）。
+    /// 出元が怪しい新作（別人の曲がまとめられたものなど）は外さずに、補足に印を付ける（Android と同じ）。
+    /// </summary>
     public static HomeItem ReleaseItem(NewRelease r)
     {
         var fresh = !r.Seeded && DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - r.FoundAtEpochMs < 7L * 24 * 60 * 60 * 1000;
-        var subtitle = (fresh ? "NEW • " : "") + r.ArtistName;
+        var subtitle = (r.IsSuspect ? "⚠ " + L.T("出元が怪しい", "Suspicious source") + " • " : fresh ? "NEW • " : "") + r.ArtistName;
         return r.AlbumBrowseId is { } album
             ? new HomeItem.AlbumItem(new AlbumSummary(album, r.Title, subtitle, r.ThumbnailUrl))
             : new HomeItem.SongItem(new Song(r.VideoId!, r.Title, [new ArtistRef(r.ArtistName, r.ArtistId)], null, null, r.ThumbnailUrl));

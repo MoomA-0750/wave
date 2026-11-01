@@ -12,8 +12,12 @@ public sealed record NewRelease(
     string? ThumbnailUrl,
     long FoundAtEpochMs = 0,
     // 初めて見たときに、今年の作品として覚えたもの（知らせていない）
-    bool Seeded = false)
+    bool Seeded = false,
+    // 出元が怪しい点（ReleaseSuspicion.Name など。空なら確かめて何も無い、null ならまだ確かめていない）。印を付けて残す
+    List<string>? Suspect = null)
 {
+    public bool IsSuspect => Suspect is { Count: > 0 };
+
     public string Key => AlbumBrowseId ?? VideoId ?? Title;
 }
 
@@ -93,6 +97,13 @@ public sealed record ReleaseWatchState(Dictionary<string, HashSet<string>> Seen,
 
     public ReleaseWatchState Retain(ISet<string> artistIds) =>
         new(Seen.Where(kv => artistIds.Contains(kv.Key)).ToDictionary(kv => kv.Key, kv => kv.Value), Recent.Where(r => artistIds.Contains(r.ArtistId)).ToList());
+
+    /// <summary>出元をまだ確かめていない新作（アルバム・シングルだけ。新しい順）。</summary>
+    public List<NewRelease> Unchecked() => Recent.Where(r => r.Suspect is null && r.AlbumBrowseId is not null).ToList();
+
+    /// <summary>確かめた結果を覚える。</summary>
+    public ReleaseWatchState WithSuspicion(string albumBrowseId, List<string> reasons) =>
+        this with { Recent = Recent.Select(r => r.AlbumBrowseId == albumBrowseId ? r with { Suspect = reasons } : r).ToList() };
 
     public ReleaseWatchState Expire(long nowEpochMs, long maxAgeMs = RecentMaxAgeMs) => this with { Recent = Recent.Where(r => nowEpochMs - r.FoundAtEpochMs <= maxAgeMs && r.VideoId is null).ToList() }; // 動画は新作として扱わなくなった（前に覚えた分も外す）
 

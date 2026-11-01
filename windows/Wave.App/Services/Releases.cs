@@ -14,6 +14,9 @@ public sealed class Releases(DispatcherQueue ui)
     private const int MaxArtists = 300;
     private const int MaxNotifications = 10;
 
+    /// <summary>1回の確かめで出元を確かめる新作の数（前に覚えた分も少しずつ確かめる）。</summary>
+    private const int MaxSuspicionChecks = 20;
+
     /// <summary>新作を通知するのに要る、そのアーティストの高く評価した曲の数。</summary>
     private const int MinLikedToNotify = 3;
     private DispatcherQueueTimer? timer;
@@ -96,10 +99,14 @@ public sealed class Releases(DispatcherQueue ui)
                 // まとめて叩かない
                 await Task.Delay(300);
             }
+            state = await CheckSuspicionAsync(state, now);
             await File.WriteAllTextAsync(FilePath, state.Encode());
             Recent = state.Recent;
-            AppPaths.Log($"release watch artists={artists.Count} new={found.Count} recent={Recent.Count}");
+            // 出元が怪しい新作は棚に印を付けて残すが、通知は鳴らさない（Android と同じ）
+            var notable = found.Where(f => state.Recent.FirstOrDefault(r => r.AlbumBrowseId == f.AlbumBrowseId)?.IsSuspect != true).ToList();
+            AppPaths.Log($"release watch artists={artists.Count} new={found.Count} suspect={found.Count - notable.Count} recent={Recent.Count}");
             Changed?.Invoke();
+            found = notable;
             if (found.Count == 0) return;
             // 鳴らす通知は、よく聴くアーティスト（高く評価した曲が MinLikedToNotify 曲以上）の新作だけにする（Android と同じ。
             // Apple Music のお気に入りの新作の通知と同じ考え方）。ほかの新作はホームとアーティストのページの「新作」に並べるだけ
@@ -116,6 +123,27 @@ public sealed class Releases(DispatcherQueue ui)
         {
             checking = false;
         }
+    }
+
+    /// <summary>
+    /// まだ確かめていない新作の出元を確かめる（1曲目の YouTube の説明文と再生回数。ReleaseSuspicion。Android と同じ）。
+    /// 読めなかったものは次の回にまた確かめる。
+    /// </summary>
+    private static async Task<ReleaseWatchState> CheckSuspicionAsync(ReleaseWatchState state, long now)
+    {
+        foreach (var release in state.Unchecked().Take(MaxSuspicionChecks))
+        {
+            if (release.AlbumBrowseId is not { } albumId) continue;
+            var album = await AppServices.Music.AlbumAsync(albumId);
+            if (!album.IsOk || album.Value!.Songs.FirstOrDefault()?.VideoId is not { } videoId) continue;
+            var facts = await AppServices.Music.VideoFactsAsync(videoId);
+            if (!facts.IsOk) continue;
+            var reasons = ReleaseSuspicion.Reasons(release.ArtistName, facts.Value!, now);
+            if (reasons.Count > 0) AppPaths.Log($"release suspect album={albumId} reasons={string.Join(",", reasons)}");
+            state = state.WithSuspicion(albumId, reasons);
+            await Task.Delay(300);
+        }
+        return state;
     }
 
     private static async void Notify(NewRelease release)

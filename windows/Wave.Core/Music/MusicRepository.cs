@@ -281,6 +281,10 @@ public sealed class MusicRepository(InnerTubeClient client, LiveClient? live = n
     public async Task<ApiResult<List<ArtistPost>>> ArtistPostsAsync(string channelId, CancellationToken cancel = default) =>
         (await client.PostYouTubeAsync("browse", new JsonObject { ["browseId"] = channelId, ["params"] = PostsParams }, cancel)).Map(MusicParsers.ArtistPosts);
 
+    /// <summary>動画の説明文・再生回数・公開日（新作の出元の確かめに使う。ログインの情報を付けずに www.youtube.com から読む）。</summary>
+    public async Task<ApiResult<VideoFacts>> VideoFactsAsync(string videoId, CancellationToken cancel = default) =>
+        (await client.PostYouTubeAsync("next", new JsonObject { ["videoId"] = videoId }, cancel)).Map(MusicParsers.VideoFacts);
+
     /// <summary>チャンネルの「投稿」タブを開く params。</summary>
     private const string PostsParams = "EgVwb3N0c_IGBAoCSgA=";
 

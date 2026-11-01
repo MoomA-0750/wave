@@ -337,6 +337,18 @@ public static partial class MusicParsers
         _ => false,
     };
 
+    /// <summary>YouTube（www.youtube.com）の動画のページ（WEB の next）から、説明文・再生回数・公開日を読む（Android と同じ）。</summary>
+    public static VideoFacts VideoFacts(JsonNode root)
+    {
+        var primary = root.FindAll("videoPrimaryInfoRenderer").FirstOrDefault();
+        var secondary = root.FindAll("videoSecondaryInfoRenderer").FirstOrDefault();
+        var views = new string((primary.Path("viewCount", "videoViewCountRenderer", "viewCount", "simpleText").Str() ?? "").Where(char.IsAsciiDigit).ToArray());
+        return new VideoFacts(
+            secondary.Path("attributedDescription", "content").Str(),
+            long.TryParse(views, out var count) ? count : null,
+            primary.Path("dateText", "simpleText").Str());
+    }
+
     /// <summary>チャンネルの「投稿」タブの投稿（新しい順。Android と同じ）。</summary>
     public static List<ArtistPost> ArtistPosts(JsonNode root) =>
         root.FindAll("backstagePostRenderer").Select(post =>
