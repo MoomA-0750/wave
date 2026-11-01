@@ -21,6 +21,8 @@ const MAX_NOTIFICATIONS: usize = 10;
 /// 新作を通知するのに要る、そのアーティストの高く評価した曲の数。
 const MIN_LIKED_TO_NOTIFY: usize = 3;
 const MAX_LIKED_PAGES: usize = 50;
+/// 1回の確かめで出元を確かめる新作の数（前に覚えた分も少しずつ確かめる）。
+const MAX_SUSPICION_CHECKS: usize = 20;
 
 pub struct Releases {
     repo: MusicRepository,
@@ -103,6 +105,21 @@ impl Releases {
                     // まとめて叩かない
                     tokio::time::sleep(Duration::from_millis(300)).await;
                 }
+                // まだ確かめていない新作の出元を確かめる（1曲目の YouTube の説明文と再生回数。読めなかったものは次の回に）
+                for release in state.unchecked().into_iter().take(MAX_SUSPICION_CHECKS) {
+                    let Some(album_id) = release.album_browse_id.clone() else { continue };
+                    let Some(video_id) = repo.album(&album_id).await.ok().and_then(|a| a.songs.first().map(|s| s.video_id.clone())) else { continue };
+                    let Ok(facts) = repo.video_facts(&video_id).await else { continue };
+                    let reasons = wave_core::music::suspicion::reasons(&release.artist_name, &facts, now);
+                    if !reasons.is_empty() {
+                        eprintln!("release suspect album={album_id} reasons={reasons:?}");
+                    }
+                    state = state.with_suspicion(&album_id, reasons);
+                    tokio::time::sleep(Duration::from_millis(300)).await;
+                }
+                // 出元が怪しい新作は棚に印を付けて残すが、通知は鳴らさない
+                let suspect = |r: &NewRelease| state.recent.iter().any(|s| s.album_browse_id == r.album_browse_id && s.suspect.as_ref().is_some_and(|x| !x.is_empty()));
+                let found: Vec<NewRelease> = found.into_iter().filter(|r| !suspect(r)).collect();
                 let liked = if found.is_empty() { Vec::new() } else { liked_songs(&repo).await };
                 Some((state, found, liked, artists.len()))
             })

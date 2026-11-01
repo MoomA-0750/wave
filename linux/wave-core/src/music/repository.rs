@@ -423,6 +423,12 @@ impl MusicRepository {
         Ok(parsers::artist_posts(&root))
     }
 
+    /// 動画の説明文・再生回数・公開日（新作の出元の確かめに使う。Android と同じ）。www.youtube.com へ認証情報なしで送る。
+    pub async fn video_facts(&self, video_id: &str) -> ApiResult<super::suspicion::VideoFacts> {
+        let root = self.live.next(video_id).await.ok_or(Failure::Network)?;
+        Ok(super::suspicion::video_facts(&root))
+    }
+
     /// アーティスト（チャンネル）を登録する・登録を外す（Windows・Android と同じ）。ログイン必須。
     pub async fn set_subscribed(&self, channel_id: &str, subscribe: bool) -> ApiResult<()> {
         if !self.client.is_logged_in() {

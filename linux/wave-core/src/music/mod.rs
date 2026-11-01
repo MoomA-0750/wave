@@ -10,3 +10,4 @@ pub mod parsers;
 pub mod podcast;
 pub mod releases;
 pub mod repository;
+pub mod suspicion;

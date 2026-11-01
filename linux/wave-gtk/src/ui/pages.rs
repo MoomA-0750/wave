@@ -47,7 +47,9 @@ pub fn home(app: &Rc<App>) -> adw::NavigationPage {
                     .into_iter()
                     .take(wave_core::music::releases::NEW_RELEASES_COUNT)
                     .filter_map(|r| {
-                        Some(HomeItem::Album(wave_core::music::models::AlbumSummary { browse_id: r.album_browse_id?, title: r.title, subtitle: Some(r.artist_name), thumbnail_url: r.thumbnail_url }))
+                        // 出元が怪しい新作（別人の曲がまとめられたものなど）は外さずに印を付ける
+                        let subtitle = if r.suspect.as_ref().is_some_and(|s| !s.is_empty()) { format!("出元が怪しい • {}", r.artist_name) } else { r.artist_name };
+                        Some(HomeItem::Album(wave_core::music::models::AlbumSummary { browse_id: r.album_browse_id?, title: r.title, subtitle: Some(subtitle), thumbnail_url: r.thumbnail_url }))
                     })
                     .collect();
                 if !subscribed.is_empty() {
@@ -911,7 +913,10 @@ pub fn artist(app: &Rc<App>, browse_id: &str, name: &str) -> adw::NavigationPage
                     .recent()
                     .into_iter()
                     .filter(|r| r.artist_id == artist_id)
-                    .filter_map(|r| Some(HomeItem::Album(wave_core::music::models::AlbumSummary { browse_id: r.album_browse_id?, title: r.title, subtitle: None, thumbnail_url: r.thumbnail_url })))
+                    .filter_map(|r| {
+                        let subtitle = r.suspect.as_ref().is_some_and(|s| !s.is_empty()).then(|| "出元が怪しい".to_string());
+                        Some(HomeItem::Album(wave_core::music::models::AlbumSummary { browse_id: r.album_browse_id?, title: r.title, subtitle, thumbnail_url: r.thumbnail_url }))
+                    })
                     .collect();
                 if !fresh.is_empty() {
                     column.append(&shelf_widget(&app, "新作", None, fresh));

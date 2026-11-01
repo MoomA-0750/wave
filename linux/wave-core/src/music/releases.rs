@@ -33,6 +33,9 @@ pub struct NewRelease {
     /// 初めて見たときに、今年の作品として覚えたもの（知らせていない）。
     #[serde(default)]
     pub seeded: bool,
+    /// 出元が怪しい点（suspicion の NAME など。空なら確かめて何も無い、None ならまだ確かめていない）。印を付けて残す。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub suspect: Option<Vec<String>>,
 }
 
 impl NewRelease {
@@ -76,6 +79,7 @@ impl ReleaseWatchState {
             thumbnail_url: a.thumbnail_url.clone(),
             found_at_epoch_ms: now_epoch_ms,
             seeded,
+            suspect: None,
         };
         let this_year = year.map(|y| y.to_string());
         let of_this_year = |a: &AlbumSummary| this_year.as_ref().is_none_or(|y| a.subtitle.as_deref().is_some_and(|s| s.contains(y.as_str())));
@@ -113,6 +117,20 @@ impl ReleaseWatchState {
             seen: self.seen.iter().filter(|(k, _)| artist_ids.contains(*k)).map(|(k, v)| (k.clone(), v.clone())).collect(),
             recent: self.recent.iter().filter(|r| artist_ids.contains(&r.artist_id)).cloned().collect(),
         }
+    }
+
+    /// 出元をまだ確かめていない新作（アルバム・シングルだけ。新しい順）。
+    pub fn unchecked(&self) -> Vec<NewRelease> {
+        self.recent.iter().filter(|r| r.suspect.is_none() && r.album_browse_id.is_some()).cloned().collect()
+    }
+
+    /// 確かめた結果を覚える。
+    pub fn with_suspicion(&self, album_browse_id: &str, reasons: Vec<String>) -> Self {
+        let mut next = self.clone();
+        for r in next.recent.iter_mut().filter(|r| r.album_browse_id.as_deref() == Some(album_browse_id)) {
+            r.suspect = Some(reasons.clone());
+        }
+        next
     }
 
     /// 古い新作（と、前に覚えた動画）を外す。
@@ -261,6 +279,7 @@ mod tests {
             thumbnail_url: None,
             found_at_epoch_ms: 0,
             seeded: false,
+            suspect: None,
         };
         let releases = vec![r("A", "a1"), r("A", "a2"), r("A", "a3"), r("B", "b1")];
         assert_eq!(diversified(&releases, 2).iter().map(|r| r.title.as_str()).collect::<Vec<_>>(), ["a1", "b1", "a2"]);
@@ -275,6 +294,28 @@ mod tests {
         assert!(third.recent.is_empty());
         assert_eq!(listed(&second.recent, "UC1", &page(&["MP4new", "MP5new"], &[]), Some(2026), None), second.recent);
         assert_eq!(listed(&second.recent, "UC2", &page(&["MPold"], &[]), Some(2026), None), second.recent);
+    }
+
+    #[test]
+    fn suspicion_is_remembered_per_release() {
+        let r = |album: Option<&str>, video: Option<&str>, suspect: Option<Vec<String>>| NewRelease {
+            artist_id: "UC1".into(),
+            artist_name: "A".into(),
+            title: "t".into(),
+            album_browse_id: album.map(str::to_string),
+            video_id: video.map(str::to_string),
+            thumbnail_url: None,
+            found_at_epoch_ms: 0,
+            seeded: false,
+            suspect,
+        };
+        let state = ReleaseWatchState { seen: HashMap::new(), recent: vec![r(Some("MP1"), None, None), r(Some("MP2"), None, Some(vec![])), r(None, Some("v1"), None)] };
+        assert_eq!(state.unchecked().iter().map(|r| r.key()).collect::<Vec<_>>(), ["MP1"]);
+        let next = state.with_suspicion("MP1", vec!["name".into()]);
+        assert!(next.unchecked().is_empty());
+        assert_eq!(next.recent[0].suspect, Some(vec!["name".to_string()]));
+        let decoded: ReleaseWatchState = serde_json::from_str(&serde_json::to_string(&next).unwrap()).unwrap();
+        assert_eq!(decoded, next);
     }
 
     #[test]

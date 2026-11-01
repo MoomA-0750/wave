@@ -231,6 +231,21 @@ impl LiveClient {
         self.send_json(request).await
     }
 
+    /// YouTube の動画のページ（WEB の next。説明文・再生回数）。認証情報は送らない。読めなければ None。
+    pub async fn next(&self, video_id: &str) -> Option<Value> {
+        let body = json!({
+            "context": { "client": { "clientName": "WEB", "clientVersion": WEB_CLIENT_VERSION, "hl": self.hl, "gl": self.gl } },
+            "videoId": video_id,
+        });
+        let request = self
+            .http
+            .post("https://www.youtube.com/youtubei/v1/next?prettyPrint=false")
+            .header("user-agent", crate::innertube::USER_AGENT)
+            .header("origin", "https://www.youtube.com")
+            .json(&body);
+        self.send_json(request).await
+    }
+
     /// ライブの HLS（音を聴くための1本、video なら映像を見るための1本の媒体プレイリスト）を解決する。
     pub async fn resolve(&self, video_id: &str, video: bool) -> Result<LiveStream, LiveFailure> {
         let body = json!({
