@@ -178,6 +178,8 @@ struct SongPageView: View {
                 .frame(maxWidth: 480, alignment: .leading)
             }
             .padding(EdgeInsets(top: 0, leading: 12, bottom: 24, trailing: 12))
+            // 中身の幅で縮むと、背景のグラデーションがその幅で切れる
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .background(alignment: .top) {
             LinearGradient(colors: [(gradient ?? .clear).opacity(0.6), .clear], startPoint: .top, endPoint: .bottom).frame(height: 360)

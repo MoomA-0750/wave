@@ -27,6 +27,9 @@ enum DebugCommands {
             if let id = arg.isEmpty ? player.current?.artists.first(where: { $0.browseId != nil })?.browseId : arg { nav.artist(id) }
         case "album":
             if let id = arg.isEmpty ? player.current?.album?.browseId : arg { nav.album(id) }
+        case "song":
+            // 今の曲の画面
+            if let song = player.current { nav.song(song) }
         case "back": nav.goBack()
         case "podcast-play":
             // 番組のページでエピソードを押したのと同じ流し方（引数は「browseId [番号]」）
