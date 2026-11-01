@@ -3,7 +3,12 @@ package xyz.mooma0750.wave.navigation
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import android.graphics.Rect
 import android.os.Build
+import android.util.Log
+import android.view.View
+import android.view.ViewTreeObserver
+import androidx.annotation.RequiresApi
 import android.view.WindowInsetsController
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandHorizontally
@@ -59,6 +64,7 @@ import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import xyz.mooma0750.wave.R
+import xyz.mooma0750.wave.WaveApplication
 import xyz.mooma0750.wave.ui.IconAction
 import xyz.mooma0750.wave.ui.NoticeHost
 
@@ -259,15 +265,25 @@ private fun captionSpace(): CaptionSpace? {
         onDispose { window.insetsController?.setSystemBarsAppearance(0, mask) }
     }
     val density = LocalDensity.current
-    // 帯の高さと窓の幅が変わったら読み直す（OS のボタンの場所は右寄せなので幅で動く）
     val top = WindowInsets.captionBar.getTop(density)
     val width = LocalWindowInfo.current.containerSize.width
+    // OS のボタンの場所は、帯の高さや窓の幅が変わらなくても動く（Galaxy でボタンを縮めたときなど）ので、組み直しのたびに読み直す
+    var rects by remember(view) { mutableStateOf(captionRects(view)) }
+    DisposableEffect(view) {
+        val listener = ViewTreeObserver.OnGlobalLayoutListener { captionRects(view).let { if (it != rects) rects = it } }
+        view.viewTreeObserver.addOnGlobalLayoutListener(listener)
+        onDispose { view.viewTreeObserver.removeOnGlobalLayoutListener(listener) }
+    }
+    LaunchedEffect(top, width, rects) { Log.i(WaveApplication.LOG_TAG, "caption top=$top width=$width rects=$rects") }
     if (top == 0) return null
-    val rects = view.rootWindowInsets?.getBoundingRects(android.view.WindowInsets.Type.captionBar()).orEmpty()
-    val start = rects.filter { it.centerX() < width / 2 }.maxOfOrNull { it.right } ?: 0
-    val end = rects.filter { it.centerX() >= width / 2 }.minOfOrNull { it.left }?.let { width - it } ?: 0
-    return with(density) { CaptionSpace(top.toDp(), start.coerceAtLeast(0).toDp(), end.coerceAtLeast(0).toDp()) }
+    // 左右の端に寄ったものだけを避ける。窓の幅の大半を覆うもの（縮めたボタンなどで返ることがある）は避けると中身が消えるので見ない
+    val start = rects.filter { it.right <= width * 2 / 5 }.maxOfOrNull { it.right } ?: 0
+    val end = rects.filter { it.left >= width * 3 / 5 }.minOfOrNull { width - it.left } ?: 0
+    return with(density) { CaptionSpace(top.toDp(), start.coerceIn(0, width / 3).toDp(), end.coerceIn(0, width / 3).toDp()) }
 }
+
+@RequiresApi(Build.VERSION_CODES.VANILLA_ICE_CREAM)
+private fun captionRects(view: View): List<Rect> = view.rootWindowInsets?.getBoundingRects(android.view.WindowInsets.Type.captionBar()).orEmpty()
 
 private tailrec fun Context.findActivity(): Activity? =
     when (this) {
