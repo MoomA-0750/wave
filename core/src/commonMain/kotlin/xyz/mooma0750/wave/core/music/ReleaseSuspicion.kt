@@ -30,7 +30,7 @@ object ReleaseSuspicion {
     /** 名義がアーティスト名に「公式」などを足しただけのもの（なりすまし）。 */
     const val NAME = "name"
 
-    /** 作詞・作曲がアーティスト名でない名義そのまま（個人の名前が無い）。 */
+    /** 作詞・作曲が、アーティスト名に何かを足した名義そのまま（個人の名前が無い。ボカロ曲・タイアップで作曲者が名義に並ぶのは除く）。 */
     const val WRITER = "writer"
 
     /** 公開から日が経っているのに、ほとんど再生されていない。 */
@@ -78,7 +78,7 @@ object ReleaseSuspicion {
             val names = credits.artists.map(::key)
             if (names.any { it != page && it.startsWith(page) && it.removePrefix(page) in NAME_SUFFIXES }) reasons += NAME
             val writers = credits.writers.map(::key)
-            if (writers.isNotEmpty() && writers.all { it in names && it != page }) reasons += WRITER
+            if (writers.isNotEmpty() && writers.all { it in names && it != page && page in it }) reasons += WRITER
         }
         val released = epochDay(credits?.releasedOn) ?: epochDay(facts.publishedText)
         val views = facts.viewCount

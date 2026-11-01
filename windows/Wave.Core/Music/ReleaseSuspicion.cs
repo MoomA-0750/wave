@@ -23,7 +23,7 @@ public static class ReleaseSuspicion
     /// <summary>名義がアーティスト名に「公式」などを足しただけのもの（なりすまし）。</summary>
     public const string Name = "name";
 
-    /// <summary>作詞・作曲がアーティスト名でない名義そのまま（個人の名前が無い）。</summary>
+    /// <summary>作詞・作曲が、アーティスト名に何かを足した名義そのまま（個人の名前が無い。ボカロ曲・タイアップで作曲者が名義に並ぶのは除く）。</summary>
     public const string Writer = "writer";
 
     /// <summary>公開から日が経っているのに、ほとんど再生されていない。</summary>
@@ -73,7 +73,7 @@ public static class ReleaseSuspicion
             var names = credits.Artists.Select(Key).ToList();
             if (names.Any(n => n != page && n.StartsWith(page, StringComparison.Ordinal) && NameSuffixes.Contains(n[page.Length..]))) reasons.Add(Name);
             var writers = credits.Writers.Select(Key).ToList();
-            if (writers.Count > 0 && writers.All(w => names.Contains(w) && w != page)) reasons.Add(Writer);
+            if (writers.Count > 0 && writers.All(w => names.Contains(w) && w != page && w.Contains(page))) reasons.Add(Writer);
         }
         var released = EpochDay(credits?.ReleasedOn) ?? EpochDay(facts.PublishedText);
         if (facts.ViewCount is { } views && views < MinViews && released is { } day && nowEpochMs / DayMs - day >= ViewsGraceDays) reasons.Add(Views);
