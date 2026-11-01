@@ -73,6 +73,12 @@ fun NewReleaseRow(
                                 Text(stringResource(R.string.releases_new_badge), Modifier.padding(horizontal = 6.dp, vertical = 2.dp), style = MaterialTheme.typography.labelSmallEmphasized)
                             }
                         }
+                        // 出元が怪しい新作（別人の曲がまとめられたものなど）は外さずに印を付ける
+                        if (!release.suspect.isNullOrEmpty()) {
+                            Surface(Modifier.align(Alignment.BottomStart).padding(6.dp), shape = MaterialTheme.shapes.extraSmall, color = MaterialTheme.colorScheme.errorContainer) {
+                                Text(stringResource(R.string.releases_suspect_badge), Modifier.padding(horizontal = 6.dp, vertical = 2.dp), style = MaterialTheme.typography.labelSmallEmphasized, color = MaterialTheme.colorScheme.onErrorContainer)
+                            }
+                        }
                     }
                     Text(release.title, Modifier.padding(top = 6.dp), maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium)
                     val kind = if (release.videoId != null) stringResource(R.string.releases_kind_video) else stringResource(R.string.releases_kind_release)

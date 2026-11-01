@@ -14,8 +14,10 @@ import kotlinx.coroutines.withTimeoutOrNull
 import xyz.mooma0750.wave.WaveApplication
 import xyz.mooma0750.wave.core.auth.AuthManager
 import xyz.mooma0750.wave.core.auth.AuthState
+import xyz.mooma0750.wave.core.music.ChannelPostsClient
 import xyz.mooma0750.wave.core.music.MusicRepository
 import xyz.mooma0750.wave.core.music.NewRelease
+import xyz.mooma0750.wave.core.music.ReleaseSuspicion
 import xyz.mooma0750.wave.core.music.ReleaseWatchState
 import xyz.mooma0750.wave.core.session.CallResult
 import xyz.mooma0750.wave.settings.AppSettings
@@ -30,6 +32,7 @@ class Releases(
     private val music: MusicRepository,
     private val auth: AuthManager,
     private val settings: AppSettings,
+    private val youtube: ChannelPostsClient,
 ) {
     private val file = AtomicFile(File(context.noBackupFilesDir, "release-watch.json"))
     private val lock = Mutex()
@@ -95,13 +98,37 @@ class Releases(
                 // まとめて叩かない
                 delay(300)
             }
+            watch = checkSuspicion(watch, now)
             write(watch)
             mutableRecent.value = watch.recent
             loaded = true
-            Log.i(WaveApplication.LOG_TAG, "release watch artists=${artists.size} new=${found.size} recent=${watch.recent.size}")
-            onFound(found)
+            // 出元が怪しい新作は棚に印を付けて残すが、通知は鳴らさない
+            val notable = found.filter { release -> watch.recent.firstOrNull { it.albumBrowseId == release.albumBrowseId }?.suspect.isNullOrEmpty() }
+            Log.i(WaveApplication.LOG_TAG, "release watch artists=${artists.size} new=${found.size} suspect=${found.size - notable.size} recent=${watch.recent.size}")
+            onFound(notable)
             true
         }
+    }
+
+    /**
+     * まだ確かめていない新作の出元を確かめる（1曲目の YouTube の説明文と再生回数。ReleaseSuspicion）。
+     * 読めなかったものは次の回にまた確かめる。
+     */
+    private suspend fun checkSuspicion(
+        state: ReleaseWatchState,
+        now: Long,
+    ): ReleaseWatchState {
+        var watch = state
+        for (release in state.unchecked().take(MAX_SUSPICION_CHECKS)) {
+            val albumId = release.albumBrowseId ?: continue
+            val videoId = (music.album(albumId) as? CallResult.Ok)?.value?.songs?.firstOrNull()?.videoId ?: continue
+            val facts = youtube.videoFacts(videoId) ?: continue
+            val reasons = ReleaseSuspicion.reasons(release.artistName, facts, now)
+            if (reasons.isNotEmpty()) Log.i(WaveApplication.LOG_TAG, "release suspect album=$albumId reasons=$reasons")
+            watch = watch.withSuspicion(albumId, reasons)
+            delay(300)
+        }
+        return watch
     }
 
     /** ログアウト。 */
@@ -112,5 +139,8 @@ class Releases(
 
     private companion object {
         const val MAX_ARTISTS = 300
+
+        /** 1回の確かめで出元を確かめる新作の数（前に覚えた分も少しずつ確かめる）。 */
+        const val MAX_SUSPICION_CHECKS = 20
     }
 }

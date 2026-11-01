@@ -397,7 +397,7 @@ class AppContainer(
         }
 
     /** 登録したアーティストの新作。 */
-    val releases = xyz.mooma0750.wave.releases.Releases(appContext, music, authManager, settings)
+    val releases = xyz.mooma0750.wave.releases.Releases(appContext, music, authManager, settings, channelPosts)
 
     /** Claude の中継へ直接送る（スマホ）。 */
     private val directAiTransport by lazy { xyz.mooma0750.wave.ai.DirectAiTransport(settings) }

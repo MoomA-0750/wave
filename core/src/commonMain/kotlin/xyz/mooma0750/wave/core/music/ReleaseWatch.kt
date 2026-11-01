@@ -18,6 +18,8 @@ data class NewRelease(
     val foundAtEpochMs: Long = 0,
     /** 初めて見たときに、今年の作品として覚えたもの（知らせていない）。 */
     val seeded: Boolean = false,
+    /** 出元が怪しい点（ReleaseSuspicion の NAME など。空なら確かめて何も無い、null ならまだ確かめていない）。印を付けて残す。 */
+    val suspect: List<String>? = null,
 )
 
 /**
@@ -121,6 +123,15 @@ data class ReleaseWatchState(
         val all = (added + recent).distinctBy { it.albumBrowseId ?: it.videoId }
         return copy(recent = (all.filterNot { it.seeded } + all.filter { it.seeded }).take(MAX_RECENT))
     }
+
+    /** 出元をまだ確かめていない新作（アルバム・シングルだけ。新しい順）。 */
+    fun unchecked(): List<NewRelease> = recent.filter { it.suspect == null && it.albumBrowseId != null }
+
+    /** 確かめた結果を覚える。 */
+    fun withSuspicion(
+        albumBrowseId: String,
+        reasons: List<String>,
+    ): ReleaseWatchState = copy(recent = recent.map { if (it.albumBrowseId == albumBrowseId) it.copy(suspect = reasons) else it })
 
     /** 古くなった新作を外す。 */
     fun expire(

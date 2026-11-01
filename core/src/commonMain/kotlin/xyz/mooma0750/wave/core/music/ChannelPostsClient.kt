@@ -26,6 +26,18 @@ class ChannelPostsClient(
 ) {
     /** 新しい順の投稿。読めなければ null。 */
     suspend fun posts(channelId: String): List<ArtistPost>? =
+        call("browse") {
+            put("browseId", channelId)
+            put("params", POSTS_PARAMS)
+        }?.let(MusicParsers::artistPosts)
+
+    /** 動画の説明文・再生回数・公開日（新作の出元の確かめに使う）。読めなければ null。 */
+    suspend fun videoFacts(videoId: String): VideoFacts? = call("next") { put("videoId", videoId) }?.let(MusicParsers::videoFacts)
+
+    private suspend fun call(
+        endpoint: String,
+        params: kotlinx.serialization.json.JsonObjectBuilder.() -> Unit,
+    ): JsonObject? =
         try {
             val body =
                 buildJsonObject {
@@ -37,16 +49,15 @@ class ChannelPostsClient(
                             put("gl", gl)
                         }
                     }
-                    put("browseId", channelId)
-                    put("params", POSTS_PARAMS)
+                    params()
                 }
             val response =
-                http.post("https://www.youtube.com/youtubei/v1/browse?prettyPrint=false") {
+                http.post("https://www.youtube.com/youtubei/v1/$endpoint?prettyPrint=false") {
                     contentType(ContentType.Application.Json)
                     header(HttpHeaders.Origin, "https://www.youtube.com")
                     setBody(body.toString())
                 }
-            if (response.status.value !in 200..299) null else MusicParsers.artistPosts(json.parseToJsonElement(response.bodyAsText()) as JsonObject)
+            if (response.status.value !in 200..299) null else json.parseToJsonElement(response.bodyAsText()) as JsonObject
         } catch (cancel: CancellationException) {
             throw cancel
         } catch (_: Exception) {

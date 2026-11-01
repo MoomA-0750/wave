@@ -388,6 +388,18 @@ internal object MusicParsers {
             ArtistPost(id, text, textOf(post.path("publishedTimeText")), image)
         }.distinctBy { it.postId }
 
+    /** YouTube（www.youtube.com）の動画のページ（WEB の next）から、説明文・再生回数・公開日を読む。 */
+    fun videoFacts(root: JsonObject): VideoFacts {
+        val primary = findAll(root, "videoPrimaryInfoRenderer").firstOrNull()
+        val secondary = findAll(root, "videoSecondaryInfoRenderer").firstOrNull()
+        val views = primary.path("viewCount", "videoViewCountRenderer", "viewCount", "simpleText").string()
+        return VideoFacts(
+            description = secondary.path("attributedDescription", "content").string(),
+            viewCount = views?.filter { it.isDigit() }?.takeIf { it.isNotEmpty() }?.toLongOrNull(),
+            publishedText = primary.path("dateText", "simpleText").string(),
+        )
+    }
+
     fun editPlaylistStatus(root: JsonObject): String? = root.path("status").string()
 
     /**

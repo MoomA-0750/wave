@@ -181,6 +181,7 @@
     <string name="settings_language_japanese" translatable="false">日本語</string>
     <string name="settings_language_english" translatable="false">English</string>
     <string name="releases_new_badge">NEW</string>
+    <string name="releases_suspect_badge">Suspicious source</string>
     <string name="releases_kind_video">Video</string>
     <string name="releases_kind_release">Release</string>
     <string name="releases_home_title">New from artists you subscribe to</string>

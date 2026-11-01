@@ -109,7 +109,7 @@ fun ReleasesScreen(
     ListScreen(stringResource(R.string.releases_home_title)) { look ->
         if (releases.isEmpty()) item { MessageRow(look, stringResource(R.string.wear_no_releases)) }
         itemsIndexed(releases, key = { index, _ -> "r-$index" }) { _, release ->
-            EntryRow(look, release.title, release.artistName, release.thumbnailUrl) {
+            EntryRow(look, release.title, if (release.suspect.isNullOrEmpty()) release.artistName else "${release.artistName} • ${stringResource(R.string.releases_suspect_badge)}", release.thumbnailUrl) {
                 val album = release.albumBrowseId
                 if (album != null) actions.openAlbum(AlbumRef(release.title, album)) else actions.openArtist(ArtistRef(release.artistName, release.artistId))
             }
@@ -435,7 +435,7 @@ fun ArtistScreen(
         }
         newReleases.forEach { release ->
             item(key = "new-${release.albumBrowseId}-${release.videoId}") {
-                EntryRow(look, release.title, stringResource(R.string.releases_new_badge), release.thumbnailUrl) {
+                EntryRow(look, release.title, stringResource(if (release.suspect.isNullOrEmpty()) R.string.releases_new_badge else R.string.releases_suspect_badge), release.thumbnailUrl) {
                     release.albumBrowseId?.let { onOpenAlbum(it, release.title) }
                 }
             }
