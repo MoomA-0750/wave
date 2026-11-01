@@ -1,15 +1,23 @@
 package xyz.mooma0750.wave.navigation
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.os.Build
+import android.view.WindowInsetsController
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.background
+import androidx.compose.foundation.systemGestureExclusion
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.captionBar
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.consumeWindowInsets
@@ -44,6 +52,11 @@ import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import xyz.mooma0750.wave.R
 import xyz.mooma0750.wave.ui.IconAction
@@ -148,6 +161,7 @@ internal fun DesktopShell(
                 .weight(1f)
                 .fillMaxWidth()
                 .consumeWindowInsets(WindowInsets.statusBars)
+                .consumeWindowInsets(WindowInsets.captionBar)
                 .consumeWindowInsets(WindowInsets.navigationBars)
                 .padding(horizontal = PANE_GAP),
             horizontalArrangement = Arrangement.spacedBy(PANE_GAP),
@@ -195,9 +209,21 @@ private fun TopBar(
     searchModifier: Modifier,
     onAi: () -> Unit,
 ) {
-    Box(Modifier.fillMaxWidth().statusBarsPadding().height(TOP_BAR_HEIGHT).padding(horizontal = 8.dp)) {
-        if (nav.canGoBack) IconAction(R.drawable.ic_arrow_back, stringResource(R.string.ui_back), nav::back, Modifier.align(Alignment.CenterStart))
-        Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    val caption = captionSpace()
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .then(
+                if (caption == null) {
+                    Modifier.statusBarsPadding().height(TOP_BAR_HEIGHT)
+                } else {
+                    Modifier.height(maxOf(TOP_BAR_HEIGHT, caption.height)).padding(start = caption.start, end = caption.end)
+                },
+            ).padding(horizontal = 8.dp),
+    ) {
+        // 窓の帯に載せたときは、押せるものだけを OS の窓の移動から外す（空いた所は掴んで窓を動かせる）
+        if (nav.canGoBack) IconAction(R.drawable.ic_arrow_back, stringResource(R.string.ui_back), nav::back, Modifier.align(Alignment.CenterStart).systemGestureExclusion())
+        Row(Modifier.align(Alignment.Center).systemGestureExclusion(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             IconAction(
                 if (nav.tab == Tab.Home && nav.current == null) R.drawable.ic_home else R.drawable.ic_home_outline,
                 stringResource(R.string.nav_home),
@@ -207,9 +233,48 @@ private fun TopBar(
             // Claude は検索の欄の右（Mac・Windows と同じ）。右の欄に出す
             IconAction(R.drawable.ic_ai, stringResource(R.string.ai_title), onAi, active = aiShown)
         }
-        Box(Modifier.align(Alignment.CenterEnd)) { parts.account() }
+        Box(Modifier.align(Alignment.CenterEnd).systemGestureExclusion()) { parts.account() }
     }
 }
+
+/** 窓の帯（デスクトップの窓のタイトルの帯）の高さと、OS のボタン（閉じる・最大化など）を避ける左右の幅。 */
+private class CaptionSpace(val height: Dp, val start: Dp, val end: Dp)
+
+/**
+ * デスクトップの窓（Android 15 から）では、OS の窓の帯の地を透かして上の帯をそこに載せる（Mac・Windows で検索の欄がタイトルの帯にあるのと同じ）。
+ * 窓の帯が無いとき（全画面・分割など）は null。
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun captionSpace(): CaptionSpace? {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) return null
+    val view = LocalView.current
+    val window = remember(view) { view.context.findActivity()?.window } ?: return null
+    // 帯の上の OS のボタンは、地が明るければ暗い色で描かせる
+    val lightBar = MaterialTheme.colorScheme.surfaceContainerLowest.luminance() > 0.5f
+    DisposableEffect(window, lightBar) {
+        val mask = WindowInsetsController.APPEARANCE_TRANSPARENT_CAPTION_BAR_BACKGROUND or WindowInsetsController.APPEARANCE_LIGHT_CAPTION_BARS
+        val flags = WindowInsetsController.APPEARANCE_TRANSPARENT_CAPTION_BAR_BACKGROUND or (if (lightBar) WindowInsetsController.APPEARANCE_LIGHT_CAPTION_BARS else 0)
+        window.insetsController?.setSystemBarsAppearance(flags, mask)
+        onDispose { window.insetsController?.setSystemBarsAppearance(0, mask) }
+    }
+    val density = LocalDensity.current
+    // 帯の高さと窓の幅が変わったら読み直す（OS のボタンの場所は右寄せなので幅で動く）
+    val top = WindowInsets.captionBar.getTop(density)
+    val width = LocalWindowInfo.current.containerSize.width
+    if (top == 0) return null
+    val rects = view.rootWindowInsets?.getBoundingRects(android.view.WindowInsets.Type.captionBar()).orEmpty()
+    val start = rects.filter { it.centerX() < width / 2 }.maxOfOrNull { it.right } ?: 0
+    val end = rects.filter { it.centerX() >= width / 2 }.minOfOrNull { it.left }?.let { width - it } ?: 0
+    return with(density) { CaptionSpace(top.toDp(), start.coerceAtLeast(0).toDp(), end.coerceAtLeast(0).toDp()) }
+}
+
+private tailrec fun Context.findActivity(): Activity? =
+    when (this) {
+        is Activity -> this
+        is ContextWrapper -> baseContext.findActivity()
+        else -> null
+    }
 
 @Composable
 private fun Pane(
