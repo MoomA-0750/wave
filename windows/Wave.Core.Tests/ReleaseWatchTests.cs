@@ -65,4 +65,23 @@ public class ReleaseWatchTests
         Assert.Equal(second.Recent, ReleaseWatchState.Listed(second.Recent, "UC1", Page(["MP4new", "MP5new"]), 2026));
         Assert.Equal(second.Recent, ReleaseWatchState.Listed(second.Recent, "UC2", Page(["MPold"]), 2026));
     }
+
+    [Fact]
+    public void ReleasesMissingBeforeOlderReleasesOfThisYearAreDropped()
+    {
+        // 今年の作品だけの棚でも、先に見つけた新作が残っているのに後から見つけた新作が無ければ、外されたもの（Android と同じ）
+        var (_, first) = ReleaseWatchState.Empty.Observe("UC1", Page(["MP1new", "MPold"]), 1, 2026);
+        var (_, second) = first.Observe("UC1", Page(["MP2new", "MP1new"]), 2, 2026);
+        var (_, third) = second.Observe("UC1", Page(["MPothernew", "MP2new", "MP1new"]), 3, 2026);
+        Assert.Equal(["MPothernew", "MP2new", "MP1new"], third.Recent.Select(r => r.AlbumBrowseId));
+        var (_, fourth) = third.Observe("UC1", Page(["MP2new", "MP1new"]), 4, 2026);
+        Assert.Equal(["MP2new", "MP1new"], fourth.Recent.Select(r => r.AlbumBrowseId));
+        // 前から見ていた今年の作品が残っているときも外す。前に見た作品の記録が無い（表示のとき）と外さない
+        var other = third.Recent.Where(r => r.AlbumBrowseId == "MPothernew").ToList();
+        Assert.Empty(ReleaseWatchState.Listed(other, "UC1", Page(["MP2new", "MP1new"]), 2026, third.Seen["UC1"]));
+        Assert.Equal(other, ReleaseWatchState.Listed(other, "UC1", Page(["MP2new", "MP1new"]), 2026));
+        // より新しい作品に押し出されただけなら外さない
+        var (_, pushed) = third.Observe("UC1", Page(["MP5new", "MP4new"]), 5, 2026);
+        Assert.Equal(["MP5new", "MP4new", "MPothernew", "MP2new", "MP1new"], pushed.Recent.Select(r => r.AlbumBrowseId));
+    }
 }

@@ -66,7 +66,7 @@ impl ReleaseWatchState {
         let merged: HashSet<String> = ids.iter().cloned().chain(before.into_iter().flatten().filter(|i| !ids.contains(i)).cloned()).take(MAX_IDS_PER_ARTIST).collect();
         let mut next = self.clone();
         next.seen.insert(artist_id.to_string(), merged);
-        next.recent = listed(&self.recent, artist_id, page, year);
+        next.recent = listed(&self.recent, artist_id, page, year, before);
         let release = |a: &AlbumSummary, seeded: bool| NewRelease {
             artist_id: artist_id.to_string(),
             artist_name: page.name.clone(),
@@ -121,15 +121,36 @@ impl ReleaseWatchState {
     }
 }
 
-/// アーティストのページから消えた新作を外す（同じ名前の別人の作品が後で外されることがある）。棚がどれも今年より前の作品まで並べているのに無いものだけ。
-pub fn listed(releases: &[NewRelease], artist_id: &str, page: &ArtistPage, year: Option<i32>) -> Vec<NewRelease> {
+/// アーティストのページから消えた新作を外す（同じ名前の別人の作品が後で外されることがある）。
+/// 棚は新しい順に並ぶので、その新作より古い作品がどの棚にも残っているのに無いものだけ外す。
+/// 古い作品は、今年より前の作品か、その新作より前に見つけた新作か、前から見ていた作品（seen。`a:` を付けた ID）で新作として覚えていないもの。
+pub fn listed(releases: &[NewRelease], artist_id: &str, page: &ArtistPage, year: Option<i32>, seen: Option<&HashSet<String>>) -> Vec<NewRelease> {
     let shelves: Vec<_> = page.album_shelves.iter().filter(|s| !s.albums.is_empty()).collect();
-    let Some(year) = year else { return releases.to_vec() };
-    if shelves.is_empty() || !shelves.iter().all(|s| s.albums.iter().any(|a| year_of(a.subtitle.as_deref()).is_some_and(|y| y < year))) {
+    if shelves.is_empty() {
         return releases.to_vec();
     }
     let ids: HashSet<&str> = shelves.iter().flat_map(|s| &s.albums).map(|a| a.browse_id.as_str()).collect();
-    releases.iter().filter(|r| r.artist_id != artist_id || r.album_browse_id.as_deref().is_none_or(|id| ids.contains(id))).cloned().collect()
+    let mut found_at: HashMap<&str, i64> = HashMap::new();
+    for r in releases.iter().filter(|r| r.artist_id == artist_id) {
+        if let Some(id) = r.album_browse_id.as_deref() {
+            found_at.entry(id).or_insert(r.found_at_epoch_ms);
+        }
+    }
+    let older = |a: &AlbumSummary, r: &NewRelease| {
+        if year.is_some_and(|year| year_of(a.subtitle.as_deref()).is_some_and(|y| y < year)) {
+            return true;
+        }
+        // 見つけた新作は、その新作より前に見つけたものだけが古い（同じ時に見つけたものは前後が分からない）
+        if let Some(found) = found_at.get(a.browse_id.as_str()) {
+            return *found < r.found_at_epoch_ms;
+        }
+        seen.is_some_and(|seen| seen.contains(&format!("a:{}", a.browse_id)))
+    };
+    releases
+        .iter()
+        .filter(|r| r.artist_id != artist_id || r.album_browse_id.as_deref().is_none_or(|id| ids.contains(id)) || !shelves.iter().all(|s| s.albums.iter().any(|a| older(a, r))))
+        .cloned()
+        .collect()
 }
 
 /// 補足（「Single • 2023」など）の年。
@@ -252,7 +273,28 @@ mod tests {
         assert_eq!(second.recent.iter().map(|r| r.key()).collect::<Vec<_>>(), ["MPothernew"]);
         let (_, third) = second.observe("UC1", &page(&["MPold"], &[]), 3, Some(2026));
         assert!(third.recent.is_empty());
-        assert_eq!(listed(&second.recent, "UC1", &page(&["MP4new", "MP5new"], &[]), Some(2026)), second.recent);
-        assert_eq!(listed(&second.recent, "UC2", &page(&["MPold"], &[]), Some(2026)), second.recent);
+        assert_eq!(listed(&second.recent, "UC1", &page(&["MP4new", "MP5new"], &[]), Some(2026), None), second.recent);
+        assert_eq!(listed(&second.recent, "UC2", &page(&["MPold"], &[]), Some(2026), None), second.recent);
+    }
+
+    #[test]
+    fn releases_missing_before_older_releases_of_this_year_are_dropped() {
+        let keys = |s: &ReleaseWatchState| s.recent.iter().map(|r| r.key().to_string()).collect::<Vec<_>>();
+        // 今年の作品だけの棚でも、先に見つけた新作が残っているのに後から見つけた新作が無ければ、外されたもの
+        let (_, first) = ReleaseWatchState::default().observe("UC1", &page(&["MP1new", "MPold"], &[]), 1, Some(2026));
+        let (_, second) = first.observe("UC1", &page(&["MP2new", "MP1new"], &[]), 2, Some(2026));
+        let (_, third) = second.observe("UC1", &page(&["MPothernew", "MP2new", "MP1new"], &[]), 3, Some(2026));
+        assert_eq!(keys(&third), ["MPothernew", "MP2new", "MP1new"]);
+        let (_, fourth) = third.observe("UC1", &page(&["MP2new", "MP1new"], &[]), 4, Some(2026));
+        assert_eq!(keys(&fourth), ["MP2new", "MP1new"]);
+        // 前から見ていた今年の作品が残っているときも外す（新作として覚えていなくても）
+        let other: Vec<_> = third.recent.iter().filter(|r| r.key() == "MPothernew").cloned().collect();
+        assert!(listed(&other, "UC1", &page(&["MP2new", "MP1new"], &[]), Some(2026), third.seen.get("UC1")).is_empty());
+        assert_eq!(listed(&other, "UC1", &page(&["MP2new", "MP1new"], &[]), Some(2026), None), other);
+        // より新しい作品に押し出されただけなら外さない
+        let (_, pushed) = third.observe("UC1", &page(&["MP5new", "MP4new"], &[]), 5, Some(2026));
+        assert_eq!(keys(&pushed), ["MP5new", "MP4new", "MPothernew", "MP2new", "MP1new"]);
+        // 前に見た作品の記録が無い（表示のとき）と、記録に無い今年の作品は古いと数えない
+        assert_eq!(listed(&third.recent, "UC1", &page(&["MP9new"], &[]), Some(2026), None), third.recent);
     }
 }

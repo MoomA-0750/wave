@@ -65,4 +65,24 @@ class ReleaseWatchTest {
         // ほかのアーティストの分は残す
         assertEquals(second.recent, listedReleases(second.recent, "UC2", page(listOf("MPold")), 2026))
     }
+
+    @Test
+    fun releasesMissingBeforeOlderReleasesOfThisYearAreDropped() {
+        // 今年の作品だけの棚でも、先に見つけた新作が残っているのに後から見つけた新作が無ければ、外されたもの
+        val (_, first) = ReleaseWatchState().observe("UC1", page(listOf("MP1new", "MPold")), nowEpochMs = 1, year = 2026)
+        val (_, second) = first.observe("UC1", page(listOf("MP2new", "MP1new")), nowEpochMs = 2, year = 2026)
+        val (_, third) = second.observe("UC1", page(listOf("MPothernew", "MP2new", "MP1new")), nowEpochMs = 3, year = 2026)
+        assertEquals(listOf("MPothernew", "MP2new", "MP1new"), third.recent.mapNotNull { it.albumBrowseId })
+        val (_, fourth) = third.observe("UC1", page(listOf("MP2new", "MP1new")), nowEpochMs = 4, year = 2026)
+        assertEquals(listOf("MP2new", "MP1new"), fourth.recent.mapNotNull { it.albumBrowseId })
+        // 前から見ていた今年の作品が残っているときも外す（新作として覚えていなくても）
+        val other = third.recent.filter { it.albumBrowseId == "MPothernew" }
+        assertEquals(emptyList(), listedReleases(other, "UC1", page(listOf("MP2new", "MP1new")), 2026, third.seen["UC1"]))
+        assertEquals(other, listedReleases(other, "UC1", page(listOf("MP2new", "MP1new")), 2026))
+        // より新しい作品に押し出されただけ（棚がその新作より後に見つけたものだけ）なら外さない
+        val (_, pushed) = third.observe("UC1", page(listOf("MP5new", "MP4new")), nowEpochMs = 5, year = 2026)
+        assertEquals(listOf("MP5new", "MP4new", "MPothernew", "MP2new", "MP1new"), pushed.recent.mapNotNull { it.albumBrowseId })
+        // 前に見た作品の記録が無い（表示のとき）と、記録に無い今年の作品は古いと数えない
+        assertEquals(third.recent, listedReleases(third.recent, "UC1", page(listOf("MP9new")), 2026))
+    }
 }

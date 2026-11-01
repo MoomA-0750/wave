@@ -56,7 +56,7 @@ public struct ReleaseWatchState: Equatable, Sendable {
         let merged = Set((ids + (before ?? []).filter { !idSet.contains($0) }).prefix(ReleaseWatchState.maxIdsPerArtist))
         var nextSeen = seen
         nextSeen[artistId] = merged
-        let next = ReleaseWatchState(seen: nextSeen, recent: ReleaseWatchState.listed(recent, artistId: artistId, page: page, year: year))
+        let next = ReleaseWatchState(seen: nextSeen, recent: ReleaseWatchState.listed(recent, artistId: artistId, page: page, year: year, seen: before))
         guard let before else {
             guard let y = year else { return ([], next) }
             let seeds = albums.filter { $0.subtitle?.contains(String(y)) == true }
@@ -75,14 +75,25 @@ public struct ReleaseWatchState: Equatable, Sendable {
 
     /// アーティストのページから消えた新作を外す（ほかのアーティストの分はそのまま。Android の listedReleases と同じ）。
     /// 同じ名前の別人の作品が YouTube 側で同じアーティストにまとめられ、後で外されることがある（その間に新作として覚えてしまう）。
-    /// 棚がどれも今年より前の作品まで並べているのに無いものは、外されたものとみなす。
-    /// 今年の作品だけの棚がある（新しい作品に押し出されただけかもしれない）・棚が読めない・年が分からないときは何も外さない。
-    public static func listed(_ releases: [NewRelease], artistId: String, page: ArtistPage, year: Int?) -> [NewRelease] {
+    /// 棚は新しい順に並ぶので、その新作より古い作品がどの棚にも残っているのに無いものは、押し出されたのではなく外されたとみなす。
+    /// 古い作品は、今年より前の作品か、その新作より前に見つけた新作か、前から見ていた作品（seen。`a:` を付けた ID）で新作として覚えていないもの。
+    /// どれかの棚に古い作品が無い（押し出されただけかもしれない）・棚が読めないときは何も外さない。
+    public static func listed(_ releases: [NewRelease], artistId: String, page: ArtistPage, year: Int?, seen: Set<String>? = nil) -> [NewRelease] {
         let shelves = page.albumShelves.filter { !$0.albums.isEmpty }
-        guard let y = year, !shelves.isEmpty else { return releases }
-        guard shelves.allSatisfy({ s in s.albums.contains { a in yearOf(a.subtitle).map { $0 < y } ?? false } }) else { return releases }
+        guard !shelves.isEmpty else { return releases }
         let listed = Set(shelves.flatMap(\.albums).map(\.browseId))
-        return releases.filter { r in r.artistId != artistId || r.albumBrowseId == nil || listed.contains(r.albumBrowseId!) }
+        var foundAt: [String: Int64] = [:]
+        for r in releases where r.artistId == artistId { if let id = r.albumBrowseId, foundAt[id] == nil { foundAt[id] = r.foundAtEpochMs } }
+        func older(_ a: AlbumSummary, than r: NewRelease) -> Bool {
+            if let y = year, let ay = yearOf(a.subtitle), ay < y { return true }
+            // 見つけた新作は、その新作より前に見つけたものだけが古い（同じ時に見つけたものは前後が分からない）
+            if let found = foundAt[a.browseId] { return found < r.foundAtEpochMs }
+            return seen?.contains("a:" + a.browseId) == true
+        }
+        return releases.filter { r in
+            r.artistId != artistId || r.albumBrowseId == nil || listed.contains(r.albumBrowseId!)
+                || !shelves.allSatisfy { s in s.albums.contains { older($0, than: r) } }
+        }
     }
 
     private static let yearPattern = try! NSRegularExpression(pattern: #"\b(19|20)\d\d\b"#)

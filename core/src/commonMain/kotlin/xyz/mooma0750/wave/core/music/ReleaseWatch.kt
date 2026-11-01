@@ -38,21 +38,34 @@ fun diversifiedReleases(
 /**
  * アーティストのページから消えた新作を外す（ほかのアーティストの分はそのまま）。
  * 同じ名前の別人の作品が YouTube 側で同じアーティストにまとめられ、後で外されることがある（その間に新作として覚えてしまう）。
- * 棚がどれも今年より前の作品まで並べているのに無いものは、外されたものとみなす。
- * 今年の作品だけの棚がある（新しい作品に押し出されただけかもしれない）・棚が読めない・年が分からないときは何も外さない。
+ * 棚は新しい順に並ぶので、その新作より古い作品がどの棚にも残っているのに無いものは、押し出されたのではなく外されたとみなす。
+ * 古い作品は、今年より前の作品か、その新作より前に見つけた新作か、前から見ていた作品（seen。`a:` を付けた ID）で新作として覚えていないもの。
+ * どれかの棚に古い作品が無い（押し出されただけかもしれない）・棚が読めないときは何も外さない。
  */
 fun listedReleases(
     releases: List<NewRelease>,
     artistId: String,
     page: ArtistPage,
     year: Int?,
+    seen: Set<String>? = null,
 ): List<NewRelease> {
     val shelves = page.albumShelves.filter { it.albums.isNotEmpty() }
-    if (year == null || shelves.isEmpty()) return releases
-    val reachesPast = shelves.all { shelf -> shelf.albums.any { album -> yearOf(album.subtitle)?.let { it < year } == true } }
-    if (!reachesPast) return releases
+    if (shelves.isEmpty()) return releases
     val listed = shelves.flatMap { it.albums }.map { it.browseId }.toSet()
-    return releases.filter { it.artistId != artistId || it.albumBrowseId == null || it.albumBrowseId in listed }
+    val foundAt = releases.filter { it.artistId == artistId && it.albumBrowseId != null }.associate { it.albumBrowseId to it.foundAtEpochMs }
+    fun olderThan(
+        album: AlbumSummary,
+        release: NewRelease,
+    ): Boolean {
+        if (year != null && yearOf(album.subtitle)?.let { it < year } == true) return true
+        // 見つけた新作は、その新作より前に見つけたものだけが古い（同じ時に見つけたものは前後が分からない）
+        foundAt[album.browseId]?.let { return it < release.foundAtEpochMs }
+        return seen?.contains("a:${album.browseId}") == true
+    }
+    return releases.filter { release ->
+        release.artistId != artistId || release.albumBrowseId == null || release.albumBrowseId in listed ||
+            !shelves.all { shelf -> shelf.albums.any { olderThan(it, release) } }
+    }
 }
 
 private val YEAR = Regex("""\b(19|20)\d\d\b""")
@@ -85,7 +98,7 @@ data class ReleaseWatchState(
         // 棚が読めなかった（空）ときは覚えている分を消さない
         if (ids.isEmpty()) return emptyList<NewRelease>() to this
         val before = seen[artistId]
-        val next = copy(recent = listedReleases(recent, artistId, page, year), seen = seen + (artistId to ((before.orEmpty() + ids).toSet().takeLastIds(MAX_IDS_PER_ARTIST, ids))))
+        val next = copy(recent = listedReleases(recent, artistId, page, year, before), seen = seen + (artistId to ((before.orEmpty() + ids).toSet().takeLastIds(MAX_IDS_PER_ARTIST, ids))))
         if (before == null) {
             val thisYear = year?.toString() ?: return emptyList<NewRelease>() to next
             val seeds = albums.filter { it.subtitle?.contains(thisYear) == true }.map { NewRelease(artistId, page.name, it.title, it.browseId, null, it.thumbnailUrl, nowEpochMs, seeded = true) }

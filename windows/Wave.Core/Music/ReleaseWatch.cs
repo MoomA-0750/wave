@@ -38,7 +38,7 @@ public sealed record ReleaseWatchState(Dictionary<string, HashSet<string>> Seen,
         if (ids.Count == 0) return ([], this);
         Seen.TryGetValue(artistId, out var before);
         var merged = new HashSet<string>(ids.Concat((before ?? []).Where(i => !ids.Contains(i))).Take(MaxIdsPerArtist));
-        var next = this with { Seen = new Dictionary<string, HashSet<string>>(Seen) { [artistId] = merged }, Recent = Listed(Recent, artistId, page, year) };
+        var next = this with { Seen = new Dictionary<string, HashSet<string>>(Seen) { [artistId] = merged }, Recent = Listed(Recent, artistId, page, year, before) };
         if (before is null)
         {
             if (year is not { } y) return ([], next);
@@ -58,16 +58,26 @@ public sealed record ReleaseWatchState(Dictionary<string, HashSet<string>> Seen,
     /// <summary>
     /// アーティストのページから消えた新作を外す（ほかのアーティストの分はそのまま。Android の listedReleases と同じ）。
     /// 同じ名前の別人の作品が YouTube 側で同じアーティストにまとめられ、後で外されることがある（その間に新作として覚えてしまう）。
-    /// 棚がどれも今年より前の作品まで並べているのに無いものは、外されたものとみなす。
-    /// 今年の作品だけの棚がある（新しい作品に押し出されただけかもしれない）・棚が読めない・年が分からないときは何も外さない。
+    /// 棚は新しい順に並ぶので、その新作より古い作品がどの棚にも残っているのに無いものは、押し出されたのではなく外されたとみなす。
+    /// 古い作品は、今年より前の作品か、その新作より前に見つけた新作か、前から見ていた作品（seen。"a:" を付けた ID）で新作として覚えていないもの。
+    /// どれかの棚に古い作品が無い（押し出されただけかもしれない）・棚が読めないときは何も外さない。
     /// </summary>
-    public static List<NewRelease> Listed(List<NewRelease> releases, string artistId, ArtistPage page, int? year)
+    public static List<NewRelease> Listed(List<NewRelease> releases, string artistId, ArtistPage page, int? year, ISet<string>? seen = null)
     {
         var shelves = page.AlbumShelves.Where(s => s.Albums.Count > 0).ToList();
-        if (year is not { } y || shelves.Count == 0) return releases;
-        if (!shelves.All(s => s.Albums.Any(a => YearOf(a.Subtitle) < y))) return releases;
+        if (shelves.Count == 0) return releases;
         var listed = shelves.SelectMany(s => s.Albums).Select(a => a.BrowseId).ToHashSet();
-        return releases.Where(r => r.ArtistId != artistId || r.AlbumBrowseId is null || listed.Contains(r.AlbumBrowseId)).ToList();
+        var foundAt = releases.Where(r => r.ArtistId == artistId && r.AlbumBrowseId is not null)
+            .GroupBy(r => r.AlbumBrowseId!).ToDictionary(g => g.Key, g => g.First().FoundAtEpochMs);
+        bool Older(AlbumSummary a, NewRelease r)
+        {
+            if (year is { } y && YearOf(a.Subtitle) < y) return true;
+            // 見つけた新作は、その新作より前に見つけたものだけが古い（同じ時に見つけたものは前後が分からない）
+            if (foundAt.TryGetValue(a.BrowseId, out var found)) return found < r.FoundAtEpochMs;
+            return seen?.Contains("a:" + a.BrowseId) == true;
+        }
+        return releases.Where(r => r.ArtistId != artistId || r.AlbumBrowseId is null || listed.Contains(r.AlbumBrowseId)
+            || !shelves.All(s => s.Albums.Any(a => Older(a, r)))).ToList();
     }
 
     /// <summary>補足（「Single • 2023」など）の年。</summary>

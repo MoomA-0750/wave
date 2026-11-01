@@ -68,6 +68,23 @@ final class ReleaseWatchTests: XCTestCase {
         XCTAssertEqual(second.recent, ReleaseWatchState.listed(second.recent, artistId: "UC2", page: page(["MPold"]), year: 2026))
     }
 
+    func testReleasesMissingBeforeOlderReleasesOfThisYearAreDropped() {
+        // 今年の作品だけの棚でも、先に見つけた新作が残っているのに後から見つけた新作が無ければ、外されたもの（Android と同じ）
+        let (_, first) = ReleaseWatchState.empty.observe("UC1", page: page(["MP1new", "MPold"]), nowEpochMs: 1, year: 2026)
+        let (_, second) = first.observe("UC1", page: page(["MP2new", "MP1new"]), nowEpochMs: 2, year: 2026)
+        let (_, third) = second.observe("UC1", page: page(["MPothernew", "MP2new", "MP1new"]), nowEpochMs: 3, year: 2026)
+        XCTAssertEqual(["MPothernew", "MP2new", "MP1new"], third.recent.map(\.albumBrowseId))
+        let (_, fourth) = third.observe("UC1", page: page(["MP2new", "MP1new"]), nowEpochMs: 4, year: 2026)
+        XCTAssertEqual(["MP2new", "MP1new"], fourth.recent.map(\.albumBrowseId))
+        // 前から見ていた今年の作品が残っているときも外す。前に見た作品の記録が無い（表示のとき）と外さない
+        let other = third.recent.filter { $0.albumBrowseId == "MPothernew" }
+        XCTAssertTrue(ReleaseWatchState.listed(other, artistId: "UC1", page: page(["MP2new", "MP1new"]), year: 2026, seen: third.seen["UC1"]).isEmpty)
+        XCTAssertEqual(other, ReleaseWatchState.listed(other, artistId: "UC1", page: page(["MP2new", "MP1new"]), year: 2026))
+        // より新しい作品に押し出されただけなら外さない
+        let (_, pushed) = third.observe("UC1", page: page(["MP5new", "MP4new"]), nowEpochMs: 5, year: 2026)
+        XCTAssertEqual(["MP5new", "MP4new", "MPothernew", "MP2new", "MP1new"], pushed.recent.map(\.albumBrowseId))
+    }
+
     func testPlaylistOrderParams() {
         // {139: {1: 2, 2: 3}} を base64 にしたもの
         XCTAssertEqual("2ggECAIQAw==", PlaylistOrder.params(PlaylistOrder.added, descending: true))
