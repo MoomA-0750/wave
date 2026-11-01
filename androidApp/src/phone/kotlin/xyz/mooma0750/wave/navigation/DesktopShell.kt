@@ -216,14 +216,17 @@ private fun TopBar(
     onAi: () -> Unit,
 ) {
     val caption = captionSpace()
+    // 窓の帯を縮めて OS のボタンが無いとき（Galaxy など）は、帯を普通の灰色の帯にして、その下に上の帯を出す
+    val shrunk = caption != null && !caption.hasControls
+    if (shrunk) Box(Modifier.fillMaxWidth().height(caption.height).background(MaterialTheme.colorScheme.surfaceContainerHigh))
     Box(
         Modifier
             .fillMaxWidth()
             .then(
-                if (caption == null) {
-                    Modifier.statusBarsPadding().height(TOP_BAR_HEIGHT)
-                } else {
-                    Modifier.height(maxOf(TOP_BAR_HEIGHT, caption.height)).padding(start = caption.start, end = caption.end)
+                when {
+                    caption == null -> Modifier.statusBarsPadding().height(TOP_BAR_HEIGHT)
+                    shrunk -> Modifier.height(TOP_BAR_HEIGHT)
+                    else -> Modifier.height(maxOf(TOP_BAR_HEIGHT, caption.height)).padding(start = caption.start, end = caption.end)
                 },
             ).padding(horizontal = 8.dp),
     ) {
@@ -244,7 +247,10 @@ private fun TopBar(
 }
 
 /** 窓の帯（デスクトップの窓のタイトルの帯）の高さと、OS のボタン（閉じる・最大化など）を避ける左右の幅。 */
-private class CaptionSpace(val height: Dp, val start: Dp, val end: Dp)
+private class CaptionSpace(val height: Dp, val start: Dp, val end: Dp) {
+    /** 帯の左右の端に OS のボタンがある（縮めた帯では無い）。 */
+    val hasControls get() = start > 0.dp || end > 0.dp
+}
 
 /**
  * デスクトップの窓（Android 15 から）では、OS の窓の帯の地を透かして上の帯をそこに載せる（Mac・Windows で検索の欄がタイトルの帯にあるのと同じ）。
