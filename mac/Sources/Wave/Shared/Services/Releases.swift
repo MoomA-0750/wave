@@ -16,6 +16,8 @@ final class Releases: NSObject, UNUserNotificationCenterDelegate {
     private static let maxNotifications = 10
     /// 新作を通知するのに要る、そのアーティストの高く評価した曲の数。
     private static let minLikedToNotify = 3
+    /// 1回の確かめで出元を確かめる新作の数（前に覚えた分も少しずつ確かめる）。
+    private static let maxSuspicionChecks = 20
 
     /// 最近の新作（新しい順）。
     private(set) var recent: [NewRelease] = []
@@ -73,15 +75,36 @@ final class Releases: NSObject, UNUserNotificationCenterDelegate {
             // まとめて叩かない
             try? await Task.sleep(for: .milliseconds(300))
         }
+        state = await checkSuspicion(state, now: now)
         try? state.encode().write(to: Releases.fileURL, atomically: true, encoding: .utf8)
         recent = state.recent
-        AppPaths.log("release watch artists=\(artists.count) new=\(found.count) recent=\(recent.count)")
+        // 出元が怪しい新作は棚に印を付けて残すが、通知は鳴らさない（Android と同じ）
+        let checked = state.recent
+        let notable = found.filter { f in !(checked.first { $0.key == f.key }?.isSuspect ?? false) }
+        AppPaths.log("release watch artists=\(artists.count) new=\(found.count) suspect=\(found.count - notable.count) recent=\(recent.count)")
+        found = notable
         if found.isEmpty { return }
         // 鳴らす通知は、よく聴くアーティスト（高く評価した曲が minLikedToNotify 曲以上）の新作だけにする（Android と同じ）
         let (liked, _) = await AppServices.library.likedSongs()
         let favorites = found.filter { LibraryState.byArtist(liked, $0.artistId, $0.artistName).count >= Releases.minLikedToNotify }
         AppPaths.log("release notify found=\(found.count) favorites=\(favorites.count) liked=\(liked.count)")
         for release in favorites.prefix(Releases.maxNotifications) { await notify(release) }
+    }
+
+    /// まだ確かめていない新作の出元を確かめる（1曲目の YouTube の説明文と再生回数。ReleaseSuspicion）。読めなかったものは次の回にまた確かめる。
+    private func checkSuspicion(_ state: ReleaseWatchState, now: Int64) async -> ReleaseWatchState {
+        var state = state
+        for release in state.unchecked().prefix(Releases.maxSuspicionChecks) {
+            guard let albumId = release.albumBrowseId,
+                  let videoId = (try? await AppServices.music.album(albumId))?.value?.songs.first?.videoId,
+                  let facts = (try? await AppServices.music.videoFacts(videoId))?.value
+            else { continue }
+            let reasons = ReleaseSuspicion.reasons(artistName: release.artistName, facts: facts, nowEpochMs: now)
+            if !reasons.isEmpty { AppPaths.log("release suspect album=\(albumId) reasons=\(reasons)") }
+            state = state.withSuspicion(albumId, reasons: reasons)
+            try? await Task.sleep(for: .milliseconds(300))
+        }
+        return state
     }
 
     func notify(_ release: NewRelease) async {

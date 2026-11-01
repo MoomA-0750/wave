@@ -329,6 +329,16 @@ public enum MusicParsers {
         }.distinct { $0.postId }
     }
 
+    /// YouTube（www.youtube.com）の動画のページ（WEB の next）から、説明文・再生回数・公開日を読む（Android と同じ）。
+    public static func videoFacts(_ root: JSON) -> VideoFacts {
+        let primary = root.findAll("videoPrimaryInfoRenderer").first
+        let secondary = root.findAll("videoSecondaryInfoRenderer").first
+        let views = primary?.path("viewCount", "videoViewCountRenderer", "viewCount", "simpleText").str?.filter(\.isNumber)
+        return VideoFacts(description: secondary?.path("attributedDescription", "content").str,
+                          viewCount: views.flatMap { $0.isEmpty ? nil : Int64($0) },
+                          publishedText: primary?.path("dateText", "simpleText").str)
+    }
+
     public static func editPlaylistStatus(_ root: JSON) -> String? { root.path("status").str }
 
     public static func createdPlaylistId(_ root: JSON) -> String? { root.path("playlistId").str }

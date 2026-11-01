@@ -128,9 +128,11 @@ final class HomeModel {
     }
 
     /// 新作をカードにする（アルバムは開く、動画は再生する・曲の画面へ。見つけて7日は補足に NEW を付ける。Android と同じ）。ホームとアーティストのページで使う。
+    /// 出元が怪しいもの（ReleaseSuspicion）は外さずに補足の先頭に印を付ける。
     static func releaseItem(_ r: NewRelease) -> HomeItem {
         let fresh = !r.seeded && Int64(Date().timeIntervalSince1970 * 1000) - r.foundAtEpochMs < 7 * 24 * 60 * 60 * 1000
-        let subtitle = (fresh ? "NEW • " : "") + r.artistName
+        let mark = r.isSuspect ? "⚠︎ " + L.t("出元が怪しい", "Suspicious source") + " • " : fresh ? "NEW • " : ""
+        let subtitle = mark + r.artistName
         if let album = r.albumBrowseId { return .album(AlbumSummary(browseId: album, title: r.title, subtitle: subtitle, thumbnailUrl: r.thumbnailUrl)) }
         return .song(Song(videoId: r.videoId ?? "", title: r.title, artists: [ArtistRef(name: r.artistName, browseId: r.artistId)], album: nil,
                           durationSeconds: nil, thumbnailUrl: r.thumbnailUrl))

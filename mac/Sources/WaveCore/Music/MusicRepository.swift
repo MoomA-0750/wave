@@ -318,6 +318,11 @@ public final class MusicRepository: Sendable {
             .map(MusicParsers.artistPosts)
     }
 
+    /// 動画の説明文・再生回数・公開日（新作の出元の確かめに使う。ログインの情報を付けない。Android と同じ）。
+    public func videoFacts(_ videoId: String) async throws -> ApiResult<VideoFacts> {
+        try await client.postYouTube("next", body: .obj(["videoId": .string(videoId)])).map(MusicParsers.videoFacts)
+    }
+
     /// アーティスト（チャンネル）を登録する・登録を外す（Android と同じ）。
     public func setSubscribed(_ channelId: String, subscribe: Bool) async throws -> ApiResult<Bool> {
         guard client.isLoggedIn else { return .failed(.notLoggedIn) }

@@ -11,9 +11,11 @@ public struct NewRelease: Hashable, Sendable {
     public var foundAtEpochMs: Int64
     /// 初めて見たときに、今年の作品として覚えたもの（知らせていない）
     public var seeded: Bool
+    /// 出元が怪しい点（ReleaseSuspicion.name など。空なら確かめて何も無い、nil ならまだ確かめていない）。印を付けて残す
+    public var suspect: [String]?
 
     public init(artistId: String, artistName: String, title: String, albumBrowseId: String?, videoId: String?, thumbnailUrl: String?,
-                foundAtEpochMs: Int64 = 0, seeded: Bool = false)
+                foundAtEpochMs: Int64 = 0, seeded: Bool = false, suspect: [String]? = nil)
     {
         self.artistId = artistId
         self.artistName = artistName
@@ -23,7 +25,11 @@ public struct NewRelease: Hashable, Sendable {
         self.thumbnailUrl = thumbnailUrl
         self.foundAtEpochMs = foundAtEpochMs
         self.seeded = seeded
+        self.suspect = suspect
     }
+
+    /// 出元が怪しいか（確かめて怪しい点があったもの）。
+    public var isSuspect: Bool { !(suspect ?? []).isEmpty }
 
     public var key: String { albumBrowseId ?? videoId ?? title }
 }
@@ -113,6 +119,18 @@ public struct ReleaseWatchState: Equatable, Sendable {
         return ReleaseWatchState(seen: seen, recent: Array((all.filter { !$0.seeded } + all.filter(\.seeded)).prefix(ReleaseWatchState.maxRecent)))
     }
 
+    /// 出元をまだ確かめていない新作（アルバム・シングルだけ。新しい順）。
+    public func unchecked() -> [NewRelease] { recent.filter { $0.suspect == nil && $0.albumBrowseId != nil } }
+
+    /// 確かめた結果を覚える。
+    public func withSuspicion(_ albumBrowseId: String, reasons: [String]) -> ReleaseWatchState {
+        ReleaseWatchState(seen: seen, recent: recent.map { r in
+            var r = r
+            if r.albumBrowseId == albumBrowseId { r.suspect = reasons }
+            return r
+        })
+    }
+
     public func retain(_ artistIds: Set<String>) -> ReleaseWatchState {
         ReleaseWatchState(seen: seen.filter { artistIds.contains($0.key) }, recent: recent.filter { artistIds.contains($0.artistId) })
     }
@@ -132,7 +150,8 @@ public struct ReleaseWatchState: Equatable, Sendable {
         let recent = root["Recent"].items.compactMap { r -> NewRelease? in
             guard let artistId = r["ArtistId"].str, let artistName = r["ArtistName"].str, let title = r["Title"].str else { return nil }
             return NewRelease(artistId: artistId, artistName: artistName, title: title, albumBrowseId: r["AlbumBrowseId"].str, videoId: r["VideoId"].str,
-                              thumbnailUrl: r["ThumbnailUrl"].str, foundAtEpochMs: r["FoundAtEpochMs"].long ?? 0, seeded: r["Seeded"].bool ?? false)
+                              thumbnailUrl: r["ThumbnailUrl"].str, foundAtEpochMs: r["FoundAtEpochMs"].long ?? 0, seeded: r["Seeded"].bool ?? false,
+                              suspect: r["Suspect"].arr.map { $0.compactMap(\.str) })
         }
         return ReleaseWatchState(seen: seen, recent: recent)
     }
@@ -150,6 +169,7 @@ public struct ReleaseWatchState: Equatable, Sendable {
                 "ThumbnailUrl": JSON(r.thumbnailUrl),
                 "FoundAtEpochMs": JSON(r.foundAtEpochMs),
                 "Seeded": JSON(r.seeded),
+                "Suspect": r.suspect.map { .array($0.map { .string($0) }) } ?? .null,
                 "Key": .string(r.key),
             ])
         }
