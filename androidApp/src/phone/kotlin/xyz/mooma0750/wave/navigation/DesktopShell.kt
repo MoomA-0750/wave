@@ -22,7 +22,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.captionBar
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.consumeWindowInsets
@@ -34,7 +38,6 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.MaterialTheme
@@ -63,6 +66,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
 import xyz.mooma0750.wave.R
 import xyz.mooma0750.wave.WaveApplication
 import xyz.mooma0750.wave.ui.IconAction
@@ -216,17 +220,15 @@ private fun TopBar(
     onAi: () -> Unit,
 ) {
     val caption = captionSpace()
-    // 窓の帯を縮めて OS のボタンが無いとき（Galaxy など）は、帯を普通の灰色の帯にして、その下に上の帯を出す
-    val shrunk = caption != null && !caption.hasControls
-    if (shrunk) Box(Modifier.fillMaxWidth().height(caption.height).background(MaterialTheme.colorScheme.surfaceContainerHigh))
     Box(
         Modifier
             .fillMaxWidth()
             .then(
-                when {
-                    caption == null -> Modifier.statusBarsPadding().height(TOP_BAR_HEIGHT)
-                    shrunk -> Modifier.height(TOP_BAR_HEIGHT)
-                    else -> Modifier.height(maxOf(TOP_BAR_HEIGHT, caption.height)).padding(start = caption.start, end = caption.end)
+                if (caption == null) {
+                    // OS の帯があればその下に出す
+                    Modifier.windowInsetsPadding(WindowInsets.statusBars.union(WindowInsets.captionBar).only(WindowInsetsSides.Top)).height(TOP_BAR_HEIGHT)
+                } else {
+                    Modifier.height(maxOf(TOP_BAR_HEIGHT, caption.height)).padding(start = caption.start, end = caption.end)
                 },
             ).padding(horizontal = 8.dp),
     ) {
@@ -247,10 +249,7 @@ private fun TopBar(
 }
 
 /** 窓の帯（デスクトップの窓のタイトルの帯）の高さと、OS のボタン（閉じる・最大化など）を避ける左右の幅。 */
-private class CaptionSpace(val height: Dp, val start: Dp, val end: Dp) {
-    /** 帯の左右の端に OS のボタンがある（縮めた帯では無い）。 */
-    val hasControls get() = start > 0.dp || end > 0.dp
-}
+private class CaptionSpace(val height: Dp, val start: Dp, val end: Dp)
 
 /**
  * デスクトップの窓（Android 15 から）では、OS の窓の帯の地を透かして上の帯をそこに載せる（Mac・Windows で検索の欄がタイトルの帯にあるのと同じ）。
@@ -262,13 +261,29 @@ private fun captionSpace(): CaptionSpace? {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) return null
     val view = LocalView.current
     val window = remember(view) { view.context.findActivity()?.window } ?: return null
+    // 帯を縮めて OS のボタンが無いとき（Galaxy など）は、透かすのをやめて OS の帯に戻し、その下に上の帯を出す
+    var transparent by remember(view) { mutableStateOf(true) }
     // 帯の上の OS のボタンは、地が明るければ暗い色で描かせる
     val lightBar = MaterialTheme.colorScheme.surfaceContainerLowest.luminance() > 0.5f
-    DisposableEffect(window, lightBar) {
+    DisposableEffect(window, lightBar, transparent) {
         val mask = WindowInsetsController.APPEARANCE_TRANSPARENT_CAPTION_BAR_BACKGROUND or WindowInsetsController.APPEARANCE_LIGHT_CAPTION_BARS
-        val flags = WindowInsetsController.APPEARANCE_TRANSPARENT_CAPTION_BAR_BACKGROUND or (if (lightBar) WindowInsetsController.APPEARANCE_LIGHT_CAPTION_BARS else 0)
+        val flags = if (!transparent) 0 else WindowInsetsController.APPEARANCE_TRANSPARENT_CAPTION_BAR_BACKGROUND or (if (lightBar) WindowInsetsController.APPEARANCE_LIGHT_CAPTION_BARS else 0)
         window.insetsController?.setSystemBarsAppearance(flags, mask)
-        onDispose { window.insetsController?.setSystemBarsAppearance(0, mask) }
+        // Galaxy は帯を作り直した後に透かしを伝えても灰色のまま描くので、少し後に外し、間を空けて付け直す
+        // （同じ時に外して付け直すと、変わっていないと見なされて効かない）
+        val reapply = Runnable {
+            window.insetsController?.setSystemBarsAppearance(flags, mask)
+        }
+        val nudge = Runnable {
+            window.insetsController?.setSystemBarsAppearance(0, mask)
+            view.postDelayed(reapply, 300)
+        }
+        if (transparent) view.postDelayed(nudge, 500)
+        onDispose {
+            view.removeCallbacks(nudge)
+            view.removeCallbacks(reapply)
+            window.insetsController?.setSystemBarsAppearance(0, mask)
+        }
     }
     val density = LocalDensity.current
     val top = WindowInsets.captionBar.getTop(density)
@@ -280,12 +295,31 @@ private fun captionSpace(): CaptionSpace? {
         view.viewTreeObserver.addOnGlobalLayoutListener(listener)
         onDispose { view.viewTreeObserver.removeOnGlobalLayoutListener(listener) }
     }
-    LaunchedEffect(top, width, rects) { Log.i(WaveApplication.LOG_TAG, "caption top=$top width=$width rects=$rects") }
-    if (top == 0) return null
     // 左右の端に寄ったものだけを避ける。窓の幅の大半を覆うもの（縮めたボタンなどで返ることがある）は避けると中身が消えるので見ない
     val start = rects.filter { it.right <= width * 2 / 5 }.maxOfOrNull { it.right } ?: 0
     val end = rects.filter { it.left >= width * 3 / 5 }.minOfOrNull { width - it.left } ?: 0
-    return with(density) { CaptionSpace(top.toDp(), start.coerceIn(0, width / 3).toDp(), end.coerceIn(0, width / 3).toDp()) }
+    val hasControls = start > 0 || end > 0
+    // OS の帯に戻している間は、OS のボタンの場所が分からないことがある。帯の高さ・窓の幅・ボタンの場所が
+    // 戻したときから変わったら、もう一度透かしてボタンがあるか見る（縮めるのをやめたときに上の帯を帯に戻す）
+    var opaqueState by remember(view) { mutableStateOf<Any?>(null) }
+    val state = listOf(top, width, rects)
+    LaunchedEffect(state, transparent) {
+        Log.i(WaveApplication.LOG_TAG, "caption top=$top width=$width rects=$rects transparent=$transparent")
+        // 帯が変わる途中の値で決めない
+        delay(300)
+        if (transparent) {
+            if (top > 0 && !hasControls) {
+                opaqueState = null
+                transparent = false
+            }
+        } else if (opaqueState == null) {
+            opaqueState = state
+        } else if (opaqueState != state) {
+            transparent = true
+        }
+    }
+    if (top == 0 || !transparent || !hasControls) return null
+    return with(density) { CaptionSpace(top.toDp(), start.coerceAtMost(width / 3).toDp(), end.coerceAtMost(width / 3).toDp()) }
 }
 
 @RequiresApi(Build.VERSION_CODES.VANILLA_ICE_CREAM)

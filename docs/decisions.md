@@ -984,3 +984,11 @@
 - 署名は `ios-device` と同じにした。Apple Development の証明書と、Xcode が作る Team Provisioning Profile を使う。iPhone 13 Pro の UDID は登録済みなので、Ad Hoc の証明書や xcodebuild archive は使わない。
 - TestFlight はやめた。Apple の処理を待つうえ、beta 版の Xcode で作ったものはアップロードを断られるおそれがある。
 - 置き場は Mac の `~/ota/<名前>/`。LaunchAgent の `local.ota-web`（127.0.0.1:8791）が出し、`tailscale serve --https=8444` で tailnet にだけ載せる。宛先が `~/ota/notify-to` にあれば imsg で知らせる。`ota.sh` は他のアプリでも使える。
+
+## 2026-11-01 Android のデスクトップの窓で、上の帯を OS の窓の帯に載せる
+
+- Android 15 の `APPEARANCE_TRANSPARENT_CAPTION_BAR_BACKGROUND` で窓の帯を透かし、`WindowInsets.getBoundingRects(captionBar)` で OS のボタンを避ける。
+- Galaxy（One UI）は帯を縮められる。縮めると、窓の幅いっぱいの場所を1つ返す。これを避けると上の帯の中身が消えたので、端に寄った場所だけを避ける。
+- 縮めた帯に自前の灰色の帯を塗る形は、本人の希望で OS の帯に戻す形へ替えた。透かしている間は OS の帯の地が描かれないため。
+- OS の帯に戻している間、Galaxy は帯の高さを 0 として渡す。ボタンの場所は、帯の全幅を1つの場所として返す。そのため、帯の高さ・幅・ボタンの場所が変わったら一度透かし直してボタンを確かめる。
+- Galaxy は帯を作り直した後に透かしを伝えても、灰色のまま描く。同じ時に外して付け直すのも効かなかった。そこで、少し後に外して、300ms 空けて付け直している。
