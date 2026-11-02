@@ -14,6 +14,7 @@
 #   mac.sh ios-provision      Xcode に実機用の配布設定（wave・ウィジェット、1年）を作らせる
 #   mac.sh ios-device         実機向けに組み、配布設定で署名して、つないだ iPhone へ入れる
 #   mac.sh ios-ota            ios-device と同じに組んで署名し、tailnet のページに置いて iPhone へ iMessage で知らせる
+#   mac.sh ios-shelf [変更点]  ios-device と同じに組んで署名し、general-console の appshelf に載せる
 #   mac.sh ios-dev-cmd <命令>... つないだ iPhone の wave に開発用の命令を送る
 #   mac.sh ios-dev-log [行数]   つないだ iPhone の wave のログの末尾
 #   mac.sh ios-ipa [ファイル]  iPhone の実機向けに、署名していない wave.ipa を組んで持ってくる（既定は build/wave.ipa）
@@ -71,6 +72,11 @@ ios-ota)
   # 組んで署名し、tailnet のページに置いて iPhone へ iMessage で知らせる（外からでもリンクで入れられる）
   ios_signed
   ssh mac "~/$remote/mac/scripts/ota.sh ~/$remote/mac/build/ios-device/wave.app wave wave" ;;
+ios-shelf)
+  # 組んで署名し、appshelf（general-console の上の配布ページ）に載せる。IPA だけを持ってくる
+  ios_signed
+  "$here/../appshelf/scripts/ios-from-mac.sh" "~/$remote/mac/build/ios-device/wave.app" wave -- \
+    -title wave -commit "$(git -C "$here" rev-parse HEAD)" -note "${2:-$(git -C "$here" log -1 --format=%s)}" ;;
 ios-dev-cmd)
   # つないだ iPhone の wave に開発用の命令を送る（ios-device で入れた版だけ効く）
   shift; printf "%s\n" "$@" | ssh mac "cat > /tmp/wave-debug-command.txt && xcrun devicectl device copy to --device \$(xcrun devicectl list devices 2>/dev/null | grep -E 'available \(paired\)|connected' | grep iPhone | grep -oE '[0-9A-F]{8}-[0-9A-F-]{27}' | head -1) --domain-type appDataContainer --domain-identifier xyz.mooma0750.wave --source /tmp/wave-debug-command.txt --destination 'Library/Application Support/wave/debug-command.txt' >/dev/null" ;;
