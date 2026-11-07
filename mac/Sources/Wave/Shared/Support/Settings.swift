@@ -18,6 +18,9 @@ final class Settings: Codable {
     var playlistOrders: [String: String] = [:]
     /// 画面の言語。"system"（macOS に合わせる）・"ja"・"en"。次の起動から効く。
     var language = "system"
+    /// 曲名・アーティスト名・アルバム名を、YouTube が画面の言語に合わせて書き換える前の表記で出す（洋楽をカタカナに、邦楽をローマ字にしない）。
+    /// 既定はオフ（YouTube への読み取りが倍になる。Android と同じ）。
+    var originalTitles = false
     var searchHistory: [SearchHistoryEntry] = []
     /// 端末の連携の中継 v2 の場所（例: wss://ホスト:ポート）と、署名に入れるホスト名とポート。空なら連携を使わない。
     var relayV2Url: String?
@@ -39,12 +42,18 @@ final class Settings: Codable {
     var smartDownloads = false
     var smartDownloadCount = 50
 
+    /// 「曲名を元の表記で」の説明（Android の settings_original_titles_summary と同じ）。
+    static var originalTitlesDetail: String {
+        L.t("曲名・アーティスト名・アルバム名を、曲の言語のまま出します（洋楽をカタカナに、邦楽をローマ字にしません）。YouTube に2回問い合わせるので、ページの表示が少し遅くなります",
+            "Keep song, artist, and album names in their own language (no katakana for Western songs, no romaji for Japanese songs). wave asks YouTube twice, so pages load a little slower")
+    }
+
     private static var fileURL: URL { AppPaths.file("settings.json") }
 
     init() {}
 
     enum CodingKeys: String, CodingKey {
-        case volume, shuffle, repeatMode, sendHistory, rightPaneOpen, releaseNotices, librarySort, libraryGrid, playlistOrders, language,
+        case volume, shuffle, repeatMode, sendHistory, rightPaneOpen, releaseNotices, librarySort, libraryGrid, playlistOrders, language, originalTitles,
             searchHistory, relayV2Url, relayV2Host, aiUrl, aiToken, aiName, discordPresence, discordClientId, musicPip,
             pinnedTab, downloadNetwork, smartDownloads, smartDownloadCount
     }
@@ -62,6 +71,7 @@ final class Settings: Codable {
         libraryGrid = try c.decodeIfPresent(Bool.self, forKey: .libraryGrid) ?? libraryGrid
         playlistOrders = try c.decodeIfPresent([String: String].self, forKey: .playlistOrders) ?? playlistOrders
         language = try c.decodeIfPresent(String.self, forKey: .language) ?? language
+        originalTitles = try c.decodeIfPresent(Bool.self, forKey: .originalTitles) ?? originalTitles
         searchHistory = (try? c.decodeIfPresent([SearchHistoryEntry].self, forKey: .searchHistory)) ?? []
         relayV2Url = try c.decodeIfPresent(String.self, forKey: .relayV2Url)
         relayV2Host = try c.decodeIfPresent(String.self, forKey: .relayV2Host)

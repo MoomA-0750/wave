@@ -43,6 +43,16 @@ enum DebugCommon {
         switch command {
         case "wait": try? await Task.sleep(for: .milliseconds(Int(arg) ?? 0))
         case "settings": nav.settings()
+        case "original-titles":
+            // 設定の「曲名を元の表記で」を切り替える（on|off）
+            AppServices.settings.originalTitles = arg == "on"
+            AppServices.settings.save()
+            AppServices.client.originalTitles = arg == "on"
+            AppPaths.log("debug original-titles \(AppServices.client.originalTitles)")
+        case "search-names":
+            // 曲の検索の先頭5曲の曲名・アーティスト名（元の表記になっているかを見る）
+            let songs = (try? await AppServices.music.searchSongs(arg))?.value?.songs.prefix(5) ?? []
+            AppPaths.log("debug search-names " + songs.map { "\($0.title) / \($0.artistsText)" }.joined(separator: " | "))
         case "devices": nav.devices()
         case "history": nav.history()
         case "liked": nav.likedSongs()

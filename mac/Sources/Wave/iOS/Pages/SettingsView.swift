@@ -9,6 +9,7 @@ struct SettingsView: View {
     @State private var releaseNotices = AppServices.settings.releaseNotices
     @State private var musicPip = AppServices.settings.musicPip
     @State private var language = AppServices.settings.language
+    @State private var originalTitles = AppServices.settings.originalTitles
     @State private var pinnedTab = IOSShell.shared.pinnedTab
     @State private var pairText = ""
     @State private var aiConfigured = AppServices.ai.configured
@@ -76,6 +77,16 @@ struct SettingsView: View {
             } footer: {
                 Text(L.t("YouTube から届く文字（棚の見出しなど）もこの言語になります。次の起動から反映されます",
                          "Text from YouTube (such as shelf titles) also uses this language. Takes effect the next time you open wave"))
+            }
+            Section {
+                Toggle(isOn: $originalTitles) {
+                    SettingsLabel(title: L.t("曲名を元の表記で", "Show titles as released"), detail: Settings.originalTitlesDetail)
+                }
+                .onChange(of: originalTitles) { _, v in
+                    AppServices.settings.originalTitles = v
+                    AppServices.settings.save()
+                    AppServices.client.originalTitles = v
+                }
             }
             Section {
                 Picker(selection: $pinnedTab) {

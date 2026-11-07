@@ -89,6 +89,21 @@ public final class InnerTubeClient: @unchecked Sendable {
     /// 地域。端末の設定のまま。
     public let gl: String
 
+    /// 曲名・アーティスト名・アルバム名を、YouTube が画面の言語に合わせて書き換える前の表記で出すか（設定の「曲名を元の表記で」。既定は出さない）。
+    /// 出すときは、曲の一覧を返す読み取り（search・browse・next）を、もう1つの言語（画面が日本語なら英語、それ以外なら日本語）でも同時に送って
+    /// 突き合わせる（OriginalTitles）ので、通信が倍になる。切り替えは次の読み取りから効く。
+    public var originalTitles: Bool {
+        get { lock.withLock { originalTitlesValue } }
+        set { lock.withLock { originalTitlesValue = newValue } }
+    }
+    private var originalTitlesValue = false
+    /// 元の表記を選ぶときに覚えたアーティスト（browseId → `ja`・`en`）と、覚えた順。アプリを閉じるまで。
+    private var knownArtists: [String: String] = [:]
+    private var knownArtistOrder: [String] = []
+    private static let maxKnownArtists = 5000
+    /// 曲名を元の表記で出すときに、2つの言語で送る読み取り（曲・アルバム・アーティストの一覧を返すもの）。
+    static let bilingualEndpoints: Set<String> = ["browse", "search", "next"]
+
     public init(session: URLSession = InnerTubeClient.createSession(), hl: String = "ja", gl: String? = nil) {
         self.session = session
         self.hl = hl
@@ -213,6 +228,9 @@ public final class InnerTubeClient: @unchecked Sendable {
         let creds = setLogin ? currentCredentials : nil
         let loginGeneration = generation
         let request = try makeRequest(endpoint, body: body, creds: creds, query: query)
+        // 曲名を元の表記で出すなら、同じ頼みをもう1つの言語でも同時に送る（失敗したら画面の言語のまま）
+        let bilingual = originalTitles && InnerTubeClient.bilingualEndpoints.contains(endpoint)
+        async let otherRoot: JSON? = bilingual ? otherLanguageJSON(endpoint, body: body, creds: creds, query: query, loginGeneration: loginGeneration) : nil
         do {
             let (data, response) = try await session.data(for: request)
             let status = (response as? HTTPURLResponse)?.statusCode ?? 0
@@ -235,6 +253,7 @@ public final class InnerTubeClient: @unchecked Sendable {
                     anonymousVisitor = v
                 }
             }
+            if bilingual, let other = await otherRoot { return .ok(localized(root, other)) }
             return .ok(root)
         } catch {
             if Task.isCancelled { throw CancellationError() }
@@ -242,16 +261,47 @@ public final class InnerTubeClient: @unchecked Sendable {
         }
     }
 
-    private func makeRequest(_ endpoint: String, body: JSON, creds: Credentials?, query: [(String, String)]) throws -> URLRequest {
+    /// もう1つの言語の同じ頼みの応答。失敗したら nil（ログインの状態は変えない。同じ頼みの画面の言語の方が分類される）。
+    private func otherLanguageJSON(_ endpoint: String, body: JSON, creds: Credentials?, query: [(String, String)], loginGeneration: Int64) async -> JSON? {
+        guard let request = try? makeRequest(endpoint, body: body, creds: creds, query: query, hl: OriginalTitles.otherLanguage(hl)),
+            let (data, response) = try? await session.data(for: request),
+            let status = (response as? HTTPURLResponse)?.statusCode, (200...299).contains(status),
+            data.count <= InnerTubeClient.maxResponseBytes
+        else { return nil }
+        if creds != nil && loginGeneration != generation { return nil }
+        return try? JSON.parse(data)
+    }
+
+    /// 応答をもう1つの言語の応答と突き合わせて、元の表記にする。分かったアーティストは次の応答の判定に使う。
+    private func localized(_ root: JSON, _ other: JSON) -> JSON {
+        let known = lock.withLock { knownArtists }
+        let result = OriginalTitles.merge(root, other, primaryLanguage: hl, known: known)
+        if !result.learned.isEmpty {
+            lock.withLock {
+                for (id, origin) in result.learned {
+                    if knownArtists.updateValue(origin, forKey: id) == nil { knownArtistOrder.append(id) }
+                }
+                if knownArtistOrder.count > InnerTubeClient.maxKnownArtists {
+                    let drop = knownArtistOrder.count - InnerTubeClient.maxKnownArtists
+                    for id in knownArtistOrder.prefix(drop) { knownArtists[id] = nil }
+                    knownArtistOrder.removeFirst(drop)
+                }
+            }
+        }
+        return result.json
+    }
+
+    private func makeRequest(_ endpoint: String, body: JSON, creds: Credentials?, query: [(String, String)], hl: String? = nil) throws -> URLRequest {
+        let hl = hl ?? self.hl
         var body = body.obj ?? JSONObject()
-        body["context"] = context(creds)
+        body["context"] = context(creds, hl: hl)
         var url = InnerTubeClient.apiBase + endpoint + "?prettyPrint=false"
         for (name, value) in query { url += "&" + name + "=" + InnerTubeClient.escape(value) }
         var request = URLRequest(url: URL(string: url)!)
         request.httpMethod = "POST"
         request.httpBody = JSON.object(body).data()
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        try addHeaders(&request, creds)
+        try addHeaders(&request, creds, hl: hl)
         return request
     }
 
@@ -293,7 +343,7 @@ public final class InnerTubeClient: @unchecked Sendable {
         return (response as? HTTPURLResponse)?.statusCode
     }
 
-    private func context(_ creds: Credentials?) -> JSON {
+    private func context(_ creds: Credentials?, hl: String) -> JSON {
         var client = JSONObject([
             ("clientName", .string(InnerTubeClient.clientName)),
             ("clientVersion", .string(InnerTubeClient.clientVersion)),
@@ -312,7 +362,8 @@ public final class InnerTubeClient: @unchecked Sendable {
 
     public struct AuthRouteViolation: Error {}
 
-    private func addHeaders(_ request: inout URLRequest, _ creds: Credentials?) throws {
+    private func addHeaders(_ request: inout URLRequest, _ creds: Credentials?, hl: String? = nil) throws {
+        let hl = hl ?? self.hl
         // 認証のヘッダは music.youtube.com への https にだけ付ける
         guard let url = request.url, url.scheme == "https", url.host == "music.youtube.com", url.port == nil else {
             throw AuthRouteViolation()
@@ -326,7 +377,7 @@ public final class InnerTubeClient: @unchecked Sendable {
         request.setValue(InnerTubeClient.origin + "/", forHTTPHeaderField: "Referer")
         request.setValue(hl, forHTTPHeaderField: "Accept-Language")
         if let v = creds?.visitorData ?? visitor { request.setValue(v, forHTTPHeaderField: "X-Goog-Visitor-Id") }
-        request.setValue(withPref(creds?.revealCookie()), forHTTPHeaderField: "Cookie")
+        request.setValue(withPref(creds?.revealCookie(), hl: hl), forHTTPHeaderField: "Cookie")
         if let sapisid = creds?.revealSapisid() {
             request.setValue("0", forHTTPHeaderField: "X-Goog-AuthUser")
             request.setValue(InnerTubeClient.sapisidHash(sapisid, unixSeconds: Int64(Date().timeIntervalSince1970)), forHTTPHeaderField: "Authorization")
@@ -339,7 +390,8 @@ public final class InnerTubeClient: @unchecked Sendable {
     }
 
     /// cookie の PREF に表示の言語と地域を入れる（無ければ PREF だけ）。
-    func withPref(_ cookie: String?) -> String {
+    func withPref(_ cookie: String?, hl: String? = nil) -> String {
+        let hl = hl ?? self.hl
         guard let cookie, !cookie.trimmingCharacters(in: .whitespaces).isEmpty else { return "PREF=hl=\(hl)&gl=\(gl)" }
         var prefParts: [String] = []
         var others: [String] = []

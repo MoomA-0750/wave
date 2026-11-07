@@ -7,6 +7,7 @@ struct SettingsPageView: View {
     @State private var sendHistory = AppServices.settings.sendHistory
     @State private var releaseNotices = AppServices.settings.releaseNotices
     @State private var language = AppServices.settings.language
+    @State private var originalTitles = AppServices.settings.originalTitles
     @State private var pairText = ""
     @State private var aiConfigured = AppServices.ai.configured
     @State private var confirmLogout = false
@@ -153,6 +154,14 @@ struct SettingsPageView: View {
                             AppServices.toast.show(L.t("次の起動から反映されます", "Takes effect the next time you open wave"))
                         }
                     }
+                }
+                card {
+                    toggleRow(L.t("曲名を元の表記で", "Show titles as released"), Settings.originalTitlesDetail, isOn: $originalTitles)
+                        .onChange(of: originalTitles) { _, v in
+                            AppServices.settings.originalTitles = v
+                            AppServices.settings.save()
+                            AppServices.client.originalTitles = v
+                        }
                 }
 
                 section(L.t("このアプリについて", "About"))

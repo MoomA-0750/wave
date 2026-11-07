@@ -56,6 +56,8 @@ enum AppServices {
         audioCache = AudioCache(directory: caches.appendingPathComponent("wave-audio"), nowMs: { Int64(Date().timeIntervalSince1970 * 1000) })
         // YouTube から届く文字（棚の見出しなど）を画面と同じ言語にする
         client = InnerTubeClient(session: session, hl: L.hl)
+        // 曲名を元の表記で出すか（設定を切り替えると、次の読み取りから効く）
+        client.originalTitles = settings.originalTitles
         // ログインの状態（切れた・疑い）を設定の画面へ映す。知らせの順に頼らず、届いたときの今の値を読む
         client.sessionStateChanged = { _ in
             Task { @MainActor in AppServices.account?.session = AppServices.client.sessionState }
