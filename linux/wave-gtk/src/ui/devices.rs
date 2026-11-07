@@ -52,7 +52,6 @@ pub fn open_page(app: &Rc<App>) {
 
 /// アカウントのメニューの「端末の連携」（Mac と同じく、ログインしていて中継が設定済みのときだけ。そうでなければ None）。
 /// 押すと、入っている小窓を閉じてページを開く。
-#[allow(dead_code, reason = "shell.rs のアカウントのメニューからつなぐ（下の帯・メニューの担当が足す）")]
 pub fn menu_button(app: &Rc<App>) -> Option<gtk::Button> {
     if !app.connect.info().configured || !app.repo.client().is_logged_in() {
         return None;
@@ -67,7 +66,6 @@ pub fn menu_button(app: &Rc<App>) -> Option<gtk::Button> {
 }
 
 /// 下の帯の端末の小窓の「端末の連携の設定」のリンク。押すと、入っている小窓を閉じてページを開く。
-#[allow(dead_code, reason = "shell.rs の端末の小窓からつなぐ（下の帯の担当が足す）")]
 pub fn settings_link(app: &Rc<App>) -> gtk::Button {
     let button = gtk::Button::builder().label("端末の連携の設定").css_classes(["flat"]).build();
     let app = app.clone();
@@ -78,7 +76,6 @@ pub fn settings_link(app: &Rc<App>) -> gtk::Button {
     button
 }
 
-#[allow(dead_code, reason = "menu_button・settings_link が使う")]
 fn close_popover(widget: &impl IsA<gtk::Widget>) {
     if let Some(popover) = widget.ancestor(gtk::Popover::static_type()).and_downcast::<gtk::Popover>() {
         popover.popdown();

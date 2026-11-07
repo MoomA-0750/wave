@@ -29,11 +29,13 @@ pub struct Settings {
     pub discord_client_id: Option<String>,
     /// 端末の連携の中継（wss://ホスト:ポート）。リポジトリには書かない、本人がここで入れる値。ログに出さない。
     pub relay_url: Option<String>,
+    /// 右の欄（再生中・キュー）を開いているか（次に開いたときも同じにする。Mac と同じ）。
+    pub right_pane_open: bool,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { smart_downloads: false, smart_download_count: DEFAULT_COUNT, download_network: DownloadNetwork::Unmetered, relay_url: None, send_history: true, release_notices: true, original_titles: false, search_history: Vec::new(), discord_presence: false, discord_client_id: None, library_sort: "recent".into(), library_grid: false }
+        Self { smart_downloads: false, smart_download_count: DEFAULT_COUNT, download_network: DownloadNetwork::Unmetered, relay_url: None, send_history: true, release_notices: true, original_titles: false, search_history: Vec::new(), discord_presence: false, discord_client_id: None, library_sort: "recent".into(), library_grid: false, right_pane_open: true }
     }
 }
 

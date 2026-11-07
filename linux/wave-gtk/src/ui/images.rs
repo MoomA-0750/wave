@@ -62,7 +62,7 @@ impl Art {
 }
 
 /// picture に url の画像を出す（読み終わる前に別の URL を頼まれたら、古い方は捨てる）。
-fn load(picture: &gtk::Picture, url: Option<&str>, px: u32) {
+pub fn load(picture: &gtk::Picture, url: Option<&str>, px: u32) {
     let Some(url) = url.filter(|u| u.starts_with("https://")).map(|u| sized(u, px)) else {
         picture.set_paintable(None::<&gtk::gdk::Paintable>);
         return;

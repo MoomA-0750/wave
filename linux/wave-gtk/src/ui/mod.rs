@@ -2,6 +2,7 @@
 
 pub mod ai;
 pub mod devices;
+pub mod full_view;
 pub mod images;
 pub mod library;
 pub mod lyrics;
