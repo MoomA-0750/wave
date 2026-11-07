@@ -379,19 +379,20 @@ impl Search {
             return empty("見つかりませんでした");
         }
         let column = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(28).margin_top(16).margin_bottom(32).margin_start(16).margin_end(16).build();
-        let top_row = gtk::Box::builder().spacing(24).build();
+        // 中央が狭いときは、トップの検索結果の下に曲を並べる（横に並べると曲の題が潰れ、窓の幅を押し広げる）
+        let top_row = gtk::FlowBox::builder().homogeneous(true).min_children_per_line(1).max_children_per_line(2).column_spacing(24).row_spacing(28).selection_mode(gtk::SelectionMode::None).build();
         if let Some(top) = wave_core::music::collection::top_result(&query, &songs, &artists, &albums) {
-            let side = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(12).width_request(300).build();
+            let side = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(12).width_request(340).build();
             side.append(&gtk::Label::builder().label("トップの検索結果").xalign(0.0).css_classes(["title-2"]).build());
             side.append(&self.top_card(top));
-            top_row.append(&side);
+            top_row.insert(&side, -1);
         }
         if !songs.is_empty() {
-            let side = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(12).hexpand(true).build();
+            let side = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(12).width_request(340).hexpand(true).build();
             side.append(&gtk::Label::builder().label("曲").xalign(0.0).css_classes(["title-2"]).build());
             let shown: Vec<Song> = songs.iter().take(4).cloned().collect();
             side.append(&self.track_list(shown, Columns::SHORT).0);
-            top_row.append(&side);
+            top_row.insert(&side, -1);
         }
         column.append(&top_row);
         let remember = |item: &HomeItem| -> Option<Rc<dyn Fn()>> {
