@@ -84,6 +84,24 @@ pub fn page(app: &Rc<App>) -> adw::NavigationPage {
         });
     }
 
+    let display = adw::PreferencesGroup::builder().title("表示").build();
+    let original_titles = adw::SwitchRow::builder()
+        .title("曲名を元の表記で")
+        .subtitle("曲名・アーティスト名・アルバム名を、曲の言語のまま出します（洋楽をカタカナに、邦楽をローマ字にしません）。YouTube に2回問い合わせるので、ページの表示が少し遅くなります")
+        .active(settings.original_titles)
+        .build();
+    display.add(&original_titles);
+    prefs.add(&display);
+    {
+        // 次の読み取り（ページを開く・検索する）から効く
+        let app = app.clone();
+        original_titles.connect_active_notify(move |row| {
+            let on = row.is_active();
+            app.downloads.update_settings(|s| s.original_titles = on);
+            app.repo.client().set_original_titles(on);
+        });
+    }
+
     super::devices::add_to(&prefs, app);
 
     let discord = adw::PreferencesGroup::builder()

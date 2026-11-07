@@ -56,6 +56,8 @@ fn build_window(app: &adw::Application) {
     // ランチャー・Alt+Tab のアイコン（scripts/install.sh で入れた絵）
     gtk::Window::set_default_icon_name(APP_ID);
     let repo = MusicRepository::new(InnerTube::new(&language(), &region()));
+    // 曲名を元の表記で（設定）。最初の読み取りから効かせる
+    repo.client().set_original_titles(settings::Settings::load().original_titles);
     let toolbar = adw::ToolbarView::new();
     toolbar.add_top_bar(&adw::HeaderBar::new());
     let window = adw::ApplicationWindow::builder()

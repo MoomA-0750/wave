@@ -4,6 +4,7 @@ pub mod artist;
 pub mod feed;
 pub mod feed_library;
 pub mod lofi;
+pub mod original_titles;
 pub mod models;
 pub mod new_episodes;
 pub mod parsers;

@@ -15,6 +15,8 @@ pub struct Settings {
     pub send_history: bool,
     /// 登録したアーティストの新作を確かめて知らせる（既定は入）。
     pub release_notices: bool,
+    /// 曲名・アーティスト名・アルバム名を曲の言語のまま出す（既定は切。YouTube に2回問い合わせるため。Android と同じ）。
+    pub original_titles: bool,
     /// 検索の履歴（新しい順、最大 30 件。Windows と同じ）。ログアウトで消す。
     pub search_history: Vec<SearchHistoryEntry>,
     /// マイライブラリの並べ方（"recent"・"added"・"alpha"。Windows と同じ）。
@@ -31,7 +33,7 @@ pub struct Settings {
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { smart_downloads: false, smart_download_count: DEFAULT_COUNT, download_network: DownloadNetwork::Unmetered, relay_url: None, send_history: true, release_notices: true, search_history: Vec::new(), discord_presence: false, discord_client_id: None, library_sort: "recent".into(), library_grid: false }
+        Self { smart_downloads: false, smart_download_count: DEFAULT_COUNT, download_network: DownloadNetwork::Unmetered, relay_url: None, send_history: true, release_notices: true, original_titles: false, search_history: Vec::new(), discord_presence: false, discord_client_id: None, library_sort: "recent".into(), library_grid: false }
     }
 }
 
