@@ -155,6 +155,7 @@ async fn login_from_browser(window: &adw::ApplicationWindow, repo: &MusicReposit
         dialog.add_response(&format!("p{i}"), &profile.label);
     }
     dialog.set_response_appearance("p0", adw::ResponseAppearance::Suggested);
+    dialog.set_default_response(Some("p0"));
     dialog.set_close_response("cancel");
     let chosen = dialog.choose_future(Some(window)).await;
     let Some(profile) = chosen.strip_prefix('p').and_then(|i| i.parse::<usize>().ok()).and_then(|i| profiles.get(i)) else { return false };
