@@ -82,17 +82,6 @@ fn close_popover(widget: &impl IsA<gtk::Widget>) {
     }
 }
 
-/// 設定のページの「端末の連携」（中身は独立したページへ移した。開く行だけ置く）。
-pub fn add_to(prefs: &adw::PreferencesPage, app: &Rc<App>) {
-    let group = adw::PreferencesGroup::builder().title("端末の連携").build();
-    let row = adw::ActionRow::builder().title("端末の連携").subtitle("ほかの端末（スマホ・PC）と再生を引き継ぎます").activatable(true).build();
-    row.add_suffix(&gtk::Image::from_icon_name("go-next-symbolic"));
-    let app = app.clone();
-    row.connect_activated(move |_| open_page(&app));
-    group.add(&row);
-    prefs.add(&group);
-}
-
 /// 端末の連携のページ。
 pub fn page(app: &Rc<App>) -> adw::NavigationPage {
     add_style();

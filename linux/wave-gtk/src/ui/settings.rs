@@ -21,8 +21,6 @@ pub fn page(app: &Rc<App>) -> adw::NavigationPage {
     prefs.add(&claude_group(app));
     prefs.add(&language_group(app));
     prefs.add(&about_group());
-    // 端末の連携は独立したページへ移す（別の担当）。移したらこの行を消す
-    super::devices::add_to(&prefs, app);
     adw::NavigationPage::builder().title("設定").tag("settings").child(&prefs).build()
 }
 
