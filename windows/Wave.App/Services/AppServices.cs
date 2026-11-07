@@ -57,7 +57,7 @@ public static class AppServices
         Http = InnerTubeClient.CreateHttpClient();
         AudioCache = new AudioCache(Path.Combine(AppPaths.Data, "audio-cache"), () => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
         // YouTube から届く文字（棚の見出しなど）を画面と同じ言語にする
-        Client = new InnerTubeClient(Http, L.Hl);
+        Client = new InnerTubeClient(Http, L.Hl) { OriginalTitles = Settings.OriginalTitles };
         Live = new LiveClient(InnerTubeClient.CreateHttpClient(), Client.Hl, Client.Gl, () => Clock.ElapsedMilliseconds);
         Music = new MusicRepository(Client, Live);
         Resolver = new StreamResolver(Client, new PlayerCipherProvider(Http, () => Clock.ElapsedMilliseconds), () => Clock.ElapsedMilliseconds);

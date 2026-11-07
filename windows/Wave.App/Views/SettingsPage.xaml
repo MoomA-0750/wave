@@ -124,6 +124,14 @@
                 </StackPanel>
                 <ComboBox x:Name="LanguageBox" HorizontalAlignment="Right" VerticalAlignment="Center" MinWidth="200" SelectionChanged="OnLanguageChanged" />
             </Grid>
+            <Grid Padding="16" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" Margin="0,8,0,0"
+                  BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+                <StackPanel Margin="0,0,80,0">
+                    <TextBlock Text="{x:Bind app:L.T('曲名を元の表記で', 'Show titles as released')}" />
+                    <TextBlock Text="{x:Bind app:L.T('曲名・アーティスト名・アルバム名を、曲の言語のまま出します（洋楽をカタカナに、邦楽をローマ字にしません）。YouTube に2回問い合わせるので、ページの表示が少し遅くなります', 'Keep song, artist, and album names in their own language (no katakana for Western songs, no romaji for Japanese songs). wave asks YouTube twice, so pages load a little slower')}" Style="{StaticResource SubtleTextStyle}" TextWrapping="Wrap" MaxLines="3" />
+                </StackPanel>
+                <ToggleSwitch x:Name="OriginalTitlesSwitch" HorizontalAlignment="Right" OnContent="" OffContent="" MinWidth="0" Toggled="OnOriginalTitlesToggled" />
+            </Grid>
 
             <TextBlock Text="{x:Bind app:L.T('このアプリについて', 'About')}" Style="{StaticResource BodyStrongTextBlockStyle}" Margin="0,16,0,4" />
             <StackPanel Padding="16" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"

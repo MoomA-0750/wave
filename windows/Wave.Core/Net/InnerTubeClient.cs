@@ -117,6 +117,27 @@ public sealed class InnerTubeClient
 
     internal Credentials? CurrentCredentials => credentials;
 
+    private volatile bool originalTitles;
+
+    /// <summary>
+    /// 曲名・アーティスト名・アルバム名を、YouTube が画面の言語に合わせて書き換える前の表記で出すか（設定の「曲名を元の表記で」。既定は出さない）。
+    /// 出すときは、曲の一覧を返す読み取り（<see cref="BilingualEndpoints"/>）を2つの言語で送るので、通信が倍になる。次の読み取りから効く。
+    /// </summary>
+    public bool OriginalTitles
+    {
+        get => originalTitles;
+        set => originalTitles = value;
+    }
+
+    /// <summary>曲名を元の表記で出すときに、2つの言語で送る読み取り（曲・アルバム・アーティストの一覧を返すもの）。</summary>
+    private static readonly HashSet<string> BilingualEndpoints = ["browse", "search", "next"];
+
+    private const int MaxKnownArtists = 5000;
+    private readonly Lock knownArtistsLock = new();
+
+    /// <summary>元の表記を選ぶときに覚えたアーティスト（browseId → `ja`・`en`）。アプリを閉じるまで（覚えた順、古いものから捨てる）。</summary>
+    private OrderedDictionary<string, string> knownArtists = new();
+
     /// <summary>youtubei/v1/{endpoint} に POST する。setLogin なら（ログイン中のとき）認証のヘッダを付ける。</summary>
     public async Task<ApiResult<JsonNode>> PostAsync(
         string endpoint,
@@ -125,18 +146,99 @@ public sealed class InnerTubeClient
         IReadOnlyDictionary<string, string>? query = null,
         CancellationToken cancel = default)
     {
-        var creds = setLogin ? credentials : null;
-        var loginGeneration = Generation;
-        body["context"] = Context(creds);
+        if (!OriginalTitles || !BilingualEndpoints.Contains(endpoint)) return await PostOnceAsync(endpoint, body, setLogin, query, cancel);
+        // 曲名を元の表記で出すなら、同じ頼みをもう1つの言語（画面が日本語なら英語、それ以外なら日本語）でも同時に送り、突き合わせる。
+        // もう1つが失敗したら画面の言語のまま（結果の分類は画面の言語の方で決める）
+        var screenHl = Hl;
+        using var otherCancel = CancellationTokenSource.CreateLinkedTokenSource(cancel);
+        var other = OtherLanguageAsync(endpoint, (JsonObject)body.DeepClone(), setLogin ? credentials : null, query, Wave.Core.Music.OriginalTitles.OtherLanguage(screenHl), otherCancel.Token);
+        try
+        {
+            var result = await PostOnceAsync(endpoint, body, setLogin, query, cancel);
+            if (!result.IsOk || await other is not { } otherRoot) return result;
+            return ApiResult<JsonNode>.Ok(Localized(result.Value!, otherRoot, screenHl));
+        }
+        finally
+        {
+            otherCancel.Cancel();
+            await other;
+        }
+    }
+
+    /// <summary>もう1つの言語の応答を、画面の言語の応答と突き合わせて元の表記にする（覚えたアーティストを渡し、新しく分かったものを覚える）。</summary>
+    private JsonNode Localized(JsonNode root, JsonNode other, string screenHl)
+    {
+        IReadOnlyDictionary<string, string> known;
+        lock (knownArtistsLock) known = knownArtists;
+        var result = Wave.Core.Music.OriginalTitles.Merge(root, other, screenHl, known);
+        if (result.Learned.Count == 0) return result.Json;
+        lock (knownArtistsLock)
+        {
+            // 覚えたものは書き換えずに差し替える（読む側が lock の外で使うので）
+            var next = new OrderedDictionary<string, string>(knownArtists);
+            foreach (var (id, language) in result.Learned) next[id] = language;
+            while (next.Count > MaxKnownArtists) next.RemoveAt(0);
+            knownArtists = next;
+        }
+        return result.Json;
+    }
+
+    /// <summary>
+    /// 同じ頼みを、もう1つの言語で送る。ログインの状態（失効・疑い）は変えず、どんな失敗でも null（画面の言語のまま出す）。
+    /// creds は画面の言語の方と同じもの。
+    /// </summary>
+    private async Task<JsonNode?> OtherLanguageAsync(
+        string endpoint,
+        JsonObject body,
+        Credentials? creds,
+        IReadOnlyDictionary<string, string>? query,
+        string otherHl,
+        CancellationToken cancel)
+    {
+        try
+        {
+            // この流れの間だけ、送る言語（context・Accept-Language・cookie の PREF）をもう1つの言語にする
+            HlOverride = otherHl;
+            var loginGeneration = Generation;
+            body["context"] = Context(creds);
+            using var request = NewRequest(endpoint, body, query);
+            AddHeaders(request, creds);
+            using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancel);
+            if ((int)response.StatusCode is < 200 or > 299) return null;
+            if (creds is not null && loginGeneration != Generation) return null;
+            return JsonNode.Parse(await ReadLimitedAsync(response, MaxResponseBytes, cancel)) as JsonObject;
+        }
+        catch (Exception)
+        {
+            // 取り消し・通信の失敗・ガード違反も含め、もう1つの言語は諦める
+            return null;
+        }
+    }
+
+    private static HttpRequestMessage NewRequest(string endpoint, JsonObject body, IReadOnlyDictionary<string, string>? query)
+    {
         var url = ApiBase + endpoint + "?prettyPrint=false";
         if (query is not null)
         {
             foreach (var (name, value) in query) url += "&" + name + "=" + Uri.EscapeDataString(value);
         }
-        using var request = new HttpRequestMessage(HttpMethod.Post, url)
+        return new HttpRequestMessage(HttpMethod.Post, url)
         {
             Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json"),
         };
+    }
+
+    private async Task<ApiResult<JsonNode>> PostOnceAsync(
+        string endpoint,
+        JsonObject body,
+        bool setLogin,
+        IReadOnlyDictionary<string, string>? query,
+        CancellationToken cancel)
+    {
+        var creds = setLogin ? credentials : null;
+        var loginGeneration = Generation;
+        body["context"] = Context(creds);
+        using var request = NewRequest(endpoint, body, query);
         AddHeaders(request, creds);
         try
         {

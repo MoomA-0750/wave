@@ -14,6 +14,8 @@ public sealed class Settings
     public bool RightPaneOpen { get; set; } = true;
     /// <summary>登録したアーティストの新作を通知で知らせる（アプリが動いている間。Android と同じく既定はオン）。</summary>
     public bool ReleaseNotices { get; set; } = true;
+    /// <summary>曲名・アーティスト名を、YouTube が画面の言語に合わせて書き換える前の表記で出す（洋楽をカタカナに、邦楽をローマ字にしない。Android と同じく既定はオフ）。</summary>
+    public bool OriginalTitles { get; set; }
     /// <summary>マイライブラリの並べ方（recent: 最近再生した順・added: 最近追加した順・alpha: アルファベット順）と、グリッドで出すか。</summary>
     public string LibrarySort { get; set; } = "recent";
     public bool LibraryGrid { get; set; }

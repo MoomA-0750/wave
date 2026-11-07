@@ -16,6 +16,7 @@ public sealed partial class SettingsPage : Page
         HistorySwitch.IsOn = AppServices.Settings.SendHistory;
         RenderAi();
         ReleaseSwitch.IsOn = AppServices.Settings.ReleaseNotices;
+        OriginalTitlesSwitch.IsOn = AppServices.Settings.OriginalTitles;
         DiscordSwitch.IsOn = AppServices.Settings.DiscordPresence;
         DiscordIdBox.Text = AppServices.Settings.DiscordClientId ?? "";
         DiscordStateText.Text = DiscordState();
@@ -161,6 +162,15 @@ public sealed partial class SettingsPage : Page
     {
         if (AppServices.Settings.ReleaseNotices == ReleaseSwitch.IsOn) return;
         AppServices.Settings.ReleaseNotices = ReleaseSwitch.IsOn;
+        AppServices.Settings.Save();
+    }
+
+    /// <summary>曲名を元の表記で出すか。次の読み取りから効く（開いているページは読み直したときに変わる）。</summary>
+    private void OnOriginalTitlesToggled(object sender, RoutedEventArgs e)
+    {
+        if (AppServices.Settings.OriginalTitles == OriginalTitlesSwitch.IsOn) return;
+        AppServices.Settings.OriginalTitles = OriginalTitlesSwitch.IsOn;
+        AppServices.Client.OriginalTitles = OriginalTitlesSwitch.IsOn;
         AppServices.Settings.Save();
     }
 
