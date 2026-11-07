@@ -248,7 +248,13 @@ async fn show_home(toolbar: &adw::ToolbarView, repo: &MusicRepository) {
     // 端末の連携（中継の場所が設定にあるときだけ）
     let relay_url = downloads.settings.borrow().relay_url.clone();
     let connect = connect::Connect::start(repo.clone(), playback.clone(), podcasts.clone(), relay_url).await;
-    let releases = releases::Releases::start(repo.clone(), downloads.settings.borrow().release_notices);
+    // 新作の通知は確かめるたびに設定を見る（切り替えがすぐ効く。Mac と同じ）
+    let releases = {
+        let downloads = downloads.clone();
+        releases::Releases::start(repo.clone(), move || downloads.settings.borrow().release_notices)
+    };
+    // 設定の「ログアウト」からも同じ後片付けを呼べるようにする
+    LOGOUT.with(|l| *l.borrow_mut() = Some(on_logout.clone()));
     let (shell, app) = ui::shell::build(repo.clone(), lyrics, playback.clone(), video, downloads, connect, releases, podcasts, on_logout);
     if let Some(window) = toolbar.root().and_downcast::<adw::ApplicationWindow>() {
         // GNOME のメディアの操作・メディアキーから操作できるようにする（窓がある間だけ出す）
@@ -280,6 +286,30 @@ async fn show_home(toolbar: &adw::ToolbarView, repo: &MusicRepository) {
         Ok(params) => app.push(ui::pages::mood_category(&app, "気分・ジャンル", params)),
         Err(_) => {}
     }
+    // 確かめ用: WAVE_DEMO_DEVICES があれば端末の連携のページを開く。offer・code・wrong・show・working・done・done-api・failed なら、
+    // 中継につながずに加入の手順のその様子を出す（家の記録は変えない）
+    if let Ok(state) = std::env::var("WAVE_DEMO_DEVICES") {
+        use connect::PairingView;
+        let view = match state.as_str() {
+            "offer" => Some(PairingView::ShowingOffer("wave-pair:eyJ2IjoxLCJwa0EiOiJkZW1vIiwiZUEiOiJkZW1vIiwidG9rZW4iOiJkZW1vIn0".into())),
+            "code" => Some(PairingView::EnterCode(None)),
+            "wrong" => Some(PairingView::EnterCode(Some("数字が違います".into()))),
+            "show" => Some(PairingView::ShowCode { code: "123456".into(), peer: "Pixel 3".into() }),
+            "working" => Some(PairingView::Working("相手が加えるのを待っています…".into())),
+            "done" => Some(PairingView::Done { peer: "Pixel 3".into(), grant_device_id: None }),
+            "done-api" => Some(PairingView::Done { peer: "wave API".into(), grant_device_id: Some("demo".into()) }),
+            "failed" => Some(PairingView::Failed("時間内に読み取られませんでした".into())),
+            _ => None,
+        };
+        if let Some(view) = view {
+            app.connect.show_demo_pairing(view);
+        }
+        ui::devices::open_page(&app);
+    }
+    // 確かめ用: WAVE_DEMO_PAGE=settings で設定のページを開く
+    if std::env::var("WAVE_DEMO_PAGE").as_deref() == Ok("settings") {
+        app.push(ui::settings::page(&app));
+    }
     // 入れ物（読み込み中の上の帯）ごと、画面の上の帯を持つ並びに替える
     if let Some(window) = toolbar.root().and_downcast::<adw::ApplicationWindow>() {
         window.set_content(Some(&shell));
@@ -291,8 +321,17 @@ thread_local! {
     static WINDOW: std::cell::RefCell<Option<adw::ApplicationWindow>> = const { std::cell::RefCell::new(None) };
     /// 今の画面の中身（ログアウトのときに Claude の履歴を消すのに使う）。
     static APP: std::cell::RefCell<Option<std::rc::Rc<ui::shell::App>>> = const { std::cell::RefCell::new(None) };
+    /// ログアウトの後片付け（右上のメニューと設定の「ログアウト」から呼ぶ）。
+    static LOGOUT: std::cell::RefCell<Option<std::rc::Rc<dyn Fn()>>> = const { std::cell::RefCell::new(None) };
     /// GNOME のメディアの操作への口（1つだけ）。
     static MPRIS: std::cell::RefCell<Option<std::rc::Rc<mpris::Mpris>>> = const { std::cell::RefCell::new(None) };
+}
+
+/// ログアウトする（キーリングのログイン情報・取った曲・キュー・Claude との会話を消し、ログインの入り口に戻る）。
+pub fn log_out() {
+    if let Some(logout) = LOGOUT.with(|l| l.borrow().clone()) {
+        logout();
+    }
 }
 
 fn toolbar_window(toolbar: &adw::ToolbarView) -> Option<adw::ApplicationWindow> {

@@ -11,7 +11,12 @@ use crate::runtime;
 
 thread_local! {
     static CACHE: RefCell<HashMap<String, gtk::gdk::Texture>> = RefCell::new(HashMap::new());
+    static COLORS: RefCell<HashMap<String, Option<Rgb>>> = RefCell::new(HashMap::new());
 }
+
+/// 色（0〜1 の赤・緑・青）。
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Rgb(pub f64, pub f64, pub f64);
 
 static HTTP: LazyLock<reqwest::Client> = LazyLock::new(|| {
     reqwest::Client::builder().timeout(std::time::Duration::from_secs(20)).build().expect("the TLS backend is built in")
@@ -57,7 +62,7 @@ impl Art {
 }
 
 /// picture に url の画像を出す（読み終わる前に別の URL を頼まれたら、古い方は捨てる）。
-fn load(picture: &gtk::Picture, url: Option<&str>, px: u32) {
+pub fn load(picture: &gtk::Picture, url: Option<&str>, px: u32) {
     let Some(url) = url.filter(|u| u.starts_with("https://")).map(|u| sized(u, px)) else {
         picture.set_paintable(None::<&gtk::gdk::Paintable>);
         return;
@@ -104,9 +109,57 @@ pub fn texture(url: &str, px: u32, on_loaded: impl FnOnce(gtk::gdk::Texture) + '
     });
 }
 
+/// ジャケットの色（歌詞のページの背景のグラデーションに使う）。Mac・Windows の Artwork と同じ求め方で、
+/// 小さく縮めた画像の、鮮やかさで重みを付けた平均の色。求まったら on_color に渡す（同じ URL は一度だけ求める）。
+/// 画像を読めなかったときは呼ばない。
+pub fn dominant_color(url: Option<&str>, on_color: impl FnOnce(Option<Rgb>) + 'static) {
+    let Some(url) = url.filter(|u| u.starts_with("https://")).map(str::to_string) else {
+        on_color(None);
+        return;
+    };
+    if let Some(hit) = COLORS.with(|c| c.borrow().get(&url).copied()) {
+        on_color(hit);
+        return;
+    }
+    texture(&url.clone(), 48, move |texture| {
+        let mut downloader = gtk::gdk::TextureDownloader::new(&texture);
+        downloader.set_format(gtk::gdk::MemoryFormat::R8g8b8a8);
+        let (bytes, stride) = downloader.download_bytes();
+        let width = texture.width().max(0) as usize * 4;
+        let pixels: Vec<u8> =
+            bytes.chunks(stride.max(1)).take(texture.height().max(0) as usize).flat_map(|row| row[..width.min(row.len())].to_vec()).collect();
+        let color = weighted_color(&pixels);
+        COLORS.with(|c| c.borrow_mut().insert(url, color));
+        on_color(color);
+    });
+}
+
+/// RGBA の並びから、鮮やかで暗すぎない色を重く見た平均の色。
+fn weighted_color(rgba: &[u8]) -> Option<Rgb> {
+    let (mut r, mut g, mut b, mut w) = (0.0, 0.0, 0.0, 0.0);
+    for px in rgba.chunks_exact(4) {
+        let (pr, pg, pb) = (f64::from(px[0]), f64::from(px[1]), f64::from(px[2]));
+        let (mx, mn) = (pr.max(pg).max(pb), pr.min(pg).min(pb));
+        let weight = (mx - mn) / 255.0 * (mx / 255.0) + 0.02;
+        r += pr * weight;
+        g += pg * weight;
+        b += pb * weight;
+        w += weight;
+    }
+    (w > 0.0).then(|| Rgb(r / w / 255.0, g / w / 255.0, b / w / 255.0))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn vivid_pixels_outweigh_gray_ones() {
+        // 鮮やかな赤 1 つと灰色 3 つなら、赤に寄る
+        let color = weighted_color(&[255, 0, 0, 255, 128, 128, 128, 255, 128, 128, 128, 255, 128, 128, 128, 255]).unwrap();
+        assert!(color.0 > 0.85 && color.1 < 0.15, "{color:?}");
+        assert_eq!(weighted_color(&[]), None);
+    }
 
     #[test]
     fn resizes_google_and_ytimg_urls() {

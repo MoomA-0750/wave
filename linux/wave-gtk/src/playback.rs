@@ -331,7 +331,8 @@ impl Playback {
         }
     }
 
-    /// キューの最後に入れる（何も鳴っていなければ、その曲から流す）。ラジオの曲より前に入れる作りにはしない（Windows と同じく後ろ）。
+    /// 自分で足した曲のかたまり（今の曲のすぐ後ろに続く、足した曲）の最後に入れる。元の流れ（「次に流れる曲」）より前に来る（Mac と同じ）。
+    /// 何も鳴っていなければ、その曲から流す。
     pub fn add_to_queue(self: &Rc<Self>, song: Song) {
         if self.queue_intercepted(&song, false) {
             return;
@@ -340,7 +341,11 @@ impl Playback {
             self.play_list(vec![song], 0);
             return;
         }
-        self.queue.borrow_mut().push(QueueItem::new(song, Origin::UserAdded));
+        let at = {
+            let queue = self.queue.borrow();
+            user_added_end(&queue, self.index.get().unwrap_or(0))
+        };
+        self.queue.borrow_mut().insert(at, QueueItem::new(song, Origin::UserAdded));
         self.changed();
     }
 
@@ -755,14 +760,8 @@ impl Playback {
         let at = match after {
             Some(p) => p + 1,
             None if next => current + 1,
-            None => {
-                // 今の曲の後ろに続く、足した曲のかたまりの最後
-                let mut p = current + 1;
-                while queue.get(p).is_some_and(|q| q.origin == Origin::UserAdded) {
-                    p += 1;
-                }
-                p
-            }
+            // 今の曲の後ろに続く、足した曲のかたまりの最後
+            None => user_added_end(&queue, current),
         };
         let at = at.min(queue.len());
         for (offset, item) in fresh.into_iter().enumerate() {
@@ -860,6 +859,15 @@ impl Playback {
     }
 }
 
+/// 今の曲（current）の後ろに続く、自分で足した曲のかたまりの次の位置。
+fn user_added_end(queue: &[QueueItem], current: usize) -> usize {
+    let mut p = (current + 1).min(queue.len());
+    while queue.get(p).is_some_and(|q| q.origin == Origin::UserAdded) {
+        p += 1;
+    }
+    p
+}
+
 /// プレイリストの曲を最後のページまで読む（読めなかったらそこまで）。
 pub async fn full_playlist(repo: &MusicRepository, id: &str) -> Vec<Song> {
     let Ok(first) = repo.playlist(id, None).await else { return Vec::new() };
@@ -894,6 +902,15 @@ mod tests {
         assert_eq!(id.len(), 36);
         assert_eq!(&id[14..15], "4");
         assert_ne!(id, new_item_id());
+    }
+
+    #[test]
+    fn added_songs_go_after_the_added_block_and_before_the_flow() {
+        let song = |id: &str| Song { video_id: id.into(), title: id.into(), artists: vec![], album: None, duration_seconds: None, thumbnail_url: None, kind: None, is_live: false };
+        let queue = vec![QueueItem::new(song("now"), Origin::Source), QueueItem::new(song("u1"), Origin::UserAdded), QueueItem::new(song("u2"), Origin::UserAdded), QueueItem::new(song("next"), Origin::Source)];
+        assert_eq!(user_added_end(&queue, 0), 3);
+        assert_eq!(user_added_end(&queue[..1], 0), 1);
+        assert_eq!(user_added_end(&queue, 3), 4);
     }
 
     #[test]

@@ -380,3 +380,31 @@ pub fn popup_saved(app: &Rc<App>, song: &Song, anchor: &impl IsA<gtk::Widget>, o
     });
     popover.popup();
 }
+
+/// キューの行の右クリックのメニュー（Mac のキューの行と同じ）: 曲のメニューの頭に「キューから削除」を足す（今の曲には出さない）。
+/// x・y は anchor の中の押した位置。
+pub fn popup_queue(app: &Rc<App>, song: &Song, item_id: Option<String>, anchor: &impl IsA<gtk::Widget>, x: f64, y: f64) {
+    let (menu, actions) = build(app, song, None);
+    if let Some(item_id) = item_id {
+        let section = gio::Menu::new();
+        section.append(Some("キューから削除"), Some("song.remove-queue"));
+        menu.prepend_section(None, &section);
+        let action = gio::SimpleAction::new("remove-queue", None);
+        let app = app.clone();
+        action.connect_activate(move |_, _| {
+            app.playback.remove_items(std::slice::from_ref(&item_id));
+        });
+        actions.add_action(&action);
+    }
+    let popover = gtk::PopoverMenu::from_model(Some(&menu));
+    popover.insert_action_group("song", Some(&actions));
+    popover.set_parent(anchor);
+    popover.set_has_arrow(false);
+    popover.set_pointing_to(Some(&gtk::gdk::Rectangle::new(x as i32, y as i32, 1, 1)));
+    popover.connect_closed(|p| {
+        let p = p.clone();
+        // メニューの項目の動きが終わってから外す
+        gtk::glib::idle_add_local_once(move || p.unparent());
+    });
+    popover.popup();
+}

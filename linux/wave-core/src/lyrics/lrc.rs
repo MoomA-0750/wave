@@ -45,6 +45,19 @@ pub fn current_index(lines: &[LyricLine], position_ms: u64) -> Option<usize> {
     lines.partition_point(|l| l.start_ms <= at).checked_sub(1)
 }
 
+/// position_ms で歌っている行の範囲（最初と最後の位置）。同じ時刻の行（原文に続く読み・訳）はまとめて今の行とする
+/// （Mac・Android と同じ）。最初の行より前なら None。
+pub fn current_range(lines: &[LyricLine], position_ms: u64) -> Option<(usize, usize)> {
+    let last = current_index(lines, position_ms)?;
+    let start = lines[last].start_ms;
+    Some((lines.partition_point(|l| l.start_ms < start), last))
+}
+
+/// 前の行と同じ時刻の行（原文に添える読み・訳）か。
+pub fn is_sub_line(lines: &[LyricLine], index: usize) -> bool {
+    index > 0 && lines.get(index).is_some_and(|l| l.start_ms == lines[index - 1].start_ms)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -62,5 +75,15 @@ mod tests {
         assert_eq!(current_index(&lines, 500), None);
         assert_eq!(current_index(&lines, 900), Some(0));
         assert_eq!(current_index(&lines, 5000), Some(1));
+    }
+
+    #[test]
+    fn lines_with_the_same_time_are_current_together() {
+        let line = |start_ms, text: &str| LyricLine { start_ms, text: text.into() };
+        let lines = [line(1000, "原文"), line(1000, "よみ"), line(1000, "訳"), line(2000, "次")];
+        assert_eq!(current_range(&lines, 500), None);
+        assert_eq!(current_range(&lines, 1500), Some((0, 2)));
+        assert_eq!(current_range(&lines, 2500), Some((3, 3)));
+        assert_eq!((0..4).map(|i| is_sub_line(&lines, i)).collect::<Vec<_>>(), [false, true, true, false]);
     }
 }
