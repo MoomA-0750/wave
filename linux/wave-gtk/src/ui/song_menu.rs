@@ -259,3 +259,64 @@ fn new_playlist(app: &Rc<App>, song: &Song) {
     });
     dialog.present(parent.as_ref());
 }
+
+/// 評価済みの曲の ✓ ボタンから開く小さなメニュー（Mac の「プレイリストに追加」の画面に当たる）:
+/// プレイリストに追加（新しいプレイリストも）と、高く評価した曲から削除。外したら on_unlike を呼ぶ。
+pub fn popup_saved(app: &Rc<App>, song: &Song, anchor: &impl IsA<gtk::Widget>, on_unlike: impl Fn() + 'static) {
+    let actions = gio::SimpleActionGroup::new();
+    let menu = gio::Menu::new();
+    let add_section = gio::Menu::new();
+    add_section.append(Some("新しいプレイリスト…"), Some("saved.new-playlist"));
+    let editable = app.editable_playlists.borrow().clone();
+    for p in &editable {
+        let item = gio::MenuItem::new(Some(&p.title), None);
+        item.set_action_and_target_value(Some("saved.add-to"), Some(&p.playlist_id.to_variant()));
+        add_section.append_item(&item);
+    }
+    menu.append_submenu(Some("プレイリストに追加"), &add_section);
+    menu.append(Some("高く評価した曲から削除"), Some("saved.unlike"));
+    {
+        let (app, song) = (app.clone(), song.clone());
+        let action = gio::SimpleAction::new("new-playlist", None);
+        action.connect_activate(move |_, _| new_playlist(&app, &song));
+        actions.add_action(&action);
+    }
+    {
+        let (app, song) = (app.clone(), song.clone());
+        let action = gio::SimpleAction::new("add-to", Some(gtk::glib::VariantTy::STRING));
+        action.connect_activate(move |_, target| {
+            let Some(id) = target.and_then(|t| t.get::<String>()) else { return };
+            let title = editable.iter().find(|p| p.playlist_id == id).map(|p| p.title.clone()).unwrap_or_default();
+            add_to(&app, &song, &id, &title, false);
+        });
+        actions.add_action(&action);
+    }
+    {
+        let (app, song) = (app.clone(), song.clone());
+        let on_unlike = Rc::new(on_unlike);
+        let action = gio::SimpleAction::new("unlike", None);
+        action.connect_activate(move |_, _| {
+            let (app, id, on_unlike) = (app.clone(), song.video_id.clone(), on_unlike.clone());
+            gtk::glib::spawn_future_local(async move {
+                let repo = app.repo.clone();
+                match runtime::run(async move { repo.set_liked(&id, false).await }).await {
+                    Ok(_) => {
+                        on_unlike();
+                        app.toast("高く評価した曲から削除しました");
+                    }
+                    Err(_) => app.toast("高く評価した曲から削除できませんでした"),
+                }
+            });
+        });
+        actions.add_action(&action);
+    }
+    let popover = gtk::PopoverMenu::from_model(Some(&menu));
+    popover.insert_action_group("saved", Some(&actions));
+    popover.set_parent(anchor);
+    popover.connect_closed(|p| {
+        let p = p.clone();
+        // メニューの項目の動きが終わってから外す
+        gtk::glib::idle_add_local_once(move || p.unparent());
+    });
+    popover.popup();
+}

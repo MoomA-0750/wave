@@ -98,7 +98,7 @@ const STYLE: &str = "
 .video { background-color: black; }
 .video-layer { background-color: black; }
 .ai-user { background-color: alpha(@accent_bg_color, 0.15); border-radius: 12px; padding: 6px 10px; }
-.like-button:checked { color: @accent_color; background: transparent; }
+.like-button.liked { color: @accent_color; }
 .lyric-plain { font-size: 17px; line-height: 1.6; }
 ";
 
@@ -934,59 +934,88 @@ fn queue_row(song: &wave_core::music::models::Song, activatable: bool) -> adw::A
     row
 }
 
-/// 評価のボタン: 曲が変わったら評価を読み直し、押されたら書き込む（失敗したら元に戻す）。
-fn like_behaviour(app: &Rc<App>, like: &gtk::ToggleButton) {
-    // 評価済みは塗った星、まだなら輪郭の星
-    like.connect_active_notify(|b| b.set_icon_name(if b.is_active() { "starred-symbolic" } else { "non-starred-symbolic" }));
-    // 読み直した値を入れている間は書き込まない
-    let updating = Rc::new(Cell::new(false));
+/// 評価のボタン（Mac と同じ ＋ と ✓）: 曲が変わったら評価を読み直す。＋ を押すと高く評価し（失敗したら元に戻す）、
+/// ✓ を押すとプレイリストに追加・高く評価した曲から削除の小さなメニューを開く。評価を読めなかったときは ↻ で読み直す。
+fn like_behaviour(app: &Rc<App>, like: &gtk::Button) {
+    // None は読めていない（読み中・失敗）
+    let state: Rc<Cell<Option<bool>>> = Rc::default();
     let shown: Rc<std::cell::RefCell<Option<String>>> = Rc::default();
-    {
-        let (app, like, updating, shown) = (app.clone(), like.clone(), updating.clone(), shown.clone());
-        let playback = app.playback.clone();
-        playback.on_change(move || {
-            let id = app.playback.current().map(|s| s.video_id);
-            if *shown.borrow() == id {
-                return;
-            }
-            *shown.borrow_mut() = id.clone();
-            updating.set(true);
-            like.set_active(false);
-            like.set_sensitive(false);
-            updating.set(false);
-            let Some(id) = id else { return };
-            let (repo, like, updating, shown) = (app.repo.clone(), like.clone(), updating.clone(), shown.clone());
+    let show = {
+        let like = like.clone();
+        Rc::new(move |liked: Option<bool>, loading: bool| {
+            let (icon, tip) = match liked {
+                Some(true) => ("emblem-ok-symbolic", "プレイリストに追加"),
+                Some(false) => ("list-add-symbolic", "高く評価した曲に追加"),
+                None => ("view-refresh-symbolic", "評価を読み直す"),
+            };
+            like.set_icon_name(icon);
+            like.set_tooltip_text(Some(tip));
+            if liked == Some(true) { like.add_css_class("liked") } else { like.remove_css_class("liked") }
+            like.set_sensitive(!loading);
+        })
+    };
+    let load = {
+        let (app, state, shown, show) = (app.clone(), state.clone(), shown.clone(), show.clone());
+        Rc::new(move |id: String| {
+            state.set(None);
+            show(None, true);
+            let (repo, state, shown, show) = (app.repo.clone(), state.clone(), shown.clone(), show.clone());
             gtk::glib::spawn_future_local(async move {
                 let wanted = id.clone();
                 let status = runtime::run(async move { repo.like_status(&wanted).await }).await;
                 if shown.borrow().as_deref() != Some(id.as_str()) {
                     return;
                 }
-                if let Ok(status) = status {
-                    updating.set(true);
-                    like.set_active(status == Some(wave_core::music::models::LikeStatus::Like));
-                    updating.set(false);
-                    like.set_sensitive(status.is_some());
-                }
+                let liked = status.ok().flatten().map(|s| s == wave_core::music::models::LikeStatus::Like);
+                state.set(liked);
+                show(liked, false);
             });
+        })
+    };
+    {
+        let (app, like, shown, load) = (app.clone(), like.clone(), shown.clone(), load.clone());
+        let playback = app.playback.clone();
+        playback.on_change(move || {
+            let current = app.playback.current();
+            // RSS のエピソードは YouTube の曲ではないので、評価もプレイリストへの追加もできない（Mac と同じく出さない）
+            like.set_visible(current.as_ref().is_some_and(|s| !wave_core::music::feed::is_external(&s.video_id)));
+            let id = current.map(|s| s.video_id);
+            if *shown.borrow() == id {
+                return;
+            }
+            *shown.borrow_mut() = id.clone();
+            if let Some(id) = id {
+                load(id);
+            }
         });
     }
     let app = app.clone();
-    like.connect_toggled(move |button| {
-        if updating.get() {
-            return;
-        }
+    like.connect_clicked(move |button| {
         let Some(song) = app.playback.current() else { return };
-        let (repo, liked, button, updating) = (app.repo.clone(), button.is_active(), button.clone(), updating.clone());
-        button.set_tooltip_text(Some(if liked { "高く評価を外す" } else { "高く評価" }));
-        gtk::glib::spawn_future_local(async move {
-            let id = song.video_id.clone();
-            if runtime::run(async move { repo.set_liked(&id, liked).await }).await.is_err() {
-                updating.set(true);
-                button.set_active(!liked);
-                updating.set(false);
+        match state.get() {
+            None => load(song.video_id.clone()),
+            Some(true) => {
+                let (state, show) = (state.clone(), show.clone());
+                super::song_menu::popup_saved(&app, &song, button, move || {
+                    state.set(Some(false));
+                    show(Some(false), false);
+                });
             }
-        });
+            Some(false) => {
+                state.set(Some(true));
+                show(Some(true), false);
+                let (repo, state, show, shown) = (app.repo.clone(), state.clone(), show.clone(), shown.clone());
+                gtk::glib::spawn_future_local(async move {
+                    let id = song.video_id.clone();
+                    if runtime::run(async move { repo.set_liked(&id, true).await }).await.is_err()
+                        && shown.borrow().as_deref() == Some(song.video_id.as_str())
+                    {
+                        state.set(Some(false));
+                        show(Some(false), false);
+                    }
+                });
+            }
+        }
     });
 }
 
@@ -1092,7 +1121,7 @@ fn player_bar(app: &Rc<App>, side: &gtk::Widget, side_stack: &gtk::Stack) -> gtk
     song.append(&art.root);
     song.append(&text);
     // 評価（高く評価の付け外し。Mac・Windows と同じく曲名の右）
-    let like = gtk::ToggleButton::builder().icon_name("non-starred-symbolic").tooltip_text("高く評価").valign(gtk::Align::Center).css_classes(["flat", "circular", "like-button"]).build();
+    let like = gtk::Button::builder().icon_name("list-add-symbolic").tooltip_text("高く評価した曲に追加").valign(gtk::Align::Center).css_classes(["flat", "circular", "like-button"]).build();
     song.append(&like);
     like_behaviour(app, &like);
 
@@ -1131,14 +1160,15 @@ fn player_bar(app: &Rc<App>, side: &gtk::Widget, side_stack: &gtk::Stack) -> gtk
     let queue_toggle = gtk::ToggleButton::builder().icon_name("view-list-symbolic").tooltip_text("キュー").css_classes(["flat"]).build();
     let end = gtk::Box::builder().spacing(8).valign(gtk::Align::Center).build();
     // 端末の連携が使えるときだけ、再生する端末を選ぶボタン
+    // 並びは Mac と同じ: 歌詞・キュー・端末・再生中の画面・音量
+    end.append(&lyrics_toggle);
+    end.append(&queue_toggle);
     if app.connect.info().configured {
         end.append(&devices_button(app));
     }
-    end.append(&lyrics_toggle);
-    end.append(&queue_toggle);
+    end.append(&side_toggle);
     end.append(&volume_icon);
     end.append(&volume);
-    end.append(&side_toggle);
 
     let bar = gtk::CenterBox::builder().css_classes(["player-bar"]).build();
     bar.set_start_widget(Some(&song));
