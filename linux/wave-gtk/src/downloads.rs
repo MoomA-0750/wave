@@ -306,6 +306,29 @@ impl Downloads {
         self.store.total_bytes()
     }
 
+    /// 取ったものも、取ろうとしているものも無いか（設定の「すべて削除」を押せなくする）。
+    pub fn is_empty(&self) -> bool {
+        self.total_bytes() == 0 && self.manifest.borrow().wanted_songs().is_empty()
+    }
+
+    /// 使っている容量と進み具合の1行（設定に出す。Mac の DownloadsModel.statusText と同じ）。
+    pub fn status_text(&self) -> String {
+        let pending: Vec<Song> = self
+            .manifest
+            .borrow()
+            .wanted_songs()
+            .into_iter()
+            .filter(|s| self.store.completed(&s.video_id).is_none() && !self.unavailable.borrow().contains(&s.video_id))
+            .collect();
+        let progress = self.progress.lock().unwrap().clone();
+        let active = progress.and_then(|(id, got, total)| {
+            let song = pending.iter().find(|s| s.video_id == id)?;
+            let percent = if total > 0 { (got * 100 / total).min(100) } else { 0 };
+            Some((song.title.clone(), percent))
+        });
+        status_line(self.total_bytes(), pending.len(), !self.network_allows(), !self.online(), active)
+    }
+
     pub fn download_song(self: &Rc<Self>, song: &Song) {
         let next = self.manifest.borrow().with_single(song.clone(), now_ms());
         self.apply(next);
@@ -415,6 +438,22 @@ fn now_ms() -> i64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as i64).unwrap_or(0)
 }
 
+/// 「使っている容量: 120 MB • 残り 3 曲 • 取っています: 曲名（40%）」の形の1行。
+fn status_line(bytes: u64, pending: usize, waiting_for_network: bool, offline: bool, active: Option<(String, u64)>) -> String {
+    let used = format!("使っている容量: {}", format_bytes(bytes));
+    if pending == 0 {
+        return used;
+    }
+    let state = if waiting_for_network {
+        if offline { "通信を待っています".to_string() } else { "Wi-Fi など従量制でない通信を待っています".to_string() }
+    } else if let Some((title, percent)) = active {
+        format!("取っています: {title}（{percent}%）")
+    } else {
+        "待っています".to_string()
+    };
+    format!("{used} • 残り {pending} 曲 • {state}")
+}
+
 /// 大きさの表示（MB・GB）。
 pub fn format_bytes(bytes: u64) -> String {
     let mb = bytes as f64 / 1_000_000.0;
@@ -427,4 +466,18 @@ fn internet_route() -> bool {
     wave_core::net::has_internet_route(&v4, &v6, |name| {
         std::fs::read_to_string(format!("/sys/class/net/{name}/type")).ok().and_then(|t| t.trim().parse().ok()).is_some_and(wave_core::net::is_tunnel_type)
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::status_line;
+
+    #[test]
+    fn status_line_shows_progress_and_waiting() {
+        assert_eq!(status_line(0, 0, false, false, None), "使っている容量: 0 MB");
+        assert_eq!(status_line(120_000_000, 3, false, false, Some(("曲".into(), 40))), "使っている容量: 120 MB • 残り 3 曲 • 取っています: 曲（40%）");
+        assert_eq!(status_line(0, 2, true, false, None), "使っている容量: 0 MB • 残り 2 曲 • Wi-Fi など従量制でない通信を待っています");
+        assert_eq!(status_line(0, 2, true, true, None), "使っている容量: 0 MB • 残り 2 曲 • 通信を待っています");
+        assert_eq!(status_line(0, 1, false, false, None), "使っている容量: 0 MB • 残り 1 曲 • 待っています");
+    }
 }
