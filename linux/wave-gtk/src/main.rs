@@ -2,6 +2,7 @@
 
 mod ai_chat;
 mod connect;
+mod browser_login;
 mod discord_status;
 mod downloads;
 mod keyring;
@@ -90,13 +91,32 @@ fn loading_page() -> gtk::Widget {
 /// ログインしていないときの入り口。押すとログインの窓を開き、済んだらホームを出す。
 fn show_login(window: &adw::ApplicationWindow, toolbar: &adw::ToolbarView, repo: &MusicRepository) {
     let button = gtk::Button::builder().label("ログイン").halign(gtk::Align::Center).css_classes(["suggested-action", "pill"]).build();
+    // ふだんのブラウザでログインしてあれば、それを読んで使う（アプリの中の窓でログインしなくて済む）
+    let from_browser = gtk::Button::builder().label("ブラウザのログインを使う").halign(gtk::Align::Center).css_classes(["pill"]).build();
+    let buttons = gtk::Box::new(gtk::Orientation::Vertical, 12);
+    buttons.append(&button);
+    buttons.append(&from_browser);
     let page = adw::StatusPage::builder()
         .icon_name("audio-x-generic-symbolic")
         .title("wave")
         .description("YouTube Music のアカウントでログインしてください")
-        .child(&button)
+        .child(&buttons)
         .build();
     toolbar.set_content(Some(&page));
+    {
+        let (window, toolbar, repo) = (window.clone(), toolbar.clone(), repo.clone());
+        from_browser.connect_clicked(move |b| {
+            let (b, window, toolbar, repo) = (b.clone(), window.clone(), toolbar.clone(), repo.clone());
+            gtk::glib::spawn_future_local(async move {
+                b.set_sensitive(false);
+                let ok = login_from_browser(&window, &repo).await;
+                b.set_sensitive(true);
+                if ok {
+                    show_home(&toolbar, &repo).await;
+                }
+            });
+        });
+    }
     let (window, toolbar, repo) = (window.clone(), toolbar.clone(), repo.clone());
     button.connect_clicked(move |_| {
         let (toolbar, repo) = (toolbar.clone(), repo.clone());
@@ -107,6 +127,62 @@ fn show_login(window: &adw::ApplicationWindow, toolbar: &adw::ToolbarView, repo:
             gtk::glib::spawn_future_local(async move { show_home(&toolbar, &repo).await });
         });
     });
+}
+
+/// ブラウザに残っているログインを選んで読み、キーリングに保存する。使えるようになったら true。
+async fn login_from_browser(window: &adw::ApplicationWindow, repo: &MusicRepository) -> bool {
+    let home = gtk::glib::home_dir();
+    let profiles = gtk::gio::spawn_blocking(move || browser_login::find(&home)).await.unwrap_or_default();
+    if profiles.is_empty() {
+        let dialog = adw::AlertDialog::new(
+            Some("ブラウザにログインが見つかりません"),
+            Some("ふだんのブラウザで music.youtube.com にログインしてから、もう一度「ブラウザのログインを使う」を押してください。\n\n読めるブラウザ: Firefox・Zen・LibreWolf・Floorp・Waterfox・Chrome・Chromium・Brave・Edge・Vivaldi・Opera"),
+        );
+        dialog.add_responses(&[("close", "閉じる"), ("open", "ブラウザで開く")]);
+        dialog.set_response_appearance("open", adw::ResponseAppearance::Suggested);
+        dialog.set_default_response(Some("open"));
+        if dialog.choose_future(Some(window)).await == "open" {
+            gtk::UriLauncher::new("https://music.youtube.com/").launch(Some(window), None::<&gtk::gio::Cancellable>, |_| {});
+        }
+        return false;
+    }
+    let dialog = adw::AlertDialog::new(
+        Some("どのブラウザのログインを使いますか"),
+        Some("選んだブラウザの YouTube の cookie を読んで、この PC のキーリングに保存します。ブラウザの側のログインはそのまま残ります。"),
+    );
+    dialog.add_response("cancel", "やめる");
+    for (i, profile) in profiles.iter().enumerate() {
+        dialog.add_response(&format!("p{i}"), &profile.label);
+    }
+    dialog.set_response_appearance("p0", adw::ResponseAppearance::Suggested);
+    dialog.set_close_response("cancel");
+    let chosen = dialog.choose_future(Some(window)).await;
+    let Some(profile) = chosen.strip_prefix('p').and_then(|i| i.parse::<usize>().ok()).and_then(|i| profiles.get(i)) else { return false };
+    let result = async {
+        let cookie = browser_login::read_cookie(profile).await?;
+        let (visitor, data_sync) = browser_login::page_config(cookie.clone()).await?;
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as i64);
+        let credentials = wave_core::credentials::Credentials::from_login(&cookie, visitor.as_deref(), data_sync.as_deref(), now)
+            .ok_or_else(|| "ログインの cookie が見つかりませんでした".to_string())?;
+        eprintln!("browser login visitor={} dataSync={}", visitor.is_some(), data_sync.is_some());
+        if !keyring::save(&credentials).await {
+            return Err("ログイン情報を保存できませんでした".to_string());
+        }
+        Ok(credentials)
+    }
+    .await;
+    match result {
+        Ok(credentials) => {
+            repo.client().set_credentials(Some(credentials));
+            true
+        }
+        Err(message) => {
+            let dialog = adw::AlertDialog::new(Some(&format!("{}のログインを使えませんでした", profile.label)), Some(&message));
+            dialog.add_response("close", "閉じる");
+            dialog.choose_future(Some(window)).await;
+            false
+        }
+    }
 }
 
 /// ログインできたら、Mac・Windows と同じ並びの画面に入れ替える（上の帯も画面の側が持つ）。

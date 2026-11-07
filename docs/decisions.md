@@ -1029,3 +1029,14 @@
 - コードの変更は要らなかった。cramgent で `cargo test` の 206 件が全部通った
 - appshelf に CPU の種類の欄が無いので、時計（wave-wear）と同じく別のアプリ「wave-aarch64」として linux に載せる
 - cramgent には webkitgtk-6.0・gst-plugins-base/good/bad・gst-libav・rustup を pacman で入れた（再生は playbin と pulsesink。音は PipeWire の Pulse 互換の口へ出る）
+
+## 2026-11-08 Linux はブラウザのログインを読んで使える
+
+- 本人の頼み: 「ログイン情報をブラウザから持ってくる、あるいはそのログインをブラウザでやるようにして欲しい」
+- ふだんのブラウザで済ませたログインを、アプリへ戻す口は無い（拡張を入れない限り）。そこで、ブラウザの cookie の DB を読む形にし、見つからなければ music.youtube.com をふだんのブラウザで開いて、ログインしてから押し直してもらう。二つの頼みを一つの流れでかなえる
+- 読むのは押したときだけで、ログインが残っているプロファイルを並べて本人に選ばせる（黙って読まない）。値を読むのは選んだ1つだけ。DB は $XDG_RUNTIME_DIR の自分だけが読める置き場へ写して開き、すぐ消す（ブラウザが開いたままでも読める）
+- Firefox の系統は既定の入れ物（originAttributes が空）だけ。コンテナーやプライベートの窓のログインは混ぜない
+- Chromium の系統は v10（決まった鍵）・v11（キーリングの鍵）を解き、DB の版 24 からの値の頭のホストの SHA-256 を確かめる（鍵の取り違えを見分ける）
+- 保存の前に music.youtube.com を1度開いて LOGGED_IN を確かめ、VISITOR_DATA・DATASYNC_ID もそこで取る（WebKit の窓のログインと同じものを持つ）
+- ブラウザとログインを分け合うので、ブラウザでログアウトすると wave のログインも切れる。そのときは押し直せばよい
+- Windows は Chrome・Edge の cookie が App-Bound の暗号で外から読めず、Android・iPhone はほかのアプリの cookie を読めないので、Linux だけにした
