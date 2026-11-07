@@ -553,6 +553,8 @@ const STYLE: &str = "
 .full-title { font-size: 44px; font-weight: 700; }
 .full-artist { font-size: 22px; opacity: 0.75; }
 .full-view button.flat { color: white; }
+.media-switch { background-color: alpha(black, 0.6); color: white; }
+.media-switch > toggle:checked { background-color: white; color: black; }
 ";
 
 /// 窓の中身（上の帯を含む）を作る。
@@ -1142,7 +1144,7 @@ pub(super) fn video_or_cover(app: &Rc<App>, place: Place) -> gtk::Widget {
 
 /// 「曲｜動画」の切り替え（MV のある曲だけ出す）。
 pub(super) fn song_video_switch(app: &Rc<App>) -> adw::ToggleGroup {
-    let switch = adw::ToggleGroup::builder().visible(false).css_classes(["round"]).build();
+    let switch = adw::ToggleGroup::builder().visible(false).css_classes(["round", "media-switch"]).build();
     switch.add(adw::Toggle::builder().label("曲").name("song").build());
     switch.add(adw::Toggle::builder().label("動画").name("video").build());
     switch.set_active_name(Some("song"));
@@ -2259,7 +2261,7 @@ fn player_bar(app: &Rc<App>) -> gtk::Widget {
     // 中央: 操作と位置
     let previous = gtk::Button::builder().icon_name("media-skip-backward-symbolic").tooltip_text("前へ").css_classes(["circular", "flat"]).build();
     let play_icon = gtk::Image::from_icon_name("media-playback-start-symbolic");
-    let play_spinner = adw::Spinner::new();
+    let play_spinner = adw::Spinner::builder().width_request(20).height_request(20).halign(gtk::Align::Center).valign(gtk::Align::Center).build();
     let play_face = gtk::Stack::new();
     play_face.add_named(&play_icon, Some("icon"));
     play_face.add_named(&play_spinner, Some("loading"));
@@ -2428,8 +2430,8 @@ fn player_bar(app: &Rc<App>) -> gtk::Widget {
     // 表示の状態（右の欄・全画面・窓の幅）に合わせる
     {
         let weak = Rc::downgrade(app);
-        let (queue_toggle, pane_toggle, full_toggle, device_name, volume_inline, volume_menu) =
-            (queue_toggle.clone(), pane_toggle.clone(), full_toggle.clone(), device_name.clone(), volume_inline.clone(), volume_menu.clone());
+        let (queue_toggle, pane_toggle, full_toggle, device_name, volume_inline, volume_menu, seek) =
+            (queue_toggle.clone(), pane_toggle.clone(), full_toggle.clone(), device_name.clone(), volume_inline.clone(), volume_menu.clone(), seek.clone());
         let sync = move || {
             let Some(app) = weak.upgrade() else { return };
             let shown = app.show_right();
@@ -2438,10 +2440,12 @@ fn player_bar(app: &Rc<App>) -> gtk::Widget {
                     toggle.set_active(on);
                 }
             }
+            // 狭いとき（1180 未満）は位置のバーを縮め、音量のバーをアイコンの小窓へしまう（端末名は 1400 未満でしまう）
             let level = app.width_level();
             device_name.set_visible(level == 0 && app.connect.mirror().is_some());
-            volume_inline.set_visible(level <= 2);
-            volume_menu.set_visible(level > 2);
+            volume_inline.set_visible(level <= 1);
+            volume_menu.set_visible(level > 1);
+            seek.set_width_request(if level <= 1 { 420 } else { 240 });
         };
         sync();
         app.on_view(sync);
