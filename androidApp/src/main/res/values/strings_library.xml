@@ -175,6 +175,8 @@
     <string name="releases_new_video">New video from %1$s</string>
     <string name="settings_release_notices_title">New release notifications</string>
     <string name="settings_release_notices_summary">Notify when artists you subscribe to release albums or singles this year. Only artists with 3 or more liked songs make a sound; the others appear under New releases</string>
+    <string name="settings_original_titles_title">Show titles as released</string>
+    <string name="settings_original_titles_summary">Keep song, artist, and album names in their own language (no katakana for Western songs, no romaji for Japanese songs). wave asks YouTube twice, so pages load a little slower</string>
     <string name="settings_language_title">App language</string>
     <string name="settings_language_summary">%1$s. Text from YouTube (such as shelf titles) also uses this language. YouTube text changes the next time you open wave</string>
     <string name="settings_language_system">Use device language</string>

@@ -67,6 +67,19 @@ class AppSettings(
         store.edit { it[RELEASE_NOTICES] = enabled }
     }
 
+    /**
+     * 曲名・アーティスト名を、YouTube が画面の言語に合わせて書き換える前の表記で出すか（洋楽をカタカナに、邦楽をローマ字にしない）。
+     * 既定は出さない（YouTube への読み取りが倍になる）。
+     */
+    val originalTitles: Flow<Boolean> =
+        store.data
+            .map { it[ORIGINAL_TITLES] ?: false }
+            .catch { if (it is IOException) emit(false) else throw it }
+
+    suspend fun setOriginalTitles(enabled: Boolean) {
+        store.edit { it[ORIGINAL_TITLES] = enabled }
+    }
+
     /** 再生中に、通知センターにキュー（次に流れる曲）を出すか。既定は出さない。 */
     val queueNotice: Flow<Boolean> =
         store.data
@@ -193,6 +206,7 @@ class AppSettings(
     private companion object {
         val HISTORY_ENABLED = booleanPreferencesKey("history_enabled")
         val RELEASE_NOTICES = booleanPreferencesKey("release_notices")
+        val ORIGINAL_TITLES = booleanPreferencesKey("original_titles")
         val QUEUE_NOTICE = booleanPreferencesKey("queue_notice")
         val PLAYER_OVERLAY = booleanPreferencesKey("player_overlay")
         val OPEN_ON_PHONE_PLAYBACK = booleanPreferencesKey("open_on_phone_playback")

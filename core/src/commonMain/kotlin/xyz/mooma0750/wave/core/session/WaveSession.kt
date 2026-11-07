@@ -21,6 +21,7 @@ import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
@@ -29,19 +30,25 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.Json
 import xyz.mooma0750.wave.core.auth.AuthManager
 import xyz.mooma0750.wave.core.auth.Credentials
 import xyz.mooma0750.wave.core.auth.normalizeDataSyncId
+import xyz.mooma0750.wave.core.music.OriginalTitles
 import xyz.mooma0750.wave.core.net.AuthRouteViolation
 import xyz.mooma0750.wave.core.net.PLAYBACK_STATS_PATH
 import xyz.mooma0750.wave.core.net.isAuthRouteAllowed
 import xyz.mooma0750.wave.core.net.isPlainHttps443
 import kotlin.time.Duration
 import kotlin.time.TimeSource
+import kotlin.coroutines.AbstractCoroutineContextElement
+import kotlin.coroutines.CoroutineContext
 
 sealed interface SessionState {
     data object LoggedOut : SessionState
@@ -230,6 +237,7 @@ class WaveSession internal constructor(
         authManager.beforePublish = { next -> applyCredentials(next, authoritative = true) }
         if (contentLanguage != null || contentRegion != null) {
             innerTube.locale = sanitizedYouTubeLocale(YouTubeLocale(gl = contentRegion ?: innerTube.locale.gl, hl = contentLanguage ?: innerTube.locale.hl))
+            otherInnerTube.locale = otherLocale()
         }
     }
 
@@ -260,6 +268,29 @@ class WaveSession internal constructor(
 
     internal val innerTube =
         InnerTube(httpClient = httpClient, retryDelay = retryDelay).also { it.locale = sanitizedYouTubeLocale(it.locale) }
+
+    /**
+     * 曲名を元の表記で出すときに、同じ頼みをもう1つの言語（画面が日本語なら英語、それ以外なら日本語）で送る口（[OriginalTitles]）。
+     * ログインは innerTube と同じものにそろえる。
+     */
+    private val otherInnerTube = InnerTube(httpClient = httpClient, retryDelay = retryDelay).also { it.locale = otherLocale() }
+
+    private fun otherLocale() = YouTubeLocale(gl = innerTube.locale.gl, hl = OriginalTitles.otherLanguage(innerTube.locale.hl))
+
+    private val mutableOriginalTitles = MutableStateFlow(false)
+
+    /**
+     * 曲名・アーティスト名・アルバム名を、YouTube が画面の言語に合わせて書き換える前の表記で出すか（設定の「曲名を元の表記で」。既定は出さない）。
+     * 出すときは、曲の一覧を返す読み取り（検索・browse・next）を2つの言語で送るので、通信が倍になる。
+     */
+    var originalTitles: Boolean
+        get() = mutableOriginalTitles.value
+        set(value) {
+            mutableOriginalTitles.value = value
+        }
+
+    /** 元の表記を選ぶときに覚えたアーティスト（browseId → `ja`・`en`）。このセッションの間だけ。 */
+    private val knownArtists = MutableStateFlow<Map<String, String>>(emptyMap())
     private val ytConfigParser: YtConfigParser =
         configParser?.invoke(httpClient, innerTube) ?: YtConfigParserImpl(httpClient, innerTube)
     private val generationLock = Mutex()
@@ -295,13 +326,15 @@ class WaveSession internal constructor(
             if (!sessionJob.isActive) return
             old.scope.cancel()
             if (next != null) {
-                innerTube.replaceSession(
-                    cookie = next.cookie.reveal(),
-                    visitorData = next.visitorData,
-                    dataSyncId = next.dataSyncId?.reveal(),
-                    authUser = "0",
-                    useLoginForBrowse = true,
-                )
+                for (tube in listOf(innerTube, otherInnerTube)) {
+                    tube.replaceSession(
+                        cookie = next.cookie.reveal(),
+                        visitorData = next.visitorData,
+                        dataSyncId = next.dataSyncId?.reveal(),
+                        authUser = "0",
+                        useLoginForBrowse = true,
+                    )
+                }
             } else {
                 clearInnerTubeSession()
             }
@@ -317,7 +350,7 @@ class WaveSession internal constructor(
 
     private fun clearInnerTubeSession() {
         // clearSessionIfMatches は CAS を1回しか試さないので使わない
-        innerTube.replaceSession(cookie = null, visitorData = null, dataSyncId = null, authUser = "0", useLoginForBrowse = false)
+        for (tube in listOf(innerTube, otherInnerTube)) tube.replaceSession(cookie = null, visitorData = null, dataSyncId = null, authUser = "0", useLoginForBrowse = false)
     }
 
     /** generationId が現在の世代と一致するときだけ状態を変える。 */
@@ -384,7 +417,8 @@ class WaveSession internal constructor(
         }
         if (expectedGeneration != null && expectedGeneration != generation.id) return CallResult.Failed(FailureKind.NotLoggedIn)
 
-        val deferred = generation.scope.async { runCatchingOutcome(block, parse) }
+        val bilingual = originalTitles && operation in BILINGUAL_OPERATIONS
+        val deferred = generation.scope.async { runCatchingOutcome(block, parse, bilingual) }
         val outcome =
             try {
                 deferred.await()
@@ -570,28 +604,69 @@ class WaveSession internal constructor(
         return verify(generation)
     }
 
+    /** bilingual なら、同じ頼みをもう1つの言語でも同時に送り、parse の中で [localized] が突き合わせる（もう1つが失敗したら画面の言語のまま）。 */
     private suspend fun <T> runCatchingOutcome(
         block: suspend (InnerTube) -> HttpResponse,
         parse: suspend (HttpResponse) -> ParseOutcome<T>,
+        bilingual: Boolean = false,
     ): Outcome<T> =
+        coroutineScope {
+            val other = if (bilingual) async { otherLanguageJson(block) } else null
+            try {
+                val response = block(innerTube)
+                val status = response.status.value
+                if (status in 200..299) {
+                    val otherJson = other?.await()
+                    Outcome.Body(runCatchingParse { if (otherJson != null) withContext(OtherLanguageResponse(otherJson)) { parse(response) } else parse(response) })
+                } else {
+                    response.bodyAsChannel().cancel(null)
+                    Outcome.Status(status)
+                }
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (httpError: InnerTubeHttpException) {
+                Outcome.Status(httpError.status.value)
+            } catch (_: AuthRouteViolation) {
+                Outcome.Violation
+            } catch (_: Exception) {
+                Outcome.Network
+            } finally {
+                other?.cancel()
+            }
+        }
+
+    private suspend fun otherLanguageJson(block: suspend (InnerTube) -> HttpResponse): JsonObject? =
         try {
-            val response = block(innerTube)
-            val status = response.status.value
-            if (status in 200..299) {
-                Outcome.Body(runCatchingParse { parse(response) })
+            val response = block(otherInnerTube)
+            if (response.status.value in 200..299) {
+                json.parseToJsonElement(response.bodyAsTextLimited(MAX_OTHER_LANGUAGE_BYTES)) as? JsonObject
             } else {
                 response.bodyAsChannel().cancel(null)
-                Outcome.Status(status)
+                null
             }
         } catch (cancellation: CancellationException) {
             throw cancellation
-        } catch (httpError: InnerTubeHttpException) {
-            Outcome.Status(httpError.status.value)
-        } catch (_: AuthRouteViolation) {
-            Outcome.Violation
         } catch (_: Exception) {
-            Outcome.Network
+            // ガード違反も含め、もう1つの言語は諦めて画面の言語のまま出す（同じ頼みの画面の言語の方が分類される）
+            null
         }
+
+    /** もう1つの言語の応答（[runCatchingOutcome] が parse に渡す）。 */
+    private class OtherLanguageResponse(
+        val json: JsonObject,
+    ) : AbstractCoroutineContextElement(Key) {
+        companion object Key : CoroutineContext.Key<OtherLanguageResponse>
+    }
+
+    /** 曲名を元の表記で出すなら、応答をもう1つの言語の応答と突き合わせて書き換える（parse の中から呼ぶ）。それ以外はそのまま。 */
+    internal suspend fun localized(root: JsonObject): JsonObject {
+        val other = currentCoroutineContext()[OtherLanguageResponse]?.json ?: return root
+        val result = OriginalTitles.merge(root, other, innerTube.locale.hl, knownArtists.value)
+        if (result.learned.isNotEmpty()) {
+            knownArtists.update { known -> (known + result.learned).entries.toList().takeLast(MAX_KNOWN_ARTISTS).associate { it.key to it.value } }
+        }
+        return result.json
+    }
 
     private suspend fun <T> runCatchingParse(parse: suspend () -> ParseOutcome<T>): ParseOutcome<T> =
         try {
@@ -812,6 +887,11 @@ class WaveSession internal constructor(
         const val CONFIRM_INTERVAL_MS = 30_000L
         const val MAX_ACCOUNT_MENU_BYTES = 2 * 1024 * 1024
         const val MAX_PLAYER_BYTES = 4 * 1024 * 1024
+        const val MAX_OTHER_LANGUAGE_BYTES = 8 * 1024 * 1024
+        const val MAX_KNOWN_ARTISTS = 5000
+
+        /** 曲名を元の表記で出すときに、2つの言語で送る読み取り（曲・アルバム・アーティストの一覧を返すもの）。 */
+        val BILINGUAL_OPERATIONS = setOf("browse", "search", "next")
 
         val json =
             Json {
@@ -832,7 +912,14 @@ class WaveSession internal constructor(
             rethrowViolations: Boolean = false,
             nowMs: () -> Long = { 0L },
             configParser: ((HttpClient, InnerTube) -> YtConfigParser)? = null,
-        ) = WaveSession(httpClient, credentials, scope, retryDelay, rethrowViolations, nowMs, configParser)
+            /** YouTube に送る言語（null なら端末の言語）。 */
+            hl: String? = null,
+        ) = WaveSession(httpClient, credentials, scope, retryDelay, rethrowViolations, nowMs, configParser).also { session ->
+            if (hl != null) {
+                session.innerTube.locale = YouTubeLocale(gl = session.innerTube.locale.gl, hl = hl)
+                session.otherInnerTube.locale = session.otherLocale()
+            }
+        }
     }
 }
 

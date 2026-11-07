@@ -87,6 +87,8 @@ class WaveApplication :
                 .distinctUntilChanged()
                 .collect { xyz.mooma0750.wave.releases.ReleaseWatcher.schedule(this@WaveApplication, it) }
         }
+        // 曲名を元の表記で出すか（設定の切り替えはすぐに次の読み取りから効く）
+        container.appScope.launch { container.settings.originalTitles.collect { container.session.originalTitles = it } }
         registerActivityLifecycleCallbacks(
             object : ActivityLifecycleCallbacks {
                 override fun onActivityStarted(activity: android.app.Activity) {

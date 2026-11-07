@@ -152,6 +152,18 @@ fun SettingsScreen(
                 item { HorizontalDivider() }
             }
             item { LanguageSetting() }
+            item {
+                val originalTitles by container.settings.originalTitles.collectAsStateWithLifecycle(initialValue = null)
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.settings_original_titles_title)) },
+                    supportingContent = { Text(stringResource(R.string.settings_original_titles_summary)) },
+                    trailingContent = {
+                        originalTitles?.let { enabled ->
+                            Switch(checked = enabled, onCheckedChange = { container.appScope.launch { container.settings.setOriginalTitles(it) } })
+                        }
+                    },
+                )
+            }
             item { WidgetScaleSetting(container.appScope) }
             if (container.connectV2 != null) {
                 item {

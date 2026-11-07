@@ -170,6 +170,8 @@
     <string name="releases_new_video">%1$s の新しい動画</string>
     <string name="settings_release_notices_title">新作の通知</string>
     <string name="settings_release_notices_summary">登録したアーティストの今年のアルバム・シングルを知らせる（数時間おきに確かめる）。通知が鳴るのは高く評価した曲が3曲以上のアーティストだけで、ほかは「新作」に並べる</string>
+    <string name="settings_original_titles_title">曲名を元の表記で</string>
+    <string name="settings_original_titles_summary">曲名・アーティスト名・アルバム名を、曲の言語のまま出します（洋楽をカタカナに、邦楽をローマ字にしません）。YouTube に2回問い合わせるので、ページの表示が少し遅くなります</string>
     <string name="settings_language_title">画面の言語</string>
     <string name="settings_language_summary">%1$s。YouTube から届く文字（棚の見出しなど）もこの言語になります。YouTube の文字は次の起動から反映されます</string>
     <string name="settings_language_system">端末に合わせる</string>

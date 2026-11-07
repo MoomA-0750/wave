@@ -589,8 +589,9 @@ class MusicRepository(
     /** 読めなければ（形が違えば）Invalid。 */
     private fun <T> parsedOrInvalid(value: T?): ParseOutcome<T> = if (value != null) ParseOutcome.Parsed(value) else ParseOutcome.Invalid
 
+    /** 応答を読む。曲名を元の表記で出すなら、もう1つの言語の応答と突き合わせたもの（[WaveSession.localized]）。 */
     private suspend fun json(response: HttpResponse): JsonObject =
-        WaveSession.json.parseToJsonElement(response.bodyAsTextLimited(MAX_BROWSE_BYTES)) as JsonObject
+        session.localized(WaveSession.json.parseToJsonElement(response.bodyAsTextLimited(MAX_BROWSE_BYTES)) as JsonObject)
 
     companion object {
         /** 検索を曲に絞る params。 */
