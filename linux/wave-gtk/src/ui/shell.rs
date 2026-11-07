@@ -97,7 +97,6 @@ pub struct App {
     pub ai: Rc<crate::ai_chat::AiChat>,
     /// 自分で編集できるプレイリスト（曲のメニューの「プレイリストに追加」に並べる）。
     pub editable_playlists: RefCell<Vec<wave_core::music::models::PlaylistSummary>>,
-    on_logout: Rc<dyn Fn()>,
     view: Cell<View>,
     parts: RefCell<Parts>,
     view_listeners: RefCell<Vec<Rc<dyn Fn()>>>,
@@ -169,11 +168,6 @@ impl App {
         }
     }
 
-    /// ログアウトする（設定のアカウントのカードから呼ぶ）。
-    #[allow(dead_code, reason = "ui/settings.rs のアカウントのカードからつなぐ（設定の担当が足す）")]
-    pub fn logout(&self) {
-        (self.on_logout)();
-    }
 
     /// 今映している曲（ほかの端末で鳴っていればその曲、そうでなければ手元の今の曲）。
     pub fn shown_song(&self) -> Option<Song> {
@@ -572,7 +566,8 @@ pub fn build(
     connect: Rc<crate::connect::Connect>,
     releases: Rc<crate::releases::Releases>,
     podcasts: Rc<crate::podcasts::Podcasts>,
-    on_logout: Rc<dyn Fn()>,
+    // ログアウトは設定のアカウントのカード（crate::log_out）から
+    _on_logout: Rc<dyn Fn()>,
 ) -> (gtk::Widget, Rc<App>) {
     let css = gtk::CssProvider::new();
     css.load_from_string(STYLE);
@@ -595,7 +590,6 @@ pub fn build(
         podcasts,
         ai: Default::default(),
         editable_playlists: Default::default(),
-        on_logout,
         view: Cell::new(View { right_open, ..Default::default() }),
         parts: Default::default(),
         view_listeners: Default::default(),
@@ -664,7 +658,15 @@ pub fn build(
     let side_stack = gtk::Stack::builder().transition_type(gtk::StackTransitionType::Crossfade).build();
     side_stack.add_named(&now_playing(&app), Some("now"));
     side_stack.add_named(&queue(&app), Some("queue"));
-    side_stack.add_named(&super::ai::panel(&app, { let app = app.clone(); move || if let Some(t) = app.claude_toggle.borrow().as_ref() { t.set_active(false) } }), Some("ai"));
+    side_stack.add_named(&super::ai::panel(&app, {
+        // Claude の欄の × は、開く前の右の欄に戻す
+        let weak = Rc::downgrade(&app);
+        move || {
+            if let Some(app) = weak.upgrade() {
+                app.close_ai();
+            }
+        }
+    }), Some("ai"));
     // 中身ごとに幅を変えず、いつも同じ幅にする（Claude の長い文に合わせて広がらないように）
     side_stack.set_hhomogeneous(false);
     let side_width = adw::Clamp::builder().maximum_size(SIDE_WIDTH).tightening_threshold(SIDE_WIDTH).child(&side_stack).build();
@@ -1690,7 +1692,7 @@ fn now_playing(app: &Rc<App>) -> gtk::Widget {
 }
 
 /// 上の帯の右端: アカウントの写真。押すと名前・最近再生した曲・端末の連携（中継を設定しているとき）・設定（Mac と同じ）。
-/// ログアウトは設定のアカウントから（App::logout）。
+/// ログアウトは設定のアカウントのカードから（確認つき）。
 fn account_button(app: &Rc<App>) -> gtk::MenuButton {
     let avatar = adw::Avatar::builder().size(30).show_initials(true).build();
     let name = gtk::Label::builder().css_classes(["heading"]).margin_bottom(6).build();
