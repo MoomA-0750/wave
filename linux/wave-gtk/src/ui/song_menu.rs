@@ -1,6 +1,7 @@
-//! 曲のメニュー（行の右端の「…」と右クリック。Mac・Windows と同じ並び）: 次に再生・キューに追加・プレイリストに追加（新しいプレイリストも）・
+//! 曲のメニュー（行の右端の「…」と右クリック。Mac・Windows と同じ並び）: 次に再生・キューに追加・ダウンロード・プレイリストに追加（新しいプレイリストも）・
 //! 高く評価した曲に追加（評価済みなら削除）・
 //! このプレイリストから削除・曲のラジオ・アルバムへ・アーティストへ・リンクをコピー。
+//! RSS のエピソードは YouTube の曲ではないので、プレイリストに追加・高く評価・ラジオ・共有を出さない（ダウンロードは出す。Mac と同じ）。
 
 use std::rc::Rc;
 
@@ -44,6 +45,22 @@ pub fn button(app: &Rc<App>, song: &Song, removal: Option<Removal>, right_click_
     button
 }
 
+/// 部品の上の (x, y) に曲のメニューを開く（カードの右クリック）。
+pub fn popup(app: &Rc<App>, song: &Song, anchor: &gtk::Widget, x: f64, y: f64) {
+    let (menu, actions) = build(app, song, None);
+    let popover = gtk::PopoverMenu::from_model(Some(&menu));
+    popover.insert_action_group("song", Some(&actions));
+    popover.set_parent(anchor);
+    popover.set_has_arrow(false);
+    popover.set_pointing_to(Some(&gtk::gdk::Rectangle::new(x as i32, y as i32, 1, 1)));
+    popover.connect_closed(|p| {
+        let p = p.clone();
+        // メニューの項目の動きが終わってから外す
+        gtk::glib::idle_add_local_once(move || p.unparent());
+    });
+    popover.popup();
+}
+
 fn build(app: &Rc<App>, song: &Song, removal: Option<Rc<Removal>>) -> (gio::Menu, gio::SimpleActionGroup) {
     let actions = gio::SimpleActionGroup::new();
     let menu = gio::Menu::new();
@@ -56,8 +73,10 @@ fn build(app: &Rc<App>, song: &Song, removal: Option<Rc<Removal>>) -> (gio::Menu
     let queue_section = gio::Menu::new();
     queue_section.append(Some("次に再生"), Some("song.play-next"));
     queue_section.append(Some("キューに追加"), Some("song.add-queue"));
-    // ダウンロード（取っていれば「ダウンロードを削除」。ライブ配信と RSS のエピソードはまだ取らない）
-    if !song.is_live && !wave_core::music::feed::is_external(&song.video_id) {
+    // RSS のエピソードは YouTube の曲ではない（プレイリスト・評価・ラジオ・共有のリンクが無い。ADR-0012）
+    let external = wave_core::music::feed::is_external(&song.video_id);
+    // ダウンロード（取っていれば「ダウンロードを削除」。ライブ配信は取らない。RSS のエピソードは取れる）
+    if !song.is_live {
         let state = app.downloads.state(&song.video_id);
         let single = app.downloads.manifest().is_single(&song.video_id);
         if single || state == crate::downloads::SongState::Done && !app.downloads.manifest().is_wanted(&song.video_id) {
@@ -79,7 +98,14 @@ fn build(app: &Rc<App>, song: &Song, removal: Option<Rc<Removal>>) -> (gio::Menu
     menu.append_section(None, &queue_section);
     {
         let (app, song) = (app.clone(), song.clone());
-        add("play-next", Box::new(move |_| app.playback.play_next(song.clone())), false);
+        add("play-next", Box::new(move |_| {
+            // ほかの端末を映している間は、その端末のキューへの追加として知らせる（連携の側が出す）
+            let remote = app.connect.mirror().is_some();
+            app.playback.play_next(song.clone());
+            if !remote {
+                app.toast("次に再生します");
+            }
+        }), false);
     }
     {
         let (app, song) = (app.clone(), song.clone());
@@ -94,7 +120,7 @@ fn build(app: &Rc<App>, song: &Song, removal: Option<Rc<Removal>>) -> (gio::Menu
     }
 
     // ログインしていなければ出さない（押せないものは出さない。Mac・Windows と同じ）
-    if app.repo.client().is_logged_in() {
+    if app.repo.client().is_logged_in() && (!external || removal.is_some()) {
         let playlist_section = gio::Menu::new();
         let submenu = gio::Menu::new();
         submenu.append(Some("新しいプレイリスト…"), Some("song.new-playlist"));
@@ -108,23 +134,31 @@ fn build(app: &Rc<App>, song: &Song, removal: Option<Rc<Removal>>) -> (gio::Menu
             }
             submenu.append_section(None, &list);
         }
-        playlist_section.append_submenu(Some("プレイリストに追加"), &submenu);
-        // 高く評価した曲に足す・外す（開いた時点の評価を読んでから、外すほうに替える。RSS のエピソードには出さない）
-        if !song.video_id.starts_with("ext:") {
-            playlist_section.append(Some("高く評価した曲に追加"), Some("song.like"));
-            let (repo, id, section) = (app.repo.clone(), song.video_id.clone(), playlist_section.clone());
-            gtk::glib::spawn_future_local(async move {
-                let status = runtime::run(async move { repo.like_status(&id).await }).await;
-                if let Ok(Some(wave_core::music::models::LikeStatus::Like)) = status {
-                    for i in 0..section.n_items() {
-                        if section.item_attribute_value(i, "action", None).and_then(|v| v.get::<String>()).as_deref() == Some("song.like") {
-                            section.remove(i);
-                            section.insert(i, Some("高く評価した曲から削除"), Some("song.unlike"));
-                            break;
+        if !external {
+            playlist_section.append_submenu(Some("プレイリストに追加"), &submenu);
+        }
+        // 高く評価した曲に足す・外す。高く評価した曲の一覧を読んであればそれで、無ければ開いた時点の評価を読んでから外すほうに替える
+        if !external {
+            match super::track::liked_known(&song.video_id) {
+                Some(true) => playlist_section.append(Some("高く評価した曲から削除"), Some("song.unlike")),
+                Some(false) => playlist_section.append(Some("高く評価した曲に追加"), Some("song.like")),
+                None => {
+                    playlist_section.append(Some("高く評価した曲に追加"), Some("song.like"));
+                    let (repo, id, section) = (app.repo.clone(), song.video_id.clone(), playlist_section.clone());
+                    gtk::glib::spawn_future_local(async move {
+                        let status = runtime::run(async move { repo.like_status(&id).await }).await;
+                        if let Ok(Some(wave_core::music::models::LikeStatus::Like)) = status {
+                            for i in 0..section.n_items() {
+                                if section.item_attribute_value(i, "action", None).and_then(|v| v.get::<String>()).as_deref() == Some("song.like") {
+                                    section.remove(i);
+                                    section.insert(i, Some("高く評価した曲から削除"), Some("song.unlike"));
+                                    break;
+                                }
+                            }
                         }
-                    }
+                    });
                 }
-            });
+            }
             for (name, liked) in [("like", true), ("unlike", false)] {
                 let (app, song) = (app.clone(), song.clone());
                 add(name, Box::new(move |_| {
@@ -132,6 +166,9 @@ fn build(app: &Rc<App>, song: &Song, removal: Option<Rc<Removal>>) -> (gio::Menu
                     gtk::glib::spawn_future_local(async move {
                         let (repo, id) = (app.repo.clone(), song.video_id.clone());
                         let ok = runtime::run(async move { repo.set_liked(&id, liked).await }).await.is_ok();
+                        if ok {
+                            super::track::set_liked(&song.video_id, liked);
+                        }
                         app.toast(match (ok, liked) {
                             (true, true) => "高く評価した曲に追加しました",
                             (true, false) => "高く評価した曲から削除しました",
@@ -175,8 +212,8 @@ fn build(app: &Rc<App>, song: &Song, removal: Option<Rc<Removal>>) -> (gio::Menu
     }
 
     let go_section = gio::Menu::new();
-    go_section.append(Some("曲のラジオを再生"), Some("song.radio"));
-    {
+    if !external {
+        go_section.append(Some("曲のラジオを再生"), Some("song.radio"));
         let (app, song) = (app.clone(), song.clone());
         add("radio", Box::new(move |_| app.playback.play_list(vec![song.clone()], 0)), false);
     }
@@ -202,10 +239,10 @@ fn build(app: &Rc<App>, song: &Song, removal: Option<Rc<Removal>>) -> (gio::Menu
     }
     menu.append_section(None, &go_section);
 
-    let share = gio::Menu::new();
-    share.append(Some("曲のリンクをコピー"), Some("song.copy-link"));
-    menu.append_section(None, &share);
-    {
+    if !external {
+        let share = gio::Menu::new();
+        share.append(Some("曲のリンクをコピー"), Some("song.copy-link"));
+        menu.append_section(None, &share);
         let (app, link) = (app.clone(), format!("https://music.youtube.com/watch?v={}", song.video_id));
         add("copy-link", Box::new(move |_| {
             if let Some(display) = gtk::gdk::Display::default() {
@@ -234,30 +271,51 @@ fn add_to(app: &Rc<App>, song: &Song, playlist_id: &str, title: &str, known_empt
 
 /// 名前を聞いて非公開のプレイリストを作り、その曲を入れる。
 fn new_playlist(app: &Rc<App>, song: &Song) {
-    let entry = gtk::Entry::builder().placeholder_text("マイ プレイリスト").activates_default(true).build();
-    let dialog = adw::AlertDialog::builder().heading("新しいプレイリスト").extra_child(&entry).default_response("create").close_response("cancel").build();
+    create_playlist(app, Some(song.clone()), None);
+}
+
+/// プレイリストを作る（名前を聞く）。song があれば作ったプレイリストに入れる。欄は曲から作るとき「マイプレイリスト」入りで、空なら作れない（Mac と同じ）。
+/// 作れたら on_created を呼ぶ（マイライブラリを読み直す）。
+pub fn create_playlist(app: &Rc<App>, song: Option<Song>, on_created: Option<Rc<dyn Fn()>>) {
+    let entry = gtk::Entry::builder().placeholder_text("プレイリスト名").text(if song.is_some() { "マイプレイリスト" } else { "" }).activates_default(true).build();
+    let dialog = adw::AlertDialog::builder().heading("プレイリストを作成").extra_child(&entry).default_response("create").close_response("cancel").build();
     dialog.add_response("cancel", "キャンセル");
     dialog.add_response("create", "作成");
     dialog.set_response_appearance("create", adw::ResponseAppearance::Suggested);
-    let (app, song) = (app.clone(), song.clone());
+    let sync = {
+        let dialog = dialog.clone();
+        move |entry: &gtk::Entry| dialog.set_response_enabled("create", !entry.text().trim().is_empty())
+    };
+    sync(&entry);
+    entry.connect_changed(sync);
+    let (app, entry_c) = (app.clone(), entry.clone());
     let parent = app.window();
     dialog.connect_response(None, move |_, response| {
-        if response != "create" {
+        let title = entry_c.text().trim().to_string();
+        if response != "create" || title.is_empty() {
             return;
         }
-        let title = Some(entry.text().trim().to_string()).filter(|t| !t.is_empty()).unwrap_or_else(|| "マイ プレイリスト".into());
-        let (app, song) = (app.clone(), song.clone());
+        let (app, song, on_created) = (app.clone(), song.clone(), on_created.clone());
         gtk::glib::spawn_future_local(async move {
             let repo = app.repo.clone();
             let name = title.clone();
             match runtime::run(async move { repo.create_playlist(&name).await }).await {
-                // 作ったばかりで空なので、重複を確かめずに入れる
-                Ok(id) => add_to(&app, &song, &id, &title, true),
+                Ok(id) => {
+                    match song {
+                        // 作ったばかりで空なので、重複を確かめずに入れる
+                        Some(song) => add_to(&app, &song, &id, &title, true),
+                        None => app.toast(&format!("「{title}」を作成しました")),
+                    }
+                    if let Some(f) = on_created {
+                        f();
+                    }
+                }
                 Err(_) => app.toast("プレイリストを作れませんでした"),
             }
         });
     });
     dialog.present(parent.as_ref());
+    entry.grab_focus();
 }
 
 /// 評価済みの曲の ✓ ボタンから開く小さなメニュー（Mac の「プレイリストに追加」の画面に当たる）:
@@ -299,8 +357,10 @@ pub fn popup_saved(app: &Rc<App>, song: &Song, anchor: &impl IsA<gtk::Widget>, o
             let (app, id, on_unlike) = (app.clone(), song.video_id.clone(), on_unlike.clone());
             gtk::glib::spawn_future_local(async move {
                 let repo = app.repo.clone();
+                let video = id.clone();
                 match runtime::run(async move { repo.set_liked(&id, false).await }).await {
                     Ok(_) => {
+                        super::track::set_liked(&video, false);
                         on_unlike();
                         app.toast("高く評価した曲から削除しました");
                     }

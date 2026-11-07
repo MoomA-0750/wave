@@ -193,6 +193,48 @@ pub fn diversified(releases: &[NewRelease], per_artist: usize) -> Vec<NewRelease
     out
 }
 
+/// 見つけてから NEW の印を付けておく間（7日。Android・Mac と同じ）。
+pub const FRESH_MS: i64 = 7 * 24 * 60 * 60 * 1000;
+
+/// 新作をカードにする（アルバムは開く、動画は曲として流す）。見つけて7日は補足の先頭に「NEW • 」、
+/// 出元が怪しいものは外さずに「⚠︎ 出元が怪しい • 」を付ける（Mac の HomeModel.releaseItem と同じ）。ホームとアーティストのページで使う。
+pub fn release_item(r: &NewRelease, now_epoch_ms: i64) -> Option<HomeItem> {
+    let fresh = !r.seeded && now_epoch_ms - r.found_at_epoch_ms < FRESH_MS;
+    let suspect = r.suspect.as_ref().is_some_and(|s| !s.is_empty());
+    let mark = if suspect { "⚠︎ 出元が怪しい • " } else if fresh { "NEW • " } else { "" };
+    let subtitle = format!("{mark}{}", r.artist_name);
+    if let Some(album) = &r.album_browse_id {
+        return Some(HomeItem::Album(AlbumSummary { browse_id: album.clone(), title: r.title.clone(), subtitle: Some(subtitle), thumbnail_url: r.thumbnail_url.clone() }));
+    }
+    let video_id = r.video_id.clone().filter(|v| !v.is_empty())?;
+    Some(HomeItem::Song(super::models::Song {
+        video_id,
+        title: r.title.clone(),
+        artists: vec![super::models::ArtistRef { name: r.artist_name.clone(), browse_id: Some(r.artist_id.clone()) }],
+        album: None,
+        duration_seconds: None,
+        thumbnail_url: r.thumbnail_url.clone(),
+        kind: None,
+        is_live: false,
+    }))
+}
+
+/// ホームの棚が前に読んだ棚と同じか見分ける印（見出しと先頭の3枚。続きのページで同じ棚が来ても重ねない。Mac と同じ）。
+pub fn shelf_key(shelf: &HomeShelf) -> String {
+    let keys: Vec<String> = shelf
+        .items
+        .iter()
+        .take(3)
+        .map(|i| match i {
+            HomeItem::Song(s) => format!("s:{}", s.video_id),
+            HomeItem::Album(a) => format!("a:{}", a.browse_id),
+            HomeItem::Playlist(p) => format!("p:{}", p.playlist_id),
+            HomeItem::Artist(a) => format!("r:{}", a.browse_id),
+        })
+        .collect();
+    format!("{}|{}", shelf.title, keys.join(","))
+}
+
 /// YouTube Music の新作の棚が、ホームに来ている新作の棚と重なるか（アルバムが3枚以上同じ棚にある）。重なるなら出さない。
 pub fn duplicates_new_releases(releases: &[AlbumSummary], shelves: &[HomeShelf]) -> bool {
     let ids: HashSet<&str> = releases.iter().take(NEW_RELEASES_COUNT).map(|a| a.browse_id.as_str()).collect();
@@ -207,6 +249,22 @@ pub fn new_releases_shelf(title: &str, releases: Vec<AlbumSummary>) -> Option<Ho
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn release(album: Option<&str>, video: Option<&str>, found: i64, seeded: bool, suspect: Option<Vec<String>>) -> NewRelease {
+        NewRelease { artist_id: "UC1".into(), artist_name: "A".into(), title: "T".into(), album_browse_id: album.map(String::from), video_id: video.map(String::from), thumbnail_url: None, found_at_epoch_ms: found, seeded, suspect }
+    }
+
+    #[test]
+    fn release_items_mark_new_for_seven_days_and_keep_videos_as_songs() {
+        let day = 24 * 60 * 60 * 1000;
+        let subtitle = |item: Option<HomeItem>| item.and_then(|i| i.subtitle());
+        assert_eq!(subtitle(release_item(&release(Some("MPRE1"), None, 0, false, None), 6 * day)).as_deref(), Some("NEW • A"));
+        assert_eq!(subtitle(release_item(&release(Some("MPRE1"), None, 0, false, None), 8 * day)).as_deref(), Some("A"));
+        assert_eq!(subtitle(release_item(&release(Some("MPRE1"), None, 0, true, None), day)).as_deref(), Some("A"));
+        assert_eq!(subtitle(release_item(&release(Some("MPRE1"), None, 0, false, Some(vec!["NAME".into()])), day)).as_deref(), Some("⚠︎ 出元が怪しい • A"));
+        assert!(matches!(release_item(&release(None, Some("vid"), 0, false, None), day), Some(HomeItem::Song(s)) if s.video_id == "vid"));
+        assert_eq!(release_item(&release(None, None, 0, false, None), day), None);
+    }
     use crate::music::models::{AlbumShelf, Song};
 
     fn page(albums: &[&str], videos: &[&str]) -> ArtistPage {

@@ -414,6 +414,7 @@ fn header(app: &Rc<App>) -> adw::HeaderBar {
             search.grab_focus();
         });
     }
+    super::search::set_entry(&search);
     let app = app.clone();
     search.connect_activate(move |entry| {
         suggestions.popdown();
@@ -421,73 +422,10 @@ fn header(app: &Rc<App>) -> adw::HeaderBar {
         if query.is_empty() {
             return;
         }
-        // 検索のページは1枚だけ積む（打ち直したら置き換える）
-        if app.visible_kind().as_deref() == Some("search") {
-            app.nav.pop();
-        }
-        app.push(pages::search(&app, &query));
+        // 検索のページは1枚だけ積む（検索のページにいればその場で語を替える）
+        super::search::open(&app, Some(&query));
     });
     bar
-}
-
-/// 検索の履歴の行（画像付き。押すと開く・右の × で消す・最後に「すべて消す」）。
-fn history_rows(app: &Rc<App>, popover: &gtk::Popover, list: &gtk::ListBox, entry: &gtk::SearchEntry) {
-    while let Some(row) = list.first_child() {
-        list.remove(&row);
-    }
-    let history = app.downloads.settings.borrow().search_history.clone();
-    if history.is_empty() {
-        popover.popdown();
-        return;
-    }
-    list.append(&gtk::Label::builder().label("最近の検索").xalign(0.0).margin_start(12).margin_top(6).css_classes(["heading"]).build());
-    for item in history.into_iter().take(10) {
-        let row = adw::ActionRow::builder().title(gtk::glib::markup_escape_text(&item.title)).subtitle(gtk::glib::markup_escape_text(item.subtitle.as_deref().unwrap_or(""))).activatable(true).build();
-        if item.kind == "query" {
-            row.add_prefix(&gtk::Image::from_icon_name("document-open-recent-symbolic"));
-        } else {
-            let art = images::square(36);
-            if item.kind == "artist" {
-                art.add_css_class("round");
-            }
-            art.load(item.thumbnail_url.as_deref(), 72);
-            row.add_prefix(&art.root);
-        }
-        let remove = gtk::Button::builder().icon_name("window-close-symbolic").tooltip_text("履歴から消す").valign(gtk::Align::Center).css_classes(["flat", "circular"]).build();
-        row.add_suffix(&remove);
-        {
-            let (app, key, popover, list, entry) = (app.clone(), item.key(), popover.clone(), list.clone(), entry.clone());
-            remove.connect_clicked(move |_| {
-                app.downloads.update_settings(|s| s.search_history.retain(|e| e.key() != key));
-                history_rows(&app, &popover, &list, &entry);
-            });
-        }
-        let (app, popover, entry) = (app.clone(), popover.clone(), entry.clone());
-        row.connect_activated(move |_| {
-            popover.popdown();
-            app.remember_search(item.clone());
-            match (item.kind.as_str(), &item.id, &item.song) {
-                ("album", Some(id), _) => app.push(pages::album(&app, id, &item.title)),
-                ("artist", Some(id), _) => app.push(pages::artist(&app, id, &item.title)),
-                ("song", _, Some(song)) => app.playback.play_list(vec![song.clone()], 0),
-                _ => {
-                    entry.set_text(&item.title);
-                    entry.emit_activate();
-                }
-            }
-        });
-        list.append(&row);
-    }
-    let clear = gtk::Button::builder().label("すべて消す").halign(gtk::Align::End).margin_end(8).margin_bottom(6).css_classes(["flat"]).build();
-    {
-        let (app, popover) = (app.clone(), popover.clone());
-        clear.connect_clicked(move |_| {
-            app.downloads.update_settings(|s| s.search_history.clear());
-            popover.popdown();
-        });
-    }
-    list.append(&clear);
-    popover.popup();
 }
 
 /// 入力の欄（中の文字の部品も含めて）に手が乗っているか。
@@ -495,11 +433,33 @@ fn focused(entry: &gtk::SearchEntry) -> bool {
     entry.root().and_then(|r| r.focus()).is_some_and(|f| f == *entry.upcast_ref::<gtk::Widget>() || f.is_ancestor(entry))
 }
 
-/// 打ち込み中の候補（語・アーティスト・アルバム・曲）。語を押すとその語で検索し、アーティスト・アルバムはそのページ、曲は鳴らす。
+/// 候補の行（画像・名前・補足）。
+fn suggestion_row(title: &str, subtitle: Option<&str>, thumbnail: Option<&str>, round: bool, icon: &str) -> adw::ActionRow {
+    let row = adw::ActionRow::builder().title(gtk::glib::markup_escape_text(title)).activatable(true).title_lines(1).subtitle_lines(1).build();
+    if let Some(subtitle) = subtitle.filter(|s| !s.is_empty()) {
+        row.set_subtitle(&gtk::glib::markup_escape_text(subtitle));
+    }
+    match thumbnail {
+        Some(url) => {
+            let art = images::square(36);
+            if round {
+                art.add_css_class("round");
+            }
+            art.load(Some(url), 72);
+            row.add_prefix(&art.root);
+        }
+        None => row.add_prefix(&gtk::Image::from_icon_name(icon)),
+    }
+    row
+}
+
+/// 打ち込み中の候補（Mac と同じ並び: 語5つ → アーティスト → 曲 → アルバム）。語を押すとその語で検索し、アーティスト・アルバムはそのページ、
+/// 曲はその1曲＋ラジオで鳴らす（どれも検索の履歴に残す）。空のまま欄に入ると検索のページ（最近の検索・すべてをブラウズ）へ移る。
 fn suggestions_popover(app: &Rc<App>, entry: &gtk::SearchEntry) -> gtk::Popover {
     let list = gtk::ListBox::builder().selection_mode(gtk::SelectionMode::None).width_request(440).css_classes(["navigation-sidebar"]).build();
+    let scroller = gtk::ScrolledWindow::builder().child(&list).hscrollbar_policy(gtk::PolicyType::Never).propagate_natural_height(true).max_content_height(560).build();
     // 打ち続けられるよう、候補を出しても入力の欄から手を離させない
-    let popover = gtk::Popover::builder().child(&list).autohide(false).has_arrow(false).position(gtk::PositionType::Bottom).can_focus(false).build();
+    let popover = gtk::Popover::builder().child(&scroller).autohide(false).has_arrow(false).position(gtk::PositionType::Bottom).can_focus(false).build();
     popover.set_parent(entry);
     let request = Rc::new(Cell::new(0u64));
     // 検索した語（打ち直すまで候補を出し直さない。候補を押して欄の文字を替えたときも）
@@ -517,27 +477,31 @@ fn suggestions_popover(app: &Rc<App>, entry: &gtk::SearchEntry) -> gtk::Popover 
             popover.popdown();
         });
     }
-    // 空のまま欄に入ったら、検索の履歴を出す
-    let show_history: Rc<dyn Fn()> = {
-        let (app, popover, list, entry) = (app.clone(), popover.clone(), list.clone(), entry.clone());
-        Rc::new(move || history_rows(&app, &popover, &list, &entry))
-    };
-    let (app_c, popover_c, list_c, history_c) = (app.clone(), popover.clone(), list.clone(), show_history.clone());
+    let (app_c, popover_c, list_c) = (app.clone(), popover.clone(), list.clone());
     entry.connect_search_changed(move |entry| {
-        let show_history = &history_c;
         let input = entry.text().trim().to_string();
         let id = request.get() + 1;
         request.set(id);
-        if input.is_empty() && focused(entry) {
-            show_history();
+        if input.is_empty() {
+            popover_c.popdown();
+            searched.borrow_mut().clear();
+            // 消したら「すべてをブラウズ」に戻る（検索のページにいるときだけ）
+            if focused(entry) {
+                super::search::open(&app_c, None);
+            }
             return;
         }
-        if input.is_empty() || !focused(entry) || *searched.borrow() == input {
+        if !focused(entry) || *searched.borrow() == input {
             popover_c.popdown();
             return;
         }
         let (app, popover, list, request, entry) = (app_c.clone(), popover_c.clone(), list_c.clone(), request.clone(), entry.clone());
         gtk::glib::spawn_future_local(async move {
+            // 打ち続けている間は問い合わせない
+            gtk::glib::timeout_future(std::time::Duration::from_millis(150)).await;
+            if request.get() != id {
+                return;
+            }
             let repo = app.repo.clone();
             let Ok(found) = runtime::run(async move { repo.suggestions(&input).await }).await else { return };
             // 打ち直した後に古い候補を出さない
@@ -551,9 +515,8 @@ fn suggestions_popover(app: &Rc<App>, entry: &gtk::SearchEntry) -> gtk::Popover 
                 popover.popdown();
                 entry.set_text("");
             };
-            for query in found.queries.into_iter().take(6) {
-                let row = adw::ActionRow::builder().title(gtk::glib::markup_escape_text(&query)).activatable(true).build();
-                row.add_prefix(&gtk::Image::from_icon_name("system-search-symbolic"));
+            for query in found.queries.into_iter().take(5) {
+                let row = suggestion_row(&query, None, None, false, "system-search-symbolic");
                 let (entry, popover) = (entry.clone(), popover.clone());
                 row.connect_activated(move |_| {
                     popover.popdown();
@@ -562,9 +525,8 @@ fn suggestions_popover(app: &Rc<App>, entry: &gtk::SearchEntry) -> gtk::Popover 
                 });
                 list.append(&row);
             }
-            for artist in found.artists.into_iter().take(2) {
-                let row = adw::ActionRow::builder().title(gtk::glib::markup_escape_text(&artist.name)).subtitle("アーティスト").activatable(true).build();
-                row.add_prefix(&gtk::Image::from_icon_name("avatar-default-symbolic"));
+            for artist in found.artists {
+                let row = suggestion_row(&artist.name, Some("アーティスト"), artist.thumbnail_url.as_deref(), true, "avatar-default-symbolic");
                 let (app, entry, popover) = (app.clone(), entry.clone(), popover.clone());
                 row.connect_activated(move |_| {
                     close(&popover, &entry);
@@ -573,25 +535,23 @@ fn suggestions_popover(app: &Rc<App>, entry: &gtk::SearchEntry) -> gtk::Popover 
                 });
                 list.append(&row);
             }
-            for album in found.albums.into_iter().take(2) {
-                let row = adw::ActionRow::builder().title(gtk::glib::markup_escape_text(&album.title)).subtitle(gtk::glib::markup_escape_text(album.subtitle.as_deref().unwrap_or("アルバム"))).activatable(true).build();
-                row.add_prefix(&gtk::Image::from_icon_name("media-optical-symbolic"));
-                let (app, entry, popover) = (app.clone(), entry.clone(), popover.clone());
-                row.connect_activated(move |_| {
-                    close(&popover, &entry);
-                    app.remember_search(crate::settings::SearchHistoryEntry::album(&album.browse_id, &album.title, album.subtitle.as_deref(), album.thumbnail_url.as_deref()));
-                    app.push(pages::album(&app, &album.browse_id, &album.title));
-                });
-                list.append(&row);
-            }
-            for song in found.songs.into_iter().take(3) {
-                let row = adw::ActionRow::builder().title(gtk::glib::markup_escape_text(&song.title)).subtitle(gtk::glib::markup_escape_text(&song.artists_text())).activatable(true).build();
-                row.add_prefix(&gtk::Image::from_icon_name("audio-x-generic-symbolic"));
+            for song in found.songs {
+                let row = suggestion_row(&song.title, Some(&format!("曲 • {}", song.artists_text())), song.thumbnail_url.as_deref(), false, "audio-x-generic-symbolic");
                 let (app, entry, popover) = (app.clone(), entry.clone(), popover.clone());
                 row.connect_activated(move |_| {
                     close(&popover, &entry);
                     app.remember_search(crate::settings::SearchHistoryEntry::song(&song));
                     app.playback.play_list(vec![song.clone()], 0);
+                });
+                list.append(&row);
+            }
+            for album in found.albums {
+                let row = suggestion_row(&album.title, Some(album.subtitle.as_deref().unwrap_or("アルバム")), album.thumbnail_url.as_deref(), false, "media-optical-symbolic");
+                let (app, entry, popover) = (app.clone(), entry.clone(), popover.clone());
+                row.connect_activated(move |_| {
+                    close(&popover, &entry);
+                    app.remember_search(crate::settings::SearchHistoryEntry::album(&album.browse_id, &album.title, album.subtitle.as_deref(), album.thumbnail_url.as_deref()));
+                    app.push(pages::album(&app, &album.browse_id, &album.title));
                 });
                 list.append(&row);
             }
@@ -602,13 +562,13 @@ fn suggestions_popover(app: &Rc<App>, entry: &gtk::SearchEntry) -> gtk::Popover 
             }
         });
     });
-    // 欄から離れたら・Esc で閉じる。空のまま入ったら履歴を出す
+    // 欄に入ったら検索のページへ移る（Spotify・Mac と同じ）。離れたら・Esc で候補を閉じる
     let focus = gtk::EventControllerFocus::new();
     {
-        let (entry, show_history) = (entry.clone(), show_history.clone());
+        let (entry, app) = (entry.clone(), app.clone());
         focus.connect_enter(move |_| {
             if entry.text().trim().is_empty() {
-                show_history();
+                super::search::enter(&app);
             }
         });
     }

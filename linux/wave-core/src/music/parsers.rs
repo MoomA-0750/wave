@@ -424,6 +424,7 @@ pub fn playlist_page(root: &Value) -> PlaylistPage {
         continuation,
         subtitle: subtitle.filter(|s| !s.is_empty()),
         thumbnail_url: thumbnail,
+        sortable: !find_all(root, "sortFilterSubMenuRenderer").is_empty(),
     }
 }
 

@@ -23,6 +23,8 @@ pub struct Settings {
     pub library_sort: String,
     /// マイライブラリをグリッドで出す。
     pub library_grid: bool,
+    /// プレイリストごとに選んだ並べ方（"Title:desc" の形。Mac と同じ）。
+    pub playlist_orders: std::collections::HashMap<String, String>,
     /// Discord に再生中の曲を出す（既定は切。Windows と同じ）。
     pub discord_presence: bool,
     /// Discord のアプリケーション ID（本人が discord.com/developers で作ったもの）。
@@ -33,7 +35,7 @@ pub struct Settings {
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { smart_downloads: false, smart_download_count: DEFAULT_COUNT, download_network: DownloadNetwork::Unmetered, relay_url: None, send_history: true, release_notices: true, original_titles: false, search_history: Vec::new(), discord_presence: false, discord_client_id: None, library_sort: "recent".into(), library_grid: false }
+        Self { smart_downloads: false, smart_download_count: DEFAULT_COUNT, download_network: DownloadNetwork::Unmetered, relay_url: None, send_history: true, release_notices: true, original_titles: false, search_history: Vec::new(), discord_presence: false, discord_client_id: None, library_sort: "recent".into(), library_grid: false, playlist_orders: Default::default() }
     }
 }
 
@@ -45,12 +47,12 @@ fn path() -> std::path::PathBuf {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct SearchHistoryEntry {
-    /// "query"・"song"・"album"・"artist"。
+    /// "query"・"song"・"album"・"artist"・"playlist"・"podcast"。
     pub kind: String,
     pub title: String,
     pub subtitle: Option<String>,
     pub thumbnail_url: Option<String>,
-    /// アルバム・アーティストの browseId。
+    /// アルバム・アーティスト・番組の browseId、プレイリストの ID。
     pub id: Option<String>,
     /// 曲なら、その曲（押すと鳴らす）。
     pub song: Option<wave_core::music::models::Song>,
@@ -83,6 +85,46 @@ impl SearchHistoryEntry {
 
     pub fn artist(id: &str, name: &str, thumbnail: Option<&str>) -> Self {
         Self { kind: "artist".into(), title: name.into(), subtitle: Some("アーティスト".into()), thumbnail_url: thumbnail.map(String::from), id: Some(id.into()), song: None }
+    }
+
+    pub fn playlist(id: &str, title: &str, subtitle: Option<&str>, thumbnail: Option<&str>) -> Self {
+        Self { kind: "playlist".into(), title: title.into(), subtitle: subtitle.map(String::from), thumbnail_url: thumbnail.map(String::from), id: Some(id.into()), song: None }
+    }
+
+    /// ポッドキャストの番組（YouTube の MPSP… も RSS の rss:… も）。
+    pub fn podcast(show: &wave_core::music::podcast::PodcastSummary) -> Self {
+        Self {
+            kind: "podcast".into(),
+            title: show.title.clone(),
+            subtitle: Some(show.author.clone().unwrap_or_else(|| "ポッドキャスト".into())),
+            thumbnail_url: show.thumbnail_url.clone(),
+            id: Some(show.browse_id.clone()),
+            song: None,
+        }
+    }
+
+    /// カード（曲・アルバム・プレイリスト・アーティスト）から（Mac の SearchHistoryEntry.of と同じ）。
+    pub fn of(item: &wave_core::music::models::HomeItem) -> Self {
+        use wave_core::music::models::HomeItem;
+        match item {
+            HomeItem::Song(s) => Self::song(s),
+            HomeItem::Album(a) => Self::album(&a.browse_id, &a.title, a.subtitle.as_deref(), a.thumbnail_url.as_deref()),
+            HomeItem::Playlist(p) => Self::playlist(&p.playlist_id, &p.title, p.subtitle.as_deref(), p.thumbnail_url.as_deref()),
+            HomeItem::Artist(a) => Self::artist(&a.browse_id, &a.name, a.thumbnail_url.as_deref()),
+        }
+    }
+
+    /// 押したときに開くもの（語なら None）。
+    pub fn item(&self) -> Option<wave_core::music::models::HomeItem> {
+        use wave_core::music::models::{AlbumSummary, ArtistSummary, HomeItem, PlaylistSummary};
+        let id = self.id.clone();
+        match self.kind.as_str() {
+            "song" => self.song.clone().map(HomeItem::Song),
+            "album" => Some(HomeItem::Album(AlbumSummary { browse_id: id?, title: self.title.clone(), subtitle: self.subtitle.clone(), thumbnail_url: self.thumbnail_url.clone() })),
+            "artist" => Some(HomeItem::Artist(ArtistSummary { browse_id: id?, name: self.title.clone(), subtitle: None, thumbnail_url: self.thumbnail_url.clone() })),
+            "playlist" => Some(HomeItem::Playlist(PlaylistSummary { playlist_id: id?, title: self.title.clone(), subtitle: self.subtitle.clone(), thumbnail_url: self.thumbnail_url.clone(), editable: false })),
+            _ => None,
+        }
     }
 }
 
@@ -122,5 +164,18 @@ mod tests {
         settings.add_search(SearchHistoryEntry::query("q20"));
         assert_eq!(settings.search_history[0].title, "q20");
         assert_eq!(settings.search_history.iter().filter(|e| e.title == "q20").count(), 1);
+    }
+
+    #[test]
+    fn search_history_entries_open_what_was_remembered() {
+        use wave_core::music::models::{HomeItem, PlaylistSummary};
+        let playlist = HomeItem::Playlist(PlaylistSummary { playlist_id: "PL1".into(), title: "P".into(), subtitle: None, thumbnail_url: None, editable: false });
+        let entry = SearchHistoryEntry::of(&playlist);
+        assert_eq!(entry.key(), "playlist:PL1");
+        assert!(matches!(entry.item(), Some(HomeItem::Playlist(p)) if p.playlist_id == "PL1"));
+        assert_eq!(SearchHistoryEntry::query("q").item(), None);
+        let show = wave_core::music::podcast::PodcastSummary { browse_id: "rss:https://example.com/f".into(), title: "S".into(), author: None, thumbnail_url: None };
+        let entry = SearchHistoryEntry::podcast(&show);
+        assert_eq!((entry.kind.as_str(), entry.id.as_deref(), entry.item()), ("podcast", Some("rss:https://example.com/f"), None));
     }
 }

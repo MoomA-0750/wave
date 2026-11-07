@@ -1,4 +1,5 @@
 //! 再生の流れ（主スレッド）: キュー・今の曲・次と前・曲の終わりで次へ・キューの終わりでラジオを継ぎ足す。
+//! 一覧を流し終えるときは、最後の曲から始まるラジオにつなぐ（Mac の PlayerService・Android の QueueSession と同じ。決定 E4）。
 //! 画面は on_change に登録して、変わるたびに描き直す。
 //! キューの曲には項目の ID を振る（端末の連携で、ほかの端末と同じ曲を指すのに使う）。
 
@@ -13,8 +14,7 @@ use crate::runtime;
 
 /// 前の曲のボタンで、曲の頭へ戻すか前の曲へ行くかの境（これより進んでいれば頭へ戻す）。
 const RESTART_THRESHOLD_MS: u64 = 3000;
-/// 残りがこれ以下になったらラジオを継ぎ足す。
-const RADIO_REFILL_LEFT: usize = 2;
+use wave_core::music::queue_radio;
 
 /// キューの曲がどこから来たか（ほかの端末と同じ区別）。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -105,6 +105,12 @@ pub struct Playback {
     /// 選んだ一覧の ID（ほかの端末に渡す出どころ）。
     source_id: RefCell<Option<String>>,
     refilling: Cell<bool>,
+    /// 長い一覧を最初のページから鳴らし始め、残りをまだ読んでいる（読み終えるまでラジオへ切り替えない）。
+    rest_pending: Cell<bool>,
+    /// 「次に流れる曲」を消して流れを止めた（ラジオへ切り替えず、継ぎ足さない）。
+    flow_stopped: Cell<bool>,
+    /// 最後の曲を流し終えて止まっている（ラジオの曲が足せたら、そのまま続きを鳴らす）。
+    ended_at_last: Cell<bool>,
     repeat: Cell<Repeat>,
     /// シャッフルを入れる前の並び（項目の ID）。シャッフル中だけ持つ。
     unshuffled: RefCell<Option<Vec<String>>>,
@@ -113,6 +119,8 @@ pub struct Playback {
     /// 曲を頼んだ回数。読み込みの途中で別の曲が頼まれたら、古い方の結果は捨てる。
     request: Cell<u64>,
     listeners: RefCell<Vec<Box<dyn Fn()>>>,
+    /// 部品がある間だけ呼ぶもの（曲の行の「今の曲」の印など、数が多く入れ替わるもの）。false を返したものは外す。
+    watchers: RefCell<Vec<Box<dyn Fn() -> bool>>>,
     user_listeners: UserListeners,
     /// ほかの端末を操作している間に、手元の再生・次・前を横取りする（true を返したら手元では何もしない）。
     interceptor: RefCell<Option<Interceptor>>,
@@ -144,11 +152,15 @@ impl Playback {
             radio: RefCell::default(),
             source_id: RefCell::default(),
             refilling: Cell::default(),
+            rest_pending: Cell::default(),
+            flow_stopped: Cell::default(),
+            ended_at_last: Cell::default(),
             repeat: Cell::default(),
             unshuffled: RefCell::default(),
             restored_position: Cell::default(),
             request: Cell::default(),
             listeners: RefCell::default(),
+            watchers: RefCell::default(),
             user_listeners: RefCell::default(),
             interceptor: RefCell::default(),
             queue_interceptor: RefCell::default(),
@@ -193,6 +205,20 @@ impl Playback {
 
     pub fn on_change(&self, listener: impl Fn() + 'static) {
         self.listeners.borrow_mut().push(Box::new(listener));
+    }
+
+    /// widget がある間だけ、変わったら f を呼ぶ（曲の行の印・ページの再生ボタンなど）。
+    pub fn watch<W: gtk::prelude::ObjectType>(&self, widget: &W, f: impl Fn(&W) + 'static) {
+        let weak = gtk::glib::object::WeakRef::new();
+        weak.set(Some(widget));
+        f(widget);
+        self.watchers.borrow_mut().push(Box::new(move || match weak.upgrade() {
+            Some(widget) => {
+                f(&widget);
+                true
+            }
+            None => false,
+        }));
     }
 
     /// 本人の手元の操作（曲を選んだ・再開した・止めた）を聞く。
@@ -259,6 +285,14 @@ impl Playback {
         for listener in self.listeners.borrow().iter() {
             listener();
         }
+        // 呼んでいる間に見張りが足されてもよいよう、取り出してから呼ぶ
+        let watchers = std::mem::take(&mut *self.watchers.borrow_mut());
+        let kept: Vec<_> = watchers.into_iter().filter(|w| w()).collect();
+        let mut current = self.watchers.borrow_mut();
+        let added = std::mem::take(&mut *current);
+        *current = kept;
+        current.extend(added);
+        drop(current);
         // 次に再生・シャッフル・ラジオの継ぎ足しなどで次の曲が替わったら、その曲の頭を先に取る（取ってある・取っている途中なら何もしない）
         self.warm_next();
     }
@@ -320,6 +354,11 @@ impl Playback {
         (self.queue.borrow().clone(), self.index.get())
     }
 
+    /// 選んだ一覧（プレイリスト・アルバム・アーティスト・番組）を流しているか（ページの再生ボタンが一時停止になる）。
+    pub fn is_playing_source(&self, source_id: &str) -> bool {
+        self.source_id.borrow().as_deref() == Some(source_id) && self.current_item().is_some()
+    }
+
     pub fn source(&self) -> QueueSource {
         let radio = self.radio.borrow().clone();
         QueueSource {
@@ -338,6 +377,9 @@ impl Playback {
         self.index.set(None);
         *self.radio.borrow_mut() = None;
         *self.source_id.borrow_mut() = None;
+        self.rest_pending.set(false);
+        self.flow_stopped.set(false);
+        self.ended_at_last.set(false);
         self.unshuffled.borrow_mut().take();
         self.restored_position.set(None);
         self.changed();
@@ -400,21 +442,80 @@ impl Playback {
 
     /// 一覧（プレイリスト・アルバム）から鳴らす。source_id はほかの端末に渡す出どころ。
     pub fn play_list_from(self: &Rc<Self>, songs: Vec<Song>, index: usize, source_id: Option<String>) {
+        self.play_list_pending(songs, index, source_id, false);
+    }
+
+    /// 一覧から鳴らす。出どころの無い一覧（検索の結果など）と1曲だけのときは、初めから最後の曲のラジオを続きにする。
+    /// 出どころがあれば、終わりが近づいたときに最後の曲のラジオへ切り替える。
+    /// rest_pending は、長い一覧を最初のページから鳴らし始め、残りをあとで append_from で足すとき（読み終えるまでラジオへ切り替えない）。
+    pub fn play_list_pending(self: &Rc<Self>, songs: Vec<Song>, index: usize, source_id: Option<String>, rest_pending: bool) {
         if songs.is_empty() {
             return;
         }
         self.failures.set(0);
+        let seed = queue_radio::initial_seed(&songs, source_id.is_some());
         let single = songs.len() == 1;
-        *self.radio.borrow_mut() = single.then_some((None, None));
+        *self.radio.borrow_mut() = seed.map(|seed| (Some(queue_radio::playlist_id(&seed)), None));
         *self.source_id.borrow_mut() = source_id;
+        self.rest_pending.set(rest_pending);
+        self.flow_stopped.set(false);
+        self.ended_at_last.set(false);
         *self.queue.borrow_mut() = songs.into_iter().map(|s| QueueItem::new(s, Origin::Source)).collect();
         // 新しい一覧はその並びで流す（シャッフルは切る）
         self.unshuffled.borrow_mut().take();
+        let index = index.min(self.queue.borrow().len() - 1);
         self.start_at(index, 0, true);
         self.user(UserAction::Selected);
         if single {
             self.refill();
         }
+    }
+
+    /// あとから読めた一覧の残りを、まだキューに無い分だけ後ろに足す（長いプレイリスト・アーティストの「すべての曲」）。
+    /// 読めなかったときも空で呼ぶ（読み終えたことにして、一覧の終わりでラジオへ切り替えられるようにする）。
+    pub fn append_from(self: &Rc<Self>, songs: Vec<Song>) {
+        self.rest_pending.set(false);
+        if self.flow_stopped.get() {
+            return;
+        }
+        let mut queue = self.queue.borrow_mut();
+        let mut known: std::collections::HashSet<String> = queue.iter().map(|q| q.song.video_id.clone()).collect();
+        let mut fresh: Vec<QueueItem> = songs.into_iter().filter(|s| known.insert(s.video_id.clone())).map(|s| QueueItem::new(s, Origin::Source)).collect();
+        if let Some(order) = self.unshuffled.borrow_mut().as_mut() {
+            // シャッフル中に一覧の残りが読めた: 混ぜて足し、戻す並びには届いた順で加える
+            order.extend(fresh.iter().map(|q| q.item_id.clone()));
+            shuffle(&mut fresh);
+        }
+        let added = !fresh.is_empty();
+        queue.extend(fresh);
+        drop(queue);
+        if added {
+            self.changed();
+            self.continue_after_end();
+        }
+        self.extend_if_needed();
+    }
+
+    /// アーティストを流す: 人気の曲からすぐ鳴らし始め、「すべての曲」が読めたら残りを後ろに足す（Mac・Android と同じ）。
+    /// 人気の曲だけだと、終わったところで最後の曲のラジオに切り替わり、ほかのアーティストの曲が混ざってしまう。
+    pub fn play_artist(self: &Rc<Self>, browse_id: &str, top_songs: Vec<Song>, index: usize, shuffle: bool, all_songs_playlist: Option<String>) {
+        if top_songs.is_empty() {
+            return;
+        }
+        self.play_list_pending(top_songs, index, Some(browse_id.to_string()), all_songs_playlist.is_some());
+        if shuffle {
+            self.set_shuffle(true);
+        }
+        let Some(playlist) = all_songs_playlist else { return };
+        let (this, repo, browse_id) = (self.clone(), self.repo.clone(), browse_id.to_string());
+        gtk::glib::spawn_future_local(async move {
+            let songs = runtime::run(async move { full_playlist(&repo, &playlist).await }).await;
+            eprintln!("artist all songs={}", songs.len());
+            // 読んでいる間にほかのものを流し始めていたら足さない
+            if this.source_id.borrow().as_deref() == Some(browse_id.as_str()) {
+                this.append_from(songs);
+            }
+        });
     }
 
     /// 一覧をシャッフルで流す（どこかの曲から始め、シャッフルを入れる）。
@@ -443,6 +544,9 @@ impl Playback {
         }
         *self.queue.borrow_mut() = items;
         self.unshuffled.borrow_mut().take();
+        self.rest_pending.set(false);
+        self.flow_stopped.set(false);
+        self.ended_at_last.set(false);
         *self.source_id.borrow_mut() = source.playlist_id;
         *self.radio.borrow_mut() = source.radio.then_some((source.radio_playlist_id, source.continuation));
         self.start_at(index, position_ms, playing);
@@ -451,6 +555,7 @@ impl Playback {
     fn start_at(self: &Rc<Self>, index: usize, position_ms: u64, playing: bool) {
         let Some(song) = self.queue.borrow().get(index).map(|i| i.song.clone()) else { return };
         self.restored_position.set(None);
+        self.ended_at_last.set(false);
         self.index.set(Some(index));
         let request = self.request.get() + 1;
         self.request.set(request);
@@ -494,9 +599,7 @@ impl Playback {
             this.changed();
             // 次の曲の頭を先に取っておく（曲送りですぐ鳴らす。ライブと RSS のエピソードは残さない）
             this.warm_next();
-            if this.upcoming().len() <= RADIO_REFILL_LEFT {
-                this.refill();
-            }
+            this.extend_if_needed();
         });
     }
 
@@ -517,11 +620,49 @@ impl Playback {
             Some(i) if i + 1 < self.queue.borrow().len() => self.start_at(i + 1, 0, true),
             // 全体の繰り返しは、最後の曲の次は最初の曲
             Some(_) if self.repeat.get() == Repeat::All && !self.queue.borrow().is_empty() => self.start_at(0, 0, true),
-            _ => {
+            Some(_) => {
+                // 最後まで流し終えた: ラジオの続きを取れていなければもう一度取ってみる（足せたらそのまま続きを鳴らす）
+                self.player.stop();
+                self.ended_at_last.set(true);
+                self.changed();
+                self.extend_if_needed();
+            }
+            None => {
                 self.player.stop();
                 self.changed();
             }
         }
+    }
+
+    /// 最後の曲を流し終えて止まっていたところへ曲が足されたら、続きを鳴らす。
+    fn continue_after_end(self: &Rc<Self>) {
+        if !self.ended_at_last.get() {
+            return;
+        }
+        let Some(i) = self.index.get() else { return };
+        if i + 1 < self.queue.borrow().len() && !self.player.is_playing() {
+            self.start_at(i + 1, 0, true);
+        }
+    }
+
+    /// 残りが少なくなったら続きを足す。ラジオなら続きのページを、一覧なら最後の曲から始まるラジオに切り替えて、その最初のページを足す。
+    fn extend_if_needed(self: &Rc<Self>) {
+        let Some(index) = self.index.get() else { return };
+        if self.flow_stopped.get() || !queue_radio::near_end(self.queue.borrow().len(), index) {
+            return;
+        }
+        let songs: Vec<Song> = self.queue.borrow().iter().map(|q| q.song.clone()).collect();
+        let radio = self.radio.borrow().is_some();
+        if let Some(seed) = queue_radio::switch_seed(&songs, index, radio, self.repeat.get() == Repeat::All, self.rest_pending.get(), false) {
+            // 出どころ（source_id）は「再生中」の表示のために残す
+            eprintln!("queue switched to radio items={} index={index}", songs.len());
+            *self.radio.borrow_mut() = Some((Some(queue_radio::playlist_id(&seed)), None));
+        }
+        // 全体の繰り返し中は今のキューを繰り返すので、ラジオの続きは取らない
+        if self.repeat.get() == Repeat::All {
+            return;
+        }
+        self.refill();
     }
 
     pub fn previous(self: &Rc<Self>) {
@@ -681,6 +822,8 @@ impl Playback {
         }
         self.queue.borrow_mut().truncate(current + 1);
         *self.radio.borrow_mut() = None;
+        self.flow_stopped.set(true);
+        self.rest_pending.set(false);
         self.changed();
         true
     }
@@ -691,7 +834,8 @@ impl Playback {
         if self.refilling.replace(true) {
             return;
         }
-        let seed = self.queue.borrow().first().map(|s| s.song.video_id.clone());
+        // 種の曲: ラジオの流れの ID から戻す（一覧の最後の曲）。無ければキューの最初の曲
+        let seed = playlist.as_deref().and_then(queue_radio::seed_of).map(String::from).or_else(|| self.queue.borrow().first().map(|s| s.song.video_id.clone()));
         let repo = self.repo.clone();
         let this = self.clone();
         gtk::glib::spawn_future_local(async move {
@@ -700,8 +844,8 @@ impl Playback {
             let page = runtime::run(async move { repo.up_next(video.as_deref(), playlist_id.as_deref(), continuation.as_deref()).await }).await;
             this.refilling.set(false);
             let Ok(page) = page else { return };
-            // ラジオをやめていたら（ほかのキューに替えていたら）足さない
-            if this.radio.borrow().is_none() {
+            // ラジオをやめていたら（ほかのキューに替えていたら・流れを止めていたら）足さない
+            if this.radio.borrow().is_none() || this.flow_stopped.get() {
                 return;
             }
             let mut queue = this.queue.borrow_mut();
@@ -711,8 +855,23 @@ impl Playback {
             drop(queue);
             *this.radio.borrow_mut() = Some((page.playlist_id.or(playlist), page.continuation));
             this.changed();
+            this.continue_after_end();
         });
     }
+}
+
+/// プレイリストの曲を最後のページまで読む（読めなかったらそこまで）。
+pub async fn full_playlist(repo: &MusicRepository, id: &str) -> Vec<Song> {
+    let Ok(first) = repo.playlist(id, None).await else { return Vec::new() };
+    let mut songs = first.songs;
+    let mut token = first.continuation;
+    for _ in 0..50 {
+        let Some(t) = token.clone() else { break };
+        let Ok(next) = repo.playlist(id, Some(&t)).await else { break };
+        songs.extend(next.songs);
+        token = next.continuation.filter(|n| *n != t);
+    }
+    songs
 }
 
 /// 並びを混ぜる（Fisher–Yates）。

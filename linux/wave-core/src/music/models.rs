@@ -153,6 +153,8 @@ pub struct PlaylistPage {
     pub continuation: Option<String>,
     pub subtitle: Option<String>,
     pub thumbnail_url: Option<String>,
+    /// YouTube Music に並べ替えてもらえる（追加した日・リリース日の並べ替えのメニューがある。Mac と同じく sortFilterSubMenuRenderer で見る）。
+    pub sortable: bool,
 }
 
 /// 次に流れる曲（ラジオ）。
