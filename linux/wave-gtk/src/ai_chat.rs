@@ -162,6 +162,11 @@ impl AiChat {
         }
     }
 
+    /// 今開いている会話の id（これまでの会話の一覧で、開いている会話を塗る）。
+    pub fn conversation_id(&self) -> String {
+        self.conversation_id.borrow().clone()
+    }
+
     pub fn configured(&self) -> Option<String> {
         self.config.borrow().as_ref().map(|c| c.name.clone().unwrap_or_else(|| c.url.clone()))
     }
@@ -240,7 +245,7 @@ impl AiChat {
         self.push(AiMessage::User(task.clone()));
         self.archive();
         let Some(config) = self.config.borrow().clone() else {
-            self.push(AiMessage::Failure("Claude につないでいません。右上の「つなぐ」から、中継の接続の文字列を貼ってください。".into()));
+            self.push(AiMessage::Failure("Claude につないでいません。設定の「Claude」でつないでください。".into()));
             return;
         };
         self.running.set(true);

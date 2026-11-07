@@ -1,4 +1,4 @@
-//! 登録したアーティストの新作（Windows の Releases・Android と同じ）。動いている間、起動の1分後と6時間おきに確かめ、
+//! 登録したアーティストの新作（Windows の Releases・Android と同じ）。動いている間、起動の1分後と6時間おきに確かめ（設定の「新作の通知」が切なら、その回は飛ばす）、
 //! よく聴くアーティスト（高く評価した曲が3曲以上）の新作を GNOME の通知で知らせる。最近の新作はホームに出す。
 //! 覚えたものは ~/.local/share/wave/release-watch.json。
 
@@ -28,6 +28,8 @@ pub struct Releases {
     repo: MusicRepository,
     recent: RefCell<Vec<NewRelease>>,
     checking: Cell<bool>,
+    /// 設定の「新作の通知」が入か（確かめるたびに見る。切り替えがすぐ効くように）。
+    enabled: Box<dyn Fn() -> bool>,
 }
 
 fn path() -> std::path::PathBuf {
@@ -43,26 +45,24 @@ fn now_ms() -> i64 {
 }
 
 impl Releases {
-    /// 覚えている最近の新作を読み、定期の確かめを始める（notices が切なら確かめない）。
-    pub fn start(repo: MusicRepository, notices: bool) -> Rc<Self> {
-        let releases = Rc::new(Self { repo, recent: RefCell::new(read().expire(now_ms()).recent), checking: Cell::new(false) });
-        if notices {
-            let weak = Rc::downgrade(&releases);
-            // 確かめ用: WAVE_DEMO_RELEASES があれば起動してすぐ確かめる
-            let first = if std::env::var_os("WAVE_DEMO_RELEASES").is_some() { Duration::from_secs(1) } else { FIRST_DELAY };
-            gtk::glib::timeout_add_local_once(first, move || {
-                let Some(this) = weak.upgrade() else { return };
-                this.check();
-                let weak = Rc::downgrade(&this);
-                gtk::glib::timeout_add_local(INTERVAL, move || match weak.upgrade() {
-                    Some(this) => {
-                        this.check();
-                        gtk::glib::ControlFlow::Continue
-                    }
-                    None => gtk::glib::ControlFlow::Break,
-                });
+    /// 覚えている最近の新作を読み、定期の確かめを始める（Mac と同じく、確かめは常に回し、毎回 enabled を見る）。
+    pub fn start(repo: MusicRepository, enabled: impl Fn() -> bool + 'static) -> Rc<Self> {
+        let releases = Rc::new(Self { repo, recent: RefCell::new(read().expire(now_ms()).recent), checking: Cell::new(false), enabled: Box::new(enabled) });
+        let weak = Rc::downgrade(&releases);
+        // 確かめ用: WAVE_DEMO_RELEASES があれば起動してすぐ確かめる
+        let first = if std::env::var_os("WAVE_DEMO_RELEASES").is_some() { Duration::from_secs(1) } else { FIRST_DELAY };
+        gtk::glib::timeout_add_local_once(first, move || {
+            let Some(this) = weak.upgrade() else { return };
+            this.check();
+            let weak = Rc::downgrade(&this);
+            gtk::glib::timeout_add_local(INTERVAL, move || match weak.upgrade() {
+                Some(this) => {
+                    this.check();
+                    gtk::glib::ControlFlow::Continue
+                }
+                None => gtk::glib::ControlFlow::Break,
             });
-        }
+        });
         releases
     }
 
@@ -79,10 +79,10 @@ impl Releases {
 
     /// 登録したアーティストのページを順に見て、新作を探す（同時に1本だけ）。
     pub fn check(self: &Rc<Self>) {
-        if self.checking.replace(true) || !self.repo.client().is_logged_in() {
-            self.checking.set(false);
+        if self.checking.get() || !self.repo.client().is_logged_in() || !(self.enabled)() {
             return;
         }
+        self.checking.set(true);
         let this = self.clone();
         gtk::glib::spawn_future_local(async move {
             let repo = this.repo.clone();
