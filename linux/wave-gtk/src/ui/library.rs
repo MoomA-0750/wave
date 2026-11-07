@@ -84,7 +84,7 @@ pub fn sidebar(app: &Rc<App>) -> gtk::Widget {
     track::forget_liked();
     let column = gtk::Box::new(gtk::Orientation::Vertical, 0);
     let header = gtk::Box::builder().spacing(8).margin_top(12).margin_bottom(4).margin_start(16).margin_end(8).build();
-    header.append(&gtk::Image::from_icon_name("library-music-symbolic"));
+    header.append(&gtk::Image::from_icon_name("folder-music-symbolic"));
     header.append(&gtk::Label::builder().label("マイライブラリ").xalign(0.0).hexpand(true).css_classes(["heading"]).build());
     let logged_in = app.repo.client().is_logged_in();
     let create = gtk::Button::builder().icon_name("list-add-symbolic").tooltip_text("プレイリストを作成").visible(logged_in).css_classes(["flat", "circular"]).build();
