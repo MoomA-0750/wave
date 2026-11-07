@@ -1022,3 +1022,10 @@
 - キューの動画の行は、アーティスト名（チャンネル名）がどちらの言語でも同じで題しか違わないので、手がかりが無い。ほかのページで分かったアーティストを覚えて使う
 - Windows・Mac・iPhone・Linux は、YouTube Music への読み取りがすべて通る口（InnerTubeClient・InnerTube::post）で、送り先の名前（browse・search・next）を見て2つ送る。もう1つの言語の応答は、ログインの失効・疑いの判定と訪問者 ID の記録に使わない（画面の言語の応答だけで決める）
 - Linux で実際に「Taylor Swift」を検索すると、英語の応答に同じ曲が無い行（ワイルデスト・ドリームス（テイラーズ・ヴァージョン）など）の曲名がカタカナのまま残った。行ごとにもう1回読む案は通信がさらに増えるので見送った
+
+## 2026-11-08 Linux の aarch64 版は aarch64 の機械で組む
+
+- x86_64 の機械からのクロスコンパイルは、GTK4・libadwaita・WebKitGTK・GStreamer の aarch64 のライブラリ一式（sysroot）とリンカーを揃える必要があり重い。aarch64 の Arch Linux ARM 機（cramgent、Apple M1）に Rust を入れて、そこで組むことにした（Mac・Windows の版をそれぞれの機械で組むのと同じ形）
+- コードの変更は要らなかった。cramgent で `cargo test` の 206 件が全部通った
+- appshelf に CPU の種類の欄が無いので、時計（wave-wear）と同じく別のアプリ「wave-aarch64」として linux に載せる
+- cramgent には webkitgtk-6.0・gst-plugins-base/good/bad・gst-libav・rustup を pacman で入れた（再生は playbin と pulsesink。音は PipeWire の Pulse 互換の口へ出る）
