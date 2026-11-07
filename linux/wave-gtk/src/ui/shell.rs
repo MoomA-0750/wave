@@ -1244,20 +1244,40 @@ fn player_bar(app: &Rc<App>, side: &gtk::Widget, side_stack: &gtk::Stack) -> gtk
         }
         _ => {}
     }
-    // 利用者が動かしたときだけシークする（位置の書き換えでは呼ばれない）
+    // 利用者が動かしたときだけシークする（位置の書き換えでは呼ばれない）。Mac と同じく、動かしている間は時刻だけをつまみに付いてこさせ、
+    // 手を止めてから（0.3 秒動かなければ）1度だけ移る。動かしている間は、0.5 秒ごとの描き直しでつまみを戻さない
     let dragging = Rc::new(Cell::new(false));
     {
-        let (app, dragging) = (app.clone(), dragging.clone());
+        let (app, dragging, position) = (app.clone(), dragging.clone(), position.clone());
+        let pending: Rc<std::cell::RefCell<Option<gtk::glib::SourceId>>> = Rc::default();
         seek.connect_change_value(move |_, _, value| {
-            let playback = &app.playback;
-            if let Some(mirror) = app.connect.mirror() {
-                if let Some(seconds) = mirror.song.duration_seconds {
-                    app.connect.remote_seek((value.clamp(0.0, 1.0) * f64::from(seconds) * 1000.0) as i64);
-                }
-            } else if let Some(total) = playback.player().duration_ms() {
-                playback.player().seek_ms((value.clamp(0.0, 1.0) * total as f64) as u64);
+            let value = value.clamp(0.0, 1.0);
+            dragging.set(true);
+            let total_ms = match app.connect.mirror() {
+                Some(mirror) => mirror.song.duration_seconds.map(|s| u64::from(s) * 1000),
+                None => app.playback.player().duration_ms(),
+            };
+            if let Some(total) = total_ms {
+                position.set_label(&pages::format_seconds((value * total as f64 / 1000.0) as u32));
             }
-            dragging.set(false);
+            if let Some(old) = pending.borrow_mut().take() {
+                old.remove();
+            }
+            let (app, dragging, pending_inner) = (app.clone(), dragging.clone(), pending.clone());
+            let id = gtk::glib::timeout_add_local_once(std::time::Duration::from_millis(300), move || {
+                pending_inner.borrow_mut().take();
+                if let Some(mirror) = app.connect.mirror() {
+                    if let Some(seconds) = mirror.song.duration_seconds {
+                        app.connect.remote_seek((value * f64::from(seconds) * 1000.0) as i64);
+                    }
+                } else if let Some(total) = app.playback.player().duration_ms() {
+                    app.playback.player().seek_ms((value * total as f64) as u64);
+                }
+                // 移った位置が描き直しに届くまで少し待ってから、つまみを位置に合わせ直す
+                let dragging = dragging.clone();
+                gtk::glib::timeout_add_local_once(std::time::Duration::from_millis(600), move || dragging.set(false));
+            });
+            *pending.borrow_mut() = Some(id);
             gtk::glib::Propagation::Proceed
         });
     }
@@ -1321,7 +1341,9 @@ fn player_bar(app: &Rc<App>, side: &gtk::Widget, side_stack: &gtk::Stack) -> gtk
         // ライブ配信には長さもシークも無い
         let live = app.connect.mirror().map(|m| m.song.is_live).unwrap_or_else(|| app.playback.current().is_some_and(|s| s.is_live));
         seek.set_sensitive(!live);
-        position.set_label(&pages::format_seconds((pos / 1000) as u32));
+        if !dragging.get() {
+            position.set_label(&pages::format_seconds((pos / 1000) as u32));
+        }
         duration.set_label(&if live { "ライブ".to_string() } else { pages::format_seconds((total / 1000) as u32) });
         if live {
             seek.set_value(1.0);
