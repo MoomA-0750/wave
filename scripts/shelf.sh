@@ -6,7 +6,7 @@
 #
 # Android（スマホ・時計）と Linux はこの機械で、iOS・macOS は Mac（ssh mac）で、Windows は to-fu（scripts/win.sh）で組む。
 # Linux の aarch64（linux-arm）は cramgent（WAVE_ARM_HOST で変えられる）で組む。
-# 時計は appshelf の android に「wave-wear」、Linux の aarch64 は linux に「wave-aarch64」として載せる。
+# 時計は appshelf の android に「wave-wear」として載せる。Linux は x86_64 と aarch64 を同じ「wave」の linux に -arch で分けて載せる。
 set -euo pipefail
 REPO=$(cd "$(dirname "$0")/.." && pwd)
 # Gradle は Android Studio に付いてくる JDK で動かす（JAVA_HOME が無いとき）
@@ -89,7 +89,7 @@ PS
     # x86_64 はこの機械で組む
     (cd "$REPO/linux" && cargo build -q --release -p wave-gtk)
     linux_package "$REPO/linux/target/release/wave-gtk" wave-linux
-    publish -app wave -os linux -version "$version" -build "$stamp" "$work/wave-linux-$stamp.tar.gz" ;;
+    publish -app wave -os linux -arch x86_64 -version "$version" -build "$stamp" "$work/wave-linux-$stamp.tar.gz" ;;
   linux-arm)
     # aarch64 は aarch64 の Linux 機（既定は cramgent）で組む。GTK などを揃えたクロスの土台を持たずに済む
     host=${WAVE_ARM_HOST:-cramgent}
@@ -100,7 +100,7 @@ PS
     ssh "$host" "cd ~/$remote/linux && cargo build -q --release -p wave-gtk"
     scp -q "$host:$remote/linux/target/release/wave-gtk" "$work/wave-gtk-aarch64"
     linux_package "$work/wave-gtk-aarch64" wave-linux-aarch64
-    publish -app wave-aarch64 -os linux -title "wave（aarch64）" -version "$version" -build "$stamp" "$work/wave-linux-aarch64-$stamp.tar.gz" ;;
+    publish -app wave -os linux -arch aarch64 -version "$version" -build "$stamp" "$work/wave-linux-aarch64-$stamp.tar.gz" ;;
   *) sed -n 2,8p "$0"; exit 1 ;;
   esac
 done
