@@ -2052,7 +2052,9 @@ fn like_behaviour(app: &Rc<App>, like: &gtk::Button) {
             None => load(song.video_id.clone()),
             Some(true) => {
                 let (state, show) = (state.clone(), show.clone());
+                let id = song.video_id.clone();
                 super::song_menu::popup_saved(&app, &song, button, move || {
+                    super::track::set_liked(&id, false);
                     state.set(Some(false));
                     show(Some(false), false);
                 });
@@ -2060,12 +2062,14 @@ fn like_behaviour(app: &Rc<App>, like: &gtk::Button) {
             Some(false) => {
                 state.set(Some(true));
                 show(Some(true), false);
+                super::track::set_liked(&song.video_id, true);
                 let (repo, state, show, shown) = (app.repo.clone(), state.clone(), show.clone(), shown.clone());
                 gtk::glib::spawn_future_local(async move {
                     let id = song.video_id.clone();
                     if runtime::run(async move { repo.set_liked(&id, true).await }).await.is_err()
                         && shown.borrow().as_deref() == Some(song.video_id.as_str())
                     {
+                        super::track::set_liked(&song.video_id, false);
                         state.set(Some(false));
                         show(Some(false), false);
                     }

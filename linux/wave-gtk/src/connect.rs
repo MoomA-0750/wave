@@ -1439,7 +1439,9 @@ impl Connect {
         let source = self.shared.playback.source();
         // 出どころは Android の handoffSnapshot と同じ形にする（AutoRadio.ForHandoff と同じ）
         let (radio_seed, radio_playlist_id, exhausted) = if source.radio {
-            let seed = items.first().map(|i| i.song.video_id.clone());
+            // 一覧の最後の曲からラジオへ切り替えたあとは、その曲が種（RDAMVM<種>。Mac と同じ）。無ければキューの先頭
+            let seed = source.radio_playlist_id.as_deref().and_then(wave_core::music::queue_radio::seed_of).map(String::from)
+                .or_else(|| items.first().map(|i| i.song.video_id.clone()));
             let playlist = source.radio_playlist_id.clone().or_else(|| seed.as_ref().map(|s| format!("RDAMVM{s}")));
             (seed, playlist, false)
         } else {
