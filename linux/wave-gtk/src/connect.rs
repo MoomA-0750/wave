@@ -55,6 +55,8 @@ pub struct MemberView {
     pub active: bool,
     /// 端末の種類（"pc"・"phone"・"api"。知らなければ None）。
     pub kind: Option<String>,
+    /// 表示と操作だけの端末（再生しない）。
+    pub is_controller: bool,
 }
 
 /// ほかの端末で鳴っている再生（下の帯に映す）。
@@ -82,7 +84,8 @@ pub enum PairingView {
     EnterCode(Option<String>),
     /// 加わる側: 相手に入れてもらう6桁。
     ShowCode { code: String, peer: String },
-    Done(String),
+    /// 連携できた。grant_device_id は、加えたのがログインをまだ持たない wave API のときの端末 ID（続けてログインを渡す）。
+    Done { peer: String, grant_device_id: Option<String> },
     Failed(String),
 }
 
@@ -435,7 +438,9 @@ impl Connect {
             .map(|m| MemberView {
                 label: self.label_of(&m.device_id, &me, &names),
                 is_self: m.device_id == me,
-                online: client.online().contains(&m.device_id),
+                // 自分は中継につながっていればオンライン（中継の在席の一覧には自分が入らない）
+                online: client.online().contains(&m.device_id) || (m.device_id == me && self.status.get() == RelayStatus::Connected),
+                is_controller: m.role == Role::Controller,
                 active: client.active_device_id() == Some(m.device_id.as_str()),
                 kind: names.kinds.get(&m.device_id).cloned(),
                 device_id: m.device_id,
@@ -1063,23 +1068,19 @@ impl Connect {
         self.changed();
     }
 
-    /// 家から他の端末を外す。
-    pub fn remove_member(self: &Rc<Self>, device_id: String) {
-        let Some(device) = self.device.clone() else { return };
+    /// 家から他の端末を外す（外せたら true。知らせは画面が出す）。
+    pub async fn remove_member(self: &Rc<Self>, device_id: &str) -> bool {
+        let Some(device) = self.device.clone() else { return false };
         let record = {
             let client = self.client.borrow();
-            client.as_ref().and_then(|c| c.verified_chain()).filter(|chain| chain.members().contains_key(&device_id)).map(|chain| chain::remove(&*device, chain, &device_id))
+            client.as_ref().and_then(|c| c.verified_chain()).filter(|chain| chain.members().contains_key(device_id)).map(|chain| chain::remove(&*device, chain, device_id))
         };
-        let Some(record) = record else { return };
-        let weak = Rc::downgrade(self);
-        glib::spawn_future_local(async move {
-            let Some(connect) = weak.upgrade() else { return };
-            let target = device_id.clone();
-            let removed = connect.append_record(record, move |members| members.iter().all(|m| m.device_id != target)).await;
-            eprintln!("connect-v2 remove member ok={removed}");
-            connect.notify(if removed { "端末を外しました" } else { "外せませんでした" });
-            connect.changed();
-        });
+        let Some(record) = record else { return false };
+        let target = device_id.to_string();
+        let removed = self.append_record(record, move |members| members.iter().all(|m| m.device_id != target)).await;
+        eprintln!("connect-v2 remove member ok={removed}");
+        self.changed();
+        removed
     }
 
     async fn append_record(self: &Rc<Self>, record: wave_core::connect::models::ChainRecord, done: impl Fn(&[MemberKeys]) -> bool) -> bool {
@@ -1116,10 +1117,15 @@ impl Connect {
         self.set_pairing(PairingView::Idle);
     }
 
-    pub fn enter_code(&self, code: &str) {
-        if let Some(tx) = self.codes.borrow().as_ref() {
-            let _ = tx.send(code.trim().to_string());
-        }
+    /// 招く側: 相手に出ている6桁を渡す。数字以外は落とし、6桁でなければ送らない（送ったら true）。
+    pub fn enter_code(&self, code: &str) -> bool {
+        let Some(code) = six_digits(code) else { return false };
+        self.codes.borrow().as_ref().is_some_and(|tx| tx.send(code).is_ok())
+    }
+
+    /// 確かめ用（WAVE_DEMO_PAIRING）: 中継につながずに、加入の手順の様子だけを出す。
+    pub fn show_demo_pairing(&self, view: PairingView) {
+        self.set_pairing(view);
     }
 
     fn fail(&self, epoch: u64, message: &str) {
@@ -1240,8 +1246,13 @@ impl Connect {
             }
             let peer_id = wave_core::connect::crypto::device_id(&established.peer_public_key);
             self.remember_label(&peer_id, &established.peer_device_name);
-            eprintln!("pairing-v2 established role=A");
-            self.set_pairing(PairingView::Done(established.peer_device_name.clone()));
+            // ログインをまだ持たない相手（wave-api、ADR-0015）: 一覧で wave API として出し、続けてログインを渡すよう促す
+            if established.peer_accountless {
+                self.remember_kind(&peer_id, "api");
+            }
+            eprintln!("pairing-v2 established role=A accountless={}", established.peer_accountless);
+            let grant_device_id = established.peer_accountless.then_some(peer_id);
+            self.set_pairing(PairingView::Done { peer: established.peer_device_name.clone(), grant_device_id });
             return;
         }
     }
@@ -1394,11 +1405,17 @@ impl Connect {
         if outcome == Some(ClientEvent::Joined) {
             self.remember_label(&inviter, &established.peer_device_name);
             eprintln!("pairing-v2 established role=B");
-            self.set_pairing(PairingView::Done(established.peer_device_name));
+            self.set_pairing(PairingView::Done { peer: established.peer_device_name, grant_device_id: None });
         } else {
             self.with_client(ConnectClient::cancel_join);
             self.fail(epoch, if outcome.is_none() { "加われませんでした（時間切れ）" } else { "端末の一覧を確かめられませんでした" });
         }
+    }
+
+    fn remember_kind(&self, device_id: &str, kind: &str) {
+        let mut names = self.names.borrow_mut();
+        names.kinds.insert(device_id.to_string(), kind.to_string());
+        write_atomically(&data_path("connect-v2-names.json"), &serde_json::to_string(&*names).expect("plain data"));
     }
 
     fn remember_label(&self, device_id: &str, name: &str) {
@@ -1781,4 +1798,24 @@ fn boot_clock_ms() -> i64 {
     // SAFETY: ts は書き込める timespec で、CLOCK_BOOTTIME は Linux にある
     unsafe { libc::clock_gettime(libc::CLOCK_BOOTTIME, &mut ts) };
     ts.tv_sec * 1000 + ts.tv_nsec / 1_000_000
+}
+
+/// 6桁の数字（入れた文字から数字以外を落とす。Mac と同じく6桁でなければ None）。
+fn six_digits(text: &str) -> Option<String> {
+    let digits: String = text.chars().filter(char::is_ascii_digit).collect();
+    (digits.len() == 6).then_some(digits)
+}
+
+#[cfg(test)]
+mod code_tests {
+    use super::six_digits;
+
+    #[test]
+    fn six_digits_drops_non_digits_and_needs_six() {
+        assert_eq!(six_digits("123 456").as_deref(), Some("123456"));
+        assert_eq!(six_digits(" 12-34-56 ").as_deref(), Some("123456"));
+        assert_eq!(six_digits("12345"), None);
+        assert_eq!(six_digits("1234567"), None);
+        assert_eq!(six_digits("１２３４５６"), None);
+    }
 }

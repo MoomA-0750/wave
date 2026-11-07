@@ -280,6 +280,26 @@ async fn show_home(toolbar: &adw::ToolbarView, repo: &MusicRepository) {
         Ok(params) => app.push(ui::pages::mood_category(&app, "気分・ジャンル", params)),
         Err(_) => {}
     }
+    // 確かめ用: WAVE_DEMO_DEVICES があれば端末の連携のページを開く。offer・code・wrong・show・working・done・done-api・failed なら、
+    // 中継につながずに加入の手順のその様子を出す（家の記録は変えない）
+    if let Ok(state) = std::env::var("WAVE_DEMO_DEVICES") {
+        use connect::PairingView;
+        let view = match state.as_str() {
+            "offer" => Some(PairingView::ShowingOffer("wave-pair:eyJ2IjoxLCJwa0EiOiJkZW1vIiwiZUEiOiJkZW1vIiwidG9rZW4iOiJkZW1vIn0".into())),
+            "code" => Some(PairingView::EnterCode(None)),
+            "wrong" => Some(PairingView::EnterCode(Some("数字が違います".into()))),
+            "show" => Some(PairingView::ShowCode { code: "123456".into(), peer: "Pixel 3".into() }),
+            "working" => Some(PairingView::Working("相手が加えるのを待っています…".into())),
+            "done" => Some(PairingView::Done { peer: "Pixel 3".into(), grant_device_id: None }),
+            "done-api" => Some(PairingView::Done { peer: "wave API".into(), grant_device_id: Some("demo".into()) }),
+            "failed" => Some(PairingView::Failed("時間内に読み取られませんでした".into())),
+            _ => None,
+        };
+        if let Some(view) = view {
+            app.connect.show_demo_pairing(view);
+        }
+        ui::devices::open_page(&app);
+    }
     // 入れ物（読み込み中の上の帯）ごと、画面の上の帯を持つ並びに替える
     if let Some(window) = toolbar.root().and_downcast::<adw::ApplicationWindow>() {
         window.set_content(Some(&shell));
