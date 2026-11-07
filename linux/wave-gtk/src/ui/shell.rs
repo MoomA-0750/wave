@@ -165,7 +165,7 @@ pub fn build(
     let side_stack = gtk::Stack::builder().transition_type(gtk::StackTransitionType::Crossfade).build();
     side_stack.add_named(&now_playing(&app), Some("now"));
     side_stack.add_named(&queue(&app), Some("queue"));
-    side_stack.add_named(&super::ai::panel(&app), Some("ai"));
+    side_stack.add_named(&super::ai::panel(&app, { let app = app.clone(); move || if let Some(t) = app.claude_toggle.borrow().as_ref() { t.set_active(false) } }), Some("ai"));
     // 中身ごとに幅を変えず、いつも同じ幅にする（Claude の長い文に合わせて広がらないように）
     side_stack.set_hhomogeneous(false);
     let side_width = adw::Clamp::builder().maximum_size(SIDE_WIDTH).tightening_threshold(SIDE_WIDTH).child(&side_stack).build();
