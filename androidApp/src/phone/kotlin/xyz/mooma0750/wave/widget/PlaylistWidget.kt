@@ -385,27 +385,38 @@ internal suspend fun playWidgetItem(
     context: Context,
     item: WidgetItem,
     shuffle: Boolean,
+    /** 鳴らせなかったときの知らせ（既定は toast。Knot のアクションは誤りの文として返す）。 */
+    report: (suspend (Int) -> Unit)? = null,
 ): String? {
     val container = (context.applicationContext as WaveApplication).container
     when (item.kind) {
-        WidgetItemKind.Playlist -> playPlaylist(context, item.id, shuffle)
+        WidgetItemKind.Playlist -> playPlaylist(context, item.id, shuffle, report)
         WidgetItemKind.Album ->
             when (val page = container.music.album(item.id)) {
                 is CallResult.Ok ->
                     if (page.value.songs.isEmpty()) {
-                        toast(context, R.string.widget_load_failed)
+                        say(context, report, R.string.widget_load_failed)
                     } else {
                         container.player.playFrom(page.value.songs, 0, page.value.playlistId, null, shuffle)
                         return page.value.playlistId
                     }
                 is CallResult.Failed -> {
                     Log.w(WaveApplication.LOG_TAG, "widget album failed kind=${page.kind}")
-                    toast(context, R.string.widget_load_failed)
+                    say(context, report, R.string.widget_load_failed)
                 }
             }
         WidgetItemKind.Song, WidgetItemKind.Live -> container.player.playSong(item.toSong())
     }
     return null
+}
+
+/** 鳴らせなかったときの知らせ（受け手が無ければ toast）。 */
+internal suspend fun say(
+    context: Context,
+    report: (suspend (Int) -> Unit)?,
+    text: Int,
+) {
+    if (report != null) report(text) else toast(context, text)
 }
 
 internal suspend fun toast(
@@ -421,6 +432,7 @@ internal suspend fun playPlaylist(
     context: Context,
     playlistId: String,
     shuffle: Boolean,
+    report: (suspend (Int) -> Unit)? = null,
 ) {
     val container = (context.applicationContext as WaveApplication).container
     val order = container.settings.playlistOrders.get(playlistId)
@@ -428,13 +440,13 @@ internal suspend fun playPlaylist(
     when (val page = container.music.playlist(playlistId, order = order.takeUnless { it.arrangedLocally })) {
         is CallResult.Ok ->
             if (page.value.songs.isEmpty()) {
-                toast(context, R.string.widget_playlist_empty)
+                say(context, report, R.string.widget_playlist_empty)
             } else {
                 container.player.playFrom(page.value.songs, 0, playlistId, page.value.continuation, shuffle)
             }
         is CallResult.Failed -> {
             Log.w(WaveApplication.LOG_TAG, "widget playlist failed kind=${page.kind}")
-            toast(context, R.string.widget_playlist_failed)
+            say(context, report, R.string.widget_playlist_failed)
         }
     }
 }

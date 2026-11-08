@@ -1060,3 +1060,12 @@
 - 口は BroadcastReceiver でなく透明な Activity にした: 頼みの多くが「Intent を送る（Activity）」で、受けたあと再生サービスにつなぐまでプロセスが前にいるほうが確か（動的ショートカットの PlaylistShortcutActivity と同じ形）
 - リンクの見分け方は core の PlayLink に純粋な関数で置き、Mac も同じ規則で Swift に別に書く。ID だけのときの 11 文字は動画、`PL`・`OLAK5uy_`・`RD` はプレイリスト、`MPREb_` はアルバム。`browse/VL…` やチャンネルは今は読まない（規則を Mac とそろえるため、足すときは両方で）
 - 動画の題・アーティストは upNext（next）の先頭の曲から引く。ログインしていない next の応答をライブ配信（Lofi Girl）で取ったところ、playlistPanelVideoRenderer にライブの印（バッジ・isLive）が無く、長さの欄に配信の経過時間が入っていた。長さで見分けるのは当てにならないので、ライブかどうかは鳴らすときの StreamResolver の判定（ライブと分かれば HLS で流し直す、今ある仕組み）に任せた
+
+## 2026-11-09 Knot のショートカットに wave のアクションを出す
+
+- Knot のセッションが、ほかのアプリがアクションを出す口（ContentProvider の call。docs/external-actions.md）を作ったので、wave の Android がそこへ出す。iPhone・Mac のショートカットのアクションと同じ並び（選んだものを再生・リンクで再生・再生と一時停止・次・前・高く評価・今の曲を取得）にした
+- 候補の読み方は、ワンタップ再生の選ぶ画面の ViewModel から WidgetItemCatalog に切り出して共用した。鳴らす頼みも playWidgetItem・playLink をそのまま使う。両方とも、鳴らせなかったときに toast の代わりに知らせを受け取れるようにし（report）、Knot へは誤りの文で返す（Knot は画面の外で動くので、toast よりショートカットの結果に出るほうが分かる）
+- 候補の id は WidgetItem を丸ごと JSON にした（Knot は中を見ずに保存して run で返す）。ライブラリから外したプレイリストや、履歴から流れた曲でも鳴らせる。id が wave の作ったものでなければ PlayLink で読むので、Claude Code に作らせたショートカットで id に URL を書いても鳴る
+- 呼び手は getCallingPackage() で Knot だけにした。adb の `content call` は呼び手が shell になるので、開発版（BuildConfig.DEBUG）に限って shell も通す。shell はもともと am start で同じことができるので、開発版で開けても新しくできることは増えない
+- 今の曲と高く評価は、ウィジェットと同じ WidgetHooks.nowPlaying から読む（再生サービスが居なければ「再生していません」）。再生・一時停止・次・前はウィジェットのボタンと同じ withController（ほかの端末を映している間はその端末の操作）
+- Knot は 60 秒ほどで見切るので、50 秒で打ち切って「時間内に終わりませんでした」を返す

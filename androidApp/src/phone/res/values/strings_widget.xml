@@ -42,4 +42,6 @@
     <string name="shortcut_choose">Choose what to play</string>
     <string name="shortcut_link_unknown">Couldn\'t read that link</string>
     <string name="shortcut_add_to_home">Add to Home screen</string>
+    <string name="knot_timeout">Didn\'t finish in time</string>
+    <string name="knot_no_item">Choose what to play</string>
 </resources>

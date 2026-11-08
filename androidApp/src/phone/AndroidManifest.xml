@@ -113,6 +113,22 @@
             </intent-filter>
         </activity>
 
+        <!--
+            Knot のショートカットに wave のアクションを出す口（Knot の docs/external-actions.md）。
+            call の actions・choices・run だけに答え、呼び手が Knot のときだけ答える
+        -->
+        <provider
+            android:name=".knot.KnotActions"
+            android:authorities="xyz.mooma0750.wave.knot"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="xyz.mooma0750.knot.ACTION_PROVIDER" />
+            </intent-filter>
+            <meta-data
+                android:name="xyz.mooma0750.knot.PREFIX"
+                android:value="wave" />
+        </provider>
+
         <!-- ホーム画面のウィジェット: 1つのプレイリスト（置くときに選ぶ） -->
         <receiver
             android:name=".widget.PlaylistWidgetReceiver"

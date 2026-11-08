@@ -42,4 +42,6 @@
     <string name="shortcut_choose">ショートカットで再生するもの</string>
     <string name="shortcut_link_unknown">このリンクは再生できません</string>
     <string name="shortcut_add_to_home">ホーム画面に追加</string>
+    <string name="knot_timeout">時間内に終わりませんでした</string>
+    <string name="knot_no_item">再生するものを選んでください</string>
 </resources>

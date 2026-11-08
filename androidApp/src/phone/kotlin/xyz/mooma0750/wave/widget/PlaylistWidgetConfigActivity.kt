@@ -152,9 +152,10 @@ data class PickerState(
 /** 種類と検索の語から、選べるものの一覧を作る（ライブラリと再生履歴は一度だけ読む）。 */
 @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
 class WidgetItemPickerModel(
-    private val music: MusicRepository,
-    private val likedTitle: String,
+    music: MusicRepository,
+    likedTitle: String,
 ) : ViewModel() {
+    private val catalog = WidgetItemCatalog(music, likedTitle)
     val kind = MutableStateFlow(WidgetItemKind.Playlist)
     val query = MutableStateFlow("")
 
@@ -164,14 +165,28 @@ class WidgetItemPickerModel(
             .flatMapLatest { (k, q) ->
                 flow {
                     emit(PickerState())
-                    emit(load(k, q))
+                    emit(catalog.load(k, q))
                 }
             }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), PickerState())
 
+    private companion object {
+        const val SEARCH_DELAY_MS = 400L
+    }
+}
+
+/**
+ * 種類ごとの選べるもの（ワンタップ再生の選ぶ画面と、Knot のアクションの候補で共通）。ライブラリと再生履歴は一度だけ読む。
+ * 検索の語が空なら、プレイリスト・アルバムはライブラリ、曲・ライブは最近再生したもの（ライブを見ていなければ Lo-Fi のライブ）。
+ * 語があれば、プレイリストはライブラリの中を、ほかは YouTube Music を検索する。
+ */
+class WidgetItemCatalog(
+    private val music: MusicRepository,
+    private val likedTitle: String,
+) {
     private var playlists: List<PlaylistSummary>? = null
     private var history: List<Song>? = null
 
-    private suspend fun load(
+    suspend fun load(
         kind: WidgetItemKind,
         query: String,
     ): PickerState =
@@ -229,10 +244,6 @@ class WidgetItemPickerModel(
             is CallResult.Ok -> CallResult.Ok(transform(value))
             is CallResult.Failed -> this
         }
-
-    private companion object {
-        const val SEARCH_DELAY_MS = 400L
-    }
 }
 
 /** 鳴らすものを選ぶ画面（ワンタップ再生のウィジェットと、ホーム画面のショートカットで共通）。 */

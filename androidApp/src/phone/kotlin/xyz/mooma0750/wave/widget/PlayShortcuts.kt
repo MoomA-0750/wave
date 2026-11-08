@@ -223,28 +223,29 @@ class PlayIntentActivity : Activity() {
  * リンクで渡されたものを鳴らす。動画は、曲かライブか・題・アーティストを次に流れる曲（upNext）の先頭で引いてから、
  * ワンタップ再生の曲と同じく鳴らす（ライブの印が取れなくても、流すときにライブと分かれば流し直す）。
  */
-private suspend fun playLink(
+internal suspend fun playLink(
     context: Context,
     link: PlayLink,
     shuffle: Boolean,
+    report: (suspend (Int) -> Unit)? = null,
 ) {
     val container = (context.applicationContext as WaveApplication).container
     when (link) {
-        is PlayLink.Playlist -> playWidgetItem(context, WidgetItem(WidgetItemKind.Playlist, link.playlistId, "", null, null), shuffle)
-        is PlayLink.Album -> playWidgetItem(context, WidgetItem(WidgetItemKind.Album, link.browseId, "", null, null), shuffle)
+        is PlayLink.Playlist -> playWidgetItem(context, WidgetItem(WidgetItemKind.Playlist, link.playlistId, "", null, null), shuffle, report)
+        is PlayLink.Album -> playWidgetItem(context, WidgetItem(WidgetItemKind.Album, link.browseId, "", null, null), shuffle, report)
         is PlayLink.Video ->
             when (val page = container.music.upNext(link.videoId, null)) {
                 is CallResult.Ok -> {
                     val song = page.value.songs.firstOrNull { it.videoId == link.videoId }
                     if (song == null) {
-                        toast(context, R.string.widget_load_failed)
+                        say(context, report, R.string.widget_load_failed)
                     } else {
                         container.player.playSong(song)
                     }
                 }
                 is CallResult.Failed -> {
                     Log.w(WaveApplication.LOG_TAG, "play link failed kind=${page.kind}")
-                    toast(context, R.string.widget_load_failed)
+                    say(context, report, R.string.widget_load_failed)
                 }
             }
     }
