@@ -1093,3 +1093,8 @@
 
 - Android の core と Mac が next の行の liveBadge を見るようにしたのに合わせ、Windows（`PlaylistPanelSong`）と Linux（`playlist_panel_song`）も同じ見方にした。前はどちらも IsLive を常に false にしていて、ラジオに配信中のライブが混ざるとふつうの曲として流そうとした
 - 手本は Android の core と共通の `next_live`・`next_ended_live`。長さが無いだけではライブとしない（配信を終えた動画は長さが付いて来るが、取り違えの元になるので）
+
+## 2026-11-09 再生の丸の × の窓は、掴んでいない間は窓ごと透かす
+
+- × の窓は丸と一緒に置いたままで、中身が見えないだけだった。Android 12 以降は、ほかのアプリの重ねる窓が FLAG_NOT_TOUCHABLE でも、不透明の度合い（窓の alpha）が 0.8 を超えるとその下へのタップを遮る（untrusted touch occlusion）。そのため、画面の下の真ん中（Pixel 3 で 424〜655 × 1696〜1927）がほかのアプリで押せなかった（pixwall のセッションが adb の input tap で見つけた）
+- 掴んだときに alpha を 1 にし、離したら × が消える動きを待って（400ms）0 にする。窓を掴むたびに足し外しすると、最初の掴みで × の位置が取れない（center() が窓の配置を待つ）ので、置いたままで透かす形にした
