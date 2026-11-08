@@ -4,10 +4,19 @@ use wave_core::credentials::Credentials;
 
 use crate::runtime;
 
+/// 確かめ用: WAVE_KEYRING_OFF があれば、キーリングを読みも書きもしない（人の機械で、その人のログインに触れずに画面を確かめる）。
+fn off() -> bool {
+    std::env::var_os("WAVE_KEYRING_OFF").is_some()
+}
+
 const ATTRIBUTES: [(&str, &str); 2] = [("application", "xyz.mooma0750.wave"), ("kind", "youtube-music-login")];
 const LABEL: &str = "wave (YouTube Music のログイン)";
 
 pub async fn load() -> Option<Credentials> {
+    if off() {
+        return None;
+    }
+
     runtime::run(async {
         let keyring = oo7::Keyring::new().await.ok()?;
         let _ = keyring.unlock().await;
@@ -19,6 +28,10 @@ pub async fn load() -> Option<Credentials> {
 }
 
 pub async fn save(credentials: &Credentials) -> bool {
+    if off() {
+        return false;
+    }
+
     let text = credentials.serialize();
     runtime::run(async move {
         let Ok(keyring) = oo7::Keyring::new().await else { return false };
@@ -30,6 +43,10 @@ pub async fn save(credentials: &Credentials) -> bool {
 
 /// ログアウト: キーリングからログインの情報を消す。
 pub async fn delete() {
+    if off() {
+        return;
+    }
+
     runtime::run(async {
         if let Ok(keyring) = oo7::Keyring::new().await {
             let _ = keyring.delete(&ATTRIBUTES).await;
@@ -42,6 +59,10 @@ pub async fn delete() {
 const AI_ATTRIBUTES: [(&str, &str); 2] = [("application", "xyz.mooma0750.wave"), ("kind", "claude-bridge")];
 
 pub async fn load_ai() -> Option<String> {
+    if off() {
+        return None;
+    }
+
     runtime::run(async {
         let keyring = oo7::Keyring::new().await.ok()?;
         let _ = keyring.unlock().await;
@@ -53,6 +74,10 @@ pub async fn load_ai() -> Option<String> {
 }
 
 pub async fn save_ai(text: String) -> bool {
+    if off() {
+        return false;
+    }
+
     runtime::run(async move {
         let Ok(keyring) = oo7::Keyring::new().await else { return false };
         let _ = keyring.unlock().await;
@@ -62,6 +87,10 @@ pub async fn save_ai(text: String) -> bool {
 }
 
 pub async fn delete_ai() {
+    if off() {
+        return;
+    }
+
     runtime::run(async {
         if let Ok(keyring) = oo7::Keyring::new().await {
             let _ = keyring.delete(&AI_ATTRIBUTES).await;
@@ -74,6 +103,10 @@ pub async fn delete_ai() {
 const CONNECT_ATTRIBUTES: [(&str, &str); 2] = [("application", "xyz.mooma0750.wave"), ("kind", "connect-device-keys")];
 
 pub async fn load_connect_keys() -> Option<String> {
+    if off() {
+        return None;
+    }
+
     runtime::run(async {
         let keyring = oo7::Keyring::new().await.ok()?;
         let _ = keyring.unlock().await;
@@ -85,6 +118,10 @@ pub async fn load_connect_keys() -> Option<String> {
 }
 
 pub async fn save_connect_keys(text: String) -> bool {
+    if off() {
+        return false;
+    }
+
     runtime::run(async move {
         let Ok(keyring) = oo7::Keyring::new().await else { return false };
         let _ = keyring.unlock().await;

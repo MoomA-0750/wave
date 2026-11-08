@@ -14,6 +14,21 @@ use wave_core::music::repository::MusicRepository;
 const APP_ID: &str = "xyz.mooma0750.wave";
 
 fn main() -> gtk::glib::ExitCode {
+    // QML 版（wave-qt）の「アプリの中の窓でログイン」から呼ばれる: ログインの窓だけを開き、キーリングに保存したら閉じる
+    // （WebKitGTK のログインの窓は GTK 版にしか無いので、QML 版は別の手続きとしてこれを開く）
+    if std::env::args().any(|a| a == "--login") {
+        let app = adw::Application::builder().application_id("xyz.mooma0750.wave.Login").flags(gtk::gio::ApplicationFlags::NON_UNIQUE).build();
+        app.connect_activate(|app| {
+            gtk::Window::set_default_icon_name(APP_ID);
+            let parent = adw::ApplicationWindow::builder().application(app).title("wave").build();
+            let app = app.clone();
+            login::open(&parent, move |credentials| {
+                eprintln!("login-only saved={}", credentials.is_some());
+                app.quit();
+            });
+        });
+        return app.run_with_args(&["wave-gtk"]);
+    }
     let app = adw::Application::builder().application_id(APP_ID).build();
     app.connect_activate(build_window);
     app.run()
@@ -153,19 +168,7 @@ async fn login_from_browser(window: &adw::ApplicationWindow, repo: &MusicReposit
     dialog.set_close_response("cancel");
     let chosen = dialog.choose_future(Some(window)).await;
     let Some(profile) = chosen.strip_prefix('p').and_then(|i| i.parse::<usize>().ok()).and_then(|i| profiles.get(i)) else { return false };
-    let result = async {
-        let cookie = browser_login::read_cookie(profile).await?;
-        let (visitor, data_sync) = browser_login::page_config(cookie.clone()).await?;
-        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as i64);
-        let credentials = wave_core::credentials::Credentials::from_login(&cookie, visitor.as_deref(), data_sync.as_deref(), now)
-            .ok_or_else(|| "ログインの cookie が見つかりませんでした".to_string())?;
-        eprintln!("browser login visitor={} dataSync={}", visitor.is_some(), data_sync.is_some());
-        if !keyring::save(&credentials).await {
-            return Err("ログイン情報を保存できませんでした".to_string());
-        }
-        Ok(credentials)
-    }
-    .await;
+    let result = browser_login::use_profile(profile).await;
     match result {
         Ok(credentials) => {
             repo.client().set_credentials(Some(credentials));

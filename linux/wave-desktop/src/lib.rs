@@ -10,6 +10,7 @@ pub mod discord_status;
 pub mod downloads;
 pub mod keyring;
 pub mod mpris;
+pub mod omarchy_theme;
 pub mod playback;
 pub mod player;
 pub mod podcasts;

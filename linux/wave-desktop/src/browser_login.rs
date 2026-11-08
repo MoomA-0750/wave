@@ -87,6 +87,20 @@ pub fn find(home: &Path) -> Vec<Profile> {
     out
 }
 
+/// 選んだブラウザのログインを読み、music.youtube.com を1度開いて確かめてから、キーリングに保存する（GTK 版・QML 版の「ブラウザのログインを使う」）。
+pub async fn use_profile(profile: &Profile) -> Result<wave_core::credentials::Credentials, String> {
+    let cookie = read_cookie(profile).await?;
+    let (visitor, data_sync) = page_config(cookie.clone()).await?;
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as i64);
+    let credentials = wave_core::credentials::Credentials::from_login(&cookie, visitor.as_deref(), data_sync.as_deref(), now)
+        .ok_or_else(|| "ログインの cookie が見つかりませんでした".to_string())?;
+    eprintln!("browser login visitor={} dataSync={}", visitor.is_some(), data_sync.is_some());
+    if !crate::keyring::save(&credentials).await {
+        return Err("ログイン情報を保存できませんでした".to_string());
+    }
+    Ok(credentials)
+}
+
 /// 選ばれたプロファイルから、music.youtube.com に送る cookie を「名前=値; …」で読む。Chromium の系統は鍵をキーリングから取る。
 pub async fn read_cookie(profile: &Profile) -> Result<String, String> {
     let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs() as i64);

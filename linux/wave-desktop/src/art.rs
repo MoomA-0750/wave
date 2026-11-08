@@ -34,6 +34,23 @@ pub fn weighted_color(rgba: &[u8]) -> Option<Rgb> {
     (w > 0.0).then(|| Rgb(r / w / 255.0, g / w / 255.0, b / w / 255.0))
 }
 
+/// タイルの色（Mac の Ui.tile と同じ）。
+pub fn tile_color(argb: Option<u32>, index: usize) -> (u8, u8, u8) {
+    const FALLBACK: [u32; 8] = [0x8D67AB, 0xE8115B, 0x1E3264, 0x148A08, 0xBA5D07, 0x503750, 0x477D95, 0xAF2896];
+    match argb {
+        Some(v) => {
+            let (r, g, b) = (((v >> 16) & 0xFF) as f64, ((v >> 8) & 0xFF) as f64, (v & 0xFF) as f64);
+            let luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255.0;
+            let factor = if luminance > 0.45 { 0.45 / luminance } else { 1.0 };
+            ((r * factor) as u8, (g * factor) as u8, (b * factor) as u8)
+        }
+        None => {
+            let f = FALLBACK[index % FALLBACK.len()];
+            (((f >> 16) & 0xFF) as u8, ((f >> 8) & 0xFF) as u8, (f & 0xFF) as u8)
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -51,5 +68,14 @@ mod tests {
         assert_eq!(sized("https://lh3.googleusercontent.com/abc=w60-h60-l90-rj", 226), "https://lh3.googleusercontent.com/abc=w226-h226-l90-rj");
         assert_eq!(sized("https://i.ytimg.com/vi/x/sddefault.jpg", 300), "https://i.ytimg.com/vi/x/hqdefault.jpg");
         assert_eq!(sized("https://i.ytimg.com/vi/x/default.jpg", 48), "https://i.ytimg.com/vi/x/default.jpg");
+    }
+
+    #[test]
+    fn bright_tile_colors_are_darkened_for_white_text() {
+        assert_eq!(tile_color(Some(0xFF_000080), 0), (0, 0, 128));
+        let (r, g, b) = tile_color(Some(0xFF_FFFFFF), 0);
+        assert!(r < 120 && g < 120 && b < 120);
+        assert_eq!(tile_color(None, 1), (0xE8, 0x11, 0x5B));
+        assert_eq!(tile_color(None, 9), (0xE8, 0x11, 0x5B));
     }
 }
