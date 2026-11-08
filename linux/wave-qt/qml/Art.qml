@@ -38,10 +38,12 @@ Item {
         sourceSize.width: Math.ceil(width * 2)
         sourceSize.height: Math.ceil(height * 2)
     }
-    // 丸める: 画像を地の形で切り抜く（丸みが 0 なら切り抜かない）
+    // 丸める: 画像を地の形で切り抜く（丸みが 0 なら切り抜かない）。GPU で描くときは MultiEffect の型抜き、
+    // software で描くとき（効果が使えない）は Canvas で角を丸めた形に切って描く
+    readonly property bool software: GraphicsInfo.api === GraphicsInfo.Software
     MultiEffect {
         anchors.fill: parent
-        visible: art.clipRadius > 0 && image.status === Image.Ready
+        visible: !art.software && art.clipRadius > 0 && image.status === Image.Ready
         source: image
         maskEnabled: true
         maskSource: mask
@@ -51,8 +53,42 @@ Item {
     Item {
         id: mask
         anchors.fill: parent
-        layer.enabled: true
+        layer.enabled: !art.software
         visible: false
         Rectangle { anchors.fill: parent; radius: art.clipRadius; color: "black" }
+    }
+    Canvas {
+        id: canvas
+        anchors.fill: parent
+        visible: art.software && art.clipRadius > 0 && image.status === Image.Ready
+        property string loadedUrl: ""
+        function drawWhenReady() {
+            if (!visible) return
+            if (loadedUrl !== art.source) {
+                if (loadedUrl !== "") unloadImage(loadedUrl)
+                loadedUrl = art.source
+                loadImage(art.source)
+            }
+            requestPaint()
+        }
+        onVisibleChanged: drawWhenReady()
+        onWidthChanged: requestPaint()
+        onImageLoaded: requestPaint()
+        Connections { target: art; function onSourceChanged() { canvas.drawWhenReady() } }
+        onPaint: {
+            const ctx = getContext("2d")
+            ctx.reset()
+            if (!isImageLoaded(loadedUrl)) return
+            const r = art.clipRadius, w = width, h = height
+            ctx.beginPath()
+            ctx.roundedRect(0, 0, w, h, r, r)
+            ctx.clip()
+            // 縦横の比を保って枠いっぱいに（はみ出す方を切る）
+            const img = ctx.createImageData(loadedUrl)
+            const iw = img ? img.width : w, ih = img ? img.height : h
+            const scale = Math.max(w / iw, h / ih)
+            const dw = iw * scale, dh = ih * scale
+            ctx.drawImage(loadedUrl, (w - dw) / 2, (h - dh) / 2, dw, dh)
+        }
     }
 }

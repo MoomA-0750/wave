@@ -79,7 +79,7 @@ Item {
                 visible: page.settings.search_history.length > 0
                 Layout.fillWidth: true
                 Section { text: "最近の検索"; Layout.fillWidth: true }
-                Button { Material.roundedScale: Style.radius; text: "すべて消去"; flat: true; onClicked: WaveApp.clearSearchHistory() }
+                Btn { text: "すべて消去"; flat: true; onClicked: WaveApp.clearSearchHistory() }
             }
             GridLayout {
                 visible: page.settings.search_history.length > 0

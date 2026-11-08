@@ -55,8 +55,7 @@ Flickable {
                         onClicked: WaveApp.playItem(JSON.stringify({ kind: "artist", id: page.itemId }), false)
                     }
                     IconButton { iconName: "media-playlist-shuffle-symbolic"; tip: "シャッフル再生"; size: 22; onClicked: WaveApp.playItem(JSON.stringify({ kind: "artist", id: page.itemId }), true) }
-                    Button {
-                        Material.roundedScale: Style.radius
+                    Btn {
                         visible: WaveApp.loggedIn && !!page.info && page.info.channelId !== "" && page.subscribed >= 0
                         text: page.subscribed === 1 ? "登録済み" : "登録"
                         flat: page.subscribed === 1
@@ -79,6 +78,7 @@ Flickable {
                     Layout.fillWidth: true
                     song: modelData
                     number: index + 1
+                    showAlbum: false
                     onPlay: WaveApp.playSongs(JSON.stringify(page.info.topSongs), index, page.itemId, false)
                 }
             }

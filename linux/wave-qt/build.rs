@@ -25,6 +25,16 @@ const QML: &[&str] = &[
     "qml/Chip.qml",
     "qml/IconButton.qml",
     "qml/PlayButton.qml",
+    "qml/Btn.qml",
+    "qml/WMenu.qml",
+    "qml/WDialog.qml",
+    "qml/AiPane.qml",
+    "qml/DevicesPage.qml",
+    "qml/DownloadsPage.qml",
+    "qml/PodcastPage.qml",
+    "qml/FeedSearchPage.qml",
+    "qml/QrCode.qml",
+    "qml/VideoView.qml",
     "qml/SongMenu.qml",
     "qml/Section.qml",
 ];
@@ -42,6 +52,8 @@ fn main() {
         .qt_module("Network")
         .include_dir(concat!(env!("CARGO_MANIFEST_DIR"), "/cpp"))
         .cpp_file("cpp/helpers.cpp")
+        .cpp_file("cpp/videoitem.h")
+        .cpp_file("cpp/videoitem.cpp")
         .file("src/bridge.rs")
         .build();
 }

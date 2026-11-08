@@ -21,6 +21,8 @@ ListView {
 
     clip: true
     boundsBehavior: Flickable.StopAtBounds
+    // 見出しが後から伸びても、頭から見せる（今の行に寄せない）
+    currentIndex: -1
     ScrollBar.vertical: ScrollBar {}
     model: songs
     spacing: 0
@@ -83,6 +85,8 @@ ListView {
                         model: page.info.artists || []
                         delegate: Label {
                             text: modelData.name
+                            lineHeightMode: Text.FixedHeight
+                            lineHeight: 20
                             font.weight: Font.DemiBold
                             color: modelData.id ? Style.foreground : Style.dim
                             font.underline: artistHover.hovered && modelData.id !== ""
@@ -90,7 +94,7 @@ ListView {
                             TapHandler { enabled: modelData.id !== ""; onTapped: Style.nav.openArtist(modelData.id, modelData.name) }
                         }
                     }
-                    Label { text: page.info.subtitle || ""; color: Style.dim; wrapMode: Text.Wrap }
+                    Label { text: page.info.subtitle || ""; color: Style.dim; wrapMode: Text.Wrap; lineHeightMode: Text.FixedHeight; lineHeight: 20 }
                 }
                 RowLayout {
                     Layout.topMargin: 10
@@ -100,6 +104,13 @@ ListView {
                         onClicked: page.playFrom(0, false)
                     }
                     IconButton { iconName: "media-playlist-shuffle-symbolic"; tip: "シャッフル再生"; size: 22; onClicked: page.playFrom(0, true) }
+                    IconButton {
+                        visible: page.kind !== "history"
+                        iconName: "folder-download-symbolic"
+                        tip: "ダウンロード"
+                        size: 22
+                        onClicked: WaveApp.downloadCollection(page.kind === "album" ? "album" : page.itemId === "LM" ? "liked" : "playlist", page.itemId, page.info.title || page.pageTitle, page.info.art || "", JSON.stringify(page.songs))
+                    }
                 }
             }
         }
@@ -126,6 +137,28 @@ ListView {
         showAlbum: page.kind !== "album"
         subtitleText: page.kind === "album" ? (modelData.artists || "") : (showAlbum ? (modelData.artists || "") : (modelData.subtitle || ""))
         onPlay: page.playFrom(index, false)
+        // 自分のプレイリストからは外せる
+        removal: page.kind === "playlist" && page.info.editable && (modelData.setVideoId || "") !== ""
+                 ? { label: "このプレイリストから削除", action: () => page.removeSong(index) } : null
+    }
+    property int removeToken: -1
+    property int removing: -1
+    function removeSong(index) {
+        const song = page.songs[index]
+        removing = index
+        removeToken = WaveApp.removeFromPlaylist(page.itemId, song.id, song.setVideoId)
+    }
+    Connections {
+        target: WaveApp
+        function onLoaded(t, json) {
+            if (t !== page.removeToken) return
+            if (JSON.parse(json).ok && page.removing >= 0) {
+                const next = page.songs.slice()
+                next.splice(page.removing, 1)
+                page.songs = next
+            }
+            page.removing = -1
+        }
     }
     footer: BusyIndicator { width: page.width; visible: page.loading && page.songs.length > 0; running: visible }
 }

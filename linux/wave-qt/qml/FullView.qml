@@ -25,11 +25,11 @@ Rectangle {
         anchors.centerIn: parent
         width: Math.min(parent.width - 96, 1100)
         spacing: 48
-        Art {
-            Layout.preferredWidth: Math.min(view.height - 120, view.width * 0.45)
-            Layout.preferredHeight: Layout.preferredWidth
-            source: WaveApp.art
-            radius: Style.radius
+        Item {
+            Layout.preferredWidth: WaveApp.showVideo ? Math.min(view.width * 0.55, (view.height - 120) * 16 / 9) : Math.min(view.height - 120, view.width * 0.45)
+            Layout.preferredHeight: WaveApp.showVideo ? Layout.preferredWidth * 9 / 16 : Layout.preferredWidth
+            Art { anchors.fill: parent; visible: !WaveApp.showVideo; source: WaveApp.art; radius: Style.radius }
+            VideoView { anchors.fill: parent; visible: WaveApp.showVideo }
         }
         ColumnLayout {
             Layout.fillWidth: true
@@ -37,6 +37,13 @@ Rectangle {
             Label { Layout.fillWidth: true; text: WaveApp.hasSong ? WaveApp.title : "何も再生していません"; font.pixelSize: 40; font.weight: Font.Bold; wrapMode: Text.Wrap; maximumLineCount: 3; elide: Text.ElideRight; color: Style.foreground }
             Label { Layout.fillWidth: true; text: WaveApp.artists; font.pixelSize: 22; elide: Text.ElideRight; color: Style.dim }
             Label { Layout.fillWidth: true; text: WaveApp.album; visible: text !== ""; font.pixelSize: 16; elide: Text.ElideRight; color: Style.dim }
+            Row {
+                visible: WaveApp.hasVideo
+                Layout.topMargin: 12
+                spacing: 6
+                Chip { text: "曲"; on: !WaveApp.showVideo; onClicked: WaveApp.setVideoOn(false) }
+                Chip { text: "動画"; on: WaveApp.showVideo; onClicked: WaveApp.setVideoOn(true) }
+            }
         }
     }
 }

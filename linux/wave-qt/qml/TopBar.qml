@@ -45,9 +45,9 @@ Rectangle {
             flat: bar.shell.visibleKind !== "home"
             icon.source: Style.icon("go-home-symbolic")
             icon.color: Style.foreground
-            Material.roundedScale: Style.radius === 0 ? Material.NotRounded : Material.FullScale
             Material.background: Style.raised
             Material.elevation: 0
+            background: Rectangle { radius: width / 2; color: parent.flat ? (parent.hovered ? Style.hover : "transparent") : Style.raised }
             ToolTip.visible: hovered
             ToolTip.text: "ホーム"
             onClicked: bar.shell.goHome()
@@ -82,6 +82,19 @@ Rectangle {
             Keys.onDownPressed: if (popup.opened) list.forceActiveFocus()
             Keys.onEscapePressed: popup.close()
         }
+        RoundButton {
+            Layout.preferredWidth: 40
+            Layout.preferredHeight: 40
+            flat: !(bar.shell.showRight && bar.shell.rightView === "ai")
+            icon.source: Style.icon("chat-message-new-symbolic")
+            icon.color: Style.foreground
+            Material.background: Style.raised
+            Material.elevation: 0
+            background: Rectangle { radius: width / 2; color: parent.flat ? (parent.hovered ? Style.hover : "transparent") : Style.raised }
+            ToolTip.visible: hovered
+            ToolTip.text: "Claude に聞く (Ctrl+J)"
+            onClicked: bar.shell.toggleAi()
+        }
     }
 
     // アカウント（写真）。押すと設定・ログアウト
@@ -94,6 +107,7 @@ Rectangle {
         height: 40
         flat: true
         padding: 0
+        background: Item {}
         contentItem: Art {
             source: WaveApp.accountPhoto
             round: true
@@ -102,17 +116,19 @@ Rectangle {
         ToolTip.visible: hovered
         ToolTip.text: WaveApp.accountName !== "" ? WaveApp.accountName : "アカウント"
         onClicked: accountMenu.popup(account, 0, account.height)
-        Menu {
+        WMenu {
             id: accountMenu
             MenuItem { text: WaveApp.accountName !== "" ? WaveApp.accountName : "ログインしていません"; enabled: false }
             MenuSeparator {}
             MenuItem { text: "設定"; onTriggered: bar.shell.openSettings() }
+            MenuItem { text: "端末の連携"; visible: WaveApp.connectConfigured && WaveApp.loggedIn; height: visible ? implicitHeight : 0; onTriggered: bar.shell.openDevices() }
+            MenuItem { text: "ダウンロード"; onTriggered: bar.shell.openDownloads() }
             MenuItem { text: "再生履歴"; enabled: WaveApp.loggedIn; onTriggered: bar.shell.push(historyPage, {}) }
             MenuItem { text: WaveApp.loggedIn ? "ログアウト" : "ログイン"; onTriggered: WaveApp.loggedIn ? confirm.open() : WaveApp.logOut() }
         }
     }
 
-    Dialog {
+    WDialog {
         id: confirm
         parent: Overlay.overlay
         anchors.centerIn: parent

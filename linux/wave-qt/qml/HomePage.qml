@@ -126,7 +126,7 @@ Flickable {
             Layout.alignment: Qt.AlignHCenter
             spacing: 8
             Label { text: page.params !== "" ? "読み込めませんでした" : "ホームを読み込めませんでした"; font.pixelSize: 18; font.weight: Font.Bold; Layout.alignment: Qt.AlignHCenter; color: Style.foreground }
-            Button { Material.roundedScale: Style.radius; text: "もう一度読み込む"; Layout.alignment: Qt.AlignHCenter; onClicked: page.reload() }
+            Btn { text: "もう一度読み込む"; Layout.alignment: Qt.AlignHCenter; onClicked: page.reload() }
         }
     }
 }

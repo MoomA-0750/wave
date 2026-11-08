@@ -24,11 +24,19 @@ Flickable {
             Label { text: WaveApp.album !== "" ? WaveApp.album : "再生中"; font.weight: Font.Bold; elide: Text.ElideRight; Layout.fillWidth: true; color: Style.foreground }
             IconButton { iconName: "window-close-symbolic"; tip: "閉じる"; size: 16; onClicked: pane.shell.setRight(false, "") }
         }
-        Art {
+        // 曲｜動画（今の曲に MV があるときだけ）
+        Row {
+            visible: WaveApp.hasVideo
+            Layout.alignment: Qt.AlignHCenter
+            spacing: 6
+            Chip { text: "曲"; on: !WaveApp.showVideo; onClicked: WaveApp.setVideoOn(false) }
+            Chip { text: "動画"; on: WaveApp.showVideo; onClicked: WaveApp.setVideoOn(true) }
+        }
+        Item {
             Layout.fillWidth: true
-            Layout.preferredHeight: width
-            source: WaveApp.art
-            radius: Style.radius
+            Layout.preferredHeight: WaveApp.showVideo ? width * 9 / 16 : width
+            Art { anchors.fill: parent; visible: !WaveApp.showVideo; source: WaveApp.art; radius: Style.radius }
+            VideoView { anchors.fill: parent; visible: WaveApp.showVideo }
         }
         RowLayout {
             Layout.fillWidth: true
@@ -83,7 +91,7 @@ Flickable {
                 RowLayout {
                     Layout.fillWidth: true
                     Label { text: "次の曲"; font.weight: Font.Bold; Layout.fillWidth: true; color: Style.foreground }
-                    Button { Material.roundedScale: Style.radius; text: "キューを開く"; flat: true; font.weight: Font.Bold; onClicked: pane.shell.setRight(true, "queue") }
+                    Btn { text: "キューを開く"; flat: true; link: true; font.weight: Font.Bold; onClicked: pane.shell.setRight(true, "queue") }
                 }
                 TrackRow { visible: !!pane.next; Layout.fillWidth: true; song: pane.next || ({}); showAlbum: false; onPlay: WaveApp.next() }
             }

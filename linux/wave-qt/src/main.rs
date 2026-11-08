@@ -4,6 +4,7 @@
 
 mod app;
 mod bridge;
+mod more;
 mod theme;
 mod view;
 
@@ -12,6 +13,8 @@ use cxx_qt_lib::{QGuiApplication, QQmlApplicationEngine, QQuickStyle, QString, Q
 fn main() {
     let mut app = QGuiApplication::new();
     bridge::qobject::wave_setup_application();
+    // MV の絵を描く部品（VideoFrame）
+    bridge::qobject::wave_register_video_item();
     // 部品は Material（Omarchy のテーマの色と丸みは Theme が QML に渡す）
     QQuickStyle::set_style(&QString::from("Material"));
     let mut engine = QQmlApplicationEngine::new();

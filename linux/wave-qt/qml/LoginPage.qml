@@ -32,11 +32,10 @@ Item {
     ColumnLayout {
         anchors.centerIn: parent
         spacing: 12
-        IconImage { Layout.alignment: Qt.AlignHCenter; source: Style.icon("audio-x-generic-symbolic"); sourceSize.width: 96; sourceSize.height: 96; color: Style.dim }
+        IconImage { Layout.alignment: Qt.AlignHCenter; source: Style.icon("audio-x-generic-symbolic"); sourceSize.width: 96; sourceSize.height: 96; color: Style.accent }
         Label { Layout.alignment: Qt.AlignHCenter; text: "wave"; font.pixelSize: 32; font.weight: Font.Bold; color: Style.foreground }
         Label { Layout.alignment: Qt.AlignHCenter; text: "YouTube Music のアカウントでログインしてください"; color: Style.dim }
-        Button {
-            Material.roundedScale: Style.radius
+        Btn {
             Layout.alignment: Qt.AlignHCenter
             Layout.topMargin: 12
             Layout.preferredWidth: 260
@@ -45,8 +44,7 @@ Item {
             enabled: !page.busy
             onClicked: WaveApp.openLoginWindow()
         }
-        Button {
-            Material.roundedScale: Style.radius
+        Btn {
             Layout.alignment: Qt.AlignHCenter
             Layout.preferredWidth: 260
             text: "ブラウザのログインを使う"
@@ -56,19 +54,19 @@ Item {
         BusyIndicator { Layout.alignment: Qt.AlignHCenter; visible: page.busy; running: visible }
     }
 
-    Dialog {
+    WDialog {
         id: notFound
         anchors.centerIn: parent
         modal: true
         title: "ブラウザにログインが見つかりません"
         Label { width: 420; wrapMode: Text.Wrap; text: "ふだんのブラウザで music.youtube.com にログインしてから、もう一度「ブラウザのログインを使う」を押してください。\n\n読めるブラウザ: Firefox・Zen・LibreWolf・Floorp・Waterfox・Chrome・Chromium・Brave・Edge・Vivaldi・Opera" }
         footer: DialogButtonBox {
-            Button { Material.roundedScale: Style.radius; text: "閉じる"; DialogButtonBox.buttonRole: DialogButtonBox.RejectRole }
-            Button { Material.roundedScale: Style.radius; text: "ブラウザで開く"; highlighted: true; DialogButtonBox.buttonRole: DialogButtonBox.AcceptRole }
+            Btn { text: "閉じる"; DialogButtonBox.buttonRole: DialogButtonBox.RejectRole }
+            Btn { text: "ブラウザで開く"; highlighted: true; DialogButtonBox.buttonRole: DialogButtonBox.AcceptRole }
         }
         onAccepted: Qt.openUrlExternally("https://music.youtube.com/")
     }
-    Dialog {
+    WDialog {
         id: chooser
         property var profiles: []
         anchors.centerIn: parent
@@ -79,8 +77,7 @@ Item {
             Label { Layout.fillWidth: true; wrapMode: Text.Wrap; text: "選んだブラウザの YouTube の cookie を読んで、この PC のキーリングに保存します。ブラウザの側のログインはそのまま残ります。" }
             Repeater {
                 model: chooser.profiles
-                delegate: Button {
-                    Material.roundedScale: Style.radius
+                delegate: Btn {
                     Layout.fillWidth: true
                     text: modelData
                     highlighted: index === 0
@@ -90,7 +87,7 @@ Item {
         }
         standardButtons: Dialog.Cancel
     }
-    Dialog {
+    WDialog {
         id: failed
         anchors.centerIn: parent
         modal: true

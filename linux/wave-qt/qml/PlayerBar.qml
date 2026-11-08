@@ -106,7 +106,7 @@ Rectangle {
                 Layout.fillWidth: true
                 from: 0
                 to: Math.max(1, WaveApp.durationMs)
-                value: bar.position
+                value: WaveApp.durationMs > 0 ? bar.position : 0
                 enabled: WaveApp.hasSong && WaveApp.durationMs > 0
                 onPressedChanged: {
                     bar.dragging = pressed
@@ -140,7 +140,14 @@ Rectangle {
         RowLayout {
             visible: WaveApp.connectConfigured
             spacing: 4
-            IconButton { iconName: "audio-speakers-symbolic"; tip: "デバイスに接続"; checked: WaveApp.remoteLabel !== ""; onClicked: WaveApp.toast("端末の切り替えは GTK 版で行えます") }
+            IconButton {
+                id: deviceButton
+                iconName: "audio-speakers-symbolic"
+                tip: "デバイスに接続"
+                checked: WaveApp.remoteLabel !== ""
+                onClicked: { devicePopup.d = JSON.parse(WaveApp.devicesJson()); devicePopup.open() }
+                DevicePopup { id: devicePopup; y: -height - 8; x: -width / 2 }
+            }
             Label { visible: WaveApp.remoteLabel !== "" && bar.width >= 1400; text: WaveApp.remoteLabel; color: Style.accent; font.pixelSize: 12; font.weight: Font.Bold; elide: Text.ElideRight; Layout.maximumWidth: 120 }
         }
         IconButton { iconName: "sidebar-show-right-symbolic"; tip: "再生中の画面"; checked: bar.shell.showRight && bar.shell.rightView === "now"; onClicked: bar.shell.togglePane() }
@@ -168,6 +175,36 @@ Rectangle {
             to: 1
             value: WaveApp.volume
             onMoved: WaveApp.setVolumeLevel(value)
+        }
+    }
+
+    // 再生する端末を選ぶ小窓（GTK 版・Mac と同じ）: 今鳴らしている端末、ほかのデバイス、端末の連携の設定
+    component DevicePopup: Popup {
+        id: popup
+        property var d: ({})
+        width: 300
+        padding: 10
+        background: Rectangle { color: Style.raised; radius: Style.radius; border.color: Style.border }
+        contentItem: ColumnLayout {
+            spacing: 4
+            Label { text: "再生中のデバイス"; font.weight: Font.Bold; color: Style.foreground }
+            Label { text: popup.d.mirror ? popup.d.mirror.label : "この PC"; color: Style.accent; font.weight: Font.DemiBold }
+            Label { visible: (popup.d.pickable || []).length > 0; text: "ほかのデバイスを選択"; font.weight: Font.Bold; Layout.topMargin: 8; color: Style.foreground }
+            Repeater {
+                model: popup.d.pickable || []
+                delegate: ItemDelegate {
+                    Layout.fillWidth: true
+                    enabled: modelData.self || modelData.online
+                    text: (modelData.self ? "この PC" : modelData.name) + (enabled ? "" : "（オフライン）")
+                    icon.source: Style.icon(modelData.icon)
+                    onClicked: {
+                        popup.close()
+                        if (modelData.self) WaveApp.connectAction("transfer_here", "")
+                        else WaveApp.connectAction("play_on_device", modelData.id)
+                    }
+                }
+            }
+            Btn { text: "端末の連携の設定"; flat: true; Layout.topMargin: 6; onClicked: { popup.close(); bar.shell.full = false; bar.shell.openDevices() } }
         }
     }
 }

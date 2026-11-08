@@ -13,6 +13,11 @@ pub mod qobject {
         fn wave_window_active() -> bool;
         fn wave_quit();
         fn wave_snapshot_later(engine: Pin<&mut QQmlApplicationEngine>, path: &QString, delay_ms: i32);
+
+        include!("videoitem.h");
+        fn wave_register_video_item();
+        fn wave_video_frame(data: &[u8], width: i32, height: i32, stride: i32);
+        fn wave_video_clear();
     }
 
     #[auto_cxx_name]
@@ -54,6 +59,14 @@ pub mod qobject {
         #[qproperty(i32, library_version)]
         #[qproperty(i32, settings_version)]
         #[qproperty(QString, demo)]
+        // 変わったら増やす（QML が読み直す）: Claude の会話・端末の連携・ダウンロード
+        #[qproperty(i32, ai_version)]
+        #[qproperty(i32, devices_version)]
+        #[qproperty(i32, downloads_version)]
+        // 映像: 今の曲に MV があるか・「動画」にしているか・その様子（off・loading・failed・showing・gap）
+        #[qproperty(bool, has_video)]
+        #[qproperty(bool, show_video)]
+        #[qproperty(QString, video_state)]
         type WaveApp = super::WaveAppRust;
 
         /// 起動: キーリングのログインを読み、ログインしていればホームへ、いなければログインの入り口へ。
@@ -146,6 +159,74 @@ pub mod qobject {
         fn open_login_window(self: Pin<&mut WaveApp>);
         #[qinvokable]
         fn log_out(self: Pin<&mut WaveApp>);
+
+        /// Claude の欄（会話・これまでの会話・つないでいるか・答えを待っているか）。
+        #[qinvokable]
+        fn ai_json(self: &WaveApp) -> QString;
+        #[qinvokable]
+        fn ai_send(self: Pin<&mut WaveApp>, text: &QString);
+        #[qinvokable]
+        fn ai_stop(self: Pin<&mut WaveApp>);
+        #[qinvokable]
+        fn ai_clear(self: Pin<&mut WaveApp>);
+        #[qinvokable]
+        fn ai_open(self: Pin<&mut WaveApp>, id: &QString);
+        #[qinvokable]
+        fn ai_delete(self: Pin<&mut WaveApp>, id: &QString);
+        #[qinvokable]
+        fn ai_pair(self: Pin<&mut WaveApp>, text: &QString) -> i32;
+        #[qinvokable]
+        fn ai_unpair(self: Pin<&mut WaveApp>);
+        /// 答えの中の [mm:ss]（話している曲が鳴っているときだけ飛ぶ）。
+        #[qinvokable]
+        fn ai_seek(self: Pin<&mut WaveApp>, video_id: &QString, position_ms: i32);
+
+        /// 端末の連携（知らせの帯・ほかの端末の再生・加入の手順・端末の一覧・中継）。
+        #[qinvokable]
+        fn devices_json(self: &WaveApp) -> QString;
+        /// start_offer・accept（arg は文字列）・create_household・confirm_on_b・cancel_pairing・forget_household・
+        /// accept_store_reset・transfer_here・play_on_device（arg は端末 ID）。
+        #[qinvokable]
+        fn connect_action(self: Pin<&mut WaveApp>, name: &QString, arg: &QString);
+        #[qinvokable]
+        fn connect_enter_code(self: Pin<&mut WaveApp>, code: &QString) -> bool;
+        #[qinvokable]
+        fn connect_remove(self: Pin<&mut WaveApp>, device_id: &QString, label: &QString);
+        #[qinvokable]
+        fn connect_grant(self: Pin<&mut WaveApp>, device_id: &QString, label: &QString);
+
+        /// ダウンロード（容量と進み具合・スマートダウンロード・丸ごと取ったもの・曲・エピソード）。
+        #[qinvokable]
+        fn downloads_json(self: &WaveApp, category: &QString) -> QString;
+        /// 0: 取っていない、1: 待っている、2: 取っている、3: 取った。
+        #[qinvokable]
+        fn download_state(self: &WaveApp, video_id: &QString) -> i32;
+        #[qinvokable]
+        fn download_song(self: Pin<&mut WaveApp>, song_json: &QString);
+        #[qinvokable]
+        fn remove_download(self: Pin<&mut WaveApp>, video_id: &QString);
+        #[qinvokable]
+        fn download_collection(self: Pin<&mut WaveApp>, kind: &QString, id: &QString, title: &QString, thumbnail: &QString, songs_json: &QString);
+        #[qinvokable]
+        fn remove_collection(self: Pin<&mut WaveApp>, id: &QString);
+        #[qinvokable]
+        fn clear_downloads(self: Pin<&mut WaveApp>);
+
+        /// 番組の保存（YouTube）・登録（RSS）。終わったら loaded で { ok }。
+        #[qinvokable]
+        fn set_podcast_saved(self: Pin<&mut WaveApp>, show_json: &QString, saved: bool) -> i32;
+        /// プレイリストを作る（song_json があればその曲を入れる）。終わったら loaded で { ok, id }。
+        #[qinvokable]
+        fn create_playlist(self: Pin<&mut WaveApp>, title: &QString, song_json: &QString) -> i32;
+        /// プレイリストから外す。終わったら loaded で { ok }。
+        #[qinvokable]
+        fn remove_from_playlist(self: Pin<&mut WaveApp>, playlist_id: &QString, video_id: &QString, set_video_id: &QString) -> i32;
+
+        /// 「曲｜動画」の動画にする・やめる。
+        #[qinvokable]
+        fn set_video_on(self: Pin<&mut WaveApp>, on: bool);
+        #[qsignal]
+        fn open_requested(self: Pin<&mut WaveApp>, kind: QString, id: QString, title: QString);
     }
 
     impl cxx_qt::Threading for WaveApp {}

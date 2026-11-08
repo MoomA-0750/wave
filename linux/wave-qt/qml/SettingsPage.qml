@@ -13,6 +13,8 @@ Flickable {
     property var s: JSON.parse(WaveApp.settingsJson())
     property var account: ({ loggedIn: WaveApp.loggedIn, premium: null })
     property int token: -1
+    property int pairToken: -1
+    property var ai: JSON.parse(WaveApp.aiJson())
     contentHeight: column.implicitHeight + 64
     clip: true
     boundsBehavior: Flickable.StopAtBounds
@@ -23,7 +25,11 @@ Flickable {
     Connections {
         target: WaveApp
         function onSettingsVersionChanged() { page.s = JSON.parse(WaveApp.settingsJson()) }
-        function onLoaded(t, json) { if (t === page.token) page.account = JSON.parse(json) }
+        function onLoaded(t, json) {
+            if (t === page.token) page.account = JSON.parse(json)
+            if (t === page.pairToken && !JSON.parse(json).ok) WaveApp.toast("接続の文字列の形が違います")
+        }
+        function onAiVersionChanged() { page.ai = JSON.parse(WaveApp.aiJson()) }
     }
 
     ColumnLayout {
@@ -42,7 +48,7 @@ Flickable {
                 subtitle: !WaveApp.loggedIn ? "ログインすると、ライブラリと評価を使えます"
                           : page.account.premium === true ? "Premium の音質を使えます"
                           : page.account.premium === false ? "Premium の音質を使えません（アプリはそのまま使えます）" : "Premium かどうかを確かめています…"
-                Button { Material.roundedScale: Style.radius; text: WaveApp.loggedIn ? "ログアウト" : "ログイン"; onClicked: WaveApp.logOut() }
+                Btn { text: WaveApp.loggedIn ? "ログアウト" : "ログイン"; onClicked: WaveApp.logOut() }
             }
         }
         Group {
@@ -56,7 +62,7 @@ Flickable {
             Row_ {
                 title: "ダウンロードに使う通信"
                 ComboBox {
-                    implicitWidth: 280
+                    implicitWidth: 300
                     Material.roundedScale: Style.radius
                     model: ["従量制でない通信だけ", "どの通信でも"]
                     currentIndex: page.s.download_network === "Any" ? 1 : 0
@@ -76,6 +82,25 @@ Flickable {
                     validator: RegularExpressionValidator { regularExpression: /[0-9]*/ }
                     onEditingFinished: page.set("discord_client_id", text === "" ? null : text)
                 }
+            }
+        }
+        Group {
+            title: "Claude"
+            Row_ {
+                title: page.ai.configured ? "つないでいます: " + page.ai.configured : "つないでいません"
+                subtitle: "Claude の中継（ai-bridge）の「接続の文字列」（waveai://pair?…）を貼り付けてつなぎます。つなぎ先はキーリングに保存します。"
+                Btn { visible: !!page.ai.configured; text: "切る"; onClicked: WaveApp.aiUnpair() }
+            }
+            Row_ {
+                visible: !page.ai.configured
+                title: "接続の文字列"
+                TextField {
+                    id: pairText
+                    implicitWidth: 300
+                    placeholderText: "waveai://pair?…"
+                    background: Rectangle { radius: Style.small; color: Style.view; border.color: pairText.activeFocus ? Style.accent : Style.border }
+                }
+                Btn { text: "つなぐ"; highlighted: true; enabled: pairText.text.trim() !== ""; onClicked: page.pairToken = WaveApp.aiPair(pairText.text.trim()) }
             }
         }
         Group {

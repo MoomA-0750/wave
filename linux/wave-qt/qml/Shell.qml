@@ -33,7 +33,8 @@ Item {
         case "playlist": openPlaylist(item.id, item.title); break
         case "liked": openPlaylist(item.id, item.title); break
         case "artist": openArtist(item.id, item.title); break
-        default: WaveApp.toast("この画面ではまだ開けません（GTK 版で開けます）")
+        case "podcast": case "newepisodes": openPodcast(item.id, item.title); break
+        case "downloads": openDownloads(); break
         }
     }
     function openAlbum(id, title) { if (id) push(collectionPage, { kind: "album", itemId: id, pageTitle: title || "" }) }
@@ -45,6 +46,23 @@ Item {
     }
     function openMood(title, params) { push(moodPage, { pageTitle: title, params: params }) }
     function openSettings() { push(settingsPage, {}) }
+    function openPodcast(id, title) { if (id) push(podcastPage, { itemId: id, pageTitle: title || "" }) }
+    function openFeedSearch() { push(feedSearchPage, {}) }
+    function openDownloads() { if (visibleKind !== "downloads") push(downloadsPage, {}) }
+    function openDevices() { if (visibleKind !== "devices") push(devicesPage, {}) }
+    // Claude の欄（開く前の右の欄を覚え、閉じたら戻す）
+    property var beforeAi: null
+    function toggleAi() { if (showRight && rightView === "ai") closeAi(); else showAi() }
+    function showAi() {
+        if (!(showRight && rightView === "ai")) beforeAi = { open: rightOpen, view: rightView }
+        rightOpen = true
+        rightView = "ai"
+    }
+    function closeAi() {
+        const before = beforeAi || { open: true, view: "now" }
+        beforeAi = null
+        setRight(before.open, before.view === "ai" ? "now" : before.view)
+    }
     function toggleLyrics() {
         if (visibleKind === "lyrics") back()
         else push(lyricsPage, {})
@@ -88,6 +106,13 @@ Item {
         else if (kind === "settings") openSettings()
         else if (kind === "full") demoFull.start()
         else if (kind === "mood") openMood(rest[0], rest.slice(1).join(":"))
+        else if (kind === "ai") showAi()
+        else if (kind === "devices") openDevices()
+        else if (kind === "downloads") openDownloads()
+        else if (kind === "podcast") openPodcast(arg, "ポッドキャスト")
+        else if (kind === "newepisodes") openPodcast("VLRDPN", "新しいエピソード")
+        else if (kind === "feedsearch") openFeedSearch()
+        else if (kind === "firstpodcast") demoToken = WaveApp.request("search.podcasts", arg, "")
         else if (kind === "firstalbum" || kind === "firstartist") demoToken = WaveApp.request(kind === "firstalbum" ? "search.albums" : "search.artists", arg, "")
     }
     // 確かめ用: firstalbum:語・firstartist:語 は検索の1件目のページを開く
@@ -98,6 +123,11 @@ Item {
             if (t !== shell.demoToken) return
             const v = JSON.parse(json)
             if (v.items && v.items.length > 0) shell.openItem(v.items[0])
+        }
+        // 新作の通知を押した
+        function onOpenRequested(kind, id, title) {
+            if (kind === "album") shell.openAlbum(id, title)
+            else shell.openArtist(id, title)
         }
     }
     Timer { id: demoFull; interval: 2500; onTriggered: shell.full = true }
@@ -110,6 +140,7 @@ Item {
     Shortcut { sequence: "F11"; onActivated: shell.full = !shell.full }
     Shortcut { sequence: "Escape"; enabled: shell.full; onActivated: shell.full = false }
     Shortcut { sequences: ["Ctrl+F", "Ctrl+L"]; onActivated: top.focusSearch() }
+    Shortcut { sequence: "Ctrl+J"; onActivated: shell.toggleAi() }
 
     ColumnLayout {
         anchors.fill: parent
@@ -147,6 +178,7 @@ Item {
                     Layout.fillHeight: true
                     NowPlayingPane { anchors.fill: parent; visible: shell.rightView === "now"; shell: shell }
                     QueuePane { anchors.fill: parent; visible: shell.rightView === "queue"; shell: shell }
+                    AiPane { anchors.fill: parent; visible: shell.rightView === "ai"; shell: shell }
                 }
             }
             FullView { anchors.fill: parent; visible: shell.full; shell: shell }
@@ -162,6 +194,35 @@ Item {
         clip: true
     }
 
+    // プレイリストを作る（song があれば作ったプレイリストに入れる）
+    function createPlaylist(song) {
+        newPlaylist.song = song
+        newPlaylistTitle.text = ""
+        newPlaylist.open()
+        newPlaylistTitle.forceActiveFocus()
+    }
+    WDialog {
+        id: newPlaylist
+        property var song: null
+        title: "新しいプレイリスト"
+        ColumnLayout {
+            width: 380
+            TextField {
+                id: newPlaylistTitle
+                Layout.fillWidth: true
+                placeholderText: "プレイリストの名前"
+                background: Rectangle { radius: Style.small; color: Style.view; border.color: newPlaylistTitle.activeFocus ? Style.accent : Style.border }
+                onAccepted: if (text.trim() !== "") newPlaylist.accept()
+            }
+        }
+        footer: DialogButtonBox {
+            background: null
+            Btn { text: "キャンセル"; flat: true; DialogButtonBox.buttonRole: DialogButtonBox.RejectRole }
+            Btn { text: "作成"; highlighted: true; enabled: newPlaylistTitle.text.trim() !== ""; DialogButtonBox.buttonRole: DialogButtonBox.AcceptRole }
+        }
+        onAccepted: WaveApp.createPlaylist(newPlaylistTitle.text.trim(), newPlaylist.song ? JSON.stringify(newPlaylist.song) : "")
+    }
+
     Component { id: homePage; HomePage {} }
     Component { id: collectionPage; CollectionPage {} }
     Component { id: artistPage; ArtistPage {} }
@@ -169,4 +230,8 @@ Item {
     Component { id: lyricsPage; LyricsPage {} }
     Component { id: settingsPage; SettingsPage {} }
     Component { id: moodPage; HomePage {} }
+    Component { id: podcastPage; PodcastPage {} }
+    Component { id: feedSearchPage; FeedSearchPage {} }
+    Component { id: downloadsPage; DownloadsPage {} }
+    Component { id: devicesPage; DevicesPage {} }
 }

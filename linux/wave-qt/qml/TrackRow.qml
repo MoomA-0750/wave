@@ -22,7 +22,7 @@ Rectangle {
     RowLayout {
         anchors.fill: parent
         anchors.leftMargin: 8
-        anchors.rightMargin: 4
+        anchors.rightMargin: 8
         spacing: 12
         Label {
             visible: row.number > 0
@@ -46,6 +46,9 @@ Rectangle {
                 Layout.fillWidth: true
                 text: row.song.title || ""
                 elide: Text.ElideRight
+                lineHeightMode: Text.FixedHeight
+                lineHeight: 20
+                verticalAlignment: Text.AlignVCenter
                 color: row.current ? Style.accent : Style.foreground
                 font.weight: Font.Medium
             }
@@ -54,6 +57,9 @@ Rectangle {
                 text: row.subtitleText
                 visible: text !== ""
                 elide: Text.ElideRight
+                lineHeightMode: Text.FixedHeight
+                lineHeight: 16
+                verticalAlignment: Text.AlignVCenter
                 font.pixelSize: 12
                 color: Style.dim
             }
@@ -67,18 +73,28 @@ Rectangle {
             color: Style.dim
             font.pixelSize: 13
         }
-        Label {
-            text: row.song.live ? "LIVE" : (row.song.duration || "")
-            color: row.song.live ? Style.red : Style.dim
-            font.pixelSize: 12
-            font.features: { "tnum": 1 }
-        }
-        IconButton {
-            iconName: "view-more-symbolic"
-            tip: "その他"
-            size: 16
-            opacity: hover.hovered ? 1 : 0
-            onClicked: menu.popup()
+        // 長さ（指を乗せている間は同じ場所に ⋯）
+        Item {
+            Layout.preferredWidth: 44
+            Layout.fillHeight: true
+            Label {
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                visible: !hover.hovered
+                text: row.song.live ? "LIVE" : (row.song.duration || "")
+                color: row.song.live ? Style.red : Style.dim
+                font.pixelSize: 12
+                font.features: { "tnum": 1 }
+            }
+            IconButton {
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                visible: hover.hovered
+                iconName: "view-more-symbolic"
+                tip: "その他"
+                size: 16
+                onClicked: menu.popup()
+            }
         }
     }
     HoverHandler { id: hover }

@@ -36,7 +36,7 @@ Item {
             Layout.rightMargin: 8
             IconImage { source: Style.icon("folder-music-symbolic"); sourceSize.width: 16; sourceSize.height: 16; color: Style.foreground }
             Label { text: "マイライブラリ"; font.weight: Font.Bold; Layout.fillWidth: true; color: Style.foreground }
-            IconButton { iconName: "list-add-symbolic"; tip: "プレイリストを作成"; visible: WaveApp.loggedIn; onClicked: WaveApp.toast("プレイリストの作成は GTK 版で行えます") }
+            IconButton { iconName: "list-add-symbolic"; tip: "プレイリストを作成"; visible: WaveApp.loggedIn; onClicked: Style.nav.createPlaylist(null) }
         }
         Flickable {
             Layout.fillWidth: true
@@ -77,14 +77,14 @@ Item {
                 onTextChanged: pane.query = text
                 IconImage { anchors.left: parent.left; anchors.leftMargin: 10; anchors.verticalCenter: parent.verticalCenter; source: Style.icon("system-search-symbolic"); sourceSize.width: 14; sourceSize.height: 14; color: Style.dim }
             }
-            Button {
+            Btn {
                 id: sortButton
                 flat: true
                 font.pixelSize: 12
                 text: (pane.sorts.find(s => s[0] === pane.settings.library_sort) || pane.sorts[0])[1]
                 Material.roundedScale: Style.small
                 onClicked: sortMenu.popup(sortButton, 0, sortButton.height)
-                Menu {
+                WMenu {
                     id: sortMenu
                     Repeater {
                         model: pane.sorts
@@ -163,15 +163,14 @@ Item {
     }
 
     function open(entry) {
-        if (entry.kind === "downloads") { WaveApp.toast("ダウンロードのページは GTK 版で開けます"); return }
         Style.nav.openItem(entry)
     }
     function menu(entry) {
-        if (entry.kind === "downloads" || entry.kind === "podcast") return
+        if (entry.kind === "downloads" || entry.kind === "podcast" || entry.kind === "newepisodes") return
         entryMenu.entry = entry.kind === "liked" ? Object.assign({}, entry, { kind: "playlist" }) : entry
         entryMenu.popup()
     }
-    Menu {
+    WMenu {
         id: entryMenu
         property var entry: ({})
         MenuItem { text: "再生"; onTriggered: WaveApp.playItem(JSON.stringify(entryMenu.entry), false) }
@@ -182,23 +181,23 @@ Item {
         property var entry: ({})
         Rectangle {
             anchors.fill: parent
-            visible: entry.kind === "liked" || entry.kind === "downloads"
+            visible: entry.kind === "liked" || entry.kind === "downloads" || entry.kind === "newepisodes"
             radius: Style.small
             gradient: Gradient {
-                GradientStop { position: 0; color: entry.kind === "liked" ? "#4b2bd6" : "#0f6b5c" }
-                GradientStop { position: 1; color: entry.kind === "liked" ? "#c14de0" : "#1aa48c" }
+                GradientStop { position: 0; color: entry.kind === "liked" ? "#4b2bd6" : entry.kind === "newepisodes" ? "#b34700" : "#0f6b5c" }
+                GradientStop { position: 1; color: entry.kind === "liked" ? "#c14de0" : entry.kind === "newepisodes" ? "#e8912d" : "#1aa48c" }
             }
             IconImage {
                 anchors.centerIn: parent
                 color: "white"
-                source: Style.icon(entry.kind === "liked" ? "starred-symbolic" : "folder-download-symbolic")
+                source: Style.icon(entry.kind === "liked" ? "starred-symbolic" : entry.kind === "newepisodes" ? "audio-input-microphone-symbolic" : "folder-download-symbolic")
                 sourceSize.width: parent.width * 0.42
                 sourceSize.height: parent.width * 0.42
             }
         }
         Art {
             anchors.fill: parent
-            visible: !(entry.kind === "liked" || entry.kind === "downloads")
+            visible: !(entry.kind === "liked" || entry.kind === "downloads" || entry.kind === "newepisodes")
             source: entry.thumb || ""
             round: !!entry.round
         }

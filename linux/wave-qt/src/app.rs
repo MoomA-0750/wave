@@ -56,6 +56,12 @@ pub struct WaveAppRust {
     pub library_version: i32,
     pub settings_version: i32,
     pub demo: QString,
+    pub ai_version: i32,
+    pub devices_version: i32,
+    pub downloads_version: i32,
+    pub has_video: bool,
+    pub show_video: bool,
+    pub video_state: QString,
 }
 
 /// マイライブラリの読んだもの。
@@ -91,19 +97,19 @@ fn with_core<T>(f: impl FnOnce(&mut Core) -> T) -> Option<T> {
     CORE.with(|c| c.borrow_mut().as_mut().map(f))
 }
 
-fn services() -> Option<Rc<Services>> {
+pub(crate) fn services() -> Option<Rc<Services>> {
     CORE.with(|c| c.borrow().as_ref().and_then(|c| c.services.clone()))
 }
 
-fn repo() -> Option<MusicRepository> {
+pub(crate) fn repo() -> Option<MusicRepository> {
     CORE.with(|c| c.borrow().as_ref().map(|c| c.repo.clone()))
 }
 
-fn core_thread() -> Option<CxxQtThread<qobject::WaveApp>> {
+pub(crate) fn core_thread() -> Option<CxxQtThread<qobject::WaveApp>> {
     CORE.with(|c| c.borrow().as_ref().map(|c| c.thread.clone()))
 }
 
-fn next_token() -> i32 {
+pub(crate) fn next_token() -> i32 {
     TOKEN.with(|t| {
         t.set(t.get() + 1);
         t.get()
@@ -111,7 +117,7 @@ fn next_token() -> i32 {
 }
 
 /// 画面の下に短い知らせを出す。
-fn toast(text: &str) {
+pub(crate) fn toast(text: &str) {
     let text = text.to_string();
     if let Some(thread) = core_thread() {
         let _ = thread.queue(move |app| app.toast(QString::from(&text)));
@@ -119,22 +125,22 @@ fn toast(text: &str) {
 }
 
 /// 再生の様子をプロパティに入れ直す（次の主ループの回で）。
-fn request_sync() {
+pub(crate) fn request_sync() {
     if let Some(thread) = core_thread() {
         let _ = thread.queue(|app| app.sync());
     }
 }
 
-fn now_ms() -> i64 {
+pub(crate) fn now_ms() -> i64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as i64)
 }
 
-fn parse_song(json: &QString) -> Option<Song> {
+pub(crate) fn parse_song(json: &QString) -> Option<Song> {
     let value: Value = serde_json::from_str(&json.to_string()).ok()?;
     serde_json::from_value(value.get("song").cloned().unwrap_or(value)).ok()
 }
 
-fn failure(e: impl std::fmt::Display) -> Value {
+pub(crate) fn failure(e: impl std::fmt::Display) -> Value {
     json!({ "error": e.to_string() })
 }
 
@@ -517,6 +523,10 @@ impl qobject::WaveApp {
         })
         .unwrap_or_default();
         let mut head: Vec<Value> = Vec::new();
+        // ポッドキャストで絞ったときは「新しいエピソード」を先頭に（GTK 版と同じ）
+        if kind == "podcast" && matches("新しいエピソード") {
+            head.push(json!({ "kind": "newepisodes", "id": wave_core::music::repository::NEW_EPISODES_BROWSE, "title": "新しいエピソード", "subtitle": "プレイリスト • 自動", "thumb": "", "round": false }));
+        }
         // 高く評価した曲はいつも先頭、ダウンロードはその次（Mac と同じ）
         if wants("playlist") && matches("高く評価した曲") {
             head.push(json!({ "kind": "liked", "id": LIKED_SONGS, "title": "高く評価した曲", "subtitle": "プレイリスト • 自動", "thumb": "", "round": false }));
@@ -680,6 +690,7 @@ impl qobject::WaveApp {
         let Some(s) = services() else { return };
         glib::spawn_future_local(async move {
             s.log_out().await;
+            crate::more::detach();
             with_core(|c| {
                 c.services = None;
                 c.mpris = None;
@@ -730,6 +741,8 @@ async fn enter_main() {
         c.services = Some(services.clone());
         c.mpris = Some(mpris);
     });
+    // Claude・連携・ダウンロードの見張り、映像、新作の通知
+    crate::more::attach(&services);
     let logged_in = repo.client().is_logged_in();
     load_library(&services);
     if logged_in {
@@ -752,6 +765,29 @@ async fn enter_main() {
             app.as_mut().sync();
             app.set_phase(QString::from("main"));
         });
+    }
+    // 確かめ用: WAVE_DEMO_DEVICES（offer・code・wrong・show・working・done・failed）で、中継につながずに加入の手順のその様子を出す（GTK 版と同じ）
+    if let Ok(state) = std::env::var("WAVE_DEMO_DEVICES") {
+        use wave_desktop::connect::PairingView;
+        let view = match state.as_str() {
+            "offer" => Some(PairingView::ShowingOffer("wave-pair:eyJ2IjoxLCJwa0EiOiJkZW1vIiwiZUEiOiJkZW1vIiwidG9rZW4iOiJkZW1vIn0".into())),
+            "code" => Some(PairingView::EnterCode(None)),
+            "wrong" => Some(PairingView::EnterCode(Some("数字が違います".into()))),
+            "show" => Some(PairingView::ShowCode { code: "123456".into(), peer: "Pixel 3".into() }),
+            "working" => Some(PairingView::Working("相手が加えるのを待っています…".into())),
+            "done" => Some(PairingView::Done { peer: "Pixel 3".into(), grant_device_id: None }),
+            "failed" => Some(PairingView::Failed("時間内に読み取られませんでした".into())),
+            _ => None,
+        };
+        if let Some(view) = view {
+            services.connect.show_demo_pairing(view);
+        }
+    }
+    // 確かめ用: WAVE_DEMO_PLAY_ID の動画（MV など）を1曲として鳴らす（題は WAVE_DEMO_PLAY_TITLE）
+    if let Ok(id) = std::env::var("WAVE_DEMO_PLAY_ID") {
+        let title = std::env::var("WAVE_DEMO_PLAY_TITLE").unwrap_or_else(|_| id.clone());
+        let song = Song { video_id: id, title, artists: Vec::new(), album: None, duration_seconds: None, thumbnail_url: None, kind: Some("MUSIC_VIDEO_TYPE_OMV".into()), is_live: false };
+        services.playback.play_list(vec![song], 0);
     }
     // 確かめ用: WAVE_DEMO_QUERY の検索の1曲目を鳴らす（GTK 版と同じ）
     if let Ok(query) = std::env::var("WAVE_DEMO_QUERY") {
@@ -779,7 +815,7 @@ fn load_like(services: &Rc<Services>, video_id: String) {
 }
 
 /// マイライブラリを読み直す（届いた種類から出す）。
-fn load_library(services: &Rc<Services>) {
+pub(crate) fn load_library(services: &Rc<Services>) {
     if !services.repo.client().is_logged_in() {
         return;
     }
@@ -1019,6 +1055,13 @@ fn load(kind: &str, arg: String, extra: String) -> Loading {
             }
         }),
         "lyrics" => Box::pin(async move { load_lyrics(services).await }),
+        // 番組のページ（arg は browseId（MPSP…・rss:…・新しいエピソード）、extra は題）・続き（extra は「題\n続き」）
+        "podcast" => Box::pin(crate::more::load_podcast(arg, extra, None)),
+        "podcast.more" => {
+            let (title, token) = extra.split_once('\n').map(|(a, b)| (a.to_string(), b.to_string())).unwrap_or_default();
+            Box::pin(crate::more::load_podcast(arg, title, Some(token)))
+        }
+        "feed.search" => Box::pin(crate::more::search_feeds(arg)),
         "account" => Box::pin(async move {
             let logged_in = repo.client().is_logged_in();
             let premium = match &services {
@@ -1129,7 +1172,7 @@ async fn load_lyrics(services: Option<Rc<Services>>) -> Value {
                 // 同じ時刻の行（原文に続く読み・訳）は、前の行に添える小さな行として出す
                 "sub": wave_core::lyrics::lrc::is_sub_line(&lines, i),
             })).collect::<Vec<_>>(),
-            "source": source.map(|s| format!("歌詞の提供: {s}")).unwrap_or_default(),
+            "source": source.map(|s| wave_desktop::labels::lyrics_source(&s)).unwrap_or_default(),
         }),
         LyricsResult::Found(SongLyrics::Plain { text, source }) => json!({ "state": "plain", "text": text, "source": source.unwrap_or_default() }),
         LyricsResult::None => json!({ "state": "message", "message": "この曲の歌詞は見つかりませんでした" }),

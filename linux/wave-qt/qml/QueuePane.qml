@@ -18,14 +18,14 @@ Item {
         spacing: 4
         RowLayout {
             Layout.fillWidth: true
-            Layout.topMargin: 10
-            Layout.leftMargin: 16
-            Layout.rightMargin: 8
+            Layout.topMargin: 12
+            Layout.leftMargin: 20
+            Layout.rightMargin: 20
             spacing: 6
             Chip { text: "キュー"; on: !pane.history; onClicked: pane.history = false }
             Chip { text: "履歴"; on: pane.history; onClicked: pane.history = true }
             Item { Layout.fillWidth: true }
-            Button { Material.roundedScale: Style.radius; text: "キューを消去"; flat: true; visible: !pane.history && pane.hasUserQueue; onClicked: WaveApp.clearUserQueue() }
+            Btn { text: "キューを消去"; flat: true; visible: !pane.history && pane.hasUserQueue; onClicked: WaveApp.clearUserQueue() }
             IconButton { iconName: "window-close-symbolic"; tip: "閉じる"; size: 16; onClicked: pane.shell.setRight(true, "now") }
         }
         ListView {
@@ -44,7 +44,7 @@ Item {
                     visible: modelData.section !== ""
                     height: visible ? 40 : 0
                     Label { text: modelData.section; font.weight: Font.Bold; Layout.leftMargin: 8; Layout.fillWidth: true; color: Style.foreground }
-                    Button { Material.roundedScale: Style.radius; visible: modelData.flowHeader; text: "消去"; flat: true; onClicked: WaveApp.clearFlow() }
+                    Btn { visible: modelData.flowHeader; text: "消去"; flat: true; onClicked: WaveApp.clearFlow() }
                 }
                 TrackRow {
                     width: parent.width

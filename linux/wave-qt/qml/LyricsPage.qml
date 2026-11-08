@@ -96,12 +96,22 @@ Item {
             font.pixelSize: 18
             color: Style.foreground
         }
-        Button { Material.roundedScale: Style.radius; visible: !!page.info.retry; text: "もう一度読み込む"; Layout.alignment: Qt.AlignHCenter; onClicked: page.reload() }
+        Btn { visible: !!page.info.retry; text: "もう一度読み込む"; Layout.alignment: Qt.AlignHCenter; onClicked: page.reload() }
+    }
+    // 出典（歌詞の下に、歌詞と重ならない帯で）
+    Rectangle {
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        height: 28
+        visible: (page.info.source || "") !== ""
+        color: Qt.rgba(Style.view.r, Style.view.g, Style.view.b, 0.85)
     }
     Label {
         anchors.right: parent.right
         anchors.bottom: parent.bottom
-        anchors.margins: 12
+        anchors.rightMargin: 12
+        anchors.bottomMargin: 7
         text: page.info.source || ""
         font.pixelSize: 11
         color: Style.dim

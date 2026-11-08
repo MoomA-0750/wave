@@ -26,7 +26,7 @@ ColumnLayout {
     ListView {
         id: list
         Layout.fillWidth: true
-        Layout.preferredHeight: shelf.cardSize + 86
+        Layout.preferredHeight: shelf.cardSize + 104
         orientation: ListView.Horizontal
         spacing: 16
         clip: true
