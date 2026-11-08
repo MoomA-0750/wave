@@ -77,6 +77,18 @@ public final class MusicRepository: Sendable {
         try await search(query, filter: MusicRepository.artistsFilter, continuation: continuation, parse: MusicParsers.searchArtists)
     }
 
+    /// プレイリストに絞った検索。YouTube Music のプレイリストを先に、みんなのプレイリストを後ろに並べる（ショートカットの検索結果）。
+    public func searchPlaylists(_ query: String) async throws -> ApiResult<SearchPage<PlaylistSummary>> {
+        async let featuredResult = search(query, filter: MusicRepository.featuredPlaylistsFilter, continuation: nil, parse: MusicParsers.searchPlaylists)
+        async let communityResult = search(query, filter: MusicRepository.communityPlaylistsFilter, continuation: nil, parse: MusicParsers.searchPlaylists)
+        let featured = try await featuredResult
+        let community = try await communityResult
+        if featured.value == nil && community.value == nil { return .failed(featured.failure ?? .network, status: featured.status) }
+        var seen = Set<String>()
+        let items = ((featured.value?.items ?? []) + (community.value?.items ?? [])).filter { seen.insert($0.playlistId).inserted }
+        return .ok(SearchPage(items: items, continuation: nil))
+    }
+
     /// ポッドキャスト（番組）に絞った検索。
     public func searchPodcasts(_ query: String, continuation: String? = nil) async throws -> ApiResult<SearchPage<PodcastSummary>> {
         try await search(query, filter: MusicRepository.podcastsFilter, continuation: continuation, parse: MusicParsers.searchPodcasts)

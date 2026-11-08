@@ -181,6 +181,8 @@ enum WidgetCommand: Sendable {
 @MainActor
 enum WidgetBridge {
     static var handler: ((WidgetCommand) async -> Void)?
+    /// YouTube Music の検索（ショートカットの「選んだものを再生」の一覧で文字を打ったとき）。ウィジェットの中では空のままで、手元の候補だけを出す
+    static var search: (@Sendable (String) async -> [WidgetItem])?
 
     static func run(_ command: WidgetCommand) async {
         await handler?(command)
@@ -307,10 +309,10 @@ struct PlayPlaylistShortcutIntent: AudioPlaybackIntent {
     }
 }
 
-/// ワンタップ再生と同じ候補（プレイリスト・アルバム・最近再生した曲・ライブ）から選んで鳴らす。
+/// ワンタップ再生と同じ候補（プレイリスト・アルバム・最近再生した曲・ライブ）か、YouTube Music の検索結果から選んで鳴らす。
 struct PlayItemShortcutIntent: AudioPlaybackIntent {
     static let title: LocalizedStringResource = "Play Something"
-    static let description = IntentDescription("Plays a playlist, album, recently played song or live stream.")
+    static let description = IntentDescription("Plays a playlist, album, recently played song or live stream. Type to search YouTube Music for songs, live streams, albums and playlists.")
     @Parameter(title: "Play") var item: PlayItemEntity
     @Parameter(title: "Shuffle", default: false) var shuffle: Bool
 
@@ -362,6 +364,7 @@ struct PlayItemEntity: AppEntity {
 }
 
 /// 候補はアプリが書いた一覧（ウィジェットは YouTube に触れない）。名前・アーティストで絞り込める。
+/// アプリの中で動いているときは、文字を打つと YouTube Music も検索し、手元の候補の後ろに「検索結果」として並べる（選んだものは中身ごと ID に入るので、候補から外れても鳴る）。
 struct PlayItemQuery: EntityStringQuery {
     init() {}
 
@@ -371,9 +374,15 @@ struct PlayItemQuery: EntityStringQuery {
     }
 
     func entities(matching string: String) async throws -> IntentItemCollection<PlayItemEntity> {
-        Self.sections(WidgetStore.items.filter { item in
+        let local = WidgetStore.items.filter { item in
             item.title.localizedStandardContains(string) || (item.subtitle?.localizedStandardContains(string) ?? false)
-        })
+        }
+        let query = string.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty, let search = await MainActor.run(body: { WidgetBridge.search }) else { return Self.sections(local) }
+        // 手元の候補にあるものは重ねない
+        let shown = Set(local.map { "\($0.kind.rawValue):\($0.id)" })
+        let found = await search(query).filter { !shown.contains("\($0.kind.rawValue):\($0.id)") }
+        return Self.sections(local, found: found)
     }
 
     func suggestedEntities() async throws -> IntentItemCollection<PlayItemEntity> {
@@ -386,14 +395,17 @@ struct PlayItemQuery: EntityStringQuery {
     }
 
     /// 種類ごとの見出しを付けて並べる。
-    private static func sections(_ items: [WidgetItem]) -> IntentItemCollection<PlayItemEntity> {
+    /// 検索結果（found）は種類を混ぜたまま、最後に1つの見出しで並べる。
+    private static func sections(_ items: [WidgetItem], found: [WidgetItem] = []) -> IntentItemCollection<PlayItemEntity> {
         let sections: [(WidgetItem.Kind, LocalizedStringResource)] = [
             (.playlist, "Playlists"), (.album, "Albums"), (.song, "Recently Played Songs"), (.live, "Live"),
         ]
-        return IntentItemCollection(sections: sections.compactMap { kind, title in
+        var result = sections.compactMap { kind, title -> IntentItemSection<PlayItemEntity>? in
             let entities = items.filter { $0.kind == kind }.map { IntentItem(PlayItemEntity($0)) }
             return entities.isEmpty ? nil : IntentItemSection(title, items: entities)
-        })
+        }
+        if !found.isEmpty { result.append(IntentItemSection("Search Results", items: found.map { IntentItem(PlayItemEntity($0)) })) }
+        return IntentItemCollection(sections: result)
     }
 }
 
