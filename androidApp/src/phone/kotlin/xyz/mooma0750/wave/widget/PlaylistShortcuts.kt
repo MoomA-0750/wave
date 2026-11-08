@@ -8,6 +8,7 @@ import android.graphics.Canvas
 import android.graphics.Rect
 import android.os.Bundle
 import android.util.Log
+import androidx.annotation.DrawableRes
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.ui.graphics.toArgb
 import androidx.core.content.ContextCompat
@@ -90,7 +91,7 @@ object PlaylistShortcuts {
             .Builder(context, ID_PREFIX + playlist.id)
             .setShortLabel(playlist.title)
             .setLongLabel(context.getString(R.string.widget_play_playlist, playlist.title))
-            .setIcon(IconCompat.createWithAdaptiveBitmap(cover?.let(::adaptive) ?: placeholder(context, playlist)))
+            .setIcon(IconCompat.createWithAdaptiveBitmap(cover?.let(::adaptive) ?: placeholder(context, if (playlist.id == MusicRepository.LIKED_SONGS) R.drawable.ic_favorite else R.drawable.ic_queue_music)))
             .setIntent(
                 Intent(context, PlaylistShortcutActivity::class.java)
                     .setAction(Intent.ACTION_VIEW)
@@ -99,7 +100,7 @@ object PlaylistShortcuts {
             .build()
 
     /** 表紙を、ランチャーが形で切る絵の大きさ（四方に余白のある 108dp 角）いっぱいに敷く。 */
-    private fun adaptive(cover: Bitmap): Bitmap {
+    internal fun adaptive(cover: Bitmap): Bitmap {
         val out = Bitmap.createBitmap(ICON_PIXELS, ICON_PIXELS, Bitmap.Config.ARGB_8888)
         val side = minOf(cover.width, cover.height)
         val source = Rect((cover.width - side) / 2, (cover.height - side) / 2, (cover.width + side) / 2, (cover.height + side) / 2)
@@ -108,15 +109,15 @@ object PlaylistShortcuts {
     }
 
     /** 表紙が無い（高く評価した曲など）: ウィジェットの表紙の代わりと同じく、tonal の地に印。 */
-    private fun placeholder(
+    internal fun placeholder(
         context: Context,
-        playlist: WidgetPlaylist,
+        @DrawableRes iconRes: Int,
     ): Bitmap {
         val colors = dynamicLightColorScheme(context)
         val out = Bitmap.createBitmap(ICON_PIXELS, ICON_PIXELS, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(out)
         canvas.drawColor(colors.secondaryContainer.toArgb())
-        val icon = ContextCompat.getDrawable(context, if (playlist.id == MusicRepository.LIKED_SONGS) R.drawable.ic_favorite else R.drawable.ic_queue_music)
+        val icon = ContextCompat.getDrawable(context, iconRes)
         if (icon != null) {
             // 形で切られても残る真ん中（108 のうち 72）の、さらに内側に置く
             val inset = ICON_PIXELS * 3 / 8

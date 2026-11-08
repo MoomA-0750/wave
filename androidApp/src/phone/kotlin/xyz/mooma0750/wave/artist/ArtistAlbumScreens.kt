@@ -269,7 +269,14 @@ fun AlbumScreen(
         },
         actions = {
             page?.let { downloadButton(it) }
-            QueueMenu(enabled = page?.songs?.isNotEmpty() == true, onQueue = { next -> page?.let { onQueue(it, next) } })
+            QueueMenu(
+                enabled = page?.songs?.isNotEmpty() == true,
+                onQueue = { next -> page?.let { onQueue(it, next) } },
+                pinShortcut =
+                    page?.let {
+                        xyz.mooma0750.wave.widget.WidgetItem(xyz.mooma0750.wave.widget.WidgetItemKind.Album, it.browseId, it.title, it.artists.joinToString(", ") { artist -> artist.name }, it.thumbnailUrl)
+                    },
+            )
         },
         play = PlayControls(shuffle, { shuffle = it }, enabled = page?.songs?.isNotEmpty() == true) { page?.let { onPlay(it, 0, shuffle) } },
     ) {

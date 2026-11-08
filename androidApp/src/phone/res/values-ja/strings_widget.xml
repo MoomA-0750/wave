@@ -38,4 +38,8 @@
     <string name="widget_preview_artist">アーティスト</string>
     <string name="widget_preview_next_song">次の曲 %1$d</string>
     <string name="widget_preview_playlist">プレイリスト %1$d</string>
+    <string name="shortcut_create_label">wave: 再生</string>
+    <string name="shortcut_choose">ショートカットで再生するもの</string>
+    <string name="shortcut_link_unknown">このリンクは再生できません</string>
+    <string name="shortcut_add_to_home">ホーム画面に追加</string>
 </resources>

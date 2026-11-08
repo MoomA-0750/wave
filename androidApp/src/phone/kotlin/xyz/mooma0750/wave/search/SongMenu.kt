@@ -173,6 +173,13 @@ fun SongMenuItems(
             actions.openSong(song)
         }
     }
+    // 押すと画面を出さずにこの曲を鳴らすショートカットをホーム画面に置く（ランチャーが受け付けるときだけ）
+    if (!external && xyz.mooma0750.wave.widget.PlayShortcuts.canPin(context)) {
+        MenuRow(R.drawable.ic_home_outline, stringResource(R.string.shortcut_add_to_home)) {
+            close()
+            xyz.mooma0750.wave.widget.PlayShortcuts.pin(context, xyz.mooma0750.wave.widget.WidgetItem.of(song))
+        }
+    }
     if (!external) {
         MenuRow(R.drawable.ic_share, stringResource(R.string.search_share)) {
             close()
