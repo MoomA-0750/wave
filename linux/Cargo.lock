@@ -3410,32 +3410,46 @@ dependencies = [
 ]
 
 [[package]]
-name = "wave-gtk"
+name = "wave-desktop"
 version = "0.1.0"
 dependencies = [
  "aes",
  "cbc",
  "getrandom 0.3.4",
+ "gio",
+ "glib",
  "gstreamer",
  "gstreamer-app",
- "gtk4",
  "hex",
- "libadwaita",
  "libc",
  "oo7",
  "pbkdf2",
- "qrcode",
  "regex",
  "reqwest",
- "rqrr",
  "rusqlite",
  "serde",
  "serde_json",
  "sha1 0.10.7",
  "sha2",
+ "tokio",
+ "wave-core",
+]
+
+[[package]]
+name = "wave-gtk"
+version = "0.1.0"
+dependencies = [
+ "gstreamer",
+ "gstreamer-app",
+ "gtk4",
+ "libadwaita",
+ "qrcode",
+ "reqwest",
+ "rqrr",
  "soup3",
  "tokio",
  "wave-core",
+ "wave-desktop",
  "webkit6",
 ]
 

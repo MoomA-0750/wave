@@ -7,10 +7,9 @@ use std::rc::Rc;
 
 use adw::prelude::*;
 use wave_core::music::models::{MusicVideo, Song};
-use wave_core::music::repository::MusicRepository;
 
 use super::{images, pages};
-use crate::playback::{Origin, Playback, QueueItem};
+use crate::playback::{Origin, QueueItem};
 use crate::runtime;
 
 /// 右の欄に出すもの。
@@ -78,25 +77,12 @@ struct Parts {
 }
 
 pub struct App {
-    pub repo: MusicRepository,
-    pub lyrics: wave_core::lyrics::service::LyricsService,
-    pub playback: Rc<Playback>,
+    /// 画面に依らない部分（再生・ダウンロード・連携・新作・番組・Claude）。app.playback などはここを指す（Deref）。
+    pub core: Rc<wave_desktop::services::Services>,
     nav: adw::NavigationView,
     toasts: adw::ToastOverlay,
     /// 曲に重ねる MV の流し手（gtk4paintablesink が無ければ None）。
     pub video: Option<crate::video::VideoPlayer>,
-    /// ダウンロード（取った曲・丸ごと取ったもの）。
-    pub downloads: Rc<crate::downloads::Downloads>,
-    /// 端末の連携。
-    pub connect: Rc<crate::connect::Connect>,
-    /// 登録したアーティストの新作。
-    pub releases: Rc<crate::releases::Releases>,
-    /// RSS の番組（登録と聴いたところ）。
-    pub podcasts: Rc<crate::podcasts::Podcasts>,
-    /// Claude との会話。
-    pub ai: Rc<crate::ai_chat::AiChat>,
-    /// 自分で編集できるプレイリスト（曲のメニューの「プレイリストに追加」に並べる）。
-    pub editable_playlists: RefCell<Vec<wave_core::music::models::PlaylistSummary>>,
     view: Cell<View>,
     parts: RefCell<Parts>,
     view_listeners: RefCell<Vec<Rc<dyn Fn()>>>,
@@ -109,6 +95,13 @@ pub struct App {
     forward: RefCell<Vec<adw::NavigationPage>>,
     going_forward: Cell<bool>,
     volume_before_mute: Cell<f64>,
+}
+
+impl std::ops::Deref for App {
+    type Target = wave_desktop::services::Services;
+    fn deref(&self) -> &Self::Target {
+        &self.core
+    }
 }
 
 impl App {
@@ -560,14 +553,8 @@ const STYLE: &str = "
 /// 窓の中身（上の帯を含む）を作る。
 #[allow(clippy::too_many_arguments)]
 pub fn build(
-    repo: MusicRepository,
-    lyrics: wave_core::lyrics::service::LyricsService,
-    playback: Rc<Playback>,
+    core: Rc<wave_desktop::services::Services>,
     video: Option<crate::video::VideoPlayer>,
-    downloads: Rc<crate::downloads::Downloads>,
-    connect: Rc<crate::connect::Connect>,
-    releases: Rc<crate::releases::Releases>,
-    podcasts: Rc<crate::podcasts::Podcasts>,
     // ログアウトは設定のアカウントのカード（crate::log_out）から
     _on_logout: Rc<dyn Fn()>,
 ) -> (gtk::Widget, Rc<App>) {
@@ -577,21 +564,13 @@ pub fn build(
 
     let nav = adw::NavigationView::new();
     let toasts = adw::ToastOverlay::new();
-    let right_open = downloads.settings.borrow().right_pane_open;
-    let volume = playback.player().volume();
+    let right_open = core.downloads.settings.borrow().right_pane_open;
+    let volume = core.playback.player().volume();
     let app = Rc::new(App {
-        repo,
-        lyrics,
-        playback,
+        core,
         nav: nav.clone(),
         toasts: toasts.clone(),
         video,
-        downloads,
-        connect,
-        releases,
-        podcasts,
-        ai: Default::default(),
-        editable_playlists: Default::default(),
         view: Cell::new(View { right_open, ..Default::default() }),
         parts: Default::default(),
         view_listeners: Default::default(),
@@ -609,17 +588,6 @@ pub fn build(
         app.playback.on_notice(move |text| {
             if let Some(app) = weak.upgrade() {
                 app.toast(text);
-            }
-        });
-    }
-    {
-        let app = app.clone();
-        gtk::glib::spawn_future_local(async move {
-            app.ai.load().await;
-            // 確かめ用: WAVE_DEMO_AI_ASK の頼みを、曲が流れ始めるのを待ってから送る
-            if let Ok(ask) = std::env::var("WAVE_DEMO_AI_ASK") {
-                gtk::glib::timeout_future_seconds(6).await;
-                app.ai.send(&app, &ask);
             }
         });
     }

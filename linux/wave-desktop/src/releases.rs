@@ -7,8 +7,7 @@ use std::collections::HashSet;
 use std::rc::Rc;
 use std::time::Duration;
 
-use gtk::gio;
-use gtk::gio::prelude::*;
+use gio::prelude::*;
 use wave_core::music::releases::{NewRelease, ReleaseWatchState};
 use wave_core::music::repository::{LIKED_SONGS, MusicRepository};
 
@@ -33,7 +32,7 @@ pub struct Releases {
 }
 
 fn path() -> std::path::PathBuf {
-    gtk::glib::user_data_dir().join("wave").join("release-watch.json")
+    glib::user_data_dir().join("wave").join("release-watch.json")
 }
 
 fn read() -> ReleaseWatchState {
@@ -51,16 +50,16 @@ impl Releases {
         let weak = Rc::downgrade(&releases);
         // 確かめ用: WAVE_DEMO_RELEASES があれば起動してすぐ確かめる
         let first = if std::env::var_os("WAVE_DEMO_RELEASES").is_some() { Duration::from_secs(1) } else { FIRST_DELAY };
-        gtk::glib::timeout_add_local_once(first, move || {
+        glib::timeout_add_local_once(first, move || {
             let Some(this) = weak.upgrade() else { return };
             this.check();
             let weak = Rc::downgrade(&this);
-            gtk::glib::timeout_add_local(INTERVAL, move || match weak.upgrade() {
+            glib::timeout_add_local(INTERVAL, move || match weak.upgrade() {
                 Some(this) => {
                     this.check();
-                    gtk::glib::ControlFlow::Continue
+                    glib::ControlFlow::Continue
                 }
-                None => gtk::glib::ControlFlow::Break,
+                None => glib::ControlFlow::Break,
             });
         });
         releases
@@ -84,12 +83,12 @@ impl Releases {
         }
         self.checking.set(true);
         let this = self.clone();
-        gtk::glib::spawn_future_local(async move {
+        glib::spawn_future_local(async move {
             let repo = this.repo.clone();
             let outcome = runtime::run(async move {
                 let (artists, complete) = repo.subscribed_artists().await.ok()?;
                 let now = now_ms();
-                let year = gtk::glib::DateTime::now_local().ok().map(|d| d.year());
+                let year = glib::DateTime::now_local().ok().map(|d| d.year());
                 let mut state = read().expire(now);
                 // 登録をやめたアーティストの記録は、一覧を最後まで読めたときだけ捨てる（途中で失敗すると欠けて返るため）
                 if complete && !artists.is_empty() {

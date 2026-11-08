@@ -189,12 +189,12 @@ impl Playback {
         *playback._watch.borrow_mut() = Some(watch);
         // 先に取るのに失敗した次の曲を、鳴っている間に時々もう一度試す（試す間と回数は Player::warm が決める）
         let weak = Rc::downgrade(&playback);
-        gtk::glib::timeout_add_seconds_local(5, move || {
-            let Some(playback) = weak.upgrade() else { return gtk::glib::ControlFlow::Break };
+        glib::timeout_add_seconds_local(5, move || {
+            let Some(playback) = weak.upgrade() else { return glib::ControlFlow::Break };
             if playback.player.is_playing() {
                 playback.warm_next();
             }
-            gtk::glib::ControlFlow::Continue
+            glib::ControlFlow::Continue
         });
         playback
     }
@@ -208,8 +208,8 @@ impl Playback {
     }
 
     /// widget がある間だけ、変わったら f を呼ぶ（曲の行の印・ページの再生ボタンなど）。
-    pub fn watch<W: gtk::prelude::ObjectType>(&self, widget: &W, f: impl Fn(&W) + 'static) {
-        let weak = gtk::glib::object::WeakRef::new();
+    pub fn watch<W: glib::prelude::ObjectType>(&self, widget: &W, f: impl Fn(&W) + 'static) {
+        let weak = glib::object::WeakRef::new();
         weak.set(Some(widget));
         f(widget);
         self.watchers.borrow_mut().push(Box::new(move || match weak.upgrade() {
@@ -513,7 +513,7 @@ impl Playback {
         }
         let Some(playlist) = all_songs_playlist else { return };
         let (this, repo, browse_id) = (self.clone(), self.repo.clone(), browse_id.to_string());
-        gtk::glib::spawn_future_local(async move {
+        glib::spawn_future_local(async move {
             let songs = runtime::run(async move { full_playlist(&repo, &playlist).await }).await;
             eprintln!("artist all songs={}", songs.len());
             // 読んでいる間にほかのものを流し始めていたら足さない
@@ -566,7 +566,7 @@ impl Playback {
         self.request.set(request);
         self.changed();
         let this = self.clone();
-        gtk::glib::spawn_future_local(async move {
+        glib::spawn_future_local(async move {
             use wave_core::stream::resolver::StreamFailure;
             let generation = this.player.login_generation();
             // 少し前に拒まれた曲は、解き直さずに飛ばす（取った曲・RSS のエピソードは通信しないので除く）
@@ -837,7 +837,7 @@ impl Playback {
         let seed = playlist.as_deref().and_then(queue_radio::seed_of).map(String::from).or_else(|| self.queue.borrow().first().map(|s| s.song.video_id.clone()));
         let repo = self.repo.clone();
         let this = self.clone();
-        gtk::glib::spawn_future_local(async move {
+        glib::spawn_future_local(async move {
             let playlist_id = playlist.clone().or_else(|| seed.as_ref().map(|v| format!("RDAMVM{v}")));
             let video = if continuation.is_none() { seed.clone() } else { None };
             let page = runtime::run(async move { repo.up_next(video.as_deref(), playlist_id.as_deref(), continuation.as_deref()).await }).await;

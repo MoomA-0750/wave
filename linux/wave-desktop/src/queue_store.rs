@@ -43,7 +43,7 @@ struct SavedQueue {
 }
 
 fn path() -> std::path::PathBuf {
-    gtk::glib::user_data_dir().join("wave").join("queue.json")
+    glib::user_data_dir().join("wave").join("queue.json")
 }
 
 /// 前回のキューを戻し、以後は変わるたびに書く。obtained_at は今のログインの取得時刻（ログインしていなければ None で、戻さず書かない）。
@@ -59,7 +59,7 @@ pub fn attach(playback: &Rc<Playback>, obtained_at: Option<i64>) {
                 return;
             }
             let (weak, pending) = (weak.clone(), pending.clone());
-            gtk::glib::timeout_add_local_once(SAVE_DELAY, move || {
+            glib::timeout_add_local_once(SAVE_DELAY, move || {
                 pending.set(false);
                 if let Some(playback) = weak.upgrade() {
                     save(&playback, obtained_at);
@@ -69,12 +69,12 @@ pub fn attach(playback: &Rc<Playback>, obtained_at: Option<i64>) {
     };
     playback.on_change(schedule);
     let weak = Rc::downgrade(playback);
-    gtk::glib::timeout_add_local(POSITION_EVERY, move || {
-        let Some(playback) = weak.upgrade() else { return gtk::glib::ControlFlow::Break };
+    glib::timeout_add_local(POSITION_EVERY, move || {
+        let Some(playback) = weak.upgrade() else { return glib::ControlFlow::Break };
         if playback.player().is_playing() {
             save(&playback, obtained_at);
         }
-        gtk::glib::ControlFlow::Continue
+        glib::ControlFlow::Continue
     });
 }
 

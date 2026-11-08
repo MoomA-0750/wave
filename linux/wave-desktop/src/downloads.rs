@@ -6,8 +6,7 @@ use std::collections::HashSet;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
-use gtk::gio;
-use gtk::prelude::*;
+use gio::prelude::*;
 use wave_core::download::downloader::{self, DownloadOutcome};
 use wave_core::download::manifest::{DownloadCollection, DownloadManifest};
 use wave_core::download::smart::{self, PlayCounts};
@@ -53,7 +52,7 @@ pub struct Downloads {
 }
 
 fn counts_path() -> std::path::PathBuf {
-    gtk::glib::user_data_dir().join("wave").join("play_counts.json")
+    glib::user_data_dir().join("wave").join("play_counts.json")
 }
 
 pub fn directory() -> std::path::PathBuf {
@@ -61,7 +60,7 @@ pub fn directory() -> std::path::PathBuf {
     if let Some(dir) = std::env::var_os("WAVE_DOWNLOADS_DIR") {
         return dir.into();
     }
-    gtk::glib::user_data_dir().join("wave").join("downloads")
+    glib::user_data_dir().join("wave").join("downloads")
 }
 
 impl Downloads {
@@ -97,12 +96,12 @@ impl Downloads {
         });
         // スマートダウンロードは起動のときと、1時間ごとに選び直す頃かを見る（選び直すのは1日1回）
         let weak = Rc::downgrade(&downloads);
-        gtk::glib::timeout_add_seconds_local(60 * 60, move || match weak.upgrade() {
+        glib::timeout_add_seconds_local(60 * 60, move || match weak.upgrade() {
             Some(d) => {
                 d.refresh_smart(false);
-                gtk::glib::ControlFlow::Continue
+                glib::ControlFlow::Continue
             }
-            None => gtk::glib::ControlFlow::Break,
+            None => glib::ControlFlow::Break,
         });
         downloads.refresh_smart(false);
         downloads
@@ -149,8 +148,8 @@ impl Downloads {
         let counted: RefCell<Option<String>> = RefCell::default();
         let listened = Cell::new(0u64);
         let last: RefCell<Option<String>> = RefCell::default();
-        gtk::glib::timeout_add_seconds_local(1, move || {
-            let Some(downloads) = weak.upgrade() else { return gtk::glib::ControlFlow::Break };
+        glib::timeout_add_seconds_local(1, move || {
+            let Some(downloads) = weak.upgrade() else { return glib::ControlFlow::Break };
             let current = playback.current();
             let id = current.as_ref().map(|s| s.video_id.clone());
             if *last.borrow() != id {
@@ -171,7 +170,7 @@ impl Downloads {
                         let position = playback.player().position_ms().unwrap_or(0) as f64 / 1000.0;
                         if let Some(stream) = playback.player().current_stream(&song.video_id) {
                             let repo = downloads.repo.clone();
-                            gtk::glib::spawn_future_local(async move {
+                            glib::spawn_future_local(async move {
                                 let cpn = wave_core::stream::stats::new_cpn();
                                 let status = crate::runtime::run(async move { wave_core::stream::stats::report(repo.client(), &stream, &cpn, position).await }).await;
                                 eprintln!("stats status={}", status.map_or("skipped".to_string(), |s| s.to_string()));
@@ -180,7 +179,7 @@ impl Downloads {
                     }
                 }
             }
-            gtk::glib::ControlFlow::Continue
+            glib::ControlFlow::Continue
         });
     }
 
@@ -204,7 +203,7 @@ impl Downloads {
         let count = smart::normalize_count(self.settings.borrow().smart_download_count);
         let (repo, counts) = (self.repo.clone(), self.counts.borrow().entries.clone());
         let this = self.clone();
-        gtk::glib::spawn_future_local(async move {
+        glib::spawn_future_local(async move {
             let picked = runtime::run(async move {
                 let history = repo.history().await;
                 let history_songs = history.clone().unwrap_or_default();
@@ -262,8 +261,8 @@ impl Downloads {
     }
 
     /// widget がある間だけ、変わったら f を呼ぶ（曲の行の印など、数が多く入れ替わるもの）。
-    pub fn watch<W: gtk::prelude::ObjectType>(&self, widget: &W, f: impl Fn(&W) + 'static) {
-        let weak = gtk::glib::object::WeakRef::new();
+    pub fn watch<W: glib::prelude::ObjectType>(&self, widget: &W, f: impl Fn(&W) + 'static) {
+        let weak = glib::object::WeakRef::new();
         weak.set(Some(widget));
         f(widget);
         self.listeners.borrow_mut().push(Box::new(move || match weak.upgrade() {
@@ -379,7 +378,7 @@ impl Downloads {
             return;
         }
         let this = self.clone();
-        gtk::glib::spawn_future_local(async move {
+        glib::spawn_future_local(async move {
             loop {
                 // 設定の通信で取れないあいだは待つ（通信が変わったら work が呼ばれ直す）
                 if !this.network_allows() {
@@ -423,7 +422,7 @@ impl Downloads {
                     // ログインしていない・通信の失敗は、少し待ってからにする（飛ばし続けない）
                     DownloadOutcome::NotLoggedIn | DownloadOutcome::Failed => {
                         this.changed();
-                        gtk::glib::timeout_future_seconds(30).await;
+                        glib::timeout_future_seconds(30).await;
                     }
                 }
                 this.changed();

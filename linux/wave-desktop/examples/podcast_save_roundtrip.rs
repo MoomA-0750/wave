@@ -1,5 +1,5 @@
 //! 確かめ用: キーリングのログインで、番組をライブラリに保存して一覧を読み直し、外して読み直す（本物のライブラリを一度変えて戻す）。
-//! cargo run -p wave-gtk --example podcast_save_roundtrip -- <番組の browseId（MPSP…）>
+//! cargo run -p wave-desktop --example podcast_save_roundtrip -- <番組の browseId（MPSP…）>
 
 #[path = "../src/keyring.rs"]
 mod keyring;
@@ -11,7 +11,7 @@ use wave_core::music::repository::MusicRepository;
 
 fn main() {
     let browse_id = std::env::args().nth(1).expect("browse id");
-    let creds = gtk::glib::MainContext::default().block_on(keyring::load()).expect("login saved");
+    let creds = glib::MainContext::default().block_on(keyring::load()).expect("login saved");
     let repo = MusicRepository::new(InnerTube::new("ja", "JP"));
     repo.client().set_credentials(Some(creds));
     runtime::block_on(async move {

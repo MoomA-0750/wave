@@ -1,5 +1,5 @@
 //! 確かめ用: 検索の1件目を GStreamer で鳴らし、位置が進むかを出す（曲名・URL は出さない）。
-//! スピーカーを鳴らさないなら WAVE_AUDIO_SINK=fakesink cargo run -p wave-gtk --example play -- <検索の語>
+//! スピーカーを鳴らさないなら WAVE_AUDIO_SINK=fakesink cargo run -p wave-desktop --example play -- <検索の語>
 
 #[path = "../src/keyring.rs"]
 mod keyring;
@@ -15,8 +15,8 @@ use wave_core::stream::resolver::StreamResolver;
 
 fn main() {
     let query = std::env::args().nth(1).expect("query");
-    let main_loop = gtk::glib::MainLoop::new(None, false);
-    let context = gtk::glib::MainContext::default();
+    let main_loop = glib::MainLoop::new(None, false);
+    let context = glib::MainContext::default();
     let quit = main_loop.clone();
     context.spawn_local(async move {
         let client = InnerTube::new("ja", "JP");
@@ -32,7 +32,7 @@ fn main() {
         match player.play(&song.video_id).await {
             Ok(()) => {
                 for _ in 0..6 {
-                    gtk::glib::timeout_future_seconds(1).await;
+                    glib::timeout_future_seconds(1).await;
                     println!("t={:.1}s playing={} position={:?}ms duration={:?}ms", started.elapsed().as_secs_f32(), player.is_playing(), player.position_ms(), player.duration_ms());
                 }
             }

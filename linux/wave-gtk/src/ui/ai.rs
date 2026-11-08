@@ -83,7 +83,7 @@ pub fn panel(app: &Rc<App>, on_close: impl Fn() + 'static) -> gtk::Widget {
     buffer.connect_changed(move |b| placeholder.set_visible(b.char_count() == 0));
     let send_text = {
         let app = app.clone();
-        Rc::new(move |text: &str| app.ai.send(&app, text))
+        Rc::new(move |text: &str| app.ai.send(&app.core, text))
     };
     for suggestion in SUGGESTIONS {
         let label = gtk::Label::builder().label(suggestion).xalign(0.0).wrap(true).build();

@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use wave_core::discord::{DiscordPresence, PresenceStatus, PresenceTrack};
 
-use crate::ui::shell::App;
+use crate::services::Services as App;
 
 thread_local! {
     static PRESENCE: RefCell<Option<(DiscordPresence, Weak<App>)>> = const { RefCell::new(None) };
@@ -25,9 +25,9 @@ pub fn start(app: &Rc<App>) {
         started
     });
     if !started {
-        gtk::glib::timeout_add_local(Duration::from_secs(1), || {
+        glib::timeout_add_local(Duration::from_secs(1), || {
             push();
-            gtk::glib::ControlFlow::Continue
+            glib::ControlFlow::Continue
         });
     }
 }

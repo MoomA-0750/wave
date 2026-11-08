@@ -24,7 +24,7 @@ pub struct Podcasts {
 }
 
 fn path() -> std::path::PathBuf {
-    gtk::glib::user_data_dir().join("wave").join("podcast-feeds.json")
+    glib::user_data_dir().join("wave").join("podcast-feeds.json")
 }
 
 fn now_ms() -> i64 {
@@ -75,8 +75,8 @@ impl Podcasts {
     /// RSS のエピソードを鳴らしている間、聴いたところを書き留める。
     pub fn track(self: &Rc<Self>, playback: &Rc<Playback>) {
         let (weak, playback) = (Rc::downgrade(self), playback.clone());
-        gtk::glib::timeout_add_local(REMEMBER_EVERY, move || {
-            let Some(this) = weak.upgrade() else { return gtk::glib::ControlFlow::Break };
+        glib::timeout_add_local(REMEMBER_EVERY, move || {
+            let Some(this) = weak.upgrade() else { return glib::ControlFlow::Break };
             if let Some(song) = playback.current()
                 && let Some(url) = feed::audio_url_of(&song.video_id)
                 && playback.player().is_playing()
@@ -86,7 +86,7 @@ impl Podcasts {
                 let duration = player.duration_ms().map(|d| (d / 1000) as i32).or(song.duration_seconds.map(|d| d as i32));
                 this.library.remember(url, position, duration);
             }
-            gtk::glib::ControlFlow::Continue
+            glib::ControlFlow::Continue
         });
     }
 

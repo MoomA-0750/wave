@@ -1,5 +1,5 @@
 //! 確かめ用: キーリングのログインで、検索の1件目を高く評価して読み直し、外して読み直す（本物の評価を一度付けて戻す）。
-//! cargo run -p wave-gtk --example like_roundtrip -- <検索の語>
+//! cargo run -p wave-desktop --example like_roundtrip -- <検索の語>
 
 #[path = "../src/keyring.rs"]
 mod keyring;
@@ -11,7 +11,7 @@ use wave_core::music::repository::MusicRepository;
 
 fn main() {
     let query = std::env::args().nth(1).expect("query");
-    let creds = gtk::glib::MainContext::default().block_on(keyring::load()).expect("login saved");
+    let creds = glib::MainContext::default().block_on(keyring::load()).expect("login saved");
     let repo = MusicRepository::new(InnerTube::new("ja", "JP"));
     repo.client().set_credentials(Some(creds));
     runtime::block_on(async move {

@@ -8,7 +8,6 @@ use std::rc::{Rc, Weak};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use gtk::glib;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 use wave_core::connect::chain::{self, ChainVerification, DeviceIdentity, DeviceSigner};
@@ -1594,13 +1593,19 @@ fn epoch_ms() -> i64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as i64)
 }
 
+thread_local! {
+    /// 窓が前面にあるかを答える口（画面の側が起動のときに渡す）。
+    static FOREGROUND: RefCell<Option<Box<dyn Fn() -> bool>>> = const { RefCell::new(None) };
+}
+
+/// 窓が前面にあるかを答える関数を渡す（GTK 版・QML 版がそれぞれの窓で答える）。
+pub fn set_foreground(check: impl Fn() -> bool + 'static) {
+    FOREGROUND.with(|f| *f.borrow_mut() = Some(Box::new(check)));
+}
+
 /// 窓が前面にあるか（裏でメディアキーを押したときに、ほかの端末の再生を黙って引き取らない）。
 fn foreground() -> bool {
-    use gtk::prelude::*;
-    gtk::gio::Application::default()
-        .and_then(|app| app.downcast::<gtk::Application>().ok())
-        .and_then(|app| app.active_window())
-        .is_some_and(|w| w.is_active())
+    FOREGROUND.with(|f| f.borrow().as_ref().is_some_and(|check| check()))
 }
 
 fn device_name() -> String {

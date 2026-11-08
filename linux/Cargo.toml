@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["wave-core", "wave-gtk"]
+members = ["wave-core", "wave-desktop", "wave-gtk"]
 
 [workspace.package]
 edition = "2024"

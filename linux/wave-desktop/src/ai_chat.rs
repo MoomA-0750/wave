@@ -17,7 +17,7 @@ use wave_core::music::repository::LIKED_SONGS;
 
 use crate::keyring;
 use crate::runtime;
-use crate::ui::shell::App;
+use crate::services::Services as App;
 
 /// 会話の1つ分の表示。
 #[derive(Clone)]
@@ -47,7 +47,7 @@ pub struct AiChat {
 }
 
 fn history_path() -> std::path::PathBuf {
-    gtk::glib::user_data_dir().join("wave").join("ai_history.json")
+    glib::user_data_dir().join("wave").join("ai_history.json")
 }
 
 fn now_ms() -> i64 {
@@ -252,7 +252,7 @@ impl AiChat {
         self.changed();
         let generation = self.generation.get();
         let (this, app) = (self.clone(), app.clone());
-        gtk::glib::spawn_future_local(async move {
+        glib::spawn_future_local(async move {
             this.run(&app, Bridge::new(config), task, history, generation).await;
             // 止めたあとに別の会話へ移っていれば、そちらには触れない
             if this.generation.get() == generation {

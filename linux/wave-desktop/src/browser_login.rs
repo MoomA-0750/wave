@@ -407,11 +407,11 @@ mod tests {
 
 #[cfg(test)]
 mod real {
-    /// 実際のホームのブラウザを読む（値は出さない）。`cargo test -p wave-gtk real_browsers -- --ignored --nocapture`
+    /// 実際のホームのブラウザを読む（値は出さない）。`cargo test -p wave-desktop real_browsers -- --ignored --nocapture`
     #[test]
     #[ignore]
     fn real_browsers() {
-        let profiles = super::find(&gtk::glib::home_dir());
+        let profiles = super::find(&glib::home_dir());
         for p in &profiles {
             let result = crate::runtime::block_on(async {
                 let cookie = super::read_cookie(p).await?;

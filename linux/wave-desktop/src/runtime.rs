@@ -1,4 +1,4 @@
-//! core の通信は tokio の上で動かし、結果を GTK の主スレッドへ戻す。
+//! core の通信は tokio の上で動かし、結果を主スレッド（glib の主ループ。GTK 版も QML 版もこれで回る）へ戻す。
 
 use std::future::Future;
 use std::sync::LazyLock;

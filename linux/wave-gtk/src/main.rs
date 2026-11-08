@@ -1,28 +1,15 @@
 //! wave の Linux（GNOME）版。画面は GTK4 + libadwaita で作り、YouTube Music とのやり取りは wave-core に任せる。
 
-mod ai_chat;
-mod connect;
-mod browser_login;
-mod discord_status;
-mod downloads;
-mod keyring;
 mod login;
-mod mpris;
-mod playback;
-mod podcasts;
-mod player;
-mod queue_store;
-mod releases;
-mod runtime;
-mod settings;
 mod ui;
 mod video;
+
+// 画面に依らない部分は wave-desktop（QML 版と共有）。crate::playback などの名前のまま使う
+use wave_desktop::{ai_chat, browser_login, connect, discord_status, downloads, keyring, mpris, playback, runtime, settings};
 
 use adw::prelude::*;
 use wave_core::innertube::InnerTube;
 use wave_core::music::repository::MusicRepository;
-use wave_core::stream::player::PlayerCipherProvider;
-use wave_core::stream::resolver::StreamResolver;
 
 const APP_ID: &str = "xyz.mooma0750.wave";
 
@@ -54,6 +41,13 @@ fn add_open_actions(app: &adw::Application) {
 
 fn build_window(app: &adw::Application) {
     add_open_actions(app);
+    // 窓が前面にあるか（端末の連携が、裏でメディアキーを押したときにほかの端末の再生を黙って引き取らないのに使う）
+    connect::set_foreground(|| {
+        gtk::gio::Application::default()
+            .and_then(|app| app.downcast::<gtk::Application>().ok())
+            .and_then(|app| app.active_window())
+            .is_some_and(|w| w.is_active())
+    });
     // ランチャー・Alt+Tab のアイコン（scripts/install.sh で入れた絵）
     gtk::Window::set_default_icon_name(APP_ID);
     let repo = MusicRepository::new(InnerTube::new(&language(), &region()));
@@ -188,39 +182,18 @@ async fn login_from_browser(window: &adw::ApplicationWindow, repo: &MusicReposit
 
 /// ログインできたら、Mac・Windows と同じ並びの画面に入れ替える（上の帯も画面の側が持つ）。
 async fn show_home(toolbar: &adw::ToolbarView, repo: &MusicRepository) {
-    // 解読の準備（プレイヤーの JS）は音と映像で1つを共有する
-    let resolver = StreamResolver::new(repo.client().clone(), PlayerCipherProvider::default());
-    let video = video::VideoPlayer::new(resolver.clone());
-    let downloads = downloads::Downloads::new(resolver.clone(), repo.clone());
-    let playback = playback::Playback::new(player::Player::new(resolver, Some(downloads.store())).with_live(repo.live().clone()).with_audio_cache(std::sync::Arc::new(
-            // 曲の音を残す（上限 300MB。Windows と同じ）
-            wave_core::stream::audio_cache::AudioCache::new(gtk::glib::user_cache_dir().join("wave").join("audio"), wave_core::stream::audio_cache::DEFAULT_MAX_BYTES, || {
-                std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as i64)
-            }),
-        )), repo.clone());
-    // 聴いた曲を数える（スマートダウンロードの「いつも聴いている」に使う）
-    downloads.track_listens(&playback);
-    // 前回のキューを戻し、以後は変わるたびに書く（同じログインのときだけ）
-    queue_store::attach(&playback, repo.client().obtained_at());
+    let services = wave_desktop::services::Services::start(repo.clone()).await;
+    // 映像（MV）の流し手は GTK の絵（gtk4paintablesink）を使うので、画面の側で作る。解読の準備は音と共有する
+    let video = video::VideoPlayer::new(services.resolver.clone());
+    let playback = services.playback.clone();
     let on_logout: std::rc::Rc<dyn Fn()> = {
-        let (toolbar, repo, playback, downloads) = (toolbar.clone(), repo.clone(), playback.clone(), downloads.clone());
+        let (toolbar, repo, services) = (toolbar.clone(), repo.clone(), std::rc::Rc::downgrade(&services));
         std::rc::Rc::new(move || {
-            playback.clear();
-            queue_store::clear();
-            // 聴いた曲の音も残さない
-            playback.player().clear_audio_cache();
-            // 検索の履歴も消す（ほかの端末と同じ）
-            downloads.update_settings(|s| s.search_history.clear());
-            // ログアウトしたら、取った曲と Claude との会話も消す（ほかの端末と同じ）
-            downloads.clear();
-            if let Some(app) = APP.with(|a| a.borrow().clone()) {
-                app.ai.wipe();
-                app.releases.clear();
-            }
+            let Some(services) = services.upgrade() else { return };
             let (toolbar, repo) = (toolbar.clone(), repo.clone());
             gtk::glib::spawn_future_local(async move {
-                keyring::delete().await;
-                repo.client().set_credentials(None);
+                // キュー・取った曲・Claude との会話などを消し、キーリングのログイン情報も消す（wave-desktop の Services）
+                services.log_out().await;
                 // 入れ物（読み込み中の上の帯）に戻し、ログインの入り口を出す
                 if let Some(window) = toolbar_window(&toolbar) {
                     window.set_content(Some(&toolbar));
@@ -233,29 +206,9 @@ async fn show_home(toolbar: &adw::ToolbarView, repo: &MusicRepository) {
     if let Some(window) = &window {
         WINDOW.with(|w| *w.borrow_mut() = Some(window.clone()));
     }
-    let lyrics = wave_core::lyrics::service::LyricsService::new(
-        repo.clone(),
-        wave_core::lyrics::lrclib::LrclibClient::default(),
-        wave_core::lyrics::timed::TimedLyricsClient::new(&language(), &region()),
-    );
-    // RSS の番組（登録と聴いたところ）。エピソードは続きから流し、鳴らしている間は聴いたところを書き留める
-    let podcasts = podcasts::Podcasts::new(&region());
-    {
-        let podcasts = podcasts.clone();
-        playback.player().set_external_resume(move |url| podcasts.resume_ms(url));
-    }
-    podcasts.track(&playback);
-    // 端末の連携（中継の場所が設定にあるときだけ）
-    let relay_url = downloads.settings.borrow().relay_url.clone();
-    let connect = connect::Connect::start(repo.clone(), playback.clone(), podcasts.clone(), relay_url).await;
-    // 新作の通知は確かめるたびに設定を見る（切り替えがすぐ効く。Mac と同じ）
-    let releases = {
-        let downloads = downloads.clone();
-        releases::Releases::start(repo.clone(), move || downloads.settings.borrow().release_notices)
-    };
     // 設定の「ログアウト」からも同じ後片付けを呼べるようにする
     LOGOUT.with(|l| *l.borrow_mut() = Some(on_logout.clone()));
-    let (shell, app) = ui::shell::build(repo.clone(), lyrics, playback.clone(), video, downloads, connect, releases, podcasts, on_logout);
+    let (shell, app) = ui::shell::build(services.clone(), video, on_logout);
     if let Some(window) = toolbar.root().and_downcast::<adw::ApplicationWindow>() {
         // GNOME のメディアの操作・メディアキーから操作できるようにする（窓がある間だけ出す）
         let (raise, quit) = (window.clone(), window.clone());
@@ -265,7 +218,7 @@ async fn show_home(toolbar: &adw::ToolbarView, repo: &MusicRepository) {
         MPRIS.with(|m| *m.borrow_mut() = Some(started));
     }
     APP.with(|a| *a.borrow_mut() = Some(app.clone()));
-    discord_status::start(&app);
+    discord_status::start(&services);
     if let Ok(query) = std::env::var("WAVE_DEMO_QUERY") {
         app.demo(&query);
     }
@@ -338,20 +291,7 @@ fn toolbar_window(toolbar: &adw::ToolbarView) -> Option<adw::ApplicationWindow> 
     toolbar.root().and_downcast::<adw::ApplicationWindow>().or_else(|| WINDOW.with(|w| w.borrow().clone()))
 }
 
-/// 表示の言語（YouTube から届く文字の言語）。LANG が日本語なら ja、ほかは en。
-fn language() -> String {
-    let lang = std::env::var("LANG").unwrap_or_default();
-    if lang.starts_with("ja") { "ja".into() } else { "en".into() }
-}
-
-/// 地域。LANG の地域の部分（ja_JP.UTF-8 なら JP）。読めなければ JP。
-fn region() -> String {
-    std::env::var("LANG")
-        .ok()
-        .and_then(|l| l.split(['_', '.']).nth(1).map(str::to_uppercase))
-        .filter(|r| r.len() == 2)
-        .unwrap_or_else(|| "JP".into())
-}
+use wave_desktop::services::{language, region};
 
 /// 確かめ用: 環境変数 WAVE_SNAPSHOT に PNG の行き先があれば、描き終わるのを待って窓を書き出し、アプリを閉じる
 /// （scripts/shot.sh が見えない画面の mutter の中で使う。作業中の画面に窓を出さずに見た目を確かめる）。

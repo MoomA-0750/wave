@@ -9,7 +9,7 @@ use wave_core::music::models::MusicVideo;
 use wave_core::stream::range::RangeReader;
 use wave_core::stream::resolver::{StreamKind, StreamResolver};
 
-use crate::player::{Feed, configure_source};
+use wave_desktop::player::{Feed, configure_source};
 use crate::runtime;
 
 /// 映像と音のずれがこれより大きくなったら、映像を音の位置へ飛ばす。

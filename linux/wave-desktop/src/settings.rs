@@ -42,7 +42,7 @@ impl Default for Settings {
 }
 
 fn path() -> std::path::PathBuf {
-    gtk::glib::user_config_dir().join("wave").join("settings.json")
+    glib::user_config_dir().join("wave").join("settings.json")
 }
 
 /// 検索の履歴の1件（語・曲・アルバム・アーティスト。画像付きで出す）。

@@ -55,23 +55,23 @@ pub struct Player {
 }
 
 #[derive(Default)]
-pub(crate) struct Feed {
-    pub(crate) reader: Option<RangeReader>,
+pub struct Feed {
+    pub reader: Option<RangeReader>,
     /// 取り終えた曲のファイルと長さ（あれば reader の代わりに読む）。
-    pub(crate) local: Option<(PathBuf, u64)>,
-    pub(crate) offset: u64,
+    pub local: Option<(PathBuf, u64)>,
+    pub offset: u64,
     /// 最後に取った塊（始まりの位置と中身）。demuxer は小さく何度も求めるので、ここから切り出す。
-    pub(crate) cache: Option<(u64, Vec<u8>)>,
+    pub cache: Option<(u64, Vec<u8>)>,
     /// 曲の音を残す置き場と、その曲の ID（残っている分はそこから読み、取った分は足す）。
-    pub(crate) audio: Option<(Arc<AudioCache>, String)>,
+    pub audio: Option<(Arc<AudioCache>, String)>,
     /// 残した分から鳴らし始めた曲: 続きが要ったときに URL を調べる口と、同じ形式か確かめる itag・長さ。
-    pub(crate) source: Option<(StreamResolver, u32, u64)>,
+    pub source: Option<(StreamResolver, u32, u64)>,
 }
 
 impl Feed {
     /// offset から length バイト（終わりで切れる）。塊に無ければ範囲で取り直す。
     /// 流しているものの長さ。
-    pub(crate) fn length(&self) -> u64 {
+    pub fn length(&self) -> u64 {
         self.local
             .as_ref()
             .map(|(_, l)| *l)
@@ -309,7 +309,7 @@ impl Player {
                 .as_ref()
                 .filter(|store| store.completed(video_id).is_some())
                 .and_then(|store| store.bytes_path(video_id))
-                .and_then(|path| gtk::glib::filename_to_uri(path, None).ok());
+                .and_then(|path| glib::filename_to_uri(path, None).ok());
             eprintln!("play source={}", if downloaded.is_some() { "feed-download" } else { "feed" });
             match &downloaded {
                 Some(uri) => self.playbin.set_property("uri", uri.as_str()),
@@ -466,7 +466,7 @@ impl Player {
                     }
                     _ => {}
                 }
-                gtk::glib::ControlFlow::Continue
+                glib::ControlFlow::Continue
             })
             .expect("one bus watch")
     }
@@ -481,7 +481,7 @@ impl Player {
 }
 
 /// appsrc を「どこからでも読める長さの決まった流れ」にし、求められた分を範囲で取って渡す。
-pub(crate) fn configure_source(source: &gst_app::AppSrc, feed: Arc<Mutex<Feed>>) {
+pub fn configure_source(source: &gst_app::AppSrc, feed: Arc<Mutex<Feed>>) {
     let length = feed.lock().unwrap().length();
     source.set_format(gst::Format::Bytes);
     source.set_stream_type(gst_app::AppStreamType::RandomAccess);

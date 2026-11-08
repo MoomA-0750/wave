@@ -6,6 +6,6 @@ mod keyring;
 mod runtime;
 
 fn main() {
-    let found = gtk::glib::MainContext::default().block_on(keyring::load());
+    let found = glib::MainContext::default().block_on(keyring::load());
     println!("login saved={}", found.is_some());
 }

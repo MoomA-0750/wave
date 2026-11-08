@@ -5,8 +5,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use gtk::gio;
-use gtk::glib::{self, Variant, prelude::*};
+use glib::{self, Variant, prelude::*};
 
 use crate::playback::Playback;
 
@@ -238,7 +237,7 @@ fn metadata(playback: &Playback) -> Variant {
         map.insert("xesam:album".into(), album.title.to_variant());
     }
     if let Some(url) = &song.thumbnail_url {
-        map.insert("mpris:artUrl".into(), crate::ui::images::sized(url, 544).to_variant());
+        map.insert("mpris:artUrl".into(), crate::art::sized(url, 544).to_variant());
     }
     let length_ms = playback.player().duration_ms().or(song.duration_seconds.map(|s| s as u64 * 1000));
     if let Some(ms) = length_ms {
