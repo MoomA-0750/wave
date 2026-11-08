@@ -100,6 +100,7 @@ class PlaylistWidgetConfigActivity : ComponentActivity() {
             WaveTheme {
                 val auth by container.authManager.state.collectAsStateWithLifecycle()
                 ItemPicker(
+                    title = stringResource(R.string.widget_choose_playlist),
                     loggedIn = auth is AuthState.LoggedIn,
                     restoring = auth == AuthState.Restoring,
                     saving = saving.value,
@@ -234,8 +235,10 @@ class WidgetItemPickerModel(
     }
 }
 
+/** 鳴らすものを選ぶ画面（ワンタップ再生のウィジェットと、ホーム画面のショートカットで共通）。 */
 @Composable
-private fun ItemPicker(
+internal fun ItemPicker(
+    title: String,
     loggedIn: Boolean,
     restoring: Boolean,
     saving: Boolean,
@@ -244,7 +247,7 @@ private fun ItemPicker(
     onCancel: () -> Unit,
 ) {
     Scaffold(
-        topBar = { TopAppBar(title = { Text(stringResource(R.string.widget_choose_playlist)) }, navigationIcon = { BackButton(onCancel) }) },
+        topBar = { TopAppBar(title = { Text(title) }, navigationIcon = { BackButton(onCancel) }) },
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
             when {

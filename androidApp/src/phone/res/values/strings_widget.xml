@@ -38,4 +38,8 @@
     <string name="widget_preview_artist">Artist</string>
     <string name="widget_preview_next_song">Next song %1$d</string>
     <string name="widget_preview_playlist">Playlist %1$d</string>
+    <string name="shortcut_create_label">wave: Play</string>
+    <string name="shortcut_choose">Choose what to play</string>
+    <string name="shortcut_link_unknown">Couldn\'t read that link</string>
+    <string name="shortcut_add_to_home">Add to Home screen</string>
 </resources>

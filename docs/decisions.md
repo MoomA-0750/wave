@@ -1050,3 +1050,13 @@
 - 一覧を流し終えたら止まっていたのは、Mac と同じく最後の曲のラジオへつなぐ（決まりは wave-core の queue_radio に切り出して試験を付けた）
 - 検索の「すべて」で、トップの検索結果と曲を横に並べると、中央が狭いとき曲の題が潰れ、窓の幅を押し広げて右の欄が切れた。中央が狭いときは縦に並べる（AdwBreakpointBin は高さを決まった値に縛って中身を切ったので、FlowBox で折り返す形にした）
 - 手を付けなかったもの: ログインの切れ・疑いの知らせ（Linux の核に session の状態の口が無い）、ログインしないまま使う形、画面の言語の設定、メニューバーの曲名、曲の画面
+
+## 2026-11-09 Android のショートカットとほかのアプリからの再生の口
+
+- 本人の頼み: 「Mac/iOSで、特定の曲やライブストリームなどをショートカットアプリから再生できるようにしたいです。Androidでもショートカットで同様のことをしたいです」
+- Android には iPhone のショートカットのアプリに当たる OS の仕組みが無いので、2つに分けた。ホーム画面に置くもの（ランチャーの「ショートカット」の ACTION_CREATE_SHORTCUT と、メニューの「ホーム画面に追加」の requestPinShortcut）と、Tasker などから Intent で呼ぶ口（`PlayIntentActivity`）
+- 選ぶ画面はワンタップ再生のウィジェットのもの（ItemPicker・WidgetItemPickerModel）を使い回し、鳴らす頼みもウィジェットのボタンと同じ関数（playWidgetItem）にまとめた。ウィジェットとショートカットで鳴り方がずれないように
+- ほかのアプリから呼ぶ口は exported だが、受けるのは再生の操作だけで、結果やログイン情報は返さない。ホーム画面のショートカットの宛先（ItemShortcutActivity）は、題や表紙の URL まで extra で受けるので exported にしない（ランチャーは固定ショートカットを wave として開くので、exported でなくてよい）
+- 口は BroadcastReceiver でなく透明な Activity にした: 頼みの多くが「Intent を送る（Activity）」で、受けたあと再生サービスにつなぐまでプロセスが前にいるほうが確か（動的ショートカットの PlaylistShortcutActivity と同じ形）
+- リンクの見分け方は core の PlayLink に純粋な関数で置き、Mac も同じ規則で Swift に別に書く。ID だけのときの 11 文字は動画、`PL`・`OLAK5uy_`・`RD` はプレイリスト、`MPREb_` はアルバム。`browse/VL…` やチャンネルは今は読まない（規則を Mac とそろえるため、足すときは両方で）
+- 動画の題・アーティストは upNext（next）の先頭の曲から引く。ログインしていない next の応答をライブ配信（Lofi Girl）で取ったところ、playlistPanelVideoRenderer にライブの印（バッジ・isLive）が無く、長さの欄に配信の経過時間が入っていた。長さで見分けるのは当てにならないので、ライブかどうかは鳴らすときの StreamResolver の判定（ライブと分かれば HLS で流し直す、今ある仕組み）に任せた
