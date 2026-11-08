@@ -16,6 +16,7 @@ InnerTube との通信には [innertubex](https://github.com/MetrolistGroup/inne
 | `relay` | 端末の連携の中継（Kotlin/JVM のサーバー）。暗号文を振り分けて家の最新の状態を預かるだけで、中身・曲・アカウントは読めない。自宅に置き、tailnet の中だけに出す。v2 だけで動く（運用は [docs/connect-v2-operations.md](docs/connect-v2-operations.md)） |
 | `windows/` | Windows 版（WinUI 3、C#）。`Wave.Core` は Android のコアを C# で書き直したもの、`Wave.App` が画面、`Wave.Core.Tests` がテスト（Android と同じ fixture を使う）。試作の扱いで、どこかで作り直す前提 |
 | `mac/` | macOS 版と iPhone 版（SwiftUI、`swift build` で組む）。下の「macOS・iPhone」を参照 |
+| `linux/` | Linux 版（Rust）。`wave-core` が中身（InnerTube・再生の URL・連携など）、`wave-desktop` が画面に依らない部分（再生・キーリング・MPRIS など）、`wave-gtk` が GTK4・libadwaita の画面、`wave-qt` が QML（Qt Quick ＋ Material）の画面。下の「Linux」を参照 |
 | `ai` | 「Claude に聞く」のシステムプロンプトと道具の定義（`agent.json`。4つの OS が同じファイルをアプリに入れる）。中継は別のリポジトリの汎用の中継 ai-bridge（[tools/ai-bridge/README.md](tools/ai-bridge/README.md)） |
 
 設計の決定は `docs/adr/` にある。
@@ -77,6 +78,31 @@ mac/scripts/mac.sh ios-ipa  # iPhone 版の wave.ipa を組んで、この機械
 - 署名は Mac の画面側のターミナルで行う（`scripts/sign.command`。ssh からはログインキーチェーンが閉じていて署名できない）。Team ID の付いた署名にしておくと、組み直してもキーチェーンに保存したログイン情報をそのまま読める
 - ログイン情報は macOS のキーチェーン（このユーザー・この Mac だけ）に保存する。Windows の DPAPI に当たる
 - 再生は AVPlayer。署名付きの URL は渡さず、アプリの中の受け口（127.0.0.1 の LocalMediaServer）から HLS として渡し、求められた範囲をアプリが取って返す。目次が読めない形式と MV は仮の URL（`wave-media://`）で同じことをする
+
+## Linux
+
+`linux/` は Rust の cargo のワークスペース。画面は2つあり、同じ中身（`wave-desktop`）を使う別々の実行ファイルにしている（GTK と Qt を1つの実行ファイルにリンクすると、使わない方まで読み込まれるため）。
+
+| 実行ファイル | 画面 | 向く机 |
+|---|---|---|
+| `wave-gtk` | GTK4 ＋ libadwaita | GNOME |
+| `wave-qt` | Qt Quick ＋ Material（Rust の中身は cxx-qt で QML に渡す）。Omarchy の `colors.toml` を見張って色を、Hyprland の `decoration:rounding` で角の丸みを合わせる | Omarchy（Hyprland）・KDE など |
+| `wave`（`scripts/wave`） | 選び役。`WAVE_UI=gtk\|qt` があればそれ、QML 版が入っていて `XDG_CURRENT_DESKTOP` に GNOME が無ければ QML 版、ほかは GTK 版（選んだ方が無ければもう一方） | ランチャーの項目はこれを開く |
+
+入れ方（自分のホームの `~/.local` に入れる）:
+
+```sh
+cd linux
+scripts/install.sh                 # 本体: wave-gtk・選び役 wave・ランチャーの項目・アイコン（GTK4・libadwaita・WebKitGTK・GStreamer が要る）
+scripts/install.sh --qt            # QML 版 wave-qt（qt6-base・qt6-declarative が要る。本体も入れておく）
+scripts/install.sh --uninstall-qt  # QML 版だけ外す（選び役は GTK 版に戻る）
+scripts/install.sh --uninstall     # 全部外す（キーリングのログインは残す）
+```
+
+- 何も指さない `cargo build`・`cargo test` は `wave-core`・`wave-desktop`・`wave-gtk` だけを組む。`wave-qt` は Qt の開発用ファイルがある機械で `cargo build -p wave-qt`（この Fedora には無いので、Omarchy の cramgent で組む）
+- QML 版にはアプリの中のログインの窓（WebKitGTK）が無いので、「ログイン」は `wave-gtk --login`（ログインの窓だけを開き、キーリングに保存したら閉じる）を開く。「ブラウザのログインを使う」はどちらの画面にもある
+- 見た目の確かめ: GTK 版は `scripts/shot.sh`（見えない mutter の中）、QML 版は `scripts/shot-qt.sh 出力.png [テーマ名] [待つミリ秒]`（offscreen で開いて grabWindow。一時的な設定の場所・キーリングを読まない・自分だけの D-Bus で動かすので、人の機械でも触らない）
+- 選び役の確かめ: `scripts/test-chooser.sh`
 
 ## Discord に再生中の曲を出す（Windows・macOS）
 

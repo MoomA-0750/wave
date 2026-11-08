@@ -1093,3 +1093,18 @@
 
 - Android の core と Mac が next の行の liveBadge を見るようにしたのに合わせ、Windows（`PlaylistPanelSong`）と Linux（`playlist_panel_song`）も同じ見方にした。前はどちらも IsLive を常に false にしていて、ラジオに配信中のライブが混ざるとふつうの曲として流そうとした
 - 手本は Android の core と共通の `next_live`・`next_ended_live`。長さが無いだけではライブとしない（配信を終えた動画は長さが付いて来るが、取り違えの元になるので）
+
+## 2026-11-09 Linux 版に QML の画面（wave-qt）を足す
+
+- 本人の頼み: Omarchy（Hyprland）で使っていて、GTK の画面がテーマに馴染まない。決まりは Vault の「LinuxアプリのQML版の画面の決まり」（中身は共通、画面は別の実行ファイル、起動の入口は1つの選び役、入れる対象を本体と qt に分ける、Qt Quick ＋ Material、colors.toml を見張る）
+- 先に wave-gtk の中の画面に依らない部分（再生・キーリング・MPRIS・連携・ダウンロードなど）を wave-desktop へ動きを変えずに移した。GTK に絡んでいたのは「窓が前面か」（連携が使う。画面の側が関数を渡す）・ジャケットの URL の書き換えと色（art へ）・ログインした後の組み立て（Services へ）だけだった
+- 主スレッドの仕事は glib の主ループのまま残した。Qt は Linux では glib の主ループ（QEventDispatcherGlib）の上で動くので、glib::spawn_future_local・timeout・gio の D-Bus（MPRIS）・GStreamer のバスがそのまま動く。cramgent で、glib の future から cxx-qt の qt_thread().queue でプロパティを書き換えられることを先に確かめた
+- Rust と QML の受け渡しは、cxx-qt の QObject を2つ（WaveApp・Theme）だけにした。ページの中身は request(kind, arg, extra) → loaded(token, json) の JSON で渡す（ページごとに QObject と一覧の model を作るより少なく書け、wave-core の値は serde でそのまま JSON にできるため）。曲は "song" に元の値を持たせ、鳴らすときはそれを Rust に返す
+- テーマの読み取りと見張りは Rust（wave-desktop の omarchy_theme）に置き、gio のフォルダの見張りを使った（QFileSystemWatcher と同等。Qt の側に置くと Fedora で試験できないため）。colors.toml のフォルダ・その上・さらに上を見張り、変わるたびに付け直す（テーマを切り替えるとフォルダごと置き換わる）
+- 角の丸みは Material.roundedScale に px をそのまま渡した（Qt 6.12 の Material は値をそのまま半径に使う）。Material の Button は自分で FullScale にするので、ボタンごとに入れ直している。再生のボタンは丸い部品として丸のまま
+- QML の中で on で始まる名前のプロパティ（onAccent）は、シグナルの受け手とみなされて値が入らなかった。accentText にした
+- アイコンは GTK 版と同じ Adwaita の記号の絵を、入っているテーマのフォルダから探して使う（Qt のアイコンのテーマは、Qt のテーマの手伝いが無いと決まらず、絵が出なかった）。wave の本体は GTK4 に依るので Adwaita は入っている
+- 撮るとき、offscreen は既定で software の描き方になり、Material のボタンの地・影（シェーダーの効果）が描かれなかった。DISPLAY（cramgent では本人の Xwayland）があれば offscreen の GLX で OpenGL を使って描く（窓は出ない）。scripts/shot-qt.sh はさらに、一時的な設定の場所・WAVE_KEYRING_OFF（キーリングを読みも書きもしない）・dbus-run-session（MPRIS を本人の机に出さない）で動かす
+- QML 版にはアプリの中のログインの窓が無い（WebKitGTK は GTK 版だけ。Qt WebEngine は Omarchy に入っておらず大きい）。QML 版の「ログイン」は wave-gtk --login（ログインの窓だけを開いて、保存したら閉じる）を開き、閉じたらキーリングを読み直す。QML 版は本体（wave-gtk）に依るので、いつも入っている
+- まだ QML 版に無いもの（Claude の欄・端末の連携のページと切り替え・ダウンロードのページ・ポッドキャストのページ・映像・プレイリストの作成）は、押すと「GTK 版で行えます」と知らせる。残りは linux/wave-qt/STATUS.md
+
