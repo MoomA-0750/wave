@@ -547,9 +547,11 @@ public static partial class MusicParsers
         if (videoId is null || title is null) return null;
         var byline = item.Path("longBylineText", "runs").Items();
         if (byline.Count == 0) byline = item.Path("shortBylineText", "runs").Items();
-        return new Song(videoId, title, ArtistsOf(byline), AlbumOf(byline), DurationOf(item.Path("lengthText", "runs").Items()),
+        // 配信中のライブには「ライブ」のバッジ（liveBadge）が付き、長さが無い。長さが無いだけではライブと見なさない（終わった配信を取り違える）。Android・Mac と同じ
+        var live = item.Path("badges").Items().Any(b => b.ContainsKey("liveBadge") || b.ContainsKey("liveBadgeRenderer"));
+        return new Song(videoId, title, ArtistsOf(byline), AlbumOf(byline), live ? null : DurationOf(item.Path("lengthText", "runs").Items()),
             item.Path("thumbnail", "thumbnails").Items().LastOrDefault().Path("url").Str(),
-            item.Path("navigationEndpoint", "watchEndpoint", "watchEndpointMusicSupportedConfigs", "watchEndpointMusicConfig", "musicVideoType").Str());
+            item.Path("navigationEndpoint", "watchEndpoint", "watchEndpointMusicSupportedConfigs", "watchEndpointMusicConfig", "musicVideoType").Str(), live);
     }
 
     /// <summary>アーティストの runs。ページ種別が付いていればそれを、無ければ区切り（" • "）の前をアーティストとみなす。</summary>

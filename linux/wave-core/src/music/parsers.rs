@@ -474,15 +474,17 @@ pub fn playlist_panel_song(item: &Value) -> Option<Song> {
     if byline.is_empty() {
         byline = item.path(&["shortBylineText", "runs"]).items();
     }
+    // 配信中のライブには「ライブ」のバッジ（liveBadge）が付き、長さが無い。長さが無いだけではライブと見なさない（終わった配信を取り違える）。Android・Mac と同じ
+    let live = item.path(&["badges"]).items().iter().any(|b| b.get("liveBadge").is_some() || b.get("liveBadgeRenderer").is_some());
     Some(Song {
         video_id: video_id.to_string(),
         title,
         artists: artists_of(&byline),
         album: album_of(&byline),
-        duration_seconds: duration_of(&item.path(&["lengthText", "runs"]).items()),
+        duration_seconds: if live { None } else { duration_of(&item.path(&["lengthText", "runs"]).items()) },
         thumbnail_url: item.path(&["thumbnail", "thumbnails"]).items().last().and_then(|t| t.path(&["url"]).str_()).map(String::from),
         kind: item.path(&["navigationEndpoint"]).path(&MUSIC_CONFIG).str_().map(String::from),
-        is_live: false,
+        is_live: live,
     })
 }
 
@@ -955,6 +957,16 @@ mod tests {
         assert!(page.continuation.is_some());
         assert_eq!(page.chips.len(), 10);
         assert_eq!(page.chips[0].title, "Sleep");
+    }
+
+    #[test]
+    fn up_next_marks_live_streams_by_the_live_badge() {
+        // 配信中（4t4AQ15yj1M）はバッジが付く。配信を終えた動画（jfKfPfyJRdk）は長さの付いたふつうの動画（Android の core と同じ手本）
+        let live = &up_next(&fixture("next_live")).songs[0];
+        assert!(live.is_live);
+        assert_eq!(live.duration_seconds, None);
+        assert!(!up_next(&fixture("next_ended_live")).songs[0].is_live);
+        assert!(up_next(&fixture("next_radio")).songs.iter().all(|s| !s.is_live));
     }
 
     #[test]

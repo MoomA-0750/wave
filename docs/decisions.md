@@ -1088,3 +1088,8 @@
 - 「長さが無ければライブ」とは見なさない。Mac で試したところ取り違えが起きた
 - これで、リンク（Intent・Knot の「リンクで再生」）で渡した配信中のライブは、ワンタップ再生のライブと同じく後ろにラジオを付けない（QueueSession.playSong がライブにはラジオを付けない）。Knot の「選んだものを再生」の id にリンクを入れたときも、WidgetItem の曲として鳴らさず「リンクで再生」と同じ道を通す
 - 同じ行はラジオ・キューの続きの読み込みにも使うので、ラジオに配信中のライブが混ざったときもライブとして流れる
+
+## 2026-11-09 Windows・Linux もラジオ・キューの行の liveBadge でライブを見分ける
+
+- Android の core と Mac が next の行の liveBadge を見るようにしたのに合わせ、Windows（`PlaylistPanelSong`）と Linux（`playlist_panel_song`）も同じ見方にした。前はどちらも IsLive を常に false にしていて、ラジオに配信中のライブが混ざるとふつうの曲として流そうとした
+- 手本は Android の core と共通の `next_live`・`next_ended_live`。長さが無いだけではライブとしない（配信を終えた動画は長さが付いて来るが、取り違えの元になるので）

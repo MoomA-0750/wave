@@ -31,6 +31,17 @@ public class MusicParsersTests
     }
 
     [Fact]
+    public void UpNextMarksLiveStreamsByTheLiveBadge()
+    {
+        // 配信中（4t4AQ15yj1M）はバッジが付く。配信を終えた動画（jfKfPfyJRdk）は長さの付いたふつうの動画（Android の core と同じ手本）
+        var live = MusicParsers.UpNext(Fixtures.Json("next_live")).Songs[0];
+        Assert.True(live.IsLive);
+        Assert.Null(live.DurationSeconds);
+        Assert.False(MusicParsers.UpNext(Fixtures.Json("next_ended_live")).Songs[0].IsLive);
+        Assert.All(MusicParsers.UpNext(Fixtures.Json("next_radio")).Songs, s => Assert.False(s.IsLive));
+    }
+
+    [Fact]
     public void UpNextPages()
     {
         var first = MusicParsers.UpNext(Fixtures.Json("next_radio"));
