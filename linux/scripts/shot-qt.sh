@@ -6,7 +6,8 @@
 #   firstalbum:語・firstartist:語 は検索の1件目のアルバム・アーティストのページ
 # 人の機械でも触らないように: 設定・データ・キャッシュ・テーマは一時的な場所、キーリングは読まない（WAVE_KEYRING_OFF）、
 # ログインせずに使う（WAVE_SKIP_LOGIN）、D-Bus は自分だけのもの（MPRIS を本人の机に出さない）。
-# Material の影などは OpenGL が要るので、DISPLAY があれば offscreen の GLX で描く（窓は出ない）。無ければ software で描く。
+# 描き方は Qt Quick の software（GPU も人の画面のセッションも使わない）。Material の部品のうち地が効果で描かれるもの
+# （ボタン・メニュー・ダイアログ）は、wave-qt の側で地を自分で描いているので software でも出る。
 set -euo pipefail
 out=$(realpath -m "$1"); theme=${2:-catppuccin}; delay=${3:-6000}
 cd "$(dirname "$0")/.."
@@ -19,14 +20,12 @@ if [ "$theme" != none ]; then
     [ -d "$src" ] || src=$HOME/.local/share/omarchy/themes/$theme
     cp -r "$src" "$tmp/state/omarchy/current/theme"
 fi
-gl=()
 skip=(WAVE_SKIP_LOGIN=1)
 # WAVE_SHOT_LOGIN_PAGE=1 ならログインの入り口を撮る
 if [ -n "${WAVE_SHOT_LOGIN_PAGE:-}" ]; then skip=(); fi
-if [ -n "${DISPLAY:-}" ]; then gl=(QT_QUICK_BACKEND=rhi QSG_RHI_BACKEND=opengl); fi
-env XDG_CONFIG_HOME="$tmp/config" XDG_DATA_HOME="$tmp/data" XDG_CACHE_HOME="$tmp/cache" XDG_STATE_HOME="$tmp/state" \
+env -u DISPLAY -u WAYLAND_DISPLAY XDG_CONFIG_HOME="$tmp/config" XDG_DATA_HOME="$tmp/data" XDG_CACHE_HOME="$tmp/cache" XDG_STATE_HOME="$tmp/state" \
     WAVE_KEYRING_OFF=1 "${skip[@]}" WAVE_AUDIO_SINK="fakesink sync=true" WAVE_THEME_ROUNDING="${WAVE_THEME_ROUNDING:-0}" \
-    LANG="${LANG_SHOT:-ja_JP.UTF-8}" QT_QPA_PLATFORM=offscreen QT_FORCE_STDERR_LOGGING=1 "${gl[@]}" \
+    LANG="${LANG_SHOT:-ja_JP.UTF-8}" QT_QPA_PLATFORM=offscreen QT_FORCE_STDERR_LOGGING=1 QT_QUICK_BACKEND=software \
     WAVE_SNAPSHOT="$out" WAVE_SNAPSHOT_DELAY_MS="$delay" \
     timeout "${WAVE_SHOT_TIMEOUT:-90}" dbus-run-session -- target/debug/wave-qt
 echo "$out"
