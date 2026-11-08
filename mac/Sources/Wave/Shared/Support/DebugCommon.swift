@@ -73,6 +73,21 @@ enum DebugCommon {
         case "search-play":
             if let songs = (try? await AppServices.music.searchSongs(arg))?.value?.songs, !songs.isEmpty { player.playList(Array(songs.prefix(5))) }
         case "song-play": if let song = await firstSong(arg) { player.playSong(song) }
+        case "play-link":
+            // ショートカットの「リンクで再生」を、ショートカットから頼まれたのと同じく行う（引数はリンクか ID）
+            var intent = PlayLinkIntent()
+            intent.link = arg
+            intent.shuffle = false
+            do {
+                _ = try await intent.perform()
+                AppPaths.log("debug play-link ok playing=\(player.isPlaying) live=\(player.current?.isLive == true) source=\(player.sourceId ?? "-") title=\(player.current?.title ?? "-") queue=\(player.queue.count)")
+            } catch {
+                AppPaths.log("debug play-link error=\(error)")
+            }
+        case "item-search":
+            // ショートカットの「選んだものを再生」の一覧で文字を打ったときの検索結果（種類と題）
+            let found = await WidgetSync.search(arg)
+            AppPaths.log("debug item-search count=\(found.count) " + found.map { "\($0.kind.rawValue):\($0.title)" }.joined(separator: " | "))
         case "queue-add": if let song = await firstSong(arg) { player.addToQueue(song) }
         case "queue-next": if let song = await firstSong(arg) { player.playNext(song) }
         case "queue-dump":

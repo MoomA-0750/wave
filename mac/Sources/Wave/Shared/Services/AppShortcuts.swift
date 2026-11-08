@@ -11,6 +11,9 @@ struct WaveShortcuts: AppShortcutsProvider {
         AppShortcut(intent: PlayItemShortcutIntent(), phrases: [
             "Play something in \(.applicationName)",
         ], shortTitle: "Play Something", systemImageName: "play.circle")
+        AppShortcut(intent: PlayLinkIntent(), phrases: [
+            "Play a link in \(.applicationName)",
+        ], shortTitle: "Play a Link", systemImageName: "link")
         AppShortcut(intent: TogglePlayIntent(), phrases: [
             "Play or pause \(.applicationName)",
         ], shortTitle: "Play/Pause", systemImageName: "playpause.fill")

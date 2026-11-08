@@ -2,6 +2,7 @@
 "Play ${playlist} in ${applicationName}" = "${applicationName}で${playlist}を再生";
 "Play a playlist in ${applicationName}" = "${applicationName}でプレイリストを再生";
 "Play something in ${applicationName}" = "${applicationName}で選んだものを再生";
+"Play a link in ${applicationName}" = "${applicationName}でリンクを再生";
 "Play or pause ${applicationName}" = "${applicationName}を再生・一時停止";
 "Skip to the next song in ${applicationName}" = "${applicationName}で次の曲";
 "Go back to the previous song in ${applicationName}" = "${applicationName}で前の曲";

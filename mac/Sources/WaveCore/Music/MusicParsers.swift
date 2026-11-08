@@ -616,9 +616,13 @@ public enum MusicParsers {
         else { return nil }
         var byline = item.path("longBylineText", "runs").items
         if byline.isEmpty { byline = item.path("shortBylineText", "runs").items }
-        return Song(videoId: videoId, title: title, artists: artistsOf(byline), album: albumOf(byline), durationSeconds: durationOf(item.path("lengthText", "runs").items),
+        // 配信中のライブには「ライブ」のバッジ（liveBadge）が付き、長さが無い。終わった配信は長さの付いたふつうの動画で来る
+        let live = item.path("badges").items.contains { $0.path("liveBadge") != nil || $0.path("liveBadgeRenderer") != nil }
+        return Song(videoId: videoId, title: title, artists: artistsOf(byline), album: albumOf(byline),
+                    durationSeconds: live ? nil : durationOf(item.path("lengthText", "runs").items),
                     thumbnailUrl: item.path("thumbnail", "thumbnails").items.last.path("url").str,
-                    kind: item.path("navigationEndpoint", "watchEndpoint", "watchEndpointMusicSupportedConfigs", "watchEndpointMusicConfig", "musicVideoType").str)
+                    kind: item.path("navigationEndpoint", "watchEndpoint", "watchEndpointMusicSupportedConfigs", "watchEndpointMusicConfig", "musicVideoType").str,
+                    isLive: live)
     }
 
     /// アーティストの runs。ページ種別が付いていればそれを、無ければ区切り（" • "）の前をアーティストとみなす。

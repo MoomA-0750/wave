@@ -24,6 +24,7 @@ final class WidgetSync {
 
     func start() {
         WidgetBridge.handler = { command in await WidgetSync.handle(command) }
+        WidgetBridge.search = { query in await WidgetSync.search(query) }
         // ウィジェットの文言を画面の言語に合わせる
         WidgetStore.write(L.ja ? "ja" : "en", "language.json")
         #if os(iOS)
@@ -65,6 +66,76 @@ final class WidgetSync {
             history += lives.songs.filter(\.isLive)
         }
         AppPaths.log("widget history songs=\(history.count) live=\(history.filter(\.isLive).count)")
+    }
+
+    /// ショートカットの「選んだものを再生」の検索結果（曲・ライブ・アルバム・プレイリストを少しずつ。検索の順）。
+    static func search(_ query: String) async -> [WidgetItem] {
+        guard let music = AppServices.music else { return [] }
+        async let songsResult = try? music.searchSongs(query)
+        async let liveResult = try? music.searchLive(query)
+        async let albumsResult = try? music.searchAlbums(query)
+        async let playlistsResult = try? music.searchPlaylists(query)
+        let songs = await songsResult?.value?.songs ?? []
+        let lives = await liveResult?.value?.songs.filter(\.isLive) ?? []
+        let albums = await albumsResult?.value?.items ?? []
+        let playlists = await playlistsResult?.value?.items ?? []
+        let thumb = { (url: String?) in Ui.resize(url, 240)?.absoluteString }
+        let songItems = (songs.prefix(8) + lives.prefix(5)).map { song in
+            WidgetItem(kind: song.isLive ? .live : .song, id: song.videoId, title: song.title, subtitle: song.artistsText, thumbnailUrl: thumb(song.thumbnailUrl))
+        }
+        let albumItems = albums.prefix(5).map { WidgetItem(kind: .album, id: $0.browseId, title: $0.title, subtitle: $0.subtitle, thumbnailUrl: thumb($0.thumbnailUrl)) }
+        let playlistItems = playlists.prefix(5).map {
+            WidgetItem(kind: .playlist, id: $0.playlistId, title: $0.title, subtitle: $0.subtitle, thumbnailUrl: thumb($0.thumbnailUrl))
+        }
+        var seen = Set<String>()
+        return (songItems + albumItems + playlistItems).filter { seen.insert("\($0.kind.rawValue):\($0.id)").inserted }
+    }
+
+    /// ショートカットの「リンクで再生」。動画は next の先頭の曲で題・アーティスト・ライブかを調べてから鳴らし（曲の後ろはラジオ）、
+    /// プレイリスト・アルバムは読めることを確かめてから「選んだものを再生」と同じく鳴らす。読み込めなければ誤りを返す。
+    /// 同じものが鳴っている最中なら何もしない（止めない）。ほかの端末を映している間はその端末で鳴らす。
+    static func playLink(_ link: YouTubeLink, shuffle: Bool) async throws {
+        guard let player = AppServices.player, let music = AppServices.music else { throw PlayLinkError.notReady }
+        AppPaths.log("play link \(link)")
+        let item: WidgetItem
+        switch link {
+        case .video(let id):
+            let songs = (try? await music.upNext(videoId: id, playlistId: nil))?.value?.songs ?? []
+            // 配信中のライブは next の行の「ライブ」のバッジで分かる（MusicParsers.playlistPanelSong）
+            guard let song = songs.first(where: { $0.videoId == id }) else { throw PlayLinkError.videoNotFound }
+            item = WidgetItem(kind: song.isLive ? .live : .song, id: id, title: song.title, subtitle: song.artistsText, thumbnailUrl: song.thumbnailUrl)
+            if item.isCurrent(shared.shown), player.isPlaying { return }
+            if item.isCurrent(shared.shown) {
+                player.togglePlay()
+            } else {
+                player.playSong(song)
+            }
+            await waitUntilPlaying(player)
+            return
+        case .album(let id):
+            guard let album = (try? await music.album(id))?.value, !album.songs.isEmpty else { throw PlayLinkError.albumNotFound }
+            item = WidgetItem(kind: .album, id: id, title: album.title, subtitle: album.subtitle, thumbnailUrl: album.thumbnailUrl)
+        case .playlist(let id):
+            if let page = (try? await music.playlist(id))?.value, !page.songs.isEmpty {
+                item = WidgetItem(kind: .playlist, id: id, title: page.title ?? "", subtitle: page.subtitle, thumbnailUrl: page.thumbnailUrl)
+            } else if id.hasPrefix("RD"), let songs = (try? await music.upNext(videoId: nil, playlistId: id))?.value?.songs, !songs.isEmpty {
+                // ミックス（RD…）はプレイリストのページとして読めないことがあるので、next で曲を取って流す
+                if player.sourceId == id, player.isPlaying { return }
+                player.playList(songs, start: 0, source: id, shuffleOverride: shuffle ? true : nil)
+                await waitUntilPlaying(player)
+                return
+            } else {
+                throw PlayLinkError.playlistNotFound
+            }
+        }
+        if item.isCurrent(shared.shown), player.isPlaying, !shuffle { return }
+        await handle(.playItem(item, shuffle: shuffle))
+        // プレイリスト・アルバムは読み込んでから鳴らし始めるので、キューが替わってから鳴り始めるまで待つ（前の曲が鳴ったままで待ち終えないように）
+        let deadline = Date().addingTimeInterval(30)
+        while player.sourceId != item.id, !player.isRemote, Date() < deadline {
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+        await waitUntilPlaying(player)
     }
 
     private static func handle(_ command: WidgetCommand) async {
@@ -122,9 +193,16 @@ final class WidgetSync {
         }
         // iPhone はボタンの処理が終わるとアプリをまた眠らせる。曲は読み込み終えてから鳴るので、
         // 鳴り始めるまで（長くて30秒。裏では読み込みが遅く、1曲に15秒ほどかかることがある）処理を終えずに待つ（待たないと、読み込みの途中で止まって鳴らない）
-        guard shouldPlay, !player.isRemote else { return }
+        guard shouldPlay else { return }
+        await waitUntilPlaying(player)
+    }
+
+    /// 鳴り始めるまで待つ（ほかの端末で鳴らすときは待たない）。
+    private static func waitUntilPlaying(_ player: PlayerService) async {
+        guard !player.isRemote else { return }
         let deadline = Date().addingTimeInterval(30)
-        while !player.isPlaying, Date() < deadline {
+        // 前の曲が鳴ったままの間に読み込み始めることがあるので、読み込み中も待つ
+        while !player.isPlaying || player.isLoading, Date() < deadline {
             try? await Task.sleep(for: .milliseconds(100))
         }
         AppPaths.log("widget command playing=\(player.isPlaying)")

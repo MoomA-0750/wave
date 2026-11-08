@@ -23,6 +23,18 @@ final class MusicParsersTests: XCTestCase {
         XCTAssertNotNil(page.continuation)
     }
 
+    /// next の行: 配信中のライブには liveBadge が付き、長さが無い。終わった配信は長さの付いたふつうの動画
+    func testUpNextLiveBadge() throws {
+        let live = Fixtures.parse(#"{"videoId":"4t4AQ15yj1M","title":{"runs":[{"text":"lofi hip hop radio"}]},"badges":[{"liveBadge":{"label":{"runs":[{"text":"ライブ"}]}}}]}"#)
+        let song = try XCTUnwrap(MusicParsers.playlistPanelSong(live))
+        XCTAssertTrue(song.isLive)
+        XCTAssertNil(song.durationSeconds)
+        let ended = Fixtures.parse(#"{"videoId":"ZRtdQ81jPUQ","title":{"runs":[{"text":"Idol"}]},"lengthText":{"runs":[{"text":"3:46"}]}}"#)
+        let video = try XCTUnwrap(MusicParsers.playlistPanelSong(ended))
+        XCTAssertFalse(video.isLive)
+        XCTAssertEqual(226, video.durationSeconds)
+    }
+
     func testUpNextPages() throws {
         let first = MusicParsers.upNext(Fixtures.json("next_radio"))
         XCTAssertEqual(4, first.songs.count)
