@@ -221,7 +221,7 @@ class PlayIntentActivity : Activity() {
 
 /**
  * リンクで渡されたものを鳴らす。動画は、曲かライブか・題・アーティストを次に流れる曲（upNext）の先頭で引いてから、
- * ワンタップ再生の曲と同じく鳴らす（ライブの印が取れなくても、流すときにライブと分かれば流し直す）。
+ * ワンタップ再生の曲と同じく鳴らす（配信中のライブは upNext の行の liveBadge で分かり、後ろにラジオを付けない）。
  */
 internal suspend fun playLink(
     context: Context,

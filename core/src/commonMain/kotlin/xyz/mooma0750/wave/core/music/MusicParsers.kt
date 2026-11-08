@@ -855,14 +855,18 @@ internal object MusicParsers {
         val videoId = item.path("videoId").string() ?: item.path("navigationEndpoint", "watchEndpoint", "videoId").string() ?: return null
         val title = textOf(item.path("title")) ?: return null
         val byline = item.path("longBylineText", "runs").arrayItems().ifEmpty { item.path("shortBylineText", "runs").arrayItems() }
+        // 配信中のライブには「ライブ」のバッジ（liveBadge）が付き、長さが無い（ログインのある・なしとも）。終わった配信は長さの付いたふつうの動画で来る。
+        // 長さが無いだけでライブとは見なさない（取り違える）。Mac の playlistPanelSong と同じ
+        val live = item.path("badges").arrayItems().any { it.containsKey("liveBadge") || it.containsKey("liveBadgeRenderer") }
         return Song(
             videoId = videoId,
             title = title,
             artists = artistsOf(byline),
             album = albumOf(byline),
-            durationSeconds = durationOf(item.path("lengthText", "runs").arrayItems()),
+            durationSeconds = if (live) null else durationOf(item.path("lengthText", "runs").arrayItems()),
             thumbnailUrl = item.path("thumbnail", "thumbnails").arrayItems().lastOrNull().path("url").string(),
             kind = musicVideoTypeOf(item),
+            isLive = live,
         )
     }
 

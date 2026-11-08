@@ -152,24 +152,24 @@ object KnotActionsJson {
             item.thumbnailUrl?.let { put("thumbnail", it) }
         }.toString()
 
-    /**
-     * 保存された `{"id", "title"}` から鳴らすものを戻す。id が wave の作ったものでなければ、リンクか ID として読む
-     * （Claude Code に作らせたショートカットなどで、id に URL を入れたとき）。
-     */
+    /** 保存された `{"id", "title"}` から、wave の候補で選んだものを戻す（id が wave の作ったものでなければ null）。 */
     fun itemOf(choice: JsonObject): WidgetItem? {
         val id = choice["id"]?.stringOrNull() ?: return null
         val title = choice["title"]?.stringOrNull().orEmpty()
-        runCatching { json.parseToJsonElement(id) as? JsonObject }.getOrNull()?.let { saved ->
-            val kind = saved["kind"]?.stringOrNull()?.let { name -> WidgetItemKind.entries.firstOrNull { it.name == name } } ?: return null
-            val itemId = saved["id"]?.stringOrNull()?.takeIf { it.isNotEmpty() } ?: return null
-            return WidgetItem(kind, itemId, saved["title"]?.stringOrNull() ?: title, saved["subtitle"]?.stringOrNull(), saved["thumbnail"]?.stringOrNull())
-        }
-        return when (val link = PlayLink.parse(id)) {
-            is PlayLink.Video -> WidgetItem(WidgetItemKind.Song, link.videoId, title, null, null)
-            is PlayLink.Playlist -> WidgetItem(WidgetItemKind.Playlist, link.playlistId, title, null, null)
-            is PlayLink.Album -> WidgetItem(WidgetItemKind.Album, link.browseId, title, null, null)
-            null -> null
-        }
+        val saved = runCatching { json.parseToJsonElement(id) as? JsonObject }.getOrNull() ?: return null
+        val kind = saved["kind"]?.stringOrNull()?.let { name -> WidgetItemKind.entries.firstOrNull { it.name == name } } ?: return null
+        val itemId = saved["id"]?.stringOrNull()?.takeIf { it.isNotEmpty() } ?: return null
+        return WidgetItem(kind, itemId, saved["title"]?.stringOrNull() ?: title, saved["subtitle"]?.stringOrNull(), saved["thumbnail"]?.stringOrNull())
+    }
+
+    /**
+     * id が wave の作ったものでなく、リンクか ID のとき（Claude Code に作らせたショートカットなどで、id に URL を入れたとき）。
+     * 「リンクで再生」と同じく鳴らす（動画は曲かライブかを引いてから鳴らすので、ライブに後ろのラジオが付かない）。
+     */
+    fun linkOf(choice: JsonObject): PlayLink? {
+        val id = choice["id"]?.stringOrNull() ?: return null
+        if (runCatching { json.parseToJsonElement(id) is JsonObject }.getOrDefault(false)) return null
+        return PlayLink.parse(id)
     }
 
     /** run の extras の `params`（JSON の辞書）を読む。 */

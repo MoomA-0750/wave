@@ -105,10 +105,14 @@ class KnotActions : ContentProvider() {
         val report: suspend (Int) -> Unit = { failure = context.getString(it) }
         when (type) {
             KnotActionsJson.PLAY -> {
-                val item = params.item?.let(KnotActionsJson::itemOf) ?: return KnotReply.Error(context.getString(R.string.knot_no_item))
+                val choice = params.item ?: return KnotReply.Error(context.getString(R.string.knot_no_item))
+                val item = KnotActionsJson.itemOf(choice)
+                val link = if (item == null) KnotActionsJson.linkOf(choice) else null
+                if (item == null && link == null) return KnotReply.Error(context.getString(R.string.knot_no_item))
                 if (!signedIn(app)) return KnotReply.Error(context.getString(R.string.widget_sign_in))
-                playWidgetItem(app, item, params.shuffle, report)
-                return failure?.let(KnotReply::Error) ?: KnotReply.Output(KnotActionsJson.text(context.getString(R.string.widget_play_playlist, item.title)))
+                if (item != null) playWidgetItem(app, item, params.shuffle, report) else playLink(app, link!!, params.shuffle, report)
+                val title = item?.title ?: (choice["title"] as? kotlinx.serialization.json.JsonPrimitive)?.content.orEmpty()
+                return failure?.let(KnotReply::Error) ?: KnotReply.Output(KnotActionsJson.text(context.getString(R.string.widget_play_playlist, title)))
             }
             KnotActionsJson.PLAY_LINK -> {
                 val link = params.link?.let(PlayLink::parse) ?: return KnotReply.Error(context.getString(R.string.shortcut_link_unknown))

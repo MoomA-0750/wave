@@ -41,6 +41,22 @@ class MusicParsersTest {
         assertNotNull(page.continuation)
     }
 
+    /** next の行: 配信中のライブ（Lofi Girl の 4t4AQ15yj1M）には liveBadge が付き長さが無い。終わった配信（jfKfPfyJRdk）は長さの付いたふつうの動画。 */
+    @Test
+    fun upNextMarksLiveStreamsByTheLiveBadge() {
+        val live = MusicParsers.upNext(fixture("next_live")).songs.first()
+        assertEquals("4t4AQ15yj1M", live.videoId)
+        assertTrue(live.isLive)
+        assertNull(live.durationSeconds)
+        assertTrue(live.title.isNotBlank() && live.artists.isNotEmpty())
+        val ended = MusicParsers.upNext(fixture("next_ended_live")).songs.first()
+        assertEquals("jfKfPfyJRdk", ended.videoId)
+        // 長さの欄はあるがバッジが無い（長さは配信の経過時間「33,778:11:52」で読めないが、それでもライブにはしない）
+        assertTrue(!ended.isLive)
+        // ふつうの曲もライブにしない
+        assertTrue(MusicParsers.upNext(fixture("next_radio")).songs.none { it.isLive })
+    }
+
     @Test
     fun upNextContinuationPrefersContinuationContents() {
         val first = MusicParsers.upNext(fixture("next_radio"))

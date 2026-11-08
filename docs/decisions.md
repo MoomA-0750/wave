@@ -1080,3 +1080,11 @@
 - 呼び手は getCallingPackage() で Knot だけにした。adb の `content call` は呼び手が shell になるので、開発版（BuildConfig.DEBUG）に限って shell も通す。shell はもともと am start で同じことができるので、開発版で開けても新しくできることは増えない
 - 今の曲と高く評価は、ウィジェットと同じ WidgetHooks.nowPlaying から読む（再生サービスが居なければ「再生していません」）。再生・一時停止・次・前はウィジェットのボタンと同じ withController（ほかの端末を映している間はその端末の操作）
 - Knot は 60 秒ほどで見切るので、50 秒で打ち切って「時間内に終わりませんでした」を返す
+
+## 2026-11-09 next の行の liveBadge で配信中のライブを見分ける（上の「印が無い」は取り違え）
+
+- 上の節で「next の応答にライブの印が無い」と書いたのは、試した jfKfPfyJRdk が配信を終えた動画だったため。Mac 版の担当が配信中の Lofi Girl（4t4AQ15yj1M）で確かめたところ、playlistPanelVideoRenderer の badges に liveBadge が付き、長さの欄が無かった（ログインのある・なしとも）。こちらでもログインなしで同じ形を取り、fixture（next_live・next_ended_live）にした
+- core の MusicParsers.playlistPanelSong で liveBadge（と liveBadgeRenderer）を見て isLive を付け、長さを持たせない。Mac の playlistPanelSong と同じ見方
+- 「長さが無ければライブ」とは見なさない。Mac で試したところ取り違えが起きた
+- これで、リンク（Intent・Knot の「リンクで再生」）で渡した配信中のライブは、ワンタップ再生のライブと同じく後ろにラジオを付けない（QueueSession.playSong がライブにはラジオを付けない）。Knot の「選んだものを再生」の id にリンクを入れたときも、WidgetItem の曲として鳴らさず「リンクで再生」と同じ道を通す
+- 同じ行はラジオ・キューの続きの読み込みにも使うので、ラジオに配信中のライブが混ざったときもライブとして流れる

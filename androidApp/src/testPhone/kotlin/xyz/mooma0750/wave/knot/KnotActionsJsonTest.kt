@@ -11,6 +11,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import org.junit.Test
+import xyz.mooma0750.wave.core.music.PlayLink
 import xyz.mooma0750.wave.widget.WidgetItem
 import xyz.mooma0750.wave.widget.WidgetItemKind
 import kotlin.test.assertEquals
@@ -88,10 +89,14 @@ class KnotActionsJsonTest {
                 put("id", id)
                 put("title", "題")
             }
-        assertEquals(WidgetItem(WidgetItemKind.Song, "jfKfPfyJRdk", "題", null, null), KnotActionsJson.itemOf(choice("https://youtu.be/jfKfPfyJRdk")))
-        assertEquals(WidgetItem(WidgetItemKind.Album, "MPREb_4pL8gzRtw1p", "題", null, null), KnotActionsJson.itemOf(choice("MPREb_4pL8gzRtw1p")))
+        // リンクや ID は「リンクで再生」と同じく読む（動画は曲かライブかを引いてから鳴らす）
+        assertNull(KnotActionsJson.itemOf(choice("https://youtu.be/4t4AQ15yj1M")))
+        assertEquals(PlayLink.Video("4t4AQ15yj1M"), KnotActionsJson.linkOf(choice("https://youtu.be/4t4AQ15yj1M")))
+        assertEquals(PlayLink.Album("MPREb_4pL8gzRtw1p"), KnotActionsJson.linkOf(choice("MPREb_4pL8gzRtw1p")))
         assertNull(KnotActionsJson.itemOf(choice("pl:morning")))
+        assertNull(KnotActionsJson.linkOf(choice("pl:morning")))
         assertNull(KnotActionsJson.itemOf(choice("""{"kind":"Nope","id":"x"}""")))
+        assertNull(KnotActionsJson.linkOf(choice("""{"kind":"Nope","id":"x"}""")))
         assertNull(KnotActionsJson.itemOf(JsonObject(mapOf("title" to JsonPrimitive("題")))))
     }
 
