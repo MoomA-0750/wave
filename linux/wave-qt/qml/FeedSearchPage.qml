@@ -12,7 +12,7 @@ Flickable {
     property string message: ""
     property bool busy: false
     property int token: -1
-    contentHeight: column.implicitHeight + 48
+    contentHeight: column.implicitHeight + Style.pageBottom
     clip: true
     boundsBehavior: Flickable.StopAtBounds
     Connections {

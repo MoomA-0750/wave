@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Window
 import wave
 
 // 窓の並び（GTK 版・Mac と同じ）: 上の帯に戻る・進む、中央にホーム・検索の欄、右端にアカウント。左にマイライブラリ、
@@ -13,7 +14,16 @@ Item {
     property bool full: false
     // 戻ったページ（「進む」で開き直す。新しいページを開いたら消す）
     property var forwardPages: []
-    readonly property bool showRight: rightOpen && width >= 1000
+    // 窓の幅の段（GTK 版と同じ。0: 1400 以上、1: 1180〜、2: 1000〜、3: 880〜、4: それ未満）。
+    // 右の欄は段 1 まで（Claude の欄は段 3 まで）。下の帯は、段 0 だけ端末名、段 1 まで音量のバー
+    readonly property int level: width >= 1400 ? 0 : width >= 1180 ? 1 : width >= 1000 ? 2 : width >= 880 ? 3 : 4
+    readonly property bool showRight: rightOpen && (level <= 1 || (rightView === "ai" && level <= 3))
+    // 映像だけを窓いっぱいに出している（右の欄・小窓の「拡大」から直に開いたなら、やめると元の画面に戻す）
+    property bool videoOnly: false
+    property bool videoOnlyFromExpand: false
+    property bool pipOpen: false
+    // 今の検索の語（上の帯の検索の欄に出す）
+    property string searchQuery: ""
     readonly property string visibleKind: nav.currentItem ? (nav.currentItem.pageKind || "") : ""
     readonly property bool canBack: nav.depth > 1 || full
     readonly property bool canForward: forwardPages.length > 0
@@ -41,6 +51,7 @@ Item {
     function openPlaylist(id, title) { if (id) push(collectionPage, { kind: "playlist", itemId: id, pageTitle: title || "" }) }
     function openArtist(id, name) { if (id) push(artistPage, { itemId: id, pageTitle: name || "" }) }
     function openSearch(query) {
+        searchQuery = query
         if (visibleKind === "search") nav.currentItem.search(query)
         else push(searchPage, { query: query })
     }
@@ -67,8 +78,49 @@ Item {
         if (visibleKind === "lyrics") back()
         else push(lyricsPage, {})
     }
+    function expandVideo() {
+        WaveApp.setVideoOn(true)
+        full = true
+        videoOnly = true
+        videoOnlyFromExpand = true
+    }
+    function toggleVideoOnly() {
+        if (videoOnly) {
+            if (videoOnlyFromExpand) { videoOnly = false; videoOnlyFromExpand = false; full = false }
+            else videoOnly = false
+        } else {
+            videoOnly = true
+            full = true
+        }
+    }
+    function openPip() {
+        WaveApp.setVideoOn(true)
+        if (videoOnly) toggleVideoOnly()
+        if (!pipWindow) pipWindow = pipComponent.createObject(shell, { shell: shell })
+        pipOpen = true
+        pipWindow.show()
+    }
+    function closePip() { if (pipWindow) pipWindow.close() }
+    function togglePip() { if (pipOpen) closePip(); else openPip() }
+    function pipClosed() { pipOpen = false; if (pipWindow) { pipWindow.destroy(); pipWindow = null } }
+    function pipBackToApp() { closePip(); Window.window.raise(); Window.window.requestActivate(); expandVideo() }
+    property var pipWindow: null
+    Component { id: pipComponent; PipWindow {} }
+    // 曲が変わって映像が無くなったら、映像だけの表示をやめる（小窓は開いたまま）
+    Connections {
+        target: WaveApp
+        function onShowVideoChanged() { if (!WaveApp.showVideo && shell.videoOnly && !shell.pipOpen) shell.toggleVideoOnly() }
+        // 確かめ用: 映像が見つかってから、映像だけ・小窓にする
+        function onHasVideoChanged() {
+            if (!WaveApp.hasVideo) return
+            if (WaveApp.demo === "videoonly") shell.expandVideo()
+            else if (WaveApp.demo === "pip") shell.openPip()
+        }
+    }
+
     function goHome() { full = false; forwardPages = []; records = []; nav.pop(null) }
     function back() {
+        if (videoOnly) { toggleVideoOnly(); return }
         if (full) { full = false; return }
         if (nav.depth <= 1) return
         forwardPages = forwardPages.concat([records[records.length - 1]])
@@ -138,7 +190,7 @@ Item {
     Shortcut { sequence: "Alt+Left"; onActivated: shell.back() }
     Shortcut { sequence: "Alt+Right"; onActivated: shell.forward() }
     Shortcut { sequence: "F11"; onActivated: shell.full = !shell.full }
-    Shortcut { sequence: "Escape"; enabled: shell.full; onActivated: shell.full = false }
+    Shortcut { sequence: "Escape"; enabled: shell.full; onActivated: shell.videoOnly ? shell.toggleVideoOnly() : (shell.full = false) }
     Shortcut { sequences: ["Ctrl+F", "Ctrl+L"]; onActivated: top.focusSearch() }
     Shortcut { sequence: "Ctrl+J"; onActivated: shell.toggleAi() }
 
@@ -185,6 +237,44 @@ Item {
         }
 
         PlayerBar { Layout.fillWidth: true; shell: shell }
+    }
+
+    // 映像だけを窓いっぱいに出す層（下の帯も覆う）。右上に小窓・窓の全画面・やめる（Esc）。ダブルクリックで窓の全画面
+    Rectangle {
+        anchors.fill: parent
+        visible: shell.videoOnly && shell.full
+        color: "black"
+        z: 50
+        VideoView { anchors.fill: parent; place: "layer" }
+        TapHandler { onDoubleTapped: shell.toggleWindowFullScreen() }
+        Row {
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.margins: 16
+            spacing: 8
+            LayerButton { iconName: shell.pipOpen ? "view-conceal-symbolic" : "view-restore-symbolic"; tip: shell.pipOpen ? "小窓を閉じる" : "小窓で見る"; onClicked: shell.togglePip() }
+            LayerButton {
+                iconName: shell.Window.window && shell.Window.window.visibility === Window.FullScreen ? "view-restore-symbolic" : "view-fullscreen-symbolic"
+                tip: shell.Window.window && shell.Window.window.visibility === Window.FullScreen ? "全画面をやめる" : "全画面"
+                onClicked: shell.toggleWindowFullScreen()
+            }
+            LayerButton { iconName: "window-close-symbolic"; tip: "映像だけをやめる (Esc)"; onClicked: shell.toggleVideoOnly() }
+        }
+    }
+    function toggleWindowFullScreen() {
+        const w = Window.window
+        if (w) w.visibility = w.visibility === Window.FullScreen ? Window.Windowed : Window.FullScreen
+    }
+    component LayerButton: RoundButton {
+        property string iconName
+        property string tip
+        implicitWidth: 40
+        implicitHeight: 40
+        icon.source: Style.icon(iconName)
+        icon.color: "white"
+        background: Rectangle { radius: width / 2; color: Qt.rgba(0, 0, 0, parent.hovered ? 0.75 : 0.55) }
+        ToolTip.visible: hovered
+        ToolTip.text: tip
     }
 
     // 左・中央・右の欄の地（一覧と横の欄の色、角は Hyprland の丸み）

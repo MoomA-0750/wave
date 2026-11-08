@@ -98,6 +98,19 @@ Item {
         }
         Btn { visible: !!page.info.retry; text: "もう一度読み込む"; Layout.alignment: Qt.AlignHCenter; onClicked: page.reload() }
     }
+    // 歌詞の下の端は薄く消す（行が途中で切れて見えないように）
+    Rectangle {
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: 28
+        height: 72
+        visible: page.info.state === "synced"
+        gradient: Gradient {
+            GradientStop { position: 0; color: Qt.rgba(Style.view.r, Style.view.g, Style.view.b, 0) }
+            GradientStop { position: 1; color: Qt.rgba(Style.view.r, Style.view.g, Style.view.b, 0.95) }
+        }
+    }
     // 出典（歌詞の下に、歌詞と重ならない帯で）
     Rectangle {
         anchors.left: parent.left
@@ -105,7 +118,7 @@ Item {
         anchors.bottom: parent.bottom
         height: 28
         visible: (page.info.source || "") !== ""
-        color: Qt.rgba(Style.view.r, Style.view.g, Style.view.b, 0.85)
+        color: Qt.rgba(Style.view.r, Style.view.g, Style.view.b, 0.95)
     }
     Label {
         anchors.right: parent.right

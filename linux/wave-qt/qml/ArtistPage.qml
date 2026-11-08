@@ -15,7 +15,7 @@ Flickable {
     property int subscribed: -1
     property int token: -1
 
-    contentHeight: column.implicitHeight + 48
+    contentHeight: column.implicitHeight + Style.pageBottom
     clip: true
     boundsBehavior: Flickable.StopAtBounds
     ScrollBar.vertical: ScrollBar {}

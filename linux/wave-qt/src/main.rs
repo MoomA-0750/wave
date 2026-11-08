@@ -4,6 +4,7 @@
 
 mod app;
 mod bridge;
+mod extra;
 mod more;
 mod theme;
 mod view;

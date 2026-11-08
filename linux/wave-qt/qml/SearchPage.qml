@@ -15,7 +15,7 @@ Item {
     property var settings: JSON.parse(WaveApp.settingsJson())
     property var moods: []
     property int moodToken: -1
-    readonly property var tabs: [["all", "すべて"], ["songs", "曲"], ["albums", "アルバム"], ["artists", "アーティスト"], ["live", "ライブ"], ["podcasts", "ポッドキャスト"], ["episodes", "エピソード"]]
+    readonly property var tabs: [["all", "すべて"], ["songs", "曲"], ["albums", "アルバム"], ["artists", "アーティスト"], ["live", "ライブ"], ["podcasts", "ポッドキャスト"], ["episodes", "エピソード"], ["lyrics", "歌詞"]]
     property string tab: "all"
     // タブごとの結果 { items, continuation, loading, error, token }
     property var results: ({})
@@ -24,6 +24,7 @@ Item {
 
     function search(q) {
         query = (q || "").trim()
+        if (Style.nav) Style.nav.searchQuery = query
         results = ({})
         all = null
         tab = "all"
@@ -31,8 +32,9 @@ Item {
     }
     function loadTab(name, more) {
         if (name === "all" || query === "") return
-        const r = results[name] || { items: [], continuation: "", loading: false, error: false }
-        if (r.loading || (more && r.continuation === "") || (!more && r.items.length > 0)) return
+        const old = results[name] || { items: [], continuation: "", loading: false, error: false }
+        if (old.loading || (more && old.continuation === "") || (!more && old.items.length > 0)) return
+        const r = Object.assign({}, old)
         const kind = name === "live" ? "search.live" : "search." + name
         r.loading = true
         r.token = WaveApp.request(kind, query, more ? r.continuation : "")
@@ -40,6 +42,9 @@ Item {
     }
     Component.onCompleted: {
         search(query)
+        // 確かめ用: WAVE_DEMO_SEARCH_TAB にある種類（lyrics など）を開く（GTK 版と同じ）
+        const demoTab = WaveApp.env("WAVE_DEMO_SEARCH_TAB")
+        if (query !== "" && demoTab !== "") tab = demoTab
         moodToken = WaveApp.request("moods", "", "")
     }
     onTabChanged: loadTab(tab, false)
@@ -50,11 +55,12 @@ Item {
             if (t === page.moodToken) { if (!v.error) page.moods = v.tiles; return }
             if (t === page.allToken) { page.all = v; return }
             for (const name in page.results) {
-                const r = page.results[name]
-                if (r.token !== t) continue
-                r.loading = false
+                const old = page.results[name]
+                if (old.token !== t) continue
+                // 新しい入れ物にする（同じ物を書き換えるだけだと、見ている側が変わったことに気づかない）
+                const r = Object.assign({}, old, { loading: false })
                 if (v.error) r.error = true
-                else { r.items = r.items.concat(v.items); r.continuation = v.continuation || "" }
+                else { r.items = old.items.concat(v.items); r.continuation = v.continuation || "" }
                 const next = Object.assign({}, page.results); next[name] = r; page.results = next
             }
         }
@@ -65,7 +71,7 @@ Item {
     Flickable {
         anchors.fill: parent
         visible: page.query === ""
-        contentHeight: browse.implicitHeight + 48
+        contentHeight: browse.implicitHeight + Style.pageBottom
         clip: true
         boundsBehavior: Flickable.StopAtBounds
         ScrollBar.vertical: ScrollBar {}
@@ -191,7 +197,7 @@ Item {
             visible: page.tab === "all"
             Layout.fillWidth: true
             Layout.fillHeight: true
-            contentHeight: allColumn.implicitHeight + 32
+            contentHeight: allColumn.implicitHeight + Style.pageBottom
             clip: true
             boundsBehavior: Flickable.StopAtBounds
             ScrollBar.vertical: ScrollBar {}
@@ -268,7 +274,7 @@ Item {
                 id: tabView
                 readonly property string name: modelData[0]
                 readonly property var result: page.results[name] || { items: [], continuation: "", loading: true, error: false }
-                readonly property bool rows: name === "songs" || name === "live" || name === "episodes"
+                readonly property bool rows: name === "songs" || name === "live" || name === "episodes" || name === "lyrics"
                 visible: page.tab === name
                 Layout.fillWidth: true
                 Layout.fillHeight: true
@@ -279,11 +285,27 @@ Item {
                     model: tabView.rows ? tabView.result.items : []
                     ScrollBar.vertical: ScrollBar {}
                     onAtYEndChanged: if (atYEnd && visible) page.loadTab(tabView.name, true)
-                    delegate: TrackRow {
+                    delegate: Column {
                         width: ListView.view.width - 32
                         x: 16
-                        song: modelData
-                        onPlay: { WaveApp.rememberSearch(JSON.stringify(modelData)); WaveApp.playSongs(JSON.stringify([modelData]), 0, "", false) }
+                        TrackRow {
+                            width: parent.width
+                            song: modelData
+                            onPlay: { WaveApp.rememberSearch(JSON.stringify(modelData)); WaveApp.playSongs(JSON.stringify([modelData]), 0, "", false) }
+                        }
+                        // 歌詞から探したときは、合った行を曲名の下に（GTK 版と同じ）
+                        Label {
+                            visible: (modelData.quote || "") !== ""
+                            x: 60
+                            width: parent.width - 60
+                            bottomPadding: 8
+                            text: modelData.quote || ""
+                            wrapMode: Text.Wrap
+                            maximumLineCount: 2
+                            elide: Text.ElideRight
+                            font.pixelSize: 13
+                            color: Style.accent
+                        }
                     }
                     footer: BusyIndicator { width: parent ? parent.width : 0; visible: tabView.result.loading; running: visible }
                 }

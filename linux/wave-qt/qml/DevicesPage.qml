@@ -12,7 +12,7 @@ Flickable {
     property string pageKind: "devices"
     property string pageTitle: "端末の連携"
     property var d: JSON.parse(WaveApp.devicesJson())
-    contentHeight: column.implicitHeight + 64
+    contentHeight: column.implicitHeight + Style.pageBottom
     clip: true
     boundsBehavior: Flickable.StopAtBounds
     ScrollBar.vertical: ScrollBar {}
@@ -191,7 +191,7 @@ Flickable {
         property string label: ""
         function ask(id, name) { deviceId = id; label = name; open() }
         title: "端末を外しますか？"
-        Label { width: 420; wrapMode: Text.Wrap; text: "「" + remove.label + "」は、もう再生を引き継げなくなります。もう一度加えるには、QR と6桁の手順が要ります。" }
+        Label { width: 440; wrapMode: Text.Wrap; text: "「" + remove.label + "」は、もう再生を引き継げなくなります。もう一度加えるには、QR と6桁の手順が要ります。" }
         footer: DialogButtonBox {
             background: null
             Btn { text: "キャンセル"; flat: true; DialogButtonBox.buttonRole: DialogButtonBox.RejectRole }
@@ -205,7 +205,7 @@ Flickable {
         property string label: ""
         function ask(id, name) { deviceId = id; label = name; open() }
         title: "ログインを渡しますか？"
-        Label { width: 420; wrapMode: Text.Wrap; text: "「" + grant.label + "」に、この端末の YouTube のログインを渡します。ほかのアプリ（home-dashboard など）から、あなたのプレイリスト・高く評価した曲・おすすめを使えるようになります。wave API を動かしている機械に入れる人は、それらを読めます。" }
+        Label { width: 440; wrapMode: Text.Wrap; text: "「" + grant.label + "」に、この端末の YouTube のログインを渡します。ほかのアプリ（home-dashboard など）から、あなたのプレイリスト・高く評価した曲・おすすめを使えるようになります。wave API を動かしている機械に入れる人は、それらを読めます。" }
         footer: DialogButtonBox {
             background: null
             Btn { text: "やめる"; flat: true; DialogButtonBox.buttonRole: DialogButtonBox.RejectRole }

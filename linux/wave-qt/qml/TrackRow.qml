@@ -50,7 +50,6 @@ Rectangle {
                 lineHeight: 20
                 verticalAlignment: Text.AlignVCenter
                 color: row.current ? Style.accent : Style.foreground
-                font.weight: Font.Medium
             }
             Label {
                 Layout.fillWidth: true

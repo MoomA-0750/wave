@@ -225,6 +225,18 @@ pub mod qobject {
         /// 「曲｜動画」の動画にする・やめる。
         #[qinvokable]
         fn set_video_on(self: Pin<&mut WaveApp>, on: bool);
+        #[qinvokable]
+        fn arrange_songs(self: &WaveApp, songs_json: &QString, filter: &QString, kind: &QString, order: &QString) -> QString;
+        #[qinvokable]
+        fn sort_choices(self: &WaveApp, sortable: bool, order: &QString) -> QString;
+        #[qinvokable]
+        fn choose_order(self: &WaveApp, order: &QString, key: &QString) -> QString;
+        #[qinvokable]
+        fn playlist_order(self: &WaveApp, id: &QString) -> QString;
+        #[qinvokable]
+        fn set_playlist_order(self: Pin<&mut WaveApp>, id: &QString, order: &QString);
+        #[qinvokable]
+        fn env(self: &WaveApp, name: &QString) -> QString;
         #[qsignal]
         fn open_requested(self: Pin<&mut WaveApp>, kind: QString, id: QString, title: QString);
     }

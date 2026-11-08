@@ -27,7 +27,7 @@ ListView {
     currentIndex: -1
     ScrollBar.vertical: ScrollBar {}
     model: episodes
-    bottomMargin: 32
+    bottomMargin: Style.pageBottom
     Component.onCompleted: token = WaveApp.request("podcast", itemId, pageTitle)
     onAtYEndChanged: if (atYEnd && continuation !== "" && !loading) { loading = true; token = WaveApp.request("podcast.more", itemId, pageTitle + "\n" + continuation) }
 

@@ -27,6 +27,9 @@ QtObject {
     // 小さい部品（チップ・行・小さな画像）は min(4, 丸み)
     readonly property int small: Math.min(4, radius)
 
+    // ページの下の余白（いちばん下の行・ボタンを下の端から離す）
+    readonly property int pageBottom: 64
+
     // ページの行き先（Shell が入れる）。Style.nav.openAlbum(id, title) などで開く
     property var nav: null
 

@@ -35,6 +35,8 @@ const QML: &[&str] = &[
     "qml/FeedSearchPage.qml",
     "qml/QrCode.qml",
     "qml/VideoView.qml",
+    "qml/LyricsFollower.qml",
+    "qml/PipWindow.qml",
     "qml/SongMenu.qml",
     "qml/Section.qml",
 ];

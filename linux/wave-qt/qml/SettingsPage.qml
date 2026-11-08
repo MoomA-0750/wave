@@ -15,7 +15,7 @@ Flickable {
     property int token: -1
     property int pairToken: -1
     property var ai: JSON.parse(WaveApp.aiJson())
-    contentHeight: column.implicitHeight + 64
+    contentHeight: column.implicitHeight + Style.pageBottom
     clip: true
     boundsBehavior: Flickable.StopAtBounds
     ScrollBar.vertical: ScrollBar {}
@@ -54,7 +54,7 @@ Flickable {
         Group {
             title: "再生"
             SwitchRow { title: "再生した曲を YouTube Music の再生履歴に残す"; subtitle: "オフにすると、wave で聴いた曲は履歴やおすすめに使われません"; checked: page.s.send_history; onToggled: page.set("send_history", checked) }
-            SwitchRow { title: "新作の通知"; subtitle: "登録したアーティストのアルバム・シングル・動画が出たら知らせる（wave が動いている間、6時間おきに確かめる）"; checked: page.s.release_notices; onToggled: page.set("release_notices", checked) }
+            SwitchRow { title: "新作の通知"; subtitle: "登録したアーティストのアルバム・シングル・動画が出たら知らせる（wave が動いている間、6時間おきに確かめる）"; checked: page.s.release_notices; onToggled: page.set("release_notices", checked) }
         }
         Group {
             title: "ダウンロード"

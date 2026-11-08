@@ -33,8 +33,8 @@ Item {
             Layout.fillWidth: true
             Layout.topMargin: 12
             Layout.leftMargin: 20
-            Layout.rightMargin: 20
-            spacing: 4
+            Layout.rightMargin: 14
+            spacing: 2
             Label { text: "Claude に聞く"; font.weight: Font.Bold; Layout.fillWidth: true; color: Style.foreground }
             IconButton {
                 iconName: "document-open-recent-symbolic"
@@ -56,7 +56,7 @@ Item {
                     MenuItem { text: "今の会話を履歴から消す"; onTriggered: { const c = (pane.chat.history || []).find(h => h.current); if (c) WaveApp.aiDelete(c.id) } }
                 }
             }
-            Btn { text: "新しい会話"; flat: true; onClicked: WaveApp.aiClear() }
+            Btn { text: "新しい会話"; flat: true; leftPadding: 10; rightPadding: 10; onClicked: WaveApp.aiClear() }
             IconButton { iconName: "window-close-symbolic"; tip: "閉じる"; size: 16; onClicked: pane.shell.closeAi() }
         }
         ListView {
@@ -130,7 +130,7 @@ Item {
             PlayButton {
                 implicitWidth: 44
                 implicitHeight: 44
-                iconName: pane.chat.running ? "media-playback-stop-symbolic" : "document-send-symbolic"
+                iconName: pane.chat.running ? "media-playback-stop-symbolic" : "mail-send-symbolic"
                 tip: pane.chat.running ? "止める" : "送る"
                 onClicked: pane.chat.running ? WaveApp.aiStop() : pane.submit()
             }

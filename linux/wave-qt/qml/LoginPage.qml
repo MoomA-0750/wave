@@ -59,7 +59,7 @@ Item {
         anchors.centerIn: parent
         modal: true
         title: "ブラウザにログインが見つかりません"
-        Label { width: 420; wrapMode: Text.Wrap; text: "ふだんのブラウザで music.youtube.com にログインしてから、もう一度「ブラウザのログインを使う」を押してください。\n\n読めるブラウザ: Firefox・Zen・LibreWolf・Floorp・Waterfox・Chrome・Chromium・Brave・Edge・Vivaldi・Opera" }
+        Label { width: 440; wrapMode: Text.Wrap; text: "ふだんのブラウザで music.youtube.com にログインしてから、もう一度「ブラウザのログインを使う」を押してください。\n\n読めるブラウザ: Firefox・Zen・LibreWolf・Floorp・Waterfox・Chrome・Chromium・Brave・Edge・Vivaldi・Opera" }
         footer: DialogButtonBox {
             Btn { text: "閉じる"; DialogButtonBox.buttonRole: DialogButtonBox.RejectRole }
             Btn { text: "ブラウザで開く"; highlighted: true; DialogButtonBox.buttonRole: DialogButtonBox.AcceptRole }
@@ -91,7 +91,7 @@ Item {
         id: failed
         anchors.centerIn: parent
         modal: true
-        Label { id: failedText; width: 420; wrapMode: Text.Wrap }
+        Label { id: failedText; width: 440; wrapMode: Text.Wrap }
         standardButtons: Dialog.Close
     }
 }

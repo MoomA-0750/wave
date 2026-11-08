@@ -14,6 +14,11 @@ Rectangle {
     color: Style.background
 
     function focusSearch() { field.forceActiveFocus(); field.selectAll() }
+    // 検索のページの語を欄にも出す（最近の検索を押した・確かめ用に開いたときも）
+    Connections {
+        target: bar.shell
+        function onSearchQueryChanged() { if (field.text !== bar.shell.searchQuery) field.text = bar.shell.searchQuery }
+    }
 
     RowLayout {
         anchors.fill: parent
@@ -56,7 +61,8 @@ Rectangle {
             id: field
             Layout.fillWidth: true
             Layout.preferredHeight: 40
-            placeholderText: "何を聴きたいですか？"
+            // 空のときの案内は自分で置く（語を後から入れると、Material の案内が消えずに重なることがあった）
+            Label { anchors.left: parent.left; anchors.leftMargin: 40; anchors.verticalCenter: parent.verticalCenter; visible: field.text === "" && !field.inputMethodComposing; text: "何を聴きたいですか？"; color: Style.dim; font: field.font }
             leftPadding: 40
             topPadding: 0
             bottomPadding: 0
@@ -134,7 +140,7 @@ Rectangle {
         anchors.centerIn: parent
         modal: true
         title: "ログアウトしますか？"
-        Label { width: 360; wrapMode: Text.Wrap; text: "この PC のキーリングからログインの情報を消し、取った曲・キュー・検索の履歴・Claude との会話も消します。" }
+        Label { width: 440; wrapMode: Text.Wrap; text: "この PC のキーリングからログインの情報を消し、取った曲・キュー・検索の履歴・Claude との会話も消します。" }
         standardButtons: Dialog.Cancel | Dialog.Ok
         onAccepted: WaveApp.logOut()
     }

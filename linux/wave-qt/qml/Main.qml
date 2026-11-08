@@ -6,13 +6,17 @@ import wave
 // 主の窓。読み込み中・ログインの入り口・主の画面を切り替え、知らせ（トースト）を下に出す。
 ApplicationWindow {
     id: window
-    width: 1280
-    height: 800
+    // 確かめ用: WAVE_WINDOW_SIZE=幅x高さ で窓の大きさを決める（狭い窓の並びを撮る）
+    readonly property var demoSize: WaveApp.env("WAVE_WINDOW_SIZE").split("x").map(Number)
+    width: demoSize.length === 2 && demoSize[0] > 0 ? demoSize[0] : 1280
+    height: demoSize.length === 2 && demoSize[1] > 0 ? demoSize[1] : 800
     minimumWidth: 720
     minimumHeight: 480
     visible: true
     title: "wave"
     color: Style.background
+    // 文字は Noto Sans CJK に寄せる（英字のフォントと記号・かなの代わりのフォントが混ざると、引用符などの太さがそろわない）
+    font.family: Qt.fontFamilies().indexOf("Noto Sans CJK JP") >= 0 ? "Noto Sans CJK JP" : Qt.application.font.family
 
     Material.theme: Style.dark ? Material.Dark : Material.Light
     Material.accent: Style.accent

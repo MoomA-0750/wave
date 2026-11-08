@@ -786,8 +786,14 @@ async fn enter_main() {
     // 確かめ用: WAVE_DEMO_PLAY_ID の動画（MV など）を1曲として鳴らす（題は WAVE_DEMO_PLAY_TITLE）
     if let Ok(id) = std::env::var("WAVE_DEMO_PLAY_ID") {
         let title = std::env::var("WAVE_DEMO_PLAY_TITLE").unwrap_or_else(|_| id.clone());
-        let song = Song { video_id: id, title, artists: Vec::new(), album: None, duration_seconds: None, thumbnail_url: None, kind: Some("MUSIC_VIDEO_TYPE_OMV".into()), is_live: false };
-        services.playback.play_list(vec![song], 0);
+        let s = services.clone();
+        glib::spawn_future_local(async move {
+            // 題・アーティスト・長さ・画像は next の先頭の行から引く（引けなければ ID と題だけで鳴らす）
+            let (repo, wanted) = (s.repo.clone(), id.clone());
+            let found = runtime::run(async move { repo.up_next(Some(&wanted), None, None).await }).await.ok().and_then(|p| p.songs.into_iter().find(|song| song.video_id == id));
+            let song = found.unwrap_or(Song { video_id: id, title, artists: Vec::new(), album: None, duration_seconds: None, thumbnail_url: None, kind: Some("MUSIC_VIDEO_TYPE_OMV".into()), is_live: false });
+            s.playback.play_list(vec![song], 0);
+        });
     }
     // 確かめ用: WAVE_DEMO_QUERY の検索の1曲目を鳴らす（GTK 版と同じ）
     if let Ok(query) = std::env::var("WAVE_DEMO_QUERY") {
@@ -952,17 +958,22 @@ fn load(kind: &str, arg: String, extra: String) -> Loading {
         "home" => Box::pin(load_home(repo, services, arg, continuation)),
         "album" => Box::pin(async move {
             match runtime::run(async move { repo.album(&arg).await }).await {
-                Ok(page) => view::album_page(&page),
+                Ok(page) => {
+                    // 補足は「アルバム • 年 • N 曲、M 分」（GTK 版と同じ）
+                    let mut value = view::album_page(&page);
+                    let detail = [page.subtitle.clone(), Some(wave_core::music::collection::count_and_length(&page.songs))].into_iter().flatten().filter(|s| !s.is_empty()).collect::<Vec<_>>().join(" • ");
+                    value["subtitle"] = serde_json::json!(detail);
+                    value
+                }
                 Err(e) => failure(e),
             }
         }),
-        "playlist" => Box::pin(async move {
-            let id = arg.clone();
-            match runtime::run(async move { repo.playlist(&id, continuation.as_deref()).await }).await {
-                Ok(page) => view::playlist_page(&arg, &page),
-                Err(e) => failure(e),
-            }
-        }),
+        // プレイリストは全部読む（extra は並べ方 "Added:desc" など。空ならカスタム順）
+        "playlist" => {
+            let _ = continuation;
+            Box::pin(crate::extra::load_playlist(arg, extra))
+        }
+        "search.lyrics" => Box::pin(crate::extra::search_lyrics(arg)),
         "artist" => Box::pin(async move {
             let id = arg.clone();
             match runtime::run(async move { repo.artist(&id).await }).await {

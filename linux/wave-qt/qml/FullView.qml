@@ -21,29 +21,43 @@ Rectangle {
         tip: "全画面を終える (Esc)"
         onClicked: view.shell.full = false
     }
-    RowLayout {
-        anchors.centerIn: parent
-        width: Math.min(parent.width - 96, 1100)
-        spacing: 48
-        Item {
-            Layout.preferredWidth: WaveApp.showVideo ? Math.min(view.width * 0.55, (view.height - 120) * 16 / 9) : Math.min(view.height - 120, view.width * 0.45)
-            Layout.preferredHeight: WaveApp.showVideo ? Layout.preferredWidth * 9 / 16 : Layout.preferredWidth
-            Art { anchors.fill: parent; visible: !WaveApp.showVideo; source: WaveApp.art; radius: Style.radius }
-            VideoView { anchors.fill: parent; visible: WaveApp.showVideo }
+    // 左にジャケット（か映像）、右に曲名・アーティスト・アルバムと流れる歌詞（GTK 版の全画面の再生中と同じ）。全体を窓の真ん中に置く
+    readonly property real side: Math.min(view.height - 160, view.width * 0.42)
+    Item {
+        id: media
+        anchors.verticalCenter: parent.verticalCenter
+        x: Math.max(48, (view.width - width - 48 - info.width) / 2)
+        width: WaveApp.showVideo ? Math.min(view.width * 0.55, (view.height - 160) * 16 / 9) : view.side
+        height: WaveApp.showVideo ? width * 9 / 16 : width
+        Art { anchors.fill: parent; visible: !WaveApp.showVideo; source: WaveApp.art; radius: Style.radius }
+        VideoView { anchors.fill: parent; visible: WaveApp.showVideo; place: "full" }
+    }
+    ColumnLayout {
+        id: info
+        anchors.left: media.right
+        anchors.leftMargin: 48
+        anchors.verticalCenter: parent.verticalCenter
+        width: Math.min(520, view.width - media.width - 144)
+        height: Math.min(view.height - 120, Math.max(media.height, 360))
+        spacing: 8
+        Label { Layout.fillWidth: true; text: WaveApp.hasSong ? WaveApp.title : "何も再生していません"; font.pixelSize: 36; font.weight: Font.Bold; wrapMode: Text.Wrap; maximumLineCount: 2; elide: Text.ElideRight; color: Style.foreground }
+        Label { Layout.fillWidth: true; text: WaveApp.artists; visible: text !== ""; font.pixelSize: 20; elide: Text.ElideRight; color: Style.dim }
+        Label { Layout.fillWidth: true; text: WaveApp.album; visible: text !== ""; font.pixelSize: 15; elide: Text.ElideRight; color: Style.dim }
+        Row {
+            visible: WaveApp.hasVideo
+            Layout.topMargin: 8
+            spacing: 6
+            Chip { text: "曲"; on: !WaveApp.showVideo; onClicked: WaveApp.setVideoOn(false) }
+            Chip { text: "動画"; on: WaveApp.showVideo; onClicked: WaveApp.setVideoOn(true) }
         }
-        ColumnLayout {
+        LyricsFollower {
+            id: follower
+            big: true
+            visible: found && view.visible
             Layout.fillWidth: true
-            spacing: 8
-            Label { Layout.fillWidth: true; text: WaveApp.hasSong ? WaveApp.title : "何も再生していません"; font.pixelSize: 40; font.weight: Font.Bold; wrapMode: Text.Wrap; maximumLineCount: 3; elide: Text.ElideRight; color: Style.foreground }
-            Label { Layout.fillWidth: true; text: WaveApp.artists; font.pixelSize: 22; elide: Text.ElideRight; color: Style.dim }
-            Label { Layout.fillWidth: true; text: WaveApp.album; visible: text !== ""; font.pixelSize: 16; elide: Text.ElideRight; color: Style.dim }
-            Row {
-                visible: WaveApp.hasVideo
-                Layout.topMargin: 12
-                spacing: 6
-                Chip { text: "曲"; on: !WaveApp.showVideo; onClicked: WaveApp.setVideoOn(false) }
-                Chip { text: "動画"; on: WaveApp.showVideo; onClicked: WaveApp.setVideoOn(true) }
-            }
+            Layout.fillHeight: true
+            Layout.topMargin: 16
         }
+        Item { visible: !follower.visible; Layout.fillHeight: true }
     }
 }

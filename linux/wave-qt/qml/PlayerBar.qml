@@ -74,7 +74,7 @@ Rectangle {
     // 中央: 操作と位置
     ColumnLayout {
         anchors.centerIn: parent
-        width: Math.min(560, bar.width - 2 * Math.max(left.width, right.implicitWidth) - 48)
+        width: Math.min(bar.shell.level <= 1 ? 560 : 380, bar.width - 2 * Math.max(left.width, right.implicitWidth) - 48)
         spacing: 2
         RowLayout {
             Layout.alignment: Qt.AlignHCenter
@@ -148,14 +148,14 @@ Rectangle {
                 onClicked: { devicePopup.d = JSON.parse(WaveApp.devicesJson()); devicePopup.open() }
                 DevicePopup { id: devicePopup; y: -height - 8; x: -width / 2 }
             }
-            Label { visible: WaveApp.remoteLabel !== "" && bar.width >= 1400; text: WaveApp.remoteLabel; color: Style.accent; font.pixelSize: 12; font.weight: Font.Bold; elide: Text.ElideRight; Layout.maximumWidth: 120 }
+            Label { visible: WaveApp.remoteLabel !== "" && bar.shell.level === 0; text: WaveApp.remoteLabel; color: Style.accent; font.pixelSize: 12; font.weight: Font.Bold; elide: Text.ElideRight; Layout.maximumWidth: 120 }
         }
         IconButton { iconName: "sidebar-show-right-symbolic"; tip: "再生中の画面"; checked: bar.shell.showRight && bar.shell.rightView === "now"; onClicked: bar.shell.togglePane() }
         IconButton { iconName: "view-fullscreen-symbolic"; tip: "全画面 (F11)"; checked: bar.shell.full; onClicked: bar.shell.full = !bar.shell.full }
         IconButton {
             iconName: WaveApp.volume <= 0 ? "audio-volume-muted-symbolic" : WaveApp.volume < 0.34 ? "audio-volume-low-symbolic" : WaveApp.volume < 0.67 ? "audio-volume-medium-symbolic" : "audio-volume-high-symbolic"
             tip: "ミュート"
-            onClicked: bar.width >= 1180 ? WaveApp.toggleMute() : volumePopup.open()
+            onClicked: bar.shell.level <= 1 ? WaveApp.toggleMute() : volumePopup.open()
             Popup {
                 id: volumePopup
                 y: -height - 8
@@ -169,7 +169,7 @@ Rectangle {
             }
         }
         Slider {
-            visible: bar.width >= 1180
+            visible: bar.shell.level <= 1
             implicitWidth: 110
             from: 0
             to: 1

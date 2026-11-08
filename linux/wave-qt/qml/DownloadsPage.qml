@@ -12,7 +12,7 @@ Flickable {
     property string pageTitle: "ダウンロード"
     property string category: ""
     property var d: JSON.parse(WaveApp.downloadsJson(category))
-    contentHeight: column.implicitHeight + 48
+    contentHeight: column.implicitHeight + Style.pageBottom
     clip: true
     boundsBehavior: Flickable.StopAtBounds
     ScrollBar.vertical: ScrollBar {}
@@ -138,7 +138,7 @@ Flickable {
     WDialog {
         id: clearDialog
         title: "ダウンロードをすべて削除しますか？"
-        Label { width: 380; wrapMode: Text.Wrap; text: "この端末に取った曲・エピソードをすべて消します。" }
+        Label { width: 440; wrapMode: Text.Wrap; text: "この端末に取った曲・エピソードをすべて消します。" }
         footer: DialogButtonBox {
             background: null
             Btn { text: "キャンセル"; flat: true; DialogButtonBox.buttonRole: DialogButtonBox.RejectRole }

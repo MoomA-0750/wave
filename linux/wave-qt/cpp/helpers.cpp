@@ -43,12 +43,26 @@ void wave_snapshot_later(QQmlApplicationEngine& engine, const QString& path, int
 {
     QQmlApplicationEngine* e = &engine;
     QTimer::singleShot(delay_ms, [e, path]() {
-        if (auto window = main_window(*e)) {
-            const QImage image = window->grabWindow();
+        QQuickWindow* main = main_window(*e);
+        if (!main) {
+            qWarning("snapshot failed: no window");
+        } else {
+            const QImage image = main->grabWindow();
             if (image.isNull() || !image.save(path))
                 qWarning("snapshot failed: %s", qPrintable(path));
-        } else {
-            qWarning("snapshot failed: no window");
+        }
+        // ほかに開いている窓（映像の小窓など）は「名前-2.png」…に書き出す
+        int n = 2;
+        const auto windows = QGuiApplication::topLevelWindows();
+        for (QWindow* w : windows) {
+            auto quick = qobject_cast<QQuickWindow*>(w);
+            if (!quick || quick == main || !quick->isVisible())
+                continue;
+            QString other = path;
+            other.replace(QStringLiteral(".png"), QStringLiteral("-%1.png").arg(n++));
+            const QImage image = quick->grabWindow();
+            if (image.isNull() || !image.save(other))
+                qWarning("snapshot failed: %s", qPrintable(other));
         }
         QGuiApplication::quit();
     });
