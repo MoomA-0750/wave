@@ -28,7 +28,8 @@ Rectangle {
         anchors.left: parent.left
         anchors.leftMargin: 16
         anchors.verticalCenter: parent.verticalCenter
-        width: Math.min(bar.width * 0.3, 360)
+        // 狭い窓（720〜800 ほど）では、中央の操作と右のボタンの分を先に取り、残りまで縮める（曲名は省略される）
+        width: Math.max(0, Math.min(bar.width * 0.3, 360, bar.width - 16 - right.implicitWidth - 16 - transport.implicitWidth - 2 * bar.gap))
         spacing: 12
         visible: WaveApp.hasSong
         Art {
@@ -71,12 +72,21 @@ Rectangle {
         }
     }
 
-    // 中央: 操作と位置
+    // 中央: 操作と位置。ふだんは帯の真ん中。狭い窓では左の曲と右のボタンの間に収まるよう寄せ、
+    // 幅は操作の並び（シャッフル〜リピート）より狭くしない（狭くすると並びがはみ出し、右のボタンと重なる）
+    readonly property int gap: 16
+    readonly property real centerStart: left.visible ? left.x + left.width + gap : gap
+    readonly property real centerEnd: right.x - gap
     ColumnLayout {
-        anchors.centerIn: parent
-        width: Math.min(bar.shell.level <= 1 ? 560 : 380, bar.width - 2 * Math.max(left.width, right.implicitWidth) - 48)
+        id: center
+        anchors.verticalCenter: parent.verticalCenter
+        width: Math.max(transport.implicitWidth,
+                        Math.min(bar.shell.level <= 1 ? 560 : 380, bar.width - 2 * Math.max(left.width, right.implicitWidth) - 48,
+                                 bar.centerEnd - bar.centerStart))
+        x: Math.max(bar.centerStart, Math.min((bar.width - width) / 2, bar.centerEnd - width))
         spacing: 2
         RowLayout {
+            id: transport
             Layout.alignment: Qt.AlignHCenter
             spacing: 12
             IconButton { iconName: "media-playlist-shuffle-symbolic"; tip: "シャッフル"; checked: WaveApp.shuffle; enabled: WaveApp.hasSong; onClicked: WaveApp.toggleShuffle() }
