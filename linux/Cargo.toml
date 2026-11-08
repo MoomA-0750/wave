@@ -1,6 +1,8 @@
 [workspace]
 resolver = "3"
-members = ["wave-core", "wave-desktop", "wave-gtk"]
+members = ["wave-core", "wave-desktop", "wave-gtk", "wave-qt"]
+# wave-qt は Qt の開発用ファイルが要るので、何も指さない cargo build・cargo test では組まない（cargo build -p wave-qt で組む）
+default-members = ["wave-core", "wave-desktop", "wave-gtk"]
 
 [workspace.package]
 edition = "2024"
