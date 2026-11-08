@@ -120,9 +120,9 @@ class KnotActions : ContentProvider() {
                 playLink(app, link, params.shuffle, report)
                 return failure?.let(KnotReply::Error) ?: KnotReply.Output(KnotActionsJson.NULL)
             }
-            KnotActionsJson.PLAY_PAUSE -> withController(app) { if (it.playWhenReady) it.pause() else it.playFromButton() }
-            KnotActionsJson.NEXT -> withController(app) { it.seekToNext() }
-            KnotActionsJson.PREVIOUS -> withController(app) { it.seekToPrevious() }
+            // ログインしていなければ鳴らせるキューも無いので、再生のサービスにつながずにすぐ返す（つなぐと保存したキューが戻るのを待ってしまう）
+            KnotActionsJson.PLAY_PAUSE, KnotActionsJson.NEXT, KnotActionsJson.PREVIOUS ->
+                if (!signedIn(app)) return KnotReply.Error(context.getString(R.string.widget_sign_in)) else controlled(app, type)
             KnotActionsJson.LIKE -> {
                 val videoId = WidgetHooks.nowPlaying.value?.videoId ?: return KnotReply.Error(context.getString(R.string.widget_nothing_playing))
                 container.player.setLiked(videoId, true)
@@ -135,6 +135,17 @@ class KnotActions : ContentProvider() {
             else -> return KnotReply.Error("知らないアクション $type")
         }
         return KnotReply.Output(KnotActionsJson.NULL)
+    }
+
+    private suspend fun controlled(
+        app: WaveApplication,
+        type: String,
+    ) {
+        when (type) {
+            KnotActionsJson.PLAY_PAUSE -> withController(app) { if (it.playWhenReady) it.pause() else it.playFromButton() }
+            KnotActionsJson.NEXT -> withController(app) { it.seekToNext() }
+            KnotActionsJson.PREVIOUS -> withController(app) { it.seekToPrevious() }
+        }
     }
 
     /** プロセスを起こしたばかりなら、ログインを読み終えるのを待つ。 */
