@@ -407,6 +407,7 @@ object PlayerOverlay {
             if (ui.stage) settleNow()
             ui.dismissShown = false
             ui.dismissHover = false
+            dismiss.visible(false)
             savePlace(app, params.x, params.y)
             attached = false
             registry.currentState = Lifecycle.State.DESTROYED
@@ -473,6 +474,7 @@ object PlayerOverlay {
             val miniWidth = dp(MINI_WIDTH_DP)
             val miniHeight = ui.targetSizeNow.height.takeIf { ui.mode == Mode.Mini && it > 0 } ?: dp(MINI_HEIGHT_GUESS_DP)
             ui.dismissShown = true
+            dismiss.visible(true)
             val target = dismiss.center()?.let { (it - screenOffset).toOffset() }
             val nearDismiss = target != null && (finger - target).getDistance() < dp(DISMISS_ZONE_DP)
             // 掴んだまま入れ替える: × の近くは丸。ミニプレーヤーは端に当たったら丸、丸は端から十分に離れたらミニプレーヤー
@@ -518,6 +520,7 @@ object PlayerOverlay {
             val hover = ui.dismissHover
             ui.dismissShown = false
             ui.dismissHover = false
+            dismiss.visible(false)
             recenter?.cancel()
             if (!ui.stage) return
             if (ui.mode == Mode.Bubble && hover) {
@@ -632,11 +635,33 @@ object PlayerOverlay {
                 ).apply {
                     gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
                     y = (DISMISS_BOTTOM_DP * density).roundToInt()
+                    // 引っぱっていない間は窓ごと透かす。中身が見えなくても、ほかのアプリの窓が透けていないと
+                    // Android 12 以降はその下へのタップを遮る（FLAG_NOT_TOUCHABLE でも。不透明の度合いが 0.8 を超えると遮られる）
+                    alpha = 0f
                 }
+            this.params = params
             runCatching { wm.addView(view, params) }.onSuccess { attached = true }
         }
 
+        private var params: WindowManager.LayoutParams? = null
+
+        /** 引っぱっている間だけ窓を見せる（[attach] の注を参照）。隠すのは、× が消える動きを終えてから。 */
+        fun visible(shown: Boolean) {
+            view.removeCallbacks(hide)
+            if (shown) setAlpha(1f) else view.postDelayed(hide, HIDE_AFTER_MS)
+        }
+
+        private val hide = Runnable { if (!ui.dismissShown) setAlpha(0f) }
+
+        private fun setAlpha(alpha: Float) {
+            val params = params ?: return
+            if (!attached || params.alpha == alpha) return
+            params.alpha = alpha
+            runCatching { wm.updateViewLayout(view, params) }
+        }
+
         fun detach() {
+            view.removeCallbacks(hide)
             registry.currentState = Lifecycle.State.DESTROYED
             if (attached) runCatching { wm.removeView(view) }
             attached = false
@@ -701,6 +726,9 @@ object PlayerOverlay {
 
     /** × の下端の位置（画面の下から）。 */
     internal const val DISMISS_BOTTOM_DP = 72
+
+    /** × が消える動きを待ってから捨てる場所の窓を透かす。 */
+    private const val HIDE_AFTER_MS = 400L
 
     /** 丸（影の余白を含む）。 */
     internal const val BUBBLE_DP = 68

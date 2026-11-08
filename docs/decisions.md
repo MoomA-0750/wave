@@ -1094,6 +1094,19 @@
 - Android の core と Mac が next の行の liveBadge を見るようにしたのに合わせ、Windows（`PlaylistPanelSong`）と Linux（`playlist_panel_song`）も同じ見方にした。前はどちらも IsLive を常に false にしていて、ラジオに配信中のライブが混ざるとふつうの曲として流そうとした
 - 手本は Android の core と共通の `next_live`・`next_ended_live`。長さが無いだけではライブとしない（配信を終えた動画は長さが付いて来るが、取り違えの元になるので）
 
+## 2026-11-09 再生の丸の × の窓は、掴んでいない間は窓ごと透かす
+
+- × の窓は丸と一緒に置いたままで、中身が見えないだけだった。Android 12 以降は、ほかのアプリの重ねる窓が FLAG_NOT_TOUCHABLE でも、不透明の度合い（窓の alpha）が 0.8 を超えるとその下へのタップを遮る（untrusted touch occlusion）。そのため、画面の下の真ん中（Pixel 3 で 424〜655 × 1696〜1927）がほかのアプリで押せなかった（pixwall のセッションが adb の input tap で見つけた）
+- 掴んだときに alpha を 1 にし、離したら × が消える動きを待って（400ms）0 にする。窓を掴むたびに足し外しすると、最初の掴みで × の位置が取れない（center() が窓の配置を待つ）ので、置いたままで透かす形にした
+
+## 2026-11-09 Mac のショートカットから wave の頼みが届かないように見えたのは、OS の許可の窓と古い wave だった
+
+- 前の担当が「`shortcuts run` も実行ボタンも、wave に頼みが届かず終わらない」としていた。OS の記録を見ると、届かなかった理由は2つあった
+  - ショートカットごとに初めて動かすとき、OS が「〈ショートカット〉に wave のアクションを動かすのを許すか」を尋ねる窓（ShortcutsViewService の Privacy）を出して待っていた。ほかの窓の陰に出るので、CLI から動かすと終わらないように見える
+  - そのとき動いていた wave は、作業用の worktree で組んだ別の wave.app だった。LaunchServices には作業用・iOS 版・シミュレーターの wave.app が 18 個登録されていた
+- 許すと、頼みは wave に届いて鳴った。wave の作りは直していない。作業用の wave.app の登録は外した（`lsregister -u`。作業用の組み立て物は ~/.Trash/wave-agent-builds.tgz にまとめた）
+- 本人が作った「Endless Lofi Girl」（「プレイリストを再生」）も、`shortcuts run` では wave に届いていた（`widget command` の記録あり）。「届かない」と見えたのは、記録の差分の取り方の誤り（置き場の名前の空白）もあった
+
 ## 2026-11-09 Linux 版に QML の画面（wave-qt）を足す
 
 - 本人の頼み: Omarchy（Hyprland）で使っていて、GTK の画面がテーマに馴染まない。決まりは Vault の「LinuxアプリのQML版の画面の決まり」（中身は共通、画面は別の実行ファイル、起動の入口は1つの選び役、入れる対象を本体と qt に分ける、Qt Quick ＋ Material、colors.toml を見張る）
@@ -1121,4 +1134,3 @@
 - 狭い窓（880px 未満）でも左のマイライブラリは 300px のまま（GTK 版も幅を 300 に決めていて、窓の最小は 720px）。Claude の欄を出したときに真ん中が狭くなるのも GTK 版と同じ（右の欄の幅は GTK 版と同じ 340px にそろえた）
 - 補足の「27 曲」「1 時間 50 分」は、数と単位の間を折り返さない空白にした（QML 版の表示だけ）
 - 映像の小窓のボタンは window-new（小窓を開く）、小窓の「wave に戻して大きく見る」は view-fullscreen の絵にした。GTK 版は小窓も全画面を終えるのも view-restore で、全画面の再生中に同じ絵が並んで分かりにくかったため
-
