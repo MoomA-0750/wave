@@ -1,0 +1,41 @@
+#!/bin/sh
+# wave の起動の入口（選び役）。GTK 版（wave-gtk）と QML 版（wave-qt）のどちらかを選び、exec でその実行ファイルに置き換わる。
+#   1. 環境変数 WAVE_UI=gtk|qt があればそれ
+#   2. QML 版が入っていて、XDG_CURRENT_DESKTOP に GNOME が含まれなければ QML 版（Hyprland・Omarchy・KDE など）
+#   3. それ以外は GTK 版（QML 版が入っていなければ、いつも GTK 版）
+# 選んだ方が無ければ、もう一方を出す（どちらも無いときだけ失敗）。
+# 実行ファイルは、この選び役と同じ場所を先に探し、無ければ PATH から探す。
+
+here=$(dirname "$(readlink -f "$0")")
+
+find_ui() {
+    if [ -x "$here/$1" ]; then
+        printf '%s\n' "$here/$1"
+    else
+        command -v "$1" 2>/dev/null
+    fi
+}
+
+gtk=$(find_ui wave-gtk)
+qt=$(find_ui wave-qt)
+
+case "${WAVE_UI:-}" in
+    gtk) want=gtk ;;
+    qt) want=qt ;;
+    *)
+        case ":${XDG_CURRENT_DESKTOP:-}:" in
+            *[Gg][Nn][Oo][Mm][Ee]*) want=gtk ;;
+            *) if [ -n "$qt" ]; then want=qt; else want=gtk; fi ;;
+        esac
+        ;;
+esac
+
+if [ "$want" = qt ] && [ -n "$qt" ]; then
+    exec "$qt" "$@"
+elif [ -n "$gtk" ]; then
+    exec "$gtk" "$@"
+elif [ -n "$qt" ]; then
+    exec "$qt" "$@"
+fi
+echo "wave: wave-gtk も wave-qt も見つかりません" >&2
+exit 127
