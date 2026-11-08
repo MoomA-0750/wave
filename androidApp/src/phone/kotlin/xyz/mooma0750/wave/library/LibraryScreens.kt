@@ -131,7 +131,11 @@ fun PlaylistScreen(
         },
         actions = {
             downloadButton(state.title ?: summary.title, state.songs)
-            QueueMenu(enabled = kindSongs.isNotEmpty(), onQueue = { next -> onQueue(kindSongs, next) })
+            QueueMenu(
+                enabled = kindSongs.isNotEmpty(),
+                onQueue = { next -> onQueue(kindSongs, next) },
+                pinShortcut = xyz.mooma0750.wave.widget.WidgetItem.of(summary.copy(title = state.title ?: summary.title)),
+            )
         },
         play =
             PlayControls(shuffle, { shuffle = it }, enabled = kindSongs.isNotEmpty()) {
@@ -193,7 +197,10 @@ private fun kindLabel(kind: KindFilter): String =
 fun QueueMenu(
     enabled: Boolean,
     onQueue: (next: Boolean) -> Unit,
+    /** ホーム画面に、押すとこれを鳴らすショートカットを置く（ランチャーが受け付けないときは出さない）。 */
+    pinShortcut: xyz.mooma0750.wave.widget.WidgetItem? = null,
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     var open by remember { mutableStateOf(false) }
     Box {
         IconAction(R.drawable.ic_more_vert, stringResource(R.string.library_more_options), { open = true }, enabled = enabled)
@@ -206,6 +213,12 @@ fun QueueMenu(
                 open = false
                 onQueue(false)
             })
+            if (pinShortcut != null && xyz.mooma0750.wave.widget.PlayShortcuts.canPin(context)) {
+                DropdownMenuItem(text = { Text(stringResource(R.string.shortcut_add_to_home)) }, leadingIcon = { MenuIcon(R.drawable.ic_home_outline) }, onClick = {
+                    open = false
+                    xyz.mooma0750.wave.widget.PlayShortcuts.pin(context, pinShortcut)
+                })
+            }
         }
     }
 }

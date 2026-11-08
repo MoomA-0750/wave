@@ -276,7 +276,7 @@ private fun Cover(
     }
 }
 
-private fun placeholderIcon(item: WidgetItem): Int =
+internal fun placeholderIcon(item: WidgetItem): Int =
     when (item.kind) {
         WidgetItemKind.Playlist -> if (item.id == MusicRepository.LIKED_SONGS) R.drawable.ic_favorite else R.drawable.ic_queue_music
         WidgetItemKind.Album -> R.drawable.ic_album
@@ -363,25 +363,8 @@ class PlayItemAction : ActionCallback {
                 toast(context, R.string.widget_sign_in)
                 return
             }
-            when (item.kind) {
-                WidgetItemKind.Playlist -> playPlaylist(context, item.id, shuffle)
-                WidgetItemKind.Album ->
-                    when (val page = container.music.album(item.id)) {
-                        is CallResult.Ok ->
-                            if (page.value.songs.isEmpty()) {
-                                toast(context, R.string.widget_load_failed)
-                            } else {
-                                // 出どころを覚えておく（鳴っている間を見分ける）
-                                page.value.playlistId?.let { id -> updateAppWidgetState(context, glanceId) { it[PlaylistWidget.SOURCE_ID] = id } }
-                                container.player.playFrom(page.value.songs, 0, page.value.playlistId, null, shuffle)
-                            }
-                        is CallResult.Failed -> {
-                            Log.w(WaveApplication.LOG_TAG, "widget album failed kind=${page.kind}")
-                            toast(context, R.string.widget_load_failed)
-                        }
-                    }
-                WidgetItemKind.Song, WidgetItemKind.Live -> container.player.playSong(item.toSong())
-            }
+            // 出どころを覚えておく（鳴っている間を見分ける）
+            playWidgetItem(context, item, shuffle)?.let { id -> updateAppWidgetState(context, glanceId) { it[PlaylistWidget.SOURCE_ID] = id } }
         } finally {
             setLoading(false)
         }
@@ -390,6 +373,39 @@ class PlayItemAction : ActionCallback {
     private companion object {
         const val AUTH_WAIT_MS = 5_000L
     }
+}
+
+/**
+ * ワンタップ再生で選んだ1つを鳴らす（ウィジェット・ホーム画面のショートカット・ほかのアプリからの頼みで共通）。
+ * プレイリストは最初のページ（続きはキューが読み足す）、アルバムは曲の一覧、曲・ライブはその曲から（アプリで曲を選んだときと同じく、
+ * 後ろにラジオが続く）。ほかの端末を映している間は、その端末で鳴らしてもらう。ログインは呼ぶ側で確かめておく。
+ * @return アルバムを鳴らしたときのキューの出どころ（`OLAK5uy_…`）
+ */
+internal suspend fun playWidgetItem(
+    context: Context,
+    item: WidgetItem,
+    shuffle: Boolean,
+): String? {
+    val container = (context.applicationContext as WaveApplication).container
+    when (item.kind) {
+        WidgetItemKind.Playlist -> playPlaylist(context, item.id, shuffle)
+        WidgetItemKind.Album ->
+            when (val page = container.music.album(item.id)) {
+                is CallResult.Ok ->
+                    if (page.value.songs.isEmpty()) {
+                        toast(context, R.string.widget_load_failed)
+                    } else {
+                        container.player.playFrom(page.value.songs, 0, page.value.playlistId, null, shuffle)
+                        return page.value.playlistId
+                    }
+                is CallResult.Failed -> {
+                    Log.w(WaveApplication.LOG_TAG, "widget album failed kind=${page.kind}")
+                    toast(context, R.string.widget_load_failed)
+                }
+            }
+        WidgetItemKind.Song, WidgetItemKind.Live -> container.player.playSong(item.toSong())
+    }
+    return null
 }
 
 internal suspend fun toast(

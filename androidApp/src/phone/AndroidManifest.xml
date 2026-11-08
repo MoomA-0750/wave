@@ -64,6 +64,55 @@
             android:taskAffinity=""
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
 
+        <!-- ホーム画面に置いた「鳴らすもの」のショートカットから開く、画面を出さずに鳴らすだけの入口 -->
+        <activity
+            android:name=".widget.ItemShortcutActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
+        <!-- ランチャーのウィジェットの一覧の「ショートカット」に出す「wave: 再生」。置くと鳴らすものを選ぶ -->
+        <activity
+            android:name=".widget.CreatePlayShortcutActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:label="@string/shortcut_create_label"
+            android:taskAffinity="">
+            <intent-filter>
+                <action android:name="android.intent.action.CREATE_SHORTCUT" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <!--
+            ほかのアプリ（Tasker など）から呼ぶ再生の口。受けるのは再生の操作だけで、何も返さない。
+            extra xyz.mooma0750.wave.extra.LINK（または data）に YouTube / YouTube Music の URL か ID、xyz.mooma0750.wave.extra.SHUFFLE（boolean）
+        -->
+        <activity
+            android:name=".widget.PlayIntentActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="xyz.mooma0750.wave.action.PLAY" />
+                <action android:name="xyz.mooma0750.wave.action.PAUSE" />
+                <action android:name="xyz.mooma0750.wave.action.PLAY_PAUSE" />
+                <action android:name="xyz.mooma0750.wave.action.NEXT" />
+                <action android:name="xyz.mooma0750.wave.action.PREVIOUS" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="xyz.mooma0750.wave.action.PLAY" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="https" />
+                <data android:scheme="http" />
+            </intent-filter>
+        </activity>
+
         <!-- ホーム画面のウィジェット: 1つのプレイリスト（置くときに選ぶ） -->
         <receiver
             android:name=".widget.PlaylistWidgetReceiver"
