@@ -100,8 +100,9 @@ scripts/install.sh --uninstall     # 全部外す（キーリングのログイ�
 ```
 
 - 何も指さない `cargo build`・`cargo test` は `wave-core`・`wave-desktop`・`wave-gtk` だけを組む。`wave-qt` は Qt の開発用ファイルがある機械で `cargo build -p wave-qt`（この Fedora には無いので、Omarchy の cramgent で組む）
+- QML 版の映像（MV）は GStreamer の appsink で受け取った絵を自分で描く（qml6glsink は GPU の描き方でしか映らないため）
 - QML 版にはアプリの中のログインの窓（WebKitGTK）が無いので、「ログイン」は `wave-gtk --login`（ログインの窓だけを開き、キーリングに保存したら閉じる）を開く。「ブラウザのログインを使う」はどちらの画面にもある
-- 見た目の確かめ: GTK 版は `scripts/shot.sh`（見えない mutter の中）、QML 版は `scripts/shot-qt.sh 出力.png [テーマ名] [待つミリ秒]`（offscreen で開いて grabWindow。一時的な設定の場所・キーリングを読まない・自分だけの D-Bus で動かすので、人の機械でも触らない）
+- 見た目の確かめ: GTK 版は `scripts/shot.sh`（見えない mutter の中）、QML 版は `scripts/shot-qt.sh 出力.png [テーマ名] [待つミリ秒]`（offscreen・software の描き方で開いて grabWindow。人の画面のセッションにつながず、一時的な設定の場所・キーリングを読まない・自分だけの D-Bus で動かすので、人の機械でも触らない）
 - 選び役の確かめ: `scripts/test-chooser.sh`
 
 ## Discord に再生中の曲を出す（Windows・macOS）

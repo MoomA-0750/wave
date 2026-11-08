@@ -1104,7 +1104,12 @@
 - 角の丸みは Material.roundedScale に px をそのまま渡した（Qt 6.12 の Material は値をそのまま半径に使う）。Material の Button は自分で FullScale にするので、ボタンごとに入れ直している。再生のボタンは丸い部品として丸のまま
 - QML の中で on で始まる名前のプロパティ（onAccent）は、シグナルの受け手とみなされて値が入らなかった。accentText にした
 - アイコンは GTK 版と同じ Adwaita の記号の絵を、入っているテーマのフォルダから探して使う（Qt のアイコンのテーマは、Qt のテーマの手伝いが無いと決まらず、絵が出なかった）。wave の本体は GTK4 に依るので Adwaita は入っている
-- 撮るとき、offscreen は既定で software の描き方になり、Material のボタンの地・影（シェーダーの効果）が描かれなかった。DISPLAY（cramgent では本人の Xwayland）があれば offscreen の GLX で OpenGL を使って描く（窓は出ない）。scripts/shot-qt.sh はさらに、一時的な設定の場所・WAVE_KEYRING_OFF（キーリングを読みも書きもしない）・dbus-run-session（MPRIS を本人の机に出さない）で動かす
+- 撮るとき、offscreen は software の描き方になり、Material のボタン・メニュー・ダイアログの地（影の効果で描かれる）と、MultiEffect で丸めたジャケットが描かれなかった。はじめは本人の Xwayland（DISPLAY=:0）を借りて OpenGL で描いたが、本人のセッションに触れるのでやめた（2026-11-09 の頼み）。headless の Wayland コンポジター（weston・sway・cage）は cramgent に入っていない。そこで地を自分で描く部品（Btn・WMenu・WDialog）にし、丸めたジャケットは software のとき Canvas で切り抜いて描くようにした（pixwall・Kanade の QML 版と同じ方針）。本物の机（GPU の描き方）でも同じ部品を使う。scripts/shot-qt.sh は DISPLAY・WAYLAND_DISPLAY を外し、一時的な設定の場所・WAVE_KEYRING_OFF（キーリングを読みも書きもしない）・dbus-run-session（MPRIS を本人の机に出さない）で動かす
 - QML 版にはアプリの中のログインの窓が無い（WebKitGTK は GTK 版だけ。Qt WebEngine は Omarchy に入っておらず大きい）。QML 版の「ログイン」は wave-gtk --login（ログインの窓だけを開いて、保存したら閉じる）を開き、閉じたらキーリングを読み直す。QML 版は本体（wave-gtk）に依るので、いつも入っている
-- まだ QML 版に無いもの（Claude の欄・端末の連携のページと切り替え・ダウンロードのページ・ポッドキャストのページ・映像・プレイリストの作成）は、押すと「GTK 版で行えます」と知らせる。残りは linux/wave-qt/STATUS.md
+- 残りは linux/wave-qt/STATUS.md
+- 映像（MV）は、GStreamer の qml6glsink を使わず、appsink で RGBA の絵を受け取って C++ の QQuickPaintedItem（VideoFrame）で描いた。qml6glsink は OpenGL の描き方でしか映らず、software の描き方や Vulkan などほかの RHI では何も出ないため。絵はどの糸からでも渡せ、主の糸で描き直す。VideoPlayer は wave-desktop に移し、出口（sink）だけを画面の側が渡す
+- 新作の通知は GApplication の通知を使えない（QML 版に GApplication が無い）ので、freedesktop の通知を D-Bus で直に送り、ActionInvoked を受けてアルバムを開く（desktop_notify）
+- Claude・連携・ダウンロードの中身は、ページごとに JSON を返す口（ai_json・devices_json・downloads_json）にし、変わったら ai_version などを増やして QML に読み直させる。連携の様子は知らせが来ないこともあるので、GTK 版のページと同じく1秒おきにも増やす
+- 歌詞の出典は「提供元: Musixmatch」のように見出し付きで届くことがあり、「歌詞の提供: 提供元: …」と重なっていた（GTK 版も）。見出し付きならそのまま出す（labels::lyrics_source）
+- GTK 版の絵の点検（下の帯とペインの下端の黒・新作の副題の2行目の切れ・右の欄の空の灰色の四角・チップの英語と日本語の混ざり・「44 tr…」の切れ）は、分ける前の HEAD を同じ条件で撮って比べ、分ける前からそうだったので変えていない
 
