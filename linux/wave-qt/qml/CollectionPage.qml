@@ -35,6 +35,7 @@ ListView {
     bottomMargin: Style.pageBottom
 
     function load() {
+        moreLoading = false
         loading = true
         error = ""
         token = kind === "history" ? WaveApp.request("history", "", "") : WaveApp.request(kind, itemId, kind === "playlist" ? order : "")
@@ -63,23 +64,50 @@ ListView {
             if (t !== page.token) return
             page.loading = false
             const v = JSON.parse(json)
+            if (v.error && page.moreLoading) { page.moreLoading = false; return }
             if (v.error) { page.error = page.kind === "album" ? "アルバムを読み込めませんでした" : (v.error.indexOf("ログイン") >= 0 ? v.error : "読み込めませんでした"); return }
             if (page.kind === "history") {
                 page.info = { title: "再生履歴", subtitle: "", art: "" }
                 page.songs = v.sections.reduce((all, s) => all.concat(s.songs), [])
+            } else if (v.continuation !== undefined && page.moreLoading) {
+                // 続き: 届いた分を足し、まだあれば次を読む
+                page.moreLoading = false
+                page.songs = page.songs.concat(v.songs)
+                page.arrange()
+                page.loadMore(v.continuation)
+                return
             } else {
                 page.info = v
                 page.songs = v.songs
+                page.pages = 1
                 // 並べ替えられないプレイリストでは、YouTube Music に並べてもらう並べ方は選べない
                 if (!v.sortable && page.order !== "" && (page.order.startsWith("Added") || page.order.startsWith("Published"))) page.order = ""
+                if (page.kind === "playlist") page.loadMore(v.continuation || "")
             }
             page.arrange()
             Qt.callLater(() => page.positionViewAtBeginning())
         }
     }
+    // プレイリストの続きを、届いた分から順に足す（GTK 版と同じく 100 ページまで）
+    property bool moreLoading: false
+    property int pages: 0
+    function loadMore(continuation) {
+        if (continuation === "" || pages > 100) {
+            // 読み終えた。サーバーの補足が無ければ、読めた曲から数える
+            if (kind === "playlist" && !info.hasSubtitle) info = Object.assign({}, info, { subtitle: WaveApp.countAndLength(JSON.stringify(songs)) })
+            return
+        }
+        pages++
+        moreLoading = true
+        token = WaveApp.request("playlist.more", itemId, continuation)
+    }
 
+    // 見出しが後から伸びても（文が折り返す・ボタンが出る）、まだ動かしていなければ頭から見せる
+    property bool userScrolled: false
+    onMovementStarted: userScrolled = true
     header: ColumnLayout {
         width: page.width
+        onHeightChanged: if (!page.userScrolled) Qt.callLater(() => page.positionViewAtBeginning())
         spacing: 12
         RowLayout {
             Layout.fillWidth: true
@@ -126,6 +154,7 @@ ListView {
                 }
                 RowLayout {
                     Layout.topMargin: 10
+                    Layout.fillWidth: true
                     spacing: 8
                     visible: page.songs.length > 0
                     PlayButton { onClicked: page.playFrom(0, false) }
@@ -137,43 +166,32 @@ ListView {
                         size: 22
                         onClicked: WaveApp.downloadCollection(page.kind === "album" ? "album" : page.itemId === "LM" ? "liked" : "playlist", page.itemId, page.info.title || page.pageTitle, page.info.art || "", JSON.stringify(page.songs))
                     }
+                    BusyIndicator { visible: page.moreLoading; running: visible; Layout.preferredWidth: 28; Layout.preferredHeight: 28 }
+                    Item { Layout.fillWidth: true }
                 }
             }
         }
-        // 一覧の中の検索・曲の種類・並べ替え
+        // 一覧の中の検索（虫眼鏡で開く）・並べ替え（GTK 版と同じく右に）、その下に曲の種類のチップ（横に送れる帯）
         RowLayout {
             visible: page.songs.length > 0 && page.kind !== "history"
             Layout.fillWidth: true
             Layout.leftMargin: 24
             Layout.rightMargin: 24
             spacing: 8
+            Item { Layout.fillWidth: true }
+            IconButton { iconName: "system-search-symbolic"; tip: "一覧の中を検索"; checked: find.visible; onClicked: { find.visible = !find.visible; if (find.visible) find.forceActiveFocus(); else find.text = "" } }
             TextField {
                 id: find
-                Layout.preferredWidth: 220
+                visible: false
+                Layout.preferredWidth: Math.min(240, page.width / 3)
                 Layout.preferredHeight: 36
                 placeholderText: "一覧の中を検索"
-                leftPadding: 32
                 topPadding: 0
                 bottomPadding: 0
                 verticalAlignment: TextInput.AlignVCenter
                 background: Rectangle { radius: Style.small; color: Style.raised; border.color: find.activeFocus ? Style.accent : "transparent" }
                 onTextChanged: page.filter = text
-                IconImage { anchors.left: parent.left; anchors.leftMargin: 10; anchors.verticalCenter: parent.verticalCenter; source: Style.icon("system-search-symbolic"); sourceSize.width: 14; sourceSize.height: 14; color: Style.dim }
-            }
-            Flickable {
-                Layout.fillWidth: true
-                Layout.preferredHeight: 34
-                contentWidth: kinds.implicitWidth
-                clip: true
-                boundsBehavior: Flickable.StopAtBounds
-                Row {
-                    id: kinds
-                    spacing: 6
-                    Repeater {
-                        model: [["", "すべて"], ["MUSIC_VIDEO_TYPE_ATV", "曲"], ["MUSIC_VIDEO_TYPE_OMV", "MV"], ["MUSIC_VIDEO_TYPE_UGC", "その他の動画（歌ってみた・ライブなど）"]]
-                        delegate: Chip { text: modelData[1]; on: page.songKind === modelData[0]; onClicked: page.songKind = (modelData[0] === "" || page.songKind === modelData[0]) ? "" : modelData[0] }
-                    }
-                }
+                Keys.onEscapePressed: { text = ""; visible = false }
             }
             Btn {
                 id: sortButton
@@ -190,6 +208,24 @@ ListView {
                             onTriggered: page.choose(modelData.name)
                         }
                     }
+                }
+            }
+        }
+        Flickable {
+            visible: page.songs.length > 0 && page.kind !== "history"
+            Layout.fillWidth: true
+            Layout.leftMargin: 24
+            Layout.rightMargin: 24
+            Layout.preferredHeight: 34
+            contentWidth: kinds.implicitWidth
+            clip: true
+            boundsBehavior: Flickable.StopAtBounds
+            Row {
+                id: kinds
+                spacing: 6
+                Repeater {
+                    model: [["", "すべて"], ["MUSIC_VIDEO_TYPE_ATV", "曲"], ["MUSIC_VIDEO_TYPE_OMV", "MV"], ["MUSIC_VIDEO_TYPE_UGC", "その他の動画（歌ってみた・ライブなど）"]]
+                    delegate: Chip { text: modelData[1]; on: page.songKind === modelData[0]; onClicked: page.songKind = (modelData[0] === "" || page.songKind === modelData[0]) ? "" : modelData[0] }
                 }
             }
         }

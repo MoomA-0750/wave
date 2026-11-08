@@ -962,7 +962,7 @@ fn load(kind: &str, arg: String, extra: String) -> Loading {
                     // 補足は「アルバム • 年 • N 曲、M 分」（GTK 版と同じ）
                     let mut value = view::album_page(&page);
                     let detail = [page.subtitle.clone(), Some(wave_core::music::collection::count_and_length(&page.songs))].into_iter().flatten().filter(|s| !s.is_empty()).collect::<Vec<_>>().join(" • ");
-                    value["subtitle"] = serde_json::json!(detail);
+                    value["subtitle"] = serde_json::json!(crate::extra::keep_units(&detail));
                     value
                 }
                 Err(e) => failure(e),
@@ -973,6 +973,7 @@ fn load(kind: &str, arg: String, extra: String) -> Loading {
             let _ = continuation;
             Box::pin(crate::extra::load_playlist(arg, extra))
         }
+        "playlist.more" => Box::pin(crate::extra::load_playlist_more(arg, extra)),
         "search.lyrics" => Box::pin(crate::extra::search_lyrics(arg)),
         "artist" => Box::pin(async move {
             let id = arg.clone();

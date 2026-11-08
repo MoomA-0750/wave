@@ -33,7 +33,7 @@ Window {
         anchors.top: parent.top
         anchors.margins: 6
         visible: hover.hovered || WaveApp.demo === "pip"
-        iconName: "go-up-symbolic"
+        iconName: "view-fullscreen-symbolic"
         tip: "wave に戻して大きく見る"
         onClicked: pip.shell.pipBackToApp()
     }

@@ -237,6 +237,8 @@ pub mod qobject {
         fn set_playlist_order(self: Pin<&mut WaveApp>, id: &QString, order: &QString);
         #[qinvokable]
         fn env(self: &WaveApp, name: &QString) -> QString;
+        #[qinvokable]
+        fn count_and_length(self: &WaveApp, songs_json: &QString) -> QString;
         #[qsignal]
         fn open_requested(self: Pin<&mut WaveApp>, kind: QString, id: QString, title: QString);
     }

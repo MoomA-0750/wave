@@ -165,15 +165,20 @@ Item {
         else if (kind === "newepisodes") openPodcast("VLRDPN", "新しいエピソード")
         else if (kind === "feedsearch") openFeedSearch()
         else if (kind === "firstpodcast") demoToken = WaveApp.request("search.podcasts", arg, "")
+        else if (kind === "firstplaylist") { demoPlaylist = true; demoToken = WaveApp.request("search.albums", arg, "") }
         else if (kind === "firstalbum" || kind === "firstartist") demoToken = WaveApp.request(kind === "firstalbum" ? "search.albums" : "search.artists", arg, "")
     }
     // 確かめ用: firstalbum:語・firstartist:語 は検索の1件目のページを開く
     property int demoToken: -1
+    property bool demoPlaylist: false
     Connections {
         target: WaveApp
         function onLoaded(t, json) {
             if (t !== shell.demoToken) return
             const v = JSON.parse(json)
+            // 確かめ用: firstplaylist:語 は検索の1件目のアルバムの曲のプレイリスト（OLAK…）を、プレイリストとして開く
+            if (shell.demoPlaylist && v.items) { shell.demoToken = WaveApp.request("album", v.items[0].id, ""); return }
+            if (shell.demoPlaylist && v.playlistId) { shell.demoPlaylist = false; shell.openPlaylist(v.playlistId, v.title); return }
             if (v.items && v.items.length > 0) shell.openItem(v.items[0])
         }
         // 新作の通知を押した
@@ -226,7 +231,7 @@ Item {
                 }
                 Pane_ {
                     visible: shell.showRight
-                    Layout.preferredWidth: 360
+                    Layout.preferredWidth: 340
                     Layout.fillHeight: true
                     NowPlayingPane { anchors.fill: parent; visible: shell.rightView === "now"; shell: shell }
                     QueuePane { anchors.fill: parent; visible: shell.rightView === "queue"; shell: shell }
@@ -247,12 +252,14 @@ Item {
         z: 50
         VideoView { anchors.fill: parent; place: "layer" }
         TapHandler { onDoubleTapped: shell.toggleWindowFullScreen() }
+        // ボタンは映像の中（上下の黒い帯をまたがない位置）に置く
         Row {
+            readonly property real videoHeight: Math.min(parent.height, parent.width * 9 / 16)
             anchors.right: parent.right
-            anchors.top: parent.top
-            anchors.margins: 16
+            anchors.rightMargin: 16 + Math.max(0, (parent.width - parent.height * 16 / 9) / 2)
+            y: (parent.height - videoHeight) / 2 + 16
             spacing: 8
-            LayerButton { iconName: shell.pipOpen ? "view-conceal-symbolic" : "view-restore-symbolic"; tip: shell.pipOpen ? "小窓を閉じる" : "小窓で見る"; onClicked: shell.togglePip() }
+            LayerButton { iconName: shell.pipOpen ? "view-conceal-symbolic" : "window-new-symbolic"; tip: shell.pipOpen ? "小窓を閉じる" : "小窓で見る"; onClicked: shell.togglePip() }
             LayerButton {
                 iconName: shell.Window.window && shell.Window.window.visibility === Window.FullScreen ? "view-restore-symbolic" : "view-fullscreen-symbolic"
                 tip: shell.Window.window && shell.Window.window.visibility === Window.FullScreen ? "全画面をやめる" : "全画面"

@@ -13,7 +13,18 @@ use crate::app::{failure, repo, services};
 use crate::bridge::qobject;
 use crate::view;
 
-/// プレイリストを全部読む（first は並べ方を付けて、続きは届いた順に。GTK 版と同じく 100 ページまで）。
+/// 数と単位（「27 曲」「1 時間 50 分」）を離さない（折り返しで「27」と「曲」が別の行に分かれないように）。
+pub fn keep_units(text: &str) -> String {
+    let mut out = String::new();
+    let chars: Vec<char> = text.chars().collect();
+    for (i, c) in chars.iter().enumerate() {
+        let joins = *c == ' ' && i > 0 && chars[i - 1].is_ascii_digit() && chars.get(i + 1).is_some_and(|n| !n.is_ascii() && !n.is_whitespace());
+        out.push(if joins { '\u{a0}' } else { *c });
+    }
+    out
+}
+
+/// プレイリストの最初のページ（並べ方を付けて）。続きは playlist.more で届いた分から順に足す（GTK 版と同じ）。
 pub async fn load_playlist(id: String, order: String) -> Value {
     let Some(repo) = repo() else { return failure("not started") };
     let (key, descending) = collection::parse_order(&order);
@@ -23,34 +34,33 @@ pub async fn load_playlist(id: String, order: String) -> Value {
         _ => None,
     };
     let (r, i) = (repo.clone(), id.clone());
-    let first = match runtime::run(async move { r.playlist_in_order(&i, None, params.as_deref()).await }).await {
+    let mut page = match runtime::run(async move { r.playlist_in_order(&i, None, params.as_deref()).await }).await {
         Ok(page) => page,
         Err(wave_core::innertube::Failure::NotLoggedIn) => return failure("このプレイリストを見るにはログインしてください"),
         Err(e) => return failure(format!("プレイリストを読み込めませんでした（{e}）")),
     };
-    let mut songs = first.songs.clone();
-    let mut set_ids = first.set_video_ids.clone();
-    set_ids.resize(songs.len(), None);
-    let mut token = first.continuation.clone();
-    for _ in 0..100 {
-        let Some(t) = token.clone() else { break };
-        let (r, i, tok) = (repo.clone(), id.clone(), t.clone());
-        let Ok(next) = runtime::run(async move { r.playlist(&i, Some(&tok)).await }).await else { break };
-        let mut ids = next.set_video_ids.clone();
-        ids.resize(next.songs.len(), None);
-        songs.extend(next.songs);
-        set_ids.extend(ids);
-        token = next.continuation.filter(|n| *n != t);
-    }
-    let mut page = first;
-    page.songs = songs;
-    page.set_video_ids = set_ids;
-    page.continuation = None;
+    page.set_video_ids.resize(page.songs.len(), None);
     let mut value = view::playlist_page(&id, &page);
-    let detail = page.subtitle.clone().filter(|s| !s.is_empty()).unwrap_or_else(|| collection::count_and_length(&page.songs));
-    value["subtitle"] = json!(detail);
+    value["subtitle"] = json!(keep_units(&page.subtitle.clone().unwrap_or_default()));
+    value["hasSubtitle"] = json!(page.subtitle.as_ref().is_some_and(|s| !s.is_empty()));
     value["sortable"] = json!(page.sortable);
     value
+}
+
+/// プレイリストの続きの1ページ。
+pub async fn load_playlist_more(id: String, token: String) -> Value {
+    let Some(repo) = repo() else { return failure("not started") };
+    let (r, i, t) = (repo.clone(), id.clone(), token.clone());
+    match runtime::run(async move { r.playlist(&i, Some(&t)).await }).await {
+        Ok(mut page) => {
+            page.set_video_ids.resize(page.songs.len(), None);
+            // 同じトークンが返ってきたら終わり
+            let next = page.continuation.clone().filter(|n| *n != token).unwrap_or_default();
+            let value = view::playlist_page(&id, &page);
+            json!({ "songs": value["songs"], "continuation": next })
+        }
+        Err(e) => failure(e),
+    }
 }
 
 /// 歌詞から探す（検索の「歌詞」のタブ。GTK 版と同じ wave-core の search）。
@@ -136,6 +146,11 @@ impl qobject::WaveApp {
         }
     }
 
+    /// 曲の一覧の補足「N 曲、M 分」（数と単位を離さない）。
+    pub fn count_and_length(&self, songs_json: &QString) -> QString {
+        QString::from(&keep_units(&collection::count_and_length(&songs_of(songs_json))))
+    }
+
     /// 確かめ用の環境変数（WAVE_WINDOW_SIZE など。WAVE_ で始まるものだけ）。
     pub fn env(&self, name: &QString) -> QString {
         let name = name.to_string();
@@ -143,5 +158,16 @@ impl qobject::WaveApp {
             return QString::default();
         }
         QString::from(&std::env::var(&name).unwrap_or_default())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn numbers_stay_with_units() {
+        assert_eq!(keep_units("アルバム • 2026年 • 27 曲、1 時間 50 分"), "アルバム • 2026年 • 27\u{a0}曲、1\u{a0}時間 50\u{a0}分");
+        assert_eq!(keep_units("Album 2 songs"), "Album 2 songs");
     }
 }

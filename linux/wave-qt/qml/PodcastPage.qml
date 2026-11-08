@@ -47,8 +47,12 @@ ListView {
         }
     }
 
+    // 見出しが後から伸びても（文が折り返す・ボタンが出る）、まだ動かしていなければ頭から見せる
+    property bool userScrolled: false
+    onMovementStarted: userScrolled = true
     header: ColumnLayout {
         width: page.width
+        onHeightChanged: if (!page.userScrolled) Qt.callLater(() => page.positionViewAtBeginning())
         spacing: 16
         BusyIndicator { visible: !page.info && !page.failed; running: visible; Layout.alignment: Qt.AlignHCenter; Layout.topMargin: 24 }
         Label { visible: page.failed; text: "ポッドキャストを読み込めませんでした"; color: Style.dim; Layout.alignment: Qt.AlignHCenter; Layout.topMargin: 24 }

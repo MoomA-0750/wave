@@ -40,7 +40,7 @@ Rectangle {
         spacing: 6
         visible: (view.place === "side" || view.place === "full") && (hover.hovered || view.place === "full")
         Osd { iconName: "view-fullscreen-symbolic"; tip: view.place === "side" ? "映像を大きく見る" : "映像だけを窓いっぱいに"; onClicked: Style.nav.expandVideo() }
-        Osd { iconName: Style.nav && Style.nav.pipOpen ? "view-conceal-symbolic" : "view-restore-symbolic"; tip: Style.nav && Style.nav.pipOpen ? "小窓を閉じる" : "小窓で見る"; onClicked: Style.nav.togglePip() }
+        Osd { iconName: Style.nav && Style.nav.pipOpen ? "view-conceal-symbolic" : "window-new-symbolic"; tip: Style.nav && Style.nav.pipOpen ? "小窓を閉じる" : "小窓で見る"; onClicked: Style.nav.togglePip() }
     }
     HoverHandler { id: hover }
 
