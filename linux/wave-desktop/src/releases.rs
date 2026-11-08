@@ -159,8 +159,25 @@ async fn liked_songs(repo: &MusicRepository) -> Vec<wave_core::music::models::So
     songs
 }
 
-/// GNOME の通知。押すとそのアルバム（無ければアーティスト）を開く（app.open-album・app.open-artist）。
+thread_local! {
+    /// 新作の知らせ方（画面の側が渡す。無ければ GApplication の通知）。
+    static NOTIFIER: RefCell<Option<Box<dyn Fn(&NewRelease)>>> = const { RefCell::new(None) };
+}
+
+/// 新作の知らせ方を決める（QML 版は GApplication を持たないので、freedesktop の通知を直に送る）。
+pub fn set_notifier(notify: impl Fn(&NewRelease) + 'static) {
+    NOTIFIER.with(|n| *n.borrow_mut() = Some(Box::new(notify)));
+}
+
 fn notify(release: &NewRelease) {
+    if NOTIFIER.with(|n| n.borrow().as_ref().map(|f| f(release)).is_some()) {
+        return;
+    }
+    notify_gapplication(release);
+}
+
+/// GNOME の通知。押すとそのアルバム（無ければアーティスト）を開く（app.open-album・app.open-artist）。
+fn notify_gapplication(release: &NewRelease) {
     let Some(app) = gio::Application::default() else { return };
     let notification = gio::Notification::new(&format!("{} の新作", release.artist_name));
     notification.set_body(Some(&release.title));

@@ -215,7 +215,7 @@ fn load(state: &Rc<Lyrics>) {
             LyricsResult::Found(SongLyrics::Synced { lines, source }) => {
                 show_synced(&state, lines);
                 if let Some(source) = source {
-                    state.source.set_label(&format!("歌詞の提供: {source}"));
+                    state.source.set_label(&wave_desktop::labels::lyrics_source(&source));
                 }
                 state.stack.set_visible_child_name("lines");
                 follow(&state);
