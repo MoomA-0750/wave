@@ -128,7 +128,8 @@ class KnotActions : ContentProvider() {
                 container.player.setLiked(videoId, true)
             }
             KnotActionsJson.NOW_PLAYING -> {
-                val now = WidgetHooks.nowPlaying.value ?: return KnotReply.Error(context.getString(R.string.widget_nothing_playing))
+                // 何も鳴っていなければ空の文字（誤りにしない。iPhone・Mac の「今の曲を取得」と同じ。ショートカットの続きで「空か」で分けられる）
+                val now = WidgetHooks.nowPlaying.value ?: return KnotReply.Output(KnotActionsJson.text(""))
                 return KnotReply.Output(KnotActionsJson.text(KnotActionsJson.nowPlayingText(now.title, now.artist)))
             }
             else -> return KnotReply.Error("知らないアクション $type")
