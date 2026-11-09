@@ -499,6 +499,9 @@ struct SelectPlaylistIntent: WidgetConfigurationIntent {
             var fraction: Double?
             /// ジャケットを置き場に書き終えたか（書き終えたら知らせ直して、ジャケットを読み直させる）。
             var artwork: Bool?
+            /// 今歌っている歌詞の行と次の行（時刻付きの歌詞があり、設定でオンのとき。間奏は nil）。
+            var line: String?
+            var nextLine: String?
         }
     }
 #endif

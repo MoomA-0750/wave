@@ -208,7 +208,13 @@ final class PlayerService {
     var video: MusicVideo?
     /// 画面の下に一時的に出す知らせ（出したら nil に戻す）。
     var message: String?
-    var lyrics: LyricsService.Result?
+    var lyrics: LyricsService.Result? {
+        didSet {
+            #if os(iOS)
+                LockScreenLyrics.shared.refresh()
+            #endif
+        }
+    }
     /// 今のキューの出どころ（プレイリスト・アルバムの ID。ラジオなら nil）。画面で「再生中」の印に使う。
     var sourceId: String?
     /// ほかの端末で鳴っている（下のバー・右の欄・キューは、その端末の再生を映し、操作はその端末への命令になる）。
@@ -472,10 +478,22 @@ final class PlayerService {
         info[MPMediaItemPropertyPlaybackDuration] = live ? nil : duration
         info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = live ? nil : position
         info[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? 1.0 : 0.0
+        #if os(iOS)
+            // 歌っている行があれば、アーティスト名の行に出す（ロック画面の歌詞。LockScreenLyrics）
+            info[MPMediaItemPropertyArtist] = LockScreenLyrics.shared.current ?? song.artistsText
+        #endif
         MPRemoteCommandCenter.shared().changePlaybackPositionCommand.isEnabled = !live
         center.nowPlayingInfo = info
         center.playbackState = isPlaying ? .playing : .paused
     }
+
+    #if os(iOS)
+        /// ロック画面に出す歌詞の行が変わった。位置も今の値に直して送る（古い位置のままだと、ロック画面の位置の棒が戻る）。
+        func lockScreenLineChanged() {
+            if !isRemote, engine.hasSource, !isLoading { position = engine.positionSeconds }
+            updateNowPlayingInfo()
+        }
+    #endif
 
     private func loadArtwork(_ song: Song) {
         // ロック画面・コントロールセンターの画像は大きいもの（Android の largeArtwork と同じ）
@@ -1194,6 +1212,9 @@ final class PlayerService {
 
     private func onIsPlayingChanged() {
         updateNowPlayingInfo()
+        #if os(iOS)
+            LockScreenLyrics.shared.refresh()
+        #endif
         // ほかの端末を映している間は、この端末で聴いた時間ではない（ライブの映像だけ、再生・一時停止を合わせる）
         if isRemote {
             syncRemoteLiveVideo()

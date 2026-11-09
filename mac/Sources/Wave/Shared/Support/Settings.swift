@@ -34,6 +34,8 @@ final class Settings: Codable {
     var discordClientId: String?
     /// 映像の無い曲を鳴らしているときも、ホームへ戻ったら小窓（PiP）に曲名とジャケットを出す（iPhone だけ。既定はオン）。
     var musicPip = true
+    /// ロック画面に今歌っている歌詞の行を出す（再生中の情報のアーティスト名の行と、ロック画面の再生中（Live Activity）。iPhone だけ。既定はオン）。
+    var lockScreenLyrics = true
     /// 下のタブの欄で、右に離して置き、欄を畳んでも出しておくタブ（search・ai・library。iPhone だけ。既定は検索）。
     var pinnedTab = "search"
     /// ダウンロードに使う通信（unmetered: Wi-Fi など従量制でない通信だけ・any: どの通信でも。ADR-0016）。
@@ -54,7 +56,7 @@ final class Settings: Codable {
 
     enum CodingKeys: String, CodingKey {
         case volume, shuffle, repeatMode, sendHistory, rightPaneOpen, releaseNotices, librarySort, libraryGrid, playlistOrders, language, originalTitles,
-            searchHistory, relayV2Url, relayV2Host, aiUrl, aiToken, aiName, discordPresence, discordClientId, musicPip,
+            searchHistory, relayV2Url, relayV2Host, aiUrl, aiToken, aiName, discordPresence, discordClientId, musicPip, lockScreenLyrics,
             pinnedTab, downloadNetwork, smartDownloads, smartDownloadCount
     }
 
@@ -81,6 +83,7 @@ final class Settings: Codable {
         discordPresence = try c.decodeIfPresent(Bool.self, forKey: .discordPresence) ?? discordPresence
         discordClientId = try c.decodeIfPresent(String.self, forKey: .discordClientId)
         musicPip = try c.decodeIfPresent(Bool.self, forKey: .musicPip) ?? musicPip
+        lockScreenLyrics = try c.decodeIfPresent(Bool.self, forKey: .lockScreenLyrics) ?? lockScreenLyrics
         pinnedTab = try c.decodeIfPresent(String.self, forKey: .pinnedTab) ?? pinnedTab
         downloadNetwork = try c.decodeIfPresent(String.self, forKey: .downloadNetwork) ?? downloadNetwork
         smartDownloads = try c.decodeIfPresent(Bool.self, forKey: .smartDownloads) ?? smartDownloads

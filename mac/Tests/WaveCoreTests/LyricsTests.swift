@@ -32,6 +32,17 @@ final class LyricsTests: XCTestCase {
         XCTAssertTrue(LyricsTiming.currentAndNext(lines, positionMs: 9000) == ("次", nil))
     }
 
+    func testLockScreenLineLeavesOutInstrumentalBreaks() {
+        let lines = [
+            LyricLine(startMs: 1000, text: "一行目"), LyricLine(startMs: 1000, text: "いちぎょうめ"),
+            LyricLine(startMs: 3000, text: ""), LyricLine(startMs: 5000, text: "二行目"),
+        ]
+        XCTAssertTrue(LyricsTiming.lockScreen(lines, positionMs: 0) == (nil, "一行目"))
+        XCTAssertTrue(LyricsTiming.lockScreen(lines, positionMs: 1500) == ("一行目", nil))
+        XCTAssertTrue(LyricsTiming.lockScreen(lines, positionMs: 3500) == (nil, "二行目"))
+        XCTAssertTrue(LyricsTiming.lockScreen(lines, positionMs: 9000) == ("二行目", nil))
+    }
+
     func testSearchTitlesDropDecorations() {
         XCTAssertEqual(["夜に駆ける (From \"THE FIRST TAKE\")", "夜に駆ける"], LrclibClient.searchTitles("夜に駆ける (From \"THE FIRST TAKE\")"))
         XCTAssertEqual(["Song - Orion", "Song"], LrclibClient.searchTitles("Song - Orion"))

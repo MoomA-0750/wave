@@ -902,7 +902,9 @@ private struct PlayMark: View {
                         VStack(spacing: 6) {
                             ActivityProgress(state: state)
                             Controls(playing: state.playing, size: 20)
-                            if let next = state.nextTitle {
+                            if let line = state.line {
+                                Text(line).font(.caption.weight(.semibold)).lineLimit(1)
+                            } else if let next = state.nextTitle {
                                 Text(WidgetText.t("次: ", "Next: ") + next).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
                             }
                         }
@@ -933,6 +935,25 @@ private struct PlayMark: View {
         }
     }
 
+    /// 今歌っている歌詞の行と、薄く次の行。行が替わると下から上へ送る。
+    private struct ActivityLyrics: View {
+        var line: String
+        var next: String?
+
+        var body: some View {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(line).font(.title3.weight(.bold)).lineLimit(2).minimumScaleFactor(0.8)
+                    .contentTransition(.opacity)
+                if let next {
+                    Text(next).font(.subheadline.weight(.semibold)).foregroundStyle(.white.opacity(0.45)).lineLimit(1)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .id(line)
+            .transition(.push(from: .bottom))
+        }
+    }
+
     private struct LockScreenView: View {
         var state: NowPlayingAttributes.ContentState
 
@@ -952,6 +973,9 @@ private struct PlayMark: View {
                     Link(destination: URL(string: "wave://add-to-playlist")!) {
                         Image(systemName: "plus.circle").font(.title2).foregroundStyle(.white)
                     }
+                }
+                if let line = state.line {
+                    ActivityLyrics(line: line, next: state.nextLine)
                 }
                 ActivityProgress(state: state)
                 HStack {

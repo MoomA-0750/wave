@@ -317,6 +317,11 @@ final class WidgetSync {
         }
     }
 
+    /// ロック画面に出す歌詞の行が変わった（LockScreenLyrics）。
+    func lockScreenLineChanged() {
+        if let shown { updateActivity(shown) }
+    }
+
     private func updateActivity(_ now: WidgetNowPlaying?) {
         guard let now else {
             if let activity {
@@ -332,7 +337,8 @@ final class WidgetSync {
         let artwork = artworkReady == now.videoId || file.map { FileManager.default.fileExists(atPath: $0.path) } == true
         let state = NowPlayingAttributes.ContentState(videoId: now.videoId, title: now.title, artist: now.artist, playing: now.playing,
                                                       device: now.device, nextTitle: now.nextTitle,
-                                                      startedAt: timing?.startedAt, endsAt: timing?.endsAt, fraction: timing?.fraction, artwork: artwork)
+                                                      startedAt: timing?.startedAt, endsAt: timing?.endsAt, fraction: timing?.fraction, artwork: artwork,
+                                                      line: LockScreenLyrics.shared.current, nextLine: LockScreenLyrics.shared.next)
         // 同じ中身は送らない（位置の棒の確かめで毎秒呼ばれる）
         guard state != sentState || activity?.activityState != .active else { return }
         let content = ActivityContent(state: state, staleDate: nil)

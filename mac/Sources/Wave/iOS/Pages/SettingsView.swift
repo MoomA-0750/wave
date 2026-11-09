@@ -8,6 +8,7 @@ struct SettingsView: View {
     @State private var sendHistory = AppServices.settings.sendHistory
     @State private var releaseNotices = AppServices.settings.releaseNotices
     @State private var musicPip = AppServices.settings.musicPip
+    @State private var lockScreenLyrics = AppServices.settings.lockScreenLyrics
     @State private var language = AppServices.settings.language
     @State private var originalTitles = AppServices.settings.originalTitles
     @State private var pinnedTab = IOSShell.shared.pinnedTab
@@ -40,6 +41,16 @@ struct SettingsView: View {
                     AppServices.settings.musicPip = v
                     AppServices.settings.save()
                     MusicPip.shared.settingChanged()
+                }
+                Toggle(isOn: $lockScreenLyrics) {
+                    SettingsLabel(title: L.t("ロック画面に歌詞を出す", "Lyrics on the Lock Screen"),
+                                  detail: L.t("時刻付きの歌詞がある曲で、歌っている行をロック画面の再生中に出す。アーティスト名の欄にも出るので、車やイヤホンの画面にも出る",
+                                              "For songs with synced lyrics, show the line being sung in the Lock Screen player. It also replaces the artist name, so car and headphone displays show it too"))
+                }
+                .onChange(of: lockScreenLyrics) { _, v in
+                    AppServices.settings.lockScreenLyrics = v
+                    AppServices.settings.save()
+                    LockScreenLyrics.shared.refresh()
                 }
             } header: {
                 Text(L.t("再生", "Play"))

@@ -118,4 +118,10 @@ public enum LyricsTiming {
         }
         return (start < 0 ? nil : shown(start), following.map(shown))
     }
+
+    /// ロック画面に出す行: currentAndNext から間奏（空の行の「♪」）を除いたもの。間奏の間はアーティスト名に戻す。
+    public static func lockScreen(_ lines: [LyricLine], positionMs: Int64) -> (current: String?, next: String?) {
+        let (current, next) = currentAndNext(lines, positionMs: positionMs)
+        return (current == "♪" ? nil : current, next == "♪" ? nil : next)
+    }
 }
