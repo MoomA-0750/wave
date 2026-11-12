@@ -691,6 +691,7 @@ impl qobject::WaveApp {
     pub fn relogin(self: Pin<&mut Self>) {
         if let Some(s) = services() {
             s.playback.player().stop();
+            wave_desktop::queue_store::remember_before_relogin(s.repo.client().obtained_at(), s.repo.client().data_sync_id());
         }
         crate::more::detach();
         with_core(|c| {

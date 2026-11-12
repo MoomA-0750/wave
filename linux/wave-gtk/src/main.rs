@@ -218,6 +218,7 @@ async fn show_home(toolbar: &adw::ToolbarView, repo: &MusicRepository) {
         std::rc::Rc::new(move || {
             if let Some(services) = services.upgrade() {
                 services.playback.player().stop();
+                wave_desktop::queue_store::remember_before_relogin(services.repo.client().obtained_at(), services.repo.client().data_sync_id());
             }
             if let Some(window) = toolbar_window(&toolbar) {
                 window.set_content(Some(&toolbar));

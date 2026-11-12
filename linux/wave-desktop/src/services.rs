@@ -48,7 +48,7 @@ impl Services {
         // 聴いた曲を数える（スマートダウンロードの「いつも聴いている」に使う）
         downloads.track_listens(&playback);
         // 前回のキューを戻し、以後は変わるたびに書く（同じログインのときだけ）
-        queue_store::attach(&playback, repo.client().obtained_at());
+        queue_store::attach(&playback, repo.client().obtained_at(), repo.client().data_sync_id());
         let lyrics = wave_core::lyrics::service::LyricsService::new(
             repo.clone(),
             wave_core::lyrics::lrclib::LrclibClient::default(),
