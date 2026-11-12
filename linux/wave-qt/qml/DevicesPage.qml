@@ -156,7 +156,7 @@ Flickable {
                     ColumnLayout {
                         Layout.fillWidth: true
                         spacing: 0
-                        Label { Layout.fillWidth: true; text: modelData.label + (modelData.self ? "（この PC）" : ""); elide: Text.ElideRight; color: Style.foreground }
+                        Label { Layout.fillWidth: true; text: modelData.label; elide: Text.ElideRight; color: Style.foreground }
                         Label { text: modelData.status; font.pixelSize: 12; color: modelData.status === "再生中の端末" ? Style.accent : Style.dim }
                     }
                     Btn { visible: modelData.canGrant; text: "ログインを渡す"; onClicked: grant.ask(modelData.id, modelData.name) }
