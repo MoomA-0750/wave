@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Controls.impl
 import QtQuick.Layouts
 import wave
 
@@ -12,6 +13,8 @@ Rectangle {
     property bool showAlbum: true
     property bool current: WaveApp.videoId !== "" && song.id === WaveApp.videoId
     property var removal: null
+    // 取った（3）・取っている途中（1・2）の印（GTK 版と同じ）。ダウンロードが変わるたびに読み直す
+    property int downloaded: { WaveApp.downloadsVersion; return song.id ? WaveApp.downloadState(song.id) : 0 }
     // 2行目（既定はアルバムの列があればアーティスト、無ければ「アーティスト • アルバム」）
     property string subtitleText: showAlbum ? (song.artists || "") : (song.subtitle || "")
     signal play()
@@ -71,6 +74,20 @@ Rectangle {
             elide: Text.ElideRight
             color: Style.dim
             font.pixelSize: 13
+        }
+        // 印の幅はいつも取っておく（印のある行だけアルバムの列がずれないように）
+        Item {
+            Layout.preferredWidth: 16
+            Layout.preferredHeight: 16
+            IconImage {
+                anchors.fill: parent
+                visible: row.downloaded > 0
+                source: Style.icon(row.downloaded === 3 ? "folder-download-symbolic" : "content-loading-symbolic")
+                sourceSize.width: 16
+                sourceSize.height: 16
+                color: row.downloaded === 3 ? Style.accent : Style.dim
+                opacity: row.downloaded === 3 ? 1 : 0.7
+            }
         }
         // 長さ（指を乗せている間は同じ場所に ⋯）
         Item {

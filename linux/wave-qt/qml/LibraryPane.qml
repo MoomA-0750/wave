@@ -22,6 +22,8 @@ Item {
     Connections {
         target: WaveApp
         function onLibraryVersionChanged() { pane.refresh() }
+        // ダウンロードの曲数（先頭の「ダウンロード」の行）
+        function onDownloadsVersionChanged() { pane.refresh() }
         function onSettingsVersionChanged() { pane.settings = JSON.parse(WaveApp.settingsJson()); pane.refresh() }
     }
 
