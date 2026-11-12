@@ -16,6 +16,8 @@ struct NowPlayingView: View {
     @State private var scrollTouching = false
     /// 縦向きの下の操作の欄の高さ（ジャケットをその上まで伸ばす）。
     @State private var controlsHeight: CGFloat = 320
+    /// 映像の縦横比（幅 / 高さ）。
+    @State private var videoAspect: CGFloat = 16 / 9
     @Environment(\.dismiss) private var dismiss
     /// 横向き（縦が狭い）なら、ジャケット・映像と操作を左右に並べる。
     @Environment(\.verticalSizeClass) private var verticalSize
@@ -66,7 +68,10 @@ struct NowPlayingView: View {
                 if player.isRemote { player.setLiveVideo(false) }
             }
         }
-        .sheet(isPresented: $shell.queueOpen) { QueueView().modifier(DialogSheets(layer: .queue)) }
+        // 縦向きの歌詞・キューは、ジャケットの場所を切り替えて出す（Apple Music と同じ）。シートは横向きだけ
+        .sheet(isPresented: Binding(get: { shell.queueOpen && verticalSize == .compact }, set: { shell.queueOpen = $0 })) {
+            QueueView().modifier(DialogSheets(layer: .queue))
+        }
         .sheet(isPresented: $devicesOpen) { DevicesSheet() }
         .sheet(isPresented: $aiOpen) { AiSheet() }
         // 曲のメニューの「プレイリストに追加」は、この画面の上に出す
@@ -136,8 +141,9 @@ struct NowPlayingView: View {
     /// 上には閉じるためのつまみだけを置き、ボタンはジャケットに重ねない（Apple Music の再生中の画面と同じ）。
     private func portrait(_ player: PlayerService, _ song: Song?) -> some View {
         let video = shell.showVideo && player.hasVideo
+        let panel = portraitPanel
         return ZStack(alignment: .top) {
-            if !video {
+            if !video && panel == nil {
                 // ジャケットは操作の欄の少し下まで縦に伸ばす（左右ははみ出して切れる）。下の方は、ぼかした同じ絵を挟んで
                 // くっきり → ぼかし → 地 と溶かし、ジャケットと操作の間に隙間を作らない
                 VStack(spacing: 0) {
@@ -155,6 +161,7 @@ struct NowPlayingView: View {
                     Color.clear.frame(height: max(0, controlsHeight - 120))
                 }
                 .ignoresSafeArea(edges: .top)
+                .transition(.opacity)
             }
             VStack(spacing: 0) {
                 Capsule().fill(.white.opacity(0.5)).frame(width: 36, height: 5)
@@ -163,12 +170,27 @@ struct NowPlayingView: View {
                     .onTapGesture { dismiss() }
                     .accessibilityLabel(L.t("閉じる", "Close"))
                     .accessibilityAddTraits(.isButton)
-                if video {
+                if let panel {
+                    // 歌詞・キュー: 上に小さな曲の行、真ん中に中身、下に操作
+                    compactTitleRow(player, song)
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 8)
+                    Group {
+                        switch panel {
+                        case .lyrics: LyricsView(embedded: true)
+                        case .queue: QueueView(embedded: true)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .transition(.opacity)
+                } else if video {
                     media(player).padding(.horizontal, 24).padding(.top, 16)
+                    Spacer(minLength: 0)
+                } else {
+                    Spacer(minLength: 0)
                 }
-                Spacer(minLength: 0)
                 VStack(alignment: .leading, spacing: 14) {
-                    portraitTitleRow(player, song)
+                    if panel == nil { portraitTitleRow(player, song) }
                     seekBar(player)
                     portraitControls(player)
                     if player.canChangeVolume { volumeBar(player) }
@@ -176,15 +198,61 @@ struct NowPlayingView: View {
                 }
                 .padding(.horizontal, 28)
                 .padding(.bottom, 4)
-                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { controlsHeight = $0 }
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { if panel == nil { controlsHeight = $0 } }
             }
         }
-        // ジャケットや曲名の辺りを下へ払ったら閉じる（つまみ・シークバーの横の動きは通す）
+        .animation(.easeInOut(duration: 0.3), value: panel)
+        // ジャケットや曲名の辺りを下へ払ったら閉じる（つまみ・シークバーの横の動きは通す）。歌詞・キューは中を送るので、払っても閉じない
         .simultaneousGesture(DragGesture(minimumDistance: 20).onEnded { value in
             if value.translation.height > 70, value.translation.height > abs(value.translation.width) * 1.5 { dismiss() }
-        })
-        .sheet(isPresented: Binding(get: { LyricsSheetState.shared.open }, set: { LyricsSheetState.shared.open = $0 })) {
-            LyricsView().modifier(DialogSheets(layer: .lyrics))
+        }, including: panel == nil ? .all : .subviews)
+    }
+
+    enum PortraitPanel { case lyrics, queue }
+
+    /// 縦向きで、ジャケットの場所に出している中身（歌詞・キュー）。
+    private var portraitPanel: PortraitPanel? {
+        guard verticalSize != .compact else { return nil }
+        if shell.queueOpen { return .queue }
+        if LyricsSheetState.shared.open { return .lyrics }
+        return nil
+    }
+
+    /// 歌詞・キューのときの上の曲の行（小さなジャケットを押すとジャケットの画面に戻る）。
+    private func compactTitleRow(_ player: PlayerService, _ song: Song?) -> some View {
+        HStack(spacing: 12) {
+            Button { closePanels() } label: { Cover(url: Ui.small(song?.thumbnailUrl), size: 56, radius: 6) }
+                .buttonStyle(.plain)
+                .accessibilityLabel(L.t("ジャケットに戻る", "Back to artwork"))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(song?.title ?? "").font(.headline).lineLimit(1)
+                Text(song?.artistsText ?? "").font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+            }
+            Spacer(minLength: 0)
+            if song != nil {
+                LikeButtonView(size: 18).frame(width: 36, height: 36).modifier(RoundButtonBackground())
+                songMenu(song).modifier(RoundButtonBackground())
+            }
+        }
+        .foregroundStyle(.primary)
+    }
+
+    private func closePanels() {
+        shell.queueOpen = false
+        LyricsSheetState.shared.open = false
+    }
+
+    /// 「…」のメニュー（Claude に聞く・共有・曲のメニュー）。
+    private func songMenu(_ song: Song?) -> some View {
+        Menu {
+            Button { aiOpen = true } label: { Label(L.t("Claude に聞く", "Ask Claude"), systemImage: "sparkles") }
+            // RSS のエピソードには YouTube の共有のリンクが無い（ADR-0012）
+            if let song, !Feed.isExternal(song.videoId) {
+                ShareLink(item: SongActions.url(song)) { Label(L.t("共有", "Share"), systemImage: "square.and.arrow.up") }
+            }
+            if let song { SongMenuItems(song: song) }
+        } label: {
+            Image(systemName: "ellipsis").font(.body.weight(.semibold)).frame(width: 40, height: 40)
         }
     }
 
@@ -201,16 +269,7 @@ struct NowPlayingView: View {
             Spacer(minLength: 0)
             if song != nil {
                 LikeButtonView(size: 20).frame(width: 40, height: 40).modifier(RoundButtonBackground())
-                Menu {
-                    Button { aiOpen = true } label: { Label(L.t("Claude に聞く", "Ask Claude"), systemImage: "sparkles") }
-                    // RSS のエピソードには YouTube の共有のリンクが無い（ADR-0012）
-                    if let song, !Feed.isExternal(song.videoId) {
-                        ShareLink(item: SongActions.url(song)) { Label(L.t("共有", "Share"), systemImage: "square.and.arrow.up") }
-                    }
-                    if let song { SongMenuItems(song: song) }
-                } label: {
-                    Image(systemName: "ellipsis").font(.body.weight(.semibold)).frame(width: 40, height: 40)
-                }
+                songMenu(song)
                 .modifier(RoundButtonBackground())
             }
         }
@@ -263,8 +322,15 @@ struct NowPlayingView: View {
     private func portraitBottomRow(_ player: PlayerService) -> some View {
         let hasLyrics = if case .found = player.lyrics { true } else { false }
         return HStack {
-            Button { LyricsSheetState.shared.open = true } label: {
-                Image(systemName: "quote.bubble").frame(width: 44, height: 44)
+            Button {
+                // 縦向きはジャケットの場所を歌詞に切り替える（もう一度押すとジャケットに戻る）。横向きはシート
+                let open = !LyricsSheetState.shared.open
+                shell.queueOpen = false
+                LyricsSheetState.shared.open = open
+            } label: {
+                Image(systemName: LyricsSheetState.shared.open ? "quote.bubble.fill" : "quote.bubble")
+                    .foregroundStyle(LyricsSheetState.shared.open ? Color.accentColor : Color.primary)
+                    .frame(width: 44, height: 44)
             }
             .disabled(!hasLyrics)
             .accessibilityLabel(L.t("歌詞", "Lyrics"))
@@ -281,7 +347,7 @@ struct NowPlayingView: View {
                 Spacer()
                 Button { devicesOpen = true } label: {
                     HStack(spacing: 6) {
-                        Image(systemName: player.isRemote ? "hifispeaker.2.fill" : "hifispeaker.2")
+                        Image(systemName: "airplay.audio")
                         if player.isRemote, let device = player.remoteDevice { Text(device).font(.caption.weight(.semibold)).lineLimit(1) }
                     }
                     .foregroundStyle(player.isRemote ? Color.accentColor : Color.primary)
@@ -290,10 +356,18 @@ struct NowPlayingView: View {
                 .accessibilityLabel(L.t("デバイスに接続", "Connect to a device"))
             }
             Spacer()
-            Button { shell.queueOpen = true } label: { Image(systemName: "list.bullet").frame(width: 44, height: 44) }
-                .accessibilityLabel(L.t("キュー", "Queue"))
+            Button {
+                let open = !shell.queueOpen
+                LyricsSheetState.shared.open = false
+                shell.queueOpen = open
+            } label: {
+                Image(systemName: "list.bullet")
+                    .foregroundStyle(shell.queueOpen ? Color.accentColor : Color.primary)
+                    .frame(width: 44, height: 44)
+            }
+            .accessibilityLabel(L.t("キュー", "Queue"))
         }
-        .font(.title3)
+        .font(.title3.weight(.semibold))
         .buttonStyle(.plain)
         .foregroundStyle(.primary)
         .padding(.horizontal, 12)
@@ -318,7 +392,18 @@ struct NowPlayingView: View {
     private func media(_ player: PlayerService) -> some View {
         if shell.showVideo, player.hasVideo {
             VideoSurface()
-                .aspectRatio(1, contentMode: .fit)
+                // 枠は映像の縦横比に合わせる（分かるまでは 16:9）
+                .aspectRatio(videoAspect, contentMode: .fit)
+                .task(id: shell.showVideo) {
+                    while !Task.isCancelled {
+                        let item = (player.liveVideoPlayer ?? MusicVideoPlayer.shared.player).currentItem
+                        if let size = item?.presentationSize, size.width > 0, size.height > 0 {
+                            let aspect = size.width / size.height
+                            if abs(aspect - videoAspect) > 0.01 { withAnimation(.snappy) { videoAspect = aspect } }
+                        }
+                        try? await Task.sleep(for: .milliseconds(500))
+                    }
+                }
                 .clipShape(RoundedRectangle(cornerRadius: 10))
                 .overlay(alignment: .bottomTrailing) {
                     HStack(spacing: 8) {
@@ -490,6 +575,15 @@ struct NowPlayingView: View {
 
 /// 再生中の画面のジャケット。前後の曲のジャケットを横に並べておき（先に読んでおく）、指について動く。
 /// 払いきると隣のジャケットが真ん中へ滑ってきて、その曲へ移る（前へ払うと、再生した長さによらず前の曲へ。Android と同じ）。
+/// fullBleed でなければ正方形にする。
+private struct SquareUnless: ViewModifier {
+    var fullBleed: Bool
+    init(_ fullBleed: Bool) { self.fullBleed = fullBleed }
+    func body(content: Content) -> some View {
+        if fullBleed { content } else { content.aspectRatio(1, contentMode: .fit) }
+    }
+}
+
 /// 曲名の横の丸いボタンの地（iOS 26 からはガラス、それより前は薄い丸）。
 private struct RoundButtonBackground: ViewModifier {
     func body(content: Content) -> some View {
@@ -597,8 +691,8 @@ private struct CoverCarousel: View {
                     }
                 })
         }
-        // 画面の幅いっぱいのときは、渡された高さまで伸ばす（絵ははみ出した左右が切れる）
-        .aspectRatio(fullBleed ? nil : 1, contentMode: .fit)
+        // 画面の幅いっぱいのときは、渡された高さまで伸ばす（絵ははみ出した左右が切れる）。縦横比を付けると正方形のまま真ん中に置かれ、上に境目が出た
+        .modifier(SquareUnless(fullBleed))
     }
 
     private func cover(_ song: Song) -> some View {

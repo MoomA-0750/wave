@@ -10,9 +10,57 @@ struct QueueView: View {
     /// 並べ替えの「編集」。EditButton に任せると、曲の進みなどで画面を描き直すたびに編集の状態が揺れ、右のつまみが出たり消えたりしたので、自分で持つ
     @State private var editMode: EditMode = .inactive
     @Environment(\.dismiss) private var dismiss
+    /// 再生画面の中に埋め込む（縦向き。上に見出しと「編集」、地は再生画面のもの）。
+    var embedded = false
 
     var body: some View {
         let player = AppServices.player!
+        if embedded {
+            VStack(spacing: 0) {
+                HStack {
+                    Text(L.t("次に再生", "Playing Next")).font(.headline)
+                    Spacer()
+                    editButton(player)
+                }
+                .padding(.horizontal, 24)
+                .frame(minHeight: 36)
+                list(player)
+                    .scrollContentBackground(.hidden)
+            }
+            .onChange(of: history) { if history { editMode = .inactive } }
+        } else {
+            sheet(player)
+        }
+    }
+
+    @ViewBuilder
+    private func editButton(_ player: PlayerService) -> some View {
+        if !history && player.queue.count > player.index + 1 {
+            Button(editMode.isEditing ? L.t("完了", "Done") : L.t("編集", "Edit")) {
+                withAnimation { editMode = editMode.isEditing ? .inactive : .active }
+            }
+            .fontWeight(editMode.isEditing ? .semibold : .regular)
+        }
+    }
+
+    private func list(_ player: PlayerService) -> some View {
+        List {
+            Section {
+                QueueModeControls(history: $history)
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+            }
+            if history {
+                historySection(player)
+            } else {
+                upcomingSections(player)
+            }
+        }
+        .listStyle(.insetGrouped)
+        .environment(\.editMode, $editMode)
+    }
+
+    private func sheet(_ player: PlayerService) -> some View {
         NavigationStack {
             List {
                 Section {

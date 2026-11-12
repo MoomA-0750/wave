@@ -6,12 +6,22 @@ import WaveCore
 /// 時刻付きなら歌っている行を明るくして追い、行を押すとその位置へ。本人が送ったら、しばらく自動で追わない。
 /// 出典（LRCLIB など）は歌詞の最後に小さく出す（Android と同じ）。下に小さな再生の操作。
 struct LyricsView: View {
+    /// 再生画面の中に埋め込む（縦向き。曲の行・操作・地は再生画面のものを使い、歌詞だけを出す）。
+    var embedded = false
     @State private var tint: Color?
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         let player = AppServices.player!
         let song = player.current
+        if embedded {
+            content(player).environment(\.colorScheme, .dark)
+        } else {
+            sheet(player, song)
+        }
+    }
+
+    private func sheet(_ player: PlayerService, _ song: Song?) -> some View {
         VStack(spacing: 0) {
             header(song)
             content(player)
