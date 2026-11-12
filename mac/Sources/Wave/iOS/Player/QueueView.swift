@@ -24,10 +24,8 @@ struct QueueView: View {
                 }
                 .padding(.horizontal, 24)
                 .frame(minHeight: 36)
-                list(player)
-                    .scrollContentBackground(.hidden)
+                embeddedList(player)
             }
-            .onChange(of: history) { if history { editMode = .inactive } }
         } else {
             sheet(player)
         }
@@ -42,6 +40,32 @@ struct QueueView: View {
             .fontWeight(editMode.isEditing ? .semibold : .regular)
         }
     }
+
+    /// 再生画面の中のキュー: 履歴（古い順）・再生中・次の曲を1本に並べ、開いたら再生中を上に合わせる（上へ引っ張ると履歴が出る）。
+    /// 行の地は出さない（再生画面の地をそのまま見せる）。シャッフル・リピートは再生画面の操作にあるので置かない。
+    private func embeddedList(_ player: PlayerService) -> some View {
+        let played = Array(0..<max(0, min(player.index, player.queue.count)))
+        return ScrollViewReader { proxy in
+            List {
+                if !played.isEmpty {
+                    Section(L.t("履歴", "History")) {
+                        ForEach(played.map { QueuePosition(position: $0, id: QueueView.itemId(player, $0)) }) { item in
+                            QueueSongRow(position: item.position, isCurrent: false).modifier(QueueRowBackground())
+                        }
+                    }
+                }
+                upcomingSections(player)
+            }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .environment(\.listRowBackgroundClear, true)
+            .environment(\.editMode, $editMode)
+            .onAppear { proxy.scrollTo(QueueView.nowId, anchor: .top) }
+            .onChange(of: player.index) { withAnimation { proxy.scrollTo(QueueView.nowId, anchor: .top) } }
+        }
+    }
+
+    static let nowId = "queue-now"
 
     private func list(_ player: PlayerService) -> some View {
         List {
@@ -107,14 +131,16 @@ struct QueueView: View {
         let userEnd = player.userQueueEnd
         if current >= 0 && current < count {
             Section(L.t("再生中", "Now playing")) {
-                QueueSongRow(position: current, isCurrent: true)
+                QueueSongRow(position: current, isCurrent: true).modifier(QueueRowBackground())
             }
+            .id(QueueView.nowId)
         }
         if current + 1 >= count {
             // 次の曲が無い
             Section {
                 QueueEmptyNote(title: L.t("キューは空です", "Your queue is empty"),
                                detail: L.t("曲を再生すると、ここに次の曲が並びます", "Play something and upcoming songs will show up here"))
+                    .modifier(QueueRowBackground())
             }
         }
         if current >= 0 && userEnd > current + 1 {
@@ -151,7 +177,7 @@ struct QueueView: View {
     private func rows(_ player: PlayerService, _ positions: [Int]) -> some View {
         let start = positions.first ?? 0
         return ForEach(positions.map { QueuePosition(position: $0, id: QueueView.itemId(player, $0)) }) { item in
-            QueueSongRow(position: item.position, isCurrent: false)
+            QueueSongRow(position: item.position, isCurrent: false).modifier(QueueRowBackground())
         }
         .onMove { from, to in
             guard let first = from.first else { return }
@@ -173,11 +199,12 @@ struct QueueView: View {
             Section {
                 QueueEmptyNote(title: L.t("まだ流れた曲はありません", "Nothing played yet"),
                                detail: L.t("流れた曲は、ここに新しい順に並びます", "Songs you've played will show up here"))
+                    .modifier(QueueRowBackground())
             }
         } else {
             Section(L.t("履歴", "History")) {
                 ForEach(played.map { QueuePosition(position: $0, id: QueueView.itemId(player, $0)) }) { item in
-                    QueueSongRow(position: item.position, isCurrent: false)
+                    QueueSongRow(position: item.position, isCurrent: false).modifier(QueueRowBackground())
                 }
             }
         }
@@ -284,3 +311,23 @@ private struct QueueEmptyNote: View {
     }
 }
 #endif
+
+private struct ListRowBackgroundClearKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    /// キューの行の地を出さない（再生画面に埋め込んだとき）。
+    var listRowBackgroundClear: Bool {
+        get { self[ListRowBackgroundClearKey.self] }
+        set { self[ListRowBackgroundClearKey.self] = newValue }
+    }
+}
+
+/// listRowBackgroundClear のときだけ、行の地を透明にする。
+struct QueueRowBackground: ViewModifier {
+    @Environment(\.listRowBackgroundClear) private var clear
+    func body(content: Content) -> some View {
+        if clear { content.listRowBackground(Color.clear) } else { content }
+    }
+}
