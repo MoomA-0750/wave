@@ -209,7 +209,9 @@ final class LockScreenArtwork: @unchecked Sendable {
         let centered = scaled.transformed(by: CGAffineTransform(translationX: (size.width - scaled.extent.width) / 2 - scaled.extent.minX,
                                                                 y: (size.height - scaled.extent.height) / 2 - scaled.extent.minY))
         let blurred = centered.clampedToExtent().applyingGaussianBlur(sigma: size.width * 0.06)
-        let dimmed = blurred.applyingFilter("CIColorControls", parameters: [kCIInputBrightnessKey: -0.28, kCIInputSaturationKey: 1.25])
+        // 暗くするのは掛け算（露出）で。明るさを引くと、ぼかしの薄い裾が 0 に切れて、光の縁がすっぱり切れ、赤い縞が出た
+        let dimmed = blurred.applyingFilter("CIExposureAdjust", parameters: [kCIInputEVKey: -1.3])
+            .applyingFilter("CIColorControls", parameters: [kCIInputSaturationKey: 1.2])
         return context.createCGImage(dimmed.cropped(to: rect), from: rect)
     }
 
