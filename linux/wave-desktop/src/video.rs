@@ -1,7 +1,8 @@
 //! 曲に重ねる MV（音を消した映像。Windows の MusicVideoPlayer と同じ）。音は Player が鳴らし、映像は音の位置に合わせ続ける。
 //! 映像の出口（sink）は画面の側が渡す（GTK 版は gtk4paintablesink、QML 版は appsink で絵を受け取って描く）。
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
+use std::time::{Duration, Instant};
 use std::sync::{Arc, Mutex};
 
 use gst::prelude::*;
@@ -14,12 +15,19 @@ use crate::runtime;
 
 /// 映像と音のずれがこれより大きくなったら、映像を音の位置へ飛ばす。
 const DRIFT_MS: i64 = 400;
+/// シークしてから、次のシークを考えるまで待つ時間。解くのが遅い機械（cramgent の M1 のソフトの解き方など）では、
+/// 指定の位置に着くまでにずれが DRIFT_MS を超え、待たずに見るとシークをやり直し続けて絵が1枚も出なかった。
+const SEEK_SETTLE: Duration = Duration::from_millis(2500);
+/// 鳴っている間にシークするときは、着くまでの間に音が進むぶん先へ飛ぶ。
+const SEEK_LEAD_MS: u64 = 600;
 
 pub struct VideoPlayer {
     playbin: gst::Element,
     resolver: StreamResolver,
     feed: Arc<Mutex<Feed>>,
     loaded: RefCell<Option<String>>,
+    /// 最後にシークした時刻（落ち着くまで次のシークをしない）。
+    last_seek: Cell<Option<Instant>>,
 }
 
 impl VideoPlayer {
@@ -34,7 +42,7 @@ impl VideoPlayer {
             configure_source(&source, setup_feed.clone());
             None
         });
-        Some(Self { playbin, resolver, feed, loaded: RefCell::default() })
+        Some(Self { playbin, resolver, feed, loaded: RefCell::default(), last_seek: Cell::new(None) })
     }
 
     /// 映像を読み込む（同じ映像なら何もしない）。読めなければ false。
@@ -66,9 +74,12 @@ impl VideoPlayer {
             self.playbin.set_state(gst::State::Paused).ok();
             return false;
         };
+        let settling = self.last_seek.get().is_some_and(|t| t.elapsed() < SEEK_SETTLE);
         let current = self.playbin.query_position::<gst::ClockTime>().map(|t| t.mseconds() as i64);
-        if current.is_none_or(|c| (c - target as i64).abs() > DRIFT_MS) {
-            self.playbin.seek_simple(gst::SeekFlags::FLUSH | gst::SeekFlags::ACCURATE, gst::ClockTime::from_mseconds(target)).ok();
+        if !settling && current.is_none_or(|c| (c - target as i64).abs() > DRIFT_MS) {
+            let to = if playing { target + SEEK_LEAD_MS } else { target };
+            self.playbin.seek_simple(gst::SeekFlags::FLUSH | gst::SeekFlags::ACCURATE, gst::ClockTime::from_mseconds(to)).ok();
+            self.last_seek.set(Some(Instant::now()));
         }
         self.playbin.set_state(if playing { gst::State::Playing } else { gst::State::Paused }).ok();
         true
@@ -77,6 +88,7 @@ impl VideoPlayer {
     pub fn stop(&self) {
         self.playbin.set_state(gst::State::Null).ok();
         *self.loaded.borrow_mut() = None;
+        self.last_seek.set(None);
     }
 }
 

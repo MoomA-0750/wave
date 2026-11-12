@@ -152,22 +152,33 @@ impl Video {
     }
 }
 
+/// appsink の絵を1枚、QML の VideoFrame に渡す。
+fn show_sample(sample: gst::Sample) -> Result<gst::FlowSuccess, gst::FlowError> {
+    let (Some(buffer), Some(caps)) = (sample.buffer(), sample.caps()) else { return Ok(gst::FlowSuccess::Ok) };
+    let Ok(info) = gst_video::VideoInfo::from_caps(caps) else { return Ok(gst::FlowSuccess::Ok) };
+    if let Ok(map) = buffer.map_readable() {
+        let stride = info.stride()[0];
+        // 最初の1枚だけ大きさを記録に残す（映らないときに、絵が届いているかを分ける）
+        if !FIRST_FRAME_SEEN.swap(true, std::sync::atomic::Ordering::Relaxed) {
+            eprintln!("video first frame {}x{}", info.width(), info.height());
+        }
+        crate::bridge::qobject::wave_video_frame(map.as_slice(), info.width() as i32, info.height() as i32, stride);
+    }
+    Ok(gst::FlowSuccess::Ok)
+}
+
+/// 映像の最初の1枚を記録したか（MV を読み直すたびに戻す）。
+static FIRST_FRAME_SEEN: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 fn make_player(services: &Rc<Services>) -> Option<wave_desktop::video::VideoPlayer> {
     gst::init().ok()?;
     let caps = gst::Caps::builder("video/x-raw").field("format", "RGBA").build();
     let sink = gst_app::AppSink::builder().caps(&caps).max_buffers(2).drop(true).sync(true).build();
+    // 鳴っている間の絵（new_sample）と、止まっている間・シークした直後の1枚（new_preroll）を同じように描く
     sink.set_callbacks(
         gst_app::AppSinkCallbacks::builder()
-            .new_sample(|sink| {
-                let sample = sink.pull_sample().map_err(|_| gst::FlowError::Eos)?;
-                let (Some(buffer), Some(caps)) = (sample.buffer(), sample.caps()) else { return Ok(gst::FlowSuccess::Ok) };
-                let Ok(info) = gst_video::VideoInfo::from_caps(caps) else { return Ok(gst::FlowSuccess::Ok) };
-                if let Ok(map) = buffer.map_readable() {
-                    let stride = info.stride()[0];
-                    crate::bridge::qobject::wave_video_frame(map.as_slice(), info.width() as i32, info.height() as i32, stride);
-                }
-                Ok(gst::FlowSuccess::Ok)
-            })
+            .new_sample(|sink| show_sample(sink.pull_sample().map_err(|_| gst::FlowError::Eos)?))
+            .new_preroll(|sink| show_sample(sink.pull_preroll().map_err(|_| gst::FlowError::Eos)?))
             .build(),
     );
     wave_desktop::video::VideoPlayer::with_sink(services.resolver.clone(), sink.upcast_ref())
@@ -238,6 +249,7 @@ fn set_video(on: bool) {
     glib::spawn_future_local(async move {
         // VideoPlayer::load は await の間も借りるので、借りずに済むよう一度取り出す
         let Some(video) = VIDEO.with(|v| v.borrow_mut().take()) else { return };
+        FIRST_FRAME_SEEN.store(false, std::sync::atomic::Ordering::Relaxed);
         let ok = video.player.load(&mv).await;
         eprintln!("video load ok={ok}");
         VIDEO.with(|v| {
