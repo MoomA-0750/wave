@@ -148,6 +148,8 @@ struct SongMenuItems: View {
 /// 評価のボタン（＋と✓。Android・Mac と同じ動き）。
 struct LikeButtonView: View {
     var size: CGFloat = 22
+    /// 押せる枠の一辺（隣の丸いボタンと大きさをそろえるときに渡す）。
+    var box: CGFloat = 44
 
     var body: some View {
         let player = AppServices.player!
@@ -157,7 +159,7 @@ struct LikeButtonView: View {
                 Image(systemName: LikeButton.symbol(player))
                     .font(.system(size: size))
                     .foregroundStyle(LikeButton.accent(player) ? Color.accentColor : Color.secondary)
-                    .frame(width: 44, height: 44)
+                    .frame(width: box, height: box)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)

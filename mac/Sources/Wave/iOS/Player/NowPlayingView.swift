@@ -172,8 +172,9 @@ struct NowPlayingView: View {
                     .accessibilityAddTraits(.isButton)
                 if let panel {
                     // 歌詞・キュー: 上に小さな曲の行、真ん中に中身、下に操作
+                    // 左右の端は、キューの並び（List の行と区切りの見出し）にそろえる
                     compactTitleRow(player, song)
-                        .padding(.horizontal, 24)
+                        .padding(.horizontal, 20)
                         .padding(.vertical, 8)
                     Group {
                         switch panel {
@@ -238,7 +239,7 @@ struct NowPlayingView: View {
             }
             Spacer(minLength: 0)
             if song != nil {
-                LikeButtonView(size: 18).frame(width: 36, height: 36).modifier(RoundButtonBackground())
+                LikeButtonView(size: 17, box: 40).modifier(RoundButtonBackground())
                 songMenu(song).modifier(RoundButtonBackground())
             }
         }
@@ -260,7 +261,7 @@ struct NowPlayingView: View {
             }
             if let song { SongMenuItems(song: song) }
         } label: {
-            Image(systemName: "ellipsis").font(.body.weight(.semibold)).frame(width: 40, height: 40)
+            Image(systemName: "ellipsis").font(.system(size: 17, weight: .semibold)).frame(width: 40, height: 40)
         }
     }
 
@@ -276,7 +277,7 @@ struct NowPlayingView: View {
             }
             Spacer(minLength: 0)
             if song != nil {
-                LikeButtonView(size: 20).frame(width: 40, height: 40).modifier(RoundButtonBackground())
+                LikeButtonView(size: 17, box: 40).modifier(RoundButtonBackground())
                 songMenu(song)
                 .modifier(RoundButtonBackground())
             }

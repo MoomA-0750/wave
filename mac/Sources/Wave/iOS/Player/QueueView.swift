@@ -16,17 +16,8 @@ struct QueueView: View {
     var body: some View {
         let player = AppServices.player!
         if embedded {
-            VStack(spacing: 0) {
-                HStack {
-                    Text(L.t("次に再生", "Playing Next")).font(.headline)
-                    Spacer()
-                    editButton(player)
-                }
-                // List の区切りの見出しと左右の端をそろえる
-                .padding(.horizontal, 18)
-                .frame(minHeight: 36)
-                embeddedList(player)
-            }
+            // 見出しの段は置かず、「編集」は最初の区切りの見出し（「キューの次の曲」か「次に流れる曲」）に付ける
+            embeddedList(player)
         } else {
             sheet(player)
         }
@@ -38,7 +29,7 @@ struct QueueView: View {
             Button(editMode.isEditing ? L.t("完了", "Done") : L.t("編集", "Edit")) {
                 withAnimation { editMode = editMode.isEditing ? .inactive : .active }
             }
-            .fontWeight(editMode.isEditing ? .semibold : .regular)
+            .fontWeight(embedded || editMode.isEditing ? .semibold : .regular)
         }
     }
 
@@ -67,13 +58,19 @@ struct QueueView: View {
             .scrollContentBackground(.hidden)
             // 目印の行が行の最低の高さまで広がって、見出しの下が空かないように
             .environment(\.defaultMinListRowHeight, 0)
+            // 次の曲が少なくても、履歴と次の曲の境目を上まで送れるよう、下に余白を足す
+            .contentMargins(.bottom, 480, for: .scrollContent)
             // 上の端は薄くして消す（見出しと「編集」は薄くしない）
             .mask {
                 LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.05)], startPoint: .top, endPoint: .bottom)
             }
             .environment(\.listRowBackgroundClear, true)
             .environment(\.editMode, $editMode)
-            .onAppear { proxy.scrollTo(QueueView.nowId, anchor: .top) }
+            // 開いた直後は並びの位置がまだ決まっていないので、少し待ってから合わせる
+            .task {
+                try? await Task.sleep(for: .milliseconds(80))
+                proxy.scrollTo(QueueView.nowId, anchor: .top)
+            }
             .onChange(of: player.index) { withAnimation { proxy.scrollTo(QueueView.nowId, anchor: .top) } }
         }
     }
@@ -167,6 +164,8 @@ struct QueueView: View {
                     Button(L.t("キューを消去", "Clear queue")) { player.clearUserQueue() }
                         .font(.footnote.weight(.semibold))
                         .textCase(nil)
+                        .modifier(HeaderButtonColor(embedded: embedded))
+                    if embedded { editButton(player).font(.footnote.weight(.semibold)).textCase(nil).modifier(HeaderButtonColor(embedded: true)) }
                 }
             }
         }
@@ -181,6 +180,11 @@ struct QueueView: View {
                     Button(L.t("消去", "Clear")) { player.clearFlow() }
                         .font(.footnote.weight(.semibold))
                         .textCase(nil)
+                        .modifier(HeaderButtonColor(embedded: embedded))
+                    // 自分で足した曲が無ければ、ここが最初の区切り
+                    if embedded && !(current >= 0 && userEnd > current + 1) {
+                        editButton(player).font(.footnote.weight(.semibold)).textCase(nil).modifier(HeaderButtonColor(embedded: true))
+                    }
                 }
             }
         }
@@ -342,5 +346,14 @@ struct QueueRowBackground: ViewModifier {
     @Environment(\.listRowBackgroundClear) private var clear
     func body(content: Content) -> some View {
         if clear { content.listRowBackground(Color.clear) } else { content }
+    }
+}
+
+/// 再生画面に埋め込んだキューの見出しのボタンは、青でなく白にする。
+private struct HeaderButtonColor: ViewModifier {
+    var embedded: Bool
+    func body(content: Content) -> some View {
+        // 区切りの見出しの中は文字が薄い灰色になるので、白を直に渡す
+        if embedded { content.foregroundStyle(Color.white) } else { content }
     }
 }
