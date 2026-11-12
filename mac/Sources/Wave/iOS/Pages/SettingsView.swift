@@ -8,7 +8,9 @@ struct SettingsView: View {
     @State private var sendHistory = AppServices.settings.sendHistory
     @State private var releaseNotices = AppServices.settings.releaseNotices
     @State private var musicPip = AppServices.settings.musicPip
-    @State private var lockScreenLyrics = AppServices.settings.lockScreenLyrics
+    @State private var lyricsInArtist = AppServices.settings.lyricsInArtist
+    @State private var lyricsInLiveActivity = AppServices.settings.lyricsInLiveActivity
+    @State private var lyricsInArtwork = AppServices.settings.lyricsInArtwork
     @State private var language = AppServices.settings.language
     @State private var originalTitles = AppServices.settings.originalTitles
     @State private var pinnedTab = IOSShell.shared.pinnedTab
@@ -42,18 +44,43 @@ struct SettingsView: View {
                     AppServices.settings.save()
                     MusicPip.shared.settingChanged()
                 }
-                Toggle(isOn: $lockScreenLyrics) {
-                    SettingsLabel(title: L.t("ロック画面に歌詞を出す", "Lyrics on the Lock Screen"),
-                                  detail: L.t("時刻付きの歌詞がある曲で、歌っている行をロック画面の再生中に出す。アーティスト名の欄にも出るので、車やイヤホンの画面にも出る",
-                                              "For songs with synced lyrics, show the line being sung in the Lock Screen player. It also replaces the artist name, so car and headphone displays show it too"))
-                }
-                .onChange(of: lockScreenLyrics) { _, v in
-                    AppServices.settings.lockScreenLyrics = v
-                    AppServices.settings.save()
-                    LockScreenLyrics.shared.refresh()
-                }
             } header: {
                 Text(L.t("再生", "Play"))
+            }
+            Section {
+                Toggle(isOn: $lyricsInLiveActivity) {
+                    SettingsLabel(title: L.t("ロック画面の再生中", "Lock Screen player"),
+                                  detail: L.t("ロック画面とダイナミックアイランドの再生中（Live Activity）に、今の行と次の行を出す",
+                                              "Show the current and next line in the Live Activity on the Lock Screen and in the Dynamic Island"))
+                }
+                .onChange(of: lyricsInLiveActivity) { _, v in
+                    AppServices.settings.lyricsInLiveActivity = v
+                    lockScreenLyricsChanged()
+                }
+                if #available(iOS 26.0, *) {
+                    Toggle(isOn: $lyricsInArtwork) {
+                        SettingsLabel(title: L.t("全画面のジャケット", "Full-screen artwork"),
+                                      detail: L.t("ロック画面の大きなジャケットを、ぼかしたジャケットの上に今の行と次の行を描いた絵にする",
+                                                  "Replace the large Lock Screen artwork with the current and next line over the blurred cover"))
+                    }
+                    .onChange(of: lyricsInArtwork) { _, v in
+                        AppServices.settings.lyricsInArtwork = v
+                        lockScreenLyricsChanged()
+                    }
+                }
+                Toggle(isOn: $lyricsInArtist) {
+                    SettingsLabel(title: L.t("アーティスト名の欄", "Artist name"),
+                                  detail: L.t("再生中のアーティスト名を今の行に替える。車・イヤホン・時計の画面にも出る",
+                                              "Replace the artist name with the current line. Car, headphone and watch displays show it too"))
+                }
+                .onChange(of: lyricsInArtist) { _, v in
+                    AppServices.settings.lyricsInArtist = v
+                    lockScreenLyricsChanged()
+                }
+            } header: {
+                Text(L.t("ロック画面の歌詞", "Lyrics on the Lock Screen"))
+            } footer: {
+                Text(L.t("時刻付きの歌詞がある曲で、歌っている行を出します", "For songs with synced lyrics, shows the line being sung"))
             }
             downloadsSection
             claudeSection
@@ -165,6 +192,11 @@ struct SettingsView: View {
     private var version: String { Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1.0" }
 
     // MARK: アカウント
+
+    private func lockScreenLyricsChanged() {
+        AppServices.settings.save()
+        LockScreenLyrics.shared.settingsChanged()
+    }
 
     private var accountSection: some View {
         Section {

@@ -454,6 +454,10 @@ final class PlayerService {
     }
 
     @ObservationIgnored private var shownArtworkFor: String?
+    #if os(iOS)
+        /// ロック画面のジャケット（全画面の歌詞の絵の地に使う）。
+        @ObservationIgnored private var nowPlayingCover: (videoId: String, image: UIImage)?
+    #endif
 
     /// 「再生中」の表示（コントロールセンター・メディアキーの相手）。ほかの端末を映している間は、その端末の曲を出す。
     private func updateNowPlayingInfo() {
@@ -479,8 +483,13 @@ final class PlayerService {
         info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = live ? nil : position
         info[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? 1.0 : 0.0
         #if os(iOS)
-            // 歌っている行があれば、アーティスト名の行に出す（ロック画面の歌詞。LockScreenLyrics）
-            info[MPMediaItemPropertyArtist] = LockScreenLyrics.shared.current ?? song.artistsText
+            // 歌っている行を、アーティスト名の欄と全画面のジャケットに出す（ロック画面の歌詞。どちらも設定で選ぶ。LockScreenLyrics）
+            info[MPMediaItemPropertyArtist] = LockScreenLyrics.shared.artistLine ?? song.artistsText
+            if #available(iOS 26.0, *) {
+                let artwork = LockScreenLyrics.shared.artwork(videoId: song.videoId, cover: nowPlayingCover?.videoId == song.videoId ? nowPlayingCover?.image : nil)
+                let key = MPNowPlayingInfoProperty3x4AnimatedArtwork
+                info[key] = artwork != nil && MPNowPlayingInfoCenter.supportedAnimatedArtworkKeys.contains(key) ? artwork : nil
+            }
         #endif
         MPRemoteCommandCenter.shared().changePlaybackPositionCommand.isEnabled = !live
         center.nowPlayingInfo = info
@@ -504,6 +513,11 @@ final class PlayerService {
             var info = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
             info[MPMediaItemPropertyArtwork] = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
             MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+            #if os(iOS)
+                // 全画面の歌詞の絵を、ジャケットを地にして描き直す
+                self.nowPlayingCover = (song.videoId, image)
+                if LockScreenLyrics.shared.artworkOn { self.updateNowPlayingInfo() }
+            #endif
         }
     }
 

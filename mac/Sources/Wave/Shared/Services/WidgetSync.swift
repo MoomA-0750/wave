@@ -338,7 +338,7 @@ final class WidgetSync {
         let state = NowPlayingAttributes.ContentState(videoId: now.videoId, title: now.title, artist: now.artist, playing: now.playing,
                                                       device: now.device, nextTitle: now.nextTitle,
                                                       startedAt: timing?.startedAt, endsAt: timing?.endsAt, fraction: timing?.fraction, artwork: artwork,
-                                                      line: LockScreenLyrics.shared.current, nextLine: LockScreenLyrics.shared.next)
+                                                      line: LockScreenLyrics.shared.activityLines.line, nextLine: LockScreenLyrics.shared.activityLines.next)
         // 同じ中身は送らない（位置の棒の確かめで毎秒呼ばれる）
         guard state != sentState || activity?.activityState != .active else { return }
         let content = ActivityContent(state: state, staleDate: nil)
