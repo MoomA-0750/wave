@@ -14,6 +14,8 @@ struct NowPlayingView: View {
     @State private var aiOpen = false
     /// 指でスクロールしている間か（一番上からさらに下へ引っ張ったら閉じるため）。
     @State private var scrollTouching = false
+    /// 縦向きの下の操作の欄の高さ（ジャケットをその上まで伸ばす）。
+    @State private var controlsHeight: CGFloat = 320
     @Environment(\.dismiss) private var dismiss
     /// 横向き（縦が狭い）なら、ジャケット・映像と操作を左右に並べる。
     @Environment(\.verticalSizeClass) private var verticalSize
@@ -136,8 +138,23 @@ struct NowPlayingView: View {
         let video = shell.showVideo && player.hasVideo
         return ZStack(alignment: .top) {
             if !video {
-                CoverCarousel(fullBleed: true)
-                    .ignoresSafeArea(edges: .top)
+                // ジャケットは操作の欄の少し下まで縦に伸ばす（左右ははみ出して切れる）。下の方は、ぼかした同じ絵を挟んで
+                // くっきり → ぼかし → 地 と溶かし、ジャケットと操作の間に隙間を作らない
+                VStack(spacing: 0) {
+                    ZStack {
+                        RemoteImage(url: Ui.large(song?.thumbnailUrl))
+                            .blur(radius: 40, opaque: true)
+                            .mask {
+                                LinearGradient(stops: [.init(color: .clear, location: 0.35), .init(color: .black, location: 0.6),
+                                                       .init(color: .black, location: 0.8), .init(color: .clear, location: 1)],
+                                               startPoint: .top, endPoint: .bottom)
+                            }
+                            .allowsHitTesting(false)
+                        CoverCarousel(fullBleed: true)
+                    }
+                    Color.clear.frame(height: max(0, controlsHeight - 120))
+                }
+                .ignoresSafeArea(edges: .top)
             }
             VStack(spacing: 0) {
                 Capsule().fill(.white.opacity(0.5)).frame(width: 36, height: 5)
@@ -159,6 +176,7 @@ struct NowPlayingView: View {
                 }
                 .padding(.horizontal, 28)
                 .padding(.bottom, 4)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { controlsHeight = $0 }
             }
         }
         // ジャケットや曲名の辺りを下へ払ったら閉じる（つまみ・シークバーの横の動きは通す）
@@ -528,8 +546,8 @@ private struct CoverCarousel: View {
             }
             .mask {
                 if fullBleed {
-                    // 下の 30% で地へ溶かす
-                    LinearGradient(stops: [.init(color: .black, location: 0), .init(color: .black, location: 0.7), .init(color: .clear, location: 1)],
+                    // 下の方は、後ろのぼかした絵へ溶かす
+                    LinearGradient(stops: [.init(color: .black, location: 0), .init(color: .black, location: 0.5), .init(color: .clear, location: 0.78)],
                                    startPoint: .top, endPoint: .bottom)
                 } else if isolated {
                     Rectangle().padding(.horizontal, -40).padding(.vertical, -200)
@@ -579,7 +597,8 @@ private struct CoverCarousel: View {
                     }
                 })
         }
-        .aspectRatio(1, contentMode: .fit)
+        // 画面の幅いっぱいのときは、渡された高さまで伸ばす（絵ははみ出した左右が切れる）
+        .aspectRatio(fullBleed ? nil : 1, contentMode: .fit)
     }
 
     private func cover(_ song: Song) -> some View {
