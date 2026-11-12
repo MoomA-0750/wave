@@ -35,12 +35,25 @@ final class LyricsTests: XCTestCase {
     func testLockScreenLineLeavesOutInstrumentalBreaks() {
         let lines = [
             LyricLine(startMs: 1000, text: "一行目"), LyricLine(startMs: 1000, text: "いちぎょうめ"),
-            LyricLine(startMs: 3000, text: ""), LyricLine(startMs: 5000, text: "二行目"),
+            LyricLine(startMs: 3000, text: ""), LyricLine(startMs: 5000, text: "二行目"), LyricLine(startMs: 7000, text: "三行目"),
         ]
         XCTAssertTrue(LyricsTiming.lockScreen(lines, positionMs: 0) == (nil, "一行目"))
-        XCTAssertTrue(LyricsTiming.lockScreen(lines, positionMs: 1500) == ("一行目", nil))
+        XCTAssertTrue(LyricsTiming.lockScreen(lines, positionMs: 1500) == ("一行目", "二行目"))
         XCTAssertTrue(LyricsTiming.lockScreen(lines, positionMs: 3500) == (nil, "二行目"))
-        XCTAssertTrue(LyricsTiming.lockScreen(lines, positionMs: 9000) == ("二行目", nil))
+        XCTAssertTrue(LyricsTiming.lockScreen(lines, positionMs: 9000) == ("三行目", nil))
+    }
+
+    func testLockScreenLinesShowTwoAheadAndWhenTheNextStarts() {
+        let lines = [
+            LyricLine(startMs: 1000, text: "一行目"), LyricLine(startMs: 1000, text: "いちぎょうめ"),
+            LyricLine(startMs: 3000, text: ""), LyricLine(startMs: 5000, text: "二行目"), LyricLine(startMs: 7000, text: "三行目"),
+        ]
+        XCTAssertEqual(LockScreenLines(current: "一行目", upcoming: ["二行目", "三行目"], nextStartMs: 3000),
+                       LyricsTiming.lockScreenLines(lines, positionMs: 1500))
+        XCTAssertEqual(LockScreenLines(current: nil, upcoming: ["一行目", "二行目"], nextStartMs: 1000),
+                       LyricsTiming.lockScreenLines(lines, positionMs: 0))
+        XCTAssertEqual(LockScreenLines(current: "三行目", upcoming: [], nextStartMs: nil),
+                       LyricsTiming.lockScreenLines(lines, positionMs: 9000))
     }
 
     func testSearchTitlesDropDecorations() {

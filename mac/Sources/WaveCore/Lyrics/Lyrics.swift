@@ -119,9 +119,46 @@ public enum LyricsTiming {
         return (start < 0 ? nil : shown(start), following.map(shown))
     }
 
-    /// ロック画面に出す行: currentAndNext から間奏（空の行の「♪」）を除いたもの。間奏の間はアーティスト名に戻す。
+    /// ロック画面に出す行: 今歌っている行（間奏の空の行と、最初の行より前は nil）と、この先に歌う行（空の行と、同じ時刻に並ぶ読み・訳は除く）。
+    public static func lockScreenLines(_ lines: [LyricLine], positionMs: Int64, upcoming count: Int = 2) -> LockScreenLines {
+        let last = currentIndex(lines, positionMs: positionMs)
+        func text(_ i: Int) -> String? {
+            let t = lines[i].text.trimmingCharacters(in: .whitespaces)
+            return t.isEmpty ? nil : t
+        }
+        let start = last < 0 ? -1 : (lines.firstIndex { $0.startMs == lines[last].startMs } ?? last)
+        var upcoming: [String] = []
+        var nextStartMs: Int64?
+        var i = last + 1
+        while i < lines.count, upcoming.count < count {
+            // 同じ時刻のかたまりの頭だけを見る
+            if i > 0, lines[i].startMs == lines[i - 1].startMs {
+                i += 1
+                continue
+            }
+            if nextStartMs == nil { nextStartMs = lines[i].startMs }
+            if let t = text(i) { upcoming.append(t) }
+            i += 1
+        }
+        return LockScreenLines(current: start < 0 ? nil : text(start), upcoming: upcoming, nextStartMs: nextStartMs)
+    }
+
+    /// ロック画面に出す今の行と次の行（lockScreenLines の先頭の2つ）。
     public static func lockScreen(_ lines: [LyricLine], positionMs: Int64) -> (current: String?, next: String?) {
-        let (current, next) = currentAndNext(lines, positionMs: positionMs)
-        return (current == "♪" ? nil : current, next == "♪" ? nil : next)
+        let view = lockScreenLines(lines, positionMs: positionMs, upcoming: 1)
+        return (view.current, view.upcoming.first)
+    }
+}
+
+/// ロック画面に出す歌詞の行。
+public struct LockScreenLines: Equatable, Sendable {
+    public var current: String?
+    public var upcoming: [String]
+    /// 次のかたまり（空の行も含む）が始まる時刻。最後の行なら nil。
+    public var nextStartMs: Int64?
+    public init(current: String?, upcoming: [String], nextStartMs: Int64?) {
+        self.current = current
+        self.upcoming = upcoming
+        self.nextStartMs = nextStartMs
     }
 }
