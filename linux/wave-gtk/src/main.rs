@@ -233,7 +233,7 @@ async fn show_home(toolbar: &adw::ToolbarView, repo: &MusicRepository) {
         let (raise, quit) = (window.clone(), window.clone());
         // ログアウトして入り直したら、古い方を外してから置き換える
         MPRIS.with(|m| *m.borrow_mut() = None);
-        let started = mpris::start(playback, move || raise.present(), move || quit.close());
+        let started = mpris::start(playback, services.connect.clone(), move || raise.present(), move || quit.close());
         MPRIS.with(|m| *m.borrow_mut() = Some(started));
     }
     APP.with(|a| *a.borrow_mut() = Some(app.clone()));

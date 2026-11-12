@@ -98,8 +98,70 @@ pub async fn use_profile(profile: &Profile) -> Result<wave_core::credentials::Cr
     if !crate::keyring::save(&credentials).await {
         return Err("ログイン情報を保存できませんでした".to_string());
     }
+    remember(profile);
     Ok(credentials)
 }
+
+// MARK: ブラウザのログインに追いつく
+// ブラウザは開いている間、ログインの cookie の一部（__Secure-1PSIDTS など）を数分〜数十分ごとに新しくし、Google は古い組を受け付けなくなる。
+// 写した cookie はそのままだと切れるので、使ったプロファイル（cookie の DB の場所だけ。値は書かない）を覚えておき、
+// ときどき読み直して、同じログイン（SAPISID が同じ）なら新しい cookie に差し替える。
+
+fn remembered_path() -> PathBuf {
+    glib::user_data_dir().join("wave").join("browser-login.json")
+}
+
+/// 「ブラウザのログインを使う」で使ったプロファイルを覚える。
+fn remember(profile: &Profile) {
+    let path = remembered_path();
+    if let Some(dir) = path.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    let _ = std::fs::write(&path, serde_json::json!({ "db": profile.db }).to_string());
+}
+
+/// 覚えたプロファイルを忘れる（ログアウト・アプリの中の窓でログインしたとき）。
+pub fn forget() {
+    let _ = std::fs::remove_file(remembered_path());
+}
+
+/// 覚えたプロファイル（まだログインが残っているときだけ）。
+fn remembered(home: &Path) -> Option<Profile> {
+    let text = std::fs::read_to_string(remembered_path()).ok()?;
+    let db = PathBuf::from(serde_json::from_str::<serde_json::Value>(&text).ok()?.get("db")?.as_str()?);
+    find(home).into_iter().find(|p| p.db == db)
+}
+
+/// 覚えたブラウザの cookie を読み直し、同じログインで値が変わっていれば差し替えてキーリングにも書く。差し替えたら true。
+pub async fn sync(client: &wave_core::innertube::InnerTube) -> bool {
+    if !client.is_logged_in() {
+        return false;
+    }
+    let home = glib::home_dir();
+    let Some(profile) = gio::spawn_blocking(move || remembered(&home)).await.ok().flatten() else { return false };
+    let Ok(header) = read_cookie(&profile).await else { return false };
+    let Some(fresh) = client.refresh_cookie(&header) else { return false };
+    let saved = crate::keyring::save(&fresh).await;
+    eprintln!("browser login refreshed saved={saved}");
+    true
+}
+
+/// 覚えたブラウザがあれば、数分ごとに追いつく（ログインの世代が変わったら止める）。
+pub fn keep_in_sync(client: wave_core::innertube::InnerTube) {
+    let generation = client.generation();
+    glib::spawn_future_local(async move {
+        loop {
+            if client.generation() != generation {
+                break;
+            }
+            sync(&client).await;
+            glib::timeout_future_seconds(SYNC_EVERY_SECONDS).await;
+        }
+    });
+}
+
+/// 読み直す間隔。ブラウザが cookie を新しくしてから、古い組が受け付けられなくなるまでより短くする。
+const SYNC_EVERY_SECONDS: u32 = 120;
 
 /// 選ばれたプロファイルから、music.youtube.com に送る cookie を「名前=値; …」で読む。Chromium の系統は鍵をキーリングから取る。
 pub async fn read_cookie(profile: &Profile) -> Result<String, String> {

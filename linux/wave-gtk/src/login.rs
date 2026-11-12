@@ -99,6 +99,8 @@ pub fn open(parent: &impl IsA<gtk::Window>, on_done: impl Fn(Option<Credentials>
             gtk::glib::spawn_future_local(async move {
                 match finish(&view).await {
                     Some(credentials) if keyring::save(&credentials).await => {
+                        // アプリの中の窓のログインは自分だけのものなので、ブラウザには追いつかない
+                        wave_desktop::browser_login::forget();
                         finished.set(true);
                         on_done(Some(credentials));
                         window.close();

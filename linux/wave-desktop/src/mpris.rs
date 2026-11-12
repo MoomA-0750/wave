@@ -1,5 +1,6 @@
 //! MPRIS（GNOME の上部のメディアの操作・ロック画面・キーボードのメディアキーが使う口）を D-Bus に出す。
 //! 名前は org.mpris.MediaPlayer2.wave。曲名・アーティスト・ジャケットの URL・長さを出し、再生・一時停止・次・前・シークを受ける。
+//! ほかの端末を映している間は、その端末の曲と状態を出し、操作もその端末へ送る（画面の下の帯と同じ）。
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -7,7 +8,9 @@ use std::rc::Rc;
 
 use glib::{self, Variant, prelude::*};
 
+use crate::connect::Connect;
 use crate::playback::Playback;
+use wave_core::music::models::Song;
 
 const BUS_NAME: &str = "org.mpris.MediaPlayer2.wave";
 const OBJECT_PATH: &str = "/org/mpris/MediaPlayer2";
@@ -66,12 +69,55 @@ pub struct Mpris {
     _owner: RefCell<Option<gio::OwnerId>>,
 }
 
-pub fn start(playback: Rc<Playback>, raise: impl Fn() + 'static, quit: impl Fn() + 'static) -> Rc<Mpris> {
+/// MPRIS に出す今の様子（手元の再生か、映している端末の再生）。
+struct Now {
+    song: Option<Song>,
+    playing: bool,
+    position_ms: u64,
+    length_ms: Option<u64>,
+    has_next: bool,
+    remote: bool,
+}
+
+/// 手元の再生と、映しているほかの端末の再生のどちらを出すかを決める元。
+#[derive(Clone)]
+struct Source {
+    playback: Rc<Playback>,
+    connect: Rc<Connect>,
+}
+
+impl Source {
+    fn now(&self) -> Now {
+        if let Some(m) = self.connect.mirror() {
+            return Now {
+                length_ms: m.song.duration_seconds.map(|s| s as u64 * 1000),
+                song: Some(m.song),
+                playing: m.playing,
+                position_ms: m.position_ms.max(0) as u64,
+                has_next: true,
+                remote: true,
+            };
+        }
+        let player = self.playback.player();
+        let song = self.playback.current();
+        Now {
+            length_ms: player.duration_ms().or(song.as_ref().and_then(|s| s.duration_seconds).map(|s| s as u64 * 1000)),
+            song,
+            playing: player.is_playing(),
+            position_ms: player.position_ms().unwrap_or(0),
+            has_next: self.playback.has_next(),
+            remote: false,
+        }
+    }
+}
+
+pub fn start(playback: Rc<Playback>, connect: Rc<Connect>, raise: impl Fn() + 'static, quit: impl Fn() + 'static) -> Rc<Mpris> {
+    let source = Source { playback: playback.clone(), connect: connect.clone() };
     let mpris = Rc::new(Mpris { connection: RefCell::default(), registrations: RefCell::default(), last: RefCell::default(), _owner: RefCell::default() });
     let node = gio::DBusNodeInfo::for_xml(INTROSPECTION).expect("MPRIS introspection");
     let (raise, quit) = (Rc::new(raise), Rc::new(quit));
     let weak = Rc::downgrade(&mpris);
-    let pb = playback.clone();
+    let pb = source.clone();
     let owner = gio::bus_own_name(
         gio::BusType::Session,
         BUS_NAME,
@@ -93,7 +139,7 @@ pub fn start(playback: Rc<Playback>, raise: impl Fn() + 'static, quit: impl Fn()
                         if name == "Volume"
                             && let Some(volume) = value.get::<f64>()
                         {
-                            setter.player().set_volume(volume);
+                            setter.playback.player().set_volume(volume);
                         }
                         true
                     })
@@ -115,8 +161,15 @@ pub fn start(playback: Rc<Playback>, raise: impl Fn() + 'static, quit: impl Fn()
 
     // 曲・再生の状態・次と前の有無が変わったら知らせる（再生の状態は GStreamer から遅れて届くので、0.5 秒ごとにも見る）
     let weak = Rc::downgrade(&mpris);
-    let watched = playback.clone();
+    let watched = source.clone();
     playback.on_change(move || {
+        if let Some(mpris) = weak.upgrade() {
+            mpris.notify(&watched);
+        }
+    });
+    let weak = Rc::downgrade(&mpris);
+    let watched = source.clone();
+    connect.on_change(move || {
         if let Some(mpris) = weak.upgrade() {
             mpris.notify(&watched);
         }
@@ -124,7 +177,7 @@ pub fn start(playback: Rc<Playback>, raise: impl Fn() + 'static, quit: impl Fn()
     let weak = Rc::downgrade(&mpris);
     glib::timeout_add_local(std::time::Duration::from_millis(500), move || match weak.upgrade() {
         Some(mpris) => {
-            mpris.notify(&playback);
+            mpris.notify(&source);
             glib::ControlFlow::Continue
         }
         None => glib::ControlFlow::Break,
@@ -147,82 +200,90 @@ impl Drop for Mpris {
 }
 
 impl Mpris {
-    fn notify(&self, playback: &Playback) {
+    fn notify(&self, source: &Source) {
         let Some(connection) = self.connection.borrow().clone() else { return };
-        let now = (status(playback).to_string(), playback.current().map(|s| s.video_id).unwrap_or_default(), playback.has_next());
+        let state = source.now();
+        let now = (status(&state).to_string(), state.song.as_ref().map(|s| s.video_id.clone()).unwrap_or_default(), state.has_next);
         if self.last.borrow().as_ref() == Some(&now) {
             return;
         }
         *self.last.borrow_mut() = Some(now);
         let changed: HashMap<String, Variant> = ["PlaybackStatus", "Metadata", "CanGoNext", "CanGoPrevious", "CanPlay", "CanPause", "CanSeek"]
             .into_iter()
-            .map(|name| (name.to_string(), property(playback, PLAYER_IFACE, name)))
+            .map(|name| (name.to_string(), property(source, PLAYER_IFACE, name)))
             .collect();
         let params = (PLAYER_IFACE, changed, Vec::<String>::new()).to_variant();
         let _ = connection.emit_signal(None, OBJECT_PATH, "org.freedesktop.DBus.Properties", "PropertiesChanged", Some(&params));
     }
 }
 
-fn status(playback: &Playback) -> &'static str {
-    match (playback.current().is_some(), playback.player().is_playing()) {
+fn status(now: &Now) -> &'static str {
+    match (now.song.is_some(), now.playing) {
         (false, _) => "Stopped",
         (true, true) => "Playing",
         (true, false) => "Paused",
     }
 }
 
-fn call(playback: &Rc<Playback>, connection: &gio::DBusConnection, method: &str, params: &Variant, raise: &dyn Fn(), quit: &dyn Fn()) {
-    let player = playback.player();
+fn call(source: &Source, connection: &gio::DBusConnection, method: &str, params: &Variant, raise: &dyn Fn(), quit: &dyn Fn()) {
+    let playback = &source.playback;
+    // 再生・一時停止の向きは、映している端末ならその端末の状態で決める（toggle はその端末への命令になる）
+    let now = source.now();
+    let seek = |target: u64| {
+        if now.remote {
+            source.connect.remote_seek(target as i64);
+        } else {
+            playback.player().seek_ms(target);
+        }
+        let _ = connection.emit_signal(None, OBJECT_PATH, PLAYER_IFACE, "Seeked", Some(&((target * 1000) as i64,).to_variant()));
+    };
     match method {
         "Raise" => raise(),
         "Quit" => quit(),
         "Next" => playback.next(),
         "Previous" => playback.previous(),
         "PlayPause" => playback.toggle(),
-        "Play" if !player.is_playing() => playback.toggle(),
-        "Pause" | "Stop" if player.is_playing() => playback.toggle(),
+        "Play" if !now.playing => playback.toggle(),
+        "Pause" | "Stop" if now.playing => playback.toggle(),
         "Seek" => {
             if let Some((offset,)) = params.get::<(i64,)>() {
-                let target = (player.position_ms().unwrap_or(0) as i64 + offset / 1000).max(0) as u64;
-                player.seek_ms(target);
-                let _ = connection.emit_signal(None, OBJECT_PATH, PLAYER_IFACE, "Seeked", Some(&((target * 1000) as i64,).to_variant()));
+                seek((now.position_ms as i64 + offset / 1000).max(0) as u64);
             }
         }
         "SetPosition" => {
             if let Some((_, position)) = params.get::<(glib::variant::ObjectPath, i64)>() {
-                let target = (position / 1000).max(0) as u64;
-                player.seek_ms(target);
-                let _ = connection.emit_signal(None, OBJECT_PATH, PLAYER_IFACE, "Seeked", Some(&((target * 1000) as i64,).to_variant()));
+                seek((position / 1000).max(0) as u64);
             }
         }
         _ => {}
     }
 }
 
-fn property(playback: &Playback, iface: &str, name: &str) -> Variant {
-    let player = playback.player();
-    let has_song = playback.current().is_some();
+fn property(source: &Source, iface: &str, name: &str) -> Variant {
+    let player = source.playback.player();
+    let now = source.now();
+    let has_song = now.song.is_some();
     match (iface, name) {
         (ROOT_IFACE, "CanQuit" | "CanRaise") => true.to_variant(),
         (ROOT_IFACE, "HasTrackList") => false.to_variant(),
         (ROOT_IFACE, "Identity") => "wave".to_variant(),
         (ROOT_IFACE, "DesktopEntry") => "xyz.mooma0750.wave".to_variant(),
         (ROOT_IFACE, "SupportedUriSchemes" | "SupportedMimeTypes") => Vec::<String>::new().to_variant(),
-        (_, "PlaybackStatus") => status(playback).to_variant(),
+        (_, "PlaybackStatus") => status(&now).to_variant(),
         (_, "Rate" | "MinimumRate" | "MaximumRate") => 1.0f64.to_variant(),
         (_, "Volume") => player.volume().to_variant(),
-        (_, "Position") => ((player.position_ms().unwrap_or(0) * 1000) as i64).to_variant(),
-        (_, "CanGoNext") => playback.has_next().to_variant(),
+        (_, "Position") => ((now.position_ms * 1000) as i64).to_variant(),
+        (_, "CanGoNext") => now.has_next.to_variant(),
         (_, "CanGoPrevious" | "CanPlay" | "CanPause" | "CanSeek") => has_song.to_variant(),
         (_, "CanControl") => true.to_variant(),
-        (_, "Metadata") => metadata(playback),
+        (_, "Metadata") => metadata(&now),
         _ => false.to_variant(),
     }
 }
 
-fn metadata(playback: &Playback) -> Variant {
+fn metadata(now: &Now) -> Variant {
     let mut map: HashMap<String, Variant> = HashMap::new();
-    let Some(song) = playback.current() else {
+    let Some(song) = &now.song else {
         map.insert("mpris:trackid".into(), glib::variant::ObjectPath::try_from(NO_TRACK.to_string()).expect("valid path").to_variant());
         return map.to_variant();
     };
@@ -239,8 +300,7 @@ fn metadata(playback: &Playback) -> Variant {
     if let Some(url) = &song.thumbnail_url {
         map.insert("mpris:artUrl".into(), crate::art::sized(url, 544).to_variant());
     }
-    let length_ms = playback.player().duration_ms().or(song.duration_seconds.map(|s| s as u64 * 1000));
-    if let Some(ms) = length_ms {
+    if let Some(ms) = now.length_ms {
         map.insert("mpris:length".into(), ((ms * 1000) as i64).to_variant());
     }
     map.to_variant()

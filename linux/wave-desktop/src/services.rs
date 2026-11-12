@@ -61,6 +61,10 @@ impl Services {
             playback.player().set_external_resume(move |url| podcasts.resume_ms(url));
         }
         podcasts.track(&playback);
+        // 「ブラウザのログインを使う」で入ったなら、ブラウザが cookie を新しくするのに追いつく
+        if repo.client().is_logged_in() {
+            crate::browser_login::keep_in_sync(repo.client().clone());
+        }
         // 端末の連携（中継の場所が設定にあるときだけ）
         let relay_url = downloads.settings.borrow().relay_url.clone();
         let connect = connect::Connect::start(repo.clone(), playback.clone(), podcasts.clone(), relay_url).await;
@@ -109,6 +113,7 @@ impl Services {
         self.ai.wipe();
         self.releases.clear();
         keyring::delete().await;
+        crate::browser_login::forget();
         self.repo.client().set_credentials(None);
     }
 }

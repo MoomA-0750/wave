@@ -106,6 +106,19 @@ impl InnerTube {
         state.generation += 1;
     }
 
+    /// 同じログインの cookie だけを新しくする（ブラウザのログインに追いつく）。アカウントも取得時刻も変わらないので、
+    /// 世代は進めない（読み込み中の応答もそのまま使える）。今のログインと SAPISID が違えば何もしない。差し替えたら新しい方を返す。
+    pub fn refresh_cookie(&self, raw_cookie: &str) -> Option<Credentials> {
+        let mut state = self.state.write().unwrap();
+        let current = state.credentials.as_ref()?;
+        if current.reveal_cookie() == raw_cookie {
+            return None;
+        }
+        let fresh = current.with_refreshed_cookie(raw_cookie)?;
+        state.credentials = Some(fresh.clone());
+        Some(fresh)
+    }
+
     pub fn is_logged_in(&self) -> bool {
         self.state.read().unwrap().credentials.is_some()
     }

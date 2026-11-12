@@ -751,6 +751,7 @@ async fn enter_main() {
     // メディアキー・GNOME などのメディアの操作（MPRIS）
     let mpris = mpris::start(
         services.playback.clone(),
+        services.connect.clone(),
         || {
             if let Some(thread) = core_thread() {
                 let _ = thread.queue(|app| app.raise_requested());
@@ -1121,6 +1122,7 @@ async fn load_home(repo: MusicRepository, services: Option<Rc<Services>>, chip: 
         };
     }
     let all = chip.is_none();
+    let chip_text = chip.clone().unwrap_or_default();
     let logged_in = repo.client().is_logged_in();
     let r = repo.clone();
     let (home, new_releases, recent) = runtime::run(async move {
@@ -1148,6 +1150,10 @@ async fn load_home(repo: MusicRepository, services: Option<Rc<Services>>, chip: 
     let home = if std::env::var_os("WAVE_DEMO_EXPIRED").is_some() { Err(wave_core::innertube::Failure::NotLoggedIn) } else { home };
     let page = match home {
         Ok(page) => page,
+        // ブラウザのログインなら、ブラウザが新しくした cookie に追いついてから1回だけ読み直す
+        Err(wave_core::innertube::Failure::NotLoggedIn) if logged_in && std::env::var_os("WAVE_DEMO_EXPIRED").is_none() && wave_desktop::browser_login::sync(repo.client()).await => {
+            return Box::pin(load_home(repo, services, chip_text, None)).await;
+        }
         Err(e) => return home_failure(&repo, logged_in, e).await,
     };
     // 登録したアーティストの新作（「すべて」のときだけ。アーティストごとに2件まで交互に、見つけて7日は NEW）

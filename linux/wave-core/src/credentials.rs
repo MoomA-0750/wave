@@ -56,6 +56,13 @@ impl Credentials {
         self.data_sync_id.as_deref()
     }
 
+    /// 同じログインの cookie を新しくしたもの（ブラウザが cookie を新しくしたのに追いつく）。アカウント・取得時刻は変えない。
+    /// SAPISID が違う（別のログイン）・制御文字を含む・SAPISID が無ければ None。
+    pub fn with_refreshed_cookie(&self, raw_cookie: &str) -> Option<Self> {
+        let fresh = Self::from_login(raw_cookie, self.visitor_data.as_deref(), self.data_sync_id.as_deref(), self.obtained_at_epoch_ms)?;
+        (sapisid_of(&fresh.cookie) == sapisid_of(&self.cookie)).then_some(fresh)
+    }
+
     /// SAPISIDHASH に使う値。無ければ None。
     pub(crate) fn reveal_sapisid(&self) -> Option<&str> {
         sapisid_of(&self.cookie)
@@ -108,6 +115,16 @@ mod tests {
         let c = Credentials::from_login("SID=b; __Secure-3PAPISID=xyz", Some("v"), Some("123||456"), 7).unwrap();
         assert_eq!(c.reveal_sapisid(), Some("xyz"));
         assert_eq!(c.reveal_data_sync_id(), Some("123"));
+    }
+
+    #[test]
+    fn refreshes_only_the_same_login() {
+        let c = Credentials::from_login("SAPISID=a; __Secure-1PSIDTS=old", Some("v"), Some("123||456"), 7).unwrap();
+        let fresh = c.with_refreshed_cookie("SAPISID=a; __Secure-1PSIDTS=new").unwrap();
+        assert_eq!(fresh.reveal_cookie(), "SAPISID=a; __Secure-1PSIDTS=new");
+        assert_eq!((fresh.obtained_at_epoch_ms, fresh.reveal_data_sync_id(), fresh.visitor_data.as_deref()), (7, Some("123"), Some("v")));
+        assert!(c.with_refreshed_cookie("SAPISID=b; __Secure-1PSIDTS=new").is_none());
+        assert!(c.with_refreshed_cookie("HSID=x").is_none());
     }
 
     #[test]

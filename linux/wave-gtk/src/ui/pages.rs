@@ -310,6 +310,16 @@ impl Home {
             result = runtime::run(async move { repo.home(c.as_deref(), p.as_deref()).await }).await;
         }
         // ログインを受け付けてもらえなかったら、アカウントでも確かめてから「切れた」とする（ADR-0004）
+        // ブラウザのログインなら、ブラウザが新しくした cookie に追いついてから1回だけ読み直す
+        if matches!(result, Err(wave_core::innertube::Failure::NotLoggedIn))
+            && self.app.repo.client().is_logged_in()
+            && wave_desktop::browser_login::sync(self.app.repo.client()).await
+            && self.state.borrow().request == request
+        {
+            let repo = self.app.repo.clone();
+            let (c, p) = (continuation.clone(), params.clone());
+            result = runtime::run(async move { repo.home(c.as_deref(), p.as_deref()).await }).await;
+        }
         // 確かめ用: WAVE_DEMO_EXPIRED で、ログインが切れたときの画面を出す
         let demo_expired = std::env::var_os("WAVE_DEMO_EXPIRED").is_some();
         if demo_expired {
