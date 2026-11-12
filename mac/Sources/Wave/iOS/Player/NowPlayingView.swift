@@ -182,6 +182,12 @@ struct NowPlayingView: View {
                         }
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    // 上下の端は薄くして消す（操作の欄の上ですっぱり切れて見えないように）
+                    .mask {
+                        LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.04),
+                                               .init(color: .black, location: 0.9), .init(color: .clear, location: 1)],
+                                       startPoint: .top, endPoint: .bottom)
+                    }
                     .transition(.opacity)
                 } else if video {
                     media(player).padding(.horizontal, 24).padding(.top, 16)
