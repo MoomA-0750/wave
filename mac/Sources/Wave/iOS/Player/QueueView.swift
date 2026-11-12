@@ -22,7 +22,8 @@ struct QueueView: View {
                     Spacer()
                     editButton(player)
                 }
-                .padding(.horizontal, 24)
+                // List の区切りの見出しと左右の端をそろえる
+                .padding(.horizontal, 18)
                 .frame(minHeight: 36)
                 embeddedList(player)
             }
@@ -54,10 +55,22 @@ struct QueueView: View {
                         }
                     }
                 }
-                upcomingSections(player)
+                // 今の曲は上の曲の行に出ているので、並びには出さない。履歴と次の曲の境目に、開いたときに合わせる目印を置く
+                Color.clear.frame(height: 1)
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+                    .listRowInsets(EdgeInsets())
+                    .id(QueueView.nowId)
+                upcomingSections(player, showCurrent: false)
             }
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
+            // 目印の行が行の最低の高さまで広がって、見出しの下が空かないように
+            .environment(\.defaultMinListRowHeight, 0)
+            // 上の端は薄くして消す（見出しと「編集」は薄くしない）
+            .mask {
+                LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.05)], startPoint: .top, endPoint: .bottom)
+            }
             .environment(\.listRowBackgroundClear, true)
             .environment(\.editMode, $editMode)
             .onAppear { proxy.scrollTo(QueueView.nowId, anchor: .top) }
@@ -125,11 +138,11 @@ struct QueueView: View {
     // MARK: 次の曲
 
     @ViewBuilder
-    private func upcomingSections(_ player: PlayerService) -> some View {
+    private func upcomingSections(_ player: PlayerService, showCurrent: Bool = true) -> some View {
         let count = player.queue.count
         let current = player.index
         let userEnd = player.userQueueEnd
-        if current >= 0 && current < count {
+        if showCurrent && current >= 0 && current < count {
             Section(L.t("再生中", "Now playing")) {
                 QueueSongRow(position: current, isCurrent: true).modifier(QueueRowBackground())
             }

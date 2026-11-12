@@ -15,7 +15,12 @@ struct LyricsView: View {
         let player = AppServices.player!
         let song = player.current
         if embedded {
-            content(player).environment(\.colorScheme, .dark)
+            content(player)
+                .environment(\.colorScheme, .dark)
+                // 上の端は薄くして消す（再生画面の曲の行の下で切れて見えないように）
+                .mask {
+                    LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.05)], startPoint: .top, endPoint: .bottom)
+                }
         } else {
             sheet(player, song)
         }

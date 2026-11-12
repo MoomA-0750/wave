@@ -182,10 +182,10 @@ struct NowPlayingView: View {
                         }
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    // 上下の端は薄くして消す（操作の欄の上ですっぱり切れて見えないように）
+                    // 下の端は薄くして消す（操作の欄の上ですっぱり切れて見えないように。上の端は歌詞・キューの中で薄くする）
                     .mask {
                         // 下は操作の欄の手前で長めに溶かす（境目を見せない）
-                        LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.05),
+                        LinearGradient(stops: [.init(color: .black, location: 0),
                                                .init(color: .black, location: 0.7), .init(color: .black.opacity(0.35), location: 0.88),
                                                .init(color: .clear, location: 1)],
                                        startPoint: .top, endPoint: .bottom)
