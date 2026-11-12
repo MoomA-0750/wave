@@ -20,6 +20,7 @@ Flickable {
     property string continuation: ""
     property bool loading: false
     property bool failed: false
+    property bool expired: false
     property int token: -1
 
     contentHeight: column.implicitHeight + Style.pageBottom
@@ -28,7 +29,7 @@ Flickable {
     ScrollBar.vertical: ScrollBar {}
 
     function reload() {
-        recent = []; releases = null; newReleases = null; shelves = []; continuation = ""; failed = false; loading = true
+        recent = []; releases = null; newReleases = null; shelves = []; continuation = ""; failed = false; expired = false; loading = true
         token = params !== "" ? WaveApp.request("mood", params, "") : WaveApp.request("home", selected, "")
     }
     function loadMore() {
@@ -45,7 +46,7 @@ Flickable {
             if (t !== page.token) return
             page.loading = false
             const v = JSON.parse(json)
-            if (v.error) { if (page.shelves.length === 0) page.failed = true; return }
+            if (v.error) { if (page.shelves.length === 0) { page.failed = true; page.expired = v.expired === true }; return }
             if (v.chips && v.chips.length > 0 && page.selected === "") page.chips = v.chips
             if (v.recent) page.recent = v.recent
             if (v.releases !== undefined) page.releases = v.releases
@@ -125,7 +126,9 @@ Flickable {
             visible: page.failed && !page.loading
             Layout.alignment: Qt.AlignHCenter
             spacing: 8
-            Label { text: page.params !== "" ? "読み込めませんでした" : "ホームを読み込めませんでした"; font.pixelSize: 18; font.weight: Font.Bold; Layout.alignment: Qt.AlignHCenter; color: Style.foreground }
+            Label { text: page.expired ? "ログインが切れています" : page.params !== "" ? "読み込めませんでした" : "ホームを読み込めませんでした"; font.pixelSize: 18; font.weight: Font.Bold; Layout.alignment: Qt.AlignHCenter; color: Style.foreground }
+            Label { visible: page.expired; text: "YouTube Music が保存したログインを受け付けませんでした。\nログインし直してください。"; wrapMode: Text.Wrap; horizontalAlignment: Text.AlignHCenter; Layout.maximumWidth: 420; Layout.alignment: Qt.AlignHCenter; color: Style.dim }
+            Btn { visible: page.expired; text: "ログインし直す"; highlighted: true; Layout.alignment: Qt.AlignHCenter; onClicked: WaveApp.relogin() }
             Btn { text: "もう一度読み込む"; Layout.alignment: Qt.AlignHCenter; onClicked: page.reload() }
         }
     }

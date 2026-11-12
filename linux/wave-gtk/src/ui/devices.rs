@@ -53,7 +53,8 @@ pub fn open_page(app: &Rc<App>) {
 /// アカウントのメニューの「端末の連携」（Mac と同じく、ログインしていて中継が設定済みのときだけ。そうでなければ None）。
 /// 押すと、入っている小窓を閉じてページを開く。
 pub fn menu_button(app: &Rc<App>) -> Option<gtk::Button> {
-    if !app.connect.info().configured || !app.repo.client().is_logged_in() {
+    // 中継の場所がまだ無くても出す（場所はこのページの下で入れる）
+    if !app.repo.client().is_logged_in() {
         return None;
     }
     let button = gtk::Button::builder().label("端末の連携").css_classes(["flat"]).build();

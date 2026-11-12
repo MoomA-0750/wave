@@ -686,6 +686,27 @@ impl qobject::WaveApp {
         });
     }
 
+    /// ログインが切れたとき: 再生と見張りを止めてログインの入り口に戻す。ログアウトと違い、キュー・取った曲などは消さない
+    /// （入り直したら enter_main が中身を作り直す。キーリングの古いログインは、新しいログインで上書きされる）。
+    pub fn relogin(self: Pin<&mut Self>) {
+        if let Some(s) = services() {
+            s.playback.player().stop();
+        }
+        crate::more::detach();
+        with_core(|c| {
+            c.services = None;
+            c.mpris = None;
+            c.liked.clear();
+        });
+        if let Some(thread) = core_thread() {
+            let _ = thread.queue(|mut app| {
+                app.as_mut().set_logged_in(false);
+                app.as_mut().set_has_song(false);
+                app.set_phase(QString::from("login"));
+            });
+        }
+    }
+
     pub fn log_out(self: Pin<&mut Self>) {
         let Some(s) = services() else { return };
         glib::spawn_future_local(async move {
@@ -1123,9 +1144,10 @@ async fn load_home(repo: MusicRepository, services: Option<Rc<Services>>, chip: 
         tokio::join!(home, new_releases, recent)
     })
     .await;
+    let home = if std::env::var_os("WAVE_DEMO_EXPIRED").is_some() { Err(wave_core::innertube::Failure::NotLoggedIn) } else { home };
     let page = match home {
         Ok(page) => page,
-        Err(e) => return failure(e),
+        Err(e) => return home_failure(&repo, logged_in, e).await,
     };
     // 登録したアーティストの新作（「すべて」のときだけ。アーティストごとに2件まで交互に、見つけて7日は NEW）
     let releases: Vec<HomeItem> = match (&services, all) {
@@ -1150,6 +1172,25 @@ async fn load_home(repo: MusicRepository, services: Option<Rc<Services>>, chip: 
         "shelves": view::shelves(&page.shelves),
         "continuation": page.continuation.unwrap_or_default(),
     })
+}
+
+/// ホームが読めなかったときの返事。ログインを受け付けてもらえず、アカウントの確かめでも同じだったら
+/// ログインが切れたとして expired を付ける（画面は「ログインし直す」を出す。ADR-0004 の「確かめてから」）。
+async fn home_failure(repo: &MusicRepository, logged_in: bool, e: wave_core::innertube::Failure) -> Value {
+    // 確かめ用: WAVE_DEMO_EXPIRED で、ログインが切れたときの画面を出す
+    if std::env::var_os("WAVE_DEMO_EXPIRED").is_some() {
+        return json!({ "error": "demo", "expired": true });
+    }
+    if logged_in && matches!(e, wave_core::innertube::Failure::NotLoggedIn) {
+        let r = repo.clone();
+        let account = runtime::run(async move { r.account().await }).await;
+        if matches!(account, Err(wave_core::innertube::Failure::NotLoggedIn)) {
+            eprintln!("home failed: login expired");
+            return json!({ "error": e.to_string(), "expired": true });
+        }
+    }
+    eprintln!("home failed: {e}");
+    failure(e)
 }
 
 /// 今の曲の歌詞（時刻付きなら行と時刻、無ければ文）。

@@ -1621,7 +1621,7 @@ fn now_playing(app: &Rc<App>) -> gtk::Widget {
     gtk::ScrolledWindow::builder().child(&column).hscrollbar_policy(gtk::PolicyType::Never).build().upcast()
 }
 
-/// 上の帯の右端: アカウントの写真。押すと名前・最近再生した曲・端末の連携（中継を設定しているとき）・設定（Mac と同じ）。
+/// 上の帯の右端: アカウントの写真。押すと名前・最近再生した曲・端末の連携（ログイン中のとき）・設定（Mac と同じ）。
 /// ログアウトは設定のアカウントのカードから（確認つき）。
 fn account_button(app: &Rc<App>) -> gtk::MenuButton {
     let avatar = adw::Avatar::builder().size(30).show_initials(true).build();
@@ -1632,7 +1632,7 @@ fn account_button(app: &Rc<App>) -> gtk::MenuButton {
     column.append(&name);
     column.append(&gtk::Separator::new(gtk::Orientation::Horizontal));
     column.append(&history);
-    // 端末の連携（ログイン中かつ中継が設定済みのときだけ。押すと小窓を閉じてページを開く）
+    // 端末の連携（ログイン中のとき。中継の場所はページの中で入れる。押すと小窓を閉じてページを開く）
     if let Some(devices) = super::devices::menu_button(app) {
         column.append(&devices);
     }

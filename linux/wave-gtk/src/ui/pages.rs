@@ -87,6 +87,8 @@ struct HomeState {
     /// 最初のページの棚（YouTube Music の新作の棚と重なるかを見る）。
     first_shelves: Vec<HomeShelf>,
     failed: bool,
+    /// ログインを受け付けてもらえず、アカウントの確かめでも同じだった（「ログインし直す」を出す）。
+    expired: bool,
 }
 
 /// ホーム: 一番上にチップ（すべて／各チップ。もう一度押すと外れ、棚を読み直す）、ログイン中かつ「すべて」なら最近聴いたもの（4列で最大8件）、
@@ -181,6 +183,7 @@ impl Home {
             st.count = 0;
             st.loading = false;
             st.failed = false;
+            st.expired = false;
             st.new_releases.clear();
             st.first_shelves.clear();
             (st.request, st.selected.clone())
@@ -306,6 +309,18 @@ impl Home {
             let (c, p) = (continuation.clone(), params.clone());
             result = runtime::run(async move { repo.home(c.as_deref(), p.as_deref()).await }).await;
         }
+        // ログインを受け付けてもらえなかったら、アカウントでも確かめてから「切れた」とする（ADR-0004）
+        // 確かめ用: WAVE_DEMO_EXPIRED で、ログインが切れたときの画面を出す
+        let demo_expired = std::env::var_os("WAVE_DEMO_EXPIRED").is_some();
+        if demo_expired {
+            result = Err(wave_core::innertube::Failure::NotLoggedIn);
+        }
+        let expired = demo_expired || if matches!(result, Err(wave_core::innertube::Failure::NotLoggedIn)) && self.app.repo.client().is_logged_in() {
+            let repo = self.app.repo.clone();
+            matches!(runtime::run(async move { repo.account().await }).await, Err(wave_core::innertube::Failure::NotLoggedIn))
+        } else {
+            false
+        };
         let mut st = self.state.borrow_mut();
         st.loading = false;
         if st.request != request {
@@ -314,9 +329,10 @@ impl Home {
         let page = match result {
             Ok(page) => page,
             Err(e) => {
-                eprintln!("home failed: {e}");
+                eprintln!("home failed: {}", if expired { "login expired".to_string() } else { e.to_string() });
                 if st.count == 0 {
                     st.failed = true;
+                    st.expired = expired;
                 }
                 return false;
             }
@@ -355,9 +371,15 @@ impl Home {
         }
         if st.loading {
             self.footer.set_child(Some(&spinner()));
-        } else if st.failed && st.new_releases.is_empty() {
+        } else if st.failed && (st.expired || st.new_releases.is_empty()) {
             let column = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(8).halign(gtk::Align::Center).margin_top(24).build();
-            column.append(&gtk::Label::builder().label("ホームを読み込めませんでした").css_classes(["title-3"]).build());
+            column.append(&gtk::Label::builder().label(if st.expired { "ログインが切れています" } else { "ホームを読み込めませんでした" }).css_classes(["title-3"]).build());
+            if st.expired {
+                column.append(&gtk::Label::builder().label("YouTube Music が保存したログインを受け付けませんでした。\nログインし直してください。").wrap(true).justify(gtk::Justification::Center).max_width_chars(40).css_classes(["dim-label"]).build());
+                let relogin = gtk::Button::builder().label("ログインし直す").halign(gtk::Align::Center).css_classes(["suggested-action", "pill"]).build();
+                relogin.connect_clicked(|_| crate::relogin());
+                column.append(&relogin);
+            }
             let retry = gtk::Button::builder().label("もう一度読み込む").halign(gtk::Align::Center).css_classes(["pill"]).build();
             let weak = Rc::downgrade(self);
             retry.connect_clicked(move |_| {

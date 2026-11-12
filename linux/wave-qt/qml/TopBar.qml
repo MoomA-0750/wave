@@ -127,7 +127,7 @@ Rectangle {
             MenuItem { text: WaveApp.accountName !== "" ? WaveApp.accountName : "ログインしていません"; enabled: false }
             MenuSeparator {}
             MenuItem { text: "設定"; onTriggered: bar.shell.openSettings() }
-            MenuItem { text: "端末の連携"; visible: WaveApp.connectConfigured && WaveApp.loggedIn; height: visible ? implicitHeight : 0; onTriggered: bar.shell.openDevices() }
+            MenuItem { text: "端末の連携"; visible: WaveApp.loggedIn; height: visible ? implicitHeight : 0; onTriggered: bar.shell.openDevices() }
             MenuItem { text: "ダウンロード"; onTriggered: bar.shell.openDownloads() }
             MenuItem { text: "再生履歴"; enabled: WaveApp.loggedIn; onTriggered: bar.shell.push(historyPage, {}) }
             MenuItem { text: WaveApp.loggedIn ? "ログアウト" : "ログイン"; onTriggered: WaveApp.loggedIn ? confirm.open() : WaveApp.logOut() }

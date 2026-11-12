@@ -157,6 +157,9 @@ pub mod qobject {
         fn use_browser_profile(self: Pin<&mut WaveApp>, index: i32) -> i32;
         #[qinvokable]
         fn open_login_window(self: Pin<&mut WaveApp>);
+        /// ログインが切れたとき、データを消さずにログインの入り口へ戻す。
+        #[qinvokable]
+        fn relogin(self: Pin<&mut WaveApp>);
         #[qinvokable]
         fn log_out(self: Pin<&mut WaveApp>);
 

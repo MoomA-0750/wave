@@ -211,6 +211,21 @@ async fn show_home(toolbar: &adw::ToolbarView, repo: &MusicRepository) {
     }
     // 設定の「ログアウト」からも同じ後片付けを呼べるようにする
     LOGOUT.with(|l| *l.borrow_mut() = Some(on_logout.clone()));
+    // ログインが切れたとき: 再生を止めてログインの入り口に戻す。ログアウトと違い、キュー・取った曲などは消さない
+    // （キーリングの古いログインは、新しいログインで上書きされる）
+    let on_relogin: std::rc::Rc<dyn Fn()> = {
+        let (toolbar, repo, services) = (toolbar.clone(), repo.clone(), std::rc::Rc::downgrade(&services));
+        std::rc::Rc::new(move || {
+            if let Some(services) = services.upgrade() {
+                services.playback.player().stop();
+            }
+            if let Some(window) = toolbar_window(&toolbar) {
+                window.set_content(Some(&toolbar));
+                show_login(&window, &toolbar, &repo);
+            }
+        })
+    };
+    RELOGIN.with(|l| *l.borrow_mut() = Some(on_relogin));
     let (shell, app) = ui::shell::build(services.clone(), video, on_logout);
     if let Some(window) = toolbar.root().and_downcast::<adw::ApplicationWindow>() {
         // GNOME のメディアの操作・メディアキーから操作できるようにする（窓がある間だけ出す）
@@ -279,6 +294,8 @@ thread_local! {
     static APP: std::cell::RefCell<Option<std::rc::Rc<ui::shell::App>>> = const { std::cell::RefCell::new(None) };
     /// ログアウトの後片付け（右上のメニューと設定の「ログアウト」から呼ぶ）。
     static LOGOUT: std::cell::RefCell<Option<std::rc::Rc<dyn Fn()>>> = const { std::cell::RefCell::new(None) };
+    /// ログインが切れたときの入り直し（ホームの「ログインし直す」から呼ぶ）。
+    static RELOGIN: std::cell::RefCell<Option<std::rc::Rc<dyn Fn()>>> = const { std::cell::RefCell::new(None) };
     /// GNOME のメディアの操作への口（1つだけ）。
     static MPRIS: std::cell::RefCell<Option<std::rc::Rc<mpris::Mpris>>> = const { std::cell::RefCell::new(None) };
 }
@@ -287,6 +304,13 @@ thread_local! {
 pub fn log_out() {
     if let Some(logout) = LOGOUT.with(|l| l.borrow().clone()) {
         logout();
+    }
+}
+
+/// ログインが切れたとき、データを消さずにログインの入り口に戻る。
+pub fn relogin() {
+    if let Some(relogin) = RELOGIN.with(|l| l.borrow().clone()) {
+        relogin();
     }
 }
 
