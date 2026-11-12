@@ -14,7 +14,6 @@ struct NowPlayingView: View {
     @State private var aiOpen = false
     /// 指でスクロールしている間か（一番上からさらに下へ引っ張ったら閉じるため）。
     @State private var scrollTouching = false
-    @State private var safeTop: CGFloat = 0
     @Environment(\.dismiss) private var dismiss
     /// 横向き（縦が狭い）なら、ジャケット・映像と操作を左右に並べる。
     @Environment(\.verticalSizeClass) private var verticalSize
@@ -41,47 +40,13 @@ struct NowPlayingView: View {
                     .modifier(PullDownToDismiss(touching: $scrollTouching) { dismiss() })
                 }
                 .padding(.horizontal, 24)
-            } else if !(shell.showVideo && player.hasVideo) {
-                // 縦向きの曲: ジャケットを画面の幅いっぱいに、上は時刻の帯の裏まで出し、下はぼかした地へ溶かす（Apple Music と同じ）。
-                // 閉じる・切り替え・メニューはジャケットの上に重ね、曲名はジャケットの溶けた所に重ねる
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 20) {
-                        CoverCarousel(fullBleed: true)
-                            .overlay(alignment: .top) {
-                                header(player, song)
-                                    .padding(.horizontal, 24)
-                                    .padding(.top, safeTop)
-                            }
-                        VStack(alignment: .leading, spacing: 20) { details(player, song, withHeader: false) }
-                            .padding(.horizontal, 24)
-                            .padding(.top, -64)
-                    }
-                    .padding(.bottom, 40)
-                }
-                .scrollIndicators(.hidden)
-                .ignoresSafeArea(edges: .top)
-                .modifier(PullDownToDismiss(touching: $scrollTouching) { dismiss() })
             } else {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 20) {
-                        header(player, song)
-                        media(player)
-                        details(player, song, withHeader: false)
-                    }
-                    .padding(.horizontal, 24)
-                    .padding(.bottom, 40)
-                }
-                .scrollIndicators(.hidden)
-                .modifier(PullDownToDismiss(touching: $scrollTouching) { dismiss() })
+                portrait(player, song)
             }
         }
         .fullScreenCover(isPresented: $shell.videoFullScreen) { VideoFullScreen() }
         // ジャケットを大きくぼかして画面の端まで敷く（Apple Music の再生中の画面と同じ）
-        .background {
-            ArtworkBackdrop(url: song?.thumbnailUrl)
-                // 時刻の帯の高さ（ジャケットを帯の裏まで出すとき、閉じる・メニューをその下に置く）
-                .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.top } action: { safeTop = $0 }
-        }
+        .background { ArtworkBackdrop(url: song?.thumbnailUrl) }
         .task(id: song?.thumbnailUrl) { tint = await Artwork.dominantColor(song?.thumbnailUrl) }
         // 曲が変わったら曲の表示に戻す（PiP で映している間は動画のまま）
         .onChange(of: song?.videoId) { _, _ in if !VideoPip.shared.active { shell.showVideo = false } }
@@ -161,6 +126,159 @@ struct NowPlayingView: View {
         .gesture(DragGesture(minimumDistance: 20).onEnded { value in
             if value.translation.height > 60, abs(value.translation.width) < value.translation.height { dismiss() }
         })
+    }
+
+    // MARK: 縦向き（Apple Music の並び）
+
+    /// 縦向き: 上にジャケット（画面の幅いっぱいに、時刻の帯の裏まで。動画のときは映像）、操作は下に寄せる。
+    /// 上には閉じるためのつまみだけを置き、ボタンはジャケットに重ねない（Apple Music の再生中の画面と同じ）。
+    private func portrait(_ player: PlayerService, _ song: Song?) -> some View {
+        let video = shell.showVideo && player.hasVideo
+        return ZStack(alignment: .top) {
+            if !video {
+                CoverCarousel(fullBleed: true)
+                    .ignoresSafeArea(edges: .top)
+            }
+            VStack(spacing: 0) {
+                Capsule().fill(.white.opacity(0.5)).frame(width: 36, height: 5)
+                    .frame(maxWidth: .infinity, minHeight: 24)
+                    .contentShape(Rectangle())
+                    .onTapGesture { dismiss() }
+                    .accessibilityLabel(L.t("閉じる", "Close"))
+                    .accessibilityAddTraits(.isButton)
+                if video {
+                    media(player).padding(.horizontal, 24).padding(.top, 16)
+                }
+                Spacer(minLength: 0)
+                VStack(alignment: .leading, spacing: 14) {
+                    portraitTitleRow(player, song)
+                    seekBar(player)
+                    portraitControls(player)
+                    if player.canChangeVolume { volumeBar(player) }
+                    portraitBottomRow(player)
+                }
+                .padding(.horizontal, 28)
+                .padding(.bottom, 4)
+            }
+        }
+        // ジャケットや曲名の辺りを下へ払ったら閉じる（つまみ・シークバーの横の動きは通す）
+        .simultaneousGesture(DragGesture(minimumDistance: 20).onEnded { value in
+            if value.translation.height > 70, value.translation.height > abs(value.translation.width) * 1.5 { dismiss() }
+        })
+        .sheet(isPresented: Binding(get: { LyricsSheetState.shared.open }, set: { LyricsSheetState.shared.open = $0 })) {
+            LyricsView().modifier(DialogSheets(layer: .lyrics))
+        }
+    }
+
+    /// 曲名とアーティスト、右に評価と「…」（Claude に聞く・共有・曲のメニュー）。
+    private func portraitTitleRow(_ player: PlayerService, _ song: Song?) -> some View {
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(song?.title ?? L.t("何も再生していません", "Nothing playing"))
+                    .font(.title3.weight(.semibold)).lineLimit(1)
+                    .onTapGesture { if let id = song?.album?.browseId { AppServices.nav.album(id) } }
+                Text(song?.artistsText ?? "").font(.title3).foregroundStyle(.secondary).lineLimit(1)
+                    .onTapGesture { if let id = song?.artists.first(where: { $0.browseId != nil })?.browseId { AppServices.nav.artist(id) } }
+            }
+            Spacer(minLength: 0)
+            if song != nil {
+                LikeButtonView(size: 20).frame(width: 40, height: 40).modifier(RoundButtonBackground())
+                Menu {
+                    Button { aiOpen = true } label: { Label(L.t("Claude に聞く", "Ask Claude"), systemImage: "sparkles") }
+                    // RSS のエピソードには YouTube の共有のリンクが無い（ADR-0012）
+                    if let song, !Feed.isExternal(song.videoId) {
+                        ShareLink(item: SongActions.url(song)) { Label(L.t("共有", "Share"), systemImage: "square.and.arrow.up") }
+                    }
+                    if let song { SongMenuItems(song: song) }
+                } label: {
+                    Image(systemName: "ellipsis").font(.body.weight(.semibold)).frame(width: 40, height: 40)
+                }
+                .modifier(RoundButtonBackground())
+            }
+        }
+        .foregroundStyle(.primary)
+    }
+
+    /// 前・再生・次を大きく、両端にシャッフルとリピートを小さく。
+    private func portraitControls(_ player: PlayerService) -> some View {
+        HStack {
+            Button(action: player.toggleShuffle) {
+                Image(systemName: "shuffle").font(.body.weight(.semibold))
+                    .foregroundStyle(player.shuffle ? Color.accentColor : Color.secondary)
+                    .frame(width: 44, height: 44)
+            }
+            .disabled(!player.canChangeModes)
+            .accessibilityLabel(L.t("シャッフル", "Shuffle"))
+            Spacer()
+            Button(action: player.previous) { Image(systemName: "backward.fill").font(.system(size: 34)).frame(width: 64, height: 64) }
+                .accessibilityLabel(L.t("前へ", "Previous"))
+            Spacer()
+            Button(action: player.togglePlay) {
+                ZStack {
+                    if player.isLoading {
+                        ProgressView().controlSize(.large)
+                    } else {
+                        Image(systemName: player.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 46))
+                    }
+                }
+                .frame(width: 72, height: 72)
+                .contentShape(Rectangle())
+            }
+            .accessibilityLabel(player.isPlaying ? L.t("一時停止", "Pause") : L.t("再生", "Play"))
+            Spacer()
+            Button(action: player.next) { Image(systemName: "forward.fill").font(.system(size: 34)).frame(width: 64, height: 64) }
+                .accessibilityLabel(L.t("次へ", "Next"))
+            Spacer()
+            Button(action: player.cycleRepeat) {
+                Image(systemName: player.repeatMode == .one ? "repeat.1" : "repeat").font(.body.weight(.semibold))
+                    .foregroundStyle(player.repeatMode != .off ? Color.accentColor : Color.secondary)
+                    .frame(width: 44, height: 44)
+            }
+            .disabled(!player.canChangeModes)
+            .accessibilityLabel(L.t("リピート", "Repeat"))
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(.primary)
+    }
+
+    /// 下の段: 歌詞・動画（MV のある曲とライブ）・端末・キュー（Apple Music の歌詞・AirPlay・次に再生と同じ置き場）。
+    private func portraitBottomRow(_ player: PlayerService) -> some View {
+        let hasLyrics = if case .found = player.lyrics { true } else { false }
+        return HStack {
+            Button { LyricsSheetState.shared.open = true } label: {
+                Image(systemName: "quote.bubble").frame(width: 44, height: 44)
+            }
+            .disabled(!hasLyrics)
+            .accessibilityLabel(L.t("歌詞", "Lyrics"))
+            if player.hasVideo {
+                Spacer()
+                Button { shell.showVideo.toggle() } label: {
+                    Image(systemName: shell.showVideo ? "play.rectangle.fill" : "play.rectangle")
+                        .foregroundStyle(shell.showVideo ? Color.accentColor : Color.primary)
+                        .frame(width: 44, height: 44)
+                }
+                .accessibilityLabel(shell.showVideo ? L.t("曲にする", "Show song") : L.t("動画にする", "Show video"))
+            }
+            if AppServices.connect.configured {
+                Spacer()
+                Button { devicesOpen = true } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: player.isRemote ? "hifispeaker.2.fill" : "hifispeaker.2")
+                        if player.isRemote, let device = player.remoteDevice { Text(device).font(.caption.weight(.semibold)).lineLimit(1) }
+                    }
+                    .foregroundStyle(player.isRemote ? Color.accentColor : Color.primary)
+                    .frame(minWidth: 44, minHeight: 44)
+                }
+                .accessibilityLabel(L.t("デバイスに接続", "Connect to a device"))
+            }
+            Spacer()
+            Button { shell.queueOpen = true } label: { Image(systemName: "list.bullet").frame(width: 44, height: 44) }
+                .accessibilityLabel(L.t("キュー", "Queue"))
+        }
+        .font(.title3)
+        .buttonStyle(.plain)
+        .foregroundStyle(.primary)
+        .padding(.horizontal, 12)
     }
 
     private func titleRow(_ player: PlayerService, _ song: Song?) -> some View {
@@ -354,6 +472,17 @@ struct NowPlayingView: View {
 
 /// 再生中の画面のジャケット。前後の曲のジャケットを横に並べておき（先に読んでおく）、指について動く。
 /// 払いきると隣のジャケットが真ん中へ滑ってきて、その曲へ移る（前へ払うと、再生した長さによらず前の曲へ。Android と同じ）。
+/// 曲名の横の丸いボタンの地（iOS 26 からはガラス、それより前は薄い丸）。
+private struct RoundButtonBackground: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content.glassEffect(.regular.interactive(), in: .circle)
+        } else {
+            content.background(Circle().fill(.white.opacity(0.15)))
+        }
+    }
+}
+
 /// 再生画面の地: ジャケットを画面いっぱいに引き伸ばして大きくぼかし、文字が読めるよう暗くしたもの。曲が替わったら重ねて替える。
 private struct ArtworkBackdrop: View {
     var url: String?
