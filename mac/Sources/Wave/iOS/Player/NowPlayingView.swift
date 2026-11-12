@@ -55,11 +55,8 @@ struct NowPlayingView: View {
             }
         }
         .fullScreenCover(isPresented: $shell.videoFullScreen) { VideoFullScreen() }
-        .background {
-            LinearGradient(colors: [(tint ?? Color.gray).opacity(0.85), Color.black], startPoint: .top, endPoint: .center)
-                .ignoresSafeArea()
-                .animation(.easeOut(duration: 0.4), value: tint)
-        }
+        // ジャケットを大きくぼかして画面の端まで敷く（Apple Music の再生中の画面と同じ）
+        .background { ArtworkBackdrop(url: song?.thumbnailUrl) }
         .task(id: song?.thumbnailUrl) { tint = await Artwork.dominantColor(song?.thumbnailUrl) }
         // 曲が変わったら曲の表示に戻す（PiP で映している間は動画のまま）
         .onChange(of: song?.videoId) { _, _ in if !VideoPip.shared.active { shell.showVideo = false } }
@@ -332,6 +329,27 @@ struct NowPlayingView: View {
 
 /// 再生中の画面のジャケット。前後の曲のジャケットを横に並べておき（先に読んでおく）、指について動く。
 /// 払いきると隣のジャケットが真ん中へ滑ってきて、その曲へ移る（前へ払うと、再生した長さによらず前の曲へ。Android と同じ）。
+/// 再生画面の地: ジャケットを画面いっぱいに引き伸ばして大きくぼかし、文字が読めるよう暗くしたもの。曲が替わったら重ねて替える。
+private struct ArtworkBackdrop: View {
+    var url: String?
+
+    var body: some View {
+        ZStack {
+            Color.black
+            // ぼかすので小さい絵で足りる。縁がぼけて透けないよう、少し大きくしてから不透明のままぼかす
+            RemoteImage(url: Ui.resize(url, 240))
+                .scaleEffect(1.4)
+                .blur(radius: 60, opaque: true)
+                .saturation(1.3)
+                .id(url)
+                .transition(.opacity)
+            LinearGradient(colors: [.black.opacity(0.2), .black.opacity(0.45), .black.opacity(0.6)], startPoint: .top, endPoint: .bottom)
+        }
+        .animation(.easeInOut(duration: 0.6), value: url)
+        .ignoresSafeArea()
+    }
+}
+
 private struct CoverCarousel: View {
     /// 横向き: 前後の曲のジャケットは払っている間だけ出し、間を広く取って、影が収まる広さより外は見せない
     /// （右の操作の欄の下や画面の端にはみ出さず、真ん中のジャケットの影も切れない）。
