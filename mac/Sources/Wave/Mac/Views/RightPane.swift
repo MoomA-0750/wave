@@ -190,6 +190,11 @@ struct QueueView: View {
                 if !model.queueHistory && player.userQueueEnd > player.index + 1 {
                     Button(L.t("キューを消去", "Clear queue")) { player.clearUserQueue() }.buttonStyle(.textLink)
                 }
+                // 良いラジオの流れを残す（SPEC「キューをプレイリストとして保存」）
+                if !model.queueHistory && Dialogs.canSaveQueue {
+                    Button { Dialogs.shared.saveQueue() } label: { Image(systemName: "text.badge.plus").font(.system(size: 12)) } // apple-ui-allow: 隣の閉じるボタンと同じ小さな記号
+                        .buttonStyle(IconButtonStyle()).help(L.t("キューをプレイリストとして保存", "Save queue as playlist"))
+                }
                 Button { model.setRightPane(open: true, queue: false) } label: { Image(systemName: "xmark").font(.system(size: 11)) }
                     .buttonStyle(IconButtonStyle()).help(L.t("閉じる", "Close"))
             }

@@ -167,6 +167,32 @@ final class MusicParsersTests: XCTestCase {
         XCTAssertEqual(.like, MusicParsers.songInfo(Fixtures.parse(text.replacingOccurrences(of: "\"INDIFFERENT\"", with: "\"LIKE\"")), videoId: "mD__tW1cTfg").like)
     }
 
+    func testPlaylistSuggestionsAndReload() throws {
+        XCTAssertNotNil(MusicParsers.playlistPage(Fixtures.json("browse_playlist")).suggestionsContinuation)
+        let first = try XCTUnwrap(MusicParsers.playlistSuggestions(Fixtures.json("browse_playlist_suggestions")))
+        XCTAssertEqual(7, first.songs.count)
+        XCTAssertEqual("HKTAlo2dBDA", first.songs.first?.videoId)
+        XCTAssertFalse(first.songs.first?.title.isEmpty ?? true)
+        XCTAssertNotNil(first.reload)
+        let again = try XCTUnwrap(MusicParsers.playlistSuggestions(Fixtures.json("browse_playlist_suggestions_reload")))
+        XCTAssertEqual(7, again.songs.count)
+        XCTAssertNotEqual(first.songs.map(\.videoId), again.songs.map(\.videoId))
+        XCTAssertNotNil(again.reload)
+        XCTAssertNil(MusicParsers.playlistSuggestions(Fixtures.json("browse_playlist")))
+    }
+
+    func testQueueSongsToSaveKeepOrderAndDropEpisodesLivesAndRepeats() {
+        func song(_ id: String, kind: String? = nil, live: Bool = false) -> Song {
+            Song(videoId: id, title: "t" + id, artists: [], album: nil, durationSeconds: nil, thumbnailUrl: nil, kind: kind, isLive: live)
+        }
+        let queue = [song("a"), song("b"), song("ext:https://example.com/e.mp3"), song("c", kind: "MUSIC_VIDEO_TYPE_PODCAST_EPISODE"),
+                     song("d", live: true), song("a"), song("e", kind: Song.kindMusicVideo)]
+        let saved = QueuePlaylist.songsToSave(queue)
+        XCTAssertEqual(["a", "b", "e"], saved.map(\.videoId))
+        XCTAssertEqual("taのラジオ", QueuePlaylist.defaultTitle(saved, japanese: true))
+        XCTAssertEqual("ta radio", QueuePlaylist.defaultTitle(saved, japanese: false))
+    }
+
     func testPlaylistPagesAndSignInPrompt() {
         let page = MusicParsers.playlistPage(Fixtures.json("browse_playlist"))
         XCTAssertFalse(page.songs.isEmpty)

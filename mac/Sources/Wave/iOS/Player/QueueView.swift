@@ -53,6 +53,7 @@ struct QueueView: View {
                     .listRowInsets(EdgeInsets())
                     .id(QueueView.nowId)
                 upcomingSections(player, showCurrent: false)
+                saveQueueSection()
             }
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
@@ -88,6 +89,7 @@ struct QueueView: View {
                 historySection(player)
             } else {
                 upcomingSections(player)
+                saveQueueSection()
             }
         }
         .listStyle(.insetGrouped)
@@ -106,6 +108,7 @@ struct QueueView: View {
                     historySection(player)
                 } else {
                     upcomingSections(player)
+                    saveQueueSection()
                 }
             }
             .listStyle(.insetGrouped)
@@ -186,6 +189,20 @@ struct QueueView: View {
                         editButton(player).font(.footnote.weight(.semibold)).textCase(nil).modifier(HeaderButtonColor(embedded: true))
                     }
                 }
+            }
+        }
+    }
+
+    /// 並びの一番下: キューをプレイリストとして保存（良いラジオの流れを残す。SPEC「キューをプレイリストとして保存」）。
+    @ViewBuilder
+    private func saveQueueSection() -> some View {
+        if Dialogs.canSaveQueue {
+            Section {
+                Button { Dialogs.shared.saveQueue() } label: {
+                    Label(L.t("キューをプレイリストとして保存", "Save queue as playlist"), systemImage: "text.badge.plus")
+                }
+                .modifier(HeaderButtonColor(embedded: embedded))
+                .modifier(QueueRowBackground())
             }
         }
     }

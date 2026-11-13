@@ -70,25 +70,34 @@ struct SongMenuItems: View {
 }
 
 /// プレイリストを作成する画面。
+/// songs を渡すとキューの保存（作るときにその曲を入れる）。
 struct CreatePlaylistSheet: View {
     var song: Song?
+    var songs: [Song] = []
     @State private var name: String
     @Environment(\.dismiss) private var dismiss
 
-    init(song: Song?) {
+    init(song: Song?, songs: [Song] = []) {
         self.song = song
-        _name = State(initialValue: song == nil ? "" : L.t("マイプレイリスト", "My playlist"))
+        self.songs = songs
+        _name = State(initialValue: !songs.isEmpty ? QueuePlaylist.defaultTitle(songs, japanese: L.ja) : song == nil ? "" : L.t("マイプレイリスト", "My playlist"))
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text(L.t("プレイリストを作成", "Create playlist")).font(.title2.weight(.semibold))
+            Text(songs.isEmpty ? L.t("プレイリストを作成", "Create playlist") : L.t("キューをプレイリストとして保存", "Save queue as playlist"))
+                .font(.title2.weight(.semibold))
             TextField(L.t("プレイリスト名", "Playlist name"), text: $name).textFieldStyle(.roundedBorder).frame(width: 340)
                 .onSubmit(create)
+            if !songs.isEmpty {
+                Text(L.t("キューの \(L.songs(songs.count))（聴いた曲も含む）を、非公開のプレイリストに入れます。",
+                         "The \(L.songs(songs.count)) in the queue (including ones already played) go into a private playlist."))
+                    .font(.callout).foregroundStyle(.secondary).frame(width: 340, alignment: .leading)
+            }
             HStack {
                 Spacer()
                 Button(L.t("キャンセル", "Cancel")) { dismiss() }.keyboardShortcut(.cancelAction)
-                Button(L.t("作成", "Create"), action: create).keyboardShortcut(.defaultAction)
+                Button(songs.isEmpty ? L.t("作成", "Create") : L.t("保存", "Save"), action: create).keyboardShortcut(.defaultAction)
                     .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
             }
         }
@@ -100,7 +109,8 @@ struct CreatePlaylistSheet: View {
         guard !title.isEmpty else { return }
         dismiss()
         let song = self.song
-        Task { await Dialogs.shared.create(title, song: song) }
+        let songs = self.songs
+        Task { await Dialogs.shared.create(title, song: song, songs: songs) }
     }
 }
 

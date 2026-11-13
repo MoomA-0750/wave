@@ -101,6 +101,53 @@ enum DebugCommon {
         case "queue-remove": if let position = Int(arg) { player.removeAt(position) }
         // 「次に流れる曲」の消去（元の流れの曲を外して流れを止める。ほかの端末で鳴っている間は queue_edit の clear_flow で送る）
         case "queue-clear-flow": player.clearFlow()
+        case "queue-save":
+            // キューをプレイリストとして保存（名前の画面で「保存」を押したのと同じ）。引数は名前（無ければ既定）
+            let songs = QueuePlaylist.songsToSave(player.queue)
+            let title = arg.isEmpty ? QueuePlaylist.defaultTitle(songs, japanese: L.ja) : arg
+            AppPaths.log("debug queue-save can=\(Dialogs.canSaveQueue) queue=\(player.queue.count) songs=\(songs.count)")
+            await Dialogs.shared.create(title, song: nil, songs: songs)
+            AppPaths.log("debug queue-save message=\(player.message ?? "-")")
+        case "queue-save-dialog": Dialogs.shared.saveQueue()
+        case "playlist-open":
+            // 名前の一致する自分のプレイリストのページを開く
+            if let target = AppServices.library.editable.first(where: { $0.title == arg }) { nav.playlist(target) } else { AppPaths.log("debug playlist-open none") }
+        case "playlist-check":
+            // 名前の一致する自分のプレイリストの曲数と、キューの保存する曲と同じ並びか
+            guard let target = AppServices.library.editable.first(where: { $0.title == arg }),
+                  let page = (try? await AppServices.music.fullPlaylist(target.playlistId))?.value
+            else {
+                AppPaths.log("debug playlist-check none")
+                break
+            }
+            let wanted = QueuePlaylist.songsToSave(player.queue).map(\.videoId)
+            AppPaths.log("debug playlist-check songs=\(page.songs.count) sameOrder=\(page.songs.map(\.videoId) == wanted)")
+        case "suggestions":
+            // 名前の一致する自分のプレイリストの候補を読み、「更新」でも読む。引数「add」付き（「add 名前」）なら先頭の候補を足してから外す
+            let p = arg.split(separator: " ", maxSplits: 1).map(String.init)
+            let add = p.first == "add"
+            let name = add ? (p.count > 1 ? p[1] : "") : arg
+            guard let target = AppServices.library.editable.first(where: { $0.title == name }),
+                  let page = (try? await AppServices.music.playlist(target.playlistId))?.value
+            else {
+                AppPaths.log("debug suggestions no playlist")
+                break
+            }
+            guard let token = page.suggestionsContinuation, let first = (try? await AppServices.music.playlistSuggestions(token))?.value ?? nil else {
+                AppPaths.log("debug suggestions none token=\(page.suggestionsContinuation != nil)")
+                break
+            }
+            var again: PlaylistSuggestions?
+            if let reload = first.reload { again = (try? await AppServices.music.playlistSuggestions(reload))?.value ?? nil }
+            AppPaths.log("debug suggestions count=\(first.songs.count) reloadCount=\(again?.songs.count ?? -1) different=\(again.map { $0.songs.map(\.videoId) != first.songs.map(\.videoId) } ?? false)")
+            if add, let song = first.songs.first {
+                let added = (try? await AppServices.music.addToPlaylist(target.playlistId, videoId: song.videoId, knownEmpty: true)) ?? .failed
+                try? await Task.sleep(for: .seconds(3))
+                let setIds = await AppServices.library.membership.setVideoIds(target.playlistId, song.videoId) ?? []
+                var removed = !setIds.isEmpty
+                for setId in setIds { removed = ((try? await AppServices.music.removeFromPlaylist(target.playlistId, videoId: song.videoId, setVideoId: setId)) ?? false) && removed }
+                AppPaths.log("debug suggestions add=\(added) removed=\(removed) setIds=\(setIds.count)")
+            }
         case "shuffle": player.toggleShuffle()
         case "repeat": player.cycleRepeat()
         case "next": player.next()

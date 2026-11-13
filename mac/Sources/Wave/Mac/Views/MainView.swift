@@ -62,7 +62,7 @@ struct MainView: View {
         .toolbarBackground(.hidden, for: .windowToolbar)
         .navigationTitle(player.current.map { "\($0.title) • \($0.artistsText)" } ?? "wave")
         .sheet(item: $dialogs.addToPlaylist) { song in AddToPlaylistSheet(song: song) }
-        .sheet(isPresented: $dialogs.creating) { CreatePlaylistSheet(song: dialogs.createSong) }
+        .sheet(isPresented: $dialogs.creating) { CreatePlaylistSheet(song: dialogs.createSong, songs: dialogs.createQueue) }
         .onChange(of: player.message) { _, message in
             guard let message else { return }
             AppServices.toast.show(message)

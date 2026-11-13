@@ -299,8 +299,23 @@ public enum MusicParsers {
         let songArea: JSON? = appended ?? shelf
         let endConfirmed = continuation == nil && songArea != nil && !containsKeyLike(songArea, "continuation")
         let sortable = !root.findAll("sortFilterSubMenuRenderer").isEmpty
+        let suggestions = root.path("contents", "twoColumnBrowseResultsRenderer", "secondaryContents", "sectionListRenderer", "continuations").items.lazy
+            .compactMap { $0.path("nextContinuationData", "continuation").str }.first
         return PlaylistPage(title: title, songs: rows.map(\.song), continuation: continuation, setVideoIds: rows.map(\.setId), editable: editable,
-                            endConfirmed: endConfirmed, subtitle: (subtitle?.isEmpty ?? true) ? nil : subtitle, thumbnailUrl: thumbnail, sortable: sortable)
+                            endConfirmed: endConfirmed, subtitle: (subtitle?.isEmpty ?? true) ? nil : subtitle, thumbnailUrl: thumbnail, sortable: sortable,
+                            suggestionsContinuation: suggestions)
+    }
+
+    /// プレイリストの曲の後ろに続く棚の応答（sectionListContinuation の「候補」の musicShelfRenderer）か、
+    /// 候補の「更新」の応答（musicShelfContinuation）から、候補の曲と次の更新のトークン。棚が無ければ nil。
+    public static func playlistSuggestions(_ root: JSON) -> PlaylistSuggestions? {
+        let contents = root.path("continuationContents")
+        let shelf = contents.path("musicShelfContinuation").asObject
+            ?? contents.path("sectionListContinuation", "contents").items.lazy.compactMap { $0.path("musicShelfRenderer").asObject }.first
+        guard let shelf else { return nil }
+        let songs = shelf.path("contents").items.compactMap { $0.path("musicResponsiveListItemRenderer").asObject }.compactMap { responsiveListItemSong($0) }
+        let reload = shelf.path("continuations").items.lazy.compactMap { $0.path("reloadContinuationData", "continuation").str }.first
+        return PlaylistSuggestions(songs: songs, reload: reload)
     }
 
     private static func containsKeyLike(_ root: JSON?, _ fragment: String) -> Bool {

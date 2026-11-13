@@ -111,6 +111,8 @@ final class CollectionModel {
         generation += 1
         let mine = generation
         all = []
+        suggestions = []
+        suggestionsReload = nil
         loading = true
         error = nil
         if isLiked { gradient = Color(red: 0x50 / 255, green: 0x38 / 255, blue: 0xA0 / 255) } else { Task { await color() } }
@@ -193,6 +195,61 @@ final class CollectionModel {
         let total = all.reduce(0) { $0 + ($1.song.durationSeconds ?? 0) }
         // サーバーの補足（曲数・時間を含む）があればそれを出す。無ければ読めた曲から数える
         detail = page.subtitle ?? request.subtitle ?? "\(L.songs(all.count)), \(L.length(total))"
+        // 自分のプレイリストは、最後まで読めたら一番下に「おすすめの曲」（YouTube Music の候補）を出す
+        if page.editable, page.continuation == nil, let token = page.suggestionsContinuation {
+            Task { await loadSuggestions(token, mine) }
+        }
+    }
+
+    // MARK: おすすめの曲（SPEC「自分のプレイリストのページの一番下に…」）
+
+    /// YouTube Music の候補（足していない曲）。空なら出さない。
+    var suggestions: [Song] = []
+    var suggestionsLoading = false
+    @ObservationIgnored private var suggestionsReload: String?
+
+    private func loadSuggestions(_ token: String, _ mine: Int) async {
+        suggestionsLoading = true
+        let result = try? await AppServices.music.playlistSuggestions(token)
+        guard mine == generation else { return }
+        suggestionsLoading = false
+        guard let found = result?.value ?? nil else { return }
+        // 読み込んでいる間に足した曲は除く（候補は入っていない曲だけのはずだが、念のため）
+        let inside = Set(all.map(\.song.videoId))
+        suggestions = found.songs.filter { !inside.contains($0.videoId) }
+        suggestionsReload = found.reload
+        AppPaths.log("playlist suggestions count=\(suggestions.count) reload=\(found.reload != nil)")
+    }
+
+    /// 「更新」: 別の候補に替える。
+    func refreshSuggestions() {
+        guard let token = suggestionsReload, !suggestionsLoading else { return }
+        let mine = generation
+        Task { await loadSuggestions(token, mine) }
+    }
+
+    /// 候補の曲を押した: その曲を流す。
+    func playSuggestion(_ song: Song) { AppServices.player.playSong(song) }
+
+    /// 「＋」: このプレイリストに足し、候補から外して曲の並びの最後に出す（重複は確かめない: 候補は入っていない曲だけ）。
+    func addSuggestion(_ song: Song) {
+        guard let index = suggestions.firstIndex(of: song) else { return }
+        suggestions.remove(at: index)
+        let playlistTitle = title ?? request.title ?? ""
+        Task {
+            let result = (try? await AppServices.music.addToPlaylist(request.id, videoId: song.videoId, knownEmpty: true)) ?? .failed
+            AppPaths.log("playlist suggestion add result=\(result)")
+            if result == .added {
+                all.append(TrackRow(number: all.count + 1, song: song))
+                AppServices.library.membership.noteAdded(request.id, song.videoId)
+                AppServices.player.message = L.t("「\(playlistTitle)」に追加しました", "Added to \(playlistTitle)")
+                // 候補を全部足したら、次の候補を読む（YouTube Music と同じ）
+                if suggestions.isEmpty { refreshSuggestions() }
+            } else {
+                suggestions.insert(song, at: min(index, suggestions.count))
+                AppServices.player.message = L.t("追加できませんでした", "Couldn't add it")
+            }
+        }
     }
 
     /// 読み込めなかったとき、取っていれば取り終えた曲を出す（通信なしでも開ける。ADR-0016 の 18）。出したら true。

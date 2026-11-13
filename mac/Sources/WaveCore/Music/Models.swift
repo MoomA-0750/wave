@@ -58,6 +58,16 @@ public struct AlbumRef: Hashable, Sendable {
     }
 }
 
+/// 自分のプレイリストのページの下に出す、YouTube Music の「候補」の曲。reload で別の候補に替える。
+public struct PlaylistSuggestions: Sendable {
+    public var songs: [Song]
+    public var reload: String?
+    public init(songs: [Song], reload: String?) {
+        self.songs = songs
+        self.reload = reload
+    }
+}
+
 public struct SongPage: Sendable {
     public var songs: [Song]
     public var continuation: String?
@@ -104,9 +114,12 @@ public struct PlaylistPage: Sendable {
     public var thumbnailUrl: String?
     /// サーバーで並べ替えられる（自分のプレイリストなど。並べ替えのメニューがある）。
     public var sortable: Bool
+    /// 最初のページだけ: 曲の後ろに続く棚（自分のプレイリストなら「候補」）を読むトークン。
+    public var suggestionsContinuation: String?
     public init(title: String?, songs: [Song], continuation: String?, setVideoIds: [String?], editable: Bool, endConfirmed: Bool,
-                subtitle: String? = nil, thumbnailUrl: String? = nil, sortable: Bool = false)
+                subtitle: String? = nil, thumbnailUrl: String? = nil, sortable: Bool = false, suggestionsContinuation: String? = nil)
     {
+        self.suggestionsContinuation = suggestionsContinuation
         self.title = title
         self.songs = songs
         self.continuation = continuation

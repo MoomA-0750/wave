@@ -100,15 +100,18 @@ private struct PlaylistSheetsRow<Trailing: View>: View {
 }
 
 /// プレイリストを作成する画面（名前を入れて作る。曲から開いたときは、作ったあとにその曲を入れる）。
+/// songs を渡すとキューの保存（作るときにその曲を入れる）。
 struct CreatePlaylistSheet: View {
     var song: Song?
+    var songs: [Song] = []
     @State private var name: String
     @FocusState private var focused: Bool
     @Environment(\.dismiss) private var dismiss
 
-    init(song: Song?) {
+    init(song: Song?, songs: [Song] = []) {
         self.song = song
-        _name = State(initialValue: song == nil ? "" : L.t("マイプレイリスト", "My playlist"))
+        self.songs = songs
+        _name = State(initialValue: !songs.isEmpty ? QueuePlaylist.defaultTitle(songs, japanese: L.ja) : song == nil ? "" : L.t("マイプレイリスト", "My playlist"))
     }
 
     private var trimmed: String { name.trimmingCharacters(in: .whitespaces) }
@@ -122,14 +125,21 @@ struct CreatePlaylistSheet: View {
                         .submitLabel(.done)
                         .onSubmit(create)
                 } footer: {
-                    if let song { Text(L.t("作成したあと、「\(song.title)」を入れます。", "“\(song.title)” will be added after it's created.")) }
+                    if !songs.isEmpty {
+                        Text(L.t("キューの \(L.songs(songs.count))（聴いた曲も含む）を、非公開のプレイリストに入れます。",
+                                 "The \(L.songs(songs.count)) in the queue (including ones already played) go into a private playlist."))
+                    } else if let song {
+                        Text(L.t("作成したあと、「\(song.title)」を入れます。", "“\(song.title)” will be added after it's created."))
+                    }
                 }
             }
-            .navigationTitle(L.t("プレイリストを作成", "Create playlist"))
+            .navigationTitle(songs.isEmpty ? L.t("プレイリストを作成", "Create playlist") : L.t("キューを保存", "Save queue"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button(L.t("キャンセル", "Cancel")) { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) { Button(L.t("作成", "Create"), action: create).disabled(trimmed.isEmpty) }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(songs.isEmpty ? L.t("作成", "Create") : L.t("保存", "Save"), action: create).disabled(trimmed.isEmpty)
+                }
             }
         }
         .presentationDetents([.height(260), .medium])
@@ -141,7 +151,8 @@ struct CreatePlaylistSheet: View {
         guard !title.isEmpty else { return }
         dismiss()
         let song = self.song
-        Task { await Dialogs.shared.create(title, song: song) }
+        let songs = self.songs
+        Task { await Dialogs.shared.create(title, song: song, songs: songs) }
     }
 }
 #endif

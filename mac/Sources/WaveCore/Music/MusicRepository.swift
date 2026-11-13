@@ -272,6 +272,11 @@ public final class MusicRepository: Sendable {
         try await loggedInBrowse("VL" + playlistId, continuation: continuation, parse: MusicParsers.playlistPage, params: order)
     }
 
+    /// 自分のプレイリストの「候補」（ページの suggestionsContinuation か、前の候補の reload で読む）。棚が無ければ ok(nil)。
+    public func playlistSuggestions(_ continuation: String) async throws -> ApiResult<PlaylistSuggestions?> {
+        try await loggedInBrowse("", continuation: continuation, parse: MusicParsers.playlistSuggestions)
+    }
+
     /// プレイリストの曲を全部読む（再生とシャッフル用）。onPage にはそれまでの分を渡す。
     public func fullPlaylist(_ playlistId: String, onPage: ((PlaylistPage) -> Void)? = nil, order: String? = nil) async throws -> ApiResult<PlaylistPage> {
         let first = try await playlist(playlistId, continuation: nil, order: order)
@@ -400,9 +405,12 @@ public final class MusicRepository: Sendable {
     }
 
     /// 非公開のプレイリストを作る。作った playlistId を返す。
-    public func createPlaylist(_ title: String) async throws -> ApiResult<String> {
+    /// videoIds を渡すと、作るときに曲もまとめて入れる（YouTube は同じ曲を2つ入れない）。
+    public func createPlaylist(_ title: String, videoIds: [String] = []) async throws -> ApiResult<String> {
         guard client.isLoggedIn else { return .failed(.notLoggedIn) }
-        let result = try await client.post("playlist/create", body: .obj(["title": .string(title), "privacyStatus": "PRIVATE"]))
+        var body = JSONObject([("title", .string(title)), ("privacyStatus", "PRIVATE")])
+        if !videoIds.isEmpty { body["videoIds"] = .array(videoIds.map { .string($0) }) }
+        let result = try await client.post("playlist/create", body: .object(body))
         guard result.isOk, let value = result.value else { return .failed(result.failure ?? .parse, status: result.status) }
         guard let id = MusicParsers.createdPlaylistId(value) else { return .failed(.parse) }
         return .ok(id)

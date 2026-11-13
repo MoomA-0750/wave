@@ -38,6 +38,27 @@ struct CollectionView: View {
                         Button(L.t("次に再生", "Play next"), systemImage: "text.line.first.and.arrowtriangle.forward") { player.playNext(row.song) }.tint(.indigo)
                     }
             }
+            // 自分のプレイリストの一番下: YouTube Music の候補（＋で足す・「更新」で替える）。絞っている間は出さない
+            if !model.suggestions.isEmpty && model.filter.isEmpty && model.kindFilter == nil {
+                Section {
+                    ForEach(model.suggestions) { song in
+                        SuggestionRow(song: song, onAdd: { model.addSuggestion(song) }) { model.playSuggestion(song) }
+                    }
+                } header: {
+                    HStack(alignment: .firstTextBaseline) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(L.t("おすすめの曲", "Recommended songs")).font(.title3.weight(.bold)).foregroundStyle(.primary)
+                            Text(L.t("このプレイリストの曲をもとに", "Based on what's in this playlist")).font(.footnote).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Button(L.t("更新", "Refresh")) { model.refreshSuggestions() }
+                            .font(.subheadline.weight(.semibold))
+                            .disabled(model.suggestionsLoading)
+                    }
+                    .textCase(nil)
+                    .padding(.top, 20)
+                }
+            }
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
@@ -167,6 +188,30 @@ private struct CollectionViewChip: View {
                 .background(Capsule().fill(isOn ? Color.accentColor : Color.primary.opacity(0.08)))
         }
         .buttonStyle(.plain)
+    }
+}
+/// おすすめの曲の行（押すと流す。右の「＋」でプレイリストに足す）。
+private struct SuggestionRow: View {
+    var song: Song
+    var onAdd: () -> Void
+    var onPlay: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Cover(url: Ui.small(song.thumbnailUrl), size: 48, radius: 4)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(song.title).lineLimit(1)
+                Text(song.artistsText).subtle()
+            }
+            Spacer(minLength: 0)
+            Button(action: onAdd) {
+                Image(systemName: "plus.circle").font(.title2).foregroundStyle(.secondary)
+            }
+            .buttonStyle(.borderless)
+            .accessibilityLabel(L.t("プレイリストに追加", "Add to playlist"))
+        }
+        .contentShape(Rectangle())
+        .onTapGesture(perform: onPlay)
     }
 }
 #endif

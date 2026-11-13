@@ -1,5 +1,6 @@
 #if os(macOS)
 #if WAVE_DEBUG
+import AppKit
 import Foundation
 import MediaPlayer
 import UserNotifications
@@ -244,6 +245,15 @@ enum DebugCommands {
         case "playlist-create":
             let r = try? await AppServices.music.createPlaylist(arg)
             AppPaths.log("debug playlist create ok=\(r?.isOk ?? false)")
+        case "window-shot":
+            // 見えている窓（シートも）を、それぞれの中身から絵にする（画面の収録の許可が要らない）。引数は保存先の頭（…-0.png, …-1.png）
+            for (i, w) in NSApp.windows.filter({ $0.isVisible }).enumerated() {
+                guard let view = w.contentView?.superview ?? w.contentView, let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { continue }
+                view.cacheDisplay(in: view.bounds, to: rep)
+                let path = "\(arg)-\(i).png"
+                try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path))
+                AppPaths.log("debug window-shot \(path) \(Int(view.bounds.width))x\(Int(view.bounds.height)) sheet=\(w.isSheet)")
+            }
         case "playlists":
             AppPaths.log("debug playlists " + AppServices.library.editable.map(\.title).joined(separator: " | "))
         case "connect-accept":

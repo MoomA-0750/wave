@@ -191,7 +191,7 @@ struct DialogSheets: ViewModifier {
                 AddToPlaylistSheet(song: song)
             }
             .sheet(isPresented: Binding(get: { top && dialogs.creating }, set: { dialogs.creating = $0 })) {
-                CreatePlaylistSheet(song: dialogs.createSong)
+                CreatePlaylistSheet(song: dialogs.createSong, songs: dialogs.createQueue)
             }
     }
 }

@@ -31,6 +31,10 @@ struct CollectionPageView: View {
                                  removeFromPlaylist: model.editable && row.setVideoId != nil ? { model.remove(row) } : nil,
                                  onPlay: { model.play(rows: rows, start: i) }, onSelect: { selected = row.id })
                 }
+                // 自分のプレイリストの一番下: YouTube Music の候補（「追加」で足す・「更新」で替える）。絞っている間は出さない
+                if !model.suggestions.isEmpty && model.filter.isEmpty && model.kindFilter == nil {
+                    PlaylistSuggestionsView(model: model)
+                }
             }
             .padding(EdgeInsets(top: 0, leading: 12, bottom: 24, trailing: 12))
         }
@@ -134,6 +138,67 @@ struct CollectionPageView: View {
             }
         }
         .padding(EdgeInsets(top: 0, leading: 12, bottom: 12, trailing: 12))
+    }
+}
+
+/// プレイリストのページの一番下の「おすすめの曲」（Spotify のおすすめと同じ並び）。
+private struct PlaylistSuggestionsView: View {
+    var model: CollectionModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(L.t("おすすめの曲", "Recommended songs")).font(.title2.weight(.bold))
+                Text(L.t("このプレイリストの曲をもとに", "Based on what's in this playlist")).font(.callout).foregroundStyle(.secondary)
+            }
+            .padding(EdgeInsets(top: 32, leading: 12, bottom: 8, trailing: 12))
+            ForEach(model.suggestions) { song in
+                SuggestionRow(song: song, onAdd: { model.addSuggestion(song) }, onPlay: { model.playSuggestion(song) })
+            }
+            HStack {
+                Spacer()
+                Button(L.t("更新", "Refresh")) { model.refreshSuggestions() }
+                    .buttonStyle(.bordered).buttonBorderShape(.capsule)
+                    .disabled(model.suggestionsLoading)
+                    .help(L.t("別のおすすめに替える", "Show other recommendations"))
+            }
+            .padding(.horizontal, 12).padding(.top, 8)
+        }
+    }
+}
+
+private struct SuggestionRow: View {
+    var song: Song
+    var onAdd: () -> Void
+    var onPlay: () -> Void
+    @State private var hover = false
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Cover(url: Ui.small(song.thumbnailUrl), size: 40, radius: 4)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(song.title).lineLimit(1)
+                Text(song.artistsText).subtle()
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .layoutPriority(3)
+            if let album = song.album?.title {
+                Text(album).lineLimit(1).foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .layoutPriority(2)
+            }
+            Button(L.t("追加", "Add"), action: onAdd)
+                .buttonStyle(.bordered).buttonBorderShape(.capsule).controlSize(.small)
+                // 曲名・アルバムの欄に押しつぶされないよう、文字の幅を保つ
+                .fixedSize()
+                .help(L.t("このプレイリストに追加", "Add to this playlist"))
+        }
+        .padding(.horizontal, 12).padding(.vertical, 6)
+        .background(RoundedRectangle(cornerRadius: 6).fill(hover ? Color.primary.opacity(0.06) : .clear))
+        .contentShape(Rectangle())
+        .onHover { hover = $0 }
+        // 曲の行と同じく、ダブルクリックで流す
+        .onTapGesture(count: 2, perform: onPlay)
     }
 }
 #endif
