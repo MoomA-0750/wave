@@ -33,7 +33,7 @@ wave の画面の文言（英語・日本語）を、全部のプラットフォ
 - ボタン・見出し・項目名・状態・知らせ（トースト・下の帯の一言）・エラー・設定の補足には付けない。2 文になるときも、文の区切りにだけ付けて最後には付けない
   - 例: `Timed out. Please try again` / 「時間切れになりました。もう一度やり直してください」
 - ダイアログの本文と、空の画面・案内の画面の説明文（読ませる文）には付ける。1 文でも付ける
-  - 例: `This removes your login saved on this PC.` / 「この PC に保存したログイン情報を消します。」、`Log in to see your YouTube Music playlists, artists and albums here.`
+  - 例: `This removes your sign-in saved on this PC.` / 「この PC に保存したログイン情報を消します。」、`Sign in to see your YouTube Music playlists, artists and albums here.`
 - 英語と日本語で付け方をそろえる（片方だけ付けない）
 - 問いは英語 `?`、日本語は全角の「？」（「ログアウトしますか？」）。今も全部そう
 
@@ -91,7 +91,7 @@ wave の画面の文言（英語・日本語）を、全部のプラットフォ
 - できなかったとき: 「〜できませんでした」「〜（ら）れませんでした」（`Couldn't …`）。「〜に失敗しました」は使わない
 - 頼む文: 「〜してください」。「〜しましょう」は使わない
 - 端末: 自分の機器は全部「端末」（「デバイス」は使わない）。電話は「スマホ」、時計は「時計」、パソコンは「PC」（Mac・iPhone はその名前）
-- ログイン: 英語は `Log in` / `Log out`（名詞は `login`）、日本語は「ログイン」「ログアウト」。`Sign in` / `sign-in` は使わない（今は時計・Android のウィジェット・Mac の「ログインを渡す」にある）
+- ログイン: 英語は `Sign in` / `Sign out`（YouTube Music・Google と同じ。名詞・形容は `sign-in`）、日本語は「ログイン」「ログアウト」。`Log in` / `Log out` / `login` は使わない（2026-11-13 に本人が決めた）
 - やめる: ダイアログの取り消しは「キャンセル」（`Cancel`）。今は Android・時計・Mac・iPhone・GTK・QML の一部に「やめる」がある
 
 ### 1.9 設定の「画面の言語」
@@ -236,7 +236,7 @@ wave の画面の文言（英語・日本語）を、全部のプラットフォ
 | 再生履歴（ページ） | History | 再生履歴 | Android: Listening history / 再生履歴<br>※ Windows の再生履歴のページの題は今 Recently played / 最近再生した曲。ホームの棚とは別にする |
 | 最近再生した曲（ホームの棚） | Recently played | 最近再生した曲 | 揺れなし |
 | ウィジェット: 最近再生した順 | Recently played | 最近再生した順 | Mac/iPhone ウィジェット: Recently Played / 最近再生した順 |
-| ログインを促す（ライブラリ） | Log in to see your YouTube Music playlists, artists and albums here. | ログインすると、YouTube Music のプレイリスト・アーティスト・アルバムがここに並びます。 | 揺れなし |
+| ログインを促す（ライブラリ） | Sign in to see your YouTube Music playlists, artists and albums here. | ログインすると、YouTube Music のプレイリスト・アーティスト・アルバムがここに並びます。 | 揺れなし |
 | ライブラリを変更できない | Couldn't change your library | ライブラリを変更できませんでした | Android: Couldn't update your library / ライブラリを変えられませんでした |
 
 ### プレイリスト・アルバム・アーティストのページ
@@ -375,12 +375,12 @@ wave の画面の文言（英語・日本語）を、全部のプラットフォ
 | 設定 (YT) | Settings | 設定 | 揺れなし |
 | 設定を開く | Open settings | 設定を開く | iPhone: Open Settings / 設定を開く |
 | アカウント | Account | アカウント | 揺れなし |
-| ログイン | Log in | ログイン | 揺れなし |
-| ログアウト | Log out | ログアウト | 揺れなし |
-| ログアウトしますか | Log out? | ログアウトしますか？ | 揺れなし |
+| ログイン | Sign in | ログイン | 揺れなし |
+| ログアウト | Sign out | ログアウト | 揺れなし |
+| ログアウトしますか | Sign out? | ログアウトしますか？ | 揺れなし |
 | ログインしていない | Not logged in | ログインしていません | Android・Windows・Mac: You're not logged in / ログインしていません |
 | ログイン中（状態） | Logged in | ログイン中 | 揺れなし |
-| ログインし直す | Log in again | ログインし直す | Mac・iPhone: Log in again / もう一度ログイン<br>Android: Log in again / もう一度ログインする |
+| ログインし直す | Sign in again | ログインし直す | Mac・iPhone: Log in again / もう一度ログイン<br>Android: Log in again / もう一度ログインする |
 | ログインし直しが要る | You need to log in again | 再ログインが必要です | Android・Mac: Please log in again / 再ログインが必要です |
 | 言語（見出し） | Language | 言語 | 揺れなし |
 | 画面の言語 | App language | 画面の言語 | 揺れなし |
@@ -460,7 +460,7 @@ YouTube Music に合わせて全部で変わる語（Library・Liked music・Sav
 1. **ライブラリと高く評価した曲の英語**: 今は全部が `Your Library` / 「マイライブラリ」、`Liked Songs`（Spotify の言い方）。YouTube Music に合わせて `Library` / 「ライブラリ」、`Liked music` にした。画面の作りを Spotify に寄せている（Android の `Collection.kt` の注など）ので、Spotify の語を残すなら表の該当行を戻す
 2. **プレイリストへの追加**: 今は全部が `Add to playlist` / 「プレイリストに追加」。YouTube Music の `Save to playlist` / 「プレイリストに保存」にした
 3. **キューの「次に流れる曲」の英語**: 今は 6 つが `Next up`。YouTube Music の `Up next` にした。日本語は、キューの区切り（続く曲の一覧）を「次に流れる曲」、再生中の画面の「次の 1 曲」の見出しを「次の曲」と分けたまま
-4. **ログインの英語**: YouTube Music は `Sign in` だが、wave は 9 割が `Log in`。多数の `Log in` にした。`Give login`（ログインを渡す）も多数のまま。英語として自然なのは `Share login` かもしれない
+4. **ログインの英語**: YouTube Music は `Sign in` だが、wave は 9 割が `Log in`。本人が `Sign in` に決めた（2026-11-13）。`Give login`（ログインを渡す）も多数のまま。英語として自然なのは `Share login` かもしれない
 5. **画面の言語の「端末に合わせる」**: 英語は OS の名前を出す形（Windows・Mac・iPhone）が 3 つ、日本語は「端末に合わせる」が 3 つ（Android・GTK・QML）で同数。決め方どおり Android の `Use device language` / 「端末に合わせる」にした。Linux では「端末」がターミナルと読めること、Windows・Mac は OS の名前のほうが分かりやすいことから、`Use {OS} language` / 「{OS} に合わせる」（Linux は `Use system language` / 「システムに合わせる」）にする案もある
 6. **アポストロフィ**: `'` と `’` がほぼ半々。Android に合わせて `'` にしたが、引用符は `“ ”` なので、字形をそろえるなら `’` にする案もある
 7. **「デバイス」→「端末」**: 「現在のデバイス」「ほかのデバイスを選択」「デバイスに接続」は 5〜6 つのプラットフォームでそろっているが、規則（1.8）で「端末」に変えた
@@ -469,3 +469,11 @@ YouTube Music に合わせて全部で変わる語（Library・Liked music・Sav
 10. **アルバム・アーティストへの移動**: YouTube Music の日本語版が「〜へ移動」か「〜に移動」か確かめられていない。今そろっている「アルバムへ移動」「アーティストへ移動」のまま
 11. **「新作」**: YouTube Music の日本語版の `New releases` の訳を確かめられていない。今そろっている「新作」のまま
 12. **曲数と長さ（1.6）**: 合計の長さを Windows・Mac・Android の「分 秒」の形にそろえた（Linux は分だけ）。Linux の短い形にそろえる案もある
+
+
+## 本人が決めたこと（2026-11-13）
+
+- ライブラリまわりは YouTube Music に合わせる（Library／ライブラリ、Liked music／高く評価した曲）
+- 曲のメニューは YouTube Music に合わせる（Save to playlist／プレイリストに保存、Up next、Start radio／ラジオを開始）
+- 画面の言語の選び肢は Use device language／端末に合わせる
+- ログインの英語は Sign in／Sign out
