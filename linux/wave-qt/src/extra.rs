@@ -7,7 +7,7 @@ use serde_json::{Value, json};
 use wave_core::music::collection::{self, SortKey};
 use wave_core::music::models::Song;
 use wave_core::music::repository::{ORDER_ADDED, ORDER_PUBLISHED, order_params};
-use wave_desktop::runtime;
+use wave_desktop::{lang, runtime};
 
 use crate::app::{failure, repo, services};
 use crate::bridge::qobject;
@@ -36,8 +36,8 @@ pub async fn load_playlist(id: String, order: String) -> Value {
     let (r, i) = (repo.clone(), id.clone());
     let mut page = match runtime::run(async move { r.playlist_in_order(&i, None, params.as_deref()).await }).await {
         Ok(page) => page,
-        Err(wave_core::innertube::Failure::NotLoggedIn) => return failure("このプレイリストを見るにはログインしてください"),
-        Err(e) => return failure(format!("プレイリストを読み込めませんでした（{e}）")),
+        Err(wave_core::innertube::Failure::NotLoggedIn) => return failure(lang::t("このプレイリストを見るにはログインしてください", "Log in to see this playlist")),
+        Err(e) => return failure(if lang::ja() { format!("プレイリストを読み込めませんでした（{e}）") } else { format!("Couldn't load the playlist ({e})") }),
     };
     page.set_video_ids.resize(page.songs.len(), None);
     let mut value = view::playlist_page(&id, &page);
@@ -64,7 +64,7 @@ pub async fn add_suggestion(playlist_id: String, video_id: String) -> Value {
     let Some(repo) = repo() else { return failure("not started") };
     let result = runtime::run(async move { repo.add_to_playlist(&playlist_id, &video_id, true).await }).await;
     let ok = result == wave_core::music::models::AddToPlaylistResult::Added;
-    crate::app::toast(if ok { "プレイリストに追加しました" } else { "追加できませんでした" });
+    crate::app::toast(if ok { lang::t("プレイリストに追加しました", "Added to playlist") } else { lang::t("追加できませんでした", "Couldn't add it") });
     json!({ "ok": ok })
 }
 
@@ -139,10 +139,10 @@ impl qobject::WaveApp {
                 } else {
                     "go-up-symbolic"
                 };
-                json!({ "name": k.name(), "label": k.label(), "mark": mark, "server": k.server() })
+                json!({ "name": k.name(), "label": sort_label(k), "mark": mark, "server": k.server() })
             })
             .collect();
-        QString::from(&json!({ "choices": list, "label": current.label() }).to_string())
+        QString::from(&json!({ "choices": list, "label": sort_label(current) }).to_string())
     }
 
     /// 並べ方を選んだ（同じものなら向きを変える）。新しい並べ方を返す。
@@ -169,7 +169,7 @@ impl qobject::WaveApp {
 
     /// 曲の一覧の補足「N 曲、M 分」（数と単位を離さない）。
     pub fn count_and_length(&self, songs_json: &QString) -> QString {
-        QString::from(&keep_units(&collection::count_and_length(&songs_of(songs_json))))
+        QString::from(&keep_units(&count_and_length(&songs_of(songs_json))))
     }
 
     /// 確かめ用の環境変数（WAVE_WINDOW_SIZE など。WAVE_ で始まるものだけ）。
@@ -180,6 +180,31 @@ impl qobject::WaveApp {
         }
         QString::from(&std::env::var(&name).unwrap_or_default())
     }
+}
+
+/// 並べ方の名前（画面の言語で。日本語は wave-core の名前のまま）。
+fn sort_label(key: SortKey) -> &'static str {
+    let en = match key {
+        SortKey::Custom => "Custom order",
+        SortKey::Added => "Date added",
+        SortKey::Published => "Release date",
+        SortKey::Title => "Title",
+        SortKey::Artist => "Artist",
+        SortKey::Album => "Album",
+        SortKey::Duration => "Duration",
+    };
+    lang::t(key.label(), en)
+}
+
+/// 曲の一覧の補足「N 曲、M 分」。英語は「N songs, M min」（Windows の L.Songs・L.Length と同じ言い方）。
+pub(crate) fn count_and_length(songs: &[Song]) -> String {
+    if lang::ja() {
+        return collection::count_and_length(songs);
+    }
+    let total: u32 = songs.iter().filter_map(|s| s.duration_seconds).sum();
+    let (h, m) = (total / 3600, total / 60 % 60);
+    let length = if h > 0 { format!("{h} hr {m} min") } else { format!("{} min", total.div_ceil(60)) };
+    format!("{}, {length}", lang::songs(songs.len()))
 }
 
 #[cfg(test)]

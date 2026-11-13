@@ -67,7 +67,7 @@ Rectangle {
         IconButton { compact: true;
             visible: WaveApp.loggedIn
             iconName: WaveApp.liked === 1 ? "object-select-symbolic" : "list-add-symbolic"
-            tip: WaveApp.liked === 1 ? "高く評価した曲から削除" : "高く評価した曲に追加"
+            tip: WaveApp.liked === 1 ? Style.t("高く評価した曲から削除", "Remove from Liked Songs") : Style.t("高く評価した曲に追加", "Add to Liked Songs")
             checked: WaveApp.liked === 1
             onClicked: WaveApp.toggleLike()
         }
@@ -91,20 +91,20 @@ Rectangle {
             Layout.alignment: Qt.AlignHCenter
             // 狭い窓では詰めて、曲名に幅を回す
             spacing: bar.shell.level >= 3 ? 4 : 10
-            IconButton { compact: true; iconName: "media-playlist-shuffle-symbolic"; tip: "シャッフル"; checked: WaveApp.shuffle; enabled: WaveApp.hasSong; onClicked: WaveApp.toggleShuffle() }
-            IconButton { compact: true; iconName: "media-skip-backward-symbolic"; tip: "前へ"; enabled: WaveApp.hasSong; onClicked: WaveApp.previous() }
+            IconButton { compact: true; iconName: "media-playlist-shuffle-symbolic"; tip: Style.t("シャッフル", "Shuffle"); checked: WaveApp.shuffle; enabled: WaveApp.hasSong; onClicked: WaveApp.toggleShuffle() }
+            IconButton { compact: true; iconName: "media-skip-backward-symbolic"; tip: Style.t("前へ", "Previous"); enabled: WaveApp.hasSong; onClicked: WaveApp.previous() }
             PlayButton {
                 diameter: 40
                 glyph: 20
                 enabled: WaveApp.hasSong
                 iconName: WaveApp.playing ? "media-playback-pause-symbolic" : "media-playback-start-symbolic"
-                tip: "再生/一時停止"
+                tip: Style.t("再生/一時停止", "Play/Pause")
                 onClicked: WaveApp.togglePlay()
             }
-            IconButton { compact: true; iconName: "media-skip-forward-symbolic"; tip: "次へ"; enabled: WaveApp.hasSong; onClicked: WaveApp.next() }
+            IconButton { compact: true; iconName: "media-skip-forward-symbolic"; tip: Style.t("次へ", "Next"); enabled: WaveApp.hasSong; onClicked: WaveApp.next() }
             IconButton { compact: true;
                 iconName: WaveApp.repeatMode === 2 ? "media-playlist-repeat-song-symbolic" : "media-playlist-repeat-symbolic"
-                tip: "リピート"
+                tip: Style.t("リピート", "Repeat")
                 checked: WaveApp.repeatMode !== 0
                 enabled: WaveApp.hasSong
                 onClicked: WaveApp.cycleRepeat()
@@ -151,15 +151,15 @@ Rectangle {
         anchors.rightMargin: 16
         anchors.verticalCenter: parent.verticalCenter
         spacing: 2
-        IconButton { compact: true; iconName: "text-x-generic-symbolic"; tip: "歌詞"; checked: bar.shell.visibleKind === "lyrics"; onClicked: bar.shell.toggleLyrics() }
-        IconButton { compact: true; iconName: "view-list-symbolic"; tip: "キュー"; checked: bar.shell.showRight && bar.shell.rightView === "queue"; onClicked: bar.shell.toggleQueue() }
+        IconButton { compact: true; iconName: "text-x-generic-symbolic"; tip: Style.t("歌詞", "Lyrics"); checked: bar.shell.visibleKind === "lyrics"; onClicked: bar.shell.toggleLyrics() }
+        IconButton { compact: true; iconName: "view-list-symbolic"; tip: Style.t("キュー", "Queue"); checked: bar.shell.showRight && bar.shell.rightView === "queue"; onClicked: bar.shell.toggleQueue() }
         RowLayout {
             visible: WaveApp.connectConfigured
             spacing: 4
             IconButton { compact: true;
                 id: deviceButton
                 iconName: "audio-speakers-symbolic"
-                tip: "デバイスに接続"
+                tip: Style.t("デバイスに接続", "Connect to a device")
                 checked: WaveApp.remoteLabel !== ""
                 onClicked: { devicePopup.d = JSON.parse(WaveApp.devicesJson()); devicePopup.open() }
                 DevicePopup { id: devicePopup; y: -height - 8; x: -width / 2 }
@@ -167,11 +167,11 @@ Rectangle {
             Label { visible: WaveApp.remoteLabel !== "" && bar.shell.level === 0; text: WaveApp.remoteLabel; color: Style.accent; font.pixelSize: 12; font.weight: Font.Bold; elide: Text.ElideRight; Layout.maximumWidth: 120 }
         }
         // いちばん狭い窓では、再生中の画面（ジャケットを押しても開く）と全画面（F11）のボタンをしまい、曲名に幅を回す
-        IconButton { compact: true; visible: bar.shell.level < 4; iconName: "sidebar-show-right-symbolic"; tip: "再生中の画面"; checked: bar.shell.showRight && bar.shell.rightView === "now"; onClicked: bar.shell.togglePane() }
-        IconButton { compact: true; visible: bar.shell.level < 4; iconName: "view-fullscreen-symbolic"; tip: "全画面 (F11)"; checked: bar.shell.full; onClicked: bar.shell.full = !bar.shell.full }
+        IconButton { compact: true; visible: bar.shell.level < 4; iconName: "sidebar-show-right-symbolic"; tip: Style.t("再生中の画面", "Now playing view"); checked: bar.shell.showRight && bar.shell.rightView === "now"; onClicked: bar.shell.togglePane() }
+        IconButton { compact: true; visible: bar.shell.level < 4; iconName: "view-fullscreen-symbolic"; tip: Style.t("全画面 (F11)", "Full screen (F11)"); checked: bar.shell.full; onClicked: bar.shell.full = !bar.shell.full }
         IconButton { compact: true;
             iconName: WaveApp.volume <= 0 ? "audio-volume-muted-symbolic" : WaveApp.volume < 0.34 ? "audio-volume-low-symbolic" : WaveApp.volume < 0.67 ? "audio-volume-medium-symbolic" : "audio-volume-high-symbolic"
-            tip: "ミュート"
+            tip: Style.t("ミュート", "Mute")
             onClicked: bar.shell.level <= 1 ? WaveApp.toggleMute() : volumePopup.open()
             Popup {
                 id: volumePopup
@@ -180,7 +180,7 @@ Rectangle {
                 padding: 8
                 background: Rectangle { color: Style.raised; radius: Style.radius; border.color: Style.border }
                 RowLayout {
-                    IconButton { compact: true; iconName: "audio-volume-muted-symbolic"; tip: "ミュート"; onClicked: WaveApp.toggleMute() }
+                    IconButton { compact: true; iconName: "audio-volume-muted-symbolic"; tip: Style.t("ミュート", "Mute"); onClicked: WaveApp.toggleMute() }
                     Slider { from: 0; to: 1; value: WaveApp.volume; implicitWidth: 120; onMoved: WaveApp.setVolumeLevel(value) }
                 }
             }
@@ -204,15 +204,15 @@ Rectangle {
         background: Rectangle { color: Style.raised; radius: Style.radius; border.color: Style.border }
         contentItem: ColumnLayout {
             spacing: 4
-            Label { text: "再生中のデバイス"; font.weight: Font.Bold; color: Style.foreground }
-            Label { text: popup.d.mirror ? popup.d.mirror.label : "この PC"; color: Style.accent; font.weight: Font.DemiBold }
-            Label { visible: (popup.d.pickable || []).length > 0; text: "ほかのデバイスを選択"; font.weight: Font.Bold; Layout.topMargin: 8; color: Style.foreground }
+            Label { text: Style.t("再生中のデバイス", "Current device"); font.weight: Font.Bold; color: Style.foreground }
+            Label { text: popup.d.mirror ? popup.d.mirror.label : Style.t("この PC", "This PC"); color: Style.accent; font.weight: Font.DemiBold }
+            Label { visible: (popup.d.pickable || []).length > 0; text: Style.t("ほかのデバイスを選択", "Select another device"); font.weight: Font.Bold; Layout.topMargin: 8; color: Style.foreground }
             Repeater {
                 model: popup.d.pickable || []
                 delegate: ItemDelegate {
                     Layout.fillWidth: true
                     enabled: modelData.self || modelData.online
-                    text: (modelData.self ? "この PC" : modelData.name) + (enabled ? "" : "（オフライン）")
+                    text: (modelData.self ? Style.t("この PC", "This PC") : modelData.name) + (enabled ? "" : Style.t("（オフライン）", " (offline)"))
                     icon.source: Style.icon(modelData.icon)
                     onClicked: {
                         popup.close()
@@ -221,7 +221,7 @@ Rectangle {
                     }
                 }
             }
-            Btn { text: "端末の連携の設定"; flat: true; Layout.topMargin: 6; onClicked: { popup.close(); bar.shell.full = false; bar.shell.openDevices() } }
+            Btn { text: Style.t("端末の連携の設定", "Device settings"); flat: true; Layout.topMargin: 6; onClicked: { popup.close(); bar.shell.full = false; bar.shell.openDevices() } }
         }
     }
 }

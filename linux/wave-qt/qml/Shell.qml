@@ -175,8 +175,8 @@ Item {
         else if (kind === "ai") showAi()
         else if (kind === "devices") openDevices()
         else if (kind === "downloads") openDownloads()
-        else if (kind === "podcast") openPodcast(arg, "ポッドキャスト")
-        else if (kind === "newepisodes") openPodcast("VLRDPN", "新しいエピソード")
+        else if (kind === "podcast") openPodcast(arg, Style.t("ポッドキャスト", "Podcast"))
+        else if (kind === "newepisodes") openPodcast("VLRDPN", Style.t("新しいエピソード", "New episodes"))
         else if (kind === "feedsearch") openFeedSearch()
         else if (kind === "firstpodcast") demoToken = WaveApp.request("search.podcasts", arg, "")
         else if (kind === "firstplaylist") { demoPlaylist = true; demoToken = WaveApp.request("search.albums", arg, "") }
@@ -317,13 +317,13 @@ Item {
             anchors.rightMargin: 16 + Math.max(0, (parent.width - parent.height * 16 / 9) / 2)
             y: (parent.height - videoHeight) / 2 + 16
             spacing: 8
-            LayerButton { iconName: shell.pipOpen ? "view-conceal-symbolic" : "window-new-symbolic"; tip: shell.pipOpen ? "小窓を閉じる" : "小窓で見る"; onClicked: shell.togglePip() }
+            LayerButton { iconName: shell.pipOpen ? "view-conceal-symbolic" : "window-new-symbolic"; tip: shell.pipOpen ? Style.t("小窓を閉じる", "Close picture in picture") : Style.t("小窓で見る", "Picture in picture"); onClicked: shell.togglePip() }
             LayerButton {
                 iconName: shell.Window.window && shell.Window.window.visibility === Window.FullScreen ? "view-restore-symbolic" : "view-fullscreen-symbolic"
-                tip: shell.Window.window && shell.Window.window.visibility === Window.FullScreen ? "全画面をやめる" : "全画面"
+                tip: shell.Window.window && shell.Window.window.visibility === Window.FullScreen ? Style.t("全画面をやめる", "Exit full screen") : Style.t("全画面", "Full screen")
                 onClicked: shell.toggleWindowFullScreen()
             }
-            LayerButton { iconName: "window-close-symbolic"; tip: "映像だけをやめる (Esc)"; onClicked: shell.toggleVideoOnly() }
+            LayerButton { iconName: "window-close-symbolic"; tip: Style.t("映像だけをやめる (Esc)", "Exit video only (Esc)"); onClicked: shell.toggleVideoOnly() }
         }
     }
     function toggleWindowFullScreen() {
@@ -359,13 +359,13 @@ Item {
     WDialog {
         id: newPlaylist
         property var song: null
-        title: "新しいプレイリスト"
+        title: Style.t("新しいプレイリスト", "New playlist")
         ColumnLayout {
             // 欄はダイアログの幅いっぱい（キューの保存の名前の画面と同じ）
             width: parent ? parent.width : 400
             spacing: 6
             // 名前の見出しは欄の外に置く（Material の placeholderText は文字が入ると枠の上へ浮くが、背景を自前にしているので文字に重なる）
-            Label { text: "プレイリストの名前"; color: Style.dim; font.pixelSize: 12 }
+            Label { text: Style.t("プレイリストの名前", "Playlist name"); color: Style.dim; font.pixelSize: 12 }
             TextField {
                 id: newPlaylistTitle
                 Layout.fillWidth: true
@@ -375,8 +375,8 @@ Item {
         }
         footer: DialogButtonBox {
             background: null
-            Btn { text: "キャンセル"; flat: true; DialogButtonBox.buttonRole: DialogButtonBox.RejectRole }
-            Btn { text: "作成"; highlighted: true; enabled: newPlaylistTitle.text.trim() !== ""; DialogButtonBox.buttonRole: DialogButtonBox.AcceptRole }
+            Btn { text: Style.t("キャンセル", "Cancel"); flat: true; DialogButtonBox.buttonRole: DialogButtonBox.RejectRole }
+            Btn { text: Style.t("作成", "Create"); highlighted: true; enabled: newPlaylistTitle.text.trim() !== ""; DialogButtonBox.buttonRole: DialogButtonBox.AcceptRole }
         }
         onAccepted: WaveApp.createPlaylist(newPlaylistTitle.text.trim(), newPlaylist.song ? JSON.stringify(newPlaylist.song) : "")
     }

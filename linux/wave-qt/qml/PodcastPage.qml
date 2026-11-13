@@ -55,7 +55,7 @@ ListView {
         onHeightChanged: if (!page.userScrolled) Qt.callLater(() => page.positionViewAtBeginning())
         spacing: 16
         BusyIndicator { visible: !page.info && !page.failed; running: visible; Layout.alignment: Qt.AlignHCenter; Layout.topMargin: 24 }
-        Label { visible: page.failed; text: "ポッドキャストを読み込めませんでした"; color: Style.dim; Layout.alignment: Qt.AlignHCenter; Layout.topMargin: 24 }
+        Label { visible: page.failed; text: Style.t("ポッドキャストを読み込めませんでした", "Couldn't load the podcast"); color: Style.dim; Layout.alignment: Qt.AlignHCenter; Layout.topMargin: 24 }
         RowLayout {
             visible: !!page.info
             Layout.fillWidth: true
@@ -65,7 +65,7 @@ ListView {
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: 6
-                Label { text: page.info && page.info.newEpisodes ? "プレイリスト • 自動" : "ポッドキャスト"; font.pixelSize: 12; font.weight: Font.DemiBold; color: Style.dim }
+                Label { text: page.info && page.info.newEpisodes ? Style.t("プレイリスト • 自動", "Playlist • Auto") : Style.t("ポッドキャスト", "Podcast"); font.pixelSize: 12; font.weight: Font.DemiBold; color: Style.dim }
                 Label { Layout.fillWidth: true; text: page.info ? page.info.title : page.pageTitle; font.pixelSize: 32; font.weight: Font.Bold; wrapMode: Text.Wrap; maximumLineCount: 2; elide: Text.ElideRight; color: Style.foreground }
                 Label { text: page.info ? page.info.author : ""; visible: text !== ""; font.weight: Font.DemiBold; color: Style.foreground }
                 Label {
@@ -86,14 +86,14 @@ ListView {
                     PlayButton { visible: page.episodes.length > 0; onClicked: WaveApp.playSongs(JSON.stringify(page.episodes), 0, page.itemId, false) }
                     Btn {
                         visible: !!page.info && page.info.canSave
-                        text: page.saved ? (page.info.isFeed ? "登録済み" : "保存済み") : (page.info && page.info.isFeed ? "登録する" : "ライブラリに保存")
+                        text: page.saved ? (page.info.isFeed ? Style.t("登録済み", "Subscribed") : Style.t("保存済み", "Saved")) : (page.info && page.info.isFeed ? Style.t("登録する", "Subscribe") : Style.t("ライブラリに保存", "Save to library"))
                         onClicked: page.saveToken = WaveApp.setPodcastSaved(JSON.stringify(page.info.show), !page.saved)
                     }
-                    Btn { visible: !!page.info && page.info.newEpisodes; text: "RSS の番組を探して足す"; onClicked: Style.nav.openFeedSearch() }
+                    Btn { visible: !!page.info && page.info.newEpisodes; text: Style.t("RSS の番組を探して足す", "Find and add RSS shows"); onClicked: Style.nav.openFeedSearch() }
                 }
             }
         }
-        Label { visible: !!page.info && page.episodes.length === 0 && !page.loading; text: "エピソードはありません"; color: Style.dim; Layout.leftMargin: 24 }
+        Label { visible: !!page.info && page.episodes.length === 0 && !page.loading; text: Style.t("エピソードはありません", "No episodes"); color: Style.dim; Layout.leftMargin: 24 }
     }
     delegate: TrackRow {
         width: page.width - 32

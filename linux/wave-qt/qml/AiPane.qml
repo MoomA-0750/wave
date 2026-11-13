@@ -10,7 +10,7 @@ Item {
     id: pane
     property var shell
     property var chat: JSON.parse(WaveApp.aiJson())
-    readonly property var suggestions: ["この歌詞ってどういう意味だと思う？", "これに似た曲ある？", "この曲から始まるプレイリストを作って"]
+    readonly property var suggestions: [Style.t("この歌詞ってどういう意味だと思う？", "What do these lyrics mean?"), Style.t("これに似た曲ある？", "Any songs like this?"), Style.t("この曲から始まるプレイリストを作って", "Make a playlist from this song")]
     Connections {
         target: WaveApp
         function onAiVersionChanged() {
@@ -35,10 +35,10 @@ Item {
             Layout.leftMargin: 20
             Layout.rightMargin: 20
             spacing: 6
-            Label { text: "Claude に聞く"; font.weight: Font.Bold; Layout.fillWidth: true; color: Style.foreground }
+            Label { text: Style.t("Claude に聞く", "Ask Claude"); font.weight: Font.Bold; Layout.fillWidth: true; color: Style.foreground }
             IconButton {
                 iconName: "document-open-recent-symbolic"
-                tip: "これまでの会話"
+                tip: Style.t("これまでの会話", "Past chats")
                 enabled: pane.chat.history && pane.chat.history.length > 0
                 onClicked: historyMenu.popup()
                 WMenu {
@@ -53,11 +53,11 @@ Item {
                         }
                     }
                     MenuSeparator {}
-                    MenuItem { text: "今の会話を履歴から消す"; onTriggered: { const c = (pane.chat.history || []).find(h => h.current); if (c) WaveApp.aiDelete(c.id) } }
+                    MenuItem { text: Style.t("今の会話を履歴から消す", "Delete this chat from history"); onTriggered: { const c = (pane.chat.history || []).find(h => h.current); if (c) WaveApp.aiDelete(c.id) } }
                 }
             }
-            Btn { text: "新しい会話"; leftPadding: 12; rightPadding: 12; implicitHeight: 36; onClicked: WaveApp.aiClear() }
-            IconButton { iconName: "window-close-symbolic"; tip: "閉じる"; size: 16; onClicked: pane.shell.closeAi() }
+            Btn { text: Style.t("新しい会話", "New chat"); leftPadding: 12; rightPadding: 12; implicitHeight: 36; onClicked: WaveApp.aiClear() }
+            IconButton { iconName: "window-close-symbolic"; tip: Style.t("閉じる", "Close"); size: 16; onClicked: pane.shell.closeAi() }
         }
         ListView {
             id: list
@@ -77,7 +77,7 @@ Item {
                 wrapMode: Text.Wrap
                 font.pixelSize: 12
                 color: Style.dim
-                text: "曲探し・プレイリスト作りを頼めます。再生中の曲について、歌詞の意味や似た曲も聞けます。" + (pane.chat.configured ? "" : "\n設定の「Claude」でつなぐと使えます。")
+                text: Style.t("曲探し・プレイリスト作りを頼めます。再生中の曲について、歌詞の意味や似た曲も聞けます。", "Ask Claude to find music, make a playlist, or tell you about the song that's playing — what the lyrics mean, similar songs, and more.") + (pane.chat.configured ? "" : Style.t("\n設定の「Claude」でつなぐと使えます。", "\nConnect it in Settings → Claude to use it."))
             }
             delegate: Loader {
                 width: ListView.view.width
@@ -120,7 +120,7 @@ Item {
                 bottomPadding: 12
                 background: Rectangle { radius: Style.radius; color: Style.raised; border.color: input.activeFocus ? Style.accent : Style.border }
                 // 空のときの案内（Material の浮く案内は枠の外に出るので、自分で置く）
-                Label { x: 12; anchors.verticalCenter: parent.verticalCenter; visible: input.text === "" && !input.inputMethodComposing; text: "Claude に聞く"; color: Style.dim }
+                Label { x: 12; anchors.verticalCenter: parent.verticalCenter; visible: input.text === "" && !input.inputMethodComposing; text: Style.t("Claude に聞く", "Ask Claude"); color: Style.dim }
                 // Enter で送り、Shift+Enter で改行（変換中の Enter は確定）
                 Keys.onReturnPressed: (event) => {
                     if (event.modifiers & Qt.ShiftModifier || input.inputMethodComposing) { event.accepted = false; return }
@@ -131,7 +131,7 @@ Item {
                 implicitWidth: 44
                 implicitHeight: 44
                 iconName: pane.chat.running ? "media-playback-stop-symbolic" : "mail-send-symbolic"
-                tip: pane.chat.running ? "止める" : "送る"
+                tip: pane.chat.running ? Style.t("止める", "Stop") : Style.t("送る", "Send")
                 onClicked: pane.chat.running ? WaveApp.aiStop() : pane.submit()
             }
         }

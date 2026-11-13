@@ -107,7 +107,7 @@ Rectangle {
                 anchors.verticalCenter: parent.verticalCenter
                 visible: hover.hovered
                 iconName: "view-more-symbolic"
-                tip: "その他"
+                tip: Style.t("その他", "More")
                 size: 16
                 onClicked: menu.popup()
             }

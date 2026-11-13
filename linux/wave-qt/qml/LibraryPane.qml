@@ -13,7 +13,7 @@ Item {
     property string query: ""
     property var settings: JSON.parse(WaveApp.settingsJson())
     property var entries: []
-    readonly property var sorts: [["recent", "最近"], ["added", "最近追加した順"], ["alpha", "アルファベット順"]]
+    readonly property var sorts: [["recent", Style.t("最近", "Recents")], ["added", Style.t("最近追加した順", "Recently added")], ["alpha", Style.t("アルファベット順", "Alphabetical")]]
 
     function refresh() { entries = JSON.parse(WaveApp.libraryEntries(kind, query)) }
     Component.onCompleted: refresh()
@@ -37,8 +37,8 @@ Item {
             Layout.leftMargin: 16
             Layout.rightMargin: 8
             IconImage { source: Style.icon("folder-music-symbolic"); sourceSize.width: 16; sourceSize.height: 16; color: Style.foreground }
-            Label { text: "マイライブラリ"; font.weight: Font.Bold; Layout.fillWidth: true; color: Style.foreground }
-            IconButton { iconName: "list-add-symbolic"; tip: "プレイリストを作成"; visible: WaveApp.loggedIn; onClicked: Style.nav.createPlaylist(null) }
+            Label { text: Style.t("マイライブラリ", "Your Library"); font.weight: Font.Bold; Layout.fillWidth: true; color: Style.foreground }
+            IconButton { iconName: "list-add-symbolic"; tip: Style.t("プレイリストを作成", "Create playlist"); visible: WaveApp.loggedIn; onClicked: Style.nav.createPlaylist(null) }
         }
         ChipStrip {
             Layout.fillWidth: true
@@ -47,7 +47,7 @@ Item {
             Layout.preferredHeight: 34
             spacing: 6
                 Repeater {
-                    model: [["playlist", "プレイリスト"], ["artist", "アーティスト"], ["album", "アルバム"], ["podcast", "ポッドキャスト"]]
+                    model: [["playlist", Style.t("プレイリスト", "Playlists")], ["artist", Style.t("アーティスト", "Artists")], ["album", Style.t("アルバム", "Albums")], ["podcast", Style.t("ポッドキャスト", "Podcasts")]]
                     delegate: Chip {
                         text: modelData[1]
                         on: pane.kind === modelData[0]
@@ -64,7 +64,7 @@ Item {
                 id: search
                 Layout.fillWidth: true
                 Layout.preferredHeight: 36
-                placeholderText: width < 150 ? "検索" : "マイライブラリを検索"
+                placeholderText: width < 150 ? Style.t("検索", "Search") : Style.t("マイライブラリを検索", "Search your library")
                 topPadding: 0
                 bottomPadding: 0
                 leftPadding: 32
@@ -90,7 +90,7 @@ Item {
             }
             IconButton {
                 iconName: pane.settings.library_grid ? "view-list-symbolic" : "view-grid-symbolic"
-                tip: pane.settings.library_grid ? "リストで表示" : "グリッドで表示"
+                tip: pane.settings.library_grid ? Style.t("リストで表示", "List view") : Style.t("グリッドで表示", "Grid view")
                 onClicked: WaveApp.setSetting("library_grid", JSON.stringify(!pane.settings.library_grid))
             }
         }
@@ -100,7 +100,7 @@ Item {
             Layout.fillWidth: true
             Layout.margins: 16
             wrapMode: Text.Wrap
-            text: "ログインすると、YouTube Music のプレイリスト・アーティスト・アルバムがここに並びます。"
+            text: Style.t("ログインすると、YouTube Music のプレイリスト・アーティスト・アルバムがここに並びます。", "Log in to see your YouTube Music playlists, artists and albums here.")
             color: Style.dim
         }
         Item { visible: !WaveApp.loggedIn; Layout.fillHeight: true }
@@ -169,7 +169,7 @@ Item {
     WMenu {
         id: entryMenu
         property var entry: ({})
-        MenuItem { text: "再生"; onTriggered: WaveApp.playItem(JSON.stringify(entryMenu.entry), false) }
+        MenuItem { text: Style.t("再生", "Play"); onTriggered: WaveApp.playItem(JSON.stringify(entryMenu.entry), false) }
     }
 
     // 先頭の固定の行は絵の代わりに記号（高く評価した曲・ダウンロード）

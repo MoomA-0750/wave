@@ -7,7 +7,7 @@ import wave
 Flickable {
     id: page
     property string pageKind: "feed-search"
-    property string pageTitle: "RSS の番組を探す"
+    property string pageTitle: Style.t("RSS の番組を探す", "Find RSS shows")
     property var results: []
     property string message: ""
     property bool busy: false
@@ -21,10 +21,10 @@ Flickable {
             if (t !== page.token) return
             page.busy = false
             const v = JSON.parse(json)
-            if (v.open) { Style.nav.openPodcast(v.open, "RSS の番組"); return }
-            if (v.error) { page.message = "探せませんでした（通信を確かめてください）"; page.results = []; return }
+            if (v.open) { Style.nav.openPodcast(v.open, Style.t("RSS の番組", "RSS show")); return }
+            if (v.error) { page.message = Style.t("探せませんでした（通信を確かめてください）", "Couldn't search (check your connection)"); page.results = []; return }
             page.results = v.items
-            page.message = v.items.length === 0 ? "見つかりませんでした" : ""
+            page.message = v.items.length === 0 ? Style.t("見つかりませんでした", "No results found") : ""
         }
     }
     ColumnLayout {
@@ -33,12 +33,12 @@ Flickable {
         y: 24
         width: page.width - 48
         spacing: 12
-        Label { text: "RSS の番組を探す"; font.pixelSize: 28; font.weight: Font.Bold; color: Style.foreground }
-        Label { Layout.fillWidth: true; wrapMode: Text.Wrap; color: Style.dim; text: "番組名で探すか、RSS の URL（https://…）を入れてください。YouTube に無い番組も聴けます" }
+        Label { text: Style.t("RSS の番組を探す", "Find RSS shows"); font.pixelSize: 28; font.weight: Font.Bold; color: Style.foreground }
+        Label { Layout.fillWidth: true; wrapMode: Text.Wrap; color: Style.dim; text: Style.t("番組名で探すか、RSS の URL（https://…）を入れてください。YouTube に無い番組も聴けます", "Search by show name or enter an RSS URL (https://…). You can listen to shows that aren’t on YouTube") }
         TextField {
             id: field
             Layout.fillWidth: true
-            placeholderText: "番組名・RSS の URL"
+            placeholderText: Style.t("番組名・RSS の URL", "Show name or RSS URL")
             background: Rectangle { radius: Style.small; color: Style.raised; border.color: field.activeFocus ? Style.accent : Style.border }
             onAccepted: { if (text.trim() === "") return; page.busy = true; page.token = WaveApp.request("feed.search", text.trim(), "") }
         }

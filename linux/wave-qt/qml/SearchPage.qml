@@ -11,11 +11,11 @@ Item {
     id: page
     property string query: ""
     property string pageKind: "search"
-    property string pageTitle: query === "" ? "検索" : "「" + query + "」の検索"
+    property string pageTitle: query === "" ? Style.t("検索", "Search") : (Style.ja ? "「" + query + "」の検索" : "Search “" + query + "”")
     property var settings: JSON.parse(WaveApp.settingsJson())
     property var moods: []
     property int moodToken: -1
-    readonly property var tabs: [["all", "すべて"], ["songs", "曲"], ["albums", "アルバム"], ["artists", "アーティスト"], ["live", "ライブ"], ["podcasts", "ポッドキャスト"], ["episodes", "エピソード"], ["lyrics", "歌詞"]]
+    readonly property var tabs: [["all", Style.t("すべて", "All")], ["songs", Style.t("曲", "Songs")], ["albums", Style.t("アルバム", "Albums")], ["artists", Style.t("アーティスト", "Artists")], ["live", Style.t("ライブ", "Live")], ["podcasts", Style.t("ポッドキャスト", "Podcasts")], ["episodes", Style.t("エピソード", "Episodes")], ["lyrics", Style.t("歌詞", "Lyrics")]]
     property string tab: "all"
     // タブごとの結果 { items, continuation, loading, error, token }
     property var results: ({})
@@ -84,8 +84,8 @@ Item {
             RowLayout {
                 visible: page.settings.search_history.length > 0
                 Layout.fillWidth: true
-                Section { text: "最近の検索"; Layout.fillWidth: true }
-                Btn { text: "すべて消去"; flat: true; onClicked: WaveApp.clearSearchHistory() }
+                Section { text: Style.t("最近の検索", "Recent searches"); Layout.fillWidth: true }
+                Btn { text: Style.t("すべて消去", "Clear all"); flat: true; onClicked: WaveApp.clearSearchHistory() }
             }
             GridLayout {
                 visible: page.settings.search_history.length > 0
@@ -119,7 +119,7 @@ Item {
                             }
                             IconButton {
                                 iconName: "window-close-symbolic"
-                                tip: "履歴から削除"
+                                tip: Style.t("履歴から削除", "Remove from history")
                                 size: 14
                                 onClicked: WaveApp.forgetSearch(modelData.kind + ":" + (modelData.id || (modelData.song ? modelData.song.VideoId : modelData.title)))
                             }
@@ -136,7 +136,7 @@ Item {
                     }
                 }
             }
-            Section { text: "すべてをブラウズ"; Layout.topMargin: 8 }
+            Section { text: Style.t("すべてをブラウズ", "Browse all"); Layout.topMargin: 8 }
             BusyIndicator { visible: page.moods.length === 0; running: visible }
             GridLayout {
                 Layout.fillWidth: true
@@ -214,7 +214,7 @@ Item {
                         Layout.fillWidth: allColumn.width < 760
                         Layout.alignment: Qt.AlignTop
                         spacing: 10
-                        Section { text: "トップの検索結果" }
+                        Section { text: Style.t("トップの検索結果", "Top result") }
                         Rectangle {
                             Layout.fillWidth: true
                             Layout.preferredHeight: 220
@@ -244,7 +244,7 @@ Item {
                         Layout.alignment: Qt.AlignTop
                         spacing: 4
                         visible: !!page.all && page.all.songs.length > 0
-                        Section { text: "曲" }
+                        Section { text: Style.t("曲", "Songs") }
                         Repeater {
                             model: page.all ? page.all.songs : []
                             delegate: TrackRow {
@@ -256,8 +256,8 @@ Item {
                         }
                     }
                 }
-                Shelf { visible: !!page.all && page.all.artists.length > 0; Layout.fillWidth: true; title: "アーティスト"; items: page.all ? page.all.artists : [] }
-                Shelf { visible: !!page.all && page.all.albums.length > 0; Layout.fillWidth: true; title: "アルバム"; items: page.all ? page.all.albums : [] }
+                Shelf { visible: !!page.all && page.all.artists.length > 0; Layout.fillWidth: true; title: Style.t("アーティスト", "Artists"); items: page.all ? page.all.artists : [] }
+                Shelf { visible: !!page.all && page.all.albums.length > 0; Layout.fillWidth: true; title: Style.t("アルバム", "Albums"); items: page.all ? page.all.albums : [] }
             }
         }
         // 曲・ライブ・エピソード（行）とアルバム・アーティスト・ポッドキャスト（格子）
@@ -319,7 +319,7 @@ Item {
                 Label {
                     anchors.centerIn: parent
                     visible: !tabView.result.loading && tabView.result.items.length === 0
-                    text: tabView.result.error ? "検索できませんでした" : "見つかりませんでした"
+                    text: tabView.result.error ? Style.t("検索できませんでした", "Couldn't search") : Style.t("見つかりませんでした", "No results found")
                     color: Style.dim
                 }
             }

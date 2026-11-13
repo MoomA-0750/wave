@@ -20,8 +20,8 @@ ColumnLayout {
             Label { text: shelf.strapline.toUpperCase(); visible: shelf.strapline !== ""; font.pixelSize: 11; color: Style.dim }
             Section { text: shelf.title; Layout.fillWidth: true }
         }
-        IconButton { iconName: "go-previous-symbolic"; tip: "前へ"; opacity: list.atXBeginning ? 0 : 1; enabled: !list.atXBeginning; onClicked: list.flick(2400, 0) }
-        IconButton { iconName: "go-next-symbolic"; tip: "次へ"; opacity: list.atXEnd ? 0 : 1; enabled: !list.atXEnd; onClicked: list.flick(-2400, 0) }
+        IconButton { iconName: "go-previous-symbolic"; tip: Style.t("前へ", "Previous"); opacity: list.atXBeginning ? 0 : 1; enabled: !list.atXBeginning; onClicked: list.flick(2400, 0) }
+        IconButton { iconName: "go-next-symbolic"; tip: Style.t("次へ", "Next"); opacity: list.atXEnd ? 0 : 1; enabled: !list.atXEnd; onClicked: list.flick(-2400, 0) }
     }
     ListView {
         id: list

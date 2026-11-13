@@ -34,12 +34,12 @@ Item {
         spacing: 12
         IconImage { Layout.alignment: Qt.AlignHCenter; source: Style.icon("audio-x-generic-symbolic"); sourceSize.width: 96; sourceSize.height: 96; color: Style.accent }
         Label { Layout.alignment: Qt.AlignHCenter; text: "wave"; font.pixelSize: 32; font.weight: Font.Bold; color: Style.foreground }
-        Label { Layout.alignment: Qt.AlignHCenter; text: "YouTube Music のアカウントでログインしてください"; color: Style.dim }
+        Label { Layout.alignment: Qt.AlignHCenter; text: Style.t("YouTube Music のアカウントでログインしてください", "Log in with your YouTube Music account"); color: Style.dim }
         Btn {
             Layout.alignment: Qt.AlignHCenter
             Layout.topMargin: 12
             Layout.preferredWidth: 260
-            text: "ログイン"
+            text: Style.t("ログイン", "Log in")
             highlighted: true
             enabled: !page.busy
             onClicked: WaveApp.openLoginWindow()
@@ -47,7 +47,7 @@ Item {
         Btn {
             Layout.alignment: Qt.AlignHCenter
             Layout.preferredWidth: 260
-            text: "ブラウザのログインを使う"
+            text: Style.t("ブラウザのログインを使う", "Use browser login")
             enabled: !page.busy
             onClicked: { page.busy = true; page.token = WaveApp.browserProfiles() }
         }
@@ -58,11 +58,11 @@ Item {
         id: notFound
         anchors.centerIn: parent
         modal: true
-        title: "ブラウザにログインが見つかりません"
-        Label { width: 440; wrapMode: Text.Wrap; text: "ふだんのブラウザで music.youtube.com にログインしてから、もう一度「ブラウザのログインを使う」を押してください。\n\n読めるブラウザ: Firefox・Zen・LibreWolf・Floorp・Waterfox・Chrome・Chromium・Brave・Edge・Vivaldi・Opera" }
+        title: Style.t("ブラウザにログインが見つかりません", "No login found in your browsers")
+        Label { width: 440; wrapMode: Text.Wrap; text: Style.t("ふだんのブラウザで music.youtube.com にログインしてから、もう一度「ブラウザのログインを使う」を押してください。\n\n読めるブラウザ: Firefox・Zen・LibreWolf・Floorp・Waterfox・Chrome・Chromium・Brave・Edge・Vivaldi・Opera", "Log in to music.youtube.com in your usual browser, then press “Use browser login” again.\n\nSupported browsers: Firefox, Zen, LibreWolf, Floorp, Waterfox, Chrome, Chromium, Brave, Edge, Vivaldi, Opera") }
         footer: DialogButtonBox {
-            Btn { text: "閉じる"; DialogButtonBox.buttonRole: DialogButtonBox.RejectRole }
-            Btn { text: "ブラウザで開く"; highlighted: true; DialogButtonBox.buttonRole: DialogButtonBox.AcceptRole }
+            Btn { text: Style.t("閉じる", "Close"); DialogButtonBox.buttonRole: DialogButtonBox.RejectRole }
+            Btn { text: Style.t("ブラウザで開く", "Open in browser"); highlighted: true; DialogButtonBox.buttonRole: DialogButtonBox.AcceptRole }
         }
         onAccepted: Qt.openUrlExternally("https://music.youtube.com/")
     }
@@ -71,10 +71,10 @@ Item {
         property var profiles: []
         anchors.centerIn: parent
         modal: true
-        title: "どのブラウザのログインを使いますか"
+        title: Style.t("どのブラウザのログインを使いますか", "Which browser’s login should wave use?")
         ColumnLayout {
             width: 420
-            Label { Layout.fillWidth: true; wrapMode: Text.Wrap; text: "選んだブラウザの YouTube の cookie を読んで、この PC のキーリングに保存します。ブラウザの側のログインはそのまま残ります。" }
+            Label { Layout.fillWidth: true; wrapMode: Text.Wrap; text: Style.t("選んだブラウザの YouTube の cookie を読んで、この PC のキーリングに保存します。ブラウザの側のログインはそのまま残ります。", "wave reads the YouTube cookies from the browser you choose and saves them in this PC’s keyring. You stay logged in in the browser.") }
             Repeater {
                 model: chooser.profiles
                 delegate: Btn {

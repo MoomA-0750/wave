@@ -67,9 +67,9 @@ ListView {
             page.loading = false
             const v = JSON.parse(json)
             if (v.error && page.moreLoading) { page.moreLoading = false; return }
-            if (v.error) { page.error = page.kind === "album" ? "アルバムを読み込めませんでした" : (v.error.indexOf("ログイン") >= 0 ? v.error : "読み込めませんでした"); return }
+            if (v.error) { page.error = page.kind === "album" ? Style.t("アルバムを読み込めませんでした", "Couldn't load the album") : (v.error.indexOf(Style.t("ログイン", "Log in")) >= 0 ? v.error : Style.t("読み込めませんでした", "Couldn't load")); return }
             if (page.kind === "history") {
-                page.info = { title: "再生履歴", subtitle: "", art: "" }
+                page.info = { title: Style.t("再生履歴", "History"), subtitle: "", art: "" }
                 page.songs = v.sections.reduce((all, s) => all.concat(s.songs), [])
             } else if (v.continuation !== undefined && page.moreLoading) {
                 // 続き: 届いた分を足し、まだあれば次を読む
@@ -134,7 +134,7 @@ ListView {
                 Layout.fillWidth: true
                 Layout.minimumWidth: 0
                 spacing: 6
-                Label { text: page.kind === "album" ? "アルバム" : page.kind === "history" ? "" : "プレイリスト"; visible: text !== ""; font.pixelSize: 12; font.weight: Font.DemiBold; color: Style.dim }
+                Label { text: page.kind === "album" ? Style.t("アルバム", "Album") : page.kind === "history" ? "" : Style.t("プレイリスト", "Playlist"); visible: text !== ""; font.pixelSize: 12; font.weight: Font.DemiBold; color: Style.dim }
                 Label {
                     Layout.fillWidth: true
                     text: page.info.title || page.pageTitle
@@ -167,11 +167,11 @@ ListView {
                     spacing: 8
                     visible: page.songs.length > 0
                     PlayButton { onClicked: page.playFrom(0, false) }
-                    IconButton { iconName: "media-playlist-shuffle-symbolic"; tip: "シャッフル再生"; size: 22; onClicked: page.playFrom(0, true) }
+                    IconButton { iconName: "media-playlist-shuffle-symbolic"; tip: Style.t("シャッフル再生", "Shuffle play"); size: 22; onClicked: page.playFrom(0, true) }
                     IconButton {
                         visible: page.kind !== "history"
                         iconName: "folder-download-symbolic"
-                        tip: "ダウンロード"
+                        tip: Style.t("ダウンロード", "Download")
                         size: 22
                         onClicked: WaveApp.downloadCollection(page.kind === "album" ? "album" : page.itemId === "LM" ? "liked" : "playlist", page.itemId, page.info.title || page.pageTitle, page.info.art || "", JSON.stringify(page.songs))
                     }
@@ -188,13 +188,13 @@ ListView {
             Layout.rightMargin: page.edge
             spacing: 8
             Item { Layout.fillWidth: true }
-            IconButton { iconName: "system-search-symbolic"; tip: "一覧の中を検索"; checked: find.visible; onClicked: { find.visible = !find.visible; if (find.visible) find.forceActiveFocus(); else find.text = "" } }
+            IconButton { iconName: "system-search-symbolic"; tip: Style.t("一覧の中を検索", "Search in this list"); checked: find.visible; onClicked: { find.visible = !find.visible; if (find.visible) find.forceActiveFocus(); else find.text = "" } }
             TextField {
                 id: find
                 visible: false
                 Layout.preferredWidth: Math.min(240, page.width / 3)
                 Layout.preferredHeight: 36
-                placeholderText: "一覧の中を検索"
+                placeholderText: Style.t("一覧の中を検索", "Search in this list")
                 topPadding: 0
                 bottomPadding: 0
                 verticalAlignment: TextInput.AlignVCenter
@@ -228,7 +228,7 @@ ListView {
             Layout.preferredHeight: 34
             spacing: 6
                 Repeater {
-                    model: [["", "すべて"], ["MUSIC_VIDEO_TYPE_ATV", "曲"], ["MUSIC_VIDEO_TYPE_OMV", "MV"], ["MUSIC_VIDEO_TYPE_UGC", "その他の動画（歌ってみた・ライブなど）"]]
+                    model: [["", Style.t("すべて", "All")], ["MUSIC_VIDEO_TYPE_ATV", Style.t("曲", "Songs")], ["MUSIC_VIDEO_TYPE_OMV", "MV"], ["MUSIC_VIDEO_TYPE_UGC", Style.t("その他の動画（歌ってみた・ライブなど）", "Other videos (covers, live, etc.)")]]
                     delegate: Chip { text: modelData[1]; on: page.songKind === modelData[0]; onClicked: page.songKind = (modelData[0] === "" || page.songKind === modelData[0]) ? "" : modelData[0] }
                 }
         }
@@ -240,7 +240,7 @@ ListView {
         }
         Label {
             visible: !page.loading && page.songs.length > 0 && page.shown.length === 0
-            text: "合う曲がありません"
+            text: Style.t("合う曲がありません", "No matching songs")
             Layout.leftMargin: 24
             color: Style.dim
         }
@@ -297,11 +297,11 @@ ListView {
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: 2
-                Label { text: "おすすめの曲"; font.pixelSize: 20; font.weight: Font.Bold; color: Style.foreground }
-                Label { text: "このプレイリストに合いそうな曲"; font.pixelSize: 12; color: Style.dim }
+                Label { text: Style.t("おすすめの曲", "Recommended songs"); font.pixelSize: 20; font.weight: Font.Bold; color: Style.foreground }
+                Label { text: Style.t("このプレイリストに合いそうな曲", "Songs that fit this playlist"); font.pixelSize: 12; color: Style.dim }
             }
             Item { Layout.fillWidth: true }
-            Btn { text: "更新"; visible: page.suggestionsReload !== ""; onClicked: page.loadSuggestions(page.suggestionsReload) }
+            Btn { text: Style.t("更新", "Refresh"); visible: page.suggestionsReload !== ""; onClicked: page.loadSuggestions(page.suggestionsReload) }
         }
         Repeater {
             model: page.suggestions
@@ -320,7 +320,7 @@ ListView {
                         Label { Layout.fillWidth: true; text: modelData.title; elide: Text.ElideRight; color: Style.foreground }
                         Label { Layout.fillWidth: true; text: modelData.subtitle || modelData.artists || ""; elide: Text.ElideRight; font.pixelSize: 12; color: Style.dim }
                     }
-                    IconButton { iconName: "list-add-symbolic"; tip: "このプレイリストに追加"; enabled: page.adding === null; onClicked: page.addSuggestion(modelData) }
+                    IconButton { iconName: "list-add-symbolic"; tip: Style.t("このプレイリストに追加", "Add to this playlist"); enabled: page.adding === null; onClicked: page.addSuggestion(modelData) }
                 }
             }
         }
@@ -337,7 +337,7 @@ ListView {
         onPlay: page.playFrom(index, false)
         // 自分のプレイリストからは外せる
         removal: page.kind === "playlist" && page.info.editable && (modelData.setVideoId || "") !== ""
-                 ? { label: "このプレイリストから削除", action: () => page.removeSong(modelData.at) } : null
+                 ? { label: Style.t("このプレイリストから削除", "Remove from this playlist"), action: () => page.removeSong(modelData.at) } : null
     }
     property int removeToken: -1
     property int removing: -1

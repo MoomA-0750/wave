@@ -11,7 +11,7 @@ Item {
     property var shell
     property bool history: false
     readonly property var entries: JSON.parse(history ? (WaveApp.historyJson || "[]") : (WaveApp.queueJson || "[]"))
-    readonly property bool hasUserQueue: entries.some(e => e.section === "キューの次の曲")
+    readonly property bool hasUserQueue: entries.some(e => e.section === Style.t("キューの次の曲", "Next in queue"))
 
     ColumnLayout {
         anchors.fill: parent
@@ -22,13 +22,13 @@ Item {
             Layout.leftMargin: 20
             Layout.rightMargin: 20
             spacing: 6
-            Chip { text: "キュー"; on: !pane.history; onClicked: pane.history = false }
-            Chip { text: "履歴"; on: pane.history; onClicked: pane.history = true }
+            Chip { text: Style.t("キュー", "Queue"); on: !pane.history; onClicked: pane.history = false }
+            Chip { text: Style.t("履歴", "History"); on: pane.history; onClicked: pane.history = true }
             Item { Layout.fillWidth: true }
-            Btn { text: "キューを消去"; flat: true; visible: !pane.history && pane.hasUserQueue; onClicked: WaveApp.clearUserQueue() }
+            Btn { text: Style.t("キューを消去", "Clear queue"); flat: true; visible: !pane.history && pane.hasUserQueue; onClicked: WaveApp.clearUserQueue() }
             // キューをプレイリストとして保存（ログインしていて手元のキューに曲があるとき。ほかの端末を映している間は出さない）
-            IconButton { iconName: "bookmark-new-symbolic"; tip: "キューをプレイリストとして保存"; size: 16; visible: !pane.history && WaveApp.loggedIn && WaveApp.remoteLabel === "" && pane.entries.length > 0; onClicked: pane.askSave() }
-            IconButton { iconName: "window-close-symbolic"; tip: "閉じる"; size: 16; onClicked: pane.shell.setRight(true, "now") }
+            IconButton { iconName: "bookmark-new-symbolic"; tip: Style.t("キューをプレイリストとして保存", "Save queue as playlist"); size: 16; visible: !pane.history && WaveApp.loggedIn && WaveApp.remoteLabel === "" && pane.entries.length > 0; onClicked: pane.askSave() }
+            IconButton { iconName: "window-close-symbolic"; tip: Style.t("閉じる", "Close"); size: 16; onClicked: pane.shell.setRight(true, "now") }
         }
         ListView {
             id: list
@@ -46,14 +46,14 @@ Item {
                     visible: modelData.section !== ""
                     height: visible ? 40 : 0
                     Label { text: modelData.section; font.weight: Font.Bold; Layout.leftMargin: 8; Layout.fillWidth: true; color: Style.foreground }
-                    Btn { visible: modelData.flowHeader; text: "消去"; flat: true; onClicked: WaveApp.clearFlow() }
+                    Btn { visible: modelData.flowHeader; text: Style.t("消去", "Clear"); flat: true; onClicked: WaveApp.clearFlow() }
                 }
                 TrackRow {
                     width: parent.width
                     song: modelData
                     showAlbum: false
                     current: modelData.current
-                    removal: pane.history || modelData.current ? null : { label: "キューから削除", action: () => WaveApp.removeQueueItem(modelData.itemId) }
+                    removal: pane.history || modelData.current ? null : { label: Style.t("キューから削除", "Remove from queue"), action: () => WaveApp.removeQueueItem(modelData.itemId) }
                     onPlay: WaveApp.playQueueItem(modelData.index)
                     TapHandler { onTapped: WaveApp.playQueueItem(modelData.index) }
                 }
@@ -66,8 +66,8 @@ Item {
             Layout.margins: 24
             spacing: 6
             Item { Layout.fillHeight: true }
-            Label { Layout.alignment: Qt.AlignHCenter; text: pane.history ? "履歴はありません" : "キューは空です"; font.weight: Font.Bold; color: Style.foreground }
-            Label { Layout.alignment: Qt.AlignHCenter; Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap; text: pane.history ? "曲を聴くと、ここに並びます" : "曲を再生すると、次に流れる曲がここに並びます"; font.pixelSize: 12; color: Style.dim }
+            Label { Layout.alignment: Qt.AlignHCenter; text: pane.history ? Style.t("履歴はありません", "Nothing played yet") : Style.t("キューは空です", "Your queue is empty"); font.weight: Font.Bold; color: Style.foreground }
+            Label { Layout.alignment: Qt.AlignHCenter; Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap; text: pane.history ? Style.t("曲を聴くと、ここに並びます", "Songs you've played will show up here") : Style.t("曲を再生すると、次に流れる曲がここに並びます", "Play something and upcoming songs will show up here"); font.pixelSize: 12; color: Style.dim }
             Item { Layout.fillHeight: true }
         }
     }
@@ -82,7 +82,7 @@ Item {
         function onLoaded(t, json) {
             if (t === pane.infoToken) {
                 const v = JSON.parse(json)
-                if (!v.count) { WaveApp.toast("保存できる曲がキューにありません"); return }
+                if (!v.count) { WaveApp.toast(Style.t("保存できる曲がキューにありません", "No songs in the queue to save")); return }
                 pane.saveCount = v.count
                 saveTitle.text = v.title
                 saveDialog.open()
@@ -93,13 +93,13 @@ Item {
     }
     WDialog {
         id: saveDialog
-        title: "キューをプレイリストとして保存"
+        title: Style.t("キューをプレイリストとして保存", "Save queue as playlist")
         ColumnLayout {
             width: parent ? parent.width : 400
             spacing: 10
-            Label { Layout.fillWidth: true; wrapMode: Text.Wrap; text: "キューの " + pane.saveCount + " 曲を、新しい非公開のプレイリストに入れます。"; color: Style.dim }
+            Label { Layout.fillWidth: true; wrapMode: Text.Wrap; text: Style.ja ? "キューの " + pane.saveCount + " 曲を、新しい非公開のプレイリストに入れます。" : "Puts the " + Style.songs(pane.saveCount) + " in the queue into a new private playlist."; color: Style.dim }
             // 名前の見出しは欄の外に置く（Material の placeholderText は文字が入ると枠の上へ浮き、自前の背景では文字に重なる）
-            Label { text: "プレイリストの名前"; color: Style.dim; font.pixelSize: 12 }
+            Label { text: Style.t("プレイリストの名前", "Playlist name"); color: Style.dim; font.pixelSize: 12 }
             TextField {
                 id: saveTitle
                 Layout.fillWidth: true
@@ -109,8 +109,8 @@ Item {
         }
         footer: DialogButtonBox {
             background: null
-            Btn { text: "キャンセル"; flat: true; DialogButtonBox.buttonRole: DialogButtonBox.RejectRole }
-            Btn { text: "保存"; highlighted: true; enabled: saveTitle.text.trim() !== ""; DialogButtonBox.buttonRole: DialogButtonBox.AcceptRole }
+            Btn { text: Style.t("キャンセル", "Cancel"); flat: true; DialogButtonBox.buttonRole: DialogButtonBox.RejectRole }
+            Btn { text: Style.t("保存", "Save"); highlighted: true; enabled: saveTitle.text.trim() !== ""; DialogButtonBox.buttonRole: DialogButtonBox.AcceptRole }
         }
         onAccepted: pane.saveToken = WaveApp.request("queue.save", saveTitle.text.trim(), "")
     }

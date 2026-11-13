@@ -26,13 +26,13 @@ Rectangle {
         anchors.rightMargin: 12
         spacing: 4
         IconButton {
-            iconName: "go-previous-symbolic"; tip: "戻る"
+            iconName: "go-previous-symbolic"; tip: Style.t("戻る", "Back")
             visible: bar.shell.canBack || bar.shell.canForward
             enabled: bar.shell.canBack
             onClicked: bar.shell.back()
         }
         IconButton {
-            iconName: "go-next-symbolic"; tip: "進む"
+            iconName: "go-next-symbolic"; tip: Style.t("進む", "Forward")
             visible: bar.shell.canForward
             onClicked: bar.shell.forward()
         }
@@ -54,7 +54,7 @@ Rectangle {
             Material.elevation: 0
             background: Rectangle { radius: width / 2; color: parent.flat ? (parent.hovered ? Style.hover : "transparent") : Style.raised }
             ToolTip.visible: hovered
-            ToolTip.text: "ホーム"
+            ToolTip.text: Style.t("ホーム", "Home")
             onClicked: bar.shell.goHome()
         }
         TextField {
@@ -62,7 +62,7 @@ Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 40
             // 空のときの案内は自分で置く（語を後から入れると、Material の案内が消えずに重なることがあった）
-            Label { anchors.left: parent.left; anchors.leftMargin: 40; anchors.verticalCenter: parent.verticalCenter; visible: field.text === "" && !field.inputMethodComposing; text: "何を聴きたいですか？"; color: Style.dim; font: field.font }
+            Label { anchors.left: parent.left; anchors.leftMargin: 40; anchors.verticalCenter: parent.verticalCenter; visible: field.text === "" && !field.inputMethodComposing; text: Style.t("何を聴きたいですか？", "What do you want to listen to?"); color: Style.dim; font: field.font }
             leftPadding: 40
             topPadding: 0
             bottomPadding: 0
@@ -98,7 +98,7 @@ Rectangle {
             Material.elevation: 0
             background: Rectangle { radius: width / 2; color: parent.flat ? (parent.hovered ? Style.hover : "transparent") : Style.raised }
             ToolTip.visible: hovered
-            ToolTip.text: "Claude に聞く (Ctrl+J)"
+            ToolTip.text: Style.t("Claude に聞く (Ctrl+J)", "Ask Claude (Ctrl+J)")
             onClicked: bar.shell.toggleAi()
         }
     }
@@ -120,17 +120,17 @@ Rectangle {
             placeholder: "avatar-default-symbolic"
         }
         ToolTip.visible: hovered
-        ToolTip.text: WaveApp.accountName !== "" ? WaveApp.accountName : "アカウント"
+        ToolTip.text: WaveApp.accountName !== "" ? WaveApp.accountName : Style.t("アカウント", "Account")
         onClicked: accountMenu.popup(account, 0, account.height)
         WMenu {
             id: accountMenu
-            MenuItem { text: WaveApp.accountName !== "" ? WaveApp.accountName : "ログインしていません"; enabled: false }
+            MenuItem { text: WaveApp.accountName !== "" ? WaveApp.accountName : Style.t("ログインしていません", "Not logged in"); enabled: false }
             MenuSeparator {}
-            MenuItem { text: "設定"; onTriggered: bar.shell.openSettings() }
-            MenuItem { text: "端末の連携"; visible: WaveApp.loggedIn; height: visible ? implicitHeight : 0; onTriggered: bar.shell.openDevices() }
-            MenuItem { text: "ダウンロード"; onTriggered: bar.shell.openDownloads() }
-            MenuItem { text: "再生履歴"; enabled: WaveApp.loggedIn; onTriggered: bar.shell.push(historyPage, {}) }
-            MenuItem { text: WaveApp.loggedIn ? "ログアウト" : "ログイン"; onTriggered: WaveApp.loggedIn ? confirm.open() : WaveApp.logOut() }
+            MenuItem { text: Style.t("設定", "Settings"); onTriggered: bar.shell.openSettings() }
+            MenuItem { text: Style.t("端末の連携", "Devices"); visible: WaveApp.loggedIn; height: visible ? implicitHeight : 0; onTriggered: bar.shell.openDevices() }
+            MenuItem { text: Style.t("ダウンロード", "Downloads"); onTriggered: bar.shell.openDownloads() }
+            MenuItem { text: Style.t("再生履歴", "History"); enabled: WaveApp.loggedIn; onTriggered: bar.shell.push(historyPage, {}) }
+            MenuItem { text: WaveApp.loggedIn ? Style.t("ログアウト", "Log out") : Style.t("ログイン", "Log in"); onTriggered: WaveApp.loggedIn ? confirm.open() : WaveApp.logOut() }
         }
     }
 
@@ -139,8 +139,8 @@ Rectangle {
         parent: Overlay.overlay
         anchors.centerIn: parent
         modal: true
-        title: "ログアウトしますか？"
-        Label { width: 440; wrapMode: Text.Wrap; text: "この PC のキーリングからログインの情報を消し、取った曲・キュー・検索の履歴・Claude との会話も消します。" }
+        title: Style.t("ログアウトしますか？", "Log out?")
+        Label { width: 440; wrapMode: Text.Wrap; text: Style.t("この PC のキーリングからログインの情報を消し、取った曲・キュー・検索の履歴・Claude との会話も消します。", "This removes your login from this PC’s keyring, along with downloaded songs, the queue, search history and Claude chats.") }
         standardButtons: Dialog.Cancel | Dialog.Ok
         onAccepted: WaveApp.logOut()
     }
@@ -149,7 +149,7 @@ Rectangle {
         id: historyPage
         Page_ {}
     }
-    component Page_: CollectionPage { kind: "history"; pageTitle: "再生履歴" }
+    component Page_: CollectionPage { kind: "history"; pageTitle: Style.t("再生履歴", "History") }
 
     // 打ち込み中の候補（語と、曲・アーティスト・アルバムの行）
     property int suggestToken: -1

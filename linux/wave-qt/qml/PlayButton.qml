@@ -8,7 +8,7 @@ import wave
 RoundButton {
     id: button
     property string iconName: "media-playback-start-symbolic"
-    property string tip: "再生"
+    property string tip: Style.t("再生", "Play")
     // 丸の大きさと記号の大きさ（下の帯では小さくする）
     property int diameter: 52
     property int glyph: 24

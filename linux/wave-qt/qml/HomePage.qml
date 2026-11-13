@@ -9,7 +9,7 @@ import wave
 Flickable {
     id: page
     property string pageKind: params === "" ? "home" : "mood"
-    property string pageTitle: "ホーム"
+    property string pageTitle: Style.t("ホーム", "Home")
     property string params: ""
     property var chips: []
     property string selected: ""
@@ -69,7 +69,7 @@ Flickable {
             visible: page.params === ""
             Layout.fillWidth: true
             Layout.preferredHeight: 34
-                Chip { text: "すべて"; on: page.selected === ""; onClicked: { page.selected = ""; page.reload() } }
+                Chip { text: Style.t("すべて", "All"); on: page.selected === ""; onClicked: { page.selected = ""; page.reload() } }
                 Repeater {
                     model: page.chips
                     delegate: Chip {
@@ -122,10 +122,10 @@ Flickable {
             visible: page.failed && !page.loading
             Layout.alignment: Qt.AlignHCenter
             spacing: 8
-            Label { text: page.expired ? "ログインが切れています" : page.params !== "" ? "読み込めませんでした" : "ホームを読み込めませんでした"; font.pixelSize: 18; font.weight: Font.Bold; Layout.alignment: Qt.AlignHCenter; color: Style.foreground }
-            Label { visible: page.expired; text: "YouTube Music が保存したログインを受け付けませんでした。\nログインし直してください。"; wrapMode: Text.Wrap; horizontalAlignment: Text.AlignHCenter; Layout.maximumWidth: 420; Layout.alignment: Qt.AlignHCenter; color: Style.dim }
-            Btn { visible: page.expired; text: "ログインし直す"; highlighted: true; Layout.alignment: Qt.AlignHCenter; onClicked: WaveApp.relogin() }
-            Btn { text: "もう一度読み込む"; Layout.alignment: Qt.AlignHCenter; onClicked: page.reload() }
+            Label { text: page.expired ? Style.t("ログインが切れています", "Your login has expired") : page.params !== "" ? Style.t("読み込めませんでした", "Couldn't load") : Style.t("ホームを読み込めませんでした", "Couldn't load Home"); font.pixelSize: 18; font.weight: Font.Bold; Layout.alignment: Qt.AlignHCenter; color: Style.foreground }
+            Label { visible: page.expired; text: Style.t("YouTube Music が保存したログインを受け付けませんでした。\nログインし直してください。", "YouTube Music didn’t accept the saved login.\nPlease log in again."); wrapMode: Text.Wrap; horizontalAlignment: Text.AlignHCenter; Layout.maximumWidth: 420; Layout.alignment: Qt.AlignHCenter; color: Style.dim }
+            Btn { visible: page.expired; text: Style.t("ログインし直す", "Log in again"); highlighted: true; Layout.alignment: Qt.AlignHCenter; onClicked: WaveApp.relogin() }
+            Btn { text: Style.t("もう一度読み込む", "Reload"); Layout.alignment: Qt.AlignHCenter; onClicked: page.reload() }
         }
     }
 }

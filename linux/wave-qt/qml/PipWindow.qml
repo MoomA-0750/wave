@@ -12,7 +12,7 @@ Window {
     height: 225
     minimumWidth: 240
     minimumHeight: 135
-    title: "wave の小窓"
+    title: Style.t("wave の小窓", "wave mini player")
     color: "black"
     flags: Qt.Window | Qt.WindowStaysOnTopHint
     onClosing: shell.pipClosed()
@@ -24,9 +24,9 @@ Window {
         anchors.centerIn: parent
         spacing: 18
         visible: hover.hovered || WaveApp.demo === "pip"
-        Osd { iconName: "media-skip-backward-symbolic"; tip: "前へ"; onClicked: WaveApp.previous() }
-        Osd { iconName: WaveApp.playing ? "media-playback-pause-symbolic" : "media-playback-start-symbolic"; tip: WaveApp.playing ? "一時停止" : "再生"; onClicked: WaveApp.togglePlay() }
-        Osd { iconName: "media-skip-forward-symbolic"; tip: "次へ"; onClicked: WaveApp.next() }
+        Osd { iconName: "media-skip-backward-symbolic"; tip: Style.t("前へ", "Previous"); onClicked: WaveApp.previous() }
+        Osd { iconName: WaveApp.playing ? "media-playback-pause-symbolic" : "media-playback-start-symbolic"; tip: WaveApp.playing ? Style.t("一時停止", "Pause") : Style.t("再生", "Play"); onClicked: WaveApp.togglePlay() }
+        Osd { iconName: "media-skip-forward-symbolic"; tip: Style.t("次へ", "Next"); onClicked: WaveApp.next() }
     }
     Osd {
         anchors.right: parent.right
@@ -34,7 +34,7 @@ Window {
         anchors.margins: 6
         visible: hover.hovered || WaveApp.demo === "pip"
         iconName: "view-fullscreen-symbolic"
-        tip: "wave に戻して大きく見る"
+        tip: Style.t("wave に戻して大きく見る", "Back to wave")
         onClicked: pip.shell.pipBackToApp()
     }
 

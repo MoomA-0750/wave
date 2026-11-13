@@ -23,13 +23,13 @@ Rectangle {
             width: parent.width
             horizontalAlignment: Text.AlignHCenter
             wrapMode: Text.Wrap
-            text: WaveApp.videoState === "failed" ? "動画を読み込めませんでした" : "この位置には映像がありません"
+            text: WaveApp.videoState === "failed" ? Style.t("動画を読み込めませんでした", "Couldn't load the video") : Style.t("この位置には映像がありません", "There’s no video for this part")
             color: "white"
         }
         Btn {
             visible: WaveApp.videoState === "failed"
             anchors.horizontalCenter: parent.horizontalCenter
-            text: "もう一度"
+            text: Style.t("もう一度", "Retry")
             onClicked: { WaveApp.setVideoOn(false); WaveApp.setVideoOn(true) }
         }
     }
@@ -39,8 +39,8 @@ Rectangle {
         anchors.margins: 8
         spacing: 6
         visible: (view.place === "side" || view.place === "full") && (hover.hovered || view.place === "full")
-        Osd { iconName: "view-fullscreen-symbolic"; tip: view.place === "side" ? "映像を大きく見る" : "映像だけを窓いっぱいに"; onClicked: Style.nav.expandVideo() }
-        Osd { iconName: Style.nav && Style.nav.pipOpen ? "view-conceal-symbolic" : "window-new-symbolic"; tip: Style.nav && Style.nav.pipOpen ? "小窓を閉じる" : "小窓で見る"; onClicked: Style.nav.togglePip() }
+        Osd { iconName: "view-fullscreen-symbolic"; tip: view.place === "side" ? Style.t("映像を大きく見る", "Bigger video") : Style.t("映像だけを窓いっぱいに", "Fill the window with video"); onClicked: Style.nav.expandVideo() }
+        Osd { iconName: Style.nav && Style.nav.pipOpen ? "view-conceal-symbolic" : "window-new-symbolic"; tip: Style.nav && Style.nav.pipOpen ? Style.t("小窓を閉じる", "Close picture in picture") : Style.t("小窓で見る", "Picture in picture"); onClicked: Style.nav.togglePip() }
     }
     HoverHandler { id: hover }
 

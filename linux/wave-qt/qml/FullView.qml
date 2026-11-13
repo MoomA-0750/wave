@@ -18,7 +18,7 @@ Rectangle {
         anchors.top: parent.top
         anchors.margins: 16
         iconName: "view-restore-symbolic"
-        tip: "全画面を終える (Esc)"
+        tip: Style.t("全画面を終える (Esc)", "Exit full screen (Esc)")
         onClicked: view.shell.full = false
     }
     // 左にジャケット（か映像）、右に曲名・アーティスト・アルバムと流れる歌詞（GTK 版の全画面の再生中と同じ）。全体を窓の真ん中に置く
@@ -41,15 +41,15 @@ Rectangle {
         // 歌詞があるときは上下いっぱいまで使う（ジャケットの高さで切ると、下が空いたまま行が途中で切れていた）
         height: follower.visible ? view.height - 96 : Math.min(view.height - 120, Math.max(media.height, 360))
         spacing: 8
-        Label { Layout.fillWidth: true; text: WaveApp.hasSong ? WaveApp.title : "何も再生していません"; font.pixelSize: 36; font.weight: Font.Bold; wrapMode: Text.Wrap; maximumLineCount: 2; elide: Text.ElideRight; color: Style.foreground }
+        Label { Layout.fillWidth: true; text: WaveApp.hasSong ? WaveApp.title : Style.t("何も再生していません", "Nothing playing"); font.pixelSize: 36; font.weight: Font.Bold; wrapMode: Text.Wrap; maximumLineCount: 2; elide: Text.ElideRight; color: Style.foreground }
         Label { Layout.fillWidth: true; text: WaveApp.artists; visible: text !== ""; font.pixelSize: 20; elide: Text.ElideRight; color: Style.dim }
         Label { Layout.fillWidth: true; text: WaveApp.album; visible: text !== ""; font.pixelSize: 15; elide: Text.ElideRight; color: Style.dim }
         Row {
             visible: WaveApp.hasVideo
             Layout.topMargin: 8
             spacing: 6
-            Chip { text: "曲"; on: !WaveApp.showVideo; onClicked: WaveApp.setVideoOn(false) }
-            Chip { text: "動画"; on: WaveApp.showVideo; onClicked: WaveApp.setVideoOn(true) }
+            Chip { text: Style.t("曲", "Song"); on: !WaveApp.showVideo; onClicked: WaveApp.setVideoOn(false) }
+            Chip { text: Style.t("動画", "Video"); on: WaveApp.showVideo; onClicked: WaveApp.setVideoOn(true) }
         }
         LyricsFollower {
             id: follower

@@ -20,6 +20,7 @@ use wave_core::music::repository::{LIKED_SONGS, MusicRepository};
 use wave_desktop::playback::{Origin, QueueItem, Repeat};
 use wave_desktop::services::{Services, language, region};
 use wave_desktop::settings::{SearchHistoryEntry, Settings};
+use wave_desktop::lang;
 use wave_desktop::{browser_login, connect, discord_status, keyring, mpris, runtime};
 
 use crate::bridge::qobject;
@@ -366,7 +367,7 @@ impl qobject::WaveApp {
                                 s.playback.play_list_from(page.songs, 0, Some(id));
                             }
                         }
-                        _ => toast("アルバムを読み込めませんでした"),
+                        _ => toast(lang::t("アルバムを読み込めませんでした", "Couldn't load the album")),
                     }
                 }
                 "playlist" => play_playlist(&s, &id, shuffle).await,
@@ -374,7 +375,7 @@ impl qobject::WaveApp {
                     let wanted = id.clone();
                     match runtime::run(async move { repo.artist(&wanted).await }).await {
                         Ok(page) if !page.top_songs.is_empty() => s.playback.play_artist(&id, page.top_songs, 0, shuffle, page.all_songs_playlist_id),
-                        _ => toast("アーティストの曲を読み込めませんでした"),
+                        _ => toast(lang::t("アーティストの曲を読み込めませんでした", "Couldn't load the artist's songs")),
                     }
                 }
                 _ => {}
@@ -385,14 +386,14 @@ impl qobject::WaveApp {
     pub fn play_next_song(self: Pin<&mut Self>, song_json: &QString) {
         if let (Some(s), Some(song)) = (services(), parse_song(song_json)) {
             s.playback.play_next(song);
-            toast("次に再生します");
+            toast(lang::t("次に再生します", "Playing next"));
         }
     }
 
     pub fn add_to_queue(self: Pin<&mut Self>, song_json: &QString) {
         if let (Some(s), Some(song)) = (services(), parse_song(song_json)) {
             s.playback.add_to_queue(song);
-            toast("キューに追加しました");
+            toast(lang::t("キューに追加しました", "Added to queue"));
         }
     }
 
@@ -431,7 +432,7 @@ impl qobject::WaveApp {
     pub fn set_song_liked(self: Pin<&mut Self>, song_json: &QString, liked: bool) {
         let (Some(s), Some(song)) = (services(), parse_song(song_json)) else { return };
         if !s.repo.client().is_logged_in() {
-            toast("ログインすると評価できます");
+            toast(lang::t("ログインすると評価できます", "Log in to like songs"));
             return;
         }
         let video_id = song.video_id.clone();
@@ -443,10 +444,10 @@ impl qobject::WaveApp {
             let result = runtime::run(async move { repo.set_liked(&id, liked).await }).await;
             if result.is_err() {
                 with_core(|c| c.liked.insert(video_id, !liked));
-                toast("評価を変えられませんでした");
+                toast(lang::t("評価を変えられませんでした", "Couldn't update your likes"));
                 request_sync();
             } else {
-                toast(if liked { "高く評価した曲に追加しました" } else { "高く評価した曲から削除しました" });
+                toast(if liked { lang::t("高く評価した曲に追加しました", "Added to Liked Songs") } else { lang::t("高く評価した曲から削除しました", "Removed from Liked Songs") });
             }
         });
     }
@@ -459,10 +460,10 @@ impl qobject::WaveApp {
             let result = runtime::run(async move { repo.add_to_playlist(&playlist_id, &song.video_id, false).await }).await;
             use wave_core::music::models::AddToPlaylistResult as R;
             toast(&match result {
-                R::Added => format!("「{title}」に追加しました"),
-                R::AlreadyInPlaylist => format!("「{title}」にもう入っています"),
-                R::NotChecked => "プレイリストを読み切れなかったので、追加しませんでした".to_string(),
-                R::Failed => "追加できませんでした".to_string(),
+                R::Added => if lang::ja() { format!("「{title}」に追加しました") } else { format!("Added to \"{title}\"") },
+                R::AlreadyInPlaylist => if lang::ja() { format!("「{title}」にもう入っています") } else { format!("Already in \"{title}\"") },
+                R::NotChecked => lang::t("プレイリストを読み切れなかったので、追加しませんでした", "Couldn't check for duplicates, so it wasn't added").to_string(),
+                R::Failed => lang::t("追加できませんでした", "Couldn't add it").to_string(),
             });
         });
     }
@@ -474,9 +475,9 @@ impl qobject::WaveApp {
             let repo = s.repo.clone();
             let result = runtime::run(async move { repo.set_subscribed(&channel, subscribed).await }).await;
             toast(match (result.is_ok(), subscribed) {
-                (true, true) => "登録しました",
-                (true, false) => "登録を解除しました",
-                _ => "登録を変えられませんでした",
+                (true, true) => lang::t("登録しました", "Subscribed"),
+                (true, false) => lang::t("登録を解除しました", "Unsubscribed"),
+                _ => lang::t("登録を変えられませんでした", "Couldn't change your subscription"),
             });
         });
     }
@@ -525,16 +526,18 @@ impl qobject::WaveApp {
         .unwrap_or_default();
         let mut head: Vec<Value> = Vec::new();
         // ポッドキャストで絞ったときは「新しいエピソード」を先頭に（GTK 版と同じ）
-        if kind == "podcast" && matches("新しいエピソード") {
-            head.push(json!({ "kind": "newepisodes", "id": wave_core::music::repository::NEW_EPISODES_BROWSE, "title": "新しいエピソード", "subtitle": "プレイリスト • 自動", "thumb": "", "round": false }));
+        let auto = lang::t("プレイリスト • 自動", "Playlist • Auto");
+        let (new_episodes, liked, downloads) = (lang::t("新しいエピソード", "New episodes"), lang::t("高く評価した曲", "Liked Songs"), lang::t("ダウンロード", "Downloads"));
+        if kind == "podcast" && matches(new_episodes) {
+            head.push(json!({ "kind": "newepisodes", "id": wave_core::music::repository::NEW_EPISODES_BROWSE, "title": new_episodes, "subtitle": auto, "thumb": "", "round": false }));
         }
         // 高く評価した曲はいつも先頭、ダウンロードはその次（Mac と同じ）
-        if wants("playlist") && matches("高く評価した曲") {
-            head.push(json!({ "kind": "liked", "id": LIKED_SONGS, "title": "高く評価した曲", "subtitle": "プレイリスト • 自動", "thumb": "", "round": false }));
+        if wants("playlist") && matches(liked) {
+            head.push(json!({ "kind": "liked", "id": LIKED_SONGS, "title": liked, "subtitle": auto, "thumb": "", "round": false }));
         }
-        if wants("playlist") && matches("ダウンロード") {
+        if wants("playlist") && matches(downloads) {
             let count = s.downloads.manifest().wanted_songs().iter().filter(|song| s.downloads.state(&song.video_id) == wave_desktop::downloads::SongState::Done).count();
-            head.push(json!({ "kind": "downloads", "id": "downloads", "title": "ダウンロード", "subtitle": format!("プレイリスト • 自動 • {count} 曲"), "thumb": "", "round": false }));
+            head.push(json!({ "kind": "downloads", "id": "downloads", "title": downloads, "subtitle": format!("{auto} • {}", lang::songs(count)), "thumb": "", "round": false }));
         }
         head.extend(entries);
         QString::from(&Value::Array(head).to_string())
@@ -650,7 +653,7 @@ impl qobject::WaveApp {
             let result = browser_login::use_profile(&profile).await;
             let text = match &result {
                 Ok(_) => json!({ "ok": true }),
-                Err(message) => json!({ "ok": false, "title": format!("{}のログインを使えませんでした", profile.label), "message": message }),
+                Err(message) => json!({ "ok": false, "title": if lang::ja() { format!("{}のログインを使えませんでした", profile.label) } else { format!("Couldn't use the login from {}", profile.label) }, "message": message }),
             }
             .to_string();
             let _ = thread.queue(move |app| app.loaded(token, QString::from(&text)));
@@ -672,7 +675,7 @@ impl qobject::WaveApp {
             Ok(child) => child,
             Err(e) => {
                 eprintln!("login window failed: {}", e.kind());
-                toast("ログインの窓を開けませんでした（wave の GTK 版が要ります）");
+                toast(lang::t("ログインの窓を開けませんでした（wave の GTK 版が要ります）", "Couldn't open the login window (wave's GTK version is needed)"));
                 return;
             }
         };
@@ -796,11 +799,11 @@ async fn enter_main() {
         let view = match state.as_str() {
             "offer" => Some(PairingView::ShowingOffer("wave-pair:eyJ2IjoxLCJwa0EiOiJkZW1vIiwiZUEiOiJkZW1vIiwidG9rZW4iOiJkZW1vIn0".into())),
             "code" => Some(PairingView::EnterCode(None)),
-            "wrong" => Some(PairingView::EnterCode(Some("数字が違います".into()))),
+            "wrong" => Some(PairingView::EnterCode(Some(lang::t("数字が違います", "That code doesn’t match").into()))),
             "show" => Some(PairingView::ShowCode { code: "123456".into(), peer: "Pixel 3".into() }),
-            "working" => Some(PairingView::Working("相手が加えるのを待っています…".into())),
+            "working" => Some(PairingView::Working(lang::t("相手が加えるのを待っています…", "Waiting for the other device to add this PC…").into())),
             "done" => Some(PairingView::Done { peer: "Pixel 3".into(), grant_device_id: None }),
-            "failed" => Some(PairingView::Failed("時間内に読み取られませんでした".into())),
+            "failed" => Some(PairingView::Failed(lang::t("時間内に読み取られませんでした", "The code wasn’t used in time").into())),
             _ => None,
         };
         if let Some(view) = view {
@@ -863,25 +866,25 @@ pub(crate) fn load_library(services: &Rc<Services>) {
         let r = repo.clone();
         if let Ok(playlists) = runtime::run(async move { r.library_playlists().await }).await {
             *s.editable_playlists.borrow_mut() = playlists.iter().filter(|p| p.editable).cloned().collect();
-            let list: Vec<Value> = playlists.iter().filter(|p| p.playlist_id != LIKED_SONGS).map(|p| library_entry(view::playlist(p), "プレイリスト")).collect();
+            let list: Vec<Value> = playlists.iter().filter(|p| p.playlist_id != LIKED_SONGS).map(|p| library_entry(view::playlist(p), lang::t("プレイリスト", "Playlist"))).collect();
             with_core(|c| c.library.playlists = list);
             bump();
         }
         let r = repo.clone();
         if let Ok(artists) = runtime::run(async move { r.library_artists().await }).await {
-            let list: Vec<Value> = artists.iter().map(|a| library_entry(view::artist(a), "アーティスト")).collect();
+            let list: Vec<Value> = artists.iter().map(|a| library_entry(view::artist(a), lang::t("アーティスト", "Artist"))).collect();
             with_core(|c| c.library.artists = list);
             bump();
         }
         let r = repo.clone();
         if let Ok(albums) = runtime::run(async move { r.library_albums().await }).await {
-            let list: Vec<Value> = albums.iter().map(|a| library_entry(view::album(a), "アルバム")).collect();
+            let list: Vec<Value> = albums.iter().map(|a| library_entry(view::album(a), lang::t("アルバム", "Album"))).collect();
             with_core(|c| c.library.albums = list);
             bump();
         }
         let r = repo.clone();
         if let Ok(shows) = runtime::run(async move { r.library_podcasts().await }).await {
-            let list: Vec<Value> = shows.iter().map(|p| library_entry(view::podcast(p), "ポッドキャスト")).collect();
+            let list: Vec<Value> = shows.iter().map(|p| library_entry(view::podcast(p), lang::t("ポッドキャスト", "Podcast"))).collect();
             with_core(|c| c.library.podcasts = list);
             bump();
         }
@@ -901,7 +904,7 @@ pub(crate) fn load_library_after_create(services: &Rc<Services>) {
     let created = services.repo.recently_created();
     with_core(|c| {
         for p in created.iter().rev() {
-            let entry = library_entry(view::playlist(p), "プレイリスト");
+            let entry = library_entry(view::playlist(p), lang::t("プレイリスト", "Playlist"));
             let id = entry["id"].as_str().unwrap_or_default().to_string();
             if !c.library.playlists.iter().any(|e| e["id"].as_str() == Some(id.as_str())) {
                 c.library.playlists.insert(0, entry);
@@ -933,11 +936,11 @@ fn library_entry(mut value: Value, kind: &str) -> Value {
 async fn play_playlist(s: &Rc<Services>, playlist_id: &str, shuffle: bool) {
     let (repo, id) = (s.repo.clone(), playlist_id.to_string());
     let Ok(first) = runtime::run(async move { repo.playlist(&id, None).await }).await else {
-        toast("プレイリストを読み込めませんでした");
+        toast(lang::t("プレイリストを読み込めませんでした", "Couldn't load the playlist"));
         return;
     };
     if first.songs.is_empty() {
-        toast("プレイリストを読み込めませんでした");
+        toast(lang::t("プレイリストを読み込めませんでした", "Couldn't load the playlist"));
         return;
     }
     let more = first.continuation.is_some();
@@ -985,11 +988,11 @@ fn queue_entries(items: &[QueueItem], index: Option<usize>, history: bool) -> Va
         (index..items.len())
             .map(|i| {
                 let section = if i == index {
-                    "再生中"
+                    lang::t("再生中", "Now playing")
                 } else if i == index + 1 && i < user_end {
-                    "キューの次の曲"
+                    lang::t("キューの次の曲", "Next in queue")
                 } else if i == user_end {
-                    "次に流れる曲"
+                    lang::t("次に流れる曲", "Next up")
                 } else {
                     ""
                 };
@@ -1013,7 +1016,7 @@ fn load(kind: &str, arg: String, extra: String) -> Loading {
                 Ok(page) => {
                     // 補足は「アルバム • 年 • N 曲、M 分」（GTK 版と同じ）
                     let mut value = view::album_page(&page);
-                    let detail = [page.subtitle.clone(), Some(wave_core::music::collection::count_and_length(&page.songs))].into_iter().flatten().filter(|s| !s.is_empty()).collect::<Vec<_>>().join(" • ");
+                    let detail = [page.subtitle.clone(), Some(crate::extra::count_and_length(&page.songs))].into_iter().flatten().filter(|s| !s.is_empty()).collect::<Vec<_>>().join(" • ");
                     value["subtitle"] = serde_json::json!(crate::extra::keep_units(&detail));
                     value
                 }
@@ -1046,7 +1049,7 @@ fn load(kind: &str, arg: String, extra: String) -> Loading {
                 let (t, sent) = (title.clone(), ids.clone());
                 match runtime::run(async move { repo.create_playlist_with(&t, &sent).await }).await {
                     Ok(id) => {
-                        toast(&format!("「{title}」に {} 曲を保存しました", ids.len()));
+                        toast(&if lang::ja() { format!("「{title}」に {} 曲を保存しました", ids.len()) } else { format!("Saved {} to \"{title}\"", lang::songs(ids.len())) });
                         if let Some(s) = &services {
                             load_library_after_create(s);
                         }
@@ -1054,7 +1057,7 @@ fn load(kind: &str, arg: String, extra: String) -> Loading {
                     }
                     Err(e) => {
                         eprintln!("save queue failed: {e}");
-                        toast("キューを保存できませんでした");
+                        toast(lang::t("キューを保存できませんでした", "Couldn't save the queue"));
                         json!({ "ok": false })
                     }
                 }
@@ -1232,12 +1235,12 @@ async fn load_home(repo: MusicRepository, services: Option<Rc<Services>>, chip: 
     let new_shelf = if new_releases.is_empty() || wave_core::music::releases::duplicates_new_releases(&new_releases, &page.shelves) {
         None
     } else {
-        wave_core::music::releases::new_releases_shelf("新作", new_releases)
+        wave_core::music::releases::new_releases_shelf(lang::t("新作", "New releases"), new_releases)
     };
     json!({
         "chips": page.chips.iter().map(|c| json!({ "title": c.title, "params": c.params })).collect::<Vec<_>>(),
         "recent": recent.iter().take(8).map(view::home_item).collect::<Vec<_>>(),
-        "releases": if releases.is_empty() { Value::Null } else { view::shelf("登録したアーティストの新作", None, &releases) },
+        "releases": if releases.is_empty() { Value::Null } else { view::shelf(lang::t("登録したアーティストの新作", "New from artists you subscribe to"), None, &releases) },
         "newReleases": new_shelf.map(|s| view::shelf(&s.title, None, &s.items)),
         "shelves": view::shelves(&page.shelves),
         "continuation": page.continuation.unwrap_or_default(),
@@ -1270,7 +1273,7 @@ async fn load_lyrics(services: Option<Rc<Services>>) -> Value {
         Some(m) => Some(m.song),
         None => s.playback.current(),
     };
-    let Some(song) = song else { return json!({ "state": "empty", "message": "曲を再生すると、ここに歌詞が出ます" }) };
+    let Some(song) = song else { return json!({ "state": "empty", "message": lang::t("曲を再生すると、ここに歌詞が出ます", "Play a song to see its lyrics here") }) };
     let base = json!({ "videoId": song.video_id, "art": view::image(song.thumbnail_url.as_deref(), view::LARGE) });
     let with = |mut value: Value| {
         value["videoId"] = base["videoId"].clone();
@@ -1278,11 +1281,11 @@ async fn load_lyrics(services: Option<Rc<Services>>) -> Value {
         value
     };
     if song.is_live {
-        return with(json!({ "state": "message", "message": "ライブ配信には歌詞がありません" }));
+        return with(json!({ "state": "message", "message": lang::t("ライブ配信には歌詞がありません", "Live streams don't have lyrics") }));
     }
     // ポッドキャストのエピソードなど YouTube Music の外の音には歌詞を探さない
     if wave_core::music::feed::is_external(&song.video_id) {
-        return with(json!({ "state": "message", "message": "この曲の歌詞は見つかりませんでした" }));
+        return with(json!({ "state": "message", "message": lang::t("この曲の歌詞は見つかりませんでした", "No lyrics found for this song") }));
     }
     let service = s.lyrics.clone();
     let result = runtime::run(async move { service.lyrics(&song).await }).await;
@@ -1298,7 +1301,7 @@ async fn load_lyrics(services: Option<Rc<Services>>) -> Value {
             "source": source.map(|s| wave_desktop::labels::lyrics_source(&s)).unwrap_or_default(),
         }),
         LyricsResult::Found(SongLyrics::Plain { text, source }) => json!({ "state": "plain", "text": text, "source": source.unwrap_or_default() }),
-        LyricsResult::None => json!({ "state": "message", "message": "この曲の歌詞は見つかりませんでした" }),
-        LyricsResult::Failed => json!({ "state": "message", "message": "歌詞を読み込めませんでした", "retry": true }),
+        LyricsResult::None => json!({ "state": "message", "message": lang::t("この曲の歌詞は見つかりませんでした", "No lyrics found for this song") }),
+        LyricsResult::Failed => json!({ "state": "message", "message": lang::t("歌詞を読み込めませんでした", "Couldn't load lyrics"), "retry": true }),
     })
 }

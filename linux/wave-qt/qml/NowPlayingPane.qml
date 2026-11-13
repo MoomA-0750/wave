@@ -21,16 +21,16 @@ Flickable {
         spacing: 14
         RowLayout {
             Layout.fillWidth: true
-            Label { text: WaveApp.album !== "" ? WaveApp.album : "再生中"; font.weight: Font.Bold; elide: Text.ElideRight; Layout.fillWidth: true; color: Style.foreground }
-            IconButton { iconName: "window-close-symbolic"; tip: "閉じる"; size: 16; onClicked: pane.shell.setRight(false, "") }
+            Label { text: WaveApp.album !== "" ? WaveApp.album : Style.t("再生中", "Now playing"); font.weight: Font.Bold; elide: Text.ElideRight; Layout.fillWidth: true; color: Style.foreground }
+            IconButton { iconName: "window-close-symbolic"; tip: Style.t("閉じる", "Close"); size: 16; onClicked: pane.shell.setRight(false, "") }
         }
         // 曲｜動画（今の曲に MV があるときだけ）
         Row {
             visible: WaveApp.hasVideo
             Layout.alignment: Qt.AlignHCenter
             spacing: 6
-            Chip { text: "曲"; on: !WaveApp.showVideo; onClicked: WaveApp.setVideoOn(false) }
-            Chip { text: "動画"; on: WaveApp.showVideo; onClicked: WaveApp.setVideoOn(true) }
+            Chip { text: Style.t("曲", "Song"); on: !WaveApp.showVideo; onClicked: WaveApp.setVideoOn(false) }
+            Chip { text: Style.t("動画", "Video"); on: WaveApp.showVideo; onClicked: WaveApp.setVideoOn(true) }
         }
         Item {
             Layout.fillWidth: true
@@ -46,7 +46,7 @@ Flickable {
                 spacing: 2
                 Label {
                     Layout.fillWidth: true
-                    text: WaveApp.hasSong ? WaveApp.title : "何も再生していません"
+                    text: WaveApp.hasSong ? WaveApp.title : Style.t("何も再生していません", "Nothing playing")
                     font.pixelSize: 22
                     font.weight: Font.Bold
                     elide: Text.ElideRight
@@ -69,7 +69,7 @@ Flickable {
             IconButton {
                 visible: WaveApp.hasSong && WaveApp.loggedIn
                 iconName: WaveApp.liked === 1 ? "object-select-symbolic" : "list-add-symbolic"
-                tip: WaveApp.liked === 1 ? "高く評価した曲から削除" : "高く評価した曲に追加"
+                tip: WaveApp.liked === 1 ? Style.t("高く評価した曲から削除", "Remove from Liked Songs") : Style.t("高く評価した曲に追加", "Add to Liked Songs")
                 checked: WaveApp.liked === 1
                 checkable: false
                 onClicked: WaveApp.toggleLike()
@@ -83,7 +83,7 @@ Flickable {
             radius: Style.radius
             color: Style.raised
             clip: true
-            Label { id: lyricsTitle; x: 12; y: 12; text: "歌詞"; font.weight: Font.Bold; color: Style.foreground }
+            Label { id: lyricsTitle; x: 12; y: 12; text: Style.t("歌詞", "Lyrics"); font.weight: Font.Bold; color: Style.foreground }
             LyricsFollower { id: lyricsBox; x: 12; y: lyricsTitle.y + lyricsTitle.height + 8; width: parent.width - 24; height: parent.height - y - 12 }
             // 下の端は薄く消す（行が途中で切れて見えないように）
             Rectangle {
@@ -115,8 +115,8 @@ Flickable {
                 spacing: 8
                 RowLayout {
                     Layout.fillWidth: true
-                    Label { text: "次の曲"; font.weight: Font.Bold; Layout.fillWidth: true; color: Style.foreground }
-                    Btn { text: "キューを開く"; flat: true; link: true; font.weight: Font.Bold; onClicked: pane.shell.setRight(true, "queue") }
+                    Label { text: Style.t("次の曲", "Up next"); font.weight: Font.Bold; Layout.fillWidth: true; color: Style.foreground }
+                    Btn { text: Style.t("キューを開く", "Open queue"); flat: true; link: true; font.weight: Font.Bold; onClicked: pane.shell.setRight(true, "queue") }
                 }
                 TrackRow { visible: !!pane.next; Layout.fillWidth: true; song: pane.next || ({}); showAlbum: false; onPlay: WaveApp.next() }
             }

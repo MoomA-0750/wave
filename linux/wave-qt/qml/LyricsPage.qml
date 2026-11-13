@@ -10,7 +10,7 @@ import wave
 Item {
     id: page
     property string pageKind: "lyrics"
-    property string pageTitle: "歌詞"
+    property string pageTitle: Style.t("歌詞", "Lyrics")
     property var info: ({ state: "loading" })
     property int token: -1
     property int current: -1
@@ -95,11 +95,11 @@ Item {
         BusyIndicator { visible: page.info.state === "loading"; running: visible; Layout.alignment: Qt.AlignHCenter }
         Label {
             Layout.alignment: Qt.AlignHCenter
-            text: page.info.state === "loading" ? "歌詞を探しています…" : (page.info.message || "曲を再生すると、ここに歌詞が出ます")
+            text: page.info.state === "loading" ? Style.t("歌詞を探しています…", "Looking for lyrics…") : (page.info.message || Style.t("曲を再生すると、ここに歌詞が出ます", "Play a song to see its lyrics here"))
             font.pixelSize: 18
             color: Style.foreground
         }
-        Btn { visible: !!page.info.retry; text: "もう一度読み込む"; Layout.alignment: Qt.AlignHCenter; onClicked: page.reload() }
+        Btn { visible: !!page.info.retry; text: Style.t("もう一度読み込む", "Reload"); Layout.alignment: Qt.AlignHCenter; onClicked: page.reload() }
     }
     // 歌詞の下の端は薄く消す（行が途中で切れて見えないように）
     Rectangle {

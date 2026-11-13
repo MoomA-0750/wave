@@ -18,7 +18,7 @@ use wave_core::music::repository::NEW_EPISODES_BROWSE;
 use wave_desktop::ai_chat::AiMessage;
 use wave_desktop::connect::{ConnectInfo, MemberView, PairingView};
 use wave_desktop::downloads::SongState;
-use wave_desktop::runtime;
+use wave_desktop::{lang, runtime};
 use wave_desktop::services::Services;
 
 use crate::app::{core_thread, failure, next_token, parse_song, request_sync, services, toast};
@@ -81,7 +81,7 @@ pub fn attach(services: &Rc<Services>) {
             None => ("artist", release.artist_id.clone()),
         };
         let title = release.title.clone();
-        wave_desktop::desktop_notify::notify("xyz.mooma0750.wave", &format!("{} の新作", release.artist_name), &release.title, move || {
+        wave_desktop::desktop_notify::notify("xyz.mooma0750.wave", &if lang::ja() { format!("{} の新作", release.artist_name) } else { format!("New from {}", release.artist_name) }, &release.title, move || {
             let (kind, id, title) = (kind.to_string(), id.clone(), title.clone());
             if let Some(thread) = core_thread() {
                 let _ = thread.queue(move |mut app| {
@@ -309,33 +309,33 @@ fn assistant_html(text: &str) -> String {
 
 fn banner(info: &ConnectInfo) -> Value {
     if !info.configured {
-        let message = if info.unreadable { "この PC の連携の鍵を読めませんでした（キーリングを確かめてください）" } else { "ページの下の「中継の場所」に入れると使えます" };
-        return json!({ "severity": "info", "title": "中継の場所が設定されていません", "message": message, "action": "", "actionLabel": "" });
+        let message = if info.unreadable { lang::t("この PC の連携の鍵を読めませんでした（キーリングを確かめてください）", "Couldn’t read this PC’s device keys (check the keyring)") } else { lang::t("ページの下の「中継の場所」に入れると使えます", "Enter the relay address at the bottom of this page to use this") };
+        return json!({ "severity": "info", "title": lang::t("中継の場所が設定されていません", "The relay isn’t configured"), "message": message, "action": "", "actionLabel": "" });
     }
     if info.unreadable {
-        return json!({ "severity": "error", "title": "連携の保存を読めません", "message": "リセットすると、この PC はもう一度ほかの端末から加わり直します。", "action": "forget_household", "actionLabel": "リセット" });
+        return json!({ "severity": "error", "title": lang::t("連携の保存を読めません", "Couldn’t read the saved device group"), "message": lang::t("リセットすると、この PC はもう一度ほかの端末から加わり直します。", "Reset it to join your devices again from another device."), "action": "forget_household", "actionLabel": lang::t("リセット", "Reset") });
     }
     if info.in_household && info.relay == Some(RelayStatus::NotMember) {
-        return json!({ "severity": "error", "title": "中継がこの PC を連携した端末として受け付けません", "message": "ほかの端末から外された可能性があります。", "action": "forget_household", "actionLabel": "この PC の連携の記録を消す" });
+        return json!({ "severity": "error", "title": lang::t("中継がこの PC を連携した端末として受け付けません", "The relay no longer accepts this PC"), "message": lang::t("ほかの端末から外された可能性があります。", "It may have been removed by another device."), "action": "forget_household", "actionLabel": lang::t("この PC の連携の記録を消す", "Forget the group on this PC") });
     }
     if info.store_reset_pending {
-        return json!({ "severity": "warning", "title": "中継の状態が作り直されました", "message": "", "action": "accept_store_reset", "actionLabel": "この状態から始める" });
+        return json!({ "severity": "warning", "title": lang::t("中継の状態が作り直されました", "The relay’s state was reset"), "message": "", "action": "accept_store_reset", "actionLabel": lang::t("この状態から始める", "Start from this state") });
     }
     Value::Null
 }
 
 fn relay_text(info: &ConnectInfo) -> &'static str {
     if !info.configured {
-        return "設定されていません";
+        return lang::t("設定されていません", "Not configured");
     }
     match info.relay {
-        Some(RelayStatus::Connected) => "接続中",
-        Some(RelayStatus::Connecting) => "接続しています…",
-        Some(RelayStatus::TailnetUnreachable) => "届きません（Tailscale につながっているか確かめてください）",
-        Some(RelayStatus::NotMember) if info.in_household => "受け付けられません",
-        Some(RelayStatus::NotMember) => "まだ連携していません",
-        Some(RelayStatus::Failed) => "つながりませんでした",
-        Some(RelayStatus::Disconnected) | None => "切断",
+        Some(RelayStatus::Connected) => lang::t("接続中", "Connected"),
+        Some(RelayStatus::Connecting) => lang::t("接続しています…", "Connecting…"),
+        Some(RelayStatus::TailnetUnreachable) => lang::t("届きません（Tailscale につながっているか確かめてください）", "Unreachable (check that Tailscale is connected)"),
+        Some(RelayStatus::NotMember) if info.in_household => lang::t("受け付けられません", "Not accepted"),
+        Some(RelayStatus::NotMember) => lang::t("まだ連携していません", "Not set up yet"),
+        Some(RelayStatus::Failed) => lang::t("つながりませんでした", "Couldn’t connect"),
+        Some(RelayStatus::Disconnected) | None => lang::t("切断", "Disconnected"),
     }
 }
 
@@ -344,11 +344,11 @@ fn pairing_json(view: &PairingView) -> Value {
         PairingView::Idle => ("idle", String::new()),
         PairingView::Working(m) => ("working", m.clone()),
         PairingView::Failed(m) => ("failed", m.clone()),
-        PairingView::ShowingOffer(_) => ("offer", "加える端末で wave の「端末の連携」を開き、この QR を読み取ってください（PC なら下の文字列をコピーして貼り付けます）。2分で無効になります。".into()),
-        PairingView::EnterCode(m) => ("code", format!("{}加える端末に出ている6桁の数字を入力してください", m.as_ref().map(|m| format!("{m}\n")).unwrap_or_default())),
-        PairingView::ShowCode { peer, .. } => ("show", format!("「{peer}」に、この6桁の数字を入力してください")),
-        PairingView::Done { peer, grant_device_id: Some(_) } => ("done", format!("「{peer}」を加えました。プレイリストなどを使えるようにするには、ログインを渡してください。")),
-        PairingView::Done { peer, grant_device_id: None } => ("done", format!("「{peer}」と連携しました")),
+        PairingView::ShowingOffer(_) => ("offer", lang::t("加える端末で wave の「端末の連携」を開き、この QR を読み取ってください（PC なら下の文字列をコピーして貼り付けます）。2分で無効になります。", "On the device you’re adding, open Devices in wave and scan this QR code (on a PC, copy the text below and paste it). Expires in 2 minutes.").into()),
+        PairingView::EnterCode(m) => ("code", format!("{}{}", m.as_ref().map(|m| format!("{m}\n")).unwrap_or_default(), lang::t("加える端末に出ている6桁の数字を入力してください", "Enter the 6-digit code shown on the device you’re adding"))),
+        PairingView::ShowCode { peer, .. } => ("show", if lang::ja() { format!("「{peer}」に、この6桁の数字を入力してください") } else { format!("Enter this 6-digit code on \"{peer}\"") }),
+        PairingView::Done { peer, grant_device_id: Some(_) } => ("done", if lang::ja() { format!("「{peer}」を加えました。プレイリストなどを使えるようにするには、ログインを渡してください。") } else { format!("Added \"{peer}\". Give it your login so it can use your playlists and more.") }),
+        PairingView::Done { peer, grant_device_id: None } => ("done", if lang::ja() { format!("「{peer}」と連携しました") } else { format!("Connected with \"{peer}\"") }),
     };
     let mut value = json!({ "kind": kind, "text": text, "offer": "", "code": "", "qr": [], "grantId": "" });
     match view {
@@ -372,11 +372,11 @@ fn qr_rows(text: &str) -> Vec<String> {
 
 fn member_json(m: &MemberView, logged_in: bool) -> Value {
     let status = if m.active {
-        "再生中の端末"
+        lang::t("再生中の端末", "Active device")
     } else if m.online {
-        "オンライン"
+        lang::t("オンライン", "Online")
     } else {
-        "オフライン"
+        lang::t("オフライン", "Offline")
     };
     let icon = match m.kind.as_deref() {
         Some("api") => "network-server-symbolic",
@@ -386,7 +386,7 @@ fn member_json(m: &MemberView, logged_in: bool) -> Value {
     };
     json!({
         "id": m.device_id,
-        "label": if m.is_controller { format!("{}（操作だけ）", m.label) } else { m.label.clone() },
+        "label": if m.is_controller { format!("{}{}", m.label, lang::t("（操作だけ）", " (control only)")) } else { m.label.clone() },
         "name": m.label,
         "status": status,
         "icon": icon,
@@ -461,7 +461,7 @@ pub async fn load_podcast(browse_id: String, title: String, continuation: Option
         let library = s.podcasts.library.clone();
         let refs: Vec<&feed::FeedShow> = feeds.iter().map(|f| f.as_ref()).collect();
         page.episodes = wave_core::music::new_episodes::merge_refs(&page.episodes, &refs, now, |u| library.position(u));
-        page.title = "新しいエピソード".into();
+        page.title = lang::t("新しいエピソード", "New episodes").into();
     }
     let is_feed = feed::is_feed_show(&page.browse_id);
     let continuation = match feed::feed_url_of(&page.browse_id) {
@@ -499,7 +499,7 @@ pub async fn search_feeds(text: String) -> Value {
     let client = s.podcasts.client.clone();
     match runtime::run(async move { client.search(&text).await }).await {
         Some(shows) => json!({ "items": shows.iter().map(view::podcast).collect::<Vec<_>>() }),
-        None => failure("探せませんでした（通信を確かめてください）"),
+        None => failure(lang::t("探せませんでした（通信を確かめてください）", "Couldn't search (check your connection)")),
     }
 }
 
@@ -516,7 +516,7 @@ impl qobject::WaveApp {
             .map(|m| match m {
                 AiMessage::User(t) => json!({ "kind": "user", "text": t }),
                 AiMessage::Assistant(t, video) => json!({ "kind": "assistant", "text": t, "html": assistant_html(t), "videoId": video.clone().unwrap_or_default() }),
-                AiMessage::Action(t) => json!({ "kind": "action", "text": format!("・{t}") }),
+                AiMessage::Action(t) => json!({ "kind": "action", "text": format!("{}{t}", lang::t("・", "• ")) }),
                 AiMessage::Songs(songs) => json!({ "kind": "songs", "songs": view::songs(songs) }),
                 AiMessage::Failure(t) => json!({ "kind": "failure", "text": t }),
             })
@@ -583,7 +583,7 @@ impl qobject::WaveApp {
         if !video_id.is_empty() && s.playback.current().map(|song| song.video_id) == Some(video_id) {
             s.playback.player().seek_ms(position_ms.max(0) as u64);
         } else {
-            toast("話している曲が鳴っていないので飛べません");
+            toast(lang::t("話している曲が鳴っていないので飛べません", "That song isn't playing, so wave can't jump there"));
         }
     }
 
@@ -621,10 +621,10 @@ impl qobject::WaveApp {
             "pickable": pickable.iter().filter(|m| mirror.as_ref().is_none_or(|r| r.device_id != m.device_id) || m.is_self).map(|m| member_json(m, logged_in)).collect::<Vec<_>>(),
             "mirror": mirror.as_ref().map(|m| json!({
                 "label": m.label,
-                "status": if m.playing { format!("{}で再生中", m.label) } else { format!("{}で一時停止中", m.label) },
+                "status": if !lang::ja() { format!("{} on {}", if m.playing { "Playing" } else { "Paused" }, m.label) } else if m.playing { format!("{}で再生中", m.label) } else { format!("{}で一時停止中", m.label) },
                 "song": view::song(&m.song),
             })),
-            "relay": format!("中継: {}", relay_text(&info)),
+            "relay": format!("{}{}", lang::t("中継: ", "Relay: "), relay_text(&info)),
             "relayUrl": relay_url,
             "loggedIn": logged_in,
         });
@@ -647,11 +647,11 @@ impl qobject::WaveApp {
             "set_relay" => {
                 let text = arg.trim().to_string();
                 if !text.is_empty() && RelayEndpoint::parse(&text).is_none() {
-                    toast("wss:// で始まる、パスの無い場所を入れてください");
+                    toast(lang::t("wss:// で始まる、パスの無い場所を入れてください", "Enter an address that starts with wss:// and has no path"));
                     return;
                 }
                 s.downloads.update_settings(|st| st.relay_url = (!text.is_empty()).then_some(text));
-                toast("中継の場所を覚えました。次に wave を開いたときから使います");
+                toast(lang::t("中継の場所を覚えました。次に wave を開いたときから使います", "Relay saved. It takes effect the next time you open wave"));
             }
             other => eprintln!("connect action unknown={other}"),
         }
@@ -667,7 +667,7 @@ impl qobject::WaveApp {
         let (id, label) = (device_id.to_string(), label.to_string());
         glib::spawn_future_local(async move {
             let removed = s.connect.remove_member(&id).await;
-            toast(&if removed { format!("「{label}」を外しました") } else { "外せませんでした".into() });
+            toast(&if removed { if lang::ja() { format!("「{label}」を外しました") } else { format!("Removed \"{label}\"") } } else { lang::t("外せませんでした", "Couldn’t remove the device").into() });
         });
     }
 
@@ -676,7 +676,7 @@ impl qobject::WaveApp {
         let (id, label) = (device_id.to_string(), label.to_string());
         glib::spawn_future_local(async move {
             let sent = s.connect.grant_login(&id).await;
-            toast(&if sent { format!("「{label}」にログインを渡しました") } else { "ログインを渡せませんでした".into() });
+            toast(&if sent { if lang::ja() { format!("「{label}」にログインを渡しました") } else { format!("Gave your login to \"{label}\"") } } else { lang::t("ログインを渡せませんでした", "Couldn’t send your login").into() });
         });
     }
 
@@ -690,20 +690,20 @@ impl qobject::WaveApp {
         let wanted = manifest.wanted_songs();
         let done = |id: &str| downloads.state(id) == SongState::Done;
         let pending: Vec<&Song> = wanted.iter().filter(|song| !done(&song.video_id)).collect();
-        let mut status = format!("使っている容量: {}", wave_desktop::downloads::format_bytes(downloads.total_bytes()));
+        let mut status = format!("{}{}", lang::t("使っている容量: ", "Storage used: "), wave_desktop::downloads::format_bytes(downloads.total_bytes()));
         let mut progress = -1.0;
         if !pending.is_empty() {
-            status.push_str(&format!(" • 残り {} 曲 • ", pending.len()));
+            status.push_str(&if lang::ja() { format!(" • 残り {} 曲 • ", pending.len()) } else { format!(" • {} left • ", lang::songs(pending.len())) });
             let active = downloads.progress.lock().unwrap().clone();
             if !downloads.network_allows() {
-                status.push_str(if downloads.online() { "Wi-Fi など従量制でない通信を待っています" } else { "通信を待っています" });
+                status.push_str(if downloads.online() { lang::t("Wi-Fi など従量制でない通信を待っています", "Waiting for Wi-Fi or another unmetered network") } else { lang::t("通信を待っています", "Waiting for a connection") });
             } else if let Some((id, got, total)) = active {
                 let title = wanted.iter().find(|song| song.video_id == id).map(|song| song.title.clone()).unwrap_or_default();
                 let percent = if total > 0 { got * 100 / total } else { 0 };
-                status.push_str(&format!("取っています: {title}（{percent}%）"));
+                status.push_str(&if lang::ja() { format!("取っています: {title}（{percent}%）") } else { format!("Downloading: {title} ({percent}%)") });
                 progress = if total > 0 { got as f64 / total as f64 } else { 0.0 };
             } else {
-                status.push_str("待っています");
+                status.push_str(lang::t("待っています", "Waiting"));
             }
         }
         let category = category.to_string();
@@ -721,9 +721,9 @@ impl qobject::WaveApp {
             .collections
             .iter()
             .map(|c| {
-                let kind = if c.kind == KIND_ALBUM { "アルバム" } else if c.kind == KIND_LIKED { "プレイリスト • 自動" } else { "プレイリスト" };
+                let kind = if c.kind == KIND_ALBUM { lang::t("アルバム", "Album") } else if c.kind == KIND_LIKED { lang::t("プレイリスト • 自動", "Playlist • Auto") } else { lang::t("プレイリスト", "Playlist") };
                 let got = c.songs.iter().filter(|song| done(&song.video_id)).count();
-                let count = if got >= c.songs.len() { format!("{} 曲", c.songs.len()) } else { format!("{got} / {} 曲", c.songs.len()) };
+                let count = if got >= c.songs.len() { lang::songs(c.songs.len()) } else { format!("{got} / {}", lang::songs(c.songs.len())) };
                 json!({ "kind": if c.kind == KIND_ALBUM { "album" } else { "playlist" }, "id": c.id, "title": c.title, "subtitle": format!("{kind} • {count}"), "thumb": view::image(c.thumbnail_url.as_deref(), 120), "round": false })
             })
             .collect();
@@ -761,7 +761,7 @@ impl qobject::WaveApp {
     pub fn download_song(self: Pin<&mut Self>, song_json: &QString) {
         if let (Some(s), Some(song)) = (services(), parse_song(song_json)) {
             s.downloads.download_song(&song);
-            toast("ダウンロードに追加しました");
+            toast(lang::t("ダウンロードに追加しました", "Added to downloads"));
         }
     }
 
@@ -777,7 +777,7 @@ impl qobject::WaveApp {
         let songs: Vec<Song> = list.into_iter().filter_map(|v| serde_json::from_value(v.get("song").cloned().unwrap_or(v)).ok()).collect();
         let thumbnail = thumbnail.to_string();
         s.downloads.download_collection(&kind.to_string(), &id.to_string(), &title.to_string(), (!thumbnail.is_empty()).then_some(thumbnail.as_str()), songs);
-        toast("ダウンロードに追加しました");
+        toast(lang::t("ダウンロードに追加しました", "Added to downloads"));
     }
 
     pub fn remove_collection(self: Pin<&mut Self>, id: &QString) {
@@ -789,7 +789,7 @@ impl qobject::WaveApp {
     pub fn clear_downloads(self: Pin<&mut Self>) {
         if let Some(s) = services() {
             s.downloads.clear();
-            toast("ダウンロードをすべて削除しました");
+            toast(lang::t("ダウンロードをすべて削除しました", "All downloads deleted"));
         }
     }
 
@@ -808,10 +808,10 @@ impl qobject::WaveApp {
                     subscription.author = show["author"].as_str().map(String::from);
                     subscription.thumbnail_url = show["thumbnailUrl"].as_str().map(String::from);
                     s.podcasts.library.subscribe(subscription);
-                    toast("番組を登録しました");
+                    toast(lang::t("番組を登録しました", "Subscribed"));
                 } else {
                     s.podcasts.library.unsubscribe(url);
-                    toast("登録をやめました");
+                    toast(lang::t("登録をやめました", "Unsubscribed"));
                 }
                 bump(|mut app| {
                     let v = *app.library_version() + 1;
@@ -828,7 +828,7 @@ impl qobject::WaveApp {
                     if ok {
                         crate::app::load_library(&s);
                     } else {
-                        toast("ライブラリを変更できませんでした");
+                        toast(lang::t("ライブラリを変更できませんでした", "Couldn't change your library"));
                     }
                     reply(token, json!({ "ok": ok }));
                 });
@@ -854,16 +854,16 @@ impl qobject::WaveApp {
                     if let Some(song) = song {
                         let (repo, pid, vid) = (s.repo.clone(), id.clone(), song.video_id.clone());
                         let result = runtime::run(async move { repo.add_to_playlist(&pid, &vid, true).await }).await;
-                        toast(if result == wave_core::music::models::AddToPlaylistResult::Added { "プレイリストを作って追加しました" } else { "プレイリストを作りました（曲は追加できませんでした）" });
+                        toast(if result == wave_core::music::models::AddToPlaylistResult::Added { lang::t("プレイリストを作って追加しました", "Created the playlist and added the song") } else { lang::t("プレイリストを作りました（曲は追加できませんでした）", "Created the playlist (couldn't add the song)") });
                     } else {
-                        toast(&format!("「{title}」を作りました"));
+                        toast(&if lang::ja() { format!("「{title}」を作りました") } else { format!("Created \"{title}\"") });
                     }
                     crate::app::load_library_after_create(&s);
                     reply(token, json!({ "ok": true, "id": id }));
                 }
                 Err(e) => {
                     eprintln!("create playlist failed: {e}");
-                    toast("プレイリストを作れませんでした");
+                    toast(lang::t("プレイリストを作れませんでした", "Couldn't create the playlist"));
                     reply(token, json!({ "ok": false }));
                 }
             }
@@ -878,7 +878,7 @@ impl qobject::WaveApp {
         glib::spawn_future_local(async move {
             let repo = s.repo.clone();
             let ok = runtime::run(async move { repo.remove_from_playlist(&pid, &vid, &sid).await }).await;
-            toast(if ok { "プレイリストから削除しました" } else { "削除できませんでした" });
+            toast(if ok { lang::t("プレイリストから削除しました", "Removed from playlist") } else { lang::t("削除できませんでした", "Couldn't remove it") });
             reply(token, json!({ "ok": ok }));
         });
         token
