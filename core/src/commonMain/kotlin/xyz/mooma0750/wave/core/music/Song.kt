@@ -80,7 +80,28 @@ data class PlaylistPage(
     val endConfirmed: Boolean = false,
     /** サーバーで並べ替えられる（最初のページに並べ替えのメニューがある）。 */
     val sortable: Boolean = false,
+    /** 自分のプレイリストの、曲の棚の外の続き（「候補」の棚が来る。最初のページだけ）。曲の続きではない。 */
+    val suggestionsContinuation: String? = null,
 )
+
+/** 自分のプレイリストの「候補」（YouTube Music のおすすめの曲）。 */
+data class PlaylistSuggestions(
+    val songs: List<Song>,
+    /** 「更新」で別の候補を読むトークン。無ければ更新できない。 */
+    val reloadContinuation: String?,
+)
+
+/** 曲を入れて作ったプレイリスト（added は入った曲の数）。 */
+data class SavedPlaylist(
+    val playlistId: String,
+    val added: Int,
+)
+
+/** キューをプレイリストとして保存するときに入れる曲（並びの順。RSS のエピソードとライブは除き、同じ曲は最初の1つだけ）。 */
+fun songsToSave(queue: List<Song>): List<Song> =
+    queue
+        .filterNot { it.isLive || Feed.isExternal(it.videoId) }
+        .distinctBy { it.videoId }
 
 /** 再生履歴の1つの区切り（「今日」「今週」など）。 */
 data class HistorySection(

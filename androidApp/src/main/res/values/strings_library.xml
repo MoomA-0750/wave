@@ -199,4 +199,14 @@
     <string name="queue_notice_channel">Queue</string>
     <string name="queue_notice_more">+%1$d more</string>
     <string name="queue_notice_empty">Nothing comes next</string>
+    <string name="library_save_queue">Save queue as playlist</string>
+    <string name="library_save_queue_title">Save queue as playlist</string>
+    <string name="library_save_queue_default">%1$s radio</string>
+    <string name="library_save_queue_count">%1$d songs will be added</string>
+    <string name="library_save">Save</string>
+    <string name="library_queue_saved">Saved %2$d songs to “%1$s”</string>
+    <string name="library_queue_saved_partly">Saved %2$d of %1$d songs to “%3$s”</string>
+    <string name="library_suggestions">Recommended songs</string>
+    <string name="library_suggestions_refresh">Refresh</string>
+    <string name="library_suggestion_add">Add to this playlist</string>
 </resources>

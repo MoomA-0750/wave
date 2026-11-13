@@ -186,6 +186,7 @@ class MainActivity : ComponentActivity() {
                             },
                             // ダウンロード・ダウンロードを削除（ADR-0016 の 16）
                             setDownloaded = container.downloads?.let { downloads -> { song, on -> if (on) downloads.downloadSong(song) else downloads.removeSong(song.videoId) } },
+                            saveQueue = { title, songs -> container.playlistEditor.saveQueue(title, songs) },
                         )
                     }
                 LaunchedEffect(container) {
@@ -479,6 +480,11 @@ class MainActivity : ComponentActivity() {
                                         onQueue = playerActions::queue,
                                         actions = songActions,
                                         onRemove = { song, setVideoId -> container.playlistEditor.remove(playlist.playlistId, song, setVideoId) },
+                                        onAddSuggestion = { song, done ->
+                                            container.playlistEditor.addSuggestion(playlist, song) { result ->
+                                                scope.launch { done(result == xyz.mooma0750.wave.core.music.AddToPlaylistResult.Added) }
+                                            }
+                                        },
                                         onBack = pop,
                                     )
                                 }

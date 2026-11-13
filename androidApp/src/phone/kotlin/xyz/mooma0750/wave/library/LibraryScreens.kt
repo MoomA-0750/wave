@@ -17,6 +17,10 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.ui.res.painterResource
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -75,6 +79,8 @@ fun PlaylistScreen(
     onQueue: (songs: List<Song>, next: Boolean) -> Unit,
     actions: SongActions,
     onRemove: (song: Song, setVideoId: String) -> Unit,
+    /** 「おすすめの曲」をこのプレイリストに足す（結果が Added なら true を返す呼び返し）。null なら「＋」を出さない。 */
+    onAddSuggestion: ((song: Song, done: (Boolean) -> Unit) -> Unit)? = null,
     onBack: () -> Unit,
     bottomBar: @Composable () -> Unit = {},
     /** ダウンロードのボタン（ADR-0016 の 15）。題と読んだ曲を渡す。 */
@@ -180,6 +186,28 @@ fun PlaylistScreen(
             }
         }
         if (state.loading) item { LoadingIndicator(Modifier.padding(16.dp)) }
+        // 自分のプレイリストの一番下に「おすすめの曲」（YouTube Music の候補）。最後のページまで読んでから、絞っていないときだけ出す
+        if (onAddSuggestion != null && !filtering && state.continuation == null && !state.loading && state.suggestions.isNotEmpty()) {
+            item(key = "suggestions-header") {
+                Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 24.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(stringResource(R.string.library_suggestions), Modifier.weight(1f), style = MaterialTheme.typography.titleMediumEmphasized)
+                    if (state.suggestionsReload != null) {
+                        TextButton(onClick = viewModel::refreshSuggestions, enabled = !state.suggestionsLoading, shapes = ButtonDefaults.shapes()) {
+                            MenuIcon(R.drawable.ic_refresh)
+                            Text(stringResource(R.string.library_suggestions_refresh), Modifier.padding(start = 6.dp))
+                        }
+                    }
+                }
+            }
+            items(state.suggestions, key = { "suggestion-${it.videoId}" }) { song ->
+                SongRow(song, onClick = { onPlay(listOf(song), 0, null) }) {
+                    IconButton(
+                        onClick = { onAddSuggestion(song) { added -> if (added) viewModel.suggestionAdded(song) } },
+                        shapes = IconButtonDefaults.shapes(),
+                    ) { Icon(painterResource(R.drawable.ic_add_circle), contentDescription = stringResource(R.string.library_suggestion_add)) }
+                }
+            }
+        }
     }
 }
 

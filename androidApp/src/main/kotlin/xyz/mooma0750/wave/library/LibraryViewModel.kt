@@ -73,6 +73,11 @@ data class PlaylistUiState(
     val order: PlaylistOrder = PlaylistOrder(),
     /** サーバーで並べ替えられるプレイリストか（できなければカスタムだけ）。 */
     val sortable: Boolean = false,
+    /** 自分のプレイリストの「おすすめの曲」（YouTube Music の候補）。無ければ空。 */
+    val suggestions: List<Song> = emptyList(),
+    /** 「更新」で別の候補を読むトークン。 */
+    val suggestionsReload: String? = null,
+    val suggestionsLoading: Boolean = false,
 )
 
 /** プレイリストごとに選んだ並べ方（アプリの設定に持つ）。 */
@@ -163,6 +168,7 @@ class PlaylistViewModel(
                             sortable = it.sortable || result.value.sortable,
                         )
                     }
+                    if (result.value.editable) result.value.suggestionsContinuation?.let(::loadSuggestions)
                 }
                 is CallResult.Failed -> {
                     val local = offline?.invoke()
@@ -226,6 +232,41 @@ class PlaylistViewModel(
     private fun arrangedLocally(state: PlaylistUiState): PlaylistUiState {
         val (songs, setVideoIds) = state.order.arrange(state.songs, state.setVideoIds)
         return state.copy(songs = songs, setVideoIds = setVideoIds)
+    }
+
+    /** 「おすすめの曲」を読む（最初は最初のページの続き、「更新」では候補の reloadContinuation）。読めなければ前のまま。 */
+    private fun loadSuggestions(token: String) {
+        mutableState.update { it.copy(suggestionsLoading = true) }
+        viewModelScope.launch {
+            val result = music.playlistSuggestions(token)
+            val found = (result as? CallResult.Ok)?.value
+            Log.i(WaveApplication.LOG_TAG, "playlist suggestions songs=${found?.songs?.size} ok=${result is CallResult.Ok}")
+            mutableState.update {
+                if (found != null) {
+                    it.copy(suggestions = found.songs, suggestionsReload = found.reloadContinuation, suggestionsLoading = false)
+                } else {
+                    it.copy(suggestionsLoading = false)
+                }
+            }
+        }
+    }
+
+    /** 「更新」: 別の候補に替える。 */
+    fun refreshSuggestions() {
+        val token = state.value.suggestionsReload ?: return
+        if (state.value.suggestionsLoading) return
+        loadSuggestions(token)
+    }
+
+    /** 候補を足せた: 候補から外し、曲の並びの最後に出す（外すための ID は読み直すまで分からない）。 */
+    fun suggestionAdded(song: Song) {
+        mutableState.update {
+            it.copy(
+                suggestions = it.suggestions.filterNot { s -> s.videoId == song.videoId },
+                songs = if (it.continuation == null) it.songs + song else it.songs,
+                setVideoIds = if (it.continuation == null) it.setVideoIds + null else it.setVideoIds,
+            )
+        }
     }
 
     fun loadMore() {

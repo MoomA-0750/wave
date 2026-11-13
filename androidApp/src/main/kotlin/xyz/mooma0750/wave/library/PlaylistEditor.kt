@@ -131,6 +131,38 @@ class PlaylistEditor(
         }
     }
 
+    /** キューの曲を入れたプレイリストを作る（良いラジオの流れを残す）。songs は songsToSave で選んだもの。 */
+    fun saveQueue(
+        title: String,
+        songs: List<Song>,
+    ) = run("save-queue") { generation ->
+        val saved = music.createPlaylistWithSongs(title, songs, generation)
+        Log.i(WaveApplication.LOG_TAG, "queue saved songs=${songs.size} added=${saved?.added}")
+        onChanged()
+        when {
+            saved == null -> context.getString(R.string.library_create_playlist_failed)
+            saved.added == songs.size -> context.getString(R.string.library_queue_saved, title, saved.added)
+            else -> context.getString(R.string.library_queue_saved_partly, songs.size, saved.added, title)
+        }
+    }
+
+    /** プレイリストのページの「おすすめの曲」を足す（候補は入っていない曲なので、重複を確かめる全読みを省く）。 */
+    fun addSuggestion(
+        playlist: PlaylistSummary,
+        song: Song,
+        onResult: (AddToPlaylistResult) -> Unit = {},
+    ) = run("suggest:${playlist.playlistId}:${song.videoId}") { generation ->
+        val result = music.addToPlaylist(playlist.playlistId, song.videoId, generation, knownEmpty = true)
+        Log.i(WaveApplication.LOG_TAG, "playlist suggestion add result=${result::class.simpleName}")
+        if (result == AddToPlaylistResult.Added) membership?.noteAdded(playlist.playlistId, song.videoId) else membership?.invalidate(playlist.playlistId)
+        onResult(result)
+        when (result) {
+            AddToPlaylistResult.Added -> context.getString(R.string.library_added_to_playlist, playlist.title)
+            AddToPlaylistResult.Unknown -> context.getString(R.string.library_add_unknown)
+            else -> context.getString(R.string.library_add_failed)
+        }
+    }
+
     /**
      * 曲のメニューから、再生中でない曲を高く評価する・評価を外す（再生中の曲は LikeController を通す）。
      * 書き込みの規則は WaveSession.callWrite（自動で送り直さない）。

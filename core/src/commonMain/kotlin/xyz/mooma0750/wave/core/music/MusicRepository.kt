@@ -507,6 +507,34 @@ class MusicRepository(
             expectedGeneration = expectedGeneration,
         ) { ParseOutcome.Parsed(Unit) }
 
+    /**
+     * 自分のプレイリストの「候補」。token は最初のページの [PlaylistPage.suggestionsContinuation]（または候補の reloadContinuation で別の候補）。
+     * 候補が無ければ Ok(null)。
+     */
+    suspend fun playlistSuggestions(
+        token: String,
+        expectedGeneration: Long? = null,
+    ): CallResult<PlaylistSuggestions?> =
+        session.call(
+            operation = "browse",
+            expectedGeneration = expectedGeneration,
+            block = { it.browse(YouTubeClient.WEB_REMIX, continuation = token, setLogin = true) },
+        ) { response -> ParseOutcome.Parsed(MusicParsers.playlistSuggestions(json(response))) }
+
+    /** キューの曲を入れた非公開のプレイリストを作る（作ってから1曲ずつ足す。innertubex の作成は曲を渡せない）。 */
+    suspend fun createPlaylistWithSongs(
+        title: String,
+        songs: List<Song>,
+        expectedGeneration: Long = currentLoginGeneration(),
+    ): SavedPlaylist? {
+        val created = createPlaylist(title, expectedGeneration) as? WriteResult.Done ?: return null
+        var added = 0
+        for (song in songs) {
+            if (addToPlaylist(created.value, song.videoId, expectedGeneration, knownEmpty = true) == AddToPlaylistResult.Added) added++
+        }
+        return SavedPlaylist(created.value, added)
+    }
+
     /** 非公開のプレイリストを作る（innertubex が PRIVATE 固定）。作った playlistId を返す。 */
     suspend fun createPlaylist(
         title: String,

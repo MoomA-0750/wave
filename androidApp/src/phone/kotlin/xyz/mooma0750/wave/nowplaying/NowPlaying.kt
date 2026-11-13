@@ -9,6 +9,10 @@ import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.AlertDialog
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
@@ -782,8 +786,42 @@ private fun QueueSheet(
     var dragOffset by remember { mutableFloatStateOf(0f) }
     val current = state.currentIndex
     Column(Modifier.fillMaxWidth()) {
+        // キューをプレイリストとして保存（良いラジオの流れを残す。手元のキューのときだけ）
+        var saving by remember { mutableStateOf<List<xyz.mooma0750.wave.core.music.Song>?>(null) }
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             ChoiceButtonGroup(listOf(stringResource(R.string.nowplaying_queue), stringResource(R.string.nowplaying_history)), if (history) 1 else 0, { history = it == 1 })
+            Spacer(Modifier.weight(1f))
+            val save = actions.saveQueue
+            if (save != null && !remote && controller != null && state.queue.isNotEmpty()) {
+                IconButton(
+                    onClick = {
+                        val songs = (0 until controller.mediaItemCount).mapNotNull { Media3QueuePlayer.songOf(controller.getMediaItemAt(it)) }
+                        saving = xyz.mooma0750.wave.core.music.songsToSave(songs).takeIf { it.isNotEmpty() }
+                    },
+                    shapes = IconButtonDefaults.shapes(),
+                ) { Icon(painterResource(R.drawable.ic_playlist_add), contentDescription = stringResource(R.string.library_save_queue)) }
+            }
+        }
+        saving?.let { songs ->
+            val defaultName = stringResource(R.string.library_save_queue_default, songs.first().title)
+            var title by remember(songs) { mutableStateOf(defaultName) }
+            AlertDialog(
+                onDismissRequest = { saving = null },
+                title = { Text(stringResource(R.string.library_save_queue_title)) },
+                text = {
+                    Column {
+                        OutlinedTextField(title, { title = it }, singleLine = true)
+                        Text(stringResource(R.string.library_save_queue_count, songs.size), Modifier.padding(top = 8.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        actions.saveQueue?.invoke(title.ifBlank { defaultName }, songs)
+                        saving = null
+                    }) { Text(stringResource(R.string.library_save)) }
+                },
+                dismissButton = { TextButton(onClick = { saving = null }) { Text(stringResource(R.string.library_cancel)) } },
+            )
         }
         @Composable
         fun songRow(

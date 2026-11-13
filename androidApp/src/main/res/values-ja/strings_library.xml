@@ -192,4 +192,14 @@
     <string name="queue_notice_channel">キュー</string>
     <string name="queue_notice_more">ほか %1$d 曲</string>
     <string name="queue_notice_empty">次の曲はありません</string>
+    <string name="library_save_queue">キューをプレイリストとして保存</string>
+    <string name="library_save_queue_title">キューをプレイリストとして保存</string>
+    <string name="library_save_queue_default">%1$s のラジオ</string>
+    <string name="library_save_queue_count">%1$d 曲を入れます</string>
+    <string name="library_save">保存</string>
+    <string name="library_queue_saved">「%1$s」に %2$d 曲を保存しました</string>
+    <string name="library_queue_saved_partly">%1$d 曲中 %2$d 曲を「%3$s」に保存しました</string>
+    <string name="library_suggestions">おすすめの曲</string>
+    <string name="library_suggestions_refresh">更新</string>
+    <string name="library_suggestion_add">このプレイリストに追加</string>
 </resources>

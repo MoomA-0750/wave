@@ -359,7 +359,31 @@ internal object MusicParsers {
         val songArea: JsonElement? = appended ?: shelf
         val endConfirmed = continuation == null && songArea != null && !containsKeyLike(songArea, "continuation")
         val sortable = findAll(root, "sortFilterSubMenuRenderer").isNotEmpty()
-        return PlaylistPage(title, rows.map { it.first }, continuation, rows.map { it.second }, editable, endConfirmed, sortable)
+        val suggestions =
+            root
+                .path("contents", "twoColumnBrowseResultsRenderer", "secondaryContents", "sectionListRenderer", "continuations")
+                .arrayItems()
+                .firstNotNullOfOrNull { it.path("nextContinuationData", "continuation").string() }
+        return PlaylistPage(title, rows.map { it.first }, continuation, rows.map { it.second }, editable, endConfirmed, sortable, suggestions)
+    }
+
+    /**
+     * 自分のプレイリストの「候補」の棚。sectionList の続き（`sectionListContinuation` の `musicShelfRenderer`）と、
+     * 「更新」の応答（`musicShelfContinuation`）のどちらも読む。曲が無ければ null。
+     */
+    fun playlistSuggestions(root: JsonObject): PlaylistSuggestions? {
+        val contents = root.path("continuationContents")
+        val shelf =
+            contents.path("musicShelfContinuation").asObject()
+                ?: contents.path("sectionListContinuation", "contents").arrayItems().firstNotNullOfOrNull { it.path("musicShelfRenderer").asObject() }
+                ?: return null
+        val songs =
+            shelf.path("contents").arrayItems().mapNotNull { item ->
+                item.path("musicResponsiveListItemRenderer").asObject()?.let(::responsiveListItemSong)
+            }
+        if (songs.isEmpty()) return null
+        val reload = shelf.path("continuations").arrayItems().firstNotNullOfOrNull { it.path("reloadContinuationData", "continuation").string() }
+        return PlaylistSuggestions(songs, reload)
     }
 
     private fun containsKeyLike(

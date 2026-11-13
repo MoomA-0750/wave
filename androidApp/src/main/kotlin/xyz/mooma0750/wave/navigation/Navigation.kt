@@ -75,6 +75,8 @@ data class SongActions(
     val setLiked: ((Song, Boolean) -> Unit)? = null,
     /** ダウンロードする（true）・ダウンロードを削除する（false）。null なら項目を出さない（ADR-0016 の 16）。 */
     val setDownloaded: ((Song, Boolean) -> Unit)? = null,
+    /** キューの曲を入れたプレイリストを作る（名前・入れる曲）。null ならキューの画面に入口を出さない。 */
+    val saveQueue: ((String, List<Song>) -> Unit)? = null,
 ) {
     /** シートの上から画面を開くときに、先にシートを閉じる。 */
     fun closing(close: () -> Unit): SongActions =
