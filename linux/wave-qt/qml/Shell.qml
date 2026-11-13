@@ -184,6 +184,7 @@ Item {
             if (shell.demoPlaylist && v.playlistId) { shell.demoPlaylist = false; shell.openPlaylist(v.playlistId, v.title); return }
             if (v.items && v.items.length > 0) shell.openItem(v.items[0])
         }
+        function onToast(text) { toastStrip.show(text) }
         // 新作の通知を押した
         function onOpenRequested(kind, id, title) {
             if (kind === "album") shell.openAlbum(id, title)
@@ -243,6 +244,32 @@ Item {
                 }
             }
             FullView { anchors.fill: parent; visible: shell.full; shell: shell }
+        }
+
+        // 短い知らせ。中身と下の帯の間に場所を取って出す（中身に重ねると、一覧の行や棚の文字を覆っていた）。3.5 秒で畳む
+        Item {
+            id: toastStrip
+            property string text: ""
+            property bool shown: false
+            function show(t) { text = t; shown = true; toastHide.restart() }
+            Layout.fillWidth: true
+            Layout.preferredHeight: shown ? toastBox.height + 12 : 0
+            Behavior on Layout.preferredHeight { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
+            clip: true
+            visible: Layout.preferredHeight > 0
+            Rectangle {
+                id: toastBox
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.top: parent.top
+                anchors.topMargin: 6
+                width: Math.min(toastLabel.implicitWidth + 40, toastStrip.width - 48)
+                height: toastLabel.implicitHeight + 16
+                radius: Style.radius === 0 ? 0 : height / 2
+                color: Style.raised
+                border.color: Style.border
+                Label { id: toastLabel; anchors.centerIn: parent; width: Math.min(implicitWidth, toastStrip.width - 88); text: toastStrip.text; wrapMode: Text.Wrap; horizontalAlignment: Text.AlignHCenter; color: Style.foreground }
+            }
+            Timer { id: toastHide; interval: 3500; onTriggered: toastStrip.shown = false }
         }
 
         PlayerBar { Layout.fillWidth: true; shell: shell }
@@ -307,7 +334,8 @@ Item {
         property var song: null
         title: "新しいプレイリスト"
         ColumnLayout {
-            width: 380
+            // 欄はダイアログの幅いっぱい（キューの保存の名前の画面と同じ）
+            width: parent ? parent.width : 400
             spacing: 6
             // 名前の見出しは欄の外に置く（Material の placeholderText は文字が入ると枠の上へ浮くが、背景を自前にしているので文字に重なる）
             Label { text: "プレイリストの名前"; color: Style.dim; font.pixelSize: 12 }

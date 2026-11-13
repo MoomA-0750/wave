@@ -80,7 +80,7 @@ pub struct App {
     /// 画面に依らない部分（再生・ダウンロード・連携・新作・番組・Claude）。app.playback などはここを指す（Deref）。
     pub core: Rc<wave_desktop::services::Services>,
     nav: adw::NavigationView,
-    toasts: adw::ToastOverlay,
+    toasts: Rc<ToastStrip>,
     /// 曲に重ねる MV の流し手（gtk4paintablesink が無ければ None）。
     pub video: Option<crate::video::VideoPlayer>,
     view: Cell<View>,
@@ -95,6 +95,40 @@ pub struct App {
     forward: RefCell<Vec<adw::NavigationPage>>,
     going_forward: Cell<bool>,
     volume_before_mute: Cell<f64>,
+}
+
+/// 短い知らせの段。中身と下の帯の間に場所を取って出す（中身に重ねると、一覧の行や棚の文字を覆っていた）。
+/// 3.5 秒で畳む。続けて来たら文を替えて延ばす。
+struct ToastStrip {
+    revealer: gtk::Revealer,
+    label: gtk::Label,
+    hide: RefCell<Option<gtk::glib::SourceId>>,
+}
+
+impl ToastStrip {
+    fn new() -> Rc<Self> {
+        let label = gtk::Label::builder().wrap(true).justify(gtk::Justification::Center).build();
+        let pill = gtk::Box::builder().halign(gtk::Align::Center).margin_top(6).margin_bottom(6).css_classes(["toast-strip"]).build();
+        pill.append(&label);
+        let revealer = gtk::Revealer::builder().transition_type(gtk::RevealerTransitionType::SlideUp).transition_duration(180).child(&pill).build();
+        Rc::new(Self { revealer, label, hide: RefCell::default() })
+    }
+
+    fn show(self: &Rc<Self>, text: &str) {
+        self.label.set_label(text);
+        self.revealer.set_reveal_child(true);
+        if let Some(old) = self.hide.borrow_mut().take() {
+            old.remove();
+        }
+        let weak = Rc::downgrade(self);
+        let id = gtk::glib::timeout_add_local_once(std::time::Duration::from_millis(3500), move || {
+            if let Some(this) = weak.upgrade() {
+                this.hide.borrow_mut().take();
+                this.revealer.set_reveal_child(false);
+            }
+        });
+        *self.hide.borrow_mut() = Some(id);
+    }
 }
 
 impl std::ops::Deref for App {
@@ -117,7 +151,7 @@ impl App {
 
     /// 画面の下に短い知らせを出す。
     pub fn toast(&self, text: &str) {
-        self.toasts.add_toast(adw::Toast::new(text));
+        self.toasts.show(text);
     }
 
     /// ページを積む。同じタグのページが下に残っていると AdwNavigationView が積むのを断るので、
@@ -537,6 +571,8 @@ const STYLE: &str = "
 .follow-line { font-weight: 700; opacity: 0.45; }
 .follow-line.follow-current { opacity: 1; }
 .follow-small .follow-line { font-size: 16px; }
+.toast-strip { background-color: @card_bg_color; color: @card_fg_color; border-radius: 9999px; padding: 8px 20px; box-shadow: 0 0 0 1px alpha(currentColor, 0.08), 0 2px 6px alpha(black, 0.12); }
+scrolledwindow.follow-scroller > undershoot.top, scrolledwindow.follow-scroller > undershoot.bottom { box-shadow: none; background: none; }
 .follow-small .follow-current { color: @accent_color; }
 .follow-big .follow-line { font-size: 30px; }
 .follow-plain { font-size: 16px; line-height: 1.5; }
@@ -563,13 +599,13 @@ pub fn build(
     gtk::style_context_add_provider_for_display(&gtk::gdk::Display::default().expect("display"), &css, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION);
 
     let nav = adw::NavigationView::new();
-    let toasts = adw::ToastOverlay::new();
+    let toasts = ToastStrip::new();
     let right_open = core.downloads.settings.borrow().right_pane_open;
     let volume = core.playback.player().volume();
     let app = Rc::new(App {
         core,
         nav: nav.clone(),
-        toasts: toasts.clone(),
+        toasts: Rc::clone(&toasts),
         video,
         view: Cell::new(View { right_open, ..Default::default() }),
         parts: Default::default(),
@@ -582,6 +618,15 @@ pub fn build(
         going_forward: Default::default(),
         volume_before_mute: Cell::new(if volume > 0.0 { volume } else { 0.7 }),
     });
+    // 確かめ用: WAVE_DEMO_TOAST の文を、開いて少ししてから知らせに出す
+    if let Ok(text) = std::env::var("WAVE_DEMO_TOAST") {
+        let weak = Rc::downgrade(&app);
+        gtk::glib::timeout_add_local_once(std::time::Duration::from_secs(8), move || {
+            if let Some(app) = weak.upgrade() {
+                app.toast(&text);
+            }
+        });
+    }
     {
         // 再生の知らせ（飛ばした・止めた理由）を画面の下に出す
         let weak = Rc::downgrade(&app);
@@ -646,8 +691,11 @@ pub fn build(
     let content = gtk::Stack::builder().transition_type(gtk::StackTransitionType::Crossfade).build();
     content.add_named(&body, Some("main"));
     content.add_named(&super::full_view::build(&app), Some("full"));
-    toasts.set_child(Some(&content));
-    toolbar.set_content(Some(&toasts));
+    content.set_vexpand(true);
+    let content_column = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    content_column.append(&content);
+    content_column.append(&toasts.revealer);
+    toolbar.set_content(Some(&content_column));
     toolbar.add_bottom_bar(&player_bar(&app));
     // 映像だけを窓いっぱいに出す層（下の帯も覆う）
     let root = gtk::Overlay::builder().child(&toolbar).build();
@@ -2226,9 +2274,13 @@ fn player_bar(app: &Rc<App>) -> gtk::Widget {
     seek_row.append(&duration);
     // ライブ配信: 長さも位置も無く、シークしない（時刻の段を LIVE の印に替える）
     let live = gtk::Label::builder().label("LIVE").halign(gtk::Align::Center).valign(gtk::Align::Center).css_classes(["live-badge"]).build();
-    let seek_stack = gtk::Stack::builder().vhomogeneous(true).build();
-    seek_stack.add_named(&seek_row, Some("seek"));
-    seek_stack.add_named(&live, Some("live"));
+    // 段の高さは位置の段に合わせる（Stack に入れると、再生中に位置を動かすたびにシークバーが描かれなくなった）
+    let seek_stack = gtk::Box::builder().build();
+    live.set_visible(false);
+    live.set_hexpand(true);
+    seek_stack.append(&seek_row);
+    seek_stack.append(&live);
+    seek_row.set_hexpand(true);
     let middle = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(4).build();
     middle.append(&controls);
     middle.append(&seek_stack);
@@ -2494,6 +2546,7 @@ fn player_bar(app: &Rc<App>) -> gtk::Widget {
     // 位置は 0.5 秒ごとに描き直す（再生・一時停止の印も、状態の変化が遅れて届くのでここでも合わせる）
     app.connect.on_change(refresh.clone());
     let app = app.clone();
+    let live_badge = live.clone();
     gtk::glib::timeout_add_local(std::time::Duration::from_millis(500), move || {
         let player = app.playback.player();
         let (pos, total) = match app.connect.mirror() {
@@ -2506,7 +2559,10 @@ fn player_bar(app: &Rc<App>) -> gtk::Widget {
             ),
         };
         let live = app.connect.mirror().map(|m| m.song.is_live).unwrap_or_else(|| app.playback.current().is_some_and(|s| s.is_live));
-        seek_stack.set_visible_child_name(if live { "live" } else { "seek" });
+        if seek_row.is_visible() == live {
+            seek_row.set_visible(!live);
+            live_badge.set_visible(live);
+        }
         if !dragging.get() {
             position.set_label(&pages::format_seconds((pos / 1000) as u32));
         }

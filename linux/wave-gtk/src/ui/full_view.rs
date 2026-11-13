@@ -101,6 +101,7 @@ pub(super) fn lyrics_follower(app: &Rc<App>, big: bool, on_found: impl Fn(bool) 
         .hscrollbar_policy(gtk::PolicyType::Never)
         .vscrollbar_policy(if big { gtk::PolicyType::Automatic } else { gtk::PolicyType::External })
         .vexpand(true)
+        .css_classes(["follow-scroller"])
         .build();
     let on_found: Rc<dyn Fn(bool)> = Rc::new(on_found);
     let lines: Rc<RefCell<Vec<LyricLine>>> = Rc::default();

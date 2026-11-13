@@ -29,7 +29,8 @@ ApplicationWindow {
 
     Connections {
         target: WaveApp
-        function onToast(text) { toast.show(text) }
+        // 主の画面では Shell が下の帯の上に場所を取って出す。ここはログイン・読み込み中の画面のときだけ
+        function onToast(text) { if (WaveApp.phase !== "main") toast.show(text) }
         function onRaiseRequested() { window.show(); window.raise(); window.requestActivate() }
     }
 

@@ -88,16 +88,19 @@ Flickable {
         }
 
         // 最近聴いたもの（4列の格子。押すと開く）
+        // 列の数は幅で決める（1つ 200px 以上。狭いと名前が単語の途中で折れていた）。各列は同じ幅
         GridLayout {
+            id: recentGrid
             visible: page.recent.length > 0
             Layout.fillWidth: true
-            columns: 4
+            columns: Math.max(1, Math.min(4, Math.floor((width + 8) / 208)))
             columnSpacing: 8
             rowSpacing: 8
             Repeater {
                 model: page.recent
                 delegate: Rectangle {
                     Layout.fillWidth: true
+                    Layout.preferredWidth: 1
                     Layout.preferredHeight: 56
                     radius: Style.small
                     color: tileHover.hovered ? Qt.lighter(Style.raised, 1.15) : Style.raised
@@ -106,7 +109,7 @@ Flickable {
                         anchors.fill: parent
                         spacing: 12
                         Art { Layout.preferredWidth: 56; Layout.preferredHeight: 56; source: modelData.thumb; round: !!modelData.round; radius: 0 }
-                        Label { Layout.fillWidth: true; Layout.rightMargin: 12; text: modelData.title; font.weight: Font.DemiBold; wrapMode: Text.Wrap; maximumLineCount: 2; elide: Text.ElideRight; color: Style.foreground }
+                        Label { Layout.fillWidth: true; Layout.preferredWidth: 1; Layout.rightMargin: 12; text: modelData.title; font.weight: Font.DemiBold; wrapMode: Text.WordWrap; maximumLineCount: 2; elide: Text.ElideRight; color: Style.foreground }
                     }
                     HoverHandler { id: tileHover; cursorShape: Qt.PointingHandCursor }
                     TapHandler { onTapped: Style.nav.openItem(modelData) }

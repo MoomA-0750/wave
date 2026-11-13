@@ -236,7 +236,8 @@ impl Home {
             if home.state.borrow().request != request || items.is_empty() {
                 return;
             }
-            let grid = gtk::FlowBox::builder().selection_mode(gtk::SelectionMode::None).homogeneous(true).min_children_per_line(4).max_children_per_line(4).column_spacing(8).row_spacing(8).build();
+            // 幅が足りなければ列を減らす（4列に決め打つと、右の欄を開いた 1280 の窓で窓より広くなり、右端が切れていた）
+            let grid = gtk::FlowBox::builder().selection_mode(gtk::SelectionMode::None).homogeneous(true).min_children_per_line(2).max_children_per_line(4).column_spacing(8).row_spacing(8).build();
             for item in items.into_iter().take(8) {
                 grid.append(&recent_tile(&home.app, item));
             }
