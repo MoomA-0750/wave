@@ -30,11 +30,11 @@ Rectangle {
         anchors.verticalCenter: parent.verticalCenter
         // 狭い窓（720〜800 ほど）では、中央の操作と右のボタンの分を先に取り、残りまで縮める（曲名は省略される）
         width: Math.max(0, Math.min(bar.width * 0.3, 360, bar.width - 16 - right.implicitWidth - 16 - transport.implicitWidth - 2 * bar.gap))
-        spacing: 12
+        spacing: bar.shell.level >= 4 ? 8 : 12
         visible: WaveApp.hasSong
         Art {
-            Layout.preferredWidth: 56
-            Layout.preferredHeight: 56
+            Layout.preferredWidth: bar.shell.level >= 4 ? 44 : 56
+            Layout.preferredHeight: bar.shell.level >= 4 ? 44 : 56
             source: WaveApp.thumb
             HoverHandler { cursorShape: Qt.PointingHandCursor }
             TapHandler { onTapped: bar.shell.togglePane() }
@@ -89,7 +89,7 @@ Rectangle {
             id: transport
             Layout.alignment: Qt.AlignHCenter
             // 狭い窓では詰めて、曲名に幅を回す
-            spacing: bar.shell.level >= 4 ? 4 : 12
+            spacing: bar.shell.level >= 3 ? 2 : 12
             IconButton { iconName: "media-playlist-shuffle-symbolic"; tip: "シャッフル"; checked: WaveApp.shuffle; enabled: WaveApp.hasSong; onClicked: WaveApp.toggleShuffle() }
             IconButton { iconName: "media-skip-backward-symbolic"; tip: "前へ"; enabled: WaveApp.hasSong; onClicked: WaveApp.previous() }
             PlayButton {
@@ -161,8 +161,9 @@ Rectangle {
             }
             Label { visible: WaveApp.remoteLabel !== "" && bar.shell.level === 0; text: WaveApp.remoteLabel; color: Style.accent; font.pixelSize: 12; font.weight: Font.Bold; elide: Text.ElideRight; Layout.maximumWidth: 120 }
         }
-        IconButton { iconName: "sidebar-show-right-symbolic"; tip: "再生中の画面"; checked: bar.shell.showRight && bar.shell.rightView === "now"; onClicked: bar.shell.togglePane() }
-        IconButton { iconName: "view-fullscreen-symbolic"; tip: "全画面 (F11)"; checked: bar.shell.full; onClicked: bar.shell.full = !bar.shell.full }
+        // いちばん狭い窓では、再生中の画面（ジャケットを押しても開く）と全画面（F11）のボタンをしまい、曲名に幅を回す
+        IconButton { visible: bar.shell.level < 4; iconName: "sidebar-show-right-symbolic"; tip: "再生中の画面"; checked: bar.shell.showRight && bar.shell.rightView === "now"; onClicked: bar.shell.togglePane() }
+        IconButton { visible: bar.shell.level < 4; iconName: "view-fullscreen-symbolic"; tip: "全画面 (F11)"; checked: bar.shell.full; onClicked: bar.shell.full = !bar.shell.full }
         IconButton {
             iconName: WaveApp.volume <= 0 ? "audio-volume-muted-symbolic" : WaveApp.volume < 0.34 ? "audio-volume-low-symbolic" : WaveApp.volume < 0.67 ? "audio-volume-medium-symbolic" : "audio-volume-high-symbolic"
             tip: "ミュート"
