@@ -12,8 +12,8 @@ Rectangle {
     property var shell
     property int position: 0
     property bool dragging: false
-    // 操作のボタンと位置のバーをまとめて上下の真ん中に置き、上下に 20px ほどの余白を残す高さ
-    implicitHeight: 116
+    // 操作のボタンと位置のバーをまとめて上下の真ん中に置き、上下に 14px ほどの余白を残す高さ
+    implicitHeight: 92
     color: Style.background
 
     function time(ms) {
@@ -34,8 +34,8 @@ Rectangle {
         spacing: bar.shell.level >= 4 ? 8 : 12
         visible: WaveApp.hasSong
         Art {
-            Layout.preferredWidth: bar.shell.level >= 4 ? 44 : 56
-            Layout.preferredHeight: bar.shell.level >= 4 ? 44 : 56
+            Layout.preferredWidth: bar.shell.level >= 4 ? 40 : 48
+            Layout.preferredHeight: bar.shell.level >= 4 ? 40 : 48
             source: WaveApp.thumb
             HoverHandler { cursorShape: Qt.PointingHandCursor }
             TapHandler { onTapped: bar.shell.togglePane() }
@@ -64,7 +64,7 @@ Rectangle {
                 TapHandler { enabled: WaveApp.artistId !== ""; onTapped: Style.nav.openArtist(WaveApp.artistId, WaveApp.artists) }
             }
         }
-        IconButton {
+        IconButton { compact: true;
             visible: WaveApp.loggedIn
             iconName: WaveApp.liked === 1 ? "object-select-symbolic" : "list-add-symbolic"
             tip: WaveApp.liked === 1 ? "高く評価した曲から削除" : "高く評価した曲に追加"
@@ -90,17 +90,19 @@ Rectangle {
             id: transport
             Layout.alignment: Qt.AlignHCenter
             // 狭い窓では詰めて、曲名に幅を回す
-            spacing: bar.shell.level >= 3 ? 2 : 12
-            IconButton { iconName: "media-playlist-shuffle-symbolic"; tip: "シャッフル"; checked: WaveApp.shuffle; enabled: WaveApp.hasSong; onClicked: WaveApp.toggleShuffle() }
-            IconButton { iconName: "media-skip-backward-symbolic"; tip: "前へ"; enabled: WaveApp.hasSong; onClicked: WaveApp.previous() }
+            spacing: bar.shell.level >= 3 ? 4 : 10
+            IconButton { compact: true; iconName: "media-playlist-shuffle-symbolic"; tip: "シャッフル"; checked: WaveApp.shuffle; enabled: WaveApp.hasSong; onClicked: WaveApp.toggleShuffle() }
+            IconButton { compact: true; iconName: "media-skip-backward-symbolic"; tip: "前へ"; enabled: WaveApp.hasSong; onClicked: WaveApp.previous() }
             PlayButton {
+                diameter: 40
+                glyph: 20
                 enabled: WaveApp.hasSong
                 iconName: WaveApp.playing ? "media-playback-pause-symbolic" : "media-playback-start-symbolic"
                 tip: "再生/一時停止"
                 onClicked: WaveApp.togglePlay()
             }
-            IconButton { iconName: "media-skip-forward-symbolic"; tip: "次へ"; enabled: WaveApp.hasSong; onClicked: WaveApp.next() }
-            IconButton {
+            IconButton { compact: true; iconName: "media-skip-forward-symbolic"; tip: "次へ"; enabled: WaveApp.hasSong; onClicked: WaveApp.next() }
+            IconButton { compact: true;
                 iconName: WaveApp.repeatMode === 2 ? "media-playlist-repeat-song-symbolic" : "media-playlist-repeat-symbolic"
                 tip: "リピート"
                 checked: WaveApp.repeatMode !== 0
@@ -149,12 +151,12 @@ Rectangle {
         anchors.rightMargin: 16
         anchors.verticalCenter: parent.verticalCenter
         spacing: 2
-        IconButton { iconName: "text-x-generic-symbolic"; tip: "歌詞"; checked: bar.shell.visibleKind === "lyrics"; onClicked: bar.shell.toggleLyrics() }
-        IconButton { iconName: "view-list-symbolic"; tip: "キュー"; checked: bar.shell.showRight && bar.shell.rightView === "queue"; onClicked: bar.shell.toggleQueue() }
+        IconButton { compact: true; iconName: "text-x-generic-symbolic"; tip: "歌詞"; checked: bar.shell.visibleKind === "lyrics"; onClicked: bar.shell.toggleLyrics() }
+        IconButton { compact: true; iconName: "view-list-symbolic"; tip: "キュー"; checked: bar.shell.showRight && bar.shell.rightView === "queue"; onClicked: bar.shell.toggleQueue() }
         RowLayout {
             visible: WaveApp.connectConfigured
             spacing: 4
-            IconButton {
+            IconButton { compact: true;
                 id: deviceButton
                 iconName: "audio-speakers-symbolic"
                 tip: "デバイスに接続"
@@ -165,9 +167,9 @@ Rectangle {
             Label { visible: WaveApp.remoteLabel !== "" && bar.shell.level === 0; text: WaveApp.remoteLabel; color: Style.accent; font.pixelSize: 12; font.weight: Font.Bold; elide: Text.ElideRight; Layout.maximumWidth: 120 }
         }
         // いちばん狭い窓では、再生中の画面（ジャケットを押しても開く）と全画面（F11）のボタンをしまい、曲名に幅を回す
-        IconButton { visible: bar.shell.level < 4; iconName: "sidebar-show-right-symbolic"; tip: "再生中の画面"; checked: bar.shell.showRight && bar.shell.rightView === "now"; onClicked: bar.shell.togglePane() }
-        IconButton { visible: bar.shell.level < 4; iconName: "view-fullscreen-symbolic"; tip: "全画面 (F11)"; checked: bar.shell.full; onClicked: bar.shell.full = !bar.shell.full }
-        IconButton {
+        IconButton { compact: true; visible: bar.shell.level < 4; iconName: "sidebar-show-right-symbolic"; tip: "再生中の画面"; checked: bar.shell.showRight && bar.shell.rightView === "now"; onClicked: bar.shell.togglePane() }
+        IconButton { compact: true; visible: bar.shell.level < 4; iconName: "view-fullscreen-symbolic"; tip: "全画面 (F11)"; checked: bar.shell.full; onClicked: bar.shell.full = !bar.shell.full }
+        IconButton { compact: true;
             iconName: WaveApp.volume <= 0 ? "audio-volume-muted-symbolic" : WaveApp.volume < 0.34 ? "audio-volume-low-symbolic" : WaveApp.volume < 0.67 ? "audio-volume-medium-symbolic" : "audio-volume-high-symbolic"
             tip: "ミュート"
             onClicked: bar.shell.level <= 1 ? WaveApp.toggleMute() : volumePopup.open()
@@ -178,7 +180,7 @@ Rectangle {
                 padding: 8
                 background: Rectangle { color: Style.raised; radius: Style.radius; border.color: Style.border }
                 RowLayout {
-                    IconButton { iconName: "audio-volume-muted-symbolic"; tip: "ミュート"; onClicked: WaveApp.toggleMute() }
+                    IconButton { compact: true; iconName: "audio-volume-muted-symbolic"; tip: "ミュート"; onClicked: WaveApp.toggleMute() }
                     Slider { from: 0; to: 1; value: WaveApp.volume; implicitWidth: 120; onMoved: WaveApp.setVolumeLevel(value) }
                 }
             }

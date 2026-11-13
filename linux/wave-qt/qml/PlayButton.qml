@@ -9,16 +9,23 @@ RoundButton {
     id: button
     property string iconName: "media-playback-start-symbolic"
     property string tip: "再生"
+    // 丸の大きさと記号の大きさ（下の帯では小さくする）
+    property int diameter: 52
+    property int glyph: 24
     highlighted: true
-    implicitWidth: 52
-    implicitHeight: 52
+    topInset: 0
+    bottomInset: 0
+    leftInset: 0
+    rightInset: 0
+    implicitWidth: diameter
+    implicitHeight: diameter
     Material.elevation: 0
     contentItem: Item {
         IconImage {
             anchors.centerIn: parent
             source: Style.icon(button.iconName)
-            sourceSize.width: 24
-            sourceSize.height: 24
+            sourceSize.width: button.glyph
+            sourceSize.height: button.glyph
             color: button.enabled ? Style.accentText : Style.dim
         }
     }
