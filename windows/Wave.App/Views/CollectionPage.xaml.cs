@@ -9,6 +9,7 @@ using Wave.App.Controls;
 using Wave.App.Services;
 using Wave.Core.Downloads;
 using Wave.Core.Music;
+using Wave.Core.Net;
 
 namespace Wave.App.Views;
 
@@ -141,6 +142,9 @@ public sealed partial class CollectionPage : Page
         loading = true;
         rows.Clear();
         all.Clear();
+        suggestionsReload = null;
+        SuggestionList.Children.Clear();
+        SuggestionsPanel.Visibility = Visibility.Collapsed;
         LoadingRing.IsActive = true;
         ErrorText.Visibility = Visibility.Collapsed;
         try
@@ -246,7 +250,108 @@ public sealed partial class CollectionPage : Page
         // 丸ごと取っているなら、最後まで読めたときだけ開いたときの曲に合わせる（ADR-0016 の 2）
         if (result.Value.Continuation is null) AppServices.Downloads.SyncCollection(request.Id, all.Select(r => r.Song).ToList());
         Done();
+        // 自分のプレイリストは、最後まで読めたら一番下におすすめの曲を出す
+        if (editable && result.Value.Continuation is null && result.Value.SuggestionsToken is { } suggestions) _ = LoadSuggestionsAsync(suggestions, token);
     }
+
+    private string? suggestionsReload;
+
+    private async Task LoadSuggestionsAsync(string continuation, CancellationToken token)
+    {
+        SuggestionsRefresh.IsEnabled = false;
+        ApiResult<PlaylistSuggestions?> result;
+        try { result = await AppServices.Music.PlaylistSuggestionsAsync(continuation, token); }
+        catch (OperationCanceledException) { return; }
+        if (token.IsCancellationRequested) return;
+        SuggestionsRefresh.IsEnabled = true;
+        // 読めない・候補が無いときは出さない（「更新」で読めなかったときは前の候補を残す）
+        if (!result.IsOk || result.Value is not { } found)
+        {
+            AppPaths.Log($"playlist suggestions ok={result.IsOk} songs=0");
+            if (suggestionsReload is null) SuggestionsPanel.Visibility = Visibility.Collapsed;
+            return;
+        }
+        AppPaths.Log($"playlist suggestions songs={found.Songs.Count} reload={found.ReloadToken is not null}");
+        suggestionsReload = found.ReloadToken;
+        SuggestionsRefresh.Visibility = Ui.Show(suggestionsReload is not null);
+        SuggestionList.Children.Clear();
+        foreach (var song in found.Songs.Where(s => all.All(r => r.Song.VideoId != s.VideoId))) SuggestionList.Children.Add(SuggestionRow(song));
+        SuggestionsPanel.Visibility = Ui.Show(SuggestionList.Children.Count > 0);
+    }
+
+    private void OnRefreshSuggestions(object sender, RoutedEventArgs e)
+    {
+        if (suggestionsReload is { } reload) _ = LoadSuggestionsAsync(reload, cancel?.Token ?? CancellationToken.None);
+    }
+
+    /// <summary>おすすめの曲の1行: ジャケット・曲名・アーティスト、右に「＋」。行を押すとその曲を流す。</summary>
+    private FrameworkElement SuggestionRow(Song song)
+    {
+        var grid = new Grid { Padding = new Thickness(12, 6, 12, 6), ColumnSpacing = 12, Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Transparent) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var cover = new Border { Width = 40, Height = 40, CornerRadius = new CornerRadius(4), Child = new Image { Source = Ui.Small(song.ThumbnailUrl), Stretch = Microsoft.UI.Xaml.Media.Stretch.UniformToFill } };
+        var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        text.Children.Add(new TextBlock { Text = song.Title, TextTrimming = TextTrimming.CharacterEllipsis });
+        text.Children.Add(new TextBlock { Text = song.Subtitle, TextTrimming = TextTrimming.CharacterEllipsis, Style = (Style)Application.Current.Resources["SubtleTextStyle"] });
+        Grid.SetColumn(text, 1);
+        var add = new Button
+        {
+            Style = (Style)Application.Current.Resources["IconButtonStyle"],
+            Content = new FontIcon { Glyph = "\uE710", FontSize = 14 },
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        var label = L.T("このプレイリストに追加", "Add to this playlist");
+        ToolTipService.SetToolTip(add, label);
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(add, label);
+        add.Click += async (_, _) =>
+        {
+            add.IsEnabled = false;
+            var playlist = new PlaylistSummary(request.Id, TitleText.Text, null, null, Editable: true);
+            // 候補はプレイリストに入っていない曲だけなので、重複は確かめない
+            var result = await SongMenu.AddAsync(playlist, song, knownEmpty: true);
+            if (result is AddToPlaylistResult.Added)
+            {
+                SuggestionList.Children.Remove(grid);
+                AddRow(new TrackRow(all.Count + 1, song) { Menu = MenuFor });
+                ApplyView();
+                DetailText.Text = $"{L.Songs(all.Count)}, {L.Length(all.Sum(r => r.Song.DurationSeconds ?? 0))}";
+                if (SuggestionList.Children.Count == 0 && suggestionsReload is { } reload) _ = LoadSuggestionsAsync(reload, cancel?.Token ?? CancellationToken.None);
+            }
+            else add.IsEnabled = true;
+        };
+        Grid.SetColumn(add, 2);
+        grid.Children.Add(cover);
+        grid.Children.Add(text);
+        grid.Children.Add(add);
+        grid.Tapped += (_, e) =>
+        {
+            if (e.OriginalSource is DependencyObject source && IsInside(source, add)) return;
+            Player.PlaySong(song);
+        };
+        return grid;
+    }
+
+    private static bool IsInside(DependencyObject source, DependencyObject target)
+    {
+        for (var node = source; node is not null; node = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetParent(node))
+            if (node == target) return true;
+        return false;
+    }
+
+    /// <summary>確かめ用: おすすめの曲の数。</summary>
+    public int DebugSuggestionCount => SuggestionsPanel.Visibility == Visibility.Visible ? SuggestionList.Children.Count : 0;
+
+    /// <summary>確かめ用: 1つ目の候補の「＋」を押したのと同じ。</summary>
+    public void DebugAddSuggestion()
+    {
+        if (SuggestionList.Children.FirstOrDefault() is Grid row && row.Children.OfType<Button>().FirstOrDefault() is { } add)
+            new Microsoft.UI.Xaml.Automation.Peers.ButtonAutomationPeer(add).Invoke();
+    }
+
+    /// <summary>確かめ用: 「更新」を押したのと同じ。</summary>
+    public void DebugRefreshSuggestions() => OnRefreshSuggestions(SuggestionsRefresh, new RoutedEventArgs());
 
     /// <summary>高く評価した曲のうち、そのアーティストのもの（ライブラリで覚えた一覧から絞る）。</summary>
     private async Task LoadLikedByArtistAsync(ArtistFilter artist, CancellationToken token)

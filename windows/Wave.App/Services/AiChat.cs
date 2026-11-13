@@ -387,7 +387,7 @@ public sealed class AiChat
                 var title = args["title"]?.ToString() ?? "";
                 if (title.Length == 0) return (null, "title is empty", null);
                 var (songs, _) = SongsOf(args);
-                var created = await music.CreatePlaylistAsync(title, token);
+                var created = await music.CreatePlaylistAsync(title, cancel: token);
                 if (!created.IsOk) return (null, "create failed", null);
                 var playlist = new PlaylistSummary(created.Value!, title, L.T("非公開", "Private"), null, Editable: true);
                 AppServices.Library.AddCreated(playlist);

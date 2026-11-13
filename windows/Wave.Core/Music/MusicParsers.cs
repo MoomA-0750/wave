@@ -326,8 +326,25 @@ public static partial class MusicParsers
         JsonNode? songArea = appended ?? (JsonNode?)shelf;
         var endConfirmed = continuation is null && songArea is not null && !ContainsKeyLike(songArea, "continuation");
         var sortable = root.FindAll("sortFilterSubMenuRenderer").Count > 0;
+        var suggestions = root.Path("contents", "twoColumnBrowseResultsRenderer", "secondaryContents", "sectionListRenderer", "continuations").Items()
+            .Select(c => c.Path("nextContinuationData", "continuation").Str()).FirstOrDefault(c => c is not null);
         return new PlaylistPage(title, rows.Select(r => r.Song!).ToList(), continuation, rows.Select(r => r.SetId).ToList(), editable, endConfirmed,
-            string.IsNullOrEmpty(subtitle) ? null : subtitle, thumbnail, sortable);
+            string.IsNullOrEmpty(subtitle) ? null : subtitle, thumbnail, sortable, suggestions);
+    }
+
+    /// <summary>
+    /// 自分のプレイリストのページの続き（sectionListContinuation の「候補」の musicShelfRenderer）か、「更新」の応答（musicShelfContinuation）から、
+    /// おすすめの曲と次の「更新」のトークン。曲が無ければ null。
+    /// </summary>
+    public static PlaylistSuggestions? PlaylistSuggestions(JsonNode root)
+    {
+        var shelf = root.Path("continuationContents", "musicShelfContinuation")
+            ?? root.Path("continuationContents", "sectionListContinuation", "contents").Items().Select(c => c.Path("musicShelfRenderer")).FirstOrDefault(c => c is not null);
+        var songs = shelf.Path("contents").Items().Select(i => i.Path("musicResponsiveListItemRenderer").Obj()).OfType<JsonObject>()
+            .Select(ResponsiveListItemSong).OfType<Song>().DistinctBy(s => s.VideoId).ToList();
+        if (songs.Count == 0) return null;
+        var reload = shelf.Path("continuations").Items().Select(c => c.Path("reloadContinuationData", "continuation").Str()).FirstOrDefault(c => c is not null);
+        return new PlaylistSuggestions(songs, reload);
     }
 
     private static bool ContainsKeyLike(JsonNode? root, string fragment) => root switch

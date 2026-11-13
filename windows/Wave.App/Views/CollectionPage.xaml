@@ -94,5 +94,19 @@
                 <TextBlock x:Name="NoMatchText" Visibility="Collapsed" Margin="12,24" Style="{StaticResource SubtleTextStyle}" Text="{x:Bind app:L.T('一致する曲はありません', 'No matching songs')}" />
             </StackPanel>
         </ListView.Header>
+        <ListView.Footer>
+            <!-- 自分のプレイリストの一番下の「おすすめの曲」（YouTube Music の候補。＋で足す・「更新」で別の候補。Spotify と同じ） -->
+            <StackPanel x:Name="SuggestionsPanel" Visibility="Collapsed" Margin="0,32,0,0" Spacing="4">
+                <Grid Padding="12,0">
+                    <StackPanel>
+                        <TextBlock Text="{x:Bind app:L.T('おすすめの曲', 'Recommended')}" Style="{StaticResource SubtitleTextBlockStyle}" />
+                        <TextBlock Text="{x:Bind app:L.T('このプレイリストの曲をもとにしたおすすめ', 'Based on this playlist')}" Style="{StaticResource SubtleTextStyle}" />
+                    </StackPanel>
+                    <Button x:Name="SuggestionsRefresh" HorizontalAlignment="Right" VerticalAlignment="Center" CornerRadius="16" Click="OnRefreshSuggestions"
+                            Content="{x:Bind app:L.T('更新', 'Refresh')}" />
+                </Grid>
+                <StackPanel x:Name="SuggestionList" Spacing="2" />
+            </StackPanel>
+        </ListView.Footer>
     </ListView>
 </Page>

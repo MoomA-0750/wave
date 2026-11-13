@@ -874,6 +874,7 @@ public sealed partial class MainWindow : Window
             ClearQueueButton.Visibility = Ui.Show(userEnd > Player.Index + 1);
         }
         QueueList.ItemsSource = entries;
+        SaveQueueButton.Visibility = Ui.Show(AppServices.Client.IsLoggedIn && !Player.IsRemote && QueueSave.Songs(Player.Queue).Count > 0);
         QueueEmpty.Visibility = Ui.Show(entries.Count == 0);
         QueueEmptyTitle.Text = queueHistory ? L.T("まだ流れた曲はありません", "Nothing played yet") : L.T("キューは空です", "Your queue is empty");
         QueueEmptyText.Text = queueHistory ? L.T("流れた曲は、ここに新しい順に並びます", "Songs you've played will show up here") : L.T("曲を再生すると、ここに次の曲が並びます", "Play something and upcoming songs will show up here");
@@ -893,6 +894,8 @@ public sealed partial class MainWindow : Window
         queueHistory = true;
         RenderQueue();
     }
+
+    private void OnSaveQueue(object sender, RoutedEventArgs e) => _ = Dialogs.SaveQueueAsync();
 
     private void OnClearQueue(object sender, RoutedEventArgs e)
     {

@@ -342,6 +342,12 @@
                             </StackPanel>
                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="4">
                                 <HyperlinkButton x:Name="ClearQueueButton" Visibility="Collapsed" Click="OnClearQueue" Content="{x:Bind app:L.T('キューを消去', 'Clear queue')}" />
+                                <!-- 良いラジオの流れを残す（全端末。聴いた曲から先の曲までを新しいプレイリストに） -->
+                                <Button x:Name="SaveQueueButton" Style="{StaticResource IconButtonStyle}" Visibility="Collapsed" Click="OnSaveQueue"
+                                        ToolTipService.ToolTip="{x:Bind app:L.T('キューをプレイリストとして保存', 'Save queue as playlist')}"
+                                        AutomationProperties.Name="{x:Bind app:L.T('キューをプレイリストとして保存', 'Save queue as playlist')}">
+                                    <FontIcon Glyph="&#xE74E;" FontSize="12" />
+                                </Button>
                                 <Button Style="{StaticResource IconButtonStyle}" Click="OnShowNowPlaying" ToolTipService.ToolTip="{x:Bind app:L.T('閉じる', 'Close')}">
                                     <FontIcon Glyph="&#xE711;" FontSize="12" />
                                 </Button>

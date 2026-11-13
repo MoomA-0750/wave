@@ -255,6 +255,10 @@ public sealed class MusicRepository(InnerTubeClient client, LiveClient? live = n
         return ApiResult<PlaylistPage>.Ok(page with { Songs = songs, SetVideoIds = setIds, Continuation = token });
     }
 
+    /// <summary>自分のプレイリストの「おすすめの曲」。token はページの SuggestionsToken か、前の候補の ReloadToken（「更新」）。無ければ Ok(null)。</summary>
+    public Task<ApiResult<PlaylistSuggestions?>> PlaylistSuggestionsAsync(string token, CancellationToken cancel = default) =>
+        LoggedInBrowseAsync<PlaylistSuggestions?>("", token, MusicParsers.PlaylistSuggestions, cancel);
+
     /// <summary>曲の評価と歌詞のタブ（next の最初の応答から取る）。</summary>
     public async Task<ApiResult<SongInfo>> SongInfoAsync(string videoId, CancellationToken cancel = default) =>
         (await client.PostAsync("next", new JsonObject { ["videoId"] = videoId, ["contentCheckOk"] = true, ["racyCheckOk"] = true }, cancel: cancel))
@@ -359,11 +363,13 @@ public sealed class MusicRepository(InnerTubeClient client, LiveClient? live = n
         return result.IsOk && MusicParsers.EditPlaylistStatus(result.Value!) == "STATUS_SUCCEEDED";
     }
 
-    /// <summary>非公開のプレイリストを作る。作った playlistId を返す。</summary>
-    public async Task<ApiResult<string>> CreatePlaylistAsync(string title, CancellationToken cancel = default)
+    /// <summary>非公開のプレイリストを作る。videoIds を渡すと、その曲を入れて作る（YouTube は同じ曲を2つ入れない）。作った playlistId を返す。</summary>
+    public async Task<ApiResult<string>> CreatePlaylistAsync(string title, IReadOnlyList<string>? videoIds = null, CancellationToken cancel = default)
     {
         if (!client.IsLoggedIn) return ApiResult<string>.Failed(FailureKind.NotLoggedIn);
-        var result = await client.PostAsync("playlist/create", new JsonObject { ["title"] = title, ["privacyStatus"] = "PRIVATE" }, cancel: cancel);
+        var body = new JsonObject { ["title"] = title, ["privacyStatus"] = "PRIVATE" };
+        if (videoIds is { Count: > 0 }) body["videoIds"] = new JsonArray(videoIds.Select(v => (JsonNode?)JsonValue.Create(v)).ToArray());
+        var result = await client.PostAsync("playlist/create", body, cancel: cancel);
         if (!result.IsOk) return ApiResult<string>.Failed(result.Failure!.Value, result.Status);
         return MusicParsers.CreatedPlaylistId(result.Value!) is { } id ? ApiResult<string>.Ok(id) : ApiResult<string>.Failed(FailureKind.Parse);
     }

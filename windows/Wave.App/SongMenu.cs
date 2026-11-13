@@ -276,4 +276,62 @@ public static class Dialogs
         if (song is not null) await SongMenu.AddAsync(playlist, song, knownEmpty: true);
         else AppServices.Player.Message = L.T($"「{title}」を作成しました", $"Created {title}");
     }
+
+    /// <summary>
+    /// キューをプレイリストとして保存する（良いラジオの流れを残す）。キューの全部（聴いた曲・今の曲・先の曲）から、エピソードとライブと重複を除いて、
+    /// 名前を聞いてから曲ごと非公開のプレイリストを作る。
+    /// </summary>
+    public static async Task SaveQueueAsync()
+    {
+        if (App.Window is null) return;
+        var player = AppServices.Player;
+        var songs = QueueSave.Songs(player.Queue);
+        if (songs.Count == 0 || player.IsRemote) return;
+        var box = new TextBox { PlaceholderText = L.T("プレイリスト名", "Playlist name"), Text = QueueSave.DefaultTitle(songs, L.Ja) };
+        var dialog = new ContentDialog
+        {
+            Title = L.T("キューをプレイリストとして保存", "Save queue as playlist"),
+            Content = new StackPanel
+            {
+                Spacing = 8,
+                Children =
+                {
+                    box,
+                    new TextBlock { Text = L.T($"聴いた曲から先の曲まで、{songs.Count} 曲を入れます。", $"{songs.Count} songs, from what you've played to what's coming up."), TextWrapping = TextWrapping.Wrap, Opacity = 0.7 },
+                },
+            },
+            PrimaryButtonText = L.T("保存", "Save"),
+            CloseButtonText = L.T("キャンセル", "Cancel"),
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = App.Window.Content.XamlRoot,
+        };
+        box.SelectAll();
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary || string.IsNullOrWhiteSpace(box.Text)) return;
+        await SaveQueueAsync(box.Text.Trim(), songs);
+    }
+
+    /// <summary>名前を決めたあと: 曲ごと非公開のプレイリストを作り、入った曲数を確かめて知らせる。</summary>
+    public static async Task SaveQueueAsync(string title, IReadOnlyList<Song> songs)
+    {
+        var player = AppServices.Player;
+        var created = await AppServices.Music.CreatePlaylistAsync(title, songs.Select(s => s.VideoId).ToList());
+        if (!created.IsOk)
+        {
+            player.Message = L.T("プレイリストを作成できませんでした", "Couldn't create the playlist");
+            return;
+        }
+        AppServices.Library.AddCreated(new PlaylistSummary(created.Value!, title, L.T("非公開", "Private"), null, Editable: true));
+        // 入った曲数を読み直して確かめる（作ってすぐは空のことがあるので少し待つ）
+        var saved = -1;
+        for (var i = 0; i < 3 && saved < songs.Count; i++)
+        {
+            await Task.Delay(1500);
+            var page = await AppServices.Music.FullPlaylistAsync(created.Value!);
+            if (page.IsOk) saved = page.Value!.Songs.Count;
+        }
+        AppPaths.Log($"queue saved id={created.Value} songs={songs.Count} read={saved}");
+        player.Message = saved < 0 || saved >= songs.Count
+            ? L.T($"「{title}」に {songs.Count} 曲を保存しました", $"Saved {songs.Count} songs to {title}")
+            : L.T($"{songs.Count} 曲中 {saved} 曲を保存しました", $"Saved {saved} of {songs.Count} songs");
+    }
 }

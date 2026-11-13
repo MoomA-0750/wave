@@ -388,6 +388,23 @@ public static class DebugCommands
                 await AppServices.Library.RefreshAsync();
                 break;
             }
+            case "queue-save-dialog":
+                // 「キューをプレイリストとして保存」のボタンを押したのと同じ（名前の画面を出す）
+                _ = Dialogs.SaveQueueAsync();
+                break;
+            case "queue-save":
+                // キューの保存の画面で「保存」を押したのと同じ（名前は arg）
+                await Dialogs.SaveQueueAsync(arg, QueueSave.Songs(player.Queue));
+                break;
+            case "suggestions":
+                if (Nav.Frame.Content is Views.CollectionPage suggestPage) AppPaths.Log($"debug suggestions count={suggestPage.DebugSuggestionCount}");
+                break;
+            case "suggestion-add":
+                if (Nav.Frame.Content is Views.CollectionPage addPage) addPage.DebugAddSuggestion();
+                break;
+            case "suggestions-refresh":
+                if (Nav.Frame.Content is Views.CollectionPage refreshPage) refreshPage.DebugRefreshSuggestions();
+                break;
             case "playlist-create":
             {
                 var r = await AppServices.Music.CreatePlaylistAsync(arg);

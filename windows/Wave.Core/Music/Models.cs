@@ -43,7 +43,12 @@ public sealed record PlaylistPage(
     string? Subtitle = null,
     string? ThumbnailUrl = null,
     /// <summary>サーバーで並べ替えられる（自分のプレイリストなど。並べ替えのメニューがある）。</summary>
-    bool Sortable = false);
+    bool Sortable = false,
+    /// <summary>ページの下の続き（自分のプレイリストでは「候補」の棚が来る）。最初のページだけにある。</summary>
+    string? SuggestionsToken = null);
+
+/// <summary>自分のプレイリストの下に出す「おすすめの曲」（YouTube Music の「候補」の棚）。ReloadToken で別の候補に替える。</summary>
+public sealed record PlaylistSuggestions(IReadOnlyList<Song> Songs, string? ReloadToken);
 
 public sealed record HistorySection(string? Title, IReadOnlyList<Song> Songs);
 
