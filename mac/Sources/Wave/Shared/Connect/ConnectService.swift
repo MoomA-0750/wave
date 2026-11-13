@@ -390,7 +390,7 @@ final class ConnectService {
     func confirmOnB() {
         guard let worker, let established = pendingOnB else { return }
         guard let ext = established.peerExtension else {
-            setPairing(.failed(L.t("相手のアプリが古く、加われません", "The other device’s app is too old")))
+            setPairing(.failed(L.t("相手のアプリが古く、加われません", "The other device's app is too old")))
             return
         }
         pendingOnB = nil
@@ -407,7 +407,7 @@ final class ConnectService {
             } catch where cancel.isCancelled {
             } catch {
                 AppPaths.log("pairing-v2 error type=\(String(describing: type(of: error)))")
-                self.fail(L.t("連携できませんでした", "Couldn’t connect the device"))
+                self.fail(L.t("連携できませんでした", "Couldn't connect the device"))
             }
         }
     }
@@ -420,7 +420,7 @@ final class ConnectService {
     }
 
     private func runOffer(_ worker: ConnectWorker, _ entered: AsyncChannel<String>, _ cancel: CancelSource) async throws {
-        setPairing(.working(L.t("中継につないでいます…", "Connecting to the relay…")))
+        setPairing(.working(L.t("中継に接続しています…", "Connecting to the relay…")))
         let relay = worker.relay!
         relay.acquire()
         defer { relay.release() }
@@ -430,18 +430,18 @@ final class ConnectService {
             tries += 1
         }
         if relay.status != .connected {
-            fail(L.t("中継につながりませんでした（Tailscale につながっているか確かめてください）", "Couldn’t reach the relay (check that Tailscale is connected)"))
+            fail(L.t("中継につながりませんでした（Tailscale につながっているか確かめてください）", "Couldn't reach the relay (check that Tailscale is connected)"))
             return
         }
         let joinInfo = try await worker.onEngine { worker.client?.currentJoinInfo().map { ConnectJSON.encode($0) } }
         guard let joinInfo else {
-            fail(L.t("この Mac はまだ連携していません", "This Mac isn’t set up yet"))
+            fail(L.t("この Mac はまだ連携していません", "This Mac isn't set up yet"))
             return
         }
         let verified = try await worker.music.verifiedAccount()
         try cancel.throwIfCancelled()
         guard let account = verified else {
-            fail(L.t("アカウントを確かめられませんでした", "Couldn’t verify your account"))
+            fail(L.t("アカウントを確かめられませんでした", "Couldn't verify your account"))
             return
         }
         let responder = Pairing.Responder(identity: worker.keys, deviceName: ConnectWorker.deviceName, accountId: account.id, nowMs: { worker.clockMs },
@@ -449,7 +449,7 @@ final class ConnectService {
         let tokenHash = B64.encode(responder.tokenHash)
         while worker.pairHellos.tryRead() != nil {}
         if !worker.send(.pairingOpen(.init(tokenHash: tokenHash))) {
-            fail(L.t("中継に送れませんでした", "Couldn’t send to the relay"))
+            fail(L.t("中継に送れませんでした", "Couldn't send to the relay"))
             return
         }
         setPairing(.showingOffer(Pairing.encodeOffer(responder.offer)))
@@ -469,22 +469,22 @@ final class ConnectService {
         } catch is CancellationError where !cancel.isCancelled {
             fail(relay.status != .connected
                 ? L.t("中継との接続が切れました", "Lost the connection to the relay")
-                : L.t("時間内に読み取られませんでした", "The code wasn’t used in time"))
+                : L.t("時間内に読み取られませんでした", "The code wasn't used in time"))
             return
         }
         guard let hello, let decoded = Pairing.decodeHello(hello.hello) else {
-            fail(L.t("相手から届いた内容を読めませんでした", "Couldn’t read the reply from the other device"))
+            fail(L.t("相手から届いた内容を読めませんでした", "Couldn't read the reply from the other device"))
             return
         }
         let confirm = try responder.onHello(decoded)
         guard case .success(let confirmValue) = confirm else {
             fail(confirm.failure == .accountMismatch
-                ? L.t("相手は別のアカウントでログインしています", "The other device is logged in to a different account")
-                : L.t("相手を確かめられませんでした", "Couldn’t verify the other device"))
+                ? L.t("相手は別のアカウントでログインしています", "The other device is signed in to a different account")
+                : L.t("相手を確かめられませんでした", "Couldn't verify the other device"))
             return
         }
         if !worker.send(.pairConfirm(.init(tokenHash: tokenHash, confirm: Pairing.toJSON(confirmValue)))) {
-            fail(L.t("中継に送れませんでした", "Couldn’t send to the relay"))
+            fail(L.t("中継に送れませんでした", "Couldn't send to the relay"))
             return
         }
         setPairing(.enterCode(nil))
@@ -494,21 +494,21 @@ final class ConnectService {
                 let result = responder.onCodeEntered(code)
                 guard case .success(let established) = result else {
                     if result.failure == .wrongCode {
-                        setPairing(.enterCode(L.t("数字が違います", "That code doesn’t match")))
+                        setPairing(.enterCode(L.t("数字が違います", "That code doesn't match")))
                         continue
                     }
-                    fail(L.t("連携できませんでした", "Couldn’t connect the device"))
+                    fail(L.t("連携できませんでした", "Couldn't connect the device"))
                     return
                 }
                 if worker.tube.generation != account.generation {
-                    fail(L.t("途中でログインが変わりました", "Your login changed during setup"))
+                    fail(L.t("途中でログインが変わりました", "Your sign-in changed during setup"))
                     return
                 }
                 setPairing(.working(L.t("端末を加えています…", "Adding the device…")))
                 var added = false
                 if let memberKeys = established.peerExtension { added = try await addMember(worker, memberKeys, established.peerPublicKey) }
                 if !added {
-                    fail(L.t("端末を加えられませんでした", "Couldn’t add the device"))
+                    fail(L.t("端末を加えられませんでした", "Couldn't add the device"))
                     return
                 }
                 let peerId = WaveCrypto.deviceId(established.peerPublicKey)
@@ -547,16 +547,16 @@ final class ConnectService {
 
     private func runAccept(_ worker: ConnectWorker, _ offerText: String, _ cancel: CancelSource) async throws {
         guard let offer = Pairing.decodeOffer(offerText) else {
-            fail(L.t("wave の連携の文字列ではありません", "That isn’t a wave pairing code"))
+            fail(L.t("wave の連携の文字列ではありません", "That isn't a wave pairing code"))
             return
         }
         let verified = try await worker.music.verifiedAccount()
         try cancel.throwIfCancelled()
         guard let account = verified else {
-            fail(L.t("アカウントを確かめられませんでした（ログインしてください）", "Couldn’t verify your account (log in first)"))
+            fail(L.t("アカウントを確かめられませんでした（ログインしてください）", "Couldn't verify your account (sign in first)"))
             return
         }
-        setPairing(.working(L.t("相手に送っています…", "Sending to the other device…")))
+        setPairing(.working(L.t("相手の端末に送っています…", "Sending to the other device…")))
         let initiator = try Pairing.Initiator(offer: offer, identity: worker.keys, deviceName: ConnectWorker.deviceName, accountId: account.id,
                                               helloExtension: ConnectJSON.encode(try worker.keys.memberKeys(role: .player)))
         let hello = try initiator.hello()
@@ -564,23 +564,23 @@ final class ConnectService {
         try cancel.throwIfCancelled()
         guard let reply, case .pairConfirmed(let confirmed)? = RelayV2.decode(reply) else {
             fail(reply == nil
-                ? L.t("中継につながりませんでした（Tailscale につながっているか確かめてください）", "Couldn’t reach the relay (check that Tailscale is connected)")
-                : L.t("相手が待っていません。相手でもう一度「端末を追加」を押してください", "The other device isn’t waiting. Tap “Add device” on it again"))
+                ? L.t("中継につながりませんでした（Tailscale につながっているか確かめてください）", "Couldn't reach the relay (check that Tailscale is connected)")
+                : L.t("相手が待っていません。相手でもう一度「端末を追加」を押してください", "The other device isn't waiting. Tap “Add device” on it again"))
             return
         }
         guard let confirm = Pairing.decodeConfirm(confirmed.confirm) else {
-            fail(L.t("相手から届いた内容を読めませんでした", "Couldn’t read the reply from the other device"))
+            fail(L.t("相手から届いた内容を読めませんでした", "Couldn't read the reply from the other device"))
             return
         }
         let result = initiator.onConfirm(confirm)
         guard case .success(let value) = result else {
             fail(result.failure == .accountMismatch
-                ? L.t("相手は別のアカウントでログインしています", "The other device is logged in to a different account")
-                : L.t("相手を確かめられませんでした", "Couldn’t verify the other device"))
+                ? L.t("相手は別のアカウントでログインしています", "The other device is signed in to a different account")
+                : L.t("相手を確かめられませんでした", "Couldn't verify the other device"))
             return
         }
         if worker.tube.generation != account.generation {
-            fail(L.t("途中でログインが変わりました", "Your login changed during setup"))
+            fail(L.t("途中でログインが変わりました", "Your sign-in changed during setup"))
             return
         }
         pendingOnB = value.pair
@@ -589,7 +589,7 @@ final class ConnectService {
 
     private func runJoinOnB(_ worker: ConnectWorker, _ established: Pairing.Established, _ ext: String, _ cancel: CancelSource) async throws {
         guard let info = ConnectJSON.decode(ConnectClient.JoinInfo.self, from: ext) else {
-            fail(L.t("相手から届いた内容を読めませんでした", "Couldn’t read the reply from the other device"))
+            fail(L.t("相手から届いた内容を読めませんでした", "Couldn't read the reply from the other device"))
             return
         }
         let inviter = WaveCrypto.deviceId(established.peerPublicKey)
@@ -599,7 +599,7 @@ final class ConnectService {
             return true
         }
         if !started {
-            fail(L.t("この Mac は今は加われません", "This Mac can’t join right now"))
+            fail(L.t("この Mac は今は加われません", "This Mac can't join right now"))
             return
         }
         setPairing(.working(L.t("相手が加えるのを待っています…", "Waiting for the other device to add this Mac…")))
@@ -634,7 +634,7 @@ final class ConnectService {
             AppPaths.log("pairing-v2 established role=B")
             setPairing(.done(established.peerDeviceName))
         } else {
-            fail(outcome == nil ? L.t("加われませんでした（時間切れ）", "Couldn’t join (timed out)") : L.t("端末の一覧を確かめられませんでした", "Couldn’t verify the device list"))
+            fail(outcome == nil ? L.t("加われませんでした（時間切れ）", "Couldn't join (timed out)") : L.t("端末の一覧を確かめられませんでした", "Couldn't verify the device list"))
         }
     }
 }
@@ -1151,27 +1151,27 @@ final class ConnectWorker: ConnectClientEffects, @unchecked Sendable {
         let text: String?
         switch e {
         case .stopped(let by):
-            text = L.t("\(labelOf(by))で再生を始めたので、ここでは止めました", "Paused here because \(labelOf(by)) started playing")
+            text = L.t("\(labelOf(by)) で再生を始めたので、ここでは止めました", "Paused here because \(labelOf(by)) started playing")
         case .transferCompleted(let from):
-            text = L.t("\(labelOf(from))から引き継ぎました", "Took over from \(labelOf(from))")
+            text = L.t("\(labelOf(from)) から引き継ぎました", "Took over from \(labelOf(from))")
         case .transferFailed:
-            text = L.t("引き継げませんでした", "Couldn’t take over playback")
+            text = L.t("引き継げませんでした", "Couldn't take over playback")
         case .storeReset:
-            text = L.t("中継の状態が作り直されました。「端末の連携」で確かめてください", "The relay’s state was reset. Check Devices")
+            text = L.t("中継の状態が作り直されました。「端末の連携」で確かめてください", "The relay's state was reset. Check Devices")
         case .chainForked, .chainRolledBack, .chainInvalid:
-            text = L.t("中継から届いた端末の一覧を確かめられませんでした", "Couldn’t verify the device list from the relay")
+            text = L.t("中継から届いた端末の一覧を確かめられませんでした", "Couldn't verify the device list from the relay")
         case .stateEquivocation:
             text = L.t("中継から食い違った状態が届きました", "The relay sent conflicting state")
         case .serverError(let code) where code == ConnectService.remotePlaying:
-            text = L.t("ほかの端末で再生中なので、ここでは鳴らしませんでした", "Another device is playing, so playback didn’t start here")
+            text = L.t("ほかの端末で再生中なので、ここでは鳴らしませんでした", "Another device is playing, so playback didn't start here")
         case .serverError(let code) where code == ConnectService.relayUnreachable:
-            text = L.t("中継につながらず、ほかの端末の再生を確かめられませんでした", "Couldn’t reach the relay to check your other devices")
+            text = L.t("中継につながらず、ほかの端末の再生を確かめられませんでした", "Couldn't reach the relay to check your other devices")
         case .serverError(let code) where code == ConnectService.notMemberPlay:
-            text = L.t("中継がこの Mac を連携した端末として受け付けませんでした", "The relay didn’t accept this Mac as one of your devices")
+            text = L.t("中継がこの Mac を連携した端末として受け付けませんでした", "The relay didn't accept this Mac as one of your devices")
         case .serverError(let code) where code == ConnectService.accountUnverifiedPlay:
-            text = L.t("アカウントを確かめられませんでした", "Couldn’t verify your account")
+            text = L.t("アカウントを確かめられませんでした", "Couldn't verify your account")
         case .serverError(let code) where code == ConnectService.householdCreateUnsent:
-            text = L.t("中継に送れませんでした（この Mac では新しく始められない設定かもしれません）", "Couldn’t reach the relay (this Mac may not be allowed to start a new group)")
+            text = L.t("中継に送れませんでした（この Mac では新しく始められない設定かもしれません）", "Couldn't reach the relay (this Mac may not be allowed to start a new group)")
         default:
             text = nil
         }

@@ -177,7 +177,7 @@ struct QueueView: View {
                 rows(player, Array(userEnd..<count))
             } header: {
                 HStack {
-                    Text(L.t("次に流れる曲", "Next up"))
+                    Text(L.t("次に流れる曲", "Up next"))
                     Spacer()
                     // 元の流れの曲をまとめて外し、流れも止める（自分で足した曲は残す。ほかの端末で鳴っている間は、その端末へ送る）
                     Button(L.t("消去", "Clear")) { player.clearFlow() }

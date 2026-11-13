@@ -22,7 +22,7 @@ struct DownloadsView: View {
                 Toggle(isOn: Binding(get: { downloads.settings.smartDownloads }, set: { downloads.setSmart($0) })) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(L.t("スマートダウンロード", "Smart downloads"))
-                        Text(L.t("いつも聴いている曲・好きそうな曲・おすすめから、毎日選び直します", "Picks from your favorites, something new and recommendations, refreshed daily"))
+                        Text(L.t("いつも聴いている曲・好きそうな曲・おすすめから、毎日選び直します", "Picks from songs you play often, songs you might like and recommendations, refreshed daily"))
                             .font(.footnote).foregroundStyle(.secondary)
                     }
                 }

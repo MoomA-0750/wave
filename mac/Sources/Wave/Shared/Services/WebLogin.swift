@@ -89,9 +89,9 @@ enum WebLogin {
             Credentials.fromLogin(rawCookie: $0, visitorData: visitor, rawDataSyncId: dataSync, nowEpochMs: Int64(Date().timeIntervalSince1970 * 1000))
         }
         AppPaths.log("login landed sapisid=\(hasSapisid(cookie)) visitor=\(visitor != nil) dataSync=\(dataSync != nil) ok=\(credentials != nil)")
-        guard let credentials else { return .failed(L.t("ログイン情報を取得できませんでした", "Couldn't get your login details")) }
-        guard AppServices.account.logIn(credentials) else { return .failed(L.t("ログイン情報を保存できませんでした", "Couldn't save your login details")) }
-        AppServices.toast.show(L.t("ログインしました", "Logged in"))
+        guard let credentials else { return .failed(L.t("ログイン情報を取得できませんでした", "Couldn't get your sign-in details")) }
+        guard AppServices.account.logIn(credentials) else { return .failed(L.t("ログイン情報を保存できませんでした", "Couldn't save your sign-in details")) }
+        AppServices.toast.show(L.t("ログインしました", "Signed in"))
         return .loggedIn
     }
 

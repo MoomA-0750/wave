@@ -22,7 +22,7 @@ struct WaveApp: App {
             CommandGroup(replacing: .newItem) {}
             CommandMenu(L.t("再生", "Playback")) {
                 // スペース・⌘←/→ は主画面で扱う（文字の入力中は除く）。ここはメニューから選ぶ分
-                Button(L.t("再生/一時停止", "Play/Pause")) { AppServices.player.togglePlay() }
+                Button(L.t("再生・一時停止", "Play/Pause")) { AppServices.player.togglePlay() }
                 Button(L.t("次へ", "Next")) { AppServices.player.next() }
                 Button(L.t("前へ", "Previous")) { AppServices.player.previous() }
                 Divider()

@@ -251,11 +251,11 @@ struct SongView: View {
             Section {
                 // 並びは Android の曲のメニューと同じ
                 if AppServices.client.isLoggedIn {
-                    Button(L.t("プレイリストに追加", "Add to playlist"), systemImage: "plus.circle") { Dialogs.shared.addToPlaylist(song) }
+                    Button(L.t("プレイリストに保存", "Save to playlist"), systemImage: "plus.circle") { Dialogs.shared.addToPlaylist(song) }
                 }
                 if AppServices.client.isLoggedIn && !Feed.isExternal(song.videoId) {
                     let liked = player.isLiked(song)
-                    Button(liked ? L.t("高く評価した曲から削除", "Remove from Liked Songs") : L.t("高く評価した曲に追加", "Add to Liked Songs"),
+                    Button(liked ? L.t("高く評価した曲から削除", "Remove from liked music") : L.t("高く評価した曲に追加", "Add to liked music"),
                            systemImage: liked ? "checkmark.circle.fill" : "plus.circle") { player.setLiked(song, !liked) }
                 }
                 Button(L.t("次に再生", "Play next"), systemImage: "text.line.first.and.arrowtriangle.forward") { player.playNext(song) }

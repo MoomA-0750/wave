@@ -441,7 +441,7 @@ struct SearchView: View {
                 Section {
                     ForEach(model.history) { entry in
                         HistoryRow(entry: entry, onRemove: { model.remove(entry) }) { openHistory(entry) }
-                            .swipeActions { Button(L.t("削除", "Delete"), systemImage: "trash", role: .destructive) { model.remove(entry) } }
+                            .swipeActions { Button(L.t("消去", "Clear"), systemImage: "trash", role: .destructive) { model.remove(entry) } }
                     }
                 } header: {
                     HStack {
@@ -461,7 +461,7 @@ struct SearchView: View {
                 }
             }
             ForEach(Array(model.moods.enumerated()), id: \.offset) { sectionIndex, section in
-                Section(section.title.isEmpty ? L.t("すべてを見る", "Browse all") : section.title) {
+                Section(section.title.isEmpty ? L.t("すべてをブラウズ", "Browse all") : section.title) {
                     LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
                         ForEach(Array(section.categories.enumerated()), id: \.offset) { i, category in
                             MoodTile(category: category, color: Ui.tile(category.color, sectionIndex * 7 + i))

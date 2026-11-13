@@ -14,7 +14,7 @@ struct LibraryPane: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Image(systemName: "books.vertical").font(.system(size: 16))
-                Text(L.t("マイライブラリ", "Your Library")).font(.body.weight(.semibold))
+                Text(L.t("ライブラリ", "Library")).font(.body.weight(.semibold))
                 Spacer()
                 // ログインしているときだけ出す
                 if account.isLoggedIn {
@@ -36,7 +36,7 @@ struct LibraryPane: View {
             }
             .padding(.vertical, 4)
             HStack(spacing: 4) {
-                TextField(L.t("マイライブラリを検索", "Search in Your Library"), text: $model.libraryFilter).textFieldStyle(.roundedBorder)
+                TextField(L.t("ライブラリを検索", "Search library"), text: $model.libraryFilter).textFieldStyle(.roundedBorder)
                 Menu {
                     Picker(selection: Binding(get: { settings.librarySort }, set: {
                         settings.librarySort = $0
@@ -67,9 +67,9 @@ struct LibraryPane: View {
                 if !account.isLoggedIn {
                     VStack(alignment: .leading, spacing: 12) {
                         Text(L.t("ログインすると、YouTube Music のプレイリスト・アーティスト・アルバムがここに並びます。",
-                                 "Log in to see your YouTube Music playlists, artists and albums here."))
+                                 "Sign in to see your YouTube Music playlists, artists and albums here."))
                             .fixedSize(horizontal: false, vertical: true)
-                        Button(L.t("ログイン", "Log in")) { LoginWindowController.show() }.buttonStyle(.borderedProminent)
+                        Button(L.t("ログイン", "Sign in")) { LoginWindowController.show() }.buttonStyle(.borderedProminent)
                     }
                     .padding(16)
                     .frame(maxWidth: .infinity, alignment: .leading)

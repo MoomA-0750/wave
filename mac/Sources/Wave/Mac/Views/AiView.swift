@@ -159,7 +159,7 @@ private struct AiHistoryList: View {
                             }
                             .buttonStyle(.plain)
                             Button { chat.delete(conversation.id) } label: { Image(systemName: "trash").font(.system(size: 11)) }
-                                .buttonStyle(IconButtonStyle()).help(L.t("会話を消す", "Delete chat"))
+                                .buttonStyle(IconButtonStyle()).help(L.t("会話を削除", "Delete chat"))
                         }
                     }
                 }

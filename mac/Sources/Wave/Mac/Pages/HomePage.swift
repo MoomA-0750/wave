@@ -36,8 +36,8 @@ struct HomePageView: View {
                 // 新作だけでも読めていれば、失敗は出さない（Android と同じ）
                 if home.failure != nil && home.newReleases.isEmpty {
                     VStack(spacing: 8) {
-                        Text(L.t("ホームを読み込めませんでした", "Couldn’t load Home"))
-                        Button(L.t("もう一度読み込む", "Try again")) { home.reload() }
+                        Text(L.t("ホームを読み込めませんでした", "Couldn't load Home"))
+                        Button(L.t("もう一度", "Retry")) { home.reload() }
                     }
                     .frame(maxWidth: .infinity)
                 }
@@ -123,7 +123,7 @@ struct HistoryPageView: View {
             let result = (try? await AppServices.music.history()) ?? .failed(.network)
             loading = false
             guard let page = result.value else {
-                error = result.failure == .notLoggedIn ? L.t("再生履歴を見るにはログインしてください", "Log in to see your listening history")
+                error = result.failure == .notLoggedIn ? L.t("再生履歴を見るにはログインしてください", "Sign in to see your listening history")
                     : L.t("再生履歴を読み込めませんでした", "Couldn't load your listening history")
                 return
             }

@@ -20,7 +20,7 @@ struct DevicesPageView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Text(L.t("端末の連携", "Devices")).font(.system(size: 48, weight: .bold))
                 Text(L.t("同じアカウントのスマホと Mac のあいだで、再生を引き継げます。端末どうしの通信は暗号化され、中継のサーバーは中身を読めません。",
-                         "Move playback between your phone and Mac on the same account. Devices encrypt everything they share, so the relay server can’t read it."))
+                         "Move playback between your phone and Mac on the same account. Devices encrypt everything they share, so the relay server can't read it."))
                     .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true).padding(.bottom, 16)
 
                 statusBar(info)
@@ -68,12 +68,12 @@ struct DevicesPageView: View {
             Button(L.t("キャンセル", "Cancel"), role: .cancel) {}
         } message: { member in
             Text(L.t("「\(member.label)」は、もう再生を引き継げなくなります。もう一度加えるには、QR と6桁の手順が要ります。",
-                     "“\(member.label)” won’t be able to move playback anymore. To add it again, you’ll need the QR code and 6-digit steps."))
+                     "“\(member.label)” won't be able to move playback anymore. To add it again, you'll need the QR code and 6-digit steps."))
         }
         .confirmationDialog(DevicesText.grantTitle, isPresented: Binding(get: { granting != nil }, set: { if !$0 { granting = nil } }),
                             presenting: granting) { member in
-            Button(L.t("渡す", "Share")) { DevicesText.grantLogin(member) }
-            Button(L.t("やめる", "Cancel"), role: .cancel) {}
+            Button(L.t("渡す", "Give")) { DevicesText.grantLogin(member) }
+            Button(L.t("キャンセル", "Cancel"), role: .cancel) {}
         } message: { member in
             Text(DevicesText.grantMessage(member))
         }
@@ -86,12 +86,12 @@ struct DevicesPageView: View {
     @ViewBuilder
     private func statusBar(_ info: ConnectInfo) -> some View {
         if !info.configured {
-            banner(.informational, L.t("中継の場所が設定されていません", "The relay isn’t configured"),
-                   devices.unreadable ? L.t("この Mac の連携の鍵を読めませんでした", "Couldn’t read this Mac’s device keys")
+            banner(.informational, L.t("中継の場所が設定されていません", "The relay isn't configured"),
+                   devices.unreadable ? L.t("この Mac の連携の鍵を読めませんでした", "Couldn't read this Mac's device keys")
                        : L.t("設定ファイルに中継の場所を書くと使えます", "Add the relay address to the settings file to use this"))
         } else if info.unreadable {
             // Android の「リセット」と同じ: 読めない保存を消して、加わり直せるようにする
-            banner(.error, L.t("連携の保存を読めません", "Couldn’t read the saved device group"),
+            banner(.error, L.t("連携の保存を読めません", "Couldn't read the saved device group"),
                    L.t("リセットすると、この Mac はもう一度ほかの端末から加わり直します。", "Reset it to join your devices again from another device."),
                    L.t("リセット", "Reset"), devices.forgetHousehold)
         } else if info.inHousehold && info.relay == .notMember {
@@ -99,7 +99,7 @@ struct DevicesPageView: View {
                    L.t("ほかの端末から外された可能性があります。", "It may have been removed by another device."),
                    L.t("この Mac の連携の記録を消す", "Forget the group on this Mac"), devices.forgetHousehold)
         } else if info.storeResetPending {
-            banner(.warning, L.t("中継の状態が作り直されました", "The relay’s state was reset"), nil, L.t("この状態から始める", "Start from this state"),
+            banner(.warning, L.t("中継の状態が作り直されました", "The relay's state was reset"), nil, L.t("この状態から始める", "Start from this state"),
                    devices.acceptStoreReset)
         }
     }
@@ -130,7 +130,7 @@ struct DevicesPageView: View {
         HStack(spacing: 16) {
             Cover(url: Ui.small(remote.thumbnailUrl), size: 64)
             VStack(alignment: .leading, spacing: 2) {
-                Text(remote.playing ? L.t("\(remote.deviceLabel)で再生中", "Playing on \(remote.deviceLabel)") : L.t("\(remote.deviceLabel)で一時停止中", "Paused on \(remote.deviceLabel)"))
+                Text(remote.playing ? L.t("\(remote.deviceLabel) で再生中", "Playing on \(remote.deviceLabel)") : L.t("\(remote.deviceLabel) で一時停止中", "Paused on \(remote.deviceLabel)"))
                     .font(.caption).foregroundStyle(Color.accentColor)
                 Text(remote.title ?? L.t("曲", "Song")).font(.body.weight(.semibold)).lineLimit(1)
                 Text("\(remote.artist ?? "") · \(Ui.time(Double(remote.positionMs) / 1000))").foregroundStyle(.secondary).lineLimit(1)
@@ -149,7 +149,7 @@ struct DevicesPageView: View {
             Text(L.t("はじめる", "Get started")).font(.body.weight(.semibold)).padding(.top, 8).padding(.bottom, 4)
             VStack(alignment: .leading, spacing: 12) {
                 Text(L.t("連携済みのスマホの wave で「端末の連携」→「端末を追加」を押し、「文字で共有」で送った文字列をここに貼り付けてください。",
-                         "On a phone that’s already set up, open Devices in wave, tap “Add device”, then “Share as text”, and paste the text here."))
+                         "On a phone that's already set up, open Devices in wave, tap “Add device”, then “Share as text”, and paste the text here."))
                     .fixedSize(horizontal: false, vertical: true)
                 TextField("wave-pair:…", text: $offerText).textFieldStyle(.roundedBorder)
                 HStack(spacing: 8) {
@@ -204,7 +204,7 @@ struct DevicesPageView: View {
                 if pairing.kind == .done, AppServices.client.isLoggedIn, let id = pairing.grantDeviceId,
                    let member = devices.members.first(where: { $0.deviceId == id })
                 {
-                    Button(L.t("ログインを渡す", "Share sign-in")) { granting = member }.buttonStyle(.borderedProminent)
+                    Button(L.t("ログインを渡す", "Give login")) { granting = member }.buttonStyle(.borderedProminent)
                 }
                 Button(pairing.kind == .done || pairing.kind == .failed ? L.t("閉じる", "Close") : L.t("キャンセル", "Cancel")) { devices.cancelPairing() }
             }
@@ -264,7 +264,7 @@ struct DevicesPageView: View {
             Spacer()
             // ログインしているときだけ出す（渡すログインが無い）
             if member.isApi && AppServices.client.isLoggedIn {
-                Button(L.t("ログインを渡す", "Share sign-in")) { granting = member }
+                Button(L.t("ログインを渡す", "Give login")) { granting = member }
             }
             if !member.isSelf {
                 Button(L.t("外す", "Remove")) { removing = member }

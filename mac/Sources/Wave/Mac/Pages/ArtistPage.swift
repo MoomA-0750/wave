@@ -63,7 +63,7 @@ struct ArtistPageView: View {
                                 .padding(EdgeInsets(top: 0, leading: 24, bottom: 8, trailing: 24))
                         }
                     }
-                    if model.failed { Text(L.t("アーティストを読み込めませんでした", "Couldn’t load the artist")).padding(24) }
+                    if model.failed { Text(L.t("アーティストを読み込めませんでした", "Couldn't load the artist")).padding(24) }
                     if !rows.isEmpty {
                         Text(L.t("人気", "Popular")).subtitleStyle().padding(EdgeInsets(top: 8, leading: 24, bottom: 0, trailing: 24))
                         VStack(spacing: 0) {
@@ -85,7 +85,7 @@ struct ArtistPageView: View {
                             HStack(spacing: 16) {
                                 LikedCover(size: 56, round: true)
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text(L.t("高く評価した曲", "Liked Songs")).font(.body.weight(.semibold))
+                                    Text(L.t("高く評価した曲", "Liked music")).font(.body.weight(.semibold))
                                     Text(model.likedText(artist.name)).subtle()
                                 }
                             }
@@ -160,7 +160,7 @@ struct SongPageView: View {
                     .padding(EdgeInsets(top: 8, leading: 12, bottom: 16, trailing: 12))
                 // 並びは Android の曲の画面と同じ（曲のラジオは再生ボタンと同じなので出さない）
                 VStack(alignment: .leading, spacing: 2) {
-                    if AppServices.client.isLoggedIn { row(L.t("プレイリストに追加", "Add to playlist"), "plus") { Dialogs.shared.addToPlaylist(song) } }
+                    if AppServices.client.isLoggedIn { row(L.t("プレイリストに保存", "Save to playlist"), "plus") { Dialogs.shared.addToPlaylist(song) } }
                     row(L.t("次に再生", "Play next"), "text.line.first.and.arrowtriangle.forward") { AppServices.player.playNext(song) }
                     row(L.t("キューに追加", "Add to queue"), "text.badge.plus") { AppServices.player.addToQueue(song) }
                     if let albumId = song.album?.browseId { row(L.t("アルバムへ移動", "Go to album"), "square.stack") { AppServices.nav.album(albumId) } }

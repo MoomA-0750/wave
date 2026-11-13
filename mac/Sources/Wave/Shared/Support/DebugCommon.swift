@@ -169,7 +169,7 @@ enum DebugCommon {
             let limit = parts.count > 1 ? Int(parts[1]) : nil
             let songs = album ? (try? await AppServices.music.album(id))?.value?.songs : (try? await AppServices.music.fullPlaylist(id))?.value?.songs
             if let songs, !songs.isEmpty {
-                AppServices.downloads.downloadCollection(album ? .album : id == MusicRepository.likedSongs ? .liked : .playlist, id: id, title: id == MusicRepository.likedSongs ? L.t("高く評価した曲", "Liked Songs") : id, thumbnailUrl: nil,
+                AppServices.downloads.downloadCollection(album ? .album : id == MusicRepository.likedSongs ? .liked : .playlist, id: id, title: id == MusicRepository.likedSongs ? L.t("高く評価した曲", "Liked music") : id, thumbnailUrl: nil,
                                                          songs: Array(songs.prefix(limit ?? songs.count)))
             }
             AppPaths.log("debug \(command) songs=\(songs?.count ?? -1)")

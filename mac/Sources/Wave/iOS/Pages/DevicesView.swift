@@ -24,7 +24,7 @@ struct DevicesView: View {
         Form {
             Section {
                 Text(L.t("同じアカウントのスマホ・PC と、再生を引き継げます。端末どうしの通信は暗号化され、中継のサーバーは中身を読めません。",
-                         "Move playback between your phone and computers on the same account. Devices encrypt everything they share, so the relay server can’t read it."))
+                         "Move playback between your phone and computers on the same account. Devices encrypt everything they share, so the relay server can't read it."))
                     .font(.footnote).foregroundStyle(.secondary)
             }
             statusSection(info)
@@ -73,12 +73,12 @@ struct DevicesView: View {
             Button(L.t("キャンセル", "Cancel"), role: .cancel) {}
         } message: { member in
             Text(L.t("「\(member.label)」は、もう再生を引き継げなくなります。もう一度加えるには、QR と6桁の手順が要ります。",
-                     "“\(member.label)” won’t be able to move playback anymore. To add it again, you’ll need the QR code and 6-digit steps."))
+                     "“\(member.label)” won't be able to move playback anymore. To add it again, you'll need the QR code and 6-digit steps."))
         }
         .confirmationDialog(DevicesText.grantTitle, isPresented: Binding(get: { granting != nil }, set: { if !$0 { granting = nil } }),
                             titleVisibility: .visible, presenting: granting) { member in
-            Button(L.t("渡す", "Share")) { DevicesText.grantLogin(member) }
-            Button(L.t("やめる", "Cancel"), role: .cancel) {}
+            Button(L.t("渡す", "Give")) { DevicesText.grantLogin(member) }
+            Button(L.t("キャンセル", "Cancel"), role: .cancel) {}
         } message: { member in
             Text(DevicesText.grantMessage(member))
         }
@@ -86,7 +86,7 @@ struct DevicesView: View {
             Button(L.t("置き換える", "Replace")) { devices.transfer() }
             Button(L.t("キャンセル", "Cancel"), role: .cancel) {}
         } message: {
-            Text(L.t("この iPhone で鳴っている曲とキューは、ほかの端末の再生に置き換わります。", "What’s playing on this iPhone will be replaced with the other device’s playback."))
+            Text(L.t("この iPhone で鳴っている曲とキューは、ほかの端末の再生に置き換わります。", "What's playing on this iPhone will be replaced with the other device's playback."))
         }
     }
 
@@ -96,13 +96,13 @@ struct DevicesView: View {
     private func statusSection(_ info: ConnectInfo) -> some View {
         if !info.configured {
             DevicesBanner(symbol: "info.circle.fill", color: .accentColor,
-                          title: L.t("中継の場所が設定されていません", "The relay isn’t configured"),
-                          message: devices.unreadable ? L.t("この iPhone の連携の鍵を読めませんでした", "Couldn’t read this iPhone’s device keys")
+                          title: L.t("中継の場所が設定されていません", "The relay isn't configured"),
+                          message: devices.unreadable ? L.t("この iPhone の連携の鍵を読めませんでした", "Couldn't read this iPhone's device keys")
                               : L.t("設定ファイルに中継の場所を書くと使えます", "Add the relay address to the settings file to use this"))
         } else if info.unreadable {
             // Android の「リセット」と同じ: 読めない保存を消して、加わり直せるようにする
             DevicesBanner(symbol: "xmark.octagon.fill", color: .red,
-                          title: L.t("連携の保存を読めません", "Couldn’t read the saved device group"),
+                          title: L.t("連携の保存を読めません", "Couldn't read the saved device group"),
                           message: L.t("リセットすると、この iPhone はもう一度ほかの端末から加わり直します。", "Reset it to join your devices again from another device."),
                           action: L.t("リセット", "Reset"), onAction: devices.forgetHousehold)
         } else if info.inHousehold && info.relay == .notMember {
@@ -113,7 +113,7 @@ struct DevicesView: View {
                           action: L.t("この iPhone の連携の記録を消す", "Forget the group on this iPhone"), onAction: devices.forgetHousehold)
         } else if info.storeResetPending {
             DevicesBanner(symbol: "exclamationmark.triangle.fill", color: .yellow,
-                          title: L.t("中継の状態が作り直されました", "The relay’s state was reset"), message: nil,
+                          title: L.t("中継の状態が作り直されました", "The relay's state was reset"), message: nil,
                           action: L.t("この状態から始める", "Start from this state"), onAction: devices.acceptStoreReset)
         }
     }
@@ -125,14 +125,14 @@ struct DevicesView: View {
             HStack(spacing: 14) {
                 Cover(url: Ui.small(remote.thumbnailUrl), size: 56)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(remote.playing ? L.t("\(remote.deviceLabel)で再生中", "Playing on \(remote.deviceLabel)") : L.t("\(remote.deviceLabel)で一時停止中", "Paused on \(remote.deviceLabel)"))
+                    Text(remote.playing ? L.t("\(remote.deviceLabel) で再生中", "Playing on \(remote.deviceLabel)") : L.t("\(remote.deviceLabel) で一時停止中", "Paused on \(remote.deviceLabel)"))
                         .font(.caption).foregroundStyle(Color.accentColor)
                     Text(remote.title ?? L.t("曲", "Song")).font(.body.weight(.semibold)).lineLimit(1)
                     Text("\(remote.artist ?? "") · \(Ui.time(Double(remote.positionMs) / 1000))").subtle()
                 }
             }
             if !remote.accountMatches {
-                Text(L.t("別のアカウントで再生しているため、引き取れません", "It’s playing on a different account, so it can’t be moved here"))
+                Text(L.t("別のアカウントで再生しているため、引き取れません", "It's playing on a different account, so it can't be moved here"))
                     .font(.footnote).foregroundStyle(.secondary)
             } else if !info.isWriter {
                 Button {
@@ -143,7 +143,7 @@ struct DevicesView: View {
                 }
             }
         } header: {
-            Text(L.t("再生中の端末", "Now playing on"))
+            Text(L.t("再生中の端末", "Active device"))
         }
     }
 
@@ -152,7 +152,7 @@ struct DevicesView: View {
     private var joinSection: some View {
         Section {
             Text(L.t("連携済みの端末の wave で「端末の連携」→「端末を追加」を押し、出た QR を読むか、「文字で共有」で送った文字列をここに貼り付けてください。",
-                     "On a device that’s already set up, open Devices in wave and tap “Add device”. Scan the QR code, or share the text and paste it here."))
+                     "On a device that's already set up, open Devices in wave and tap “Add device”. Scan the QR code, or share the text and paste it here."))
                 .font(.footnote).foregroundStyle(.secondary)
             Button(L.t("QR を読んで加わる", "Scan QR code to join"), systemImage: "qrcode.viewfinder") { scanning = true }
             HStack {
@@ -234,13 +234,13 @@ struct DevicesView: View {
             }
             // 加えたのがログインをまだ持たない wave API なら、続けてログインを渡す
             if pairing.kind == .done, let id = pairing.grantDeviceId, let member = devices.members.first(where: { $0.deviceId == id }) {
-                Button(L.t("ログインを渡す", "Share sign-in")) { granting = member }
+                Button(L.t("ログインを渡す", "Give login")) { granting = member }
                     .disabled(!AppServices.client.isLoggedIn)
             }
             Button(pairing.kind == .done || pairing.kind == .failed ? L.t("閉じる", "Close") : L.t("キャンセル", "Cancel"),
                    role: pairing.kind == .done || pairing.kind == .failed ? nil : .cancel) { devices.cancelPairing() }
         } header: {
-            Text(L.t("端末を加える", "Add a device"))
+            Text(L.t("端末を追加", "Add device"))
         }
     }
 
@@ -330,7 +330,7 @@ private struct DevicesMemberRow: View {
             }
             if member.isApi {
                 Spacer()
-                Button(L.t("ログインを渡す", "Share sign-in"), action: onGrant)
+                Button(L.t("ログインを渡す", "Give login"), action: onGrant)
                     .buttonStyle(.borderless)
                     .disabled(!AppServices.client.isLoggedIn)
             }
@@ -350,7 +350,7 @@ struct DevicesSheet: View {
         let remote = player.isRemote ? connect.remote : nil
         NavigationStack {
             List {
-                Section(L.t("現在のデバイス", "Current device")) {
+                Section(L.t("現在の端末", "Current device")) {
                     if let remote {
                         let isPc = connect.members.first { $0.deviceId == remote.deviceId }?.isPc == true
                         DevicesPickRow(symbol: isPc ? "desktopcomputer" : "iphone", title: remote.deviceLabel,
@@ -379,7 +379,7 @@ struct DevicesSheet: View {
                         }
                         .map(\.element)
                     if !others.isEmpty {
-                        Section(L.t("ほかのデバイスを選択", "Select another device")) {
+                        Section(L.t("ほかの端末を選択", "Select another device")) {
                             ForEach(others) { member in
                                 if member.isSelf {
                                     DevicesPickRow(symbol: "iphone", title: L.t("この iPhone", "This iPhone"), subtitle: nil, accent: false, enabled: true) {
@@ -407,7 +407,7 @@ struct DevicesSheet: View {
                     }
                 }
             }
-            .navigationTitle(L.t("デバイスに接続", "Connect to a device"))
+            .navigationTitle(L.t("端末に接続", "Connect to a device"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {

@@ -146,7 +146,7 @@ final class CollectionModel {
         thumbnailUrl = album.thumbnailUrl ?? thumbnailUrl
         if changedArt { await color() }
         let total = album.songs.reduce(0) { $0 + ($1.durationSeconds ?? 0) }
-        detail = [album.subtitle, "\(L.songs(album.songs.count)), \(L.length(total))"].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " • ")
+        detail = [album.subtitle, L.songsAndLength(album.songs.count, total)].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " • ")
         // アーティストは題名の下に別の行で出す（押すとアーティストのページ。Android と同じ）
         albumArtist = album.artists.first { $0.browseId != nil }
         artistText = album.artists.isEmpty ? nil : album.artists.map(\.name).joined(separator: ", ")
@@ -186,7 +186,7 @@ final class CollectionModel {
         guard mine == generation else { return }
         guard let page = result.value else {
             if showOffline() { return }
-            error = result.failure == .notLoggedIn ? L.t("このプレイリストを見るにはログインしてください", "Log in to see this playlist")
+            error = result.failure == .notLoggedIn ? L.t("このプレイリストを見るにはログインしてください", "Sign in to see this playlist")
                 : L.t("プレイリストを読み込めませんでした", "Couldn't load the playlist")
             return
         }
@@ -194,7 +194,7 @@ final class CollectionModel {
         if page.continuation == nil { AppServices.downloads.pageLoaded(request.id, title: page.title, thumbnailUrl: nil, songs: page.songs) }
         let total = all.reduce(0) { $0 + ($1.song.durationSeconds ?? 0) }
         // サーバーの補足（曲数・時間を含む）があればそれを出す。無ければ読めた曲から数える
-        detail = page.subtitle ?? request.subtitle ?? "\(L.songs(all.count)), \(L.length(total))"
+        detail = page.subtitle ?? request.subtitle ?? L.songsAndLength(all.count, total)
         // 自分のプレイリストは、最後まで読めたら一番下に「おすすめの曲」（YouTube Music の候補）を出す
         if page.editable, page.continuation == nil, let token = page.suggestionsContinuation {
             Task { await loadSuggestions(token, mine) }
@@ -242,7 +242,7 @@ final class CollectionModel {
             if result == .added {
                 all.append(TrackRow(number: all.count + 1, song: song))
                 AppServices.library.membership.noteAdded(request.id, song.videoId)
-                AppServices.player.message = L.t("「\(playlistTitle)」に追加しました", "Added to \(playlistTitle)")
+                AppServices.player.message = L.t("「\(playlistTitle)」に追加しました", "Added to “\(playlistTitle)”")
                 // 候補を全部足したら、次の候補を読む（YouTube Music と同じ）
                 if suggestions.isEmpty { refreshSuggestions() }
             } else {
@@ -286,7 +286,7 @@ final class CollectionModel {
         guard mine == generation else { return }
         all = LibraryState.byArtist(songs, artist.browseId, artist.name).enumerated().map { TrackRow(number: $0.offset + 1, song: $0.element) }
         let total = all.reduce(0) { $0 + ($1.song.durationSeconds ?? 0) }
-        detail = "\(artist.name) • \(L.songs(all.count))\(complete ? "" : "+"), \(L.length(total))"
+        detail = "\(artist.name) • \(L.songsAndLength(all.count, total, more: !complete))"
     }
 
     /// 絞り込みと並べ替えを当てた、出す行。再生は出ている並びで行う。

@@ -28,7 +28,7 @@ struct SettingsView: View {
             Section {
                 Toggle(isOn: $sendHistory) {
                     SettingsLabel(title: L.t("再生した曲を YouTube Music の再生履歴に残す", "Save played songs to your YouTube Music history"),
-                                  detail: L.t("オフにすると、wave で聴いた曲は履歴やおすすめに使われません", "When off, songs you play in wave won’t be used for history or recommendations"))
+                                  detail: L.t("オフにすると、wave で聴いた曲は履歴やおすすめに使われません", "When off, songs you play in wave won't be used for history or recommendations"))
                 }
                 .onChange(of: sendHistory) { _, v in
                     AppServices.settings.sendHistory = v
@@ -100,7 +100,7 @@ struct SettingsView: View {
             }
             Section {
                 Picker(L.t("画面の言語", "App language"), selection: $language) {
-                    Text(L.t("iPhone に合わせる", "Use iPhone language")).tag("system")
+                    Text(L.t("端末に合わせる", "Use device language")).tag("system")
                     Text("日本語").tag("ja")
                     Text("English").tag("en")
                 }
@@ -162,7 +162,7 @@ struct SettingsView: View {
             if account.isLoggedIn {
                 Section {
                     // 押し間違いでログインが消えないよう、確かめてからログアウトする（Android と同じ）
-                    Button(L.t("ログアウト", "Log out"), role: .destructive) { confirmLogout = true }
+                    Button(L.t("ログアウト", "Sign out"), role: .destructive) { confirmLogout = true }
                 }
             }
             Section {
@@ -170,7 +170,7 @@ struct SettingsView: View {
                 // 動作の記録（件数・状態だけで、認証情報・URL は書いていない）を送れるように
                 ShareLink(item: AppPaths.file("wave.log")) { Label(L.t("動作の記録を共有", "Share the activity log"), systemImage: "doc.text") }
                 Text(L.t("ログイン情報は iOS のキーチェーンに、この iPhone だけが読める形で保存します。",
-                         "Your login is stored in the iOS keychain, readable only on this iPhone."))
+                         "Your sign-in is stored in the iOS keychain, readable only on this iPhone."))
                     .font(.footnote).foregroundStyle(.secondary)
             } header: {
                 Text(L.t("このアプリについて", "About"))
@@ -181,11 +181,11 @@ struct SettingsView: View {
         .sheet(isPresented: $scanningAi) {
             QrScanSheet(title: L.t("Claude の接続の QR を読む", "Scan Claude pairing QR code")) { text in pairAi(text) }
         }
-        .confirmationDialog(L.t("ログアウトしますか？", "Log out?"), isPresented: $confirmLogout, titleVisibility: .visible) {
-            Button(L.t("ログアウト", "Log out"), role: .destructive) { logOut() }
+        .confirmationDialog(L.t("ログアウトしますか？", "Sign out?"), isPresented: $confirmLogout, titleVisibility: .visible) {
+            Button(L.t("ログアウト", "Sign out"), role: .destructive) { logOut() }
             Button(L.t("キャンセル", "Cancel"), role: .cancel) {}
         } message: {
-            Text(L.t("この iPhone に保存したログイン情報を消します。", "This removes your login saved on this iPhone."))
+            Text(L.t("この iPhone に保存したログイン情報を消します。", "This removes your sign-in saved on this iPhone."))
         }
     }
 
@@ -210,32 +210,32 @@ struct SettingsView: View {
             }
             .padding(.vertical, 4)
             if !account.isLoggedIn {
-                Button(L.t("ログイン", "Log in")) { LoginGate.shared.skipped = false }
+                Button(L.t("ログイン", "Sign in")) { LoginGate.shared.skipped = false }
             }
             // ログインが切れたと確かめられた・疑いがある（ADR-0004）: Android と同じく、もう一度ログインを勧める。
             // 通信の失敗だけでは出さない。押してもログアウトはせず、ログインの画面を開くだけ（ログアウトは下の確認付きのボタン）
             if account.isLoggedIn, account.session == .expired {
                 VStack(alignment: .leading, spacing: 2) {
-                    Label(L.t("再ログインが必要です", "You need to log in again"), systemImage: "exclamationmark.triangle.fill")
+                    Label(L.t("再ログインが必要です", "You need to sign in again"), systemImage: "exclamationmark.triangle.fill")
                         .foregroundStyle(.orange)
-                    Text(L.t("ログインが切れました。もう一度ログインしてください。", "Your login has expired. Please log in again."))
+                    Text(L.t("ログインが切れました。もう一度ログインしてください。", "Your sign-in has expired. Please sign in again."))
                         .font(.footnote).foregroundStyle(.secondary)
                 }
-                Button(L.t("もう一度ログイン", "Log in again")) { LoginGate.shared.reLogin = true }
+                Button(L.t("ログインし直す", "Sign in again")) { LoginGate.shared.reLogin = true }
             } else if account.isLoggedIn, case .suspect = account.session {
                 VStack(alignment: .leading, spacing: 2) {
-                    Label(L.t("ログイン状態を確認できていません", "Couldn’t verify your login"), systemImage: "exclamationmark.circle")
+                    Label(L.t("ログイン状態を確かめられていません", "Couldn't verify your sign-in"), systemImage: "exclamationmark.circle")
                         .foregroundStyle(.secondary)
-                    Text(L.t("少し待っても直らなければ、もう一度ログインしてください。", "If this doesn’t clear up soon, log in again."))
+                    Text(L.t("少し待っても直らなければ、もう一度ログインしてください。", "If this doesn't clear up soon, sign in again."))
                         .font(.footnote).foregroundStyle(.secondary)
                 }
-                Button(L.t("もう一度ログイン", "Log in again")) { LoginGate.shared.reLogin = true }
+                Button(L.t("ログインし直す", "Sign in again")) { LoginGate.shared.reLogin = true }
             }
             if account.savedLoginUnreadable && !account.isLoggedIn {
                 VStack(alignment: .leading, spacing: 2) {
-                    Label(L.t("保存したログイン情報を読み込めませんでした", "Couldn’t read your saved login"), systemImage: "exclamationmark.triangle.fill")
+                    Label(L.t("保存したログイン情報を読み込めませんでした", "Couldn't read your saved sign-in"), systemImage: "exclamationmark.triangle.fill")
                         .foregroundStyle(.orange)
-                    Text(L.t("ログインし直すと上書きされます。", "Logging in again will replace it.")).font(.footnote).foregroundStyle(.secondary)
+                    Text(L.t("ログインし直すと上書きされます。", "Signing in again will replace it.")).font(.footnote).foregroundStyle(.secondary)
                 }
             }
         } header: {
@@ -259,7 +259,7 @@ struct SettingsView: View {
             }
             Toggle(isOn: Binding(get: { downloads.settings.smartDownloads }, set: { downloads.setSmart($0) })) {
                 SettingsLabel(title: L.t("スマートダウンロード", "Smart downloads"),
-                              detail: L.t("聴きそうな曲を毎日選び直して取っておく", "Automatically download songs you might like, refreshed daily"))
+                              detail: L.t("聴きそうな曲を毎日選び直して取っておく", "Automatically download songs you're likely to play, refreshed daily"))
             }
             if downloads.settings.smartDownloads {
                 Picker(L.t("曲数", "Songs"), selection: Binding(get: { downloads.settings.smartDownloadCount }, set: { downloads.setSmartCount($0) })) {

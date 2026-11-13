@@ -225,14 +225,14 @@ struct AccountMenu: View {
         let account = AppServices.account!
         Menu {
             if account.isLoggedIn {
-                Text(account.name ?? L.t("ログイン中", "Logged in"))
+                Text(account.name ?? L.t("ログイン中", "Signed in"))
                 Divider()
                 Button(L.t("最近再生した曲", "Recently played"), systemImage: "clock.arrow.circlepath") { AppServices.nav.history() }
                 if AppServices.connect.configured {
                     Button(L.t("端末の連携", "Devices"), systemImage: "hifispeaker.2") { AppServices.nav.devices() }
                 }
             } else {
-                Button(L.t("ログイン", "Log in"), systemImage: "person.crop.circle") { LoginWindowController.show() }
+                Button(L.t("ログイン", "Sign in"), systemImage: "person.crop.circle") { LoginWindowController.show() }
             }
             Button(L.t("設定", "Settings"), systemImage: "gearshape") { AppServices.nav.settings() }
         } label: {

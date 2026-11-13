@@ -362,7 +362,7 @@ struct NowPlayingView: View {
                     .foregroundStyle(player.isRemote ? Color.accentColor : Color.primary)
                     .frame(minWidth: 44, minHeight: 44)
                 }
-                .accessibilityLabel(L.t("デバイスに接続", "Connect to a device"))
+                .accessibilityLabel(L.t("端末に接続", "Connect to a device"))
             }
             Spacer()
             Button {
@@ -421,7 +421,7 @@ struct NowPlayingView: View {
                             Image(systemName: "arrow.up.left.and.arrow.down.right").font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
                                 .frame(width: 40, height: 40).background(Circle().fill(Color.black.opacity(0.45)))
                         }
-                        .accessibilityLabel(L.t("全画面で見る", "Full screen"))
+                        .accessibilityLabel(L.t("全画面", "Full screen"))
                     }
                     .padding(8)
                 }
@@ -545,7 +545,7 @@ struct NowPlayingView: View {
                     .foregroundStyle(player.isRemote ? Color.accentColor : Color.primary)
                     .frame(minHeight: 44)
                 }
-                .accessibilityLabel(L.t("デバイスに接続", "Connect to a device"))
+                .accessibilityLabel(L.t("端末に接続", "Connect to a device"))
             }
             Spacer()
             // RSS のエピソードには YouTube の共有のリンクが無い（ADR-0012）
@@ -917,7 +917,7 @@ private struct PipButton: View {
                 Image(systemName: pip.active ? "pip.exit" : "pip.enter").font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
                     .frame(width: 40, height: 40).background(Circle().fill(Color.black.opacity(0.45)))
             }
-            .accessibilityLabel(pip.active ? L.t("小窓をやめる", "Stop picture in picture") : L.t("小窓で見る", "Picture in picture"))
+            .accessibilityLabel(pip.active ? L.t("小窓を閉じる", "Close picture in picture") : L.t("小窓で見る", "Picture in picture"))
         }
     }
 }

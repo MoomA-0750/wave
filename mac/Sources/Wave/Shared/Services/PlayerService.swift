@@ -739,7 +739,7 @@ final class PlayerService {
             return
         }
         insert([song], at: index + 1, origin: .userAdded)
-        message = L.t("「\(song.title)」を次に再生します", "\(song.title) will play next")
+        message = L.t("「\(song.title)」を次に再生します", "“\(song.title)” will play next")
     }
 
     /// 一覧（プレイリスト・アルバム）を丸ごと、今の曲の次（next）かキューの最後に入れる（Android の「次に再生」「キューに追加」と同じ）。
@@ -769,20 +769,20 @@ final class PlayerService {
             return
         }
         insertUserItems([song])
-        message = L.t("「\(song.title)」をキューに追加しました", "Added \(song.title) to queue")
+        message = L.t("「\(song.title)」をキューに追加しました", "Added “\(song.title)” to queue")
     }
 
     /// ほかの端末で鳴っている間の追加は、鳴らしている端末のキューへ送る（手元のキューに入れても、その端末は使わない）。
     /// 映しているキューは、その端末が書き直したものが届いたときに変わる。
     private func queueOnRemote(_ songs: [Song], next: Bool) {
         guard sendRemoteQueueAdd?(songs, next) == true else {
-            message = L.t("ほかの端末に送れませんでした", "Couldn’t reach the other device")
+            message = L.t("ほかの端末に送れませんでした", "Couldn't reach the other device")
             return
         }
         let device = remoteDevice ?? L.t("ほかの端末", "the other device")
         if songs.count == 1, let song = songs.first {
-            message = next ? L.t("「\(song.title)」を \(device) で次に再生します", "\(song.title) will play next on \(device)")
-                : L.t("「\(song.title)」を \(device) のキューに追加しました", "Added \(song.title) to the queue on \(device)")
+            message = next ? L.t("「\(song.title)」を \(device) で次に再生します", "“\(song.title)” will play next on \(device)")
+                : L.t("「\(song.title)」を \(device) のキューに追加しました", "Added “\(song.title)” to the queue on \(device)")
         } else {
             message = next ? L.t("\(songs.count) 曲を \(device) で次に再生します", "\(L.songs(songs.count)) will play next on \(device)")
                 : L.t("\(songs.count) 曲を \(device) のキューに追加しました", "Added \(L.songs(songs.count)) to the queue on \(device)")
@@ -824,7 +824,7 @@ final class PlayerService {
     func clearUserQueue() {
         let positions = itemMeta.indices.filter { $0 > index && isUserAdded($0) }
         guard removeUpcoming(positions) else { return }
-        if !positions.isEmpty { message = L.t("キューから \(positions.count) 曲を外しました", "Removed \(L.songs(positions.count)) from the queue") }
+        if !positions.isEmpty { message = L.t("キューから \(positions.count) 曲を削除しました", "Removed \(L.songs(positions.count)) from the queue") }
     }
 
     /// 「次に流れる曲」（元の流れ: 一覧の残り・サジェスト）を消去する。自分で足した曲は残す（Android の QueueSession.clearFlow と同じ）。
@@ -834,7 +834,7 @@ final class PlayerService {
         guard index >= 0, index < queue.count else { return }
         if isRemote {
             guard sendRemoteQueueClearFlow?(itemMeta[index].itemId) == true else {
-                message = L.t("ほかの端末に送れませんでした", "Couldn’t reach the other device")
+                message = L.t("ほかの端末に送れませんでした", "Couldn't reach the other device")
                 return
             }
         } else {
@@ -865,7 +865,7 @@ final class PlayerService {
             ids.remove(at: from)
             ids.insert(itemId, at: to)
             guard sendRemoteQueueMove?(itemId, to - 1 > index ? ids[to - 1] : nil) == true else {
-                message = L.t("ほかの端末に送れませんでした", "Couldn’t reach the other device")
+                message = L.t("ほかの端末に送れませんでした", "Couldn't reach the other device")
                 return
             }
         }
@@ -886,7 +886,7 @@ final class PlayerService {
         if targets.isEmpty { return true }
         if isRemote {
             guard sendRemoteQueueRemove?(targets.reversed().map { itemMeta[$0].itemId }) == true else {
-                message = L.t("ほかの端末に送れませんでした", "Couldn’t reach the other device")
+                message = L.t("ほかの端末に送れませんでした", "Couldn't reach the other device")
                 return false
             }
         }
@@ -1099,7 +1099,7 @@ final class PlayerService {
         guard remoteModesKnown else { return }
         let sent = on.map { sendRemoteShuffle?($0) } ?? mode.map { sendRemoteRepeat?($0) } ?? false
         guard sent == true else {
-            message = L.t("ほかの端末に送れませんでした", "Couldn’t reach the other device")
+            message = L.t("ほかの端末に送れませんでした", "Couldn't reach the other device")
             return
         }
         remoteModesHoldUntilMs = clockMs + 3_000
@@ -1187,7 +1187,7 @@ final class PlayerService {
         // RSS のエピソードは YouTube の曲ではない（評価できない）
         guard !Feed.isExternal(song.videoId) else { return }
         guard AppServices.client.isLoggedIn else {
-            message = L.t("高く評価するにはログインしてください", "Log in to like songs")
+            message = L.t("高く評価するにはログインしてください", "Sign in to like songs")
             return
         }
         if current?.videoId == song.videoId { like = liked ? .like : .indifferent }
@@ -1195,9 +1195,9 @@ final class PlayerService {
             let result = (try? await AppServices.music.setLiked(song.videoId, liked: liked)) ?? .failed(.network)
             if !result.isOk {
                 if current?.videoId == song.videoId { like = liked ? .indifferent : .like }
-                message = L.t("高評価を変更できませんでした", "Couldn't update your likes")
+                message = L.t("評価を変更できませんでした", "Couldn't update your likes")
             } else {
-                message = liked ? L.t("高く評価した曲に追加しました", "Added to Liked Songs") : L.t("高く評価した曲から削除しました", "Removed from Liked Songs")
+                message = liked ? L.t("高く評価した曲に追加しました", "Added to liked music") : L.t("高く評価した曲から削除しました", "Removed from liked music")
                 AppServices.library.likedChanged(song.videoId, liked)
             }
         }
@@ -1332,7 +1332,7 @@ final class PlayerService {
 
     private func sendRemote(_ action: ControlAction, _ positionMs: Int64? = nil) {
         guard sendRemoteControl?(action, positionMs) == true else {
-            message = L.t("ほかの端末に送れませんでした", "Couldn’t reach the other device")
+            message = L.t("ほかの端末に送れませんでした", "Couldn't reach the other device")
             return
         }
         // 返事（相手の次のカーソル）を待つ間も、押した結果をすぐ見せる
@@ -1521,7 +1521,7 @@ final class PlayerService {
         let percent = Int((volume * 100).rounded())
         let work = DispatchWorkItem { [weak self] in
             guard let self else { return }
-            if self.sendRemoteVolume?(percent) != true { self.message = L.t("ほかの端末に送れませんでした", "Couldn’t reach the other device") }
+            if self.sendRemoteVolume?(percent) != true { self.message = L.t("ほかの端末に送れませんでした", "Couldn't reach the other device") }
         }
         remoteVolumeWork = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: work)
@@ -1684,7 +1684,7 @@ final class PlayerService {
         if result.failure == .liveStream { return .live }
         AppPaths.log("resolve failed reason=\(String(describing: result.failure))")
         message = switch result.failure {
-        case .notLoggedIn: L.t("この曲を再生するにはログインが必要です", "Log in to play this song")
+        case .notLoggedIn: L.t("この曲を再生するにはログインが必要です", "Sign in to play this song")
         case .unplayable: L.t("この曲は再生できません", "This song isn't available")
         case .songLoginRequired: L.t("この曲はログインの確認（年齢の確認など）が要ります", "This song needs a sign-in check (such as age verification)")
         case .network: L.t("通信できませんでした", "Couldn't connect")
@@ -1940,7 +1940,7 @@ final class PlayerService {
         if !live && !external {
             guard AppServices.client.isLoggedIn else {
                 isLoading = false
-                message = L.t("曲を再生するにはログインしてください（右上のアカウントから）", "Log in to play songs (from the account button at the top right)")
+                message = L.t("曲を再生するにはログインしてください（右上のアカウントから）", "Sign in to play songs (from the account button at the top right)")
                 return
             }
         }

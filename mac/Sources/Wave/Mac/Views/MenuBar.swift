@@ -321,7 +321,7 @@ struct MenuBarNowPlaying: View {
             if player.index + 1 < player.queue.count {
                 let next = player.queue[player.index + 1]
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(L.t("次の曲", "Next up")).font(.body.weight(.semibold))
+                    Text(L.t("次の曲", "Up next")).font(.body.weight(.semibold))
                     HStack(spacing: 12) {
                         Cover(url: Ui.small(next.thumbnailUrl), size: 40, radius: 4)
                         VStack(alignment: .leading, spacing: 2) {

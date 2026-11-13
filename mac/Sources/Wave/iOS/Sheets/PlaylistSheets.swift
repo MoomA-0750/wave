@@ -43,7 +43,7 @@ struct AddToPlaylistSheet: View {
                         // 評価済みなら外す（今の曲のときだけ評価を変えられる。Mac と同じ）
                         if isCurrent { player.toggleLike() }
                     } label: {
-                        PlaylistSheetsRow(title: L.t("高く評価した曲", "Liked Songs"), icon: "heart") {
+                        PlaylistSheetsRow(title: L.t("高く評価した曲", "Liked music"), icon: "heart") {
                             Image(systemName: liked ? "checkmark.circle.fill" : "plus.circle").foregroundStyle(Color.accentColor)
                         }
                     }
@@ -71,7 +71,7 @@ struct AddToPlaylistSheet: View {
                 }
             }
             .tint(.primary)
-            .navigationTitle(L.t("プレイリストに追加", "Add to playlist"))
+            .navigationTitle(L.t("プレイリストに保存", "Save to playlist"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) { Button(L.t("完了", "Done")) { dismiss() }.tint(Color.accentColor) }
@@ -133,7 +133,7 @@ struct CreatePlaylistSheet: View {
                     }
                 }
             }
-            .navigationTitle(songs.isEmpty ? L.t("プレイリストを作成", "Create playlist") : L.t("キューを保存", "Save queue"))
+            .navigationTitle(songs.isEmpty ? L.t("プレイリストを作成", "Create playlist") : L.t("キューをプレイリストとして保存", "Save queue as playlist"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button(L.t("キャンセル", "Cancel")) { dismiss() } }

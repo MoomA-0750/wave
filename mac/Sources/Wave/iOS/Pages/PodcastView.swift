@@ -84,7 +84,7 @@ struct PodcastView: View {
                 .disabled(model.episodes.isEmpty)
                 if let saved = model.saved, model.isFeed || AppServices.client.isLoggedIn {
                     Button { model.toggleSaved() } label: {
-                        Label(saved ? L.t("保存済み", "Saved") : L.t("ライブラリに保存", "Save"), systemImage: saved ? "checkmark" : "plus")
+                        Label(saved ? L.t("保存済み", "Saved") : L.t("ライブラリに保存", "Save to library"), systemImage: saved ? "checkmark" : "plus")
                             .font(.headline)
                             .frame(maxWidth: .infinity, minHeight: 44)
                     }

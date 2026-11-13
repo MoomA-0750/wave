@@ -68,8 +68,8 @@ struct DownloadsPageView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 16) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(L.t("聴きそうな曲を自動で取っておく", "Automatically download songs you might like"))
-                    Text(L.t("いつも聴いている曲・好きそうな曲・おすすめから、毎日選び直します", "Picks from your favorites, something new and recommendations, refreshed daily"))
+                    Text(L.t("聴きそうな曲を自動で取っておく", "Automatically download songs you're likely to play"))
+                    Text(L.t("いつも聴いている曲・好きそうな曲・おすすめから、毎日選び直します", "Picks from songs you play often, songs you might like and recommendations, refreshed daily"))
                         .subtle()
                 }
                 Spacer()

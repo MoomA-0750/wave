@@ -14,8 +14,8 @@ final class DownloadsModel {
     static func label(_ category: SmartCategory?) -> String {
         switch category {
         case nil: L.t("すべて", "All")
-        case .frequent: L.t("いつも聴いている", "Your favorites")
-        case .discover: L.t("好きそう", "Something new")
+        case .frequent: L.t("いつも聴いている", "Played often")
+        case .discover: L.t("好きそう", "You might like")
         case .recommended: L.t("おすすめ", "Recommended")
         }
     }
@@ -67,12 +67,12 @@ final class DownloadsModel {
         if pending == 0 { return used }
         let state: String
         if d.waitingForNetwork {
-            state = d.offline ? L.t("通信を待っています", "Waiting for a connection")
+            state = d.offline ? L.t("通信を待っています", "Waiting for a network")
                 : L.t("Wi-Fi など従量制でない通信を待っています", "Waiting for Wi-Fi or another unmetered network")
         } else if let id = d.active, let song = d.song(id) {
             state = L.t("取っています: \(song.title)（\(Int(d.activeProgress * 100))%）", "Downloading: \(song.title) (\(Int(d.activeProgress * 100))%)")
         } else {
-            state = L.t("待っています", "Queued")
+            state = L.t("待っています", "Waiting")
         }
         return used + " • " + L.t("残り \(pending) 曲", "\(pending) left") + " • " + state
     }

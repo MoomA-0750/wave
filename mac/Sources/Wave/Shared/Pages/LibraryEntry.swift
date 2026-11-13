@@ -70,7 +70,7 @@ extension LibraryEntry {
             entries.insert(LibraryEntry(title: downloadsTitle, subtitle: L.t("プレイリスト • 自動", "Playlist • Auto") + " • " + L.songs(count), isDownloads: true), at: 0)
         }
         // 高く評価した曲はいつも先頭（Spotify の「お気に入りの曲」と同じ）
-        let likedTitle = L.t("高く評価した曲", "Liked Songs")
+        let likedTitle = L.t("高く評価した曲", "Liked music")
         if (kind == nil || kind == "playlist") && (filter.isEmpty || likedTitle.localizedCaseInsensitiveContains(filter)) {
             entries.insert(LibraryEntry(title: likedTitle, subtitle: L.t("プレイリスト • 自動", "Playlist • Auto"), thumbnailUrl: lib.likedThumbnail, isLiked: true), at: 0)
         }

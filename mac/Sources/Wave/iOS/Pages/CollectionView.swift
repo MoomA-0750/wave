@@ -129,7 +129,7 @@ struct CollectionView: View {
 
     private func moreMenu(_ player: PlayerService) -> some View {
         Menu {
-            Section(L.t("並べ替え", "Sort by")) {
+            Section(L.t("並べ替え", "Sort")) {
                 ForEach(model.sortChoices, id: \.self) { key in
                     Button {
                         model.choose(key)
@@ -208,7 +208,7 @@ private struct SuggestionRow: View {
                 Image(systemName: "plus.circle").font(.title2).foregroundStyle(.secondary)
             }
             .buttonStyle(.borderless)
-            .accessibilityLabel(L.t("プレイリストに追加", "Add to playlist"))
+            .accessibilityLabel(L.t("プレイリストに保存", "Save to playlist"))
         }
         .contentShape(Rectangle())
         .onTapGesture(perform: onPlay)

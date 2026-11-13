@@ -329,7 +329,7 @@ final class AiChat {
             let (songs, _) = await AppServices.library.likedSongs()
             let picked = Array(songs.prefix(limit))
             picked.forEach(remember)
-            return (.array(picked.map(AiChat.songJson)), nil, .action(L.t("高く評価した曲を見ました", "Looked at your liked songs")))
+            return (.array(picked.map(AiChat.songJson)), nil, .action(L.t("高く評価した曲を見ました", "Looked at your liked music")))
         case "show_songs":
             let (songs, missing) = songsOf(args)
             return songs.isEmpty ? AiChat.unknown(missing) : (.string("shown \(songs.count)"), nil, .songs(songs))
@@ -342,7 +342,7 @@ final class AiChat {
             let (songs, missing) = songsOf(args)
             if songs.isEmpty { return AiChat.unknown(missing) }
             player.queueAll(songs, next: args["next"].bool == true)
-            return (.string("queued \(songs.count) songs"), nil, .action(L.t("\(songs.count) 曲をキューに足しました", "Added \(L.songs(songs.count)) to the queue")))
+            return (.string("queued \(songs.count) songs"), nil, .action(L.t("\(songs.count) 曲をキューに追加しました", "Added \(L.songs(songs.count)) to the queue")))
         case "list_playlists":
             return (.array(AppServices.library.editable.map { .obj(["playlist_id": .string($0.playlistId), "title": .string($0.title)]) }), nil, nil)
         case "create_playlist":
@@ -356,7 +356,7 @@ final class AiChat {
             for (i, s) in songs.enumerated() {
                 if (try? await music.addToPlaylist(id, videoId: s.videoId, knownEmpty: i == 0)) == .added { added += 1 }
             }
-            return (.obj(["playlist_id": .string(id), "added": JSON(added)]), nil, .action(L.t("「\(title)」を作って \(added) 曲入れました", "Created “\(title)” with \(L.songs(added))")))
+            return (.obj(["playlist_id": .string(id), "added": JSON(added)]), nil, .action(L.t("「\(title)」を作成して \(added) 曲追加しました", "Created “\(title)” with \(L.songs(added))")))
         case "add_to_playlist":
             let id = args["playlist_id"].str ?? ""
             guard let playlist = AppServices.library.editable.first(where: { $0.playlistId == id }) else { return (nil, "unknown playlist_id", nil) }
@@ -373,7 +373,7 @@ final class AiChat {
                 }
             }
             return (.obj(["added": JSON(added), "already_in_playlist": JSON(already)]), nil,
-                    .action(L.t("「\(playlist.title)」に \(added) 曲足しました", "Added \(L.songs(added)) to “\(playlist.title)”")))
+                    .action(L.t("「\(playlist.title)」に \(added) 曲追加しました", "Added \(L.songs(added)) to “\(playlist.title)”")))
         default:
             return (nil, "unknown tool: \(name)", nil)
         }

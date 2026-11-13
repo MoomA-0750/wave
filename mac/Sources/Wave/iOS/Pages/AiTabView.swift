@@ -243,7 +243,7 @@ private struct AiHistorySheet: View {
                     }
                     .listRowBackground(conversation.id == chat.conversationId ? Color.accentColor.opacity(0.12) : nil)
                     .swipeActions {
-                        Button(role: .destructive) { chat.delete(conversation.id) } label: { Label(L.t("会話を消す", "Delete chat"), systemImage: "trash") }
+                        Button(role: .destructive) { chat.delete(conversation.id) } label: { Label(L.t("会話を削除", "Delete chat"), systemImage: "trash") }
                     }
                 }
             }

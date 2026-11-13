@@ -576,7 +576,7 @@ struct PlaylistWidgetView: View {
     private var emptyMessage: some View {
         VStack(spacing: 6) {
             Image(systemName: "music.note.list").font(WidgetFont.title)
-            Text(WidgetText.t("wave を開いてログインすると、プレイリストが出ます", "Open wave and log in to see your playlists")).font(WidgetFont.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
+            Text(WidgetText.t("wave を開いてログインすると、プレイリストが出ます", "Open wave and sign in to see your playlists")).font(WidgetFont.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
         }
     }
 

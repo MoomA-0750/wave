@@ -20,7 +20,7 @@ struct LoginView: View {
                     .padding()
                 }
             }
-            .navigationTitle(L.t("wave にログイン", "Log in to wave"))
+            .navigationTitle(L.t("wave にログイン", "Sign in to wave"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {
@@ -49,7 +49,7 @@ final class LoginModel {
         guard !finishing else { return }
         let result = await WebLogin.finish(webView) {
             finishing = true
-            status = L.t("ログインしています…", "Logging in…")
+            status = L.t("ログインしています…", "Signing in…")
         }
         switch result {
         case .notYet: break
@@ -103,7 +103,7 @@ private struct LoginWebView: UIViewRepresentable {
 
         func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
             AppPaths.log("login webview process terminated")
-            MainActor.assumeIsolated { model.status = L.t("ログイン画面が異常終了しました。閉じてやり直してください", "The login page crashed. Close it and try again") }
+            MainActor.assumeIsolated { model.status = L.t("ログイン画面が異常終了しました。閉じてやり直してください", "The sign-in page crashed. Close it and try again") }
         }
     }
 }

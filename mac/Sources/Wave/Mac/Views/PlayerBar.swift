@@ -73,8 +73,8 @@ struct PlayerBar: View {
                 }
                 .buttonStyle(IconButtonStyle())
                 .help(player.isRemote && player.remoteDevice != nil && !showDeviceName
-                    ? L.t("デバイスに接続（\(player.remoteDevice!) で再生中）", "Connect to a device (playing on \(player.remoteDevice!))")
-                    : L.t("デバイスに接続", "Connect to a device"))
+                    ? L.t("端末に接続（\(player.remoteDevice!) で再生中）", "Connect to a device (playing on \(player.remoteDevice!))")
+                    : L.t("端末に接続", "Connect to a device"))
                 .popover(isPresented: $devicesOpen, arrowEdge: .top) { DevicesPopover(isOpen: $devicesOpen) }
             }
             IconToggle(isOn: model.paneToggleOn, help: L.t("再生中の画面", "Now playing view"), action: model.togglePane) {
@@ -169,7 +169,7 @@ struct TransportControls: View {
                     }
                 }
                 .buttonStyle(.plain)
-                .help(L.t("再生/一時停止", "Play/Pause"))
+                .help(L.t("再生・一時停止", "Play/Pause"))
                 Button(action: player.next) { Image(systemName: "forward.end.fill").font(.system(size: 15)) }
                     .buttonStyle(IconButtonStyle()).help(L.t("次へ", "Next"))
                 IconToggle(isOn: player.repeatMode != .off, help: L.t("リピート", "Repeat"), action: player.cycleRepeat) {
@@ -310,10 +310,10 @@ struct FullView: View {
                         Image(systemName: model.windowFullScreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right").font(.system(size: 15))
                     }
                     .buttonStyle(IconButtonStyle())
-                    .help(model.windowFullScreen ? L.t("全画面をやめる", "Exit full screen") : L.t("全画面", "Full screen"))
+                    .help(model.windowFullScreen ? L.t("全画面を終える", "Exit full screen") : L.t("全画面", "Full screen"))
                     Button { model.toggleVideoOnly() } label: { Image(systemName: "xmark").font(.system(size: 15)) }
                         .buttonStyle(IconButtonStyle())
-                        .help(L.t("映像だけをやめる (Esc)", "Close video (Esc)"))
+                        .help(L.t("映像だけをやめる (Esc)", "Exit video only (Esc)"))
                 }
                 .foregroundStyle(.white)
                 .background(Capsule().fill(Color.black.opacity(0.45)))

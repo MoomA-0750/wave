@@ -112,7 +112,7 @@ struct NowPlayingView: View {
                 // 次の曲（Android と同じく歌詞の上）
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
-                        Text(L.t("次の曲", "Next up")).font(.body.weight(.semibold))
+                        Text(L.t("次の曲", "Up next")).font(.body.weight(.semibold))
                         Spacer()
                         Button(L.t("キューを開く", "Open queue")) { model.showQueue() }.buttonStyle(.textLink)
                     }

@@ -10,8 +10,8 @@ final class LoginWindowController: NSObject, NSWindowDelegate, WKNavigationDeleg
     private static var shared: LoginWindowController?
     private let window: NSWindow
     private let webView: WKWebView
-    private let hostLabel = NSTextField(labelWithString: L.t("Google アカウントでログインしてください", "Log in with your Google account"))
-    private let status = NSTextField(labelWithString: L.t("ログインしています…", "Logging in…"))
+    private let hostLabel = NSTextField(labelWithString: L.t("Google アカウントでログインしてください", "Sign in with your Google account"))
+    private let status = NSTextField(labelWithString: L.t("ログインしています…", "Signing in…"))
     private let spinner = NSProgressIndicator()
     private var finishing = false
 
@@ -29,7 +29,7 @@ final class LoginWindowController: NSObject, NSWindowDelegate, WKNavigationDeleg
         webView = WebLogin.makeWebView()
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 520, height: 760), styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false)
         super.init()
-        window.title = L.t("wave にログイン", "Log in to wave")
+        window.title = L.t("wave にログイン", "Sign in to wave")
         window.identifier = NSUserInterfaceItemIdentifier("login")
         window.isReleasedWhenClosed = false
         window.delegate = self
@@ -97,7 +97,7 @@ final class LoginWindowController: NSObject, NSWindowDelegate, WKNavigationDeleg
 
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
         AppPaths.log("login webview process terminated")
-        showStatus(L.t("ログイン画面が異常終了しました。閉じてやり直してください", "The login page crashed. Close it and try again"))
+        showStatus(L.t("ログイン画面が異常終了しました。閉じてやり直してください", "The sign-in page crashed. Close it and try again"))
     }
 
     private func showStatus(_ text: String) {
@@ -114,7 +114,7 @@ final class LoginWindowController: NSObject, NSWindowDelegate, WKNavigationDeleg
         let result = await WebLogin.finish(webView) {
             finishing = true
             webView.isHidden = true
-            showStatus(L.t("ログインしています…", "Logging in…"))
+            showStatus(L.t("ログインしています…", "Signing in…"))
         }
         switch result {
         case .notYet: break

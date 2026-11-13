@@ -25,7 +25,7 @@ struct SongMenuItems: View {
         Divider()
         // プレイリストへの追加はログインしているときだけ出す
         if !external && AppServices.client.isLoggedIn {
-            Menu(L.t("プレイリストに追加", "Add to playlist"), systemImage: "plus") {
+            Menu(L.t("プレイリストに保存", "Save to playlist"), systemImage: "plus") {
                 Button(L.t("新しいプレイリスト", "New playlist"), systemImage: "plus") { Dialogs.shared.createPlaylist(with: song) }
                 let editable = AppServices.library.editable
                 if !editable.isEmpty { Divider() }
@@ -37,7 +37,7 @@ struct SongMenuItems: View {
         // 高く評価した曲に足す・外す（Spotify の「お気に入りに追加」。Android・Windows と同じ）
         if !external && AppServices.client.isLoggedIn {
             let liked = player.isLiked(song)
-            Button(liked ? L.t("高く評価した曲から削除", "Remove from Liked Songs") : L.t("高く評価した曲に追加", "Add to Liked Songs"),
+            Button(liked ? L.t("高く評価した曲から削除", "Remove from liked music") : L.t("高く評価した曲に追加", "Add to liked music"),
                    systemImage: liked ? "checkmark.circle.fill" : "plus.circle") { player.setLiked(song, !liked) }
         }
         if let removeFromPlaylist {
@@ -45,7 +45,7 @@ struct SongMenuItems: View {
         }
         Divider()
         if !external {
-            Button(L.t("曲のラジオを再生", "Go to song radio"), systemImage: "dot.radiowaves.left.and.right") { player.playSong(song) }
+            Button(L.t("ラジオを開始", "Start radio"), systemImage: "dot.radiowaves.left.and.right") { player.playSong(song) }
         }
         if let albumId = song.album?.browseId {
             Button(L.t("アルバムへ移動", "Go to album"), systemImage: "square.stack") { AppServices.nav.album(albumId) }
@@ -56,7 +56,7 @@ struct SongMenuItems: View {
         }
         // 曲の画面（iPhone のメニューと同じ。ライブ配信には曲の画面が無い）
         if !external && !song.isLive {
-            Button(L.t("曲の画面を開く", "Open song"), systemImage: "music.note") { AppServices.nav.song(song) }
+            Button(L.t("曲の画面を開く", "Go to song"), systemImage: "music.note") { AppServices.nav.song(song) }
         }
         if !external {
             Divider()
@@ -130,14 +130,14 @@ struct AddToPlaylistSheet: View {
         let player = AppServices.player!
         let liked = player.current?.videoId == song.videoId ? player.like == .like : AppServices.library.isLiked(song.videoId)
         VStack(alignment: .leading, spacing: 12) {
-            Text(L.t("プレイリストに追加", "Add to playlist")).font(.title2.weight(.semibold))
+            Text(L.t("プレイリストに保存", "Save to playlist")).font(.title2.weight(.semibold))
             ScrollView {
                 VStack(spacing: 2) {
                     row(L.t("新しいプレイリスト", "New playlist"), icon: "plus", accentIcon: true) {
                         dismiss()
                         Dialogs.shared.createPlaylist(with: song)
                     } trailing: { EmptyView() }
-                    row(L.t("高く評価した曲", "Liked Songs"), icon: "heart") {
+                    row(L.t("高く評価した曲", "Liked music"), icon: "heart") {
                         dismiss()
                         // 評価済みなら外す（今の曲のときだけ評価を変えられる）
                         if player.current?.videoId == song.videoId { player.toggleLike() }

@@ -13,7 +13,7 @@ struct DevicesPopover: View {
         let info = connect.info
         let remote = player.isRemote ? connect.remote : nil
         VStack(alignment: .leading, spacing: 4) {
-            Text(L.t("現在のデバイス", "Current device")).font(.body.weight(.semibold))
+            Text(L.t("現在の端末", "Current device")).font(.body.weight(.semibold))
             if let remote {
                 let isPc = connect.members.first { $0.deviceId == remote.deviceId }?.isPc == true
                 DeviceRow(symbol: isPc ? "desktopcomputer" : "iphone", title: remote.deviceLabel,
@@ -38,7 +38,7 @@ struct DevicesPopover: View {
                     }
                     .map(\.element)
                 if !others.isEmpty {
-                    Text(L.t("ほかのデバイスを選択", "Select another device")).font(.body.weight(.semibold)).padding(.top, 8)
+                    Text(L.t("ほかの端末を選択", "Select another device")).font(.body.weight(.semibold)).padding(.top, 8)
                     ForEach(others) { member in
                         if member.isSelf {
                             DeviceRow(symbol: "desktopcomputer", title: L.t("この Mac", "This Mac"), subtitle: nil, accent: false, enabled: true) {

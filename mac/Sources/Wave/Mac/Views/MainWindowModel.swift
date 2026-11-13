@@ -257,7 +257,7 @@ final class MainWindowModel {
             while i < player.queue.count {
                 let section: String? = i == player.index ? L.t("再生中", "Now playing")
                     : i == player.index + 1 && i < userEnd ? L.t("キューの次の曲", "Next in queue")
-                    : i == userEnd ? L.t("次に流れる曲", "Next up")
+                    : i == userEnd ? L.t("次に流れる曲", "Up next")
                     : nil
                 entries.append(QueueEntry(index: i, song: player.queue[i], isCurrent: i == player.index, section: section,
                                           isFlowHeader: i == userEnd && i > player.index))

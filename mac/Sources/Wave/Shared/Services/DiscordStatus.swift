@@ -21,7 +21,7 @@ final class DiscordStatus {
         switch presence.status {
         case .connected: L.t("Discord につないでいます", "Connected to Discord")
         case .notFound: L.t("Discord が見つかりません（Discord のアプリを起動すると、自動でつなぎます）", "Discord not found (wave connects when the Discord app is running)")
-        case .refused: L.t("Discord につなげませんでした。アプリケーション ID を確かめてください", "Discord refused the connection. Check the application ID")
+        case .refused: L.t("Discord につなげませんでした。Application ID を確かめてください", "Discord refused the connection. Check the Application ID")
         case .off: L.t("曲を再生すると Discord につなぎます", "wave connects to Discord when you play a song")
         }
     }

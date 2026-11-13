@@ -38,7 +38,7 @@ enum SongActions {
             if removed { membership.noteRemoved(playlist.playlistId, song.videoId) } else { membership.invalidate(playlist.playlistId) }
         }
         AppPaths.log("playlist remove-song known=\(setIds != nil) removed=\(removed)")
-        AppServices.player.message = removed ? L.t("「\(playlist.title)」から外しました", "Removed from \(playlist.title)") : L.t("外せませんでした", "Couldn't remove it")
+        AppServices.player.message = removed ? L.t("「\(playlist.title)」から削除しました", "Removed from “\(playlist.title)”") : L.t("削除できませんでした", "Couldn't remove it")
         return removed
     }
 
@@ -47,8 +47,8 @@ enum SongActions {
         let result = (try? await AppServices.music.addToPlaylist(playlist.playlistId, videoId: song.videoId, knownEmpty: knownEmpty)) ?? .failed
         if result == .added || result == .alreadyInPlaylist { AppServices.library.membership.noteAdded(playlist.playlistId, song.videoId) }
         AppServices.player.message = switch result {
-        case .added: L.t("「\(playlist.title)」に追加しました", "Added to \(playlist.title)")
-        case .alreadyInPlaylist: L.t("「\(playlist.title)」にはもう入っています", "Already in \(playlist.title)")
+        case .added: L.t("「\(playlist.title)」に追加しました", "Added to “\(playlist.title)”")
+        case .alreadyInPlaylist: L.t("「\(playlist.title)」にはもう入っています", "Already in “\(playlist.title)”")
         case .notChecked: L.t("重複を確かめられなかったので、追加しませんでした", "Couldn't check for duplicates, so it wasn't added")
         default: L.t("追加できませんでした", "Couldn't add it")
         }
@@ -87,7 +87,7 @@ final class Dialogs {
     func saveQueue() {
         let songs = QueuePlaylist.songsToSave(AppServices.player.queue)
         guard !songs.isEmpty else {
-            AppServices.player.message = L.t("保存できる曲がキューにありません", "There are no songs in the queue to save")
+            AppServices.player.message = L.t("保存できる曲がキューにありません", "No songs in the queue to save")
             return
         }
         createSong = nil
@@ -109,11 +109,11 @@ final class Dialogs {
         if !songs.isEmpty {
             // 再生中の曲の「入っている」の印を直す
             for song in songs { AppServices.library.membership.noteAdded(id, song.videoId) }
-            AppServices.player.message = L.t("「\(title)」に \(songs.count) 曲を保存しました", "Saved \(L.songs(songs.count)) to \(title)")
+            AppServices.player.message = L.t("「\(title)」に \(songs.count) 曲を保存しました", "Saved \(L.songs(songs.count)) to “\(title)”")
         } else if let song {
             await SongActions.add(playlist, song, knownEmpty: true)
         } else {
-            AppServices.player.message = L.t("「\(title)」を作成しました", "Created \(title)")
+            AppServices.player.message = L.t("「\(title)」を作成しました", "Created “\(title)”")
         }
     }
 }

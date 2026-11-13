@@ -39,7 +39,7 @@ struct PodcastPageView: View {
                 }
                 .padding(EdgeInsets(top: 20, leading: 12, bottom: 12, trailing: 12))
                 // 「新しいエピソード」は、番組を保存していないと番組のページの形で返らない（エピソードが無いだけとして出す）
-                if model.failed && !model.isNewEpisodes { Text(L.t("ポッドキャストを読み込めませんでした", "Couldn’t load the podcast")).padding(12) }
+                if model.failed && !model.isNewEpisodes { Text(L.t("ポッドキャストを読み込めませんでした", "Couldn't load the podcast")).padding(12) }
                 if !model.loading && (!model.failed || model.isNewEpisodes) && episodes.isEmpty { Text(L.t("エピソードはありません", "No episodes")).subtle().padding(12) }
                 ForEach(Array(episodes.enumerated()), id: \.element.id) { i, episode in
                     EpisodeRowView(episode: episode, showShow: false, onPlay: { model.play(i) })

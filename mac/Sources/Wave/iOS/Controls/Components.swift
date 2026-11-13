@@ -114,20 +114,20 @@ struct SongMenuItems: View {
         // RSS のエピソードは YouTube の曲ではない（プレイリスト・ラジオ・曲の画面・共有のリンクが無い。ADR-0012）
         let external = Feed.isExternal(song.videoId)
         if !external {
-            Button(L.t("プレイリストに追加", "Add to playlist"), systemImage: "plus") { Dialogs.shared.addToPlaylist(song) }
+            Button(L.t("プレイリストに保存", "Save to playlist"), systemImage: "plus") { Dialogs.shared.addToPlaylist(song) }
                 .disabled(!AppServices.client.isLoggedIn)
         }
         // 高く評価した曲に足す・外す（Spotify の「お気に入りに追加」。Android・Windows と同じ）
         if !external && AppServices.client.isLoggedIn {
             let liked = player.isLiked(song)
-            Button(liked ? L.t("高く評価した曲から削除", "Remove from Liked Songs") : L.t("高く評価した曲に追加", "Add to Liked Songs"),
+            Button(liked ? L.t("高く評価した曲から削除", "Remove from liked music") : L.t("高く評価した曲に追加", "Add to liked music"),
                    systemImage: liked ? "checkmark.circle.fill" : "plus.circle") { player.setLiked(song, !liked) }
         }
         if let removeFromPlaylist {
             Button(L.t("このプレイリストから削除", "Remove from this playlist"), systemImage: "trash", role: .destructive, action: removeFromPlaylist)
         }
         if !external {
-            Button(L.t("曲のラジオを再生", "Go to song radio"), systemImage: "dot.radiowaves.left.and.right") { player.playSong(song) }
+            Button(L.t("ラジオを開始", "Start radio"), systemImage: "dot.radiowaves.left.and.right") { player.playSong(song) }
         }
         if let albumId = song.album?.browseId {
             Button(L.t("アルバムへ移動", "Go to album"), systemImage: "square.stack") { AppServices.nav.album(albumId) }
@@ -137,7 +137,7 @@ struct SongMenuItems: View {
                    systemImage: "person") { AppServices.nav.artist(artist.browseId!) }
         }
         if !external {
-            Button(L.t("曲の画面を開く", "Open song"), systemImage: "music.note") { AppServices.nav.song(song) }
+            Button(L.t("曲の画面を開く", "Go to song"), systemImage: "music.note") { AppServices.nav.song(song) }
             ShareLink(item: SongActions.url(song), subject: Text(song.title), message: Text(SongActions.shareText(song))) {
                 Label(L.t("共有", "Share"), systemImage: "square.and.arrow.up")
             }

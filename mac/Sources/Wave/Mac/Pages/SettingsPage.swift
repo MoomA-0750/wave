@@ -35,7 +35,7 @@ struct SettingsPageView: View {
                             Text(account.stateText).subtle()
                         }
                         Spacer()
-                        Button(account.isLoggedIn ? L.t("ログアウト", "Log out") : L.t("ログイン", "Log in")) {
+                        Button(account.isLoggedIn ? L.t("ログアウト", "Sign out") : L.t("ログイン", "Sign in")) {
                             if account.isLoggedIn { confirmLogout = true } else { LoginWindowController.show() }
                         }
                     }
@@ -43,18 +43,18 @@ struct SettingsPageView: View {
                 // ログインが切れたと確かめられた・疑いがある（ADR-0004）: Android と同じく、もう一度ログインを勧める。
                 // 通信の失敗だけでは出さない
                 if account.isLoggedIn, account.session == .expired {
-                    warning(L.t("再ログインが必要です", "You need to log in again"),
-                            L.t("ログインが切れました。もう一度ログインしてください。", "Your login has expired. Please log in again.")) {
-                        Button(L.t("もう一度ログイン", "Log in again")) { LoginWindowController.show() }
+                    warning(L.t("再ログインが必要です", "You need to sign in again"),
+                            L.t("ログインが切れました。もう一度ログインしてください。", "Your sign-in has expired. Please sign in again.")) {
+                        Button(L.t("ログインし直す", "Sign in again")) { LoginWindowController.show() }
                     }
                 } else if account.isLoggedIn, case .suspect = account.session {
-                    warning(L.t("ログイン状態を確認できていません", "Couldn’t verify your login"),
-                            L.t("少し待っても直らなければ、もう一度ログインしてください。", "If this doesn’t clear up soon, log in again.")) {
-                        Button(L.t("もう一度ログイン", "Log in again")) { LoginWindowController.show() }
+                    warning(L.t("ログイン状態を確かめられていません", "Couldn't verify your sign-in"),
+                            L.t("少し待っても直らなければ、もう一度ログインしてください。", "If this doesn't clear up soon, sign in again.")) {
+                        Button(L.t("ログインし直す", "Sign in again")) { LoginWindowController.show() }
                     }
                 }
                 if account.savedLoginUnreadable && !account.isLoggedIn {
-                    warning(L.t("保存したログイン情報を読み込めませんでした", "Couldn’t read your saved login"), L.t("ログインし直すと上書きされます。", "Logging in again will replace it.")) {
+                    warning(L.t("保存したログイン情報を読み込めませんでした", "Couldn't read your saved sign-in"), L.t("ログインし直すと上書きされます。", "Signing in again will replace it.")) {
                         EmptyView()
                     }
                 }
@@ -62,7 +62,7 @@ struct SettingsPageView: View {
                 section(L.t("再生", "Play"))
                 card {
                     toggleRow(L.t("再生した曲を YouTube Music の再生履歴に残す", "Save played songs to your YouTube Music history"),
-                              L.t("オフにすると、wave で聴いた曲は履歴やおすすめに使われません", "When off, songs you play in wave won’t be used for history or recommendations"),
+                              L.t("オフにすると、wave で聴いた曲は履歴やおすすめに使われません", "When off, songs you play in wave won't be used for history or recommendations"),
                               isOn: $sendHistory)
                         .onChange(of: sendHistory) { _, v in
                             AppServices.settings.sendHistory = v
@@ -85,7 +85,7 @@ struct SettingsPageView: View {
                 section("Discord")
                 card {
                     VStack(alignment: .leading, spacing: 8) {
-                        toggleRow(L.t("Discord に再生中の曲を出す", "Show what you’re playing on Discord"),
+                        toggleRow(L.t("Discord に再生中の曲を出す", "Show what you're playing on Discord"),
                                   L.t("この Mac の Discord のアプリに「聴いています」を出します。スマホなどほかの端末で鳴らしている曲も出します",
                                       "Shows “Listening to” through the Discord app on this Mac, including songs playing on your other devices"),
                                   isOn: $discordOn)
@@ -141,7 +141,7 @@ struct SettingsPageView: View {
                         }
                         Spacer(minLength: 40)
                         Picker("", selection: $language) {
-                            Text(L.t("macOS に合わせる", "Use macOS language")).tag("system")
+                            Text(L.t("端末に合わせる", "Use device language")).tag("system")
                             Text("日本語").tag("ja")
                             Text("English").tag("en")
                         }
@@ -169,7 +169,7 @@ struct SettingsPageView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("wave for Mac \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1.0")")
                         Text(L.t("ログイン情報は macOS のキーチェーンに、このユーザーとこの Mac だけが読める形で保存します。",
-                                 "Your login is stored in the macOS keychain, readable only by this user on this Mac."))
+                                 "Your sign-in is stored in the macOS keychain, readable only by this user on this Mac."))
                             .font(.caption).foregroundStyle(.secondary)
                         Text(L.t("データの場所: ", "Data folder: ") + AppPaths.data.path).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
                     }
@@ -185,11 +185,11 @@ struct SettingsPageView: View {
                 discordState = Self.discordStateText()
             }
         }
-        .confirmationDialog(L.t("ログアウトしますか？", "Log out?"), isPresented: $confirmLogout) {
-            Button(L.t("ログアウト", "Log out"), role: .destructive) { AppServices.account.logOut() }
+        .confirmationDialog(L.t("ログアウトしますか？", "Sign out?"), isPresented: $confirmLogout) {
+            Button(L.t("ログアウト", "Sign out"), role: .destructive) { AppServices.account.logOut() }
             Button(L.t("キャンセル", "Cancel"), role: .cancel) {}
         } message: {
-            Text(L.t("この Mac に保存したログイン情報を消します。", "This removes your login saved on this Mac."))
+            Text(L.t("この Mac に保存したログイン情報を消します。", "This removes your sign-in saved on this Mac."))
         }
     }
 
@@ -213,7 +213,7 @@ struct SettingsPageView: View {
             VStack(alignment: .leading, spacing: 8) {
                 toggleRow(L.t("スマートダウンロード", "Smart downloads"),
                           L.t("いつも聴いている曲・好きそうな曲・おすすめから、聴きそうな曲を毎日選び直して取っておく",
-                              "Automatically download songs you might like from your favorites, something new and recommendations, refreshed daily"),
+                              "Automatically download songs you're likely to play from songs you play often, songs you might like and recommendations, refreshed daily"),
                           isOn: Binding(get: { downloads.settings.smartDownloads }, set: { downloads.setSmart($0) }))
                 if downloads.settings.smartDownloads {
                     HStack {

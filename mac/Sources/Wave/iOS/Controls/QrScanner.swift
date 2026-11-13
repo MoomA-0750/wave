@@ -30,7 +30,7 @@ struct QrScanSheet: View {
                     VStack(spacing: 12) {
                         note(L.t("カメラが許可されていません。設定で wave のカメラを許可するか、文字列を貼り付けてください。",
                                  "Camera access is off. Allow it for wave in Settings, or paste the text instead."))
-                        Button(L.t("設定を開く", "Open Settings")) {
+                        Button(L.t("設定を開く", "Open settings")) {
                             if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
                         }
                     }

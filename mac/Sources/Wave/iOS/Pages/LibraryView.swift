@@ -20,9 +20,9 @@ struct LibraryView: View {
                     Label(L.t("ライブラリ", "Library"), systemImage: "books.vertical")
                 } description: {
                     Text(L.t("ログインすると、YouTube Music のプレイリスト・アーティスト・アルバムがここに並びます。",
-                             "Log in to see your YouTube Music playlists, artists and albums here."))
+                             "Sign in to see your YouTube Music playlists, artists and albums here."))
                 } actions: {
-                    Button(L.t("ログイン", "Log in")) { LoginGate.shared.skipped = false }.buttonStyle(.borderedProminent)
+                    Button(L.t("ログイン", "Sign in")) { LoginGate.shared.skipped = false }.buttonStyle(.borderedProminent)
                 }
             } else if grid {
                 ScrollView {
@@ -56,7 +56,7 @@ struct LibraryView: View {
             }
         }
         .navigationTitle(L.t("ライブラリ", "Library"))
-        .searchable(text: $filter, prompt: L.t("ライブラリを検索", "Search in Your Library"))
+        .searchable(text: $filter, prompt: L.t("ライブラリを検索", "Search library"))
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Button { AppServices.nav.settings() } label: { LibraryViewAvatar(url: account.photoUrl) }
@@ -281,7 +281,7 @@ struct HistoryView: View {
         let result = (try? await AppServices.music.history()) ?? .failed(.network)
         loading = false
         guard let page = result.value else {
-            error = result.failure == .notLoggedIn ? L.t("再生履歴を見るにはログインしてください", "Log in to see your listening history")
+            error = result.failure == .notLoggedIn ? L.t("再生履歴を見るにはログインしてください", "Sign in to see your listening history")
                 : L.t("再生履歴を読み込めませんでした", "Couldn't load your listening history")
             return
         }

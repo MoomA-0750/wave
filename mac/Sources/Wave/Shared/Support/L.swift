@@ -21,6 +21,12 @@ enum L {
     /// 曲数（英語は単数・複数を分ける）。
     static func songs(_ count: Int) -> String { ja ? "\(count) 曲" : count == 1 ? "1 song" : "\(count) songs" }
 
+    /// 曲数と合計の長さ（「3 曲、13 分 5 秒」/ "3 songs, 13 min 5 sec"）。more は曲数が読めた分より多いとき（「100 曲以上」/ "100+ songs"）。
+    static func songsAndLength(_ count: Int, _ seconds: Int, more: Bool = false) -> String {
+        let n = more ? (ja ? "\(count) 曲以上" : "\(count)+ songs") : songs(count)
+        return n + (ja ? "、" : ", ") + length(seconds)
+    }
+
     /// 合計の長さ（プレイリスト・アルバムの補足）。
     static func length(_ seconds: Int) -> String {
         let h = seconds / 3600, m = (seconds % 3600) / 60, s = seconds % 60

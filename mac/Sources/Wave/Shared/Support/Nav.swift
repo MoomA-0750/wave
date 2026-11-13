@@ -77,13 +77,13 @@ final class Nav {
     }
 
     func likedSongs() {
-        go(.collection(CollectionRequest(isAlbum: false, id: MusicRepository.likedSongs, title: L.t("高く評価した曲", "Liked Songs"),
+        go(.collection(CollectionRequest(isAlbum: false, id: MusicRepository.likedSongs, title: L.t("高く評価した曲", "Liked music"),
                                          thumbnailUrl: AppServices.library.likedThumbnail)))
     }
 
     /// 高く評価した曲のうち、そのアーティストのもの。
     func likedSongsBy(_ browseId: String?, _ name: String) {
-        go(.collection(CollectionRequest(isAlbum: false, id: MusicRepository.likedSongs, title: L.t("高く評価した曲", "Liked Songs"),
+        go(.collection(CollectionRequest(isAlbum: false, id: MusicRepository.likedSongs, title: L.t("高く評価した曲", "Liked music"),
                                          thumbnailUrl: AppServices.library.likedThumbnail, subtitle: name, artist: ArtistFilter(browseId: browseId, name: name))))
     }
 

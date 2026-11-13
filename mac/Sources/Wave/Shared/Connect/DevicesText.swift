@@ -16,13 +16,13 @@ enum DevicesText {
         case .showingOffer:
             #if os(macOS)
                 return L.t("加える端末で wave の「端末の連携」を開き、この QR を読み取ってください（PC なら下の文字列をコピーして貼り付けます）。2分で無効になります。",
-                           "On the device you’re adding, open Devices in wave and scan this QR code (on a PC, copy the text below and paste it). Expires in 2 minutes.")
+                           "On the device you're adding, open Devices in wave and scan this QR code (on a PC, copy the text below and paste it). Expires in 2 minutes.")
             #else
                 return L.t("加える端末で wave の「端末の連携」を開き、この QR を読み取ってください（PC なら下の文字列を送って貼り付けます）。2分で無効になります。",
-                           "On the device you’re adding, open Devices in wave and scan this QR code (on a PC, send the text below and paste it). Expires in 2 minutes.")
+                           "On the device you're adding, open Devices in wave and scan this QR code (on a PC, send the text below and paste it). Expires in 2 minutes.")
             #endif
         case .enterCode:
-            return (pairing.text.map { $0 + "\n" } ?? "") + L.t("加える端末に出ている6桁の数字を入力してください", "Enter the 6-digit code shown on the device you’re adding")
+            return (pairing.text.map { $0 + "\n" } ?? "") + L.t("加える端末に出ている6桁の数字を入力してください", "Enter the 6-digit code shown on the device you're adding")
         case .showCode:
             let peer = pairing.peerName ?? ""
             return L.t("「\(peer)」に、この6桁の数字を入力してください", "Enter this 6-digit code on “\(peer)”")
@@ -30,7 +30,7 @@ enum DevicesText {
             let peer = pairing.peerName ?? ""
             if pairing.grantDeviceId != nil {
                 return L.t("「\(peer)」を加えました。プレイリストなどを使えるようにするには、ログインを渡してください。",
-                           "Added “\(peer)”. To let it use your playlists and more, share your sign-in.")
+                           "Added “\(peer)”. To let it use your playlists and more, give it your login.")
             }
             return L.t("「\(peer)」と連携しました", "Connected with “\(peer)”")
         case .failed: return pairing.text ?? ""
@@ -51,7 +51,7 @@ enum DevicesText {
                 return L.t("届きません（Tailscale）", "Unreachable (Tailscale)")
             #endif
         case .notMember: return info.inHousehold ? L.t("受け付けられません", "Not accepted") : L.t("まだ連携していません", "Not set up yet")
-        case .failed: return L.t("つながりませんでした", "Couldn’t connect")
+        case .failed: return L.t("つながりませんでした", "Couldn't connect")
         case .disconnected: return L.t("切断", "Disconnected")
         }
     }
@@ -66,19 +66,19 @@ enum DevicesText {
         member.isController ? L.t("\(member.label)（操作だけ）", "\(member.label) (remote only)") : member.label
     }
 
-    static let grantTitle = L.t("ログインを渡しますか？", "Share your sign-in?")
+    static let grantTitle = L.t("ログインを渡しますか？", "Give your login?")
 
     static func grantMessage(_ member: MemberView) -> String {
         L.t("「\(label(member))」に、この端末の YouTube のログインを渡します。ほかのアプリ（home-dashboard など）から、あなたのプレイリスト・高く評価した曲・おすすめを使えるようになります。wave API を動かしている機械に入れる人は、それらを読めます。",
-            "This sends this device’s YouTube sign-in to “\(label(member))”, so other apps (such as home-dashboard) can use your playlists, liked songs and recommendations. Anyone with access to the machine running wave API can read them.")
+            "This gives “\(label(member))” this device's YouTube login, so other apps (such as home-dashboard) can use your playlists, liked music and recommendations. Anyone with access to the machine running wave API can read them.")
     }
 
     /// wave-api にログインを渡し、結果を知らせる（確認の画面で「渡す」を押したときだけ）。
     static func grantLogin(_ member: MemberView) {
         Task {
             let sent = await AppServices.connect.grantLogin(member.deviceId)
-            AppServices.toast.show(sent ? L.t("「\(label(member))」にログインを渡しました", "Shared your sign-in with \(label(member))")
-                : L.t("ログインを渡せませんでした", "Couldn’t share your sign-in"))
+            AppServices.toast.show(sent ? L.t("「\(label(member))」にログインを渡しました", "Gave your login to “\(label(member))”")
+                : L.t("ログインを渡せませんでした", "Couldn't give your login"))
         }
     }
 
@@ -86,7 +86,7 @@ enum DevicesText {
     static func remove(_ member: MemberView) {
         Task {
             let removed = await AppServices.connect.removeMember(member.deviceId)
-            AppServices.toast.show(removed ? L.t("「\(member.label)」を外しました", "Removed \(member.label)") : L.t("外せませんでした", "Couldn’t remove the device"))
+            AppServices.toast.show(removed ? L.t("「\(member.label)」を外しました", "Removed “\(member.label)”") : L.t("外せませんでした", "Couldn't remove the device"))
         }
     }
 

@@ -84,7 +84,7 @@ struct ArtistView: View {
                             }
                             .frame(width: 56, height: 56)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(L.t("高く評価した曲", "Liked Songs")).font(.body.weight(.semibold))
+                                Text(L.t("高く評価した曲", "Liked music")).font(.body.weight(.semibold))
                                 Text(model.likedText(artist.name)).subtle()
                             }
                             Spacer(minLength: 0)
