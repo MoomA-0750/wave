@@ -327,7 +327,6 @@ private struct QueueEmptyNote: View {
         .padding(.vertical, 16)
     }
 }
-#endif
 
 private struct ListRowBackgroundClearKey: EnvironmentKey {
     static let defaultValue = false
@@ -357,3 +356,4 @@ private struct HeaderButtonColor: ViewModifier {
         if embedded { content.foregroundStyle(Color.white) } else { content }
     }
 }
+#endif
