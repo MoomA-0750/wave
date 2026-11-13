@@ -425,7 +425,38 @@ pub fn playlist_page(root: &Value) -> PlaylistPage {
         subtitle: subtitle.filter(|s| !s.is_empty()),
         thumbnail_url: thumbnail,
         sortable: !find_all(root, "sortFilterSubMenuRenderer").is_empty(),
+        suggestions_continuation: root
+            .path(&["contents", "twoColumnBrowseResultsRenderer", "secondaryContents", "sectionListRenderer", "continuations"])
+            .items()
+            .into_iter()
+            .find_map(|c| c.path(&["nextContinuationData", "continuation"]).str_())
+            .map(String::from),
     }
+}
+
+/// 自分のプレイリストの候補の棚。sectionList の続き（最初）と、棚の「更新」（musicShelfContinuation）の両方を読む。
+/// 候補の棚が無ければ None。
+pub fn playlist_suggestions(root: &Value) -> Option<PlaylistSuggestions> {
+    let shelf = root.path(&["continuationContents", "musicShelfContinuation"]).or_else(|| {
+        root.path(&["continuationContents", "sectionListContinuation", "contents"])
+            .items()
+            .into_iter()
+            .find_map(|c| c.path(&["musicShelfRenderer"]))
+    })?;
+    let songs = shelf
+        .path(&["contents"])
+        .items()
+        .into_iter()
+        .filter_map(|i| i.path(&["musicResponsiveListItemRenderer"]))
+        .filter_map(responsive_list_item_song)
+        .collect();
+    let reload = shelf
+        .path(&["continuations"])
+        .items()
+        .into_iter()
+        .find_map(|c| c.path(&["reloadContinuationData", "continuation"]).str_())
+        .map(String::from);
+    Some(PlaylistSuggestions { songs, reload })
 }
 
 const CONTINUATION_CONTAINERS: [&str; 2] = ["appendContinuationItemsAction", "continuationItems"];
@@ -908,6 +939,7 @@ pub fn parse_duration(text: &str) -> Option<u32> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     fn fixture(name: &str) -> Value {
         // 手本の応答は Android の core と共通（core/src/desktopTest/resources/fixtures）
@@ -1094,6 +1126,22 @@ mod tests {
         assert_eq!(like_status(&fixture("next_radio"), "other"), None);
         let liked: Value = serde_json::from_str(&text.replace("\"INDIFFERENT\"", "\"LIKE\"")).unwrap();
         assert_eq!(like_status(&liked, video_id), Some(LikeStatus::Like));
+    }
+
+    #[test]
+    fn playlist_suggestions_and_reload() {
+        let first = playlist_suggestions(&fixture("browse_playlist_suggestions")).expect("shelf");
+        assert_eq!(first.songs.len(), 7);
+        assert!(first.songs.iter().all(|s| !s.video_id.is_empty() && !s.title.is_empty()));
+        assert!(first.reload.is_some());
+        let again = playlist_suggestions(&fixture("browse_playlist_suggestions_reload")).expect("reload");
+        assert_eq!(again.songs.len(), 7);
+        assert_ne!(again.songs[0].video_id, first.songs[0].video_id);
+        assert!(again.reload.is_some());
+        assert_eq!(playlist_suggestions(&fixture("next_radio")), None);
+        // 最初のページは sectionList の続きのトークンを持つ（自分のプレイリストなら候補の棚。ほかの人のものは関連の棚なので読まない）
+        let own = json!({ "contents": { "twoColumnBrowseResultsRenderer": { "secondaryContents": { "sectionListRenderer": { "contents": [], "continuations": [{ "nextContinuationData": { "continuation": "tok" } }] } } } } });
+        assert_eq!(playlist_page(&own).suggestions_continuation.as_deref(), Some("tok"));
     }
 
     #[test]

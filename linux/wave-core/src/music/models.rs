@@ -155,6 +155,15 @@ pub struct PlaylistPage {
     pub thumbnail_url: Option<String>,
     /// YouTube Music に並べ替えてもらえる（追加した日・リリース日の並べ替えのメニューがある。Mac と同じく sortFilterSubMenuRenderer で見る）。
     pub sortable: bool,
+    /// 最初のページの sectionList の続きのトークン。自分のプレイリスト（editable）なら候補（おすすめの曲）の棚が来る。
+    pub suggestions_continuation: Option<String>,
+}
+
+/// 自分のプレイリストの候補（おすすめの曲）。reload は「更新」で別の候補を読むトークン。
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct PlaylistSuggestions {
+    pub songs: Vec<Song>,
+    pub reload: Option<String>,
 }
 
 /// 次に流れる曲（ラジオ）。

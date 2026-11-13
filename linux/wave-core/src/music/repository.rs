@@ -3,7 +3,7 @@
 use serde_json::json;
 
 use super::models::{Account, AddToPlaylistResult, AlbumPage, LikeStatus, MusicVideo, ArtistPage, HomePage, PlaylistPage, PlaylistSummary, SongPage, UpNextPage, VerifiedAccount, AlbumSummary, ArtistSummary, SearchPage, SearchSuggestions, MoodSection, HomeItem};
-use super::models::{ArtistPost, ArtistRef};
+use super::models::{ArtistPost, ArtistRef, PlaylistSuggestions};
 use super::parsers;
 use super::podcast::{self, PodcastEpisode, PodcastPage, PodcastSummary};
 use crate::innertube::{ApiResult, Failure, InnerTube};
@@ -549,6 +549,21 @@ impl MusicRepository {
         }
         let root = self.client.post("playlist/create", json!({ "title": title, "privacyStatus": "PRIVATE" }), true, &[]).await?;
         root.get("playlistId").and_then(|p| p.as_str()).map(String::from).ok_or(Failure::Parse)
+    }
+
+    /// 非公開のプレイリストを曲を入れて作る（曲はまとめて渡す。YouTube は同じ曲を2つ入れない）。作った playlistId を返す。
+    pub async fn create_playlist_with(&self, title: &str, video_ids: &[String]) -> ApiResult<String> {
+        if !self.client.is_logged_in() {
+            return Err(Failure::NotLoggedIn);
+        }
+        let root = self.client.post("playlist/create", json!({ "title": title, "privacyStatus": "PRIVATE", "videoIds": video_ids }), true, &[]).await?;
+        root.get("playlistId").and_then(|p| p.as_str()).map(String::from).ok_or(Failure::Parse)
+    }
+
+    /// 自分のプレイリストの候補（おすすめの曲）を読む。token は最初のページの suggestions_continuation か、前の候補の reload（「更新」）。
+    /// 候補の棚が無ければ Ok(None)。
+    pub async fn playlist_suggestions(&self, token: &str) -> ApiResult<Option<PlaylistSuggestions>> {
+        Ok(parsers::playlist_suggestions(&self.logged_in_post("browse", json!({ "continuation": token })).await?))
     }
 
     /// 曲に見せる映像（next の最初の応答から）。無ければ None。

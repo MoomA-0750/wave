@@ -318,6 +318,56 @@ pub fn create_playlist(app: &Rc<App>, song: Option<Song>, on_created: Option<Rc<
     entry.grab_focus();
 }
 
+/// キューをプレイリストとして保存する（SPEC「キューをプレイリストとして保存」）。名前を聞き、キューの全部（聴いた曲・今の曲・先の曲）を
+/// 並びの順に入れた非公開のプレイリストを作る。エピソード・ライブ・重複は除く。
+pub fn save_queue(app: &Rc<App>) {
+    let (songs, _) = app.playback.queue();
+    let ids = wave_core::music::save_queue::video_ids_to_save(&songs);
+    if ids.is_empty() {
+        app.toast("保存できる曲がキューにありません");
+        return;
+    }
+    let entry = gtk::Entry::builder().placeholder_text("プレイリスト名").text(wave_core::music::save_queue::default_title(&songs)).activates_default(true).build();
+    let dialog = adw::AlertDialog::builder()
+        .heading("キューをプレイリストとして保存")
+        .body(format!("キューの {} 曲を、新しい非公開のプレイリストに入れます。", ids.len()))
+        .extra_child(&entry)
+        .default_response("save")
+        .close_response("cancel")
+        .build();
+    dialog.add_response("cancel", "キャンセル");
+    dialog.add_response("save", "保存");
+    dialog.set_response_appearance("save", adw::ResponseAppearance::Suggested);
+    let sync = {
+        let dialog = dialog.clone();
+        move |entry: &gtk::Entry| dialog.set_response_enabled("save", !entry.text().trim().is_empty())
+    };
+    sync(&entry);
+    entry.connect_changed(sync);
+    let (app, entry_c) = (app.clone(), entry.clone());
+    let parent = app.window();
+    dialog.connect_response(None, move |_, response| {
+        let title = entry_c.text().trim().to_string();
+        if response != "save" || title.is_empty() {
+            return;
+        }
+        let (app, ids) = (app.clone(), ids.clone());
+        gtk::glib::spawn_future_local(async move {
+            let repo = app.repo.clone();
+            let (name, sent) = (title.clone(), ids.clone());
+            match runtime::run(async move { repo.create_playlist_with(&name, &sent).await }).await {
+                Ok(_) => {
+                    app.toast(&format!("「{title}」に {} 曲を保存しました", ids.len()));
+                    super::library::reload(&app);
+                }
+                Err(_) => app.toast("キューを保存できませんでした"),
+            }
+        });
+    });
+    dialog.present(parent.as_ref());
+    entry.grab_focus();
+}
+
 /// 評価済みの曲の ✓ ボタンから開く小さなメニュー（Mac の「プレイリストに追加」の画面に当たる）:
 /// プレイリストに追加（新しいプレイリストも）と、高く評価した曲から削除。外したら on_unlike を呼ぶ。
 pub fn popup_saved(app: &Rc<App>, song: &Song, anchor: &impl IsA<gtk::Widget>, on_unlike: impl Fn() + 'static) {

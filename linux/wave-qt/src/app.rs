@@ -997,6 +997,40 @@ fn load(kind: &str, arg: String, extra: String) -> Loading {
             Box::pin(crate::extra::load_playlist(arg, extra))
         }
         "playlist.more" => Box::pin(crate::extra::load_playlist_more(arg, extra)),
+        "playlist.suggestions" => Box::pin(crate::extra::playlist_suggestions(arg)),
+        "playlist.addSuggestion" => Box::pin(crate::extra::add_suggestion(arg, extra)),
+        // キューをプレイリストとして保存（SPEC と同じ決まり）。"queue.saveInfo" は既定の名前と曲数、"queue.save" は arg の名前で作る
+        "queue.saveInfo" => {
+            let songs = services.as_ref().map(|s| s.playback.queue().0).unwrap_or_default();
+            let value = json!({ "title": wave_core::music::save_queue::default_title(&songs), "count": wave_core::music::save_queue::video_ids_to_save(&songs).len() });
+            Box::pin(async move { value })
+        }
+        "queue.save" => {
+            let songs = services.as_ref().map(|s| s.playback.queue().0).unwrap_or_default();
+            let ids = wave_core::music::save_queue::video_ids_to_save(&songs);
+            let services = services.clone();
+            Box::pin(async move {
+                let title = arg.trim().to_string();
+                if title.is_empty() || ids.is_empty() {
+                    return json!({ "ok": false });
+                }
+                let (t, sent) = (title.clone(), ids.clone());
+                match runtime::run(async move { repo.create_playlist_with(&t, &sent).await }).await {
+                    Ok(id) => {
+                        toast(&format!("「{title}」に {} 曲を保存しました", ids.len()));
+                        if let Some(s) = &services {
+                            load_library(s);
+                        }
+                        json!({ "ok": true, "id": id, "count": ids.len() })
+                    }
+                    Err(e) => {
+                        eprintln!("save queue failed: {e}");
+                        toast("キューを保存できませんでした");
+                        json!({ "ok": false })
+                    }
+                }
+            })
+        }
         "search.lyrics" => Box::pin(crate::extra::search_lyrics(arg)),
         "artist" => Box::pin(async move {
             let id = arg.clone();

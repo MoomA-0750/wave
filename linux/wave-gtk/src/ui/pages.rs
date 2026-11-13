@@ -554,6 +554,8 @@ struct Collection {
     kind_chips: gtk::Box,
     spinner: adw::Spinner,
     play: gtk::Button,
+    /// 一番下の「おすすめの曲」（自分のプレイリストだけ。YouTube Music の候補）。
+    suggestions: gtk::Box,
 }
 
 /// プレイリストのページ（LM は高く評価した曲）。
@@ -596,6 +598,7 @@ fn collection_page(app: &Rc<App>, id: &str, title: &str, source: Source, songs: 
         kind_chips,
         spinner: adw::Spinner::builder().width_request(18).height_request(18).build(),
         play: gtk::Button::builder().icon_name("media-playback-start-symbolic").tooltip_text("再生").valign(gtk::Align::Center).visible(false).css_classes(["circular", "suggested-action", "play-large"]).build(),
+        suggestions: gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(4).margin_top(24).visible(false).build(),
     });
     collection.restore_order();
     let column = page_column();
@@ -605,6 +608,7 @@ fn collection_page(app: &Rc<App>, id: &str, title: &str, source: Source, songs: 
     collection.build_kind_chips();
     column.append(&collection.kind_chips);
     column.append(&collection.list_holder);
+    column.append(&collection.suggestions);
     collection.render_header(None, None);
     match songs {
         Some(songs) => {
@@ -943,6 +947,7 @@ impl Collection {
         self.generation.set(generation);
         self.all.borrow_mut().clear();
         *self.error.borrow_mut() = None;
+        self.suggestions.set_visible(false);
         self.loading.set(true);
         self.spinner.set_visible(true);
         self.render();
@@ -1039,6 +1044,7 @@ impl Collection {
             *self.thumbnail.borrow_mut() = first.thumbnail_url.clone();
         }
         let subtitle = first.subtitle.clone();
+        let suggestions = first.suggestions_continuation.clone().filter(|_| first.editable && !self.is_liked());
         self.render_header(None, subtitle.clone());
         self.append_entries(first.songs.into_iter().zip(first.set_video_ids.into_iter().chain(std::iter::repeat(None))).collect());
         // 届いたページから順に出す
@@ -1059,6 +1065,100 @@ impl Collection {
             let songs: Vec<Song> = self.all.borrow().iter().map(|(s, _)| s.clone()).collect();
             self.render_header(None, Some(collection::count_and_length(&songs)));
         }
+        // 最後のページまで読んでから、一番下におすすめの曲を出す
+        if let Some(token) = suggestions {
+            self.load_suggestions(token, generation);
+        }
+    }
+
+    /// おすすめの曲（YouTube Music の候補）を読んで出す。token は最初のページの続きか、前の候補の「更新」。
+    fn load_suggestions(self: &Rc<Self>, token: String, generation: u64) {
+        let this = self.clone();
+        gtk::glib::spawn_future_local(async move {
+            let repo = this.app.repo.clone();
+            let result = runtime::run(async move { repo.playlist_suggestions(&token).await }).await;
+            if this.generation.get() != generation {
+                return;
+            }
+            match result {
+                Ok(Some(found)) if !found.songs.is_empty() => this.render_suggestions(found.songs, found.reload, generation),
+                // 候補が無い・読めないときは出さない
+                _ => this.suggestions.set_visible(false),
+            }
+        });
+    }
+
+    fn render_suggestions(self: &Rc<Self>, songs: Vec<Song>, reload: Option<String>, generation: u64) {
+        while let Some(child) = self.suggestions.first_child() {
+            self.suggestions.remove(&child);
+        }
+        let head = gtk::Box::builder().spacing(8).build();
+        let titles = gtk::Box::builder().orientation(gtk::Orientation::Vertical).hexpand(true).build();
+        titles.append(&gtk::Label::builder().label("おすすめの曲").xalign(0.0).css_classes(["title-3"]).build());
+        titles.append(&gtk::Label::builder().label("このプレイリストに合いそうな曲").xalign(0.0).css_classes(["caption", "dim-label"]).build());
+        head.append(&titles);
+        if let Some(token) = reload {
+            let refresh = gtk::Button::builder().label("更新").valign(gtk::Align::Center).css_classes(["pill"]).build();
+            let weak = Rc::downgrade(self);
+            refresh.connect_clicked(move |b| {
+                b.set_sensitive(false);
+                if let Some(c) = weak.upgrade() {
+                    c.load_suggestions(token.clone(), generation);
+                }
+            });
+            head.append(&refresh);
+        }
+        self.suggestions.append(&head);
+        let list = gtk::ListBox::builder().selection_mode(gtk::SelectionMode::None).css_classes(["boxed-list-separate", "suggestion-list"]).margin_top(8).build();
+        for song in songs {
+            let row = gtk::ListBoxRow::builder().activatable(true).build();
+            let line = gtk::Box::builder().spacing(12).margin_top(6).margin_bottom(6).margin_start(8).margin_end(8).build();
+            let art = images::square(44);
+            art.load(song.thumbnail_url.as_deref(), 88);
+            line.append(&art.root);
+            let text = gtk::Box::builder().orientation(gtk::Orientation::Vertical).valign(gtk::Align::Center).hexpand(true).build();
+            text.append(&gtk::Label::builder().label(&song.title).xalign(0.0).ellipsize(gtk::pango::EllipsizeMode::End).build());
+            text.append(&gtk::Label::builder().label(song.subtitle()).xalign(0.0).ellipsize(gtk::pango::EllipsizeMode::End).css_classes(["caption", "dim-label"]).build());
+            line.append(&text);
+            let add = gtk::Button::builder().icon_name("list-add-symbolic").tooltip_text("このプレイリストに追加").valign(gtk::Align::Center).css_classes(["flat", "circular"]).build();
+            line.append(&add);
+            row.set_child(Some(&line));
+            {
+                let (weak, song, row_c) = (Rc::downgrade(self), song.clone(), row.clone());
+                add.connect_clicked(move |b| {
+                    let Some(c) = weak.upgrade() else { return };
+                    b.set_sensitive(false);
+                    c.add_suggestion(song.clone(), row_c.clone(), b.clone());
+                });
+            }
+            {
+                let (app, song) = (self.app.clone(), song.clone());
+                row.connect_activate(move |_| app.playback.play_list(vec![song.clone()], 0));
+            }
+            list.append(&row);
+        }
+        list.connect_row_activated(|_, row| row.emit_activate());
+        self.suggestions.append(&list);
+        self.suggestions.set_visible(true);
+    }
+
+    /// 候補の曲をこのプレイリストに足す（候補は入っていない曲なので重複は確かめない）。足したら候補から外し、曲の並びの最後に出す。
+    fn add_suggestion(self: &Rc<Self>, song: Song, row: gtk::ListBoxRow, button: gtk::Button) {
+        let this = self.clone();
+        gtk::glib::spawn_future_local(async move {
+            let (repo, id, video) = (this.app.repo.clone(), this.id.clone(), song.video_id.clone());
+            let result = runtime::run(async move { repo.add_to_playlist(&id, &video, true).await }).await;
+            if result == wave_core::music::models::AddToPlaylistResult::Added {
+                if let Some(list) = row.parent().and_downcast::<gtk::ListBox>() {
+                    list.remove(&row);
+                }
+                this.append_entries(vec![(song.clone(), None)]);
+                this.app.toast(&format!("「{}」に追加しました", this.title.borrow()));
+            } else {
+                button.set_sensitive(true);
+                this.app.toast("追加できませんでした");
+            }
+        });
     }
 
     /// 届いた曲を足す。絞り込み・並べ替えをしていなければ、行を後ろに足すだけにする（長いプレイリストで出し直さない）。

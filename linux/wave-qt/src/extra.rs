@@ -44,7 +44,28 @@ pub async fn load_playlist(id: String, order: String) -> Value {
     value["subtitle"] = json!(keep_units(&page.subtitle.clone().unwrap_or_default()));
     value["hasSubtitle"] = json!(page.subtitle.as_ref().is_some_and(|s| !s.is_empty()));
     value["sortable"] = json!(page.sortable);
+    // 自分のプレイリストなら、一番下のおすすめの曲を読むトークン（全部読んでから使う）
+    value["suggestions"] = json!(page.suggestions_continuation.clone().filter(|_| page.editable && id != wave_core::music::repository::LIKED_SONGS).unwrap_or_default());
     value
+}
+
+/// 自分のプレイリストのおすすめの曲（YouTube Music の候補）。token は最初のページの続きか、前の候補の「更新」。
+pub async fn playlist_suggestions(token: String) -> Value {
+    let Some(repo) = repo() else { return failure("not started") };
+    match runtime::run(async move { repo.playlist_suggestions(&token).await }).await {
+        Ok(Some(found)) => json!({ "songs": view::songs(&found.songs), "reload": found.reload.unwrap_or_default() }),
+        Ok(None) => json!({ "songs": [], "reload": "" }),
+        Err(e) => failure(e),
+    }
+}
+
+/// 候補の曲をプレイリストに足す（候補は入っていない曲なので重複は確かめない）。
+pub async fn add_suggestion(playlist_id: String, video_id: String) -> Value {
+    let Some(repo) = repo() else { return failure("not started") };
+    let result = runtime::run(async move { repo.add_to_playlist(&playlist_id, &video_id, true).await }).await;
+    let ok = result == wave_core::music::models::AddToPlaylistResult::Added;
+    crate::app::toast(if ok { "プレイリストに追加しました" } else { "追加できませんでした" });
+    json!({ "ok": ok })
 }
 
 /// プレイリストの続きの1ページ。

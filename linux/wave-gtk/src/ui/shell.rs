@@ -1745,12 +1745,14 @@ fn queue(app: &Rc<App>) -> gtk::Widget {
     switch.add(adw::Toggle::builder().label("履歴").name("history").build());
     switch.set_active_name(Some("queue"));
     let clear = gtk::Button::builder().label("キューを消去").css_classes(["flat", "text-link"]).visible(false).build();
+    let save = gtk::Button::builder().icon_name("bookmark-new-symbolic").tooltip_text("キューをプレイリストとして保存").css_classes(["flat", "circular"]).visible(false).build();
     let close = gtk::Button::builder().icon_name("window-close-symbolic").tooltip_text("閉じる").css_classes(["flat", "circular"]).build();
     let spacer = gtk::Box::builder().hexpand(true).build();
     let top = gtk::Box::builder().spacing(4).margin_top(12).margin_start(16).margin_end(12).margin_bottom(4).build();
     top.append(&switch);
     top.append(&spacer);
     top.append(&clear);
+    top.append(&save);
     top.append(&close);
     {
         let app = app.clone();
@@ -1764,6 +1766,10 @@ fn queue(app: &Rc<App>) -> gtk::Widget {
     {
         let app = app.clone();
         clear.connect_clicked(move |_| clear_user_queue(&app));
+    }
+    {
+        let app = app.clone();
+        save.connect_clicked(move |_| super::song_menu::save_queue(&app));
     }
     {
         let app = app.clone();
@@ -1830,6 +1836,8 @@ fn queue(app: &Rc<App>) -> gtk::Widget {
             };
             let user_added = !remote && !history && index.is_some_and(|i| user_queue_end(&items, i) > i + 1);
             clear.set_visible(user_added);
+            // ログインしていて手元のキューに曲があるときだけ（ほかの端末を映している間は出さない）
+            save.set_visible(!remote && app.repo.client().is_logged_in() && !items.is_empty());
             if entries.is_empty() {
                 empty_title.set_label(if history { "まだ流れた曲はありません" } else { "キューは空です" });
                 empty_text.set_label(if history { "流れた曲は、ここに新しい順に並びます" } else { "曲を再生すると、ここに次の曲が並びます" });

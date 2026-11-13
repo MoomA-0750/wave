@@ -13,4 +13,5 @@ pub mod podcast;
 pub mod queue_radio;
 pub mod releases;
 pub mod repository;
+pub mod save_queue;
 pub mod suspicion;

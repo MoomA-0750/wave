@@ -35,6 +35,8 @@ ListView {
     bottomMargin: Style.pageBottom
 
     function load() {
+        suggestions = []
+        suggestionsReload = ""
         moreLoading = false
         loading = true
         error = ""
@@ -95,6 +97,8 @@ ListView {
         if (continuation === "" || pages > 100) {
             // 読み終えた。サーバーの補足が無ければ、読めた曲から数える
             if (kind === "playlist" && !info.hasSubtitle) info = Object.assign({}, info, { subtitle: WaveApp.countAndLength(JSON.stringify(songs)) })
+            // 最後のページまで読んでから、一番下におすすめの曲を出す（自分のプレイリストだけ）
+            if (kind === "playlist" && (info.suggestions || "") !== "") loadSuggestions(info.suggestions)
             return
         }
         pages++
@@ -247,6 +251,80 @@ ListView {
     function playFrom(index, shuffle) {
         const source = page.kind === "history" ? "" : page.itemId
         WaveApp.playSongs(JSON.stringify(page.shown), index, source, shuffle)
+    }
+
+    // 一番下の「おすすめの曲」（YouTube Music の候補）。＋でこのプレイリストに足し、「更新」で別の候補に替える
+    property var suggestions: []
+    property string suggestionsReload: ""
+    property int suggestionsToken: -1
+    property int addToken: -1
+    property var adding: null
+    function loadSuggestions(token) { suggestionsToken = WaveApp.request("playlist.suggestions", token, "") }
+    function addSuggestion(song) {
+        adding = song
+        addToken = WaveApp.request("playlist.addSuggestion", page.itemId, song.id)
+    }
+    Connections {
+        target: WaveApp
+        function onLoaded(t, json) {
+            if (t === page.suggestionsToken) {
+                const v = JSON.parse(json)
+                // 候補が無い・読めないときは出さない
+                page.suggestions = v.error ? [] : (v.songs || [])
+                page.suggestionsReload = v.error ? "" : (v.reload || "")
+            } else if (t === page.addToken && page.adding) {
+                if (JSON.parse(json).ok) {
+                    const song = page.adding
+                    page.suggestions = page.suggestions.filter(s => s.id !== song.id)
+                    page.songs = page.songs.concat([Object.assign({}, song, { setVideoId: "" })])
+                    // 一覧を出し直しても、見ていた所（一番下）から動かさない
+                    const y = page.contentY
+                    page.arrange()
+                    Qt.callLater(() => { page.contentY = y })
+                }
+                page.adding = null
+            }
+        }
+    }
+    footer: ColumnLayout {
+        width: page.width
+        visible: page.suggestions.length > 0
+        spacing: 4
+        RowLayout {
+            Layout.fillWidth: true
+            Layout.leftMargin: 24
+            Layout.rightMargin: 24
+            Layout.topMargin: 32
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: 2
+                Label { text: "おすすめの曲"; font.pixelSize: 20; font.weight: Font.Bold; color: Style.foreground }
+                Label { text: "このプレイリストに合いそうな曲"; font.pixelSize: 12; color: Style.dim }
+            }
+            Item { Layout.fillWidth: true }
+            Btn { text: "更新"; visible: page.suggestionsReload !== ""; onClicked: page.loadSuggestions(page.suggestionsReload) }
+        }
+        Repeater {
+            model: page.suggestions
+            delegate: ItemDelegate {
+                Layout.fillWidth: true
+                Layout.leftMargin: 16
+                Layout.rightMargin: 16
+                height: 56
+                onClicked: WaveApp.playSongs(JSON.stringify([modelData]), 0, "", false)
+                contentItem: RowLayout {
+                    spacing: 12
+                    Art { Layout.preferredWidth: 40; Layout.preferredHeight: 40; source: modelData.thumb || modelData.art || ""; radius: Style.small }
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 1
+                        Label { Layout.fillWidth: true; text: modelData.title; elide: Text.ElideRight; color: Style.foreground }
+                        Label { Layout.fillWidth: true; text: modelData.subtitle || modelData.artists || ""; elide: Text.ElideRight; font.pixelSize: 12; color: Style.dim }
+                    }
+                    IconButton { iconName: "list-add-symbolic"; tip: "このプレイリストに追加"; enabled: page.adding === null; onClicked: page.addSuggestion(modelData) }
+                }
+            }
+        }
     }
 
     delegate: TrackRow {
