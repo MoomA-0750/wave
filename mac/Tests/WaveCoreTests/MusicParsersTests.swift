@@ -159,6 +159,14 @@ final class MusicParsersTests: XCTestCase {
         XCTAssertEqual(.like, MusicParsers.songInfo(Fixtures.parse(text.replacingOccurrences(of: "\"INDIFFERENT\"", with: "\"LIKE\"")), videoId: videoId).like)
     }
 
+    func testLikeStatusReadsTheViewModelShape() {
+        // 2026-11 からの形（videoActionBar の likeButtonViewModel）
+        let text = Fixtures.text("next_like_view_model")
+        XCTAssertEqual(.indifferent, MusicParsers.songInfo(Fixtures.json("next_like_view_model"), videoId: "mD__tW1cTfg").like)
+        XCTAssertNil(MusicParsers.songInfo(Fixtures.json("next_like_view_model"), videoId: "other").like)
+        XCTAssertEqual(.like, MusicParsers.songInfo(Fixtures.parse(text.replacingOccurrences(of: "\"INDIFFERENT\"", with: "\"LIKE\"")), videoId: "mD__tW1cTfg").like)
+    }
+
     func testPlaylistPagesAndSignInPrompt() {
         let page = MusicParsers.playlistPage(Fixtures.json("browse_playlist"))
         XCTAssertFalse(page.songs.isEmpty)

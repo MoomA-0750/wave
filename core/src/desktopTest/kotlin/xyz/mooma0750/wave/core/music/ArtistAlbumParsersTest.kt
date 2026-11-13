@@ -80,6 +80,17 @@ class ArtistAlbumParsersTest {
     }
 
     @Test
+    fun likeStatusReadsTheViewModelShape() {
+        // 2026-11 からの形（videoActionBar の likeButtonViewModel）
+        val text = fixtureText("next_like_view_model")
+        val videoId = "mD__tW1cTfg"
+        assertEquals(LikeStatus.Indifferent, MusicParsers.likeStatus(fixture("next_like_view_model"), videoId))
+        assertNull(MusicParsers.likeStatus(fixture("next_like_view_model"), "other-video"))
+        val liked = Json.parseToJsonElement(text.replace("\"INDIFFERENT\"", "\"LIKE\"")) as JsonObject
+        assertEquals(LikeStatus.Like, MusicParsers.likeStatus(liked, videoId))
+    }
+
+    @Test
     fun albumPlaylistIdFallsBackToTheCanonicalUrlThenToAnyAlbumPlaylist() {
         // 再生ボタンが無い応答（ログイン時の形）: canonical URL の list= から取る
         val expected = assertNotNull(MusicParsers.albumPage(fixture("browse_album"), "MPREb_test")).playlistId

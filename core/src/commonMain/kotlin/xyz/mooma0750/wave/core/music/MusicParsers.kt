@@ -469,18 +469,28 @@ internal object MusicParsers {
     fun createdPlaylistId(root: JsonObject): String? = root.path("playlistId").string()
 
     /**
-     * next の最初の応答にある、指定した曲の評価（`playerOverlays…likeButtonRenderer`）。続きの応答には無い。
-     * 別の曲の評価や、知らない値なら null。
+     * next の最初の応答にある、指定した曲の評価。続きの応答には無い。別の曲の評価や、知らない値なら null。
+     * 2026-11 から YouTube は `playerOverlayRenderer.videoActionBar` の `likeButtonViewModel`（評価は `likeStatusEntity`、
+     * 曲は押したときの `likeEndpoint.target`）で返す。前の `actions` の `likeButtonRenderer` も読む。
      */
     fun likeStatus(
         root: JsonObject,
         videoId: String,
     ): LikeStatus? {
-        val button =
-            root.path("playerOverlays", "playerOverlayRenderer", "actions").arrayItems().firstNotNullOfOrNull { it.path("likeButtonRenderer").asObject() }
-                ?: return null
-        if (button.path("target", "videoId").string() != videoId) return null
-        return when (button.path("likeStatus").string()) {
+        val overlay = root.path("playerOverlays", "playerOverlayRenderer").asObject() ?: return null
+        val button = overlay.path("actions").arrayItems().firstNotNullOfOrNull { it.path("likeButtonRenderer").asObject() }
+        val target: String?
+        val status: String?
+        if (button != null) {
+            target = button.path("target", "videoId").string()
+            status = button.path("likeStatus").string()
+        } else {
+            val model = findAll(overlay, "likeButtonViewModel").firstOrNull { it.path("likeStatusEntity").asObject() != null } ?: return null
+            target = findAll(model, "likeEndpoint").firstNotNullOfOrNull { it.path("target", "videoId").string() }
+            status = model.path("likeStatusEntity", "likeStatus").string()
+        }
+        if (target != videoId) return null
+        return when (status) {
             "LIKE" -> LikeStatus.Like
             "DISLIKE" -> LikeStatus.Dislike
             "INDIFFERENT" -> LikeStatus.Indifferent

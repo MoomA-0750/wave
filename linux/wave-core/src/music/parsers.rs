@@ -522,16 +522,21 @@ pub fn account(root: &Value) -> Option<Account> {
 }
 
 /// next の最初の応答から、頼んだ曲の評価（別の曲の評価のボタンなら None）。
+/// 2026-11 から YouTube は `playerOverlayRenderer.videoActionBar` の `likeButtonViewModel`（評価は `likeStatusEntity`、曲は押したときの
+/// `likeEndpoint.target`）で返す。前の `actions` の `likeButtonRenderer` も読む。
 pub fn like_status(root: &Value, video_id: &str) -> Option<LikeStatus> {
-    let button = root
-        .path(&["playerOverlays", "playerOverlayRenderer", "actions"])
-        .items()
-        .into_iter()
-        .find_map(|a| a.path(&["likeButtonRenderer"]))?;
-    if button.path(&["target", "videoId"]).str_() != Some(video_id) {
+    let overlay = root.path(&["playerOverlays", "playerOverlayRenderer"])?;
+    let (target, status) = if let Some(button) = overlay.path(&["actions"]).items().into_iter().find_map(|a| a.path(&["likeButtonRenderer"])) {
+        (button.path(&["target", "videoId"]).str_(), button.path(&["likeStatus"]).str_())
+    } else {
+        let model = find_all(overlay, "likeButtonViewModel").into_iter().find(|m| m.path(&["likeStatusEntity"]).is_some())?;
+        let target = find_all(model, "likeEndpoint").into_iter().find_map(|e| e.path(&["target", "videoId"]).str_());
+        (target, model.path(&["likeStatusEntity", "likeStatus"]).str_())
+    };
+    if target != Some(video_id) {
         return None;
     }
-    match button.path(&["likeStatus"]).str_()? {
+    match status? {
         "LIKE" => Some(LikeStatus::Like),
         "DISLIKE" => Some(LikeStatus::Dislike),
         "INDIFFERENT" => Some(LikeStatus::Indifferent),
@@ -1087,6 +1092,18 @@ mod tests {
         let video_id = &compact[at..at + compact[at..].find('"').unwrap()];
         assert_eq!(like_status(&fixture("next_radio"), video_id), Some(LikeStatus::Indifferent));
         assert_eq!(like_status(&fixture("next_radio"), "other"), None);
+        let liked: Value = serde_json::from_str(&text.replace("\"INDIFFERENT\"", "\"LIKE\"")).unwrap();
+        assert_eq!(like_status(&liked, video_id), Some(LikeStatus::Like));
+    }
+
+    #[test]
+    fn like_status_reads_the_view_model_shape() {
+        // 2026-11 からの形（videoActionBar の likeButtonViewModel）
+        let text = std::fs::read_to_string(format!("{}/../../core/src/desktopTest/resources/fixtures/next_like_view_model.json", env!("CARGO_MANIFEST_DIR"))).unwrap();
+        let root: Value = serde_json::from_str(&text).unwrap();
+        let video_id = "mD__tW1cTfg";
+        assert_eq!(like_status(&root, video_id), Some(LikeStatus::Indifferent));
+        assert_eq!(like_status(&root, "other"), None);
         let liked: Value = serde_json::from_str(&text.replace("\"INDIFFERENT\"", "\"LIKE\"")).unwrap();
         assert_eq!(like_status(&liked, video_id), Some(LikeStatus::Like));
     }

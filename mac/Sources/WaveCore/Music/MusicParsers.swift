@@ -346,9 +346,23 @@ public enum MusicParsers {
     /// next の最初の応答から、その曲の評価と歌詞のタブの browseId。
     public static func songInfo(_ root: JSON, videoId: String) -> SongInfo {
         var like: LikeStatus?
-        let button = root.path("playerOverlays", "playerOverlayRenderer", "actions").items.lazy.compactMap { $0.path("likeButtonRenderer").asObject }.first
-        if let button, button.path("target", "videoId").str == videoId {
-            switch button.path("likeStatus").str {
+        // 2026-11 から YouTube は videoActionBar の likeButtonViewModel（評価は likeStatusEntity、曲は押したときの likeEndpoint.target）で返す。
+        // 前の actions の likeButtonRenderer も読む。
+        let overlay = root.path("playerOverlays", "playerOverlayRenderer")
+        let target: String?
+        let status: String?
+        if let button = overlay.path("actions").items.lazy.compactMap({ $0.path("likeButtonRenderer").asObject }).first {
+            target = button.path("target", "videoId").str
+            status = button.path("likeStatus").str
+        } else if let model = overlay.findAll("likeButtonViewModel").first(where: { $0.path("likeStatusEntity").asObject != nil }) {
+            target = model.findAll("likeEndpoint").lazy.compactMap { $0.path("target", "videoId").str }.first
+            status = model.path("likeStatusEntity", "likeStatus").str
+        } else {
+            target = nil
+            status = nil
+        }
+        if target == videoId {
+            switch status {
             case "LIKE": like = .like
             case "DISLIKE": like = .dislike
             case "INDIFFERENT": like = .indifferent

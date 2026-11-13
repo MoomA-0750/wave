@@ -1206,3 +1206,9 @@
 
 - cramgent（M1）の本物の窓で MV を出すと、枠が黒いままだった。絵は1枚も届いていなかった。GStreamer の記録では、映像の流し手が 0.6 秒ごとにシークし直していた。指定の位置まで解くあいだに音が進み、ずれが 400ms を超えるので、着く前に次のシークが走り続けていた
 - シークしてから 2.5 秒は次のシークをせず、鳴っている間は 0.6 秒先へ飛ぶようにした。QML 版は止まっている間の1枚（preroll）も描くようにした（これまで鳴っている間の絵だけを描いていたので、止まっていると黒かった）。M1 の部品（v4l2slh264dec）のままで映った
+
+## 2026-11-13 曲の評価を YouTube の新しい形（likeButtonViewModel）からも読む
+
+- Android と iPhone で、再生画面の曲名の右のボタン（評価とプレイリストの✓）が＋や✓にならず、やり直しの絵のままだった。Pixel 3 の記録は `like status failed Parse`。next の応答から `playerOverlayRenderer.actions` の `likeButtonRenderer` が無くなり、`playerOverlayRenderer.videoActionBar` の `likeButtonViewModel` に移っていた。評価は `likeStatusEntity.likeStatus`、曲は押したときの `likeEndpoint.target.videoId` で確かめる（別の曲のボタンなら読まない、の決まりは前と同じ）
+- 4つの実装（Kotlin・Swift・C#・Rust）とも、前の形を先に見て、無ければ新しい形を読む。プレイリストの中身の読み方（追加の画面の✓）は変わっておらず、Linux から自分のプレイリスト36件を最後まで読めることを確かめた
+- 手本は `next_like_view_model.json`（本物の応答から評価のボタンだけを残したもの）。Pixel 3 で、やり直しの絵が＋に戻り、押すと評価が付き、追加の画面で外せることを確かめた

@@ -183,6 +183,16 @@ public class MusicParsersTests
     }
 
     [Fact]
+    public void LikeStatusReadsTheViewModelShape()
+    {
+        // 2026-11 からの形（videoActionBar の likeButtonViewModel）
+        var text = Fixtures.Text("next_like_view_model");
+        Assert.Equal(LikeStatus.Indifferent, MusicParsers.SongInfo(Fixtures.Json("next_like_view_model"), "mD__tW1cTfg").Like);
+        Assert.Null(MusicParsers.SongInfo(Fixtures.Json("next_like_view_model"), "other").Like);
+        Assert.Equal(LikeStatus.Like, MusicParsers.SongInfo(Fixtures.Parse(text.Replace("\"INDIFFERENT\"", "\"LIKE\"")), "mD__tW1cTfg").Like);
+    }
+
+    [Fact]
     public void PlaylistPagesAndSignInPrompt()
     {
         var page = MusicParsers.PlaylistPage(Fixtures.Json("browse_playlist"));

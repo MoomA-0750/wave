@@ -370,10 +370,25 @@ public static partial class MusicParsers
     public static SongInfo SongInfo(JsonNode root, string videoId)
     {
         LikeStatus? like = null;
-        var button = root.Path("playerOverlays", "playerOverlayRenderer", "actions").Items().Select(a => a.Path("likeButtonRenderer").Obj()).FirstOrDefault(b => b is not null);
-        if (button is not null && button.Path("target", "videoId").Str() == videoId)
+        // 2026-11 から YouTube は videoActionBar の likeButtonViewModel（評価は likeStatusEntity、曲は押したときの likeEndpoint.target）で返す。
+        // 前の actions の likeButtonRenderer も読む。
+        var overlay = root.Path("playerOverlays", "playerOverlayRenderer");
+        var button = overlay.Path("actions").Items().Select(a => a.Path("likeButtonRenderer").Obj()).FirstOrDefault(b => b is not null);
+        string? target, status;
+        if (button is not null)
         {
-            like = button.Path("likeStatus").Str() switch
+            target = button.Path("target", "videoId").Str();
+            status = button.Path("likeStatus").Str();
+        }
+        else
+        {
+            var model = overlay.FindAll("likeButtonViewModel").FirstOrDefault(m => m.Path("likeStatusEntity").Obj() is not null);
+            target = model?.FindAll("likeEndpoint").Select(e => e.Path("target", "videoId").Str()).FirstOrDefault(v => v is not null);
+            status = model.Path("likeStatusEntity", "likeStatus").Str();
+        }
+        if (target is not null && target == videoId)
+        {
+            like = status switch
             {
                 "LIKE" => LikeStatus.Like,
                 "DISLIKE" => LikeStatus.Dislike,

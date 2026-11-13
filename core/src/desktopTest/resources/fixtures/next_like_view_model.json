@@ -1,0 +1,169 @@
+{
+  "playerOverlays": {
+    "playerOverlayRenderer": {
+      "videoActionBar": {
+        "videoActionBarViewModel": {
+          "buttons": [
+            {
+              "buttonViewModel": {
+                "segmentedLikeDislikeButtonViewModel": {
+                  "dislikeButtonViewModel": {
+                    "dislikeButtonViewModel": {
+                      "dislikeEntityKey": "EgttRF9fdFcxY1RmZyA-KAE%3D",
+                      "toggleButtonViewModel": {
+                        "toggleButtonViewModel": {
+                          "defaultButtonViewModel": {
+                            "buttonViewModel": {
+                              "accessibilityText": "この動画を低く評価する",
+                              "buttonSize": "BUTTON_VIEW_MODEL_SIZE_DEFAULT",
+                              "iconName": "DISLIKE",
+                              "loggingDirectives": {
+                                "trackingParams": "CBAQ2aEDIhMIjuah8oWEmAMVKaW5BR389RFd"
+                              },
+                              "onTap": {
+                                "innertubeCommand": {
+                                  "clickTrackingParams": "CBAQ2aEDIhMIjuah8oWEmAMVKaW5BR389RFdygEEP8OZoA==",
+                                  "likeEndpoint": {
+                                    "dislikeParams": "KAI%3D",
+                                    "status": "DISLIKE",
+                                    "target": {
+                                      "videoId": "mD__tW1cTfg"
+                                    }
+                                  }
+                                }
+                              },
+                              "shouldLogGestures": true,
+                              "style": "BUTTON_VIEW_MODEL_STYLE_MONO",
+                              "trackingParams": "CBAQ2aEDIhMIjuah8oWEmAMVKaW5BR389RFd",
+                              "type": "BUTTON_VIEW_MODEL_TYPE_TONAL",
+                              "useYoutubeLoggingDirectives": true
+                            }
+                          },
+                          "isToggled": false,
+                          "toggledButtonViewModel": {
+                            "buttonViewModel": {
+                              "accessibilityText": "動画を低く評価",
+                              "buttonSize": "BUTTON_VIEW_MODEL_SIZE_DEFAULT",
+                              "iconName": "DISLIKE_SELECTED",
+                              "loggingDirectives": {
+                                "trackingParams": "CA8Q2aEDIhMIjuah8oWEmAMVKaW5BR389RFd"
+                              },
+                              "onTap": {
+                                "innertubeCommand": {
+                                  "clickTrackingParams": "CA8Q2aEDIhMIjuah8oWEmAMVKaW5BR389RFdygEEP8OZoA==",
+                                  "likeEndpoint": {
+                                    "removeLikeParams": "MAI%3D",
+                                    "status": "INDIFFERENT",
+                                    "target": {
+                                      "videoId": "mD__tW1cTfg"
+                                    }
+                                  }
+                                }
+                              },
+                              "shouldLogGestures": true,
+                              "style": "BUTTON_VIEW_MODEL_STYLE_MONO",
+                              "trackingParams": "CA8Q2aEDIhMIjuah8oWEmAMVKaW5BR389RFd",
+                              "type": "BUTTON_VIEW_MODEL_TYPE_TONAL",
+                              "useYoutubeLoggingDirectives": true
+                            }
+                          },
+                          "trackingParams": "CAAQg2ciEwiO5qHyhYSYAxUppbkFHfz1EV3KAQQ_w5mg"
+                        }
+                      }
+                    }
+                  },
+                  "likeButtonViewModel": {
+                    "likeButtonViewModel": {
+                      "likeStatusEntity": {
+                        "key": "EgttRF9fdFcxY1RmZyA-KAE%3D",
+                        "likeStatus": "INDIFFERENT"
+                      },
+                      "likeStatusEntityKey": "EgttRF9fdFcxY1RmZyA-KAE%3D",
+                      "toggleButtonViewModel": {
+                        "toggleButtonViewModel": {
+                          "defaultButtonViewModel": {
+                            "buttonViewModel": {
+                              "accessibilityText": "他 4,628 人もこの動画を高く評価しました",
+                              "buttonSize": "BUTTON_VIEW_MODEL_SIZE_DEFAULT",
+                              "iconName": "LIKE",
+                              "loggingDirectives": {
+                                "trackingParams": "CBIQ2qEDIhMIjuah8oWEmAMVKaW5BR389RFd"
+                              },
+                              "onTap": {
+                                "innertubeCommand": {
+                                  "clickTrackingParams": "CBIQ2qEDIhMIjuah8oWEmAMVKaW5BR389RFdygEEP8OZoA==",
+                                  "likeEndpoint": {
+                                    "actions": [
+                                      {
+                                        "clickTrackingParams": "CBIQ2qEDIhMIjuah8oWEmAMVKaW5BR389RFdygEEP8OZoA==",
+                                        "musicLibraryStatusUpdateCommand": {
+                                          "addToLibraryFeedbackToken": "AB9zfpLSBMTsRSOpxvb-4se9lKVONbm1sbJMhQYcPRIO7X_mhMiDOa1uyzQY9Gcihy8E750FkYZlhqJojzUgIZZCDy6OXumZJA",
+                                          "libraryStatus": "MUSIC_LIBRARY_STATUS_IN_LIBRARY"
+                                        }
+                                      }
+                                    ],
+                                    "likeParams": "OAI%3D",
+                                    "status": "LIKE",
+                                    "target": {
+                                      "videoId": "mD__tW1cTfg"
+                                    }
+                                  }
+                                }
+                              },
+                              "shouldLogGestures": true,
+                              "style": "BUTTON_VIEW_MODEL_STYLE_MONO",
+                              "title": "4628",
+                              "trackingParams": "CBIQ2qEDIhMIjuah8oWEmAMVKaW5BR389RFd",
+                              "type": "BUTTON_VIEW_MODEL_TYPE_TONAL",
+                              "useYoutubeLoggingDirectives": true
+                            }
+                          },
+                          "isToggled": false,
+                          "toggledButtonViewModel": {
+                            "buttonViewModel": {
+                              "accessibilityText": "他 4,629 人もこの動画を高く評価しました",
+                              "buttonSize": "BUTTON_VIEW_MODEL_SIZE_DEFAULT",
+                              "iconName": "LIKE_SELECTED",
+                              "loggingDirectives": {
+                                "trackingParams": "CBEQ2qEDIhMIjuah8oWEmAMVKaW5BR389RFd"
+                              },
+                              "onTap": {
+                                "innertubeCommand": {
+                                  "clickTrackingParams": "CBEQ2qEDIhMIjuah8oWEmAMVKaW5BR389RFdygEEP8OZoA==",
+                                  "likeEndpoint": {
+                                    "removeLikeParams": "MAI%3D",
+                                    "status": "INDIFFERENT",
+                                    "target": {
+                                      "videoId": "mD__tW1cTfg"
+                                    }
+                                  }
+                                }
+                              },
+                              "shouldLogGestures": true,
+                              "style": "BUTTON_VIEW_MODEL_STYLE_MONO",
+                              "title": "4629",
+                              "trackingParams": "CBEQ2qEDIhMIjuah8oWEmAMVKaW5BR389RFd",
+                              "type": "BUTTON_VIEW_MODEL_TYPE_TONAL",
+                              "useYoutubeLoggingDirectives": true
+                            }
+                          },
+                          "trackingParams": "CAAQg2ciEwiO5qHyhYSYAxUppbkFHfz1EV3KAQQ_w5mg"
+                        }
+                      }
+                    }
+                  },
+                  "likeCountEntity": {
+                    "key": "EgttRF9fdFcxY1RmZyC9AygB",
+                    "likeCountIfDislikedNumber": "4628",
+                    "likeCountIfIndifferentNumber": "4628",
+                    "likeCountIfLikedNumber": "4629"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}
