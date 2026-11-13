@@ -118,10 +118,9 @@ impl Services {
     }
 }
 
-/// 表示の言語（YouTube から届く文字の言語）。LANG が日本語なら ja、ほかは en。
+/// 表示の言語（YouTube から届く文字の言語）。画面の言語と同じ（crate::lang）。
 pub fn language() -> String {
-    let lang = std::env::var("LANG").unwrap_or_default();
-    if lang.starts_with("ja") { "ja".into() } else { "en".into() }
+    crate::lang::hl().into()
 }
 
 /// 地域。LANG の地域の部分（ja_JP.UTF-8 なら JP）。読めなければ JP。

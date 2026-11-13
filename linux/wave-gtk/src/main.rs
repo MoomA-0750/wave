@@ -14,6 +14,8 @@ use wave_core::music::repository::MusicRepository;
 const APP_ID: &str = "xyz.mooma0750.wave";
 
 fn main() -> gtk::glib::ExitCode {
+    // 画面の言語（設定の「画面の言語」か端末の言語）。文言と YouTube の hl はこれに従う
+    wave_desktop::lang::init(&wave_desktop::settings::Settings::load().ui_language);
     // QML 版（wave-qt）の「アプリの中の窓でログイン」から呼ばれる: ログインの窓だけを開き、キーリングに保存したら閉じる
     // （WebKitGTK のログインの窓は GTK 版にしか無いので、QML 版は別の手続きとしてこれを開く）
     if std::env::args().any(|a| a == "--login") {

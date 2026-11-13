@@ -12,6 +12,8 @@ mod view;
 use cxx_qt_lib::{QGuiApplication, QQmlApplicationEngine, QQuickStyle, QString, QUrl};
 
 fn main() {
+    // 画面の言語（設定の「画面の言語」か端末の言語）。文言と YouTube の hl はこれに従う
+    wave_desktop::lang::init(&wave_desktop::settings::Settings::load().ui_language);
     let mut app = QGuiApplication::new();
     bridge::qobject::wave_setup_application();
     // MV の絵を描く部品（VideoFrame）

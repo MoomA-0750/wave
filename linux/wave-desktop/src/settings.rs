@@ -33,11 +33,13 @@ pub struct Settings {
     pub relay_url: Option<String>,
     /// 右の欄（再生中・キュー）を開いているか（次に開いたときも同じにする。Mac と同じ）。
     pub right_pane_open: bool,
+    /// 画面の言語（""＝端末に合わせる・"ja"・"en"）。次の起動から効く。Windows・Android と同じ
+    pub ui_language: String,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { smart_downloads: false, smart_download_count: DEFAULT_COUNT, download_network: DownloadNetwork::Unmetered, relay_url: None, send_history: true, release_notices: true, original_titles: false, search_history: Vec::new(), discord_presence: false, discord_client_id: None, library_sort: "recent".into(), library_grid: false, playlist_orders: Default::default(), right_pane_open: true }
+        Self { smart_downloads: false, smart_download_count: DEFAULT_COUNT, download_network: DownloadNetwork::Unmetered, relay_url: None, send_history: true, release_notices: true, original_titles: false, search_history: Vec::new(), discord_presence: false, discord_client_id: None, library_sort: "recent".into(), library_grid: false, playlist_orders: Default::default(), right_pane_open: true, ui_language: String::new() }
     }
 }
 

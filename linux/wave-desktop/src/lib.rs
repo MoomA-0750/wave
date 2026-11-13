@@ -11,6 +11,7 @@ pub mod discord_status;
 pub mod downloads;
 pub mod keyring;
 pub mod labels;
+pub mod lang;
 pub mod mpris;
 pub mod omarchy_theme;
 pub mod playback;
