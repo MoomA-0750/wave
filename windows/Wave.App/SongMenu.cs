@@ -121,7 +121,11 @@ public static class SongMenu
         if (removed)
         {
             foreach (var setId in setIds!) removed &= await AppServices.Music.RemoveFromPlaylistAsync(playlist.PlaylistId, song.VideoId, setId);
-            if (removed) membership.NoteRemoved(playlist.PlaylistId, song.VideoId);
+            if (removed)
+            {
+                membership.NoteRemoved(playlist.PlaylistId, song.VideoId);
+                AppServices.Library.RefreshPlaylistsSoon();
+            }
             else membership.Invalidate(playlist.PlaylistId);
         }
         AppPaths.Log($"playlist remove-song known={setIds is not null} removed={removed}");
@@ -133,6 +137,7 @@ public static class SongMenu
     {
         var result = await AppServices.Music.AddToPlaylistAsync(playlist.PlaylistId, song.VideoId, knownEmpty);
         if (result is AddToPlaylistResult.Added or AddToPlaylistResult.AlreadyInPlaylist) AppServices.Library.Membership.NoteAdded(playlist.PlaylistId, song.VideoId);
+        if (result is AddToPlaylistResult.Added) AppServices.Library.RefreshPlaylistsSoon();
         AppServices.Player.Message = result switch
         {
             AddToPlaylistResult.Added => L.T($"「{playlist.Title}」に追加しました", $"Added to {playlist.Title}"),
@@ -249,11 +254,17 @@ public static class Dialogs
         cancel.Cancel();
     }
 
+    /// <summary>
+    /// プレイリストの名前の欄。名前を選んだ状態では開かず、文字の終わりにカーソルを置く（Windows の既定の選んだ地はアクセントの色で、
+    /// 明るいアクセントだと選んだ文字が読みにくい。消して打ち直すのは右の×で一度で済む）。
+    /// </summary>
+    private static TextBox NameBox(string text) => new() { PlaceholderText = L.T("プレイリスト名", "Playlist name"), Text = text, SelectionStart = text.Length };
+
     /// <summary>新しいプレイリストを作る（非公開）。song を渡したら作ったあとに入れる。</summary>
     public static async Task CreatePlaylistAsync(Song? song = null)
     {
         if (App.Window is null) return;
-        var box = new TextBox { PlaceholderText = L.T("プレイリスト名", "Playlist name"), Text = song is null ? "" : L.T("マイプレイリスト", "My playlist") };
+        var box = NameBox(song is null ? "" : L.T("マイプレイリスト", "My playlist"));
         var dialog = new ContentDialog
         {
             Title = L.T("プレイリストを作成", "Create playlist"),
@@ -287,7 +298,7 @@ public static class Dialogs
         var player = AppServices.Player;
         var songs = QueueSave.Songs(player.Queue);
         if (songs.Count == 0 || player.IsRemote) return;
-        var box = new TextBox { PlaceholderText = L.T("プレイリスト名", "Playlist name"), Text = QueueSave.DefaultTitle(songs, L.Ja) };
+        var box = NameBox(QueueSave.DefaultTitle(songs, L.Ja));
         var dialog = new ContentDialog
         {
             Title = L.T("キューをプレイリストとして保存", "Save queue as playlist"),
@@ -305,7 +316,6 @@ public static class Dialogs
             DefaultButton = ContentDialogButton.Primary,
             XamlRoot = App.Window.Content.XamlRoot,
         };
-        box.SelectAll();
         if (await dialog.ShowAsync() != ContentDialogResult.Primary || string.IsNullOrWhiteSpace(box.Text)) return;
         await SaveQueueAsync(box.Text.Trim(), songs);
     }

@@ -162,5 +162,53 @@ public sealed partial class LibraryState : ObservableObject
         foreach (var item in list.Skip(same)) target.Add(item);
     }
 
-    public void AddCreated(PlaylistSummary playlist) => Playlists.Insert(0, playlist);
+    public void AddCreated(PlaylistSummary playlist)
+    {
+        Playlists.Insert(0, playlist);
+        // 並べ方が「最近」でも先頭に出す（最近再生したものの並びに、作ったものを先頭として足す）
+        RecentKeys = [KeyOf(new HomeItem.PlaylistItem(playlist))!, .. RecentKeys];
+        created[playlist.PlaylistId] = (playlist, DateTime.UtcNow);
+        RefreshPlaylistsSoon();
+    }
+
+    // 作ったばかりのプレイリスト。YouTube のライブラリの一覧に載るまでしばらくかかるので、読み直しで消えないよう2分は先頭に残す
+    private readonly Dictionary<string, (PlaylistSummary Playlist, DateTime At)> created = [];
+
+    private CancellationTokenSource? playlistsSoon;
+
+    /// <summary>
+    /// プレイリストに曲を足し外し・作ったあと、左の一覧の曲数（「20 曲」など）を合わせる。YouTube 側の数が追いつくまで少し待ち、
+    /// プレイリストの一覧だけを読み直す（全部を読み直すと高く評価した曲や所属の記憶まで消えるため）。続けて操作したら最後の1回だけ読む。
+    /// </summary>
+    public void RefreshPlaylistsSoon()
+    {
+        playlistsSoon?.Cancel();
+        var token = (playlistsSoon = new CancellationTokenSource()).Token;
+        _ = ReloadPlaylistsAsync(token);
+    }
+
+    private async Task ReloadPlaylistsAsync(CancellationToken token)
+    {
+        try
+        {
+            await Task.Delay(2500, token);
+            if (!AppServices.Client.IsLoggedIn) return;
+            var result = await AppServices.Music.LibraryPlaylistsAsync(cancel: token);
+            if (token.IsCancellationRequested || !result.IsOk || result.Value!.Count == 0) return;
+            var fresh = result.Value.Where(p => p.PlaylistId != MusicRepository.LikedSongs || Capture(p)).ToList();
+            var missing = false;
+            foreach (var (id, entry) in created.ToList())
+            {
+                if (fresh.Any(p => p.PlaylistId == id) || DateTime.UtcNow - entry.At > TimeSpan.FromMinutes(2)) { created.Remove(id); continue; }
+                fresh.Insert(0, entry.Playlist);
+                missing = true;
+            }
+            Replace(Playlists, fresh, token);
+            // まだ載っていなければ、もう一度少し後に読み直す
+            if (missing) { await Task.Delay(8000, token); await ReloadPlaylistsAsync(token); }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
 }

@@ -111,14 +111,17 @@
                             <FontIcon Glyph="&#xE710;" FontSize="14" />
                         </Button>
                     </Grid>
-                    <StackPanel x:Name="FilterChips" Grid.Row="1" Orientation="Horizontal" Spacing="6" Padding="12,4" />
+                    <!-- 種類のチップ。窓が狭いと右端が切れるので、横に流せるようにする（QML 版の Flickable と同じ） -->
+                    <ScrollViewer Grid.Row="1" HorizontalScrollMode="Enabled" HorizontalScrollBarVisibility="Hidden" VerticalScrollMode="Disabled" VerticalScrollBarVisibility="Disabled">
+                        <StackPanel x:Name="FilterChips" Orientation="Horizontal" Spacing="4" Padding="12,4,8,4" />
+                    </ScrollViewer>
                     <Grid Grid.Row="2" Padding="12,4,8,4" ColumnSpacing="4">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
-                        <TextBox x:Name="LibraryFilter" PlaceholderText="{x:Bind app:L.T('マイライブラリを検索', 'Search in Your Library')}" TextChanged="OnLibraryFilterChanged" />
+                        <TextBox x:Name="LibraryFilter" PlaceholderText="{x:Bind app:L.T('マイライブラリを検索', 'Search library')}" TextChanged="OnLibraryFilterChanged" />
                         <DropDownButton x:Name="SortButton" Grid.Column="1" Content="{x:Bind app:L.T('最近', 'Recents')}" Background="Transparent" BorderThickness="0">
                             <DropDownButton.Flyout>
                                 <MenuFlyout Placement="BottomEdgeAlignedRight">

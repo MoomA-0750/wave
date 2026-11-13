@@ -412,7 +412,7 @@ public sealed partial class MainWindow : Window
         FilterChips.Children.Clear();
         foreach (var (kind, title) in new[] { ("playlist", L.T("プレイリスト", "Playlists")), ("artist", L.T("アーティスト", "Artists")), ("album", L.T("アルバム", "Albums")), ("podcast", L.T("ポッドキャスト", "Podcasts")) })
         {
-            var chip = new ToggleButton { Content = title, IsChecked = libraryKind == kind, CornerRadius = new CornerRadius(14), Padding = new Thickness(12, 4, 12, 5) };
+            var chip = new ToggleButton { Content = title, IsChecked = libraryKind == kind, CornerRadius = new CornerRadius(14), Padding = new Thickness(9, 4, 9, 5) };
             chip.Click += (_, _) =>
             {
                 libraryKind = libraryKind == kind ? null : kind;

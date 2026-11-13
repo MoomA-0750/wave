@@ -380,6 +380,7 @@ public sealed partial class CollectionPage : Page
             all.Remove(row);
             // 再生中の曲なら「入っている」の✓をすぐ直す（iPhone と同じ）
             AppServices.Library.Membership.NoteRemoved(request.Id, row.Song.VideoId);
+            AppServices.Library.RefreshPlaylistsSoon();
             Player.Message = L.T("プレイリストから削除しました", "Removed from playlist");
         }
         else Player.Message = L.T("削除できませんでした", "Couldn't remove it");
