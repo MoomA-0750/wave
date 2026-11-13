@@ -66,8 +66,8 @@ Item {
             Layout.margins: 24
             spacing: 6
             Item { Layout.fillHeight: true }
-            Label { Layout.alignment: Qt.AlignHCenter; text: pane.history ? Style.t("履歴はありません", "Nothing played yet") : Style.t("キューは空です", "Your queue is empty"); font.weight: Font.Bold; color: Style.foreground }
-            Label { Layout.alignment: Qt.AlignHCenter; Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap; text: pane.history ? Style.t("曲を聴くと、ここに並びます", "Songs you've played will show up here") : Style.t("曲を再生すると、次に流れる曲がここに並びます", "Play something and upcoming songs will show up here"); font.pixelSize: 12; color: Style.dim }
+            Label { Layout.alignment: Qt.AlignHCenter; text: pane.history ? Style.t("まだ流れた曲はありません", "Nothing played yet") : Style.t("キューは空です", "Your queue is empty"); font.weight: Font.Bold; color: Style.foreground }
+            Label { Layout.alignment: Qt.AlignHCenter; Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap; text: pane.history ? Style.t("流れた曲は、ここに新しい順に並びます", "Songs you've played will show up here") : Style.t("曲を再生すると、ここに次の曲が並びます", "Play something and upcoming songs will show up here"); font.pixelSize: 12; color: Style.dim }
             Item { Layout.fillHeight: true }
         }
     }
@@ -99,7 +99,7 @@ Item {
             spacing: 10
             Label { Layout.fillWidth: true; wrapMode: Text.Wrap; text: Style.ja ? "キューの " + pane.saveCount + " 曲を、新しい非公開のプレイリストに入れます。" : "Puts the " + Style.songs(pane.saveCount) + " in the queue into a new private playlist."; color: Style.dim }
             // 名前の見出しは欄の外に置く（Material の placeholderText は文字が入ると枠の上へ浮き、自前の背景では文字に重なる）
-            Label { text: Style.t("プレイリストの名前", "Playlist name"); color: Style.dim; font.pixelSize: 12 }
+            Label { text: Style.t("プレイリスト名", "Playlist name"); color: Style.dim; font.pixelSize: 12 }
             TextField {
                 id: saveTitle
                 Layout.fillWidth: true

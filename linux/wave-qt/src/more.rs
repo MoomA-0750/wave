@@ -309,17 +309,17 @@ fn assistant_html(text: &str) -> String {
 
 fn banner(info: &ConnectInfo) -> Value {
     if !info.configured {
-        let message = if info.unreadable { lang::t("この PC の連携の鍵を読めませんでした（キーリングを確かめてください）", "Couldn’t read this PC’s device keys (check the keyring)") } else { lang::t("ページの下の「中継の場所」に入れると使えます", "Enter the relay address at the bottom of this page to use this") };
-        return json!({ "severity": "info", "title": lang::t("中継の場所が設定されていません", "The relay isn’t configured"), "message": message, "action": "", "actionLabel": "" });
+        let message = if info.unreadable { lang::t("この PC の連携の鍵を読めませんでした（キーリングを確かめてください）", "Couldn't read this PC's device keys (check the keyring)") } else { lang::t("ページの下の「中継の場所」に入れると使えます", "Enter the relay address at the bottom of this page to use this") };
+        return json!({ "severity": "info", "title": lang::t("中継の場所が設定されていません", "The relay isn't configured"), "message": message, "action": "", "actionLabel": "" });
     }
     if info.unreadable {
-        return json!({ "severity": "error", "title": lang::t("連携の保存を読めません", "Couldn’t read the saved device group"), "message": lang::t("リセットすると、この PC はもう一度ほかの端末から加わり直します。", "Reset it to join your devices again from another device."), "action": "forget_household", "actionLabel": lang::t("リセット", "Reset") });
+        return json!({ "severity": "error", "title": lang::t("連携の保存を読めません", "Couldn't read the saved device group"), "message": lang::t("リセットすると、この PC はもう一度ほかの端末から加わり直します", "Reset it to join your devices again from another device"), "action": "forget_household", "actionLabel": lang::t("リセット", "Reset") });
     }
     if info.in_household && info.relay == Some(RelayStatus::NotMember) {
-        return json!({ "severity": "error", "title": lang::t("中継がこの PC を連携した端末として受け付けません", "The relay no longer accepts this PC"), "message": lang::t("ほかの端末から外された可能性があります。", "It may have been removed by another device."), "action": "forget_household", "actionLabel": lang::t("この PC の連携の記録を消す", "Forget the group on this PC") });
+        return json!({ "severity": "error", "title": lang::t("中継がこの PC を連携した端末として受け付けません", "The relay no longer accepts this PC"), "message": lang::t("ほかの端末から外された可能性があります", "It may have been removed by another device"), "action": "forget_household", "actionLabel": lang::t("この PC の連携の記録を消す", "Forget the group on this PC") });
     }
     if info.store_reset_pending {
-        return json!({ "severity": "warning", "title": lang::t("中継の状態が作り直されました", "The relay’s state was reset"), "message": "", "action": "accept_store_reset", "actionLabel": lang::t("この状態から始める", "Start from this state") });
+        return json!({ "severity": "warning", "title": lang::t("中継の状態が作り直されました", "The relay's state was reset"), "message": "", "action": "accept_store_reset", "actionLabel": lang::t("この状態から始める", "Start from this state") });
     }
     Value::Null
 }
@@ -334,7 +334,7 @@ fn relay_text(info: &ConnectInfo) -> &'static str {
         Some(RelayStatus::TailnetUnreachable) => lang::t("届きません（Tailscale につながっているか確かめてください）", "Unreachable (check that Tailscale is connected)"),
         Some(RelayStatus::NotMember) if info.in_household => lang::t("受け付けられません", "Not accepted"),
         Some(RelayStatus::NotMember) => lang::t("まだ連携していません", "Not set up yet"),
-        Some(RelayStatus::Failed) => lang::t("つながりませんでした", "Couldn’t connect"),
+        Some(RelayStatus::Failed) => lang::t("つながりませんでした", "Couldn't connect"),
         Some(RelayStatus::Disconnected) | None => lang::t("切断", "Disconnected"),
     }
 }
@@ -344,11 +344,11 @@ fn pairing_json(view: &PairingView) -> Value {
         PairingView::Idle => ("idle", String::new()),
         PairingView::Working(m) => ("working", m.clone()),
         PairingView::Failed(m) => ("failed", m.clone()),
-        PairingView::ShowingOffer(_) => ("offer", lang::t("加える端末で wave の「端末の連携」を開き、この QR を読み取ってください（PC なら下の文字列をコピーして貼り付けます）。2分で無効になります。", "On the device you’re adding, open Devices in wave and scan this QR code (on a PC, copy the text below and paste it). Expires in 2 minutes.").into()),
-        PairingView::EnterCode(m) => ("code", format!("{}{}", m.as_ref().map(|m| format!("{m}\n")).unwrap_or_default(), lang::t("加える端末に出ている6桁の数字を入力してください", "Enter the 6-digit code shown on the device you’re adding"))),
-        PairingView::ShowCode { peer, .. } => ("show", if lang::ja() { format!("「{peer}」に、この6桁の数字を入力してください") } else { format!("Enter this 6-digit code on \"{peer}\"") }),
-        PairingView::Done { peer, grant_device_id: Some(_) } => ("done", if lang::ja() { format!("「{peer}」を加えました。プレイリストなどを使えるようにするには、ログインを渡してください。") } else { format!("Added \"{peer}\". Give it your login so it can use your playlists and more.") }),
-        PairingView::Done { peer, grant_device_id: None } => ("done", if lang::ja() { format!("「{peer}」と連携しました") } else { format!("Connected with \"{peer}\"") }),
+        PairingView::ShowingOffer(_) => ("offer", lang::t("加える端末で wave の「端末の連携」を開き、この QR を読み取ってください（PC なら下の文字列をコピーして貼り付けます）。2分で無効になります。", "On the device you're adding, open Devices in wave and scan this QR code (on a PC, copy the text below and paste it). Expires in 2 minutes.").into()),
+        PairingView::EnterCode(m) => ("code", format!("{}{}", m.as_ref().map(|m| format!("{m}\n")).unwrap_or_default(), lang::t("加える端末に出ている6桁の数字を入力してください", "Enter the 6-digit code shown on the device you're adding"))),
+        PairingView::ShowCode { peer, .. } => ("show", if lang::ja() { format!("「{peer}」に、この6桁の数字を入力してください") } else { format!("Enter this 6-digit code on “{peer}”") }),
+        PairingView::Done { peer, grant_device_id: Some(_) } => ("done", if lang::ja() { format!("「{peer}」を加えました。プレイリストなどを使えるようにするには、ログインを渡してください。") } else { format!("Added “{peer}”. Give it your login so it can use your playlists and more.") }),
+        PairingView::Done { peer, grant_device_id: None } => ("done", if lang::ja() { format!("「{peer}」と連携しました") } else { format!("Connected with “{peer}”") }),
     };
     let mut value = json!({ "kind": kind, "text": text, "offer": "", "code": "", "qr": [], "grantId": "" });
     match view {
@@ -386,7 +386,7 @@ fn member_json(m: &MemberView, logged_in: bool) -> Value {
     };
     json!({
         "id": m.device_id,
-        "label": if m.is_controller { format!("{}{}", m.label, lang::t("（操作だけ）", " (control only)")) } else { m.label.clone() },
+        "label": if m.is_controller { format!("{}{}", m.label, lang::t("（操作だけ）", " (remote only)")) } else { m.label.clone() },
         "name": m.label,
         "status": status,
         "icon": icon,
@@ -499,7 +499,7 @@ pub async fn search_feeds(text: String) -> Value {
     let client = s.podcasts.client.clone();
     match runtime::run(async move { client.search(&text).await }).await {
         Some(shows) => json!({ "items": shows.iter().map(view::podcast).collect::<Vec<_>>() }),
-        None => failure(lang::t("探せませんでした（通信を確かめてください）", "Couldn't search (check your connection)")),
+        None => failure(lang::t("検索できませんでした", "Couldn't search")),
     }
 }
 
@@ -651,7 +651,7 @@ impl qobject::WaveApp {
                     return;
                 }
                 s.downloads.update_settings(|st| st.relay_url = (!text.is_empty()).then_some(text));
-                toast(lang::t("中継の場所を覚えました。次に wave を開いたときから使います", "Relay saved. It takes effect the next time you open wave"));
+                toast(lang::t("中継の場所を保存しました。次に wave を開いたときから使います", "Relay saved. It takes effect the next time you open wave"));
             }
             other => eprintln!("connect action unknown={other}"),
         }
@@ -667,7 +667,7 @@ impl qobject::WaveApp {
         let (id, label) = (device_id.to_string(), label.to_string());
         glib::spawn_future_local(async move {
             let removed = s.connect.remove_member(&id).await;
-            toast(&if removed { if lang::ja() { format!("「{label}」を外しました") } else { format!("Removed \"{label}\"") } } else { lang::t("外せませんでした", "Couldn’t remove the device").into() });
+            toast(&if removed { if lang::ja() { format!("「{label}」を外しました") } else { format!("Removed “{label}”") } } else { lang::t("外せませんでした", "Couldn't remove the device").into() });
         });
     }
 
@@ -676,7 +676,7 @@ impl qobject::WaveApp {
         let (id, label) = (device_id.to_string(), label.to_string());
         glib::spawn_future_local(async move {
             let sent = s.connect.grant_login(&id).await;
-            toast(&if sent { if lang::ja() { format!("「{label}」にログインを渡しました") } else { format!("Gave your login to \"{label}\"") } } else { lang::t("ログインを渡せませんでした", "Couldn’t send your login").into() });
+            toast(&if sent { if lang::ja() { format!("「{label}」にログインを渡しました") } else { format!("Gave your login to “{label}”") } } else { lang::t("ログインを渡せませんでした", "Couldn't give your login").into() });
         });
     }
 
@@ -696,7 +696,7 @@ impl qobject::WaveApp {
             status.push_str(&if lang::ja() { format!(" • 残り {} 曲 • ", pending.len()) } else { format!(" • {} left • ", lang::songs(pending.len())) });
             let active = downloads.progress.lock().unwrap().clone();
             if !downloads.network_allows() {
-                status.push_str(if downloads.online() { lang::t("Wi-Fi など従量制でない通信を待っています", "Waiting for Wi-Fi or another unmetered network") } else { lang::t("通信を待っています", "Waiting for a connection") });
+                status.push_str(if downloads.online() { lang::t("Wi-Fi など従量制でない通信を待っています", "Waiting for Wi-Fi or another unmetered network") } else { lang::t("通信を待っています", "Waiting for a network") });
             } else if let Some((id, got, total)) = active {
                 let title = wanted.iter().find(|song| song.video_id == id).map(|song| song.title.clone()).unwrap_or_default();
                 let percent = if total > 0 { got * 100 / total } else { 0 };
@@ -808,10 +808,10 @@ impl qobject::WaveApp {
                     subscription.author = show["author"].as_str().map(String::from);
                     subscription.thumbnail_url = show["thumbnailUrl"].as_str().map(String::from);
                     s.podcasts.library.subscribe(subscription);
-                    toast(lang::t("番組を登録しました", "Subscribed"));
+                    toast(lang::t("番組を登録しました", "Subscribed to the show"));
                 } else {
                     s.podcasts.library.unsubscribe(url);
-                    toast(lang::t("登録をやめました", "Unsubscribed"));
+                    toast(lang::t("登録を解除しました", "Unsubscribed"));
                 }
                 bump(|mut app| {
                     let v = *app.library_version() + 1;
@@ -854,16 +854,16 @@ impl qobject::WaveApp {
                     if let Some(song) = song {
                         let (repo, pid, vid) = (s.repo.clone(), id.clone(), song.video_id.clone());
                         let result = runtime::run(async move { repo.add_to_playlist(&pid, &vid, true).await }).await;
-                        toast(if result == wave_core::music::models::AddToPlaylistResult::Added { lang::t("プレイリストを作って追加しました", "Created the playlist and added the song") } else { lang::t("プレイリストを作りました（曲は追加できませんでした）", "Created the playlist (couldn't add the song)") });
+                        toast(if result == wave_core::music::models::AddToPlaylistResult::Added { lang::t("プレイリストを作成して追加しました", "Created the playlist and added the song") } else { lang::t("プレイリストを作成しました（曲は追加できませんでした）", "Created the playlist (couldn't add the song)") });
                     } else {
-                        toast(&if lang::ja() { format!("「{title}」を作りました") } else { format!("Created \"{title}\"") });
+                        toast(&if lang::ja() { format!("「{title}」を作成しました") } else { format!("Created “{title}”") });
                     }
                     crate::app::load_library_after_create(&s);
                     reply(token, json!({ "ok": true, "id": id }));
                 }
                 Err(e) => {
                     eprintln!("create playlist failed: {e}");
-                    toast(lang::t("プレイリストを作れませんでした", "Couldn't create the playlist"));
+                    toast(lang::t("プレイリストを作成できませんでした", "Couldn't create the playlist"));
                     reply(token, json!({ "ok": false }));
                 }
             }

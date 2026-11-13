@@ -15,14 +15,14 @@ WMenu {
     MenuItem { text: Style.t("再生", "Play"); visible: !menu.isSong; height: visible ? implicitHeight : 0; onTriggered: WaveApp.playItem(JSON.stringify(menu.item), false) }
     MenuItem { text: Style.t("次に再生", "Play next"); visible: menu.isSong; height: visible ? implicitHeight : 0; onTriggered: WaveApp.playNextSong(JSON.stringify(menu.item)) }
     MenuItem { text: Style.t("キューに追加", "Add to queue"); visible: menu.isSong; height: visible ? implicitHeight : 0; onTriggered: WaveApp.addToQueue(JSON.stringify(menu.item)) }
-    MenuItem { text: Style.t("ラジオを再生", "Start radio"); visible: menu.isSong; height: visible ? implicitHeight : 0; onTriggered: WaveApp.playItem(JSON.stringify(menu.item), false) }
+    MenuItem { text: Style.t("ラジオを開始", "Start radio"); visible: menu.isSong; height: visible ? implicitHeight : 0; onTriggered: WaveApp.playItem(JSON.stringify(menu.item), false) }
     MenuSeparator { visible: menu.isSong && WaveApp.loggedIn; height: visible ? implicitHeight : 0 }
     MenuItem { text: Style.t("高く評価", "Like"); visible: menu.isSong && WaveApp.loggedIn; height: visible ? implicitHeight : 0; onTriggered: WaveApp.setSongLiked(JSON.stringify(menu.item), true) }
     WMenu {
         id: add
-        title: Style.t("プレイリストに追加", "Add to playlist")
+        title: Style.t("プレイリストに保存", "Save to playlist")
         enabled: menu.isSong && WaveApp.loggedIn
-        MenuItem { text: Style.t("新しいプレイリスト…", "New playlist…"); onTriggered: Style.nav.createPlaylist(menu.item) }
+        MenuItem { text: Style.t("新しいプレイリスト", "New playlist"); onTriggered: Style.nav.createPlaylist(menu.item) }
         MenuSeparator {}
         Repeater {
             model: menu.playlists

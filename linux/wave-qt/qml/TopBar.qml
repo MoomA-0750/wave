@@ -62,7 +62,7 @@ Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 40
             // 空のときの案内は自分で置く（語を後から入れると、Material の案内が消えずに重なることがあった）
-            Label { anchors.left: parent.left; anchors.leftMargin: 40; anchors.verticalCenter: parent.verticalCenter; visible: field.text === "" && !field.inputMethodComposing; text: Style.t("何を聴きたいですか？", "What do you want to listen to?"); color: Style.dim; font: field.font }
+            Label { anchors.left: parent.left; anchors.leftMargin: 40; anchors.verticalCenter: parent.verticalCenter; visible: field.text === "" && !field.inputMethodComposing; text: Style.t("何を聴きたいですか？", "What do you want to play?"); color: Style.dim; font: field.font }
             leftPadding: 40
             topPadding: 0
             bottomPadding: 0
@@ -130,7 +130,7 @@ Rectangle {
             MenuItem { text: Style.t("端末の連携", "Devices"); visible: WaveApp.loggedIn; height: visible ? implicitHeight : 0; onTriggered: bar.shell.openDevices() }
             MenuItem { text: Style.t("ダウンロード", "Downloads"); onTriggered: bar.shell.openDownloads() }
             MenuItem { text: Style.t("再生履歴", "History"); enabled: WaveApp.loggedIn; onTriggered: bar.shell.push(historyPage, {}) }
-            MenuItem { text: WaveApp.loggedIn ? Style.t("ログアウト", "Log out") : Style.t("ログイン", "Log in"); onTriggered: WaveApp.loggedIn ? confirm.open() : WaveApp.logOut() }
+            MenuItem { text: WaveApp.loggedIn ? Style.t("ログアウト", "Sign out") : Style.t("ログイン", "Sign in"); onTriggered: WaveApp.loggedIn ? confirm.open() : WaveApp.logOut() }
         }
     }
 
@@ -139,8 +139,8 @@ Rectangle {
         parent: Overlay.overlay
         anchors.centerIn: parent
         modal: true
-        title: Style.t("ログアウトしますか？", "Log out?")
-        Label { width: 440; wrapMode: Text.Wrap; text: Style.t("この PC のキーリングからログインの情報を消し、取った曲・キュー・検索の履歴・Claude との会話も消します。", "This removes your login from this PC’s keyring, along with downloaded songs, the queue, search history and Claude chats.") }
+        title: Style.t("ログアウトしますか？", "Sign out?")
+        Label { width: 440; wrapMode: Text.Wrap; text: Style.t("この PC のキーリングからログインの情報を消し、取った曲・キュー・検索の履歴・Claude との会話も消します。", "This removes your sign-in from this PC's keyring, along with downloaded songs, the queue, search history and Claude chats.") }
         standardButtons: Dialog.Cancel | Dialog.Ok
         onAccepted: WaveApp.logOut()
     }

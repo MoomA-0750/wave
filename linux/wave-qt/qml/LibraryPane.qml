@@ -37,7 +37,7 @@ Item {
             Layout.leftMargin: 16
             Layout.rightMargin: 8
             IconImage { source: Style.icon("folder-music-symbolic"); sourceSize.width: 16; sourceSize.height: 16; color: Style.foreground }
-            Label { text: Style.t("マイライブラリ", "Your Library"); font.weight: Font.Bold; Layout.fillWidth: true; color: Style.foreground }
+            Label { text: Style.t("ライブラリ", "Library"); font.weight: Font.Bold; Layout.fillWidth: true; color: Style.foreground }
             IconButton { iconName: "list-add-symbolic"; tip: Style.t("プレイリストを作成", "Create playlist"); visible: WaveApp.loggedIn; onClicked: Style.nav.createPlaylist(null) }
         }
         ChipStrip {
@@ -49,6 +49,7 @@ Item {
                 Repeater {
                     model: [["playlist", Style.t("プレイリスト", "Playlists")], ["artist", Style.t("アーティスト", "Artists")], ["album", Style.t("アルバム", "Albums")], ["podcast", Style.t("ポッドキャスト", "Podcasts")]]
                     delegate: Chip {
+                        dense: true
                         text: modelData[1]
                         on: pane.kind === modelData[0]
                         onClicked: pane.kind = pane.kind === modelData[0] ? "" : modelData[0]
@@ -64,7 +65,9 @@ Item {
                 id: search
                 Layout.fillWidth: true
                 Layout.preferredHeight: 36
-                placeholderText: width < 150 ? Style.t("検索", "Search") : Style.t("マイライブラリを検索", "Search your library")
+                // 欄が狭くて「ライブラリを検索」が切れるときは「検索」だけにする
+                placeholderText: searchHint.advanceWidth + leftPadding + rightPadding + 4 <= width ? searchHint.text : Style.t("検索", "Search")
+                TextMetrics { id: searchHint; font: search.font; text: Style.t("ライブラリを検索", "Search library") }
                 topPadding: 0
                 bottomPadding: 0
                 leftPadding: 32
@@ -100,7 +103,7 @@ Item {
             Layout.fillWidth: true
             Layout.margins: 16
             wrapMode: Text.Wrap
-            text: Style.t("ログインすると、YouTube Music のプレイリスト・アーティスト・アルバムがここに並びます。", "Log in to see your YouTube Music playlists, artists and albums here.")
+            text: Style.t("ログインすると、YouTube Music のプレイリスト・アーティスト・アルバムがここに並びます。", "Sign in to see your YouTube Music playlists, artists and albums here.")
             color: Style.dim
         }
         Item { visible: !WaveApp.loggedIn; Layout.fillHeight: true }

@@ -23,7 +23,7 @@ Rectangle {
             width: parent.width
             horizontalAlignment: Text.AlignHCenter
             wrapMode: Text.Wrap
-            text: WaveApp.videoState === "failed" ? Style.t("動画を読み込めませんでした", "Couldn't load the video") : Style.t("この位置には映像がありません", "There’s no video for this part")
+            text: WaveApp.videoState === "failed" ? Style.t("動画を読み込めませんでした", "Couldn't load the video") : Style.t("この位置には映像がありません", "There's no video for this part")
             color: "white"
         }
         Btn {
@@ -39,7 +39,7 @@ Rectangle {
         anchors.margins: 8
         spacing: 6
         visible: (view.place === "side" || view.place === "full") && (hover.hovered || view.place === "full")
-        Osd { iconName: "view-fullscreen-symbolic"; tip: view.place === "side" ? Style.t("映像を大きく見る", "Bigger video") : Style.t("映像だけを窓いっぱいに", "Fill the window with video"); onClicked: Style.nav.expandVideo() }
+        Osd { iconName: "view-fullscreen-symbolic"; tip: view.place === "side" ? Style.t("映像を大きく見る", "Expand video") : Style.t("映像だけを窓いっぱいに", "Video only"); onClicked: Style.nav.expandVideo() }
         Osd { iconName: Style.nav && Style.nav.pipOpen ? "view-conceal-symbolic" : "window-new-symbolic"; tip: Style.nav && Style.nav.pipOpen ? Style.t("小窓を閉じる", "Close picture in picture") : Style.t("小窓で見る", "Picture in picture"); onClicked: Style.nav.togglePip() }
     }
     HoverHandler { id: hover }

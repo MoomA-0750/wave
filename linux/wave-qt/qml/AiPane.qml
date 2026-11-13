@@ -53,7 +53,7 @@ Item {
                         }
                     }
                     MenuSeparator {}
-                    MenuItem { text: Style.t("今の会話を履歴から消す", "Delete this chat from history"); onTriggered: { const c = (pane.chat.history || []).find(h => h.current); if (c) WaveApp.aiDelete(c.id) } }
+                    MenuItem { text: Style.t("会話を削除", "Delete chat"); onTriggered: { const c = (pane.chat.history || []).find(h => h.current); if (c) WaveApp.aiDelete(c.id) } }
                 }
             }
             Btn { text: Style.t("新しい会話", "New chat"); leftPadding: 12; rightPadding: 12; implicitHeight: 36; onClicked: WaveApp.aiClear() }

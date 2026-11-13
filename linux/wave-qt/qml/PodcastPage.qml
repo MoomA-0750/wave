@@ -86,10 +86,10 @@ ListView {
                     PlayButton { visible: page.episodes.length > 0; onClicked: WaveApp.playSongs(JSON.stringify(page.episodes), 0, page.itemId, false) }
                     Btn {
                         visible: !!page.info && page.info.canSave
-                        text: page.saved ? (page.info.isFeed ? Style.t("登録済み", "Subscribed") : Style.t("保存済み", "Saved")) : (page.info && page.info.isFeed ? Style.t("登録する", "Subscribe") : Style.t("ライブラリに保存", "Save to library"))
+                        text: page.saved ? (page.info.isFeed ? Style.t("登録済み", "Subscribed") : Style.t("保存済み", "Saved")) : (page.info && page.info.isFeed ? Style.t("登録", "Subscribe") : Style.t("ライブラリに保存", "Save to library"))
                         onClicked: page.saveToken = WaveApp.setPodcastSaved(JSON.stringify(page.info.show), !page.saved)
                     }
-                    Btn { visible: !!page.info && page.info.newEpisodes; text: Style.t("RSS の番組を探して足す", "Find and add RSS shows"); onClicked: Style.nav.openFeedSearch() }
+                    Btn { visible: !!page.info && page.info.newEpisodes; text: Style.t("RSS の番組を探して追加", "Find and add RSS shows"); onClicked: Style.nav.openFeedSearch() }
                 }
             }
         }

@@ -99,7 +99,7 @@ Item {
             font.pixelSize: 18
             color: Style.foreground
         }
-        Btn { visible: !!page.info.retry; text: Style.t("もう一度読み込む", "Reload"); Layout.alignment: Qt.AlignHCenter; onClicked: page.reload() }
+        Btn { visible: !!page.info.retry; text: Style.t("もう一度", "Retry"); Layout.alignment: Qt.AlignHCenter; onClicked: page.reload() }
     }
     // 歌詞の下の端は薄く消す（行が途中で切れて見えないように）
     Rectangle {

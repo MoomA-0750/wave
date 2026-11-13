@@ -596,7 +596,7 @@ impl Playback {
                     return;
                 }
                 this.notice(match e {
-                    StreamFailure::NotLoggedIn => crate::lang::t("曲を再生するにはログインしてください", "Log in to play songs"),
+                    StreamFailure::NotLoggedIn => crate::lang::t("曲を再生するにはログインしてください", "Sign in to play songs"),
                     StreamFailure::Network => crate::lang::t("通信できないため再生できませんでした", "Couldn't play because you're offline"),
                     _ => crate::lang::t("再生できませんでした", "Couldn't play this song"),
                 });

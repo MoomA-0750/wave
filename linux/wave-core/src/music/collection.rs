@@ -116,14 +116,6 @@ pub fn top_result(query: &str, songs: &[Song], artists: &[ArtistSummary], albums
         .or_else(|| albums.first().map(|a| HomeItem::Album(a.clone())))
 }
 
-/// 曲の一覧の補足「N 曲、M 分」（Mac の L.songs・L.length と同じ）。
-pub fn count_and_length(songs: &[Song]) -> String {
-    let total: u32 = songs.iter().filter_map(|s| s.duration_seconds).sum();
-    let (h, m) = (total / 3600, total / 60 % 60);
-    let length = if h > 0 { format!("{h} 時間 {m} 分") } else { format!("{} 分", total.div_ceil(60)) };
-    format!("{} 曲、{length}", songs.len())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -192,13 +184,5 @@ mod tests {
         assert!(matches!(top_result("the book 3", &songs, std::slice::from_ref(&artist), std::slice::from_ref(&album)), Some(HomeItem::Album(_))));
         assert!(matches!(top_result("ほか", &songs, &[artist], &[album]), Some(HomeItem::Song(s)) if s.title == "さくら"));
         assert_eq!(top_result("x", &[], &[], &[]), None);
-    }
-
-    #[test]
-    fn count_and_length_reads_like_the_mac() {
-        assert_eq!(count_and_length(&sample()), "3 曲、13 分");
-        let long: Vec<Song> = (0..20).map(|i| song(&format!("t{i}"), "a", "b", 400, "x")).collect();
-        assert_eq!(count_and_length(&long), "20 曲、2 時間 13 分");
-        assert_eq!(count_and_length(&[]), "0 曲、0 分");
     }
 }

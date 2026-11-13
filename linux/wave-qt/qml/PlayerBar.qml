@@ -67,7 +67,7 @@ Rectangle {
         IconButton { compact: true;
             visible: WaveApp.loggedIn
             iconName: WaveApp.liked === 1 ? "object-select-symbolic" : "list-add-symbolic"
-            tip: WaveApp.liked === 1 ? Style.t("高く評価した曲から削除", "Remove from Liked Songs") : Style.t("高く評価した曲に追加", "Add to Liked Songs")
+            tip: WaveApp.liked === 1 ? Style.t("高く評価した曲から削除", "Remove from liked music") : Style.t("高く評価した曲に追加", "Add to liked music")
             checked: WaveApp.liked === 1
             onClicked: WaveApp.toggleLike()
         }
@@ -98,7 +98,7 @@ Rectangle {
                 glyph: 20
                 enabled: WaveApp.hasSong
                 iconName: WaveApp.playing ? "media-playback-pause-symbolic" : "media-playback-start-symbolic"
-                tip: Style.t("再生/一時停止", "Play/Pause")
+                tip: Style.t("再生・一時停止", "Play/Pause")
                 onClicked: WaveApp.togglePlay()
             }
             IconButton { compact: true; iconName: "media-skip-forward-symbolic"; tip: Style.t("次へ", "Next"); enabled: WaveApp.hasSong; onClicked: WaveApp.next() }
@@ -159,7 +159,7 @@ Rectangle {
             IconButton { compact: true;
                 id: deviceButton
                 iconName: "audio-speakers-symbolic"
-                tip: Style.t("デバイスに接続", "Connect to a device")
+                tip: Style.t("端末に接続", "Connect to a device")
                 checked: WaveApp.remoteLabel !== ""
                 onClicked: { devicePopup.d = JSON.parse(WaveApp.devicesJson()); devicePopup.open() }
                 DevicePopup { id: devicePopup; y: -height - 8; x: -width / 2 }
@@ -204,9 +204,9 @@ Rectangle {
         background: Rectangle { color: Style.raised; radius: Style.radius; border.color: Style.border }
         contentItem: ColumnLayout {
             spacing: 4
-            Label { text: Style.t("再生中のデバイス", "Current device"); font.weight: Font.Bold; color: Style.foreground }
+            Label { text: Style.t("現在の端末", "Current device"); font.weight: Font.Bold; color: Style.foreground }
             Label { text: popup.d.mirror ? popup.d.mirror.label : Style.t("この PC", "This PC"); color: Style.accent; font.weight: Font.DemiBold }
-            Label { visible: (popup.d.pickable || []).length > 0; text: Style.t("ほかのデバイスを選択", "Select another device"); font.weight: Font.Bold; Layout.topMargin: 8; color: Style.foreground }
+            Label { visible: (popup.d.pickable || []).length > 0; text: Style.t("ほかの端末を選択", "Select another device"); font.weight: Font.Bold; Layout.topMargin: 8; color: Style.foreground }
             Repeater {
                 model: popup.d.pickable || []
                 delegate: ItemDelegate {

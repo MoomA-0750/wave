@@ -385,15 +385,17 @@ impl qobject::WaveApp {
 
     pub fn play_next_song(self: Pin<&mut Self>, song_json: &QString) {
         if let (Some(s), Some(song)) = (services(), parse_song(song_json)) {
+            let message = if lang::ja() { format!("「{}」を次に再生します", song.title) } else { format!("{} will play next", song.title) };
             s.playback.play_next(song);
-            toast(lang::t("次に再生します", "Playing next"));
+            toast(&message);
         }
     }
 
     pub fn add_to_queue(self: Pin<&mut Self>, song_json: &QString) {
         if let (Some(s), Some(song)) = (services(), parse_song(song_json)) {
+            let message = if lang::ja() { format!("「{}」をキューに追加しました", song.title) } else { format!("Added {} to queue", song.title) };
             s.playback.add_to_queue(song);
-            toast(lang::t("キューに追加しました", "Added to queue"));
+            toast(&message);
         }
     }
 
@@ -432,7 +434,7 @@ impl qobject::WaveApp {
     pub fn set_song_liked(self: Pin<&mut Self>, song_json: &QString, liked: bool) {
         let (Some(s), Some(song)) = (services(), parse_song(song_json)) else { return };
         if !s.repo.client().is_logged_in() {
-            toast(lang::t("ログインすると評価できます", "Log in to like songs"));
+            toast(lang::t("ログインすると評価できます", "Sign in to like songs"));
             return;
         }
         let video_id = song.video_id.clone();
@@ -444,10 +446,10 @@ impl qobject::WaveApp {
             let result = runtime::run(async move { repo.set_liked(&id, liked).await }).await;
             if result.is_err() {
                 with_core(|c| c.liked.insert(video_id, !liked));
-                toast(lang::t("評価を変えられませんでした", "Couldn't update your likes"));
+                toast(lang::t("評価を変更できませんでした", "Couldn't update your likes"));
                 request_sync();
             } else {
-                toast(if liked { lang::t("高く評価した曲に追加しました", "Added to Liked Songs") } else { lang::t("高く評価した曲から削除しました", "Removed from Liked Songs") });
+                toast(if liked { lang::t("高く評価した曲に追加しました", "Added to liked music") } else { lang::t("高く評価した曲から削除しました", "Removed from liked music") });
             }
         });
     }
@@ -460,9 +462,9 @@ impl qobject::WaveApp {
             let result = runtime::run(async move { repo.add_to_playlist(&playlist_id, &song.video_id, false).await }).await;
             use wave_core::music::models::AddToPlaylistResult as R;
             toast(&match result {
-                R::Added => if lang::ja() { format!("「{title}」に追加しました") } else { format!("Added to \"{title}\"") },
-                R::AlreadyInPlaylist => if lang::ja() { format!("「{title}」にもう入っています") } else { format!("Already in \"{title}\"") },
-                R::NotChecked => lang::t("プレイリストを読み切れなかったので、追加しませんでした", "Couldn't check for duplicates, so it wasn't added").to_string(),
+                R::Added => if lang::ja() { format!("「{title}」に追加しました") } else { format!("Added to “{title}”") },
+                R::AlreadyInPlaylist => if lang::ja() { format!("「{title}」にはもう入っています") } else { format!("Already in “{title}”") },
+                R::NotChecked => lang::t("重複を確かめられなかったので、追加しませんでした", "Couldn't check for duplicates, so it wasn't added").to_string(),
                 R::Failed => lang::t("追加できませんでした", "Couldn't add it").to_string(),
             });
         });
@@ -477,7 +479,7 @@ impl qobject::WaveApp {
             toast(match (result.is_ok(), subscribed) {
                 (true, true) => lang::t("登録しました", "Subscribed"),
                 (true, false) => lang::t("登録を解除しました", "Unsubscribed"),
-                _ => lang::t("登録を変えられませんでした", "Couldn't change your subscription"),
+                _ => lang::t("登録を変更できませんでした", "Couldn't change your subscription"),
             });
         });
     }
@@ -527,7 +529,7 @@ impl qobject::WaveApp {
         let mut head: Vec<Value> = Vec::new();
         // ポッドキャストで絞ったときは「新しいエピソード」を先頭に（GTK 版と同じ）
         let auto = lang::t("プレイリスト • 自動", "Playlist • Auto");
-        let (new_episodes, liked, downloads) = (lang::t("新しいエピソード", "New episodes"), lang::t("高く評価した曲", "Liked Songs"), lang::t("ダウンロード", "Downloads"));
+        let (new_episodes, liked, downloads) = (lang::t("新しいエピソード", "New episodes"), lang::t("高く評価した曲", "Liked music"), lang::t("ダウンロード", "Downloads"));
         if kind == "podcast" && matches(new_episodes) {
             head.push(json!({ "kind": "newepisodes", "id": wave_core::music::repository::NEW_EPISODES_BROWSE, "title": new_episodes, "subtitle": auto, "thumb": "", "round": false }));
         }
@@ -653,7 +655,7 @@ impl qobject::WaveApp {
             let result = browser_login::use_profile(&profile).await;
             let text = match &result {
                 Ok(_) => json!({ "ok": true }),
-                Err(message) => json!({ "ok": false, "title": if lang::ja() { format!("{}のログインを使えませんでした", profile.label) } else { format!("Couldn't use the login from {}", profile.label) }, "message": message }),
+                Err(message) => json!({ "ok": false, "title": if lang::ja() { format!("{}のログインを使えませんでした", profile.label) } else { format!("Couldn't use the sign-in from {}", profile.label) }, "message": message }),
             }
             .to_string();
             let _ = thread.queue(move |app| app.loaded(token, QString::from(&text)));
@@ -675,7 +677,7 @@ impl qobject::WaveApp {
             Ok(child) => child,
             Err(e) => {
                 eprintln!("login window failed: {}", e.kind());
-                toast(lang::t("ログインの窓を開けませんでした（wave の GTK 版が要ります）", "Couldn't open the login window (wave's GTK version is needed)"));
+                toast(lang::t("ログインの窓を開けませんでした（wave の GTK 版が要ります）", "Couldn't open the sign-in window (wave's GTK version is needed)"));
                 return;
             }
         };
@@ -799,11 +801,11 @@ async fn enter_main() {
         let view = match state.as_str() {
             "offer" => Some(PairingView::ShowingOffer("wave-pair:eyJ2IjoxLCJwa0EiOiJkZW1vIiwiZUEiOiJkZW1vIiwidG9rZW4iOiJkZW1vIn0".into())),
             "code" => Some(PairingView::EnterCode(None)),
-            "wrong" => Some(PairingView::EnterCode(Some(lang::t("数字が違います", "That code doesn’t match").into()))),
+            "wrong" => Some(PairingView::EnterCode(Some(lang::t("数字が違います", "That code doesn't match").into()))),
             "show" => Some(PairingView::ShowCode { code: "123456".into(), peer: "Pixel 3".into() }),
             "working" => Some(PairingView::Working(lang::t("相手が加えるのを待っています…", "Waiting for the other device to add this PC…").into())),
             "done" => Some(PairingView::Done { peer: "Pixel 3".into(), grant_device_id: None }),
-            "failed" => Some(PairingView::Failed(lang::t("時間内に読み取られませんでした", "The code wasn’t used in time").into())),
+            "failed" => Some(PairingView::Failed(lang::t("時間内に読み取られませんでした", "The code wasn't used in time").into())),
             _ => None,
         };
         if let Some(view) = view {
@@ -992,7 +994,7 @@ fn queue_entries(items: &[QueueItem], index: Option<usize>, history: bool) -> Va
                 } else if i == index + 1 && i < user_end {
                     lang::t("キューの次の曲", "Next in queue")
                 } else if i == user_end {
-                    lang::t("次に流れる曲", "Next up")
+                    lang::t("次に流れる曲", "Up next")
                 } else {
                     ""
                 };
@@ -1049,7 +1051,7 @@ fn load(kind: &str, arg: String, extra: String) -> Loading {
                 let (t, sent) = (title.clone(), ids.clone());
                 match runtime::run(async move { repo.create_playlist_with(&t, &sent).await }).await {
                     Ok(id) => {
-                        toast(&if lang::ja() { format!("「{title}」に {} 曲を保存しました", ids.len()) } else { format!("Saved {} to \"{title}\"", lang::songs(ids.len())) });
+                        toast(&if lang::ja() { format!("「{title}」に {} 曲を保存しました", ids.len()) } else { format!("Saved {} to “{title}”", lang::songs(ids.len())) });
                         if let Some(s) = &services {
                             load_library_after_create(s);
                         }

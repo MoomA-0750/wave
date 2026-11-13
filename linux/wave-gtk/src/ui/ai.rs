@@ -270,7 +270,7 @@ fn history_button(app: &Rc<App>) -> gtk::MenuButton {
                 if c.id == open_id {
                     row.add_css_class("ai-open-chat");
                 }
-                let delete = gtk::Button::builder().icon_name("user-trash-symbolic").tooltip_text(lang::t("会話を消す", "Delete chat")).valign(gtk::Align::Center).css_classes(["flat", "circular"]).build();
+                let delete = gtk::Button::builder().icon_name("user-trash-symbolic").tooltip_text(lang::t("会話を削除", "Delete chat")).valign(gtk::Align::Center).css_classes(["flat", "circular"]).build();
                 row.add_suffix(&delete);
                 let (app_open, id_open, pop) = (app.clone(), c.id.clone(), popover.clone());
                 row.connect_activated(move |_| {

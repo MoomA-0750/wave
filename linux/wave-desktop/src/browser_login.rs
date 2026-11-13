@@ -93,10 +93,10 @@ pub async fn use_profile(profile: &Profile) -> Result<wave_core::credentials::Cr
     let (visitor, data_sync) = page_config(cookie.clone()).await?;
     let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as i64);
     let credentials = wave_core::credentials::Credentials::from_login(&cookie, visitor.as_deref(), data_sync.as_deref(), now)
-        .ok_or_else(|| crate::lang::t("ログインの cookie が見つかりませんでした", "Couldn't find the login cookie").to_string())?;
+        .ok_or_else(|| crate::lang::t("ログインの cookie が見つかりませんでした", "Couldn't find the sign-in cookie").to_string())?;
     eprintln!("browser login visitor={} dataSync={}", visitor.is_some(), data_sync.is_some());
     if !crate::keyring::save(&credentials).await {
-        return Err(crate::lang::t("ログイン情報を保存できませんでした", "Couldn't save your login details").to_string());
+        return Err(crate::lang::t("ログイン情報を保存できませんでした", "Couldn't save your sign-in details").to_string());
     }
     remember(profile);
     Ok(credentials)
@@ -176,7 +176,7 @@ pub async fn read_cookie(profile: &Profile) -> Result<String, String> {
     };
     let header = cookie_header(&cookies);
     if wave_core::credentials::Credentials::from_login(&header, None, None, 0).is_none() {
-        return Err(crate::lang::t("ログインの cookie が見つかりませんでした", "Couldn't find the login cookie").into());
+        return Err(crate::lang::t("ログインの cookie が見つかりませんでした", "Couldn't find the sign-in cookie").into());
     }
     Ok(header)
 }
@@ -196,7 +196,7 @@ pub async fn page_config(cookie: String) -> Result<(Option<String>, Option<Strin
             .await
             .map_err(|e| e.to_string())?;
         if !html.contains("\"LOGGED_IN\":true") {
-            return Err(crate::lang::t("ブラウザのログインが切れていました。ブラウザで music.youtube.com を開き直してから、もう一度押してください", "Your browser login has expired. Open music.youtube.com in the browser again, then try again").into());
+            return Err(crate::lang::t("ブラウザのログインが切れていました。ブラウザで music.youtube.com を開き直してから、もう一度押してください", "Your browser sign-in has expired. Open music.youtube.com in the browser again, then try again").into());
         }
         Ok((config_value(&html, "VISITOR_DATA"), config_value(&html, "DATASYNC_ID")))
     })

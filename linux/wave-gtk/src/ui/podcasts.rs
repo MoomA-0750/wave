@@ -150,7 +150,7 @@ fn show_content(app: &Rc<App>, page: PodcastPage, new_episodes: bool) -> gtk::Sc
         controls.append(&save_button(app, &page, saved));
     }
     if new_episodes {
-        let find = gtk::Button::builder().label(lang::t("RSS の番組を探して足す", "Find and add an RSS show")).valign(gtk::Align::Center).css_classes(["pill"]).build();
+        let find = gtk::Button::builder().label(lang::t("RSS の番組を探して追加", "Find and add RSS shows")).valign(gtk::Align::Center).css_classes(["pill"]).build();
         let app = app.clone();
         find.connect_clicked(move |_| app.push(find_feed(&app)));
         controls.append(&find);
@@ -258,7 +258,7 @@ fn save_button(app: &Rc<App>, page: &PodcastPage, saved: bool) -> gtk::Button {
                     app.toast(lang::t("番組を登録しました", "Subscribed to the show"));
                 } else {
                     app.podcasts.library.unsubscribe(url);
-                    app.toast(lang::t("登録をやめました", "Unsubscribed"));
+                    app.toast(lang::t("登録を解除しました", "Unsubscribed"));
                 }
                 state.set(target);
                 show();
@@ -394,7 +394,7 @@ pub fn card(app: &Rc<App>, summary: &PodcastSummary, on_open: Option<Rc<dyn Fn()
 /// RSS の番組を探して足す: Apple の公開の目録で探すか、RSS の URL を打ち込む。結果を押すと番組のページ（そこで登録）。
 pub fn find_feed(app: &Rc<App>) -> adw::NavigationPage {
     let column = column();
-    column.append(&track::page_title(lang::t("RSS の番組を探す", "Find an RSS show")));
+    column.append(&track::page_title(lang::t("RSS の番組を探す", "Find RSS shows")));
     column.append(&gtk::Label::builder().label(lang::t("番組名で探すか、RSS の URL（https://…）を入れてください。YouTube に無い番組も聴けます", "Search by show name or enter an RSS URL (https://…). You can also listen to shows that aren't on YouTube")).xalign(0.0).wrap(true).css_classes(["dim-label"]).build());
     let entry = gtk::SearchEntry::builder().placeholder_text(lang::t("番組名・RSS の URL", "Show name or RSS URL")).build();
     column.append(&entry);
@@ -423,9 +423,9 @@ pub fn find_feed(app: &Rc<App>) -> adw::NavigationPage {
                     results.set_child(Some(&track::card_grid(cards)));
                 }
                 Some(_) => results.set_child(Some(&gtk::Label::builder().label(lang::t("見つかりませんでした", "No results found")).css_classes(["dim-label"]).build())),
-                None => results.set_child(Some(&gtk::Label::builder().label(lang::t("探せませんでした（通信を確かめてください）", "Couldn't search (check your connection)")).css_classes(["dim-label"]).build())),
+                None => results.set_child(Some(&gtk::Label::builder().label(lang::t("検索できませんでした", "Couldn't search")).css_classes(["dim-label"]).build())),
             }
         });
     });
-    page(lang::t("RSS の番組を探す", "Find an RSS show"), "feed-search", &scrolling(&column))
+    page(lang::t("RSS の番組を探す", "Find RSS shows"), "feed-search", &scrolling(&column))
 }

@@ -61,7 +61,7 @@ Flickable {
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: 2
-                Label { text: Style.t("聴きそうな曲を自動で取っておく", "Download songs you’re likely to play"); color: Style.foreground }
+                Label { text: Style.t("聴きそうな曲を自動で取っておく", "Automatically download songs you're likely to play"); color: Style.foreground }
                 Label { Layout.fillWidth: true; text: Style.t("いつも聴いている曲・好きそうな曲・おすすめから、毎日選び直します", "Picked again every day from songs you play often, songs you might like and recommendations"); wrapMode: Text.Wrap; font.pixelSize: 12; color: Style.dim }
             }
             ComboBox {

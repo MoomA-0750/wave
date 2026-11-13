@@ -46,7 +46,7 @@ fn account_group(app: &Rc<App>, prefs: &adw::PreferencesPage) -> adw::Preference
     let avatar = adw::Avatar::builder().size(56).show_initials(true).build();
     let row = adw::ActionRow::builder().build();
     row.add_prefix(&avatar);
-    let logout = gtk::Button::builder().label(lang::t("ログアウト", "Log out")).valign(gtk::Align::Center).build();
+    let logout = gtk::Button::builder().label(lang::t("ログアウト", "Sign out")).valign(gtk::Align::Center).build();
     row.add_suffix(&logout);
     group.add(&row);
 
@@ -88,8 +88,8 @@ fn account_group(app: &Rc<App>, prefs: &adw::PreferencesPage) -> adw::Preference
     logout.connect_clicked(move |_| {
         let prefs = prefs.clone();
         gtk::glib::spawn_future_local(async move {
-            let dialog = adw::AlertDialog::new(Some(lang::t("ログアウトしますか？", "Log out?")), Some(lang::t("この PC に保存したログイン情報を消します。", "This removes your login saved on this PC.")));
-            dialog.add_responses(&[("cancel", lang::t("キャンセル", "Cancel")), ("logout", lang::t("ログアウト", "Log out"))]);
+            let dialog = adw::AlertDialog::new(Some(lang::t("ログアウトしますか？", "Sign out?")), Some(lang::t("この PC に保存したログイン情報を消します。", "This removes your sign-in saved on this PC.")));
+            dialog.add_responses(&[("cancel", lang::t("キャンセル", "Cancel")), ("logout", lang::t("ログアウト", "Sign out"))]);
             dialog.set_response_appearance("logout", adw::ResponseAppearance::Destructive);
             dialog.set_close_response("cancel");
             if dialog.choose_future(Some(&prefs)).await == "logout" {
@@ -104,7 +104,7 @@ fn account_group(app: &Rc<App>, prefs: &adw::PreferencesPage) -> adw::Preference
 /// name: None はまだ確かめている、Some(None) は取れなかった。premium: None はまだ確かめている、Some(None) は分からなかった。
 fn account_texts(logged_in: bool, name: Option<Option<String>>, premium: Option<Option<bool>>) -> (String, String) {
     if !logged_in {
-        return (lang::t("ログインしていません", "Not logged in").into(), lang::t("ログインすると、ライブラリやおすすめが使えます", "Log in to use your library and recommendations").into());
+        return (lang::t("ログインしていません", "Not logged in").into(), lang::t("ログインすると、ライブラリやおすすめが使えます", "Sign in to use your library and recommendations").into());
     }
     let title = match &name {
         Some(Some(n)) => n.clone(),
@@ -129,7 +129,7 @@ fn play_group(app: &Rc<App>) -> adw::PreferencesGroup {
     let settings = app.downloads.settings.borrow().clone();
     let send_history = adw::SwitchRow::builder()
         .title(lang::t("再生した曲を YouTube Music の再生履歴に残す", "Save played songs to your YouTube Music history"))
-        .subtitle(lang::t("オフにすると、wave で聴いた曲は履歴やおすすめに使われません", "When off, songs you play in wave won’t be used for history or recommendations"))
+        .subtitle(lang::t("オフにすると、wave で聴いた曲は履歴やおすすめに使われません", "When off, songs you play in wave won't be used for history or recommendations"))
         .active(settings.send_history)
         .build();
     let notices = adw::SwitchRow::builder()
@@ -162,7 +162,9 @@ fn downloads_group(app: &Rc<App>, prefs: &adw::PreferencesPage) -> adw::Preferen
     let group = adw::PreferencesGroup::builder().title(lang::t("ダウンロード", "Downloads")).build();
     let settings = app.downloads.settings.borrow().clone();
     let network = adw::ComboRow::builder()
-        .title(lang::t("ダウンロードに使う通信", "Download using"))
+        .title(lang::t("ダウンロードに使う通信", "Download over"))
+        // 選んだ通信は題の下に出す（右の狭いところでは英語の選び肢が切れる）
+        .use_subtitle(true)
         .model(&gtk::StringList::new(&[lang::t("Wi-Fi など従量制でない通信だけ", "Wi-Fi and other unmetered networks only"), lang::t("どの通信でも", "Any network")]))
         .selected(if settings.download_network == DownloadNetwork::Any { 1 } else { 0 })
         .build();
@@ -256,10 +258,10 @@ fn discord_group(app: &Rc<App>) -> adw::PreferencesGroup {
     let settings = app.downloads.settings.borrow().clone();
     let group = adw::PreferencesGroup::builder()
         .title("Discord")
-        .description(lang::t("discord.com/developers/applications で「wave」という名前のアプリケーションを作り、その Application ID を貼ってください。", "Create an application named “wave” at discord.com/developers/applications and paste its Application ID."))
+        .description(lang::t("discord.com/developers/applications で「wave」という名前のアプリケーションを作り、その Application ID を貼ってください", "Create an application named “wave” at discord.com/developers/applications and paste its Application ID"))
         .build();
     let on = adw::SwitchRow::builder()
-        .title(lang::t("Discord に再生中の曲を出す", "Show what you’re playing on Discord"))
+        .title(lang::t("Discord に再生中の曲を出す", "Show what you're playing on Discord"))
         .subtitle(lang::t("この PC の Discord のアプリに「聴いています」を出します。スマホなどほかの端末で鳴らしている曲も出します", "Shows “Listening to” through the Discord app on this PC, including songs playing on your other devices"))
         .active(settings.discord_presence)
         .build();
@@ -345,7 +347,7 @@ fn discord_state_text(app: &App) -> &'static str {
 fn claude_group(app: &Rc<App>) -> adw::PreferencesGroup {
     let group = adw::PreferencesGroup::builder()
         .title("Claude")
-        .description(lang::t("家の PC で ai-bridge の ai_bridge.py --name wave --pair を動かし、出てきた waveai://pair?… の文字列を貼ってください。", "Run ai_bridge.py --name wave --pair from ai-bridge on your PC and paste the waveai://pair?… text it prints."))
+        .description(lang::t("家の PC で ai-bridge の ai_bridge.py --name wave --pair を動かし、出てきた waveai://pair?… の文字列を貼ってください", "Run ai_bridge.py --name wave --pair from ai-bridge on your PC and paste the waveai://pair?… text it prints"))
         .build();
     let state = adw::ActionRow::builder().build();
     let unpair = gtk::Button::builder().label(lang::t("接続を外す", "Disconnect")).valign(gtk::Align::Center).build();
@@ -420,7 +422,7 @@ fn language_group(app: &Rc<App>) -> adw::PreferencesGroup {
     let current = app.downloads.settings.borrow().ui_language.clone();
     let ui_language = adw::ComboRow::builder()
         .title(lang::t("画面の言語", "App language"))
-        .model(&gtk::StringList::new(&[lang::t("端末に合わせる", "System"), "日本語", "English"]))
+        .model(&gtk::StringList::new(&[lang::t("端末に合わせる", "Use device language"), "日本語", "English"]))
         .selected(UI_LANGUAGES.iter().position(|v| *v == current).unwrap_or(0) as u32)
         .build();
     group.add(&ui_language);
@@ -432,7 +434,7 @@ fn language_group(app: &Rc<App>) -> adw::PreferencesGroup {
                 return;
             }
             app.downloads.update_settings(|s| s.ui_language = value.to_string());
-            app.toast(lang::t("次の起動から変わります", "Takes effect the next time you open wave"));
+            app.toast(lang::t("次の起動から反映されます", "Takes effect the next time you open wave"));
         });
     }
     let original_titles = adw::SwitchRow::builder()
@@ -458,7 +460,7 @@ fn about_group() -> adw::PreferencesGroup {
     let group = adw::PreferencesGroup::builder().title(lang::t("このアプリについて", "About")).build();
     let version = adw::ActionRow::builder()
         .title(concat!("wave for Linux ", env!("CARGO_PKG_VERSION")))
-        .subtitle(lang::t("ログイン情報と Claude の接続は GNOME のキーリング（Secret Service）に保存し、ファイルには書きません。", "Your login and Claude connection are stored in the GNOME keyring (Secret Service), never in files."))
+        .subtitle(lang::t("ログイン情報と Claude の接続は GNOME のキーリング（Secret Service）に保存し、ファイルには書きません", "Your sign-in and Claude connection are stored in the GNOME keyring (Secret Service), never in files"))
         .build();
     let data = gtk::glib::user_data_dir().join("wave");
     let place = adw::ActionRow::builder()
@@ -477,7 +479,7 @@ mod tests {
 
     #[test]
     fn account_texts_follow_the_checks() {
-        assert_eq!(account_texts(false, None, None), (lang::t("ログインしていません", "Not logged in").into(), lang::t("ログインすると、ライブラリやおすすめが使えます", "Log in to use your library and recommendations").into()));
+        assert_eq!(account_texts(false, None, None), (lang::t("ログインしていません", "Not logged in").into(), lang::t("ログインすると、ライブラリやおすすめが使えます", "Sign in to use your library and recommendations").into()));
         assert_eq!(account_texts(true, None, None), (lang::t("ログイン中", "Logged in").into(), lang::t("アカウントを確かめています…", "Checking account…").into()));
         assert_eq!(account_texts(true, Some(Some("名前".into())), None), ("名前".into(), lang::t("Premium 音質: 確かめています…", "Premium audio: Checking…").into()));
         assert_eq!(account_texts(true, Some(Some("名前".into())), Some(Some(true))), ("名前".into(), lang::t("Premium 音質: 使えます", "Premium audio: Available").into()));

@@ -104,7 +104,7 @@ fn build(app: &Rc<App>, song: &Song, removal: Option<Rc<Removal>>) -> (gio::Menu
             let remote = app.connect.mirror().is_some();
             app.playback.play_next(song.clone());
             if !remote {
-                app.toast(lang::t("次に再生します", "Will play next"));
+                app.toast(&if lang::ja() { format!("「{}」を次に再生します", song.title) } else { format!("{} will play next", song.title) });
             }
         }), false);
     }
@@ -115,7 +115,7 @@ fn build(app: &Rc<App>, song: &Song, removal: Option<Rc<Removal>>) -> (gio::Menu
             let remote = app.connect.mirror().is_some();
             app.playback.add_to_queue(song.clone());
             if !remote {
-                app.toast(lang::t("キューに追加しました", "Added to queue"));
+                app.toast(&if lang::ja() { format!("「{}」をキューに追加しました", song.title) } else { format!("Added {} to queue", song.title) });
             }
         }), false);
     }
@@ -124,7 +124,7 @@ fn build(app: &Rc<App>, song: &Song, removal: Option<Rc<Removal>>) -> (gio::Menu
     if app.repo.client().is_logged_in() && (!external || removal.is_some()) {
         let playlist_section = gio::Menu::new();
         let submenu = gio::Menu::new();
-        submenu.append(Some(lang::t("新しいプレイリスト…", "New playlist…")), Some("song.new-playlist"));
+        submenu.append(Some(lang::t("新しいプレイリスト", "New playlist")), Some("song.new-playlist"));
         let editable = app.editable_playlists.borrow().clone();
         if !editable.is_empty() {
             let list = gio::Menu::new();
@@ -136,15 +136,15 @@ fn build(app: &Rc<App>, song: &Song, removal: Option<Rc<Removal>>) -> (gio::Menu
             submenu.append_section(None, &list);
         }
         if !external {
-            playlist_section.append_submenu(Some(lang::t("プレイリストに追加", "Add to playlist")), &submenu);
+            playlist_section.append_submenu(Some(lang::t("プレイリストに保存", "Save to playlist")), &submenu);
         }
         // 高く評価した曲に足す・外す。高く評価した曲の一覧を読んであればそれで、無ければ開いた時点の評価を読んでから外すほうに替える
         if !external {
             match super::track::liked_known(&song.video_id) {
-                Some(true) => playlist_section.append(Some(lang::t("高く評価した曲から削除", "Remove from Liked Songs")), Some("song.unlike")),
-                Some(false) => playlist_section.append(Some(lang::t("高く評価した曲に追加", "Add to Liked Songs")), Some("song.like")),
+                Some(true) => playlist_section.append(Some(lang::t("高く評価した曲から削除", "Remove from liked music")), Some("song.unlike")),
+                Some(false) => playlist_section.append(Some(lang::t("高く評価した曲に追加", "Add to liked music")), Some("song.like")),
                 None => {
-                    playlist_section.append(Some(lang::t("高く評価した曲に追加", "Add to Liked Songs")), Some("song.like"));
+                    playlist_section.append(Some(lang::t("高く評価した曲に追加", "Add to liked music")), Some("song.like"));
                     let (repo, id, section) = (app.repo.clone(), song.video_id.clone(), playlist_section.clone());
                     gtk::glib::spawn_future_local(async move {
                         let status = runtime::run(async move { repo.like_status(&id).await }).await;
@@ -152,7 +152,7 @@ fn build(app: &Rc<App>, song: &Song, removal: Option<Rc<Removal>>) -> (gio::Menu
                             for i in 0..section.n_items() {
                                 if section.item_attribute_value(i, "action", None).and_then(|v| v.get::<String>()).as_deref() == Some("song.like") {
                                     section.remove(i);
-                                    section.insert(i, Some(lang::t("高く評価した曲から削除", "Remove from Liked Songs")), Some("song.unlike"));
+                                    section.insert(i, Some(lang::t("高く評価した曲から削除", "Remove from liked music")), Some("song.unlike"));
                                     break;
                                 }
                             }
@@ -171,9 +171,9 @@ fn build(app: &Rc<App>, song: &Song, removal: Option<Rc<Removal>>) -> (gio::Menu
                             super::track::set_liked(&song.video_id, liked);
                         }
                         app.toast(match (ok, liked) {
-                            (true, true) => lang::t("高く評価した曲に追加しました", "Added to Liked Songs"),
-                            (true, false) => lang::t("高く評価した曲から削除しました", "Removed from Liked Songs"),
-                            (false, _) => lang::t("評価を変えられませんでした", "Couldn't update your likes"),
+                            (true, true) => lang::t("高く評価した曲に追加しました", "Added to liked music"),
+                            (true, false) => lang::t("高く評価した曲から削除しました", "Removed from liked music"),
+                            (false, _) => lang::t("評価を変更できませんでした", "Couldn't update your likes"),
                         });
                     });
                 }), false);
@@ -214,7 +214,7 @@ fn build(app: &Rc<App>, song: &Song, removal: Option<Rc<Removal>>) -> (gio::Menu
 
     let go_section = gio::Menu::new();
     if !external {
-        go_section.append(Some(lang::t("曲のラジオを再生", "Go to song radio")), Some("song.radio"));
+        go_section.append(Some(lang::t("ラジオを開始", "Start radio")), Some("song.radio"));
         let (app, song) = (app.clone(), song.clone());
         add("radio", Box::new(move |_| app.playback.play_list(vec![song.clone()], 0)), false);
     }
@@ -262,9 +262,9 @@ fn add_to(app: &Rc<App>, song: &Song, playlist_id: &str, title: &str, known_empt
         let playlist = id.clone();
         let result = runtime::run(async move { repo.add_to_playlist(&playlist, &video, known_empty).await }).await;
         app.toast(&match result {
-            AddToPlaylistResult::Added => if lang::ja() { format!("「{title}」に追加しました") } else { format!("Added to {title}") },
-            AddToPlaylistResult::AlreadyInPlaylist => if lang::ja() { format!("「{title}」にはもう入っています") } else { format!("Already in {title}") },
-            AddToPlaylistResult::NotChecked => lang::t("プレイリストを確かめられなかったので、追加しませんでした", "Couldn't check for duplicates, so it wasn't added").to_string(),
+            AddToPlaylistResult::Added => if lang::ja() { format!("「{title}」に追加しました") } else { format!("Added to “{title}”") },
+            AddToPlaylistResult::AlreadyInPlaylist => if lang::ja() { format!("「{title}」にはもう入っています") } else { format!("Already in “{title}”") },
+            AddToPlaylistResult::NotChecked => lang::t("重複を確かめられなかったので、追加しませんでした", "Couldn't check for duplicates, so it wasn't added").to_string(),
             AddToPlaylistResult::Failed => lang::t("追加できませんでした", "Couldn't add it").to_string(),
         });
     });
@@ -305,11 +305,11 @@ pub fn create_playlist(app: &Rc<App>, song: Option<Song>) {
                     match song {
                         // 作ったばかりで空なので、重複を確かめずに入れる
                         Some(song) => add_to(&app, &song, &id, &title, true),
-                        None => app.toast(&if lang::ja() { format!("「{title}」を作成しました") } else { format!("Created {title}") }),
+                        None => app.toast(&if lang::ja() { format!("「{title}」を作成しました") } else { format!("Created “{title}”") }),
                     }
                     super::library::reload_after_create(&app);
                 }
-                Err(_) => app.toast(lang::t("プレイリストを作れませんでした", "Couldn't create the playlist")),
+                Err(_) => app.toast(lang::t("プレイリストを作成できませんでした", "Couldn't create the playlist")),
             }
         });
     });
@@ -323,7 +323,7 @@ pub fn save_queue(app: &Rc<App>) {
     let (songs, _) = app.playback.queue();
     let ids = wave_core::music::save_queue::video_ids_to_save(&songs);
     if ids.is_empty() {
-        app.toast(lang::t("保存できる曲がキューにありません", "There are no songs in the queue to save"));
+        app.toast(lang::t("保存できる曲がキューにありません", "No songs in the queue to save"));
         return;
     }
     let entry = gtk::Entry::builder().placeholder_text(lang::t("プレイリスト名", "Playlist name")).text(wave_core::music::save_queue::default_title(&songs)).activates_default(true).build();
@@ -373,15 +373,15 @@ pub fn popup_saved(app: &Rc<App>, song: &Song, anchor: &impl IsA<gtk::Widget>, o
     let actions = gio::SimpleActionGroup::new();
     let menu = gio::Menu::new();
     let add_section = gio::Menu::new();
-    add_section.append(Some(lang::t("新しいプレイリスト…", "New playlist…")), Some("saved.new-playlist"));
+    add_section.append(Some(lang::t("新しいプレイリスト", "New playlist")), Some("saved.new-playlist"));
     let editable = app.editable_playlists.borrow().clone();
     for p in &editable {
         let item = gio::MenuItem::new(Some(&p.title), None);
         item.set_action_and_target_value(Some("saved.add-to"), Some(&p.playlist_id.to_variant()));
         add_section.append_item(&item);
     }
-    menu.append_submenu(Some(lang::t("プレイリストに追加", "Add to playlist")), &add_section);
-    menu.append(Some(lang::t("高く評価した曲から削除", "Remove from Liked Songs")), Some("saved.unlike"));
+    menu.append_submenu(Some(lang::t("プレイリストに保存", "Save to playlist")), &add_section);
+    menu.append(Some(lang::t("高く評価した曲から削除", "Remove from liked music")), Some("saved.unlike"));
     {
         let (app, song) = (app.clone(), song.clone());
         let action = gio::SimpleAction::new("new-playlist", None);
@@ -411,9 +411,9 @@ pub fn popup_saved(app: &Rc<App>, song: &Song, anchor: &impl IsA<gtk::Widget>, o
                     Ok(_) => {
                         super::track::set_liked(&video, false);
                         on_unlike();
-                        app.toast(lang::t("高く評価した曲から削除しました", "Removed from Liked Songs"));
+                        app.toast(lang::t("高く評価した曲から削除しました", "Removed from liked music"));
                     }
-                    Err(_) => app.toast(lang::t("高く評価した曲から削除できませんでした", "Couldn't remove it from Liked Songs")),
+                    Err(_) => app.toast(lang::t("高く評価した曲から削除できませんでした", "Couldn't remove it from liked music")),
                 }
             });
         });

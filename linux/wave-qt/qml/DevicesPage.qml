@@ -34,7 +34,7 @@ Flickable {
         spacing: 16
 
         Label { text: Style.t("端末の連携", "Devices"); font.pixelSize: 28; font.weight: Font.Bold; color: Style.foreground }
-        Label { Layout.fillWidth: true; wrapMode: Text.Wrap; color: Style.dim; text: Style.t("同じアカウントのスマホと PC のあいだで、再生を引き継げます。端末どうしの通信は暗号化され、中継のサーバーは中身を読めません。", "Move playback between your phone and PC on the same account. Traffic between devices is encrypted, so the relay server can’t read it.") }
+        Label { Layout.fillWidth: true; wrapMode: Text.Wrap; color: Style.dim; text: Style.t("同じアカウントのスマホと PC のあいだで、再生を引き継げます。端末どうしの通信は暗号化され、中継のサーバーは中身を読めません。", "Move playback between your phone and PC on the same account. Traffic between devices is encrypted, so the relay server can't read it.") }
 
         // 知らせの帯
         Rectangle {
@@ -87,7 +87,7 @@ Flickable {
         Card_ {
             visible: !!page.d.showJoin
             Label { text: Style.t("はじめる", "Get started"); font.weight: Font.Bold; color: Style.foreground }
-            Label { Layout.fillWidth: true; wrapMode: Text.Wrap; color: Style.foreground; text: Style.t("連携済みのスマホの wave で「端末の連携」→「端末を追加」を押し、「文字で共有」で送った文字列をここに貼り付けてください。", "In wave on a phone that’s already set up, go to Devices → Add device, choose “Share as text”, and paste the text here.") }
+            Label { Layout.fillWidth: true; wrapMode: Text.Wrap; color: Style.foreground; text: Style.t("連携済みのスマホの wave で「端末の連携」→「端末を追加」を押し、「文字で共有」で送った文字列をここに貼り付けてください。", "In wave on a phone that's already set up, go to Devices → Add device, choose “Share as text”, and paste the text here.") }
             TextField { id: offer; Layout.fillWidth: true; placeholderText: "wave-pair:…"; background: Rectangle { radius: Style.small; color: Style.view; border.color: offer.activeFocus ? Style.accent : Style.border } }
             RowLayout {
                 spacing: 8
@@ -99,7 +99,7 @@ Flickable {
         // 加入の手順
         Card_ {
             visible: !!page.d.pairing && page.d.pairing.kind !== "idle"
-            Label { text: Style.t("端末を加える", "Add a device"); font.weight: Font.Bold; color: Style.foreground }
+            Label { text: Style.t("端末を追加", "Add device"); font.weight: Font.Bold; color: Style.foreground }
             Label { Layout.fillWidth: true; wrapMode: Text.Wrap; text: page.d.pairing ? page.d.pairing.text : ""; color: page.d.pairing && page.d.pairing.kind === "failed" ? Style.red : Style.foreground }
             QrCode { visible: !!page.d.pairing && page.d.pairing.kind === "offer"; rows: page.d.pairing ? page.d.pairing.qr : []; Layout.preferredWidth: 220; Layout.preferredHeight: 220 }
             RowLayout {
@@ -133,7 +133,7 @@ Flickable {
             BusyIndicator { visible: !!page.d.pairing && page.d.pairing.kind === "working"; running: visible }
             RowLayout {
                 spacing: 8
-                Btn { visible: !!page.d.pairing && page.d.pairing.kind === "show"; text: Style.t("相手に入力したら、続ける", "Continue after entering it on the other device"); highlighted: true; onClicked: WaveApp.connectAction("confirm_on_b", "") }
+                Btn { visible: !!page.d.pairing && page.d.pairing.kind === "show"; text: Style.t("相手に入力したら、続ける", "Continue after entering it"); highlighted: true; onClicked: WaveApp.connectAction("confirm_on_b", "") }
                 Btn { visible: !!page.d.pairing && page.d.pairing.grantId !== "" && !!page.d.pairing.grantLabel; text: Style.t("ログインを渡す", "Give login"); highlighted: true; onClicked: grant.ask(page.d.pairing.grantId, page.d.pairing.grantLabel) }
                 Btn { text: page.d.pairing && (page.d.pairing.kind === "done" || page.d.pairing.kind === "failed") ? Style.t("閉じる", "Close") : Style.t("キャンセル", "Cancel"); onClicked: WaveApp.connectAction("cancel_pairing", "") }
             }
@@ -180,7 +180,7 @@ Flickable {
                     background: Rectangle { radius: Style.small; color: Style.view; border.color: relay.activeFocus ? Style.accent : Style.border }
                     onAccepted: WaveApp.connectAction("set_relay", text)
                 }
-                Btn { text: Style.t("覚える", "Save"); onClicked: WaveApp.connectAction("set_relay", relay.text) }
+                Btn { text: Style.t("保存", "Save"); onClicked: WaveApp.connectAction("set_relay", relay.text) }
             }
         }
     }
@@ -191,7 +191,7 @@ Flickable {
         property string label: ""
         function ask(id, name) { deviceId = id; label = name; open() }
         title: Style.t("端末を外しますか？", "Remove this device?")
-        Label { width: 440; wrapMode: Text.Wrap; text: Style.ja ? "「" + remove.label + "」は、もう再生を引き継げなくなります。もう一度加えるには、QR と6桁の手順が要ります。" : "“" + remove.label + "” won’t be able to take over playback anymore. To add it again, you’ll need the QR code and 6-digit steps." }
+        Label { width: 440; wrapMode: Text.Wrap; text: Style.ja ? "「" + remove.label + "」は、もう再生を引き継げなくなります。もう一度加えるには、QR と6桁の手順が要ります。" : "“" + remove.label + "” won't be able to take over playback anymore. To add it again, you'll need the QR code and 6-digit steps." }
         footer: DialogButtonBox {
             background: null
             Btn { text: Style.t("キャンセル", "Cancel"); flat: true; DialogButtonBox.buttonRole: DialogButtonBox.RejectRole }
@@ -205,10 +205,10 @@ Flickable {
         property string label: ""
         function ask(id, name) { deviceId = id; label = name; open() }
         title: Style.t("ログインを渡しますか？", "Give your login?")
-        Label { width: 440; wrapMode: Text.Wrap; text: Style.ja ? "「" + grant.label + "」に、この端末の YouTube のログインを渡します。ほかのアプリ（home-dashboard など）から、あなたのプレイリスト・高く評価した曲・おすすめを使えるようになります。wave API を動かしている機械に入れる人は、それらを読めます。" : "This gives this device’s YouTube login to “" + grant.label + "”. Other apps (such as home-dashboard) can then use your playlists, liked songs and recommendations. Anyone who can get into the machine running wave API can read them." }
+        Label { width: 440; wrapMode: Text.Wrap; text: Style.ja ? "「" + grant.label + "」に、この端末の YouTube のログインを渡します。ほかのアプリ（home-dashboard など）から、あなたのプレイリスト・高く評価した曲・おすすめを使えるようになります。wave API を動かしている機械に入れる人は、それらを読めます。" : "This gives this device's YouTube login to “" + grant.label + "”. Other apps (such as home-dashboard) can then use your playlists, liked songs and recommendations. Anyone who can get into the machine running wave API can read them." }
         footer: DialogButtonBox {
             background: null
-            Btn { text: Style.t("やめる", "Cancel"); flat: true; DialogButtonBox.buttonRole: DialogButtonBox.RejectRole }
+            Btn { text: Style.t("キャンセル", "Cancel"); flat: true; DialogButtonBox.buttonRole: DialogButtonBox.RejectRole }
             Btn { text: Style.t("渡す", "Give"); highlighted: true; DialogButtonBox.buttonRole: DialogButtonBox.AcceptRole }
         }
         onAccepted: WaveApp.connectGrant(deviceId, label)

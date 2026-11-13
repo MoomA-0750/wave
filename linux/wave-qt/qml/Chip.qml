@@ -7,15 +7,17 @@ import wave
 Button {
     id: chip
     property bool on: false
+    // 狭い欄（左のライブラリ）では余白と文字を詰める
+    property bool dense: false
     flat: !on
     highlighted: on
     checkable: false
     topInset: 0
     bottomInset: 0
     implicitHeight: 32
-    leftPadding: 14
-    rightPadding: 14
-    font.pixelSize: 13
+    leftPadding: dense ? 9 : 14
+    rightPadding: dense ? 9 : 14
+    font.pixelSize: dense ? 12 : 13
     font.weight: Font.DemiBold
     Material.roundedScale: Style.small
     Material.elevation: 0

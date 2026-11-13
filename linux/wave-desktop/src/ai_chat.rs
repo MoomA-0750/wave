@@ -246,7 +246,7 @@ impl AiChat {
         self.push(AiMessage::User(task.clone()));
         self.archive();
         let Some(config) = self.config.borrow().clone() else {
-            self.push(AiMessage::Failure(lang::t("Claude につないでいません。設定の「Claude」でつないでください。", "Claude isn't connected yet. Connect it in Settings → Claude.").into()));
+            self.push(AiMessage::Failure(lang::t("Claude につないでいません。設定の「Claude」でつないでください", "Claude isn't connected yet. Connect it in Settings → Claude").into()));
             return;
         };
         self.running.set(true);
@@ -316,9 +316,9 @@ impl AiChat {
                     runtime::run(async move { bridge.post_result(&session, &id, result).await }).await;
                 }
                 BridgeEvent::Error(e) => self.push(AiMessage::Failure(if lang::ja() { format!("Claude が失敗しました: {e}") } else { format!("Claude failed: {e}") })),
-                BridgeEvent::Unauthorized => self.push(AiMessage::Failure(lang::t("Claude の中継にトークンを断られました。つなぎ直してください。", "The Claude bridge refused the token. Connect again.").into())),
+                BridgeEvent::Unauthorized => self.push(AiMessage::Failure(lang::t("Claude の中継にトークンを断られました。つなぎ直してください", "The Claude bridge refused the token. Connect again").into())),
                 BridgeEvent::Unreachable => {
-                    self.push(AiMessage::Failure(lang::t("Claude の中継に届きませんでした。中継を動かしている PC が起きているか確かめてください。", "Couldn't reach the Claude bridge. Is the PC running it?").into()))
+                    self.push(AiMessage::Failure(lang::t("Claude の中継に届きませんでした。中継を動かしている PC が起きているか確かめてください", "Couldn't reach the Claude bridge. Is the PC running it?").into()))
                 }
                 BridgeEvent::Done => break,
             }
@@ -382,7 +382,7 @@ impl AiChat {
                 })
                 .await;
                 songs.iter().for_each(|s| self.remember(s));
-                (Ok(json!(songs.iter().map(song_json).collect::<Vec<_>>())), Some(AiMessage::Action(lang::t("高く評価した曲を見ました", "Looked at your liked songs").into())))
+                (Ok(json!(songs.iter().map(song_json).collect::<Vec<_>>())), Some(AiMessage::Action(lang::t("高く評価した曲を見ました", "Looked at your liked music").into())))
             }
             "show_songs" => {
                 let (songs, missing) = self.songs_of(args);
@@ -412,7 +412,7 @@ impl AiChat {
                 } else {
                     songs.into_iter().for_each(|s| app.playback.add_to_queue(s));
                 }
-                (Ok(json!(format!("queued {count} songs"))), Some(AiMessage::Action(if lang::ja() { format!("{count} 曲をキューに足しました") } else { format!("Added {} to the queue", lang::songs(count)) })))
+                (Ok(json!(format!("queued {count} songs"))), Some(AiMessage::Action(if lang::ja() { format!("{count} 曲をキューに追加しました") } else { format!("Added {} to queue", lang::songs(count)) })))
             }
             "list_playlists" => {
                 let list: Vec<Value> = app.editable_playlists.borrow().iter().map(|p| json!({ "playlist_id": p.playlist_id, "title": p.title })).collect();
@@ -443,7 +443,7 @@ impl AiChat {
                             0,
                             wave_core::music::models::PlaylistSummary { playlist_id: id.clone(), title: title.clone(), subtitle: Some(lang::t("非公開", "Private").into()), thumbnail_url: None, editable: true },
                         );
-                        (Ok(json!({ "playlist_id": id, "added": added })), Some(AiMessage::Action(if lang::ja() { format!("「{title}」を作って {added} 曲入れました") } else { format!("Created “{title}” with {}", lang::songs(added)) })))
+                        (Ok(json!({ "playlist_id": id, "added": added })), Some(AiMessage::Action(if lang::ja() { format!("「{title}」を作成して {added} 曲追加しました") } else { format!("Created “{title}” with {}", lang::songs(added)) })))
                     }
                     None => (Err("create failed".into()), None),
                 }
@@ -470,7 +470,7 @@ impl AiChat {
                     (added, already)
                 })
                 .await;
-                (Ok(json!({ "added": added, "already_in_playlist": already })), Some(AiMessage::Action(if lang::ja() { format!("「{title}」に {added} 曲足しました") } else { format!("Added {} to “{title}”", lang::songs(added)) })))
+                (Ok(json!({ "added": added, "already_in_playlist": already })), Some(AiMessage::Action(if lang::ja() { format!("「{title}」に {added} 曲追加しました") } else { format!("Added {} to “{title}”", lang::songs(added)) })))
             }
             _ => (Err(format!("unknown tool: {name}")), None),
         }

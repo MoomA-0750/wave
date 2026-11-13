@@ -630,7 +630,7 @@ impl Search {
                 list.append(&row);
             }
         };
-        pager(None, fetch, column.upcast(), Box::new(add), lang::t("見つかりませんでした", "No results found"), lang::t("歌詞から探せませんでした", "Couldn't search lyrics"))
+        pager(None, fetch, column.upcast(), Box::new(add), lang::t("見つかりませんでした", "No results found"), lang::t("歌詞から検索できませんでした", "Couldn't search lyrics"))
     }
 }
 

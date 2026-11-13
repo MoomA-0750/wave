@@ -69,7 +69,7 @@ Flickable {
             IconButton {
                 visible: WaveApp.hasSong && WaveApp.loggedIn
                 iconName: WaveApp.liked === 1 ? "object-select-symbolic" : "list-add-symbolic"
-                tip: WaveApp.liked === 1 ? Style.t("高く評価した曲から削除", "Remove from Liked Songs") : Style.t("高く評価した曲に追加", "Add to Liked Songs")
+                tip: WaveApp.liked === 1 ? Style.t("高く評価した曲から削除", "Remove from liked music") : Style.t("高く評価した曲に追加", "Add to liked music")
                 checked: WaveApp.liked === 1
                 checkable: false
                 onClicked: WaveApp.toggleLike()

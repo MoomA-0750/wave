@@ -320,7 +320,7 @@ Item {
             LayerButton { iconName: shell.pipOpen ? "view-conceal-symbolic" : "window-new-symbolic"; tip: shell.pipOpen ? Style.t("小窓を閉じる", "Close picture in picture") : Style.t("小窓で見る", "Picture in picture"); onClicked: shell.togglePip() }
             LayerButton {
                 iconName: shell.Window.window && shell.Window.window.visibility === Window.FullScreen ? "view-restore-symbolic" : "view-fullscreen-symbolic"
-                tip: shell.Window.window && shell.Window.window.visibility === Window.FullScreen ? Style.t("全画面をやめる", "Exit full screen") : Style.t("全画面", "Full screen")
+                tip: shell.Window.window && shell.Window.window.visibility === Window.FullScreen ? Style.t("全画面を終える", "Exit full screen") : Style.t("全画面", "Full screen")
                 onClicked: shell.toggleWindowFullScreen()
             }
             LayerButton { iconName: "window-close-symbolic"; tip: Style.t("映像だけをやめる (Esc)", "Exit video only (Esc)"); onClicked: shell.toggleVideoOnly() }
@@ -365,7 +365,7 @@ Item {
             width: parent ? parent.width : 400
             spacing: 6
             // 名前の見出しは欄の外に置く（Material の placeholderText は文字が入ると枠の上へ浮くが、背景を自前にしているので文字に重なる）
-            Label { text: Style.t("プレイリストの名前", "Playlist name"); color: Style.dim; font.pixelSize: 12 }
+            Label { text: Style.t("プレイリスト名", "Playlist name"); color: Style.dim; font.pixelSize: 12 }
             TextField {
                 id: newPlaylistTitle
                 Layout.fillWidth: true

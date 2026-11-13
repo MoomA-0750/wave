@@ -4,6 +4,9 @@
 
 use std::sync::OnceLock;
 
+use wave_core::music::collection::SortKey;
+use wave_core::music::models::Song;
+
 static JA: OnceLock<bool> = OnceLock::new();
 
 /// 起動のはじめに1度だけ呼ぶ（設定の値。空なら端末の言語）。呼ぶ前に ja() を使うと端末の言語で決まる。
@@ -29,6 +32,41 @@ pub fn songs(count: usize) -> String {
     if ja() { format!("{count} 曲") } else if count == 1 { "1 song".into() } else { format!("{count} songs") }
 }
 
+/// 合計の長さ（一覧の補足）。1 時間以上は「1 時間 5 分」/ `1 hr 5 min`、未満は「13 分 5 秒」/ `13 min 5 sec`（Windows・Mac と同じ）。
+pub fn length(seconds: u32) -> String {
+    length_in(ja(), seconds)
+}
+
+/// 曲数と合計の長さ（「3 曲、13 分 5 秒」/ `3 songs, 13 min 5 sec`）。長さの分からない曲は数えない。
+pub fn count_and_length(list: &[Song]) -> String {
+    let total: u32 = list.iter().filter_map(|s| s.duration_seconds).sum();
+    format!("{}{}{}", songs(list.len()), t("、", ", "), length(total))
+}
+
+fn length_in(ja: bool, seconds: u32) -> String {
+    let (h, m, s) = (seconds / 3600, seconds / 60 % 60, seconds % 60);
+    match (ja, h > 0) {
+        (true, true) => format!("{h} 時間 {m} 分"),
+        (false, true) => format!("{h} hr {m} min"),
+        (true, false) => format!("{m} 分 {s} 秒"),
+        (false, false) => format!("{m} min {s} sec"),
+    }
+}
+
+/// 並べ方の名前（画面の言語で。日本語は wave-core の名前のまま。GTK 版・QML 版で同じ）。
+pub fn sort_label(key: SortKey) -> &'static str {
+    let en = match key {
+        SortKey::Custom => "Custom order",
+        SortKey::Added => "Date added",
+        SortKey::Published => "Release date",
+        SortKey::Title => "Title",
+        SortKey::Artist => "Artist",
+        SortKey::Album => "Album",
+        SortKey::Duration => "Duration",
+    };
+    t(key.label(), en)
+}
+
 fn system_locale() -> String {
     ["LC_ALL", "LC_MESSAGES", "LANG"]
         .iter()
@@ -47,7 +85,16 @@ fn choose(setting: &str, locale: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::choose;
+    use super::{choose, length_in};
+
+    #[test]
+    fn lengths_read_like_windows_and_the_mac() {
+        assert_eq!(length_in(true, 785), "13 分 5 秒");
+        assert_eq!(length_in(false, 785), "13 min 5 sec");
+        assert_eq!(length_in(true, 3900), "1 時間 5 分");
+        assert_eq!(length_in(false, 3900), "1 hr 5 min");
+        assert_eq!(length_in(false, 0), "0 min 0 sec");
+    }
 
     #[test]
     fn the_setting_wins_over_the_locale() {

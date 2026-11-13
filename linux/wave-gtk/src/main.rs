@@ -101,16 +101,16 @@ fn loading_page() -> gtk::Widget {
 
 /// ログインしていないときの入り口。押すとログインの窓を開き、済んだらホームを出す。
 fn show_login(window: &adw::ApplicationWindow, toolbar: &adw::ToolbarView, repo: &MusicRepository) {
-    let button = gtk::Button::builder().label(lang::t("ログイン", "Log in")).halign(gtk::Align::Center).css_classes(["suggested-action", "pill"]).build();
+    let button = gtk::Button::builder().label(lang::t("ログイン", "Sign in")).halign(gtk::Align::Center).css_classes(["suggested-action", "pill"]).build();
     // ふだんのブラウザでログインしてあれば、それを読んで使う（アプリの中の窓でログインしなくて済む）
-    let from_browser = gtk::Button::builder().label(lang::t("ブラウザのログインを使う", "Use browser login")).halign(gtk::Align::Center).css_classes(["pill"]).build();
+    let from_browser = gtk::Button::builder().label(lang::t("ブラウザのログインを使う", "Use browser sign-in")).halign(gtk::Align::Center).css_classes(["pill"]).build();
     let buttons = gtk::Box::new(gtk::Orientation::Vertical, 12);
     buttons.append(&button);
     buttons.append(&from_browser);
     let page = adw::StatusPage::builder()
         .icon_name("audio-x-generic-symbolic")
         .title("wave")
-        .description(lang::t("YouTube Music のアカウントでログインしてください", "Log in with your YouTube Music account"))
+        .description(lang::t("YouTube Music のアカウントでログインしてください", "Sign in with your YouTube Music account"))
         .child(&buttons)
         .build();
     toolbar.set_content(Some(&page));
@@ -146,10 +146,10 @@ async fn login_from_browser(window: &adw::ApplicationWindow, repo: &MusicReposit
     let profiles = gtk::gio::spawn_blocking(move || browser_login::find(&home)).await.unwrap_or_default();
     if profiles.is_empty() {
         let dialog = adw::AlertDialog::new(
-            Some(lang::t("ブラウザにログインが見つかりません", "No browser login found")),
+            Some(lang::t("ブラウザにログインが見つかりません", "No browser sign-in found")),
             Some(lang::t(
                 "ふだんのブラウザで music.youtube.com にログインしてから、もう一度「ブラウザのログインを使う」を押してください。\n\n読めるブラウザ: Firefox・Zen・LibreWolf・Floorp・Waterfox・Chrome・Chromium・Brave・Edge・Vivaldi・Opera",
-                "Log in to music.youtube.com in your usual browser, then press “Use browser login” again.\n\nSupported browsers: Firefox, Zen, LibreWolf, Floorp, Waterfox, Chrome, Chromium, Brave, Edge, Vivaldi, Opera",
+                "Sign in to music.youtube.com in your usual browser, then press “Use browser sign-in” again.\n\nSupported browsers: Firefox, Zen, LibreWolf, Floorp, Waterfox, Chrome, Chromium, Brave, Edge, Vivaldi, Opera",
             )),
         );
         dialog.add_responses(&[("close", lang::t("閉じる", "Close")), ("open", lang::t("ブラウザで開く", "Open in browser"))]);
@@ -161,10 +161,10 @@ async fn login_from_browser(window: &adw::ApplicationWindow, repo: &MusicReposit
         return false;
     }
     let dialog = adw::AlertDialog::new(
-        Some(lang::t("どのブラウザのログインを使いますか", "Which browser's login do you want to use?")),
-        Some(lang::t("選んだブラウザの YouTube の cookie を読んで、この PC のキーリングに保存します。ブラウザの側のログインはそのまま残ります。", "wave reads YouTube cookies from the browser you choose and saves them in this PC's keyring. You stay logged in on the browser.")),
+        Some(lang::t("どのブラウザのログインを使いますか？", "Which browser's sign-in do you want to use?")),
+        Some(lang::t("選んだブラウザの YouTube の cookie を読んで、この PC のキーリングに保存します。ブラウザの側のログインはそのまま残ります。", "wave reads YouTube cookies from the browser you choose and saves them in this PC's keyring. You stay signed in on the browser.")),
     );
-    dialog.add_response("cancel", lang::t("やめる", "Cancel"));
+    dialog.add_response("cancel", lang::t("キャンセル", "Cancel"));
     for (i, profile) in profiles.iter().enumerate() {
         dialog.add_response(&format!("p{i}"), &profile.label);
     }
@@ -270,12 +270,12 @@ async fn show_home(toolbar: &adw::ToolbarView, repo: &MusicRepository) {
         let view = match state.as_str() {
             "offer" => Some(PairingView::ShowingOffer("wave-pair:eyJ2IjoxLCJwa0EiOiJkZW1vIiwiZUEiOiJkZW1vIiwidG9rZW4iOiJkZW1vIn0".into())),
             "code" => Some(PairingView::EnterCode(None)),
-            "wrong" => Some(PairingView::EnterCode(Some(lang::t("数字が違います", "That code doesn’t match").into()))),
+            "wrong" => Some(PairingView::EnterCode(Some(lang::t("数字が違います", "That code doesn't match").into()))),
             "show" => Some(PairingView::ShowCode { code: "123456".into(), peer: "Pixel 3".into() }),
             "working" => Some(PairingView::Working(lang::t("相手が加えるのを待っています…", "Waiting for the other device to add this PC…").into())),
             "done" => Some(PairingView::Done { peer: "Pixel 3".into(), grant_device_id: None }),
             "done-api" => Some(PairingView::Done { peer: "wave API".into(), grant_device_id: Some("demo".into()) }),
-            "failed" => Some(PairingView::Failed(lang::t("時間内に読み取られませんでした", "The code wasn’t used in time").into())),
+            "failed" => Some(PairingView::Failed(lang::t("時間内に読み取られませんでした", "The code wasn't used in time").into())),
             _ => None,
         };
         if let Some(view) = view {

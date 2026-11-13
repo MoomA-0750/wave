@@ -115,7 +115,7 @@ pub fn sidebar(app: &Rc<App>) -> gtk::Widget {
     let column = gtk::Box::new(gtk::Orientation::Vertical, 0);
     let header = gtk::Box::builder().spacing(8).margin_top(12).margin_bottom(4).margin_start(16).margin_end(8).build();
     header.append(&gtk::Image::from_icon_name("folder-music-symbolic"));
-    header.append(&gtk::Label::builder().label(lang::t("マイライブラリ", "Your Library")).xalign(0.0).hexpand(true).css_classes(["heading"]).build());
+    header.append(&gtk::Label::builder().label(lang::t("ライブラリ", "Library")).xalign(0.0).hexpand(true).css_classes(["heading"]).build());
     let logged_in = app.repo.client().is_logged_in();
     let create = gtk::Button::builder().icon_name("list-add-symbolic").tooltip_text(lang::t("プレイリストを作成", "Create playlist")).visible(logged_in).css_classes(["flat", "circular"]).build();
     header.append(&create);
@@ -128,7 +128,7 @@ pub fn sidebar(app: &Rc<App>) -> gtk::Widget {
     chip_scroller.set_margin_bottom(4);
     column.append(&chip_scroller);
     let tools = gtk::Box::builder().spacing(4).margin_start(12).margin_end(8).margin_top(4).margin_bottom(4).build();
-    let search = gtk::SearchEntry::builder().placeholder_text(lang::t("マイライブラリを検索", "Search library")).hexpand(true).build();
+    let search = gtk::SearchEntry::builder().placeholder_text(lang::t("ライブラリを検索", "Search library")).hexpand(true).build();
     tools.append(&search);
     let sort_label = gtk::Label::builder().css_classes(["caption"]).build();
     let sort = gtk::MenuButton::builder().child(&sort_label).tooltip_text(lang::t("並べ替え", "Sort")).css_classes(["flat"]).build();
@@ -152,7 +152,7 @@ pub fn sidebar(app: &Rc<App>) -> gtk::Widget {
     let stack = gtk::Stack::new();
     stack.add_named(&gtk::ScrolledWindow::builder().child(&list).hscrollbar_policy(gtk::PolicyType::Never).vexpand(true).build(), Some("list"));
     stack.add_named(&gtk::ScrolledWindow::builder().child(&grid).hscrollbar_policy(gtk::PolicyType::Never).vexpand(true).build(), Some("grid"));
-    let empty = gtk::Label::builder().label(lang::t("ログインすると、YouTube Music のプレイリスト・アーティスト・アルバムがここに並びます。", "Log in to see your YouTube Music playlists, artists and albums here.")).wrap(true).xalign(0.0).valign(gtk::Align::Start).margin_start(16).margin_end(16).margin_top(12).build();
+    let empty = gtk::Label::builder().label(lang::t("ログインすると、YouTube Music のプレイリスト・アーティスト・アルバムがここに並びます。", "Sign in to see your YouTube Music playlists, artists and albums here.")).wrap(true).xalign(0.0).valign(gtk::Align::Start).margin_start(16).margin_end(16).margin_top(12).build();
     stack.add_named(&empty, Some("logged-out"));
     let progress = gtk::ProgressBar::builder().margin_start(12).margin_end(12).visible(false).build();
     column.append(&progress);
@@ -398,8 +398,8 @@ impl View {
             head.push(fixed(lang::t("新しいエピソード", "New episodes"), lang::t("プレイリスト • 自動", "Playlist • Auto").into(), Target::NewEpisodes));
         }
         // 高く評価した曲はいつも先頭、ダウンロードはその次
-        if wants("playlist") && matches(lang::t("高く評価した曲", "Liked Songs")) {
-            head.push(fixed(lang::t("高く評価した曲", "Liked Songs"), lang::t("プレイリスト • 自動", "Playlist • Auto").into(), Target::Liked));
+        if wants("playlist") && matches(lang::t("高く評価した曲", "Liked music")) {
+            head.push(fixed(lang::t("高く評価した曲", "Liked music"), lang::t("プレイリスト • 自動", "Playlist • Auto").into(), Target::Liked));
         }
         if wants("playlist") && matches(lang::t("ダウンロード", "Downloads")) {
             head.push(fixed(lang::t("ダウンロード", "Downloads"), format!("{} • {}", lang::t("プレイリスト • 自動", "Playlist • Auto"), lang::songs(downloaded_count(&self.app))), Target::Downloads));
@@ -465,7 +465,7 @@ impl View {
         let Some(entry) = self.shown.borrow().get(index).cloned() else { return };
         let app = &self.app;
         match entry.target {
-            Target::Liked => app.push(super::pages::playlist(app, LIKED_SONGS, lang::t("高く評価した曲", "Liked Songs"))),
+            Target::Liked => app.push(super::pages::playlist(app, LIKED_SONGS, lang::t("高く評価した曲", "Liked music"))),
             Target::Downloads => app.push(super::pages::downloads(app)),
             Target::NewEpisodes => app.push(super::podcasts::new_episodes(app)),
             Target::Item(item) => track::open_item(app, &item),

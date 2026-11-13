@@ -67,7 +67,7 @@ ListView {
             page.loading = false
             const v = JSON.parse(json)
             if (v.error && page.moreLoading) { page.moreLoading = false; return }
-            if (v.error) { page.error = page.kind === "album" ? Style.t("アルバムを読み込めませんでした", "Couldn't load the album") : (v.error.indexOf(Style.t("ログイン", "Log in")) >= 0 ? v.error : Style.t("読み込めませんでした", "Couldn't load")); return }
+            if (v.error) { page.error = page.kind === "album" ? Style.t("アルバムを読み込めませんでした", "Couldn't load the album") : (v.error.indexOf(Style.t("ログイン", "Sign in")) >= 0 ? v.error : Style.t("読み込めませんでした", "Couldn't load")); return }
             if (page.kind === "history") {
                 page.info = { title: Style.t("再生履歴", "History"), subtitle: "", art: "" }
                 page.songs = v.sections.reduce((all, s) => all.concat(s.songs), [])
@@ -188,13 +188,13 @@ ListView {
             Layout.rightMargin: page.edge
             spacing: 8
             Item { Layout.fillWidth: true }
-            IconButton { iconName: "system-search-symbolic"; tip: Style.t("一覧の中を検索", "Search in this list"); checked: find.visible; onClicked: { find.visible = !find.visible; if (find.visible) find.forceActiveFocus(); else find.text = "" } }
+            IconButton { iconName: "system-search-symbolic"; tip: Style.t("この一覧の中を検索", "Search in this list"); checked: find.visible; onClicked: { find.visible = !find.visible; if (find.visible) find.forceActiveFocus(); else find.text = "" } }
             TextField {
                 id: find
                 visible: false
                 Layout.preferredWidth: Math.min(240, page.width / 3)
                 Layout.preferredHeight: 36
-                placeholderText: Style.t("一覧の中を検索", "Search in this list")
+                placeholderText: Style.t("この一覧の中を検索", "Search in this list")
                 topPadding: 0
                 bottomPadding: 0
                 verticalAlignment: TextInput.AlignVCenter
@@ -228,7 +228,7 @@ ListView {
             Layout.preferredHeight: 34
             spacing: 6
                 Repeater {
-                    model: [["", Style.t("すべて", "All")], ["MUSIC_VIDEO_TYPE_ATV", Style.t("曲", "Songs")], ["MUSIC_VIDEO_TYPE_OMV", "MV"], ["MUSIC_VIDEO_TYPE_UGC", Style.t("その他の動画（歌ってみた・ライブなど）", "Other videos (covers, live, etc.)")]]
+                    model: [["", Style.t("すべて", "All")], ["MUSIC_VIDEO_TYPE_ATV", Style.t("曲", "Songs")], ["MUSIC_VIDEO_TYPE_OMV", "MV"], ["MUSIC_VIDEO_TYPE_UGC", Style.t("その他の動画（歌ってみた・ライブなど）", "Other videos (covers, live…)")]]
                     delegate: Chip { text: modelData[1]; on: page.songKind === modelData[0]; onClicked: page.songKind = (modelData[0] === "" || page.songKind === modelData[0]) ? "" : modelData[0] }
                 }
         }
@@ -240,7 +240,7 @@ ListView {
         }
         Label {
             visible: !page.loading && page.songs.length > 0 && page.shown.length === 0
-            text: Style.t("合う曲がありません", "No matching songs")
+            text: Style.t("一致する曲はありません", "No matching songs")
             Layout.leftMargin: 24
             color: Style.dim
         }

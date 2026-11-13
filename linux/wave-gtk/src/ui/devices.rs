@@ -90,7 +90,7 @@ pub fn page(app: &Rc<App>) -> adw::NavigationPage {
     let column = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(8).margin_top(32).margin_bottom(32).margin_start(40).margin_end(40).build();
     column.append(&gtk::Label::builder().label(lang::t("端末の連携", "Devices")).xalign(0.0).css_classes(["title-1"]).build());
     column.append(&text(
-        lang::t("同じアカウントのスマホと PC のあいだで、再生を引き継げます。端末どうしの通信は暗号化され、中継のサーバーは中身を読めません。", "Move playback between your phone and PC on the same account. Devices encrypt everything they share, so the relay server can’t read it."),
+        lang::t("同じアカウントのスマホと PC のあいだで、再生を引き継げます。端末どうしの通信は暗号化され、中継のサーバーは中身を読めません。", "Move playback between your phone and PC on the same account. Devices encrypt everything they share, so the relay server can't read it."),
         &["dim-label"],
     ));
     column.last_child().inspect(|w| w.set_margin_bottom(16));
@@ -214,16 +214,16 @@ enum Severity {
 fn status_bar(app: &Rc<App>, info: &ConnectInfo) -> Option<gtk::Widget> {
     let connect = &app.connect;
     if !info.configured {
-        let message = if info.unreadable { lang::t("この PC の連携の鍵を読めませんでした（キーリングを確かめてください）", "Couldn’t read this PC’s device keys (check the keyring)") } else { lang::t("ページの下の「中継の場所」に入れると使えます", "Enter it under “Relay address” at the bottom of this page to use this") };
-        return Some(banner(Severity::Info, lang::t("中継の場所が設定されていません", "The relay isn’t configured"), Some(message), None));
+        let message = if info.unreadable { lang::t("この PC の連携の鍵を読めませんでした（キーリングを確かめてください）", "Couldn't read this PC's device keys (check the keyring)") } else { lang::t("ページの下の「中継の場所」に入れると使えます", "Enter it under “Relay address” at the bottom of this page to use this") };
+        return Some(banner(Severity::Info, lang::t("中継の場所が設定されていません", "The relay isn't configured"), Some(message), None));
     }
     if info.unreadable {
         // Android の「リセット」と同じ: 読めない保存を消して、加わり直せるようにする
         let c = connect.clone();
         return Some(banner(
             Severity::Error,
-            lang::t("連携の保存を読めません", "Couldn’t read the saved device group"),
-            Some(lang::t("リセットすると、この PC はもう一度ほかの端末から加わり直します。", "Reset it to join your devices again from another device.")),
+            lang::t("連携の保存を読めません", "Couldn't read the saved device group"),
+            Some(lang::t("リセットすると、この PC はもう一度ほかの端末から加わり直します", "Reset it to join your devices again from another device")),
             Some((lang::t("リセット", "Reset"), Box::new(move || c.forget_household()))),
         ));
     }
@@ -232,13 +232,13 @@ fn status_bar(app: &Rc<App>, info: &ConnectInfo) -> Option<gtk::Widget> {
         return Some(banner(
             Severity::Error,
             lang::t("中継がこの PC を連携した端末として受け付けません", "The relay no longer accepts this PC"),
-            Some(lang::t("ほかの端末から外された可能性があります。", "It may have been removed by another device.")),
+            Some(lang::t("ほかの端末から外された可能性があります", "It may have been removed by another device")),
             Some((lang::t("この PC の連携の記録を消す", "Forget the group on this PC"), Box::new(move || c.forget_household()))),
         ));
     }
     if info.store_reset_pending {
         let c = connect.clone();
-        return Some(banner(Severity::Warning, lang::t("中継の状態が作り直されました", "The relay’s state was reset"), None, Some((lang::t("この状態から始める", "Start from this state"), Box::new(move || c.accept_store_reset())))));
+        return Some(banner(Severity::Warning, lang::t("中継の状態が作り直されました", "The relay's state was reset"), None, Some((lang::t("この状態から始める", "Start from this state"), Box::new(move || c.accept_store_reset())))));
     }
     None
 }
@@ -278,7 +278,7 @@ fn relay_text_of(info: &ConnectInfo) -> &'static str {
         Some(RelayStatus::TailnetUnreachable) => lang::t("届きません（Tailscale につながっているか確かめてください）", "Unreachable (check that Tailscale is connected)"),
         Some(RelayStatus::NotMember) if info.in_household => lang::t("受け付けられません", "Not accepted"),
         Some(RelayStatus::NotMember) => lang::t("まだ連携していません", "Not set up yet"),
-        Some(RelayStatus::Failed) => lang::t("つながりませんでした", "Couldn’t connect"),
+        Some(RelayStatus::Failed) => lang::t("つながりませんでした", "Couldn't connect"),
         Some(RelayStatus::Disconnected) | None => lang::t("切断", "Disconnected"),
     }
 }
@@ -299,7 +299,7 @@ fn relay_group(app: &Rc<App>) -> gtk::Widget {
             return;
         }
         app.downloads.update_settings(|s| s.relay_url = (!text.is_empty()).then_some(text));
-        app.toast(lang::t("中継の場所を覚えました。次に wave を開いたときから使います", "Relay address saved. It takes effect the next time you open wave"));
+        app.toast(lang::t("中継の場所を保存しました。次に wave を開いたときから使います", "Relay address saved. It takes effect the next time you open wave"));
     });
     list.upcast()
 }
@@ -371,7 +371,7 @@ impl JoinPanel {
         title.set_margin_top(8);
         root.append(&title);
         let body = card();
-        body.append(&text(lang::t("連携済みのスマホの wave で「端末の連携」→「端末を追加」を押し、「文字で共有」で送った文字列をここに貼り付けてください。", "On a phone that’s already set up, open Devices in wave, tap “Add device”, then “Share as text”, and paste the text here."), &[]));
+        body.append(&text(lang::t("連携済みのスマホの wave で「端末の連携」→「端末を追加」を押し、「文字で共有」で送った文字列をここに貼り付けてください。", "On a phone that's already set up, open Devices in wave, tap “Add device”, then “Share as text”, and paste the text here."), &[]));
         let entry = gtk::Entry::builder().placeholder_text("wave-pair:…").build();
         body.append(&entry);
         let buttons = gtk::Box::builder().spacing(8).build();
@@ -407,11 +407,11 @@ fn pairing_text(view: &PairingView) -> String {
     match view {
         PairingView::Idle => String::new(),
         PairingView::Working(message) | PairingView::Failed(message) => message.clone(),
-        PairingView::ShowingOffer(_) => lang::t("加える端末で wave の「端末の連携」を開き、この QR を読み取ってください（PC なら下の文字列をコピーして貼り付けます）。2分で無効になります。", "On the device you’re adding, open Devices in wave and scan this QR code (on a PC, copy the text below and paste it). Expires in 2 minutes.").into(),
+        PairingView::ShowingOffer(_) => lang::t("加える端末で wave の「端末の連携」を開き、この QR を読み取ってください（PC なら下の文字列をコピーして貼り付けます）。2分で無効になります。", "On the device you're adding, open Devices in wave and scan this QR code (on a PC, copy the text below and paste it). Expires in 2 minutes.").into(),
         PairingView::EnterCode(message) => format!(
             "{}{}",
             message.as_ref().map(|m| format!("{m}\n")).unwrap_or_default(),
-            lang::t("加える端末に出ている6桁の数字を入力してください", "Enter the 6-digit code shown on the device you’re adding")
+            lang::t("加える端末に出ている6桁の数字を入力してください", "Enter the 6-digit code shown on the device you're adding")
         ),
         PairingView::ShowCode { peer, .. } => if lang::ja() { format!("「{peer}」に、この6桁の数字を入力してください") } else { format!("Enter this 6-digit code on “{peer}”") },
         PairingView::Done { peer, grant_device_id: Some(_) } => {
@@ -614,7 +614,7 @@ fn confirm_remove(app: &Rc<App>, member: &MemberView) {
         .body(if lang::ja() {
             format!("「{}」は、もう再生を引き継げなくなります。もう一度加えるには、QR と6桁の手順が要ります。", member.label)
         } else {
-            format!("“{}” won’t be able to move playback anymore. To add it again, you’ll need the QR code and 6-digit steps.", member.label)
+            format!("“{}” won't be able to move playback anymore. To add it again, you'll need the QR code and 6-digit steps.", member.label)
         })
         .build();
     dialog.add_responses(&[("cancel", lang::t("キャンセル", "Cancel")), ("remove", lang::t("外す", "Remove"))]);
@@ -629,7 +629,7 @@ fn confirm_remove(app: &Rc<App>, member: &MemberView) {
         let (app, member) = (app2.clone(), member.clone());
         gtk::glib::spawn_future_local(async move {
             let removed = app.connect.remove_member(&member.device_id).await;
-            app.toast(&if removed { if lang::ja() { format!("「{}」を外しました", member.label) } else { format!("Removed {}", member.label) } } else { lang::t("外せませんでした", "Couldn’t remove the device").into() });
+            app.toast(&if removed { if lang::ja() { format!("「{}」を外しました", member.label) } else { format!("Removed “{}”", member.label) } } else { lang::t("外せませんでした", "Couldn't remove the device").into() });
         });
     });
     if let Some(window) = app.window() {
@@ -648,11 +648,11 @@ fn confirm_grant(app: &Rc<App>, member: &MemberView) {
             )
         } else {
             format!(
-                "Gives this device’s YouTube login to “{label}”. Other apps (such as home-dashboard) can then use your playlists, Liked Songs and recommendations. Anyone who can access the machine running wave API can read them."
+                "Gives this device's YouTube login to “{label}”. Other apps (such as home-dashboard) can then use your playlists, liked music and recommendations. Anyone who can access the machine running wave API can read them."
             )
         })
         .build();
-    dialog.add_responses(&[("cancel", lang::t("やめる", "Cancel")), ("grant", lang::t("渡す", "Give"))]);
+    dialog.add_responses(&[("cancel", lang::t("キャンセル", "Cancel")), ("grant", lang::t("渡す", "Give"))]);
     dialog.set_response_appearance("grant", adw::ResponseAppearance::Suggested);
     dialog.set_default_response(Some("cancel"));
     dialog.set_close_response("cancel");
@@ -664,7 +664,7 @@ fn confirm_grant(app: &Rc<App>, member: &MemberView) {
         let (app, device_id, label) = (app2.clone(), device_id.clone(), label.clone());
         gtk::glib::spawn_future_local(async move {
             let sent = app.connect.grant_login(&device_id).await;
-            app.toast(&if sent { if lang::ja() { format!("「{label}」にログインを渡しました") } else { format!("Sent your login to {label}") } } else { lang::t("ログインを渡せませんでした", "Couldn’t send your login").into() });
+            app.toast(&if sent { if lang::ja() { format!("「{label}」にログインを渡しました") } else { format!("Gave your login to “{label}”") } } else { lang::t("ログインを渡せませんでした", "Couldn't give your login").into() });
         });
     });
     if let Some(window) = app.window() {

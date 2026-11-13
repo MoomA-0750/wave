@@ -60,7 +60,7 @@ pub fn open(parent: &impl IsA<gtk::Window>, on_done: impl Fn(Option<Credentials>
         true
     });
     let status = gtk::Label::builder().wrap(true).visible(false).margin_top(12).margin_bottom(12).build();
-    let host = adw::WindowTitle::new(lang::t("wave にログイン", "Log in to wave"), "");
+    let host = adw::WindowTitle::new(lang::t("wave にログイン", "Sign in to wave"), "");
     let header = adw::HeaderBar::builder().title_widget(&host).build();
     let body = gtk::Box::new(gtk::Orientation::Vertical, 0);
     body.append(&status);
@@ -72,7 +72,7 @@ pub fn open(parent: &impl IsA<gtk::Window>, on_done: impl Fn(Option<Credentials>
     let window = adw::Window::builder()
         .transient_for(parent)
         .modal(true)
-        .title(lang::t("wave にログイン", "Log in to wave"))
+        .title(lang::t("wave にログイン", "Sign in to wave"))
         .default_width(520)
         .default_height(760)
         .content(&toolbar)
@@ -107,7 +107,7 @@ pub fn open(parent: &impl IsA<gtk::Window>, on_done: impl Fn(Option<Credentials>
                         window.close();
                     }
                     result => {
-                        status.set_label(if result.is_none() { lang::t("ログイン情報を取得できませんでした", "Couldn't get your login details") } else { lang::t("ログイン情報を保存できませんでした", "Couldn't save your login details") });
+                        status.set_label(if result.is_none() { lang::t("ログイン情報を取得できませんでした", "Couldn't get your sign-in details") } else { lang::t("ログイン情報を保存できませんでした", "Couldn't save your sign-in details") });
                         status.set_visible(true);
                         finishing.set(false);
                     }
