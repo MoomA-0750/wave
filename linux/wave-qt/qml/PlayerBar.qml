@@ -12,7 +12,8 @@ Rectangle {
     property var shell
     property int position: 0
     property bool dragging: false
-    implicitHeight: 96
+    // 操作のボタンと位置のバーをまとめて上下の真ん中に置き、上下に 20px ほどの余白を残す高さ
+    implicitHeight: 116
     color: Style.background
 
     function time(ms) {
@@ -115,6 +116,8 @@ Rectangle {
             Slider {
                 id: seek
                 Layout.fillWidth: true
+                // Material の Slider は上下に 48px 取り、操作のボタンを上へ押し上げていた。つまみの分だけにする
+                Layout.preferredHeight: 24
                 from: 0
                 to: Math.max(1, WaveApp.durationMs)
                 value: WaveApp.durationMs > 0 ? bar.position : 0
