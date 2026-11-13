@@ -18,7 +18,7 @@
             </Grid.ColumnDefinitions>
             <FontIcon Glyph="&#xE72E;" FontSize="14" />
             <TextBlock x:Name="HostText" Grid.Column="1" Style="{StaticResource CaptionTextBlockStyle}" VerticalAlignment="Center"
-                       Text="{x:Bind app:L.T('Google アカウントでログインしてください', 'Log in with your Google account')}" TextTrimming="CharacterEllipsis" />
+                       Text="{x:Bind app:L.T('Google アカウントでログインしてください', 'Sign in with your Google account')}" TextTrimming="CharacterEllipsis" />
         </Grid>
         <WebView2 x:Name="Browser" Grid.Row="1" />
         <StackPanel x:Name="Status" Grid.Row="1" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="12" Visibility="Collapsed">

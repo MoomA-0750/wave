@@ -363,7 +363,7 @@ public sealed partial class PlayerService : ObservableObject
             remoteVolumeTimer.Tick += (_, _) =>
             {
                 if (IsRemote && SendRemoteVolume?.Invoke((int)Math.Round(Volume * 100)) != true)
-                    Message = L.T("ほかの端末に送れませんでした", "Couldn’t reach the other device");
+                    Message = L.T("ほかの端末に送れませんでした", "Couldn't reach the other device");
             };
         }
         remoteVolumeTimer.Stop();
@@ -694,7 +694,7 @@ public sealed partial class PlayerService : ObservableObject
     {
         if (SendRemoteQueueAdd?.Invoke(songs, next) != true)
         {
-            Message = L.T("ほかの端末に送れませんでした", "Couldn’t reach the other device");
+            Message = L.T("ほかの端末に送れませんでした", "Couldn't reach the other device");
             return;
         }
         var device = RemoteDevice ?? L.T("ほかの端末", "the other device");
@@ -764,7 +764,7 @@ public sealed partial class PlayerService : ObservableObject
             var ids = Enumerable.Range(Index + 1, Math.Max(0, Queue.Count - Index - 1)).Where(IsUserAdded).Select(i => itemMeta[i].ItemId).ToList();
             if (ids.Count == 0 || !RemoveOnRemote(ids)) return;
             var device = RemoteDevice ?? L.T("ほかの端末", "the other device");
-            Message = L.T($"{device} のキューから {ids.Count} 曲を外しました", $"Removed {L.Songs(ids.Count)} from the queue on {device}");
+            Message = L.T($"{device} のキューから {ids.Count} 曲を削除しました", $"Removed {L.Songs(ids.Count)} from the queue on {device}");
             return;
         }
         var removed = 0;
@@ -774,7 +774,7 @@ public sealed partial class PlayerService : ObservableObject
             Queue.RemoveAt(i);
             removed++;
         }
-        if (removed > 0) Message = L.T($"キューから {removed} 曲を外しました", $"Removed {L.Songs(removed)} from the queue");
+        if (removed > 0) Message = L.T($"キューから {removed} 曲を削除しました", $"Removed {L.Songs(removed)} from the queue");
     }
 
     /// <summary>
@@ -789,7 +789,7 @@ public sealed partial class PlayerService : ObservableObject
         {
             if (SendRemoteQueueClearFlow?.Invoke(itemMeta[Index].ItemId) != true)
             {
-                Message = L.T("ほかの端末に送れませんでした", "Couldn’t reach the other device");
+                Message = L.T("ほかの端末に送れませんでした", "Couldn't reach the other device");
                 return;
             }
             HoldRemoteQueue();
@@ -829,7 +829,7 @@ public sealed partial class PlayerService : ObservableObject
             var after = before == Index ? null : itemMeta[before].ItemId;
             if (SendRemoteQueueMove?.Invoke(itemMeta[from].ItemId, after) != true)
             {
-                Message = L.T("ほかの端末に送れませんでした", "Couldn’t reach the other device");
+                Message = L.T("ほかの端末に送れませんでした", "Couldn't reach the other device");
                 return;
             }
             HoldRemoteQueue();
@@ -852,7 +852,7 @@ public sealed partial class PlayerService : ObservableObject
     {
         if (SendRemoteQueueRemove?.Invoke(itemIds) != true)
         {
-            Message = L.T("ほかの端末に送れませんでした", "Couldn’t reach the other device");
+            Message = L.T("ほかの端末に送れませんでした", "Couldn't reach the other device");
             return false;
         }
         HoldRemoteQueue();
@@ -1085,7 +1085,7 @@ public sealed partial class PlayerService : ObservableObject
         var sent = shuffle is { } on ? SendRemoteShuffle?.Invoke(on) : mode is { } m ? SendRemoteRepeat?.Invoke(m) : false;
         if (sent != true)
         {
-            Message = L.T("ほかの端末に送れませんでした", "Couldn’t reach the other device");
+            Message = L.T("ほかの端末に送れませんでした", "Couldn't reach the other device");
             return;
         }
         remoteModesHoldUntilMs = clock.ElapsedMilliseconds + 3_000;
@@ -1174,7 +1174,7 @@ public sealed partial class PlayerService : ObservableObject
         if (Feed.IsExternal(song.VideoId)) return;
         if (!AppServices.Client.IsLoggedIn)
         {
-            Message = L.T("高く評価するにはログインしてください", "Log in to like songs");
+            Message = L.T("高く評価するにはログインしてください", "Sign in to like songs");
             return;
         }
         if (Current?.VideoId == song.VideoId) Like = liked ? LikeStatus.Like : LikeStatus.Indifferent;
@@ -1182,11 +1182,11 @@ public sealed partial class PlayerService : ObservableObject
         if (!result.IsOk)
         {
             if (Current?.VideoId == song.VideoId) Like = liked ? LikeStatus.Indifferent : LikeStatus.Like;
-            Message = L.T("高評価を変更できませんでした", "Couldn't update your likes");
+            Message = L.T("評価を変更できませんでした", "Couldn't update your likes");
         }
         else
         {
-            Message = liked ? L.T("高く評価した曲に追加しました", "Added to Liked Songs") : L.T("高く評価した曲から削除しました", "Removed from Liked Songs");
+            Message = liked ? L.T("高く評価した曲に追加しました", "Added to liked music") : L.T("高く評価した曲から削除しました", "Removed from liked music");
             AppServices.Library.LikedChanged(song.VideoId, liked);
         }
     }
@@ -1415,7 +1415,7 @@ public sealed partial class PlayerService : ObservableObject
     {
         if (SendRemoteControl?.Invoke(action, positionMs) != true)
         {
-            Message = L.T("ほかの端末に送れませんでした", "Couldn’t reach the other device");
+            Message = L.T("ほかの端末に送れませんでした", "Couldn't reach the other device");
             return;
         }
         // 返事（相手の次のカーソル）を待つ間も、押した結果をすぐ見せる
@@ -1814,7 +1814,7 @@ public sealed partial class PlayerService : ObservableObject
         }
         Message = result.Failure switch
         {
-            StreamFailure.NotLoggedIn => L.T("この曲を再生するにはログインが必要です", "Log in to play this song"),
+            StreamFailure.NotLoggedIn => L.T("この曲を再生するにはログインが必要です", "Sign in to play this song"),
             StreamFailure.Unplayable => L.T("この曲は再生できません", "This song isn't available"),
             StreamFailure.SongLoginRequired => L.T("この曲はログインの確認（年齢の確認など）が要ります", "This song needs a sign-in check (such as age verification)"),
             StreamFailure.Network => L.T("通信できませんでした", "Couldn't connect"),
@@ -2243,7 +2243,7 @@ public sealed partial class PlayerService : ObservableObject
         if (!live && !AppServices.Client.IsLoggedIn)
         {
             IsLoading = false;
-            Message = L.T("曲を再生するにはログインしてください（右上のアカウントから）", "Log in to play songs (from the account button at the top right)");
+            Message = L.T("曲を再生するにはログインしてください（右上のアカウントから）", "Sign in to play songs (from the account button at the top right)");
             return;
         }
         // ライブ配信は長く流れ続けるので、しばらく鳴ったあとの失敗（URL の期限・403）なら、もう一度取り直してよい

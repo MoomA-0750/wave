@@ -30,7 +30,7 @@ public sealed partial class SongPage : Page
         _ = ColorAsync(song.ThumbnailUrl);
         // 並びは Android の曲の画面と同じ（曲のラジオは再生ボタンと同じなので出さない）
         Actions.Children.Clear();
-        if (AppServices.Client.IsLoggedIn) Row(L.T("プレイリストに追加", "Add to playlist"), "", () => _ = Dialogs.AddToPlaylistAsync(song));
+        if (AppServices.Client.IsLoggedIn) Row(L.T("プレイリストに保存", "Save to playlist"), "", () => _ = Dialogs.AddToPlaylistAsync(song));
         Row(L.T("次に再生", "Play next"), "", () => AppServices.Player.PlayNext(song));
         Row(L.T("キューに追加", "Add to queue"), "", () => AppServices.Player.AddToQueue(song));
         if (song.Album?.BrowseId is { } albumId) Row(L.T("アルバムへ移動", "Go to album"), "", () => Nav.Album(albumId));

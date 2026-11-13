@@ -105,7 +105,7 @@
                     <Grid Padding="16,12,8,4">
                         <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
                             <FontIcon Glyph="&#xE8F1;" FontSize="18" />
-                            <TextBlock Text="{x:Bind app:L.T('マイライブラリ', 'Your Library')}" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                            <TextBlock Text="{x:Bind app:L.T('ライブラリ', 'Library')}" Style="{StaticResource BodyStrongTextBlockStyle}" />
                         </StackPanel>
                         <Button x:Name="CreateButton" HorizontalAlignment="Right" Style="{StaticResource IconButtonStyle}" Click="OnCreatePlaylist" ToolTipService.ToolTip="{x:Bind app:L.T('プレイリストを作成', 'Create playlist')}">
                             <FontIcon Glyph="&#xE710;" FontSize="14" />
@@ -121,7 +121,7 @@
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
-                        <TextBox x:Name="LibraryFilter" PlaceholderText="{x:Bind app:L.T('マイライブラリを検索', 'Search library')}" TextChanged="OnLibraryFilterChanged" />
+                        <TextBox x:Name="LibraryFilter" PlaceholderText="{x:Bind app:L.T('ライブラリを検索', 'Search library')}" TextChanged="OnLibraryFilterChanged" />
                         <DropDownButton x:Name="SortButton" Grid.Column="1" Content="{x:Bind app:L.T('最近', 'Recents')}" Background="Transparent" BorderThickness="0">
                             <DropDownButton.Flyout>
                                 <MenuFlyout Placement="BottomEdgeAlignedRight">
@@ -180,8 +180,8 @@
                         </GridView.ItemTemplate>
                     </GridView>
                     <StackPanel x:Name="LoggedOutPanel" Grid.Row="3" Spacing="12" Padding="16" Visibility="Collapsed">
-                        <TextBlock Text="{x:Bind app:L.T('ログインすると、YouTube Music のプレイリスト・アーティスト・アルバムがここに並びます。', 'Log in to see your YouTube Music playlists, artists and albums here.')}" TextWrapping="Wrap" />
-                        <Button Content="{x:Bind app:L.T('ログイン', 'Log in')}" Style="{StaticResource AccentButtonStyle}" Click="OnLogin" />
+                        <TextBlock Text="{x:Bind app:L.T('ログインすると、YouTube Music のプレイリスト・アーティスト・アルバムがここに並びます。', 'Sign in to see your YouTube Music playlists, artists and albums here.')}" TextWrapping="Wrap" />
+                        <Button Content="{x:Bind app:L.T('ログイン', 'Sign in')}" Style="{StaticResource AccentButtonStyle}" Click="OnLogin" />
                     </StackPanel>
                     <ProgressBar x:Name="LibraryLoading" Grid.Row="3" IsIndeterminate="True" VerticalAlignment="Top" Visibility="Collapsed" />
                 </Grid>
@@ -250,7 +250,7 @@
                                     <!-- ライブ配信の印 -->
                                     <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,0,0,4" Visibility="{x:Bind app:Ui.Show(Player.IsLive), Mode=OneWay}">
                                         <Ellipse Width="8" Height="8" Fill="{StaticResource LiveBrush}" VerticalAlignment="Center" />
-                                        <TextBlock Text="{x:Bind app:L.T('ライブ配信', 'Live')}" Foreground="{StaticResource LiveBrush}" Style="{StaticResource CaptionTextBlockStyle}" FontWeight="SemiBold" />
+                                        <TextBlock Text="{x:Bind app:L.T('ライブ', 'Live')}" Foreground="{StaticResource LiveBrush}" Style="{StaticResource CaptionTextBlockStyle}" FontWeight="SemiBold" />
                                     </StackPanel>
                                     <!-- 曲名を押すとアルバムへ、アーティストを押すとアーティストのページへ（複数なら選ぶ） -->
                                     <HyperlinkButton Padding="0" Click="OnAlbumLink" Foreground="{ThemeResource TextFillColorPrimaryBrush}">
@@ -267,7 +267,7 @@
                             <!-- 次の曲（Android と同じく歌詞の上） -->
                             <StackPanel Padding="16" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" Spacing="8">
                                 <Grid>
-                                    <TextBlock Text="{x:Bind app:L.T('次の曲', 'Next up')}" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                                    <TextBlock Text="{x:Bind app:L.T('次の曲', 'Up next')}" Style="{StaticResource BodyStrongTextBlockStyle}" />
                                     <HyperlinkButton Content="{x:Bind app:L.T('キューを開く', 'Open queue')}" HorizontalAlignment="Right" Padding="0" Click="OnShowQueue" />
                                 </Grid>
                                 <Grid ColumnSpacing="12" x:Name="NextSongPanel">
@@ -434,7 +434,7 @@
                     <Button Style="{StaticResource IconButtonStyle}" Click="OnPrevious" ToolTipService.ToolTip="{x:Bind app:L.T('前へ', 'Previous')}">
                         <FontIcon Glyph="&#xE892;" FontSize="16" />
                     </Button>
-                    <Button Style="{StaticResource PlayCircleButtonStyle}" Width="40" Height="40" CornerRadius="20" Click="OnPlayPause" ToolTipService.ToolTip="{x:Bind app:L.T('再生/一時停止', 'Play/Pause')}">
+                    <Button Style="{StaticResource PlayCircleButtonStyle}" Width="40" Height="40" CornerRadius="20" Click="OnPlayPause" ToolTipService.ToolTip="{x:Bind app:L.T('再生・一時停止', 'Play/Pause')}">
                         <Grid>
                             <FontIcon Glyph="{x:Bind PlayGlyph(Player.IsPlaying), Mode=OneWay}" FontSize="16" Visibility="{x:Bind app:Ui.Hide(Player.IsLoading), Mode=OneWay}" />
                             <ProgressRing IsActive="{x:Bind Player.IsLoading, Mode=OneWay}" Width="18" Height="18" Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}" />
@@ -475,7 +475,7 @@
                 <ToggleButton x:Name="QueueToggle" Style="{StaticResource IconToggleStyle}" Click="OnQueueToggle" ToolTipService.ToolTip="{x:Bind app:L.T('キュー', 'Queue')}">
                     <FontIcon Glyph="&#xE8FD;" FontSize="16" />
                 </ToggleButton>
-                <Button x:Name="DevicesButton" Style="{StaticResource IconButtonStyle}" ToolTipService.ToolTip="{x:Bind app:L.T('デバイスに接続', 'Connect to a device')}" Visibility="Collapsed">
+                <Button x:Name="DevicesButton" Style="{StaticResource IconButtonStyle}" ToolTipService.ToolTip="{x:Bind app:L.T('端末に接続', 'Connect to a device')}" Visibility="Collapsed">
                     <StackPanel Orientation="Horizontal" Spacing="6">
                         <FontIcon x:Name="DevicesIcon" Glyph="&#xE772;" FontSize="16" />
                         <TextBlock x:Name="DevicesLabel" Visibility="Collapsed" MaxWidth="140" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
@@ -561,7 +561,7 @@
                 <!-- 小窓（PiP）・窓の全画面・閉じる（小窓では元の窓に戻す）。右上は窓の最小化・閉じるのボタンと重なるので右下に置く -->
                 <StackPanel HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="12" Orientation="Horizontal" Spacing="2" Background="#73000000" CornerRadius="18" Padding="2">
                     <Button Style="{StaticResource IconButtonStyle}" Foreground="White" Click="OnVideoPip"
-                            ToolTipService.ToolTip="{x:Bind app:L.T('小窓で見る・元に戻す', 'Picture in picture')}">
+                            ToolTipService.ToolTip="{x:Bind app:L.T('小窓で見る', 'Picture in picture')}">
                         <FontIcon x:Name="VideoPipIcon" Glyph="&#xEE49;" FontSize="15" />
                     </Button>
                     <Button x:Name="VideoOnlyFullScreenButton" Style="{StaticResource IconButtonStyle}" Foreground="White" Click="OnVideoOnlyFullScreen"

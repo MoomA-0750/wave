@@ -62,7 +62,7 @@
                         <FontIcon Glyph="&#xEB52;" FontSize="20" Foreground="White" />
                     </Grid>
                     <StackPanel VerticalAlignment="Center" Spacing="2">
-                        <TextBlock Text="{x:Bind app:L.T('高く評価した曲', 'Liked Songs')}" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                        <TextBlock Text="{x:Bind app:L.T('高く評価した曲', 'Liked music')}" Style="{StaticResource BodyStrongTextBlockStyle}" />
                         <TextBlock x:Name="LikedText" Style="{StaticResource SubtleTextStyle}" />
                     </StackPanel>
                 </StackPanel>
@@ -77,7 +77,7 @@
                     </DataTemplate>
                 </ItemsRepeater.ItemTemplate>
             </ItemsRepeater>
-            <TextBlock x:Name="ErrorText" Visibility="Collapsed" Margin="24" Text="{x:Bind app:L.T('アーティストを読み込めませんでした', 'Couldn’t load the artist')}" />
+            <TextBlock x:Name="ErrorText" Visibility="Collapsed" Margin="24" Text="{x:Bind app:L.T('アーティストを読み込めませんでした', 'Couldn^'t load the artist')}" />
         </StackPanel>
     </ScrollViewer>
 </Page>

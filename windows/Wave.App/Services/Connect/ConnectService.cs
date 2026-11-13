@@ -671,17 +671,17 @@ public sealed class ConnectService
         if (e is ClientEvent.Joined or ClientEvent.ChainForked or ClientEvent.ChainRolledBack or ClientEvent.ChainInvalid) joinWaiter?.TrySetResult(e);
         var text = e switch
         {
-            ClientEvent.Stopped stopped => L.T($"{LabelOf(stopped.By)}で再生を始めたので、ここでは止めました", $"Paused here because {LabelOf(stopped.By)} started playing"),
-            ClientEvent.TransferCompleted from => L.T($"{LabelOf(from.From)}から引き継ぎました", $"Took over from {LabelOf(from.From)}"),
-            ClientEvent.TransferFailed => L.T("引き継げませんでした", "Couldn’t take over playback"),
-            ClientEvent.StoreReset => L.T("中継の状態が作り直されました。「端末の連携」で確かめてください", "The relay’s state was reset. Check Devices"),
-            ClientEvent.ChainForked or ClientEvent.ChainRolledBack or ClientEvent.ChainInvalid => L.T("中継から届いた端末の一覧を確かめられませんでした", "Couldn’t verify the device list from the relay"),
+            ClientEvent.Stopped stopped => L.T($"{LabelOf(stopped.By)} で再生を始めたので、ここでは止めました", $"Paused here because {LabelOf(stopped.By)} started playing"),
+            ClientEvent.TransferCompleted from => L.T($"{LabelOf(from.From)} から引き継ぎました", $"Took over from {LabelOf(from.From)}"),
+            ClientEvent.TransferFailed => L.T("引き継げませんでした", "Couldn't take over playback"),
+            ClientEvent.StoreReset => L.T("中継の状態が作り直されました。「端末の連携」で確かめてください", "The relay's state was reset. Check Devices"),
+            ClientEvent.ChainForked or ClientEvent.ChainRolledBack or ClientEvent.ChainInvalid => L.T("中継から届いた端末の一覧を確かめられませんでした", "Couldn't verify the device list from the relay"),
             ClientEvent.StateEquivocation => L.T("中継から食い違った状態が届きました", "The relay sent conflicting state"),
-            ClientEvent.ServerError { Code: RemotePlaying } => L.T("ほかの端末で再生中なので、ここでは鳴らしませんでした", "Another device is playing, so playback didn’t start here"),
-            ClientEvent.ServerError { Code: RelayUnreachable } => L.T("中継につながらず、ほかの端末の再生を確かめられませんでした", "Couldn’t reach the relay to check your other devices"),
-            ClientEvent.ServerError { Code: NotMemberPlay } => L.T("中継がこの PC を連携した端末として受け付けませんでした", "The relay didn’t accept this PC as one of your devices"),
-            ClientEvent.ServerError { Code: AccountUnverifiedPlay } => L.T("アカウントを確かめられませんでした", "Couldn’t verify your account"),
-            ClientEvent.ServerError { Code: HouseholdCreateUnsent } => L.T("中継に送れませんでした（この PC では新しく始められない設定かもしれません）", "Couldn’t reach the relay (this PC may not be allowed to start a new group)"),
+            ClientEvent.ServerError { Code: RemotePlaying } => L.T("ほかの端末で再生中なので、ここでは鳴らしませんでした", "Another device is playing, so playback didn't start here"),
+            ClientEvent.ServerError { Code: RelayUnreachable } => L.T("中継につながらず、ほかの端末の再生を確かめられませんでした", "Couldn't reach the relay to check your other devices"),
+            ClientEvent.ServerError { Code: NotMemberPlay } => L.T("中継がこの PC を連携した端末として受け付けませんでした", "The relay didn't accept this PC as one of your devices"),
+            ClientEvent.ServerError { Code: AccountUnverifiedPlay } => L.T("アカウントを確かめられませんでした", "Couldn't verify your account"),
+            ClientEvent.ServerError { Code: HouseholdCreateUnsent } => L.T("中継に送れませんでした（この PC では新しく始められない設定かもしれません）", "Couldn't reach the relay (this PC may not be allowed to start a new group)"),
             _ => null,
         };
         if (text is null) return;
@@ -1182,7 +1182,7 @@ public sealed class ConnectService
         if (pendingOnB is not { } established) return;
         if (established.PeerExtension is not { } extension)
         {
-            SetPairing(PairingView.Failed(L.T("相手のアプリが古く、加われません", "The other device’s app is too old")));
+            SetPairing(PairingView.Failed(L.T("相手のアプリが古く、加われません", "The other device's app is too old")));
             return;
         }
         pendingOnB = null;
@@ -1204,7 +1204,7 @@ public sealed class ConnectService
         catch (Exception e)
         {
             AppPaths.Log($"pairing-v2 error type={e.GetType().Name}");
-            Fail(L.T("連携できませんでした", "Couldn’t connect the device"));
+            Fail(L.T("連携できませんでした", "Couldn't connect the device"));
         }
     }
 
@@ -1218,7 +1218,7 @@ public sealed class ConnectService
 
     private async Task RunOfferAsync(System.Threading.Channels.Channel<string> entered, CancellationToken cancel)
     {
-        SetPairing(PairingView.Working(L.T("中継につないでいます…", "Connecting to the relay…")));
+        SetPairing(PairingView.Working(L.T("中継に接続しています…", "Connecting to the relay…")));
         var relay = Relay!;
         relay.Acquire();
         try
@@ -1226,18 +1226,18 @@ public sealed class ConnectService
             for (var i = 0; i < 150 && relay.Status is RelayStatus.Connecting or RelayStatus.Disconnected; i++) await Task.Delay(100, cancel);
             if (relay.Status != RelayStatus.Connected)
             {
-                Fail(L.T("中継につながりませんでした（Tailscale につながっているか確かめてください）", "Couldn’t reach the relay (check that Tailscale is connected)"));
+                Fail(L.T("中継につながりませんでした（Tailscale につながっているか確かめてください）", "Couldn't reach the relay (check that Tailscale is connected)"));
                 return;
             }
             var joinInfo = await OnEngine(() => client?.CurrentJoinInfo() is { } info ? ConnectJson.Encode(info) : null);
             if (joinInfo is null)
             {
-                Fail(L.T("この PC はまだ連携していません", "This PC isn’t set up yet"));
+                Fail(L.T("この PC はまだ連携していません", "This PC isn't set up yet"));
                 return;
             }
             if (await AppServices.Music.VerifiedAccountAsync(cancel) is not { } account)
             {
-                Fail(L.T("アカウントを確かめられませんでした", "Couldn’t verify your account"));
+                Fail(L.T("アカウントを確かめられませんでした", "Couldn't verify your account"));
                 return;
             }
             var responder = new Pairing.Responder(keys!, DeviceName, account.Id, () => clock.ElapsedMilliseconds, joinInfo);
@@ -1247,7 +1247,7 @@ public sealed class ConnectService
             }
             if (!Send(new RelayV2.PairingOpen { TokenHash = tokenHash }))
             {
-                Fail(L.T("中継に送れませんでした", "Couldn’t send to the relay"));
+                Fail(L.T("中継に送れませんでした", "Couldn't send to the relay"));
                 return;
             }
             SetPairing(PairingView.ShowingOffer(Wave.Core.Connect.Pairing.EncodeOffer(responder.Offer)));
@@ -1279,12 +1279,12 @@ public sealed class ConnectService
             {
                 Fail(relay.Status != RelayStatus.Connected
                     ? L.T("中継との接続が切れました", "Lost the connection to the relay")
-                    : L.T("時間内に読み取られませんでした", "The code wasn’t used in time"));
+                    : L.T("時間内に読み取られませんでした", "The code wasn't used in time"));
                 return;
             }
             if (Wave.Core.Connect.Pairing.DecodeHello(hello.Hello) is not { } decoded)
             {
-                Fail(L.T("相手から届いた内容を読めませんでした", "Couldn’t read the reply from the other device"));
+                Fail(L.T("相手から届いた内容を読めませんでした", "Couldn't read the reply from the other device"));
                 return;
             }
             var confirm = responder.OnHello(decoded);
@@ -1292,12 +1292,12 @@ public sealed class ConnectService
             {
                 Fail(confirm.Error == Wave.Core.Connect.Pairing.Failure.AccountMismatch
                     ? L.T("相手は別のアカウントでログインしています", "The other device is logged in to a different account")
-                    : L.T("相手を確かめられませんでした", "Couldn’t verify the other device"));
+                    : L.T("相手を確かめられませんでした", "Couldn't verify the other device"));
                 return;
             }
             if (!Send(new RelayV2.PairConfirm { TokenHash = tokenHash, Confirm = Wave.Core.Connect.Pairing.ToJson(confirm.Value!) }))
             {
-                Fail(L.T("中継に送れませんでした", "Couldn’t send to the relay"));
+                Fail(L.T("中継に送れませんでした", "Couldn't send to the relay"));
                 return;
             }
             SetPairing(PairingView.EnterCode(null));
@@ -1311,22 +1311,22 @@ public sealed class ConnectService
                     {
                         if (result.Error == Wave.Core.Connect.Pairing.Failure.WrongCode)
                         {
-                            SetPairing(PairingView.EnterCode(L.T("数字が違います", "That code doesn’t match")));
+                            SetPairing(PairingView.EnterCode(L.T("数字が違います", "That code doesn't match")));
                             continue;
                         }
-                        Fail(L.T("連携できませんでした", "Couldn’t connect the device"));
+                        Fail(L.T("連携できませんでした", "Couldn't connect the device"));
                         return;
                     }
                     if (AppServices.Client.Generation != account.Generation)
                     {
-                        Fail(L.T("途中でログインが変わりました", "Your login changed during setup"));
+                        Fail(L.T("途中でログインが変わりました", "Your sign-in changed during setup"));
                         return;
                     }
                     var established = result.Value!;
                     SetPairing(PairingView.Working(L.T("端末を加えています…", "Adding the device…")));
                     if (established.PeerExtension is not { } memberKeys || !await AddMemberAsync(memberKeys, established.PeerPublicKey))
                     {
-                        Fail(L.T("端末を加えられませんでした", "Couldn’t add the device"));
+                        Fail(L.T("端末を加えられませんでした", "Couldn't add the device"));
                         return;
                     }
                     var peerId = WaveCrypto.DeviceId(established.PeerPublicKey);
@@ -1373,28 +1373,28 @@ public sealed class ConnectService
     {
         if (Wave.Core.Connect.Pairing.DecodeOffer(offerText) is not { } offer)
         {
-            Fail(L.T("wave の連携の文字列ではありません", "That isn’t a wave pairing code"));
+            Fail(L.T("wave の連携の文字列ではありません", "That isn't a wave pairing code"));
             return;
         }
         if (await AppServices.Music.VerifiedAccountAsync(cancel) is not { } account)
         {
-            Fail(L.T("アカウントを確かめられませんでした（ログインしてください）", "Couldn’t verify your account (log in first)"));
+            Fail(L.T("アカウントを確かめられませんでした（ログインしてください）", "Couldn't verify your account (sign in first)"));
             return;
         }
-        SetPairing(PairingView.Working(L.T("相手に送っています…", "Sending to the other device…")));
+        SetPairing(PairingView.Working(L.T("相手の端末に送っています…", "Sending to the other device…")));
         var initiator = new Pairing.Initiator(offer, keys!, DeviceName, account.Id, ConnectJson.Encode(keys!.MemberKeys(Role.Player)));
         var reply = await Relay!.PairAsync(RelayV2.Encode(new RelayV2.PairHelloIn { Token = offer.Token, Hello = Wave.Core.Connect.Pairing.ToJson(initiator.Hello()) }));
         cancel.ThrowIfCancellationRequested();
         if ((reply is null ? null : RelayV2.Decode(reply)) is not RelayV2.PairConfirmed confirmed)
         {
             Fail(reply is null
-                ? L.T("中継につながりませんでした（Tailscale につながっているか確かめてください）", "Couldn’t reach the relay (check that Tailscale is connected)")
-                : L.T("相手が待っていません。相手でもう一度「端末を追加」を押してください", "The other device isn’t waiting. Tap “Add device” on it again"));
+                ? L.T("中継につながりませんでした（Tailscale につながっているか確かめてください）", "Couldn't reach the relay (check that Tailscale is connected)")
+                : L.T("相手が待っていません。相手でもう一度「端末を追加」を押してください", "The other device isn't waiting. Tap “Add device” on it again"));
             return;
         }
         if (Wave.Core.Connect.Pairing.DecodeConfirm(confirmed.Confirm) is not { } confirm)
         {
-            Fail(L.T("相手から届いた内容を読めませんでした", "Couldn’t read the reply from the other device"));
+            Fail(L.T("相手から届いた内容を読めませんでした", "Couldn't read the reply from the other device"));
             return;
         }
         var result = initiator.OnConfirm(confirm);
@@ -1402,12 +1402,12 @@ public sealed class ConnectService
         {
             Fail(result.Error == Wave.Core.Connect.Pairing.Failure.AccountMismatch
                 ? L.T("相手は別のアカウントでログインしています", "The other device is logged in to a different account")
-                : L.T("相手を確かめられませんでした", "Couldn’t verify the other device"));
+                : L.T("相手を確かめられませんでした", "Couldn't verify the other device"));
             return;
         }
         if (AppServices.Client.Generation != account.Generation)
         {
-            Fail(L.T("途中でログインが変わりました", "Your login changed during setup"));
+            Fail(L.T("途中でログインが変わりました", "Your sign-in changed during setup"));
             return;
         }
         pendingOnB = result.Value!.Pair;
@@ -1418,7 +1418,7 @@ public sealed class ConnectService
     {
         if (ConnectJson.Decode<ConnectClient.JoinInfo>(extension) is not { } info)
         {
-            Fail(L.T("相手から届いた内容を読めませんでした", "Couldn’t read the reply from the other device"));
+            Fail(L.T("相手から届いた内容を読めませんでした", "Couldn't read the reply from the other device"));
             return;
         }
         var inviter = WaveCrypto.DeviceId(established.PeerPublicKey);
@@ -1430,7 +1430,7 @@ public sealed class ConnectService
         });
         if (!started)
         {
-            Fail(L.T("この PC は今は加われません", "This PC can’t join right now"));
+            Fail(L.T("この PC は今は加われません", "This PC can't join right now"));
             return;
         }
         SetPairing(PairingView.Working(L.T("相手が加えるのを待っています…", "Waiting for the other device to add this PC…")));
@@ -1469,7 +1469,7 @@ public sealed class ConnectService
             }
             else
             {
-                Fail(outcome is null ? L.T("加われませんでした（時間切れ）", "Couldn’t join (timed out)") : L.T("端末の一覧を確かめられませんでした", "Couldn’t verify the device list"));
+                Fail(outcome is null ? L.T("加われませんでした（時間切れ）", "Couldn't join (timed out)") : L.T("端末の一覧を確かめられませんでした", "Couldn't verify the device list"));
             }
         }
         finally

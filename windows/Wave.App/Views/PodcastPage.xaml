@@ -38,7 +38,7 @@
                     <Button x:Name="SaveButton" Visibility="Collapsed" Click="OnSave" VerticalAlignment="Center" CornerRadius="16" Padding="16,6" />
                     <ProgressRing x:Name="LoadingRing" IsActive="True" Width="20" Height="20" />
                 </StackPanel>
-                <TextBlock x:Name="ErrorText" Visibility="Collapsed" Margin="12,24" Text="{x:Bind app:L.T('番組を読み込めませんでした', 'Could not load the podcast')}" />
+                <TextBlock x:Name="ErrorText" Visibility="Collapsed" Margin="12,24" Text="{x:Bind app:L.T('ポッドキャストを読み込めませんでした', 'Couldn^'t load the podcast')}" />
             </StackPanel>
         </ListView.Header>
         <ListView.ItemTemplate>

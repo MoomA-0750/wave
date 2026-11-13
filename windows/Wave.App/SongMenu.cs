@@ -22,7 +22,7 @@ public static class SongMenu
         // ログインしていなければ出さない（押せないものは出さない。Mac と同じ）
         if (AppServices.Client.IsLoggedIn)
         {
-            var add = new MenuFlyoutSubItem { Text = L.T("プレイリストに追加", "Add to playlist"), Icon = new FontIcon { Glyph = "" } };
+            var add = new MenuFlyoutSubItem { Text = L.T("プレイリストに保存", "Save to playlist"), Icon = new FontIcon { Glyph = "" } };
             add.Items.Add(Item(L.T("新しいプレイリスト", "New playlist"), "", () => _ = Dialogs.CreatePlaylistAsync(song)));
             var editable = AppServices.Library.Editable.ToList();
             if (editable.Count > 0) add.Items.Add(new MenuFlyoutSeparator());
@@ -30,12 +30,12 @@ public static class SongMenu
             menu.Items.Add(add);
             // 高く評価した曲に足す・外す（Spotify の「お気に入りに追加」。Android・Mac・iPhone と同じ）
             var liked = AppServices.Player.IsLiked(song);
-            menu.Items.Add(Item(liked ? L.T("高く評価した曲から削除", "Remove from Liked Songs") : L.T("高く評価した曲に追加", "Add to Liked Songs"),
+            menu.Items.Add(Item(liked ? L.T("高く評価した曲から削除", "Remove from liked music") : L.T("高く評価した曲に追加", "Add to liked music"),
                 liked ? "\uEC61" : "\uECC8", () => AppServices.Player.SetLiked(song, !liked)));
         }
         if (removeFromPlaylist is not null) menu.Items.Add(Item(L.T("このプレイリストから削除", "Remove from this playlist"), "", removeFromPlaylist));
         menu.Items.Add(new MenuFlyoutSeparator());
-        menu.Items.Add(Item(L.T("曲のラジオを再生", "Go to song radio"), "", () => AppServices.Player.PlaySong(song)));
+        menu.Items.Add(Item(L.T("ラジオを開始", "Start radio"), "", () => AppServices.Player.PlaySong(song)));
         // 曲の画面（Android・Mac・iPhone と同じ。ライブ配信には曲の画面が無い）
         if (!song.IsLive && Nav.Frame?.Content is not Views.SongPage) menu.Items.Add(Item(L.T("曲の画面を開く", "Go to song"), "\uE8D6", () => Nav.Song(song)));
         if (song.Album?.BrowseId is { } albumId) menu.Items.Add(Item(L.T("アルバムへ移動", "Go to album"), "", () => Nav.Album(albumId)));
@@ -69,7 +69,7 @@ public static class SongMenu
             {
                 downloads.AddSingle(song, episode);
                 AppServices.Player.Message = downloads.NetworkAllows
-                    ? L.T("ダウンロードを始めました", "Downloading")
+                    ? L.T("ダウンロード中", "Downloading")
                     : L.T("通信が設定に合うまで待ってからダウンロードします", "Will download when a suitable network is available");
             }));
     }
@@ -129,7 +129,7 @@ public static class SongMenu
             else membership.Invalidate(playlist.PlaylistId);
         }
         AppPaths.Log($"playlist remove-song known={setIds is not null} removed={removed}");
-        AppServices.Player.Message = removed ? L.T($"「{playlist.Title}」から外しました", $"Removed from {playlist.Title}") : L.T("外せませんでした", "Couldn't remove it");
+        AppServices.Player.Message = removed ? L.T($"「{playlist.Title}」から削除しました", $"Removed from {playlist.Title}") : L.T("削除できませんでした", "Couldn't remove it");
         return removed;
     }
 
@@ -196,7 +196,7 @@ public static class Dialogs
             dialog?.Hide();
             _ = CreatePlaylistAsync(song);
         };
-        var likedRow = Row(L.T("高く評価した曲", "Liked Songs"), "\uEB52");
+        var likedRow = Row(L.T("高く評価した曲", "Liked music"), "\uEB52");
         var liked = AppServices.Player.Current?.VideoId == song.VideoId ? AppServices.Player.Like == LikeStatus.Like : AppServices.Library.IsLiked(song.VideoId);
         likedRow.Trailing.Children.Add(new FontIcon { Glyph = liked ? "\uEC61" : "\uECC8", FontSize = 18, Foreground = accent });
         likedRow.Button.Click += (_, _) =>
@@ -245,7 +245,7 @@ public static class Dialogs
         }
         dialog = new ContentDialog
         {
-            Title = L.T("プレイリストに追加", "Add to playlist"),
+            Title = L.T("プレイリストに保存", "Save to playlist"),
             Content = new ScrollViewer { Content = list, MaxHeight = 480 },
             CloseButtonText = L.T("完了", "Done"),
             XamlRoot = App.Window.Content.XamlRoot,

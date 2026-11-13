@@ -25,7 +25,7 @@ public sealed class DiscordStatus : IDisposable
     {
         "connected" => L.T("Discord につないでいます", "Connected to Discord"),
         "notFound" => L.T("Discord が見つかりません（Discord のアプリを起動すると、自動でつなぎます）", "Discord not found (wave connects when the Discord app is running)"),
-        "refused" => L.T("Discord につなげませんでした。アプリケーション ID を確かめてください", "Discord refused the connection. Check the application ID"),
+        "refused" => L.T("Discord につなげませんでした。Application ID を確かめてください", "Discord refused the connection. Check the Application ID"),
         _ => L.T("曲を再生すると Discord につなぎます", "wave connects to Discord when you play a song"),
     };
 

@@ -275,7 +275,7 @@ public sealed partial class SearchPage : Page
     internal static string FailureText(FailureKind kind) =>
         kind switch
         {
-            FailureKind.NotLoggedIn => L.T("ログインしていません", "You're not logged in"),
+            FailureKind.NotLoggedIn => L.T("ログインしていません", "Not signed in"),
             FailureKind.Network => L.T("通信できませんでした", "Couldn't connect"),
             FailureKind.Http => L.T("サーバーから応答がありませんでした", "The server didn't respond"),
             _ => L.T("応答を読み取れませんでした", "Couldn't read the response"),

@@ -99,7 +99,7 @@
             <StackPanel x:Name="SuggestionsPanel" Visibility="Collapsed" Margin="0,32,0,0" Spacing="4">
                 <Grid Padding="12,0">
                     <StackPanel>
-                        <TextBlock Text="{x:Bind app:L.T('おすすめの曲', 'Recommended')}" Style="{StaticResource SubtitleTextBlockStyle}" />
+                        <TextBlock Text="{x:Bind app:L.T('おすすめの曲', 'Recommended songs')}" Style="{StaticResource SubtitleTextBlockStyle}" />
                         <TextBlock Text="{x:Bind app:L.T('このプレイリストの曲をもとにしたおすすめ', 'Based on this playlist')}" Style="{StaticResource SubtleTextStyle}" />
                     </StackPanel>
                     <Button x:Name="SuggestionsRefresh" HorizontalAlignment="Right" VerticalAlignment="Center" CornerRadius="16" Click="OnRefreshSuggestions"

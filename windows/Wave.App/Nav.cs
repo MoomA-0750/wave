@@ -27,11 +27,11 @@ public static class Nav
         Go(typeof(Views.CollectionPage), new CollectionRequest(false, playlist.PlaylistId, playlist.Title, playlist.ThumbnailUrl, playlist.Subtitle));
 
     public static void LikedSongs() =>
-        Go(typeof(Views.CollectionPage), new CollectionRequest(false, MusicRepository.LikedSongs, L.T("高く評価した曲", "Liked Songs"), AppServices.Library.LikedThumbnail));
+        Go(typeof(Views.CollectionPage), new CollectionRequest(false, MusicRepository.LikedSongs, L.T("高く評価した曲", "Liked music"), AppServices.Library.LikedThumbnail));
 
     /// <summary>高く評価した曲のうち、そのアーティストのもの。</summary>
     public static void LikedSongsBy(string? browseId, string name) =>
-        Go(typeof(Views.CollectionPage), new CollectionRequest(false, MusicRepository.LikedSongs, L.T("高く評価した曲", "Liked Songs"), AppServices.Library.LikedThumbnail, name, new ArtistFilter(browseId, name)));
+        Go(typeof(Views.CollectionPage), new CollectionRequest(false, MusicRepository.LikedSongs, L.T("高く評価した曲", "Liked music"), AppServices.Library.LikedThumbnail, name, new ArtistFilter(browseId, name)));
 
     public static void Album(string browseId, AlbumSummary? summary = null) =>
         Go(typeof(Views.CollectionPage), new CollectionRequest(true, browseId, summary?.Title, summary?.ThumbnailUrl, summary?.Subtitle));

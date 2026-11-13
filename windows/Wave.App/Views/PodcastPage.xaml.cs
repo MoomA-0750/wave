@@ -59,7 +59,7 @@ public sealed partial class PodcastPage : Page
             AppPaths.Log($"podcast failed {result.Failure}");
             // 保存した番組が無いアカウントの「新しいエピソード」は、番組のページの形で返らない。失敗ではなく空として出す（Android・Mac と同じ）
             var emptyNewEpisodes = result.Failure == Core.Net.FailureKind.Parse && summary.BrowseId == MusicRepository.NewEpisodesBrowse;
-            if (emptyNewEpisodes) ErrorText.Text = L.T("エピソードがありません", "No episodes");
+            if (emptyNewEpisodes) ErrorText.Text = L.T("エピソードはありません", "No episodes");
             ErrorText.Visibility = Visibility.Visible;
             // YouTube の新着が無くても、RSS で登録した番組の新しい回は出す
             if (emptyNewEpisodes)
@@ -168,7 +168,7 @@ public sealed partial class PodcastPage : Page
     {
         var expanded = DescriptionText.MaxLines == 0;
         DescriptionText.MaxLines = expanded ? 3 : 0;
-        MoreLink.Content = expanded ? L.T("すべて表示", "Show more") : L.T("一部のみ表示", "Show less");
+        MoreLink.Content = expanded ? L.T("すべて表示", "Show more") : L.T("短く表示", "Show less");
     }
 
     private void UpdateSave()

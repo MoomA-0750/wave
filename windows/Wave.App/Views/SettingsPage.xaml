@@ -23,18 +23,18 @@
             </Grid>
             <InfoBar x:Name="ReloginBar" Severity="Warning" IsClosable="False">
                 <InfoBar.ActionButton>
-                    <Button Click="OnRelogin" Content="{x:Bind app:L.T('ログインし直す', 'Log in again')}" />
+                    <Button Click="OnRelogin" Content="{x:Bind app:L.T('ログインし直す', 'Sign in again')}" />
                 </InfoBar.ActionButton>
             </InfoBar>
             <InfoBar x:Name="UnreadableBar" Severity="Warning" IsClosable="False"
-                     Title="{x:Bind app:L.T('保存したログイン情報を読み込めませんでした', 'Couldn’t read your saved login')}" Message="{x:Bind app:L.T('ログインし直すと上書きされます。', 'Logging in again will replace it.')}" />
+                     Title="{x:Bind app:L.T('保存したログイン情報を読み込めませんでした', 'Couldn^'t read your saved sign-in')}" Message="{x:Bind app:L.T('ログインし直すと上書きされます', 'Signing in again will replace it')}" />
 
             <TextBlock Text="{x:Bind app:L.T('再生', 'Play')}" Style="{StaticResource BodyStrongTextBlockStyle}" Margin="0,16,0,4" />
             <Grid Padding="16" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                   BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
                 <StackPanel>
                     <TextBlock Text="{x:Bind app:L.T('再生した曲を YouTube Music の再生履歴に残す', 'Save played songs to your YouTube Music history')}" />
-                    <TextBlock Text="{x:Bind app:L.T('オフにすると、wave で聴いた曲は履歴やおすすめに使われません', 'When off, songs you play in wave won’t be used for history or recommendations')}" Style="{StaticResource SubtleTextStyle}" />
+                    <TextBlock Text="{x:Bind app:L.T('オフにすると、wave で聴いた曲は履歴やおすすめに使われません', 'When off, songs you play in wave won^'t be used for history or recommendations')}" Style="{StaticResource SubtleTextStyle}" />
                 </StackPanel>
                 <ToggleSwitch x:Name="HistorySwitch" HorizontalAlignment="Right" OnContent="" OffContent="" MinWidth="0" Toggled="OnHistoryToggled" />
             </Grid>
@@ -53,8 +53,8 @@
             <Grid Padding="16" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                   BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
                 <StackPanel Margin="0,0,300,0">
-                    <TextBlock Text="{x:Bind app:L.T('ダウンロードに使う通信', 'Download using')}" />
-                    <TextBlock Text="{x:Bind app:L.T('手で選んだものも、スマートダウンロードも、この設定に従います。合わない通信の間は待ちます', 'Applies to everything you download, including smart downloads. Downloads wait while the network doesn’t match')}" Style="{StaticResource SubtleTextStyle}" TextWrapping="Wrap" MaxLines="3" />
+                    <TextBlock Text="{x:Bind app:L.T('ダウンロードに使う通信', 'Download over')}" />
+                    <TextBlock Text="{x:Bind app:L.T('手で選んだものも、スマートダウンロードも、この設定に従います。合わない通信の間は待ちます', 'Applies to everything you download, including smart downloads. Downloads wait while the network doesn^'t match')}" Style="{StaticResource SubtleTextStyle}" TextWrapping="Wrap" MaxLines="3" />
                 </StackPanel>
                 <ComboBox x:Name="NetworkBox" HorizontalAlignment="Right" VerticalAlignment="Center" MinWidth="260" SelectionChanged="OnNetworkChanged" />
             </Grid>
@@ -86,12 +86,12 @@
                         BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Spacing="8">
                 <Grid>
                     <StackPanel Margin="0,0,80,0">
-                        <TextBlock Text="{x:Bind app:L.T('Discord に再生中の曲を出す', 'Show what you’re playing on Discord')}" />
+                        <TextBlock Text="{x:Bind app:L.T('Discord に再生中の曲を出す', 'Show what you^'re playing on Discord')}" />
                         <TextBlock Text="{x:Bind app:L.T('この PC の Discord のアプリに「聴いています」を出します。スマホなどほかの端末で鳴らしている曲も出します', 'Shows “Listening to” through the Discord app on this PC, including songs playing on your other devices')}" Style="{StaticResource SubtleTextStyle}" TextWrapping="Wrap" MaxLines="3" />
                     </StackPanel>
                     <ToggleSwitch x:Name="DiscordSwitch" HorizontalAlignment="Right" OnContent="" OffContent="" MinWidth="0" Toggled="OnDiscordToggled" />
                 </Grid>
-                <TextBlock Text="{x:Bind app:L.T('discord.com/developers/applications で「wave」という名前のアプリケーションを作り、その Application ID を貼ってください。', 'Create an application named “wave” at discord.com/developers/applications and paste its Application ID.')}"
+                <TextBlock Text="{x:Bind app:L.T('discord.com/developers/applications で「wave」という名前のアプリケーションを作り、その Application ID を貼ってください', 'Create an application named “wave” at discord.com/developers/applications and paste its Application ID')}"
                            Style="{StaticResource SubtleTextStyle}" TextWrapping="Wrap" MaxLines="3" />
                 <TextBox x:Name="DiscordIdBox" PlaceholderText="Application ID" LostFocus="OnDiscordIdChanged" />
                 <TextBlock x:Name="DiscordStateText" Style="{StaticResource SubtleTextStyle}" TextWrapping="Wrap" />
@@ -101,7 +101,7 @@
             <StackPanel Padding="16" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                         BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Spacing="8">
                 <TextBlock x:Name="AiStateText" TextWrapping="Wrap" />
-                <TextBlock Text="{x:Bind app:L.T('家の PC で ai-bridge の ai_bridge.py --name wave --pair を動かし、出てきた waveai://pair?… の文字列を貼ってください。', 'Run ai_bridge.py --name wave --pair from ai-bridge on your PC and paste the waveai://pair?… text it prints.')}"
+                <TextBlock Text="{x:Bind app:L.T('家の PC で ai-bridge の ai_bridge.py --name wave --pair を動かし、出てきた waveai://pair?… の文字列を貼ってください', 'Run ai_bridge.py --name wave --pair from ai-bridge on your PC and paste the waveai://pair?… text it prints')}"
                            Style="{StaticResource SubtleTextStyle}" TextWrapping="Wrap" MaxLines="3" />
                 <Grid ColumnSpacing="8">
                     <Grid.ColumnDefinitions>
@@ -128,7 +128,7 @@
                   BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
                 <StackPanel Margin="0,0,80,0">
                     <TextBlock Text="{x:Bind app:L.T('曲名を元の表記で', 'Show titles as released')}" />
-                    <TextBlock Text="{x:Bind app:L.T('曲名・アーティスト名・アルバム名を、曲の言語のまま出します（洋楽をカタカナに、邦楽をローマ字にしません）。YouTube に2回問い合わせるので、ページの表示が少し遅くなります', 'Keep song, artist, and album names in their own language (no katakana for Western songs, no romaji for Japanese songs). wave asks YouTube twice, so pages load a little slower')}" Style="{StaticResource SubtleTextStyle}" TextWrapping="Wrap" MaxLines="3" />
+                    <TextBlock Text="{x:Bind app:L.T('曲名・アーティスト名・アルバム名を、曲の言語のまま出します（洋楽をカタカナに、邦楽をローマ字にしません）。YouTube に2回問い合わせるので、ページの表示が少し遅くなります', 'Keep song, artist and album names in their own language (no katakana for Western songs, no romaji for Japanese songs). wave asks YouTube twice, so pages load a little slower')}" Style="{StaticResource SubtleTextStyle}" TextWrapping="Wrap" MaxLines="3" />
                 </StackPanel>
                 <ToggleSwitch x:Name="OriginalTitlesSwitch" HorizontalAlignment="Right" OnContent="" OffContent="" MinWidth="0" Toggled="OnOriginalTitlesToggled" />
             </Grid>
@@ -137,7 +137,7 @@
             <StackPanel Padding="16" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                         BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Spacing="4">
                 <TextBlock x:Name="VersionText" />
-                <TextBlock Text="{x:Bind app:L.T('ログイン情報は Windows のデータ保護で暗号化して、このユーザーのフォルダにだけ保存します。', 'Your login is encrypted with Windows Data Protection and stored only in this user’s folder.')}" Style="{StaticResource SubtleTextStyle}" TextWrapping="Wrap" MaxLines="3" />
+                <TextBlock Text="{x:Bind app:L.T('ログイン情報は Windows のデータ保護で暗号化して、このユーザーのフォルダにだけ保存します', 'Your sign-in is encrypted with Windows Data Protection and stored only in this user^'s folder')}" Style="{StaticResource SubtleTextStyle}" TextWrapping="Wrap" MaxLines="3" />
                 <TextBlock x:Name="DataPath" Style="{StaticResource SubtleTextStyle}" IsTextSelectionEnabled="True" />
             </StackPanel>
         </StackPanel>

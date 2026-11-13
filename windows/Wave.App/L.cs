@@ -26,8 +26,13 @@ public static class L
 
     public static string T(string ja, string en) => Ja ? ja : en;
 
-    /// <summary>曲数（英語は単数・複数を分ける）。</summary>
-    public static string Songs(int count) => Ja ? $"{count} 曲" : count == 1 ? "1 song" : $"{count} songs";
+    /// <summary>曲数（英語は単数・複数を分ける）。more は「まだ先がある」（100+ songs / 100 曲以上）。</summary>
+    public static string Songs(int count, bool more = false) =>
+        Ja ? (more ? $"{count} 曲以上" : $"{count} 曲") : more ? $"{count}+ songs" : count == 1 ? "1 song" : $"{count} songs";
+
+    /// <summary>曲数と合計の長さ（3 songs, 13 min 5 sec / 3 曲、13 分 5 秒）。</summary>
+    public static string SongsAndLength(int count, int seconds, bool more = false) =>
+        Songs(count, more) + (Ja ? "、" : ", ") + Length(seconds);
 
     /// <summary>合計の長さ（プレイリスト・アルバムの補足）。</summary>
     public static string Length(int seconds)

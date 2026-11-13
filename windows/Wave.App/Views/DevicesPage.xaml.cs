@@ -35,31 +35,31 @@ public sealed partial class DevicesPage : Page
         StatusBar.IsOpen = false;
         if (!info.Configured)
         {
-            Show(InfoBarSeverity.Informational, L.T("中継の場所が設定されていません", "The relay isn’t configured"),
-                Devices.Unreadable ? L.T("この PC の連携の鍵を読めませんでした", "Couldn’t read this PC’s device keys") : L.T("設定ファイルに中継の場所を書くと使えます", "Add the relay address to the settings file to use this"));
+            Show(InfoBarSeverity.Informational, L.T("中継の場所が設定されていません", "The relay isn't configured"),
+                Devices.Unreadable ? L.T("この PC の連携の鍵を読めませんでした", "Couldn't read this PC's device keys") : L.T("設定ファイルに中継の場所を書くと使えます", "Add the relay address to the settings file to use this"));
         }
         else if (info.Unreadable)
         {
             // Android の「リセット」と同じ: 読めない保存を消して、加わり直せるようにする
-            Show(InfoBarSeverity.Error, L.T("連携の保存を読めません", "Couldn’t read the saved device group"),
-                L.T("リセットすると、この PC はもう一度ほかの端末から加わり直します。", "Reset it to join your devices again from another device."),
+            Show(InfoBarSeverity.Error, L.T("連携の保存を読めません", "Couldn't read the saved device group"),
+                L.T("リセットすると、この PC はもう一度ほかの端末から加わり直します", "Reset it to join your devices again from another device"),
                 L.T("リセット", "Reset"), Devices.ForgetHousehold);
         }
         else if (info.InHousehold && info.Relay == RelayStatus.NotMember)
         {
             Show(InfoBarSeverity.Error, L.T("中継がこの PC を連携した端末として受け付けません", "The relay no longer accepts this PC"),
-                L.T("ほかの端末から外された可能性があります。", "It may have been removed by another device."), L.T("この PC の連携の記録を消す", "Forget the group on this PC"), Devices.ForgetHousehold);
+                L.T("ほかの端末から外された可能性があります", "It may have been removed by another device"), L.T("この PC の連携の記録を消す", "Forget the group on this PC"), Devices.ForgetHousehold);
         }
         else if (info.StoreResetPending)
         {
-            Show(InfoBarSeverity.Warning, L.T("中継の状態が作り直されました", "The relay’s state was reset"), null, L.T("この状態から始める", "Start from this state"), Devices.AcceptStoreReset);
+            Show(InfoBarSeverity.Warning, L.T("中継の状態が作り直されました", "The relay's state was reset"), null, L.T("この状態から始める", "Start from this state"), Devices.AcceptStoreReset);
         }
 
         var remote = Devices.Remote;
         RemoteCard.Visibility = Ui.Show(info.InHousehold && info.Relay != RelayStatus.NotMember && remote is { AccountMatches: true } && !info.IsWriter);
         if (remote is not null && RemoteCard.Visibility == Visibility.Visible)
         {
-            RemoteDevice.Text = remote.Playing ? L.T($"{remote.DeviceLabel}で再生中", $"Playing on {remote.DeviceLabel}") : L.T($"{remote.DeviceLabel}で一時停止中", $"Paused on {remote.DeviceLabel}");
+            RemoteDevice.Text = remote.Playing ? L.T($"{remote.DeviceLabel} で再生中", $"Playing on {remote.DeviceLabel}") : L.T($"{remote.DeviceLabel} で一時停止中", $"Paused on {remote.DeviceLabel}");
             RemoteTitle.Text = remote.Title ?? L.T("曲", "Song");
             RemoteArtist.Text = $"{remote.Artist} · {Ui.Time(remote.PositionMs / 1000.0)}";
             RemoteImage.Source = Ui.Small(remote.ThumbnailUrl);
@@ -76,7 +76,7 @@ public sealed partial class DevicesPage : Page
             RelayStatus.Connecting => L.T("接続しています…", "Connecting…"),
             RelayStatus.TailnetUnreachable => L.T("届きません（Tailscale につながっているか確かめてください）", "Unreachable (check that Tailscale is connected)"),
             RelayStatus.NotMember => info.InHousehold ? L.T("受け付けられません", "Not accepted") : L.T("まだ連携していません", "Not set up yet"),
-            RelayStatus.Failed => L.T("つながりませんでした", "Couldn’t connect"),
+            RelayStatus.Failed => L.T("つながりませんでした", "Couldn't connect"),
             _ => L.T("切断", "Disconnected"),
         };
     }
@@ -144,7 +144,7 @@ public sealed partial class DevicesPage : Page
             {
                 TextWrapping = TextWrapping.Wrap,
                 Text = L.T($"「{member.Label}」に YouTube のログインを渡します。ほかのアプリ（home-dashboard など）で、あなたのプレイリストや高く評価した曲を出せるようになります。wave API を動かす機械に入れる人は、これらを読めます。",
-                    $"Your YouTube login will be sent to “{member.Label}”, so other apps (such as home-dashboard) can show your playlists and liked songs. Anyone who can get into the computer running wave API can read them."),
+                    $"Your YouTube login will be sent to “{member.Label}”, so other apps (such as home-dashboard) can show your playlists and liked music. Anyone who can get into the computer running wave API can read them."),
             },
             PrimaryButtonText = L.T("渡す", "Give"),
             CloseButtonText = L.T("キャンセル", "Cancel"),
@@ -152,7 +152,7 @@ public sealed partial class DevicesPage : Page
         };
         if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
         var sent = await Devices.GrantLoginAsync(member.DeviceId);
-        App.Window?.ShowToast(sent ? L.T($"「{member.Label}」にログインを渡しました", $"Sent your login to {member.Label}") : L.T("ログインを渡せませんでした（中継への接続を確かめてください）", "Couldn’t send your login (check your connection to the relay)"));
+        App.Window?.ShowToast(sent ? L.T($"「{member.Label}」にログインを渡しました", $"Sent your login to {member.Label}") : L.T("ログインを渡せませんでした（中継への接続を確かめてください）", "Couldn't give your login (check your connection to the relay)"));
     }
 
     private async Task RemoveAsync(MemberView member)
@@ -160,14 +160,14 @@ public sealed partial class DevicesPage : Page
         var dialog = new ContentDialog
         {
             Title = L.T("端末を外しますか？", "Remove this device?"),
-            Content = L.T($"「{member.Label}」は、もう再生を引き継げなくなります。もう一度加えるには、QR と6桁の手順が要ります。", $"“{member.Label}” won’t be able to move playback anymore. To add it again, you’ll need the QR code and 6-digit steps."),
+            Content = L.T($"「{member.Label}」は、もう再生を引き継げなくなります。もう一度加えるには、QR と6桁の手順が要ります。", $"“{member.Label}” won't be able to move playback anymore. To add it again, you'll need the QR code and 6-digit steps."),
             PrimaryButtonText = L.T("外す", "Remove"),
             CloseButtonText = L.T("キャンセル", "Cancel"),
             XamlRoot = XamlRoot,
         };
         if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
         var removed = await Devices.RemoveMemberAsync(member.DeviceId);
-        App.Window?.ShowToast(removed ? L.T($"「{member.Label}」を外しました", $"Removed {member.Label}") : L.T("外せませんでした", "Couldn’t remove the device"));
+        App.Window?.ShowToast(removed ? L.T($"「{member.Label}」を外しました", $"Removed {member.Label}") : L.T("外せませんでした", "Couldn't remove the device"));
     }
 
     private void RenderPairing(PairingView pairing)
@@ -184,11 +184,11 @@ public sealed partial class DevicesPage : Page
         PairingText.Text = pairing.Kind switch
         {
             PairingKind.Working => pairing.Text ?? "",
-            PairingKind.ShowingOffer => L.T("加える端末で wave の「端末の連携」を開き、この QR を読み取ってください（PC なら下の文字列をコピーして貼り付けます）。2分で無効になります。", "On the device you’re adding, open Devices in wave and scan this QR code (on a PC, copy the text below and paste it). Expires in 2 minutes."),
-            PairingKind.EnterCode => (pairing.Text is { } error ? error + "\n" : "") + L.T("加える端末に出ている6桁の数字を入力してください", "Enter the 6-digit code shown on the device you’re adding"),
+            PairingKind.ShowingOffer => L.T("加える端末で wave の「端末の連携」を開き、この QR を読み取ってください（PC なら下の文字列をコピーして貼り付けます）。2分で無効になります。", "On the device you're adding, open Devices in wave and scan this QR code (on a PC, copy the text below and paste it). Expires in 2 minutes."),
+            PairingKind.EnterCode => (pairing.Text is { } error ? error + "\n" : "") + L.T("加える端末に出ている6桁の数字を入力してください", "Enter the 6-digit code shown on the device you're adding"),
             PairingKind.ShowCode => L.T($"「{pairing.PeerName}」に、この6桁の数字を入力してください", $"Enter this 6-digit code on “{pairing.PeerName}”"),
             PairingKind.Done when pairing.GrantDeviceId is not null => L.T($"「{pairing.PeerName}」と連携しました。まだログインしていないので、下の端末の一覧の「ログインを渡す」から渡すと、あなたのプレイリストなどを出せるようになります。",
-                $"Connected with “{pairing.PeerName}”. It isn’t signed in yet — use “Give login” in the device list below so it can show your playlists."),
+                $"Connected with “{pairing.PeerName}”. It isn't signed in yet — use “Give login” in the device list below so it can show your playlists."),
             PairingKind.Done => L.T($"「{pairing.PeerName}」と連携しました", $"Connected with “{pairing.PeerName}”"),
             PairingKind.Failed => pairing.Text ?? "",
             _ => "",

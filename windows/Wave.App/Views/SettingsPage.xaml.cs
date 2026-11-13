@@ -40,8 +40,8 @@ public sealed partial class SettingsPage : Page
     private void Render()
     {
         var account = AppServices.Account;
-        NameText.Text = account.IsLoggedIn ? account.Name ?? L.T("ログイン中", "Logged in") : L.T("ログインしていません", "Not logged in");
-        StateText.Text = !account.IsLoggedIn ? L.T("ログインすると、ライブラリやおすすめが使えます", "Log in to use your library and recommendations")
+        NameText.Text = account.IsLoggedIn ? account.Name ?? L.T("ログイン中", "Signed in") : L.T("ログインしていません", "Not signed in");
+        StateText.Text = !account.IsLoggedIn ? L.T("ログインすると、ライブラリやおすすめが使えます", "Sign in to use your library and recommendations")
             : !account.AccountChecked ? L.T("アカウントを確かめています…", "Checking account…")
             : L.T("Premium 音質: ", "Premium audio: ") + account.PremiumAudio switch
             {
@@ -54,18 +54,18 @@ public sealed partial class SettingsPage : Page
         if (account.Session == SessionStatus.Expired)
         {
             ReloginBar.Severity = InfoBarSeverity.Warning;
-            ReloginBar.Title = L.T("再ログインが必要です", "You need to log in again");
-            ReloginBar.Message = L.T("ログインが切れました。もう一度ログインしてください。", "Your login has expired. Please log in again.");
+            ReloginBar.Title = L.T("再ログインが必要です", "You need to sign in again");
+            ReloginBar.Message = L.T("ログインが切れました。もう一度ログインしてください", "Your sign-in has expired. Please sign in again");
         }
         else
         {
             ReloginBar.Severity = InfoBarSeverity.Informational;
-            ReloginBar.Title = L.T("ログイン状態を確認できていません", "Couldn’t verify your login");
-            ReloginBar.Message = L.T("確かめています。続くときはログインし直してください。", "Checking now. If this continues, log in again.");
+            ReloginBar.Title = L.T("ログイン状態を確かめられていません", "Couldn't verify your sign-in");
+            ReloginBar.Message = L.T("確かめています。続くときはログインし直してください", "Checking now. If this continues, sign in again");
         }
         Avatar.DisplayName = account.Name ?? "";
         Avatar.ProfilePicture = Ui.Small(account.PhotoUrl);
-        AccountButton.Content = account.IsLoggedIn ? L.T("ログアウト", "Log out") : L.T("ログイン", "Log in");
+        AccountButton.Content = account.IsLoggedIn ? L.T("ログアウト", "Sign out") : L.T("ログイン", "Sign in");
         UnreadableBar.IsOpen = account.SavedLoginUnreadable && !account.IsLoggedIn;
     }
 
@@ -80,9 +80,9 @@ public sealed partial class SettingsPage : Page
         }
         var dialog = new ContentDialog
         {
-            Title = L.T("ログアウトしますか？", "Log out?"),
-            Content = L.T("この PC に保存したログイン情報を消します。", "This removes your login saved on this PC."),
-            PrimaryButtonText = L.T("ログアウト", "Log out"),
+            Title = L.T("ログアウトしますか？", "Sign out?"),
+            Content = L.T("この PC に保存したログイン情報を消します。", "This removes your sign-in saved on this PC."),
+            PrimaryButtonText = L.T("ログアウト", "Sign out"),
             CloseButtonText = L.T("キャンセル", "Cancel"),
             XamlRoot = XamlRoot,
         };
@@ -91,7 +91,7 @@ public sealed partial class SettingsPage : Page
 
     private static readonly (string Key, string Label)[] Languages =
     [
-        ("system", L.T("Windows に合わせる", "Use Windows language")),
+        ("system", L.T("端末に合わせる", "Use device language")),
         ("ja", "日本語"),
         ("en", "English"),
     ];

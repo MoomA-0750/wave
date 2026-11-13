@@ -197,7 +197,7 @@ public sealed class AiChat
         {
             if (!Configured)
             {
-                Messages.Add(new AiMessage.Failure(L.T("Claude につないでいません。設定の「Claude」でつないでください。", "Claude isn't connected yet. Connect it in Settings → Claude.")));
+                Messages.Add(new AiMessage.Failure(L.T("Claude につないでいません。設定の「Claude」でつないでください", "Claude isn't connected yet. Connect it in Settings → Claude")));
                 return;
             }
             await RunAsync(task, history, source.Token);
@@ -207,7 +207,7 @@ public sealed class AiChat
         }
         catch (HttpRequestException)
         {
-            Messages.Add(new AiMessage.Failure(L.T("Claude の中継に届きませんでした。中継を動かしている PC が起きているか確かめてください。", "Couldn't reach the Claude bridge. Is the PC running it?")));
+            Messages.Add(new AiMessage.Failure(L.T("Claude の中継に届きませんでした。中継を動かしている PC が起きているか確かめてください", "Couldn't reach the Claude bridge. Is the PC running it?")));
         }
         finally
         {
@@ -252,7 +252,7 @@ public sealed class AiChat
         using var response = await Http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, token);
         if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
-            Messages.Add(new AiMessage.Failure(L.T("Claude の中継にトークンを断られました。設定でつなぎ直してください。", "The Claude bridge refused the token. Connect again in Settings.")));
+            Messages.Add(new AiMessage.Failure(L.T("Claude の中継にトークンを断られました。設定でつなぎ直してください", "The Claude bridge refused the token. Connect again in Settings")));
             return;
         }
         response.EnsureSuccessStatusCode();
@@ -359,7 +359,7 @@ public sealed class AiChat
                 var (songs, _) = await AppServices.Library.LikedSongsAsync();
                 var picked = songs.Take(limit).ToList();
                 picked.ForEach(Remember);
-                return (new JsonArray([.. picked.Select(SongJson)]), null, new AiMessage.Action(L.T("高く評価した曲を見ました", "Looked at your liked songs")));
+                return (new JsonArray([.. picked.Select(SongJson)]), null, new AiMessage.Action(L.T("高く評価した曲を見ました", "Looked at your liked music")));
             }
             case "show_songs":
             {
@@ -378,7 +378,7 @@ public sealed class AiChat
                 var (songs, missing) = SongsOf(args);
                 if (songs.Count == 0) return Unknown(missing);
                 player.QueueAll(songs, args["next"]?.GetValue<bool>() == true);
-                return ($"queued {songs.Count} songs", null, new AiMessage.Action(L.T($"{songs.Count} 曲をキューに足しました", $"Added {L.Songs(songs.Count)} to the queue")));
+                return ($"queued {songs.Count} songs", null, new AiMessage.Action(L.T($"{songs.Count} 曲をキューに追加しました", $"Added {L.Songs(songs.Count)} to queue")));
             }
             case "list_playlists":
                 return (new JsonArray([.. AppServices.Library.Editable.Select(p => new JsonObject { ["playlist_id"] = p.PlaylistId, ["title"] = p.Title })]), null, null);
@@ -394,7 +394,7 @@ public sealed class AiChat
                 var added = 0;
                 for (var i = 0; i < songs.Count; i++)
                     if (await music.AddToPlaylistAsync(playlist.PlaylistId, songs[i].VideoId, knownEmpty: i == 0, cancel: token) == AddToPlaylistResult.Added) added++;
-                return (new JsonObject { ["playlist_id"] = playlist.PlaylistId, ["added"] = added }, null, new AiMessage.Action(L.T($"「{title}」を作って {added} 曲入れました", $"Created “{title}” with {L.Songs(added)}")));
+                return (new JsonObject { ["playlist_id"] = playlist.PlaylistId, ["added"] = added }, null, new AiMessage.Action(L.T($"「{title}」を作成して {added} 曲追加しました", $"Created “{title}” with {L.Songs(added)}")));
             }
             case "add_to_playlist":
             {
@@ -413,7 +413,7 @@ public sealed class AiChat
                     }
                     else if (r == AddToPlaylistResult.AlreadyInPlaylist) already++;
                 }
-                return (new JsonObject { ["added"] = added, ["already_in_playlist"] = already }, null, new AiMessage.Action(L.T($"「{playlist.Title}」に {added} 曲足しました", $"Added {L.Songs(added)} to “{playlist.Title}”")));
+                return (new JsonObject { ["added"] = added, ["already_in_playlist"] = already }, null, new AiMessage.Action(L.T($"「{playlist.Title}」に {added} 曲追加しました", $"Added {L.Songs(added)} to “{playlist.Title}”")));
             }
             default:
                 return (null, $"unknown tool: {name}", null);

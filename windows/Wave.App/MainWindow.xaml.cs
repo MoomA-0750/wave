@@ -371,10 +371,10 @@ public sealed partial class MainWindow : Window
         {
             AccountMenu.Items.Add(new MenuFlyoutItem { Text = account.Name ?? L.T("ログイン中", "Logged in"), IsEnabled = false });
             AccountMenu.Items.Add(new MenuFlyoutSeparator());
-            AccountMenu.Items.Add(MenuItem(L.T("最近再生した曲", "Recently played"), "", Nav.History));
+            AccountMenu.Items.Add(MenuItem(L.T("再生履歴", "History"), "", Nav.History));
             if (AppServices.Connect.Configured) AccountMenu.Items.Add(MenuItem(L.T("端末の連携", "Devices"), "\uE772", Nav.Devices));
         }
-        else AccountMenu.Items.Add(MenuItem(L.T("ログイン", "Log in"), "", ShowLogin));
+        else AccountMenu.Items.Add(MenuItem(L.T("ログイン", "Sign in"), "", ShowLogin));
         AccountMenu.Items.Add(MenuItem(L.T("設定", "Settings"), "", Nav.Settings));
     }
 
@@ -452,8 +452,8 @@ public sealed partial class MainWindow : Window
         if (libraryKind is null or "playlist" && (filter.Length == 0 || L.T("ダウンロード", "Downloads").Contains(filter, StringComparison.CurrentCultureIgnoreCase)))
             entries.Insert(0, new LibraryEntry(L.T("ダウンロード", "Downloads"), L.T("自動 • ", "Auto • ") + L.Songs(AppServices.Downloads.DownloadedCount), null, null, isDownloads: true));
         // 高く評価した曲はいつも先頭（Spotify の「お気に入りの曲」と同じ）
-        if (libraryKind is null or "playlist" && (filter.Length == 0 || L.T("高く評価した曲", "Liked Songs").Contains(filter)))
-            entries.Insert(0, new LibraryEntry(L.T("高く評価した曲", "Liked Songs"), L.T("プレイリスト • 自動", "Playlist • Auto"), lib.LikedThumbnail, null, isLiked: true));
+        if (libraryKind is null or "playlist" && (filter.Length == 0 || L.T("高く評価した曲", "Liked music").Contains(filter)))
+            entries.Insert(0, new LibraryEntry(L.T("高く評価した曲", "Liked music"), L.T("プレイリスト • 自動", "Playlist • Auto"), lib.LikedThumbnail, null, isLiked: true));
         // ポッドキャストで絞ったときは、保存した番組の新しいエピソード（自動のプレイリスト）を先頭に（Android と同じ）
         if (libraryKind == "podcast" && (filter.Length == 0 || L.T("新しいエピソード", "New episodes").Contains(filter)))
             entries.Insert(0, new LibraryEntry(L.T("新しいエピソード", "New episodes"), L.T("プレイリスト • 自動", "Playlist • Auto"), null,
@@ -867,7 +867,7 @@ public sealed partial class MainWindow : Window
             {
                 string? section = i == Player.Index ? L.T("再生中", "Now playing")
                     : i == Player.Index + 1 && i < userEnd ? L.T("キューの次の曲", "Next in queue")
-                    : i == userEnd ? L.T("次に流れる曲", "Next up")
+                    : i == userEnd ? L.T("次に流れる曲", "Up next")
                     : null;
                 entries.Add(new QueueEntry(i, Player.Queue[i], i == Player.Index, section, isFlowHeader: i == userEnd && i > Player.Index));
             }
@@ -1148,7 +1148,7 @@ public sealed partial class MainWindow : Window
                 };
                 grid.Children.Add(open);
                 var delete = new Button { Style = (Style)Application.Current.Resources["IconButtonStyle"], Content = new FontIcon { Glyph = "\uE74D", FontSize = 14 }, VerticalAlignment = VerticalAlignment.Center };
-                ToolTipService.SetToolTip(delete, L.T("会話を消す", "Delete chat"));
+                ToolTipService.SetToolTip(delete, L.T("会話を削除", "Delete chat"));
                 delete.Click += (_, _) =>
                 {
                     chat.Delete(id);
@@ -1222,10 +1222,10 @@ public sealed partial class MainWindow : Window
 
     public string LikeTip(LikeStatus? like, Song? current, bool inPlaylist) => like switch
     {
-        LikeStatus.Like => L.T("プレイリストに追加", "Add to playlist"),
+        LikeStatus.Like => L.T("プレイリストに保存", "Save to playlist"),
         _ when inPlaylist => L.T("プレイリストに入っています（追加先を変える）", "Saved in a playlist (change)"),
         null when AppServices.Client.IsLoggedIn && current is not null => L.T("評価を読み直す", "Reload like status"),
-        _ => L.T("高く評価した曲に追加", "Add to Liked Songs"),
+        _ => L.T("高く評価した曲に追加", "Add to liked music"),
     };
 
     public bool IsRepeating(RepeatMode mode) => mode != RepeatMode.Off;
@@ -1433,7 +1433,7 @@ public sealed partial class MainWindow : Window
         var info = connect.Info;
         DevicesPanel.Children.Clear();
         var remote = Player.IsRemote ? connect.Remote : null;
-        DevicesPanel.Children.Add(new TextBlock { Text = L.T("現在のデバイス", "Current device"), Style = (Style)Application.Current.Resources["BodyStrongTextBlockStyle"] });
+        DevicesPanel.Children.Add(new TextBlock { Text = L.T("現在の端末", "Current device"), Style = (Style)Application.Current.Resources["BodyStrongTextBlockStyle"] });
         if (remote is null)
         {
             DevicesPanel.Children.Add(DeviceRow("\uE7F4", L.T("この PC", "This PC"), null, accent: true, enabled: true, action: null));
@@ -1451,7 +1451,7 @@ public sealed partial class MainWindow : Window
             var others = connect.Members.Where(m => remote is null ? !m.IsSelf : m.DeviceId != remote.DeviceId).Where(m => !m.IsController && !m.IsApi).ToList();
             if (others.Count > 0)
             {
-                DevicesPanel.Children.Add(new TextBlock { Text = L.T("ほかのデバイスを選択", "Select another device"), Margin = new Thickness(0, 8, 0, 0), Style = (Style)Application.Current.Resources["BodyStrongTextBlockStyle"] });
+                DevicesPanel.Children.Add(new TextBlock { Text = L.T("ほかの端末を選択", "Select another device"), Margin = new Thickness(0, 8, 0, 0), Style = (Style)Application.Current.Resources["BodyStrongTextBlockStyle"] });
                 foreach (var member in others.OrderByDescending(m => m.IsSelf).ThenByDescending(m => m.Online))
                 {
                     if (member.IsSelf)

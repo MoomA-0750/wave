@@ -199,7 +199,7 @@ public sealed partial class CollectionPage : Page
         var album = result.Value!;
         playlistIdForPlayback = album.PlaylistId;
         var total = album.Songs.Sum(s => s.DurationSeconds ?? 0);
-        ShowHeader(album.Title, album.ThumbnailUrl, string.Join(" • ", new[] { album.Subtitle, $"{L.Songs(album.Songs.Count)}, {L.Length(total)}" }.Where(s => !string.IsNullOrEmpty(s))));
+        ShowHeader(album.Title, album.ThumbnailUrl, string.Join(" • ", new[] { album.Subtitle, L.SongsAndLength(album.Songs.Count, total) }.Where(s => !string.IsNullOrEmpty(s))));
         // アーティストは題名の下に別の行で出す（押すとアーティストのページ。Android と同じ）
         albumArtist = album.Artists.FirstOrDefault(a => a.BrowseId is not null);
         ArtistText.Text = string.Join(", ", album.Artists.Select(a => a.Name));
@@ -240,13 +240,13 @@ public sealed partial class CollectionPage : Page
         if (!result.IsOk)
         {
             if (ShowSaved()) return;
-            Fail(result.Failure == Core.Net.FailureKind.NotLoggedIn ? L.T("このプレイリストを見るにはログインしてください", "Log in to see this playlist") : L.T("プレイリストを読み込めませんでした", "Couldn't load the playlist"));
+            Fail(result.Failure == Core.Net.FailureKind.NotLoggedIn ? L.T("このプレイリストを見るにはログインしてください", "Sign in to see this playlist") : L.T("プレイリストを読み込めませんでした", "Couldn't load the playlist"));
             return;
         }
         var total = all.Sum(r => r.Song.DurationSeconds ?? 0);
         // サーバーの補足（曲数・時間を含む）があればそれを出す。無ければ読めた曲から数える
         var subtitle = result.Value!.Subtitle ?? request.Subtitle;
-        DetailText.Text = subtitle ?? $"{L.Songs(all.Count)}, {L.Length(total)}";
+        DetailText.Text = subtitle ?? L.SongsAndLength(all.Count, total);
         // 丸ごと取っているなら、最後まで読めたときだけ開いたときの曲に合わせる（ADR-0016 の 2）
         if (result.Value.Continuation is null) AppServices.Downloads.SyncCollection(request.Id, all.Select(r => r.Song).ToList());
         Done();
@@ -316,7 +316,7 @@ public sealed partial class CollectionPage : Page
                 SuggestionList.Children.Remove(grid);
                 AddRow(new TrackRow(all.Count + 1, song) { Menu = MenuFor });
                 ApplyView();
-                DetailText.Text = $"{L.Songs(all.Count)}, {L.Length(all.Sum(r => r.Song.DurationSeconds ?? 0))}";
+                DetailText.Text = L.SongsAndLength(all.Count, all.Sum(r => r.Song.DurationSeconds ?? 0));
                 if (SuggestionList.Children.Count == 0 && suggestionsReload is { } reload) _ = LoadSuggestionsAsync(reload, cancel?.Token ?? CancellationToken.None);
             }
             else add.IsEnabled = true;
@@ -361,7 +361,7 @@ public sealed partial class CollectionPage : Page
         var n = 1;
         foreach (var song in LibraryState.ByArtist(songs, artist.BrowseId, artist.Name)) AddRow(new TrackRow(n++, song) { Menu = MenuFor });
         var total = all.Sum(r => r.Song.DurationSeconds ?? 0);
-        DetailText.Text = $"{artist.Name} • {L.Songs(all.Count)}{(complete ? "" : "+")}, {L.Length(total)}";
+        DetailText.Text = $"{artist.Name} • {L.SongsAndLength(all.Count, total, more: !complete)}";
         Done();
     }
 
@@ -478,7 +478,7 @@ public sealed partial class CollectionPage : Page
         if (DownloadKindOf is not { } kind || loading || all.Count == 0) return;
         downloads.AddCollection(kind, request.Id, TitleText.Text.Length > 0 ? TitleText.Text : request.Title ?? request.Id, headerThumbnail, all.Select(r => r.Song).ToList());
         Player.Message = downloads.NetworkAllows
-            ? L.T("ダウンロードを始めました", "Downloading")
+            ? L.T("ダウンロード中", "Downloading")
             : L.T("通信が設定に合うまで待ってからダウンロードします", "Will download when a suitable network is available");
     }
 
