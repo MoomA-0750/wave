@@ -124,7 +124,7 @@ Rectangle {
         onClicked: accountMenu.popup(account, 0, account.height)
         WMenu {
             id: accountMenu
-            MenuItem { text: WaveApp.accountName !== "" ? WaveApp.accountName : Style.t("ログインしていません", "Not logged in"); enabled: false }
+            MenuItem { text: WaveApp.accountName !== "" ? WaveApp.accountName : Style.t("ログインしていません", "Not signed in"); enabled: false }
             MenuSeparator {}
             MenuItem { text: Style.t("設定", "Settings"); onTriggered: bar.shell.openSettings() }
             MenuItem { text: Style.t("端末の連携", "Devices"); visible: WaveApp.loggedIn; height: visible ? implicitHeight : 0; onTriggered: bar.shell.openDevices() }

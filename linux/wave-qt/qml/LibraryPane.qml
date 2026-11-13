@@ -65,9 +65,13 @@ Item {
                 id: search
                 Layout.fillWidth: true
                 Layout.preferredHeight: 36
-                // 欄が狭くて「ライブラリを検索」が切れるときは「検索」だけにする
-                placeholderText: searchHint.advanceWidth + leftPadding + rightPadding + 4 <= width ? searchHint.text : Style.t("検索", "Search")
-                TextMetrics { id: searchHint; font: search.font; text: Style.t("ライブラリを検索", "Search library") }
+                // 案内はほかのプラットフォームと同じ「ライブラリを検索」に固定する。欄が狭いときは字を小さくして切らない
+                placeholderText: Style.t("ライブラリを検索", "Search library")
+                // 窓の字の大きさ（Main.qml と同じ決め方）
+                readonly property real basePoints: Style.fontPoints > 0 ? Style.fontPoints : 10.5
+                TextMetrics { id: searchHint; font.family: Style.fontFamily; font.pointSize: search.basePoints; text: search.placeholderText }
+                readonly property real roomRatio: (width - leftPadding - rightPadding - 4) / Math.max(1, searchHint.advanceWidth)
+                font.pointSize: text === "" && roomRatio < 1 ? Math.max(basePoints * 0.75, basePoints * roomRatio) : basePoints
                 topPadding: 0
                 bottomPadding: 0
                 leftPadding: 32

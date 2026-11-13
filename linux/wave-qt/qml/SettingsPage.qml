@@ -44,21 +44,21 @@ Flickable {
         Group {
             title: Style.t("アカウント", "Account")
             Row_ {
-                title: WaveApp.loggedIn ? (WaveApp.accountName !== "" ? WaveApp.accountName : Style.t("ログイン中", "Logged in")) : Style.t("ログインしていません", "Not logged in")
-                subtitle: !WaveApp.loggedIn ? Style.t("ログインすると、ライブラリと評価を使えます", "Sign in to use your library and likes")
-                          : page.account.premium === true ? Style.t("Premium の音質を使えます", "Premium audio quality is available")
-                          : page.account.premium === false ? Style.t("Premium の音質を使えません（アプリはそのまま使えます）", "Premium audio quality isn't available (the app still works)") : Style.t("Premium かどうかを確かめています…", "Checking for Premium…")
+                title: WaveApp.loggedIn ? (WaveApp.accountName !== "" ? WaveApp.accountName : Style.t("ログイン中", "Signed in")) : Style.t("ログインしていません", "Not signed in")
+                subtitle: !WaveApp.loggedIn ? Style.t("ログインすると、ライブラリやおすすめが使えます", "Sign in to use your library and recommendations")
+                          : page.account.premium === true ? Style.t("Premium 音質: 使えます", "Premium audio: Available")
+                          : page.account.premium === false ? Style.t("Premium 音質: 使えません", "Premium audio: Unavailable") : Style.t("アカウントを確かめています…", "Checking account…")
                 Btn { text: WaveApp.loggedIn ? Style.t("ログアウト", "Sign out") : Style.t("ログイン", "Sign in"); onClicked: WaveApp.logOut() }
             }
         }
         Group {
             title: Style.t("再生", "Play")
-            SwitchRow { title: Style.t("再生した曲を YouTube Music の再生履歴に残す", "Save played songs to your YouTube Music history"); subtitle: Style.t("オフにすると、wave で聴いた曲は履歴やおすすめに使われません", "When off, songs you play in wave aren't used for your history or recommendations"); checked: page.s.send_history; onToggled: page.set("send_history", checked) }
-            SwitchRow { title: Style.t("新作の通知", "New release notifications"); subtitle: Style.t("登録したアーティストのアルバム・シングル・動画が出たら知らせる（wave が動いている間、6時間おきに確かめる）", "Get notified when artists you subscribe to release albums, singles or videos (checked every 6 hours while wave is running)"); checked: page.s.release_notices; onToggled: page.set("release_notices", checked) }
+            SwitchRow { title: Style.t("再生した曲を YouTube Music の再生履歴に残す", "Save played songs to your YouTube Music history"); subtitle: Style.t("オフにすると、wave で聴いた曲は履歴やおすすめに使われません", "When off, songs you play in wave won't be used for history or recommendations"); checked: page.s.send_history; onToggled: page.set("send_history", checked) }
+            SwitchRow { title: Style.t("新作の通知", "New release notifications"); subtitle: Style.t("登録したアーティストのアルバム・シングル・動画が出たら知らせる（wave が動いている間、6時間おきに確かめる）", "Notify when artists you subscribe to release albums, singles or videos (checked every 6 hours while wave is running)"); checked: page.s.release_notices; onToggled: page.set("release_notices", checked) }
         }
         Group {
             title: Style.t("ダウンロード", "Downloads")
-            SwitchRow { title: Style.t("スマートダウンロード", "Smart downloads"); subtitle: Style.t("よく聴く曲を自動で取っておき、通信が無くても聴けるようにする", "Automatically download songs you play often so you can listen offline"); checked: page.s.smart_downloads; onToggled: page.set("smart_downloads", checked) }
+            SwitchRow { title: Style.t("スマートダウンロード", "Smart downloads"); subtitle: Style.t("いつも聴いている曲・好きそうな曲・おすすめから、聴きそうな曲を毎日選び直して取っておく", "Automatically download songs you're likely to play from songs you play often, songs you might like and recommendations, refreshed daily"); checked: page.s.smart_downloads; onToggled: page.set("smart_downloads", checked) }
             Row_ {
                 title: Style.t("ダウンロードに使う通信", "Download over")
                 ComboBox {
@@ -90,8 +90,8 @@ Flickable {
         Group {
             title: "Claude"
             Row_ {
-                title: page.ai.configured ? Style.t("つないでいます: ", "Connected: ") + page.ai.configured : Style.t("つないでいません", "Not connected")
-                subtitle: Style.t("Claude の中継（ai-bridge）の「接続の文字列」（waveai://pair?…）を貼り付けてつなぎます。つなぎ先はキーリングに保存します", "Paste the pairing text (waveai://pair?…) from the Claude bridge (ai-bridge) to connect. The connection is saved in the keyring")
+                title: page.ai.configured ? (Style.ja ? page.ai.configured + " の中継につないでいます" : "Connected to " + page.ai.configured) : Style.t("家の PC の Claude Code で、歌詞の意味・似た曲・プレイリスト作りを頼めます", "Ask about lyrics, find similar songs and make playlists with Claude Code on your PC")
+                subtitle: Style.t("家の PC で ai-bridge の ai_bridge.py --name wave --pair を動かし、出てきた waveai://pair?… の文字列を貼ってください", "Run ai_bridge.py --name wave --pair from ai-bridge on your PC and paste the waveai://pair?… text it prints")
                 Btn { visible: !!page.ai.configured; text: Style.t("接続を外す", "Disconnect"); onClicked: WaveApp.aiUnpair() }
             }
             Row_ {
@@ -124,11 +124,11 @@ Flickable {
                     }
                 }
             }
-            SwitchRow { title: Style.t("曲名を元の表記で", "Show titles as released"); subtitle: Style.t("曲名・アーティスト名・アルバム名を、曲の言語のまま出します（洋楽をカタカナに、邦楽をローマ字にしません）。YouTube に2回問い合わせるので、ページの表示が少し遅くなります", "Show song, artist and album names in the song's own language instead of transliterating them. wave asks YouTube twice, so pages load a little slower"); checked: page.s.original_titles; onToggled: page.set("original_titles", checked) }
+            SwitchRow { title: Style.t("曲名を元の表記で", "Show titles as released"); subtitle: Style.t("曲名・アーティスト名・アルバム名を、曲の言語のまま出します（洋楽をカタカナに、邦楽をローマ字にしません）。YouTube に2回問い合わせるので、ページの表示が少し遅くなります", "Keep song, artist and album names in their own language (no katakana for Western songs, no romaji for Japanese songs). wave asks YouTube twice, so pages load a little slower"); checked: page.s.original_titles; onToggled: page.set("original_titles", checked) }
         }
         Group {
             title: Style.t("このアプリについて", "About")
-            Row_ { title: "wave for Linux " + page.s.version + Style.t("（QML 版）", " (QML)"); subtitle: Style.t("ログイン情報と Claude の接続は GNOME のキーリング（Secret Service）に保存し、ファイルには書きません", "Your sign-in and Claude connection are saved in the GNOME keyring (Secret Service), never in files") }
+            Row_ { title: "wave for Linux " + page.s.version + Style.t("（QML 版）", " (QML)"); subtitle: Style.t("ログイン情報と Claude の接続は GNOME のキーリング（Secret Service）に保存し、ファイルには書きません", "Your sign-in and Claude connection are stored in the GNOME keyring (Secret Service), never in files") }
             Row_ { title: Style.t("データの場所", "Data folder"); subtitle: page.s.data_dir }
             Row_ { title: Style.t("画面の見た目", "Appearance"); subtitle: Style.omarchy ? (Style.ja ? "Omarchy のテーマの色と、Hyprland の角の丸み（" + Style.radius + "px）に合わせています" : "Matches your Omarchy theme colors and Hyprland corner rounding (" + Style.radius + "px)") : Style.t("Omarchy のテーマが見つからないので、Material の既定の色です", "No Omarchy theme found, so Material's default colors are used") }
         }

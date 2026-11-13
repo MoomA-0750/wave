@@ -1675,7 +1675,7 @@ fn now_playing(app: &Rc<App>) -> gtk::Widget {
 fn account_button(app: &Rc<App>) -> gtk::MenuButton {
     let avatar = adw::Avatar::builder().size(30).show_initials(true).build();
     let name = gtk::Label::builder().css_classes(["heading"]).margin_bottom(6).build();
-    let history = gtk::Button::builder().label(lang::t("最近再生した曲", "Recently played")).css_classes(["flat"]).build();
+    let history = gtk::Button::builder().label(lang::t("再生履歴", "History")).css_classes(["flat"]).build();
     let settings = gtk::Button::builder().label(lang::t("設定", "Settings")).css_classes(["flat"]).build();
     let column = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(4).margin_top(6).margin_bottom(6).margin_start(6).margin_end(6).build();
     column.append(&name);
@@ -1705,7 +1705,7 @@ fn account_button(app: &Rc<App>) -> gtk::MenuButton {
     let repo = app.repo.clone();
     gtk::glib::spawn_future_local(async move {
         let Ok(account) = runtime::run(async move { repo.account().await }).await else { return };
-        let text = account.name.unwrap_or_else(|| lang::t("ログイン中", "Logged in").to_string());
+        let text = account.name.unwrap_or_else(|| lang::t("ログイン中", "Signed in").to_string());
         avatar.set_text(Some(&text));
         name.set_label(&text);
         if let Some(url) = account.photo_url {

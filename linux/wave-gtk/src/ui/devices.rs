@@ -648,7 +648,7 @@ fn confirm_grant(app: &Rc<App>, member: &MemberView) {
             )
         } else {
             format!(
-                "Gives this device's YouTube login to “{label}”. Other apps (such as home-dashboard) can then use your playlists, liked music and recommendations. Anyone who can access the machine running wave API can read them."
+                "This gives “{label}” this device's YouTube login, so other apps (such as home-dashboard) can use your playlists, liked music and recommendations. Anyone with access to the machine running wave API can read them."
             )
         })
         .build();

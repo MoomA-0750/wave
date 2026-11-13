@@ -58,7 +58,7 @@ Item {
         id: notFound
         anchors.centerIn: parent
         modal: true
-        title: Style.t("ブラウザにログインが見つかりません", "No sign-in found in your browsers")
+        title: Style.t("ブラウザにログインが見つかりません", "No browser sign-in found")
         Label { width: 440; wrapMode: Text.Wrap; text: Style.t("ふだんのブラウザで music.youtube.com にログインしてから、もう一度「ブラウザのログインを使う」を押してください。\n\n読めるブラウザ: Firefox・Zen・LibreWolf・Floorp・Waterfox・Chrome・Chromium・Brave・Edge・Vivaldi・Opera", "Sign in to music.youtube.com in your usual browser, then press “Use browser sign-in” again.\n\nSupported browsers: Firefox, Zen, LibreWolf, Floorp, Waterfox, Chrome, Chromium, Brave, Edge, Vivaldi, Opera") }
         footer: DialogButtonBox {
             Btn { text: Style.t("閉じる", "Close"); DialogButtonBox.buttonRole: DialogButtonBox.RejectRole }
@@ -71,10 +71,10 @@ Item {
         property var profiles: []
         anchors.centerIn: parent
         modal: true
-        title: Style.t("どのブラウザのログインを使いますか？", "Which browser's sign-in should wave use?")
+        title: Style.t("どのブラウザのログインを使いますか？", "Which browser's sign-in do you want to use?")
         ColumnLayout {
             width: 420
-            Label { Layout.fillWidth: true; wrapMode: Text.Wrap; text: Style.t("選んだブラウザの YouTube の cookie を読んで、この PC のキーリングに保存します。ブラウザの側のログインはそのまま残ります。", "wave reads the YouTube cookies from the browser you choose and saves them in this PC's keyring. You stay signed in in the browser.") }
+            Label { Layout.fillWidth: true; wrapMode: Text.Wrap; text: Style.t("選んだブラウザの YouTube の cookie を読んで、この PC のキーリングに保存します。ブラウザの側のログインはそのまま残ります。", "wave reads YouTube cookies from the browser you choose and saves them in this PC's keyring. You stay signed in on the browser.") }
             Repeater {
                 model: chooser.profiles
                 delegate: Btn {

@@ -23,7 +23,7 @@ Rectangle {
             width: parent.width
             horizontalAlignment: Text.AlignHCenter
             wrapMode: Text.Wrap
-            text: WaveApp.videoState === "failed" ? Style.t("動画を読み込めませんでした", "Couldn't load the video") : Style.t("この位置には映像がありません", "There's no video for this part")
+            text: WaveApp.videoState === "failed" ? Style.t("動画を読み込めませんでした", "Couldn't load the video") : Style.t("この部分には動画がありません", "There's no video for this part")
             color: "white"
         }
         Btn {

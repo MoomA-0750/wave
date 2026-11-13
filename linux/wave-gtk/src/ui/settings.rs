@@ -104,12 +104,12 @@ fn account_group(app: &Rc<App>, prefs: &adw::PreferencesPage) -> adw::Preference
 /// name: None はまだ確かめている、Some(None) は取れなかった。premium: None はまだ確かめている、Some(None) は分からなかった。
 fn account_texts(logged_in: bool, name: Option<Option<String>>, premium: Option<Option<bool>>) -> (String, String) {
     if !logged_in {
-        return (lang::t("ログインしていません", "Not logged in").into(), lang::t("ログインすると、ライブラリやおすすめが使えます", "Sign in to use your library and recommendations").into());
+        return (lang::t("ログインしていません", "Not signed in").into(), lang::t("ログインすると、ライブラリやおすすめが使えます", "Sign in to use your library and recommendations").into());
     }
     let title = match &name {
         Some(Some(n)) => n.clone(),
         Some(None) => lang::t("アカウントを取得できませんでした", "Couldn't get your account").into(),
-        None => lang::t("ログイン中", "Logged in").into(),
+        None => lang::t("ログイン中", "Signed in").into(),
     };
     if name.is_none() && premium.is_none() {
         return (title, lang::t("アカウントを確かめています…", "Checking account…").into());
@@ -170,7 +170,7 @@ fn downloads_group(app: &Rc<App>, prefs: &adw::PreferencesPage) -> adw::Preferen
         .build();
     let smart = adw::SwitchRow::builder()
         .title(lang::t("スマートダウンロード", "Smart downloads"))
-        .subtitle(lang::t("いつも聴いている曲・好きそうな曲・おすすめから、聴きそうな曲を毎日選び直して取っておく", "Keeps songs you're likely to play from what you play often, songs you might like and recommendations, refreshed every day"))
+        .subtitle(lang::t("いつも聴いている曲・好きそうな曲・おすすめから、聴きそうな曲を毎日選び直して取っておく", "Automatically download songs you're likely to play from songs you play often, songs you might like and recommendations, refreshed daily"))
         .active(settings.smart_downloads)
         .build();
     let labels: Vec<String> = COUNTS.iter().map(|c| lang::songs(*c as usize)).collect();
@@ -220,7 +220,7 @@ fn downloads_group(app: &Rc<App>, prefs: &adw::PreferencesPage) -> adw::Preferen
         clear.connect_clicked(move |_| {
             let (app, prefs) = (app.clone(), prefs.clone());
             gtk::glib::spawn_future_local(async move {
-                let dialog = adw::AlertDialog::new(Some(lang::t("ダウンロードをすべて削除しますか？", "Delete all downloads?")), Some(lang::t("この PC に取った曲をすべて消します。", "This removes every song saved on this PC.")));
+                let dialog = adw::AlertDialog::new(Some(lang::t("ダウンロードをすべて削除しますか？", "Delete all downloads?")), Some(lang::t("この PC に取った曲・エピソードをすべて消します。", "This removes all songs and episodes saved on this PC.")));
                 dialog.add_responses(&[("cancel", lang::t("キャンセル", "Cancel")), ("delete", lang::t("すべて削除", "Delete all"))]);
                 dialog.set_response_appearance("delete", adw::ResponseAppearance::Destructive);
                 dialog.set_close_response("cancel");
@@ -415,8 +415,8 @@ fn language_group(app: &Rc<App>) -> adw::PreferencesGroup {
     let group = adw::PreferencesGroup::builder()
         .title(lang::t("言語", "Language"))
         .description(lang::t(
-            "画面の言語は次の起動から反映されます。YouTube から届く文字（棚の見出しなど）も画面の言語になります",
-            "The app language takes effect the next time you open wave. Text from YouTube (such as shelf titles) also uses it",
+            "YouTube から届く文字（棚の見出しなど）もこの言語になります。次の起動から反映されます",
+            "Text from YouTube (such as shelf titles) also uses this language. Takes effect the next time you open wave",
         ))
         .build();
     let current = app.downloads.settings.borrow().ui_language.clone();
@@ -439,7 +439,7 @@ fn language_group(app: &Rc<App>) -> adw::PreferencesGroup {
     }
     let original_titles = adw::SwitchRow::builder()
         .title(lang::t("曲名を元の表記で", "Show titles as released"))
-        .subtitle(lang::t("曲名・アーティスト名・アルバム名を、曲の言語のまま出します（洋楽をカタカナに、邦楽をローマ字にしません）。YouTube に2回問い合わせるので、ページの表示が少し遅くなります", "Keep song, artist, and album names in their own language (no katakana for Western songs, no romaji for Japanese songs). wave asks YouTube twice, so pages load a little slower"))
+        .subtitle(lang::t("曲名・アーティスト名・アルバム名を、曲の言語のまま出します（洋楽をカタカナに、邦楽をローマ字にしません）。YouTube に2回問い合わせるので、ページの表示が少し遅くなります", "Keep song, artist and album names in their own language (no katakana for Western songs, no romaji for Japanese songs). wave asks YouTube twice, so pages load a little slower"))
         .active(app.downloads.settings.borrow().original_titles)
         .build();
     group.add(&original_titles);
@@ -479,12 +479,12 @@ mod tests {
 
     #[test]
     fn account_texts_follow_the_checks() {
-        assert_eq!(account_texts(false, None, None), (lang::t("ログインしていません", "Not logged in").into(), lang::t("ログインすると、ライブラリやおすすめが使えます", "Sign in to use your library and recommendations").into()));
-        assert_eq!(account_texts(true, None, None), (lang::t("ログイン中", "Logged in").into(), lang::t("アカウントを確かめています…", "Checking account…").into()));
+        assert_eq!(account_texts(false, None, None), (lang::t("ログインしていません", "Not signed in").into(), lang::t("ログインすると、ライブラリやおすすめが使えます", "Sign in to use your library and recommendations").into()));
+        assert_eq!(account_texts(true, None, None), (lang::t("ログイン中", "Signed in").into(), lang::t("アカウントを確かめています…", "Checking account…").into()));
         assert_eq!(account_texts(true, Some(Some("名前".into())), None), ("名前".into(), lang::t("Premium 音質: 確かめています…", "Premium audio: Checking…").into()));
         assert_eq!(account_texts(true, Some(Some("名前".into())), Some(Some(true))), ("名前".into(), lang::t("Premium 音質: 使えます", "Premium audio: Available").into()));
         assert_eq!(account_texts(true, Some(None), Some(None)), (lang::t("アカウントを取得できませんでした", "Couldn't get your account").into(), lang::t("Premium 音質: 分かりません", "Premium audio: Unknown").into()));
-        assert_eq!(account_texts(true, None, Some(Some(false))), (lang::t("ログイン中", "Logged in").into(), lang::t("Premium 音質: 使えません", "Premium audio: Unavailable").into()));
+        assert_eq!(account_texts(true, None, Some(Some(false))), (lang::t("ログイン中", "Signed in").into(), lang::t("Premium 音質: 使えません", "Premium audio: Unavailable").into()));
     }
 
     #[test]

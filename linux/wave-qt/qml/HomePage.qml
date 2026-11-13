@@ -123,7 +123,7 @@ Flickable {
             Layout.alignment: Qt.AlignHCenter
             spacing: 8
             Label { text: page.expired ? Style.t("ログインが切れています", "Your sign-in has expired") : page.params !== "" ? Style.t("読み込めませんでした", "Couldn't load") : Style.t("ホームを読み込めませんでした", "Couldn't load Home"); font.pixelSize: 18; font.weight: Font.Bold; Layout.alignment: Qt.AlignHCenter; color: Style.foreground }
-            Label { visible: page.expired; text: Style.t("YouTube Music が保存したログインを受け付けませんでした。\nログインし直してください。", "YouTube Music didn't accept the saved sign-in.\nPlease sign in again."); wrapMode: Text.Wrap; horizontalAlignment: Text.AlignHCenter; Layout.maximumWidth: 420; Layout.alignment: Qt.AlignHCenter; color: Style.dim }
+            Label { visible: page.expired; text: Style.t("YouTube Music が保存したログインを受け付けませんでした。\nログインし直してください。", "YouTube Music didn't accept your saved sign-in.\nPlease sign in again."); wrapMode: Text.Wrap; horizontalAlignment: Text.AlignHCenter; Layout.maximumWidth: 420; Layout.alignment: Qt.AlignHCenter; color: Style.dim }
             Btn { visible: page.expired; text: Style.t("ログインし直す", "Sign in again"); highlighted: true; Layout.alignment: Qt.AlignHCenter; onClicked: WaveApp.relogin() }
             Btn { text: Style.t("もう一度", "Retry"); Layout.alignment: Qt.AlignHCenter; onClicked: page.reload() }
         }

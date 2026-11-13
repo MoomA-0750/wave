@@ -630,7 +630,7 @@ impl Search {
                 list.append(&row);
             }
         };
-        pager(None, fetch, column.upcast(), Box::new(add), lang::t("見つかりませんでした", "No results found"), lang::t("歌詞から検索できませんでした", "Couldn't search lyrics"))
+        pager(None, fetch, column.upcast(), Box::new(add), lang::t("見つかりませんでした", "No results found"), lang::t("歌詞から探せませんでした", "Couldn't search by lyrics"))
     }
 }
 
@@ -753,7 +753,7 @@ fn failed(title: &str, failure: &Failure, retry: impl Fn() + 'static) -> gtk::Wi
 
 pub fn failure_text(e: &Failure) -> String {
     match e {
-        Failure::NotLoggedIn => lang::t("ログインしていません", "Not logged in").into(),
+        Failure::NotLoggedIn => lang::t("ログインしていません", "Not signed in").into(),
         Failure::Network => lang::t("通信できませんでした", "Couldn't connect").into(),
         Failure::Parse => lang::t("応答を読み取れませんでした", "Couldn't read the response").into(),
         Failure::Http(code) => if lang::ja() { format!("応答がありませんでした（{code}）") } else { format!("The server didn't respond ({code})") },

@@ -309,7 +309,7 @@ fn assistant_html(text: &str) -> String {
 
 fn banner(info: &ConnectInfo) -> Value {
     if !info.configured {
-        let message = if info.unreadable { lang::t("この PC の連携の鍵を読めませんでした（キーリングを確かめてください）", "Couldn't read this PC's device keys (check the keyring)") } else { lang::t("ページの下の「中継の場所」に入れると使えます", "Enter the relay address at the bottom of this page to use this") };
+        let message = if info.unreadable { lang::t("この PC の連携の鍵を読めませんでした（キーリングを確かめてください）", "Couldn't read this PC's device keys (check the keyring)") } else { lang::t("ページの下の「中継の場所」に入れると使えます", "Enter it under “Relay address” at the bottom of this page to use this") };
         return json!({ "severity": "info", "title": lang::t("中継の場所が設定されていません", "The relay isn't configured"), "message": message, "action": "", "actionLabel": "" });
     }
     if info.unreadable {
@@ -651,7 +651,7 @@ impl qobject::WaveApp {
                     return;
                 }
                 s.downloads.update_settings(|st| st.relay_url = (!text.is_empty()).then_some(text));
-                toast(lang::t("中継の場所を保存しました。次に wave を開いたときから使います", "Relay saved. It takes effect the next time you open wave"));
+                toast(lang::t("中継の場所を保存しました。次に wave を開いたときから使います", "Relay address saved. It takes effect the next time you open wave"));
             }
             other => eprintln!("connect action unknown={other}"),
         }

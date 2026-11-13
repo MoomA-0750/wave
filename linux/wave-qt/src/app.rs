@@ -434,7 +434,7 @@ impl qobject::WaveApp {
     pub fn set_song_liked(self: Pin<&mut Self>, song_json: &QString, liked: bool) {
         let (Some(s), Some(song)) = (services(), parse_song(song_json)) else { return };
         if !s.repo.client().is_logged_in() {
-            toast(lang::t("ログインすると評価できます", "Sign in to like songs"));
+            toast(lang::t("高く評価するにはログインしてください", "Sign in to like songs"));
             return;
         }
         let video_id = song.video_id.clone();

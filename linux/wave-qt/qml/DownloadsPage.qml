@@ -62,7 +62,7 @@ Flickable {
                 Layout.fillWidth: true
                 spacing: 2
                 Label { text: Style.t("聴きそうな曲を自動で取っておく", "Automatically download songs you're likely to play"); color: Style.foreground }
-                Label { Layout.fillWidth: true; text: Style.t("いつも聴いている曲・好きそうな曲・おすすめから、毎日選び直します", "Picked again every day from songs you play often, songs you might like and recommendations"); wrapMode: Text.Wrap; font.pixelSize: 12; color: Style.dim }
+                Label { Layout.fillWidth: true; text: Style.t("いつも聴いている曲・好きそうな曲・おすすめから、毎日選び直します", "Picks from songs you play often, songs you might like and recommendations, refreshed daily"); wrapMode: Text.Wrap; font.pixelSize: 12; color: Style.dim }
             }
             ComboBox {
                 visible: !!page.d.smartOn
@@ -88,7 +88,7 @@ Flickable {
             PlayButton { enabled: (page.d.smart || []).length > 0; onClicked: WaveApp.playSongs(JSON.stringify(page.d.smart), 0, "", false) }
             IconButton { iconName: "media-playlist-shuffle-symbolic"; tip: Style.t("シャッフル再生", "Shuffle play"); enabled: (page.d.smart || []).length > 0; onClicked: WaveApp.playSongs(JSON.stringify(page.d.smart), 0, "", true) }
         }
-        Label { visible: !!page.d.smartOn && (page.d.smart || []).length === 0; text: Style.t("まだ選んだ曲はありません", "Nothing chosen yet"); color: Style.dim }
+        Label { visible: !!page.d.smartOn && (page.d.smart || []).length === 0; text: Style.t("まだ選んだ曲はありません", "No songs chosen yet"); color: Style.dim }
         Repeater {
             model: page.d.smartOn ? page.d.smart : []
             delegate: DownloadRow { Layout.fillWidth: true; song: modelData; onPlay: WaveApp.playSongs(JSON.stringify(page.d.smart), index, "", false) }
@@ -131,14 +131,14 @@ Flickable {
             Layout.topMargin: 16
             wrapMode: Text.Wrap
             color: Style.dim
-            text: Style.t("曲・プレイリスト・アルバムのメニューやページの頭のボタンから、ダウンロードできます。通信の無いところでも聴けます。", "Download songs, playlists and albums from their menu or the button at the top of their page, and listen without a connection.")
+            text: Style.t("曲・プレイリスト・アルバムのメニューやページの頭のボタンから、ダウンロードできます。通信の無いところでも聴けます。", "Download songs, playlists and albums from their menus or the button at the top of their pages, and listen without a connection.")
         }
     }
 
     WDialog {
         id: clearDialog
         title: Style.t("ダウンロードをすべて削除しますか？", "Delete all downloads?")
-        Label { width: 440; wrapMode: Text.Wrap; text: Style.t("この端末に取った曲・エピソードをすべて消します。", "This removes every song and episode saved on this PC.") }
+        Label { width: 440; wrapMode: Text.Wrap; text: Style.t("この PC に取った曲・エピソードをすべて消します。", "This removes all songs and episodes saved on this PC.") }
         footer: DialogButtonBox {
             background: null
             Btn { text: Style.t("キャンセル", "Cancel"); flat: true; DialogButtonBox.buttonRole: DialogButtonBox.RejectRole }

@@ -488,7 +488,7 @@ pub fn history(app: &Rc<App>) -> adw::NavigationPage {
             Ok(sections) if sections.is_empty() => adw::StatusPage::builder().icon_name("document-open-recent-symbolic").title(lang::t("再生履歴はまだありません", "No listening history yet")).vexpand(true).build().upcast(),
             Ok(sections) => {
                 let column = page_column();
-                column.append(&track::page_title(lang::t("最近再生した曲", "Recently played")));
+                column.append(&track::page_title(lang::t("再生履歴", "History")));
                 let mut number = 0;
                 for (title, songs) in sections {
                     if let Some(title) = title {
@@ -512,7 +512,7 @@ pub fn history(app: &Rc<App>) -> adw::NavigationPage {
         };
         target.set_child(Some(&content));
     });
-    page(lang::t("最近再生した曲", "Recently played"), "history", &bin)
+    page(lang::t("再生履歴", "History"), "history", &bin)
 }
 
 // MARK: プレイリスト・アルバム
@@ -1044,7 +1044,8 @@ impl Collection {
             self.sort.set((SortKey::Custom, false));
         }
         self.render_sort();
-        if let Some(title) = first.title.clone().filter(|t| !t.is_empty()) {
+        // 高く評価した曲は、YouTube の題（「高く評価した音楽」）ではなく、ライブラリの行と同じアプリの名前のまま
+        if let Some(title) = first.title.clone().filter(|t| !t.is_empty() && !self.is_liked()) {
             *self.title.borrow_mut() = title;
         }
         if first.thumbnail_url.is_some() {
@@ -1568,7 +1569,7 @@ pub fn downloads(app: &Rc<App>) -> adw::NavigationPage {
     {
         let app = app.clone();
         clear.connect_clicked(move |_| {
-            let dialog = adw::AlertDialog::builder().heading(lang::t("ダウンロードをすべて削除しますか？", "Delete all downloads?")).body(lang::t("この端末に取った曲・エピソードをすべて消します。", "This removes every song and episode saved on this device.")).default_response("cancel").close_response("cancel").build();
+            let dialog = adw::AlertDialog::builder().heading(lang::t("ダウンロードをすべて削除しますか？", "Delete all downloads?")).body(lang::t("この PC に取った曲・エピソードをすべて消します。", "This removes all songs and episodes saved on this PC.")).default_response("cancel").close_response("cancel").build();
             dialog.add_response("cancel", lang::t("キャンセル", "Cancel"));
             dialog.add_response("remove", lang::t("すべて削除", "Delete all"));
             dialog.set_response_appearance("remove", adw::ResponseAppearance::Destructive);
@@ -1643,7 +1644,7 @@ pub fn downloads(app: &Rc<App>) -> adw::NavigationPage {
             let smart_row = gtk::Box::builder().spacing(16).build();
             let texts = gtk::Box::builder().orientation(gtk::Orientation::Vertical).hexpand(true).spacing(2).build();
             texts.append(&gtk::Label::builder().label(lang::t("聴きそうな曲を自動で取っておく", "Automatically download songs you're likely to play")).xalign(0.0).build());
-            texts.append(&gtk::Label::builder().label(lang::t("いつも聴いている曲・好きそうな曲・おすすめから、毎日選び直します", "Picked again every day from songs you play often, songs you might like and recommendations")).xalign(0.0).wrap(true).css_classes(["caption", "dim-label"]).build());
+            texts.append(&gtk::Label::builder().label(lang::t("いつも聴いている曲・好きそうな曲・おすすめから、毎日選び直します", "Picks from songs you play often, songs you might like and recommendations, refreshed daily")).xalign(0.0).wrap(true).css_classes(["caption", "dim-label"]).build());
             smart_row.append(&texts);
             if settings.smart_downloads {
                 let labels: Vec<String> = wave_core::download::smart::COUNTS.iter().map(|c| lang::songs(*c as usize)).collect();
@@ -1697,7 +1698,7 @@ pub fn downloads(app: &Rc<App>) -> adw::NavigationPage {
                 chips_row.append(&play);
                 body.append(&chips_row);
                 if songs.is_empty() {
-                    body.append(&gtk::Label::builder().label(lang::t("まだ選んだ曲はありません", "Nothing chosen yet")).xalign(0.0).css_classes(["dim-label"]).build());
+                    body.append(&gtk::Label::builder().label(lang::t("まだ選んだ曲はありません", "No songs chosen yet")).xalign(0.0).css_classes(["dim-label"]).build());
                 } else {
                     body.append(&download_rows(&app, songs));
                 }
@@ -1724,7 +1725,7 @@ pub fn downloads(app: &Rc<App>) -> adw::NavigationPage {
                 body.append(&download_rows(&app, episodes));
             }
             if manifest.collections.is_empty() && manifest.singles.is_empty() && manifest.smart.is_empty() {
-                body.append(&gtk::Label::builder().label(lang::t("曲・プレイリスト・アルバムのメニューやページの頭のボタンから、ダウンロードできます。通信の無いところでも聴けます。", "Download from the menu of a song, playlist or album, or the button at the top of its page. You can listen without a connection.")).xalign(0.0).wrap(true).margin_top(16).css_classes(["dim-label"]).build());
+                body.append(&gtk::Label::builder().label(lang::t("曲・プレイリスト・アルバムのメニューやページの頭のボタンから、ダウンロードできます。通信の無いところでも聴けます。", "Download songs, playlists and albums from their menus or the button at the top of their pages, and listen without a connection.")).xalign(0.0).wrap(true).margin_top(16).css_classes(["dim-label"]).build());
             }
         })
     };

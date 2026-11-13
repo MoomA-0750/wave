@@ -34,7 +34,7 @@ Flickable {
         spacing: 16
 
         Label { text: Style.t("端末の連携", "Devices"); font.pixelSize: 28; font.weight: Font.Bold; color: Style.foreground }
-        Label { Layout.fillWidth: true; wrapMode: Text.Wrap; color: Style.dim; text: Style.t("同じアカウントのスマホと PC のあいだで、再生を引き継げます。端末どうしの通信は暗号化され、中継のサーバーは中身を読めません。", "Move playback between your phone and PC on the same account. Traffic between devices is encrypted, so the relay server can't read it.") }
+        Label { Layout.fillWidth: true; wrapMode: Text.Wrap; color: Style.dim; text: Style.t("同じアカウントのスマホと PC のあいだで、再生を引き継げます。端末どうしの通信は暗号化され、中継のサーバーは中身を読めません。", "Move playback between your phone and PC on the same account. Devices encrypt everything they share, so the relay server can't read it.") }
 
         // 知らせの帯
         Rectangle {
@@ -87,7 +87,7 @@ Flickable {
         Card_ {
             visible: !!page.d.showJoin
             Label { text: Style.t("はじめる", "Get started"); font.weight: Font.Bold; color: Style.foreground }
-            Label { Layout.fillWidth: true; wrapMode: Text.Wrap; color: Style.foreground; text: Style.t("連携済みのスマホの wave で「端末の連携」→「端末を追加」を押し、「文字で共有」で送った文字列をここに貼り付けてください。", "In wave on a phone that's already set up, go to Devices → Add device, choose “Share as text”, and paste the text here.") }
+            Label { Layout.fillWidth: true; wrapMode: Text.Wrap; color: Style.foreground; text: Style.t("連携済みのスマホの wave で「端末の連携」→「端末を追加」を押し、「文字で共有」で送った文字列をここに貼り付けてください。", "On a phone that's already set up, open Devices in wave, tap “Add device”, then “Share as text”, and paste the text here.") }
             TextField { id: offer; Layout.fillWidth: true; placeholderText: "wave-pair:…"; background: Rectangle { radius: Style.small; color: Style.view; border.color: offer.activeFocus ? Style.accent : Style.border } }
             RowLayout {
                 spacing: 8
@@ -205,7 +205,7 @@ Flickable {
         property string label: ""
         function ask(id, name) { deviceId = id; label = name; open() }
         title: Style.t("ログインを渡しますか？", "Give your login?")
-        Label { width: 440; wrapMode: Text.Wrap; text: Style.ja ? "「" + grant.label + "」に、この端末の YouTube のログインを渡します。ほかのアプリ（home-dashboard など）から、あなたのプレイリスト・高く評価した曲・おすすめを使えるようになります。wave API を動かしている機械に入れる人は、それらを読めます。" : "This gives this device's YouTube login to “" + grant.label + "”. Other apps (such as home-dashboard) can then use your playlists, liked songs and recommendations. Anyone who can get into the machine running wave API can read them." }
+        Label { width: 440; wrapMode: Text.Wrap; text: Style.ja ? "「" + grant.label + "」に、この端末の YouTube のログインを渡します。ほかのアプリ（home-dashboard など）から、あなたのプレイリスト・高く評価した曲・おすすめを使えるようになります。wave API を動かしている機械に入れる人は、それらを読めます。" : "This gives “" + grant.label + "” this device's YouTube login, so other apps (such as home-dashboard) can use your playlists, liked music and recommendations. Anyone with access to the machine running wave API can read them." }
         footer: DialogButtonBox {
             background: null
             Btn { text: Style.t("キャンセル", "Cancel"); flat: true; DialogButtonBox.buttonRole: DialogButtonBox.RejectRole }

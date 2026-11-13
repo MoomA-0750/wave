@@ -316,7 +316,7 @@ impl AiChat {
                     runtime::run(async move { bridge.post_result(&session, &id, result).await }).await;
                 }
                 BridgeEvent::Error(e) => self.push(AiMessage::Failure(if lang::ja() { format!("Claude が失敗しました: {e}") } else { format!("Claude failed: {e}") })),
-                BridgeEvent::Unauthorized => self.push(AiMessage::Failure(lang::t("Claude の中継にトークンを断られました。つなぎ直してください", "The Claude bridge refused the token. Connect again").into())),
+                BridgeEvent::Unauthorized => self.push(AiMessage::Failure(lang::t("Claude の中継にトークンを断られました。設定でつなぎ直してください", "The Claude bridge refused the token. Connect again in Settings").into())),
                 BridgeEvent::Unreachable => {
                     self.push(AiMessage::Failure(lang::t("Claude の中継に届きませんでした。中継を動かしている PC が起きているか確かめてください", "Couldn't reach the Claude bridge. Is the PC running it?").into()))
                 }

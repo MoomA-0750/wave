@@ -13,6 +13,7 @@ ListView {
     property string kind: "album"
     property string itemId: ""
     property string pageTitle: ""
+    readonly property string shownTitle: (page.itemId === "LM" ? page.pageTitle : "") || page.info.title || page.pageTitle
     property string pageKind: kind
     property var info: ({})
     property var songs: []
@@ -137,7 +138,8 @@ ListView {
                 Label { text: page.kind === "album" ? Style.t("アルバム", "Album") : page.kind === "history" ? "" : Style.t("プレイリスト", "Playlist"); visible: text !== ""; font.pixelSize: 12; font.weight: Font.DemiBold; color: Style.dim }
                 Label {
                     Layout.fillWidth: true
-                    text: page.info.title || page.pageTitle
+                    // 高く評価した曲は、YouTube の題（「高く評価した音楽」）ではなく、ライブラリの行と同じアプリの名前を出す
+                    text: page.shownTitle
                     font.pixelSize: page.width < 560 ? 22 : 32
                     font.weight: Font.Bold
                     wrapMode: Text.Wrap
@@ -173,7 +175,7 @@ ListView {
                         iconName: "folder-download-symbolic"
                         tip: Style.t("ダウンロード", "Download")
                         size: 22
-                        onClicked: WaveApp.downloadCollection(page.kind === "album" ? "album" : page.itemId === "LM" ? "liked" : "playlist", page.itemId, page.info.title || page.pageTitle, page.info.art || "", JSON.stringify(page.songs))
+                        onClicked: WaveApp.downloadCollection(page.kind === "album" ? "album" : page.itemId === "LM" ? "liked" : "playlist", page.itemId, page.shownTitle, page.info.art || "", JSON.stringify(page.songs))
                     }
                     BusyIndicator { visible: page.moreLoading; running: visible; Layout.preferredWidth: 28; Layout.preferredHeight: 28 }
                     Item { Layout.fillWidth: true }
