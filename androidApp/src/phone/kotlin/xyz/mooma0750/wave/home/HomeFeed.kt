@@ -63,7 +63,8 @@ fun LazyListScope.homeFeedItems(
         item(key = "shelf-$index") {
             Column(Modifier.padding(top = 12.dp)) {
                 shelf.strapline?.let { Text(it, Modifier.padding(horizontal = 16.dp), style = MaterialTheme.typography.labelMedium) }
-                Text(shelfTitle(shelf), Modifier.padding(horizontal = 16.dp), style = MaterialTheme.typography.titleLarge)
+                // 見出しは登録したアーティストの新作・アーティストのページの棚と同じ書体（同格の見出しの太さをそろえる）
+                Text(shelfTitle(shelf), Modifier.padding(horizontal = 16.dp), style = MaterialTheme.typography.titleLargeEmphasized)
                 LazyRow(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     items(shelf.items) { item ->
                         val look = HomeItemLook.of(item)

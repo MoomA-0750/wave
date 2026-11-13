@@ -6,6 +6,7 @@ import kotlinx.coroutines.launch
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.ui.layout.layout
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -348,7 +349,7 @@ fun AddToPlaylistDialog(
                 // 送れる向きの端に区切りの線を出す（Material のスクロールするダイアログと同じ）
                 val listState = androidx.compose.foundation.lazy.rememberLazyListState()
                 Column {
-                    if (listState.canScrollBackward) androidx.compose.material3.HorizontalDivider()
+                    if (listState.canScrollBackward) DialogEdgeDivider()
                 LazyColumn(Modifier.heightIn(max = 400.dp), state = listState) {
                     item {
                         // 下のプレイリストの行と同じ左端・同じ高さに並べる（文字のボタンにすると、ボタンの中の余白のぶん右にずれる）
@@ -429,7 +430,7 @@ fun AddToPlaylistDialog(
                         }
                     }
                 }
-                    if (listState.canScrollForward) androidx.compose.material3.HorizontalDivider()
+                    if (listState.canScrollForward) DialogEdgeDivider()
                 }
             }
         },
@@ -443,3 +444,22 @@ fun AddToPlaylistDialog(
         dismissButton = { if (creating) TextButton(onClick = { creating = false }) { Text(stringResource(R.string.library_back)) } },
     )
 }
+
+/**
+ * ダイアログの中で送る一覧の端の区切り。ダイアログの左右の余白（24dp）の外まで伸ばし、端から端までの線にする
+ * （余白の内側だけだと、最後の行の下線（入力欄）に見える）。
+ */
+@Composable
+private fun DialogEdgeDivider() {
+    androidx.compose.material3.HorizontalDivider(
+        Modifier.layout { measurable, constraints ->
+            val bleed = DIALOG_SIDE_PADDING.roundToPx()
+            val width = constraints.maxWidth + bleed * 2
+            val placeable = measurable.measure(constraints.copy(minWidth = width, maxWidth = width))
+            layout(constraints.maxWidth, placeable.height) { placeable.place(-bleed, 0) }
+        },
+    )
+}
+
+/** AlertDialog の中身の左右の余白（Material の既定）。 */
+private val DIALOG_SIDE_PADDING = 24.dp
