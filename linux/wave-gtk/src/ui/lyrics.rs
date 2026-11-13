@@ -13,6 +13,7 @@ use wave_core::music::models::Song;
 
 use super::images;
 use super::shell::App;
+use crate::lang;
 use crate::runtime;
 
 const STYLE: &str = "
@@ -88,7 +89,7 @@ pub fn page(app: &Rc<App>) -> adw::NavigationPage {
     let column = gtk::Box::builder().orientation(gtk::Orientation::Vertical).margin_top(18).margin_bottom(240).margin_start(40).margin_end(40).build();
     let scroller = gtk::ScrolledWindow::builder().child(&column).hscrollbar_policy(gtk::PolicyType::Never).vexpand(true).build();
     let message = gtk::Label::builder().wrap(true).justify(gtk::Justification::Center).css_classes(["lyrics-message"]).build();
-    let retry = gtk::Button::builder().label("もう一度").halign(gtk::Align::Center).visible(false).css_classes(["pill"]).build();
+    let retry = gtk::Button::builder().label(lang::t("もう一度", "Retry")).halign(gtk::Align::Center).visible(false).css_classes(["pill"]).build();
     let status = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(8).halign(gtk::Align::Center).valign(gtk::Align::Center).build();
     status.append(&message);
     status.append(&retry);
@@ -150,7 +151,7 @@ pub fn page(app: &Rc<App>) -> adw::NavigationPage {
         gtk::glib::ControlFlow::Continue
     });
 
-    let page = adw::NavigationPage::builder().title("歌詞").tag("lyrics").child(&root).build();
+    let page = adw::NavigationPage::builder().title(lang::t("歌詞", "Lyrics")).tag("lyrics").child(&root).build();
     // ページが捨てられるまで中身を持っておく
     page.connect_destroy(move |_| {
         let _ = &state;
@@ -181,7 +182,7 @@ fn load(state: &Rc<Lyrics>) {
     state.source.set_label("");
     let Some(song) = song else {
         set_backdrop(None);
-        show_message(state, "曲を再生すると、ここに歌詞が出ます", false);
+        show_message(state, lang::t("曲を再生すると、ここに歌詞が出ます", "Play a song to see its lyrics here"), false);
         return;
     };
     set_backdrop(None);
@@ -193,15 +194,15 @@ fn load(state: &Rc<Lyrics>) {
         }
     });
     if song.is_live {
-        show_message(state, "ライブ配信には歌詞がありません", false);
+        show_message(state, lang::t("ライブ配信には歌詞がありません", "Live streams don't have lyrics"), false);
         return;
     }
     // ポッドキャストのエピソードなど YouTube Music の外の音には歌詞を探さない
     if wave_core::music::feed::is_external(&song.video_id) {
-        show_message(state, "この曲の歌詞は見つかりませんでした", false);
+        show_message(state, lang::t("この曲の歌詞は見つかりませんでした", "No lyrics found for this song"), false);
         return;
     }
-    show_message(state, "歌詞を探しています…", false);
+    show_message(state, lang::t("歌詞を探しています…", "Looking for lyrics…"), false);
     let state = state.clone();
     gtk::glib::spawn_future_local(async move {
         let service = state.app.lyrics.clone();
@@ -226,8 +227,8 @@ fn load(state: &Rc<Lyrics>) {
                 state.source.set_label(source.as_deref().unwrap_or(""));
                 state.stack.set_visible_child_name("lines");
             }
-            LyricsResult::None => show_message(&state, "この曲の歌詞は見つかりませんでした", false),
-            LyricsResult::Failed => show_message(&state, "歌詞を読み込めませんでした", true),
+            LyricsResult::None => show_message(&state, lang::t("この曲の歌詞は見つかりませんでした", "No lyrics found for this song"), false),
+            LyricsResult::Failed => show_message(&state, lang::t("歌詞を読み込めませんでした", "Couldn't load lyrics"), true),
         }
     });
 }

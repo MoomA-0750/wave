@@ -179,7 +179,7 @@ fn notify(release: &NewRelease) {
 /// GNOME の通知。押すとそのアルバム（無ければアーティスト）を開く（app.open-album・app.open-artist）。
 fn notify_gapplication(release: &NewRelease) {
     let Some(app) = gio::Application::default() else { return };
-    let notification = gio::Notification::new(&format!("{} の新作", release.artist_name));
+    let notification = gio::Notification::new(&if crate::lang::ja() { format!("{} の新作", release.artist_name) } else { format!("New from {}", release.artist_name) });
     notification.set_body(Some(&release.title));
     match &release.album_browse_id {
         Some(album) => notification.set_default_action_and_target_value("app.open-album", Some(&album.to_variant())),

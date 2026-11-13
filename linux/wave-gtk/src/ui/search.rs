@@ -15,6 +15,7 @@ use wave_core::music::models::{AlbumSummary, ArtistSummary, HomeItem, MoodCatego
 use super::images;
 use super::shell::App;
 use super::track::{self, Columns, Row};
+use crate::lang;
 use crate::runtime;
 use crate::settings::SearchHistoryEntry;
 
@@ -88,7 +89,7 @@ pub fn page(app: &Rc<App>, query: Option<&str>) -> adw::NavigationPage {
     let browse = adw::Bin::new();
     stack.add_named(&browse, Some("browse"));
     let tabs = adw::ToggleGroup::builder().halign(gtk::Align::Start).homogeneous(false).css_classes(["round"]).build();
-    for (name, label) in [("all", "すべて"), ("songs", "曲"), ("albums", "アルバム"), ("artists", "アーティスト"), ("live", "ライブ"), ("podcasts", "ポッドキャスト"), ("episodes", "エピソード"), ("lyrics", "歌詞")] {
+    for (name, label) in [("all", lang::t("すべて", "All")), ("songs", lang::t("曲", "Songs")), ("albums", lang::t("アルバム", "Albums")), ("artists", lang::t("アーティスト", "Artists")), ("live", lang::t("ライブ", "Live")), ("podcasts", lang::t("ポッドキャスト", "Podcasts")), ("episodes", lang::t("エピソード", "Episodes")), ("lyrics", lang::t("歌詞", "Lyrics"))] {
         // 既定の名前の文字は縮めると切れるので、切れない文字を中身にする
         tabs.add(adw::Toggle::builder().child(&gtk::Label::new(Some(label))).name(name).build());
     }
@@ -100,7 +101,7 @@ pub fn page(app: &Rc<App>, query: Option<&str>) -> adw::NavigationPage {
     results.append(&tab_scroller);
     results.append(&content);
     stack.add_named(&results, Some("results"));
-    let page = adw::NavigationPage::builder().title("検索").tag("search").child(&stack).build();
+    let page = adw::NavigationPage::builder().title(lang::t("検索", "Search")).tag("search").child(&stack).build();
     let search = Rc::new(Search { app: app.clone(), page: page.clone(), stack, browse, tabs: tabs.clone(), content, query: RefCell::default(), request: Cell::new(0), first: RefCell::default() });
     {
         let weak = Rc::downgrade(&search);
@@ -134,12 +135,12 @@ impl Search {
         }
         match query {
             None => {
-                self.page.set_title("検索");
+                self.page.set_title(lang::t("検索", "Search"));
                 self.show_browse();
                 self.stack.set_visible_child_name("browse");
             }
             Some(q) => {
-                self.page.set_title(&format!("「{q}」の検索"));
+                self.page.set_title(&if lang::ja() { format!("「{q}」の検索") } else { format!("Search: {q}") });
                 self.stack.set_visible_child_name("results");
                 self.load_first(q);
                 self.show_tab();
@@ -162,8 +163,8 @@ impl Search {
         let history: Vec<SearchHistoryEntry> = self.app.downloads.settings.borrow().search_history.iter().take(RECENT_COUNT).cloned().collect();
         if !history.is_empty() {
             let head = gtk::Box::builder().spacing(8).build();
-            head.append(&gtk::Label::builder().label("最近の検索").xalign(0.0).hexpand(true).css_classes(["title-2"]).build());
-            let clear = gtk::Button::builder().label("すべて消去").css_classes(["flat"]).build();
+            head.append(&gtk::Label::builder().label(lang::t("最近の検索", "Recent searches")).xalign(0.0).hexpand(true).css_classes(["title-2"]).build());
+            let clear = gtk::Button::builder().label(lang::t("すべて消去", "Clear all")).css_classes(["flat"]).build();
             {
                 let weak = self.weak();
                 clear.connect_clicked(move |_| {
@@ -181,7 +182,7 @@ impl Search {
             }
             column.append(&grid);
         }
-        column.append(&gtk::Label::builder().label("すべてをブラウズ").xalign(0.0).margin_top(8).css_classes(["title-2"]).build());
+        column.append(&gtk::Label::builder().label(lang::t("すべてをブラウズ", "Browse all")).xalign(0.0).margin_top(8).css_classes(["title-2"]).build());
         let tiles = gtk::FlowBox::builder().selection_mode(gtk::SelectionMode::None).homogeneous(true).min_children_per_line(2).max_children_per_line(8).column_spacing(12).row_spacing(12).build();
         column.append(&tiles);
         let fill = {
@@ -235,7 +236,7 @@ impl Search {
             text.append(&gtk::Label::builder().label(subtitle).xalign(0.0).ellipsize(gtk::pango::EllipsizeMode::End).max_width_chars(1).css_classes(["caption", "dim-label"]).build());
         }
         row.append(&text);
-        let remove = gtk::Button::builder().icon_name("window-close-symbolic").tooltip_text("履歴から削除").valign(gtk::Align::Center).css_classes(["flat", "circular"]).build();
+        let remove = gtk::Button::builder().icon_name("window-close-symbolic").tooltip_text(lang::t("履歴から削除", "Remove from history")).valign(gtk::Align::Center).css_classes(["flat", "circular"]).build();
         {
             let (weak, key) = (self.weak(), entry.key());
             remove.connect_clicked(move |_| {
@@ -327,7 +328,7 @@ impl Search {
                     let (repo, q) = (repo.clone(), q.clone());
                     Box::pin(runtime::run(async move { repo.search_songs(&q, t.as_deref()).await.map(|p| (p.songs, p.continuation)) }))
                 });
-                self.song_pager(first.map(|f| f.songs), fetch, "見つかりませんでした", "検索できませんでした")
+                self.song_pager(first.map(|f| f.songs), fetch, lang::t("見つかりませんでした", "No results found"), lang::t("検索できませんでした", "Couldn't search"))
             }
             "live" => {
                 let q = query.clone();
@@ -335,7 +336,7 @@ impl Search {
                     let (repo, q) = (repo.clone(), q.clone());
                     Box::pin(runtime::run(async move { repo.search_live(&q, t.as_deref()).await.map(|p| (p.songs, p.continuation)) }))
                 });
-                self.song_pager(None, fetch, "配信中のライブは見つかりませんでした", "ライブ配信を検索できませんでした")
+                self.song_pager(None, fetch, lang::t("配信中のライブは見つかりませんでした", "No live streams found"), lang::t("ライブ配信を検索できませんでした", "Couldn't search live streams"))
             }
             "albums" => {
                 let q = query.clone();
@@ -365,7 +366,7 @@ impl Search {
         if first.songs.is_err() && first.albums.is_err() && first.artists.is_err() {
             let failure = first.songs.clone().err().unwrap_or(Failure::Network);
             let weak = self.weak();
-            return failed("検索できませんでした", &failure, move || {
+            return failed(lang::t("検索できませんでした", "Couldn't search"), &failure, move || {
                 if let Some(search) = weak.upgrade() {
                     let q = search.query.borrow().clone();
                     search.search(q);
@@ -376,20 +377,20 @@ impl Search {
         let albums = first.albums.map(|p| p.0).unwrap_or_default();
         let artists = first.artists.map(|p| p.0).unwrap_or_default();
         if songs.is_empty() && albums.is_empty() && artists.is_empty() {
-            return empty("見つかりませんでした");
+            return empty(lang::t("見つかりませんでした", "No results found"));
         }
         let column = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(28).margin_top(16).margin_bottom(32).margin_start(16).margin_end(16).build();
         // 中央が狭いときは、トップの検索結果の下に曲を並べる（横に並べると曲の題が潰れ、窓の幅を押し広げる）
         let top_row = gtk::FlowBox::builder().homogeneous(true).min_children_per_line(1).max_children_per_line(2).column_spacing(24).row_spacing(28).selection_mode(gtk::SelectionMode::None).build();
         if let Some(top) = wave_core::music::collection::top_result(&query, &songs, &artists, &albums) {
             let side = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(12).width_request(340).build();
-            side.append(&gtk::Label::builder().label("トップの検索結果").xalign(0.0).css_classes(["title-2"]).build());
+            side.append(&gtk::Label::builder().label(lang::t("トップの検索結果", "Top result")).xalign(0.0).css_classes(["title-2"]).build());
             side.append(&self.top_card(top));
             top_row.insert(&side, -1);
         }
         if !songs.is_empty() {
             let side = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(12).width_request(340).hexpand(true).build();
-            side.append(&gtk::Label::builder().label("曲").xalign(0.0).css_classes(["title-2"]).build());
+            side.append(&gtk::Label::builder().label(lang::t("曲", "Songs")).xalign(0.0).css_classes(["title-2"]).build());
             let shown: Vec<Song> = songs.iter().take(4).cloned().collect();
             side.append(&self.track_list(shown, Columns::SHORT).0);
             top_row.insert(&side, -1);
@@ -405,11 +406,11 @@ impl Search {
         };
         if !artists.is_empty() {
             let cards = artists.into_iter().map(HomeItem::Artist).map(|item| track::card(&self.app, item.clone(), remember(&item))).collect();
-            column.append(&track::shelf_with(&self.app, "アーティスト", None, cards));
+            column.append(&track::shelf_with(&self.app, lang::t("アーティスト", "Artists"), None, cards));
         }
         if !albums.is_empty() {
             let cards = albums.into_iter().map(HomeItem::Album).map(|item| track::card(&self.app, item.clone(), remember(&item))).collect();
-            column.append(&track::shelf_with(&self.app, "アルバム", None, cards));
+            column.append(&track::shelf_with(&self.app, lang::t("アルバム", "Albums"), None, cards));
         }
         gtk::ScrolledWindow::builder().child(&column).hscrollbar_policy(gtk::PolicyType::Never).vexpand(true).build().upcast()
     }
@@ -425,14 +426,14 @@ impl Search {
         card.append(&art.root);
         card.append(&gtk::Label::builder().label(item.title()).xalign(0.0).wrap(true).lines(2).ellipsize(gtk::pango::EllipsizeMode::End).css_classes(["title-1"]).build());
         let subtitle = match &item {
-            HomeItem::Song(s) => format!("曲 • {}", s.artists_text()),
-            HomeItem::Artist(_) => "アーティスト".into(),
-            HomeItem::Album(a) => a.subtitle.clone().unwrap_or_else(|| "アルバム".into()),
+            HomeItem::Song(s) => format!("{}{}", lang::t("曲 • ", "Song • "), s.artists_text()),
+            HomeItem::Artist(_) => lang::t("アーティスト", "Artist").into(),
+            HomeItem::Album(a) => a.subtitle.clone().unwrap_or_else(|| lang::t("アルバム", "Album").into()),
             HomeItem::Playlist(p) => p.subtitle.clone().unwrap_or_default(),
         };
         let bottom = gtk::Box::builder().spacing(8).build();
         bottom.append(&gtk::Label::builder().label(subtitle).xalign(0.0).hexpand(true).ellipsize(gtk::pango::EllipsizeMode::End).css_classes(["dim-label"]).build());
-        let play = gtk::Button::builder().icon_name("media-playback-start-symbolic").tooltip_text("再生").css_classes(["circular", "suggested-action", "play-fab"]).build();
+        let play = gtk::Button::builder().icon_name("media-playback-start-symbolic").tooltip_text(lang::t("再生", "Play")).css_classes(["circular", "suggested-action", "play-fab"]).build();
         bottom.append(&play);
         card.append(&bottom);
         card.set_cursor_from_name(Some("pointer"));
@@ -515,7 +516,7 @@ impl Search {
                 }
             }
         };
-        pager(first, fetch, grid.upcast(), Box::new(add), "見つかりませんでした", "検索できませんでした")
+        pager(first, fetch, grid.upcast(), Box::new(add), lang::t("見つかりませんでした", "No results found"), lang::t("検索できませんでした", "Couldn't search"))
     }
 
     /// ポッドキャスト: Apple の目録の番組（RSS）を先に、YouTube の番組を後に、カードで（RSS の URL を打てば、その番組）。
@@ -564,9 +565,9 @@ impl Search {
             }
         };
         let body = gtk::Box::builder().orientation(gtk::Orientation::Vertical).build();
-        body.append(&gtk::Label::builder().label("番組名のほか、RSS の URL（https://…）でも探せます").xalign(0.0).margin_start(24).margin_top(4).css_classes(["caption", "dim-label"]).build());
+        body.append(&gtk::Label::builder().label(lang::t("番組名のほか、RSS の URL（https://…）でも探せます", "You can also search with an RSS URL (https://…)")).xalign(0.0).margin_start(24).margin_top(4).css_classes(["caption", "dim-label"]).build());
         body.append(&grid);
-        pager(None, fetch, body.upcast(), Box::new(add), "見つかりませんでした", "検索できませんでした")
+        pager(None, fetch, body.upcast(), Box::new(add), lang::t("見つかりませんでした", "No results found"), lang::t("検索できませんでした", "Couldn't search"))
     }
 
     /// エピソード（押したエピソードだけを流す）。
@@ -588,7 +589,7 @@ impl Search {
                 }
             }
         };
-        pager(None, fetch, list.upcast(), Box::new(add), "見つかりませんでした", "検索できませんでした")
+        pager(None, fetch, list.upcast(), Box::new(add), lang::t("見つかりませんでした", "No results found"), lang::t("検索できませんでした", "Couldn't search"))
     }
 
     /// 歌詞: 合った一節を曲の下にアクセントの色で引用する（大体合っているときは「≈ 」）。続きは無い。
@@ -629,7 +630,7 @@ impl Search {
                 list.append(&row);
             }
         };
-        pager(None, fetch, column.upcast(), Box::new(add), "見つかりませんでした", "歌詞から探せませんでした")
+        pager(None, fetch, column.upcast(), Box::new(add), lang::t("見つかりませんでした", "No results found"), lang::t("歌詞から探せませんでした", "Couldn't search lyrics"))
     }
 }
 
@@ -744,7 +745,7 @@ fn failed(title: &str, failure: &Failure, retry: impl Fn() + 'static) -> gtk::Wi
     let column = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(8).halign(gtk::Align::Center).valign(gtk::Align::Start).margin_top(64).build();
     column.append(&gtk::Label::builder().label(title).css_classes(["title-3"]).build());
     column.append(&gtk::Label::builder().label(failure_text(failure)).css_classes(["dim-label"]).build());
-    let button = gtk::Button::builder().label("もう一度").halign(gtk::Align::Center).css_classes(["pill"]).build();
+    let button = gtk::Button::builder().label(lang::t("もう一度", "Retry")).halign(gtk::Align::Center).css_classes(["pill"]).build();
     button.connect_clicked(move |_| retry());
     column.append(&button);
     column.upcast()
@@ -752,10 +753,10 @@ fn failed(title: &str, failure: &Failure, retry: impl Fn() + 'static) -> gtk::Wi
 
 pub fn failure_text(e: &Failure) -> String {
     match e {
-        Failure::NotLoggedIn => "ログインしていません".into(),
-        Failure::Network => "通信できませんでした".into(),
-        Failure::Parse => "応答を読み取れませんでした".into(),
-        Failure::Http(code) => format!("応答がありませんでした（{code}）"),
+        Failure::NotLoggedIn => lang::t("ログインしていません", "Not logged in").into(),
+        Failure::Network => lang::t("通信できませんでした", "Couldn't connect").into(),
+        Failure::Parse => lang::t("応答を読み取れませんでした", "Couldn't read the response").into(),
+        Failure::Http(code) => if lang::ja() { format!("応答がありませんでした（{code}）") } else { format!("The server didn't respond ({code})") },
     }
 }
 

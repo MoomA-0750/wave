@@ -452,11 +452,11 @@ impl Connect {
 
     fn label_of(&self, device_id: &str, me: &str, names: &Names) -> String {
         if device_id == me {
-            "この PC".to_string()
+            crate::lang::t("この PC", "This PC").to_string()
         } else if let Some(name) = names.labels.get(device_id) {
             name.clone()
         } else {
-            format!("端末 {}", device_id.chars().take(6).collect::<String>())
+            format!("{} {}", crate::lang::t("端末", "Device"), device_id.chars().take(6).collect::<String>())
         }
     }
 
@@ -598,22 +598,22 @@ impl Connect {
                 glib::timeout_add_local_once(Duration::from_secs(2), move || {
                     let Some(connect) = weak.upgrade() else { return };
                     if connect.shared.transfer_requested_at.get().is_none_or(|at| at < stopped_at) {
-                        connect.notify(&format!("{label}で再生を始めたので、ここでは止めました"));
+                        connect.notify(&if crate::lang::ja() { format!("{label}で再生を始めたので、ここでは止めました") } else { format!("Paused here because {label} started playing") });
                     }
                 });
                 return;
             }
-            ClientEvent::TransferCompleted { from } => format!("{}から引き継ぎました", self.member_label(from)),
-            ClientEvent::TransferFailed { .. } => "引き継げませんでした".to_string(),
-            ClientEvent::StoreReset => "中継の状態が作り直されました。設定の「端末の連携」で確かめてください".to_string(),
-            ClientEvent::ChainForked | ClientEvent::ChainRolledBack | ClientEvent::ChainInvalid { .. } => "中継から届いた端末の一覧を確かめられませんでした".to_string(),
-            ClientEvent::StateEquivocation => "中継から食い違った状態が届きました".to_string(),
+            ClientEvent::TransferCompleted { from } => if crate::lang::ja() { format!("{}から引き継ぎました", self.member_label(from)) } else { format!("Took over from {}", self.member_label(from)) },
+            ClientEvent::TransferFailed { .. } => crate::lang::t("引き継げませんでした", "Couldn’t take over playback").to_string(),
+            ClientEvent::StoreReset => crate::lang::t("中継の状態が作り直されました。設定の「端末の連携」で確かめてください", "The relay’s state was reset. Check Devices in Settings").to_string(),
+            ClientEvent::ChainForked | ClientEvent::ChainRolledBack | ClientEvent::ChainInvalid { .. } => crate::lang::t("中継から届いた端末の一覧を確かめられませんでした", "Couldn’t verify the device list from the relay").to_string(),
+            ClientEvent::StateEquivocation => crate::lang::t("中継から食い違った状態が届きました", "The relay sent conflicting state").to_string(),
             ClientEvent::ServerError { code } => match code.as_str() {
-                REMOTE_PLAYING => "ほかの端末で再生中なので、ここでは鳴らしませんでした".to_string(),
-                RELAY_UNREACHABLE => "中継につながらず、ほかの端末の再生を確かめられませんでした".to_string(),
-                NOT_MEMBER_PLAY => "中継がこの PC を連携した端末として受け付けませんでした".to_string(),
-                ACCOUNT_UNVERIFIED_PLAY => "アカウントを確かめられませんでした".to_string(),
-                HOUSEHOLD_CREATE_UNSENT => "中継に送れませんでした（この PC では新しく始められない設定かもしれません）".to_string(),
+                REMOTE_PLAYING => crate::lang::t("ほかの端末で再生中なので、ここでは鳴らしませんでした", "Another device is playing, so playback didn’t start here").to_string(),
+                RELAY_UNREACHABLE => crate::lang::t("中継につながらず、ほかの端末の再生を確かめられませんでした", "Couldn’t reach the relay to check your other devices").to_string(),
+                NOT_MEMBER_PLAY => crate::lang::t("中継がこの PC を連携した端末として受け付けませんでした", "The relay didn’t accept this PC as one of your devices").to_string(),
+                ACCOUNT_UNVERIFIED_PLAY => crate::lang::t("アカウントを確かめられませんでした", "Couldn’t verify your account").to_string(),
+                HOUSEHOLD_CREATE_UNSENT => crate::lang::t("中継に送れませんでした（この PC では新しく始められない設定かもしれません）", "Couldn’t reach the relay (this PC may not be allowed to start a new group)").to_string(),
                 _ => return,
             },
             _ => return,
@@ -771,7 +771,7 @@ impl Connect {
                 let sent = connect2.with_client(|c| c.send_queue_add(std::slice::from_ref(&item), next));
                 eprintln!("connect-v2 queue add next={next} sent={sent:?}");
                 if sent == Some(true) {
-                    connect2.notify(if next { "再生中の端末で次に再生します" } else { "再生中の端末のキューに追加しました" });
+                    connect2.notify(if next { crate::lang::t("再生中の端末で次に再生します", "Will play next on the active device") } else { crate::lang::t("再生中の端末のキューに追加しました", "Added to the queue on the active device") });
                 }
             });
             true
@@ -958,7 +958,7 @@ impl Connect {
         let sent = self.with_client(ConnectClient::request_transfer);
         eprintln!("connect-v2 transfer requested={sent:?}");
         if sent != Some(true) {
-            self.notify("引き継げませんでした");
+            self.notify(crate::lang::t("引き継げませんでした", "Couldn’t take over playback"));
         }
     }
 
@@ -967,7 +967,7 @@ impl Connect {
         let sent = self.with_client(|c| c.request_remote_transfer(device_id));
         eprintln!("connect-v2 remote transfer requested={sent:?}");
         if sent != Some(true) {
-            self.notify("その端末に移せませんでした");
+            self.notify(crate::lang::t("その端末に移せませんでした", "Couldn’t move playback to that device"));
         }
     }
 
@@ -1151,7 +1151,7 @@ impl Connect {
 
     async fn run_offer(self: Rc<Self>, epoch: u64) {
         let Some(device) = self.device.clone() else { return };
-        self.set_pairing(PairingView::Working("中継につないでいます…".into()));
+        self.set_pairing(PairingView::Working(crate::lang::t("中継につないでいます…", "Connecting to the relay…").into()));
         for _ in 0..150 {
             if matches!(self.status.get(), RelayStatus::Connected) || !self.still(epoch) {
                 break;
@@ -1159,14 +1159,14 @@ impl Connect {
             glib::timeout_future(Duration::from_millis(100)).await;
         }
         if self.status.get() != RelayStatus::Connected {
-            return self.fail(epoch, "中継につながりませんでした（Tailscale につながっているか確かめてください）");
+            return self.fail(epoch, crate::lang::t("中継につながりませんでした（Tailscale につながっているか確かめてください）", "Couldn’t reach the relay (check that Tailscale is connected)"));
         }
         let Some(join_info) = self.client.borrow().as_ref().and_then(ConnectClient::current_join_info) else {
-            return self.fail(epoch, "この PC はまだ連携していません");
+            return self.fail(epoch, crate::lang::t("この PC はまだ連携していません", "This PC isn’t set up yet"));
         };
         let repo = self.shared.repo.clone();
         let Some(account) = runtime::run(async move { repo.verified_account().await }).await else {
-            return self.fail(epoch, "アカウントを確かめられませんでした");
+            return self.fail(epoch, crate::lang::t("アカウントを確かめられませんでした", "Couldn’t verify your account"));
         };
         if !self.still(epoch) {
             return;
@@ -1179,7 +1179,7 @@ impl Connect {
         let (hello_tx, mut hello_rx) = mpsc::unbounded_channel();
         *self.pair_hellos.borrow_mut() = Some(hello_tx);
         if !self.send(RelayMessage::PairingOpen { token_hash: token_hash.clone() }) {
-            return self.fail(epoch, "中継に送れませんでした");
+            return self.fail(epoch, crate::lang::t("中継に送れませんでした", "Couldn’t send to the relay"));
         }
         self.set_pairing(PairingView::ShowingOffer(pairing::encode_offer(responder.offer())));
         let lifetime = Duration::from_millis(pairing::LIFETIME_MS as u64);
@@ -1191,7 +1191,7 @@ impl Connect {
                 _ => {
                     return self.fail(
                         epoch,
-                        if self.status.get() != RelayStatus::Connected { "中継との接続が切れました" } else { "時間内に読み取られませんでした" },
+                        if self.status.get() != RelayStatus::Connected { crate::lang::t("中継との接続が切れました", "Lost the connection to the relay") } else { crate::lang::t("時間内に読み取られませんでした", "The code wasn’t used in time") },
                     );
                 }
             }
@@ -1201,15 +1201,15 @@ impl Connect {
             return;
         }
         let Some(decoded) = pairing::decode_hello(&hello) else {
-            return self.fail(epoch, "相手から届いた内容を読めませんでした");
+            return self.fail(epoch, crate::lang::t("相手から届いた内容を読めませんでした", "Couldn’t read the reply from the other device"));
         };
         let confirm = match responder.on_hello(&decoded) {
             Ok(confirm) => confirm,
-            Err(pairing::Failure::AccountMismatch) => return self.fail(epoch, "相手は別のアカウントでログインしています"),
-            Err(_) => return self.fail(epoch, "相手を確かめられませんでした"),
+            Err(pairing::Failure::AccountMismatch) => return self.fail(epoch, crate::lang::t("相手は別のアカウントでログインしています", "The other device is logged in to a different account")),
+            Err(_) => return self.fail(epoch, crate::lang::t("相手を確かめられませんでした", "Couldn’t verify the other device")),
         };
         if !self.send(RelayMessage::PairConfirm { token_hash, confirm: pairing::confirm_to_json(&confirm) }) {
-            return self.fail(epoch, "中継に送れませんでした");
+            return self.fail(epoch, crate::lang::t("中継に送れませんでした", "Couldn’t send to the relay"));
         }
         let (code_tx, mut code_rx) = mpsc::unbounded_channel();
         *self.codes.borrow_mut() = Some(code_tx);
@@ -1218,7 +1218,7 @@ impl Connect {
             let remaining = lifetime.saturating_sub(started.elapsed());
             let code = match glib::future_with_timeout(remaining, code_rx.recv()).await {
                 Ok(Some(code)) => code,
-                _ => return self.fail(epoch, "時間切れになりました。もう一度やり直してください"),
+                _ => return self.fail(epoch, crate::lang::t("時間切れになりました。もう一度やり直してください", "Timed out. Please try again")),
             };
             if !self.still(epoch) {
                 return;
@@ -1226,22 +1226,22 @@ impl Connect {
             let established = match responder.on_code_entered(&code) {
                 Ok(established) => established,
                 Err(pairing::Failure::WrongCode) => {
-                    self.set_pairing(PairingView::EnterCode(Some("数字が違います".into())));
+                    self.set_pairing(PairingView::EnterCode(Some(crate::lang::t("数字が違います", "That code doesn’t match").into())));
                     continue;
                 }
-                Err(_) => return self.fail(epoch, "連携できませんでした"),
+                Err(_) => return self.fail(epoch, crate::lang::t("連携できませんでした", "Couldn’t connect the device")),
             };
             if self.shared.repo.client().generation() != account.generation {
-                return self.fail(epoch, "途中でログインが変わりました");
+                return self.fail(epoch, crate::lang::t("途中でログインが変わりました", "Your login changed during setup"));
             }
             self.codes.borrow_mut().take();
-            self.set_pairing(PairingView::Working("端末を加えています…".into()));
+            self.set_pairing(PairingView::Working(crate::lang::t("端末を加えています…", "Adding the device…").into()));
             let added = match &established.peer_extension {
                 Some(member_keys) => self.add_member(member_keys, &established.peer_public_key).await,
                 None => false,
             };
             if !added {
-                return self.fail(epoch, "端末を加えられませんでした");
+                return self.fail(epoch, crate::lang::t("端末を加えられませんでした", "Couldn’t add the device"));
             }
             let peer_id = wave_core::connect::crypto::device_id(&established.peer_public_key);
             self.remember_label(&peer_id, &established.peer_device_name);
@@ -1297,21 +1297,21 @@ impl Connect {
     async fn run_accept(self: Rc<Self>, epoch: u64, offer_text: String) {
         let (Some(device), Some(socket)) = (self.device.clone(), self.socket.clone()) else { return };
         let Some(offer) = pairing::decode_offer(&offer_text) else {
-            return self.fail(epoch, "wave の連携の文字列ではありません");
+            return self.fail(epoch, crate::lang::t("wave の連携の文字列ではありません", "That isn’t a wave pairing code"));
         };
-        self.set_pairing(PairingView::Working("アカウントを確かめています…".into()));
+        self.set_pairing(PairingView::Working(crate::lang::t("アカウントを確かめています…", "Checking account…").into()));
         let repo = self.shared.repo.clone();
         let Some(account) = runtime::run(async move { repo.verified_account().await }).await else {
-            return self.fail(epoch, "アカウントを確かめられませんでした（ログインしてください）");
+            return self.fail(epoch, crate::lang::t("アカウントを確かめられませんでした（ログインしてください）", "Couldn’t verify your account (log in first)"));
         };
         if !self.still(epoch) {
             return;
         }
-        self.set_pairing(PairingView::Working("相手に送っています…".into()));
+        self.set_pairing(PairingView::Working(crate::lang::t("相手に送っています…", "Sending to the other device…").into()));
         let identity: Arc<dyn DeviceSigner + Send + Sync> = device.clone();
         let extension = connect_json::encode(&device.member_keys(Role::Player));
         let Ok(initiator) = pairing::Initiator::new(&offer, identity, &device_name(), &account.id, Some(extension)) else {
-            return self.fail(epoch, "wave の連携の文字列ではありません");
+            return self.fail(epoch, crate::lang::t("wave の連携の文字列ではありません", "That isn’t a wave pairing code"));
         };
         let hello = RelayMessage::PairHelloIn { token: offer.token.clone(), hello: pairing::hello_to_json(&initiator.hello()) }.encode();
         let reply = runtime::run(async move { socket.pair(hello).await }).await;
@@ -1322,22 +1322,22 @@ impl Connect {
             return self.fail(
                 epoch,
                 if reply.is_none() {
-                    "中継につながりませんでした（Tailscale につながっているか確かめてください）"
+                    crate::lang::t("中継につながりませんでした（Tailscale につながっているか確かめてください）", "Couldn’t reach the relay (check that Tailscale is connected)")
                 } else {
-                    "相手が待っていません。相手でもう一度「端末を追加」を押してください"
+                    crate::lang::t("相手が待っていません。相手でもう一度「端末を追加」を押してください", "The other device isn’t waiting. Tap “Add device” on it again")
                 },
             );
         };
         let Some(confirm) = pairing::decode_confirm(&confirm) else {
-            return self.fail(epoch, "相手から届いた内容を読めませんでした");
+            return self.fail(epoch, crate::lang::t("相手から届いた内容を読めませんでした", "Couldn’t read the reply from the other device"));
         };
         let confirmed = match initiator.on_confirm(&confirm) {
             Ok(confirmed) => confirmed,
-            Err(pairing::Failure::AccountMismatch) => return self.fail(epoch, "相手は別のアカウントでログインしています"),
-            Err(_) => return self.fail(epoch, "相手を確かめられませんでした"),
+            Err(pairing::Failure::AccountMismatch) => return self.fail(epoch, crate::lang::t("相手は別のアカウントでログインしています", "The other device is logged in to a different account")),
+            Err(_) => return self.fail(epoch, crate::lang::t("相手を確かめられませんでした", "Couldn’t verify the other device")),
         };
         if self.shared.repo.client().generation() != account.generation {
-            return self.fail(epoch, "途中でログインが変わりました");
+            return self.fail(epoch, crate::lang::t("途中でログインが変わりました", "Your login changed during setup"));
         }
         let peer = confirmed.pair.peer_device_name.clone();
         *self.pending_on_b.borrow_mut() = Some(confirmed.pair);
@@ -1350,7 +1350,7 @@ impl Connect {
         let epoch = self.pairing_epoch.get() + 1;
         self.pairing_epoch.set(epoch);
         let Some(extension) = established.peer_extension.clone() else {
-            return self.fail(epoch, "相手のアプリが古く、加われません");
+            return self.fail(epoch, crate::lang::t("相手のアプリが古く、加われません", "The other device’s app is too old"));
         };
         let this = self.clone();
         glib::spawn_future_local(async move { this.run_join_on_b(epoch, established, extension).await });
@@ -1358,7 +1358,7 @@ impl Connect {
 
     async fn run_join_on_b(self: Rc<Self>, epoch: u64, established: pairing::Established, extension: String) {
         let Some(info) = connect_json::decode::<JoinInfo>(&extension) else {
-            return self.fail(epoch, "相手から届いた内容を読めませんでした");
+            return self.fail(epoch, crate::lang::t("相手から届いた内容を読めませんでした", "Couldn’t read the reply from the other device"));
         };
         let inviter = wave_core::connect::crypto::device_id(&established.peer_public_key);
         let started = self.with_client(|c| {
@@ -1369,9 +1369,9 @@ impl Connect {
             true
         });
         if started != Some(true) {
-            return self.fail(epoch, "この PC は今は加われません");
+            return self.fail(epoch, crate::lang::t("この PC は今は加われません", "This PC can’t join right now"));
         }
-        self.set_pairing(PairingView::Working("相手が加えるのを待っています…".into()));
+        self.set_pairing(PairingView::Working(crate::lang::t("相手が加えるのを待っています…", "Waiting for the other device to add this PC…").into()));
         let (tx, mut rx) = tokio::sync::oneshot::channel();
         *self.join_waiter.borrow_mut() = Some(tx);
         let deadline = Instant::now();
@@ -1407,7 +1407,7 @@ impl Connect {
             self.set_pairing(PairingView::Done { peer: established.peer_device_name, grant_device_id: None });
         } else {
             self.with_client(ConnectClient::cancel_join);
-            self.fail(epoch, if outcome.is_none() { "加われませんでした（時間切れ）" } else { "端末の一覧を確かめられませんでした" });
+            self.fail(epoch, if outcome.is_none() { crate::lang::t("加われませんでした（時間切れ）", "Couldn’t join (timed out)") } else { crate::lang::t("端末の一覧を確かめられませんでした", "Couldn’t verify the device list") });
         }
     }
 

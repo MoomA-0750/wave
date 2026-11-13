@@ -259,7 +259,7 @@ impl Playback {
         if failures >= MAX_CONSECUTIVE_FAILURES {
             self.failures.set(0);
             self.player.stop();
-            self.notice("続けて再生できなかったので、止めました");
+            self.notice(crate::lang::t("続けて再生できなかったので、止めました", "Stopped after several songs failed to play"));
             self.changed();
             return;
         }
@@ -271,7 +271,7 @@ impl Playback {
             self.changed();
             return;
         }
-        self.notice(message.unwrap_or("再生できなかったので、次の曲に進みます"));
+        self.notice(message.unwrap_or(crate::lang::t("再生できなかったので、次の曲に進みます", "Couldn't play this song, skipping to the next one")));
         self.advance();
     }
 
@@ -596,9 +596,9 @@ impl Playback {
                     return;
                 }
                 this.notice(match e {
-                    StreamFailure::NotLoggedIn => "曲を再生するにはログインしてください",
-                    StreamFailure::Network => "通信できないため再生できませんでした",
-                    _ => "再生できませんでした",
+                    StreamFailure::NotLoggedIn => crate::lang::t("曲を再生するにはログインしてください", "Log in to play songs"),
+                    StreamFailure::Network => crate::lang::t("通信できないため再生できませんでした", "Couldn't play because you're offline"),
+                    _ => crate::lang::t("再生できませんでした", "Couldn't play this song"),
                 });
             }
             this.changed();

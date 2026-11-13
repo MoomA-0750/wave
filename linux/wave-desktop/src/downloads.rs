@@ -439,18 +439,23 @@ fn now_ms() -> i64 {
 
 /// 「使っている容量: 120 MB • 残り 3 曲 • 取っています: 曲名（40%）」の形の1行。
 fn status_line(bytes: u64, pending: usize, waiting_for_network: bool, offline: bool, active: Option<(String, u64)>) -> String {
-    let used = format!("使っている容量: {}", format_bytes(bytes));
+    status_line_in(crate::lang::ja(), bytes, pending, waiting_for_network, offline, active)
+}
+
+fn status_line_in(ja: bool, bytes: u64, pending: usize, waiting_for_network: bool, offline: bool, active: Option<(String, u64)>) -> String {
+    let t = |ja_text: &'static str, en_text: &'static str| if ja { ja_text } else { en_text };
+    let used = format!("{}{}", t("使っている容量: ", "Storage used: "), format_bytes(bytes));
     if pending == 0 {
         return used;
     }
     let state = if waiting_for_network {
-        if offline { "通信を待っています".to_string() } else { "Wi-Fi など従量制でない通信を待っています".to_string() }
+        if offline { t("通信を待っています", "Waiting for a network").to_string() } else { t("Wi-Fi など従量制でない通信を待っています", "Waiting for Wi-Fi or another unmetered network").to_string() }
     } else if let Some((title, percent)) = active {
-        format!("取っています: {title}（{percent}%）")
+        if ja { format!("取っています: {title}（{percent}%）") } else { format!("Downloading: {title} ({percent}%)") }
     } else {
-        "待っています".to_string()
+        t("待っています", "Waiting").to_string()
     };
-    format!("{used} • 残り {pending} 曲 • {state}")
+    if ja { format!("{used} • 残り {pending} 曲 • {state}") } else { format!("{used} • {pending} left • {state}") }
 }
 
 /// 大きさの表示（MB・GB）。
@@ -469,7 +474,11 @@ fn internet_route() -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::status_line;
+    use super::status_line_in;
+
+    fn status_line(bytes: u64, pending: usize, waiting_for_network: bool, offline: bool, active: Option<(String, u64)>) -> String {
+        status_line_in(true, bytes, pending, waiting_for_network, offline, active)
+    }
 
     #[test]
     fn status_line_shows_progress_and_waiting() {
@@ -478,5 +487,12 @@ mod tests {
         assert_eq!(status_line(0, 2, true, false, None), "使っている容量: 0 MB • 残り 2 曲 • Wi-Fi など従量制でない通信を待っています");
         assert_eq!(status_line(0, 2, true, true, None), "使っている容量: 0 MB • 残り 2 曲 • 通信を待っています");
         assert_eq!(status_line(0, 1, false, false, None), "使っている容量: 0 MB • 残り 1 曲 • 待っています");
+    }
+
+    #[test]
+    fn status_line_in_english() {
+        assert_eq!(status_line_in(false, 0, 0, false, false, None), "Storage used: 0 MB");
+        assert_eq!(status_line_in(false, 120_000_000, 3, false, false, Some(("Song".into(), 40))), "Storage used: 120 MB • 3 left • Downloading: Song (40%)");
+        assert_eq!(status_line_in(false, 0, 2, true, true, None), "Storage used: 0 MB • 2 left • Waiting for a network");
     }
 }

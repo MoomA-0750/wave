@@ -7,6 +7,7 @@ use std::time::Duration;
 
 use wave_core::discord::{DiscordPresence, PresenceStatus, PresenceTrack};
 
+use crate::lang;
 use crate::services::Services as App;
 
 thread_local! {
@@ -51,17 +52,17 @@ pub fn push() {
 pub fn status_text() -> &'static str {
     let status = PRESENCE.with(|p| p.borrow().as_ref().map(|(presence, _)| presence.status()));
     match status {
-        Some(PresenceStatus::Connected) => "Discord につないでいます",
-        Some(PresenceStatus::NotFound) => "Discord が見つかりません（Discord のアプリを起動すると、自動でつなぎます）",
-        Some(PresenceStatus::Refused) => "Discord につなげませんでした。Application ID を確かめてください",
-        _ => "曲を再生すると Discord につなぎます",
+        Some(PresenceStatus::Connected) => lang::t("Discord につないでいます", "Connected to Discord"),
+        Some(PresenceStatus::NotFound) => lang::t("Discord が見つかりません（Discord のアプリを起動すると、自動でつなぎます）", "Discord not found (wave connects when the Discord app is running)"),
+        Some(PresenceStatus::Refused) => lang::t("Discord につなげませんでした。Application ID を確かめてください", "Discord refused the connection. Check the Application ID"),
+        _ => lang::t("曲を再生すると Discord につなぎます", "wave connects to Discord when you play a song"),
     }
 }
 
 fn track(app: &App) -> Option<PresenceTrack> {
     if let Some(mirror) = app.connect.mirror() {
         let song = mirror.song;
-        let large = [song.album.as_ref().map(|a| a.title.clone()), Some(format!("{}で再生中", mirror.label))].into_iter().flatten().collect::<Vec<_>>().join(" · ");
+        let large = [song.album.as_ref().map(|a| a.title.clone()), Some(if lang::ja() { format!("{}で再生中", mirror.label) } else { format!("Playing on {}", mirror.label) })].into_iter().flatten().collect::<Vec<_>>().join(" · ");
         return Some(PresenceTrack {
             artists: song.artists_text(),
             large_text: Some(large),

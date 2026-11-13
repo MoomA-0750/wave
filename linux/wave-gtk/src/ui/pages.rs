@@ -12,6 +12,7 @@ use wave_core::music::repository::LIKED_SONGS;
 use super::images;
 use super::shell::App;
 use super::track::{self, Columns, Row};
+use crate::lang;
 use crate::runtime;
 
 /// 読み込み中のページの中身。
@@ -126,7 +127,7 @@ pub fn home(app: &Rc<App>) -> adw::NavigationPage {
     home.reload();
     // ページが消えるまで状態を持つ
     let keep = home.clone();
-    let page = page("ホーム", "home", &scroller);
+    let page = page(lang::t("ホーム", "Home"), "home", &scroller);
     page.connect_destroy(move |_| {
         let _ = &keep;
     });
@@ -142,7 +143,7 @@ impl Home {
             let st = self.state.borrow();
             (st.chips.clone(), st.selected.clone())
         };
-        let all = track::chip("すべて", selected.is_none());
+        let all = track::chip(lang::t("すべて", "All"), selected.is_none());
         {
             let weak = Rc::downgrade(self);
             all.connect_clicked(move |_| {
@@ -204,7 +205,7 @@ impl Home {
                 .filter_map(|r| wave_core::music::releases::release_item(&r, now))
                 .collect();
             if !items.is_empty() {
-                self.releases.set_child(Some(&track::shelf(&self.app, "登録したアーティストの新作", None, items)));
+                self.releases.set_child(Some(&track::shelf(&self.app, lang::t("登録したアーティストの新作", "New from artists you subscribe to"), None, items)));
             }
             self.load_recent(request);
             self.load_new_releases(request);
@@ -266,7 +267,7 @@ impl Home {
             self.new_releases.set_child(None::<&gtk::Widget>);
             return;
         }
-        if let Some(shelf) = wave_core::music::releases::new_releases_shelf("新作", st.new_releases.clone()) {
+        if let Some(shelf) = wave_core::music::releases::new_releases_shelf(lang::t("新作", "New releases"), st.new_releases.clone()) {
             self.new_releases.set_child(Some(&track::shelf(&self.app, &shelf.title, None, shelf.items)));
         }
     }
@@ -384,14 +385,14 @@ impl Home {
             self.footer.set_child(Some(&spinner()));
         } else if st.failed && (st.expired || st.new_releases.is_empty()) {
             let column = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(8).halign(gtk::Align::Center).margin_top(24).build();
-            column.append(&gtk::Label::builder().label(if st.expired { "ログインが切れています" } else { "ホームを読み込めませんでした" }).css_classes(["title-3"]).build());
+            column.append(&gtk::Label::builder().label(if st.expired { lang::t("ログインが切れています", "Your login has expired") } else { lang::t("ホームを読み込めませんでした", "Couldn’t load Home") }).css_classes(["title-3"]).build());
             if st.expired {
-                column.append(&gtk::Label::builder().label("YouTube Music が保存したログインを受け付けませんでした。\nログインし直してください。").wrap(true).justify(gtk::Justification::Center).max_width_chars(40).css_classes(["dim-label"]).build());
-                let relogin = gtk::Button::builder().label("ログインし直す").halign(gtk::Align::Center).css_classes(["suggested-action", "pill"]).build();
+                column.append(&gtk::Label::builder().label(lang::t("YouTube Music が保存したログインを受け付けませんでした。\nログインし直してください。", "YouTube Music didn't accept your saved login.\nPlease log in again.")).wrap(true).justify(gtk::Justification::Center).max_width_chars(40).css_classes(["dim-label"]).build());
+                let relogin = gtk::Button::builder().label(lang::t("ログインし直す", "Log in again")).halign(gtk::Align::Center).css_classes(["suggested-action", "pill"]).build();
                 relogin.connect_clicked(|_| crate::relogin());
                 column.append(&relogin);
             }
-            let retry = gtk::Button::builder().label("もう一度読み込む").halign(gtk::Align::Center).css_classes(["pill"]).build();
+            let retry = gtk::Button::builder().label(lang::t("もう一度読み込む", "Try again")).halign(gtk::Align::Center).css_classes(["pill"]).build();
             let weak = Rc::downgrade(self);
             retry.connect_clicked(move |_| {
                 if let Some(home) = weak.upgrade() {
@@ -453,8 +454,8 @@ pub fn mood_category(app: &Rc<App>, title: &str, params: &str) -> adw::Navigatio
                 }
                 gtk::ScrolledWindow::builder().child(&column).hscrollbar_policy(gtk::PolicyType::Never).vexpand(true).build().upcast()
             }
-            Ok(_) => failure("このページには何もありませんでした"),
-            Err(e) => failure(&format!("読めませんでした（{e}）")),
+            Ok(_) => failure(lang::t("このページには何もありませんでした", "There was nothing on this page")),
+            Err(e) => failure(&if lang::ja() { format!("読めませんでした（{e}）") } else { format!("Couldn't load it ({e})") }),
         };
         target.set_child(Some(&content));
     });
@@ -484,10 +485,10 @@ pub fn history(app: &Rc<App>) -> adw::NavigationPage {
         let repo = app.repo.clone();
         let result = runtime::run(async move { repo.history_sections().await }).await;
         let content: gtk::Widget = match result {
-            Ok(sections) if sections.is_empty() => adw::StatusPage::builder().icon_name("document-open-recent-symbolic").title("再生履歴はまだありません").vexpand(true).build().upcast(),
+            Ok(sections) if sections.is_empty() => adw::StatusPage::builder().icon_name("document-open-recent-symbolic").title(lang::t("再生履歴はまだありません", "No listening history yet")).vexpand(true).build().upcast(),
             Ok(sections) => {
                 let column = page_column();
-                column.append(&track::page_title("最近再生した曲"));
+                column.append(&track::page_title(lang::t("最近再生した曲", "Recently played")));
                 let mut number = 0;
                 for (title, songs) in sections {
                     if let Some(title) = title {
@@ -506,12 +507,12 @@ pub fn history(app: &Rc<App>) -> adw::NavigationPage {
                 }
                 scrolling_column(&column).upcast()
             }
-            Err(wave_core::innertube::Failure::NotLoggedIn) => failure("再生履歴を見るにはログインしてください"),
-            Err(e) => failure(&format!("再生履歴を読み込めませんでした（{e}）")),
+            Err(wave_core::innertube::Failure::NotLoggedIn) => failure(lang::t("再生履歴を見るにはログインしてください", "Log in to see your listening history")),
+            Err(e) => failure(&if lang::ja() { format!("再生履歴を読み込めませんでした（{e}）") } else { format!("Couldn't load your listening history ({e})") }),
         };
         target.set_child(Some(&content));
     });
-    page("最近再生した曲", "history", &bin)
+    page(lang::t("最近再生した曲", "Recently played"), "history", &bin)
 }
 
 // MARK: プレイリスト・アルバム
@@ -598,7 +599,7 @@ fn collection_page(app: &Rc<App>, id: &str, title: &str, source: Source, songs: 
         sort_list,
         kind_chips,
         spinner: adw::Spinner::builder().width_request(18).height_request(18).build(),
-        play: gtk::Button::builder().icon_name("media-playback-start-symbolic").tooltip_text("再生").valign(gtk::Align::Center).visible(false).css_classes(["circular", "suggested-action", "play-large"]).build(),
+        play: gtk::Button::builder().icon_name("media-playback-start-symbolic").tooltip_text(lang::t("再生", "Play")).valign(gtk::Align::Center).visible(false).css_classes(["circular", "suggested-action", "play-large"]).build(),
         suggestions: gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(4).margin_top(24).visible(false).build(),
     });
     collection.restore_order();
@@ -676,7 +677,7 @@ impl Collection {
             header.append(&art.root);
         }
         let info = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(6).valign(gtk::Align::End).hexpand(true).build();
-        info.append(&gtk::Label::builder().label(if self.is_album() { "アルバム" } else { "プレイリスト" }).xalign(0.0).build());
+        info.append(&gtk::Label::builder().label(if self.is_album() { lang::t("アルバム", "Album") } else { lang::t("プレイリスト", "Playlist") }).xalign(0.0).build());
         info.append(&track::page_title(&self.title.borrow()));
         if let Some((names, id)) = artists {
             match id {
@@ -713,7 +714,7 @@ impl Collection {
             self.app.playback.watch(&self.play, move |play| track::set_play_icon(play, playback.is_playing_source(&id) && playback.player().is_playing()));
         }
         self.controls.append(&self.play);
-        let shuffle = gtk::ToggleButton::builder().icon_name("media-playlist-shuffle-symbolic").tooltip_text("シャッフル").valign(gtk::Align::Center).css_classes(["circular", "flat"]).build();
+        let shuffle = gtk::ToggleButton::builder().icon_name("media-playlist-shuffle-symbolic").tooltip_text(lang::t("シャッフル", "Shuffle")).valign(gtk::Align::Center).css_classes(["circular", "flat"]).build();
         let syncing = Rc::new(Cell::new(false));
         {
             let (weak, syncing) = (weak.clone(), syncing.clone());
@@ -745,8 +746,8 @@ impl Collection {
         }
         // 次に再生・キューに追加は「…」の中（Mac と同じ）
         let menu = gtk::gio::Menu::new();
-        menu.append(Some("次に再生"), Some("collection.next"));
-        menu.append(Some("キューに追加"), Some("collection.queue"));
+        menu.append(Some(lang::t("次に再生", "Play next")), Some("collection.next"));
+        menu.append(Some(lang::t("キューに追加", "Add to queue")), Some("collection.queue"));
         let actions = gtk::gio::SimpleActionGroup::new();
         for (name, next) in [("next", true), ("queue", false)] {
             let action = gtk::gio::SimpleAction::new(name, None);
@@ -760,25 +761,25 @@ impl Collection {
                     for song in songs.into_iter().rev() {
                         c.app.playback.play_next(song);
                     }
-                    c.app.toast(&format!("{count} 曲を次に再生します"));
+                    c.app.toast(&if lang::ja() { format!("{count} 曲を次に再生します") } else { format!("{} will play next", lang::songs(count)) });
                 } else {
                     for song in songs {
                         c.app.playback.add_to_queue(song);
                     }
-                    c.app.toast(&format!("{count} 曲をキューに追加しました"));
+                    c.app.toast(&if lang::ja() { format!("{count} 曲をキューに追加しました") } else { format!("Added {} to queue", lang::songs(count)) });
                 }
             });
             actions.add_action(&action);
         }
-        let more = gtk::MenuButton::builder().icon_name("view-more-symbolic").tooltip_text("その他").menu_model(&menu).valign(gtk::Align::Center).css_classes(["circular", "flat"]).build();
+        let more = gtk::MenuButton::builder().icon_name("view-more-symbolic").tooltip_text(lang::t("その他", "More")).menu_model(&menu).valign(gtk::Align::Center).css_classes(["circular", "flat"]).build();
         more.insert_action_group("collection", Some(&actions));
         self.controls.append(&more);
         self.spinner.set_valign(gtk::Align::Center);
         self.controls.append(&self.spinner);
         self.controls.append(&gtk::Box::builder().hexpand(true).build());
         // 一覧の中の検索（🔍 で開き、Esc で閉じる）
-        let filter = gtk::SearchEntry::builder().placeholder_text("この一覧の中を検索").width_request(240).visible(false).valign(gtk::Align::Center).build();
-        let find = gtk::Button::builder().icon_name("system-search-symbolic").tooltip_text("この一覧の中を検索").valign(gtk::Align::Center).css_classes(["flat", "circular"]).build();
+        let filter = gtk::SearchEntry::builder().placeholder_text(lang::t("この一覧の中を検索", "Search in this list")).width_request(240).visible(false).valign(gtk::Align::Center).build();
+        let find = gtk::Button::builder().icon_name("system-search-symbolic").tooltip_text(lang::t("この一覧の中を検索", "Search in this list")).valign(gtk::Align::Center).css_classes(["flat", "circular"]).build();
         {
             let filter = filter.clone();
             let weak = weak.clone();
@@ -812,7 +813,7 @@ impl Collection {
         self.controls.append(&find);
         self.controls.append(&filter);
         let popover = gtk::Popover::builder().child(&self.sort_list).build();
-        let sort = gtk::MenuButton::builder().child(&self.sort_label).popover(&popover).tooltip_text("並べ替え").valign(gtk::Align::Center).css_classes(["flat"]).build();
+        let sort = gtk::MenuButton::builder().child(&self.sort_label).popover(&popover).tooltip_text(lang::t("並べ替え", "Sort")).valign(gtk::Align::Center).css_classes(["flat"]).build();
         {
             let weak = weak.clone();
             self.sort_list.connect_row_activated(move |_, row| {
@@ -835,7 +836,7 @@ impl Collection {
             self.kind_chips.remove(&child);
         }
         let current = self.kind.borrow().clone();
-        for (kind, label) in [(None, "すべて"), (Some("MUSIC_VIDEO_TYPE_ATV"), "曲"), (Some("MUSIC_VIDEO_TYPE_OMV"), "MV"), (Some("MUSIC_VIDEO_TYPE_UGC"), "その他の動画（歌ってみた・ライブなど）")] {
+        for (kind, label) in [(None, lang::t("すべて", "All")), (Some("MUSIC_VIDEO_TYPE_ATV"), lang::t("曲", "Songs")), (Some("MUSIC_VIDEO_TYPE_OMV"), "MV"), (Some("MUSIC_VIDEO_TYPE_UGC"), lang::t("その他の動画（歌ってみた・ライブなど）", "Other videos (covers, live…)"))] {
             let chip = track::chip(label, current.as_deref() == kind);
             let weak = Rc::downgrade(self);
             chip.connect_clicked(move |_| {
@@ -882,7 +883,7 @@ impl Collection {
     }
 
     fn download_button(self: &Rc<Self>) -> gtk::Widget {
-        let button = gtk::ToggleButton::builder().icon_name("folder-download-symbolic").tooltip_text("ダウンロード").valign(gtk::Align::Center).css_classes(["circular", "flat"]).build();
+        let button = gtk::ToggleButton::builder().icon_name("folder-download-symbolic").tooltip_text(lang::t("ダウンロード", "Download")).valign(gtk::Align::Center).css_classes(["circular", "flat"]).build();
         let label = gtk::Label::builder().css_classes(["caption", "dim-label"]).valign(gtk::Align::Center).build();
         let row = gtk::Box::builder().spacing(6).build();
         row.append(&button);
@@ -902,11 +903,11 @@ impl Collection {
                 label.set_label(&if !on {
                     String::new()
                 } else if done >= ids.len() {
-                    "ダウンロード済み".to_string()
+                    lang::t("ダウンロード済み", "Downloaded").to_string()
                 } else {
-                    format!("{} 曲中 {} 曲", ids.len(), done)
+                    if lang::ja() { format!("{} 曲中 {} 曲", ids.len(), done) } else { format!("{done} of {} songs", ids.len()) }
                 });
-                button.set_tooltip_text(Some(if on { "ダウンロードを削除" } else { "ダウンロード" }));
+                button.set_tooltip_text(Some(if on { lang::t("ダウンロードを削除", "Remove download") } else { lang::t("ダウンロード", "Download") }));
             });
         }
         let weak = Rc::downgrade(self);
@@ -931,9 +932,9 @@ impl Collection {
                 updating.set(true);
                 b.set_active(true);
                 updating.set(false);
-                let dialog = adw::AlertDialog::builder().heading("ダウンロードを削除しますか？").body("この端末から曲を消します。あとからもう一度ダウンロードできます。").default_response("cancel").close_response("cancel").build();
-                dialog.add_response("cancel", "キャンセル");
-                dialog.add_response("remove", "削除");
+                let dialog = adw::AlertDialog::builder().heading(lang::t("ダウンロードを削除しますか？", "Remove download?")).body(lang::t("この端末から曲を消します。あとからもう一度ダウンロードできます。", "This removes the songs from this device. You can download them again later.")).default_response("cancel").close_response("cancel").build();
+                dialog.add_response("cancel", lang::t("キャンセル", "Cancel"));
+                dialog.add_response("remove", lang::t("削除", "Remove"));
                 dialog.set_response_appearance("remove", adw::ResponseAppearance::Destructive);
                 let c2 = c.clone();
                 dialog.connect_response(None, move |_, response| {
@@ -974,7 +975,7 @@ impl Collection {
         self.loading.set(false);
         self.spinner.set_visible(false);
         if self.all.borrow().is_empty() && self.error.borrow().is_none() {
-            *self.error.borrow_mut() = Some("曲がありません".into());
+            *self.error.borrow_mut() = Some(lang::t("曲がありません", "No songs").into());
         }
         self.render();
         // 確かめ用: WAVE_DEMO_COLLECTION_FILTER の語で一覧の中を絞る
@@ -1005,7 +1006,7 @@ impl Collection {
             }
             Err(e) => {
                 if !self.show_offline() {
-                    *self.error.borrow_mut() = Some(format!("アルバムを読み込めませんでした（{e}）"));
+                    *self.error.borrow_mut() = Some(if lang::ja() { format!("アルバムを読み込めませんでした（{e}）") } else { format!("Couldn't load the album ({e})") });
                 }
             }
         }
@@ -1029,8 +1030,8 @@ impl Collection {
             Err(e) => {
                 if !self.show_offline() {
                     *self.error.borrow_mut() = Some(match e {
-                        wave_core::innertube::Failure::NotLoggedIn => "このプレイリストを見るにはログインしてください".into(),
-                        e => format!("プレイリストを読み込めませんでした（{e}）"),
+                        wave_core::innertube::Failure::NotLoggedIn => lang::t("このプレイリストを見るにはログインしてください", "Log in to see this playlist").into(),
+                        e => if lang::ja() { format!("プレイリストを読み込めませんでした（{e}）") } else { format!("Couldn't load the playlist ({e})") },
                     });
                 }
                 return;
@@ -1100,11 +1101,11 @@ impl Collection {
         }
         let head = gtk::Box::builder().spacing(8).build();
         let titles = gtk::Box::builder().orientation(gtk::Orientation::Vertical).hexpand(true).build();
-        titles.append(&gtk::Label::builder().label("おすすめの曲").xalign(0.0).css_classes(["title-3"]).build());
-        titles.append(&gtk::Label::builder().label("このプレイリストに合いそうな曲").xalign(0.0).css_classes(["caption", "dim-label"]).build());
+        titles.append(&gtk::Label::builder().label(lang::t("おすすめの曲", "Recommended")).xalign(0.0).css_classes(["title-3"]).build());
+        titles.append(&gtk::Label::builder().label(lang::t("このプレイリストに合いそうな曲", "Songs that fit this playlist")).xalign(0.0).css_classes(["caption", "dim-label"]).build());
         head.append(&titles);
         if let Some(token) = reload {
-            let refresh = gtk::Button::builder().label("更新").valign(gtk::Align::Center).css_classes(["pill"]).build();
+            let refresh = gtk::Button::builder().label(lang::t("更新", "Refresh")).valign(gtk::Align::Center).css_classes(["pill"]).build();
             let weak = Rc::downgrade(self);
             refresh.connect_clicked(move |b| {
                 b.set_sensitive(false);
@@ -1126,7 +1127,7 @@ impl Collection {
             text.append(&gtk::Label::builder().label(&song.title).xalign(0.0).ellipsize(gtk::pango::EllipsizeMode::End).build());
             text.append(&gtk::Label::builder().label(song.subtitle()).xalign(0.0).ellipsize(gtk::pango::EllipsizeMode::End).css_classes(["caption", "dim-label"]).build());
             line.append(&text);
-            let add = gtk::Button::builder().icon_name("list-add-symbolic").tooltip_text("このプレイリストに追加").valign(gtk::Align::Center).css_classes(["flat", "circular"]).build();
+            let add = gtk::Button::builder().icon_name("list-add-symbolic").tooltip_text(lang::t("このプレイリストに追加", "Add to this playlist")).valign(gtk::Align::Center).css_classes(["flat", "circular"]).build();
             line.append(&add);
             row.set_child(Some(&line));
             {
@@ -1159,10 +1160,10 @@ impl Collection {
                     list.remove(&row);
                 }
                 this.append_entries(vec![(song.clone(), None)]);
-                this.app.toast(&format!("「{}」に追加しました", this.title.borrow()));
+                this.app.toast(&if lang::ja() { format!("「{}」に追加しました", this.title.borrow()) } else { format!("Added to {}", this.title.borrow()) });
             } else {
                 button.set_sensitive(true);
-                this.app.toast("追加できませんでした");
+                this.app.toast(lang::t("追加できませんでした", "Couldn't add it"));
             }
         });
     }
@@ -1194,7 +1195,7 @@ impl Collection {
         }
         *self.title.borrow_mut() = c.title.clone();
         *self.thumbnail.borrow_mut() = c.thumbnail_url.clone();
-        self.render_header(None, Some(format!("ダウンロード済み • {} 曲", c.songs.len())));
+        self.render_header(None, Some(format!("{} • {}", lang::t("ダウンロード済み", "Downloaded"), lang::songs(c.songs.len()))));
         *self.all.borrow_mut() = c.songs.into_iter().map(|s| (s, None)).collect();
         true
     }
@@ -1248,7 +1249,7 @@ impl Collection {
         }
         self.list_holder.append(&track::header(self.columns()));
         if shown.is_empty() {
-            self.list_holder.append(&gtk::Label::builder().label("一致する曲はありません").margin_top(24).css_classes(["dim-label"]).build());
+            self.list_holder.append(&gtk::Label::builder().label(lang::t("一致する曲はありません", "No matching songs")).margin_top(24).css_classes(["dim-label"]).build());
             return;
         }
         let rows = self.rows_for(&shown);
@@ -1301,7 +1302,7 @@ pub fn artist(app: &Rc<App>, browse_id: &str, name: &str) -> adw::NavigationPage
                 art.load(page.thumbnail_url.as_deref(), 400);
                 header.append(&art.root);
                 let info = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(12).valign(gtk::Align::End).hexpand(true).build();
-                info.append(&gtk::Label::builder().label("アーティスト").xalign(0.0).build());
+                info.append(&gtk::Label::builder().label(lang::t("アーティスト", "Artist")).xalign(0.0).build());
                 info.append(&track::page_title(&page.name));
                 header.append(&info);
                 if let Some(channel_id) = page.channel_id.clone().filter(|_| app.repo.client().is_logged_in()) {
@@ -1313,7 +1314,7 @@ pub fn artist(app: &Rc<App>, browse_id: &str, name: &str) -> adw::NavigationPage
                 let shuffle_play = Rc::new(Cell::new(false));
                 let top = page.top_songs.clone();
                 let all_songs = page.all_songs_playlist_id.clone();
-                let play = gtk::Button::builder().icon_name("media-playback-start-symbolic").tooltip_text("再生").visible(!top.is_empty()).css_classes(["circular", "suggested-action", "play-large"]).build();
+                let play = gtk::Button::builder().icon_name("media-playback-start-symbolic").tooltip_text(lang::t("再生", "Play")).visible(!top.is_empty()).css_classes(["circular", "suggested-action", "play-large"]).build();
                 {
                     let (app, id, top, all_songs, shuffle_play) = (app.clone(), artist_id.clone(), top.clone(), all_songs.clone(), shuffle_play.clone());
                     play.connect_clicked(move |_| {
@@ -1329,7 +1330,7 @@ pub fn artist(app: &Rc<App>, browse_id: &str, name: &str) -> adw::NavigationPage
                     app.playback.watch(&play, move |play| track::set_play_icon(play, playback.is_playing_source(&id) && playback.player().is_playing()));
                 }
                 controls.append(&play);
-                let shuffle = gtk::ToggleButton::builder().icon_name("media-playlist-shuffle-symbolic").tooltip_text("シャッフル").valign(gtk::Align::Center).css_classes(["circular", "flat"]).build();
+                let shuffle = gtk::ToggleButton::builder().icon_name("media-playlist-shuffle-symbolic").tooltip_text(lang::t("シャッフル", "Shuffle")).valign(gtk::Align::Center).css_classes(["circular", "flat"]).build();
                 let syncing = Rc::new(Cell::new(false));
                 {
                     let (app, id, shuffle_play, syncing) = (app.clone(), artist_id.clone(), shuffle_play.clone(), syncing.clone());
@@ -1360,15 +1361,15 @@ pub fn artist(app: &Rc<App>, browse_id: &str, name: &str) -> adw::NavigationPage
                 }
                 if !top.is_empty() {
                     let popular = gtk::Box::builder().orientation(gtk::Orientation::Vertical).margin_start(12).margin_end(12).build();
-                    popular.append(&gtk::Label::builder().label("人気").xalign(0.0).margin_bottom(4).css_classes(["title-2"]).build());
+                    popular.append(&gtk::Label::builder().label(lang::t("人気", "Popular")).xalign(0.0).margin_bottom(4).css_classes(["title-2"]).build());
                     let (app_c, id, top_c, all_c) = (app.clone(), artist_id.clone(), top.clone(), all_songs.clone());
                     popular.append(&track::list(&app, Row::numbered(top.clone()), Columns::FULL, Rc::new(move |i| app_c.playback.play_artist(&id, top_c.clone(), i, false, all_c.clone()))));
                     column.append(&popular);
                 }
                 if let Some(all) = all_songs.clone() {
-                    let title = format!("{} のすべての曲", page.name);
+                    let title = if lang::ja() { format!("{} のすべての曲", page.name) } else { format!("{} — all songs", page.name) };
                     let app_c = app.clone();
-                    let link = track::link("すべての曲を見る", move || app_c.push(playlist(&app_c, &all, &title)));
+                    let link = track::link(lang::t("すべての曲を見る", "See all songs"), move || app_c.push(playlist(&app_c, &all, &title)));
                     link.set_margin_start(12);
                     column.append(&link);
                 }
@@ -1383,13 +1384,13 @@ pub fn artist(app: &Rc<App>, browse_id: &str, name: &str) -> adw::NavigationPage
                     .filter_map(|r| wave_core::music::releases::release_item(&r, now_ms()))
                     .collect();
                 if !releases.is_empty() {
-                    column.append(&track::shelf(&app, "新作", None, releases));
+                    column.append(&track::shelf(&app, lang::t("新作", "New releases"), None, releases));
                 }
                 for shelf in page.album_shelves {
                     column.append(&track::shelf(&app, &shelf.title, None, shelf.albums.into_iter().map(HomeItem::Album).collect()));
                 }
                 if !page.videos.is_empty() {
-                    column.append(&track::shelf(&app, "動画", None, page.videos.into_iter().map(HomeItem::Song).collect()));
+                    column.append(&track::shelf(&app, lang::t("動画", "Videos"), None, page.videos.into_iter().map(HomeItem::Song).collect()));
                 }
                 let scrolled = gtk::ScrolledWindow::builder().child(&clamp(&column)).hscrollbar_policy(gtk::PolicyType::Never).vexpand(true).build();
                 // 確かめ用: WAVE_DEMO_ARTIST_SCROLL の px だけ、読み終わるころに下へ送る
@@ -1399,7 +1400,7 @@ pub fn artist(app: &Rc<App>, browse_id: &str, name: &str) -> adw::NavigationPage
                 }
                 scrolled.upcast()
             }
-            Err(e) => failure(&format!("アーティストを読み込めませんでした（{e}）")),
+            Err(e) => failure(&if lang::ja() { format!("アーティストを読み込めませんでした（{e}）") } else { format!("Couldn't load the artist ({e})") }),
         };
         target.set_child(Some(&content));
     });
@@ -1414,7 +1415,7 @@ fn subscribe_button(app: &Rc<App>, channel_id: String, subscribed: Option<bool>)
         let (button, state) = (button.clone(), state.clone());
         move |busy: bool| {
             let on = state.get() == Some(true);
-            button.set_label(if on { "登録済み" } else { "登録" });
+            button.set_label(if on { lang::t("登録済み", "Subscribed") } else { lang::t("登録", "Subscribe") });
             if on { button.remove_css_class("suggested-action") } else { button.add_css_class("suggested-action") }
             button.set_sensitive(!busy && state.get().is_some());
         }
@@ -1432,7 +1433,7 @@ fn subscribe_button(app: &Rc<App>, channel_id: String, subscribed: Option<bool>)
             eprintln!("artist subscribe target={target} ok={}", result.is_ok());
             match result {
                 Ok(()) => state.set(Some(target)),
-                Err(_) => app.toast("登録を変更できませんでした"),
+                Err(_) => app.toast(lang::t("登録を変更できませんでした", "Couldn't change your subscription")),
             }
             show(false);
         });
@@ -1452,7 +1453,7 @@ fn show_live_posts(app: &Rc<App>, channel_id: String, slot: &gtk::Box) {
             return;
         }
         let column = gtk::Box::new(gtk::Orientation::Vertical, 8);
-        column.append(&gtk::Label::builder().label("ライブ・お知らせ").xalign(0.0).margin_start(12).css_classes(["title-2"]).build());
+        column.append(&gtk::Label::builder().label(lang::t("ライブ・お知らせ", "Live & news")).xalign(0.0).margin_start(12).css_classes(["title-2"]).build());
         let row = gtk::Box::builder().spacing(12).margin_start(12).margin_end(12).valign(gtk::Align::Start).build();
         for post in posts {
             row.append(&live_post_card(post));
@@ -1487,7 +1488,7 @@ fn live_post_card(post: wave_core::music::models::ArtistPost) -> gtk::Widget {
     }
     // 長い本文でカードが横に伸びないよう、幅の上限を決める
     let clamp = adw::Clamp::builder().child(&body).maximum_size(POST_WIDTH).tightening_threshold(POST_WIDTH).build();
-    let button = gtk::Button::builder().child(&clamp).css_classes(["card"]).halign(gtk::Align::Start).valign(gtk::Align::Start).tooltip_text("YouTube で開く").build();
+    let button = gtk::Button::builder().child(&clamp).css_classes(["card"]).halign(gtk::Align::Start).valign(gtk::Align::Start).tooltip_text(lang::t("YouTube で開く", "Open in YouTube")).build();
     let url = post.url();
     button.connect_clicked(move |_| gtk::UriLauncher::new(&url).launch(None::<&gtk::Window>, None::<&gtk::gio::Cancellable>, |_| {}));
     button.upcast()
@@ -1498,8 +1499,8 @@ fn liked_by_artist(app: &Rc<App>, browse_id: &str, name: &str) -> gtk::Widget {
     let row = gtk::Box::builder().spacing(16).margin_start(12).build();
     row.append(&track::cover("liked", 56));
     let text = gtk::Box::builder().orientation(gtk::Orientation::Vertical).valign(gtk::Align::Center).spacing(2).build();
-    text.append(&gtk::Label::builder().label("高く評価した曲").xalign(0.0).css_classes(["heading"]).build());
-    let count = gtk::Label::builder().label("確かめています…").xalign(0.0).css_classes(["caption", "dim-label"]).build();
+    text.append(&gtk::Label::builder().label(lang::t("高く評価した曲", "Liked Songs")).xalign(0.0).css_classes(["heading"]).build());
+    let count = gtk::Label::builder().label(lang::t("確かめています…", "Checking…")).xalign(0.0).css_classes(["caption", "dim-label"]).build();
     text.append(&count);
     row.append(&text);
     row.set_cursor_from_name(Some("pointer"));
@@ -1526,7 +1527,12 @@ fn liked_by_artist(app: &Rc<App>, browse_id: &str, name: &str) -> gtk::Widget {
         let mine = wave_core::music::artist::songs_by_artist(&songs, Some(&browse_id), &name);
         eprintln!("artist liked songs={} mine={} complete={complete}", songs.len(), mine.len());
         row.set_visible(!mine.is_empty());
-        count.set_label(&if complete { format!("{name} の {} 曲", mine.len()) } else { format!("{name} の {} 曲以上", mine.len()) });
+        count.set_label(&match (lang::ja(), complete) {
+            (true, true) => format!("{name} の {} 曲", mine.len()),
+            (true, false) => format!("{name} の {} 曲以上", mine.len()),
+            (false, true) => format!("{} by {name}", lang::songs(mine.len())),
+            (false, false) => format!("{}+ songs by {name}", mine.len()),
+        });
         *found.borrow_mut() = Some(mine);
     });
     row.upcast()
@@ -1534,8 +1540,8 @@ fn liked_by_artist(app: &Rc<App>, browse_id: &str, name: &str) -> gtk::Widget {
 
 /// 高く評価した曲のうち、そのアーティストのもの（プレイリストのページと同じ形）。
 fn liked_songs_page(app: &Rc<App>, name: &str, songs: Vec<Song>) -> adw::NavigationPage {
-    let page = collection_page(app, &format!("liked-by:{name}"), "高く評価した曲", Source::LikedBy(name.to_string()), Some(songs.clone()));
-    page.set_title(&format!("高く評価した曲（{name}）"));
+    let page = collection_page(app, &format!("liked-by:{name}"), lang::t("高く評価した曲", "Liked Songs"), Source::LikedBy(name.to_string()), Some(songs.clone()));
+    page.set_title(&if lang::ja() { format!("高く評価した曲（{name}）") } else { format!("Liked Songs ({name})") });
     page.set_tag(Some("liked-by-artist"));
     page
 }
@@ -1550,27 +1556,27 @@ pub fn downloads(app: &Rc<App>) -> adw::NavigationPage {
     let header = gtk::Box::builder().spacing(24).build();
     header.append(&track::cover("downloads", 160));
     let info = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(6).valign(gtk::Align::End).hexpand(true).build();
-    info.append(&track::page_title("ダウンロード"));
+    info.append(&track::page_title(lang::t("ダウンロード", "Downloads")));
     let status = gtk::Label::builder().xalign(0.0).wrap(true).css_classes(["dim-label"]).build();
     info.append(&status);
     let progress = gtk::ProgressBar::builder().width_request(320).halign(gtk::Align::Start).visible(false).build();
     info.append(&progress);
-    let clear = gtk::Button::builder().label("すべて削除").halign(gtk::Align::Start).margin_top(4).css_classes(["destructive-action", "pill"]).build();
+    let clear = gtk::Button::builder().label(lang::t("すべて削除", "Delete all")).halign(gtk::Align::Start).margin_top(4).css_classes(["destructive-action", "pill"]).build();
     info.append(&clear);
     header.append(&info);
     column.append(&header);
     {
         let app = app.clone();
         clear.connect_clicked(move |_| {
-            let dialog = adw::AlertDialog::builder().heading("ダウンロードをすべて削除しますか？").body("この端末に取った曲・エピソードをすべて消します。").default_response("cancel").close_response("cancel").build();
-            dialog.add_response("cancel", "キャンセル");
-            dialog.add_response("remove", "すべて削除");
+            let dialog = adw::AlertDialog::builder().heading(lang::t("ダウンロードをすべて削除しますか？", "Delete all downloads?")).body(lang::t("この端末に取った曲・エピソードをすべて消します。", "This removes every song and episode saved on this device.")).default_response("cancel").close_response("cancel").build();
+            dialog.add_response("cancel", lang::t("キャンセル", "Cancel"));
+            dialog.add_response("remove", lang::t("すべて削除", "Delete all"));
             dialog.set_response_appearance("remove", adw::ResponseAppearance::Destructive);
             let app_c = app.clone();
             dialog.connect_response(None, move |_, response| {
                 if response == "remove" {
                     app_c.downloads.clear();
-                    app_c.toast("ダウンロードをすべて削除しました");
+                    app_c.toast(lang::t("ダウンロードをすべて削除しました", "All downloads deleted"));
                 }
             });
             dialog.present(app.window().as_ref());
@@ -1583,21 +1589,21 @@ pub fn downloads(app: &Rc<App>) -> adw::NavigationPage {
             let downloads = &app.downloads;
             let wanted = downloads.manifest().wanted_songs();
             let pending: Vec<&Song> = wanted.iter().filter(|s| downloads.state(&s.video_id) != crate::downloads::SongState::Done).collect();
-            let mut text = format!("使っている容量: {}", crate::downloads::format_bytes(downloads.total_bytes()));
+            let mut text = format!("{}{}", lang::t("使っている容量: ", "Storage used: "), crate::downloads::format_bytes(downloads.total_bytes()));
             let active = downloads.progress.lock().unwrap().clone();
             progress.set_visible(false);
             if !pending.is_empty() {
-                text.push_str(&format!(" • 残り {} 曲 • ", pending.len()));
+                text.push_str(&if lang::ja() { format!(" • 残り {} 曲 • ", pending.len()) } else { format!(" • {} left • ", pending.len()) });
                 if !downloads.network_allows() {
-                    text.push_str(if downloads.online() { "Wi-Fi など従量制でない通信を待っています" } else { "通信を待っています" });
+                    text.push_str(if downloads.online() { lang::t("Wi-Fi など従量制でない通信を待っています", "Waiting for Wi-Fi or another unmetered network") } else { lang::t("通信を待っています", "Waiting for a network") });
                 } else if let Some((id, got, total)) = active {
                     let title = wanted.iter().find(|s| s.video_id == id).map(|s| s.title.clone()).unwrap_or_default();
                     let percent = if total > 0 { got * 100 / total } else { 0 };
-                    text.push_str(&format!("取っています: {title}（{percent}%）"));
+                    text.push_str(&if lang::ja() { format!("取っています: {title}（{percent}%）") } else { format!("Downloading: {title} ({percent}%)") });
                     progress.set_visible(true);
                     progress.set_fraction(if total > 0 { got as f64 / total as f64 } else { 0.0 });
                 } else {
-                    text.push_str("待っています");
+                    text.push_str(lang::t("待っています", "Waiting"));
                 }
             }
             status.set_label(&text);
@@ -1633,14 +1639,14 @@ pub fn downloads(app: &Rc<App>) -> adw::NavigationPage {
                 body.remove(&child);
             }
             // スマートダウンロード
-            body.append(&section_title("スマートダウンロード"));
+            body.append(&section_title(lang::t("スマートダウンロード", "Smart downloads")));
             let smart_row = gtk::Box::builder().spacing(16).build();
             let texts = gtk::Box::builder().orientation(gtk::Orientation::Vertical).hexpand(true).spacing(2).build();
-            texts.append(&gtk::Label::builder().label("聴きそうな曲を自動で取っておく").xalign(0.0).build());
-            texts.append(&gtk::Label::builder().label("いつも聴いている曲・好きそうな曲・おすすめから、毎日選び直します").xalign(0.0).wrap(true).css_classes(["caption", "dim-label"]).build());
+            texts.append(&gtk::Label::builder().label(lang::t("聴きそうな曲を自動で取っておく", "Automatically keep songs you're likely to play")).xalign(0.0).build());
+            texts.append(&gtk::Label::builder().label(lang::t("いつも聴いている曲・好きそうな曲・おすすめから、毎日選び直します", "Picked again every day from songs you play often, songs you might like and recommendations")).xalign(0.0).wrap(true).css_classes(["caption", "dim-label"]).build());
             smart_row.append(&texts);
             if settings.smart_downloads {
-                let labels: Vec<String> = wave_core::download::smart::COUNTS.iter().map(|c| format!("{c} 曲")).collect();
+                let labels: Vec<String> = wave_core::download::smart::COUNTS.iter().map(|c| lang::songs(*c as usize)).collect();
                 let model = gtk::StringList::new(&labels.iter().map(String::as_str).collect::<Vec<_>>());
                 let count = gtk::DropDown::builder().model(&model).valign(gtk::Align::Center).selected(wave_core::download::smart::COUNTS.iter().position(|c| *c == settings.smart_download_count).unwrap_or(1) as u32).build();
                 let app_c = app.clone();
@@ -1664,7 +1670,7 @@ pub fn downloads(app: &Rc<App>) -> adw::NavigationPage {
             if settings.smart_downloads {
                 use wave_core::download::smart::SmartCategory;
                 let chips_row = gtk::Box::builder().spacing(8).build();
-                for (value, label) in [(None, "すべて"), (Some(SmartCategory::Frequent), "いつも聴いている"), (Some(SmartCategory::Likely), "好きそう"), (Some(SmartCategory::Recommended), "おすすめ")] {
+                for (value, label) in [(None, lang::t("すべて", "All")), (Some(SmartCategory::Frequent), lang::t("いつも聴いている", "Played often")), (Some(SmartCategory::Likely), lang::t("好きそう", "You might like")), (Some(SmartCategory::Recommended), lang::t("おすすめ", "Recommended"))] {
                     let chip = track::chip(label, category.get() == value);
                     let (category, render) = (category.clone(), render.clone());
                     chip.connect_clicked(move |_| {
@@ -1677,8 +1683,8 @@ pub fn downloads(app: &Rc<App>) -> adw::NavigationPage {
                 }
                 chips_row.append(&gtk::Box::builder().hexpand(true).build());
                 let songs: Vec<Song> = manifest.smart.iter().filter(|t| category.get().is_none_or(|c| t.category == c)).map(|t| t.song.clone()).collect();
-                let shuffle = gtk::Button::builder().icon_name("media-playlist-shuffle-symbolic").tooltip_text("シャッフル再生").sensitive(!songs.is_empty()).valign(gtk::Align::Center).css_classes(["flat", "circular"]).build();
-                let play = gtk::Button::builder().icon_name("media-playback-start-symbolic").tooltip_text("再生").sensitive(!songs.is_empty()).css_classes(["circular", "suggested-action", "play-fab"]).build();
+                let shuffle = gtk::Button::builder().icon_name("media-playlist-shuffle-symbolic").tooltip_text(lang::t("シャッフル再生", "Shuffle play")).sensitive(!songs.is_empty()).valign(gtk::Align::Center).css_classes(["flat", "circular"]).build();
+                let play = gtk::Button::builder().icon_name("media-playback-start-symbolic").tooltip_text(lang::t("再生", "Play")).sensitive(!songs.is_empty()).css_classes(["circular", "suggested-action", "play-fab"]).build();
                 {
                     let (app, songs) = (app.clone(), songs.clone());
                     shuffle.connect_clicked(move |_| app.playback.play_shuffled(songs.clone(), Some("downloads".into())));
@@ -1691,7 +1697,7 @@ pub fn downloads(app: &Rc<App>) -> adw::NavigationPage {
                 chips_row.append(&play);
                 body.append(&chips_row);
                 if songs.is_empty() {
-                    body.append(&gtk::Label::builder().label("まだ選んだ曲はありません").xalign(0.0).css_classes(["dim-label"]).build());
+                    body.append(&gtk::Label::builder().label(lang::t("まだ選んだ曲はありません", "Nothing chosen yet")).xalign(0.0).css_classes(["dim-label"]).build());
                 } else {
                     body.append(&download_rows(&app, songs));
                 }
@@ -1700,7 +1706,7 @@ pub fn downloads(app: &Rc<App>) -> adw::NavigationPage {
             let mut collections = manifest.collections.clone();
             collections.sort_by_key(|c| std::cmp::Reverse(c.added_at_ms));
             if !collections.is_empty() {
-                body.append(&section_title("プレイリスト・アルバム"));
+                body.append(&section_title(lang::t("プレイリスト・アルバム", "Playlists and albums")));
                 let list = gtk::ListBox::builder().selection_mode(gtk::SelectionMode::None).css_classes(["track-list"]).build();
                 for c in collections {
                     list.append(&collection_row(&app, c));
@@ -1710,15 +1716,15 @@ pub fn downloads(app: &Rc<App>) -> adw::NavigationPage {
             let singles: Vec<Song> = manifest.singles.iter().map(|s| s.song.clone()).collect();
             let (episodes, songs): (Vec<Song>, Vec<Song>) = singles.into_iter().partition(|s| wave_core::music::feed::is_external(&s.video_id));
             if !songs.is_empty() {
-                body.append(&section_title("曲"));
+                body.append(&section_title(lang::t("曲", "Songs")));
                 body.append(&download_rows(&app, songs));
             }
             if !episodes.is_empty() {
-                body.append(&section_title("エピソード"));
+                body.append(&section_title(lang::t("エピソード", "Episodes")));
                 body.append(&download_rows(&app, episodes));
             }
             if manifest.collections.is_empty() && manifest.singles.is_empty() && manifest.smart.is_empty() {
-                body.append(&gtk::Label::builder().label("曲・プレイリスト・アルバムのメニューやページの頭のボタンから、ダウンロードできます。通信の無いところでも聴けます。").xalign(0.0).wrap(true).margin_top(16).css_classes(["dim-label"]).build());
+                body.append(&gtk::Label::builder().label(lang::t("曲・プレイリスト・アルバムのメニューやページの頭のボタンから、ダウンロードできます。通信の無いところでも聴けます。", "Download from the menu of a song, playlist or album, or the button at the top of its page. You can listen without a connection.")).xalign(0.0).wrap(true).margin_top(16).css_classes(["dim-label"]).build());
             }
         })
     };
@@ -1731,7 +1737,7 @@ pub fn downloads(app: &Rc<App>) -> adw::NavigationPage {
             }
         });
     }
-    let page = adw::NavigationPage::builder().title("ダウンロード").tag("downloads").child(&scrolling_column(&column)).build();
+    let page = adw::NavigationPage::builder().title(lang::t("ダウンロード", "Downloads")).tag("downloads").child(&scrolling_column(&column)).build();
     page.connect_destroy(move |_| {
         render.borrow_mut().take();
     });
@@ -1767,9 +1773,15 @@ fn collection_row(app: &Rc<App>, c: wave_core::download::manifest::DownloadColle
     }
     let text = gtk::Box::builder().orientation(gtk::Orientation::Vertical).valign(gtk::Align::Center).hexpand(true).build();
     text.append(&gtk::Label::builder().label(&c.title).xalign(0.0).ellipsize(gtk::pango::EllipsizeMode::End).build());
-    let kind = if c.kind == KIND_ALBUM { "アルバム" } else if c.kind == KIND_LIKED { "プレイリスト • 自動" } else { "プレイリスト" };
+    let kind = if c.kind == KIND_ALBUM { lang::t("アルバム", "Album") } else if c.kind == KIND_LIKED { lang::t("プレイリスト • 自動", "Playlist • Auto") } else { lang::t("プレイリスト", "Playlist") };
     let done = c.songs.iter().filter(|s| app.downloads.state(&s.video_id) == crate::downloads::SongState::Done).count();
-    let count = if done >= c.songs.len() { format!("{} 曲", c.songs.len()) } else { format!("{done} / {} 曲", c.songs.len()) };
+    let count = if done >= c.songs.len() {
+        lang::songs(c.songs.len())
+    } else if lang::ja() {
+        format!("{done} / {} 曲", c.songs.len())
+    } else {
+        format!("{done} of {} songs", c.songs.len())
+    };
     text.append(&gtk::Label::builder().label(format!("{kind} • {count}")).xalign(0.0).css_classes(["caption", "dim-label"]).build());
     line.append(&text);
     let row = gtk::ListBoxRow::builder().child(&line).activatable(true).build();
@@ -1780,7 +1792,7 @@ fn collection_row(app: &Rc<App>, c: wave_core::download::manifest::DownloadColle
             if c.kind == KIND_ALBUM {
                 app.push(album(&app, &c.id, &c.title));
             } else if c.kind == KIND_LIKED {
-                app.push(playlist(&app, LIKED_SONGS, "高く評価した曲"));
+                app.push(playlist(&app, LIKED_SONGS, lang::t("高く評価した曲", "Liked Songs")));
             } else {
                 app.push(playlist(&app, &c.id, &c.title));
             }
@@ -1788,7 +1800,7 @@ fn collection_row(app: &Rc<App>, c: wave_core::download::manifest::DownloadColle
     }
     line.add_controller(click);
     let menu = gtk::gio::Menu::new();
-    menu.append(Some("ダウンロードを削除"), Some("download.remove"));
+    menu.append(Some(lang::t("ダウンロードを削除", "Remove download")), Some("download.remove"));
     let actions = gtk::gio::SimpleActionGroup::new();
     let remove = gtk::gio::SimpleAction::new("remove", None);
     {

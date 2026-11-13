@@ -88,7 +88,7 @@ impl SearchHistoryEntry {
     }
 
     pub fn artist(id: &str, name: &str, thumbnail: Option<&str>) -> Self {
-        Self { kind: "artist".into(), title: name.into(), subtitle: Some("アーティスト".into()), thumbnail_url: thumbnail.map(String::from), id: Some(id.into()), song: None }
+        Self { kind: "artist".into(), title: name.into(), subtitle: Some(crate::lang::t("アーティスト", "Artist").into()), thumbnail_url: thumbnail.map(String::from), id: Some(id.into()), song: None }
     }
 
     pub fn playlist(id: &str, title: &str, subtitle: Option<&str>, thumbnail: Option<&str>) -> Self {
@@ -100,7 +100,7 @@ impl SearchHistoryEntry {
         Self {
             kind: "podcast".into(),
             title: show.title.clone(),
-            subtitle: Some(show.author.clone().unwrap_or_else(|| "ポッドキャスト".into())),
+            subtitle: Some(show.author.clone().unwrap_or_else(|| crate::lang::t("ポッドキャスト", "Podcast").into())),
             thumbnail_url: show.thumbnail_url.clone(),
             id: Some(show.browse_id.clone()),
             song: None,

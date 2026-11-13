@@ -15,6 +15,7 @@ use wave_core::music::repository::NEW_EPISODES_BROWSE;
 use super::images;
 use super::shell::App;
 use super::track;
+use crate::lang;
 use crate::runtime;
 
 fn page(title: &str, tag: &str, child: &impl IsA<gtk::Widget>) -> adw::NavigationPage {
@@ -67,11 +68,11 @@ pub fn show(app: &Rc<App>, browse_id: &str, title: &str) -> adw::NavigationPage 
                     let library = app.podcasts.library.clone();
                     let refs: Vec<&feed::FeedShow> = feeds.iter().map(|s| s.as_ref()).collect();
                     page.episodes = wave_core::music::new_episodes::merge_refs(&page.episodes, &refs, now, |u| library.position(u));
-                    page.title = "新しいエピソード".into();
+                    page.title = lang::t("新しいエピソード", "New episodes").into();
                 }
                 show_content(&app, page, new_episodes).upcast()
             }
-            None => adw::StatusPage::builder().icon_name("network-error-symbolic").title("ポッドキャストを読み込めませんでした").vexpand(true).build().upcast(),
+            None => adw::StatusPage::builder().icon_name("network-error-symbolic").title(lang::t("ポッドキャストを読み込めませんでした", "Couldn't load the podcast")).vexpand(true).build().upcast(),
         };
         target.set_child(Some(&content));
     });
@@ -80,7 +81,7 @@ pub fn show(app: &Rc<App>, browse_id: &str, title: &str) -> adw::NavigationPage 
 
 /// マイライブラリの「新しいエピソード」（保存した番組と RSS で登録した番組の新しい回）。
 pub fn new_episodes(app: &Rc<App>) -> adw::NavigationPage {
-    show(app, NEW_EPISODES_BROWSE, "新しいエピソード")
+    show(app, NEW_EPISODES_BROWSE, lang::t("新しいエピソード", "New episodes"))
 }
 
 /// これまでの入口（マイライブラリのポッドキャスト）。今は「新しいエピソード」のページ。
@@ -102,13 +103,13 @@ fn show_content(app: &Rc<App>, page: PodcastPage, new_episodes: bool) -> gtk::Sc
         header.append(&art.root);
     }
     let info = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(6).valign(gtk::Align::End).hexpand(true).build();
-    info.append(&gtk::Label::builder().label(if new_episodes { "プレイリスト • 自動" } else { "ポッドキャスト" }).xalign(0.0).build());
+    info.append(&gtk::Label::builder().label(if new_episodes { lang::t("プレイリスト • 自動", "Playlist • Auto") } else { lang::t("ポッドキャスト", "Podcast") }).xalign(0.0).build());
     info.append(&track::page_title(&page.title));
     if let Some(author) = page.author.as_deref().filter(|a| !a.is_empty()) {
         info.append(&gtk::Label::builder().label(author).xalign(0.0).css_classes(["heading"]).build());
     }
     if let Some(description) = page.description.as_deref().map(str::trim).filter(|d| !d.is_empty()) {
-        let label = gtk::Label::builder().label(description).xalign(0.0).wrap(true).wrap_mode(gtk::pango::WrapMode::WordChar).lines(3).ellipsize(gtk::pango::EllipsizeMode::End).max_width_chars(1).hexpand(true).tooltip_text("すべて表示").css_classes(["dim-label"]).build();
+        let label = gtk::Label::builder().label(description).xalign(0.0).wrap(true).wrap_mode(gtk::pango::WrapMode::WordChar).lines(3).ellipsize(gtk::pango::EllipsizeMode::End).max_width_chars(1).hexpand(true).tooltip_text(lang::t("すべて表示", "Show more")).css_classes(["dim-label"]).build();
         label.set_cursor_from_name(Some("pointer"));
         let click = gtk::GestureClick::new();
         let l = label.clone();
@@ -116,7 +117,7 @@ fn show_content(app: &Rc<App>, page: PodcastPage, new_episodes: bool) -> gtk::Sc
             let expanded = l.lines() < 0;
             l.set_lines(if expanded { 3 } else { -1 });
             l.set_ellipsize(if expanded { gtk::pango::EllipsizeMode::End } else { gtk::pango::EllipsizeMode::None });
-            l.set_tooltip_text(Some(if expanded { "すべて表示" } else { "短く表示" }));
+            l.set_tooltip_text(Some(if expanded { lang::t("すべて表示", "Show more") } else { lang::t("短く表示", "Show less") }));
         });
         label.add_controller(click);
         info.append(&label);
@@ -127,7 +128,7 @@ fn show_content(app: &Rc<App>, page: PodcastPage, new_episodes: bool) -> gtk::Sc
     let episodes: Rc<RefCell<Vec<PodcastEpisode>>> = Rc::new(RefCell::new(page.episodes.clone()));
     // 操作: 再生（流しているときは一時停止）・保存・RSS の番組を探す（新しいエピソードのとき）
     let controls = gtk::Box::builder().spacing(16).build();
-    let play = gtk::Button::builder().icon_name("media-playback-start-symbolic").tooltip_text("再生").visible(!page.episodes.is_empty()).css_classes(["circular", "suggested-action", "play-large"]).build();
+    let play = gtk::Button::builder().icon_name("media-playback-start-symbolic").tooltip_text(lang::t("再生", "Play")).visible(!page.episodes.is_empty()).css_classes(["circular", "suggested-action", "play-large"]).build();
     {
         let (app, episodes, source) = (app.clone(), episodes.clone(), source.clone());
         play.connect_clicked(move |_| {
@@ -149,7 +150,7 @@ fn show_content(app: &Rc<App>, page: PodcastPage, new_episodes: bool) -> gtk::Sc
         controls.append(&save_button(app, &page, saved));
     }
     if new_episodes {
-        let find = gtk::Button::builder().label("RSS の番組を探して足す").valign(gtk::Align::Center).css_classes(["pill"]).build();
+        let find = gtk::Button::builder().label(lang::t("RSS の番組を探して足す", "Find and add an RSS show")).valign(gtk::Align::Center).css_classes(["pill"]).build();
         let app = app.clone();
         find.connect_clicked(move |_| app.push(find_feed(&app)));
         controls.append(&find);
@@ -176,7 +177,7 @@ fn show_content(app: &Rc<App>, page: PodcastPage, new_episodes: bool) -> gtk::Sc
     };
     add_rows(0, &page.episodes);
     if page.episodes.is_empty() {
-        column.append(&gtk::Label::builder().label("エピソードはありません").xalign(0.0).css_classes(["dim-label"]).build());
+        column.append(&gtk::Label::builder().label(lang::t("エピソードはありません", "No episodes")).xalign(0.0).css_classes(["dim-label"]).build());
     }
     column.append(&list);
     let more = adw::Spinner::builder().width_request(24).height_request(24).halign(gtk::Align::Center).visible(false).build();
@@ -240,7 +241,7 @@ fn save_button(app: &Rc<App>, page: &PodcastPage, saved: bool) -> gtk::Button {
     let state = Rc::new(Cell::new(saved));
     let show = {
         let (button, state) = (button.clone(), state.clone());
-        move || button.set_label(if state.get() { "保存済み" } else { "ライブラリに保存" })
+        move || button.set_label(if state.get() { lang::t("保存済み", "Saved") } else { lang::t("ライブラリに保存", "Save to library") })
     };
     show();
     let rss = feed::feed_url_of(&page.browse_id).map(String::from);
@@ -254,10 +255,10 @@ fn save_button(app: &Rc<App>, page: &PodcastPage, saved: bool) -> gtk::Button {
                     subscription.author = summary.author.clone();
                     subscription.thumbnail_url = summary.thumbnail_url.clone();
                     app.podcasts.library.subscribe(subscription);
-                    app.toast("番組を登録しました");
+                    app.toast(lang::t("番組を登録しました", "Subscribed to the show"));
                 } else {
                     app.podcasts.library.unsubscribe(url);
-                    app.toast("登録をやめました");
+                    app.toast(lang::t("登録をやめました", "Unsubscribed"));
                 }
                 state.set(target);
                 show();
@@ -274,7 +275,7 @@ fn save_button(app: &Rc<App>, page: &PodcastPage, saved: bool) -> gtk::Button {
                         show();
                         super::library::reload(&app);
                     } else {
-                        app.toast("ライブラリを変更できませんでした");
+                        app.toast(lang::t("ライブラリを変更できませんでした", "Couldn't change your library"));
                     }
                 });
             }
@@ -298,7 +299,7 @@ pub fn episode_row(app: &Rc<App>, episode: &PodcastEpisode, show_show: bool, on_
     let title = gtk::Label::builder().label(&episode.song.title).xalign(0.0).wrap(true).lines(2).ellipsize(gtk::pango::EllipsizeMode::End).max_width_chars(1).css_classes(["heading"]).build();
     text.append(&title);
     let detail_row = gtk::Box::builder().spacing(4).build();
-    let mark = gtk::Image::builder().icon_name("folder-download-symbolic").pixel_size(12).tooltip_text("ダウンロード済み").css_classes(["dim-label"]).visible(false).build();
+    let mark = gtk::Image::builder().icon_name("folder-download-symbolic").pixel_size(12).tooltip_text(lang::t("ダウンロード済み", "Downloaded")).css_classes(["dim-label"]).visible(false).build();
     {
         let (downloads, id) = (app.downloads.clone(), episode.song.video_id.clone());
         app.downloads.watch(&mark, move |mark| mark.set_visible(downloads.state(&id) == crate::downloads::SongState::Done));
@@ -314,7 +315,7 @@ pub fn episode_row(app: &Rc<App>, episode: &PodcastEpisode, show_show: bool, on_
         text.append(&gtk::Label::builder().label(one).xalign(0.0).wrap(true).wrap_mode(gtk::pango::WrapMode::WordChar).lines(2).ellipsize(gtk::pango::EllipsizeMode::End).max_width_chars(1).css_classes(["dim-label"]).build());
     }
     if let Some(percent) = episode.progress_percent {
-        text.append(&gtk::ProgressBar::builder().fraction(f64::from(percent.min(100)) / 100.0).width_request(160).halign(gtk::Align::Start).margin_top(2).tooltip_text(if percent >= 100 { "聴いた".to_string() } else { format!("{percent}% 聴いた") }).build());
+        text.append(&gtk::ProgressBar::builder().fraction(f64::from(percent.min(100)) / 100.0).width_request(160).halign(gtk::Align::Start).margin_top(2).tooltip_text(if percent >= 100 { lang::t("聴いた", "Played").to_string() } else { if lang::ja() { format!("{percent}% 聴いた") } else { format!("{percent}% played") } }).build());
     }
     line.append(&text);
     let state = gtk::Image::builder().icon_name("media-playback-start-symbolic").pixel_size(20).valign(gtk::Align::Center).opacity(0.0).build();
@@ -375,7 +376,7 @@ pub fn card(app: &Rc<App>, summary: &PodcastSummary, on_open: Option<Rc<dyn Fn()
     let column = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(6).width_request(track::CARD_SIZE).css_classes(["media-card"]).build();
     column.append(&art.root);
     column.append(&gtk::Label::builder().label(&summary.title).xalign(0.0).ellipsize(gtk::pango::EllipsizeMode::End).max_width_chars(1).width_request(track::CARD_SIZE).css_classes(["heading"]).build());
-    column.append(&gtk::Label::builder().label(summary.author.as_deref().unwrap_or("ポッドキャスト")).xalign(0.0).wrap(true).lines(2).ellipsize(gtk::pango::EllipsizeMode::End).max_width_chars(1).width_request(track::CARD_SIZE).css_classes(["caption", "dim-label"]).build());
+    column.append(&gtk::Label::builder().label(summary.author.as_deref().unwrap_or(lang::t("ポッドキャスト", "Podcast"))).xalign(0.0).wrap(true).lines(2).ellipsize(gtk::pango::EllipsizeMode::End).max_width_chars(1).width_request(track::CARD_SIZE).css_classes(["caption", "dim-label"]).build());
     column.set_cursor_from_name(Some("pointer"));
     let click = gtk::GestureClick::new();
     let (app, id, title) = (app.clone(), summary.browse_id.clone(), summary.title.clone());
@@ -393,9 +394,9 @@ pub fn card(app: &Rc<App>, summary: &PodcastSummary, on_open: Option<Rc<dyn Fn()
 /// RSS の番組を探して足す: Apple の公開の目録で探すか、RSS の URL を打ち込む。結果を押すと番組のページ（そこで登録）。
 pub fn find_feed(app: &Rc<App>) -> adw::NavigationPage {
     let column = column();
-    column.append(&track::page_title("RSS の番組を探す"));
-    column.append(&gtk::Label::builder().label("番組名で探すか、RSS の URL（https://…）を入れてください。YouTube に無い番組も聴けます").xalign(0.0).wrap(true).css_classes(["dim-label"]).build());
-    let entry = gtk::SearchEntry::builder().placeholder_text("番組名・RSS の URL").build();
+    column.append(&track::page_title(lang::t("RSS の番組を探す", "Find an RSS show")));
+    column.append(&gtk::Label::builder().label(lang::t("番組名で探すか、RSS の URL（https://…）を入れてください。YouTube に無い番組も聴けます", "Search by show name or enter an RSS URL (https://…). You can also listen to shows that aren't on YouTube")).xalign(0.0).wrap(true).css_classes(["dim-label"]).build());
+    let entry = gtk::SearchEntry::builder().placeholder_text(lang::t("番組名・RSS の URL", "Show name or RSS URL")).build();
     column.append(&entry);
     let results = adw::Bin::new();
     column.append(&results);
@@ -411,7 +412,7 @@ pub fn find_feed(app: &Rc<App>) -> adw::NavigationPage {
             // URL ならその番組を開く
             if let Some(url) = feed::normalize_feed_url(&text) {
                 results.set_child(None::<&gtk::Widget>);
-                app.push(show(&app, &feed::show_browse_id(&url), "RSS の番組"));
+                app.push(show(&app, &feed::show_browse_id(&url), lang::t("RSS の番組", "RSS show")));
                 return;
             }
             let client = app.podcasts.client.clone();
@@ -421,10 +422,10 @@ pub fn find_feed(app: &Rc<App>) -> adw::NavigationPage {
                     let cards = shows.iter().map(|s| card(&app, s, None)).collect();
                     results.set_child(Some(&track::card_grid(cards)));
                 }
-                Some(_) => results.set_child(Some(&gtk::Label::builder().label("見つかりませんでした").css_classes(["dim-label"]).build())),
-                None => results.set_child(Some(&gtk::Label::builder().label("探せませんでした（通信を確かめてください）").css_classes(["dim-label"]).build())),
+                Some(_) => results.set_child(Some(&gtk::Label::builder().label(lang::t("見つかりませんでした", "No results found")).css_classes(["dim-label"]).build())),
+                None => results.set_child(Some(&gtk::Label::builder().label(lang::t("探せませんでした（通信を確かめてください）", "Couldn't search (check your connection)")).css_classes(["dim-label"]).build())),
             }
         });
     });
-    page("RSS の番組を探す", "feed-search", &scrolling(&column))
+    page(lang::t("RSS の番組を探す", "Find an RSS show"), "feed-search", &scrolling(&column))
 }

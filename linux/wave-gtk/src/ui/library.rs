@@ -17,6 +17,7 @@ use wave_core::music::repository::LIKED_SONGS;
 use super::images;
 use super::shell::App;
 use super::track;
+use crate::lang;
 use crate::runtime;
 
 thread_local! {
@@ -68,8 +69,13 @@ struct View {
     shown: RefCell<Vec<Entry>>,
 }
 
-const KINDS: [(&str, &str); 4] = [("playlist", "プレイリスト"), ("artist", "アーティスト"), ("album", "アルバム"), ("podcast", "ポッドキャスト")];
-const SORTS: [(&str, &str); 3] = [("recent", "最近"), ("added", "最近追加した順"), ("alpha", "アルファベット順")];
+fn kinds() -> [(&'static str, &'static str); 4] {
+    [("playlist", lang::t("プレイリスト", "Playlists")), ("artist", lang::t("アーティスト", "Artists")), ("album", lang::t("アルバム", "Albums")), ("podcast", lang::t("ポッドキャスト", "Podcasts"))]
+}
+
+fn sorts() -> [(&'static str, &'static str); 3] {
+    [("recent", lang::t("最近", "Recents")), ("added", lang::t("最近追加した順", "Recently added")), ("alpha", lang::t("アルファベット順", "Alphabetical"))]
+}
 
 /// マイライブラリを読み直す（プレイリストを作った・番組を保存したあと）。
 pub fn reload(_app: &Rc<App>) {
@@ -109,9 +115,9 @@ pub fn sidebar(app: &Rc<App>) -> gtk::Widget {
     let column = gtk::Box::new(gtk::Orientation::Vertical, 0);
     let header = gtk::Box::builder().spacing(8).margin_top(12).margin_bottom(4).margin_start(16).margin_end(8).build();
     header.append(&gtk::Image::from_icon_name("folder-music-symbolic"));
-    header.append(&gtk::Label::builder().label("マイライブラリ").xalign(0.0).hexpand(true).css_classes(["heading"]).build());
+    header.append(&gtk::Label::builder().label(lang::t("マイライブラリ", "Your Library")).xalign(0.0).hexpand(true).css_classes(["heading"]).build());
     let logged_in = app.repo.client().is_logged_in();
-    let create = gtk::Button::builder().icon_name("list-add-symbolic").tooltip_text("プレイリストを作成").visible(logged_in).css_classes(["flat", "circular"]).build();
+    let create = gtk::Button::builder().icon_name("list-add-symbolic").tooltip_text(lang::t("プレイリストを作成", "Create playlist")).visible(logged_in).css_classes(["flat", "circular"]).build();
     header.append(&create);
     column.append(&header);
 
@@ -122,10 +128,10 @@ pub fn sidebar(app: &Rc<App>) -> gtk::Widget {
     chip_scroller.set_margin_bottom(4);
     column.append(&chip_scroller);
     let tools = gtk::Box::builder().spacing(4).margin_start(12).margin_end(8).margin_top(4).margin_bottom(4).build();
-    let search = gtk::SearchEntry::builder().placeholder_text("マイライブラリを検索").hexpand(true).build();
+    let search = gtk::SearchEntry::builder().placeholder_text(lang::t("マイライブラリを検索", "Search library")).hexpand(true).build();
     tools.append(&search);
     let sort_label = gtk::Label::builder().css_classes(["caption"]).build();
-    let sort = gtk::MenuButton::builder().child(&sort_label).tooltip_text("並べ替え").css_classes(["flat"]).build();
+    let sort = gtk::MenuButton::builder().child(&sort_label).tooltip_text(lang::t("並べ替え", "Sort")).css_classes(["flat"]).build();
     tools.append(&sort);
     let layout = gtk::Button::builder().css_classes(["flat", "circular"]).build();
     tools.append(&layout);
@@ -146,7 +152,7 @@ pub fn sidebar(app: &Rc<App>) -> gtk::Widget {
     let stack = gtk::Stack::new();
     stack.add_named(&gtk::ScrolledWindow::builder().child(&list).hscrollbar_policy(gtk::PolicyType::Never).vexpand(true).build(), Some("list"));
     stack.add_named(&gtk::ScrolledWindow::builder().child(&grid).hscrollbar_policy(gtk::PolicyType::Never).vexpand(true).build(), Some("grid"));
-    let empty = gtk::Label::builder().label("ログインすると、YouTube Music のプレイリスト・アーティスト・アルバムがここに並びます。").wrap(true).xalign(0.0).valign(gtk::Align::Start).margin_start(16).margin_end(16).margin_top(12).build();
+    let empty = gtk::Label::builder().label(lang::t("ログインすると、YouTube Music のプレイリスト・アーティスト・アルバムがここに並びます。", "Log in to see your YouTube Music playlists, artists and albums here.")).wrap(true).xalign(0.0).valign(gtk::Align::Start).margin_start(16).margin_end(16).margin_top(12).build();
     stack.add_named(&empty, Some("logged-out"));
     let progress = gtk::ProgressBar::builder().margin_start(12).margin_end(12).visible(false).build();
     column.append(&progress);
@@ -161,7 +167,7 @@ pub fn sidebar(app: &Rc<App>) -> gtk::Widget {
 
     // 種類の絞り込み（もう一度押すと外す）
     let buttons: Rc<Vec<(gtk::Button, &'static str)>> = Rc::new(
-        KINDS
+        kinds()
             .iter()
             .map(|(kind, title)| {
                 let button = track::chip(title, false);
@@ -191,7 +197,7 @@ pub fn sidebar(app: &Rc<App>) -> gtk::Widget {
 
     // 並べ替え（今の並べ方を文字で出す）
     let menu = gtk::gio::Menu::new();
-    for (key, label) in SORTS {
+    for (key, label) in sorts() {
         menu.append(Some(label), Some(&format!("library.sort::{key}")));
     }
     sort.set_menu_model(Some(&menu));
@@ -199,7 +205,7 @@ pub fn sidebar(app: &Rc<App>) -> gtk::Widget {
         let (view, sort_label) = (view.clone(), sort_label.clone());
         move || {
             let current = view.app.downloads.settings.borrow().library_sort.clone();
-            sort_label.set_label(SORTS.iter().find(|(k, _)| *k == current).map_or("最近", |(_, l)| l));
+            sort_label.set_label(sorts().iter().find(|(k, _)| *k == current).map_or(lang::t("最近", "Recents"), |(_, l)| *l));
         }
     };
     show_sort();
@@ -225,7 +231,7 @@ pub fn sidebar(app: &Rc<App>) -> gtk::Widget {
         move || {
             let grid = view.app.downloads.settings.borrow().library_grid;
             layout.set_icon_name(if grid { "view-list-symbolic" } else { "view-grid-symbolic" });
-            layout.set_tooltip_text(Some(if grid { "リストで表示" } else { "グリッドで表示" }));
+            layout.set_tooltip_text(Some(if grid { lang::t("リストで表示", "List view") } else { lang::t("グリッドで表示", "Grid view") }));
             view.show_stack();
         }
     };
@@ -388,15 +394,15 @@ impl View {
         }
         let mut head: Vec<Entry> = Vec::new();
         // ポッドキャストで絞ったときは「新しいエピソード」を先頭に
-        if kind == Some("podcast") && matches("新しいエピソード") {
-            head.push(fixed("新しいエピソード", "プレイリスト • 自動".into(), Target::NewEpisodes));
+        if kind == Some("podcast") && matches(lang::t("新しいエピソード", "New episodes")) {
+            head.push(fixed(lang::t("新しいエピソード", "New episodes"), lang::t("プレイリスト • 自動", "Playlist • Auto").into(), Target::NewEpisodes));
         }
         // 高く評価した曲はいつも先頭、ダウンロードはその次
-        if wants("playlist") && matches("高く評価した曲") {
-            head.push(fixed("高く評価した曲", "プレイリスト • 自動".into(), Target::Liked));
+        if wants("playlist") && matches(lang::t("高く評価した曲", "Liked Songs")) {
+            head.push(fixed(lang::t("高く評価した曲", "Liked Songs"), lang::t("プレイリスト • 自動", "Playlist • Auto").into(), Target::Liked));
         }
-        if wants("playlist") && matches("ダウンロード") {
-            head.push(fixed("ダウンロード", format!("プレイリスト • 自動 • {} 曲", downloaded_count(&self.app)), Target::Downloads));
+        if wants("playlist") && matches(lang::t("ダウンロード", "Downloads")) {
+            head.push(fixed(lang::t("ダウンロード", "Downloads"), format!("{} • {}", lang::t("プレイリスト • 自動", "Playlist • Auto"), lang::songs(downloaded_count(&self.app))), Target::Downloads));
         }
         head.extend(entries);
         head
@@ -430,7 +436,7 @@ impl View {
             _ => return,
         };
         let menu = gtk::gio::Menu::new();
-        menu.append(Some("再生"), Some("entry.play"));
+        menu.append(Some(lang::t("再生", "Play")), Some("entry.play"));
         let actions = gtk::gio::SimpleActionGroup::new();
         let play = gtk::gio::SimpleAction::new("play", None);
         let app = self.app.clone();
@@ -459,7 +465,7 @@ impl View {
         let Some(entry) = self.shown.borrow().get(index).cloned() else { return };
         let app = &self.app;
         match entry.target {
-            Target::Liked => app.push(super::pages::playlist(app, LIKED_SONGS, "高く評価した曲")),
+            Target::Liked => app.push(super::pages::playlist(app, LIKED_SONGS, lang::t("高く評価した曲", "Liked Songs"))),
             Target::Downloads => app.push(super::pages::downloads(app)),
             Target::NewEpisodes => app.push(super::podcasts::new_episodes(app)),
             Target::Item(item) => track::open_item(app, &item),
@@ -481,19 +487,19 @@ fn subtitle(kind: &str, rest: Option<&str>) -> String {
 }
 
 fn playlist_entry(p: PlaylistSummary) -> Entry {
-    Entry { title: p.title.clone(), subtitle: subtitle("プレイリスト", p.subtitle.as_deref()), thumbnail: p.thumbnail_url.clone(), round: false, key: Some(format!("p-{}", p.playlist_id)), target: Target::Item(HomeItem::Playlist(p)) }
+    Entry { title: p.title.clone(), subtitle: subtitle(lang::t("プレイリスト", "Playlist"), p.subtitle.as_deref()), thumbnail: p.thumbnail_url.clone(), round: false, key: Some(format!("p-{}", p.playlist_id)), target: Target::Item(HomeItem::Playlist(p)) }
 }
 
 fn artist_entry(a: ArtistSummary) -> Entry {
-    Entry { title: a.name.clone(), subtitle: "アーティスト".into(), thumbnail: a.thumbnail_url.clone(), round: true, key: Some(format!("ar-{}", a.browse_id)), target: Target::Item(HomeItem::Artist(a)) }
+    Entry { title: a.name.clone(), subtitle: lang::t("アーティスト", "Artist").into(), thumbnail: a.thumbnail_url.clone(), round: true, key: Some(format!("ar-{}", a.browse_id)), target: Target::Item(HomeItem::Artist(a)) }
 }
 
 fn album_entry(a: AlbumSummary) -> Entry {
-    Entry { title: a.title.clone(), subtitle: subtitle("アルバム", a.subtitle.as_deref()), thumbnail: a.thumbnail_url.clone(), round: false, key: Some(format!("al-{}", a.browse_id)), target: Target::Item(HomeItem::Album(a)) }
+    Entry { title: a.title.clone(), subtitle: subtitle(lang::t("アルバム", "Album"), a.subtitle.as_deref()), thumbnail: a.thumbnail_url.clone(), round: false, key: Some(format!("al-{}", a.browse_id)), target: Target::Item(HomeItem::Album(a)) }
 }
 
 fn podcast_entry(c: PodcastSummary) -> Entry {
-    Entry { title: c.title.clone(), subtitle: subtitle("ポッドキャスト", c.author.as_deref()), thumbnail: c.thumbnail_url.clone(), round: false, key: Some(format!("c-{}", c.browse_id)), target: Target::Podcast(c) }
+    Entry { title: c.title.clone(), subtitle: subtitle(lang::t("ポッドキャスト", "Podcast"), c.author.as_deref()), thumbnail: c.thumbnail_url.clone(), round: false, key: Some(format!("c-{}", c.browse_id)), target: Target::Podcast(c) }
 }
 
 fn fixed(title: &str, subtitle: String, target: Target) -> Entry {

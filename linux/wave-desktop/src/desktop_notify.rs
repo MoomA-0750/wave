@@ -21,7 +21,7 @@ pub fn notify(app_id: &str, summary: &str, body: &str, on_click: impl Fn() + 'st
     subscribe(&connection);
     let hints = glib::VariantDict::new(None);
     hints.insert_value("desktop-entry", &app_id.to_variant());
-    let actions: Vec<&str> = vec!["default", "開く"];
+    let actions: Vec<&str> = vec!["default", crate::lang::t("開く", "Open")];
     let parameters = Variant::tuple_from_iter([
         "wave".to_variant(),
         0u32.to_variant(),

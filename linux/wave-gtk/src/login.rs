@@ -11,6 +11,7 @@ use adw::prelude::*;
 use webkit6::prelude::*;
 use wave_core::credentials::Credentials;
 
+use crate::lang;
 use crate::keyring;
 
 const START_URL: &str = "https://accounts.google.com/ServiceLogin?continue=https%3A%2F%2Fmusic.youtube.com%2F";
@@ -59,7 +60,7 @@ pub fn open(parent: &impl IsA<gtk::Window>, on_done: impl Fn(Option<Credentials>
         true
     });
     let status = gtk::Label::builder().wrap(true).visible(false).margin_top(12).margin_bottom(12).build();
-    let host = adw::WindowTitle::new("wave にログイン", "");
+    let host = adw::WindowTitle::new(lang::t("wave にログイン", "Log in to wave"), "");
     let header = adw::HeaderBar::builder().title_widget(&host).build();
     let body = gtk::Box::new(gtk::Orientation::Vertical, 0);
     body.append(&status);
@@ -71,7 +72,7 @@ pub fn open(parent: &impl IsA<gtk::Window>, on_done: impl Fn(Option<Credentials>
     let window = adw::Window::builder()
         .transient_for(parent)
         .modal(true)
-        .title("wave にログイン")
+        .title(lang::t("wave にログイン", "Log in to wave"))
         .default_width(520)
         .default_height(760)
         .content(&toolbar)
@@ -106,7 +107,7 @@ pub fn open(parent: &impl IsA<gtk::Window>, on_done: impl Fn(Option<Credentials>
                         window.close();
                     }
                     result => {
-                        status.set_label(if result.is_none() { "ログイン情報を取得できませんでした" } else { "ログイン情報を保存できませんでした" });
+                        status.set_label(if result.is_none() { lang::t("ログイン情報を取得できませんでした", "Couldn't get your login details") } else { lang::t("ログイン情報を保存できませんでした", "Couldn't save your login details") });
                         status.set_visible(true);
                         finishing.set(false);
                     }

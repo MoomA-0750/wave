@@ -9,6 +9,7 @@ use adw::prelude::*;
 use wave_core::music::models::{MusicVideo, Song};
 
 use super::{images, pages};
+use crate::lang;
 use crate::playback::{Origin, QueueItem};
 use crate::runtime;
 
@@ -915,8 +916,8 @@ fn video_layer(app: &Rc<App>) -> Option<gtk::Widget> {
     app.video.as_ref()?;
     let media = video_or_cover(app, Place::Layer);
     let pip = pip_button(app);
-    let fullscreen = gtk::Button::builder().icon_name("view-fullscreen-symbolic").tooltip_text("全画面").css_classes(["osd", "circular"]).build();
-    let close = gtk::Button::builder().icon_name("window-close-symbolic").tooltip_text("映像だけをやめる (Esc)").css_classes(["osd", "circular"]).build();
+    let fullscreen = gtk::Button::builder().icon_name("view-fullscreen-symbolic").tooltip_text(lang::t("全画面", "Full screen")).css_classes(["osd", "circular"]).build();
+    let close = gtk::Button::builder().icon_name("window-close-symbolic").tooltip_text(lang::t("映像だけをやめる (Esc)", "Exit video only (Esc)")).css_classes(["osd", "circular"]).build();
     let buttons = gtk::Box::builder().spacing(8).halign(gtk::Align::End).valign(gtk::Align::Start).margin_end(16).margin_top(16).build();
     buttons.append(&pip);
     buttons.append(&fullscreen);
@@ -950,7 +951,7 @@ fn video_layer(app: &Rc<App>) -> Option<gtk::Widget> {
             let Some(app) = weak.upgrade() else { return };
             let on = app.window().is_some_and(|w| w.is_fullscreen());
             fullscreen.set_icon_name(if on { "view-restore-symbolic" } else { "view-fullscreen-symbolic" });
-            fullscreen.set_tooltip_text(Some(if on { "全画面をやめる" } else { "全画面" }));
+            fullscreen.set_tooltip_text(Some(if on { lang::t("全画面をやめる", "Exit full screen") } else { lang::t("全画面", "Full screen") }));
         });
     }
     Some(layer.upcast())
@@ -960,10 +961,10 @@ fn video_layer(app: &Rc<App>) -> Option<gtk::Widget> {
 /// ダブルクリックでも wave に戻す。閉じても音は続ける。常に手前にするのは GNOME の窓のメニューで（Wayland ではアプリから手前に固定できない）。
 fn mini_window(app: &Rc<App>) -> gtk::Window {
     let media = video_or_cover(app, Place::Pip);
-    let previous = gtk::Button::builder().icon_name("media-skip-backward-symbolic").tooltip_text("前へ").css_classes(["osd", "circular"]).build();
-    let play = gtk::Button::builder().icon_name("media-playback-pause-symbolic").tooltip_text("再生・一時停止").css_classes(["osd", "circular"]).build();
-    let next = gtk::Button::builder().icon_name("media-skip-forward-symbolic").tooltip_text("次へ").css_classes(["osd", "circular"]).build();
-    let back = gtk::Button::builder().icon_name("go-up-symbolic").tooltip_text("wave に戻して大きく見る").halign(gtk::Align::End).valign(gtk::Align::Start).margin_top(6).margin_end(6).visible(false).css_classes(["osd", "circular"]).build();
+    let previous = gtk::Button::builder().icon_name("media-skip-backward-symbolic").tooltip_text(lang::t("前へ", "Previous")).css_classes(["osd", "circular"]).build();
+    let play = gtk::Button::builder().icon_name("media-playback-pause-symbolic").tooltip_text(lang::t("再生・一時停止", "Play/Pause")).css_classes(["osd", "circular"]).build();
+    let next = gtk::Button::builder().icon_name("media-skip-forward-symbolic").tooltip_text(lang::t("次へ", "Next")).css_classes(["osd", "circular"]).build();
+    let back = gtk::Button::builder().icon_name("go-up-symbolic").tooltip_text(lang::t("wave に戻して大きく見る", "Back to wave")).halign(gtk::Align::End).valign(gtk::Align::Start).margin_top(6).margin_end(6).visible(false).css_classes(["osd", "circular"]).build();
     let controls = gtk::Box::builder().spacing(18).halign(gtk::Align::Center).valign(gtk::Align::Center).visible(false).build();
     for b in [&previous, &play, &next] {
         controls.append(b);
@@ -971,7 +972,7 @@ fn mini_window(app: &Rc<App>) -> gtk::Window {
     let overlay = gtk::Overlay::builder().child(&media).css_classes(["video-layer"]).build();
     overlay.add_overlay(&controls);
     overlay.add_overlay(&back);
-    let window = gtk::Window::builder().title("wave の小窓").default_width(400).default_height(225).child(&overlay).build();
+    let window = gtk::Window::builder().title(lang::t("wave の小窓", "wave mini player")).default_width(400).default_height(225).child(&overlay).build();
     // 指を乗せたときだけ操作を出す
     let motion = gtk::EventControllerMotion::new();
     let (c, b) = (controls.clone(), back.clone());
@@ -1020,7 +1021,7 @@ fn mini_window(app: &Rc<App>) -> gtk::Window {
         let Some(p) = p.upgrade() else { return gtk::glib::ControlFlow::Break };
         let playing = playback.player().is_playing();
         p.set_icon_name(if playing { "media-playback-pause-symbolic" } else { "media-playback-start-symbolic" });
-        p.set_tooltip_text(Some(if playing { "一時停止" } else { "再生" }));
+        p.set_tooltip_text(Some(if playing { lang::t("一時停止", "Pause") } else { lang::t("再生", "Play") }));
         gtk::glib::ControlFlow::Continue
     });
     window
@@ -1028,7 +1029,7 @@ fn mini_window(app: &Rc<App>) -> gtk::Window {
 
 /// 映像の小窓を出す・閉じるボタン（絵も替える）。
 fn pip_button(app: &Rc<App>) -> gtk::Button {
-    let button = gtk::Button::builder().icon_name("view-restore-symbolic").tooltip_text("小窓で見る").css_classes(["osd", "circular"]).build();
+    let button = gtk::Button::builder().icon_name("view-restore-symbolic").tooltip_text(lang::t("小窓で見る", "Picture in picture")).css_classes(["osd", "circular"]).build();
     {
         let app = app.clone();
         button.connect_clicked(move |_| app.toggle_pip());
@@ -1038,7 +1039,7 @@ fn pip_button(app: &Rc<App>) -> gtk::Button {
         let Some(app) = weak.upgrade() else { return };
         let open = app.pip_open();
         b.set_icon_name(if open { "view-conceal-symbolic" } else { "view-restore-symbolic" });
-        b.set_tooltip_text(Some(if open { "小窓を閉じる" } else { "小窓で見る" }));
+        b.set_tooltip_text(Some(if open { lang::t("小窓を閉じる", "Close picture in picture") } else { lang::t("小窓で見る", "Picture in picture") }));
     });
     button
 }
@@ -1080,7 +1081,7 @@ pub(super) fn video_or_cover(app: &Rc<App>, place: Place) -> gtk::Widget {
         }
     };
     let note = gtk::Label::builder().wrap(true).justify(gtk::Justification::Center).css_classes(["caption", "video-note"]).build();
-    let retry = gtk::Button::builder().label("もう一度").halign(gtk::Align::Center).css_classes(["pill", "osd"]).build();
+    let retry = gtk::Button::builder().label(lang::t("もう一度", "Retry")).halign(gtk::Align::Center).css_classes(["pill", "osd"]).build();
     if let Some(video) = app.video.as_ref() {
         let picture = gtk::Picture::builder().paintable(video.paintable()).content_fit(gtk::ContentFit::Contain).can_shrink(true).hexpand(true).vexpand(true).build();
         if place == Place::Side {
@@ -1102,7 +1103,7 @@ pub(super) fn video_or_cover(app: &Rc<App>, place: Place) -> gtk::Widget {
         }
         if matches!(place, Place::Side | Place::Full) {
             let pip = pip_button(app);
-            let (icon, tip) = if place == Place::Side { ("view-fullscreen-symbolic", "映像を大きく見る") } else { ("view-fullscreen-symbolic", "映像だけを窓いっぱいに") };
+            let (icon, tip) = if place == Place::Side { ("view-fullscreen-symbolic", lang::t("映像を大きく見る", "Expand video")) } else { ("view-fullscreen-symbolic", lang::t("映像だけを窓いっぱいに", "Video only")) };
             let expand = gtk::Button::builder().icon_name(icon).tooltip_text(tip).css_classes(["osd", "circular"]).build();
             let corner = gtk::Box::builder().spacing(6).halign(gtk::Align::End).valign(gtk::Align::End).margin_end(8).margin_bottom(8).build();
             corner.append(&pip);
@@ -1140,9 +1141,9 @@ pub(super) fn video_or_cover(app: &Rc<App>, place: Place) -> gtk::Widget {
             stack.set_visible_child_name(if state == VideoState::Off { "art" } else { "video" });
             note.set_visible(state != VideoState::Showing);
             note.set_label(match state {
-                VideoState::Loading => "動画を読み込んでいます…",
-                VideoState::Failed => "動画を読み込めませんでした",
-                VideoState::Gap => "この部分には動画がありません",
+                VideoState::Loading => lang::t("動画を読み込んでいます…", "Loading video…"),
+                VideoState::Failed => lang::t("動画を読み込めませんでした", "Couldn't load the video"),
+                VideoState::Gap => lang::t("この部分には動画がありません", "There's no video for this part"),
                 _ => "",
             });
             retry.set_visible(state == VideoState::Failed);
@@ -1161,8 +1162,8 @@ pub(super) fn video_or_cover(app: &Rc<App>, place: Place) -> gtk::Widget {
 /// 「曲｜動画」の切り替え（MV のある曲だけ出す）。
 pub(super) fn song_video_switch(app: &Rc<App>) -> adw::ToggleGroup {
     let switch = adw::ToggleGroup::builder().visible(false).css_classes(["round", "media-switch"]).build();
-    switch.add(adw::Toggle::builder().label("曲").name("song").build());
-    switch.add(adw::Toggle::builder().label("動画").name("video").build());
+    switch.add(adw::Toggle::builder().label(lang::t("曲", "Song")).name("song").build());
+    switch.add(adw::Toggle::builder().label(lang::t("動画", "Video")).name("video").build());
     switch.set_active_name(Some("song"));
     let syncing = Rc::new(Cell::new(false));
     {
@@ -1316,15 +1317,15 @@ fn pane(child: &impl IsA<gtk::Widget>, width: Option<i32>) -> gtk::Widget {
 /// 上の帯: 左に戻る・進む、中央（窓の左右の中央）にホーム・検索の欄・Claude（Mac と同じ）。
 /// 戻れるときは戻るだけ、進めるときは2つとも出す（戻れなければ戻るは薄く）。
 fn header(app: &Rc<App>) -> adw::HeaderBar {
-    let back = gtk::Button::builder().icon_name("go-previous-symbolic").tooltip_text("戻る").visible(false).build();
-    let forward = gtk::Button::builder().icon_name("go-next-symbolic").tooltip_text("進む").visible(false).build();
-    let home = gtk::Button::builder().icon_name("go-home-symbolic").tooltip_text("ホーム").css_classes(["circular"]).build();
-    let search = gtk::SearchEntry::builder().placeholder_text("何を聴きたいですか？").width_request(440).build();
+    let back = gtk::Button::builder().icon_name("go-previous-symbolic").tooltip_text(lang::t("戻る", "Back")).visible(false).build();
+    let forward = gtk::Button::builder().icon_name("go-next-symbolic").tooltip_text(lang::t("進む", "Forward")).visible(false).build();
+    let home = gtk::Button::builder().icon_name("go-home-symbolic").tooltip_text(lang::t("ホーム", "Home")).css_classes(["circular"]).build();
+    let search = gtk::SearchEntry::builder().placeholder_text(lang::t("何を聴きたいですか？", "What do you want to play?")).width_request(440).build();
     let center = gtk::Box::builder().spacing(8).build();
     center.append(&home);
     center.append(&search);
     // Claude は検索の欄の右（Mac と同じ）。右の欄に出し、もう一度押すと開く前に戻す
-    let claude = gtk::ToggleButton::builder().icon_name("chat-message-new-symbolic").tooltip_text("Claude に聞く (Ctrl+J)").css_classes(["circular", "flat"]).build();
+    let claude = gtk::ToggleButton::builder().icon_name("chat-message-new-symbolic").tooltip_text(lang::t("Claude に聞く (Ctrl+J)", "Ask Claude (Ctrl+J)")).css_classes(["circular", "flat"]).build();
     center.append(&claude);
     {
         let app = app.clone();
@@ -1491,7 +1492,7 @@ fn suggestions_popover(app: &Rc<App>, entry: &gtk::SearchEntry) -> gtk::Popover 
                 list.append(&row);
             }
             for artist in found.artists {
-                let row = suggestion_row(&artist.name, Some("アーティスト"), artist.thumbnail_url.as_deref(), true, "avatar-default-symbolic");
+                let row = suggestion_row(&artist.name, Some(lang::t("アーティスト", "Artist")), artist.thumbnail_url.as_deref(), true, "avatar-default-symbolic");
                 let (app, entry, popover) = (app.clone(), entry.clone(), popover.clone());
                 row.connect_activated(move |_| {
                     close(&popover, &entry);
@@ -1501,7 +1502,7 @@ fn suggestions_popover(app: &Rc<App>, entry: &gtk::SearchEntry) -> gtk::Popover 
                 list.append(&row);
             }
             for song in found.songs {
-                let row = suggestion_row(&song.title, Some(&format!("曲 • {}", song.artists_text())), song.thumbnail_url.as_deref(), false, "audio-x-generic-symbolic");
+                let row = suggestion_row(&song.title, Some(&format!("{}{}", lang::t("曲 • ", "Song • "), song.artists_text())), song.thumbnail_url.as_deref(), false, "audio-x-generic-symbolic");
                 let (app, entry, popover) = (app.clone(), entry.clone(), popover.clone());
                 row.connect_activated(move |_| {
                     close(&popover, &entry);
@@ -1511,7 +1512,7 @@ fn suggestions_popover(app: &Rc<App>, entry: &gtk::SearchEntry) -> gtk::Popover 
                 list.append(&row);
             }
             for album in found.albums {
-                let row = suggestion_row(&album.title, Some(album.subtitle.as_deref().unwrap_or("アルバム")), album.thumbnail_url.as_deref(), false, "media-optical-symbolic");
+                let row = suggestion_row(&album.title, Some(album.subtitle.as_deref().unwrap_or(lang::t("アルバム", "Album"))), album.thumbnail_url.as_deref(), false, "media-optical-symbolic");
                 let (app, entry, popover) = (app.clone(), entry.clone(), popover.clone());
                 row.connect_activated(move |_| {
                     close(&popover, &entry);
@@ -1567,15 +1568,15 @@ fn now_playing(app: &Rc<App>) -> gtk::Widget {
     let text = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(2).hexpand(true).build();
     text.append(&title);
     text.append(&artist);
-    let like = gtk::Button::builder().icon_name("list-add-symbolic").tooltip_text("高く評価した曲に追加").valign(gtk::Align::Start).css_classes(["flat", "circular", "like-button"]).build();
+    let like = gtk::Button::builder().icon_name("list-add-symbolic").tooltip_text(lang::t("高く評価した曲に追加", "Add to Liked Songs")).valign(gtk::Align::Start).css_classes(["flat", "circular", "like-button"]).build();
     like_behaviour(app, &like);
     let title_row = gtk::Box::builder().spacing(8).build();
     title_row.append(&text);
     title_row.append(&like);
 
     // 次の曲（見出しは常に出し、右に「キューを開く」）
-    let next_heading = gtk::Label::builder().label("次の曲").xalign(0.0).hexpand(true).css_classes(["heading"]).build();
-    let open_queue = gtk::Button::builder().label("キューを開く").css_classes(["flat", "text-link"]).build();
+    let next_heading = gtk::Label::builder().label(lang::t("次の曲", "Next up")).xalign(0.0).hexpand(true).css_classes(["heading"]).build();
+    let open_queue = gtk::Button::builder().label(lang::t("キューを開く", "Open queue")).css_classes(["flat", "text-link"]).build();
     {
         let app = app.clone();
         open_queue.connect_clicked(move |_| app.show_queue(false));
@@ -1611,7 +1612,7 @@ fn now_playing(app: &Rc<App>) -> gtk::Widget {
 
     // 歌詞（無い曲では箱ごと出さない）。押すと歌詞のページ
     let lyrics_card = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(8).visible(false).css_classes(["np-card"]).build();
-    lyrics_card.append(&gtk::Label::builder().label("歌詞").xalign(0.0).css_classes(["heading"]).build());
+    lyrics_card.append(&gtk::Label::builder().label(lang::t("歌詞", "Lyrics")).xalign(0.0).css_classes(["heading"]).build());
     let card = lyrics_card.clone();
     let follower = super::full_view::lyrics_follower(app, false, move |found| card.set_visible(found));
     follower.set_size_request(-1, 190);
@@ -1650,8 +1651,8 @@ fn now_playing(app: &Rc<App>) -> gtk::Widget {
             }
             *shown.borrow_mut() = Some(key);
             let album = song.as_ref().and_then(|s| s.album.as_ref()).map(|a| a.title.clone()).filter(|t| !t.is_empty());
-            heading.set_label(album.as_deref().unwrap_or("再生中"));
-            title.set_label(song.as_ref().map_or("何も再生していません", |s| s.title.as_str()));
+            heading.set_label(album.as_deref().unwrap_or(lang::t("再生中", "Now playing")));
+            title.set_label(song.as_ref().map_or(lang::t("何も再生していません", "Nothing playing"), |s| s.title.as_str()));
             artist.set_label(&song.as_ref().map(|s| s.artists_text()).unwrap_or_default());
             next_row.set_visible(next.is_some());
             if let Some(next) = next {
@@ -1674,8 +1675,8 @@ fn now_playing(app: &Rc<App>) -> gtk::Widget {
 fn account_button(app: &Rc<App>) -> gtk::MenuButton {
     let avatar = adw::Avatar::builder().size(30).show_initials(true).build();
     let name = gtk::Label::builder().css_classes(["heading"]).margin_bottom(6).build();
-    let history = gtk::Button::builder().label("最近再生した曲").css_classes(["flat"]).build();
-    let settings = gtk::Button::builder().label("設定").css_classes(["flat"]).build();
+    let history = gtk::Button::builder().label(lang::t("最近再生した曲", "Recently played")).css_classes(["flat"]).build();
+    let settings = gtk::Button::builder().label(lang::t("設定", "Settings")).css_classes(["flat"]).build();
     let column = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(4).margin_top(6).margin_bottom(6).margin_start(6).margin_end(6).build();
     column.append(&name);
     column.append(&gtk::Separator::new(gtk::Orientation::Horizontal));
@@ -1686,7 +1687,7 @@ fn account_button(app: &Rc<App>) -> gtk::MenuButton {
     }
     column.append(&settings);
     let popover = gtk::Popover::builder().child(&column).build();
-    let button = gtk::MenuButton::builder().child(&avatar).popover(&popover).tooltip_text("アカウント").css_classes(["flat", "circular"]).build();
+    let button = gtk::MenuButton::builder().child(&avatar).popover(&popover).tooltip_text(lang::t("アカウント", "Account")).css_classes(["flat", "circular"]).build();
     {
         let (app, popover) = (app.clone(), popover.clone());
         settings.connect_clicked(move |_| {
@@ -1704,7 +1705,7 @@ fn account_button(app: &Rc<App>) -> gtk::MenuButton {
     let repo = app.repo.clone();
     gtk::glib::spawn_future_local(async move {
         let Ok(account) = runtime::run(async move { repo.account().await }).await else { return };
-        let text = account.name.unwrap_or_else(|| "ログイン中".to_string());
+        let text = account.name.unwrap_or_else(|| lang::t("ログイン中", "Logged in").to_string());
         avatar.set_text(Some(&text));
         name.set_label(&text);
         if let Some(url) = account.photo_url {
@@ -1754,11 +1755,11 @@ fn queue_entries(items: &[QueueItem], index: Option<usize>, history: bool) -> Ve
     (index..items.len())
         .map(|i| {
             let section = if i == index {
-                Some("再生中")
+                Some(lang::t("再生中", "Now playing"))
             } else if i == index + 1 && i < user_end {
-                Some("キューの次の曲")
+                Some(lang::t("キューの次の曲", "Next in queue"))
             } else if i == user_end {
-                Some("次に流れる曲")
+                Some(lang::t("次に流れる曲", "Next up"))
             } else {
                 None
             };
@@ -1789,12 +1790,12 @@ fn clear_flow(app: &Rc<App>) {
 /// 右クリックで曲のメニュー（キューから削除も）、ドラッグで並べ替え。
 fn queue(app: &Rc<App>) -> gtk::Widget {
     let switch = adw::ToggleGroup::builder().css_classes(["round"]).build();
-    switch.add(adw::Toggle::builder().label("キュー").name("queue").build());
-    switch.add(adw::Toggle::builder().label("履歴").name("history").build());
+    switch.add(adw::Toggle::builder().label(lang::t("キュー", "Queue")).name("queue").build());
+    switch.add(adw::Toggle::builder().label(lang::t("履歴", "History")).name("history").build());
     switch.set_active_name(Some("queue"));
-    let clear = gtk::Button::builder().label("キューを消去").css_classes(["flat", "text-link"]).visible(false).build();
-    let save = gtk::Button::builder().icon_name("bookmark-new-symbolic").tooltip_text("キューをプレイリストとして保存").css_classes(["flat", "circular"]).visible(false).build();
-    let close = gtk::Button::builder().icon_name("window-close-symbolic").tooltip_text("閉じる").css_classes(["flat", "circular"]).build();
+    let clear = gtk::Button::builder().label(lang::t("キューを消去", "Clear queue")).css_classes(["flat", "text-link"]).visible(false).build();
+    let save = gtk::Button::builder().icon_name("bookmark-new-symbolic").tooltip_text(lang::t("キューをプレイリストとして保存", "Save queue as playlist")).css_classes(["flat", "circular"]).visible(false).build();
+    let close = gtk::Button::builder().icon_name("window-close-symbolic").tooltip_text(lang::t("閉じる", "Close")).css_classes(["flat", "circular"]).build();
     let spacer = gtk::Box::builder().hexpand(true).build();
     let top = gtk::Box::builder().spacing(4).margin_top(12).margin_start(16).margin_end(12).margin_bottom(4).build();
     top.append(&switch);
@@ -1873,9 +1874,9 @@ fn queue(app: &Rc<App>) -> gtk::Widget {
             // ほかの端末を映している間は、その端末の今の曲と次の曲だけを出す（操作はしない）
             let entries = match mirror {
                 Some(m) if !history => {
-                    let mut e = vec![QueueEntry { index: usize::MAX, item_id: String::new(), song: m.song, is_current: true, section: Some("再生中"), flow_header: false }];
+                    let mut e = vec![QueueEntry { index: usize::MAX, item_id: String::new(), song: m.song, is_current: true, section: Some(lang::t("再生中", "Now playing")), flow_header: false }];
                     if let Some(next) = m.next {
-                        e.push(QueueEntry { index: usize::MAX, item_id: String::new(), song: next, is_current: false, section: Some("次に流れる曲"), flow_header: false });
+                        e.push(QueueEntry { index: usize::MAX, item_id: String::new(), song: next, is_current: false, section: Some(lang::t("次に流れる曲", "Next up")), flow_header: false });
                     }
                     e
                 }
@@ -1887,8 +1888,8 @@ fn queue(app: &Rc<App>) -> gtk::Widget {
             // ログインしていて手元のキューに曲があるときだけ（ほかの端末を映している間は出さない）
             save.set_visible(!remote && app.repo.client().is_logged_in() && !items.is_empty());
             if entries.is_empty() {
-                empty_title.set_label(if history { "まだ流れた曲はありません" } else { "キューは空です" });
-                empty_text.set_label(if history { "流れた曲は、ここに新しい順に並びます" } else { "曲を再生すると、ここに次の曲が並びます" });
+                empty_title.set_label(if history { lang::t("まだ流れた曲はありません", "Nothing played yet") } else { lang::t("キューは空です", "Your queue is empty") });
+                empty_text.set_label(if history { lang::t("流れた曲は、ここに新しい順に並びます", "Songs you've played will show up here") } else { lang::t("曲を再生すると、ここに次の曲が並びます", "Play something and upcoming songs will show up here") });
                 stack.set_visible_child_name("empty");
                 return;
             }
@@ -1918,7 +1919,7 @@ fn queue_header(app: &Rc<App>, title: &str, flow: bool) -> gtk::ListBoxRow {
     let line = gtk::Box::builder().spacing(8).margin_top(10).margin_bottom(2).margin_start(4).build();
     line.append(&gtk::Label::builder().label(title).xalign(0.0).hexpand(true).css_classes(["heading"]).build());
     if flow {
-        let clear = gtk::Button::builder().label("消去").tooltip_text("元の流れの曲をまとめて外す（自分で足した曲は残す）").css_classes(["flat", "text-link"]).build();
+        let clear = gtk::Button::builder().label(lang::t("消去", "Clear")).tooltip_text(lang::t("元の流れの曲をまとめて外す（自分で足した曲は残す）", "Remove the autoplay songs (songs you added stay)")).css_classes(["flat", "text-link"]).build();
         let app = app.clone();
         clear.connect_clicked(move |_| clear_flow(&app));
         line.append(&clear);
@@ -2024,9 +2025,9 @@ fn like_behaviour(app: &Rc<App>, like: &gtk::Button) {
         let like = like.clone();
         Rc::new(move |liked: Option<bool>, loading: bool| {
             let (icon, tip) = match liked {
-                Some(true) => ("object-select-symbolic", "プレイリストに追加"),
-                Some(false) => ("list-add-symbolic", "高く評価した曲に追加"),
-                None => ("view-refresh-symbolic", "評価を読み直す"),
+                Some(true) => ("object-select-symbolic", lang::t("プレイリストに追加", "Add to playlist")),
+                Some(false) => ("list-add-symbolic", lang::t("高く評価した曲に追加", "Add to Liked Songs")),
+                None => ("view-refresh-symbolic", lang::t("評価を読み直す", "Reload like status")),
             };
             like.set_icon_name(icon);
             like.set_tooltip_text(Some(tip));
@@ -2159,16 +2160,16 @@ fn fill_devices(app: &Rc<App>, column: &gtk::Box, popover: &gtk::Popover) {
     let members = app.connect.members();
     let mirror = app.connect.mirror();
     let is_pc = |id: &str| members.iter().find(|m| m.device_id == id).and_then(|m| m.kind.as_deref()) == Some("pc");
-    column.append(&gtk::Label::builder().label("現在のデバイス").xalign(0.0).css_classes(["heading"]).build());
+    column.append(&gtk::Label::builder().label(lang::t("現在のデバイス", "Current device")).xalign(0.0).css_classes(["heading"]).build());
     match &mirror {
         Some(m) => {
             let subtitle = [m.song.title.clone(), m.song.artists_text()].into_iter().filter(|s| !s.is_empty()).collect::<Vec<_>>().join(" · ");
             column.append(&device_row(if is_pc(&m.device_id) { "computer-symbolic" } else { "phone-symbolic" }, &m.label, Some(&subtitle), true, true));
         }
-        None => column.append(&device_row("computer-symbolic", "この PC", None, true, true)),
+        None => column.append(&device_row("computer-symbolic", lang::t("この PC", "This PC"), None, true, true)),
     }
     if !info.in_household {
-        column.append(&gtk::Label::builder().label("スマホと連携すると、再生を引き継げます").xalign(0.0).wrap(true).margin_top(4).css_classes(["dim-label"]).build());
+        column.append(&gtk::Label::builder().label(lang::t("スマホと連携すると、再生を引き継げます", "Connect your phone to move playback between devices")).xalign(0.0).wrap(true).margin_top(4).css_classes(["dim-label"]).build());
     } else {
         let mut others: Vec<_> = members
             .iter()
@@ -2182,12 +2183,12 @@ fn fill_devices(app: &Rc<App>, column: &gtk::Box, popover: &gtk::Popover) {
         // 自分を先に、その後はオンラインのものを先に（同じなら家の順のまま）
         others.sort_by_key(|m| (!m.is_self, !(m.online || m.is_self)));
         if !others.is_empty() {
-            column.append(&gtk::Label::builder().label("ほかのデバイスを選択").xalign(0.0).margin_top(8).css_classes(["heading"]).build());
+            column.append(&gtk::Label::builder().label(lang::t("ほかのデバイスを選択", "Select another device")).xalign(0.0).margin_top(8).css_classes(["heading"]).build());
         }
         for member in others {
             let enabled = member.is_self || member.online;
-            let (icon, title) = if member.is_self { ("computer-symbolic", "この PC".to_string()) } else { (if member.kind.as_deref() == Some("pc") { "computer-symbolic" } else { "phone-symbolic" }, member.label.clone()) };
-            let line = device_row(icon, &title, (!enabled).then_some("オフライン"), false, enabled);
+            let (icon, title) = if member.is_self { ("computer-symbolic", lang::t("この PC", "This PC").to_string()) } else { (if member.kind.as_deref() == Some("pc") { "computer-symbolic" } else { "phone-symbolic" }, member.label.clone()) };
+            let line = device_row(icon, &title, (!enabled).then_some(lang::t("オフライン", "Offline")), false, enabled);
             if !enabled {
                 column.append(&line);
                 continue;
@@ -2242,22 +2243,22 @@ fn player_bar(app: &Rc<App>) -> gtk::Widget {
     song.append(&art.root);
     song.append(&text);
     // 評価（Mac と同じく曲名の右）
-    let like = gtk::Button::builder().icon_name("list-add-symbolic").tooltip_text("高く評価した曲に追加").valign(gtk::Align::Center).css_classes(["flat", "circular", "like-button"]).build();
+    let like = gtk::Button::builder().icon_name("list-add-symbolic").tooltip_text(lang::t("高く評価した曲に追加", "Add to Liked Songs")).valign(gtk::Align::Center).css_classes(["flat", "circular", "like-button"]).build();
     song.append(&like);
     like_behaviour(app, &like);
 
     // 中央: 操作と位置
-    let previous = gtk::Button::builder().icon_name("media-skip-backward-symbolic").tooltip_text("前へ").css_classes(["circular", "flat"]).build();
+    let previous = gtk::Button::builder().icon_name("media-skip-backward-symbolic").tooltip_text(lang::t("前へ", "Previous")).css_classes(["circular", "flat"]).build();
     let play_icon = gtk::Image::from_icon_name("media-playback-start-symbolic");
     let play_spinner = adw::Spinner::builder().width_request(20).height_request(20).halign(gtk::Align::Center).valign(gtk::Align::Center).build();
     let play_face = gtk::Stack::new();
     play_face.add_named(&play_icon, Some("icon"));
     play_face.add_named(&play_spinner, Some("loading"));
-    let play = gtk::Button::builder().child(&play_face).tooltip_text("再生/一時停止").css_classes(["circular", "suggested-action", "play-large"]).build();
-    let next = gtk::Button::builder().icon_name("media-skip-forward-symbolic").tooltip_text("次へ").css_classes(["circular", "flat"]).build();
+    let play = gtk::Button::builder().child(&play_face).tooltip_text(lang::t("再生/一時停止", "Play/Pause")).css_classes(["circular", "suggested-action", "play-large"]).build();
+    let next = gtk::Button::builder().icon_name("media-skip-forward-symbolic").tooltip_text(lang::t("次へ", "Next")).css_classes(["circular", "flat"]).build();
     // シャッフルとリピート（Mac と同じく前・次の外側）
-    let shuffle = gtk::ToggleButton::builder().icon_name("media-playlist-shuffle-symbolic").tooltip_text("シャッフル").css_classes(["circular", "flat"]).build();
-    let repeat = gtk::ToggleButton::builder().icon_name("media-playlist-repeat-symbolic").tooltip_text("リピート").css_classes(["circular", "flat"]).build();
+    let shuffle = gtk::ToggleButton::builder().icon_name("media-playlist-shuffle-symbolic").tooltip_text(lang::t("シャッフル", "Shuffle")).css_classes(["circular", "flat"]).build();
+    let repeat = gtk::ToggleButton::builder().icon_name("media-playlist-repeat-symbolic").tooltip_text(lang::t("リピート", "Repeat")).css_classes(["circular", "flat"]).build();
     let controls = gtk::Box::builder().spacing(12).halign(gtk::Align::Center).build();
     controls.append(&shuffle);
     controls.append(&previous);
@@ -2286,26 +2287,26 @@ fn player_bar(app: &Rc<App>) -> gtk::Widget {
     middle.append(&seek_stack);
 
     // 右: 歌詞・キュー・端末・再生中の画面・全画面・音量
-    let lyrics_toggle = gtk::ToggleButton::builder().icon_name("text-x-generic-symbolic").tooltip_text("歌詞").css_classes(["flat"]).build();
-    let queue_toggle = gtk::ToggleButton::builder().icon_name("view-list-symbolic").tooltip_text("キュー").css_classes(["flat"]).build();
-    let pane_toggle = gtk::ToggleButton::builder().icon_name("sidebar-show-right-symbolic").tooltip_text("再生中の画面").css_classes(["flat"]).build();
-    let full_toggle = gtk::ToggleButton::builder().icon_name("view-fullscreen-symbolic").tooltip_text("全画面 (F11)").css_classes(["flat"]).build();
+    let lyrics_toggle = gtk::ToggleButton::builder().icon_name("text-x-generic-symbolic").tooltip_text(lang::t("歌詞", "Lyrics")).css_classes(["flat"]).build();
+    let queue_toggle = gtk::ToggleButton::builder().icon_name("view-list-symbolic").tooltip_text(lang::t("キュー", "Queue")).css_classes(["flat"]).build();
+    let pane_toggle = gtk::ToggleButton::builder().icon_name("sidebar-show-right-symbolic").tooltip_text(lang::t("再生中の画面", "Now playing view")).css_classes(["flat"]).build();
+    let full_toggle = gtk::ToggleButton::builder().icon_name("view-fullscreen-symbolic").tooltip_text(lang::t("全画面 (F11)", "Full screen (F11)")).css_classes(["flat"]).build();
     // 音量: アイコンでミュート・戻す。狭いときはアイコンから小窓（ミュートと音量のバー）
     let volume = gtk::Scale::builder().orientation(gtk::Orientation::Horizontal).width_request(110).build();
     volume.set_range(0.0, 1.0);
-    let mute = gtk::Button::builder().icon_name("audio-volume-high-symbolic").tooltip_text("ミュート").css_classes(["flat"]).build();
+    let mute = gtk::Button::builder().icon_name("audio-volume-high-symbolic").tooltip_text(lang::t("ミュート", "Mute")).css_classes(["flat"]).build();
     let volume_inline = gtk::Box::builder().spacing(2).build();
     volume_inline.append(&mute);
     volume_inline.append(&volume);
     let small_volume = gtk::Scale::builder().orientation(gtk::Orientation::Horizontal).width_request(110).build();
     small_volume.set_range(0.0, 1.0);
-    let small_mute = gtk::Button::builder().icon_name("audio-volume-high-symbolic").tooltip_text("ミュート").css_classes(["flat"]).build();
+    let small_mute = gtk::Button::builder().icon_name("audio-volume-high-symbolic").tooltip_text(lang::t("ミュート", "Mute")).css_classes(["flat"]).build();
     let small_box = gtk::Box::builder().spacing(8).margin_top(6).margin_bottom(6).margin_start(6).margin_end(6).build();
     small_box.append(&small_mute);
     small_box.append(&small_volume);
     let volume_menu = gtk::MenuButton::builder()
         .icon_name("audio-volume-high-symbolic")
-        .tooltip_text("音量")
+        .tooltip_text(lang::t("音量", "Volume"))
         .popover(&gtk::Popover::builder().child(&small_box).build())
         .direction(gtk::ArrowType::Up)
         .css_classes(["flat"])
@@ -2325,7 +2326,7 @@ fn player_bar(app: &Rc<App>) -> gtk::Widget {
         let popover = gtk::Popover::builder().child(&column).build();
         let app = app.clone();
         popover.connect_show(move |popover| fill_devices(&app, &column, popover));
-        gtk::MenuButton::builder().child(&face).tooltip_text("デバイスに接続").popover(&popover).direction(gtk::ArrowType::Up).css_classes(["flat"]).build()
+        gtk::MenuButton::builder().child(&face).tooltip_text(lang::t("デバイスに接続", "Connect to a device")).popover(&popover).direction(gtk::ArrowType::Up).css_classes(["flat"]).build()
     };
     if app.connect.info().configured {
         end.append(&devices);
@@ -2538,7 +2539,7 @@ fn player_bar(app: &Rc<App>) -> gtk::Widget {
             let loading = current.is_some() && player.wants_to_play() && !playing;
             play_face.set_visible_child_name(if loading { "loading" } else { "icon" });
             play_icon.set_icon_name(Some(if playing { "media-playback-pause-symbolic" } else { "media-playback-start-symbolic" }));
-            play.set_tooltip_text(Some("再生/一時停止"));
+            play.set_tooltip_text(Some(lang::t("再生/一時停止", "Play/Pause")));
         }
     };
     refresh();
@@ -2593,10 +2594,10 @@ mod tests {
         assert_eq!(
             shape,
             vec![
-                ("b", Some("再生中"), true, false),
-                ("u1", Some("キューの次の曲"), false, false),
+                ("b", Some(lang::t("再生中", "Now playing")), true, false),
+                ("u1", Some(lang::t("キューの次の曲", "Next in queue")), false, false),
                 ("u2", None, false, false),
-                ("c", Some("次に流れる曲"), false, true),
+                ("c", Some(lang::t("次に流れる曲", "Next up")), false, true),
                 ("d", None, false, false),
             ]
         );
@@ -2607,8 +2608,8 @@ mod tests {
     fn queue_without_user_added_songs_has_two_sections() {
         let items = vec![item("a", Origin::Source), item("b", Origin::Source)];
         let entries = queue_entries(&items, Some(0), false);
-        assert_eq!(entries[0].section, Some("再生中"));
-        assert_eq!(entries[1].section, Some("次に流れる曲"));
+        assert_eq!(entries[0].section, Some(lang::t("再生中", "Now playing")));
+        assert_eq!(entries[1].section, Some(lang::t("次に流れる曲", "Next up")));
         assert!(entries[1].flow_header);
         // 最後の曲ならキューは今の曲だけ
         assert_eq!(queue_entries(&items, Some(1), false).len(), 1);

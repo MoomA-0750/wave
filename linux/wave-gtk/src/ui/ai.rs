@@ -9,18 +9,21 @@ use wave_core::ai::text;
 
 use super::pages;
 use super::shell::App;
+use crate::lang;
 use crate::ai_chat::AiMessage;
 
 /// 頼みの例（押すとそのまま送る。Mac の AiView と同じ）。
-const SUGGESTIONS: [&str; 3] = ["この歌詞ってどういう意味だと思う？", "これに似た曲ある？", "この曲から始まるプレイリストを作って"];
+fn suggestion_texts() -> [&'static str; 3] {
+    [lang::t("この歌詞ってどういう意味だと思う？", "What do these lyrics mean?"), lang::t("これに似た曲ある？", "Any songs like this?"), lang::t("この曲から始まるプレイリストを作って", "Make a playlist from this song")]
+}
 
 /// 右の欄の中身: 上の段（これまでの会話・新しい会話・閉じる）・会話・頼みの例・入力の欄。
 /// on_close は × を押したとき（右の欄を Claude を開く前の状態に戻す。右の欄の切り替えは shell の側が持つ）。
 pub fn panel(app: &Rc<App>, on_close: impl Fn() + 'static) -> gtk::Widget {
     add_style();
-    let title = gtk::Label::builder().label("Claude に聞く").xalign(0.0).hexpand(true).css_classes(["heading"]).build();
-    let new_chat = gtk::Button::builder().label("新しい会話").css_classes(["flat"]).build();
-    let close = gtk::Button::builder().icon_name("window-close-symbolic").tooltip_text("閉じる").css_classes(["flat", "circular"]).build();
+    let title = gtk::Label::builder().label(lang::t("Claude に聞く", "Ask Claude")).xalign(0.0).hexpand(true).css_classes(["heading"]).build();
+    let new_chat = gtk::Button::builder().label(lang::t("新しい会話", "New chat")).css_classes(["flat"]).build();
+    let close = gtk::Button::builder().icon_name("window-close-symbolic").tooltip_text(lang::t("閉じる", "Close")).css_classes(["flat", "circular"]).build();
     let header = gtk::Box::builder().spacing(4).margin_top(12).margin_start(16).margin_end(8).build();
     header.append(&title);
     header.append(&history_button(app));
@@ -30,7 +33,7 @@ pub fn panel(app: &Rc<App>, on_close: impl Fn() + 'static) -> gtk::Widget {
 
     let messages = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(10).margin_start(16).margin_end(16).margin_top(8).margin_bottom(16).build();
     let empty = gtk::Label::builder()
-        .label("曲探し・プレイリスト作りを頼めます。再生中の曲について、歌詞の意味や似た曲も聞けます。")
+        .label(lang::t("曲探し・プレイリスト作りを頼めます。再生中の曲について、歌詞の意味や似た曲も聞けます。", "Ask Claude to find music, make a playlist, or tell you about the song that's playing — what the lyrics mean, similar songs, and more."))
         .wrap(true)
         .xalign(0.0)
         .css_classes(["caption", "dim-label"])
@@ -47,9 +50,9 @@ pub fn panel(app: &Rc<App>, on_close: impl Fn() + 'static) -> gtk::Widget {
         .left_margin(10)
         .right_margin(10)
         .build();
-    input_view.update_property(&[gtk::accessible::Property::Placeholder("Claude に聞く")]);
+    input_view.update_property(&[gtk::accessible::Property::Placeholder(lang::t("Claude に聞く", "Ask Claude"))]);
     let placeholder = gtk::Label::builder()
-        .label("Claude に聞く")
+        .label(lang::t("Claude に聞く", "Ask Claude"))
         .xalign(0.0)
         .halign(gtk::Align::Start)
         .valign(gtk::Align::Start)
@@ -68,7 +71,7 @@ pub fn panel(app: &Rc<App>, on_close: impl Fn() + 'static) -> gtk::Widget {
     let input_overlay = gtk::Overlay::builder().child(&input_scroller).build();
     input_overlay.add_overlay(&placeholder);
     let input_frame = gtk::Frame::builder().child(&input_overlay).hexpand(true).build();
-    let send = gtk::Button::builder().icon_name("mail-send-symbolic").tooltip_text("送る").valign(gtk::Align::End).css_classes(["circular", "suggested-action"]).build();
+    let send = gtk::Button::builder().icon_name("mail-send-symbolic").tooltip_text(lang::t("送る", "Send")).valign(gtk::Align::End).css_classes(["circular", "suggested-action"]).build();
     let input = gtk::Box::builder().spacing(8).margin_start(16).margin_end(16).margin_bottom(12).margin_top(4).build();
     input.append(&input_frame);
     input.append(&send);
@@ -85,7 +88,7 @@ pub fn panel(app: &Rc<App>, on_close: impl Fn() + 'static) -> gtk::Widget {
         let app = app.clone();
         Rc::new(move |text: &str| app.ai.send(&app.core, text))
     };
-    for suggestion in SUGGESTIONS {
+    for suggestion in suggestion_texts() {
         let label = gtk::Label::builder().label(suggestion).xalign(0.0).wrap(true).build();
         let button = gtk::Button::builder().child(&label).css_classes(["flat"]).build();
         let send_text = send_text.clone();
@@ -170,7 +173,7 @@ pub fn panel(app: &Rc<App>, on_close: impl Fn() + 'static) -> gtk::Widget {
                 messages.append(&adw::Spinner::builder().halign(gtk::Align::Start).build());
             }
             send.set_icon_name(if running { "media-playback-stop-symbolic" } else { "mail-send-symbolic" });
-            send.set_tooltip_text(Some(if running { "止める" } else { "送る" }));
+            send.set_tooltip_text(Some(if running { lang::t("止める", "Stop") } else { lang::t("送る", "Send") }));
             suggestions.set_visible(!running);
             // 新しい発言が見えるよう、描き終わってから一番下へ
             let adjustment = scroller.vadjustment();
@@ -203,7 +206,7 @@ fn message_widget(app: &Rc<App>, message: AiMessage) -> gtk::Widget {
                 if video_id.is_some() && app.playback.current().map(|s| s.video_id) == video_id {
                     app.playback.player().seek_ms(ms);
                 } else {
-                    app.toast("話している曲が鳴っていないので飛べません");
+                    app.toast(lang::t("話している曲が鳴っていないので飛べません", "That song isn't playing, so wave can't jump there"));
                 }
                 gtk::glib::Propagation::Stop
             });
@@ -217,7 +220,7 @@ fn message_widget(app: &Rc<App>, message: AiMessage) -> gtk::Widget {
 
 /// これまでの会話（この PC の中だけ）。押すと開いて続け、ゴミ箱で消す（消しても小窓は閉じない。Mac と同じ）。
 fn history_button(app: &Rc<App>) -> gtk::MenuButton {
-    let heading = gtk::Label::builder().label("これまでの会話").xalign(0.0).margin_start(6).margin_top(4).css_classes(["heading"]).build();
+    let heading = gtk::Label::builder().label(lang::t("これまでの会話", "Past chats")).xalign(0.0).margin_start(6).margin_top(4).css_classes(["heading"]).build();
     // 題名が読める幅にする（決めないと題名が1文字まで縮む）
     let list = gtk::ListBox::builder().selection_mode(gtk::SelectionMode::None).width_request(320).css_classes(["navigation-sidebar"]).build();
     let scroller = gtk::ScrolledWindow::builder()
@@ -231,7 +234,7 @@ fn history_button(app: &Rc<App>) -> gtk::MenuButton {
     column.append(&heading);
     column.append(&scroller);
     let popover = gtk::Popover::builder().child(&column).build();
-    let button = gtk::MenuButton::builder().icon_name("document-open-recent-symbolic").tooltip_text("これまでの会話").popover(&popover).css_classes(["flat", "circular"]).build();
+    let button = gtk::MenuButton::builder().icon_name("document-open-recent-symbolic").tooltip_text(lang::t("これまでの会話", "Past chats")).popover(&popover).css_classes(["flat", "circular"]).build();
     // 消したら一覧だけ描き直す（自分を呼ぶので、描き直しの関数を後から入れる）
     let render: Rc<RefCell<Option<Rc<dyn Fn()>>>> = Rc::default();
     let render_fn: Rc<dyn Fn()> = {
@@ -245,7 +248,7 @@ fn history_button(app: &Rc<App>) -> gtk::MenuButton {
             if conversations.is_empty() {
                 list.append(
                     &gtk::Label::builder()
-                        .label("まだ会話はありません。会話はこの PC の中だけに残ります。")
+                        .label(lang::t("まだ会話はありません。会話はこの PC の中だけに残ります。", "No past chats yet. Chats are kept on this PC only."))
                         .wrap(true)
                         .max_width_chars(36)
                         .margin_top(12)
@@ -256,7 +259,7 @@ fn history_button(app: &Rc<App>) -> gtk::MenuButton {
             }
             let open_id = app.ai.conversation_id();
             for c in conversations {
-                let title = if c.title.trim().is_empty() { "（質問なし）".to_string() } else { c.title.clone() };
+                let title = if c.title.trim().is_empty() { lang::t("（質問なし）", "(no question)").to_string() } else { c.title.clone() };
                 let row = adw::ActionRow::builder()
                     .title(gtk::glib::markup_escape_text(&title))
                     .subtitle(gtk::glib::markup_escape_text(&when(c.updated_at_ms)))
@@ -267,7 +270,7 @@ fn history_button(app: &Rc<App>) -> gtk::MenuButton {
                 if c.id == open_id {
                     row.add_css_class("ai-open-chat");
                 }
-                let delete = gtk::Button::builder().icon_name("user-trash-symbolic").tooltip_text("会話を消す").valign(gtk::Align::Center).css_classes(["flat", "circular"]).build();
+                let delete = gtk::Button::builder().icon_name("user-trash-symbolic").tooltip_text(lang::t("会話を消す", "Delete chat")).valign(gtk::Align::Center).css_classes(["flat", "circular"]).build();
                 row.add_suffix(&delete);
                 let (app_open, id_open, pop) = (app.clone(), c.id.clone(), popover.clone());
                 row.connect_activated(move |_| {

@@ -5,7 +5,7 @@ mod ui;
 mod video;
 
 // 画面に依らない部分は wave-desktop（QML 版と共有）。crate::playback などの名前のまま使う
-use wave_desktop::{ai_chat, browser_login, connect, discord_status, downloads, keyring, mpris, playback, runtime, settings};
+use wave_desktop::{ai_chat, browser_login, connect, discord_status, downloads, keyring, lang, mpris, playback, runtime, settings};
 
 use adw::prelude::*;
 use wave_core::innertube::InnerTube;
@@ -47,9 +47,9 @@ fn add_open_actions(app: &adw::Application) {
                 window.present();
             }
             if album {
-                app.push(ui::pages::album(&app, &id, "アルバム"));
+                app.push(ui::pages::album(&app, &id, lang::t("アルバム", "Album")));
             } else {
-                app.push(ui::pages::artist(&app, &id, "アーティスト"));
+                app.push(ui::pages::artist(&app, &id, lang::t("アーティスト", "Artist")));
             }
         });
         app.add_action(&action);
@@ -101,16 +101,16 @@ fn loading_page() -> gtk::Widget {
 
 /// ログインしていないときの入り口。押すとログインの窓を開き、済んだらホームを出す。
 fn show_login(window: &adw::ApplicationWindow, toolbar: &adw::ToolbarView, repo: &MusicRepository) {
-    let button = gtk::Button::builder().label("ログイン").halign(gtk::Align::Center).css_classes(["suggested-action", "pill"]).build();
+    let button = gtk::Button::builder().label(lang::t("ログイン", "Log in")).halign(gtk::Align::Center).css_classes(["suggested-action", "pill"]).build();
     // ふだんのブラウザでログインしてあれば、それを読んで使う（アプリの中の窓でログインしなくて済む）
-    let from_browser = gtk::Button::builder().label("ブラウザのログインを使う").halign(gtk::Align::Center).css_classes(["pill"]).build();
+    let from_browser = gtk::Button::builder().label(lang::t("ブラウザのログインを使う", "Use browser login")).halign(gtk::Align::Center).css_classes(["pill"]).build();
     let buttons = gtk::Box::new(gtk::Orientation::Vertical, 12);
     buttons.append(&button);
     buttons.append(&from_browser);
     let page = adw::StatusPage::builder()
         .icon_name("audio-x-generic-symbolic")
         .title("wave")
-        .description("YouTube Music のアカウントでログインしてください")
+        .description(lang::t("YouTube Music のアカウントでログインしてください", "Log in with your YouTube Music account"))
         .child(&buttons)
         .build();
     toolbar.set_content(Some(&page));
@@ -146,10 +146,13 @@ async fn login_from_browser(window: &adw::ApplicationWindow, repo: &MusicReposit
     let profiles = gtk::gio::spawn_blocking(move || browser_login::find(&home)).await.unwrap_or_default();
     if profiles.is_empty() {
         let dialog = adw::AlertDialog::new(
-            Some("ブラウザにログインが見つかりません"),
-            Some("ふだんのブラウザで music.youtube.com にログインしてから、もう一度「ブラウザのログインを使う」を押してください。\n\n読めるブラウザ: Firefox・Zen・LibreWolf・Floorp・Waterfox・Chrome・Chromium・Brave・Edge・Vivaldi・Opera"),
+            Some(lang::t("ブラウザにログインが見つかりません", "No browser login found")),
+            Some(lang::t(
+                "ふだんのブラウザで music.youtube.com にログインしてから、もう一度「ブラウザのログインを使う」を押してください。\n\n読めるブラウザ: Firefox・Zen・LibreWolf・Floorp・Waterfox・Chrome・Chromium・Brave・Edge・Vivaldi・Opera",
+                "Log in to music.youtube.com in your usual browser, then press “Use browser login” again.\n\nSupported browsers: Firefox, Zen, LibreWolf, Floorp, Waterfox, Chrome, Chromium, Brave, Edge, Vivaldi, Opera",
+            )),
         );
-        dialog.add_responses(&[("close", "閉じる"), ("open", "ブラウザで開く")]);
+        dialog.add_responses(&[("close", lang::t("閉じる", "Close")), ("open", lang::t("ブラウザで開く", "Open in browser"))]);
         dialog.set_response_appearance("open", adw::ResponseAppearance::Suggested);
         dialog.set_default_response(Some("open"));
         if dialog.choose_future(Some(window)).await == "open" {
@@ -158,10 +161,10 @@ async fn login_from_browser(window: &adw::ApplicationWindow, repo: &MusicReposit
         return false;
     }
     let dialog = adw::AlertDialog::new(
-        Some("どのブラウザのログインを使いますか"),
-        Some("選んだブラウザの YouTube の cookie を読んで、この PC のキーリングに保存します。ブラウザの側のログインはそのまま残ります。"),
+        Some(lang::t("どのブラウザのログインを使いますか", "Which browser's login do you want to use?")),
+        Some(lang::t("選んだブラウザの YouTube の cookie を読んで、この PC のキーリングに保存します。ブラウザの側のログインはそのまま残ります。", "wave reads YouTube cookies from the browser you choose and saves them in this PC's keyring. You stay logged in on the browser.")),
     );
-    dialog.add_response("cancel", "やめる");
+    dialog.add_response("cancel", lang::t("やめる", "Cancel"));
     for (i, profile) in profiles.iter().enumerate() {
         dialog.add_response(&format!("p{i}"), &profile.label);
     }
@@ -177,8 +180,8 @@ async fn login_from_browser(window: &adw::ApplicationWindow, repo: &MusicReposit
             true
         }
         Err(message) => {
-            let dialog = adw::AlertDialog::new(Some(&format!("{}のログインを使えませんでした", profile.label)), Some(&message));
-            dialog.add_response("close", "閉じる");
+            let dialog = adw::AlertDialog::new(Some(&if lang::ja() { format!("{}のログインを使えませんでした", profile.label) } else { format!("Couldn't use the login from {}", profile.label) }), Some(&message));
+            dialog.add_response("close", lang::t("閉じる", "Close"));
             dialog.choose_future(Some(window)).await;
             false
         }
@@ -246,18 +249,18 @@ async fn show_home(toolbar: &adw::ToolbarView, repo: &MusicRepository) {
     // 確かめ用: WAVE_DEMO_PODCAST に番組の browseId（MPSP… か rss:…）、podcasts ならマイライブラリのポッドキャストを開く
     match std::env::var("WAVE_DEMO_PODCAST").as_deref() {
         Ok("podcasts") => app.push(ui::podcasts::library(&app)),
-        Ok(id) => app.push(ui::podcasts::show(&app, id, "ポッドキャスト")),
+        Ok(id) => app.push(ui::podcasts::show(&app, id, lang::t("ポッドキャスト", "Podcast"))),
         Err(_) => {}
     }
     // 確かめ用: WAVE_DEMO_PLAYLIST にプレイリストの ID（LM は高く評価した曲）があれば開く
     if let Ok(id) = std::env::var("WAVE_DEMO_PLAYLIST") {
-        app.push(ui::pages::playlist(&app, &id, "プレイリスト"));
+        app.push(ui::pages::playlist(&app, &id, lang::t("プレイリスト", "Playlist")));
     }
     // 確かめ用: WAVE_DEMO_MOOD=moods で見つける、lofi で Lo-Fi のページ、ほかはその params の気分・ジャンルのページを開く
     match std::env::var("WAVE_DEMO_MOOD").as_deref() {
         Ok("moods") => app.push(ui::pages::moods(&app)),
         Ok("lofi") => app.push(ui::pages::mood_category(&app, "Lo-Fi", wave_core::music::lofi::PARAMS)),
-        Ok(params) => app.push(ui::pages::mood_category(&app, "気分・ジャンル", params)),
+        Ok(params) => app.push(ui::pages::mood_category(&app, lang::t("気分・ジャンル", "Moods & genres"), params)),
         Err(_) => {}
     }
     // 確かめ用: WAVE_DEMO_DEVICES があれば端末の連携のページを開く。offer・code・wrong・show・working・done・done-api・failed なら、
@@ -267,12 +270,12 @@ async fn show_home(toolbar: &adw::ToolbarView, repo: &MusicRepository) {
         let view = match state.as_str() {
             "offer" => Some(PairingView::ShowingOffer("wave-pair:eyJ2IjoxLCJwa0EiOiJkZW1vIiwiZUEiOiJkZW1vIiwidG9rZW4iOiJkZW1vIn0".into())),
             "code" => Some(PairingView::EnterCode(None)),
-            "wrong" => Some(PairingView::EnterCode(Some("数字が違います".into()))),
+            "wrong" => Some(PairingView::EnterCode(Some(lang::t("数字が違います", "That code doesn’t match").into()))),
             "show" => Some(PairingView::ShowCode { code: "123456".into(), peer: "Pixel 3".into() }),
-            "working" => Some(PairingView::Working("相手が加えるのを待っています…".into())),
+            "working" => Some(PairingView::Working(lang::t("相手が加えるのを待っています…", "Waiting for the other device to add this PC…").into())),
             "done" => Some(PairingView::Done { peer: "Pixel 3".into(), grant_device_id: None }),
             "done-api" => Some(PairingView::Done { peer: "wave API".into(), grant_device_id: Some("demo".into()) }),
-            "failed" => Some(PairingView::Failed("時間内に読み取られませんでした".into())),
+            "failed" => Some(PairingView::Failed(lang::t("時間内に読み取られませんでした", "The code wasn’t used in time").into())),
             _ => None,
         };
         if let Some(view) = view {
@@ -280,8 +283,8 @@ async fn show_home(toolbar: &adw::ToolbarView, repo: &MusicRepository) {
         }
         ui::devices::open_page(&app);
     }
-    // 確かめ用: WAVE_DEMO_PAGE=settings で設定のページを開く
-    if std::env::var("WAVE_DEMO_PAGE").as_deref() == Ok("settings") {
+    // 確かめ用: WAVE_DEMO_PAGE=settings で設定のページを開く（settings-bottom ならページの下まで送る）
+    if matches!(std::env::var("WAVE_DEMO_PAGE").as_deref(), Ok("settings" | "settings-bottom")) {
         app.push(ui::settings::page(&app));
     }
     // 入れ物（読み込み中の上の帯）ごと、画面の上の帯を持つ並びに替える

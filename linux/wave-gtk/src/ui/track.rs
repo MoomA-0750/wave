@@ -12,6 +12,7 @@ use wave_core::music::models::{HomeItem, Song};
 use super::images;
 use super::shell::App;
 use super::song_menu::Removal;
+use crate::lang;
 use crate::runtime;
 
 const STYLE: &str = "
@@ -172,9 +173,9 @@ pub fn header(columns: Columns) -> gtk::Widget {
     ensure_style();
     let row = gtk::Box::builder().spacing(12).css_classes(["track-header", "caption", "dim-label"]).build();
     row.append(&gtk::Label::builder().label("#").xalign(1.0).width_request(32).build());
-    row.append(&gtk::Label::builder().label("タイトル").xalign(0.0).hexpand(true).build());
+    row.append(&gtk::Label::builder().label(lang::t("タイトル", "Title")).xalign(0.0).hexpand(true).build());
     if columns.album {
-        row.append(&gtk::Label::builder().label("アルバム").xalign(0.0).hexpand(true).build());
+        row.append(&gtk::Label::builder().label(lang::t("アルバム", "Album")).xalign(0.0).hexpand(true).build());
     }
     let clock = gtk::Image::builder().icon_name("alarm-symbolic").halign(gtk::Align::End).width_request(96).build();
     row.append(&clock);
@@ -236,9 +237,9 @@ pub fn track_row(app: &Rc<App>, row: Row, columns: Columns) -> gtk::ListBoxRow {
         let (downloads, id) = (app.downloads.clone(), song.video_id.clone());
         app.downloads.watch(&mark, move |mark| {
             let (icon, tip) = match downloads.state(&id) {
-                crate::downloads::SongState::Done => (Some("folder-download-symbolic"), "ダウンロード済み"),
-                crate::downloads::SongState::Downloading => (Some("content-loading-symbolic"), "ダウンロード中"),
-                crate::downloads::SongState::Waiting => (Some("content-loading-symbolic"), "ダウンロード待ち"),
+                crate::downloads::SongState::Done => (Some("folder-download-symbolic"), lang::t("ダウンロード済み", "Downloaded")),
+                crate::downloads::SongState::Downloading => (Some("content-loading-symbolic"), lang::t("ダウンロード中", "Downloading")),
+                crate::downloads::SongState::Waiting => (Some("content-loading-symbolic"), lang::t("ダウンロード待ち", "Waiting to download")),
                 crate::downloads::SongState::None => (None, ""),
             };
             mark.set_visible(icon.is_some());
@@ -249,14 +250,14 @@ pub fn track_row(app: &Rc<App>, row: Row, columns: Columns) -> gtk::ListBoxRow {
         });
     }
     trailing.append(&mark);
-    let liked = gtk::Image::builder().icon_name("object-select-symbolic").pixel_size(14).tooltip_text("高く評価済み").css_classes(["accent-text"]).visible(false).build();
+    let liked = gtk::Image::builder().icon_name("object-select-symbolic").pixel_size(14).tooltip_text(lang::t("高く評価済み", "Liked")).css_classes(["accent-text"]).visible(false).build();
     {
         let id = song.video_id.clone();
         watch_liked(&liked, move |image| image.set_visible(is_liked(&id)));
     }
     trailing.append(&liked);
     if song.is_live {
-        trailing.append(&gtk::Label::builder().label("ライブ").valign(gtk::Align::Center).css_classes(["live-badge"]).build());
+        trailing.append(&gtk::Label::builder().label(lang::t("ライブ", "LIVE")).valign(gtk::Align::Center).css_classes(["live-badge"]).build());
     } else {
         trailing.append(&gtk::Label::builder().label(song.duration_seconds.map(super::pages::format_seconds).unwrap_or_default()).css_classes(["dim-label", "numeric"]).build());
     }
@@ -329,7 +330,7 @@ pub const CARD_SIZE: i32 = 160;
 /// カードの補足（アーティストは「アーティスト」）。
 fn card_subtitle(item: &HomeItem) -> String {
     match item {
-        HomeItem::Artist(_) => "アーティスト".into(),
+        HomeItem::Artist(_) => lang::t("アーティスト", "Artist").into(),
         HomeItem::Song(s) => s.artists_text(),
         other => other.subtitle().unwrap_or_default(),
     }
@@ -345,7 +346,7 @@ pub fn card(app: &Rc<App>, item: HomeItem, on_open: Option<Rc<dyn Fn()>>) -> gtk
         picture.add_css_class("round");
     }
     picture.load(item.thumbnail_url(), CARD_SIZE as u32 * 2);
-    let play = gtk::Button::builder().icon_name("media-playback-start-symbolic").tooltip_text("再生").halign(gtk::Align::End).valign(gtk::Align::End).margin_end(6).margin_bottom(6).opacity(0.0).css_classes(["circular", "suggested-action", "play-fab"]).build();
+    let play = gtk::Button::builder().icon_name("media-playback-start-symbolic").tooltip_text(lang::t("再生", "Play")).halign(gtk::Align::End).valign(gtk::Align::End).margin_end(6).margin_bottom(6).opacity(0.0).css_classes(["circular", "suggested-action", "play-fab"]).build();
     let overlay = gtk::Overlay::builder().child(&picture.root).build();
     overlay.add_overlay(&play);
     let column = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(6).width_request(CARD_SIZE).css_classes(["media-card"]).build();
@@ -424,7 +425,7 @@ pub fn play_item(app: &Rc<App>, item: &HomeItem) {
                 let id = a.browse_id.clone();
                 match runtime::run(async move { repo.album(&id).await }).await {
                     Ok(page) if !page.songs.is_empty() => app.playback.play_list_from(page.songs, 0, Some(a.browse_id)),
-                    _ => app.toast("アルバムを読み込めませんでした"),
+                    _ => app.toast(lang::t("アルバムを読み込めませんでした", "Couldn't load the album")),
                 }
             }
             HomeItem::Playlist(p) => play_playlist(&app, &p.playlist_id, false).await,
@@ -432,7 +433,7 @@ pub fn play_item(app: &Rc<App>, item: &HomeItem) {
                 let id = a.browse_id.clone();
                 match runtime::run(async move { repo.artist(&id).await }).await {
                     Ok(page) if !page.top_songs.is_empty() => app.playback.play_artist(&a.browse_id, page.top_songs, 0, false, page.all_songs_playlist_id),
-                    _ => app.toast("アーティストの曲を読み込めませんでした"),
+                    _ => app.toast(lang::t("アーティストの曲を読み込めませんでした", "Couldn't load the artist's songs")),
                 }
             }
         }
@@ -443,11 +444,11 @@ pub fn play_item(app: &Rc<App>, item: &HomeItem) {
 pub async fn play_playlist(app: &Rc<App>, playlist_id: &str, shuffle: bool) {
     let (repo, id) = (app.repo.clone(), playlist_id.to_string());
     let Ok(first) = runtime::run(async move { repo.playlist(&id, None).await }).await else {
-        app.toast("プレイリストを読み込めませんでした");
+        app.toast(lang::t("プレイリストを読み込めませんでした", "Couldn't load the playlist"));
         return;
     };
     if first.songs.is_empty() {
-        app.toast("プレイリストを読み込めませんでした");
+        app.toast(lang::t("プレイリストを読み込めませんでした", "Couldn't load the playlist"));
         return;
     }
     let more = first.continuation.is_some();
@@ -483,8 +484,8 @@ pub fn shelf_with(_app: &Rc<App>, title: &str, strapline: Option<&str>, cards: V
     }
     titles.append(&gtk::Label::builder().label(title).xalign(0.0).ellipsize(gtk::pango::EllipsizeMode::End).css_classes(["title-2"]).build());
     head.append(&titles);
-    let previous = gtk::Button::builder().icon_name("go-previous-symbolic").tooltip_text("前へ").valign(gtk::Align::End).opacity(0.0).sensitive(false).css_classes(["flat", "circular"]).build();
-    let next = gtk::Button::builder().icon_name("go-next-symbolic").tooltip_text("次へ").valign(gtk::Align::End).opacity(0.0).sensitive(false).css_classes(["flat", "circular"]).build();
+    let previous = gtk::Button::builder().icon_name("go-previous-symbolic").tooltip_text(lang::t("前へ", "Previous")).valign(gtk::Align::End).opacity(0.0).sensitive(false).css_classes(["flat", "circular"]).build();
+    let next = gtk::Button::builder().icon_name("go-next-symbolic").tooltip_text(lang::t("次へ", "Next")).valign(gtk::Align::End).opacity(0.0).sensitive(false).css_classes(["flat", "circular"]).build();
     head.append(&previous);
     head.append(&next);
     column.append(&head);
@@ -573,7 +574,7 @@ pub fn link(text: &str, on_click: impl Fn() + 'static) -> gtk::Label {
 /// 大きな丸い再生ボタン。playing なら一時停止の絵。
 pub fn set_play_icon(button: &gtk::Button, playing: bool) {
     button.set_icon_name(if playing { "media-playback-pause-symbolic" } else { "media-playback-start-symbolic" });
-    button.set_tooltip_text(Some(if playing { "一時停止" } else { "再生" }));
+    button.set_tooltip_text(Some(if playing { lang::t("一時停止", "Pause") } else { lang::t("再生", "Play") }));
 }
 
 /// 下の端に近づいたら f を呼ぶ（続きのページを読む。中身が短くて送れないときも呼ぶ）。

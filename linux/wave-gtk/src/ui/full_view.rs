@@ -11,6 +11,7 @@ use wave_core::lyrics::{LyricLine, SongLyrics, lrc};
 
 use super::images;
 use super::shell::{self, App, Place};
+use crate::lang;
 use crate::runtime;
 
 pub fn build(app: &Rc<App>) -> gtk::Widget {
@@ -49,7 +50,7 @@ pub fn build(app: &Rc<App>) -> gtk::Widget {
 
     let exit = gtk::Button::builder()
         .icon_name("view-restore-symbolic")
-        .tooltip_text("全画面を終える (Esc)")
+        .tooltip_text(lang::t("全画面を終える (Esc)", "Exit full screen (Esc)"))
         .halign(gtk::Align::End)
         .valign(gtk::Align::Start)
         .margin_top(16)
