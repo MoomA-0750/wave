@@ -144,7 +144,8 @@ Item {
 
     Component.onCompleted: {
         Style.nav = shell
-        // 確かめ用: WAVE_DEMO（search:語・album:ID・playlist:ID・artist:ID・lyrics・queue・settings・full・mood:題:params・history）
+        // 確かめ用: WAVE_DEMO（search:語・album:ID・playlist:ID・artist:ID・lyrics・queue・settings・full・mood:題:params・history・
+        // savequeue（キューを開いて保存の名前の画面を出す）・newplaylist（新しいプレイリストの名前の画面を出す））
         const demo = WaveApp.demo
         if (demo === "") return
         const [kind, ...rest] = demo.split(":")
@@ -155,6 +156,8 @@ Item {
         else if (kind === "artist") openArtist(arg, "")
         else if (kind === "lyrics") push(lyricsPage, {})
         else if (kind === "queue") setRight(true, "queue")
+        else if (kind === "savequeue") { setRight(true, "queue"); demoDialog.start() }
+        else if (kind === "newplaylist") demoDialog.start()
         else if (kind === "settings") openSettings()
         else if (kind === "full") demoFull.start()
         else if (kind === "mood") openMood(rest[0], rest.slice(1).join(":"))
@@ -188,6 +191,7 @@ Item {
         }
     }
     Timer { id: demoFull; interval: 2500; onTriggered: shell.full = true }
+    Timer { id: demoDialog; interval: 6000; onTriggered: WaveApp.demo === "savequeue" ? queuePane.askSave() : shell.createPlaylist(null) }
 
     Shortcut { sequence: "Space"; context: Qt.WindowShortcut; enabled: !(shell.Window.activeFocusItem instanceof TextInput); onActivated: WaveApp.togglePlay() }
     Shortcut { sequence: "Ctrl+Right"; onActivated: WaveApp.next() }
@@ -234,7 +238,7 @@ Item {
                     Layout.preferredWidth: 340
                     Layout.fillHeight: true
                     NowPlayingPane { anchors.fill: parent; visible: shell.rightView === "now"; shell: shell }
-                    QueuePane { anchors.fill: parent; visible: shell.rightView === "queue"; shell: shell }
+                    QueuePane { id: queuePane; anchors.fill: parent; visible: shell.rightView === "queue"; shell: shell }
                     AiPane { anchors.fill: parent; visible: shell.rightView === "ai"; shell: shell }
                 }
             }
@@ -304,10 +308,12 @@ Item {
         title: "新しいプレイリスト"
         ColumnLayout {
             width: 380
+            spacing: 6
+            // 名前の見出しは欄の外に置く（Material の placeholderText は文字が入ると枠の上へ浮くが、背景を自前にしているので文字に重なる）
+            Label { text: "プレイリストの名前"; color: Style.dim; font.pixelSize: 12 }
             TextField {
                 id: newPlaylistTitle
                 Layout.fillWidth: true
-                placeholderText: "プレイリストの名前"
                 background: Rectangle { radius: Style.small; color: Style.view; border.color: newPlaylistTitle.activeFocus ? Style.accent : Style.border }
                 onAccepted: if (text.trim() !== "") newPlaylist.accept()
             }

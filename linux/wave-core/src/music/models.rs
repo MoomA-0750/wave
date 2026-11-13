@@ -36,6 +36,35 @@ impl Song {
     }
 }
 
+/// 再生バーに出す曲の長さ（ミリ秒）。流れの実際の長さ（stream_ms）は YouTube の長さ（一覧・キューに出す listed_seconds）より
+/// 1秒ほど短いことが多く、秒で切り捨てると「3:06」の曲が「3:05」と出て食い違う。差が2秒以内なら YouTube の長さに合わせる。
+/// 大きく違う（別の版の音源など）ときと、YouTube の長さが無いときは流れの長さ。
+pub fn shown_length_ms(stream_ms: Option<u64>, listed_seconds: Option<u32>) -> Option<u64> {
+    let listed = listed_seconds.filter(|s| *s > 0).map(|s| u64::from(s) * 1000);
+    match (stream_ms, listed) {
+        (Some(stream), Some(listed)) if stream.abs_diff(listed) <= 2000 => Some(listed),
+        (Some(stream), _) => Some(stream),
+        (None, listed) => listed,
+    }
+}
+
+#[cfg(test)]
+mod length_tests {
+    use super::shown_length_ms;
+
+    #[test]
+    fn shown_length_follows_the_listed_length_when_close() {
+        // 実際は 185.8 秒、YouTube は 3:06
+        assert_eq!(shown_length_ms(Some(185_800), Some(186)), Some(186_000));
+        assert_eq!(shown_length_ms(Some(187_500), Some(186)), Some(186_000));
+        // 大きく違えば流れの長さ
+        assert_eq!(shown_length_ms(Some(200_000), Some(186)), Some(200_000));
+        assert_eq!(shown_length_ms(Some(185_800), None), Some(185_800));
+        assert_eq!(shown_length_ms(None, Some(186)), Some(186_000));
+        assert_eq!(shown_length_ms(None, None), None);
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct ArtistRef {

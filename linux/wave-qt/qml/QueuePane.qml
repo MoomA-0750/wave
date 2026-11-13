@@ -98,10 +98,11 @@ Item {
             width: parent ? parent.width : 400
             spacing: 10
             Label { Layout.fillWidth: true; wrapMode: Text.Wrap; text: "キューの " + pane.saveCount + " 曲を、新しい非公開のプレイリストに入れます。"; color: Style.dim }
+            // 名前の見出しは欄の外に置く（Material の placeholderText は文字が入ると枠の上へ浮き、自前の背景では文字に重なる）
+            Label { text: "プレイリストの名前"; color: Style.dim; font.pixelSize: 12 }
             TextField {
                 id: saveTitle
                 Layout.fillWidth: true
-                placeholderText: "プレイリストの名前"
                 background: Rectangle { radius: Style.small; color: Style.view; border.color: saveTitle.activeFocus ? Style.accent : Style.border }
                 onAccepted: if (text.trim() !== "") saveDialog.accept()
             }

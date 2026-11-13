@@ -621,6 +621,11 @@ fn collection_page(app: &Rc<App>, id: &str, title: &str, source: Source, songs: 
         None => collection.load(),
     }
     let scroller = scrolling_column(&column);
+    // 確かめ用: WAVE_DEMO_COLLECTION_SCROLL の px だけ、読み終わるころに下へ送る（大きな数なら一番下）
+    if let Some(px) = std::env::var("WAVE_DEMO_COLLECTION_SCROLL").ok().and_then(|v| v.parse::<f64>().ok()) {
+        let scroller = scroller.clone();
+        gtk::glib::timeout_add_local_once(std::time::Duration::from_secs(10), move || scroller.vadjustment().set_value(px));
+    }
     // 選んだ行で Return を押すと、その行から（一覧の中の検索の欄の Return は欄が使う）
     let page = page(title, if matches!(collection.source, Source::Album) { "album" } else { "playlist" }, &scroller);
     let keep = collection.clone();

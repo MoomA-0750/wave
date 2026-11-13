@@ -271,12 +271,12 @@ fn add_to(app: &Rc<App>, song: &Song, playlist_id: &str, title: &str, known_empt
 
 /// 名前を聞いて非公開のプレイリストを作り、その曲を入れる。
 fn new_playlist(app: &Rc<App>, song: &Song) {
-    create_playlist(app, Some(song.clone()), None);
+    create_playlist(app, Some(song.clone()));
 }
 
 /// プレイリストを作る（名前を聞く）。song があれば作ったプレイリストに入れる。欄は曲から作るとき「マイプレイリスト」入りで、空なら作れない（Mac と同じ）。
-/// 作れたら on_created を呼ぶ（マイライブラリを読み直す）。
-pub fn create_playlist(app: &Rc<App>, song: Option<Song>, on_created: Option<Rc<dyn Fn()>>) {
+/// 作れたらマイライブラリを読み直す（作ったものは一覧の先頭にすぐ出る）。
+pub fn create_playlist(app: &Rc<App>, song: Option<Song>) {
     let entry = gtk::Entry::builder().placeholder_text("プレイリスト名").text(if song.is_some() { "マイプレイリスト" } else { "" }).activates_default(true).build();
     let dialog = adw::AlertDialog::builder().heading("プレイリストを作成").extra_child(&entry).default_response("create").close_response("cancel").build();
     dialog.add_response("cancel", "キャンセル");
@@ -295,7 +295,7 @@ pub fn create_playlist(app: &Rc<App>, song: Option<Song>, on_created: Option<Rc<
         if response != "create" || title.is_empty() {
             return;
         }
-        let (app, song, on_created) = (app.clone(), song.clone(), on_created.clone());
+        let (app, song) = (app.clone(), song.clone());
         gtk::glib::spawn_future_local(async move {
             let repo = app.repo.clone();
             let name = title.clone();
@@ -306,9 +306,7 @@ pub fn create_playlist(app: &Rc<App>, song: Option<Song>, on_created: Option<Rc<
                         Some(song) => add_to(&app, &song, &id, &title, true),
                         None => app.toast(&format!("「{title}」を作成しました")),
                     }
-                    if let Some(f) = on_created {
-                        f();
-                    }
+                    super::library::reload_after_create(&app);
                 }
                 Err(_) => app.toast("プレイリストを作れませんでした"),
             }
@@ -358,7 +356,7 @@ pub fn save_queue(app: &Rc<App>) {
             match runtime::run(async move { repo.create_playlist_with(&name, &sent).await }).await {
                 Ok(_) => {
                     app.toast(&format!("「{title}」に {} 曲を保存しました", ids.len()));
-                    super::library::reload(&app);
+                    super::library::reload_after_create(&app);
                 }
                 Err(_) => app.toast("キューを保存できませんでした"),
             }

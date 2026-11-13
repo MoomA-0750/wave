@@ -78,6 +78,30 @@ pub fn reload(_app: &Rc<App>) {
     }
 }
 
+/// プレイリストを作ったあと。作ったものは YouTube の一覧に出てくるまで先頭に足して出し（MusicRepository が覚えている）、
+/// ジャケットの絵が付くころにもう一度読み直す。
+pub fn reload_after_create(app: &Rc<App>) {
+    // 読み直しを待たず、作ったものをすぐ先頭に出す
+    if let Some(view) = CURRENT.with(|c| c.borrow().upgrade()) {
+        {
+            let mut data = view.data.borrow_mut();
+            for p in app.repo.recently_created().into_iter().rev() {
+                let key = format!("p-{}", p.playlist_id);
+                if !data.playlists.iter().any(|e| e.key.as_deref() == Some(key.as_str())) {
+                    data.playlists.insert(0, playlist_entry(p));
+                }
+                if !data.recent.contains(&key) {
+                    data.recent.insert(0, key);
+                }
+            }
+        }
+        view.render();
+    }
+    reload(app);
+    let app = app.clone();
+    gtk::glib::timeout_add_seconds_local_once(8, move || reload(&app));
+}
+
 pub fn sidebar(app: &Rc<App>) -> gtk::Widget {
     track::ensure_style();
     // ログインし直したら（窓の中身を作り直したら）、前のアカウントの評価を忘れる
@@ -131,15 +155,8 @@ pub fn sidebar(app: &Rc<App>) -> gtk::Widget {
     let view = Rc::new(View { app: app.clone(), data: RefCell::default(), kind: RefCell::default(), query: RefCell::default(), list: list.clone(), grid: grid.clone(), stack, progress, shown: RefCell::default() });
     CURRENT.with(|c| *c.borrow_mut() = Rc::downgrade(&view));
     {
-        let view = view.clone();
-        create.connect_clicked(move |_| {
-            let weak = Rc::downgrade(&view);
-            super::song_menu::create_playlist(&view.app, None, Some(Rc::new(move || {
-                if let Some(view) = weak.upgrade() {
-                    view.load();
-                }
-            })));
-        });
+        let app = app.clone();
+        create.connect_clicked(move |_| super::song_menu::create_playlist(&app, None));
     }
 
     // 種類の絞り込み（もう一度押すと外す）

@@ -1976,7 +1976,7 @@ fn like_behaviour(app: &Rc<App>, like: &gtk::Button) {
         let like = like.clone();
         Rc::new(move |liked: Option<bool>, loading: bool| {
             let (icon, tip) = match liked {
-                Some(true) => ("emblem-ok-symbolic", "プレイリストに追加"),
+                Some(true) => ("object-select-symbolic", "プレイリストに追加"),
                 Some(false) => ("list-add-symbolic", "高く評価した曲に追加"),
                 None => ("view-refresh-symbolic", "評価を読み直す"),
             };
@@ -2501,7 +2501,8 @@ fn player_bar(app: &Rc<App>) -> gtk::Widget {
             // 前回のキューを戻しただけのときは、戻した位置と曲の長さを出す
             None => (
                 app.playback.position_ms(),
-                player.duration_ms().or_else(|| app.playback.current().and_then(|s| s.duration_seconds).map(|d| u64::from(d) * 1000)).unwrap_or(0),
+                // 一覧・キューと同じ長さを出す（流れの長さが少し短くても YouTube の長さに合わせる）
+                wave_core::music::models::shown_length_ms(player.duration_ms(), app.playback.current().and_then(|s| s.duration_seconds)).unwrap_or(0),
             ),
         };
         let live = app.connect.mirror().map(|m| m.song.is_live).unwrap_or_else(|| app.playback.current().is_some_and(|s| s.is_live));

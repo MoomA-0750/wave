@@ -858,7 +858,7 @@ impl qobject::WaveApp {
                     } else {
                         toast(&format!("「{title}」を作りました"));
                     }
-                    crate::app::load_library(&s);
+                    crate::app::load_library_after_create(&s);
                     reply(token, json!({ "ok": true, "id": id }));
                 }
                 Err(e) => {

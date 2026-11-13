@@ -58,13 +58,39 @@ pub struct MusicRepository {
     client: InnerTube,
     /// ライブ配信の検索と HLS の解決（www.youtube.com へ。認証情報を送らない）。
     live: crate::stream::live::LiveClient,
+    /// この起動で作ったプレイリスト（作った時刻と一緒に。新しい順）。作った直後は YouTube のライブラリの一覧・最近の項目に
+    /// しばらく出てこないので、出てくるまで（長くて CREATED_GRACE の間）一覧の先頭に足して出す。
+    created: std::sync::Arc<std::sync::Mutex<Vec<(std::time::Instant, PlaylistSummary)>>>,
 }
+
+/// 作ったプレイリストを、YouTube の一覧に出てこなくても足して出す長さ。
+const CREATED_GRACE: std::time::Duration = std::time::Duration::from_secs(2 * 60);
 
 impl MusicRepository {
     pub fn new(client: InnerTube) -> Self {
         let (hl, gl) = client.locale();
         let live = crate::stream::live::LiveClient::new(hl, gl);
-        Self { client, live }
+        Self { client, live, created: Default::default() }
+    }
+
+    /// 作ったプレイリストを覚える（一覧に先に出すため）。
+    fn remember_created(&self, playlist_id: &str, title: &str, count: Option<usize>) {
+        let summary = PlaylistSummary { playlist_id: playlist_id.to_string(), title: title.to_string(), subtitle: count.map(|n| format!("{n} 曲")), thumbnail_url: None, editable: true };
+        if let Ok(mut created) = self.created.lock() {
+            created.insert(0, (std::time::Instant::now(), summary));
+        }
+    }
+
+    /// この起動で作ったプレイリスト（新しい順。CREATED_GRACE を過ぎたものは除く）。作った直後に、読み直しを待たず一覧へ足すのに使う。
+    pub fn recently_created(&self) -> Vec<PlaylistSummary> {
+        self.pending_created(|_| false)
+    }
+
+    /// まだ一覧に出ていない作ったプレイリスト（新しい順）。古いものは忘れる。
+    fn pending_created(&self, present: impl Fn(&str) -> bool) -> Vec<PlaylistSummary> {
+        let Ok(mut created) = self.created.lock() else { return Vec::new() };
+        created.retain(|(at, _)| at.elapsed() < CREATED_GRACE);
+        created.iter().map(|(_, p)| p).filter(|p| !present(&p.playlist_id)).cloned().collect()
     }
 
     pub fn live(&self) -> &crate::stream::live::LiveClient {
@@ -228,7 +254,12 @@ impl MusicRepository {
 
     /// 最近再生したアルバム・プレイリスト・アーティスト（マイライブラリの「最近」の並べ方に使う）。
     pub async fn recent_activity(&self) -> ApiResult<Vec<HomeItem>> {
-        Ok(parsers::library_cards(&self.logged_in_post("browse", json!({ "browseId": "FEmusic_library_landing" })).await?))
+        let items = parsers::library_cards(&self.logged_in_post("browse", json!({ "browseId": "FEmusic_library_landing" })).await?);
+        // 作った直後でまだ出てこないプレイリストを先頭に（「最近」の並べ方で一番上に来るように）
+        let present = |id: &str| items.iter().any(|i| matches!(i, HomeItem::Playlist(p) if p.playlist_id == id));
+        let mut list: Vec<HomeItem> = self.pending_created(present).into_iter().map(HomeItem::Playlist).collect();
+        list.extend(items);
+        Ok(list)
     }
 
     pub async fn subscribed_artists(&self) -> ApiResult<(Vec<ArtistSummary>, bool)> {
@@ -293,7 +324,10 @@ impl MusicRepository {
             }
             token = next;
         }
-        Ok(items)
+        // 作った直後でまだ出てこないものを先頭に
+        let mut pending = self.pending_created(|id| items.iter().any(|x| x.playlist_id == id));
+        pending.extend(items);
+        Ok(pending)
     }
 
     /// プレイリストの曲（高く評価した曲は LM）。continuation で続き。
@@ -548,7 +582,9 @@ impl MusicRepository {
             return Err(Failure::NotLoggedIn);
         }
         let root = self.client.post("playlist/create", json!({ "title": title, "privacyStatus": "PRIVATE" }), true, &[]).await?;
-        root.get("playlistId").and_then(|p| p.as_str()).map(String::from).ok_or(Failure::Parse)
+        let id = root.get("playlistId").and_then(|p| p.as_str()).map(String::from).ok_or(Failure::Parse)?;
+        self.remember_created(&id, title, None);
+        Ok(id)
     }
 
     /// 非公開のプレイリストを曲を入れて作る（曲はまとめて渡す。YouTube は同じ曲を2つ入れない）。作った playlistId を返す。
@@ -557,7 +593,9 @@ impl MusicRepository {
             return Err(Failure::NotLoggedIn);
         }
         let root = self.client.post("playlist/create", json!({ "title": title, "privacyStatus": "PRIVATE", "videoIds": video_ids }), true, &[]).await?;
-        root.get("playlistId").and_then(|p| p.as_str()).map(String::from).ok_or(Failure::Parse)
+        let id = root.get("playlistId").and_then(|p| p.as_str()).map(String::from).ok_or(Failure::Parse)?;
+        self.remember_created(&id, title, Some(video_ids.len()));
+        Ok(id)
     }
 
     /// 自分のプレイリストの候補（おすすめの曲）を読む。token は最初のページの suggestions_continuation か、前の候補の reload（「更新」）。

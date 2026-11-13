@@ -190,7 +190,8 @@ impl qobject::WaveApp {
         };
         let duration = match &mirror {
             Some(m) => m.song.duration_seconds.map(|s| s as i64 * 1000),
-            None => services.playback.player().duration_ms().map(|d| d as i64).or(song.as_ref().and_then(|s| s.duration_seconds).map(|s| s as i64 * 1000)),
+            // 一覧・キューと同じ長さを出す（流れの長さが少し短くても YouTube の長さに合わせる）
+            None => wave_core::music::models::shown_length_ms(services.playback.player().duration_ms(), song.as_ref().and_then(|s| s.duration_seconds)).map(|d| d as i64),
         };
         self.as_mut().set_has_song(song.is_some());
         let s = song.clone();
@@ -893,6 +894,34 @@ pub(crate) fn load_library(services: &Rc<Services>) {
     });
 }
 
+/// プレイリストを作ったあと。作ったものは YouTube の一覧に出てくるまで先頭に足して出し（MusicRepository が覚えている）、
+/// ジャケットの絵が付くころにもう一度読み直す。
+pub(crate) fn load_library_after_create(services: &Rc<Services>) {
+    // 読み直しを待たず、作ったものをすぐ先頭に出す
+    let created = services.repo.recently_created();
+    with_core(|c| {
+        for p in created.iter().rev() {
+            let entry = library_entry(view::playlist(p), "プレイリスト");
+            let id = entry["id"].as_str().unwrap_or_default().to_string();
+            if !c.library.playlists.iter().any(|e| e["id"].as_str() == Some(id.as_str())) {
+                c.library.playlists.insert(0, entry);
+            }
+            if !c.library.recent.contains(&id) {
+                c.library.recent.insert(0, id);
+            }
+        }
+    });
+    if let Some(thread) = core_thread() {
+        let _ = thread.queue(|mut app| {
+            let v = *app.library_version() + 1;
+            app.as_mut().set_library_version(v);
+        });
+    }
+    load_library(services);
+    let s = services.clone();
+    glib::timeout_add_seconds_local_once(8, move || load_library(&s));
+}
+
 /// マイライブラリの行の補足は「種類 • 元の補足」（GTK 版と同じ）。
 fn library_entry(mut value: Value, kind: &str) -> Value {
     let rest = value["subtitle"].as_str().unwrap_or_default().to_string();
@@ -1019,7 +1048,7 @@ fn load(kind: &str, arg: String, extra: String) -> Loading {
                     Ok(id) => {
                         toast(&format!("「{title}」に {} 曲を保存しました", ids.len()));
                         if let Some(s) = &services {
-                            load_library(s);
+                            load_library_after_create(s);
                         }
                         json!({ "ok": true, "id": id, "count": ids.len() })
                     }

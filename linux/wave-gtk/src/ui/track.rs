@@ -249,7 +249,7 @@ pub fn track_row(app: &Rc<App>, row: Row, columns: Columns) -> gtk::ListBoxRow {
         });
     }
     trailing.append(&mark);
-    let liked = gtk::Image::builder().icon_name("emblem-ok-symbolic").pixel_size(14).tooltip_text("高く評価済み").css_classes(["accent-text"]).visible(false).build();
+    let liked = gtk::Image::builder().icon_name("object-select-symbolic").pixel_size(14).tooltip_text("高く評価済み").css_classes(["accent-text"]).visible(false).build();
     {
         let id = song.video_id.clone();
         watch_liked(&liked, move |image| image.set_visible(is_liked(&id)));
