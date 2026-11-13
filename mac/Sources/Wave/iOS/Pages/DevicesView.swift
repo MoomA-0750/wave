@@ -65,7 +65,7 @@ struct DevicesView: View {
             }
         }
         .sheet(isPresented: $scanning) {
-            QrScanSheet(title: L.t("QR を読んで加わる", "Scan QR code to join")) { text in devices.accept(text) }
+            QrScanSheet(title: L.t("QR を読み取って加わる", "Scan QR to join")) { text in devices.accept(text) }
         }
         .confirmationDialog(L.t("端末を外しますか？", "Remove this device?"), isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }),
                             titleVisibility: .visible, presenting: removing) { member in
@@ -103,13 +103,13 @@ struct DevicesView: View {
             // Android の「リセット」と同じ: 読めない保存を消して、加わり直せるようにする
             DevicesBanner(symbol: "xmark.octagon.fill", color: .red,
                           title: L.t("連携の保存を読めません", "Couldn't read the saved device group"),
-                          message: L.t("リセットすると、この iPhone はもう一度ほかの端末から加わり直します。", "Reset it to join your devices again from another device."),
+                          message: L.t("リセットすると、この iPhone はもう一度ほかの端末から加わり直します", "Reset it to join your devices again from another device"),
                           action: L.t("リセット", "Reset"), onAction: devices.forgetHousehold)
         } else if info.inHousehold && info.relay == .notMember {
             // 家から外された・中継の家が作り直された。消すかどうかは本人が決める（勝手に消さない）
             DevicesBanner(symbol: "xmark.octagon.fill", color: .red,
                           title: L.t("中継がこの iPhone を連携した端末として受け付けません", "The relay no longer accepts this iPhone"),
-                          message: L.t("ほかの端末から外された可能性があります。", "It may have been removed by another device."),
+                          message: L.t("ほかの端末から外された可能性があります", "It may have been removed by another device"),
                           action: L.t("この iPhone の連携の記録を消す", "Forget the group on this iPhone"), onAction: devices.forgetHousehold)
         } else if info.storeResetPending {
             DevicesBanner(symbol: "exclamationmark.triangle.fill", color: .yellow,
@@ -154,7 +154,7 @@ struct DevicesView: View {
             Text(L.t("連携済みの端末の wave で「端末の連携」→「端末を追加」を押し、出た QR を読むか、「文字で共有」で送った文字列をここに貼り付けてください。",
                      "On a device that's already set up, open Devices in wave and tap “Add device”. Scan the QR code, or share the text and paste it here."))
                 .font(.footnote).foregroundStyle(.secondary)
-            Button(L.t("QR を読んで加わる", "Scan QR code to join"), systemImage: "qrcode.viewfinder") { scanning = true }
+            Button(L.t("QR を読み取って加わる", "Scan QR to join"), systemImage: "qrcode.viewfinder") { scanning = true }
             HStack {
                 TextField("wave-pair:…", text: $offerText, axis: .vertical)
                     .lineLimit(1...4)

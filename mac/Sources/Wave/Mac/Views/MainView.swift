@@ -227,7 +227,7 @@ struct AccountMenu: View {
             if account.isLoggedIn {
                 Text(account.name ?? L.t("ログイン中", "Signed in"))
                 Divider()
-                Button(L.t("最近再生した曲", "Recently played"), systemImage: "clock.arrow.circlepath") { AppServices.nav.history() }
+                Button(L.t("再生履歴", "History"), systemImage: "clock.arrow.circlepath") { AppServices.nav.history() }
                 if AppServices.connect.configured {
                     Button(L.t("端末の連携", "Devices"), systemImage: "hifispeaker.2") { AppServices.nav.devices() }
                 }

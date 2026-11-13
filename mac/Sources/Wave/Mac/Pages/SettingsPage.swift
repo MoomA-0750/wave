@@ -44,7 +44,7 @@ struct SettingsPageView: View {
                 // 通信の失敗だけでは出さない
                 if account.isLoggedIn, account.session == .expired {
                     warning(L.t("再ログインが必要です", "You need to sign in again"),
-                            L.t("ログインが切れました。もう一度ログインしてください。", "Your sign-in has expired. Please sign in again.")) {
+                            L.t("ログインが切れました。もう一度ログインしてください", "Your sign-in has expired. Please sign in again")) {
                         Button(L.t("ログインし直す", "Sign in again")) { LoginWindowController.show() }
                     }
                 } else if account.isLoggedIn, case .suspect = account.session {
@@ -54,7 +54,7 @@ struct SettingsPageView: View {
                     }
                 }
                 if account.savedLoginUnreadable && !account.isLoggedIn {
-                    warning(L.t("保存したログイン情報を読み込めませんでした", "Couldn't read your saved sign-in"), L.t("ログインし直すと上書きされます。", "Signing in again will replace it.")) {
+                    warning(L.t("保存したログイン情報を読み込めませんでした", "Couldn't read your saved sign-in"), L.t("ログインし直すと上書きされます", "Signing in again will replace it")) {
                         EmptyView()
                     }
                 }
@@ -90,8 +90,8 @@ struct SettingsPageView: View {
                                       "Shows “Listening to” through the Discord app on this Mac, including songs playing on your other devices"),
                                   isOn: $discordOn)
                             .onChange(of: discordOn) { _, _ in saveDiscord() }
-                        Text(L.t("discord.com/developers/applications で「wave」という名前のアプリケーションを作り、その Application ID を貼ってください。",
-                                 "Create an application named “wave” at discord.com/developers/applications and paste its Application ID."))
+                        Text(L.t("discord.com/developers/applications で「wave」という名前のアプリケーションを作り、その Application ID を貼ってください",
+                                 "Create an application named “wave” at discord.com/developers/applications and paste its Application ID"))
                             .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                         TextField("Application ID", text: $discordId).textFieldStyle(.roundedBorder)
                             .onSubmit { saveDiscord() }
@@ -107,8 +107,8 @@ struct SettingsPageView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text(aiConfigured ? L.t("\(AppServices.settings.aiName ?? AppServices.settings.aiUrl ?? "") の中継につないでいます", "Connected to \(AppServices.settings.aiName ?? AppServices.settings.aiUrl ?? "")")
                             : L.t("家の PC の Claude Code で、歌詞の意味・似た曲・プレイリスト作りを頼めます", "Ask about lyrics, find similar songs and make playlists with Claude Code on your PC"))
-                        Text(L.t("家の PC で ai-bridge の ai_bridge.py --name wave --pair を動かし、出てきた waveai://pair?… の文字列を貼ってください。",
-                                 "Run ai_bridge.py --name wave --pair from ai-bridge on your PC and paste the waveai://pair?… text it prints."))
+                        Text(L.t("家の PC で ai-bridge の ai_bridge.py --name wave --pair を動かし、出てきた waveai://pair?… の文字列を貼ってください",
+                                 "Run ai_bridge.py --name wave --pair from ai-bridge on your PC and paste the waveai://pair?… text it prints"))
                             .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                         HStack(spacing: 8) {
                             SecureField("waveai://pair?u=…&t=…", text: $pairText).textFieldStyle(.roundedBorder)

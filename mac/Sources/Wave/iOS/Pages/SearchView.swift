@@ -441,7 +441,7 @@ struct SearchView: View {
                 Section {
                     ForEach(model.history) { entry in
                         HistoryRow(entry: entry, onRemove: { model.remove(entry) }) { openHistory(entry) }
-                            .swipeActions { Button(L.t("消去", "Clear"), systemImage: "trash", role: .destructive) { model.remove(entry) } }
+                            .swipeActions { Button(L.t("履歴から削除", "Remove from history"), systemImage: "trash", role: .destructive) { model.remove(entry) } }
                     }
                 } header: {
                     HStack {

@@ -218,7 +218,7 @@ struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Label(L.t("再ログインが必要です", "You need to sign in again"), systemImage: "exclamationmark.triangle.fill")
                         .foregroundStyle(.orange)
-                    Text(L.t("ログインが切れました。もう一度ログインしてください。", "Your sign-in has expired. Please sign in again."))
+                    Text(L.t("ログインが切れました。もう一度ログインしてください", "Your sign-in has expired. Please sign in again"))
                         .font(.footnote).foregroundStyle(.secondary)
                 }
                 Button(L.t("ログインし直す", "Sign in again")) { LoginGate.shared.reLogin = true }
@@ -235,7 +235,7 @@ struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Label(L.t("保存したログイン情報を読み込めませんでした", "Couldn't read your saved sign-in"), systemImage: "exclamationmark.triangle.fill")
                         .foregroundStyle(.orange)
-                    Text(L.t("ログインし直すと上書きされます。", "Signing in again will replace it.")).font(.footnote).foregroundStyle(.secondary)
+                    Text(L.t("ログインし直すと上書きされます", "Signing in again will replace it")).font(.footnote).foregroundStyle(.secondary)
                 }
             }
         } header: {
@@ -259,7 +259,8 @@ struct SettingsView: View {
             }
             Toggle(isOn: Binding(get: { downloads.settings.smartDownloads }, set: { downloads.setSmart($0) })) {
                 SettingsLabel(title: L.t("スマートダウンロード", "Smart downloads"),
-                              detail: L.t("聴きそうな曲を毎日選び直して取っておく", "Automatically download songs you're likely to play, refreshed daily"))
+                              detail: L.t("いつも聴いている曲・好きそうな曲・おすすめから、聴きそうな曲を毎日選び直して取っておく",
+                                      "Automatically download songs you're likely to play from songs you play often, songs you might like and recommendations, refreshed daily"))
             }
             if downloads.settings.smartDownloads {
                 Picker(L.t("曲数", "Songs"), selection: Binding(get: { downloads.settings.smartDownloadCount }, set: { downloads.setSmartCount($0) })) {
@@ -329,8 +330,8 @@ struct SettingsView: View {
             Text("Claude")
         } footer: {
             if !aiConfigured {
-                Text(L.t("家の PC で ai-bridge の ai_bridge.py --name wave --pair を動かし、出てきた waveai://pair?… の文字列を貼ってください。",
-                         "Run ai_bridge.py --name wave --pair from ai-bridge on your PC and paste the waveai://pair?… text it prints."))
+                Text(L.t("家の PC で ai-bridge の ai_bridge.py --name wave --pair を動かし、出てきた waveai://pair?… の文字列を貼ってください",
+                         "Run ai_bridge.py --name wave --pair from ai-bridge on your PC and paste the waveai://pair?… text it prints"))
             }
         }
     }

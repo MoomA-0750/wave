@@ -167,7 +167,8 @@ final class CollectionModel {
                         first = false
                         self.editable = page.editable
                         self.sortable = page.sortable
-                        self.title = page.title ?? self.request.title
+                        // 高く評価した曲は、YouTube の題（「高く評価した音楽」）ではなく、ライブラリの行と同じアプリの名前を出す
+                        self.title = self.isLiked ? self.request.title ?? page.title : page.title ?? self.request.title
                         if self.request.thumbnailUrl == nil, let t = page.thumbnailUrl {
                             self.thumbnailUrl = t
                             Task { await self.color() }

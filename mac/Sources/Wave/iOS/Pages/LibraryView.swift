@@ -286,7 +286,7 @@ struct HistoryView: View {
             return
         }
         sections = page.sections.map { ($0.title ?? "", $0.songs) }
-        if sections.allSatisfy({ $0.songs.isEmpty }) { error = L.t("再生履歴はありません", "No listening history") }
+        if sections.allSatisfy({ $0.songs.isEmpty }) { error = L.t("再生履歴はまだありません", "No listening history yet") }
     }
 }
 #endif

@@ -105,7 +105,7 @@ struct HistoryPageView: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(L.t("最近再生した曲", "Recently played")).font(.system(size: 48, weight: .bold))
+                    Text(L.t("再生履歴", "History")).font(.system(size: 48, weight: .bold))
                     if loading { ProgressView() }
                     if let error { Text(error) }
                 }

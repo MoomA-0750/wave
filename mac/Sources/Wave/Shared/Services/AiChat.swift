@@ -196,7 +196,7 @@ final class AiChat {
                 }
             }
             guard configured else {
-                messages.append(.failure(L.t("Claude につないでいません。設定の「Claude」でつないでください。", "Claude isn't connected yet. Connect it in Settings → Claude.")))
+                messages.append(.failure(L.t("Claude につないでいません。設定の「Claude」でつないでください", "Claude isn't connected yet. Connect it in Settings → Claude")))
                 return
             }
             do {
@@ -204,7 +204,7 @@ final class AiChat {
             } catch is CancellationError {
             } catch let error as URLError where error.code == .cancelled {
             } catch {
-                messages.append(.failure(L.t("Claude の中継に届きませんでした。中継を動かしている PC が起きているか確かめてください。",
+                messages.append(.failure(L.t("Claude の中継に届きませんでした。中継を動かしている PC が起きているか確かめてください",
                                              "Couldn't reach the Claude bridge. Is the PC running it?")))
             }
         }
@@ -242,7 +242,7 @@ final class AiChat {
         let (bytes, response) = try await session.bytes(for: post("/v1/run", body))
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         if status == 401 {
-            messages.append(.failure(L.t("Claude の中継にトークンを断られました。設定でつなぎ直してください。", "The Claude bridge refused the token. Connect again in Settings.")))
+            messages.append(.failure(L.t("Claude の中継にトークンを断られました。設定でつなぎ直してください", "The Claude bridge refused the token. Connect again in Settings")))
             return
         }
         guard (200...299).contains(status) else { throw URLError(.badServerResponse) }
@@ -342,7 +342,7 @@ final class AiChat {
             let (songs, missing) = songsOf(args)
             if songs.isEmpty { return AiChat.unknown(missing) }
             player.queueAll(songs, next: args["next"].bool == true)
-            return (.string("queued \(songs.count) songs"), nil, .action(L.t("\(songs.count) 曲をキューに追加しました", "Added \(L.songs(songs.count)) to the queue")))
+            return (.string("queued \(songs.count) songs"), nil, .action(L.t("\(songs.count) 曲をキューに追加しました", "Added \(L.songs(songs.count)) to queue")))
         case "list_playlists":
             return (.array(AppServices.library.editable.map { .obj(["playlist_id": .string($0.playlistId), "title": .string($0.title)]) }), nil, nil)
         case "create_playlist":

@@ -50,7 +50,7 @@ final class Settings: Codable {
     /// 「曲名を元の表記で」の説明（Android の settings_original_titles_summary と同じ）。
     static var originalTitlesDetail: String {
         L.t("曲名・アーティスト名・アルバム名を、曲の言語のまま出します（洋楽をカタカナに、邦楽をローマ字にしません）。YouTube に2回問い合わせるので、ページの表示が少し遅くなります",
-            "Keep song, artist, and album names in their own language (no katakana for Western songs, no romaji for Japanese songs). wave asks YouTube twice, so pages load a little slower")
+            "Keep song, artist and album names in their own language (no katakana for Western songs, no romaji for Japanese songs). wave asks YouTube twice, so pages load a little slower")
     }
 
     private static var fileURL: URL { AppPaths.file("settings.json") }

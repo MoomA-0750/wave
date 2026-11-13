@@ -92,11 +92,11 @@ struct DevicesPageView: View {
         } else if info.unreadable {
             // Android の「リセット」と同じ: 読めない保存を消して、加わり直せるようにする
             banner(.error, L.t("連携の保存を読めません", "Couldn't read the saved device group"),
-                   L.t("リセットすると、この Mac はもう一度ほかの端末から加わり直します。", "Reset it to join your devices again from another device."),
+                   L.t("リセットすると、この Mac はもう一度ほかの端末から加わり直します", "Reset it to join your devices again from another device"),
                    L.t("リセット", "Reset"), devices.forgetHousehold)
         } else if info.inHousehold && info.relay == .notMember {
             banner(.error, L.t("中継がこの Mac を連携した端末として受け付けません", "The relay no longer accepts this Mac"),
-                   L.t("ほかの端末から外された可能性があります。", "It may have been removed by another device."),
+                   L.t("ほかの端末から外された可能性があります", "It may have been removed by another device"),
                    L.t("この Mac の連携の記録を消す", "Forget the group on this Mac"), devices.forgetHousehold)
         } else if info.storeResetPending {
             banner(.warning, L.t("中継の状態が作り直されました", "The relay's state was reset"), nil, L.t("この状態から始める", "Start from this state"),
