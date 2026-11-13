@@ -18,6 +18,23 @@ public static partial class Ui
         var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(window);
         var scale = Math.Max(1.0, GetDpiForWindow(hwnd) / 96.0);
         window.AppWindow.Resize(new Windows.Graphics.SizeInt32((int)(width * scale), (int)(height * scale)));
+        FitWorkArea(window.AppWindow);
+    }
+
+    /// <summary>
+    /// 窓を画面の作業域（タスクバーを除いた所）に収める。Windows が置いた位置のまま決まった大きさに広げると、
+    /// 下端がタスクバーの裏に隠れることがある（再生の帯が半分見えなくなる）。
+    /// </summary>
+    private static void FitWorkArea(Microsoft.UI.Windowing.AppWindow appWindow)
+    {
+        var area = Microsoft.UI.Windowing.DisplayArea.GetFromWindowId(appWindow.Id, Microsoft.UI.Windowing.DisplayAreaFallback.Nearest)?.WorkArea;
+        if (area is not { } work) return;
+        var w = Math.Min(appWindow.Size.Width, work.Width);
+        var h = Math.Min(appWindow.Size.Height, work.Height);
+        var x = Math.Clamp(appWindow.Position.X, work.X, work.X + work.Width - w);
+        var y = Math.Clamp(appWindow.Position.Y, work.Y, work.Y + work.Height - h);
+        if (w != appWindow.Size.Width || h != appWindow.Size.Height || x != appWindow.Position.X || y != appWindow.Position.Y)
+            appWindow.MoveAndResize(new Windows.Graphics.RectInt32(x, y, w, h));
     }
 
     /// <summary>画像の URL を、表示する大きさに合うものにして読む（YouTube の画像は URL で大きさを選べる）。</summary>
