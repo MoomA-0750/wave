@@ -1212,3 +1212,10 @@
 - Android と iPhone で、再生画面の曲名の右のボタン（評価とプレイリストの✓）が＋や✓にならず、やり直しの絵のままだった。Pixel 3 の記録は `like status failed Parse`。next の応答から `playerOverlayRenderer.actions` の `likeButtonRenderer` が無くなり、`playerOverlayRenderer.videoActionBar` の `likeButtonViewModel` に移っていた。評価は `likeStatusEntity.likeStatus`、曲は押したときの `likeEndpoint.target.videoId` で確かめる（別の曲のボタンなら読まない、の決まりは前と同じ）
 - 4つの実装（Kotlin・Swift・C#・Rust）とも、前の形を先に見て、無ければ新しい形を読む。プレイリストの中身の読み方（追加の画面の✓）は変わっておらず、Linux から自分のプレイリスト36件を最後まで読めることを確かめた
 - 手本は `next_like_view_model.json`（本物の応答から評価のボタンだけを残したもの）。Pixel 3 で、やり直しの絵が＋に戻り、押すと評価が付き、追加の画面で外せることを確かめた
+
+## 2026-11-13 キューをプレイリストとして保存する・自分のプレイリストの下におすすめの曲を出す
+
+- 本人の頼み: ラジオの流れが良いときに残したい。残し方は YouTube Music のプレイリスト（ほかの端末・公式アプリでも聴ける。wave の中だけに残す形はやめた）、範囲は聴いた曲＋これから流れる曲（本人が選んだ）
+- 曲は playlist/create に videoIds でまとめて渡せる（6曲送って、同じ曲を除いた5曲が入った。作った直後は読んでも0曲で、数秒おくと読める）。Android の innertubex は createPlaylist に曲を渡せないので、作ってから1曲ずつ足す
+- おすすめの曲は、自分のプレイリストの browse の sectionList の続き（曲の続きとは別のトークン）で来る「候補」の棚（7曲・「更新」は棚の reloadContinuation）を使う。自分のでないプレイリストにも同じ形の続きが来るが、中身は関連のプレイリストの棚なので、編集できるプレイリストで高く評価した曲でないときだけ読む。候補は入っていない曲なので、足すときに重複は確かめない
+- 4つの端末を並べて作った。確かめのプレイリストはどれも消した
