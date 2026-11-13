@@ -65,7 +65,7 @@ fun QueueScreen(
             EntryRow(
                 look,
                 title,
-                if (row.userAdded) "${row.artist} · ${stringResource(R.string.nowplaying_next_in_queue)}" else row.artist,
+                if (row.userAdded) "${row.artist} • ${stringResource(R.string.nowplaying_next_in_queue)}" else row.artist,
                 row.thumbnailUrl,
                 onLongClick = {
                     // 押すまでの間にキューが変わっていることがあるので、行の ID で今の位置を引き直す

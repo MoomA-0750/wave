@@ -92,7 +92,7 @@ fun PhoneNowPlayingScreen(
                 status == WatchRemote.PeerStatus.NotFound -> stringResource(R.string.wear_remote_no_phone_short)
                 else -> null
             },
-        subtitle = listOfNotNull(phone?.artist, phone?.playingOn?.let { stringResource(R.string.nowplaying_playing_on, it) }).joinToString(" · "),
+        subtitle = listOfNotNull(phone?.artist, phone?.playingOn?.let { stringResource(R.string.nowplaying_playing_on, it) }).joinToString(" • "),
         artworkUrl = phone?.thumbnailUrl,
         deviceIcon = deviceIcon,
         loading = phone == null && status != WatchRemote.PeerStatus.NotFound,
@@ -160,7 +160,7 @@ fun PhoneQueueScreen(remote: WatchRemote) {
             EntryRow(
                 look,
                 if (row.current) "▶ ${row.title}" else row.title,
-                if (row.userAdded) "${row.artist} · ${stringResource(R.string.nowplaying_next_in_queue)}" else row.artist,
+                if (row.userAdded) "${row.artist} • ${stringResource(R.string.nowplaying_next_in_queue)}" else row.artist,
                 row.thumbnailUrl,
             ) { if (!row.current) remote.command(WatchRemote.CMD_JUMP + row.itemId) }
         }

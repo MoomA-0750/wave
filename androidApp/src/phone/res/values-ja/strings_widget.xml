@@ -4,7 +4,7 @@
     <string name="widget_now_playing_description">今の曲と次に流れる曲、再生の操作、高く評価</string>
     <string name="widget_playlist_label">ワンタップ再生</string>
     <string name="widget_playlist_description">選んだプレイリスト・アルバム・曲・ライブを、押すだけで再生する</string>
-    <string name="widget_nothing_playing">再生していません</string>
+    <string name="widget_nothing_playing">何も再生していません</string>
     <string name="widget_open_app">押すと wave を開きます</string>
     <string name="widget_play">再生</string>
     <string name="widget_play_playlist">%1$s を再生</string>

@@ -7,7 +7,7 @@
     <!-- navigation -->
     <string name="nav_home">ホーム</string>
     <string name="nav_search">検索</string>
-    <string name="nav_library">マイライブラリ</string>
+    <string name="nav_library">ライブラリ</string>
     <string name="nav_ai">Claude</string>
 
     <!-- ui -->
@@ -20,14 +20,14 @@
     <!-- login -->
     <string name="login_title">ログイン</string>
     <string name="login_cancel">キャンセル</string>
-    <string name="login_saved_unreadable">保存済みのログイン情報を読み込めませんでした。ログインし直すと上書きされます。</string>
-    <string name="login_discard_saved">保存済みのログイン情報を消す</string>
-    <string name="login_failed_no_sapisid">ログイン情報を取得できませんでした。</string>
-    <string name="login_failed_no_visitor_data">ログイン情報の一部を取得できませんでした。通信状況を確認して、もう一度ログインしてください。</string>
-    <string name="login_failed_save">ログイン情報を端末に保存できませんでした。</string>
-    <string name="login_failed_renderer_gone">ログイン画面が異常終了しました。</string>
-    <string name="login_retry">もう一度ログインする</string>
-    <string name="login_discard_saved_and_retry">保存済みのログイン情報を消してやり直す</string>
+    <string name="login_saved_unreadable">保存済みのログイン情報を読み込めませんでした。ログインし直すと上書きされます</string>
+    <string name="login_discard_saved">保存済みのログイン情報を削除</string>
+    <string name="login_failed_no_sapisid">ログイン情報を取得できませんでした</string>
+    <string name="login_failed_no_visitor_data">ログイン情報の一部を取得できませんでした。通信状況を確かめて、もう一度ログインしてください</string>
+    <string name="login_failed_save">ログイン情報を端末に保存できませんでした</string>
+    <string name="login_failed_renderer_gone">ログイン画面が異常終了しました</string>
+    <string name="login_retry">ログインし直す</string>
+    <string name="login_discard_saved_and_retry">保存済みのログイン情報を削除してやり直す</string>
 
     <!-- nowplaying -->
     <string name="nowplaying_video_searching">動画を探しています…</string>
@@ -43,7 +43,7 @@
     <string name="nowplaying_pause">一時停止</string>
     <string name="nowplaying_play">再生</string>
     <string name="nowplaying_like_pending">変更中</string>
-    <string name="nowplaying_unlike">高く評価した曲から外す</string>
+    <string name="nowplaying_unlike">高く評価した曲から削除</string>
     <string name="nowplaying_saved_in_playlist">プレイリストに入っています（追加先を変える）</string>
     <string name="nowplaying_like_reload">評価を読み直す</string>
     <string name="nowplaying_like">高く評価した曲に追加</string>
@@ -53,19 +53,19 @@
     <string name="nowplaying_panel_toggle">再生中の画面</string>
     <string name="nowplaying_song">曲</string>
     <string name="nowplaying_video">動画</string>
-    <string name="nowplaying_previous">前の曲</string>
-    <string name="nowplaying_next">次の曲</string>
+    <string name="nowplaying_previous">前へ</string>
+    <string name="nowplaying_next">次へ</string>
     <string name="nowplaying_volume_on_device">%1$s の音量</string>
     <string name="nowplaying_volume_app">音量</string>
     <string name="nowplaying_repeat_all">リピート: 全体</string>
     <string name="nowplaying_repeat_one">リピート: 1曲</string>
     <string name="nowplaying_repeat_off">リピート: オフ</string>
     <plurals name="nowplaying_queue_with_count">
-        <item quantity="other">再生キュー（%1$d曲）</item>
+        <item quantity="other">キュー（%1$d 曲）</item>
     </plurals>
     <string name="nowplaying_lyrics">歌詞</string>
     <string name="nowplaying_lyrics_open_full">歌詞を全面で開く</string>
-    <string name="nowplaying_queue">再生キュー</string>
+    <string name="nowplaying_queue">キュー</string>
     <string name="nowplaying_remove_from_queue">キューから削除</string>
     <string name="nowplaying_lyrics_searching">歌詞を探しています…</string>
     <string name="nowplaying_lyrics_none">この曲の歌詞は見つかりませんでした</string>
@@ -73,18 +73,18 @@
 
     <!-- settings -->
     <string name="settings_title">設定</string>
-    <string name="settings_account_checking">アカウントを確認しています…</string>
+    <string name="settings_account_checking">アカウントを確かめています…</string>
     <string name="settings_account_no_name">名前を取得できませんでした</string>
     <string name="settings_account_failed">アカウントを取得できませんでした</string>
     <string name="settings_premium_quality">Premium 音質: %1$s</string>
-    <string name="settings_premium_checking">確認中…</string>
-    <string name="settings_premium_available">利用可</string>
-    <string name="settings_premium_unavailable">利用不可</string>
-    <string name="settings_premium_unknown">未確認</string>
+    <string name="settings_premium_checking">確かめています…</string>
+    <string name="settings_premium_available">使えます</string>
+    <string name="settings_premium_unavailable">使えません</string>
+    <string name="settings_premium_unknown">分かりません</string>
     <string name="settings_relogin_required">再ログインが必要です</string>
     <string name="settings_relogin">ログインし直す</string>
-    <string name="settings_session_unverified">ログイン状態を確認できていません</string>
-    <string name="settings_history_title">再生履歴を YouTube Music に送る</string>
+    <string name="settings_session_unverified">ログイン状態を確かめられていません</string>
+    <string name="settings_history_title">再生した曲を YouTube Music の再生履歴に残す</string>
     <string name="settings_history_summary">オフにすると、wave で聴いた曲が YouTube Music の履歴やおすすめに反映されません</string>
     <string name="settings_connected_devices">端末の連携</string>
     <string name="settings_connected_devices_summary">ほかの端末で再生を引き継ぐ</string>
@@ -95,7 +95,7 @@
     <string name="settings_about">このアプリについて</string>
     <string name="settings_version">バージョン %1$s</string>
     <string name="settings_login_storage">ログインの情報は、この端末の Android Keystore の鍵で暗号化して、この端末の中だけに保存しています。バックアップや端末間の転送には含めません。</string>
-    <string name="settings_checking">確認中…</string>
+    <string name="settings_checking">確かめています…</string>
     <string name="settings_debug_stream_check">開発用: ストリーム確認</string>
     <string name="settings_debug_play_fixed">開発用: 固定の曲を再生</string>
     <string name="settings_debug_corrupt_url">開発用: URL を壊して 2 分進む</string>
@@ -111,7 +111,7 @@
     <string name="nowplaying_video_fullscreen">全画面</string>
     <string name="nowplaying_video_exit_fullscreen">全画面を終える</string>
     <string name="nowplaying_video_pip">小窓で見る</string>
-    <string name="nowplaying_pick_artist">アーティストを選ぶ</string>
+    <string name="nowplaying_pick_artist">アーティストへ移動</string>
     <string name="nowplaying_history">履歴</string>
     <string name="nowplaying_history_empty">まだ流れた曲はありません</string>
     <string name="nowplaying_now_playing">再生中</string>
@@ -126,7 +126,7 @@
     <string name="ai_new_chat">新しい会話</string>
     <string name="ai_history">これまでの会話</string>
     <string name="ai_history_empty">まだ会話はありません。会話はこの端末の中だけに残ります。</string>
-    <string name="ai_history_delete">会話を消す</string>
+    <string name="ai_history_delete">会話を削除</string>
     <string name="ai_history_untitled">（質問なし）</string>
     <string name="ai_intro">曲探し・プレイリスト作りを頼めます。再生中の曲について、歌詞の意味や似た曲も聞けます。</string>
     <string name="ai_open_settings">設定を開く</string>
@@ -152,12 +152,12 @@
         <item quantity="other">%d 曲を再生しました</item>
     </plurals>
     <plurals name="ai_queued">
-        <item quantity="other">%d 曲をキューに足しました</item>
+        <item quantity="other">%d 曲をキューに追加しました</item>
     </plurals>
     <plurals name="ai_created">
-        <item quantity="other">「%1$s」を作って %2$d 曲入れました</item>
+        <item quantity="other">「%1$s」を作成して %2$d 曲追加しました</item>
     </plurals>
     <plurals name="ai_added">
-        <item quantity="other">「%1$s」に %2$d 曲足しました</item>
+        <item quantity="other">「%1$s」に %2$d 曲追加しました</item>
     </plurals>
 </resources>

@@ -30,7 +30,7 @@ fun HomeMenu(
                         look,
                         if (phone.playing) R.drawable.ic_graphic_eq else R.drawable.ic_smartphone,
                         phone.title ?: stringResource(R.string.wear_nothing_playing),
-                        listOfNotNull(phone.playingOn ?: phone.deviceName, phone.artist).joinToString(" · "),
+                        listOfNotNull(phone.playingOn ?: phone.deviceName, phone.artist).joinToString(" • "),
                     ) { onOpen(WearScreen.NowPlaying) }
                 }
             state.title != null ->

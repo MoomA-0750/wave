@@ -59,7 +59,7 @@ fun DevicesScreen(
                     EntryRow(
                         look,
                         phone.playingOn?.let { stringResource(R.string.nowplaying_playing_on, it) } ?: phone.deviceName,
-                        phone.title?.let { listOfNotNull(it, phone.artist).joinToString(" · ") } ?: stringResource(R.string.wear_nothing_playing),
+                        phone.title?.let { listOfNotNull(it, phone.artist).joinToString(" • ") } ?: stringResource(R.string.wear_nothing_playing),
                         phone.thumbnailUrl,
                         icon = if (phone.thumbnailUrl == null) R.drawable.ic_smartphone else null,
                     ) {}

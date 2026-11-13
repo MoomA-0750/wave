@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- MainActivity -->
-    <string name="main_logging_out">Logging out…</string>
-    <string name="main_liked_songs">Liked Songs</string>
+    <string name="main_logging_out">Signing out…</string>
+    <string name="main_liked_songs">Liked music</string>
 
     <!-- navigation -->
     <string name="nav_home">Home</string>
     <string name="nav_search">Search</string>
-    <string name="nav_library">Your Library</string>
+    <string name="nav_library">Library</string>
     <string name="nav_ai">Claude</string>
 
     <!-- ui -->
@@ -18,35 +18,35 @@
     <string name="ui_back">Back</string>
 
     <!-- login -->
-    <string name="login_title">Log in</string>
+    <string name="login_title">Sign in</string>
     <string name="login_cancel">Cancel</string>
-    <string name="login_saved_unreadable">Couldn\'t read your saved login. Logging in again will replace it.</string>
-    <string name="login_discard_saved">Delete saved login</string>
-    <string name="login_failed_no_sapisid">Couldn\'t get your login details.</string>
-    <string name="login_failed_no_visitor_data">Couldn\'t get some of your login details. Check your connection and log in again.</string>
-    <string name="login_failed_save">Couldn\'t save your login on this device.</string>
-    <string name="login_failed_renderer_gone">The login screen stopped unexpectedly.</string>
-    <string name="login_retry">Log in again</string>
-    <string name="login_discard_saved_and_retry">Delete saved login and try again</string>
+    <string name="login_saved_unreadable">Couldn\'t read your saved sign-in. Signing in again will replace it</string>
+    <string name="login_discard_saved">Delete saved sign-in</string>
+    <string name="login_failed_no_sapisid">Couldn\'t get your sign-in details</string>
+    <string name="login_failed_no_visitor_data">Couldn\'t get some of your sign-in details. Check your connection and sign in again</string>
+    <string name="login_failed_save">Couldn\'t save your sign-in on this device</string>
+    <string name="login_failed_renderer_gone">The sign-in screen stopped unexpectedly</string>
+    <string name="login_retry">Sign in again</string>
+    <string name="login_discard_saved_and_retry">Delete saved sign-in and try again</string>
 
     <!-- nowplaying -->
     <string name="nowplaying_video_searching">Looking for a video…</string>
     <string name="nowplaying_video_none">No video for this song</string>
     <string name="nowplaying_video_load_failed">Couldn\'t load the video</string>
-    <string name="nowplaying_retry">Try again</string>
+    <string name="nowplaying_retry">Retry</string>
     <string name="nowplaying_video_play_failed">Couldn\'t play the video</string>
     <string name="nowplaying_video_loading">Loading video…</string>
     <string name="nowplaying_video_gap">(This part isn\'t in the video)</string>
     <string name="nowplaying_error">Error: %1$s</string>
     <string name="nowplaying_buffering">Buffering</string>
-    <string name="nowplaying_connected_devices">Connected devices</string>
+    <string name="nowplaying_connected_devices">Devices</string>
     <string name="nowplaying_pause">Pause</string>
     <string name="nowplaying_play">Play</string>
     <string name="nowplaying_like_pending">Updating</string>
-    <string name="nowplaying_unlike">Remove from Liked Songs</string>
+    <string name="nowplaying_unlike">Remove from liked music</string>
     <string name="nowplaying_saved_in_playlist">Saved in a playlist (change)</string>
     <string name="nowplaying_like_reload">Reload like status</string>
-    <string name="nowplaying_like">Add to Liked Songs</string>
+    <string name="nowplaying_like">Add to liked music</string>
     <string name="nowplaying_close">Close</string>
     <string name="nowplaying_expand">Expand</string>
     <string name="nowplaying_hide_panel">Hide player</string>
@@ -82,20 +82,20 @@
     <string name="settings_premium_available">Available</string>
     <string name="settings_premium_unavailable">Unavailable</string>
     <string name="settings_premium_unknown">Unknown</string>
-    <string name="settings_relogin_required">You need to log in again</string>
-    <string name="settings_relogin">Log in again</string>
-    <string name="settings_session_unverified">Couldn\'t verify your login</string>
-    <string name="settings_history_title">Send play history to YouTube Music</string>
+    <string name="settings_relogin_required">You need to sign in again</string>
+    <string name="settings_relogin">Sign in again</string>
+    <string name="settings_session_unverified">Couldn\'t verify your sign-in</string>
+    <string name="settings_history_title">Save played songs to your YouTube Music history</string>
     <string name="settings_history_summary">When off, songs you play in wave won\'t appear in your YouTube Music history or affect recommendations</string>
-    <string name="settings_connected_devices">Connected devices</string>
+    <string name="settings_connected_devices">Devices</string>
     <string name="settings_connected_devices_summary">Continue playback on other devices</string>
-    <string name="settings_log_out">Log out</string>
-    <string name="settings_log_out_confirm_title">Log out?</string>
+    <string name="settings_log_out">Sign out</string>
+    <string name="settings_log_out_confirm_title">Sign out?</string>
     <string name="settings_log_out_confirm_message">You\'ll need to sign in to YouTube Music again. The saved queue on this device is also cleared.</string>
     <string name="settings_cancel">Cancel</string>
     <string name="settings_about">About</string>
     <string name="settings_version">Version %1$s</string>
-    <string name="settings_login_storage">Your login is encrypted with a key in this device\'s Android Keystore and stored only on this device. It isn\'t included in backups or device transfers.</string>
+    <string name="settings_login_storage">Your sign-in is encrypted with a key in this device\'s Android Keystore and stored only on this device. It isn\'t included in backups or device transfers.</string>
     <string name="settings_checking">Checking…</string>
     <string name="settings_debug_stream_check">Dev: Check stream</string>
     <string name="settings_debug_play_fixed">Dev: Play fixed song</string>
@@ -104,10 +104,10 @@
     <string name="settings_debug_play_public_playlist">Dev: Play public playlist</string>
     <string name="settings_debug_last_in_queue">Dev: Jump to last song in queue</string>
     <string name="settings_debug_song_end">Dev: Jump to end of song</string>
-    <string name="nowplaying_next_up">Next in queue</string>
+    <string name="nowplaying_next_up">Up next</string>
     <string name="nowplaying_open_queue">Open queue</string>
     <string name="nowplaying_reorder">Drag to reorder</string>
-    <string name="library_liked_songs_row">Liked Songs</string>
+    <string name="library_liked_songs_row">Liked music</string>
     <string name="ui_liked_badge">Liked</string>
     <string name="nowplaying_video_fullscreen">Full screen</string>
     <string name="nowplaying_video_exit_fullscreen">Exit full screen</string>
@@ -118,11 +118,11 @@
     <string name="nowplaying_now_playing">Now playing</string>
     <string name="nowplaying_next_in_queue">Next in queue</string>
     <string name="nowplaying_clear_queue">Clear queue</string>
-    <string name="nowplaying_next_from_source">Next up</string>
+    <string name="nowplaying_next_from_source">Up next</string>
     <string name="nowplaying_clear_flow">Clear</string>
-    <string name="nowplaying_clear_flow_long">Clear next up</string>
+    <string name="nowplaying_clear_flow_long">Clear up next</string>
     <string name="search_share">Share</string>
-    <string name="search_open_song">Open song</string>
+    <string name="search_open_song">Go to song</string>
     <string name="ai_title">Ask Claude</string>
     <string name="ai_new_chat">New chat</string>
     <string name="ai_history">Past chats</string>
@@ -142,7 +142,7 @@
     <string name="ai_unauthorized">The Claude bridge refused the token. Connect again in Settings.</string>
     <string name="ai_failed">Claude failed: %1$s</string>
     <string name="ai_searched">Searched for “%1$s”</string>
-    <string name="ai_read_liked">Looked at your liked songs</string>
+    <string name="ai_read_liked">Looked at your liked music</string>
     <string name="settings_ai_title">Claude</string>
     <string name="settings_ai_summary_off">Ask about lyrics, find similar songs and make playlists with Claude Code on your PC (ai-bridge)</string>
     <string name="settings_ai_connected">Connected to %1$s</string>
@@ -154,8 +154,8 @@
         <item quantity="other">Playing %d songs</item>
     </plurals>
     <plurals name="ai_queued">
-        <item quantity="one">Added %d song to the queue</item>
-        <item quantity="other">Added %d songs to the queue</item>
+        <item quantity="one">Added %d song to queue</item>
+        <item quantity="other">Added %d songs to queue</item>
     </plurals>
     <plurals name="ai_created">
         <item quantity="one">Created “%1$s” with %2$d song</item>
