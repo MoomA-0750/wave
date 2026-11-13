@@ -26,6 +26,12 @@ QtObject {
     readonly property string fontFamily: Theme.fontFamily !== "" ? Theme.fontFamily : Qt.application.font.family
     readonly property real fontPoints: Theme.fontPoints
 
+    // 画面の言語（日本語・英語）。文言は t("日本語", "English") で書く（Windows の L.T と同じ）
+    readonly property bool ja: Theme.ja
+    function t(jaText, enText) { return ja ? jaText : enText }
+    // 曲数（英語は単数・複数を分ける）
+    function songs(n) { return ja ? n + " 曲" : (n === 1 ? "1 song" : n + " songs") }
+
     // 角の丸み: Hyprland の decoration:rounding（Omarchy の既定は 0）。Hyprland でなければ 12
     readonly property int radius: Theme.rounding >= 0 ? Theme.rounding : 12
     // 小さい部品（チップ・行・小さな画像）は min(4, 丸み)

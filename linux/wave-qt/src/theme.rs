@@ -30,6 +30,7 @@ pub struct ThemeRust {
     pub rounding: i32,
     pub font_family: QString,
     pub font_points: f64,
+    pub ja: bool,
 }
 
 thread_local! {
@@ -40,6 +41,7 @@ thread_local! {
 
 impl cxx_qt::Initialize for qobject::Theme {
     fn initialize(mut self: Pin<&mut Self>) {
+        self.as_mut().set_ja(wave_desktop::lang::ja());
         self.as_mut().reload();
         // テーマを切り替えたら（colors.toml が置き換わったら）その場で色を変える
         let thread = self.qt_thread();

@@ -271,6 +271,8 @@ pub mod qobject {
         // 本体の UI の文字（GNOME の font-name。Omarchy もここに入れる）。読めなければ空と 0（Qt の既定に任せる）
         #[qproperty(QString, font_family)]
         #[qproperty(f64, font_points)]
+        // 画面の言語が日本語か（wave_desktop::lang。起動のはじめに決まり、開いている間は変わらない）
+        #[qproperty(bool, ja)]
         type Theme = super::ThemeRust;
 
         #[qinvokable]
