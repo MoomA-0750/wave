@@ -638,7 +638,7 @@ public sealed partial class PlayerService : ObservableObject
         Queue.Insert(Index + 1, song);
         nextOrigin = QueueOrigin.Source;
         ResumeAfterEnd(Index + 1);
-        Message = L.T($"「{song.Title}」を次に再生します", $"{song.Title} will play next");
+        Message = L.T($"「{song.Title}」を次に再生します", $"“{song.Title}” will play next");
     }
 
     /// <summary>
@@ -683,7 +683,7 @@ public sealed partial class PlayerService : ObservableObject
             return;
         }
         InsertUserItems([song]);
-        Message = L.T($"「{song.Title}」をキューに追加しました", $"Added {song.Title} to queue");
+        Message = L.T($"「{song.Title}」をキューに追加しました", $"Added “{song.Title}” to queue");
     }
 
     /// <summary>
@@ -699,8 +699,8 @@ public sealed partial class PlayerService : ObservableObject
         }
         var device = RemoteDevice ?? L.T("ほかの端末", "the other device");
         Message = songs.Count == 1
-            ? next ? L.T($"「{songs[0].Title}」を {device} で次に再生します", $"{songs[0].Title} will play next on {device}")
-                : L.T($"「{songs[0].Title}」を {device} のキューに追加しました", $"Added {songs[0].Title} to the queue on {device}")
+            ? next ? L.T($"「{songs[0].Title}」を {device} で次に再生します", $"“{songs[0].Title}” will play next on {device}")
+                : L.T($"「{songs[0].Title}」を {device} のキューに追加しました", $"Added “{songs[0].Title}” to the queue on {device}")
             : next ? L.T($"{songs.Count} 曲を {device} で次に再生します", $"{L.Songs(songs.Count)} will play next on {device}")
                 : L.T($"{songs.Count} 曲を {device} のキューに追加しました", $"Added {L.Songs(songs.Count)} to the queue on {device}");
     }

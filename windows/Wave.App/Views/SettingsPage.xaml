@@ -67,7 +67,7 @@
                 </Grid.ColumnDefinitions>
                 <StackPanel>
                     <TextBlock Text="{x:Bind app:L.T('スマートダウンロード', 'Smart downloads')}" />
-                    <TextBlock Text="{x:Bind app:L.T('いつも聴いている曲・聴いたことのない好きそうな曲・おすすめを、1日1回選び直して取っておきます（wave が動いている間）', 'Keeps songs you play often, new songs you might like and recommendations, refreshed once a day while wave is running')}" Style="{StaticResource SubtleTextStyle}" TextWrapping="Wrap" MaxLines="3" />
+                    <TextBlock Text="{x:Bind app:L.T('いつも聴いている曲・好きそうな曲・おすすめから、聴きそうな曲を毎日選び直して取っておく', 'Automatically download songs you^'re likely to play from songs you play often, songs you might like and recommendations, refreshed daily')}" Style="{StaticResource SubtleTextStyle}" TextWrapping="Wrap" MaxLines="3" />
                 </StackPanel>
                 <ComboBox x:Name="SmartCountBox" Grid.Column="1" VerticalAlignment="Center" MinWidth="110" SelectionChanged="OnSmartCountChanged" />
                 <ToggleSwitch x:Name="SmartSwitch" Grid.Column="2" VerticalAlignment="Center" OnContent="" OffContent="" MinWidth="0" Toggled="OnSmartToggled" />

@@ -369,7 +369,7 @@ public sealed partial class MainWindow : Window
         var account = AppServices.Account;
         if (account.IsLoggedIn)
         {
-            AccountMenu.Items.Add(new MenuFlyoutItem { Text = account.Name ?? L.T("ログイン中", "Logged in"), IsEnabled = false });
+            AccountMenu.Items.Add(new MenuFlyoutItem { Text = account.Name ?? L.T("ログイン中", "Signed in"), IsEnabled = false });
             AccountMenu.Items.Add(new MenuFlyoutSeparator());
             AccountMenu.Items.Add(MenuItem(L.T("再生履歴", "History"), "", Nav.History));
             if (AppServices.Connect.Configured) AccountMenu.Items.Add(MenuItem(L.T("端末の連携", "Devices"), "\uE772", Nav.Devices));
@@ -398,7 +398,7 @@ public sealed partial class MainWindow : Window
         login.Finished += ok =>
         {
             login = null;
-            if (ok) ShowToast(L.T("ログインしました", "Logged in"));
+            if (ok) ShowToast(L.T("ログインしました", "Signed in"));
         };
         login.Activate();
     }

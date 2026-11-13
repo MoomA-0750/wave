@@ -1291,7 +1291,7 @@ public sealed class ConnectService
             if (!confirm.IsSuccess)
             {
                 Fail(confirm.Error == Wave.Core.Connect.Pairing.Failure.AccountMismatch
-                    ? L.T("相手は別のアカウントでログインしています", "The other device is logged in to a different account")
+                    ? L.T("相手は別のアカウントでログインしています", "The other device is signed in to a different account")
                     : L.T("相手を確かめられませんでした", "Couldn't verify the other device"));
                 return;
             }
@@ -1401,7 +1401,7 @@ public sealed class ConnectService
         if (!result.IsSuccess)
         {
             Fail(result.Error == Wave.Core.Connect.Pairing.Failure.AccountMismatch
-                ? L.T("相手は別のアカウントでログインしています", "The other device is logged in to a different account")
+                ? L.T("相手は別のアカウントでログインしています", "The other device is signed in to a different account")
                 : L.T("相手を確かめられませんでした", "Couldn't verify the other device"));
             return;
         }

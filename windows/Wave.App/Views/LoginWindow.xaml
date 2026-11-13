@@ -23,7 +23,7 @@
         <WebView2 x:Name="Browser" Grid.Row="1" />
         <StackPanel x:Name="Status" Grid.Row="1" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="12" Visibility="Collapsed">
             <ProgressRing IsActive="True" />
-            <TextBlock x:Name="StatusText" Text="{x:Bind app:L.T('ログインしています…', 'Logging in…')}" HorizontalAlignment="Center" />
+            <TextBlock x:Name="StatusText" Text="{x:Bind app:L.T('ログインしています…', 'Signing in…')}" HorizontalAlignment="Center" />
         </StackPanel>
     </Grid>
 </Window>

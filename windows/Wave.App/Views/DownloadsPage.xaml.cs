@@ -86,8 +86,8 @@ public sealed partial class DownloadsPage : Page
         rendering = false;
         SmartPanel.Visibility = Ui.Show(settings.SmartDownloads);
         SmartCountBox.Visibility = Ui.Show(settings.SmartDownloads);
-        SmartDetail.Text = L.T("いつも聴いている曲・聴いたことのない好きそうな曲・おすすめを、1日1回選び直して取っておきます",
-            "Keeps songs you play often, new songs you might like, and recommendations, refreshed once a day");
+        SmartDetail.Text = L.T("いつも聴いている曲・好きそうな曲・おすすめから、毎日選び直します",
+            "Picks from songs you play often, songs you might like and recommendations, refreshed daily");
         RenderChips();
         var current = AppServices.Player.Current?.VideoId;
         var n = 1;
@@ -95,7 +95,7 @@ public sealed partial class DownloadsPage : Page
         SmartList.ItemsSource = smartRows;
         SmartPlayButton.IsEnabled = smartRows.Count > 0;
         SmartEmpty.Text = manifest.Smart.Count == 0
-            ? L.T("まだ選んでいません。通信できるときに選んで取ります", "Nothing chosen yet. Songs are picked when you're online")
+            ? L.T("まだ選んだ曲はありません。通信できるときに選んで取ります", "No songs chosen yet. Songs are picked when you're online")
             : L.T("この分類の曲はありません", "No songs in this category");
         SmartEmpty.Visibility = Ui.Show(smartRows.Count == 0);
 

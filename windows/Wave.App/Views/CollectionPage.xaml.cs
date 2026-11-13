@@ -227,7 +227,8 @@ public sealed partial class CollectionPage : Page
                 first = false;
                 editable = page.Editable;
                 sortable = page.Sortable;
-                ShowHeader(page.Title ?? request.Title, request.ThumbnailUrl ?? page.ThumbnailUrl, page.Subtitle ?? request.Subtitle);
+                // 高く評価した曲は、YouTube の題（「高く評価した音楽」）ではなく、ライブラリの行と同じアプリの名前を出す
+                ShowHeader(request.Id == MusicRepository.LikedSongs ? request.Title ?? page.Title : page.Title ?? request.Title, request.ThumbnailUrl ?? page.ThumbnailUrl, page.Subtitle ?? request.Subtitle);
             }
             for (var i = all.Count; i < page.Songs.Count; i++)
             {

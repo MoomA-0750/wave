@@ -139,12 +139,12 @@ public sealed partial class DevicesPage : Page
     {
         var dialog = new ContentDialog
         {
-            Title = L.T("wave API にログインを渡しますか？", "Give your login to wave API?"),
+            Title = L.T("ログインを渡しますか？", "Give your login?"),
             Content = new TextBlock
             {
                 TextWrapping = TextWrapping.Wrap,
-                Text = L.T($"「{member.Label}」に YouTube のログインを渡します。ほかのアプリ（home-dashboard など）で、あなたのプレイリストや高く評価した曲を出せるようになります。wave API を動かす機械に入れる人は、これらを読めます。",
-                    $"Your YouTube login will be sent to “{member.Label}”, so other apps (such as home-dashboard) can show your playlists and liked music. Anyone who can get into the computer running wave API can read them."),
+                Text = L.T($"「{member.Label}」に、この端末の YouTube のログインを渡します。ほかのアプリ（home-dashboard など）から、あなたのプレイリスト・高く評価した曲・おすすめを使えるようになります。wave API を動かしている機械に入れる人は、それらを読めます。",
+                    $"This gives “{member.Label}” this device's YouTube login, so other apps (such as home-dashboard) can use your playlists, liked music and recommendations. Anyone with access to the machine running wave API can read them."),
             },
             PrimaryButtonText = L.T("渡す", "Give"),
             CloseButtonText = L.T("キャンセル", "Cancel"),
@@ -152,7 +152,7 @@ public sealed partial class DevicesPage : Page
         };
         if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
         var sent = await Devices.GrantLoginAsync(member.DeviceId);
-        App.Window?.ShowToast(sent ? L.T($"「{member.Label}」にログインを渡しました", $"Sent your login to {member.Label}") : L.T("ログインを渡せませんでした（中継への接続を確かめてください）", "Couldn't give your login (check your connection to the relay)"));
+        App.Window?.ShowToast(sent ? L.T($"「{member.Label}」にログインを渡しました", $"Gave your login to “{member.Label}”") : L.T("ログインを渡せませんでした（中継への接続を確かめてください）", "Couldn't give your login (check your connection to the relay)"));
     }
 
     private async Task RemoveAsync(MemberView member)
@@ -167,7 +167,7 @@ public sealed partial class DevicesPage : Page
         };
         if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
         var removed = await Devices.RemoveMemberAsync(member.DeviceId);
-        App.Window?.ShowToast(removed ? L.T($"「{member.Label}」を外しました", $"Removed {member.Label}") : L.T("外せませんでした", "Couldn't remove the device"));
+        App.Window?.ShowToast(removed ? L.T($"「{member.Label}」を外しました", $"Removed “{member.Label}”") : L.T("外せませんでした", "Couldn't remove the device"));
     }
 
     private void RenderPairing(PairingView pairing)

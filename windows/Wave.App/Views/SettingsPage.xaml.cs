@@ -147,7 +147,7 @@ public sealed partial class SettingsPage : Page
         var dialog = new ContentDialog
         {
             Title = L.T("ダウンロードをすべて削除しますか？", "Delete all downloads?"),
-            Content = L.T("この PC に取ったプレイリスト・アルバム・曲・エピソードを全部消します。スマートダウンロードの設定はそのままです。", "This removes every playlist, album, song and episode saved on this PC. Your smart download setting stays as it is."),
+            Content = L.T("この PC に取ったプレイリスト・アルバム・曲・エピソードをすべて消します。スマートダウンロードの設定はそのままです。", "This removes all playlists, albums, songs and episodes saved on this PC. Your smart download setting stays as it is."),
             PrimaryButtonText = L.T("削除", "Delete"),
             CloseButtonText = L.T("キャンセル", "Cancel"),
             DefaultButton = ContentDialogButton.Close,

@@ -129,7 +129,7 @@ public static class SongMenu
             else membership.Invalidate(playlist.PlaylistId);
         }
         AppPaths.Log($"playlist remove-song known={setIds is not null} removed={removed}");
-        AppServices.Player.Message = removed ? L.T($"「{playlist.Title}」から削除しました", $"Removed from {playlist.Title}") : L.T("削除できませんでした", "Couldn't remove it");
+        AppServices.Player.Message = removed ? L.T($"「{playlist.Title}」から削除しました", $"Removed from “{playlist.Title}”") : L.T("削除できませんでした", "Couldn't remove it");
         return removed;
     }
 
@@ -140,8 +140,8 @@ public static class SongMenu
         if (result is AddToPlaylistResult.Added) AppServices.Library.RefreshPlaylistsSoon();
         AppServices.Player.Message = result switch
         {
-            AddToPlaylistResult.Added => L.T($"「{playlist.Title}」に追加しました", $"Added to {playlist.Title}"),
-            AddToPlaylistResult.AlreadyInPlaylist => L.T($"「{playlist.Title}」にはもう入っています", $"Already in {playlist.Title}"),
+            AddToPlaylistResult.Added => L.T($"「{playlist.Title}」に追加しました", $"Added to “{playlist.Title}”"),
+            AddToPlaylistResult.AlreadyInPlaylist => L.T($"「{playlist.Title}」にはもう入っています", $"Already in “{playlist.Title}”"),
             AddToPlaylistResult.NotChecked => L.T("重複を確かめられなかったので、追加しませんでした", "Couldn't check for duplicates, so it wasn't added"),
             _ => L.T("追加できませんでした", "Couldn't add it"),
         };
@@ -285,7 +285,7 @@ public static class Dialogs
         var playlist = new PlaylistSummary(created.Value!, title, L.T("非公開", "Private"), null, Editable: true);
         AppServices.Library.AddCreated(playlist);
         if (song is not null) await SongMenu.AddAsync(playlist, song, knownEmpty: true);
-        else AppServices.Player.Message = L.T($"「{title}」を作成しました", $"Created {title}");
+        else AppServices.Player.Message = L.T($"「{title}」を作成しました", $"Created “{title}”");
     }
 
     /// <summary>
@@ -341,7 +341,7 @@ public static class Dialogs
         }
         AppPaths.Log($"queue saved id={created.Value} songs={songs.Count} read={saved}");
         player.Message = saved < 0 || saved >= songs.Count
-            ? L.T($"「{title}」に {songs.Count} 曲を保存しました", $"Saved {songs.Count} songs to {title}")
+            ? L.T($"「{title}」に {songs.Count} 曲を保存しました", $"Saved {L.Songs(songs.Count)} to “{title}”")
             : L.T($"{songs.Count} 曲中 {saved} 曲を保存しました", $"Saved {saved} of {songs.Count} songs");
     }
 }
