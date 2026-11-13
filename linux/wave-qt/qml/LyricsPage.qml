@@ -46,6 +46,8 @@ Item {
         }
     }
 
+    // 狭いページ（狭い窓）では、端の余白と文字を小さくする
+    readonly property bool narrow: width < 560
     // 背景: ジャケットをぼかして暗くしたもの
     Image { id: backdrop; anchors.fill: parent; source: page.info.art || ""; fillMode: Image.PreserveAspectCrop; visible: false; sourceSize.width: 256; sourceSize.height: 256 }
     MultiEffect { anchors.fill: parent; source: backdrop; blurEnabled: true; blur: 1.0; blurMax: 64; brightness: Style.dark ? -0.45 : 0.35; saturation: 0.2; visible: backdrop.status === Image.Ready }
@@ -54,8 +56,8 @@ Item {
     ListView {
         id: list
         anchors.fill: parent
-        anchors.leftMargin: 48
-        anchors.rightMargin: 48
+        anchors.leftMargin: page.narrow ? 20 : 48
+        anchors.rightMargin: page.narrow ? 20 : 48
         anchors.bottomMargin: 28
         visible: page.info.state === "synced"
         clip: true
@@ -65,10 +67,10 @@ Item {
         highlightMoveDuration: 300
         delegate: Label {
             width: ListView.view.width
-            topPadding: modelData.sub ? 2 : 22
+            topPadding: modelData.sub ? 2 : (page.narrow ? 14 : 22)
             text: modelData.text
             wrapMode: Text.Wrap
-            font.pixelSize: modelData.sub ? 20 : 30
+            font.pixelSize: page.narrow ? (modelData.sub ? 15 : 22) : (modelData.sub ? 20 : 30)
             font.weight: Font.Bold
             color: Style.foreground
             opacity: index === page.current || (modelData.sub && index > page.current && page.current >= 0 && index - page.current <= 2) ? 1 : (index < page.current ? 0.55 : 0.32)
@@ -79,7 +81,8 @@ Item {
     }
     Flickable {
         anchors.fill: parent
-        anchors.margins: 48
+        anchors.margins: page.narrow ? 20 : 48
+        anchors.bottomMargin: 40
         visible: page.info.state === "plain"
         contentHeight: plain.implicitHeight
         clip: true

@@ -7,6 +7,7 @@ use std::pin::Pin;
 use std::rc::Rc;
 
 use cxx_qt::Threading;
+use gio::prelude::*;
 use cxx_qt_lib::QString;
 use wave_desktop::omarchy_theme::{self, ThemeWatcher};
 
@@ -27,11 +28,14 @@ pub struct ThemeRust {
     pub green: QString,
     pub yellow: QString,
     pub rounding: i32,
+    pub font_family: QString,
+    pub font_points: f64,
 }
 
 thread_local! {
     static WATCHER: RefCell<Option<Rc<ThemeWatcher>>> = const { RefCell::new(None) };
     static ICONS: RefCell<HashMap<String, String>> = RefCell::new(HashMap::new());
+    static FONT_SETTINGS: RefCell<Option<gio::Settings>> = const { RefCell::new(None) };
 }
 
 impl cxx_qt::Initialize for qobject::Theme {
@@ -43,10 +47,27 @@ impl cxx_qt::Initialize for qobject::Theme {
             let _ = thread.queue(|theme| theme.reload());
         });
         WATCHER.with(|w| *w.borrow_mut() = Some(watcher));
+        // 本体の UI の文字を変えたら、その場で変える
+        if let Some(settings) = interface_settings() {
+            let thread = self.qt_thread();
+            settings.connect_changed(Some("font-name"), move |_, _| {
+                let _ = thread.queue(|theme| theme.reload_font());
+            });
+            FONT_SETTINGS.with(|f| *f.borrow_mut() = Some(settings));
+        }
+        self.as_mut().reload_font();
     }
 }
 
 impl qobject::Theme {
+    fn reload_font(mut self: Pin<&mut Self>) {
+        let name = interface_settings().map(|s| s.string("font-name").to_string()).unwrap_or_default();
+        let (family, points) = parse_font_name(&name).unwrap_or_default();
+        eprintln!("theme font {family:?} {points}");
+        self.as_mut().set_font_family(QString::from(&family));
+        self.as_mut().set_font_points(points);
+    }
+
     pub fn reload(mut self: Pin<&mut Self>) {
         let rounding = omarchy_theme::hypr_rounding().unwrap_or(-1);
         self.as_mut().set_rounding(rounding);
@@ -104,4 +125,45 @@ fn data_dirs() -> Vec<PathBuf> {
     dirs.extend(glib::system_data_dirs());
     dirs.push(PathBuf::from("/usr/share"));
     dirs
+}
+
+/// GNOME の org.gnome.desktop.interface（GTK 版が文字に使うのと同じ設定）。スキーマが無ければ None
+fn interface_settings() -> Option<gio::Settings> {
+    const SCHEMA: &str = "org.gnome.desktop.interface";
+    let source = gio::SettingsSchemaSource::default()?;
+    let schema = source.lookup(SCHEMA, true)?;
+    schema.has_key("font-name").then(|| gio::Settings::new(SCHEMA))
+}
+
+/// "Murecho 11"・"Noto Sans Bold 10.5" のような Pango の書き方から、字の名前と大きさ（ポイント）を取る。
+/// 太さ・斜体の語は落とす（UI の文字は普通の太さで使う）。
+pub fn parse_font_name(name: &str) -> Option<(String, f64)> {
+    const STYLES: &[&str] = &[
+        "thin", "ultra-light", "extra-light", "light", "semi-light", "book", "regular", "normal", "medium", "semi-bold",
+        "demi-bold", "bold", "ultra-bold", "extra-bold", "heavy", "black", "italic", "oblique", "condensed", "expanded",
+    ];
+    let mut words: Vec<&str> = name.trim().trim_end_matches(',').split_whitespace().collect();
+    let points = words.last().and_then(|w| w.trim_end_matches("px").parse::<f64>().ok());
+    if points.is_some() {
+        words.pop();
+    }
+    while words.len() > 1 && words.last().is_some_and(|w| STYLES.contains(&w.to_ascii_lowercase().as_str())) {
+        words.pop();
+    }
+    let family = words.join(" ");
+    (!family.is_empty()).then_some((family, points.unwrap_or(0.0)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_font_name;
+
+    #[test]
+    fn reads_family_and_size() {
+        assert_eq!(parse_font_name("Murecho 11"), Some(("Murecho".into(), 11.0)));
+        assert_eq!(parse_font_name("Noto Sans CJK JP Bold 10.5"), Some(("Noto Sans CJK JP".into(), 10.5)));
+        assert_eq!(parse_font_name("Adwaita Sans 11"), Some(("Adwaita Sans".into(), 11.0)));
+        assert_eq!(parse_font_name("Cantarell"), Some(("Cantarell".into(), 0.0)));
+        assert_eq!(parse_font_name(""), None);
+    }
 }

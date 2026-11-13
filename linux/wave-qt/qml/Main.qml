@@ -15,8 +15,9 @@ ApplicationWindow {
     visible: true
     title: "wave"
     color: Style.background
-    // 文字は Noto Sans CJK に寄せる（英字のフォントと記号・かなの代わりのフォントが混ざると、引用符などの太さがそろわない）
-    font.family: Qt.fontFamilies().indexOf("Noto Sans CJK JP") >= 0 ? "Noto Sans CJK JP" : Qt.application.font.family
+    // 文字は本体の UI の文字（Style.fontFamily）。大きさも本体の設定に合わせる（読めなければ Material の既定）
+    font.family: Style.fontFamily
+    font.pointSize: Style.fontPoints > 0 ? Style.fontPoints : 10.5
 
     Material.theme: Style.dark ? Material.Dark : Material.Light
     Material.accent: Style.accent

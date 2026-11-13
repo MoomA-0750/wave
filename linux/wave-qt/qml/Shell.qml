@@ -17,7 +17,12 @@ Item {
     // 窓の幅の段（GTK 版と同じ。0: 1400 以上、1: 1180〜、2: 1000〜、3: 880〜、4: それ未満）。
     // 右の欄は段 1 まで（Claude の欄は段 3 まで）。下の帯は、段 0 だけ端末名、段 1 まで音量のバー
     readonly property int level: width >= 1400 ? 0 : width >= 1180 ? 1 : width >= 1000 ? 2 : width >= 880 ? 3 : 4
-    readonly property bool showRight: rightOpen && (level <= 1 || (rightView === "ai" && level <= 3))
+    readonly property bool dockRight: rightOpen && (level <= 1 || (rightView === "ai" && level <= 3))
+    // 狭くて横に並べられない窓では、右の欄を中身の上に重ねて出す（押した間だけ。外を押す・Esc で閉じる）
+    property bool overlayRight: false
+    readonly property bool showRight: dockRight || overlayRight
+    readonly property bool narrowRight: !(level <= 1 || (rightView === "ai" && level <= 3))
+    onNarrowRightChanged: if (!narrowRight) overlayRight = false
     // 映像だけを窓いっぱいに出している（右の欄・小窓の「拡大」から直に開いたなら、やめると元の画面に戻す）
     property bool videoOnly: false
     property bool videoOnlyFromExpand: false
@@ -65,11 +70,13 @@ Item {
     property var beforeAi: null
     function toggleAi() { if (showRight && rightView === "ai") closeAi(); else showAi() }
     function showAi() {
+        if (level > 3) { overlayRight = true; rightView = "ai"; return }
         if (!(showRight && rightView === "ai")) beforeAi = { open: rightOpen, view: rightView }
         rightOpen = true
         rightView = "ai"
     }
     function closeAi() {
+        if (overlayRight) { overlayRight = false; return }
         const before = beforeAi || { open: true, view: "now" }
         beforeAi = null
         setRight(before.open, before.view === "ai" ? "now" : before.view)
@@ -139,8 +146,12 @@ Item {
         if (view) rightView = view
         WaveApp.setSetting("right_pane_open", JSON.stringify(open))
     }
-    function toggleQueue() { setRight(!(showRight && rightView === "queue"), "queue") }
-    function togglePane() { setRight(!(showRight && rightView === "now"), "now") }
+    function toggleRight(view) {
+        if (level > 1) { overlayRight = !(overlayRight && rightView === view); rightView = view; return }
+        setRight(!(showRight && rightView === view), view)
+    }
+    function toggleQueue() { toggleRight("queue") }
+    function togglePane() { toggleRight("now") }
 
     Component.onCompleted: {
         Style.nav = shell
@@ -155,8 +166,8 @@ Item {
         else if (kind === "playlist") openPlaylist(arg, "")
         else if (kind === "artist") openArtist(arg, "")
         else if (kind === "lyrics") push(lyricsPage, {})
-        else if (kind === "queue") setRight(true, "queue")
-        else if (kind === "savequeue") { setRight(true, "queue"); demoDialog.start() }
+        else if (kind === "queue") { setRight(true, "queue"); overlayRight = narrowRight }
+        else if (kind === "savequeue") { setRight(true, "queue"); overlayRight = narrowRight; demoDialog.start() }
         else if (kind === "newplaylist") demoDialog.start()
         else if (kind === "settings") openSettings()
         else if (kind === "full") demoFull.start()
@@ -201,6 +212,7 @@ Item {
     Shortcut { sequence: "Alt+Right"; onActivated: shell.forward() }
     Shortcut { sequence: "F11"; onActivated: shell.full = !shell.full }
     Shortcut { sequence: "Escape"; enabled: shell.full; onActivated: shell.videoOnly ? shell.toggleVideoOnly() : (shell.full = false) }
+    Shortcut { sequence: "Escape"; enabled: !shell.full && shell.overlayRight; onActivated: shell.overlayRight = false }
     Shortcut { sequences: ["Ctrl+F", "Ctrl+L"]; onActivated: top.focusSearch() }
     Shortcut { sequence: "Ctrl+J"; onActivated: shell.toggleAi() }
 
@@ -219,7 +231,8 @@ Item {
                 anchors.rightMargin: 8
                 spacing: 8
                 visible: !shell.full
-                Pane_ { Layout.preferredWidth: 300; Layout.fillHeight: true; LibraryPane { anchors.fill: parent } }
+                // 左の欄は狭い窓では細くする（中身のページに幅を残す）
+                Pane_ { Layout.preferredWidth: shell.level >= 4 ? 232 : shell.level >= 3 ? 264 : 300; Layout.fillHeight: true; LibraryPane { anchors.fill: parent } }
                 Pane_ {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
@@ -234,14 +247,28 @@ Item {
                         popExit: Transition { NumberAnimation { property: "opacity"; from: 1; to: 0; duration: 140 } }
                     }
                 }
-                Pane_ {
-                    visible: shell.showRight
-                    Layout.preferredWidth: 340
-                    Layout.fillHeight: true
-                    NowPlayingPane { anchors.fill: parent; visible: shell.rightView === "now"; shell: shell }
-                    QueuePane { id: queuePane; anchors.fill: parent; visible: shell.rightView === "queue"; shell: shell }
-                    AiPane { anchors.fill: parent; visible: shell.rightView === "ai"; shell: shell }
-                }
+                // 右の欄の場所（中身は下の rightPane。並べるときだけ幅を取る）
+                Item { visible: shell.dockRight && !shell.overlayRight; Layout.preferredWidth: 340; Layout.fillHeight: true }
+            }
+            // 重ねて出している間は、外を暗くして押すと閉じる
+            Rectangle {
+                anchors.fill: parent
+                visible: shell.overlayRight && !shell.full
+                color: Qt.rgba(0, 0, 0, 0.35)
+                TapHandler { onTapped: shell.overlayRight = false }
+            }
+            Pane_ {
+                id: rightPane
+                visible: shell.showRight && !shell.full
+                anchors.top: parent.top
+                anchors.bottom: parent.bottom
+                anchors.right: parent.right
+                anchors.rightMargin: 8
+                width: shell.overlayRight ? Math.min(360, parent.width - 48) : 340
+                border.color: shell.overlayRight ? Style.border : "transparent"
+                NowPlayingPane { anchors.fill: parent; visible: shell.rightView === "now"; shell: shell }
+                QueuePane { id: queuePane; anchors.fill: parent; visible: shell.rightView === "queue"; shell: shell }
+                AiPane { anchors.fill: parent; visible: shell.rightView === "ai"; shell: shell }
             }
             FullView { anchors.fill: parent; visible: shell.full; shell: shell }
         }

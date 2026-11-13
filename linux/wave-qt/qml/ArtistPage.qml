@@ -42,12 +42,13 @@ Flickable {
         RowLayout {
             Layout.fillWidth: true
             spacing: 24
-            Art { Layout.preferredWidth: 180; Layout.preferredHeight: 180; source: page.info ? page.info.art : ""; round: true; placeholder: "avatar-default-symbolic" }
+            Art { readonly property int side: page.width < 480 ? 112 : page.width < 640 ? 148 : 180; Layout.preferredWidth: side; Layout.preferredHeight: side; source: page.info ? page.info.art : ""; round: true; placeholder: "avatar-default-symbolic" }
             ColumnLayout {
                 Layout.fillWidth: true
+                Layout.minimumWidth: 0
                 spacing: 10
                 Label { text: "アーティスト"; font.pixelSize: 12; font.weight: Font.DemiBold; color: Style.dim }
-                Label { Layout.fillWidth: true; text: page.info ? page.info.title : page.pageTitle; font.pixelSize: 36; font.weight: Font.Bold; elide: Text.ElideRight; color: Style.foreground }
+                Label { Layout.fillWidth: true; text: page.info ? page.info.title : page.pageTitle; font.pixelSize: page.width < 560 ? 26 : 36; font.weight: Font.Bold; wrapMode: Text.Wrap; maximumLineCount: 2; elide: Text.ElideRight; color: Style.foreground }
                 RowLayout {
                     spacing: 8
                     visible: !!page.info && page.info.topSongs.length > 0

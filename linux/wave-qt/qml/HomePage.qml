@@ -65,16 +65,10 @@ Flickable {
 
         Section { visible: page.params !== ""; text: page.pageTitle; font.pixelSize: 28 }
 
-        Flickable {
+        ChipStrip {
             visible: page.params === ""
             Layout.fillWidth: true
             Layout.preferredHeight: 34
-            contentWidth: chipRow.implicitWidth
-            clip: true
-            boundsBehavior: Flickable.StopAtBounds
-            Row {
-                id: chipRow
-                spacing: 8
                 Chip { text: "すべて"; on: page.selected === ""; onClicked: { page.selected = ""; page.reload() } }
                 Repeater {
                     model: page.chips
@@ -84,7 +78,6 @@ Flickable {
                         onClicked: { page.selected = page.selected === modelData.params ? "" : modelData.params; page.reload() }
                     }
                 }
-            }
         }
 
         // 最近聴いたもの（4列の格子。押すと開く）

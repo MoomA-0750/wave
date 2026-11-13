@@ -88,7 +88,8 @@ Rectangle {
         RowLayout {
             id: transport
             Layout.alignment: Qt.AlignHCenter
-            spacing: 12
+            // 狭い窓では詰めて、曲名に幅を回す
+            spacing: bar.shell.level >= 4 ? 4 : 12
             IconButton { iconName: "media-playlist-shuffle-symbolic"; tip: "シャッフル"; checked: WaveApp.shuffle; enabled: WaveApp.hasSong; onClicked: WaveApp.toggleShuffle() }
             IconButton { iconName: "media-skip-backward-symbolic"; tip: "前へ"; enabled: WaveApp.hasSong; onClicked: WaveApp.previous() }
             PlayButton {

@@ -38,7 +38,8 @@ Rectangle {
         anchors.leftMargin: 48
         anchors.verticalCenter: parent.verticalCenter
         width: Math.min(520, view.width - media.width - 144)
-        height: Math.min(view.height - 120, Math.max(media.height, 360))
+        // 歌詞があるときは上下いっぱいまで使う（ジャケットの高さで切ると、下が空いたまま行が途中で切れていた）
+        height: follower.visible ? view.height - 96 : Math.min(view.height - 120, Math.max(media.height, 360))
         spacing: 8
         Label { Layout.fillWidth: true; text: WaveApp.hasSong ? WaveApp.title : "何も再生していません"; font.pixelSize: 36; font.weight: Font.Bold; wrapMode: Text.Wrap; maximumLineCount: 2; elide: Text.ElideRight; color: Style.foreground }
         Label { Layout.fillWidth: true; text: WaveApp.artists; visible: text !== ""; font.pixelSize: 20; elide: Text.ElideRight; color: Style.dim }

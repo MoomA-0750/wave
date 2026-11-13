@@ -15,6 +15,8 @@ cargo build -q -p wave-qt
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 mkdir -p "$tmp/config" "$tmp/data" "$tmp/cache" "$tmp/state/omarchy/current"
+# 本体の UI の文字（GSettings の font-name）は人と同じものを使う（dconf の写しを読むだけ。書いても元には戻さない）
+if [ -f "$HOME/.config/dconf/user" ]; then mkdir -p "$tmp/config/dconf"; cp "$HOME/.config/dconf/user" "$tmp/config/dconf/"; fi
 if [ "$theme" != none ]; then
     src=/usr/share/omarchy/themes/$theme
     [ -d "$src" ] || src=$HOME/.local/share/omarchy/themes/$theme

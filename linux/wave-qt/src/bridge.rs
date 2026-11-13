@@ -268,6 +268,9 @@ pub mod qobject {
         #[qproperty(QString, yellow)]
         // Hyprland の窓の角の丸み（px）。Hyprland でなければ -1（画面の側が既定の丸みを使う）
         #[qproperty(i32, rounding)]
+        // 本体の UI の文字（GNOME の font-name。Omarchy もここに入れる）。読めなければ空と 0（Qt の既定に任せる）
+        #[qproperty(QString, font_family)]
+        #[qproperty(f64, font_points)]
         type Theme = super::ThemeRust;
 
         #[qinvokable]

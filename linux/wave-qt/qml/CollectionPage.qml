@@ -109,31 +109,36 @@ ListView {
     // 見出しが後から伸びても（文が折り返す・ボタンが出る）、まだ動かしていなければ頭から見せる
     property bool userScrolled: false
     onMovementStarted: userScrolled = true
+    // 狭いページ（左の欄を出した狭い窓）では、ジャケットと題を小さくし、端の余白を詰める
+    readonly property int edge: width < 560 ? 16 : 24
+    readonly property int artSize: width < 480 ? 112 : width < 640 ? 152 : 200
     header: ColumnLayout {
         width: page.width
         onHeightChanged: if (!page.userScrolled) Qt.callLater(() => page.positionViewAtBeginning())
         spacing: 12
         RowLayout {
             Layout.fillWidth: true
-            Layout.leftMargin: 24
-            Layout.rightMargin: 24
-            Layout.topMargin: 24
-            spacing: 24
+            Layout.leftMargin: page.edge
+            Layout.rightMargin: page.edge
+            Layout.topMargin: page.edge
+            spacing: page.edge
             Art {
                 visible: page.kind !== "history"
-                Layout.preferredWidth: 200
-                Layout.preferredHeight: 200
+                Layout.preferredWidth: page.artSize
+                Layout.preferredHeight: page.artSize
+                Layout.alignment: Qt.AlignTop
                 source: page.info.art || ""
                 radius: Style.radius
             }
             ColumnLayout {
                 Layout.fillWidth: true
+                Layout.minimumWidth: 0
                 spacing: 6
                 Label { text: page.kind === "album" ? "アルバム" : page.kind === "history" ? "" : "プレイリスト"; visible: text !== ""; font.pixelSize: 12; font.weight: Font.DemiBold; color: Style.dim }
                 Label {
                     Layout.fillWidth: true
                     text: page.info.title || page.pageTitle
-                    font.pixelSize: 32
+                    font.pixelSize: page.width < 560 ? 22 : 32
                     font.weight: Font.Bold
                     wrapMode: Text.Wrap
                     maximumLineCount: 2
@@ -157,7 +162,7 @@ ListView {
                     HoverHandler { cursorShape: parent.hoveredLink !== "" ? Qt.PointingHandCursor : Qt.ArrowCursor }
                 }
                 RowLayout {
-                    Layout.topMargin: 10
+                    Layout.topMargin: page.width < 560 ? 4 : 10
                     Layout.fillWidth: true
                     spacing: 8
                     visible: page.songs.length > 0
@@ -179,8 +184,8 @@ ListView {
         RowLayout {
             visible: page.songs.length > 0 && page.kind !== "history"
             Layout.fillWidth: true
-            Layout.leftMargin: 24
-            Layout.rightMargin: 24
+            Layout.leftMargin: page.edge
+            Layout.rightMargin: page.edge
             spacing: 8
             Item { Layout.fillWidth: true }
             IconButton { iconName: "system-search-symbolic"; tip: "一覧の中を検索"; checked: find.visible; onClicked: { find.visible = !find.visible; if (find.visible) find.forceActiveFocus(); else find.text = "" } }
@@ -215,23 +220,17 @@ ListView {
                 }
             }
         }
-        Flickable {
+        ChipStrip {
             visible: page.songs.length > 0 && page.kind !== "history"
             Layout.fillWidth: true
-            Layout.leftMargin: 24
-            Layout.rightMargin: 24
+            Layout.leftMargin: page.edge
+            Layout.rightMargin: page.edge
             Layout.preferredHeight: 34
-            contentWidth: kinds.implicitWidth
-            clip: true
-            boundsBehavior: Flickable.StopAtBounds
-            Row {
-                id: kinds
-                spacing: 6
+            spacing: 6
                 Repeater {
                     model: [["", "すべて"], ["MUSIC_VIDEO_TYPE_ATV", "曲"], ["MUSIC_VIDEO_TYPE_OMV", "MV"], ["MUSIC_VIDEO_TYPE_UGC", "その他の動画（歌ってみた・ライブなど）"]]
                     delegate: Chip { text: modelData[1]; on: page.songKind === modelData[0]; onClicked: page.songKind = (modelData[0] === "" || page.songKind === modelData[0]) ? "" : modelData[0] }
                 }
-            }
         }
         Label {
             visible: page.error !== ""

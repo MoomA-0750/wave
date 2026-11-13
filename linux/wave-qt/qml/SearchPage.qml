@@ -174,23 +174,16 @@ Item {
         anchors.fill: parent
         visible: page.query !== ""
         spacing: 8
-        Flickable {
+        ChipStrip {
             Layout.fillWidth: true
             Layout.topMargin: 12
             Layout.leftMargin: 16
             Layout.rightMargin: 16
             Layout.preferredHeight: 34
-            contentWidth: tabRow.implicitWidth
-            clip: true
-            boundsBehavior: Flickable.StopAtBounds
-            Row {
-                id: tabRow
-                spacing: 8
                 Repeater {
                     model: page.tabs
                     delegate: Chip { text: modelData[1]; on: page.tab === modelData[0]; onClicked: page.tab = modelData[0] }
                 }
-            }
         }
         // すべて: トップの検索結果・曲4件・アーティストの棚・アルバムの棚
         Flickable {
@@ -217,7 +210,7 @@ Item {
                     ColumnLayout {
                         visible: !!page.all && !!page.all.top
                         Layout.preferredWidth: 360
-                        Layout.maximumWidth: 400
+                        Layout.maximumWidth: 560
                         Layout.fillWidth: allColumn.width < 760
                         Layout.alignment: Qt.AlignTop
                         spacing: 10

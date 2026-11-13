@@ -22,6 +22,10 @@ QtObject {
     // 指を乗せた行の地
     readonly property color hover: Qt.rgba(foreground.r, foreground.g, foreground.b, 0.07)
 
+    // 文字: 本体の UI の文字（GNOME の font-name。GTK 版と同じ）。読めなければ Qt の既定
+    readonly property string fontFamily: Theme.fontFamily !== "" ? Theme.fontFamily : Qt.application.font.family
+    readonly property real fontPoints: Theme.fontPoints
+
     // 角の丸み: Hyprland の decoration:rounding（Omarchy の既定は 0）。Hyprland でなければ 12
     readonly property int radius: Theme.rounding >= 0 ? Theme.rounding : 12
     // 小さい部品（チップ・行・小さな画像）は min(4, 丸み)

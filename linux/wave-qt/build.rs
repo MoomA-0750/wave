@@ -23,6 +23,7 @@ const QML: &[&str] = &[
     "qml/Shelf.qml",
     "qml/TrackRow.qml",
     "qml/Chip.qml",
+    "qml/ChipStrip.qml",
     "qml/IconButton.qml",
     "qml/PlayButton.qml",
     "qml/Btn.qml",

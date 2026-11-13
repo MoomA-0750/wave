@@ -40,17 +40,12 @@ Item {
             Label { text: "マイライブラリ"; font.weight: Font.Bold; Layout.fillWidth: true; color: Style.foreground }
             IconButton { iconName: "list-add-symbolic"; tip: "プレイリストを作成"; visible: WaveApp.loggedIn; onClicked: Style.nav.createPlaylist(null) }
         }
-        Flickable {
+        ChipStrip {
             Layout.fillWidth: true
             Layout.leftMargin: 12
             Layout.rightMargin: 12
-            Layout.preferredHeight: 36
-            contentWidth: chips.implicitWidth
-            clip: true
-            boundsBehavior: Flickable.StopAtBounds
-            Row {
-                id: chips
-                spacing: 6
+            Layout.preferredHeight: 34
+            spacing: 6
                 Repeater {
                     model: [["playlist", "プレイリスト"], ["artist", "アーティスト"], ["album", "アルバム"], ["podcast", "ポッドキャスト"]]
                     delegate: Chip {
@@ -59,7 +54,6 @@ Item {
                         onClicked: pane.kind = pane.kind === modelData[0] ? "" : modelData[0]
                     }
                 }
-            }
         }
         RowLayout {
             Layout.fillWidth: true
@@ -70,7 +64,7 @@ Item {
                 id: search
                 Layout.fillWidth: true
                 Layout.preferredHeight: 36
-                placeholderText: "マイライブラリを検索"
+                placeholderText: width < 150 ? "検索" : "マイライブラリを検索"
                 topPadding: 0
                 bottomPadding: 0
                 leftPadding: 32
