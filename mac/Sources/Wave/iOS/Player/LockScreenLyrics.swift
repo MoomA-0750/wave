@@ -89,9 +89,15 @@ import WaveCore
     }
 
     /// 全画面のジャケット（3:4 の動くジャケットの欄に渡す）。出さないときは nil（いつものジャケットに戻る）。
+    /// 時刻付きの歌詞が無い曲（歌詞の無い曲・時刻なしの歌詞・ライブ）も、ジャケットを全画面に出す（歌詞のある曲とない曲で
+    /// ロック画面の見た目が大きく変わらないように）。
     func artwork(videoId: String, cover: UIImage?) -> AnyObject? {
-        guard artworkOn, syncedLines() != nil, let player = AppServices.player else { return nil }
+        guard artworkOn, let player = AppServices.player else { return nil }
         guard #available(iOS 26.0, *) else { return nil }
+        guard syncedLines() != nil else {
+            guard let cover else { return nil }
+            return LockScreenArtwork.shared.coverArtwork(videoId: videoId, cover: cover)
+        }
         // 鳴っている間は、次の行が始まるまで（と少し）送りの動きのあと止まる動画。止めている間は動かない絵
         let playing = player.isPlaying
         var hold = 3.0
@@ -160,12 +166,31 @@ final class LockScreenArtwork: @unchecked Sendable {
         return artwork
     }
 
+    /// 歌詞の無い曲の全画面のジャケット: ジャケットそのものを 3:4 いっぱいに（はみ出す左右は中央で切る）。動かない。
+    func coverArtwork(videoId: String, cover: UIImage) -> MPMediaItemAnimatedArtwork {
+        let id = "\(videoId)-cover"
+        lock.lock()
+        defer { lock.unlock() }
+        if let shown, shown.id == id { return shown.artwork }
+        let scene = Scene(videoId: videoId, cover: cover.cgImage, from: nil, to: LockScreenLines(current: nil, upcoming: [], nextStartMs: nil),
+                          holdSeconds: 3, coverOnly: true)
+        let artwork = MPMediaItemAnimatedArtwork(artworkID: id, previewImageRequestHandler: { [self] size, completion in
+            queue.async { completion(self.frame(scene, progress: 1, size: size).map { UIImage(cgImage: $0) }) }
+        }, videoAssetFileURLRequestHandler: { [self] size, completion in
+            queue.async { completion(self.video(id: id, scene: scene, size: size)) }
+        })
+        shown = (id, artwork)
+        return artwork
+    }
+
     struct Scene {
         var videoId: String
         var cover: CGImage?
         var from: LockScreenLines?
         var to: LockScreenLines
         var holdSeconds: Double
+        /// 歌詞を重ねず、ぼかさないジャケットだけを出す（歌詞の無い曲）。
+        var coverOnly = false
     }
 
     // MARK: 描く（queue の上で）
@@ -195,6 +220,18 @@ final class LockScreenArtwork: @unchecked Sendable {
         return made
     }
 
+    /// ジャケットをぼかさずに 3:4 の全体へ敷いたもの（縦横の大きい方に合わせ、はみ出す分は中央で切る）。
+    static func makeFilledCover(cover: CGImage?, size: CGSize) -> CGImage? {
+        guard let cover else { return makeBackdrop(cover: nil, size: size) }
+        let rect = CGRect(origin: .zero, size: size)
+        let image = CIImage(cgImage: cover)
+        let scale = max(size.width / image.extent.width, size.height / image.extent.height)
+        let scaled = image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+        let centered = scaled.transformed(by: CGAffineTransform(translationX: (size.width - scaled.extent.width) / 2 - scaled.extent.minX,
+                                                                y: (size.height - scaled.extent.height) / 2 - scaled.extent.minY))
+        return CIContext().createCGImage(centered.cropped(to: rect), from: rect)
+    }
+
     /// ジャケットを大きくぼかして暗くし、3:4 の全体に敷いたもの。ジャケットが無ければ暗い地。
     static func makeBackdrop(cover: CGImage?, size: CGSize) -> CGImage? {
         let rect = CGRect(origin: .zero, size: size)
@@ -217,6 +254,7 @@ final class LockScreenArtwork: @unchecked Sendable {
 
     private func frame(_ scene: Scene, progress: Double, size requested: CGSize) -> CGImage? {
         let size = Self.clipSize(requested)
+        if scene.coverOnly { return Self.makeFilledCover(cover: scene.cover, size: size) }
         return Self.drawFrame(backdrop: backdrop(videoId: scene.videoId, cover: scene.cover, size: size),
                               rows: Self.rows(from: scene.from, to: scene.to), progress: progress, size: size)
     }
