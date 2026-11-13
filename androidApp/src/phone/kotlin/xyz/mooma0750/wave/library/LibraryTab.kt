@@ -186,7 +186,8 @@ fun LibraryTabScreen(
             state.failure != null -> Text(failureMessage(state.failure), Modifier.padding(16.dp))
         }
         if (grid) {
-            LazyVerticalGrid(GridCells.Fixed(3), Modifier.fillMaxSize(), contentPadding = PaddingValues(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            val noticeGrid = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
+            LazyVerticalGrid(GridCells.Fixed(3), Modifier.fillMaxSize(), state = noticeGrid, contentPadding = PaddingValues(start = 12.dp, top = 12.dp, end = 12.dp, bottom = 12.dp + xyz.mooma0750.wave.ui.noticeBottomPadding(noticeGrid)), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 if (showLiked) item { GridCell(LibraryEntry.Playlist(liked)) { onOpenPlaylist(liked) } }
                 if (showDownloads) item { GridCell(LibraryEntry.Playlist(downloadsEntry)) { onOpenDownloads?.invoke() } }
                 if (showNewEpisodes) item { GridCell(LibraryEntry.Playlist(newEpisodes)) { openNewEpisodes() } }
@@ -194,7 +195,8 @@ fun LibraryTabScreen(
                 item(span = { GridItemSpan(maxLineSpan) }) { Spacer(Modifier.height(8.dp)) }
             }
         } else {
-            LazyColumn(Modifier.fillMaxSize()) {
+            val noticeList = androidx.compose.foundation.lazy.rememberLazyListState()
+            LazyColumn(Modifier.fillMaxSize(), state = noticeList, contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = xyz.mooma0750.wave.ui.noticeBottomPadding(noticeList))) {
                 if (showLiked) item { LibraryRow(LibraryEntry.Playlist(liked)) { onOpenPlaylist(liked) } }
                 if (showDownloads) item { LibraryRow(LibraryEntry.Playlist(downloadsEntry)) { onOpenDownloads?.invoke() } }
                 if (showNewEpisodes) item { LibraryRow(LibraryEntry.Playlist(newEpisodes)) { openNewEpisodes() } }

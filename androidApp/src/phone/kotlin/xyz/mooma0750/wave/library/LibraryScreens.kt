@@ -63,7 +63,6 @@ import xyz.mooma0750.wave.ui.ButtonStyle
 import xyz.mooma0750.wave.ui.CollectionScreen
 import xyz.mooma0750.wave.ui.DetailText
 import xyz.mooma0750.wave.ui.IconAction
-import xyz.mooma0750.wave.ui.IconTextButton
 import xyz.mooma0750.wave.ui.MenuIcon
 import xyz.mooma0750.wave.ui.PlayControls
 
@@ -189,7 +188,8 @@ fun PlaylistScreen(
         // 自分のプレイリストの一番下に「おすすめの曲」（YouTube Music の候補）。最後のページまで読んでから、絞っていないときだけ出す
         if (onAddSuggestion != null && !filtering && state.continuation == null && !state.loading && state.suggestions.isNotEmpty()) {
             item(key = "suggestions-header") {
-                Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 24.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                // 上の余白は控えめにする（右の「更新」のボタンが 48dp の高さを持つので、24dp も足すと曲の並びとの間が大きく空く）
+                Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(stringResource(R.string.library_suggestions), Modifier.weight(1f), style = MaterialTheme.typography.titleMediumEmphasized)
                     if (state.suggestionsReload != null) {
                         TextButton(onClick = viewModel::refreshSuggestions, enabled = !state.suggestionsLoading, shapes = ButtonDefaults.shapes()) {
@@ -200,7 +200,7 @@ fun PlaylistScreen(
                 }
             }
             items(state.suggestions, key = { "suggestion-${it.videoId}" }) { song ->
-                SongRow(song, onClick = { onPlay(listOf(song), 0, null) }) {
+                SongRow(song, onClick = { onPlay(listOf(song), 0, null) }, showLiked = false) {
                     IconButton(
                         onClick = { onAddSuggestion(song) { added -> if (added) viewModel.suggestionAdded(song) } },
                         shapes = IconButtonDefaults.shapes(),
@@ -344,8 +344,24 @@ fun AddToPlaylistDialog(
                     placeholder = { Text(stringResource(R.string.library_playlist_name_hint)) },
                 )
             } else {
-                LazyColumn(Modifier.heightIn(max = 400.dp)) {
-                    item { IconTextButton(R.drawable.ic_add, stringResource(R.string.library_new_playlist), { creating = true }) }
+                // 一覧は高さを区切って送る。区切りが行の間に来ると、続きがあるのに下が空いて見えるので、
+                // 送れる向きの端に区切りの線を出す（Material のスクロールするダイアログと同じ）
+                val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+                Column {
+                    if (listState.canScrollBackward) androidx.compose.material3.HorizontalDivider()
+                LazyColumn(Modifier.heightIn(max = 400.dp), state = listState) {
+                    item {
+                        // 下のプレイリストの行と同じ左端・同じ高さに並べる（文字のボタンにすると、ボタンの中の余白のぶん右にずれる）
+                        Row(Modifier.fillMaxWidth().clickable { creating = true }.padding(vertical = 12.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                            androidx.compose.material3.Icon(painterResource(R.drawable.ic_add), contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                            Text(
+                                stringResource(R.string.library_new_playlist),
+                                Modifier.padding(start = 12.dp),
+                                color = MaterialTheme.colorScheme.primary,
+                                style = MaterialTheme.typography.labelLargeEmphasized,
+                            )
+                        }
+                    }
                     if (liked != null) {
                         item {
                             Row(Modifier.fillMaxWidth().clickable(onClick = onToggleLiked).padding(vertical = 12.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
@@ -412,6 +428,8 @@ fun AddToPlaylistDialog(
                             }
                         }
                     }
+                }
+                    if (listState.canScrollForward) androidx.compose.material3.HorizontalDivider()
                 }
             }
         },

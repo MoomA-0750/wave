@@ -66,7 +66,8 @@ fun SearchBrowseScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     // 広い画面（開いた折りたたみ・タブレット）では列を増やす（Spotify のタブレットと同じ）
     val columns = (LocalConfiguration.current.screenWidthDp / 200).coerceIn(2, 6)
-    LazyColumn(Modifier.fillMaxSize()) {
+    val noticeList = androidx.compose.foundation.lazy.rememberLazyListState()
+    LazyColumn(Modifier.fillMaxSize(), state = noticeList, contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = xyz.mooma0750.wave.ui.noticeBottomPadding(noticeList))) {
         item {
             Text(stringResource(R.string.search_title), Modifier.statusBarsPadding().padding(start = 16.dp, top = 16.dp, bottom = 12.dp), style = MaterialTheme.typography.headlineMediumEmphasized)
         }
@@ -143,7 +144,8 @@ fun MoodCategoryScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     Scaffold(topBar = { TopAppBar(title = { Text(title) }, navigationIcon = { BackButton(onBack) }) }) { padding ->
-        LazyColumn(Modifier.fillMaxSize().padding(padding)) {
+        val noticeList = androidx.compose.foundation.lazy.rememberLazyListState()
+        LazyColumn(Modifier.fillMaxSize().padding(padding), state = noticeList, contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = xyz.mooma0750.wave.ui.noticeBottomPadding(noticeList))) {
             homeFeedItems(state, viewModel::refresh, {}, onOpenPlaylist, actions)
         }
     }

@@ -22,9 +22,30 @@ import xyz.mooma0750.wave.core.session.FailureKind
 object HomeShelves {
     /** 先頭の「新作」と、アルバムが3枚以上重なる別の棚があるか。 */
     fun duplicatesNewReleases(shelves: List<HomeShelf>): Boolean {
-        val ours = shelves.firstOrNull { it.title == HomeShelves.NEW_RELEASES_TITLE && it.strapline == null } ?: return false
+        val ours = shelves.firstOrNull { isOurs(it) } ?: return false
+        return shelves.any { shelf -> shelf !== ours && overlaps(ours, shelf) }
+    }
+
+    /**
+     * 後から読んだページの棚を足す。こちらの「新作」が出ているなら、それとアルバムが3枚以上重なる YouTube Music の棚の方を落とす
+     * （もう出している先頭の棚を消すと、画面の中身が上へずれる）。
+     */
+    fun appendPage(
+        shelves: List<HomeShelf>,
+        page: List<HomeShelf>,
+    ): List<HomeShelf> {
+        val ours = shelves.firstOrNull { isOurs(it) } ?: return shelves + page
+        return shelves + page.filterNot { overlaps(ours, it) }
+    }
+
+    private fun isOurs(shelf: HomeShelf) = shelf.title == NEW_RELEASES_TITLE && shelf.strapline == null
+
+    private fun overlaps(
+        ours: HomeShelf,
+        shelf: HomeShelf,
+    ): Boolean {
         val ids = ours.items.mapNotNull { (it as? HomeItem.AlbumItem)?.album?.browseId }.toSet()
-        return shelves.any { shelf -> shelf !== ours && shelf.items.count { (it as? HomeItem.AlbumItem)?.album?.browseId in ids } >= 3 }
+        return shelf.items.count { (it as? HomeItem.AlbumItem)?.album?.browseId in ids } >= 3
     }
 
     /** アプリが自分で作る棚の見出しの目印。画面で端末の言語の見出しに置き換える（YouTube から来る見出しとは重ならない）。 */
@@ -87,21 +108,22 @@ class HomeFeedViewModel(
                 is CallResult.Ok -> {
                     // 棚の数と項目の種類の数だけを記録する（見出し・中身は記録しない）
                     Log.i(WaveApplication.LOG_TAG, "home shelves=${home.value.shelves.size} kinds=${kindCounts(home.value.shelves)} newReleases=${releases.size} continuation=${home.value.continuation != null}" + if (home.value.shelves.isEmpty()) " renderers=${music.lastRendererNames}" else "")
-                    var shelves = releaseShelf + home.value.shelves
+                    var shelves = withoutDuplicateReleases(releaseShelf + home.value.shelves)
                     var continuation = home.value.continuation
-                    // ログイン中の最初のページは棚が2つほどしかない（続きに「もう一度聴く」なども来る）ので、数ページ先まで読んでおく
+                    // 最初のページが来たらすぐ出す（続きのページを読み終えるまで「読み込み中」の丸だけを出し続けない）
+                    mutableState.value =
+                        HomeFeedUiState(recentItems.take(RECENT_GRID), shelves, home.value.chips.ifEmpty { chips }, chip, continuation, loading = false, loadingMore = shelves.size < MIN_SHELVES && continuation != null)
+                    // ログイン中の最初のページは棚が2つほどしかない（続きに「もう一度聴く」なども来る）ので、数ページ先まで読んで後ろに足す
                     var pages = 1
                     while (shelves.size < MIN_SHELVES && continuation != null && pages < MAX_INITIAL_PAGES) {
                         val next = music.home(continuation) as? CallResult.Ok ?: break
-                        shelves = shelves + next.value.shelves
+                        shelves = HomeShelves.appendPage(shelves, next.value.shelves)
                         continuation = next.value.continuation
                         pages++
+                        mutableState.update { it.copy(shelves = shelves, continuation = continuation) }
                     }
-                    // YouTube Music のホームに新作の棚が来ていれば、こちらの「新作」は出さない（同じものが2つ並ぶ）
-                    if (HomeShelves.duplicatesNewReleases(shelves)) shelves = shelves.filterNot { it.title == HomeShelves.NEW_RELEASES_TITLE && it.strapline == null }
+                    mutableState.update { it.copy(loadingMore = false) }
                     Log.i(WaveApplication.LOG_TAG, "home initial pages=$pages shelves=${shelves.size} kinds=${kindCounts(shelves)}")
-                    mutableState.value =
-                        HomeFeedUiState(recentItems.take(RECENT_GRID), shelves, home.value.chips.ifEmpty { chips }, chip, continuation, loading = false)
                 }
                 is CallResult.Failed ->
                     mutableState.value =
@@ -124,6 +146,10 @@ class HomeFeedViewModel(
             }
         }
     }
+
+    /** YouTube Music のホームに新作の棚が来ていれば、こちらの「新作」は出さない（同じものが2つ並ぶ）。 */
+    private fun withoutDuplicateReleases(shelves: List<HomeShelf>): List<HomeShelf> =
+        if (HomeShelves.duplicatesNewReleases(shelves)) shelves.filterNot { it.title == HomeShelves.NEW_RELEASES_TITLE && it.strapline == null } else shelves
 
     private fun kindCounts(shelves: List<HomeShelf>): Map<String, Int> =
         shelves.flatMap { it.items }.groupingBy { it::class.simpleName.orEmpty() }.eachCount()

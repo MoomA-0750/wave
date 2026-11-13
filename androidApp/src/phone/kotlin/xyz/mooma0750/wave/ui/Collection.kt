@@ -73,7 +73,7 @@ fun CollectionScreen(
     val collapsed by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 } }
     val barColor by animateColorAsState(if (collapsed) lerp(background, art, 0.5f) else Color.Transparent, MaterialTheme.motionScheme.defaultEffectsSpec(), label = "bar")
     Box(Modifier.fillMaxSize()) {
-        LazyColumn(Modifier.fillMaxSize(), state = listState) {
+        LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = noticeBottomPadding(listState))) {
             if (hero) {
                 item(key = "collection-hero") {
                     Box(Modifier.fillMaxWidth().height(340.dp)) {

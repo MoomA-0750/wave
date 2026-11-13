@@ -98,6 +98,9 @@ fun AppShell(
     // 小窓（PiP）にしたら、全面の再生画面（小窓の間は映像だけを出す）を前に出す
     val inPip by xyz.mooma0750.wave.nowplaying.VideoPip.inPip.collectAsState()
     LaunchedEffect(inPip) { if (inPip) playerOpen = true }
+    // 出ている知らせの高さ（一覧が下に余白を足して、最後の行が知らせに隠れないようにする）
+    val noticeHeight = remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    androidx.compose.runtime.CompositionLocalProvider(xyz.mooma0750.wave.ui.LocalNoticeHeight provides noticeHeight) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         // 縦横とも大きい画面（開いた折りたたみ・タブレットの横向き）: Mac・Windows と同じ並びにする
         if (desktop != null && maxWidth >= DESKTOP_MIN_WIDTH && maxHeight >= DESKTOP_MIN_HEIGHT) {
@@ -106,6 +109,7 @@ fun AppShell(
             PhoneShell(nav, maxWidth, maxHeight, hasPlayback, panelHidden, setPanelHidden, miniPlayer, { playerOpen = true }, nowPlaying, content)
         }
         FullPlayer(playerOpen, { playerOpen = false }, nowPlaying)
+    }
     }
 }
 

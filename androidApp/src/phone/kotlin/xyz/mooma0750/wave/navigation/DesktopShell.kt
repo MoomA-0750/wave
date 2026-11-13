@@ -176,7 +176,10 @@ internal fun DesktopShell(
                 .padding(horizontal = PANE_GAP),
             horizontalArrangement = Arrangement.spacedBy(PANE_GAP),
         ) {
-            Pane(Modifier.width(LIBRARY_WIDTH)) { parts.library() }
+            // 左のライブラリは知らせと重ならないので、知らせの高さの余白は足さない
+            Pane(Modifier.width(LIBRARY_WIDTH)) {
+                androidx.compose.runtime.CompositionLocalProvider(xyz.mooma0750.wave.ui.LocalNoticeHeight provides androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(0) }) { parts.library() }
+            }
             Pane(Modifier.weight(1f)) {
                 content()
                 NoticeHost(Modifier.align(Alignment.BottomCenter))

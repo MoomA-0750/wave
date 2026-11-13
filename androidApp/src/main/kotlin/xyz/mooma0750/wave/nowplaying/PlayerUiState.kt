@@ -78,7 +78,7 @@ fun rememberPlayerUiState(
                     isPlaying = current.isPlaying,
                     buffering = current.playbackState == Player.STATE_BUFFERING,
                     positionMs = current.currentPosition,
-                    durationMs = current.duration.coerceAtLeast(0),
+                    durationMs = durationOf(current),
                     queue = if (queueChanged) queue() else state.queue,
                     currentIndex = current.currentMediaItemIndex,
                     hasNext = current.hasNextMediaItem(),
@@ -104,11 +104,28 @@ fun rememberPlayerUiState(
     LaunchedEffect(controller, state.isPlaying) {
         val current = controller ?: return@LaunchedEffect
         while (state.isPlaying) {
-            state = state.copy(positionMs = current.currentPosition, durationMs = current.duration.coerceAtLeast(0))
+            state = state.copy(positionMs = current.currentPosition, durationMs = durationOf(current))
             kotlinx.coroutines.delay(1_000)
         }
     }
     return state to controller
+}
+
+/**
+ * 今の曲の長さ。プレーヤーがまだ曲を読んでいない（戻したキューで、再生を押す前）ときは長さが分からないので、
+ * 曲の情報に入れた長さ（YouTube Music の曲の長さ）を使う。どちらも無ければ 0。
+ */
+internal fun durationOf(player: Player): Long = PlayerDurations.of(player.duration, player.currentMediaItem?.mediaMetadata?.durationMs)
+
+object PlayerDurations {
+    /** playerMs はプレーヤーの長さ（分からなければ C.TIME_UNSET）、metadataMs は曲の情報の長さ。 */
+    fun of(
+        playerMs: Long,
+        metadataMs: Long?,
+    ): Long {
+        if (playerMs != androidx.media3.common.C.TIME_UNSET && playerMs > 0) return playerMs
+        return metadataMs?.takeIf { it > 0 } ?: 0
+    }
 }
 
 private fun row(mediaItem: androidx.media3.common.MediaItem): QueueRow =

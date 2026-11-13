@@ -218,7 +218,8 @@ private fun HistoryList(
     onOpenPlaylist: (PlaylistSummary) -> Unit,
     onOpenPodcast: (PodcastSummary) -> Unit,
 ) {
-    LazyColumn(Modifier.fillMaxSize()) {
+    val noticeList = androidx.compose.foundation.lazy.rememberLazyListState()
+    LazyColumn(Modifier.fillMaxSize(), state = noticeList, contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = xyz.mooma0750.wave.ui.noticeBottomPadding(noticeList))) {
         if (entries.isEmpty()) return@LazyColumn
         item {
             Row(
@@ -268,7 +269,8 @@ private fun SuggestionList(
     opener: Opener,
     actions: SongActions,
 ) {
-    LazyColumn(Modifier.fillMaxSize()) {
+    val noticeList = androidx.compose.foundation.lazy.rememberLazyListState()
+    LazyColumn(Modifier.fillMaxSize(), state = noticeList, contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = xyz.mooma0750.wave.ui.noticeBottomPadding(noticeList))) {
         if (suggestions == null) return@LazyColumn
         items(suggestions.queries, key = { "q-$it" }) { query ->
             Row(
@@ -309,7 +311,8 @@ private fun Results(
     val openArtist = opener.artist
     val openAlbum = opener.album
     val songRow: @Composable (Song) -> Unit = { song -> SongRow(song, onClick = { onSongClick(song) }) { SongMenuButton(song, actions) } }
-    LazyColumn(Modifier.fillMaxSize()) {
+    val noticeList = androidx.compose.foundation.lazy.rememberLazyListState()
+    LazyColumn(Modifier.fillMaxSize(), state = noticeList, contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = xyz.mooma0750.wave.ui.noticeBottomPadding(noticeList))) {
         when (state.tab) {
             SearchTab.All -> {
                 // Spotify の「トップの検索結果」: 語がアーティスト名ならそのアーティスト、そうでなければ最初の曲
@@ -555,6 +558,11 @@ fun SongRow(
     showArtwork: Boolean = true,
     /** 左に出す番号（アーティストの人気の曲）。 */
     number: Int? = null,
+    /**
+     * 高く評価した曲の印（✓）を出すか。プレイリストの「おすすめの曲」の行では出さない
+     * （右の「＋」（足す）と✓が並ぶと「もう入っている」に見える）。
+     */
+    showLiked: Boolean = true,
     trailing: @Composable () -> Unit = {},
 ) {
     Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -590,7 +598,7 @@ fun SongRow(
             }
         }
         // 高く評価した曲には印を付ける（Spotify と同じ）
-        xyz.mooma0750.wave.ui.LikedBadge(song.videoId)
+        if (showLiked) xyz.mooma0750.wave.ui.LikedBadge(song.videoId)
         // 取り終えた曲にも印を付ける（ADR-0016 の 16）
         xyz.mooma0750.wave.ui.DownloadedBadge(song.videoId)
         trailing()

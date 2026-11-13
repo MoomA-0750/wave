@@ -51,7 +51,8 @@ fun HistoryScreen(
         topBar = { TopAppBar(title = { Text(stringResource(R.string.library_history_title)) }, navigationIcon = { BackButton(onBack) }) },
         bottomBar = bottomBar,
     ) { padding ->
-        LazyColumn(Modifier.fillMaxSize().padding(padding)) {
+        val noticeList = androidx.compose.foundation.lazy.rememberLazyListState()
+        LazyColumn(Modifier.fillMaxSize().padding(padding), state = noticeList, contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = xyz.mooma0750.wave.ui.noticeBottomPadding(noticeList))) {
             state.failure?.let { item { Text(failureMessage(it), Modifier.padding(16.dp)) } }
             if (!state.loading && state.failure == null && state.sections.isEmpty()) {
                 item { Text(stringResource(R.string.library_history_empty), Modifier.padding(16.dp)) }

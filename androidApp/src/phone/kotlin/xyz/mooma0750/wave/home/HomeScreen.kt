@@ -101,7 +101,8 @@ fun HomeScreen(
             }
         },
     ) {
-        LazyColumn(Modifier.fillMaxSize()) {
+        val noticeList = androidx.compose.foundation.lazy.rememberLazyListState()
+        LazyColumn(Modifier.fillMaxSize(), state = noticeList, contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = xyz.mooma0750.wave.ui.noticeBottomPadding(noticeList))) {
             item(key = "top") {
                 Row(Modifier.statusBarsPadding().padding(top = 8.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     if (showAvatar) Avatar(account, 32.dp, Modifier.padding(start = 16.dp).clip(CircleShape).clickable { scope.launch { drawer.open() } })

@@ -56,14 +56,16 @@ class Releases(
         }
     }
 
-    /** 保存してある最近の新作を読む（画面を開いたとき）。 */
+    /**
+     * 保存してある最近の新作を読む（画面を開いたとき）。確かめ（check）の終わりは待たない: 確かめは登録したアーティストを
+     * 1人ずつ見るので数分かかり、入れ直した直後などに走っていると、その間ホームに新作の棚が出なかった。
+     * 確かめが先に新しい一覧を出していたら、ファイルの古い一覧で上書きしない。
+     */
     suspend fun load() {
         if (loaded) return
-        lock.withLock {
-            if (loaded) return
-            mutableRecent.value = read().expire(System.currentTimeMillis()).recent
-            loaded = true
-        }
+        val saved = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { read().expire(System.currentTimeMillis()).recent }
+        if (!loaded) mutableRecent.compareAndSet(emptyList(), saved)
+        loaded = true
     }
 
     /**

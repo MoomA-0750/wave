@@ -93,7 +93,8 @@ fun DownloadsScreen(
     val episodes = manifest.singles.filter { it.episode }.map { it.song }
     val songs = manifest.singles.filterNot { it.episode }.map { it.song }
     Scaffold(topBar = { TopAppBar(title = { Text(stringResource(R.string.downloads_title)) }, navigationIcon = { BackButton(onBack) }) }) { padding ->
-        LazyColumn(Modifier.fillMaxSize().padding(padding)) {
+        val noticeList = androidx.compose.foundation.lazy.rememberLazyListState()
+        LazyColumn(Modifier.fillMaxSize().padding(padding), state = noticeList, contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = xyz.mooma0750.wave.ui.noticeBottomPadding(noticeList))) {
             item(key = "status") {
                 Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                     Text(stringResource(R.string.downloads_storage, android.text.format.Formatter.formatShortFileSize(context, state.bytesUsed)), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
