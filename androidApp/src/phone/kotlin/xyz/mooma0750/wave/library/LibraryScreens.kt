@@ -96,8 +96,10 @@ fun PlaylistScreen(
     val shown = SongFilter.matchingIndices(state.songs, state.query, kind)
     val kindSongs = if (filtering) shown.map { state.songs[it] } else state.songs
     val playContinuation = if (filtering) null else state.continuation
+    // 高く評価した曲は、YouTube の題（「高く評価した音楽」）ではなく、ライブラリの行と同じアプリの名前を出す
+    val title = if (summary.playlistId == MusicRepository.LIKED_SONGS) summary.title else state.title ?: summary.title
     CollectionScreen(
-        title = state.title ?: summary.title,
+        title = title,
         coverUrl = summary.thumbnailUrl ?: state.songs.firstOrNull()?.thumbnailUrl,
         onBack = onBack,
         top = {
@@ -136,11 +138,11 @@ fun PlaylistScreen(
             DetailText(summary.subtitle ?: if (state.continuation != null) pluralStringResource(R.plurals.library_song_count_more, state.songs.size, state.songs.size) else pluralStringResource(R.plurals.library_song_count, state.songs.size, state.songs.size))
         },
         actions = {
-            downloadButton(state.title ?: summary.title, state.songs)
+            downloadButton(title, state.songs)
             QueueMenu(
                 enabled = kindSongs.isNotEmpty(),
                 onQueue = { next -> onQueue(kindSongs, next) },
-                pinShortcut = xyz.mooma0750.wave.widget.WidgetItem.of(summary.copy(title = state.title ?: summary.title)),
+                pinShortcut = xyz.mooma0750.wave.widget.WidgetItem.of(summary.copy(title = title)),
             )
         },
         play =

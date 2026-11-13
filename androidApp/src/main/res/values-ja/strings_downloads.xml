@@ -12,7 +12,7 @@
     <string name="downloads_remove_confirm">削除</string>
     <string name="downloads_cancel">キャンセル</string>
     <string name="downloads_smart">スマートダウンロード</string>
-    <string name="downloads_smart_summary">聴きそうな曲を自動で取っておきます。1日1回入れ替えます</string>
+    <string name="downloads_smart_summary">いつも聴いている曲・好きそうな曲・おすすめから、聴きそうな曲を毎日選び直して取っておく</string>
     <string name="downloads_smart_all">すべて</string>
     <string name="downloads_smart_frequent">いつも聴いている</string>
     <string name="downloads_smart_discover">好きそう</string>

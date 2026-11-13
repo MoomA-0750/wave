@@ -24,7 +24,7 @@
     <string name="login_discard_saved">保存済みのログイン情報を削除</string>
     <string name="login_failed_no_sapisid">ログイン情報を取得できませんでした</string>
     <string name="login_failed_no_visitor_data">ログイン情報の一部を取得できませんでした。通信状況を確かめて、もう一度ログインしてください</string>
-    <string name="login_failed_save">ログイン情報を端末に保存できませんでした</string>
+    <string name="login_failed_save">ログイン情報を保存できませんでした</string>
     <string name="login_failed_renderer_gone">ログイン画面が異常終了しました</string>
     <string name="login_retry">ログインし直す</string>
     <string name="login_discard_saved_and_retry">保存済みのログイン情報を削除してやり直す</string>
@@ -136,14 +136,14 @@
     <string name="ai_placeholder">Claude に聞く</string>
     <string name="ai_stop">止める</string>
     <string name="ai_send">送る</string>
-    <string name="ai_not_configured">Claude につないでいません。設定の「Claude」でつないでください。</string>
-    <string name="ai_unreachable">Claude の中継に届きませんでした。中継を動かしている PC が起きているか確かめてください。</string>
-    <string name="ai_unauthorized">Claude の中継にトークンを断られました。設定でつなぎ直してください。</string>
+    <string name="ai_not_configured">Claude につないでいません。設定の「Claude」でつないでください</string>
+    <string name="ai_unreachable">Claude の中継に届きませんでした。中継を動かしている PC が起きているか確かめてください</string>
+    <string name="ai_unauthorized">Claude の中継にトークンを断られました。設定でつなぎ直してください</string>
     <string name="ai_failed">Claude が失敗しました: %1$s</string>
     <string name="ai_searched">「%1$s」を探しました</string>
     <string name="ai_read_liked">高く評価した曲を見ました</string>
     <string name="settings_ai_title">Claude</string>
-    <string name="settings_ai_summary_off">家の PC の Claude Code（ai-bridge）で、歌詞の意味・似た曲・プレイリスト作りを頼める</string>
+    <string name="settings_ai_summary_off">家の PC の Claude Code で、歌詞の意味・似た曲・プレイリスト作りを頼めます</string>
     <string name="settings_ai_connected">%1$s の中継につないでいます</string>
     <string name="settings_ai_scan">QR コードで接続</string>
     <string name="settings_ai_disconnect">接続を外す</string>

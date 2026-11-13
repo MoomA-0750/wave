@@ -657,6 +657,6 @@ private fun HistoryRow(
             Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyLarge)
             detail?.let { Text(it, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
-        IconAction(R.drawable.ic_close, stringResource(R.string.search_clear), onRemove)
+        IconAction(R.drawable.ic_close, stringResource(R.string.search_remove_history), onRemove)
     }
 }

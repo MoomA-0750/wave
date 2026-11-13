@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="library_history_title">History</string>
-    <string name="library_history_empty">No history yet</string>
+    <string name="library_history_empty">No listening history yet</string>
     <string name="library_liked_songs">Liked music</string>
     <string name="library_liked_songs_subtitle">Playlist • Auto</string>
     <string name="library_title">Library</string>
@@ -67,6 +67,7 @@
     <string name="library_close">Close</string>
     <string name="search_hint">What do you want to play?</string>
     <string name="search_clear">Clear</string>
+    <string name="search_remove_history">Remove from history</string>
     <string name="search_recent_searches">Recent searches</string>
     <string name="search_clear_all">Clear all</string>
     <string name="search_not_found">No results found</string>
@@ -136,6 +137,8 @@
     <string name="artist_no_songs">No songs</string>
     <string name="library_length_hours">%1$d hr %2$d min</string>
     <string name="library_length_minutes">%1$d min %2$d sec</string>
+    <!-- 曲数と合計の長さ（「3 曲、13 分 5 秒」/ 3 songs, 13 min 5 sec） -->
+    <string name="library_count_and_length">%1$s, %2$s</string>
     <plurals name="library_song_count">
         <item quantity="one">%d song</item>
         <item quantity="other">%d songs</item>
@@ -178,7 +181,7 @@
     <string name="settings_original_titles_title">Show titles as released</string>
     <string name="settings_original_titles_summary">Keep song, artist and album names in their own language (no katakana for Western songs, no romaji for Japanese songs). wave asks YouTube twice, so pages load a little slower</string>
     <string name="settings_language_title">App language</string>
-    <string name="settings_language_summary">%1$s. Text from YouTube (such as shelf titles) also uses this language. YouTube text changes the next time you open wave</string>
+    <string name="settings_language_summary">%1$s. Text from YouTube (such as shelf titles) also uses this language. Takes effect the next time you open wave</string>
     <string name="settings_language_system">Use device language</string>
     <string name="settings_language_japanese" translatable="false">日本語</string>
     <string name="settings_language_english" translatable="false">English</string>

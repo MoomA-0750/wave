@@ -24,7 +24,7 @@
     <string name="login_discard_saved">Delete saved sign-in</string>
     <string name="login_failed_no_sapisid">Couldn\'t get your sign-in details</string>
     <string name="login_failed_no_visitor_data">Couldn\'t get some of your sign-in details. Check your connection and sign in again</string>
-    <string name="login_failed_save">Couldn\'t save your sign-in on this device</string>
+    <string name="login_failed_save">Couldn\'t save your sign-in details</string>
     <string name="login_failed_renderer_gone">The sign-in screen stopped unexpectedly</string>
     <string name="login_retry">Sign in again</string>
     <string name="login_discard_saved_and_retry">Delete saved sign-in and try again</string>
@@ -137,14 +137,14 @@
     <string name="ai_placeholder">Ask Claude</string>
     <string name="ai_stop">Stop</string>
     <string name="ai_send">Send</string>
-    <string name="ai_not_configured">Claude isn\'t connected yet. Connect it in Settings → Claude.</string>
+    <string name="ai_not_configured">Claude isn\'t connected yet. Connect it in Settings → Claude</string>
     <string name="ai_unreachable">Couldn\'t reach the Claude bridge. Is the PC running it?</string>
-    <string name="ai_unauthorized">The Claude bridge refused the token. Connect again in Settings.</string>
+    <string name="ai_unauthorized">The Claude bridge refused the token. Connect again in Settings</string>
     <string name="ai_failed">Claude failed: %1$s</string>
     <string name="ai_searched">Searched for “%1$s”</string>
     <string name="ai_read_liked">Looked at your liked music</string>
     <string name="settings_ai_title">Claude</string>
-    <string name="settings_ai_summary_off">Ask about lyrics, find similar songs and make playlists with Claude Code on your PC (ai-bridge)</string>
+    <string name="settings_ai_summary_off">Ask about lyrics, find similar songs and make playlists with Claude Code on your PC</string>
     <string name="settings_ai_connected">Connected to %1$s</string>
     <string name="settings_ai_scan">Connect with QR code</string>
     <string name="settings_ai_disconnect">Disconnect</string>

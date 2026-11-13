@@ -12,7 +12,7 @@
     <string name="downloads_remove_confirm">Remove</string>
     <string name="downloads_cancel">Cancel</string>
     <string name="downloads_smart">Smart downloads</string>
-    <string name="downloads_smart_summary">Automatically download songs you\'re likely to play. Refreshed once a day</string>
+    <string name="downloads_smart_summary">Automatically download songs you\'re likely to play from songs you play often, songs you might like and recommendations, refreshed daily</string>
     <string name="downloads_smart_all">All</string>
     <string name="downloads_smart_frequent">Played often</string>
     <string name="downloads_smart_discover">You might like</string>

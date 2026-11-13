@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="library_history_title">再生履歴</string>
-    <string name="library_history_empty">履歴がありません</string>
+    <string name="library_history_empty">再生履歴はまだありません</string>
     <string name="library_liked_songs">高く評価した曲</string>
     <string name="library_liked_songs_subtitle">プレイリスト • 自動</string>
     <string name="library_title">ライブラリ</string>
@@ -67,6 +67,7 @@
     <string name="library_close">閉じる</string>
     <string name="search_hint">何を聴きたいですか？</string>
     <string name="search_clear">消去</string>
+    <string name="search_remove_history">履歴から削除</string>
     <string name="search_recent_searches">最近の検索</string>
     <string name="search_clear_all">すべて消去</string>
     <string name="search_not_found">見つかりませんでした</string>
@@ -136,6 +137,8 @@
     <string name="artist_no_songs">曲がありません</string>
     <string name="library_length_hours">%1$d 時間 %2$d 分</string>
     <string name="library_length_minutes">%1$d 分 %2$d 秒</string>
+    <!-- 曲数と合計の長さ（「3 曲、13 分 5 秒」/ 3 songs, 13 min 5 sec） -->
+    <string name="library_count_and_length">%1$s、%2$s</string>
     <plurals name="library_song_count">
         <item quantity="other">%d 曲</item>
     </plurals>
@@ -173,7 +176,7 @@
     <string name="settings_original_titles_title">曲名を元の表記で</string>
     <string name="settings_original_titles_summary">曲名・アーティスト名・アルバム名を、曲の言語のまま出します（洋楽をカタカナに、邦楽をローマ字にしません）。YouTube に2回問い合わせるので、ページの表示が少し遅くなります</string>
     <string name="settings_language_title">画面の言語</string>
-    <string name="settings_language_summary">%1$s。YouTube から届く文字（棚の見出しなど）もこの言語になります。YouTube の文字は次の起動から反映されます</string>
+    <string name="settings_language_summary">%1$s。YouTube から届く文字（棚の見出しなど）もこの言語になります。次の起動から反映されます</string>
     <string name="settings_language_system">端末に合わせる</string>
     <string name="releases_new_badge">NEW</string>
     <string name="releases_suspect_badge">出元が怪しい</string>

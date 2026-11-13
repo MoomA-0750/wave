@@ -264,7 +264,7 @@ fun AlbumScreen(
                     modifier = Modifier.then(if (artist?.browseId != null) Modifier.clickable { actions.openArtist(artist) } else Modifier),
                 )
                 val count = pluralStringResource(R.plurals.library_song_count, album.songs.size, album.songs.size)
-                DetailText(listOfNotNull(album.subtitle, "$count, ${totalLength(album.songs.sumOf { it.durationSeconds ?: 0 })}").joinToString(" • "))
+                DetailText(listOfNotNull(album.subtitle, stringResource(R.string.library_count_and_length, count, totalLength(album.songs.sumOf { it.durationSeconds ?: 0 }))).joinToString(" • "))
             }
         },
         actions = {
