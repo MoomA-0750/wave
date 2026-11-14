@@ -222,7 +222,28 @@ public sealed class ConnectService
         });
         // PC は画面がある間ずっと中継につなぐ（家に入っていなければ、中継は認証で断る）
         Relay.Acquire();
+        // スリープから戻った・ネットにつながり直したら、つなぎ直しの待ちを捨てて、生きているかをすぐ確かめる（docs/decisions.md 2026-11-14）
+        var relay = Relay;
+        try
+        {
+            Microsoft.Windows.System.Power.PowerManager.SystemSuspendStatusChanged += (_, _) =>
+            {
+                if (Microsoft.Windows.System.Power.PowerManager.SystemSuspendStatus is Microsoft.Windows.System.Power.SystemSuspendStatus.AutoResume or Microsoft.Windows.System.Power.SystemSuspendStatus.ManualResume) relay.Wake();
+            };
+        }
+        catch (Exception e) when (e is System.Runtime.InteropServices.COMException or InvalidOperationException or TypeInitializationException)
+        {
+            AppPaths.Log($"connect-v2 suspend notice unavailable type={e.GetType().Name}");
+        }
+        System.Net.NetworkInformation.NetworkChange.NetworkAddressChanged += (_, _) => relay.Wake();
+        System.Net.NetworkInformation.NetworkChange.NetworkAvailabilityChanged += (_, e) =>
+        {
+            if (e.IsAvailable) relay.Wake();
+        };
     }
+
+    /// <summary>窓が前に出た（つながりを確かめ直す。ほかの端末の今の再生がすぐ映るように）。</summary>
+    public void Wake() => Relay?.Wake();
 
     private void Post(Action action)
     {

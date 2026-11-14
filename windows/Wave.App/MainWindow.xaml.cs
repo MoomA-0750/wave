@@ -1404,7 +1404,13 @@ public sealed partial class MainWindow : Window
         var connect = AppServices.Connect;
         // 裏（ほかの窓が前・最小化）で再生キーを押したときは、ほかの端末の再生を引き取らずに知らせる
         var active = true;
-        Activated += (_, e) => active = e.WindowActivationState != WindowActivationState.Deactivated;
+        Activated += (_, e) =>
+        {
+            var wasActive = active;
+            active = e.WindowActivationState != WindowActivationState.Deactivated;
+            // 窓が前に出たら、つながりを確かめ直す（ほかの端末の今の再生がすぐ映るように）
+            if (active && !wasActive) connect.Wake();
+        };
         connect.IsForeground = () => active && AppWindow.Presenter is not OverlappedPresenter { State: OverlappedPresenterState.Minimized };
         connect.Changed += RenderConnect;
         connect.Notice += ShowToast;

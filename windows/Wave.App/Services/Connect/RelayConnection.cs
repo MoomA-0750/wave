@@ -25,8 +25,6 @@ public enum RelayStatus
 /// </summary>
 public sealed class RelayConnection
 {
-    private static readonly TimeSpan ReconnectDelay = TimeSpan.FromSeconds(5);
-    private static readonly TimeSpan MaxReconnectDelay = TimeSpan.FromSeconds(60);
     private static readonly TimeSpan PairTimeout = TimeSpan.FromMinutes(2);
 
     private readonly string baseUrl;
@@ -45,6 +43,9 @@ public sealed class RelayConnection
     private int failedAttempts;
     private CancellationTokenSource? reconnectCancel;
     private RelayStatus status = RelayStatus.Disconnected;
+
+    /// <summary>今のソケットの見張り（死んだソケットに気づく。RelayWatch）。gate の中で触る。</summary>
+    private readonly RelayWatch watch = new();
 
     public event Action<RelayStatus>? StatusChanged;
 
@@ -90,6 +91,21 @@ public sealed class RelayConnection
         lock (gate)
         {
             if (users > 0 && socket is null) OpenLocked();
+        }
+    }
+
+    /// <summary>
+    /// スリープから戻った・ネットにつながり直した・窓が前に出た: 待っているつなぎ直しをすぐ行い、つながっていれば生きているかをすぐ確かめる
+    /// （スリープの間に死んだソケットや、伸びたつなぎ直しの待ちで、ほかの端末の再生が届かないままにしない）。
+    /// </summary>
+    public void Wake()
+    {
+        lock (gate)
+        {
+            if (users == 0) return;
+            failedAttempts = 0;
+            if (socket is null) OpenLocked();
+            else if (status == RelayStatus.Connected && watch.Wake(Environment.TickCount64) == RelayWatch.Action.Probe) outbox?.Writer.TryWrite(Encoding.UTF8.GetBytes(RelayWatch.Probe));
         }
     }
 
@@ -179,13 +195,47 @@ public sealed class RelayConnection
         reconnectCancel?.Cancel();
         SetStatus(RelayStatus.Connecting);
         var ws = new ClientWebSocket();
-        ws.Options.KeepAliveInterval = TimeSpan.FromSeconds(30);
+        // ping を送って pong を待つ（.NET 9。返らなければ切る）。アプリの見張り（RelayWatch）と合わせて、死んだソケットに気づく
+        ws.Options.KeepAliveInterval = TimeSpan.FromSeconds(15);
+        ws.Options.KeepAliveTimeout = TimeSpan.FromSeconds(10);
         var cancel = new CancellationTokenSource();
         var queue = System.Threading.Channels.Channel.CreateUnbounded<byte[]>(new System.Threading.Channels.UnboundedChannelOptions { SingleReader = true });
         socket = ws;
         socketCancel = cancel;
         outbox = queue;
+        watch.Opened(Environment.TickCount64);
         _ = Task.Run(() => RunAsync(ws, queue, cancel.Token));
+        _ = Task.Run(() => WatchAsync(ws, queue, cancel.Token));
+    }
+
+    /// <summary>見張り（1秒ごと）。返事の無いソケットは捨てる（受け取りが例外で終わり、つなぎ直す）。</summary>
+    private async Task WatchAsync(ClientWebSocket ws, System.Threading.Channels.Channel<byte[]> queue, CancellationToken cancel)
+    {
+        while (!cancel.IsCancellationRequested)
+        {
+            try
+            {
+                await Task.Delay(RelayWatch.TickMs, cancel);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+            lock (gate)
+            {
+                if (socket != ws) return;
+                switch (watch.Tick(Environment.TickCount64))
+                {
+                    case RelayWatch.Action.Probe:
+                        queue.Writer.TryWrite(Encoding.UTF8.GetBytes(RelayWatch.Probe));
+                        break;
+                    case RelayWatch.Action.Dead:
+                        AppPaths.Log($"relay-v2 unresponsive status={status}");
+                        ws.Abort();
+                        return;
+                }
+            }
+        }
     }
 
     private async Task RunAsync(ClientWebSocket ws, System.Threading.Channels.Channel<byte[]> queue, CancellationToken cancel)
@@ -214,7 +264,7 @@ public sealed class RelayConnection
         {
             next = RelayStatus.TailnetUnreachable;
         }
-        catch (Exception e) when (e is WebSocketException or OperationCanceledException or HttpRequestException or IOException)
+        catch (Exception e) when (e is WebSocketException or OperationCanceledException or HttpRequestException or IOException or ObjectDisposedException or InvalidOperationException)
         {
             if (!cancel.IsCancellationRequested)
             {
@@ -237,6 +287,10 @@ public sealed class RelayConnection
             return;
         }
         var op = node?["op"]?.GetValue<string>();
+        lock (gate)
+        {
+            if (socket == ws) watch.Received(Environment.TickCount64, op == "welcome");
+        }
         if (op == "challenge")
         {
             var nonceText = node!["nonce"]?.GetValue<string>();
@@ -278,7 +332,7 @@ public sealed class RelayConnection
             SetStatus(next);
             if (users > 0 && next != RelayStatus.NotMember)
             {
-                var wait = TimeSpan.FromTicks(Math.Min(ReconnectDelay.Ticks << Math.Min(failedAttempts, 4), MaxReconnectDelay.Ticks));
+                var wait = RelayWatch.ReconnectDelay(failedAttempts);
                 failedAttempts++;
                 var cancel = new CancellationTokenSource();
                 reconnectCancel = cancel;
