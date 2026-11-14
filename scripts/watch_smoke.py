@@ -217,6 +217,11 @@ def check(name: str, ok: bool, detail: str = "") -> bool:
     return ok
 
 
+# 確かめに使うアーティスト。表示の言語で名前の書き方が変わる
+ARTIST = r"^(緑黄色社会|(?i:ryokuoushoku shakai))$"
+ARTIST_SONG = r"(緑黄色社会|(?i:ryokuoushoku shakai)) • "
+
+
 def type_text(text: str) -> bool:
     """Wear のシステムの入力（キーボード）で語を入れて送る。adb の文字は候補にだけ入るので、候補を押して確定してから送る。"""
     keyboard = wait_for(r"(?i)keyboard", 8, "desc")
@@ -267,12 +272,13 @@ def main() -> int:
     if search_button:
         tap(search_button)
         time.sleep(3)
-        type_text("yoasobi")
-        hit = wait_for(r"^YOASOBI$", 20, "text")
+        # adb の input text はかなと漢字を打てないので、ローマ字で探す
+        type_text("ryokuoushoku")
+        hit = wait_for(ARTIST, 20, "text")
         check("検索の結果にアーティストが出る", hit is not None)
-        check("検索の結果に曲が出る", seek(r"YOASOBI • ", 5) is not None)
+        check("検索の結果に曲が出る", seek(ARTIST_SONG, 5) is not None)
         to_top()
-        hit = find(r"^YOASOBI$", "text")
+        hit = find(ARTIST, "text")
         if hit:
             tap(hit)
             check("アーティストのページが開く（人気の曲）", tap_text(f"^{S['artist_popular']}$", 20, 2) or find(re.escape(S["wear_shuffle_play"])) is not None)

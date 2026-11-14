@@ -73,7 +73,7 @@ object DebugActions {
             val player = container.player
             when (action) {
                 "search_play" ->
-                    when (val result = container.music.searchSongs(intent.getStringExtra("query") ?: "YOASOBI")) {
+                    when (val result = container.music.searchSongs(intent.getStringExtra("query") ?: "緑黄色社会")) {
                         is CallResult.Ok -> result.value.songs.getOrNull(intent.getIntExtra("index", 0))?.let { player.playSong(it) }
                         is CallResult.Failed -> Log.i(WaveApplication.LOG_TAG, "debug search failed ${result.kind} status=${result.status}")
                     }
