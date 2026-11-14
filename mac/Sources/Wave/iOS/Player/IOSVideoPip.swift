@@ -3,6 +3,7 @@ import AVKit
 import Observation
 import SwiftUI
 import UIKit
+import WaveCore
 
 /// 映像の PiP（iPhone の小窓）。映像を出す枠は1つの AVPlayerLayer を使い回し（再生画面・全画面のどちらに出ていても同じ枠）、
 /// PiP はその枠から始める。映像を出したままホームへ戻ると、自動で PiP になり、wave に戻ると PiP を閉じて再生画面で映像を出す。
@@ -78,6 +79,13 @@ final class VideoPip: NSObject, AVPictureInPictureControllerDelegate {
     /// 開発用: 小窓を始められる状態か。
     var debugState: String {
         "controller=\(controller != nil) possible=\(controller?.isPictureInPicturePossible ?? false) player=\(surface.playerLayer.player != nil) ready=\(surface.playerLayer.isReadyForDisplay) inWindow=\(surface.window != nil) hosts=\(hosts.count)"
+    }
+
+    /// 曲の映像（MV）が替わった（PlayerService が呼ぶ）。PiP で MV を映している間は、新しい曲の MV にする（無ければ外す）。
+    /// 再生画面を閉じていると、画面の onChange(of: player.video) が効かず、前の曲の MV を新しい曲の位置に合わせて映し続けてしまう。
+    func follow(_ video: MusicVideo?) {
+        guard active, AppServices.player?.liveVideoPlayer == nil else { return }
+        MusicVideoPlayer.shared.setActive(video)
     }
 
     func toggle() {

@@ -129,7 +129,18 @@ final class PlayerService {
 
     private(set) var queue: [Song] = []
 
-    var current: Song? { didSet { if oldValue != current { cursorChanged.forEach { $0(true) } } } }
+    var current: Song? {
+        didSet {
+            // 評価・映像・歌詞はその曲のもの。曲が替わったら、どの道で替わっても前の曲の分を残さない
+            // （読み直さない道で替わると、前の曲の歌詞・MV が新しい曲に出たままになる）
+            if oldValue?.videoId != current?.videoId {
+                like = nil
+                video = nil
+                lyrics = nil
+            }
+            if oldValue != current { cursorChanged.forEach { $0(true) } }
+        }
+    }
     var index = -1
     var isPlaying = false { didSet { if oldValue != isPlaying { onIsPlayingChanged() } } }
     var isLoading = false { didSet { if oldValue != isLoading, !isRemote { cursorChanged.forEach { $0(true) } } } }
@@ -205,7 +216,14 @@ final class PlayerService {
     /// 今の曲がどれかのプレイリストに入っている（先読みで分かったとき。Spotify と同じく評価のボタンに✓を付ける）。
     var inPlaylist = false
     /// 今の曲に重ねられる映像（MV）。無い・まだ分からなければ nil。
-    var video: MusicVideo?
+    var video: MusicVideo? {
+        didSet {
+            #if os(iOS)
+                // 再生画面を閉じて PiP で映している間も、曲が替わったら映像を新しい曲のものにする（再生画面の onChange は効かない）
+                if oldValue != video { VideoPip.shared.follow(video) }
+            #endif
+        }
+    }
     /// 画面の下に一時的に出す知らせ（出したら nil に戻す）。
     var message: String?
     var lyrics: LyricsService.Result? {
@@ -666,7 +684,11 @@ final class PlayerService {
             duration = Double(current?.durationSeconds ?? 0)
             isPlaying = false
             isLoading = false
-            if playOnRemote?(remoteTarget) == true { return true }
+            if playOnRemote?(remoteTarget) == true {
+                // 相手の端末で鳴らす曲の評価・映像・歌詞を読む（届いたカーソルが同じ曲なら、映す側では読み直さないため）
+                restartSideLoads(queue[index])
+                return true
+            }
         }
         selectAt(index)
         userStartedPlayback.forEach { $0(true) }
@@ -1482,6 +1504,8 @@ final class PlayerService {
             current = queue[backup.index]
             duration = Double(current?.durationSeconds ?? 0)
             position = backup.positionSeconds
+            // 戻した手元の曲の評価・映像・歌詞を読む（映していた曲のものを出したままにしない）
+            restartSideLoads(queue[backup.index])
         }
         updateNowPlayingInfo()
         saveQueue()
