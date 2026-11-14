@@ -94,7 +94,8 @@ struct NowPlayingView: View {
             // ジャケットは、並びの外の層に置いて画面の左・上・下の端まで伸ばす（並びの中では安全領域の内側までしか伸びず、左と下に地が残った）
             if panel == nil && !(shell.showVideo && player.hasVideo) {
                 landscapeCover(player)
-                    .transition(.offset(y: -60).combined(with: .opacity))
+                    // 画面の端まで伸ばした層なので、ずらすと下の端が見える。薄くするだけにする
+                    .transition(.opacity)
                     .simultaneousGesture(DragGesture(minimumDistance: 20).onEnded { value in
                         if value.translation.height > 70, value.translation.height > abs(value.translation.width) { dismiss() }
                     })
