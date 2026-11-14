@@ -19,6 +19,8 @@ struct NowPlayingView: View {
     /// 映像の縦横比（幅 / 高さ）。
     @State private var videoAspect: CGFloat = 16 / 9
     @Environment(\.dismiss) private var dismiss
+    /// 歌詞・キューを開け閉めするとき、曲名・評価のボタン・ジャケットを下の大きな行と上の小さな行の間で滑らせる
+    @Namespace private var titleSpace
     /// 横向き（縦が狭い）なら、ジャケット・映像と操作を左右に並べる。
     @Environment(\.verticalSizeClass) private var verticalSize
 
@@ -148,11 +150,21 @@ struct NowPlayingView: View {
                 // くっきり → ぼかし → 地 と溶かし、ジャケットと操作の間に隙間を作らない
                 VStack(spacing: 0) {
                     ZStack {
+                        // ぼかした層は、下へ行くほど地（ArtworkBackdrop: 彩度を上げて暗くしたもの）と同じ色味・暗さに寄せてから、
+                        // 緩やかな曲線で消す（明るいまま暗い地へ短く切り替えると、明るいジャケットで切れ目が目立った）
                         RemoteImage(url: Ui.large(song?.thumbnailUrl))
                             .blur(radius: 40, opaque: true)
+                            .saturation(1.15)
+                            .overlay {
+                                LinearGradient(stops: [.init(color: .black.opacity(0), location: 0.45), .init(color: .black.opacity(0.25), location: 0.75),
+                                                       .init(color: .black.opacity(0.5), location: 1)],
+                                               startPoint: .top, endPoint: .bottom)
+                            }
                             .mask {
-                                LinearGradient(stops: [.init(color: .clear, location: 0.35), .init(color: .black, location: 0.6),
-                                                       .init(color: .black, location: 0.8), .init(color: .clear, location: 1)],
+                                LinearGradient(stops: [.init(color: .clear, location: 0.3), .init(color: .black, location: 0.55),
+                                                       .init(color: .black, location: 0.7), .init(color: .black.opacity(0.75), location: 0.8),
+                                                       .init(color: .black.opacity(0.4), location: 0.89), .init(color: .black.opacity(0.12), location: 0.96),
+                                                       .init(color: .clear, location: 1)],
                                                startPoint: .top, endPoint: .bottom)
                             }
                             .allowsHitTesting(false)
@@ -161,7 +173,8 @@ struct NowPlayingView: View {
                     Color.clear.frame(height: max(0, controlsHeight - 120))
                 }
                 .ignoresSafeArea(edges: .top)
-                .transition(.opacity)
+                // 歌詞・キューを開くと上へ抜け、閉じると上から戻る（曲名が上へ滑るのに合わせる）
+                .transition(.offset(y: -160).combined(with: .opacity))
             }
             VStack(spacing: 0) {
                 Capsule().fill(.white.opacity(0.5)).frame(width: 36, height: 5)
@@ -170,34 +183,44 @@ struct NowPlayingView: View {
                     .onTapGesture { dismiss() }
                     .accessibilityLabel(L.t("閉じる", "Close"))
                     .accessibilityAddTraits(.isButton)
-                if let panel {
+                // ジャケットの場所。大きさは開け閉めで変えない（中身の並びが組み変わると、消えていく歌詞が横へずれて見えた）
+                ZStack(alignment: .top) {
                     // 歌詞・キュー: 上に小さな曲の行、真ん中に中身、下に操作
                     // 左右の端は、キューの並び（List の行と区切りの見出し）にそろえる
-                    compactTitleRow(player, song)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 8)
-                    Group {
-                        switch panel {
-                        case .lyrics: LyricsView(embedded: true)
-                        case .queue: QueueView(embedded: true)
+                    VStack(spacing: 0) {
+                        if panel != nil {
+                            // 曲名・ボタン・ジャケットは下の大きな行との間を滑る（matchedGeometryEffect）。行そのものは重ねて替える
+                            compactTitleRow(player, song)
+                                .padding(.horizontal, 20)
+                                .padding(.vertical, 8)
+                                .transition(.opacity)
+                        }
+                        if let panel {
+                            Group {
+                                switch panel {
+                                case .lyrics: LyricsView(embedded: true)
+                                case .queue: QueueView(embedded: true)
+                                }
+                            }
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            // 下の端は薄くして消す（操作の欄の上ですっぱり切れて見えないように。上の端は歌詞・キューの中で薄くする）
+                            .mask {
+                                // 下は操作の欄の手前で長めに溶かす（境目を見せない）
+                                LinearGradient(stops: [.init(color: .black, location: 0),
+                                                       .init(color: .black, location: 0.7), .init(color: .black.opacity(0.35), location: 0.88),
+                                                       .init(color: .clear, location: 1)],
+                                               startPoint: .top, endPoint: .bottom)
+                            }
+                            // 曲名が上へ滑るのに合わせて下から上がって出て、閉じると下へ下がって消える
+                            .transition(.offset(y: 140).combined(with: .opacity))
                         }
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    // 下の端は薄くして消す（操作の欄の上ですっぱり切れて見えないように。上の端は歌詞・キューの中で薄くする）
-                    .mask {
-                        // 下は操作の欄の手前で長めに溶かす（境目を見せない）
-                        LinearGradient(stops: [.init(color: .black, location: 0),
-                                               .init(color: .black, location: 0.7), .init(color: .black.opacity(0.35), location: 0.88),
-                                               .init(color: .clear, location: 1)],
-                                       startPoint: .top, endPoint: .bottom)
+                    if panel == nil && video {
+                        media(player).padding(.horizontal, 24).padding(.top, 16)
+                            .transition(.opacity)
                     }
-                    .transition(.opacity)
-                } else if video {
-                    media(player).padding(.horizontal, 24).padding(.top, 16)
-                    Spacer(minLength: 0)
-                } else {
-                    Spacer(minLength: 0)
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 VStack(alignment: .leading, spacing: 14) {
                     if panel == nil { portraitTitleRow(player, song) }
                     seekBar(player)
@@ -210,7 +233,7 @@ struct NowPlayingView: View {
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { if panel == nil { controlsHeight = $0 } }
             }
         }
-        .animation(.easeInOut(duration: 0.3), value: panel)
+        .animation(.smooth(duration: 0.45), value: panel)
         // ジャケットや曲名の辺りを下へ払ったら閉じる（つまみ・シークバーの横の動きは通す）。歌詞・キューは中を送るので、払っても閉じない
         .simultaneousGesture(DragGesture(minimumDistance: 20).onEnded { value in
             if value.translation.height > 70, value.translation.height > abs(value.translation.width) * 1.5 { dismiss() }
@@ -233,14 +256,19 @@ struct NowPlayingView: View {
             Button { closePanels() } label: { Cover(url: Ui.small(song?.thumbnailUrl), size: 56, radius: 6) }
                 .buttonStyle(.plain)
                 .accessibilityLabel(L.t("ジャケットに戻る", "Back to artwork"))
+                .matchedGeometryEffect(id: "cover", in: titleSpace)
             VStack(alignment: .leading, spacing: 2) {
                 Text(song?.title ?? "").font(.headline).lineLimit(1)
                 Text(song?.artistsText ?? "").font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
             }
+            .matchedGeometryEffect(id: "title", in: titleSpace, anchor: .leading)
             Spacer(minLength: 0)
             if song != nil {
-                LikeButtonView(size: 17, box: 40).modifier(RoundButtonBackground())
-                songMenu(song).modifier(RoundButtonBackground())
+                HStack(spacing: 12) {
+                    LikeButtonView(size: 17, box: 40).modifier(RoundButtonBackground())
+                    songMenu(song).modifier(RoundButtonBackground())
+                }
+                .matchedGeometryEffect(id: "actions", in: titleSpace, anchor: .trailing)
             }
         }
         .foregroundStyle(.primary)
@@ -275,11 +303,19 @@ struct NowPlayingView: View {
                 Text(song?.artistsText ?? "").font(.title3).foregroundStyle(.secondary).lineLimit(1)
                     .onTapGesture { if let id = song?.artists.first(where: { $0.browseId != nil })?.browseId { AppServices.nav.artist(id) } }
             }
+            .matchedGeometryEffect(id: "title", in: titleSpace, anchor: .leading)
+            // 小さなジャケットは、開くとここ（曲名の左の端）から上の行へ滑って大きくなり、閉じるとここへ戻って消える
+            .background(alignment: .leading) {
+                Color.clear.frame(width: 1, height: 56).matchedGeometryEffect(id: "cover", in: titleSpace).allowsHitTesting(false)
+            }
             Spacer(minLength: 0)
             if song != nil {
-                LikeButtonView(size: 17, box: 40).modifier(RoundButtonBackground())
-                songMenu(song)
-                .modifier(RoundButtonBackground())
+                HStack(spacing: 12) {
+                    LikeButtonView(size: 17, box: 40).modifier(RoundButtonBackground())
+                    songMenu(song)
+                    .modifier(RoundButtonBackground())
+                }
+                .matchedGeometryEffect(id: "actions", in: titleSpace, anchor: .trailing)
             }
         }
         .foregroundStyle(.primary)
