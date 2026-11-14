@@ -90,7 +90,23 @@ struct NowPlayingView: View {
     /// 横向き: 左にジャケット・映像（歌詞・キューを開いたらその場所に歌詞・キュー）、右に縦向きと同じ曲名・シーク・操作・音量・下の列。
     private func landscape(_ player: PlayerService, _ song: Song?) -> some View {
         let panel = landscapePanel
-        return HStack(alignment: .center, spacing: 28) {
+        return ZStack {
+            // ジャケットは、並びの外の層に置いて画面の左・上・下の端まで伸ばす（並びの中では安全領域の内側までしか伸びず、左と下に地が残った）
+            if panel == nil && !(shell.showVideo && player.hasVideo) {
+                landscapeCover(player)
+                    .transition(.offset(y: -60).combined(with: .opacity))
+                    .simultaneousGesture(DragGesture(minimumDistance: 20).onEnded { value in
+                        if value.translation.height > 70, value.translation.height > abs(value.translation.width) { dismiss() }
+                    })
+            }
+            landscapeColumns(player, song, panel: panel)
+        }
+        .animation(.timingCurve(0.2, 0.9, 0.25, 1, duration: 0.5), value: panel)
+        .onChange(of: panel) { old, new in holdWhileClosing(old: old, new: new) { landscapePanel } }
+    }
+
+    private func landscapeColumns(_ player: PlayerService, _ song: Song?, panel: PortraitPanel?) -> some View {
+        HStack(alignment: .center, spacing: 28) {
             ZStack {
                 // 歌詞・キューは、閉じる間も残して薄くしながら下げ、消えてから外す（開くときの逆の動きにそろえる。
                 // 消える部品にすると、消え始めに中身が跳んで開くときと違う動きに見えた）
@@ -111,17 +127,13 @@ struct NowPlayingView: View {
                     .allowsHitTesting(panel != nil)
                     .transition(.asymmetric(insertion: .offset(y: 60).combined(with: .opacity), removal: .identity))
                 }
-                if panel == nil {
+                if panel == nil, shell.showVideo, player.hasVideo {
                     media(player)
                         .transition(.offset(y: -60).combined(with: .opacity))
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(.vertical, 12)
-            // 横向きのジャケットはスクロールの中に無いので、下へ払ったら閉じる（歌詞・キューは中を送るので閉じない）
-            .simultaneousGesture(DragGesture(minimumDistance: 20).onEnded { value in
-                if value.translation.height > 70, value.translation.height > abs(value.translation.width) { dismiss() }
-            }, including: panel == nil ? .all : .subviews)
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
                     Capsule().fill(.white.opacity(0.5)).frame(width: 36, height: 5)
@@ -147,8 +159,6 @@ struct NowPlayingView: View {
             .containerRelativeFrame(.horizontal) { width, _ in min(440, (width - 76) / 2) }
         }
         .padding(.horizontal, 24)
-        .animation(.timingCurve(0.2, 0.9, 0.25, 1, duration: 0.5), value: panel)
-        .onChange(of: panel) { old, new in holdWhileClosing(old: old, new: new) { landscapePanel } }
     }
 
     /// 閉じた歌詞・キューを、薄くし終えるまで出しておく（外すときは見えていないので、動きは付けない）。
@@ -163,6 +173,34 @@ struct NowPlayingView: View {
                 withTransaction(t) { closingPanel = nil }
             }
         }
+    }
+
+    /// 横向きのジャケット: 枠を付けず、画面の左・上・下の端まで伸ばして、右の操作の列の側を地へ溶かす（縦向きと同じく境目を作らない）。
+    /// 間にぼかした同じ絵を挟んで、くっきり → ぼかし → 地 と溶かす。幅は右の操作の列の手前まで。
+    private func landscapeCover(_ player: PlayerService) -> some View {
+        GeometryReader { geo in
+            let insets = geo.safeAreaInsets
+            let inner = geo.size.width - insets.leading - insets.trailing
+            let column = min(440, (inner - 76) / 2)
+            // 右の列の左の端（と少し重ねて、そこで溶かしきる）
+            let width = geo.size.width - insets.trailing - 24 - column + 24
+            ZStack {
+                RemoteImage(url: Ui.large(player.current?.thumbnailUrl))
+                    .blur(radius: 40, opaque: true)
+                    .saturation(1.15)
+                    .mask {
+                        LinearGradient(stops: [.init(color: .clear, location: 0.35), .init(color: .black, location: 0.6),
+                                               .init(color: .black.opacity(0.6), location: 0.82), .init(color: .black.opacity(0.2), location: 0.94),
+                                               .init(color: .clear, location: 1)],
+                                       startPoint: .leading, endPoint: .trailing)
+                    }
+                    .allowsHitTesting(false)
+                CoverCarousel(fullBleed: true, fadeEdge: .trailing)
+            }
+            .frame(width: max(0, width), height: geo.size.height)
+            .clipped()
+        }
+        .ignoresSafeArea()
     }
 
     /// 横向きで、ジャケットの場所に出している中身（歌詞・キュー）。
@@ -621,6 +659,8 @@ private struct CoverCarousel: View {
     var isolated = false
     /// 画面の幅いっぱいに、角を丸めず影も付けずに出し、下の端を地へ溶かす（縦向きの再生画面）。
     var fullBleed = false
+    /// fullBleed のとき、地へ溶かす端（縦向きは下、横向きは右の操作の列の側）。
+    var fadeEdge: Edge = .bottom
     @State private var drag: CGFloat = 0
     @State private var settling = false
 
@@ -638,7 +678,13 @@ private struct CoverCarousel: View {
                 }
             }
             .mask {
-                if fullBleed {
+                if fullBleed && fadeEdge == .trailing {
+                    // 右の方は、後ろのぼかした絵へ溶かす（横向き）
+                    // 緩やかな曲線で消す（直線で消すと、消え始めと消え終わりに縦の段が見える）
+                    LinearGradient(stops: [.init(color: .black, location: 0), .init(color: .black, location: 0.42), .init(color: .black.opacity(0.75), location: 0.6),
+                                           .init(color: .black.opacity(0.4), location: 0.75), .init(color: .black.opacity(0.12), location: 0.88), .init(color: .clear, location: 0.97)],
+                                   startPoint: .leading, endPoint: .trailing)
+                } else if fullBleed {
                     // 下の方は、後ろのぼかした絵へ溶かす
                     LinearGradient(stops: [.init(color: .black, location: 0), .init(color: .black, location: 0.5), .init(color: .clear, location: 0.78)],
                                    startPoint: .top, endPoint: .bottom)
@@ -650,7 +696,7 @@ private struct CoverCarousel: View {
             }
             // 上の端は少し暗くして、重ねた閉じる・メニューを読めるようにする
             .overlay(alignment: .top) {
-                if fullBleed {
+                if fullBleed && fadeEdge == .bottom {
                     LinearGradient(colors: [.black.opacity(0.35), .clear], startPoint: .top, endPoint: .bottom)
                         .frame(height: 140)
                         .allowsHitTesting(false)
