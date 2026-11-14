@@ -45,8 +45,9 @@ class RelayV2Config(
  */
 fun Application.relayV2Module(config: RelayV2Config) {
     install(WebSockets) {
-        pingPeriod = 30.seconds
-        timeout = 90.seconds
+        // 返事の無くなった端末（スリープ・通信を失った）を早めに外し、家の端末に「つながっている」と申告し続けない（docs/decisions.md 2026-11-14）
+        pingPeriod = 15.seconds
+        timeout = 15.seconds
         maxFrameSize = RelayV2.MAX_FRAME_CHARS.toLong() + 1024
     }
     val hub = HubV2(config)

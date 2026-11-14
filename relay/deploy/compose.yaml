@@ -6,6 +6,8 @@ services:
     working_dir: /app
     environment:
       WAVE_RELAY_PROTOCOL: "v2"
+      # JVM の性能の記録（/tmp/hsperfdata の mmap）で SIGBUS により落ちることがあったので切る（2026-11-13 に3回。docs/decisions.md 2026-11-14）
+      JAVA_OPTS: "-XX:-UsePerfData"
       WAVE_RELAY_HOST: "${WAVE_RELAY_V2_HOST}"
       WAVE_RELAY_DATA: "/data/household.json"
       WAVE_RELAY_BIND: "0.0.0.0"
