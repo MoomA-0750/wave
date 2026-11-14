@@ -4,6 +4,7 @@
     import UIKit
 #endif
 import Foundation
+import Network
 import Observation
 import WaveCore
 
@@ -175,7 +176,29 @@ final class ConnectService {
         worker.startTicking()
         // Mac は画面がある間ずっと中継につなぐ（家に入っていなければ、中継は認証で断る）
         worker.relay.acquire()
+        watchWakes(worker.relay)
     }
+
+    /// 前面に戻った・スリープから戻った・ネットにつながり直したら、つなぎ直しの待ちを捨てて、つながりをすぐ確かめる
+    /// （iPhone は裏にいる間にソケットが切られる。docs/decisions.md 2026-11-14）。
+    private func watchWakes(_ relay: RelayConnection) {
+        let center = NotificationCenter.default
+        #if os(macOS)
+            let names = [NSApplication.didBecomeActiveNotification]
+            NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: nil) { _ in relay.wake() }
+        #else
+            let names = [UIApplication.willEnterForegroundNotification, UIApplication.didBecomeActiveNotification]
+        #endif
+        for name in names {
+            center.addObserver(forName: name, object: nil, queue: nil) { _ in relay.wake() }
+        }
+        pathMonitor.pathUpdateHandler = { path in
+            if path.status == .satisfied { relay.wake() }
+        }
+        pathMonitor.start(queue: DispatchQueue(label: "connect-v2-path"))
+    }
+
+    @ObservationIgnored private let pathMonitor = NWPathMonitor()
 
     // MARK: 作業の列からの知らせ
 

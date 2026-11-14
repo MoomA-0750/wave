@@ -18,8 +18,6 @@ public enum RelayStatus: Sendable {
 /// 受けたメッセージは JSON の文字列のまま deliver に渡す（呼ぶ側が1本の流れへ移す）。ログは状態と種類だけ（鍵・トークンの値は出さない）。
 /// Windows では Wave.App の RelayConnection（ClientWebSocket）。Mac では URLSessionWebSocketTask で同じ振る舞いにする。
 public final class RelayConnection: @unchecked Sendable {
-    private static let reconnectDelayMs: Int64 = 5_000
-    private static let maxReconnectDelayMs: Int64 = 60_000
     private static let pairTimeoutSeconds: Double = 120
     private static let keepAliveSeconds: Double = 30
 
@@ -50,6 +48,8 @@ public final class RelayConnection: @unchecked Sendable {
     private var failedAttempts = 0
     private var reconnectTask: Task<Void, Never>?
     private var statusValue: RelayStatus = .disconnected
+    /// 今のソケットの見張り（死んだソケットに気づく。RelayWatch）。gate の中で触る。
+    private var watch = RelayWatch()
 
     /// 状態が変わった（Windows の StatusChanged イベント）。呼ぶ側のスレッドとは別のところから呼ぶ。
     public var onStatusChanged: ((RelayStatus) -> Void)? {
@@ -100,6 +100,20 @@ public final class RelayConnection: @unchecked Sendable {
     public func reconnect() {
         gate.withLock {
             if users > 0 && socket == nil { openLocked() }
+        }
+    }
+
+    /// 前面に戻った・スリープから戻った・ネットにつながり直した: 待っているつなぎ直しをすぐ行い、つながっていれば生きているかをすぐ確かめる
+    /// （裏にいた間に死んだソケットや、伸びたつなぎ直しの待ちで、ほかの端末の再生が届かないままにしない）。
+    public func wake() {
+        gate.withLock {
+            if users == 0 { return }
+            failedAttempts = 0
+            guard let socket else {
+                openLocked()
+                return
+            }
+            if statusValue == .connected && watch.wake(RelayWatch.nowMs()) == .probe { socket.outbox.yield(RelayWatch.probe) }
         }
     }
 
@@ -160,7 +174,31 @@ public final class RelayConnection: @unchecked Sendable {
         let (stream, continuation) = AsyncStream<String>.makeStream()
         let current = Socket(task: task, outbox: continuation)
         socket = current
+        watch.opened(RelayWatch.nowMs())
         Task.detached { [self] in await run(current, stream) }
+        Task.detached { [weak self] in await self?.watchLoop(current) }
+    }
+
+    /// 見張り（1秒ごと）。返事の無いソケットは捨てる（受け取りが例外で終わり、つなぎ直す）。
+    private func watchLoop(_ current: Socket) async {
+        while true {
+            try? await Task.sleep(nanoseconds: UInt64(RelayWatch.tickMs) * 1_000_000)
+            let keep: Bool = gate.withLock {
+                guard socket === current else { return false }
+                switch watch.tick(RelayWatch.nowMs()) {
+                case .none:
+                    return true
+                case .probe:
+                    current.outbox.yield(RelayWatch.probe)
+                    return true
+                case .dead:
+                    log("relay-v2 unresponsive")
+                    current.task.cancel()
+                    return false
+                }
+            }
+            if !keep { return }
+        }
     }
 
     private func run(_ current: Socket, _ outbox: AsyncStream<String>) async {
@@ -211,6 +249,9 @@ public final class RelayConnection: @unchecked Sendable {
     private func onText(_ current: Socket, _ text: String) {
         guard let node = try? JSON.parse(text) else { return }
         let op = node["op"].str
+        gate.withLock {
+            if socket === current { watch.received(RelayWatch.nowMs(), welcome: op == "welcome") }
+        }
         if op == "challenge" {
             guard let nonceText = node["nonce"].str, let nonce = B64.decode(nonceText) else { return }
             // 中継が名乗るホストではなく、設定のホストで署名する
@@ -246,8 +287,7 @@ public final class RelayConnection: @unchecked Sendable {
             current.outbox.finish()
             setStatusLocked(next)
             if users > 0 && next != .notMember {
-                let shift = min(failedAttempts, 4)
-                let waitMs = min(RelayConnection.reconnectDelayMs << Int64(shift), RelayConnection.maxReconnectDelayMs)
+                let waitMs = RelayWatch.reconnectDelayMs(failedAttempts)
                 failedAttempts += 1
                 reconnectTask = Task.detached { [weak self] in
                     try? await Task.sleep(nanoseconds: UInt64(waitMs) * 1_000_000)

@@ -150,6 +150,37 @@ final class RelayConnectionTests: XCTestCase {
         XCTAssertEqual(.disconnected, relay.status)
     }
 
+    func testWakeProbesALiveConnectionAtOnce() async throws {
+        let device = SoftwareDevice.generate()
+        let server = try LocalWebSocketServer()
+        server.greeting = #"{"op":"challenge","host":"relay.test","nonce":"bm9uY2U"}"#
+        server.reply = { text in
+            switch RelayV2.decode(text) {
+            case .auth?: return RelayV2.encode(.welcome(.init(deviceId: device.deviceId, storeId: "store-1")))
+            case .chainGet?: return #"{"op":"chain","records":[]}"#
+            default: return nil
+            }
+        }
+        let port = try await server.start()
+        defer { server.stop() }
+        let delivered = Box<[String]>([])
+        let relay = RelayConnection(
+            baseUrl: "ws://127.0.0.1:\(port)", relayHost: "relay.test", identityPub: device.identityPub,
+            sign: { label, message in try device.sign(label: label, message: message) }, deliver: { text in delivered.update { $0.append(text) } },
+            onConnectionLost: {})
+        relay.acquire()
+        defer { relay.release() }
+        let connected = await until { relay.status == .connected }
+        XCTAssertTrue(connected)
+        // 前面に戻った: 20 秒の見張りを待たずに確かめを送り、返事（空の鎖）は呼ぶ側へ渡す
+        relay.wake()
+        let probed = await until { server.messages.contains(RelayWatch.probe) }
+        XCTAssertTrue(probed)
+        let answered = await until { delivered.get().contains(#"{"op":"chain","records":[]}"#) }
+        XCTAssertTrue(answered)
+        XCTAssertEqual(.connected, relay.status)
+    }
+
     func testPairSendsTheFirstMoveAndReturnsTheReply() async throws {
         let server = try LocalWebSocketServer()
         server.reply = { text in RelayV2.decode(text).map { _ in #"{"op":"pair_confirmed","confirm":{"nonce":"n","ciphertext":"c"}}"# } }
