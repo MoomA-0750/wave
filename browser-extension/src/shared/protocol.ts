@@ -31,6 +31,8 @@ export const PING_INTERVAL_MS = 20_000;
 export type PageToBackground = { id?: number } & (
   | { type: "hello"; version: number }
   | { type: "ping" }
+  /** タブが前に出た・ネットにつながり直した（中継のつながりをすぐ確かめる）。 */
+  | { type: "wake" }
   /** ytcfg の DATASYNC_ID（ログインしていなければ null）。ログインが変わるたびに送る。 */
   | { type: "account"; dataSyncId: string | null }
   /** 再生の様子（曲・再生/一時停止・シーク・キュー・音量・シャッフル・繰り返しが変わったとき）。 */

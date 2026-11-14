@@ -441,6 +441,11 @@ export class ConnectService {
     this.relay?.release();
   }
 
+  /** タブが前に出た・ネットにつながり直した: 中継のつながりをすぐ確かめる（待っているつなぎ直しは今行う）。 */
+  wake(): void {
+    this.relay?.wake();
+  }
+
   /** ページ（music.youtube.com のタブ）がつながった・離れた。ページが無い間は引き取りを受けない。 */
   pageConnected(): void {
     this.pages++;

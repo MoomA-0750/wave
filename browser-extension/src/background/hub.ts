@@ -86,6 +86,9 @@ export class PortHub {
         case "ping":
           this.post(port, { type: "pong" });
           return this.reply(port, message.id, true);
+        case "wake":
+          s.wake();
+          return this.reply(port, message.id, true);
         case "account":
           await s.setAccount(message.dataSyncId);
           return this.reply(port, message.id, true);

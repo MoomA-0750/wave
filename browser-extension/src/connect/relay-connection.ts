@@ -1,9 +1,10 @@
 // 中継 v2 への接続（Swift の RelayConnection・Android の RelayClientV2 と同じ規則）。使う側が参照を数え、0 になったら閉じる。切れたら間を空けてつなぎ直す。
 // 受けたメッセージは JSON の文字列のまま deliver に渡す。ログは状態と種類だけ（鍵・トークンの値は出さない）。
-// ブラウザの WebSocket は ping を送れないので、生きているかの確かめは中継の ping（30 秒ごと。ブラウザが自分で pong を返す）に任せる。
+// ブラウザの WebSocket は ping を送れないので、生きているかは中継が答えるメッセージで確かめる（RelayWatch）。
 
 import { b64, lengthPrefixed, unb64, utf8, type Bytes } from "./bytes.ts";
 import { AUTH_LABEL, MAX_FRAME_CHARS, encodeRelay } from "./relay-messages.ts";
+import { PROBE, RelayWatch, WATCH_TICK_MS, reconnectDelayMs } from "./relay-watch.ts";
 
 export type RelayStatus =
   | "disconnected"
@@ -13,8 +14,6 @@ export type RelayStatus =
   | "not_member"
   | "failed";
 
-const RECONNECT_DELAY_MS = 5_000;
-const MAX_RECONNECT_DELAY_MS = 60_000;
 const PAIR_TIMEOUT_MS = 120_000;
 const MAX_PAIR_REPLY_CHARS = 64 * 1024;
 
@@ -32,6 +31,8 @@ export interface RelayConnectionOptions {
   log?: (message: string) => void;
   /** 試験で差し替える。 */
   webSocket?: typeof WebSocket;
+  /** 単調時計（ミリ秒）。試験で差し替える。 */
+  nowMs?: () => number;
 }
 
 /** 中継が送ってきた "challenge" に、設定のホストで署名して "auth" を返す（中継が名乗るホストは使わない）。 */
@@ -51,11 +52,16 @@ export class RelayConnection {
   private failedAttempts = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private statusValue: RelayStatus = "disconnected";
+  /** 今のソケットの見張り（死んだソケットに気づく）。 */
+  private readonly watch = new RelayWatch();
+  private watchTimer: ReturnType<typeof setInterval> | null = null;
+  private readonly now: () => number;
 
   constructor(options: RelayConnectionOptions) {
     this.options = options;
     this.baseUrl = options.baseUrl.replace(/\/+$/, "");
     this.WS = options.webSocket ?? WebSocket;
+    this.now = options.nowMs ?? (() => performance.now());
   }
 
   get status(): RelayStatus {
@@ -89,6 +95,52 @@ export class RelayConnection {
   /** 断られた（家に入っていなかった）後に、つなぎ直す（加入の後）。 */
   reconnect(): void {
     if (this.users > 0 && this.socket === null) this.open();
+  }
+
+  /**
+   * タブが前に出た・ネットにつながり直した: 待っているつなぎ直しをすぐ行い、つながっていれば生きているかをすぐ確かめる
+   * （眠っていた間に死んだソケットや、伸びたつなぎ直しの待ちで、ほかの端末の再生が届かないままにしない）。
+   */
+  wake(): void {
+    if (this.users === 0) return;
+    this.failedAttempts = 0;
+    const socket = this.socket;
+    if (socket === null) {
+      this.open();
+      return;
+    }
+    if (this.statusValue === "connected" && this.watch.wake(this.now()) === "probe") this.sendRaw(socket, PROBE);
+  }
+
+  /** 見張り（1秒ごと）。返事の無いソケットは捨ててつなぎ直す。 */
+  private checkLiveness(socket: WebSocket): void {
+    if (this.socket !== socket) return;
+    const action = this.watch.tick(this.now());
+    if (action === "probe") {
+      this.sendRaw(socket, PROBE);
+    } else if (action === "dead") {
+      this.log(`relay-v2 unresponsive status=${this.statusValue}`);
+      try {
+        socket.close(4000);
+      } catch {
+        // 閉じられなくてもよい
+      }
+      // 死んだソケットの onclose は遅れて来る（来ない）ので待たない
+      this.onDisconnected(socket, "failed");
+    }
+  }
+
+  private sendRaw(socket: WebSocket, text: string): void {
+    try {
+      if (socket.readyState === 1) socket.send(text);
+    } catch {
+      // 送れなければ次の見張りで切れる
+    }
+  }
+
+  private stopWatch(): void {
+    if (this.watchTimer !== null) clearInterval(this.watchTimer);
+    this.watchTimer = null;
   }
 
   /** つないでいてもつなぎ直す。 */
@@ -161,6 +213,9 @@ export class RelayConnection {
       return;
     }
     this.socket = socket;
+    this.watch.opened(this.now());
+    this.stopWatch();
+    this.watchTimer = setInterval(() => this.checkLiveness(socket), WATCH_TICK_MS);
     socket.onmessage = (event) => {
       if (this.socket !== socket) return;
       const text = typeof event.data === "string" ? event.data : null;
@@ -195,6 +250,7 @@ export class RelayConnection {
     } catch {
       return;
     }
+    if (this.socket === socket) this.watch.received(this.now(), op === "welcome");
     if (op === "challenge") {
       if (typeof nonce !== "string") return;
       let auth: string | null;
@@ -220,10 +276,10 @@ export class RelayConnection {
   private onDisconnected(socket: WebSocket, next: RelayStatus): void {
     if (this.socket !== socket) return;
     this.socket = null;
+    this.stopWatch();
     this.setStatus(next);
     if (this.users > 0 && next !== "not_member") {
-      const shift = Math.min(this.failedAttempts, 4);
-      const wait = Math.min(RECONNECT_DELAY_MS * 2 ** shift, MAX_RECONNECT_DELAY_MS);
+      const wait = reconnectDelayMs(this.failedAttempts);
       this.failedAttempts++;
       this.reconnectTimer = setTimeout(() => {
         this.reconnectTimer = null;
@@ -238,6 +294,7 @@ export class RelayConnection {
     this.reconnectTimer = null;
     const closing = this.socket;
     this.socket = null;
+    this.stopWatch();
     this.setStatus("disconnected");
     if (closing === null) return;
     try {

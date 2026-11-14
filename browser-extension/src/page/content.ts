@@ -308,3 +308,8 @@ page.onAccount((dataSyncId) => {
 page.onState(onPageState);
 connect();
 setInterval(() => send({ type: "ping" }), PING_INTERVAL_MS);
+// タブが前に出た・ネットにつながり直したら、中継のつながりをすぐ確かめる（眠っていた間に死んだソケットを待たない）
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") send({ type: "wake" });
+});
+window.addEventListener("online", () => send({ type: "wake" }));
