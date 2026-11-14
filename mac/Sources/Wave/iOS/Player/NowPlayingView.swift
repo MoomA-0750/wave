@@ -102,7 +102,7 @@ struct NowPlayingView: View {
             landscapeColumns(player, song, panel: panel)
         }
         .animation(.timingCurve(0.2, 0.9, 0.25, 1, duration: 0.5), value: panel)
-        .onChange(of: panel) { old, new in holdWhileClosing(old: old, new: new) { landscapePanel } }
+        .onChange(of: panel, initial: true) { old, new in holdWhileClosing(old: old, new: new) { landscapePanel } }
     }
 
     private func landscapeColumns(_ player: PlayerService, _ song: Song?, panel: PortraitPanel?) -> some View {
@@ -161,10 +161,11 @@ struct NowPlayingView: View {
         .padding(.horizontal, 24)
     }
 
-    /// 閉じた歌詞・キューを、薄くし終えるまで出しておく（外すときは見えていないので、動きは付けない）。
+    /// 開いた歌詞・キューを覚えておき、閉じたら薄くし終えるまで出しておく（外すときは見えていないので、動きは付けない）。
+    /// 開いたときに覚えておく（閉じてから覚えると、閉じた最初のコマで一度外れて、歌詞がぱっと消えた）。
     private func holdWhileClosing(old: PortraitPanel?, new: PortraitPanel?, current: @escaping () -> PortraitPanel?) {
-        guard new == nil, let old else { closingPanel = nil; return }
-        closingPanel = old
+        if let new { closingPanel = new; return }
+        guard old != nil else { return }
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(550))
             if current() == nil {
@@ -312,7 +313,7 @@ struct NowPlayingView: View {
         }
         // 初めに速く動き、終わりは慣性で緩やかに止まる
         .animation(.timingCurve(0.2, 0.9, 0.25, 1, duration: 0.5), value: panel)
-        .onChange(of: panel) { old, new in holdWhileClosing(old: old, new: new) { portraitPanel } }
+        .onChange(of: panel, initial: true) { old, new in holdWhileClosing(old: old, new: new) { portraitPanel } }
         // ジャケットや曲名の辺りを下へ払ったら閉じる（つまみ・シークバーの横の動きは通す）。歌詞・キューは中を送るので、払っても閉じない
         .simultaneousGesture(DragGesture(minimumDistance: 20).onEnded { value in
             if value.translation.height > 70, value.translation.height > abs(value.translation.width) * 1.5 { dismiss() }
@@ -598,26 +599,41 @@ private struct SquareUnless: ViewModifier {
 }
 
 /// 1行に収まらない文字は「…」で切らず、右の端を薄く消す（大きさが変わる動きの途中で「…」が出たり消えたりして跳ばないように）。
+/// 幅は渡された幅だけを使い、文字の長さで広がらない（長い曲名の分だけ、再生画面の操作の欄が画面より広がっていた）。
 private struct FadeTail: ViewModifier {
     @State private var natural: CGFloat = 0
     @State private var box: CGFloat = 0
 
     func body(content: Content) -> some View {
         let overflows = natural > box + 0.5
-        content
-            .lineLimit(1)
-            .fixedSize(horizontal: true, vertical: false)
-            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { natural = $0 }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { box = $0 }
-            .clipped()
-            .mask {
-                HStack(spacing: 0) {
-                    Rectangle()
-                    LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing).frame(width: overflows ? 28 : 0)
-                }
-                .animation(.easeOut(duration: 0.2), value: overflows)
+        FillWidth {
+            content
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { natural = $0 }
+        }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { box = $0 }
+        .clipped()
+        .mask {
+            HStack(spacing: 0) {
+                Rectangle()
+                LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing).frame(width: overflows ? 28 : 0)
             }
+            .animation(.easeOut(duration: 0.2), value: overflows)
+        }
+    }
+}
+
+/// 渡された幅いっぱいを取り、中身の幅では広がらない入れ物（中身は左に寄せ、はみ出した分は外で切る）。
+private struct FillWidth: Layout {
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let child = subviews.first?.sizeThatFits(.unspecified) ?? .zero
+        let width = proposal.width.map { $0.isFinite ? $0 : child.width } ?? 0
+        return CGSize(width: width, height: child.height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews.first?.place(at: CGPoint(x: bounds.minX, y: bounds.midY), anchor: .leading, proposal: .unspecified)
     }
 }
 
