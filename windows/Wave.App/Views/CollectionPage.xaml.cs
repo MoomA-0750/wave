@@ -77,6 +77,8 @@ public sealed partial class CollectionPage : Page
         shufflePlay = false;
         UpdateShuffleButton();
         ArtistLink.Visibility = Visibility.Collapsed;
+        album = null;
+        UpdateSave();
         ShowHeader(request.Title, request.ThumbnailUrl, request.Subtitle);
         _ = LoadAsync();
     }
@@ -197,6 +199,8 @@ public sealed partial class CollectionPage : Page
             return;
         }
         var album = result.Value!;
+        this.album = album;
+        UpdateSave();
         playlistIdForPlayback = album.PlaylistId;
         var total = album.Songs.Sum(s => s.DurationSeconds ?? 0);
         ShowHeader(album.Title, album.ThumbnailUrl, string.Join(" • ", new[] { album.Subtitle, L.SongsAndLength(album.Songs.Count, total) }.Where(s => !string.IsNullOrEmpty(s))));
@@ -210,6 +214,48 @@ public sealed partial class CollectionPage : Page
         AppServices.Downloads.SyncCollection(request.Id, album.Songs);
         Done();
     }
+
+    // --- アルバムをライブラリに保存・外す（Android と同じ: 押すとすぐ表示を変え、書けなければ戻す） ---
+
+    /// <summary>読み込んだアルバム（保存の状態を持つ。プレイリストのときは null）。</summary>
+    private AlbumPage? album;
+    private bool saving;
+
+    private void UpdateSave()
+    {
+        // 保存の状態が分からない（ログインしていない・ボタンが無い）ときは出さない
+        SaveButton.Visibility = Ui.Show(album?.Saved is not null && album.SavePlaylistId is not null);
+        SaveButton.Content = album?.Saved == true ? L.T("保存済み", "Saved") : L.T("ライブラリに保存", "Save to library");
+        SaveButton.IsEnabled = !saving;
+        // 保存していなければ色付き、保存済みなら控えめに（ポッドキャストの保存と同じ）
+        SaveButton.Style = album?.Saved == true ? null : (Style)Application.Current.Resources["AccentButtonStyle"];
+    }
+
+    private async void OnSave(object sender, RoutedEventArgs e)
+    {
+        if (album is not { Saved: { } saved, SavePlaylistId: { } playlistId } before || saving) return;
+        saving = true;
+        album = before with { Saved = !saved };
+        UpdateSave();
+        var result = await AppServices.Music.SetPlaylistSavedAsync(playlistId, !saved);
+        saving = false;
+        AppPaths.Log($"album save ok={result.IsOk} save={!saved}");
+        if (result.IsOk) _ = AppServices.Library.RefreshAlbumsAsync();
+        else
+        {
+            // 書けなければ戻す（書いている間に別のアルバムへ移っていたら、そちらの表示は触らない）
+            if (album?.BrowseId == before.BrowseId) album = album with { Saved = saved };
+            Player.Message = L.T("ライブラリを変更できませんでした", "Couldn't change your library");
+        }
+        UpdateSave();
+    }
+
+#if DEBUG
+    /// <summary>開発用: アルバムの「保存」を押したのと同じ。</summary>
+    public void DebugSave() => OnSave(SaveButton, new RoutedEventArgs());
+
+    public string DebugSaveState => $"saved={album?.Saved} visible={SaveButton.Visibility == Visibility.Visible}";
+#endif
 
     private async Task LoadPlaylistAsync(CancellationToken token)
     {

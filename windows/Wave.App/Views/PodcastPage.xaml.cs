@@ -195,7 +195,7 @@ public sealed partial class PodcastPage : Page
         }
         saving = true;
         UpdateSave();
-        var result = await AppServices.Music.SetPodcastSavedAsync(current.PlaylistId, !saved);
+        var result = await AppServices.Music.SetPlaylistSavedAsync(current.PlaylistId, !saved);
         saving = false;
         AppPaths.Log($"podcast save ok={result.IsOk} save={!saved}");
         if (page == current && result.IsOk)

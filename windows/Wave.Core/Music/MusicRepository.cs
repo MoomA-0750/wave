@@ -76,8 +76,10 @@ public sealed class MusicRepository(InnerTubeClient client, LiveClient? live = n
     public Task<ApiResult<List<PodcastSummary>>> LibraryPodcastsAsync(Action<List<PodcastSummary>>? onPage = null, CancellationToken cancel = default) =>
         AllLibraryPagesAsync(LibraryPodcastsBrowse, MusicParsers.LibraryPodcasts, p => p.BrowseId, onPage, cancel);
 
-    /// <summary>ポッドキャストをライブラリに保存する・外す（番組のプレイリスト PL… を高く評価するのと同じ書き込み。Android と同じ）。</summary>
-    public async Task<ApiResult<bool>> SetPodcastSavedAsync(string playlistId, bool saved, CancellationToken cancel = default)
+    /// <summary>
+    /// ポッドキャスト・アルバムをライブラリに保存する・外す（番組のプレイリスト PL…・アルバムのプレイリスト OLAK5uy_… を高く評価するのと同じ書き込み。Android と同じ）。
+    /// </summary>
+    public async Task<ApiResult<bool>> SetPlaylistSavedAsync(string playlistId, bool saved, CancellationToken cancel = default)
     {
         if (!client.IsLoggedIn) return ApiResult<bool>.Failed(FailureKind.NotLoggedIn);
         var body = new JsonObject { ["target"] = new JsonObject { ["playlistId"] = playlistId } };

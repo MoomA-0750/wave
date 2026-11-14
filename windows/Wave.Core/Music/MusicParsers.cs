@@ -474,7 +474,12 @@ public static partial class MusicParsers
             var typed = TypedArtistsOf(rowRuns);
             return song with { Artists = typed.Count > 0 ? typed : artists, Album = song.Album ?? album, ThumbnailUrl = song.ThumbnailUrl ?? thumbnail };
         }).OfType<Song>().ToList();
-        return new AlbumPage(browseId, title, TextOf(header.Path("subtitle")), artists, thumbnail, playlistId, songs);
+        // 保存のボタン（ポッドキャストと同じ形）。ログインしていなければ likeEndpoint を持たないので、状態は分からないとする
+        var toggle = header.Path("buttons").Items().Select(b => b.Path("toggleButtonRenderer").Obj()).FirstOrDefault(t => t?.FindAll("likeEndpoint").Count > 0);
+        bool? saved = toggle?.Path("isToggled") is JsonValue toggled && toggled.TryGetValue<bool>(out var isSaved) ? isSaved : null;
+        var savePlaylistId = toggle?.FindAll("likeEndpoint").Select(e => e.Path("target", "playlistId").Str()).FirstOrDefault(p => p is not null) ?? playlistId;
+        return new AlbumPage(browseId, title, TextOf(header.Path("subtitle")), artists, thumbnail, playlistId, songs,
+            savePlaylistId is null ? null : saved, savePlaylistId);
     }
 
     private static string? CanonicalList(string? url)

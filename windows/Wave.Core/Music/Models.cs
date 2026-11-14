@@ -58,6 +58,7 @@ public enum LikeStatus { Like, Dislike, Indifferent }
 
 public sealed record AlbumSummary(string BrowseId, string Title, string? Subtitle, string? ThumbnailUrl);
 
+/// <summary>アルバムのページ。Saved はライブラリに保存しているか（ログインしていない・保存のボタンが無ければ null）。SavePlaylistId は保存・外すときに送るプレイリスト（OLAK5uy_…）。</summary>
 public sealed record AlbumPage(
     string BrowseId,
     string Title,
@@ -65,7 +66,9 @@ public sealed record AlbumPage(
     IReadOnlyList<ArtistRef> Artists,
     string? ThumbnailUrl,
     string? PlaylistId,
-    IReadOnlyList<Song> Songs);
+    IReadOnlyList<Song> Songs,
+    bool? Saved = null,
+    string? SavePlaylistId = null);
 
 /// <summary>アーティストの YouTube のチャンネルの投稿（本人のお知らせ）。PublishedText は「2 日前」など応答の表示のまま。</summary>
 public sealed record ArtistPost(string PostId, string Text, string? PublishedText, string? ImageUrl)

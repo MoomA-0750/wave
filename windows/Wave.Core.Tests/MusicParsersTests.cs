@@ -158,6 +158,23 @@ public class MusicParsersTests
     }
 
     [Fact]
+    public void AlbumSavedStateIsReadOnlyWhenTheToggleCanSave()
+    {
+        // ログインしていない応答（保存のボタンは押すとログインの案内で、likeEndpoint を持たない）では分からない
+        Assert.Null(MusicParsers.AlbumPage(Fixtures.Json("browse_album"), "MPREb_test")!.Saved);
+        // ログインした応答: 保存のボタンが likeEndpoint を持ち、isToggled が保存しているか
+        var text = Fixtures.Text("browse_album");
+        foreach (var toggled in new[] { true, false })
+        {
+            var loggedIn = text.ReplaceFirst("\"toggleButtonRenderer\":{\"isToggled\":false,",
+                $"\"toggleButtonRenderer\":{{\"isToggled\":{(toggled ? "true" : "false")},\"defaultServiceEndpoint\":{{\"likeEndpoint\":{{\"status\":\"LIKE\",\"target\":{{\"playlistId\":\"OLAK5uy_save\"}}}}}},\"toggledServiceEndpoint\":{{\"likeEndpoint\":{{\"status\":\"INDIFFERENT\",\"target\":{{\"playlistId\":\"OLAK5uy_save\"}}}}}},");
+            var page = MusicParsers.AlbumPage(Fixtures.Parse(loggedIn), "MPREb_test")!;
+            Assert.Equal(toggled, page.Saved);
+            Assert.Equal("OLAK5uy_save", page.SavePlaylistId);
+        }
+    }
+
+    [Fact]
     public void ArtistPage()
     {
         var page = MusicParsers.ArtistPage(Fixtures.Json("browse_artist"))!;

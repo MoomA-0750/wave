@@ -40,6 +40,8 @@
                     <ToggleButton x:Name="ShuffleButton" Style="{StaticResource IconToggleStyle}" Click="OnShuffle" ToolTipService.ToolTip="{x:Bind app:L.T('シャッフル', 'Shuffle')}">
                         <FontIcon Glyph="&#xE8B1;" FontSize="22" />
                     </ToggleButton>
+                    <!-- アルバムをライブラリに保存・外す（ログインしていて保存の状態が分かるときだけ。ポッドキャストの保存と同じ見た目） -->
+                    <Button x:Name="SaveButton" Visibility="Collapsed" Click="OnSave" VerticalAlignment="Center" CornerRadius="16" Padding="16,6" />
                     <Button x:Name="MoreButton" Style="{StaticResource IconButtonStyle}" Click="OnMore" ToolTipService.ToolTip="{x:Bind app:L.T('その他', 'More')}">
                         <FontIcon Glyph="&#xE712;" FontSize="20" />
                     </Button>

@@ -119,6 +119,12 @@ public static class DebugCommands
             case "podcast-save":
                 if (Nav.Frame.Content is Views.PodcastPage savePage) savePage.DebugSave();
                 break;
+            case "album-save":
+                if (Nav.Frame.Content is Views.CollectionPage albumSavePage) albumSavePage.DebugSave();
+                break;
+            case "album-save-state":
+                AppPaths.Log($"debug album-save-state {(Nav.Frame.Content as Views.CollectionPage)?.DebugSaveState}");
+                break;
             case "podcast-episode":
                 if (Nav.Frame.Content is Views.PodcastPage playPage) playPage.DebugPlay(int.Parse(arg));
                 break;

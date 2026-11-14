@@ -132,6 +132,16 @@ public sealed partial class LibraryState : ObservableObject
     /// <summary>保存したポッドキャストを読み直す（番組のページで保存を変えたとき）。</summary>
     public Task RefreshPodcastsAsync() => AppServices.Client.IsLoggedIn ? LoadPodcastsAsync(cancel?.Token ?? CancellationToken.None) : Task.CompletedTask;
 
+    /// <summary>保存したアルバムを読み直す（アルバムのページで保存を変えたとき）。</summary>
+    public async Task RefreshAlbumsAsync()
+    {
+        if (!AppServices.Client.IsLoggedIn) return;
+        var token = cancel?.Token ?? CancellationToken.None;
+        var result = await AppServices.Music.LibraryAlbumsAsync(cancel: token);
+        if (result.IsOk) Replace(Albums, result.Value!, token);
+        AppPaths.Log($"library albums ok={result.IsOk} count={Albums.Count}");
+    }
+
     private async Task LoadPodcastsAsync(CancellationToken token)
     {
         var result = await AppServices.Music.LibraryPodcastsAsync(page => Replace(Podcasts, page, token), token);
