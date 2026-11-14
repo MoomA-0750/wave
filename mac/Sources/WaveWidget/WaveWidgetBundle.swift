@@ -875,7 +875,7 @@ private struct PlayMark: View {
         var body: some WidgetConfiguration {
             ActivityConfiguration(for: NowPlayingAttributes.self) { context in
                 LockScreenView(state: context.state)
-                    .padding(14)
+                    .padding(12)
                     .activityBackgroundTint(Color.black.opacity(0.75))
                     .activitySystemActionForegroundColor(.white)
                     .widgetURL(URL(string: "wave://nowplaying"))
@@ -941,11 +941,11 @@ private struct PlayMark: View {
         var next: String?
 
         var body: some View {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(line).font(.title3.weight(.bold)).lineLimit(2).minimumScaleFactor(0.8)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(line).font(.headline.weight(.bold)).lineLimit(2).minimumScaleFactor(0.8)
                     .contentTransition(.opacity)
                 if let next {
-                    Text(next).font(.subheadline.weight(.semibold)).foregroundStyle(.white.opacity(0.45)).lineLimit(1)
+                    Text(next).font(.caption.weight(.semibold)).foregroundStyle(.white.opacity(0.45)).lineLimit(1)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -954,39 +954,64 @@ private struct PlayMark: View {
         }
     }
 
+    /// ロック画面の Live Activity。ロック画面の高さは決まっている（160pt まで。超えると上下が切れる）ので、
+    /// 歌詞を出すときは操作を曲の行の右へ寄せ、次の曲の行を省いて縦を詰める。
     private struct LockScreenView: View {
         var state: NowPlayingAttributes.ContentState
 
         var body: some View {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 12) {
-                    Artwork(image: loadImage(WidgetStore.artworkFile(state.videoId)), radius: 8).frame(width: 56, height: 56)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(state.title).font(.headline).lineLimit(1)
-                        Text(state.artist).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
-                        if let device = state.device {
-                            Label(device, systemImage: "hifispeaker.2").font(.caption).foregroundStyle(accent).lineLimit(1)
+            if let line = state.line {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 10) {
+                        Artwork(image: loadImage(WidgetStore.artworkFile(state.videoId)), radius: 7).frame(width: 44, height: 44)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(state.title).font(.subheadline.weight(.semibold)).lineLimit(1)
+                            if let device = state.device {
+                                Label(device, systemImage: "hifispeaker.2").font(.caption).foregroundStyle(accent).lineLimit(1)
+                            } else {
+                                Text(state.artist).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                            }
                         }
+                        Spacer(minLength: 4)
+                        Controls(playing: state.playing, size: 17)
+                        addButton.font(.title3)
                     }
-                    Spacer(minLength: 0)
-                    // プレイリストに追加する（選ぶ画面はアプリで開く）
-                    Link(destination: URL(string: "wave://add-to-playlist")!) {
-                        Image(systemName: "plus.circle").font(.title2).foregroundStyle(.white)
-                    }
-                }
-                if let line = state.line {
                     ActivityLyrics(line: line, next: state.nextLine)
+                    ActivityProgress(state: state)
                 }
-                ActivityProgress(state: state)
-                HStack {
-                    if let next = state.nextTitle {
-                        Label(next, systemImage: "text.line.first.and.arrowtriangle.forward").font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                .foregroundStyle(.white)
+            } else {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 12) {
+                        Artwork(image: loadImage(WidgetStore.artworkFile(state.videoId)), radius: 8).frame(width: 56, height: 56)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(state.title).font(.headline).lineLimit(1)
+                            Text(state.artist).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                            if let device = state.device {
+                                Label(device, systemImage: "hifispeaker.2").font(.caption).foregroundStyle(accent).lineLimit(1)
+                            }
+                        }
+                        Spacer(minLength: 0)
+                        addButton.font(.title2)
                     }
-                    Spacer(minLength: 8)
-                    Controls(playing: state.playing)
+                    ActivityProgress(state: state)
+                    HStack {
+                        if let next = state.nextTitle {
+                            Label(next, systemImage: "text.line.first.and.arrowtriangle.forward").font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                        }
+                        Spacer(minLength: 8)
+                        Controls(playing: state.playing)
+                    }
                 }
+                .foregroundStyle(.white)
             }
-            .foregroundStyle(.white)
+        }
+
+        // プレイリストに追加する（選ぶ画面はアプリで開く）
+        private var addButton: some View {
+            Link(destination: URL(string: "wave://add-to-playlist")!) {
+                Image(systemName: "plus.circle").foregroundStyle(.white)
+            }
         }
     }
 #endif

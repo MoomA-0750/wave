@@ -11,6 +11,11 @@ struct SettingsView: View {
     @State private var lyricsInArtist = AppServices.settings.lyricsInArtist
     @State private var lyricsInLiveActivity = AppServices.settings.lyricsInLiveActivity
     @State private var lyricsInArtwork = AppServices.settings.lyricsInArtwork
+    /// 全画面のジャケットに歌詞を出しているか（そのときは Live Activity には出さない）
+    private var artworkLyricsOn: Bool {
+        if #available(iOS 26.0, *) { return lyricsInArtwork }
+        return false
+    }
     @State private var language = AppServices.settings.language
     @State private var originalTitles = AppServices.settings.originalTitles
     @State private var pinnedTab = IOSShell.shared.pinnedTab
@@ -50,9 +55,13 @@ struct SettingsView: View {
             Section {
                 Toggle(isOn: $lyricsInLiveActivity) {
                     SettingsLabel(title: L.t("ロック画面の再生中", "Lock Screen player"),
-                                  detail: L.t("ロック画面とダイナミックアイランドの再生中（Live Activity）に、今の行と次の行を出す",
-                                              "Show the current and next line in the Live Activity on the Lock Screen and in the Dynamic Island"))
+                                  detail: artworkLyricsOn
+                                      ? L.t("全画面のジャケットに歌詞を出している間は出さない（ロック画面に同じ歌詞が2か所出ないように）",
+                                            "Not shown while lyrics are on the full-screen artwork, so the Lock Screen doesn't show them twice")
+                                      : L.t("ロック画面とダイナミックアイランドの再生中（Live Activity）に、今の行と次の行を出す",
+                                            "Show the current and next line in the Live Activity on the Lock Screen and in the Dynamic Island"))
                 }
+                .disabled(artworkLyricsOn)
                 .onChange(of: lyricsInLiveActivity) { _, v in
                     AppServices.settings.lyricsInLiveActivity = v
                     lockScreenLyricsChanged()
