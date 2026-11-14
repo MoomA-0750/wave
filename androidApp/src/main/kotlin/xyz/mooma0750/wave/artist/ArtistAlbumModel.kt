@@ -186,15 +186,17 @@ class AlbumViewModel(
         if (mutableSaving.value) return
         val target = !saved
         mutableSaving.value = true
+        // 押すとすぐ切り替え、失敗したら戻す（Windows・iPhone・Mac・Linux のアルバムの保存と同じ）
+        mutableState.update { it.copy(page = it.page?.copy(saved = target)) }
         viewModelScope.launch {
             val result = music.setAlbumSaved(playlistId, target, music.currentLoginGeneration())
             Log.i(WaveApplication.LOG_TAG, "album save result=${result::class.simpleName} save=$target")
             when (result) {
-                is WriteResult.Done -> {
-                    mutableState.update { it.copy(page = it.page?.copy(saved = target)) }
-                    onSavedChanged()
+                is WriteResult.Done -> onSavedChanged()
+                is WriteResult.Failed -> {
+                    mutableState.update { it.copy(page = it.page?.copy(saved = saved)) }
+                    xyz.mooma0750.wave.ui.Notices.show(failedMessage)
                 }
-                is WriteResult.Failed -> xyz.mooma0750.wave.ui.Notices.show(failedMessage)
                 WriteResult.Unknown -> {
                     (music.album(browseId) as? CallResult.Ok)?.value?.let { fresh -> mutableState.update { it.copy(page = it.page?.copy(saved = fresh.saved)) } }
                     onSavedChanged()
