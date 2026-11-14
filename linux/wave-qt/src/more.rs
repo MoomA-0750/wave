@@ -837,6 +837,23 @@ impl qobject::WaveApp {
         token
     }
 
+    pub fn set_album_saved(self: Pin<&mut Self>, playlist_id: &QString, saved: bool) -> i32 {
+        let token = next_token();
+        let Some(s) = services() else { return token };
+        let playlist_id = playlist_id.to_string();
+        glib::spawn_future_local(async move {
+            let repo = s.repo.clone();
+            let ok = runtime::run(async move { repo.set_playlist_saved(&playlist_id, saved).await }).await.is_ok();
+            if ok {
+                crate::app::load_library(&s);
+            } else {
+                toast(lang::t("ライブラリを変更できませんでした", "Couldn't change your library"));
+            }
+            reply(token, json!({ "ok": ok }));
+        });
+        token
+    }
+
     pub fn create_playlist(self: Pin<&mut Self>, title: &QString, song_json: &QString) -> i32 {
         let token = next_token();
         let Some(s) = services() else { return token };

@@ -218,6 +218,9 @@ pub mod qobject {
         /// 番組の保存（YouTube）・登録（RSS）。終わったら loaded で { ok }。
         #[qinvokable]
         fn set_podcast_saved(self: Pin<&mut WaveApp>, show_json: &QString, saved: bool) -> i32;
+        /// アルバム（OLAK5uy_…）をライブラリに保存する・外す。終わったら loaded で { ok }。
+        #[qinvokable]
+        fn set_album_saved(self: Pin<&mut WaveApp>, playlist_id: &QString, saved: bool) -> i32;
         /// プレイリストを作る（song_json があればその曲を入れる）。終わったら loaded で { ok, id }。
         #[qinvokable]
         fn create_playlist(self: Pin<&mut WaveApp>, title: &QString, song_json: &QString) -> i32;

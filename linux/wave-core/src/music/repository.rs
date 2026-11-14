@@ -422,6 +422,11 @@ impl MusicRepository {
     /// ポッドキャストをライブラリに保存する・外す（番組のプレイリスト PL… を高く評価するのと同じ書き込み。Windows・Android と同じ）。
     /// playlist_id は PodcastSummary::playlist_id・PodcastPage::playlist_id。ログイン必須。
     pub async fn set_podcast_saved(&self, playlist_id: &str, saved: bool) -> ApiResult<()> {
+        self.set_playlist_saved(playlist_id, saved).await
+    }
+
+    /// プレイリスト（番組・アルバムの OLAK5uy_…）をライブラリに保存する・外す。
+    pub async fn set_playlist_saved(&self, playlist_id: &str, saved: bool) -> ApiResult<()> {
         if !self.client.is_logged_in() {
             return Err(Failure::NotLoggedIn);
         }

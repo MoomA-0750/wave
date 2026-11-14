@@ -212,6 +212,10 @@ pub struct AlbumPage {
     pub thumbnail_url: Option<String>,
     pub playlist_id: Option<String>,
     pub songs: Vec<Song>,
+    /// ライブラリに保存しているか。ログインしていない・保存のボタンが無ければ None。
+    pub saved: Option<bool>,
+    /// 保存・外すときに送るプレイリスト（OLAK5uy_…）。保存のボタンの行き先、無ければ playlist_id。
+    pub save_playlist_id: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]

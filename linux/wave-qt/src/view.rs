@@ -95,6 +95,9 @@ pub fn album_page(page: &AlbumPage) -> Value {
         "artists": page.artists.iter().map(|a| json!({ "name": a.name, "id": a.browse_id.clone().unwrap_or_default() })).collect::<Vec<_>>(),
         "art": image(page.thumbnail_url.as_deref(), LARGE),
         "playlistId": page.playlist_id.clone().unwrap_or_default(),
+        // ライブラリに保存しているか（ログインしていなければ null で、保存のボタンを出さない）
+        "saved": page.saved.filter(|_| page.save_playlist_id.is_some()),
+        "savePlaylistId": page.save_playlist_id.clone().unwrap_or_default(),
         "songs": songs(&page.songs),
         "continuation": "",
         "editable": false,

@@ -547,6 +547,8 @@ struct Collection {
     /// 今出している行（all の位置）。
     shown: RefCell<Vec<usize>>,
     error: RefCell<Option<String>>,
+    /// アルバムの保存先（OLAK5uy_…）とライブラリに保存しているか。ログインしていなければ None で、保存のボタンを出さない。
+    album_saved: Rc<RefCell<Option<(String, bool)>>>,
     // 部品
     header: adw::Bin,
     controls: gtk::Box,
@@ -558,6 +560,43 @@ struct Collection {
     play: gtk::Button,
     /// 一番下の「おすすめの曲」（自分のプレイリストだけ。YouTube Music の候補）。
     suggestions: gtk::Box,
+}
+
+/// アルバムの「ライブラリに保存」のボタン。押すとすぐ表示を切り替え、書けなければ戻す（書いている間は押せない）。
+fn album_save_button(app: &Rc<App>, state: Rc<RefCell<Option<(String, bool)>>>) -> gtk::Button {
+    let button = gtk::Button::builder().valign(gtk::Align::Center).css_classes(["pill"]).build();
+    let show = {
+        let (button, state) = (button.clone(), state.clone());
+        move || {
+            let saved = state.borrow().as_ref().is_some_and(|(_, saved)| *saved);
+            button.set_label(if saved { lang::t("保存済み", "Saved") } else { lang::t("ライブラリに保存", "Save to library") });
+        }
+    };
+    show();
+    let app = app.clone();
+    button.connect_clicked(move |button| {
+        let Some((playlist_id, saved)) = state.borrow().clone() else { return };
+        let target = !saved;
+        *state.borrow_mut() = Some((playlist_id.clone(), target));
+        show();
+        button.set_sensitive(false);
+        let (app, state, show, button) = (app.clone(), state.clone(), show.clone(), button.clone());
+        gtk::glib::spawn_future_local(async move {
+            let repo = app.repo.clone();
+            let ok = runtime::run(async move { repo.set_playlist_saved(&playlist_id, target).await }).await.is_ok();
+            button.set_sensitive(true);
+            if ok {
+                super::library::reload(&app);
+            } else {
+                if let Some((_, saved)) = state.borrow_mut().as_mut() {
+                    *saved = !target;
+                }
+                show();
+                app.toast(lang::t("ライブラリを変更できませんでした", "Couldn't change your library"));
+            }
+        });
+    });
+    button
 }
 
 /// プレイリストのページ（LM は高く評価した曲）。
@@ -592,6 +631,7 @@ fn collection_page(app: &Rc<App>, id: &str, title: &str, source: Source, songs: 
         generation: Cell::new(0),
         shown: RefCell::default(),
         error: RefCell::default(),
+        album_saved: Rc::default(),
         header: adw::Bin::new(),
         controls: gtk::Box::builder().spacing(16).build(),
         list_holder: gtk::Box::builder().orientation(gtk::Orientation::Vertical).build(),
@@ -690,6 +730,12 @@ impl Collection {
         }
         if let Some(detail) = detail.filter(|d| !d.is_empty()) {
             info.append(&gtk::Label::builder().label(detail).xalign(0.0).wrap(true).lines(2).ellipsize(gtk::pango::EllipsizeMode::End).css_classes(["dim-label"]).build());
+        }
+        if self.album_saved.borrow().is_some() {
+            let button = album_save_button(&self.app, self.album_saved.clone());
+            button.set_halign(gtk::Align::Start);
+            button.set_margin_top(6);
+            info.append(&button);
         }
         header.append(&info);
         self.header.set_child(Some(&header));
@@ -1001,6 +1047,7 @@ impl Collection {
                     let names = page.artists.iter().map(|a| a.name.as_str()).collect::<Vec<_>>().join(", ");
                     (names, page.artists.iter().find_map(|a| a.browse_id.clone()))
                 });
+                *self.album_saved.borrow_mut() = page.saved.zip(page.save_playlist_id.clone()).map(|(saved, id)| (id, saved));
                 self.render_header(artists, Some(detail));
                 *self.all.borrow_mut() = page.songs.into_iter().map(|s| (s, None)).collect();
             }

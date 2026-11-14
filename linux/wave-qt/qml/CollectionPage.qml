@@ -21,6 +21,9 @@ ListView {
     property bool loading: true
     property string error: ""
     property int token: -1
+    // アルバムをライブラリに保存しているか（null はログインしていない・分からない）。押すとすぐ切り替え、書けなければ戻す
+    property var saved: null
+    property int saveToken: -1
     property string order: kind === "playlist" ? WaveApp.playlistOrder(itemId) : ""
     property string filter: ""
     property string songKind: ""
@@ -64,6 +67,7 @@ ListView {
     Connections {
         target: WaveApp
         function onLoaded(t, json) {
+            if (t === page.saveToken) { page.saveToken = -1; if (!JSON.parse(json).ok) page.saved = !page.saved; return }
             if (t !== page.token) return
             page.loading = false
             const v = JSON.parse(json)
@@ -81,6 +85,7 @@ ListView {
                 return
             } else {
                 page.info = v
+                if (page.kind === "album" && page.saveToken < 0) page.saved = v.saved === undefined ? null : v.saved
                 page.songs = v.songs
                 page.pages = 1
                 // 並べ替えられないプレイリストでは、YouTube Music に並べてもらう並べ方は選べない
@@ -176,6 +181,12 @@ ListView {
                         tip: Style.t("ダウンロード", "Download")
                         size: 22
                         onClicked: WaveApp.downloadCollection(page.kind === "album" ? "album" : page.itemId === "LM" ? "liked" : "playlist", page.itemId, page.shownTitle, page.info.art || "", JSON.stringify(page.songs))
+                    }
+                    Btn {
+                        visible: page.kind === "album" && page.saved !== null
+                        enabled: page.saveToken < 0
+                        text: page.saved ? Style.t("保存済み", "Saved") : Style.t("ライブラリに保存", "Save to library")
+                        onClicked: { page.saved = !page.saved; page.saveToken = WaveApp.setAlbumSaved(page.info.savePlaylistId, page.saved) }
                     }
                     BusyIndicator { visible: page.moreLoading; running: visible; Layout.preferredWidth: 28; Layout.preferredHeight: 28 }
                     Item { Layout.fillWidth: true }

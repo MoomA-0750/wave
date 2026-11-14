@@ -680,7 +680,18 @@ pub fn album_page(root: &Value, browse_id: &str) -> Option<AlbumPage> {
             Some(song)
         })
         .collect();
-    Some(AlbumPage { browse_id: browse_id.to_string(), title, subtitle: text_of(header.path(&["subtitle"])), artists, thumbnail_url: thumbnail, playlist_id, songs })
+    // 保存のボタン（ポッドキャストと同じ形）。ログインしていなければ likeEndpoint を持たないので、状態は分からないとする
+    let toggle = header
+        .path(&["buttons"])
+        .items()
+        .into_iter()
+        .filter_map(|b| b.path(&["toggleButtonRenderer"]).filter(|t| t.is_object()))
+        .find(|t| !find_all(t, "likeEndpoint").is_empty());
+    let saved = toggle.and_then(|t| t.path(&["isToggled"]).and_then(Value::as_bool));
+    let save_playlist_id = toggle
+        .and_then(|t| find_all(t, "likeEndpoint").into_iter().find_map(|e| e.path(&["target", "playlistId"]).str_().map(String::from)))
+        .or_else(|| playlist_id.clone());
+    Some(AlbumPage { browse_id: browse_id.to_string(), title, subtitle: text_of(header.path(&["subtitle"])), artists, thumbnail_url: thumbnail, playlist_id, songs, saved, save_playlist_id })
 }
 
 fn canonical_list(url: Option<&str>) -> Option<String> {
@@ -1056,6 +1067,25 @@ mod tests {
             1,
         );
         assert_eq!(album_page(&serde_json::from_str(&greyed).unwrap(), "MPREb_test").unwrap().songs.len(), 3);
+    }
+
+    #[test]
+    fn album_page_reads_saved_state() {
+        let header = |buttons: &str| {
+            let text = format!(r#"{{"contents":{{"twoColumnBrowseResultsRenderer":{{"tabs":[{{"tabRenderer":{{"content":{{"sectionListRenderer":{{"contents":[{{"musicResponsiveHeaderRenderer":{{"title":{{"runs":[{{"text":"A"}}]}},"buttons":[{buttons}]}}}}]}}}}}}}}]}}}}}}"#);
+            album_page(&serde_json::from_str(&text).unwrap(), "MPREb_x").unwrap()
+        };
+        let play = r#"{"musicPlayButtonRenderer":{"playNavigationEndpoint":{"watchPlaylistEndpoint":{"playlistId":"OLAK5uy_play"}}}}"#;
+        let like = |toggled: bool| format!(r#"{{"toggleButtonRenderer":{{"isToggled":{toggled},"defaultIcon":{{"iconType":"BOOKMARK_BORDER"}},"defaultServiceEndpoint":{{"likeEndpoint":{{"status":"LIKE","target":{{"playlistId":"OLAK5uy_save"}}}}}},"toggledServiceEndpoint":{{"likeEndpoint":{{"status":"INDIFFERENT","target":{{"playlistId":"OLAK5uy_save"}}}}}}}}}}"#);
+        let saved = header(&format!("{play},{}", like(true)));
+        assert_eq!(saved.saved, Some(true));
+        assert_eq!(saved.save_playlist_id.as_deref(), Some("OLAK5uy_save"));
+        assert_eq!(header(&format!("{play},{}", like(false))).saved, Some(false));
+        // ログインしていない（押すとログインの案内）なら分からない。保存先は再生のプレイリスト
+        let signed_out = header(&format!(r#"{play},{{"toggleButtonRenderer":{{"isToggled":false,"defaultServiceEndpoint":{{"modalEndpoint":{{}}}}}}}}"#));
+        assert_eq!(signed_out.saved, None);
+        assert_eq!(signed_out.save_playlist_id.as_deref(), Some("OLAK5uy_play"));
+        assert_eq!(album_page(&fixture("browse_album"), "MPREb_test").unwrap().saved, None);
     }
 
     #[test]
