@@ -92,9 +92,11 @@ struct NowPlayingView: View {
         let panel = landscapePanel
         return HStack(alignment: .center, spacing: 28) {
             ZStack {
-                if let panel {
+                // 歌詞・キューは、閉じる間も残して薄くしながら下げ、消えてから外す（開くときの逆の動きにそろえる。
+                // 消える部品にすると、消え始めに中身が跳んで開くときと違う動きに見えた）
+                if let shown = panel ?? closingPanel {
                     Group {
-                        switch panel {
+                        switch shown {
                         case .lyrics: LyricsView(embedded: true)
                         case .queue: QueueView(embedded: true)
                         }
@@ -104,8 +106,12 @@ struct NowPlayingView: View {
                         LinearGradient(stops: [.init(color: .black, location: 0), .init(color: .black, location: 0.82), .init(color: .clear, location: 1)],
                                        startPoint: .top, endPoint: .bottom)
                     }
-                    .transition(.offset(y: 60).combined(with: .opacity))
-                } else {
+                    .opacity(panel != nil ? 1 : 0)
+                    .offset(y: panel != nil ? 0 : 60)
+                    .allowsHitTesting(panel != nil)
+                    .transition(.asymmetric(insertion: .offset(y: 60).combined(with: .opacity), removal: .identity))
+                }
+                if panel == nil {
                     media(player)
                         .transition(.offset(y: -60).combined(with: .opacity))
                 }
@@ -142,6 +148,21 @@ struct NowPlayingView: View {
         }
         .padding(.horizontal, 24)
         .animation(.timingCurve(0.2, 0.9, 0.25, 1, duration: 0.5), value: panel)
+        .onChange(of: panel) { old, new in holdWhileClosing(old: old, new: new) { landscapePanel } }
+    }
+
+    /// 閉じた歌詞・キューを、薄くし終えるまで出しておく（外すときは見えていないので、動きは付けない）。
+    private func holdWhileClosing(old: PortraitPanel?, new: PortraitPanel?, current: @escaping () -> PortraitPanel?) {
+        guard new == nil, let old else { closingPanel = nil; return }
+        closingPanel = old
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(550))
+            if current() == nil {
+                var t = Transaction()
+                t.disablesAnimations = true
+                withTransaction(t) { closingPanel = nil }
+            }
+        }
     }
 
     /// 横向きで、ジャケットの場所に出している中身（歌詞・キュー）。
@@ -253,19 +274,7 @@ struct NowPlayingView: View {
         }
         // 初めに速く動き、終わりは慣性で緩やかに止まる
         .animation(.timingCurve(0.2, 0.9, 0.25, 1, duration: 0.5), value: panel)
-        .onChange(of: panel) { old, new in
-            guard new == nil, let old else { closingPanel = nil; return }
-            // 薄くし終えてから外す（外すときは見えていないので、動きは付けない）
-            closingPanel = old
-            Task { @MainActor in
-                try? await Task.sleep(for: .milliseconds(550))
-                if portraitPanel == nil {
-                    var t = Transaction()
-                    t.disablesAnimations = true
-                    withTransaction(t) { closingPanel = nil }
-                }
-            }
-        }
+        .onChange(of: panel) { old, new in holdWhileClosing(old: old, new: new) { portraitPanel } }
         // ジャケットや曲名の辺りを下へ払ったら閉じる（つまみ・シークバーの横の動きは通す）。歌詞・キューは中を送るので、払っても閉じない
         .simultaneousGesture(DragGesture(minimumDistance: 20).onEnded { value in
             if value.translation.height > 70, value.translation.height > abs(value.translation.width) * 1.5 { dismiss() }
