@@ -21,6 +21,8 @@ struct NowPlayingView: View {
     @Environment(\.dismiss) private var dismiss
     /// 歌詞・キューを開け閉めするとき、曲名・評価のボタン・ジャケットを下の大きな行と上の小さな行の間で滑らせる
     @Namespace private var titleSpace
+    /// 閉じている途中も出しておく歌詞・キュー（消える部品にすると、消え始めに中身が横へ跳んだ。薄くし終えてから外す）
+    @State private var closingPanel: PortraitPanel?
     /// 横向き（縦が狭い）なら、ジャケット・映像と操作を左右に並べる。
     @Environment(\.verticalSizeClass) private var verticalSize
 
@@ -190,23 +192,20 @@ struct NowPlayingView: View {
                     // 歌詞・キュー: 上に小さな曲の行、真ん中に中身、下に操作
                     // 左右の端は、キューの並び（List の行と区切りの見出し）にそろえる
                     VStack(spacing: 0) {
-                        if panel != nil {
-                            // 曲名・ボタン・ジャケットは下の大きな行との間を滑る（matchedGeometryEffect）。行そのものは重ねて替える
-                            compactTitleRow(player, song)
+                        if let shown = panel ?? closingPanel {
+                            // 曲名・ボタン・ジャケットは下の大きな行との間を滑る（matchedGeometryEffect）。閉じる間は行を残して薄くする
+                            compactTitleRow(player, song, active: panel != nil)
                                 .padding(.horizontal, 20)
                                 .padding(.vertical, 8)
+                                .opacity(panel != nil ? 1 : 0)
                                 .transition(.opacity)
-                        }
-                        if let panel {
                             Group {
-                                switch panel {
+                                switch shown {
                                 case .lyrics: LyricsView(embedded: true)
                                 case .queue: QueueView(embedded: true)
                                 }
                             }
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            // 幅は画面の幅に固定する（消えていく途中は幅の指定が外れ、歌詞の行が1行の長さまで広がって左へずれていた）
-                            .containerRelativeFrame(.horizontal)
                             // 下の端は薄くして消す（操作の欄の上ですっぱり切れて見えないように。上の端は歌詞・キューの中で薄くする）
                             .mask {
                                 // 下は操作の欄の手前で長めに溶かす（境目を見せない）
@@ -215,8 +214,12 @@ struct NowPlayingView: View {
                                                        .init(color: .clear, location: 1)],
                                                startPoint: .top, endPoint: .bottom)
                             }
-                            // 曲名が上へ滑るのに合わせて下から上がって出て、閉じると下へ下がって消える
-                            .transition(.offset(y: 140).combined(with: .opacity))
+                            // 曲名が上へ滑るのに合わせて下から上がって出て、閉じると下へ下がって消える。
+                            // 閉じるときは部品を残したまま動かす（消える部品にすると、消え始めに中身が左へ跳んだ）
+                            .opacity(panel != nil ? 1 : 0)
+                            .offset(y: panel != nil ? 0 : 140)
+                            .allowsHitTesting(panel != nil)
+                            .transition(.asymmetric(insertion: .offset(y: 140).combined(with: .opacity), removal: .identity))
                         }
                     }
                     if panel == nil && video {
@@ -239,6 +242,19 @@ struct NowPlayingView: View {
         }
         // 初めに速く動き、終わりは慣性で緩やかに止まる
         .animation(.timingCurve(0.2, 0.9, 0.25, 1, duration: 0.5), value: panel)
+        .onChange(of: panel) { old, new in
+            guard new == nil, let old else { closingPanel = nil; return }
+            // 薄くし終えてから外す（外すときは見えていないので、動きは付けない）
+            closingPanel = old
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(550))
+                if portraitPanel == nil {
+                    var t = Transaction()
+                    t.disablesAnimations = true
+                    withTransaction(t) { closingPanel = nil }
+                }
+            }
+        }
         // ジャケットや曲名の辺りを下へ払ったら閉じる（つまみ・シークバーの横の動きは通す）。歌詞・キューは中を送るので、払っても閉じない
         .simultaneousGesture(DragGesture(minimumDistance: 20).onEnded { value in
             if value.translation.height > 70, value.translation.height > abs(value.translation.width) * 1.5 { dismiss() }
@@ -256,24 +272,25 @@ struct NowPlayingView: View {
     }
 
     /// 歌詞・キューのときの上の曲の行（小さなジャケットを押すとジャケットの画面に戻る）。
-    private func compactTitleRow(_ player: PlayerService, _ song: Song?) -> some View {
+    /// active: 開いている間（閉じる途中は false にして、曲名などを下の大きな行の位置へ滑らせる）
+    private func compactTitleRow(_ player: PlayerService, _ song: Song?, active: Bool) -> some View {
         HStack(spacing: 12) {
             Button { closePanels() } label: { Cover(url: Ui.small(song?.thumbnailUrl), size: 56, radius: 6) }
                 .buttonStyle(.plain)
                 .accessibilityLabel(L.t("ジャケットに戻る", "Back to artwork"))
-                .matchedGeometryEffect(id: "cover", in: titleSpace)
+                .matchedGeometryEffect(id: "cover", in: titleSpace, isSource: active)
             VStack(alignment: .leading, spacing: 2) {
                 Text(song?.title ?? "").font(.headline).modifier(FadeTail())
                 Text(song?.artistsText ?? "").font(.subheadline).foregroundStyle(.secondary).modifier(FadeTail())
             }
-            .matchedGeometryEffect(id: "title", in: titleSpace, anchor: .leading)
+            .matchedGeometryEffect(id: "title", in: titleSpace, anchor: .leading, isSource: active)
             Spacer(minLength: 0)
             if song != nil {
                 HStack(spacing: 12) {
                     LikeButtonView(size: 17, box: 40).modifier(RoundButtonBackground())
                     songMenu(song).modifier(RoundButtonBackground())
                 }
-                .matchedGeometryEffect(id: "actions", in: titleSpace, anchor: .trailing)
+                .matchedGeometryEffect(id: "actions", in: titleSpace, anchor: .trailing, isSource: active)
             }
         }
         .foregroundStyle(.primary)
