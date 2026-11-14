@@ -537,7 +537,8 @@ class WaveSession internal constructor(
 
     /**
      * 書き込み先のアカウントを、世代ごとに1本だけ確かめる（ADR-0007）。保存している DATASYNC_ID（onBehalfOfUser に送る値）が、
-     * accountsList の選択中のアカウントの datasyncIdToken と一致すれば Verified。Unknown は60秒だけキャッシュする。
+     * accountsList の選択中のアカウントの datasyncIdToken と一致すれば Verified。Unknown は5秒だけキャッシュする
+     * （端末の連携のアカウントタグがこれを待つので、開いた直後に通信が整う前の1回の失敗で、ほかの端末の再生を1分映さないままにしない）。
      */
     private suspend fun verify(generation: Generation): AccountVerification {
         val saved = generation.credentials?.dataSyncId?.reveal() ?: return AccountVerification.Mismatch
@@ -545,7 +546,7 @@ class WaveSession internal constructor(
             generationLock.withLock {
                 val cached = generation.verification
                 val unknownAt = generation.verificationUnknownAtMs
-                if (cached != null && !cached.isCancelled && (unknownAt == null || nowMs() - unknownAt < UNKNOWN_CACHE_MS)) {
+                if (cached != null && !cached.isCancelled && (unknownAt == null || nowMs() - unknownAt < VERIFICATION_UNKNOWN_CACHE_MS)) {
                     cached
                 } else {
                     generation.verificationUnknownAtMs = null
@@ -884,6 +885,7 @@ class WaveSession internal constructor(
         const val PROBE_VIDEO_ID = "dQw4w9WgXcQ"
 
         const val UNKNOWN_CACHE_MS = 60_000L
+        const val VERIFICATION_UNKNOWN_CACHE_MS = 5_000L
         const val CONFIRM_INTERVAL_MS = 30_000L
         const val MAX_ACCOUNT_MENU_BYTES = 2 * 1024 * 1024
         const val MAX_PLAYER_BYTES = 4 * 1024 * 1024

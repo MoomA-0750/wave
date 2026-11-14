@@ -89,12 +89,26 @@ class WaveApplication :
         }
         // 曲名を元の表記で出すか（設定の切り替えはすぐに次の読み取りから効く）
         container.appScope.launch { container.settings.originalTitles.collect { container.session.originalTitles = it } }
+        // ネットにつながり直したら（Wi-Fi とモバイルの切り替え・Tailscale のつなぎ直し）、中継のつなぎ直しを待たずに行う
+        runCatching {
+            getSystemService(android.net.ConnectivityManager::class.java)?.registerDefaultNetworkCallback(
+                object : android.net.ConnectivityManager.NetworkCallback() {
+                    override fun onAvailable(network: android.net.Network) {
+                        container.connectV2?.relay?.wake()
+                    }
+                },
+            )
+        }
         registerActivityLifecycleCallbacks(
             object : ActivityLifecycleCallbacks {
                 override fun onActivityStarted(activity: android.app.Activity) {
                     container.startedActivities++
                     // 画面が前面の間は中継 v2 につなぎ、他の端末の再生を表示する（Phase 6b、D-11）
-                    if (container.startedActivities == 1) container.connectV2?.relay?.acquire()
+                    if (container.startedActivities == 1) {
+                        container.connectV2?.relay?.acquire()
+                        // 裏にいた間に死んだソケット・伸びたつなぎ直しの待ちを、前面に戻ったらすぐ確かめ直す（docs/decisions.md 2026-11-14）
+                        container.connectV2?.relay?.wake()
+                    }
                 }
 
                 override fun onActivityStopped(activity: android.app.Activity) {

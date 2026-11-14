@@ -1,5 +1,6 @@
 package xyz.mooma0750.wave.connect2
 
+import android.os.SystemClock
 import android.util.Log
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -60,6 +61,10 @@ class RelayClientV2(
     private var reconnectJob: Job? = null
     private var failedAttempts = 0
 
+    /** 今のソケットの見張り（死んだソケットに気づく。RelayWatch）。 */
+    private val watch = RelayWatch()
+    private var watchJob: Job? = null
+
     @Synchronized
     fun acquire() {
         users++
@@ -81,6 +86,22 @@ class RelayClientV2(
         closing?.close(1000, null)
         if (closing != null) onConnectionLost()
         open()
+    }
+
+    /**
+     * 前面に戻った・ネットにつながり直した: 待っているつなぎ直しをすぐ行い、つながっていれば生きているかをすぐ確かめる
+     * （バックグラウンドの間に死んだソケットや、伸びたつなぎ直しの待ちで、ほかの端末の再生が届かないままにしない）。
+     */
+    @Synchronized
+    fun wake() {
+        if (users == 0) return
+        failedAttempts = 0
+        val current = socket
+        when {
+            current == null -> open()
+            status.value == Status.Connected -> if (watch.wake(SystemClock.elapsedRealtime()) == RelayWatch.Action.Probe) current.send(RelayWatch.PROBE)
+            else -> Unit
+        }
     }
 
     fun send(message: RelayV2): Boolean = currentSocket()?.takeIf { status.value == Status.Connected }?.send(RelayV2.encode(message)) == true
@@ -136,7 +157,8 @@ class RelayClientV2(
     private fun open() {
         reconnectJob?.cancel()
         mutableStatus.value = Status.Connecting
-        socket =
+        watch.opened(SystemClock.elapsedRealtime())
+        val opened =
             client.newWebSocket(
                 Request.Builder().url("$baseUrl/v2/connect").build(),
                 object : WebSocketListener() {
@@ -145,7 +167,9 @@ class RelayClientV2(
                         text: String,
                     ) {
                         if (!isCurrent(webSocket)) return
-                        when (val message = RelayV2.decode(text)) {
+                        val message = RelayV2.decode(text)
+                        synchronized(this@RelayClientV2) { if (socket === webSocket) watch.received(SystemClock.elapsedRealtime(), welcome = message is RelayV2.Welcome) }
+                        when (message) {
                             is RelayV2.Challenge -> {
                                 val nonce = runCatching { Base64.getUrlDecoder().decode(message.nonce) }.getOrNull() ?: return
                                 // 中継が名乗るホストではなく、設定のホストで署名する
@@ -194,6 +218,33 @@ class RelayClientV2(
                     }
                 },
             )
+        socket = opened
+        watchJob?.cancel()
+        watchJob =
+            scope.launch {
+                while (true) {
+                    delay(RelayWatch.TICK_MS)
+                    if (!checkLiveness(opened)) break
+                }
+            }
+    }
+
+    /** 見張りの1回分。@return このソケットを見張り続けるか */
+    @Synchronized
+    private fun checkLiveness(webSocket: WebSocket): Boolean {
+        if (socket !== webSocket) return false
+        when (watch.tick(SystemClock.elapsedRealtime())) {
+            RelayWatch.Action.None -> Unit
+            RelayWatch.Action.Probe -> webSocket.send(RelayWatch.PROBE)
+            RelayWatch.Action.Dead -> {
+                Log.i(WaveApplication.LOG_TAG, "relay-v2 unresponsive status=${status.value}")
+                // 返事の無いソケットは捨てる（cancel の onFailure は今のソケットでなくなるので届かない）。すぐつなぎ直す
+                webSocket.cancel()
+                onDisconnected(webSocket, Status.Failed)
+                return false
+            }
+        }
+        return true
     }
 
     @Synchronized
@@ -203,10 +254,11 @@ class RelayClientV2(
     ) {
         if (socket !== webSocket) return
         socket = null
+        watchJob?.cancel()
         mutableStatus.value = next
         onConnectionLost()
         if (users > 0 && next != Status.NotMember) {
-            val wait = (RECONNECT_DELAY_MS shl failedAttempts.coerceAtMost(4)).coerceAtMost(MAX_RECONNECT_DELAY_MS)
+            val wait = RelayWatch.reconnectDelayMs(failedAttempts)
             failedAttempts++
             reconnectJob =
                 scope.launch {
@@ -219,6 +271,7 @@ class RelayClientV2(
     @Synchronized
     private fun close() {
         reconnectJob?.cancel()
+        watchJob?.cancel()
         val closing = socket
         socket = null
         closing?.close(1000, null)
@@ -227,8 +280,6 @@ class RelayClientV2(
     }
 
     private companion object {
-        const val RECONNECT_DELAY_MS = 5_000L
-        const val MAX_RECONNECT_DELAY_MS = 60_000L
         const val PAIR_TIMEOUT_MS = 2 * 60 * 1000L
     }
 }

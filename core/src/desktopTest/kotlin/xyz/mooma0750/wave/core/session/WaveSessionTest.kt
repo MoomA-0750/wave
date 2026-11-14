@@ -639,7 +639,7 @@ class WaveSessionTest {
         }
 
     @Test
-    fun verificationFailureIsRetriedAfterAMinuteAndMatchingAccountIsVerified(): Unit =
+    fun verificationFailureIsRetriedAfterFiveSecondsAndMatchingAccountIsVerified(): Unit =
         runBlocking {
             var calls = 0
             accountsListHandler = {
@@ -649,8 +649,8 @@ class WaveSessionTest {
             }
             val session = loggedInSession()
             assertEquals(AccountVerification.Unknown, session.accountVerification())
-            assertEquals(AccountVerification.Unknown, session.accountVerification(), "60秒以内に確かめ直した")
-            now.addAndGet(61_000)
+            assertEquals(AccountVerification.Unknown, session.accountVerification(), "5秒以内に確かめ直した")
+            now.addAndGet(6_000)
             assertEquals(AccountVerification.Verified, session.accountVerification())
             assertEquals(AccountVerification.Verified, session.accountVerification())
             assertTrue(calls >= 2)
