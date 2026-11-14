@@ -104,6 +104,36 @@ class ArtistAlbumParsersTest {
         assertNull(assertNotNull(MusicParsers.albumPage(Json.parseToJsonElement(none) as JsonObject, "MPREb_test")).playlistId)
     }
 
+    @Test
+    fun albumSavedStateIsReadFromTheBookmarkToggle() {
+        fun header(buttons: String) =
+            """{"contents":{"twoColumnBrowseResultsRenderer":{"tabs":[{"tabRenderer":{"content":{"sectionListRenderer":{"contents":[{"musicResponsiveHeaderRenderer":{
+            "title":{"runs":[{"text":"Album"}]},
+            "buttons":[{"musicPlayButtonRenderer":{"playNavigationEndpoint":{"watchPlaylistEndpoint":{"playlistId":"OLAK5uy_play"}}}},$buttons]
+            }}]}}}}]}}}"""
+        fun toggle(isToggled: Boolean, withLike: Boolean) =
+            if (withLike) {
+                """{"toggleButtonRenderer":{"isToggled":$isToggled,"defaultIcon":{"iconType":"BOOKMARK_BORDER"},"toggledIcon":{"iconType":"BOOKMARK"},
+                "defaultServiceEndpoint":{"likeEndpoint":{"status":"LIKE","target":{"playlistId":"OLAK5uy_save"}}},
+                "toggledServiceEndpoint":{"likeEndpoint":{"status":"INDIFFERENT","target":{"playlistId":"OLAK5uy_save"}}}}}"""
+            } else {
+                """{"toggleButtonRenderer":{"isToggled":$isToggled,"defaultIcon":{"iconType":"BOOKMARK_BORDER"},"defaultNavigationEndpoint":{"modalEndpoint":{}}}}"""
+            }
+        fun parse(text: String) = assertNotNull(MusicParsers.albumPage(Json.parseToJsonElement(text) as JsonObject, "MPREb_test"))
+
+        val saved = parse(header(toggle(isToggled = true, withLike = true)))
+        assertEquals(true, saved.saved)
+        assertEquals("OLAK5uy_save", saved.savePlaylistId)
+        assertEquals("OLAK5uy_play", saved.playlistId)
+        assertEquals(false, parse(header(toggle(isToggled = false, withLike = true))).saved)
+        // ログインしていない（likeEndpoint が無い）・ボタンが無い: 分からない
+        val anonymous = parse(header(toggle(isToggled = false, withLike = false)))
+        assertNull(anonymous.saved)
+        assertNull(anonymous.savePlaylistId)
+        assertNull(parse(header("""{"menuRenderer":{}}""")).saved)
+        assertNull(assertNotNull(MusicParsers.albumPage(fixture("browse_album"), "MPREb_test")).saved)
+    }
+
     private fun fixtureText(name: String): String = xyz.mooma0750.wave.core.Fixtures.text(name)
 
     private fun fixture(name: String): JsonObject = xyz.mooma0750.wave.core.Fixtures.json(name)

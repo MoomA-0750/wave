@@ -93,6 +93,9 @@
     <string name="podcast_save">ライブラリに保存</string>
     <string name="podcast_saved">保存済み</string>
     <string name="podcast_save_failed">ライブラリを変更できませんでした</string>
+    <string name="album_save">ライブラリに保存</string>
+    <string name="album_saved">保存済み</string>
+    <string name="album_save_failed">ライブラリを変更できませんでした</string>
     <string name="podcast_no_episodes">エピソードはありません</string>
     <string name="podcast_show_more">すべて表示</string>
     <string name="podcast_show_less">短く表示</string>

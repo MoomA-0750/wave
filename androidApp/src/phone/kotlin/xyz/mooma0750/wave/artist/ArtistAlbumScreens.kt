@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -28,6 +29,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.ToggleButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -277,6 +279,15 @@ fun AlbumScreen(
                         xyz.mooma0750.wave.widget.WidgetItem(xyz.mooma0750.wave.widget.WidgetItemKind.Album, it.browseId, it.title, it.artists.joinToString(", ") { artist -> artist.name }, it.thumbnailUrl)
                     },
             )
+            // ライブラリに保存（ポッドキャストの保存と同じ形）。ログインしていない応答では状態が分からないので出さない
+            if (page?.saved != null) {
+                val saving by viewModel.saving.collectAsStateWithLifecycle()
+                val failed = stringResource(R.string.album_save_failed)
+                Spacer(Modifier.width(8.dp))
+                ToggleButton(checked = page.saved == true, onCheckedChange = { viewModel.toggleSaved(failed) }, enabled = !saving) {
+                    Text(stringResource(if (page.saved == true) R.string.album_saved else R.string.album_save))
+                }
+            }
         },
         play = PlayControls(shuffle, { shuffle = it }, enabled = page?.songs?.isNotEmpty() == true) { page?.let { onPlay(it, 0, shuffle) } },
     ) {

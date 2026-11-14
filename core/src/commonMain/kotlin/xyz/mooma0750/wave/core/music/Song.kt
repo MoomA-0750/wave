@@ -176,6 +176,10 @@ data class AlbumPage(
     /** 再生に使う playlistId（`OLAK5uy_…`）。無ければ曲の一覧だけで再生する。 */
     val playlistId: String?,
     val songs: List<Song>,
+    /** ライブラリに保存しているか（ログインしていない・保存のボタンが無ければ null）。 */
+    val saved: Boolean? = null,
+    /** 保存・外すの宛先の playlistId（保存のボタンの likeEndpoint の target）。無ければ [playlistId]。 */
+    val savePlaylistId: String? = null,
 )
 
 /** アーティストのページ（F1c の範囲: 曲の棚・すべての曲・アルバム類の棚）。 */

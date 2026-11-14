@@ -210,6 +210,20 @@ class MusicRepository(
         playlistId: String,
         saved: Boolean,
         expectedGeneration: Long? = null,
+    ): WriteResult<Unit> = setPlaylistSaved(playlistId, saved, expectedGeneration)
+
+    /** アルバムをライブラリに保存する・外す。アルバムのプレイリスト（`OLAK5uy_…`、[AlbumPage.savePlaylistId]）へ、ポッドキャストと同じ書き込み。 */
+    suspend fun setAlbumSaved(
+        playlistId: String,
+        saved: Boolean,
+        expectedGeneration: Long? = null,
+    ): WriteResult<Unit> = setPlaylistSaved(playlistId, saved, expectedGeneration)
+
+    /** プレイリストを高く評価する（like/like）・外す（like/removelike）。番組・アルバムの「ライブラリに保存」はこれ。 */
+    private suspend fun setPlaylistSaved(
+        playlistId: String,
+        saved: Boolean,
+        expectedGeneration: Long?,
     ): WriteResult<Unit> =
         session.callWrite(
             operation = if (saved) "like" else "removelike",

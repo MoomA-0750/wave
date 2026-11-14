@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import xyz.mooma0750.wave.WaveApplication
 import xyz.mooma0750.wave.core.music.AlbumPage
@@ -16,6 +17,7 @@ import xyz.mooma0750.wave.core.music.MusicRepository
 import xyz.mooma0750.wave.core.music.Song
 import xyz.mooma0750.wave.core.session.CallResult
 import xyz.mooma0750.wave.core.session.FailureKind
+import xyz.mooma0750.wave.core.session.WriteResult
 import xyz.mooma0750.wave.library.LikedByArtist
 import xyz.mooma0750.wave.library.LikedSongsCache
 
@@ -161,13 +163,46 @@ data class ArtistPlay(
 )
 
 class AlbumViewModel(
-    music: MusicRepository,
-    browseId: String,
+    private val music: MusicRepository,
+    private val browseId: String,
     /** 読めなかったときに出す、取ってあるアルバム（通信なしで開ける、ADR-0016 の 18）。 */
     offline: (() -> AlbumPage?)? = null,
+    /** ライブラリへの保存を変えた（かもしれない）。ライブラリの一覧を読み直させる。 */
+    private val onSavedChanged: () -> Unit = {},
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(PageUiState<AlbumPage>())
     val state: StateFlow<PageUiState<AlbumPage>> = mutableState.asStateFlow()
+
+    private val mutableSaving = MutableStateFlow(false)
+
+    /** ライブラリへの保存・外すを送っている間。 */
+    val saving: StateFlow<Boolean> = mutableSaving.asStateFlow()
+
+    /** ライブラリへの保存の切り替え。ポッドキャストの保存と同じく、書けたら表示を変える（分からなければ読み直す）。 */
+    fun toggleSaved(failedMessage: String) {
+        val page = state.value.page ?: return
+        val saved = page.saved ?: return
+        val playlistId = page.savePlaylistId ?: page.playlistId ?: return
+        if (mutableSaving.value) return
+        val target = !saved
+        mutableSaving.value = true
+        viewModelScope.launch {
+            val result = music.setAlbumSaved(playlistId, target, music.currentLoginGeneration())
+            Log.i(WaveApplication.LOG_TAG, "album save result=${result::class.simpleName} save=$target")
+            when (result) {
+                is WriteResult.Done -> {
+                    mutableState.update { it.copy(page = it.page?.copy(saved = target)) }
+                    onSavedChanged()
+                }
+                is WriteResult.Failed -> xyz.mooma0750.wave.ui.Notices.show(failedMessage)
+                WriteResult.Unknown -> {
+                    (music.album(browseId) as? CallResult.Ok)?.value?.let { fresh -> mutableState.update { it.copy(page = it.page?.copy(saved = fresh.saved)) } }
+                    onSavedChanged()
+                }
+            }
+            mutableSaving.value = false
+        }
+    }
 
     init {
         viewModelScope.launch {

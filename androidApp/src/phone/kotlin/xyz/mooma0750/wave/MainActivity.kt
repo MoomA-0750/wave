@@ -518,7 +518,7 @@ class MainActivity : ComponentActivity() {
                                                 container.downloads?.offlineCollection(xyz.mooma0750.wave.core.download.CollectionKind.Album, screen.browseId)?.let { c ->
                                                     xyz.mooma0750.wave.core.music.AlbumPage(c.id, c.title, null, c.songs.firstOrNull()?.artists.orEmpty(), c.thumbnailUrl, null, c.songs)
                                                 }
-                                            })
+                                            }, onSavedChanged = container::onPlaylistsChanged)
                                         },
                                         downloadButton = { page ->
                                             container.downloads?.let { downloads ->

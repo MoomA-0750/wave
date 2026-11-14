@@ -93,6 +93,9 @@
     <string name="podcast_save">Save to library</string>
     <string name="podcast_saved">Saved</string>
     <string name="podcast_save_failed">Couldn\'t change your library</string>
+    <string name="album_save">Save to library</string>
+    <string name="album_saved">Saved</string>
+    <string name="album_save_failed">Couldn\'t change your library</string>
     <string name="podcast_no_episodes">No episodes</string>
     <string name="podcast_show_more">Show more</string>
     <string name="podcast_show_less">Show less</string>

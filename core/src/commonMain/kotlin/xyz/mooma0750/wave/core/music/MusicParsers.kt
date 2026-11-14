@@ -559,7 +559,25 @@ internal object MusicParsers {
                     )
                 }
             }
-        return AlbumPage(browseId, title, textOf(header.path("subtitle")), artists, thumbnail, playlistId, songs)
+        // 保存のボタン（ブックマーク）。ログインしていなければ likeEndpoint を持たないので、状態は分からないとする
+        val saveToggle =
+            header.path("buttons").arrayItems().firstNotNullOfOrNull { button ->
+                button.path("toggleButtonRenderer").asObject()?.takeIf { findAll(it, "likeEndpoint").isNotEmpty() }
+            }
+        val saved = saveToggle?.path("isToggled").asBoolean()
+        val savePlaylistId =
+            saveToggle?.let { toggle -> findAll(toggle, "likeEndpoint").firstNotNullOfOrNull { it.path("target", "playlistId").string() } } ?: playlistId
+        return AlbumPage(
+            browseId = browseId,
+            title = title,
+            subtitle = textOf(header.path("subtitle")),
+            artists = artists,
+            thumbnailUrl = thumbnail,
+            playlistId = playlistId,
+            songs = songs,
+            saved = saved,
+            savePlaylistId = savePlaylistId.takeIf { saved != null },
+        )
     }
 
     /** アーティストのページ（browse `UC…`）。取れなければ null。 */
