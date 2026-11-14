@@ -94,9 +94,9 @@ struct NowPlayingView: View {
             // ジャケットは、並びの外の層に置いて画面の左・上・下の端まで伸ばす（並びの中では安全領域の内側までしか伸びず、左と下に地が残った）
             if panel == nil && !(shell.showVideo && player.hasVideo) {
                 landscapeCover(player)
-                    // 画面の左下を基準に、閉じると広がりながら出て、開くと縮みながら消える（左と下の端は画面の端に付けたまま。
-                    // ずらすと下の端が見えた）。上と右の端は溶かしてあるので、縮んでも境目は出ない
-                    .transition(.scale(scale: 0.88, anchor: .bottomLeading).combined(with: .opacity))
+                    // 下の真ん中を基準に、開くと大きくなりながら（上へ伸びる動き）薄くなって消え、閉じると大きいところから
+                    // 元の大きさへ戻る（下へ縮む動き）。大きくするだけなので端は画面の外に出て、境目は見えない
+                    .transition(.scale(scale: 1.15, anchor: .bottom).combined(with: .opacity))
                     .simultaneousGesture(DragGesture(minimumDistance: 20).onEnded { value in
                         if value.translation.height > 70, value.translation.height > abs(value.translation.width) { dismiss() }
                     })
