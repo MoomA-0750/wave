@@ -96,7 +96,10 @@ struct NowPlayingView: View {
                 landscapeCover(player)
                     // 下の真ん中を基準に、開くと大きくなりながら（上へ伸びる動き）薄くなって消え、閉じると大きいところから
                     // 元の大きさへ戻る（下へ縮む動き）。大きくするだけなので端は画面の外に出て、境目は見えない
-                    .transition(.scale(scale: 1.15, anchor: .bottom).combined(with: .opacity))
+                    // 曲線は初めと終わりをゆっくりにする（ほかの動きの初めに速い曲線だと、最初のコマでほぼ大きくなりきって、
+                    // 大きくなる動きでなく滑る動きに見えた）
+                    .transition(.scale(scale: 1.25, anchor: .bottom).combined(with: .opacity)
+                        .animation(.timingCurve(0.45, 0, 0.35, 1, duration: 0.55)))
                     .simultaneousGesture(DragGesture(minimumDistance: 20).onEnded { value in
                         if value.translation.height > 70, value.translation.height > abs(value.translation.width) { dismiss() }
                     })
