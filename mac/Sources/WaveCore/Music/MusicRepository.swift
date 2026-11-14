@@ -119,6 +119,16 @@ public final class MusicRepository: Sendable {
 
     /// ポッドキャストをライブラリに保存する・外す。番組のプレイリスト（PL…）を高く評価するのと同じ書き込み（Android と同じ）。
     public func setPodcastSaved(_ playlistId: String, saved: Bool) async throws -> ApiResult<Bool> {
+        try await setPlaylistSaved(playlistId, saved: saved)
+    }
+
+    /// アルバムをライブラリに保存する・外す。アルバムのプレイリスト（OLAK5uy_…）に、番組の保存と同じ書き込みをする。
+    public func setAlbumSaved(_ playlistId: String, saved: Bool) async throws -> ApiResult<Bool> {
+        try await setPlaylistSaved(playlistId, saved: saved)
+    }
+
+    /// プレイリストを高く評価する・外す（like/like・like/removelike）。番組・アルバムの保存はこの書き込み。
+    private func setPlaylistSaved(_ playlistId: String, saved: Bool) async throws -> ApiResult<Bool> {
         guard client.isLoggedIn else { return .failed(.notLoggedIn) }
         let body = JSON.obj(["target": .obj(["playlistId": .string(playlistId)])])
         return try await client.post(saved ? "like/like" : "like/removelike", body: body).map { _ in true }

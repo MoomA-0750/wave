@@ -444,8 +444,12 @@ public enum MusicParsers {
             song.thumbnailUrl = song.thumbnailUrl ?? thumbnail
             return song
         }
+        // 保存のボタン。ログインしていなければ likeEndpoint を持たない（押すとログインの案内）ので、状態は分からないとする
+        let toggle = header.path("buttons").items.lazy.compactMap { $0.path("toggleButtonRenderer").asObject }.first { !$0.findAll("likeEndpoint").isEmpty }
+        let saved = toggle?.path("isToggled").bool
+        let savePlaylistId = toggle?.findAll("likeEndpoint").lazy.compactMap { $0.path("target", "playlistId").str }.first
         return AlbumPage(browseId: browseId, title: title, subtitle: textOf(header.path("subtitle")), artists: artists, thumbnailUrl: thumbnail,
-                         playlistId: playlistId, songs: songs)
+                         playlistId: playlistId, songs: songs, saved: saved, savePlaylistId: savePlaylistId)
     }
 
     private static func canonicalList(_ url: String?) -> String? {

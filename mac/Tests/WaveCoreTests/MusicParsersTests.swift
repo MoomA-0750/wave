@@ -138,6 +138,25 @@ final class MusicParsersTests: XCTestCase {
         XCTAssertEqual(3, MusicParsers.albumPage(Fixtures.parse(greyed), browseId: "MPREb_test")?.songs.count)
     }
 
+    func testAlbumSavedState() throws {
+        // ログインしていない応答の保存のボタンは likeEndpoint を持たない（押すとログインの案内）ので、状態は分からない
+        let loggedOut = try XCTUnwrap(MusicParsers.albumPage(Fixtures.json("browse_album"), browseId: "MPREb_test"))
+        XCTAssertNil(loggedOut.saved)
+        XCTAssertEqual(loggedOut.playlistId, loggedOut.savePlaylistId)
+        // ログインした応答の形（2026-11-14 に確かめた）。保存と外すの likeEndpoint を持つ
+        func loggedIn(_ toggled: Bool) -> String {
+            Fixtures.text("browse_album").replacingFirst(
+                "\"toggleButtonRenderer\":{\"isToggled\":false", with: "\"toggleButtonRenderer\":{\"isToggled\":\(toggled)").replacingFirst(
+                "\"defaultNavigationEndpoint\":",
+                with: "\"defaultServiceEndpoint\":{\"likeEndpoint\":{\"status\":\"LIKE\",\"target\":{\"playlistId\":\"OLAK5uy_saved\"}}},"
+                    + "\"toggledServiceEndpoint\":{\"likeEndpoint\":{\"status\":\"INDIFFERENT\",\"target\":{\"playlistId\":\"OLAK5uy_saved\"}}},\"unused\":")
+        }
+        let unsaved = try XCTUnwrap(MusicParsers.albumPage(Fixtures.parse(loggedIn(false)), browseId: "MPREb_test"))
+        XCTAssertEqual(false, unsaved.saved)
+        XCTAssertEqual("OLAK5uy_saved", unsaved.savePlaylistId)
+        XCTAssertEqual(true, MusicParsers.albumPage(Fixtures.parse(loggedIn(true)), browseId: "MPREb_test")?.saved)
+    }
+
     func testArtistPage() throws {
         let page = try XCTUnwrap(MusicParsers.artistPage(Fixtures.json("browse_artist")))
         XCTAssertEqual(5, page.topSongs.count)

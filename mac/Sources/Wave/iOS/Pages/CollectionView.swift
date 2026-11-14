@@ -149,6 +149,16 @@ struct CollectionView: View {
     @ViewBuilder
     private func actions(_ player: PlayerService, _ rows: [TrackRow], playing: Bool) -> some View {
         let buttons = HStack(spacing: 10) {
+            // アルバムだけ。ログインしていない（保存の状態が分からない）ときは出さない。しおりは YouTube Music と同じ
+            if model.request.isAlbum, let saved = model.albumSaved {
+                Button { model.toggleAlbumSaved() } label: {
+                    Image(systemName: saved ? "bookmark.fill" : "bookmark").font(.title3.weight(.semibold)).modifier(GlassCircle())
+                }
+                .buttonStyle(.plain)
+                .disabled(model.savingAlbum)
+                .accessibilityLabel(saved ? L.t("ライブラリから削除", "Remove from library") : L.t("ライブラリに保存", "Save to library"))
+                .accessibilityAddTraits(saved ? .isSelected : [])
+            }
             if model.request.artist == nil {
                 CollectionDownloadButton(model: model, size: 18, iconOnly: true)
                     .frame(width: 50, height: 50)

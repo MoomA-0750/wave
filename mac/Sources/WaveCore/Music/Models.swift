@@ -177,7 +177,12 @@ public struct AlbumPage: Sendable {
     public var thumbnailUrl: String?
     public var playlistId: String?
     public var songs: [Song]
-    public init(browseId: String, title: String, subtitle: String?, artists: [ArtistRef], thumbnailUrl: String?, playlistId: String?, songs: [Song]) {
+    /// ライブラリに保存しているか。nil はログインしていない・保存のボタンが無い（分からない）。
+    public var saved: Bool?
+    /// 保存・外すときに高く評価するプレイリスト（アルバムの OLAK5uy_…）。
+    public var savePlaylistId: String?
+    public init(browseId: String, title: String, subtitle: String?, artists: [ArtistRef], thumbnailUrl: String?, playlistId: String?, songs: [Song],
+                saved: Bool? = nil, savePlaylistId: String? = nil) {
         self.browseId = browseId
         self.title = title
         self.subtitle = subtitle
@@ -185,6 +190,8 @@ public struct AlbumPage: Sendable {
         self.thumbnailUrl = thumbnailUrl
         self.playlistId = playlistId
         self.songs = songs
+        self.saved = saved
+        self.savePlaylistId = savePlaylistId ?? playlistId
     }
 }
 

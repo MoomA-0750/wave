@@ -85,6 +85,18 @@ struct CollectionPageView: View {
             IconToggle(isOn: model.isPlayingHere ? player.shuffle : model.shufflePlay, help: L.t("シャッフル", "Shuffle")) {
                 if model.isPlayingHere { player.toggleShuffle() } else { model.shufflePlay.toggle() }
             } label: { Image(systemName: "shuffle").font(.system(size: 20)) }
+            // アルバムをライブラリに保存・外す（しおり。YouTube Music と同じ）。ログインしていない（状態が分からない）ときは出さない
+            if model.request.isAlbum, let saved = model.albumSaved {
+                let help = saved ? L.t("ライブラリから削除", "Remove from library") : L.t("ライブラリに保存", "Save to library")
+                Button { model.toggleAlbumSaved() } label: {
+                    Image(systemName: saved ? "bookmark.fill" : "bookmark").font(.system(size: 20)).foregroundStyle(.secondary)  // apple-ui-allow: 隣の再生・シャッフル・その他と同じ大きさにそろえる
+                }
+                .buttonStyle(IconButtonStyle())
+                .disabled(model.savingAlbum)
+                .help(help)
+                .accessibilityLabel(help)
+                .accessibilityAddTraits(saved ? .isSelected : [])
+            }
             // ダウンロード（取っていない／途中／取り終えた。ADR-0016 の 15）。アーティストで絞った高く評価した曲には出さない
             if model.request.artist == nil { CollectionDownloadButton(model: model, size: 20) }
             Menu {

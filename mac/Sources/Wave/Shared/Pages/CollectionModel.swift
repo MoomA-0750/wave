@@ -137,9 +137,14 @@ final class CollectionModel {
 
     private func loadAlbum(_ mine: Int) async {
         guard let album = (try? await AppServices.music.album(request.id))?.value, mine == generation else {
-            if mine == generation && !showOffline() { error = L.t("アルバムを読み込めませんでした", "Couldn't load the album") }
+            if mine == generation {
+                albumSaved = nil
+                if !showOffline() { error = L.t("アルバムを読み込めませんでした", "Couldn't load the album") }
+            }
             return
         }
+        albumSaved = album.saved
+        savePlaylistId = album.savePlaylistId
         AppServices.downloads.pageLoaded(request.id, title: album.title, thumbnailUrl: album.thumbnailUrl, songs: album.songs)
         title = album.title
         let changedArt = thumbnailUrl != album.thumbnailUrl
@@ -264,6 +269,31 @@ final class CollectionModel {
         detail = L.t("ダウンロード済み", "Downloaded") + " • " + L.songs(songs.count)
         AppPaths.log("collection offline songs=\(songs.count)")
         return true
+    }
+
+    // MARK: アルバムの保存（ページの頭のボタン）
+
+    /// アルバムをライブラリに保存しているか。nil はログインしていない・分からない（ボタンを出さない）。
+    var albumSaved: Bool?
+    var savingAlbum = false
+    @ObservationIgnored private var savePlaylistId: String?
+
+    /// 保存の切り替え。押すとすぐ表示を変え、書けなければ戻して知らせる。書いている間は押せない。
+    func toggleAlbumSaved() {
+        guard request.isAlbum, let saved = albumSaved, let playlistId = savePlaylistId, !savingAlbum else { return }
+        savingAlbum = true
+        albumSaved = !saved
+        Task {
+            let result = (try? await AppServices.music.setAlbumSaved(playlistId, saved: !saved)) ?? .failed(.network)
+            AppPaths.log("album saved=\(!saved) ok=\(result.isOk)")
+            savingAlbum = false
+            if result.isOk {
+                AppServices.library.refresh()
+            } else {
+                albumSaved = saved
+                AppServices.player.message = L.t("ライブラリを変更できませんでした", "Couldn't change your library")
+            }
+        }
     }
 
     // MARK: ダウンロード（ページの頭のボタン）
