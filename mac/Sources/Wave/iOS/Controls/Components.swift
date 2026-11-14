@@ -156,14 +156,24 @@ struct LikeButtonView: View {
         // RSS のエピソード（ADR-0012）は YouTube の曲ではないので出さない
         if LikeButton.available(player) {
             Button { LikeButton.press(player) } label: {
-                Image(systemName: LikeButton.symbol(player))
-                    .font(.system(size: size))
-                    .foregroundStyle(LikeButton.accent(player) ? Color.accentColor : Color.secondary)
+                // iPhone は丸の囲いの無い＋と✓を、どちらも白（地の文字の色）で出す
+                Image(systemName: Self.plain(LikeButton.symbol(player)))
+                    .font(.system(size: size, weight: .semibold))
+                    .foregroundStyle(.primary)
                     .frame(width: box, height: box)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel(LikeButton.tip(player))
+            .accessibilityAddTraits(LikeButton.accent(player) ? .isSelected : [])
+        }
+    }
+
+    private static func plain(_ symbol: String) -> String {
+        switch symbol {
+        case "checkmark.circle.fill": "checkmark"
+        case "plus.circle": "plus"
+        default: symbol
         }
     }
 }

@@ -359,7 +359,7 @@ struct NowPlayingView: View {
                         Image(systemName: "airplay.audio")
                         if player.isRemote, let device = player.remoteDevice { Text(device).font(.caption.weight(.semibold)).lineLimit(1) }
                     }
-                    .foregroundStyle(player.isRemote ? Color.accentColor : Color.primary)
+                    .foregroundStyle(.primary)
                     .frame(minWidth: 44, minHeight: 44)
                 }
                 .accessibilityLabel(L.t("端末に接続", "Connect to a device"))
@@ -542,7 +542,7 @@ struct NowPlayingView: View {
                         Image(systemName: player.isRemote ? "hifispeaker.2.fill" : "hifispeaker.2")
                         if player.isRemote, let device = player.remoteDevice { Text(device).font(.caption.weight(.semibold)).lineLimit(1) }
                     }
-                    .foregroundStyle(player.isRemote ? Color.accentColor : Color.primary)
+                    .foregroundStyle(.primary)
                     .frame(minHeight: 44)
                 }
                 .accessibilityLabel(L.t("端末に接続", "Connect to a device"))

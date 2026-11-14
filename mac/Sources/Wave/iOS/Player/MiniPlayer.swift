@@ -17,7 +17,7 @@ struct MiniPlayer: View {
                 Text(song?.title ?? "").font(.subheadline.weight(.semibold)).lineLimit(1)
                 if player.isRemote, let device = player.remoteDevice {
                     // ほかの端末で鳴っているときは、アーティストの代わりにその端末名（Android と同じ）
-                    Label(device, systemImage: "hifispeaker.2").font(.caption).foregroundStyle(Color.accentColor).lineLimit(1)
+                    Label(device, systemImage: "hifispeaker.2").font(.caption).foregroundStyle(.primary).lineLimit(1)
                 } else {
                     Text(song?.artistsText ?? "").font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
