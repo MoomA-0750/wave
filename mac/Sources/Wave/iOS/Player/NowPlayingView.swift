@@ -51,6 +51,8 @@ struct NowPlayingView: View {
             }
         }
         .fullScreenCover(isPresented: $shell.videoFullScreen) { VideoFullScreen() }
+        // ジャケットを左右に払っている間は、ズームで開いた画面を指で引いてしまう動きを止める（横の払いで画面が消えていた）
+        .interactiveDismissDisabled(shell.coverSwiping)
         // ジャケットを大きくぼかして画面の端まで敷く（Apple Music の再生中の画面と同じ）
         .background { ArtworkBackdrop(url: song?.thumbnailUrl) }
         .task(id: song?.thumbnailUrl) { tint = await Artwork.dominantColor(song?.thumbnailUrl) }
@@ -203,6 +205,8 @@ struct NowPlayingView: View {
                                 }
                             }
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            // 幅は画面の幅に固定する（消えていく途中は幅の指定が外れ、歌詞の行が1行の長さまで広がって左へずれていた）
+                            .containerRelativeFrame(.horizontal)
                             // 下の端は薄くして消す（操作の欄の上ですっぱり切れて見えないように。上の端は歌詞・キューの中で薄くする）
                             .mask {
                                 // 下は操作の欄の手前で長めに溶かす（境目を見せない）
@@ -233,7 +237,8 @@ struct NowPlayingView: View {
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { if panel == nil { controlsHeight = $0 } }
             }
         }
-        .animation(.smooth(duration: 0.45), value: panel)
+        // 初めに速く動き、終わりは慣性で緩やかに止まる
+        .animation(.timingCurve(0.2, 0.9, 0.25, 1, duration: 0.5), value: panel)
         // ジャケットや曲名の辺りを下へ払ったら閉じる（つまみ・シークバーの横の動きは通す）。歌詞・キューは中を送るので、払っても閉じない
         .simultaneousGesture(DragGesture(minimumDistance: 20).onEnded { value in
             if value.translation.height > 70, value.translation.height > abs(value.translation.width) * 1.5 { dismiss() }
@@ -258,8 +263,8 @@ struct NowPlayingView: View {
                 .accessibilityLabel(L.t("ジャケットに戻る", "Back to artwork"))
                 .matchedGeometryEffect(id: "cover", in: titleSpace)
             VStack(alignment: .leading, spacing: 2) {
-                Text(song?.title ?? "").font(.headline).lineLimit(1)
-                Text(song?.artistsText ?? "").font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                Text(song?.title ?? "").font(.headline).modifier(FadeTail())
+                Text(song?.artistsText ?? "").font(.subheadline).foregroundStyle(.secondary).modifier(FadeTail())
             }
             .matchedGeometryEffect(id: "title", in: titleSpace, anchor: .leading)
             Spacer(minLength: 0)
@@ -298,9 +303,9 @@ struct NowPlayingView: View {
         HStack(alignment: .center, spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(song?.title ?? L.t("何も再生していません", "Nothing playing"))
-                    .font(.title3.weight(.semibold)).lineLimit(1)
+                    .font(.title3.weight(.semibold)).modifier(FadeTail())
                     .onTapGesture { if let id = song?.album?.browseId { AppServices.nav.album(id) } }
-                Text(song?.artistsText ?? "").font(.title3).foregroundStyle(.secondary).lineLimit(1)
+                Text(song?.artistsText ?? "").font(.title3).foregroundStyle(.secondary).modifier(FadeTail())
                     .onTapGesture { if let id = song?.artists.first(where: { $0.browseId != nil })?.browseId { AppServices.nav.artist(id) } }
             }
             .matchedGeometryEffect(id: "title", in: titleSpace, anchor: .leading)
@@ -629,6 +634,30 @@ private struct SquareUnless: ViewModifier {
     }
 }
 
+/// 1行に収まらない文字は「…」で切らず、右の端を薄く消す（大きさが変わる動きの途中で「…」が出たり消えたりして跳ばないように）。
+private struct FadeTail: ViewModifier {
+    @State private var natural: CGFloat = 0
+    @State private var box: CGFloat = 0
+
+    func body(content: Content) -> some View {
+        let overflows = natural > box + 0.5
+        content
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { natural = $0 }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { box = $0 }
+            .clipped()
+            .mask {
+                HStack(spacing: 0) {
+                    Rectangle()
+                    LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing).frame(width: overflows ? 28 : 0)
+                }
+                .animation(.easeOut(duration: 0.2), value: overflows)
+            }
+    }
+}
+
 /// 曲名の横の丸いボタンの地（iOS 26 からはガラス、それより前は薄い丸）。
 private struct RoundButtonBackground: ViewModifier {
     func body(content: Content) -> some View {
@@ -703,6 +732,13 @@ private struct CoverCarousel: View {
                 }
             }
             .contentShape(Rectangle())
+            // 横へ動き始めたらすぐ、画面をしまう指の動きを止める（下の払いより先に決める）
+            .simultaneousGesture(DragGesture(minimumDistance: 3)
+                .onChanged { value in
+                    let horizontal = abs(value.translation.width) > abs(value.translation.height)
+                    if horizontal && !IOSShell.shared.coverSwiping { IOSShell.shared.coverSwiping = true }
+                }
+                .onEnded { _ in IOSShell.shared.coverSwiping = false })
             // 縦の払い（スクロール・下へ払って閉じる）も通す
             .simultaneousGesture(DragGesture(minimumDistance: 16)
                 .onChanged { value in

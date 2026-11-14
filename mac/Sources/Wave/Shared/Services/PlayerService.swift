@@ -1400,6 +1400,9 @@ final class PlayerService {
             if isRemote { leaveRemote(restoreLocal: true) }
             return
         }
+        // 映し始めは、相手の曲が手元の曲と同じでも評価・映像・歌詞を読み直す（下の cancelLoad で手元の読み込みを止めるので、
+        // 読み直さないと「歌詞を探しています」・評価の読み直しの印のままになっていた）
+        let entering = !isRemote
         if !isRemote {
             // 手元の再生は止めて、キューを退避する（この端末は鳴らしていない）
             finishEpisode()
@@ -1422,7 +1425,7 @@ final class PlayerService {
             replaceAll(q.items.map { ($0.song, $0.meta) })
             sourceId = q.sourceId
         }
-        if let i = itemMeta.firstIndex(where: { $0.itemId == next.currentItemId }), index != i || current == nil || current != queue[i] {
+        if let i = itemMeta.firstIndex(where: { $0.itemId == next.currentItemId }), entering || index != i || current == nil || current != queue[i] {
             index = i
             current = queue[i]
             like = nil
