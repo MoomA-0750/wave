@@ -134,6 +134,8 @@ struct NowPlayingView: View {
             }
             .scrollIndicators(.hidden)
             .scrollBounceBehavior(.basedOnSize)
+            // 収まるときは上下の中央に置く（上に寄って下が大きく空いていた）
+            .defaultScrollAnchor(.center)
             .modifier(PullDownToDismiss(touching: $scrollTouching) { dismiss() })
             // 幅は画面の半分ほどに決める（長い曲名の1行の幅に引かれて、右へはみ出していた）
             .containerRelativeFrame(.horizontal) { width, _ in min(440, (width - 76) / 2) }
