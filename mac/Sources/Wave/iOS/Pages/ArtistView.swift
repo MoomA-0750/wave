@@ -110,11 +110,16 @@ struct ArtistView: View {
         Color.clear
             .frame(height: 380)
             .overlay {
-                RemoteImage(url: Ui.resize(model.artist?.thumbnailUrl, 1080))
-                    .mask(LinearGradient(stops: [.init(color: .black, location: 0.5), .init(color: .clear, location: 1)], startPoint: .top, endPoint: .bottom))
-            }
-            .overlay {
-                LinearGradient(stops: [.init(color: .clear, location: 0.45), .init(color: .black.opacity(0.35), location: 1)], startPoint: .top, endPoint: .bottom)
+                // 名前を読めるよう下を暗くした写真を、暗くした層ごとまとめて地へ溶かす（暗くする層だけが残って境に線が出ないように）。
+                // 消え方は緩やかな曲線にする（直線で消すと消え始めと消え終わりに段が見える）
+                ZStack {
+                    RemoteImage(url: Ui.resize(model.artist?.thumbnailUrl, 1080))
+                    LinearGradient(stops: [.init(color: .clear, location: 0.4), .init(color: .black.opacity(0.3), location: 0.8)], startPoint: .top, endPoint: .bottom)
+                }
+                .mask(LinearGradient(stops: [.init(color: .black, location: 0.35), .init(color: .black.opacity(0.9), location: 0.5),
+                                             .init(color: .black.opacity(0.6), location: 0.65), .init(color: .black.opacity(0.3), location: 0.8),
+                                             .init(color: .black.opacity(0.08), location: 0.92), .init(color: .clear, location: 1)],
+                                     startPoint: .top, endPoint: .bottom))
             }
             .overlay(alignment: .bottom) {
                 HStack(alignment: .center, spacing: 12) {
@@ -158,7 +163,7 @@ private struct ArtistViewActions: View {
                 Button { model.toggleSubscribe() } label: {
                     Image(systemName: subscribed ? "person.crop.circle.badge.checkmark" : "person.crop.circle.badge.plus")
                         .font(.title3.weight(.semibold))
-                        .modifier(ArtistViewGlassCircle(size: 44))
+                        .modifier(ArtistViewGlassCircle())
                 }
                 .buttonStyle(.plain)
                 .disabled(model.subscribing || model.artist?.subscribed == nil)
@@ -167,15 +172,15 @@ private struct ArtistViewActions: View {
             Button { model.toggleShuffle() } label: {
                 Image(systemName: "shuffle")
                     .font(.title3.weight(.semibold))
-                    .modifier(ArtistViewGlassCircle(size: 44, tint: shuffleOn ? Color.accentColor.opacity(0.5) : nil))
+                    .modifier(ArtistViewGlassCircle(tint: shuffleOn ? Color.accentColor.opacity(0.5) : nil))
             }
             .buttonStyle(.plain)
             .accessibilityLabel(L.t("シャッフル", "Shuffle"))
             .accessibilityAddTraits(shuffleOn ? .isSelected : [])
             Button { model.playOrPause() } label: {
                 Image(systemName: playing ? "pause.fill" : "play.fill")
-                    .font(.title2)
-                    .modifier(ArtistViewGlassCircle(size: 56, tint: .accentColor))
+                    .font(.title3)
+                    .modifier(ArtistViewGlassCircle(tint: .accentColor))
             }
             .buttonStyle(.plain)
             .disabled(model.topSongs.isEmpty)
@@ -189,7 +194,8 @@ private struct ArtistViewActions: View {
 
 /// 丸いガラスの地（iOS 26 より前は薄い丸）。押すと光って弾む。
 private struct ArtistViewGlassCircle: ViewModifier {
-    var size: CGFloat
+    /// 3つとも同じ大きさ
+    var size: CGFloat = 50
     var tint: Color? = nil
 
     func body(content: Content) -> some View {
