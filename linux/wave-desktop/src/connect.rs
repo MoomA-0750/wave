@@ -339,7 +339,43 @@ impl Connect {
         });
         // PC は画面がある間ずっと中継につなぐ（家に入っていなければ、中継は認証で断る）
         connect.with_socket(RelaySocket::start);
+        connect.watch_wakes();
         connect
+    }
+
+    /// ネットにつながり直した・スリープから戻ったら、つなぎ直しの待ちを捨てて、つながりをすぐ確かめる（docs/decisions.md 2026-11-14）。
+    fn watch_wakes(self: &Rc<Self>) {
+        use gio::prelude::*;
+        let weak = Rc::downgrade(self);
+        gio::NetworkMonitor::default().connect_network_changed(move |_, available| {
+            if let Some(connect) = weak.upgrade().filter(|_| available) {
+                connect.wake();
+            }
+        });
+        // logind の PrepareForSleep(false) が、スリープから戻った知らせ
+        let Ok(system) = gio::bus_get_sync(gio::BusType::System, gio::Cancellable::NONE) else { return };
+        let weak = Rc::downgrade(self);
+        let subscription = system.subscribe_to_signal(
+            Some("org.freedesktop.login1"),
+            Some("org.freedesktop.login1.Manager"),
+            Some("PrepareForSleep"),
+            Some("/org/freedesktop/login1"),
+            None,
+            gio::DBusSignalFlags::NONE,
+            move |signal| {
+                let sleeping = signal.parameters.get::<(bool,)>().is_some_and(|(sleeping,)| sleeping);
+                if let Some(connect) = weak.upgrade().filter(|_| !sleeping) {
+                    connect.wake();
+                }
+            },
+        );
+        // 窓がある間ずっと受ける（購読を手放すと外れる）
+        std::mem::forget(subscription);
+    }
+
+    /// つながりをすぐ確かめる（待っているつなぎ直しは今行う）。窓が前に出たときにも呼べる。
+    pub fn wake(&self) {
+        self.with_socket(RelaySocket::wake);
     }
 
     pub fn on_change(&self, listener: impl Fn() + 'static) {
