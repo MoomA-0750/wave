@@ -16,33 +16,11 @@ struct ArtistView: View {
     }
 
     var body: some View {
-        let player = AppServices.player!
-        let playingHere = model.isPlayingHere
         let artist = model.artist
         let topSongs = model.topSongs
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 hero
-                HStack(spacing: 16) {
-                    if artist?.channelId != nil && AppServices.client.isLoggedIn { subscribeButton }
-                    if model.loading { ProgressView() }
-                    Spacer()
-                    Button {
-                        model.toggleShuffle()
-                    } label: {
-                        Image(systemName: "shuffle").font(.system(size: 20, weight: .semibold))
-                            .foregroundStyle((playingHere ? player.shuffle : model.shufflePlay) ? Color.accentColor : Color.secondary)
-                            .frame(width: 44, height: 44)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(L.t("シャッフル", "Shuffle"))
-                    ArtistViewPlayPause(playing: playingHere && player.isPlaying) {
-                        model.playOrPause()
-                    }
-                    .disabled(topSongs.isEmpty)
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
                 if model.failed {
                     LoadState(loading: false, failure: L.t("アーティストを読み込めませんでした", "Couldn't load the artist")) {
                         Task { await model.load() }
@@ -110,6 +88,10 @@ struct ArtistView: View {
             .padding(.bottom, 32)
         }
         .ignoresSafeArea(edges: .top)
+        // 地は再生画面と同じ（アーティストの写真を大きくぼかして暗くしたもの）。暗い地なので文字は常に暗い表示の色にする
+        .background { ArtworkBackdrop(url: artist?.thumbnailUrl) }
+        .environment(\.colorScheme, .dark)
+        .toolbarColorScheme(.dark, for: .navigationBar)
         .onScrollGeometryChange(for: Bool.self) { geo in
             geo.contentOffset.y + geo.contentInsets.top > 380 - 120
         } action: { _, past in
@@ -117,40 +99,106 @@ struct ArtistView: View {
         }
         .navigationTitle(pastHero ? (artist?.name ?? "") : "")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(.hidden, for: .navigationBar)
+        .toolbarBackground(.hidden, for: .navigationBar) // apple-ui-allow: iOS 18 で写真の上の帯を塗らないため（26 からはガラスになる）
         .modifier(TopEdgeEffect(hidden: !pastHero))
         .refreshable { await model.load() }
         .task { if model.artist == nil { await model.load() } }
     }
 
-    // 横いっぱいの写真に名前を重ねる（下を暗くして白い文字を読めるようにする）
+    // 横いっぱいの写真。下の端は地（ぼかした同じ写真）へ溶かし、そこに名前・登録・シャッフル・再生を1列に重ねる
     private var hero: some View {
         Color.clear
             .frame(height: 380)
-            .overlay { RemoteImage(url: Ui.resize(model.artist?.thumbnailUrl, 1080)) }
             .overlay {
-                LinearGradient(stops: [.init(color: .clear, location: 0.4), .init(color: .black.opacity(0.7), location: 1)], startPoint: .top, endPoint: .bottom)
+                RemoteImage(url: Ui.resize(model.artist?.thumbnailUrl, 1080))
+                    .mask(LinearGradient(stops: [.init(color: .black, location: 0.5), .init(color: .clear, location: 1)], startPoint: .top, endPoint: .bottom))
             }
-            .overlay(alignment: .bottomLeading) {
-                Text(model.artist?.name ?? "")
-                    .font(.system(size: 40, weight: .bold))
-                    .foregroundStyle(.white)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.5)
-                    .padding(16)
+            .overlay {
+                LinearGradient(stops: [.init(color: .clear, location: 0.45), .init(color: .black.opacity(0.35), location: 1)], startPoint: .top, endPoint: .bottom)
+            }
+            .overlay(alignment: .bottom) {
+                HStack(alignment: .center, spacing: 12) {
+                    Text(model.artist?.name ?? "")
+                        .font(.largeTitle.bold())
+                        .foregroundStyle(.white)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.5)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    if model.loading { ProgressView() }
+                    ArtistViewActions(model: model)
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 12)
             }
             .clipped()
-            .background(Color.primary.opacity(0.08))
+    }
+}
+
+/// 名前の右に並べる、登録・シャッフル・再生のアイコンのボタン（Liquid Glass。混ざるよう1つの入れ物にまとめる。
+/// 色を付けるのは主役の再生だけ。シャッフルは入れている間だけ薄く色を付ける）。
+private struct ArtistViewActions: View {
+    var model: ArtistModel
+
+    var body: some View {
+        if #available(iOS 26.0, *) {
+            GlassEffectContainer(spacing: 10) { buttons }
+        } else {
+            buttons
+        }
     }
 
-    private var subscribeButton: some View {
+    private var buttons: some View {
+        let player = AppServices.player!
+        let playingHere = model.isPlayingHere
+        let shuffleOn = playingHere ? player.shuffle : model.shufflePlay
         let subscribed = model.artist?.subscribed == true
-        return Button(subscribed ? L.t("登録済み", "Subscribed") : L.t("登録", "Subscribe")) { model.toggleSubscribe() }
-            .font(.subheadline.weight(.semibold))
-            .buttonStyle(.borderedProminent)
-            .tint(subscribed ? Color.gray.opacity(0.4) : Color.accentColor)
-            .buttonBorderShape(.capsule)
-            .disabled(model.subscribing || model.artist?.subscribed == nil)
+        let playing = playingHere && player.isPlaying
+        return HStack(spacing: 10) {
+            if model.artist?.channelId != nil && AppServices.client.isLoggedIn {
+                Button { model.toggleSubscribe() } label: {
+                    Image(systemName: subscribed ? "person.crop.circle.badge.checkmark" : "person.crop.circle.badge.plus")
+                        .font(.title3.weight(.semibold))
+                        .modifier(ArtistViewGlassCircle(size: 44))
+                }
+                .buttonStyle(.plain)
+                .disabled(model.subscribing || model.artist?.subscribed == nil)
+                .accessibilityLabel(subscribed ? L.t("登録済み", "Subscribed") : L.t("登録", "Subscribe"))
+            }
+            Button { model.toggleShuffle() } label: {
+                Image(systemName: "shuffle")
+                    .font(.title3.weight(.semibold))
+                    .modifier(ArtistViewGlassCircle(size: 44, tint: shuffleOn ? Color.accentColor.opacity(0.5) : nil))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(L.t("シャッフル", "Shuffle"))
+            .accessibilityAddTraits(shuffleOn ? .isSelected : [])
+            Button { model.playOrPause() } label: {
+                Image(systemName: playing ? "pause.fill" : "play.fill")
+                    .font(.title2)
+                    .modifier(ArtistViewGlassCircle(size: 56, tint: .accentColor))
+            }
+            .buttonStyle(.plain)
+            .disabled(model.topSongs.isEmpty)
+            .accessibilityLabel(playing ? L.t("一時停止", "Pause") : L.t("再生", "Play"))
+        }
+        .foregroundStyle(.white)
+        // 丸の大きさは決まっているので、記号は大きくしすぎない
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+    }
+}
+
+/// 丸いガラスの地（iOS 26 より前は薄い丸）。押すと光って弾む。
+private struct ArtistViewGlassCircle: ViewModifier {
+    var size: CGFloat
+    var tint: Color? = nil
+
+    func body(content: Content) -> some View {
+        let framed = content.frame(width: size, height: size).contentShape(Circle())
+        if #available(iOS 26.0, *) {
+            framed.glassEffect((tint.map { Glass.regular.tint($0) } ?? .regular).interactive(), in: .circle)
+        } else {
+            framed.background(Circle().fill(tint ?? Color.white.opacity(0.15)))
+        }
     }
 }
 
@@ -159,24 +207,6 @@ private struct ArtistViewSectionTitle: View {
 
     var body: some View {
         Text(text).font(.title3.weight(.bold)).padding(EdgeInsets(top: 20, leading: 16, bottom: 8, trailing: 16))
-    }
-}
-
-/// 大きな丸い再生・一時停止のボタン。
-private struct ArtistViewPlayPause: View {
-    var playing: Bool
-    var action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Image(systemName: playing ? "pause.fill" : "play.fill")
-                .font(.system(size: 22))
-                .foregroundStyle(.white)
-                .frame(width: 56, height: 56)
-                .background(Circle().fill(Color.accentColor))
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(playing ? L.t("一時停止", "Pause") : L.t("再生", "Play"))
     }
 }
 

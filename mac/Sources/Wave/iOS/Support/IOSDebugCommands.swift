@@ -95,6 +95,12 @@ enum IOSDebugCommands {
             default: MusicPip.shared.start()
             }
             AppPaths.log("debug music-pip setting=\(AppServices.settings.musicPip) active=\(MusicPip.shared.active)")
+        case "snapshot":
+            // 実機の画面を写して screen.png に書く（devicectl で持ってくる。実機はシミュレーターと違って外から撮れない）
+            if let window = UIApplication.shared.connectedScenes.compactMap({ ($0 as? UIWindowScene)?.keyWindow }).first {
+                let image = UIGraphicsImageRenderer(bounds: window.bounds).image { _ in _ = window.drawHierarchy(in: window.bounds, afterScreenUpdates: true) }
+                try? image.pngData()?.write(to: AppPaths.file(arg.isEmpty ? "screen.png" : arg))
+            }
         default: await DebugCommon.run(command, arg)
         }
     }

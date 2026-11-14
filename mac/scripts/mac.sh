@@ -17,6 +17,7 @@
 #   mac.sh ios-shelf [変更点]  ios-device と同じに組んで署名し、general-console の appshelf に載せる
 #   mac.sh ios-dev-cmd <命令>... つないだ iPhone の wave に開発用の命令を送る
 #   mac.sh ios-dev-log [行数]   つないだ iPhone の wave のログの末尾
+#   mac.sh ios-dev-shot <ファイル> つないだ iPhone の wave の画面を写して持ってくる
 #   mac.sh ios-ipa [ファイル]  iPhone の実機向けに、署名していない wave.ipa を組んで持ってくる（既定は build/wave.ipa）
 set -euo pipefail
 here=$(cd "$(dirname "$0")/../.." && pwd)
@@ -82,6 +83,10 @@ ios-dev-cmd)
   shift; printf "%s\n" "$@" | ssh mac "cat > /tmp/wave-debug-command.txt && xcrun devicectl device copy to --device \$(xcrun devicectl list devices 2>/dev/null | grep -E 'available \(paired\)|connected' | grep iPhone | grep -oE '[0-9A-F]{8}-[0-9A-F-]{27}' | head -1) --domain-type appDataContainer --domain-identifier xyz.mooma0750.wave --source /tmp/wave-debug-command.txt --destination 'Library/Application Support/wave/debug-command.txt' >/dev/null" ;;
 ios-dev-log)
   ssh mac "xcrun devicectl device copy from --device \$(xcrun devicectl list devices 2>/dev/null | grep -E 'available \(paired\)|connected' | grep iPhone | grep -oE '[0-9A-F]{8}-[0-9A-F-]{27}' | head -1) --domain-type appDataContainer --domain-identifier xyz.mooma0750.wave --source 'Library/Application Support/wave/wave.log' --destination /tmp/wave-device.log >/dev/null && tail -n ${2:-80} /tmp/wave-device.log" ;;
+ios-dev-shot)
+  # つないだ iPhone の wave の画面を写してこの機械に持ってくる（ios-device で入れた版だけ効く）
+  "$0" ios-dev-cmd snapshot; sleep 3
+  ssh mac "xcrun devicectl device copy from --device \$(xcrun devicectl list devices 2>/dev/null | grep -E 'available \(paired\)|connected' | grep iPhone | grep -oE '[0-9A-F]{8}-[0-9A-F-]{27}' | head -1) --domain-type appDataContainer --domain-identifier xyz.mooma0750.wave --source 'Library/Application Support/wave/screen.png' --destination /tmp/wave-device.png >/dev/null" && scp -q mac:/tmp/wave-device.png "$2" ;;
 ios-provision)
   # Xcode に wave とウィジェットの配布設定（1年）を作らせる。GUI のセッションで動かす
   rsync -a --delete scripts/ios-provision/ mac:wave-provision/

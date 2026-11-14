@@ -604,8 +604,8 @@ private struct RoundButtonBackground: ViewModifier {
     }
 }
 
-/// 再生画面の地: ジャケットを画面いっぱいに引き伸ばして大きくぼかし、文字が読めるよう暗くしたもの。曲が替わったら重ねて替える。
-private struct ArtworkBackdrop: View {
+/// 再生画面（とアーティスト・アルバム・プレイリストのページ）の地: ジャケットを画面いっぱいに引き伸ばして大きくぼかし、文字が読めるよう暗くしたもの。曲が替わったら重ねて替える。
+struct ArtworkBackdrop: View {
     var url: String?
 
     var body: some View {

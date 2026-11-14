@@ -20,15 +20,16 @@ struct CollectionView: View {
             header(player, rows).listRowSeparator(.hidden).listRowBackground(Color.clear)
             kindChips.listRowInsets(EdgeInsets()).listRowSeparator(.hidden).listRowBackground(Color.clear)
             if model.loading && model.all.isEmpty {
-                ProgressView().frame(maxWidth: .infinity).padding().listRowSeparator(.hidden)
+                ProgressView().frame(maxWidth: .infinity).padding().listRowSeparator(.hidden).listRowBackground(Color.clear)
             } else if let error = model.error {
-                LoadState(loading: false, failure: error) { model.load() }.listRowSeparator(.hidden)
+                LoadState(loading: false, failure: error) { model.load() }.listRowSeparator(.hidden).listRowBackground(Color.clear)
             } else if !model.all.isEmpty && rows.isEmpty {
-                Text(L.t("一致する曲はありません", "No matching songs")).subtle().frame(maxWidth: .infinity).padding().listRowSeparator(.hidden)
+                Text(L.t("一致する曲はありません", "No matching songs")).subtle().frame(maxWidth: .infinity).padding().listRowSeparator(.hidden).listRowBackground(Color.clear)
             }
             ForEach(Array(rows.enumerated()), id: \.element.id) { i, row in
                 let remove: (() -> Void)? = model.editable && row.setVideoId != nil ? { model.remove(row) } : nil
                 SongRow(song: row.song, number: request.isAlbum ? row.number : nil, removeFromPlaylist: remove) { model.play(rows: rows, start: i) }
+                    .listRowBackground(Color.clear)
                     .swipeActions(edge: .trailing) {
                         if let remove {
                             Button(L.t("削除", "Remove"), systemImage: "trash", role: .destructive, action: remove)
@@ -43,6 +44,7 @@ struct CollectionView: View {
                 Section {
                     ForEach(model.suggestions) { song in
                         SuggestionRow(song: song, onAdd: { model.addSuggestion(song) }) { model.playSuggestion(song) }
+                            .listRowBackground(Color.clear)
                     }
                 } header: {
                     HStack(alignment: .firstTextBaseline) {
@@ -62,11 +64,20 @@ struct CollectionView: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
-        .background(alignment: .top) {
-            LinearGradient(colors: [(model.gradient ?? .clear).opacity(0.55), .clear], startPoint: .top, endPoint: .bottom)
-                .frame(height: 460)
-                .ignoresSafeArea()
+        // 地は再生画面と同じ（ジャケットを大きくぼかして暗くしたもの）。高く評価した曲はジャケットが無いので、その色を上に重ねる。
+        // 暗い地なので文字は常に暗い表示の色にする
+        .background {
+            ZStack(alignment: .top) {
+                ArtworkBackdrop(url: model.isLiked ? nil : model.thumbnailUrl)
+                if model.isLiked {
+                    LinearGradient(colors: [(model.gradient ?? .clear).opacity(0.55), .clear], startPoint: .top, endPoint: .bottom)
+                        .frame(height: 460)
+                        .ignoresSafeArea()
+                }
+            }
         }
+        .environment(\.colorScheme, .dark)
+        .toolbarColorScheme(.dark, for: .navigationBar)
         .navigationTitle(model.title ?? "")
         .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $model.filter, placement: .navigationBarDrawer(displayMode: .automatic), prompt: L.t("この一覧の中を検索", "Search in this list"))
