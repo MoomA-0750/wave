@@ -94,8 +94,9 @@ struct NowPlayingView: View {
             // ジャケットは、並びの外の層に置いて画面の左・上・下の端まで伸ばす（並びの中では安全領域の内側までしか伸びず、左と下に地が残った）
             if panel == nil && !(shell.showVideo && player.hasVideo) {
                 landscapeCover(player)
-                    // 画面の端まで伸ばした層なので、ずらすと下の端が見える。薄くするだけにする
-                    .transition(.opacity)
+                    // 画面の左下を基準に、閉じると広がりながら出て、開くと縮みながら消える（左と下の端は画面の端に付けたまま。
+                    // ずらすと下の端が見えた）。上と右の端は溶かしてあるので、縮んでも境目は出ない
+                    .transition(.scale(scale: 0.88, anchor: .bottomLeading).combined(with: .opacity))
                     .simultaneousGesture(DragGesture(minimumDistance: 20).onEnded { value in
                         if value.translation.height > 70, value.translation.height > abs(value.translation.width) { dismiss() }
                     })
@@ -201,6 +202,10 @@ struct NowPlayingView: View {
             }
             .frame(width: max(0, width), height: geo.size.height)
             .clipped()
+            // 上の端も地へ薄く溶かす（開け閉めで縮んだとき、上に境目が出ないように）
+            .mask {
+                LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.08)], startPoint: .top, endPoint: .bottom)
+            }
         }
         .ignoresSafeArea()
     }
