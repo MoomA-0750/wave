@@ -43,6 +43,8 @@ struct DownloadedMark: View {
 struct CollectionDownloadButton: View {
     var model: CollectionModel
     var size: CGFloat = 22
+    /// 記号だけ（丸いガラスのボタンの中に置くとき）。囲いの無い矢印にし、何曲取ったかの数は出さない（読み上げでは言う）
+    var iconOnly = false
     @State private var confirm = false
 
     var body: some View {
@@ -71,7 +73,8 @@ struct CollectionDownloadButton: View {
     private func label(_ state: Downloads.CollectionState) -> some View {
         switch state {
         case .none:
-            Image(systemName: "arrow.down.circle").font(.system(size: size)).foregroundStyle(.secondary)  // apple-ui-allow: ボタンの大きさを渡して合わせる
+            Image(systemName: iconOnly ? "arrow.down" : "arrow.down.circle").font(.system(size: size, weight: iconOnly ? .semibold : .regular))  // apple-ui-allow: ボタンの大きさを渡して合わせる
+                .foregroundStyle(iconOnly ? Color.primary : Color.secondary)
         case .downloading(let done, let total):
             HStack(spacing: 6) {
                 ZStack {
@@ -82,7 +85,7 @@ struct CollectionDownloadButton: View {
                     Image(systemName: "arrow.down").font(.system(size: size * 0.45, weight: .bold)).foregroundStyle(Color.accentColor)  // apple-ui-allow: 輪の大きさに合わせた記号
                 }
                 .frame(width: size, height: size)
-                Text("\(done) / \(total)").font(.caption).monospacedDigit().foregroundStyle(.secondary)
+                if !iconOnly { Text("\(done) / \(total)").font(.caption).monospacedDigit().foregroundStyle(.secondary) }
             }
         case .done:
             Image(systemName: "arrow.down.circle.fill").font(.system(size: size)).foregroundStyle(Color.accentColor)  // apple-ui-allow: ボタンの大きさを渡して合わせる

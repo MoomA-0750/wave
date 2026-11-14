@@ -3,11 +3,10 @@ import AVKit
 import SwiftUI
 import WaveCore
 
-/// 再生中の画面（Android と同じ並び）。上にジャケットの色のグラデーション、閉じる・曲／動画の切り替え・メニュー、
-/// 大きなジャケット（動画のときは映像）、曲名と評価、シークバー、操作の列、端末とキュー、下に歌詞のカード。
+/// 再生中の画面（Apple Music の並び）。縦向きは上にジャケット（動画のときは映像）、下に曲名と評価・シーク・操作・音量・下の列。
+/// 横向きは左にジャケット、右に同じ部品。歌詞・キューはどちらの向きもジャケットの場所を切り替えて出す。
 struct NowPlayingView: View {
     @State private var shell = IOSShell.shared
-    @State private var tint: Color?
     @State private var dragging: Double?
     @State private var devicesOpen = false
     /// Claude に聞く（下のタブの「Claude」と同じ会話。Android の再生画面の ✨ と同じ）。
@@ -31,23 +30,7 @@ struct NowPlayingView: View {
         let song = player.current
         Group {
             if verticalSize == .compact {
-                // 横向き: 左にジャケット・映像（高さいっぱい）、右に操作から下（右だけ送る）
-                HStack(alignment: .center, spacing: 28) {
-                    media(player)
-                        .frame(maxHeight: .infinity)
-                        .padding(.vertical, 12)
-                        // 横向きのジャケットはスクロールの中に無いので、下へ払ったら閉じる
-                        .simultaneousGesture(DragGesture(minimumDistance: 20).onEnded { value in
-                            if value.translation.height > 70, value.translation.height > abs(value.translation.width) { dismiss() }
-                        })
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 16) { details(player, song) }
-                            .padding(.vertical, 12)
-                    }
-                    .scrollIndicators(.hidden)
-                    .modifier(PullDownToDismiss(touching: $scrollTouching) { dismiss() })
-                }
-                .padding(.horizontal, 24)
+                landscape(player, song)
             } else {
                 portrait(player, song)
             }
@@ -57,7 +40,6 @@ struct NowPlayingView: View {
         .interactiveDismissDisabled(shell.coverSwiping)
         // ジャケットを大きくぼかして画面の端まで敷く（Apple Music の再生中の画面と同じ）
         .background { ArtworkBackdrop(url: song?.thumbnailUrl) }
-        .task(id: song?.thumbnailUrl) { tint = await Artwork.dominantColor(song?.thumbnailUrl) }
         // 曲が変わったら曲の表示に戻す（PiP で映している間は動画のまま）
         .onChange(of: song?.videoId) { _, _ in if !VideoPip.shared.active { shell.showVideo = false } }
         .onChange(of: shell.showVideo, initial: true) { _, show in
@@ -74,10 +56,7 @@ struct NowPlayingView: View {
                 if player.isRemote { player.setLiveVideo(false) }
             }
         }
-        // 縦向きの歌詞・キューは、ジャケットの場所を切り替えて出す（Apple Music と同じ）。シートは横向きだけ
-        .sheet(isPresented: Binding(get: { shell.queueOpen && verticalSize == .compact }, set: { shell.queueOpen = $0 })) {
-            QueueView().modifier(DialogSheets(layer: .queue))
-        }
+        // 歌詞・キューは、縦向きも横向きもジャケットの場所を切り替えて出す（Apple Music と同じ）
         .sheet(isPresented: $devicesOpen) { DevicesSheet() }
         .sheet(isPresented: $aiOpen) { AiSheet() }
         // 曲のメニューの「プレイリストに追加」は、この画面の上に出す
@@ -106,39 +85,69 @@ struct NowPlayingView: View {
         }
     }
 
-    private func header(_ player: PlayerService, _ song: Song?) -> some View {
-        HStack {
-            Button { dismiss() } label: { Image(systemName: "chevron.down").font(.title3.weight(.semibold)).frame(width: 44, height: 44) }
-                .accessibilityLabel(L.t("閉じる", "Close"))
-            Spacer()
-            if player.hasVideo {
-                Picker("", selection: $shell.showVideo) {
-                    Text(L.t("曲", "Song")).tag(false)
-                    Text(L.t("動画", "Video")).tag(true)
+    // MARK: 横向き（縦向きと同じ部品を左右に並べる）
+
+    /// 横向き: 左にジャケット・映像（歌詞・キューを開いたらその場所に歌詞・キュー）、右に縦向きと同じ曲名・シーク・操作・音量・下の列。
+    private func landscape(_ player: PlayerService, _ song: Song?) -> some View {
+        let panel = landscapePanel
+        return HStack(alignment: .center, spacing: 28) {
+            ZStack {
+                if let panel {
+                    Group {
+                        switch panel {
+                        case .lyrics: LyricsView(embedded: true)
+                        case .queue: QueueView(embedded: true)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .mask {
+                        LinearGradient(stops: [.init(color: .black, location: 0), .init(color: .black, location: 0.82), .init(color: .clear, location: 1)],
+                                       startPoint: .top, endPoint: .bottom)
+                    }
+                    .transition(.offset(y: 60).combined(with: .opacity))
+                } else {
+                    media(player)
+                        .transition(.offset(y: -60).combined(with: .opacity))
                 }
-                .pickerStyle(.segmented)
-                .frame(width: 160)
-            } else {
-                Text(song?.album?.title ?? L.t("再生中", "Now playing")).font(.subheadline.weight(.semibold)).lineLimit(1)
             }
-            Spacer()
-            // Claude に聞く（今の曲と歌詞を添えて頼む。Android の再生画面と同じ入口）
-            if song != nil {
-                Button { aiOpen = true } label: { Image(systemName: "sparkles").font(.title3).frame(width: 44, height: 44) }
-                    .accessibilityLabel(L.t("Claude に聞く", "Ask Claude"))
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.vertical, 12)
+            // 横向きのジャケットはスクロールの中に無いので、下へ払ったら閉じる（歌詞・キューは中を送るので閉じない）
+            .simultaneousGesture(DragGesture(minimumDistance: 20).onEnded { value in
+                if value.translation.height > 70, value.translation.height > abs(value.translation.width) { dismiss() }
+            }, including: panel == nil ? .all : .subviews)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    Capsule().fill(.white.opacity(0.5)).frame(width: 36, height: 5)
+                        .frame(maxWidth: .infinity, minHeight: 20)
+                        .contentShape(Rectangle())
+                        .onTapGesture { dismiss() }
+                        .accessibilityLabel(L.t("閉じる", "Close"))
+                        .accessibilityAddTraits(.isButton)
+                    portraitTitleRow(player, song)
+                    seekBar(player)
+                    portraitControls(player)
+                    if player.canChangeVolume { volumeBar(player) }
+                    portraitBottomRow(player)
+                }
+                .padding(.vertical, 8)
             }
-            Menu {
-                if let song { SongMenuItems(song: song) }
-            } label: { Image(systemName: "ellipsis").font(.title3).frame(width: 44, height: 44) }
-                .disabled(song == nil)
+            .scrollIndicators(.hidden)
+            .scrollBounceBehavior(.basedOnSize)
+            .modifier(PullDownToDismiss(touching: $scrollTouching) { dismiss() })
+            // 幅は画面の半分ほどに決める（長い曲名の1行の幅に引かれて、右へはみ出していた）
+            .containerRelativeFrame(.horizontal) { width, _ in min(440, (width - 76) / 2) }
         }
-        .foregroundStyle(.primary)
-        .padding(.top, 8)
-        .contentShape(Rectangle())
-        // 上の帯を下へ払っても閉じる
-        .gesture(DragGesture(minimumDistance: 20).onEnded { value in
-            if value.translation.height > 60, abs(value.translation.width) < value.translation.height { dismiss() }
-        })
+        .padding(.horizontal, 24)
+        .animation(.timingCurve(0.2, 0.9, 0.25, 1, duration: 0.5), value: panel)
+    }
+
+    /// 横向きで、ジャケットの場所に出している中身（歌詞・キュー）。
+    private var landscapePanel: PortraitPanel? {
+        guard verticalSize == .compact else { return nil }
+        if shell.queueOpen { return .queue }
+        if LyricsSheetState.shared.open { return .lyrics }
+        return nil
     }
 
     // MARK: 縦向き（Apple Music の並び）
@@ -390,7 +399,7 @@ struct NowPlayingView: View {
         let hasLyrics = if case .found = player.lyrics { true } else { false }
         return HStack {
             Button {
-                // 縦向きはジャケットの場所を歌詞に切り替える（もう一度押すとジャケットに戻る）。横向きはシート
+                // ジャケットの場所を歌詞に切り替える（もう一度押すとジャケットに戻る。縦向きも横向きも）
                 let open = !LyricsSheetState.shared.open
                 shell.queueOpen = false
                 LyricsSheetState.shared.open = open
@@ -440,20 +449,6 @@ struct NowPlayingView: View {
         .padding(.horizontal, 12)
     }
 
-    private func titleRow(_ player: PlayerService, _ song: Song?) -> some View {
-        HStack(alignment: .center, spacing: 8) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(song?.title ?? L.t("何も再生していません", "Nothing playing"))
-                    .font(.title2.weight(.bold)).lineLimit(2)
-                    .onTapGesture { if let id = song?.album?.browseId { AppServices.nav.album(id) } }
-                Text(song?.artistsText ?? "").font(.body).foregroundStyle(.secondary).lineLimit(1)
-                    .onTapGesture { if let id = song?.artists.first(where: { $0.browseId != nil })?.browseId { AppServices.nav.artist(id) } }
-            }
-            Spacer(minLength: 0)
-            if song != nil { LikeButtonView(size: 26) }
-        }
-    }
-
     /// ジャケット（左右に払うと前後の曲へ）か、MV のある曲・ライブで「動画」を選んでいれば映像（右下のボタンで全画面）。
     @ViewBuilder
     private func media(_ player: PlayerService) -> some View {
@@ -492,20 +487,6 @@ struct NowPlayingView: View {
         }
     }
 
-    /// 曲名から下（縦向きはジャケットの下、横向きは右の列）。
-    @ViewBuilder
-    private func details(_ player: PlayerService, _ song: Song?, withHeader: Bool = true) -> some View {
-        if withHeader { header(player, song) }
-        titleRow(player, song)
-        seekBar(player)
-        controls(player)
-        // この iPhone で鳴らしている間は本体の音量（音量ボタンと同じ）。PC で鳴っている間は、その PC のアプリの中の音量。
-        // ほかのスマホで鳴っている間は出さない（スマホの音量はそのスマホで変える。Spotify と同じ）
-        if player.canChangeVolume { volumeBar(player) }
-        deviceAndQueue(player)
-        lyricsCard(player)
-    }
-
     @ViewBuilder
     private func seekBar(_ player: PlayerService) -> some View {
         if player.isLive {
@@ -536,44 +517,6 @@ struct NowPlayingView: View {
         }
     }
 
-    private func controls(_ player: PlayerService) -> some View {
-        HStack {
-            Button(action: player.toggleShuffle) {
-                Image(systemName: "shuffle").foregroundStyle(player.shuffle ? Color.accentColor : Color.primary)
-            }
-            .disabled(!player.canChangeModes)
-            .accessibilityLabel(L.t("シャッフル", "Shuffle"))
-            Spacer()
-            Button(action: player.previous) { Image(systemName: "backward.end.fill").font(.title) }
-                .accessibilityLabel(L.t("前へ", "Previous"))
-            Spacer()
-            Button(action: player.togglePlay) {
-                ZStack {
-                    Circle().fill(Color.white).frame(width: 72, height: 72)
-                    if player.isLoading {
-                        ProgressView().tint(.black)
-                    } else {
-                        Image(systemName: player.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 28)).foregroundStyle(.black)
-                    }
-                }
-            }
-            .accessibilityLabel(player.isPlaying ? L.t("一時停止", "Pause") : L.t("再生", "Play"))
-            Spacer()
-            Button(action: player.next) { Image(systemName: "forward.end.fill").font(.title) }
-                .accessibilityLabel(L.t("次へ", "Next"))
-            Spacer()
-            Button(action: player.cycleRepeat) {
-                Image(systemName: player.repeatMode == .one ? "repeat.1" : "repeat")
-                    .foregroundStyle(player.repeatMode != .off ? Color.accentColor : Color.primary)
-            }
-            .disabled(!player.canChangeModes)
-            .accessibilityLabel(L.t("リピート", "Repeat"))
-        }
-        .font(.title3)
-        .buttonStyle(.plain)
-        .foregroundStyle(.primary)
-    }
-
     /// 音量のゲージ。この iPhone で鳴らしている間は本体の音量（PlayerService.volume が本体の音量を映す）。
     /// PC で鳴っている間はその PC のアプリの中の音量（iPhone の音量ボタンは横取りできないので、画面で変える）。
     private func volumeBar(_ player: PlayerService) -> some View {
@@ -592,52 +535,6 @@ struct NowPlayingView: View {
         .background { SystemVolumeAnchor().frame(width: 1, height: 1).offset(x: -2000).allowsHitTesting(false) }
     }
 
-    private func deviceAndQueue(_ player: PlayerService) -> some View {
-        HStack {
-            if AppServices.connect.configured {
-                Button { devicesOpen = true } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: player.isRemote ? "hifispeaker.2.fill" : "hifispeaker.2")
-                        if player.isRemote, let device = player.remoteDevice { Text(device).font(.caption.weight(.semibold)).lineLimit(1) }
-                    }
-                    .foregroundStyle(.primary)
-                    .frame(minHeight: 44)
-                }
-                .accessibilityLabel(L.t("端末に接続", "Connect to a device"))
-            }
-            Spacer()
-            // RSS のエピソードには YouTube の共有のリンクが無い（ADR-0012）
-            if let song = player.current, !Feed.isExternal(song.videoId) {
-                ShareLink(item: SongActions.url(song)) { Image(systemName: "square.and.arrow.up").frame(width: 44, height: 44) }
-            }
-            Button { shell.queueOpen = true } label: { Image(systemName: "list.bullet").frame(width: 44, height: 44) }
-                .accessibilityLabel(L.t("キュー", "Queue"))
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(.primary)
-    }
-
-    @ViewBuilder
-    private func lyricsCard(_ player: PlayerService) -> some View {
-        if case .found(let lyrics) = player.lyrics, player.current != nil {
-            Button { LyricsSheetState.shared.open = true } label: {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text(L.t("歌詞", "Lyrics")).font(.headline)
-                    LyricsFollower(lyrics: lyrics, positionMs: Int64(player.position * 1000), fontSize: 20)
-                        .frame(height: 260, alignment: .top)
-                        .clipped()
-                        .allowsHitTesting(false)
-                }
-                .padding(16)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(RoundedRectangle(cornerRadius: 14).fill((tint ?? .gray).opacity(0.55)))
-            }
-            .buttonStyle(.plain)
-            .sheet(isPresented: Binding(get: { LyricsSheetState.shared.open }, set: { LyricsSheetState.shared.open = $0 })) {
-                LyricsView().modifier(DialogSheets(layer: .lyrics))
-            }
-        }
-    }
 }
 
 /// 再生中の画面のジャケット。前後の曲のジャケットを横に並べておき（先に読んでおく）、指について動く。

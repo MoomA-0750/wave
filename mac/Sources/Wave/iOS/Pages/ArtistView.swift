@@ -163,7 +163,7 @@ private struct ArtistViewActions: View {
                 Button { model.toggleSubscribe() } label: {
                     Image(systemName: subscribed ? "person.crop.circle.badge.checkmark" : "person.crop.circle.badge.plus")
                         .font(.title3.weight(.semibold))
-                        .modifier(ArtistViewGlassCircle())
+                        .modifier(GlassCircle())
                 }
                 .buttonStyle(.plain)
                 .disabled(model.subscribing || model.artist?.subscribed == nil)
@@ -172,7 +172,7 @@ private struct ArtistViewActions: View {
             Button { model.toggleShuffle() } label: {
                 Image(systemName: "shuffle")
                     .font(.title3.weight(.semibold))
-                    .modifier(ArtistViewGlassCircle(tint: shuffleOn ? Color.accentColor.opacity(0.5) : nil))
+                    .modifier(GlassCircle(tint: shuffleOn ? Color.accentColor.opacity(0.5) : nil))
             }
             .buttonStyle(.plain)
             .accessibilityLabel(L.t("シャッフル", "Shuffle"))
@@ -180,7 +180,7 @@ private struct ArtistViewActions: View {
             Button { model.playOrPause() } label: {
                 Image(systemName: playing ? "pause.fill" : "play.fill")
                     .font(.title3)
-                    .modifier(ArtistViewGlassCircle(tint: .accentColor))
+                    .modifier(GlassCircle(tint: .accentColor))
             }
             .buttonStyle(.plain)
             .disabled(model.topSongs.isEmpty)
@@ -189,22 +189,6 @@ private struct ArtistViewActions: View {
         .foregroundStyle(.white)
         // 丸の大きさは決まっているので、記号は大きくしすぎない
         .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
-    }
-}
-
-/// 丸いガラスの地（iOS 26 より前は薄い丸）。押すと光って弾む。
-private struct ArtistViewGlassCircle: ViewModifier {
-    /// 3つとも同じ大きさ
-    var size: CGFloat = 50
-    var tint: Color? = nil
-
-    func body(content: Content) -> some View {
-        let framed = content.frame(width: size, height: size).contentShape(Circle())
-        if #available(iOS 26.0, *) {
-            framed.glassEffect((tint.map { Glass.regular.tint($0) } ?? .regular).interactive(), in: .circle)
-        } else {
-            framed.background(Circle().fill(tint ?? Color.white.opacity(0.15)))
-        }
     }
 }
 

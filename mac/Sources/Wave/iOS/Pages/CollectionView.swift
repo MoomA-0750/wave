@@ -7,6 +7,8 @@ import WaveCore
 struct CollectionView: View {
     var request: CollectionRequest
     @State private var model: CollectionModel
+    /// 上の大きなジャケットが流れきったか（それまでは上の帯の題を出さない。ジャケットの上の題と二重になる）
+    @State private var pastHero = false
 
     init(request: CollectionRequest) {
         self.request = request
@@ -17,7 +19,7 @@ struct CollectionView: View {
         let player = AppServices.player!
         let rows = model.rows
         List {
-            header(player, rows).listRowSeparator(.hidden).listRowBackground(Color.clear)
+            header(player, rows).listRowInsets(EdgeInsets()).listRowSeparator(.hidden).listRowBackground(Color.clear)
             kindChips.listRowInsets(EdgeInsets()).listRowSeparator(.hidden).listRowBackground(Color.clear)
             if model.loading && model.all.isEmpty {
                 ProgressView().frame(maxWidth: .infinity).padding().listRowSeparator(.hidden).listRowBackground(Color.clear)
@@ -64,6 +66,13 @@ struct CollectionView: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
+        // 大きなジャケットは上の帯の裏まで伸ばす（アーティストのページと同じ）
+        .ignoresSafeArea(edges: .top)
+        .onScrollGeometryChange(for: Bool.self) { geo in
+            geo.contentOffset.y + geo.contentInsets.top > heroHeight - 120
+        } action: { _, past in
+            withAnimation(.easeOut(duration: 0.2)) { pastHero = past }
+        }
         // 地は再生画面と同じ（ジャケットを大きくぼかして暗くしたもの）。高く評価した曲はジャケットが無いので、その色を上に重ねる。
         // 暗い地なので文字は常に暗い表示の色にする
         .background {
@@ -78,49 +87,94 @@ struct CollectionView: View {
         }
         .environment(\.colorScheme, .dark)
         .toolbarColorScheme(.dark, for: .navigationBar)
-        .navigationTitle(model.title ?? "")
+        .navigationTitle(pastHero ? (model.title ?? "") : "")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(.hidden, for: .navigationBar) // apple-ui-allow: iOS 18 でジャケットの上の帯を塗らないため（26 からはガラスになる）
+        .modifier(TopEdgeEffect(hidden: !pastHero))
         .searchable(text: $model.filter, placement: .navigationBarDrawer(displayMode: .automatic), prompt: L.t("この一覧の中を検索", "Search in this list"))
         .toolbar { ToolbarItem(placement: .topBarTrailing) { moreMenu(player) } }
         .refreshable { await model.reload() }
         .onAppear { if model.all.isEmpty && model.error == nil { model.load() } }
     }
 
+    private var heroHeight: CGFloat { 420 }
+
+    /// 上の大きなジャケット（横いっぱい。下の端は地へ溶かす）に、題・アーティスト・補足と、ダウンロード・シャッフル・再生を重ねる
+    /// （アーティストのページ・再生画面と同じ見せ方）。この一覧を流していれば再生は一時停止・再開になる。
     private func header(_ player: PlayerService, _ rows: [TrackRow]) -> some View {
-        VStack(spacing: 8) {
-            Group {
-                if model.isLiked {
-                    LikedCover(size: 240, radius: 10)
-                } else {
-                    Cover(url: Ui.large(model.thumbnailUrl), size: 240, radius: 10)
+        let playing = model.isPlayingHere && player.isPlaying
+        return Color.clear
+            .frame(height: heroHeight)
+            .overlay {
+                ZStack {
+                    if model.isLiked {
+                        ZStack {
+                            Ui.likedGradient
+                            Image(systemName: "heart.fill").font(.system(size: 120)).foregroundStyle(.white.opacity(0.9))
+                        }
+                    } else {
+                        RemoteImage(url: Ui.large(model.thumbnailUrl))
+                    }
+                    LinearGradient(stops: [.init(color: .clear, location: 0.4), .init(color: .black.opacity(0.35), location: 0.8)], startPoint: .top, endPoint: .bottom)
                 }
+                .mask(LinearGradient(stops: [.init(color: .black, location: 0.35), .init(color: .black.opacity(0.9), location: 0.5),
+                                             .init(color: .black.opacity(0.6), location: 0.65), .init(color: .black.opacity(0.3), location: 0.8),
+                                             .init(color: .black.opacity(0.08), location: 0.92), .init(color: .clear, location: 1)],
+                                     startPoint: .top, endPoint: .bottom))
             }
-            .shadow(color: .black.opacity(0.25), radius: 16, y: 8)
-            .padding(.bottom, 8)
-            Text(model.title ?? "").font(.title2.weight(.bold)).multilineTextAlignment(.center).lineLimit(3)
-            if let artist = model.artistText {
-                Button(artist) { if let id = model.albumArtist?.browseId { AppServices.nav.artist(id) } }
-                    .font(.headline)
-                    .buttonStyle(.plain)
-                    .foregroundStyle(Color.accentColor)
-                    .disabled(model.albumArtist?.browseId == nil)
-            }
-            if let detail = model.detail { Text(detail).font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center).lineLimit(3) }
-            // ダウンロード（取っていない／途中／取り終えた。ADR-0016 の 15）。アーティストで絞った高く評価した曲には出さない
-            if model.request.artist == nil { CollectionDownloadButton(model: model) }
-            // 再生・シャッフル再生（iOS のミュージックと同じ大きな2つのボタン）。この一覧を流していれば再生は一時停止・再開になる
-            HStack(spacing: 12) {
-                CollectionViewBigButton(title: model.isPlayingHere && player.isPlaying ? L.t("一時停止", "Pause") : L.t("再生", "Play"),
-                                        icon: model.isPlayingHere && player.isPlaying ? "pause.fill" : "play.fill") {
-                    if model.isPlayingHere { player.togglePlay() } else { model.play(rows: rows) }
+            .overlay(alignment: .bottom) {
+                HStack(alignment: .bottom, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(model.title ?? "").font(.title.bold()).foregroundStyle(.white).lineLimit(2).minimumScaleFactor(0.6)
+                        if let artist = model.artistText {
+                            Button(artist) { if let id = model.albumArtist?.browseId { AppServices.nav.artist(id) } }
+                                .font(.headline)
+                                .buttonStyle(.plain)
+                                .foregroundStyle(.white.opacity(0.85))
+                                .disabled(model.albumArtist?.browseId == nil)
+                        }
+                        if let detail = model.detail { Text(detail).font(.footnote).foregroundStyle(.white.opacity(0.7)).lineLimit(2) }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    actions(player, rows, playing: playing)
                 }
-                CollectionViewBigButton(title: L.t("シャッフル", "Shuffle"), icon: "shuffle") { model.play(rows: rows, shuffle: true) }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 12)
             }
-            .disabled(rows.isEmpty)
-            .padding(.top, 8)
+            .clipped()
+    }
+
+    /// ダウンロード（取っていない／途中／取り終えた。ADR-0016 の 15。アーティストで絞った高く評価した曲には出さない）・シャッフル・再生。
+    /// アーティストのページと同じ大きさのガラスの丸を1つの入れ物にまとめ、色は再生だけ。
+    @ViewBuilder
+    private func actions(_ player: PlayerService, _ rows: [TrackRow], playing: Bool) -> some View {
+        let buttons = HStack(spacing: 10) {
+            if model.request.artist == nil {
+                CollectionDownloadButton(model: model, size: 18, iconOnly: true)
+                    .frame(width: 50, height: 50)
+                    .modifier(GlassCircle())
+            }
+            Button { model.play(rows: rows, shuffle: true) } label: {
+                Image(systemName: "shuffle").font(.title3.weight(.semibold)).modifier(GlassCircle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(L.t("シャッフル", "Shuffle"))
+            Button {
+                if model.isPlayingHere { player.togglePlay() } else { model.play(rows: rows) }
+            } label: {
+                Image(systemName: playing ? "pause.fill" : "play.fill").font(.title3).modifier(GlassCircle(tint: .accentColor))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(playing ? L.t("一時停止", "Pause") : L.t("再生", "Play"))
         }
-        .frame(maxWidth: .infinity)
-        .padding(.top, 8)
+        .foregroundStyle(.white)
+        .disabled(rows.isEmpty)
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+        if #available(iOS 26.0, *) {
+            GlassEffectContainer(spacing: 10) { buttons }
+        } else {
+            buttons
+        }
     }
 
     // 曲の種類で絞る（動画や歌ってみたと、ふつうの曲を分ける。Android と同じ）。同じものをもう一度押すと外す
@@ -162,25 +216,6 @@ struct CollectionView: View {
             Image(systemName: "ellipsis")
         }
         .accessibilityLabel(L.t("その他", "More"))
-    }
-}
-
-private struct CollectionViewBigButton: View {
-    var title: String
-    var icon: String
-    var action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Label(title, systemImage: icon)
-                .font(.headline)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(Color.accentColor)
-        .glassCard(14, interactive: true)
     }
 }
 

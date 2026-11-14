@@ -23,6 +23,22 @@ extension View {
     func subtle() -> some View { font(.footnote).foregroundStyle(.secondary).lineLimit(1) }
 }
 
+/// 丸いガラスの地（iOS 26 より前は薄い丸）。押すと光って弾む。アーティスト・アルバム・プレイリストの頭のボタン。
+struct GlassCircle: ViewModifier {
+    /// 3つとも同じ大きさ
+    var size: CGFloat = 50
+    var tint: Color? = nil
+
+    func body(content: Content) -> some View {
+        let framed = content.frame(width: size, height: size).contentShape(Circle())
+        if #available(iOS 26.0, *) {
+            framed.glassEffect((tint.map { Glass.regular.tint($0) } ?? .regular).interactive(), in: .circle)
+        } else {
+            framed.background(Circle().fill(tint ?? Color.white.opacity(0.15)))
+        }
+    }
+}
+
 /// ジャケットの枠（アーティストは丸、ほかは角の少し丸い四角。Android と同じ）。
 struct Cover: View {
     var url: URL?
