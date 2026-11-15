@@ -144,7 +144,7 @@ struct NowPlayingView: View {
                     if player.isLoading {
                         ProgressView().tint(.black)
                     } else {
-                        Image(systemName: player.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 28)).foregroundStyle(.black)
+                        Image(systemName: player.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 28)).foregroundStyle(.black) // apple-ui-allow: 記号の大きさ（Windows 版と揃える）
                     }
                 }
             }
@@ -220,7 +220,7 @@ private struct CoverCarousel: View {
 
     var body: some View {
         let player = AppServices.player!
-        GeometryReader { geo in
+        GeometryReader { geo in // apple-ui-allow: 大きさに合わせて並べる・描く（測るだけではない）
             let step = geo.size.width + 24
             ZStack {
                 ForEach(slots(player), id: \.index) { slot in

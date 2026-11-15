@@ -11,7 +11,7 @@ struct PlayerBar: View {
 
     var body: some View {
         let player = AppServices.player!
-        GeometryReader { geo in
+        GeometryReader { geo in // apple-ui-allow: 大きさに合わせて並べる・描く（測るだけではない）
             let side = geo.size.width * 0.3
             HStack(spacing: Kasane.Space.s4) {
                 // 左: 曲
@@ -37,15 +37,15 @@ struct PlayerBar: View {
                 HStack(spacing: Kasane.Space.s1) {
                     Spacer(minLength: 0)
                     IconToggle(isOn: isLyrics, help: L.t("歌詞", "Lyrics"), action: toggleLyrics) {
-                        Image(systemName: "quote.bubble").font(.system(size: 15))
+                        Image(systemName: "quote.bubble").font(.system(size: 15)) // apple-ui-allow: 記号の大きさ（Windows 版と揃える）
                     }
                     IconToggle(isOn: model.queueToggleOn, help: L.t("キュー", "Queue"), action: model.toggleQueue) {
-                        Image(systemName: "list.bullet").font(.system(size: 15))
+                        Image(systemName: "list.bullet").font(.system(size: 15)) // apple-ui-allow: 記号の大きさ（Windows 版と揃える）
                     }
                     if AppServices.connect.configured {
                         Button { devicesOpen.toggle() } label: {
                             HStack(spacing: Kasane.Space.s2) {
-                                Image(systemName: player.isRemote ? "iphone.radiowaves.left.and.right" : "hifispeaker.2").font(.system(size: 15))
+                                Image(systemName: player.isRemote ? "iphone.radiowaves.left.and.right" : "hifispeaker.2").font(.system(size: 15)) // apple-ui-allow: 記号の大きさ（Windows 版と揃える）
                                     .foregroundStyle(player.isRemote ? Color.accentColor : Color.primary)
                                 // ほかの端末で鳴っているときは、アイコンの右にその端末名（Spotify と同じく色を付ける）
                                 if player.isRemote, let device = player.remoteDevice {
@@ -58,12 +58,12 @@ struct PlayerBar: View {
                         .popover(isPresented: $devicesOpen, arrowEdge: .top) { DevicesPopover(isOpen: $devicesOpen) }
                     }
                     IconToggle(isOn: model.paneToggleOn, help: L.t("再生中の画面", "Now playing view"), action: model.togglePane) {
-                        Image(systemName: "sidebar.right").font(.system(size: 15))
+                        Image(systemName: "sidebar.right").font(.system(size: 15)) // apple-ui-allow: 記号の大きさ（Windows 版と揃える）
                     }
                     IconToggle(isOn: model.fullScreen, help: L.t("全画面 (F11)", "Full screen (F11)"), action: { model.setFullScreen(!model.fullScreen) }) {
-                        Image(systemName: "arrow.up.left.and.arrow.down.right").font(.system(size: 15))
+                        Image(systemName: "arrow.up.left.and.arrow.down.right").font(.system(size: 15)) // apple-ui-allow: 記号の大きさ（Windows 版と揃える）
                     }
-                    Button(action: mute) { Image(systemName: volumeSymbol(player.volume)).font(.system(size: 15)).frame(width: 20) }
+                    Button(action: mute) { Image(systemName: volumeSymbol(player.volume)).font(.system(size: 15)).frame(width: 20) } // apple-ui-allow: 記号の大きさ（Windows 版と揃える）
                         .buttonStyle(IconButtonStyle()).help(L.t("ミュート", "Mute"))
                     Slider(value: Binding(get: { player.volume }, set: { player.volume = $0 }), in: 0...1).frame(width: 110).controlSize(.small)
                 }
@@ -110,9 +110,9 @@ struct TransportControls: View {
         VStack(spacing: 2) {
             HStack(spacing: Kasane.Space.s3) {
                 IconToggle(isOn: player.shuffle, help: L.t("シャッフル", "Shuffle"), action: player.toggleShuffle) {
-                    Image(systemName: "shuffle").font(.system(size: 15))
+                    Image(systemName: "shuffle").font(.system(size: 15)) // apple-ui-allow: 記号の大きさ（Windows 版と揃える）
                 }
-                Button(action: player.previous) { Image(systemName: "backward.end.fill").font(.system(size: 15)) }
+                Button(action: player.previous) { Image(systemName: "backward.end.fill").font(.system(size: 15)) } // apple-ui-allow: 記号の大きさ（Windows 版と揃える）
                     .buttonStyle(IconButtonStyle()).help(L.t("前へ", "Previous"))
                 Button(action: player.togglePlay) {
                     ZStack {
@@ -120,17 +120,17 @@ struct TransportControls: View {
                         if player.isLoading {
                             ProgressView().controlSize(.small).tint(Color(nsColor: .windowBackgroundColor))
                         } else {
-                            Image(systemName: player.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 15))
+                            Image(systemName: player.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 15)) // apple-ui-allow: 記号の大きさ（Windows 版と揃える）
                                 .foregroundStyle(Color(nsColor: .windowBackgroundColor))
                         }
                     }
                 }
                 .buttonStyle(.plain)
                 .help(L.t("再生/一時停止", "Play/Pause"))
-                Button(action: player.next) { Image(systemName: "forward.end.fill").font(.system(size: 15)) }
+                Button(action: player.next) { Image(systemName: "forward.end.fill").font(.system(size: 15)) } // apple-ui-allow: 記号の大きさ（Windows 版と揃える）
                     .buttonStyle(IconButtonStyle()).help(L.t("次へ", "Next"))
                 IconToggle(isOn: player.repeatMode != .off, help: L.t("リピート", "Repeat"), action: player.cycleRepeat) {
-                    Image(systemName: player.repeatMode == .one ? "repeat.1" : "repeat").font(.system(size: 15))
+                    Image(systemName: player.repeatMode == .one ? "repeat.1" : "repeat").font(.system(size: 15)) // apple-ui-allow: 記号の大きさ（Windows 版と揃える）
                 }
             }
             if player.isLive {
@@ -225,14 +225,14 @@ struct FullView: View {
             Color(nsColor: .windowBackgroundColor)
             RemoteImage(url: Ui.large(song?.thumbnailUrl)).opacity(0.25)
             LinearGradient(colors: [.black.opacity(0.2), .black.opacity(0.8)], startPoint: .top, endPoint: .bottom)
-            GeometryReader { outer in
+            GeometryReader { outer in // apple-ui-allow: 大きさに合わせて並べる・描く（測るだけではない）
             // 左に曲（3）、右に歌詞（2）。Windows と同じ割り付け
             let left = (outer.size.width - 56) * 0.6
             HStack(alignment: .bottom, spacing: 56) {
                 VStack(alignment: .leading, spacing: Kasane.Space.s5) {
                     if player.video != nil { SongVideoSwitch() }
                     // ジャケットは正方形、映像は枠いっぱいの大きさ（縦横比はそのまま）
-                    GeometryReader { geo in
+                    GeometryReader { geo in // apple-ui-allow: 大きさに合わせて並べる・描く（測るだけではない）
                         if model.showVideo && player.video != nil {
                             VideoOrCover(size: nil, inFullView: true)
                         } else {
@@ -244,7 +244,7 @@ struct FullView: View {
                         }
                     }
                     VStack(alignment: .leading, spacing: Kasane.Space.s1) {
-                        LinkText(text: song?.title ?? "", action: SongLinks.openAlbum).font(.system(size: 44, weight: .bold)).lineLimit(1)
+                        LinkText(text: song?.title ?? "", action: SongLinks.openAlbum).font(.system(size: 44, weight: .bold)).lineLimit(1) // apple-ui-allow: 見出し・歌詞の大きさ（Windows 版と揃える）
                             .foregroundStyle(.white)
                         ArtistLink(font: .system(size: 22), color: .white.opacity(0.75))
                     }
@@ -262,7 +262,7 @@ struct FullView: View {
             }
             }
             .padding(EdgeInsets(top: 56, leading: 56, bottom: Kasane.Space.s8, trailing: 56))
-            Button { model.setFullScreen(false) } label: { Image(systemName: "arrow.down.right.and.arrow.up.left").font(.system(size: 15)) }
+            Button { model.setFullScreen(false) } label: { Image(systemName: "arrow.down.right.and.arrow.up.left").font(.system(size: 15)) } // apple-ui-allow: 記号の大きさ（Windows 版と揃える）
                 .buttonStyle(IconButtonStyle())
                 .foregroundStyle(.white)
                 .help(L.t("全画面を終える (Esc)", "Exit full screen (Esc)"))

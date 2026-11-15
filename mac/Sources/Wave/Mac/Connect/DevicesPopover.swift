@@ -80,7 +80,7 @@ private struct DeviceRow: View {
 
     var body: some View {
         let content = HStack(spacing: Kasane.Space.s3) {
-            Image(systemName: symbol).font(.system(size: 22)).frame(width: 30)
+            Image(systemName: symbol).font(.system(size: 22)).frame(width: 30) // apple-ui-allow: 記号の大きさ（Windows 版と揃える）
                 .foregroundStyle(accent ? Color.accentColor : Color.primary)
             VStack(alignment: .leading, spacing: 1) {
                 Text(title).font(.body.weight(.semibold)).lineLimit(1).truncationMode(.tail)

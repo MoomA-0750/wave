@@ -19,7 +19,7 @@ struct LyricsFollower: View {
         case .plain(let p):
             VStack(alignment: .leading, spacing: Kasane.Space.s2) {
                 ForEach(Array(p.text.split(separator: "\n", omittingEmptySubsequences: false).prefix(plainLines).enumerated()), id: \.offset) { _, line in
-                    Text(String(line)).font(.system(size: fontSize, weight: .semibold)).lineSpacing(fontSize * 0.375)
+                    Text(String(line)).font(.system(size: fontSize, weight: .semibold)).lineSpacing(fontSize * 0.375) // apple-ui-allow: 見出し・歌詞の大きさ（Windows 版と揃える）
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
@@ -45,7 +45,7 @@ private struct SyncedLyrics: View {
                         let isSub = k > 0 && lines[k - 1].startMs == line.startMs
                         let size = isSub ? fontSize * 0.8 : fontSize
                         Text(line.text.trimmingCharacters(in: .whitespaces).isEmpty ? "♪" : line.text)
-                            .font(.system(size: size, weight: isSub ? .regular : .semibold))
+                            .font(.system(size: size, weight: isSub ? .regular : .semibold)) // apple-ui-allow: 見出し・歌詞の大きさ（Windows 版と揃える）
                             .lineSpacing(size * 0.375)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .opacity(i >= 0 && k >= i && k <= last ? 1 : k < i ? 0.5 : 0.4)

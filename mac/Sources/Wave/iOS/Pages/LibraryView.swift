@@ -237,7 +237,7 @@ private struct LibraryViewAvatar: View {
         if let url {
             Cover(url: Ui.small(url), size: 30, round: true)
         } else {
-            Image(systemName: "person.crop.circle").font(.system(size: 24))
+            Image(systemName: "person.crop.circle").font(.system(size: 24)) // apple-ui-allow: 記号の大きさ（Windows 版と揃える）
         }
     }
 }
@@ -290,7 +290,7 @@ private struct LibraryViewGridCell: View {
             Color.clear
                 .aspectRatio(1, contentMode: .fit)
                 .overlay {
-                    GeometryReader { geo in
+                    GeometryReader { geo in // apple-ui-allow: 大きさに合わせて並べる・描く（測るだけではない）
                         if entry.isLiked {
                             LikedCover(size: geo.size.width)
                         } else if entry.isNewEpisodes {

@@ -11,7 +11,7 @@ struct GlassCard: ViewModifier {
         if #available(iOS 26.0, *) {
             content.glassEffect(interactive ? .regular.interactive() : .regular, in: RoundedRectangle(cornerRadius: radius, style: Kasane.cornerStyle))
         } else {
-            content.background(.regularMaterial, in: RoundedRectangle(cornerRadius: radius, style: Kasane.cornerStyle))
+            content.background(.regularMaterial, in: RoundedRectangle(cornerRadius: radius, style: Kasane.cornerStyle)) // apple-ui-allow: Liquid Glass（26）より前の代わりのすりガラス
         }
     }
 }
@@ -46,7 +46,7 @@ struct LikedCover: View {
     var body: some View {
         ZStack {
             Ui.likedGradient
-            Image(systemName: "heart.fill").font(.system(size: size * 0.36)).foregroundStyle(.white)
+            Image(systemName: "heart.fill").font(.system(size: size * 0.36)).foregroundStyle(.white) // apple-ui-allow: 記号の大きさ（Windows 版と揃える）
         }
         .frame(width: size, height: size)
         .clipShape(RoundedRectangle(cornerRadius: radius, style: Kasane.cornerStyle))
@@ -145,7 +145,7 @@ struct LikeButtonView: View {
         if LikeButton.available(player) {
             Button { LikeButton.press(player) } label: {
                 Image(systemName: LikeButton.symbol(player))
-                    .font(.system(size: size))
+                    .font(.system(size: size)) // apple-ui-allow: 記号・絵に合わせた大きさ（Windows 版と揃える）
                     .foregroundStyle(LikeButton.accent(player) ? Color.accentColor : Color.secondary)
                     .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
@@ -164,7 +164,7 @@ struct PlayCircle: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: "play.fill")
-                .font(.system(size: size * 0.38))
+                .font(.system(size: size * 0.38)) // apple-ui-allow: 記号・絵に合わせた大きさ（Windows 版と揃える）
                 .foregroundStyle(.white)
                 .frame(width: size, height: size)
                 .background(Circle().fill(Color.accentColor))

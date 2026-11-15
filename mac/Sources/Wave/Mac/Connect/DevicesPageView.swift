@@ -18,7 +18,7 @@ struct DevicesPageView: View {
         let pairing = devices.pairingState
         ScrollView {
             VStack(alignment: .leading, spacing: Kasane.Space.s2) {
-                Text(L.t("端末の連携", "Devices")).font(.system(size: 48, weight: .bold))
+                Text(L.t("端末の連携", "Devices")).font(.system(size: 48, weight: .bold)) // apple-ui-allow: 見出し・歌詞の大きさ（Windows 版と揃える）
                 Text(L.t("同じアカウントのスマホと Mac のあいだで、再生を引き継げます。端末どうしの通信は暗号化され、中継のサーバーは中身を読めません。",
                          "Move playback between your phone and Mac on the same account. Devices encrypt everything they share, so the relay server can’t read it."))
                     .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true).padding(.bottom, Kasane.Space.s4)
@@ -176,7 +176,7 @@ struct DevicesPageView: View {
                 Button(L.t("文字列をコピー", "Copy text")) { copyOffer() }
             }
             if pairing.kind == .showCode, let code = pairing.code, code.count == 6 {
-                Text(String(code.prefix(3)) + " " + String(code.suffix(3))).font(.system(size: 44, weight: .semibold)).tracking(8).monospacedDigit()
+                Text(String(code.prefix(3)) + " " + String(code.suffix(3))).font(.system(size: 44, weight: .semibold)).tracking(8).monospacedDigit() // apple-ui-allow: 見出し・歌詞の大きさ（Windows 版と揃える）
             }
             if pairing.kind == .enterCode {
                 HStack(spacing: Kasane.Space.s2) {
@@ -275,7 +275,7 @@ struct DevicesPageView: View {
 
     private func memberRow(_ member: MemberView) -> some View {
         HStack(spacing: Kasane.Space.s4) {
-            Image(systemName: member.isSelf || member.isPc ? "desktopcomputer" : "iphone").font(.system(size: 20)).frame(width: 28)
+            Image(systemName: member.isSelf || member.isPc ? "desktopcomputer" : "iphone").font(.system(size: 20)).frame(width: 28) // apple-ui-allow: 記号の大きさ（Windows 版と揃える）
             VStack(alignment: .leading, spacing: 2) {
                 Text(member.isController ? L.t("\(member.label)（操作だけ）", "\(member.label) (remote only)") : member.label)
                 Text(member.active ? L.t("再生中の端末", "Active device") : member.online ? L.t("オンライン", "Online") : L.t("オフライン", "Offline"))

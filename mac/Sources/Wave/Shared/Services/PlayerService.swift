@@ -174,7 +174,7 @@ final class PlayerService {
     private var remoteDeviceId: String? { isRemote ? remote?.deviceId : nil }
 
     @ObservationIgnored private var timer: Timer?
-    @ObservationIgnored private var saveWork: DispatchWorkItem?
+    @ObservationIgnored private var saveWork: Task<Void, Never>?
     @ObservationIgnored private let store = QueueStore()
     @ObservationIgnored private var lastPositionSaveMs: Int64 = 0
     private static let positionSaveIntervalMs: Int64 = 15_000
@@ -284,9 +284,11 @@ final class PlayerService {
 
     private func scheduleSave() {
         saveWork?.cancel()
-        let work = DispatchWorkItem { [weak self] in MainActor.assumeIsolated { self?.saveQueue() } }
-        saveWork = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2, execute: work)
+        saveWork = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(2))
+            guard !Task.isCancelled else { return }
+            self?.saveQueue()
+        }
     }
 
     /// 今のキューを保存する（ほかの端末を映している間は、手元のキューが無いので書かない）。
@@ -639,7 +641,7 @@ final class PlayerService {
     }
 
     @ObservationIgnored private var pendingRemoteSeek: Int64?
-    @ObservationIgnored private var remoteSeekWork: DispatchWorkItem?
+    @ObservationIgnored private var remoteSeekWork: Task<Void, Never>?
 
     func seek(_ seconds: Double) {
         if isRemote {
@@ -654,15 +656,12 @@ final class PlayerService {
             pendingRemoteSeek = target
             holdOptimistic()
             remoteSeekWork?.cancel()
-            let work = DispatchWorkItem { [weak self] in
-                MainActor.assumeIsolated {
-                    guard let self else { return }
-                    if self.isRemote, let p = self.pendingRemoteSeek { self.sendRemote(.seek, p) }
-                    self.pendingRemoteSeek = nil
-                }
+            remoteSeekWork = Task { [weak self] in
+                try? await Task.sleep(for: .milliseconds(350))
+                guard !Task.isCancelled, let self else { return }
+                if self.isRemote, let p = self.pendingRemoteSeek { self.sendRemote(.seek, p) }
+                self.pendingRemoteSeek = nil
             }
-            remoteSeekWork = work
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: work)
             return
         }
         guard engine.hasSource, !isLive else { return }

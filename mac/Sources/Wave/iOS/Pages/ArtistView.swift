@@ -34,7 +34,7 @@ struct ArtistView: View {
                     Button {
                         if playingHere { player.toggleShuffle() } else { shufflePlay.toggle() }
                     } label: {
-                        Image(systemName: "shuffle").font(.system(size: 20, weight: .semibold))
+                        Image(systemName: "shuffle").font(.system(size: 20, weight: .semibold)) // apple-ui-allow: 記号の大きさ（Windows 版と揃える）
                             .foregroundStyle((playingHere ? player.shuffle : shufflePlay) ? Color.accentColor : Color.secondary)
                             .frame(width: 44, height: 44)
                     }
@@ -121,7 +121,7 @@ struct ArtistView: View {
         }
         .navigationTitle(pastHero ? (artist?.name ?? "") : "")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(.hidden, for: .navigationBar)
+        .toolbarBackground(.hidden, for: .navigationBar) // apple-ui-allow: 塗っていない（バーの地を隠して窓の地を透かす）
         .modifier(TopEdgeEffect(hidden: !pastHero))
         .refreshable { await load() }
         .task { if artist == nil { await load() } }
@@ -137,7 +137,7 @@ struct ArtistView: View {
             }
             .overlay(alignment: .bottomLeading) {
                 Text(artist?.name ?? "")
-                    .font(.system(size: 40, weight: .bold))
+                    .font(.system(size: 40, weight: .bold)) // apple-ui-allow: 見出し・歌詞の大きさ（Windows 版と揃える）
                     .foregroundStyle(.white)
                     .lineLimit(2)
                     .minimumScaleFactor(0.5)
@@ -252,7 +252,7 @@ private struct ArtistViewPlayPause: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: playing ? "pause.fill" : "play.fill")
-                .font(.system(size: 22))
+                .font(.system(size: 22)) // apple-ui-allow: 記号・絵に合わせた大きさ（Windows 版と揃える）
                 .foregroundStyle(.white)
                 .frame(width: 56, height: 56)
                 .background(Circle().fill(Color.accentColor))

@@ -112,7 +112,7 @@ enum Artwork {
                     b += pb * weight
                     w += weight
                 }
-                if w > 0 { color = Color(red: r / w / 255, green: g / w / 255, blue: b / w / 255) }
+                if w > 0 { color = Color(red: r / w / 255, green: g / w / 255, blue: b / w / 255) } // apple-ui-allow: 絵から取った色・計算した色（直書きではない）
             }
         }
         colors[url] = color

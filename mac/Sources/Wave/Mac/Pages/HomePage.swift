@@ -175,7 +175,7 @@ struct MoodPageView: View {
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: Kasane.Space.s6) {
-                Text(mood.title).font(.system(size: 48, weight: .bold)).padding(EdgeInsets(top: Kasane.Space.s4, leading: Kasane.Space.s2, bottom: 0, trailing: Kasane.Space.s2))
+                Text(mood.title).font(.system(size: 48, weight: .bold)).padding(EdgeInsets(top: Kasane.Space.s4, leading: Kasane.Space.s2, bottom: 0, trailing: Kasane.Space.s2)) // apple-ui-allow: 見出し・歌詞の大きさ（Windows 版と揃える）
                 if loading { ProgressView().padding(.horizontal, Kasane.Space.s2) }
                 ForEach(Array(shelves.enumerated()), id: \.offset) { _, shelf in
                     ShelfView(title: shelf.title, strapline: shelf.strapline, items: shelf.items)
@@ -202,7 +202,7 @@ struct HistoryPageView: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
                 VStack(alignment: .leading, spacing: Kasane.Space.s2) {
-                    Text(L.t("最近再生した曲", "Recently played")).font(.system(size: 48, weight: .bold))
+                    Text(L.t("最近再生した曲", "Recently played")).font(.system(size: 48, weight: .bold)) // apple-ui-allow: 見出し・歌詞の大きさ（Windows 版と揃える）
                     if loading { ProgressView() }
                     if let error { Text(error) }
                 }

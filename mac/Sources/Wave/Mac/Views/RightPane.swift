@@ -23,7 +23,7 @@ extension LikeButton {
     static func view(_ player: PlayerService, size: CGFloat) -> some View {
         if available(player) {
             Button { press(player) } label: {
-                Image(systemName: symbol(player)).font(.system(size: size)).foregroundStyle(accent(player) ? Color.accentColor : Color.secondary)
+                Image(systemName: symbol(player)).font(.system(size: size)).foregroundStyle(accent(player) ? Color.accentColor : Color.secondary) // apple-ui-allow: 記号の大きさ（Windows 版と揃える）
             }
             .buttonStyle(IconButtonStyle())
             .help(tip(player))
@@ -186,7 +186,7 @@ struct QueueView: View {
                 if !model.queueHistory && player.userQueueEnd > player.index + 1 && !player.isRemote {
                     Button(L.t("キューを消去", "Clear queue")) { player.clearUserQueue() }.buttonStyle(.textLink)
                 }
-                Button { model.setRightPane(open: true, queue: false) } label: { Image(systemName: "xmark").font(.system(size: 11)) }
+                Button { model.setRightPane(open: true, queue: false) } label: { Image(systemName: "xmark").font(.system(size: 11)) } // apple-ui-allow: 記号の大きさ（Windows 版と揃える）
                     .buttonStyle(IconButtonStyle()).help(L.t("閉じる", "Close"))
             }
             .padding(EdgeInsets(top: Kasane.Space.s3, leading: Kasane.Space.s4, bottom: Kasane.Space.s1, trailing: Kasane.Space.s2))

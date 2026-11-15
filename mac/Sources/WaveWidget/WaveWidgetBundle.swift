@@ -36,7 +36,7 @@ private func loadImage(_ url: URL?) -> WidgetImage? {
     return WidgetImage(data: data)
 }
 
-private let accent = Color(red: 0.27, green: 0.55, blue: 1.0)
+private let accent = Color(red: 0.27, green: 0.55, blue: 1.0) // apple-ui-allow: 作品の絵の色（Windows・Android 版と同じ）
 
 /// ジャケット（無ければ音符）。
 private struct Artwork: View {
@@ -102,10 +102,10 @@ private struct Controls: View {
     var body: some View {
         HStack(spacing: Kasane.Space.s5) {
             Button(intent: PreviousTrackIntent()) { Image(systemName: "backward.fill") }
-            Button(intent: TogglePlayIntent()) { Image(systemName: playing ? "pause.fill" : "play.fill").font(.system(size: size + 6)) }
+            Button(intent: TogglePlayIntent()) { Image(systemName: playing ? "pause.fill" : "play.fill").font(.system(size: size + 6)) } // apple-ui-allow: 記号の大きさ（Windows 版と揃える）
             Button(intent: NextTrackIntent()) { Image(systemName: "forward.fill") }
         }
-        .font(.system(size: size))
+        .font(.system(size: size)) // apple-ui-allow: 記号・絵に合わせた大きさ（Windows 版と揃える）
         .buttonStyle(.plain)
         .foregroundStyle(.white)
     }
@@ -209,11 +209,11 @@ struct PlaylistWidgetView: View {
         if let playlist = entry.playlist {
             let buttons = HStack(spacing: Kasane.Space.s3) {
                 Button(intent: PlayPlaylistIntent(playlistId: playlist.id, shuffle: false)) {
-                    Image(systemName: "play.fill").font(.system(size: 16, weight: .bold)).foregroundStyle(.white)
+                    Image(systemName: "play.fill").font(.system(size: 16, weight: .bold)).foregroundStyle(.white) // apple-ui-allow: 記号の大きさ（Windows 版と揃える）
                         .frame(width: 38, height: 38).background(Circle().fill(accent))
                 }
                 Button(intent: PlayPlaylistIntent(playlistId: playlist.id, shuffle: true)) {
-                    Image(systemName: "shuffle").font(.system(size: 14, weight: .semibold)).foregroundStyle(.white)
+                    Image(systemName: "shuffle").font(.system(size: 14, weight: .semibold)).foregroundStyle(.white) // apple-ui-allow: 記号の大きさ（Windows 版と揃える）
                         .frame(width: 34, height: 34).background(Circle().fill(Color.white.opacity(0.15)))
                 }
             }

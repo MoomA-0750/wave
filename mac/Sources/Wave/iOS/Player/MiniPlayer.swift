@@ -29,7 +29,7 @@ struct MiniPlayer: View {
                     if player.isLoading {
                         ProgressView()
                     } else {
-                        Image(systemName: player.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 20))
+                        Image(systemName: player.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 20)) // apple-ui-allow: 記号の大きさ（Windows 版と揃える）
                     }
                 }
                 .frame(width: 40, height: 40)
@@ -41,7 +41,7 @@ struct MiniPlayer: View {
         .padding(.horizontal, Kasane.Space.s3)
         .overlay(alignment: .bottom) {
             // 進み具合の線
-            GeometryReader { geo in
+            GeometryReader { geo in // apple-ui-allow: 大きさに合わせて並べる・描く（測るだけではない）
                 Capsule().fill(Color.primary.opacity(0.85))
                     .frame(width: geo.size.width * progress(player), height: 2)
             }

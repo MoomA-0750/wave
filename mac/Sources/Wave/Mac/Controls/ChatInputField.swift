@@ -23,7 +23,7 @@ struct ChatInputField: NSViewRepresentable {
     var autoFocus = false
     var onSubmit: () -> Void
 
-    private static let font = NSFont.systemFont(ofSize: NSFont.systemFontSize)
+    private static let font = NSFont.systemFont(ofSize: NSFont.systemFontSize) // apple-ui-allow: システムの字の大きさ（NSFont.systemFontSize）
     private static let inset = NSSize(width: 4, height: 4)
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
@@ -52,7 +52,7 @@ struct ChatInputField: NSViewRepresentable {
                       forKey: "placeholderAttributedString")
         view.setAccessibilityPlaceholderValue(placeholder)
         if autoFocus {
-            DispatchQueue.main.async { view.window?.makeFirstResponder(view) }
+            Task { @MainActor in view.window?.makeFirstResponder(view) }
         }
         return scroll
     }

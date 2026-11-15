@@ -101,7 +101,7 @@ final class CollectionModel {
         all = []
         loading = true
         error = nil
-        if isLiked { gradient = Color(red: 0x50 / 255, green: 0x38 / 255, blue: 0xA0 / 255) } else { Task { await color() } }
+        if isLiked { gradient = Color(red: 0x50 / 255, green: 0x38 / 255, blue: 0xA0 / 255) } else { Task { await color() } } // apple-ui-allow: 作品の絵の色（Windows・Android 版と同じ）
         task = Task {
             if request.isAlbum { await loadAlbum(mine) } else { await loadPlaylist(mine) }
             if mine == generation {
@@ -142,7 +142,7 @@ final class CollectionModel {
         }
         var first = true
         let result = (try? await AppServices.music.fullPlaylist(request.id, onPage: { page in
-            DispatchQueue.main.async {
+            DispatchQueue.main.async { // apple-ui-allow: ページの届いた順に main の列へ積む（後の c.resume() と同じ列で順を守る）
                 MainActor.assumeIsolated {
                     guard mine == self.generation else { return }
                     if first {
@@ -164,7 +164,7 @@ final class CollectionModel {
                 }
             }
         }, order: serverOrder)) ?? .failed(.network)
-        await withCheckedContinuation { c in DispatchQueue.main.async { c.resume() } }
+        await withCheckedContinuation { c in DispatchQueue.main.async { c.resume() } } // apple-ui-allow: 先に積んだページの処理が全部済むまで待つ（Task.yield では順を守れない）
         guard mine == generation else { return }
         guard let page = result.value else {
             error = result.failure == .notLoggedIn ? L.t("このプレイリストを見るにはログインしてください", "Log in to see this playlist")
@@ -294,7 +294,7 @@ struct CollectionPageView: View {
             }
             // 題名・アーティスト（アルバムだけ。押すとアーティストのページ）・説明。下端をジャケットの下端にそろえる
             VStack(alignment: .leading, spacing: 0) {
-                Text(model.title ?? "").font(.system(size: 56, weight: .bold)).lineLimit(2).minimumScaleFactor(0.5).padding(.bottom, Kasane.Space.s2)
+                Text(model.title ?? "").font(.system(size: 56, weight: .bold)).lineLimit(2).minimumScaleFactor(0.5).padding(.bottom, Kasane.Space.s2) // apple-ui-allow: 見出し・歌詞の大きさ（Windows 版と揃える）
                 if let artist = model.artistText {
                     LinkText(text: artist) { if let id = model.albumArtist?.browseId { AppServices.nav.artist(id) } }
                         .font(.body.weight(.semibold)).padding(.bottom, 2)
@@ -310,16 +310,16 @@ struct CollectionPageView: View {
             PlayCircleButton(action: {
                 if model.isPlayingHere { player.togglePlay() } else { model.play(rows: model.rows, shuffle: model.shufflePlay ? true : nil) }
             }) {
-                Image(systemName: model.isPlayingHere && player.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 20))
+                Image(systemName: model.isPlayingHere && player.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 20)) // apple-ui-allow: 記号の大きさ（Windows 版と揃える）
             }
             .disabled(model.rows.isEmpty)
             IconToggle(isOn: model.isPlayingHere ? player.shuffle : model.shufflePlay, help: L.t("シャッフル", "Shuffle")) {
                 if model.isPlayingHere { player.toggleShuffle() } else { model.shufflePlay.toggle() }
-            } label: { Image(systemName: "shuffle").font(.system(size: 20)) }
+            } label: { Image(systemName: "shuffle").font(.system(size: 20)) } // apple-ui-allow: 記号の大きさ（Windows 版と揃える）
             Menu {
                 Button(L.t("次に再生", "Play next"), systemImage: "text.line.first.and.arrowtriangle.forward") { player.queueAll(model.rows.map(\.song), next: true) }
                 Button(L.t("キューに追加", "Add to queue"), systemImage: "text.badge.plus") { player.queueAll(model.rows.map(\.song), next: false) }
-            } label: { Image(systemName: "ellipsis").font(.system(size: 20)) }
+            } label: { Image(systemName: "ellipsis").font(.system(size: 20)) } // apple-ui-allow: 記号の大きさ（Windows 版と揃える）
                 .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().help(L.t("その他", "More"))
             if model.loading { ProgressView().controlSize(.small) }
             Spacer()

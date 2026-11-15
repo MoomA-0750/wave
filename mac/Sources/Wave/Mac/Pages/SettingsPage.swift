@@ -18,7 +18,7 @@ struct SettingsPageView: View {
         let account = AppServices.account!
         ScrollView {
             VStack(alignment: .leading, spacing: Kasane.Space.s2) {
-                Text(L.t("設定", "Settings")).font(.system(size: 48, weight: .bold)).padding(.bottom, Kasane.Space.s4)
+                Text(L.t("設定", "Settings")).font(.system(size: 48, weight: .bold)).padding(.bottom, Kasane.Space.s4) // apple-ui-allow: 見出し・歌詞の大きさ（Windows 版と揃える）
 
                 section(L.t("アカウント", "Account"))
                 card {
@@ -26,7 +26,7 @@ struct SettingsPageView: View {
                         if let url = Ui.small(account.photoUrl) {
                             Cover(url: url, size: 56, round: true)
                         } else {
-                            Image(systemName: "person.crop.circle.fill").font(.system(size: 50)).foregroundStyle(.secondary)
+                            Image(systemName: "person.crop.circle.fill").font(.system(size: 50)).foregroundStyle(.secondary) // apple-ui-allow: 記号の大きさ（Windows 版と揃える）
                         }
                         VStack(alignment: .leading, spacing: 2) {
                             Text(account.isLoggedIn ? account.name ?? L.t("ログイン中", "Logged in") : L.t("ログインしていません", "Not logged in")).subtitleStyle()

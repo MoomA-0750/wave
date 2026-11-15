@@ -63,7 +63,7 @@ final class MenuBarController: NSObject {
         let size = NSFont.systemFontSize
         let text = NSMutableAttributedString(string: shorten(title, maxTitle), attributes: [.font: NSFont.boldSystemFont(ofSize: size)])
         if !artist.isEmpty {
-            text.append(NSAttributedString(string: " - " + shorten(artist, maxArtist), attributes: [.font: NSFont.systemFont(ofSize: size)]))
+            text.append(NSAttributedString(string: " - " + shorten(artist, maxArtist), attributes: [.font: NSFont.systemFont(ofSize: size)])) // apple-ui-allow: システムの字の大きさ（NSFont.systemFontSize）
         }
         return text
     }
@@ -327,7 +327,7 @@ private struct GlassBackground: ViewModifier {
         if #available(macOS 26.0, *) {
             content.glassEffect(.regular, in: .rect(cornerRadius: Kasane.Radius.card, style: Kasane.cornerStyle))
         } else {
-            content.background(.regularMaterial, in: RoundedRectangle(cornerRadius: Kasane.Radius.card, style: Kasane.cornerStyle))
+            content.background(.regularMaterial, in: RoundedRectangle(cornerRadius: Kasane.Radius.card, style: Kasane.cornerStyle)) // apple-ui-allow: Liquid Glass（26）より前の代わりのすりガラス
         }
     }
 }
