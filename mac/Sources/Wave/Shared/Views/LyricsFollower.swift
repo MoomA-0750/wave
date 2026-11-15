@@ -19,7 +19,7 @@ struct LyricsFollower: View {
         case .synced(let s):
             SyncedLyrics(lines: s.lines, positionMs: positionMs, fontSize: fontSize, scrollable: scrollable)
         case .plain(let p):
-            let text = VStack(alignment: .leading, spacing: 6) {
+            let text = VStack(alignment: .leading, spacing: Kasane.Space.s2) {
                 ForEach(Array(p.text.split(separator: "\n", omittingEmptySubsequences: false).prefix(plainLines).enumerated()), id: \.offset) { _, line in
                     Text(String(line)).font(.system(size: fontSize, weight: .semibold)).lineSpacing(fontSize * 0.375)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -27,7 +27,7 @@ struct LyricsFollower: View {
             }
             if scrollable {
                 // 枠の高さに収め、はみ出した分はスクロールで読む（並べたままだと高さが窓を超えて、隣の並びを押し出す）
-                ScrollView(.vertical, showsIndicators: false) { text.padding(.bottom, 40) }
+                ScrollView(.vertical, showsIndicators: false) { text.padding(.bottom, Kasane.Space.s10) }
             } else {
                 text
             }

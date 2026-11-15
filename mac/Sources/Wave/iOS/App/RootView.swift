@@ -265,7 +265,7 @@ struct ToastHost: View {
                 .padding(.horizontal, Kasane.Space.s4)
                 .padding(.vertical, Kasane.Space.s3)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .modifier(GlassCard(radius: 14))
+                .modifier(GlassCard(radius: Kasane.Radius.lg))
                 .padding(.horizontal, Kasane.Space.s3)
                 .onTapGesture { toast.close() }
                 .transition(.move(edge: .bottom).combined(with: .opacity))

@@ -290,7 +290,7 @@ struct MenuBarNowPlaying: View {
     var body: some View {
         let player = AppServices.player!
         let song = player.current
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: Kasane.Space.s4) {
             HStack {
                 Text(song?.album?.title.isEmpty == false ? song!.album!.title : L.t("再生中", "Now playing"))
                     .font(.body.weight(.semibold)).lineLimit(1)
@@ -303,7 +303,7 @@ struct MenuBarNowPlaying: View {
             }
             ZStack(alignment: .top) {
                 VideoOrCover(size: 288, inFullView: false)
-                if player.hasVideo { SongVideoSwitch().padding(.top, 10) }
+                if player.hasVideo { SongVideoSwitch().padding(.top, Kasane.Space.s3) }
             }
             .frame(height: 288)
             HStack(alignment: .top, spacing: Kasane.Space.s2) {
@@ -323,7 +323,7 @@ struct MenuBarNowPlaying: View {
                 VStack(alignment: .leading, spacing: Kasane.Space.s2) {
                     Text(L.t("次の曲", "Up next")).font(.body.weight(.semibold))
                     HStack(spacing: Kasane.Space.s3) {
-                        Cover(url: Ui.small(next.thumbnailUrl), size: 40, radius: 4)
+                        Cover(url: Ui.small(next.thumbnailUrl), size: 40, radius: Kasane.Radius.sm)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(next.title).lineLimit(1)
                             Text(next.artistsText).subtle()
@@ -332,7 +332,7 @@ struct MenuBarNowPlaying: View {
                 }
                 .padding(Kasane.Space.s3)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.05)))
+                .kasaneInnerBackground(Color.primary.opacity(0.05), outer: Kasane.Radius.card, padding: Kasane.Space.s4)
             }
             if case .found(let lyrics) = player.lyrics, song != nil {
                 VStack(alignment: .leading, spacing: Kasane.Space.s2) {
@@ -344,12 +344,13 @@ struct MenuBarNowPlaying: View {
                 }
                 .padding(Kasane.Space.s3)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.05)))
+                .kasaneInnerBackground(Color.primary.opacity(0.05), outer: Kasane.Radius.card, padding: Kasane.Space.s4)
             }
         }
         .padding(Kasane.Space.s4)
         .frame(width: 320)
         .fixedSize(horizontal: false, vertical: true)
+        .kasaneContainer(radius: Kasane.Radius.card)
         .modifier(GlassBackground())
         .shadow(color: .black.opacity(0.22), radius: 14, y: 6)
         .padding(MenuBarController.shadowMargin)
@@ -366,9 +367,9 @@ struct MenuBarNowPlaying: View {
 private struct GlassBackground: ViewModifier {
     func body(content: Content) -> some View {
         if #available(macOS 26.0, *) {
-            content.glassEffect(.regular, in: .rect(cornerRadius: 22))
+            content.glassEffect(.regular, in: .rect(cornerRadius: Kasane.Radius.card, style: Kasane.cornerStyle))
         } else {
-            content.background(.regularMaterial, in: RoundedRectangle(cornerRadius: 22))
+            content.background(.regularMaterial, in: RoundedRectangle(cornerRadius: Kasane.Radius.card, style: Kasane.cornerStyle))
         }
     }
 }

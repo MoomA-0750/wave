@@ -107,7 +107,7 @@ struct PodcastRow: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: Kasane.Space.s3) {
-                Cover(url: Ui.small(podcast.thumbnailUrl), size: 48, radius: 4)
+                Cover(url: Ui.small(podcast.thumbnailUrl), size: 48, radius: Kasane.Radius.sm)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(podcast.title).lineLimit(1)
                     Text([L.t("ポッドキャスト", "Podcast"), podcast.author].compactMap { $0 }.joined(separator: " • ")).subtle()
@@ -135,7 +135,7 @@ struct EpisodeRow: View {
                     RemoteImage(url: URL(string: episode.song.thumbnailUrl ?? ""))
                         .frame(width: showShow ? 48 : 96, height: showShow ? 48 : 54)
                         .background(Color.primary.opacity(0.08))
-                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                        .clipShape(RoundedRectangle(cornerRadius: Kasane.Radius.sm, style: Kasane.cornerStyle))
                     VStack(alignment: .leading, spacing: 3) {
                         Text(episode.song.title).font(showShow ? .body : .subheadline.weight(.semibold)).lineLimit(2)
                             .foregroundStyle(isCurrent ? Color.accentColor : Color.primary)

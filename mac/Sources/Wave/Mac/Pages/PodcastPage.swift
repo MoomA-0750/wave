@@ -60,11 +60,11 @@ struct PodcastPageView: View {
     private var header: some View {
         HStack(alignment: .bottom, spacing: Kasane.Space.s6) {
             if model.isNewEpisodes && model.page?.thumbnailUrl == nil {
-                NewEpisodesCover(size: 220, radius: 8)
+                NewEpisodesCover(size: 220, radius: Kasane.Radius.base)
             } else {
-                Cover(url: Ui.large(model.page?.thumbnailUrl ?? summary.thumbnailUrl), size: 220, radius: 8)
+                Cover(url: Ui.large(model.page?.thumbnailUrl ?? summary.thumbnailUrl), size: 220, radius: Kasane.Radius.base)
             }
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: Kasane.Space.s2) {
                 Text(model.isNewEpisodes ? L.t("プレイリスト • 自動", "Playlist • Auto") : L.t("ポッドキャスト", "Podcast")).font(.callout)
                 Text(model.page?.title ?? summary.title).font(.system(size: 48, weight: .bold)).lineLimit(2).minimumScaleFactor(0.5)
                 if let author = model.page?.author ?? summary.author { Text(author).font(.body.weight(.semibold)) }
@@ -145,7 +145,7 @@ struct PodcastCard: View {
         }
         .padding(Kasane.Space.s2)
         .frame(width: 176)
-        .background(RoundedRectangle(cornerRadius: 8).fill(hover ? Color.primary.opacity(0.07) : .clear))
+        .background(RoundedRectangle(cornerRadius: Kasane.Radius.base, style: Kasane.cornerStyle).fill(hover ? Color.primary.opacity(0.07) : .clear))
         .contentShape(Rectangle())
         .onHover { hover = $0 }
         .onTapGesture {

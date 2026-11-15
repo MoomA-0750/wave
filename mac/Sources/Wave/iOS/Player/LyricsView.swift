@@ -47,7 +47,7 @@ struct LyricsView: View {
 
     private func header(_ song: Song?) -> some View {
         HStack(spacing: Kasane.Space.s3) {
-            Cover(url: Ui.small(song?.thumbnailUrl), size: 44, radius: 4)
+            Cover(url: Ui.small(song?.thumbnailUrl), size: 44, radius: Kasane.Radius.sm)
             VStack(alignment: .leading, spacing: 2) {
                 Text(song?.title ?? "").font(.headline).lineLimit(1)
                 Text(song?.artistsText ?? "").subtle()
@@ -57,7 +57,7 @@ struct LyricsView: View {
                 Image(systemName: "chevron.down").font(.body.weight(.semibold)).frame(width: 44, height: 44)
             }
             .buttonStyle(.plain)
-            .glassCard(22, interactive: true)
+            .glassCard(Kasane.Radius.card, interactive: true)
             .accessibilityLabel(L.t("閉じる", "Close"))
         }
         .padding(.horizontal, Kasane.Space.s5)
@@ -173,7 +173,7 @@ private struct LyricsMiniControls: View {
 
     var body: some View {
         let player = AppServices.player!
-        VStack(spacing: 6) {
+        VStack(spacing: Kasane.Space.s2) {
             // ライブ配信は長さも位置も無く、シークしない
             if !player.isLive {
                 Slider(value: Binding(get: { dragging ?? min(player.position, max(1, player.duration)) }, set: { dragging = $0 }),
@@ -199,7 +199,7 @@ private struct LyricsMiniControls: View {
                         }
                     }
                     .frame(width: 56, height: 56)
-                    .glassCard(28, interactive: true)
+                    .glassCard(Kasane.Radius.card, interactive: true)
                 }
                 .accessibilityLabel(player.isPlaying ? L.t("一時停止", "Pause") : L.t("再生", "Play"))
                 Button(action: player.next) { Image(systemName: "forward.end.fill").font(.title3).frame(width: 44, height: 44) }

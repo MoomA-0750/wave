@@ -248,7 +248,7 @@ struct NowPlayingWidgetView: View {
     var body: some View {
         if let song = entry.song {
             if family == .systemSmall {
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: Kasane.Space.s2) {
                     ArtworkWithLike(image: entry.artwork, liked: song.liked, likeSize: 16).frame(width: 54, height: 54)
                     Spacer(minLength: 0)
                     Text(song.title).font(WidgetFont.headline).lineLimit(1)
@@ -257,7 +257,7 @@ struct NowPlayingWidgetView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             } else {
-                HStack(alignment: .top, spacing: 14) {
+                HStack(alignment: .top, spacing: Kasane.Space.s4) {
                     // 高さに収まる大きさにする（収まらないと列が上下にはみ出し、上の余白がほかより狭くなる）
                     VStack(alignment: .leading, spacing: 2) {
                         ArtworkWithLike(image: entry.artwork, liked: song.liked, likeSize: 18).frame(width: 56, height: 56)
@@ -294,7 +294,7 @@ struct NowPlayingWidgetView: View {
                 }
             }
         } else {
-            VStack(spacing: 6) {
+            VStack(spacing: Kasane.Space.s2) {
                 Image(systemName: "music.note").font(WidgetFont.title)
                 Text(WidgetText.t("何も再生していません", "Nothing playing")).font(WidgetFont.caption).foregroundStyle(.secondary)
             }
@@ -550,14 +550,14 @@ struct PlaylistWidgetView: View {
         } else if family == .systemLarge && count > 4 {
             // 大で2〜3段なら、上に再生中の曲と操作、下に表紙（2段なら名前も付ける）
             let rows = (count + 3) / 4
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: Kasane.Space.s3) {
                 nowPlaying
                 Spacer(minLength: 0)
                 grid(rows: rows, columns: 4, spacing: rows == 2 ? 12 : 10, captions: rows == 2)
             }
         } else {
             // 中・大は上に再生中の曲と操作、下に表紙を1段（2つ以下なら、表紙の右に名前を置く）
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: Kasane.Space.s3) {
                 nowPlaying
                 Spacer(minLength: 0)
                 if count <= 2 { namedGrid(rows: 1, pairs: 2, spacing: 10) } else { grid(rows: 1, columns: 4, spacing: 10) }
@@ -574,7 +574,7 @@ struct PlaylistWidgetView: View {
     }
 
     private var emptyMessage: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: Kasane.Space.s2) {
             Image(systemName: "music.note.list").font(WidgetFont.title)
             Text(WidgetText.t("wave を開いてログインすると、プレイリストが出ます", "Open wave and sign in to see your playlists")).font(WidgetFont.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
         }
@@ -785,9 +785,9 @@ struct ItemWidgetView: View {
                 }
                 .buttonStyle(.plain)
             case .systemMedium:
-                HStack(spacing: 14) {
+                HStack(spacing: Kasane.Space.s4) {
                     Button(intent: PlayItemIntent(item: item, shuffle: false)) {
-                        HStack(spacing: 14) {
+                        HStack(spacing: Kasane.Space.s4) {
                             cover(item).aspectRatio(1, contentMode: .fit)
                             names(item, titleFont: WidgetFont.title3.weight(.semibold))
                         }
@@ -810,7 +810,7 @@ struct ItemWidgetView: View {
                 }
             }
         } else {
-            VStack(spacing: 6) {
+            VStack(spacing: Kasane.Space.s2) {
                 Image(systemName: "play.circle").font(WidgetFont.title)
                 Text(WidgetText.t("長押しして「ウィジェットを編集」から、再生するものを選んでください", "Long-press and choose Edit Widget to pick what to play"))
                     .font(WidgetFont.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
@@ -884,7 +884,7 @@ private struct PlayMark: View {
                 let art = loadImage(WidgetStore.artworkFile(state.videoId))
                 return DynamicIsland {
                     DynamicIslandExpandedRegion(.leading) {
-                        Artwork(image: art, radius: 8).frame(width: 52, height: 52)
+                        Artwork(image: art, radius: Kasane.Radius.base).frame(width: 52, height: 52)
                     }
                     DynamicIslandExpandedRegion(.center) {
                         VStack(alignment: .leading, spacing: 2) {
@@ -899,7 +899,7 @@ private struct PlayMark: View {
                         }
                     }
                     DynamicIslandExpandedRegion(.bottom) {
-                        VStack(spacing: 6) {
+                        VStack(spacing: Kasane.Space.s2) {
                             ActivityProgress(state: state)
                             Controls(playing: state.playing, size: 20)
                             if let line = state.line {
@@ -910,7 +910,7 @@ private struct PlayMark: View {
                         }
                     }
                 } compactLeading: {
-                    Artwork(image: art, radius: 4).frame(width: 22, height: 22)
+                    Artwork(image: art, radius: Kasane.Radius.sm).frame(width: 22, height: 22)
                 } compactTrailing: {
                     Image(systemName: state.playing ? "waveform" : "pause.fill").foregroundStyle(accent)
                 } minimal: {
@@ -981,9 +981,9 @@ private struct PlayMark: View {
                 }
                 .foregroundStyle(.white)
             } else {
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: Kasane.Space.s3) {
                     HStack(spacing: Kasane.Space.s3) {
-                        Artwork(image: loadImage(WidgetStore.artworkFile(state.videoId)), radius: 8).frame(width: 56, height: 56)
+                        Artwork(image: loadImage(WidgetStore.artworkFile(state.videoId)), radius: Kasane.Radius.base).frame(width: 56, height: 56)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(state.title).font(.headline).lineLimit(1)
                             Text(state.artist).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)

@@ -481,7 +481,7 @@ struct NowPlayingView: View {
             if AppServices.connect.configured {
                 Spacer()
                 Button { devicesOpen = true } label: {
-                    HStack(spacing: 6) {
+                    HStack(spacing: Kasane.Space.s2) {
                         Image(systemName: "airplay.audio")
                         if player.isRemote, let device = player.remoteDevice { Text(device).font(.caption.weight(.semibold)).lineLimit(1) }
                     }

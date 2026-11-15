@@ -323,7 +323,7 @@ struct SearchPageView: View {
                             Text(tile.0.title).subtitleStyle().foregroundStyle(.white).multilineTextAlignment(.leading)
                                 .padding(Kasane.Space.s4)
                                 .frame(maxWidth: .infinity, minHeight: 110, alignment: .topLeading)
-                                .background(RoundedRectangle(cornerRadius: 8).fill(tile.1))
+                                .background(RoundedRectangle(cornerRadius: Kasane.Radius.base, style: Kasane.cornerStyle).fill(tile.1))
                         }
                         .buttonStyle(.plain)
                     }
@@ -494,7 +494,7 @@ struct SearchPageView: View {
 
     private var all: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 28) {
+            VStack(alignment: .leading, spacing: Kasane.Space.s8) {
                 HStack(alignment: .top, spacing: Kasane.Space.s6) {
                     if let top = model.top {
                         VStack(alignment: .leading, spacing: Kasane.Space.s3) {
@@ -551,7 +551,7 @@ private struct TopCard: View {
             }) { Image(systemName: "play.fill").font(.system(size: 18)) }
         }
         .padding(Kasane.Space.s5)
-        .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(hover ? 0.1 : 0.06)))
+        .background(RoundedRectangle(cornerRadius: Kasane.Radius.base, style: Kasane.cornerStyle).fill(Color.primary.opacity(hover ? 0.1 : 0.06)))
         .contentShape(Rectangle())
         .onHover { hover = $0 }
         .onTapGesture {

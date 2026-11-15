@@ -60,7 +60,7 @@ struct PlayerBar: View {
             }
             if AppServices.connect.configured {
                 Button { devicesOpen.toggle() } label: {
-                    HStack(spacing: 6) {
+                    HStack(spacing: Kasane.Space.s2) {
                         Image(systemName: player.isRemote ? "iphone.radiowaves.left.and.right" : "hifispeaker.2").font(.system(size: 15))
                             .foregroundStyle(player.isRemote ? Color.accentColor : Color.primary)
                         // ほかの端末で鳴っているときは、アイコンの右にその端末名（Spotify と同じく色を付ける）
@@ -358,7 +358,7 @@ struct FullView: View {
                             let side = min(geo.size.width, geo.size.height)
                             RemoteImage(url: Ui.large(song?.thumbnailUrl))
                                 .frame(width: side, height: side)
-                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                                .clipShape(RoundedRectangle(cornerRadius: Kasane.Radius.base, style: Kasane.cornerStyle))
                                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
                         }
                     }

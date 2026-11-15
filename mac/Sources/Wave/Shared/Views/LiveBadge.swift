@@ -6,7 +6,7 @@ struct LiveBadge: View {
     var dot: CGFloat = 7
 
     var body: some View {
-        HStack(spacing: 5) {
+        HStack(spacing: Kasane.Space.s1) {
             Circle().fill(Color.red).frame(width: dot, height: dot)
             Text(L.t("ライブ", "LIVE")).font(font).foregroundStyle(Color.red)
         }

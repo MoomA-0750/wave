@@ -122,7 +122,7 @@ struct DevicesView: View {
 
     private func remoteSection(_ remote: RemoteView, _ info: ConnectInfo) -> some View {
         Section {
-            HStack(spacing: 14) {
+            HStack(spacing: Kasane.Space.s4) {
                 Cover(url: Ui.small(remote.thumbnailUrl), size: 56)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(remote.playing ? L.t("\(remote.deviceLabel) で再生中", "Playing on \(remote.deviceLabel)") : L.t("\(remote.deviceLabel) で一時停止中", "Paused on \(remote.deviceLabel)"))
@@ -198,7 +198,7 @@ struct DevicesView: View {
                         }
                     }
                     .frame(width: 260, height: 260)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .clipShape(RoundedRectangle(cornerRadius: Kasane.Radius.base, style: Kasane.cornerStyle))
                     .onAppear { makeQr(offer) }
                     .onChange(of: offer) { _, next in makeQr(next) }
                     Spacer()
@@ -318,7 +318,7 @@ private struct DevicesMemberRow: View {
     var onGrant: () -> Void
 
     var body: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: Kasane.Space.s4) {
             Image(systemName: DevicesText.symbol(member, selfIsPc: false))
                 .font(.title3).frame(width: 28)
                 .foregroundStyle(member.active ? Color.accentColor : Color.primary)
@@ -431,7 +431,7 @@ private struct DevicesPickRow: View {
     var action: (() -> Void)?
 
     var body: some View {
-        let content = HStack(spacing: 14) {
+        let content = HStack(spacing: Kasane.Space.s4) {
             Image(systemName: symbol).font(.title2).frame(width: 32)
                 .foregroundStyle(accent ? Color.accentColor : Color.primary)
             VStack(alignment: .leading, spacing: 1) {

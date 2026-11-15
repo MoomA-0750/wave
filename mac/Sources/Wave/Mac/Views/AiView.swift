@@ -30,7 +30,7 @@ struct AiView: View {
             .padding(EdgeInsets(top: Kasane.Space.s3, leading: Kasane.Space.s4, bottom: Kasane.Space.s1, trailing: RightPane.headerTrailing))
             ScrollViewReader { proxy in
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 10) {
+                    VStack(alignment: .leading, spacing: Kasane.Space.s3) {
                         if chat.messages.isEmpty {
                             Text(L.t("曲探し・プレイリスト作りを頼めます。再生中の曲について、歌詞の意味や似た曲も聞けます。",
                                      "Ask Claude to find music, make a playlist, or tell you about the song that's playing — what the lyrics mean, similar songs, and more."))
@@ -94,8 +94,8 @@ private struct AiMessageView: View {
             HStack {
                 Spacer(minLength: 40)
                 Text(text).foregroundStyle(.white)
-                    .padding(EdgeInsets(top: 6, leading: Kasane.Space.s3, bottom: Kasane.Space.s2, trailing: Kasane.Space.s3))
-                    .background(RoundedRectangle(cornerRadius: 14).fill(Color.accentColor))
+                    .padding(EdgeInsets(top: Kasane.Space.s2, leading: Kasane.Space.s3, bottom: Kasane.Space.s2, trailing: Kasane.Space.s3))
+                    .background(RoundedRectangle(cornerRadius: Kasane.Radius.lg, style: Kasane.cornerStyle).fill(Color.accentColor))
                     .frame(maxWidth: 260, alignment: .trailing)
             }
         case .assistant(let text, let videoId):
@@ -109,15 +109,15 @@ private struct AiMessageView: View {
             VStack(spacing: 2) {
                 ForEach(songs, id: \.videoId) { song in
                     Button { AppServices.player.playSong(song) } label: {
-                        HStack(spacing: 10) {
-                            Cover(url: Ui.small(song.thumbnailUrl), size: 40, radius: 4)
+                        HStack(spacing: Kasane.Space.s3) {
+                            Cover(url: Ui.small(song.thumbnailUrl), size: 40, radius: Kasane.Radius.sm)
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(song.title).lineLimit(1)
                                 Text(song.artistsText).subtle()
                             }
                             Spacer(minLength: 0)
                         }
-                        .padding(6)
+                        .padding(Kasane.Space.s2)
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
@@ -135,10 +135,10 @@ private struct AiHistoryList: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Kasane.Space.s1) {
-            Text(L.t("これまでの会話", "Past chats")).font(.body.weight(.semibold)).padding(.horizontal, 6)
+            Text(L.t("これまでの会話", "Past chats")).font(.body.weight(.semibold)).padding(.horizontal, Kasane.Space.s2)
             if chat.history.conversations.isEmpty {
                 Text(L.t("まだ会話はありません。会話はこの Mac の中だけに残ります。", "No past chats yet. Chats are kept on this Mac only."))
-                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true).padding(.horizontal, 6)
+                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true).padding(.horizontal, Kasane.Space.s2)
             }
             ScrollView {
                 VStack(spacing: 2) {
@@ -153,7 +153,7 @@ private struct AiHistoryList: View {
                                     Text(Date(timeIntervalSince1970: Double(conversation.updatedAtMs) / 1000).formatted(date: .abbreviated, time: .shortened)).subtle()
                                 }
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(6)
+                                .padding(Kasane.Space.s2)
                                 .contentShape(Rectangle())
                                 .background(RoundedRectangle(cornerRadius: Kasane.Radius.sm, style: Kasane.cornerStyle).fill(conversation.id == chat.conversationId ? Color.secondary.opacity(0.15) : .clear))
                             }
@@ -166,7 +166,7 @@ private struct AiHistoryList: View {
             }
             .frame(maxHeight: 420)
         }
-        .padding(10)
+        .padding(Kasane.Space.s3)
         .frame(width: 320)
     }
 }

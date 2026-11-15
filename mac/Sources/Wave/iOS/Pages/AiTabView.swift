@@ -100,9 +100,9 @@ struct AiTabView: View {
                                 .accessibilityLabel(L.t("キーボードを閉じる", "Hide keyboard"))
                         }
                     }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .glassCard(20)
+                    .padding(.horizontal, Kasane.Space.s4)
+                    .padding(.vertical, Kasane.Space.s3)
+                    .glassCard(Kasane.Radius.lg)
                 Button {
                     if chat.running { chat.stop() } else { send(input) }
                 } label: {
@@ -178,8 +178,8 @@ private struct AiMessageRow: View {
             HStack {
                 Spacer(minLength: 48)
                 Text(text).foregroundStyle(.white)
-                    .padding(.horizontal, 14).padding(.vertical, Kasane.Space.s2)
-                    .background(RoundedRectangle(cornerRadius: 18).fill(Color.accentColor))
+                    .padding(.horizontal, Kasane.Space.s4).padding(.vertical, Kasane.Space.s2)
+                    .background(RoundedRectangle(cornerRadius: Kasane.Radius.lg, style: Kasane.cornerStyle).fill(Color.accentColor))
                     .textSelection(.enabled)
             }
         case .assistant(let text, let videoId):
@@ -187,7 +187,7 @@ private struct AiMessageRow: View {
         case .action(let text):
             Text("・" + text).font(.footnote).foregroundStyle(.secondary)
         case .failure(let text):
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: Kasane.Space.s2) {
                 Text(text).font(.footnote).foregroundStyle(.red)
                 if !configured {
                     Button(L.t("設定を開く", "Open settings")) { openSettings() }.font(.footnote)
@@ -200,7 +200,7 @@ private struct AiMessageRow: View {
                     ForEach(songs, id: \.videoId) { song in
                         Button { AppServices.player.playSong(song) } label: {
                             VStack(alignment: .leading, spacing: Kasane.Space.s1) {
-                                Cover(url: Ui.img(song.thumbnailUrl), size: 120, radius: 8)
+                                Cover(url: Ui.img(song.thumbnailUrl), size: 120, radius: Kasane.Radius.base)
                                 Text(song.title).font(.subheadline).lineLimit(2).multilineTextAlignment(.leading)
                                 Text(song.artistsText).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                             }

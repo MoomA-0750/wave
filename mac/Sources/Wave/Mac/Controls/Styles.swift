@@ -9,13 +9,13 @@ struct PaneBackground: ViewModifier {
     func body(content: Content) -> some View {
         if #available(macOS 26.0, *) {
             content
-                .clipShape(RoundedRectangle(cornerRadius: 14))
-                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 14))
+                .clipShape(RoundedRectangle(cornerRadius: Kasane.Radius.lg, style: Kasane.cornerStyle))
+                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: Kasane.Radius.lg, style: Kasane.cornerStyle))
         } else {
             content
-                .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 8))
-                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.primary.opacity(0.08)))
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: Kasane.Radius.base, style: Kasane.cornerStyle))
+                .overlay(RoundedRectangle(cornerRadius: Kasane.Radius.base, style: Kasane.cornerStyle).strokeBorder(Color.primary.opacity(0.08)))
+                .clipShape(RoundedRectangle(cornerRadius: Kasane.Radius.base, style: Kasane.cornerStyle))
         }
     }
 }
@@ -123,7 +123,7 @@ struct Chip: View {
             Text(title)
                 .font(.callout)
                 .padding(.horizontal, Kasane.Space.s3)
-                .padding(.vertical, 5)
+                .padding(.vertical, Kasane.Space.s1)
                 .foregroundStyle(isOn ? Color.white : Color.primary)
                 .background(Capsule().fill(isOn ? Color.accentColor : Color.primary.opacity(0.08)))
         }

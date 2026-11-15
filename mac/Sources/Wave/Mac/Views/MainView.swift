@@ -120,7 +120,7 @@ struct MainView: View {
             Button { nav.home() } label: { Image(systemName: "house").glassIcon(glass) }
                 .glassButton(glass)
                 .help(L.t("ホーム", "Home"))
-            HStack(spacing: 6) {
+            HStack(spacing: Kasane.Space.s2) {
                 Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
                 TextField(L.t("何を聴きたいですか？", "What do you want to play?"), text: $model.searchText)
                     .textFieldStyle(.plain)
@@ -142,7 +142,7 @@ struct MainView: View {
                         .buttonStyle(.plain)
                 }
             }
-            .padding(.horizontal, glass ? 14 : 10)
+            .padding(.horizontal, glass ? 14 : Kasane.Space.s3)
             .frame(width: model.searchWidth, height: glass ? 36 : 28)
             .searchFieldBackground(glass: glass, focused: searchFocus)
             // Claude に聞く（どの画面からでも。右の欄に開き、もう一度押すと元に戻す）
@@ -276,7 +276,7 @@ struct SuggestionsOverlay: View {
                     SuggestionRow(suggestion: s) { model.choose(s) }
                 }
             }
-            .padding(6)
+            .padding(Kasane.Space.s2)
             .frame(width: model.searchWidth + 40)
             .background(RoundedRectangle(cornerRadius: Kasane.Radius.base, style: Kasane.cornerStyle).fill(.regularMaterial))
             .overlay(RoundedRectangle(cornerRadius: Kasane.Radius.base, style: Kasane.cornerStyle).strokeBorder(Color.primary.opacity(0.1)))
@@ -298,11 +298,11 @@ private struct SuggestionRow: View {
                     if suggestion.isQuery {
                         Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
                     } else {
-                        Cover(url: Ui.small(suggestion.thumbnailUrl), size: 36, round: suggestion.round, radius: 4)
+                        Cover(url: Ui.small(suggestion.thumbnailUrl), size: 36, round: suggestion.round, radius: Kasane.Radius.sm)
                     }
                 }
                 .frame(width: 36, height: 36)
-                .background(suggestion.isQuery ? AnyView(RoundedRectangle(cornerRadius: 4).fill(Color.primary.opacity(0.08))) : AnyView(EmptyView()))
+                .background(suggestion.isQuery ? AnyView(RoundedRectangle(cornerRadius: Kasane.Radius.sm, style: Kasane.cornerStyle).fill(Color.primary.opacity(0.08))) : AnyView(EmptyView()))
                 VStack(alignment: .leading, spacing: 1) {
                     Text(suggestion.title).lineLimit(1)
                     if let subtitle = suggestion.subtitle, !subtitle.isEmpty { Text(subtitle).subtle() }
@@ -331,8 +331,8 @@ struct ToastView: View {
                 Spacer(minLength: 8)
                 Button { toast.close() } label: { Image(systemName: "xmark") }.buttonStyle(IconButtonStyle(size: 24))
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+            .padding(.horizontal, Kasane.Space.s4)
+            .padding(.vertical, Kasane.Space.s3)
             .frame(minWidth: 320, maxWidth: 560)
             .background(.regularMaterial)
             .overlay(alignment: .bottom) {
@@ -344,8 +344,8 @@ struct ToastView: View {
                     .frame(height: 3)
                 }
             }
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.primary.opacity(0.1)))
+            .clipShape(RoundedRectangle(cornerRadius: Kasane.Radius.base, style: Kasane.cornerStyle))
+            .overlay(RoundedRectangle(cornerRadius: Kasane.Radius.base, style: Kasane.cornerStyle).strokeBorder(Color.primary.opacity(0.1)))
             .shadow(color: .black.opacity(0.2), radius: Kasane.Radius.base, y: 4)
             .padding(Kasane.Space.s4)
             .transition(.move(edge: .bottom).combined(with: .opacity))

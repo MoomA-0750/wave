@@ -11,7 +11,7 @@ struct MiniPlayer: View {
     var body: some View {
         let player = AppServices.player!
         let song = player.current
-        HStack(spacing: 10) {
+        HStack(spacing: Kasane.Space.s3) {
             Cover(url: Ui.small(song?.thumbnailUrl), size: 36, radius: Kasane.Radius.sm)
             VStack(alignment: .leading, spacing: 1) {
                 Text(song?.title ?? "").font(.subheadline.weight(.semibold)).lineLimit(1)
@@ -46,7 +46,7 @@ struct MiniPlayer: View {
                     .frame(width: geo.size.width * progress(player), height: 2)
             }
             .frame(height: 2)
-            .padding(.horizontal, 14)
+            .padding(.horizontal, Kasane.Space.s4)
         }
         .contentShape(Rectangle())
         .onTapGesture(perform: open)

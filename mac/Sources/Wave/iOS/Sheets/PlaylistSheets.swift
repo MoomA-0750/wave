@@ -22,7 +22,7 @@ struct AddToPlaylistSheet: View {
             List {
                 Section {
                     HStack(spacing: Kasane.Space.s3) {
-                        Cover(url: Ui.small(song.thumbnailUrl), size: 44, radius: 4)
+                        Cover(url: Ui.small(song.thumbnailUrl), size: 44, radius: Kasane.Radius.sm)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(song.title).lineLimit(1)
                             Text(song.artistsText).subtle()

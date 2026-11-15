@@ -40,7 +40,7 @@ struct ArtistView: View {
                         ForEach(Array(topSongs.enumerated()), id: \.offset) { i, song in
                             SongRow(song: song) { model.play(start: i, shuffle: nil) }
                                 .padding(.horizontal, Kasane.Space.s4)
-                                .padding(.vertical, 6)
+                                .padding(.vertical, Kasane.Space.s2)
                         }
                     }
                 }
@@ -55,7 +55,7 @@ struct ArtistView: View {
                 // Spotify の「高く評価した曲」の行（このアーティストの、自分が高く評価した曲）。1曲も無ければ出さない
                 if model.checkingLiked || (model.liked?.count ?? 0) > 0, let artist {
                     Button { AppServices.nav.likedSongsBy(browseId, artist.name) } label: {
-                        HStack(spacing: 14) {
+                        HStack(spacing: Kasane.Space.s4) {
                             ZStack {
                                 Circle().fill(Ui.likedGradient)
                                 Image(systemName: "heart.fill").foregroundStyle(.white)
@@ -212,7 +212,7 @@ private struct ArtistViewCard: View {
                 RemoteImage(url: Ui.img(item.thumbnailUrl))
                     .frame(width: width, height: isVideo ? width * 9 / 16 : width)
                     .background(Color.primary.opacity(0.08))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .clipShape(RoundedRectangle(cornerRadius: Kasane.Radius.base, style: Kasane.cornerStyle))
                 Text(item.title).font(.footnote).lineLimit(2).multilineTextAlignment(.leading)
                 if let subtitle = item.subtitle { Text(subtitle).font(.caption2).foregroundStyle(.secondary).lineLimit(1) }
             }
@@ -234,9 +234,9 @@ private struct ArtistViewPostCard: View {
 
     var body: some View {
         Button { if let url = URL(string: post.url) { openURL(url) } } label: {
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: Kasane.Space.s2) {
                 if let url = post.imageUrl {
-                    RemoteImage(url: Ui.resize(url, 520)).frame(height: 140).clipShape(RoundedRectangle(cornerRadius: 8))
+                    RemoteImage(url: Ui.resize(url, 520)).frame(height: 140).clipShape(RoundedRectangle(cornerRadius: Kasane.Radius.base, style: Kasane.cornerStyle))
                 }
                 Text(post.text).font(.subheadline).lineLimit(6).multilineTextAlignment(.leading)
                 if let published = post.publishedText { Text(published).subtle() }
@@ -244,7 +244,7 @@ private struct ArtistViewPostCard: View {
             .padding(Kasane.Space.s3)
             .frame(width: 260, alignment: .topLeading)
             .frame(maxHeight: .infinity, alignment: .top)
-            .glassCard(14)
+            .glassCard(Kasane.Radius.lg)
         }
         .buttonStyle(.plain)
     }

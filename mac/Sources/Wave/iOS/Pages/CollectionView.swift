@@ -198,7 +198,7 @@ struct CollectionView: View {
                 }
             }
             .padding(.horizontal, Kasane.Space.s4)
-            .padding(.vertical, 6)
+            .padding(.vertical, Kasane.Space.s2)
         }
     }
 
@@ -238,8 +238,8 @@ private struct CollectionViewChip: View {
         Button(action: action) {
             Text(title)
                 .font(.subheadline.weight(.medium))
-                .padding(.horizontal, 14)
-                .padding(.vertical, 7)
+                .padding(.horizontal, Kasane.Space.s4)
+                .padding(.vertical, Kasane.Space.s2)
                 .foregroundStyle(isOn ? Color.white : Color.primary)
                 .background(Capsule().fill(isOn ? Color.accentColor : Color.primary.opacity(0.08)))
         }

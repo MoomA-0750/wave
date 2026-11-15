@@ -734,8 +734,8 @@ private struct SearchTabChip: View {
         Button(action: action) {
             Text(title)
                 .font(.subheadline.weight(.medium))
-                .padding(.horizontal, 14)
-                .padding(.vertical, 7)
+                .padding(.horizontal, Kasane.Space.s4)
+                .padding(.vertical, Kasane.Space.s2)
                 .foregroundStyle(isOn ? Color.white : Color.primary)
                 .background(Capsule().fill(isOn ? Color.accentColor : Color.primary.opacity(0.08)))
         }
@@ -751,7 +751,7 @@ private struct ItemRow: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: Kasane.Space.s3) {
-                Cover(url: Ui.small(item.thumbnailUrl), size: 48, round: item.isArtist, radius: 4)
+                Cover(url: Ui.small(item.thumbnailUrl), size: 48, round: item.isArtist, radius: Kasane.Radius.sm)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(item.title).lineLimit(1)
                     Text(detail).subtle()
@@ -786,14 +786,14 @@ private struct HistoryRow: View {
                 HStack(spacing: Kasane.Space.s3) {
                     ZStack {
                         if entry.isQuery || entry.thumbnailUrl == nil {
-                            RoundedRectangle(cornerRadius: 4).fill(.fill.tertiary)
+                            RoundedRectangle(cornerRadius: Kasane.Radius.sm, style: Kasane.cornerStyle).fill(.fill.tertiary)
                             Image(systemName: icon).foregroundStyle(.secondary)
                         } else {
-                            Cover(url: Ui.small(entry.thumbnailUrl), size: 48, round: entry.isRound, radius: 4)
+                            Cover(url: Ui.small(entry.thumbnailUrl), size: 48, round: entry.isRound, radius: Kasane.Radius.sm)
                         }
                     }
                     .frame(width: 48, height: 48)
-                    .clipShape(entry.isRound ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: 4)))
+                    .clipShape(entry.isRound ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: Kasane.Radius.sm, style: Kasane.cornerStyle)))
                     VStack(alignment: .leading, spacing: 2) {
                         Text(entry.title).lineLimit(1)
                         if let detail { Text(detail).subtle() }

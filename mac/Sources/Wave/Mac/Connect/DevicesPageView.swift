@@ -121,7 +121,7 @@ struct DevicesPageView: View {
         }
         .padding(Kasane.Space.s3)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 8).fill(color.opacity(0.12)))
+        .background(RoundedRectangle(cornerRadius: Kasane.Radius.base, style: Kasane.cornerStyle).fill(color.opacity(0.12)))
     }
 
     // MARK: 再生中の端末
@@ -248,8 +248,8 @@ struct DevicesPageView: View {
                     memberRow(member)
                 }
             }
-            .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.05)))
-            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.primary.opacity(0.08)))
+            .background(RoundedRectangle(cornerRadius: Kasane.Radius.base, style: Kasane.cornerStyle).fill(Color.primary.opacity(0.05)))
+            .overlay(RoundedRectangle(cornerRadius: Kasane.Radius.base, style: Kasane.cornerStyle).strokeBorder(Color.primary.opacity(0.08)))
         }
     }
 
@@ -280,8 +280,8 @@ private extension View {
     func card() -> some View {
         padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.05)))
-            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.primary.opacity(0.08)))
+            .background(RoundedRectangle(cornerRadius: Kasane.Radius.base, style: Kasane.cornerStyle).fill(Color.primary.opacity(0.05)))
+            .overlay(RoundedRectangle(cornerRadius: Kasane.Radius.base, style: Kasane.cornerStyle).strokeBorder(Color.primary.opacity(0.08)))
     }
 }
 #endif

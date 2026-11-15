@@ -96,7 +96,7 @@ struct NowPlayingView: View {
                 // ジャケットか、MV のある曲では映像（Spotify と同じ「曲｜動画」の切り替え）
                 ZStack(alignment: .top) {
                     VideoOrCover(size: 306, inFullView: false)
-                    if player.hasVideo { SongVideoSwitch().padding(.top, 10) }
+                    if player.hasVideo { SongVideoSwitch().padding(.top, Kasane.Space.s3) }
                 }
                 .frame(height: 306)
                 HStack(alignment: .top, spacing: Kasane.Space.s2) {
@@ -119,7 +119,7 @@ struct NowPlayingView: View {
                     if player.index + 1 < player.queue.count {
                         let next = player.queue[player.index + 1]
                         HStack(spacing: Kasane.Space.s3) {
-                            Cover(url: Ui.small(next.thumbnailUrl), size: 44, radius: 4)
+                            Cover(url: Ui.small(next.thumbnailUrl), size: 44, radius: Kasane.Radius.sm)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(next.title).lineLimit(1)
                                 Text(next.artistsText).subtle()
@@ -128,7 +128,7 @@ struct NowPlayingView: View {
                     }
                 }
                 .padding(Kasane.Space.s4)
-                .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.05)))
+                .background(RoundedRectangle(cornerRadius: Kasane.Radius.base, style: Kasane.cornerStyle).fill(Color.primary.opacity(0.05)))
                 // 歌詞（無い曲では箱ごと出さない）。全文を中で送り、歌っている行へ滑らかに動かす
                 if case .found(let lyrics) = player.lyrics, song != nil {
                     Button { AppServices.nav.lyrics() } label: {
@@ -141,7 +141,7 @@ struct NowPlayingView: View {
                         }
                         .padding(Kasane.Space.s4)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.05)))
+                        .background(RoundedRectangle(cornerRadius: Kasane.Radius.base, style: Kasane.cornerStyle).fill(Color.primary.opacity(0.05)))
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
@@ -167,7 +167,7 @@ struct SongVideoSwitch: View {
 
     private func segment(_ title: String, on: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Text(title).font(.caption).padding(.horizontal, 14).padding(.vertical, Kasane.Space.s1)
+            Text(title).font(.caption).padding(.horizontal, Kasane.Space.s4).padding(.vertical, Kasane.Space.s1)
                 .foregroundStyle(on ? Color.black : Color.white)
                 .background(Capsule().fill(on ? Color.white : Color.clear))
         }
@@ -201,7 +201,7 @@ struct QueueView: View {
             .padding(EdgeInsets(top: Kasane.Space.s3, leading: Kasane.Space.s4, bottom: Kasane.Space.s1, trailing: RightPane.headerTrailing))
             if entries.isEmpty {
                 Spacer()
-                VStack(spacing: 6) {
+                VStack(spacing: Kasane.Space.s2) {
                     Text(model.queueHistory ? L.t("まだ流れた曲はありません", "Nothing played yet") : L.t("キューは空です", "Your queue is empty"))
                         .font(.body.weight(.semibold))
                     Text(model.queueHistory ? L.t("流れた曲は、ここに新しい順に並びます", "Songs you've played will show up here")
@@ -248,17 +248,17 @@ private struct QueueRow: View {
                         Button(L.t("消去", "Clear")) { AppServices.player.clearFlow() }.buttonStyle(.textLink)
                     }
                 }
-                .padding(.top, 10).padding(.bottom, 2)
+                .padding(.top, Kasane.Space.s3).padding(.bottom, 2)
             }
             HStack(spacing: Kasane.Space.s3) {
-                Cover(url: Ui.small(entry.song.thumbnailUrl), size: 44, radius: 4)
+                Cover(url: Ui.small(entry.song.thumbnailUrl), size: 44, radius: Kasane.Radius.sm)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(entry.song.title).lineLimit(1).foregroundStyle(entry.isCurrent ? Color.accentColor : Color.primary)
                     Text(entry.song.artistsText).subtle()
                 }
                 Spacer(minLength: 0)
             }
-            .padding(.vertical, 6)
+            .padding(.vertical, Kasane.Space.s2)
             .background(RoundedRectangle(cornerRadius: Kasane.Radius.sm, style: Kasane.cornerStyle).fill(hover ? Color.primary.opacity(0.06) : .clear).padding(.horizontal, -6))
             .contentShape(Rectangle())
             .onHover { hover = $0 }
