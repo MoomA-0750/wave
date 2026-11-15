@@ -138,7 +138,7 @@ struct HomeView: View {
     var body: some View {
         let releases = home.selected == nil ? Array(ReleaseWatchState.diversified(AppServices.releases.recent).prefix(20)) : []
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 20) {
+            LazyVStack(alignment: .leading, spacing: Kasane.Space.s5) {
                 chips
                 if !home.recent.isEmpty { RecentGrid(items: home.recent) }
                 // 登録したアーティストの新作（最近聴いたものの下）。絞り込み中は出さない
@@ -159,7 +159,7 @@ struct HomeView: View {
                     }
                 }
             }
-            .padding(.vertical, 8)
+            .padding(.vertical, Kasane.Space.s2)
         }
         .refreshable { await home.refresh(keep: true) }
         .navigationTitle(L.t("ホーム", "Home"))
@@ -171,13 +171,13 @@ struct HomeView: View {
 
     private var chips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: Kasane.Space.s2) {
                 ChipButton(title: L.t("すべて", "All"), isOn: home.selected == nil) { home.select(nil) }
                 ForEach(home.chips, id: \.self) { chip in
                     ChipButton(title: chip.title, isOn: home.selected == chip) { home.select(chip) }
                 }
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, Kasane.Space.s4)
         }
     }
 }
@@ -225,10 +225,10 @@ private struct RecentGrid: View {
     var items: [HomeItem]
 
     var body: some View {
-        LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
+        LazyVGrid(columns: [GridItem(.flexible(), spacing: Kasane.Space.s2), GridItem(.flexible(), spacing: Kasane.Space.s2)], spacing: Kasane.Space.s2) {
             ForEach(items, id: \.key) { item in
                 Button { AppServices.nav.openCard(item) } label: {
-                    HStack(spacing: 8) {
+                    HStack(spacing: Kasane.Space.s2) {
                         Cover(url: Ui.small(item.thumbnailUrl), size: 56, round: item.isArtist, radius: 0)
                             .padding(item.isArtist ? 4 : 0)
                             .frame(width: 56, height: 56)
@@ -244,7 +244,7 @@ private struct RecentGrid: View {
                 .contextMenu { CardMenuItems(item: item) }
             }
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, Kasane.Space.s4)
     }
 }
 
@@ -255,17 +255,17 @@ private struct ShelfRow: View {
     var items: [HomeItem]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Kasane.Space.s2) {
             VStack(alignment: .leading, spacing: 0) {
                 if let strapline, !strapline.isEmpty { Text(strapline).subtle() }
                 Text(title).font(.title3.weight(.bold)).lineLimit(1)
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, Kasane.Space.s4)
             ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(alignment: .top, spacing: 12) {
+                LazyHStack(alignment: .top, spacing: Kasane.Space.s3) {
                     ForEach(Array(items.enumerated()), id: \.offset) { _, item in HomeCard(item: item) }
                 }
-                .padding(.horizontal, 16)
+                .padding(.horizontal, Kasane.Space.s4)
             }
         }
     }
@@ -278,7 +278,7 @@ private struct HomeCard: View {
 
     var body: some View {
         Button { AppServices.nav.openCard(item) } label: {
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: Kasane.Space.s1) {
                 Cover(url: Ui.img(item.thumbnailUrl), size: HomeCard.size, round: item.isArtist, radius: 8)
                 Text(item.title).font(.subheadline).lineLimit(2).multilineTextAlignment(.leading)
                 if let subtitle = subtitle { Text(subtitle).subtle() }
@@ -319,13 +319,13 @@ struct MoodView: View {
 
     var body: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 20) {
+            LazyVStack(alignment: .leading, spacing: Kasane.Space.s5) {
                 ForEach(Array(shelves.enumerated()), id: \.offset) { _, shelf in
                     ShelfRow(title: shelf.title, strapline: shelf.strapline, items: shelf.items)
                 }
                 LoadState(loading: loading && shelves.isEmpty, failure: failure.map(failureText)) { Task { await load() } }
             }
-            .padding(.vertical, 8)
+            .padding(.vertical, Kasane.Space.s2)
         }
         .refreshable { await load() }
         .navigationTitle(mood.title)
@@ -359,18 +359,18 @@ struct SongView: View {
         let player = AppServices.player!
         List {
             Section {
-                VStack(spacing: 12) {
-                    Cover(url: Ui.large(song.thumbnailUrl), size: 240, radius: 10)
+                VStack(spacing: Kasane.Space.s3) {
+                    Cover(url: Ui.large(song.thumbnailUrl), size: 240, radius: Kasane.Radius.base)
                         .shadow(radius: 12, y: 6)
                     Text(song.title).font(.title2.weight(.bold)).multilineTextAlignment(.center).lineLimit(3)
                     if !detail.isEmpty {
                         Text(detail).font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center).lineLimit(2)
                     }
                     PlayCircle(size: 60) { player.playSong(song) }
-                        .padding(.top, 4)
+                        .padding(.top, Kasane.Space.s1)
                 }
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
+                .padding(.vertical, Kasane.Space.s2)
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
             }

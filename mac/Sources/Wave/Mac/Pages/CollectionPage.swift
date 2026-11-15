@@ -260,10 +260,10 @@ struct CollectionPageView: View {
                 header
                 controls(player)
                 kindChips
-                TrackHeader(showAlbum: !model.request.isAlbum).padding(.horizontal, 12)
-                if let error = model.error { Text(error).padding(EdgeInsets(top: 24, leading: 12, bottom: 24, trailing: 12)) }
+                TrackHeader(showAlbum: !model.request.isAlbum).padding(.horizontal, Kasane.Space.s3)
+                if let error = model.error { Text(error).padding(EdgeInsets(top: Kasane.Space.s6, leading: Kasane.Space.s3, bottom: Kasane.Space.s6, trailing: Kasane.Space.s3)) }
                 if !model.all.isEmpty && rows.isEmpty {
-                    Text(L.t("一致する曲はありません", "No matching songs")).subtle().padding(24)
+                    Text(L.t("一致する曲はありません", "No matching songs")).subtle().padding(Kasane.Space.s6)
                 }
                 ForEach(Array(rows.enumerated()), id: \.element.id) { i, row in
                     TrackRowView(row: row, selected: selected == row.id,
@@ -271,7 +271,7 @@ struct CollectionPageView: View {
                                  onPlay: { model.play(rows: rows, start: i) }, onSelect: { selected = row.id })
                 }
             }
-            .padding(EdgeInsets(top: 0, leading: 12, bottom: 24, trailing: 12))
+            .padding(EdgeInsets(top: 0, leading: Kasane.Space.s3, bottom: Kasane.Space.s6, trailing: Kasane.Space.s3))
         }
         .background(alignment: .top) {
             LinearGradient(colors: [(model.gradient ?? .clear).opacity(0.6), .clear], startPoint: .top, endPoint: .bottom).frame(height: 360)
@@ -286,7 +286,7 @@ struct CollectionPageView: View {
     }
 
     private var header: some View {
-        HStack(alignment: .bottom, spacing: 24) {
+        HStack(alignment: .bottom, spacing: Kasane.Space.s6) {
             if model.isLiked {
                 LikedCover(size: 220, radius: 8)
             } else {
@@ -302,11 +302,11 @@ struct CollectionPageView: View {
                 if let detail = model.detail { Text(detail).foregroundStyle(.secondary).lineLimit(2) }
             }
         }
-        .padding(EdgeInsets(top: 40, leading: 12, bottom: 24, trailing: 12))
+        .padding(EdgeInsets(top: Kasane.Space.s10, leading: Kasane.Space.s3, bottom: Kasane.Space.s6, trailing: Kasane.Space.s3))
     }
 
     private func controls(_ player: PlayerService) -> some View {
-        HStack(spacing: 16) {
+        HStack(spacing: Kasane.Space.s4) {
             PlayCircleButton(action: {
                 if model.isPlayingHere { player.togglePlay() } else { model.play(rows: model.rows, shuffle: model.shufflePlay ? true : nil) }
             }) {
@@ -354,19 +354,19 @@ struct CollectionPageView: View {
             } label: { Text(CollectionModel.label(model.sort)).font(.callout).foregroundStyle(.secondary) }
                 .menuStyle(.borderlessButton).fixedSize()
         }
-        .padding(EdgeInsets(top: 8, leading: 12, bottom: 16, trailing: 12))
+        .padding(EdgeInsets(top: Kasane.Space.s2, leading: Kasane.Space.s3, bottom: Kasane.Space.s4, trailing: Kasane.Space.s3))
     }
 
     // 曲の種類で絞る（動画や歌ってみたと、ふつうの曲を分ける。Android と同じ）。同じものをもう一度押すと外す
     private var kindChips: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: Kasane.Space.s2) {
             Chip(title: L.t("すべて", "All"), isOn: model.kindFilter == nil) { model.kindFilter = nil }
             ForEach([(Song.kindSong, L.t("曲", "Songs")), (Song.kindMusicVideo, L.t("MV", "Music videos")),
                      (Song.kindUserVideo, L.t("その他の動画（歌ってみた・ライブなど）", "Other videos (covers, live…)"))], id: \.0) { kind, title in
                 Chip(title: title, isOn: model.kindFilter == kind) { model.kindFilter = model.kindFilter == kind ? nil : kind }
             }
         }
-        .padding(EdgeInsets(top: 0, leading: 12, bottom: 12, trailing: 12))
+        .padding(EdgeInsets(top: 0, leading: Kasane.Space.s3, bottom: Kasane.Space.s3, trailing: Kasane.Space.s3))
     }
 }
 #endif

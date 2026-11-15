@@ -119,7 +119,7 @@ struct SettingsView: View {
                     Text(stateText).font(.footnote).foregroundStyle(.secondary)
                 }
             }
-            .padding(.vertical, 4)
+            .padding(.vertical, Kasane.Space.s1)
             if !account.isLoggedIn {
                 Button(L.t("ログイン", "Log in")) { LoginGate.shared.skipped = false }
             }

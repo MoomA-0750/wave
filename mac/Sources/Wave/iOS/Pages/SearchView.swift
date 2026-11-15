@@ -405,12 +405,12 @@ struct SearchView: View {
             }
             ForEach(Array(model.moods.enumerated()), id: \.offset) { sectionIndex, section in
                 Section(section.title.isEmpty ? L.t("すべてを見る", "Browse all") : section.title) {
-                    LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
+                    LazyVGrid(columns: [GridItem(.flexible(), spacing: Kasane.Space.s2), GridItem(.flexible(), spacing: Kasane.Space.s2)], spacing: Kasane.Space.s2) {
                         ForEach(Array(section.categories.enumerated()), id: \.offset) { i, category in
                             MoodTile(category: category, color: Ui.tile(category.color, sectionIndex * 7 + i))
                         }
                     }
-                    .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+                    .listRowInsets(EdgeInsets(top: Kasane.Space.s1, leading: Kasane.Space.s4, bottom: Kasane.Space.s1, trailing: Kasane.Space.s4))
                     .listRowBackground(Color.clear)
                 }
             }
@@ -440,7 +440,7 @@ struct SearchView: View {
             if let s = model.suggestions {
                 ForEach(s.queries, id: \.self) { query in
                     Button { submit(query) } label: {
-                        HStack(spacing: 16) {
+                        HStack(spacing: Kasane.Space.s4) {
                             Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
                             Text(query).lineLimit(1)
                             Spacer()
@@ -473,21 +473,21 @@ struct SearchView: View {
             Section {
                 // 種類のチップ（6つあるので横に送る。Android の FilterChip と同じ）
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
+                    HStack(spacing: Kasane.Space.s2) {
                         ForEach(SearchTab.allCases, id: \.self) { tab in
                             SearchTabChip(title: tab.label, isOn: model.tab == tab) { model.tab = tab }
                         }
                     }
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, Kasane.Space.s4)
                 }
-                .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+                .listRowInsets(EdgeInsets(top: Kasane.Space.s1, leading: 0, bottom: Kasane.Space.s1, trailing: 0))
                 .listRowSeparator(.hidden)
                 .listRowBackground(Color.clear)
             }
             if model.tab == .live {
                 liveRows
             } else if model.loading || (model.podcastsLoading && (model.tab == .podcasts || model.tab == .episodes)) {
-                ProgressView().frame(maxWidth: .infinity).padding(.vertical, 40).listRowSeparator(.hidden).listRowBackground(Color.clear)
+                ProgressView().frame(maxWidth: .infinity).padding(.vertical, Kasane.Space.s10).listRowSeparator(.hidden).listRowBackground(Color.clear)
             } else if let failure = model.failure {
                 Text(failureText(failure)).foregroundStyle(.secondary).listRowSeparator(.hidden)
             } else if model.empty {
@@ -577,7 +577,7 @@ struct SearchView: View {
     /// 「ライブ」: いま配信中のライブ。押すと HLS で流す（後ろにラジオは足さない）。
     @ViewBuilder private var liveRows: some View {
         if model.liveLoading {
-            ProgressView().frame(maxWidth: .infinity).padding(.vertical, 40).listRowSeparator(.hidden).listRowBackground(Color.clear)
+            ProgressView().frame(maxWidth: .infinity).padding(.vertical, Kasane.Space.s10).listRowSeparator(.hidden).listRowBackground(Color.clear)
         } else if let failure = model.liveFailure {
             LoadState(loading: false, failure: L.t("ライブ配信を検索できませんでした: ", "Couldn't search live streams: ") + failureText(failure)) {
                 model.loadLiveIfNeeded()
@@ -637,7 +637,7 @@ private struct ItemRow: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 12) {
+            HStack(spacing: Kasane.Space.s3) {
                 Cover(url: Ui.small(item.thumbnailUrl), size: 48, round: item.isArtist, radius: 4)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(item.title).lineLimit(1)
@@ -668,9 +668,9 @@ private struct HistoryRow: View {
     var action: () -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: Kasane.Space.s3) {
             Button(action: action) {
-                HStack(spacing: 12) {
+                HStack(spacing: Kasane.Space.s3) {
                     ZStack {
                         if entry.isQuery || entry.thumbnailUrl == nil {
                             RoundedRectangle(cornerRadius: 4).fill(.fill.tertiary)
@@ -728,10 +728,10 @@ private struct MoodTile: View {
                 .font(.headline)
                 .foregroundStyle(.white)
                 .multilineTextAlignment(.leading)
-                .padding(12)
+                .padding(Kasane.Space.s3)
                 .frame(maxWidth: .infinity, minHeight: 88, alignment: .topLeading)
-                .background(color, in: RoundedRectangle(cornerRadius: 10))
-                .contentShape(RoundedRectangle(cornerRadius: 10))
+                .background(color, in: RoundedRectangle(cornerRadius: Kasane.Radius.base, style: Kasane.cornerStyle))
+                .contentShape(RoundedRectangle(cornerRadius: Kasane.Radius.base, style: Kasane.cornerStyle))
         }
         .buttonStyle(.plain)
     }
@@ -746,19 +746,19 @@ private struct TopResultCard: View {
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
             Button(action: open) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Cover(url: Ui.img(item.thumbnailUrl), size: 96, round: item.isArtist, radius: 6)
+                VStack(alignment: .leading, spacing: Kasane.Space.s2) {
+                    Cover(url: Ui.img(item.thumbnailUrl), size: 96, round: item.isArtist, radius: Kasane.Radius.sm)
                     Text(item.title).font(.title2.weight(.bold)).lineLimit(2).multilineTextAlignment(.leading)
                     Text(detail).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
                 }
-                .padding(16)
+                .padding(Kasane.Space.s4)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            PlayCircle(size: 48, action: play).padding(16)
+            PlayCircle(size: 48, action: play).padding(Kasane.Space.s4)
         }
-        .glassCard(16)
+        .glassCard(Kasane.Radius.lg)
         .contextMenu {
             if case .song(let song) = item { SongMenuItems(song: song) }
         }

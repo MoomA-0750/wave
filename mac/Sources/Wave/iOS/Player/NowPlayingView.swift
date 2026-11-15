@@ -17,14 +17,14 @@ struct NowPlayingView: View {
         let player = AppServices.player!
         let song = player.current
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: Kasane.Space.s5) {
                 header(player, song)
                 // ジャケット（左右に払うと前後の曲へ）か、MV のある曲で「動画」を選んでいれば映像
                 if showVideo, player.video != nil {
                     VideoSurface()
                         .aspectRatio(1, contentMode: .fit)
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
-                        .shadow(radius: 16, y: 8)
+                        .clipShape(RoundedRectangle(cornerRadius: Kasane.Radius.base, style: Kasane.cornerStyle))
+                        .shadow(radius: Kasane.Radius.lg, y: 8)
                 } else {
                     CoverCarousel()
                 }
@@ -34,8 +34,8 @@ struct NowPlayingView: View {
                 deviceAndQueue(player)
                 lyricsCard(player)
             }
-            .padding(.horizontal, 24)
-            .padding(.bottom, 40)
+            .padding(.horizontal, Kasane.Space.s6)
+            .padding(.bottom, Kasane.Space.s10)
         }
         .scrollIndicators(.hidden)
         .background {
@@ -76,7 +76,7 @@ struct NowPlayingView: View {
                 .disabled(song == nil)
         }
         .foregroundStyle(.primary)
-        .padding(.top, 8)
+        .padding(.top, Kasane.Space.s2)
         .contentShape(Rectangle())
         // 上の帯を下へ払っても閉じる
         .gesture(DragGesture(minimumDistance: 20).onEnded { value in
@@ -85,8 +85,8 @@ struct NowPlayingView: View {
     }
 
     private func titleRow(_ player: PlayerService, _ song: Song?) -> some View {
-        HStack(alignment: .center, spacing: 8) {
-            VStack(alignment: .leading, spacing: 4) {
+        HStack(alignment: .center, spacing: Kasane.Space.s2) {
+            VStack(alignment: .leading, spacing: Kasane.Space.s1) {
                 Text(song?.title ?? L.t("何も再生していません", "Nothing playing"))
                     .font(.title2.weight(.bold)).lineLimit(2)
                     .onTapGesture { if let id = song?.album?.browseId { AppServices.nav.album(id) } }
@@ -109,7 +109,7 @@ struct NowPlayingView: View {
     }
 
     private func seekSlider(_ player: PlayerService) -> some View {
-        VStack(spacing: 4) {
+        VStack(spacing: Kasane.Space.s1) {
             Slider(value: Binding(get: { dragging ?? min(player.position, max(1, player.duration)) }, set: { dragging = $0 }),
                    in: 0...max(1, player.duration)) { editing in
                 // 本人が触り終えたときだけ移る
@@ -193,14 +193,14 @@ struct NowPlayingView: View {
     private func lyricsCard(_ player: PlayerService) -> some View {
         if case .found(let lyrics) = player.lyrics, player.current != nil {
             Button { LyricsSheetState.shared.open = true } label: {
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: Kasane.Space.s3) {
                     Text(L.t("歌詞", "Lyrics")).font(.headline)
                     LyricsFollower(lyrics: lyrics, positionMs: Int64(player.position * 1000), fontSize: 20)
                         .frame(height: 260, alignment: .top)
                         .clipped()
                         .allowsHitTesting(false)
                 }
-                .padding(16)
+                .padding(Kasane.Space.s4)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(RoundedRectangle(cornerRadius: 14).fill((tint ?? .gray).opacity(0.55)))
             }
@@ -271,8 +271,8 @@ private struct CoverCarousel: View {
             RemoteImage(url: Ui.large(song.thumbnailUrl))
         }
         .background(Color.white.opacity(0.08))
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-        .shadow(radius: 16, y: 8)
+        .clipShape(RoundedRectangle(cornerRadius: Kasane.Radius.base, style: Kasane.cornerStyle))
+        .shadow(radius: Kasane.Radius.lg, y: 8)
     }
 
     private struct Slot {
@@ -311,7 +311,7 @@ struct VideoSurface: View {
             Color.black
             if video.showing { PlayerLayer(player: video.player) }
             if !video.showing || video.state != .ready {
-                VStack(spacing: 8) {
+                VStack(spacing: Kasane.Space.s2) {
                     Text(video.note).font(.caption).foregroundStyle(.white).multilineTextAlignment(.center)
                     if video.state == .failed { Button(L.t("もう一度", "Retry")) { video.load(AppServices.player.video) } }
                 }

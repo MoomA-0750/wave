@@ -15,7 +15,7 @@ struct LoginView: View {
                 LoginWebView(model: model)
                     .opacity(model.finishing ? 0 : 1)
                 if model.finishing || model.status != nil {
-                    VStack(spacing: 12) {
+                    VStack(spacing: Kasane.Space.s3) {
                         if model.finishing { ProgressView() }
                         if let status = model.status { Text(status).multilineTextAlignment(.center).foregroundStyle(.secondary) }
                     }

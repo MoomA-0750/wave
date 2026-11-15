@@ -80,7 +80,7 @@ struct NowPlayingView: View {
         let player = AppServices.player!
         let song = player.current
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: Kasane.Space.s4) {
                 HStack {
                     Text(song?.album?.title.isEmpty == false ? song!.album!.title : L.t("再生中", "Now playing"))
                         .font(.body.weight(.semibold)).lineLimit(1)
@@ -95,7 +95,7 @@ struct NowPlayingView: View {
                     if player.video != nil { SongVideoSwitch() .padding(.top, 10) }
                 }
                 .frame(height: 306)
-                HStack(alignment: .top, spacing: 8) {
+                HStack(alignment: .top, spacing: Kasane.Space.s2) {
                     VStack(alignment: .leading, spacing: 2) {
                         LinkText(text: song?.title ?? L.t("何も再生していません", "Nothing playing"), action: SongLinks.openAlbum)
                             .font(.title2.weight(.semibold))
@@ -106,7 +106,7 @@ struct NowPlayingView: View {
                     if song != nil { LikeButton.view(player, size: 20) }
                 }
                 // 次の曲（Android と同じく歌詞の上）
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: Kasane.Space.s2) {
                     HStack {
                         Text(L.t("次の曲", "Next up")).font(.body.weight(.semibold))
                         Spacer()
@@ -114,7 +114,7 @@ struct NowPlayingView: View {
                     }
                     if player.index + 1 < player.queue.count {
                         let next = player.queue[player.index + 1]
-                        HStack(spacing: 12) {
+                        HStack(spacing: Kasane.Space.s3) {
                             Cover(url: Ui.small(next.thumbnailUrl), size: 44, radius: 4)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(next.title).lineLimit(1)
@@ -123,19 +123,19 @@ struct NowPlayingView: View {
                         }
                     }
                 }
-                .padding(16)
+                .padding(Kasane.Space.s4)
                 .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.05)))
                 // 歌詞（無い曲では箱ごと出さない）。全文を中で送り、歌っている行へ滑らかに動かす
                 if case .found(let lyrics) = player.lyrics, song != nil {
                     Button { AppServices.nav.lyrics() } label: {
-                        VStack(alignment: .leading, spacing: 8) {
+                        VStack(alignment: .leading, spacing: Kasane.Space.s2) {
                             Text(L.t("歌詞", "Lyrics")).font(.body.weight(.semibold))
                             LyricsFollower(lyrics: lyrics, positionMs: Int64(player.position * 1000), fontSize: 16)
                                 .frame(height: 190, alignment: .top)
                                 .clipped()
                                 .allowsHitTesting(false)
                         }
-                        .padding(16)
+                        .padding(Kasane.Space.s4)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.05)))
                         .contentShape(Rectangle())
@@ -143,7 +143,7 @@ struct NowPlayingView: View {
                     .buttonStyle(.plain)
                 }
             }
-            .padding(16)
+            .padding(Kasane.Space.s4)
         }
     }
 }
@@ -163,7 +163,7 @@ struct SongVideoSwitch: View {
 
     private func segment(_ title: String, on: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Text(title).font(.caption).padding(.horizontal, 14).padding(.vertical, 4)
+            Text(title).font(.caption).padding(.horizontal, 14).padding(.vertical, Kasane.Space.s1)
                 .foregroundStyle(on ? Color.black : Color.white)
                 .background(Capsule().fill(on ? Color.white : Color.clear))
         }
@@ -179,7 +179,7 @@ struct QueueView: View {
         let player = AppServices.player!
         let entries = model.queueEntries()
         VStack(spacing: 0) {
-            HStack(spacing: 4) {
+            HStack(spacing: Kasane.Space.s1) {
                 Chip(title: L.t("キュー", "Queue"), isOn: !model.queueHistory) { model.queueHistory = false }
                 Chip(title: L.t("履歴", "History"), isOn: model.queueHistory) { model.queueHistory = true }
                 Spacer()
@@ -189,7 +189,7 @@ struct QueueView: View {
                 Button { model.setRightPane(open: true, queue: false) } label: { Image(systemName: "xmark").font(.system(size: 11)) }
                     .buttonStyle(IconButtonStyle()).help(L.t("閉じる", "Close"))
             }
-            .padding(EdgeInsets(top: 12, leading: 16, bottom: 4, trailing: 8))
+            .padding(EdgeInsets(top: Kasane.Space.s3, leading: Kasane.Space.s4, bottom: Kasane.Space.s1, trailing: Kasane.Space.s2))
             if entries.isEmpty {
                 Spacer()
                 VStack(spacing: 6) {
@@ -199,7 +199,7 @@ struct QueueView: View {
                         : L.t("曲を再生すると、ここに次の曲が並びます", "Play something and upcoming songs will show up here"))
                         .font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
                 }
-                .padding(24)
+                .padding(Kasane.Space.s6)
                 Spacer()
             } else {
                 List {
@@ -233,7 +233,7 @@ private struct QueueRow: View {
             if let section = entry.section {
                 Text(section).font(.body.weight(.semibold)).padding(.top, 10).padding(.bottom, 2)
             }
-            HStack(spacing: 12) {
+            HStack(spacing: Kasane.Space.s3) {
                 Cover(url: Ui.small(entry.song.thumbnailUrl), size: 44, radius: 4)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(entry.song.title).lineLimit(1).foregroundStyle(entry.isCurrent ? Color.accentColor : Color.primary)
@@ -242,7 +242,7 @@ private struct QueueRow: View {
                 Spacer(minLength: 0)
             }
             .padding(.vertical, 6)
-            .background(RoundedRectangle(cornerRadius: 6).fill(hover ? Color.primary.opacity(0.06) : .clear).padding(.horizontal, -6))
+            .background(RoundedRectangle(cornerRadius: Kasane.Radius.sm, style: Kasane.cornerStyle).fill(hover ? Color.primary.opacity(0.06) : .clear).padding(.horizontal, -6))
             .contentShape(Rectangle())
             .onHover { hover = $0 }
             .onTapGesture { if !entry.isCurrent { AppServices.player.playAt(entry.index) } }

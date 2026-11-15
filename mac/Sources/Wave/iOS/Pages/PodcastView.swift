@@ -65,16 +65,16 @@ struct PodcastView: View {
 
     private func header(_ player: PlayerService) -> some View {
         let playingHere = player.sourceId == summary.playlistId && player.current != nil
-        return VStack(spacing: 8) {
+        return VStack(spacing: Kasane.Space.s2) {
             Group {
                 if isNewEpisodes && page?.thumbnailUrl == nil {
-                    NewEpisodesCover(size: 220, radius: 10)
+                    NewEpisodesCover(size: 220, radius: Kasane.Radius.base)
                 } else {
-                    Cover(url: Ui.large(page?.thumbnailUrl ?? summary.thumbnailUrl), size: 220, radius: 10)
+                    Cover(url: Ui.large(page?.thumbnailUrl ?? summary.thumbnailUrl), size: 220, radius: Kasane.Radius.base)
                 }
             }
-                .shadow(color: .black.opacity(0.25), radius: 16, y: 8)
-                .padding(.bottom, 8)
+                .shadow(color: .black.opacity(0.25), radius: Kasane.Radius.lg, y: 8)
+                .padding(.bottom, Kasane.Space.s2)
             Text(page?.title ?? summary.title).font(.title2.weight(.bold)).multilineTextAlignment(.center).lineLimit(3)
             if let author = page?.author ?? summary.author { Text(author).font(.headline).foregroundStyle(Color.accentColor) }
             if let description = page?.description {
@@ -85,7 +85,7 @@ struct PodcastView: View {
                     .contentShape(Rectangle())
                     .onTapGesture { withAnimation { expanded.toggle() } }
             }
-            HStack(spacing: 12) {
+            HStack(spacing: Kasane.Space.s3) {
                 Button {
                     if playingHere { player.togglePlay() } else { play(0) }
                 } label: {
@@ -106,10 +106,10 @@ struct PodcastView: View {
                     .disabled(saving)
                 }
             }
-            .padding(.top, 8)
+            .padding(.top, Kasane.Space.s2)
         }
         .frame(maxWidth: .infinity)
-        .padding(.top, 8)
+        .padding(.top, Kasane.Space.s2)
     }
 
     private func load() async {
@@ -200,7 +200,7 @@ struct PodcastRow: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 12) {
+            HStack(spacing: Kasane.Space.s3) {
                 Cover(url: Ui.small(podcast.thumbnailUrl), size: 48, radius: 4)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(podcast.title).lineLimit(1)
@@ -223,9 +223,9 @@ struct EpisodeRow: View {
 
     var body: some View {
         let isCurrent = AppServices.player.current?.videoId == episode.song.videoId
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .top, spacing: Kasane.Space.s3) {
             Button(action: onPlay) {
-                HStack(alignment: .top, spacing: 12) {
+                HStack(alignment: .top, spacing: Kasane.Space.s3) {
                     RemoteImage(url: URL(string: episode.song.thumbnailUrl ?? ""))
                         .frame(width: showShow ? 48 : 96, height: showShow ? 48 : 54)
                         .background(Color.primary.opacity(0.08))

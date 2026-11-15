@@ -12,7 +12,7 @@ struct DevicesPopover: View {
         let player = AppServices.player!
         let info = connect.info
         let remote = player.isRemote ? connect.remote : nil
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: Kasane.Space.s1) {
             Text(L.t("現在のデバイス", "Current device")).font(.body.weight(.semibold))
             if let remote {
                 let isPc = connect.members.first { $0.deviceId == remote.deviceId }?.isPc == true
@@ -37,7 +37,7 @@ struct DevicesPopover: View {
                     }
                     .map(\.element)
                 if !others.isEmpty {
-                    Text(L.t("ほかのデバイスを選択", "Select another device")).font(.body.weight(.semibold)).padding(.top, 8)
+                    Text(L.t("ほかのデバイスを選択", "Select another device")).font(.body.weight(.semibold)).padding(.top, Kasane.Space.s2)
                     ForEach(others) { member in
                         if member.isSelf {
                             DeviceRow(symbol: "desktopcomputer", title: L.t("この Mac", "This Mac"), subtitle: nil, accent: false, enabled: true) {
@@ -60,9 +60,9 @@ struct DevicesPopover: View {
                 AppServices.nav.devices()
             }
             .buttonStyle(.textLink)
-            .padding(.top, 8)
+            .padding(.top, Kasane.Space.s2)
         }
-        .padding(16)
+        .padding(Kasane.Space.s4)
         .frame(width: 320, alignment: .leading)
     }
 }
@@ -79,7 +79,7 @@ private struct DeviceRow: View {
     @State private var hover = false
 
     var body: some View {
-        let content = HStack(spacing: 12) {
+        let content = HStack(spacing: Kasane.Space.s3) {
             Image(systemName: symbol).font(.system(size: 22)).frame(width: 30)
                 .foregroundStyle(accent ? Color.accentColor : Color.primary)
             VStack(alignment: .leading, spacing: 1) {
@@ -91,13 +91,13 @@ private struct DeviceRow: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(8)
+        .padding(Kasane.Space.s2)
         .opacity(enabled ? 1 : 0.45)
         .contentShape(Rectangle())
         if let action, enabled {
             Button(action: action) { content }
                 .buttonStyle(.plain)
-                .background(RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(hover ? 0.07 : 0)))
+                .background(RoundedRectangle(cornerRadius: Kasane.Radius.sm, style: Kasane.cornerStyle).fill(Color.primary.opacity(hover ? 0.07 : 0)))
                 .onHover { hover = $0 }
         } else {
             content

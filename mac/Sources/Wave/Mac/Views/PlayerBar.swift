@@ -13,13 +13,13 @@ struct PlayerBar: View {
         let player = AppServices.player!
         GeometryReader { geo in
             let side = geo.size.width * 0.3
-            HStack(spacing: 16) {
+            HStack(spacing: Kasane.Space.s4) {
                 // 左: 曲
-                HStack(spacing: 12) {
+                HStack(spacing: Kasane.Space.s3) {
                     Cover(url: Ui.small(player.current?.thumbnailUrl), size: 56)
                         .onTapGesture { model.setRightPane(open: !(model.rightPaneOpen && model.rightView == .nowPlaying), queue: false) }
                     // 評価のボタンは曲名のすぐ右（Spotify と同じ）。曲名が長いときだけ省略する
-                    HStack(spacing: 12) {
+                    HStack(spacing: Kasane.Space.s3) {
                         VStack(alignment: .leading, spacing: 2) {
                             LinkText(text: player.current?.title ?? "", action: SongLinks.openAlbum).font(.body.weight(.semibold)).lineLimit(1)
                             ArtistLink(font: .caption, color: .secondary)
@@ -34,7 +34,7 @@ struct PlayerBar: View {
                 TransportControls()
                     .frame(maxWidth: 720)
                 // 右: 歌詞・キュー・デバイス・再生中の画面・全画面・音量
-                HStack(spacing: 4) {
+                HStack(spacing: Kasane.Space.s1) {
                     Spacer(minLength: 0)
                     IconToggle(isOn: isLyrics, help: L.t("歌詞", "Lyrics"), action: toggleLyrics) {
                         Image(systemName: "quote.bubble").font(.system(size: 15))
@@ -69,7 +69,7 @@ struct PlayerBar: View {
                 }
                 .frame(width: side)
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, Kasane.Space.s4)
             .frame(maxHeight: .infinity)
         }
         .frame(height: 88)
@@ -108,7 +108,7 @@ struct TransportControls: View {
     var body: some View {
         let player = AppServices.player!
         VStack(spacing: 2) {
-            HStack(spacing: 12) {
+            HStack(spacing: Kasane.Space.s3) {
                 IconToggle(isOn: player.shuffle, help: L.t("シャッフル", "Shuffle"), action: player.toggleShuffle) {
                     Image(systemName: "shuffle").font(.system(size: 15))
                 }
@@ -144,7 +144,7 @@ struct TransportControls: View {
 
     private func positionBar(_ player: PlayerService) -> some View {
         Group {
-            HStack(spacing: 8) {
+            HStack(spacing: Kasane.Space.s2) {
                 Text(Ui.time(dragging ?? player.position)).font(.caption).foregroundStyle(.secondary).monospacedDigit()
                     .frame(width: 44, alignment: .trailing)
                 Slider(value: Binding(get: { dragging ?? min(player.position, max(1, player.duration)) }, set: { dragging = $0 }),
@@ -179,7 +179,7 @@ struct VideoOrCover: View {
                     PlayerLayerView(player: video.player)
                 }
                 if !video.showing || video.state != .ready {
-                    VStack(spacing: 8) {
+                    VStack(spacing: Kasane.Space.s2) {
                         Text(video.note).font(.caption).foregroundStyle(.white).multilineTextAlignment(.center)
                         if video.state == .failed { Button(L.t("もう一度", "Retry")) { video.load(player.video) } }
                     }
@@ -191,7 +191,7 @@ struct VideoOrCover: View {
             }
         }
         .frame(width: size, height: size)
-        .clipShape(RoundedRectangle(cornerRadius: inFullView ? 0 : 8))
+        .clipShape(RoundedRectangle(cornerRadius: inFullView ? 0 : 8, style: Kasane.cornerStyle))
         .onChange(of: model.showVideo, initial: true) { _, show in video.setActive(show ? player.video : nil) }
         .onChange(of: player.video) { _, v in if model.showVideo { video.setActive(v) } else { video.setActive(nil) } }
     }
@@ -229,7 +229,7 @@ struct FullView: View {
             // 左に曲（3）、右に歌詞（2）。Windows と同じ割り付け
             let left = (outer.size.width - 56) * 0.6
             HStack(alignment: .bottom, spacing: 56) {
-                VStack(alignment: .leading, spacing: 20) {
+                VStack(alignment: .leading, spacing: Kasane.Space.s5) {
                     if player.video != nil { SongVideoSwitch() }
                     // ジャケットは正方形、映像は枠いっぱいの大きさ（縦横比はそのまま）
                     GeometryReader { geo in
@@ -243,7 +243,7 @@ struct FullView: View {
                                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
                         }
                     }
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading, spacing: Kasane.Space.s1) {
                         LinkText(text: song?.title ?? "", action: SongLinks.openAlbum).font(.system(size: 44, weight: .bold)).lineLimit(1)
                             .foregroundStyle(.white)
                         ArtistLink(font: .system(size: 22), color: .white.opacity(0.75))
@@ -261,12 +261,12 @@ struct FullView: View {
                 }
             }
             }
-            .padding(EdgeInsets(top: 56, leading: 56, bottom: 32, trailing: 56))
+            .padding(EdgeInsets(top: 56, leading: 56, bottom: Kasane.Space.s8, trailing: 56))
             Button { model.setFullScreen(false) } label: { Image(systemName: "arrow.down.right.and.arrow.up.left").font(.system(size: 15)) }
                 .buttonStyle(IconButtonStyle())
                 .foregroundStyle(.white)
                 .help(L.t("全画面を終える (Esc)", "Exit full screen (Esc)"))
-                .padding(16)
+                .padding(Kasane.Space.s4)
         }
         .environment(\.colorScheme, .dark)
     }

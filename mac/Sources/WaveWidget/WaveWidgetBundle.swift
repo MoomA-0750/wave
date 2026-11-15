@@ -41,18 +41,18 @@ private let accent = Color(red: 0.27, green: 0.55, blue: 1.0)
 /// ジャケット（無ければ音符）。
 private struct Artwork: View {
     var image: WidgetImage?
-    var radius: CGFloat = 10
+    var radius: CGFloat = Kasane.Radius.base
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: radius).fill(Color.white.opacity(0.12))
+            RoundedRectangle(cornerRadius: radius, style: Kasane.cornerStyle).fill(Color.white.opacity(0.12))
             if let image {
                 Image(widgetImage: image).resizable().aspectRatio(contentMode: .fill)
             } else {
                 Image(systemName: "music.note").font(.title2).foregroundStyle(.secondary)
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: radius))
+        .clipShape(RoundedRectangle(cornerRadius: radius, style: Kasane.cornerStyle))
     }
 }
 
@@ -129,7 +129,7 @@ struct NowPlayingWidgetView: View {
             } else {
                 HStack(spacing: 14) {
                     Artwork(image: entry.artwork).frame(width: 110, height: 110)
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading, spacing: Kasane.Space.s1) {
                         Text(song.title).font(.headline).lineLimit(2)
                         Text(song.artist).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
                         if let device = song.device {
@@ -231,7 +231,7 @@ struct PlaylistWidgetView: View {
             } else {
                 HStack(spacing: 14) {
                     Artwork(image: entry.cover).frame(width: 110, height: 110)
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: Kasane.Space.s2) {
                         Text(playlist.title).font(.headline).lineLimit(3)
                         Spacer(minLength: 0)
                         buttons
@@ -303,7 +303,7 @@ struct PlaylistWidgetView: View {
 
         var body: some View {
             VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 12) {
+                HStack(spacing: Kasane.Space.s3) {
                     Artwork(image: loadImage(WidgetStore.artworkFile(state.videoId)), radius: 8).frame(width: 56, height: 56)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(state.title).font(.headline).lineLimit(1)

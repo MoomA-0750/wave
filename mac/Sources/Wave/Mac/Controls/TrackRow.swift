@@ -29,7 +29,7 @@ struct TrackRowView: View {
         let player = AppServices.player!
         let isCurrent = player.current?.videoId == row.song.videoId
         let isLiked = AppServices.library.isLiked(row.song.videoId)
-        HStack(spacing: 12) {
+        HStack(spacing: Kasane.Space.s3) {
             Group {
                 if isCurrent {
                     Image(systemName: "speaker.wave.2.fill").font(.system(size: 12)).foregroundStyle(Color.accentColor)
@@ -38,7 +38,7 @@ struct TrackRowView: View {
                 }
             }
             .frame(width: 32, alignment: .trailing)
-            HStack(spacing: 12) {
+            HStack(spacing: Kasane.Space.s3) {
                 if row.showArtwork { Cover(url: Ui.small(row.song.thumbnailUrl), size: 40, radius: 4) }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(row.song.title).lineLimit(1).foregroundStyle(isCurrent ? Color.accentColor : Color.primary)
@@ -52,7 +52,7 @@ struct TrackRowView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .layoutPriority(2)
             }
-            HStack(spacing: 8) {
+            HStack(spacing: Kasane.Space.s2) {
                 // 高く評価した曲は長さの左に✓（Spotify と同じ）
                 if isLiked {
                     Image(systemName: "checkmark.circle.fill").font(.system(size: 13)).foregroundStyle(Color.accentColor).help(L.t("高く評価済み", "Liked"))
@@ -75,9 +75,9 @@ struct TrackRowView: View {
             .opacity(hover || selected ? 1 : 0.0001)
             .help(L.t("その他", "More"))
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, Kasane.Space.s3)
         .frame(height: 56)
-        .background(RoundedRectangle(cornerRadius: 6).fill(selected ? Color.primary.opacity(0.12) : hover ? Color.primary.opacity(0.06) : .clear))
+        .background(RoundedRectangle(cornerRadius: Kasane.Radius.sm, style: Kasane.cornerStyle).fill(selected ? Color.primary.opacity(0.12) : hover ? Color.primary.opacity(0.06) : .clear))
         .contentShape(Rectangle())
         .onHover { hover = $0 }
         .onTapGesture(count: 2, perform: onPlay)
@@ -92,7 +92,7 @@ struct TrackHeader: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 12) {
+            HStack(spacing: Kasane.Space.s3) {
                 Text("#").frame(width: 32, alignment: .trailing)
                 Text(L.t("タイトル", "Title")).frame(maxWidth: .infinity, alignment: .leading).layoutPriority(3)
                 if showAlbum { Text(L.t("アルバム", "Album")).frame(maxWidth: .infinity, alignment: .leading).layoutPriority(2) }
@@ -100,8 +100,8 @@ struct TrackHeader: View {
                 Spacer().frame(width: 36)
             }
             .subtle()
-            .padding(.horizontal, 12)
-            .padding(.bottom, 8)
+            .padding(.horizontal, Kasane.Space.s3)
+            .padding(.bottom, Kasane.Space.s2)
             Divider()
         }
     }
@@ -113,7 +113,7 @@ struct MediaCard: View {
     @State private var hover = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Kasane.Space.s2) {
             ZStack(alignment: .bottomTrailing) {
                 Cover(url: Ui.img(item.thumbnailUrl), size: 160, round: item.isArtist)
                 PlayCircleButton(size: 44, action: { AppServices.nav.play(item) }) {
@@ -130,7 +130,7 @@ struct MediaCard: View {
             }
             .frame(width: 160, alignment: .leading)
         }
-        .padding(8)
+        .padding(Kasane.Space.s2)
         .frame(width: 176)
         .background(RoundedRectangle(cornerRadius: 8).fill(hover ? Color.primary.opacity(0.07) : .clear))
         .contentShape(Rectangle())
@@ -157,7 +157,7 @@ struct ShelfView: View {
     @State private var first = 0
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: Kasane.Space.s1) {
             HStack(alignment: .bottom) {
                 VStack(alignment: .leading, spacing: 0) {
                     if let strapline, !strapline.isEmpty { Text(strapline).subtle() }
@@ -169,7 +169,7 @@ struct ShelfView: View {
                 Button { scroll(4) } label: { Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold)) }
                     .buttonStyle(IconButtonStyle()).help(L.t("次へ", "Next"))
             }
-            .padding(.horizontal, 8)
+            .padding(.horizontal, Kasane.Space.s2)
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 0) {
                     ForEach(Array(items.enumerated()), id: \.offset) { i, item in

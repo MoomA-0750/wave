@@ -108,19 +108,19 @@ struct HomePageView: View {
     var body: some View {
         let releases = home.selected == nil ? Array(ReleaseWatchState.diversified(AppServices.releases.recent).prefix(20)) : []
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 24) {
+            LazyVStack(alignment: .leading, spacing: Kasane.Space.s6) {
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
+                    HStack(spacing: Kasane.Space.s2) {
                         Chip(title: L.t("すべて", "All"), isOn: home.selected == nil) { home.select(nil) }
                         ForEach(home.chips, id: \.self) { chip in Chip(title: chip.title, isOn: home.selected == chip) { home.select(chip) } }
                     }
-                    .padding(.horizontal, 8)
+                    .padding(.horizontal, Kasane.Space.s2)
                 }
                 if !home.recent.isEmpty {
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(minimum: 200), spacing: 8), count: 4), spacing: 8) {
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(minimum: 200), spacing: Kasane.Space.s2), count: 4), spacing: Kasane.Space.s2) {
                         ForEach(home.recent, id: \.key) { item in RecentTile(item: item) }
                     }
-                    .padding(.horizontal, 8)
+                    .padding(.horizontal, Kasane.Space.s2)
                 }
                 // 登録したアーティストの新作（Android と同じ。アーティストごとに2件まで交互に）
                 if !releases.isEmpty {
@@ -132,14 +132,14 @@ struct HomePageView: View {
                 }
                 if home.loading { ProgressView().frame(maxWidth: .infinity) }
                 if home.failed {
-                    VStack(spacing: 8) {
+                    VStack(spacing: Kasane.Space.s2) {
                         Text(L.t("ホームを読み込めませんでした", "Couldn’t load Home"))
                         Button(L.t("もう一度読み込む", "Try again")) { home.reload() }
                     }
                     .frame(maxWidth: .infinity)
                 }
             }
-            .padding(EdgeInsets(top: 16, leading: 16, bottom: 32, trailing: 16))
+            .padding(EdgeInsets(top: Kasane.Space.s4, leading: Kasane.Space.s4, bottom: Kasane.Space.s8, trailing: Kasane.Space.s4))
         }
         .onAppear { home.start() }
     }
@@ -151,14 +151,14 @@ private struct RecentTile: View {
 
     var body: some View {
         Button { AppServices.nav.openCard(item) } label: {
-            HStack(spacing: 12) {
+            HStack(spacing: Kasane.Space.s3) {
                 Cover(url: Ui.small(item.thumbnailUrl), size: 56, round: item.isArtist, radius: 0)
                 Text(item.title).font(.body.weight(.semibold)).lineLimit(2).multilineTextAlignment(.leading)
                 Spacer(minLength: 12)
             }
             .frame(height: 56)
             .background(Color.primary.opacity(hover ? 0.12 : 0.07))
-            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .clipShape(RoundedRectangle(cornerRadius: Kasane.Radius.sm, style: Kasane.cornerStyle))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -174,14 +174,14 @@ struct MoodPageView: View {
 
     var body: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 24) {
-                Text(mood.title).font(.system(size: 48, weight: .bold)).padding(EdgeInsets(top: 16, leading: 8, bottom: 0, trailing: 8))
-                if loading { ProgressView().padding(.horizontal, 8) }
+            LazyVStack(alignment: .leading, spacing: Kasane.Space.s6) {
+                Text(mood.title).font(.system(size: 48, weight: .bold)).padding(EdgeInsets(top: Kasane.Space.s4, leading: Kasane.Space.s2, bottom: 0, trailing: Kasane.Space.s2))
+                if loading { ProgressView().padding(.horizontal, Kasane.Space.s2) }
                 ForEach(Array(shelves.enumerated()), id: \.offset) { _, shelf in
                     ShelfView(title: shelf.title, strapline: shelf.strapline, items: shelf.items)
                 }
             }
-            .padding(EdgeInsets(top: 16, leading: 16, bottom: 32, trailing: 16))
+            .padding(EdgeInsets(top: Kasane.Space.s4, leading: Kasane.Space.s4, bottom: Kasane.Space.s8, trailing: Kasane.Space.s4))
         }
         .task {
             let result = try? await AppServices.music.moodCategory(mood.params)
@@ -201,20 +201,20 @@ struct HistoryPageView: View {
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: Kasane.Space.s2) {
                     Text(L.t("最近再生した曲", "Recently played")).font(.system(size: 48, weight: .bold))
                     if loading { ProgressView() }
                     if let error { Text(error) }
                 }
-                .padding(EdgeInsets(top: 32, leading: 12, bottom: 16, trailing: 12))
+                .padding(EdgeInsets(top: Kasane.Space.s8, leading: Kasane.Space.s3, bottom: Kasane.Space.s4, trailing: Kasane.Space.s3))
                 ForEach(Array(sections.enumerated()), id: \.offset) { _, section in
-                    Text(section.title).subtitleStyle().padding(EdgeInsets(top: 12, leading: 12, bottom: 4, trailing: 12))
+                    Text(section.title).subtitleStyle().padding(EdgeInsets(top: Kasane.Space.s3, leading: Kasane.Space.s3, bottom: Kasane.Space.s1, trailing: Kasane.Space.s3))
                     ForEach(section.rows) { row in
                         TrackRowView(row: row, selected: selected == row.id, onPlay: { AppServices.player.playSong(row.song) }, onSelect: { selected = row.id })
                     }
                 }
             }
-            .padding(EdgeInsets(top: 0, leading: 12, bottom: 24, trailing: 12))
+            .padding(EdgeInsets(top: 0, leading: Kasane.Space.s3, bottom: Kasane.Space.s6, trailing: Kasane.Space.s3))
         }
         .task {
             let result = (try? await AppServices.music.history()) ?? .failed(.network)

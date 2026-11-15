@@ -298,16 +298,16 @@ struct CollectionView: View {
     }
 
     private func header(_ player: PlayerService, _ rows: [CollectionViewRow]) -> some View {
-        VStack(spacing: 8) {
+        VStack(spacing: Kasane.Space.s2) {
             Group {
                 if model.isLiked {
-                    LikedCover(size: 240, radius: 10)
+                    LikedCover(size: 240, radius: Kasane.Radius.base)
                 } else {
-                    Cover(url: Ui.large(model.thumbnailUrl), size: 240, radius: 10)
+                    Cover(url: Ui.large(model.thumbnailUrl), size: 240, radius: Kasane.Radius.base)
                 }
             }
-            .shadow(color: .black.opacity(0.25), radius: 16, y: 8)
-            .padding(.bottom, 8)
+            .shadow(color: .black.opacity(0.25), radius: Kasane.Radius.lg, y: 8)
+            .padding(.bottom, Kasane.Space.s2)
             Text(model.title ?? "").font(.title2.weight(.bold)).multilineTextAlignment(.center).lineLimit(3)
             if let artist = model.artistText {
                 Button(artist) { if let id = model.albumArtist?.browseId { AppServices.nav.artist(id) } }
@@ -318,7 +318,7 @@ struct CollectionView: View {
             }
             if let detail = model.detail { Text(detail).font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center).lineLimit(3) }
             // 再生・シャッフル再生（iOS のミュージックと同じ大きな2つのボタン）。この一覧を流していれば再生は一時停止・再開になる
-            HStack(spacing: 12) {
+            HStack(spacing: Kasane.Space.s3) {
                 CollectionViewBigButton(title: model.isPlayingHere && player.isPlaying ? L.t("一時停止", "Pause") : L.t("再生", "Play"),
                                         icon: model.isPlayingHere && player.isPlaying ? "pause.fill" : "play.fill") {
                     if model.isPlayingHere { player.togglePlay() } else { model.play(rows: rows) }
@@ -326,23 +326,23 @@ struct CollectionView: View {
                 CollectionViewBigButton(title: L.t("シャッフル", "Shuffle"), icon: "shuffle") { model.play(rows: rows, shuffle: true) }
             }
             .disabled(rows.isEmpty)
-            .padding(.top, 8)
+            .padding(.top, Kasane.Space.s2)
         }
         .frame(maxWidth: .infinity)
-        .padding(.top, 8)
+        .padding(.top, Kasane.Space.s2)
     }
 
     // 曲の種類で絞る（動画や歌ってみたと、ふつうの曲を分ける。Android と同じ）。同じものをもう一度押すと外す
     private var kindChips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: Kasane.Space.s2) {
                 CollectionViewChip(title: L.t("すべて", "All"), isOn: model.kindFilter == nil) { model.kindFilter = nil }
                 ForEach([(Song.kindSong, L.t("曲", "Songs")), (Song.kindMusicVideo, L.t("MV", "Music videos")),
                          (Song.kindUserVideo, L.t("その他の動画", "Other videos"))], id: \.0) { kind, title in
                     CollectionViewChip(title: title, isOn: model.kindFilter == kind) { model.kindFilter = model.kindFilter == kind ? nil : kind }
                 }
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, Kasane.Space.s4)
             .padding(.vertical, 6)
         }
     }
@@ -384,7 +384,7 @@ private struct CollectionViewBigButton: View {
             Label(title, systemImage: icon)
                 .font(.headline)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
+                .padding(.vertical, Kasane.Space.s3)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

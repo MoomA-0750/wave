@@ -17,8 +17,8 @@ struct LyricsView: View {
             content(player)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             LyricsMiniControls()
-                .padding(.horizontal, 16)
-                .padding(.bottom, 8)
+                .padding(.horizontal, Kasane.Space.s4)
+                .padding(.bottom, Kasane.Space.s2)
         }
         .background {
             LinearGradient(colors: [(tint ?? .gray).opacity(0.95), (tint ?? .gray).opacity(0.55), .black], startPoint: .top, endPoint: .bottom)
@@ -31,7 +31,7 @@ struct LyricsView: View {
     }
 
     private func header(_ song: Song?) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: Kasane.Space.s3) {
             Cover(url: Ui.small(song?.thumbnailUrl), size: 44, radius: 4)
             VStack(alignment: .leading, spacing: 2) {
                 Text(song?.title ?? "").font(.headline).lineLimit(1)
@@ -45,9 +45,9 @@ struct LyricsView: View {
             .glassCard(22, interactive: true)
             .accessibilityLabel(L.t("閉じる", "Close"))
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 16)
-        .padding(.bottom, 8)
+        .padding(.horizontal, Kasane.Space.s5)
+        .padding(.top, Kasane.Space.s4)
+        .padding(.bottom, Kasane.Space.s2)
     }
 
     @ViewBuilder
@@ -69,14 +69,14 @@ struct LyricsView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                         LyricsSourceNote(source: plain.source)
                     }
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 16)
+                    .padding(.horizontal, Kasane.Space.s6)
+                    .padding(.vertical, Kasane.Space.s4)
                 }
             case .some(.none):
                 message(L.t("この曲の歌詞は見つかりませんでした", "No lyrics found for this song"))
             default:
                 // 読み込みに失敗したときだけ（Android と同じ）
-                VStack(spacing: 12) {
+                VStack(spacing: Kasane.Space.s3) {
                     Text(L.t("歌詞を読み込めませんでした", "Couldn't load lyrics")).font(.headline)
                     Button(L.t("もう一度", "Retry"), systemImage: "arrow.clockwise") { player.reloadLyrics() }
                         .buttonStyle(.bordered)
@@ -86,7 +86,7 @@ struct LyricsView: View {
     }
 
     private func message(_ text: String) -> some View {
-        Text(text).font(.headline).foregroundStyle(.secondary).multilineTextAlignment(.center).padding(24)
+        Text(text).font(.headline).foregroundStyle(.secondary).multilineTextAlignment(.center).padding(Kasane.Space.s6)
     }
 }
 
@@ -96,7 +96,7 @@ private struct LyricsSourceNote: View {
 
     var body: some View {
         if let source, !source.isEmpty {
-            Text(source).font(.caption).foregroundStyle(.secondary).padding(.vertical, 16)
+            Text(source).font(.caption).foregroundStyle(.secondary).padding(.vertical, Kasane.Space.s4)
         }
     }
 }
@@ -139,8 +139,8 @@ private struct LyricsSyncedPage: View {
                     LyricsSourceNote(source: source)
                     Color.clear.frame(height: 200)
                 }
-                .padding(.horizontal, 24)
-                .padding(.top, 16)
+                .padding(.horizontal, Kasane.Space.s6)
+                .padding(.top, Kasane.Space.s4)
             }
             .scrollIndicators(.hidden)
             .simultaneousGesture(DragGesture(minimumDistance: 8).onChanged { _ in userScrolledAt = Date() })

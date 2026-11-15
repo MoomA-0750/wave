@@ -6,7 +6,7 @@ struct NewEpisodesCover: View {
     var radius: CGFloat = 4
 
     var body: some View {
-        RoundedRectangle(cornerRadius: radius)
+        RoundedRectangle(cornerRadius: radius, style: Kasane.cornerStyle)
             .fill(LinearGradient(colors: [Color(red: 0.0, green: 0.45, blue: 0.4), Color(red: 0.2, green: 0.75, blue: 0.6)], startPoint: .topLeading, endPoint: .bottomTrailing))
             .frame(width: size, height: size)
             .overlay(Image(systemName: "dot.radiowaves.left.and.right").font(.system(size: size * 0.4)).foregroundStyle(.white))

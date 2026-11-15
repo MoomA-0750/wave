@@ -45,7 +45,7 @@ struct IconButtonStyle: ButtonStyle {
             configuration.label
                 .frame(minWidth: size, minHeight: size)
                 .foregroundStyle(enabled ? (configuration.isPressed ? Color.secondary : Color.primary) : Color.secondary.opacity(0.5))
-                .background(RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(configuration.isPressed ? 0.12 : hover ? 0.07 : 0)))
+                .background(RoundedRectangle(cornerRadius: Kasane.Radius.sm, style: Kasane.cornerStyle).fill(Color.primary.opacity(configuration.isPressed ? 0.12 : hover ? 0.07 : 0)))
                 .contentShape(Rectangle())
                 .onHover { hover = $0 }
         }
@@ -101,7 +101,7 @@ struct Chip: View {
         Button(action: action) {
             Text(title)
                 .font(.callout)
-                .padding(.horizontal, 12)
+                .padding(.horizontal, Kasane.Space.s3)
                 .padding(.vertical, 5)
                 .foregroundStyle(isOn ? Color.white : Color.primary)
                 .background(Capsule().fill(isOn ? Color.accentColor : Color.primary.opacity(0.08)))
@@ -115,13 +115,13 @@ struct Cover: View {
     var url: URL?
     var size: CGFloat
     var round = false
-    var radius: CGFloat = 6
+    var radius: CGFloat = Kasane.Radius.sm
 
     var body: some View {
         RemoteImage(url: url)
             .frame(width: size, height: size)
             .background(Color.primary.opacity(0.08))
-            .clipShape(round ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: radius)))
+            .clipShape(round ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: radius, style: Kasane.cornerStyle)))
     }
 }
 
@@ -129,7 +129,7 @@ struct Cover: View {
 struct LikedCover: View {
     var size: CGFloat
     var round = false
-    var radius: CGFloat = 6
+    var radius: CGFloat = Kasane.Radius.sm
 
     var body: some View {
         ZStack {
@@ -137,7 +137,7 @@ struct LikedCover: View {
             Image(systemName: "heart.fill").font(.system(size: size * 0.36)).foregroundStyle(.white)
         }
         .frame(width: size, height: size)
-        .clipShape(round ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: radius)))
+        .clipShape(round ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: radius, style: Kasane.cornerStyle)))
     }
 }
 

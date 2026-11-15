@@ -4,20 +4,20 @@ import WaveCore
 
 /// Liquid Glass の板（iOS 26 より前はすりガラス）。
 struct GlassCard: ViewModifier {
-    var radius: CGFloat = 16
+    var radius: CGFloat = Kasane.Radius.lg
     var interactive = false
 
     func body(content: Content) -> some View {
         if #available(iOS 26.0, *) {
-            content.glassEffect(interactive ? .regular.interactive() : .regular, in: RoundedRectangle(cornerRadius: radius))
+            content.glassEffect(interactive ? .regular.interactive() : .regular, in: RoundedRectangle(cornerRadius: radius, style: Kasane.cornerStyle))
         } else {
-            content.background(.regularMaterial, in: RoundedRectangle(cornerRadius: radius))
+            content.background(.regularMaterial, in: RoundedRectangle(cornerRadius: radius, style: Kasane.cornerStyle))
         }
     }
 }
 
 extension View {
-    func glassCard(_ radius: CGFloat = 16, interactive: Bool = false) -> some View { modifier(GlassCard(radius: radius, interactive: interactive)) }
+    func glassCard(_ radius: CGFloat = Kasane.Radius.lg, interactive: Bool = false) -> some View { modifier(GlassCard(radius: radius, interactive: interactive)) }
 
     /// 小さな灰色の文字。
     func subtle() -> some View { font(.footnote).foregroundStyle(.secondary).lineLimit(1) }
@@ -28,20 +28,20 @@ struct Cover: View {
     var url: URL?
     var size: CGFloat
     var round = false
-    var radius: CGFloat = 6
+    var radius: CGFloat = Kasane.Radius.sm
 
     var body: some View {
         RemoteImage(url: url)
             .frame(width: size, height: size)
             .background(Color.primary.opacity(0.08))
-            .clipShape(round ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: radius)))
+            .clipShape(round ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: radius, style: Kasane.cornerStyle)))
     }
 }
 
 /// 高く評価した曲の絵（紫から緑のグラデーションにハート）。
 struct LikedCover: View {
     var size: CGFloat
-    var radius: CGFloat = 6
+    var radius: CGFloat = Kasane.Radius.sm
 
     var body: some View {
         ZStack {
@@ -49,7 +49,7 @@ struct LikedCover: View {
             Image(systemName: "heart.fill").font(.system(size: size * 0.36)).foregroundStyle(.white)
         }
         .frame(width: size, height: size)
-        .clipShape(RoundedRectangle(cornerRadius: radius))
+        .clipShape(RoundedRectangle(cornerRadius: radius, style: Kasane.cornerStyle))
     }
 }
 
@@ -64,7 +64,7 @@ struct SongRow: View {
     var body: some View {
         let player = AppServices.player!
         let isCurrent = player.current?.videoId == song.videoId
-        HStack(spacing: 12) {
+        HStack(spacing: Kasane.Space.s3) {
             if let number {
                 Text("\(number)").foregroundStyle(.secondary).monospacedDigit().frame(width: 28)
             } else {
@@ -72,7 +72,7 @@ struct SongRow: View {
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(song.title).lineLimit(1).foregroundStyle(isCurrent ? Color.accentColor : Color.primary)
-                HStack(spacing: 4) {
+                HStack(spacing: Kasane.Space.s1) {
                     if song.isLive { LiveBadge(font: .caption2.weight(.bold), dot: 6) }
                     if AppServices.library.isLiked(song.videoId) {
                         Image(systemName: "checkmark.circle.fill").font(.caption2).foregroundStyle(Color.accentColor)
@@ -184,7 +184,7 @@ struct LoadState: View {
         if loading {
             ProgressView().frame(maxWidth: .infinity, minHeight: 200)
         } else if let failure {
-            VStack(spacing: 12) {
+            VStack(spacing: Kasane.Space.s3) {
                 Text(failure).foregroundStyle(.secondary).multilineTextAlignment(.center)
                 if let retry { Button(L.t("もう一度", "Retry"), action: retry).buttonStyle(.bordered) }
             }

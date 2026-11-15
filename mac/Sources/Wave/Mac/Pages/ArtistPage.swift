@@ -24,23 +24,23 @@ struct ArtistPageView: View {
         let player = AppServices.player!
         let playingHere = player.sourceId == browseId && player.current != nil
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 16) {
+            LazyVStack(alignment: .leading, spacing: Kasane.Space.s4) {
                 ZStack(alignment: .bottom) {
                     RemoteImage(url: Ui.resize(artist?.thumbnailUrl, 1080))
                     LinearGradient(stops: [.init(color: .clear, location: 0.3), .init(color: .black.opacity(0.7), location: 1)], startPoint: .top, endPoint: .bottom)
                     // 名前と、枠の右端に登録（Spotify の「フォロー」）。登録していなければ色を付けて目立たせる
-                    HStack(alignment: .lastTextBaseline, spacing: 20) {
+                    HStack(alignment: .lastTextBaseline, spacing: Kasane.Space.s5) {
                         Text(artist?.name ?? "").font(.system(size: 72, weight: .bold)).foregroundStyle(.white).lineLimit(1).minimumScaleFactor(0.4)
                         Spacer()
                         if artist?.channelId != nil && AppServices.client.isLoggedIn {
                             subscribeButton
                         }
                     }
-                    .padding(24)
+                    .padding(Kasane.Space.s6)
                 }
                 .frame(height: 320)
                 .clipped()
-                HStack(spacing: 16) {
+                HStack(spacing: Kasane.Space.s4) {
                     PlayCircleButton(action: {
                         if playingHere { player.togglePlay() } else { play(start: 0, shuffle: shufflePlay ? true : nil) }
                     }) { Image(systemName: playingHere && player.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 20)) }
@@ -50,53 +50,53 @@ struct ArtistPageView: View {
                     } label: { Image(systemName: "shuffle").font(.system(size: 20)) }
                     if loading { ProgressView().controlSize(.small) }
                 }
-                .padding(.horizontal, 24)
+                .padding(.horizontal, Kasane.Space.s6)
                 // ライブ・ツアーの告知（アーティストの YouTube のチャンネルの投稿から。Android と同じ）。告知が無ければ出さない
                 if !posts.isEmpty {
-                    Text(L.t("ライブ・お知らせ", "Live & news")).subtitleStyle().padding(EdgeInsets(top: 8, leading: 24, bottom: 0, trailing: 24))
+                    Text(L.t("ライブ・お知らせ", "Live & news")).subtitleStyle().padding(EdgeInsets(top: Kasane.Space.s2, leading: Kasane.Space.s6, bottom: 0, trailing: Kasane.Space.s6))
                     ScrollView(.horizontal) {
-                        HStack(alignment: .top, spacing: 12) { ForEach(posts, id: \.postId) { LivePostCard(post: $0) } }
-                            .padding(EdgeInsets(top: 0, leading: 24, bottom: 8, trailing: 24))
+                        HStack(alignment: .top, spacing: Kasane.Space.s3) { ForEach(posts, id: \.postId) { LivePostCard(post: $0) } }
+                            .padding(EdgeInsets(top: 0, leading: Kasane.Space.s6, bottom: Kasane.Space.s2, trailing: Kasane.Space.s6))
                     }
                 }
-                if failed { Text(L.t("アーティストを読み込めませんでした", "Couldn’t load the artist")).padding(24) }
+                if failed { Text(L.t("アーティストを読み込めませんでした", "Couldn’t load the artist")).padding(Kasane.Space.s6) }
                 if !rows.isEmpty {
-                    Text(L.t("人気", "Popular")).subtitleStyle().padding(EdgeInsets(top: 8, leading: 24, bottom: 0, trailing: 24))
+                    Text(L.t("人気", "Popular")).subtitleStyle().padding(EdgeInsets(top: Kasane.Space.s2, leading: Kasane.Space.s6, bottom: 0, trailing: Kasane.Space.s6))
                     VStack(spacing: 0) {
                         ForEach(Array(rows.enumerated()), id: \.element.id) { i, row in
                             TrackRowView(row: row, selected: selected == row.id, onPlay: { play(start: i, shuffle: nil) }, onSelect: { selected = row.id })
                         }
                     }
-                    .padding(.horizontal, 12)
+                    .padding(.horizontal, Kasane.Space.s3)
                 }
                 if let id = artist?.allSongsPlaylistId, let artist {
                     Button(L.t("すべての曲を見る", "See all songs")) {
                         AppServices.nav.playlist(PlaylistSummary(playlistId: id, title: artist.name + L.t(" のすべての曲", " — all songs"), subtitle: nil, thumbnailUrl: artist.thumbnailUrl))
                     }
-                    .buttonStyle(.textLink).padding(.horizontal, 24)
+                    .buttonStyle(.textLink).padding(.horizontal, Kasane.Space.s6)
                 }
                 // Spotify の「高く評価した曲」の行（このアーティストの、自分が高く評価した曲）。1曲も無ければ出さない
                 if checkingLiked || (liked?.count ?? 0) > 0, let artist {
                     Button { AppServices.nav.likedSongsBy(browseId, artist.name) } label: {
-                        HStack(spacing: 16) {
+                        HStack(spacing: Kasane.Space.s4) {
                             LikedCover(size: 56, round: true)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(L.t("高く評価した曲", "Liked Songs")).font(.body.weight(.semibold))
                                 Text(likedText(artist.name)).subtle()
                             }
                         }
-                        .padding(8)
+                        .padding(Kasane.Space.s2)
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .disabled(checkingLiked)
-                    .padding(.horizontal, 24)
+                    .padding(.horizontal, Kasane.Space.s6)
                 }
                 ForEach(Array(shelves.enumerated()), id: \.offset) { _, shelf in
-                    ShelfView(title: shelf.title, items: shelf.items).padding(.horizontal, 16)
+                    ShelfView(title: shelf.title, items: shelf.items).padding(.horizontal, Kasane.Space.s4)
                 }
             }
-            .padding(.bottom, 32)
+            .padding(.bottom, Kasane.Space.s8)
         }
         .task { await load() }
     }
@@ -109,7 +109,7 @@ struct ArtistPageView: View {
             .buttonBorderShape(.capsule)
             .controlSize(.large)
             .disabled(subscribing || artist?.subscribed == nil)
-            .padding(.bottom, 16)
+            .padding(.bottom, Kasane.Space.s4)
     }
 
     private func likedText(_ name: String) -> String {
@@ -197,7 +197,7 @@ private struct LivePostCard: View {
                 Text(post.text).lineLimit(6).multilineTextAlignment(.leading)
                 if let published = post.publishedText { Text(published).subtle() }
             }
-            .padding(12)
+            .padding(Kasane.Space.s3)
             .frame(width: 260, alignment: .topLeading)
             .frame(maxHeight: .infinity, alignment: .top)
             .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.06)))
@@ -215,17 +215,17 @@ struct SongPageView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                HStack(alignment: .bottom, spacing: 24) {
+                HStack(alignment: .bottom, spacing: Kasane.Space.s6) {
                     Cover(url: Ui.large(song.thumbnailUrl), size: 220, radius: 8)
                     VStack(alignment: .leading, spacing: 0) {
                         Text(L.t("曲", "Song")).font(.body.weight(.semibold))
-                        Text(song.title).font(.system(size: 48, weight: .bold)).lineLimit(2).minimumScaleFactor(0.5).padding(.vertical, 4)
+                        Text(song.title).font(.system(size: 48, weight: .bold)).lineLimit(2).minimumScaleFactor(0.5).padding(.vertical, Kasane.Space.s1)
                         Text(detail).foregroundStyle(.secondary).lineLimit(2)
                     }
                 }
-                .padding(EdgeInsets(top: 40, leading: 12, bottom: 24, trailing: 12))
+                .padding(EdgeInsets(top: Kasane.Space.s10, leading: Kasane.Space.s3, bottom: Kasane.Space.s6, trailing: Kasane.Space.s3))
                 PlayCircleButton(action: { AppServices.player.playSong(song) }) { Image(systemName: "play.fill").font(.system(size: 20)) }
-                    .padding(EdgeInsets(top: 8, leading: 12, bottom: 16, trailing: 12))
+                    .padding(EdgeInsets(top: Kasane.Space.s2, leading: Kasane.Space.s3, bottom: Kasane.Space.s4, trailing: Kasane.Space.s3))
                 // 並びは Android の曲の画面と同じ（曲のラジオは再生ボタンと同じなので出さない）
                 VStack(alignment: .leading, spacing: 2) {
                     if AppServices.client.isLoggedIn { row(L.t("プレイリストに追加", "Add to playlist"), "plus") { Dialogs.shared.addToPlaylist(song) } }
@@ -239,13 +239,13 @@ struct SongPageView: View {
                     }
                     row(L.t("曲のリンクをコピー", "Copy song link"), "link") { SongActions.copyLink(song) }
                     ShareLink(item: SongActions.url(song), subject: Text(song.title), message: Text(SongActions.shareText(song))) {
-                        Label(L.t("ほかのアプリで共有…", "Share with…"), systemImage: "square.and.arrow.up").padding(.horizontal, 12).padding(.vertical, 10)
+                        Label(L.t("ほかのアプリで共有…", "Share with…"), systemImage: "square.and.arrow.up").padding(.horizontal, Kasane.Space.s3).padding(.vertical, 10)
                     }
                     .buttonStyle(.plain)
                 }
                 .frame(maxWidth: 480, alignment: .leading)
             }
-            .padding(EdgeInsets(top: 0, leading: 12, bottom: 24, trailing: 12))
+            .padding(EdgeInsets(top: 0, leading: Kasane.Space.s3, bottom: Kasane.Space.s6, trailing: Kasane.Space.s3))
         }
         .background(alignment: .top) {
             LinearGradient(colors: [(gradient ?? .clear).opacity(0.6), .clear], startPoint: .top, endPoint: .bottom).frame(height: 360)
@@ -267,7 +267,7 @@ struct SongPageView: View {
 
 private struct WideIconLabel: LabelStyle {
     func makeBody(configuration: Configuration) -> some View {
-        HStack(spacing: 16) {
+        HStack(spacing: Kasane.Space.s4) {
             configuration.icon.frame(width: 18)
             configuration.title
         }
@@ -283,10 +283,10 @@ struct HoverRow<Content: View>: View {
     var body: some View {
         Button(action: action) {
             content()
-                .padding(.horizontal, 12)
+                .padding(.horizontal, Kasane.Space.s3)
                 .padding(.vertical, 10)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(RoundedRectangle(cornerRadius: 6).fill(hover ? Color.primary.opacity(0.07) : .clear))
+                .background(RoundedRectangle(cornerRadius: Kasane.Radius.sm, style: Kasane.cornerStyle).fill(hover ? Color.primary.opacity(0.07) : .clear))
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

@@ -16,7 +16,7 @@ struct QueueView: View {
                 Section {
                     QueueModeControls(history: $history)
                         .listRowBackground(Color.clear)
-                        .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+                        .listRowInsets(EdgeInsets(top: Kasane.Space.s1, leading: 0, bottom: Kasane.Space.s1, trailing: 0))
                 }
                 if history {
                     historySection(player)
@@ -136,7 +136,7 @@ private struct QueueModeControls: View {
 
     var body: some View {
         let player = AppServices.player!
-        HStack(spacing: 12) {
+        HStack(spacing: Kasane.Space.s3) {
             Picker("", selection: $history) {
                 Text(L.t("キュー", "Queue")).tag(false)
                 Text(L.t("履歴", "History")).tag(true)
@@ -173,7 +173,7 @@ private struct QueueSongRow: View {
         let player = AppServices.player!
         if position < player.queue.count {
             let song = player.queue[position]
-            HStack(spacing: 12) {
+            HStack(spacing: Kasane.Space.s3) {
                 Cover(url: Ui.small(song.thumbnailUrl), size: 44, radius: 4)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(song.title).lineLimit(1)
@@ -209,7 +209,7 @@ private struct QueueEmptyNote: View {
             Text(detail).font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 16)
+        .padding(.vertical, Kasane.Space.s4)
     }
 }
 #endif

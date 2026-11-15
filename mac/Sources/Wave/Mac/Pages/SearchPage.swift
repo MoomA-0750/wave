@@ -257,7 +257,7 @@ struct SearchPageView: View {
     // 何も打っていないとき: 最近の検索と、気分・ジャンルのタイル（Spotify の「すべてをブラウズ」）
     private var browse: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: Kasane.Space.s4) {
                 if !model.history.isEmpty {
                     HStack {
                         Text(L.t("最近の検索", "Recent searches")).subtitleStyle()
@@ -269,16 +269,16 @@ struct SearchPageView: View {
                         }
                         .buttonStyle(.textLink)
                     }
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 260), spacing: 8)], spacing: 8) {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 260), spacing: Kasane.Space.s2)], spacing: Kasane.Space.s2) {
                         ForEach(model.history) { entry in RecentSearchTile(entry: entry, model: model) }
                     }
                 }
-                Text(L.t("すべてをブラウズ", "Browse all")).subtitleStyle().padding(.top, 8)
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 200), spacing: 12)], spacing: 12) {
+                Text(L.t("すべてをブラウズ", "Browse all")).subtitleStyle().padding(.top, Kasane.Space.s2)
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 200), spacing: Kasane.Space.s3)], spacing: Kasane.Space.s3) {
                     ForEach(Array(model.moods.enumerated()), id: \.offset) { _, tile in
                         Button { AppServices.nav.mood(tile.0) } label: {
                             Text(tile.0.title).subtitleStyle().foregroundStyle(.white).multilineTextAlignment(.leading)
-                                .padding(16)
+                                .padding(Kasane.Space.s4)
                                 .frame(maxWidth: .infinity, minHeight: 110, alignment: .topLeading)
                                 .background(RoundedRectangle(cornerRadius: 8).fill(tile.1))
                         }
@@ -286,7 +286,7 @@ struct SearchPageView: View {
                     }
                 }
             }
-            .padding(EdgeInsets(top: 16, leading: 24, bottom: 32, trailing: 24))
+            .padding(EdgeInsets(top: Kasane.Space.s4, leading: Kasane.Space.s6, bottom: Kasane.Space.s8, trailing: Kasane.Space.s6))
         }
     }
 
@@ -305,7 +305,7 @@ struct SearchPageView: View {
             .labelsHidden()
             .fixedSize()
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(EdgeInsets(top: 8, leading: 16, bottom: 0, trailing: 16))
+            .padding(EdgeInsets(top: Kasane.Space.s2, leading: Kasane.Space.s4, bottom: 0, trailing: Kasane.Space.s4))
             .onChange(of: model.tab) { model.tabChanged() }
             if model.tab == "live" {
                 live
@@ -324,17 +324,17 @@ struct SearchPageView: View {
                         LazyVStack(spacing: 0) {
                             ForEach(model.songs) { row in songRow(row).onAppear { if row.id == model.songs.last?.id { model.loadMoreSongs() } } }
                         }
-                        .padding(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
+                        .padding(EdgeInsets(top: Kasane.Space.s2, leading: Kasane.Space.s3, bottom: Kasane.Space.s2, trailing: Kasane.Space.s3))
                     }
                 case "albums", "artists":
                     let items: [HomeItem] = model.tab == "albums" ? model.albums.map { .album($0) } : model.artists.map { .artist($0) }
                     ScrollView {
-                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 176), spacing: 0)], spacing: 8) {
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 176), spacing: 0)], spacing: Kasane.Space.s2) {
                             ForEach(Array(items.enumerated()), id: \.offset) { i, item in
                                 MediaCard(item: item).onAppear { if i == items.count - 1 { model.loadMoreCards() } }
                             }
                         }
-                        .padding(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                        .padding(EdgeInsets(top: Kasane.Space.s2, leading: Kasane.Space.s4, bottom: Kasane.Space.s2, trailing: Kasane.Space.s4))
                     }
                 default:
                     all
@@ -351,12 +351,12 @@ struct SearchPageView: View {
             Spacer()
         } else if model.tab == "podcasts" {
             ScrollView {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 176), spacing: 0)], spacing: 8) {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 176), spacing: 0)], spacing: Kasane.Space.s2) {
                     ForEach(Array(model.podcasts.enumerated()), id: \.element.id) { i, podcast in
                         PodcastCard(podcast: podcast).onAppear { if i == model.podcasts.count - 1 { model.loadMoreCards() } }
                     }
                 }
-                .padding(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                .padding(EdgeInsets(top: Kasane.Space.s2, leading: Kasane.Space.s4, bottom: Kasane.Space.s2, trailing: Kasane.Space.s4))
             }
         } else {
             ScrollView {
@@ -367,7 +367,7 @@ struct SearchPageView: View {
                             .onAppear { if i == model.episodes.count - 1 { model.loadMoreCards() } }
                     }
                 }
-                .padding(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
+                .padding(EdgeInsets(top: Kasane.Space.s2, leading: Kasane.Space.s3, bottom: Kasane.Space.s2, trailing: Kasane.Space.s3))
             }
         }
     }
@@ -379,7 +379,7 @@ struct SearchPageView: View {
             ProgressView().padding(.top, 48)
             Spacer()
         } else if model.liveFailed {
-            VStack(spacing: 8) {
+            VStack(spacing: Kasane.Space.s2) {
                 Text(L.t("ライブ配信を検索できませんでした", "Couldn't search live streams")).subtitleStyle()
                 Button(L.t("もう一度", "Retry")) { model.loadLiveIfNeeded() }
             }
@@ -393,7 +393,7 @@ struct SearchPageView: View {
                 LazyVStack(spacing: 0) {
                     ForEach(model.liveSongs) { row in songRow(row).onAppear { if row.id == model.liveSongs.last?.id { model.loadMoreLive() } } }
                 }
-                .padding(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
+                .padding(EdgeInsets(top: Kasane.Space.s2, leading: Kasane.Space.s3, bottom: Kasane.Space.s2, trailing: Kasane.Space.s3))
             }
         }
     }
@@ -401,16 +401,16 @@ struct SearchPageView: View {
     private var all: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 28) {
-                HStack(alignment: .top, spacing: 24) {
+                HStack(alignment: .top, spacing: Kasane.Space.s6) {
                     if let top = model.top {
-                        VStack(alignment: .leading, spacing: 12) {
+                        VStack(alignment: .leading, spacing: Kasane.Space.s3) {
                             Text(L.t("トップの検索結果", "Top result")).subtitleStyle()
                             TopCard(item: top, model: model)
                         }
                         .frame(minWidth: 280, maxWidth: .infinity)
                         .layoutPriority(2)
                     }
-                    VStack(alignment: .leading, spacing: 12) {
+                    VStack(alignment: .leading, spacing: Kasane.Space.s3) {
                         Text(L.t("曲", "Songs")).subtitleStyle()
                         VStack(spacing: 0) {
                             ForEach(model.songs.prefix(4)) { row in
@@ -426,7 +426,7 @@ struct SearchPageView: View {
                 if !model.artists.isEmpty { ShelfView(title: L.t("アーティスト", "Artists"), items: model.artists.map { .artist($0) }) }
                 if !model.albums.isEmpty { ShelfView(title: L.t("アルバム", "Albums"), items: model.albums.map { .album($0) }) }
             }
-            .padding(EdgeInsets(top: 16, leading: 24, bottom: 32, trailing: 24))
+            .padding(EdgeInsets(top: Kasane.Space.s4, leading: Kasane.Space.s6, bottom: Kasane.Space.s8, trailing: Kasane.Space.s6))
         }
     }
 
@@ -445,7 +445,7 @@ private struct TopCard: View {
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: Kasane.Space.s4) {
                 Cover(url: Ui.img(item.thumbnailUrl), size: 96, round: item.isArtist)
                 Text(item.title).font(.title.weight(.bold)).lineLimit(2)
                 Text(subtitle).font(.callout).foregroundStyle(.secondary).lineLimit(1)
@@ -456,7 +456,7 @@ private struct TopCard: View {
                 AppServices.nav.play(item)
             }) { Image(systemName: "play.fill").font(.system(size: 18)) }
         }
-        .padding(20)
+        .padding(Kasane.Space.s5)
         .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(hover ? 0.1 : 0.06)))
         .contentShape(Rectangle())
         .onHover { hover = $0 }
@@ -482,10 +482,10 @@ private struct RecentSearchTile: View {
     @State private var hover = false
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: Kasane.Space.s3) {
             ZStack {
                 if entry.isQuery {
-                    RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(0.08))
+                    RoundedRectangle(cornerRadius: Kasane.Radius.sm, style: Kasane.cornerStyle).fill(Color.primary.opacity(0.08))
                     Image(systemName: "magnifyingglass")
                 } else {
                     Cover(url: Ui.small(entry.thumbnailUrl), size: 48, round: entry.isRound)
@@ -504,8 +504,8 @@ private struct RecentSearchTile: View {
                 .buttonStyle(IconButtonStyle())
                 .help(L.t("履歴から削除", "Remove from history"))
         }
-        .padding(8)
-        .background(RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(hover ? 0.1 : 0.05)))
+        .padding(Kasane.Space.s2)
+        .background(RoundedRectangle(cornerRadius: Kasane.Radius.sm, style: Kasane.cornerStyle).fill(Color.primary.opacity(hover ? 0.1 : 0.05)))
         .contentShape(Rectangle())
         .onHover { hover = $0 }
         .onTapGesture {

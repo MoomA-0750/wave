@@ -68,7 +68,7 @@ struct CreatePlaylistSheet: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: Kasane.Space.s4) {
             Text(L.t("プレイリストを作成", "Create playlist")).font(.title2.weight(.semibold))
             TextField(L.t("プレイリスト名", "Playlist name"), text: $name).textFieldStyle(.roundedBorder).frame(width: 340)
                 .onSubmit(create)
@@ -79,7 +79,7 @@ struct CreatePlaylistSheet: View {
                     .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
             }
         }
-        .padding(24)
+        .padding(Kasane.Space.s6)
     }
 
     private func create() {
@@ -102,7 +102,7 @@ struct AddToPlaylistSheet: View {
     var body: some View {
         let player = AppServices.player!
         let liked = player.current?.videoId == song.videoId ? player.like == .like : AppServices.library.isLiked(song.videoId)
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Kasane.Space.s3) {
             Text(L.t("プレイリストに追加", "Add to playlist")).font(.title2.weight(.semibold))
             ScrollView {
                 VStack(spacing: 2) {
@@ -143,7 +143,7 @@ struct AddToPlaylistSheet: View {
                 Button(L.t("完了", "Done")) { dismiss() }.keyboardShortcut(.defaultAction)
             }
         }
-        .padding(24)
+        .padding(Kasane.Space.s6)
     }
 
     private func toggle(_ playlist: PlaylistSummary) {
@@ -164,18 +164,18 @@ struct AddToPlaylistSheet: View {
 
     private func row<T: View>(_ title: String, icon: String, accentIcon: Bool = false, action: @escaping () -> Void, @ViewBuilder trailing: () -> T) -> some View {
         Button(action: action) {
-            HStack(spacing: 12) {
+            HStack(spacing: Kasane.Space.s3) {
                 Image(systemName: icon).frame(width: 20).foregroundStyle(accentIcon ? Color.accentColor : Color.primary)
                 Text(title).lineLimit(1)
                 Spacer()
                 trailing().frame(width: 20, height: 20)
             }
-            .padding(.horizontal, 12)
+            .padding(.horizontal, Kasane.Space.s3)
             .frame(height: 38)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .background(RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(0.0001)))
+        .background(RoundedRectangle(cornerRadius: Kasane.Radius.sm, style: Kasane.cornerStyle).fill(Color.primary.opacity(0.0001)))
     }
 }
 #endif
