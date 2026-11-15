@@ -277,7 +277,7 @@ struct NowPlayingWidgetView: View {
                         Text(WidgetText.t("次に流れる曲", "Up next")).font(WidgetFont.caption.weight(.semibold)).foregroundStyle(.secondary)
                         ForEach((song.upNext ?? []).prefix(3)) { item in
                             Button(intent: PlayQueueItemIntent(index: item.index, videoId: item.videoId)) {
-                                HStack(spacing: 8) {
+                                HStack(spacing: Kasane.Space.s2) {
                                     Artwork(image: entry.queueArtwork[item.videoId], radius: 5).frame(width: 28, height: 28)
                                     VStack(alignment: .leading, spacing: 0) {
                                         Text(item.title).font(WidgetFont.subheadline.weight(.medium)).lineLimit(1)
@@ -327,7 +327,7 @@ struct QueueWidgetView: View {
 
     var body: some View {
         let items = entry.song?.upNext ?? []
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: Kasane.Space.s1) {
             HStack(spacing: 6) {
                 Text(WidgetText.t("次に流れる曲", "Up next")).font(WidgetFont.caption.weight(.semibold)).foregroundStyle(.secondary)
                 Spacer(minLength: 0)
@@ -342,7 +342,7 @@ struct QueueWidgetView: View {
                 Spacer(minLength: 0)
             } else if family == .systemMedium {
                 // 中は2列に3曲ずつ（左の列を上から、続きを右の列に）
-                HStack(spacing: 12) {
+                HStack(spacing: Kasane.Space.s3) {
                     column(Array(items.prefix(3)), rows: 3)
                     column(Array(items.dropFirst(3).prefix(3)), rows: 3)
                 }
@@ -371,7 +371,7 @@ struct QueueWidgetView: View {
     private func row(_ item: WidgetQueueItem) -> some View {
         let small = family == .systemSmall
         return Button(intent: PlayQueueItemIntent(index: item.index, videoId: item.videoId)) {
-            HStack(spacing: 8) {
+            HStack(spacing: Kasane.Space.s2) {
                 Artwork(image: entry.queueArtwork[item.videoId], radius: 5).frame(width: small ? 26 : 32, height: small ? 26 : 32)
                 VStack(alignment: .leading, spacing: 0) {
                     Text(item.title).font(WidgetFont.subheadline.weight(.medium)).lineLimit(1)
@@ -527,7 +527,7 @@ struct PlaylistWidgetView: View {
                         AccessoryWidgetBackground()
                         Image(systemName: "music.note.list").font(WidgetFont.title2)
                     }
-                    .clipShape(family == .accessoryCircular ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: 10)))
+                    .clipShape(family == .accessoryCircular ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: Kasane.Radius.base, style: Kasane.cornerStyle)))
                 } else {
                     emptyMessage
                 }
@@ -540,10 +540,10 @@ struct PlaylistWidgetView: View {
             #endif
         } else if family == .systemSmall {
             // 小は表紙だけを 2×2 に（2つ以下なら、表紙の右に名前を置く）
-            if count <= 2 { namedGrid(rows: 2, pairs: 1, spacing: 8) } else { grid(rows: 2, columns: 2, spacing: 8) }
+            if count <= 2 { namedGrid(rows: 2, pairs: 1, spacing: Kasane.Space.s2) } else { grid(rows: 2, columns: 2, spacing: Kasane.Space.s2) }
         } else if family == .systemMedium && count > 4 {
             // 中で2段目に入る数なら、再生中の曲を出さず、表紙を 4×2 に並べる
-            grid(rows: 2, columns: 4, spacing: 8).frame(maxHeight: .infinity)
+            grid(rows: 2, columns: 4, spacing: Kasane.Space.s2).frame(maxHeight: .infinity)
         } else if family == .systemLarge && count > 12 {
             // 大で4段目に入る数なら、再生中の曲を出さず、表紙を 4×4 に並べる
             grid(rows: 4, columns: 4, spacing: 10).frame(maxHeight: .infinity)
@@ -591,7 +591,7 @@ struct PlaylistWidgetView: View {
                 .buttonStyle(.plain)
             } else if entry.tiles.count == 1, let tile = entry.tiles.first {
                 Button(intent: PlayPlaylistIntent(playlistId: tile.playlist.id, shuffle: false)) {
-                    HStack(spacing: 8) {
+                    HStack(spacing: Kasane.Space.s2) {
                         Artwork(image: tile.cover, radius: 8).aspectRatio(1, contentMode: .fit)
                         Text(tile.playlist.title).font(WidgetFont.headline).lineLimit(3)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -616,7 +616,7 @@ struct PlaylistWidgetView: View {
     private var nowPlaying: some View {
         HStack(spacing: 10) {
             if let song = entry.song {
-                Artwork(image: entry.artwork, radius: 6).frame(width: 40, height: 40)
+                Artwork(image: entry.artwork, radius: Kasane.Radius.sm).frame(width: 40, height: 40)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(song.title).font(WidgetFont.headline).lineLimit(1)
                     Text(song.device ?? song.artist).font(WidgetFont.subheadline).foregroundStyle(song.device != nil ? accent : .secondary).lineLimit(1)
@@ -679,7 +679,7 @@ struct PlaylistWidgetView: View {
         if i < entry.tiles.count {
             let tile = entry.tiles[i]
             Button(intent: PlayPlaylistIntent(playlistId: tile.playlist.id, shuffle: false)) {
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: Kasane.Space.s1) {
                     cover(tile)
                     if caption {
                         Text(tile.playlist.title).font(WidgetFont.caption.weight(.medium)).lineLimit(2)
@@ -797,12 +797,12 @@ struct ItemWidgetView: View {
                     buttons(item, playing: playing)
                 }
             default:
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: Kasane.Space.s3) {
                     Button(intent: PlayItemIntent(item: item, shuffle: false)) {
                         cover(item).frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                     .buttonStyle(.plain)
-                    HStack(spacing: 12) {
+                    HStack(spacing: Kasane.Space.s3) {
                         Button(intent: PlayItemIntent(item: item, shuffle: false)) { names(item, titleFont: WidgetFont.title2.weight(.semibold)).contentShape(Rectangle()) }
                             .buttonStyle(.plain)
                         buttons(item, playing: playing)
@@ -875,7 +875,7 @@ private struct PlayMark: View {
         var body: some WidgetConfiguration {
             ActivityConfiguration(for: NowPlayingAttributes.self) { context in
                 LockScreenView(state: context.state)
-                    .padding(12)
+                    .padding(Kasane.Space.s3)
                     .activityBackgroundTint(Color.black.opacity(0.75))
                     .activitySystemActionForegroundColor(.white)
                     .widgetURL(URL(string: "wave://nowplaying"))
@@ -961,7 +961,7 @@ private struct PlayMark: View {
 
         var body: some View {
             if let line = state.line {
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: Kasane.Space.s2) {
                     HStack(spacing: 10) {
                         Artwork(image: loadImage(WidgetStore.artworkFile(state.videoId)), radius: 7).frame(width: 44, height: 44)
                         VStack(alignment: .leading, spacing: 1) {
@@ -982,7 +982,7 @@ private struct PlayMark: View {
                 .foregroundStyle(.white)
             } else {
                 VStack(alignment: .leading, spacing: 10) {
-                    HStack(spacing: 12) {
+                    HStack(spacing: Kasane.Space.s3) {
                         Artwork(image: loadImage(WidgetStore.artworkFile(state.videoId)), radius: 8).frame(width: 56, height: 56)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(state.title).font(.headline).lineLimit(1)

@@ -60,7 +60,7 @@ struct CollectionView: View {
                             .disabled(model.suggestionsLoading)
                     }
                     .textCase(nil)
-                    .padding(.top, 20)
+                    .padding(.top, Kasane.Space.s5)
                 }
             }
         }
@@ -123,8 +123,8 @@ struct CollectionView: View {
                                      startPoint: .top, endPoint: .bottom))
             }
             .overlay(alignment: .bottom) {
-                HStack(alignment: .bottom, spacing: 12) {
-                    VStack(alignment: .leading, spacing: 4) {
+                HStack(alignment: .bottom, spacing: Kasane.Space.s3) {
+                    VStack(alignment: .leading, spacing: Kasane.Space.s1) {
                         Text(model.title ?? "").font(.title.bold()).foregroundStyle(.white).lineLimit(2).minimumScaleFactor(0.6)
                         if let artist = model.artistText {
                             Button(artist) { if let id = model.albumArtist?.browseId { AppServices.nav.artist(id) } }
@@ -138,8 +138,8 @@ struct CollectionView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     actions(player, rows, playing: playing)
                 }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 12)
+                .padding(.horizontal, Kasane.Space.s4)
+                .padding(.bottom, Kasane.Space.s3)
             }
             .clipped()
     }
@@ -190,14 +190,14 @@ struct CollectionView: View {
     // 曲の種類で絞る（動画や歌ってみたと、ふつうの曲を分ける。Android と同じ）。同じものをもう一度押すと外す
     private var kindChips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: Kasane.Space.s2) {
                 CollectionViewChip(title: L.t("すべて", "All"), isOn: model.kindFilter == nil) { model.kindFilter = nil }
                 ForEach([(Song.kindSong, L.t("曲", "Songs")), (Song.kindMusicVideo, L.t("MV", "Music videos")),
                          (Song.kindUserVideo, L.t("その他の動画", "Other videos"))], id: \.0) { kind, title in
                     CollectionViewChip(title: title, isOn: model.kindFilter == kind) { model.kindFilter = model.kindFilter == kind ? nil : kind }
                 }
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, Kasane.Space.s4)
             .padding(.vertical, 6)
         }
     }
@@ -253,7 +253,7 @@ private struct SuggestionRow: View {
     var onPlay: () -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: Kasane.Space.s3) {
             Cover(url: Ui.small(song.thumbnailUrl), size: 48, radius: 4)
             VStack(alignment: .leading, spacing: 2) {
                 Text(song.title).lineLimit(1)

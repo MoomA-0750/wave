@@ -23,13 +23,13 @@ struct LyricsPageView: View {
                     case .found(.plain(let plain)):
                         ScrollView {
                             Text(plain.text).font(.system(size: 26, weight: .semibold)).lineSpacing(14).textSelection(.enabled)
-                                .frame(maxWidth: .infinity, alignment: .leading).padding(40)
+                                .frame(maxWidth: .infinity, alignment: .leading).padding(Kasane.Space.s10)
                         }
                     case .some(.none):
                         empty(L.t("この曲の歌詞は見つかりませんでした", "No lyrics found for this song"))
                     default:
                         // 読み込みに失敗したときだけ（Android と同じ）
-                        VStack(spacing: 8) {
+                        VStack(spacing: Kasane.Space.s2) {
                             Text(L.t("歌詞を読み込めませんでした", "Couldn't load lyrics")).subtitleStyle()
                             Button(L.t("もう一度", "Retry")) { player.reloadLyrics() }
                         }
@@ -38,7 +38,7 @@ struct LyricsPageView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             // 出典は歌詞に重ねず、下の段に置く
-            Text(source(player.lyrics)).subtle().frame(maxWidth: .infinity, alignment: .leading).padding(EdgeInsets(top: 8, leading: 40, bottom: 12, trailing: 40))
+            Text(source(player.lyrics)).subtle().frame(maxWidth: .infinity, alignment: .leading).padding(EdgeInsets(top: Kasane.Space.s2, leading: Kasane.Space.s10, bottom: Kasane.Space.s3, trailing: Kasane.Space.s10))
         }
         .background {
             LinearGradient(colors: [(backdrop ?? .clear).opacity(0.67), (backdrop ?? .clear).opacity(0.16)], startPoint: .top, endPoint: .bottom)
@@ -86,7 +86,7 @@ private struct SyncedPage: View {
                             .id(i)
                     }
                 }
-                .padding(EdgeInsets(top: 40, leading: 40, bottom: 240, trailing: 40))
+                .padding(EdgeInsets(top: Kasane.Space.s10, leading: Kasane.Space.s10, bottom: 240, trailing: Kasane.Space.s10))
             }
             // 歌っている行を真ん中より少し上に寄せる
             .onChange(of: index, initial: true) { _, i in

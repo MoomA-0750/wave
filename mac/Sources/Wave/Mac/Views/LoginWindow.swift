@@ -43,7 +43,7 @@ final class LoginWindowController: NSObject, NSWindowDelegate, WKNavigationDeleg
         let bar = NSStackView(views: [lock, hostLabel])
         bar.orientation = .horizontal
         bar.spacing = 8
-        bar.edgeInsets = NSEdgeInsets(top: 8, left: 16, bottom: 8, right: 16)
+        bar.edgeInsets = NSEdgeInsets(top: Kasane.Space.s2, left: 16, bottom: Kasane.Space.s2, right: 16)
         status.isHidden = true
         spinner.style = .spinning
         spinner.isHidden = true

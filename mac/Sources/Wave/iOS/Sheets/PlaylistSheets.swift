@@ -21,7 +21,7 @@ struct AddToPlaylistSheet: View {
         NavigationStack {
             List {
                 Section {
-                    HStack(spacing: 12) {
+                    HStack(spacing: Kasane.Space.s3) {
                         Cover(url: Ui.small(song.thumbnailUrl), size: 44, radius: 4)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(song.title).lineLimit(1)
@@ -89,7 +89,7 @@ private struct PlaylistSheetsRow<Trailing: View>: View {
     @ViewBuilder var trailing: () -> Trailing
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: Kasane.Space.s3) {
             Image(systemName: icon).frame(width: 24).foregroundStyle(accent ? Color.accentColor : Color.primary)
             Text(title).lineLimit(1)
             Spacer()

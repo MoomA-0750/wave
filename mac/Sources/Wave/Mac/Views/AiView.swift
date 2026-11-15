@@ -27,7 +27,7 @@ struct AiView: View {
                 Button { model.setRightPane(open: true, queue: false) } label: { Image(systemName: "xmark").font(.system(size: 11)) }
                     .buttonStyle(IconButtonStyle()).help(L.t("閉じる", "Close"))
             }
-            .padding(EdgeInsets(top: 12, leading: 16, bottom: 4, trailing: RightPane.headerTrailing))
+            .padding(EdgeInsets(top: Kasane.Space.s3, leading: Kasane.Space.s4, bottom: Kasane.Space.s1, trailing: RightPane.headerTrailing))
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(alignment: .leading, spacing: 10) {
@@ -42,30 +42,30 @@ struct AiView: View {
                         if chat.running { ProgressView().progressViewStyle(.linear) }
                         Color.clear.frame(height: 1).id("end")
                     }
-                    .padding(EdgeInsets(top: 8, leading: 16, bottom: 16, trailing: 16))
+                    .padding(EdgeInsets(top: Kasane.Space.s2, leading: Kasane.Space.s4, bottom: Kasane.Space.s4, trailing: Kasane.Space.s4))
                 }
                 .onChange(of: chat.messages.count) { _, _ in proxy.scrollTo("end", anchor: .bottom) }
                 .onChange(of: lastText(chat)) { _, _ in proxy.scrollTo("end", anchor: .bottom) }
             }
             if !chat.running {
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: Kasane.Space.s1) {
                     ForEach(suggestions, id: \.self) { s in
                         Button(s) { chat.send(s) }.buttonStyle(.textLink).font(.callout)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 4)
+                .padding(.horizontal, Kasane.Space.s4)
+                .padding(.vertical, Kasane.Space.s1)
             }
-            HStack(alignment: .bottom, spacing: 8) {
+            HStack(alignment: .bottom, spacing: Kasane.Space.s2) {
                 // Enter で送る（Shift+Enter は改行。変換中の Enter は確定）
                 ChatInputField(text: $input, placeholder: L.t("Claude に聞く", "Ask Claude"), autoFocus: true, onSubmit: submit)
-                    .background(RoundedRectangle(cornerRadius: 6).fill(.quaternary.opacity(0.5)))
-                    .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Color(nsColor: .separatorColor)))
+                    .background(RoundedRectangle(cornerRadius: Kasane.Radius.sm, style: Kasane.cornerStyle).fill(.quaternary.opacity(0.5)))
+                    .overlay(RoundedRectangle(cornerRadius: Kasane.Radius.sm, style: Kasane.cornerStyle).strokeBorder(Color(nsColor: .separatorColor)))
                 Button(action: submit) { Image(systemName: chat.running ? "stop.fill" : "paperplane.fill") }
                     .buttonStyle(IconButtonStyle())
             }
-            .padding(EdgeInsets(top: 4, leading: 16, bottom: 12, trailing: 16))
+            .padding(EdgeInsets(top: Kasane.Space.s1, leading: Kasane.Space.s4, bottom: Kasane.Space.s3, trailing: Kasane.Space.s4))
         }
     }
 
@@ -94,7 +94,7 @@ private struct AiMessageView: View {
             HStack {
                 Spacer(minLength: 40)
                 Text(text).foregroundStyle(.white)
-                    .padding(EdgeInsets(top: 6, leading: 12, bottom: 8, trailing: 12))
+                    .padding(EdgeInsets(top: 6, leading: Kasane.Space.s3, bottom: Kasane.Space.s2, trailing: Kasane.Space.s3))
                     .background(RoundedRectangle(cornerRadius: 14).fill(Color.accentColor))
                     .frame(maxWidth: 260, alignment: .trailing)
             }
@@ -134,7 +134,7 @@ private struct AiHistoryList: View {
     var onClose: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: Kasane.Space.s1) {
             Text(L.t("これまでの会話", "Past chats")).font(.body.weight(.semibold)).padding(.horizontal, 6)
             if chat.history.conversations.isEmpty {
                 Text(L.t("まだ会話はありません。会話はこの Mac の中だけに残ります。", "No past chats yet. Chats are kept on this Mac only."))
@@ -143,7 +143,7 @@ private struct AiHistoryList: View {
             ScrollView {
                 VStack(spacing: 2) {
                     ForEach(chat.history.conversations) { conversation in
-                        HStack(spacing: 4) {
+                        HStack(spacing: Kasane.Space.s1) {
                             Button {
                                 chat.open(conversation.id)
                                 onClose()
@@ -155,7 +155,7 @@ private struct AiHistoryList: View {
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(6)
                                 .contentShape(Rectangle())
-                                .background(RoundedRectangle(cornerRadius: 6).fill(conversation.id == chat.conversationId ? Color.secondary.opacity(0.15) : .clear))
+                                .background(RoundedRectangle(cornerRadius: Kasane.Radius.sm, style: Kasane.cornerStyle).fill(conversation.id == chat.conversationId ? Color.secondary.opacity(0.15) : .clear))
                             }
                             .buttonStyle(.plain)
                             Button { chat.delete(conversation.id) } label: { Image(systemName: "trash").font(.system(size: 11)) }

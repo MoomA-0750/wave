@@ -244,8 +244,8 @@ private struct MiniPlayerAccessory: ViewModifier {
             content.safeAreaInset(edge: .bottom) {
                 MiniPlayer(open: open)
                     .matchedTransitionSource(id: MiniPlayer.zoomId, in: zoom)
-                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
-                    .padding(.horizontal, 8)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: Kasane.Radius.lg, style: Kasane.cornerStyle))
+                    .padding(.horizontal, Kasane.Space.s2)
                     .padding(.bottom, 52)
             }
         } else {
@@ -262,11 +262,11 @@ struct ToastHost: View {
         if let text = toast.text {
             Text(text)
                 .font(.subheadline)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
+                .padding(.horizontal, Kasane.Space.s4)
+                .padding(.vertical, Kasane.Space.s3)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .modifier(GlassCard(radius: 14))
-                .padding(.horizontal, 12)
+                .padding(.horizontal, Kasane.Space.s3)
                 .onTapGesture { toast.close() }
                 .transition(.move(edge: .bottom).combined(with: .opacity))
                 .animation(.snappy, value: toast.text)

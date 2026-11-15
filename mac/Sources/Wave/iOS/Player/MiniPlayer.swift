@@ -12,7 +12,7 @@ struct MiniPlayer: View {
         let player = AppServices.player!
         let song = player.current
         HStack(spacing: 10) {
-            Cover(url: Ui.small(song?.thumbnailUrl), size: 36, radius: 6)
+            Cover(url: Ui.small(song?.thumbnailUrl), size: 36, radius: Kasane.Radius.sm)
             VStack(alignment: .leading, spacing: 1) {
                 Text(song?.title ?? "").font(.subheadline.weight(.semibold)).lineLimit(1)
                 if player.isRemote, let device = player.remoteDevice {
@@ -38,7 +38,7 @@ struct MiniPlayer: View {
             .buttonStyle(.plain)
             .accessibilityLabel(player.isPlaying ? L.t("一時停止", "Pause") : L.t("再生", "Play"))
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, Kasane.Space.s3)
         .overlay(alignment: .bottom) {
             // 進み具合の線
             GeometryReader { geo in

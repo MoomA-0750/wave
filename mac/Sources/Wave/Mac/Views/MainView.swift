@@ -47,7 +47,7 @@ struct MainView: View {
                 }
                 // 下の再生の操作は、Apple Music と同じく下の端に浮かせた板にする（ページはその下まで流れる）
                 .safeAreaInset(edge: .bottom, spacing: 0) {
-                    PlayerBar().floatingBar().padding(.horizontal, 12).padding(.bottom, 12)
+                    PlayerBar().floatingBar().padding(.horizontal, Kasane.Space.s3).padding(.bottom, Kasane.Space.s3)
                 }
             }
         }
@@ -116,7 +116,7 @@ struct MainView: View {
     /// 上の帯の真ん中（ホーム・検索の欄・Claude）。
     private func principal(glass: Bool) -> some View {
         let nav = AppServices.nav!
-        return HStack(spacing: 8) {
+        return HStack(spacing: Kasane.Space.s2) {
             Button { nav.home() } label: { Image(systemName: "house").glassIcon(glass) }
                 .glassButton(glass)
                 .help(L.t("ホーム", "Home"))
@@ -278,9 +278,9 @@ struct SuggestionsOverlay: View {
             }
             .padding(6)
             .frame(width: model.searchWidth + 40)
-            .background(RoundedRectangle(cornerRadius: 10).fill(.regularMaterial))
-            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Color.primary.opacity(0.1)))
-            .shadow(color: .black.opacity(0.25), radius: 16, y: 6)
+            .background(RoundedRectangle(cornerRadius: Kasane.Radius.base, style: Kasane.cornerStyle).fill(.regularMaterial))
+            .overlay(RoundedRectangle(cornerRadius: Kasane.Radius.base, style: Kasane.cornerStyle).strokeBorder(Color.primary.opacity(0.1)))
+            .shadow(color: .black.opacity(0.25), radius: Kasane.Radius.lg, y: 6)
             .padding(.top, 2)
         }
     }
@@ -293,7 +293,7 @@ private struct SuggestionRow: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 12) {
+            HStack(spacing: Kasane.Space.s3) {
                 ZStack {
                     if suggestion.isQuery {
                         Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
@@ -309,12 +309,12 @@ private struct SuggestionRow: View {
                 }
                 Spacer()
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
+            .padding(.horizontal, Kasane.Space.s2)
+            .padding(.vertical, Kasane.Space.s1)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .background(RoundedRectangle(cornerRadius: 6).fill(hover ? Color.primary.opacity(0.08) : .clear))
+        .background(RoundedRectangle(cornerRadius: Kasane.Radius.sm, style: Kasane.cornerStyle).fill(hover ? Color.primary.opacity(0.08) : .clear))
         .onHover { hover = $0 }
     }
 }
@@ -325,7 +325,7 @@ struct ToastView: View {
 
     var body: some View {
         if let text = toast.text {
-            HStack(spacing: 12) {
+            HStack(spacing: Kasane.Space.s3) {
                 Image(systemName: "info.circle.fill").foregroundStyle(Color.accentColor)
                 Text(text).lineLimit(3)
                 Spacer(minLength: 8)
@@ -346,8 +346,8 @@ struct ToastView: View {
             }
             .clipShape(RoundedRectangle(cornerRadius: 8))
             .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.primary.opacity(0.1)))
-            .shadow(color: .black.opacity(0.2), radius: 10, y: 4)
-            .padding(16)
+            .shadow(color: .black.opacity(0.2), radius: Kasane.Radius.base, y: 4)
+            .padding(Kasane.Space.s4)
             .transition(.move(edge: .bottom).combined(with: .opacity))
             .id(toast.shownAt)
         }

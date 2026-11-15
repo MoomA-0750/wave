@@ -297,7 +297,7 @@ private struct DevicesBanner: View {
 
     var body: some View {
         Section {
-            HStack(alignment: .top, spacing: 12) {
+            HStack(alignment: .top, spacing: Kasane.Space.s3) {
                 Image(systemName: symbol).foregroundStyle(color)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title).font(.body.weight(.semibold))

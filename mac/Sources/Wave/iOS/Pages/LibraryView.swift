@@ -29,15 +29,15 @@ struct LibraryView: View {
                     VStack(alignment: .leading, spacing: 0) {
                         controls
                         status(lib)
-                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12, alignment: .top), count: 3), spacing: 16) {
+                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: Kasane.Space.s3, alignment: .top), count: 3), spacing: Kasane.Space.s4) {
                             ForEach(entries) { entry in
                                 Button { open(entry) } label: { LibraryViewGridCell(entry: entry) }
                                     .buttonStyle(.plain)
                                     .contextMenu { menu(entry) }
                             }
                         }
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 16)
+                        .padding(.horizontal, Kasane.Space.s4)
+                        .padding(.bottom, Kasane.Space.s4)
                     }
                 }
                 .refreshable { await reload() }
@@ -72,15 +72,15 @@ struct LibraryView: View {
 
     // 種類のチップ（同じものをもう一度押すと外す）・並べ替え・一覧と格子の切り替え
     private var controls: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: Kasane.Space.s1) {
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
+                HStack(spacing: Kasane.Space.s2) {
                     ForEach([("playlist", L.t("プレイリスト", "Playlists")), ("artist", L.t("アーティスト", "Artists")), ("album", L.t("アルバム", "Albums")),
                              ("podcast", L.t("ポッドキャスト", "Podcasts"))], id: \.0) { k, title in
                         LibraryViewChip(title: title, isOn: kind == k) { kind = kind == k ? nil : k }
                     }
                 }
-                .padding(.horizontal, 16)
+                .padding(.horizontal, Kasane.Space.s4)
                 .padding(.vertical, 6)
             }
             HStack {
@@ -106,8 +106,8 @@ struct LibraryView: View {
                 } label: { Image(systemName: grid ? "list.bullet" : "square.grid.2x2").frame(width: 36, height: 32) }
                     .accessibilityLabel(grid ? L.t("リストで表示", "List view") : L.t("グリッドで表示", "Grid view"))
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 4)
+            .padding(.horizontal, Kasane.Space.s4)
+            .padding(.bottom, Kasane.Space.s1)
         }
     }
 
@@ -116,7 +116,7 @@ struct LibraryView: View {
         if lib.isLoading && lib.playlists.isEmpty && lib.artists.isEmpty && lib.albums.isEmpty {
             ProgressView().frame(maxWidth: .infinity).padding()
         } else if let failure = lib.failure {
-            Text(L.t("ライブラリを読み込めませんでした（\(failure)）", "Couldn't load your library (\(failure))")).subtle().padding(.horizontal, 16)
+            Text(L.t("ライブラリを読み込めませんでした（\(failure)）", "Couldn't load your library (\(failure))")).subtle().padding(.horizontal, Kasane.Space.s4)
         }
     }
 
@@ -203,11 +203,11 @@ private struct LibraryViewRow: View {
     var entry: LibraryEntry
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: Kasane.Space.s3) {
             if entry.isLiked {
                 LikedCover(size: 56)
             } else if entry.isDownloads {
-                DownloadsCover(size: 56, radius: 6)
+                DownloadsCover(size: 56, radius: Kasane.Radius.sm)
             } else if entry.isNewEpisodes {
                 NewEpisodesCover(size: 56)
             } else {
@@ -227,7 +227,7 @@ private struct LibraryViewGridCell: View {
     var entry: LibraryEntry
 
     var body: some View {
-        VStack(alignment: entry.isArtist ? .center : .leading, spacing: 4) {
+        VStack(alignment: entry.isArtist ? .center : .leading, spacing: Kasane.Space.s1) {
             Color.clear
                 .aspectRatio(1, contentMode: .fit)
                 .overlay {
@@ -235,7 +235,7 @@ private struct LibraryViewGridCell: View {
                         if entry.isLiked {
                             LikedCover(size: geo.size.width)
                         } else if entry.isDownloads {
-                            DownloadsCover(size: geo.size.width, radius: 6)
+                            DownloadsCover(size: geo.size.width, radius: Kasane.Radius.sm)
                         } else if entry.isNewEpisodes {
                             NewEpisodesCover(size: geo.size.width, radius: 8)
                         } else {

@@ -217,7 +217,7 @@ struct SettingsView: View {
                     Text(account.stateText).font(.footnote).foregroundStyle(.secondary)
                 }
             }
-            .padding(.vertical, 4)
+            .padding(.vertical, Kasane.Space.s1)
             if !account.isLoggedIn {
                 Button(L.t("ログイン", "Sign in")) { LoginGate.shared.skipped = false }
             }

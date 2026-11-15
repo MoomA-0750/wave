@@ -17,11 +17,11 @@ struct DevicesPageView: View {
         let info = devices.info
         let pairing = devices.pairingState
         ScrollView {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: Kasane.Space.s2) {
                 Text(L.t("端末の連携", "Devices")).font(.system(size: 48, weight: .bold))
                 Text(L.t("同じアカウントのスマホと Mac のあいだで、再生を引き継げます。端末どうしの通信は暗号化され、中継のサーバーは中身を読めません。",
                          "Move playback between your phone and Mac on the same account. Devices encrypt everything they share, so the relay server can't read it."))
-                    .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true).padding(.bottom, 16)
+                    .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true).padding(.bottom, Kasane.Space.s4)
 
                 statusBar(info)
 
@@ -45,10 +45,10 @@ struct DevicesPageView: View {
                     householdPanel
                 }
 
-                Text(L.t("中継: ", "Relay: ") + DevicesText.relay(info)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true).padding(.top, 16)
+                Text(L.t("中継: ", "Relay: ") + DevicesText.relay(info)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true).padding(.top, Kasane.Space.s4)
             }
-            .padding(.horizontal, 40)
-            .padding(.vertical, 32)
+            .padding(.horizontal, Kasane.Space.s10)
+            .padding(.vertical, Kasane.Space.s8)
             .frame(maxWidth: 880, alignment: .leading)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -110,7 +110,7 @@ struct DevicesPageView: View {
         case .warning: ("exclamationmark.triangle.fill", .yellow)
         case .error: ("xmark.octagon.fill", .red)
         }
-        return HStack(alignment: .top, spacing: 12) {
+        return HStack(alignment: .top, spacing: Kasane.Space.s3) {
             Image(systemName: symbol).foregroundStyle(color)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(.body.weight(.semibold))
@@ -119,7 +119,7 @@ struct DevicesPageView: View {
             Spacer()
             if let action, let onAction { Button(action, action: onAction) }
         }
-        .padding(12)
+        .padding(Kasane.Space.s3)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: 8).fill(color.opacity(0.12)))
     }
@@ -127,7 +127,7 @@ struct DevicesPageView: View {
     // MARK: 再生中の端末
 
     private func remoteCard(_ remote: RemoteView) -> some View {
-        HStack(spacing: 16) {
+        HStack(spacing: Kasane.Space.s4) {
             Cover(url: Ui.small(remote.thumbnailUrl), size: 64)
             VStack(alignment: .leading, spacing: 2) {
                 Text(remote.playing ? L.t("\(remote.deviceLabel) で再生中", "Playing on \(remote.deviceLabel)") : L.t("\(remote.deviceLabel) で一時停止中", "Paused on \(remote.deviceLabel)"))
@@ -145,14 +145,14 @@ struct DevicesPageView: View {
     // MARK: 家に入っていない
 
     private var joinPanel: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(L.t("はじめる", "Get started")).font(.body.weight(.semibold)).padding(.top, 8).padding(.bottom, 4)
-            VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Kasane.Space.s2) {
+            Text(L.t("はじめる", "Get started")).font(.body.weight(.semibold)).padding(.top, Kasane.Space.s2).padding(.bottom, Kasane.Space.s1)
+            VStack(alignment: .leading, spacing: Kasane.Space.s3) {
                 Text(L.t("連携済みのスマホの wave で「端末の連携」→「端末を追加」を押し、「文字で共有」で送った文字列をここに貼り付けてください。",
                          "On a phone that's already set up, open Devices in wave, tap “Add device”, then “Share as text”, and paste the text here."))
                     .fixedSize(horizontal: false, vertical: true)
                 TextField("wave-pair:…", text: $offerText).textFieldStyle(.roundedBorder)
-                HStack(spacing: 8) {
+                HStack(spacing: Kasane.Space.s2) {
                     Button(L.t("加わる", "Join")) {
                         if offerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return }
                         devices.accept(offerText)
@@ -168,7 +168,7 @@ struct DevicesPageView: View {
     // MARK: 加入の手順
 
     private func pairingPanel(_ pairing: PairingView) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Kasane.Space.s3) {
             Text(DevicesText.pairing(pairing)).foregroundStyle(pairing.kind == .failed ? Color.red : Color.primary).fixedSize(horizontal: false, vertical: true)
             if pairing.kind == .showingOffer, let offer = pairing.offerText {
                 Group {
@@ -186,7 +186,7 @@ struct DevicesPageView: View {
                 Text(String(code.prefix(3)) + " " + String(code.suffix(3))).font(.system(size: 44, weight: .semibold)).tracking(8).monospacedDigit()
             }
             if pairing.kind == .enterCode {
-                HStack(spacing: 8) {
+                HStack(spacing: Kasane.Space.s2) {
                     TextField("000000", text: $codeText).textFieldStyle(.roundedBorder).frame(width: 160)
                         .onChange(of: codeText) { _, next in if next.count > 6 { codeText = String(next.prefix(6)) } }
                         .onSubmit(enterCode)
@@ -196,7 +196,7 @@ struct DevicesPageView: View {
             if pairing.kind == .working {
                 ProgressView().controlSize(.small)
             }
-            HStack(spacing: 8) {
+            HStack(spacing: Kasane.Space.s2) {
                 if pairing.kind == .showCode {
                     Button(L.t("相手に入力したら、続ける", "Continue after entering it")) { devices.confirmOnB() }.buttonStyle(.borderedProminent)
                 }
@@ -234,14 +234,14 @@ struct DevicesPageView: View {
     // MARK: 家の端末
 
     private var householdPanel: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Kasane.Space.s2) {
             HStack {
                 Text(L.t("連携している端末", "Your devices")).font(.body.weight(.semibold))
                 Spacer()
                 Button { devices.startOffer() } label: { Label(L.t("端末を追加", "Add device"), systemImage: "plus") }
             }
-            .padding(.top, 8)
-            .padding(.bottom, 4)
+            .padding(.top, Kasane.Space.s2)
+            .padding(.bottom, Kasane.Space.s1)
             VStack(spacing: 0) {
                 ForEach(Array(devices.members.enumerated()), id: \.element.id) { index, member in
                     if index > 0 { Divider() }
@@ -254,7 +254,7 @@ struct DevicesPageView: View {
     }
 
     private func memberRow(_ member: MemberView) -> some View {
-        HStack(spacing: 16) {
+        HStack(spacing: Kasane.Space.s4) {
             Image(systemName: DevicesText.symbol(member, selfIsPc: true)).font(.system(size: 20)).frame(width: 28)
             VStack(alignment: .leading, spacing: 2) {
                 Text(DevicesText.label(member))
@@ -270,8 +270,8 @@ struct DevicesPageView: View {
                 Button(L.t("外す", "Remove")) { removing = member }
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.horizontal, Kasane.Space.s4)
+        .padding(.vertical, Kasane.Space.s3)
     }
 }
 

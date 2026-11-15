@@ -23,7 +23,7 @@ struct AiTabView: View {
         let chat = AppServices.ai!
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 12) {
+                LazyVStack(alignment: .leading, spacing: Kasane.Space.s3) {
                     if !configured {
                         AiSetupNote()
                     }
@@ -40,8 +40,8 @@ struct AiTabView: View {
                     }
                     Color.clear.frame(height: 1).id("end")
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
+                .padding(.horizontal, Kasane.Space.s4)
+                .padding(.vertical, Kasane.Space.s3)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             // 会話を払う・入力欄の外を押すと、キーボードを閉じる（会話が短くてスクロールしないときも）
@@ -70,24 +70,24 @@ struct AiTabView: View {
     }
 
     private func inputBar(_ chat: AiChat) -> some View {
-        VStack(spacing: 8) {
+        VStack(spacing: Kasane.Space.s2) {
             // よく頼むこと
             ScrollView(.horizontal) {
-                HStack(spacing: 8) {
+                HStack(spacing: Kasane.Space.s2) {
                     ForEach(suggestions, id: \.self) { suggestion in
                         Button { send(suggestion) } label: {
-                            Text(suggestion).font(.footnote).padding(.horizontal, 12).padding(.vertical, 8)
-                                .glassCard(16, interactive: true)
+                            Text(suggestion).font(.footnote).padding(.horizontal, Kasane.Space.s3).padding(.vertical, Kasane.Space.s2)
+                                .glassCard(Kasane.Radius.lg, interactive: true)
                         }
                         .buttonStyle(.plain)
                         .disabled(chat.running)
                         .opacity(chat.running ? 0.5 : 1)
                     }
                 }
-                .padding(.horizontal, 16)
+                .padding(.horizontal, Kasane.Space.s4)
             }
             .scrollIndicators(.hidden)
-            HStack(alignment: .bottom, spacing: 8) {
+            HStack(alignment: .bottom, spacing: Kasane.Space.s2) {
                 TextField(L.t("Claude に聞く", "Ask Claude"), text: $input, axis: .vertical)
                     .lineLimit(1...4)
                     .focused($inputFocus)
@@ -117,9 +117,9 @@ struct AiTabView: View {
                 .opacity(!chat.running && input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.5 : 1)
                 .accessibilityLabel(chat.running ? L.t("止める", "Stop") : L.t("送る", "Send"))
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, Kasane.Space.s4)
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, Kasane.Space.s2)
     }
 
     private func lastLength(_ chat: AiChat) -> Int {
@@ -152,7 +152,7 @@ private struct AiSetupNote: View {
     @Environment(\.aiOpenSettings) private var openSettings
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Kasane.Space.s2) {
             Label(L.t("Claude につないでいません", "Claude isn't connected"), systemImage: "sparkles").font(.headline)
             Text(L.t("家の PC の Claude Code で、歌詞の意味・似た曲・プレイリスト作りを頼めます。設定の「Claude」で、中継の QR を読むか接続の文字列を貼ってつないでください。",
                      "Ask about lyrics, find similar songs and make playlists with Claude Code on your PC. In Settings → Claude, scan the bridge's QR code or paste its pairing text."))
@@ -160,7 +160,7 @@ private struct AiSetupNote: View {
             Button(L.t("設定を開く", "Open settings")) { openSettings() }
                 .buttonStyle(.borderedProminent)
         }
-        .padding(16)
+        .padding(Kasane.Space.s4)
         .frame(maxWidth: .infinity, alignment: .leading)
         .glassCard()
     }
@@ -178,7 +178,7 @@ private struct AiMessageRow: View {
             HStack {
                 Spacer(minLength: 48)
                 Text(text).foregroundStyle(.white)
-                    .padding(.horizontal, 14).padding(.vertical, 8)
+                    .padding(.horizontal, 14).padding(.vertical, Kasane.Space.s2)
                     .background(RoundedRectangle(cornerRadius: 18).fill(Color.accentColor))
                     .textSelection(.enabled)
             }
@@ -196,10 +196,10 @@ private struct AiMessageRow: View {
         case .songs(let songs):
             // 横に並べたカード。押すと再生、長押しで曲のメニュー（Android と同じ）
             ScrollView(.horizontal) {
-                HStack(alignment: .top, spacing: 12) {
+                HStack(alignment: .top, spacing: Kasane.Space.s3) {
                     ForEach(songs, id: \.videoId) { song in
                         Button { AppServices.player.playSong(song) } label: {
-                            VStack(alignment: .leading, spacing: 4) {
+                            VStack(alignment: .leading, spacing: Kasane.Space.s1) {
                                 Cover(url: Ui.img(song.thumbnailUrl), size: 120, radius: 8)
                                 Text(song.title).font(.subheadline).lineLimit(2).multilineTextAlignment(.leading)
                                 Text(song.artistsText).font(.caption).foregroundStyle(.secondary).lineLimit(1)

@@ -21,7 +21,7 @@ struct PodcastPageView: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
                 header
-                HStack(spacing: 16) {
+                HStack(spacing: Kasane.Space.s4) {
                     // 押せるとき（エピソードがあるとき）だけ出す
                     if !episodes.isEmpty {
                         PlayCircleButton(action: {
@@ -37,17 +37,17 @@ struct PodcastPageView: View {
                     }
                     if model.loading { ProgressView().controlSize(.small) }
                 }
-                .padding(EdgeInsets(top: 20, leading: 12, bottom: 12, trailing: 12))
+                .padding(EdgeInsets(top: Kasane.Space.s5, leading: Kasane.Space.s3, bottom: Kasane.Space.s3, trailing: Kasane.Space.s3))
                 // 「新しいエピソード」は、番組を保存していないと番組のページの形で返らない（エピソードが無いだけとして出す）
-                if model.failed && !model.isNewEpisodes { Text(L.t("ポッドキャストを読み込めませんでした", "Couldn't load the podcast")).padding(12) }
-                if !model.loading && (!model.failed || model.isNewEpisodes) && episodes.isEmpty { Text(L.t("エピソードはありません", "No episodes")).subtle().padding(12) }
+                if model.failed && !model.isNewEpisodes { Text(L.t("ポッドキャストを読み込めませんでした", "Couldn't load the podcast")).padding(Kasane.Space.s3) }
+                if !model.loading && (!model.failed || model.isNewEpisodes) && episodes.isEmpty { Text(L.t("エピソードはありません", "No episodes")).subtle().padding(Kasane.Space.s3) }
                 ForEach(Array(episodes.enumerated()), id: \.element.id) { i, episode in
                     EpisodeRowView(episode: episode, showShow: false, onPlay: { model.play(i) })
                         .onAppear { if i == episodes.count - 1 { model.loadMore() } }
                 }
-                if model.loadingMore { ProgressView().controlSize(.small).padding(12) }
+                if model.loadingMore { ProgressView().controlSize(.small).padding(Kasane.Space.s3) }
             }
-            .padding(EdgeInsets(top: 0, leading: 12, bottom: 24, trailing: 12))
+            .padding(EdgeInsets(top: 0, leading: Kasane.Space.s3, bottom: Kasane.Space.s6, trailing: Kasane.Space.s3))
         }
         .background(alignment: .top) {
             LinearGradient(colors: [(model.gradient ?? .clear).opacity(0.6), .clear], startPoint: .top, endPoint: .bottom).frame(height: 360)
@@ -58,7 +58,7 @@ struct PodcastPageView: View {
     }
 
     private var header: some View {
-        HStack(alignment: .bottom, spacing: 24) {
+        HStack(alignment: .bottom, spacing: Kasane.Space.s6) {
             if model.isNewEpisodes && model.page?.thumbnailUrl == nil {
                 NewEpisodesCover(size: 220, radius: 8)
             } else {
@@ -79,7 +79,7 @@ struct PodcastPageView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(EdgeInsets(top: 32, leading: 12, bottom: 0, trailing: 12))
+        .padding(EdgeInsets(top: Kasane.Space.s8, leading: Kasane.Space.s3, bottom: 0, trailing: Kasane.Space.s3))
     }
 }
 
@@ -93,15 +93,15 @@ struct EpisodeRowView: View {
 
     var body: some View {
         let isCurrent = AppServices.player.current?.videoId == episode.song.videoId
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .top, spacing: Kasane.Space.s3) {
             RemoteImage(url: URL(string: episode.song.thumbnailUrl ?? ""))
                 .frame(width: showShow ? 64 : 112, height: showShow ? 64 : 63)
                 .background(Color.primary.opacity(0.08))
-                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .clipShape(RoundedRectangle(cornerRadius: Kasane.Radius.sm, style: Kasane.cornerStyle))
             VStack(alignment: .leading, spacing: 3) {
                 Text(episode.song.title).font(.body.weight(.semibold)).lineLimit(2).foregroundStyle(isCurrent ? Color.accentColor : Color.primary)
                 let detail = showShow ? episode.showAndDate : episode.dateAndLength
-                HStack(spacing: 4) {
+                HStack(spacing: Kasane.Space.s1) {
                     DownloadedMark(videoId: episode.song.videoId)
                     if !detail.isEmpty { Text(detail).subtle() }
                 }
@@ -118,8 +118,8 @@ struct EpisodeRowView: View {
                 .foregroundStyle(isCurrent ? Color.accentColor : .secondary)
                 .opacity(hover || isCurrent ? 1 : 0)
         }
-        .padding(8)
-        .background(RoundedRectangle(cornerRadius: 6).fill(hover ? Color.primary.opacity(0.07) : .clear))
+        .padding(Kasane.Space.s2)
+        .background(RoundedRectangle(cornerRadius: Kasane.Radius.sm, style: Kasane.cornerStyle).fill(hover ? Color.primary.opacity(0.07) : .clear))
         .contentShape(Rectangle())
         .onHover { hover = $0 }
         .onTapGesture(perform: onPlay)
@@ -135,7 +135,7 @@ struct PodcastCard: View {
     @State private var hover = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Kasane.Space.s2) {
             Cover(url: Ui.img(podcast.thumbnailUrl), size: 160)
             VStack(alignment: .leading, spacing: 2) {
                 Text(podcast.title).font(.body.weight(.semibold)).lineLimit(1)
@@ -143,7 +143,7 @@ struct PodcastCard: View {
             }
             .frame(width: 160, alignment: .leading)
         }
-        .padding(8)
+        .padding(Kasane.Space.s2)
         .frame(width: 176)
         .background(RoundedRectangle(cornerRadius: 8).fill(hover ? Color.primary.opacity(0.07) : .clear))
         .contentShape(Rectangle())

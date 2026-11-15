@@ -30,8 +30,8 @@ struct ArtistView: View {
                 if !model.posts.isEmpty {
                     ArtistViewSectionTitle(text: L.t("ライブ・お知らせ", "Live & news"))
                     ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(alignment: .top, spacing: 12) { ForEach(model.posts, id: \.postId) { ArtistViewPostCard(post: $0) } }
-                            .padding(.horizontal, 16)
+                        HStack(alignment: .top, spacing: Kasane.Space.s3) { ForEach(model.posts, id: \.postId) { ArtistViewPostCard(post: $0) } }
+                            .padding(.horizontal, Kasane.Space.s4)
                     }
                 }
                 if !topSongs.isEmpty {
@@ -39,7 +39,7 @@ struct ArtistView: View {
                     LazyVStack(spacing: 0) {
                         ForEach(Array(topSongs.enumerated()), id: \.offset) { i, song in
                             SongRow(song: song) { model.play(start: i, shuffle: nil) }
-                                .padding(.horizontal, 16)
+                                .padding(.horizontal, Kasane.Space.s4)
                                 .padding(.vertical, 6)
                         }
                     }
@@ -49,8 +49,8 @@ struct ArtistView: View {
                         AppServices.nav.playlist(PlaylistSummary(playlistId: id, title: artist.name + L.t(" のすべての曲", " — all songs"), subtitle: nil, thumbnailUrl: artist.thumbnailUrl))
                     }
                     .font(.subheadline.weight(.semibold))
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
+                    .padding(.horizontal, Kasane.Space.s4)
+                    .padding(.vertical, Kasane.Space.s2)
                 }
                 // Spotify の「高く評価した曲」の行（このアーティストの、自分が高く評価した曲）。1曲も無ければ出さない
                 if model.checkingLiked || (model.liked?.count ?? 0) > 0, let artist {
@@ -68,8 +68,8 @@ struct ArtistView: View {
                             Spacer(minLength: 0)
                             Image(systemName: "chevron.right").foregroundStyle(.tertiary)
                         }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
+                        .padding(.horizontal, Kasane.Space.s4)
+                        .padding(.vertical, Kasane.Space.s2)
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
@@ -78,14 +78,14 @@ struct ArtistView: View {
                 ForEach(Array(model.shelves.enumerated()), id: \.offset) { _, shelf in
                     ArtistViewSectionTitle(text: shelf.title)
                     ScrollView(.horizontal, showsIndicators: false) {
-                        LazyHStack(alignment: .top, spacing: 12) {
+                        LazyHStack(alignment: .top, spacing: Kasane.Space.s3) {
                             ForEach(shelf.items, id: \.key) { ArtistViewCard(item: $0) }
                         }
-                        .padding(.horizontal, 16)
+                        .padding(.horizontal, Kasane.Space.s4)
                     }
                 }
             }
-            .padding(.bottom, 32)
+            .padding(.bottom, Kasane.Space.s8)
         }
         .ignoresSafeArea(edges: .top)
         // 地は再生画面と同じ（アーティストの写真を大きくぼかして暗くしたもの）。暗い地なので文字は常に暗い表示の色にする
@@ -122,7 +122,7 @@ struct ArtistView: View {
                                      startPoint: .top, endPoint: .bottom))
             }
             .overlay(alignment: .bottom) {
-                HStack(alignment: .center, spacing: 12) {
+                HStack(alignment: .center, spacing: Kasane.Space.s3) {
                     Text(model.artist?.name ?? "")
                         .font(.largeTitle.bold())
                         .foregroundStyle(.white)
@@ -132,8 +132,8 @@ struct ArtistView: View {
                     if model.loading { ProgressView() }
                     ArtistViewActions(model: model)
                 }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 12)
+                .padding(.horizontal, Kasane.Space.s4)
+                .padding(.bottom, Kasane.Space.s3)
             }
             .clipped()
     }
@@ -196,7 +196,7 @@ private struct ArtistViewSectionTitle: View {
     var text: String
 
     var body: some View {
-        Text(text).font(.title3.weight(.bold)).padding(EdgeInsets(top: 20, leading: 16, bottom: 8, trailing: 16))
+        Text(text).font(.title3.weight(.bold)).padding(EdgeInsets(top: Kasane.Space.s5, leading: Kasane.Space.s4, bottom: Kasane.Space.s2, trailing: Kasane.Space.s4))
     }
 }
 
@@ -208,7 +208,7 @@ private struct ArtistViewCard: View {
         let isVideo = if case .song = item { true } else { false }
         let width: CGFloat = isVideo ? 220 : 150
         Button { AppServices.nav.openCard(item) } label: {
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: Kasane.Space.s1) {
                 RemoteImage(url: Ui.img(item.thumbnailUrl))
                     .frame(width: width, height: isVideo ? width * 9 / 16 : width)
                     .background(Color.primary.opacity(0.08))
@@ -241,7 +241,7 @@ private struct ArtistViewPostCard: View {
                 Text(post.text).font(.subheadline).lineLimit(6).multilineTextAlignment(.leading)
                 if let published = post.publishedText { Text(published).subtle() }
             }
-            .padding(12)
+            .padding(Kasane.Space.s3)
             .frame(width: 260, alignment: .topLeading)
             .frame(maxHeight: .infinity, alignment: .top)
             .glassCard(14)

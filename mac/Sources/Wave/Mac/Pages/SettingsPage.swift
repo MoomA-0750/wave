@@ -19,12 +19,12 @@ struct SettingsPageView: View {
     var body: some View {
         let account = AppServices.account!
         ScrollView {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(L.t("設定", "Settings")).font(.system(size: 48, weight: .bold)).padding(.bottom, 16)
+            VStack(alignment: .leading, spacing: Kasane.Space.s2) {
+                Text(L.t("設定", "Settings")).font(.system(size: 48, weight: .bold)).padding(.bottom, Kasane.Space.s4)
 
                 section(L.t("アカウント", "Account"))
                 card {
-                    HStack(spacing: 16) {
+                    HStack(spacing: Kasane.Space.s4) {
                         if let url = Ui.small(account.photoUrl) {
                             Cover(url: url, size: 56, round: true)
                         } else {
@@ -84,7 +84,7 @@ struct SettingsPageView: View {
 
                 section("Discord")
                 card {
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: Kasane.Space.s2) {
                         toggleRow(L.t("Discord に再生中の曲を出す", "Show what you're playing on Discord"),
                                   L.t("この Mac の Discord のアプリに「聴いています」を出します。スマホなどほかの端末で鳴らしている曲も出します",
                                       "Shows “Listening to” through the Discord app on this Mac, including songs playing on your other devices"),
@@ -104,13 +104,13 @@ struct SettingsPageView: View {
 
                 section("Claude")
                 card {
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: Kasane.Space.s2) {
                         Text(aiConfigured ? L.t("\(AppServices.settings.aiName ?? AppServices.settings.aiUrl ?? "") の中継につないでいます", "Connected to \(AppServices.settings.aiName ?? AppServices.settings.aiUrl ?? "")")
                             : L.t("家の PC の Claude Code で、歌詞の意味・似た曲・プレイリスト作りを頼めます", "Ask about lyrics, find similar songs and make playlists with Claude Code on your PC"))
                         Text(L.t("家の PC で ai-bridge の ai_bridge.py --name wave --pair を動かし、出てきた waveai://pair?… の文字列を貼ってください",
                                  "Run ai_bridge.py --name wave --pair from ai-bridge on your PC and paste the waveai://pair?… text it prints"))
                             .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                        HStack(spacing: 8) {
+                        HStack(spacing: Kasane.Space.s2) {
                             SecureField("waveai://pair?u=…&t=…", text: $pairText).textFieldStyle(.roundedBorder)
                             Button(L.t("接続", "Connect")) {
                                 if AiChat.pair(pairText) {
@@ -166,7 +166,7 @@ struct SettingsPageView: View {
 
                 section(L.t("このアプリについて", "About"))
                 card {
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading, spacing: Kasane.Space.s1) {
                         Text("wave for Mac \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1.0")")
                         Text(L.t("ログイン情報は macOS のキーチェーンに、このユーザーとこの Mac だけが読める形で保存します。",
                                  "Your sign-in is stored in the macOS keychain, readable only by this user on this Mac."))
@@ -175,7 +175,7 @@ struct SettingsPageView: View {
                     }
                 }
             }
-            .padding(EdgeInsets(top: 32, leading: 40, bottom: 32, trailing: 40))
+            .padding(EdgeInsets(top: Kasane.Space.s8, leading: Kasane.Space.s10, bottom: Kasane.Space.s8, trailing: Kasane.Space.s10))
             .frame(maxWidth: 880, alignment: .leading)
         }
         .task {
@@ -210,7 +210,7 @@ struct SettingsPageView: View {
             }
         }
         card {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: Kasane.Space.s2) {
                 toggleRow(L.t("スマートダウンロード", "Smart downloads"),
                           L.t("いつも聴いている曲・好きそうな曲・おすすめから、聴きそうな曲を毎日選び直して取っておく",
                               "Automatically download songs you're likely to play from songs you play often, songs you might like and recommendations, refreshed daily"),
@@ -268,12 +268,12 @@ struct SettingsPageView: View {
     }
 
     private func section(_ title: String) -> some View {
-        Text(title).font(.body.weight(.semibold)).padding(.top, 16).padding(.bottom, 4)
+        Text(title).font(.body.weight(.semibold)).padding(.top, Kasane.Space.s4).padding(.bottom, Kasane.Space.s1)
     }
 
     private func card<C: View>(@ViewBuilder _ content: () -> C) -> some View {
         content()
-            .padding(16)
+            .padding(Kasane.Space.s4)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.05)))
             .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.primary.opacity(0.08)))
@@ -291,7 +291,7 @@ struct SettingsPageView: View {
     }
 
     private func warning<A: View>(_ title: String, _ message: String, @ViewBuilder action: () -> A) -> some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .top, spacing: Kasane.Space.s3) {
             Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.yellow)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(.body.weight(.semibold))
@@ -300,7 +300,7 @@ struct SettingsPageView: View {
             Spacer()
             action()
         }
-        .padding(12)
+        .padding(Kasane.Space.s3)
         .background(RoundedRectangle(cornerRadius: 8).fill(Color.yellow.opacity(0.12)))
     }
 }

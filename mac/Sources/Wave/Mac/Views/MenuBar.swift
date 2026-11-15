@@ -306,7 +306,7 @@ struct MenuBarNowPlaying: View {
                 if player.hasVideo { SongVideoSwitch().padding(.top, 10) }
             }
             .frame(height: 288)
-            HStack(alignment: .top, spacing: 8) {
+            HStack(alignment: .top, spacing: Kasane.Space.s2) {
                 VStack(alignment: .leading, spacing: 2) {
                     LinkText(text: song?.title ?? L.t("何も再生していません", "Nothing playing"), action: SongLinks.openAlbum)
                         .font(.title3.weight(.semibold))
@@ -320,9 +320,9 @@ struct MenuBarNowPlaying: View {
             TransportControls()
             if player.index + 1 < player.queue.count {
                 let next = player.queue[player.index + 1]
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: Kasane.Space.s2) {
                     Text(L.t("次の曲", "Up next")).font(.body.weight(.semibold))
-                    HStack(spacing: 12) {
+                    HStack(spacing: Kasane.Space.s3) {
                         Cover(url: Ui.small(next.thumbnailUrl), size: 40, radius: 4)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(next.title).lineLimit(1)
@@ -330,24 +330,24 @@ struct MenuBarNowPlaying: View {
                         }
                     }
                 }
-                .padding(12)
+                .padding(Kasane.Space.s3)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.05)))
             }
             if case .found(let lyrics) = player.lyrics, song != nil {
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: Kasane.Space.s2) {
                     Text(L.t("歌詞", "Lyrics")).font(.body.weight(.semibold))
                     LyricsFollower(lyrics: lyrics, positionMs: Int64(player.position * 1000), fontSize: 15)
                         .frame(height: 120, alignment: .top)
                         .clipped()
                         .allowsHitTesting(false)
                 }
-                .padding(12)
+                .padding(Kasane.Space.s3)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.05)))
             }
         }
-        .padding(16)
+        .padding(Kasane.Space.s4)
         .frame(width: 320)
         .fixedSize(horizontal: false, vertical: true)
         .modifier(GlassBackground())

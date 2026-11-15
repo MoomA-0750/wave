@@ -138,9 +138,9 @@ struct NowPlayingView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .padding(.vertical, 12)
+            .padding(.vertical, Kasane.Space.s3)
             ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: Kasane.Space.s3) {
                     Capsule().fill(.white.opacity(0.5)).frame(width: 36, height: 5)
                         .frame(maxWidth: .infinity, minHeight: 20)
                         .contentShape(Rectangle())
@@ -153,7 +153,7 @@ struct NowPlayingView: View {
                     if player.canChangeVolume { volumeBar(player) }
                     portraitBottomRow(player)
                 }
-                .padding(.vertical, 8)
+                .padding(.vertical, Kasane.Space.s2)
             }
             .scrollIndicators(.hidden)
             .scrollBounceBehavior(.basedOnSize)
@@ -163,7 +163,7 @@ struct NowPlayingView: View {
             // 幅は画面の半分ほどに決める（長い曲名の1行の幅に引かれて、右へはみ出していた）
             .containerRelativeFrame(.horizontal) { width, _ in min(440, (width - 76) / 2) }
         }
-        .padding(.horizontal, 24)
+        .padding(.horizontal, Kasane.Space.s6)
     }
 
     /// 開いた歌詞・キューを覚えておき、閉じたら薄くし終えるまで出しておく（外すときは見えていないので、動きは付けない）。
@@ -275,8 +275,8 @@ struct NowPlayingView: View {
                         if let shown = panel ?? closingPanel {
                             // 曲名・ボタン・ジャケットは下の大きな行との間を滑る（matchedGeometryEffect）。閉じる間は行を残して薄くする
                             compactTitleRow(player, song, active: panel != nil)
-                                .padding(.horizontal, 20)
-                                .padding(.vertical, 8)
+                                .padding(.horizontal, Kasane.Space.s5)
+                                .padding(.vertical, Kasane.Space.s2)
                                 .opacity(panel != nil ? 1 : 0)
                                 .transition(.opacity)
                             Group {
@@ -303,7 +303,7 @@ struct NowPlayingView: View {
                         }
                     }
                     if panel == nil && video {
-                        media(player).padding(.horizontal, 24).padding(.top, 16)
+                        media(player).padding(.horizontal, Kasane.Space.s6).padding(.top, Kasane.Space.s4)
                             .transition(.opacity)
                     }
                 }
@@ -316,7 +316,7 @@ struct NowPlayingView: View {
                     portraitBottomRow(player)
                 }
                 .padding(.horizontal, 28)
-                .padding(.bottom, 4)
+                .padding(.bottom, Kasane.Space.s1)
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { if panel == nil { controlsHeight = $0 } }
             }
         }
@@ -342,8 +342,8 @@ struct NowPlayingView: View {
     /// 歌詞・キューのときの上の曲の行（小さなジャケットを押すとジャケットの画面に戻る）。
     /// active: 開いている間（閉じる途中は false にして、曲名などを下の大きな行の位置へ滑らせる）
     private func compactTitleRow(_ player: PlayerService, _ song: Song?, active: Bool) -> some View {
-        HStack(spacing: 12) {
-            Button { closePanels() } label: { Cover(url: Ui.small(song?.thumbnailUrl), size: 56, radius: 6) }
+        HStack(spacing: Kasane.Space.s3) {
+            Button { closePanels() } label: { Cover(url: Ui.small(song?.thumbnailUrl), size: 56, radius: Kasane.Radius.sm) }
                 .buttonStyle(.plain)
                 .accessibilityLabel(L.t("ジャケットに戻る", "Back to artwork"))
                 .matchedGeometryEffect(id: "cover", in: titleSpace, isSource: active)
@@ -354,7 +354,7 @@ struct NowPlayingView: View {
             .matchedGeometryEffect(id: "title", in: titleSpace, anchor: .leading, isSource: active)
             Spacer(minLength: 0)
             if song != nil {
-                HStack(spacing: 12) {
+                HStack(spacing: Kasane.Space.s3) {
                     LikeButtonView(size: 17, box: 40).modifier(RoundButtonBackground())
                     songMenu(song).modifier(RoundButtonBackground())
                 }
@@ -385,7 +385,7 @@ struct NowPlayingView: View {
 
     /// 曲名とアーティスト、右に評価と「…」（Claude に聞く・共有・曲のメニュー）。
     private func portraitTitleRow(_ player: PlayerService, _ song: Song?) -> some View {
-        HStack(alignment: .center, spacing: 12) {
+        HStack(alignment: .center, spacing: Kasane.Space.s3) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(song?.title ?? L.t("何も再生していません", "Nothing playing"))
                     .font(.title3.weight(.semibold)).modifier(FadeTail())
@@ -400,7 +400,7 @@ struct NowPlayingView: View {
             }
             Spacer(minLength: 0)
             if song != nil {
-                HStack(spacing: 12) {
+                HStack(spacing: Kasane.Space.s3) {
                     LikeButtonView(size: 17, box: 40).modifier(RoundButtonBackground())
                     songMenu(song)
                     .modifier(RoundButtonBackground())
@@ -505,7 +505,7 @@ struct NowPlayingView: View {
         .font(.title3.weight(.semibold))
         .buttonStyle(.plain)
         .foregroundStyle(.primary)
-        .padding(.horizontal, 12)
+        .padding(.horizontal, Kasane.Space.s3)
     }
 
     /// ジャケット（左右に払うと前後の曲へ）か、MV のある曲・ライブで「動画」を選んでいれば映像（右下のボタンで全画面）。
@@ -525,9 +525,9 @@ struct NowPlayingView: View {
                         try? await Task.sleep(for: .milliseconds(500))
                     }
                 }
-                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .clipShape(RoundedRectangle(cornerRadius: Kasane.Radius.base, style: Kasane.cornerStyle))
                 .overlay(alignment: .bottomTrailing) {
-                    HStack(spacing: 8) {
+                    HStack(spacing: Kasane.Space.s2) {
                         PipButton()
                         Button { shell.videoFullScreen = true } label: {
                             Image(systemName: "arrow.up.left.and.arrow.down.right").font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
@@ -535,9 +535,9 @@ struct NowPlayingView: View {
                         }
                         .accessibilityLabel(L.t("全画面", "Full screen"))
                     }
-                    .padding(8)
+                    .padding(Kasane.Space.s2)
                 }
-                .shadow(radius: 16, y: 8)
+                .shadow(radius: Kasane.Radius.lg, y: 8)
         } else if verticalSize == .compact {
             // 横向きでは、前後の曲のジャケットが右の操作の欄の下や画面の端にはみ出すので、払っている間だけ出す
             CoverCarousel(isolated: true)
@@ -557,7 +557,7 @@ struct NowPlayingView: View {
     }
 
     private func seekSlider(_ player: PlayerService) -> some View {
-        VStack(spacing: 4) {
+        VStack(spacing: Kasane.Space.s1) {
             Slider(value: Binding(get: { dragging ?? min(player.position, max(1, player.duration)) }, set: { dragging = $0 }),
                    in: 0...max(1, player.duration)) { editing in
                 // 本人が触り終えたときだけ移る
@@ -894,7 +894,7 @@ private struct VideoFullScreen: View {
                     Text(song?.artistsText ?? "").font(.subheadline).foregroundStyle(.white.opacity(0.75)).lineLimit(1)
                 }
                 Spacer(minLength: 0)
-                HStack(spacing: 12) {
+                HStack(spacing: Kasane.Space.s3) {
                     if player.isLive {
                         LiveBadge(font: .subheadline.weight(.bold), dot: 9)
                         Spacer(minLength: 0)
@@ -920,8 +920,8 @@ private struct VideoFullScreen: View {
                     .accessibilityLabel(L.t("全画面を終える", "Exit full screen"))
                 }
             }
-            .padding(.horizontal, 24)
-            .padding(.vertical, 16)
+            .padding(.horizontal, Kasane.Space.s6)
+            .padding(.vertical, Kasane.Space.s4)
             HStack(spacing: 56) {
                 Button { player.previous(); touched += 1 } label: {
                     Image(systemName: "backward.end.fill").font(.system(size: 24))
@@ -965,7 +965,7 @@ struct VideoSurface: View {
             // MV に無い区間・読み込み中は黒地にする
             if AppServices.player.liveVideoPlayer == nil && !video.showing { Color.black }
             if AppServices.player.liveVideoPlayer == nil && (!video.showing || video.state != .ready) {
-                VStack(spacing: 8) {
+                VStack(spacing: Kasane.Space.s2) {
                     Text(video.note).font(.caption).foregroundStyle(.white).multilineTextAlignment(.center)
                     if video.state == .failed { Button(L.t("もう一度", "Retry")) { video.load(AppServices.player.video) } }
                 }

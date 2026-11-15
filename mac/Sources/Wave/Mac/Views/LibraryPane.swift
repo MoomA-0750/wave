@@ -23,7 +23,7 @@ struct LibraryPane: View {
                         .help(L.t("プレイリストを作成", "Create playlist"))
                 }
             }
-            .padding(EdgeInsets(top: 12, leading: 16, bottom: 4, trailing: 8))
+            .padding(EdgeInsets(top: Kasane.Space.s3, leading: Kasane.Space.s4, bottom: Kasane.Space.s1, trailing: Kasane.Space.s2))
             // 種類のチップ（4つ並ぶと欄の幅に収まらないことがあるので横に送れるように）
             ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
@@ -32,10 +32,10 @@ struct LibraryPane: View {
                     Chip(title: title, isOn: model.libraryKind == kind) { model.libraryKind = model.libraryKind == kind ? nil : kind }
                 }
             }
-            .padding(.horizontal, 12)
+            .padding(.horizontal, Kasane.Space.s3)
             }
-            .padding(.vertical, 4)
-            HStack(spacing: 4) {
+            .padding(.vertical, Kasane.Space.s1)
+            HStack(spacing: Kasane.Space.s1) {
                 TextField(L.t("ライブラリを検索", "Search library"), text: $model.libraryFilter).textFieldStyle(.roundedBorder)
                 Menu {
                     Picker(selection: Binding(get: { settings.librarySort }, set: {
@@ -62,22 +62,22 @@ struct LibraryPane: View {
                     .buttonStyle(IconButtonStyle())
                     .help(settings.libraryGrid ? L.t("リストで表示", "List view") : L.t("グリッドで表示", "Grid view"))
             }
-            .padding(EdgeInsets(top: 4, leading: 12, bottom: 4, trailing: 8))
+            .padding(EdgeInsets(top: Kasane.Space.s1, leading: Kasane.Space.s3, bottom: Kasane.Space.s1, trailing: Kasane.Space.s2))
             ZStack(alignment: .top) {
                 if !account.isLoggedIn {
-                    VStack(alignment: .leading, spacing: 12) {
+                    VStack(alignment: .leading, spacing: Kasane.Space.s3) {
                         Text(L.t("ログインすると、YouTube Music のプレイリスト・アーティスト・アルバムがここに並びます。",
                                  "Sign in to see your YouTube Music playlists, artists and albums here."))
                             .fixedSize(horizontal: false, vertical: true)
                         Button(L.t("ログイン", "Sign in")) { LoginWindowController.show() }.buttonStyle(.borderedProminent)
                     }
-                    .padding(16)
+                    .padding(Kasane.Space.s4)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 } else if settings.libraryGrid {
                     ScrollView {
-                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 96, maximum: 110), spacing: 8, alignment: .top)], spacing: 8) {
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 96, maximum: 110), spacing: Kasane.Space.s2, alignment: .top)], spacing: Kasane.Space.s2) {
                             ForEach(entries) { entry in
-                                VStack(alignment: .leading, spacing: 4) {
+                                VStack(alignment: .leading, spacing: Kasane.Space.s1) {
                                     entryCover(entry, size: 96)
                                     Text(entry.title).font(.caption).lineLimit(1)
                                 }
@@ -87,7 +87,7 @@ struct LibraryPane: View {
                                 .contextMenu { entryMenu(entry) }
                             }
                         }
-                        .padding(EdgeInsets(top: 4, leading: 10, bottom: 8, trailing: 4))
+                        .padding(EdgeInsets(top: Kasane.Space.s1, leading: 10, bottom: Kasane.Space.s2, trailing: Kasane.Space.s1))
                     }
                 } else {
                     ScrollView {
@@ -97,10 +97,10 @@ struct LibraryPane: View {
                                     .contextMenu { entryMenu(entry) }
                             }
                         }
-                        .padding(EdgeInsets(top: 0, leading: 4, bottom: 8, trailing: 4))
+                        .padding(EdgeInsets(top: 0, leading: Kasane.Space.s1, bottom: Kasane.Space.s2, trailing: Kasane.Space.s1))
                     }
                 }
-                if lib.isLoading { ProgressView().progressViewStyle(.linear).padding(.horizontal, 12) }
+                if lib.isLoading { ProgressView().progressViewStyle(.linear).padding(.horizontal, Kasane.Space.s3) }
             }
             .frame(maxHeight: .infinity, alignment: .top)
         }
@@ -120,7 +120,7 @@ struct LibraryPane: View {
         if entry.isLiked {
             LikedCover(size: size)
         } else if entry.isDownloads {
-            DownloadsCover(size: size, radius: 6)
+            DownloadsCover(size: size, radius: Kasane.Radius.sm)
         } else if entry.isNewEpisodes {
             NewEpisodesCover(size: size)
         } else {
@@ -160,11 +160,11 @@ private struct LibraryRow: View {
     @State private var hover = false
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: Kasane.Space.s3) {
             if entry.isLiked {
                 LikedCover(size: 48)
             } else if entry.isDownloads {
-                DownloadsCover(size: 48, radius: 6)
+                DownloadsCover(size: 48, radius: Kasane.Radius.sm)
             } else if entry.isNewEpisodes {
                 NewEpisodesCover(size: 48)
             } else {
@@ -176,9 +176,9 @@ private struct LibraryRow: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 8)
+        .padding(.horizontal, Kasane.Space.s2)
         .frame(minHeight: 60)
-        .background(RoundedRectangle(cornerRadius: 6).fill(hover ? Color.primary.opacity(0.07) : .clear))
+        .background(RoundedRectangle(cornerRadius: Kasane.Radius.sm, style: Kasane.cornerStyle).fill(hover ? Color.primary.opacity(0.07) : .clear))
         .contentShape(Rectangle())
         .onHover { hover = $0 }
         .onTapGesture(perform: action)
