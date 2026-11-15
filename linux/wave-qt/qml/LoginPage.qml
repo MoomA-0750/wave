@@ -31,13 +31,13 @@ Item {
 
     ColumnLayout {
         anchors.centerIn: parent
-        spacing: 12
+        spacing: Style.space.s3
         IconImage { Layout.alignment: Qt.AlignHCenter; source: Style.icon("audio-x-generic-symbolic"); sourceSize.width: 96; sourceSize.height: 96; color: Style.accent }
         Label { Layout.alignment: Qt.AlignHCenter; text: "wave"; font.pixelSize: 32; font.weight: Font.Bold; color: Style.foreground }
         Label { Layout.alignment: Qt.AlignHCenter; text: Style.t("YouTube Music のアカウントでログインしてください", "Sign in with your YouTube Music account"); color: Style.dim }
         Btn {
             Layout.alignment: Qt.AlignHCenter
-            Layout.topMargin: 12
+            Layout.topMargin: Style.space.s3
             Layout.preferredWidth: 260
             text: Style.t("ログイン", "Sign in")
             highlighted: true

@@ -80,7 +80,7 @@ Item {
             x: 24
             y: 16
             width: parent.width - 48
-            spacing: 16
+            spacing: Style.space.s4
             RowLayout {
                 visible: page.settings.search_history.length > 0
                 Layout.fillWidth: true
@@ -91,8 +91,8 @@ Item {
                 visible: page.settings.search_history.length > 0
                 Layout.fillWidth: true
                 columns: Math.max(1, Math.floor(width / 270))
-                columnSpacing: 8
-                rowSpacing: 8
+                columnSpacing: Style.space.s2
+                rowSpacing: Style.space.s2
                 Repeater {
                     model: page.settings.search_history.slice(0, 12)
                     delegate: Rectangle {
@@ -103,7 +103,7 @@ Item {
                         RowLayout {
                             anchors.fill: parent
                             anchors.margins: 6
-                            spacing: 12
+                            spacing: Style.space.s3
                             Art {
                                 Layout.preferredWidth: 48
                                 Layout.preferredHeight: 48
@@ -141,8 +141,8 @@ Item {
             GridLayout {
                 Layout.fillWidth: true
                 columns: Math.max(2, Math.min(8, Math.floor(width / 180)))
-                columnSpacing: 12
-                rowSpacing: 12
+                columnSpacing: Style.space.s3
+                rowSpacing: Style.space.s3
                 Repeater {
                     model: page.moods
                     delegate: Rectangle {
@@ -173,12 +173,12 @@ Item {
     ColumnLayout {
         anchors.fill: parent
         visible: page.query !== ""
-        spacing: 8
+        spacing: Style.space.s2
         ChipStrip {
             Layout.fillWidth: true
-            Layout.topMargin: 12
-            Layout.leftMargin: 16
-            Layout.rightMargin: 16
+            Layout.topMargin: Style.space.s3
+            Layout.leftMargin: Style.space.s4
+            Layout.rightMargin: Style.space.s4
             Layout.preferredHeight: 34
                 Repeater {
                     model: page.tabs
@@ -205,8 +205,8 @@ Item {
                     visible: !!page.all
                     Layout.fillWidth: true
                     columns: allColumn.width >= 760 ? 2 : 1
-                    columnSpacing: 24
-                    rowSpacing: 24
+                    columnSpacing: Style.space.s6
+                    rowSpacing: Style.space.s6
                     ColumnLayout {
                         visible: !!page.all && !!page.all.top
                         Layout.preferredWidth: 360
@@ -222,7 +222,7 @@ Item {
                             color: topHover.hovered ? Qt.lighter(Style.raised, 1.12) : Style.raised
                             ColumnLayout {
                                 anchors.fill: parent
-                                anchors.margins: 20
+                                anchors.margins: Style.space.s5
                                 spacing: 10
                                 Art { Layout.preferredWidth: 96; Layout.preferredHeight: 96; source: page.all && page.all.top ? page.all.top.art : ""; round: page.all && page.all.top ? !!page.all.top.round : false }
                                 Label { Layout.fillWidth: true; text: page.all && page.all.top ? page.all.top.title : ""; font.pixelSize: 26; font.weight: Font.Bold; elide: Text.ElideRight; color: Style.foreground }
@@ -231,7 +231,7 @@ Item {
                             PlayButton {
                                 anchors.right: parent.right
                                 anchors.bottom: parent.bottom
-                                anchors.margins: 16
+                                anchors.margins: Style.space.s4
                                 visible: topHover.hovered
                                 onClicked: WaveApp.playItem(JSON.stringify(page.all.top), false)
                             }
@@ -242,7 +242,7 @@ Item {
                     ColumnLayout {
                         Layout.fillWidth: true
                         Layout.alignment: Qt.AlignTop
-                        spacing: 4
+                        spacing: Style.space.s1
                         visible: !!page.all && page.all.songs.length > 0
                         Section { text: Style.t("曲", "Songs") }
                         Repeater {
@@ -291,7 +291,7 @@ Item {
                             visible: (modelData.quote || "") !== ""
                             x: 60
                             width: parent.width - 60
-                            bottomPadding: 8
+                            bottomPadding: Style.space.s2
                             text: modelData.quote || ""
                             wrapMode: Text.Wrap
                             maximumLineCount: 2
@@ -305,7 +305,7 @@ Item {
                 GridView {
                     id: cards
                     anchors.fill: parent
-                    anchors.leftMargin: 16
+                    anchors.leftMargin: Style.space.s4
                     visible: !tabView.rows
                     clip: true
                     cellWidth: 190

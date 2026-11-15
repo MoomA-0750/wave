@@ -53,14 +53,14 @@ ListView {
     header: ColumnLayout {
         width: page.width
         onHeightChanged: if (!page.userScrolled) Qt.callLater(() => page.positionViewAtBeginning())
-        spacing: 16
+        spacing: Style.space.s4
         BusyIndicator { visible: !page.info && !page.failed; running: visible; Layout.alignment: Qt.AlignHCenter; Layout.topMargin: 24 }
         Label { visible: page.failed; text: Style.t("ポッドキャストを読み込めませんでした", "Couldn't load the podcast"); color: Style.dim; Layout.alignment: Qt.AlignHCenter; Layout.topMargin: 24 }
         RowLayout {
             visible: !!page.info
             Layout.fillWidth: true
-            Layout.margins: 24
-            spacing: 24
+            Layout.margins: Style.space.s6
+            spacing: Style.space.s6
             Art { Layout.preferredWidth: 200; Layout.preferredHeight: 200; Layout.alignment: Qt.AlignTop; source: page.info ? page.info.art : ""; radius: Style.radius; placeholder: "audio-input-microphone-symbolic" }
             ColumnLayout {
                 Layout.fillWidth: true
@@ -81,8 +81,8 @@ ListView {
                     ToolTip.visible: false
                 }
                 RowLayout {
-                    Layout.topMargin: 8
-                    spacing: 8
+                    Layout.topMargin: Style.space.s2
+                    spacing: Style.space.s2
                     PlayButton { visible: page.episodes.length > 0; onClicked: WaveApp.playSongs(JSON.stringify(page.episodes), 0, page.itemId, false) }
                     Btn {
                         visible: !!page.info && page.info.canSave

@@ -87,8 +87,8 @@ Flickable {
             visible: page.recent.length > 0
             Layout.fillWidth: true
             columns: Math.max(1, Math.min(4, Math.floor((width + 8) / 208)))
-            columnSpacing: 8
-            rowSpacing: 8
+            columnSpacing: Style.space.s2
+            rowSpacing: Style.space.s2
             Repeater {
                 model: page.recent
                 delegate: Rectangle {
@@ -100,9 +100,9 @@ Flickable {
                     clip: true
                     RowLayout {
                         anchors.fill: parent
-                        spacing: 12
+                        spacing: Style.space.s3
                         Art { Layout.preferredWidth: 56; Layout.preferredHeight: 56; source: modelData.thumb; round: !!modelData.round; radius: 0 }
-                        Label { Layout.fillWidth: true; Layout.preferredWidth: 1; Layout.rightMargin: 12; text: modelData.title; font.weight: Font.DemiBold; wrapMode: Text.WordWrap; maximumLineCount: 2; elide: Text.ElideRight; color: Style.foreground }
+                        Label { Layout.fillWidth: true; Layout.preferredWidth: 1; Layout.rightMargin: Style.space.s3; text: modelData.title; font.weight: Font.DemiBold; wrapMode: Text.WordWrap; maximumLineCount: 2; elide: Text.ElideRight; color: Style.foreground }
                     }
                     HoverHandler { id: tileHover; cursorShape: Qt.PointingHandCursor }
                     TapHandler { onTapped: Style.nav.openItem(modelData) }
@@ -121,7 +121,7 @@ Flickable {
         ColumnLayout {
             visible: page.failed && !page.loading
             Layout.alignment: Qt.AlignHCenter
-            spacing: 8
+            spacing: Style.space.s2
             Label { text: page.expired ? Style.t("ログインが切れています", "Your sign-in has expired") : page.params !== "" ? Style.t("読み込めませんでした", "Couldn't load") : Style.t("ホームを読み込めませんでした", "Couldn't load Home"); font.pixelSize: 18; font.weight: Font.Bold; Layout.alignment: Qt.AlignHCenter; color: Style.foreground }
             Label { visible: page.expired; text: Style.t("YouTube Music が保存したログインを受け付けませんでした。\nログインし直してください。", "YouTube Music didn't accept your saved sign-in.\nPlease sign in again."); wrapMode: Text.Wrap; horizontalAlignment: Text.AlignHCenter; Layout.maximumWidth: 420; Layout.alignment: Qt.AlignHCenter; color: Style.dim }
             Btn { visible: page.expired; text: Style.t("ログインし直す", "Sign in again"); highlighted: true; Layout.alignment: Qt.AlignHCenter; onClicked: WaveApp.relogin() }

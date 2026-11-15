@@ -28,11 +28,11 @@ Flickable {
         x: 24
         y: 24
         width: page.width - 48
-        spacing: 12
+        spacing: Style.space.s3
 
         RowLayout {
             Layout.fillWidth: true
-            spacing: 20
+            spacing: Style.space.s5
             Rectangle {
                 Layout.preferredWidth: 140
                 Layout.preferredHeight: 140
@@ -57,7 +57,7 @@ Flickable {
         Section { text: Style.t("スマートダウンロード", "Smart downloads"); Layout.topMargin: 12 }
         RowLayout {
             Layout.fillWidth: true
-            spacing: 16
+            spacing: Style.space.s4
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: 2
@@ -76,7 +76,7 @@ Flickable {
         }
         Row {
             visible: !!page.d.smartOn
-            spacing: 8
+            spacing: Style.space.s2
             Repeater {
                 model: [["", Style.t("すべて", "All")], ["Frequent", Style.t("いつも聴いている", "Played often")], ["Likely", Style.t("好きそう", "You might like")], ["Recommended", Style.t("おすすめ", "Recommended")]]
                 delegate: Chip { text: modelData[1]; on: page.category === modelData[0]; onClicked: page.category = modelData[0] }
@@ -84,7 +84,7 @@ Flickable {
         }
         RowLayout {
             visible: !!page.d.smartOn
-            spacing: 8
+            spacing: Style.space.s2
             PlayButton { enabled: (page.d.smart || []).length > 0; onClicked: WaveApp.playSongs(JSON.stringify(page.d.smart), 0, "", false) }
             IconButton { iconName: "media-playlist-shuffle-symbolic"; tip: Style.t("シャッフル再生", "Shuffle play"); enabled: (page.d.smart || []).length > 0; onClicked: WaveApp.playSongs(JSON.stringify(page.d.smart), 0, "", true) }
         }
@@ -101,7 +101,7 @@ Flickable {
                 Layout.fillWidth: true
                 height: 60
                 contentItem: RowLayout {
-                    spacing: 12
+                    spacing: Style.space.s3
                     Art { Layout.preferredWidth: 46; Layout.preferredHeight: 46; source: modelData.thumb }
                     ColumnLayout {
                         Layout.fillWidth: true
@@ -128,7 +128,7 @@ Flickable {
         Label {
             visible: (page.d.collections || []).length === 0 && (page.d.songs || []).length === 0 && (page.d.episodes || []).length === 0
             Layout.fillWidth: true
-            Layout.topMargin: 16
+            Layout.topMargin: Style.space.s4
             wrapMode: Text.Wrap
             color: Style.dim
             text: Style.t("曲・プレイリスト・アルバムのメニューやページの頭のボタンから、ダウンロードできます。通信の無いところでも聴けます。", "Download songs, playlists and albums from their menus or the button at the top of their pages, and listen without a connection.")

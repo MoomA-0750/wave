@@ -227,9 +227,9 @@ Item {
             Layout.fillHeight: true
             RowLayout {
                 anchors.fill: parent
-                anchors.leftMargin: 8
-                anchors.rightMargin: 8
-                spacing: 8
+                anchors.leftMargin: Style.space.s2
+                anchors.rightMargin: Style.space.s2
+                spacing: Style.space.s2
                 visible: !shell.full
                 // 左の欄は狭い窓では細くする（中身のページに幅を残す）
                 Pane_ { Layout.preferredWidth: shell.level >= 4 ? 232 : shell.level >= 3 ? 264 : 300; Layout.fillHeight: true; LibraryPane { anchors.fill: parent } }
@@ -263,7 +263,7 @@ Item {
                 anchors.top: parent.top
                 anchors.bottom: parent.bottom
                 anchors.right: parent.right
-                anchors.rightMargin: 8
+                anchors.rightMargin: Style.space.s2
                 width: shell.overlayRight ? Math.min(360, parent.width - 48) : 340
                 border.color: shell.overlayRight ? Style.border : "transparent"
                 NowPlayingPane { anchors.fill: parent; visible: shell.rightView === "now"; shell: shell }
@@ -316,7 +316,7 @@ Item {
             anchors.right: parent.right
             anchors.rightMargin: 16 + Math.max(0, (parent.width - parent.height * 16 / 9) / 2)
             y: (parent.height - videoHeight) / 2 + 16
-            spacing: 8
+            spacing: Style.space.s2
             LayerButton { iconName: shell.pipOpen ? "view-conceal-symbolic" : "window-new-symbolic"; tip: shell.pipOpen ? Style.t("小窓を閉じる", "Close picture in picture") : Style.t("小窓で見る", "Picture in picture"); onClicked: shell.togglePip() }
             LayerButton {
                 iconName: shell.Window.window && shell.Window.window.visibility === Window.FullScreen ? "view-restore-symbolic" : "view-fullscreen-symbolic"

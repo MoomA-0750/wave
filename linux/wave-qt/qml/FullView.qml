@@ -16,7 +16,7 @@ Rectangle {
     IconButton {
         anchors.right: parent.right
         anchors.top: parent.top
-        anchors.margins: 16
+        anchors.margins: Style.space.s4
         iconName: "view-restore-symbolic"
         tip: Style.t("全画面を終える (Esc)", "Exit full screen (Esc)")
         onClicked: view.shell.full = false
@@ -40,13 +40,13 @@ Rectangle {
         width: Math.min(520, view.width - media.width - 144)
         // 歌詞があるときは上下いっぱいまで使う（ジャケットの高さで切ると、下が空いたまま行が途中で切れていた）
         height: follower.visible ? view.height - 96 : Math.min(view.height - 120, Math.max(media.height, 360))
-        spacing: 8
+        spacing: Style.space.s2
         Label { Layout.fillWidth: true; text: WaveApp.hasSong ? WaveApp.title : Style.t("何も再生していません", "Nothing playing"); font.pixelSize: 36; font.weight: Font.Bold; wrapMode: Text.Wrap; maximumLineCount: 2; elide: Text.ElideRight; color: Style.foreground }
         Label { Layout.fillWidth: true; text: WaveApp.artists; visible: text !== ""; font.pixelSize: 20; elide: Text.ElideRight; color: Style.dim }
         Label { Layout.fillWidth: true; text: WaveApp.album; visible: text !== ""; font.pixelSize: 15; elide: Text.ElideRight; color: Style.dim }
         Row {
             visible: WaveApp.hasVideo
-            Layout.topMargin: 8
+            Layout.topMargin: Style.space.s2
             spacing: 6
             Chip { text: Style.t("曲", "Song"); on: !WaveApp.showVideo; onClicked: WaveApp.setVideoOn(false) }
             Chip { text: Style.t("動画", "Video"); on: WaveApp.showVideo; onClicked: WaveApp.setVideoOn(true) }
@@ -57,7 +57,7 @@ Rectangle {
             visible: found && view.visible
             Layout.fillWidth: true
             Layout.fillHeight: true
-            Layout.topMargin: 16
+            Layout.topMargin: Style.space.s4
         }
         Item { visible: !follower.visible; Layout.fillHeight: true }
     }

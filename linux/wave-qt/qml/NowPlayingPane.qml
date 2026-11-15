@@ -40,7 +40,7 @@ Flickable {
         }
         RowLayout {
             Layout.fillWidth: true
-            spacing: 8
+            spacing: Style.space.s2
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: 2
@@ -111,8 +111,8 @@ Flickable {
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.top: parent.top
-                anchors.margins: 12
-                spacing: 8
+                anchors.margins: Style.space.s3
+                spacing: Style.space.s2
                 RowLayout {
                     Layout.fillWidth: true
                     Label { text: Style.t("次の曲", "Up next"); font.weight: Font.Bold; Layout.fillWidth: true; color: Style.foreground }

@@ -32,7 +32,7 @@ Flickable {
         x: 24
         y: 24
         width: page.width - 48
-        spacing: 12
+        spacing: Style.space.s3
         Label { text: Style.t("RSS の番組を探す", "Find RSS shows"); font.pixelSize: 28; font.weight: Font.Bold; color: Style.foreground }
         Label { Layout.fillWidth: true; wrapMode: Text.Wrap; color: Style.dim; text: Style.t("番組名で探すか、RSS の URL（https://…）を入れてください。YouTube に無い番組も聴けます", "Search by show name or enter an RSS URL (https://…). You can also listen to shows that aren't on YouTube") }
         TextField {
@@ -46,7 +46,7 @@ Flickable {
         Label { visible: page.message !== ""; text: page.message; color: Style.dim }
         Flow {
             Layout.fillWidth: true
-            spacing: 16
+            spacing: Style.space.s4
             Repeater { model: page.results; delegate: Card { item: modelData; size: 160 } }
         }
     }

@@ -22,9 +22,9 @@ Rectangle {
 
     RowLayout {
         anchors.fill: parent
-        anchors.leftMargin: 8
-        anchors.rightMargin: 12
-        spacing: 4
+        anchors.leftMargin: Style.space.s2
+        anchors.rightMargin: Style.space.s3
+        spacing: Style.space.s1
         IconButton {
             iconName: "go-previous-symbolic"; tip: Style.t("戻る", "Back")
             visible: bar.shell.canBack || bar.shell.canForward
@@ -43,7 +43,7 @@ Rectangle {
     RowLayout {
         anchors.centerIn: parent
         width: Math.min(560, bar.width - 280)
-        spacing: 8
+        spacing: Style.space.s2
         RoundButton {
             Layout.preferredWidth: 40
             Layout.preferredHeight: 40
@@ -62,8 +62,8 @@ Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 40
             // 空のときの案内は自分で置く（語を後から入れると、Material の案内が消えずに重なることがあった）
-            Label { anchors.left: parent.left; anchors.leftMargin: 40; anchors.verticalCenter: parent.verticalCenter; visible: field.text === "" && !field.inputMethodComposing; text: Style.t("何を聴きたいですか？", "What do you want to play?"); color: Style.dim; font: field.font }
-            leftPadding: 40
+            Label { anchors.left: parent.left; anchors.leftMargin: Style.space.s10; anchors.verticalCenter: parent.verticalCenter; visible: field.text === "" && !field.inputMethodComposing; text: Style.t("何を聴きたいですか？", "What do you want to play?"); color: Style.dim; font: field.font }
+            leftPadding: Style.space.s10
             topPadding: 0
             bottomPadding: 0
             verticalAlignment: TextInput.AlignVCenter
@@ -71,7 +71,7 @@ Rectangle {
             background: Rectangle { radius: Style.radius === 0 ? 0 : height / 2; color: Style.raised; border.color: field.activeFocus ? Style.accent : "transparent"; border.width: 2 }
             IconImage {
                 anchors.left: parent.left
-                anchors.leftMargin: 12
+                anchors.leftMargin: Style.space.s3
                 anchors.verticalCenter: parent.verticalCenter
                 source: Style.icon("system-search-symbolic")
                 sourceSize.width: 16
@@ -107,7 +107,7 @@ Rectangle {
     RoundButton {
         id: account
         anchors.right: parent.right
-        anchors.rightMargin: 12
+        anchors.rightMargin: Style.space.s3
         anchors.verticalCenter: parent.verticalCenter
         width: 40
         height: 40
@@ -189,7 +189,7 @@ Rectangle {
                 width: ListView.view.width
                 height: 48
                 contentItem: RowLayout {
-                    spacing: 12
+                    spacing: Style.space.s3
                     Art {
                         Layout.preferredWidth: 32
                         Layout.preferredHeight: 32

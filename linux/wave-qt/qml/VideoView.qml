@@ -17,7 +17,7 @@ Rectangle {
     Column {
         anchors.centerIn: parent
         width: parent.width - 32
-        spacing: 8
+        spacing: Style.space.s2
         visible: WaveApp.videoState === "failed" || WaveApp.videoState === "gap"
         Label {
             width: parent.width
@@ -36,7 +36,7 @@ Rectangle {
     Row {
         anchors.right: parent.right
         anchors.bottom: parent.bottom
-        anchors.margins: 8
+        anchors.margins: Style.space.s2
         spacing: 6
         visible: (view.place === "side" || view.place === "full") && (hover.hovered || view.place === "full")
         Osd { iconName: "view-fullscreen-symbolic"; tip: view.place === "side" ? Style.t("映像を大きく見る", "Expand video") : Style.t("映像だけを窓いっぱいに", "Video only"); onClicked: Style.nav.expandVideo() }

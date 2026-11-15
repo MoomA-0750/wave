@@ -31,7 +31,7 @@ Flickable {
         x: Math.max(24, (page.width - 760) / 2)
         y: 24
         width: Math.min(760, page.width - 48)
-        spacing: 16
+        spacing: Style.space.s4
 
         Label { text: Style.t("端末の連携", "Devices"); font.pixelSize: 28; font.weight: Font.Bold; color: Style.foreground }
         Label { Layout.fillWidth: true; wrapMode: Text.Wrap; color: Style.dim; text: Style.t("同じアカウントのスマホと PC のあいだで、再生を引き継げます。端末どうしの通信は暗号化され、中継のサーバーは中身を読めません。", "Move playback between your phone and PC on the same account. Devices encrypt everything they share, so the relay server can't read it.") }
@@ -47,8 +47,8 @@ Flickable {
             RowLayout {
                 id: bannerRow
                 anchors.fill: parent
-                anchors.margins: 12
-                spacing: 12
+                anchors.margins: Style.space.s3
+                spacing: Style.space.s3
                 IconImage {
                     source: Style.icon(page.d.banner && page.d.banner.severity !== "info" ? "dialog-warning-symbolic" : "dialog-information-symbolic")
                     sourceSize.width: 20
@@ -70,7 +70,7 @@ Flickable {
             visible: !!page.d.mirror
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 12
+                spacing: Style.space.s3
                 Art { Layout.preferredWidth: 56; Layout.preferredHeight: 56; source: page.d.mirror ? page.d.mirror.song.thumb : "" }
                 ColumnLayout {
                     Layout.fillWidth: true
@@ -90,7 +90,7 @@ Flickable {
             Label { Layout.fillWidth: true; wrapMode: Text.Wrap; color: Style.foreground; text: Style.t("連携済みのスマホの wave で「端末の連携」→「端末を追加」を押し、「文字で共有」で送った文字列をここに貼り付けてください。", "On a phone that's already set up, open Devices in wave, tap “Add device”, then “Share as text”, and paste the text here.") }
             TextField { id: offer; Layout.fillWidth: true; placeholderText: "wave-pair:…"; background: Rectangle { radius: Style.small; color: Style.view; border.color: offer.activeFocus ? Style.accent : Style.border } }
             RowLayout {
-                spacing: 8
+                spacing: Style.space.s2
                 Btn { text: Style.t("加わる", "Join"); highlighted: true; enabled: offer.text.trim() !== ""; onClicked: WaveApp.connectAction("accept", offer.text) }
                 Btn { text: Style.t("この PC で新しく始める", "Start a new group on this PC"); onClicked: WaveApp.connectAction("create_household", "") }
             }
@@ -119,7 +119,7 @@ Flickable {
             }
             RowLayout {
                 visible: !!page.d.pairing && page.d.pairing.kind === "code"
-                spacing: 8
+                spacing: Style.space.s2
                 TextField {
                     id: code
                     implicitWidth: 180
@@ -132,7 +132,7 @@ Flickable {
             }
             BusyIndicator { visible: !!page.d.pairing && page.d.pairing.kind === "working"; running: visible }
             RowLayout {
-                spacing: 8
+                spacing: Style.space.s2
                 Btn { visible: !!page.d.pairing && page.d.pairing.kind === "show"; text: Style.t("相手に入力したら、続ける", "Continue after entering it"); highlighted: true; onClicked: WaveApp.connectAction("confirm_on_b", "") }
                 Btn { visible: !!page.d.pairing && page.d.pairing.grantId !== "" && !!page.d.pairing.grantLabel; text: Style.t("ログインを渡す", "Give login"); highlighted: true; onClicked: grant.ask(page.d.pairing.grantId, page.d.pairing.grantLabel) }
                 Btn { text: page.d.pairing && (page.d.pairing.kind === "done" || page.d.pairing.kind === "failed") ? Style.t("閉じる", "Close") : Style.t("キャンセル", "Cancel"); onClicked: WaveApp.connectAction("cancel_pairing", "") }
@@ -151,7 +151,7 @@ Flickable {
                 model: page.d.members || []
                 delegate: RowLayout {
                     Layout.fillWidth: true
-                    spacing: 12
+                    spacing: Style.space.s3
                     IconImage { source: Style.icon(modelData.icon); sourceSize.width: 20; sourceSize.height: 20; color: Style.foreground; Layout.preferredWidth: 28 }
                     ColumnLayout {
                         Layout.fillWidth: true
@@ -171,7 +171,7 @@ Flickable {
             Label { text: Style.t("中継の場所（wss://ホスト:ポート）", "Relay address (wss://host:port)"); font.weight: Font.Bold; color: Style.foreground }
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 8
+                spacing: Style.space.s2
                 TextField {
                     id: relay
                     Layout.fillWidth: true

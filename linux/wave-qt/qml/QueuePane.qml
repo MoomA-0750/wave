@@ -15,12 +15,12 @@ Item {
 
     ColumnLayout {
         anchors.fill: parent
-        spacing: 4
+        spacing: Style.space.s1
         RowLayout {
             Layout.fillWidth: true
-            Layout.topMargin: 12
-            Layout.leftMargin: 20
-            Layout.rightMargin: 20
+            Layout.topMargin: Style.space.s3
+            Layout.leftMargin: Style.space.s5
+            Layout.rightMargin: Style.space.s5
             spacing: 6
             Chip { text: Style.t("キュー", "Queue"); on: !pane.history; onClicked: pane.history = false }
             Chip { text: Style.t("履歴", "History"); on: pane.history; onClicked: pane.history = true }
@@ -34,8 +34,8 @@ Item {
             id: list
             Layout.fillWidth: true
             Layout.fillHeight: true
-            Layout.leftMargin: 8
-            Layout.rightMargin: 8
+            Layout.leftMargin: Style.space.s2
+            Layout.rightMargin: Style.space.s2
             clip: true
             model: pane.entries
             ScrollBar.vertical: ScrollBar {}
@@ -45,7 +45,7 @@ Item {
                     width: parent.width
                     visible: modelData.section !== ""
                     height: visible ? 40 : 0
-                    Label { text: modelData.section; font.weight: Font.Bold; Layout.leftMargin: 8; Layout.fillWidth: true; color: Style.foreground }
+                    Label { text: modelData.section; font.weight: Font.Bold; Layout.leftMargin: Style.space.s2; Layout.fillWidth: true; color: Style.foreground }
                     Btn { visible: modelData.flowHeader; text: Style.t("消去", "Clear"); flat: true; onClicked: WaveApp.clearFlow() }
                 }
                 TrackRow {
@@ -63,7 +63,7 @@ Item {
             visible: pane.entries.length === 0
             Layout.fillWidth: true
             Layout.fillHeight: true
-            Layout.margins: 24
+            Layout.margins: Style.space.s6
             spacing: 6
             Item { Layout.fillHeight: true }
             Label { Layout.alignment: Qt.AlignHCenter; text: pane.history ? Style.t("まだ流れた曲はありません", "Nothing played yet") : Style.t("キューは空です", "Your queue is empty"); font.weight: Font.Bold; color: Style.foreground }

@@ -10,7 +10,7 @@ Dialog {
     modal: true
     // 幅は決め打ち（中身の幅から決めると、見出しと中身の間で幅の計算が回り続ける）
     width: Math.min(parent ? parent.width - 48 : 480, 480)
-    padding: 20
+    padding: Style.space.s5
     background: Rectangle {
         radius: Style.radius
         color: Style.raised

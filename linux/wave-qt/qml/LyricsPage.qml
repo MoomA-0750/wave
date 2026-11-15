@@ -82,7 +82,7 @@ Item {
     Flickable {
         anchors.fill: parent
         anchors.margins: page.narrow ? 20 : 48
-        anchors.bottomMargin: 40
+        anchors.bottomMargin: Style.space.s10
         visible: page.info.state === "plain"
         contentHeight: plain.implicitHeight
         clip: true
@@ -91,7 +91,7 @@ Item {
     ColumnLayout {
         anchors.centerIn: parent
         visible: page.info.state !== "synced" && page.info.state !== "plain"
-        spacing: 12
+        spacing: Style.space.s3
         BusyIndicator { visible: page.info.state === "loading"; running: visible; Layout.alignment: Qt.AlignHCenter }
         Label {
             Layout.alignment: Qt.AlignHCenter
@@ -126,7 +126,7 @@ Item {
     Label {
         anchors.right: parent.right
         anchors.bottom: parent.bottom
-        anchors.rightMargin: 12
+        anchors.rightMargin: Style.space.s3
         anchors.bottomMargin: 7
         text: page.info.source || ""
         font.pixelSize: 11

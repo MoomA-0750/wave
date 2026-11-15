@@ -121,7 +121,7 @@ ListView {
     header: ColumnLayout {
         width: page.width
         onHeightChanged: if (!page.userScrolled) Qt.callLater(() => page.positionViewAtBeginning())
-        spacing: 12
+        spacing: Style.space.s3
         RowLayout {
             Layout.fillWidth: true
             Layout.leftMargin: page.edge
@@ -171,7 +171,7 @@ ListView {
                 RowLayout {
                     Layout.topMargin: page.width < 560 ? 4 : 10
                     Layout.fillWidth: true
-                    spacing: 8
+                    spacing: Style.space.s2
                     visible: page.songs.length > 0
                     PlayButton { onClicked: page.playFrom(0, false) }
                     IconButton { iconName: "media-playlist-shuffle-symbolic"; tip: Style.t("シャッフル再生", "Shuffle play"); size: 22; onClicked: page.playFrom(0, true) }
@@ -199,7 +199,7 @@ ListView {
             Layout.fillWidth: true
             Layout.leftMargin: page.edge
             Layout.rightMargin: page.edge
-            spacing: 8
+            spacing: Style.space.s2
             Item { Layout.fillWidth: true }
             IconButton { iconName: "system-search-symbolic"; tip: Style.t("この一覧の中を検索", "Search in this list"); checked: find.visible; onClicked: { find.visible = !find.visible; if (find.visible) find.forceActiveFocus(); else find.text = "" } }
             TextField {
@@ -248,13 +248,13 @@ ListView {
         Label {
             visible: page.error !== ""
             text: page.error
-            Layout.leftMargin: 24
+            Layout.leftMargin: Style.space.s6
             color: Style.dim
         }
         Label {
             visible: !page.loading && page.songs.length > 0 && page.shown.length === 0
             text: Style.t("一致する曲はありません", "No matching songs")
-            Layout.leftMargin: 24
+            Layout.leftMargin: Style.space.s6
             color: Style.dim
         }
         BusyIndicator { visible: page.loading; running: visible; Layout.alignment: Qt.AlignHCenter }
@@ -301,12 +301,12 @@ ListView {
     footer: ColumnLayout {
         width: page.width
         visible: page.suggestions.length > 0
-        spacing: 4
+        spacing: Style.space.s1
         RowLayout {
             Layout.fillWidth: true
-            Layout.leftMargin: 24
-            Layout.rightMargin: 24
-            Layout.topMargin: 32
+            Layout.leftMargin: Style.space.s6
+            Layout.rightMargin: Style.space.s6
+            Layout.topMargin: Style.space.s8
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: 2
@@ -320,12 +320,12 @@ ListView {
             model: page.suggestions
             delegate: ItemDelegate {
                 Layout.fillWidth: true
-                Layout.leftMargin: 16
-                Layout.rightMargin: 16
+                Layout.leftMargin: Style.space.s4
+                Layout.rightMargin: Style.space.s4
                 height: 56
                 onClicked: WaveApp.playSongs(JSON.stringify([modelData]), 0, "", false)
                 contentItem: RowLayout {
-                    spacing: 12
+                    spacing: Style.space.s3
                     Art { Layout.preferredWidth: 40; Layout.preferredHeight: 40; source: modelData.thumb || modelData.art || ""; radius: Style.small }
                     ColumnLayout {
                         Layout.fillWidth: true

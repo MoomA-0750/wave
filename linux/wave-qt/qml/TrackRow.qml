@@ -24,9 +24,9 @@ Rectangle {
 
     RowLayout {
         anchors.fill: parent
-        anchors.leftMargin: 8
-        anchors.rightMargin: 8
-        spacing: 12
+        anchors.leftMargin: Style.space.s2
+        anchors.rightMargin: Style.space.s2
+        spacing: Style.space.s3
         Label {
             visible: row.number > 0
             text: row.number

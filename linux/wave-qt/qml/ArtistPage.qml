@@ -41,7 +41,7 @@ Flickable {
 
         RowLayout {
             Layout.fillWidth: true
-            spacing: 24
+            spacing: Style.space.s6
             Art { readonly property int side: page.width < 480 ? 112 : page.width < 640 ? 148 : 180; Layout.preferredWidth: side; Layout.preferredHeight: side; source: page.info ? page.info.art : ""; round: true; placeholder: "avatar-default-symbolic" }
             ColumnLayout {
                 Layout.fillWidth: true
@@ -50,7 +50,7 @@ Flickable {
                 Label { text: Style.t("アーティスト", "Artist"); font.pixelSize: 12; font.weight: Font.DemiBold; color: Style.dim }
                 Label { Layout.fillWidth: true; text: page.info ? page.info.title : page.pageTitle; font.pixelSize: page.width < 560 ? 26 : 36; font.weight: Font.Bold; wrapMode: Text.Wrap; maximumLineCount: 2; elide: Text.ElideRight; color: Style.foreground }
                 RowLayout {
-                    spacing: 8
+                    spacing: Style.space.s2
                     visible: !!page.info && page.info.topSongs.length > 0
                     PlayButton {
                         onClicked: WaveApp.playItem(JSON.stringify({ kind: "artist", id: page.itemId }), false)
@@ -71,7 +71,7 @@ Flickable {
         ColumnLayout {
             visible: !!page.info && page.info.topSongs.length > 0
             Layout.fillWidth: true
-            spacing: 4
+            spacing: Style.space.s1
             Section { text: Style.t("人気の曲", "Top songs") }
             Repeater {
                 model: page.info ? page.info.topSongs.slice(0, 5) : []

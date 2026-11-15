@@ -27,7 +27,7 @@ Rectangle {
     RowLayout {
         id: left
         anchors.left: parent.left
-        anchors.leftMargin: 16
+        anchors.leftMargin: Style.space.s4
         anchors.verticalCenter: parent.verticalCenter
         // 狭い窓（720〜800 ほど）では、中央の操作と右のボタンの分を先に取り、残りまで縮める（曲名は省略される）
         width: Math.max(0, Math.min(bar.width * 0.3, 360, bar.width - 16 - right.implicitWidth - 16 - transport.implicitWidth - 2 * bar.gap))
@@ -112,7 +112,7 @@ Rectangle {
         }
         RowLayout {
             Layout.fillWidth: true
-            spacing: 8
+            spacing: Style.space.s2
             visible: !WaveApp.live
             Label { text: bar.time(seek.pressed ? seek.value : bar.position); font.pixelSize: 12; color: Style.dim; Layout.preferredWidth: 44; horizontalAlignment: Text.AlignRight; font.features: { "tnum": 1 } }
             Slider {
@@ -139,7 +139,7 @@ Rectangle {
             font.weight: Font.Bold
             font.pixelSize: 11
             color: "white"
-            leftPadding: 8; rightPadding: 8; topPadding: 2; bottomPadding: 2
+            leftPadding: Style.space.s2; rightPadding: Style.space.s2; topPadding: 2; bottomPadding: 2
             background: Rectangle { color: Style.red; radius: Style.small }
         }
     }
@@ -148,14 +148,14 @@ Rectangle {
     RowLayout {
         id: right
         anchors.right: parent.right
-        anchors.rightMargin: 16
+        anchors.rightMargin: Style.space.s4
         anchors.verticalCenter: parent.verticalCenter
         spacing: 2
         IconButton { compact: true; iconName: "text-x-generic-symbolic"; tip: Style.t("歌詞", "Lyrics"); checked: bar.shell.visibleKind === "lyrics"; onClicked: bar.shell.toggleLyrics() }
         IconButton { compact: true; iconName: "view-list-symbolic"; tip: Style.t("キュー", "Queue"); checked: bar.shell.showRight && bar.shell.rightView === "queue"; onClicked: bar.shell.toggleQueue() }
         RowLayout {
             visible: WaveApp.connectConfigured
-            spacing: 4
+            spacing: Style.space.s1
             IconButton { compact: true;
                 id: deviceButton
                 iconName: "audio-speakers-symbolic"
@@ -177,7 +177,7 @@ Rectangle {
                 id: volumePopup
                 y: -height - 8
                 x: -width / 2
-                padding: 8
+                padding: Style.space.s2
                 background: Rectangle { color: Style.raised; radius: Style.radius; border.color: Style.border }
                 RowLayout {
                     IconButton { compact: true; iconName: "audio-volume-muted-symbolic"; tip: Style.t("ミュート", "Mute"); onClicked: WaveApp.toggleMute() }
@@ -203,10 +203,10 @@ Rectangle {
         padding: 10
         background: Rectangle { color: Style.raised; radius: Style.radius; border.color: Style.border }
         contentItem: ColumnLayout {
-            spacing: 4
+            spacing: Style.space.s1
             Label { text: Style.t("現在の端末", "Current device"); font.weight: Font.Bold; color: Style.foreground }
             Label { text: popup.d.mirror ? popup.d.mirror.label : Style.t("この PC", "This PC"); color: Style.accent; font.weight: Font.DemiBold }
-            Label { visible: (popup.d.pickable || []).length > 0; text: Style.t("ほかの端末を選択", "Select another device"); font.weight: Font.Bold; Layout.topMargin: 8; color: Style.foreground }
+            Label { visible: (popup.d.pickable || []).length > 0; text: Style.t("ほかの端末を選択", "Select another device"); font.weight: Font.Bold; Layout.topMargin: Style.space.s2; color: Style.foreground }
             Repeater {
                 model: popup.d.pickable || []
                 delegate: ItemDelegate {

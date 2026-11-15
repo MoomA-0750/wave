@@ -15,7 +15,7 @@ Flickable {
     boundsBehavior: Flickable.StopAtBounds
     flickableDirection: Flickable.HorizontalFlick
 
-    Row { id: row; spacing: 8; height: strip.height }
+    Row { id: row; spacing: Style.space.s2; height: strip.height }
 
     // 縦の回しで横に送る（指の回しで送れないと、右端のチップへ届かない）
     WheelHandler {

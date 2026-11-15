@@ -25,7 +25,7 @@ Item {
             PlayButton {
                 anchors.right: parent.right
                 anchors.bottom: parent.bottom
-                anchors.margins: 8
+                anchors.margins: Style.space.s2
                 implicitWidth: 44
                 implicitHeight: 44
                 visible: hover.hovered && card.item.kind !== "podcast"

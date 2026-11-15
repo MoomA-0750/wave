@@ -28,12 +28,12 @@ Item {
 
     ColumnLayout {
         anchors.fill: parent
-        spacing: 4
+        spacing: Style.space.s1
         RowLayout {
             Layout.fillWidth: true
-            Layout.topMargin: 12
-            Layout.leftMargin: 20
-            Layout.rightMargin: 20
+            Layout.topMargin: Style.space.s3
+            Layout.leftMargin: Style.space.s5
+            Layout.rightMargin: Style.space.s5
             spacing: 6
             Label { text: Style.t("Claude に聞く", "Ask Claude"); font.weight: Font.Bold; Layout.fillWidth: true; color: Style.foreground }
             IconButton {
@@ -56,15 +56,15 @@ Item {
                     MenuItem { text: Style.t("会話を削除", "Delete chat"); onTriggered: { const c = (pane.chat.history || []).find(h => h.current); if (c) WaveApp.aiDelete(c.id) } }
                 }
             }
-            Btn { text: Style.t("新しい会話", "New chat"); leftPadding: 12; rightPadding: 12; implicitHeight: 36; onClicked: WaveApp.aiClear() }
+            Btn { text: Style.t("新しい会話", "New chat"); leftPadding: Style.space.s3; rightPadding: Style.space.s3; implicitHeight: 36; onClicked: WaveApp.aiClear() }
             IconButton { iconName: "window-close-symbolic"; tip: Style.t("閉じる", "Close"); size: 16; onClicked: pane.shell.closeAi() }
         }
         ListView {
             id: list
             Layout.fillWidth: true
             Layout.fillHeight: true
-            Layout.leftMargin: 16
-            Layout.rightMargin: 20
+            Layout.leftMargin: Style.space.s4
+            Layout.rightMargin: Style.space.s5
             clip: true
             spacing: 10
             model: pane.chat.messages || []
@@ -72,8 +72,8 @@ Item {
             header: Label {
                 width: ListView.view.width
                 visible: (pane.chat.messages || []).length === 0
-                topPadding: 8
-                bottomPadding: 8
+                topPadding: Style.space.s2
+                bottomPadding: Style.space.s2
                 wrapMode: Text.Wrap
                 font.pixelSize: 12
                 color: Style.dim
@@ -88,8 +88,8 @@ Item {
         }
         Column {
             Layout.fillWidth: true
-            Layout.leftMargin: 12
-            Layout.rightMargin: 16
+            Layout.leftMargin: Style.space.s3
+            Layout.rightMargin: Style.space.s4
             visible: (pane.chat.messages || []).length === 0
             Repeater {
                 model: pane.suggestions
@@ -104,20 +104,20 @@ Item {
         }
         RowLayout {
             Layout.fillWidth: true
-            Layout.leftMargin: 16
-            Layout.rightMargin: 20
-            Layout.bottomMargin: 12
-            spacing: 8
+            Layout.leftMargin: Style.space.s4
+            Layout.rightMargin: Style.space.s5
+            Layout.bottomMargin: Style.space.s3
+            spacing: Style.space.s2
             TextArea {
                 id: input
                 Layout.fillWidth: true
                 Layout.preferredHeight: Math.min(140, Math.max(44, implicitHeight))
                 wrapMode: TextEdit.Wrap
                 verticalAlignment: TextEdit.AlignVCenter
-                leftPadding: 12
-                rightPadding: 12
-                topPadding: 12
-                bottomPadding: 12
+                leftPadding: Style.space.s3
+                rightPadding: Style.space.s3
+                topPadding: Style.space.s3
+                bottomPadding: Style.space.s3
                 background: Rectangle { radius: Style.radius; color: Style.raised; border.color: input.activeFocus ? Style.accent : Style.border }
                 // 空のときの案内（Material の浮く案内は枠の外に出るので、自分で置く）
                 Label { x: 12; anchors.verticalCenter: parent.verticalCenter; visible: input.text === "" && !input.inputMethodComposing; text: Style.t("Claude に聞く", "Ask Claude"); color: Style.dim }

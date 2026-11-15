@@ -37,7 +37,7 @@ Flickable {
         x: Math.max(24, (page.width - 720) / 2)
         y: 24
         width: Math.min(720, page.width - 48)
-        spacing: 24
+        spacing: Style.space.s6
 
         Label { text: Style.t("設定", "Settings"); font.pixelSize: 28; font.weight: Font.Bold; color: Style.foreground }
 
@@ -130,7 +130,7 @@ Flickable {
             title: Style.t("このアプリについて", "About")
             Row_ { title: "wave for Linux " + page.s.version + Style.t("（QML 版）", " (QML)"); subtitle: Style.t("ログイン情報と Claude の接続は GNOME のキーリング（Secret Service）に保存し、ファイルには書きません", "Your sign-in and Claude connection are stored in the GNOME keyring (Secret Service), never in files") }
             Row_ { title: Style.t("データの場所", "Data folder"); subtitle: page.s.data_dir }
-            Row_ { title: Style.t("画面の見た目", "Appearance"); subtitle: Style.omarchy ? (Style.ja ? "Omarchy のテーマの色と、Hyprland の角の丸み（" + Style.radius + "px）に合わせています" : "Matches your Omarchy theme colors and Hyprland corner rounding (" + Style.radius + "px)") : Style.t("Omarchy のテーマが見つからないので、Material の既定の色です", "No Omarchy theme found, so Material's default colors are used") }
+            Row_ { title: Style.t("画面の見た目", "Appearance"); subtitle: Style.omarchy ? (Style.ja ? "Omarchy のテーマの色と、Hyprland の角の丸み（" + Style.radius + "px）に合わせています" : "Matches your Omarchy theme colors and Hyprland corner rounding (" + Style.radius + "px)") : Style.t("Omarchy のテーマが見つからないので、kasane の既定の色です", "No Omarchy theme found, so kasane's default colors are used") }
         }
     }
 
@@ -139,7 +139,7 @@ Flickable {
         default property alias rows: card.data
         property string title
         Layout.fillWidth: true
-        spacing: 8
+        spacing: Style.space.s2
         Label { text: parent.title; font.weight: Font.Bold; color: Style.foreground }
         Rectangle {
             Layout.fillWidth: true
@@ -156,7 +156,7 @@ Flickable {
         property string subtitle
         Layout.fillWidth: true
         Layout.margins: 14
-        spacing: 12
+        spacing: Style.space.s3
         ColumnLayout {
             Layout.fillWidth: true
             spacing: 2

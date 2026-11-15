@@ -28,7 +28,7 @@ ColumnLayout {
         Layout.fillWidth: true
         Layout.preferredHeight: shelf.cardSize + 104
         orientation: ListView.Horizontal
-        spacing: 16
+        spacing: Style.space.s4
         clip: true
         boundsBehavior: Flickable.StopAtBounds
         model: shelf.items

@@ -29,21 +29,21 @@ Item {
 
     ColumnLayout {
         anchors.fill: parent
-        spacing: 4
+        spacing: Style.space.s1
 
         RowLayout {
             Layout.fillWidth: true
             Layout.topMargin: 10
-            Layout.leftMargin: 16
-            Layout.rightMargin: 8
+            Layout.leftMargin: Style.space.s4
+            Layout.rightMargin: Style.space.s2
             IconImage { source: Style.icon("folder-music-symbolic"); sourceSize.width: 16; sourceSize.height: 16; color: Style.foreground }
             Label { text: Style.t("ライブラリ", "Library"); font.weight: Font.Bold; Layout.fillWidth: true; color: Style.foreground }
             IconButton { iconName: "list-add-symbolic"; tip: Style.t("プレイリストを作成", "Create playlist"); visible: WaveApp.loggedIn; onClicked: Style.nav.createPlaylist(null) }
         }
         ChipStrip {
             Layout.fillWidth: true
-            Layout.leftMargin: 12
-            Layout.rightMargin: 12
+            Layout.leftMargin: Style.space.s3
+            Layout.rightMargin: Style.space.s3
             Layout.preferredHeight: 34
             spacing: 6
                 Repeater {
@@ -58,9 +58,9 @@ Item {
         }
         RowLayout {
             Layout.fillWidth: true
-            Layout.leftMargin: 12
-            Layout.rightMargin: 8
-            spacing: 4
+            Layout.leftMargin: Style.space.s3
+            Layout.rightMargin: Style.space.s2
+            spacing: Style.space.s1
             TextField {
                 id: search
                 Layout.fillWidth: true
@@ -74,7 +74,7 @@ Item {
                 font.pointSize: text === "" && roomRatio < 1 ? Math.max(basePoints * 0.75, basePoints * roomRatio) : basePoints
                 topPadding: 0
                 bottomPadding: 0
-                leftPadding: 32
+                leftPadding: Style.space.s8
                 verticalAlignment: TextInput.AlignVCenter
                 background: Rectangle { radius: Style.small; color: Style.raised }
                 onTextChanged: pane.query = text
@@ -105,7 +105,7 @@ Item {
         Label {
             visible: !WaveApp.loggedIn
             Layout.fillWidth: true
-            Layout.margins: 16
+            Layout.margins: Style.space.s4
             wrapMode: Text.Wrap
             text: Style.t("ログインすると、YouTube Music のプレイリスト・アーティスト・アルバムがここに並びます。", "Sign in to see your YouTube Music playlists, artists and albums here.")
             color: Style.dim
@@ -123,9 +123,9 @@ Item {
             delegate: ItemDelegate {
                 width: ListView.view.width
                 height: 58
-                leftPadding: 12
+                leftPadding: Style.space.s3
                 contentItem: RowLayout {
-                    spacing: 12
+                    spacing: Style.space.s3
                     LibraryArt { entry: modelData; Layout.preferredWidth: 46; Layout.preferredHeight: 46 }
                     ColumnLayout {
                         spacing: 1
@@ -144,7 +144,7 @@ Item {
             visible: WaveApp.loggedIn && pane.settings.library_grid
             Layout.fillWidth: true
             Layout.fillHeight: true
-            Layout.leftMargin: 12
+            Layout.leftMargin: Style.space.s3
             clip: true
             cellWidth: Math.floor((width - 4) / 2)
             cellHeight: cellWidth + 30
@@ -154,8 +154,8 @@ Item {
                 height: grid.cellHeight
                 Column {
                     anchors.fill: parent
-                    anchors.margins: 4
-                    spacing: 4
+                    anchors.margins: Style.space.s1
+                    spacing: Style.space.s1
                     LibraryArt { entry: modelData; width: parent.width; height: parent.width }
                     Label { text: modelData.title; width: parent.width; elide: Text.ElideRight; font.pixelSize: 12; color: Style.foreground }
                 }

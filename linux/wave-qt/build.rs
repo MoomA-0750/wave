@@ -40,6 +40,7 @@ const QML: &[&str] = &[
     "qml/PipWindow.qml",
     "qml/SongMenu.qml",
     "qml/Section.qml",
+    "qml/Kasane.qml",
 ];
 
 fn main() {
