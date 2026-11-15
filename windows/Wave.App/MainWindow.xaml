@@ -34,7 +34,7 @@
             </TitleBar.LeftHeader>
             <TitleBar.Content>
                 <!-- 中身の置き場は左右の欄と窓の操作ボタンの間なので、そのままだと左へ寄る。CenterSearch で窓の中央へ寄せる -->
-                <StackPanel x:Name="SearchBar" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center" SizeChanged="OnSearchBarSizeChanged">
+                <StackPanel x:Name="SearchBar" Orientation="Horizontal" Spacing="{StaticResource KasaneSpace2}" HorizontalAlignment="Center" SizeChanged="OnSearchBarSizeChanged">
                     <Button x:Name="HomeButton" Click="OnHome" ToolTipService.ToolTip="{x:Bind app:L.T('ホーム', 'Home')}" CornerRadius="16" Height="32" Width="40" Padding="0">
                         <FontIcon Glyph="&#xE80F;" FontSize="14" />
                     </Button>
@@ -47,7 +47,7 @@
                         </AutoSuggestBox.KeyboardAccelerators>
                         <AutoSuggestBox.ItemTemplate>
                             <DataTemplate x:DataType="app:Suggestion">
-                                <Grid ColumnSpacing="12" Padding="0,4">
+                                <Grid ColumnSpacing="{StaticResource KasaneSpace3}" Padding="0,4">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="36" />
                                         <ColumnDefinition Width="*" />
@@ -86,7 +86,7 @@
             </TitleBar.RightHeader>
         </TitleBar>
 
-        <Grid x:Name="Body" Grid.Row="1" Padding="8,0,8,0" ColumnSpacing="8">
+        <Grid x:Name="Body" Grid.Row="1" Padding="8,0,8,0" ColumnSpacing="{StaticResource KasaneSpace2}">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition x:Name="LibraryColumn" Width="300" />
                 <ColumnDefinition Width="*" />
@@ -113,9 +113,9 @@
                     </Grid>
                     <!-- 種類のチップ。窓が狭いと右端が切れるので、横に流せるようにする（QML 版の Flickable と同じ） -->
                     <ScrollViewer Grid.Row="1" HorizontalScrollMode="Enabled" HorizontalScrollBarVisibility="Hidden" VerticalScrollMode="Disabled" VerticalScrollBarVisibility="Disabled">
-                        <StackPanel x:Name="FilterChips" Orientation="Horizontal" Spacing="4" Padding="12,4,8,4" />
+                        <StackPanel x:Name="FilterChips" Orientation="Horizontal" Spacing="{StaticResource KasaneSpace1}" Padding="12,4,8,4" />
                     </ScrollViewer>
-                    <Grid Grid.Row="2" Padding="12,4,8,4" ColumnSpacing="4">
+                    <Grid Grid.Row="2" Padding="12,4,8,4" ColumnSpacing="{StaticResource KasaneSpace1}">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
@@ -145,7 +145,7 @@
                         </ListView.ItemContainerStyle>
                         <ListView.ItemTemplate>
                             <DataTemplate x:DataType="app:LibraryEntry">
-                                <Grid ColumnSpacing="12" RightTapped="OnLibraryRightTapped">
+                                <Grid ColumnSpacing="{StaticResource KasaneSpace3}" RightTapped="OnLibraryRightTapped">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="48" />
                                         <ColumnDefinition Width="*" />
@@ -167,7 +167,7 @@
                     <GridView x:Name="LibraryGrid" Grid.Row="3" SelectionMode="None" IsItemClickEnabled="True" ItemClick="OnLibraryClick" Padding="10,4,4,8" Visibility="Collapsed">
                         <GridView.ItemTemplate>
                             <DataTemplate x:DataType="app:LibraryEntry">
-                                <StackPanel Width="96" Spacing="4" Padding="0,0,0,6" RightTapped="OnLibraryRightTapped">
+                                <StackPanel Width="96" Spacing="{StaticResource KasaneSpace1}" Padding="0,0,0,6" RightTapped="OnLibraryRightTapped">
                                     <Border Width="96" Height="96" CornerRadius="{x:Bind app:Ui.Radius(IsArtist)}" Background="{x:Bind CoverBackground}">
                                         <Grid>
                                             <FontIcon Glyph="{x:Bind Glyph}" Foreground="White" FontSize="28" Visibility="{x:Bind app:Ui.Show(HasGlyph)}" />
@@ -179,7 +179,7 @@
                             </DataTemplate>
                         </GridView.ItemTemplate>
                     </GridView>
-                    <StackPanel x:Name="LoggedOutPanel" Grid.Row="3" Spacing="12" Padding="16" Visibility="Collapsed">
+                    <StackPanel x:Name="LoggedOutPanel" Grid.Row="3" Spacing="{StaticResource KasaneSpace3}" Padding="{StaticResource KasanePadding4}" Visibility="Collapsed">
                         <TextBlock Text="{x:Bind app:L.T('ログインすると、YouTube Music のプレイリスト・アーティスト・アルバムがここに並びます。', 'Sign in to see your YouTube Music playlists, artists and albums here.')}" TextWrapping="Wrap" />
                         <Button Content="{x:Bind app:L.T('ログイン', 'Sign in')}" Style="{StaticResource AccentButtonStyle}" Click="OnLogin" />
                     </StackPanel>
@@ -193,7 +193,7 @@
                     <Frame x:Name="ContentFrame" Navigated="OnNavigated" />
                     <!-- 知らせ（Android のスナックバーと同じく、下の細いバーが消えるまでの残り時間を表す） -->
                     <!-- 箱の角で切り取り、バーを箱の下の縁に沿わせる -->
-                    <Border x:Name="ToastFrame" VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="16" MaxWidth="560" MinWidth="320"
+                    <Border x:Name="ToastFrame" VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="{StaticResource KasanePadding4}" MaxWidth="560" MinWidth="320"
                             CornerRadius="{ThemeResource ControlCornerRadius}" Visibility="Collapsed">
                         <Grid>
                             <InfoBar x:Name="Toast" IsOpen="False" Severity="Informational" IsClosable="True" Closed="OnToastClosed" />
@@ -208,23 +208,23 @@
             <Border x:Name="RightPane" Grid.Column="2" Style="{StaticResource PaneStyle}">
                 <Grid>
                     <ScrollViewer x:Name="NowPlayingView">
-                        <StackPanel Padding="16" Spacing="16">
+                        <StackPanel Padding="{StaticResource KasanePadding4}" Spacing="{StaticResource KasaneSpace4}">
                             <!-- Claude は上の帯のボタンから開く（右の欄には置かない） -->
                             <TextBlock Text="{x:Bind PaneHeader(Player.Current), Mode=OneWay}" Style="{StaticResource BodyStrongTextBlockStyle}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
                             <!-- ジャケットか、MV のある曲では映像（Spotify と同じ「曲｜動画」の切り替え） -->
                             <Grid>
-                                <Border x:Name="CoverBox" CornerRadius="8" Background="{ThemeResource ControlFillColorSecondaryBrush}" Height="{x:Bind CoverSize, Mode=OneWay}">
+                                <Border x:Name="CoverBox" CornerRadius="{StaticResource KasaneCornerRadiusLg}" Background="{ThemeResource ControlFillColorSecondaryBrush}" Height="{x:Bind CoverSize, Mode=OneWay}">
                                     <Grid>
                                         <Image x:Name="CoverImage" Source="{x:Bind app:Ui.Large(Player.Current.ThumbnailUrl), Mode=OneWay}" Stretch="UniformToFill" />
                                         <MediaPlayerElement x:Name="PaneVideo" AreTransportControlsEnabled="False" Stretch="Uniform" Visibility="Collapsed" IsHitTestVisible="False" />
-                                        <StackPanel x:Name="VideoNotePanel" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8">
+                                        <StackPanel x:Name="VideoNotePanel" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="{StaticResource KasaneSpace2}">
                                             <TextBlock x:Name="VideoNote" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" Foreground="White" Style="{StaticResource CaptionTextBlockStyle}" />
                                             <Button x:Name="VideoRetry" HorizontalAlignment="Center" Visibility="Collapsed" Click="OnVideoRetry" Content="{x:Bind app:L.T('もう一度', 'Retry')}" />
                                         </StackPanel>
                                     </Grid>
                                 </Border>
                                 <!-- 映像を小窓（PiP）で見る・窓の中で大きく見る -->
-                                <StackPanel x:Name="VideoExpand" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="8" Visibility="Collapsed" Orientation="Horizontal"
+                                <StackPanel x:Name="VideoExpand" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="{StaticResource KasanePadding2}" Visibility="Collapsed" Orientation="Horizontal"
                                             Background="#73000000" CornerRadius="16">
                                     <Button Style="{StaticResource IconButtonStyle}" Foreground="White" CornerRadius="16" Click="OnVideoPip" ToolTipService.ToolTip="{x:Bind app:L.T('小窓で見る', 'Picture in picture')}">
                                         <FontIcon Glyph="&#xEE49;" FontSize="13" />
@@ -241,7 +241,7 @@
                                                   Content="{x:Bind app:L.T('動画', 'Video')}" />
                                 </StackPanel>
                             </Grid>
-                            <Grid ColumnSpacing="8">
+                            <Grid ColumnSpacing="{StaticResource KasaneSpace2}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="Auto" />
@@ -265,17 +265,17 @@
                                 </Button>
                             </Grid>
                             <!-- 次の曲（Android と同じく歌詞の上） -->
-                            <StackPanel Padding="16" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" Spacing="8">
+                            <StackPanel Padding="{StaticResource KasanePadding4}" CornerRadius="{StaticResource KasaneCornerRadiusCard}" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" Spacing="{StaticResource KasaneSpace2}">
                                 <Grid>
                                     <TextBlock Text="{x:Bind app:L.T('次の曲', 'Up next')}" Style="{StaticResource BodyStrongTextBlockStyle}" />
                                     <HyperlinkButton Content="{x:Bind app:L.T('キューを開く', 'Open queue')}" HorizontalAlignment="Right" Padding="0" Click="OnShowQueue" />
                                 </Grid>
-                                <Grid ColumnSpacing="12" x:Name="NextSongPanel">
+                                <Grid ColumnSpacing="{StaticResource KasaneSpace3}" x:Name="NextSongPanel">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="44" />
                                         <ColumnDefinition Width="*" />
                                     </Grid.ColumnDefinitions>
-                                    <Border Width="44" Height="44" CornerRadius="4" Background="{ThemeResource ControlFillColorSecondaryBrush}">
+                                    <Border Width="44" Height="44" CornerRadius="{StaticResource KasaneCornerRadiusSm}" Background="{ThemeResource ControlFillColorSecondaryBrush}">
                                         <Image x:Name="NextImage" Stretch="UniformToFill" />
                                     </Border>
                                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
@@ -285,8 +285,8 @@
                                 </Grid>
                             </StackPanel>
                             <!-- 歌詞（無い曲では箱ごと出さない）。全文を中で送り、歌っている行へ滑らかに動かす -->
-                            <Button x:Name="LyricsCard" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Padding="16" CornerRadius="8" Click="OnOpenLyrics" Visibility="Collapsed">
-                                <StackPanel Spacing="8">
+                            <Button x:Name="LyricsCard" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Padding="{StaticResource KasanePadding4}" CornerRadius="{StaticResource KasaneCornerRadiusCard}" Click="OnOpenLyrics" Visibility="Collapsed">
+                                <StackPanel Spacing="{StaticResource KasaneSpace2}">
                                     <TextBlock Text="{x:Bind app:L.T('歌詞', 'Lyrics')}" Style="{StaticResource BodyStrongTextBlockStyle}" />
                                     <ScrollViewer x:Name="LyricsScroller" Height="190" IsHitTestVisible="False" VerticalScrollBarVisibility="Hidden" HorizontalScrollMode="Disabled">
                                         <StackPanel x:Name="LyricsPreview" Padding="0,0,0,160" />
@@ -306,7 +306,7 @@
                         </Grid.RowDefinitions>
                         <Grid Padding="16,12,8,4">
                             <TextBlock Text="{x:Bind app:L.T('Claude に聞く', 'Ask Claude')}" Style="{StaticResource BodyStrongTextBlockStyle}" VerticalAlignment="Center" />
-                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="4">
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="{StaticResource KasaneSpace1}">
                                 <Button Style="{StaticResource IconButtonStyle}" Click="OnAiHistory" ToolTipService.ToolTip="{x:Bind app:L.T('これまでの会話', 'Past chats')}">
                                     <FontIcon Glyph="&#xE81C;" FontSize="14" />
                                 </Button>
@@ -319,8 +319,8 @@
                         <ScrollViewer x:Name="AiScroller" Grid.Row="1" Padding="16,0">
                             <StackPanel x:Name="AiMessages" Spacing="10" Padding="0,8,0,16" />
                         </ScrollViewer>
-                        <StackPanel x:Name="AiSuggestions" Grid.Row="2" Spacing="4" Padding="16,4" />
-                        <Grid Grid.Row="3" Padding="16,4,16,12" ColumnSpacing="8">
+                        <StackPanel x:Name="AiSuggestions" Grid.Row="2" Spacing="{StaticResource KasaneSpace1}" Padding="16,4" />
+                        <Grid Grid.Row="3" Padding="16,4,16,12" ColumnSpacing="{StaticResource KasaneSpace2}">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
@@ -339,11 +339,11 @@
                         </Grid.RowDefinitions>
                         <Grid Padding="16,12,8,4">
                             <!-- キューと履歴の切り替え（Spotify と同じ） -->
-                            <StackPanel Orientation="Horizontal" Spacing="4">
+                            <StackPanel Orientation="Horizontal" Spacing="{StaticResource KasaneSpace1}">
                                 <ToggleButton x:Name="QueueTab" CornerRadius="14" Padding="14,4" MinWidth="0" IsChecked="True" Click="OnQueueTab" Content="{x:Bind app:L.T('キュー', 'Queue')}" />
                                 <ToggleButton x:Name="HistoryTab" CornerRadius="14" Padding="14,4" MinWidth="0" Click="OnHistoryTab" Content="{x:Bind app:L.T('履歴', 'History')}" />
                             </StackPanel>
-                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="4">
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="{StaticResource KasaneSpace1}">
                                 <HyperlinkButton x:Name="ClearQueueButton" Visibility="Collapsed" Click="OnClearQueue" Content="{x:Bind app:L.T('キューを消去', 'Clear queue')}" />
                                 <!-- 良いラジオの流れを残す（全端末。聴いた曲から先の曲までを新しいプレイリストに） -->
                                 <Button x:Name="SaveQueueButton" Style="{StaticResource IconButtonStyle}" Visibility="Collapsed" Click="OnSaveQueue"
@@ -356,7 +356,7 @@
                                 </Button>
                             </StackPanel>
                         </Grid>
-                        <StackPanel x:Name="QueueEmpty" Grid.Row="1" Spacing="6" Padding="24" VerticalAlignment="Center" Visibility="Collapsed">
+                        <StackPanel x:Name="QueueEmpty" Grid.Row="1" Spacing="6" Padding="{StaticResource KasanePadding6}" VerticalAlignment="Center" Visibility="Collapsed">
                             <TextBlock x:Name="QueueEmptyTitle" Text="{x:Bind app:L.T('キューは空です', 'Your queue is empty')}" Style="{StaticResource BodyStrongTextBlockStyle}" HorizontalAlignment="Center" />
                             <TextBlock x:Name="QueueEmptyText" Text="{x:Bind app:L.T('曲を再生すると、ここに次の曲が並びます', 'Play something and upcoming songs will show up here')}" Style="{StaticResource SubtleTextStyle}"
                                        HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" MaxLines="3" />
@@ -374,12 +374,12 @@
                                             <HyperlinkButton Visibility="{x:Bind app:Ui.Show(IsFlowHeader)}" HorizontalAlignment="Right" Padding="8,2" Click="OnClearFlow"
                                                              Content="{x:Bind app:L.T('消去', 'Clear')}" />
                                         </Grid>
-                                        <Grid ColumnSpacing="12" Padding="0,6">
+                                        <Grid ColumnSpacing="{StaticResource KasaneSpace3}" Padding="0,6">
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="44" />
                                                 <ColumnDefinition Width="*" />
                                             </Grid.ColumnDefinitions>
-                                            <Border Width="44" Height="44" CornerRadius="4" Background="{ThemeResource ControlFillColorSecondaryBrush}">
+                                            <Border Width="44" Height="44" CornerRadius="{StaticResource KasaneCornerRadiusSm}" Background="{ThemeResource ControlFillColorSecondaryBrush}">
                                                 <Image Source="{x:Bind app:Ui.Small(Song.ThumbnailUrl)}" Stretch="UniformToFill" />
                                             </Border>
                                             <StackPanel Grid.Column="1" VerticalAlignment="Center">
@@ -397,19 +397,19 @@
         </Grid>
 
         <!-- 再生の操作（Spotify の下の帯: 左に曲、中央にボタンと位置、右に歌詞・キュー・音量） -->
-        <Grid x:Name="PlayerBarRow" Grid.Row="2" MinHeight="88" Padding="16,10" ColumnSpacing="16">
+        <Grid x:Name="PlayerBarRow" Grid.Row="2" MinHeight="88" Padding="16,10" ColumnSpacing="{StaticResource KasaneSpace4}">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="3*" />
                 <ColumnDefinition Width="4*" MaxWidth="720" />
                 <ColumnDefinition Width="3*" />
             </Grid.ColumnDefinitions>
-            <Grid ColumnSpacing="12">
+            <Grid ColumnSpacing="{StaticResource KasaneSpace3}">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="56" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                <Border Width="56" Height="56" CornerRadius="6" Background="{ThemeResource ControlFillColorSecondaryBrush}" Tapped="OnArtTapped">
+                <Border Width="56" Height="56" CornerRadius="{StaticResource KasaneCornerRadiusSm}" Background="{ThemeResource ControlFillColorSecondaryBrush}" Tapped="OnArtTapped">
                     <Image Source="{x:Bind app:Ui.Small(Player.Current.ThumbnailUrl), Mode=OneWay}" Stretch="UniformToFill" />
                 </Border>
                 <StackPanel Grid.Column="1" VerticalAlignment="Center" MaxWidth="260">
@@ -427,7 +427,7 @@
             </Grid>
 
             <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="12">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="{StaticResource KasaneSpace3}">
                     <ToggleButton Style="{StaticResource IconToggleStyle}" IsChecked="{x:Bind Player.Shuffle, Mode=OneWay}" IsEnabled="{x:Bind Player.CanChangeModes, Mode=OneWay}" Click="OnShuffle" ToolTipService.ToolTip="{x:Bind app:L.T('シャッフル', 'Shuffle')}">
                         <FontIcon Glyph="&#xE8B1;" FontSize="16" />
                     </ToggleButton>
@@ -448,7 +448,7 @@
                     </ToggleButton>
                 </StackPanel>
                 <Grid>
-                    <Grid ColumnSpacing="8" Visibility="{x:Bind app:Ui.Hide(Player.IsLive), Mode=OneWay}">
+                    <Grid ColumnSpacing="{StaticResource KasaneSpace2}" Visibility="{x:Bind app:Ui.Hide(Player.IsLive), Mode=OneWay}">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="44" />
                             <ColumnDefinition Width="*" />
@@ -468,7 +468,7 @@
                 </Grid>
             </StackPanel>
 
-            <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Spacing="4">
+            <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Spacing="{StaticResource KasaneSpace1}">
                 <ToggleButton x:Name="LyricsToggle" Style="{StaticResource IconToggleStyle}" Click="OnLyricsToggle" ToolTipService.ToolTip="{x:Bind app:L.T('歌詞', 'Lyrics')}">
                     <FontIcon Glyph="&#xE720;" FontSize="16" />
                 </ToggleButton>
@@ -483,7 +483,7 @@
                     </StackPanel>
                     <Button.Flyout>
                         <Flyout x:Name="DevicesFlyout" Placement="Top" Opening="OnDevicesOpening">
-                            <StackPanel x:Name="DevicesPanel" Width="320" Spacing="4" />
+                            <StackPanel x:Name="DevicesPanel" Width="320" Spacing="{StaticResource KasaneSpace1}" />
                         </Flyout>
                     </Button.Flyout>
                 </Button>
@@ -517,7 +517,7 @@
                     <ColumnDefinition Width="3*" />
                     <ColumnDefinition Width="2*" />
                 </Grid.ColumnDefinitions>
-                <Grid RowSpacing="20">
+                <Grid RowSpacing="{StaticResource KasaneSpace5}">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
@@ -537,7 +537,7 @@
                             <FontIcon Glyph="&#xE740;" FontSize="14" />
                         </Button>
                     </Grid>
-                    <StackPanel Grid.Row="2" Spacing="4">
+                    <StackPanel Grid.Row="2" Spacing="{StaticResource KasaneSpace1}">
                         <HyperlinkButton Padding="0" Click="OnAlbumLink" Foreground="{ThemeResource TextFillColorPrimaryBrush}">
                             <TextBlock x:Name="FullTitle" FontSize="44" FontWeight="Bold" TextTrimming="CharacterEllipsis" />
                         </HyperlinkButton>
@@ -551,7 +551,7 @@
                     <StackPanel x:Name="FullLyrics" Padding="0,0,0,400" />
                 </ScrollViewer>
             </Grid>
-            <Button HorizontalAlignment="Right" VerticalAlignment="Top" Margin="16" Style="{StaticResource IconButtonStyle}" Click="OnFullScreenToggle"
+            <Button HorizontalAlignment="Right" VerticalAlignment="Top" Margin="{StaticResource KasanePadding4}" Style="{StaticResource IconButtonStyle}" Click="OnFullScreenToggle"
                     ToolTipService.ToolTip="{x:Bind app:L.T('全画面を終える (Esc)', 'Exit full screen (Esc)')}">
                 <FontIcon Glyph="&#xE73F;" FontSize="16" />
             </Button>
@@ -559,7 +559,7 @@
             <Grid x:Name="VideoOnlyView" Visibility="Collapsed" Background="Black" DoubleTapped="OnVideoOnlyDoubleTapped">
                 <MediaPlayerElement x:Name="OnlyVideo" AreTransportControlsEnabled="False" Stretch="Uniform" IsHitTestVisible="False" />
                 <!-- 小窓（PiP）・窓の全画面・閉じる（小窓では元の窓に戻す）。右上は窓の最小化・閉じるのボタンと重なるので右下に置く -->
-                <StackPanel HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="12" Orientation="Horizontal" Spacing="2" Background="#73000000" CornerRadius="18" Padding="2">
+                <StackPanel HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="{StaticResource KasanePadding3}" Orientation="Horizontal" Spacing="2" Background="#73000000" CornerRadius="18" Padding="2">
                     <Button Style="{StaticResource IconButtonStyle}" Foreground="White" Click="OnVideoPip"
                             ToolTipService.ToolTip="{x:Bind app:L.T('小窓で見る', 'Picture in picture')}">
                         <FontIcon x:Name="VideoPipIcon" Glyph="&#xEE49;" FontSize="15" />

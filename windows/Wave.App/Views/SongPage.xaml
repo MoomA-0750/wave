@@ -7,12 +7,12 @@
         <StackPanel Padding="12,0,12,24">
             <Grid>
                 <Rectangle x:Name="Gradient" Height="360" VerticalAlignment="Top" Margin="-12,0" />
-                <Grid Padding="12,40,12,24" ColumnSpacing="24">
+                <Grid Padding="12,40,12,24" ColumnSpacing="{StaticResource KasaneSpace6}">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <Border Width="220" Height="220" CornerRadius="8" VerticalAlignment="Bottom" Background="{ThemeResource ControlFillColorSecondaryBrush}">
+                    <Border Width="220" Height="220" CornerRadius="{StaticResource KasaneCornerRadiusLg}" VerticalAlignment="Bottom" Background="{ThemeResource ControlFillColorSecondaryBrush}">
                         <Image x:Name="Cover" Stretch="UniformToFill" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Bottom">

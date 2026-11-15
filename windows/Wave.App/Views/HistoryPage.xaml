@@ -7,7 +7,7 @@
     <ListView x:Name="Tracks" ItemTemplate="{StaticResource TrackRowTemplate}" ItemContainerStyle="{StaticResource TrackListItemStyle}"
               DoubleTapped="OnDoubleTapped" Padding="12,0,12,24">
         <ListView.Header>
-            <StackPanel Padding="12,32,12,16" Spacing="8">
+            <StackPanel Padding="12,32,12,16" Spacing="{StaticResource KasaneSpace2}">
                 <TextBlock Text="{x:Bind app:L.T('再生履歴', 'History')}" FontSize="48" FontWeight="Bold" />
                 <ProgressRing x:Name="LoadingRing" IsActive="True" HorizontalAlignment="Left" />
                 <TextBlock x:Name="ErrorText" Visibility="Collapsed" />

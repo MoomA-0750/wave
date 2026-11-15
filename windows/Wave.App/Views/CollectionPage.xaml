@@ -9,12 +9,12 @@
             <StackPanel>
                 <Grid>
                     <Rectangle x:Name="Gradient" Height="360" VerticalAlignment="Top" Margin="-12,0" />
-                    <Grid Padding="12,40,12,24" ColumnSpacing="24">
+                    <Grid Padding="12,40,12,24" ColumnSpacing="{StaticResource KasaneSpace6}">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
-                        <Border x:Name="CoverBorder" Width="220" Height="220" CornerRadius="8" VerticalAlignment="Bottom" Background="{ThemeResource ControlFillColorSecondaryBrush}">
+                        <Border x:Name="CoverBorder" Width="220" Height="220" CornerRadius="{StaticResource KasaneCornerRadiusLg}" VerticalAlignment="Bottom" Background="{ThemeResource ControlFillColorSecondaryBrush}">
                             <Grid>
                                 <FontIcon x:Name="LikedIcon" Glyph="&#xEB52;" FontSize="72" Foreground="White" Visibility="Collapsed" />
                                 <Image x:Name="Cover" Stretch="UniformToFill" />
@@ -33,7 +33,7 @@
                     </Grid>
                 </Grid>
                 <Grid Padding="12,8,12,16">
-                <StackPanel Orientation="Horizontal" Spacing="16">
+                <StackPanel Orientation="Horizontal" Spacing="{StaticResource KasaneSpace4}">
                     <Button x:Name="PlayButton" Style="{StaticResource PlayCircleButtonStyle}" Click="OnPlay" ToolTipService.ToolTip="{x:Bind app:L.T('再生', 'Play')}" Visibility="Collapsed">
                         <FontIcon x:Name="PlayIcon" Glyph="&#xF5B0;" FontSize="20" />
                     </Button>
@@ -46,7 +46,7 @@
                         <FontIcon Glyph="&#xE712;" FontSize="20" />
                     </Button>
                     <!-- ダウンロード（ADR-0016 の 15）: 取っていない／取っている途中（何曲中何曲）／取り終えた。取っているものを押すと、消すか確かめる -->
-                    <StackPanel Orientation="Horizontal" Spacing="4">
+                    <StackPanel Orientation="Horizontal" Spacing="{StaticResource KasaneSpace1}">
                         <Button x:Name="DownloadButton" Style="{StaticResource IconButtonStyle}" Click="OnDownload" Visibility="Collapsed" Width="40" Height="40">
                             <Grid>
                                 <ProgressRing x:Name="DownloadRing" Width="30" Height="30" IsIndeterminate="False" Maximum="1" Visibility="Collapsed" />
@@ -58,7 +58,7 @@
                     <ProgressRing x:Name="LoadingRing" IsActive="True" Width="20" Height="20" />
                 </StackPanel>
                 <!-- 右端: 一覧の中を探す（🔍で開く）と並べ替え（Spotify と同じ） -->
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Spacing="8">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Spacing="{StaticResource KasaneSpace2}">
                     <Button Style="{StaticResource IconButtonStyle}" Click="OnSearchToggle" ToolTipService.ToolTip="{x:Bind app:L.T('この一覧の中を検索', 'Search in this list')}">
                         <FontIcon Glyph="&#xE721;" FontSize="16" />
                     </Button>
@@ -73,13 +73,13 @@
                 </StackPanel>
                 </Grid>
                 <!-- 曲の種類で絞る（動画や歌ってみたと、ふつうの曲を分ける。Android と同じ） -->
-                <StackPanel Orientation="Horizontal" Spacing="8" Padding="12,0,12,12">
+                <StackPanel Orientation="Horizontal" Spacing="{StaticResource KasaneSpace2}" Padding="12,0,12,12">
                     <ToggleButton x:Name="KindAll" CornerRadius="14" Padding="14,4" IsChecked="True" Click="OnKindChip" Content="{x:Bind app:L.T('すべて', 'All')}" />
                     <ToggleButton x:Name="KindSongs" CornerRadius="14" Padding="14,4" Click="OnKindChip" Tag="MUSIC_VIDEO_TYPE_ATV" Content="{x:Bind app:L.T('曲', 'Songs')}" />
                     <ToggleButton x:Name="KindVideos" CornerRadius="14" Padding="14,4" Click="OnKindChip" Tag="MUSIC_VIDEO_TYPE_OMV" Content="{x:Bind app:L.T('MV', 'Music videos')}" />
                     <ToggleButton x:Name="KindUserVideos" CornerRadius="14" Padding="14,4" Click="OnKindChip" Tag="MUSIC_VIDEO_TYPE_UGC" Content="{x:Bind app:L.T('その他の動画（歌ってみた・ライブなど）', 'Other videos (covers, live…)')}" />
                 </StackPanel>
-                <Grid Padding="12,0,12,8" ColumnSpacing="12" BorderThickness="0,0,0,1" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}">
+                <Grid Padding="12,0,12,8" ColumnSpacing="{StaticResource KasaneSpace3}" BorderThickness="0,0,0,1" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="32" />
                         <ColumnDefinition Width="3*" />
@@ -98,7 +98,7 @@
         </ListView.Header>
         <ListView.Footer>
             <!-- 自分のプレイリストの一番下の「おすすめの曲」（YouTube Music の候補。＋で足す・「更新」で別の候補。Spotify と同じ） -->
-            <StackPanel x:Name="SuggestionsPanel" Visibility="Collapsed" Margin="0,32,0,0" Spacing="4">
+            <StackPanel x:Name="SuggestionsPanel" Visibility="Collapsed" Margin="0,32,0,0" Spacing="{StaticResource KasaneSpace1}">
                 <Grid Padding="12,0">
                     <StackPanel>
                         <TextBlock Text="{x:Bind app:L.T('おすすめの曲', 'Recommended songs')}" Style="{StaticResource SubtitleTextBlockStyle}" />

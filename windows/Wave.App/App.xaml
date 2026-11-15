@@ -5,6 +5,8 @@
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
                 <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
+                <!-- kasane の角丸・余白（kasane-sync で写したもの）。Fluent の ControlCornerRadius・OverlayCornerRadius を上書きするので XamlControlsResources の後 -->
+                <ResourceDictionary Source="Kasane.xaml" />
                 <controls:Templates xmlns:controls="using:Wave.App.Controls" />
             </ResourceDictionary.MergedDictionaries>
 

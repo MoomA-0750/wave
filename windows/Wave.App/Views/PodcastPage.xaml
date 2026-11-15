@@ -14,15 +14,15 @@
         </ListView.ItemContainerStyle>
         <ListView.Header>
             <StackPanel>
-                <Grid Padding="12,40,12,24" ColumnSpacing="24">
+                <Grid Padding="12,40,12,24" ColumnSpacing="{StaticResource KasaneSpace6}">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <Border Width="220" Height="220" CornerRadius="8" VerticalAlignment="Top" Background="{ThemeResource ControlFillColorSecondaryBrush}">
+                    <Border Width="220" Height="220" CornerRadius="{StaticResource KasaneCornerRadiusLg}" VerticalAlignment="Top" Background="{ThemeResource ControlFillColorSecondaryBrush}">
                         <Image x:Name="Cover" Stretch="UniformToFill" />
                     </Border>
-                    <StackPanel Grid.Column="1" VerticalAlignment="Bottom" Spacing="4">
+                    <StackPanel Grid.Column="1" VerticalAlignment="Bottom" Spacing="{StaticResource KasaneSpace1}">
                         <TextBlock Text="{x:Bind app:L.T('ポッドキャスト', 'Podcast')}" Style="{StaticResource BodyStrongTextBlockStyle}" />
                         <TextBlock x:Name="TitleText" FontSize="48" FontWeight="Bold" TextTrimming="CharacterEllipsis" MaxLines="2" TextWrapping="Wrap" />
                         <TextBlock x:Name="AuthorText" Style="{StaticResource BodyStrongTextBlockStyle}" TextTrimming="CharacterEllipsis" />
@@ -31,7 +31,7 @@
                         <HyperlinkButton x:Name="MoreLink" Padding="0" Visibility="Collapsed" Click="OnMoreDescription" Content="{x:Bind app:L.T('すべて表示', 'Show more')}" />
                     </StackPanel>
                 </Grid>
-                <StackPanel Orientation="Horizontal" Spacing="16" Padding="12,0,12,16">
+                <StackPanel Orientation="Horizontal" Spacing="{StaticResource KasaneSpace4}" Padding="12,0,12,16">
                     <Button x:Name="PlayButton" Style="{StaticResource PlayCircleButtonStyle}" Click="OnPlay" ToolTipService.ToolTip="{x:Bind app:L.T('再生', 'Play')}" Visibility="Collapsed">
                         <FontIcon Glyph="&#xF5B0;" FontSize="20" />
                     </Button>
@@ -43,12 +43,12 @@
         </ListView.Header>
         <ListView.ItemTemplate>
             <DataTemplate x:DataType="music:PodcastEpisode">
-                <Grid Padding="0,10" ColumnSpacing="16" Background="Transparent" RightTapped="OnRowRightTapped">
+                <Grid Padding="0,10" ColumnSpacing="{StaticResource KasaneSpace4}" Background="Transparent" RightTapped="OnRowRightTapped">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <Border Width="112" Height="63" CornerRadius="6" VerticalAlignment="Top" Background="{ThemeResource ControlFillColorSecondaryBrush}">
+                    <Border Width="112" Height="63" CornerRadius="{StaticResource KasaneCornerRadiusSm}" VerticalAlignment="Top" Background="{ThemeResource ControlFillColorSecondaryBrush}">
                         <Image Source="{x:Bind app:Ui.Small(Song.ThumbnailUrl)}" Stretch="UniformToFill" />
                     </Border>
                     <StackPanel Grid.Column="1" Spacing="2">

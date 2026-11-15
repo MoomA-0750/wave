@@ -32,13 +32,13 @@
             </ListView.ItemTemplate>
         </ListView>
         <ScrollViewer x:Name="PlainView" Visibility="Collapsed">
-            <TextBlock x:Name="PlainText" FontSize="26" FontWeight="SemiBold" TextWrapping="Wrap" Margin="40" LineHeight="40" IsTextSelectionEnabled="True" />
+            <TextBlock x:Name="PlainText" FontSize="26" FontWeight="SemiBold" TextWrapping="Wrap" Margin="{StaticResource KasanePadding10}" LineHeight="40" IsTextSelectionEnabled="True" />
         </ScrollViewer>
         <!-- 出典は歌詞に重ねず、下の段に置く -->
         <Border Grid.Row="1" Padding="40,8,40,12">
             <TextBlock x:Name="SourceText" Style="{StaticResource SubtleTextStyle}" />
         </Border>
-        <StackPanel x:Name="EmptyPanel" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="8" Visibility="Collapsed">
+        <StackPanel x:Name="EmptyPanel" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="{StaticResource KasaneSpace2}" Visibility="Collapsed">
             <TextBlock x:Name="EmptyText" Style="{StaticResource SubtitleTextBlockStyle}" HorizontalAlignment="Center" />
             <!-- 読み込みに失敗したときだけ（Android と同じ） -->
             <Button x:Name="RetryButton" HorizontalAlignment="Center" Visibility="Collapsed" Click="OnRetry" Content="{x:Bind local:LyricsPage.RetryText}" />

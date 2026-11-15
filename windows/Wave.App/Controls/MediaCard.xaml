@@ -3,7 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:app="using:Wave.App">
     <!-- 棚のカード（Spotify と同じ: 画像・名前・補足。乗せると再生ボタンが出る） -->
-    <Grid x:Name="Root" Width="{StaticResource CardWidth}" Padding="8" CornerRadius="8" RowSpacing="8"
+    <Grid x:Name="Root" Width="{StaticResource CardWidth}" Padding="{StaticResource KasanePadding2}" CornerRadius="{StaticResource KasaneCornerRadiusLg}" RowSpacing="{StaticResource KasaneSpace2}"
           Background="Transparent" PointerEntered="OnEnter" PointerExited="OnExit" Tapped="OnTapped"
           RightTapped="OnRightTapped">
         <Grid.RowDefinitions>
