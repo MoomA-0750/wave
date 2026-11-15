@@ -192,15 +192,15 @@ private struct LivePostCard: View {
 
     var body: some View {
         Button { if let url = URL(string: post.url) { NSWorkspace.shared.open(url) } } label: {
-            VStack(alignment: .leading, spacing: 6) {
-                if let url = post.imageUrl { RemoteImage(url: Ui.resize(url, 520)).frame(height: 140).clipShape(RoundedRectangle(cornerRadius: 4)) }
+            VStack(alignment: .leading, spacing: Kasane.Space.s2) {
+                if let url = post.imageUrl { RemoteImage(url: Ui.resize(url, 520)).frame(height: 140).clipShape(RoundedRectangle(cornerRadius: Kasane.Radius.sm, style: Kasane.cornerStyle)) }
                 Text(post.text).lineLimit(6).multilineTextAlignment(.leading)
                 if let published = post.publishedText { Text(published).subtle() }
             }
             .padding(Kasane.Space.s3)
             .frame(width: 260, alignment: .topLeading)
             .frame(maxHeight: .infinity, alignment: .top)
-            .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.06)))
+            .background(RoundedRectangle(cornerRadius: Kasane.Radius.base, style: Kasane.cornerStyle).fill(Color.primary.opacity(0.06)))
         }
         .buttonStyle(.plain)
     }
@@ -216,7 +216,7 @@ struct SongPageView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(alignment: .bottom, spacing: Kasane.Space.s6) {
-                    Cover(url: Ui.large(song.thumbnailUrl), size: 220, radius: 8)
+                    Cover(url: Ui.large(song.thumbnailUrl), size: 220, radius: Kasane.Radius.base)
                     VStack(alignment: .leading, spacing: 0) {
                         Text(L.t("曲", "Song")).font(.body.weight(.semibold))
                         Text(song.title).font(.system(size: 48, weight: .bold)).lineLimit(2).minimumScaleFactor(0.5).padding(.vertical, Kasane.Space.s1)
@@ -239,7 +239,7 @@ struct SongPageView: View {
                     }
                     row(L.t("曲のリンクをコピー", "Copy song link"), "link") { SongActions.copyLink(song) }
                     ShareLink(item: SongActions.url(song), subject: Text(song.title), message: Text(SongActions.shareText(song))) {
-                        Label(L.t("ほかのアプリで共有…", "Share with…"), systemImage: "square.and.arrow.up").padding(.horizontal, Kasane.Space.s3).padding(.vertical, 10)
+                        Label(L.t("ほかのアプリで共有…", "Share with…"), systemImage: "square.and.arrow.up").padding(.horizontal, Kasane.Space.s3).padding(.vertical, Kasane.Space.s3)
                     }
                     .buttonStyle(.plain)
                 }
@@ -284,7 +284,7 @@ struct HoverRow<Content: View>: View {
         Button(action: action) {
             content()
                 .padding(.horizontal, Kasane.Space.s3)
-                .padding(.vertical, 10)
+                .padding(.vertical, Kasane.Space.s3)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(RoundedRectangle(cornerRadius: Kasane.Radius.sm, style: Kasane.cornerStyle).fill(hover ? Color.primary.opacity(0.07) : .clear))
                 .contentShape(Rectangle())

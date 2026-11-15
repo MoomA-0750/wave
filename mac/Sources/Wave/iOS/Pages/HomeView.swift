@@ -236,9 +236,9 @@ private struct RecentGrid: View {
                         Spacer(minLength: 4)
                     }
                     .frame(height: 56)
-                    .background(.fill.tertiary, in: RoundedRectangle(cornerRadius: 8))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                    .contentShape(RoundedRectangle(cornerRadius: 8))
+                    .background(.fill.tertiary, in: RoundedRectangle(cornerRadius: Kasane.Radius.base, style: Kasane.cornerStyle))
+                    .clipShape(RoundedRectangle(cornerRadius: Kasane.Radius.base, style: Kasane.cornerStyle))
+                    .contentShape(RoundedRectangle(cornerRadius: Kasane.Radius.base, style: Kasane.cornerStyle))
                 }
                 .buttonStyle(.plain)
                 .contextMenu { CardMenuItems(item: item) }
@@ -279,7 +279,7 @@ private struct HomeCard: View {
     var body: some View {
         Button { AppServices.nav.openCard(item) } label: {
             VStack(alignment: .leading, spacing: Kasane.Space.s1) {
-                Cover(url: Ui.img(item.thumbnailUrl), size: HomeCard.size, round: item.isArtist, radius: 8)
+                Cover(url: Ui.img(item.thumbnailUrl), size: HomeCard.size, round: item.isArtist, radius: Kasane.Radius.base)
                 Text(item.title).font(.subheadline).lineLimit(2).multilineTextAlignment(.leading)
                 if let subtitle = subtitle { Text(subtitle).subtle() }
             }
@@ -361,7 +361,7 @@ struct SongView: View {
             Section {
                 VStack(spacing: Kasane.Space.s3) {
                     Cover(url: Ui.large(song.thumbnailUrl), size: 240, radius: Kasane.Radius.base)
-                        .shadow(radius: 12, y: 6)
+                        .shadow(radius: Kasane.Radius.base, y: 6)
                     Text(song.title).font(.title2.weight(.bold)).multilineTextAlignment(.center).lineLimit(3)
                     if !detail.isEmpty {
                         Text(detail).font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center).lineLimit(2)

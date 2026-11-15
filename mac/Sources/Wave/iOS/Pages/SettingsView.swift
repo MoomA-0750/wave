@@ -111,7 +111,7 @@ struct SettingsView: View {
 
     private var accountSection: some View {
         Section {
-            HStack(spacing: 14) {
+            HStack(spacing: Kasane.Space.s4) {
                 SettingsAvatar(name: account.name, photoUrl: account.photoUrl, size: 52)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(account.isLoggedIn ? account.name ?? L.t("ログイン中", "Logged in") : L.t("ログインしていません", "Not logged in"))

@@ -3,7 +3,7 @@ import SwiftUI
 /// 「新しいエピソード」の絵（画像の無い自動のプレイリスト）。
 struct NewEpisodesCover: View {
     var size: CGFloat
-    var radius: CGFloat = 4
+    var radius: CGFloat = Kasane.Radius.sm
 
     var body: some View {
         RoundedRectangle(cornerRadius: radius, style: Kasane.cornerStyle)

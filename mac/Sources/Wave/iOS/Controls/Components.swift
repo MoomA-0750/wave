@@ -68,7 +68,7 @@ struct SongRow: View {
             if let number {
                 Text("\(number)").foregroundStyle(.secondary).monospacedDigit().frame(width: 28)
             } else {
-                Cover(url: Ui.small(song.thumbnailUrl), size: 48, radius: 4)
+                Cover(url: Ui.small(song.thumbnailUrl), size: 48, radius: Kasane.Radius.sm)
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(song.title).lineLimit(1).foregroundStyle(isCurrent ? Color.accentColor : Color.primary)

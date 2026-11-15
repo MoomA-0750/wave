@@ -24,7 +24,7 @@ struct LibraryPane: View {
             .padding(EdgeInsets(top: Kasane.Space.s3, leading: Kasane.Space.s4, bottom: Kasane.Space.s1, trailing: Kasane.Space.s2))
             // 種類のチップ（4つ並ぶと欄の幅に収まらないことがあるので横に送れるように）
             ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
+            HStack(spacing: Kasane.Space.s2) {
                 ForEach([("playlist", L.t("プレイリスト", "Playlists")), ("artist", L.t("アーティスト", "Artists")), ("album", L.t("アルバム", "Albums")),
                          ("podcast", L.t("ポッドキャスト", "Podcasts"))], id: \.0) { kind, title in
                     Chip(title: title, isOn: model.libraryKind == kind) { model.libraryKind = model.libraryKind == kind ? nil : kind }
@@ -85,7 +85,7 @@ struct LibraryPane: View {
                                 .contextMenu { entryMenu(entry) }
                             }
                         }
-                        .padding(EdgeInsets(top: Kasane.Space.s1, leading: 10, bottom: Kasane.Space.s2, trailing: Kasane.Space.s1))
+                        .padding(EdgeInsets(top: Kasane.Space.s1, leading: Kasane.Space.s3, bottom: Kasane.Space.s2, trailing: Kasane.Space.s1))
                     }
                 } else {
                     ScrollView {

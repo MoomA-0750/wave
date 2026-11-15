@@ -148,7 +148,7 @@ private struct QueueModeControls: View {
                 Image(systemName: "shuffle")
                     .foregroundStyle(player.shuffle ? Color.accentColor : Color.primary)
                     .frame(width: 44, height: 44)
-                    .glassCard(22, interactive: true)
+                    .glassCard(Kasane.Radius.card, interactive: true)
             }
             .accessibilityLabel(L.t("シャッフル", "Shuffle"))
             .accessibilityValue(player.shuffle ? L.t("オン", "On") : L.t("オフ", "Off"))
@@ -156,7 +156,7 @@ private struct QueueModeControls: View {
                 Image(systemName: player.repeatMode == .one ? "repeat.1" : "repeat")
                     .foregroundStyle(player.repeatMode != .off ? Color.accentColor : Color.primary)
                     .frame(width: 44, height: 44)
-                    .glassCard(22, interactive: true)
+                    .glassCard(Kasane.Radius.card, interactive: true)
             }
             .accessibilityLabel(L.t("リピート", "Repeat"))
         }
@@ -174,7 +174,7 @@ private struct QueueSongRow: View {
         if position < player.queue.count {
             let song = player.queue[position]
             HStack(spacing: Kasane.Space.s3) {
-                Cover(url: Ui.small(song.thumbnailUrl), size: 44, radius: 4)
+                Cover(url: Ui.small(song.thumbnailUrl), size: 44, radius: Kasane.Radius.sm)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(song.title).lineLimit(1)
                         .fontWeight(isCurrent ? .semibold : .regular)
@@ -204,7 +204,7 @@ private struct QueueEmptyNote: View {
     var detail: String
 
     var body: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: Kasane.Space.s2) {
             Text(title).font(.headline)
             Text(detail).font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
         }

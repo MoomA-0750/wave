@@ -17,7 +17,7 @@ struct LyricsFollower: View {
         case .synced(let s):
             SyncedLyrics(lines: s.lines, positionMs: positionMs, fontSize: fontSize)
         case .plain(let p):
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: Kasane.Space.s2) {
                 ForEach(Array(p.text.split(separator: "\n", omittingEmptySubsequences: false).prefix(plainLines).enumerated()), id: \.offset) { _, line in
                     Text(String(line)).font(.system(size: fontSize, weight: .semibold)).lineSpacing(fontSize * 0.375)
                         .frame(maxWidth: .infinity, alignment: .leading)

@@ -288,13 +288,13 @@ struct CollectionPageView: View {
     private var header: some View {
         HStack(alignment: .bottom, spacing: Kasane.Space.s6) {
             if model.isLiked {
-                LikedCover(size: 220, radius: 8)
+                LikedCover(size: 220, radius: Kasane.Radius.base)
             } else {
-                Cover(url: Ui.large(model.thumbnailUrl), size: 220, radius: 8)
+                Cover(url: Ui.large(model.thumbnailUrl), size: 220, radius: Kasane.Radius.base)
             }
             // 題名・アーティスト（アルバムだけ。押すとアーティストのページ）・説明。下端をジャケットの下端にそろえる
             VStack(alignment: .leading, spacing: 0) {
-                Text(model.title ?? "").font(.system(size: 56, weight: .bold)).lineLimit(2).minimumScaleFactor(0.5).padding(.bottom, 6)
+                Text(model.title ?? "").font(.system(size: 56, weight: .bold)).lineLimit(2).minimumScaleFactor(0.5).padding(.bottom, Kasane.Space.s2)
                 if let artist = model.artistText {
                     LinkText(text: artist) { if let id = model.albumArtist?.browseId { AppServices.nav.artist(id) } }
                         .font(.body.weight(.semibold)).padding(.bottom, 2)

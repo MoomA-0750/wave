@@ -100,7 +100,7 @@ private struct Controls: View {
     var size: CGFloat = 18
 
     var body: some View {
-        HStack(spacing: 18) {
+        HStack(spacing: Kasane.Space.s5) {
             Button(intent: PreviousTrackIntent()) { Image(systemName: "backward.fill") }
             Button(intent: TogglePlayIntent()) { Image(systemName: playing ? "pause.fill" : "play.fill").font(.system(size: size + 6)) }
             Button(intent: NextTrackIntent()) { Image(systemName: "forward.fill") }
@@ -118,8 +118,8 @@ struct NowPlayingWidgetView: View {
     var body: some View {
         if let song = entry.song {
             if family == .systemSmall {
-                VStack(alignment: .leading, spacing: 6) {
-                    Artwork(image: entry.artwork, radius: 8).frame(width: 52, height: 52)
+                VStack(alignment: .leading, spacing: Kasane.Space.s2) {
+                    Artwork(image: entry.artwork, radius: Kasane.Radius.base).frame(width: 52, height: 52)
                     Spacer(minLength: 0)
                     Text(song.title).font(.caption.weight(.semibold)).lineLimit(1)
                     Text(song.device ?? song.artist).font(.caption2).foregroundStyle(song.device != nil ? accent : .secondary).lineLimit(1)
@@ -127,7 +127,7 @@ struct NowPlayingWidgetView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             } else {
-                HStack(spacing: 14) {
+                HStack(spacing: Kasane.Space.s4) {
                     Artwork(image: entry.artwork).frame(width: 110, height: 110)
                     VStack(alignment: .leading, spacing: Kasane.Space.s1) {
                         Text(song.title).font(.headline).lineLimit(2)
@@ -144,7 +144,7 @@ struct NowPlayingWidgetView: View {
                 }
             }
         } else {
-            VStack(spacing: 6) {
+            VStack(spacing: Kasane.Space.s2) {
                 Image(systemName: "music.note").font(.title)
                 Text("何も再生していません").font(.caption).foregroundStyle(.secondary)
             }
@@ -207,7 +207,7 @@ struct PlaylistWidgetView: View {
 
     var body: some View {
         if let playlist = entry.playlist {
-            let buttons = HStack(spacing: 10) {
+            let buttons = HStack(spacing: Kasane.Space.s3) {
                 Button(intent: PlayPlaylistIntent(playlistId: playlist.id, shuffle: false)) {
                     Image(systemName: "play.fill").font(.system(size: 16, weight: .bold)).foregroundStyle(.white)
                         .frame(width: 38, height: 38).background(Circle().fill(accent))
@@ -219,9 +219,9 @@ struct PlaylistWidgetView: View {
             }
             .buttonStyle(.plain)
             if family == .systemSmall {
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: Kasane.Space.s2) {
                     HStack(alignment: .top) {
-                        Artwork(image: entry.cover, radius: 8).frame(width: 56, height: 56)
+                        Artwork(image: entry.cover, radius: Kasane.Radius.base).frame(width: 56, height: 56)
                         Spacer(minLength: 0)
                     }
                     Spacer(minLength: 0)
@@ -229,7 +229,7 @@ struct PlaylistWidgetView: View {
                     buttons
                 }
             } else {
-                HStack(spacing: 14) {
+                HStack(spacing: Kasane.Space.s4) {
                     Artwork(image: entry.cover).frame(width: 110, height: 110)
                     VStack(alignment: .leading, spacing: Kasane.Space.s2) {
                         Text(playlist.title).font(.headline).lineLimit(3)
@@ -240,7 +240,7 @@ struct PlaylistWidgetView: View {
                 }
             }
         } else {
-            VStack(spacing: 6) {
+            VStack(spacing: Kasane.Space.s2) {
                 Image(systemName: "music.note.list").font(.title)
                 Text("wave を開いてログインすると、プレイリストを選べます").font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
             }
@@ -255,7 +255,7 @@ struct PlaylistWidgetView: View {
         var body: some WidgetConfiguration {
             ActivityConfiguration(for: NowPlayingAttributes.self) { context in
                 LockScreenView(state: context.state)
-                    .padding(14)
+                    .padding(Kasane.Space.s4)
                     .activityBackgroundTint(Color.black.opacity(0.75))
                     .activitySystemActionForegroundColor(.white)
                     .widgetURL(URL(string: "wave://nowplaying"))
@@ -264,7 +264,7 @@ struct PlaylistWidgetView: View {
                 let art = loadImage(WidgetStore.artworkFile(state.videoId))
                 return DynamicIsland {
                     DynamicIslandExpandedRegion(.leading) {
-                        Artwork(image: art, radius: 8).frame(width: 52, height: 52)
+                        Artwork(image: art, radius: Kasane.Radius.base).frame(width: 52, height: 52)
                     }
                     DynamicIslandExpandedRegion(.center) {
                         VStack(alignment: .leading, spacing: 2) {
@@ -279,7 +279,7 @@ struct PlaylistWidgetView: View {
                         }
                     }
                     DynamicIslandExpandedRegion(.bottom) {
-                        VStack(spacing: 6) {
+                        VStack(spacing: Kasane.Space.s2) {
                             Controls(playing: state.playing, size: 20)
                             if let next = state.nextTitle {
                                 Text("次: \(next)").font(.caption2).foregroundStyle(.secondary).lineLimit(1)
@@ -287,7 +287,7 @@ struct PlaylistWidgetView: View {
                         }
                     }
                 } compactLeading: {
-                    Artwork(image: art, radius: 4).frame(width: 22, height: 22)
+                    Artwork(image: art, radius: Kasane.Radius.sm).frame(width: 22, height: 22)
                 } compactTrailing: {
                     Image(systemName: state.playing ? "waveform" : "pause.fill").foregroundStyle(accent)
                 } minimal: {
@@ -302,9 +302,9 @@ struct PlaylistWidgetView: View {
         var state: NowPlayingAttributes.ContentState
 
         var body: some View {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: Kasane.Space.s3) {
                 HStack(spacing: Kasane.Space.s3) {
-                    Artwork(image: loadImage(WidgetStore.artworkFile(state.videoId)), radius: 8).frame(width: 56, height: 56)
+                    Artwork(image: loadImage(WidgetStore.artworkFile(state.videoId)), radius: Kasane.Radius.base).frame(width: 56, height: 56)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(state.title).font(.headline).lineLimit(1)
                         Text(state.artist).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)

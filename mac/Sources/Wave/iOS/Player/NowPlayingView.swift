@@ -168,7 +168,7 @@ struct NowPlayingView: View {
         HStack {
             if AppServices.connect.configured {
                 Button { devicesOpen = true } label: {
-                    HStack(spacing: 6) {
+                    HStack(spacing: Kasane.Space.s2) {
                         Image(systemName: player.isRemote ? "hifispeaker.2.fill" : "hifispeaker.2")
                         if player.isRemote, let device = player.remoteDevice { Text(device).font(.caption.weight(.semibold)).lineLimit(1) }
                     }
@@ -202,7 +202,7 @@ struct NowPlayingView: View {
                 }
                 .padding(Kasane.Space.s4)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(RoundedRectangle(cornerRadius: 14).fill((tint ?? .gray).opacity(0.55)))
+                .background(RoundedRectangle(cornerRadius: Kasane.Radius.lg, style: Kasane.cornerStyle).fill((tint ?? .gray).opacity(0.55)))
             }
             .buttonStyle(.plain)
             .sheet(isPresented: Binding(get: { LyricsSheetState.shared.open }, set: { LyricsSheetState.shared.open = $0 })) {

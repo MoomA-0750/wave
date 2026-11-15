@@ -213,8 +213,8 @@ struct SettingsPageView: View {
         content()
             .padding(Kasane.Space.s4)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.05)))
-            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.primary.opacity(0.08)))
+            .background(RoundedRectangle(cornerRadius: Kasane.Radius.base, style: Kasane.cornerStyle).fill(Color.primary.opacity(0.05)))
+            .overlay(RoundedRectangle(cornerRadius: Kasane.Radius.base, style: Kasane.cornerStyle).strokeBorder(Color.primary.opacity(0.08)))
     }
 
     private func toggleRow(_ title: String, _ detail: String, isOn: Binding<Bool>) -> some View {
@@ -239,7 +239,7 @@ struct SettingsPageView: View {
             action()
         }
         .padding(Kasane.Space.s3)
-        .background(RoundedRectangle(cornerRadius: 8).fill(Color.yellow.opacity(0.12)))
+        .background(RoundedRectangle(cornerRadius: Kasane.Radius.base, style: Kasane.cornerStyle).fill(Color.yellow.opacity(0.12)))
     }
 }
 #endif

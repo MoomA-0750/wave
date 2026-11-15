@@ -39,7 +39,7 @@ struct TrackRowView: View {
             }
             .frame(width: 32, alignment: .trailing)
             HStack(spacing: Kasane.Space.s3) {
-                if row.showArtwork { Cover(url: Ui.small(row.song.thumbnailUrl), size: 40, radius: 4) }
+                if row.showArtwork { Cover(url: Ui.small(row.song.thumbnailUrl), size: 40, radius: Kasane.Radius.sm) }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(row.song.title).lineLimit(1).foregroundStyle(isCurrent ? Color.accentColor : Color.primary)
                     Text(row.song.artistsText).subtle()
@@ -119,8 +119,8 @@ struct MediaCard: View {
                 PlayCircleButton(size: 44, action: { AppServices.nav.play(item) }) {
                     Image(systemName: "play.fill").font(.system(size: 16))
                 }
-                .shadow(radius: 4)
-                .padding(6)
+                .shadow(radius: Kasane.Radius.sm)
+                .padding(Kasane.Space.s2)
                 .opacity(hover ? 1 : 0)
                 .animation(.easeOut(duration: 0.15), value: hover)
             }
@@ -132,7 +132,7 @@ struct MediaCard: View {
         }
         .padding(Kasane.Space.s2)
         .frame(width: 176)
-        .background(RoundedRectangle(cornerRadius: 8).fill(hover ? Color.primary.opacity(0.07) : .clear))
+        .background(RoundedRectangle(cornerRadius: Kasane.Radius.base, style: Kasane.cornerStyle).fill(hover ? Color.primary.opacity(0.07) : .clear))
         .contentShape(Rectangle())
         .onHover { hover = $0 }
         .onTapGesture { AppServices.nav.openCard(item) }
