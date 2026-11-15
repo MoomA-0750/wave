@@ -145,6 +145,8 @@ QtObject {
     }
 
     function colors(isDark: bool): Palette { return isDark ? dark : light }
-    // 同心の角丸: 中の角丸 = max(radius-min, 外 − 余白)。外がピル・Hyprland の丸さのときも同じ
+    // 同心の角丸: 中の角丸 = max(radius-min, 外 − 余白)。外がピルなら使わない
     function innerRadius(outer: real, padding: real): real { return Math.max(radius.min, outer - padding) }
+    // Hyprland の丸さに従うとき: 下限もアプリが渡す（Omarchy の既定の角張った 0 なら 0 まで）
+    function innerRadiusWith(outer: real, padding: real, minimum: real): real { return Math.max(minimum, outer - padding) }
 }
