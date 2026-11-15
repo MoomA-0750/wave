@@ -1,0 +1,53 @@
+<!--
+   書き出したもの。直すのは kasane の tokens.css と themes/personal.css（scripts/build.mjs）
+   kasane 1.1.0  source 3d5c1044cf587f0b
+  App.xaml の MergedDictionaries で、XamlControlsResources の後に合わせる。色は入れない（Fluent とシステムのアクセントに従う）
+-->
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- 角丸（epx）。ピルは高さの半分を CornerRadius に入れる -->
+    <x:Double x:Key="KasaneRadiusSm">6</x:Double>
+    <CornerRadius x:Key="KasaneCornerRadiusSm">6</CornerRadius>
+    <x:Double x:Key="KasaneRadiusBase">10</x:Double>
+    <CornerRadius x:Key="KasaneCornerRadiusBase">10</CornerRadius>
+    <x:Double x:Key="KasaneRadiusLg">16</x:Double>
+    <CornerRadius x:Key="KasaneCornerRadiusLg">16</CornerRadius>
+    <x:Double x:Key="KasaneRadiusMin">2</x:Double>
+    <CornerRadius x:Key="KasaneCornerRadiusMin">2</CornerRadius>
+    <x:Double x:Key="KasaneRadiusControl">10</x:Double>
+    <CornerRadius x:Key="KasaneCornerRadiusControl">10</CornerRadius>
+    <x:Double x:Key="KasaneRadiusField">10</x:Double>
+    <CornerRadius x:Key="KasaneCornerRadiusField">10</CornerRadius>
+    <x:Double x:Key="KasaneRadiusCard">26</x:Double>
+    <CornerRadius x:Key="KasaneCornerRadiusCard">26</CornerRadius>
+    <x:Double x:Key="KasaneRadiusRow">26</x:Double>
+    <CornerRadius x:Key="KasaneCornerRadiusRow">26</CornerRadius>
+
+    <!-- 余白（epx） -->
+    <x:Double x:Key="KasaneSpace1">4</x:Double>
+    <Thickness x:Key="KasanePadding1">4</Thickness>
+    <x:Double x:Key="KasaneSpace2">8</x:Double>
+    <Thickness x:Key="KasanePadding2">8</Thickness>
+    <x:Double x:Key="KasaneSpace3">12</x:Double>
+    <Thickness x:Key="KasanePadding3">12</Thickness>
+    <x:Double x:Key="KasaneSpace4">16</x:Double>
+    <Thickness x:Key="KasanePadding4">16</Thickness>
+    <x:Double x:Key="KasaneSpace5">20</x:Double>
+    <Thickness x:Key="KasanePadding5">20</Thickness>
+    <x:Double x:Key="KasaneSpace6">24</x:Double>
+    <Thickness x:Key="KasanePadding6">24</Thickness>
+    <x:Double x:Key="KasaneSpace8">32</x:Double>
+    <Thickness x:Key="KasanePadding8">32</Thickness>
+    <x:Double x:Key="KasaneSpace10">40</x:Double>
+    <Thickness x:Key="KasanePadding10">40</Thickness>
+
+    <!-- 同心の角丸: ThemeResource の中で計算できないので、カード（KasaneCornerRadiusCard）× 余白 KasanePadding4 の中の角丸を計算済みで置く。
+         ほかの組は max(radius-min, 外 − 余白) をコードで計算する -->
+    <CornerRadius x:Key="KasaneInnerRadius">10</CornerRadius>
+
+    <!-- Fluent の角丸の上書き（仮の対応。本人の確認待ち: kasane の docs/tokens-format.md）。ボタン・入力欄 = control、メニュー・小窓 = lg -->
+    <CornerRadius x:Key="ControlCornerRadius">10</CornerRadius>
+    <CornerRadius x:Key="OverlayCornerRadius">16</CornerRadius>
+</ResourceDictionary>
