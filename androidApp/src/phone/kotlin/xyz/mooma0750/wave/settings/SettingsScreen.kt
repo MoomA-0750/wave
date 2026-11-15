@@ -54,6 +54,7 @@ import xyz.mooma0750.wave.core.session.SessionState
 import xyz.mooma0750.wave.debug.DebugPlayback
 import xyz.mooma0750.wave.debug.StreamCheck
 import androidx.compose.ui.res.stringResource
+import kasane.KasaneSpace
 /** 設定（Spotify の「設定とプライバシー」）。アカウント・再生履歴の送信・端末の連携・ログアウト・このアプリについて・開発用の確認。 */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -207,14 +208,14 @@ fun SettingsScreen(
                     supportingContent = {
                         Column {
                             Text(stringResource(R.string.settings_version, BuildConfig.VERSION_NAME))
-                            Text(stringResource(R.string.settings_login_storage), Modifier.padding(top = 4.dp))
+                            Text(stringResource(R.string.settings_login_storage), Modifier.padding(top = KasaneSpace.s1))
                         }
                     },
                 )
             }
             if (container.isDebuggable) {
                 item {
-                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(Modifier.padding(KasaneSpace.s4), verticalArrangement = Arrangement.spacedBy(KasaneSpace.s2)) {
                         var checkLines by remember { mutableStateOf<List<String>?>(null) }
                         val scope = rememberCoroutineScope()
                         val checking = stringResource(R.string.settings_checking)
@@ -300,7 +301,7 @@ fun Avatar(
 @Composable
 private fun DebugPlaybackButtons(container: AppContainer) {
     val scope = rememberCoroutineScope()
-    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(KasaneSpace.s2)) {
         OutlinedButton(onClick = { scope.launch { container.player.playSong(DebugPlayback.fixedSong) } }) { Text(stringResource(R.string.settings_debug_play_fixed)) }
         OutlinedButton(onClick = {
             scope.launch {

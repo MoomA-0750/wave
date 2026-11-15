@@ -73,6 +73,7 @@ import xyz.mooma0750.wave.navigation.SongActions
 import xyz.mooma0750.wave.ui.BackButton
 import xyz.mooma0750.wave.ui.Durations
 import xyz.mooma0750.wave.ui.IconAction
+import kasane.KasaneSpace
 @Composable
 fun SearchScreen(
     viewModel: SearchViewModel,
@@ -97,7 +98,7 @@ fun SearchScreen(
     LaunchedEffect(Unit) { if (showField && state.query.isBlank()) focus.requestFocus() }
     Scaffold(bottomBar = bottomBar) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
-            if (showField) Row(Modifier.padding(start = 4.dp, end = 16.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (showField) Row(Modifier.padding(start = KasaneSpace.s1, end = KasaneSpace.s4, top = KasaneSpace.s2, bottom = KasaneSpace.s2), verticalAlignment = Alignment.CenterVertically) {
                 BackButton(onBack)
                 TextField(
                     value = state.query,
@@ -223,7 +224,7 @@ private fun HistoryList(
         if (entries.isEmpty()) return@LazyColumn
         item {
             Row(
-                Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp),
+                Modifier.fillMaxWidth().padding(start = KasaneSpace.s4, end = KasaneSpace.s1),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(stringResource(R.string.search_recent_searches), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
@@ -274,11 +275,11 @@ private fun SuggestionList(
         if (suggestions == null) return@LazyColumn
         items(suggestions.queries, key = { "q-$it" }) { query ->
             Row(
-                Modifier.fillMaxWidth().clickable { onQuery(query) }.padding(horizontal = 16.dp, vertical = 12.dp),
+                Modifier.fillMaxWidth().clickable { onQuery(query) }.padding(horizontal = KasaneSpace.s4, vertical = KasaneSpace.s3),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(painterResource(R.drawable.ic_search), contentDescription = null)
-                Spacer(Modifier.width(16.dp))
+                Spacer(Modifier.width(KasaneSpace.s4))
                 Text(query, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
@@ -299,14 +300,14 @@ private fun Results(
     opener: Opener,
     actions: SongActions,
 ) {
-    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = KasaneSpace.s4), horizontalArrangement = Arrangement.spacedBy(KasaneSpace.s2)) {
         SearchTab.entries.forEach { tab ->
             FilterChip(selected = state.tab == tab, onClick = { viewModel.selectTab(tab) }, label = { Text(tabLabel(tab)) })
         }
     }
     when {
-        state.failure != null -> Text(failureMessage(state.failure), Modifier.padding(16.dp))
-        state.empty && state.tab !in setOf(SearchTab.Live, SearchTab.Podcasts, SearchTab.Episodes, SearchTab.Lyrics) -> Text(stringResource(R.string.search_not_found), Modifier.padding(16.dp))
+        state.failure != null -> Text(failureMessage(state.failure), Modifier.padding(KasaneSpace.s4))
+        state.empty && state.tab !in setOf(SearchTab.Live, SearchTab.Podcasts, SearchTab.Episodes, SearchTab.Lyrics) -> Text(stringResource(R.string.search_not_found), Modifier.padding(KasaneSpace.s4))
     }
     val openArtist = opener.artist
     val openAlbum = opener.album
@@ -366,7 +367,7 @@ private fun Results(
             }
             SearchTab.Live -> {
                 pagedItems(state.lives, { "lv-$it-" }, { viewModel.loadMore(SearchTab.Live) }) { songRow(it) }
-                if (state.lives.loaded && state.lives.items.isEmpty() && state.lives.failure == null) item { Text(stringResource(R.string.search_not_found), Modifier.padding(16.dp)) }
+                if (state.lives.loaded && state.lives.items.isEmpty() && state.lives.failure == null) item { Text(stringResource(R.string.search_not_found), Modifier.padding(KasaneSpace.s4)) }
             }
             SearchTab.Lyrics -> {
                 // 歌詞に語が見つかった曲を先に、見つかった行を添えて出す。見つからなかった曲は検索の順で後ろに
@@ -374,7 +375,7 @@ private fun Results(
                 notFound(state.lyrics)
             }
         }
-        if (state.loading) item { LoadingIndicator(Modifier.padding(16.dp)) }
+        if (state.loading) item { LoadingIndicator(Modifier.padding(KasaneSpace.s4)) }
     }
 }
 
@@ -391,14 +392,14 @@ private fun <T> LazyListScope.pagedItems(
             LaunchedEffect(list.items.size) { loadMore() }
         }
     }
-    if (list.loadingMore) item { LoadingIndicator(Modifier.padding(16.dp)) }
-    if (list.failure != null && list.items.isEmpty()) item { Text(failureMessage(list.failure), Modifier.padding(16.dp)) }
+    if (list.loadingMore) item { LoadingIndicator(Modifier.padding(KasaneSpace.s4)) }
+    if (list.failure != null && list.items.isEmpty()) item { Text(failureMessage(list.failure), Modifier.padding(KasaneSpace.s4)) }
 }
 
 /** 選んだときに読む種類（ポッドキャスト・エピソード）で、読み終えて0件だったとき。 */
 private fun <T> LazyListScope.notFound(list: ResultList<T>) {
     if (list.requested && !list.loadingMore && list.failure == null && list.items.isEmpty()) {
-        item { Text(stringResource(R.string.search_not_found), Modifier.padding(16.dp)) }
+        item { Text(stringResource(R.string.search_not_found), Modifier.padding(KasaneSpace.s4)) }
     }
 }
 
@@ -418,14 +419,14 @@ private fun EpisodeRow(
     onClick: () -> Unit,
     trailing: @Composable () -> Unit,
 ) {
-    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = KasaneSpace.s4, vertical = KasaneSpace.s2), verticalAlignment = Alignment.CenterVertically) {
         coil3.compose.AsyncImage(
             model = episode.song.thumbnailUrl,
             contentDescription = null,
             modifier = Modifier.size(48.dp).clip(MaterialTheme.shapes.extraSmall),
             contentScale = ContentScale.Crop,
         )
-        Spacer(Modifier.width(12.dp))
+        Spacer(Modifier.width(KasaneSpace.s3))
         Column(Modifier.weight(1f)) {
             Text(episode.song.title, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyLarge)
             Text(
@@ -451,12 +452,12 @@ private fun TopResult(
 ) {
     androidx.compose.material3.Card(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = KasaneSpace.s4, vertical = KasaneSpace.s1),
         colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
     ) {
-        Column(Modifier.padding(16.dp)) {
+        Column(Modifier.padding(KasaneSpace.s4)) {
             coil3.compose.AsyncImage(model = thumbnailUrl, contentDescription = null, modifier = Modifier.size(96.dp).clip(shape), contentScale = ContentScale.Crop)
-            Text(title, Modifier.padding(top = 12.dp), style = MaterialTheme.typography.headlineSmallEmphasized, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(title, Modifier.padding(top = KasaneSpace.s3), style = MaterialTheme.typography.headlineSmallEmphasized, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Text(detail, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
@@ -468,7 +469,7 @@ private fun SectionHeader(
     more: Boolean,
     onMore: () -> Unit,
 ) {
-    Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().padding(start = KasaneSpace.s4, end = KasaneSpace.s1, top = KasaneSpace.s2), verticalAlignment = Alignment.CenterVertically) {
         Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
         if (more) TextButton(onClick = onMore) { Text(stringResource(R.string.search_show_all)) }
     }
@@ -498,14 +499,14 @@ private fun CardRow(
     shape: Shape,
     onClick: () -> Unit,
 ) {
-    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = KasaneSpace.s4, vertical = KasaneSpace.s2), verticalAlignment = Alignment.CenterVertically) {
         coil3.compose.AsyncImage(
             model = thumbnailUrl,
             contentDescription = null,
             modifier = Modifier.size(48.dp).clip(shape),
             contentScale = ContentScale.Crop,
         )
-        Spacer(Modifier.width(12.dp))
+        Spacer(Modifier.width(KasaneSpace.s3))
         Column(Modifier.weight(1f)) {
             Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyLarge)
             subtitle?.let { Text(it, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall) }
@@ -538,7 +539,7 @@ private fun LyricsHitRow(
         hit.match?.let { match ->
             Text(
                 (if (match.exact) "" else "≈ ") + "“${match.line}”",
-                Modifier.padding(start = 76.dp, end = 16.dp, bottom = 8.dp),
+                Modifier.padding(start = 76.dp, end = KasaneSpace.s4, bottom = KasaneSpace.s2),
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.bodyMedium,
@@ -565,7 +566,7 @@ fun SongRow(
     showLiked: Boolean = true,
     trailing: @Composable () -> Unit = {},
 ) {
-    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = KasaneSpace.s4, vertical = KasaneSpace.s2), verticalAlignment = Alignment.CenterVertically) {
         number?.let { Text("$it", Modifier.width(28.dp), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge) }
         if (showArtwork) {
             coil3.compose.AsyncImage(
@@ -574,7 +575,7 @@ fun SongRow(
                 modifier = Modifier.size(48.dp).clip(MaterialTheme.shapes.extraSmall),
                 contentScale = ContentScale.Crop,
             )
-            Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.width(KasaneSpace.s3))
         }
         Column(Modifier.weight(1f)) {
             Text(song.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyLarge)
@@ -632,7 +633,7 @@ private fun HistoryRow(
             is SearchHistoryEntry.Song -> entry.title to listOfNotNull(stringResource(R.string.search_kind_song), entry.subtitle).joinToString(" • ")
         }
     Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(start = 16.dp, top = 8.dp, bottom = 8.dp, end = 4.dp),
+        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(start = KasaneSpace.s4, top = KasaneSpace.s2, bottom = KasaneSpace.s2, end = KasaneSpace.s1),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         val shape = if (entry is SearchHistoryEntry.Artist) CircleShape else MaterialTheme.shapes.extraSmall
@@ -652,7 +653,7 @@ private fun HistoryRow(
                 Icon(painterResource(icon), contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
-        Spacer(Modifier.width(12.dp))
+        Spacer(Modifier.width(KasaneSpace.s3))
         Column(Modifier.weight(1f)) {
             Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyLarge)
             detail?.let { Text(it, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }

@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import xyz.mooma0750.wave.AppContainer
 import xyz.mooma0750.wave.R
 import xyz.mooma0750.wave.connect2.ConnectV2Section
+import kasane.KasaneSpace
 
 /** 端末の連携の画面（仮）。中身は Connect v2（ADR-0010）の節だけ。 */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -37,8 +38,8 @@ fun ConnectScreen(
         bottomBar = bottomBar,
     ) { padding ->
         Column(
-            Modifier.fillMaxSize().padding(padding).padding(16.dp).verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            Modifier.fillMaxSize().padding(padding).padding(KasaneSpace.s4).verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(KasaneSpace.s3),
         ) {
             if (container.connectV2 == null) {
                 Text(stringResource(R.string.connect_relay_not_configured))

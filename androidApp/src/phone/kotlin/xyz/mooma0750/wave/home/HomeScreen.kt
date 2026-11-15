@@ -52,6 +52,7 @@ import xyz.mooma0750.wave.search.SongMenuSheet
 import xyz.mooma0750.wave.settings.AccountInfo
 import xyz.mooma0750.wave.settings.Avatar
 import xyz.mooma0750.wave.ui.MenuIcon
+import kasane.KasaneSpace
 
 /**
  * ホーム（並びは Spotify と同じ）: 左上のアカウントのアイコン（押すと横からメニュー）と絞り込みのチップ、
@@ -84,11 +85,11 @@ fun HomeScreen(
         drawerState = drawer,
         drawerContent = {
             ModalDrawerSheet {
-                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.padding(KasaneSpace.s4), verticalAlignment = Alignment.CenterVertically) {
                     Avatar(account, 48.dp)
                     Text(
                         (account.account as? AccountResult.Ok)?.name ?: stringResource(R.string.home_account),
-                        Modifier.padding(start = 12.dp),
+                        Modifier.padding(start = KasaneSpace.s3),
                         style = MaterialTheme.typography.titleMedium,
                     )
                 }
@@ -104,9 +105,9 @@ fun HomeScreen(
         val noticeList = androidx.compose.foundation.lazy.rememberLazyListState()
         LazyColumn(Modifier.fillMaxSize(), state = noticeList, contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = xyz.mooma0750.wave.ui.noticeBottomPadding(noticeList))) {
             item(key = "top") {
-                Row(Modifier.statusBarsPadding().padding(top = 8.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    if (showAvatar) Avatar(account, 32.dp, Modifier.padding(start = 16.dp).clip(CircleShape).clickable { scope.launch { drawer.open() } })
-                    LazyRow(contentPadding = PaddingValues(horizontal = if (showAvatar) 12.dp else 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(Modifier.statusBarsPadding().padding(top = KasaneSpace.s2, bottom = KasaneSpace.s1), verticalAlignment = Alignment.CenterVertically) {
+                    if (showAvatar) Avatar(account, 32.dp, Modifier.padding(start = KasaneSpace.s4).clip(CircleShape).clickable { scope.launch { drawer.open() } })
+                    LazyRow(contentPadding = PaddingValues(horizontal = if (showAvatar) 12.dp else 16.dp), horizontalArrangement = Arrangement.spacedBy(KasaneSpace.s2)) {
                         item { FilterChip(selected = state.selected == null, onClick = { feed.select(null) }, label = { Text(stringResource(R.string.home_chip_all)) }) }
                         items(state.chips) { chip -> FilterChip(selected = state.selected == chip, onClick = { feed.select(chip) }, label = { Text(chip.title) }) }
                     }
@@ -122,7 +123,7 @@ fun HomeScreen(
                 }
             }
             homeFeedItems(state, feed::refresh, feed::loadMore, onOpenPlaylist, songActions)
-            item(key = "bottom") { Spacer(Modifier.height(16.dp)) }
+            item(key = "bottom") { Spacer(Modifier.height(KasaneSpace.s4)) }
         }
     }
 }
@@ -137,9 +138,9 @@ private fun RecentGrid(
     // 広い画面では4列（Spotify のタブレットと同じ）。右の再生の列や左のレールで狭まるので、画面ではなく中身の幅で決める
     androidx.compose.foundation.layout.BoxWithConstraints {
         val columns = if (maxWidth >= 600.dp) 4 else 2
-        Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.padding(horizontal = KasaneSpace.s4, vertical = KasaneSpace.s2), verticalArrangement = Arrangement.spacedBy(KasaneSpace.s2)) {
             items.chunked(columns).forEach { row ->
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(KasaneSpace.s2)) {
                     row.forEach { item ->
                         val look = HomeItemLook.of(item)
                         // 曲は長押しで曲のメニューを開く（棚のカードと同じ）
@@ -158,12 +159,12 @@ private fun RecentGrid(
                                 coil3.compose.AsyncImage(
                                     model = look.thumbnailUrl,
                                     contentDescription = null,
-                                    modifier = Modifier.size(56.dp).then(if (item is HomeItem.ArtistItem) Modifier.padding(4.dp).clip(CircleShape) else Modifier),
+                                    modifier = Modifier.size(56.dp).then(if (item is HomeItem.ArtistItem) Modifier.padding(KasaneSpace.s1).clip(CircleShape) else Modifier),
                                     contentScale = ContentScale.Crop,
                                 )
                                 Text(
                                     look.title,
-                                    Modifier.padding(horizontal = 8.dp),
+                                    Modifier.padding(horizontal = KasaneSpace.s2),
                                     maxLines = 2,
                                     overflow = TextOverflow.Ellipsis,
                                     style = MaterialTheme.typography.labelLargeEmphasized,
@@ -200,7 +201,7 @@ fun AccountMenuButton(
         androidx.compose.material3.DropdownMenu(open, onDismissRequest = { open = false }) {
             Text(
                 (account.account as? AccountResult.Ok)?.name ?: stringResource(R.string.home_account),
-                Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                Modifier.padding(horizontal = KasaneSpace.s4, vertical = KasaneSpace.s2),
                 style = MaterialTheme.typography.titleSmallEmphasized,
             )
             androidx.compose.material3.DropdownMenuItem(text = { Text(stringResource(R.string.home_recently_played)) }, leadingIcon = { MenuIcon(R.drawable.ic_history) }, onClick = { pick(onOpenHistory) })

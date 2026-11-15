@@ -28,6 +28,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import xyz.mooma0750.wave.R
 import xyz.mooma0750.wave.connect.QrScanner
+import kasane.KasaneSpace
 
 /**
  * Claude の中継（ai-bridge）への接続。中継の `--pair` が出す QR（waveai://pair?u=&t=&n=）を読む（Kite と同じ）。
@@ -41,13 +42,13 @@ fun AiSettingsSection(settings: AppSettings) {
     val context = LocalContext.current
     val badQr = stringResource(R.string.settings_ai_bad_qr)
     val cameraPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted -> scanning = granted }
-    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(Modifier.padding(horizontal = KasaneSpace.s4, vertical = KasaneSpace.s2), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(stringResource(R.string.settings_ai_title), style = MaterialTheme.typography.titleMedium)
         Text(
             config?.let { stringResource(R.string.settings_ai_connected, it.name ?: it.url) } ?: stringResource(R.string.settings_ai_summary_off),
             style = MaterialTheme.typography.bodySmall,
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(KasaneSpace.s2)) {
             OutlinedButton(onClick = {
                 message = null
                 if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) scanning = true else cameraPermission.launch(Manifest.permission.CAMERA)

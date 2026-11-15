@@ -11,6 +11,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import xyz.mooma0750.wave.R
+import kasane.KasaneSpace
 
 /** 高く評価した曲の ID。曲の行がバッジを出すかを決める（MainActivity が渡す）。 */
 val LocalLikedIds = compositionLocalOf<Set<String>> { emptySet() }
@@ -26,7 +27,7 @@ fun LikedBadge(
         painterResource(R.drawable.ic_check_circle),
         contentDescription = stringResource(R.string.ui_liked_badge),
         tint = MaterialTheme.colorScheme.primary,
-        modifier = modifier.padding(horizontal = 4.dp).size(18.dp),
+        modifier = modifier.padding(horizontal = KasaneSpace.s1).size(18.dp),
     )
 }
 
@@ -47,6 +48,6 @@ fun DownloadedBadge(
         painterResource(R.drawable.ic_download),
         contentDescription = stringResource(R.string.downloads_badge),
         tint = MaterialTheme.colorScheme.primary,
-        modifier = modifier.padding(horizontal = 4.dp).size(18.dp),
+        modifier = modifier.padding(horizontal = KasaneSpace.s1).size(18.dp),
     )
 }

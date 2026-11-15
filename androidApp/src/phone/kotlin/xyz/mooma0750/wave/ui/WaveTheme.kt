@@ -12,6 +12,7 @@ import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
@@ -42,15 +43,32 @@ import coil3.request.allowHardware
 import coil3.toBitmap
 import xyz.mooma0750.wave.R
 import androidx.compose.ui.res.stringResource
+import kasane.KasaneShapes
+import kasane.kasaneDarkColorScheme
+import kasane.kasaneLightColorScheme
 
-/** 端末の壁紙から作った色（Material You）で、ダークモードにも従う。minSdk 31 なので常に使える。動きは Expressive のばね。 */
+/**
+ * 端末の壁紙から作った色（Material You）で、ダークモードにも従う。minSdk 31 なので常に使える。動きは Expressive のばね。
+ * dynamicColor = false（試しの画面など）は kasane の控えの色（アイコンの色が種）。角丸は kasane（KasaneShapes）
+ */
 @Composable
-fun WaveTheme(content: @Composable () -> Unit) {
-    val context = LocalContext.current
-    val colorScheme = if (isSystemInDarkTheme()) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-    MaterialExpressiveTheme(colorScheme = colorScheme, motionScheme = MotionScheme.expressive(), typography = WaveTypography) {
+fun WaveTheme(dynamicColor: Boolean = true, content: @Composable () -> Unit) {
+    val colorScheme = waveColorScheme(dynamicColor)
+    MaterialExpressiveTheme(colorScheme = colorScheme, motionScheme = MotionScheme.expressive(), shapes = KasaneShapes, typography = WaveTypography) {
         // 画面の下地と文字の色をテーマに合わせる（Scaffold の外に出る文字も読めるように）
         Surface(color = MaterialTheme.colorScheme.background, content = content)
+    }
+}
+
+/** 壁紙の色（Material You）。dynamicColor = false なら kasane の控えの色 */
+@Composable
+fun waveColorScheme(dynamicColor: Boolean = true): ColorScheme {
+    val context = LocalContext.current
+    val dark = isSystemInDarkTheme()
+    return when {
+        dynamicColor -> if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+        dark -> kasaneDarkColorScheme()
+        else -> kasaneLightColorScheme()
     }
 }
 

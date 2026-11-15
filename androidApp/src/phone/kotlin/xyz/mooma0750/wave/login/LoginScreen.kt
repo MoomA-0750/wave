@@ -49,6 +49,7 @@ import xyz.mooma0750.wave.WebViewCredentials
 import java.io.ByteArrayInputStream
 import androidx.compose.ui.res.stringResource
 import xyz.mooma0750.wave.R
+import kasane.KasaneSpace
 
 private const val START_URL = "https://accounts.google.com/ServiceLogin?continue=https%3A%2F%2Fmusic.youtube.com%2F"
 private const val LANDING_HOST = "music.youtube.com"
@@ -106,7 +107,7 @@ fun LoginScreen(
                 LoginUiState.Browsing ->
                     Column(Modifier.fillMaxSize()) {
                         if (savedLoginUnreadable) {
-                            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Column(Modifier.padding(KasaneSpace.s4), verticalArrangement = Arrangement.spacedBy(KasaneSpace.s2)) {
                                 Text(stringResource(R.string.login_saved_unreadable))
                                 OutlinedButton(onClick = viewModel::discardSavedAndRetry) { Text(stringResource(R.string.login_discard_saved)) }
                             }
@@ -121,7 +122,7 @@ fun LoginScreen(
                 LoginUiState.Saving, LoginUiState.Done ->
                     LoadingIndicator(Modifier.align(Alignment.Center))
                 is LoginUiState.Failed ->
-                    Column(Modifier.align(Alignment.Center).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Column(Modifier.align(Alignment.Center).padding(KasaneSpace.s6), verticalArrangement = Arrangement.spacedBy(KasaneSpace.s4)) {
                         Text(
                             when (state.reason) {
                                 FailureReason.NoSapisid -> stringResource(R.string.login_failed_no_sapisid)

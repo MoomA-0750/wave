@@ -42,6 +42,7 @@ import xyz.mooma0750.wave.R
 import xyz.mooma0750.wave.connect.QrImage
 import xyz.mooma0750.wave.connect.QrScanner
 import xyz.mooma0750.wave.handoff.v2.Role
+import kasane.KasaneSpace
 
 /**
  * Connect v2 の仮の画面（Phase 6b P6b-4）。端末の連携の画面の上に出す。見た目は後で詰める（機能を先）。
@@ -153,7 +154,7 @@ fun ConnectV2Section(container: AppContainer) {
         OutlinedButton(onClick = { pairing.startOffer() }) { Text(stringResource(R.string.connect_v2_add_device)) }
         Text(stringResource(R.string.connect_v2_household_devices), style = MaterialTheme.typography.bodyMedium)
         for (member in members) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(KasaneSpace.s2)) {
                 Text(if (member.role == Role.Controller) stringResource(R.string.connect_v2_member_controller, member.label) else member.label, modifier = Modifier.weight(1f))
                 // wave-api（ADR-0015）: 本人が押したときだけログインを渡す。ログインしていなければ押せない
                 if (member.isApi) {

@@ -37,6 +37,7 @@ import xyz.mooma0750.wave.search.SongMenuButton
 import xyz.mooma0750.wave.search.SongRow
 import xyz.mooma0750.wave.search.failureMessage
 import xyz.mooma0750.wave.ui.BackButton
+import kasane.KasaneSpace
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HistoryScreen(
@@ -53,20 +54,20 @@ fun HistoryScreen(
     ) { padding ->
         val noticeList = androidx.compose.foundation.lazy.rememberLazyListState()
         LazyColumn(Modifier.fillMaxSize().padding(padding), state = noticeList, contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = xyz.mooma0750.wave.ui.noticeBottomPadding(noticeList))) {
-            state.failure?.let { item { Text(failureMessage(it), Modifier.padding(16.dp)) } }
+            state.failure?.let { item { Text(failureMessage(it), Modifier.padding(KasaneSpace.s4)) } }
             if (!state.loading && state.failure == null && state.sections.isEmpty()) {
-                item { Text(stringResource(R.string.library_history_empty), Modifier.padding(16.dp)) }
+                item { Text(stringResource(R.string.library_history_empty), Modifier.padding(KasaneSpace.s4)) }
             }
             val rows = state.rows
             itemsIndexed(rows, key = { index, row -> if (row is HistoryRow.Item) "$index-${row.song.videoId}" else "$index-h" }) { index, row ->
                 when (row) {
-                    is HistoryRow.Heading -> Text(row.title, Modifier.padding(start = 16.dp, top = 16.dp, bottom = 4.dp), style = MaterialTheme.typography.titleSmall)
+                    is HistoryRow.Heading -> Text(row.title, Modifier.padding(start = KasaneSpace.s4, top = KasaneSpace.s4, bottom = KasaneSpace.s1), style = MaterialTheme.typography.titleSmall)
                     // 並びの中の位置（見出しを除いた番号）から再生する
                     is HistoryRow.Item -> SongRow(row.song, onClick = { onPlay(state.songs, row.songIndex) }) { SongMenuButton(row.song, actions) }
                 }
                 if (index == rows.lastIndex && state.continuation != null) LaunchedEffect(rows.size) { viewModel.loadMore() }
             }
-            if (state.loading) item { LoadingIndicator(Modifier.padding(16.dp)) }
+            if (state.loading) item { LoadingIndicator(Modifier.padding(KasaneSpace.s4)) }
         }
     }
 }

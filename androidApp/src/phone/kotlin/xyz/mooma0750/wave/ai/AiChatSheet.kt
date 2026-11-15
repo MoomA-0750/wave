@@ -56,6 +56,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import xyz.mooma0750.wave.R
 import xyz.mooma0750.wave.core.music.Song
 import xyz.mooma0750.wave.ui.IconAction
+import kasane.KasaneSpace
 
 /**
  * Claude に聞く。再生画面の ✨ からはシートで、下のバーの「Claude」のタブからは全面で開く（会話は同じものを続ける）。
@@ -81,7 +82,7 @@ fun AiChatScreen(
     onPlay: (Song) -> Unit,
     onOpenSettings: () -> Unit,
 ) {
-    AiChatPanel(chat, onPlay, onOpenSettings, Modifier.fillMaxSize().statusBarsPadding().imePadding().padding(top = 16.dp), MaterialTheme.typography.headlineMediumEmphasized)
+    AiChatPanel(chat, onPlay, onOpenSettings, Modifier.fillMaxSize().statusBarsPadding().imePadding().padding(top = KasaneSpace.s4), MaterialTheme.typography.headlineMediumEmphasized)
 }
 
 @Composable
@@ -106,13 +107,13 @@ private fun AiChatPanel(
         input = ""
     }
     Column(modifier) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = KasaneSpace.s4), verticalAlignment = Alignment.CenterVertically) {
             Text(stringResource(R.string.ai_title), Modifier.weight(1f), style = titleStyle)
             IconAction(R.drawable.ic_history, stringResource(R.string.ai_history), { showHistory = true })
             if (state.messages.isNotEmpty()) TextButton(onClick = chat::clear) { Text(stringResource(R.string.ai_new_chat)) }
         }
-        if (state.running) LinearWavyProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 16.dp))
-        LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = listState, contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (state.running) LinearWavyProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = KasaneSpace.s4))
+        LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = listState, contentPadding = androidx.compose.foundation.layout.PaddingValues(KasaneSpace.s4), verticalArrangement = Arrangement.spacedBy(KasaneSpace.s2)) {
             if (state.messages.isEmpty()) {
                 item { Text(stringResource(R.string.ai_intro), color = MaterialTheme.colorScheme.onSurfaceVariant) }
             }
@@ -122,7 +123,7 @@ private fun AiChatPanel(
                         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
                             Text(
                                 message.text,
-                                Modifier.widthIn(max = 320.dp).clip(MaterialTheme.shapes.large).background(MaterialTheme.colorScheme.primaryContainer).padding(horizontal = 14.dp, vertical = 8.dp),
+                                Modifier.widthIn(max = 320.dp).clip(MaterialTheme.shapes.large).background(MaterialTheme.colorScheme.primaryContainer).padding(horizontal = 14.dp, vertical = KasaneSpace.s2),
                                 color = MaterialTheme.colorScheme.onPrimaryContainer,
                             )
                         }
@@ -134,7 +135,7 @@ private fun AiChatPanel(
                     }
                     is AiMessage.Action -> Text("・" + message.text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     is AiMessage.Songs ->
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(KasaneSpace.s3)) {
                             items(message.songs, key = { it.videoId }) { song -> SongCard(song) { onPlay(song) } }
                         }
                     is AiMessage.Failure ->
@@ -149,10 +150,10 @@ private fun AiChatPanel(
         }
         // よく頼むこと
         val suggestions = listOf(stringResource(R.string.ai_suggest_meaning), stringResource(R.string.ai_suggest_similar), stringResource(R.string.ai_suggest_playlist))
-        LazyRow(contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        LazyRow(contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = KasaneSpace.s4), horizontalArrangement = Arrangement.spacedBy(KasaneSpace.s2)) {
             items(suggestions) { suggestion -> AssistChip(onClick = { send(suggestion) }, label = { Text(suggestion) }, enabled = !state.running) }
         }
-        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = KasaneSpace.s4, vertical = KasaneSpace.s2), verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(
                 value = input,
                 onValueChange = { input = it },
@@ -224,9 +225,9 @@ private fun AiHistorySheet(
     val history by chat.history.collectAsStateWithLifecycle()
     val state by chat.state.collectAsStateWithLifecycle()
     ModalBottomSheet(onDismissRequest = onDismiss) {
-        Text(stringResource(R.string.ai_history), Modifier.padding(horizontal = 24.dp, vertical = 8.dp), style = MaterialTheme.typography.titleLargeEmphasized)
+        Text(stringResource(R.string.ai_history), Modifier.padding(horizontal = KasaneSpace.s6, vertical = KasaneSpace.s2), style = MaterialTheme.typography.titleLargeEmphasized)
         if (history.isEmpty()) {
-            Text(stringResource(R.string.ai_history_empty), Modifier.padding(24.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(stringResource(R.string.ai_history_empty), Modifier.padding(KasaneSpace.s6), color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         val format = remember { java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.MEDIUM, java.text.DateFormat.SHORT) }
         LazyColumn(Modifier.fillMaxWidth().navigationBarsPadding()) {
@@ -268,7 +269,7 @@ private fun SongCard(
             modifier = Modifier.size(120.dp).clip(MaterialTheme.shapes.small),
             contentScale = ContentScale.Crop,
         )
-        Text(song.title, Modifier.padding(top = 4.dp), maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium)
+        Text(song.title, Modifier.padding(top = KasaneSpace.s1), maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium)
         Text(song.artistsText, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

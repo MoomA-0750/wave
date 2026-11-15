@@ -76,6 +76,7 @@ import xyz.mooma0750.wave.settings.AccountInfo
 import xyz.mooma0750.wave.settings.Avatar
 import xyz.mooma0750.wave.ui.IconAction
 import xyz.mooma0750.wave.ui.MenuIcon
+import kasane.KasaneSpace
 
 /**
  * マイライブラリ（並びは Spotify と同じ）: アカウントのアイコン・見出し・作成のボタン、種類のチップ、
@@ -135,12 +136,12 @@ fun LibraryTabScreen(
     }
 
     Column(Modifier.fillMaxSize()) {
-        Row(Modifier.statusBarsPadding().padding(start = 16.dp, end = 4.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.statusBarsPadding().padding(start = KasaneSpace.s4, end = KasaneSpace.s1, top = KasaneSpace.s2), verticalAlignment = Alignment.CenterVertically) {
             if (showAvatar) Avatar(account, 32.dp)
             Text(stringResource(R.string.library_title), Modifier.weight(1f).padding(start = if (showAvatar) 12.dp else 0.dp), style = MaterialTheme.typography.headlineSmallEmphasized)
             IconAction(R.drawable.ic_add, stringResource(R.string.library_create_playlist), { creating = true })
         }
-        LazyRow(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        LazyRow(contentPadding = PaddingValues(horizontal = KasaneSpace.s4, vertical = KasaneSpace.s2), horizontalArrangement = Arrangement.spacedBy(KasaneSpace.s2)) {
             items(LibraryFilter.entries) { option ->
                 FilterChip(
                     selected = filter == option,
@@ -158,7 +159,7 @@ fun LibraryTabScreen(
                 )
             }
         }
-        Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().padding(start = KasaneSpace.s1, end = KasaneSpace.s1), verticalAlignment = Alignment.CenterVertically) {
             if (searching) {
                 val focus = remember { FocusRequester() }
                 LaunchedEffect(Unit) { focus.requestFocus() }
@@ -170,7 +171,7 @@ fun LibraryTabScreen(
                     leadingIcon = { MenuIcon(R.drawable.ic_search) },
                     trailingIcon = { if (query.isNotEmpty()) IconAction(R.drawable.ic_close, stringResource(R.string.library_clear), { query = "" }) },
                     shape = MaterialTheme.shapes.small,
-                    modifier = Modifier.weight(1f).padding(start = 12.dp).height(52.dp).focusRequester(focus),
+                    modifier = Modifier.weight(1f).padding(start = KasaneSpace.s3).height(52.dp).focusRequester(focus),
                     textStyle = MaterialTheme.typography.bodyMedium,
                 )
                 TextButton(onClick = closeSearch) { Text(stringResource(R.string.library_cancel)) }
@@ -182,17 +183,17 @@ fun LibraryTabScreen(
             }
         }
         when {
-            state.loading -> LoadingIndicator(Modifier.padding(16.dp))
-            state.failure != null -> Text(failureMessage(state.failure), Modifier.padding(16.dp))
+            state.loading -> LoadingIndicator(Modifier.padding(KasaneSpace.s4))
+            state.failure != null -> Text(failureMessage(state.failure), Modifier.padding(KasaneSpace.s4))
         }
         if (grid) {
             val noticeGrid = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
-            LazyVerticalGrid(GridCells.Fixed(3), Modifier.fillMaxSize(), state = noticeGrid, contentPadding = PaddingValues(start = 12.dp, top = 12.dp, end = 12.dp, bottom = 12.dp + xyz.mooma0750.wave.ui.noticeBottomPadding(noticeGrid)), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            LazyVerticalGrid(GridCells.Fixed(3), Modifier.fillMaxSize(), state = noticeGrid, contentPadding = PaddingValues(start = 12.dp, top = 12.dp, end = 12.dp, bottom = 12.dp + xyz.mooma0750.wave.ui.noticeBottomPadding(noticeGrid)), horizontalArrangement = Arrangement.spacedBy(KasaneSpace.s3), verticalArrangement = Arrangement.spacedBy(KasaneSpace.s3)) {
                 if (showLiked) item { GridCell(LibraryEntry.Playlist(liked)) { onOpenPlaylist(liked) } }
                 if (showDownloads) item { GridCell(LibraryEntry.Playlist(downloadsEntry)) { onOpenDownloads?.invoke() } }
                 if (showNewEpisodes) item { GridCell(LibraryEntry.Playlist(newEpisodes)) { openNewEpisodes() } }
                 items(entries, key = { it.key }) { entry -> GridCell(entry) { open(entry) } }
-                item(span = { GridItemSpan(maxLineSpan) }) { Spacer(Modifier.height(8.dp)) }
+                item(span = { GridItemSpan(maxLineSpan) }) { Spacer(Modifier.height(KasaneSpace.s2)) }
             }
         } else {
             val noticeList = androidx.compose.foundation.lazy.rememberLazyListState()
@@ -239,7 +240,7 @@ private fun SortButton(
             Text(librarySortLabel(sort))
         }
         DropdownMenu(open, onDismissRequest = { open = false }) {
-            Text(stringResource(R.string.library_sort), Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.titleSmall)
+            Text(stringResource(R.string.library_sort), Modifier.padding(horizontal = KasaneSpace.s4, vertical = KasaneSpace.s2), style = MaterialTheme.typography.titleSmall)
             LibrarySort.entries.forEach { option ->
                 DropdownMenuItem(
                     text = { Text(librarySortLabel(option)) },
@@ -309,9 +310,9 @@ private fun LibraryRow(
     entry: LibraryEntry,
     onClick: () -> Unit,
 ) {
-    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = KasaneSpace.s4, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         Thumbnail(entry, Modifier.size(64.dp))
-        Column(Modifier.padding(start = 12.dp)) {
+        Column(Modifier.padding(start = KasaneSpace.s3)) {
             Text(entry.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyLarge)
             Text(subtitleOf(entry), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }

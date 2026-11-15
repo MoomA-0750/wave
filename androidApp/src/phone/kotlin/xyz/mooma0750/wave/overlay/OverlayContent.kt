@@ -68,6 +68,8 @@ import kotlin.math.roundToInt
 import xyz.mooma0750.wave.R
 import xyz.mooma0750.wave.ui.IconAction
 import xyz.mooma0750.wave.ui.WaveTypography
+import kasane.KasaneShapes
+import kasane.KasaneSpace
 
 /** 重ね表示の中身。端の丸（＋曲が変わったときの吹き出し）か、ミニプレーヤー。 */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
@@ -84,7 +86,7 @@ internal fun OverlayContent(
 ) {
     val context = LocalContext.current
     val colorScheme = if (isSystemInDarkTheme()) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-    MaterialExpressiveTheme(colorScheme = colorScheme, motionScheme = MotionScheme.expressive(), typography = WaveTypography) {
+    MaterialExpressiveTheme(colorScheme = colorScheme, motionScheme = MotionScheme.expressive(), shapes = KasaneShapes, typography = WaveTypography) {
         val now = ui.now ?: return@MaterialExpressiveTheme
         val motion = MaterialTheme.motionScheme
         val modeTransition = updateTransition(ui.mode, label = "overlay-mode")
@@ -235,7 +237,7 @@ private fun Tooltip(
             shadowElevation = 4.dp,
             modifier = Modifier.padding(horizontal = 2.dp, vertical = 6.dp).widthIn(max = 240.dp),
         ) {
-            Column(Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
+            Column(Modifier.padding(horizontal = 14.dp, vertical = KasaneSpace.s2)) {
                 Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMediumEmphasized)
                 if (artist.isNotEmpty()) {
                     Text(artist, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
@@ -284,7 +286,7 @@ private fun Mini(
                         overflow = TextOverflow.Ellipsis,
                         style = MaterialTheme.typography.titleSmallEmphasized,
                         color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(top = 8.dp),
+                        modifier = Modifier.padding(top = KasaneSpace.s2),
                     )
                 }
             }
@@ -317,7 +319,7 @@ private fun Mini(
 internal fun DismissContent(ui: PlayerOverlay.UiState) {
     val context = LocalContext.current
     val colorScheme = if (isSystemInDarkTheme()) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-    MaterialExpressiveTheme(colorScheme = colorScheme, motionScheme = MotionScheme.expressive(), typography = WaveTypography) {
+    MaterialExpressiveTheme(colorScheme = colorScheme, motionScheme = MotionScheme.expressive(), shapes = KasaneShapes, typography = WaveTypography) {
         val motion = MaterialTheme.motionScheme
         val scale by animateFloatAsState(if (ui.dismissHover) 1.25f else 1f, motion.fastSpatialSpec(), label = "dismiss-scale")
         val color by animateColorAsState(

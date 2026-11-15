@@ -39,6 +39,7 @@ import xyz.mooma0750.wave.core.lyrics.LyricsRepository
 import xyz.mooma0750.wave.core.lyrics.LyricsTiming
 import xyz.mooma0750.wave.core.music.Song
 import androidx.compose.ui.res.stringResource
+import kasane.KasaneSpace
 
 /** 再生中の曲の歌詞。時刻付きなら再生位置に合わせて今の行を強調し、行を押すとそこへ飛ぶ。 */
 @Composable
@@ -139,7 +140,7 @@ private fun SyncedLyrics(
 
 @Composable
 private fun Source(source: String?) {
-    source?.let { Text(it, Modifier.padding(vertical = 16.dp), style = MaterialTheme.typography.bodySmall) }
+    source?.let { Text(it, Modifier.padding(vertical = KasaneSpace.s4), style = MaterialTheme.typography.bodySmall) }
 }
 
 @Composable

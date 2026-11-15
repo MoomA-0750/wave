@@ -27,6 +27,7 @@ import xyz.mooma0750.wave.core.music.ArtistRef
 import xyz.mooma0750.wave.core.music.NewRelease
 import xyz.mooma0750.wave.core.music.Song
 import xyz.mooma0750.wave.navigation.SongActions
+import kasane.KasaneSpace
 
 /** 新作を開く: アルバム・シングルはそのページ、動画は再生する。 */
 fun openRelease(
@@ -56,9 +57,9 @@ fun NewReleaseRow(
 ) {
     if (releases.isEmpty()) return
     val now = System.currentTimeMillis()
-    Column(Modifier.padding(top = 12.dp)) {
-        Text(title, Modifier.padding(horizontal = 16.dp), style = MaterialTheme.typography.titleLargeEmphasized)
-        LazyRow(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(Modifier.padding(top = KasaneSpace.s3)) {
+        Text(title, Modifier.padding(horizontal = KasaneSpace.s4), style = MaterialTheme.typography.titleLargeEmphasized)
+        LazyRow(contentPadding = PaddingValues(horizontal = KasaneSpace.s4, vertical = KasaneSpace.s2), horizontalArrangement = Arrangement.spacedBy(KasaneSpace.s3)) {
             items(releases, key = { it.albumBrowseId ?: it.videoId ?: it.title }) { release ->
                 Column(Modifier.width(140.dp).clickable { openRelease(release, actions, onPlaySong) }) {
                     Box {

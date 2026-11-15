@@ -66,6 +66,7 @@ import xyz.mooma0750.wave.ui.DetailText
 import xyz.mooma0750.wave.ui.IconAction
 import xyz.mooma0750.wave.ui.MenuIcon
 import xyz.mooma0750.wave.ui.PlayControls
+import kasane.KasaneSpace
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -119,7 +120,7 @@ fun PlaylistScreen(
                 SortRow(state.order, state.sortable, viewModel::setOrder)
             }
             // 種類のチップ（動画や歌ってみたと、ふつうの曲を分けて出す）
-            androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
+            androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(KasaneSpace.s2), modifier = Modifier.padding(top = KasaneSpace.s2)) {
                 items(KindFilter.entries.toList()) { option ->
                     androidx.compose.material3.FilterChip(
                         selected = kind == option,
@@ -153,24 +154,24 @@ fun PlaylistScreen(
         // カスタムの降順・長さは、全部読んでから手元で並べる。読んでいる途中の（並べる前の）並びは出さない
         if (state.order.arrangedLocally && state.loadingAll) {
             item {
-                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.padding(KasaneSpace.s4), verticalAlignment = Alignment.CenterVertically) {
                     LoadingIndicator()
-                    Text(stringResource(R.string.library_sorting_after_loading_all), Modifier.padding(start = 12.dp))
+                    Text(stringResource(R.string.library_sorting_after_loading_all), Modifier.padding(start = KasaneSpace.s3))
                 }
             }
             return@CollectionScreen
         }
-        state.failure?.let { item { Text(failureMessage(it), Modifier.padding(16.dp)) } }
-        if (!state.loading && state.failure == null && state.songs.isEmpty()) item { Text(stringResource(R.string.library_no_songs), Modifier.padding(16.dp)) }
+        state.failure?.let { item { Text(failureMessage(it), Modifier.padding(KasaneSpace.s4)) } }
+        if (!state.loading && state.failure == null && state.songs.isEmpty()) item { Text(stringResource(R.string.library_no_songs), Modifier.padding(KasaneSpace.s4)) }
         if (filtering) {
             item {
-                Column(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                Column(Modifier.padding(horizontal = KasaneSpace.s4, vertical = KasaneSpace.s1)) {
                     Text(pluralStringResource(R.plurals.library_match_count, shown.size, shown.size), style = MaterialTheme.typography.bodySmall)
                     if (state.loadingAll) Text(stringResource(R.string.library_loading_remaining_pages), style = MaterialTheme.typography.bodySmall)
                     if (state.incomplete) Text(stringResource(R.string.library_search_incomplete), style = MaterialTheme.typography.bodySmall)
                 }
             }
-            if (shown.isEmpty() && !state.loadingAll) item { Text(stringResource(R.string.library_not_found), Modifier.padding(16.dp)) }
+            if (shown.isEmpty() && !state.loadingAll) item { Text(stringResource(R.string.library_not_found), Modifier.padding(KasaneSpace.s4)) }
         }
         items(shown, key = { index -> "$index-${state.songs[index].videoId}" }) { index ->
             val song = state.songs[index]
@@ -187,12 +188,12 @@ fun PlaylistScreen(
                 LaunchedEffect(state.songs.size) { viewModel.loadMore() }
             }
         }
-        if (state.loading) item { LoadingIndicator(Modifier.padding(16.dp)) }
+        if (state.loading) item { LoadingIndicator(Modifier.padding(KasaneSpace.s4)) }
         // 自分のプレイリストの一番下に「おすすめの曲」（YouTube Music の候補）。最後のページまで読んでから、絞っていないときだけ出す
         if (onAddSuggestion != null && !filtering && state.continuation == null && !state.loading && state.suggestions.isNotEmpty()) {
             item(key = "suggestions-header") {
                 // 上の余白は控えめにする（右の「更新」のボタンが 48dp の高さを持つので、24dp も足すと曲の並びとの間が大きく空く）
-                Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxWidth().padding(start = KasaneSpace.s4, end = KasaneSpace.s2, top = KasaneSpace.s2), verticalAlignment = Alignment.CenterVertically) {
                     Text(stringResource(R.string.library_suggestions), Modifier.weight(1f), style = MaterialTheme.typography.titleMediumEmphasized)
                     if (state.suggestionsReload != null) {
                         TextButton(onClick = viewModel::refreshSuggestions, enabled = !state.suggestionsLoading, shapes = ButtonDefaults.shapes()) {
@@ -264,9 +265,9 @@ private fun SortRow(
     var open by remember { mutableStateOf(false) }
     // Spotify の「並べ替え」: 押すと並べ方の一覧。選んでいるものをもう一度押すと昇順・降順が入れ替わる
     Box {
-        FilledTonalButton(onClick = { open = true }, shapes = ButtonDefaults.shapes(), modifier = Modifier.padding(start = 8.dp).height(52.dp)) { Text(stringResource(R.string.library_sort)) }
+        FilledTonalButton(onClick = { open = true }, shapes = ButtonDefaults.shapes(), modifier = Modifier.padding(start = KasaneSpace.s2).height(52.dp)) { Text(stringResource(R.string.library_sort)) }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            Text(stringResource(R.string.library_sort), Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.titleSmall)
+            Text(stringResource(R.string.library_sort), Modifier.padding(horizontal = KasaneSpace.s4, vertical = KasaneSpace.s2), style = MaterialTheme.typography.titleSmall)
             PlaylistSort.entries.filter { it == PlaylistSort.Custom || it == PlaylistSort.Duration || sortable }.forEach { sort ->
                 val selected = sort == order.sort
                 DropdownMenuItem(
@@ -355,11 +356,11 @@ fun AddToPlaylistDialog(
                 LazyColumn(Modifier.heightIn(max = 400.dp), state = listState) {
                     item {
                         // 下のプレイリストの行と同じ左端・同じ高さに並べる（文字のボタンにすると、ボタンの中の余白のぶん右にずれる）
-                        Row(Modifier.fillMaxWidth().clickable { creating = true }.padding(vertical = 12.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                        Row(Modifier.fillMaxWidth().clickable { creating = true }.padding(vertical = KasaneSpace.s3), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                             androidx.compose.material3.Icon(painterResource(R.drawable.ic_add), contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                             Text(
                                 stringResource(R.string.library_new_playlist),
-                                Modifier.padding(start = 12.dp),
+                                Modifier.padding(start = KasaneSpace.s3),
                                 color = MaterialTheme.colorScheme.primary,
                                 style = MaterialTheme.typography.labelLargeEmphasized,
                             )
@@ -367,7 +368,7 @@ fun AddToPlaylistDialog(
                     }
                     if (liked != null) {
                         item {
-                            Row(Modifier.fillMaxWidth().clickable(onClick = onToggleLiked).padding(vertical = 12.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                            Row(Modifier.fillMaxWidth().clickable(onClick = onToggleLiked).padding(vertical = KasaneSpace.s3), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                                 Text(stringResource(R.string.library_liked_songs_row), Modifier.weight(1f), maxLines = 1)
                                 androidx.compose.material3.Icon(
                                     androidx.compose.ui.res.painterResource(if (liked) R.drawable.ic_check_circle else R.drawable.ic_add_circle),
@@ -379,7 +380,7 @@ fun AddToPlaylistDialog(
                     }
                     when {
                         state.failure != null -> item { Text(failureMessage(state.failure)) }
-                        state.loading -> item { LoadingIndicator(Modifier.padding(8.dp)) }
+                        state.loading -> item { LoadingIndicator(Modifier.padding(KasaneSpace.s2)) }
                     }
                     itemsIndexed(editable, key = { _, playlist -> playlist.playlistId }) { _, playlist ->
                         val id = playlist.playlistId
@@ -408,7 +409,7 @@ fun AddToPlaylistDialog(
                                             }
                                         if (accepted) adding = adding + id
                                     }
-                                }.padding(vertical = 12.dp),
+                                }.padding(vertical = KasaneSpace.s3),
                             verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
                         ) {
                             Column(Modifier.weight(1f)) {

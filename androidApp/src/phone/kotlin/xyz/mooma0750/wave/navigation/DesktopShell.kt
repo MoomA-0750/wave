@@ -71,6 +71,7 @@ import xyz.mooma0750.wave.R
 import xyz.mooma0750.wave.WaveApplication
 import xyz.mooma0750.wave.ui.IconAction
 import xyz.mooma0750.wave.ui.NoticeHost
+import kasane.KasaneSpace
 
 /** デスクトップと同じ並びにするときに、アプリの側から渡す部品。 */
 class DesktopParts(
@@ -233,11 +234,11 @@ private fun TopBar(
                 } else {
                     Modifier.height(maxOf(TOP_BAR_HEIGHT, caption.height)).padding(start = caption.start, end = caption.end)
                 },
-            ).padding(horizontal = 8.dp),
+            ).padding(horizontal = KasaneSpace.s2),
     ) {
         // 窓の帯に載せたときは、押せるものだけを OS の窓の移動から外す（空いた所は掴んで窓を動かせる）
         if (nav.canGoBack) IconAction(R.drawable.ic_arrow_back, stringResource(R.string.ui_back), nav::back, Modifier.align(Alignment.CenterStart).systemGestureExclusion())
-        Row(Modifier.align(Alignment.Center).systemGestureExclusion(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.align(Alignment.Center).systemGestureExclusion(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(KasaneSpace.s2)) {
             IconAction(
                 if (nav.tab == Tab.Home && nav.current == null) R.drawable.ic_home else R.drawable.ic_home_outline,
                 stringResource(R.string.nav_home),

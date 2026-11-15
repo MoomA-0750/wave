@@ -40,6 +40,7 @@ import xyz.mooma0750.wave.search.failureMessage
 import xyz.mooma0750.wave.ui.CollectionScreen
 import xyz.mooma0750.wave.ui.DetailText
 import xyz.mooma0750.wave.ui.PlayControls
+import kasane.KasaneSpace
 
 /**
  * ポッドキャストの番組のページ: 画像・題・配信者・説明、ライブラリへの保存（ログイン中だけ）、新しい順のエピソード。
@@ -74,7 +75,7 @@ fun PodcastScreen(
             // 保存（Spotify の「フォロー」）。ログインしていない応答では状態が分からないので出さない
             if (page?.saved != null) {
                 val failed = stringResource(R.string.podcast_save_failed)
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width(KasaneSpace.s2))
                 ToggleButton(checked = page.saved == true, onCheckedChange = { viewModel.toggleSaved(failed) }, enabled = !state.saving) {
                     Text(stringResource(if (page.saved == true) R.string.podcast_saved else R.string.podcast_save))
                 }
@@ -83,16 +84,16 @@ fun PodcastScreen(
         play = PlayControls(shuffle, { shuffle = it }, enabled = songs.isNotEmpty()) { page?.let { onPlay(songs, 0, it.playlistId.takeUnless { _ -> Feed.isFeedShow(it.browseId) }, shuffle) } },
     ) {
         when {
-            state.failure != null -> item { Text(failureMessage(state.failure), Modifier.padding(16.dp)) }
-            page == null -> item { LoadingIndicator(Modifier.padding(16.dp)) }
-            state.episodes.isEmpty() -> item { Text(stringResource(R.string.podcast_no_episodes), Modifier.padding(16.dp)) }
+            state.failure != null -> item { Text(failureMessage(state.failure), Modifier.padding(KasaneSpace.s4)) }
+            page == null -> item { LoadingIndicator(Modifier.padding(KasaneSpace.s4)) }
+            state.episodes.isEmpty() -> item { Text(stringResource(R.string.podcast_no_episodes), Modifier.padding(KasaneSpace.s4)) }
             else -> {
                 itemsIndexed(state.episodes, key = { index, episode -> "$index-${episode.song.videoId}" }) { index, episode ->
                     EpisodeRow(episode, onClick = { onPlay(songs, index, page.playlistId.takeUnless { Feed.isFeedShow(page.browseId) }, false) }) { SongMenuButton(episode.song, actions) }
                     // 最後まで来たら続きを読む
                     if (index == state.episodes.lastIndex && state.continuation != null) LaunchedEffect(state.episodes.size) { viewModel.loadMore() }
                 }
-                if (state.loadingMore) item { LoadingIndicator(Modifier.padding(16.dp)) }
+                if (state.loadingMore) item { LoadingIndicator(Modifier.padding(KasaneSpace.s4)) }
             }
         }
     }
@@ -104,7 +105,7 @@ private fun Description(text: String) {
     var expanded by rememberSaveable { mutableStateOf(false) }
     Text(
         text,
-        Modifier.padding(top = 4.dp).clickable { expanded = !expanded },
+        Modifier.padding(top = KasaneSpace.s1).clickable { expanded = !expanded },
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         maxLines = if (expanded) Int.MAX_VALUE else 3,
@@ -121,14 +122,14 @@ private fun EpisodeRow(
     onClick: () -> Unit,
     trailing: @Composable () -> Unit,
 ) {
-    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.Top) {
+    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = KasaneSpace.s4, vertical = 10.dp), verticalAlignment = Alignment.Top) {
         coil3.compose.AsyncImage(
             model = episode.song.thumbnailUrl,
             contentDescription = null,
             modifier = Modifier.size(64.dp).clip(MaterialTheme.shapes.small),
             contentScale = ContentScale.Crop,
         )
-        Spacer(Modifier.width(12.dp))
+        Spacer(Modifier.width(KasaneSpace.s3))
         Column(Modifier.weight(1f)) {
             Text(episode.song.title, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyLarge)
             listOfNotNull(episode.publishedText, episode.durationText).takeIf { it.isNotEmpty() }?.let { DetailText(it.joinToString(" • ")) }
@@ -139,7 +140,7 @@ private fun EpisodeRow(
                 LinearWavyProgressIndicator(progress = { percent / 100f }, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
             }
         }
-        xyz.mooma0750.wave.ui.DownloadedBadge(episode.song.videoId, Modifier.padding(top = 12.dp))
+        xyz.mooma0750.wave.ui.DownloadedBadge(episode.song.videoId, Modifier.padding(top = KasaneSpace.s3))
         trailing()
     }
 }

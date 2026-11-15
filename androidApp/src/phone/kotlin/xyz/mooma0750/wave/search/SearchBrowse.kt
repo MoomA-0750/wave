@@ -53,6 +53,7 @@ import xyz.mooma0750.wave.home.homeFeedItems
 import xyz.mooma0750.wave.navigation.SongActions
 import xyz.mooma0750.wave.ui.BackButton
 import xyz.mooma0750.wave.ui.IconTextButton
+import kasane.KasaneSpace
 /**
  * 検索のタブの最初の画面（並びは Spotify と同じ）: 大きな見出し、押すと検索の画面を開く検索欄、
  * 気分・ジャンルの色のタイルの2列の格子。
@@ -69,7 +70,7 @@ fun SearchBrowseScreen(
     val noticeList = androidx.compose.foundation.lazy.rememberLazyListState()
     LazyColumn(Modifier.fillMaxSize(), state = noticeList, contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = xyz.mooma0750.wave.ui.noticeBottomPadding(noticeList))) {
         item {
-            Text(stringResource(R.string.search_title), Modifier.statusBarsPadding().padding(start = 16.dp, top = 16.dp, bottom = 12.dp), style = MaterialTheme.typography.headlineMediumEmphasized)
+            Text(stringResource(R.string.search_title), Modifier.statusBarsPadding().padding(start = KasaneSpace.s4, top = KasaneSpace.s4, bottom = KasaneSpace.s3), style = MaterialTheme.typography.headlineMediumEmphasized)
         }
         // 上に留めると Spotify のように見出しの下で止まるが、ここでは並びだけを合わせる
         item {
@@ -77,19 +78,19 @@ fun SearchBrowseScreen(
                 onClick = onOpenSearch,
                 shape = CircleShape,
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).height(52.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = KasaneSpace.s4).height(52.dp),
             ) {
-                Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.padding(horizontal = KasaneSpace.s4), verticalAlignment = Alignment.CenterVertically) {
                     Icon(painterResource(R.drawable.ic_search), contentDescription = null)
-                    Spacer(Modifier.width(12.dp))
+                    Spacer(Modifier.width(KasaneSpace.s3))
                     Text(stringResource(R.string.search_hint), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge)
                 }
             }
         }
-        if (state.loading) item { LoadingIndicator(Modifier.padding(16.dp)) }
+        if (state.loading) item { LoadingIndicator(Modifier.padding(KasaneSpace.s4)) }
         state.failure?.let { failure ->
             item {
-                Column(Modifier.padding(16.dp)) {
+                Column(Modifier.padding(KasaneSpace.s4)) {
                     Text(stringResource(R.string.search_genres_failed, failureMessage(failure)), style = MaterialTheme.typography.bodySmall)
                     IconTextButton(R.drawable.ic_refresh, stringResource(R.string.search_retry), viewModel::refresh)
                 }
@@ -97,18 +98,18 @@ fun SearchBrowseScreen(
         }
         state.sections.forEach { section ->
             item {
-                Text(section.title, Modifier.padding(start = 16.dp, top = 24.dp, bottom = 12.dp), style = MaterialTheme.typography.titleMediumEmphasized)
+                Text(section.title, Modifier.padding(start = KasaneSpace.s4, top = KasaneSpace.s6, bottom = KasaneSpace.s3), style = MaterialTheme.typography.titleMediumEmphasized)
             }
             section.categories.chunked(columns).forEach { row ->
                 item {
-                    Row(Modifier.padding(horizontal = 16.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(Modifier.padding(horizontal = KasaneSpace.s4, vertical = KasaneSpace.s1), horizontalArrangement = Arrangement.spacedBy(KasaneSpace.s2)) {
                         row.forEach { category -> MoodTile(category, Modifier.weight(1f)) { onOpenCategory(category) } }
                         repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
                     }
                 }
             }
         }
-        item { Spacer(Modifier.height(16.dp)) }
+        item { Spacer(Modifier.height(KasaneSpace.s4)) }
     }
 }
 
@@ -126,7 +127,7 @@ private fun MoodTile(
         shape = MaterialTheme.shapes.small,
         colors = CardDefaults.cardColors(containerColor = lerp(MaterialTheme.colorScheme.surfaceContainerHigh, accent, 0.55f)),
     ) {
-        Box(Modifier.fillMaxSize().padding(12.dp)) {
+        Box(Modifier.fillMaxSize().padding(KasaneSpace.s3)) {
             Text(category.title, style = MaterialTheme.typography.titleMediumEmphasized, color = Color.White)
         }
     }

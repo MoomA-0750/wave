@@ -11,6 +11,7 @@ import xyz.mooma0750.wave.ui.CollectionScreen
 import xyz.mooma0750.wave.ui.DetailText
 import xyz.mooma0750.wave.ui.Durations
 import xyz.mooma0750.wave.ui.PlayFab
+import kasane.KasaneSpace
 
 /**
  * 曲の画面（ホームの棚の曲を押したときに開く）。アルバム・プレイリストと同じく、押してもすぐには再生せず、
@@ -32,7 +33,7 @@ fun SongScreen(
             song.durationSeconds?.let { DetailText(Durations.ofSeconds(it.toLong())) }
         },
         play = null,
-        actions = { PlayFab(playing = false, onClick = { onPlay(song) }, modifier = Modifier.padding(start = 12.dp, end = 8.dp)) },
+        actions = { PlayFab(playing = false, onClick = { onPlay(song) }, modifier = Modifier.padding(start = KasaneSpace.s3, end = KasaneSpace.s2)) },
     ) {
         item(key = "song-actions") { SongMenuItems(song, actions, showRadio = false, showOpenSong = false) }
     }

@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import xyz.mooma0750.wave.R
 import xyz.mooma0750.wave.handoff.v2.Role
+import kasane.KasaneSpace
 
 /**
  * Spotify の「デバイスに接続」と同じ、端末を選ぶだけの画面（下から出る）。上に今鳴っている端末、下に家のほかの端末。
@@ -55,8 +56,8 @@ fun DevicePickerSheet(
     val members by manager.members.collectAsStateWithLifecycle()
     val remote by manager.remotePlayback.collectAsStateWithLifecycle()
     ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = 8.dp)) {
-            Text(stringResource(R.string.devices_current), Modifier.padding(horizontal = 24.dp, vertical = 8.dp), style = MaterialTheme.typography.titleMediumEmphasized)
+        Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = KasaneSpace.s2)) {
+            Text(stringResource(R.string.devices_current), Modifier.padding(horizontal = KasaneSpace.s6, vertical = KasaneSpace.s2), style = MaterialTheme.typography.titleMediumEmphasized)
             val playing = remote
             if (playing == null) {
                 DeviceRow(R.drawable.ic_smartphone, stringResource(R.string.devices_this_phone), null, current = true, enabled = true, onClick = null)
@@ -71,14 +72,14 @@ fun DevicePickerSheet(
                 )
             }
             if (!info.inHousehold) {
-                Text(stringResource(R.string.devices_not_set_up), Modifier.padding(horizontal = 24.dp, vertical = 8.dp), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.devices_not_set_up), Modifier.padding(horizontal = KasaneSpace.s6, vertical = KasaneSpace.s2), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             } else {
                 val others =
                     members
                         .filter { it.role == Role.Player && !it.isApi && if (playing == null) !it.isSelf else it.deviceId != playing.deviceId }
                         .sortedWith(compareByDescending<ConnectV2Manager.MemberView> { it.isSelf }.thenByDescending { it.online })
                 if (others.isNotEmpty()) {
-                    Text(stringResource(R.string.devices_select_another), Modifier.padding(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 8.dp), style = MaterialTheme.typography.titleMediumEmphasized)
+                    Text(stringResource(R.string.devices_select_another), Modifier.padding(start = KasaneSpace.s6, end = KasaneSpace.s6, top = KasaneSpace.s4, bottom = KasaneSpace.s2), style = MaterialTheme.typography.titleMediumEmphasized)
                     for (member in others) {
                         if (member.isSelf) {
                             DeviceRow(R.drawable.ic_smartphone, stringResource(R.string.devices_this_phone), null, current = false, enabled = true) {
@@ -107,11 +108,11 @@ fun DevicePickerSheet(
                     if (remote == null && !phonePlaying && state.playing) watch?.pull() else watch?.push()
                 }
             }
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(KasaneSpace.s2))
             TextButton(onClick = {
                 onDismiss()
                 onOpenSettings()
-            }, modifier = Modifier.padding(horizontal = 12.dp)) { Text(stringResource(R.string.devices_settings)) }
+            }, modifier = Modifier.padding(horizontal = KasaneSpace.s3)) { Text(stringResource(R.string.devices_settings)) }
         }
     }
 }
@@ -131,11 +132,11 @@ private fun DeviceRow(
             .fillMaxWidth()
             .then(if (onClick != null && enabled) Modifier.clickable(onClick = onClick) else Modifier)
             .alpha(if (enabled) 1f else 0.45f)
-            .padding(horizontal = 24.dp, vertical = 12.dp),
+            .padding(horizontal = KasaneSpace.s6, vertical = KasaneSpace.s3),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(painterResource(icon), null, Modifier.size(28.dp), tint = if (current) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
-        Column(Modifier.padding(start = 16.dp)) {
+        Column(Modifier.padding(start = KasaneSpace.s4)) {
             Text(title, color = accent, style = MaterialTheme.typography.bodyLargeEmphasized, maxLines = 1, overflow = TextOverflow.Ellipsis)
             subtitle?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis) }
         }

@@ -51,6 +51,7 @@ import xyz.mooma0750.wave.navigation.SongActions
 import xyz.mooma0750.wave.search.SongMenuSheet
 import xyz.mooma0750.wave.search.failureMessage
 import xyz.mooma0750.wave.ui.IconTextButton
+import kasane.KasaneSpace
 /** ホームの棚を、横に流れる欄として並べる。 */
 fun LazyListScope.homeFeedItems(
     state: HomeFeedUiState,
@@ -61,11 +62,11 @@ fun LazyListScope.homeFeedItems(
 ) {
     state.shelves.forEachIndexed { index, shelf ->
         item(key = "shelf-$index") {
-            Column(Modifier.padding(top = 12.dp)) {
-                shelf.strapline?.let { Text(it, Modifier.padding(horizontal = 16.dp), style = MaterialTheme.typography.labelMedium) }
+            Column(Modifier.padding(top = KasaneSpace.s3)) {
+                shelf.strapline?.let { Text(it, Modifier.padding(horizontal = KasaneSpace.s4), style = MaterialTheme.typography.labelMedium) }
                 // 見出しは登録したアーティストの新作・アーティストのページの棚と同じ書体（同格の見出しの太さをそろえる）
-                Text(shelfTitle(shelf), Modifier.padding(horizontal = 16.dp), style = MaterialTheme.typography.titleLargeEmphasized)
-                LazyRow(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(shelfTitle(shelf), Modifier.padding(horizontal = KasaneSpace.s4), style = MaterialTheme.typography.titleLargeEmphasized)
+                LazyRow(contentPadding = PaddingValues(horizontal = KasaneSpace.s4, vertical = KasaneSpace.s2), horizontalArrangement = Arrangement.spacedBy(KasaneSpace.s3)) {
                     items(shelf.items) { item ->
                         val look = HomeItemLook.of(item)
                         // 曲のカードは長押しで曲のメニューを開く（Spotify と同じ）
@@ -88,14 +89,14 @@ fun LazyListScope.homeFeedItems(
     // 下にライブラリが続くので、続きの棚は自動では読まない
     if (state.continuation != null) {
         item(key = "home-more") {
-            IconTextButton(R.drawable.ic_add, if (state.loadingMore) stringResource(R.string.home_loading) else stringResource(R.string.home_more_recommendations), onLoadMore, Modifier.padding(horizontal = 8.dp), enabled = !state.loadingMore)
+            IconTextButton(R.drawable.ic_add, if (state.loadingMore) stringResource(R.string.home_loading) else stringResource(R.string.home_more_recommendations), onLoadMore, Modifier.padding(horizontal = KasaneSpace.s2), enabled = !state.loadingMore)
         }
     }
     when {
-        state.loading -> item(key = "home-loading") { LoadingIndicator(Modifier.padding(16.dp)) }
+        state.loading -> item(key = "home-loading") { LoadingIndicator(Modifier.padding(KasaneSpace.s4)) }
         state.failure != null ->
             item(key = "home-failure") {
-                Column(Modifier.padding(16.dp)) {
+                Column(Modifier.padding(KasaneSpace.s4)) {
                     Text(stringResource(R.string.home_recommendations_failed, failureMessage(state.failure)), style = MaterialTheme.typography.bodySmall)
                     IconTextButton(R.drawable.ic_refresh, stringResource(R.string.home_retry), onRetry)
                 }

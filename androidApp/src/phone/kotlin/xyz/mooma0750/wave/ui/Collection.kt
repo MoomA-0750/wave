@@ -40,6 +40,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import xyz.mooma0750.wave.R
 import androidx.compose.ui.res.stringResource
+import kasane.KasaneSpace
 
 /**
  * プレイリスト・アルバムのページ（並びは Spotify と同じ）: ジャケットの色のグラデーションの上に大きなジャケット、
@@ -80,9 +81,9 @@ fun CollectionScreen(
                         coil3.compose.AsyncImage(model = coverUrl, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.4f to Color.Transparent, 1f to background.copy(alpha = 0.95f))))
                         Row(
-                            Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(16.dp),
+                            Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(KasaneSpace.s4),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(KasaneSpace.s3),
                         ) {
                             Text(
                                 title,
@@ -94,7 +95,7 @@ fun CollectionScreen(
                             titleTrailing()
                         }
                     }
-                    Column(Modifier.padding(horizontal = 16.dp)) { details() }
+                    Column(Modifier.padding(horizontal = KasaneSpace.s4)) { details() }
                 }
             } else item(key = "collection-header") {
                 Column(
@@ -102,22 +103,22 @@ fun CollectionScreen(
                         .fillMaxWidth()
                         .background(Brush.verticalGradient(listOf(lerp(background, art, 0.7f), background)))
                         .statusBarsPadding()
-                        .padding(top = 56.dp, start = 16.dp, end = 16.dp),
+                        .padding(top = 56.dp, start = KasaneSpace.s4, end = KasaneSpace.s4),
                 ) {
                     top()
                     BoxWithConstraints(Modifier.fillMaxWidth()) {
                         if (maxWidth >= WIDE_HEADER_MIN_WIDTH) {
                             // 広い画面（タブレット・開いた折りたたみ）: ジャケットの右に大きな題名（Spotify のタブレット・デスクトップと同じ）
-                            Row(Modifier.padding(vertical = 16.dp), verticalAlignment = Alignment.Bottom) {
+                            Row(Modifier.padding(vertical = KasaneSpace.s4), verticalAlignment = Alignment.Bottom) {
                                 coil3.compose.AsyncImage(
                                     model = coverUrl,
                                     contentDescription = null,
                                     modifier = Modifier.size(200.dp).clip(coverShape),
                                     contentScale = ContentScale.Crop,
                                 )
-                                Column(Modifier.padding(start = 24.dp).weight(1f)) {
+                                Column(Modifier.padding(start = KasaneSpace.s6).weight(1f)) {
                                     Text(title, style = MaterialTheme.typography.displaySmallEmphasized, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                    Spacer(Modifier.height(8.dp))
+                                    Spacer(Modifier.height(KasaneSpace.s2))
                                     details()
                                 }
                             }
@@ -126,11 +127,11 @@ fun CollectionScreen(
                                 coil3.compose.AsyncImage(
                                     model = coverUrl,
                                     contentDescription = null,
-                                    modifier = Modifier.padding(vertical = 12.dp).size(240.dp).align(Alignment.CenterHorizontally).clip(coverShape),
+                                    modifier = Modifier.padding(vertical = KasaneSpace.s3).size(240.dp).align(Alignment.CenterHorizontally).clip(coverShape),
                                     contentScale = ContentScale.Crop,
                                 )
                                 Text(title, style = MaterialTheme.typography.headlineSmallEmphasized, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                Spacer(Modifier.height(4.dp))
+                                Spacer(Modifier.height(KasaneSpace.s1))
                                 details()
                             }
                         }
@@ -138,17 +139,17 @@ fun CollectionScreen(
                 }
             }
             item(key = "collection-actions") {
-                Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 16.dp, top = 4.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxWidth().padding(start = KasaneSpace.s1, end = KasaneSpace.s4, top = KasaneSpace.s1, bottom = KasaneSpace.s2), verticalAlignment = Alignment.CenterVertically) {
                     // Windows と同じ並び: 左から再生ボタン、シャッフル、そのほかの操作
                     play?.let { controls ->
-                        PlayFab(playing = false, onClick = controls.onPlay, enabled = controls.enabled, modifier = Modifier.padding(start = 12.dp, end = 8.dp))
+                        PlayFab(playing = false, onClick = controls.onPlay, enabled = controls.enabled, modifier = Modifier.padding(start = KasaneSpace.s3, end = KasaneSpace.s2))
                         IconAction(R.drawable.ic_shuffle, if (controls.shuffle) stringResource(R.string.ui_shuffle_on) else stringResource(R.string.ui_shuffle_off), { controls.onShuffleChange(!controls.shuffle) }, active = controls.shuffle, size = 28.dp)
                     }
                     actions()
                 }
             }
             content()
-            item(key = "collection-bottom") { Spacer(Modifier.height(16.dp)) }
+            item(key = "collection-bottom") { Spacer(Modifier.height(KasaneSpace.s4)) }
         }
         TopAppBar(
             title = { if (collapsed) Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },

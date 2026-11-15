@@ -35,6 +35,7 @@ import xyz.mooma0750.wave.core.music.Song
 import xyz.mooma0750.wave.navigation.SongActions
 import xyz.mooma0750.wave.ui.IconAction
 import xyz.mooma0750.wave.ui.MenuIcon
+import kasane.KasaneSpace
 /**
  * 曲のメニュー（Spotify の「⋯」と同じく、下からのシートに曲の画像と名前、その下に操作）。
  * キューへの追加・プレイリストへの追加・曲のラジオ・アーティストとアルバムのページへの移動。
@@ -64,21 +65,21 @@ fun SongMenuSheet(
     val close = onDismiss
     ModalBottomSheet(onDismissRequest = close) {
         Column(Modifier.navigationBarsPadding()) {
-            Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.padding(horizontal = KasaneSpace.s4, vertical = KasaneSpace.s2), verticalAlignment = Alignment.CenterVertically) {
                 coil3.compose.AsyncImage(
                     model = song.thumbnailUrl,
                     contentDescription = null,
                     modifier = Modifier.size(56.dp).clip(MaterialTheme.shapes.extraSmall),
                     contentScale = ContentScale.Crop,
                 )
-                Column(Modifier.padding(start = 12.dp)) {
+                Column(Modifier.padding(start = KasaneSpace.s3)) {
                     Text(song.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMediumEmphasized)
                     Text(song.subtitle, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-            HorizontalDivider(Modifier.padding(vertical = 4.dp))
+            HorizontalDivider(Modifier.padding(vertical = KasaneSpace.s1))
             SongMenuItems(song, actions, close, extraItems)
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(KasaneSpace.s2))
         }
     }
 }

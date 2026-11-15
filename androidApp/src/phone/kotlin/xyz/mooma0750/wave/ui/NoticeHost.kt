@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kasane.KasaneSpace
 
 /**
  * 出ている知らせ（スナックバー）の高さ（px、余白を含む。出ていなければ 0）。NoticeHost が書き、一覧が下の余白に使う。
@@ -89,14 +90,14 @@ fun NoticeHost(modifier: Modifier = Modifier) {
         }
         // スナックバーと同じ色・形の箱を自分で組み、バーは中の余白ではなく箱の下の縁に沿わせる
         Surface(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp).fillMaxWidth(),
+            modifier = Modifier.padding(horizontal = KasaneSpace.s3, vertical = KasaneSpace.s2).fillMaxWidth(),
             shape = SnackbarDefaults.shape,
             color = SnackbarDefaults.color,
             contentColor = SnackbarDefaults.contentColor,
             shadowElevation = 6.dp,
         ) {
             Column {
-                Text(data.visuals.message, Modifier.padding(horizontal = 16.dp, vertical = 14.dp), style = MaterialTheme.typography.bodyMedium)
+                Text(data.visuals.message, Modifier.padding(horizontal = KasaneSpace.s4, vertical = 14.dp), style = MaterialTheme.typography.bodyMedium)
                 // 箱の下の縁に沿わせる細いバーなので、波は付けず平らなまま減らす
                 val barStroke = Stroke(width = with(LocalDensity.current) { 3.dp.toPx() }, cap = StrokeCap.Butt)
                 LinearWavyProgressIndicator(

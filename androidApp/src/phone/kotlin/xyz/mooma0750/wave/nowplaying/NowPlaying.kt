@@ -96,6 +96,7 @@ import xyz.mooma0750.wave.search.SongMenuButton
 import xyz.mooma0750.wave.ui.Durations
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.pluralStringResource
+import kasane.KasaneSpace
 
 /**
  * 画面の下のミニプレーヤー（並びは Spotify と同じ: ジャケット・曲名・端末・評価・再生、下に進み具合の線）。
@@ -123,7 +124,7 @@ fun MiniPlayer(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 4.dp)
+                .padding(horizontal = KasaneSpace.s2, vertical = KasaneSpace.s1)
                 .pointerInput(display.remote != null, state.hasNext, state.hasPrevious) {
                     detectHorizontalDragGestures(
                         onDragEnd = {
@@ -137,7 +138,7 @@ fun MiniPlayer(
                 }.clickable(onClick = onOpen),
     ) {
         Column {
-            Row(Modifier.padding(start = 6.dp, top = 6.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.padding(start = 6.dp, top = 6.dp, bottom = KasaneSpace.s1), verticalAlignment = Alignment.CenterVertically) {
                 coil3.compose.AsyncImage(
                     model = song?.thumbnailUrl,
                     contentDescription = null,
@@ -174,7 +175,7 @@ fun MiniPlayer(
                 // 下の小さな再生欄では波打たせない（波が枠からはみ出す）
                 LinearWavyProgressIndicator(
                     progress = { (state.positionMs.toFloat() / state.durationMs).coerceIn(0f, 1f) },
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = KasaneSpace.s2),
                     amplitude = { 0f },
                 )
             }
@@ -191,7 +192,7 @@ fun LiveBadge(modifier: Modifier = Modifier) {
         color = MaterialTheme.colorScheme.error,
         contentColor = MaterialTheme.colorScheme.onError,
     ) {
-        Text(stringResource(R.string.live_badge), Modifier.padding(horizontal = 8.dp, vertical = 2.dp), style = MaterialTheme.typography.labelMediumEmphasized)
+        Text(stringResource(R.string.live_badge), Modifier.padding(horizontal = KasaneSpace.s2, vertical = 2.dp), style = MaterialTheme.typography.labelMediumEmphasized)
     }
 }
 
@@ -357,24 +358,24 @@ fun NowPlayingScreen(
                     .fillMaxHeight()
                     .statusBarsPadding()
                     .navigationBarsPadding()
-                    .padding(top = 56.dp, bottom = 24.dp, end = 24.dp),
+                    .padding(top = 56.dp, bottom = KasaneSpace.s6, end = KasaneSpace.s6),
                 colors = CardDefaults.cardColors(containerColor = lerp(MaterialTheme.colorScheme.surfaceContainerHigh, art, 0.5f)),
             ) {
-                Text(stringResource(R.string.nowplaying_lyrics), Modifier.padding(start = 20.dp, top = 16.dp), style = MaterialTheme.typography.titleMediumEmphasized)
-                LyricsPanel(song, display.clock, lyrics, Modifier.fillMaxSize().padding(horizontal = 12.dp))
+                Text(stringResource(R.string.nowplaying_lyrics), Modifier.padding(start = KasaneSpace.s5, top = KasaneSpace.s4), style = MaterialTheme.typography.titleMediumEmphasized)
+                LyricsPanel(song, display.clock, lyrics, Modifier.fillMaxSize().padding(horizontal = KasaneSpace.s3))
             }
         }
         Column(
             Modifier
                 .widthIn(max = leftWidth)
                 .align(if (sideBySide) Alignment.TopStart else Alignment.TopCenter)
-                .then(if (sideBySide) Modifier.padding(start = 24.dp) else Modifier)
+                .then(if (sideBySide) Modifier.padding(start = KasaneSpace.s6) else Modifier)
                 .fillMaxSize()
                 .statusBarsPadding()
                 .navigationBarsPadding()
                 .verticalScroll(rememberScrollState()),
         ) {
-            Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = KasaneSpace.s2), verticalAlignment = Alignment.CenterVertically) {
                 if (inPanel) {
                     onHidePanel?.let { IconAction(R.drawable.ic_right_panel_close, stringResource(R.string.nowplaying_hide_panel), it) }
                     IconAction(R.drawable.ic_open_in_full, stringResource(R.string.nowplaying_expand), onClose)
@@ -444,7 +445,7 @@ fun NowPlayingScreen(
                 }
             }
             val restBlock = @Composable {
-                Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxWidth().padding(horizontal = KasaneSpace.s6), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         // 曲名を押すとアルバムへ、アーティストを押すとアーティストのページへ（複数なら選ぶ）
                         val album = song?.album?.takeIf { it.browseId != null }
@@ -475,12 +476,12 @@ fun NowPlayingScreen(
                     LikeButton(connection, scope, size = 28.dp, onLikedTap = song?.let { current -> { actions.addToPlaylist(current) } })
                 }
                 if (!controlsInBar) {
-                    SeekBar(display, Modifier.fillMaxWidth().padding(horizontal = 24.dp))
-                    Transport(display, connection, Modifier.fillMaxWidth().padding(horizontal = 16.dp), Arrangement.SpaceBetween, playSize = 72.dp, skipSize = 36.dp)
-                    VolumeSlider(display, Modifier.fillMaxWidth().padding(horizontal = 24.dp))
+                    SeekBar(display, Modifier.fillMaxWidth().padding(horizontal = KasaneSpace.s6))
+                    Transport(display, connection, Modifier.fillMaxWidth().padding(horizontal = KasaneSpace.s4), Arrangement.SpaceBetween, playSize = 72.dp, skipSize = 36.dp)
+                    VolumeSlider(display, Modifier.fillMaxWidth().padding(horizontal = KasaneSpace.s6))
                     // 左端に端末、右端にキュー（共有は「…」のメニューにある）。weight(fill = false) と Spacer の weight を並べると余りが分かれて、
                     // キューのボタンが真ん中寄りに出ていたので、SpaceBetween で両端に寄せる
-                    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                    Row(Modifier.fillMaxWidth().padding(horizontal = KasaneSpace.s4), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                         // 端末名が出ているときは、名前まで含めて押せるようにする（アイコンだけが反応するのは分かりにくい）
                         Row(
                             Modifier.weight(1f, fill = false).clip(CircleShape).clickable(onClick = onOpenDevices).padding(end = if (remote != null) 12.dp else 0.dp),
@@ -503,21 +504,21 @@ fun NowPlayingScreen(
                 // 次の曲（Windows・Spotify と同じく、操作の下に出す。押すとキューを開く）
                 state.queue.getOrNull(state.currentIndex + 1)?.let { next ->
                     Card(
-                        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).clickable { showQueue = true },
+                        Modifier.fillMaxWidth().padding(horizontal = KasaneSpace.s4, vertical = KasaneSpace.s2).clickable { showQueue = true },
                         colors = CardDefaults.cardColors(containerColor = lerp(MaterialTheme.colorScheme.surfaceContainerHigh, art, 0.35f)),
                     ) {
-                        Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Row(Modifier.fillMaxWidth().padding(start = KasaneSpace.s4, end = KasaneSpace.s2, top = KasaneSpace.s3), verticalAlignment = Alignment.CenterVertically) {
                             Text(stringResource(R.string.nowplaying_next_up), style = MaterialTheme.typography.titleMediumEmphasized, modifier = Modifier.weight(1f))
                             TextButton(onClick = { showQueue = true }) { Text(stringResource(R.string.nowplaying_open_queue)) }
                         }
-                        Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Row(Modifier.fillMaxWidth().padding(start = KasaneSpace.s4, end = KasaneSpace.s4, bottom = KasaneSpace.s3), verticalAlignment = Alignment.CenterVertically) {
                             coil3.compose.AsyncImage(
                                 model = next.thumbnailUrl,
                                 contentDescription = null,
                                 modifier = Modifier.size(48.dp).clip(MaterialTheme.shapes.extraSmall),
                                 contentScale = androidx.compose.ui.layout.ContentScale.Crop,
                             )
-                            Column(Modifier.padding(start = 12.dp)) {
+                            Column(Modifier.padding(start = KasaneSpace.s3)) {
                                 Text(next.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyLargeEmphasized)
                                 Text(next.artist, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
@@ -525,19 +526,19 @@ fun NowPlayingScreen(
                     }
                 }
                 val like by connection.likeState.collectAsState()
-                like.message?.let { Text(it, Modifier.padding(horizontal = 24.dp), style = MaterialTheme.typography.bodySmall) }
-                state.error?.let { Text(stringResource(R.string.nowplaying_error, it), Modifier.padding(horizontal = 24.dp), style = MaterialTheme.typography.bodySmall) }
+                like.message?.let { Text(it, Modifier.padding(horizontal = KasaneSpace.s6), style = MaterialTheme.typography.bodySmall) }
+                state.error?.let { Text(stringResource(R.string.nowplaying_error, it), Modifier.padding(horizontal = KasaneSpace.s6), style = MaterialTheme.typography.bodySmall) }
                 // 下に続く歌詞のカード（Spotify と同じ。押すと全面で開く）。歌詞が無い曲・探している間は出さない。広い画面の全面では右に出す
                 if (!sideBySide && song != null && hasLyrics == true) {
                     Card(
-                        Modifier.fillMaxWidth().padding(16.dp),
+                        Modifier.fillMaxWidth().padding(KasaneSpace.s4),
                         colors = CardDefaults.cardColors(containerColor = lerp(MaterialTheme.colorScheme.surfaceContainerHigh, art, 0.5f)),
                     ) {
-                        Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Row(Modifier.fillMaxWidth().padding(start = KasaneSpace.s4, end = KasaneSpace.s1, top = KasaneSpace.s2), verticalAlignment = Alignment.CenterVertically) {
                             Text(stringResource(R.string.nowplaying_lyrics), style = MaterialTheme.typography.titleMediumEmphasized, modifier = Modifier.weight(1f))
                             IconAction(R.drawable.ic_lyrics, stringResource(R.string.nowplaying_lyrics_open_full), { showLyrics = true })
                         }
-                        LyricsPanel(song, display.clock, lyrics, Modifier.fillMaxWidth().height(320.dp).padding(horizontal = 8.dp))
+                        LyricsPanel(song, display.clock, lyrics, Modifier.fillMaxWidth().height(320.dp).padding(horizontal = KasaneSpace.s2))
                     }
                 }
             }
@@ -563,9 +564,9 @@ fun NowPlayingScreen(
 
     if (showLyrics && song != null) {
         ModalBottomSheet(onDismissRequest = { showLyrics = false }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
-            Text(state.title.orEmpty(), Modifier.padding(horizontal = 24.dp), style = MaterialTheme.typography.titleMediumEmphasized)
-            Text(state.artist.orEmpty(), Modifier.padding(horizontal = 24.dp), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            LyricsPanel(song, display.clock, lyrics, Modifier.fillMaxWidth().fillMaxHeight(0.85f).padding(8.dp))
+            Text(state.title.orEmpty(), Modifier.padding(horizontal = KasaneSpace.s6), style = MaterialTheme.typography.titleMediumEmphasized)
+            Text(state.artist.orEmpty(), Modifier.padding(horizontal = KasaneSpace.s6), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            LyricsPanel(song, display.clock, lyrics, Modifier.fillMaxWidth().fillMaxHeight(0.85f).padding(KasaneSpace.s2))
         }
     }
 
@@ -591,8 +592,8 @@ fun ArtistPickerDialog(
         text = {
             Column {
                 artists.forEach { artist ->
-                    Row(Modifier.fillMaxWidth().clickable { onPick(artist) }.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(painterResource(R.drawable.ic_person), contentDescription = null, modifier = Modifier.padding(end = 12.dp))
+                    Row(Modifier.fillMaxWidth().clickable { onPick(artist) }.padding(vertical = KasaneSpace.s3), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(painterResource(R.drawable.ic_person), contentDescription = null, modifier = Modifier.padding(end = KasaneSpace.s3))
                         Text(artist.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
@@ -670,16 +671,16 @@ private fun FullScreenVideo(
                         .background(Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.5f), 0.3f to Color.Transparent, 0.65f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.6f))),
                 ) {
                     androidx.compose.runtime.CompositionLocalProvider(androidx.compose.material3.LocalContentColor provides Color.White) {
-                        Column(Modifier.align(Alignment.TopStart).padding(horizontal = 24.dp, vertical = 16.dp)) {
+                        Column(Modifier.align(Alignment.TopStart).padding(horizontal = KasaneSpace.s6, vertical = KasaneSpace.s4)) {
                             Text(state.title.orEmpty(), style = MaterialTheme.typography.titleLargeEmphasized, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Text(state.artist.orEmpty(), style = MaterialTheme.typography.bodyLarge, color = Color.White.copy(alpha = 0.75f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
-                        Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(40.dp)) {
+                        Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(KasaneSpace.s10)) {
                             VideoOverlayButton(R.drawable.ic_skip_previous, stringResource(R.string.nowplaying_previous), { display.previous(); touched++ }, enabled = state.hasPrevious, size = 56.dp)
                             PlayFab(state.isPlaying, { display.togglePlay(); touched++ }, size = 72.dp)
                             VideoOverlayButton(R.drawable.ic_skip_next, stringResource(R.string.nowplaying_next), { display.next(); touched++ }, enabled = state.hasNext, size = 56.dp)
                         }
-                        Row(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(start = 24.dp, end = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Row(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(start = KasaneSpace.s6, end = KasaneSpace.s2, bottom = KasaneSpace.s2), verticalAlignment = Alignment.CenterVertically) {
                             if (state.isLive) {
                                 LiveBadge()
                                 Spacer(Modifier.weight(1f))
@@ -696,11 +697,11 @@ private fun FullScreenVideo(
                                         if (target != null && state.durationMs > 0) display.seekTo((target * state.durationMs).toLong())
                                     },
                                     enabled = state.durationMs > 0,
-                                    modifier = Modifier.weight(1f).padding(horizontal = 12.dp),
+                                    modifier = Modifier.weight(1f).padding(horizontal = KasaneSpace.s3),
                                 )
                                 Text(formatTime(state.durationMs), style = MaterialTheme.typography.bodySmall)
                             }
-                            VideoOverlayButton(R.drawable.ic_pip, stringResource(R.string.nowplaying_video_pip), { VideoPip.enter(activity) }, modifier = Modifier.padding(start = 4.dp))
+                            VideoOverlayButton(R.drawable.ic_pip, stringResource(R.string.nowplaying_video_pip), { VideoPip.enter(activity) }, modifier = Modifier.padding(start = KasaneSpace.s1))
                             VideoOverlayButton(R.drawable.ic_fullscreen_exit, stringResource(R.string.nowplaying_video_exit_fullscreen), onClose, modifier = Modifier.padding(start = 6.dp))
                         }
                     }
@@ -788,7 +789,7 @@ private fun QueueSheet(
     Column(Modifier.fillMaxWidth()) {
         // キューをプレイリストとして保存（良いラジオの流れを残す。手元のキューのときだけ）
         var saving by remember { mutableStateOf<List<xyz.mooma0750.wave.core.music.Song>?>(null) }
-        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = KasaneSpace.s4, vertical = KasaneSpace.s2), verticalAlignment = Alignment.CenterVertically) {
             ChoiceButtonGroup(listOf(stringResource(R.string.nowplaying_queue), stringResource(R.string.nowplaying_history)), if (history) 1 else 0, { history = it == 1 })
             Spacer(Modifier.weight(1f))
             val save = actions.saveQueue
@@ -811,7 +812,7 @@ private fun QueueSheet(
                 text = {
                     Column {
                         OutlinedTextField(title, { title = it }, singleLine = true)
-                        Text(stringResource(R.string.library_save_queue_count, songs.size), Modifier.padding(top = 8.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(stringResource(R.string.library_save_queue_count, songs.size), Modifier.padding(top = KasaneSpace.s2), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 },
                 confirmButton = {
@@ -839,7 +840,7 @@ private fun QueueSheet(
                     .background(if (isDragged) MaterialTheme.colorScheme.surfaceContainerHighest else Color.Transparent)
                     // ほかの端末を映している間も、選ぶと再生サービスがその端末でその曲を鳴らしてもらう（Mac・Windows・iPhone と同じ）
                     .then(if (isCurrent) Modifier else Modifier.clickable { scope.launch { connection.jumpTo(row.itemId) } })
-                    .padding(start = 16.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
+                    .padding(start = KasaneSpace.s4, end = KasaneSpace.s1, top = 6.dp, bottom = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 coil3.compose.AsyncImage(
@@ -848,7 +849,7 @@ private fun QueueSheet(
                     modifier = Modifier.size(48.dp).clip(MaterialTheme.shapes.extraSmall),
                     contentScale = androidx.compose.ui.layout.ContentScale.Crop,
                 )
-                Column(Modifier.weight(1f).padding(start = 12.dp)) {
+                Column(Modifier.weight(1f).padding(start = KasaneSpace.s3)) {
                     Text(row.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = if (isCurrent) MaterialTheme.typography.bodyLargeEmphasized else MaterialTheme.typography.bodyLarge, color = if (isCurrent) MaterialTheme.colorScheme.primary else Color.Unspecified)
                     Text(row.artist, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
@@ -872,7 +873,7 @@ private fun QueueSheet(
                         modifier =
                             Modifier
                                 .size(48.dp)
-                                .padding(12.dp)
+                                .padding(KasaneSpace.s3)
                                 .pointerInput(row.itemId) {
                                     detectDragGestures(
                                         onDragStart = {
@@ -920,7 +921,7 @@ private fun QueueSheet(
             text: String,
             trailing: @Composable () -> Unit = {},
         ) {
-            Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().padding(start = KasaneSpace.s4, end = KasaneSpace.s2, top = KasaneSpace.s3, bottom = KasaneSpace.s1), verticalAlignment = Alignment.CenterVertically) {
                 Text(text, Modifier.weight(1f), style = MaterialTheme.typography.titleMediumEmphasized)
                 trailing()
             }
@@ -929,7 +930,7 @@ private fun QueueSheet(
             // もう流れた曲（新しい順）。押すとその曲に戻る
             val played = (0 until current.coerceAtMost(rows.size)).reversed()
             LazyColumn(Modifier.fillMaxWidth()) {
-                if (played.isEmpty()) item { Text(stringResource(R.string.nowplaying_history_empty), Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                if (played.isEmpty()) item { Text(stringResource(R.string.nowplaying_history_empty), Modifier.padding(KasaneSpace.s4), color = MaterialTheme.colorScheme.onSurfaceVariant) }
                 items(played.toList(), key = { rows[it].itemId }) { index -> songRow(index, rows[index], movable = false) }
             }
         } else {
@@ -1135,7 +1136,7 @@ private fun SeekBar(
     val position = @Composable { Text(formatTime(state.positionMs), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
     val duration = @Composable { Text(formatTime(state.durationMs), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
     if (timesBeside) {
-        Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(KasaneSpace.s2)) {
             position()
             slider(Modifier.weight(1f))
             duration()
@@ -1224,7 +1225,7 @@ private fun VolumeSlider(
                 if (remote != null) draggingVolume?.let { display.setVolume(kotlin.math.round(it * 100).toInt()) }
                 draggingVolume = null
             },
-            modifier = Modifier.weight(1f).padding(horizontal = 8.dp).semantics { contentDescription = volumeLabel },
+            modifier = Modifier.weight(1f).padding(horizontal = KasaneSpace.s2).semantics { contentDescription = volumeLabel },
         )
         Icon(painterResource(R.drawable.ic_volume_up), null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
     }
@@ -1254,7 +1255,7 @@ fun PlayerBar(
     val song = display.song
     var pickArtist by remember { mutableStateOf<List<xyz.mooma0750.wave.core.music.ArtistRef>?>(null) }
     // 左右の幅をそろえて、再生のボタンを窓の左右の中央に置く（Mac・Windows・Spotify と同じ）
-    Row(Modifier.fillMaxWidth().height(PLAYER_BAR_HEIGHT).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().height(PLAYER_BAR_HEIGHT).padding(horizontal = KasaneSpace.s2), verticalAlignment = Alignment.CenterVertically) {
         Row(Modifier.weight(PLAYER_BAR_SIDE), verticalAlignment = Alignment.CenterVertically) {
             coil3.compose.AsyncImage(
                 model = song?.thumbnailUrl,
@@ -1262,7 +1263,7 @@ fun PlayerBar(
                 modifier = Modifier.size(56.dp).clip(MaterialTheme.shapes.small).clickable(onClick = onShowPanel),
                 contentScale = androidx.compose.ui.layout.ContentScale.Crop,
             )
-            Column(Modifier.weight(1f, fill = false).padding(start = 12.dp)) {
+            Column(Modifier.weight(1f, fill = false).padding(start = KasaneSpace.s3)) {
                 // 曲名を押すとアルバムへ、アーティストを押すとアーティストのページへ（複数なら選ぶ）
                 val album = song?.album?.takeIf { it.browseId != null }
                 Text(
@@ -1292,8 +1293,8 @@ fun PlayerBar(
             }
             LikeButton(connection, scope, onLikedTap = song?.let { current -> { actions.addToPlaylist(current) } })
         }
-        Column(Modifier.weight(1f - 2 * PLAYER_BAR_SIDE).padding(top = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Transport(display, connection, Modifier, Arrangement.spacedBy(8.dp), playSize = 48.dp, skipSize = 28.dp)
+        Column(Modifier.weight(1f - 2 * PLAYER_BAR_SIDE).padding(top = KasaneSpace.s2), horizontalAlignment = Alignment.CenterHorizontally) {
+            Transport(display, connection, Modifier, Arrangement.spacedBy(KasaneSpace.s2), playSize = 48.dp, skipSize = 28.dp)
             SeekBar(display, Modifier.fillMaxWidth().widthIn(max = 640.dp), timesBeside = true)
         }
         // 右はボタン3つと音量。狭いときは音量を縮める
@@ -1325,7 +1326,7 @@ fun QueuePane(
     val display = rememberDisplay(connection, connect)
     val remote = display.remote
     Column(Modifier.fillMaxSize()) {
-        Text(stringResource(R.string.nowplaying_queue), Modifier.padding(start = 16.dp, top = 16.dp, bottom = 4.dp), style = MaterialTheme.typography.titleMediumEmphasized)
+        Text(stringResource(R.string.nowplaying_queue), Modifier.padding(start = KasaneSpace.s4, top = KasaneSpace.s4, bottom = KasaneSpace.s1), style = MaterialTheme.typography.titleMediumEmphasized)
         QueueSheet(display.state, display.controller, connection, actions, remote = remote != null, remoteSongs = remote?.items)
     }
 }
@@ -1342,13 +1343,13 @@ fun LyricsPage(
     val song = display.song
     val art by rememberArtworkColor(song?.thumbnailUrl)
     Column(Modifier.fillMaxSize().background(lerp(MaterialTheme.colorScheme.surfaceContainerHigh, art, 0.5f))) {
-        Row(Modifier.fillMaxWidth().padding(start = 4.dp, top = 8.dp, end = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().padding(start = KasaneSpace.s1, top = KasaneSpace.s2, end = KasaneSpace.s4), verticalAlignment = Alignment.CenterVertically) {
             xyz.mooma0750.wave.ui.BackButton(onBack)
-            Column(Modifier.weight(1f).padding(start = 4.dp)) {
+            Column(Modifier.weight(1f).padding(start = KasaneSpace.s1)) {
                 Text(display.state.title.orEmpty(), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMediumEmphasized)
                 Text(display.state.artist.orEmpty(), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
-        if (song != null) LyricsPanel(song, display.clock, lyrics, Modifier.fillMaxSize().padding(horizontal = 16.dp))
+        if (song != null) LyricsPanel(song, display.clock, lyrics, Modifier.fillMaxSize().padding(horizontal = KasaneSpace.s4))
     }
 }

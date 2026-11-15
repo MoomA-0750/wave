@@ -66,6 +66,7 @@ import xyz.mooma0750.wave.ui.ActionButtonGroup
 import xyz.mooma0750.wave.ui.BackButton
 import xyz.mooma0750.wave.ui.GroupAction
 import xyz.mooma0750.wave.ui.IconAction
+import kasane.KasaneSpace
 
 /**
  * ダウンロードの画面（ADR-0016 の 13・14）: 使っている容量と進み具合、スマートダウンロード（入り切り・分類・曲）、
@@ -96,11 +97,11 @@ fun DownloadsScreen(
         val noticeList = androidx.compose.foundation.lazy.rememberLazyListState()
         LazyColumn(Modifier.fillMaxSize().padding(padding), state = noticeList, contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = xyz.mooma0750.wave.ui.noticeBottomPadding(noticeList))) {
             item(key = "status") {
-                Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                Column(Modifier.padding(horizontal = KasaneSpace.s4, vertical = KasaneSpace.s2)) {
                     Text(stringResource(R.string.downloads_storage, android.text.format.Formatter.formatShortFileSize(context, state.bytesUsed)), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     if (!net.online) Text(stringResource(R.string.downloads_offline), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     state.active?.let { active ->
-                        Text(stringResource(R.string.downloads_downloading, active.title.orEmpty()), Modifier.padding(top = 8.dp), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium)
+                        Text(stringResource(R.string.downloads_downloading, active.title.orEmpty()), Modifier.padding(top = KasaneSpace.s2), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium)
                         val total = active.total
                         if (total != null && total > 0) {
                             LinearWavyProgressIndicator(progress = { (active.bytes.toFloat() / total).coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
@@ -109,7 +110,7 @@ fun DownloadsScreen(
                     if (state.pending > 0) {
                         Text(
                             if (state.waitingForNetwork) stringResource(R.string.downloads_waiting_network) + " • " + stringResource(R.string.downloads_pending, state.pending) else stringResource(R.string.downloads_pending, state.pending),
-                            Modifier.padding(top = 4.dp),
+                            Modifier.padding(top = KasaneSpace.s1),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -126,7 +127,7 @@ fun DownloadsScreen(
             }
             if (smartEnabled == true) {
                 item(key = "smart-chips") {
-                    LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    LazyRow(contentPadding = PaddingValues(horizontal = KasaneSpace.s4), horizontalArrangement = Arrangement.spacedBy(KasaneSpace.s2)) {
                         items(listOf<SmartCategory?>(null) + SmartCategory.entries) { option ->
                             FilterChip(selected = category == option, onClick = { category = option }, label = { Text(categoryLabel(option)) })
                         }
@@ -138,18 +139,18 @@ fun DownloadsScreen(
                             GroupAction(stringResource(R.string.downloads_play), primary = true, enabled = smartSongs.isNotEmpty()) { onPlay(smartSongs, 0, false) },
                             GroupAction(stringResource(R.string.downloads_shuffle), enabled = smartSongs.isNotEmpty()) { onPlay(smartSongs, 0, true) },
                         ),
-                        Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        Modifier.padding(horizontal = KasaneSpace.s4, vertical = KasaneSpace.s2),
                     )
                 }
                 if (state.refreshingSmart) {
                     item(key = "smart-loading") {
-                        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Row(Modifier.padding(KasaneSpace.s4), verticalAlignment = Alignment.CenterVertically) {
                             LoadingIndicator()
-                            Text(stringResource(R.string.downloads_smart_refreshing), Modifier.padding(start = 12.dp))
+                            Text(stringResource(R.string.downloads_smart_refreshing), Modifier.padding(start = KasaneSpace.s3))
                         }
                     }
                 } else if (smartSongs.isEmpty()) {
-                    item(key = "smart-empty") { Text(stringResource(R.string.downloads_smart_empty), Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    item(key = "smart-empty") { Text(stringResource(R.string.downloads_smart_empty), Modifier.padding(KasaneSpace.s4), color = MaterialTheme.colorScheme.onSurfaceVariant) }
                 }
                 itemsIndexed(smartSongs, key = { index, song -> "smart-$index-${song.videoId}" }) { index, song ->
                     SongRow(song, onClick = { onPlay(smartSongs, index, false) }) { SongMenuButton(song, actions) }
@@ -174,7 +175,7 @@ fun DownloadsScreen(
                 }
             }
             if (manifest.isEmpty && smartEnabled == false) {
-                item(key = "empty") { Text(stringResource(R.string.downloads_empty), Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                item(key = "empty") { Text(stringResource(R.string.downloads_empty), Modifier.padding(KasaneSpace.s4), color = MaterialTheme.colorScheme.onSurfaceVariant) }
             }
         }
     }
@@ -191,7 +192,7 @@ private fun categoryLabel(category: SmartCategory?): String =
 
 @Composable
 private fun SectionTitle(text: String) {
-    Text(text, Modifier.padding(start = 16.dp, top = 20.dp, bottom = 4.dp), style = MaterialTheme.typography.titleMediumEmphasized)
+    Text(text, Modifier.padding(start = KasaneSpace.s4, top = KasaneSpace.s5, bottom = KasaneSpace.s1), style = MaterialTheme.typography.titleMediumEmphasized)
 }
 
 @Composable
@@ -200,7 +201,7 @@ private fun CollectionRow(
     progress: Pair<Int, Int>,
     onClick: () -> Unit,
 ) {
-    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = KasaneSpace.s4, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         val url = collection.thumbnailUrl ?: collection.songs.firstOrNull()?.thumbnailUrl
         if (collection.kind == CollectionKind.Liked || url == null) {
             Box(Modifier.size(56.dp).clip(MaterialTheme.shapes.extraSmall).background(MaterialTheme.colorScheme.primaryContainer), contentAlignment = Alignment.Center) {
@@ -209,7 +210,7 @@ private fun CollectionRow(
         } else {
             coil3.compose.AsyncImage(model = url, contentDescription = null, modifier = Modifier.size(56.dp).clip(MaterialTheme.shapes.extraSmall), contentScale = ContentScale.Crop)
         }
-        Column(Modifier.padding(start = 12.dp).weight(1f)) {
+        Column(Modifier.padding(start = KasaneSpace.s3).weight(1f)) {
             Text(collection.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyLarge)
             Text(stringResource(R.string.downloads_in_progress, progress.first, progress.second), maxLines = 1, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }

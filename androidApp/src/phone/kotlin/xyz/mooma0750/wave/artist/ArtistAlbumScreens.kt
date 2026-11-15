@@ -78,6 +78,7 @@ import xyz.mooma0750.wave.ui.totalLength
 import xyz.mooma0750.wave.ui.IconTextButton
 import xyz.mooma0750.wave.ui.MenuIcon
 import xyz.mooma0750.wave.ui.PlayControls
+import kasane.KasaneSpace
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ArtistScreen(
@@ -124,8 +125,8 @@ fun ArtistScreen(
             },
     ) {
         when {
-            state.failure != null -> item { Text(failureMessage(state.failure), Modifier.padding(16.dp)) }
-            page == null -> item { LoadingIndicator(Modifier.padding(16.dp)) }
+            state.failure != null -> item { Text(failureMessage(state.failure), Modifier.padding(KasaneSpace.s4)) }
+            page == null -> item { LoadingIndicator(Modifier.padding(KasaneSpace.s4)) }
             else -> {
                 // 最近の新作（登録したアーティストの見張りで見つけたもの）。今のページから消えたもの（同じ名前の別人の作品だった）は出さない
                 val listed = newReleases.firstOrNull()?.let { listedReleases(newReleases, it.artistId, page, java.time.Year.now().value) }.orEmpty()
@@ -143,7 +144,7 @@ fun ArtistScreen(
                     SongRow(song, onClick = { viewModel.playRequest(song, false)?.let(onPlay) }, number = index + 1) { SongMenuButton(song, actions) }
                 }
                 page.allSongsPlaylistId?.let { id ->
-                    item { TextButton(onClick = { onOpenAllSongs(id, page.name) }, modifier = Modifier.padding(horizontal = 8.dp)) { Text(stringResource(R.string.artist_see_all_songs)) } }
+                    item { TextButton(onClick = { onOpenAllSongs(id, page.name) }, modifier = Modifier.padding(horizontal = KasaneSpace.s2)) { Text(stringResource(R.string.artist_see_all_songs)) } }
                 }
                 // Spotify の「高く評価した曲」の行（このアーティストの、自分が高く評価した曲）
                 if (liked.loading || liked.songs.isNotEmpty()) {
@@ -170,9 +171,9 @@ fun ArtistScreen(
                 }
                 page.albumShelves.forEachIndexed { shelfIndex, shelf ->
                     item(key = "shelf-$shelfIndex") {
-                        Column(Modifier.padding(top = 8.dp)) {
+                        Column(Modifier.padding(top = KasaneSpace.s2)) {
                             SectionTitle(shelf.title)
-                            LazyRow(contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            LazyRow(contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = KasaneSpace.s4), horizontalArrangement = Arrangement.spacedBy(KasaneSpace.s3)) {
                                 items(shelf.albums, key = { it.browseId }) { album -> AlbumCard(album, onOpenAlbum) }
                             }
                         }
@@ -181,9 +182,9 @@ fun ArtistScreen(
                 // 動画の棚（MV・YouTube の動画。iPhone と同じく1つにまとめる）。棚の曲と同じく、押すと曲の画面を開く
                 if (page.videos.isNotEmpty()) {
                     item(key = "videos") {
-                        Column(Modifier.padding(top = 8.dp)) {
+                        Column(Modifier.padding(top = KasaneSpace.s2)) {
                             SectionTitle(stringResource(R.string.artist_videos))
-                            LazyRow(contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            LazyRow(contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = KasaneSpace.s4), horizontalArrangement = Arrangement.spacedBy(KasaneSpace.s3)) {
                                 items(page.videos, key = { it.videoId }) { video -> VideoCard(video, actions) }
                             }
                         }
@@ -196,7 +197,7 @@ fun ArtistScreen(
 
 @Composable
 private fun SectionTitle(text: String) {
-    Text(text, Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp), style = MaterialTheme.typography.titleLargeEmphasized)
+    Text(text, Modifier.padding(start = KasaneSpace.s4, end = KasaneSpace.s4, top = KasaneSpace.s4, bottom = KasaneSpace.s2), style = MaterialTheme.typography.titleLargeEmphasized)
 }
 
 @Composable
@@ -283,7 +284,7 @@ fun AlbumScreen(
             if (page?.saved != null) {
                 val saving by viewModel.saving.collectAsStateWithLifecycle()
                 val failed = stringResource(R.string.album_save_failed)
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width(KasaneSpace.s2))
                 ToggleButton(checked = page.saved == true, onCheckedChange = { viewModel.toggleSaved(failed) }, enabled = !saving) {
                     Text(stringResource(if (page.saved == true) R.string.album_saved else R.string.album_save))
                 }
@@ -292,9 +293,9 @@ fun AlbumScreen(
         play = PlayControls(shuffle, { shuffle = it }, enabled = page?.songs?.isNotEmpty() == true) { page?.let { onPlay(it, 0, shuffle) } },
     ) {
         when {
-            state.failure != null -> item { Text(failureMessage(state.failure), Modifier.padding(16.dp)) }
-            page == null -> item { LoadingIndicator(Modifier.padding(16.dp)) }
-            page.songs.isEmpty() -> item { Text(stringResource(R.string.artist_no_songs), Modifier.padding(16.dp)) }
+            state.failure != null -> item { Text(failureMessage(state.failure), Modifier.padding(KasaneSpace.s4)) }
+            page == null -> item { LoadingIndicator(Modifier.padding(KasaneSpace.s4)) }
+            page.songs.isEmpty() -> item { Text(stringResource(R.string.artist_no_songs), Modifier.padding(KasaneSpace.s4)) }
             else ->
                 itemsIndexed(page.songs, key = { index, song -> "$index-${song.videoId}" }) { index, song ->
                     SongRow(song, onClick = { onPlay(page, index, false) }, showArtwork = false) { SongMenuButton(song, actions) }
@@ -307,9 +308,9 @@ fun AlbumScreen(
 @Composable
 private fun LivePostsRow(posts: List<xyz.mooma0750.wave.core.music.ArtistPost>) {
     val context = androidx.compose.ui.platform.LocalContext.current
-    Column(Modifier.padding(top = 8.dp)) {
+    Column(Modifier.padding(top = KasaneSpace.s2)) {
         SectionTitle(stringResource(R.string.artist_live_news))
-        LazyRow(contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        LazyRow(contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = KasaneSpace.s4), horizontalArrangement = Arrangement.spacedBy(KasaneSpace.s3)) {
             items(posts, key = { it.postId }) { post ->
                 androidx.compose.material3.OutlinedCard(
                     onClick = { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(post.url))) },
@@ -323,9 +324,9 @@ private fun LivePostsRow(posts: List<xyz.mooma0750.wave.core.music.ArtistPost>) 
                             contentScale = androidx.compose.ui.layout.ContentScale.Crop,
                         )
                     }
-                    Column(Modifier.padding(12.dp)) {
+                    Column(Modifier.padding(KasaneSpace.s3)) {
                         Text(post.text, maxLines = 6, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium)
-                        post.publishedText?.let { Text(it, Modifier.padding(top = 4.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                        post.publishedText?.let { Text(it, Modifier.padding(top = KasaneSpace.s1), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                     }
                 }
             }
