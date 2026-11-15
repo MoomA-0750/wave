@@ -11,7 +11,7 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
-        <Grid Padding="16,10" ColumnSpacing="12">
+        <Grid Padding="16,10" ColumnSpacing="{StaticResource KasaneSpace3}">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
@@ -21,7 +21,7 @@
                        Text="{x:Bind app:L.T('Google アカウントでログインしてください', 'Log in with your Google account')}" TextTrimming="CharacterEllipsis" />
         </Grid>
         <WebView2 x:Name="Browser" Grid.Row="1" />
-        <StackPanel x:Name="Status" Grid.Row="1" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="12" Visibility="Collapsed">
+        <StackPanel x:Name="Status" Grid.Row="1" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="{StaticResource KasaneSpace3}" Visibility="Collapsed">
             <ProgressRing IsActive="True" />
             <TextBlock x:Name="StatusText" Text="{x:Bind app:L.T('ログインしています…', 'Logging in…')}" HorizontalAlignment="Center" />
         </StackPanel>

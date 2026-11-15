@@ -6,7 +6,7 @@
       xmlns:music="using:Wave.Core.Music">
     <!-- アーティストのページ（Spotify と同じ: 横いっぱいの画像に名前、再生ボタン、人気の曲、ディスコグラフィー） -->
     <ScrollViewer>
-        <StackPanel Spacing="16" Padding="0,0,0,32">
+        <StackPanel Spacing="{StaticResource KasaneSpace4}" Padding="0,0,0,32">
             <Grid Height="320">
                 <Image x:Name="Hero" Stretch="UniformToFill" VerticalAlignment="Center" />
                 <Rectangle>
@@ -18,7 +18,7 @@
                     </Rectangle.Fill>
                 </Rectangle>
                 <!-- 名前と、枠の右端に登録（Spotify の「フォロー」）。大きさが違うので上下中央ではなく、名前の文字の下端（ベースライン）に揃える。登録していなければ色を付けて目立たせる -->
-                <Grid VerticalAlignment="Bottom" Padding="24" ColumnSpacing="20">
+                <Grid VerticalAlignment="Bottom" Padding="{StaticResource KasanePadding6}" ColumnSpacing="{StaticResource KasaneSpace5}">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
@@ -27,7 +27,7 @@
                     <Button x:Name="SubscribeButton" Grid.Column="1" Visibility="Collapsed" Click="OnSubscribe" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="0,0,0,16" CornerRadius="16" Padding="16,6" />
                 </Grid>
             </Grid>
-            <StackPanel Orientation="Horizontal" Spacing="16" Padding="24,0">
+            <StackPanel Orientation="Horizontal" Spacing="{StaticResource KasaneSpace4}" Padding="24,0">
                 <Button x:Name="PlayButton" Style="{StaticResource PlayCircleButtonStyle}" Click="OnPlay" ToolTipService.ToolTip="{x:Bind app:L.T('再生', 'Play')}" IsEnabled="False">
                     <FontIcon x:Name="PlayIcon" Glyph="&#xF5B0;" FontSize="20" />
                 </Button>
@@ -37,10 +37,10 @@
                 <ProgressRing x:Name="LoadingRing" IsActive="True" Width="20" Height="20" />
             </StackPanel>
             <!-- ライブ・ツアーの告知（アーティストの YouTube のチャンネルの投稿から。Android と同じ）。告知が無ければ出さない -->
-            <StackPanel x:Name="LivePanel" Visibility="Collapsed" Spacing="8">
+            <StackPanel x:Name="LivePanel" Visibility="Collapsed" Spacing="{StaticResource KasaneSpace2}">
                 <TextBlock Text="{x:Bind app:L.T('ライブ・お知らせ', 'Live &amp; news')}" Style="{StaticResource SubtitleTextBlockStyle}" Margin="24,8,24,0" />
                 <ScrollViewer HorizontalScrollMode="Enabled" HorizontalScrollBarVisibility="Auto" VerticalScrollMode="Disabled" VerticalScrollBarVisibility="Disabled">
-                    <StackPanel x:Name="LivePosts" Orientation="Horizontal" Spacing="12" Padding="24,0,24,8" />
+                    <StackPanel x:Name="LivePosts" Orientation="Horizontal" Spacing="{StaticResource KasaneSpace3}" Padding="24,0,24,8" />
                 </ScrollViewer>
             </StackPanel>
             <TextBlock Text="{x:Bind app:L.T('人気', 'Popular')}" Style="{StaticResource SubtitleTextBlockStyle}" Margin="24,8,24,0" />
@@ -48,8 +48,8 @@
                       ScrollViewer.VerticalScrollMode="Disabled" DoubleTapped="OnDoubleTapped" />
             <HyperlinkButton x:Name="AllSongs" Content="{x:Bind app:L.T('すべての曲を見る', 'See all songs')}" Margin="20,0" Click="OnAllSongs" Visibility="Collapsed" />
             <!-- Spotify の「高く評価した曲」の行（このアーティストの、自分が高く評価した曲）。1曲も無ければ出さない -->
-            <Button x:Name="LikedRow" Margin="24,0" Padding="8" HorizontalAlignment="Left" Background="Transparent" BorderThickness="0" Click="OnLiked" Visibility="Collapsed">
-                <StackPanel Orientation="Horizontal" Spacing="16">
+            <Button x:Name="LikedRow" Margin="24,0" Padding="{StaticResource KasanePadding2}" HorizontalAlignment="Left" Background="Transparent" BorderThickness="0" Click="OnLiked" Visibility="Collapsed">
+                <StackPanel Orientation="Horizontal" Spacing="{StaticResource KasaneSpace4}">
                     <Grid Width="56" Height="56">
                         <Ellipse>
                             <Ellipse.Fill>
@@ -69,7 +69,7 @@
             </Button>
             <ItemsRepeater x:Name="Shelves" Margin="16,8,16,0">
                 <ItemsRepeater.Layout>
-                    <StackLayout Spacing="24" />
+                    <StackLayout Spacing="{StaticResource KasaneSpace6}" />
                 </ItemsRepeater.Layout>
                 <ItemsRepeater.ItemTemplate>
                     <DataTemplate x:DataType="music:HomeShelf">
@@ -77,7 +77,7 @@
                     </DataTemplate>
                 </ItemsRepeater.ItemTemplate>
             </ItemsRepeater>
-            <TextBlock x:Name="ErrorText" Visibility="Collapsed" Margin="24" Text="{x:Bind app:L.T('アーティストを読み込めませんでした', 'Couldn’t load the artist')}" />
+            <TextBlock x:Name="ErrorText" Visibility="Collapsed" Margin="{StaticResource KasanePadding6}" Text="{x:Bind app:L.T('アーティストを読み込めませんでした', 'Couldn’t load the artist')}" />
         </StackPanel>
     </ScrollViewer>
 </Page>

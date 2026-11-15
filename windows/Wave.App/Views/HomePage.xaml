@@ -7,9 +7,9 @@
       NavigationCacheMode="Enabled">
     <!-- ホーム（Spotify と同じ並び: 絞り込みのチップ、最近聴いたものの格子、おすすめの棚） -->
     <ScrollViewer x:Name="Scroller" ViewChanged="OnScrolled">
-        <StackPanel Padding="16,16,16,32" Spacing="24">
+        <StackPanel Padding="16,16,16,32" Spacing="{StaticResource KasaneSpace6}">
             <ScrollViewer HorizontalScrollMode="Enabled" HorizontalScrollBarVisibility="Hidden" VerticalScrollMode="Disabled">
-                <StackPanel x:Name="Chips" Orientation="Horizontal" Spacing="8" Padding="8,0" />
+                <StackPanel x:Name="Chips" Orientation="Horizontal" Spacing="{StaticResource KasaneSpace2}" Padding="8,0" />
             </ScrollViewer>
 
             <ItemsRepeater x:Name="RecentGrid" Margin="8,0" Visibility="Collapsed">
@@ -20,8 +20,8 @@
                 <ItemsRepeater.ItemTemplate>
                     <DataTemplate x:DataType="music:HomeItem">
                         <Button Padding="0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Height="56"
-                                CornerRadius="6" Click="OnRecentClick" Tag="{x:Bind}">
-                            <Grid ColumnSpacing="12">
+                                CornerRadius="{StaticResource KasaneCornerRadiusControl}" Click="OnRecentClick" Tag="{x:Bind}">
+                            <Grid ColumnSpacing="{StaticResource KasaneSpace3}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="56" />
                                     <ColumnDefinition Width="*" />
@@ -42,7 +42,7 @@
 
             <ItemsRepeater x:Name="Shelves">
                 <ItemsRepeater.Layout>
-                    <StackLayout Spacing="24" />
+                    <StackLayout Spacing="{StaticResource KasaneSpace6}" />
                 </ItemsRepeater.Layout>
                 <ItemsRepeater.ItemTemplate>
                     <DataTemplate x:DataType="music:HomeShelf">
@@ -52,7 +52,7 @@
             </ItemsRepeater>
 
             <ProgressRing x:Name="LoadingRing" IsActive="False" HorizontalAlignment="Center" />
-            <StackPanel x:Name="FailurePanel" Visibility="Collapsed" Spacing="8" HorizontalAlignment="Center">
+            <StackPanel x:Name="FailurePanel" Visibility="Collapsed" Spacing="{StaticResource KasaneSpace2}" HorizontalAlignment="Center">
                 <TextBlock Text="{x:Bind app:L.T('ホームを読み込めませんでした', 'Couldn’t load Home')}" HorizontalAlignment="Center" />
                 <Button Content="{x:Bind app:L.T('もう一度読み込む', 'Try again')}" HorizontalAlignment="Center" Click="OnRetry" />
             </StackPanel>

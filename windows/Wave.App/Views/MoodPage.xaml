@@ -4,12 +4,12 @@
       xmlns:controls="using:Wave.App.Controls"
       xmlns:music="using:Wave.Core.Music">
     <ScrollViewer>
-        <StackPanel Padding="16,16,16,32" Spacing="24">
+        <StackPanel Padding="16,16,16,32" Spacing="{StaticResource KasaneSpace6}">
             <TextBlock x:Name="TitleText" FontSize="48" FontWeight="Bold" Margin="8,16,8,0" />
             <ProgressRing x:Name="LoadingRing" IsActive="True" HorizontalAlignment="Left" Margin="8,0" />
             <ItemsRepeater x:Name="Shelves">
                 <ItemsRepeater.Layout>
-                    <StackLayout Spacing="24" />
+                    <StackLayout Spacing="{StaticResource KasaneSpace6}" />
                 </ItemsRepeater.Layout>
                 <ItemsRepeater.ItemTemplate>
                     <DataTemplate x:DataType="music:HomeShelf">

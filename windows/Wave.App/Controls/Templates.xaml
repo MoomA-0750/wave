@@ -41,7 +41,7 @@
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="Foreground" Value="{ThemeResource TextFillColorPrimaryBrush}" />
             <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="Padding" Value="8" />
+            <Setter Property="Padding" Value="{StaticResource KasanePadding2}" />
             <Setter Property="MinWidth" Value="36" />
             <Setter Property="MinHeight" Value="36" />
             <Setter Property="HorizontalContentAlignment" Value="Center" />
@@ -86,7 +86,7 @@
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
             <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="Padding" Value="8" />
+            <Setter Property="Padding" Value="{StaticResource KasanePadding2}" />
             <Setter Property="MinWidth" Value="36" />
             <Setter Property="MinHeight" Value="36" />
             <Setter Property="CornerRadius" Value="{ThemeResource ControlCornerRadius}" />
@@ -162,7 +162,7 @@
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
             <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="Padding" Value="8" />
+            <Setter Property="Padding" Value="{StaticResource KasanePadding2}" />
             <Setter Property="MinWidth" Value="36" />
             <Setter Property="MinHeight" Value="36" />
             <Setter Property="CornerRadius" Value="{ThemeResource ControlCornerRadius}" />
@@ -236,7 +236,7 @@
 
     <!-- 曲の一覧の行（Spotify の表と同じ列: # / タイトル / アルバム / 時間 / …） -->
     <DataTemplate x:Key="TrackRowTemplate" x:DataType="controls:TrackRow">
-        <Grid Height="56" ColumnSpacing="12" Background="Transparent" RightTapped="OnRowRightTapped">
+        <Grid Height="56" ColumnSpacing="{StaticResource KasaneSpace3}" Background="Transparent" RightTapped="OnRowRightTapped">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="32" />
                 <ColumnDefinition Width="3*" />
@@ -248,12 +248,12 @@
                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" Visibility="{x:Bind app:Ui.Hide(IsCurrent), Mode=OneWay}" />
             <FontIcon Glyph="&#xE767;" FontSize="14" HorizontalAlignment="Right" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
                       Visibility="{x:Bind app:Ui.Show(IsCurrent), Mode=OneWay}" />
-            <Grid Grid.Column="1" ColumnSpacing="12">
+            <Grid Grid.Column="1" ColumnSpacing="{StaticResource KasaneSpace3}">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
-                <Border Width="40" Height="40" CornerRadius="4" Background="{ThemeResource ControlFillColorSecondaryBrush}"
+                <Border Width="40" Height="40" CornerRadius="{StaticResource KasaneCornerRadiusSm}" Background="{ThemeResource ControlFillColorSecondaryBrush}"
                         Visibility="{x:Bind app:Ui.Show(ShowArtwork)}">
                     <Image Source="{x:Bind app:Ui.Small(Song.ThumbnailUrl)}" Stretch="UniformToFill" />
                 </Border>
@@ -266,7 +266,7 @@
             <TextBlock Grid.Column="2" Text="{x:Bind AlbumTitle}" Visibility="{x:Bind app:Ui.Show(ShowAlbum)}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
             <!-- 高く評価した曲は長さの左に✓（Spotify と同じ） -->
-            <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" VerticalAlignment="Center">
+            <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="{StaticResource KasaneSpace2}" HorizontalAlignment="Right" VerticalAlignment="Center">
                 <FontIcon Glyph="&#xEC61;" FontSize="14" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" Visibility="{x:Bind app:Ui.Show(IsLiked), Mode=OneWay}"
                           ToolTipService.ToolTip="{x:Bind app:L.T('高く評価済み', 'Liked')}" />
                 <TextBlock Text="{x:Bind app:Ui.Duration(Song.DurationSeconds)}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Visibility="{x:Bind app:Ui.Hide(Song.IsLive)}" />

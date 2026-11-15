@@ -3,7 +3,7 @@
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:app="using:Wave.App">
     <ScrollViewer>
-        <StackPanel Padding="40,32" Spacing="8" MaxWidth="880" HorizontalAlignment="Stretch">
+        <StackPanel Padding="40,32" Spacing="{StaticResource KasaneSpace2}" MaxWidth="880" HorizontalAlignment="Stretch">
             <TextBlock Text="{x:Bind app:L.T('端末の連携', 'Devices')}" FontSize="48" FontWeight="Bold" />
             <TextBlock Text="{x:Bind app:L.T('同じアカウントのスマホと PC のあいだで、再生を引き継げます。端末どうしの通信は暗号化され、中継のサーバーは中身を読めません。', 'Move playback between your phone and PC on the same account. Devices encrypt everything they share, so the relay server can’t read it.')}"
                        Style="{StaticResource SubtleTextStyle}" TextWrapping="Wrap" Margin="0,0,0,16" />
@@ -11,14 +11,14 @@
             <InfoBar x:Name="StatusBar" IsClosable="False" IsOpen="False" />
 
             <!-- 再生中の端末 -->
-            <Grid x:Name="RemoteCard" Padding="16" CornerRadius="8" ColumnSpacing="16" Visibility="Collapsed"
+            <Grid x:Name="RemoteCard" Padding="{StaticResource KasanePadding4}" CornerRadius="{StaticResource KasaneCornerRadiusCard}" ColumnSpacing="{StaticResource KasaneSpace4}" Visibility="Collapsed"
                   Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                <Border Width="64" Height="64" CornerRadius="6" Background="{ThemeResource ControlFillColorSecondaryBrush}">
+                <Border Width="64" Height="64" CornerRadius="{StaticResource KasaneCornerRadiusSm}" Background="{ThemeResource ControlFillColorSecondaryBrush}">
                     <Image x:Name="RemoteImage" Stretch="UniformToFill" />
                 </Border>
                 <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
@@ -31,13 +31,13 @@
             </Grid>
 
             <!-- 家に入っていない -->
-            <StackPanel x:Name="JoinPanel" Spacing="8" Visibility="Collapsed">
+            <StackPanel x:Name="JoinPanel" Spacing="{StaticResource KasaneSpace2}" Visibility="Collapsed">
                 <TextBlock Text="{x:Bind app:L.T('はじめる', 'Get started')}" Style="{StaticResource BodyStrongTextBlockStyle}" Margin="0,8,0,4" />
-                <StackPanel Padding="16" CornerRadius="8" Spacing="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                <StackPanel Padding="{StaticResource KasanePadding4}" CornerRadius="{StaticResource KasaneCornerRadiusCard}" Spacing="{StaticResource KasaneSpace3}" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                             BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
                     <TextBlock TextWrapping="Wrap" Text="{x:Bind app:L.T('連携済みのスマホの wave で「端末の連携」→「端末を追加」を押し、「文字で共有」で送った文字列をここに貼り付けてください。', 'On a phone that’s already set up, open Devices in wave, tap “Add device”, then “Share as text”, and paste the text here.')}" />
                     <TextBox x:Name="OfferBox" PlaceholderText="wave-pair:…" TextWrapping="Wrap" AcceptsReturn="False" />
-                    <StackPanel Orientation="Horizontal" Spacing="8">
+                    <StackPanel Orientation="Horizontal" Spacing="{StaticResource KasaneSpace2}">
                         <Button Style="{StaticResource AccentButtonStyle}" Click="OnJoin" Content="{x:Bind app:L.T('加わる', 'Join')}" />
                         <Button x:Name="CreateButton" Click="OnCreate" Content="{x:Bind app:L.T('この PC で新しく始める', 'Start a new group on this PC')}" />
                     </StackPanel>
@@ -45,20 +45,20 @@
             </StackPanel>
 
             <!-- 加入の手順 -->
-            <StackPanel x:Name="PairingPanel" Padding="16" CornerRadius="8" Spacing="12" Visibility="Collapsed"
+            <StackPanel x:Name="PairingPanel" Padding="{StaticResource KasanePadding4}" CornerRadius="{StaticResource KasaneCornerRadiusCard}" Spacing="{StaticResource KasaneSpace3}" Visibility="Collapsed"
                         Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
                 <TextBlock x:Name="PairingText" TextWrapping="Wrap" />
                 <Image x:Name="QrImage" Width="280" Height="280" HorizontalAlignment="Left" Visibility="Collapsed" />
-                <StackPanel x:Name="OfferTextPanel" Orientation="Horizontal" Spacing="8" Visibility="Collapsed">
+                <StackPanel x:Name="OfferTextPanel" Orientation="Horizontal" Spacing="{StaticResource KasaneSpace2}" Visibility="Collapsed">
                     <Button Click="OnCopyOffer" Content="{x:Bind app:L.T('文字列をコピー', 'Copy text')}" />
                 </StackPanel>
                 <TextBlock x:Name="CodeText" FontSize="44" FontWeight="SemiBold" CharacterSpacing="200" Visibility="Collapsed" />
-                <StackPanel x:Name="CodeEntry" Orientation="Horizontal" Spacing="8" Visibility="Collapsed">
+                <StackPanel x:Name="CodeEntry" Orientation="Horizontal" Spacing="{StaticResource KasaneSpace2}" Visibility="Collapsed">
                     <TextBox x:Name="CodeBox" Width="160" MaxLength="6" InputScope="Number" PlaceholderText="000000" />
                     <Button Style="{StaticResource AccentButtonStyle}" Click="OnEnterCode" Content="{x:Bind app:L.T('確認', 'Confirm')}" />
                 </StackPanel>
                 <ProgressRing x:Name="PairingRing" IsActive="False" HorizontalAlignment="Left" Visibility="Collapsed" />
-                <StackPanel Orientation="Horizontal" Spacing="8">
+                <StackPanel Orientation="Horizontal" Spacing="{StaticResource KasaneSpace2}">
                     <Button x:Name="ContinueButton" Style="{StaticResource AccentButtonStyle}" Click="OnContinue" Visibility="Collapsed"
                             Content="{x:Bind app:L.T('相手に入力したら、続ける', 'Continue after entering it')}" />
                     <Button x:Name="PairingCloseButton" Click="OnPairingCancel" />
@@ -66,17 +66,17 @@
             </StackPanel>
 
             <!-- 家の端末 -->
-            <StackPanel x:Name="HouseholdPanel" Spacing="8" Visibility="Collapsed">
+            <StackPanel x:Name="HouseholdPanel" Spacing="{StaticResource KasaneSpace2}" Visibility="Collapsed">
                 <Grid Margin="0,8,0,4">
                     <TextBlock Text="{x:Bind app:L.T('連携している端末', 'Your devices')}" Style="{StaticResource BodyStrongTextBlockStyle}" VerticalAlignment="Center" />
                     <Button HorizontalAlignment="Right" Click="OnAddDevice">
-                        <StackPanel Orientation="Horizontal" Spacing="8">
+                        <StackPanel Orientation="Horizontal" Spacing="{StaticResource KasaneSpace2}">
                             <FontIcon Glyph="&#xE710;" FontSize="14" />
                             <TextBlock Text="{x:Bind app:L.T('端末を追加', 'Add device')}" />
                         </StackPanel>
                     </Button>
                 </Grid>
-                <StackPanel x:Name="MemberList" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                <StackPanel x:Name="MemberList" CornerRadius="{StaticResource KasaneCornerRadiusLg}" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                             BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" />
             </StackPanel>
 

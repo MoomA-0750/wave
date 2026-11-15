@@ -9,8 +9,8 @@
     <Grid>
         <!-- 何も打っていないとき: 最近の検索と、気分・ジャンルのタイル（Spotify の「すべてをブラウズ」） -->
         <ScrollViewer x:Name="BrowseView">
-            <StackPanel Padding="24,16,24,32" Spacing="16">
-                <StackPanel x:Name="RecentPanel" Spacing="12">
+            <StackPanel Padding="24,16,24,32" Spacing="{StaticResource KasaneSpace4}">
+                <StackPanel x:Name="RecentPanel" Spacing="{StaticResource KasaneSpace3}">
                     <Grid>
                         <TextBlock Text="{x:Bind app:L.T('最近の検索', 'Recent searches')}" Style="{StaticResource SubtitleTextBlockStyle}" />
                         <HyperlinkButton Content="{x:Bind app:L.T('すべて消去', 'Clear all')}" HorizontalAlignment="Right" Click="OnClearHistory" />
@@ -21,8 +21,8 @@
                         </ItemsRepeater.Layout>
                         <ItemsRepeater.ItemTemplate>
                             <DataTemplate x:DataType="services:SearchHistoryEntry">
-                                <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Padding="8" Click="OnRecentClick" Tag="{x:Bind}">
-                                    <Grid ColumnSpacing="12">
+                                <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Padding="{StaticResource KasanePadding2}" Click="OnRecentClick" Tag="{x:Bind}">
+                                    <Grid ColumnSpacing="{StaticResource KasaneSpace3}">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="48" />
                                             <ColumnDefinition Width="*" />
@@ -57,7 +57,7 @@
                     <ItemsRepeater.ItemTemplate>
                         <DataTemplate x:DataType="views:MoodTile">
                             <Button HorizontalAlignment="Stretch" VerticalAlignment="Stretch" HorizontalContentAlignment="Left" VerticalContentAlignment="Top"
-                                    Background="{x:Bind Brush}" Foreground="White" CornerRadius="8" Padding="16" BorderThickness="0" Click="OnMoodClick" Tag="{x:Bind Category}">
+                                    Background="{x:Bind Brush}" Foreground="White" CornerRadius="{StaticResource KasaneCornerRadiusCard}" Padding="{StaticResource KasanePadding4}" BorderThickness="0" Click="OnMoodClick" Tag="{x:Bind Category}">
                                 <TextBlock Text="{x:Bind Category.Title}" Style="{StaticResource SubtitleTextBlockStyle}" TextWrapping="Wrap" />
                             </Button>
                         </DataTemplate>
@@ -84,18 +84,18 @@
 
             <ScrollViewer x:Name="AllView" Grid.Row="1">
                 <StackPanel Padding="24,16,24,32" Spacing="28">
-                    <Grid ColumnSpacing="24">
+                    <Grid ColumnSpacing="{StaticResource KasaneSpace6}">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="2*" MinWidth="280" />
                             <ColumnDefinition Width="3*" />
                         </Grid.ColumnDefinitions>
-                        <StackPanel Spacing="12" x:Name="TopPanel">
+                        <StackPanel Spacing="{StaticResource KasaneSpace3}" x:Name="TopPanel">
                             <TextBlock Text="{x:Bind app:L.T('トップの検索結果', 'Top result')}" Style="{StaticResource SubtitleTextBlockStyle}" />
-                            <Button x:Name="TopCard" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Padding="20" CornerRadius="8"
+                            <Button x:Name="TopCard" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Padding="{StaticResource KasanePadding5}" CornerRadius="{StaticResource KasaneCornerRadiusCard}"
                                     Click="OnTopClick" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
                                 <Grid>
-                                    <StackPanel Spacing="16">
-                                        <Border x:Name="TopImageBorder" Width="96" Height="96" CornerRadius="6" HorizontalAlignment="Left">
+                                    <StackPanel Spacing="{StaticResource KasaneSpace4}">
+                                        <Border x:Name="TopImageBorder" Width="96" Height="96" CornerRadius="{StaticResource KasaneCornerRadiusSm}" HorizontalAlignment="Left">
                                             <Image x:Name="TopImage" Stretch="UniformToFill" />
                                         </Border>
                                         <TextBlock x:Name="TopTitle" Style="{StaticResource TitleTextBlockStyle}" TextTrimming="CharacterEllipsis" MaxLines="2" TextWrapping="Wrap" />
@@ -108,7 +108,7 @@
                                 </Grid>
                             </Button>
                         </StackPanel>
-                        <StackPanel Grid.Column="1" Spacing="12">
+                        <StackPanel Grid.Column="1" Spacing="{StaticResource KasaneSpace3}">
                             <TextBlock Text="{x:Bind app:L.T('曲', 'Songs')}" Style="{StaticResource SubtitleTextBlockStyle}" />
                             <ListView x:Name="TopSongs" ItemTemplate="{StaticResource TrackRowTemplate}" ItemContainerStyle="{StaticResource TrackListItemStyle}"
                                       SelectionMode="Single" DoubleTapped="OnSongDoubleTapped" ScrollViewer.VerticalScrollMode="Disabled" />
@@ -131,12 +131,12 @@
                 </ListView.ItemContainerStyle>
                 <ListView.ItemTemplate>
                     <DataTemplate x:DataType="music:PodcastEpisode">
-                        <Grid Height="64" ColumnSpacing="12" Background="Transparent" RightTapped="OnEpisodeRightTapped">
+                        <Grid Height="64" ColumnSpacing="{StaticResource KasaneSpace3}" Background="Transparent" RightTapped="OnEpisodeRightTapped">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
-                            <Border Width="48" Height="48" CornerRadius="4" Background="{ThemeResource ControlFillColorSecondaryBrush}">
+                            <Border Width="48" Height="48" CornerRadius="{StaticResource KasaneCornerRadiusSm}" Background="{ThemeResource ControlFillColorSecondaryBrush}">
                                 <Image Source="{x:Bind app:Ui.Small(Song.ThumbnailUrl)}" Stretch="UniformToFill" />
                             </Border>
                             <StackPanel Grid.Column="1" VerticalAlignment="Center">
