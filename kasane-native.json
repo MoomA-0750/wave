@@ -1,0 +1,9 @@
+{
+  "$schema": "kasane-native/1",
+  "files": [
+    { "from": "android/kasane/Shape.kt", "to": "androidApp/src/phone/kotlin/kasane/Shape.kt" },
+    { "from": "android/kasane/Dimens.kt", "to": "androidApp/src/phone/kotlin/kasane/Dimens.kt" },
+    { "from": "apps/wave/android/kasane/Color.kt", "to": "androidApp/src/phone/kotlin/kasane/Color.kt" },
+    { "from": "apps/wave/qml/Kasane.qml", "to": "linux/wave-qt/qml/Kasane.qml" }
+  ]
+}
