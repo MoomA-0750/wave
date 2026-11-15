@@ -115,7 +115,7 @@ final class CollectionModel {
         suggestionsReload = nil
         loading = true
         error = nil
-        if isLiked { gradient = Color(red: 0x50 / 255, green: 0x38 / 255, blue: 0xA0 / 255) } else { Task { await color() } }
+        if isLiked { gradient = Color(red: 0x50 / 255, green: 0x38 / 255, blue: 0xA0 / 255) } else { Task { await color() } } // apple-ui-allow: 作品の絵の色（Windows・Android 版と同じ）
         task = Task {
             if request.isAlbum { await loadAlbum(mine) } else { await loadPlaylist(mine) }
             if mine == generation {
@@ -165,7 +165,7 @@ final class CollectionModel {
         }
         var first = true
         let result = (try? await AppServices.music.fullPlaylist(request.id, onPage: { page in
-            DispatchQueue.main.async {
+            DispatchQueue.main.async { // apple-ui-allow: ページの届いた順に main の列へ積む（後の c.resume() と同じ列で順を守る）
                 MainActor.assumeIsolated {
                     guard mine == self.generation else { return }
                     if first {
@@ -188,7 +188,7 @@ final class CollectionModel {
                 }
             }
         }, order: serverOrder)) ?? .failed(.network)
-        await withCheckedContinuation { c in DispatchQueue.main.async { c.resume() } }
+        await withCheckedContinuation { c in DispatchQueue.main.async { c.resume() } } // apple-ui-allow: ページの届いた順に main の列へ積む（後の c.resume() と同じ列で順を守る）
         guard mine == generation else { return }
         guard let page = result.value else {
             if showOffline() { return }

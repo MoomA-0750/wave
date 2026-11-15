@@ -19,7 +19,7 @@ struct TrackRowView: View {
         HStack(spacing: Kasane.Space.s3) {
             Group {
                 if isCurrent {
-                    Image(systemName: "speaker.wave.2.fill").font(.system(size: 12)).foregroundStyle(Color.accentColor)
+                    Image(systemName: "speaker.wave.2.fill").font(.system(size: 12)).foregroundStyle(Color.accentColor) // apple-ui-allow: 記号の大きさ（Windows 版と揃える）
                 } else {
                     Text("\(row.number)").foregroundStyle(.secondary).monospacedDigit()
                 }
@@ -43,7 +43,7 @@ struct TrackRowView: View {
                 DownloadedMark(videoId: row.song.videoId, font: .system(size: 13))
                 // 高く評価した曲は長さの左に✓（Spotify と同じ）
                 if isLiked {
-                    Image(systemName: "checkmark.circle.fill").font(.system(size: 13)).foregroundStyle(Color.accentColor).help(L.t("高く評価済み", "Liked"))
+                    Image(systemName: "checkmark.circle.fill").font(.system(size: 13)).foregroundStyle(Color.accentColor).help(L.t("高く評価済み", "Liked")) // apple-ui-allow: 記号の大きさ（Windows 版と揃える）
                 }
                 if row.song.isLive {
                     LiveBadge()
@@ -105,7 +105,7 @@ struct MediaCard: View {
             ZStack(alignment: .bottomTrailing) {
                 Cover(url: Ui.img(item.thumbnailUrl), size: 160, round: item.isArtist)
                 PlayCircleButton(size: 44, action: { AppServices.nav.play(item) }) {
-                    Image(systemName: "play.fill").font(.system(size: 16))
+                    Image(systemName: "play.fill").font(.system(size: 16)) // apple-ui-allow: 記号の大きさ（Windows 版と揃える）
                 }
                 .shadow(radius: Kasane.Radius.sm)
                 .padding(Kasane.Space.s2)
@@ -155,10 +155,10 @@ struct ShelfView: View {
                 }
                 Spacer()
                 // 押せないほうは見えなくする（場所は残し、見出しの高さが変わらないようにする）
-                Button { scroll(-4) } label: { Image(systemName: "chevron.left").font(.system(size: 11, weight: .semibold)) }
+                Button { scroll(-4) } label: { Image(systemName: "chevron.left").font(.system(size: 11, weight: .semibold)) } // apple-ui-allow: 記号の大きさ（Windows 版と揃える）
                     .buttonStyle(IconButtonStyle()).help(L.t("前へ", "Previous"))
                     .opacity(first > 0 ? 1 : 0).disabled(first <= 0)
-                Button { scroll(4) } label: { Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold)) }
+                Button { scroll(4) } label: { Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold)) } // apple-ui-allow: 記号の大きさ（Windows 版と揃える）
                     .buttonStyle(IconButtonStyle()).help(L.t("次へ", "Next"))
                     .opacity(canScrollRight ? 1 : 0).disabled(!canScrollRight)
             }

@@ -11,7 +11,7 @@ struct GlassCard: ViewModifier {
         if #available(iOS 26.0, *) {
             content.glassEffect(interactive ? .regular.interactive() : .regular, in: RoundedRectangle(cornerRadius: radius, style: Kasane.cornerStyle))
         } else {
-            content.background(.regularMaterial, in: RoundedRectangle(cornerRadius: radius, style: Kasane.cornerStyle))
+            content.background(.regularMaterial, in: RoundedRectangle(cornerRadius: radius, style: Kasane.cornerStyle)) // apple-ui-allow: Liquid Glass（26）より前の代わりのすりガラス
         }
     }
 }
@@ -24,6 +24,7 @@ extension View {
 }
 
 /// 丸いガラスの地（iOS 26 より前は薄い丸）。押すと光って弾む。アーティスト・アルバム・プレイリストの頭のボタン。
+/// 並べる側（ArtistView・CollectionView）が GlassEffectContainer で包む。GlassCard は1枚の板なので包まない
 struct GlassCircle: ViewModifier {
     /// 3つとも同じ大きさ
     var size: CGFloat = 50
@@ -62,7 +63,7 @@ struct LikedCover: View {
     var body: some View {
         ZStack {
             Ui.likedGradient
-            Image(systemName: "heart.fill").font(.system(size: size * 0.36)).foregroundStyle(.white)
+            Image(systemName: "heart.fill").font(.system(size: size * 0.36)).foregroundStyle(.white) // apple-ui-allow: 記号の大きさ（ボタンの枠に合わせる）
         }
         .frame(width: size, height: size)
         .clipShape(RoundedRectangle(cornerRadius: radius, style: Kasane.cornerStyle))
@@ -174,7 +175,7 @@ struct LikeButtonView: View {
             Button { LikeButton.press(player) } label: {
                 // iPhone は丸の囲いの無い＋と✓を、どちらも白（地の文字の色）で出す
                 Image(systemName: Self.plain(LikeButton.symbol(player)))
-                    .font(.system(size: size, weight: .semibold))
+                    .font(.system(size: size, weight: .semibold)) // apple-ui-allow: 記号・絵に合わせた大きさ
                     .foregroundStyle(.primary)
                     .frame(width: box, height: box)
                     .contentShape(Rectangle())
@@ -202,7 +203,7 @@ struct PlayCircle: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: "play.fill")
-                .font(.system(size: size * 0.38))
+                .font(.system(size: size * 0.38)) // apple-ui-allow: 記号・絵に合わせた大きさ
                 .foregroundStyle(.white)
                 .frame(width: size, height: size)
                 .background(Circle().fill(Color.accentColor))

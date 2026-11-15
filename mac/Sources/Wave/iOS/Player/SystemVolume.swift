@@ -32,7 +32,7 @@ final class SystemVolume {
     private init() {
         observation = AVAudioSession.sharedInstance().observe(\.outputVolume, options: [.new]) { _, change in
             guard let v = change.newValue else { return }
-            DispatchQueue.main.async {
+            DispatchQueue.main.async { // apple-ui-allow: KVO の知らせ（どの列から来るか決まっていない）を届いた順に main へ積む
                 MainActor.assumeIsolated {
                     SystemVolume.shared.value = v
                     AppServices.player?.systemVolumeChanged(v)

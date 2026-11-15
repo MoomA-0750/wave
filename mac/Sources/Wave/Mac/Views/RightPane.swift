@@ -30,7 +30,7 @@ extension LikeButton {
     static func view(_ player: PlayerService, size: CGFloat) -> some View {
         if available(player) {
             Button { press(player) } label: {
-                Image(systemName: symbol(player)).font(.system(size: size)).foregroundStyle(accent(player) ? Color.accentColor : Color.secondary)
+                Image(systemName: symbol(player)).font(.system(size: size)).foregroundStyle(accent(player) ? Color.accentColor : Color.secondary) // apple-ui-allow: 記号の大きさ（Windows 版と揃える）
             }
             .buttonStyle(IconButtonStyle())
             .help(tip(player))
@@ -195,7 +195,7 @@ struct QueueView: View {
                     Button { Dialogs.shared.saveQueue() } label: { Image(systemName: "text.badge.plus").font(.system(size: 12)) } // apple-ui-allow: 隣の閉じるボタンと同じ小さな記号
                         .buttonStyle(IconButtonStyle()).help(L.t("キューをプレイリストとして保存", "Save queue as playlist"))
                 }
-                Button { model.setRightPane(open: true, queue: false) } label: { Image(systemName: "xmark").font(.system(size: 11)) }
+                Button { model.setRightPane(open: true, queue: false) } label: { Image(systemName: "xmark").font(.system(size: 11)) } // apple-ui-allow: 記号の大きさ（Windows 版と揃える）
                     .buttonStyle(IconButtonStyle()).help(L.t("閉じる", "Close"))
             }
             .padding(EdgeInsets(top: Kasane.Space.s3, leading: Kasane.Space.s4, bottom: Kasane.Space.s1, trailing: RightPane.headerTrailing))

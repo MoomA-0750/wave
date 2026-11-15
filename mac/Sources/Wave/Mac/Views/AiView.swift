@@ -20,11 +20,11 @@ struct AiView: View {
             HStack {
                 Text(L.t("Claude に聞く", "Ask Claude")).font(.body.weight(.semibold))
                 Spacer()
-                Button { showHistory = true } label: { Image(systemName: "clock.arrow.circlepath").font(.system(size: 12)) }
+                Button { showHistory = true } label: { Image(systemName: "clock.arrow.circlepath").font(.system(size: 12)) } // apple-ui-allow: 記号の大きさ（Windows 版と揃える）
                     .buttonStyle(IconButtonStyle()).help(L.t("これまでの会話", "Past chats"))
                     .popover(isPresented: $showHistory, arrowEdge: .bottom) { AiHistoryList(chat: chat) { showHistory = false } }
                 Button(L.t("新しい会話", "New chat")) { chat.clear() }.buttonStyle(.textLink)
-                Button { model.setRightPane(open: true, queue: false) } label: { Image(systemName: "xmark").font(.system(size: 11)) }
+                Button { model.setRightPane(open: true, queue: false) } label: { Image(systemName: "xmark").font(.system(size: 11)) } // apple-ui-allow: 記号の大きさ（Windows 版と揃える）
                     .buttonStyle(IconButtonStyle()).help(L.t("閉じる", "Close"))
             }
             .padding(EdgeInsets(top: Kasane.Space.s3, leading: Kasane.Space.s4, bottom: Kasane.Space.s1, trailing: RightPane.headerTrailing))
@@ -158,7 +158,7 @@ private struct AiHistoryList: View {
                                 .background(RoundedRectangle(cornerRadius: Kasane.Radius.sm, style: Kasane.cornerStyle).fill(conversation.id == chat.conversationId ? Color.secondary.opacity(0.15) : .clear))
                             }
                             .buttonStyle(.plain)
-                            Button { chat.delete(conversation.id) } label: { Image(systemName: "trash").font(.system(size: 11)) }
+                            Button { chat.delete(conversation.id) } label: { Image(systemName: "trash").font(.system(size: 11)) } // apple-ui-allow: 記号の大きさ（Windows 版と揃える）
                                 .buttonStyle(IconButtonStyle()).help(L.t("会話を削除", "Delete chat"))
                         }
                     }

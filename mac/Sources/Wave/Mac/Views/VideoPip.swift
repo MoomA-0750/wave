@@ -80,15 +80,15 @@ private struct PipView: View {
             if hover {
                 Color.black.opacity(0.35)
                 HStack(spacing: 18) {
-                    Button { player.previous() } label: { Image(systemName: "backward.fill").font(.system(size: 18)) }
+                    Button { player.previous() } label: { Image(systemName: "backward.fill").font(.system(size: 18)) } // apple-ui-allow: 記号の大きさ（Windows 版と揃える）
                         .help(L.t("前へ", "Previous"))
-                    Button { player.togglePlay() } label: { Image(systemName: player.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 26)) }
+                    Button { player.togglePlay() } label: { Image(systemName: player.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 26)) } // apple-ui-allow: 記号の大きさ（Windows 版と揃える）
                         .help(player.isPlaying ? L.t("一時停止", "Pause") : L.t("再生", "Play"))
-                    Button { player.next() } label: { Image(systemName: "forward.fill").font(.system(size: 18)) }
+                    Button { player.next() } label: { Image(systemName: "forward.fill").font(.system(size: 18)) } // apple-ui-allow: 記号の大きさ（Windows 版と揃える）
                         .help(L.t("次へ", "Next"))
                 }
                 .buttonStyle(IconButtonStyle(size: 40))
-                Button { VideoPip.shared.backToApp() } label: { Image(systemName: "arrow.up.backward.and.arrow.down.forward").font(.system(size: 13, weight: .semibold)) }
+                Button { VideoPip.shared.backToApp() } label: { Image(systemName: "arrow.up.backward.and.arrow.down.forward").font(.system(size: 13, weight: .semibold)) } // apple-ui-allow: 記号の大きさ（Windows 版と揃える）
                     .buttonStyle(IconButtonStyle(size: 28))
                     .help(L.t("wave に戻して大きく見る", "Back to wave"))
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)

@@ -213,7 +213,7 @@ struct DevicesView: View {
             }
             if pairing.kind == .showCode, let code = pairing.code, code.count == 6 {
                 Text(String(code.prefix(3)) + " " + String(code.suffix(3)))
-                    .font(.system(size: 44, weight: .semibold)).tracking(8).monospacedDigit()
+                    .font(.system(size: 44, weight: .semibold)).tracking(8).monospacedDigit() // apple-ui-allow: 見出し・歌詞の大きさ（Windows 版と揃える）
                     .frame(maxWidth: .infinity)
                     .textSelection(.enabled)
             }

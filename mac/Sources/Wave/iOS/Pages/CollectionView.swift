@@ -110,7 +110,7 @@ struct CollectionView: View {
                     if model.isLiked {
                         ZStack {
                             Ui.likedGradient
-                            Image(systemName: "heart.fill").font(.system(size: 120)).foregroundStyle(.white.opacity(0.9))
+                            Image(systemName: "heart.fill").font(.system(size: 120)).foregroundStyle(.white.opacity(0.9)) // apple-ui-allow: 記号の大きさ（ボタンの枠に合わせる）
                         }
                     } else {
                         RemoteImage(url: Ui.large(model.thumbnailUrl))

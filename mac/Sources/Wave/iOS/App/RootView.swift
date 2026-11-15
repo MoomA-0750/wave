@@ -244,7 +244,7 @@ private struct MiniPlayerAccessory: ViewModifier {
             content.safeAreaInset(edge: .bottom) {
                 MiniPlayer(open: open)
                     .matchedTransitionSource(id: MiniPlayer.zoomId, in: zoom)
-                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: Kasane.Radius.lg, style: Kasane.cornerStyle))
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: Kasane.Radius.lg, style: Kasane.cornerStyle)) // apple-ui-allow: Liquid Glass（26）より前の代わりのすりガラス
                     .padding(.horizontal, Kasane.Space.s2)
                     .padding(.bottom, 52)
             }

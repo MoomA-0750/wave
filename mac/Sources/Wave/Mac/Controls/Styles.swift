@@ -29,7 +29,7 @@ struct FloatingBarBackground: ViewModifier {
                 .shadow(color: .black.opacity(0.18), radius: Kasane.Radius.lg, y: 6)
         } else {
             content
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: Kasane.Radius.card, style: Kasane.cornerStyle))
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: Kasane.Radius.card, style: Kasane.cornerStyle)) // apple-ui-allow: Liquid Glass（26）より前の代わりのすりガラス
                 .overlay(RoundedRectangle(cornerRadius: Kasane.Radius.card, style: Kasane.cornerStyle).strokeBorder(Color.primary.opacity(0.1)))
                 .shadow(color: .black.opacity(0.18), radius: Kasane.Radius.lg, y: 6)
         }

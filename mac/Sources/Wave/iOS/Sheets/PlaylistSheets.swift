@@ -34,7 +34,10 @@ struct AddToPlaylistSheet: View {
                         dismiss()
                         // 閉じ終わってから作る画面を出す（シートを続けて出すと出ないことがある）
                         let song = self.song
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { Dialogs.shared.createPlaylist(with: song) }
+                        Task { @MainActor in
+                            try? await Task.sleep(for: .milliseconds(450))
+                            Dialogs.shared.createPlaylist(with: song)
+                        }
                     } label: {
                         PlaylistSheetsRow(title: L.t("新しいプレイリスト", "New playlist"), icon: "plus", accent: true) { EmptyView() }
                     }

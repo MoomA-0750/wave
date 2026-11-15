@@ -548,7 +548,7 @@ private struct TopCard: View {
             PlayCircleButton(size: 48, action: {
                 model.remember(item)
                 AppServices.nav.play(item)
-            }) { Image(systemName: "play.fill").font(.system(size: 18)) }
+            }) { Image(systemName: "play.fill").font(.system(size: 18)) } // apple-ui-allow: 記号の大きさ（Windows 版と揃える）
         }
         .padding(Kasane.Space.s5)
         .background(RoundedRectangle(cornerRadius: Kasane.Radius.base, style: Kasane.cornerStyle).fill(Color.primary.opacity(hover ? 0.1 : 0.06)))
@@ -594,7 +594,7 @@ private struct RecentSearchTile: View {
             Button {
                 AppServices.settings.removeSearch(entry)
                 model.showRecent()
-            } label: { Image(systemName: "xmark").font(.system(size: 11)) }
+            } label: { Image(systemName: "xmark").font(.system(size: 11)) } // apple-ui-allow: 記号の大きさ（Windows 版と揃える）
                 .buttonStyle(IconButtonStyle())
                 .help(L.t("履歴から削除", "Remove from history"))
         }

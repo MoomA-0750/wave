@@ -61,7 +61,7 @@ struct CollectionPageView: View {
             }
             // 題名・アーティスト（アルバムだけ。押すとアーティストのページ）・説明。下端をジャケットの下端にそろえる
             VStack(alignment: .leading, spacing: 0) {
-                Text(model.title ?? "").font(.system(size: 56, weight: .bold)).lineLimit(2).minimumScaleFactor(0.5).padding(.bottom, Kasane.Space.s2)
+                Text(model.title ?? "").font(.system(size: 56, weight: .bold)).lineLimit(2).minimumScaleFactor(0.5).padding(.bottom, Kasane.Space.s2) // apple-ui-allow: 見出し・歌詞の大きさ（Windows 版と揃える）
                 if let artist = model.artistText {
                     LinkText(text: artist) { if let id = model.albumArtist?.browseId { AppServices.nav.artist(id) } }
                         .font(.body.weight(.semibold)).padding(.bottom, 2)
@@ -79,12 +79,12 @@ struct CollectionPageView: View {
                 PlayCircleButton(action: {
                     if model.isPlayingHere { player.togglePlay() } else { model.play(rows: model.rows, shuffle: model.shufflePlay ? true : nil) }
                 }) {
-                    Image(systemName: model.isPlayingHere && player.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 20))
+                    Image(systemName: model.isPlayingHere && player.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 20)) // apple-ui-allow: 記号の大きさ（Windows 版と揃える）
                 }
             }
             IconToggle(isOn: model.isPlayingHere ? player.shuffle : model.shufflePlay, help: L.t("シャッフル", "Shuffle")) {
                 if model.isPlayingHere { player.toggleShuffle() } else { model.shufflePlay.toggle() }
-            } label: { Image(systemName: "shuffle").font(.system(size: 20)) }
+            } label: { Image(systemName: "shuffle").font(.system(size: 20)) } // apple-ui-allow: 記号の大きさ（Windows 版と揃える）
             // アルバムをライブラリに保存・外す（しおり。YouTube Music と同じ）。ログインしていない（状態が分からない）ときは出さない
             if model.request.isAlbum, let saved = model.albumSaved {
                 let help = saved ? L.t("ライブラリから削除", "Remove from library") : L.t("ライブラリに保存", "Save to library")
@@ -102,7 +102,7 @@ struct CollectionPageView: View {
             Menu {
                 Button(L.t("次に再生", "Play next"), systemImage: "text.line.first.and.arrowtriangle.forward") { player.queueAll(model.rows.map(\.song), next: true) }
                 Button(L.t("キューに追加", "Add to queue"), systemImage: "text.badge.plus") { player.queueAll(model.rows.map(\.song), next: false) }
-            } label: { Image(systemName: "ellipsis").font(.system(size: 20)) }
+            } label: { Image(systemName: "ellipsis").font(.system(size: 20)) } // apple-ui-allow: 記号の大きさ（Windows 版と揃える）
                 .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().help(L.t("その他", "More"))
             if model.loading { ProgressView().controlSize(.small) }
             Spacer()

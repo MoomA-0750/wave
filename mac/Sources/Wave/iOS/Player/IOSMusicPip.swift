@@ -54,7 +54,7 @@ final class MusicPip: NSObject, AVPictureInPictureControllerDelegate, AVPictureI
         withObservationTracking {
             sync()
         } onChange: {
-            DispatchQueue.main.async { MainActor.assumeIsolated { MusicPip.shared.observe() } }
+            DispatchQueue.main.async { MainActor.assumeIsolated { MusicPip.shared.observe() } } // apple-ui-allow: 変わる前（willSet）に呼ばれるので、main の列の次へ回して変わった後に見張り直す
         }
     }
 
@@ -296,10 +296,10 @@ final class MusicPip: NSObject, AVPictureInPictureControllerDelegate, AVPictureI
     // 歌っている行は3行まで、次の行は2行まで。小さい小窓でも読めるよう大きめに
     private static let currentSize: CGFloat = 60, nextSize: CGFloat = 42
     private static let currentAttrs: [NSAttributedString.Key: Any] = [
-        .font: UIFont.systemFont(ofSize: currentSize, weight: .bold), .foregroundColor: UIColor.white, .paragraphStyle: wrapping,
+        .font: UIFont.systemFont(ofSize: currentSize, weight: .bold), .foregroundColor: UIColor.white, .paragraphStyle: wrapping, // apple-ui-allow: 画像（PiP・ロック画面の絵）に描く字。Dynamic Type は効かない
     ]
     private static let nextAttrs: [NSAttributedString.Key: Any] = [
-        .font: UIFont.systemFont(ofSize: nextSize, weight: .semibold), .foregroundColor: UIColor(white: 1, alpha: 0.45), .paragraphStyle: wrapping,
+        .font: UIFont.systemFont(ofSize: nextSize, weight: .semibold), .foregroundColor: UIColor(white: 1, alpha: 0.45), .paragraphStyle: wrapping, // apple-ui-allow: 画像（PiP・ロック画面の絵）に描く字。Dynamic Type は効かない
     ]
 
     /// 中身を1枚の絵にする。motion があれば、前の絵から progress（0〜1）まで移った所の絵。
@@ -357,10 +357,10 @@ final class MusicPip: NSObject, AVPictureInPictureControllerDelegate, AVPictureI
         let textX = titleArt.maxX + 44
         let textWidth = CGFloat(width) - textX - 50
         let titleAttrs: [NSAttributedString.Key: Any] = [
-            .font: UIFont.systemFont(ofSize: 52, weight: .bold), .foregroundColor: UIColor.white, .paragraphStyle: truncating,
+            .font: UIFont.systemFont(ofSize: 52, weight: .bold), .foregroundColor: UIColor.white, .paragraphStyle: truncating, // apple-ui-allow: 画像（PiP・ロック画面の絵）に描く字。Dynamic Type は効かない
         ]
         let artistAttrs: [NSAttributedString.Key: Any] = [
-            .font: UIFont.systemFont(ofSize: 38, weight: .regular), .foregroundColor: UIColor(white: 1, alpha: 0.7), .paragraphStyle: truncating,
+            .font: UIFont.systemFont(ofSize: 38, weight: .regular), .foregroundColor: UIColor(white: 1, alpha: 0.7), .paragraphStyle: truncating, // apple-ui-allow: 画像（PiP・ロック画面の絵）に描く字。Dynamic Type は効かない
         ]
         let titleSize = (title as NSString).boundingRect(with: CGSize(width: textWidth, height: 62 * 3), options: options, attributes: titleAttrs, context: nil).size
         let artistSize = (artist as NSString).boundingRect(with: CGSize(width: textWidth, height: 46 * 2), options: options, attributes: artistAttrs, context: nil).size
@@ -376,10 +376,10 @@ final class MusicPip: NSObject, AVPictureInPictureControllerDelegate, AVPictureI
         let textX = lyricArt.maxX + 28
         let headWidth = CGFloat(width) - textX - 56
         let titleAttrs: [NSAttributedString.Key: Any] = [
-            .font: UIFont.systemFont(ofSize: 36, weight: .bold), .foregroundColor: UIColor.white, .paragraphStyle: truncating,
+            .font: UIFont.systemFont(ofSize: 36, weight: .bold), .foregroundColor: UIColor.white, .paragraphStyle: truncating, // apple-ui-allow: 画像（PiP・ロック画面の絵）に描く字。Dynamic Type は効かない
         ]
         let artistAttrs: [NSAttributedString.Key: Any] = [
-            .font: UIFont.systemFont(ofSize: 28, weight: .regular), .foregroundColor: UIColor(white: 1, alpha: 0.7), .paragraphStyle: truncating,
+            .font: UIFont.systemFont(ofSize: 28, weight: .regular), .foregroundColor: UIColor(white: 1, alpha: 0.7), .paragraphStyle: truncating, // apple-ui-allow: 画像（PiP・ロック画面の絵）に描く字。Dynamic Type は効かない
         ]
         (title as NSString).draw(with: CGRect(x: textX, y: lyricArt.minY + 14, width: headWidth, height: 44), options: options, attributes: titleAttrs, context: nil)
         (artist as NSString).draw(with: CGRect(x: textX, y: lyricArt.minY + 62, width: headWidth, height: 36), options: options, attributes: artistAttrs, context: nil)
@@ -465,7 +465,7 @@ final class MusicPip: NSObject, AVPictureInPictureControllerDelegate, AVPictureI
         // （小さく縮めてから広げるぼかしは、升目が見えてドットのようになった）
         let side = CGFloat(width)
         UIImage(cgImage: blurred).draw(in: CGRect(x: 0, y: (CGFloat(height) - side) / 2, width: side, height: side), blendMode: .normal, alpha: 0.6)
-        UIColor(white: 0, alpha: 0.45).setFill()
+        UIColor(white: 0, alpha: 0.45).setFill() // apple-ui-allow: 画像（PiP・ロック画面の絵）に描く色。システムの色は効かない
         // fill(_:) だけだと置き換え（copy）で塗られ、下のジャケットが消える
         context.fill(rect, blendMode: .normal)
     }
@@ -496,10 +496,10 @@ final class MusicPip: NSObject, AVPictureInPictureControllerDelegate, AVPictureI
         if let artwork {
             artwork.draw(in: art)
         } else {
-            UIColor(white: 0.2, alpha: 1).setFill()
+            UIColor(white: 0.2, alpha: 1).setFill() // apple-ui-allow: 画像（PiP・ロック画面の絵）に描く色。システムの色は効かない
             context.fill(art)
             let note = UIImage(systemName: "music.note", withConfiguration: UIImage.SymbolConfiguration(pointSize: notePoint, weight: .medium))?
-                .withTintColor(UIColor(white: 0.6, alpha: 1), renderingMode: .alwaysOriginal)
+                .withTintColor(UIColor(white: 0.6, alpha: 1), renderingMode: .alwaysOriginal) // apple-ui-allow: 画像（PiP・ロック画面の絵）に描く色。システムの色は効かない
             if let note { note.draw(at: CGPoint(x: art.midX - note.size.width / 2, y: art.midY - note.size.height / 2)) }
         }
         context.cgContext.restoreGState()

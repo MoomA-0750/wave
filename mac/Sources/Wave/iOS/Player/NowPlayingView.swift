@@ -99,7 +99,7 @@ struct NowPlayingView: View {
                     // 曲線は初めと終わりをゆっくりにする（ほかの動きの初めに速い曲線だと、最初のコマでほぼ大きくなりきって、
                     // 大きくなる動きでなく滑る動きに見えた）
                     .transition(.scale(scale: 1.25, anchor: .bottom).combined(with: .opacity)
-                        .animation(.timingCurve(0.45, 0, 0.35, 1, duration: 0.55)))
+                        .animation(.timingCurve(0.45, 0, 0.35, 1, duration: 0.55))) // apple-ui-allow: 移り変わり（transition）に付ける曲線で、View の .animation ではない
                     .simultaneousGesture(DragGesture(minimumDistance: 20).onEnded { value in
                         if value.translation.height > 70, value.translation.height > abs(value.translation.width) { dismiss() }
                     })
@@ -184,7 +184,7 @@ struct NowPlayingView: View {
     /// 横向きのジャケット: 枠を付けず、画面の左・上・下の端まで伸ばして、右の操作の列の側を地へ溶かす（縦向きと同じく境目を作らない）。
     /// 間にぼかした同じ絵を挟んで、くっきり → ぼかし → 地 と溶かす。幅は右の操作の列の手前まで。
     private func landscapeCover(_ player: PlayerService) -> some View {
-        GeometryReader { geo in
+        GeometryReader { geo in // apple-ui-allow: 大きさに合わせて並べる・描く（測るだけではない）
             let insets = geo.safeAreaInsets
             let inner = geo.size.width - insets.leading - insets.trailing
             let column = min(440, (inner - 76) / 2)
@@ -379,7 +379,7 @@ struct NowPlayingView: View {
             }
             if let song { SongMenuItems(song: song) }
         } label: {
-            Image(systemName: "ellipsis").font(.system(size: 17, weight: .semibold)).frame(width: 40, height: 40)
+            Image(systemName: "ellipsis").font(.system(size: 17, weight: .semibold)).frame(width: 40, height: 40) // apple-ui-allow: 記号の大きさ（ボタンの枠に合わせる）
         }
     }
 
@@ -422,7 +422,7 @@ struct NowPlayingView: View {
             .disabled(!player.canChangeModes)
             .accessibilityLabel(L.t("シャッフル", "Shuffle"))
             Spacer()
-            Button(action: player.previous) { Image(systemName: "backward.fill").font(.system(size: 34)).frame(width: 64, height: 64) }
+            Button(action: player.previous) { Image(systemName: "backward.fill").font(.system(size: 34)).frame(width: 64, height: 64) } // apple-ui-allow: 記号の大きさ（ボタンの枠に合わせる）
                 .accessibilityLabel(L.t("前へ", "Previous"))
             Spacer()
             Button(action: player.togglePlay) {
@@ -430,7 +430,7 @@ struct NowPlayingView: View {
                     if player.isLoading {
                         ProgressView().controlSize(.large)
                     } else {
-                        Image(systemName: player.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 46))
+                        Image(systemName: player.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 46)) // apple-ui-allow: 記号の大きさ（ボタンの枠に合わせる）
                     }
                 }
                 .frame(width: 72, height: 72)
@@ -438,7 +438,7 @@ struct NowPlayingView: View {
             }
             .accessibilityLabel(player.isPlaying ? L.t("一時停止", "Pause") : L.t("再生", "Play"))
             Spacer()
-            Button(action: player.next) { Image(systemName: "forward.fill").font(.system(size: 34)).frame(width: 64, height: 64) }
+            Button(action: player.next) { Image(systemName: "forward.fill").font(.system(size: 34)).frame(width: 64, height: 64) } // apple-ui-allow: 記号の大きさ（ボタンの枠に合わせる）
                 .accessibilityLabel(L.t("次へ", "Next"))
             Spacer()
             Button(action: player.cycleRepeat) {
@@ -530,7 +530,7 @@ struct NowPlayingView: View {
                     HStack(spacing: Kasane.Space.s2) {
                         PipButton()
                         Button { shell.videoFullScreen = true } label: {
-                            Image(systemName: "arrow.up.left.and.arrow.down.right").font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
+                            Image(systemName: "arrow.up.left.and.arrow.down.right").font(.system(size: 15, weight: .semibold)).foregroundStyle(.white) // apple-ui-allow: 記号の大きさ（ボタンの枠に合わせる）
                                 .frame(width: 40, height: 40).background(Circle().fill(Color.black.opacity(0.45)))
                         }
                         .accessibilityLabel(L.t("全画面", "Full screen"))
@@ -693,7 +693,7 @@ private struct CoverCarousel: View {
 
     var body: some View {
         let player = AppServices.player!
-        GeometryReader { geo in
+        GeometryReader { geo in // apple-ui-allow: 大きさに合わせて並べる・描く（測るだけではない）
             let step = geo.size.width + gap
             ZStack {
                 ForEach(slots(player), id: \.index) { slot in
@@ -914,7 +914,7 @@ private struct VideoFullScreen: View {
                     }
                     PipButton()
                     Button { dismiss() } label: {
-                        Image(systemName: "arrow.down.right.and.arrow.up.left").font(.system(size: 16, weight: .semibold))
+                        Image(systemName: "arrow.down.right.and.arrow.up.left").font(.system(size: 16, weight: .semibold)) // apple-ui-allow: 記号の大きさ（ボタンの枠に合わせる）
                             .frame(width: 44, height: 44).background(Circle().fill(Color.black.opacity(0.45)))
                     }
                     .accessibilityLabel(L.t("全画面を終える", "Exit full screen"))
@@ -924,7 +924,7 @@ private struct VideoFullScreen: View {
             .padding(.vertical, Kasane.Space.s4)
             HStack(spacing: 56) {
                 Button { player.previous(); touched += 1 } label: {
-                    Image(systemName: "backward.end.fill").font(.system(size: 24))
+                    Image(systemName: "backward.end.fill").font(.system(size: 24)) // apple-ui-allow: 記号の大きさ（ボタンの枠に合わせる）
                         .frame(width: 56, height: 56).background(Circle().fill(Color.black.opacity(0.45)))
                 }
                     .accessibilityLabel(L.t("前へ", "Previous"))
@@ -934,13 +934,13 @@ private struct VideoFullScreen: View {
                         if player.isLoading {
                             ProgressView().tint(.white)
                         } else {
-                            Image(systemName: player.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 30))
+                            Image(systemName: player.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 30)) // apple-ui-allow: 記号の大きさ（ボタンの枠に合わせる）
                         }
                     }
                 }
                 .accessibilityLabel(player.isPlaying ? L.t("一時停止", "Pause") : L.t("再生", "Play"))
                 Button { player.next(); touched += 1 } label: {
-                    Image(systemName: "forward.end.fill").font(.system(size: 24))
+                    Image(systemName: "forward.end.fill").font(.system(size: 24)) // apple-ui-allow: 記号の大きさ（ボタンの枠に合わせる）
                         .frame(width: 56, height: 56).background(Circle().fill(Color.black.opacity(0.45)))
                 }
                     .accessibilityLabel(L.t("次へ", "Next"))
@@ -982,7 +982,7 @@ private struct PipButton: View {
     var body: some View {
         if pip.supported {
             Button { pip.toggle() } label: {
-                Image(systemName: pip.active ? "pip.exit" : "pip.enter").font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
+                Image(systemName: pip.active ? "pip.exit" : "pip.enter").font(.system(size: 15, weight: .semibold)).foregroundStyle(.white) // apple-ui-allow: 記号の大きさ（ボタンの枠に合わせる）
                     .frame(width: 40, height: 40).background(Circle().fill(Color.black.opacity(0.45)))
             }
             .accessibilityLabel(pip.active ? L.t("小窓を閉じる", "Close picture in picture") : L.t("小窓で見る", "Picture in picture"))

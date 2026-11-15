@@ -51,15 +51,13 @@ struct MainView: View {
                 }
             }
         }
-        .background(GeometryReader { geo in
-            Color.clear.onChange(of: geo.size.width, initial: true) { _, w in model.windowWidth = w }
-        })
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { model.windowWidth = $0 }
         .toolbar { titleBar }
         .toolbarRole(.editor)
         // 全画面の再生中の画面は上の2段を覆う（下の操作の帯は出したまま）
         .toolbar(model.fullScreen ? .hidden : .visible, for: .windowToolbar)
         // 上の帯も窓の地（すりガラス）を透かす
-        .toolbarBackground(.hidden, for: .windowToolbar)
+        .toolbarBackground(.hidden, for: .windowToolbar) // apple-ui-allow: 塗っていない（バーの地を隠して窓の地を透かす）
         .navigationTitle(player.current.map { "\($0.title) • \($0.artistsText)" } ?? "wave")
         .sheet(item: $dialogs.addToPlaylist) { song in AddToPlaylistSheet(song: song) }
         .sheet(isPresented: $dialogs.creating) { CreatePlaylistSheet(song: dialogs.createSong, songs: dialogs.createQueue) }
@@ -167,7 +165,7 @@ struct MainView: View {
     private func installKeys() {
         guard keyMonitor == nil else { return }
         // 開いた直後に、窓が最初の文字の欄（ライブラリの検索）へ勝手に入力の焦点を当てるのを外す（スペースで再生できるように）
-        DispatchQueue.main.async { NSApp.windows.first { $0.identifier?.rawValue.hasPrefix("main") == true }?.makeFirstResponder(nil) }
+        Task { @MainActor in NSApp.windows.first { $0.identifier?.rawValue.hasPrefix("main") == true }?.makeFirstResponder(nil) }
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             let handled = MainActor.assumeIsolated { handleKey(event) }
             return handled ? nil : event
@@ -240,7 +238,7 @@ struct AccountMenu: View {
             if let avatar {
                 Image(nsImage: avatar)
             } else {
-                Image(systemName: "person.crop.circle").font(.system(size: 20))
+                Image(systemName: "person.crop.circle").font(.system(size: 20)) // apple-ui-allow: 記号の大きさ（Windows 版と揃える）
             }
         }
         .menuIndicator(.hidden)
@@ -334,11 +332,11 @@ struct ToastView: View {
             .padding(.horizontal, Kasane.Space.s4)
             .padding(.vertical, Kasane.Space.s3)
             .frame(minWidth: 320, maxWidth: 560)
-            .background(.regularMaterial)
+            .background(.regularMaterial) // apple-ui-allow: 知らせの帯の地。ガラスにするかは別に決める
             .overlay(alignment: .bottom) {
                 TimelineView(.animation) { context in
                     let left = max(0, 1 - context.date.timeIntervalSince(toast.shownAt) / ToastCenter.duration)
-                    GeometryReader { geo in
+                    GeometryReader { geo in // apple-ui-allow: 大きさに合わせて並べる・描く（測るだけではない）
                         Rectangle().fill(Color.accentColor).frame(width: geo.size.width * left, height: 3)
                     }
                     .frame(height: 3)

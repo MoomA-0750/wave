@@ -22,7 +22,7 @@ struct LyricsPageView: View {
                         SyncedPage(lines: synced.lines, positionMs: Int64(player.position * 1000))
                     case .found(.plain(let plain)):
                         ScrollView {
-                            Text(plain.text).font(.system(size: 26, weight: .semibold)).lineSpacing(14).textSelection(.enabled)
+                            Text(plain.text).font(.system(size: 26, weight: .semibold)).lineSpacing(14).textSelection(.enabled) // apple-ui-allow: 見出し・歌詞の大きさ（Windows 版と揃える）
                                 .frame(maxWidth: .infinity, alignment: .leading).padding(Kasane.Space.s10)
                         }
                     case .some(.none):
@@ -74,7 +74,7 @@ private struct SyncedPage: View {
                         let isSub = i > 0 && lines[i - 1].startMs == line.startMs
                         let now = index >= 0 && i >= index && i <= last
                         Text(line.text.trimmingCharacters(in: .whitespaces).isEmpty ? "♪" : line.text)
-                            .font(.system(size: isSub ? 21 : 30, weight: isSub ? .semibold : .bold))
+                            .font(.system(size: isSub ? 21 : 30, weight: isSub ? .semibold : .bold)) // apple-ui-allow: 見出し・歌詞の大きさ（Windows 版と揃える）
                             .lineSpacing(isSub ? 6 : 9)
                             .opacity(now ? 1 : i < index ? 0.55 : 0.4)
                             .scaleEffect(now ? 1 : 0.96, anchor: .leading)

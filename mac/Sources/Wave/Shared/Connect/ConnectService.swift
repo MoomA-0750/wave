@@ -789,12 +789,12 @@ final class ConnectWorker: ConnectClientEffects, @unchecked Sendable {
 
     /// メインのスレッドで走らせて待つ（作業の列からだけ呼ぶ。メインのスレッドはこの列を待たない）。
     private func onUi<T: Sendable>(_ body: @MainActor () -> T) -> T {
-        DispatchQueue.main.sync { MainActor.assumeIsolated { body() } }
+        DispatchQueue.main.sync { MainActor.assumeIsolated { body() } } // apple-ui-allow: 作業の列から main を同期で待つ（async では待てない）
     }
 
     /// メインのスレッドへ送る（待たない）。
     private func toUi(_ body: @escaping @MainActor () -> Void) {
-        DispatchQueue.main.async { MainActor.assumeIsolated { body() } }
+        DispatchQueue.main.async { MainActor.assumeIsolated { body() } } // apple-ui-allow: onUi と同じ列に積んで順を守る
     }
 
     func startTicking() {

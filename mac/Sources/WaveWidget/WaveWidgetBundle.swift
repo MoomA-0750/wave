@@ -38,7 +38,7 @@ private func loadImage(_ url: URL?) -> WidgetImage? {
     return WidgetImage(data: data)
 }
 
-private let accent = Color(red: 0.27, green: 0.55, blue: 1.0)
+private let accent = Color(red: 0.27, green: 0.55, blue: 1.0) // apple-ui-allow: 作品の絵の色（Windows・Android 版と同じ）
 
 /// ウィジェットの中身の余白。OS の余白（contentMargins）は Mac で上下と左右が違い、角に置いた絵の丸みがウィジェットの角と
 /// 中心がずれて見えたので、OS の余白を切って四方を同じにする（ContainerRelativeShape はこの余白の分だけ丸みを小さくする）。
@@ -194,11 +194,11 @@ private struct LikeControl: View {
     var body: some View {
         if liked {
             Link(destination: URL(string: "wave://add-to-playlist")!) {
-                Image(systemName: "checkmark.circle.fill").font(.system(size: size)).foregroundStyle(accent)
+                Image(systemName: "checkmark.circle.fill").font(.system(size: size)).foregroundStyle(accent) // apple-ui-allow: 記号の大きさ（ボタンの枠に合わせる）
             }
         } else {
             Button(intent: ToggleLikeIntent()) {
-                Image(systemName: "plus.circle").font(.system(size: size)).foregroundStyle(.primary)
+                Image(systemName: "plus.circle").font(.system(size: size)).foregroundStyle(.primary) // apple-ui-allow: 記号の大きさ（ボタンの枠に合わせる）
             }
             .buttonStyle(.plain)
         }
@@ -232,10 +232,10 @@ private struct Controls: View {
     var body: some View {
         HStack(spacing: size) {
             Button(intent: PreviousTrackIntent()) { Image(systemName: "backward.fill") }
-            Button(intent: TogglePlayIntent()) { Image(systemName: playing ? "pause.fill" : "play.fill").font(.system(size: size + 6)) }
+            Button(intent: TogglePlayIntent()) { Image(systemName: playing ? "pause.fill" : "play.fill").font(.system(size: size + 6)) } // apple-ui-allow: 記号の大きさ（ボタンの枠に合わせる）
             Button(intent: NextTrackIntent()) { Image(systemName: "forward.fill") }
         }
-        .font(.system(size: size))
+        .font(.system(size: size)) // apple-ui-allow: 記号・絵に合わせた大きさ
         .buttonStyle(.plain)
         .foregroundStyle(.primary)
     }
@@ -705,7 +705,7 @@ struct PlaylistWidgetView: View {
             .overlay(alignment: .bottomTrailing) {
                 if current {
                     Image(systemName: entry.song?.playing == true ? "speaker.wave.2.fill" : "pause.fill")
-                        .font(.system(size: 11, weight: .bold)).foregroundStyle(.white)
+                        .font(.system(size: 11, weight: .bold)).foregroundStyle(.white) // apple-ui-allow: 記号・絵に合わせた大きさ
                         // デスクトップで OS が色を抜いて描く（色付き・クリアの表示）ときも見えるよう、暗い丸に白い絵柄にする
                         .frame(width: 22, height: 22).background(Circle().fill(Color.black.opacity(0.6)))
                         .padding(5)
@@ -842,7 +842,7 @@ struct ItemWidgetView: View {
         HStack(spacing: 22) {
             if item.kind == .playlist || item.kind == .album {
                 Button(intent: PlayItemIntent(item: item, shuffle: true)) {
-                    Image(systemName: "shuffle").font(.system(size: 22)).frame(width: 32, height: 40).contentShape(Rectangle())
+                    Image(systemName: "shuffle").font(.system(size: 22)).frame(width: 32, height: 40).contentShape(Rectangle()) // apple-ui-allow: 記号の大きさ（ボタンの枠に合わせる）
                 }
                 .buttonStyle(.plain)
             }
@@ -862,7 +862,7 @@ private struct PlayMark: View {
 
     var body: some View {
         Image(systemName: playing ? "pause.fill" : "play.fill")
-            .font(.system(size: size))
+            .font(.system(size: size)) // apple-ui-allow: 記号・絵に合わせた大きさ
             .foregroundStyle(onArtwork ? AnyShapeStyle(Color.white) : AnyShapeStyle(.primary))
             .shadow(color: .black.opacity(onArtwork ? 0.5 : 0), radius: 3)
     }

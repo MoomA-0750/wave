@@ -238,7 +238,7 @@ final class LockScreenArtwork: @unchecked Sendable {
         let rect = CGRect(origin: .zero, size: size)
         let context = CIContext()
         guard let cover else {
-            return context.createCGImage(CIImage(color: CIColor(red: 0.08, green: 0.08, blue: 0.1)).cropped(to: rect), from: rect)
+            return context.createCGImage(CIImage(color: CIColor(red: 0.08, green: 0.08, blue: 0.1)).cropped(to: rect), from: rect) // apple-ui-allow: 画像（PiP・ロック画面の絵）に描く色。システムの色は効かない
         }
         let image = CIImage(cgImage: cover)
         // 縦横の大きい方に合わせて、はみ出す分は中央で切る
@@ -325,7 +325,7 @@ final class LockScreenArtwork: @unchecked Sendable {
                 cg.draw(backdrop, in: CGRect(origin: .zero, size: size))
                 cg.restoreGState()
             } else {
-                UIColor(white: 0.08, alpha: 1).setFill()
+                UIColor(white: 0.08, alpha: 1).setFill() // apple-ui-allow: 画像（PiP・ロック画面の絵）に描く色。システムの色は効かない
                 context.fill(CGRect(origin: .zero, size: size))
             }
             let margin = size.width * 0.08
@@ -333,12 +333,12 @@ final class LockScreenArtwork: @unchecked Sendable {
             let paragraph = NSMutableParagraphStyle()
             paragraph.lineBreakMode = .byWordWrapping
             paragraph.lineSpacing = size.width * 0.01
-            let font = UIFont.systemFont(ofSize: size.width * 0.072, weight: .heavy)
+            let font = UIFont.systemFont(ofSize: size.width * 0.072, weight: .heavy) // apple-ui-allow: 画像（PiP・ロック画面の絵）に描く字。Dynamic Type は効かない
             let gap = size.width * 0.045
             let anchor = size.height * 0.17
             let fadeFrom = size.height * 0.5, fadeTo = size.height * 0.62
             func string(_ text: String, alpha: Double) -> NSAttributedString {
-                NSAttributedString(string: text, attributes: [.font: font, .foregroundColor: UIColor(white: 1, alpha: alpha), .paragraphStyle: paragraph])
+                NSAttributedString(string: text, attributes: [.font: font, .foregroundColor: UIColor(white: 1, alpha: alpha), .paragraphStyle: paragraph]) // apple-ui-allow: 画像（PiP・ロック画面の絵）に描く色。システムの色は効かない
             }
             let heights = rows.map {
                 ceil(string($0.text, alpha: 1).boundingRect(with: CGSize(width: width, height: .greatestFiniteMagnitude),

@@ -80,7 +80,7 @@ struct LyricsView: View {
             case .found(.plain(let plain)):
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
-                        Text(plain.text).font(.system(size: 24, weight: .bold)).lineSpacing(10).textSelection(.enabled)
+                        Text(plain.text).font(.system(size: 24, weight: .bold)).lineSpacing(10).textSelection(.enabled) // apple-ui-allow: 見出し・歌詞の大きさ（Windows 版と揃える）
                             .frame(maxWidth: .infinity, alignment: .leading)
                         LyricsSourceNote(source: plain.source)
                     }
@@ -136,7 +136,7 @@ private struct LyricsSyncedPage: View {
                         let isSub = i > 0 && lines[i - 1].startMs == line.startMs
                         let now = index >= 0 && i >= index && i <= last
                         Text(line.text.trimmingCharacters(in: .whitespaces).isEmpty ? "♪" : line.text)
-                            .font(.system(size: isSub ? 19 : 28, weight: isSub ? .semibold : .bold))
+                            .font(.system(size: isSub ? 19 : 28, weight: isSub ? .semibold : .bold)) // apple-ui-allow: 見出し・歌詞の大きさ（Windows 版と揃える）
                             .lineSpacing(isSub ? 4 : 8)
                             .foregroundStyle(.white)
                             .opacity(now ? 1 : i < index ? 0.55 : 0.4)

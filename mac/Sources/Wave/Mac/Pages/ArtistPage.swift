@@ -20,7 +20,7 @@ struct ArtistPageView: View {
         let artist = model.artist
         let rows = model.topSongs.enumerated().map { TrackRow(number: $0.offset + 1, song: $0.element) }
         // 画像は上の帯（検索の欄）の裏まで伸ばし、帯の下に見える高さはそのままにする
-        GeometryReader { geo in
+        GeometryReader { geo in // apple-ui-allow: 大きさに合わせて並べる・描く（測るだけではない）
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: Kasane.Space.s4) {
                     ZStack(alignment: .bottom) {
@@ -32,7 +32,7 @@ struct ArtistPageView: View {
                             .frame(maxHeight: .infinity, alignment: .top)
                         // 名前と、枠の右端に登録（Spotify の「フォロー」）。登録していなければ色を付けて目立たせる
                         HStack(alignment: .lastTextBaseline, spacing: Kasane.Space.s5) {
-                            Text(artist?.name ?? "").font(.system(size: 72, weight: .bold)).foregroundStyle(.white).lineLimit(1).minimumScaleFactor(0.4)
+                            Text(artist?.name ?? "").font(.system(size: 72, weight: .bold)).foregroundStyle(.white).lineLimit(1).minimumScaleFactor(0.4) // apple-ui-allow: 見出し・歌詞の大きさ（Windows 版と揃える）
                             Spacer()
                             if artist?.channelId != nil && AppServices.client.isLoggedIn {
                                 subscribeButton
@@ -47,11 +47,11 @@ struct ArtistPageView: View {
                         if !rows.isEmpty {
                             PlayCircleButton(action: {
                                 model.playOrPause()
-                            }) { Image(systemName: playingHere && player.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 20)) }
+                            }) { Image(systemName: playingHere && player.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 20)) } // apple-ui-allow: 記号の大きさ（Windows 版と揃える）
                         }
                         IconToggle(isOn: playingHere ? player.shuffle : model.shufflePlay, help: L.t("シャッフル", "Shuffle")) {
                             model.toggleShuffle()
-                        } label: { Image(systemName: "shuffle").font(.system(size: 20)) }
+                        } label: { Image(systemName: "shuffle").font(.system(size: 20)) } // apple-ui-allow: 記号の大きさ（Windows 版と揃える）
                         if model.loading { ProgressView().controlSize(.small) }
                     }
                     .padding(.horizontal, Kasane.Space.s6)
@@ -151,12 +151,12 @@ struct SongPageView: View {
                     Cover(url: Ui.large(song.thumbnailUrl), size: 220, radius: Kasane.Radius.base)
                     VStack(alignment: .leading, spacing: 0) {
                         Text(L.t("曲", "Song")).font(.body.weight(.semibold))
-                        Text(song.title).font(.system(size: 48, weight: .bold)).lineLimit(2).minimumScaleFactor(0.5).padding(.vertical, Kasane.Space.s1)
+                        Text(song.title).font(.system(size: 48, weight: .bold)).lineLimit(2).minimumScaleFactor(0.5).padding(.vertical, Kasane.Space.s1) // apple-ui-allow: 見出し・歌詞の大きさ（Windows 版と揃える）
                         Text(detail).foregroundStyle(.secondary).lineLimit(2)
                     }
                 }
                 .padding(EdgeInsets(top: Kasane.Space.s10, leading: Kasane.Space.s3, bottom: Kasane.Space.s6, trailing: Kasane.Space.s3))
-                PlayCircleButton(action: { AppServices.player.playSong(song) }) { Image(systemName: "play.fill").font(.system(size: 20)) }
+                PlayCircleButton(action: { AppServices.player.playSong(song) }) { Image(systemName: "play.fill").font(.system(size: 20)) } // apple-ui-allow: 記号の大きさ（Windows 版と揃える）
                     .padding(EdgeInsets(top: Kasane.Space.s2, leading: Kasane.Space.s3, bottom: Kasane.Space.s4, trailing: Kasane.Space.s3))
                 // 並びは Android の曲の画面と同じ（曲のラジオは再生ボタンと同じなので出さない）
                 VStack(alignment: .leading, spacing: 2) {

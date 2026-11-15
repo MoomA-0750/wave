@@ -26,7 +26,7 @@ struct PodcastPageView: View {
                     if !episodes.isEmpty {
                         PlayCircleButton(action: {
                             model.playOrPause()
-                        }) { Image(systemName: playingHere && player.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 20)) }
+                        }) { Image(systemName: playingHere && player.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 20)) } // apple-ui-allow: 記号の大きさ（Windows 版と揃える）
                     }
                     if let saved = model.saved, model.isFeed || AppServices.client.isLoggedIn {
                         Button(saved ? L.t("保存済み", "Saved") : L.t("ライブラリに保存", "Save to library")) { model.toggleSaved() }
@@ -66,7 +66,7 @@ struct PodcastPageView: View {
             }
             VStack(alignment: .leading, spacing: Kasane.Space.s2) {
                 Text(model.isNewEpisodes ? L.t("プレイリスト • 自動", "Playlist • Auto") : L.t("ポッドキャスト", "Podcast")).font(.callout)
-                Text(model.page?.title ?? summary.title).font(.system(size: 48, weight: .bold)).lineLimit(2).minimumScaleFactor(0.5)
+                Text(model.page?.title ?? summary.title).font(.system(size: 48, weight: .bold)).lineLimit(2).minimumScaleFactor(0.5) // apple-ui-allow: 見出し・歌詞の大きさ（Windows 版と揃える）
                 if let author = model.page?.author ?? summary.author { Text(author).font(.body.weight(.semibold)) }
                 if let description = model.page?.description {
                     // 説明は短く出し、押すと全部を出す
@@ -114,7 +114,7 @@ struct EpisodeRowView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             Image(systemName: isCurrent ? "speaker.wave.2.fill" : "play.circle")
-                .font(.system(size: 22))
+                .font(.system(size: 22)) // apple-ui-allow: 記号・絵に合わせた大きさ（Windows 版と揃える）
                 .foregroundStyle(isCurrent ? Color.accentColor : .secondary)
                 .opacity(hover || isCurrent ? 1 : 0)
         }

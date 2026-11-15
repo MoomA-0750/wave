@@ -39,7 +39,7 @@ enum Ui {
     private static func readable(_ r: Double, _ g: Double, _ b: Double) -> Color {
         let luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255
         let factor = luminance > 0.45 ? 0.45 / luminance : 1
-        return Color(red: r * factor / 255, green: g * factor / 255, blue: b * factor / 255)
+        return Color(red: r * factor / 255, green: g * factor / 255, blue: b * factor / 255) // apple-ui-allow: 絵から取った色・計算した色（直書きではない）
     }
 
     /// ARGB の数を色に（気分・ジャンルのタイル）。
@@ -47,11 +47,11 @@ enum Ui {
         if let v = argb { return readable(Double((v >> 16) & 0xFF), Double((v >> 8) & 0xFF), Double(v & 0xFF)) }
         let fallback: [Int64] = [0xFF8D67AB, 0xFFE8115B, 0xFF1E3264, 0xFF148A08, 0xFFBA5D07, 0xFF503750, 0xFF477D95, 0xFFAF2896]
         let f = fallback[index % fallback.count]
-        return Color(red: Double((f >> 16) & 0xFF) / 255, green: Double((f >> 8) & 0xFF) / 255, blue: Double(f & 0xFF) / 255)
+        return Color(red: Double((f >> 16) & 0xFF) / 255, green: Double((f >> 8) & 0xFF) / 255, blue: Double(f & 0xFF) / 255) // apple-ui-allow: 絵から取った色・計算した色（直書きではない）
     }
 
     /// 高く評価した曲の絵の地（Spotify の紫から緑のグラデーション）。
     static let likedGradient = LinearGradient(
-        colors: [Color(red: 0x45 / 255, green: 0x0A / 255, blue: 0xF5 / 255), Color(red: 0xC4 / 255, green: 0xEF / 255, blue: 0xD9 / 255)],
+        colors: [Color(red: 0x45 / 255, green: 0x0A / 255, blue: 0xF5 / 255), Color(red: 0xC4 / 255, green: 0xEF / 255, blue: 0xD9 / 255)], // apple-ui-allow: 作品の絵の色（Windows・Android 版と同じ）
         startPoint: .topLeading, endPoint: .bottomTrailing)
 }
