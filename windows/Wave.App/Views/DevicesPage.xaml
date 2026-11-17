@@ -11,7 +11,7 @@
             <InfoBar x:Name="StatusBar" IsClosable="False" IsOpen="False" />
 
             <!-- 再生中の端末 -->
-            <Grid x:Name="RemoteCard" Padding="{StaticResource KasanePadding4}" CornerRadius="{StaticResource KasaneCornerRadiusCard}" ColumnSpacing="{StaticResource KasaneSpace4}" Visibility="Collapsed"
+            <Grid x:Name="RemoteCard" Padding="{StaticResource KasanePadding4}" CornerRadius="{StaticResource WaveCardCornerRadius}" ColumnSpacing="{StaticResource KasaneSpace4}" Visibility="Collapsed"
                   Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
@@ -33,7 +33,7 @@
             <!-- 家に入っていない -->
             <StackPanel x:Name="JoinPanel" Spacing="{StaticResource KasaneSpace2}" Visibility="Collapsed">
                 <TextBlock Text="{x:Bind app:L.T('はじめる', 'Get started')}" Style="{StaticResource BodyStrongTextBlockStyle}" Margin="0,8,0,4" />
-                <StackPanel Padding="{StaticResource KasanePadding4}" CornerRadius="{StaticResource KasaneCornerRadiusCard}" Spacing="{StaticResource KasaneSpace3}" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                <StackPanel Padding="{StaticResource KasanePadding4}" CornerRadius="{StaticResource WaveCardCornerRadius}" Spacing="{StaticResource KasaneSpace3}" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                             BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
                     <TextBlock TextWrapping="Wrap" Text="{x:Bind app:L.T('連携済みのスマホの wave で「端末の連携」→「端末を追加」を押し、「文字で共有」で送った文字列をここに貼り付けてください。', 'On a phone that^'s already set up, open Devices in wave, tap “Add device”, then “Share as text”, and paste the text here.')}" />
                     <TextBox x:Name="OfferBox" PlaceholderText="wave-pair:…" TextWrapping="Wrap" AcceptsReturn="False" />
@@ -45,7 +45,7 @@
             </StackPanel>
 
             <!-- 加入の手順 -->
-            <StackPanel x:Name="PairingPanel" Padding="{StaticResource KasanePadding4}" CornerRadius="{StaticResource KasaneCornerRadiusCard}" Spacing="{StaticResource KasaneSpace3}" Visibility="Collapsed"
+            <StackPanel x:Name="PairingPanel" Padding="{StaticResource KasanePadding4}" CornerRadius="{StaticResource WaveCardCornerRadius}" Spacing="{StaticResource KasaneSpace3}" Visibility="Collapsed"
                         Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
                 <TextBlock x:Name="PairingText" TextWrapping="Wrap" />
                 <Image x:Name="QrImage" Width="280" Height="280" HorizontalAlignment="Left" Visibility="Collapsed" />

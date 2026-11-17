@@ -5,10 +5,17 @@
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
                 <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
-                <!-- kasane の角丸・余白（kasane-sync で写したもの）。Fluent の ControlCornerRadius・OverlayCornerRadius を上書きするので XamlControlsResources の後 -->
+                <!-- kasane の角丸・余白（kasane-sync で写したもの）。XamlControlsResources の後 -->
                 <ResourceDictionary Source="Kasane.xaml" />
                 <controls:Templates xmlns:controls="using:Wave.App.Controls" />
             </ResourceDictionary.MergedDictionaries>
+
+            <!-- 角丸は Windows の標準（入力欄・ボタン 4、メニュー・小窓 8）に戻す。Kasane.xaml の Fluent の上書き（10・16）は丸すぎて
+                 Windows らしくないため（2026-11-17 に本人）。ここに直接置いたものは合わせた辞書より先に引かれるので、kasane-sync で写し直しても効く -->
+            <CornerRadius x:Key="ControlCornerRadius">4</CornerRadius>
+            <CornerRadius x:Key="OverlayCornerRadius">8</CornerRadius>
+            <!-- 右の欄の次の曲・歌詞、設定・端末のページの板（kasane のカード 26 の代わり。組み直しの前の 8） -->
+            <CornerRadius x:Key="WaveCardCornerRadius">8</CornerRadius>
 
         </ResourceDictionary>
     </Application.Resources>

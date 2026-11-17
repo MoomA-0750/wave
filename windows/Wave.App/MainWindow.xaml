@@ -265,7 +265,7 @@
                                 </Button>
                             </Grid>
                             <!-- 次の曲（Android と同じく歌詞の上） -->
-                            <StackPanel Padding="{StaticResource KasanePadding4}" CornerRadius="{StaticResource KasaneCornerRadiusCard}" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" Spacing="{StaticResource KasaneSpace2}">
+                            <StackPanel Padding="{StaticResource KasanePadding4}" CornerRadius="{StaticResource WaveCardCornerRadius}" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" Spacing="{StaticResource KasaneSpace2}">
                                 <Grid>
                                     <TextBlock Text="{x:Bind app:L.T('次の曲', 'Up next')}" Style="{StaticResource BodyStrongTextBlockStyle}" />
                                     <HyperlinkButton Content="{x:Bind app:L.T('キューを開く', 'Open queue')}" HorizontalAlignment="Right" Padding="0" Click="OnShowQueue" />
@@ -285,7 +285,7 @@
                                 </Grid>
                             </StackPanel>
                             <!-- 歌詞（無い曲では箱ごと出さない）。全文を中で送り、歌っている行へ滑らかに動かす -->
-                            <Button x:Name="LyricsCard" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Padding="{StaticResource KasanePadding4}" CornerRadius="{StaticResource KasaneCornerRadiusCard}" Click="OnOpenLyrics" Visibility="Collapsed">
+                            <Button x:Name="LyricsCard" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Padding="{StaticResource KasanePadding4}" CornerRadius="{StaticResource WaveCardCornerRadius}" Click="OnOpenLyrics" Visibility="Collapsed">
                                 <StackPanel Spacing="{StaticResource KasaneSpace2}">
                                     <TextBlock Text="{x:Bind app:L.T('歌詞', 'Lyrics')}" Style="{StaticResource BodyStrongTextBlockStyle}" />
                                     <ScrollViewer x:Name="LyricsScroller" Height="190" IsHitTestVisible="False" VerticalScrollBarVisibility="Hidden" HorizontalScrollMode="Disabled">

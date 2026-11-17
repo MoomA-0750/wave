@@ -7,7 +7,7 @@
             <TextBlock Text="{x:Bind app:L.T('設定', 'Settings')}" FontSize="48" FontWeight="Bold" Margin="0,0,0,16" />
 
             <TextBlock Text="{x:Bind app:L.T('アカウント', 'Account')}" Style="{StaticResource BodyStrongTextBlockStyle}" Margin="0,8,0,4" />
-            <Grid Padding="{StaticResource KasanePadding4}" CornerRadius="{StaticResource KasaneCornerRadiusCard}" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+            <Grid Padding="{StaticResource KasanePadding4}" CornerRadius="{StaticResource WaveCardCornerRadius}" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                   BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" ColumnSpacing="{StaticResource KasaneSpace4}">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
@@ -30,7 +30,7 @@
                      Title="{x:Bind app:L.T('保存したログイン情報を読み込めませんでした', 'Couldn^'t read your saved sign-in')}" Message="{x:Bind app:L.T('ログインし直すと上書きされます', 'Signing in again will replace it')}" />
 
             <TextBlock Text="{x:Bind app:L.T('再生', 'Play')}" Style="{StaticResource BodyStrongTextBlockStyle}" Margin="0,16,0,4" />
-            <Grid Padding="{StaticResource KasanePadding4}" CornerRadius="{StaticResource KasaneCornerRadiusCard}" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+            <Grid Padding="{StaticResource KasanePadding4}" CornerRadius="{StaticResource WaveCardCornerRadius}" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                   BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
                 <StackPanel>
                     <TextBlock Text="{x:Bind app:L.T('再生した曲を YouTube Music の再生履歴に残す', 'Save played songs to your YouTube Music history')}" />
@@ -39,7 +39,7 @@
                 <ToggleSwitch x:Name="HistorySwitch" HorizontalAlignment="Right" OnContent="" OffContent="" MinWidth="0" Toggled="OnHistoryToggled" />
             </Grid>
 
-            <Grid Padding="{StaticResource KasanePadding4}" CornerRadius="{StaticResource KasaneCornerRadiusCard}" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" Margin="0,8,0,0"
+            <Grid Padding="{StaticResource KasanePadding4}" CornerRadius="{StaticResource WaveCardCornerRadius}" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" Margin="0,8,0,0"
                   BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
                 <StackPanel Margin="0,0,80,0">
                     <TextBlock Text="{x:Bind app:L.T('新作の通知', 'New release notifications')}" />
@@ -82,7 +82,7 @@
             </Grid>
 
             <TextBlock Text="Discord" Style="{StaticResource BodyStrongTextBlockStyle}" Margin="0,16,0,4" />
-            <StackPanel Padding="{StaticResource KasanePadding4}" CornerRadius="{StaticResource KasaneCornerRadiusCard}" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+            <StackPanel Padding="{StaticResource KasanePadding4}" CornerRadius="{StaticResource WaveCardCornerRadius}" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                         BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Spacing="{StaticResource KasaneSpace2}">
                 <Grid>
                     <StackPanel Margin="0,0,80,0">
@@ -98,7 +98,7 @@
             </StackPanel>
 
             <TextBlock Text="Claude" Style="{StaticResource BodyStrongTextBlockStyle}" Margin="0,16,0,4" />
-            <StackPanel Padding="{StaticResource KasanePadding4}" CornerRadius="{StaticResource KasaneCornerRadiusCard}" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+            <StackPanel Padding="{StaticResource KasanePadding4}" CornerRadius="{StaticResource WaveCardCornerRadius}" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                         BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Spacing="{StaticResource KasaneSpace2}">
                 <TextBlock x:Name="AiStateText" TextWrapping="Wrap" />
                 <TextBlock Text="{x:Bind app:L.T('家の PC で ai-bridge の ai_bridge.py --name wave --pair を動かし、出てきた waveai://pair?… の文字列を貼ってください', 'Run ai_bridge.py --name wave --pair from ai-bridge on your PC and paste the waveai://pair?… text it prints')}"
@@ -116,7 +116,7 @@
             </StackPanel>
 
             <TextBlock Text="{x:Bind app:L.T('言語', 'Language')}" Style="{StaticResource BodyStrongTextBlockStyle}" Margin="0,16,0,4" />
-            <Grid Padding="{StaticResource KasanePadding4}" CornerRadius="{StaticResource KasaneCornerRadiusCard}" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+            <Grid Padding="{StaticResource KasanePadding4}" CornerRadius="{StaticResource WaveCardCornerRadius}" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                   BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
                 <StackPanel>
                     <TextBlock Text="{x:Bind app:L.T('画面の言語', 'App language')}" />
@@ -134,7 +134,7 @@
             </Grid>
 
             <TextBlock Text="{x:Bind app:L.T('このアプリについて', 'About')}" Style="{StaticResource BodyStrongTextBlockStyle}" Margin="0,16,0,4" />
-            <StackPanel Padding="{StaticResource KasanePadding4}" CornerRadius="{StaticResource KasaneCornerRadiusCard}" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+            <StackPanel Padding="{StaticResource KasanePadding4}" CornerRadius="{StaticResource WaveCardCornerRadius}" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                         BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Spacing="{StaticResource KasaneSpace1}">
                 <TextBlock x:Name="VersionText" />
                 <TextBlock Text="{x:Bind app:L.T('ログイン情報は Windows のデータ保護で暗号化して、このユーザーのフォルダにだけ保存します', 'Your sign-in is encrypted with Windows Data Protection and stored only in this user^'s folder')}" Style="{StaticResource SubtleTextStyle}" TextWrapping="Wrap" MaxLines="3" />

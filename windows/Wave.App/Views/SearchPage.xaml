@@ -57,7 +57,7 @@
                     <ItemsRepeater.ItemTemplate>
                         <DataTemplate x:DataType="views:MoodTile">
                             <Button HorizontalAlignment="Stretch" VerticalAlignment="Stretch" HorizontalContentAlignment="Left" VerticalContentAlignment="Top"
-                                    Background="{x:Bind Brush}" Foreground="White" CornerRadius="{StaticResource KasaneCornerRadiusCard}" Padding="{StaticResource KasanePadding4}" BorderThickness="0" Click="OnMoodClick" Tag="{x:Bind Category}">
+                                    Background="{x:Bind Brush}" Foreground="White" CornerRadius="{StaticResource WaveCardCornerRadius}" Padding="{StaticResource KasanePadding4}" BorderThickness="0" Click="OnMoodClick" Tag="{x:Bind Category}">
                                 <TextBlock Text="{x:Bind Category.Title}" Style="{StaticResource SubtitleTextBlockStyle}" TextWrapping="Wrap" />
                             </Button>
                         </DataTemplate>
@@ -92,7 +92,7 @@
                         </Grid.ColumnDefinitions>
                         <StackPanel Spacing="{StaticResource KasaneSpace3}" x:Name="TopPanel">
                             <TextBlock Text="{x:Bind app:L.T('トップの検索結果', 'Top result')}" Style="{StaticResource SubtitleTextBlockStyle}" />
-                            <Button x:Name="TopCard" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Padding="{StaticResource KasanePadding5}" CornerRadius="{StaticResource KasaneCornerRadiusCard}"
+                            <Button x:Name="TopCard" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Padding="{StaticResource KasanePadding5}" CornerRadius="{StaticResource WaveCardCornerRadius}"
                                     Click="OnTopClick" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
                                 <Grid>
                                     <StackPanel Spacing="{StaticResource KasaneSpace4}">

@@ -1347,3 +1347,10 @@
 - wave-api（ほかのアプリ向けの口）が 11-13 に中継と同じ SIGBUS（/tmp/hsperfdata の mmap）で落ち、`restart: unless-stopped` なのに 4 日止まっていた。中継と同じく `JAVA_OPTS=-XX:-UsePerfData` を足して起こした（relay/deploy/compose.yaml と、手元の dev/relay-deploy-v2）
 - 止まったままになるのを防ぐ見張り（systemd のユーザーのタイマーで 5 分ごとに `docker compose up -d --no-recreate --no-build`）を入れようとしたが、自動の判定で止められたので本人に任せた
 - iPhone の保存の確かめ用に、開発用の命令 album-save・podcast-save を足した（開いているページの保存のボタンと同じ処理を呼ぶ。実機ではミラーリングがつながらず指で押せないため）
+
+## 2026-11-17 Windows の角丸は Windows の標準に戻す
+
+- 本人の言葉: 「Windowsのテキストボックスや歌詞表示のパネルの角ですが、元の丸みに戻して欲しいです、Windowsではこれだけ丸々とネイティブらしくない気がしました」
+- kasane の書き出し（Kasane.xaml）は Fluent の ControlCornerRadius・OverlayCornerRadius を 10・16 に上書きしていた（kasane 側で「仮の対応、本人の確認待ち」）。Windows では App.xaml に直接 4・8（Fluent の既定）を置いて戻す。直接置いたものは合わせた辞書より先に引かれるので、kasane-sync で写し直しても効く
+- kasane のカード（26）を使っていた板（右の欄の次の曲・歌詞、設定・端末・検索のページ）は、組み直しの前の 8（WaveCardCornerRadius）に戻した
+- kasane の書き出し元で Windows の Fluent の上書きをやめるかは、kasane の側で決める

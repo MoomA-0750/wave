@@ -20,7 +20,7 @@
                 <ItemsRepeater.ItemTemplate>
                     <DataTemplate x:DataType="music:HomeItem">
                         <Button Padding="0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Height="56"
-                                CornerRadius="{StaticResource KasaneCornerRadiusControl}" Click="OnRecentClick" Tag="{x:Bind}">
+                                CornerRadius="{StaticResource ControlCornerRadius}" Click="OnRecentClick" Tag="{x:Bind}">
                             <Grid ColumnSpacing="{StaticResource KasaneSpace3}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="56" />
