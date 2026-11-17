@@ -44,7 +44,7 @@ class LrclibClient(
         val syncedLyrics: String? = null,
     )
 
-    /** 時刻付きの歌詞を探す。まず曲名・アーティスト・アルバム・長さで1件を引き、無ければ検索して長さの近いものを選ぶ。 */
+    /** 時刻付きの歌詞を探す。まず曲名・アーティスト・アルバム・長さで1件を引き、無ければ検索して曲名とアーティストの合うもののうち長さの近いものを選ぶ。 */
     suspend fun synced(
         title: String,
         artist: String,
@@ -54,7 +54,7 @@ class LrclibClient(
         try {
             exact(title, artist, album, durationSeconds)
                 ?.let { Result.Found(it) }
-                ?: searchTitles(title).firstNotNullOfOrNull { search(it, artist, durationSeconds) }?.let { Result.Found(it) }
+                ?: searchTitles(title).firstNotNullOfOrNull { search(it, title, artist, durationSeconds) }?.let { Result.Found(it) }
                 ?: Result.NotFound
         } catch (cancel: CancellationException) {
             throw cancel
@@ -84,6 +84,7 @@ class LrclibClient(
     }
 
     private suspend fun search(
+        searchTitle: String,
         title: String,
         artist: String,
         durationSeconds: Int?,
@@ -91,12 +92,12 @@ class LrclibClient(
         val response =
             http.get("$baseUrl/api/search") {
                 header(HttpHeaders.UserAgent, userAgent)
-                parameter("track_name", title)
+                parameter("track_name", searchTitle)
                 parameter("artist_name", artist)
             }
         if (response.status.value != 200) throw IllegalStateException("lrclib search status=${response.status.value}")
         val tracks = json.decodeFromString(ListSerializer(Track.serializer()), response.bodyAsText())
-        return pick(tracks, durationSeconds)?.let(::linesOf)
+        return pick(tracks, title, artist, durationSeconds)?.let(::linesOf)
     }
 
     internal companion object {
@@ -112,15 +113,32 @@ class LrclibClient(
                 ?.let(Lrc::parse)
                 ?.takeIf { lines -> lines.any { it.text.isNotBlank() } }
 
-        /** 検索の結果から、時刻付きで長さの近いものを選ぶ。長さが分からなければ最初の時刻付き。 */
+        /**
+         * 検索の結果から、曲名とアーティストが一致する時刻付きのうち長さの近いものを選ぶ。長さが分からなければ最初の一致。
+         * 一致するものが無ければ選ばない（長さだけが近い別の曲を選ばないため）。
+         * 曲名が一致しなくても、アーティストが一致して長さが [LrclibMatch.SAME_LENGTH_WITHOUT_TITLE] 秒以内なら残す。
+         */
         internal fun pick(
             tracks: List<Track>,
+            title: String,
+            artist: String,
             durationSeconds: Int?,
         ): Track? {
-            val synced = tracks.filter { !it.instrumental && !it.syncedLyrics.isNullOrBlank() }
-            if (durationSeconds == null) return synced.firstOrNull()
+            val wantedTitles = LrclibMatch.titleKeys(title)
+            val wantedArtists = LrclibMatch.artistKeys(artist)
+            val matching =
+                tracks
+                    .filter { !it.instrumental && !it.syncedLyrics.isNullOrBlank() }
+                    .filter { track ->
+                        LrclibMatch.overlap(wantedArtists, LrclibMatch.artistKeys(track.artistName.orEmpty())) &&
+                            (
+                                LrclibMatch.overlap(wantedTitles, LrclibMatch.titleKeys(track.trackName.orEmpty())) ||
+                                    (durationSeconds != null && track.duration != null && abs(track.duration - durationSeconds) <= LrclibMatch.SAME_LENGTH_WITHOUT_TITLE)
+                            )
+                    }
+            if (durationSeconds == null) return matching.firstOrNull()
             return DURATION_TOLERANCES.firstNotNullOfOrNull { tolerance ->
-                synced
+                matching
                     .filter { it.duration != null && abs(it.duration - durationSeconds) <= tolerance }
                     .minByOrNull { abs(it.duration!! - durationSeconds) }
             }

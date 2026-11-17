@@ -15,6 +15,7 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -43,7 +44,9 @@ class LrclibClientTest {
         duration: Double,
         synced: String? = "[00:01.00]合成の歌詞",
         instrumental: Boolean = false,
-    ): String = """{"trackName":"t","artistName":"a","duration":$duration,"instrumental":$instrumental,"syncedLyrics":${synced?.let { "\"$it\"" } ?: "null"}}"""
+        title: String = "t",
+        artist: String = "a",
+    ): String = """{"trackName":"$title","artistName":"$artist","duration":$duration,"instrumental":$instrumental,"syncedLyrics":${synced?.let { "\"$it\"" } ?: "null"}}"""
 
     @Test
     fun exactMatchIsUsedAndOnlySongInfoIsSent(): Unit =
@@ -107,8 +110,50 @@ class LrclibClientTest {
     }
 
     @Test
-    fun withoutLengthTheFirstTimedOneIsUsed() {
-        val tracks = listOf(LrclibClient.Track(duration = 1.0), LrclibClient.Track(duration = 100.0, syncedLyrics = "[00:01.00]x"))
-        assertEquals(100.0, LrclibClient.pick(tracks, null)?.duration)
+    fun withoutLengthTheFirstMatchingTimedOneIsUsed() {
+        val tracks =
+            listOf(
+                LrclibClient.Track(trackName = "t", artistName = "a", duration = 1.0),
+                LrclibClient.Track(trackName = "別の曲", artistName = "a", duration = 50.0, syncedLyrics = "[00:01.00]x"),
+                LrclibClient.Track(trackName = "t", artistName = "a", duration = 100.0, syncedLyrics = "[00:01.00]x"),
+            )
+        assertEquals(100.0, LrclibClient.pick(tracks, "t", "a", null)?.duration)
+    }
+
+    @Test
+    fun aDifferentSongOfTheSameLengthIsNotPicked(): Unit =
+        runBlocking {
+            // 同じ長さの別の曲が先に並んでも、曲名とアーティストの合う方を選ぶ
+            search = {
+                jsonResponse(
+                    "[${track(262.0, synced = "[00:01.00]別の曲", title = "別の曲", artist = "別の人")},${track(263.0, synced = "[00:02.00]群青", title = "群青", artist = "YOASOBI")}]",
+                )
+            }
+            val result = assertIs<LrclibClient.Result.Found>(client.synced("群青", "YOASOBI", null, 262))
+            assertEquals("群青", result.lines.single().text)
+        }
+
+    @Test
+    fun noMatchingSongIsNotFound(): Unit =
+        runBlocking {
+            search = { jsonResponse("[${track(262.0, title = "別の曲", artist = "別の人")},${track(262.0, title = "群青", artist = "別の人")}]") }
+            assertEquals(LrclibClient.Result.NotFound, client.synced("群青", "YOASOBI", null, 262))
+            assertEquals(LrclibClient.Result.NotFound, client.synced("群青", "YOASOBI", null, null))
+        }
+
+    @Test
+    fun decorationsAndWidthDoNotPreventAMatch() {
+        val tracks = listOf(LrclibClient.Track(trackName = "Ｓｏｎｇ", artistName = "ＡＢＣ, Someone", duration = 200.0, syncedLyrics = "[00:01.00]x"))
+        assertNotNull(LrclibClient.pick(tracks, "song (feat. X) [Remix]", "abc", 200))
+        assertNotNull(LrclibClient.pick(tracks, "Song - From \"THE FIRST TAKE\"", "abc", 200))
+        assertNotNull(LrclibClient.pick(tracks, "Song feat. Someone", "Someone", 200))
+    }
+
+    @Test
+    fun aRomanizedTitleMatchesOnlyByArtistAndCloseLength() {
+        val tracks = listOf(LrclibClient.Track(trackName = "Gunjo", artistName = "YOASOBI", duration = 250.0, syncedLyrics = "[00:01.00]x"))
+        assertNotNull(LrclibClient.pick(tracks, "群青", "YOASOBI", 249))
+        assertNull(LrclibClient.pick(tracks, "群青", "YOASOBI", 246))
+        assertNull(LrclibClient.pick(tracks, "群青", "YOASOBI", null))
     }
 }
