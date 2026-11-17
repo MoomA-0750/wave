@@ -1354,3 +1354,8 @@
 - kasane の書き出し（Kasane.xaml）は Fluent の ControlCornerRadius・OverlayCornerRadius を 10・16 に上書きしていた（kasane 側で「仮の対応、本人の確認待ち」）。Windows では App.xaml に直接 4・8（Fluent の既定）を置いて戻す。直接置いたものは合わせた辞書より先に引かれるので、kasane-sync で写し直しても効く
 - kasane のカード（26）を使っていた板（右の欄の次の曲・歌詞、設定・端末・検索のページ）は、組み直しの前の 8（WaveCardCornerRadius）に戻した
 - kasane の書き出し元で Windows の Fluent の上書きをやめるかは、kasane の側で決める
+
+## 2026-11-17 中継の見張りを入れた
+
+- 本人の了承で、general-console に systemd のユーザーのタイマー `wave-relay-watch.timer`（5分ごと、起動の2分後から）を入れた。`dev/relay-deploy-v2` で `docker compose up -d --no-recreate --no-build` を行い、止まっている中継・wave-api だけを起こす（動いているものは作り直さない）。linger が有効なのでログインしていなくても動く
+- wave-api を `docker stop` で止めてから見張りを動かし、起き直すのを確かめた。手で止めた中継も5分以内に起き直すので、止めておきたいときは先に `systemctl --user stop wave-relay-watch.timer`
