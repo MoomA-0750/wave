@@ -514,6 +514,16 @@ impl MusicRepository {
         Ok(parsers::lyrics_browse_id(&root))
     }
 
+    /// 曲の、もう1つの言語（画面が日本語なら英語、それ以外なら日本語）での曲名と1人目のアーティスト名（next の最初の応答から）。
+    /// 歌詞を LRCLIB で探すとき、アーティスト名が「緑黄色社会」と「Ryokuoushoku Shakai」のように言語で違う曲を一致させるため。分からなければ None。
+    pub async fn names_in_other_language(&self, video_id: &str) -> ApiResult<Option<crate::lyrics::lrclib::OtherNames>> {
+        let root = self.client.post_other_language("next", json!({ "videoId": video_id, "contentCheckOk": true, "racyCheckOk": true }), true, &[]).await?;
+        Ok(parsers::up_next(&root).songs.into_iter().find(|s| s.video_id == video_id).and_then(|s| {
+            let artist = s.artists.into_iter().next()?.name;
+            Some(crate::lyrics::lrclib::OtherNames { title: s.title, artist })
+        }))
+    }
+
     /// 歌詞のタブの時刻なしの本文。無ければ None。
     pub async fn plain_lyrics_of_tab(&self, browse_id: &str) -> ApiResult<Option<crate::lyrics::SongLyrics>> {
         let root = self.client.post("browse", json!({ "browseId": browse_id }), true, &[]).await?;

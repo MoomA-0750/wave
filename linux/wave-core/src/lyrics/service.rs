@@ -1,11 +1,13 @@
 //! 曲の歌詞を選ぶ（Windows の LyricsService・Android の LyricsRepository と同じ）。YouTube Music の時刻付き、無ければ LRCLIB の時刻付き、
 //! それも無ければ YouTube Music の時刻なし。見つかった・無かった結果は曲ごとに覚える。失敗は覚えない。
 //! 時刻付きを探すのに失敗して時刻なしを出したときも覚えない（一時の失敗で、時刻なしが残り続けないように）。
+//! LRCLIB の候補にアーティスト名・曲名の一致するものが無ければ、曲のもう1つの言語での名前（別名）を YouTube Music から取って足す。
+//! 別名は曲ごとにアプリを閉じるまで覚え、同じ曲で何度も頼まない。
 
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
 
-use super::lrclib::{LrclibClient, LrclibResult};
+use super::lrclib::{LrclibClient, LrclibResult, OtherNames};
 use super::timed::{TimedLyricsClient, TimedResult};
 use super::SongLyrics;
 use crate::music::models::Song;
@@ -27,11 +29,13 @@ pub struct LyricsService {
     lrclib: LrclibClient,
     timed: TimedLyricsClient,
     cache: Arc<Mutex<VecDeque<(String, LyricsResult)>>>,
+    /// 曲（videoId）ごとの、もう1つの言語での名前（取れなかった曲は None）。通信の失敗は覚えない。
+    other_names: Arc<Mutex<HashMap<String, Option<OtherNames>>>>,
 }
 
 impl LyricsService {
     pub fn new(music: MusicRepository, lrclib: LrclibClient, timed: TimedLyricsClient) -> Self {
-        Self { music, lrclib, timed, cache: Arc::default() }
+        Self { music, lrclib, timed, cache: Arc::default(), other_names: Arc::default() }
     }
 
     pub async fn lyrics(&self, song: &Song) -> LyricsResult {
@@ -55,7 +59,8 @@ impl LyricsService {
             Some(TimedResult::Found(lyrics)) => LyricsResult::Found(lyrics),
             _ => {
                 if let Some(artist) = song.artists.first() {
-                    synced = self.lrclib.synced(&song.title, &artist.name, song.album.as_ref().map(|a| a.title.as_str()), song.duration_seconds).await;
+                    let album = song.album.as_ref().map(|a| a.title.as_str());
+                    synced = self.lrclib.synced_with_other_names(&song.title, &artist.name, album, song.duration_seconds, || self.other_names_of(&song.video_id)).await;
                 }
                 choose(&synced, plain)
             }
@@ -69,6 +74,18 @@ impl LyricsService {
             }
         }
         result
+    }
+}
+
+impl LyricsService {
+    /// 曲のもう1つの言語での名前。覚えていればそれを使い、無ければ YouTube Music に1回頼む。
+    async fn other_names_of(&self, video_id: &str) -> Option<OtherNames> {
+        if let Some(known) = self.other_names.lock().unwrap().get(video_id) {
+            return known.clone();
+        }
+        let names = self.music.names_in_other_language(video_id).await.ok()?;
+        self.other_names.lock().unwrap().insert(video_id.to_string(), names.clone());
+        names
     }
 }
 

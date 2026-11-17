@@ -157,6 +157,11 @@ impl InnerTube {
         Ok(self.localized(root, other.as_ref()))
     }
 
+    /// もう1つの言語（画面が日本語なら英語、それ以外なら日本語）だけで POST する（突き合わせない）。歌詞を探すときの曲名・アーティスト名の別名を読むため。
+    pub async fn post_other_language(&self, endpoint: &str, body: Value, set_login: bool, query: &[(&str, &str)]) -> ApiResult<Value> {
+        self.post_in(original_titles::other_language(&self.hl), endpoint, body, set_login, query).await
+    }
+
     /// 画面の言語の応答を、もう1つの言語の応答と突き合わせて元の表記にする（other が無ければそのまま）。わかったアーティストを覚える。
     fn localized(&self, root: Value, other: Option<&Value>) -> Value {
         let Some(other) = other else { return root };
