@@ -7,6 +7,7 @@ import io.ktor.client.statement.HttpResponse
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonObject
+import xyz.mooma0750.wave.core.lyrics.LrclibClient
 import xyz.mooma0750.wave.core.lyrics.Lyrics
 import xyz.mooma0750.wave.core.session.CallResult
 import xyz.mooma0750.wave.core.session.FailureKind
@@ -400,6 +401,20 @@ class MusicRepository(
             operation = "next",
             block = { it.next(YouTubeClient.WEB_REMIX, videoId = videoId, playlistId = null) },
         ) { response -> ParseOutcome.Parsed(MusicParsers.lyricsBrowseId(json(response))) }
+
+    /**
+     * 曲の、もう1つの言語（画面が日本語なら英語、それ以外なら日本語）での曲名と1人目のアーティスト名（next の最初の応答から）。
+     * 歌詞を LRCLIB で探すとき、アーティスト名が「緑黄色社会」と「Ryokuoushoku Shakai」のように言語で違う曲を一致させるため。分からなければ null。
+     */
+    suspend fun namesInOtherLanguage(videoId: String): CallResult<LrclibClient.OtherNames?> =
+        session.callInOtherLanguage(
+            operation = "next",
+            block = { it.next(YouTubeClient.WEB_REMIX, videoId = videoId, playlistId = null) },
+        ) { response ->
+            val song = MusicParsers.upNext(json(response)).songs.firstOrNull { it.videoId == videoId }
+            val artist = song?.artists?.firstOrNull()?.name
+            ParseOutcome.Parsed(if (song != null && artist != null) LrclibClient.OtherNames(song.title, artist) else null)
+        }
 
     /** 歌詞のタブの時刻なしの本文。 */
     suspend fun plainLyrics(browseId: String): CallResult<Lyrics.Plain?> =

@@ -44,17 +44,30 @@ class LrclibClient(
         val syncedLyrics: String? = null,
     )
 
-    /** 時刻付きの歌詞を探す。まず曲名・アーティスト・アルバム・長さで1件を引き、無ければ検索して曲名とアーティストの合うもののうち長さの近いものを選ぶ。 */
+    /**
+     * 曲の、もう1つの言語（画面が日本語なら英語、それ以外なら日本語）での曲名とアーティスト名。
+     * YouTube Music では「緑黄色社会」、LRCLIB では「Ryokuoushoku Shakai」のように、言語で表記の違う曲を一致させるために使う。
+     */
+    data class OtherNames(
+        val title: String,
+        val artist: String,
+    )
+
+    /**
+     * 時刻付きの歌詞を探す。まず曲名・アーティスト・アルバム・長さで1件を引き、無ければ検索して曲名とアーティストの合うもののうち長さの近いものを選ぶ。
+     * 検索の結果に時刻付きの候補があるのに1つも一致しなければ、[otherNames] で曲名・アーティスト名の別名を取り、足してもう一度選ぶ（[otherNames] は例外を投げない）。
+     */
     suspend fun synced(
         title: String,
         artist: String,
         album: String?,
         durationSeconds: Int?,
+        otherNames: suspend () -> OtherNames? = { null },
     ): Result =
         try {
             exact(title, artist, album, durationSeconds)
                 ?.let { Result.Found(it) }
-                ?: searchTitles(title).firstNotNullOfOrNull { search(it, title, artist, durationSeconds) }?.let { Result.Found(it) }
+                ?: searched(title, artist, durationSeconds, otherNames)?.let { Result.Found(it) }
                 ?: Result.NotFound
         } catch (cancel: CancellationException) {
             throw cancel
@@ -83,21 +96,36 @@ class LrclibClient(
         }
     }
 
-    private suspend fun search(
-        searchTitle: String,
+    private suspend fun searched(
         title: String,
         artist: String,
         durationSeconds: Int?,
+        otherNames: suspend () -> OtherNames?,
     ): List<LyricLine>? {
+        val titles = searchTitles(title)
+        val seen = mutableListOf<Track>()
+        for (searchTitle in titles) {
+            val tracks = search(searchTitle, artist)
+            pick(tracks, title, artist, durationSeconds)?.let(::linesOf)?.let { return it }
+            seen += tracks
+        }
+        // アーティスト名を付けて探すと、LRCLIB で別の表記（ローマ字など）で登録された曲は返らない。曲名だけでも探して候補に足す
+        for (searchTitle in titles) seen += search(searchTitle, artist = null)
+        return pickWithOtherNames(seen, title, artist, durationSeconds, otherNames)?.let(::linesOf)
+    }
+
+    private suspend fun search(
+        searchTitle: String,
+        artist: String?,
+    ): List<Track> {
         val response =
             http.get("$baseUrl/api/search") {
                 header(HttpHeaders.UserAgent, userAgent)
                 parameter("track_name", searchTitle)
-                parameter("artist_name", artist)
+                if (artist != null) parameter("artist_name", artist)
             }
         if (response.status.value != 200) throw IllegalStateException("lrclib search status=${response.status.value}")
-        val tracks = json.decodeFromString(ListSerializer(Track.serializer()), response.bodyAsText())
-        return pick(tracks, title, artist, durationSeconds)?.let(::linesOf)
+        return json.decodeFromString(ListSerializer(Track.serializer()), response.bodyAsText())
     }
 
     internal companion object {
@@ -123,12 +151,39 @@ class LrclibClient(
             title: String,
             artist: String,
             durationSeconds: Int?,
+        ): Track? = pickAny(tracks, listOf(title), listOf(artist), durationSeconds)
+
+        /**
+         * 元の名前で選び、時刻付きの候補があるのに1つも一致しなければ、別名（[otherNames]）を足してもう一度選ぶ。
+         * 一致したとき・時刻付きの候補が無いときは [otherNames] を呼ばない（別名を取りに行かない）。
+         */
+        internal suspend fun pickWithOtherNames(
+            tracks: List<Track>,
+            title: String,
+            artist: String,
+            durationSeconds: Int?,
+            otherNames: suspend () -> OtherNames?,
         ): Track? {
-            val wantedTitles = LrclibMatch.titleKeys(title)
-            val wantedArtists = LrclibMatch.artistKeys(artist)
+            pick(tracks, title, artist, durationSeconds)?.let { return it }
+            if (tracks.none(::isSynced)) return null
+            val other = otherNames() ?: return null
+            return pickAny(tracks, listOf(title, other.title), listOf(artist, other.artist), durationSeconds)
+        }
+
+        private fun isSynced(track: Track): Boolean = !track.instrumental && !track.syncedLyrics.isNullOrBlank()
+
+        /** [pick] と同じだが、曲名・アーティストはそれぞれ [titles]・[artists] のどれかに一致すれば良い（元の名前と別名）。 */
+        private fun pickAny(
+            tracks: List<Track>,
+            titles: List<String>,
+            artists: List<String>,
+            durationSeconds: Int?,
+        ): Track? {
+            val wantedTitles = titles.flatMap(LrclibMatch::titleKeys)
+            val wantedArtists = artists.flatMap(LrclibMatch::artistKeys)
             val matching =
                 tracks
-                    .filter { !it.instrumental && !it.syncedLyrics.isNullOrBlank() }
+                    .filter(::isSynced)
                     .filter { track ->
                         LrclibMatch.overlap(wantedArtists, LrclibMatch.artistKeys(track.artistName.orEmpty())) &&
                             (

@@ -13,6 +13,8 @@ import xyz.mooma0750.wave.core.session.CallResult
  * 無ければ LRCLIB の時刻付き（曲名・アーティスト・長さで照らし合わせる）、それも無ければ YouTube Music の時刻なし。
  * 見つかった・無かった結果は曲ごとに覚えておく。失敗は覚えない（開き直せば探し直す）。時刻付きを探すのに失敗して時刻なしを出したときも
  * 覚えない（一時の失敗で、時刻なしが残り続けないように）。
+ * LRCLIB の候補にアーティスト名・曲名の一致するものが無ければ、曲のもう1つの言語での名前（別名）を YouTube Music から取って足す。
+ * 別名は曲ごとにアプリを閉じるまで覚え、同じ曲で何度も頼まない。
  */
 class LyricsRepository(
     private val music: MusicRepository,
@@ -34,6 +36,9 @@ class LyricsRepository(
     private val lock = Mutex()
     private val cache = LinkedHashMap<String, Result>()
 
+    /** 曲（videoId）ごとの、もう1つの言語での名前（取れなかった曲は null）。通信の失敗は覚えない。 */
+    private val otherNames = HashMap<String, LrclibClient.OtherNames?>()
+
     suspend fun lyrics(song: Song): Result {
         lock.withLock { cache[song.videoId] }?.let { return it }
         var timedFailed = false
@@ -50,7 +55,7 @@ class LyricsRepository(
                     else -> {}
                 }
                 val artist = song.artists.firstOrNull()?.name
-                syncedResult = if (artist == null) LrclibClient.Result.NotFound else lrclib.synced(song.title, artist, song.album?.title, song.durationSeconds)
+                syncedResult = if (artist == null) LrclibClient.Result.NotFound else lrclib.synced(song.title, artist, song.album?.title, song.durationSeconds) { otherNamesOf(song.videoId) }
                 choose(syncedResult, plain.await())
             }
         val provisional = (result as? Result.Found)?.lyrics is Lyrics.Plain && (timedFailed || syncedResult == LrclibClient.Result.Failed)
@@ -61,6 +66,14 @@ class LyricsRepository(
             }
         }
         return result
+    }
+
+    /** 曲のもう1つの言語での名前。覚えていればそれを使い、無ければ YouTube Music に1回頼む。 */
+    private suspend fun otherNamesOf(videoId: String): LrclibClient.OtherNames? {
+        lock.withLock { if (videoId in otherNames) return otherNames[videoId] }
+        val result = music.namesInOtherLanguage(videoId) as? CallResult.Ok ?: return null
+        lock.withLock { otherNames[videoId] = result.value }
+        return result.value
     }
 
     internal companion object {

@@ -24,13 +24,16 @@ class LrclibClientTest {
     private val requests = CopyOnWriteArrayList<HttpRequestData>()
     private var get: MockRequestHandleScope.() -> HttpResponseData = { respond("", HttpStatusCode.NotFound) }
     private var search: MockRequestHandleScope.() -> HttpResponseData = { jsonResponse("[]") }
+
+    /** アーティスト名を付けない（曲名だけの）検索。 */
+    private var searchByTitle: MockRequestHandleScope.() -> HttpResponseData = { jsonResponse("[]") }
     private val http =
         HttpClient(
             MockEngine { request ->
                 requests += request
                 when (request.url.encodedPath) {
                     "/api/get" -> get()
-                    "/api/search" -> search()
+                    "/api/search" -> if ("artist_name" in request.url.parameters.names()) search() else searchByTitle()
                     else -> respond("", HttpStatusCode.NotFound)
                 }
             },
@@ -156,4 +159,62 @@ class LrclibClientTest {
         assertNull(LrclibClient.pick(tracks, "群青", "YOASOBI", 246))
         assertNull(LrclibClient.pick(tracks, "群青", "YOASOBI", null))
     }
+
+    @Test
+    fun otherLanguageNamesMatchWhenTheOriginalNamesDoNot(): Unit =
+        runBlocking {
+            // YouTube Music では「緑黄色社会」、LRCLIB では「Ryokuoushoku Shakai」。アーティスト名付きの検索では返らず、曲名だけの検索で返る
+            searchByTitle = {
+                jsonResponse("[${track(205.0, synced = "[00:01.00]別の人", title = "揺れる", artist = "ねごと")},${track(238.0, synced = "[00:02.00]合う", title = "揺れる", artist = "Ryokuoushoku Shakai")}]")
+            }
+            var calls = 0
+            val result =
+                client.synced("揺れる", "緑黄色社会", null, 238) {
+                    calls++
+                    LrclibClient.OtherNames("Yureru", "Ryokuoushoku Shakai")
+                }
+            assertEquals("合う", assertIs<LrclibClient.Result.Found>(result).lines.single().text)
+            assertEquals(1, calls)
+            // 曲名が別名（ローマ字）でだけ一致する
+            searchByTitle = { jsonResponse("[${track(234.0, title = "Yureru", artist = "Ryokuoushoku Shakai")}]") }
+            assertIs<LrclibClient.Result.Found>(client.synced("揺れる", "緑黄色社会", null, 238) { LrclibClient.OtherNames("Yureru", "Ryokuoushoku Shakai") })
+        }
+
+    @Test
+    fun nothingIsPickedWhenTheOtherNamesDoNotMatchEither(): Unit =
+        runBlocking {
+            searchByTitle = { jsonResponse("[${track(205.0, title = "揺れる", artist = "ねごと")}]") }
+            var calls = 0
+            val result =
+                client.synced("揺れる", "緑黄色社会", null, 238) {
+                    calls++
+                    LrclibClient.OtherNames("Yureru", "Ryokuoushoku Shakai")
+                }
+            assertEquals(LrclibClient.Result.NotFound, result)
+            assertEquals(1, calls)
+            // 別名が取れなければ今までどおり選ばない
+            searchByTitle = { jsonResponse("[${track(238.0, title = "揺れる", artist = "Ryokuoushoku Shakai")}]") }
+            assertEquals(LrclibClient.Result.NotFound, client.synced("揺れる", "緑黄色社会", null, 238) { null })
+        }
+
+    @Test
+    fun otherNamesAreNotFetchedWhenATrackMatchesOrNoneIsSynced(): Unit =
+        runBlocking {
+            search = { jsonResponse("[${track(238.0, title = "揺れる", artist = "緑黄色社会")}]") }
+            var calls = 0
+            val other: suspend () -> LrclibClient.OtherNames? = {
+                calls++
+                LrclibClient.OtherNames("Yureru", "Ryokuoushoku Shakai")
+            }
+            assertIs<LrclibClient.Result.Found>(client.synced("揺れる", "緑黄色社会", null, 238, other))
+            // 一致したら曲名だけの検索もしない
+            assertEquals(listOf("/api/get", "/api/search"), requests.map { it.url.encodedPath })
+            // 時刻付きの候補が無ければ取りに行かない
+            search = { jsonResponse("[]") }
+            searchByTitle = { jsonResponse("[${track(238.0, synced = null, title = "揺れる", artist = "Ryokuoushoku Shakai")}]") }
+            assertEquals(LrclibClient.Result.NotFound, client.synced("揺れる", "緑黄色社会", null, 238, other))
+            searchByTitle = { jsonResponse("[]") }
+            assertEquals(LrclibClient.Result.NotFound, client.synced("揺れる", "緑黄色社会", null, 238, other))
+            assertEquals(0, calls)
+        }
 }

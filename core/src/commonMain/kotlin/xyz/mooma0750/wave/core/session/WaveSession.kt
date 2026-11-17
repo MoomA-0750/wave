@@ -437,6 +437,16 @@ class WaveSession internal constructor(
     }
 
     /**
+     * 読み取りを、もう1つの言語（画面が日本語なら英語、それ以外なら日本語）だけで送る（突き合わせない）。
+     * 歌詞を探すときの曲名・アーティスト名の別名を読むため。分類は [call] と同じ。
+     */
+    internal suspend fun <T> callInOtherLanguage(
+        operation: String,
+        block: suspend (InnerTube) -> HttpResponse,
+        parse: suspend (HttpResponse) -> ParseOutcome<T>,
+    ): CallResult<T> = call(operation = "$operation.otherLanguage", block = { block(otherInnerTube) }, parse = parse)
+
+    /**
      * 書き込みの入口。応答の失効・疑いの分類は読み取りと同じだが、書き込みの成功は認証の証明に使わない（ADR-0004）。
      * 「送っていない」と確実に言えるのは、ログインの事前チェックとガード違反だけ。通信の例外・キャンセル（innertubex の
      * セッション変更を含む）は、送信後に起きたかもしれないので Unknown にする。

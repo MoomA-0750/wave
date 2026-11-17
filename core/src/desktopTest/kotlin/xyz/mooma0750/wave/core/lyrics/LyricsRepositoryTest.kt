@@ -64,6 +64,9 @@ class LyricsRepositoryTest {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val youtube = CopyOnWriteArrayList<Pair<String, String>>()
     private var lrclibRequests = 0
+
+    /** LRCLIB の曲名だけの検索（アーティスト名を付けない）の応答。 */
+    private var lrclibByTitle = "[]"
     private val youtubeClient =
         createWaveHttpClient(
             AuthGuardEngine(
@@ -83,7 +86,11 @@ class LyricsRepositoryTest {
             MockEngine { request ->
                 lrclibRequests++
                 // LRCLIB は、1件を引いて無ければ 404、検索で無ければ空の一覧を返す
-                if (request.url.encodedPath.endsWith("/search")) jsonResponse("[]") else respond("", HttpStatusCode.NotFound)
+                when {
+                    !request.url.encodedPath.endsWith("/search") -> respond("", HttpStatusCode.NotFound)
+                    "artist_name" in request.url.parameters.names() -> jsonResponse("[]")
+                    else -> jsonResponse(lrclibByTitle)
+                }
             },
         )
 
@@ -169,5 +176,30 @@ class LyricsRepositoryTest {
             assertIs<Lyrics.Plain>(assertIs<LyricsRepository.Result.Found>(repository.lyrics(song)).lyrics)
             repository.lyrics(song)
             assertEquals(2, requests.size, "時刻付きの失敗のあとの時刻なしを覚えてしまった")
+        }
+
+    @Test
+    fun otherLanguageNamesAreAskedOncePerSongAndUsedToMatch(): Unit =
+        runBlocking {
+            val requests = mutableListOf<String>()
+            val session = activeSession()
+            val repository = LyricsRepository(MusicRepository(session), LrclibClient(lrclibHttp, "wave-test/1"), timedClient(HttpStatusCode.ServiceUnavailable, requests))
+            // 画面の言語では「Racing Into The Night」「Ayase」。もう1つの言語の next（合成の応答）では「夜に駆ける」「YOASOBI」
+            val song = Song("by4SYYWlhEs", "Racing Into The Night", listOf(ArtistRef("Ayase", null)), null, 262, null)
+            lrclibByTitle = """[{"trackName":"夜に駆ける","artistName":"YOASOBI","duration":262,"syncedLyrics":"[00:01.00]合成の歌詞"}]"""
+            val found = assertIs<LyricsRepository.Result.Found>(repository.lyrics(song))
+            assertEquals("LRCLIB", assertIs<Lyrics.Synced>(found.lyrics).source)
+            val nexts = youtube.filter { it.first.endsWith("/next") }.map { it.second }
+            assertEquals(2, nexts.size)
+            assertTrue(nexts.any { "\"hl\":\"${session.innerTube.locale.hl}\"" in it })
+            assertTrue(nexts.any { "\"hl\":\"${xyz.mooma0750.wave.core.music.OriginalTitles.otherLanguage(session.innerTube.locale.hl)}\"" in it })
+
+            // 別名でも一致しない（時刻なしを出し、時刻付きの失敗のあとなので覚えない）。同じ曲の別名は覚えていて頼み直さない
+            lrclibByTitle = """[{"trackName":"別の曲","artistName":"別の人","duration":100,"syncedLyrics":"[00:01.00]合成の歌詞"}]"""
+            val other = Song("other", "t", listOf(ArtistRef("a", null)), null, 262, null)
+            assertIs<Lyrics.Plain>(assertIs<LyricsRepository.Result.Found>(repository.lyrics(other)).lyrics)
+            val before = youtube.count { it.first.endsWith("/next") }
+            assertIs<Lyrics.Plain>(assertIs<LyricsRepository.Result.Found>(repository.lyrics(other)).lyrics)
+            assertEquals(before + 1, youtube.count { it.first.endsWith("/next") }, "同じ曲の別名を頼み直した")
         }
 }
