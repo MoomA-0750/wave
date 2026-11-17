@@ -279,6 +279,18 @@ public sealed class MusicRepository(InnerTubeClient client, LiveClient? live = n
     public async Task<ApiResult<string?>> LyricsBrowseIdAsync(string videoId, CancellationToken cancel = default) =>
         (await SongInfoAsync(videoId, cancel)).Map(info => info.LyricsBrowseId);
 
+    /// <summary>
+    /// 曲の、もう1つの言語（画面が日本語なら英語、それ以外なら日本語）での曲名と1人目のアーティスト名（next の最初の応答から）。
+    /// 歌詞を LRCLIB で探すとき、アーティスト名が「緑黄色社会」と「Ryokuoushoku Shakai」のように言語で違う曲を一致させるため。分からなければ Ok(null)。
+    /// </summary>
+    public async Task<ApiResult<LrclibClient.OtherNames?>> NamesInOtherLanguageAsync(string videoId, CancellationToken cancel = default)
+    {
+        var body = new JsonObject { ["videoId"] = videoId, ["contentCheckOk"] = true, ["racyCheckOk"] = true };
+        if (await client.PostInOtherLanguageAsync("next", body, cancel: cancel) is not { } root) return ApiResult<LrclibClient.OtherNames?>.Failed(FailureKind.Network);
+        var song = MusicParsers.UpNext(root).Songs.FirstOrDefault(s => s.VideoId == videoId);
+        return ApiResult<LrclibClient.OtherNames?>.Ok(song is { Artists.Count: > 0 } ? new LrclibClient.OtherNames(song.Title, song.Artists[0].Name) : null);
+    }
+
     /// <summary>歌詞のタブの時刻なしの本文。</summary>
     public async Task<ApiResult<SongLyrics.Plain?>> PlainLyricsOfTabAsync(string browseId, CancellationToken cancel = default) =>
         (await BrowseAsync(browseId, null, null, cancel)).Map(MusicParsers.PlainLyrics);

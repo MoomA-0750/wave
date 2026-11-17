@@ -148,4 +148,107 @@ public class LyricsTests
         // 時刻付きの失敗のあとの時刻なしを覚えていれば、2回目は尋ねない
         Assert.Equal(2, timed.Requests.Count);
     }
+
+    // 言語で表記の違う曲（YouTube Music では「緑黄色社会」、LRCLIB では「Ryokuoushoku Shakai」）
+
+    private static string TrackJson(string title, string artist, double duration, string? synced = "[00:01.00]合成の歌詞") =>
+        $$"""{"trackName":"{{title}}","artistName":"{{artist}}","duration":{{duration}},"instrumental":false,"syncedLyrics":{{(synced is null ? "null" : $"\"{synced}\"")}}}""";
+
+    /// <summary>LRCLIB。アーティスト名付きの検索は withArtist、曲名だけの検索は byTitle を返す。</summary>
+    private static Server Lrclib(string withArtist, string byTitle) =>
+        new((request, _) => request.RequestUri!.AbsolutePath.EndsWith("/search")
+            ? JsonResponse(request.RequestUri.Query.Contains("artist_name=") ? withArtist : byTitle)
+            : new HttpResponseMessage(HttpStatusCode.NotFound));
+
+    private static readonly LrclibClient.OtherNames Yureru = new("Yureru", "Ryokuoushoku Shakai");
+
+    [Fact]
+    public async Task OtherLanguageNamesMatchWhenTheOriginalNamesDoNot()
+    {
+        // アーティスト名付きの検索では返らず、曲名だけの検索で返る
+        var byTitle = $"[{TrackJson("揺れる", "ねごと", 205, "[00:01.00]別の人")},{TrackJson("揺れる", "Ryokuoushoku Shakai", 238, "[00:02.00]合う")}]";
+        var calls = 0;
+        var client = new LrclibClient(new HttpClient(Lrclib("[]", byTitle)), "wave-test/1");
+        var result = await client.SyncedAsync("揺れる", "緑黄色社会", null, 238, otherNames: _ =>
+        {
+            calls++;
+            return Task.FromResult<LrclibClient.OtherNames?>(Yureru);
+        });
+        Assert.Equal("合う", Assert.Single(Assert.IsType<LrclibClient.Result.Found>(result).Lines).Text);
+        Assert.Equal(1, calls);
+        // 曲名が別名（ローマ字）でだけ一致する
+        var romanized = new LrclibClient(new HttpClient(Lrclib("[]", $"[{TrackJson("Yureru", "Ryokuoushoku Shakai", 234)}]")), "wave-test/1");
+        Assert.IsType<LrclibClient.Result.Found>(await romanized.SyncedAsync("揺れる", "緑黄色社会", null, 238, otherNames: _ => Task.FromResult<LrclibClient.OtherNames?>(Yureru)));
+    }
+
+    [Fact]
+    public async Task NothingIsPickedWhenTheOtherNamesDoNotMatchEither()
+    {
+        var calls = 0;
+        var client = new LrclibClient(new HttpClient(Lrclib("[]", $"[{TrackJson("揺れる", "ねごと", 205)}]")), "wave-test/1");
+        var result = await client.SyncedAsync("揺れる", "緑黄色社会", null, 238, otherNames: _ =>
+        {
+            calls++;
+            return Task.FromResult<LrclibClient.OtherNames?>(Yureru);
+        });
+        Assert.IsType<LrclibClient.Result.NotFound>(result);
+        Assert.Equal(1, calls);
+        // 別名が取れなければ今までどおり選ばない
+        var romaji = new LrclibClient(new HttpClient(Lrclib("[]", $"[{TrackJson("揺れる", "Ryokuoushoku Shakai", 238)}]")), "wave-test/1");
+        Assert.IsType<LrclibClient.Result.NotFound>(await romaji.SyncedAsync("揺れる", "緑黄色社会", null, 238, otherNames: _ => Task.FromResult<LrclibClient.OtherNames?>(null)));
+    }
+
+    [Fact]
+    public async Task OtherNamesAreNotFetchedWhenATrackMatchesOrNoneIsSynced()
+    {
+        var calls = 0;
+        Task<LrclibClient.OtherNames?> Other(CancellationToken _)
+        {
+            calls++;
+            return Task.FromResult<LrclibClient.OtherNames?>(Yureru);
+        }
+        var matching = Lrclib($"[{TrackJson("揺れる", "緑黄色社会", 238)}]", "[]");
+        Assert.IsType<LrclibClient.Result.Found>(await new LrclibClient(new HttpClient(matching), "wave-test/1").SyncedAsync("揺れる", "緑黄色社会", null, 238, otherNames: Other));
+        // 一致したら曲名だけの検索もしない
+        Assert.Equal(["/api/get", "/api/search"], matching.Requests.Select(r => r.Path));
+        // 時刻付きの候補が無ければ取りに行かない
+        var untimed = new LrclibClient(new HttpClient(Lrclib("[]", $"[{TrackJson("揺れる", "Ryokuoushoku Shakai", 238, null)}]")), "wave-test/1");
+        Assert.IsType<LrclibClient.Result.NotFound>(await untimed.SyncedAsync("揺れる", "緑黄色社会", null, 238, otherNames: Other));
+        var empty = new LrclibClient(new HttpClient(Lrclib("[]", "[]")), "wave-test/1");
+        Assert.IsType<LrclibClient.Result.NotFound>(await empty.SyncedAsync("揺れる", "緑黄色社会", null, 238, otherNames: Other));
+        Assert.Equal(0, calls);
+    }
+
+    [Fact]
+    public async Task OtherLanguageNamesAreAskedOncePerSongAndUsedToMatch()
+    {
+        var youtube = new Server((request, _) => request.RequestUri!.AbsolutePath switch
+        {
+            var p when p.EndsWith("/next") => JsonResponse(Fixtures.Text("next_radio")),
+            var p when p.EndsWith("/browse") => JsonResponse(Fixtures.Text("browse_lyrics")),
+            _ => new HttpResponseMessage(HttpStatusCode.NotFound),
+        });
+        var music = new MusicRepository(new InnerTubeClient(new HttpClient(youtube), "ja", "JP"));
+        var byTitle = $"[{TrackJson("夜に駆ける", "YOASOBI", 262)}]";
+        var lrclib = new Server((request, _) => request.RequestUri!.AbsolutePath.EndsWith("/search")
+            ? JsonResponse(request.RequestUri.Query.Contains("artist_name=") ? "[]" : byTitle)
+            : new HttpResponseMessage(HttpStatusCode.NotFound));
+        var service = new LyricsService(music, new LrclibClient(new HttpClient(lrclib), "wave-test/1"), new YouTubeTimedLyricsClient(new HttpClient(Timed(HttpStatusCode.ServiceUnavailable)), "ja", "JP"));
+        // 画面の言語では「Racing Into The Night」「Ayase」。もう1つの言語の next（合成の応答）では「夜に駆ける」「YOASOBI」
+        var song = new Song("by4SYYWlhEs", "Racing Into The Night", [new ArtistRef("Ayase", null)], null, 262, null);
+        var found = Assert.IsType<LyricsService.Result.Found>(await service.LyricsAsync(song));
+        Assert.Equal(LyricsService.LrclibSource, Assert.IsType<SongLyrics.Synced>(found.Lyrics).Source);
+        var nexts = youtube.Requests.Where(r => r.Path.EndsWith("/next")).Select(r => r.Body).ToList();
+        Assert.Equal(2, nexts.Count);
+        Assert.Contains(nexts, b => b.Contains("\"hl\":\"ja\""));
+        Assert.Contains(nexts, b => b.Contains("\"hl\":\"en\""));
+
+        // 別名でも一致しない（時刻なしを出し、時刻付きの失敗のあとなので覚えない）。同じ曲の別名は覚えていて頼み直さない
+        byTitle = $"[{TrackJson("別の曲", "別の人", 100)}]";
+        var other = new Song("other", "t", [new ArtistRef("a", null)], null, 262, null);
+        Assert.IsType<SongLyrics.Plain>(Assert.IsType<LyricsService.Result.Found>(await service.LyricsAsync(other)).Lyrics);
+        var before = youtube.Requests.Count(r => r.Path.EndsWith("/next"));
+        Assert.IsType<SongLyrics.Plain>(Assert.IsType<LyricsService.Result.Found>(await service.LyricsAsync(other)).Lyrics);
+        Assert.Equal(before + 1, youtube.Requests.Count(r => r.Path.EndsWith("/next")));
+    }
 }

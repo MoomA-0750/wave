@@ -8,6 +8,8 @@ namespace Wave.Core.Lyrics;
 /// 出典は Musixmatch・LyricFind）、無ければ LRCLIB の時刻付き（曲名・アーティスト・長さで照らし合わせる）、それも無ければ YouTube Music の時刻なし。
 /// 見つかった・無かった結果は曲ごとに覚える。失敗は覚えない。時刻付きを探すのに失敗して時刻なしを出したときも覚えない
 /// （一時の失敗で、時刻なしが残り続けないように）。
+/// LRCLIB の候補にアーティスト名・曲名の一致するものが無ければ、曲のもう1つの言語での名前（別名）を YouTube Music から取って足す。
+/// 別名は曲ごとにアプリを閉じるまで覚え、同じ曲で何度も頼まない。
 /// </summary>
 public sealed class LyricsService(MusicRepository music, LrclibClient lrclib, YouTubeTimedLyricsClient? timed = null)
 {
@@ -24,6 +26,9 @@ public sealed class LyricsService(MusicRepository music, LrclibClient lrclib, Yo
     private readonly Dictionary<string, Result> cache = new();
     private readonly LinkedList<string> order = new();
     private readonly object gate = new();
+
+    /// <summary>曲（videoId）ごとの、もう1つの言語での名前（取れなかった曲は null）。通信の失敗は覚えない。</summary>
+    private readonly Dictionary<string, LrclibClient.OtherNames?> otherNames = new();
 
     public async Task<Result> LyricsAsync(Song song, CancellationToken cancel = default)
     {
@@ -50,7 +55,11 @@ public sealed class LyricsService(MusicRepository music, LrclibClient lrclib, Yo
         else
         {
             timedFailed = fromYouTube is YouTubeTimedLyricsClient.Result.Failed;
-            if (song.Artists.Count > 0) synced = await lrclib.SyncedAsync(song.Title, song.Artists[0].Name, song.Album?.Title, song.DurationSeconds, cancel);
+            if (song.Artists.Count > 0)
+            {
+                synced = await lrclib.SyncedAsync(
+                    song.Title, song.Artists[0].Name, song.Album?.Title, song.DurationSeconds, cancel, c => OtherNamesOfAsync(song.VideoId, c));
+            }
             result = Choose(synced, await plainTask);
         }
         var provisional = result is Result.Found { Lyrics: SongLyrics.Plain } && (timedFailed || synced is LrclibClient.Result.Failed);
@@ -68,6 +77,27 @@ public sealed class LyricsService(MusicRepository music, LrclibClient lrclib, Yo
             }
         }
         return result;
+    }
+
+    /// <summary>曲のもう1つの言語での名前。覚えていればそれを使い、無ければ YouTube Music に1回頼む。</summary>
+    private async Task<LrclibClient.OtherNames?> OtherNamesOfAsync(string videoId, CancellationToken cancel)
+    {
+        lock (gate)
+        {
+            if (otherNames.TryGetValue(videoId, out var known)) return known;
+        }
+        ApiResult<LrclibClient.OtherNames?> result;
+        try
+        {
+            result = await music.NamesInOtherLanguageAsync(videoId, cancel);
+        }
+        catch (Exception) when (!cancel.IsCancellationRequested)
+        {
+            return null;
+        }
+        if (!result.IsOk) return null;
+        lock (gate) otherNames[videoId] = result.Value;
+        return result.Value;
     }
 
     /// <summary>時刻付きを優先する。片方が失敗していて、もう片方に無ければ「分からない」（無いとは決めない）。</summary>

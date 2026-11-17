@@ -28,18 +28,41 @@ public sealed partial class LrclibClient(HttpClient http, string userAgent, stri
         [property: JsonPropertyName("instrumental")] bool Instrumental,
         [property: JsonPropertyName("syncedLyrics")] string? SyncedLyrics);
 
+    /// <summary>
+    /// 曲の、もう1つの言語（画面が日本語なら英語、それ以外なら日本語）での曲名とアーティスト名。
+    /// YouTube Music では「緑黄色社会」、LRCLIB では「Ryokuoushoku Shakai」のように、言語で表記の違う曲を一致させるために使う。
+    /// </summary>
+    public sealed record OtherNames(string Title, string Artist);
+
     private static readonly double[] DurationTolerances = [2.0, 5.0];
 
-    public async Task<Result> SyncedAsync(string title, string artist, string? album, int? durationSeconds, CancellationToken cancel = default)
+    /// <summary>
+    /// 時刻付きの歌詞を探す。まず曲名・アーティスト・アルバム・長さで1件を引き、無ければ検索して曲名とアーティストの合うもののうち長さの近いものを選ぶ。
+    /// 検索の結果に時刻付きの候補があるのに1つも一致しなければ、otherNames で曲名・アーティスト名の別名を取り、足してもう一度選ぶ（otherNames は例外を投げない）。
+    /// </summary>
+    public async Task<Result> SyncedAsync(
+        string title,
+        string artist,
+        string? album,
+        int? durationSeconds,
+        CancellationToken cancel = default,
+        Func<CancellationToken, Task<OtherNames?>>? otherNames = null)
     {
         try
         {
             if (await ExactAsync(title, artist, album, durationSeconds, cancel) is { } exact) return new Result.Found(exact);
-            foreach (var t in SearchTitles(title))
+            var titles = SearchTitles(title);
+            var seen = new List<Track>();
+            foreach (var t in titles)
             {
-                if (await SearchAsync(t, title, artist, durationSeconds, cancel) is { } found) return new Result.Found(found);
+                var tracks = await SearchAsync(t, artist, cancel);
+                if (Pick(tracks, title, artist, durationSeconds) is { } picked && LinesOf(picked) is { } found) return new Result.Found(found);
+                seen.AddRange(tracks);
             }
-            return new Result.NotFound();
+            // アーティスト名を付けて探すと、LRCLIB で別の表記（ローマ字など）で登録された曲は返らない。曲名だけでも探して候補に足す
+            foreach (var t in titles) seen.AddRange(await SearchAsync(t, null, cancel));
+            var other = await PickWithOtherNamesAsync(seen, title, artist, durationSeconds, () => otherNames?.Invoke(cancel) ?? Task.FromResult<OtherNames?>(null));
+            return other is not null && LinesOf(other) is { } lines ? new Result.Found(lines) : new Result.NotFound();
         }
         catch (OperationCanceledException) when (cancel.IsCancellationRequested)
         {
@@ -63,12 +86,13 @@ public sealed partial class LrclibClient(HttpClient http, string userAgent, stri
         return track is null ? null : LinesOf(track);
     }
 
-    private async Task<List<LyricLine>?> SearchAsync(string searchTitle, string title, string artist, int? durationSeconds, CancellationToken cancel)
+    private async Task<List<Track>> SearchAsync(string searchTitle, string? artist, CancellationToken cancel)
     {
-        using var response = await SendAsync($"{baseUrl}/api/search?track_name={Uri.EscapeDataString(searchTitle)}&artist_name={Uri.EscapeDataString(artist)}", cancel);
+        var url = $"{baseUrl}/api/search?track_name={Uri.EscapeDataString(searchTitle)}";
+        if (artist is not null) url += $"&artist_name={Uri.EscapeDataString(artist)}";
+        using var response = await SendAsync(url, cancel);
         if (response.StatusCode != HttpStatusCode.OK) throw new HttpRequestException($"lrclib search status={(int)response.StatusCode}");
-        var tracks = JsonSerializer.Deserialize<List<Track>>(await response.Content.ReadAsStringAsync(cancel)) ?? [];
-        return Pick(tracks, title, artist, durationSeconds) is { } picked ? LinesOf(picked) : null;
+        return JsonSerializer.Deserialize<List<Track>>(await response.Content.ReadAsStringAsync(cancel)) ?? [];
     }
 
     private Task<HttpResponseMessage> SendAsync(string url, CancellationToken cancel)
@@ -91,12 +115,29 @@ public sealed partial class LrclibClient(HttpClient http, string userAgent, stri
     /// 曲名が一致しなくても、アーティストが一致して長さが <see cref="SameLengthWithoutTitle"/> 秒以内なら残す。
     /// 照らし合わせは Android・Apple・Linux の版と同じ規則。
     /// </summary>
-    internal static Track? Pick(List<Track> tracks, string title, string artist, int? durationSeconds)
+    internal static Track? Pick(List<Track> tracks, string title, string artist, int? durationSeconds) =>
+        PickAny(tracks, [title], [artist], durationSeconds);
+
+    /// <summary>
+    /// 元の名前で選び、時刻付きの候補があるのに1つも一致しなければ、別名（otherNames）を足してもう一度選ぶ。
+    /// 一致したとき・時刻付きの候補が無いときは otherNames を呼ばない（別名を取りに行かない）。
+    /// </summary>
+    internal static async Task<Track?> PickWithOtherNamesAsync(List<Track> tracks, string title, string artist, int? durationSeconds, Func<Task<OtherNames?>> otherNames)
     {
-        var wantedTitles = TitleKeys(title);
-        var wantedArtists = ArtistKeys(artist);
+        if (Pick(tracks, title, artist, durationSeconds) is { } picked) return picked;
+        if (!tracks.Any(IsSynced) || await otherNames() is not { } other) return null;
+        return PickAny(tracks, [title, other.Title], [artist, other.Artist], durationSeconds);
+    }
+
+    private static bool IsSynced(Track t) => !t.Instrumental && !string.IsNullOrWhiteSpace(t.SyncedLyrics);
+
+    /// <summary><see cref="Pick"/> と同じだが、曲名・アーティストはそれぞれ titles・artists のどれかに一致すれば良い（元の名前と別名）。</summary>
+    private static Track? PickAny(List<Track> tracks, List<string> titles, List<string> artists, int? durationSeconds)
+    {
+        var wantedTitles = titles.SelectMany(TitleKeys).ToList();
+        var wantedArtists = artists.SelectMany(ArtistKeys).ToList();
         var matching = tracks
-            .Where(t => !t.Instrumental && !string.IsNullOrWhiteSpace(t.SyncedLyrics))
+            .Where(IsSynced)
             .Where(t => Overlap(wantedArtists, ArtistKeys(t.ArtistName ?? ""))
                 && (Overlap(wantedTitles, TitleKeys(t.TrackName ?? ""))
                     || (durationSeconds is { } want && t.Duration is { } d && Math.Abs(d - want) <= SameLengthWithoutTitle)))

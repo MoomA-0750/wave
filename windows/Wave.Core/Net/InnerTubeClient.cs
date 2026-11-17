@@ -184,6 +184,13 @@ public sealed class InnerTubeClient
     }
 
     /// <summary>
+    /// もう1つの言語（画面が日本語なら英語、それ以外なら日本語）だけで POST する（突き合わせない）。歌詞を探すときの曲名・アーティスト名の別名を読むため。
+    /// ログインの状態は変えず、どんな失敗でも null。
+    /// </summary>
+    public Task<JsonNode?> PostInOtherLanguageAsync(string endpoint, JsonObject body, bool setLogin = true, CancellationToken cancel = default) =>
+        OtherLanguageAsync(endpoint, body, setLogin ? credentials : null, null, Wave.Core.Music.OriginalTitles.OtherLanguage(Hl), cancel);
+
+    /// <summary>
     /// 同じ頼みを、もう1つの言語で送る。ログインの状態（失効・疑い）は変えず、どんな失敗でも null（画面の言語のまま出す）。
     /// creds は画面の言語の方と同じもの。
     /// </summary>
