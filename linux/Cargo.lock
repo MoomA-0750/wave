@@ -3734,6 +3734,8 @@ dependencies = [
  "getrandom 0.3.4",
  "hex",
  "hmac",
+ "icu_normalizer",
+ "icu_properties",
  "indexmap",
  "p256",
  "percent-encoding",
