@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Navigation;
@@ -19,6 +20,7 @@ public sealed partial class SearchPage : Page
 {
     private static List<MoodTile>? moodCache;
     private string? query;
+    private string selectedTab = "all";
     private int requestId;
     private HomeItem? top;
     private readonly ObservableCollection<TrackRow> songRows = [];
@@ -51,6 +53,7 @@ public sealed partial class SearchPage : Page
     public SearchPage()
     {
         InitializeComponent();
+        RenderTabs();
         SongList.ItemsSource = songRows;
         LiveList.ItemsSource = liveRows;
         CardGrid.ItemsSource = cards;
@@ -204,7 +207,7 @@ public sealed partial class SearchPage : Page
 
 #if DEBUG
     /// <summary>開発用: タブを選ぶ（DebugCommands の search-tab）。</summary>
-    public void DebugTab(string tag) => Tabs.SelectedItem = Tabs.Items.FirstOrDefault(i => i.Tag as string == tag);
+    public void DebugTab(string tag) => SelectTab(tag);
 
     /// <summary>開発用: そのタブの行の数（ライブ・歌詞）。</summary>
     public int DebugRows(string tag) => tag == "lyrics" ? lyricsRows.Count : liveRows.Count;
@@ -216,9 +219,34 @@ public sealed partial class SearchPage : Page
     public string? DebugLyricsTop => lyricsRows.FirstOrDefault() is { } r ? $"{r.Song.Title} / {r.Song.ArtistsText} / {r.Quote}" : null;
 #endif
 
-    private string SelectedTab => (Tabs.SelectedItem?.Tag as string) ?? "all";
+    private string SelectedTab => selectedTab;
 
-    private void OnTabChanged(SelectorBar sender, SelectorBarSelectionChangedEventArgs args) => ShowTab();
+    private static readonly (string Tag, string Title)[] TabTitles =
+    [
+        ("all", L.T("すべて", "All")), ("songs", L.T("曲", "Songs")), ("albums", L.T("アルバム", "Albums")), ("artists", L.T("アーティスト", "Artists")),
+        ("live", L.T("ライブ", "Live")), ("podcasts", L.T("ポッドキャスト", "Podcasts")), ("episodes", L.T("エピソード", "Episodes")), ("lyrics", L.T("歌詞", "Lyrics")),
+    ];
+
+    /// 絞り込みのチップ（ライブラリの種類のチップと同じ ToggleButton。選んでいるものをもう一度押しても外さない）
+    private void RenderTabs()
+    {
+        TabChips.Children.Clear();
+        foreach (var (tag, title) in TabTitles)
+        {
+            var chip = new ToggleButton { Content = title, Tag = tag, IsChecked = selectedTab == tag, CornerRadius = new CornerRadius(14), Padding = new Thickness(12, 4, 12, 5) };
+            chip.Click += (_, _) => SelectTab(tag);
+            TabChips.Children.Add(chip);
+        }
+    }
+
+    private void SelectTab(string tag)
+    {
+        var changed = selectedTab != tag;
+        selectedTab = tag;
+        foreach (var chip in TabChips.Children.OfType<ToggleButton>()) chip.IsChecked = chip.Tag as string == tag;
+        if (changed) ShowTab();
+    }
+
 
     private void ShowTab()
     {

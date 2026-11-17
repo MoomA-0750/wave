@@ -1359,3 +1359,8 @@
 
 - 本人の了承で、general-console に systemd のユーザーのタイマー `wave-relay-watch.timer`（5分ごと、起動の2分後から）を入れた。`dev/relay-deploy-v2` で `docker compose up -d --no-recreate --no-build` を行い、止まっている中継・wave-api だけを起こす（動いているものは作り直さない）。linger が有効なのでログインしていなくても動く
 - wave-api を `docker stop` で止めてから見張りを動かし、起き直すのを確かめた。手で止めた中継も5分以内に起き直すので、止めておきたいときは先に `systemctl --user stop wave-relay-watch.timer`
+
+## 2026-11-18 Windows の検索の絞り込みを丸い地のチップにする
+
+- 本人の頼み（「All」「Songs」「Albums」に丸い地が欲しい）。Windows の検索の絞り込みは SelectorBar（文字と下線）だったのを、ライブラリの種類・ホームの気分と同じ ToggleButton のチップ（角 14）にした。選んでいるものをもう一度押しても外さない（タブなので必ずどれか1つ）
+- 調べたところ、Windows は最初（cd14007e）から SelectorBar で、kasane の組み直しで消えたのではなかった。Mac は区切りのボタン（segmented）、Android は FilterChip、iPhone は丸い地のチップのまま
