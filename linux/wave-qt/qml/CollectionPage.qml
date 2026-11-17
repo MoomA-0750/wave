@@ -175,18 +175,21 @@ ListView {
                     visible: page.songs.length > 0
                     PlayButton { onClicked: page.playFrom(0, false) }
                     IconButton { iconName: "media-playlist-shuffle-symbolic"; tip: Style.t("シャッフル再生", "Shuffle play"); size: 22; onClicked: page.playFrom(0, true) }
+                    // アルバムをライブラリに保存・外す（しおりのアイコン。ポッドキャストの番組の保存と同じ）
+                    IconButton {
+                        visible: page.kind === "album" && page.saved !== null
+                        enabled: page.saveToken < 0
+                        iconName: page.saved ? "user-bookmarks-symbolic" : "bookmark-new-symbolic"
+                        tip: page.saved ? Style.t("ライブラリから削除", "Remove from library") : Style.t("ライブラリに保存", "Save to library")
+                        size: 22
+                        onClicked: { page.saved = !page.saved; page.saveToken = WaveApp.setAlbumSaved(page.info.savePlaylistId, page.saved) }
+                    }
                     IconButton {
                         visible: page.kind !== "history"
                         iconName: "folder-download-symbolic"
                         tip: Style.t("ダウンロード", "Download")
                         size: 22
                         onClicked: WaveApp.downloadCollection(page.kind === "album" ? "album" : page.itemId === "LM" ? "liked" : "playlist", page.itemId, page.shownTitle, page.info.art || "", JSON.stringify(page.songs))
-                    }
-                    Btn {
-                        visible: page.kind === "album" && page.saved !== null
-                        enabled: page.saveToken < 0
-                        text: page.saved ? Style.t("保存済み", "Saved") : Style.t("ライブラリに保存", "Save to library")
-                        onClicked: { page.saved = !page.saved; page.saveToken = WaveApp.setAlbumSaved(page.info.savePlaylistId, page.saved) }
                     }
                     BusyIndicator { visible: page.moreLoading; running: visible; Layout.preferredWidth: 28; Layout.preferredHeight: 28 }
                     Item { Layout.fillWidth: true }

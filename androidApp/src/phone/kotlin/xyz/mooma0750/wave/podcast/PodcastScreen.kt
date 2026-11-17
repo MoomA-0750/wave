@@ -4,11 +4,14 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.LoadingIndicator
@@ -28,6 +31,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import xyz.mooma0750.wave.R
@@ -43,7 +47,8 @@ import xyz.mooma0750.wave.ui.PlayControls
 import kasane.KasaneSpace
 
 /**
- * ポッドキャストの番組のページ: 画像・題・配信者・説明、ライブラリへの保存（ログイン中だけ）、新しい順のエピソード。
+ * ポッドキャストの番組のページ: 頭はアルバムのページと同じ（ジャケット・題・配信者・補足の行、再生・シャッフル・保存の列）、
+ * その下に説明、新しい順のエピソード。保存はログイン中だけ。
  * エピソードを押すと、そのエピソードから番組の一覧を続けて流す（曲と同じ再生）。
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
@@ -64,11 +69,11 @@ fun PodcastScreen(
         title = page?.title ?: title,
         coverUrl = page?.thumbnailUrl,
         onBack = onBack,
-        coverShape = MaterialTheme.shapes.medium,
+        // 頭はアルバムのページと同じ: ジャケットの形は既定のまま、名前の下に配信者と「ポッドキャスト」の補足の行。説明は操作の列の下に出す
         details = {
             page?.let { podcast ->
                 podcast.author?.let { Text(it, style = MaterialTheme.typography.titleSmallEmphasized) }
-                podcast.description?.let { Description(it) }
+                DetailText(stringResource(R.string.library_kind_podcast))
             }
         },
         actions = {
@@ -83,6 +88,7 @@ fun PodcastScreen(
         },
         play = PlayControls(shuffle, { shuffle = it }, enabled = songs.isNotEmpty()) { page?.let { onPlay(songs, 0, it.playlistId.takeUnless { _ -> Feed.isFeedShow(it.browseId) }, shuffle) } },
     ) {
+        page?.description?.let { item(key = "podcast-description") { Description(it) } }
         when {
             state.failure != null -> item { Text(failureMessage(state.failure), Modifier.padding(KasaneSpace.s4)) }
             page == null -> item { LoadingIndicator(Modifier.padding(KasaneSpace.s4)) }
@@ -103,15 +109,20 @@ fun PodcastScreen(
 @Composable
 private fun Description(text: String) {
     var expanded by rememberSaveable { mutableStateOf(false) }
-    Text(
-        text,
-        Modifier.padding(top = KasaneSpace.s1).clickable { expanded = !expanded },
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        maxLines = if (expanded) Int.MAX_VALUE else 3,
-        overflow = TextOverflow.Ellipsis,
-    )
-    TextButton(onClick = { expanded = !expanded }) { Text(stringResource(if (expanded) R.string.podcast_show_less else R.string.podcast_show_more)) }
+    Column(Modifier.fillMaxWidth().padding(horizontal = KasaneSpace.s4)) {
+        Text(
+            text,
+            Modifier.clickable { expanded = !expanded },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = if (expanded) Int.MAX_VALUE else 3,
+            overflow = TextOverflow.Ellipsis,
+        )
+        // 文字の頭を説明の左端にそろえる（TextButton の内側の余白の分だけ左へ出す）
+        TextButton(onClick = { expanded = !expanded }, modifier = Modifier.offset(x = -ButtonDefaults.TextButtonContentPadding.calculateStartPadding(LayoutDirection.Ltr))) {
+            Text(stringResource(if (expanded) R.string.podcast_show_less else R.string.podcast_show_more))
+        }
+    }
 }
 
 /** エピソードの行: 画像、題、「日付 • 長さ」、説明の2行、聴いたところ。 */

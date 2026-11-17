@@ -51,24 +51,32 @@ ListView {
     // 見出しが後から伸びても（文が折り返す・ボタンが出る）、まだ動かしていなければ頭から見せる
     property bool userScrolled: false
     onMovementStarted: userScrolled = true
+    // 頭の大きさ・余白・並びはアルバムのページ（CollectionPage）と同じ。狭いページでは画像と題を小さくし、端の余白を詰める
+    readonly property int edge: width < 560 ? 16 : 24
+    readonly property int artSize: width < 480 ? 112 : width < 640 ? 152 : 200
     header: ColumnLayout {
         width: page.width
         onHeightChanged: if (!page.userScrolled) Qt.callLater(() => page.positionViewAtBeginning())
-        spacing: Style.space.s4
+        spacing: Style.space.s3
         BusyIndicator { visible: !page.info && !page.failed; running: visible; Layout.alignment: Qt.AlignHCenter; Layout.topMargin: 24 }
         Label { visible: page.failed; text: Style.t("ポッドキャストを読み込めませんでした", "Couldn't load the podcast"); color: Style.dim; Layout.alignment: Qt.AlignHCenter; Layout.topMargin: 24 }
         RowLayout {
             visible: !!page.info
             Layout.fillWidth: true
-            Layout.margins: Style.space.s6
-            spacing: Style.space.s6
-            Art { Layout.preferredWidth: 200; Layout.preferredHeight: 200; Layout.alignment: Qt.AlignTop; source: page.info ? page.info.art : ""; radius: Style.radius; placeholder: "audio-input-microphone-symbolic" }
+            Layout.leftMargin: page.edge
+            Layout.rightMargin: page.edge
+            Layout.topMargin: page.edge
+            Layout.bottomMargin: Style.space.s3
+            spacing: page.edge
+            Art { Layout.preferredWidth: page.artSize; Layout.preferredHeight: page.artSize; Layout.alignment: Qt.AlignTop; source: page.info ? page.info.art : ""; radius: Style.radius; placeholder: "audio-input-microphone-symbolic" }
             ColumnLayout {
                 Layout.fillWidth: true
+                Layout.minimumWidth: 0
                 spacing: 6
                 Label { text: page.info && page.info.newEpisodes ? Style.t("プレイリスト • 自動", "Playlist • Auto") : Style.t("ポッドキャスト", "Podcast"); font.pixelSize: 12; font.weight: Font.DemiBold; color: Style.dim }
-                Label { Layout.fillWidth: true; text: page.info ? page.info.title : page.pageTitle; font.pixelSize: 32; font.weight: Font.Bold; wrapMode: Text.Wrap; maximumLineCount: 2; elide: Text.ElideRight; color: Style.foreground }
-                Label { text: page.info ? page.info.author : ""; visible: text !== ""; font.weight: Font.DemiBold; color: Style.foreground }
+                Label { Layout.fillWidth: true; text: page.info ? page.info.title : page.pageTitle; font.pixelSize: page.width < 560 ? 22 : 32; font.weight: Font.Bold; wrapMode: Text.Wrap; maximumLineCount: 2; elide: Text.ElideRight; color: Style.foreground }
+                // 配信者はアルバムのアーティストと同じ太字
+                Label { Layout.fillWidth: true; text: page.info ? page.info.author : ""; visible: text !== ""; font.weight: Font.Bold; wrapMode: Text.Wrap; color: Style.foreground }
                 Label {
                     Layout.fillWidth: true
                     visible: text !== ""
@@ -82,12 +90,16 @@ ListView {
                     ToolTip.visible: false
                 }
                 RowLayout {
-                    Layout.topMargin: Style.space.s2
+                    Layout.topMargin: page.width < 560 ? 4 : 10
+                    Layout.fillWidth: true
                     spacing: Style.space.s2
                     PlayButton { visible: page.episodes.length > 0; onClicked: WaveApp.playSongs(JSON.stringify(page.episodes), 0, page.itemId, false) }
-                    Btn {
+                    // 保存（YouTube）・登録（RSS）: アルバムの保存と同じしおりのアイコンのボタン
+                    IconButton {
                         visible: !!page.info && page.info.canSave
-                        text: page.saved ? (page.info.isFeed ? Style.t("登録済み", "Subscribed") : Style.t("保存済み", "Saved")) : (page.info && page.info.isFeed ? Style.t("登録", "Subscribe") : Style.t("ライブラリに保存", "Save to library"))
+                        iconName: page.saved ? "user-bookmarks-symbolic" : "bookmark-new-symbolic"
+                        tip: page.saved ? (page.info && page.info.isFeed ? Style.t("登録を解除", "Unsubscribe") : Style.t("ライブラリから削除", "Remove from library")) : (page.info && page.info.isFeed ? Style.t("登録", "Subscribe") : Style.t("ライブラリに保存", "Save to library"))
+                        size: 22
                         enabled: page.saveToken < 0
                         onClicked: {
                             if (page.info.isFeed) { page.saveToken = WaveApp.setPodcastSaved(JSON.stringify(page.info.show), !page.saved); return }
@@ -96,10 +108,11 @@ ListView {
                         }
                     }
                     Btn { visible: !!page.info && page.info.newEpisodes; text: Style.t("RSS の番組を探して追加", "Find and add RSS shows"); onClicked: Style.nav.openFeedSearch() }
+                    Item { Layout.fillWidth: true }
                 }
             }
         }
-        Label { visible: !!page.info && page.episodes.length === 0 && !page.loading; text: Style.t("エピソードはありません", "No episodes"); color: Style.dim; Layout.leftMargin: 24 }
+        Label { visible: !!page.info && page.episodes.length === 0 && !page.loading; text: Style.t("エピソードはありません", "No episodes"); color: Style.dim; Layout.leftMargin: page.edge }
     }
     delegate: TrackRow {
         width: page.width - 32

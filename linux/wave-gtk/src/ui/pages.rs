@@ -43,11 +43,11 @@ pub fn format_seconds(seconds: u32) -> String {
 }
 
 /// 縦に流れるページの入れ物（余白と幅の上限）。
-fn scrolling_column(column: &gtk::Box) -> gtk::ScrolledWindow {
+pub(super) fn scrolling_column(column: &gtk::Box) -> gtk::ScrolledWindow {
     gtk::ScrolledWindow::builder().child(&clamp(column)).hscrollbar_policy(gtk::PolicyType::Never).vexpand(true).build()
 }
 
-fn page_column() -> gtk::Box {
+pub(super) fn page_column() -> gtk::Box {
     gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(16).margin_top(20).margin_bottom(24).margin_start(20).margin_end(20).build()
 }
 
@@ -552,6 +552,8 @@ struct Collection {
     // 部品
     header: adw::Bin,
     controls: gtk::Box,
+    /// 操作の行の、アルバムの保存のボタンの場所（シャッフルの隣。読めてから入れる）。
+    save_slot: adw::Bin,
     list_holder: gtk::Box,
     sort_label: gtk::Label,
     sort_list: gtk::ListBox,
@@ -562,14 +564,25 @@ struct Collection {
     suggestions: gtk::Box,
 }
 
+/// 「ライブラリに保存」のアイコンのボタン（しおり。再生の列のシャッフル・ダウンロードと同じ丸い形。アルバムとポッドキャストの番組で使う）。
+pub(super) fn save_icon_button() -> gtk::Button {
+    gtk::Button::builder().valign(gtk::Align::Center).css_classes(["circular", "flat"]).build()
+}
+
+/// 保存のボタンの絵とツールチップを、保存しているかに合わせる（保存していればしおり、していなければ「＋」付きのしおり）。
+pub(super) fn show_saved(button: &gtk::Button, saved: bool, save: &str, remove: &str) {
+    button.set_icon_name(if saved { "user-bookmarks-symbolic" } else { "bookmark-new-symbolic" });
+    button.set_tooltip_text(Some(if saved { remove } else { save }));
+}
+
 /// アルバムの「ライブラリに保存」のボタン。押すとすぐ表示を切り替え、書けなければ戻す（書いている間は押せない）。
 fn album_save_button(app: &Rc<App>, state: Rc<RefCell<Option<(String, bool)>>>) -> gtk::Button {
-    let button = gtk::Button::builder().valign(gtk::Align::Center).css_classes(["pill"]).build();
+    let button = save_icon_button();
     let show = {
         let (button, state) = (button.clone(), state.clone());
         move || {
             let saved = state.borrow().as_ref().is_some_and(|(_, saved)| *saved);
-            button.set_label(if saved { lang::t("保存済み", "Saved") } else { lang::t("ライブラリに保存", "Save to library") });
+            show_saved(&button, saved, lang::t("ライブラリに保存", "Save to library"), lang::t("ライブラリから削除", "Remove from library"));
         }
     };
     show();
@@ -634,6 +647,7 @@ fn collection_page(app: &Rc<App>, id: &str, title: &str, source: Source, songs: 
         album_saved: Rc::default(),
         header: adw::Bin::new(),
         controls: gtk::Box::builder().spacing(16).build(),
+        save_slot: adw::Bin::builder().valign(gtk::Align::Center).build(),
         list_holder: gtk::Box::builder().orientation(gtk::Orientation::Vertical).build(),
         sort_label,
         sort_list,
@@ -731,11 +745,11 @@ impl Collection {
         if let Some(detail) = detail.filter(|d| !d.is_empty()) {
             info.append(&gtk::Label::builder().label(detail).xalign(0.0).wrap(true).lines(2).ellipsize(gtk::pango::EllipsizeMode::End).css_classes(["dim-label"]).build());
         }
+        // 保存のボタンは操作の行（シャッフルの隣）に置く
         if self.album_saved.borrow().is_some() {
-            let button = album_save_button(&self.app, self.album_saved.clone());
-            button.set_halign(gtk::Align::Start);
-            button.set_margin_top(6);
-            info.append(&button);
+            self.save_slot.set_child(Some(&album_save_button(&self.app, self.album_saved.clone())));
+        } else {
+            self.save_slot.set_child(None::<&gtk::Widget>);
         }
         header.append(&info);
         self.header.set_child(Some(&header));
@@ -787,6 +801,7 @@ impl Collection {
             });
         }
         self.controls.append(&shuffle);
+        self.controls.append(&self.save_slot);
         if !matches!(self.source, Source::LikedBy(_)) {
             self.controls.append(&self.download_button());
         }

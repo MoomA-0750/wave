@@ -26,13 +26,13 @@ fn holder() -> adw::Bin {
     adw::Bin::builder().child(&adw::Spinner::builder().width_request(32).height_request(32).halign(gtk::Align::Center).valign(gtk::Align::Center).build()).build()
 }
 
+/// 入れ物（余白と幅の上限）はアルバムのページと同じ。
 fn column() -> gtk::Box {
-    gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(16).margin_top(20).margin_bottom(24).margin_start(20).margin_end(20).build()
+    super::pages::page_column()
 }
 
 fn scrolling(column: &gtk::Box) -> gtk::ScrolledWindow {
-    let clamp = adw::Clamp::builder().maximum_size(1100).tightening_threshold(800).child(column).build();
-    gtk::ScrolledWindow::builder().child(&clamp).hscrollbar_policy(gtk::PolicyType::Never).vexpand(true).build()
+    super::pages::scrolling_column(column)
 }
 
 /// 番組のページ。browse_id が rss: なら RSS の番組（この端末の登録）、MPSP… なら YouTube の番組（ライブラリに保存）、VLRDPN なら新しいエピソード。
@@ -93,8 +93,8 @@ fn show_content(app: &Rc<App>, page: PodcastPage, new_episodes: bool) -> gtk::Sc
     let column = column();
     let source = page.playlist_id();
     let is_feed = feed::is_feed_show(&page.browse_id);
-    // 頭: 絵・種類・題・配信者・説明（3行で切り、押すと全部）
-    let header = gtk::Box::builder().spacing(24).build();
+    // 頭: 絵・種類・題・配信者・説明（3行で切り、押すと全部）。大きさ・並びはアルバムのページと同じ
+    let header = gtk::Box::builder().spacing(24).margin_top(12).build();
     if new_episodes && page.thumbnail_url.is_none() {
         header.append(&track::cover("episodes", 220));
     } else {
@@ -126,9 +126,9 @@ fn show_content(app: &Rc<App>, page: PodcastPage, new_episodes: bool) -> gtk::Sc
     column.append(&header);
 
     let episodes: Rc<RefCell<Vec<PodcastEpisode>>> = Rc::new(RefCell::new(page.episodes.clone()));
-    // 操作: 再生（流しているときは一時停止）・保存・RSS の番組を探す（新しいエピソードのとき）
+    // 操作: 再生（流しているときは一時停止）・保存（しおりのアイコン。アルバムと同じ）・RSS の番組を探す（新しいエピソードのとき）
     let controls = gtk::Box::builder().spacing(16).build();
-    let play = gtk::Button::builder().icon_name("media-playback-start-symbolic").tooltip_text(lang::t("再生", "Play")).visible(!page.episodes.is_empty()).css_classes(["circular", "suggested-action", "play-large"]).build();
+    let play = gtk::Button::builder().icon_name("media-playback-start-symbolic").tooltip_text(lang::t("再生", "Play")).valign(gtk::Align::Center).visible(!page.episodes.is_empty()).css_classes(["circular", "suggested-action", "play-large"]).build();
     {
         let (app, episodes, source) = (app.clone(), episodes.clone(), source.clone());
         play.connect_clicked(move |_| {
@@ -235,13 +235,13 @@ fn show_content(app: &Rc<App>, page: PodcastPage, new_episodes: bool) -> gtk::Sc
     scroller
 }
 
-/// 保存（YouTube）・登録（RSS）のボタン。YouTube の番組は押すとすぐ表示を切り替え、書けなければ戻す（書いている間は押せない。アルバムの保存と同じ）。RSS の番組はこの端末の登録。
+/// 保存（YouTube）・登録（RSS）のボタン（アルバムの保存と同じしおりのアイコンとツールチップ）。YouTube の番組は押すとすぐ表示を切り替え、書けなければ戻す（書いている間は押せない。アルバムの保存と同じ）。RSS の番組はこの端末の登録。
 fn save_button(app: &Rc<App>, page: &PodcastPage, saved: bool) -> gtk::Button {
-    let button = gtk::Button::builder().valign(gtk::Align::Center).css_classes(["pill"]).build();
+    let button = super::pages::save_icon_button();
     let state = Rc::new(Cell::new(saved));
     let show = {
         let (button, state) = (button.clone(), state.clone());
-        move || button.set_label(if state.get() { lang::t("保存済み", "Saved") } else { lang::t("ライブラリに保存", "Save to library") })
+        move || super::pages::show_saved(&button, state.get(), lang::t("ライブラリに保存", "Save to library"), lang::t("ライブラリから削除", "Remove from library"))
     };
     show();
     let rss = feed::feed_url_of(&page.browse_id).map(String::from);
