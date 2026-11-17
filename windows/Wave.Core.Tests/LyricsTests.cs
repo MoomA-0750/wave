@@ -31,6 +31,48 @@ public class LyricsTests
         Assert.Equal(["Song - Orion", "Song"], LrclibClient.SearchTitles("Song - Orion"));
     }
 
+    private static LrclibClient.Track Track(string title, string artist, double duration) =>
+        new(title, artist, null, duration, false, "[00:01.00]a");
+
+    [Fact]
+    public void PickPrefersTheClosestDuration()
+    {
+        List<LrclibClient.Track> tracks = [Track("t", "a", 200), new("t", "a", null, 181, false, null), Track("t", "a", 184)];
+        Assert.Equal(184, LrclibClient.Pick(tracks, "t", "a", 182)?.Duration);
+        Assert.Null(LrclibClient.Pick(tracks, "t", "a", 100));
+    }
+
+    [Fact]
+    public void PickSkipsADifferentSongOfTheSameLength()
+    {
+        // 同じ長さの別の曲が先に並んでも、曲名とアーティストの合う方を選ぶ
+        List<LrclibClient.Track> tracks = [Track("別の曲", "別の人", 262), Track("群青", "YOASOBI", 263)];
+        Assert.Equal("群青", LrclibClient.Pick(tracks, "群青", "YOASOBI", 262)?.TrackName);
+        // 合うものが無ければ選ばない
+        Assert.Null(LrclibClient.Pick([tracks[0]], "群青", "YOASOBI", 262));
+        Assert.Null(LrclibClient.Pick([tracks[0]], "群青", "YOASOBI", null));
+        // 曲名だけ合ってもアーティストが違えば選ばない
+        Assert.Null(LrclibClient.Pick([Track("群青", "別の人", 262)], "群青", "YOASOBI", 262));
+    }
+
+    [Fact]
+    public void PickMatchesDespiteDecorationsAndWidth()
+    {
+        List<LrclibClient.Track> tracks = [Track("Ｓｏｎｇ", "ＡＢＣ, Someone", 200)];
+        Assert.NotNull(LrclibClient.Pick(tracks, "song (feat. X) [Remix]", "abc", 200));
+        Assert.NotNull(LrclibClient.Pick(tracks, "Song - From \"THE FIRST TAKE\"", "abc", 200));
+        Assert.NotNull(LrclibClient.Pick(tracks, "Song feat. Someone", "Someone", 200));
+    }
+
+    [Fact]
+    public void PickAcceptsARomanizedTitleOnlyByArtistAndCloseLength()
+    {
+        List<LrclibClient.Track> tracks = [Track("Gunjo", "YOASOBI", 250)];
+        Assert.NotNull(LrclibClient.Pick(tracks, "群青", "YOASOBI", 249));
+        Assert.Null(LrclibClient.Pick(tracks, "群青", "YOASOBI", 246));
+        Assert.Null(LrclibClient.Pick(tracks, "群青", "YOASOBI", null));
+    }
+
     // YouTube Music の時刻付き（Android 版の LyricsRepositoryTest と同じ確かめ方）
 
     [Fact]
