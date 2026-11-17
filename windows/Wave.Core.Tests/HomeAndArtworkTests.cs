@@ -52,5 +52,8 @@ public class HomeAndArtworkTests
         Assert.Equal(url, ArtworkUrl.Sized(url, 192));
         // webp などの形は触らない
         Assert.Equal("https://i.ytimg.com/vi_webp/abc/maxresdefault.webp", ArtworkUrl.Sized("https://i.ytimg.com/vi_webp/abc/maxresdefault.webp", 1088));
+        // 動画のサムネイルでない画像（ポッドキャストの番組の画像）は名前を変えない（hqdefault は無い）
+        const string podcast = "https://i.ytimg.com/podcasts_artwork/PLx/rss_feed_ingested.jpg?sqp=xyz&rs=sig";
+        Assert.Equal(podcast, ArtworkUrl.Sized(podcast, 1088));
     }
 }

@@ -14,27 +14,32 @@
         </ListView.ItemContainerStyle>
         <ListView.Header>
             <StackPanel>
-                <Grid Padding="12,40,12,24" ColumnSpacing="{StaticResource KasaneSpace6}">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <Border Width="220" Height="220" CornerRadius="{StaticResource KasaneCornerRadiusLg}" VerticalAlignment="Top" Background="{ThemeResource ControlFillColorSecondaryBrush}">
-                        <Image x:Name="Cover" Stretch="UniformToFill" />
-                    </Border>
-                    <StackPanel Grid.Column="1" VerticalAlignment="Bottom" Spacing="{StaticResource KasaneSpace1}">
-                        <TextBlock Text="{x:Bind app:L.T('ポッドキャスト', 'Podcast')}" Style="{StaticResource BodyStrongTextBlockStyle}" />
-                        <TextBlock x:Name="TitleText" FontSize="48" FontWeight="Bold" TextTrimming="CharacterEllipsis" MaxLines="2" TextWrapping="Wrap" />
-                        <TextBlock x:Name="AuthorText" Style="{StaticResource BodyStrongTextBlockStyle}" TextTrimming="CharacterEllipsis" />
-                        <TextBlock x:Name="DescriptionText" Style="{StaticResource BodyTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                   TextWrapping="Wrap" MaxLines="3" TextTrimming="CharacterEllipsis" IsTextSelectionEnabled="True" />
-                        <HyperlinkButton x:Name="MoreLink" Padding="0" Visibility="Collapsed" Click="OnMoreDescription" Content="{x:Bind app:L.T('すべて表示', 'Show more')}" />
-                    </StackPanel>
+                <!-- 頭はアルバムのページ（CollectionPage）と同じ見せ方: ジャケットの色のグラデーション、下端をそろえたジャケットと題・配信者・説明 -->
+                <Grid>
+                    <Rectangle x:Name="Gradient" Height="360" VerticalAlignment="Top" Margin="-12,0" />
+                    <Grid Padding="12,40,12,24" ColumnSpacing="{StaticResource KasaneSpace6}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Border Width="220" Height="220" CornerRadius="{StaticResource KasaneCornerRadiusLg}" VerticalAlignment="Bottom" Background="{ThemeResource ControlFillColorSecondaryBrush}">
+                            <Image x:Name="Cover" Stretch="UniformToFill" />
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Bottom" Spacing="0">
+                            <TextBlock x:Name="TitleText" FontSize="56" FontWeight="Bold" TextTrimming="CharacterEllipsis" MaxLines="2" TextWrapping="Wrap"
+                                       LineHeight="58" LineStackingStrategy="BlockLineHeight" Margin="0,2,0,6" />
+                            <TextBlock x:Name="AuthorText" Style="{StaticResource BodyStrongTextBlockStyle}" TextTrimming="CharacterEllipsis" Margin="0,0,0,2" />
+                            <TextBlock x:Name="DescriptionText" Style="{StaticResource BodyTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       TextWrapping="Wrap" MaxLines="3" TextTrimming="CharacterEllipsis" IsTextSelectionEnabled="True" />
+                            <HyperlinkButton x:Name="MoreLink" Padding="0" Visibility="Collapsed" Click="OnMoreDescription" Content="{x:Bind app:L.T('すべて表示', 'Show more')}" />
+                        </StackPanel>
+                    </Grid>
                 </Grid>
-                <StackPanel Orientation="Horizontal" Spacing="{StaticResource KasaneSpace4}" Padding="12,0,12,16">
+                <StackPanel Orientation="Horizontal" Spacing="{StaticResource KasaneSpace4}" Padding="12,8,12,16">
                     <Button x:Name="PlayButton" Style="{StaticResource PlayCircleButtonStyle}" Click="OnPlay" ToolTipService.ToolTip="{x:Bind app:L.T('再生', 'Play')}" Visibility="Collapsed">
                         <FontIcon Glyph="&#xF5B0;" FontSize="20" />
                     </Button>
+                    <!-- 保存はアルバムの保存と同じ見た目 -->
                     <Button x:Name="SaveButton" Visibility="Collapsed" Click="OnSave" VerticalAlignment="Center" CornerRadius="16" Padding="16,6" />
                     <ProgressRing x:Name="LoadingRing" IsActive="True" Width="20" Height="20" />
                 </StackPanel>

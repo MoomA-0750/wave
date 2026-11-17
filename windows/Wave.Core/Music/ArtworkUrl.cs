@@ -26,8 +26,10 @@ public static partial class ArtworkUrl
             if (string.IsNullOrEmpty(uri.Query) && !uri.AbsolutePath.Contains('=')) return url + $"=w{px}-h{px}";
             return url;
         }
-        // i.ytimg.com/vi/ID/sddefault.jpg?sqp=… の形（大きく出すときだけ。署名付きの問い合わせは名前を変えると合わないので外す）
-        if (px >= YtimgHqFromPx && host.Equals("i.ytimg.com", StringComparison.OrdinalIgnoreCase) && YtimgThumbnail().IsMatch(uri.AbsolutePath))
+        // i.ytimg.com/vi/ID/sddefault.jpg?sqp=… の形（大きく出すときだけ。署名付きの問い合わせは名前を変えると合わないので外す）。
+        // 動画のサムネイル（/vi/）だけ。番組の画像（/podcasts_artwork/…/rss_feed_ingested.jpg）などには hqdefault が無いのでそのまま
+        if (px >= YtimgHqFromPx && host.Equals("i.ytimg.com", StringComparison.OrdinalIgnoreCase) && uri.AbsolutePath.StartsWith("/vi/", StringComparison.Ordinal)
+            && YtimgThumbnail().IsMatch(uri.AbsolutePath))
             return YtimgThumbnail().Replace(uri.GetLeftPart(UriPartial.Path), "/hqdefault.jpg");
         return url;
     }

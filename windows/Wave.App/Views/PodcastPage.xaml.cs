@@ -46,7 +46,7 @@ public sealed partial class PodcastPage : Page
         summary = (PodcastSummary)e.Parameter;
         TitleText.Text = summary.Title;
         AuthorText.Text = summary.Author ?? "";
-        Cover.Source = Ui.Img(summary.ThumbnailUrl, 544);
+        SetCover(summary.ThumbnailUrl);
         if (Feed.FeedUrlOf(summary.BrowseId) is { } feedUrl)
         {
             await LoadFeedAsync(feedUrl);
@@ -75,12 +75,24 @@ public sealed partial class PodcastPage : Page
         AuthorText.Text = page.Author ?? "";
         DescriptionText.Text = page.Description ?? "";
         MoreLink.Visibility = Ui.Show((page.Description?.Length ?? 0) > 200);
-        if (page.ThumbnailUrl is not null) Cover.Source = Ui.Img(page.ThumbnailUrl, 544);
+        if (page.ThumbnailUrl is not null && page.ThumbnailUrl != summary.ThumbnailUrl) SetCover(page.ThumbnailUrl);
         foreach (var episode in page.Episodes) episodes.Add(episode);
         continuation = page.Continuation;
         PlayButton.Visibility = Ui.Show(episodes.Count > 0);
         UpdateSave();
         if (summary.BrowseId == MusicRepository.NewEpisodesBrowse) await MergeFeedEpisodesAsync(page);
+    }
+
+    /// <summary>ジャケットと、その色の頭のグラデーション（アルバムのページと同じ）。</summary>
+    private void SetCover(string? url)
+    {
+        Cover.Source = Ui.Img(url, 544);
+        _ = ColorAsync(url);
+    }
+
+    private async Task ColorAsync(string? url)
+    {
+        if (await Artwork.DominantColorAsync(url) is { } color) Gradient.Fill = Ui.Fade(color, 150, 0);
     }
 
     /// <summary>
@@ -139,7 +151,7 @@ public sealed partial class PodcastPage : Page
         AuthorText.Text = page.Author ?? "";
         DescriptionText.Text = page.Description ?? "";
         MoreLink.Visibility = Ui.Show((page.Description?.Length ?? 0) > 200);
-        if (page.ThumbnailUrl is not null) Cover.Source = Ui.Img(page.ThumbnailUrl, 544);
+        if (page.ThumbnailUrl is not null && page.ThumbnailUrl != summary.ThumbnailUrl) SetCover(page.ThumbnailUrl);
         foreach (var episode in page.Episodes) episodes.Add(episode);
         continuation = page.Continuation;
         PlayButton.Visibility = Ui.Show(episodes.Count > 0);
