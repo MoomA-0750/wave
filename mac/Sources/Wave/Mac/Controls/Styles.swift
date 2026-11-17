@@ -1,6 +1,9 @@
 #if os(macOS)
 import SwiftUI
 
+// apple-ui-allow: 枠（PaneBackground）と浮いた板（FloatingBarBackground）は、窓の中で離れた場所に1枚ずつ置く別々の面で、
+// 近づけて混ぜる（形が溶け合う）見た目にはしないので、GlassEffectContainer で包まない（2026-11-17 に本人の了承で決めた）
+
 /// 枠（Spotify の角の丸い面）。窓の地の上に浮かせる。macOS 26 以降は Liquid Glass の板にする。
 struct PaneBackground: ViewModifier {
     func body(content: Content) -> some View {
