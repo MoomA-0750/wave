@@ -103,7 +103,7 @@ final class PodcastModel {
         if isPlayingHere { AppServices.player.togglePlay() } else { play(0) }
     }
 
-    /// 保存の切り替え。書けたら表示を変える（アーティストの登録と同じく楽観的に変えない）。
+    /// 保存の切り替え。押すとすぐ表示を変え、書けなければ戻して知らせる。書いている間は押せない（アルバムの保存と同じ）。
     func toggleSaved() {
         if isFeed {
             if let current = page { AppServices.feeds.toggle(current) }
@@ -111,13 +111,15 @@ final class PodcastModel {
         }
         guard let current = page, let saved = current.saved, !saving else { return }
         saving = true
+        page?.saved = !saved
         Task {
             let result = (try? await AppServices.music.setPodcastSaved(current.playlistId, saved: !saved)) ?? .failed(.network)
+            AppPaths.log("podcast saved=\(!saved) ok=\(result.isOk)")
             saving = false
             if result.isOk {
-                page?.saved = !saved
                 AppServices.library.refresh()
             } else {
+                page?.saved = saved
                 AppServices.player.message = L.t("ライブラリを変更できませんでした", "Couldn't change your library")
             }
         }

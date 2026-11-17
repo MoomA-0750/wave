@@ -181,7 +181,7 @@ public sealed partial class PodcastPage : Page
         SaveButton.Style = page?.Saved == true ? null : (Style)Application.Current.Resources["AccentButtonStyle"];
     }
 
-    /// <summary>保存の切り替え。書けたら表示を変える（アーティストの登録と同じく楽観的に変えない）。</summary>
+    /// <summary>保存の切り替え。押すとすぐ表示を変え、書けなければ戻して知らせる。書いている間は押せない（アルバムの保存と同じ）。</summary>
     private async void OnSave(object sender, RoutedEventArgs e)
     {
         if (page is not { Saved: { } saved } current || saving) return;
@@ -194,16 +194,18 @@ public sealed partial class PodcastPage : Page
             return;
         }
         saving = true;
+        page = current with { Saved = !saved };
         UpdateSave();
         var result = await AppServices.Music.SetPlaylistSavedAsync(current.PlaylistId, !saved);
         saving = false;
         AppPaths.Log($"podcast save ok={result.IsOk} save={!saved}");
-        if (page == current && result.IsOk)
+        if (result.IsOk) _ = AppServices.Library.RefreshPodcastsAsync();
+        else
         {
-            page = current with { Saved = !saved };
-            _ = AppServices.Library.RefreshPodcastsAsync();
+            // 書けなければ戻す（書いている間に別の番組へ移っていたら、そちらの表示は触らない）
+            if (page?.BrowseId == current.BrowseId) page = page with { Saved = saved };
+            AppServices.Player.Message = L.T("ライブラリを変更できませんでした", "Couldn't change your library");
         }
-        else if (!result.IsOk) AppServices.Player.Message = L.T("ライブラリを変更できませんでした", "Couldn't change your library");
         UpdateSave();
     }
 

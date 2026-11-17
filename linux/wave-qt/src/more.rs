@@ -819,7 +819,7 @@ impl qobject::WaveApp {
                 });
                 reply(token, json!({ "ok": true }));
             }
-            // YouTube の番組は書けてから表示を変える（失敗したら戻す）
+            // YouTube の番組は、画面が押したときに表示を変え、書けなければ戻す（アルバムの保存と同じ）
             None => {
                 let playlist_id = show["playlistId"].as_str().unwrap_or_default().to_string();
                 glib::spawn_future_local(async move {

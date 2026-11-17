@@ -35,7 +35,8 @@ ListView {
         target: WaveApp
         function onLoaded(t, json) {
             const v = JSON.parse(json)
-            if (t === page.saveToken) { if (v.ok) page.saved = !page.saved; return }
+            // RSS の番組は登録できてから、YouTube の番組は押したときに変えてあるので、書けなければ戻す（アルバムの保存と同じ）
+            if (t === page.saveToken) { page.saveToken = -1; if (page.info.isFeed ? v.ok : !v.ok) page.saved = !page.saved; return }
             if (t !== page.token) return
             page.loading = false
             if (v.error) { if (!page.info) page.failed = true; return }
@@ -87,7 +88,12 @@ ListView {
                     Btn {
                         visible: !!page.info && page.info.canSave
                         text: page.saved ? (page.info.isFeed ? Style.t("登録済み", "Subscribed") : Style.t("保存済み", "Saved")) : (page.info && page.info.isFeed ? Style.t("登録", "Subscribe") : Style.t("ライブラリに保存", "Save to library"))
-                        onClicked: page.saveToken = WaveApp.setPodcastSaved(JSON.stringify(page.info.show), !page.saved)
+                        enabled: page.saveToken < 0
+                        onClicked: {
+                            if (page.info.isFeed) { page.saveToken = WaveApp.setPodcastSaved(JSON.stringify(page.info.show), !page.saved); return }
+                            page.saved = !page.saved
+                            page.saveToken = WaveApp.setPodcastSaved(JSON.stringify(page.info.show), page.saved)
+                        }
                     }
                     Btn { visible: !!page.info && page.info.newEpisodes; text: Style.t("RSS の番組を探して追加", "Find and add RSS shows"); onClicked: Style.nav.openFeedSearch() }
                 }

@@ -235,7 +235,7 @@ fn show_content(app: &Rc<App>, page: PodcastPage, new_episodes: bool) -> gtk::Sc
     scroller
 }
 
-/// 保存（YouTube）・登録（RSS）のボタン。YouTube の番組は書けてから表示を変える（失敗したら戻す）。RSS の番組はこの端末の登録。
+/// 保存（YouTube）・登録（RSS）のボタン。YouTube の番組は押すとすぐ表示を切り替え、書けなければ戻す（書いている間は押せない。アルバムの保存と同じ）。RSS の番組はこの端末の登録。
 fn save_button(app: &Rc<App>, page: &PodcastPage, saved: bool) -> gtk::Button {
     let button = gtk::Button::builder().valign(gtk::Align::Center).css_classes(["pill"]).build();
     let state = Rc::new(Cell::new(saved));
@@ -264,6 +264,8 @@ fn save_button(app: &Rc<App>, page: &PodcastPage, saved: bool) -> gtk::Button {
                 show();
             }
             None => {
+                state.set(target);
+                show();
                 button.set_sensitive(false);
                 let (app, playlist_id, state, show, button) = (app.clone(), playlist_id.clone(), state.clone(), show.clone(), button.clone());
                 gtk::glib::spawn_future_local(async move {
@@ -271,10 +273,10 @@ fn save_button(app: &Rc<App>, page: &PodcastPage, saved: bool) -> gtk::Button {
                     let ok = runtime::run(async move { repo.set_podcast_saved(&playlist_id, target).await }).await.is_ok();
                     button.set_sensitive(true);
                     if ok {
-                        state.set(target);
-                        show();
                         super::library::reload(&app);
                     } else {
+                        state.set(!target);
+                        show();
                         app.toast(lang::t("ライブラリを変更できませんでした", "Couldn't change your library"));
                     }
                 });

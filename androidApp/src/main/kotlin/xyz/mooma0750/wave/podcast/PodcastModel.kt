@@ -183,7 +183,7 @@ class PodcastViewModel(
         }
     }
 
-    /** ライブラリへの保存の切り替え。アーティストの登録と同じく、書けたら表示を変える（分からなければ読み直す）。 */
+    /** ライブラリへの保存の切り替え。アルバムの保存と同じく、押すとすぐ表示を変え、失敗したら戻す（分からなければ読み直す）。 */
     fun toggleSaved(failedMessage: String) {
         val current = state.value
         val page = current.page ?: return
@@ -196,13 +196,18 @@ class PodcastViewModel(
             viewModelScope.launch { if (target) feedLibrary.subscribe(show.subscription) else feedLibrary.unsubscribe(show.feedUrl) }
             return
         }
-        mutableState.update { it.copy(saving = true) }
+        val saved = page.saved
+        // 押すとすぐ切り替え、失敗したら戻す（アルバムの保存と同じ。どの端末も同じ）
+        mutableState.update { it.copy(saving = true, page = it.page?.copy(saved = target)) }
         viewModelScope.launch {
             val result = music.setPodcastSaved(page.playlistId, target, music.currentLoginGeneration())
             Log.i(WaveApplication.LOG_TAG, "podcast save result=${result::class.simpleName} save=$target")
             when (result) {
-                is WriteResult.Done -> mutableState.update { it.copy(page = it.page?.copy(saved = target)) }
-                is WriteResult.Failed -> xyz.mooma0750.wave.ui.Notices.show(failedMessage)
+                is WriteResult.Done -> Unit
+                is WriteResult.Failed -> {
+                    mutableState.update { it.copy(page = it.page?.copy(saved = saved)) }
+                    xyz.mooma0750.wave.ui.Notices.show(failedMessage)
+                }
                 WriteResult.Unknown -> (music.podcast(browseId) as? CallResult.Ok)?.value?.let { fresh -> mutableState.update { it.copy(page = it.page?.copy(saved = fresh.saved)) } }
             }
             mutableState.update { it.copy(saving = false) }
