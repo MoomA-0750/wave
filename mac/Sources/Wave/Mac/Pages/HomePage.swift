@@ -55,8 +55,8 @@ private struct RecentTile: View {
     var body: some View {
         Button { AppServices.nav.openCard(item) } label: {
             HStack(spacing: Kasane.Space.s3) {
-                Cover(url: Ui.small(item.thumbnailUrl), size: 56, round: item.isArtist, radius: 0)
-                Text(item.title).font(.body.weight(.semibold)).lineLimit(2).multilineTextAlignment(.leading)
+                ItemCover(item: item, url: Ui.small(item.thumbnailUrl), size: 56, radius: 0)
+                Text(Ui.title(item)).font(.body.weight(.semibold)).lineLimit(2).multilineTextAlignment(.leading)
                 Spacer(minLength: 12)
             }
             .frame(height: 56)

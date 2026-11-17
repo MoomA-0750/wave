@@ -5,6 +5,7 @@ use serde_json::{Value, json};
 use wave_core::music::models::{AlbumPage, AlbumSummary, ArtistPage, ArtistSummary, HomeItem, HomeShelf, PlaylistPage, PlaylistSummary, Song};
 use wave_core::music::podcast::{PodcastEpisode, PodcastSummary};
 use wave_desktop::art::sized;
+use wave_desktop::lang;
 
 /// 一覧の小さな画像の大きさ（px）。
 const THUMB: u32 = 120;
@@ -73,6 +74,15 @@ pub fn home_item(item: &HomeItem) -> Value {
     match item {
         HomeItem::Song(s) => song(s),
         HomeItem::Album(a) => album(a),
+        // 高く評価した曲は YouTube Music の題（「Liked Music」）と親指の画像でなく、ライブラリと同じアプリの題と絵（Art の liked）
+        HomeItem::Playlist(p) if item.is_liked_songs() => {
+            let mut value = playlist(p);
+            value["title"] = Value::String(lang::t("高く評価した曲", "Liked music").into());
+            value["thumb"] = Value::String(String::new());
+            value["art"] = Value::String(String::new());
+            value["liked"] = Value::Bool(true);
+            value
+        }
         HomeItem::Playlist(p) => playlist(p),
         HomeItem::Artist(a) => artist(a),
     }
@@ -165,6 +175,19 @@ mod tests {
         // QML から返ってきた "song" をそのまま読める
         let back: Song = serde_json::from_value(value["song"].clone()).unwrap();
         assert_eq!(back, sample());
+    }
+
+    #[test]
+    fn liked_songs_card_uses_the_app_title_and_art() {
+        let liked = HomeItem::Playlist(PlaylistSummary { playlist_id: "LM".into(), title: "Liked Music".into(), subtitle: None, thumbnail_url: Some("https://lh3.googleusercontent.com/thumb=w120-h120".into()), editable: false });
+        let value = home_item(&liked);
+        assert_eq!(value["liked"], true);
+        assert_eq!(value["id"], "LM");
+        assert_eq!(value["thumb"], "");
+        assert_ne!(value["title"], "Liked Music");
+        let other = home_item(&HomeItem::Playlist(PlaylistSummary { playlist_id: "PLx".into(), title: "x".into(), subtitle: None, thumbnail_url: None, editable: false }));
+        assert!(other.get("liked").is_none());
+        assert_eq!(other["title"], "x");
     }
 
     #[test]

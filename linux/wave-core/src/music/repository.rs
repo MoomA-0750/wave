@@ -48,6 +48,11 @@ pub const HOME: &str = "FEmusic_home";
 pub const LIBRARY_PLAYLISTS: &str = "FEmusic_liked_playlists";
 /// 高く評価した曲のプレイリスト。
 pub const LIKED_SONGS: &str = "LM";
+
+/// 高く評価した曲のプレイリストか（一覧によっては browse の形の VLLM で来る）。
+pub fn is_liked_songs(playlist_id: &str) -> bool {
+    playlist_id == LIKED_SONGS || playlist_id.strip_prefix("VL") == Some(LIKED_SONGS)
+}
 const MAX_LIBRARY_PAGES: usize = 20;
 const MAX_PLAYLIST_PAGES: usize = 50;
 /// チャンネルの「投稿」タブを開く params。

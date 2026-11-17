@@ -10,6 +10,8 @@ Item {
     property bool round: false
     property int radius: Style.small
     property string placeholder: "folder-music-symbolic"
+    // 高く評価した曲（画像の代わりに、ライブラリの先頭の行と同じアプリの絵）
+    property bool liked: false
     readonly property int clipRadius: round ? Math.min(width, height) / 2 : radius
 
     Rectangle {
@@ -89,6 +91,22 @@ Item {
             const scale = Math.max(w / iw, h / ih)
             const dw = iw * scale, dh = ih * scale
             ctx.drawImage(loadedUrl, (w - dw) / 2, (h - dh) / 2, dw, dh)
+        }
+    }
+    Rectangle {
+        anchors.fill: parent
+        visible: art.liked
+        radius: art.clipRadius
+        gradient: Gradient {
+            GradientStop { position: 0; color: "#4b2bd6" }
+            GradientStop { position: 1; color: "#c14de0" }
+        }
+        IconImage {
+            anchors.centerIn: parent
+            color: "white"
+            source: Style.icon("starred-symbolic")
+            sourceSize.width: parent.width * 0.42
+            sourceSize.height: parent.width * 0.42
         }
     }
 }

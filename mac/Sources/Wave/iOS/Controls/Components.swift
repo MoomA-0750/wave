@@ -70,6 +70,22 @@ struct LikedCover: View {
     }
 }
 
+/// 棚・格子の1枚の絵。高く評価した曲は YouTube Music の親指の画像でなく、ライブラリと同じアプリの絵（LikedCover）。
+struct ItemCover: View {
+    var item: HomeItem
+    var url: URL?
+    var size: CGFloat
+    var radius: CGFloat = Kasane.Radius.sm
+
+    var body: some View {
+        if item.isLikedSongs {
+            LikedCover(size: size, radius: radius)
+        } else {
+            Cover(url: url, size: size, round: item.isArtist, radius: radius)
+        }
+    }
+}
+
 /// 曲の一覧の1行（Android の SongRow と同じ: ジャケット・曲名・アーティスト・評価済みの印・「…」）。押すと再生、長押しでメニュー。
 struct SongRow: View {
     var song: Song

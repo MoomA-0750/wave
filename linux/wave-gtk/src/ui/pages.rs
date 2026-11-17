@@ -411,13 +411,8 @@ impl Home {
 fn recent_tile(app: &Rc<App>, item: HomeItem) -> gtk::Widget {
     let row = gtk::Box::builder().spacing(12).height_request(56).css_classes(["recent-tile"]).build();
     row.set_overflow(gtk::Overflow::Hidden);
-    let art = images::square(56);
-    if matches!(item, HomeItem::Artist(_)) {
-        art.add_css_class("round");
-    }
-    art.load(item.thumbnail_url(), 112);
-    row.append(&art.root);
-    row.append(&gtk::Label::builder().label(item.title()).xalign(0.0).wrap(true).lines(2).ellipsize(gtk::pango::EllipsizeMode::End).max_width_chars(1).hexpand(true).margin_end(12).css_classes(["heading"]).build());
+    row.append(&track::item_art(&item, 56));
+    row.append(&gtk::Label::builder().label(track::item_title(&item)).xalign(0.0).wrap(true).lines(2).ellipsize(gtk::pango::EllipsizeMode::End).max_width_chars(1).hexpand(true).margin_end(12).css_classes(["heading"]).build());
     row.set_cursor_from_name(Some("pointer"));
     let click = gtk::GestureClick::new();
     let app = app.clone();

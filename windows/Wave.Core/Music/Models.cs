@@ -168,6 +168,12 @@ public abstract record HomeItem
 
     public bool IsArtist => this is ArtistItem;
 
+    /// <summary>
+    /// 高く評価した曲（LM）のプレイリストか。YouTube Music の題（「Liked Music」）と親指の絵で来るので、
+    /// 画面ではライブラリと同じくアプリの題と絵で出す。
+    /// </summary>
+    public bool IsLikedSongs => this is PlaylistItem p && MusicRepository.IsLikedSongs(p.Playlist.PlaylistId);
+
     /// <summary>同じものを見分けるための値（重複を除くのに使う）。</summary>
     public string Key => this switch
     {

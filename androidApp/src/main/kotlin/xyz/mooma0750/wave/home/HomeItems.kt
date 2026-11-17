@@ -26,16 +26,33 @@ data class HomeItemLook(
     val thumbnailUrl: String?,
     val title: String,
     val subtitle: String?,
+    /** 高く評価した曲。画像の代わりにライブラリと同じアプリの絵を出す（thumbnailUrl は null）。 */
+    val liked: Boolean = false,
 ) {
     companion object {
         fun of(item: HomeItem): HomeItemLook =
             when (item) {
                 is HomeItem.SongItem -> HomeItemLook(item.song.thumbnailUrl, item.song.title, if (item.song.isLive) listOf("LIVE", item.song.subtitle).filter { it.isNotEmpty() }.joinToString(" • ") else item.song.subtitle)
                 is HomeItem.AlbumItem -> HomeItemLook(item.album.thumbnailUrl, item.album.title, item.album.subtitle)
-                is HomeItem.PlaylistItem -> HomeItemLook(item.playlist.thumbnailUrl, item.playlist.title, item.playlist.subtitle)
+                is HomeItem.PlaylistItem ->
+                    if (item.isLikedSongs) {
+                        HomeItemLook(null, item.playlist.title, item.playlist.subtitle, liked = true)
+                    } else {
+                        HomeItemLook(item.playlist.thumbnailUrl, item.playlist.title, item.playlist.subtitle)
+                    }
                 is HomeItem.ArtistItem -> HomeItemLook(item.artist.thumbnailUrl, item.artist.name, item.artist.subtitle)
             }
     }
+}
+
+/**
+ * 画面に出す画像と文字。高く評価した曲は YouTube Music の題（「Liked Music」）と親指の絵で来るので、
+ * ライブラリと同じアプリの題にする（絵は liked を見て各画面がアプリの絵を出す）。
+ */
+@Composable
+fun homeItemLook(item: HomeItem): HomeItemLook {
+    val look = HomeItemLook.of(item)
+    return if (look.liked) look.copy(title = stringResource(R.string.library_liked_songs)) else look
 }
 
 fun openHomeItem(

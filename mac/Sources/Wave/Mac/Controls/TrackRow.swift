@@ -103,7 +103,7 @@ struct MediaCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Kasane.Space.s2) {
             ZStack(alignment: .bottomTrailing) {
-                Cover(url: Ui.img(item.thumbnailUrl), size: 160, round: item.isArtist)
+                ItemCover(item: item, url: Ui.img(item.thumbnailUrl), size: 160)
                 PlayCircleButton(size: 44, action: { AppServices.nav.play(item) }) {
                     Image(systemName: "play.fill").font(.system(size: 16)) // apple-ui-allow: 記号の大きさ（Windows 版と揃える）
                 }
@@ -113,7 +113,7 @@ struct MediaCard: View {
                 .animation(.easeOut(duration: 0.15), value: hover)
             }
             VStack(alignment: .leading, spacing: 2) {
-                Text(item.title).font(.body.weight(.semibold)).lineLimit(1)
+                Text(Ui.title(item)).font(.body.weight(.semibold)).lineLimit(1)
                 Text(subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(2)
             }
             .frame(width: 160, alignment: .leading)

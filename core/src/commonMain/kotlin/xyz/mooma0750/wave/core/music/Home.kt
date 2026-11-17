@@ -17,6 +17,12 @@ sealed interface HomeItem {
     data class ArtistItem(
         val artist: ArtistSummary,
     ) : HomeItem
+
+    /**
+     * 高く評価した曲（LM）のプレイリストか。YouTube Music の題（「Liked Music」）と親指の絵で来るので、
+     * 画面ではライブラリと同じくアプリの題と絵で出す。
+     */
+    val isLikedSongs: Boolean get() = this is PlaylistItem && MusicRepository.isLikedSongs(playlist.playlistId)
 }
 
 /** ホームの棚（「もう一度聴く」「おすすめ」など）。見出しは応答の表示のまま（言語に依るので判定に使わない）。 */

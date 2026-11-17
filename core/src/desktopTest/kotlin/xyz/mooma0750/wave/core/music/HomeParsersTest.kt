@@ -47,6 +47,12 @@ class HomeParsersTest {
         assertEquals("UCx", (only(browse("UCx", "MUSIC_PAGE_TYPE_ARTIST")) as HomeItem.ArtistItem).artist.browseId)
         assertEquals("PLx", (only(browse("VLPLx", "MUSIC_PAGE_TYPE_PLAYLIST")) as HomeItem.PlaylistItem).playlist.playlistId)
         assertTrue(MusicParsers.homePage(card(browse("x", "MUSIC_PAGE_TYPE_PODCAST_SHOW_DETAIL_PAGE"))).shelves.isEmpty())
+        // 高く評価した曲（VLLM）は LM のプレイリストとして読み、アプリの題と絵で出す印が付く
+        val liked = only(browse("VLLM", "MUSIC_PAGE_TYPE_PLAYLIST"))
+        assertEquals(MusicRepository.LIKED_SONGS, (liked as HomeItem.PlaylistItem).playlist.playlistId)
+        assertTrue(liked.isLikedSongs)
+        assertTrue(!only(browse("VLPLx", "MUSIC_PAGE_TYPE_PLAYLIST")).isLikedSongs)
+        assertTrue(!only(browse("MPREb_x", "MUSIC_PAGE_TYPE_ALBUM")).isLikedSongs)
     }
 
     @Test

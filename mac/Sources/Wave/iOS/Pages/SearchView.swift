@@ -751,9 +751,9 @@ private struct ItemRow: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: Kasane.Space.s3) {
-                Cover(url: Ui.small(item.thumbnailUrl), size: 48, round: item.isArtist, radius: Kasane.Radius.sm)
+                ItemCover(item: item, url: Ui.small(item.thumbnailUrl), size: 48, radius: Kasane.Radius.sm)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(item.title).lineLimit(1)
+                    Text(Ui.title(item)).lineLimit(1)
                     Text(detail).subtle()
                 }
                 Spacer(minLength: 0)
@@ -860,8 +860,8 @@ private struct TopResultCard: View {
         ZStack(alignment: .bottomTrailing) {
             Button(action: open) {
                 VStack(alignment: .leading, spacing: Kasane.Space.s2) {
-                    Cover(url: Ui.img(item.thumbnailUrl), size: 96, round: item.isArtist, radius: Kasane.Radius.sm)
-                    Text(item.title).font(.title2.weight(.bold)).lineLimit(2).multilineTextAlignment(.leading)
+                    ItemCover(item: item, url: Ui.img(item.thumbnailUrl), size: 96, radius: Kasane.Radius.sm)
+                    Text(Ui.title(item)).font(.title2.weight(.bold)).lineLimit(2).multilineTextAlignment(.leading)
                     Text(detail).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
                 }
                 .padding(Kasane.Space.s4)

@@ -32,7 +32,7 @@ import xyz.mooma0750.wave.core.music.NewRelease
 import xyz.mooma0750.wave.core.music.PlaylistSummary
 import xyz.mooma0750.wave.core.music.Song
 import xyz.mooma0750.wave.home.HomeFeedViewModel
-import xyz.mooma0750.wave.home.HomeItemLook
+import xyz.mooma0750.wave.home.homeItemLook
 import xyz.mooma0750.wave.home.openHomeItem
 import xyz.mooma0750.wave.home.shelfTitle
 import xyz.mooma0750.wave.library.HistoryRow
@@ -96,8 +96,9 @@ private fun androidx.wear.compose.foundation.lazy.TransformingLazyColumnItemScop
     actions: SongActions,
     onOpenPlaylist: (PlaylistSummary) -> Unit,
 ) {
-    val itemLook = HomeItemLook.of(item)
-    EntryRow(look, itemLook.title, itemLook.subtitle, itemLook.thumbnailUrl, round = item is HomeItem.ArtistItem) { openHomeItem(item, onOpenPlaylist, actions) }
+    // 高く評価した曲は、ホームの一覧と同じくアプリの題とハートの印（YouTube Music の題と親指の画像でなく）
+    val itemLook = homeItemLook(item)
+    EntryRow(look, itemLook.title, itemLook.subtitle, itemLook.thumbnailUrl, round = item is HomeItem.ArtistItem, icon = if (itemLook.liked) R.drawable.ic_favorite else null) { openHomeItem(item, onOpenPlaylist, actions) }
 }
 
 /** 新作（スマホのホームの「登録したアーティストの新作」）。 */

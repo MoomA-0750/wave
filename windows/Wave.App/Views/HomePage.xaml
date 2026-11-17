@@ -26,10 +26,14 @@
                                     <ColumnDefinition Width="56" />
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
-                                <Border Width="56" Height="56" CornerRadius="{x:Bind app:Ui.Radius(IsArtist)}">
-                                    <Image Source="{x:Bind app:Ui.Small(ThumbnailUrl)}" Stretch="UniformToFill" />
+                                <!-- 高く評価した曲は親指の画像でなく、ライブラリと同じアプリの絵と題 -->
+                                <Border Width="56" Height="56" CornerRadius="{x:Bind app:Ui.Radius(IsArtist)}" Background="{x:Bind app:Ui.ItemLikedCover(IsLikedSongs)}">
+                                    <Grid>
+                                        <Image Source="{x:Bind app:Ui.ItemImage(IsLikedSongs, ThumbnailUrl, 96)}" Stretch="UniformToFill" />
+                                        <FontIcon Glyph="&#xEB52;" Foreground="White" FontSize="20" Visibility="{x:Bind app:Ui.Show(IsLikedSongs)}" />
+                                    </Grid>
                                 </Border>
-                                <TextBlock Grid.Column="1" Text="{x:Bind Title}" VerticalAlignment="Center" Style="{StaticResource BodyStrongTextBlockStyle}"
+                                <TextBlock Grid.Column="1" Text="{x:Bind app:Ui.ItemTitle(IsLikedSongs, Title)}" VerticalAlignment="Center" Style="{StaticResource BodyStrongTextBlockStyle}"
                                            TextTrimming="CharacterEllipsis" MaxLines="2" TextWrapping="Wrap" Margin="0,0,12,0" />
                             </Grid>
                         </Button>

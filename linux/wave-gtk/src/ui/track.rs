@@ -32,6 +32,7 @@ const STYLE: &str = "
 .play-fab { min-width: 44px; min-height: 44px; padding: 0; box-shadow: 0 2px 6px alpha(black, 0.35); }
 .recent-tile { border-radius: 6px; background-color: alpha(currentColor, 0.07); }
 .recent-tile:hover { background-color: alpha(currentColor, 0.12); }
+.recent-tile .cover-liked { border-radius: 0; }
 .mood-tile { border-radius: 8px; padding: 16px; }
 .mood-tile label { color: white; font-weight: 800; font-size: 17px; }
 .top-card { border-radius: 8px; padding: 20px; background-color: alpha(currentColor, 0.06); }
@@ -341,17 +342,13 @@ fn card_subtitle(item: &HomeItem) -> String {
 /// on_open は開く・流す前に呼ぶ（検索から開いたものを履歴に残す）。
 pub fn card(app: &Rc<App>, item: HomeItem, on_open: Option<Rc<dyn Fn()>>) -> gtk::Widget {
     ensure_style();
-    let picture = images::square(CARD_SIZE);
-    if matches!(item, HomeItem::Artist(_)) {
-        picture.add_css_class("round");
-    }
-    picture.load(item.thumbnail_url(), CARD_SIZE as u32 * 2);
+    let picture = item_art(&item, CARD_SIZE);
     let play = gtk::Button::builder().icon_name("media-playback-start-symbolic").tooltip_text(lang::t("再生", "Play")).halign(gtk::Align::End).valign(gtk::Align::End).margin_end(6).margin_bottom(6).opacity(0.0).css_classes(["circular", "suggested-action", "play-fab"]).build();
-    let overlay = gtk::Overlay::builder().child(&picture.root).build();
+    let overlay = gtk::Overlay::builder().child(&picture).build();
     overlay.add_overlay(&play);
     let column = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(6).width_request(CARD_SIZE).css_classes(["media-card"]).build();
     column.append(&overlay);
-    column.append(&gtk::Label::builder().label(item.title()).xalign(0.0).ellipsize(gtk::pango::EllipsizeMode::End).max_width_chars(1).width_request(CARD_SIZE).css_classes(["heading"]).build());
+    column.append(&gtk::Label::builder().label(item_title(&item)).xalign(0.0).ellipsize(gtk::pango::EllipsizeMode::End).max_width_chars(1).width_request(CARD_SIZE).css_classes(["heading"]).build());
     let subtitle = card_subtitle(&item);
     column.append(&gtk::Label::builder().label(&subtitle).xalign(0.0).wrap(true).wrap_mode(gtk::pango::WrapMode::WordChar).lines(2).ellipsize(gtk::pango::EllipsizeMode::End).max_width_chars(1).width_request(CARD_SIZE).css_classes(["caption", "dim-label"]).build());
     column.set_cursor_from_name(Some("pointer"));
@@ -535,6 +532,24 @@ pub fn card_grid(cards: Vec<gtk::Widget>) -> gtk::FlowBox {
         grid.append(&card);
     }
     grid
+}
+
+/// 棚・格子の1枚の題。高く評価した曲は YouTube Music の題（「Liked Music」）でなく、ライブラリと同じアプリの題。
+pub fn item_title(item: &HomeItem) -> &str {
+    if item.is_liked_songs() { lang::t("高く評価した曲", "Liked music") } else { item.title() }
+}
+
+/// 棚・格子の1枚の絵（アーティストは丸）。高く評価した曲は親指の画像でなく、ライブラリと同じアプリの絵（cover("liked")）。
+pub fn item_art(item: &HomeItem, size: i32) -> gtk::Widget {
+    if item.is_liked_songs() {
+        return cover("liked", size);
+    }
+    let picture = images::square(size);
+    if matches!(item, HomeItem::Artist(_)) {
+        picture.add_css_class("round");
+    }
+    picture.load(item.thumbnail_url(), size as u32 * 2);
+    picture.root.upcast()
 }
 
 // MARK: 頭の絵

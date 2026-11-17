@@ -28,6 +28,9 @@ public sealed class MusicRepository(InnerTubeClient client, LiveClient? live = n
     public const string MoodCategoryBrowse = "FEmusic_moods_and_genres_category";
     public const string NewReleasesBrowse = "FEmusic_new_releases_albums";
     public const string LikedSongs = "LM";
+
+    /// <summary>高く評価した曲のプレイリストか（一覧によっては browse の形の VLLM で来る）。</summary>
+    public static bool IsLikedSongs(string playlistId) => playlistId is LikedSongs or "VL" + LikedSongs;
     public const string PodcastsFilter = "EgWKAQJQAWoKEAkQBRAKEAMQBA%3D%3D";
     public const string EpisodesFilter = "EgWKAQJIAWoKEAkQBRAKEAMQBA%3D%3D";
     /// <summary>ライブラリのポッドキャスト（保存した番組）。</summary>

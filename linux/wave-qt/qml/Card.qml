@@ -22,6 +22,7 @@ Item {
             source: card.item.art || card.item.thumb || ""
             round: !!card.item.round
             radius: Style.radius
+            liked: !!card.item.liked
             PlayButton {
                 anchors.right: parent.right
                 anchors.bottom: parent.bottom

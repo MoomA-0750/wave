@@ -36,6 +36,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -47,6 +48,7 @@ import xyz.mooma0750.wave.core.music.HomeItem
 import xyz.mooma0750.wave.core.music.PlaylistSummary
 import xyz.mooma0750.wave.core.music.Song
 import xyz.mooma0750.wave.core.session.AccountResult
+import xyz.mooma0750.wave.library.LikedSongsCover
 import xyz.mooma0750.wave.navigation.SongActions
 import xyz.mooma0750.wave.search.SongMenuSheet
 import xyz.mooma0750.wave.settings.AccountInfo
@@ -142,7 +144,7 @@ private fun RecentGrid(
             items.chunked(columns).forEach { row ->
                 Row(horizontalArrangement = Arrangement.spacedBy(KasaneSpace.s2)) {
                     row.forEach { item ->
-                        val look = HomeItemLook.of(item)
+                        val look = homeItemLook(item)
                         // 曲は長押しで曲のメニューを開く（棚のカードと同じ）
                         var menu by remember { mutableStateOf(false) }
                         if (menu && item is HomeItem.SongItem) SongMenuSheet(item.song, actions, onDismiss = { menu = false })
@@ -156,12 +158,17 @@ private fun RecentGrid(
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                coil3.compose.AsyncImage(
-                                    model = look.thumbnailUrl,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(56.dp).then(if (item is HomeItem.ArtistItem) Modifier.padding(KasaneSpace.s1).clip(CircleShape) else Modifier),
-                                    contentScale = ContentScale.Crop,
-                                )
+                                if (look.liked) {
+                                    // 高く評価した曲はライブラリと同じアプリの絵（角は格子の札の角で切る）
+                                    LikedSongsCover(Modifier.size(56.dp), RectangleShape)
+                                } else {
+                                    coil3.compose.AsyncImage(
+                                        model = look.thumbnailUrl,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(56.dp).then(if (item is HomeItem.ArtistItem) Modifier.padding(KasaneSpace.s1).clip(CircleShape) else Modifier),
+                                        contentScale = ContentScale.Crop,
+                                    )
+                                }
                                 Text(
                                     look.title,
                                     Modifier.padding(horizontal = KasaneSpace.s2),

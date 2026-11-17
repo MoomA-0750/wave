@@ -137,9 +137,13 @@
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
-                            <Border Width="48" Height="48" CornerRadius="{StaticResource KasaneCornerRadiusSm}" Background="{ThemeResource ControlFillColorSecondaryBrush}">
-                                <Image Source="{x:Bind app:Ui.Small(Song.ThumbnailUrl)}" Stretch="UniformToFill" />
-                            </Border>
+                            <Grid Width="48" Height="48" CornerRadius="{StaticResource KasaneCornerRadiusSm}" Background="{ThemeResource ControlFillColorSecondaryBrush}">
+                                <Border CornerRadius="{StaticResource KasaneCornerRadiusSm}">
+                                    <Border.Background>
+                                        <ImageBrush ImageSource="{x:Bind app:Ui.Small(Song.ThumbnailUrl)}" Stretch="UniformToFill" AlignmentX="Center" AlignmentY="Center" />
+                                    </Border.Background>
+                                </Border>
+                            </Grid>
                             <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                 <TextBlock Text="{x:Bind Song.Title}" TextTrimming="CharacterEllipsis" />
                                 <TextBlock Text="{x:Bind Subtitle}" Style="{StaticResource SubtleTextStyle}" TextTrimming="CharacterEllipsis" />

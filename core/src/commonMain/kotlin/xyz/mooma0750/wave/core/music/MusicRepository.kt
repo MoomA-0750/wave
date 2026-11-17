@@ -683,6 +683,9 @@ class MusicRepository(
         const val NEW_RELEASES = "FEmusic_new_releases_albums"
         const val LIKED_SONGS = "LM"
 
+        /** 高く評価した曲のプレイリストか（一覧によっては browse の形の VLLM で来る）。 */
+        fun isLikedSongs(playlistId: String): Boolean = playlistId == LIKED_SONGS || playlistId == "VL$LIKED_SONGS"
+
         private const val MAX_BROWSE_BYTES = 8 * 1024 * 1024
         private const val MAX_PLAYLIST_PAGES = 50
         private const val MAX_LIBRARY_PAGES = 20

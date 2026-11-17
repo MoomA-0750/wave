@@ -30,6 +30,17 @@ public class HomeAndArtworkTests
     }
 
     [Fact]
+    public void LikedSongsPlaylistIsTold()
+    {
+        HomeItem Playlist(string id) => new HomeItem.PlaylistItem(new PlaylistSummary(id, "Liked Music", null, null));
+        Assert.True(Playlist(MusicRepository.LikedSongs).IsLikedSongs);
+        Assert.True(Playlist("VLLM").IsLikedSongs);
+        Assert.False(Playlist("PLx").IsLikedSongs);
+        Assert.False(Playlist("LMx").IsLikedSongs);
+        Assert.False(new HomeItem.ArtistItem(new ArtistSummary("LM", "LM", null, null)).IsLikedSongs);
+    }
+
+    [Fact]
     public void GoogleImagesAreResizedInBothForms()
     {
         Assert.Equal("https://lh3.googleusercontent.com/x=w544-h544-l90-rj", ArtworkUrl.Sized("https://lh3.googleusercontent.com/x=w120-h120-l90-rj", 544));

@@ -99,8 +99,9 @@ struct EpisodeRowView: View {
     var body: some View {
         let isCurrent = AppServices.player.current?.videoId == episode.song.videoId
         HStack(alignment: .top, spacing: Kasane.Space.s3) {
+            // 正方形で切り抜く。エピソードの絵（16:9）は、音声の番組だと正方形の番組の絵の左右に黒い帯が焼き込まれている
             RemoteImage(url: URL(string: episode.song.thumbnailUrl ?? ""))
-                .frame(width: showShow ? 64 : 112, height: showShow ? 64 : 63)
+                .frame(width: 64, height: 64)
                 .background(Color.primary.opacity(0.08))
                 .clipShape(RoundedRectangle(cornerRadius: Kasane.Radius.sm, style: Kasane.cornerStyle))
             VStack(alignment: .leading, spacing: 3) {

@@ -26,6 +26,9 @@ enum Ui {
         return h >= 1 ? String(format: "%d:%02d:%02d", h, m, s) : String(format: "%d:%02d", m, s)
     }
 
+    /// 棚・格子の1枚の題。高く評価した曲は YouTube Music の題（「Liked Music」）でなく、ライブラリと同じアプリの題。
+    static func title(_ item: HomeItem) -> String { item.isLikedSongs ? L.t("高く評価した曲", "Liked music") : item.title }
+
     static func kind(_ item: HomeItem) -> String {
         switch item {
         case .song: L.t("曲", "Song")

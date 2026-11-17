@@ -88,6 +88,18 @@ public static partial class Ui
     public static Brush LikedCover() => new LinearGradientBrush(
         [new GradientStop { Color = Windows.UI.Color.FromArgb(255, 0x45, 0x0A, 0xF5), Offset = 0 }, new GradientStop { Color = Windows.UI.Color.FromArgb(255, 0xC4, 0xEF, 0xD9), Offset = 1 }], 45);
 
+    // 棚・格子の1枚（x:Bind から HomeItem.IsLikedSongs を渡す）。高く評価した曲は YouTube Music の題（「Liked Music」）と
+    // 親指の画像でなく、ライブラリと同じアプリの題と絵（紫から緑の地にハート）で出す
+
+    /// <summary>棚・格子の1枚の題。</summary>
+    public static string ItemTitle(bool likedSongs, string? title) => likedSongs ? L.T("高く評価した曲", "Liked music") : title ?? "";
+
+    /// <summary>棚・格子の1枚の画像。高く評価した曲は親指の画像を読まない。</summary>
+    public static ImageSource? ItemImage(bool likedSongs, string? url, int size) => likedSongs ? null : Img(url, size);
+
+    /// <summary>高く評価した曲なら画像の代わりのアプリの絵の地（ほかは null で、何も重ねない）。</summary>
+    public static Brush? ItemLikedCover(bool likedSongs) => likedSongs ? LikedCover() : null;
+
     /// <summary>ダウンロードの絵（マイライブラリ。高く評価した曲と並べて見分けられる色）。</summary>
     public static Brush DownloadsCover() => new LinearGradientBrush(
         [new GradientStop { Color = Windows.UI.Color.FromArgb(255, 0x0B, 0x6E, 0x4F), Offset = 0 }, new GradientStop { Color = Windows.UI.Color.FromArgb(255, 0x5F, 0xC9, 0x9A), Offset = 1 }], 45);

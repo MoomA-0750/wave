@@ -46,6 +46,8 @@ public final class MusicRepository: Sendable {
     public static let moodCategoryBrowse = "FEmusic_moods_and_genres_category"
     public static let newReleasesBrowse = "FEmusic_new_releases_albums"
     public static let likedSongs = "LM"
+    /// 高く評価した曲のプレイリストか（一覧によっては browse の形の VLLM で来る）。
+    public static func isLikedSongs(_ playlistId: String) -> Bool { playlistId == likedSongs || playlistId == "VL" + likedSongs }
     private static let maxLibraryPages = 20
     private static let maxPlaylistPages = 50
     /// チャンネルの「投稿」タブを開く params。

@@ -14,6 +14,15 @@ final class HomeShelvesTests: XCTestCase {
         XCTAssertEqual("r0", shelves[0].items.first?.key.dropFirst(2).description)
     }
 
+    func testTellsLikedSongsPlaylist() {
+        func playlist(_ id: String) -> HomeItem { .playlist(PlaylistSummary(playlistId: id, title: "Liked Music", subtitle: nil, thumbnailUrl: nil)) }
+        XCTAssertTrue(playlist(MusicRepository.likedSongs).isLikedSongs)
+        XCTAssertTrue(playlist("VLLM").isLikedSongs)
+        XCTAssertFalse(playlist("PLx").isLikedSongs)
+        XCTAssertFalse(playlist("LMx").isLikedSongs)
+        XCTAssertFalse(HomeItem.artist(ArtistSummary(browseId: "LM", name: "LM", subtitle: nil, thumbnailUrl: nil)).isLikedSongs)
+    }
+
     func testNoReleasesKeepsShelves() {
         XCTAssertEqual(["おすすめ"], HomeShelves.withNewReleases([], title: "新作", shelves: [shelf("おすすめ", ["a"])]).map(\.title))
     }

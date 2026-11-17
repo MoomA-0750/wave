@@ -146,6 +146,30 @@ impl HomeItem {
             HomeItem::Artist(a) => a.thumbnail_url.as_deref(),
         }
     }
+
+    /// 高く評価した曲（LM）のプレイリストか。YouTube Music の題（「Liked Music」）と親指の絵で来るので、
+    /// 画面ではライブラリと同じくアプリの題と絵で出す。
+    pub fn is_liked_songs(&self) -> bool {
+        matches!(self, HomeItem::Playlist(p) if super::repository::is_liked_songs(&p.playlist_id))
+    }
+}
+
+#[cfg(test)]
+mod home_item_tests {
+    use super::*;
+
+    fn playlist(id: &str) -> HomeItem {
+        HomeItem::Playlist(PlaylistSummary { playlist_id: id.into(), title: "Liked Music".into(), subtitle: None, thumbnail_url: None, editable: false })
+    }
+
+    #[test]
+    fn liked_songs_playlist_is_told() {
+        assert!(playlist("LM").is_liked_songs());
+        assert!(playlist("VLLM").is_liked_songs());
+        assert!(!playlist("PLx").is_liked_songs());
+        assert!(!playlist("LMx").is_liked_songs());
+        assert!(!HomeItem::Artist(ArtistSummary { browse_id: "LM".into(), name: "LM".into(), subtitle: None, thumbnail_url: None }).is_liked_songs());
+    }
 }
 
 /// ホームの棚。見出しは応答の表示のまま（言語に依るので判定に使わない）。

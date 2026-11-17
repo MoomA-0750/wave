@@ -290,7 +290,8 @@ fn save_button(app: &Rc<App>, page: &PodcastPage, saved: bool) -> gtk::Button {
 pub fn episode_row(app: &Rc<App>, episode: &PodcastEpisode, show_show: bool, on_play: Rc<dyn Fn()>) -> gtk::ListBoxRow {
     track::ensure_style();
     let line = gtk::Box::builder().spacing(12).margin_top(8).margin_bottom(8).build();
-    let art = gtk::Picture::builder().content_fit(gtk::ContentFit::Cover).can_shrink(true).width_request(if show_show { 64 } else { 112 }).height_request(if show_show { 64 } else { 63 }).valign(gtk::Align::Start).css_classes(["artwork", "artwork-frame"]).build();
+    // 正方形で切り抜く。エピソードの絵（16:9）は、音声の番組だと正方形の番組の絵の左右に黒い帯が焼き込まれている
+    let art = gtk::Picture::builder().content_fit(gtk::ContentFit::Cover).can_shrink(true).width_request(64).height_request(64).valign(gtk::Align::Start).css_classes(["artwork", "artwork-frame"]).build();
     art.set_overflow(gtk::Overflow::Hidden);
     if let Some(url) = episode.song.thumbnail_url.as_deref() {
         let target = art.clone();

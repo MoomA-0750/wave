@@ -53,9 +53,14 @@
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <Border Width="112" Height="63" CornerRadius="{StaticResource KasaneCornerRadiusSm}" VerticalAlignment="Top" Background="{ThemeResource ControlFillColorSecondaryBrush}">
-                        <Image Source="{x:Bind app:Ui.Small(Song.ThumbnailUrl)}" Stretch="UniformToFill" />
-                    </Border>
+                    <!-- 行の絵は正方形で切り抜く。エピソードの絵（i.ytimg の hq720 など 16:9）は、音声の番組だと正方形の番組の絵の左右に黒い帯が焼き込まれているので、16:9 の枠だと帯まで出る（Android の行と同じ 64 の正方形）。Image の UniformToFill は枠からはみ出た分を右・下から切る（左の帯が残る）ので、ImageBrush で真ん中を切る -->
+                    <Grid Width="64" Height="64" CornerRadius="{StaticResource KasaneCornerRadiusSm}" VerticalAlignment="Top" Background="{ThemeResource ControlFillColorSecondaryBrush}">
+                        <Border CornerRadius="{StaticResource KasaneCornerRadiusSm}">
+                            <Border.Background>
+                                <ImageBrush ImageSource="{x:Bind app:Ui.Small(Song.ThumbnailUrl)}" Stretch="UniformToFill" AlignmentX="Center" AlignmentY="Center" />
+                            </Border.Background>
+                        </Border>
+                    </Grid>
                     <StackPanel Grid.Column="1" Spacing="2">
                         <TextBlock Text="{x:Bind Song.Title}" Style="{StaticResource BodyStrongTextBlockStyle}" TextTrimming="CharacterEllipsis" />
                         <StackPanel Orientation="Horizontal" Spacing="6">

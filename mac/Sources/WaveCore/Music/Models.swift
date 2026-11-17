@@ -347,6 +347,10 @@ public enum HomeItem: Hashable, Sendable, Identifiable {
 
     public var isArtist: Bool { if case .artist = self { return true } else { return false } }
 
+    /// 高く評価した曲（LM）のプレイリストか。YouTube Music の題（「Liked Music」）と親指の絵で来るので、
+    /// 画面ではライブラリと同じくアプリの題と絵で出す。
+    public var isLikedSongs: Bool { if case .playlist(let p) = self { return MusicRepository.isLikedSongs(p.playlistId) } else { return false } }
+
     /// 同じものを見分けるための値（重複を除くのに使う）。
     public var key: String {
         switch self {

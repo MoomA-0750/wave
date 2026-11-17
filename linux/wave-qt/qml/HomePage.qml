@@ -101,7 +101,7 @@ Flickable {
                     RowLayout {
                         anchors.fill: parent
                         spacing: Style.space.s3
-                        Art { Layout.preferredWidth: 56; Layout.preferredHeight: 56; source: modelData.thumb; round: !!modelData.round; radius: 0 }
+                        Art { Layout.preferredWidth: 56; Layout.preferredHeight: 56; source: modelData.thumb; round: !!modelData.round; radius: 0; liked: !!modelData.liked }
                         Label { Layout.fillWidth: true; Layout.preferredWidth: 1; Layout.rightMargin: Style.space.s3; text: modelData.title; font.weight: Font.DemiBold; wrapMode: Text.WordWrap; maximumLineCount: 2; elide: Text.ElideRight; color: Style.foreground }
                     }
                     HoverHandler { id: tileHover; cursorShape: Qt.PointingHandCursor }

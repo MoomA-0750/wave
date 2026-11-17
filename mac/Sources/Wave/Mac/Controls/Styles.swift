@@ -1,5 +1,6 @@
 #if os(macOS)
 import SwiftUI
+import WaveCore
 
 // apple-ui-allow: 枠（PaneBackground）と浮いた板（FloatingBarBackground）は、窓の中で離れた場所に1枚ずつ置く別々の面で、
 // 近づけて混ぜる（形が溶け合う）見た目にはしないので、GlassEffectContainer で包まない（2026-11-17 に本人の了承で決めた）
@@ -159,6 +160,22 @@ struct LikedCover: View {
         }
         .frame(width: size, height: size)
         .clipShape(round ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: radius, style: Kasane.cornerStyle)))
+    }
+}
+
+/// 棚・格子の1枚の絵。高く評価した曲は YouTube Music の親指の画像でなく、ライブラリと同じアプリの絵（LikedCover）。
+struct ItemCover: View {
+    var item: HomeItem
+    var url: URL?
+    var size: CGFloat
+    var radius: CGFloat = Kasane.Radius.sm
+
+    var body: some View {
+        if item.isLikedSongs {
+            LikedCover(size: size, radius: radius)
+        } else {
+            Cover(url: url, size: size, round: item.isArtist, radius: radius)
+        }
     }
 }
 

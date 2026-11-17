@@ -103,10 +103,10 @@ private struct RecentGrid: View {
             ForEach(items, id: \.key) { item in
                 Button { AppServices.nav.openCard(item) } label: {
                     HStack(spacing: Kasane.Space.s2) {
-                        Cover(url: Ui.small(item.thumbnailUrl), size: 56, round: item.isArtist, radius: 0)
+                        ItemCover(item: item, url: Ui.small(item.thumbnailUrl), size: 56, radius: 0)
                             .padding(item.isArtist ? 4 : 0)
                             .frame(width: 56, height: 56)
-                        Text(item.title).font(.footnote.weight(.semibold)).lineLimit(2).multilineTextAlignment(.leading)
+                        Text(Ui.title(item)).font(.footnote.weight(.semibold)).lineLimit(2).multilineTextAlignment(.leading)
                         Spacer(minLength: 4)
                     }
                     .frame(height: 56)
@@ -153,8 +153,8 @@ private struct HomeCard: View {
     var body: some View {
         Button { AppServices.nav.openCard(item) } label: {
             VStack(alignment: .leading, spacing: Kasane.Space.s1) {
-                Cover(url: Ui.img(item.thumbnailUrl), size: HomeCard.size, round: item.isArtist, radius: Kasane.Radius.base)
-                Text(item.title).font(.subheadline).lineLimit(2).multilineTextAlignment(.leading)
+                ItemCover(item: item, url: Ui.img(item.thumbnailUrl), size: HomeCard.size, radius: Kasane.Radius.base)
+                Text(Ui.title(item)).font(.subheadline).lineLimit(2).multilineTextAlignment(.leading)
                 if let subtitle = subtitle { Text(subtitle).subtle() }
             }
             .frame(width: HomeCard.size, alignment: .leading)

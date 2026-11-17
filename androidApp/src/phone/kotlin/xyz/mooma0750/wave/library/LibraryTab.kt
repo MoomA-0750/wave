@@ -25,6 +25,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.DropdownMenu
@@ -113,10 +114,10 @@ fun LibraryTabScreen(
     }
     BackHandler(enabled = searching, onBack = closeSearch)
     var creating by remember { mutableStateOf(false) }
-    // 「高く評価した曲」は並べ方に関わらず先頭に留める（Spotify の「お気に入りの曲」と同じ）。一覧にあればその画像を使う
-    val serverLiked = state.entries.firstNotNullOfOrNull { (it as? LibraryEntry.Playlist)?.playlist?.takeIf { p -> p.playlistId == MusicRepository.LIKED_SONGS } }
-    val entries = LibraryOrder.arrange(state, filter, sort, query).filterNot { it is LibraryEntry.Playlist && it.playlist.playlistId == MusicRepository.LIKED_SONGS }
-    val liked = PlaylistSummary(MusicRepository.LIKED_SONGS, stringResource(R.string.library_liked_songs), stringResource(R.string.library_liked_songs_subtitle), serverLiked?.thumbnailUrl)
+    // 「高く評価した曲」は並べ方に関わらず先頭に留める（Spotify の「お気に入りの曲」と同じ）。
+    // 絵は YouTube Music の親指の画像でなく、アプリの絵（ホームと同じ。Windows・Mac とも同じ）
+    val entries = LibraryOrder.arrange(state, filter, sort, query).filterNot { it is LibraryEntry.Playlist && MusicRepository.isLikedSongs(it.playlist.playlistId) }
+    val liked = PlaylistSummary(MusicRepository.LIKED_SONGS, stringResource(R.string.library_liked_songs), stringResource(R.string.library_liked_songs_subtitle), null)
     val showLiked = (filter == null || filter == LibraryFilter.Playlists) && LibraryOrder.matches(liked.title, liked.subtitle, query)
     // 「ダウンロード」も「高く評価した曲」と同じく、いつも先頭の方に出す（ADR-0016 の 14）
     val downloadsEntry = PlaylistSummary(DOWNLOADS_ENTRY_ID, stringResource(R.string.downloads_title), stringResource(R.string.downloads_library_subtitle), null)
@@ -288,22 +289,38 @@ private fun Thumbnail(
     val shape = if (entry is LibraryEntry.Artist) CircleShape else MaterialTheme.shapes.extraSmall
     val url = thumbnailOf(entry)
     if (url == null) {
-        // 「高く評価した曲」など画像の無いもの（Spotify の紫のタイルの代わりに、テーマの色のタイル）
-        Box(modifier.clip(shape).background(MaterialTheme.colorScheme.primaryContainer), contentAlignment = Alignment.Center) {
-            // 「新しいエピソード」はヘッドホン、ほかは「高く評価した曲」のハート
-            val id = (entry as? LibraryEntry.Playlist)?.playlist?.playlistId
-            val icon =
-                when (id) {
-                    MusicRepository.NEW_EPISODES -> R.drawable.ic_headphones
-                    DOWNLOADS_ENTRY_ID -> R.drawable.ic_download
-                    else -> R.drawable.ic_favorite
-                }
-            Icon(painterResource(icon), contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
-        }
+        // 「新しいエピソード」はヘッドホン、ほかは「高く評価した曲」のハート
+        val id = (entry as? LibraryEntry.Playlist)?.playlist?.playlistId
+        val icon =
+            when (id) {
+                MusicRepository.NEW_EPISODES -> R.drawable.ic_headphones
+                DOWNLOADS_ENTRY_ID -> R.drawable.ic_download
+                else -> R.drawable.ic_favorite
+            }
+        IconCover(icon, modifier, shape)
     } else {
         coil3.compose.AsyncImage(model = url, contentDescription = null, modifier = modifier.clip(shape), contentScale = ContentScale.Crop)
     }
 }
+
+/** 「高く評価した曲」など画像の無いものの絵（Spotify の紫のタイルの代わりに、テーマの色のタイルに記号）。 */
+@Composable
+private fun IconCover(
+    icon: Int,
+    modifier: Modifier,
+    shape: Shape,
+) {
+    Box(modifier.clip(shape).background(MaterialTheme.colorScheme.primaryContainer), contentAlignment = Alignment.Center) {
+        Icon(painterResource(icon), contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
+    }
+}
+
+/** 「高く評価した曲」の絵（ライブラリの先頭の行と同じ。ホームの格子・棚でも、YouTube Music の親指の画像の代わりに出す）。 */
+@Composable
+fun LikedSongsCover(
+    modifier: Modifier,
+    shape: Shape = MaterialTheme.shapes.extraSmall,
+) = IconCover(R.drawable.ic_favorite, modifier, shape)
 
 @Composable
 private fun LibraryRow(

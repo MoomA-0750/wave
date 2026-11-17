@@ -47,6 +47,7 @@ import xyz.mooma0750.wave.core.music.PlaylistSummary
 import xyz.mooma0750.wave.core.music.Song
 import xyz.mooma0750.wave.core.session.CallResult
 import xyz.mooma0750.wave.core.session.FailureKind
+import xyz.mooma0750.wave.library.LikedSongsCover
 import xyz.mooma0750.wave.navigation.SongActions
 import xyz.mooma0750.wave.search.SongMenuSheet
 import xyz.mooma0750.wave.search.failureMessage
@@ -68,7 +69,7 @@ fun LazyListScope.homeFeedItems(
                 Text(shelfTitle(shelf), Modifier.padding(horizontal = KasaneSpace.s4), style = MaterialTheme.typography.titleLargeEmphasized)
                 LazyRow(contentPadding = PaddingValues(horizontal = KasaneSpace.s4, vertical = KasaneSpace.s2), horizontalArrangement = Arrangement.spacedBy(KasaneSpace.s3)) {
                     items(shelf.items) { item ->
-                        val look = HomeItemLook.of(item)
+                        val look = homeItemLook(item)
                         // 曲のカードは長押しで曲のメニューを開く（Spotify と同じ）
                         var menu by remember { mutableStateOf(false) }
                         Card(
@@ -76,6 +77,7 @@ fun LazyListScope.homeFeedItems(
                             look.title,
                             look.subtitle,
                             if (item is HomeItem.ArtistItem) CircleShape else MaterialTheme.shapes.small,
+                            liked = look.liked,
                             onLongClick = if (item is HomeItem.SongItem) ({ menu = true }) else null,
                         ) {
                             openHomeItem(item, onOpenPlaylist, actions)
@@ -110,16 +112,22 @@ private fun Card(
     title: String,
     subtitle: String?,
     shape: Shape,
+    /** 高く評価した曲（画像の代わりにライブラリと同じアプリの絵）。 */
+    liked: Boolean = false,
     onLongClick: (() -> Unit)? = null,
     onClick: () -> Unit,
 ) {
     Column(Modifier.width(CARD_SIZE).combinedClickable(onLongClick = onLongClick, onClick = onClick)) {
-        coil3.compose.AsyncImage(
-            model = thumbnailUrl,
-            contentDescription = null,
-            modifier = Modifier.size(CARD_SIZE).clip(shape),
-            contentScale = ContentScale.Crop,
-        )
+        if (liked) {
+            LikedSongsCover(Modifier.size(CARD_SIZE), shape)
+        } else {
+            coil3.compose.AsyncImage(
+                model = thumbnailUrl,
+                contentDescription = null,
+                modifier = Modifier.size(CARD_SIZE).clip(shape),
+                contentScale = ContentScale.Crop,
+            )
+        }
         Text(title, Modifier.padding(top = 6.dp), maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium)
         subtitle?.let { Text(it, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall) }
     }

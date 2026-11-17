@@ -540,8 +540,8 @@ private struct TopCard: View {
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
             VStack(alignment: .leading, spacing: Kasane.Space.s4) {
-                Cover(url: Ui.img(item.thumbnailUrl), size: 96, round: item.isArtist)
-                Text(item.title).font(.title.weight(.bold)).lineLimit(2)
+                ItemCover(item: item, url: Ui.img(item.thumbnailUrl), size: 96)
+                Text(Ui.title(item)).font(.title.weight(.bold)).lineLimit(2)
                 Text(subtitle).font(.callout).foregroundStyle(.secondary).lineLimit(1)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
