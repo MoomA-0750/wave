@@ -156,6 +156,13 @@ enum DebugCommon {
         case "pause": if player.isPlaying { player.togglePlay() }
         case "play": if !player.isPlaying { player.togglePlay() }
         case "like": LikeButton.press(player)
+        // 開いているアルバム・番組のページの保存のボタンを押したのと同じ切り替え（state は今の状態を記録に書くだけ）
+        case "album-save":
+            if arg != "state" { CollectionModel.shown?.toggleAlbumSaved() }
+            AppPaths.log("debug album-save saved=\(String(describing: CollectionModel.shown?.albumSaved)) saving=\(CollectionModel.shown?.savingAlbum == true) title=\(CollectionModel.shown?.title ?? "nil")")
+        case "podcast-save":
+            if arg != "state" { PodcastModel.shown?.toggleSaved() }
+            AppPaths.log("debug podcast-save saved=\(String(describing: PodcastModel.shown?.page?.saved)) saving=\(PodcastModel.shown?.saving == true) title=\(PodcastModel.shown?.page?.title ?? "nil")")
         // 連携でほかの端末を映していたら、この端末で鳴らす
         case "connect-transfer": AppServices.connect.transfer()
         case "releases-check": await AppServices.releases.check()

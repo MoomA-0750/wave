@@ -15,13 +15,16 @@ async fn main() {
     let mut secret = String::new();
     std::io::stdin().read_to_string(&mut secret).expect("stdin");
     let client = InnerTube::new("ja", "JP");
-    client.set_credentials(Some(Credentials::deserialize(secret.trim()).expect("credentials")));
+    if !secret.trim().is_empty() {
+        client.set_credentials(Some(Credentials::deserialize(secret.trim()).expect("credentials")));
+    }
     let repo = MusicRepository::new(client);
     let album = repo.search_albums(&query, None).await.expect("search").items.into_iter().next().expect("no albums");
     let show = |page: &wave_core::music::models::AlbumPage| {
         let target = page.save_playlist_id.as_deref().map(|s| s.chars().take(8).collect::<String>());
         println!("{} saved={:?} target={:?}", page.title, page.saved, target);
     };
+    println!("browse_id={}", album.browse_id);
     let page = repo.album(&album.browse_id).await.expect("album");
     show(&page);
     if let Some(action) = action {

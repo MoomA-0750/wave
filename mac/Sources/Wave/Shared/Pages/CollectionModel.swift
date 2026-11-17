@@ -42,8 +42,16 @@ final class CollectionModel {
     @ObservationIgnored private var task: Task<Void, Never>?
     @ObservationIgnored private var generation = 0
 
+    #if WAVE_DEBUG
+    /// 開発用: 最後に開いた一覧のページ（album-save の命令で、画面のボタンと同じ切り替えを呼ぶ）
+    static weak var shown: CollectionModel?
+    #endif
+
     init(request: CollectionRequest) {
         self.request = request
+        #if WAVE_DEBUG
+        Self.shown = self
+        #endif
         title = request.title
         thumbnailUrl = request.thumbnailUrl
         detail = request.subtitle

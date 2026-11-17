@@ -3,66 +3,28 @@ import SwiftUI
 import WaveCore
 
 /// ポッドキャストの番組のページ（Android の PodcastScreen と同じ並び: 画像・題・配信者・説明・保存、再生ボタン、新しい順のエピソード）。
+/// 頭はアルバムのページ（CollectionView）と同じ見せ方: 横いっぱいの画像に題・配信者と、保存（しおり）・再生のガラスの丸を重ねる。
 /// エピソードを押すと、読み込んだエピソードの一覧をその位置から流す（曲の一覧と同じ）。
 struct PodcastView: View {
     var summary: PodcastSummary
     @State private var model: PodcastModel
     @State private var expanded = false
+    /// 上の大きな画像が流れきったか（それまでは上の帯の題を出さない。画像の上の題と二重になる）
+    @State private var pastHero = false
 
     init(summary: PodcastSummary) {
         self.summary = summary
         _model = State(initialValue: PodcastModel(summary: summary))
     }
 
+    private var thumbnailUrl: String? { model.page?.thumbnailUrl ?? summary.thumbnailUrl }
+    private var title: String { model.page?.title ?? summary.title }
+
     var body: some View {
         let player = AppServices.player!
         let episodes = model.episodes
         List {
-            header(player).listRowSeparator(.hidden).listRowBackground(Color.clear)
-            if model.loading {
-                ProgressView().frame(maxWidth: .infinity).padding().listRowSeparator(.hidden)
-            } else if model.failed && !model.isNewEpisodes {
-                LoadState(loading: false, failure: L.t("ポッドキャストを読み込めませんでした", "Couldn't load the podcast")) {
-                    Task { await model.load() }
-                }.listRowSeparator(.hidden)
-            } else if episodes.isEmpty {
-                Text(L.t("エピソードはありません", "No episodes")).subtle().listRowSeparator(.hidden)
-            }
-            ForEach(Array(episodes.enumerated()), id: \.element.id) { i, episode in
-                EpisodeRow(episode: episode, showShow: false) { model.play(i) }
-                    .onAppear { if i == episodes.count - 1 { model.loadMore() } }
-                    .swipeActions(edge: .leading) {
-                        Button(L.t("次に再生", "Play next"), systemImage: "text.line.first.and.arrowtriangle.forward") { player.playNext(episode.song) }.tint(.indigo)
-                    }
-            }
-            if model.loadingMore { ProgressView().frame(maxWidth: .infinity).listRowSeparator(.hidden) }
-        }
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
-        .background(alignment: .top) {
-            LinearGradient(colors: [(model.gradient ?? .clear).opacity(0.55), .clear], startPoint: .top, endPoint: .bottom)
-                .frame(height: 460)
-                .ignoresSafeArea()
-        }
-        .navigationTitle(model.page?.title ?? summary.title)
-        .navigationBarTitleDisplayMode(.inline)
-        .task { if model.page == nil { await model.load() } }
-    }
-
-    private func header(_ player: PlayerService) -> some View {
-        let playingHere = model.isPlayingHere
-        return VStack(spacing: Kasane.Space.s2) {
-            Group {
-                if model.isNewEpisodes && model.page?.thumbnailUrl == nil {
-                    NewEpisodesCover(size: 220, radius: Kasane.Radius.base)
-                } else {
-                    Cover(url: Ui.large(model.page?.thumbnailUrl ?? summary.thumbnailUrl), size: 220, radius: Kasane.Radius.base)
-                }
-            }
-                .shadow(color: .black.opacity(0.25), radius: Kasane.Radius.lg, y: 8)
-                .padding(.bottom, Kasane.Space.s2)
-            Text(model.page?.title ?? summary.title).font(.title2.weight(.bold)).multilineTextAlignment(.center).lineLimit(3)
-            if let author = model.page?.author ?? summary.author { Text(author).font(.headline).foregroundStyle(Color.accentColor) }
+            header(player).listRowInsets(EdgeInsets()).listRowSeparator(.hidden).listRowBackground(Color.clear)
             if let description = model.page?.description {
                 // 説明は短く出し、押すと全部を出す
                 Text(description).font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.leading)
@@ -70,32 +32,123 @@ struct PodcastView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .contentShape(Rectangle())
                     .onTapGesture { withAnimation { expanded.toggle() } }
+                    .listRowSeparator(.hidden).listRowBackground(Color.clear)
             }
-            HStack(spacing: Kasane.Space.s3) {
-                Button {
-                    model.playOrPause()
-                } label: {
-                    Label(playingHere && player.isPlaying ? L.t("一時停止", "Pause") : L.t("再生", "Play"),
-                          systemImage: playingHere && player.isPlaying ? "pause.fill" : "play.fill")
-                        .font(.headline)
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(model.episodes.isEmpty)
-                if let saved = model.saved, model.isFeed || AppServices.client.isLoggedIn {
-                    Button { model.toggleSaved() } label: {
-                        Label(saved ? L.t("保存済み", "Saved") : L.t("ライブラリに保存", "Save to library"), systemImage: saved ? "checkmark" : "plus")
-                            .font(.headline)
-                            .frame(maxWidth: .infinity, minHeight: 44)
+            if model.loading {
+                ProgressView().frame(maxWidth: .infinity).padding().listRowSeparator(.hidden).listRowBackground(Color.clear)
+            } else if model.failed && !model.isNewEpisodes {
+                LoadState(loading: false, failure: L.t("ポッドキャストを読み込めませんでした", "Couldn't load the podcast")) {
+                    Task { await model.load() }
+                }.listRowSeparator(.hidden).listRowBackground(Color.clear)
+            } else if episodes.isEmpty {
+                Text(L.t("エピソードはありません", "No episodes")).subtle().listRowSeparator(.hidden).listRowBackground(Color.clear)
+            }
+            ForEach(Array(episodes.enumerated()), id: \.element.id) { i, episode in
+                EpisodeRow(episode: episode, showShow: false) { model.play(i) }
+                    .listRowBackground(Color.clear)
+                    .onAppear { if i == episodes.count - 1 { model.loadMore() } }
+                    .swipeActions(edge: .leading) {
+                        Button(L.t("次に再生", "Play next"), systemImage: "text.line.first.and.arrowtriangle.forward") { player.playNext(episode.song) }.tint(.indigo)
                     }
-                    .buttonStyle(.bordered)
-                    .disabled(model.saving)
+            }
+            if model.loadingMore { ProgressView().frame(maxWidth: .infinity).listRowSeparator(.hidden).listRowBackground(Color.clear) }
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        // 大きな画像は上の帯の裏まで伸ばす（アルバム・アーティストのページと同じ）
+        .ignoresSafeArea(edges: .top)
+        .onScrollGeometryChange(for: Bool.self) { geo in
+            geo.contentOffset.y + geo.contentInsets.top > heroHeight - 120
+        } action: { _, past in
+            withAnimation(.easeOut(duration: 0.2)) { pastHero = past }
+        }
+        // 地はアルバムと同じ（画像を大きくぼかして暗くしたもの）。暗い地なので文字は常に暗い表示の色にする
+        .background {
+            ZStack(alignment: .top) {
+                ArtworkBackdrop(url: thumbnailUrl)
+                if thumbnailUrl == nil {
+                    LinearGradient(colors: [(model.gradient ?? .clear).opacity(0.55), .clear], startPoint: .top, endPoint: .bottom)
+                        .frame(height: 460)
+                        .ignoresSafeArea()
                 }
             }
-            .padding(.top, Kasane.Space.s2)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.top, Kasane.Space.s2)
+        .environment(\.colorScheme, .dark)
+        .toolbarColorScheme(.dark, for: .navigationBar)
+        .navigationTitle(pastHero ? title : "")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(.hidden, for: .navigationBar) // apple-ui-allow: iOS 18 で画像の上の帯を塗らないため（26 からはガラスになる。アルバムのページと同じ）
+        .modifier(TopEdgeEffect(hidden: !pastHero))
+        .task { if model.page == nil { await model.load() } }
+    }
+
+    private var heroHeight: CGFloat { 420 }
+
+    /// 上の大きな画像（横いっぱい。下の端は地へ溶かす）に、題・配信者と、保存・再生を重ねる（アルバムのページと同じ）。
+    private func header(_ player: PlayerService) -> some View {
+        Color.clear
+            .frame(height: heroHeight)
+            .overlay {
+                ZStack {
+                    if model.isNewEpisodes && model.page?.thumbnailUrl == nil {
+                        NewEpisodesCover(size: heroHeight, radius: 0)
+                    } else {
+                        RemoteImage(url: Ui.large(thumbnailUrl))
+                    }
+                    LinearGradient(stops: [.init(color: .clear, location: 0.4), .init(color: .black.opacity(0.35), location: 0.8)], startPoint: .top, endPoint: .bottom)
+                }
+                .mask(LinearGradient(stops: [.init(color: .black, location: 0.35), .init(color: .black.opacity(0.9), location: 0.5),
+                                             .init(color: .black.opacity(0.6), location: 0.65), .init(color: .black.opacity(0.3), location: 0.8),
+                                             .init(color: .black.opacity(0.08), location: 0.92), .init(color: .clear, location: 1)],
+                                     startPoint: .top, endPoint: .bottom))
+            }
+            .overlay(alignment: .bottom) {
+                HStack(alignment: .bottom, spacing: Kasane.Space.s3) {
+                    VStack(alignment: .leading, spacing: Kasane.Space.s1) {
+                        Text(title).font(.title.bold()).foregroundStyle(.white).lineLimit(2).minimumScaleFactor(0.6)
+                        if let author = model.page?.author ?? summary.author {
+                            Text(author).font(.headline).foregroundStyle(.white.opacity(0.85)).lineLimit(1)
+                        }
+                        Text(model.isNewEpisodes ? L.t("プレイリスト • 自動", "Playlist • Auto") : L.t("ポッドキャスト", "Podcast"))
+                            .font(.footnote).foregroundStyle(.white.opacity(0.7)).lineLimit(1)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    actions(player)
+                }
+                .padding(.horizontal, Kasane.Space.s4)
+                .padding(.bottom, Kasane.Space.s3)
+            }
+            .clipped()
+    }
+
+    /// 保存（しおり。アルバムと同じ。RSS の番組はこの端末の登録）・再生。アルバムと同じ大きさのガラスの丸を1つの入れ物にまとめ、色は再生だけ。
+    @ViewBuilder
+    private func actions(_ player: PlayerService) -> some View {
+        let playing = model.isPlayingHere && player.isPlaying
+        let buttons = HStack(spacing: 10) {
+            if let saved = model.saved, model.isFeed || AppServices.client.isLoggedIn {
+                Button { model.toggleSaved() } label: {
+                    Image(systemName: saved ? "bookmark.fill" : "bookmark").font(.title3.weight(.semibold)).modifier(GlassCircle())
+                }
+                .buttonStyle(.plain)
+                .disabled(model.saving)
+                .accessibilityLabel(saved ? L.t("ライブラリから削除", "Remove from library") : L.t("ライブラリに保存", "Save to library"))
+                .accessibilityAddTraits(saved ? .isSelected : [])
+            }
+            Button { model.playOrPause() } label: {
+                Image(systemName: playing ? "pause.fill" : "play.fill").font(.title3).modifier(GlassCircle(tint: .accentColor))
+            }
+            .buttonStyle(.plain)
+            .disabled(model.episodes.isEmpty)
+            .accessibilityLabel(playing ? L.t("一時停止", "Pause") : L.t("再生", "Play"))
+        }
+        .foregroundStyle(.white)
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+        if #available(iOS 26.0, *) {
+            GlassEffectContainer(spacing: 10) { buttons }
+        } else {
+            buttons
+        }
     }
 }
 

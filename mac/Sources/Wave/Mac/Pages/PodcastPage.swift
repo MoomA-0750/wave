@@ -28,12 +28,17 @@ struct PodcastPageView: View {
                             model.playOrPause()
                         }) { Image(systemName: playingHere && player.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 20)) } // apple-ui-allow: 記号の大きさ（Windows 版と揃える）
                     }
+                    // 保存・外す（しおり。アルバムのページと同じ。RSS の番組はこの端末の登録）
                     if let saved = model.saved, model.isFeed || AppServices.client.isLoggedIn {
-                        Button(saved ? L.t("保存済み", "Saved") : L.t("ライブラリに保存", "Save to library")) { model.toggleSaved() }
-                            .buttonStyle(.bordered)
-                            .buttonBorderShape(.capsule)
-                            .controlSize(.large)
-                            .disabled(model.saving)
+                        let help = saved ? L.t("ライブラリから削除", "Remove from library") : L.t("ライブラリに保存", "Save to library")
+                        Button { model.toggleSaved() } label: {
+                            Image(systemName: saved ? "bookmark.fill" : "bookmark").font(.system(size: 20)).foregroundStyle(.secondary) // apple-ui-allow: アルバムのページの隣の記号と同じ大きさにそろえる
+                        }
+                        .buttonStyle(IconButtonStyle())
+                        .disabled(model.saving)
+                        .help(help)
+                        .accessibilityLabel(help)
+                        .accessibilityAddTraits(saved ? .isSelected : [])
                     }
                     if model.loading { ProgressView().controlSize(.small) }
                 }
@@ -66,7 +71,7 @@ struct PodcastPageView: View {
             }
             VStack(alignment: .leading, spacing: Kasane.Space.s2) {
                 Text(model.isNewEpisodes ? L.t("プレイリスト • 自動", "Playlist • Auto") : L.t("ポッドキャスト", "Podcast")).font(.callout)
-                Text(model.page?.title ?? summary.title).font(.system(size: 48, weight: .bold)).lineLimit(2).minimumScaleFactor(0.5) // apple-ui-allow: 見出し・歌詞の大きさ（Windows 版と揃える）
+                Text(model.page?.title ?? summary.title).font(.system(size: 56, weight: .bold)).lineLimit(2).minimumScaleFactor(0.5) // apple-ui-allow: 見出し・歌詞の大きさ（Windows 版と揃える）
                 if let author = model.page?.author ?? summary.author { Text(author).font(.body.weight(.semibold)) }
                 if let description = model.page?.description {
                     // 説明は短く出し、押すと全部を出す
@@ -79,7 +84,7 @@ struct PodcastPageView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(EdgeInsets(top: Kasane.Space.s8, leading: Kasane.Space.s3, bottom: 0, trailing: Kasane.Space.s3))
+        .padding(EdgeInsets(top: Kasane.Space.s10, leading: Kasane.Space.s3, bottom: 0, trailing: Kasane.Space.s3))
     }
 }
 

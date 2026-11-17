@@ -15,8 +15,16 @@ final class PodcastModel {
     var gradient: Color?
     @ObservationIgnored private var continuation: String?
 
+    #if WAVE_DEBUG
+    /// 開発用: 最後に開いた番組のページ（podcast-save の命令で、画面のボタンと同じ切り替えを呼ぶ）
+    static weak var shown: PodcastModel?
+    #endif
+
     init(summary: PodcastSummary) {
         self.summary = summary
+        #if WAVE_DEBUG
+        Self.shown = self
+        #endif
     }
 
     /// 「新しいエピソード」は、番組を保存していないと番組のページの形で返らない（エピソードが無いだけとして出す）。
