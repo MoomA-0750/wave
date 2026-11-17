@@ -65,15 +65,44 @@ final class LyricsTests: XCTestCase {
     func testPickPrefersTheClosestDuration() {
         typealias T = LrclibClient.Track
         let tracks = [
-            T(duration: 200, syncedLyrics: "[00:01]a"),
-            T(duration: 203, instrumental: true, syncedLyrics: "[00:01]i"),
-            T(duration: 204, syncedLyrics: "[00:01]b"),
-            T(duration: 201, syncedLyrics: "  "),
+            T(trackName: "t", artistName: "a", duration: 200, syncedLyrics: "[00:01]a"),
+            T(trackName: "t", artistName: "a", duration: 203, instrumental: true, syncedLyrics: "[00:01]i"),
+            T(trackName: "t", artistName: "a", duration: 204, syncedLyrics: "[00:01]b"),
+            T(trackName: "t", artistName: "a", duration: 201, syncedLyrics: "  "),
         ]
-        XCTAssertEqual(tracks[2], LrclibClient.pick(tracks, durationSeconds: 205))
-        XCTAssertEqual(tracks[0], LrclibClient.pick(tracks, durationSeconds: 199))
-        XCTAssertEqual(tracks[0], LrclibClient.pick(tracks, durationSeconds: nil))
-        XCTAssertNil(LrclibClient.pick(tracks, durationSeconds: 300))
+        XCTAssertEqual(tracks[2], LrclibClient.pick(tracks, title: "t", artist: "a", durationSeconds: 205))
+        XCTAssertEqual(tracks[0], LrclibClient.pick(tracks, title: "t", artist: "a", durationSeconds: 199))
+        XCTAssertEqual(tracks[0], LrclibClient.pick(tracks, title: "t", artist: "a", durationSeconds: nil))
+        XCTAssertNil(LrclibClient.pick(tracks, title: "t", artist: "a", durationSeconds: 300))
+    }
+
+    func testPickSkipsADifferentSongOfTheSameLength() {
+        typealias T = LrclibClient.Track
+        // 同じ長さの別の曲が先に並んでも、曲名とアーティストの合う方を選ぶ
+        let tracks = [
+            T(trackName: "別の曲", artistName: "別の人", duration: 262, syncedLyrics: "[00:01]a"),
+            T(trackName: "群青", artistName: "YOASOBI", duration: 263, syncedLyrics: "[00:01]b"),
+        ]
+        XCTAssertEqual(tracks[1], LrclibClient.pick(tracks, title: "群青", artist: "YOASOBI", durationSeconds: 262))
+        // 合うものが無ければ選ばない
+        XCTAssertNil(LrclibClient.pick([tracks[0]], title: "群青", artist: "YOASOBI", durationSeconds: 262))
+        XCTAssertNil(LrclibClient.pick([tracks[0]], title: "群青", artist: "YOASOBI", durationSeconds: nil))
+        // 曲名だけ合ってもアーティストが違えば選ばない
+        XCTAssertNil(LrclibClient.pick([T(trackName: "群青", artistName: "別の人", duration: 262, syncedLyrics: "[00:01]c")], title: "群青", artist: "YOASOBI", durationSeconds: 262))
+    }
+
+    func testPickMatchesDespiteDecorationsAndWidth() {
+        let tracks = [LrclibClient.Track(trackName: "Ｓｏｎｇ", artistName: "ＡＢＣ, Someone", duration: 200, syncedLyrics: "[00:01]a")]
+        XCTAssertNotNil(LrclibClient.pick(tracks, title: "song (feat. X) [Remix]", artist: "abc", durationSeconds: 200))
+        XCTAssertNotNil(LrclibClient.pick(tracks, title: "Song - From \"THE FIRST TAKE\"", artist: "abc", durationSeconds: 200))
+        XCTAssertNotNil(LrclibClient.pick(tracks, title: "Song feat. Someone", artist: "Someone", durationSeconds: 200))
+    }
+
+    func testPickAcceptsARomanizedTitleOnlyByArtistAndCloseLength() {
+        let tracks = [LrclibClient.Track(trackName: "Gunjo", artistName: "YOASOBI", duration: 250, syncedLyrics: "[00:01]a")]
+        XCTAssertNotNil(LrclibClient.pick(tracks, title: "群青", artist: "YOASOBI", durationSeconds: 249))
+        XCTAssertNil(LrclibClient.pick(tracks, title: "群青", artist: "YOASOBI", durationSeconds: 246))
+        XCTAssertNil(LrclibClient.pick(tracks, title: "群青", artist: "YOASOBI", durationSeconds: nil))
     }
 
     func testLrclibTriesExactThenSearch() async throws {
@@ -81,7 +110,7 @@ final class LyricsTests: XCTestCase {
             let url = request.url!.absoluteString
             if url.contains("/api/get") { return (404, [:], Data()) }
             if url.contains("track_name=Song&") {
-                return (200, [:], Data(#"[{"trackName":"Song","duration":181.0,"instrumental":false,"syncedLyrics":"[00:01.00]one\n[00:02.00]two"}]"#.utf8))
+                return (200, [:], Data(#"[{"trackName":"Song","artistName":"A B","duration":181.0,"instrumental":false,"syncedLyrics":"[00:01.00]one\n[00:02.00]two"}]"#.utf8))
             }
             return (200, [:], Data("[]".utf8))
         }

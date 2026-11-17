@@ -61,7 +61,7 @@ public final class LrclibClient: @unchecked Sendable {
         do {
             if let exact = try await exact(title: title, artist: artist, album: album, durationSeconds: durationSeconds) { return .found(exact) }
             for t in LrclibClient.searchTitles(title) {
-                if let found = try await search(title: t, artist: artist, durationSeconds: durationSeconds) { return .found(found) }
+                if let found = try await search(searchTitle: t, title: title, artist: artist, durationSeconds: durationSeconds) { return .found(found) }
             }
             return .notFound
         } catch {
@@ -81,11 +81,11 @@ public final class LrclibClient: @unchecked Sendable {
         return LrclibClient.linesOf(track)
     }
 
-    private func search(title: String, artist: String, durationSeconds: Int?) async throws -> [LyricLine]? {
-        let (data, status) = try await send("\(baseUrl)/api/search?track_name=\(InnerTubeClient.escape(title))&artist_name=\(InnerTubeClient.escape(artist))")
+    private func search(searchTitle: String, title: String, artist: String, durationSeconds: Int?) async throws -> [LyricLine]? {
+        let (data, status) = try await send("\(baseUrl)/api/search?track_name=\(InnerTubeClient.escape(searchTitle))&artist_name=\(InnerTubeClient.escape(artist))")
         if status != 200 { throw StatusError(status: status) }
         let tracks = try JSONDecoder().decode([Track]?.self, from: data) ?? []
-        return LrclibClient.pick(tracks, durationSeconds: durationSeconds).flatMap(LrclibClient.linesOf)
+        return LrclibClient.pick(tracks, title: title, artist: artist, durationSeconds: durationSeconds).flatMap(LrclibClient.linesOf)
     }
 
     private func send(_ url: String) async throws -> (Data, Int) {
@@ -102,14 +102,24 @@ public final class LrclibClient: @unchecked Sendable {
         return lines.contains { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty } ? lines : nil
     }
 
-    /// 検索の結果から、時刻付きで長さの近いものを選ぶ。長さが分からなければ最初の時刻付き。
-    static func pick(_ tracks: [Track], durationSeconds: Int?) -> Track? {
-        let synced = tracks.filter { !$0.instrumental && !($0.syncedLyrics ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-        guard let durationSeconds else { return synced.first }
+    /// 検索の結果から、曲名とアーティストが一致する時刻付きのうち長さの近いものを選ぶ。長さが分からなければ最初の一致。
+    /// 一致するものが無ければ選ばない（長さだけが近い別の曲を選ばないため）。
+    /// 曲名が一致しなくても、アーティストが一致して長さが `LrclibMatch.sameLengthWithoutTitle` 秒以内なら残す。
+    static func pick(_ tracks: [Track], title: String, artist: String, durationSeconds: Int?) -> Track? {
+        let wantedTitles = LrclibMatch.titleKeys(title)
+        let wantedArtists = LrclibMatch.artistKeys(artist)
+        let matching = tracks.filter { track in
+            guard !track.instrumental, !(track.syncedLyrics ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
+            guard LrclibMatch.overlap(wantedArtists, LrclibMatch.artistKeys(track.artistName ?? "")) else { return false }
+            if LrclibMatch.overlap(wantedTitles, LrclibMatch.titleKeys(track.trackName ?? "")) { return true }
+            guard let durationSeconds, let d = track.duration else { return false }
+            return abs(d - Double(durationSeconds)) <= LrclibMatch.sameLengthWithoutTitle
+        }
+        guard let durationSeconds else { return matching.first }
         let wanted = Double(durationSeconds)
         for tolerance in durationTolerances {
             // 差の小さい順（同じ差なら先に出てきたもの）
-            let hit = synced.enumerated()
+            let hit = matching.enumerated()
                 .filter { if let d = $0.element.duration { return abs(d - wanted) <= tolerance } else { return false } }
                 .min { a, b in
                     let da = abs(a.element.duration! - wanted)
@@ -136,5 +146,58 @@ public final class LrclibClient: @unchecked Sendable {
             result.append(s)
         }
         return result
+    }
+}
+
+/// LRCLIB の検索の結果が今の曲と同じかの照らし合わせ（Android・Windows・Linux の版と同じ規則）。
+/// 長さだけで選ぶと、長さの近い別の曲の歌詞を選んでしまうため。
+enum LrclibMatch {
+    /// 曲名が一致しなくても、アーティストが一致して長さがこの秒数以内なら同じ曲とみなす（日本語の曲名がローマ字・英語で登録されていることがあるため）。
+    static let sameLengthWithoutTitle = 2.0
+
+    /// 比べる形。NFKC にして小文字にし、文字（L）と数字（N）だけを残す。
+    static func key(_ text: String) -> String {
+        var out = String.UnicodeScalarView()
+        for scalar in text.precomposedStringWithCompatibilityMapping.lowercased().unicodeScalars {
+            switch scalar.properties.generalCategory {
+            case .uppercaseLetter, .lowercaseLetter, .titlecaseLetter, .modifierLetter, .otherLetter, .decimalNumber, .letterNumber, .otherNumber:
+                out.append(scalar)
+            default:
+                break
+            }
+        }
+        return String(out)
+    }
+
+    /// 曲名を比べる形。そのまま、括弧の中の補足を除いた形、「 - 」の後ろを除いた形、「feat.」の後ろを除いた形。
+    static func titleKeys(_ title: String) -> [String] {
+        let full = title.precomposedStringWithCompatibilityMapping
+        let withoutBrackets = full.replacing(#/\s*[(\[（【][^)\]）】]*[)\]）】]/#, with: "")
+        let beforeDash = before(withoutBrackets, #/\s[-–—]\s/#)
+        let beforeFeat = before(beforeDash, #/(?i)\s(?:feat\.?|ft\.|featuring)\s/#)
+        return distinctKeys([full, withoutBrackets, beforeDash, beforeFeat])
+    }
+
+    /// アーティストを比べる形。全体と、「,」「&」「feat.」「×」などで分けたそれぞれの名前。
+    static func artistKeys(_ artist: String) -> [String] {
+        let full = artist.precomposedStringWithCompatibilityMapping
+        let separators = #/(?i)\s*[,&、\/;×]\s*|\s+(?:x|feat\.?|ft\.|featuring|vs\.?)\s+/#
+        return distinctKeys([full] + full.split(separator: separators).map(String.init))
+    }
+
+    /// どれかの形が等しいか、片方がもう片方を含めば一致。
+    static func overlap(_ a: [String], _ b: [String]) -> Bool {
+        a.contains { x in b.contains { y in x.contains(y) || y.contains(x) } }
+    }
+
+    private static func before(_ text: String, _ separator: some RegexComponent) -> String {
+        guard let range = text.firstRange(of: separator) else { return text }
+        return String(text[..<range.lowerBound])
+    }
+
+    private static func distinctKeys(_ texts: [String]) -> [String] {
+        var out: [String] = []
+        for key in texts.map(key) where !key.isEmpty && !out.contains(key) { out.append(key) }
+        return out
     }
 }
