@@ -85,7 +85,7 @@
 ## 再生画面
 
 - （仮）ジャケットを左右に払うと次・前の曲へ。曲名でアルバム、アーティスト名でアーティストのページへ（複数なら選ぶ）
-- （仮）歌詞を出す。時刻付きは、まず YouTube Music の時刻付き（歌詞のタブを ANDROID_MUSIC として匿名で読む。出典は Musixmatch・LyricFind で、曲の照合が要らない）、無ければ LRCLIB（曲名・アーティスト・長さで照らし合わせる）から取り、歌っている行を強調して送る。行を押すとその位置へ。どちらにも無ければ YouTube Music の時刻なしの歌詞（MV など）。時刻付きを探すのに失敗して時刻なしを出したときは覚えず、次に開いたとき探し直す（Android・Windows・Mac・iPhone。自動テスト: `core` の `LyricsRepositoryTest`、Windows の `LyricsTests`（`TimedYouTubeLyricsAreReadAndUntimedLinesAreNot`・`TimedYouTubeLyricsComeFirstWithoutAskingLrclib`・`PlainLyricsShownAfterAFailureAreNotRemembered`）、Mac・iPhone の `WaveCoreTests` の `LyricsTests`（`testTimedYouTubeLyricsAreReadAndUntimedLinesAreNot`・`testTimedYouTubeLyricsComeFirstWithoutAskingLrclib`・`testPlainLyricsShownAfterAFailureAreNotRemembered`）。2026-10-24 に Pixel 3 で、Alone Together の歌詞が「Source: Musixmatch」の時刻付きで出ることを確かめた。同じ日に Windows のアプリで Alone Together の歌詞が「Source: Musixmatch」の時刻付き（45行）になること（ローカル API の `/v1/lyrics`）、iPhone のシミュレーターでログインなしで Forever の歌詞が、iPhone の実機で Tequila の歌詞が「Source: Musixmatch」の時刻付きになることを確かめた）
+- （仮）歌詞を出す。時刻付きは、まず YouTube Music の時刻付き（歌詞のタブを ANDROID_MUSIC として匿名で読む。出典は Musixmatch・LyricFind で、曲の照合が要らない）、無ければ LRCLIB（検索の結果のうち、時刻付きで、アーティストが一致し、曲名が一致するか長さが2秒以内のものだけから、長さの最も近いものを選ぶ（許容は2秒、無ければ5秒）。比べるときは NFKC・小文字の文字と数字だけの形にし、曲名は括弧の補足・「 - 」の後ろ・feat. の後ろを除いた形も、アーティストは「,」「&」「×」「feat.」などで分けた名前ごとに見て、片方がもう片方を含めば一致とする。一致が無ければ LRCLIB からは選ばず次へ進む。アーティストが日本語とローマ字で違う曲は一致しない。自動テスト: 各土台の LrclibClient の試験）から取り、歌っている行を強調して送る。行を押すとその位置へ。どちらにも無ければ YouTube Music の時刻なしの歌詞（MV など）。時刻付きを探すのに失敗して時刻なしを出したときは覚えず、次に開いたとき探し直す（Android・Windows・Mac・iPhone。自動テスト: `core` の `LyricsRepositoryTest`、Windows の `LyricsTests`（`TimedYouTubeLyricsAreReadAndUntimedLinesAreNot`・`TimedYouTubeLyricsComeFirstWithoutAskingLrclib`・`PlainLyricsShownAfterAFailureAreNotRemembered`）、Mac・iPhone の `WaveCoreTests` の `LyricsTests`（`testTimedYouTubeLyricsAreReadAndUntimedLinesAreNot`・`testTimedYouTubeLyricsComeFirstWithoutAskingLrclib`・`testPlainLyricsShownAfterAFailureAreNotRemembered`）。2026-10-24 に Pixel 3 で、Alone Together の歌詞が「Source: Musixmatch」の時刻付きで出ることを確かめた。同じ日に Windows のアプリで Alone Together の歌詞が「Source: Musixmatch」の時刻付き（45行）になること（ローカル API の `/v1/lyrics`）、iPhone のシミュレーターでログインなしで Forever の歌詞が、iPhone の実機で Tequila の歌詞が「Source: Musixmatch」の時刻付きになることを確かめた）
 - （仮）Mac・Windows の全画面の再生中の画面の歌詞は手でスクロールでき、手で動かしてから5秒は今の行に合わせて送らない（右の欄・メニューバーの小窓・スマホの歌詞は動かさない）（Windows は 2026-10-19 にホイールで動くのを確かめた）
 - （仮）MV のある曲は「曲｜動画」を切り替えて映像を重ねられる。音は止めず、映像は音に合わせる。全画面で見られる
 - （仮）次の曲の欄を出す。共有は「…」のメニューから
@@ -118,6 +118,7 @@
 ## アルバムのライブラリへの保存
 
 - （仮）ログインしていると、アルバムのページに「ライブラリに保存」の切り替えを出す（iPhone はダウンロードの左のしおりの丸いボタン、Mac は再生の列のしおりのアイコン、Android・Windows・Linux はその画面のボタン）。ログインしていない・状態が分からないとき、プレイリストと高く評価した曲のページには出さない。押すとすぐ表示を切り替え、書いている間は押せず、失敗したら元に戻して「ライブラリを変更できませんでした」と知らせる。書けたらライブラリの一覧を読み直す。状態はアルバムのページの保存のボタン（likeEndpoint を持つもの）の isToggled、書き込みはアルバムの OLAK5uy_ のプレイリストの like/like・like/removelike（ポッドキャストの保存と同じ）。自動テスト: 各土台のパーサーの試験（保存の状態と保存先を読む・ログインしていない応答では分からない）。2026-11-14 に Linux の土台で、本物のアカウントで緑黄色社会のアルバムを保存して読み直し、外して読み直して確かめた（`linux/wave-core/examples/album_save.rs`）。各端末の画面での確かめは未
+- （仮）ポッドキャスト（YouTube の番組）の「ライブラリに保存」も、アルバムの保存と同じく押すとすぐ表示を切り替え、書いている間は押せず、失敗したら元に戻して「ライブラリを変更できませんでした」と知らせる（Android は結果が分からなければ読み直す）。RSS の番組の「登録」は手元の操作なので、登録できてから表示が変わる。各端末の画面での確かめは未
 
 ## ポッドキャスト
 
