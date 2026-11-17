@@ -25,6 +25,8 @@ services:
     command: ["/app/bin/api"]
     working_dir: /app
     environment:
+      # 中継と同じく、JVM の性能の記録の mmap で SIGBUS により落ちたので切る（2026-11-13 に落ち、4日止まっていた。docs/decisions.md 2026-11-17）
+      JAVA_OPTS: "-XX:-UsePerfData"
       WAVE_API_DATA: "/data"
       WAVE_API_BIND: "0.0.0.0"
       WAVE_API_PORT: "8793"

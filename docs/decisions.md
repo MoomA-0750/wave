@@ -1341,3 +1341,9 @@
 - LRCLIB はアーティスト名を付けて検索すると、別の表記（Ryokuoushoku Shakai）で登録された曲を返さない（揺れる・ナイスアイディア！・Landscape に 緑黄色社会 を付けると0件、曲名だけだと時刻付きが返る）。そのため、一致が無いときだけ曲名だけでも検索する。LRCLIB に無い曲では LRCLIB への問い合わせが曲名の数だけ増える
 - 別名は「曲名を元の表記で」の突き合わせ（merge）は使わず、videoId の next を逆の言語で1回頼み、その曲の曲名と1人目のアーティスト名を読む。アーティストの一致は今までどおり必須
 - 残る弱点: 英語の画面で「曲名を元の表記で」を入れていると、画面の言語の応答がすでに元の表記なので、逆の言語で頼んでも同じ名前しか返らないことがある。英語の画面の向き（YouTube Music がローマ字・LRCLIB が日本語）は本物で試していない
+
+## 2026-11-17 wave-api も JVM の性能の記録を切る、見張りは本人の判断待ち
+
+- wave-api（ほかのアプリ向けの口）が 11-13 に中継と同じ SIGBUS（/tmp/hsperfdata の mmap）で落ち、`restart: unless-stopped` なのに 4 日止まっていた。中継と同じく `JAVA_OPTS=-XX:-UsePerfData` を足して起こした（relay/deploy/compose.yaml と、手元の dev/relay-deploy-v2）
+- 止まったままになるのを防ぐ見張り（systemd のユーザーのタイマーで 5 分ごとに `docker compose up -d --no-recreate --no-build`）を入れようとしたが、自動の判定で止められたので本人に任せた
+- iPhone の保存の確かめ用に、開発用の命令 album-save・podcast-save を足した（開いているページの保存のボタンと同じ処理を呼ぶ。実機ではミラーリングがつながらず指で押せないため）
