@@ -126,6 +126,70 @@ final class LyricsTests: XCTestCase {
         XCTAssertEqual("wave-mac/test", StubURLProtocol.recorded.first?.value(forHTTPHeaderField: "User-Agent"))
     }
 
+    /// 別名を求められた回数を数える。
+    private final class OtherNamesCounter: @unchecked Sendable {
+        var calls = 0
+        let names: LrclibClient.OtherNames?
+        init(_ names: LrclibClient.OtherNames?) { self.names = names }
+        func next() -> LrclibClient.OtherNames? {
+            calls += 1
+            return names
+        }
+    }
+
+    /// アーティスト名付きの検索は withArtist、曲名だけの検索は byTitle を返す LRCLIB。
+    private func lrclib(withArtist: String = "[]", byTitle: String) -> LrclibClient {
+        let session = StubURLProtocol.session { request in
+            let url = request.url!.absoluteString
+            if url.contains("/api/get") { return (404, [:], Data()) }
+            return (200, [:], Data((url.contains("artist_name=") ? withArtist : byTitle).utf8))
+        }
+        return LrclibClient(session: session, userAgent: "wave-mac/test", baseUrl: "https://lrclib.invalid")
+    }
+
+    private let yureru = LrclibClient.OtherNames(title: "Yureru", artist: "Ryokuoushoku Shakai")
+
+    func testOtherLanguageNamesMatchWhenTheOriginalNamesDoNot() async throws {
+        // YouTube Music では「緑黄色社会」、LRCLIB では「Ryokuoushoku Shakai」。アーティスト名付きの検索では返らず、曲名だけの検索で返る
+        let tracks = #"[{"trackName":"揺れる","artistName":"ねごと","duration":205,"syncedLyrics":"[00:01.00]other"},{"trackName":"揺れる","artistName":"Ryokuoushoku Shakai","duration":238,"syncedLyrics":"[00:02.00]match"}]"#
+        let counter = OtherNamesCounter(yureru)
+        let result = try await lrclib(byTitle: tracks).synced(title: "揺れる", artist: "緑黄色社会", album: nil, durationSeconds: 238) { counter.next() }
+        XCTAssertEqual(.found([LyricLine(startMs: 2000, text: "match")]), result)
+        XCTAssertEqual(1, counter.calls)
+        // 曲名が別名（ローマ字）でだけ一致する
+        let romanized = #"[{"trackName":"Yureru","artistName":"Ryokuoushoku Shakai","duration":234,"syncedLyrics":"[00:01.00]x"}]"#
+        let other = try await lrclib(byTitle: romanized).synced(title: "揺れる", artist: "緑黄色社会", album: nil, durationSeconds: 238) { [yureru] in yureru }
+        XCTAssertNotEqual(.notFound, other)
+    }
+
+    func testNothingIsPickedWhenTheOtherNamesDoNotMatchEither() async throws {
+        let counter = OtherNamesCounter(yureru)
+        let tracks = #"[{"trackName":"揺れる","artistName":"ねごと","duration":205,"syncedLyrics":"[00:01.00]x"}]"#
+        let result = try await lrclib(byTitle: tracks).synced(title: "揺れる", artist: "緑黄色社会", album: nil, durationSeconds: 238) { counter.next() }
+        XCTAssertEqual(.notFound, result)
+        XCTAssertEqual(1, counter.calls)
+        // 別名が取れなければ今までどおり選ばない
+        let romaji = #"[{"trackName":"揺れる","artistName":"Ryokuoushoku Shakai","duration":238,"syncedLyrics":"[00:01.00]x"}]"#
+        let none = try await lrclib(byTitle: romaji).synced(title: "揺れる", artist: "緑黄色社会", album: nil, durationSeconds: 238) { nil }
+        XCTAssertEqual(.notFound, none)
+    }
+
+    func testOtherNamesAreNotFetchedWhenATrackMatchesOrNoneIsSynced() async throws {
+        let counter = OtherNamesCounter(yureru)
+        let matching = #"[{"trackName":"揺れる","artistName":"緑黄色社会","duration":238,"syncedLyrics":"[00:01.00]x"}]"#
+        let found = try await lrclib(withArtist: matching, byTitle: "[]").synced(title: "揺れる", artist: "緑黄色社会", album: nil, durationSeconds: 238) { counter.next() }
+        XCTAssertNotEqual(.notFound, found)
+        // 一致したら曲名だけの検索もしない
+        XCTAssertEqual(2, StubURLProtocol.recorded.count)
+        // 時刻付きの候補が無ければ取りに行かない
+        let untimed = #"[{"trackName":"揺れる","artistName":"Ryokuoushoku Shakai","duration":238,"syncedLyrics":null}]"#
+        let none = try await lrclib(byTitle: untimed).synced(title: "揺れる", artist: "緑黄色社会", album: nil, durationSeconds: 238) { counter.next() }
+        XCTAssertEqual(.notFound, none)
+        let empty = try await lrclib(byTitle: "[]").synced(title: "揺れる", artist: "緑黄色社会", album: nil, durationSeconds: 238) { counter.next() }
+        XCTAssertEqual(.notFound, empty)
+        XCTAssertEqual(0, counter.calls)
+    }
+
     func testLrclibServerErrorIsAFailure() async throws {
         let session = StubURLProtocol.session { _ in (500, [:], Data()) }
         let result = try await LrclibClient(session: session, userAgent: "t").synced(title: "a", artist: "b", album: nil, durationSeconds: nil)
@@ -149,11 +213,48 @@ final class LyricsTests: XCTestCase {
             return .ok(browseId)
         }
         func plainLyrics(browseId: String) async throws -> ApiResult<SongLyrics.Plain?> { result }
+        /// もう1つの言語での名前。頼まれた回数を数える。
+        var otherNames: ApiResult<LrclibClient.OtherNames?> = .ok(nil)
+        var otherNamesCalls = 0
+        func namesInOtherLanguage(videoId: String) async throws -> ApiResult<LrclibClient.OtherNames?> {
+            otherNamesCalls += 1
+            return otherNames
+        }
     }
 
     private struct FakeLrclib: SyncedLyricsSource {
         let result: LrclibClient.Result
-        func synced(title: String, artist: String, album: String?, durationSeconds: Int?) async throws -> LrclibClient.Result { result }
+        func synced(
+            title: String, artist: String, album: String?, durationSeconds: Int?,
+            otherNames: @escaping @Sendable () async -> LrclibClient.OtherNames?
+        ) async throws -> LrclibClient.Result { result }
+    }
+
+    /// 候補を選ぶたびに別名を求める LRCLIB（別名を覚えているかを見る）。
+    private struct AskingLrclib: SyncedLyricsSource {
+        func synced(
+            title: String, artist: String, album: String?, durationSeconds: Int?,
+            otherNames: @escaping @Sendable () async -> LrclibClient.OtherNames?
+        ) async throws -> LrclibClient.Result {
+            await otherNames() == nil ? .notFound : .found([LyricLine(startMs: 0, text: "x")])
+        }
+    }
+
+    func testServiceAsksForOtherNamesOncePerSong() async throws {
+        let music = FakeMusic(.ok(SongLyrics.Plain(text: "p", source: "s")))
+        music.otherNames = .ok(nil)
+        let service = LyricsService(music: music, lrclib: AskingLrclib(), timed: timedClient(status: 503))
+        // 時刻付きの失敗のあとなので結果は覚えないが、別名（無かったこと）は覚えて頼み直さない
+        _ = try await service.lyrics(song: song)
+        _ = try await service.lyrics(song: song)
+        XCTAssertEqual(1, music.otherNamesCalls)
+        // 通信の失敗は覚えない
+        let failing = FakeMusic(.ok(SongLyrics.Plain(text: "p", source: "s")))
+        failing.otherNames = .failed(.network)
+        let retrying = LyricsService(music: failing, lrclib: AskingLrclib(), timed: timedClient(status: 503))
+        _ = try await retrying.lyrics(song: song)
+        _ = try await retrying.lyrics(song: song)
+        XCTAssertEqual(2, failing.otherNamesCalls)
     }
 
     private let song = Song(videoId: "v1", title: "t", artists: [ArtistRef(name: "a", browseId: nil)], album: nil, durationSeconds: 100, thumbnailUrl: nil)
@@ -203,7 +304,10 @@ final class LyricsTests: XCTestCase {
     /// LRCLIB へ尋ねた回数を数える。
     private final class CountingLrclib: SyncedLyricsSource, @unchecked Sendable {
         var calls = 0
-        func synced(title: String, artist: String, album: String?, durationSeconds: Int?) async throws -> LrclibClient.Result {
+        func synced(
+            title: String, artist: String, album: String?, durationSeconds: Int?,
+            otherNames: @escaping @Sendable () async -> LrclibClient.OtherNames?
+        ) async throws -> LrclibClient.Result {
             calls += 1
             return .notFound
         }

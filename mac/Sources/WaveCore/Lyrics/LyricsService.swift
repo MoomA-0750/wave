@@ -6,11 +6,16 @@ public protocol PlainLyricsSource: Sendable {
     func lyricsBrowseId(videoId: String) async throws -> ApiResult<String?>
     /// 歌詞のタブの時刻なしの本文。
     func plainLyrics(browseId: String) async throws -> ApiResult<SongLyrics.Plain?>
+    /// 曲の、もう1つの言語での曲名と1人目のアーティスト名。分からなければ ok(nil)。
+    func namesInOtherLanguage(videoId: String) async throws -> ApiResult<LrclibClient.OtherNames?>
 }
 
 /// LyricsService が LRCLIB から使うもの（LrclibClient の SyncedAsync に当たる）。
 public protocol SyncedLyricsSource: Sendable {
-    func synced(title: String, artist: String, album: String?, durationSeconds: Int?) async throws -> LrclibClient.Result
+    func synced(
+        title: String, artist: String, album: String?, durationSeconds: Int?,
+        otherNames: @escaping @Sendable () async -> LrclibClient.OtherNames?
+    ) async throws -> LrclibClient.Result
 }
 
 /// LyricsService が YouTube Music の時刻付きに使うもの（YouTubeTimedLyricsClient）。
@@ -25,6 +30,8 @@ extension YouTubeTimedLyricsClient: TimedLyricsSource {}
 /// 出典は Musixmatch・LyricFind）、無ければ LRCLIB の時刻付き（曲名・アーティスト・長さで照らし合わせる）、それも無ければ YouTube Music の時刻なし。
 /// 見つかった・無かった結果は曲ごとに覚える。失敗は覚えない。時刻付きを探すのに失敗して時刻なしを出したときも覚えない
 /// （一時の失敗で、時刻なしが残り続けないように）。
+/// LRCLIB の候補にアーティスト名・曲名の一致するものが無ければ、曲のもう1つの言語での名前（別名）を YouTube Music から取って足す。
+/// 別名は曲ごとにアプリを閉じるまで覚え、同じ曲で何度も頼まない。
 public final class LyricsService: @unchecked Sendable {
     public static let lrclibSource = "LRCLIB"
     private static let cacheSize = 50
@@ -40,6 +47,8 @@ public final class LyricsService: @unchecked Sendable {
     private let timed: TimedLyricsSource?
     private var cache: [String: Result] = [:]
     private var order: [String] = []
+    /// 曲（videoId）ごとの、もう1つの言語での名前（取れなかった曲は nil）。通信の失敗は覚えない。
+    private var otherNames: [String: LrclibClient.OtherNames?] = [:]
     private let lock = NSLock()
 
     public init(music: PlainLyricsSource, lrclib: SyncedLyricsSource, timed: TimedLyricsSource? = nil) {
@@ -74,7 +83,10 @@ public final class LyricsService: @unchecked Sendable {
             result = .found(.synced(lyrics))
         } else {
             if let artist = song.artists.first {
-                synced = try await lrclib.synced(title: song.title, artist: artist.name, album: song.album?.title, durationSeconds: song.durationSeconds)
+                let videoId = song.videoId
+                synced = try await lrclib.synced(title: song.title, artist: artist.name, album: song.album?.title, durationSeconds: song.durationSeconds) { [self] in
+                    await otherNamesOf(videoId)
+                }
             }
             result = LyricsService.choose(synced, try await plainTask.value)
         }
@@ -90,6 +102,15 @@ public final class LyricsService: @unchecked Sendable {
             }
         }
         return result
+    }
+
+    /// 曲のもう1つの言語での名前。覚えていればそれを使い、無ければ YouTube Music に1回頼む。
+    private func otherNamesOf(_ videoId: String) async -> LrclibClient.OtherNames? {
+        if let known = lock.withLock({ otherNames[videoId] }) { return known }
+        guard let result = try? await music.namesInOtherLanguage(videoId: videoId), result.isOk else { return nil }
+        let names = result.value ?? nil
+        lock.withLock { otherNames[videoId] = .some(names) }
+        return names
     }
 
     /// 時刻付きを優先する。片方が失敗していて、もう片方に無ければ「分からない」（無いとは決めない）。

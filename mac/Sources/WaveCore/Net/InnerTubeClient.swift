@@ -261,6 +261,13 @@ public final class InnerTubeClient: @unchecked Sendable {
         }
     }
 
+    /// もう1つの言語（画面が日本語なら英語、それ以外なら日本語）だけで POST する（突き合わせない）。歌詞を探すときの曲名・アーティスト名の別名を読むため。
+    /// 失敗したら nil（ログインの状態は変えない）。
+    public func postInOtherLanguage(_ endpoint: String, body: JSON, setLogin: Bool = true) async -> JSON? {
+        let creds = setLogin ? currentCredentials : nil
+        return await otherLanguageJSON(endpoint, body: body, creds: creds, query: [], loginGeneration: generation)
+    }
+
     /// もう1つの言語の同じ頼みの応答。失敗したら nil（ログインの状態は変えない。同じ頼みの画面の言語の方が分類される）。
     private func otherLanguageJSON(_ endpoint: String, body: JSON, creds: Credentials?, query: [(String, String)], loginGeneration: Int64) async -> JSON? {
         guard let request = try? makeRequest(endpoint, body: body, creds: creds, query: query, hl: OriginalTitles.otherLanguage(hl)),

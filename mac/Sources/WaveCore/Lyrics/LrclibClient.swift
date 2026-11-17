@@ -41,6 +41,18 @@ public final class LrclibClient: @unchecked Sendable {
         }
     }
 
+    /// 曲の、もう1つの言語（画面が日本語なら英語、それ以外なら日本語）での曲名とアーティスト名。
+    /// YouTube Music では「緑黄色社会」、LRCLIB では「Ryokuoushoku Shakai」のように、言語で表記の違う曲を一致させるために使う。
+    public struct OtherNames: Hashable, Sendable {
+        public let title: String
+        public let artist: String
+
+        public init(title: String, artist: String) {
+            self.title = title
+            self.artist = artist
+        }
+    }
+
     struct StatusError: Error {
         let status: Int
     }
@@ -57,12 +69,26 @@ public final class LrclibClient: @unchecked Sendable {
         self.baseUrl = baseUrl
     }
 
-    public func synced(title: String, artist: String, album: String?, durationSeconds: Int?) async throws -> Result {
+    /// 検索の結果に時刻付きの候補があるのに1つも一致しなければ、otherNames で曲名・アーティスト名の別名を取り、足してもう一度選ぶ。
+    public func synced(
+        title: String, artist: String, album: String?, durationSeconds: Int?,
+        otherNames: @escaping @Sendable () async -> OtherNames? = { nil }
+    ) async throws -> Result {
         do {
             if let exact = try await exact(title: title, artist: artist, album: album, durationSeconds: durationSeconds) { return .found(exact) }
-            for t in LrclibClient.searchTitles(title) {
-                if let found = try await search(searchTitle: t, title: title, artist: artist, durationSeconds: durationSeconds) { return .found(found) }
+            let titles = LrclibClient.searchTitles(title)
+            var seen: [Track] = []
+            for t in titles {
+                let tracks = try await search(searchTitle: t, artist: artist)
+                if let found = LrclibClient.pick(tracks, title: title, artist: artist, durationSeconds: durationSeconds).flatMap(LrclibClient.linesOf) {
+                    return .found(found)
+                }
+                seen += tracks
             }
+            // アーティスト名を付けて探すと、LRCLIB で別の表記（ローマ字など）で登録された曲は返らない。曲名だけでも探して候補に足す
+            for t in titles { seen += try await search(searchTitle: t, artist: nil) }
+            let picked = await LrclibClient.pickWithOtherNames(seen, title: title, artist: artist, durationSeconds: durationSeconds, otherNames: otherNames)
+            if let found = picked.flatMap(LrclibClient.linesOf) { return .found(found) }
             return .notFound
         } catch {
             try rethrowIfCancelled(error)
@@ -81,11 +107,12 @@ public final class LrclibClient: @unchecked Sendable {
         return LrclibClient.linesOf(track)
     }
 
-    private func search(searchTitle: String, title: String, artist: String, durationSeconds: Int?) async throws -> [LyricLine]? {
-        let (data, status) = try await send("\(baseUrl)/api/search?track_name=\(InnerTubeClient.escape(searchTitle))&artist_name=\(InnerTubeClient.escape(artist))")
+    private func search(searchTitle: String, artist: String?) async throws -> [Track] {
+        var url = "\(baseUrl)/api/search?track_name=\(InnerTubeClient.escape(searchTitle))"
+        if let artist { url += "&artist_name=\(InnerTubeClient.escape(artist))" }
+        let (data, status) = try await send(url)
         if status != 200 { throw StatusError(status: status) }
-        let tracks = try JSONDecoder().decode([Track]?.self, from: data) ?? []
-        return LrclibClient.pick(tracks, title: title, artist: artist, durationSeconds: durationSeconds).flatMap(LrclibClient.linesOf)
+        return try JSONDecoder().decode([Track]?.self, from: data) ?? []
     }
 
     private func send(_ url: String) async throws -> (Data, Int) {
@@ -106,10 +133,29 @@ public final class LrclibClient: @unchecked Sendable {
     /// 一致するものが無ければ選ばない（長さだけが近い別の曲を選ばないため）。
     /// 曲名が一致しなくても、アーティストが一致して長さが `LrclibMatch.sameLengthWithoutTitle` 秒以内なら残す。
     static func pick(_ tracks: [Track], title: String, artist: String, durationSeconds: Int?) -> Track? {
-        let wantedTitles = LrclibMatch.titleKeys(title)
-        let wantedArtists = LrclibMatch.artistKeys(artist)
+        pickAny(tracks, titles: [title], artists: [artist], durationSeconds: durationSeconds)
+    }
+
+    /// 元の名前で選び、時刻付きの候補があるのに1つも一致しなければ、別名（otherNames）を足してもう一度選ぶ。
+    /// 一致したとき・時刻付きの候補が無いときは otherNames を呼ばない（別名を取りに行かない）。
+    static func pickWithOtherNames(
+        _ tracks: [Track], title: String, artist: String, durationSeconds: Int?, otherNames: () async -> OtherNames?
+    ) async -> Track? {
+        if let track = pick(tracks, title: title, artist: artist, durationSeconds: durationSeconds) { return track }
+        guard tracks.contains(where: isSynced), let other = await otherNames() else { return nil }
+        return pickAny(tracks, titles: [title, other.title], artists: [artist, other.artist], durationSeconds: durationSeconds)
+    }
+
+    private static func isSynced(_ track: Track) -> Bool {
+        !track.instrumental && !(track.syncedLyrics ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// pick と同じだが、曲名・アーティストはそれぞれ titles・artists のどれかに一致すれば良い（元の名前と別名）。
+    private static func pickAny(_ tracks: [Track], titles: [String], artists: [String], durationSeconds: Int?) -> Track? {
+        let wantedTitles = titles.flatMap(LrclibMatch.titleKeys)
+        let wantedArtists = artists.flatMap(LrclibMatch.artistKeys)
         let matching = tracks.filter { track in
-            guard !track.instrumental, !(track.syncedLyrics ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
+            guard isSynced(track) else { return false }
             guard LrclibMatch.overlap(wantedArtists, LrclibMatch.artistKeys(track.artistName ?? "")) else { return false }
             if LrclibMatch.overlap(wantedTitles, LrclibMatch.titleKeys(track.trackName ?? "")) { return true }
             guard let durationSeconds, let d = track.duration else { return false }

@@ -334,6 +334,15 @@ public final class MusicRepository: Sendable {
         try await songInfo(videoId).map { $0.lyricsBrowseId }
     }
 
+    /// 曲の、もう1つの言語（画面が日本語なら英語、それ以外なら日本語）での曲名と1人目のアーティスト名（next の最初の応答から）。
+    /// 歌詞を LRCLIB で探すとき、アーティスト名が「緑黄色社会」と「Ryokuoushoku Shakai」のように言語で違う曲を一致させるため。分からなければ ok(nil)。
+    public func namesInOtherLanguage(videoId: String) async throws -> ApiResult<LrclibClient.OtherNames?> {
+        let body = JSON.obj(["videoId": .string(videoId), "contentCheckOk": true, "racyCheckOk": true])
+        guard let root = await client.postInOtherLanguage("next", body: body) else { return .failed(.network) }
+        guard let song = MusicParsers.upNext(root).songs.first(where: { $0.videoId == videoId }), let artist = song.artists.first else { return .ok(nil) }
+        return .ok(LrclibClient.OtherNames(title: song.title, artist: artist.name))
+    }
+
     /// 歌詞のタブの時刻なしの本文。
     public func plainLyrics(browseId: String) async throws -> ApiResult<SongLyrics.Plain?> {
         try await browse(browseId, continuation: nil, params: nil).map(MusicParsers.plainLyrics)
