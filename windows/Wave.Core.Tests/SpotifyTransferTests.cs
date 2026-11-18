@@ -328,6 +328,16 @@ public class SpotifyTransferTests
         public Task<HashSet<string>?> LibraryPlaylistTitlesAsync(CancellationToken cancel) =>
             Task.FromResult(LibraryTitles is null ? null : new HashSet<string>(LibraryTitles));
 
+        public Task<ApiResult<IReadOnlyList<Song>>> AlbumSongsAsync(string browseId, CancellationToken cancel)
+        {
+            Calls.Add("album-songs:" + browseId);
+            return Task.FromResult(ApiResult<IReadOnlyList<Song>>.Ok([
+                new Song("a-1", "Shout Baby", [new ArtistRef("緑黄色社会", "UC1")], new AlbumRef("SINGALONG", browseId), 264, null, Song.KindSong),
+                new Song("a-2", "sabotage", [new ArtistRef("緑黄色社会", "UC1")], new AlbumRef("SINGALONG", browseId), 239, null, Song.KindSong),
+                new Song("a-3", "Mela!", [new ArtistRef("緑黄色社会", "UC1")], new AlbumRef("SINGALONG", browseId), 243, null, Song.KindSong),
+            ]));
+        }
+
         public Task<HashSet<string>?> PlaylistVideoIdsAsync(string playlistId, CancellationToken cancel) =>
             Task.FromResult<HashSet<string>?>(Playlists.TryGetValue(playlistId, out var l) ? [.. l] : null);
 
@@ -388,6 +398,22 @@ public class SpotifyTransferTests
         Assert.Equal(TransferStop.None, await runner.MatchAsync(s, default));
         Assert.DoesNotContain(s.ItemsInScope(), i => i.Status == MatchStatus.Pending);
         Assert.Equal([60, 120], waits);
+    }
+
+    [Fact]
+    public async Task SongsOfTheSameAlbumAreMatchedFromTheAlbumPage()
+    {
+        // 同じアルバムの曲が3曲: アルバムを1回探してページを1回読み、曲ごとには探さない。ページに無い曲だけ1曲ずつ探す
+        var tracks = new[] { "Shout Baby", "sabotage", "Mela!", "存在しない曲" }
+            .Select(t => new SpotifyTrack(t, ["緑黄色社会"], "SINGALONG")).ToList();
+        var s = TransferSession.From(new SpotifyLibrary([], tracks, [], [], []), "api", "spotify", 0);
+        var w = new FakeWriter();
+        var runner = Runner(w);
+        Assert.Equal(TransferStop.None, await runner.MatchAsync(s, default));
+        Assert.Equal(1, w.Calls.Count(c => c.StartsWith("album-songs:")));
+        Assert.Equal(3, runner.MatchedByAlbum);
+        Assert.Equal(["search:緑黄色社会 存在しない曲"], w.Calls.Where(c => c.StartsWith("search:")).ToList());
+        Assert.Equal("a-2", s.Items.Single(i => i.Title == "sabotage").Target);
     }
 
     [Fact]

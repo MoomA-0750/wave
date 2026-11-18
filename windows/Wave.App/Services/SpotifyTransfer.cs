@@ -267,7 +267,7 @@ public sealed class SpotifyTransfer(DispatcherQueue ui)
         var before = session.ItemsInScope().Count(i => i.Status != MatchStatus.Pending);
         var stop = await Task.Run(() => OriginalAsync(() => runner.MatchAsync(session, cancel.Token)));
         var searched = session.ItemsInScope().Count(i => i.Status != MatchStatus.Pending) - before;
-        AppPaths.Log($"transfer match pace gap={Pace.GapMs} batch={Pace.Batch} pause={Pace.PauseSeconds} searched={searched} minutes={(DateTimeOffset.UtcNow - started).TotalMinutes:F1} throttles={runner.Throttles}");
+        AppPaths.Log($"transfer match pace gap={Pace.GapMs} batch={Pace.Batch} pause={Pace.PauseSeconds} searched={searched} minutes={(DateTimeOffset.UtcNow - started).TotalMinutes:F1} throttles={runner.Throttles} by-album={runner.MatchedByAlbum}");
         LastStop = stop;
         var items = session.ItemsInScope();
         AppPaths.Log($"transfer match stop={stop} matched={items.Count(i => i.Status == MatchStatus.Matched)} review={items.Count(i => i.Status == MatchStatus.Review)} notfound={items.Count(i => i.Status == MatchStatus.NotFound)} pending={items.Count(i => i.Status == MatchStatus.Pending)}");

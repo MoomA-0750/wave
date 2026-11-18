@@ -14,6 +14,8 @@ public interface ITransferWriter
     Task<ApiResult<string>> CreatePlaylistAsync(string title, IReadOnlyList<string> videoIds, CancellationToken cancel);
     /// <summary>ライブラリのプレイリストの名前を全部読む。読めなければ null。</summary>
     Task<HashSet<string>?> LibraryPlaylistTitlesAsync(CancellationToken cancel);
+    /// <summary>アルバムのページの曲（アルバム名・アーティストが無い曲にはページのものを入れる）。</summary>
+    Task<ApiResult<IReadOnlyList<Song>>> AlbumSongsAsync(string browseId, CancellationToken cancel);
     /// <summary>プレイリストの曲の ID を全部読む。読み切れなければ null。</summary>
     Task<HashSet<string>?> PlaylistVideoIdsAsync(string playlistId, CancellationToken cancel);
     /// <summary>曲をまとめて足す（入っていない曲だけを渡す）。</summary>
@@ -79,6 +81,13 @@ public sealed class MusicTransferWriter(MusicRepository repository, MusicReposit
         return session.Status is SessionStatus.Expired or SessionStatus.LoggedOut;
     }
 
+    public async Task<ApiResult<IReadOnlyList<Song>>> AlbumSongsAsync(string browseId, CancellationToken cancel) =>
+        (await searchRepository.AlbumAsync(browseId, cancel)).Map<IReadOnlyList<Song>>(a => a.Songs.Select(s => s with
+        {
+            Album = s.Album ?? new AlbumRef(a.Title, a.BrowseId),
+            Artists = s.Artists.Count > 0 ? s.Artists : a.Artists,
+        }).ToList());
+
     public async Task<ApiResult<(bool? Saved, string? SavePlaylistId)>> AlbumSaveStateAsync(string browseId, CancellationToken cancel) =>
         (await repository.AlbumAsync(browseId, cancel)).Map(a => (a.Saved, a.SavePlaylistId));
 
@@ -110,6 +119,10 @@ public sealed class TransferRunner(ITransferWriter writer, Action<TransferSessio
     /// <summary>この件数を探すごとに、BatchPause だけ休む（0 なら休まない）。続けての頼みが多いと YouTube が一時的に断るため。</summary>
     public int BatchSize { get; init; }
     public TimeSpan BatchPause { get; init; } = TimeSpan.Zero;
+    /// <summary>同じアルバムの曲がこの数以上あれば、アルバムを1回探してページの曲目で突き合わせる（頼む回数を減らす）。0 なら使わない。</summary>
+    public int AlbumGroupMin { get; init; } = 3;
+    /// <summary>アルバムのページで決まった曲の数（記録に使う）。</summary>
+    public int MatchedByAlbum { get; private set; }
     /// <summary>突き合わせの間に断られた回数（記録と速さの調べに使う）。</summary>
     public int Throttles { get; private set; }
     public TimeSpan WriteGap { get; init; } = TimeSpan.FromMilliseconds(700);
@@ -191,12 +204,31 @@ public sealed class TransferRunner(ITransferWriter writer, Action<TransferSessio
         var done = items.Count(i => i.Status != MatchStatus.Pending);
         var sinceSave = 0;
         var matched = 0;
+        // 同じアルバムの曲をまとめる（アーティストとアルバム名で）
+        var groups = AlbumGroupMin <= 0 ? [] : items.Where(i => i.Status == MatchStatus.Pending && i.Kind == TransferKind.Track)
+            .Select(i => (Item: i, Key: AlbumKey(i.AsTrack())))
+            .Where(x => x.Key is not null)
+            .GroupBy(x => x.Key!)
+            .Where(g => g.Count() >= AlbumGroupMin)
+            .ToDictionary(g => g.Key, g => g.Select(x => x.Item).ToList());
+        var triedAlbums = new HashSet<string>();
         try
         {
+            // Where は遅れて評価されるので、アルバムのページで決まった曲は飛ばされる
             foreach (var item in items.Where(i => i.Status == MatchStatus.Pending))
             {
                 cancel.ThrowIfCancellationRequested();
                 Report(new TransferProgress("match", done, total, item.Title));
+                if (item.Kind == TransferKind.Track && AlbumKey(item.AsTrack()) is { } key && groups.TryGetValue(key, out var group) && triedAlbums.Add(key))
+                {
+                    var (albumStop, decided) = await MatchAlbumGroupAsync(group, cancel);
+                    if (albumStop != TransferStop.None) return albumStop;
+                    done += decided;
+                    MatchedByAlbum += decided;
+                    if (decided > 0) { save(session); sinceSave = 0; }
+                    await delay(searchGap, cancel);
+                    if (item.Status != MatchStatus.Pending) continue;
+                }
                 var stop = await MatchOneAsync(item, cancel);
                 if (stop != TransferStop.None) return stop;
                 done++;
@@ -216,6 +248,32 @@ public sealed class TransferRunner(ITransferWriter writer, Action<TransferSessio
         {
             save(session);
         }
+    }
+
+    private static string? AlbumKey(SpotifyTrack track) =>
+        track.Album is { Length: > 0 } album && track.Artists.Count > 0 ? TransferMatcher.Fold(track.Artists[0]) + "\u0001" + TransferMatcher.Fold(album) : null;
+
+    /// <summary>アルバムを探し、確かに合うアルバムのページの曲目で、まとめた曲を突き合わせる。一致した曲の数を返す（合わない曲は Pending のまま、1曲ずつ探す）。</summary>
+    private async Task<(TransferStop Stop, int Decided)> MatchAlbumGroupAsync(List<TransferItem> group, CancellationToken cancel)
+    {
+        var first = group[0].AsTrack();
+        var album = new SpotifyAlbum(first.Album!, first.Artists);
+        var albums = await RetryAsync(() => writer.SearchAlbumsAsync(TransferMatcher.AlbumQuery(album), cancel), cancel);
+        if (!albums.IsOk) return (albums.Failure == FailureKind.Parse ? TransferStop.None : StopOf(albums), 0);
+        var best = TransferMatcher.RankAlbums(album, albums.Value ?? []);
+        if (TransferMatcher.StatusOf(best) != MatchStatus.Matched) return (TransferStop.None, 0);
+        await delay(searchGap, cancel);
+        var songs = await RetryAsync(() => writer.AlbumSongsAsync(best[0].Id, cancel), cancel);
+        if (!songs.IsOk) return (songs.Failure == FailureKind.Parse ? TransferStop.None : StopOf(songs), 0);
+        var decided = 0;
+        foreach (var item in group.Where(i => i.Status == MatchStatus.Pending))
+        {
+            var candidates = TransferMatcher.RankSongs(item.AsTrack(), songs.Value ?? []);
+            if (TransferMatcher.StatusOf(candidates) != MatchStatus.Matched) continue;
+            item.SetCandidates(candidates);
+            decided++;
+        }
+        return (TransferStop.None, decided);
     }
 
     private async Task<TransferStop> MatchOneAsync(TransferItem item, CancellationToken cancel)
