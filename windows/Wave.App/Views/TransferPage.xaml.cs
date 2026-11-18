@@ -166,7 +166,7 @@ public sealed partial class TransferPage : Page
             _ => "",
         };
         if (p?.WaitSeconds is { } wait)
-            ProgressDetail.Text = L.T($"YouTube Music に続けての検索を一時的に断られたので、{(wait >= 60 ? $"{wait / 60} 分" : $"{wait} 秒")}待ってから続けます", $"YouTube Music is briefly refusing requests, so wave waits {(wait >= 60 ? $"{wait / 60} min" : $"{wait} s")} and continues");
+            ProgressDetail.Text = L.T($"{p.Done} / {p.Total} • YouTube Music に続けての検索を一時的に断られたので、{(wait >= 60 ? $"{wait / 60} 分" : $"{wait} 秒")}待ってから続けます", $"{p.Done} of {p.Total} • YouTube Music is briefly refusing requests, so wave waits {(wait >= 60 ? $"{wait / 60} min" : $"{wait} s")} and continues");
         else if (Transfer.Remaining is { } left) ProgressDetail.Text += " • " + Remaining(left);
         StopButton.Visibility = Ui.Show(busy is "login" or "match" or "write" or "read");
     }

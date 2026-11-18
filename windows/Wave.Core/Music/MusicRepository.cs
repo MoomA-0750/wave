@@ -178,18 +178,18 @@ public sealed class MusicRepository(InnerTubeClient client, LiveClient? live = n
     public Task<ApiResult<List<HomeItem>>> RecentActivityAsync(CancellationToken cancel = default) =>
         LoggedInBrowseAsync(LibraryLanding, null, MusicParsers.GridItems, cancel);
 
-    public Task<ApiResult<List<PlaylistSummary>>> LibraryPlaylistsAsync(Action<List<PlaylistSummary>>? onPage = null, CancellationToken cancel = default) =>
-        AllLibraryPagesAsync(LibraryPlaylists, MusicParsers.Playlists, p => p.PlaylistId, onPage, cancel);
+    public Task<ApiResult<List<PlaylistSummary>>> LibraryPlaylistsAsync(Action<List<PlaylistSummary>>? onPage = null, CancellationToken cancel = default, Action? onIncomplete = null) =>
+        AllLibraryPagesAsync(LibraryPlaylists, MusicParsers.Playlists, p => p.PlaylistId, onPage, cancel, onIncomplete);
 
-    public Task<ApiResult<List<ArtistSummary>>> LibraryArtistsAsync(Action<List<ArtistSummary>>? onPage = null, CancellationToken cancel = default) =>
-        AllLibraryPagesAsync(LibraryArtists, root => MusicParsers.LibraryCards(root).OfType<HomeItem.ArtistItem>().Select(a => a.Artist).ToList(), a => a.BrowseId, onPage, cancel);
+    public Task<ApiResult<List<ArtistSummary>>> LibraryArtistsAsync(Action<List<ArtistSummary>>? onPage = null, CancellationToken cancel = default, Action? onIncomplete = null) =>
+        AllLibraryPagesAsync(LibraryArtists, root => MusicParsers.LibraryCards(root).OfType<HomeItem.ArtistItem>().Select(a => a.Artist).ToList(), a => a.BrowseId, onPage, cancel, onIncomplete);
 
     /// <summary>登録（サブスクライブ）したアーティスト。新作の知らせに使う（Android と同じ）。途中で打ち切ったら onIncomplete を呼ぶ。</summary>
     public Task<ApiResult<List<ArtistSummary>>> SubscribedArtistsAsync(Action? onIncomplete = null, CancellationToken cancel = default) =>
         AllLibraryPagesAsync(SubscribedArtists, root => MusicParsers.LibraryCards(root).OfType<HomeItem.ArtistItem>().Select(a => a.Artist).ToList(), a => a.BrowseId, null, cancel, onIncomplete);
 
-    public Task<ApiResult<List<AlbumSummary>>> LibraryAlbumsAsync(Action<List<AlbumSummary>>? onPage = null, CancellationToken cancel = default) =>
-        AllLibraryPagesAsync(LibraryAlbums, root => MusicParsers.LibraryCards(root).OfType<HomeItem.AlbumItem>().Select(a => a.Album).ToList(), a => a.BrowseId, onPage, cancel);
+    public Task<ApiResult<List<AlbumSummary>>> LibraryAlbumsAsync(Action<List<AlbumSummary>>? onPage = null, CancellationToken cancel = default, Action? onIncomplete = null) =>
+        AllLibraryPagesAsync(LibraryAlbums, root => MusicParsers.LibraryCards(root).OfType<HomeItem.AlbumItem>().Select(a => a.Album).ToList(), a => a.BrowseId, onPage, cancel, onIncomplete);
 
     /// <summary>
     /// ライブラリの一覧を続きのページまで読む。途中で失敗したらそこまでの分を返す（onIncomplete を呼ぶ。ページの上限で打ち切ったときも）。

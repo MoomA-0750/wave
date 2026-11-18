@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Wave.Core.Music;
+using Wave.Core.Net;
 
 namespace Wave.App.Services;
 
@@ -92,7 +93,12 @@ public sealed partial class LibraryState : ObservableObject
     public static List<Song> ByArtist(IEnumerable<Song> songs, string? browseId, string name) =>
         songs.Where(song => song.Artists.Any(a => browseId is not null && a.BrowseId is not null ? a.BrowseId == browseId : string.Equals(a.Name, name, StringComparison.OrdinalIgnoreCase))).ToList();
 
-    public async Task RefreshAsync()
+    /// <summary>読めなかったときに読み直すまでの間（YouTube が続けての頼みを一時的に断ったときなど。尽きたらやめる）。</summary>
+    private static readonly TimeSpan[] RetryAfter = [TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(3), TimeSpan.FromMinutes(10)];
+
+    public Task RefreshAsync() => RefreshAsync(0);
+
+    private async Task RefreshAsync(int retry)
     {
         cancel?.Cancel();
         var token = (cancel = new CancellationTokenSource()).Token;
@@ -110,15 +116,21 @@ public sealed partial class LibraryState : ObservableObject
         IsLoading = true;
         try
         {
-            var playlists = AppServices.Music.LibraryPlaylistsAsync(page => Replace(Playlists, page.Where(p => p.PlaylistId != MusicRepository.LikedSongs || Capture(p)), token), token);
-            var artists = AppServices.Music.LibraryArtistsAsync(page => Replace(Artists, page, token), token);
-            var albums = AppServices.Music.LibraryAlbumsAsync(page => Replace(Albums, page, token), token);
+            // 途中のページで失敗すると、そこまでの分が「読めた」として返る。そのときも読み直す
+            var incomplete = false;
+            void Incomplete() => incomplete = true;
+            var playlists = AppServices.Music.LibraryPlaylistsAsync(page => Replace(Playlists, page.Where(p => p.PlaylistId != MusicRepository.LikedSongs || Capture(p)), token), token, Incomplete);
+            var artists = AppServices.Music.LibraryArtistsAsync(page => Replace(Artists, page, token), token, Incomplete);
+            var albums = AppServices.Music.LibraryAlbumsAsync(page => Replace(Albums, page, token), token, Incomplete);
             _ = LoadRecentAsync(token);
             _ = LoadPodcastsAsync(token);
             var results = await Task.WhenAll(playlists.ContinueWith(t => t.Result.Failure), artists.ContinueWith(t => t.Result.Failure), albums.ContinueWith(t => t.Result.Failure));
             if (token.IsCancellationRequested) return;
             Failure = results.FirstOrDefault(f => f is not null)?.ToString();
-            AppPaths.Log($"library playlists={Playlists.Count} artists={Artists.Count} albums={Albums.Count} failure={Failure}");
+            AppPaths.Log($"library playlists={Playlists.Count} artists={Artists.Count} albums={Albums.Count} failure={Failure} incomplete={incomplete}");
+            // 一部でも読めなかったら、少し待って読み直す（途中までの一覧のままにしない。ログインが切れたときは読み直さない）
+            if ((Failure is not null || incomplete) && results.All(f => f != FailureKind.NotLoggedIn || AppServices.Client.Session.Status != SessionStatus.Expired) && retry < RetryAfter.Length)
+                _ = RetryLaterAsync(retry, token);
         }
         catch (OperationCanceledException)
         {
@@ -127,6 +139,19 @@ public sealed partial class LibraryState : ObservableObject
         {
             if (!token.IsCancellationRequested) IsLoading = false;
         }
+    }
+
+    private async Task RetryLaterAsync(int retry, CancellationToken token)
+    {
+        try
+        {
+            await Task.Delay(RetryAfter[retry], token);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        if (!token.IsCancellationRequested && AppServices.Client.IsLoggedIn) await RefreshAsync(retry + 1);
     }
 
     /// <summary>保存したポッドキャストを読み直す（番組のページで保存を変えたとき）。</summary>

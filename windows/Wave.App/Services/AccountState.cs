@@ -30,8 +30,11 @@ public sealed partial class AccountState : ObservableObject
     /// <summary>今のログインの取得時刻（ログインしていなければ 0）。保存したキューを、同じログインのときだけ戻すのに使う。</summary>
     public long ObtainedAtEpochMs { get; private set; }
 
+    private readonly DispatcherQueue ui;
+
     public AccountState(DispatcherQueue ui)
     {
+        this.ui = ui;
         // 状態は通信の途中から変わるので、画面の糸へ移して持つ
         AppServices.Client.Session.Changed += status => ui.TryEnqueue(() =>
         {
@@ -68,6 +71,8 @@ public sealed partial class AccountState : ObservableObject
         _ = RefreshAccountAsync();
     }
 
+    private int accountRetry;
+
     public async Task RefreshAccountAsync()
     {
         var result = await AppServices.Music.AccountAsync();
@@ -78,6 +83,13 @@ public sealed partial class AccountState : ObservableObject
         }
         AccountCheckFailed = !result.IsOk;
         AccountChecked = true;
+        // 読めなかった（YouTube が一時的に断ったなど）ときは、少し待って読み直す（アカウントの写真が出ないままにしない）
+        if (!result.IsOk && accountRetry < 3 && AppServices.Client.IsLoggedIn && AppServices.Client.Session.Status != SessionStatus.Expired)
+        {
+            var wait = TimeSpan.FromMinutes(new[] { 1, 3, 10 }[accountRetry++]);
+            _ = Task.Delay(wait).ContinueWith(_ => ui.TryEnqueue(() => _ = RefreshAccountAsync()));
+        }
+        else if (result.IsOk) accountRetry = 0;
         PremiumAudio = result.IsOk ? await AppServices.Resolver.PremiumAudioAsync() : null;
         AppPaths.Log($"account check ok={result.IsOk} failure={result.Failure}");
     }

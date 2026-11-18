@@ -51,8 +51,13 @@ public sealed class MusicTransferWriter(MusicRepository repository, MusicReposit
     public Task<ApiResult<string>> CreatePlaylistAsync(string title, IReadOnlyList<string> videoIds, CancellationToken cancel) =>
         repository.CreatePlaylistAsync(title, videoIds, cancel);
 
-    public async Task<HashSet<string>?> LibraryPlaylistTitlesAsync(CancellationToken cancel) =>
-        await repository.LibraryPlaylistsAsync(cancel: cancel) is { IsOk: true } r ? r.Value!.Select(p => p.Title).ToHashSet() : null;
+    public async Task<HashSet<string>?> LibraryPlaylistTitlesAsync(CancellationToken cancel)
+    {
+        // 途中のページで切れた一覧では、同じ名前を見落とすので「読めなかった」とする
+        var incomplete = false;
+        var r = await repository.LibraryPlaylistsAsync(cancel: cancel, onIncomplete: () => incomplete = true);
+        return r.IsOk && !incomplete ? r.Value!.Select(p => p.Title).ToHashSet() : null;
+    }
 
     public Task<HashSet<string>?> PlaylistVideoIdsAsync(string playlistId, CancellationToken cancel) => repository.ScanPlaylistAsync(playlistId, cancel);
 
