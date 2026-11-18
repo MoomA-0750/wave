@@ -296,6 +296,7 @@ public class SpotifyTransferTests
         {
             Calls.Add("search:" + query);
             if (FailSearches-- > 0) return Task.FromResult(ApiResult<IReadOnlyList<Song>>.Failed(FailureKind.Network));
+            if (ThrottleSearches-- > 0) return Task.FromResult(ApiResult<IReadOnlyList<Song>>.Failed(FailureKind.NotLoggedIn, 403));
             var title = query.Split(' ', 2).Last();
             return Task.FromResult(ApiResult<IReadOnlyList<Song>>.Ok([S("v-" + title, title, "緑黄色社会")]));
         }
@@ -319,6 +320,10 @@ public class SpotifyTransferTests
         }
 
         public HashSet<string>? LibraryTitles = [];
+        public int ThrottleSearches;
+        public bool LoginLost;
+
+        public Task<bool> LoginLostAsync(CancellationToken cancel) => Task.FromResult(LoginLost || LoggedOut);
 
         public Task<HashSet<string>?> LibraryPlaylistTitlesAsync(CancellationToken cancel) =>
             Task.FromResult(LibraryTitles is null ? null : new HashSet<string>(LibraryTitles));
@@ -371,6 +376,27 @@ public class SpotifyTransferTests
 
     private static TransferRunner Runner(FakeWriter w, List<int>? saves = null) =>
         new(w, _ => saves?.Add(1), (_, c) => { c.ThrowIfCancellationRequested(); return Task.CompletedTask; });
+
+    [Fact]
+    public async Task MatchWaitsAndContinuesWhenYouTubeRefusesButTheLoginIsAlive()
+    {
+        var s = Sample();
+        var w = new FakeWriter { ThrottleSearches = 2 };
+        var runner = Runner(w);
+        var waits = new List<int>();
+        runner.Progress += p => { if (p.WaitSeconds is { } sec) waits.Add(sec); };
+        Assert.Equal(TransferStop.None, await runner.MatchAsync(s, default));
+        Assert.DoesNotContain(s.ItemsInScope(), i => i.Status == MatchStatus.Pending);
+        Assert.Equal([60, 120], waits);
+    }
+
+    [Fact]
+    public async Task MatchStopsWhenTheLoginIsReallyLost()
+    {
+        var s = Sample();
+        var w = new FakeWriter { ThrottleSearches = 100, LoginLost = true };
+        Assert.Equal(TransferStop.NotLoggedIn, await Runner(w).MatchAsync(s, default));
+    }
 
     [Fact]
     public async Task MatchRetriesAfterAFailureAndSearchesEachSongOnce()

@@ -148,6 +148,7 @@ public sealed partial class TransferPage : Page
             "match" => L.T("YouTube Music で同じものを探しています…", "Finding the same items on YouTube Music…"),
             _ => L.T("YouTube Music に書き込んでいます…", "Writing to YouTube Music…"),
         };
+        BackgroundHint.Visibility = Ui.Show(Transfer.RunsLong);
         ProgressBar.IsIndeterminate = p is null || p.Total == 0;
         if (p is { Total: > 0 }) ProgressBar.Value = (double)p.Done / p.Total;
         ProgressDetail.Text = p is null ? "" : p.Stage switch
@@ -164,7 +165,21 @@ public sealed partial class TransferPage : Page
             "read-artists" => L.T($"アーティスト {p.Done} 人", En(p.Done, "artist")),
             _ => "",
         };
+        if (p?.WaitSeconds is { } wait)
+            ProgressDetail.Text = L.T($"YouTube Music に続けての検索を一時的に断られたので、{(wait >= 60 ? $"{wait / 60} 分" : $"{wait} 秒")}待ってから続けます", $"YouTube Music is briefly refusing requests, so wave waits {(wait >= 60 ? $"{wait / 60} min" : $"{wait} s")} and continues");
+        else if (Transfer.Remaining is { } left) ProgressDetail.Text += " • " + Remaining(left);
         StopButton.Visibility = Ui.Show(busy is "login" or "match" or "write" or "read");
+    }
+
+    /// <summary>残りのおよその時間（「残り およそ 1 時間 20 分」）。</summary>
+    internal static string Remaining(TimeSpan left)
+    {
+        var minutes = (int)Math.Ceiling(left.TotalMinutes);
+        if (minutes <= 1) return L.T("残り 1 分ほど", "about a minute left");
+        if (minutes < 60) return L.T($"残り およそ {minutes} 分", $"about {minutes} min left");
+        var h = minutes / 60;
+        var m = minutes % 60 / 10 * 10;
+        return m == 0 ? L.T($"残り およそ {h} 時間", $"about {h} h left") : L.T($"残り およそ {h} 時間 {m} 分", $"about {h} h {m} min left");
     }
 
     private void OnStop(object sender, RoutedEventArgs e) => Transfer.Stop();
@@ -211,7 +226,7 @@ public sealed partial class TransferPage : Page
     private void RenderChoose(TransferSession s)
     {
         renderingChoose = true;
-        SourceText.Text = (s.Source == "api" ? L.T("Spotify の Web API から読みました", "Read from the Spotify Web API") : L.T("データのダウンロードから読みました", "Read from your data download"))
+        SourceText.Text = (s.Source == "api" ? L.T("読んだ元: Spotify の Web API（ログイン）", "Source: Spotify Web API (signed in)") : L.T("読んだ元: Spotify のデータのダウンロード", "Source: Spotify data download"))
             + (s.SourceName is { } name && s.Source != "api" ? $" • {name}" : "");
         ProblemsBar.IsOpen = s.Problems.Count > 0;
         ProblemsBar.Message = string.Join("\n", s.Problems.Select(ProblemText));
@@ -236,7 +251,7 @@ public sealed partial class TransferPage : Page
             var p = s.Playlists[i];
             var check = new CheckBox
             {
-                Content = p.Name + L.T("（", " (") + (p.Readable ? L.Songs(p.TrackKeys.Count) : L.T("中身を読めない: 他人のプレイリスト", "can't read: made by someone else")) + L.T("）", ")"),
+                Content = p.Name + L.T("（", " (") + (!p.Readable ? L.T("中身を読めない: 他人のプレイリスト", "can't read: made by someone else") : p.TrackKeys.Count == 0 ? L.T("空なので移さない", "empty, nothing to move") : L.Songs(p.TrackKeys.Count)) + L.T("）", ")"),
                 IsChecked = p.Include && p.Readable,
                 IsEnabled = p.Readable && p.TrackKeys.Count > 0 && s.IncludePlaylists,
             };

@@ -24,6 +24,8 @@
                         <TextBlock x:Name="ProgressTitle" Style="{StaticResource BodyStrongTextBlockStyle}" />
                         <TextBlock x:Name="ProgressDetail" Style="{StaticResource SubtleTextStyle}" TextTrimming="CharacterEllipsis" />
                         <ProgressBar x:Name="ProgressBar" Maximum="1" />
+                        <TextBlock x:Name="BackgroundHint" Style="{StaticResource SubtleTextStyle}" TextWrapping="Wrap" MaxLines="0" Visibility="Collapsed"
+                                   Text="{x:Bind app:L.T('時間がかかります。ほかの画面へ移っても、窓を最小化しても閉じても裏で続け、終わったら通知で知らせます（閉じたときは再生を止めます）。閉じたあとは、通知を押すか wave をもう一度開くと、ここへ戻ります', 'This takes a while. It keeps going if you open other pages, minimize the window or close it, and you get a notification when it finishes (closing pauses playback). After closing, click the notification or open wave again to come back here')}" />
                     </StackPanel>
                     <Button x:Name="StopButton" Grid.Column="1" VerticalAlignment="Center" Click="OnStop" Content="{x:Bind app:L.T('止める', 'Stop')}" />
                 </Grid>

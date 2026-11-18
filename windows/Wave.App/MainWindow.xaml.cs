@@ -15,6 +15,7 @@ using Wave.App.Services.Connect;
 using Wave.App.Views;
 using Wave.Core.Lyrics;
 using Wave.Core.Music;
+using Wave.Core.Transfer;
 
 namespace Wave.App;
 
@@ -103,6 +104,7 @@ public sealed partial class MainWindow : Window
         Nav.Frame = ContentFrame;
         InitPositionSlider();
         InitConnect();
+        InitBackgroundTransfer();
 #if DEBUG
         DebugCommands.Start(this);
 #endif
@@ -1406,6 +1408,58 @@ public sealed partial class MainWindow : Window
         toastCountdown?.Stop();
         toastCountdown = null;
         ToastFrame.Visibility = Visibility.Collapsed;
+    }
+
+    // --- 窓を閉じても続ける作業（Spotify から移す） ---
+
+    /// <summary>移す作業のために窓を隠しているか（閉じたが、作業が終わるまでアプリは動いている）。</summary>
+    public bool HiddenForTransfer { get; private set; }
+
+    private void InitBackgroundTransfer()
+    {
+        var transfer = AppServices.Transfer;
+        // 突き合わせ・書き込みの途中で閉じたら、終わらせずに窓だけ隠す（再生は止める。閉じたのに鳴り続けないように）
+        AppWindow.Closing += (_, e) =>
+        {
+            if (!transfer.RunsLong) return;
+            e.Cancel = true;
+            HiddenForTransfer = true;
+            if (Player.IsPlaying) Player.TogglePlay();
+            Player.SaveQueue();
+            AppWindow.Hide();
+            AppPaths.Log($"transfer hidden busy={transfer.Busy}");
+            Toasts.Show(L.T("wave は裏で続けています", "wave is still working"),
+                transfer.Busy == "match"
+                    ? L.T("Spotify から移すものを YouTube Music で探しています。終わったら知らせます", "Finding your Spotify items on YouTube Music. You'll be notified when it's done")
+                    : L.T("YouTube Music に書き込んでいます。終わったら知らせます", "Writing to YouTube Music. You'll be notified when it's done"),
+                "transfer=1");
+        };
+        transfer.Finished += (kind, stop) =>
+        {
+            var foreground = !HiddenForTransfer && AppWindow.IsVisible && AppWindow.Presenter is not OverlappedPresenter { State: OverlappedPresenterState.Minimized }
+                && Nav.Frame.Content is TransferPage;
+            if (foreground || stop == TransferStop.Cancelled) return;
+            var (title, body) = (kind, stop) switch
+            {
+                ("match", TransferStop.None) => (L.T("突き合わせが終わりました", "Matching is done"), L.T("押すと見直しの一覧を開きます。YouTube Music にはまだ何も書いていません", "Open the review list. Nothing has been written to YouTube Music yet")),
+                ("write", TransferStop.None) => (L.T("Spotify から移し終えました", "Moving from Spotify is done"), L.T("押すと結果を開きます", "Open the results")),
+                _ => (L.T("Spotify から移す作業が止まりました", "Moving from Spotify stopped"), L.T("押すと開きます。「続ける」で続きから行えます", "Open it and choose Continue to pick up where it stopped")),
+            };
+            Toasts.Show(title, body, "transfer=1");
+        };
+        // 通知を押したら、隠していた窓を出す（開く先は通知ごとの処理が決める）
+        Toasts.Activated += _ => DispatcherQueue.TryEnqueue(ShowFromBackground);
+    }
+
+    /// <summary>隠していた・最小化していた窓を前に出す（通知を押した・wave をもう一度開いた）。</summary>
+    public void ShowFromBackground()
+    {
+        var wasHidden = HiddenForTransfer;
+        HiddenForTransfer = false;
+        AppWindow.Show();
+        if (AppWindow.Presenter is OverlappedPresenter { State: OverlappedPresenterState.Minimized } presenter) presenter.Restore();
+        Activate();
+        if (wasHidden && Nav.Frame.Content is not TransferPage) Nav.Transfer();
     }
 
     // --- 端末の連携（Connect v2） ---

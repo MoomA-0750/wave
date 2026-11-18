@@ -68,6 +68,7 @@ public sealed class Releases(DispatcherQueue ui)
         var args = launch.Split('&').Select(p => p.Split('=', 2)).Where(p => p.Length == 2).ToDictionary(p => p[0], p => Uri.UnescapeDataString(p[1]));
         if (args.TryGetValue("album", out var album)) Nav.Album(album);
         else if (args.TryGetValue("artist", out var artist)) Nav.Artist(artist);
+        else if (args.ContainsKey("transfer")) Nav.Transfer();
         App.Window?.Activate();
     }
 

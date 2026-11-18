@@ -29,6 +29,8 @@ public interface ITransferWriter
     /// <summary>アーティストを登録しているかと、登録に使うチャンネルの ID。</summary>
     Task<ApiResult<(bool? Subscribed, string? ChannelId)>> ArtistSubscriptionAsync(string browseId, CancellationToken cancel);
     Task<ApiResult<bool>> SubscribeAsync(string channelId, CancellationToken cancel);
+    /// <summary>「ログインが要る」と返ったあと、本当にログインが切れたか（確かめが済むまで待つ）。切れていなければ、続けての頼みに YouTube が一時的に断っただけ。</summary>
+    Task<bool> LoginLostAsync(CancellationToken cancel);
 }
 
 /// <summary>MusicRepository を使う本物（検索は searchRepository、書き込みと読み直しはログインした repository）。</summary>
@@ -64,6 +66,14 @@ public sealed class MusicTransferWriter(MusicRepository repository, MusicReposit
 
     public Task<ApiResult<bool>> SetLikedAsync(string videoId, CancellationToken cancel) => repository.SetLikedAsync(videoId, true, cancel);
 
+    public async Task<bool> LoginLostAsync(CancellationToken cancel)
+    {
+        // 403 のあとは裏で account_menu の確かめが走る。済むまで（最大40秒）待って、切れたと分かったときだけ true
+        var session = repository.Client.Session;
+        for (var i = 0; i < 40 && session.Status == SessionStatus.Suspect; i++) await Task.Delay(TimeSpan.FromSeconds(1), cancel);
+        return session.Status is SessionStatus.Expired or SessionStatus.LoggedOut;
+    }
+
     public async Task<ApiResult<(bool? Saved, string? SavePlaylistId)>> AlbumSaveStateAsync(string browseId, CancellationToken cancel) =>
         (await repository.AlbumAsync(browseId, cancel)).Map(a => (a.Saved, a.SavePlaylistId));
 
@@ -76,7 +86,8 @@ public sealed class MusicTransferWriter(MusicRepository repository, MusicReposit
 }
 
 /// <summary>進み具合（画面に出す）。Stage は "match"・"playlist"・"like"・"album"・"artist"。</summary>
-public sealed record TransferProgress(string Stage, int Done, int Total, string? Current = null);
+/// <summary>進み具合。WaitSeconds は、YouTube に一時的に断られて待っている秒数（待っていなければ null）。</summary>
+public sealed record TransferProgress(string Stage, int Done, int Total, string? Current = null, int? WaitSeconds = null);
 
 /// <summary>止まった理由。</summary>
 public enum TransferStop { None, Cancelled, NotLoggedIn, Network }
@@ -93,6 +104,8 @@ public sealed class TransferRunner(ITransferWriter writer, Action<TransferSessio
     public TimeSpan SearchGap { get; init; } = TimeSpan.FromMilliseconds(250);
     public TimeSpan WriteGap { get; init; } = TimeSpan.FromMilliseconds(700);
     public static readonly TimeSpan[] Backoff = [TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(30)];
+    /// <summary>ログインは切れていないのに「ログインが要る」（403）と断られたときに待つ時間（続けての頼みが多すぎたとみなす）。尽きたら止める。</summary>
+    public static readonly TimeSpan[] ThrottleBackoff = [TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(2), TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(10), TimeSpan.FromMinutes(10)];
     /// <summary>プレイリストを作るときに一緒に渡す曲の数と、あとから足すときの1回の数。</summary>
     public const int CreateChunk = 50;
     public const int AddChunk = 25;
@@ -101,12 +114,36 @@ public sealed class TransferRunner(ITransferWriter writer, Action<TransferSessio
 
     public event Action<TransferProgress>? Progress;
 
+    private TransferProgress? last;
+    /// <summary>今の検索の間隔。断られるたびに倍にする（3秒まで）。</summary>
+    private TimeSpan? gap;
+    private TimeSpan searchGap => gap ?? SearchGap;
+    public static readonly TimeSpan MaxSearchGap = TimeSpan.FromSeconds(3);
+
+    private void Report(TransferProgress p)
+    {
+        last = p;
+        Progress?.Invoke(p);
+    }
+
     /// <summary>失敗したら待ってやり直す。ログインが要る・形が読めないときはやり直さない。</summary>
     private async Task<ApiResult<T>> RetryAsync<T>(Func<Task<ApiResult<T>>> call, CancellationToken cancel)
     {
+        var throttled = 0;
         for (var attempt = 0; ; attempt++)
         {
             var result = await call();
+            if (result.Failure == FailureKind.NotLoggedIn && throttled < ThrottleBackoff.Length && !await writer.LoginLostAsync(cancel))
+            {
+                // ログインは生きている: 続けての頼みに一時的に断られただけなので、長めに待って同じ頼みをやり直す
+                var wait = ThrottleBackoff[throttled++];
+                gap = TimeSpan.FromTicks(Math.Min(MaxSearchGap.Ticks, Math.Max(searchGap.Ticks * 2, TimeSpan.FromMilliseconds(500).Ticks)));
+                if (last is { } p) Progress?.Invoke(p with { WaitSeconds = (int)wait.TotalSeconds });
+                await delay(wait, cancel);
+                if (last is { } q) Progress?.Invoke(q);
+                attempt = -1;
+                continue;
+            }
             if (result.IsOk || result.Failure is FailureKind.NotLoggedIn or FailureKind.Parse || attempt >= Backoff.Length) return result;
             await delay(Backoff[attempt], cancel);
         }
@@ -147,14 +184,14 @@ public sealed class TransferRunner(ITransferWriter writer, Action<TransferSessio
             foreach (var item in items.Where(i => i.Status == MatchStatus.Pending))
             {
                 cancel.ThrowIfCancellationRequested();
-                Progress?.Invoke(new TransferProgress("match", done, total, item.Title));
+                Report(new TransferProgress("match", done, total, item.Title));
                 var stop = await MatchOneAsync(item, cancel);
                 if (stop != TransferStop.None) return stop;
                 done++;
                 if (++sinceSave >= SaveEvery) { save(session); sinceSave = 0; }
-                await delay(SearchGap, cancel);
+                await delay(searchGap, cancel);
             }
-            Progress?.Invoke(new TransferProgress("match", done, total));
+            Report(new TransferProgress("match", done, total));
             return TransferStop.None;
         }
         catch (OperationCanceledException)
@@ -181,7 +218,7 @@ public sealed class TransferRunner(ITransferWriter writer, Action<TransferSessio
                 if (TransferMatcher.StatusOf(candidates) != MatchStatus.Matched)
                 {
                     // 曲（song）で見つからなければ、動画も含めた検索の上位から探す
-                    await delay(SearchGap, cancel);
+                    await delay(searchGap, cancel);
                     var top = await RetryAsync(() => writer.SearchTopSongsAsync(query, cancel), cancel);
                     if (!top.IsOk && top.Failure != FailureKind.Parse) return StopOf(top);
                     candidates = TransferMatcher.Merge(candidates, TransferMatcher.RankSongs(track, top.Value ?? []));
@@ -229,7 +266,7 @@ public sealed class TransferRunner(ITransferWriter writer, Action<TransferSessio
                 var p = plan.Playlists[n];
                 var entry = session.Playlists[p.Index];
                 var op = TransferSession.PlaylistOp(p.Index);
-                Progress?.Invoke(new TransferProgress("playlist", n, plan.Playlists.Count, p.Name));
+                Report(new TransferProgress("playlist", n, plan.Playlists.Count, p.Name));
                 cancel.ThrowIfCancellationRequested();
                 if (entry.CreatedPlaylistId is null)
                 {
@@ -301,7 +338,7 @@ public sealed class TransferRunner(ITransferWriter writer, Action<TransferSessio
                 {
                     cancel.ThrowIfCancellationRequested();
                     var v = plan.Likes[i];
-                    Progress?.Invoke(new TransferProgress("like", i, plan.Likes.Count));
+                    Report(new TransferProgress("like", i, plan.Likes.Count));
                     // 一覧を読めなければ1曲ずつ確かめる（前から評価していた曲を「書いた」と数えない）
                     if (liked?.Contains(v) ?? await writer.IsLikedAsync(v, cancel) == true)
                     {
@@ -321,7 +358,7 @@ public sealed class TransferRunner(ITransferWriter writer, Action<TransferSessio
             {
                 cancel.ThrowIfCancellationRequested();
                 var a = plan.Albums[i];
-                Progress?.Invoke(new TransferProgress("album", i, plan.Albums.Count));
+                Report(new TransferProgress("album", i, plan.Albums.Count));
                 var state = await RetryAsync(() => writer.AlbumSaveStateAsync(a, cancel), cancel);
                 if (state.Failure == FailureKind.NotLoggedIn) return TransferStop.NotLoggedIn;
                 WriteOutcome outcome;
@@ -344,7 +381,7 @@ public sealed class TransferRunner(ITransferWriter writer, Action<TransferSessio
             {
                 cancel.ThrowIfCancellationRequested();
                 var a = plan.Artists[i];
-                Progress?.Invoke(new TransferProgress("artist", i, plan.Artists.Count));
+                Report(new TransferProgress("artist", i, plan.Artists.Count));
                 var state = await RetryAsync(() => writer.ArtistSubscriptionAsync(a, cancel), cancel);
                 if (state.Failure == FailureKind.NotLoggedIn) return TransferStop.NotLoggedIn;
                 WriteOutcome outcome;
@@ -361,7 +398,7 @@ public sealed class TransferRunner(ITransferWriter writer, Action<TransferSessio
                 Saved();
                 await delay(WriteGap, cancel);
             }
-            Progress?.Invoke(new TransferProgress("done", 1, 1));
+            Report(new TransferProgress("done", 1, 1));
             return TransferStop.None;
         }
         catch (OperationCanceledException)

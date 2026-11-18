@@ -24,6 +24,26 @@ public sealed class SpotifyTransfer(DispatcherQueue ui)
 
     /// <summary>作業の状態が変わった（UI のスレッドで呼ぶ）。</summary>
     public event Action? Changed;
+    /// <summary>突き合わせ（"match"）か書き込み（"write"）が終わった・止まった（UI のスレッドで呼ぶ）。窓を閉じていたら通知に使う。</summary>
+    public event Action<string, TransferStop>? Finished;
+
+    /// <summary>時間のかかる作業（突き合わせ・書き込み）をしているか。窓を閉じても裏で続ける。</summary>
+    public bool RunsLong => Busy is "match" or "write";
+
+    /// <summary>残りのおよその時間（今の作業で20件以上進んでから、その速さで見積もる）。分からなければ null。</summary>
+    public TimeSpan? Remaining
+    {
+        get
+        {
+            if (Progress is not { Total: > 0 } p || paceFrom is not { } from || p.Stage != from.Stage) return null;
+            var done = p.Done - from.Done;
+            if (done < 20) return null;
+            var per = (DateTimeOffset.UtcNow - from.At).TotalSeconds / done;
+            return TimeSpan.FromSeconds(per * Math.Max(0, p.Total - p.Done));
+        }
+    }
+
+    private (string Stage, int Done, DateTimeOffset At)? paceFrom;
 
     private CancellationTokenSource? cancel;
 
@@ -50,6 +70,8 @@ public sealed class SpotifyTransfer(DispatcherQueue ui)
         var runner = new TransferRunner(new MusicTransferWriter(AppServices.Music, AppServices.Music), Save);
         runner.Progress += p => ui.TryEnqueue(() =>
         {
+            // 速さは段階（曲・アルバム…）ごとに、その段階の最初の知らせから測る
+            if (paceFrom is not { } from || from.Stage != p.Stage) paceFrom = (p.Stage, p.Done, DateTimeOffset.UtcNow);
             Progress = p;
             Changed?.Invoke();
         });
@@ -84,7 +106,11 @@ public sealed class SpotifyTransfer(DispatcherQueue ui)
     {
         Busy = busy;
         Message = message;
-        if (busy is not null) Progress = null;
+        if (busy is not null)
+        {
+            Progress = null;
+            paceFrom = null;
+        }
         Changed?.Invoke();
     }
 
@@ -233,6 +259,7 @@ public sealed class SpotifyTransfer(DispatcherQueue ui)
         if (stop == TransferStop.None) session.Stage = TransferStage.Review;
         Save(session);
         Set(null, StopMessage(stop));
+        Finished?.Invoke("match", stop);
     }
 
     /// <summary>YouTube Music に書く（書く前の確認は画面がする）。</summary>
@@ -256,6 +283,7 @@ public sealed class SpotifyTransfer(DispatcherQueue ui)
         // 作ったプレイリスト・保存したアルバム・登録したアーティストをライブラリにすぐ出す
         if (summary.Written > 0) _ = AppServices.Library.RefreshAsync();
         Set(null, StopMessage(stop));
+        Finished?.Invoke("write", stop);
     }
 
     private static string? StopMessage(TransferStop stop) => stop switch
