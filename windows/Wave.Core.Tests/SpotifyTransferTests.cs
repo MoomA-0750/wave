@@ -391,6 +391,22 @@ public class SpotifyTransferTests
     }
 
     [Fact]
+    public async Task MatchRestsAfterEachBatch()
+    {
+        var s = Sample();
+        var waits = new List<TimeSpan>();
+        var runner = new TransferRunner(new FakeWriter(), _ => { }, (t, _) => { waits.Add(t); return Task.CompletedTask; })
+        {
+            SearchGap = TimeSpan.FromSeconds(1),
+            BatchSize = 2,
+            BatchPause = TimeSpan.FromSeconds(60),
+        };
+        Assert.Equal(TransferStop.None, await runner.MatchAsync(s, default));
+        var n = s.ItemsInScope().Count;
+        Assert.Equal(n / 2, waits.Count(w => w == TimeSpan.FromSeconds(60)));
+    }
+
+    [Fact]
     public async Task MatchStopsWhenTheLoginIsReallyLost()
     {
         var s = Sample();

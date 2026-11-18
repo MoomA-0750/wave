@@ -584,6 +584,14 @@ public static class DebugCommands
                 await AppServices.Library.RefreshAsync();
                 break;
             }
+            case "transfer-pace":
+            {
+                // 「間のミリ秒 何件ごと 休む秒」。次に突き合わせを始めたときから効く
+                var v = arg.Split(' ', StringSplitOptions.RemoveEmptyEntries).Select(int.Parse).ToArray();
+                Services.SpotifyTransfer.Pace = (v[0], v.Length > 1 ? v[1] : 0, v.Length > 2 ? v[2] : 0);
+                AppPaths.Log($"debug transfer-pace {Services.SpotifyTransfer.Pace}");
+                break;
+            }
             case "transfer-discard":
                 AppServices.Transfer.Discard();
                 break;

@@ -107,6 +107,11 @@ public sealed class TransferRunner(ITransferWriter writer, Action<TransferSessio
 
     /// <summary>検索の間・書き込みの間に空ける時間。</summary>
     public TimeSpan SearchGap { get; init; } = TimeSpan.FromMilliseconds(250);
+    /// <summary>この件数を探すごとに、BatchPause だけ休む（0 なら休まない）。続けての頼みが多いと YouTube が一時的に断るため。</summary>
+    public int BatchSize { get; init; }
+    public TimeSpan BatchPause { get; init; } = TimeSpan.Zero;
+    /// <summary>突き合わせの間に断られた回数（記録と速さの調べに使う）。</summary>
+    public int Throttles { get; private set; }
     public TimeSpan WriteGap { get; init; } = TimeSpan.FromMilliseconds(700);
     public static readonly TimeSpan[] Backoff = [TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(30)];
     /// <summary>ログインは切れていないのに「ログインが要る」（403）と断られたときに待つ時間（続けての頼みが多すぎたとみなす）。尽きたら止める。</summary>
@@ -142,6 +147,7 @@ public sealed class TransferRunner(ITransferWriter writer, Action<TransferSessio
             {
                 // ログインは生きている: 続けての頼みに一時的に断られただけなので、長めに待って同じ頼みをやり直す
                 var wait = ThrottleBackoff[throttled++];
+                Throttles++;
                 gap = TimeSpan.FromTicks(Math.Min(MaxSearchGap.Ticks, Math.Max(searchGap.Ticks * 2, TimeSpan.FromMilliseconds(500).Ticks)));
                 if (last is { } p) Progress?.Invoke(p with { WaitSeconds = (int)wait.TotalSeconds });
                 await delay(wait, cancel);
@@ -184,6 +190,7 @@ public sealed class TransferRunner(ITransferWriter writer, Action<TransferSessio
         var total = items.Count;
         var done = items.Count(i => i.Status != MatchStatus.Pending);
         var sinceSave = 0;
+        var matched = 0;
         try
         {
             foreach (var item in items.Where(i => i.Status == MatchStatus.Pending))
@@ -193,8 +200,10 @@ public sealed class TransferRunner(ITransferWriter writer, Action<TransferSessio
                 var stop = await MatchOneAsync(item, cancel);
                 if (stop != TransferStop.None) return stop;
                 done++;
+                matched++;
                 if (++sinceSave >= SaveEvery) { save(session); sinceSave = 0; }
-                await delay(searchGap, cancel);
+                if (BatchSize > 0 && matched % BatchSize == 0) await delay(BatchPause, cancel);
+                else await delay(searchGap, cancel);
             }
             Report(new TransferProgress("match", done, total));
             return TransferStop.None;

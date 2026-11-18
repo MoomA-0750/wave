@@ -65,13 +65,23 @@ public sealed class SpotifyTransfer(DispatcherQueue ui)
     }
 #endif
 
+    /// <summary>突き合わせの速さ（検索の間・何件ごとに何秒休むか）。開発用の命令 transfer-pace で替えて、断られない速さを探す。</summary>
+    public static (int GapMs, int Batch, int PauseSeconds) Pace = (1000, 100, 60);
+
     private TransferRunner Runner()
     {
-        var runner = new TransferRunner(new MusicTransferWriter(AppServices.Music, AppServices.Music), Save);
+        var runner = new TransferRunner(new MusicTransferWriter(AppServices.Music, AppServices.Music), Save)
+        {
+            SearchGap = TimeSpan.FromMilliseconds(Pace.GapMs),
+            BatchSize = Pace.Batch,
+            BatchPause = TimeSpan.FromSeconds(Pace.PauseSeconds),
+        };
         runner.Progress += p => ui.TryEnqueue(() =>
         {
             // 速さは段階（曲・アルバム…）ごとに、その段階の最初の知らせから測る
             if (paceFrom is not { } from || from.Stage != p.Stage) paceFrom = (p.Stage, p.Done, DateTimeOffset.UtcNow);
+            if (p.Stage == "match" && p.Done % 100 == 0 && p.Done > 0 && p.WaitSeconds is null && Progress?.Done != p.Done)
+                AppPaths.Log($"transfer match progress done={p.Done} total={p.Total}");
             Progress = p;
             Changed?.Invoke();
         });
@@ -252,7 +262,12 @@ public sealed class SpotifyTransfer(DispatcherQueue ui)
         cancel = new CancellationTokenSource();
         session.Stage = TransferStage.Matching;
         Set("match");
-        var stop = await Task.Run(() => OriginalAsync(() => Runner().MatchAsync(session, cancel.Token)));
+        var runner = Runner();
+        var started = DateTimeOffset.UtcNow;
+        var before = session.ItemsInScope().Count(i => i.Status != MatchStatus.Pending);
+        var stop = await Task.Run(() => OriginalAsync(() => runner.MatchAsync(session, cancel.Token)));
+        var searched = session.ItemsInScope().Count(i => i.Status != MatchStatus.Pending) - before;
+        AppPaths.Log($"transfer match pace gap={Pace.GapMs} batch={Pace.Batch} pause={Pace.PauseSeconds} searched={searched} minutes={(DateTimeOffset.UtcNow - started).TotalMinutes:F1} throttles={runner.Throttles}");
         LastStop = stop;
         var items = session.ItemsInScope();
         AppPaths.Log($"transfer match stop={stop} matched={items.Count(i => i.Status == MatchStatus.Matched)} review={items.Count(i => i.Status == MatchStatus.Review)} notfound={items.Count(i => i.Status == MatchStatus.NotFound)} pending={items.Count(i => i.Status == MatchStatus.Pending)}");
