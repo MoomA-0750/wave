@@ -12,13 +12,15 @@ public sealed record SpotifyToken(string AccessToken, string? RefreshToken, long
 
 /// <summary>
 /// Spotify の Web API へのログイン（Authorization Code + PKCE。秘密の鍵は要らない）。
-/// Client ID は本人が developer.spotify.com で作ったアプリのもの。戻り先はループバックの IP（ポートは開くたびに決める。Spotify はループバックだけ動的なポートを許す）。
+/// Client ID は本人が developer.spotify.com で作ったアプリのもの。戻り先はループバックの IP の決まったポート（Spotify のダッシュボードはポート無しの http を登録させないので、ポートまで登録してもらう）。
 /// </summary>
 public static class SpotifyAuth
 {
     public const string Scopes = "playlist-read-private playlist-read-collaborative user-library-read user-follow-read";
-    /// <summary>Spotify のアプリの設定に登録してもらう戻り先（ポート無し）。</summary>
-    public const string RegisteredRedirectUri = "http://127.0.0.1/callback";
+    /// <summary>戻りを受けるポート（登録した戻り先と同じでないと Spotify が断る）。</summary>
+    public const int CallbackPort = 43819;
+    /// <summary>Spotify のアプリの設定に登録してもらう戻り先。</summary>
+    public const string RegisteredRedirectUri = "http://127.0.0.1:43819/callback";
 
     public static string CreateVerifier()
     {
@@ -83,12 +85,17 @@ public static class SpotifyAuth
     private static string Base64Url(byte[] bytes) => Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
 }
 
-/// <summary>ブラウザから戻ってくるのを 127.0.0.1 の空いたポートで1回だけ受ける（HttpListener は URL の予約が要ることがあるので、TCP で直に受ける）。</summary>
+/// <summary>ブラウザから戻ってくるのを 127.0.0.1 の決まったポート（SpotifyAuth.CallbackPort）で1回だけ受ける（HttpListener は URL の予約が要ることがあるので、TCP で直に受ける）。</summary>
 public sealed class LoopbackReceiver : IDisposable
 {
-    private readonly TcpListener listener = new(IPAddress.Loopback, 0);
+    private readonly TcpListener listener;
 
-    public LoopbackReceiver() => listener.Start();
+    /// <summary>port が使われていれば SocketException。試験では 0（空いたポート）を渡す。</summary>
+    public LoopbackReceiver(int port = SpotifyAuth.CallbackPort)
+    {
+        listener = new TcpListener(IPAddress.Loopback, port);
+        listener.Start();
+    }
 
     public int Port => ((IPEndPoint)listener.LocalEndpoint).Port;
 

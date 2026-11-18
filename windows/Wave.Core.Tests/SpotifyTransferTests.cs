@@ -114,6 +114,9 @@ public class SpotifyTransferTests
         Assert.Contains("redirect_uri=http%3A%2F%2F127.0.0.1%3A5123%2Fcallback", url);
         Assert.Contains("code_challenge_method=S256", url);
         Assert.Contains("scope=playlist-read-private%20playlist-read-collaborative%20user-library-read%20user-follow-read", url);
+        // 戻りを受けるポートと、登録してもらう戻り先がそろっている（違うと Spotify が断る）
+        Assert.Equal($"http://127.0.0.1:{SpotifyAuth.CallbackPort}/callback", SpotifyAuth.RegisteredRedirectUri);
+        using (var receiver = new LoopbackReceiver(0)) Assert.StartsWith("http://127.0.0.1:", receiver.RedirectUri);
         var q = LoopbackReceiver.ParseQuery("/callback?code=a%2Bb&state=xyz");
         Assert.Equal("a+b", q["code"]);
         Assert.Equal("xyz", q["state"]);

@@ -143,7 +143,7 @@ public sealed class SpotifyTransfer(DispatcherQueue ui)
         AppPaths.Log($"transfer loaded source={source} playlists={library.Playlists.Count} unreadable={library.Playlists.Count(p => !p.Readable)} tracks={library.Playlists.Sum(p => p.Tracks.Count)} liked={library.LikedTracks.Count} albums={library.Albums.Count} artists={library.Artists.Count} problems={library.Problems.Count}");
     }
 
-    /// <summary>Spotify にログインして Web API から読む（ブラウザで許可してもらい、127.0.0.1 の空いたポートで戻りを受ける）。</summary>
+    /// <summary>Spotify にログインして Web API から読む（ブラウザで許可してもらい、127.0.0.1 の決まったポートで戻りを受ける）。</summary>
     public async Task LoginAndReadAsync(string clientId)
     {
         if (Busy is not null) return;
@@ -178,12 +178,12 @@ public sealed class SpotifyTransfer(DispatcherQueue ui)
         catch (System.Net.Sockets.SocketException e)
         {
             AppPaths.Log($"transfer login listen failed code={e.SocketErrorCode}");
-            Set(null, L.T("ログインの戻り先を開けませんでした", "Couldn't open the sign-in return address"));
+            Set(null, L.T($"ログインの戻り先を開けませんでした（ポート {SpotifyAuth.CallbackPort} をほかのアプリが使っているかもしれません）", $"Couldn't open the sign-in return address (another app may be using port {SpotifyAuth.CallbackPort})"));
             return;
         }
         if (spotifyToken is null)
         {
-            Set(null, L.T("Spotify のログインを完了できませんでした。Client ID と Redirect URI（http://127.0.0.1/callback）を確かめてください", "Couldn't finish signing in to Spotify. Check the Client ID and the Redirect URI (http://127.0.0.1/callback)"));
+            Set(null, L.T("Spotify のログインを完了できませんでした。Client ID と Redirect URI（http://127.0.0.1:43819/callback）を確かめてください", "Couldn't finish signing in to Spotify. Check the Client ID and the Redirect URI (http://127.0.0.1:43819/callback)"));
             return;
         }
         AppPaths.Log("transfer login ok");
