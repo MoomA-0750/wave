@@ -64,6 +64,9 @@ public static class Nav
 
     public static void Settings() => Go(typeof(Views.SettingsPage));
 
+    /// <summary>Spotify から移す（設定から開く）。</summary>
+    public static void Transfer() => Go(typeof(Views.TransferPage));
+
     public static void Devices() => Go(typeof(Views.DevicesPage));
 
     public static void Lyrics() => Go(typeof(Views.LyricsPage));

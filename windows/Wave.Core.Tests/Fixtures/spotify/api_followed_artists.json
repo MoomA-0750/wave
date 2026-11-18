@@ -1,0 +1,1 @@
+{ "artists": { "items": [ { "name": "緑黄色社会", "uri": "spotify:artist:0000000000000000000021" }, { "name": "Official髭男dism", "uri": "spotify:artist:0000000000000000000022" } ], "next": "https://api.spotify.com/v1/me/following?type=artist&after=x&limit=50", "cursors": { "after": "x" } } }

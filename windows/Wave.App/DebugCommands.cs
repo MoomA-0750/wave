@@ -417,6 +417,142 @@ public static class DebugCommands
                 AppPaths.Log($"debug playlist create ok={r.IsOk}");
                 break;
             }
+            case "transfer":
+                // Spotify から移すページを開く
+                Nav.Transfer();
+                break;
+            case "transfer-load":
+                // データのダウンロードの ZIP・JSON・フォルダを読む（arg は Windows の場所）
+                await AppServices.Transfer.LoadExportAsync(arg);
+                break;
+            case "transfer-include":
+            {
+                // 移す種類を切り替える（例: transfer-include liked off）
+                if (AppServices.Transfer.Session is not { } ts) break;
+                var on = arg.EndsWith(" on", StringComparison.Ordinal);
+                switch (arg.Split(' ')[0])
+                {
+                    case "playlists": ts.IncludePlaylists = on; break;
+                    case "liked": ts.IncludeLiked = on; break;
+                    case "albums": ts.IncludeAlbums = on; break;
+                    case "artists": ts.IncludeArtists = on; break;
+                }
+                AppServices.Transfer.SelectionChanged();
+                break;
+            }
+            case "transfer-playlist-only":
+            {
+                // 番号のプレイリストだけを移す（ほかのプレイリストは外す）
+                if (AppServices.Transfer.Session is not { } ts) break;
+                var keep = int.Parse(arg);
+                for (var i = 0; i < ts.Playlists.Count; i++) ts.Playlists[i].Include = i == keep && ts.Playlists[i].Readable;
+                AppServices.Transfer.SelectionChanged();
+                break;
+            }
+            case "transfer-match":
+                await AppServices.Transfer.MatchAsync();
+                break;
+            case "transfer-rematch":
+                // 突き合わせをやり直す（本人の選びは残す）
+                foreach (var item in AppServices.Transfer.Session?.Items ?? []) item.Status = Wave.Core.Transfer.MatchStatus.Pending;
+                if (AppServices.Transfer.Session is { } rs) rs.Stage = Wave.Core.Transfer.TransferStage.Loaded;
+                await AppServices.Transfer.MatchAsync();
+                break;
+            case "transfer-state":
+            {
+                var ts = AppServices.Transfer.Session;
+                var scope = ts?.ItemsInScope() ?? [];
+                var plan = ts is null ? null : Wave.Core.Transfer.TransferPlan.Of(ts);
+                AppPaths.Log($"debug transfer stage={ts?.Stage} busy={AppServices.Transfer.Busy} stop={AppServices.Transfer.LastStop} scope={scope.Count} "
+                    + string.Join(" ", scope.GroupBy(i => i.Status).Select(g => $"{g.Key}={g.Count()}"))
+                    + $" excluded={scope.Count(i => i.Excluded)} manual={scope.Count(i => i.Manual)} plan-playlists={plan?.Playlists.Count} plan-songs={plan?.PlaylistSongs} likes={plan?.Likes.Count} albums={plan?.Albums.Count} artists={plan?.Artists.Count} done={ts?.Done.Count}"
+                    + $" page={(Nav.Frame.Content as Views.TransferPage)?.DebugState}");
+                break;
+            }
+            case "transfer-filter":
+            {
+                // 見直しの絞り込み（例: transfer-filter review track）
+                var f = arg.Split(' ');
+                (Nav.Frame.Content as Views.TransferPage)?.DebugFilter(f[0], f.Length > 1 ? f[1] : "all");
+                break;
+            }
+            case "transfer-choose":
+            {
+                // 見えている行の番号と候補の番号（-1 で外す）
+                var f = arg.Split(' ');
+                (Nav.Frame.Content as Views.TransferPage)?.DebugChoose(int.Parse(f[0]), int.Parse(f[1]));
+                break;
+            }
+            case "transfer-menu":
+                (Nav.Frame.Content as Views.TransferPage)?.DebugOpenMenu(int.Parse(arg));
+                break;
+            case "transfer-search":
+                (Nav.Frame.Content as Views.TransferPage)?.DebugSearch(int.Parse(arg));
+                break;
+            case "transfer-confirm":
+                (Nav.Frame.Content as Views.TransferPage)?.DebugConfirm();
+                break;
+            case "transfer-write":
+                // 確かめの画面を出さずに書く（開発用）
+                await AppServices.Transfer.WriteAsync();
+                break;
+            case "transfer-probe":
+            {
+                // 突き合わせの検索の通り方を比べる（件数と、曲名が一致した数だけ）
+                var title = Wave.Core.Transfer.TransferMatcher.Fold(arg.Split(' ').Last());
+                foreach (var (name, repo) in AppServices.Transfer.DebugRepositories())
+                {
+                    Wave.Core.Net.InnerTubeClient.OriginalTitlesOverride = name == "main-original" ? true : null;
+                    var r = await repo.SearchSongsAsync(arg);
+                    Wave.Core.Net.InnerTubeClient.OriginalTitlesOverride = null;
+                    AppPaths.Log($"debug transfer-probe {name} ok={r.IsOk} failure={r.Failure} status={r.Status} songs={r.Value?.Songs.Count} same-title={r.Value?.Songs.Count(x => Wave.Core.Transfer.TransferMatcher.Fold(x.Title) == title)}");
+                }
+                break;
+            }
+            case "transfer-add-test":
+            {
+                // 作ったプレイリストに、高く評価する曲をまとめて足す（入っている曲は飛ばされるか）。前後の曲数だけを書く
+                if (AppServices.Transfer.Session is not { } ts || ts.Playlists.FirstOrDefault(p => p.CreatedPlaylistId is not null)?.CreatedPlaylistId is not { } pid) break;
+                var ids = ts.LikedKeys.Select(k => ts.Item(k)?.Target).OfType<string>().ToList();
+                var before = await AppServices.Music.ScanPlaylistAsync(pid);
+                var ok = await AppServices.Music.AddManyToPlaylistAsync(pid, ids);
+                var after = await AppServices.Music.ScanPlaylistItemsAsync(pid);
+                AppPaths.Log($"debug transfer-add-test ok={ok} sent={ids.Count} new={ids.Count(i => before?.Contains(i) == false)} before={before?.Count} after={after?.Count} entries={after?.Values.Sum(v => v.Count)}");
+                break;
+            }
+            case "transfer-stop":
+                AppServices.Transfer.Stop();
+                break;
+            case "transfer-revert":
+            {
+                // 確かめで書いたものを元に戻す（wave が書いたものだけ。前からあったものは触らない）
+                if (AppServices.Transfer.Session is not { } ts) break;
+                var music = AppServices.Music;
+                foreach (var p in ts.Playlists.Where(p => p.CreatedPlaylistId is not null))
+                {
+                    var id = p.CreatedPlaylistId!.StartsWith("VL", StringComparison.Ordinal) ? p.CreatedPlaylistId[2..] : p.CreatedPlaylistId;
+                    var r = await AppServices.Client.PostAsync("playlist/delete", new System.Text.Json.Nodes.JsonObject { ["playlistId"] = id });
+                    AppPaths.Log($"debug transfer revert playlist ok={r.IsOk}");
+                }
+                foreach (var (key, _) in ts.Done.Where(d => d.Value == Wave.Core.Transfer.WriteOutcome.Written).ToList())
+                {
+                    var opKind = key[..key.IndexOf(':')];
+                    var id = key[(key.IndexOf(':') + 1)..];
+                    var ok = opKind switch
+                    {
+                        "like" => (await music.SetLikedAsync(id, false)).IsOk,
+                        "album" => (await music.AlbumAsync(id)) is { IsOk: true } a && a.Value!.SavePlaylistId is { } sp && (await music.SetPlaylistSavedAsync(sp, false)).IsOk,
+                        "artist" => (await music.ArtistAsync(id)) is { IsOk: true } ar && ar.Value!.ChannelId is { } ch && (await music.SetSubscribedAsync(ch, false)).IsOk,
+                        _ => true,
+                    };
+                    AppPaths.Log($"debug transfer revert {opKind} ok={ok}");
+                }
+                await AppServices.Library.RefreshAsync();
+                break;
+            }
+            case "transfer-discard":
+                AppServices.Transfer.Discard();
+                break;
             case "playlists":
                 await AppServices.Library.RefreshAsync();
                 AppPaths.Log("debug playlists " + string.Join(" | ", AppServices.Library.Editable.Select(p => p.Title)));

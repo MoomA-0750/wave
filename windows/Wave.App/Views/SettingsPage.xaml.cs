@@ -71,6 +71,8 @@ public sealed partial class SettingsPage : Page
 
     private void OnRelogin(object sender, RoutedEventArgs e) => App.Window?.ShowLogin();
 
+    private void OnTransfer(object sender, RoutedEventArgs e) => Nav.Transfer();
+
     private async void OnAccount(object sender, RoutedEventArgs e)
     {
         if (!AppServices.Account.IsLoggedIn)

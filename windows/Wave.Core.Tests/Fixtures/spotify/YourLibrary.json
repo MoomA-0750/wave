@@ -1,0 +1,19 @@
+{
+  "tracks": [
+    { "artist": "緑黄色社会", "album": "Actor", "track": "Mela!", "uri": "spotify:track:0000000000000000000001" },
+    { "artist": "緑黄色社会", "album": "SINGALONG", "track": "sabotage", "uri": "spotify:track:0000000000000000000002" },
+    { "artist": "緑黄色社会", "album": "pink blue", "track": "キャラクター", "uri": "spotify:track:0000000000000000000003" },
+    { "artist": "", "album": "", "track": "" }
+  ],
+  "albums": [
+    { "artist": "緑黄色社会", "album": "SINGALONG", "uri": "spotify:album:0000000000000000000011" }
+  ],
+  "shows": [],
+  "episodes": [],
+  "bannedTracks": [],
+  "artists": [
+    { "name": "緑黄色社会", "uri": "spotify:artist:0000000000000000000021" }
+  ],
+  "bannedArtists": [],
+  "other": []
+}

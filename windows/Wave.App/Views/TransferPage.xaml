@@ -1,0 +1,168 @@
+<Page x:Class="Wave.App.Views.TransferPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:app="using:Wave.App"
+      xmlns:local="using:Wave.App.Views">
+    <!-- Spotify から移す: 読み込む → 移すものを選ぶ → 突き合わせ → 見直す → 書き込む。作業は裏で続き、閉じても続きから行える -->
+    <Grid>
+        <ScrollViewer x:Name="MainScroll">
+            <StackPanel Padding="40,32" Spacing="{StaticResource KasaneSpace2}" MaxWidth="880" HorizontalAlignment="Stretch">
+                <TextBlock Text="{x:Bind app:L.T('Spotify から移す', 'Move from Spotify')}" FontSize="48" FontWeight="Bold" Margin="0,0,0,8" />
+                <TextBlock Text="{x:Bind app:L.T('プレイリストは同じ名前で作って曲を入れ、お気に入りの曲は高く評価し、アルバムはライブラリに保存し、アーティストは登録します。YouTube Music の同じものを自動で探し、書き込む前に一覧で見直せます', 'Playlists are recreated with the same names, liked songs are liked, albums are saved to your library and artists are subscribed. wave finds the same items on YouTube Music, and you can review them before anything is written')}"
+                           Style="{StaticResource SubtleTextStyle}" FontSize="14" TextWrapping="Wrap" MaxLines="0" Margin="0,0,0,8" />
+                <InfoBar x:Name="MessageBar" IsClosable="True" Severity="Informational" />
+
+                <!-- 進み具合 -->
+                <Grid x:Name="ProgressPanel" Padding="{StaticResource KasanePadding4}" CornerRadius="{StaticResource WaveCardCornerRadius}" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                      BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" ColumnSpacing="{StaticResource KasaneSpace4}" Visibility="Collapsed">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Spacing="{StaticResource KasaneSpace2}">
+                        <TextBlock x:Name="ProgressTitle" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                        <TextBlock x:Name="ProgressDetail" Style="{StaticResource SubtleTextStyle}" TextTrimming="CharacterEllipsis" />
+                        <ProgressBar x:Name="ProgressBar" Maximum="1" />
+                    </StackPanel>
+                    <Button x:Name="StopButton" Grid.Column="1" VerticalAlignment="Center" Click="OnStop" Content="{x:Bind app:L.T('止める', 'Stop')}" />
+                </Grid>
+
+                <!-- 読み込む -->
+                <StackPanel x:Name="StartPanel" Spacing="{StaticResource KasaneSpace2}">
+                    <TextBlock Text="{x:Bind app:L.T('データのダウンロードから', 'From your data download')}" Style="{StaticResource BodyStrongTextBlockStyle}" Margin="0,8,0,4" />
+                    <Grid Padding="{StaticResource KasanePadding4}" CornerRadius="{StaticResource WaveCardCornerRadius}" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                          BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" RowSpacing="{StaticResource KasaneSpace3}">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="{x:Bind app:L.T('Spotify のデータのファイルを開く', 'Open your Spotify data file')}" />
+                            <TextBlock Text="{x:Bind app:L.T('Spotify のアカウントの「プライバシーの設定」で「アカウントのデータ」を頼むと、数日でメールで ZIP が届きます。その ZIP、または展開したフォルダ・JSON（YourLibrary.json・Playlist1.json）を選んでください。曲の長さは入っていないので、曲名とアーティストで探します', 'Request “Account data” in Spotify^'s privacy settings and a ZIP arrives by email within a few days. Choose that ZIP, or the extracted folder or JSON (YourLibrary.json, Playlist1.json). It has no song lengths, so wave matches by title and artist')}"
+                                       Style="{StaticResource SubtleTextStyle}" TextWrapping="Wrap" MaxLines="0" />
+                        </StackPanel>
+                        <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="{StaticResource KasaneSpace2}">
+                            <Button Style="{StaticResource AccentButtonStyle}" Click="OnOpenFile" Content="{x:Bind app:L.T('ZIP・JSON を開く', 'Open ZIP or JSON')}" />
+                            <Button Click="OnOpenFolder" Content="{x:Bind app:L.T('フォルダを開く', 'Open folder')}" />
+                        </StackPanel>
+                    </Grid>
+
+                    <TextBlock Text="{x:Bind app:L.T('Spotify にログインして', 'By signing in to Spotify')}" Style="{StaticResource BodyStrongTextBlockStyle}" Margin="0,16,0,4" />
+                    <StackPanel Padding="{StaticResource KasanePadding4}" CornerRadius="{StaticResource WaveCardCornerRadius}" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Spacing="{StaticResource KasaneSpace2}">
+                        <TextBlock Text="{x:Bind app:L.T('すぐに読めて、曲の長さも使えます。developer.spotify.com で自分用のアプリを作る必要があります（作る人は Spotify Premium が必要）', 'Reads right away and uses song lengths. You need to create your own app at developer.spotify.com (the creator needs Spotify Premium)')}" TextWrapping="Wrap" />
+                        <TextBlock Text="{x:Bind app:L.T('1. developer.spotify.com の Dashboard で「Create app」。Web API を選び、Redirect URI に次を登録する', '1. In the Dashboard at developer.spotify.com, choose Create app, select Web API and add this Redirect URI')}" Style="{StaticResource SubtleTextStyle}" TextWrapping="Wrap" MaxLines="0" />
+                        <TextBox x:Name="RedirectBox" IsReadOnly="True" HorizontalAlignment="Left" MinWidth="320" />
+                        <TextBlock Text="{x:Bind app:L.T('2. 他の Spotify のアカウントで読むなら、アプリの「User Management」にそのアカウントを足す（5人まで）', '2. To read another Spotify account, add it under User Management in the app (up to 5 users)')}" Style="{StaticResource SubtleTextStyle}" TextWrapping="Wrap" MaxLines="0" />
+                        <TextBlock Text="{x:Bind app:L.T('3. アプリの Client ID を貼ってログインする。読み取りだけを許可してもらいます。他人が作ったプレイリストは中身を読めません', '3. Paste the app^'s Client ID and sign in. wave asks for read-only access. Playlists made by other people can^'t be read')}" Style="{StaticResource SubtleTextStyle}" TextWrapping="Wrap" MaxLines="0" />
+                        <Grid ColumnSpacing="{StaticResource KasaneSpace2}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox x:Name="ClientIdBox" PlaceholderText="Client ID" />
+                            <Button Grid.Column="1" Click="OnLogin" Content="{x:Bind app:L.T('ログインして読む', 'Sign in and read')}" />
+                        </Grid>
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- 移すものを選ぶ -->
+                <StackPanel x:Name="ChoosePanel" Spacing="{StaticResource KasaneSpace2}" Visibility="Collapsed">
+                    <TextBlock x:Name="SourceText" Style="{StaticResource SubtleTextStyle}" />
+                    <InfoBar x:Name="ProblemsBar" Severity="Warning" IsClosable="False" Title="{x:Bind app:L.T('読めなかったもの・移さないもの', 'Not read or not moved')}" />
+                    <TextBlock Text="{x:Bind app:L.T('移すもの', 'What to move')}" Style="{StaticResource BodyStrongTextBlockStyle}" Margin="0,8,0,4" />
+                    <StackPanel Padding="{StaticResource KasanePadding4}" CornerRadius="{StaticResource WaveCardCornerRadius}" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+                        <CheckBox x:Name="PlaylistsCheck" Click="OnCategoryClick" />
+                        <CheckBox x:Name="LikedCheck" Click="OnCategoryClick" />
+                        <CheckBox x:Name="AlbumsCheck" Click="OnCategoryClick" />
+                        <CheckBox x:Name="ArtistsCheck" Click="OnCategoryClick" />
+                    </StackPanel>
+                    <TextBlock x:Name="PlaylistsHeader" Text="{x:Bind app:L.T('プレイリスト', 'Playlists')}" Style="{StaticResource BodyStrongTextBlockStyle}" Margin="0,8,0,4" />
+                    <StackPanel x:Name="PlaylistChecks" Padding="{StaticResource KasanePadding4}" CornerRadius="{StaticResource WaveCardCornerRadius}" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" />
+                    <StackPanel Orientation="Horizontal" Spacing="{StaticResource KasaneSpace2}" Margin="0,8,0,0">
+                        <Button x:Name="MatchButton" Style="{StaticResource AccentButtonStyle}" Click="OnMatch" />
+                        <Button Click="OnDiscard" Content="{x:Bind app:L.T('最初からやり直す', 'Start over')}" />
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- 書き込みの結果 -->
+                <StackPanel x:Name="ResultPanel" Spacing="{StaticResource KasaneSpace2}" Visibility="Collapsed">
+                    <TextBlock x:Name="ResultTitle" Style="{StaticResource BodyStrongTextBlockStyle}" Margin="0,8,0,4" />
+                    <StackPanel x:Name="ResultLines" Padding="{StaticResource KasanePadding4}" CornerRadius="{StaticResource WaveCardCornerRadius}" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Spacing="{StaticResource KasaneSpace1}" />
+                    <StackPanel Orientation="Horizontal" Spacing="{StaticResource KasaneSpace2}" Margin="0,8,0,0">
+                        <Button x:Name="ContinueButton" Style="{StaticResource AccentButtonStyle}" Click="OnWrite" Content="{x:Bind app:L.T('続ける', 'Continue')}" />
+                        <Button Click="OnBackToReview" Content="{x:Bind app:L.T('見直しに戻る', 'Back to review')}" />
+                        <Button Click="OnFinish" Content="{x:Bind app:L.T('終える', 'Done')}" />
+                    </StackPanel>
+                </StackPanel>
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- 見直す（多いときも軽いよう、一覧だけを動かす） -->
+        <Grid x:Name="ReviewPanel" Padding="40,32,40,16" RowSpacing="{StaticResource KasaneSpace2}" Visibility="Collapsed">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <TextBlock Text="{x:Bind app:L.T('見直す', 'Review')}" FontSize="48" FontWeight="Bold" />
+            <TextBlock x:Name="ReviewSummary" Grid.Row="1" Style="{StaticResource SubtleTextStyle}" FontSize="14" TextWrapping="Wrap" MaxLines="0" />
+            <InfoBar x:Name="ReviewMessageBar" Grid.Row="2" IsClosable="True" Severity="Informational" />
+            <StackPanel Grid.Row="3" Spacing="{StaticResource KasaneSpace2}" Margin="0,4,0,4">
+                <StackPanel x:Name="StatusChips" Orientation="Horizontal" Spacing="{StaticResource KasaneSpace2}" />
+                <StackPanel x:Name="KindChips" Orientation="Horizontal" Spacing="{StaticResource KasaneSpace2}" />
+            </StackPanel>
+            <ListView x:Name="ReviewList" Grid.Row="4" SelectionMode="None" Margin="-12,0">
+                <ListView.ItemTemplate>
+                    <DataTemplate x:DataType="local:TransferRow">
+                        <Grid ColumnSpacing="12" Padding="0,6" MinHeight="56">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="110" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="{x:Bind SourceTitle}" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Text="{x:Bind SourceSubtitle}" Style="{StaticResource SubtleTextStyle}" TextTrimming="CharacterEllipsis" />
+                            </StackPanel>
+                            <FontIcon Grid.Column="1" Glyph="&#xE72A;" FontSize="12" Opacity="0.6" VerticalAlignment="Center" />
+                            <Grid Grid.Column="2" ColumnSpacing="10">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="40" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Border Width="40" Height="40" CornerRadius="{x:Bind Radius}" Background="{ThemeResource ControlFillColorSecondaryBrush}" VerticalAlignment="Center">
+                                    <Image Source="{x:Bind Thumb, Mode=OneWay}" Stretch="UniformToFill" />
+                                </Border>
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <TextBlock Text="{x:Bind TargetTitle, Mode=OneWay}" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Text="{x:Bind TargetSubtitle, Mode=OneWay}" Style="{StaticResource SubtleTextStyle}" TextTrimming="CharacterEllipsis" />
+                                </StackPanel>
+                            </Grid>
+                            <Border Grid.Column="3" HorizontalAlignment="Left" VerticalAlignment="Center" CornerRadius="10" Padding="8,2,8,3" Background="{x:Bind StatusBackground, Mode=OneWay}">
+                                <TextBlock Text="{x:Bind StatusText, Mode=OneWay}" FontSize="12" />
+                            </Border>
+                            <Button Grid.Column="4" VerticalAlignment="Center" Click="OnRowChoose" Content="{x:Bind app:L.T('選ぶ', 'Choose')}" />
+                        </Grid>
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
+            <!-- 書くものの数は1行を使う（ボタンと並べると狭く、日本語が語の途中で折り返す） -->
+            <StackPanel Grid.Row="5" Spacing="{StaticResource KasaneSpace2}" Padding="0,8,0,0">
+                <TextBlock x:Name="PlanText" TextWrapping="Wrap" MaxLines="0" Style="{StaticResource SubtleTextStyle}" />
+                <StackPanel Orientation="Horizontal" Spacing="{StaticResource KasaneSpace2}" HorizontalAlignment="Right">
+                    <Button Click="OnBackToChoose" Content="{x:Bind app:L.T('移すものを選び直す', 'Change what to move')}" />
+                    <Button x:Name="WriteButton" Style="{StaticResource AccentButtonStyle}" Click="OnWrite" Content="{x:Bind app:L.T('YouTube Music に書き込む', 'Write to YouTube Music')}" />
+                </StackPanel>
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Page>

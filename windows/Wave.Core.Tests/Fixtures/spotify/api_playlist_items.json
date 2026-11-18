@@ -1,0 +1,9 @@
+{
+  "items": [
+    { "added_at": "2026-11-01T00:00:00Z", "item": { "type": "track", "name": "Mela!", "duration_ms": 245000, "uri": "spotify:track:0000000000000000000001",
+      "artists": [ { "name": "緑黄色社会" } ], "album": { "name": "Actor" }, "external_ids": { "isrc": "JPXX02000001" } } },
+    { "added_at": "2026-11-01T00:00:00Z", "item": { "type": "episode", "name": "ある番組" } },
+    { "added_at": "2026-11-01T00:00:00Z", "item": null }
+  ],
+  "next": null
+}

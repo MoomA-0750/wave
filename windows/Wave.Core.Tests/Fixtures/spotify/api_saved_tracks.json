@@ -1,0 +1,1 @@
+{ "items": [ { "added_at": "2026-11-01T00:00:00Z", "track": { "type": "track", "name": "sabotage", "duration_ms": 230000, "artists": [ { "name": "緑黄色社会" } ], "album": { "name": "SINGALONG" }, "uri": "spotify:track:0000000000000000000002" } } ], "next": "https://api.spotify.com/v1/me/tracks?offset=1&limit=1" }

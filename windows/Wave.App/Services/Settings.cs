@@ -39,6 +39,8 @@ public sealed class Settings
     /// <summary>スマートダウンロード（既定は切）と曲数（25・50・100・200。既定は 50）。</summary>
     public bool SmartDownloads { get; set; }
     public int SmartDownloadCount { get; set; } = Wave.Core.Downloads.SmartDownloads.DefaultCount;
+    /// <summary>Spotify から移すときに Web API へログインする、本人が developer.spotify.com で作ったアプリの Client ID（秘密ではない。PKCE なので secret は要らない）。</summary>
+    public string? SpotifyClientId { get; set; }
 
     private static readonly string FilePath = Path.Combine(AppPaths.Data, "settings.json");
     private static readonly JsonSerializerOptions Options = new() { WriteIndented = true };

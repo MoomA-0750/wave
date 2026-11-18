@@ -125,8 +125,20 @@ public sealed class InnerTubeClient
     /// </summary>
     public bool OriginalTitles
     {
-        get => originalTitles;
+        get => originalTitlesOverride.Value ?? originalTitles;
         set => originalTitles = value;
+    }
+
+    private static readonly AsyncLocal<bool?> originalTitlesOverride = new();
+
+    /// <summary>
+    /// 今の非同期の流れの間だけ「曲名を元の表記で」を決める（Spotify から移すときの検索。Spotify の名前は元の表記なので、設定に依らず元の表記で受け取る）。
+    /// null なら設定のまま。async のメソッドの中で入れたものは、そのメソッドを抜けると戻る。
+    /// </summary>
+    public static bool? OriginalTitlesOverride
+    {
+        get => originalTitlesOverride.Value;
+        set => originalTitlesOverride.Value = value;
     }
 
     /// <summary>曲名を元の表記で出すときに、2つの言語で送る読み取り（曲・アルバム・アーティストの一覧を返すもの）。</summary>

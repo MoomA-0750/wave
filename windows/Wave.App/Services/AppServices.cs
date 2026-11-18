@@ -48,6 +48,8 @@ public static class AppServices
     public static DiscordStatus Discord { get; private set; } = null!;
     /// <summary>同じ PC のほかのアプリ向けの口（docs/local-api.md）。待ち受けられなければ null。</summary>
     public static Wave.Core.LocalApi.LocalApiServer? LocalApi { get; private set; }
+    /// <summary>Spotify から移す作業（設定から開く）。</summary>
+    public static SpotifyTransfer Transfer { get; private set; } = null!;
 
     public static void Initialize(DispatcherQueue ui)
     {
@@ -87,6 +89,8 @@ public static class AppServices
         Releases.Start();
         Downloads.Start();
         Discord = new DiscordStatus(ui);
+        Transfer = new SpotifyTransfer(ui);
+        Transfer.Restore();
         StartLocalApi(ui);
     }
 

@@ -1,0 +1,10 @@
+{
+  "href": "https://api.spotify.com/v1/me/playlists?offset=0&limit=50",
+  "items": [
+    { "id": "pl1", "name": "自分の", "collaborative": false, "owner": { "id": "me" }, "items": { "total": 2 } },
+    { "id": "pl2", "name": "他人の", "collaborative": false, "owner": { "id": "someone" } },
+    { "id": "pl3", "name": "共同編集", "collaborative": true, "owner": { "id": "someone" } }
+  ],
+  "next": "https://api.spotify.com/v1/me/playlists?offset=50&limit=50",
+  "total": 53
+}

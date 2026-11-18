@@ -369,13 +369,26 @@ public sealed class MusicRepository(InnerTubeClient client, LiveClient? live = n
         return result ? AddToPlaylistResult.Added : AddToPlaylistResult.Failed;
     }
 
+    /// <summary>
+    /// 曲をまとめてプレイリストに足す（1回の書き込みにいくつもの追加を入れる。Spotify から移すとき）。
+    /// 呼ぶ側が先に入っている曲を読んで、入っていない曲だけを渡す（dedupeOption の DEDUPE_OPTION_SKIP は「重複の確認を飛ばす」で、入れると同じ曲が2つ入る。2026-11-18 に確かめた）。
+    /// </summary>
+    public Task<bool> AddManyToPlaylistAsync(string playlistId, IReadOnlyList<string> videoIds, CancellationToken cancel = default)
+    {
+        if (videoIds.Count == 0) return Task.FromResult(true);
+        var actions = videoIds.Select(v => (JsonNode?)new JsonObject { ["action"] = "ACTION_ADD_VIDEO", ["addedVideoId"] = v }).ToArray();
+        return EditPlaylistAsync(playlistId, actions, cancel);
+    }
+
     public Task<bool> RemoveFromPlaylistAsync(string playlistId, string videoId, string setVideoId, CancellationToken cancel = default) =>
         EditPlaylistAsync(playlistId, new JsonObject { ["action"] = "ACTION_REMOVE_VIDEO", ["setVideoId"] = setVideoId, ["removedVideoId"] = videoId }, cancel);
 
-    private async Task<bool> EditPlaylistAsync(string playlistId, JsonObject action, CancellationToken cancel)
+    private Task<bool> EditPlaylistAsync(string playlistId, JsonObject action, CancellationToken cancel) => EditPlaylistAsync(playlistId, [action], cancel);
+
+    private async Task<bool> EditPlaylistAsync(string playlistId, JsonNode?[] actions, CancellationToken cancel)
     {
         if (!client.IsLoggedIn) return false;
-        var body = new JsonObject { ["playlistId"] = playlistId.StartsWith("VL", StringComparison.Ordinal) ? playlistId[2..] : playlistId, ["actions"] = new JsonArray(action) };
+        var body = new JsonObject { ["playlistId"] = playlistId.StartsWith("VL", StringComparison.Ordinal) ? playlistId[2..] : playlistId, ["actions"] = new JsonArray(actions) };
         var result = await client.PostAsync("browse/edit_playlist", body, cancel: cancel);
         return result.IsOk && MusicParsers.EditPlaylistStatus(result.Value!) == "STATUS_SUCCEEDED";
     }

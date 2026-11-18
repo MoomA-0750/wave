@@ -81,6 +81,21 @@
                 <Button x:Name="DeleteDownloadsButton" HorizontalAlignment="Right" VerticalAlignment="Center" Click="OnDeleteDownloads" Content="{x:Bind app:L.T('ダウンロードをすべて削除', 'Delete all downloads')}" />
             </Grid>
 
+            <!-- Spotify から移す（プレイリスト・お気に入りの曲・アルバム・アーティスト） -->
+            <TextBlock Text="{x:Bind app:L.T('ほかのサービスから', 'From other services')}" Style="{StaticResource BodyStrongTextBlockStyle}" Margin="0,16,0,4" />
+            <Grid Padding="{StaticResource KasanePadding4}" CornerRadius="{StaticResource WaveCardCornerRadius}" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                  BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" ColumnSpacing="{StaticResource KasaneSpace4}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Text="{x:Bind app:L.T('Spotify から移す', 'Move from Spotify')}" />
+                    <TextBlock Text="{x:Bind app:L.T('Spotify のプレイリスト・お気に入りの曲・保存したアルバム・フォロー中のアーティストを、YouTube Music の同じものに置き換えて足します。書き込む前に一覧で見直せます', 'Bring your Spotify playlists, liked songs, saved albums and followed artists to YouTube Music. You can review every match before anything is written')}" Style="{StaticResource SubtleTextStyle}" TextWrapping="Wrap" MaxLines="3" />
+                </StackPanel>
+                <Button Grid.Column="1" VerticalAlignment="Center" Click="OnTransfer" Content="{x:Bind app:L.T('開く', 'Open')}" />
+            </Grid>
+
             <TextBlock Text="Discord" Style="{StaticResource BodyStrongTextBlockStyle}" Margin="0,16,0,4" />
             <StackPanel Padding="{StaticResource KasanePadding4}" CornerRadius="{StaticResource WaveCardCornerRadius}" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                         BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Spacing="{StaticResource KasaneSpace2}">

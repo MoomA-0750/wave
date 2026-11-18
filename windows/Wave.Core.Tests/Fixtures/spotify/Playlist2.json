@@ -1,0 +1,10 @@
+{
+  "Playlists": [
+    {
+      "Name": "もう1つ",
+      "Items": [
+        { "Track": { "TrackName": "Mela!", "ArtistName": "緑黄色社会", "AlbumName": "Actor" } }
+      ]
+    }
+  ]
+}

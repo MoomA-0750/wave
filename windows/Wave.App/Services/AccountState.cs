@@ -92,6 +92,8 @@ public sealed partial class AccountState : ObservableObject
         AppServices.Downloads.Clear();
         // 前のアカウントの Claude との会話を残さない（履歴も消す。Android と同じ）
         AppServices.Ai.Wipe();
+        // Spotify から移す作業も消す（書いた先のアカウントが変わると、済んだ印が合わなくなる）
+        AppServices.Transfer.Discard();
         // 前のアカウントの検索の履歴とプレイリストの並べ方も残さない（Android と同じ）
         AppServices.Settings.SearchHistory.Clear();
         AppServices.Settings.PlaylistOrders.Clear();

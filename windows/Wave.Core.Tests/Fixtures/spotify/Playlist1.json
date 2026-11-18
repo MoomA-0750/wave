@@ -1,0 +1,16 @@
+{
+  "playlists": [
+    {
+      "name": "wave の移行の試し",
+      "lastModifiedDate": "2026-11-01",
+      "description": null,
+      "numberOfFollowers": 0,
+      "items": [
+        { "track": { "trackName": "Mela!", "artistName": "緑黄色社会", "albumName": "Actor", "trackUri": "spotify:track:0000000000000000000001" }, "episode": null, "localTrack": null, "audiobook": null, "addedDate": "2026-11-01" },
+        { "track": { "trackName": "Shout Baby", "artistName": "緑黄色社会", "albumName": "Shout Baby", "trackUri": "spotify:track:0000000000000000000004" }, "episode": null, "localTrack": null, "audiobook": null, "addedDate": "2026-11-01" },
+        { "track": null, "episode": { "episodeName": "ある番組", "showName": "番組", "episodeUri": "spotify:episode:0000000000000000000031" }, "localTrack": null, "audiobook": null, "addedDate": "2026-11-01" },
+        { "track": null, "episode": null, "localTrack": { "uri": "spotify:local:%E7%B7%91%E9%BB%84%E8%89%B2%E7%A4%BE%E4%BC%9A:Actor:%E5%A4%8F%E6%85%95:260" }, "audiobook": null, "addedDate": "2026-11-01" }
+      ]
+    }
+  ]
+}
