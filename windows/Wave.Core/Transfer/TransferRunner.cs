@@ -12,6 +12,8 @@ public interface ITransferWriter
     Task<ApiResult<IReadOnlyList<AlbumSummary>>> SearchAlbumsAsync(string query, CancellationToken cancel);
     Task<ApiResult<IReadOnlyList<ArtistSummary>>> SearchArtistsAsync(string query, CancellationToken cancel);
     Task<ApiResult<string>> CreatePlaylistAsync(string title, IReadOnlyList<string> videoIds, CancellationToken cancel);
+    /// <summary>ライブラリのプレイリストの名前を全部読む。読めなければ null。</summary>
+    Task<HashSet<string>?> LibraryPlaylistTitlesAsync(CancellationToken cancel);
     /// <summary>プレイリストの曲の ID を全部読む。読み切れなければ null。</summary>
     Task<HashSet<string>?> PlaylistVideoIdsAsync(string playlistId, CancellationToken cancel);
     /// <summary>曲をまとめて足す（入っていない曲だけを渡す）。</summary>
@@ -46,6 +48,9 @@ public sealed class MusicTransferWriter(MusicRepository repository, MusicReposit
 
     public Task<ApiResult<string>> CreatePlaylistAsync(string title, IReadOnlyList<string> videoIds, CancellationToken cancel) =>
         repository.CreatePlaylistAsync(title, videoIds, cancel);
+
+    public async Task<HashSet<string>?> LibraryPlaylistTitlesAsync(CancellationToken cancel) =>
+        await repository.LibraryPlaylistsAsync(cancel: cancel) is { IsOk: true } r ? r.Value!.Select(p => p.Title).ToHashSet() : null;
 
     public Task<HashSet<string>?> PlaylistVideoIdsAsync(string playlistId, CancellationToken cancel) => repository.ScanPlaylistAsync(playlistId, cancel);
 
@@ -115,6 +120,17 @@ public sealed class TransferRunner(ITransferWriter writer, Action<TransferSessio
             if (result is not null || attempt >= Backoff.Length) return result;
             await delay(Backoff[attempt], cancel);
         }
+    }
+
+    /// <summary>移してきたと分かる印（YouTube Music に同じ名前のプレイリストが前からあるときだけ付ける）。</summary>
+    public const string FromSpotifySuffix = " (from Spotify)";
+
+    /// <summary>作るプレイリストの名前。同じ名前（前後の空白・大小文字は区別しない）が前からあれば印を付け、無ければ元の名前のまま。
+    /// ライブラリを読めなかったときは、重なるかもしれないので印を付ける。</summary>
+    public static string PlaylistTitle(string name, IEnumerable<string> existing, bool existingUnknown = false)
+    {
+        var key = name.Trim();
+        return existingUnknown || existing.Any(t => string.Equals(t.Trim(), key, StringComparison.OrdinalIgnoreCase)) ? key + FromSpotifySuffix : name;
     }
 
     private static TransferStop StopOf<T>(ApiResult<T> r) => r.Failure == FailureKind.NotLoggedIn ? TransferStop.NotLoggedIn : TransferStop.Network;
@@ -196,6 +212,8 @@ public sealed class TransferRunner(ITransferWriter writer, Action<TransferSessio
     public async Task<TransferStop> WriteAsync(TransferSession session, CancellationToken cancel)
     {
         var plan = TransferPlan.Of(session);
+        HashSet<string>? titles = null;
+        var titlesUnknown = false;
         var sinceSave = 0;
         void Saved()
         {
@@ -216,7 +234,15 @@ public sealed class TransferRunner(ITransferWriter writer, Action<TransferSessio
                 if (entry.CreatedPlaylistId is null)
                 {
                     // 作るのはやり直さない（通信が途中で切れて、作れていたのに2つ目を作るのを避ける）。失敗は次に続けるときにもう一度
-                    var created = await writer.CreatePlaylistAsync(p.Name, p.VideoIds.Take(CreateChunk).ToList(), cancel);
+                    // 同じ名前が前からあれば、移してきたと分かる印を付けて別に作る（読めなければ印を付ける方に倒す）
+                    if (titles is null)
+                    {
+                        var read = await RetryNullAsync(() => writer.LibraryPlaylistTitlesAsync(cancel), cancel);
+                        titlesUnknown = read is null;
+                        titles = read ?? [];
+                    }
+                    var title = PlaylistTitle(p.Name, titles, titlesUnknown);
+                    var created = await writer.CreatePlaylistAsync(title, p.VideoIds.Take(CreateChunk).ToList(), cancel);
                     if (!created.IsOk)
                     {
                         if (created.Failure == FailureKind.NotLoggedIn) return TransferStop.NotLoggedIn;
@@ -224,6 +250,7 @@ public sealed class TransferRunner(ITransferWriter writer, Action<TransferSessio
                         continue;
                     }
                     entry.CreatedPlaylistId = created.Value;
+                    titles.Add(title);
                     save(session);
                     await delay(WriteGap, cancel);
                 }

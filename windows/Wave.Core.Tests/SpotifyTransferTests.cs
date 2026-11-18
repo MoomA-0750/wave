@@ -270,6 +270,15 @@ public class SpotifyTransferTests
         Assert.Equal("picked", item.Target);
     }
 
+    [Fact]
+    public void PlaylistTitleMarksOnlyWhenTheSameNameExists()
+    {
+        Assert.Equal("ドライブ", TransferRunner.PlaylistTitle("ドライブ", ["作業用", "Chill"]));
+        Assert.Equal("ドライブ (from Spotify)", TransferRunner.PlaylistTitle("ドライブ", ["作業用", "ドライブ"]));
+        Assert.Equal("Chill (from Spotify)", TransferRunner.PlaylistTitle("Chill", [" chill "]));
+        Assert.Equal("ドライブ (from Spotify)", TransferRunner.PlaylistTitle("ドライブ", [], existingUnknown: true));
+    }
+
     private sealed class FakeWriter : ITransferWriter
     {
         public readonly Dictionary<string, List<string>> Playlists = [];
@@ -305,6 +314,11 @@ public class SpotifyTransferTests
             Calls.Add("create:" + title);
             return Task.FromResult(ApiResult<string>.Ok(id));
         }
+
+        public HashSet<string>? LibraryTitles = [];
+
+        public Task<HashSet<string>?> LibraryPlaylistTitlesAsync(CancellationToken cancel) =>
+            Task.FromResult(LibraryTitles is null ? null : new HashSet<string>(LibraryTitles));
 
         public Task<HashSet<string>?> PlaylistVideoIdsAsync(string playlistId, CancellationToken cancel) =>
             Task.FromResult<HashSet<string>?>(Playlists.TryGetValue(playlistId, out var l) ? [.. l] : null);
@@ -373,6 +387,17 @@ public class SpotifyTransferTests
         var w = new FakeWriter { FailSearches = 100 };
         Assert.Equal(TransferStop.Network, await Runner(w).MatchAsync(s, default));
         Assert.All(s.ItemsInScope(), i => Assert.Equal(MatchStatus.Pending, i.Status));
+    }
+
+    [Fact]
+    public async Task WriteMarksPlaylistsWhoseNameIsAlreadyInTheLibrary()
+    {
+        var s = Sample();
+        var w = new FakeWriter { LibraryTitles = ["もう1つ"] };
+        await Runner(w).MatchAsync(s, default);
+        Assert.Equal(TransferStop.None, await Runner(w).WriteAsync(s, default));
+        Assert.Contains("create:wave の移行の試し", w.Calls);
+        Assert.Contains("create:もう1つ (from Spotify)", w.Calls);
     }
 
     [Fact]
