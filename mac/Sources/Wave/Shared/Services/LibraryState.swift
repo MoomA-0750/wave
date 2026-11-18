@@ -84,7 +84,12 @@ final class LibraryState {
         }
     }
 
-    func refresh() {
+    /// 読めなかった（YouTube が続けての頼みを一時的に断ったなど）ときに読み直すまでの秒（尽きたらやめる）。Windows と同じ。
+    private static let retryAfter: [UInt64] = [60, 180, 600]
+
+    func refresh() { refresh(retry: 0) }
+
+    private func refresh(retry: Int) {
         refreshTask?.cancel()
         generation += 1
         let mine = generation
@@ -112,17 +117,19 @@ final class LibraryState {
                 }
             }
             let music = AppServices.music!
-            async let p = music.libraryPlaylists(onPage: { page in
+            // 途中のページで失敗すると、そこまでの分が「読めた」として返る。そのときも読み直す
+            let incomplete = Flag()
+            async let p = music.libraryPlaylists(onIncomplete: { incomplete.set() }, onPage: { page in
                 DispatchQueue.main.async {
                     guard self.generation == mine else { return }
                     if let liked = page.first(where: { $0.playlistId == MusicRepository.likedSongs }) { self.likedThumbnail = liked.thumbnailUrl }
                     self.playlists = page.filter { $0.playlistId != MusicRepository.likedSongs }
                 }
             })
-            async let r = music.libraryArtists(onPage: { page in
+            async let r = music.libraryArtists(onIncomplete: { incomplete.set() }, onPage: { page in
                 DispatchQueue.main.async { if self.generation == mine { self.artists = page } }
             })
-            async let a = music.libraryAlbums(onPage: { page in
+            async let a = music.libraryAlbums(onIncomplete: { incomplete.set() }, onPage: { page in
                 DispatchQueue.main.async { if self.generation == mine { self.albums = page } }
             })
             async let pod = music.libraryPodcasts(onPage: { page in
@@ -136,10 +143,24 @@ final class LibraryState {
             guard self.generation == mine else { return }
             self.failure = results.compactMap { $0 ?? nil }.first.map { String(describing: $0) }
             self.isLoading = false
-            AppPaths.log("library playlists=\(self.playlists.count) artists=\(self.artists.count) albums=\(self.albums.count) podcasts=\(self.podcasts.count) failure=\(self.failure ?? "nil")")
+            AppPaths.log("library playlists=\(self.playlists.count) artists=\(self.artists.count) albums=\(self.albums.count) podcasts=\(self.podcasts.count) failure=\(self.failure ?? "nil") incomplete=\(incomplete.value)")
             AppServices.onLibraryLoaded()
+            // 読めなかった・途中で切れたら少し待って読み直す（ログインが切れたと確かめられたときは読み直さない）
+            let failed = results.contains { $0 ?? nil != nil } || incomplete.value
+            if failed, retry < LibraryState.retryAfter.count, AppServices.client.sessionState != .expired {
+                try? await Task.sleep(nanoseconds: LibraryState.retryAfter[retry] * 1_000_000_000)
+                if !Task.isCancelled, self.generation == mine, AppServices.client.isLoggedIn { self.refresh(retry: retry + 1) }
+            }
         }
     }
 
     func addCreated(_ playlist: PlaylistSummary) { playlists.insert(playlist, at: 0) }
+}
+
+/// 別の糸から立てる印（ライブラリの一覧が途中で切れたか）。
+private final class Flag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var on = false
+    func set() { lock.lock(); on = true; lock.unlock() }
+    var value: Bool { lock.lock(); defer { lock.unlock() }; return on }
 }

@@ -61,7 +61,18 @@ final class AccountState {
         accountChecked = true
         premiumAudio = result.isOk ? (try? await AppServices.resolver.premiumAudio()) ?? nil : nil
         AppPaths.log("account check ok=\(result.isOk) failure=\(String(describing: result.failure))")
+        // 読めなかった（YouTube が一時的に断ったなど）ときは、1・3・10分あとに読み直す（アカウントの写真が出ないままにしない。Windows と同じ）
+        if result.isOk {
+            accountRetry = 0
+        } else if accountRetry < 3, AppServices.client.isLoggedIn, AppServices.client.sessionState != .expired {
+            let wait: UInt64 = [60, 180, 600][accountRetry]
+            accountRetry += 1
+            try? await Task.sleep(nanoseconds: wait * 1_000_000_000)
+            await refreshAccount()
+        }
     }
+
+    @ObservationIgnored private var accountRetry = 0
 
     func logOut() {
         AppServices.player.stop()

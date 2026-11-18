@@ -210,12 +210,12 @@ public final class MusicRepository: Sendable {
         try await loggedInBrowse(MusicRepository.libraryLanding, continuation: nil, parse: MusicParsers.gridItems)
     }
 
-    public func libraryPlaylists(onPage: (([PlaylistSummary]) -> Void)? = nil) async throws -> ApiResult<[PlaylistSummary]> {
-        try await allLibraryPages(MusicRepository.libraryPlaylists, parse: MusicParsers.playlists, key: \.playlistId, onPage: onPage)
+    public func libraryPlaylists(onIncomplete: (() -> Void)? = nil, onPage: (([PlaylistSummary]) -> Void)? = nil) async throws -> ApiResult<[PlaylistSummary]> {
+        try await allLibraryPages(MusicRepository.libraryPlaylists, parse: MusicParsers.playlists, key: \.playlistId, onPage: onPage, onIncomplete: onIncomplete)
     }
 
-    public func libraryArtists(onPage: (([ArtistSummary]) -> Void)? = nil) async throws -> ApiResult<[ArtistSummary]> {
-        try await allLibraryPages(MusicRepository.libraryArtists, parse: MusicRepository.artistCards, key: \.browseId, onPage: onPage)
+    public func libraryArtists(onIncomplete: (() -> Void)? = nil, onPage: (([ArtistSummary]) -> Void)? = nil) async throws -> ApiResult<[ArtistSummary]> {
+        try await allLibraryPages(MusicRepository.libraryArtists, parse: MusicRepository.artistCards, key: \.browseId, onPage: onPage, onIncomplete: onIncomplete)
     }
 
     /// 登録（サブスクライブ）したアーティスト。新作の知らせに使う（Android と同じ）。途中で打ち切ったら onIncomplete を呼ぶ。
@@ -223,8 +223,8 @@ public final class MusicRepository: Sendable {
         try await allLibraryPages(MusicRepository.subscribedArtists, parse: MusicRepository.artistCards, key: \.browseId, onPage: nil, onIncomplete: onIncomplete)
     }
 
-    public func libraryAlbums(onPage: (([AlbumSummary]) -> Void)? = nil) async throws -> ApiResult<[AlbumSummary]> {
-        try await allLibraryPages(MusicRepository.libraryAlbums, parse: MusicRepository.albumCards, key: \.browseId, onPage: onPage)
+    public func libraryAlbums(onIncomplete: (() -> Void)? = nil, onPage: (([AlbumSummary]) -> Void)? = nil) async throws -> ApiResult<[AlbumSummary]> {
+        try await allLibraryPages(MusicRepository.libraryAlbums, parse: MusicRepository.albumCards, key: \.browseId, onPage: onPage, onIncomplete: onIncomplete)
     }
 
     private static func artistCards(_ root: JSON) -> [ArtistSummary] {

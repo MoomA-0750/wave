@@ -192,7 +192,12 @@ final class MainWindowModel {
         }
         suggestTask = Task {
             try? await Task.sleep(for: .milliseconds(150))
-            guard !Task.isCancelled, let s = (try? await AppServices.music.suggestions(trimmed))?.value, !Task.isCancelled else { return }
+            guard !Task.isCancelled else { return }
+            let result = try? await AppServices.music.suggestions(trimmed)
+            guard let s = result?.value, !Task.isCancelled else {
+                if !Task.isCancelled { AppPaths.log("suggest failed failure=\(String(describing: result?.failure)) status=\(String(describing: result?.status))") }
+                return
+            }
             var list: [Suggestion] = s.queries.prefix(5).map { Suggestion(title: $0, query: $0) }
             list += s.artists.map { Suggestion(title: $0.name, subtitle: L.t("アーティスト", "Artist"), thumbnailUrl: $0.thumbnailUrl, item: .artist($0)) }
             list += s.songs.map { Suggestion(title: $0.title, subtitle: L.t("曲 • ", "Song • ") + $0.artistsText, thumbnailUrl: $0.thumbnailUrl, item: .song($0)) }
