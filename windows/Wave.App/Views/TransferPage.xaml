@@ -119,6 +119,10 @@
                 <StackPanel x:Name="KindChips" Orientation="Horizontal" Spacing="{StaticResource KasaneSpace2}" />
             </StackPanel>
             <ListView x:Name="ReviewList" Grid.Row="4" SelectionMode="None" Margin="-12,0">
+                <!-- 絞り込みを変えるたびに行が入ってくる動き（既定の EntranceThemeTransition）を付けない。続けて押すと一覧が点滅して見えた -->
+                <ListView.ItemContainerTransitions>
+                    <TransitionCollection />
+                </ListView.ItemContainerTransitions>
                 <ListView.ItemTemplate>
                     <DataTemplate x:DataType="local:TransferRow">
                         <Grid ColumnSpacing="12" Padding="0,6" MinHeight="56">

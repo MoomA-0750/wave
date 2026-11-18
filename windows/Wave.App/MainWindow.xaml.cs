@@ -412,7 +412,7 @@ public sealed partial class MainWindow : Window
         FilterChips.Children.Clear();
         foreach (var (kind, title) in new[] { ("playlist", L.T("プレイリスト", "Playlists")), ("artist", L.T("アーティスト", "Artists")), ("album", L.T("アルバム", "Albums")), ("podcast", L.T("ポッドキャスト", "Podcasts")) })
         {
-            var chip = new ToggleButton { Content = title, IsChecked = libraryKind == kind, CornerRadius = new CornerRadius(14), Padding = new Thickness(9, 4, 9, 5) };
+            var chip = new ToggleButton { Content = title, IsChecked = libraryKind == kind, CornerRadius = new CornerRadius(14), Padding = new Thickness(8, 4, 8, 5) };
             chip.Click += (_, _) =>
             {
                 libraryKind = libraryKind == kind ? null : kind;
@@ -421,6 +421,17 @@ public sealed partial class MainWindow : Window
             };
             FilterChips.Children.Add(chip);
         }
+    }
+
+    /// <summary>
+    /// ライブラリのアルバムの補足。YouTube の補足が種類（Album・Single・EP・アルバム・シングル）で始まるときはそのまま使う
+    /// （頭に「Album」を足すと「Album • Album • アーティスト」と二重になり、シングルは「Album • Single」になっていた）。
+    /// </summary>
+    internal static string AlbumSubtitle(string? subtitle)
+    {
+        if (string.IsNullOrEmpty(subtitle)) return L.T("アルバム", "Album");
+        var first = subtitle.Split('•', 2)[0].Trim();
+        return first is "Album" or "Single" or "EP" or "アルバム" or "シングル" ? subtitle : L.T("アルバム", "Album") + " • " + subtitle;
     }
 
     private void RenderLibrary()
@@ -433,7 +444,7 @@ public sealed partial class MainWindow : Window
             entries.AddRange(lib.Playlists.Select(p => new LibraryEntry(p.Title, L.T("プレイリスト", "Playlist") + (string.IsNullOrEmpty(p.Subtitle) ? "" : " • " + p.Subtitle), p.ThumbnailUrl, new HomeItem.PlaylistItem(p))));
         }
         if (libraryKind is null or "artist") entries.AddRange(lib.Artists.Select(a => new LibraryEntry(a.Name, L.T("アーティスト", "Artist"), a.ThumbnailUrl, new HomeItem.ArtistItem(a))));
-        if (libraryKind is null or "album") entries.AddRange(lib.Albums.Select(a => new LibraryEntry(a.Title, L.T("アルバム", "Album") + (string.IsNullOrEmpty(a.Subtitle) ? "" : " • " + a.Subtitle), a.ThumbnailUrl, new HomeItem.AlbumItem(a))));
+        if (libraryKind is null or "album") entries.AddRange(lib.Albums.Select(a => new LibraryEntry(a.Title, AlbumSubtitle(a.Subtitle), a.ThumbnailUrl, new HomeItem.AlbumItem(a))));
         // YouTube で保存した番組の後ろに、RSS で登録した番組（この端末だけ、ADR-0012）を並べる（Android と同じ）
         if (libraryKind is null or "podcast")
             entries.AddRange(lib.Podcasts.Concat(AppServices.FeedLibrary.State.Subscriptions.Select(f => f.Summary)).DistinctBy(c => c.BrowseId)

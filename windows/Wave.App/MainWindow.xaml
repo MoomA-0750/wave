@@ -111,10 +111,8 @@
                             <FontIcon Glyph="&#xE710;" FontSize="14" />
                         </Button>
                     </Grid>
-                    <!-- 種類のチップ。窓が狭いと右端が切れるので、横に流せるようにする（QML 版の Flickable と同じ） -->
-                    <ScrollViewer Grid.Row="1" HorizontalScrollMode="Enabled" HorizontalScrollBarVisibility="Hidden" VerticalScrollMode="Disabled" VerticalScrollBarVisibility="Disabled">
-                        <StackPanel x:Name="FilterChips" Orientation="Horizontal" Spacing="{StaticResource KasaneSpace1}" Padding="12,4,8,4" />
-                    </ScrollViewer>
+                    <!-- 種類のチップ。入りきらなければ次の行へ折り返す（横に流す形では、日本語の「ポッドキャスト」が右端で切れて見えた） -->
+                    <controls:WrapPanel x:Name="FilterChips" Grid.Row="1" Spacing="4" RowSpacing="4" Margin="12,4,4,4" />
                     <Grid Grid.Row="2" Padding="12,4,8,4" ColumnSpacing="{StaticResource KasaneSpace1}">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />

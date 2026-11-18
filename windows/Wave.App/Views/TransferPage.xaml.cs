@@ -35,7 +35,18 @@ public sealed class TransferRow(TransferItem item) : INotifyPropertyChanged
 
     public string TargetSubtitle => Item.Excluded ? "" : Item.Chosen is { } c ? TransferPage.CandidateSubtitle(c) : L.T("「選ぶ」から YouTube Music で探せます", "Use Choose to search YouTube Music");
 
-    public ImageSource? Thumb => Item.Excluded ? null : Ui.Small(Item.Chosen?.ThumbnailUrl);
+    // 絵は行ごとに1つを持ち続ける（絞り込みで出し直すたびに作り直すと、読み直す間の数コマ空になった）
+    private (string? Url, ImageSource? Image) thumb;
+
+    public ImageSource? Thumb
+    {
+        get
+        {
+            var url = Item.Excluded ? null : Item.Chosen?.ThumbnailUrl;
+            if (thumb.Url != url || (url is not null && thumb.Image is null)) thumb = (url, Ui.Small(url));
+            return thumb.Image;
+        }
+    }
 
     public CornerRadius Radius => Ui.Radius(Item.Kind == TransferKind.Artist);
 
@@ -353,13 +364,16 @@ public sealed partial class TransferPage : Page
             foreach (var tag in new[] { "all", "review", "notfound", "excluded" })
             {
                 var chip = new ToggleButton { Tag = tag, CornerRadius = new CornerRadius(14), Padding = new Thickness(12, 4, 12, 5) };
-                chip.Click += (_, _) => SetStatusFilter(tag);
+                // Click でなく Checked で受ける（UI Automation の切り替え（ナレーターなど）は Click を起こさず、印だけ変わって一覧が変わらなかった）
+                chip.Checked += (_, _) => { if (statusFilter != tag) SetStatusFilter(tag); };
+                chip.Unchecked += (_, _) => { if (statusFilter == tag) chip.IsChecked = true; };
                 StatusChips.Children.Add(chip);
             }
             foreach (var (tag, title) in new[] { ("all", L.T("すべての種類", "All kinds")), ("track", L.T("曲", "Songs")), ("album", L.T("アルバム", "Albums")), ("artist", L.T("アーティスト", "Artists")) })
             {
                 var chip = new ToggleButton { Tag = tag, Content = title, CornerRadius = new CornerRadius(14), Padding = new Thickness(12, 4, 12, 5) };
-                chip.Click += (_, _) => SetKindFilter(tag);
+                chip.Checked += (_, _) => { if (kindFilter != tag) SetKindFilter(tag); };
+                chip.Unchecked += (_, _) => { if (kindFilter == tag) chip.IsChecked = true; };
                 KindChips.Children.Add(chip);
             }
         }
