@@ -461,7 +461,7 @@ public sealed partial class MainWindow : Window
         }
         // ダウンロードは高く評価した曲の次（いつも先頭の方。ADR-0016 の 14）
         if (libraryKind is null or "playlist" && (filter.Length == 0 || L.T("ダウンロード", "Downloads").Contains(filter, StringComparison.CurrentCultureIgnoreCase)))
-            entries.Insert(0, new LibraryEntry(L.T("ダウンロード", "Downloads"), L.T("自動 • ", "Auto • ") + L.Songs(AppServices.Downloads.DownloadedCount), null, null, isDownloads: true));
+            entries.Insert(0, new LibraryEntry(L.T("ダウンロード", "Downloads"), L.T("プレイリスト • 自動 • ", "Playlist • Auto • ") + L.Songs(AppServices.Downloads.DownloadedCount), null, null, isDownloads: true));
         // 高く評価した曲はいつも先頭（Spotify の「お気に入りの曲」と同じ）
         if (libraryKind is null or "playlist" && (filter.Length == 0 || L.T("高く評価した曲", "Liked music").Contains(filter)))
             entries.Insert(0, new LibraryEntry(L.T("高く評価した曲", "Liked music"), L.T("プレイリスト • 自動", "Playlist • Auto"), lib.LikedThumbnail, null, isLiked: true));

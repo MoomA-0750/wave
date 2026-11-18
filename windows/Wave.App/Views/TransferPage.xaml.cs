@@ -88,6 +88,8 @@ public sealed partial class TransferPage : Page
     private string kindFilter = "all";
     private List<TransferRow> rows = [];
     private TransferStage? renderedStage;
+    /// <summary>一覧を作ったときの作業（ページは使い回すので、やり直したら作り直す）。</summary>
+    private TransferSession? renderedSession;
 
     public TransferPage() => InitializeComponent();
 
@@ -120,10 +122,11 @@ public sealed partial class TransferPage : Page
         ShowMessage(reviewing ? ReviewMessageBar : MessageBar, Transfer.Message);
         (reviewing ? MessageBar : ReviewMessageBar).IsOpen = false;
         if (busy is not null) RenderProgress(busy);
-        else if (reviewing) RenderReview(stage != renderedStage);
+        else if (reviewing) RenderReview(stage != renderedStage || session != renderedSession);
         else if (stage is TransferStage.Loaded or TransferStage.Matching) RenderChoose(session!);
         else if (stage is TransferStage.Writing or TransferStage.Finished) RenderResult(session!);
         renderedStage = busy is null ? stage : null;
+        renderedSession = session;
     }
 
     private static void ShowMessage(InfoBar bar, string? message)

@@ -1,7 +1,8 @@
 <Page x:Class="Wave.App.Views.SettingsPage"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-      xmlns:app="using:Wave.App">
+      xmlns:app="using:Wave.App"
+      NavigationCacheMode="Enabled">
     <ScrollViewer>
         <StackPanel Padding="40,32" Spacing="{StaticResource KasaneSpace2}" MaxWidth="880" HorizontalAlignment="Stretch">
             <TextBlock Text="{x:Bind app:L.T('設定', 'Settings')}" FontSize="48" FontWeight="Bold" Margin="0,0,0,16" />

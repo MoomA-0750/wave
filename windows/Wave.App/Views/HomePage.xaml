@@ -8,7 +8,8 @@
     <!-- ホーム（Spotify と同じ並び: 絞り込みのチップ、最近聴いたものの格子、おすすめの棚） -->
     <ScrollViewer x:Name="Scroller" ViewChanged="OnScrolled">
         <StackPanel Padding="16,16,16,32" Spacing="{StaticResource KasaneSpace6}">
-            <ScrollViewer HorizontalScrollMode="Enabled" HorizontalScrollBarVisibility="Hidden" VerticalScrollMode="Disabled">
+            <!-- 気分のチップは横に流す。棒を隠すとマウスでは右の方へ行けないので、上に来たときだけ出る細い棒を出す -->
+            <ScrollViewer HorizontalScrollMode="Enabled" HorizontalScrollBarVisibility="Auto" VerticalScrollMode="Disabled" Padding="0,0,0,6">
                 <StackPanel x:Name="Chips" Orientation="Horizontal" Spacing="{StaticResource KasaneSpace2}" Padding="8,0" />
             </ScrollViewer>
 

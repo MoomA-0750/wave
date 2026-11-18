@@ -12,7 +12,7 @@ public sealed partial class SettingsPage : Page
 
     protected override void OnNavigatedTo(NavigationEventArgs e)
     {
-        AppServices.Account.PropertyChanged += (_, _) => DispatcherQueue.TryEnqueue(Render);
+        AppServices.Account.PropertyChanged += OnAccountChanged;
         HistorySwitch.IsOn = AppServices.Settings.SendHistory;
         RenderAi();
         ReleaseSwitch.IsOn = AppServices.Settings.ReleaseNotices;
@@ -36,6 +36,8 @@ public sealed partial class SettingsPage : Page
         RenderDownloads();
         Render();
     }
+
+    private void OnAccountChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e) => DispatcherQueue.TryEnqueue(Render);
 
     private void Render()
     {
@@ -181,6 +183,8 @@ public sealed partial class SettingsPage : Page
     protected override void OnNavigatedFrom(NavigationEventArgs e)
     {
         discordTimer?.Stop();
+        // 開くたびに足していたので、離れるときに外す（前は外さず、開いた回数だけ描き直していた）
+        AppServices.Account.PropertyChanged -= OnAccountChanged;
         base.OnNavigatedFrom(e);
     }
 

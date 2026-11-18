@@ -2,7 +2,8 @@
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:app="using:Wave.App"
-      xmlns:local="using:Wave.App.Views">
+      xmlns:local="using:Wave.App.Views"
+      NavigationCacheMode="Enabled">
     <!-- Spotify から移す: 読み込む → 移すものを選ぶ → 突き合わせ → 見直す → 書き込む。作業は裏で続き、閉じても続きから行える -->
     <Grid>
         <ScrollViewer x:Name="MainScroll">

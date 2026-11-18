@@ -417,6 +417,40 @@ public static class DebugCommands
                 AppPaths.Log($"debug playlist create ok={r.IsOk}");
                 break;
             }
+            case "nav-time":
+            {
+                // 移る処理そのもの（Navigate の中）と、次に描かれるまでの時間を測る（arg: settings / transfer / back）
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+                if (arg == "settings") Nav.Settings(); else if (arg == "transfer") Nav.Transfer(); else Nav.Frame.GoBack();
+                var navigate = sw.ElapsedMilliseconds;
+                Nav.Frame.UpdateLayout();
+                var layout = sw.ElapsedMilliseconds;
+                void OnRendering(object? o, object e)
+                {
+                    Microsoft.UI.Xaml.Media.CompositionTarget.Rendering -= OnRendering;
+                    AppPaths.Log($"debug nav-time {arg} navigate={navigate}ms layout={layout - navigate}ms first-frame={sw.ElapsedMilliseconds}ms");
+                }
+                Microsoft.UI.Xaml.Media.CompositionTarget.Rendering += OnRendering;
+                break;
+            }
+            case "ui-lag":
+            {
+                // UI のスレッドが止まった時間を記録する（16ms ごとの刻みが 60ms を超えて遅れたら書く。arg は秒）
+                var watch = System.Diagnostics.Stopwatch.StartNew();
+                var last = 0L;
+                var lagTimer = window.DispatcherQueue.CreateTimer();
+                lagTimer.Interval = TimeSpan.FromMilliseconds(16);
+                lagTimer.Tick += (_, _) =>
+                {
+                    var now = watch.ElapsedMilliseconds;
+                    if (now - last > 60 && last > 0) AppPaths.Log($"debug ui-lag gap={now - last}ms at={now} gc0={GC.CollectionCount(0)} gc1={GC.CollectionCount(1)} gc2={GC.CollectionCount(2)} pause={GC.GetTotalPauseDuration().TotalMilliseconds:0}ms");
+                    last = now;
+                    if (now > int.Parse(arg) * 1000) lagTimer.Stop();
+                };
+                lagTimer.Start();
+                AppPaths.Log("debug ui-lag start");
+                break;
+            }
             case "transfer":
                 // Spotify から移すページを開く
                 Nav.Transfer();

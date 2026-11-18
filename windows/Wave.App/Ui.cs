@@ -43,8 +43,18 @@ public static partial class Ui
     public static ImageSource? Img(string? url, int size)
     {
         if (string.IsNullOrEmpty(url) || !Uri.TryCreate(Resize(url, size), UriKind.Absolute, out var uri)) return null;
-        return new BitmapImage(uri) { DecodePixelWidth = size, DecodePixelType = DecodePixelType.Logical };
+        // 同じ絵を出し直すときは、出ている絵をそのまま使う。作り直すと読み直しの間の1コマ空になる
+        // （再生中の欄のジャケットは、ほかの端末の状態が届くたびに同じ曲で結び直され、1コマ消えていた）
+        var key = $"{size}|{uri.AbsoluteUri}";
+        if (Images.TryGetValue(key, out var weak) && weak.TryGetTarget(out var known)) return known;
+        var image = new BitmapImage(uri) { DecodePixelWidth = size, DecodePixelType = DecodePixelType.Logical };
+        if (Images.Count > 512) foreach (var dead in Images.Where(p => !p.Value.TryGetTarget(out _)).Select(p => p.Key).ToList()) Images.Remove(dead);
+        Images[key] = new WeakReference<BitmapImage>(image);
+        return image;
     }
+
+    /// <summary>作った絵（UI のスレッドだけで使う。どこにも出ていない絵は捨てられる）。</summary>
+    private static readonly Dictionary<string, WeakReference<BitmapImage>> Images = [];
 
     public static ImageSource? Large(string? url) => Img(url, 544);
 
