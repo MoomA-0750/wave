@@ -142,6 +142,8 @@ struct CollectionPageView: View {
 
     // 曲の種類で絞る（動画や歌ってみたと、ふつうの曲を分ける。Android と同じ）。同じものをもう一度押すと外す
     private var kindChips: some View {
+        // 狭い幅では横に送る（チップは縮まないので、はみ出すとページ全体が左右の欄の下へ広がる）
+        ScrollView(.horizontal, showsIndicators: false) {
         HStack(spacing: Kasane.Space.s2) {
             Chip(title: L.t("すべて", "All"), isOn: model.kindFilter == nil) { model.kindFilter = nil }
             ForEach([(Song.kindSong, L.t("曲", "Songs")), (Song.kindMusicVideo, L.t("MV", "Music videos")),
@@ -150,6 +152,7 @@ struct CollectionPageView: View {
             }
         }
         .padding(EdgeInsets(top: 0, leading: Kasane.Space.s3, bottom: Kasane.Space.s3, trailing: Kasane.Space.s3))
+        }
     }
 }
 

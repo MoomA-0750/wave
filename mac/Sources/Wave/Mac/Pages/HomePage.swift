@@ -5,6 +5,15 @@ import WaveCore
 /// ホーム（Spotify と同じ並び: 絞り込みのチップ、最近聴いたものの格子、おすすめの棚）。
 struct HomePageView: View {
     @State private var home = HomeModel.shared
+    /// 最近の格子を置ける幅（右の欄を開く・窓を狭めると縮む）。列の数を決めるのに使う。
+    @State private var gridWidth: CGFloat = 0
+
+    /// 最近の格子の列の数。1枚を 180pt より細くしない（窓が狭いと 4 列のままでは右の欄の下へはみ出した）。2〜4 列。
+    static func recentColumns(width: CGFloat) -> Int {
+        let tile: CGFloat = 180, spacing = Kasane.Space.s2
+        guard width > 0 else { return 4 }
+        return max(2, min(4, Int((width + spacing) / (tile + spacing))))
+    }
 
     var body: some View {
         let releases = home.selected == nil ? Array(ReleaseWatchState.diversified(AppServices.releases.recent).prefix(20)) : []
@@ -18,10 +27,11 @@ struct HomePageView: View {
                     .padding(.horizontal, Kasane.Space.s2)
                 }
                 if !home.recent.isEmpty {
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(minimum: 200), spacing: Kasane.Space.s2), count: 4), spacing: Kasane.Space.s2) {
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: Kasane.Space.s2), count: Self.recentColumns(width: gridWidth)), spacing: Kasane.Space.s2) {
                         ForEach(home.recent, id: \.key) { item in RecentTile(item: item) }
                     }
                     .padding(.horizontal, Kasane.Space.s2)
+                    .onGeometryChange(for: CGFloat.self) { $0.size.width - Kasane.Space.s2 * 2 } action: { gridWidth = $0 }
                 }
                 // 登録したアーティストの新作（Android と同じ。アーティストごとに2件まで交互に）
                 if !releases.isEmpty {

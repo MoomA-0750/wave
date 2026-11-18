@@ -335,6 +335,8 @@ struct SearchPageView: View {
 
     private var results: some View {
         VStack(spacing: 0) {
+            // 区切りのボタンは縮まないので、狭い幅（右の欄を開いたときなど）では横に送れるようにする（はみ出すとページ全体が左右の欄の下へ広がった）
+            ScrollView(.horizontal, showsIndicators: false) {
             Picker("", selection: $model.tab) {
                 Text(L.t("すべて", "All")).tag("all")
                 Text(L.t("曲", "Songs")).tag("songs")
@@ -348,8 +350,9 @@ struct SearchPageView: View {
             .pickerStyle(.segmented)
             .labelsHidden()
             .fixedSize()
-            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(EdgeInsets(top: Kasane.Space.s2, leading: Kasane.Space.s4, bottom: 0, trailing: Kasane.Space.s4))
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .onChange(of: model.tab) { model.tabChanged() }
             if model.tab == "live" {
                 live
