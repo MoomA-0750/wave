@@ -1364,3 +1364,8 @@
 
 - 本人の頼み（「All」「Songs」「Albums」に丸い地が欲しい）。Windows の検索の絞り込みは SelectorBar（文字と下線）だったのを、ライブラリの種類・ホームの気分と同じ ToggleButton のチップ（角 14）にした。選んでいるものをもう一度押しても外さない（タブなので必ずどれか1つ）
 - 調べたところ、Windows は最初（cd14007e）から SelectorBar で、kasane の組み直しで消えたのではなかった。Mac は区切りのボタン（segmented）、Android は FilterChip、iPhone は丸い地のチップのまま
+
+## 2026-11-18 iPhone 版が家の端末に「pc」と名乗っていたのを「phone」に
+
+- Apple の版は Mac と iPhone で同じ ConnectService を使い、種類を "pc" と書き込んだままだった（visor のセッションが 10-22 に見つけた）。macOS は "pc"、iOS は "phone" にした
+- iPad も "phone"。受け手（Android・Windows・Mac）が覚える種類は "pc"・"phone"・"api" だけで、"tablet" を送ると覚えられず絵が決まらない。Android もタブレットで "phone" と名乗っている

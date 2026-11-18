@@ -763,6 +763,16 @@ final class ConnectWorker: ConnectClientEffects, @unchecked Sendable {
         #endif
     }
 
+    /// 家の端末に名乗る種類（表示の絵だけに使う）。受け手が知っている種類は "pc"・"phone"・"api" だけなので、
+    /// iPad も Android のタブレットと同じく "phone" と名乗る。
+    static var deviceKind: String {
+        #if os(macOS)
+            return "pc"
+        #else
+            return "phone"
+        #endif
+    }
+
     // MARK: 作業の列
 
     func post(_ action: @escaping () throws -> Void) {
@@ -934,7 +944,7 @@ final class ConnectWorker: ConnectClientEffects, @unchecked Sendable {
         profileSeenOnline = online
         if count == profileSentForMembers && !newcomer { return }
         do {
-            if try engine.sendProfile(ConnectWorker.deviceName, kind: "pc") { profileSentForMembers = count }
+            if try engine.sendProfile(ConnectWorker.deviceName, kind: ConnectWorker.deviceKind) { profileSentForMembers = count }
         } catch {
             AppPaths.log("connect-v2 failed type=\(String(describing: type(of: error)))")
         }
