@@ -128,7 +128,7 @@ public sealed class TransferRunner(ITransferWriter writer, Action<TransferSessio
     /// <summary>ログインしない検索で 403 と断られた回数（やり直さずにすぐ止める）。</summary>
     public int Refusals { get; private set; }
     /// <summary>最後に失敗した頼みの種類と HTTP の番号（止まった理由の記録用）。</summary>
-    public (FailureKind? Kind, int? Status)? LastFailure { get; private set; }
+    public (FailureKind? Kind, int? Status, string Op)? LastFailure { get; private set; }
     public TimeSpan WriteGap { get; init; } = TimeSpan.FromMilliseconds(700);
     public static readonly TimeSpan[] Backoff = [TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(30)];
     /// <summary>ログインは切れていないのに「ログインが要る」（403）と断られたときに待つ時間（続けての頼みが多すぎたとみなす）。尽きたら止める。</summary>
@@ -154,7 +154,7 @@ public sealed class TransferRunner(ITransferWriter writer, Action<TransferSessio
     }
 
     /// <summary>失敗したら待ってやり直す。ログインが要る・形が読めないときはやり直さない。</summary>
-    private async Task<ApiResult<T>> RetryAsync<T>(Func<Task<ApiResult<T>>> call, CancellationToken cancel)
+    private async Task<ApiResult<T>> RetryAsync<T>(Func<Task<ApiResult<T>>> call, CancellationToken cancel, [System.Runtime.CompilerServices.CallerArgumentExpression(nameof(call))] string op = "")
     {
         var throttled = 0;
         for (var attempt = 0; ; attempt++)
@@ -172,7 +172,7 @@ public sealed class TransferRunner(ITransferWriter writer, Action<TransferSessio
                 attempt = -1;
                 continue;
             }
-            if (!result.IsOk) LastFailure = (result.Failure, result.Status);
+            if (!result.IsOk) LastFailure = (result.Failure, result.Status, OpName(op));
             if (result.Failure == FailureKind.Http && result.Status == 403)
             {
                 // ログインしない検索で断られた: ふだんの再生・検索に響かないよう、やり直さずに止める
@@ -204,6 +204,10 @@ public sealed class TransferRunner(ITransferWriter writer, Action<TransferSessio
         var key = name.Trim();
         return existingUnknown || existing.Any(t => string.Equals(t.Trim(), key, StringComparison.OrdinalIgnoreCase)) ? key + FromSpotifySuffix : name;
     }
+
+    /// <summary>「() => writer.SearchSongsAsync(…)」から「SearchSongs」だけを取る。</summary>
+    private static string OpName(string expression) =>
+        System.Text.RegularExpressions.Regex.Match(expression, @"writer\.(\w+?)(Async)?\(") is { Success: true } m ? m.Groups[1].Value : expression;
 
     private static TransferStop StopOf<T>(ApiResult<T> r) => r.Failure == FailureKind.NotLoggedIn ? TransferStop.NotLoggedIn : TransferStop.Network;
 

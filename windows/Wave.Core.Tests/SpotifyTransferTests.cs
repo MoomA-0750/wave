@@ -451,7 +451,7 @@ public class SpotifyTransferTests
         Assert.Equal(TransferStop.Network, await runner.MatchAsync(s, default));
         Assert.Equal(1, w.Calls.Count(c => c.StartsWith("search:", StringComparison.Ordinal)));
         Assert.Equal(1, runner.Refusals);
-        Assert.Equal((FailureKind.Http, 403), runner.LastFailure);
+        Assert.Equal((FailureKind.Http, 403, "SearchSongs"), runner.LastFailure);
     }
 
     [Fact]
