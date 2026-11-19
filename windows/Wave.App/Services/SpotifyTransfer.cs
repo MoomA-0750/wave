@@ -76,7 +76,7 @@ public sealed class SpotifyTransfer(DispatcherQueue ui)
 #endif
 
     /// <summary>突き合わせの速さ（検索の間・何件ごとに何秒休むか）。開発用の命令 transfer-pace で替えて、断られない速さを探す。</summary>
-    public static (int GapMs, int Batch, int PauseSeconds) Pace = (1000, 100, 60);
+    public static (int GapMs, int Batch, int PauseSeconds) Pace = (2000, 50, 120);
 
     private TransferRunner Runner()
     {
