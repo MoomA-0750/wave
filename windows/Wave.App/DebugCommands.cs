@@ -536,7 +536,7 @@ public static class DebugCommands
                 var title = Wave.Core.Transfer.TransferMatcher.Fold(arg.Split(' ').Last());
                 foreach (var (name, repo) in AppServices.Transfer.DebugRepositories())
                 {
-                    Wave.Core.Net.InnerTubeClient.OriginalTitlesOverride = name == "main-original" ? true : null;
+                    Wave.Core.Net.InnerTubeClient.OriginalTitlesOverride = name.EndsWith("-original") ? true : null;
                     var r = await repo.SearchSongsAsync(arg);
                     Wave.Core.Net.InnerTubeClient.OriginalTitlesOverride = null;
                     AppPaths.Log($"debug transfer-probe {name} ok={r.IsOk} failure={r.Failure} status={r.Status} songs={r.Value?.Songs.Count} same-title={r.Value?.Songs.Count(x => Wave.Core.Transfer.TransferMatcher.Fold(x.Title) == title)}");
@@ -592,6 +592,10 @@ public static class DebugCommands
                 AppPaths.Log($"debug transfer-pace {Services.SpotifyTransfer.Pace}");
                 break;
             }
+            case "transfer-search-login":
+                Services.SpotifyTransfer.AnonymousSearch = arg != "on";
+                AppPaths.Log($"debug transfer-search-login anonymous={Services.SpotifyTransfer.AnonymousSearch}");
+                break;
             case "transfer-discard":
                 AppServices.Transfer.Discard();
                 break;

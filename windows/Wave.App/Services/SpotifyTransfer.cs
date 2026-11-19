@@ -57,11 +57,21 @@ public sealed class SpotifyTransfer(DispatcherQueue ui)
         return await work();
     }
 
+    /// <summary>
+    /// 突き合わせの検索に使う、ログインしない通信。本人のライブラリで続けて検索すると、YouTube がアカウントごと一時的に断り（403）、
+    /// ふだんの再生・検索まで止まったので、突き合わせはアカウントに響かないログインしない検索で行う（書き込みと、見直しの手での検索はログインした通信）。
+    /// </summary>
+    private static readonly Lazy<MusicRepository> AnonymousMusic = new(() => new MusicRepository(new InnerTubeClient(AppServices.Http, L.Hl)));
+
+    /// <summary>突き合わせをログインしない検索で行うか（開発用の命令 transfer-search-login で切り替えて比べる）。</summary>
+    public static bool AnonymousSearch = true;
+
 #if DEBUG
     public IEnumerable<(string, MusicRepository)> DebugRepositories()
     {
         yield return ("main", AppServices.Music);
         yield return ("main-original", AppServices.Music);
+        yield return ("anon-original", AnonymousMusic.Value);
     }
 #endif
 
@@ -70,7 +80,7 @@ public sealed class SpotifyTransfer(DispatcherQueue ui)
 
     private TransferRunner Runner()
     {
-        var runner = new TransferRunner(new MusicTransferWriter(AppServices.Music, AppServices.Music), Save)
+        var runner = new TransferRunner(new MusicTransferWriter(AppServices.Music, AnonymousSearch ? AnonymousMusic.Value : AppServices.Music), Save)
         {
             SearchGap = TimeSpan.FromMilliseconds(Pace.GapMs),
             BatchSize = Pace.Batch,
@@ -267,7 +277,7 @@ public sealed class SpotifyTransfer(DispatcherQueue ui)
         var before = session.ItemsInScope().Count(i => i.Status != MatchStatus.Pending);
         var stop = await Task.Run(() => OriginalAsync(() => runner.MatchAsync(session, cancel.Token)));
         var searched = session.ItemsInScope().Count(i => i.Status != MatchStatus.Pending) - before;
-        AppPaths.Log($"transfer match pace gap={Pace.GapMs} batch={Pace.Batch} pause={Pace.PauseSeconds} searched={searched} minutes={(DateTimeOffset.UtcNow - started).TotalMinutes:F1} throttles={runner.Throttles} by-album={runner.MatchedByAlbum}");
+        AppPaths.Log($"transfer match pace anonymous={AnonymousSearch} gap={Pace.GapMs} batch={Pace.Batch} pause={Pace.PauseSeconds} searched={searched} minutes={(DateTimeOffset.UtcNow - started).TotalMinutes:F1} throttles={runner.Throttles} by-album={runner.MatchedByAlbum}");
         LastStop = stop;
         var items = session.ItemsInScope();
         AppPaths.Log($"transfer match stop={stop} matched={items.Count(i => i.Status == MatchStatus.Matched)} review={items.Count(i => i.Status == MatchStatus.Review)} notfound={items.Count(i => i.Status == MatchStatus.NotFound)} pending={items.Count(i => i.Status == MatchStatus.Pending)}");
