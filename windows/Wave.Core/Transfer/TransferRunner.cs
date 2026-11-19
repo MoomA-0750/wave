@@ -125,6 +125,10 @@ public sealed class TransferRunner(ITransferWriter writer, Action<TransferSessio
     public int MatchedByAlbum { get; private set; }
     /// <summary>突き合わせの間に断られた回数（記録と速さの調べに使う）。</summary>
     public int Throttles { get; private set; }
+    /// <summary>ログインしない検索で 403 と断られた回数（やり直さずにすぐ止める）。</summary>
+    public int Refusals { get; private set; }
+    /// <summary>最後に失敗した頼みの種類と HTTP の番号（止まった理由の記録用）。</summary>
+    public (FailureKind? Kind, int? Status)? LastFailure { get; private set; }
     public TimeSpan WriteGap { get; init; } = TimeSpan.FromMilliseconds(700);
     public static readonly TimeSpan[] Backoff = [TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(30)];
     /// <summary>ログインは切れていないのに「ログインが要る」（403）と断られたときに待つ時間（続けての頼みが多すぎたとみなす）。尽きたら止める。</summary>
@@ -167,6 +171,13 @@ public sealed class TransferRunner(ITransferWriter writer, Action<TransferSessio
                 if (last is { } q) Progress?.Invoke(q);
                 attempt = -1;
                 continue;
+            }
+            if (!result.IsOk) LastFailure = (result.Failure, result.Status);
+            if (result.Failure == FailureKind.Http && result.Status == 403)
+            {
+                // ログインしない検索で断られた: ふだんの再生・検索に響かないよう、やり直さずに止める
+                Refusals++;
+                return result;
             }
             if (result.IsOk || result.Failure is FailureKind.NotLoggedIn or FailureKind.Parse || attempt >= Backoff.Length) return result;
             await delay(Backoff[attempt], cancel);

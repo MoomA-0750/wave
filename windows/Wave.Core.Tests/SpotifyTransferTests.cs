@@ -296,6 +296,7 @@ public class SpotifyTransferTests
         {
             Calls.Add("search:" + query);
             if (FailSearches-- > 0) return Task.FromResult(ApiResult<IReadOnlyList<Song>>.Failed(FailureKind.Network));
+            if (RefuseSearches-- > 0) return Task.FromResult(ApiResult<IReadOnlyList<Song>>.Failed(FailureKind.Http, 403));
             if (ThrottleSearches-- > 0) return Task.FromResult(ApiResult<IReadOnlyList<Song>>.Failed(FailureKind.NotLoggedIn, 403));
             var title = query.Split(' ', 2).Last();
             return Task.FromResult(ApiResult<IReadOnlyList<Song>>.Ok([S("v-" + title, title, "緑黄色社会")]));
@@ -321,6 +322,7 @@ public class SpotifyTransferTests
 
         public HashSet<string>? LibraryTitles = [];
         public int ThrottleSearches;
+        public int RefuseSearches;
         public bool LoginLost;
 
         public Task<bool> LoginLostAsync(CancellationToken cancel) => Task.FromResult(LoginLost || LoggedOut);
@@ -438,6 +440,18 @@ public class SpotifyTransferTests
         var s = Sample();
         var w = new FakeWriter { ThrottleSearches = 100, LoginLost = true };
         Assert.Equal(TransferStop.NotLoggedIn, await Runner(w).MatchAsync(s, default));
+    }
+
+    [Fact]
+    public async Task MatchStopsAtOnceWhenTheAnonymousSearchIsRefused()
+    {
+        var s = Sample();
+        var w = new FakeWriter { RefuseSearches = 100 };
+        var runner = Runner(w);
+        Assert.Equal(TransferStop.Network, await runner.MatchAsync(s, default));
+        Assert.Equal(1, w.Calls.Count(c => c.StartsWith("search:", StringComparison.Ordinal)));
+        Assert.Equal(1, runner.Refusals);
+        Assert.Equal((FailureKind.Http, 403), runner.LastFailure);
     }
 
     [Fact]
