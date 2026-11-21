@@ -192,7 +192,7 @@ public sealed partial class SpotifyTransfer
         await done.Task;
         AppPaths.Log($"transfer ai items={items.Count} picked={picked} sure={sure} not-found={none} searches={searches} stopped={stopMessage is not null}");
         Save(session);
-        Set(null, stopMessage ?? L.T($"Claude が {picked} 件を選びました（確か {sure} 件）。{none} 件は見つからないと答えました", $"Claude picked {picked} ({sure} sure). It found nothing for {none}"));
+        Set(null, stopMessage ?? L.T($"Claude が {picked} 件を選びました（確か {sure} 件）。{none} 件は見つからないと答えました", $"Claude picked {picked} ({sure} sure). It found nothing for {none}"), result: stopMessage is null);
         Finished?.Invoke("ai", TransferStop.None);
     }
 

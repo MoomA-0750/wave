@@ -142,7 +142,7 @@ public sealed partial class TransferPage : Page
     {
         bar.Message = message ?? "";
         bar.IsOpen = message is not null;
-        bar.Severity = Transfer.LastStop == TransferStop.Cancelled ? InfoBarSeverity.Informational : InfoBarSeverity.Warning;
+        bar.Severity = Transfer.LastStop == TransferStop.Cancelled || Transfer.MessageIsResult ? InfoBarSeverity.Informational : InfoBarSeverity.Warning;
     }
 
     // --- 進み具合 ---

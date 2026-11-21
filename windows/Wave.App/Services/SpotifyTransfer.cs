@@ -122,10 +122,14 @@ public sealed partial class SpotifyTransfer(DispatcherQueue ui)
         if (Session is not null) Save(Session);
     }
 
-    private void Set(string? busy, string? message = null)
+    /// <summary>今の知らせが、失敗でなく結果の知らせか（黄色の注意にせず、ふつうの知らせの色で出す）。</summary>
+    public bool MessageIsResult { get; private set; }
+
+    private void Set(string? busy, string? message = null, bool result = false)
     {
         Busy = busy;
         Message = message;
+        MessageIsResult = result;
         if (busy is not null)
         {
             Progress = null;
