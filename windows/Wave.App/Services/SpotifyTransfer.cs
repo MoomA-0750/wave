@@ -10,7 +10,7 @@ namespace Wave.App.Services;
 /// 作業の全部（読んだもの・選び・進み具合）はデータの場所の spotify-transfer.json に保存し、閉じても続きから行える（ログアウトで消す）。
 /// 記録には件数と状態だけを書く（曲名などは書かない）。
 /// </summary>
-public sealed class SpotifyTransfer(DispatcherQueue ui)
+public sealed partial class SpotifyTransfer(DispatcherQueue ui)
 {
     private static readonly string FilePath = Path.Combine(AppPaths.Data, "spotify-transfer.json");
 
@@ -28,7 +28,7 @@ public sealed class SpotifyTransfer(DispatcherQueue ui)
     public event Action<string, TransferStop>? Finished;
 
     /// <summary>時間のかかる作業（突き合わせ・書き込み）をしているか。窓を閉じても裏で続ける。</summary>
-    public bool RunsLong => Busy is "match" or "write";
+    public bool RunsLong => Busy is "match" or "write" or "ai";
 
     /// <summary>残りのおよその時間（今の作業で20件以上進んでから、その速さで見積もる）。分からなければ null。</summary>
     public TimeSpan? Remaining
@@ -292,7 +292,7 @@ public sealed class SpotifyTransfer(DispatcherQueue ui)
     {
         if (Busy is not null || Session is not { } session) return;
         var n = 0;
-        foreach (var item in session.ItemsInScope().Where(i => i.Status is MatchStatus.Review or MatchStatus.NotFound && !i.Manual && !i.Excluded))
+        foreach (var item in session.ItemsInScope().Where(i => i.Status is MatchStatus.Review or MatchStatus.NotFound && !i.Manual && !i.Excluded && !i.AiPicked))
         {
             item.Status = MatchStatus.Pending;
             n++;

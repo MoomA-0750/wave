@@ -33,7 +33,14 @@ public sealed class TransferRow(TransferItem item) : INotifyPropertyChanged
 
     public string TargetTitle => Item.Excluded ? L.T("移さない", "Not moved") : Item.Chosen?.Title ?? L.T("見つかりません", "Not found");
 
-    public string TargetSubtitle => Item.Excluded ? "" : Item.Chosen is { } c ? TransferPage.CandidateSubtitle(c) : L.T("「選ぶ」から YouTube Music で探せます", "Use Choose to search YouTube Music");
+    public string TargetSubtitle =>
+        Item.Excluded ? ""
+        : Item.AiNote is { Length: > 0 } note && (Item.AiPicked || Item.Chosen is null) ? "Claude: " + note
+        : Item.Chosen is { } c ? TransferPage.CandidateSubtitle(c)
+        : L.T("「選ぶ」から YouTube Music で探せます", "Use Choose to search YouTube Music");
+
+    /// <summary>行に重ねて全部を読めるように（Claude の理由は長い）。</summary>
+    public string? TargetTip => Item.AiNote is { Length: > 0 } note ? "Claude: " + note : null;
 
     // 絵は行ごとに1つを持ち続ける（絞り込みで出し直すたびに作り直すと、読み直す間の数コマ空になった）
     private (string? Url, ImageSource? Image) thumb;
@@ -53,6 +60,7 @@ public sealed class TransferRow(TransferItem item) : INotifyPropertyChanged
     public string StatusText =>
         Item.Excluded ? L.T("外す", "Excluded")
         : Item.Manual ? L.T("選んだ", "Chosen")
+        : Item.AiPicked ? (Item.Status == MatchStatus.Matched ? L.T("Claude が選んだ", "Claude") : L.T("Claude・要確認", "Claude, check"))
         : Item.Status switch
         {
             MatchStatus.Matched => L.T("一致", "Matched"),
@@ -146,6 +154,7 @@ public sealed partial class TransferPage : Page
             "login" => L.T("ブラウザで Spotify にログインして、許可してください…", "Sign in to Spotify in your browser and allow access…"),
             "read" => L.T("Spotify から読んでいます…", "Reading from Spotify…"),
             "match" => L.T("YouTube Music で同じものを探しています…", "Finding the same items on YouTube Music…"),
+            "ai" => L.T("Claude が YouTube Music で探しています…", "Claude is searching YouTube Music…"),
             _ => L.T("YouTube Music に書き込んでいます…", "Writing to YouTube Music…"),
         };
         BackgroundHint.Visibility = Ui.Show(Transfer.RunsLong);
@@ -153,7 +162,7 @@ public sealed partial class TransferPage : Page
         if (p is { Total: > 0 }) ProgressBar.Value = (double)p.Done / p.Total;
         ProgressDetail.Text = p is null ? "" : p.Stage switch
         {
-            "match" => L.T($"{p.Done} / {p.Total} 件", $"{p.Done} of {p.Total}") + (p.Current is { } c ? " • " + c : ""),
+            "match" or "ai" => L.T($"{p.Done} / {p.Total} 件", $"{p.Done} of {p.Total}") + (p.Current is { } c ? " • " + c : ""),
             "playlist" => L.T($"プレイリスト {p.Done + 1} / {p.Total}", $"Playlist {p.Done + 1} of {p.Total}") + (p.Current is { } n ? " • " + n : ""),
             "like" => L.T($"高く評価 {p.Done} / {p.Total} 曲", $"Liking {p.Done} of {p.Total} songs"),
             "album" => L.T($"アルバムの保存 {p.Done} / {p.Total} 枚", $"Saving albums {p.Done} of {p.Total}"),
@@ -168,7 +177,7 @@ public sealed partial class TransferPage : Page
         if (p?.WaitSeconds is { } wait)
             ProgressDetail.Text = L.T($"{p.Done} / {p.Total} • YouTube Music に続けての検索を一時的に断られたので、{(wait >= 60 ? $"{wait / 60} 分" : $"{wait} 秒")}待ってから続けます", $"{p.Done} of {p.Total} • YouTube Music is briefly refusing requests, so wave waits {(wait >= 60 ? $"{wait / 60} min" : $"{wait} s")} and continues");
         else if (Transfer.Remaining is { } left) ProgressDetail.Text += " • " + Remaining(left);
-        StopButton.Visibility = Ui.Show(busy is "login" or "match" or "write" or "read");
+        StopButton.Visibility = Ui.Show(busy is "login" or "match" or "write" or "read" or "ai");
     }
 
     /// <summary>残りのおよその時間（「残り およそ 1 時間 20 分」）。</summary>
@@ -353,6 +362,11 @@ public sealed partial class TransferPage : Page
         var plan = TransferPlan.Of(s);
         PlanText.Text = PlanSummary(plan);
         WriteButton.IsEnabled = !plan.IsEmpty;
+        var targets = Transfer.AiTargets().Count;
+        AskClaudeButton.Content = L.T($"Claude で探す（{targets} 件）", $"Find with Claude ({targets})");
+        AskClaudeButton.IsEnabled = targets > 0;
+        AskClaudeButton.Visibility = Ui.Show(SpotifyTransfer.AiConfigured);
+        RematchButton.IsEnabled = review + notFound > 0;
         foreach (var chip in StatusChips.Children.OfType<ToggleButton>()) chip.Content = StatusChipTitle((string)chip.Tag, scope);
     }
 
@@ -371,6 +385,7 @@ public sealed partial class TransferPage : Page
     {
         "review" => L.T("要確認", "To check") + $" {scope.Count(i => !i.Excluded && !i.Manual && i.Status == MatchStatus.Review)}",
         "notfound" => L.T("見つからない", "Not found") + $" {scope.Count(i => !i.Excluded && !i.Manual && i.Status == MatchStatus.NotFound)}",
+        "ai" => "Claude" + $" {scope.Count(i => i.AiTried)}",
         "excluded" => L.T("外したもの", "Excluded") + $" {scope.Count(i => i.Excluded)}",
         _ => L.T("すべて", "All") + $" {scope.Count}",
     };
@@ -379,7 +394,7 @@ public sealed partial class TransferPage : Page
     {
         if (StatusChips.Children.Count == 0)
         {
-            foreach (var tag in new[] { "all", "review", "notfound", "excluded" })
+            foreach (var tag in new[] { "all", "review", "notfound", "ai", "excluded" })
             {
                 var chip = new ToggleButton { Tag = tag, CornerRadius = new CornerRadius(14), Padding = new Thickness(12, 4, 12, 5) };
                 // Click でなく Checked で受ける（UI Automation の切り替え（ナレーターなど）は Click を起こさず、印だけ変わって一覧が変わらなかった）
@@ -433,6 +448,7 @@ public sealed partial class TransferPage : Page
             {
                 "review" => !r.Item.Excluded && !r.Item.Manual && r.Item.Status == MatchStatus.Review,
                 "notfound" => !r.Item.Excluded && !r.Item.Manual && r.Item.Status == MatchStatus.NotFound,
+                "ai" => r.Item.AiTried,
                 "excluded" => r.Item.Excluded,
                 _ => true,
             }).ToList();
@@ -471,6 +487,12 @@ public sealed partial class TransferPage : Page
             var play = new MenuFlyoutItem { Text = L.T("選んでいる曲を再生", "Play the chosen song"), Icon = new FontIcon { Glyph = "" } };
             play.Click += (_, _) => AppServices.Player.PlaySong(new Song(chosen.Id, chosen.Title, [], null, chosen.DurationSeconds, chosen.ThumbnailUrl, chosen.Kind));
             menu.Items.Add(play);
+        }
+        if (!row.Item.Manual && !row.Item.Excluded && SpotifyTransfer.AiConfigured)
+        {
+            var ask = new MenuFlyoutItem { Text = L.T("Claude で探す", "Find with Claude"), Icon = new FontIcon { Glyph = "\uE99A" } };
+            ask.Click += async (_, _) => await Transfer.AskClaudeAsync([row.Item]);
+            menu.Items.Add(ask);
         }
         var search = new MenuFlyoutItem { Text = L.T("YouTube Music で探す…", "Search YouTube Music…"), Icon = new FontIcon { Glyph = "" } };
         search.Click += async (_, _) => await SearchDialogAsync(row);
@@ -576,6 +598,10 @@ public sealed partial class TransferPage : Page
         grid.Children.Add(text);
         return grid;
     }
+
+    private async void OnAskClaude(object sender, RoutedEventArgs e) => await Transfer.AskClaudeAsync(Transfer.AiTargets());
+
+    private async void OnRematchUnsure(object sender, RoutedEventArgs e) => await Transfer.RematchUnsureAsync();
 
     private void OnBackToChoose(object sender, RoutedEventArgs e)
     {

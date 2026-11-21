@@ -1442,6 +1442,7 @@ public sealed partial class MainWindow : Window
             var (title, body) = (kind, stop) switch
             {
                 ("match", TransferStop.None) => (L.T("突き合わせが終わりました", "Matching is done"), L.T("押すと見直しの一覧を開きます。YouTube Music にはまだ何も書いていません", "Open the review list. Nothing has been written to YouTube Music yet")),
+                ("ai", TransferStop.None) => (L.T("Claude で探し終えました", "Claude finished searching"), L.T("押すと見直しの一覧を開きます。YouTube Music にはまだ何も書いていません", "Open the review list. Nothing has been written to YouTube Music yet")),
                 ("write", TransferStop.None) => (L.T("Spotify から移し終えました", "Moving from Spotify is done"), L.T("押すと結果を開きます", "Open the results")),
                 _ => (L.T("Spotify から移す作業が止まりました", "Moving from Spotify stopped"), L.T("押すと開きます。「続ける」で続きから行えます", "Open it and choose Continue to pick up where it stopped")),
             };

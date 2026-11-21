@@ -151,7 +151,7 @@
                                 </Border>
                                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                     <TextBlock Text="{x:Bind TargetTitle, Mode=OneWay}" TextTrimming="CharacterEllipsis" />
-                                    <TextBlock Text="{x:Bind TargetSubtitle, Mode=OneWay}" Style="{StaticResource SubtleTextStyle}" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Text="{x:Bind TargetSubtitle, Mode=OneWay}" ToolTipService.ToolTip="{x:Bind TargetTip, Mode=OneWay}" Style="{StaticResource SubtleTextStyle}" TextTrimming="CharacterEllipsis" />
                                 </StackPanel>
                             </Grid>
                             <Border Grid.Column="3" HorizontalAlignment="Left" VerticalAlignment="Center" CornerRadius="10" Padding="8,2,8,3" Background="{x:Bind StatusBackground, Mode=OneWay}">
@@ -166,6 +166,8 @@
             <StackPanel Grid.Row="5" Spacing="{StaticResource KasaneSpace2}" Padding="0,8,0,0">
                 <TextBlock x:Name="PlanText" TextWrapping="Wrap" MaxLines="0" Style="{StaticResource SubtleTextStyle}" />
                 <StackPanel Orientation="Horizontal" Spacing="{StaticResource KasaneSpace2}" HorizontalAlignment="Right">
+                    <Button x:Name="RematchButton" Click="OnRematchUnsure" Content="{x:Bind app:L.T('突き合わせ直す', 'Match again')}" />
+                    <Button x:Name="AskClaudeButton" Click="OnAskClaude" />
                     <Button Click="OnBackToChoose" Content="{x:Bind app:L.T('移すものを選び直す', 'Change what to move')}" />
                     <Button x:Name="WriteButton" Style="{StaticResource AccentButtonStyle}" Click="OnWrite" Content="{x:Bind app:L.T('YouTube Music に書き込む', 'Write to YouTube Music')}" />
                 </StackPanel>

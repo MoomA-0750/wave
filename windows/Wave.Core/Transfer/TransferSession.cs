@@ -29,6 +29,12 @@ public sealed class TransferItem
     public bool Excluded { get; set; }
     /// <summary>本人が選び直した（自動の選び直しで上書きしない）。</summary>
     public bool Manual { get; set; }
+    /// <summary>「Claude で探す」を行った。</summary>
+    public bool AiTried { get; set; }
+    /// <summary>選んでいる候補は Claude が選んだもの。</summary>
+    public bool AiPicked { get; set; }
+    /// <summary>Claude の選んだ理由・見つからないと考えた理由。</summary>
+    public string? AiNote { get; set; }
 
     [JsonIgnore] public MatchCandidate? Chosen => ChosenId is null ? null : Candidates.FirstOrDefault(c => c.Id == ChosenId);
 
@@ -49,6 +55,7 @@ public sealed class TransferItem
         Candidates = candidates;
         if (keep is not null && !Candidates.Any(c => c.Id == keep.Id)) Candidates.Insert(0, keep);
         ChosenId = keep?.Id ?? candidates.FirstOrDefault()?.Id;
+        if (keep is null) AiPicked = false;
     }
 
     /// <summary>本人が候補を選んだ（手で検索して選んだものは候補の先頭に足す）。</summary>
@@ -58,6 +65,7 @@ public sealed class TransferItem
         ChosenId = candidate.Id;
         Excluded = false;
         Manual = true;
+        AiPicked = false;
     }
 }
 
