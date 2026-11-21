@@ -61,6 +61,7 @@ public sealed class TransferRow(TransferItem item) : INotifyPropertyChanged
         Item.Excluded ? L.T("外す", "Excluded")
         : Item.Manual ? L.T("選んだ", "Chosen")
         : Item.AiPicked ? (Item.Status == MatchStatus.Matched ? L.T("Claude が選んだ", "Claude") : L.T("Claude・要確認", "Claude, check"))
+        : Item.AiTried && Item.Status == MatchStatus.NotFound ? L.T("Claude: 無い", "Claude: none")
         : Item.Status switch
         {
             MatchStatus.Matched => L.T("一致", "Matched"),

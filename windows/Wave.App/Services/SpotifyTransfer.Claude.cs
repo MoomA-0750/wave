@@ -171,12 +171,19 @@ public sealed partial class SpotifyTransfer
                 });
             }
         }
+        catch (OperationCanceledException) when (!token.IsCancellationRequested)
+        {
+            // 止めていないのに切れた（中継への通信の時間切れなど）
+            AppPaths.Log("transfer ai failed timeout");
+            stopMessage = L.T("Claude の中継が答えませんでした", "The Claude bridge didn't answer");
+        }
         catch (OperationCanceledException)
         {
             stopMessage ??= L.T("止めました", "Stopped");
         }
-        catch (HttpRequestException)
+        catch (HttpRequestException e)
         {
+            AppPaths.Log($"transfer ai failed bridge={e.HttpRequestError}");
             stopMessage = L.T("Claude の中継につながりませんでした", "Couldn't reach the Claude bridge");
         }
         // 当てはめは UI のスレッドで行うので、それが済んでから終える

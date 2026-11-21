@@ -134,11 +134,17 @@ public static class TransferAi
         return true;
     }
 
-    /// <summary>Claude が見つからないと答えた（自動の候補と状態はそのまま。理由だけ残す）。</summary>
+    /// <summary>
+    /// Claude が見つからないと答えた。自動で選んであった候補（多くは別の曲）を外して「見つからない」にし、そのまま書き込んで別の曲が入るのを防ぐ。
+    /// 候補は残すので、本人が「選ぶ」から選び直せる。本人が選んだもの・外したものは理由だけ残して変えない。
+    /// </summary>
     public static void ApplyNotFound(TransferItem item, string reason)
     {
         item.AiTried = true;
         item.AiPicked = false;
         item.AiNote = reason;
+        if (item.Manual || item.Excluded) return;
+        item.ChosenId = null;
+        item.Status = MatchStatus.NotFound;
     }
 }

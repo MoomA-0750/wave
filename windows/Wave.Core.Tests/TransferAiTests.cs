@@ -70,12 +70,17 @@ public class TransferAiTests
         Assert.False(picked.AiPicked);
         Assert.True(picked.Manual);
 
-        // 見つからないと答えたら、状態と候補はそのままで、理由だけ残す
+        // 見つからないと答えたら、自動の候補を外して「見つからない」にする（候補は選び直せるように残す）
         var none = Item();
         TransferAi.ApplyNotFound(none, "YouTube Music には無いアルバム");
-        Assert.Equal(MatchStatus.Review, none.Status);
-        Assert.Equal("cover", none.ChosenId);
+        Assert.Equal(MatchStatus.NotFound, none.Status);
+        Assert.Null(none.ChosenId);
+        Assert.Single(none.Candidates);
         Assert.True(none.AiTried);
         Assert.Equal("YouTube Music には無いアルバム", none.AiNote);
+
+        // 本人が選んだものは、見つからないと答えても変えない
+        TransferAi.ApplyNotFound(chosen, "x");
+        Assert.Equal("cover", chosen.ChosenId);
     }
 }
