@@ -192,6 +192,65 @@ public class SpotifyTransferTests
         Assert.Null(TransferMatcher.DurationScore(null, 200));
     }
 
+    private static TransferItem MatchedTrack(string title, string artist, string ytTitle, string ytArtist) => new()
+    {
+        Key = "t:" + title + "|" + artist,
+        Kind = TransferKind.Track,
+        Title = title,
+        Artists = [artist],
+        Status = MatchStatus.Matched,
+        Candidates = [new MatchCandidate("v-" + title, ytTitle, ytArtist + " • アルバム", null, 1)],
+        ChosenId = "v-" + title,
+    };
+
+    [Fact]
+    public void RomanizedArtistNamesAreLearnedFromMatchedSongs()
+    {
+        // 曲名が同じで一致した曲が2つ以上あれば、ローマ字の名前と漢字・かなの名前を同じ人とみなす
+        var items = new List<TransferItem>
+        {
+            MatchedTrack("courage", "Haruka Tomatsu", "courage", "戸松　遥"),
+            MatchedTrack("PACHI PACHI PARTY", "Haruka Tomatsu", "PACHI PACHI PARTY", "戸松　遥"),
+            // 1回だけの組は使わない（カバーなどの取り違えがある）
+            MatchedTrack("Lemon", "Kenshi Yonezu", "Lemon", "米津玄師"),
+            // 曲名が違う一致からは学ばない
+            MatchedTrack("風景", "Motohiro Hata", "鱗", "秦 基博"),
+            MatchedTrack("綴る", "Motohiro Hata", "在る", "秦 基博"),
+        };
+        var aliases = NameAliases.Learn(items);
+        Assert.Equal(1, aliases.Count);
+        Assert.True(aliases.Same("Haruka Tomatsu", "戸松 遥"));
+        Assert.Equal("戸松　遥", aliases.Native("haruka tomatsu"));
+        Assert.Null(aliases.Native("Kenshi Yonezu"));
+        Assert.Null(aliases.Native("Motohiro Hata"));
+        Assert.Equal("戸松　遥 色彩日記", TransferMatcher.SongQuery(new SpotifyTrack("色彩日記", ["Haruka Tomatsu"], null), aliases));
+    }
+
+    [Fact]
+    public void KnownRomanizedArtistsMatchWithoutReview()
+    {
+        var aliases = NameAliases.Of(("Motohiro Hata", "秦 基博"));
+        var track = new SpotifyTrack("風景", ["Motohiro Hata"], "ひとみみぼれ", 328_000);
+        // 漢字の曲名・ローマ字のアーティストで、長さが分からない候補は、別の書き方が分からなければ要確認のまま
+        Assert.Equal(MatchStatus.Review, TransferMatcher.StatusOf(TransferMatcher.RankSongs(track, [S("v1", "風景", "秦 基博")])));
+        Assert.Equal(MatchStatus.Matched, TransferMatcher.StatusOf(TransferMatcher.RankSongs(track, [S("v1", "風景", "秦 基博")], aliases)));
+        // アーティストの登録も、別の書き方が分かれば確かとみなす
+        var artists = TransferMatcher.RankArtists(new SpotifyArtist("Motohiro Hata"), [new ArtistSummary("UC1", "秦 基博", null, null)], aliases);
+        Assert.Equal(MatchStatus.Matched, TransferMatcher.StatusOf(artists));
+    }
+
+    [Fact]
+    public void ReadingsAfterTheTitleAndPlusFeaturesAreIgnored()
+    {
+        Assert.Equal("月は美しく (Album ver.)", TransferMatcher.StripRomanization("月は美しく (Album ver.) - Tsuki Ha Utsukushiku"));
+        // 前が漢字・かなでなければ外さない（英語の曲名の「- Live」などは別の版）
+        Assert.Equal("Hello - Live at Home", TransferMatcher.StripRomanization("Hello - Live at Home"));
+        Assert.Equal("砂の惑星", TransferMatcher.StripDecorations("砂の惑星 ( + 初音ミク )"));
+        var track = new SpotifyTrack("月は美しく - Album ver.", ["SHE'S"], "Now & Then", 224_000);
+        var ranked = TransferMatcher.RankSongs(track, [S("v1", "月は美しく (Album ver.) - Tsuki Ha Utsukushiku", "She's", "Now & Then", 225)]);
+        Assert.Equal(MatchStatus.Matched, TransferMatcher.StatusOf(ranked));
+    }
+
     [Fact]
     public void RomajiArtistIsNotTreatedAsAMismatch()
     {

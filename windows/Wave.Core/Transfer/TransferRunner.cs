@@ -125,6 +125,9 @@ public sealed class TransferRunner(ITransferWriter writer, Action<TransferSessio
     public int MatchedByAlbum { get; private set; }
     /// <summary>突き合わせの間に断られた回数（記録と速さの調べに使う）。</summary>
     public int Throttles { get; private set; }
+    /// <summary>アーティストの別の書き方（突き合わせの初めと、途中で一定の数ごとに、一致した曲から学び直す）。</summary>
+    public NameAliases Aliases { get; private set; } = NameAliases.Empty;
+    private const int LearnEvery = 200;
     /// <summary>ログインしない検索で 403 と断られた回数（やり直さずにすぐ止める）。</summary>
     public int Refusals { get; private set; }
     /// <summary>最後に失敗した頼みの種類と HTTP の番号（止まった理由の記録用）。</summary>
@@ -227,6 +230,7 @@ public sealed class TransferRunner(ITransferWriter writer, Action<TransferSessio
             .Where(g => g.Count() >= AlbumGroupMin)
             .ToDictionary(g => g.Key, g => g.Select(x => x.Item).ToList());
         var triedAlbums = new HashSet<string>();
+        Aliases = NameAliases.Learn(session.Items);
         try
         {
             // Where は遅れて評価されるので、アルバムのページで決まった曲は飛ばされる
@@ -249,6 +253,7 @@ public sealed class TransferRunner(ITransferWriter writer, Action<TransferSessio
                 done++;
                 matched++;
                 if (++sinceSave >= SaveEvery) { save(session); sinceSave = 0; }
+                if (matched % LearnEvery == 0) Aliases = NameAliases.Learn(session.Items);
                 if (BatchSize > 0 && matched % BatchSize == 0) await delay(BatchPause, cancel);
                 else await delay(searchGap, cancel);
             }
@@ -273,9 +278,9 @@ public sealed class TransferRunner(ITransferWriter writer, Action<TransferSessio
     {
         var first = group[0].AsTrack();
         var album = new SpotifyAlbum(first.Album!, first.Artists);
-        var albums = await RetryAsync(() => writer.SearchAlbumsAsync(TransferMatcher.AlbumQuery(album), cancel), cancel);
+        var albums = await RetryAsync(() => writer.SearchAlbumsAsync(TransferMatcher.AlbumQuery(album, Aliases), cancel), cancel);
         if (!albums.IsOk) return (albums.Failure == FailureKind.Parse ? TransferStop.None : StopOf(albums), 0);
-        var best = TransferMatcher.RankAlbums(album, albums.Value ?? []);
+        var best = TransferMatcher.RankAlbums(album, albums.Value ?? [], Aliases);
         if (TransferMatcher.StatusOf(best) != MatchStatus.Matched) return (TransferStop.None, 0);
         await delay(searchGap, cancel);
         var songs = await RetryAsync(() => writer.AlbumSongsAsync(best[0].Id, cancel), cancel);
@@ -283,7 +288,7 @@ public sealed class TransferRunner(ITransferWriter writer, Action<TransferSessio
         var decided = 0;
         foreach (var item in group.Where(i => i.Status == MatchStatus.Pending))
         {
-            var candidates = TransferMatcher.RankSongs(item.AsTrack(), songs.Value ?? []);
+            var candidates = TransferMatcher.RankSongs(item.AsTrack(), songs.Value ?? [], Aliases);
             if (TransferMatcher.StatusOf(candidates) != MatchStatus.Matched) continue;
             item.SetCandidates(candidates);
             decided++;
@@ -298,17 +303,17 @@ public sealed class TransferRunner(ITransferWriter writer, Action<TransferSessio
             case TransferKind.Track:
             {
                 var track = item.AsTrack();
-                var query = TransferMatcher.SongQuery(track);
+                var query = TransferMatcher.SongQuery(track, Aliases);
                 var songs = await RetryAsync(() => writer.SearchSongsAsync(query, cancel), cancel);
                 if (!songs.IsOk && songs.Failure != FailureKind.Parse) return StopOf(songs);
-                var candidates = TransferMatcher.RankSongs(track, songs.Value ?? []);
+                var candidates = TransferMatcher.RankSongs(track, songs.Value ?? [], Aliases);
                 if (TransferMatcher.StatusOf(candidates) != MatchStatus.Matched)
                 {
                     // 曲（song）で見つからなければ、動画も含めた検索の上位から探す
                     await delay(searchGap, cancel);
                     var top = await RetryAsync(() => writer.SearchTopSongsAsync(query, cancel), cancel);
                     if (!top.IsOk && top.Failure != FailureKind.Parse) return StopOf(top);
-                    candidates = TransferMatcher.Merge(candidates, TransferMatcher.RankSongs(track, top.Value ?? []));
+                    candidates = TransferMatcher.Merge(candidates, TransferMatcher.RankSongs(track, top.Value ?? [], Aliases));
                 }
                 item.SetCandidates(candidates);
                 return TransferStop.None;
@@ -316,17 +321,17 @@ public sealed class TransferRunner(ITransferWriter writer, Action<TransferSessio
             case TransferKind.Album:
             {
                 var album = item.AsAlbum();
-                var albums = await RetryAsync(() => writer.SearchAlbumsAsync(TransferMatcher.AlbumQuery(album), cancel), cancel);
+                var albums = await RetryAsync(() => writer.SearchAlbumsAsync(TransferMatcher.AlbumQuery(album, Aliases), cancel), cancel);
                 if (!albums.IsOk && albums.Failure != FailureKind.Parse) return StopOf(albums);
-                item.SetCandidates(TransferMatcher.RankAlbums(album, albums.Value ?? []));
+                item.SetCandidates(TransferMatcher.RankAlbums(album, albums.Value ?? [], Aliases));
                 return TransferStop.None;
             }
             default:
             {
                 var artist = item.AsArtist();
-                var artists = await RetryAsync(() => writer.SearchArtistsAsync(artist.Name, cancel), cancel);
+                var artists = await RetryAsync(() => writer.SearchArtistsAsync(TransferMatcher.ArtistQuery(artist.Name, Aliases), cancel), cancel);
                 if (!artists.IsOk && artists.Failure != FailureKind.Parse) return StopOf(artists);
-                item.SetCandidates(TransferMatcher.RankArtists(artist, artists.Value ?? []));
+                item.SetCandidates(TransferMatcher.RankArtists(artist, artists.Value ?? [], Aliases));
                 return TransferStop.None;
             }
         }

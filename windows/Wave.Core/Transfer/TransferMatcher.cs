@@ -38,7 +38,7 @@ public static partial class TransferMatcher
         return sb.ToString();
     }
 
-    [GeneratedRegex(@"\s*[\(\[（［【](?:feat\.?|ft\.?|featuring|with)\s[^\)\]）］】]*[\)\]）］】]", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"\s*[\(\[（［【]\s*(?:feat\.?|ft\.?|featuring|with|\+)\s[^\)\]）］】]*[\)\]）］】]", RegexOptions.IgnoreCase)]
     private static partial Regex FeatInBrackets();
 
     [GeneratedRegex(@"\s+(?:feat\.?|ft\.?|featuring)\s.*$", RegexOptions.IgnoreCase)]
@@ -59,6 +59,16 @@ public static partial class TransferMatcher
         s = FeatTrailing().Replace(s, "");
         s = s.Trim();
         return s.Length > 0 ? s : title.Trim();
+    }
+
+    [GeneratedRegex(@"\s+[-–—]\s+[A-Za-z0-9][A-Za-z0-9 '’.,!?&:\-]*$")]
+    private static partial Regex RomanizationDash();
+
+    /// <summary>YouTube Music の曲名の後ろに付いた読み（「月は美しく - Tsuki Ha Utsukushiku」）を外す。前が漢字・かなのときだけ。</summary>
+    public static string StripRomanization(string title)
+    {
+        var m = RomanizationDash().Match(title);
+        return m.Success && title[..m.Index].Any(IsCjk) ? title[..m.Index].Trim() : title;
     }
 
     private static bool IsCjk(char c) =>
@@ -87,8 +97,9 @@ public static partial class TransferMatcher
     }
 
     /// <summary>名前の似ている度合い。文字の種類が違えば null（分からない）。</summary>
-    public static double? NameSimilarity(string a, string b)
+    public static double? NameSimilarity(string a, string b, NameAliases? aliases = null)
     {
+        if (aliases?.Same(a, b) == true) return 1;
         if (DifferentScripts(a, b)) return null;
         var sim = Similarity(a, b);
         // 「The Beatles」と「Beatles」、「緑黄色社会」と「緑黄色社会 (Ryokuoushoku Shakai)」のように片方が他方を含むなら近いとみなす
@@ -114,12 +125,12 @@ public static partial class TransferMatcher
     }
 
     /// <summary>アーティストの組のうち一番似ているもの。どれも比べられなければ null。</summary>
-    private static double? BestName(IEnumerable<string> ours, IEnumerable<string> theirs)
+    private static double? BestName(IEnumerable<string> ours, IEnumerable<string> theirs, NameAliases? aliases)
     {
         double? best = null;
         foreach (var a in ours)
             foreach (var b in theirs)
-                if (NameSimilarity(a, b) is { } s && (best is null || s > best)) best = s;
+                if (NameSimilarity(a, b, aliases) is { } s && (best is null || s > best)) best = s;
         return best;
     }
 
@@ -145,8 +156,11 @@ public static partial class TransferMatcher
     // --- 曲 ---
 
     /// <summary>曲を探す検索の語（「アーティスト 曲名」。曲名は飾りを外す）。</summary>
-    public static string SongQuery(SpotifyTrack track) =>
-        (track.Artists.Count > 0 ? track.Artists[0] + " " : "") + StripDecorations(track.Title);
+    public static string SongQuery(SpotifyTrack track, NameAliases? aliases = null) =>
+        (track.Artists.Count > 0 ? ArtistQuery(track.Artists[0], aliases) + " " : "") + StripDecorations(track.Title);
+
+    /// <summary>検索に使うアーティストの名前（YouTube Music での書き方が分かればそちら）。</summary>
+    public static string ArtistQuery(string name, NameAliases? aliases = null) => aliases?.Native(name) ?? name;
 
     /// <summary>曲の長さの近さ（sigma67/spotify_to_ytmusic と同じ 1-|d-D|*2/D）。どちらかが分からなければ null。</summary>
     public static double? DurationScore(int? spotifyMs, int? youtubeSeconds)
@@ -156,13 +170,14 @@ public static partial class TransferMatcher
         return Math.Clamp(1 - Math.Abs(d - ys) * 2 / d, 0, 1);
     }
 
-    public static double ScoreSong(SpotifyTrack track, Song song, int rank) => ScoreSongSure(track, song, rank).Score;
+    public static double ScoreSong(SpotifyTrack track, Song song, int rank, NameAliases? aliases = null) => ScoreSongSure(track, song, rank, aliases).Score;
 
     /// <summary>曲の点と、確かと言えるか（アーティストが合う、または比べられなくてもアルバムか長さが合う）。</summary>
-    public static (double Score, bool Sure) ScoreSongSure(SpotifyTrack track, Song song, int rank)
+    public static (double Score, bool Sure) ScoreSongSure(SpotifyTrack track, Song song, int rank, NameAliases? aliases = null)
     {
-        var title = Math.Max(Similarity(track.Title, song.Title), Similarity(StripDecorations(track.Title), StripDecorations(song.Title)));
-        var artist = track.Artists.Count == 0 || song.Artists.Count == 0 ? null : BestName(track.Artists, song.Artists.Select(a => a.Name));
+        var plain = StripRomanization(song.Title);
+        var title = new[] { Similarity(track.Title, song.Title), Similarity(StripDecorations(track.Title), StripDecorations(song.Title)), Similarity(track.Title, plain), Similarity(StripDecorations(track.Title), StripDecorations(plain)) }.Max();
+        var artist = track.Artists.Count == 0 || song.Artists.Count == 0 ? null : BestName(track.Artists, song.Artists.Select(a => a.Name), aliases);
         double? album = track.Album is { } a && song.Album?.Title is { } b
             ? Math.Max(Similarity(a, b), Similarity(StripDecorations(a), StripDecorations(b)))
             : null;
@@ -183,13 +198,13 @@ public static partial class TransferMatcher
         return (Math.Clamp(score * kind + RankBonus(rank), 0, 1), sure);
     }
 
-    public static List<MatchCandidate> RankSongs(SpotifyTrack track, IEnumerable<Song> results)
+    public static List<MatchCandidate> RankSongs(SpotifyTrack track, IEnumerable<Song> results, NameAliases? aliases = null)
     {
         var seen = new HashSet<string>();
         return results.Where(s => !s.IsLive && seen.Add(s.VideoId))
             .Select((s, i) =>
             {
-                var (score, sure) = ScoreSongSure(track, s, i);
+                var (score, sure) = ScoreSongSure(track, s, i, aliases);
                 return new MatchCandidate(s.VideoId, s.Title, s.Subtitle, s.ThumbnailUrl, score, s.Kind, s.DurationSeconds, sure);
             })
             .OrderByDescending(c => c.Score)
@@ -199,13 +214,13 @@ public static partial class TransferMatcher
 
     // --- アルバム ---
 
-    public static string AlbumQuery(SpotifyAlbum album) =>
-        (album.Artists.Count > 0 ? album.Artists[0] + " " : "") + StripDecorations(album.Title);
+    public static string AlbumQuery(SpotifyAlbum album, NameAliases? aliases = null) =>
+        (album.Artists.Count > 0 ? ArtistQuery(album.Artists[0], aliases) + " " : "") + StripDecorations(album.Title);
 
     /// <summary>アルバムの点。アーティストは検索結果の補足（「アルバム • アーティスト • 年」）の各部分と比べる。</summary>
-    public static double ScoreAlbum(SpotifyAlbum album, AlbumSummary result, int rank) => ScoreAlbumSure(album, result, rank).Score;
+    public static double ScoreAlbum(SpotifyAlbum album, AlbumSummary result, int rank, NameAliases? aliases = null) => ScoreAlbumSure(album, result, rank, aliases).Score;
 
-    public static (double Score, bool Sure) ScoreAlbumSure(SpotifyAlbum album, AlbumSummary result, int rank)
+    public static (double Score, bool Sure) ScoreAlbumSure(SpotifyAlbum album, AlbumSummary result, int rank, NameAliases? aliases = null)
     {
         var title = DifferentScripts(album.Title, result.Title)
             ? (double?)null
@@ -213,7 +228,7 @@ public static partial class TransferMatcher
         // 種類（アルバム・シングル）と年は名前ではないので比べない
         var parts = (result.Subtitle ?? "").Split('•', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
             .Where(p => p.Any(char.IsLetter) && !KindWords.Contains(p)).ToArray();
-        var artist = album.Artists.Count == 0 || parts.Length == 0 ? null : BestName(album.Artists, parts);
+        var artist = album.Artists.Count == 0 || parts.Length == 0 ? null : BestName(album.Artists, parts, aliases);
         var score = Weighted((title ?? Unknown, 0.65), (artist ?? Unknown, 0.35));
         if (title is < 0.5) score *= 0.6;
         // アーティストが合うか、アーティストの分からないアルバムで題がほぼ同じなら確か
@@ -223,13 +238,13 @@ public static partial class TransferMatcher
 
     private static readonly HashSet<string> KindWords = new(StringComparer.OrdinalIgnoreCase) { "アルバム", "シングル", "EP", "Album", "Single" };
 
-    public static List<MatchCandidate> RankAlbums(SpotifyAlbum album, IEnumerable<AlbumSummary> results)
+    public static List<MatchCandidate> RankAlbums(SpotifyAlbum album, IEnumerable<AlbumSummary> results, NameAliases? aliases = null)
     {
         var seen = new HashSet<string>();
         return results.Where(a => seen.Add(a.BrowseId))
             .Select((a, i) =>
             {
-                var (score, sure) = ScoreAlbumSure(album, a, i);
+                var (score, sure) = ScoreAlbumSure(album, a, i, aliases);
                 return new MatchCandidate(a.BrowseId, a.Title, a.Subtitle ?? "", a.ThumbnailUrl, score, Sure: sure);
             })
             .OrderByDescending(c => c.Score)
@@ -240,17 +255,17 @@ public static partial class TransferMatcher
     // --- アーティスト ---
 
     /// <summary>アーティストの点。名前の文字の種類が違えば 0.55 と検索の順の加点（「要確認」になる）。</summary>
-    public static double ScoreArtist(SpotifyArtist artist, ArtistSummary result, int rank)
+    public static double ScoreArtist(SpotifyArtist artist, ArtistSummary result, int rank, NameAliases? aliases = null)
     {
-        var name = NameSimilarity(artist.Name, result.Name);
+        var name = NameSimilarity(artist.Name, result.Name, aliases);
         return Math.Clamp((name ?? 0.55) + (name is null ? RankBonus(rank) * 3 : RankBonus(rank)), 0, 1);
     }
 
-    public static List<MatchCandidate> RankArtists(SpotifyArtist artist, IEnumerable<ArtistSummary> results)
+    public static List<MatchCandidate> RankArtists(SpotifyArtist artist, IEnumerable<ArtistSummary> results, NameAliases? aliases = null)
     {
         var seen = new HashSet<string>();
         return results.Where(a => seen.Add(a.BrowseId))
-            .Select((a, i) => new MatchCandidate(a.BrowseId, a.Name, a.Subtitle ?? "", a.ThumbnailUrl, ScoreArtist(artist, a, i), Sure: !DifferentScripts(artist.Name, a.Name)))
+            .Select((a, i) => new MatchCandidate(a.BrowseId, a.Name, a.Subtitle ?? "", a.ThumbnailUrl, ScoreArtist(artist, a, i, aliases), Sure: aliases?.Same(artist.Name, a.Name) == true || !DifferentScripts(artist.Name, a.Name)))
             .OrderByDescending(c => c.Score)
             .Take(MaxCandidates)
             .ToList();

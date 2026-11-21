@@ -492,6 +492,16 @@ public static class DebugCommands
                 if (AppServices.Transfer.Session is { } rs) rs.Stage = Wave.Core.Transfer.TransferStage.Loaded;
                 await AppServices.Transfer.MatchAsync();
                 break;
+            case "transfer-rematch-unsure":
+                await AppServices.Transfer.RematchUnsureAsync();
+                break;
+            case "transfer-aliases":
+            {
+                // 学んだアーティストの別の書き方の数と、本人のライブラリの名前で引けるか（名前は記録に書かない）
+                var a = AppServices.Transfer.Aliases;
+                AppPaths.Log($"debug transfer-aliases count={a.Count} arg-known={(arg.Length > 0 ? a.Native(arg) is not null : (bool?)null)}");
+                break;
+            }
             case "transfer-state":
             {
                 var ts = AppServices.Transfer.Session;

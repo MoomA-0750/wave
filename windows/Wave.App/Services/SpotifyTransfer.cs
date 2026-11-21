@@ -277,7 +277,7 @@ public sealed class SpotifyTransfer(DispatcherQueue ui)
         var before = session.ItemsInScope().Count(i => i.Status != MatchStatus.Pending);
         var stop = await Task.Run(() => OriginalAsync(() => runner.MatchAsync(session, cancel.Token)));
         var searched = session.ItemsInScope().Count(i => i.Status != MatchStatus.Pending) - before;
-        AppPaths.Log($"transfer match pace anonymous={AnonymousSearch} gap={Pace.GapMs} batch={Pace.Batch} pause={Pace.PauseSeconds} searched={searched} minutes={(DateTimeOffset.UtcNow - started).TotalMinutes:F1} throttles={runner.Throttles} refusals={runner.Refusals} last-failure={runner.LastFailure?.Kind}/{runner.LastFailure?.Status}/{runner.LastFailure?.Op} by-album={runner.MatchedByAlbum}");
+        AppPaths.Log($"transfer match pace anonymous={AnonymousSearch} gap={Pace.GapMs} batch={Pace.Batch} pause={Pace.PauseSeconds} searched={searched} minutes={(DateTimeOffset.UtcNow - started).TotalMinutes:F1} throttles={runner.Throttles} refusals={runner.Refusals} last-failure={runner.LastFailure?.Kind}/{runner.LastFailure?.Status}/{runner.LastFailure?.Op} by-album={runner.MatchedByAlbum} aliases={runner.Aliases.Count}");
         LastStop = stop;
         var items = session.ItemsInScope();
         AppPaths.Log($"transfer match stop={stop} matched={items.Count(i => i.Status == MatchStatus.Matched)} review={items.Count(i => i.Status == MatchStatus.Review)} notfound={items.Count(i => i.Status == MatchStatus.NotFound)} pending={items.Count(i => i.Status == MatchStatus.Pending)}");
@@ -285,6 +285,20 @@ public sealed class SpotifyTransfer(DispatcherQueue ui)
         Save(session);
         Set(null, StopMessage(stop));
         Finished?.Invoke("match", stop);
+    }
+
+    /// <summary>要確認・見つからないものだけを突き合わせ直す（本人が選んだもの・外したものはそのまま）。</summary>
+    public async Task RematchUnsureAsync()
+    {
+        if (Busy is not null || Session is not { } session) return;
+        var n = 0;
+        foreach (var item in session.ItemsInScope().Where(i => i.Status is MatchStatus.Review or MatchStatus.NotFound && !i.Manual && !i.Excluded))
+        {
+            item.Status = MatchStatus.Pending;
+            n++;
+        }
+        AppPaths.Log($"transfer rematch-unsure items={n}");
+        if (n > 0) await MatchAsync();
     }
 
     /// <summary>YouTube Music に書く（書く前の確認は画面がする）。</summary>
@@ -319,6 +333,20 @@ public sealed class SpotifyTransfer(DispatcherQueue ui)
         _ => null,
     };
 
+    private (TransferSession Session, int Matched, NameAliases Aliases)? aliases;
+
+    /// <summary>アーティストの別の書き方（一致した曲から学ぶ。一致の数が変わったら学び直す）。</summary>
+    public NameAliases Aliases
+    {
+        get
+        {
+            if (Session is not { } s) return NameAliases.Empty;
+            var matched = s.Items.Count(i => i.Status == MatchStatus.Matched);
+            if (aliases is not { } a || a.Session != s || a.Matched != matched) aliases = a = (s, matched, NameAliases.Learn(s.Items));
+            return a.Aliases;
+        }
+    }
+
     /// <summary>手で検索して候補を出す（見直しの「YouTube Music で探す」）。点は自動の突き合わせと同じ付け方。</summary>
     public async Task<List<MatchCandidate>?> SearchAsync(TransferItem item, string query)
     {
@@ -332,13 +360,13 @@ public sealed class SpotifyTransfer(DispatcherQueue ui)
         {
             case TransferKind.Track:
                 var songs = await repo.SearchSongsAsync(query);
-                return songs.IsOk ? TransferMatcher.RankSongs(item.AsTrack(), songs.Value!.Songs).OrderByDescending(c => c.Score).ToList() : null;
+                return songs.IsOk ? TransferMatcher.RankSongs(item.AsTrack(), songs.Value!.Songs, AppServices.Transfer.Aliases).OrderByDescending(c => c.Score).ToList() : null;
             case TransferKind.Album:
                 var albums = await repo.SearchAlbumsAsync(query);
-                return albums.IsOk ? TransferMatcher.RankAlbums(item.AsAlbum(), albums.Value!.Items) : null;
+                return albums.IsOk ? TransferMatcher.RankAlbums(item.AsAlbum(), albums.Value!.Items, AppServices.Transfer.Aliases) : null;
             default:
                 var artists = await repo.SearchArtistsAsync(query);
-                return artists.IsOk ? TransferMatcher.RankArtists(item.AsArtist(), artists.Value!.Items) : null;
+                return artists.IsOk ? TransferMatcher.RankArtists(item.AsArtist(), artists.Value!.Items, AppServices.Transfer.Aliases) : null;
         }
     }
 }

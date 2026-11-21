@@ -513,8 +513,8 @@ public sealed partial class TransferPage : Page
         {
             Text = item.Kind switch
             {
-                TransferKind.Track => TransferMatcher.SongQuery(item.AsTrack()),
-                TransferKind.Album => TransferMatcher.AlbumQuery(item.AsAlbum()),
+                TransferKind.Track => TransferMatcher.SongQuery(item.AsTrack(), AppServices.Transfer.Aliases),
+                TransferKind.Album => TransferMatcher.AlbumQuery(item.AsAlbum(), AppServices.Transfer.Aliases),
                 _ => item.Title,
             },
             QueryIcon = new SymbolIcon(Symbol.Find),
