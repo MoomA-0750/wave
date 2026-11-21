@@ -495,6 +495,10 @@ public static class DebugCommands
             case "transfer-rematch-unsure":
                 await AppServices.Transfer.RematchUnsureAsync();
                 break;
+            case "transfer-ai":
+                // Claude で探す（数を与えれば先頭のその数だけ）
+                await AppServices.Transfer.AskClaudeAsync(AppServices.Transfer.AiTargets().Take(int.TryParse(arg, out var aiN) ? aiN : int.MaxValue).ToList());
+                break;
             case "transfer-aliases":
             {
                 // 学んだアーティストの別の書き方の数と、本人のライブラリの名前で引けるか（名前は記録に書かない）
