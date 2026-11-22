@@ -22,12 +22,11 @@ Windows の wave の「Spotify から移す」。Spotify のプレイリスト�
 - 案 3 の一部と案 4 を入れた（2 本目の検索語 `RetryAlbumQueries`・「Various Artists」を名前として比べない・`ArtistsOf` が「、」でも分ける。テスト 336 件が通る）。アルバムの要確認 42 件＋見つからない 1 件を 10 秒おきでもう一度回した（22 分、断られた 0）: アルバム 一致 397→399、要確認 42→41、見つからない 1→0。全体: 一致 7547・要確認 334・見つからない 52（手で選んだ 29 件を含む）。効きは小さい。残る要確認 41 件は点が中くらいの別の版が 1 位にいるもの
 - AI コンテンツの識別（本人の了承済みの方針）: 対象は曲とアーティスト。公式の表示（確定）と自前の手がかり（疑い）を見分けられる形で両方出す。「印・絞り込み」と「移すときの除外」は別々の機能。外部の判定サービスは既定で使わず、設定から足せる形。最初の確認として、YouTube Music の匿名の応答（Velvet Sundown の曲の next）には AI の表示が見つからなかった（AI ラベルの付いた曲を確認できていないので未確定）。Spotify の API・ZIP に AI クレジットがあるかも未確認。次は、ラベルが付いた曲を 1 件見つけて応答を調べる、ログイン済みの応答で試す
 
-- 案 2 を入れた（手で選んだアルバム・アーティストからも名前の組を 1 回で学ぶ `NameAliases.Learn`、リンクで選んだアルバムの補足にアーティストを入れる `SubtitleWithArtists`。テスト 338 件が通る）。to-fu でアルバムの要確認を回す命令（`transfer-rematch-unsure album`）を 11-23 に送った。結果は to-fu の wave.log の「transfer match stop=」の行（`scripts/win.sh ps` で `%LOCALAPPDATA%\wave\wave.log` を読む）。件数の確かめは `scripts/win.sh ps < count.ps1` の形（保存データ spotify-transfer.json を Kind/Status で数える）。この結果を書き足してから次へ
+- 案 2 を入れた（手で選んだアルバム・アーティストからも名前の組を 1 回で学ぶ `NameAliases.Learn`、リンクで選んだアルバムの補足にアーティストを入れる `SubtitleWithArtists`。テスト 338 件が通る）。to-fu でアルバムの要確認を回す命令（`transfer-rematch-unsure album`）を 11-23 に送った。結果は to-fu の wave.log の「transfer match stop=」の行（`scripts/win.sh ps` で `%LOCALAPPDATA%\wave\wave.log` を読む）。件数の確かめは `scripts/win.sh ps < count.ps1` の形（保存データ spotify-transfer.json を Kind/Status で数える）。結果（11-23 06:25、断られた 0）: アルバムは一致 399・要確認 41・見つからない 0 のまま変わらず（案 2 だけでは動かない。残りは別の版が 1 位にいるもの）。全体は一致 7547・要確認 334・見つからない 52
 - AI ラベルの確認（続き）: Xania Monet・Breaking Rust・Sienna Rose の曲の search・next・player（匿名、WEB_REMIX）にも AI の語は出なかった。ログイン済みの応答か、ラベルの付いた曲の特定が要る
 
 ## 次にやること
 
-1. （案 2 の結果を上に書き足す）
 1. AI コンテンツの識別（本人の了承済みの方針は上の「どこまで」）。最初の確認: AI ラベルが付いた YouTube Music の曲の応答に表示が入っているかを調べる（本人が曲を教えるか、自分で探す。ログインしない通信と、必要ならログイン済みの応答）。Spotify の API・ZIP に AI クレジットがあるかも調べる。結果を見て `SPEC.md` に仕様（確定／仮）を書き、実装は本人の了承の後
 2. 案 2 の残り: 同じ題の別項目の ID を候補に足す（一致にはせず候補だけ）
 3. 案 3 の残り: 曲の項目にも 2 本目の検索語を使う（アルバムだけ入れた）。案 5: 曲の検索の上位 20 件まで見る
