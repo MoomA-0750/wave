@@ -332,6 +332,33 @@ public static class DebugCommands
                 AppPaths.Log($"debug album-play ok={album.IsOk} id={albumId} songs={album.Value?.Songs.Count} artist={hit.Artists.FirstOrDefault()?.BrowseId}");
                 break;
             }
+            case "ai-label-probe":
+            {
+                // 曲の詳細の応答に、AI の表示（ラベル・開示）らしい語がどこに入っているかを調べる（読み取りだけ）。パスと短い値だけを記録する
+                var pattern = new System.Text.RegularExpressions.Regex(@"\bAI\b|synthetic|generative|artificial|disclos|how this was made|made with", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                foreach (var videoId in arg.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+                foreach (var endpoint in new[] { "next", "player" })
+                {
+                    var body = new System.Text.Json.Nodes.JsonObject { ["videoId"] = videoId };
+                    if (endpoint == "next") body["isAudioOnly"] = true;
+                    var r = await AppServices.Client.PostAsync(endpoint, body);
+                    var hits = new List<string>();
+                    void Walk(System.Text.Json.Nodes.JsonNode? n, string path)
+                    {
+                        if (hits.Count >= 12) return;
+                        switch (n)
+                        {
+                            case System.Text.Json.Nodes.JsonObject o: foreach (var kv in o) Walk(kv.Value, path + "." + kv.Key); break;
+                            case System.Text.Json.Nodes.JsonArray a: for (var i = 0; i < a.Count; i++) Walk(a[i], path + "[" + i + "]"); break;
+                            case System.Text.Json.Nodes.JsonValue v when v.TryGetValue<string>(out var str) && (pattern.IsMatch(str) || pattern.IsMatch(path)):
+                                hits.Add(path + "=" + (str.Length > 60 ? str[..60] : str)); break;
+                        }
+                    }
+                    if (r.IsOk) Walk(r.Value, "");
+                    AppPaths.Log($"debug ai-label-probe video={videoId} endpoint={endpoint} ok={r.IsOk} hits={hits.Count} " + string.Join(" | ", hits));
+                }
+                break;
+            }
             case "next":
                 player.Next();
                 break;

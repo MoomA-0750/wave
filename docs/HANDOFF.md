@@ -28,6 +28,9 @@ Windows の wave の「Spotify から移す」。Spotify のプレイリスト�
 - 曲の項目にも 2 本目の検索語を入れた（`RetryTrackQueries`。テスト 340 件が通り commit 済み）。11-23 朝に to-fu で `transfer-rematch-unsure track`（曲の要確認・見つからない 約 293 件、10 秒おき）を回し始めた。終わると to-fu の wave.log に「transfer match stop=」が出る。その件数（前: 一致 7547・要確認 334・見つからない 52）を書き足す。曲の変化の誤一致は、一致が増えた分を見直しで確かめる
 - push 済み（11-23、本人の指示。ここまでの commit）
 
+- AI ラベルの設計は `docs/ai-content-design.md`。調べの命令 `ai-label-probe <videoId ...>`（DebugCommands。ログイン済みの next・player の応答から AI らしい語のパスを記録）を書いたが、**まだビルドしていない・試していない**（ビルドすると to-fu のアプリが止まり、実行中の曲の突き合わせ直しが切れるため、終わってから）。終わったら `scripts/win.sh build` → `run` → `debug-command.txt` に `ai-label-probe 動画ID …` を書き、wave.log の「ai-label-probe」の行を読む
+- 容量: Linux 側のリポジトリ 9.4GB の大半は `linux/target`（8GB、Rust のビルド作業。消してよい）。`androidApp/build` 682MB も消してよい。本人の了承の後に消す（確認一覧）
+
 ## 次にやること
 
 1. AI コンテンツの識別（本人の了承済みの方針は上の「どこまで」）。最初の確認: AI ラベルが付いた YouTube Music の曲の応答に表示が入っているかを調べる（本人が曲を教えるか、自分で探す。ログインしない通信と、必要ならログイン済みの応答）。Spotify の API・ZIP に AI クレジットがあるかも調べる。結果を見て `SPEC.md` に仕様（確定／仮）を書き、実装は本人の了承の後
