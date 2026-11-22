@@ -395,7 +395,7 @@ public sealed partial class SpotifyTransfer(DispatcherQueue ui)
         List<MatchCandidate> Artists(IEnumerable<ArtistSummary> artists) => TransferMatcher.RankArtists(item.AsArtist(), artists, aliases, int.MaxValue, sort: false);
         async Task<AlbumPage?> AlbumOf(string? browseId) => browseId is { Length: > 0 } && await repo.AlbumAsync(browseId) is { IsOk: true } r ? r.Value : null;
         async Task<ArtistPage?> ArtistOf(string? browseId) => browseId is { Length: > 0 } && await repo.ArtistAsync(browseId) is { IsOk: true } r ? r.Value : null;
-        static AlbumSummary Summary(AlbumPage a) => new(a.BrowseId, a.Title, a.Subtitle, a.ThumbnailUrl);
+        static AlbumSummary Summary(AlbumPage a) => new(a.BrowseId, a.Title, Wave.Core.Transfer.TransferMatcher.SubtitleWithArtists(a.Subtitle, a.Artists), a.ThumbnailUrl);
         static ArtistSummary ArtistSummaryOf(ArtistPage a, string browseId) => new(browseId, a.Name, null, a.ThumbnailUrl);
         // アルバムに並べるもの（アルバムの1件なら、そのアルバム。アーティストの1件なら、そのアーティスト）
         async Task<List<MatchCandidate>?> FromAlbum(AlbumPage album) => item.Kind switch

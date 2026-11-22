@@ -48,16 +48,36 @@ public sealed partial class NameAliases
         var counts = new Dictionary<string, Dictionary<string, int>>();
         foreach (var item in items)
         {
-            if (item.Kind != TransferKind.Track || item.Status != MatchStatus.Matched || item.Chosen is not { } chosen) continue;
-            if (TransferMatcher.Fold(TransferMatcher.StripDecorations(item.Title)) != TransferMatcher.Fold(TransferMatcher.StripDecorations(TransferMatcher.StripRomanization(chosen.Title)))) continue;
-            var theirs = ArtistsOf(chosen.Subtitle);
+            if (item.Chosen is not { } chosen) continue;
+            List<string> mine, theirs;
+            // 本人が手で選んだもの（アルバム・アーティストも）は本人が確かめた組なので、曲名の確かめは要らず 1 回で組にする
+            var weight = 1;
+            if (item.Manual && item.Kind == TransferKind.Album)
+            {
+                mine = item.Artists;
+                theirs = [.. TransferMatcher.AlbumSubtitleArtists(chosen.Subtitle).SelectMany(ArtistsOf)];
+                weight = 2;
+            }
+            else if (item.Manual && item.Kind == TransferKind.Artist)
+            {
+                mine = [item.Title];
+                theirs = [chosen.Title];
+                weight = 2;
+            }
+            else
+            {
+                if (item.Kind != TransferKind.Track || item.Status != MatchStatus.Matched) continue;
+                if (TransferMatcher.Fold(TransferMatcher.StripDecorations(item.Title)) != TransferMatcher.Fold(TransferMatcher.StripDecorations(TransferMatcher.StripRomanization(chosen.Title)))) continue;
+                mine = item.Artists;
+                theirs = ArtistsOf(chosen.Subtitle);
+            }
             // どちらの側でも、相手のどの名前とも文字の種類が違う名前が1つずつだけのときに組にする
-            var ours = item.Artists.Where(a => theirs.All(b => TransferMatcher.DifferentScripts(a, b))).ToList();
-            var other = theirs.Where(b => item.Artists.All(a => TransferMatcher.DifferentScripts(a, b))).ToList();
+            var ours = mine.Where(a => theirs.All(b => TransferMatcher.DifferentScripts(a, b))).ToList();
+            var other = theirs.Where(b => mine.All(a => TransferMatcher.DifferentScripts(a, b))).ToList();
             if (ours.Count != 1 || other.Count != 1) continue;
             var key = TransferMatcher.Fold(ours[0]);
             if (!counts.TryGetValue(key, out var byName)) counts[key] = byName = [];
-            byName[other[0]] = byName.GetValueOrDefault(other[0]) + 1;
+            byName[other[0]] = byName.GetValueOrDefault(other[0]) + weight;
         }
         var native = new Dictionary<string, string>();
         foreach (var (key, byName) in counts)

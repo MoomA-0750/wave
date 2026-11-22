@@ -283,6 +283,21 @@ public static partial class TransferMatcher
             .ToList();
     }
 
+    /// <summary>アルバムのページの見出し（「Single • 2018」）に、アーティストを入れて「Single • アーティスト • 2018」にする（比べる・名前を学ぶため）。</summary>
+    public static string? SubtitleWithArtists(string? subtitle, IReadOnlyList<ArtistRef> artists)
+    {
+        var names = string.Join(", ", artists.Select(a => a.Name).Where(n => n.Length > 0));
+        if (names.Length == 0 || AlbumSubtitleArtists(subtitle ?? "").Count > 0) return subtitle;
+        var parts = (subtitle ?? "").Split('•', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).ToList();
+        parts.Insert(Math.Min(1, parts.Count), names);
+        return string.Join(" • ", parts);
+    }
+
+    /// <summary>アルバムの補足（「種類 • アーティスト • 年」）から、アーティストの部分だけを取る。</summary>
+    public static List<string> AlbumSubtitleArtists(string subtitle) =>
+        [.. subtitle.Split('•', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .Where(p => p.Any(char.IsLetter) && !KindWords.Contains(p) && !(p.EndsWith('年') && p[..^1].All(char.IsDigit)))];
+
     private static readonly HashSet<string> KindWords = new(StringComparer.OrdinalIgnoreCase) { "アルバム", "シングル", "EP", "Album", "Single" };
 
     public static List<MatchCandidate> RankAlbums(SpotifyAlbum album, IEnumerable<AlbumSummary> results, NameAliases? aliases = null, int take = MaxCandidates, bool sort = true)

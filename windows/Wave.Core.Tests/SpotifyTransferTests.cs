@@ -531,6 +531,31 @@ public class SpotifyTransferTests
         Assert.Equal(["Yunomi", "KOTONOHOUSE"], NameAliases.ArtistsOf("Yunomi、KOTONOHOUSE • 未来茶屋 vol.1"));
 
     [Fact]
+    public void SubtitleWithArtistsInsertsTheArtistAfterTheKind()
+    {
+        Assert.Equal("Single • 戸松　遥 • 2016", TransferMatcher.SubtitleWithArtists("Single • 2016", [new ArtistRef("戸松　遥", null)]));
+        Assert.Equal("アルバム • LiSA • 2020", TransferMatcher.SubtitleWithArtists("アルバム • LiSA • 2020", [new ArtistRef("LiSA", null)]));
+        Assert.Equal(["戸松　遥"], TransferMatcher.AlbumSubtitleArtists("Single • 戸松　遥 • 2016年"));
+    }
+
+    [Fact]
+    public void ManualAlbumAndArtistChoicesTeachNamesOnce()
+    {
+        var album = new TransferItem { Kind = TransferKind.Album, Title = "シンデレラ☆シンフォニー", Artists = ["Haruka Tomatsu"] };
+        album.Candidates = [new MatchCandidate("MPREb_1", "シンデレラ☆シンフォニー", "Single • 戸松　遥 • 2016", null, 0.8)];
+        album.Choose(album.Candidates[0]);
+        var artist = new TransferItem { Kind = TransferKind.Artist, Title = "Sangatsu no Phantasia" };
+        artist.Candidates = [new MatchCandidate("UC1", "三月のパンタシア", "", null, 0.5)];
+        artist.Choose(artist.Candidates[0]);
+        var aliases = NameAliases.Learn([album, artist]);
+        Assert.Equal("戸松　遥", aliases.Native("Haruka Tomatsu"));
+        Assert.Equal("三月のパンタシア", aliases.Native("Sangatsu no Phantasia"));
+        // 手で選んでいない 1 回だけの組は学ばない
+        album.Manual = false;
+        Assert.Null(NameAliases.Learn([album]).Native("Haruka Tomatsu"));
+    }
+
+    [Fact]
     public async Task SongsOfTheSameAlbumAreMatchedFromTheAlbumPage()
     {
         // 同じアルバムの曲が3曲: アルバムを1回探してページを1回読み、曲ごとには探さない。ページに無い曲だけ1曲ずつ探す
