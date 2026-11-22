@@ -198,7 +198,11 @@ public static partial class TransferMatcher
         return (Math.Clamp(score * kind + RankBonus(rank), 0, 1), sure);
     }
 
-    public static List<MatchCandidate> RankSongs(SpotifyTrack track, IEnumerable<Song> results, NameAliases? aliases = null, int take = MaxCandidates)
+    /// <summary>
+    /// 検索の結果に点を付けて候補にする（重なりは除く）。sort が false なら点で並べ替えず YouTube の並びのまま（手で探すとき。点の低い正解が見えなくならないように）。
+    /// アルバム・アーティストの Rank も同じ。
+    /// </summary>
+    public static List<MatchCandidate> RankSongs(SpotifyTrack track, IEnumerable<Song> results, NameAliases? aliases = null, int take = MaxCandidates, bool sort = true)
     {
         var seen = new HashSet<string>();
         return results.Where(s => !s.IsLive && seen.Add(s.VideoId))
@@ -207,7 +211,7 @@ public static partial class TransferMatcher
                 var (score, sure) = ScoreSongSure(track, s, i, aliases);
                 return new MatchCandidate(s.VideoId, s.Title, s.Subtitle, s.ThumbnailUrl, score, s.Kind, s.DurationSeconds, sure);
             })
-            .OrderByDescending(c => c.Score)
+            .OrderByDescending(c => sort ? c.Score : 0)
             .Take(take)
             .ToList();
     }
@@ -238,7 +242,7 @@ public static partial class TransferMatcher
 
     private static readonly HashSet<string> KindWords = new(StringComparer.OrdinalIgnoreCase) { "アルバム", "シングル", "EP", "Album", "Single" };
 
-    public static List<MatchCandidate> RankAlbums(SpotifyAlbum album, IEnumerable<AlbumSummary> results, NameAliases? aliases = null, int take = MaxCandidates)
+    public static List<MatchCandidate> RankAlbums(SpotifyAlbum album, IEnumerable<AlbumSummary> results, NameAliases? aliases = null, int take = MaxCandidates, bool sort = true)
     {
         var seen = new HashSet<string>();
         return results.Where(a => seen.Add(a.BrowseId))
@@ -247,7 +251,7 @@ public static partial class TransferMatcher
                 var (score, sure) = ScoreAlbumSure(album, a, i, aliases);
                 return new MatchCandidate(a.BrowseId, a.Title, a.Subtitle ?? "", a.ThumbnailUrl, score, Sure: sure);
             })
-            .OrderByDescending(c => c.Score)
+            .OrderByDescending(c => sort ? c.Score : 0)
             .Take(take)
             .ToList();
     }
@@ -261,12 +265,12 @@ public static partial class TransferMatcher
         return Math.Clamp((name ?? 0.55) + (name is null ? RankBonus(rank) * 3 : RankBonus(rank)), 0, 1);
     }
 
-    public static List<MatchCandidate> RankArtists(SpotifyArtist artist, IEnumerable<ArtistSummary> results, NameAliases? aliases = null, int take = MaxCandidates)
+    public static List<MatchCandidate> RankArtists(SpotifyArtist artist, IEnumerable<ArtistSummary> results, NameAliases? aliases = null, int take = MaxCandidates, bool sort = true)
     {
         var seen = new HashSet<string>();
         return results.Where(a => seen.Add(a.BrowseId))
             .Select((a, i) => new MatchCandidate(a.BrowseId, a.Name, a.Subtitle ?? "", a.ThumbnailUrl, ScoreArtist(artist, a, i, aliases), Sure: aliases?.Same(artist.Name, a.Name) == true || !DifferentScripts(artist.Name, a.Name)))
-            .OrderByDescending(c => c.Score)
+            .OrderByDescending(c => sort ? c.Score : 0)
             .Take(take)
             .ToList();
     }

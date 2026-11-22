@@ -534,8 +534,17 @@ public static class DebugCommands
             case "transfer-menu":
                 (Nav.Frame.Content as Views.TransferPage)?.DebugOpenMenu(int.Parse(arg));
                 break;
+            case "dialog-close":
+                // 開いているダイアログを閉じる（キャンセルと同じ）
+                foreach (var popup in Microsoft.UI.Xaml.Media.VisualTreeHelper.GetOpenPopupsForXamlRoot(Nav.Frame.XamlRoot))
+                    if (popup.Child is Microsoft.UI.Xaml.Controls.ContentDialog dialog) dialog.Hide();
+                break;
             case "transfer-search":
-                (Nav.Frame.Content as Views.TransferPage)?.DebugSearch(int.Parse(arg));
+            {
+                // 行の「YouTube Music で探す」を開く（arg: 行の番号 [検索の語かリンク]）
+                var searchArgs = arg.Split(' ', 2);
+                (Nav.Frame.Content as Views.TransferPage)?.DebugSearch(int.Parse(searchArgs[0]), searchArgs.Length > 1 ? searchArgs[1] : null);
+            }
                 break;
             case "transfer-confirm":
                 (Nav.Frame.Content as Views.TransferPage)?.DebugConfirm();

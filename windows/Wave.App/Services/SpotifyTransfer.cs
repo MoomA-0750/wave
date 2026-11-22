@@ -357,20 +357,97 @@ public sealed partial class SpotifyTransfer(DispatcherQueue ui)
         return await OriginalAsync(() => SearchCoreAsync(item, query));
     }
 
+    /// <summary>
+    /// 手で探す（見直しの「YouTube Music で探す」）。ふつうの検索と同じログインした検索で、候補は YouTube の並びのまま数を切らない。
+    /// 曲は、曲の検索と上位の結果（MV・投稿された動画も）を合わせる。YouTube Music のリンク・ID なら、それを引いて候補にする
+    /// （曲の1件にアルバム・プレイリスト・アーティストのリンクなら、その曲目から選べる）。リンクが引けなければ語として探す。
+    /// </summary>
     private static async Task<List<MatchCandidate>?> SearchCoreAsync(TransferItem item, string query)
     {
+        if (PlayLink.Parse(query) is { } link && await LinkCandidatesAsync(item, link) is { Count: > 0 } linked) return linked;
         var repo = AppServices.Music;
+        var aliases = AppServices.Transfer.Aliases;
         switch (item.Kind)
         {
             case TransferKind.Track:
                 var songs = await repo.SearchSongsAsync(query);
-                return songs.IsOk ? TransferMatcher.RankSongs(item.AsTrack(), songs.Value!.Songs, AppServices.Transfer.Aliases).OrderByDescending(c => c.Score).ToList() : null;
+                var top = await repo.SearchTopSongsAsync(query);
+                if (!songs.IsOk && !top.IsOk) return null;
+                // 上位の結果（ふつうの検索の一番上に出るもの）を先に、続けて曲の検索
+                IEnumerable<Song> all = [.. top.IsOk ? top.Value! : [], .. songs.IsOk ? songs.Value!.Songs : []];
+                return TransferMatcher.RankSongs(item.AsTrack(), all, aliases, int.MaxValue, sort: false);
             case TransferKind.Album:
                 var albums = await repo.SearchAlbumsAsync(query);
-                return albums.IsOk ? TransferMatcher.RankAlbums(item.AsAlbum(), albums.Value!.Items, AppServices.Transfer.Aliases) : null;
+                return albums.IsOk ? TransferMatcher.RankAlbums(item.AsAlbum(), albums.Value!.Items, aliases, int.MaxValue, sort: false) : null;
             default:
                 var artists = await repo.SearchArtistsAsync(query);
-                return artists.IsOk ? TransferMatcher.RankArtists(item.AsArtist(), artists.Value!.Items, AppServices.Transfer.Aliases) : null;
+                return artists.IsOk ? TransferMatcher.RankArtists(item.AsArtist(), artists.Value!.Items, aliases, int.MaxValue, sort: false) : null;
         }
+    }
+
+    /// <summary>リンクの指すものから候補を作る（引けなければ null）。</summary>
+    private static async Task<List<MatchCandidate>?> LinkCandidatesAsync(TransferItem item, PlayLink link)
+    {
+        var repo = AppServices.Music;
+        var aliases = AppServices.Transfer.Aliases;
+        List<MatchCandidate> Songs(IEnumerable<Song> songs) => TransferMatcher.RankSongs(item.AsTrack(), songs, aliases, int.MaxValue, sort: false);
+        List<MatchCandidate> Albums(IEnumerable<AlbumSummary> albums) => TransferMatcher.RankAlbums(item.AsAlbum(), albums, aliases, int.MaxValue, sort: false);
+        List<MatchCandidate> Artists(IEnumerable<ArtistSummary> artists) => TransferMatcher.RankArtists(item.AsArtist(), artists, aliases, int.MaxValue, sort: false);
+        async Task<AlbumPage?> AlbumOf(string? browseId) => browseId is { Length: > 0 } && await repo.AlbumAsync(browseId) is { IsOk: true } r ? r.Value : null;
+        async Task<ArtistPage?> ArtistOf(string? browseId) => browseId is { Length: > 0 } && await repo.ArtistAsync(browseId) is { IsOk: true } r ? r.Value : null;
+        static AlbumSummary Summary(AlbumPage a) => new(a.BrowseId, a.Title, a.Subtitle, a.ThumbnailUrl);
+        static ArtistSummary ArtistSummaryOf(ArtistPage a, string browseId) => new(browseId, a.Name, null, a.ThumbnailUrl);
+        // アルバムに並べるもの（アルバムの1件なら、そのアルバム。アーティストの1件なら、そのアーティスト）
+        async Task<List<MatchCandidate>?> FromAlbum(AlbumPage album) => item.Kind switch
+        {
+            TransferKind.Track => Songs(album.Songs),
+            TransferKind.Album => Albums([Summary(album)]),
+            _ => await FromArtists(album.Artists),
+        };
+        async Task<List<MatchCandidate>?> FromArtists(IEnumerable<ArtistRef> artists)
+        {
+            var found = new List<ArtistSummary>();
+            foreach (var a in artists)
+                if (a.BrowseId is { } id && await ArtistOf(id) is { } artistOfRef) found.Add(ArtistSummaryOf(artistOfRef, id));
+            return Artists(found);
+        }
+        switch (link)
+        {
+            case PlayLink.Video v:
+            {
+                // 曲の情報は「次に流れる曲」の先頭（その曲そのもの）から取る
+                var next = await repo.UpNextAsync(v.VideoId, null);
+                if (!next.IsOk || next.Value!.Songs.FirstOrDefault(s => s.VideoId == v.VideoId) is not { } song) return null;
+                return item.Kind switch
+                {
+                    TransferKind.Track => Songs([song]),
+                    TransferKind.Album => await AlbumOf(song.Album?.BrowseId) is { } album ? Albums([Summary(album)]) : null,
+                    _ => await FromArtists(song.Artists),
+                };
+            }
+            case PlayLink.Album a:
+                return await AlbumOf(a.BrowseId) is { } albumPage ? await FromAlbum(albumPage) : null;
+            case PlayLink.Playlist p:
+            {
+                var playlist = await repo.PlaylistAsync(p.PlaylistId);
+                if (!playlist.IsOk) return null;
+                var songs = playlist.Value!.Songs;
+                // アルバムの共有のリンク（OLAK5uy_…）は、曲のアルバムからアルバムのページを引く
+                if (item.Kind != TransferKind.Track || p.PlaylistId.StartsWith("OLAK5uy_", StringComparison.Ordinal))
+                    if (await AlbumOf(songs.Select(s => s.Album?.BrowseId).FirstOrDefault(b => b is { Length: > 0 })) is { } album) return await FromAlbum(album);
+                return item.Kind == TransferKind.Track ? Songs(songs) : null;
+            }
+            case PlayLink.Artist ar:
+            {
+                if (await ArtistOf(ar.ChannelId) is not { } artistPage) return null;
+                return item.Kind switch
+                {
+                    TransferKind.Track => Songs([.. artistPage.TopSongs, .. artistPage.Videos]),
+                    TransferKind.Album => Albums(artistPage.AlbumShelves.SelectMany(s => s.Albums)),
+                    _ => Artists([ArtistSummaryOf(artistPage, ar.ChannelId)]),
+                };
+            }
+        }
+        return null;
     }
 }

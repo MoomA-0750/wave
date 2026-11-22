@@ -529,24 +529,32 @@ public sealed partial class TransferPage : Page
     }
 
     /// <summary>YouTube Music を手で検索して選ぶ。</summary>
-    private async Task SearchDialogAsync(TransferRow row)
+    private async Task SearchDialogAsync(TransferRow row, string? query = null)
     {
         var item = row.Item;
         var box = new AutoSuggestBox
         {
-            Text = item.Kind switch
+            Text = query ?? item.Kind switch
             {
                 TransferKind.Track => TransferMatcher.SongQuery(item.AsTrack(), AppServices.Transfer.Aliases),
                 TransferKind.Album => TransferMatcher.AlbumQuery(item.AsAlbum(), AppServices.Transfer.Aliases),
                 _ => item.Title,
             },
             QueryIcon = new SymbolIcon(Symbol.Find),
+            PlaceholderText = L.T("検索の語か、YouTube Music のリンク", "Search, or paste a YouTube Music link"),
         };
         var list = new ListView { SelectionMode = ListViewSelectionMode.Single, Height = 360, Margin = new Thickness(-12, 0, -12, 0) };
         var status = new TextBlock { Style = (Style)Application.Current.Resources["SubtleTextStyle"], TextWrapping = TextWrapping.Wrap, MaxLines = 0 };
         var content = new StackPanel { Spacing = 8, MinWidth = 440 };
         content.Children.Add(new TextBlock { Text = row.SourceTitle + " — " + row.SourceSubtitle, TextWrapping = TextWrapping.Wrap });
         content.Children.Add(box);
+        content.Children.Add(new TextBlock
+        {
+            Text = L.T("YouTube Music のページのリンク（曲・アルバム・アーティスト。「共有」→「リンクをコピー」）を貼ると、それを選べます",
+                "Paste a YouTube Music link (song, album or artist; Share > Copy link) to choose it"),
+            Style = (Style)Application.Current.Resources["SubtleTextStyle"],
+            TextWrapping = TextWrapping.Wrap,
+        });
         content.Children.Add(status);
         content.Children.Add(list);
         var dialog = new ContentDialog
@@ -568,8 +576,11 @@ public sealed partial class TransferPage : Page
             dialog.IsPrimaryButtonEnabled = false;
             var result = await Transfer.SearchAsync(item, query.Trim());
             found = result ?? [];
+            AppPaths.Log($"transfer manual-search link={PlayLink.Parse(query) is not null} results={(result is null ? -1 : found.Count)}");
             status.Text = result is null ? L.T("YouTube Music につながりませんでした", "Couldn't reach YouTube Music") : found.Count == 0 ? L.T("見つかりませんでした", "No results") : "";
             foreach (var c in found) list.Items.Add(CandidateRow(c, item.Kind == TransferKind.Artist));
+            // リンクで1件に決まったら、そのまま「選ぶ」を押せるように
+            if (found.Count == 1 && PlayLink.Parse(query) is not null) list.SelectedIndex = 0;
         }
         // AutoSuggestBox の送信は日本語の変換の確定では起きない
         box.QuerySubmitted += async (_, args) => await RunAsync(args.QueryText);
@@ -716,9 +727,9 @@ public sealed partial class TransferPage : Page
             OnRowChoose(button, new RoutedEventArgs());
     }
 
-    public void DebugSearch(int index)
+    public void DebugSearch(int index, string? query = null)
     {
-        if ((ReviewList.ItemsSource as List<TransferRow>) is { } shown && index < shown.Count) _ = SearchDialogAsync(shown[index]);
+        if ((ReviewList.ItemsSource as List<TransferRow>) is { } shown && index < shown.Count) _ = SearchDialogAsync(shown[index], query);
     }
 
     public void DebugConfirm() => _ = ConfirmAndWriteAsync();

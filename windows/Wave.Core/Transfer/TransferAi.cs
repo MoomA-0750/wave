@@ -15,7 +15,7 @@ public static class TransferAi
     public const int MaxSearches = 8;
 
     /// <summary>Claude に返す候補の数（1回の検索ごと）。</summary>
-    public const int CandidatesPerSearch = 8;
+    public const int CandidatesPerSearch = 15;
 
     public const string System =
         "あなたは音楽プレイヤー wave の「Spotify から移す」を手伝います。<item> にある Spotify の1件（曲・アルバム・アーティスト）と同じものを YouTube Music から探し、" +
