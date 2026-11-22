@@ -332,6 +332,14 @@ public sealed class TransferRunner(ITransferWriter writer, Action<TransferSessio
                     var songs = await RetryAsync(() => writer.SearchSongsAsync(query, cancel), cancel);
                     if (!songs.IsOk && songs.Failure != FailureKind.Parse) return StopOf(songs);
                     candidates = TransferMatcher.Merge(candidates, TransferMatcher.RankAlbums(album, TransferMatcher.AlbumsFromSongs(songs.Value ?? []), Aliases));
+                    // それでも一致しなければ、語を変えて（版の飾り・feat. より前・アーティストなし）曲の検索をもう 1 回だけ引く
+                    if (TransferMatcher.StatusOf(candidates) != MatchStatus.Matched && TransferMatcher.RetryAlbumQueries(album, Aliases).FirstOrDefault() is { } retry)
+                    {
+                        await delay(searchGap, cancel);
+                        var again = await RetryAsync(() => writer.SearchSongsAsync(retry, cancel), cancel);
+                        if (!again.IsOk && again.Failure != FailureKind.Parse) return StopOf(again);
+                        candidates = TransferMatcher.Merge(candidates, TransferMatcher.RankAlbums(album, TransferMatcher.AlbumsFromSongs(again.Value ?? []), Aliases));
+                    }
                 }
                 item.SetCandidates(candidates);
                 return TransferStop.None;

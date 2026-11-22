@@ -219,7 +219,37 @@ public static partial class TransferMatcher
     // --- アルバム ---
 
     public static string AlbumQuery(SpotifyAlbum album, NameAliases? aliases = null) =>
-        (album.Artists.Count > 0 ? ArtistQuery(album.Artists[0], aliases) + " " : "") + StripDecorations(album.Title);
+        (RealArtists(album.Artists).Count > 0 ? ArtistQuery(album.Artists[0], aliases) + " " : "") + StripDecorations(album.Title);
+
+    /// <summary>コンピレーションの「Various Artists」は名前として比べない（YouTube の補足のどの名前とも合わないため）。</summary>
+    public static IReadOnlyList<string> RealArtists(IReadOnlyList<string> artists) =>
+        artists.Count == 1 && VariousArtists.Contains(artists[0].Trim()) ? [] : artists;
+
+    private static readonly HashSet<string> VariousArtists = new(StringComparer.OrdinalIgnoreCase) { "Various Artists", "Various Artist", "V.A.", "VA", "ヴァリアス・アーティスト", "ヴァリアスアーティスト", "オムニバス" };
+
+    /// <summary>
+    /// アルバムを探す 2 本目の検索語（1 本目で一致しなかったとき）。版の飾り（「-Complete ver.-」「【アニメ盤】」「(アニメ盤)」「通常盤」）を外す、
+    /// 「feat.」より前のアーティストだけにする、アーティストを外して題だけにする。1 本目と同じ語は除く。比べるときは外さない（版は題で分ける）。
+    /// </summary>
+    public static List<string> RetryAlbumQueries(SpotifyAlbum album, NameAliases? aliases = null)
+    {
+        var first = AlbumQuery(album, aliases);
+        var title = StripEdition(StripDecorations(album.Title));
+        var artists = RealArtists(album.Artists);
+        var artist = artists.Count > 0 ? ArtistQuery(FeatTrailing().Replace(artists[0], "").Trim(), aliases) : "";
+        var queries = new List<string> { (artist + " " + title).Trim(), title };
+        return queries.Where(q => q.Length > 0 && q != first).Distinct().ToList();
+    }
+
+    /// <summary>題の後ろの版の飾りを外す。外して空になるなら元のまま。</summary>
+    public static string StripEdition(string title)
+    {
+        var s = EditionSuffix().Replace(title, "").Trim();
+        return s.Length > 0 ? s : title;
+    }
+
+    [GeneratedRegex(@"\s*(?:[\[（［【(][^\)\]）］】]*(?:ver\.?|version|盤|edition|vol\.?\s*\d+)[^\)\]）］】]*[\)\]）］】]|\s[-–—]\s*[^-–—]*(?:ver\.?|version|edition)[^-–—]*[-–—]?\s*|\s+(?:通常盤|初回限定盤|初回生産限定盤|期間生産限定盤))\s*$", RegexOptions.IgnoreCase)]
+    private static partial Regex EditionSuffix();
 
     /// <summary>アルバムの点。アーティストは検索結果の補足（「アルバム • アーティスト • 年」）の各部分と比べる。</summary>
     public static double ScoreAlbum(SpotifyAlbum album, AlbumSummary result, int rank, NameAliases? aliases = null) => ScoreAlbumSure(album, result, rank, aliases).Score;
@@ -232,11 +262,12 @@ public static partial class TransferMatcher
         // 種類（アルバム・シングル）と年は名前ではないので比べない
         var parts = (result.Subtitle ?? "").Split('•', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
             .Where(p => p.Any(char.IsLetter) && !KindWords.Contains(p)).ToArray();
-        var artist = album.Artists.Count == 0 || parts.Length == 0 ? null : BestName(album.Artists, parts, aliases);
+        var artists = RealArtists(album.Artists);
+        var artist = artists.Count == 0 || parts.Length == 0 ? null : BestName(artists, parts, aliases);
         var score = Weighted((title ?? Unknown, 0.65), (artist ?? Unknown, 0.35));
         if (title is < 0.5) score *= 0.6;
         // アーティストが合うか、アーティストの分からないアルバムで題がほぼ同じなら確か
-        var sure = artist is { } a ? a >= 0.6 && title is not null : album.Artists.Count == 0 && title >= 0.9;
+        var sure = artist is { } a ? a >= 0.6 && title is not null : artists.Count == 0 && title >= 0.9;
         return (Math.Clamp(score + RankBonus(rank), 0, 1), sure);
     }
 

@@ -507,6 +507,30 @@ public class SpotifyTransferTests
     }
 
     [Fact]
+    public void RetryAlbumQueriesDropEditionsFeatAndArtist()
+    {
+        Assert.Equal(["三月のパンタシア ルビコン", "ルビコン"],
+            TransferMatcher.RetryAlbumQueries(new SpotifyAlbum("ルビコン -Complete ver.-", ["三月のパンタシア"])));
+        Assert.Equal(["HoneyWorks 東京ウインターセッション", "東京ウインターセッション"],
+            TransferMatcher.RetryAlbumQueries(new SpotifyAlbum("東京ウインターセッション", ["HoneyWorks feat. 瀬戸口優"])));
+        Assert.Equal(["言わないけどね。"], TransferMatcher.RetryAlbumQueries(new SpotifyAlbum("言わないけどね。 (アニメ盤)", ["大原ゆい子"])).Skip(1));
+        Assert.Equal(["勇気のバトン"], TransferMatcher.RetryAlbumQueries(new SpotifyAlbum("勇気のバトン 通常盤", ["Various Artists"])));
+    }
+
+    [Fact]
+    public void VariousArtistsIsNotComparedAsAName()
+    {
+        var album = new SpotifyAlbum("勇気のバトン 通常盤", ["Various Artists"]);
+        Assert.Equal("勇気のバトン 通常盤", TransferMatcher.AlbumQuery(album).Trim());
+        var ranked = TransferMatcher.RankAlbums(album, [new AlbumSummary("MPREb_v", "勇気のバトン 通常盤", "アルバム • 讃州中学勇者部 • 2019", null)]);
+        Assert.Equal(MatchStatus.Matched, TransferMatcher.StatusOf(ranked));
+    }
+
+    [Fact]
+    public void ArtistsOfSplitsJapaneseComma() =>
+        Assert.Equal(["Yunomi", "KOTONOHOUSE"], NameAliases.ArtistsOf("Yunomi、KOTONOHOUSE • 未来茶屋 vol.1"));
+
+    [Fact]
     public async Task SongsOfTheSameAlbumAreMatchedFromTheAlbumPage()
     {
         // 同じアルバムの曲が3曲: アルバムを1回探してページを1回読み、曲ごとには探さない。ページに無い曲だけ1曲ずつ探す

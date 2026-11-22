@@ -35,7 +35,7 @@ public sealed partial class NameAliases
     public static NameAliases Of(params (string Spotify, string YouTube)[] pairs) =>
         new(pairs.ToDictionary(p => TransferMatcher.Fold(p.Spotify), p => p.YouTube));
 
-    [GeneratedRegex(@",\s*|\s+&\s+")]
+    [GeneratedRegex(@",\s*|、\s*|\s+&\s+")]
     private static partial Regex ArtistSeparator();
 
     /// <summary>候補の補足（「アーティスト, アーティスト • アルバム」）からアーティストの名前を取り出す。</summary>
