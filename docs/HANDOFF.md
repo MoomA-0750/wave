@@ -25,6 +25,9 @@ Windows の wave の「Spotify から移す」。Spotify のプレイリスト�
 - 案 2 を入れた（手で選んだアルバム・アーティストからも名前の組を 1 回で学ぶ `NameAliases.Learn`、リンクで選んだアルバムの補足にアーティストを入れる `SubtitleWithArtists`。テスト 338 件が通る）。to-fu でアルバムの要確認を回す命令（`transfer-rematch-unsure album`）を 11-23 に送った。結果は to-fu の wave.log の「transfer match stop=」の行（`scripts/win.sh ps` で `%LOCALAPPDATA%\wave\wave.log` を読む）。件数の確かめは `scripts/win.sh ps < count.ps1` の形（保存データ spotify-transfer.json を Kind/Status で数える）。結果（11-23 06:25、断られた 0）: アルバムは一致 399・要確認 41・見つからない 0 のまま変わらず（案 2 だけでは動かない。残りは別の版が 1 位にいるもの）。全体は一致 7547・要確認 334・見つからない 52
 - AI ラベルの確認（続き）: Xania Monet・Breaking Rust・Sienna Rose の曲の search・next・player（匿名、WEB_REMIX）にも AI の語は出なかった。ログイン済みの応答か、ラベルの付いた曲の特定が要る
 
+- 曲の項目にも 2 本目の検索語を入れた（`RetryTrackQueries`。テスト 340 件が通り commit 済み）。11-23 朝に to-fu で `transfer-rematch-unsure track`（曲の要確認・見つからない 約 293 件、10 秒おき）を回し始めた。終わると to-fu の wave.log に「transfer match stop=」が出る。その件数（前: 一致 7547・要確認 334・見つからない 52）を書き足す。曲の変化の誤一致は、一致が増えた分を見直しで確かめる
+- push 済み（11-23、本人の指示。ここまでの commit）
+
 ## 次にやること
 
 1. AI コンテンツの識別（本人の了承済みの方針は上の「どこまで」）。最初の確認: AI ラベルが付いた YouTube Music の曲の応答に表示が入っているかを調べる（本人が曲を教えるか、自分で探す。ログインしない通信と、必要ならログイン済みの応答）。Spotify の API・ZIP に AI クレジットがあるかも調べる。結果を見て `SPEC.md` に仕様（確定／仮）を書き、実装は本人の了承の後
