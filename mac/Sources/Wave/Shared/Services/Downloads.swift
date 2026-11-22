@@ -205,6 +205,13 @@ final class Downloads {
         if settings.smartDownloads { Task { await refreshSmart(force: true) } }
     }
 
+    func setSmartLimit(_ gb: Int) {
+        guard gb != settings.smartDownloadLimitGb else { return }
+        settings.smartDownloadLimitGb = gb
+        settings.save()
+        if settings.smartDownloads { Task { await refreshSmart(force: true) } }
+    }
+
     /// 「ダウンロードをすべて削除」。スマートダウンロードの入り切りは残し、選び直しは次の1日1回の時にする。
     func deleteAll() {
         worker?.cancel()
@@ -294,7 +301,9 @@ final class Downloads {
             var seen = Set(recommended.map(\.videoId))
             recommended += page.songs.filter { seen.insert($0.videoId).inserted }
         }
-        let picked = SmartDownloads.pick([.frequent: frequent, .discover: discover, .recommended: recommended], count: count)
+        let picked = SmartDownloads.withinBudget(SmartDownloads.pick([.frequent: frequent, .discover: discover, .recommended: recommended], count: count), limitGb: settings.smartDownloadLimitGb) { id in
+            manifest.isManual(id) ? 0 : store.completedSize(id) ?? SmartDownloads.estimatedSongBytes
+        }
         AppPaths.log("downloads smart frequent=\(frequent.count) discover=\(discover.count) recommended=\(recommended.count) picked=\(picked.count)")
         guard !picked.isEmpty, settings.smartDownloads else { return }
         manifest.setSmart(picked.map { (DownloadSong($0.song), $0.category) }, nowMs: now)

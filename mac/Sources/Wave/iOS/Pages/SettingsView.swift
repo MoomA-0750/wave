@@ -275,6 +275,9 @@ struct SettingsView: View {
                 Picker(L.t("曲数", "Songs"), selection: Binding(get: { downloads.settings.smartDownloadCount }, set: { downloads.setSmartCount($0) })) {
                     ForEach(SmartDownloads.countChoices, id: \.self) { Text(DownloadsModel.countLabel($0)).tag($0) }
                 }
+                Picker(L.t("容量の上限", "Storage limit"), selection: Binding(get: { downloads.settings.smartDownloadLimitGb }, set: { downloads.setSmartLimit($0) })) {
+                    ForEach(SmartDownloads.limitChoicesGb, id: \.self) { Text($0 == 0 ? L.t("無制限", "No limit") : "\($0) GB").tag($0) }
+                }
             }
             Button { AppServices.nav.downloads() } label: {
                 HStack {

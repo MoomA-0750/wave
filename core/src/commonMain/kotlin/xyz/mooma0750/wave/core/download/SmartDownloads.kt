@@ -137,6 +137,35 @@ object SmartDownloads {
         return picked
     }
 
+    /** スマートダウンロードの容量の上限（GB。0 は無制限）。手で取った分は数えない。 */
+    val LIMITS_GB = listOf(2, 5, 10, 20, 0)
+    const val DEFAULT_LIMIT_GB = 5
+
+    /** まだ取っていない曲の大きさの見積もり（端末の取った曲の平均が 1 曲 10MB 前後）。 */
+    const val ESTIMATED_SONG_BYTES = 10L * 1024 * 1024
+
+    /**
+     * 選んだ曲（優先の順）を、スマートダウンロードの上限に収める。後ろ（優先の低いもの）から外れる。
+     * [bytesOf] は、その曲を取る・持つために数える大きさ（取った曲は実際の大きさ、まだなら見積もり、手で取った曲は 0）。
+     * [limitGb] が 0 以下なら無制限。
+     */
+    fun withinBudget(
+        picked: List<SmartDownload>,
+        limitGb: Int,
+        bytesOf: (String) -> Long,
+    ): List<SmartDownload> {
+        if (limitGb <= 0) return picked
+        val limit = limitGb * 1024L * 1024 * 1024
+        var used = 0L
+        val kept = ArrayList<SmartDownload>()
+        for (item in picked) {
+            used += bytesOf(item.song.videoId)
+            if (used > limit) break
+            kept += item
+        }
+        return kept
+    }
+
     /** 長すぎる曲（作業用のまとめの動画など）は取らない。長さが分からなければ取る。 */
     fun tooLong(song: Song): Boolean = (song.durationSeconds ?: 0) > MAX_SECONDS
 

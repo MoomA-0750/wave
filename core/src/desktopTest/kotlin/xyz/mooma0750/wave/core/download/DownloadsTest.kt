@@ -158,4 +158,15 @@ class SmartDownloadsTest {
         assertFalse(SmartDownloads.refreshDue(1000, 1000 + SmartDownloads.REFRESH_INTERVAL_MS - 1))
         assertTrue(SmartDownloads.refreshDue(1000, 1000 + SmartDownloads.REFRESH_INTERVAL_MS))
     }
+
+    @Test
+    fun withinBudgetDropsTheLowPriorityTailAndIgnoresManualOwnedSongs() {
+        fun song(id: String) = SmartDownload(Song(videoId = id, title = id, artists = emptyList(), album = null, durationSeconds = 200, thumbnailUrl = null), SmartCategory.Frequent)
+        val picked = listOf("a", "b", "c", "d").map(::song)
+        val gb = 1024L * 1024 * 1024
+        // 1 曲 1GB・b は手で取った曲（0）。上限 2GB なら a・b・c が残り、d が外れる
+        val kept = SmartDownloads.withinBudget(picked, 2) { if (it == "b") 0 else gb }
+        assertEquals(listOf("a", "b", "c"), kept.map { it.song.videoId })
+        assertEquals(4, SmartDownloads.withinBudget(picked, 0) { gb }.size)
+    }
 }

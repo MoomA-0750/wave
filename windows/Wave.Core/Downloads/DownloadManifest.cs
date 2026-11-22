@@ -73,6 +73,9 @@ public sealed record DownloadManifest(
 
     public bool IsWanted(string videoId) => Collections.Any(c => c.Songs.Any(s => s.VideoId == videoId && Downloadable(s))) || IsSingle(videoId) || IsSmart(videoId);
 
+    /// <summary>手で取った曲（丸ごと・1曲ずつ）か。スマートダウンロードの容量には数えない。</summary>
+    public bool IsManual(string videoId) => Collections.Any(c => c.Songs.Any(s => s.VideoId == videoId && Downloadable(s))) || IsSingle(videoId);
+
     public bool IsSingle(string videoId) => Singles.Any(s => s.Song.VideoId == videoId);
 
     public bool IsSmart(string videoId) => Smart.Any(s => s.Song.VideoId == videoId);

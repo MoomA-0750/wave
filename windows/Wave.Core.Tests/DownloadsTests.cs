@@ -353,4 +353,15 @@ public sealed class DownloadsTests : IDisposable
         Assert.Equal(SmartDownloads.DefaultCount, SmartDownloads.NormalizeCount(7));
         Assert.Equal(200, SmartDownloads.NormalizeCount(200));
     }
+
+    [Fact]
+    public void WithinBudgetDropsTheLowPriorityTailAndIgnoresManualSongs()
+    {
+        var picked = new[] { "a", "b", "c", "d" }.Select(id => new SmartTrack(new Song(id, id, [], null, 200, null), SmartCategory.Frequent)).ToList();
+        const long gb = 1024L * 1024 * 1024;
+        var kept = SmartDownloads.WithinBudget(picked, 2, id => id == "b" ? 0 : gb);
+        Assert.Equal(["a", "b", "c"], kept.Select(t => t.Song.VideoId));
+        Assert.Equal(4, SmartDownloads.WithinBudget(picked, 0, _ => gb).Count);
+        Assert.Equal(5, SmartDownloads.NormalizeLimit(7));
+    }
 }

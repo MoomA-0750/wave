@@ -6,7 +6,7 @@ use std::rc::Rc;
 use std::time::Duration;
 
 use adw::prelude::*;
-use wave_core::download::smart::{COUNTS, DownloadNetwork};
+use wave_core::download::smart::{self, COUNTS, DownloadNetwork};
 
 use super::shell::App;
 use super::{images, pages};
@@ -181,12 +181,19 @@ fn downloads_group(app: &Rc<App>, prefs: &adw::PreferencesPage) -> adw::Preferen
         .selected(COUNTS.iter().position(|c| *c == settings.smart_download_count).unwrap_or(1) as u32)
         .visible(settings.smart_downloads)
         .build();
+    let limit_labels: Vec<String> = smart::LIMITS_GB.iter().map(|g| if *g == 0 { lang::t("無制限", "No limit").to_string() } else { format!("{g} GB") }).collect();
+    let limit = adw::ComboRow::builder()
+        .title(lang::t("容量の上限", "Storage limit"))
+        .model(&gtk::StringList::new(&limit_labels.iter().map(String::as_str).collect::<Vec<_>>()))
+        .selected(smart::LIMITS_GB.iter().position(|g| *g == settings.smart_download_limit_gb).unwrap_or(1) as u32)
+        .visible(settings.smart_downloads)
+        .build();
     let usage = adw::ActionRow::builder().title(lang::t("ダウンロード", "Downloads")).build();
     let open = gtk::Button::builder().label(lang::t("開く", "Open")).valign(gtk::Align::Center).build();
     let clear = gtk::Button::builder().label(lang::t("すべて削除", "Delete all")).valign(gtk::Align::Center).css_classes(["destructive-action"]).build();
     usage.add_suffix(&open);
     usage.add_suffix(&clear);
-    for row in [network.upcast_ref::<gtk::Widget>(), smart.upcast_ref(), count.upcast_ref(), usage.upcast_ref()] {
+    for row in [network.upcast_ref::<gtk::Widget>(), smart.upcast_ref(), count.upcast_ref(), limit.upcast_ref(), usage.upcast_ref()] {
         group.add(row);
     }
     {
@@ -197,11 +204,19 @@ fn downloads_group(app: &Rc<App>, prefs: &adw::PreferencesPage) -> adw::Preferen
         });
     }
     {
-        let (app, count) = (app.clone(), count.clone());
+        let (app, count, limit) = (app.clone(), count.clone(), limit.clone());
         smart.connect_active_notify(move |row| {
             let on = row.is_active();
             count.set_visible(on);
+            limit.set_visible(on);
             app.downloads.update_settings(|s| s.smart_downloads = on);
+        });
+    }
+    {
+        let app = app.clone();
+        limit.connect_selected_notify(move |row| {
+            let value = smart::LIMITS_GB[row.selected() as usize % smart::LIMITS_GB.len()];
+            app.downloads.update_settings(|s| s.smart_download_limit_gb = value);
         });
     }
     {

@@ -1,7 +1,7 @@
 //! アプリの設定（~/.config/wave/settings.json）。ログインの情報は入れない（キーリングに置く）。
 
 use serde::{Deserialize, Serialize};
-use wave_core::download::smart::{DEFAULT_COUNT, DownloadNetwork};
+use wave_core::download::smart::{DEFAULT_COUNT, DEFAULT_LIMIT_GB, DownloadNetwork};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -9,6 +9,8 @@ pub struct Settings {
     /// スマートダウンロード（既定は切。入れた途端に容量と通信を使うため。ほかの端末と同じ）。
     pub smart_downloads: bool,
     pub smart_download_count: usize,
+    /// スマートダウンロードの容量の上限（GB。0 は無制限。手で取った分は数えない）。
+    pub smart_download_limit_gb: u32,
     /// ダウンロードに使う通信（既定は従量制でない通信だけ）。
     pub download_network: DownloadNetwork,
     /// 聴いた曲を YouTube Music の再生履歴に載せる（既定は入。ほかの端末と同じ）。
@@ -39,7 +41,7 @@ pub struct Settings {
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { smart_downloads: false, smart_download_count: DEFAULT_COUNT, download_network: DownloadNetwork::Unmetered, relay_url: None, send_history: true, release_notices: true, original_titles: false, search_history: Vec::new(), discord_presence: false, discord_client_id: None, library_sort: "recent".into(), library_grid: false, playlist_orders: Default::default(), right_pane_open: true, ui_language: String::new() }
+        Self { smart_downloads: false, smart_download_count: DEFAULT_COUNT, smart_download_limit_gb: DEFAULT_LIMIT_GB, download_network: DownloadNetwork::Unmetered, relay_url: None, send_history: true, release_notices: true, original_titles: false, search_history: Vec::new(), discord_presence: false, discord_client_id: None, library_sort: "recent".into(), library_grid: false, playlist_orders: Default::default(), right_pane_open: true, ui_language: String::new() }
     }
 }
 

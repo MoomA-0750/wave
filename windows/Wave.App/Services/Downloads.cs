@@ -189,6 +189,15 @@ public sealed partial class Downloads : ObservableObject
         if (AppServices.Settings.SmartDownloads) _ = RefreshSmartAsync(force: true);
     }
 
+    public void SetSmartLimit(int gb)
+    {
+        gb = SmartDownloads.NormalizeLimit(gb);
+        if (AppServices.Settings.SmartDownloadLimitGb == gb) return;
+        AppServices.Settings.SmartDownloadLimitGb = gb;
+        AppServices.Settings.Save();
+        if (AppServices.Settings.SmartDownloads) _ = RefreshSmartAsync(force: true);
+    }
+
     public void SetNetwork(DownloadNetwork network)
     {
         AppServices.Settings.DownloadNetwork = DownloadPolicy.Format(network);
@@ -324,7 +333,9 @@ public sealed partial class Downloads : ObservableObject
                 AppPaths.Log("smart refresh skipped (history and home failed)");
                 return;
             }
-            var picked = SmartDownloads.Select(frequent, likely, recommended, count);
+            var manifestNow = Manifest;
+            var picked = SmartDownloads.WithinBudget(SmartDownloads.Select(frequent, likely, recommended, count), SmartDownloads.NormalizeLimit(AppServices.Settings.SmartDownloadLimitGb),
+                id => manifestNow.IsManual(id) ? 0 : store.Completed(id)?.Length ?? SmartDownloads.EstimatedSongBytes);
             // 1曲も選べなかったら、前に選んだ曲をそのまま残す
             if (picked.Count == 0)
             {

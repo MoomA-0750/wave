@@ -126,7 +126,7 @@ impl Downloads {
             // 切ったら、スマートで選んだ曲を外す
             let next = self.manifest.borrow().with_smart(Vec::new(), 0);
             self.apply(next);
-        } else if after.smart_downloads && (!before.smart_downloads || after.smart_download_count != before.smart_download_count) {
+        } else if after.smart_downloads && (!before.smart_downloads || after.smart_download_count != before.smart_download_count || after.smart_download_limit_gb != before.smart_download_limit_gb) {
             self.refresh_smart(true);
         }
         self.work();
@@ -245,6 +245,12 @@ impl Downloads {
             }
             match picked {
                 Some(tracks) if !tracks.is_empty() && this.settings.borrow().smart_downloads => {
+                    // 容量の上限に収める（手で取った曲は数えない。取った曲は実際の大きさ、まだなら見積もり）
+                    let limit = this.settings.borrow().smart_download_limit_gb;
+                    let tracks = {
+                        let manifest = this.manifest.borrow();
+                        smart::within_budget(tracks, limit, |id| if manifest.is_manual(id) { 0 } else { this.store.completed(id).map_or(smart::ESTIMATED_SONG_BYTES, |f| f.length) })
+                    };
                     eprintln!("smart refresh picked={}", tracks.len());
                     // 選び直したら、取れなかった曲も取り直してみる
                     this.unavailable.borrow_mut().clear();

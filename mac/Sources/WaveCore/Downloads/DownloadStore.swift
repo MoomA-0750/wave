@@ -236,6 +236,11 @@ public final class DownloadStore: ByteStore, @unchecked Sendable {
         try? FileManager.default.removeItem(at: jsonUrl(id))
     }
 
+    /// 取り終えた曲の大きさ（取り終えていなければ nil）。
+    public func completedSize(_ id: String) -> Int64? {
+        completed(id).map { _ in size(id) }
+    }
+
     private func size(_ id: String) -> Int64 {
         ((try? FileManager.default.attributesOfItem(atPath: bytesUrl(id).path))?[.size] as? NSNumber)?.int64Value ?? 0
     }

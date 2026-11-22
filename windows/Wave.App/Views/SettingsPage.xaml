@@ -75,6 +75,14 @@
             </Grid>
             <Grid Padding="16" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" Margin="0,8,0,0"
                   BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+                <StackPanel Margin="0,0,300,0">
+                    <TextBlock Text="{x:Bind app:L.T('スマートダウンロードの容量の上限', 'Smart download storage limit')}" />
+                    <TextBlock Text="{x:Bind app:L.T('上限を超えるぶんは、優先の低い曲から外します。手で取った曲は数えず、消しません', 'Songs beyond the limit are dropped, lowest priority first. Songs you downloaded yourself are not counted or removed')}" Style="{StaticResource SubtleTextStyle}" TextWrapping="Wrap" MaxLines="3" />
+                </StackPanel>
+                <ComboBox x:Name="SmartLimitBox" HorizontalAlignment="Right" VerticalAlignment="Center" MinWidth="110" SelectionChanged="OnSmartLimitChanged" />
+            </Grid>
+            <Grid Padding="16" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" Margin="0,8,0,0"
+                  BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
                 <StackPanel Margin="0,0,240,0">
                     <TextBlock Text="{x:Bind app:L.T('使っている容量', 'Storage used')}" />
                     <TextBlock x:Name="StorageText" Style="{StaticResource SubtleTextStyle}" />

@@ -222,4 +222,12 @@ final class DownloadsTests: XCTestCase {
         store.clear()
         XCTAssertNil(store.completed(id))
     }
+
+    func testWithinBudgetDropsTheLowPriorityTailAndIgnoresManualSongs() {
+        let picked = ["a", "b", "c", "d"].map { (song: song($0), category: SmartCategory.frequent) }
+        let gb: Int64 = 1024 * 1024 * 1024
+        let kept = SmartDownloads.withinBudget(picked, limitGb: 2) { $0 == "b" ? 0 : gb }
+        XCTAssertEqual(kept.map(\.song.videoId), ["a", "b", "c"])
+        XCTAssertEqual(SmartDownloads.withinBudget(picked, limitGb: 0) { _ in gb }.count, 4)
+    }
 }

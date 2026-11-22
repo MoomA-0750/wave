@@ -123,6 +123,9 @@ public sealed partial class SettingsPage : Page
         SmartCountBox.Items.Clear();
         foreach (var count in Wave.Core.Downloads.SmartDownloads.Counts) SmartCountBox.Items.Add(new ComboBoxItem { Content = L.Songs(count), Tag = count });
         SmartCountBox.SelectedIndex = Math.Max(0, Array.IndexOf(Wave.Core.Downloads.SmartDownloads.Counts, Wave.Core.Downloads.SmartDownloads.NormalizeCount(settings.SmartDownloadCount)));
+        SmartLimitBox.Items.Clear();
+        foreach (var gb in Wave.Core.Downloads.SmartDownloads.LimitsGb) SmartLimitBox.Items.Add(new ComboBoxItem { Content = gb == 0 ? L.T("無制限", "No limit") : $"{gb} GB", Tag = gb });
+        SmartLimitBox.SelectedIndex = Math.Max(0, Array.IndexOf(Wave.Core.Downloads.SmartDownloads.LimitsGb, Wave.Core.Downloads.SmartDownloads.NormalizeLimit(settings.SmartDownloadLimitGb)));
         SmartSwitch.IsOn = settings.SmartDownloads;
         renderingDownloads = false;
         StorageText.Text = $"{L.Songs(AppServices.Downloads.DownloadedCount)} • {DownloadsPage.Size(AppServices.Downloads.UsedBytes)}";
@@ -138,6 +141,12 @@ public sealed partial class SettingsPage : Page
     {
         if (renderingDownloads || SmartCountBox.SelectedItem is not ComboBoxItem { Tag: int count }) return;
         AppServices.Downloads.SetSmartCount(count);
+    }
+
+    private void OnSmartLimitChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (renderingDownloads || SmartLimitBox.SelectedItem is not ComboBoxItem { Tag: int gb }) return;
+        AppServices.Downloads.SetSmartLimit(gb);
     }
 
     private void OnSmartToggled(object sender, RoutedEventArgs e)

@@ -46,6 +46,8 @@ final class Settings: Codable {
     /// スマートダウンロード（既定は切）と、取る曲数（25・50・100・200）。
     var smartDownloads = false
     var smartDownloadCount = 50
+    /// スマートダウンロードの容量の上限（GB。0 は無制限。手で取った分は数えない）。
+    var smartDownloadLimitGb = 5
 
     /// 「曲名を元の表記で」の説明（Android の settings_original_titles_summary と同じ）。
     static var originalTitlesDetail: String {
@@ -60,7 +62,7 @@ final class Settings: Codable {
     enum CodingKeys: String, CodingKey {
         case volume, shuffle, repeatMode, sendHistory, rightPaneOpen, releaseNotices, librarySort, libraryGrid, playlistOrders, language, originalTitles,
             searchHistory, relayV2Url, relayV2Host, aiUrl, aiToken, aiName, discordPresence, discordClientId, musicPip, lyricsInArtist, lyricsInLiveActivity, lyricsInArtwork,
-            pinnedTab, downloadNetwork, smartDownloads, smartDownloadCount
+            pinnedTab, downloadNetwork, smartDownloads, smartDownloadCount, smartDownloadLimitGb
     }
 
     // 項目が足りないファイル（前の版）も読めるよう、無い項目は既定のまま
@@ -93,6 +95,7 @@ final class Settings: Codable {
         downloadNetwork = try c.decodeIfPresent(String.self, forKey: .downloadNetwork) ?? downloadNetwork
         smartDownloads = try c.decodeIfPresent(Bool.self, forKey: .smartDownloads) ?? smartDownloads
         smartDownloadCount = try c.decodeIfPresent(Int.self, forKey: .smartDownloadCount) ?? smartDownloadCount
+        smartDownloadLimitGb = try c.decodeIfPresent(Int.self, forKey: .smartDownloadLimitGb) ?? smartDownloadLimitGb
     }
 
     static func load() -> Settings {

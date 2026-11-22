@@ -11,6 +11,29 @@ use crate::music::models::{HomeItem, HomeShelf, PlaylistSummary, Song};
 /// 選べる曲数と既定。
 pub const COUNTS: [usize; 4] = [25, 50, 100, 200];
 pub const DEFAULT_COUNT: usize = 50;
+/// スマートダウンロードの容量の上限（GB。0 は無制限）と既定。手で取った分は数えない。
+pub const LIMITS_GB: [u32; 5] = [2, 5, 10, 20, 0];
+pub const DEFAULT_LIMIT_GB: u32 = 5;
+/// まだ取っていない曲の大きさの見積もり（1 曲 10MB 前後）。
+pub const ESTIMATED_SONG_BYTES: u64 = 10 * 1024 * 1024;
+
+/// 選んだ曲（優先の順）を上限に収める。後ろ（優先の低いもの）から外れる。bytes_of は数える大きさ（取った曲は実際、まだなら見積もり、手で取った曲は 0）。limit_gb が 0 なら無制限。
+pub fn within_budget(picked: Vec<SmartTrack>, limit_gb: u32, bytes_of: impl Fn(&str) -> u64) -> Vec<SmartTrack> {
+    if limit_gb == 0 {
+        return picked;
+    }
+    let limit = u64::from(limit_gb) * 1024 * 1024 * 1024;
+    let mut used = 0u64;
+    let mut kept = Vec::new();
+    for item in picked {
+        used += bytes_of(&item.song.video_id);
+        if used > limit {
+            break;
+        }
+        kept.push(item);
+    }
+    kept
+}
 /// 「好きそう」のラジオの種にする「いつも聴いている」の上位の曲数。
 pub const MAX_SEEDS: usize = 5;
 pub const MAX_PER_ARTIST: usize = 2;
@@ -254,6 +277,16 @@ mod tests {
             kind: None,
             is_live: false,
         }
+    }
+
+    #[test]
+    fn within_budget_drops_the_low_priority_tail_and_ignores_manual_songs() {
+        let picked: Vec<SmartTrack> = ["a", "b", "c", "d"].iter().map(|id| SmartTrack { song: s(id, "x"), category: SmartCategory::Frequent }).collect();
+        let gb = 1024u64 * 1024 * 1024;
+        let kept = within_budget(picked, 2, |id| if id == "b" { 0 } else { gb });
+        assert_eq!(kept.iter().map(|t| t.song.video_id.as_str()).collect::<Vec<_>>(), ["a", "b", "c"]);
+        let all: Vec<SmartTrack> = ["a", "b"].iter().map(|id| SmartTrack { song: s(id, "x"), category: SmartCategory::Frequent }).collect();
+        assert_eq!(within_budget(all, 0, |_| gb).len(), 2);
     }
 
     fn ids(songs: &[Song]) -> Vec<&str> {

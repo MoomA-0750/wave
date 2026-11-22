@@ -60,6 +60,14 @@ data class DownloadManifest(
         return ids
     }
 
+    /** 手で取った曲（1曲ずつ・丸ごと）の ID。スマートダウンロードの容量には数えない。 */
+    fun manualIds(): Set<String> {
+        val ids = HashSet<String>()
+        singles.forEach { ids += it.song.videoId }
+        collections.forEach { collection -> collection.songs.forEach { ids += it.videoId } }
+        return ids
+    }
+
     fun isWanted(videoId: String): Boolean = singles.any { it.song.videoId == videoId } || collections.any { c -> c.songs.any { it.videoId == videoId } } || smart.any { it.song.videoId == videoId }
 
     /** 曲の情報（通信なしで一覧・キューに出すため）。 */

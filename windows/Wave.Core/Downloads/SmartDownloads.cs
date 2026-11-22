@@ -30,6 +30,30 @@ public static class SmartDownloads
     /// <summary>選べる曲数と既定。</summary>
     public static readonly int[] Counts = [25, 50, 100, 200];
     public const int DefaultCount = 50;
+
+    /// <summary>スマートダウンロードの容量の上限（GB。0 は無制限）。手で取った分は数えない。</summary>
+    public static readonly int[] LimitsGb = [2, 5, 10, 20, 0];
+    public const int DefaultLimitGb = 5;
+    public static int NormalizeLimit(int gb) => LimitsGb.Contains(gb) ? gb : DefaultLimitGb;
+
+    /// <summary>まだ取っていない曲の大きさの見積もり（1 曲 10MB 前後）。</summary>
+    public const long EstimatedSongBytes = 10L * 1024 * 1024;
+
+    /// <summary>選んだ曲（優先の順）を上限に収める。後ろ（優先の低いもの）から外れる。bytesOf は数える大きさ（取った曲は実際、まだなら見積もり、手で取った曲は 0）。limitGb が 0 以下なら無制限。</summary>
+    public static List<SmartTrack> WithinBudget(IReadOnlyList<SmartTrack> picked, int limitGb, Func<string, long> bytesOf)
+    {
+        if (limitGb <= 0) return [.. picked];
+        var limit = limitGb * 1024L * 1024 * 1024;
+        var used = 0L;
+        var kept = new List<SmartTrack>();
+        foreach (var item in picked)
+        {
+            used += bytesOf(item.Song.VideoId);
+            if (used > limit) break;
+            kept.Add(item);
+        }
+        return kept;
+    }
     /// <summary>「好きそう」のラジオの種にする「いつも聴いている」の上位の曲数。</summary>
     public const int MaxSeeds = 5;
     public const int MaxPerArtist = 2;

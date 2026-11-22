@@ -42,6 +42,25 @@ public enum SmartDownloads {
     /// 選べる曲数と既定。
     public static let countChoices = [25, 50, 100, 200]
     public static let defaultCount = 50
+    /// スマートダウンロードの容量の上限（GB。0 は無制限）と既定。手で取った分は数えない。
+    public static let limitChoicesGb = [2, 5, 10, 20, 0]
+    public static let defaultLimitGb = 5
+    /// まだ取っていない曲の大きさの見積もり（1 曲 10MB 前後）。
+    public static let estimatedSongBytes: Int64 = 10 * 1024 * 1024
+
+    /// 選んだ曲（優先の順）を上限に収める。後ろ（優先の低いもの）から外れる。bytesOf は数える大きさ（取った曲は実際、まだなら見積もり、手で取った曲は 0）。limitGb が 0 以下なら無制限。
+    public static func withinBudget(_ picked: [(song: Song, category: SmartCategory)], limitGb: Int, bytesOf: (String) -> Int64) -> [(song: Song, category: SmartCategory)] {
+        guard limitGb > 0 else { return picked }
+        let limit = Int64(limitGb) * 1024 * 1024 * 1024
+        var used: Int64 = 0
+        var kept: [(song: Song, category: SmartCategory)] = []
+        for item in picked {
+            used += bytesOf(item.song.videoId)
+            if used > limit { break }
+            kept.append(item)
+        }
+        return kept
+    }
     /// これより長い曲（長い動画・作業用のミックスなど）は選ばない。長さの分からない曲は選んでよい。
     public static let maxDurationSeconds = 15 * 60
     /// 「好きそう」の種にする「いつも聴いている」の上位の曲の数。

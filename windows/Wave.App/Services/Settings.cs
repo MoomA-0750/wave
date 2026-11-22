@@ -38,6 +38,8 @@ public sealed class Settings
     public string DownloadNetwork { get; set; } = "unmetered";
     /// <summary>スマートダウンロード（既定は切）と曲数（25・50・100・200。既定は 50）。</summary>
     public bool SmartDownloads { get; set; }
+    /// <summary>スマートダウンロードの容量の上限（GB。0 は無制限）。手で取った分は数えない。</summary>
+    public int SmartDownloadLimitGb { get; set; } = Wave.Core.Downloads.SmartDownloads.DefaultLimitGb;
     public int SmartDownloadCount { get; set; } = Wave.Core.Downloads.SmartDownloads.DefaultCount;
     /// <summary>Spotify から移すときに Web API へログインする、本人が developer.spotify.com で作ったアプリの Client ID（秘密ではない。PKCE なので secret は要らない）。</summary>
     public string? SpotifyClientId { get; set; }

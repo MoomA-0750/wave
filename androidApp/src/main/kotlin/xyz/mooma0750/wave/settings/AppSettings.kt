@@ -180,6 +180,16 @@ class AppSettings(
         store.edit { it[SMART_DOWNLOAD_COUNT] = count }
     }
 
+    /** スマートダウンロードの容量の上限（GB。0 は無制限。既定は 5。手で取った分は数えない）。 */
+    val smartDownloadLimitGb: Flow<Int> =
+        store.data
+            .map { prefs -> prefs[SMART_DOWNLOAD_LIMIT_GB]?.takeIf { it in xyz.mooma0750.wave.core.download.SmartDownloads.LIMITS_GB } ?: xyz.mooma0750.wave.core.download.SmartDownloads.DEFAULT_LIMIT_GB }
+            .catch { if (it is IOException) emit(xyz.mooma0750.wave.core.download.SmartDownloads.DEFAULT_LIMIT_GB) else throw it }
+
+    suspend fun setSmartDownloadLimitGb(gb: Int) {
+        store.edit { it[SMART_DOWNLOAD_LIMIT_GB] = gb }
+    }
+
     /** プレイリストごとに選んだ並べ方。選んでいなければカスタム。 */
     val playlistOrders: PlaylistOrderStore =
         object : PlaylistOrderStore {
@@ -218,6 +228,7 @@ class AppSettings(
         val DOWNLOAD_ANY_NETWORK = booleanPreferencesKey("download_any_network")
         val SMART_DOWNLOADS = booleanPreferencesKey("smart_downloads")
         val SMART_DOWNLOAD_COUNT = androidx.datastore.preferences.core.intPreferencesKey("smart_download_count")
+        val SMART_DOWNLOAD_LIMIT_GB = androidx.datastore.preferences.core.intPreferencesKey("smart_download_limit_gb")
         const val PLAYLIST_ORDER_PREFIX = "playlist_order_"
 
         fun playlistOrderKey(playlistId: String) = stringPreferencesKey(PLAYLIST_ORDER_PREFIX + playlistId)

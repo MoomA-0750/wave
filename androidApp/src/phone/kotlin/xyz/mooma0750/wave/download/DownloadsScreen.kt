@@ -287,6 +287,7 @@ fun DownloadSettings(
     val any by settings.downloadOnAnyNetwork.collectAsStateWithLifecycle(initialValue = null)
     val smart by settings.smartDownloads.collectAsStateWithLifecycle(initialValue = null)
     val count by settings.smartDownloadCount.collectAsStateWithLifecycle(initialValue = null)
+    val limitGb by settings.smartDownloadLimitGb.collectAsStateWithLifecycle(initialValue = null)
     Column {
         ChoiceSetting(
             title = stringResource(R.string.settings_downloads_network),
@@ -306,6 +307,13 @@ fun DownloadSettings(
             selected = count,
             label = { stringResource(R.string.settings_smart_count_value, it) },
             onSelect = { scope.launch { settings.setSmartDownloadCount(it) } },
+        )
+        ChoiceSetting(
+            title = stringResource(R.string.settings_smart_limit),
+            options = xyz.mooma0750.wave.core.download.SmartDownloads.LIMITS_GB,
+            selected = limitGb,
+            label = { if (it == 0) stringResource(R.string.settings_smart_limit_none) else stringResource(R.string.settings_smart_limit_value, it) },
+            onSelect = { scope.launch { settings.setSmartDownloadLimitGb(it) } },
         )
         var confirming by remember { mutableStateOf(false) }
         ListItem(

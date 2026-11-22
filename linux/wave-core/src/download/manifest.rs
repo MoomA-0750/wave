@@ -64,6 +64,11 @@ impl DownloadManifest {
         self.wanted_songs().iter().any(|s| s.video_id == video_id)
     }
 
+    /// 手で取った曲（丸ごと・1曲ずつ）か。スマートダウンロードの容量には数えない。
+    pub fn is_manual(&self, video_id: &str) -> bool {
+        self.is_single(video_id) || self.collections.iter().any(|c| c.songs.iter().any(|s| s.video_id == video_id && !s.is_live))
+    }
+
     pub fn is_single(&self, video_id: &str) -> bool {
         self.singles.iter().any(|s| s.song.video_id == video_id)
     }

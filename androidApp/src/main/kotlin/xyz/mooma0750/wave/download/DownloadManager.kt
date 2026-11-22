@@ -177,6 +177,15 @@ class DownloadManager(
             }
         }
         scope.launch {
+            var limitBefore: Int? = null
+            settings.smartDownloadLimitGb.collect { limit ->
+                // 上限を変えたら選び直す（手で取った分には触らない）
+                val before = limitBefore
+                limitBefore = limit
+                if (before != null && before != limit && settings.smartDownloads.first()) refreshSmart(force = true)
+            }
+        }
+        scope.launch {
             var previous: Int? = null
             settings.smartDownloadCount.collect { count ->
                 val before = previous
@@ -352,11 +361,16 @@ class DownloadManager(
                     emptyList()
                 }
             val recommended = SmartDownloads.recommended(shelves, mix)
+            val limitGb = settings.smartDownloadLimitGb.first()
+            val manualIds = manifest.manualIds()
             val picked =
-                SmartDownloads.pick(
-                    mapOf(SmartCategory.Frequent to frequent, SmartCategory.Discover to discover, SmartCategory.Recommended to recommended),
-                    total,
-                )
+                SmartDownloads.withinBudget(
+                    SmartDownloads.pick(
+                        mapOf(SmartCategory.Frequent to frequent, SmartCategory.Discover to discover, SmartCategory.Recommended to recommended),
+                        total,
+                    ),
+                    limitGb,
+                ) { id -> if (id in manualIds) 0 else store.audioFile(id)?.length() ?: SmartDownloads.ESTIMATED_SONG_BYTES }
             Log.i(WaveApplication.LOG_TAG, "smart downloads picked=${picked.size} frequent=${frequent.size} discover=${discover.size} recommended=${recommended.size}")
             // 何も読めなかった（通信が切れた）なら、前の選びを残す
             if (picked.isEmpty() && manifest.smart.isNotEmpty()) return

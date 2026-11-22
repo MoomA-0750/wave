@@ -225,6 +225,15 @@ struct SettingsPageView: View {
                         .labelsHidden()
                         .fixedSize()
                     }
+                    HStack {
+                        Text(L.t("容量の上限", "Storage limit"))
+                        Spacer()
+                        Picker("", selection: Binding(get: { downloads.settings.smartDownloadLimitGb }, set: { downloads.setSmartLimit($0) })) {
+                            ForEach(SmartDownloads.limitChoicesGb, id: \.self) { Text($0 == 0 ? L.t("無制限", "No limit") : "\($0) GB").tag($0) }
+                        }
+                        .labelsHidden()
+                        .fixedSize()
+                    }
                 }
             }
         }
