@@ -240,6 +240,18 @@ public static partial class TransferMatcher
         return (Math.Clamp(score + RankBonus(rank), 0, 1), sure);
     }
 
+    /// <summary>
+    /// 曲の検索の結果の行から、アルバムの候補を作る（アルバムの検索に載らないシングルなどを拾う）。
+    /// 補足は「アーティスト • アルバム」の形。アルバムの無い行・重なる ID は除く。
+    /// </summary>
+    public static List<AlbumSummary> AlbumsFromSongs(IEnumerable<Song> songs)
+    {
+        var seen = new HashSet<string>();
+        return songs.Where(s => !s.IsLive && s.Album is { BrowseId: { Length: > 0 } } && seen.Add(s.Album.BrowseId!))
+            .Select(s => new AlbumSummary(s.Album!.BrowseId!, s.Album.Title, s.ArtistsText, s.ThumbnailUrl))
+            .ToList();
+    }
+
     private static readonly HashSet<string> KindWords = new(StringComparer.OrdinalIgnoreCase) { "アルバム", "シングル", "EP", "Album", "Single" };
 
     public static List<MatchCandidate> RankAlbums(SpotifyAlbum album, IEnumerable<AlbumSummary> results, NameAliases? aliases = null, int take = MaxCandidates, bool sort = true)

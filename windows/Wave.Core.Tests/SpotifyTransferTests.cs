@@ -347,6 +347,8 @@ public class SpotifyTransferTests
         public readonly HashSet<string> Liked = ["already-liked"];
         public readonly List<string> Calls = [];
         public int FailSearches;
+        public List<Song>? SongRows;
+        public List<AlbumSummary>? AlbumRows;
         public bool LoggedOut;
         public int CancelAfterAdds = -1;
         public CancellationTokenSource? Cancel;
@@ -357,6 +359,7 @@ public class SpotifyTransferTests
             if (FailSearches-- > 0) return Task.FromResult(ApiResult<IReadOnlyList<Song>>.Failed(FailureKind.Network));
             if (RefuseSearches-- > 0) return Task.FromResult(ApiResult<IReadOnlyList<Song>>.Failed(FailureKind.Http, 403));
             if (ThrottleSearches-- > 0) return Task.FromResult(ApiResult<IReadOnlyList<Song>>.Failed(FailureKind.NotLoggedIn, 403));
+            if (SongRows is { } rows) return Task.FromResult(ApiResult<IReadOnlyList<Song>>.Ok(rows));
             var title = query.Split(' ', 2).Last();
             return Task.FromResult(ApiResult<IReadOnlyList<Song>>.Ok([S("v-" + title, title, "緑黄色社会")]));
         }
@@ -365,7 +368,7 @@ public class SpotifyTransferTests
             Task.FromResult(ApiResult<IReadOnlyList<Song>>.Ok([]));
 
         public Task<ApiResult<IReadOnlyList<AlbumSummary>>> SearchAlbumsAsync(string query, CancellationToken cancel) =>
-            Task.FromResult(ApiResult<IReadOnlyList<AlbumSummary>>.Ok([new AlbumSummary("MPREb_1", "SINGALONG", "アルバム • 緑黄色社会", null)]));
+            Task.FromResult(ApiResult<IReadOnlyList<AlbumSummary>>.Ok(AlbumRows ?? [new AlbumSummary("MPREb_1", "SINGALONG", "アルバム • 緑黄色社会", null)]));
 
         public Task<ApiResult<IReadOnlyList<ArtistSummary>>> SearchArtistsAsync(string query, CancellationToken cancel) =>
             Task.FromResult(ApiResult<IReadOnlyList<ArtistSummary>>.Ok([new ArtistSummary("UC1", "緑黄色社会", null, null)]));
@@ -459,6 +462,48 @@ public class SpotifyTransferTests
         Assert.Equal(TransferStop.None, await runner.MatchAsync(s, default));
         Assert.DoesNotContain(s.ItemsInScope(), i => i.Status == MatchStatus.Pending);
         Assert.Equal([60, 120], waits);
+    }
+
+    private static Song SongInAlbum(string id, string title, string artist, string album, string browseId) =>
+        new(id, title, [new ArtistRef(artist, null)], new AlbumRef(album, browseId), 200, null, Song.KindSong);
+
+    [Fact]
+    public void AlbumsFromSongsKeepsEachAlbumOnceWithTheArtistInTheSubtitle()
+    {
+        var albums = TransferMatcher.AlbumsFromSongs([
+            SongInAlbum("v1", "雨上がりの空とキミ", "LiSA", "雨上がりの空とキミ", "MPREb_x"),
+            SongInAlbum("v2", "雨上がりの空とキミ (inst)", "LiSA", "雨上がりの空とキミ", "MPREb_x"),
+            S("v3", "動画だけ", "LiSA")]);
+        var a = Assert.Single(albums);
+        Assert.Equal("MPREb_x", a.BrowseId);
+        Assert.Equal("LiSA", a.Subtitle);
+    }
+
+    [Fact]
+    public async Task AlbumMissingFromAlbumSearchIsFoundFromTheSongSearch()
+    {
+        var lib = new SpotifyLibrary([], [], [new SpotifyAlbum("雨上がりの空とキミ", ["LiSA"])], [], []);
+        var s = TransferSession.From(lib, "api", "spotify", 0);
+        var w = new FakeWriter
+        {
+            AlbumRows = [],
+            SongRows = [SongInAlbum("v1", "雨上がりの空とキミ", "LiSA", "雨上がりの空とキミ", "MPREb_x")],
+        };
+        await Runner(w).MatchAsync(s, default);
+        var item = s.ItemsInScope().Single(i => i.Kind == TransferKind.Album);
+        Assert.Equal(MatchStatus.Matched, item.Status);
+        Assert.Equal("MPREb_x", item.Candidates[0].Id);
+    }
+
+    [Fact]
+    public async Task SongSearchIsNotUsedWhenAlbumSearchAlreadyMatches()
+    {
+        var lib = new SpotifyLibrary([], [], [new SpotifyAlbum("SINGALONG", ["緑黄色社会"])], [], []);
+        var s = TransferSession.From(lib, "api", "spotify", 0);
+        var w = new FakeWriter();
+        await Runner(w).MatchAsync(s, default);
+        Assert.Equal(MatchStatus.Matched, s.ItemsInScope().Single(i => i.Kind == TransferKind.Album).Status);
+        Assert.DoesNotContain(w.Calls, c => c.StartsWith("search:"));
     }
 
     [Fact]

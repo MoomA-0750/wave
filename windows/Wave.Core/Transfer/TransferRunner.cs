@@ -323,7 +323,17 @@ public sealed class TransferRunner(ITransferWriter writer, Action<TransferSessio
                 var album = item.AsAlbum();
                 var albums = await RetryAsync(() => writer.SearchAlbumsAsync(TransferMatcher.AlbumQuery(album, Aliases), cancel), cancel);
                 if (!albums.IsOk && albums.Failure != FailureKind.Parse) return StopOf(albums);
-                item.SetCandidates(TransferMatcher.RankAlbums(album, albums.Value ?? [], Aliases));
+                var candidates = TransferMatcher.RankAlbums(album, albums.Value ?? [], Aliases);
+                if (TransferMatcher.StatusOf(candidates) != MatchStatus.Matched)
+                {
+                    // アルバムの検索に載らないシングルなどは、同じ語の曲の検索の行のアルバムから探す
+                    await delay(searchGap, cancel);
+                    var query = TransferMatcher.AlbumQuery(album, Aliases);
+                    var songs = await RetryAsync(() => writer.SearchSongsAsync(query, cancel), cancel);
+                    if (!songs.IsOk && songs.Failure != FailureKind.Parse) return StopOf(songs);
+                    candidates = TransferMatcher.Merge(candidates, TransferMatcher.RankAlbums(album, TransferMatcher.AlbumsFromSongs(songs.Value ?? []), Aliases));
+                }
+                item.SetCandidates(candidates);
                 return TransferStop.None;
             }
             default:
