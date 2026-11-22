@@ -493,7 +493,7 @@ public static class DebugCommands
                 await AppServices.Transfer.MatchAsync();
                 break;
             case "transfer-rematch-unsure":
-                await AppServices.Transfer.RematchUnsureAsync();
+                await AppServices.Transfer.RematchUnsureAsync(arg == "album" ? Wave.Core.Transfer.TransferKind.Album : null);
                 break;
             case "transfer-ai":
                 // Claude で探す（数を与えれば先頭のその数だけ）

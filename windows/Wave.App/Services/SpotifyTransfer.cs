@@ -292,11 +292,11 @@ public sealed partial class SpotifyTransfer(DispatcherQueue ui)
     }
 
     /// <summary>要確認・見つからないものだけを突き合わせ直す（本人が選んだもの・外したものはそのまま）。</summary>
-    public async Task RematchUnsureAsync()
+    public async Task RematchUnsureAsync(TransferKind? only = null)
     {
         if (Busy is not null || Session is not { } session) return;
         var n = 0;
-        foreach (var item in session.ItemsInScope().Where(i => i.Status is MatchStatus.Review or MatchStatus.NotFound && !i.Manual && !i.Excluded && !i.AiPicked))
+        foreach (var item in session.ItemsInScope().Where(i => i.Status is MatchStatus.Review or MatchStatus.NotFound && (only is null || i.Kind == only) && !i.Manual && !i.Excluded && !i.AiPicked))
         {
             item.Status = MatchStatus.Pending;
             n++;
