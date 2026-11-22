@@ -348,6 +348,7 @@ public class SpotifyTransferTests
         public readonly List<string> Calls = [];
         public int FailSearches;
         public List<Song>? SongRows;
+        public Func<string, List<Song>>? SongRowsFor;
         public List<AlbumSummary>? AlbumRows;
         public bool LoggedOut;
         public int CancelAfterAdds = -1;
@@ -359,6 +360,7 @@ public class SpotifyTransferTests
             if (FailSearches-- > 0) return Task.FromResult(ApiResult<IReadOnlyList<Song>>.Failed(FailureKind.Network));
             if (RefuseSearches-- > 0) return Task.FromResult(ApiResult<IReadOnlyList<Song>>.Failed(FailureKind.Http, 403));
             if (ThrottleSearches-- > 0) return Task.FromResult(ApiResult<IReadOnlyList<Song>>.Failed(FailureKind.NotLoggedIn, 403));
+            if (SongRowsFor is { } rowsFor) return Task.FromResult(ApiResult<IReadOnlyList<Song>>.Ok(rowsFor(query)));
             if (SongRows is { } rows) return Task.FromResult(ApiResult<IReadOnlyList<Song>>.Ok(rows));
             var title = query.Split(' ', 2).Last();
             return Task.FromResult(ApiResult<IReadOnlyList<Song>>.Ok([S("v-" + title, title, "緑黄色社会")]));
@@ -515,6 +517,21 @@ public class SpotifyTransferTests
             TransferMatcher.RetryAlbumQueries(new SpotifyAlbum("東京ウインターセッション", ["HoneyWorks feat. 瀬戸口優"])));
         Assert.Equal(["言わないけどね。"], TransferMatcher.RetryAlbumQueries(new SpotifyAlbum("言わないけどね。 (アニメ盤)", ["大原ゆい子"])).Skip(1));
         Assert.Equal(["勇気のバトン"], TransferMatcher.RetryAlbumQueries(new SpotifyAlbum("勇気のバトン 通常盤", ["Various Artists"])));
+    }
+
+    [Fact]
+    public void RetryTrackQueriesDropEditionAndArtist() =>
+        Assert.Equal(["三月のパンタシア ルビコン", "ルビコン"], TransferMatcher.RetryTrackQueries(new SpotifyTrack("ルビコン -Complete ver.-", ["三月のパンタシア"], null, 1)));
+
+    [Fact]
+    public async Task TrackMissingFromFirstSearchIsFoundByTheSecondQuery()
+    {
+        var lib = new SpotifyLibrary([], [new SpotifyTrack("Foo -Complete ver.-", ["緑黄色社会"], null, 1)], [], [], []);
+        var s = TransferSession.From(lib, "api", "spotify", 0);
+        var w = new FakeWriter { SongRowsFor = q => q == "Foo" || q == "緑黄色社会 Foo" ? [S("v-foo", "Foo", "緑黄色社会")] : [] };
+        await Runner(w).MatchAsync(s, default);
+        var item = s.ItemsInScope().Single(i => i.Kind == TransferKind.Track);
+        Assert.Equal("v-foo", item.Chosen?.Id);
     }
 
     [Fact]

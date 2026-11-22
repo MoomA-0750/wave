@@ -241,6 +241,16 @@ public static partial class TransferMatcher
         return queries.Where(q => q.Length > 0 && q != first).Distinct().ToList();
     }
 
+    /// <summary>曲を探す 2 本目の検索語（アルバムと同じ考え。1 本目と同じ語は除く）。</summary>
+    public static List<string> RetryTrackQueries(SpotifyTrack track, NameAliases? aliases = null)
+    {
+        var first = SongQuery(track, aliases);
+        var title = StripEdition(StripDecorations(track.Title));
+        var artists = RealArtists(track.Artists);
+        var artist = artists.Count > 0 ? ArtistQuery(FeatTrailing().Replace(artists[0], "").Trim(), aliases) : "";
+        return new List<string> { (artist + " " + title).Trim(), title }.Where(q => q.Length > 0 && q != first).Distinct().ToList();
+    }
+
     /// <summary>題の後ろの版の飾りを外す。外して空になるなら元のまま。</summary>
     public static string StripEdition(string title)
     {
