@@ -91,7 +91,7 @@ struct MiniPlayer: View {
 
     /// 横へ決まった動きだけ曲送りにする（斜めは取らない）。隣が無い方へは少しだけ動いて戻る。
     private func swipe(_ player: PlayerService) -> some Gesture {
-        DragGesture(minimumDistance: 10)
+        DragGesture(minimumDistance: 6)
             .onChanged { value in
                 guard !settling else { return }
                 let x = value.translation.width
@@ -145,38 +145,39 @@ struct MiniPlayerCard: View {
 
     var body: some View {
         let player = AppServices.player!
-        let next = drag == 0 ? nil : neighbor(player, drag < 0 ? 1 : -1)
-        ZStack {
-            if let next {
-                // 進み具合 p（0〜1）。今の枠の幅は (1-p)、隣の枠の幅は p（すき間の分を引く）
-                let p = min(1, abs(drag) / max(width * 0.8, 1))
-                // すき間は途中だけ開き、入れ替わり始めと終わりでは 0（欄いっぱいの1つの枠になる）
-                let space = gap * sin(.pi * p)
-                let total = max(width - space, 0)
-                let oldW = total * (1 - p), newW = total * p
-                let toLeft = drag < 0   // 左へ払うと、今の枠は左に、隣の枠は右に
-                HStack(spacing: space) {
-                    if toLeft {
-                        pill(player.current, player, source: true, width: oldW, align: .leading, content: max(0, 1 - 1.6 * p))
-                        pill(next, player, source: false, width: newW, align: .trailing, content: max(0, 1.6 * p - 0.6))
-                    } else {
-                        pill(next, player, source: false, width: newW, align: .leading, content: max(0, 1.6 * p - 0.6))
-                        pill(player.current, player, source: true, width: oldW, align: .trailing, content: max(0, 1 - 1.6 * p))
-                    }
-                }
-            } else {
-                // 隣が無い方へは、少し引っ張られて戻る
-                pill(player.current, player, source: true, width: width, align: .center, content: 1)
-                    .offset(x: drag)
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
-        .gesture(swipe(player))
+        // 欄の幅は、中の枠に左右されない土台で測る（枠が幅を決めると、横向きから戻ったときに広がらなくなる）
+        Color.clear
+            .frame(maxWidth: .infinity)
+            .frame(height: 52)
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+            .overlay(alignment: .leading) { pills(player) }
+            .gesture(swipe(player))
     }
 
-    /// 1つの枠。中身は欄いっぱいの幅で組んで、枠の幅で切る（文字は潰さない）。背景のガラスは枠の形に付く。
-    private func pill(_ song: Song?, _ player: PlayerService, source: Bool, width w: CGFloat, align: Alignment, content: CGFloat) -> some View {
+    /// 2つの枠。今の枠と隣の枠を常に木に置き、幅だけを変える（途中で作り直さないので、払い始めがカクつかない）。
+    private func pills(_ player: PlayerService) -> some View {
+        let toLeft = drag <= 0   // 左へ払うと、今の枠は左に、隣の枠は右に
+        let next = drag == 0 ? nil : neighbor(player, toLeft ? 1 : -1)
+        // 進み具合 p（0〜1）。今の枠の幅は (1-p)、隣の枠の幅は p（すき間の分を引く）
+        let p = next == nil ? 0 : min(1, abs(drag) / max(width * 0.8, 1))
+        // すき間は途中だけ開き、入れ替わり始めと終わりでは 0（欄いっぱいの1つの枠になる）
+        let space = gap * sin(.pi * p)
+        let total = max(width - space, 0)
+        let oldW = total * (1 - p), newW = total * p
+        let travel: CGFloat = 36   // 中身が動く量
+        let dir: CGFloat = toLeft ? -1 : 1
+        return ZStack(alignment: .leading) {
+            pill(player.current, player, source: true, width: oldW, align: toLeft ? .leading : .trailing, content: max(0, 1 - 1.6 * p), shift: dir * p * travel)
+                .offset(x: toLeft ? 0 : newW + space)
+                .offset(x: next == nil ? drag : 0)
+            pill(next ?? player.current, player, source: false, width: newW, align: toLeft ? .trailing : .leading, content: max(0, 1.6 * p - 0.6), shift: -dir * (1 - p) * travel)
+                .offset(x: toLeft ? oldW + space : 0)
+                .opacity(next == nil ? 0 : 1)
+        }
+    }
+
+    /// 1つの枠。中身は欄いっぱいの幅で組んで、枠の幅で切る（文字は潰さない）。中身は払いに合わせて横へ動く。背景のガラスは枠の形に付く。
+    private func pill(_ song: Song?, _ player: PlayerService, source: Bool, width w: CGFloat, align: Alignment, content: CGFloat, shift: CGFloat) -> some View {
         HStack(spacing: Kasane.Space.s3) {
             Cover(url: Ui.small(song?.thumbnailUrl), size: 36, radius: Kasane.Radius.sm)
             VStack(alignment: .leading, spacing: 1) {
@@ -214,6 +215,7 @@ struct MiniPlayerCard: View {
             .padding(.horizontal, Kasane.Space.s5)
             .padding(.bottom, 3)
         }
+        .offset(x: shift)
         .opacity(content)
         .frame(width: max(w, 0), height: 52, alignment: align)
         .clipShape(Capsule())

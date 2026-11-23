@@ -98,7 +98,7 @@ struct RootView: View {
         .background(alignment: .bottomLeading) { MusicPipAnchor().frame(width: 16, height: 9) }
         // 本体の音量を動かすための見えない部品（再生画面を開いていない間・裏にいる間も、ほかの端末から届いた音量を本体へ入れる）
         .background { SystemVolumeAnchor().frame(width: 1, height: 1).offset(x: -2000).allowsHitTesting(false) }
-        .overlay(alignment: .bottom) { ToastHost().padding(.bottom, player.current != nil ? 120 : 64) }
+        .overlay(alignment: .bottom) { ToastHost().padding(.bottom, player.current != nil ? (shell.miniCustom ? 136 : 120) : 64) }
         .fullScreenCover(isPresented: $shell.playerOpen) {
             NowPlayingView().navigationTransition(.zoom(sourceID: MiniPlayer.zoomId, in: playerZoom))
         }
@@ -244,21 +244,17 @@ private struct MiniPlayerAccessory: ViewModifier {
     var show: Bool
     var zoom: Namespace.ID
     @State private var shell = IOSShell.shared
-    /// 下の安全な余白（ホームバーの分）。
-    private static var bottomInset: CGFloat {
-        (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.keyWindow?.safeAreaInsets.bottom ?? 34
-    }
     var open: () -> Void
 
     func body(content: Content) -> some View {
         if #available(iOS 26.0, *), show, shell.miniCustom {
             // 枠を自前で描き、タブバーの上に置く（OS の付属部品ではないので、スクロールで畳む動きは無い）
             content
-                .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 52).allowsHitTesting(false) }
+                .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 60).allowsHitTesting(false) }
                 .overlay(alignment: .bottom) {
                     MiniPlayerCard(zoom: zoom, open: open)
                         .padding(.horizontal, Kasane.Space.s3)
-                        .padding(.bottom, Self.bottomInset + 48)
+                        .padding(.bottom, 56) // 下の安全な余白からの位置。タブバーの上に 8pt あける
                 }
         } else if #available(iOS 26.0, *), show {
             content
