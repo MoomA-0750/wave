@@ -12,6 +12,7 @@ struct SettingsPageView: View {
     @State private var aiConfigured = AppServices.ai.configured
     @State private var confirmLogout = false
     @State private var confirmDeleteDownloads = false
+    @State private var keepPlaying = AppServices.settings.keepPlayingWhenClosed
     @State private var discordOn = AppServices.settings.discordPresence
     @State private var discordId = AppServices.settings.discordClientId ?? ""
     @State private var discordState = SettingsPageView.discordStateText()
@@ -236,6 +237,11 @@ struct SettingsPageView: View {
                     }
                 }
             }
+        }
+        card {
+            toggleRow(L.t("窓を閉じても再生を続ける", "Keep playing when the window is closed"),
+                      L.t("赤丸で窓を閉じても wave を終了せず、裏で曲を鳴らし続けます。Dock のアイコンを押すと窓が戻ります", "Closing the window with the red button keeps wave running and playing in the background. Click the Dock icon to bring the window back"),
+                      isOn: Binding(get: { keepPlaying }, set: { keepPlaying = $0; AppServices.settings.keepPlayingWhenClosed = $0; AppServices.settings.save() }))
         }
         card {
             HStack {

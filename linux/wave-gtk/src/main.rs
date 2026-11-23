@@ -56,7 +56,52 @@ fn add_open_actions(app: &adw::Application) {
     }
 }
 
+thread_local! {
+    /// 設定「窓を閉じても再生を続ける」で窓を隠している間、アプリを終わらせない印。
+    static HOLD: std::cell::RefCell<Option<gtk::gio::ApplicationHoldGuard>> = const { std::cell::RefCell::new(None) };
+    /// 終了を頼まれた（メディアの終了・曲が止まったまま 10 分）。窓を隠さず閉じる。
+    static QUITTING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// 隠していた窓を前に出す。印も外す。
+fn show_main_window() {
+    HOLD.with(|h| h.borrow_mut().take());
+    if let Some(window) = WINDOW.with(|w| w.borrow().clone()) {
+        window.present();
+    }
+}
+
+/// 窓を閉じられたとき: 設定がオンで曲が鳴っているなら、終了せず窓だけ隠す。曲が止まって 10 分たったら終了する。
+fn hide_if_keep_playing(window: &adw::ApplicationWindow, playing: impl Fn() -> bool + 'static) -> gtk::glib::Propagation {
+    if QUITTING.with(|q| q.get()) || !settings::Settings::load().keep_playing_when_closed || !playing() {
+        return gtk::glib::Propagation::Proceed;
+    }
+    let Some(app) = window.application() else { return gtk::glib::Propagation::Proceed };
+    window.set_visible(false);
+    HOLD.with(|h| *h.borrow_mut() = Some(app.hold()));
+    let (window, mut idle_minutes) = (window.clone(), 0u32);
+    gtk::glib::timeout_add_seconds_local(60, move || {
+        if HOLD.with(|h| h.borrow().is_none()) {
+            return gtk::glib::ControlFlow::Break; // 窓が戻った
+        }
+        idle_minutes = if playing() { 0 } else { idle_minutes + 1 };
+        if idle_minutes >= 10 {
+            QUITTING.with(|q| q.set(true));
+            HOLD.with(|h| h.borrow_mut().take());
+            window.close();
+            return gtk::glib::ControlFlow::Break;
+        }
+        gtk::glib::ControlFlow::Continue
+    });
+    gtk::glib::Propagation::Stop
+}
+
 fn build_window(app: &adw::Application) {
+    // 隠している窓があれば、新しく作らずそれを出す（wave をもう一度開いたとき）
+    if WINDOW.with(|w| w.borrow().is_some()) && HOLD.with(|h| h.borrow().is_some()) {
+        show_main_window();
+        return;
+    }
     add_open_actions(app);
     // 窓が前面にあるか（端末の連携が、裏でメディアキーを押したときにほかの端末の再生を黙って引き取らないのに使う）
     connect::set_foreground(|| {
@@ -235,10 +280,15 @@ async fn show_home(toolbar: &adw::ToolbarView, repo: &MusicRepository) {
     let (shell, app) = ui::shell::build(services.clone(), video, on_logout);
     if let Some(window) = toolbar.root().and_downcast::<adw::ApplicationWindow>() {
         // GNOME のメディアの操作・メディアキーから操作できるようにする（窓がある間だけ出す）
-        let (raise, quit) = (window.clone(), window.clone());
+        let quit = window.clone();
+        let playing_state = services.playback.clone();
+        window.connect_close_request(move |w| {
+            let playback = playing_state.clone();
+            hide_if_keep_playing(w, move || playback.player().is_playing())
+        });
         // ログアウトして入り直したら、古い方を外してから置き換える
         MPRIS.with(|m| *m.borrow_mut() = None);
-        let started = mpris::start(playback, services.connect.clone(), move || raise.present(), move || quit.close());
+        let started = mpris::start(playback, services.connect.clone(), show_main_window, move || { QUITTING.with(|q| q.set(true)); quit.close() });
         MPRIS.with(|m| *m.borrow_mut() = Some(started));
     }
     APP.with(|a| *a.borrow_mut() = Some(app.clone()));

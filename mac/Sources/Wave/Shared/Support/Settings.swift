@@ -48,6 +48,8 @@ final class Settings: Codable {
     var smartDownloadCount = 50
     /// スマートダウンロードの容量の上限（GB。0 は無制限。手で取った分は数えない）。
     var smartDownloadLimitGb = 5
+    /// 窓を×（赤丸）で閉じても、アプリを終了せず裏で曲を鳴らし続ける（Mac・Windows・Linux。既定はオフ）。
+    var keepPlayingWhenClosed = false
 
     /// 「曲名を元の表記で」の説明（Android の settings_original_titles_summary と同じ）。
     static var originalTitlesDetail: String {
@@ -62,7 +64,7 @@ final class Settings: Codable {
     enum CodingKeys: String, CodingKey {
         case volume, shuffle, repeatMode, sendHistory, rightPaneOpen, releaseNotices, librarySort, libraryGrid, playlistOrders, language, originalTitles,
             searchHistory, relayV2Url, relayV2Host, aiUrl, aiToken, aiName, discordPresence, discordClientId, musicPip, lyricsInArtist, lyricsInLiveActivity, lyricsInArtwork,
-            pinnedTab, downloadNetwork, smartDownloads, smartDownloadCount, smartDownloadLimitGb
+            pinnedTab, downloadNetwork, smartDownloads, smartDownloadCount, smartDownloadLimitGb, keepPlayingWhenClosed
     }
 
     // 項目が足りないファイル（前の版）も読めるよう、無い項目は既定のまま
@@ -96,6 +98,7 @@ final class Settings: Codable {
         smartDownloads = try c.decodeIfPresent(Bool.self, forKey: .smartDownloads) ?? smartDownloads
         smartDownloadCount = try c.decodeIfPresent(Int.self, forKey: .smartDownloadCount) ?? smartDownloadCount
         smartDownloadLimitGb = try c.decodeIfPresent(Int.self, forKey: .smartDownloadLimitGb) ?? smartDownloadLimitGb
+        keepPlayingWhenClosed = try c.decodeIfPresent(Bool.self, forKey: .keepPlayingWhenClosed) ?? keepPlayingWhenClosed
     }
 
     static func load() -> Settings {

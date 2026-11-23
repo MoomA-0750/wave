@@ -167,6 +167,12 @@ public static class DebugCommands
             case "video-pip":
                 window.DebugVideoPip(arg != "off");
                 break;
+            case "window-close":
+                window.DebugPressClose(); // ×と同じ Closing の経路（設定「窓を閉じても再生を続ける」の確かめ用）
+                break;
+            case "window-show":
+                window.ShowFromBackground();
+                break;
             case "window-fullscreen":
                 window.DebugWindowFullScreen(arg == "on");
                 break;

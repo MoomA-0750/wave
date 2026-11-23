@@ -37,11 +37,13 @@ pub struct Settings {
     pub right_pane_open: bool,
     /// 画面の言語（""＝端末に合わせる・"ja"・"en"）。次の起動から効く。Windows・Android と同じ
     pub ui_language: String,
+    /// 窓を×で閉じても終了せず、裏で曲を鳴らし続ける（既定は切。Mac・Windows と同じ）。
+    pub keep_playing_when_closed: bool,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { smart_downloads: false, smart_download_count: DEFAULT_COUNT, smart_download_limit_gb: DEFAULT_LIMIT_GB, download_network: DownloadNetwork::Unmetered, relay_url: None, send_history: true, release_notices: true, original_titles: false, search_history: Vec::new(), discord_presence: false, discord_client_id: None, library_sort: "recent".into(), library_grid: false, playlist_orders: Default::default(), right_pane_open: true, ui_language: String::new() }
+        Self { smart_downloads: false, smart_download_count: DEFAULT_COUNT, smart_download_limit_gb: DEFAULT_LIMIT_GB, download_network: DownloadNetwork::Unmetered, relay_url: None, send_history: true, release_notices: true, original_titles: false, search_history: Vec::new(), discord_presence: false, discord_client_id: None, library_sort: "recent".into(), library_grid: false, playlist_orders: Default::default(), right_pane_open: true, ui_language: String::new(), keep_playing_when_closed: false }
     }
 }
 
@@ -159,6 +161,17 @@ impl Settings {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn keep_playing_when_closed_is_off_by_default_and_survives_a_round_trip() {
+        assert!(!Settings::default().keep_playing_when_closed);
+        // 前の版のファイル（この項目が無い）も読める
+        let old: Settings = serde_json::from_str("{\"send_history\":false}").unwrap();
+        assert!(!old.keep_playing_when_closed);
+        let on = Settings { keep_playing_when_closed: true, ..Settings::default() };
+        let back: Settings = serde_json::from_str(&serde_json::to_string(&on).unwrap()).unwrap();
+        assert!(back.keep_playing_when_closed);
+    }
 
     #[test]
     fn search_history_moves_repeats_to_the_front_and_keeps_30() {

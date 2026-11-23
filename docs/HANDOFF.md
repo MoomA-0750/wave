@@ -1,6 +1,6 @@
 # 引き継ぎ（今の状態）
 
-更新: 2026-11-23（再生画面の要望のフェーズ 3 の後）（セッション 16a2e897、ブランチ ios-app）
+更新: 2026-11-23（再生画面の要望のフェーズ 4 の後）（セッション 16a2e897、ブランチ ios-app）
 
 ## 目的
 
@@ -38,7 +38,7 @@ Windows の wave の「Spotify から移す」。Spotify のプレイリスト�
 
 ## 再生画面まわりの要望 8 件（本人の依頼 11-23。計画: `docs/player-requests-plan.md`）
 
-フェーズ 1（調べ）・2（キュー）・3（PinP）は済み。次はフェーズ 4 窓を閉じても止めない設定、続いて 5 ビデオの維持と先読み。Mac の変更は Linux 機から組み立てられないので「未確認」と書き、本人に Mac で確かめてもらう。Windows は to-fu（`scripts/win.sh`）、Android は Fold 7・Pixel 3 で確かめる。まず `docs/player-requests-plan.md` を読む
+フェーズ 1（調べ）・2（キュー）・3（PinP）・4（窓を閉じても止めない設定）は済み。次はフェーズ 5 ビデオの維持と先読み。Mac の変更は Linux 機から組み立てられないので「未確認」と書き、本人に Mac で確かめてもらう。Windows は to-fu（`scripts/win.sh`）、Android は Fold 7・Pixel 3 で確かめる。まず `docs/player-requests-plan.md` を読む
 
 フェーズ 2 の結果（キューを「履歴＋今＋次」の1本の一覧にし、開いたとき・曲が替わったとき今の曲を上へ合わせる。「キュー｜履歴」のタブは廃止）:
 - Windows: to-fu で確認済み（履歴が上に出る・今の曲が上に来る）。`MainWindow.xaml.cs` の `RenderQueue`
@@ -52,6 +52,12 @@ Windows の wave の「Spotify から移す」。Spotify のプレイリスト�
 - Mac: **未確認**（`VideoPip.swift` の `PipView` に曲名・評価・シーク、`PlayerBar.swift` の `VideoOrCover` に `inPip` と案内）。Mac で `swift build` と実機の確認が要る
 - Linux GTK: ビルド・試験は通る（`shell.rs` の `mini_window`）が、画面は未確認
 - Android・iOS は OS の PiP で対象外
+
+フェーズ 4（窓を閉じても再生を続ける設定 `keepPlayingWhenClosed`、既定は切）の結果:
+- Windows: to-fu で確認済み（`MainWindow.xaml.cs` の `InitBackgroundTransfer` の `Closing`。窓が隠れ・プロセスが残り・再生が止まらない。戻すのは通知か wave をもう一度開く。`window-close`・`window-show` の開発用命令）。通知の見た目は未確認。設定画面のスイッチも画面では未確認
+- Linux GTK: ビルドと設定の試験は通る（`main.rs` の `hide_if_keep_playing`・`HOLD`）が、画面は未確認
+- Mac: **未確認**（`WaveApp.swift` の `applicationShouldTerminateAfterLastWindowClosed`・`applicationShouldHandleReopen`、`SettingsPage.swift` のスイッチ）。Mac で `swift build` と、赤丸で閉じて Dock で戻ることの確認が要る
+- `SPEC.md`・`docs/decisions.md` を更新済み
 
 ## 次にやること（Spotify から移す・AI 識別。再生画面の要望と並行）
 

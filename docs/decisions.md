@@ -1478,3 +1478,10 @@
 - 決め: Windows は 2 枚目の `Window`（`PipWindow.cs`。最前面・リサイズ可）に映像を出す。映像は 1 つの枠にしか映せないので、`SetMediaPlayer` を付け替え、元の枠には「PinP に出しています」を出す。×で閉じたら元の枠へ戻す。Mac は `VideoOrCover` が小窓を出している間は案内を出す。3 端末の小窓に曲名・アーティスト・評価・シークバーを足した
 - 試して分かったこと: to-fu の画面操作では、PinP 窓を一度クリックして前に出さないとホバー（PointerEntered）が届かなかった（窓の外から動かしただけでは出ない）。実際のマウスでは別の挙動かもしれない
 - 曲が替わると主の窓が「曲」の表示に戻るため、PinP も閉じる。維持はフェーズ 5（ビデオの維持）で扱う
+
+## 2026-11-23 窓を閉じても再生を続ける設定（フェーズ 4）
+
+- きっかけ: ×で窓を閉じるとアプリごと終わり、曲が止まる（本人の依頼）
+- 決め: 設定の Bool `keepPlayingWhenClosed`（既定は切）を Mac・Windows・Linux に足す。Mac は `applicationShouldTerminateAfterLastWindowClosed` が設定の反対を返し、Dock の再オープンで窓を戻す。Windows は `AppWindow.Closing` を取り消して窓を隠し、通知（押すと戻る）を 1 回出す。Linux は `connect_close_request` で窓を隠し `app.hold()` で生かす。二重起動では隠した窓を前に出す
+- 曲が止まっていて閉じたときは、隠さず終了する（見えない居座りを作らない）。隠した後に 10 分止まったままでも終了する（Windows・Linux）。トレイの常駐アイコンは作らず、通知・もう一度開く・メディアの操作で戻す
+- 試して分かったこと: Windows の `Window.Close()` は `AppWindow.Closing` を通らず終了する。確かめには ×と同じ WM_SYSCOMMAND（SC_CLOSE）を送る必要があり、開発用命令 `window-close`・`window-show` を足した

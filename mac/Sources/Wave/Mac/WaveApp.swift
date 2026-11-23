@@ -58,6 +58,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         MainActor.assumeIsolated { AppServices.player.saveQueue() }
     }
 
-    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+    /// 設定「窓を閉じても再生を続ける」がオンなら、最後の窓を閉じてもアプリを終了しない（Dock・メニューバーの小窓から戻せる）。
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        MainActor.assumeIsolated { !AppServices.settings.keepPlayingWhenClosed }
+    }
+
+    /// Dock のアイコンを押したとき、窓が無ければ主画面を出し直す（SwiftUI の既定の再オープンに任せる）。
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag { MainActor.assumeIsolated { MenuBarController.showMainWindow() } }
+        return true
+    }
 }
 #endif

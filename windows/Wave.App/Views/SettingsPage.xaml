@@ -157,6 +157,15 @@
                 <ToggleSwitch x:Name="OriginalTitlesSwitch" HorizontalAlignment="Right" OnContent="" OffContent="" MinWidth="0" Toggled="OnOriginalTitlesToggled" />
             </Grid>
 
+            <Grid Padding="16" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" Margin="0,8,0,0"
+                  BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+                <StackPanel Margin="0,0,80,0">
+                    <TextBlock Text="{x:Bind app:L.T('窓を閉じても再生を続ける', 'Keep playing when the window is closed')}" />
+                    <TextBlock Text="{x:Bind app:L.T('×で閉じても wave を終了せず、裏で曲を鳴らし続けます。出てくる通知を押すか、wave をもう一度開くと窓が戻ります。曲を止めて10分たつと終了します', 'Closing with × keeps wave running and playing in the background. Click the notification, or open wave again, to bring the window back. wave quits after 10 minutes without playback')}" Style="{StaticResource SubtleTextStyle}" TextWrapping="Wrap" MaxLines="3" />
+                </StackPanel>
+                <ToggleSwitch x:Name="KeepPlayingSwitch" HorizontalAlignment="Right" OnContent="" OffContent="" MinWidth="0" Toggled="OnKeepPlayingToggled" />
+            </Grid>
+
             <TextBlock Text="{x:Bind app:L.T('このアプリについて', 'About')}" Style="{StaticResource BodyStrongTextBlockStyle}" Margin="0,16,0,4" />
             <StackPanel Padding="{StaticResource KasanePadding4}" CornerRadius="{StaticResource WaveCardCornerRadius}" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                         BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Spacing="{StaticResource KasaneSpace1}">

@@ -40,6 +40,8 @@ public sealed class Settings
     public bool SmartDownloads { get; set; }
     /// <summary>スマートダウンロードの容量の上限（GB。0 は無制限）。手で取った分は数えない。</summary>
     public int SmartDownloadLimitGb { get; set; } = Wave.Core.Downloads.SmartDownloads.DefaultLimitGb;
+    /// <summary>窓を×で閉じても終了せず、裏で曲を鳴らし続ける（既定はオフ）。戻すには通知を押すか、wave をもう一度開く。</summary>
+    public bool KeepPlayingWhenClosed { get; set; }
     public int SmartDownloadCount { get; set; } = Wave.Core.Downloads.SmartDownloads.DefaultCount;
     /// <summary>Spotify から移すときに Web API へログインする、本人が developer.spotify.com で作ったアプリの Client ID（秘密ではない。PKCE なので secret は要らない）。</summary>
     public string? SpotifyClientId { get; set; }

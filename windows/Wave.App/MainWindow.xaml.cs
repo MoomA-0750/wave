@@ -1406,26 +1406,71 @@ public sealed partial class MainWindow : Window
     /// <summary>移す作業のために窓を隠しているか（閉じたが、作業が終わるまでアプリは動いている）。</summary>
     public bool HiddenForTransfer { get; private set; }
 
+    /// <summary>窓を隠して裏で動いているか（移す作業か、設定による再生の継続）。</summary>
+    public bool HiddenInBackground { get; private set; }
+    private bool quitting;
+    private DispatcherQueueTimer? idleQuitTimer;
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern nint PostMessageW(nint hwnd, uint msg, nint wParam, nint lParam);
+
+    /// <summary>開発用: ×を押したのと同じ（WM_SYSCOMMAND の SC_CLOSE）。</summary>
+    public void DebugPressClose() => PostMessageW(WinRT.Interop.WindowNative.GetWindowHandle(this), 0x0112, 0xF060, 0);
+
+    private void UpdateIdleQuit()
+    {
+        if (!HiddenInBackground || HiddenForTransfer || Player.IsPlaying)
+        {
+            idleQuitTimer?.Stop();
+            return;
+        }
+        if (idleQuitTimer is null)
+        {
+            idleQuitTimer = DispatcherQueue.CreateTimer();
+            idleQuitTimer.Interval = TimeSpan.FromMinutes(10);
+            idleQuitTimer.IsRepeating = false;
+            idleQuitTimer.Tick += (_, _) =>
+            {
+                if (!HiddenInBackground || HiddenForTransfer || Player.IsPlaying) return;
+                AppPaths.Log("window hidden: idle quit");
+                quitting = true;
+                Close();
+            };
+        }
+        if (!idleQuitTimer.IsRunning) idleQuitTimer.Start();
+    }
+
     private void InitBackgroundTransfer()
     {
         var transfer = AppServices.Transfer;
         // 突き合わせ・書き込みの途中で閉じたら、終わらせずに窓だけ隠す（再生は止める。閉じたのに鳴り続けないように）
         AppWindow.Closing += (_, e) =>
         {
+            if (quitting) return;
             if (pip) SetPip(false);
-            if (!transfer.RunsLong) return;
+            // 設定「窓を閉じても再生を続ける」: 鳴っているなら、終了せず窓だけ隠して再生を続ける。鳴っていなければ終了する
+            var keepPlaying = AppServices.Settings.KeepPlayingWhenClosed && Player.IsPlaying;
+            if (!transfer.RunsLong && !keepPlaying) return;
             e.Cancel = true;
-            HiddenForTransfer = true;
-            if (Player.IsPlaying) Player.TogglePlay();
+            HiddenForTransfer = transfer.RunsLong;
+            HiddenInBackground = true;
+            if (!keepPlaying && Player.IsPlaying) Player.TogglePlay();
             Player.SaveQueue();
             AppWindow.Hide();
-            AppPaths.Log($"transfer hidden busy={transfer.Busy}");
-            Toasts.Show(L.T("wave は裏で続けています", "wave is still working"),
-                transfer.Busy == "match"
-                    ? L.T("Spotify から移すものを YouTube Music で探しています。終わったら知らせます", "Finding your Spotify items on YouTube Music. You'll be notified when it's done")
-                    : L.T("YouTube Music に書き込んでいます。終わったら知らせます", "Writing to YouTube Music. You'll be notified when it's done"),
-                "transfer=1");
+            AppPaths.Log($"window hidden busy={transfer.Busy} keepPlaying={keepPlaying}");
+            if (transfer.RunsLong)
+                Toasts.Show(L.T("wave は裏で続けています", "wave is still working"),
+                    transfer.Busy == "match"
+                        ? L.T("Spotify から移すものを YouTube Music で探しています。終わったら知らせます", "Finding your Spotify items on YouTube Music. You'll be notified when it's done")
+                        : L.T("YouTube Music に書き込んでいます。終わったら知らせます", "Writing to YouTube Music. You'll be notified when it's done"),
+                    "transfer=1");
+            else
+                Toasts.Show(L.T("wave は裏で再生しています", "wave is playing in the background"),
+                    L.T("押すと窓が戻ります。wave をもう一度開いても戻ります", "Click to bring the window back. Opening wave again also works"), "window=1");
+            UpdateIdleQuit();
         };
+        // 隠している間に曲が止まったまま 10 分たったら終了する（窓が無いまま居座らないように）
+        Player.PropertyChanged += (_, _) => DispatcherQueue.TryEnqueue(UpdateIdleQuit);
         transfer.Finished += (kind, stop) =>
         {
             var foreground = !HiddenForTransfer && AppWindow.IsVisible && AppWindow.Presenter is not OverlappedPresenter { State: OverlappedPresenterState.Minimized }
@@ -1449,6 +1494,8 @@ public sealed partial class MainWindow : Window
     {
         var wasHidden = HiddenForTransfer;
         HiddenForTransfer = false;
+        HiddenInBackground = false;
+        idleQuitTimer?.Stop();
         AppWindow.Show();
         if (AppWindow.Presenter is OverlappedPresenter { State: OverlappedPresenterState.Minimized } presenter) presenter.Restore();
         Activate();

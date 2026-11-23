@@ -17,6 +17,7 @@ public sealed partial class SettingsPage : Page
         RenderAi();
         ReleaseSwitch.IsOn = AppServices.Settings.ReleaseNotices;
         OriginalTitlesSwitch.IsOn = AppServices.Settings.OriginalTitles;
+        KeepPlayingSwitch.IsOn = AppServices.Settings.KeepPlayingWhenClosed;
         DiscordSwitch.IsOn = AppServices.Settings.DiscordPresence;
         DiscordIdBox.Text = AppServices.Settings.DiscordClientId ?? "";
         DiscordStateText.Text = DiscordState();
@@ -179,6 +180,13 @@ public sealed partial class SettingsPage : Page
     }
 
     /// <summary>曲名を元の表記で出すか。次の読み取りから効く（開いているページは読み直したときに変わる）。</summary>
+    private void OnKeepPlayingToggled(object sender, RoutedEventArgs e)
+    {
+        if (AppServices.Settings.KeepPlayingWhenClosed == KeepPlayingSwitch.IsOn) return;
+        AppServices.Settings.KeepPlayingWhenClosed = KeepPlayingSwitch.IsOn;
+        AppServices.Settings.Save();
+    }
+
     private void OnOriginalTitlesToggled(object sender, RoutedEventArgs e)
     {
         if (AppServices.Settings.OriginalTitles == OriginalTitlesSwitch.IsOn) return;

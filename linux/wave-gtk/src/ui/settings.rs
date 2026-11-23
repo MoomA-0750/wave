@@ -458,6 +458,19 @@ fn language_group(app: &Rc<App>) -> adw::PreferencesGroup {
         .active(app.downloads.settings.borrow().original_titles)
         .build();
     group.add(&original_titles);
+    let keep_playing = adw::SwitchRow::builder()
+        .title(lang::t("窓を閉じても再生を続ける", "Keep playing when the window is closed"))
+        .subtitle(lang::t("×で閉じても wave を終了せず、裏で曲を鳴らし続けます。メディアの操作か wave をもう一度開くと窓が戻ります。曲を止めて10分たつと終了します", "Closing with × keeps wave running and playing in the background. Use the media controls or open wave again to bring the window back. wave quits after 10 minutes without playback"))
+        .active(app.downloads.settings.borrow().keep_playing_when_closed)
+        .build();
+    group.add(&keep_playing);
+    {
+        let app = app.clone();
+        keep_playing.connect_active_notify(move |row| {
+            let on = row.is_active();
+            app.downloads.update_settings(|s| s.keep_playing_when_closed = on);
+        });
+    }
     {
         // 次の読み取り（ページを開く・検索する）から効く
         let app = app.clone();
