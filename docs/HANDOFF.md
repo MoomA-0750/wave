@@ -42,7 +42,7 @@ Windows の wave の「Spotify から移す」。Spotify のプレイリスト�
 
 ## appshelf への載せ込み（11-23、本人の依頼「全ての版を載せて」）
 
-載せた（`scripts/shelf.sh`、commit ddb29c9e の中身）: Android（wave・build 20261123-133841-202611231331）、Windows（x86_64・20261123-133219-202611231331）、Linux（x86_64・20261123-133926-202611231331-x86_64）、時計（wave-wear・20261123-134505-202611231345）。版番号はすべて 0.1.0。載せていない: macOS・iOS（Mac がログイン画面のままで、署名の画面側のターミナルを開けない。組み立てはできた。Mac にログインしてもらってから `scripts/shelf.sh macos ios`）、Linux aarch64（cramgent に ssh が通らない。通ったら `scripts/shelf.sh linux-arm`）。載せる途中で、時計版が使う compose-bom 2 つの pom の sha256（dl.google.com の公開値と一致を確認）を `gradle/verification-metadata.xml` に足した。Mac の RightPane.swift の閉じ括弧の欠け（別セッションの変更）を直した（Mac でコンパイルが通ることは確認）
+載せた（`scripts/shelf.sh`、commit ddb29c9e の中身）: Android（wave・build 20261123-133841-202611231331）、Windows（x86_64・20261123-133219-202611231331）、Linux（x86_64・20261123-133926-202611231331-x86_64）、時計（wave-wear・20261123-134505-202611231345）。版番号はすべて 0.1.0。Mac にログインしてもらってから macOS（build 202611231459・commit af39bc06）と iOS（build 20261123-150259-202611231502）も載せた。載せていない: Linux aarch64（cramgent に ssh が通らない。通ったら `scripts/shelf.sh linux-arm`）。載せる途中で、時計版が使う compose-bom 2 つの pom の sha256（dl.google.com の公開値と一致を確認）を `gradle/verification-metadata.xml` に足した。Mac の RightPane.swift の閉じ括弧の欠け（別セッションの変更）を直した（Mac でコンパイルが通ることは確認）
 
 ## 再生画面まわりの要望 8 件（本人の依頼 11-23。計画: `docs/player-requests-plan.md`）
 
