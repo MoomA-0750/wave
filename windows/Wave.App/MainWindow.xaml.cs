@@ -644,7 +644,6 @@ public sealed partial class MainWindow : Window
 
     private void SetFullScreen(bool on)
     {
-        if (!on && pip) SetPip(false);
         if (!on && VideoOnlyView.Visibility == Visibility.Visible) SetVideoOnly(false);
         ShowFullView(on);
         // 窓も全画面にする
@@ -690,15 +689,14 @@ public sealed partial class MainWindow : Window
 
     private void OnVideoOnlyClose(object sender, RoutedEventArgs e)
     {
-        if (pip) SetPip(false); else SetVideoOnly(false);
+        SetVideoOnly(false);
     }
 
     private void OnVideoOnlyFullScreen(object sender, RoutedEventArgs e) => SetWindowFullScreen(!WindowFullScreen);
 
     private void OnVideoOnlyDoubleTapped(object sender, Microsoft.UI.Xaml.Input.DoubleTappedRoutedEventArgs e)
     {
-        // 小窓では元の窓に戻す。窓の中では全画面にする・やめる
-        if (pip) SetPip(false); else SetWindowFullScreen(!WindowFullScreen);
+        SetWindowFullScreen(!WindowFullScreen);
     }
 
     /// <summary>映像だけを窓いっぱいに出す・やめる（映像は1つの枠にしか映せないので、出す枠を移す）。「拡大」から開いたときは、やめると元の画面に戻す。</summary>
@@ -713,12 +711,10 @@ public sealed partial class MainWindow : Window
         if (!on && videoOnlyFromExpand) SetFullScreen(false);
     }
 
-    // --- 映像の小窓（PiP）。窓そのものを、ほかの窓の上に浮かぶ小さな窓（CompactOverlay）にして映像だけを出す ---
+    // --- 映像の小窓（PiP）。元の窓とは別の、最前面でリサイズできる窓に映像だけを出す。元の窓には「PinP に出しています」と出す ---
 
     private bool pip;
-    private bool pipWasVideoOnly;
-    private bool pipWasFullScreen;
-    private Windows.Graphics.RectInt32 pipRestoreRect;
+    private PipWindow? pipWindow;
 
     private void OnVideoPip(object sender, RoutedEventArgs e) => SetPip(!pip);
 
@@ -728,24 +724,27 @@ public sealed partial class MainWindow : Window
         if (on)
         {
             if (VideoTab.IsChecked != true || !Player.HasVideo) return;
-            pipWasVideoOnly = VideoOnlyView.Visibility == Visibility.Visible;
-            pipWasFullScreen = WindowFullScreen;
-            pipRestoreRect = new(AppWindow.Position.X, AppWindow.Position.Y, AppWindow.Size.Width, AppWindow.Size.Height);
-            if (!pipWasVideoOnly) SetVideoOnly(true);
+            var source = Player.LiveVideoPlayer ?? (Player.Video is not null ? videoPlayer.Player : null);
+            if (source is null) return;
             pip = true;
-            AppWindow.SetPresenter(AppWindowPresenterKind.CompactOverlay);
-            var scale = Content.XamlRoot?.RasterizationScale ?? 1;
-            AppWindow.Resize(new((int)(480 * scale), (int)(270 * scale)));
+            pipWindow = new PipWindow(source, () => OnLike(this, new RoutedEventArgs()));
+            pipWindow.BackRequested += () => DispatcherQueue.TryEnqueue(() => SetPip(false));
+            pipWindow.Activate();
         }
         else
         {
             pip = false;
-            AppWindow.SetPresenter(pipWasFullScreen ? AppWindowPresenterKind.FullScreen : AppWindowPresenterKind.Overlapped);
-            if (!pipWasFullScreen) AppWindow.MoveAndResize(pipRestoreRect);
-            if (!pipWasVideoOnly) SetVideoOnly(false);
+            var window = pipWindow;
+            pipWindow = null;
+            // 閉じる側からの呼び出し（×）では二重に閉じない
+            try { window?.Close(); } catch { }
+            // 映像を元の枠へ戻す
+            var source = Player.LiveVideoPlayer ?? (Player.Video is not null ? videoPlayer.Player : null);
+            if (source is not null && VideoTab.IsChecked == true)
+                (FullView.Visibility == Visibility.Visible ? FullVideo : PaneVideo).SetMediaPlayer(source);
         }
-        VideoOnlyFullScreenButton.Visibility = Ui.Hide(on);
-        VideoPipIcon.Glyph = on ? "\uEE47" : "\uEE49";
+        PaneVideoPipNote.Visibility = Ui.Show(on);
+        FullVideoPipNote.Visibility = Ui.Show(on && FullView.Visibility == Visibility.Visible);
         AppPaths.Log($"video pip={on}");
     }
 
@@ -761,7 +760,9 @@ public sealed partial class MainWindow : Window
         FullCover.Visibility = Ui.Hide(video);
         FullVideo.Visibility = Ui.Show(video && (Player.LiveVideoPlayer is not null || videoPlayer.Showing));
         FullVideoOnlyButton.Visibility = FullVideo.Visibility;
-        if (!video && VideoOnlyView.Visibility == Visibility.Visible && !pip) SetVideoOnly(false);
+        if (!video && VideoOnlyView.Visibility == Visibility.Visible) SetVideoOnly(false);
+        if (!video && pip) SetPip(false);
+        FullVideoPipNote.Visibility = Ui.Show(pip && FullView.Visibility == Visibility.Visible);
         FullVideoSwitch.Visibility = VideoSwitch.Visibility;
         FullSongTab.IsChecked = !video;
         FullVideoTab.IsChecked = video;
@@ -1359,7 +1360,7 @@ public sealed partial class MainWindow : Window
                 break;
             case Windows.System.VirtualKey.Escape when FullView.Visibility == Visibility.Visible:
                 // 映像だけのときは、まず再生中の画面に戻す
-                if (pip) SetPip(false); else if (VideoOnlyView.Visibility == Visibility.Visible) SetVideoOnly(false); else SetFullScreen(false);
+                if (VideoOnlyView.Visibility == Visibility.Visible) SetVideoOnly(false); else SetFullScreen(false);
                 e.Handled = true;
                 break;
         }
@@ -1411,6 +1412,7 @@ public sealed partial class MainWindow : Window
         // 突き合わせ・書き込みの途中で閉じたら、終わらせずに窓だけ隠す（再生は止める。閉じたのに鳴り続けないように）
         AppWindow.Closing += (_, e) =>
         {
+            if (pip) SetPip(false);
             if (!transfer.RunsLong) return;
             e.Cancel = true;
             HiddenForTransfer = true;

@@ -215,6 +215,7 @@
                                     <Grid>
                                         <Image x:Name="CoverImage" Source="{x:Bind app:Ui.Large(Player.Current.ThumbnailUrl), Mode=OneWay}" Stretch="UniformToFill" />
                                         <MediaPlayerElement x:Name="PaneVideo" AreTransportControlsEnabled="False" Stretch="Uniform" Visibility="Collapsed" IsHitTestVisible="False" />
+                                        <Border x:Name="PaneVideoPipNote" Visibility="Collapsed" Background="Black" CornerRadius="{StaticResource KasaneCornerRadiusLg}"><StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="6"><FontIcon Glyph="&#xEE49;" FontSize="20" Foreground="White" /><TextBlock Text="{x:Bind app:L.T('PinP に出しています', 'Playing in picture-in-picture')}" Foreground="White" TextAlignment="Center" TextWrapping="Wrap" Style="{StaticResource CaptionTextBlockStyle}" /></StackPanel></Border>
                                         <StackPanel x:Name="VideoNotePanel" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="{StaticResource KasaneSpace2}">
                                             <TextBlock x:Name="VideoNote" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" Foreground="White" Style="{StaticResource CaptionTextBlockStyle}" />
                                             <Button x:Name="VideoRetry" HorizontalAlignment="Center" Visibility="Collapsed" Click="OnVideoRetry" Content="{x:Bind app:L.T('もう一度', 'Retry')}" />
@@ -525,6 +526,7 @@
                     <Grid Grid.Row="1">
                         <Image x:Name="FullCover" Stretch="Uniform" HorizontalAlignment="Left" VerticalAlignment="Bottom" />
                         <MediaPlayerElement x:Name="FullVideo" AreTransportControlsEnabled="False" Stretch="Uniform" Visibility="Collapsed" IsHitTestVisible="False" />
+                        <Border x:Name="FullVideoPipNote" Visibility="Collapsed" Background="Black" CornerRadius="{StaticResource KasaneCornerRadiusLg}"><StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="6"><FontIcon Glyph="&#xEE49;" FontSize="28" Foreground="White" /><TextBlock Text="{x:Bind app:L.T('PinP に出しています', 'Playing in picture-in-picture')}" Foreground="White" TextAlignment="Center" TextWrapping="Wrap" Style="{StaticResource CaptionTextBlockStyle}" /></StackPanel></Border>
                         <!-- 映像だけを画面いっぱいに出す -->
                         <Button x:Name="FullVideoOnlyButton" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="10" Visibility="Collapsed" Style="{StaticResource IconButtonStyle}"
                                 Background="#73000000" Foreground="White" CornerRadius="16" Click="OnVideoOnly" ToolTipService.ToolTip="{x:Bind app:L.T('映像だけを窓いっぱいに', 'Video only')}">
