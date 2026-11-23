@@ -27,6 +27,7 @@ import xyz.mooma0750.wave.ui.IconAction
 import xyz.mooma0750.wave.R
 import androidx.media3.common.Player
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.width
@@ -780,7 +781,6 @@ private fun QueueSheet(
 ) {
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
-    var history by rememberSaveable { mutableStateOf(false) }
     // ドラッグの間は手元の並びを動かして見せ、指を離したときに1回だけ再生サービスへ送る
     val rows = remember(state.queue) { state.queue.toMutableStateList() }
     var dragging by remember { mutableStateOf<String?>(null) }
@@ -790,7 +790,7 @@ private fun QueueSheet(
         // キューをプレイリストとして保存（良いラジオの流れを残す。手元のキューのときだけ）
         var saving by remember { mutableStateOf<List<xyz.mooma0750.wave.core.music.Song>?>(null) }
         Row(Modifier.fillMaxWidth().padding(horizontal = KasaneSpace.s4, vertical = KasaneSpace.s2), verticalAlignment = Alignment.CenterVertically) {
-            ChoiceButtonGroup(listOf(stringResource(R.string.nowplaying_queue), stringResource(R.string.nowplaying_history)), if (history) 1 else 0, { history = it == 1 })
+            Text(stringResource(R.string.nowplaying_queue), style = MaterialTheme.typography.titleMediumEmphasized)
             Spacer(Modifier.weight(1f))
             val save = actions.saveQueue
             if (save != null && !remote && controller != null && state.queue.isNotEmpty()) {
@@ -926,18 +926,18 @@ private fun QueueSheet(
                 trailing()
             }
         }
-        if (history) {
-            // もう流れた曲（新しい順）。押すとその曲に戻る
-            val played = (0 until current.coerceAtMost(rows.size)).reversed()
-            LazyColumn(Modifier.fillMaxWidth()) {
-                if (played.isEmpty()) item { Text(stringResource(R.string.nowplaying_history_empty), Modifier.padding(KasaneSpace.s4), color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                items(played.toList(), key = { rows[it].itemId }) { index -> songRow(index, rows[index], movable = false) }
-            }
-        } else {
+        run {
             // 今の曲の直後に続く、自分で足した曲のかたまり
             var userEnd = current + 1
             while (userEnd < rows.size && rows[userEnd].userAdded) userEnd++
-            LazyColumn(Modifier.fillMaxWidth(), state = listState) {
+            // 開いたとき・曲が変わったときに今の曲を上へ合わせる（上へ引くと履歴が出る。iPhone の QueueView と同じ）
+            val nowItem = if (current > 0) 1 + current.coerceAtMost(rows.size) else 0
+            LaunchedEffect(current, rows.isNotEmpty()) { listState.scrollToItem(nowItem) }
+            LazyColumn(Modifier.fillMaxWidth(), state = listState, contentPadding = PaddingValues(bottom = 400.dp)) {
+                if (current > 0) {
+                    item(key = "h-history") { header(stringResource(R.string.nowplaying_history)) }
+                    items((0 until current.coerceAtMost(rows.size)).toList(), key = { rows[it].itemId }) { index -> songRow(index, rows[index], movable = false) }
+                }
                 if (current in rows.indices) {
                     item(key = "h-now") { header(stringResource(R.string.nowplaying_now_playing)) }
                     item(key = rows[current].itemId) { songRow(current, rows[current], movable = false) }
