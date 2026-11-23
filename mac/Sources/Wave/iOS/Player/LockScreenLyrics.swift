@@ -28,7 +28,7 @@ import WaveCore
     var next: String? { view.upcoming.first }
 
     private var settings: Settings { AppServices.settings }
-    private var anyOn: Bool { settings.lyricsInArtist || (settings.lyricsInLiveActivity && !artworkOn) || artworkOn }
+    private var anyOn: Bool { settings.lyricsInArtist || artworkOn }
     /// 全画面のジャケットに出すか（iOS 26 から）。
     var artworkOn: Bool {
         guard settings.lyricsInArtwork else { return false }
@@ -38,9 +38,6 @@ import WaveCore
 
     /// アーティスト名の欄に出す行。
     var artistLine: String? { settings.lyricsInArtist ? current : nil }
-    /// Live Activity に出す行と次の行。
-    /// 全画面のジャケットに歌詞を描いているときは出さない（ロック画面に同じ歌詞が2か所出ていた。片方だけにする）。
-    var activityLines: (line: String?, next: String?) { settings.lyricsInLiveActivity && !artworkOn ? (current, next) : (nil, nil) }
 
     /// 再生・一時停止・曲・歌詞が変わったら呼ぶ（見張るかを決め直し、すぐ今の行を求める）。
     func refresh() {
@@ -86,7 +83,6 @@ import WaveCore
         view = shown
         shownPlaying = AppServices.player?.isPlaying ?? false
         AppServices.player?.lockScreenLineChanged()
-        WidgetSync.shared.lockScreenLineChanged()
     }
 
     /// 全画面のジャケット（3:4 の動くジャケットの欄に渡す）。出さないときは nil（いつものジャケットに戻る）。

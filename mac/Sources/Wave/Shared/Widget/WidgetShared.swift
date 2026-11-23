@@ -485,23 +485,26 @@ struct SelectPlaylistIntent: WidgetConfigurationIntent {
 #if os(iOS)
     /// ロック画面・ダイナミックアイランドの「再生中」（Live Activity）。
     struct NowPlayingAttributes: ActivityAttributes {
+        /// 次に流れる曲（index はキューの中の位置。押されたとき、videoId と合わなければ探し直す）。
+        struct QueueItem: Codable, Hashable {
+            var index: Int
+            var videoId: String
+            var title: String
+            var artist: String
+        }
+
         struct ContentState: Codable, Hashable {
             var videoId: String
             var title: String
             var artist: String
             var playing: Bool
             var device: String?
-            var nextTitle: String?
-            /// 鳴っている間の、曲の頭の時刻と終わりの時刻（位置の棒を OS に進めてもらう）。止めている間・ライブ・長さが分からないときは nil。
-            var startedAt: Date?
-            var endsAt: Date?
-            /// 止めている間の位置（0〜1）。
-            var fraction: Double?
+            /// 評価のボタンを✓にするか（高く評価したか、どれかのプレイリストに入っている）。出せないとき（ログインしていない・RSS）は nil。
+            var liked: Bool?
+            /// 次に流れる曲（3曲まで）。
+            var queue: [QueueItem]
             /// ジャケットを置き場に書き終えたか（書き終えたら知らせ直して、ジャケットを読み直させる）。
             var artwork: Bool?
-            /// 今歌っている歌詞の行と次の行（時刻付きの歌詞があり、設定でオンのとき。間奏は nil）。
-            var line: String?
-            var nextLine: String?
         }
     }
 #endif

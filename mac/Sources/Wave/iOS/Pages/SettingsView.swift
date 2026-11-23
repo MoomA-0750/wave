@@ -8,14 +8,9 @@ struct SettingsView: View {
     @State private var sendHistory = AppServices.settings.sendHistory
     @State private var releaseNotices = AppServices.settings.releaseNotices
     @State private var musicPip = AppServices.settings.musicPip
+    @State private var liveActivity = AppServices.settings.liveActivity
     @State private var lyricsInArtist = AppServices.settings.lyricsInArtist
-    @State private var lyricsInLiveActivity = AppServices.settings.lyricsInLiveActivity
     @State private var lyricsInArtwork = AppServices.settings.lyricsInArtwork
-    /// 全画面のジャケットに歌詞を出しているか（そのときは Live Activity には出さない）
-    private var artworkLyricsOn: Bool {
-        if #available(iOS 26.0, *) { return lyricsInArtwork }
-        return false
-    }
     @State private var language = AppServices.settings.language
     @State private var originalTitles = AppServices.settings.originalTitles
     @State private var pinnedTab = IOSShell.shared.pinnedTab
@@ -39,6 +34,16 @@ struct SettingsView: View {
                     AppServices.settings.sendHistory = v
                     AppServices.settings.save()
                 }
+                Toggle(isOn: $liveActivity) {
+                    SettingsLabel(title: L.t("ロック画面の再生中（Live Activity）", "Lock Screen player (Live Activity)"),
+                                  detail: L.t("ロック画面とダイナミックアイランドに、評価のボタンと次に流れる曲を出す。評価したあとにボタンを押すとプレイリストへ追加する画面を開く",
+                                              "Show a like button and the next songs on the Lock Screen and in the Dynamic Island. After liking, the button opens Add to Playlist"))
+                }
+                .onChange(of: liveActivity) { _, v in
+                    AppServices.settings.liveActivity = v
+                    AppServices.settings.save()
+                    WidgetSync.shared.liveActivitySettingChanged()
+                }
                 Toggle(isOn: $musicPip) {
                     SettingsLabel(title: L.t("音楽の再生中も小窓を出す", "Picture in picture for music"),
                                   detail: L.t("ホームへ戻ると、曲名とジャケットを小窓に出す。小窓のボタンで再生・一時停止と、次の曲・前の曲へ",
@@ -53,19 +58,6 @@ struct SettingsView: View {
                 Text(L.t("再生", "Play"))
             }
             Section {
-                Toggle(isOn: $lyricsInLiveActivity) {
-                    SettingsLabel(title: L.t("ロック画面の再生中", "Lock Screen player"),
-                                  detail: artworkLyricsOn
-                                      ? L.t("全画面のジャケットに歌詞を出している間は出さない（ロック画面に同じ歌詞が2か所出ないように）",
-                                            "Not shown while lyrics are on the full-screen artwork, so the Lock Screen doesn't show them twice")
-                                      : L.t("ロック画面とダイナミックアイランドの再生中（Live Activity）に、今の行と次の行を出す",
-                                            "Show the current and next line in the Live Activity on the Lock Screen and in the Dynamic Island"))
-                }
-                .disabled(artworkLyricsOn)
-                .onChange(of: lyricsInLiveActivity) { _, v in
-                    AppServices.settings.lyricsInLiveActivity = v
-                    lockScreenLyricsChanged()
-                }
                 if #available(iOS 26.0, *) {
                     Toggle(isOn: $lyricsInArtwork) {
                         SettingsLabel(title: L.t("全画面のジャケット", "Full-screen artwork"),

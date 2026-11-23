@@ -236,10 +236,6 @@ final class WidgetSync {
                 Task { await saveArtwork(now.videoId, current: Ui.resize(player.current?.thumbnailUrl, 240), upNext: upNext) }
             }
         }
-        #if os(iOS)
-            // 位置の棒: シークしたとき・止めた位置が変わったときに知らせ直す（鳴っている間の進みは OS に任せる）
-            if let shown, Self.moved(activityTiming(player), shownTiming) { updateActivity(shown) }
-        #endif
         syncPlaylists()
     }
 
@@ -289,41 +285,14 @@ final class WidgetSync {
     // MARK: ロック画面の再生中
 
     #if os(iOS)
-    /// 位置の棒の時刻。鳴っている間は曲の頭と終わりの時刻（秒に丸める）、止めている間は位置の割合。
-    struct ActivityTiming: Equatable {
-        var startedAt: Date?
-        var endsAt: Date?
-        var fraction: Double?
-    }
-
-    private var shownTiming: ActivityTiming?
     private var sentState: NowPlayingAttributes.ContentState?
     private var artworkReady: String?
 
-    private func activityTiming(_ player: PlayerService) -> ActivityTiming? {
-        guard let song = player.current, !song.isLive, player.duration > 0 else { return nil }
-        if !player.isPlaying { return ActivityTiming(fraction: player.position / player.duration) }
-        let start = Date().addingTimeInterval(-player.position)
-        return ActivityTiming(startedAt: start, endsAt: start.addingTimeInterval(player.duration))
-    }
-
-    /// 知らせ直すほど位置が動いたか（位置の読み取りのぶれで毎秒送らないよう、2秒・1% までは同じと見る）。
-    private static func moved(_ a: ActivityTiming?, _ b: ActivityTiming?) -> Bool {
-        guard let a, let b else { return (a == nil) != (b == nil) }
-        switch (a.startedAt, b.startedAt, a.endsAt, b.endsAt) {
-        case let (sa?, sb?, ea?, eb?): return abs(sa.timeIntervalSince(sb)) > 2 || abs(ea.timeIntervalSince(eb)) > 2
-        case (nil, nil, _, _): return abs((a.fraction ?? 0) - (b.fraction ?? 0)) > 0.01
-        default: return true
-        }
-    }
-
-    /// ロック画面に出す歌詞の行が変わった（LockScreenLyrics）。
-    func lockScreenLineChanged() {
-        if let shown { updateActivity(shown) }
-    }
+    /// 設定の「ロック画面の再生中」が切り替わった（切ったら終わらせ、入れたら今の曲で始める。始められるのは前に出ているときだけ）。
+    func liveActivitySettingChanged() { updateActivity(shown) }
 
     private func updateActivity(_ now: WidgetNowPlaying?) {
-        guard let now else {
+        guard AppServices.settings.liveActivity, let now else {
             if let activity {
                 self.activity = nil
                 sentState = nil
@@ -331,14 +300,11 @@ final class WidgetSync {
             }
             return
         }
-        let timing = AppServices.player.flatMap(activityTiming)
-        shownTiming = timing
         let file = WidgetStore.artworkFile(now.videoId)
         let artwork = artworkReady == now.videoId || file.map { FileManager.default.fileExists(atPath: $0.path) } == true
+        let queue = (now.upNext ?? []).prefix(3).map { NowPlayingAttributes.QueueItem(index: $0.index, videoId: $0.videoId, title: $0.title, artist: $0.artist) }
         let state = NowPlayingAttributes.ContentState(videoId: now.videoId, title: now.title, artist: now.artist, playing: now.playing,
-                                                      device: now.device, nextTitle: now.nextTitle,
-                                                      startedAt: timing?.startedAt, endsAt: timing?.endsAt, fraction: timing?.fraction, artwork: artwork,
-                                                      line: LockScreenLyrics.shared.activityLines.line, nextLine: LockScreenLyrics.shared.activityLines.next)
+                                                      device: now.device, liked: now.liked, queue: queue, artwork: artwork)
         // 同じ中身は送らない（位置の棒の確かめで毎秒呼ばれる）
         guard state != sentState || activity?.activityState != .active else { return }
         let content = ActivityContent(state: state, staleDate: nil)
