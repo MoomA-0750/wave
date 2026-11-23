@@ -129,9 +129,9 @@ struct MiniPlayer: View {
     }
 }
 
-/// ミニプレーヤー（枠を自前で描く版。iOS 26 から）。Safari の下の欄のタブ切り替えと同じく、左右に払うと枠ごと（ガラスの背景も）
-/// 大きさを変えながら入れ替わる: 今の枠は幅が縮みながら指の方へ出ていき（中身は先に薄くなる）、隣の枠は縮んだ幅で反対側から入って、
-/// 幅が戻りながら中身が濃くなる。タブバーの上に置く（OS の付属部品ではないので、スクロールで畳む動きは無い）。
+/// ミニプレーヤー（枠を自前で描く版。iOS 26 から）。Safari の下の欄のタブ切り替えと同じく、左右に払うと2つの枠が欄を分け合う:
+/// 今の枠の幅が縮んで指の方へ寄り、その反対側から隣の枠が縮んだ幅で現れて、幅が広がりながら入れ替わる（枠ごと、ガラスの背景も形が変わる）。
+/// タブバーの上に置く（OS の付属部品ではないので、スクロールで畳む動きは無い）。
 @available(iOS 26.0, *)
 struct MiniPlayerCard: View {
     var zoom: Namespace.ID
@@ -140,22 +140,34 @@ struct MiniPlayerCard: View {
     @State private var settling = false
     @State private var width: CGFloat = 0
 
-    /// 出ていく・入る枠の、いちばん縮んだときの幅の割合。
-    private let minScale: CGFloat = 0.55
+    /// 2つの枠の間のすき間。
+    private let gap: CGFloat = 8
 
     var body: some View {
         let player = AppServices.player!
-        // 進み具合（0〜1）
-        let p = min(1, abs(drag) / max(width, 1))
-        let sign: CGFloat = drag < 0 ? -1 : 1
+        let next = drag == 0 ? nil : neighbor(player, drag < 0 ? 1 : -1)
         ZStack {
-            card(player.current, player, source: true, scale: 1 - (1 - minScale) * p, content: max(0, 1 - 2 * p))
-                .offset(x: sign * p * width * 0.55)
-                .opacity(1 - max(0, (p - 0.4) / 0.6))
-            if let next = neighbor(player, drag < 0 ? 1 : -1), drag != 0 {
-                card(next, player, source: false, scale: minScale + (1 - minScale) * p, content: max(0, 2 * p - 1))
-                    .offset(x: -sign * (1 - p) * width * 0.55)
-                    .opacity(min(1, p / 0.4))
+            if let next {
+                // 進み具合 p（0〜1）。今の枠の幅は (1-p)、隣の枠の幅は p（すき間の分を引く）
+                let p = min(1, abs(drag) / max(width * 0.8, 1))
+                // すき間は途中だけ開き、入れ替わり始めと終わりでは 0（欄いっぱいの1つの枠になる）
+                let space = gap * sin(.pi * p)
+                let total = max(width - space, 0)
+                let oldW = total * (1 - p), newW = total * p
+                let toLeft = drag < 0   // 左へ払うと、今の枠は左に、隣の枠は右に
+                HStack(spacing: space) {
+                    if toLeft {
+                        pill(player.current, player, source: true, width: oldW, align: .leading, content: max(0, 1 - 1.6 * p))
+                        pill(next, player, source: false, width: newW, align: .trailing, content: max(0, 1.6 * p - 0.6))
+                    } else {
+                        pill(next, player, source: false, width: newW, align: .leading, content: max(0, 1.6 * p - 0.6))
+                        pill(player.current, player, source: true, width: oldW, align: .trailing, content: max(0, 1 - 1.6 * p))
+                    }
+                }
+            } else {
+                // 隣が無い方へは、少し引っ張られて戻る
+                pill(player.current, player, source: true, width: width, align: .center, content: 1)
+                    .offset(x: drag)
             }
         }
         .frame(maxWidth: .infinity)
@@ -163,7 +175,8 @@ struct MiniPlayerCard: View {
         .gesture(swipe(player))
     }
 
-    private func card(_ song: Song?, _ player: PlayerService, source: Bool, scale: CGFloat, content: CGFloat) -> some View {
+    /// 1つの枠。中身は欄いっぱいの幅で組んで、枠の幅で切る（文字は潰さない）。背景のガラスは枠の形に付く。
+    private func pill(_ song: Song?, _ player: PlayerService, source: Bool, width w: CGFloat, align: Alignment, content: CGFloat) -> some View {
         HStack(spacing: Kasane.Space.s3) {
             Cover(url: Ui.small(song?.thumbnailUrl), size: 36, radius: Kasane.Radius.sm)
             VStack(alignment: .leading, spacing: 1) {
@@ -202,8 +215,7 @@ struct MiniPlayerCard: View {
             .padding(.bottom, 3)
         }
         .opacity(content)
-        // 枠の幅だけを縮める（中身は縮めず、枠で切る）。背景（ガラス）は縮んだ枠の形に付く
-        .frame(width: max(width, 1) * scale, height: 52)
+        .frame(width: max(w, 0), height: 52, alignment: align)
         .clipShape(Capsule())
         .background(Color.clear.glassEffect(.regular.interactive(), in: Capsule()))
         .contentShape(Capsule())
@@ -240,8 +252,8 @@ struct MiniPlayerCard: View {
                     return
                 }
                 settling = true
-                withAnimation(.spring(duration: 0.38, bounce: 0.12)) {
-                    drag = -CGFloat(dir) * width
+                withAnimation(.spring(duration: 0.38, bounce: 0.1)) {
+                    drag = -CGFloat(dir) * width * 0.8
                 } completion: {
                     // 曲が移ると隣の枠が真ん中の今の枠になる（同じ見た目）ので、ずらしを戻しても動かない
                     var t = Transaction()
