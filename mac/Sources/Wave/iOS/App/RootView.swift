@@ -254,11 +254,11 @@ private struct MiniPlayerAccessory: ViewModifier {
         if #available(iOS 26.0, *), show, shell.miniCustom {
             // 枠を自前で描き、タブバーの上に置く（OS の付属部品ではないので、スクロールで畳む動きは無い）
             content
-                .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 56).allowsHitTesting(false) }
+                .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 52).allowsHitTesting(false) }
                 .overlay(alignment: .bottom) {
                     MiniPlayerCard(zoom: zoom, open: open)
                         .padding(.horizontal, Kasane.Space.s3)
-                        .padding(.bottom, Self.bottomInset + 56)
+                        .padding(.bottom, Self.bottomInset + 48)
                 }
         } else if #available(iOS 26.0, *), show {
             content

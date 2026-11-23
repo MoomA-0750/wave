@@ -129,8 +129,9 @@ struct MiniPlayer: View {
     }
 }
 
-/// ミニプレーヤー（枠を自前で描く版。iOS 26 から）。Safari の下の欄のように、左右に払うと枠ごと（ガラスの背景も）指に付いてきて、
-/// 離すと出ていき、隣の曲の枠が反対側から入る。タブバーの上に置く（OS の付属部品ではないので、スクロールで畳む動きは無い）。
+/// ミニプレーヤー（枠を自前で描く版。iOS 26 から）。Safari の下の欄のタブ切り替えと同じく、左右に払うと枠ごと（ガラスの背景も）
+/// 大きさを変えながら入れ替わる: 今の枠は幅が縮みながら指の方へ出ていき（中身は先に薄くなる）、隣の枠は縮んだ幅で反対側から入って、
+/// 幅が戻りながら中身が濃くなる。タブバーの上に置く（OS の付属部品ではないので、スクロールで畳む動きは無い）。
 @available(iOS 26.0, *)
 struct MiniPlayerCard: View {
     var zoom: Namespace.ID
@@ -139,14 +140,22 @@ struct MiniPlayerCard: View {
     @State private var settling = false
     @State private var width: CGFloat = 0
 
+    /// 出ていく・入る枠の、いちばん縮んだときの幅の割合。
+    private let minScale: CGFloat = 0.55
+
     var body: some View {
         let player = AppServices.player!
+        // 進み具合（0〜1）
+        let p = min(1, abs(drag) / max(width, 1))
+        let sign: CGFloat = drag < 0 ? -1 : 1
         ZStack {
-            card(player.current, player, source: true)
-                .offset(x: drag)
+            card(player.current, player, source: true, scale: 1 - (1 - minScale) * p, content: max(0, 1 - 2 * p))
+                .offset(x: sign * p * width * 0.55)
+                .opacity(1 - max(0, (p - 0.4) / 0.6))
             if let next = neighbor(player, drag < 0 ? 1 : -1), drag != 0 {
-                card(next, player, source: false)
-                    .offset(x: drag + (drag < 0 ? width + gap : -(width + gap)))
+                card(next, player, source: false, scale: minScale + (1 - minScale) * p, content: max(0, 2 * p - 1))
+                    .offset(x: -sign * (1 - p) * width * 0.55)
+                    .opacity(min(1, p / 0.4))
             }
         }
         .frame(maxWidth: .infinity)
@@ -154,9 +163,7 @@ struct MiniPlayerCard: View {
         .gesture(swipe(player))
     }
 
-    private let gap: CGFloat = 12
-
-    private func card(_ song: Song?, _ player: PlayerService, source: Bool) -> some View {
+    private func card(_ song: Song?, _ player: PlayerService, source: Bool, scale: CGFloat, content: CGFloat) -> some View {
         HStack(spacing: Kasane.Space.s3) {
             Cover(url: Ui.small(song?.thumbnailUrl), size: 36, radius: Kasane.Radius.sm)
             VStack(alignment: .leading, spacing: 1) {
@@ -184,7 +191,7 @@ struct MiniPlayerCard: View {
             .accessibilityLabel(player.isPlaying ? L.t("一時停止", "Pause") : L.t("再生", "Play"))
         }
         .padding(.horizontal, Kasane.Space.s4)
-        .frame(height: 52)
+        .frame(width: max(width, 1), height: 52)
         .overlay(alignment: .bottom) {
             GeometryReader { geo in // apple-ui-allow: 大きさに合わせて並べる・描く（測るだけではない）
                 Capsule().fill(Color.primary.opacity(0.85))
@@ -194,7 +201,11 @@ struct MiniPlayerCard: View {
             .padding(.horizontal, Kasane.Space.s5)
             .padding(.bottom, 3)
         }
-        .glassEffect(.regular.interactive(), in: Capsule())
+        .opacity(content)
+        // 枠の幅だけを縮める（中身は縮めず、枠で切る）。背景（ガラス）は縮んだ枠の形に付く
+        .frame(width: max(width, 1) * scale, height: 52)
+        .clipShape(Capsule())
+        .background(Color.clear.glassEffect(.regular.interactive(), in: Capsule()))
         .contentShape(Capsule())
         .onTapGesture(perform: open)
         .modifier(ZoomSource(id: MiniPlayer.zoomId, namespace: zoom, on: source))
@@ -229,9 +240,10 @@ struct MiniPlayerCard: View {
                     return
                 }
                 settling = true
-                withAnimation(.snappy(duration: 0.25)) {
-                    drag = -CGFloat(dir) * (width + gap)
+                withAnimation(.spring(duration: 0.38, bounce: 0.12)) {
+                    drag = -CGFloat(dir) * width
                 } completion: {
+                    // 曲が移ると隣の枠が真ん中の今の枠になる（同じ見た目）ので、ずらしを戻しても動かない
                     var t = Transaction()
                     t.disablesAnimations = true
                     withTransaction(t) {
