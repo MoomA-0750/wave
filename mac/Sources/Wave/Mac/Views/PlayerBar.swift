@@ -211,13 +211,23 @@ struct TransportControls: View {
 struct VideoOrCover: View {
     var size: CGFloat?
     var inFullView: Bool
+    /// 小窓の中の映像か（小窓の外では、小窓に出している間は映像の代わりに案内を出す）
+    var inPip = false
     @State private var model = MainWindowModel.shared
 
     var body: some View {
         let player = AppServices.player!
         let video = MusicVideoPlayer.shared
         ZStack {
-            if model.showVideo, let live = player.liveVideoPlayer {
+            if model.pipOpen && !inPip && model.showVideo && player.hasVideo {
+                Color.black
+                VStack(spacing: Kasane.Space.s2) {
+                    Image(systemName: "pip").font(.title2) // apple-ui-allow: 案内の記号
+                    Text(L.t("PinP に出しています", "Playing in picture-in-picture")).font(.caption).multilineTextAlignment(.center)
+                }
+                .foregroundStyle(.white)
+                .padding()
+            } else if model.showVideo, let live = player.liveVideoPlayer {
                 // ライブは鳴らしている再生器の映像をそのまま出す
                 Color.black
                 PlayerLayerView(player: live)

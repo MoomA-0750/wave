@@ -71,12 +71,13 @@ final class VideoPip: NSObject, NSWindowDelegate {
 /// 小窓の中身。映像（無い曲はジャケット）と、指を乗せたときだけ出る操作。
 private struct PipView: View {
     @State private var hover = false
+    @State private var dragging: Double?
 
     var body: some View {
         let player = AppServices.player!
         ZStack {
             Color.black
-            VideoOrCover(size: nil, inFullView: true)
+            VideoOrCover(size: nil, inFullView: true, inPip: true)
             if hover {
                 Color.black.opacity(0.35)
                 HStack(spacing: 18) {
@@ -88,6 +89,34 @@ private struct PipView: View {
                         .help(L.t("次へ", "Next"))
                 }
                 .buttonStyle(IconButtonStyle(size: 40))
+                // 上: 曲名・アーティスト・評価（右上の「wave に戻す」の左）
+                HStack(spacing: 6) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(player.current?.title ?? "").font(.callout.weight(.semibold)).lineLimit(1)
+                        Text(player.current?.artistsText ?? "").font(.caption).opacity(0.75).lineLimit(1)
+                    }
+                    Spacer(minLength: 0)
+                    if player.current != nil { LikeButton.view(player, size: 16) }
+                }
+                .padding(.leading, 12).padding(.trailing, 42).padding(.top, 8)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                // 下: シークバー
+                if !player.isLive {
+                    HStack(spacing: 6) {
+                        Text(Ui.time(dragging ?? player.position)).font(.caption2).monospacedDigit()
+                        Slider(value: Binding(get: { dragging ?? min(player.position, max(1, player.duration)) }, set: { dragging = $0 }),
+                               in: 0...max(1, player.duration)) { editing in
+                            if !editing, let value = dragging {
+                                player.seek(value)
+                                dragging = nil
+                            }
+                        }
+                        .controlSize(.mini)
+                        Text(Ui.time(player.duration)).font(.caption2).monospacedDigit()
+                    }
+                    .padding(.horizontal, 12).padding(.bottom, 8)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                }
                 Button { VideoPip.shared.backToApp() } label: { Image(systemName: "arrow.up.backward.and.arrow.down.forward").font(.system(size: 13, weight: .semibold)) } // apple-ui-allow: 記号の大きさ（Windows 版と揃える）
                     .buttonStyle(IconButtonStyle(size: 28))
                     .help(L.t("wave に戻して大きく見る", "Back to wave"))
