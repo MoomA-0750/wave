@@ -1,6 +1,6 @@
 # 引き継ぎ（今の状態）
 
-更新: 2026-11-23（閉じる前）（セッション 16a2e897、ブランチ ios-app）
+更新: 2026-11-23（再生画面の要望のフェーズ 1 の後）（セッション 16a2e897、ブランチ ios-app）
 
 ## 目的
 
@@ -36,7 +36,11 @@ Windows の wave の「Spotify から移す」。Spotify のプレイリスト�
 
 - Fold 7 に容量の上限の入った新しい版（`:androidApp:assemblePhoneRelease`、debug 鍵で署名）を `adb install -r --user 0` で上書きで入れた（ログイン・設定は残った）。設定に「Smart download storage limit 5 GB」が出ることを実機で確かめた。ダウンロード削除のあとスマートダウンロードが 73MB まで取り直している。残り約 6.7GB の可能性: Fold 7 の Secure Folder（ユーザー 150）の中の wave（adb の shell では中を見られない。本人に確かめてもらう）
 
-## 次にやること
+## 再生画面まわりの要望 8 件（本人の依頼 11-23。計画: `docs/player-requests-plan.md`）
+
+フェーズ 1（調べ）は済み。次はフェーズ 2（キュー: 履歴を上スクロールで・Mac の余白・Mac のページ下）。続いて 3 PinP、4 窓を閉じても止めない設定、5 ビデオの維持と先読み。Mac の変更は Linux 機から組み立てられないので「未確認」と書き、本人に Mac で確かめてもらう。Windows は to-fu（`scripts/win.sh`）、Android は Fold 7・Pixel 3 で確かめる。まず `docs/player-requests-plan.md` を読む
+
+## 次にやること（Spotify から移す・AI 識別。再生画面の要望と並行）
 
 1. AI コンテンツの識別（本人の了承済みの方針は上の「どこまで」）。最初の確認: AI ラベルが付いた YouTube Music の曲の応答に表示が入っているかを調べる（本人が曲を教えるか、自分で探す。ログインしない通信と、必要ならログイン済みの応答）。Spotify の API・ZIP に AI クレジットがあるかも調べる。結果を見て `SPEC.md` に仕様（確定／仮）を書き、実装は本人の了承の後
 2. 案 2 の残り: 同じ題の別項目の ID を候補に足す（一致にはせず候補だけ）
