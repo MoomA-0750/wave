@@ -40,6 +40,10 @@ Windows の wave の「Spotify から移す」。Spotify のプレイリスト�
 
 曲の要確認・見つからない 約 293 件を回した（途中で to-fu のアプリが止まり、残り 41 件は再開して終えた。断られた 0）。曲: 一致 6809→6840、要確認 270→261、見つからない 23→1。全体: 一致 7578・要確認 325・見つからない 30（手で選んだ 29 件を含む）。案 1〜4 と曲への 2 本目の検索語まで入れ終えた。残りの要確認 325 件（曲 261・アルバム 41・アーティスト 23）は、別の版が 1 位にいるものが中心なので、見直しの画面で選ぶ。YouTube Music への書き込みはしていない（本人が見直しの一覧を見てから）
 
+## appshelf への載せ込み（11-23、本人の依頼「全ての版を載せて」）
+
+載せた（`scripts/shelf.sh`、commit ddb29c9e の中身）: Android（wave・build 20261123-133841-202611231331）、Windows（x86_64・20261123-133219-202611231331）、Linux（x86_64・20261123-133926-202611231331-x86_64）、時計（wave-wear・20261123-134505-202611231345）。版番号はすべて 0.1.0。載せていない: macOS・iOS（Mac がログイン画面のままで、署名の画面側のターミナルを開けない。組み立てはできた。Mac にログインしてもらってから `scripts/shelf.sh macos ios`）、Linux aarch64（cramgent に ssh が通らない。通ったら `scripts/shelf.sh linux-arm`）。載せる途中で、時計版が使う compose-bom 2 つの pom の sha256（dl.google.com の公開値と一致を確認）を `gradle/verification-metadata.xml` に足した。Mac の RightPane.swift の閉じ括弧の欠け（別セッションの変更）を直した（Mac でコンパイルが通ることは確認）
+
 ## 再生画面まわりの要望 8 件（本人の依頼 11-23。計画: `docs/player-requests-plan.md`）
 
 フェーズ 1〜5 は済み（再生画面の要望 8 件は実装が一通り終わった。残りは未確認の端末の確認）。Mac の変更は Linux 機から組み立てられないので「未確認」と書き、本人に Mac で確かめてもらう。Windows は to-fu（`scripts/win.sh`）、Android は Fold 7・Pixel 3 で確かめる。まず `docs/player-requests-plan.md` を読む
