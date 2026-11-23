@@ -1725,6 +1725,8 @@ struct QueueEntry {
     section: Option<&'static str>,
     /// 「次に流れる曲」の見出しの行（見出しに「消去」を出す）。
     flow_header: bool,
+    /// もう流れた曲（今の曲より前）。押すとその曲に戻る。並べ替えはできない。
+    is_history: bool,
 }
 
 /// 今の曲のすぐ後ろに続く、自分で足した曲（「次に再生」など）のかたまりの終わり（その次の位置）。
@@ -1736,25 +1738,25 @@ fn user_queue_end(items: &[QueueItem], index: usize) -> usize {
     p
 }
 
-/// キューの欄の並び（Mac と同じ）: 一番上に今の曲、その下に自分で足した曲、その下に元から流れる予定の曲。
-/// history なら、もう流れた曲を新しい順に（押すとその曲に戻る）。
-fn queue_entries(items: &[QueueItem], index: Option<usize>, history: bool) -> Vec<QueueEntry> {
+/// キューの欄の並び（iPhone・Mac と同じ）: 履歴（古い順）・今の曲・自分で足した曲・元から流れる予定の曲を1本に。
+/// 開いたら今の曲を上に合わせ、上へスクロールすると履歴が出る。
+fn queue_entries(items: &[QueueItem], index: Option<usize>) -> Vec<QueueEntry> {
     let Some(index) = index.filter(|&i| i < items.len()) else { return Vec::new() };
     let entry = |i: usize, section: Option<&'static str>, flow_header: bool| QueueEntry {
         index: i,
         item_id: items[i].item_id.clone(),
         song: items[i].song.clone(),
-        is_current: i == index && !history,
+        is_current: i == index,
         section,
         flow_header,
+        is_history: i < index,
     };
-    if history {
-        return (0..index).rev().map(|i| entry(i, None, false)).collect();
-    }
     let user_end = user_queue_end(items, index);
-    (index..items.len())
+    (0..items.len())
         .map(|i| {
-            let section = if i == index {
+            let section = if i == 0 && index > 0 {
+                Some(lang::t("履歴", "History"))
+            } else if i == index {
                 Some(lang::t("再生中", "Now playing"))
             } else if i == index + 1 && i < user_end {
                 Some(lang::t("キューの次の曲", "Next in queue"))
@@ -1789,29 +1791,17 @@ fn clear_flow(app: &Rc<App>) {
 /// 右の欄のキュー（Mac の QueueView）: 上に「キュー｜履歴」・キューを消去・×。今の曲はアクセント色、押すとその曲へ、
 /// 右クリックで曲のメニュー（キューから削除も）、ドラッグで並べ替え。
 fn queue(app: &Rc<App>) -> gtk::Widget {
-    let switch = adw::ToggleGroup::builder().css_classes(["round"]).build();
-    switch.add(adw::Toggle::builder().label(lang::t("キュー", "Queue")).name("queue").build());
-    switch.add(adw::Toggle::builder().label(lang::t("履歴", "History")).name("history").build());
-    switch.set_active_name(Some("queue"));
+    let heading = gtk::Label::builder().label(lang::t("キュー", "Queue")).css_classes(["heading"]).build();
     let clear = gtk::Button::builder().label(lang::t("キューを消去", "Clear queue")).css_classes(["flat", "text-link"]).visible(false).build();
     let save = gtk::Button::builder().icon_name("bookmark-new-symbolic").tooltip_text(lang::t("キューをプレイリストとして保存", "Save queue as playlist")).css_classes(["flat", "circular"]).visible(false).build();
     let close = gtk::Button::builder().icon_name("window-close-symbolic").tooltip_text(lang::t("閉じる", "Close")).css_classes(["flat", "circular"]).build();
     let spacer = gtk::Box::builder().hexpand(true).build();
     let top = gtk::Box::builder().spacing(4).margin_top(12).margin_start(16).margin_end(12).margin_bottom(4).build();
-    top.append(&switch);
+    top.append(&heading);
     top.append(&spacer);
     top.append(&clear);
     top.append(&save);
     top.append(&close);
-    {
-        let app = app.clone();
-        switch.connect_active_name_notify(move |switch| {
-            let history = switch.active_name().as_deref() == Some("history");
-            if app.view.get().queue_history != history {
-                app.update_view(|v| v.queue_history = history);
-            }
-        });
-    }
     {
         let app = app.clone();
         clear.connect_clicked(move |_| clear_user_queue(&app));
@@ -1824,14 +1814,15 @@ fn queue(app: &Rc<App>) -> gtk::Widget {
         let app = app.clone();
         close.connect_clicked(move |_| app.set_right_pane(true, false));
     }
-    let list = gtk::ListBox::builder().selection_mode(gtk::SelectionMode::None).margin_start(10).margin_end(10).margin_bottom(12).css_classes(["queue-list"]).build();
+    let list = gtk::ListBox::builder().selection_mode(gtk::SelectionMode::None).margin_start(10).margin_end(10).margin_bottom(400).css_classes(["queue-list"]).build();
     let empty_title = gtk::Label::builder().css_classes(["heading"]).build();
     let empty_text = gtk::Label::builder().wrap(true).justify(gtk::Justification::Center).css_classes(["caption", "dim-label"]).build();
     let empty = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(6).valign(gtk::Align::Center).margin_start(24).margin_end(24).build();
     empty.append(&empty_title);
     empty.append(&empty_text);
     let stack = gtk::Stack::builder().vexpand(true).build();
-    stack.add_named(&gtk::ScrolledWindow::builder().child(&list).hscrollbar_policy(gtk::PolicyType::Never).build(), Some("list"));
+    let scroller = gtk::ScrolledWindow::builder().child(&list).hscrollbar_policy(gtk::PolicyType::Never).build();
+    stack.add_named(&scroller, Some("list"));
     stack.add_named(&empty, Some("empty"));
     let column = gtk::Box::new(gtk::Orientation::Vertical, 0);
     column.append(&top);
@@ -1847,21 +1838,18 @@ fn queue(app: &Rc<App>) -> gtk::Widget {
         });
     }
     let shown: Rc<RefCell<Option<String>>> = Rc::default();
+    // 今の曲を上に合わせた位置（開いたときと曲が替わったときだけ合わせる）
+    let scrolled: Rc<Cell<Option<usize>>> = Rc::default();
     let refresh = {
         let weak = Rc::downgrade(app);
         move || {
             let Some(app) = weak.upgrade() else { return };
-            let history = app.view.get().queue_history;
-            let name = if history { "history" } else { "queue" };
-            if switch.active_name().as_deref() != Some(name) {
-                switch.set_active_name(Some(name));
-            }
             let mirror = app.connect.mirror();
             let (items, index) = app.playback.queue_items();
             // 曲・並び・切り替えが同じなら描き直さない（連携の知らせは毎秒来る）
             let key = match &mirror {
-                Some(m) => format!("m:{history}:{}:{:?}", m.song.video_id, m.next.as_ref().map(|s| &s.video_id)),
-                None => format!("l:{history}:{index:?}:{}", items.iter().map(|q| q.item_id.as_str()).collect::<Vec<_>>().join(",")),
+                Some(m) => format!("m:{}:{:?}", m.song.video_id, m.next.as_ref().map(|s| &s.video_id)),
+                None => format!("l:{index:?}:{}", items.iter().map(|q| q.item_id.as_str()).collect::<Vec<_>>().join(",")),
             };
             if shown.borrow().as_deref() == Some(key.as_str()) {
                 return;
@@ -1873,34 +1861,50 @@ fn queue(app: &Rc<App>) -> gtk::Widget {
             let remote = mirror.is_some();
             // ほかの端末を映している間は、その端末の今の曲と次の曲だけを出す（操作はしない）
             let entries = match mirror {
-                Some(m) if !history => {
-                    let mut e = vec![QueueEntry { index: usize::MAX, item_id: String::new(), song: m.song, is_current: true, section: Some(lang::t("再生中", "Now playing")), flow_header: false }];
+                Some(m) => {
+                    let mut e = vec![QueueEntry { index: usize::MAX, item_id: String::new(), song: m.song, is_current: true, section: Some(lang::t("再生中", "Now playing")), flow_header: false, is_history: false }];
                     if let Some(next) = m.next {
-                        e.push(QueueEntry { index: usize::MAX, item_id: String::new(), song: next, is_current: false, section: Some(lang::t("次に流れる曲", "Up next")), flow_header: false });
+                        e.push(QueueEntry { index: usize::MAX, item_id: String::new(), song: next, is_current: false, section: Some(lang::t("次に流れる曲", "Up next")), flow_header: false, is_history: false });
                     }
                     e
                 }
-                Some(_) => Vec::new(),
-                None => queue_entries(&items, index, history),
+                None => queue_entries(&items, index),
             };
-            let user_added = !remote && !history && index.is_some_and(|i| user_queue_end(&items, i) > i + 1);
+            let user_added = !remote && index.is_some_and(|i| user_queue_end(&items, i) > i + 1);
             clear.set_visible(user_added);
             // ログインしていて手元のキューに曲があるときだけ（ほかの端末を映している間は出さない）
             save.set_visible(!remote && app.repo.client().is_logged_in() && !items.is_empty());
             if entries.is_empty() {
-                empty_title.set_label(if history { lang::t("まだ流れた曲はありません", "Nothing played yet") } else { lang::t("キューは空です", "Your queue is empty") });
-                empty_text.set_label(if history { lang::t("流れた曲は、ここに新しい順に並びます", "Songs you've played will show up here") } else { lang::t("曲を再生すると、ここに次の曲が並びます", "Play something and upcoming songs will show up here") });
+                empty_title.set_label(lang::t("キューは空です", "Your queue is empty"));
+                empty_text.set_label(lang::t("曲を再生すると、ここに次の曲が並びます", "Play something and upcoming songs will show up here"));
                 stack.set_visible_child_name("empty");
                 return;
             }
             stack.set_visible_child_name("list");
             let mut previous_id: Option<String> = None;
+            let mut now_header: Option<gtk::ListBoxRow> = None;
             for entry in &entries {
                 if let Some(section) = entry.section {
-                    list.append(&queue_header(&app, section, entry.flow_header && !remote));
+                    let header = queue_header(&app, section, entry.flow_header && !remote);
+                    if entry.is_current {
+                        now_header = Some(header.clone());
+                    }
+                    list.append(&header);
                 }
-                list.append(&queue_row(&app, entry, history || remote, previous_id.clone()));
+                list.append(&queue_row(&app, entry, entry.is_history || remote, previous_id.clone()));
                 previous_id = Some(entry.item_id.clone());
+            }
+            // 開いたとき・曲が替わったときに、「再生中」の見出しを一番上へ合わせる（上へ引くと履歴が出る）
+            if scrolled.get() != Some(index.unwrap_or(0)) {
+                scrolled.set(Some(index.unwrap_or(0)));
+                if let Some(header) = now_header {
+                    let (scroller, list) = (scroller.clone(), list.clone());
+                    gtk::glib::idle_add_local_once(move || {
+                        if let Some(point) = header.compute_point(&list, &gtk::graphene::Point::new(0.0, 0.0)) {
+                            scroller.vadjustment().set_value(f64::from(point.y()));
+                        }
+                    });
+                }
             }
         }
     };
@@ -2589,11 +2593,12 @@ mod tests {
     #[test]
     fn queue_sections_split_now_user_added_and_flow() {
         let items = vec![item("a", Origin::Source), item("b", Origin::Source), item("u1", Origin::UserAdded), item("u2", Origin::UserAdded), item("c", Origin::Source), item("d", Origin::Suggestion)];
-        let entries = queue_entries(&items, Some(1), false);
+        let entries = queue_entries(&items, Some(1));
         let shape: Vec<(&str, Option<&str>, bool, bool)> = entries.iter().map(|e| (e.item_id.as_str(), e.section, e.is_current, e.flow_header)).collect();
         assert_eq!(
             shape,
             vec![
+                ("a", Some(lang::t("履歴", "History")), false, false),
                 ("b", Some(lang::t("再生中", "Now playing")), true, false),
                 ("u1", Some(lang::t("キューの次の曲", "Next in queue")), false, false),
                 ("u2", None, false, false),
@@ -2607,21 +2612,23 @@ mod tests {
     #[test]
     fn queue_without_user_added_songs_has_two_sections() {
         let items = vec![item("a", Origin::Source), item("b", Origin::Source)];
-        let entries = queue_entries(&items, Some(0), false);
+        let entries = queue_entries(&items, Some(0));
         assert_eq!(entries[0].section, Some(lang::t("再生中", "Now playing")));
         assert_eq!(entries[1].section, Some(lang::t("次に流れる曲", "Up next")));
         assert!(entries[1].flow_header);
         // 最後の曲ならキューは今の曲だけ
-        assert_eq!(queue_entries(&items, Some(1), false).len(), 1);
+        assert_eq!(queue_entries(&items, Some(1)).len(), 2);
     }
 
     #[test]
-    fn history_lists_played_songs_newest_first() {
+    fn history_comes_first_oldest_first_and_is_fixed() {
         let items = vec![item("a", Origin::Source), item("b", Origin::Source), item("c", Origin::Source)];
-        let ids: Vec<String> = queue_entries(&items, Some(2), true).into_iter().map(|e| e.item_id).collect();
-        assert_eq!(ids, vec!["b", "a"]);
-        assert!(queue_entries(&items, Some(0), true).is_empty());
-        assert!(queue_entries(&[], None, false).is_empty());
+        let entries = queue_entries(&items, Some(2));
+        let shape: Vec<(&str, bool, bool)> = entries.iter().map(|e| (e.item_id.as_str(), e.is_history, e.is_current)).collect();
+        assert_eq!(shape, vec![("a", true, false), ("b", true, false), ("c", false, true)]);
+        assert_eq!(entries[0].section, Some(lang::t("履歴", "History")));
+        assert!(queue_entries(&items, Some(0)).iter().all(|e| !e.is_history));
+        assert!(queue_entries(&[], None).is_empty());
     }
 
     #[test]

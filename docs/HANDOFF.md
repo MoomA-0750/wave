@@ -1,6 +1,6 @@
 # 引き継ぎ（今の状態）
 
-更新: 2026-11-23（再生画面の要望のフェーズ 1 の後）（セッション 16a2e897、ブランチ ios-app）
+更新: 2026-11-23（再生画面の要望のフェーズ 2 の後）（セッション 16a2e897、ブランチ ios-app）
 
 ## 目的
 
@@ -38,7 +38,14 @@ Windows の wave の「Spotify から移す」。Spotify のプレイリスト�
 
 ## 再生画面まわりの要望 8 件（本人の依頼 11-23。計画: `docs/player-requests-plan.md`）
 
-フェーズ 1（調べ）は済み。次はフェーズ 2（キュー: 履歴を上スクロールで・Mac の余白・Mac のページ下）。続いて 3 PinP、4 窓を閉じても止めない設定、5 ビデオの維持と先読み。Mac の変更は Linux 機から組み立てられないので「未確認」と書き、本人に Mac で確かめてもらう。Windows は to-fu（`scripts/win.sh`）、Android は Fold 7・Pixel 3 で確かめる。まず `docs/player-requests-plan.md` を読む
+フェーズ 1（調べ）・2（キュー）は済み。次はフェーズ 3 PinP、続いて 4 窓を閉じても止めない設定、5 ビデオの維持と先読み。Mac の変更は Linux 機から組み立てられないので「未確認」と書き、本人に Mac で確かめてもらう。Windows は to-fu（`scripts/win.sh`）、Android は Fold 7・Pixel 3 で確かめる。まず `docs/player-requests-plan.md` を読む
+
+フェーズ 2 の結果（キューを「履歴＋今＋次」の1本の一覧にし、開いたとき・曲が替わったとき今の曲を上へ合わせる。「キュー｜履歴」のタブは廃止）:
+- Windows: to-fu で確認済み（履歴が上に出る・今の曲が上に来る）。`MainWindow.xaml.cs` の `RenderQueue`
+- Android: Pixel 3 で確認済み（`NowPlaying.kt` の `QueueSheet`。Fold 7 は未）
+- Linux GTK: 試験は通る（`shell.rs`）が、画面は未確認（Qt 版は未対応）
+- Mac: **未確認**（`RightPane.swift` の QueueView・`MainWindowModel.queueEntries`。右欄の左右の余白＝`listRowInsets`、ページ下＝`ContentPane` の `safeAreaPadding(.bottom, 100)`。後者は二重に空く恐れがあるので Mac で見てもらう）
+- `SPEC.md` を更新済み
 
 ## 次にやること（Spotify から移す・AI 識別。再生画面の要望と並行）
 
