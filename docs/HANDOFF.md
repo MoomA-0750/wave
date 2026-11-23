@@ -79,11 +79,11 @@ Windows の wave の「Spotify から移す」。Spotify のプレイリスト�
 
 ## iPhone の Live Activity・プレーヤーまわり（本人の依頼 11-23。セッション 4033c98e。設計: `docs/ios-live-activity-design.md`、経緯: `docs/decisions.md` の 2026-11-23）
 
-appshelf（`mac.sh ios-shelf`、最新ビルド 20261123-230541）に載せ済み。iPhone へ入れるのは本人が appshelf から。実機の確認は本人の操作待ち。
+appshelf（`mac.sh ios-shelf`、最新ビルド 20261124-001055）に載せ済み。iPhone へ入れるのは本人が appshelf から。実機の確認は本人の操作待ち。
 - Live Activity: 再生の操作・位置の棒・歌詞を外し、評価のボタン（＋は一発で高く評価、✓は押すとアプリのプレイリスト追加画面）と次の 3 曲（押すとその曲へ）だけ。背景は透明（`.clear`）。設定「ロック画面の再生中」で入切。ロック画面の高さ・追加画面の二重表示・設定の入切は実機で確認済み。背景の透過・Dynamic Island 展開（2 曲）は未確認
 - 小窓（PiP）が出ているとき、ロック画面から追加画面を開くと再生画面が重なって二重に出た問題は、`IOSShell.holdPlayerUntil` で直し、実機で確認済み
 - 全画面プレイヤー: 斜めの引き下ろしで曲が替わる問題は、横が縦の 1.5 倍より大きいときだけ曲送りにして直した（実機は未確認）
-- ミニプレーヤー: 左右スワイプで曲の欄が Safari のように動く（A。OS の付属部品の中）。さらに B（`MiniPlayerCard`、iOS 26 から）を足した: ガラスの枠ごと入れ替わる。位置は「下の安全な余白＋56pt」の見積もり、スクロールで畳む動きは無い。既定は B、設定「ミニプレーヤーの枠を自前で描く（試し）」で A に戻せる（`miniPlayerCustom`）。**本人が B を試して、元の方が良ければ A に戻す予定**（確認一覧にある）
+- ミニプレーヤー: 左右スワイプで曲の欄が Safari のように動く（A。OS の付属部品の中）。さらに B（`MiniPlayerCard`、iOS 26 から）を足した: ガラスの枠ごと入れ替わる。枠は Safari のように幅が縮みながら入れ替わる（11-24 に作り直し。縮む割合 0.55 などは録画の目測で、本人の実機の感想待ち）。位置は「下の安全な余白＋48pt」の見積もり、スクロールで畳む動きは無い。既定は B、設定「ミニプレーヤーの枠を自前で描く（試し）」で A に戻せる（`miniPlayerCustom`）。**本人が B を試して、元の方が良ければ A に戻す予定**（確認一覧にある）
 - 関係する場所: `mac/Sources/WaveWidget/WaveWidgetBundle.swift`（`NowPlayingLiveActivity`）、`Shared/Widget/WidgetShared.swift`（`NowPlayingAttributes`）、`Shared/Services/WidgetSync.swift`（`updateActivity`）、`iOS/Player/MiniPlayer.swift`、`iOS/App/RootView.swift`（`MiniPlayerAccessory`）、`iOS/Player/NowPlayingView.swift`（ジャケットの横の払い）
 - Mac は `ssh mac`（`mac/scripts/mac.sh`）。画面のセッションにログインしてもらうと `mac.sh run`・`cmd`・`log` で Mac 版も確かめられる。iPhone 実機へ入れるには Mac に iPhone をつなぐ（ロックを外す）か、appshelf を使う
 
