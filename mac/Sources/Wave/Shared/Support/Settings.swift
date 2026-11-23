@@ -36,6 +36,8 @@ final class Settings: Codable {
     var musicPip = true
     /// ロック画面・ダイナミックアイランドの再生中（Live Activity。評価のボタンと次の3曲。iPhone だけ。既定はオン）。
     var liveActivity = true
+    /// ミニプレーヤーの枠を自前で描く（iPhone の iOS 26 から。既定はオン。切ると OS の付属部品に戻る）。
+    var miniPlayerCustom = true
     /// ロック画面に今歌っている歌詞の行を出す場所（iPhone だけ）: 再生中の情報のアーティスト名の欄（車・イヤホン・時計にも出るので既定はオフ）・
     /// ロック画面の全画面のジャケット（iOS 26 から。既定はオン）。
     var lyricsInArtist = false
@@ -64,7 +66,7 @@ final class Settings: Codable {
 
     enum CodingKeys: String, CodingKey {
         case volume, shuffle, repeatMode, sendHistory, rightPaneOpen, releaseNotices, librarySort, libraryGrid, playlistOrders, language, originalTitles,
-            searchHistory, relayV2Url, relayV2Host, aiUrl, aiToken, aiName, discordPresence, discordClientId, musicPip, liveActivity, lyricsInArtist, lyricsInArtwork,
+            searchHistory, relayV2Url, relayV2Host, aiUrl, aiToken, aiName, discordPresence, discordClientId, musicPip, liveActivity, miniPlayerCustom, lyricsInArtist, lyricsInArtwork,
             pinnedTab, downloadNetwork, smartDownloads, smartDownloadCount, smartDownloadLimitGb, keepPlayingWhenClosed
     }
 
@@ -92,6 +94,7 @@ final class Settings: Codable {
         discordClientId = try c.decodeIfPresent(String.self, forKey: .discordClientId)
         musicPip = try c.decodeIfPresent(Bool.self, forKey: .musicPip) ?? musicPip
         liveActivity = try c.decodeIfPresent(Bool.self, forKey: .liveActivity) ?? liveActivity
+        miniPlayerCustom = try c.decodeIfPresent(Bool.self, forKey: .miniPlayerCustom) ?? miniPlayerCustom
         lyricsInArtist = try c.decodeIfPresent(Bool.self, forKey: .lyricsInArtist) ?? lyricsInArtist
         lyricsInArtwork = try c.decodeIfPresent(Bool.self, forKey: .lyricsInArtwork) ?? lyricsInArtwork
         pinnedTab = try c.decodeIfPresent(String.self, forKey: .pinnedTab) ?? pinnedTab

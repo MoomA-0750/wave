@@ -19,6 +19,8 @@ final class IOSShell {
     var paths: [IOSTab: [Route]] = [.home: [], .search: [], .ai: [], .library: []]
     /// 再生中の画面を開いているか（ミニプレーヤーを押すと下からせり上がる）。
     var playerOpen = false
+    /// ミニプレーヤーの枠を自前で描くか（iOS 26 から。切ると OS の付属部品に戻る。Safari のように枠ごと入れ替わる試し）。
+    var miniCustom = AppServices.settings.miniPlayerCustom
     /// この時刻まで、小窓（PiP）の「元に戻す」で再生画面を開かない（ロック画面の再生中から追加画面を開いたとき、再生画面が重なって追加画面が一度消えるため）。
     var holdPlayerUntil = Date.distantPast
     /// 小窓の「元に戻す」で再生画面を開く（直前にロック画面から追加画面を開いていたときは開かない）。
@@ -241,10 +243,24 @@ struct RouteView: View {
 private struct MiniPlayerAccessory: ViewModifier {
     var show: Bool
     var zoom: Namespace.ID
+    @State private var shell = IOSShell.shared
+    /// 下の安全な余白（ホームバーの分）。
+    private static var bottomInset: CGFloat {
+        (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.keyWindow?.safeAreaInsets.bottom ?? 34
+    }
     var open: () -> Void
 
     func body(content: Content) -> some View {
-        if #available(iOS 26.0, *), show {
+        if #available(iOS 26.0, *), show, shell.miniCustom {
+            // 枠を自前で描き、タブバーの上に置く（OS の付属部品ではないので、スクロールで畳む動きは無い）
+            content
+                .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 56).allowsHitTesting(false) }
+                .overlay(alignment: .bottom) {
+                    MiniPlayerCard(zoom: zoom, open: open)
+                        .padding(.horizontal, Kasane.Space.s3)
+                        .padding(.bottom, Self.bottomInset + 56)
+                }
+        } else if #available(iOS 26.0, *), show {
             content
                 .tabViewBottomAccessory { MiniPlayer(open: open).matchedTransitionSource(id: MiniPlayer.zoomId, in: zoom) }
                 .tabBarMinimizeBehavior(.onScrollDown)
