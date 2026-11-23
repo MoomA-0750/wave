@@ -34,6 +34,8 @@ Windows の wave の「Spotify から移す」。Spotify のプレイリスト�
 - 容量（11-23）: ビルドの作業（`linux/target`・`androidApp/build`）と `.claude/worktrees` を消した。Fold 7 の wave は、設定の「ダウンロードをすべて削除」で 7.9GB を消し（使用 0B）、端末の空きが約 27.3GiB→34.7GiB（+7.7GB）になった。ただし端末の wave のアプリデータは diskstats で 14.6GB と出ていたので、ダウンロード（7.9GB）以外の約 6.7GB の正体は未解明（diskstats の値は古いまま更新されていなかったので、あとで測り直す。release ビルドで `run-as` が使えず中身を直接は見られない）。端末の wave は古い版（容量の上限の設定が無い）で、スマートダウンロードが入っている
 - スマートダウンロードの容量の上限は 5 つの実装に入れた（試験: Windows 341 件・Kotlin core・Rust core は通過、Swift は未確認）。実機で動くことは未確認
 
+- Fold 7 に容量の上限の入った新しい版（`:androidApp:assemblePhoneRelease`、debug 鍵で署名）を `adb install -r --user 0` で上書きで入れた（ログイン・設定は残った）。設定に「Smart download storage limit 5 GB」が出ることを実機で確かめた。ダウンロード削除のあとスマートダウンロードが 73MB まで取り直している。残り約 6.7GB の可能性: Fold 7 の Secure Folder（ユーザー 150）の中の wave（adb の shell では中を見られない。本人に確かめてもらう）
+
 ## 次にやること
 
 1. AI コンテンツの識別（本人の了承済みの方針は上の「どこまで」）。最初の確認: AI ラベルが付いた YouTube Music の曲の応答に表示が入っているかを調べる（本人が曲を教えるか、自分で探す。ログインしない通信と、必要ならログイン済みの応答）。Spotify の API・ZIP に AI クレジットがあるかも調べる。結果を見て `SPEC.md` に仕様（確定／仮）を書き、実装は本人の了承の後
