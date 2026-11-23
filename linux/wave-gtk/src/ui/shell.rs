@@ -972,18 +972,39 @@ fn mini_window(app: &Rc<App>) -> gtk::Window {
     let overlay = gtk::Overlay::builder().child(&media).css_classes(["video-layer"]).build();
     overlay.add_overlay(&controls);
     overlay.add_overlay(&back);
+    // 上: 曲名・アーティスト・評価（右上の「wave に戻す」の左）。下: シークバー。指を乗せたときだけ出す
+    let title = gtk::Label::builder().xalign(0.0).ellipsize(gtk::pango::EllipsizeMode::End).css_classes(["heading"]).build();
+    let artist = gtk::Label::builder().xalign(0.0).ellipsize(gtk::pango::EllipsizeMode::End).css_classes(["caption", "dim-label"]).build();
+    let names = gtk::Box::builder().orientation(gtk::Orientation::Vertical).hexpand(true).build();
+    names.append(&title);
+    names.append(&artist);
+    let like = gtk::Button::builder().css_classes(["osd", "circular"]).build();
+    like_behaviour(app, &like);
+    let top = gtk::Box::builder().spacing(6).halign(gtk::Align::Fill).valign(gtk::Align::Start).margin_top(8).margin_start(12).margin_end(48).visible(false).css_classes(["osd"]).build();
+    top.append(&names);
+    top.append(&like);
+    let seek = gtk::Scale::builder().orientation(gtk::Orientation::Horizontal).hexpand(true).build();
+    seek.set_range(0.0, 1.0);
+    let seek_row = gtk::Box::builder().halign(gtk::Align::Fill).valign(gtk::Align::End).margin_bottom(8).margin_start(12).margin_end(12).visible(false).build();
+    seek_row.append(&seek);
+    overlay.add_overlay(&top);
+    overlay.add_overlay(&seek_row);
     let window = gtk::Window::builder().title(lang::t("wave の小窓", "wave mini player")).default_width(400).default_height(225).child(&overlay).build();
     // 指を乗せたときだけ操作を出す
     let motion = gtk::EventControllerMotion::new();
-    let (c, b) = (controls.clone(), back.clone());
+    let (c, b, t, r) = (controls.clone(), back.clone(), top.clone(), seek_row.clone());
     motion.connect_enter(move |_, _, _| {
         c.set_visible(true);
         b.set_visible(true);
+        t.set_visible(true);
+        r.set_visible(true);
     });
-    let (c, b) = (controls.clone(), back.clone());
+    let (c, b, t, r) = (controls.clone(), back.clone(), top.clone(), seek_row.clone());
     motion.connect_leave(move |_| {
         c.set_visible(false);
         b.set_visible(false);
+        t.set_visible(false);
+        r.set_visible(false);
     });
     overlay.add_controller(motion);
     let playback = app.playback.clone();
@@ -1016,9 +1037,32 @@ fn mini_window(app: &Rc<App>) -> gtk::Window {
             gtk::glib::Propagation::Proceed
         });
     }
+    // 利用者が動かしたときだけシークする（位置の書き換えでは呼ばれない）。動かしている間はつまみを戻さない
+    let dragging = Rc::new(Cell::new(false));
+    {
+        let (playback, dragging) = (app.playback.clone(), dragging.clone());
+        seek.connect_change_value(move |_, _, value| {
+            if let Some(total) = playback.player().duration_ms() {
+                dragging.set(true);
+                playback.player().seek_ms((value.clamp(0.0, 1.0) * total as f64) as u64);
+                let dragging = dragging.clone();
+                gtk::glib::timeout_add_local_once(std::time::Duration::from_millis(600), move || dragging.set(false));
+            }
+            gtk::glib::Propagation::Proceed
+        });
+    }
     let (playback, p) = (app.playback.clone(), play.downgrade());
     gtk::glib::timeout_add_local(std::time::Duration::from_millis(500), move || {
         let Some(p) = p.upgrade() else { return gtk::glib::ControlFlow::Break };
+        if let Some(song) = playback.current() {
+            title.set_label(&song.title);
+            artist.set_label(&song.artists_text());
+        }
+        if !dragging.get() {
+            if let Some(total) = playback.player().duration_ms().filter(|t| *t > 0) {
+                seek.set_value((playback.position_ms() as f64 / total as f64).clamp(0.0, 1.0));
+            }
+        }
         let playing = playback.player().is_playing();
         p.set_icon_name(if playing { "media-playback-pause-symbolic" } else { "media-playback-start-symbolic" });
         p.set_tooltip_text(Some(if playing { lang::t("一時停止", "Pause") } else { lang::t("再生", "Play") }));
