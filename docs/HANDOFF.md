@@ -72,7 +72,8 @@ Windows の wave の「Spotify から移す」。Spotify のプレイリスト�
 - 先読み: 次の曲の songInfo と、維持が ON のとき映像の URL を先に解決する。Windows `PlayerService.PrefetchVideo`＋`MusicVideoPlayer.PrefetchAsync`、Swift `PlayerService.prefetchVideo`＋`MusicVideoPlayer.prefetch`、Android `MusicVideos.prefetch`（`PlaybackService.prefetchVideo`）。映像の先頭のバイトは取っていない（理由は decisions.md）。Linux（Rust）は先読みを入れていない
 - Windows: to-fu で確認済み（`keep=True` が MV の無い曲を挟んでも残り、曲の開始の 0.03 秒後に映像が読み込み済みになる）。ログで確認しただけで、画面で「動画」のタブが選ばれた見た目は見ていない
 - Android: `compilePhoneDebugKotlin` と Pixel 3 への導入は通った。Pixel 3 が Windows の再生を映す状態だったため、手元の再生での維持・先読みは**未確認**
-- Mac・iOS: `ssh mac` で `mac.sh run` のビルド（Mac 版）・`ios-bundle.sh`（iPhone シミュレーター向け）・`mac.sh test`（300 件、失敗 0）が通った。ただし Mac に画面のセッションが無く（コンソールがログイン画面で `open` が失敗する）アプリを起動できなかったので、動きは**未確認**。Mac の `DebugCommands` に `next` と、`now` に showVideo・keep・hasVideo・mv の表示を足した（`mac.sh cmd` で使う。`mac.sh run` の署名は GUI の Terminal が要る）
+- Mac: Mac にログインしてもらい `mac.sh run` で起動、`mac.sh cmd` で確認済み（11-23）。`album-play`→`video on`→`next` を繰り返し、`showVideo=true` が MV の無い曲を 4 曲挟んでも残り、`video prefetch resolved` の後、MV のある曲（LOSTSCAPES）で映像が読み込まれ（`mv=ready`、1280x720）。画面の見た目は見ていない。`mac.sh test` 300 件・失敗 0。DebugCommands に `next` と、`now` に動画の状態を足した
+- iOS: シミュレーター向けのビルドは通った（`ios-bundle.sh`）が、動きは未確認（シミュレーターを起動しない決まり。実機で確かめる）
 - Linux: `cargo check` のみ。先読みは未実装
 - `SPEC.md`・`docs/decisions.md` を更新済み
 
