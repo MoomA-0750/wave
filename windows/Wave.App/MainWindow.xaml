@@ -336,11 +336,7 @@
                             <RowDefinition Height="*" />
                         </Grid.RowDefinitions>
                         <Grid Padding="16,12,8,4">
-                            <!-- キューと履歴の切り替え（Spotify と同じ） -->
-                            <StackPanel Orientation="Horizontal" Spacing="{StaticResource KasaneSpace1}">
-                                <ToggleButton x:Name="QueueTab" CornerRadius="14" Padding="14,4" MinWidth="0" IsChecked="True" Click="OnQueueTab" Content="{x:Bind app:L.T('キュー', 'Queue')}" />
-                                <ToggleButton x:Name="HistoryTab" CornerRadius="14" Padding="14,4" MinWidth="0" Click="OnHistoryTab" Content="{x:Bind app:L.T('履歴', 'History')}" />
-                            </StackPanel>
+                            <TextBlock Text="{x:Bind app:L.T('キュー', 'Queue')}" Style="{StaticResource BodyStrongTextBlockStyle}" VerticalAlignment="Center" />
                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="{StaticResource KasaneSpace1}">
                                 <HyperlinkButton x:Name="ClearQueueButton" Visibility="Collapsed" Click="OnClearQueue" Content="{x:Bind app:L.T('キューを消去', 'Clear queue')}" />
                                 <!-- 良いラジオの流れを残す（全端末。聴いた曲から先の曲までを新しいプレイリストに） -->
@@ -360,7 +356,7 @@
                                        HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" MaxLines="3" />
                         </StackPanel>
                         <!-- 次の曲はドラッグで並べ替えられる（今の曲は動かせない。Android と同じ） -->
-                        <ListView x:Name="QueueList" Grid.Row="1" SelectionMode="None" IsItemClickEnabled="True" ItemClick="OnQueueClick" Padding="4,0,4,8"
+                        <ListView x:Name="QueueList" Grid.Row="1" SelectionMode="None" IsItemClickEnabled="True" ItemClick="OnQueueClick" Padding="4,0,4,300"
                                   CanDragItems="True" CanReorderItems="True" AllowDrop="True" DragItemsStarting="OnQueueDragStarting" DragItemsCompleted="OnQueueDragCompleted">
                             <ListView.ItemTemplate>
                                 <DataTemplate x:DataType="app:QueueEntry">

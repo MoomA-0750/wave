@@ -43,8 +43,10 @@ public sealed class LibraryEntry(string title, string? subtitle, string? thumbna
 /// キューの1行。Section はかたまりの最初の行にだけ付く見出し（「再生中」「キューの次の曲」「次に流れる曲」）。
 /// IsFlowHeader は「次に流れる曲」の見出しの行（見出しに「消去」を出す）。
 /// </summary>
-public sealed class QueueEntry(int index, Song song, bool isCurrent, string? section = null, bool isFlowHeader = false)
+public sealed class QueueEntry(int index, Song song, bool isCurrent, string? section = null, bool isFlowHeader = false, bool isHistory = false)
 {
+    /// <summary>もう流れた曲（今の曲より前）。押すとその曲に戻る。並べ替えはできない。</summary>
+    public bool IsHistory { get; } = isHistory;
     public bool IsFlowHeader { get; } = isFlowHeader;
     public int Index { get; } = index;
     public Song Song { get; } = song;
@@ -203,11 +205,9 @@ public sealed partial class MainWindow : Window
         switch (which)
         {
             case "queue":
-                queueHistory = false;
                 SetRightPane(true, queue: true);
                 break;
             case "history":
-                queueHistory = true;
                 SetRightPane(true, queue: true);
                 break;
             case "ai":
@@ -253,7 +253,7 @@ public sealed partial class MainWindow : Window
         AiView.Visibility = Visibility.Collapsed;
         NowPlayingView.Visibility = Ui.Hide(queue);
         QueueView.Visibility = Ui.Show(queue);
-        if (queue) RenderQueue();
+        if (queue) { queueScrolledIndex = -1; RenderQueue(); }
         Layout();
     }
 
@@ -857,55 +857,45 @@ public sealed partial class MainWindow : Window
         return timer;
     }
 
-    private bool queueHistory;
+    // 開いたとき・曲が変わったときだけ、今の曲を一覧の上に合わせる（-1 は「次の描き直しで合わせる」）
+    private int queueScrolledIndex = -1;
 
     /// <summary>
-    /// キュー（Spotify と同じ）: 一番上に今の曲、その下に自分で足した曲、その下に元から流れる予定の曲。もう流れた曲は「履歴」に分ける。
+    /// キュー（iOS の QueueView と同じ）: 履歴（古い順）・今の曲・自分で足した曲・元から流れる予定の曲を1本に並べる。
+    /// 開いたら今の曲を上に合わせ、上へ引くと履歴が出る。
     /// </summary>
     private void RenderQueue()
     {
         var entries = new System.Collections.ObjectModel.ObservableCollection<QueueEntry>();
-        QueueTab.IsChecked = !queueHistory;
-        HistoryTab.IsChecked = queueHistory;
-        if (queueHistory)
+        var now = Math.Clamp(Player.Index, 0, Player.Queue.Count);
+        for (var i = 0; i < now; i++) entries.Add(new QueueEntry(i, Player.Queue[i], false, i == 0 ? L.T("履歴", "History") : null, isHistory: true));
+        var userEnd = Player.UserQueueEnd;
+        QueueEntry? current = null;
+        for (var i = now; i < Player.Queue.Count; i++)
         {
-            // 新しい順。押すとその曲に戻る
-            for (var i = Math.Min(Player.Index, Player.Queue.Count) - 1; i >= 0; i--) entries.Add(new QueueEntry(i, Player.Queue[i], false));
-            ClearQueueButton.Visibility = Visibility.Collapsed;
+            string? section = i == Player.Index ? L.T("再生中", "Now playing")
+                : i == Player.Index + 1 && i < userEnd ? L.T("キューの次の曲", "Next in queue")
+                : i == userEnd ? L.T("次に流れる曲", "Up next")
+                : null;
+            var entry = new QueueEntry(i, Player.Queue[i], i == Player.Index, section, isFlowHeader: i == userEnd && i > Player.Index);
+            if (entry.IsCurrent) current = entry;
+            entries.Add(entry);
         }
-        else
-        {
-            var userEnd = Player.UserQueueEnd;
-            for (var i = Math.Max(0, Player.Index); i < Player.Queue.Count; i++)
-            {
-                string? section = i == Player.Index ? L.T("再生中", "Now playing")
-                    : i == Player.Index + 1 && i < userEnd ? L.T("キューの次の曲", "Next in queue")
-                    : i == userEnd ? L.T("次に流れる曲", "Up next")
-                    : null;
-                entries.Add(new QueueEntry(i, Player.Queue[i], i == Player.Index, section, isFlowHeader: i == userEnd && i > Player.Index));
-            }
-            ClearQueueButton.Visibility = Ui.Show(userEnd > Player.Index + 1);
-        }
+        ClearQueueButton.Visibility = Ui.Show(userEnd > Player.Index + 1);
         QueueList.ItemsSource = entries;
         SaveQueueButton.Visibility = Ui.Show(AppServices.Client.IsLoggedIn && !Player.IsRemote && QueueSave.Songs(Player.Queue).Count > 0);
         QueueEmpty.Visibility = Ui.Show(entries.Count == 0);
-        QueueEmptyTitle.Text = queueHistory ? L.T("まだ流れた曲はありません", "Nothing played yet") : L.T("キューは空です", "Your queue is empty");
-        QueueEmptyText.Text = queueHistory ? L.T("流れた曲は、ここに新しい順に並びます", "Songs you've played will show up here") : L.T("曲を再生すると、ここに次の曲が並びます", "Play something and upcoming songs will show up here");
         QueueList.Visibility = Ui.Hide(entries.Count == 0);
-        QueueList.CanReorderItems = !queueHistory;
-        QueueList.CanDragItems = !queueHistory;
-    }
-
-    private void OnQueueTab(object sender, RoutedEventArgs e)
-    {
-        queueHistory = false;
-        RenderQueue();
-    }
-
-    private void OnHistoryTab(object sender, RoutedEventArgs e)
-    {
-        queueHistory = true;
-        RenderQueue();
+        if (current is not null && queueScrolledIndex != Player.Index)
+        {
+            queueScrolledIndex = Player.Index;
+            // 並びの位置が決まってから合わせる
+            DispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low, () =>
+            {
+                QueueList.UpdateLayout();
+                QueueList.ScrollIntoView(current, ScrollIntoViewAlignment.Leading);
+            });
+        }
     }
 
     private void OnSaveQueue(object sender, RoutedEventArgs e) => _ = Dialogs.SaveQueueAsync();
@@ -926,7 +916,7 @@ public sealed partial class MainWindow : Window
     private void OnQueueDragStarting(object sender, DragItemsStartingEventArgs e)
     {
         // 今の曲は並べ替えない（ほかの端末を映している間の並べ替えは、その端末へ送る）
-        if (e.Items.OfType<QueueEntry>().Any(q => q.IsCurrent)) e.Cancel = true;
+        if (e.Items.OfType<QueueEntry>().Any(q => q.IsCurrent || q.IsHistory)) e.Cancel = true;
     }
 
     private void OnQueueDragCompleted(ListViewBase sender, DragItemsCompletedEventArgs e)
@@ -934,7 +924,7 @@ public sealed partial class MainWindow : Window
         if (e.DropResult != Windows.ApplicationModel.DataTransfer.DataPackageOperation.Move || e.Items.FirstOrDefault() is not QueueEntry moved) return;
         if (QueueList.ItemsSource is not IList<QueueEntry> shown) return;
         // 表示の並びでの位置から、キューでの行き先を求める（今の曲より前には置かない）
-        var to = Player.Index + Math.Max(1, shown.IndexOf(moved));
+        var to = Player.Index + Math.Max(1, shown.IndexOf(moved) - shown.Count(q => q.IsHistory));
         Player.MoveUpcoming(moved.Index, to);
         RenderQueue();
     }
