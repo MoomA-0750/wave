@@ -19,6 +19,10 @@ final class IOSShell {
     var paths: [IOSTab: [Route]] = [.home: [], .search: [], .ai: [], .library: []]
     /// 再生中の画面を開いているか（ミニプレーヤーを押すと下からせり上がる）。
     var playerOpen = false
+    /// この時刻まで、小窓（PiP）の「元に戻す」で再生画面を開かない（ロック画面の再生中から追加画面を開いたとき、再生画面が重なって追加画面が一度消えるため）。
+    var holdPlayerUntil = Date.distantPast
+    /// 小窓の「元に戻す」で再生画面を開く（直前にロック画面から追加画面を開いていたときは開かない）。
+    func restorePlayerFromPip() { if Date() >= holdPlayerUntil { playerOpen = true } }
     /// 再生画面のジャケットを左右に払っている間か（その間は、払いを「再生画面をしまう」動きに取られないよう止める）。
     var coverSwiping = false
     /// 再生中の画面で「曲｜動画」の動画を選んでいるか（PiP から戻ったときも映像を出せるよう、画面の外に持つ）。
@@ -110,7 +114,11 @@ struct RootView: View {
             guard url.scheme == "wave" else { return }
             switch url.host {
             case "nowplaying": if player.current != nil { shell.playerOpen = true }
-            case "add-to-playlist": if let song = player.current, !Feed.isExternal(song.videoId) { Dialogs.shared.addToPlaylist(song) }
+            case "add-to-playlist":
+                if let song = player.current, !Feed.isExternal(song.videoId) {
+                    shell.holdPlayerUntil = Date().addingTimeInterval(3)
+                    Dialogs.shared.addToPlaylist(song)
+                }
             default: break
             }
         }

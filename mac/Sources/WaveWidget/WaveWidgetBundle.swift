@@ -899,7 +899,7 @@ private struct PlayMark: View {
                         ActivityLike(liked: state.liked).font(.title2)
                     }
                     DynamicIslandExpandedRegion(.bottom) {
-                        ActivityQueue(items: state.queue, artworks: false)
+                        ActivityQueue(items: Array(state.queue.prefix(2)), artworks: false)
                     }
                 } compactLeading: {
                     Artwork(image: art, radius: Kasane.Radius.sm).frame(width: 22, height: 22)
@@ -934,28 +934,27 @@ private struct PlayMark: View {
         }
     }
 
-    /// 次に流れる曲。押すとその曲へ飛ぶ。
+    /// 次に流れる曲（1行ずつ。ロック画面の高さ 160pt に収めるため、曲名とアーティストを1行にまとめる）。押すとその曲へ飛ぶ。
     private struct ActivityQueue: View {
         var items: [NowPlayingAttributes.QueueItem]
         var artworks: Bool
 
         var body: some View {
-            VStack(alignment: .leading, spacing: Kasane.Space.s2) {
+            VStack(alignment: .leading, spacing: 4) {
                 if items.isEmpty {
                     Text(WidgetText.t("次に流れる曲はありません", "Nothing up next")).font(.caption).foregroundStyle(.secondary)
                 } else {
                     ForEach(items, id: \.index) { item in
                         Button(intent: PlayQueueItemIntent(index: item.index, videoId: item.videoId)) {
-                            HStack(spacing: Kasane.Space.s2) {
+                            HStack(spacing: 6) {
                                 if artworks {
-                                    Artwork(image: loadImage(WidgetStore.artworkFile(item.videoId)), radius: 5).frame(width: 28, height: 28)
+                                    Artwork(image: loadImage(WidgetStore.artworkFile(item.videoId)), radius: 4).frame(width: 20, height: 20)
                                 }
-                                VStack(alignment: .leading, spacing: 0) {
-                                    Text(item.title).font(.caption.weight(.semibold)).lineLimit(1)
-                                    Text(item.artist).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
-                                }
+                                (Text(item.title).fontWeight(.semibold) + Text("  " + item.artist).foregroundStyle(.secondary))
+                                    .font(.caption).lineLimit(1)
                                 Spacer(minLength: 0)
                             }
+                            .frame(height: 20)
                         }
                         .buttonStyle(.plain)
                     }
@@ -969,18 +968,19 @@ private struct PlayMark: View {
         var state: NowPlayingAttributes.ContentState
 
         var body: some View {
-            VStack(alignment: .leading, spacing: Kasane.Space.s3) {
+            VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: Kasane.Space.s3) {
-                    Artwork(image: loadImage(WidgetStore.artworkFile(state.videoId)), radius: Kasane.Radius.base).frame(width: 52, height: 52)
+                    Artwork(image: loadImage(WidgetStore.artworkFile(state.videoId)), radius: Kasane.Radius.base).frame(width: 44, height: 44)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(state.title).font(.headline).lineLimit(1)
-                        Text(state.artist).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                        Text(state.title).font(.subheadline.weight(.semibold)).lineLimit(1)
                         if let device = state.device {
                             Label(device, systemImage: "hifispeaker.2").font(.caption).foregroundStyle(accent).lineLimit(1)
+                        } else {
+                            Text(state.artist).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                         }
                     }
                     Spacer(minLength: 0)
-                    ActivityLike(liked: state.liked).font(.title)
+                    ActivityLike(liked: state.liked).font(.title2)
                 }
                 ActivityQueue(items: state.queue, artworks: true)
             }

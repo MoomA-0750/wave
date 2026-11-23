@@ -589,7 +589,7 @@ final class MusicPip: NSObject, AVPictureInPictureControllerDelegate, AVPictureI
     /// PiP の「元に戻す」: 再生画面を開く。
     nonisolated func pictureInPictureController(_ controller: AVPictureInPictureController, restoreUserInterfaceForPictureInPictureStopWithCompletionHandler completionHandler: @escaping (Bool) -> Void) {
         MainActor.assumeIsolated {
-            IOSShell.shared.playerOpen = true
+            IOSShell.shared.restorePlayerFromPip()
             completionHandler(true)
         }
     }

@@ -152,7 +152,7 @@ final class VideoPip: NSObject, AVPictureInPictureControllerDelegate {
     /// PiP の「元に戻す」: 再生画面を開いて、そこで映像を出す。
     nonisolated func pictureInPictureController(_ controller: AVPictureInPictureController, restoreUserInterfaceForPictureInPictureStopWithCompletionHandler completionHandler: @escaping (Bool) -> Void) {
         MainActor.assumeIsolated {
-            IOSShell.shared.playerOpen = true
+            IOSShell.shared.restorePlayerFromPip()
             completionHandler(true)
         }
     }
