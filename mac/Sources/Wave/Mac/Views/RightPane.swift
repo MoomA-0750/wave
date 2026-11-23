@@ -184,14 +184,13 @@ struct QueueView: View {
         let entries = model.queueEntries()
         VStack(spacing: 0) {
             HStack(spacing: Kasane.Space.s1) {
-                Chip(title: L.t("キュー", "Queue"), isOn: !model.queueHistory) { model.queueHistory = false }
-                Chip(title: L.t("履歴", "History"), isOn: model.queueHistory) { model.queueHistory = true }
+                Text(L.t("キュー", "Queue")).font(.headline)
                 Spacer()
-                if !model.queueHistory && player.userQueueEnd > player.index + 1 {
+                if player.userQueueEnd > player.index + 1 {
                     Button(L.t("キューを消去", "Clear queue")) { player.clearUserQueue() }.buttonStyle(.textLink)
                 }
                 // 良いラジオの流れを残す（SPEC「キューをプレイリストとして保存」）
-                if !model.queueHistory && Dialogs.canSaveQueue {
+                if Dialogs.canSaveQueue {
                     Button { Dialogs.shared.saveQueue() } label: { Image(systemName: "text.badge.plus").font(.system(size: 12)) } // apple-ui-allow: 隣の閉じるボタンと同じ小さな記号
                         .buttonStyle(IconButtonStyle()).help(L.t("キューをプレイリストとして保存", "Save queue as playlist"))
                 }
@@ -202,30 +201,40 @@ struct QueueView: View {
             if entries.isEmpty {
                 Spacer()
                 VStack(spacing: Kasane.Space.s2) {
-                    Text(model.queueHistory ? L.t("まだ流れた曲はありません", "Nothing played yet") : L.t("キューは空です", "Your queue is empty"))
+                    Text(L.t("キューは空です", "Your queue is empty"))
                         .font(.body.weight(.semibold))
-                    Text(model.queueHistory ? L.t("流れた曲は、ここに新しい順に並びます", "Songs you've played will show up here")
-                        : L.t("曲を再生すると、ここに次の曲が並びます", "Play something and upcoming songs will show up here"))
+                    Text(L.t("曲を再生すると、ここに次の曲が並びます", "Play something and upcoming songs will show up here"))
                         .font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
                 }
                 .padding(Kasane.Space.s6)
                 Spacer()
             } else {
-                List {
-                    ForEach(entries) { entry in
-                        QueueRow(entry: entry)
-                            .moveDisabled(model.queueHistory || entry.isCurrent)
-                            .listRowSeparator(.hidden)
+                ScrollViewReader { proxy in
+                    List {
+                        ForEach(entries) { entry in
+                            QueueRow(entry: entry)
+                                .id(entry.index)
+                                .moveDisabled(entry.isHistory || entry.isCurrent)
+                                .listRowSeparator(.hidden)
+                                .listRowInsets(EdgeInsets(top: 0, leading: Kasane.Space.s4, bottom: 0, trailing: Kasane.Space.s4))
+                        }
+                        .onMove { from, to in
+                            // 表示の並びでの位置から、キューでの行き先を求める（今の曲より前には置かない）
+                            guard let first = from.first, !entries[first].isHistory else { return }
+                            let moved = entries[first]
+                            let hist = entries.prefix { $0.isHistory }.count
+                            let dest = (to > first ? to - 1 : to) - hist
+                            player.moveUpcoming(moved.index, player.index + max(1, dest))
+                        }
                     }
-                    .onMove { from, to in
-                        // 表示の並びでの位置から、キューでの行き先を求める（今の曲より前には置かない）
-                        guard let first = from.first, !model.queueHistory else { return }
-                        let moved = entries[first]
-                        let dest = to > first ? to - 1 : to
-                        player.moveUpcoming(moved.index, player.index + max(1, dest))
+                    .listStyle(.plain)
+                    // 次の曲が少なくても、今の曲を上へ送れるよう下に余白を足す
+                    .contentMargins(.bottom, 300, for: .scrollContent)
+                    .task {
+                        try? await Task.sleep(for: .milliseconds(80))
+                        proxy.scrollTo(player.index, anchor: .top)
                     }
-                }
-                .listStyle(.plain)
+                    .onChange(of: player.index) { withAnimation { proxy.scrollTo(player.index, anchor: .top) } }
                 .scrollContentBackground(.hidden)
             }
         }

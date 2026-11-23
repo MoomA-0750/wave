@@ -13,6 +13,8 @@ struct ContentPane: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             ToastView(toast: AppServices.toast)
         }
+        // 下に浮かせた再生バー（高さ 88＋余白）の下までページが流れても、最後の行が触れるように
+        .safeAreaPadding(.bottom, 100)
         .animation(.easeOut(duration: 0.18), value: nav.current.id)
         .animation(.easeOut(duration: 0.2), value: AppServices.toast.text)
     }

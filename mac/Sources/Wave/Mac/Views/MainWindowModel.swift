@@ -24,6 +24,8 @@ struct QueueEntry: Identifiable, Hashable {
     var section: String?
     /// 「次に流れる曲」の見出しの行（見出しに「消去」を出す）。
     var isFlowHeader = false
+    /// もう流れた曲（今の曲より前。押すとその曲に戻る。並べ替えはできない）。
+    var isHistory = false
     var id: Int { index }
 }
 
@@ -245,29 +247,24 @@ final class MainWindowModel {
 
     func prefetchMembership() { AppServices.prefetchMembership() }
 
-    /// キュー（Spotify と同じ）: 一番上に今の曲、その下に自分で足した曲、その下に元から流れる予定の曲。もう流れた曲は「履歴」に分ける。
+    /// キュー（iOS の QueueView と同じ）: 履歴（古い順）・今の曲・自分で足した曲・元から流れる予定の曲を1本に並べる。開いたら今の曲を上に合わせ、上へ引くと履歴が出る。
     func queueEntries() -> [QueueEntry] {
         let player = AppServices.player!
         var entries: [QueueEntry] = []
-        if queueHistory {
-            // 新しい順。押すとその曲に戻る
-            var i = min(player.index, player.queue.count) - 1
-            while i >= 0 {
-                entries.append(QueueEntry(index: i, song: player.queue[i], isCurrent: false))
-                i -= 1
-            }
-        } else {
-            let userEnd = player.userQueueEnd
-            var i = max(0, player.index)
-            while i < player.queue.count {
-                let section: String? = i == player.index ? L.t("再生中", "Now playing")
-                    : i == player.index + 1 && i < userEnd ? L.t("キューの次の曲", "Next in queue")
-                    : i == userEnd ? L.t("次に流れる曲", "Up next")
-                    : nil
-                entries.append(QueueEntry(index: i, song: player.queue[i], isCurrent: i == player.index, section: section,
-                                          isFlowHeader: i == userEnd && i > player.index))
-                i += 1
-            }
+        let now = min(max(0, player.index), player.queue.count)
+        for i in 0..<now {
+            entries.append(QueueEntry(index: i, song: player.queue[i], isCurrent: false, section: i == 0 ? L.t("履歴", "History") : nil, isHistory: true))
+        }
+        let userEnd = player.userQueueEnd
+        var i = now
+        while i < player.queue.count {
+            let section: String? = i == player.index ? L.t("再生中", "Now playing")
+                : i == player.index + 1 && i < userEnd ? L.t("キューの次の曲", "Next in queue")
+                : i == userEnd ? L.t("次に流れる曲", "Up next")
+                : nil
+            entries.append(QueueEntry(index: i, song: player.queue[i], isCurrent: i == player.index, section: section,
+                                      isFlowHeader: i == userEnd && i > player.index))
+            i += 1
         }
         return entries
     }
