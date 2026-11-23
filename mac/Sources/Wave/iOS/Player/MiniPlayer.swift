@@ -24,6 +24,8 @@ struct MiniPlayer: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            // 曲の欄の左端を、欄の外（左の余白）まで広げて切る（余白の分だけ手前で切れないよう）。枠の丸い角の外へはみ出さないよう、全体も枠の形で切る
+            .padding(.leading, -Kasane.Space.s3)
             .clipped()
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
             .gesture(swipe(player))
@@ -52,6 +54,7 @@ struct MiniPlayer: View {
             .frame(height: 2)
             .padding(.horizontal, Kasane.Space.s4)
         }
+        .clipShape(Capsule())
         .contentShape(Rectangle())
         .onTapGesture(perform: open)
         .gesture(swipe(player))
@@ -75,6 +78,7 @@ struct MiniPlayer: View {
             }
             Spacer(minLength: 0)
         }
+        .padding(.leading, Kasane.Space.s3)
         .frame(width: max(width, 0) > 0 ? width : nil, alignment: .leading)
     }
 
