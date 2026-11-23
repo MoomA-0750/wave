@@ -63,6 +63,24 @@ class MusicVideos(
         return result
     }
 
+    /** 「動画」を選んで維持しているか（再生画面が決める）。ON のときだけ、次の曲の映像の URL を先に解決する。 */
+    @Volatile
+    var keepVideo: Boolean = false
+
+    /**
+     * 次の曲の MV の有無を先に引き（videoFor が覚える）、動画を維持しているなら映像の URL も解決して残す
+     * （曲が替わってから読み込むと、最初の数秒が映らないため）。映像の先頭のバイトまでは取らない（URL の解決が待ちの大半）。
+     */
+    suspend fun prefetch(videoId: String) {
+        val found = (videoFor(videoId) as? Result.Found)?.video ?: return
+        if (!keepVideo) return
+        val epoch = music.currentLoginGeneration()
+        if (cache.get(found.videoId, epoch) != null) return
+        val startedInEpoch = cache.epoch
+        val result = resolver.resolve(found.videoId, expectedGeneration = epoch, kind = StreamKind.Video)
+        if (result is xyz.mooma0750.wave.core.stream.ResolveResult.Ok) cache.put(result.stream, startedInEpoch)
+    }
+
     /** 映像だけを出すプレイヤー。音声の再生とは別に、音声のフォーカスを取らず、音も出さない。 */
     @OptIn(UnstableApi::class)
     fun createPlayer(context: Context): ExoPlayer =

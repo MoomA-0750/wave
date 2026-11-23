@@ -304,7 +304,11 @@ fun NowPlayingScreen(
                 else -> song?.videoId?.let { videos.videoFor(it) is MusicVideos.Result.Found }
             }
     }
-    LaunchedEffect(hasVideo) { if (hasVideo == false) video = false }
+    // 「動画」の選び（VideoPip.wanted）は曲が変わっても維持する。MV の無い曲では出せないので外すだけで、選びは残り、次に MV のある曲で戻す
+    LaunchedEffect(hasVideo) {
+        if (hasVideo == false) video = false else if (hasVideo == true && VideoPip.wanted) video = true
+    }
+    LaunchedEffect(VideoPip.wanted) { videos.keepVideo = VideoPip.wanted }
     // 映像を出していれば、ホームへ戻ったときに小窓にする
     val pipOwner = remember { Any() }
     DisposableEffect(video, hasVideo, song != null) {
@@ -386,7 +390,7 @@ fun NowPlayingScreen(
                 Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
                     // Spotify の「曲｜動画」の切り替え。動画のある曲だけ出す（無い曲・調べている間・ほかの端末を映している間は出さない）
                     if (song != null && hasVideo == true) {
-                        ChoiceButtonGroup(listOf(stringResource(R.string.nowplaying_song), stringResource(R.string.nowplaying_video)), if (video) 1 else 0, { video = it == 1 })
+                        ChoiceButtonGroup(listOf(stringResource(R.string.nowplaying_song), stringResource(R.string.nowplaying_video)), if (video) 1 else 0, { video = it == 1; VideoPip.wanted = video })
                     }
                 }
                 if (song != null && onAskAi != null) IconAction(R.drawable.ic_ai, stringResource(R.string.ai_title), onAskAi)

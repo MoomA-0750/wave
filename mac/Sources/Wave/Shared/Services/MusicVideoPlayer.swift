@@ -52,7 +52,10 @@ final class MusicVideoPlayer {
         state = .loading
         note = L.t("動画を読み込んでいます…", "Loading video…")
         Task {
-            guard let resolved = try? await AppServices.resolver.resolve(videoId: video.videoId, kind: .video), let stream = resolved.stream, mine == generation else {
+            let early = takePrefetched(video.videoId)
+            let resolvedStream: ResolvedStream?
+            if let early { resolvedStream = early } else { resolvedStream = (try? await AppServices.resolver.resolve(videoId: video.videoId, kind: .video))?.stream }
+            guard let stream = resolvedStream, mine == generation else {
                 if mine == generation { fail("resolve") }
                 return
             }
@@ -77,6 +80,27 @@ final class MusicVideoPlayer {
             AppPaths.log("video itag=\(stream.itag)")
             startTimer()
         }
+    }
+
+    @ObservationIgnored private var prefetched: [String: ResolvedStream] = [:]
+    @ObservationIgnored private var prefetchOrder: [String] = []
+    private static let freshMarginMs: Int64 = 5 * 60 * 1000
+
+    /// 次の曲の映像の URL を先に解決して残す（曲が替わって load が来たら、そのまま使う）。
+    func prefetch(_ video: MusicVideo) async {
+        if prefetched[video.videoId] != nil { return }
+        guard let stream = (try? await AppServices.resolver.resolve(videoId: video.videoId, kind: .video))?.stream else { return }
+        prefetched[video.videoId] = stream
+        prefetchOrder.append(video.videoId)
+        while prefetched.count > 2, !prefetchOrder.isEmpty { prefetched.removeValue(forKey: prefetchOrder.removeFirst()) }
+        AppPaths.log("video prefetch resolved")
+    }
+
+    private func takePrefetched(_ videoId: String) -> ResolvedStream? {
+        guard let stream = prefetched.removeValue(forKey: videoId),
+              AppServices.resolver.isFresh(stream, marginMs: MusicVideoPlayer.freshMarginMs),
+              stream.generation == AppServices.client.generation else { return nil }
+        return stream
     }
 
     private func fail(_ stage: String) {

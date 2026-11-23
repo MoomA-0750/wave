@@ -1,6 +1,6 @@
 # 引き継ぎ（今の状態）
 
-更新: 2026-11-23（再生画面の要望のフェーズ 4 の後）（セッション 16a2e897、ブランチ ios-app）
+更新: 2026-11-23（再生画面の要望のフェーズ 5 の後）（セッション 16a2e897、ブランチ ios-app）
 
 ## 目的
 
@@ -38,7 +38,7 @@ Windows の wave の「Spotify から移す」。Spotify のプレイリスト�
 
 ## 再生画面まわりの要望 8 件（本人の依頼 11-23。計画: `docs/player-requests-plan.md`）
 
-フェーズ 1（調べ）・2（キュー）・3（PinP）・4（窓を閉じても止めない設定）は済み。次はフェーズ 5 ビデオの維持と先読み。Mac の変更は Linux 機から組み立てられないので「未確認」と書き、本人に Mac で確かめてもらう。Windows は to-fu（`scripts/win.sh`）、Android は Fold 7・Pixel 3 で確かめる。まず `docs/player-requests-plan.md` を読む
+フェーズ 1〜5 は済み（再生画面の要望 8 件は実装が一通り終わった。残りは未確認の端末の確認）。Mac の変更は Linux 機から組み立てられないので「未確認」と書き、本人に Mac で確かめてもらう。Windows は to-fu（`scripts/win.sh`）、Android は Fold 7・Pixel 3 で確かめる。まず `docs/player-requests-plan.md` を読む
 
 フェーズ 2 の結果（キューを「履歴＋今＋次」の1本の一覧にし、開いたとき・曲が替わったとき今の曲を上へ合わせる。「キュー｜履歴」のタブは廃止）:
 - Windows: to-fu で確認済み（履歴が上に出る・今の曲が上に来る）。`MainWindow.xaml.cs` の `RenderQueue`
@@ -57,6 +57,14 @@ Windows の wave の「Spotify から移す」。Spotify のプレイリスト�
 - Windows: to-fu で確認済み（`MainWindow.xaml.cs` の `InitBackgroundTransfer` の `Closing`。窓が隠れ・プロセスが残り・再生が止まらない。戻すのは通知か wave をもう一度開く。`window-close`・`window-show` の開発用命令）。通知の見た目は未確認。設定画面のスイッチも画面では未確認
 - Linux GTK: ビルドと設定の試験は通る（`main.rs` の `hide_if_keep_playing`・`HOLD`）が、画面は未確認
 - Mac: **未確認**（`WaveApp.swift` の `applicationShouldTerminateAfterLastWindowClosed`・`applicationShouldHandleReopen`、`SettingsPage.swift` のスイッチ）。Mac で `swift build` と、赤丸で閉じて Dock で戻ることの確認が要る
+- `SPEC.md`・`docs/decisions.md` を更新済み
+
+フェーズ 5（ビデオの維持と先読み）の結果:
+- 維持: Mac `MainView.swift`・iOS `NowPlayingView.swift`・Linux `shell.rs` は曲が変わったときのリセットを外した（ライブは Mac・iOS で次の曲に画質を合わせる）。Windows は `wantVideo`（望む）と `UpdateVideoSwitch`（出せるか）に分けた（`ApplyVideo`）。Android は `VideoPip.wanted` を足し、MV の無い曲で `selected` が外れても選びは残る
+- 先読み: 次の曲の songInfo と、維持が ON のとき映像の URL を先に解決する。Windows `PlayerService.PrefetchVideo`＋`MusicVideoPlayer.PrefetchAsync`、Swift `PlayerService.prefetchVideo`＋`MusicVideoPlayer.prefetch`、Android `MusicVideos.prefetch`（`PlaybackService.prefetchVideo`）。映像の先頭のバイトは取っていない（理由は decisions.md）。Linux（Rust）は先読みを入れていない
+- Windows: to-fu で確認済み（`keep=True` が MV の無い曲を挟んでも残り、曲の開始の 0.03 秒後に映像が読み込み済みになる）。ログで確認しただけで、画面で「動画」のタブが選ばれた見た目は見ていない
+- Android: `compilePhoneDebugKotlin` と Pixel 3 への導入は通った。Pixel 3 が Windows の再生を映す状態だったため、手元の再生での維持・先読みは**未確認**
+- Mac・iOS・Linux: Mac・iOS は**未確認**（`swift build` していない）。Linux は `cargo check` のみ。Linux の先読みは未実装
 - `SPEC.md`・`docs/decisions.md` を更新済み
 
 ## 次にやること（Spotify から移す・AI 識別。再生画面の要望と並行）

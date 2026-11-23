@@ -40,9 +40,10 @@ struct NowPlayingView: View {
         .interactiveDismissDisabled(shell.coverSwiping)
         // ジャケットを大きくぼかして画面の端まで敷く（Apple Music の再生中の画面と同じ）
         .background { ArtworkBackdrop(url: song?.thumbnailUrl) }
-        // 曲が変わったら曲の表示に戻す（PiP で映している間は動画のまま）
-        .onChange(of: song?.videoId) { _, _ in if !VideoPip.shared.active { shell.showVideo = false } }
+        // 「動画」の選びは曲が変わっても維持する。次の曲がライブなら選びに合わせて画質を替える
+        .onChange(of: song?.videoId) { _, _ in if shell.showVideo { player.setLiveVideo(true) } }
         .onChange(of: shell.showVideo, initial: true) { _, show in
+            player.keepVideo = show
             MusicVideoPlayer.shared.setActive(show ? player.video : nil)
             // ライブは「動画」にしたときだけ、映像を見るための画質で読み直す
             player.setLiveVideo(show)

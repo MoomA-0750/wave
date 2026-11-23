@@ -412,7 +412,7 @@ public static class DebugCommands
                 }
                 break;
             case "now":
-                AppPaths.Log($"debug now title={player.Current?.Title} position={player.Position:0} playing={player.IsPlaying} remote={player.IsRemote} lyrics={player.Lyrics?.GetType().Name}");
+                AppPaths.Log($"debug now title={player.Current?.Title} position={player.Position:0} playing={player.IsPlaying} remote={player.IsRemote} lyrics={player.Lyrics?.GetType().Name} video={player.Video?.VideoId} keep={player.KeepVideo}");
                 break;
             case "playlist-delete":
             {

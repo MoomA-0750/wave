@@ -762,7 +762,7 @@ pub fn build(
     (bin.upcast(), app)
 }
 
-/// 今の曲の MV を探し、動画にしていれば読み込む。曲が変わったら「曲」の表示に戻す（小窓を出している間は動画のまま）。
+/// 今の曲の MV を探し、動画にしていれば読み込む。「動画」の選びは曲が変わっても維持する（MV の無い曲では出せないだけで、望みは残る）。
 /// 動画の間は、映像を音の位置に合わせ続ける。
 fn watch_video(app: &Rc<App>) {
     {
@@ -776,11 +776,6 @@ fn watch_video(app: &Rc<App>) {
             *app.mv_for.borrow_mut() = id.clone();
             *app.mv.borrow_mut() = None;
             app.stop_video();
-            if !app.pip_open() {
-                let mut view = app.view.get();
-                view.show_video = false;
-                app.view.set(view);
-            }
             app.view_changed();
             let Some(id) = id else { return };
             if app.video.is_none() {

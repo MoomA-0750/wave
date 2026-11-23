@@ -24,7 +24,7 @@ public sealed class MusicVideoPlayer : MutedVideo
         if (loadedVideoId == video.VideoId && Player.Source is not null) return true;
         Stop();
         var mine = Begin();
-        var resolved = await AppServices.Resolver.ResolveAsync(video.VideoId, kind: StreamKind.Video);
+        var resolved = TakePrefetched(video.VideoId) ?? await AppServices.Resolver.ResolveAsync(video.VideoId, kind: StreamKind.Video);
         if (resolved.Stream is not { } stream || Stale(mine))
         {
             AppPaths.Log($"video resolve failed reason={resolved.Failure}");
@@ -58,6 +58,23 @@ public sealed class MusicVideoPlayer : MutedVideo
         AppPaths.Log($"video itag={stream.Itag}");
         return true;
     }
+
+    private static readonly Dictionary<string, ResolveResult> prefetched = new();
+    private const long FreshMarginMs = 5 * 60 * 1000;
+
+    /// <summary>次の曲の映像の URL を先に解決して残す（曲が替わって LoadAsync が来たら、そのまま使う）。</summary>
+    public static async Task PrefetchAsync(MusicVideo video)
+    {
+        if (prefetched.ContainsKey(video.VideoId)) return;
+        var resolved = await AppServices.Resolver.ResolveAsync(video.VideoId, kind: StreamKind.Video);
+        if (resolved.Stream is null) return;
+        prefetched[video.VideoId] = resolved;
+        while (prefetched.Count > 2) prefetched.Remove(prefetched.Keys.First());
+        AppPaths.Log("video prefetch resolved");
+    }
+
+    private static ResolveResult? TakePrefetched(string videoId) =>
+        prefetched.Remove(videoId, out var r) && r.Stream is { } s && AppServices.Resolver.IsFresh(s, FreshMarginMs) && s.Generation == AppServices.Client.Generation ? r : null;
 
     /// <summary>音の位置に合わせる（画面の時計から呼ぶ）。</summary>
     public void Sync(MusicVideo video, long audioMs, bool playing)

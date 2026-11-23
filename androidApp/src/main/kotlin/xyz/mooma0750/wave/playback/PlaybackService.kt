@@ -874,6 +874,24 @@ class PlaybackService : MediaLibraryService() {
         return false
     }
 
+    private var videoPrefetchFor: String? = null
+
+    /** 次の曲の MV の有無と（動画を維持しているなら）映像の URL を先に引く。同じ曲は 1 回だけ。 */
+    private fun prefetchVideo(item: MediaItem) {
+        val song = Media3QueuePlayer.songOf(item) ?: return
+        if (song.isLive || xyz.mooma0750.wave.core.music.Feed.isExternal(song.videoId)) return
+        val videoId = song.videoId
+        if (videoPrefetchFor == videoId && !container.musicVideos.keepVideo) return
+        videoPrefetchFor = videoId
+        scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                container.musicVideos.prefetch(videoId)
+            } catch (e: java.io.IOException) {
+                Log.i(WaveApplication.LOG_TAG, "video prefetch failed type=${e.javaClass.simpleName}")
+            }
+        }
+    }
+
     /**
      * 次の曲の頭の 1MB（256kbps で 30 秒ほど）を取って残す（曲送りで、すぐ鳴らせる）。曲が替わったときと、キュー・シャッフルが変わったときに呼ぶ
      * （次の曲が替わっていなければ、取っている途中のものはそのまま）。失敗したら少し置いて、3回まで試す。
@@ -884,6 +902,7 @@ class PlaybackService : MediaLibraryService() {
         attempt: Int = 1,
     ) {
         val next = player.nextMediaItemIndex.takeIf { it != C.INDEX_UNSET } ?: return
+        prefetchVideo(player.getMediaItemAt(next))
         val uri = player.getMediaItemAt(next).localConfiguration?.uri ?: return
         val upstream = upstreamFactory ?: return
         // 取り終えた曲・通信できないときは先に取らない

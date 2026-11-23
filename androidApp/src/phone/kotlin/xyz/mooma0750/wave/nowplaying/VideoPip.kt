@@ -19,6 +19,9 @@ object VideoPip {
     /** 再生画面で「曲｜動画」の動画を選んでいるか（右の再生の列と全面の再生画面で同じものを使い、小窓から戻ったときも続ける）。 */
     var selected by mutableStateOf(false)
 
+    /** 本人が「動画」を選んでいる（曲が変わっても維持する。MV の無い曲では selected だけが外れ、これは残る）。 */
+    var wanted by mutableStateOf(false)
+
     private val inPipFlow = MutableStateFlow(false)
 
     /** 小窓で映しているか。 */

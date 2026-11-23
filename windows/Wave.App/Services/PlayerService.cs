@@ -2350,11 +2350,18 @@ public sealed partial class PlayerService : ObservableObject
     {
         // RSS のエピソードには YouTube の評価も MV も無い（ADR-0012）
         if (Feed.IsExternal(song.VideoId)) return;
-        var info = await AppServices.Music.SongInfoAsync(song.VideoId, cancel);
-        if (!info.IsOk || Current?.VideoId != song.VideoId) return;
-        if (AppServices.Client.IsLoggedIn) Like = info.Value!.Like;
+        // 先読みで引いてあれば、それを使う（曲が替わってすぐ「動画」を出せる）
+        SongInfo? info;
+        if (prefetchedInfo.Remove(song.VideoId, out var early)) info = early;
+        else
+        {
+            var result = await AppServices.Music.SongInfoAsync(song.VideoId, cancel);
+            info = result.IsOk ? result.Value : null;
+        }
+        if (info is null || Current?.VideoId != song.VideoId) return;
+        if (AppServices.Client.IsLoggedIn) Like = info.Like;
         // ライブ配信には重ねる MV を出さない
-        Video = song.IsLive || IsLive ? null : info.Value!.Video;
+        Video = song.IsLive || IsLive ? null : info.Video;
     }
 
     /// <summary>評価を読み直す（読めなかったときの↻）。</summary>
@@ -2406,6 +2413,7 @@ public sealed partial class PlayerService : ObservableObject
     {
         if (Index + 1 >= Queue.Count) return;
         var next = Queue[Index + 1];
+        PrefetchVideo(next);
         // ライブ配信は流すときに HLS を解決する（先読みしない）
         if (next.IsLive || Feed.IsExternal(next.VideoId) || prefetched.ContainsKey(next.VideoId) || prefetching.Contains(next.VideoId)) return;
         if (prefetchFailures.TryGetValue(next.VideoId, out var failure)
@@ -2420,6 +2428,37 @@ public sealed partial class PlayerService : ObservableObject
         finally
         {
             prefetching.Remove(next.VideoId);
+        }
+    }
+
+    /// <summary>「動画」を選んで維持しているか（MainWindow が決める）。ON のときだけ、次の曲の映像の URL を先に解決する。</summary>
+    public bool KeepVideo { get; set; }
+
+    private readonly Dictionary<string, SongInfo> prefetchedInfo = new();
+    private readonly HashSet<string> prefetchingVideo = [];
+
+    /// <summary>
+    /// 次の曲の MV の有無（songInfo）を先に引き、動画を維持しているなら映像の URL も解決しておく（曲が替わってから読み込むと、
+    /// 最初の数秒が映らないため）。映像の先頭のバイトまでは取らない（音の頭の先読みとは別。URL の解決が待ちの大半）。
+    /// </summary>
+    private async void PrefetchVideo(Song next)
+    {
+        if (next.IsLive || Feed.IsExternal(next.VideoId) || !prefetchingVideo.Add(next.VideoId)) return;
+        try
+        {
+            if (!prefetchedInfo.TryGetValue(next.VideoId, out var info))
+            {
+                var result = await AppServices.Music.SongInfoAsync(next.VideoId);
+                if (!result.IsOk) return;
+                info = result.Value!;
+                prefetchedInfo[next.VideoId] = info;
+                while (prefetchedInfo.Count > 4) prefetchedInfo.Remove(prefetchedInfo.Keys.First());
+            }
+            if (KeepVideo && info.Video is { } video) await MusicVideoPlayer.PrefetchAsync(video);
+        }
+        finally
+        {
+            prefetchingVideo.Remove(next.VideoId);
         }
     }
 

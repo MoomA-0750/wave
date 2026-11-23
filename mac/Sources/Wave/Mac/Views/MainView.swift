@@ -70,12 +70,16 @@ struct MainView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didEnterFullScreenNotification)) { _ in model.windowFullScreen = true }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didExitFullScreenNotification)) { _ in model.windowFullScreen = false }
         .onChange(of: player.current?.videoId) { _, _ in
-            // 曲が変わったら曲の表示に戻す（Android と同じ）。映像の小窓を出している間は動画のまま（MV の無い曲はジャケットを出す）
-            if !model.pipOpen { model.showVideo = false }
+            // 「動画」の選びは曲が変わっても維持する（MV の無い曲はジャケットを出すだけで、選びは残る）
+            // ライブは「動画」にしたときだけ映像の画質なので、次の曲がライブなら選びに合わせる
+            if model.showVideo { player.setLiveVideo(true) }
             model.prefetchMembership()
         }
         // ライブは「動画」にしたときだけ、映像を見るための画質で読み直す
-        .onChange(of: model.showVideo) { _, show in player.setLiveVideo(show) }
+        .onChange(of: model.showVideo, initial: true) { _, show in
+            player.keepVideo = show
+            player.setLiveVideo(show)
+        }
         .onChange(of: searchFocus) { _, focused in model.searchFocusChanged(focused) }
         .onChange(of: model.searchFocused) { _, focused in if focused != searchFocus { searchFocus = focused } }
         .onAppear(perform: installKeys)

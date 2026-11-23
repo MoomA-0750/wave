@@ -2088,7 +2088,10 @@ final class PlayerService {
             }
             return
         }
-        guard let info = (try? await AppServices.music.songInfo(song.videoId))?.value, current?.videoId == song.videoId else { return }
+        // 先読みで引いてあれば、それを使う（曲が替わってすぐ「動画」を出せる）
+        let early = prefetchedInfo.removeValue(forKey: song.videoId)
+        let fetched = early == nil ? (try? await AppServices.music.songInfo(song.videoId))?.value : nil
+        guard let info = early ?? fetched, current?.videoId == song.videoId else { return }
         if AppServices.client.isLoggedIn { like = info.like }
         // ライブ配信には重ねる映像（MV）を出さない
         video = song.isLive || isLive ? nil : info.video
@@ -2126,11 +2129,35 @@ final class PlayerService {
     @ObservationIgnored private var prefetching: Set<String> = []
     @ObservationIgnored private var prefetchFailures: [String: (count: Int, atMs: Int64)] = [:]
 
+    /// 「動画」を選んで維持しているか（画面が決める）。ON のときだけ、次の曲の映像の URL を先に解決する。
+    @ObservationIgnored var keepVideo = false
+    @ObservationIgnored private var prefetchedInfo: [String: SongInfo] = [:]
+    @ObservationIgnored private var prefetchingVideo: Set<String> = []
+
+    /// 次の曲の MV の有無（songInfo）を先に引き、動画を維持しているなら映像の URL も解決しておく（曲が替わってから読み込むと、
+    /// 最初の数秒が映らないため）。映像の先頭のバイトまでは取らない（URL の解決が待ちの大半）。
+    private func prefetchVideo(_ next: Song) {
+        if next.isLive || Feed.isExternal(next.videoId) || prefetchingVideo.contains(next.videoId) { return }
+        prefetchingVideo.insert(next.videoId)
+        Task {
+            defer { prefetchingVideo.remove(next.videoId) }
+            var info = prefetchedInfo[next.videoId]
+            if info == nil {
+                guard let fetched = (try? await AppServices.music.songInfo(next.videoId))?.value else { return }
+                info = fetched
+                prefetchedInfo[next.videoId] = fetched
+                if prefetchedInfo.count > 4, let drop = prefetchedInfo.keys.first(where: { $0 != next.videoId }) { prefetchedInfo.removeValue(forKey: drop) }
+            }
+            if keepVideo, let video = info?.video { await MusicVideoPlayer.shared.prefetch(video) }
+        }
+    }
+
     /// 次の曲の URL を先に解決し、頭を取っておく（曲の切り替えを速くする）。曲が鳴り始めたときと、鳴っている間は時々呼ぶ
     /// （次の曲が替わったら、その曲を先読みする）。失敗したら少し置いて、3回まで試す。
     private func prefetch() {
         guard index + 1 < queue.count else { return }
         let next = queue[index + 1]
+        prefetchVideo(next)
         if prefetched[next.videoId] != nil || prefetching.contains(next.videoId) || next.isLive || Feed.isExternal(next.videoId)
             || rejected.recentlyRejected(next.videoId, nowMs: clockMs) { return }
         if let failure = prefetchFailures[next.videoId],

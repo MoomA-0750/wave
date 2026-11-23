@@ -1485,3 +1485,11 @@
 - 決め: 設定の Bool `keepPlayingWhenClosed`（既定は切）を Mac・Windows・Linux に足す。Mac は `applicationShouldTerminateAfterLastWindowClosed` が設定の反対を返し、Dock の再オープンで窓を戻す。Windows は `AppWindow.Closing` を取り消して窓を隠し、通知（押すと戻る）を 1 回出す。Linux は `connect_close_request` で窓を隠し `app.hold()` で生かす。二重起動では隠した窓を前に出す
 - 曲が止まっていて閉じたときは、隠さず終了する（見えない居座りを作らない）。隠した後に 10 分止まったままでも終了する（Windows・Linux）。トレイの常駐アイコンは作らず、通知・もう一度開く・メディアの操作で戻す
 - 試して分かったこと: Windows の `Window.Close()` は `AppWindow.Closing` を通らず終了する。確かめには ×と同じ WM_SYSCOMMAND（SC_CLOSE）を送る必要があり、開発用命令 `window-close`・`window-show` を足した
+
+## 2026-11-23 ビデオの維持と先読み（フェーズ 5）
+
+- きっかけ: 一度「動画」にしても、次の曲で「曲」の表示に戻る。曲が始まってから映像の読み込みが始まり、最初の数秒が映らない（本人の依頼）
+- 決め（維持）: 「望む状態」と「出せるか」を分ける。Windows は `wantVideo` と `UpdateVideoSwitch`（MV があれば出す）、Android は `VideoPip.wanted`（`selected` は出している状態）。Mac・iOS・Linux は曲が変わったときのリセットを外しただけ（もともと「選び」と「MV があるか」が別の変数）。MV の無い曲を挟んでも選びは残る
+- 決め（先読み）: 音の先読み `prefetch` に足した。次の曲の songInfo（MV の有無）を先に引いて持ち、曲が替わったときの songInfo の呼び出しで使う。維持が ON なら MV の映像の URL も解決して取っておき、映像の読み込みで使う。映像の先頭のバイトは取らない: 音の先読みは `AudioCache`（曲の ID で引く）に頭を残すが、映像の ID は MV 側の別の ID で、音のキャッシュに混ぜると同じ ID を音として鳴らしたとき映像のバイトが出るため。待ちの大半は /player の解決なので、まず URL までにした
+- 試して分かったこと: to-fu で、維持が ON のまま MV の無い曲を 2 曲挟んでも `keep=True` が残り、3 曲目の開始の 0.03 秒後に `video itag=136`（読み込み済み）が出た。Pixel 3 は Windows の再生を映す状態（Playing on TO-FU）で、手元の再生での確認は未
+

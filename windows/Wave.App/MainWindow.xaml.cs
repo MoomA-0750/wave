@@ -558,8 +558,10 @@ public sealed partial class MainWindow : Window
         switch (e.PropertyName)
         {
             case nameof(PlayerService.Current):
-                // 曲が変わったら曲の表示に戻す（Android と同じ）
-                ShowVideo(false);
+                // 「動画」の選びは曲が変わっても維持する。前の曲の映像は一度外し、次の曲の MV が分かったら UpdateVideoSwitch が出し直す
+                loadedVideo = null;
+                ApplyVideo(false);
+                UpdateVideoSwitch();
                 RenderNowPlaying();
                 RenderFullView();
                 if (QueueView.Visibility == Visibility.Visible) RenderQueue();
@@ -778,8 +780,16 @@ public sealed partial class MainWindow : Window
     {
         var available = Player.HasVideo;
         VideoSwitch.Visibility = Ui.Show(available);
-        if (!available) ShowVideo(false);
+        // 「望む状態」（wantVideo）と「出せるか」（MV があるか）を分ける。出せないときは曲の表示にするが、望みは残す
+        var show = wantVideo && available;
+        if (show != (VideoTab.IsChecked == true) || (show && !ReferenceEquals(loadedVideo, Player.Video))) ApplyVideo(show);
     }
+
+    /// <summary>本人が「動画」を選んでいる（曲が変わっても維持する）。MV が無い曲では出せないだけで、望みは残る。</summary>
+    private bool wantVideo;
+
+    /// <summary>今の画面に出している（出そうとしている）映像。同じ映像を読み直さないための印。</summary>
+    private object? loadedVideo;
 
     private void OnSongTab(object sender, RoutedEventArgs e) => ShowVideo(false);
 
@@ -787,8 +797,17 @@ public sealed partial class MainWindow : Window
 
     private void OnVideoTab(object sender, RoutedEventArgs e) => ShowVideo(true);
 
-    private async void ShowVideo(bool show)
+    /// <summary>本人の操作（タブ・開発用の命令）で「動画」を選ぶ・やめる。</summary>
+    private void ShowVideo(bool show)
     {
+        wantVideo = show;
+        Player.KeepVideo = show;
+        ApplyVideo(show);
+    }
+
+    private async void ApplyVideo(bool show)
+    {
+        loadedVideo = show ? Player.Video : null;
         SongTab.IsChecked = !show;
         VideoTab.IsChecked = show;
         // ライブは「動画」にしている間だけ、映像を見るための画質で流す
