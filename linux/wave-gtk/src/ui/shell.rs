@@ -90,6 +90,8 @@ pub struct App {
     /// 今の曲の MV と、それを探した曲。
     mv: RefCell<Option<MusicVideo>>,
     mv_for: RefCell<Option<String>>,
+    /// 次の曲の MV の有無を先に引いた結果（曲が替わってすぐ「動画」を出すため。最大 4 曲）。
+    mv_prefetched: RefCell<std::collections::HashMap<String, Option<MusicVideo>>>,
     video_load: Cell<Load>,
     video_gap: Cell<bool>,
     /// 戻ったページ（「進む」で開き直す。新しいページを開いたら消す）。
@@ -613,6 +615,7 @@ pub fn build(
         view_listeners: Default::default(),
         mv: Default::default(),
         mv_for: Default::default(),
+        mv_prefetched: Default::default(),
         video_load: Default::default(),
         video_gap: Cell::new(true),
         forward: Default::default(),
@@ -781,9 +784,32 @@ fn watch_video(app: &Rc<App>) {
             if app.video.is_none() {
                 return;
             }
+            // 次の曲の MV の有無を先に引いておく（曲が替わったら、すぐ使う）
+            if let Some(next) = app.playback.upcoming().into_iter().next() {
+                let next_id = next.video_id;
+                if !next_id.is_empty() && !app.mv_prefetched.borrow().contains_key(&next_id) {
+                    let (repo, app) = (app.repo.clone(), app.clone());
+                    gtk::glib::spawn_future_local(async move {
+                        let wanted = next_id.clone();
+                        if let Ok(found) = runtime::run(async move { repo.music_video(&wanted).await }).await {
+                            let mut cache = app.mv_prefetched.borrow_mut();
+                            if cache.len() >= 4 {
+                                cache.clear();
+                            }
+                            cache.insert(next_id, found);
+                        }
+                    });
+                }
+            }
             gtk::glib::spawn_future_local(async move {
-                let (repo, wanted) = (app.repo.clone(), id.clone());
-                let found = runtime::run(async move { repo.music_video(&wanted).await }).await.ok().flatten();
+                let early = app.mv_prefetched.borrow_mut().remove(&id);
+                let found = match early {
+                    Some(found) => found,
+                    None => {
+                        let (repo, wanted) = (app.repo.clone(), id.clone());
+                        runtime::run(async move { repo.music_video(&wanted).await }).await.ok().flatten()
+                    }
+                };
                 if app.mv_for.borrow().as_deref() != Some(id.as_str()) {
                     return;
                 }

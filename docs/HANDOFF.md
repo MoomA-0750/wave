@@ -74,7 +74,7 @@ Windows の wave の「Spotify から移す」。Spotify のプレイリスト�
 - Android: `compilePhoneDebugKotlin` と Pixel 3 への導入は通った。Pixel 3 が Windows の再生を映す状態だったため、手元の再生での維持・先読みは**未確認**
 - Mac: Mac にログインしてもらい `mac.sh run` で起動、`mac.sh cmd` で確認済み（11-23）。`album-play`→`video on`→`next` を繰り返し、`showVideo=true` が MV の無い曲を 4 曲挟んでも残り、`video prefetch resolved` の後、MV のある曲（LOSTSCAPES）で映像が読み込まれ（`mv=ready`、1280x720）。画面の見た目は見ていない。`mac.sh test` 300 件・失敗 0。DebugCommands に `next` と、`now` に動画の状態を足した
 - iOS: シミュレーター向けのビルドは通った（`ios-bundle.sh`）が、動きは未確認（シミュレーターを起動しない決まり。実機で確かめる）
-- Linux: `cargo check` のみ。先読みは未実装
+- Linux: `cargo check`・試験が通る。次の曲の MV の有無だけ先に引く（`mv_prefetched`。映像の URL の先読みは無い）。画面は未確認
 - `SPEC.md`・`docs/decisions.md` を更新済み
 
 ## iPhone の Live Activity・プレーヤーまわり（本人の依頼 11-23。セッション 4033c98e。設計: `docs/ios-live-activity-design.md`、経緯: `docs/decisions.md` の 2026-11-23）
