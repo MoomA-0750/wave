@@ -1,6 +1,6 @@
 # 引き継ぎ（今の状態）
 
-更新: 2026-11-23（再生画面の要望のフェーズ 5 の後）（セッション 16a2e897、ブランチ ios-app）
+更新: 2026-11-24（iPhone の Live Activity・ミニプレーヤーの作業の後）（セッション 4033c98e、ブランチ ios-app）
 
 ## 目的
 
@@ -77,6 +77,16 @@ Windows の wave の「Spotify から移す」。Spotify のプレイリスト�
 - Linux: `cargo check` のみ。先読みは未実装
 - `SPEC.md`・`docs/decisions.md` を更新済み
 
+## iPhone の Live Activity・プレーヤーまわり（本人の依頼 11-23。セッション 4033c98e。設計: `docs/ios-live-activity-design.md`、経緯: `docs/decisions.md` の 2026-11-23）
+
+appshelf（`mac.sh ios-shelf`、最新ビルド 20261123-230541）に載せ済み。iPhone へ入れるのは本人が appshelf から。実機の確認は本人の操作待ち。
+- Live Activity: 再生の操作・位置の棒・歌詞を外し、評価のボタン（＋は一発で高く評価、✓は押すとアプリのプレイリスト追加画面）と次の 3 曲（押すとその曲へ）だけ。背景は透明（`.clear`）。設定「ロック画面の再生中」で入切。ロック画面の高さ・追加画面の二重表示・設定の入切は実機で確認済み。背景の透過・Dynamic Island 展開（2 曲）は未確認
+- 小窓（PiP）が出ているとき、ロック画面から追加画面を開くと再生画面が重なって二重に出た問題は、`IOSShell.holdPlayerUntil` で直し、実機で確認済み
+- 全画面プレイヤー: 斜めの引き下ろしで曲が替わる問題は、横が縦の 1.5 倍より大きいときだけ曲送りにして直した（実機は未確認）
+- ミニプレーヤー: 左右スワイプで曲の欄が Safari のように動く（A。OS の付属部品の中）。さらに B（`MiniPlayerCard`、iOS 26 から）を足した: ガラスの枠ごと入れ替わる。位置は「下の安全な余白＋56pt」の見積もり、スクロールで畳む動きは無い。既定は B、設定「ミニプレーヤーの枠を自前で描く（試し）」で A に戻せる（`miniPlayerCustom`）。**本人が B を試して、元の方が良ければ A に戻す予定**（確認一覧にある）
+- 関係する場所: `mac/Sources/WaveWidget/WaveWidgetBundle.swift`（`NowPlayingLiveActivity`）、`Shared/Widget/WidgetShared.swift`（`NowPlayingAttributes`）、`Shared/Services/WidgetSync.swift`（`updateActivity`）、`iOS/Player/MiniPlayer.swift`、`iOS/App/RootView.swift`（`MiniPlayerAccessory`）、`iOS/Player/NowPlayingView.swift`（ジャケットの横の払い）
+- Mac は `ssh mac`（`mac/scripts/mac.sh`）。画面のセッションにログインしてもらうと `mac.sh run`・`cmd`・`log` で Mac 版も確かめられる。iPhone 実機へ入れるには Mac に iPhone をつなぐ（ロックを外す）か、appshelf を使う
+
 ## 次にやること（Spotify から移す・AI 識別。再生画面の要望と並行）
 
 1. AI コンテンツの識別（本人の了承済みの方針は上の「どこまで」）。最初の確認: AI ラベルが付いた YouTube Music の曲の応答に表示が入っているかを調べる（本人が曲を教えるか、自分で探す。ログインしない通信と、必要ならログイン済みの応答）。Spotify の API・ZIP に AI クレジットがあるかも調べる。結果を見て `SPEC.md` に仕様（確定／仮）を書き、実装は本人の了承の後
@@ -85,6 +95,8 @@ Windows の wave の「Spotify から移す」。Spotify のプレイリスト�
 4. 件数の変化は `transfer-rematch-unsure`（引数 `album` でアルバムだけ）で数え、本人へ報告する。書き込みはしない
 
 ## 本人の判断待ち（確認一覧にもある）
+
+- ミニプレーヤーを B（枠を自前で描く）で行くか A に戻すか。実機での確認（上の「iPhone の Live Activity・プレーヤーまわり」）
 
 - YouTube Music へ書き込むか。要確認を見直してから書くか、一致だけを先に書くか
 - Windows 機から中継への転送を常に張るか。to-fu の 127.0.0.1:18798 から家の PC の 8797 への `ssh -R`。11-22 17:00 に切れた（ssh が 255 で終わった）。「Claude で探す」を使う前に `ssh -N -R 18798:127.0.0.1:8797 <to-fu>` を張り直す
