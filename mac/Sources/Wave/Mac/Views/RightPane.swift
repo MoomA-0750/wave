@@ -235,7 +235,8 @@ struct QueueView: View {
                         proxy.scrollTo(player.index, anchor: .top)
                     }
                     .onChange(of: player.index) { withAnimation { proxy.scrollTo(player.index, anchor: .top) } }
-                .scrollContentBackground(.hidden)
+                    .scrollContentBackground(.hidden)
+                }
             }
         }
     }
