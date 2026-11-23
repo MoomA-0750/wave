@@ -166,8 +166,9 @@ enum DebugCommands {
         case "dialog-close":
             Dialogs.shared.addToPlaylist = nil
             Dialogs.shared.creating = false
+        case "next": player.next()
         case "now":
-            AppPaths.log("debug now title=\(player.current?.title ?? "nil") position=\(Int(player.position)) duration=\(Int(player.duration)) playing=\(player.isPlaying) loading=\(player.isLoading) like=\(String(describing: player.like)) lyrics=\(player.lyrics != nil) video=\(player.video != nil) remote=\(player.isRemote) videoSize=\(MusicVideoPlayer.shared.player.currentItem?.presentationSize ?? .zero) remoteLive=\(player.remoteLivePlayer.timeControlStatus.rawValue) waiting=\(player.remoteLivePlayer.reasonForWaitingToPlay?.rawValue ?? "-") item=\(player.remoteLivePlayer.currentItem?.status.rawValue ?? -1) itemError=\(player.remoteLivePlayer.currentItem?.error?.localizedDescription ?? "-") liveSize=\(player.remoteLivePlayer.currentItem?.presentationSize ?? .zero)")
+            AppPaths.log("debug now showVideo=\(window.showVideo) keep=\(player.keepVideo) hasVideo=\(player.hasVideo) mv=\(MusicVideoPlayer.shared.state) title=\(player.current?.title ?? "nil") position=\(Int(player.position)) duration=\(Int(player.duration)) playing=\(player.isPlaying) loading=\(player.isLoading) like=\(String(describing: player.like)) lyrics=\(player.lyrics != nil) video=\(player.video != nil) remote=\(player.isRemote) videoSize=\(MusicVideoPlayer.shared.player.currentItem?.presentationSize ?? .zero) remoteLive=\(player.remoteLivePlayer.timeControlStatus.rawValue) waiting=\(player.remoteLivePlayer.reasonForWaitingToPlay?.rawValue ?? "-") item=\(player.remoteLivePlayer.currentItem?.status.rawValue ?? -1) itemError=\(player.remoteLivePlayer.currentItem?.error?.localizedDescription ?? "-") liveSize=\(player.remoteLivePlayer.currentItem?.presentationSize ?? .zero)")
         case "route":
             AppPaths.log("debug route=\(nav.current.route) back=\(nav.canGoBack)")
         case "widget-items":
