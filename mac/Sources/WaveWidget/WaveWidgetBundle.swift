@@ -878,7 +878,7 @@ private struct PlayMark: View {
             ActivityConfiguration(for: NowPlayingAttributes.self) { context in
                 LockScreenView(state: context.state)
                     .padding(Kasane.Space.s3)
-                    .activityBackgroundTint(Color.black.opacity(0.75))
+                    .activityBackgroundTint(.clear) // 背景を透かす（ロック画面の壁紙が見える）
                     .activitySystemActionForegroundColor(.white)
                     .widgetURL(URL(string: "wave://nowplaying"))
             } dynamicIsland: { context in

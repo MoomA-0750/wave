@@ -732,20 +732,29 @@ private struct CoverCarousel: View {
             // 横へ動き始めたらすぐ、画面をしまう指の動きを止める（下の払いより先に決める）
             .simultaneousGesture(DragGesture(minimumDistance: 3)
                 .onChanged { value in
-                    let horizontal = abs(value.translation.width) > abs(value.translation.height)
+                    let horizontal = abs(value.translation.width) > abs(value.translation.height) * 1.5
                     if horizontal && !IOSShell.shared.coverSwiping { IOSShell.shared.coverSwiping = true }
                 }
                 .onEnded { _ in IOSShell.shared.coverSwiping = false })
             // 縦の払い（スクロール・下へ払って閉じる）も通す
             .simultaneousGesture(DragGesture(minimumDistance: 16)
                 .onChanged { value in
-                    guard !settling, abs(value.translation.width) > abs(value.translation.height) else { return }
+                    // 横へ決まった動きだけ（斜めに下へ引き下ろす動きは、曲送りに取らない）
+                    guard !settling, abs(value.translation.width) > abs(value.translation.height) * 1.5 else {
+                        if drag != 0, !settling { drag = 0 }
+                        return
+                    }
                     // 隣が無い方へは、少しだけ動かして止める
                     let x = value.translation.width
                     drag = neighbor(player, x < 0 ? 1 : -1) == nil ? x / 4 : x
                 }
                 .onEnded { value in
                     guard !settling else { return }
+                    // 下へ引き下ろす動き（縦が横の 1 / 1.5 より大きい）は曲送りにしない。慣性の予測の横の動きも見ない
+                    guard abs(value.translation.width) > abs(value.translation.height) * 1.5 else {
+                        withAnimation(.snappy) { drag = 0 }
+                        return
+                    }
                     let x = value.translation.width, predicted = value.predictedEndTranslation.width
                     let dir = (x < -60 || predicted < -step / 2) ? 1 : (x > 60 || predicted > step / 2) ? -1 : 0
                     let moves = dir != 0 && neighbor(player, dir) != nil
