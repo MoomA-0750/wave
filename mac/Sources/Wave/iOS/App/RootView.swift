@@ -1,5 +1,6 @@
 #if os(iOS)
 import SwiftUI
+import UIKit
 import WaveCore
 
 /// 下のタブ（Android と同じ4つ: ホーム・検索・Claude・ライブラリ）。
@@ -98,7 +99,7 @@ struct RootView: View {
         .background(alignment: .bottomLeading) { MusicPipAnchor().frame(width: 16, height: 9) }
         // 本体の音量を動かすための見えない部品（再生画面を開いていない間・裏にいる間も、ほかの端末から届いた音量を本体へ入れる）
         .background { SystemVolumeAnchor().frame(width: 1, height: 1).offset(x: -2000).allowsHitTesting(false) }
-        .overlay(alignment: .bottom) { ToastHost().padding(.bottom, player.current != nil ? (shell.miniCustom ? 112 : 120) : 64) }
+        .overlay(alignment: .bottom) { ToastHost().padding(.bottom, player.current != nil ? (shell.miniCustom ? 114 : 120) : 64) }
         .fullScreenCover(isPresented: $shell.playerOpen) {
             NowPlayingView().navigationTransition(.zoom(sourceID: MiniPlayer.zoomId, in: playerZoom))
         }
@@ -250,22 +251,35 @@ private struct MiniPlayerAccessory: ViewModifier {
     func body(content: Content) -> some View {
         if #available(iOS 26.0, *), show, shell.miniCustom {
             // 枠を自前で描き、タブバーの上に置く（OS の付属部品ではないので、スクロールで畳む動きは無い）
+            // 畳むのはタブバーと同じ決まり: 下へ送り始めると畳み、タブバーの丸をタップするか、一番上に戻るか、タブを替えるまで広げない
             content
                 .tabBarMinimizeBehavior(.onScrollDown) // タブバーが畳まれるのに合わせて、ミニプレーヤーも一列に畳む
                 .safeAreaInset(edge: .bottom) { Color.clear.frame(height: compact ? 0 : 60).allowsHitTesting(false) }
+                // 画面の中身にだけ付ける（ミニプレーヤー自身の上を払って再生画面を開く動きでは畳まない）。スクロールの邪魔をしないよう同時に受ける
+                .simultaneousGesture(DragGesture(minimumDistance: 24).onChanged { v in
+                    guard !compact, v.translation.height < 0, abs(v.translation.height) > abs(v.translation.width),
+                          let sv = ScrollProbe.main(), !ScrollProbe.atTop(sv, slack: 4) else { return }
+                    compact = true
+                })
+                .simultaneousGesture(SpatialTapGesture().onEnded { v in
+                    // 畳んだタブバー（左下の丸）のタップで広げる
+                    if compact, v.location.x < 90, v.location.y > UIScreen.main.bounds.height - 120 { compact = false }
+                })
+                .onChange(of: shell.tab) { compact = false }
+                .task(id: compact) {
+                    // 畳んでいる間、一番上に戻ったら広げる（慣性で戻る場合も拾うため、短い間隔で見る）
+                    while compact, !Task.isCancelled {
+                        try? await Task.sleep(for: .milliseconds(150))
+                        if let sv = ScrollProbe.main(), ScrollProbe.atTop(sv, slack: 2) { compact = false }
+                    }
+                }
                 .overlay(alignment: .bottom) {
                     MiniPlayerCard(zoom: zoom, open: open, compact: compact)
-                        .padding(.leading, Kasane.Space.s3 + (compact ? 64 : 0)) // 畳んだタブバー（左端の丸）の右隣へ
-                        .padding(.trailing, Kasane.Space.s3)
-                        .padding(.bottom, compact ? 6 : 56) // 下の安全な余白からの位置。タブバーの上に 8pt あける。畳むとタブバーと同じ行
+                        .padding(.leading, Kasane.Space.s3 + (compact ? 70 : 0)) // 畳んだタブバー（左端の丸）の右隣へ
+                        .padding(.trailing, Kasane.Space.s3 + (compact ? 56 : 0)) // 右の丸（Claude）を避ける
+                        .padding(.bottom, compact ? -6 : 56) // 下の安全な余白からの位置。タブバーの上に 8pt あける。畳むと丸と中心をそろえる
                         .animation(.snappy, value: compact)
                 }
-                // 画面を上へ送る（指が上へ動く）と畳み、下へ戻すと広げる。スクロールの邪魔をしないよう同時に受ける
-                .simultaneousGesture(DragGesture(minimumDistance: 24).onChanged { v in
-                    guard abs(v.translation.height) > abs(v.translation.width) else { return }
-                    let up = v.translation.height < 0
-                    if up != compact { compact = up }
-                })
         } else if #available(iOS 26.0, *), show {
             content
                 .tabViewBottomAccessory { MiniPlayer(open: open).matchedTransitionSource(id: MiniPlayer.zoomId, in: zoom) }
@@ -281,6 +295,31 @@ private struct MiniPlayerAccessory: ViewModifier {
         } else {
             content
         }
+    }
+}
+
+/// 今見えている縦のスクロール面（UIScrollView）を探す。畳んだタブバーが広がる条件（一番上に戻る）を、自前の枠でも同じにするため。
+@MainActor
+enum ScrollProbe {
+    static func main() -> UIScrollView? {
+        guard let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first,
+              let window = scene.windows.first(where: \.isKeyWindow) ?? scene.windows.first else { return nil }
+        var best: (UIScrollView, CGFloat)?
+        var stack: [UIView] = [window]
+        while let v = stack.popLast() {
+            if v.isHidden || v.alpha < 0.01 { continue }
+            if let sv = v as? UIScrollView, sv.window != nil, sv.contentSize.height > sv.bounds.height + 1,
+               sv.bounds.width > window.bounds.width * 0.7, sv.bounds.height > 240 {
+                let area = sv.bounds.width * sv.bounds.height
+                if area > (best?.1 ?? 0) { best = (sv, area) }
+            }
+            stack.append(contentsOf: v.subviews)
+        }
+        return best?.0
+    }
+
+    static func atTop(_ sv: UIScrollView, slack: CGFloat) -> Bool {
+        sv.contentOffset.y <= -sv.adjustedContentInset.top + slack
     }
 }
 

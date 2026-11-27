@@ -160,7 +160,7 @@ struct MiniPlayerCard: View {
             .animation(.snappy, value: compact)
     }
 
-    private var h: CGFloat { compact ? 44 : 52 }
+    private var h: CGFloat { compact ? 48 : 52 }
 
     /// 2つの枠。今の枠と隣の枠を常に木に置き、幅だけを変える（途中で作り直さないので、払い始めがカクつかない）。
     private func pills(_ player: PlayerService) -> some View {
