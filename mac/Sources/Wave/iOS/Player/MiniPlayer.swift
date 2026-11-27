@@ -140,6 +140,8 @@ struct MiniPlayerCard: View {
     var compact = false
     @State private var drag: CGFloat = 0
     @State private var settling = false
+    /// 払いの最初に決めた向き（横なら true）。決めたあとは縦のぶれで止まらない（ゆっくり払うと縦へ少しずれて、途中で動きが止まっていた）
+    @State private var horizontal: Bool?
     @State private var width: CGFloat = 0
 
     /// 2つの枠の間のすき間。
@@ -249,14 +251,16 @@ struct MiniPlayerCard: View {
             .onChanged { value in
                 guard !settling else { return }
                 let x = value.translation.width
-                guard abs(x) > abs(value.translation.height) * 1.5 else { return }
+                if horizontal == nil { horizontal = abs(x) > abs(value.translation.height) * 1.5 }
+                guard horizontal == true else { return }
                 drag = neighbor(player, x < 0 ? 1 : -1) == nil ? x / 4 : x
             }
             .onEnded { value in
+                let wasHorizontal = horizontal == true
+                horizontal = nil
                 guard !settling else { return }
                 let x = value.translation.width, predicted = value.predictedEndTranslation.width
-                let horizontal = abs(x) > abs(value.translation.height) * 1.5
-                let dir = !horizontal ? 0 : (x < -width / 4 || predicted < -width / 2) ? 1 : (x > width / 4 || predicted > width / 2) ? -1 : 0
+                let dir = !wasHorizontal ? 0 : (x < -width / 4 || predicted < -width / 2) ? 1 : (x > width / 4 || predicted > width / 2) ? -1 : 0
                 guard dir != 0, neighbor(player, dir) != nil, width > 0 else {
                     withAnimation(.snappy) { drag = 0 }
                     return
