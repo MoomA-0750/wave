@@ -22,6 +22,8 @@ final class IOSShell {
     var playerOpen = false
     /// ミニプレーヤーの枠を自前で描くか（iOS 26 から。切ると OS の付属部品に戻る。Safari のように枠ごと入れ替わる試し）。
     var miniCustom = AppServices.settings.miniPlayerCustom
+    /// 自前のタブバー（miniCustom のとき）が、スクロールで一列に畳まれているか。ミニプレーヤー・スナックバーの位置もこれに合わせる。
+    var barCompact = false
     /// この時刻まで、小窓（PiP）の「元に戻す」で再生画面を開かない（ロック画面の再生中から追加画面を開いたとき、再生画面が重なって追加画面が一度消えるため）。
     var holdPlayerUntil = Date.distantPast
     /// 小窓の「元に戻す」で再生画面を開く（直前にロック画面から追加画面を開いていたときは開かない）。
@@ -84,22 +86,12 @@ struct RootView: View {
 
     var body: some View {
         let player = AppServices.player!
-        TabView(selection: Binding(get: { shell.tab }, set: { shell.select($0) })) {
-            // 設定で選んだタブは、右に離して置く役（pinnedRole）にする。欄を下へ送って畳んでも、
-            // 左の再生中のタブと並んで右に残る
-            // （ForEach で並べると OS が役を見ず、欄の中に並べてしまったので、1つずつ書く）
-            tab(.home)
-            if shell.pinnedTab != .search { tab(.search) }
-            if shell.pinnedTab != .ai { tab(.ai) }
-            if shell.pinnedTab != .library { tab(.library) }
-            tab(shell.pinnedTab, role: pinnedRole)
-        }
-        .modifier(MiniPlayerAccessory(show: player.current != nil, zoom: playerZoom) { shell.playerOpen = true })
+        rootShell(player)
         // 音楽の PiP の元の枠（画面の後ろに小さく置く）
         .background(alignment: .bottomLeading) { MusicPipAnchor().frame(width: 16, height: 9) }
         // 本体の音量を動かすための見えない部品（再生画面を開いていない間・裏にいる間も、ほかの端末から届いた音量を本体へ入れる）
         .background { SystemVolumeAnchor().frame(width: 1, height: 1).offset(x: -2000).allowsHitTesting(false) }
-        .overlay(alignment: .bottom) { ToastHost().padding(.bottom, player.current != nil ? (shell.miniCustom ? 114 : 120) : 64) }
+        .overlay(alignment: .bottom) { ToastHost().padding(.bottom, toastBottom(player)) }
         .fullScreenCover(isPresented: $shell.playerOpen) {
             NowPlayingView().navigationTransition(.zoom(sourceID: MiniPlayer.zoomId, in: playerZoom))
         }
@@ -133,6 +125,33 @@ struct RootView: View {
         }
     }
 
+    /// 画面の枠。iOS 26 以降で「枠を自前で描く」が入のときは、タブバーもミニプレーヤーも自前（`CustomTabShell`）。それ以外は OS のタブ。
+    @ViewBuilder
+    private func rootShell(_ player: PlayerService) -> some View {
+        if #available(iOS 26.0, *), shell.miniCustom {
+            CustomTabShell(zoom: playerZoom, hasSong: player.current != nil) { shell.playerOpen = true }
+        } else {
+            TabView(selection: Binding(get: { shell.tab }, set: { shell.select($0) })) {
+                // 設定で選んだタブは、右に離して置く役（pinnedRole）にする。欄を下へ送って畳んでも、
+                // 左の再生中のタブと並んで右に残る
+                // （ForEach で並べると OS が役を見ず、欄の中に並べてしまったので、1つずつ書く）
+                tab(.home)
+                if shell.pinnedTab != .search { tab(.search) }
+                if shell.pinnedTab != .ai { tab(.ai) }
+                if shell.pinnedTab != .library { tab(.library) }
+                tab(shell.pinnedTab, role: pinnedRole)
+            }
+            .modifier(MiniPlayerAccessory(show: player.current != nil, zoom: playerZoom) { shell.playerOpen = true })
+        }
+    }
+
+    /// スナックバーを置く、下の安全な余白からの高さ。自前の枠のときは、ミニプレーヤー（無ければタブバー）の上に 10pt あける。
+    private func toastBottom(_ player: PlayerService) -> CGFloat {
+        guard shell.miniCustom else { return player.current != nil ? 120 : 64 }
+        if player.current == nil { return FloatingBarMetrics.tabTop + 10 }
+        return (shell.barCompact ? FloatingBarMetrics.compactTop : FloatingBarMetrics.miniTop) + 10
+    }
+
     /// 右に離して置く役。iOS 26 は検索の役（.search）だけが離れるが、iOS 27 では検索の役も欄の中に並び、離すのは .prominent になった
     private var pinnedRole: TabRole {
         if #available(iOS 27.0, *) { return .prominent }
@@ -141,13 +160,20 @@ struct RootView: View {
 
     private func tab(_ tab: IOSTab, role: TabRole? = nil) -> some TabContent<IOSTab> {
         Tab(tab.title, systemImage: tab.symbol, value: tab, role: role) {
-            stack(tab) { TabRoot(tab: tab) }
+            TabStack(tab: tab)
         }
     }
 
-    private func stack(_ tab: IOSTab, @ViewBuilder root: () -> some View) -> some View {
+}
+
+/// 1つのタブの画面（上に積んだ画面を覚えている NavigationStack）。
+struct TabStack: View {
+    let tab: IOSTab
+    @State private var shell = IOSShell.shared
+
+    var body: some View {
         NavigationStack(path: shell.path(tab)) {
-            root().navigationDestination(for: Route.self) { route in RouteView(route: route) }
+            TabRoot(tab: tab).navigationDestination(for: Route.self) { route in RouteView(route: route) }
         }
     }
 }
@@ -245,42 +271,10 @@ private struct MiniPlayerAccessory: ViewModifier {
     var show: Bool
     var zoom: Namespace.ID
     @State private var shell = IOSShell.shared
-    @State private var compact = false
     var open: () -> Void
 
     func body(content: Content) -> some View {
-        if #available(iOS 26.0, *), show, shell.miniCustom {
-            // 枠を自前で描き、タブバーの上に置く（OS の付属部品ではないので、スクロールで畳む動きは無い）
-            // 畳むのはタブバーと同じ決まり: 下へ送り始めると畳み、タブバーの丸をタップするか、一番上に戻るか、タブを替えるまで広げない
-            content
-                .tabBarMinimizeBehavior(.onScrollDown) // タブバーが畳まれるのに合わせて、ミニプレーヤーも一列に畳む
-                .safeAreaInset(edge: .bottom) { Color.clear.frame(height: compact ? 0 : 60).allowsHitTesting(false) }
-                // 画面の中身にだけ付ける（ミニプレーヤー自身の上を払って再生画面を開く動きでは畳まない）。スクロールの邪魔をしないよう同時に受ける
-                .simultaneousGesture(DragGesture(minimumDistance: 24).onChanged { v in
-                    guard !compact, v.translation.height < 0, abs(v.translation.height) > abs(v.translation.width),
-                          let sv = ScrollProbe.main(), !ScrollProbe.atTop(sv, slack: 4) else { return }
-                    compact = true
-                })
-                .simultaneousGesture(SpatialTapGesture().onEnded { v in
-                    // 畳んだタブバー（左下の丸）のタップで広げる
-                    if compact, v.location.x < 90, v.location.y > UIScreen.main.bounds.height - 120 { compact = false }
-                })
-                .onChange(of: shell.tab) { compact = false }
-                .task(id: compact) {
-                    // 畳んでいる間、一番上に戻ったら広げる（慣性で戻る場合も拾うため、短い間隔で見る）
-                    while compact, !Task.isCancelled {
-                        try? await Task.sleep(for: .milliseconds(150))
-                        if let sv = ScrollProbe.main(), ScrollProbe.atTop(sv, slack: 2) { compact = false }
-                    }
-                }
-                .overlay(alignment: .bottom) {
-                    MiniPlayerCard(zoom: zoom, open: open, compact: compact)
-                        .padding(.leading, Kasane.Space.s3 + (compact ? 70 : 0)) // 畳んだタブバー（左端の丸）の右隣へ
-                        .padding(.trailing, Kasane.Space.s3 + (compact ? 56 : 0)) // 右の丸（Claude）を避ける
-                        .padding(.bottom, compact ? -6 : 56) // 下の安全な余白からの位置。タブバーの上に 8pt あける。畳むと丸と中心をそろえる
-                        .animation(.snappy, value: compact)
-                }
-        } else if #available(iOS 26.0, *), show {
+        if #available(iOS 26.0, *), show {
             content
                 .tabViewBottomAccessory { MiniPlayer(open: open).matchedTransitionSource(id: MiniPlayer.zoomId, in: zoom) }
                 .tabBarMinimizeBehavior(.onScrollDown)
@@ -308,8 +302,11 @@ enum ScrollProbe {
         var stack: [UIView] = [window]
         while let v = stack.popLast() {
             if v.isHidden || v.alpha < 0.01 { continue }
+            // 画面の外へ退けてある（見えていないタブの）スクロール面は数えない
+            let onScreen = v.convert(v.bounds, to: nil).intersection(window.bounds)
+            if onScreen.isNull || onScreen.width < 1 { continue }
             if let sv = v as? UIScrollView, sv.window != nil, sv.contentSize.height > sv.bounds.height + 1,
-               sv.bounds.width > window.bounds.width * 0.7, sv.bounds.height > 240 {
+               v.convert(v.bounds, to: nil).intersection(window.bounds).width > window.bounds.width * 0.7, sv.bounds.height > 240 {
                 let area = sv.bounds.width * sv.bounds.height
                 if area > (best?.1 ?? 0) { best = (sv, area) }
             }
