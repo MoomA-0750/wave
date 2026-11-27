@@ -98,7 +98,7 @@ struct RootView: View {
         .background(alignment: .bottomLeading) { MusicPipAnchor().frame(width: 16, height: 9) }
         // 本体の音量を動かすための見えない部品（再生画面を開いていない間・裏にいる間も、ほかの端末から届いた音量を本体へ入れる）
         .background { SystemVolumeAnchor().frame(width: 1, height: 1).offset(x: -2000).allowsHitTesting(false) }
-        .overlay(alignment: .bottom) { ToastHost().padding(.bottom, player.current != nil ? (shell.miniCustom ? 136 : 120) : 64) }
+        .overlay(alignment: .bottom) { ToastHost().padding(.bottom, player.current != nil ? (shell.miniCustom ? 112 : 120) : 64) }
         .fullScreenCover(isPresented: $shell.playerOpen) {
             NowPlayingView().navigationTransition(.zoom(sourceID: MiniPlayer.zoomId, in: playerZoom))
         }
@@ -244,18 +244,28 @@ private struct MiniPlayerAccessory: ViewModifier {
     var show: Bool
     var zoom: Namespace.ID
     @State private var shell = IOSShell.shared
+    @State private var compact = false
     var open: () -> Void
 
     func body(content: Content) -> some View {
         if #available(iOS 26.0, *), show, shell.miniCustom {
             // 枠を自前で描き、タブバーの上に置く（OS の付属部品ではないので、スクロールで畳む動きは無い）
             content
-                .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 60).allowsHitTesting(false) }
+                .tabBarMinimizeBehavior(.onScrollDown) // タブバーが畳まれるのに合わせて、ミニプレーヤーも一列に畳む
+                .safeAreaInset(edge: .bottom) { Color.clear.frame(height: compact ? 0 : 60).allowsHitTesting(false) }
                 .overlay(alignment: .bottom) {
-                    MiniPlayerCard(zoom: zoom, open: open)
-                        .padding(.horizontal, Kasane.Space.s3)
-                        .padding(.bottom, 56) // 下の安全な余白からの位置。タブバーの上に 8pt あける
+                    MiniPlayerCard(zoom: zoom, open: open, compact: compact)
+                        .padding(.leading, Kasane.Space.s3 + (compact ? 64 : 0)) // 畳んだタブバー（左端の丸）の右隣へ
+                        .padding(.trailing, Kasane.Space.s3)
+                        .padding(.bottom, compact ? 6 : 56) // 下の安全な余白からの位置。タブバーの上に 8pt あける。畳むとタブバーと同じ行
+                        .animation(.snappy, value: compact)
                 }
+                // 画面を上へ送る（指が上へ動く）と畳み、下へ戻すと広げる。スクロールの邪魔をしないよう同時に受ける
+                .simultaneousGesture(DragGesture(minimumDistance: 24).onChanged { v in
+                    guard abs(v.translation.height) > abs(v.translation.width) else { return }
+                    let up = v.translation.height < 0
+                    if up != compact { compact = up }
+                })
         } else if #available(iOS 26.0, *), show {
             content
                 .tabViewBottomAccessory { MiniPlayer(open: open).matchedTransitionSource(id: MiniPlayer.zoomId, in: zoom) }

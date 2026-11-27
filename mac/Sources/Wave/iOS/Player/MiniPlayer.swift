@@ -136,6 +136,8 @@ struct MiniPlayer: View {
 struct MiniPlayerCard: View {
     var zoom: Namespace.ID
     var open: () -> Void
+    /// スクロールで畳んだ一列の形（高さを縮め、評価と補足を隠す）
+    var compact = false
     @State private var drag: CGFloat = 0
     @State private var settling = false
     @State private var width: CGFloat = 0
@@ -148,11 +150,15 @@ struct MiniPlayerCard: View {
         // 欄の幅は、中の枠に左右されない土台で測る（枠が幅を決めると、横向きから戻ったときに広がらなくなる）
         Color.clear
             .frame(maxWidth: .infinity)
-            .frame(height: 52)
+            .frame(height: h)
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
             .overlay(alignment: .leading) { pills(player) }
-            .gesture(swipe(player))
+            // 評価・再生のボタンの上から払っても動くよう、子より先に受ける（短い動きは子へ通る）
+            .highPriorityGesture(swipe(player))
+            .animation(.snappy, value: compact)
     }
+
+    private var h: CGFloat { compact ? 44 : 52 }
 
     /// 2つの枠。今の枠と隣の枠を常に木に置き、幅だけを変える（途中で作り直さないので、払い始めがカクつかない）。
     private func pills(_ player: PlayerService) -> some View {
@@ -164,13 +170,15 @@ struct MiniPlayerCard: View {
         let space = gap * sin(.pi * p)
         let total = max(width - space, 0)
         let oldW = total * (1 - p), newW = total * p
-        let travel: CGFloat = 36   // 中身が動く量
-        let dir: CGFloat = toLeft ? -1 : 1
+        // 中身は指の移動量と同じだけ動く。隣の枠の中身は、払いの終わり（p=1）で動きがちょうど 0 になる位置から入る
+        let span = max(width * 0.8, 1)
+        let shiftOld = next == nil ? 0 : max(-span, min(span, drag))
+        let shiftNew = shiftOld + (toLeft ? span : -span)
         return ZStack(alignment: .leading) {
-            pill(player.current, player, source: true, width: oldW, align: toLeft ? .leading : .trailing, content: max(0, 1 - 1.6 * p), shift: dir * p * travel)
+            pill(player.current, player, source: true, width: oldW, align: toLeft ? .leading : .trailing, content: max(0, 1 - 1.6 * p), shift: shiftOld)
                 .offset(x: toLeft ? 0 : newW + space)
                 .offset(x: next == nil ? drag : 0)
-            pill(next ?? player.current, player, source: false, width: newW, align: toLeft ? .trailing : .leading, content: max(0, 1.6 * p - 0.6), shift: -dir * (1 - p) * travel)
+            pill(next ?? player.current, player, source: false, width: newW, align: toLeft ? .trailing : .leading, content: max(0, 1.6 * p - 0.6), shift: shiftNew)
                 .offset(x: toLeft ? oldW + space : 0)
                 .opacity(next == nil ? 0 : 1)
         }
@@ -183,13 +191,13 @@ struct MiniPlayerCard: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text(song?.title ?? "").font(.subheadline.weight(.semibold)).lineLimit(1)
                 if player.isRemote, let device = player.remoteDevice {
-                    Label(device, systemImage: "hifispeaker.2").font(.caption).foregroundStyle(.primary).lineLimit(1)
-                } else {
+                    if !compact { Label(device, systemImage: "hifispeaker.2").font(.caption).foregroundStyle(.primary).lineLimit(1) }
+                } else if !compact {
                     Text(song?.artistsText ?? "").font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
             }
             Spacer(minLength: 0)
-            if song != nil { LikeButtonView(size: 20) }
+            if song != nil, !compact { LikeButtonView(size: 20) }
             Button(action: player.togglePlay) {
                 Group {
                     if player.isLoading {
@@ -205,7 +213,7 @@ struct MiniPlayerCard: View {
             .accessibilityLabel(player.isPlaying ? L.t("一時停止", "Pause") : L.t("再生", "Play"))
         }
         .padding(.horizontal, Kasane.Space.s4)
-        .frame(width: max(width, 1), height: 52)
+        .frame(width: max(width, 1), height: h)
         .overlay(alignment: .bottom) {
             GeometryReader { geo in // apple-ui-allow: 大きさに合わせて並べる・描く（測るだけではない）
                 Capsule().fill(Color.primary.opacity(0.85))
@@ -217,7 +225,7 @@ struct MiniPlayerCard: View {
         }
         .offset(x: shift)
         .opacity(content)
-        .frame(width: max(w, 0), height: 52, alignment: align)
+        .frame(width: max(w, 0), height: h, alignment: align)
         .clipShape(Capsule())
         .background(Color.clear.glassEffect(.regular.interactive(), in: Capsule()))
         .contentShape(Capsule())

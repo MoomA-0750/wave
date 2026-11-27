@@ -1,6 +1,6 @@
 # 引き継ぎ（今の状態）
 
-更新: 2026-11-27（ミニプレーヤーは B で行くと決まった後）（セッション 4033c98e、ブランチ ios-app）
+更新: 2026-11-27（ミニプレーヤー B の調整・appshelf 20261127-143835）（セッション 4033c98e、ブランチ ios-app）
 
 ## 目的
 
@@ -86,6 +86,8 @@ appshelf（`mac.sh ios-shelf`、最新ビルド 20261124-004736）に載せ済�
 - ミニプレーヤー: 左右スワイプで曲の欄が Safari のように動く（A。OS の付属部品の中）。さらに B（`MiniPlayerCard`、iOS 26 から）を足した: ガラスの枠ごと入れ替わる。枠は 2 つが欄を分け合って幅だけで入れ替わる（11-24 に 2 回作り直し。前の「縮みながら横へ動く」版は Safari と遠いと言われた。11-24 00:47 の版で、中身の動き・払い始め・横向き・位置・スナックバーの重なりを直した。実機の感想待ち）。位置は「下の安全な余白＋48pt」の見積もり、スクロールで畳む動きは無い。既定は B、設定「ミニプレーヤーの枠を自前で描く（試し）」で A に戻せる（`miniPlayerCustom`）。**11-27 に本人が B で行くと決めた（A には戻さない。decisions.md 2026-11-27）。以降は本人の実機の感想に沿って B を調整する**
 - 関係する場所: `mac/Sources/WaveWidget/WaveWidgetBundle.swift`（`NowPlayingLiveActivity`）、`Shared/Widget/WidgetShared.swift`（`NowPlayingAttributes`）、`Shared/Services/WidgetSync.swift`（`updateActivity`）、`iOS/Player/MiniPlayer.swift`、`iOS/App/RootView.swift`（`MiniPlayerAccessory`）、`iOS/Player/NowPlayingView.swift`（ジャケットの横の払い）
 - Mac は `ssh mac`（`mac/scripts/mac.sh`）。画面のセッションにログインしてもらうと `mac.sh run`・`cmd`・`log` で Mac 版も確かめられる。iPhone 実機へ入れるには Mac に iPhone をつなぐ（ロックを外す）か、appshelf を使う
+
+- 11-27 の本人の感想（B）: 入れ替わりは概ね良い・カクつき無し・横向き後の幅 OK・位置 OK。直したもの（20261127-143835、実機は未確認）: ①中の文字が指の移動量と同じだけ動く（`MiniPlayerCard.pills` の `shiftOld/shiftNew`）②ボタンやアイコンの上から払うと動かず曲送りだけされた件 → `highPriorityGesture` に ③スナックバーを 136→112pt に近づけた ④スクロールで一列に畳む動き（`RootView` の `MiniPlayerAccessory.compact`。上へ送る縦のドラッグで畳み、下へ戻すと広げる近似。`tabBarMinimizeBehavior(.onScrollDown)` を自前の枠にも付けた。畳んだときの位置（下 6pt・左 +64pt）は目測で、タブバーの実際の畳み状態とずれる恐れがある）
 
 ## 次にやること（Spotify から移す・AI 識別。再生画面の要望と並行）
 
