@@ -9,7 +9,6 @@ struct SettingsView: View {
     @State private var releaseNotices = AppServices.settings.releaseNotices
     @State private var musicPip = AppServices.settings.musicPip
     @State private var liveActivity = AppServices.settings.liveActivity
-    @State private var miniPlayerCustom = AppServices.settings.miniPlayerCustom
     @State private var lyricsInArtist = AppServices.settings.lyricsInArtist
     @State private var lyricsInArtwork = AppServices.settings.lyricsInArtwork
     @State private var language = AppServices.settings.language
@@ -34,18 +33,6 @@ struct SettingsView: View {
                 .onChange(of: sendHistory) { _, v in
                     AppServices.settings.sendHistory = v
                     AppServices.settings.save()
-                }
-                if #available(iOS 26.0, *) {
-                    Toggle(isOn: $miniPlayerCustom) {
-                        SettingsLabel(title: L.t("ミニプレーヤーの枠を自前で描く（試し）", "Custom mini player (trial)"),
-                                      detail: L.t("左右に払うと、枠ごと（ガラスの背景も）入れ替わる。切ると OS の付属部品に戻り、スクロールで畳む動きが付く",
-                                                  "Swiping replaces the whole bar, glass included. Off: the system accessory, which collapses when you scroll"))
-                    }
-                    .onChange(of: miniPlayerCustom) { _, v in
-                        AppServices.settings.miniPlayerCustom = v
-                        AppServices.settings.save()
-                        IOSShell.shared.miniCustom = v
-                    }
                 }
                 Toggle(isOn: $liveActivity) {
                     SettingsLabel(title: L.t("ロック画面の再生中（Live Activity）", "Lock Screen player (Live Activity)"),

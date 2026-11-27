@@ -20,10 +20,6 @@ final class IOSShell {
     var paths: [IOSTab: [Route]] = [.home: [], .search: [], .ai: [], .library: []]
     /// 再生中の画面を開いているか（ミニプレーヤーを押すと下からせり上がる）。
     var playerOpen = false
-    /// ミニプレーヤーの枠を自前で描くか（iOS 26 から。切ると OS の付属部品に戻る。Safari のように枠ごと入れ替わる試し）。
-    var miniCustom = AppServices.settings.miniPlayerCustom
-    /// 自前のタブバー（miniCustom のとき）が、スクロールで一列に畳まれているか。ミニプレーヤー・スナックバーの位置もこれに合わせる。
-    var barCompact = false
     /// この時刻まで、小窓（PiP）の「元に戻す」で再生画面を開かない（ロック画面の再生中から追加画面を開いたとき、再生画面が重なって追加画面が一度消えるため）。
     var holdPlayerUntil = Date.distantPast
     /// 小窓の「元に戻す」で再生画面を開く（直前にロック画面から追加画面を開いていたときは開かない）。
@@ -86,12 +82,22 @@ struct RootView: View {
 
     var body: some View {
         let player = AppServices.player!
-        rootShell(player)
+        TabView(selection: Binding(get: { shell.tab }, set: { shell.select($0) })) {
+            // 設定で選んだタブは、右に離して置く役（pinnedRole）にする。欄を下へ送って畳んでも、
+            // 左の再生中のタブと並んで右に残る
+            // （ForEach で並べると OS が役を見ず、欄の中に並べてしまったので、1つずつ書く）
+            tab(.home)
+            if shell.pinnedTab != .search { tab(.search) }
+            if shell.pinnedTab != .ai { tab(.ai) }
+            if shell.pinnedTab != .library { tab(.library) }
+            tab(shell.pinnedTab, role: pinnedRole)
+        }
+        .modifier(MiniPlayerAccessory(show: player.current != nil, zoom: playerZoom) { shell.playerOpen = true })
         // 音楽の PiP の元の枠（画面の後ろに小さく置く）
         .background(alignment: .bottomLeading) { MusicPipAnchor().frame(width: 16, height: 9) }
         // 本体の音量を動かすための見えない部品（再生画面を開いていない間・裏にいる間も、ほかの端末から届いた音量を本体へ入れる）
         .background { SystemVolumeAnchor().frame(width: 1, height: 1).offset(x: -2000).allowsHitTesting(false) }
-        .overlay(alignment: .bottom) { ToastHost().padding(.bottom, toastBottom(player)) }
+        .overlay(alignment: .bottom) { ToastHost().padding(.bottom, player.current != nil ? 120 : 64) }
         .fullScreenCover(isPresented: $shell.playerOpen) {
             NowPlayingView().navigationTransition(.zoom(sourceID: MiniPlayer.zoomId, in: playerZoom))
         }
@@ -123,33 +129,6 @@ struct RootView: View {
                                               set: { if !$0 { LoginGate.shared.reLogin = false } })) {
             LoginView()
         }
-    }
-
-    /// 画面の枠。iOS 26 以降で「枠を自前で描く」が入のときは、タブバーもミニプレーヤーも自前（`CustomTabShell`）。それ以外は OS のタブ。
-    @ViewBuilder
-    private func rootShell(_ player: PlayerService) -> some View {
-        if #available(iOS 26.0, *), shell.miniCustom {
-            CustomTabShell(zoom: playerZoom, hasSong: player.current != nil) { shell.playerOpen = true }
-        } else {
-            TabView(selection: Binding(get: { shell.tab }, set: { shell.select($0) })) {
-                // 設定で選んだタブは、右に離して置く役（pinnedRole）にする。欄を下へ送って畳んでも、
-                // 左の再生中のタブと並んで右に残る
-                // （ForEach で並べると OS が役を見ず、欄の中に並べてしまったので、1つずつ書く）
-                tab(.home)
-                if shell.pinnedTab != .search { tab(.search) }
-                if shell.pinnedTab != .ai { tab(.ai) }
-                if shell.pinnedTab != .library { tab(.library) }
-                tab(shell.pinnedTab, role: pinnedRole)
-            }
-            .modifier(MiniPlayerAccessory(show: player.current != nil, zoom: playerZoom) { shell.playerOpen = true })
-        }
-    }
-
-    /// スナックバーを置く、下の安全な余白からの高さ。自前の枠のときは、ミニプレーヤー（無ければタブバー）の上に 10pt あける。
-    private func toastBottom(_ player: PlayerService) -> CGFloat {
-        guard shell.miniCustom else { return player.current != nil ? 120 : 64 }
-        if player.current == nil { return FloatingBarMetrics.tabTop + 10 }
-        return (shell.barCompact ? FloatingBarMetrics.compactTop : FloatingBarMetrics.miniTop) + 10
     }
 
     /// 右に離して置く役。iOS 26 は検索の役（.search）だけが離れるが、iOS 27 では検索の役も欄の中に並び、離すのは .prominent になった
@@ -270,7 +249,6 @@ struct RouteView: View {
 private struct MiniPlayerAccessory: ViewModifier {
     var show: Bool
     var zoom: Namespace.ID
-    @State private var shell = IOSShell.shared
     var open: () -> Void
 
     func body(content: Content) -> some View {
@@ -289,34 +267,6 @@ private struct MiniPlayerAccessory: ViewModifier {
         } else {
             content
         }
-    }
-}
-
-/// 今見えている縦のスクロール面（UIScrollView）を探す。畳んだタブバーが広がる条件（一番上に戻る）を、自前の枠でも同じにするため。
-@MainActor
-enum ScrollProbe {
-    static func main() -> UIScrollView? {
-        guard let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first,
-              let window = scene.windows.first(where: \.isKeyWindow) ?? scene.windows.first else { return nil }
-        var best: (UIScrollView, CGFloat)?
-        var stack: [UIView] = [window]
-        while let v = stack.popLast() {
-            if v.isHidden || v.alpha < 0.01 { continue }
-            // 画面の外へ退けてある（見えていないタブの）スクロール面は数えない
-            let onScreen = v.convert(v.bounds, to: nil).intersection(window.bounds)
-            if onScreen.isNull || onScreen.width < 1 { continue }
-            if let sv = v as? UIScrollView, sv.window != nil, sv.contentSize.height > sv.bounds.height + 1,
-               v.convert(v.bounds, to: nil).intersection(window.bounds).width > window.bounds.width * 0.7, sv.bounds.height > 240 {
-                let area = sv.bounds.width * sv.bounds.height
-                if area > (best?.1 ?? 0) { best = (sv, area) }
-            }
-            stack.append(contentsOf: v.subviews)
-        }
-        return best?.0
-    }
-
-    static func atTop(_ sv: UIScrollView, slack: CGFloat) -> Bool {
-        sv.contentOffset.y <= -sv.adjustedContentInset.top + slack
     }
 }
 

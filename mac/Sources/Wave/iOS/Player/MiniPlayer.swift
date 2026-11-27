@@ -63,6 +63,8 @@ struct MiniPlayer: View {
     @State private var drag: CGFloat = 0
     @State private var settling = false
     @State private var width: CGFloat = 0
+    /// 払いの最初に決めた向き（横なら true）。決めたあとは縦のぶれで止まらない（ゆっくり払うと縦へずれて動きが止まっていた）
+    @State private var horizontal: Bool?
 
     private func info(_ song: Song?, _ player: PlayerService) -> some View {
         HStack(spacing: Kasane.Space.s3) {
@@ -95,14 +97,16 @@ struct MiniPlayer: View {
             .onChanged { value in
                 guard !settling else { return }
                 let x = value.translation.width
-                guard abs(x) > abs(value.translation.height) * 1.5 else { return }
+                if horizontal == nil { horizontal = abs(x) > abs(value.translation.height) * 1.5 }
+                guard horizontal == true else { return }
                 drag = neighbor(player, x < 0 ? 1 : -1) == nil ? x / 4 : x
             }
             .onEnded { value in
+                let wasHorizontal = horizontal == true
+                horizontal = nil
                 guard !settling else { return }
                 let x = value.translation.width, predicted = value.predictedEndTranslation.width
-                let horizontal = abs(x) > abs(value.translation.height) * 1.5
-                let dir = !horizontal ? 0 : (x < -width / 4 || predicted < -width / 2) ? 1 : (x > width / 4 || predicted > width / 2) ? -1 : 0
+                let dir = !wasHorizontal ? 0 : (x < -width / 4 || predicted < -width / 2) ? 1 : (x > width / 4 || predicted > width / 2) ? -1 : 0
                 guard dir != 0, neighbor(player, dir) != nil, width > 0 else {
                     withAnimation(.snappy) { drag = 0 }
                     return
@@ -126,171 +130,6 @@ struct MiniPlayer: View {
     private func progress(_ player: PlayerService) -> CGFloat {
         guard player.duration > 0 else { return 0 }
         return CGFloat(min(1, max(0, player.position / player.duration)))
-    }
-}
-
-/// ミニプレーヤー（枠を自前で描く版。iOS 26 から）。Safari の下の欄のタブ切り替えと同じく、左右に払うと2つの枠が欄を分け合う:
-/// 今の枠の幅が縮んで指の方へ寄り、その反対側から隣の枠が縮んだ幅で現れて、幅が広がりながら入れ替わる（枠ごと、ガラスの背景も形が変わる）。
-/// タブバーの上に置く（OS の付属部品ではないので、スクロールで畳む動きは無い）。
-@available(iOS 26.0, *)
-struct MiniPlayerCard: View {
-    var zoom: Namespace.ID
-    var open: () -> Void
-    /// スクロールで畳んだ一列の形（高さを縮め、評価と補足を隠す）
-    var compact = false
-    @State private var drag: CGFloat = 0
-    @State private var settling = false
-    /// 払いの最初に決めた向き（横なら true）。決めたあとは縦のぶれで止まらない（ゆっくり払うと縦へ少しずれて、途中で動きが止まっていた）
-    @State private var horizontal: Bool?
-    @State private var width: CGFloat = 0
-
-    /// 2つの枠の間のすき間。
-    private let gap: CGFloat = 8
-
-    var body: some View {
-        let player = AppServices.player!
-        // 欄の幅は、中の枠に左右されない土台で測る（枠が幅を決めると、横向きから戻ったときに広がらなくなる）
-        Color.clear
-            .frame(maxWidth: .infinity)
-            .frame(height: h)
-            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
-            .overlay(alignment: .leading) { pills(player) }
-            // 評価・再生のボタンの上から払っても動くよう、子より先に受ける（短い動きは子へ通る）
-            .highPriorityGesture(swipe(player))
-            .animation(.snappy, value: compact)
-    }
-
-    private var h: CGFloat { compact ? 48 : 52 }
-
-    /// 2つの枠。今の枠と隣の枠を常に木に置き、幅だけを変える（途中で作り直さないので、払い始めがカクつかない）。
-    private func pills(_ player: PlayerService) -> some View {
-        let toLeft = drag <= 0   // 左へ払うと、今の枠は左に、隣の枠は右に
-        let next = drag == 0 ? nil : neighbor(player, toLeft ? 1 : -1)
-        // 進み具合 p（0〜1）。今の枠の幅は (1-p)、隣の枠の幅は p（すき間の分を引く）
-        let p = next == nil ? 0 : min(1, abs(drag) / max(width * 0.8, 1))
-        // すき間は途中だけ開き、入れ替わり始めと終わりでは 0（欄いっぱいの1つの枠になる）
-        let space = gap * sin(.pi * p)
-        let total = max(width - space, 0)
-        let oldW = total * (1 - p), newW = total * p
-        // 中身は指の移動量と同じだけ動く。隣の枠の中身は、払いの終わり（p=1）で動きがちょうど 0 になる位置から入る
-        let span = max(width * 0.8, 1)
-        let shiftOld = next == nil ? 0 : max(-span, min(span, drag))
-        let shiftNew = shiftOld + (toLeft ? span : -span)
-        return ZStack(alignment: .leading) {
-            pill(player.current, player, source: true, width: oldW, align: toLeft ? .leading : .trailing, content: max(0, 1 - 1.6 * p), shift: shiftOld)
-                .offset(x: toLeft ? 0 : newW + space)
-                .offset(x: next == nil ? drag : 0)
-            pill(next ?? player.current, player, source: false, width: newW, align: toLeft ? .trailing : .leading, content: max(0, 1.6 * p - 0.6), shift: shiftNew)
-                .offset(x: toLeft ? oldW + space : 0)
-                .opacity(next == nil ? 0 : 1)
-        }
-    }
-
-    /// 1つの枠。中身は欄いっぱいの幅で組んで、枠の幅で切る（文字は潰さない）。中身は払いに合わせて横へ動く。背景のガラスは枠の形に付く。
-    private func pill(_ song: Song?, _ player: PlayerService, source: Bool, width w: CGFloat, align: Alignment, content: CGFloat, shift: CGFloat) -> some View {
-        HStack(spacing: Kasane.Space.s3) {
-            Cover(url: Ui.small(song?.thumbnailUrl), size: 36, radius: Kasane.Radius.sm)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(song?.title ?? "").font(.subheadline.weight(.semibold)).lineLimit(1)
-                if player.isRemote, let device = player.remoteDevice {
-                    if !compact { Label(device, systemImage: "hifispeaker.2").font(.caption).foregroundStyle(.primary).lineLimit(1) }
-                } else if !compact {
-                    Text(song?.artistsText ?? "").font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                }
-            }
-            Spacer(minLength: 0)
-            if song != nil, !compact { LikeButtonView(size: 20) }
-            Button(action: player.togglePlay) {
-                Group {
-                    if player.isLoading {
-                        ProgressView()
-                    } else {
-                        Image(systemName: player.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 20)) // apple-ui-allow: 記号の大きさ（Windows 版と揃える）
-                    }
-                }
-                .frame(width: 40, height: 40)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(player.isPlaying ? L.t("一時停止", "Pause") : L.t("再生", "Play"))
-        }
-        .padding(.horizontal, Kasane.Space.s4)
-        .frame(width: max(width, 1), height: h)
-        .overlay(alignment: .bottom) {
-            GeometryReader { geo in // apple-ui-allow: 大きさに合わせて並べる・描く（測るだけではない）
-                Capsule().fill(Color.primary.opacity(0.85))
-                    .frame(width: geo.size.width * progress(player), height: 2)
-            }
-            .frame(height: 2)
-            .padding(.horizontal, Kasane.Space.s5)
-            .padding(.bottom, 3)
-        }
-        .offset(x: shift)
-        .opacity(content)
-        .frame(width: max(w, 0), height: h, alignment: align)
-        .clipShape(Capsule())
-        .background(Color.clear.glassEffect(.regular.interactive(), in: Capsule()))
-        .contentShape(Capsule())
-        .onTapGesture(perform: open)
-        .modifier(ZoomSource(id: MiniPlayer.zoomId, namespace: zoom, on: source))
-    }
-
-    private func progress(_ player: PlayerService) -> CGFloat {
-        guard player.duration > 0 else { return 0 }
-        return CGFloat(min(1, max(0, player.position / player.duration)))
-    }
-
-    private func neighbor(_ player: PlayerService, _ d: Int) -> Song? {
-        guard !player.isRemote, player.index >= 0 else { return nil }
-        let i = player.index + d
-        return player.queue.indices.contains(i) ? player.queue[i] : nil
-    }
-
-    private func swipe(_ player: PlayerService) -> some Gesture {
-        DragGesture(minimumDistance: 10)
-            .onChanged { value in
-                guard !settling else { return }
-                let x = value.translation.width
-                if horizontal == nil { horizontal = abs(x) > abs(value.translation.height) * 1.5 }
-                guard horizontal == true else { return }
-                drag = neighbor(player, x < 0 ? 1 : -1) == nil ? x / 4 : x
-            }
-            .onEnded { value in
-                let wasHorizontal = horizontal == true
-                horizontal = nil
-                guard !settling else { return }
-                let x = value.translation.width, predicted = value.predictedEndTranslation.width
-                let dir = !wasHorizontal ? 0 : (x < -width / 4 || predicted < -width / 2) ? 1 : (x > width / 4 || predicted > width / 2) ? -1 : 0
-                guard dir != 0, neighbor(player, dir) != nil, width > 0 else {
-                    withAnimation(.snappy) { drag = 0 }
-                    return
-                }
-                settling = true
-                withAnimation(.spring(duration: 0.38, bounce: 0.1)) {
-                    drag = -CGFloat(dir) * width * 0.8
-                } completion: {
-                    // 曲が移ると隣の枠が真ん中の今の枠になる（同じ見た目）ので、ずらしを戻しても動かない
-                    var t = Transaction()
-                    t.disablesAnimations = true
-                    withTransaction(t) {
-                        if dir == 1 { player.next() } else { player.previousTrack() }
-                        drag = 0
-                    }
-                    settling = false
-                }
-            }
-    }
-}
-
-/// 再生画面へのズームの元にする（隣の曲の枠には付けない。同じ ID の元が2つになるため）。
-@available(iOS 26.0, *)
-private struct ZoomSource: ViewModifier {
-    var id: String
-    var namespace: Namespace.ID
-    var on: Bool
-
-    func body(content: Content) -> some View {
-        if on { content.matchedTransitionSource(id: id, in: namespace) } else { content }
     }
 }
 #endif
