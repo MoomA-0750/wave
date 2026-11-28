@@ -88,6 +88,12 @@ appshelf（`mac.sh ios-shelf`、最新ビルド 20261124-004736）に載せ済�
 - 関係する場所: `mac/Sources/WaveWidget/WaveWidgetBundle.swift`（`NowPlayingLiveActivity`）、`Shared/Widget/WidgetShared.swift`（`NowPlayingAttributes`）、`Shared/Services/WidgetSync.swift`（`updateActivity`）、`iOS/Player/MiniPlayer.swift`、`iOS/App/RootView.swift`（`MiniPlayerAccessory`）、`iOS/Player/NowPlayingView.swift`（ジャケットの横の払い）
 - Mac は `ssh mac`（`mac/scripts/mac.sh`）。画面のセッションにログインしてもらうと `mac.sh run`・`cmd`・`log` で Mac 版も確かめられる。iPhone 実機へ入れるには Mac に iPhone をつなぐ（ロックを外す）か、appshelf を使う
 
+## Mac のメニューバー（本人の依頼 11-28。セッション 63d5f80e）
+
+- 実装済み（ビルドは Mac で通過、**画面は未確認**: Mac に画面のセッションが無く撮れなかった）: メニューバーの曲名のダブルクリックでライク（`MenuBarController.likeByDoubleClick`）、小窓の評価のボタンで小窓の中にプレイリスト追加（`MenuBarState.picking`・`MenuBarLikeButton`）、追加画面の左右の余白を対称に（`AddToPlaylistContent`、`SongMenu.swift`）。開発用の命令 `menubar-pick`・`menubar-dblclick`
+- 依頼にあった「進行中の B」は、このブランチでは 11-27 に A へ戻して削除済み（ミニプレーヤーは iPhone のもの。Mac のメニューバーとは別なので壊していない）
+- 残り: Mac にログインしてもらい、`mac.sh run` → `cmd menubar` → `cmd menubar-pick` で撮って screen-auditor に回す。ダブルクリックは実機で。macOS 版の appshelf 載せ込み（Mac のログインが要る）。push は本人に確認してから
+
 ## 次にやること（Spotify から移す・AI 識別。再生画面の要望と並行）
 
 1. AI コンテンツの識別（本人の了承済みの方針は上の「どこまで」）。最初の確認: AI ラベルが付いた YouTube Music の曲の応答に表示が入っているかを調べる（本人が曲を教えるか、自分で探す。ログインしない通信と、必要ならログイン済みの応答）。Spotify の API・ZIP に AI クレジットがあるかも調べる。結果を見て `SPEC.md` に仕様（確定／仮）を書き、実装は本人の了承の後

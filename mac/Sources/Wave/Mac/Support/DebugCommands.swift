@@ -286,6 +286,8 @@ enum DebugCommands {
             for m in c.members { AppPaths.log("debug connect member label=\(m.label) self=\(m.isSelf) online=\(m.online) active=\(m.active) pc=\(m.isPc) api=\(m.isApi) controller=\(m.isController)") }
             if let r = c.remote { AppPaths.log("debug connect remote device=\(r.deviceLabel) title=\(r.title ?? "") playing=\(r.playing) positionMs=\(r.positionMs) online=\(r.online)") }
         case "menubar": MenuBarController.shared.toggle()
+        case "menubar-pick": MenuBarState.shared.picking = true
+        case "menubar-dblclick": MenuBarController.shared.debugDoubleClick()
         case "notify-plain":
             let content = UNMutableNotificationContent()
             content.title = "wave"

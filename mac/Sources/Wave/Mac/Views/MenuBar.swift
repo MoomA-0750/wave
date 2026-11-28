@@ -3,8 +3,15 @@ import AppKit
 import SwiftUI
 import WaveCore
 
+/// メニューバーの小窓の状態（プレイリストに追加する画面を小窓の中に出しているか）。
+@MainActor @Observable
+final class MenuBarState {
+    static let shared = MenuBarState()
+    var picking = false
+}
+
 /// メニューバーの再生中の曲（「**曲名** - アーティスト名」）。押すと、右の欄の再生中の画面と同じ並びの小窓（Liquid Glass の板）を出し、そこで操作できる。
-/// 右クリックで再生/一時停止。カーソルを乗せて2本指で横に払うと曲送り・戻し、縦に払うと音量。
+/// ダブルクリックで高く評価（ライク）。右クリックで再生/一時停止。カーソルを乗せて2本指で横に払うと曲送り・戻し、縦に払うと音量。
 @MainActor
 final class MenuBarController: NSObject {
     static let shared = MenuBarController()
@@ -23,6 +30,9 @@ final class MenuBarController: NSObject {
     /// 音量を変えている間だけ、曲名の代わりに音量を出す。
     private var volumeShownUntil: Date?
     private var labelTimer: Timer?
+    /// ダブルクリックでライクしたあと、少しの間だけ出す知らせ。
+    private var notice: String?
+    private var noticeTimer: Timer?
     /// 曲名の上の受け口。スクロールは見張りから回す（下の watchScroll）。
     private var catcher: StatusGestureView?
     private var scrollMonitors: [Any] = []
@@ -36,6 +46,7 @@ final class MenuBarController: NSObject {
             let catcher = StatusGestureView(frame: button.bounds)
             catcher.autoresizingMask = [.width, .height]
             catcher.onClick = { [weak self] in self?.toggle() }
+            catcher.onDoubleClick = { [weak self] in self?.likeByDoubleClick() }
             catcher.onRightClick = { AppServices.player.togglePlay() }
             catcher.onSwipe = { forward in if forward { AppServices.player.next() } else { AppServices.player.previous() } }
             catcher.onVolume = { [weak self] delta in self?.changeVolume(delta) }
@@ -81,7 +92,11 @@ final class MenuBarController: NSObject {
             Task { @MainActor in self?.render() }
         }
         guard let button = item?.button else { return }
-        if let until = volumeShownUntil, until > Date() {
+        if let notice {
+            button.image = NSImage(systemSymbolName: "heart.fill", accessibilityDescription: nil)
+            button.imagePosition = .imageLeading
+            button.attributedTitle = NSAttributedString(string: " " + notice, attributes: [.font: NSFont.systemFont(ofSize: NSFont.systemFontSize, weight: .semibold)]) // apple-ui-allow: システムの字の大きさ
+        } else if let until = volumeShownUntil, until > Date() {
             button.image = NSImage(systemSymbolName: MenuBarController.volumeSymbol(player.volume), accessibilityDescription: nil)
             button.imagePosition = .imageLeading
             button.attributedTitle = NSAttributedString(string: " \(Int((player.volume * 100).rounded()))%", attributes: [.font: NSFont.monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .semibold)])
@@ -130,6 +145,43 @@ final class MenuBarController: NSObject {
         }
     }
 
+    /// メニューバーの曲名のダブルクリック: 今の曲を高く評価する（評価済みなら何も変えず、知らせるだけ。外すのは小窓の評価のボタンから）。
+    /// 1回目のクリックで小窓が開いているので閉じる。
+    private func likeByDoubleClick() {
+        close()
+        let player = AppServices.player!
+        guard player.current != nil, LikeButton.available(player) else { return }
+        guard AppServices.client.isLoggedIn else {
+            showNotice(L.t("ログインが要ります", "Sign in to like"))
+            return
+        }
+        switch player.like {
+        case .like:
+            showNotice(L.t("高く評価済み", "Already liked"))
+        case nil:
+            // 評価が読めていない（読み直してから押してもらう）
+            player.reloadLike()
+            showNotice(L.t("評価を読み直しました", "Reloaded"))
+        default:
+            player.toggleLike()
+            showNotice(L.t("高く評価しました", "Liked"))
+        }
+    }
+
+    func debugDoubleClick() { likeByDoubleClick() }
+
+    private func showNotice(_ text: String) {
+        notice = text
+        render()
+        noticeTimer?.invalidate()
+        noticeTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: false) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.notice = nil
+                self?.render()
+            }
+        }
+    }
+
     func toggle() {
         if let panel, panel.isVisible { close() } else { open() }
     }
@@ -166,6 +218,7 @@ final class MenuBarController: NSObject {
     func close() {
         clickMonitors.forEach { NSEvent.removeMonitor($0) }
         clickMonitors = []
+        MenuBarState.shared.picking = false
         panel?.orderOut(nil)
     }
 
@@ -217,6 +270,7 @@ final class GlassPanel: NSPanel {
 /// メニューバーの曲名の上に重ねて、押す・右クリック・2本指の払いを受ける。
 final class StatusGestureView: NSView {
     var onClick: () -> Void = {}
+    var onDoubleClick: () -> Void = {}
     var onRightClick: () -> Void = {}
     /// true で次の曲、false で前の曲。
     var onSwipe: (Bool) -> Void = { _ in }
@@ -238,7 +292,9 @@ final class StatusGestureView: NSView {
 
     override func mouseUp(with event: NSEvent) {
         (superview as? NSButton)?.highlight(false)
-        if bounds.contains(convert(event.locationInWindow, from: nil)) { onClick() }
+        guard bounds.contains(convert(event.locationInWindow, from: nil)) else { return }
+        // 2回目のクリックはダブルクリック（1回目で開いた小窓は、受け側で閉じる）
+        if event.clickCount == 2 { onDoubleClick() } else if event.clickCount == 1 { onClick() }
     }
 
     override func rightMouseDown(with event: NSEvent) {
@@ -290,7 +346,23 @@ struct MenuBarNowPlaying: View {
     var body: some View {
         let player = AppServices.player!
         let song = player.current
+        let state = MenuBarState.shared
         VStack(alignment: .leading, spacing: Kasane.Space.s4) {
+            if state.picking, let song {
+                // プレイリストに追加する画面は、メイン画面を開かず小窓の中で済ませる
+                AddToPlaylistContent(
+                    song: song,
+                    maxListHeight: 360,
+                    onNewPlaylist: {
+                        // 名前を決める画面だけはメイン画面に出る
+                        close()
+                        MenuBarController.showMainWindow()
+                        Dialogs.shared.createPlaylist(with: song)
+                    },
+                    onLiked: { player.toggleLike() },
+                    onDone: { state.picking = false }
+                )
+            } else {
             HStack {
                 Text(song?.album?.title.isEmpty == false ? song!.album!.title : L.t("再生中", "Now playing"))
                     .font(.body.weight(.semibold)).lineLimit(1)
@@ -315,7 +387,7 @@ struct MenuBarNowPlaying: View {
                     ArtistLink(font: .body, color: .primary.opacity(0.75))
                 }
                 Spacer(minLength: 0)
-                if song != nil { LikeButton.view(player, size: 20) }
+                if song != nil { MenuBarLikeButton(player: player) }
             }
             TransportControls()
             if player.index + 1 < player.queue.count {
@@ -346,6 +418,7 @@ struct MenuBarNowPlaying: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .kasaneInnerBackground(Color.primary.opacity(0.05), outer: Kasane.Radius.card, padding: Kasane.Space.s4)
             }
+            }
         }
         .padding(Kasane.Space.s4)
         .frame(width: 320)
@@ -359,6 +432,23 @@ struct MenuBarNowPlaying: View {
         .onChange(of: AppServices.nav.current) { _, _ in
             close()
             MenuBarController.showMainWindow()
+        }
+    }
+}
+
+/// 小窓の評価のボタン。まだなら高く評価し、評価済みなら小窓の中でプレイリストに追加する画面を開く（メイン画面は開かない）。
+private struct MenuBarLikeButton: View {
+    var player: PlayerService
+
+    var body: some View {
+        if LikeButton.available(player) {
+            Button {
+                if player.like == .like || player.inPlaylist { MenuBarState.shared.picking = true } else { LikeButton.press(player) }
+            } label: {
+                Image(systemName: LikeButton.symbol(player)).font(.system(size: 20)).foregroundStyle(LikeButton.accent(player) ? Color.accentColor : Color.secondary) // apple-ui-allow: 記号の大きさ（右の欄と揃える）
+            }
+            .buttonStyle(IconButtonStyle())
+            .help(LikeButton.tip(player))
         }
     }
 }

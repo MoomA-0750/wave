@@ -116,13 +116,42 @@ struct CreatePlaylistSheet: View {
 
 /// プレイリストに追加する画面（Android・Spotify と同じ）。先頭は「高く評価した曲」で、押すと評価を外す（評価済みのライクボタンから開く）。
 /// プレイリストを押しても閉じず、続けてほかのプレイリストにも足せる（閉じるのは「完了」）。入っているプレイリストには右に✓を出し、押すと外す。
+/// 中身は `AddToPlaylistContent`（メニューバーの小窓と共通）。
 struct AddToPlaylistSheet: View {
     var song: Song
     @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        AddToPlaylistContent(
+            song: song,
+            onNewPlaylist: { dismiss(); Dialogs.shared.createPlaylist(with: song) },
+            onLiked: {
+                dismiss()
+                // 評価済みなら外す（今の曲のときだけ評価を変えられる）
+                if AppServices.player.current?.videoId == song.videoId { AppServices.player.toggleLike() }
+            },
+            onDone: { dismiss() }
+        )
+        .padding(Kasane.Space.s6)
+        .frame(width: 380 + Kasane.Space.s6 * 2)
+    }
+}
+
+/// プレイリストに追加する画面の中身。幅は呼ぶ側が決める（左右の余白は呼ぶ側の padding だけ。中身は幅いっぱいに広がり、右だけ空かない）。
+struct AddToPlaylistContent: View {
+    var song: Song
+    var maxListHeight: CGFloat = 480
+    var onNewPlaylist: () -> Void
+    var onLiked: () -> Void
+    var onDone: () -> Void
     @State private var model: AddToPlaylistModel
 
-    init(song: Song) {
+    init(song: Song, maxListHeight: CGFloat = 480, onNewPlaylist: @escaping () -> Void, onLiked: @escaping () -> Void, onDone: @escaping () -> Void) {
         self.song = song
+        self.maxListHeight = maxListHeight
+        self.onNewPlaylist = onNewPlaylist
+        self.onLiked = onLiked
+        self.onDone = onDone
         _model = State(initialValue: AddToPlaylistModel(song: song))
     }
 
@@ -133,15 +162,8 @@ struct AddToPlaylistSheet: View {
             Text(L.t("プレイリストに保存", "Save to playlist")).font(.title2.weight(.semibold))
             ScrollView {
                 VStack(spacing: 2) {
-                    row(L.t("新しいプレイリスト", "New playlist"), icon: "plus", accentIcon: true) {
-                        dismiss()
-                        Dialogs.shared.createPlaylist(with: song)
-                    } trailing: { EmptyView() }
-                    row(L.t("高く評価した曲", "Liked music"), icon: "heart") {
-                        dismiss()
-                        // 評価済みなら外す（今の曲のときだけ評価を変えられる）
-                        if player.current?.videoId == song.videoId { player.toggleLike() }
-                    } trailing: {
+                    row(L.t("新しいプレイリスト", "New playlist"), icon: "plus", accentIcon: true, action: onNewPlaylist) { EmptyView() }
+                    row(L.t("高く評価した曲", "Liked music"), icon: "heart", action: onLiked) {
                         Image(systemName: liked ? "checkmark.circle.fill" : "plus.circle").foregroundStyle(Color.accentColor)
                     }
                     ForEach(AppServices.library.editable, id: \.playlistId) { playlist in
@@ -161,13 +183,13 @@ struct AddToPlaylistSheet: View {
                     }
                 }
             }
-            .frame(width: 380, height: min(480, CGFloat(AppServices.library.editable.count + 2) * 40 + 8))
+            .frame(maxWidth: .infinity)
+            .frame(height: min(maxListHeight, CGFloat(AppServices.library.editable.count + 2) * 40 + 8))
             HStack {
                 Spacer()
-                Button(L.t("完了", "Done")) { dismiss() }.keyboardShortcut(.defaultAction)
+                Button(L.t("完了", "Done"), action: onDone).keyboardShortcut(.defaultAction)
             }
         }
-        .padding(Kasane.Space.s6)
     }
 
     private func row<T: View>(_ title: String, icon: String, accentIcon: Bool = false, action: @escaping () -> Void, @ViewBuilder trailing: () -> T) -> some View {
