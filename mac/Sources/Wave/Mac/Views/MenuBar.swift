@@ -168,6 +168,11 @@ final class MenuBarController: NSObject {
         }
     }
 
+    func debugLogPosition() {
+        guard let button = item?.button, let window = button.window else { return }
+        AppPaths.log("menubar pos \(window.convertToScreen(button.convert(button.bounds, to: nil))) screenH=\(NSScreen.screens.first?.frame.height ?? 0)")
+    }
+
     func debugDoubleClick() { likeByDoubleClick() }
 
     private func showNotice(_ text: String) {
@@ -279,6 +284,7 @@ final class StatusGestureView: NSView {
 
     /// 1回の払いで横にこれだけ動いたら曲を送る（点）。
     private static let swipeDistance: CGFloat = 40
+    private var lastClick: TimeInterval = 0
     private var swipeX: CGFloat = 0
     private var swipeY: CGFloat = 0
     /// この払いで曲を送ったか・向きが決まったか（1回の払いで何曲も飛ばさない。横と縦を混ぜない）。
@@ -293,8 +299,18 @@ final class StatusGestureView: NSView {
     override func mouseUp(with event: NSEvent) {
         (superview as? NSButton)?.highlight(false)
         guard bounds.contains(convert(event.locationInWindow, from: nil)) else { return }
-        // 2回目のクリックはダブルクリック（1回目で開いた小窓は、受け側で閉じる）
-        if event.clickCount == 2 { onDoubleClick() } else if event.clickCount == 1 { onClick() }
+        // 2回目のクリックはダブルクリック（1回目で開いた小窓は、受け側で閉じる）。
+        // clickCount は項目の上では 2 にならないことがあるので、時間も自分で測る
+        let now = event.timestamp
+        let isDouble = event.clickCount >= 2 || now - lastClick <= NSEvent.doubleClickInterval
+        AppPaths.log("menubar click count=\(event.clickCount) dt=\(now - lastClick) double=\(isDouble)")
+        if isDouble {
+            lastClick = 0
+            onDoubleClick()
+        } else {
+            lastClick = now
+            onClick()
+        }
     }
 
     override func rightMouseDown(with event: NSEvent) {
@@ -347,7 +363,7 @@ struct MenuBarNowPlaying: View {
         let player = AppServices.player!
         let song = player.current
         let state = MenuBarState.shared
-        VStack(alignment: .leading, spacing: Kasane.Space.s4) {
+        ZStack(alignment: .top) {
             if state.picking, let song {
                 // プレイリストに追加する画面は、メイン画面を開かず小窓の中で済ませる
                 AddToPlaylistContent(
@@ -362,7 +378,10 @@ struct MenuBarNowPlaying: View {
                     onLiked: { player.toggleLike() },
                     onDone: { state.picking = false }
                 )
+                .frame(maxWidth: .infinity)
+                .transition(.opacity.combined(with: .offset(x: 28)))
             } else {
+            VStack(alignment: .leading, spacing: Kasane.Space.s4) {
             HStack {
                 Text(song?.album?.title.isEmpty == false ? song!.album!.title : L.t("再生中", "Now playing"))
                     .font(.body.weight(.semibold)).lineLimit(1)
@@ -419,7 +438,10 @@ struct MenuBarNowPlaying: View {
                 .kasaneInnerBackground(Color.primary.opacity(0.05), outer: Kasane.Radius.card, padding: Kasane.Space.s4)
             }
             }
+            .transition(.opacity.combined(with: .offset(x: -28)))
+            }
         }
+        .animation(.smooth(duration: 0.3), value: state.picking)
         .padding(Kasane.Space.s4)
         .frame(width: 320)
         .fixedSize(horizontal: false, vertical: true)
