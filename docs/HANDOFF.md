@@ -92,7 +92,7 @@ appshelf（`mac.sh ios-shelf`、最新ビルド 20261124-004736）に載せ済�
 
 - 実装済み（Mac で通過。小窓の追加画面は撮って余白が対称なのを確認、`menubar-dblclick` で評価が like になるのを確認。実際のダブルクリックの操作は未確認）: メニューバーの曲名のダブルクリックでライク（`MenuBarController.likeByDoubleClick`）、小窓の評価のボタンで小窓の中にプレイリスト追加（`MenuBarState.picking`・`MenuBarLikeButton`）、追加画面の左右の余白を対称に（`AddToPlaylistContent`、`SongMenu.swift`）。開発用の命令 `menubar-pick`・`menubar-dblclick`
 - 依頼にあった「進行中の B」は、このブランチでは 11-27 に A へ戻して削除済み（ミニプレーヤーは iPhone のもの。Mac のメニューバーとは別なので壊していない）
-- 残り: 実際のダブルクリックを本人に試してもらう。push は本人に確認してから
+- 本人が実機で確認済み（11-28、appshelf 20261128-181420）: ダブルクリックでライク、小窓の追加画面の出入りのアニメーション。浮かせた再生バーが左右の欄に被る件も直した。残りは push（本人に確認してから）
 
 ## 次にやること（Spotify から移す・AI 識別。再生画面の要望と並行）
 
