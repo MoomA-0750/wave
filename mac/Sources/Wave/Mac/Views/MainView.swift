@@ -26,7 +26,9 @@ struct MainView: View {
                 // 左のマイライブラリは OS のサイドバー（NavigationSplitView）、右の再生中の欄は OS の右の欄（inspector）にする。
                 // 地は OS が描く（Liquid Glass。色は後ろの壁紙に合わせて OS が決めるので、設定・Finder の左の欄と同じになる）
                 NavigationSplitView {
+                    // 下に浮かせた再生バーは左右の欄（OS のサイドバー・右の欄）には安全領域として届かないので、同じ高さを空ける
                     LibraryPane()
+                        .safeAreaPadding(.bottom, 100)
                         .navigationSplitViewColumnWidth(min: 240, ideal: 300, max: 420)
                 } detail: {
                     ZStack(alignment: .top) {
@@ -41,6 +43,7 @@ struct MainView: View {
                     .onGeometryChange(for: Double.self, of: { $0.size.width }) { model.contentWidth = $0 }
                     .inspector(isPresented: Binding(get: { model.showRight }, set: { if !$0 { model.setRightPane(open: false, queue: model.rightView == .queue) } })) {
                         RightPane()
+                            .safeAreaPadding(.bottom, 100)
                             .onGeometryChange(for: Double.self, of: { $0.size.width }) { model.inspectorWidth = $0 }
                             .inspectorColumnWidth(min: 300, ideal: 340, max: 440)
                     }
